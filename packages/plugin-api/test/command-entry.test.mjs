@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-// package manager 는 plugin repository 의 node_modules 에 package 를 link 로 둔다. 명령은 그 link 경로로 시작해도
-// 검사를 실행해야 한다(docs/spec/installation.md). link 는 이 검사가 만드는 임시 fixture 다.
+// A package manager places a package as a link in the node_modules of the plugin repository. The command must run the check even when it starts with that link path
+// (docs/spec/installation.md). The link is a temporary fixture that this check creates.
 test("the plugin commands run their check when started through a linked package", () => {
   const root = mkdtempSync(join(tmpdir(), "soksak-command-entry-"));
   try {

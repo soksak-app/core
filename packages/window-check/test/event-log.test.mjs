@@ -1,4 +1,5 @@
-// 창 검사가 애플리케이션의 event log(docs/spec/logging.md#files)에서 검사 동안 쓰인 오류 event를 읽는지 검사한다.
+// Checks that a window check reads the error events that were written during the check from the event log of the
+// application (docs/spec/logging.md#files).
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";

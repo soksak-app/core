@@ -1,10 +1,10 @@
-//! 진단 build 의 명령(docs/spec/cli.md). 일반 build 의 sok 에는 진단 method 가 없다.
+//! Commands of the diagnostic build (docs/spec/cli.md). The sok of a regular build has no diagnostic methods.
 
 use serde_json::Value;
 
 use crate::{compact, Request};
 
-/// capture 의 요청. 창을 앞으로 가져오지 않고 그 화면을 이미지 파일로 쓴다.
+/// A capture request. It writes the screen of the window to an image file without bringing the window to the front.
 pub(crate) fn capture(window: String) -> Request {
     Request {
         method: "diagnostics.capture.still",

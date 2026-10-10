@@ -22,14 +22,14 @@ import (
 	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
 
-// releaseEntry 는 release 에 넣는 파일 하나다. path 는 폴더 기준 상대 경로이며 / 로 나눈다.
+// releaseEntry is one file that goes into a release. path is relative to the folder and separated by /.
 type releaseEntry struct {
 	path       string
 	source     string
 	executable bool
 }
 
-// CurrentPlatform 은 sok 이 실행되는 플랫폼 key 다.
+// CurrentPlatform is the platform key on which sok runs.
 func CurrentPlatform() (string, error) {
 	current, err := platform.Current()
 	if err != nil {
@@ -38,8 +38,8 @@ func CurrentPlatform() (string, error) {
 	return current.Key()
 }
 
-// collect 는 package.json 과 files 의 경로를 release 항목으로 모은다. 폴더는 그 아래 파일까지 모으고, symbolic
-// link 나 일반 파일도 폴더도 아닌 파일은 거부한다.
+// collect gathers the paths of package.json and files into release entries. A folder is gathered with the files below
+// it. A symbolic link and a file that is neither a regular file nor a folder are rejected.
 func collect(dir string, listed []string) ([]releaseEntry, error) {
 	seen := map[string]bool{}
 	var entries []releaseEntry
@@ -87,8 +87,8 @@ func collect(dir string, listed []string) ([]releaseEntry, error) {
 	return entries, nil
 }
 
-// writeRelease 는 항목을 output 에 쓰고 그 sha256 을 돌려준다. 같은 폴더의 임시 파일에 쓴 뒤 이름을 바꾸므로
-// 실패하면 output 은 바뀌지 않는다.
+// writeRelease writes the entries to output and returns their sha256. It writes to a temporary file in the same folder
+// and then renames it, so output does not change when the write fails.
 func writeRelease(entries []releaseEntry, output string) (sum string, err error) {
 	temp, err := os.CreateTemp(filepath.Dir(output), "."+filepath.Base(output)+".*")
 	if err != nil {
@@ -98,7 +98,7 @@ func writeRelease(entries []releaseEntry, output string) (sum string, err error)
 		if err == nil {
 			return
 		}
-		// 실패한 쓰기는 임시 파일을 닫고 지운다. 이미 닫힌 파일은 닫기 오류가 아니다.
+		// A failed write closes and removes the temporary file. A file that is already closed is not a close error.
 		if closeErr := temp.Close(); closeErr != nil && !errors.Is(closeErr, os.ErrClosed) {
 			err = fmt.Errorf("%w; close %w", err, fileError(temp.Name(), closeErr))
 		}
@@ -135,7 +135,7 @@ func writeRelease(entries []releaseEntry, output string) (sum string, err error)
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-// readJSONFile 은 폴더의 JSON 파일 하나를 형식 검사에 쓰는 값으로 읽는다.
+// readJSONFile reads one JSON file of the folder into the value that the format check uses.
 func readJSONFile(dir, name string) (any, error) {
 	data, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil {
@@ -156,7 +156,8 @@ func listedFiles(pkg map[string]any) []string {
 	return files
 }
 
-// printJSON 은 결과를 두 칸 들여쓰기로 쓴다. 경로의 &, <, > 를 그대로 쓰도록 HTML escape 를 끈다.
+// printJSON writes the result with two-space indentation. It turns off HTML escaping so that &, < and > of a path are
+// written unchanged.
 func printJSON(stdout io.Writer, value any) error {
 	encoder := json.NewEncoder(stdout)
 	encoder.SetEscapeHTML(false)
@@ -164,7 +165,7 @@ func printJSON(stdout io.Writer, value any) error {
 	return encoder.Encode(value)
 }
 
-// outputPath 는 출력 폴더를 만들고 그 안의 절대 경로를 돌려준다.
+// outputPath creates the output folder and returns the absolute path inside it.
 func outputPath(dir, name string) (string, error) {
 	absolute, err := filepath.Abs(dir)
 	if err != nil {
@@ -176,14 +177,15 @@ func outputPath(dir, name string) (string, error) {
 	return filepath.Join(absolute, name), nil
 }
 
-// covers 는 files 의 경로 하나가 path 이거나 path 를 담은 폴더인지 알려 준다.
+// covers reports whether one path of files is path or a folder that contains path.
 func covers(listed []string, path string) bool {
 	return slices.ContainsFunc(listed, func(file string) bool {
 		return path == file || strings.HasPrefix(path, strings.TrimSuffix(file, "/")+"/")
 	})
 }
 
-// manifestModules 는 plugin.json 이 불러오는 module 과 그 이름이다: surface, section 마다의 module, state.
+// manifestModules are the modules that plugin.json loads and their names: the surface, the module of each section, and
+// the state.
 func manifestModules(manifest map[string]any) [][2]string {
 	var modules [][2]string
 	add := func(what string, value any) {
@@ -218,8 +220,8 @@ func manifestModules(manifest map[string]any) [][2]string {
 	return modules
 }
 
-// diagnosticFiles 는 plugin 폴더의 diagnostics.json 과 그 module 경로다. diagnostics.json 이 없으면 비어 있다.
-// 두 파일은 files 에 나열하지 않는다(docs/spec/plugins.md).
+// diagnosticFiles are diagnostics.json of the plugin folder and its module path. Without diagnostics.json it is empty.
+// The two files are not listed in files (docs/spec/plugins.md).
 func diagnosticFiles(dir string, listed []string) ([]string, error) {
 	value, err := readJSONFile(dir, "diagnostics.json")
 	if errors.Is(err, fs.ErrNotExist) {
@@ -244,7 +246,8 @@ func diagnosticFiles(dir string, listed []string) ([]string, error) {
 	return []string{"diagnostics.json", module}, nil
 }
 
-// runPack 은 plugin 폴더를 검사하고 `<id>-<version>.tgz` 를 쓴다. diagnostics 가 참이면 진단 선언도 담는다.
+// runPack checks the plugin folder and writes `<id>-<version>.tgz`. When diagnostics is true, it also includes the
+// diagnostic declarations.
 func runPack(dir, out string, diagnostics bool, stdout io.Writer) error {
 	value, err := readJSONFile(dir, "package.json")
 	if err != nil {
@@ -356,7 +359,7 @@ func runRelease(dir, out, platform string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	// SHA256SUMS 를 먼저 읽으므로 그 파일이 틀리면 release 를 쓰지 않는다.
+	// SHA256SUMS is read first, so no release is written when that file is wrong.
 	sumsPath := filepath.Join(filepath.Dir(output), "SHA256SUMS")
 	sums, err := readSums(sumsPath)
 	if err != nil {
@@ -373,7 +376,7 @@ func runRelease(dir, out, platform string, stdout io.Writer) error {
 	return printJSON(stdout, map[string]string{"name": name, "version": version, "platform": platform, "release": output, "sha256": sum})
 }
 
-// readSums 는 SHA256SUMS 를 release 이름마다 sha256 으로 읽는다. 파일이 없으면 빈 목록이다.
+// readSums reads SHA256SUMS as the sha256 of each release name. When the file does not exist, the list is empty.
 func readSums(path string) (map[string]string, error) {
 	sums := map[string]string{}
 	data, err := os.ReadFile(path)
@@ -393,7 +396,7 @@ func readSums(path string) (map[string]string, error) {
 	return sums, nil
 }
 
-// writeSums 는 SHA256SUMS 를 release 이름 순서로 쓴다.
+// writeSums writes SHA256SUMS in the order of release names.
 func writeSums(path string, sums map[string]string) error {
 	names := make([]string, 0, len(sums))
 	for name := range sums {
@@ -407,7 +410,7 @@ func writeSums(path string, sums map[string]string) error {
 	return replaceFile(path, []byte(out.String()))
 }
 
-// replaceFile 은 같은 폴더의 임시 파일에 data 를 쓴 뒤 이름을 바꿔 path 를 한 번에 바꾼다.
+// replaceFile writes data to a temporary file in the same folder and then renames it, which replaces path in one step.
 func replaceFile(path string, data []byte) error {
 	temp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
 	if err != nil {

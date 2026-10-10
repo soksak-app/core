@@ -1,4 +1,4 @@
-// UI 요소가 선언된 명령에 연결되고, audit 가 연결되지 않은 조작 요소를 찾는지 검사한다.
+// Checks that UI elements are connected to declared commands and that audit finds the operable elements that are not connected.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
@@ -97,7 +97,7 @@ test("delegate runs clicks, changes, and live inputs of marked descendants", asy
 test("delegate leaves an element bound to its own event to that binding", async () => {
   const b = binder();
   const root = element("div");
-  // 주소창처럼 Enter 로 실행하는 입력. WebKit 은 텍스트 입력의 Enter 에 change 도 보낸다.
+  // An input that runs with Enter, like an address bar. WebKit also sends change on Enter in a text input.
   const address = b.bind(element("input"), "fixture.put", () => ({ text: address.value }),
     { event: "keydown", when: (e) => e.key === "Enter" });
   const button = b.bind(element("button"), "fixture.press", { id: "c" });

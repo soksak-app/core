@@ -1,6 +1,7 @@
 package tests
 
-// 위치를 읽는 규칙(docs/spec/installation.md#fetching)을 검사 소유의 TLS server 로 검사한다. 외부 network 는 쓰지 않는다.
+// Checks the rules for reading a location (docs/spec/installation.md#fetching) with a TLS server that the check owns.
+// No external network is used.
 
 import (
 	"crypto/tls"
@@ -16,7 +17,7 @@ import (
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
-// tlsFetcher 는 server 의 인증서를 신뢰하고 작은 한도를 쓰는 Fetcher 다.
+// tlsFetcher is a Fetcher that trusts the certificate of the server and uses small limits.
 func tlsFetcher(server *httptest.Server) sok.Fetcher {
 	transport := server.Client().Transport.(*http.Transport)
 	return sok.Fetcher{
@@ -37,7 +38,7 @@ func TestAnHTTPSLocationIsReadOverTLS(t *testing.T) {
 	if err != nil || string(data) != `{"format":1}` {
 		t.Fatalf("data %q err %v", data, err)
 	}
-	// 신뢰하지 않는 인증서는 연결하지 못한다.
+	// A certificate that is not trusted cannot connect.
 	_, err = sok.DefaultFetcher.Read(server.URL+"/index.json", fetcher.Index)
 	if err == nil || !strings.HasPrefix(err.Error(), server.URL+"/index.json: cannot connect: ") {
 		t.Fatalf("untrusted err %v", err)

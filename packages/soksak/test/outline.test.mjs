@@ -136,8 +136,8 @@ test("every corner is drawn at the one radius, whichever way it turns", () => {
   assert.equal(radii.length, 6, "one arc per corner");
   assert.deepEqual(radii, [30, 30, 30, 30, 30, 30], "the reflex corner too");
 
-  // 볼록한 모서리와 우각은 반대 방향으로 돈다. 방향은 호의 sweep 플래그다. 모두 같은
-  // 방향으로 돌면 우각에서 선이 카드 안쪽으로 파고든다.
+  // A convex corner and a concave corner turn in opposite directions. The direction is the sweep flag of the arc. If all turn in the same
+  // direction, the line cuts into the card at a concave corner.
   const turns = [...shape.path.matchAll(/A[\d.]+ [\d.]+ 0 0 ([01]) /g)].map((m) => m[1]);
   assert.equal(turns.length, 6, "one turn per corner");
   assert.equal(turns.filter((t) => t === "1").length, 5, "five convex corners");
@@ -168,7 +168,7 @@ test("roundedPath draws the loop it is given, with arcs where the radius fits", 
   assert.equal(round.d.match(/A[\d.]/g).length, 4, "one arc per corner");
   assert.ok(round.d.endsWith("Z"), "the loop closes");
 
-  // 반경은 만나는 두 변 중 짧은 쪽의 절반으로 제한된다. 8px 변에서는 4 가 된다.
+  // The radius is limited to half of the shorter of the two sides that meet. On a side of 8px it is 4.
   const thin = roundedPath([{ x: 0, y: 0 }, { x: 8, y: 0 }, { x: 8, y: 100 }, { x: 0, y: 100 }], 40);
   assert.match(thin.d, /A4\.00 4\.00/, "the radius is capped at half the shorter side");
 });
@@ -226,7 +226,7 @@ test("two cards whose facing edges round either side of one hundredth still merg
 });
 
 test("an inset moves the joined outline inward without splitting it", () => {
-  // 간격 12 로 떨어진 두 사각형을 반 간격 6 으로 합친 L 자를 0.5 안쪽으로 줄인다.
+  // Shrinks by 0.5 an L shape that joins two rectangles 12 apart with a half gap of 6.
   const rects = [{ x: 0, y: 0, w: 100, h: 100 }, { x: 112, y: 0, w: 50, h: 200 }];
   const joined = outline(rects, { pad: 6, radius: 0 });
   const inset = outline(rects, { pad: 6, radius: 0, inset: 0.5 });
@@ -238,6 +238,6 @@ test("an inset moves the joined outline inward without splitting it", () => {
   });
   assert.deepEqual(box(joined.loops[0]), { x0: -6, x1: 168, y0: -6, y1: 206 });
   assert.deepEqual(box(inset.loops[0]), { x0: -5.5, x1: 167.5, y0: -5.5, y1: 205.5 });
-  // 안쪽 모서리(오목한 꼭짓점)도 같은 거리만큼 안쪽으로 옮긴다.
+  // An inner corner (a concave vertex) also moves inward by the same distance.
   assert.ok(inset.loops[0].some((p) => p.x === 106.5 && p.y === 105.5), JSON.stringify(inset.loops[0]));
 });

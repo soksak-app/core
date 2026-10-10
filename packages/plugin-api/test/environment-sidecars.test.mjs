@@ -1,4 +1,4 @@
-// sidecars: false 환경에서 설치된 플러그인의 상태 모듈이 사이드카를 쓰면 로드가 실패한다.
+// In an environment with sidecars: false, the load fails when the state module of an installed plugin uses a sidecar.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { checkReferences, validateEnvironment } from "../index.js";

@@ -1,13 +1,13 @@
-// 플러그인 manifest(plugin.json)와 애플리케이션 environment.json 의 형식을 검사한다.
+// Validates the format of a plugin manifest (plugin.json) and of an application environment.json.
 //
-// 워크벤치는 불러온 파일을 이 함수로 검사하고, 플러그인과 애플리케이션은 자기
-// 테스트에서 같은 함수로 자기 파일을 검사한다.
+// The workbench validates each loaded file with these functions; plugins and applications validate their own
+// files with the same functions in their tests.
 
 /*
- * 스테이징된 프런트엔드의 경로 규칙.
+ * Path rules of the staged frontend.
  *
- * 워크벤치 파일은 문서 루트에 놓인다. 다른 모듈은 `modules/<package.json name>/` 아래에
- * 패키지 안의 경로 그대로 놓인다. 런타임 모듈은 `runtime/` 에 놓인다.
+ * Workbench files are placed in the document root. Other modules are placed under `modules/<package.json name>/`
+ * with their path inside the package. Runtime modules are placed in `runtime/`.
  */
 import { createBinder } from "./binder.js";
 
@@ -25,21 +25,21 @@ export const ENVIRONMENT = "environment.json";
 export const MANIFEST = "plugin.json";
 export const SIDECAR = "sidecar.json";
 export const RUNTIME = "runtime";
-/** 코어가 공개하는 항목의 선언 파일. 워크벤치 패키지 루트에 있다. */
+/** The declaration file of the entries that the core exposes. It is in the workbench package root. */
 export const EXPOSURE = "exposure.json";
 /** The diagnostic declaration file at the root of a plugin. Only diagnostic builds stage it. */
 export const DIAGNOSTICS = "diagnostics.json";
-/** 스테이징 루트의 플러그인 진단 선언 목록. 진단 빌드가 아니면 {} 다. */
-/** host 가 설정 폴더의 설치된 plugin 목록을 제공하는 문서(docs/spec/installation.md 의 설치된 plugin 제공). */
+/** The list of plugin diagnostics declarations in the staging root. It is {} unless the build is a diagnostic build. */
+/** The document in which the host provides the list of plugins installed in the configuration folder (installed plugin provision in docs/spec/installation.md). */
 export const INSTALLED_PLUGINS = "installed-plugins.json";
 
-/** 표면 문서가 등록하는 코어 항목의 이름 접두사. 다른 코어 항목은 메인 문서가 등록한다. */
+/** The name prefix of the core entries that the surface document registers. The main document registers the other core entries. */
 export const SURFACE_CORE = "core.surface.";
 
-/** 패키지 안의 경로를 문서 루트 기준 경로로 반환한다. */
+/** Returns a path inside the package as a path relative to the document root. */
 export const modulePath = (name, path) => `modules/${name}/${path}`;
 
-/** 모든 페이지가 선언하는 import map 의 imports. 페이지는 이 값과 같은 import map 을 갖는다. */
+/** The imports of the import map that every page declares. A page has an import map equal to this value. */
 export const PAGE_IMPORTS = Object.freeze({
   "soksak": `/${modulePath("soksak", "dist/index.js")}`,
   "@soksak/plugin-api": `/${modulePath("@soksak/plugin-api", "index.js")}`,
@@ -49,7 +49,7 @@ export const PAGE_IMPORTS = Object.freeze({
   "@soksak/workbench/": "/",
 });
 
-/** HTML 문서에서 import map 의 imports 를 읽는다. import map 이 하나가 아니면 예외를 던진다. */
+/** Reads the imports of the import map from an HTML document. Throws unless the document has exactly one import map. */
 export function pageImports(html) {
   const maps = [...html.matchAll(/<script type="importmap">([\s\S]*?)<\/script>/g)];
   if (maps.length !== 1) throw new Error(`expected one import map, found ${maps.length}`);
@@ -67,20 +67,20 @@ const isText = (value) => typeof value === "string" && value.length > 0;
 
 const VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
 
-/** 두 version 을 숫자로 비교한다. */
+/** Compares two versions numerically. */
 function compareVersion(a, b) {
   const [x, y] = [a, b].map((value) => value.split(".").map(Number));
   const part = x.findIndex((number, index) => number !== y[index]);
   return part === -1 ? 0 : x[part] - y[part];
 }
 
-/** version 범위가 docs/spec/installation.md#versions-and-ranges 의 형식인지 확인한다. */
+/** Checks that the version range has the format of docs/spec/installation.md#versions-and-ranges. */
 function isRange(range) {
   if (typeof range !== "string") return false;
   if (range === "*") return true;
   const bounded = /^>=(\S+) <(\S+)$/.exec(range);
   if (bounded) return VERSION.test(bounded[1]) && VERSION.test(bounded[2]) && compareVersion(bounded[1], bounded[2]) < 0;
-  // `>=x.y.z` 는 하한만 있고 상한이 없다.
+  // `>=x.y.z` has a lower bound and no upper bound.
   const lower = /^>=(\S+)$/.exec(range);
   if (lower) return VERSION.test(lower[1]);
   return VERSION.test(range.replace(/^[\^~]/, ""));
@@ -101,7 +101,7 @@ function checkDependencies(where, dependencies) {
  * is a plugin dependency and is left out (docs/spec/plugins.md#pluginjson).
  */
 export function manifestSidecars(manifest, plugins = new Set()) {
-  // 기본값: dependencies 는 plugin.json 의 선택 필드이며, 없는 플러그인은 사이드카를 쓰지 않는다.
+  // default: dependencies is an optional field of plugin.json; a plugin without it uses no sidecar.
   return Object.keys(manifest.dependencies ?? {}).filter((name) => !plugins.has(name));
 }
 
@@ -160,22 +160,22 @@ function only(where, value, keys) {
   }
 }
 
-/* 설정 창이 보이는 플러그인 설명의 최대 길이. */
+/* The maximum length of the plugin description that the settings window shows. */
 const PLUGIN_DESCRIPTION_MAX = 200;
 
-/* 설정 창이 보이는 설정 이름과 설명의 최대 길이. */
+/* The maximum length of the setting name and description that the settings window shows. */
 const SETTING_LABEL_MAX = 40;
 const SETTING_DESCRIPTION_MAX = 200;
 const ADDRESS_MAX = 2048;
 
-/** 주소 설정 값: 빈 문자열이거나 최대 2048자의 http 또는 https 주소. */
+/** Address setting value: an empty string or an http or https address of at most 2048 characters. */
 export function isSettingAddress(value) {
   return value === "" || (typeof value === "string" && value.length <= ADDRESS_MAX && /^https?:\/\/[^/]/i.test(value));
 }
 
 function checkSettingDeclaration(where, full) {
   if (!isObject(full)) throw new Error(`${where}: setting must be an object`);
-  // 설정 창은 label 을 행 이름으로, description 을 그 아래 설명으로 보인다.
+  // The settings window shows label as the row name and description as the explanation below it.
   const { label, description, ...declaration } = full;
   if (typeof label !== "string" || label.length < 1 || label.length > SETTING_LABEL_MAX) {
     throw new Error(`${where}: label must be 1 to ${SETTING_LABEL_MAX} characters`);
@@ -251,13 +251,13 @@ function checkSettingValue(where, declaration, value) {
 }
 
 export function settingDeclarations(manifest) {
-  // 기본값: settings 는 plugin.json 의 선택 필드이며, 없는 플러그인은 설정이 없다.
+  // default: settings is an optional field of plugin.json; a plugin without it has no settings.
   return Object.fromEntries(Object.entries(manifest.settings ?? {}).map(([key, declaration]) => [
     `${manifest.id}.${key}`, { ...declaration, plugin: manifest.id, key },
   ]));
 }
 
-/** 표면 합성 선언을 검사한다. 이 선언이 호스트의 영역 권한 목록이다. */
+/** Validates the surface composition declaration. This declaration is the host's list of region permissions. */
 function checkComposition(where, composition, sidecars) {
   if (!isObject(composition)) throw new Error(`${where}: composition must be an object`);
   if (composition.kind === "dom") {
@@ -307,13 +307,13 @@ function checkComposition(where, composition, sidecars) {
 function checkBackground(where, background, sidecars, settings = {}) {
   if (!isObject(background)) throw new Error(`${where}: background must be an object`);
   only(`${where} background`, background, ["sidecar", "operation", "settings"]);
-  // settings 는 요청 필드 이름에서 이 플러그인이 선언한 설정 이름으로의 대응이다. 코어는 세션을 열 때 그 설정의
-  // 값을 요청 필드에 넣는다.
+  // settings maps a request field name to a setting name that this plugin declares. When the core opens a session, it puts the value
+  // of that setting into the request field.
   if (background.settings !== undefined) {
     if (!isObject(background.settings)) throw new Error(`${where} background: settings must map request fields to setting names`);
     for (const [field, setting] of Object.entries(background.settings)) {
       if (field === "operation") throw new Error(`${where} background: a setting cannot replace operation`);
-      // 기본값: settings 는 plugin.json 의 선택 필드이며, 없는 플러그인에는 background 가 가리킬 설정이 없다.
+      // default: settings is an optional field of plugin.json; for a plugin without it, background has no setting to point to.
       if (typeof setting !== "string" || !Object.hasOwn(settings ?? {}, setting)) {
         throw new Error(`${where} background: setting ${setting} is not declared by the plugin`);
       }
@@ -328,15 +328,15 @@ function checkBackground(where, background, sidecars, settings = {}) {
 }
 
 
-/** path 가 패키지 안의 JavaScript 파일 경로인지. */
+/** Whether path is the path of a JavaScript file inside the package. */
 function isModulePath(path) {
   return isText(path) && !path.startsWith("/") && !path.split("/").includes("..") && path.endsWith(".js");
 }
 
-// bare specifier 는 상대 경로, 절대 경로, URL 이 아닌 package 이름과 그 하위 경로다.
+// A bare specifier is a package name that is not a relative path, an absolute path or a URL, together with its subpath.
 const BARE = /^(@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*(\/[A-Za-z0-9._-]+)*$/;
 
-/** 제공자의 확장 지점 선언을 검사한다(docs/spec/plugins.md#extension-points). */
+/** Validates the extension point declaration of a provider (docs/spec/plugins.md#extension-points). */
 function checkExtends(where, points) {
   if (!isObject(points)) throw new Error(`${where}: extends must be an object`);
   for (const [name, point] of Object.entries(points)) {
@@ -356,7 +356,7 @@ function checkExtends(where, points) {
   }
 }
 
-/** 기여자의 기여 선언을 검사한다. 항목의 schema 필드는 제공자의 선언으로 workbench 가 검사한다. */
+/** Validates the contribution declaration of a contributor. The workbench validates the schema field of an entry with the declaration of the provider. */
 function checkContributes(where, id, contributes) {
   if (!isObject(contributes)) throw new Error(`${where}: contributes must be an object`);
   for (const [name, items] of Object.entries(contributes)) {
@@ -376,17 +376,17 @@ function checkContributes(where, id, contributes) {
 }
 
 /**
- * plugin.json 하나를 검사한다. 형식이 틀리면 예외를 던지고, 맞으면 받은 값을 반환한다.
+ * Validates one plugin.json. Throws when the format is wrong and returns the received value otherwise.
  *
- *   id        플러그인 id. 탭과 설정이 이 값을 참조한다
- *   name      화면에 표시할 이름
- *   mark      `+` 메뉴와 탭 제목에 표시할 짧은 표식. surface 가 있으면 필수
- *   icon      16×16 뷰박스 SVG 요소. surface 가 있으면 필수
- *   surface   카드 표면. `{ page, composition }` 은 패키지 안 문서와 합성 권한 선언이다
- *   sections  사이드바에 표시할 수 있는 섹션. id 는 `<플러그인 id>.<이름>` 형식
- *   preview   라이브러리 미리보기의 색. `ink` 는 테마 토큰 이름(`--rail` 등). surface 가 있어야 한다
+ *     id        plugin id. Tabs and settings refer to this value
+ *     name      name shown on the screen
+ *     mark      short mark shown in the `+` menu and in the tab title. Required when surface exists
+ *     icon      SVG element with a 16×16 view box. Required when surface exists
+ *     surface   card surface. `{ page, composition }` declares the document inside the plugin and the composition permissions
+ *     sections  sections that the sidebar can show. The id has the form `<plugin id>.<name>`
+ *     preview   colors of the library preview. `ink` is a theme token name (`--rail` and others). surface must exist
  *   dependencies  the version range of each sidecar that the page surface or the state module uses and of each plugin that it contributes to
- *   exposes   표면 페이지가 등록하는 status, command, dom 항목. page 표면이 있어야 한다
+ *     exposes   status, command and dom entries that the surface page registers. A page surface must exist
  */
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
@@ -397,7 +397,7 @@ export function validateManifest(manifest) {
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
   const where = `plugin ${id}`;
   if (!isText(manifest.name)) throw new Error(`${where}: name is required`);
-  // 설정 창의 플러그인 목록이 설명을 보여 주고 검색한다.
+  // The plugin list of the settings window shows the description and searches it.
   if (typeof manifest.description !== "string" || manifest.description.length < 1 ||
       manifest.description.length > PLUGIN_DESCRIPTION_MAX) {
     throw new Error(`${where}: description must be 1 to ${PLUGIN_DESCRIPTION_MAX} characters`);
@@ -478,9 +478,9 @@ export function validateManifest(manifest) {
         seen.add(extension);
       }
     }
-    // 놓기 명령은 파일이 표면에 놓였을 때 페이지가 그 표면에서 {urls} 로 실행하는 선언된 명령이다.
+    // The drop command is a declared command that the page runs on a surface with {urls} when files are dropped on that surface.
     if (surface.drop !== undefined && (!isText(surface.drop) ||
-      // 기본값: exposes 와 그 commands 는 선택 필드이며, 명령을 선언하지 않은 플러그인에는 놓기 명령이 없다.
+      // default: exposes and its commands are optional fields; a plugin that declares no command has no drop command.
       !(manifest.exposes?.commands ?? []).some((command) => command.name === surface.drop))) {
       throw new Error(`${where}: surface drop must name a command declared in exposes`);
     }
@@ -516,7 +516,7 @@ export function validateManifest(manifest) {
           throw new Error(`${where}: section ${section.id} module must be a JavaScript path inside the package`);
         }
       }
-      // fill 은 list 레이아웃에서 남은 높이를 받는 섹션이다(docs/spec/plugins.md#sections).
+      // fill is the section that receives the remaining height in the list layout (docs/spec/plugins.md#sections).
       if (section.fill !== undefined && typeof section.fill !== "boolean") {
         throw new Error(`${where}: section ${section.id} fill must be a boolean`);
       }
@@ -545,8 +545,8 @@ export function validateManifest(manifest) {
 }
 
 /**
- * 플러그인 plugin 의 프로젝트 데이터 값 하나를 선언 data 로 검사하고 값을 반환한다.
- * 선언하지 않은 키이거나 스키마에 맞지 않으면 예외를 던진다(docs/spec/plugins.md#project-data).
+ * Validates one project data value of the plugin with the declared data and returns the value.
+ * Throws when the key is not declared or the value does not match the schema (docs/spec/plugins.md#project-data).
  */
 export function checkProjectData(plugin, data, key, value) {
   const entry = data?.[key];
@@ -556,11 +556,11 @@ export function checkProjectData(plugin, data, key, value) {
 }
 
 /**
- * sidecar.json 하나를 검사한다. 형식이 틀리면 예외를 던지고, 맞으면 받은 값을 반환한다.
+ * Validates one sidecar.json. Throws when the format is wrong and returns the received value otherwise.
  *
- *   executable  빌드된 실행 파일의 패키지 안 경로. 네이티브 호스트는 이 파일 이름으로
- *               애플리케이션 실행 파일과 같은 디렉터리에서 찾는다
- *   protocol    메시지 형식 버전. 현재 1
+ *     executable  path of the built executable inside the sidecar. The native host looks for this file name
+ *                             in the same directory as the application executable
+ *     protocol    message format version. Currently 1
  *   helpers     optional; the helper programs of the sidecar, each with the name of its package.json and its executable
  */
 /**
@@ -588,7 +588,7 @@ export function validateSidecar(sidecar) {
   }
   if (sidecar.helpers !== undefined) {
     if (!Array.isArray(sidecar.helpers)) throw new Error("sidecar.json: helpers must be an array");
-    // 호스트는 실행 파일을 파일 이름으로 찾으므로 한 사이드카가 같은 이름을 두 번 요구할 수 없다.
+    // The host looks for the executable by file name, so one sidecar cannot require the same name twice.
     const names = new Set([executable.split("/").pop()]);
     for (const helper of sidecar.helpers) {
       if (!isObject(helper)) throw new Error("sidecar.json helpers: expected an object");
@@ -609,14 +609,14 @@ export function validateSidecar(sidecar) {
 }
 
 /**
- * environment.json 하나를 검사한다. 형식이 틀리면 예외를 던지고, 맞으면 받은 값을 반환한다.
+ * Validates one environment.json. Throws when the format is wrong and returns the received value otherwise.
  *
- *   runtime    런타임 모듈 디렉터리. 애플리케이션 디렉터리 기준 경로이고 index.js 를 포함한다
- *   workspace  새 스페이스의 배치. focus 는 포커스할 카드 id, grid 는 선과 카드
- *   sidebars   사이드바 세트(sets)와 자리 연결(links)의 기본값
+ *     runtime    runtime module directory. A path relative to the application directory that contains index.js
+ *     workspace  layout of a new space. focus is the id of the card to focus, grid holds the lines and cards
+ *     sidebars   defaults of the sidebar sets (sets) and the slot links (links)
  *
- * 플러그인은 environment.json 이 아니라 설정 폴더에 설치된 목록에서 온다(validateInstalledPlugins). 플러그인 id 와
- * 섹션 id 의 참조는 manifest 를 불러온 뒤 checkReferences 로 검사한다.
+ * Plugins come from the list installed in the configuration folder, not from environment.json (validateInstalledPlugins). References to plugin ids and
+ * section ids are validated with checkReferences after the manifests are loaded.
  */
 export function validateEnvironment(environment) {
   if (!isObject(environment)) throw new Error("environment.json: expected an object");
@@ -627,7 +627,7 @@ export function validateEnvironment(environment) {
   if (environment.starter !== undefined && !isText(environment.starter)) {
     throw new Error("environment.json: starter must be a pack name");
   }
-  // 기본 registry 는 첫 실행이 정하는 index 의 위치다(docs/spec/installation.md#fetching).
+  // The default registry is the index location that the first run determines (docs/spec/installation.md#fetching).
   if (environment.registry !== undefined
     && !(isText(environment.registry) && /^(https:\/\/[^/?#]+|file:\/\/\/)/.test(environment.registry))) {
     throw new Error("environment.json: registry must be an https: or absolute file: URL");
@@ -672,21 +672,21 @@ export function validateEnvironment(environment) {
 }
 
 /**
- * environment.json 이 참조하는 플러그인 id 와 섹션 id 가 불러온 manifest 에 있는지
- * 검사한다. 없으면 예외를 던진다.
+ * Checks that the plugin ids and section ids that environment.json references exist in the loaded manifests.
+ * Throws when one does not.
  */
 export function checkReferences(environment, manifests) {
   const cards = new Set(manifests.filter((m) => m.surface).map((m) => m.id));
   const ids = manifests.map((m) => m.id);
   if (new Set(ids).size !== ids.length) throw new Error("environment.json: two plugins declare the same id");
   const byId = new Map(manifests.map((manifest) => [manifest.id, manifest]));
-  // 기본값: settings 는 environment.json 의 선택 필드이며, 없으면 플러그인 설정 기본값을 바꾸지 않는다.
+  // default: settings is an optional field of environment.json; without it, the plugin setting defaults are not changed.
   for (const [pluginId, values] of Object.entries(environment.settings ?? {})) {
     const manifest = byId.get(pluginId);
-    // 불러오지 않은 플러그인의 설정은 검사하지도 적용하지도 않고 유지한다(docs/spec/plugins.md).
+    // The settings of a plugin that is not loaded are kept; they are neither validated nor applied (docs/spec/plugins.md).
     if (!manifest) continue;
     if (!isObject(values)) throw new Error(`environment.json: settings for ${pluginId} must be an object`);
-    // 기본값: settings 는 plugin.json 의 선택 필드이며, 없는 플러그인은 설정이 없다.
+    // default: settings is an optional field of plugin.json; a plugin without it has no settings.
     const declarations = manifest.settings ?? {};
     for (const [key, value] of Object.entries(values)) {
       const declaration = declarations[key];
@@ -695,14 +695,14 @@ export function checkReferences(environment, manifests) {
     }
   }
   for (const card of environment.workspace.grid.cards) {
-    // 기본값: tabs 는 environment.json 카드의 선택 필드이며, 없는 카드는 빈 자리다.
+    // default: tabs is an optional field of an environment.json card; a card without it is an empty slot.
     for (const tab of card.tabs ?? []) {
-      // 불러오지 않은 플러그인의 탭은 placeholder 카드로 열린다(docs/spec/plugins.md).
+      // The tab of a plugin that is not loaded opens as a placeholder card (docs/spec/plugins.md).
       if (byId.has(tab.plugin) && !cards.has(tab.plugin)) throw new Error(`environment.json: tab plugin ${tab.plugin} has no surface`);
     }
   }
   normalizeSidebarDefaults(environment, manifests);
-  // 사이드카를 실행하지 못하는 런타임은 표면을 열지 않지만 상태 모듈은 마운트한다(docs/spec/plugins.md#environmentjson).
+  // A runtime that cannot run sidecars does not open the surface but mounts the state module (docs/spec/plugins.md#environmentjson).
   if (environment.sidecars === false) {
     for (const manifest of manifests) {
       if (manifest.state && manifestSidecars(manifest).length > 0) {
@@ -712,10 +712,10 @@ export function checkReferences(environment, manifests) {
   }
 }
 
-/** 세트 id 로 쓸 수 없는 값. */
+/** Values that cannot be used as a set id. */
 const RESERVED_SET_IDS = ["off", "inherit"];
 
-/** 세트 제목의 최대 길이. */
+/** The maximum length of a set title. */
 const SET_TITLE_MAX = 40;
 
 function validatePluginSidebarDefaults(manifest) {
@@ -740,7 +740,7 @@ function validatePluginSidebarDefaults(manifest) {
   }
 }
 
-/** 플러그인 기본값을 정규화하고 명시적 환경 목록으로 교체한다. */
+/** Normalizes the plugin defaults and replaces them with the explicit environment list. */
 export function normalizeSidebarDefaults(environment, manifests) {
   const defaults = { sets: [], links: [] };
   for (const manifest of manifests) {
@@ -750,7 +750,7 @@ export function normalizeSidebarDefaults(environment, manifests) {
       defaults.sets.push({ ...set, id: `${manifest.id}.${set.id}`, sections: [...set.sections] });
     }
     for (const kind of ["card", "window"]) {
-      // 기본값: 선언에서 생략한 배치 종류에는 기본 연결이 없다.
+      // default: a layout kind omitted from the declaration has no default link.
       for (const [side, set] of Object.entries(manifest.sidebars[kind] ?? {})) {
         defaults.links.push({ place: `${kind}-${side}`, plugin: manifest.id, set: `${manifest.id}.${set}` });
       }
@@ -765,9 +765,9 @@ export function normalizeSidebarDefaults(environment, manifests) {
 }
 
 /**
- * 사이드바 세트(sets)와 연결(links)의 형식을 검사한다. environment.json 의 sidebars 와 설정에
- * 저장된 sets, links 가 같은 규칙을 따른다. 틀리면 where 로 시작하는 예외를 던진다. loaded 가 불러온 플러그인 id 의
- * 집합이면, 불러오지 않은 플러그인의 연결은 그 플러그인이 다시 설치되면 쓰이도록 알려진 세트를 요구하지 않고 유지한다.
+ * Validates the format of the sidebar sets (sets) and links (links). The sidebars of environment.json and the sets and links
+ * stored in the settings follow the same rules. Throws an exception that starts with where when they are wrong. When loaded is the set of loaded plugin ids,
+ * a link of a plugin that is not loaded is kept without requiring a known set, so that it is used again when that plugin is installed again.
  */
 export function validateSidebars(sidebars, where, loaded = null) {
   if (!isObject(sidebars) || !Array.isArray(sidebars.sets) || !Array.isArray(sidebars.links)) {
@@ -786,15 +786,15 @@ export function validateSidebars(sidebars, where, loaded = null) {
     if (set.sections.some((id) => !isText(id)) || new Set(set.sections).size !== set.sections.length) {
       throw new Error(`${where}: set ${set.id} sections must be section ids without repetition`);
     }
-    // 세트는 섹션을 모두 쌓아 보이거나(list) 하나씩 탭으로 보인다(tabs).
+    // A set shows all its sections stacked (list) or one at a time as tabs (tabs).
     if (!["list", "tabs"].includes(set.layout)) throw new Error(`${where}: set ${set.id} layout must be list or tabs`);
-    // 설정 선택의 off 와 카드 개별 선택의 inherit 은 세트 ID로 사용할 수 없다.
+    // off of the setting choice and inherit of the per-card choice cannot be used as a set id.
     if (RESERVED_SET_IDS.includes(set.id)) throw new Error(`${where}: set id ${set.id} is reserved`);
     if (setIds.has(set.id)) throw new Error(`${where}: duplicate set ${set.id}`);
     setIds.add(set.id);
   }
-  // 연결의 뜻은 docs/spec/settings.md 의 사이드바 선택이다. plugin 이 null 인 left, right 연결은 일반 선택,
-  // 플러그인의 창(window-*)과 카드(card-*) 연결은 서로 독립적이며 알려진 세트를 요구한다.
+  // The meaning of a link is the sidebar choice of docs/spec/settings.md. A left or right link whose plugin is null is a general choice;
+  // the window (window-*) and card (card-*) links of a plugin are independent of each other and require a known set.
   const seen = new Set();
   for (const link of sidebars.links) {
     if (!isObject(link) || !["left", "right", "window-left", "window-right", "card-left", "card-right", "card-top", "card-bottom"].includes(link.place)) {
@@ -807,7 +807,7 @@ export function validateSidebars(sidebars, where, loaded = null) {
     if (!general && link.plugin === null) throw new Error(`${where}: a ${link.place} link names a plugin`);
     const kept = loaded !== null && link.plugin !== null && !loaded.has(link.plugin);
     if (!kept && !setIds.has(link.set)) throw new Error(`${where}: a ${link.place} link requires a known set`);
-    // 기본값: plugin 이 없는 연결은 일반 사이드바 연결이며, 겹침 검사 키에서 general 로 적는다.
+    // default: a link without plugin is a general sidebar link and is written as general in the overlap check key.
     const key = `${link.place} ${link.plugin ?? "general"}`;
     if (seen.has(key)) throw new Error(`${where}: link ${key} appears twice`);
     seen.add(key);
@@ -815,18 +815,18 @@ export function validateSidebars(sidebars, where, loaded = null) {
   return sidebars;
 }
 
-/** 섹션 id 의 플러그인 id. 섹션 id 는 `<plugin id>.<name>` 이다. */
+/** The plugin id of a section id. A section id is `<plugin id>.<name>`. */
 export const sectionPlugin = (id) => id.slice(0, id.indexOf("."));
 
 /**
- * 세트의 섹션 id 와 연결의 플러그인 id 를 불러온 manifest 로 검사한다. 불러온 플러그인이 선언하지 않은 섹션과
- * 표면이 없는 불러온 플러그인의 카드 변 연결은 예외를 던진다. 불러오지 않은 플러그인을 가리키는 것은 유지한다
+ * Validates the section ids of the sets and the plugin ids of the links with the loaded manifests. A section that a loaded plugin does not declare, and
+ * a card side link of a loaded plugin that has no surface, throw an exception. A link that points to a plugin that is not loaded is kept
  * (docs/spec/plugins.md).
  */
 export function checkSidebarReferences(sidebars, manifests, where) {
   const cards = new Set(manifests.filter((m) => m.surface).map((m) => m.id));
   const plugins = new Set(manifests.map((m) => m.id));
-  // 기본값: sections 는 plugin.json 의 선택 필드이며, 없는 플러그인은 섹션이 없다.
+  // default: sections is an optional field of plugin.json; a plugin without it has no sections.
   const sections = new Set(manifests.flatMap((m) => (m.sections ?? []).map((s) => s.id)));
   for (const set of sidebars.sets) {
     for (const id of set.sections) {
@@ -841,15 +841,15 @@ export function checkSidebarReferences(sidebars, manifests, where) {
   }
 }
 
-/* ── 공개 항목(exposure) ─────────────────────────────────────────────────
-   코어와 플러그인이 외부 클라이언트에 공개하는 status, command, dom 항목의 선언
-   형식과, 문서 안에서 등록된 항목에 요청을 적용하는 함수. 명세는
-   docs/spec/exposure.md 에 있다. */
+/* ── Exposure ─────────────────────────────────────────────────────────
+   The declaration format of the status, command and dom entries that the core and plugins expose to
+   external clients, and the functions that apply a request to the entries registered in a
+   document. The specification is docs/spec/exposure.md. */
 
-/** 선언 파일의 키와 등록 종류. 선언은 commands 로, 등록과 목록은 command 로 적는다. */
+/** The keys of the declaration file and the registration kinds. A declaration is written as commands; registration and listing are written as command. */
 export const EXPOSE_KINDS = Object.freeze({ status: "status", commands: "command", dom: "dom" });
 
-/** 요청 실패의 코드. */
+/** The codes of request failures. */
 export const EXPOSURE_ERRORS = Object.freeze({
   failed: -32000,
   unknownMethod: -32601,
@@ -874,7 +874,7 @@ const SCHEMA_TYPES = {
   null: (v) => v === null,
 };
 
-/** 스키마 하나를 검사한다. 허용하는 키워드는 type, properties, items, enum 이다. */
+/** Validates one schema. The allowed keywords are type, properties, items and enum. */
 function checkSchema(where, schema) {
   if (!isObject(schema)) throw new Error(`${where}: schema must be an object`);
   only(where, schema, ["type", "properties", "items", "enum"]);
@@ -895,7 +895,7 @@ function checkSchema(where, schema) {
 }
 
 /**
- * 값이 스키마를 만족하는지 반환한다. properties 는 값에 있는 키만 검사한다.
+ * Returns whether the value satisfies the schema. properties checks only the keys that the value has.
  */
 export function matchesSchema(schema, value) {
   if (schema.enum !== undefined && !schema.enum.some((item) => JSON.stringify(item) === JSON.stringify(value))) return false;
@@ -910,18 +910,18 @@ export function matchesSchema(schema, value) {
 }
 
 /**
- * `exposes` 선언 하나를 검사한다. 형식이 틀리면 예외를 던지고, 맞으면 받은 값을 반환한다.
+ * Validates one `exposes` declaration. Throws when the format is wrong and returns the received value otherwise.
  *
- *   owner   이름의 앞부분. core, host, 또는 플러그인 id
+ *     owner   first part of the name: core, host or a plugin id
  *   status  {name, description, schema}
- *   commands {name, description, params, result, timeout?}. params 는 type object 스키마다.
- *           timeout 은 호스트가 표면의 답을 기다리는 시간(ms, 1–600000)이다
+ *     commands {name, description, params, result, timeout?}. params is a schema of type object.
+ *                     timeout is the time (ms, 1–600000) that the host waits for the answer of the surface
  *   dom     {name, description, many?}
  *
- * 이름은 `<owner>.<name>` 이고 소문자, 숫자, 점, 하이픈으로 이루어진다. 한 종류 안에서
- * 같은 이름은 한 번만 선언한다. 종류가 다르면 같은 이름을 쓸 수 있다.
+ * A name is `<owner>.<name>` and consists of lowercase letters, digits, dots and hyphens. A name is declared
+ * only once within one kind. The same name can be used in different kinds.
  */
-/** 명령 선언의 timeout 상한(ms). */
+/** The upper bound of the timeout of a command declaration (ms). */
 export const COMMAND_TIMEOUT_MAX = 600000;
 
 export function validateExposes(owner, exposes) {
@@ -961,9 +961,9 @@ export function validateExposes(owner, exposes) {
 }
 
 /**
- * 플러그인의 diagnostics.json 을 manifest 와 함께 검사한다. `{module, exposes}` 이며 module 은
- * 패키지 안의 JavaScript 경로, exposes 는 plugin.json exposes 와 같은 형식이다. 표면이 있는
- * 플러그인만 가질 수 있고, 한 이름은 plugin.json 과 diagnostics.json 중 한 곳에만 선언한다.
+ * Validates the diagnostics.json of a plugin together with the manifest. It is `{module, exposes}`; module is the
+ * JavaScript path inside the plugin and exposes has the same format as exposes of plugin.json. Only a plugin that has a surface
+ * can have it, and a name is declared in only one of plugin.json and diagnostics.json.
  */
 export function validateDiagnostics(manifest, diagnostics) {
   const where = `plugin ${manifest.id} ${DIAGNOSTICS}`;
@@ -975,24 +975,24 @@ export function validateDiagnostics(manifest, diagnostics) {
     throw new Error(`${where}: module must be a JavaScript path inside the package`);
   }
   validateExposes(manifest.id, diagnostics.exposes);
-  // 기본값: exposes 는 plugin.json 의 선택 필드이며, 없는 플러그인은 진단 항목만 공개한다.
+  // default: exposes is an optional field of plugin.json; a plugin without it exposes only the diagnostics entries.
   mergeExposes(manifest.exposes ?? {}, diagnostics.exposes);
   return diagnostics;
 }
 
-/** 두 exposes 선언을 합친다. 같은 종류의 같은 이름이 두 곳에 있으면 예외를 던진다. */
+/** Merges two exposes declarations. Throws when the same name of the same kind is in both. */
 export function mergeExposes(first, second) {
   declarationMap(second, declarationMap(first));
   return Object.fromEntries(Object.keys(EXPOSE_KINDS)
     .filter((key) => first[key] !== undefined || second[key] !== undefined)
-    // 기본값: 공개 항목 묶음의 각 목록은 선택 필드이며, 없는 목록은 비어 있다.
+    // default: each list of an exposure bundle is an optional field; a missing list is empty.
     .map((key) => [key, [...(first[key] ?? []), ...(second[key] ?? [])]]));
 }
 
 /**
- * host 가 제공한 /installed-plugins.json 을 검사하고 plugin 목록을 반환한다. 항목은 { id, package, version,
- * diagnostics? } 이며 diagnostics 는 진단 build 에서만 온다. host 가 설치 상태를 읽지 못하면 문서는 { error } 이고,
- * 그 텍스트로 예외를 던진다.
+ * Validates /installed-plugins.json that the host provides and returns the plugin list. An entry is { id, package, version,
+ * diagnostics? }; diagnostics comes only from a diagnostic build. When the host cannot read the installation state, the document is { error }
+ * and the function throws with that text.
  */
 export function validateInstalledPlugins(document) {
   if (!isObject(document)) throw new Error(`${INSTALLED_PLUGINS}: expected an object`);
@@ -1019,7 +1019,7 @@ export function validateInstalledPlugins(document) {
     try {
       validateManifest(plugin.manifest);
     } catch (error) {
-      // 거부한 manifest 가 어느 설치 plugin 의 것인지 밝힌다. 그 파일은 plugins/<id>/<version>/plugin.json 이다.
+      // States which installed plugin the rejected manifest belongs to. That file is plugins/<id>/<version>/plugin.json.
       throw new Error(`installed plugin ${plugin.id} ${plugin.version} (${plugin.package}): ${error.message}`);
     }
     if (plugin.diagnostics !== undefined && !isObject(plugin.diagnostics)) {
@@ -1033,7 +1033,7 @@ export function validateInstalledPlugins(document) {
   return document.plugins;
 }
 
-/** 코어 선언 파일(exposure.json) 하나를 검사한다. 이름의 owner 는 core 다. */
+/** Validates one core declaration file (exposure.json). The owner of a name is core. */
 export function validateExposureFile(file) {
   if (!isObject(file)) throw new Error(`${EXPOSURE}: expected an object`);
   only(EXPOSURE, file, ["exposes"]);
@@ -1041,22 +1041,22 @@ export function validateExposureFile(file) {
   return file;
 }
 
-/** 요청 메서드가 다루는 항목 종류. */
+/** The entry kinds that the request methods handle. */
 export const METHOD_KINDS = Object.freeze({
   "status.get": "status", "status.watch": "status", "status.unwatch": "status", "status.next": "status",
   "command.run": "command", "dom.rect": "dom", "dom.act": "dom",
 });
 
-/** 선언 Map 의 키. 종류와 이름의 쌍이다. */
+/** The key of a declaration Map: the pair of kind and name. */
 export const declarationKey = (kind, name) => `${kind} ${name}`;
 
 /**
- * 선언을 declarationKey(kind, name) 에서 {kind, declaration} 으로 찾는 Map 으로 바꾼다.
- * 이미 있는 키면 예외를 던진다.
+ * Converts declarations into a Map that finds {kind, declaration} by declarationKey(kind, name).
+ * Throws when the key already exists.
  */
 export function declarationMap(exposes, into = new Map()) {
   for (const [key, kind] of Object.entries(EXPOSE_KINDS)) {
-    // 기본값: 공개 항목 묶음의 각 목록은 선택 필드이며, 없는 목록은 비어 있다.
+    // default: each list of an exposure bundle is an optional field; a missing list is empty.
     for (const declaration of exposes[key] ?? []) {
       const at = declarationKey(kind, declaration.name);
       if (into.has(at)) throw new Error(`${kind} ${declaration.name} is declared twice`);
@@ -1074,7 +1074,7 @@ export function pagePackage(pathname) {
   return name && PACKAGE.test(name) ? name : null;
 }
 
-/** 코드를 가진 요청 실패. 호출자는 {error: {code, message}} 로 답한다. */
+/** A request failure that has a code. The caller answers with {error: {code, message}}. */
 export class ExposureError extends Error {
   constructor(code, message) {
     super(message);
@@ -1082,7 +1082,7 @@ export class ExposureError extends Error {
   }
 }
 
-/** 요소의 사각형. 요소가 속한 문서의 뷰포트 기준 CSS 픽셀이다. */
+/** The rectangle of an element, in CSS pixels relative to the viewport of the document that the element belongs to. */
 export function elementRect(element) {
   const r = element.getBoundingClientRect();
   return { x: r.left, y: r.top, width: r.width, height: r.height };
@@ -1093,12 +1093,12 @@ const POINTER = /^pointer/;
 const MOUSE = /^(mouse|click$|dblclick$|contextmenu$)/;
 
 /**
- * 요소에 합성 DOM 이벤트를 보낸다. 페이지는 isTrusted 가 false 인 이벤트를 받는다.
+ * Sends a synthetic DOM event to an element. The page receives an event whose isTrusted is false.
  *
  *   click     element.click()
- *   input     value 를 설정하고 input 과 change 를 보낸다
- *   dispatch  event = {type, ...init}. type 에 따라 KeyboardEvent, PointerEvent,
- *             MouseEvent, Event 를 만든다. bubbles 의 기본값은 true 다
+ *     input     sets value and sends input and change
+ *     dispatch  event = {type, ...init}. Creates a KeyboardEvent, PointerEvent,
+ *                         MouseEvent or Event according to type. The default of bubbles is true
  */
 export function actOn(element, { action, value, event }) {
   const view = element.ownerDocument.defaultView;
@@ -1128,11 +1128,11 @@ export function actOn(element, { action, value, event }) {
 }
 
 /**
- * 한 문서에 등록된 항목. 선언(declarationMap 의 결과)에 없는 이름은 등록하지 못한다.
+ * The entries registered in one document. A name that the declarations (the result of declarationMap) do not contain cannot be registered.
  *
- * status 의 감시는 두 방법으로 전달한다. watch 의 changed(value) 는 값이 바뀔 때마다
- * 호출되고, status.next 는 요청의 version 보다 새 값이 생기면 {version, value} 로
- * 답한다. 감시가 끝나면 기다리던 status.next 는 {closed: true} 로 답한다.
+ * A status watch is delivered in two ways. changed(value) of watch is
+ * called each time the value changes, and status.next answers with {version, value} when a value
+ * newer than the version of the request exists. When the watch ends, a waiting status.next answers with {closed: true}.
  */
 export function exposureEntries(declared) {
   const statuses = new Map();
@@ -1146,7 +1146,7 @@ export function exposureEntries(declared) {
     return found.declaration;
   };
 
-  // 기본값: 등록하지 않은 dom 이름에는 요소가 없고, 부르는 곳이 그 경우를 unregistered 오류로 알린다.
+  // default: an unregistered dom name has no element, and the caller reports that case as an unregistered error.
   const elements = (name) => (doms.get(name) ?? []).flatMap((provide) => provide()).filter((el) => el.isConnected !== false);
 
   function status(name) {
@@ -1165,11 +1165,11 @@ export function exposureEntries(declared) {
 
   function update(entry, value, changed) {
     if (!entry.watching) return;
-    // 기본값: 상태 값의 undefined 는 JSON 에 없으므로 null 로 공개한다.
+    // default: an undefined status value is not in JSON, so it is exposed as null.
     const text = JSON.stringify(value ?? null);
     if (text === entry.text) return;
     entry.text = text;
-    // 기본값: 상태 값의 undefined 는 JSON 에 없으므로 null 로 공개한다.
+    // default: an undefined status value is not in JSON, so it is exposed as null.
     entry.value = value ?? null;
     entry.version++;
     for (const resolve of entry.waiters.splice(0)) resolve({ version: entry.version, value: entry.value });
@@ -1180,19 +1180,19 @@ export function exposureEntries(declared) {
     declared,
 
     /**
-     * 이 문서에 등록된 status 하나를 문서 안에서 따라간다. fn(value) 는 현재 값과 그 뒤의 바뀐 값마다
-     * 호출된다. 등록되지 않은 이름이면 예외를 던진다. 따라가기를 멈추는 함수를 반환한다.
+     * Follows one status registered in this document from inside the document. fn(value) is called with the current value and with each
+     * later changed value. Throws when the name is not registered. Returns the function that stops following.
      */
     follow(name, fn) {
       const entry = status(name);
       let active = true;
       let text;
       const deliver = (value) => {
-        // 기본값: 상태 값의 undefined 는 JSON 에 없으므로 null 로 공개한다.
+        // default: an undefined status value is not in JSON, so it is exposed as null.
         const next = JSON.stringify(value ?? null);
         if (!active || next === text) return;
         text = next;
-        // 기본값: 상태 값의 undefined 는 JSON 에 없으므로 null 로 공개한다.
+        // default: an undefined status value is not in JSON, so it is exposed as null.
         fn(value ?? null);
       };
       const stopper = entry.subscribe(deliver);
@@ -1203,7 +1203,7 @@ export function exposureEntries(declared) {
       };
     },
 
-    /** 이름이 이 문서에 등록되어 있는지. dom 은 연결된 요소가 있을 때 등록된 것이다. */
+    /** Whether the name is registered in this document. A dom name is registered when an element is connected. */
     registered(kind, name) {
       return kind === "dom" ? elements(name).length > 0 : tables[kind].has(name);
     },
@@ -1224,15 +1224,15 @@ export function exposureEntries(declared) {
       commands.set(name, run);
     },
 
-    /** provide 는 요소 배열을 반환하는 함수다. many 가 아니면 한 번만 등록한다. */
+    /** provide is a function that returns an array of elements. Unless many is set, it registers only once. */
     dom(name, provide) {
       const { many } = declaration("dom", name);
       if (!many && doms.has(name)) throw new Error(`dom ${name} is already registered`);
-      // 기본값: 이 이름의 첫 등록이면 앞선 제공자가 없다.
+      // default: for the first registration of this name, there is no earlier provider.
       doms.set(name, [...(doms.get(name) ?? []), provide]);
     },
 
-    /** 이 문서의 등록을 모두 해제한다. 감시도 끝낸다. */
+    /** Releases every registration of this document. It also ends the watches. */
     clear() {
       for (const entry of statuses.values()) stop(entry);
       statuses.clear();
@@ -1241,8 +1241,8 @@ export function exposureEntries(declared) {
     },
 
     /**
-     * 요청 하나를 처리하고 결과를 반환한다. 실패하면 ExposureError 를 던진다.
-     * changed(name, value) 는 감시 중인 status 의 값이 바뀔 때 호출된다.
+     * Handles one request and returns the result. Throws ExposureError when it fails.
+     * changed(name, value) is called when the value of a watched status changes.
      */
     async answer(method, params, changed = () => {}) {
       const kind = METHOD_KINDS[method];
@@ -1253,7 +1253,7 @@ export function exposureEntries(declared) {
       const { name } = params;
       const found = declared.get(declarationKey(kind, name));
       if (!found) throw new ExposureError(EXPOSURE_ERRORS.unknownName, `unknown ${kind} ${name}`);
-      // 기본값: 상태 값의 undefined 는 JSON 에 없으므로 null 로 답한다.
+      // default: an undefined status value is not in JSON, so it is answered as null.
       if (method === "status.get") return (await status(name).read()) ?? null;
       if (method === "status.watch") {
         const entry = status(name);
@@ -1281,7 +1281,7 @@ export function exposureEntries(declared) {
       if (method === "command.run") {
         const run = commands.get(name);
         if (!run) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `command ${name} is not registered`);
-        // command.run 은 params 를 반드시 담는다(docs/spec/exposure.md).
+        // command.run always carries params (docs/spec/exposure.md).
         if (!isObject(params.params)) {
           throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `command.run for ${name} requires params`);
         }
@@ -1289,7 +1289,7 @@ export function exposureEntries(declared) {
         if (!matchesSchema(found.declaration.params, input)) {
           throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `invalid params for ${name}`);
         }
-        // 기본값: 결과가 없는 명령의 undefined 는 JSON 에 없으므로 null 로 답한다.
+        // default: an undefined result of a command without a result is not in JSON, so it is answered as null.
         return (await run(input)) ?? null;
       }
       const list = elements(name);
@@ -1297,7 +1297,7 @@ export function exposureEntries(declared) {
       if (!found.declaration.many && list.length > 1) {
         throw new ExposureError(EXPOSURE_ERRORS.unregistered, `dom ${name} has ${list.length} elements`);
       }
-      // 기본값: dom.rect 와 dom.act 의 index 는 선택 필드이며, 없으면 첫 요소다.
+      // default: index of dom.rect and dom.act is an optional field; without it, the first element is used.
       const index = params.index ?? 0;
       if (!Number.isInteger(index) || index < 0) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "index must be a non-negative integer");
       const element = list[index];
@@ -1308,39 +1308,39 @@ export function exposureEntries(declared) {
   };
 }
 
-/** 요청 처리 결과를 relay 의 답 형식 {result} 또는 {error: {code, message}} 로 바꾼다. */
+/** Converts the result of a request into the answer format {result} or {error: {code, message}} of the relay. */
 export async function replyPayload(work) {
   try {
-    // 기본값: 결과가 없는 요청의 undefined 는 JSON 에 없으므로 null 로 답한다.
+    // default: an undefined result of a request without a result is not in JSON, so it is answered as null.
     return { result: (await work()) ?? null };
   } catch (error) {
-    // 등록한 함수가 던진 일반 예외는 요청 형식이 아니라 실행의 실패다.
+    // A general exception thrown by a registered function is a failure of execution, not of the request format.
     const code = error instanceof ExposureError ? error.code : EXPOSURE_ERRORS.failed;
-    // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
+    // default: the thrown value may not be an Error, so without message the value itself is written.
     return { error: { code, message: String(error?.message ?? error) } };
   }
 }
 
 /**
- * 표면 페이지의 공개 항목 등록.
+ * Exposure registration of a surface page.
  *
- * port 는 런타임의 page.exposure 이고 load 는 manifest 형식의 선언 묶음 또는 선언 Map 을
- * 반환하는 함수다. 선언은 첫 등록에서 한 번 읽는다. 등록은 선언을 읽은 뒤 이루어지고,
- * 선언되지 않은 이름이면 반환한 promise 가 거절된다. 메인 페이지가 전달한 요청에는
- * 이 문서에 등록된 항목으로 답한다.
+ * port is page.exposure of the runtime and load is a function that returns a declaration bundle in the manifest format or a declaration Map.
+ * The declarations are read once at the first registration. Registration happens after the declarations are read,
+ * and the returned promise is rejected when the name is not declared. A request that the main page forwards is
+ * answered with the entries registered in this document.
  *
- * 감시는 메인 페이지가 정한 경로로 전달한다. 메인 페이지는 status.watch 를 전달한 뒤
- * status.next {name, version} 을 반복해서 전달하고, 이 문서는 version 보다 새 값이
- * 생기면 {version, value} 로 답한다.
+ * A watch is delivered through the path that the main page determines. The main page forwards status.watch and then
+ * forwards status.next {name, version} repeatedly; this document answers with {version, value} when a value
+ * newer than version exists.
  */
 export function createExpose(port, load) {
   let entries = null;
   let loaded = null;
   const ready = () => {
-    // 기본값: 동시 요청은 같은 manifest 로딩 Promise 를 공유한다.
+    // default: concurrent requests share the same manifest loading Promise.
     entries ??= Promise.resolve().then(load).then(async (declarations) => {
-      // manifest 파일은 묶음 배열을 담는다. 요청 경로에는 registry와 exposureEntries가 쓰는
-      // 정규 선언 map이 필요하다.
+      // The manifest file holds an array of bundles. The request path needs the canonical declaration map that
+      // registry and exposureEntries use.
       const declared = declarations instanceof Map ? declarations : declarationMap(declarations);
       const made = exposureEntries(declared);
       loaded = made;
@@ -1349,11 +1349,11 @@ export function createExpose(port, load) {
           try {
             await port.reply(id, payload);
           } catch (error) {
-            // 페이지가 답하는 동안 호스트가 요청을 포기했을 수 있다. 처리되지 않은 promise를
-            // 만들지 않고, 거절된 답을 호스트 진단 채널로 보고한다. 요청/응답 결정은
-            // 여전히 호스트가 소유한다.
+            // The host may have abandoned the request while the page was answering. This does not create an unhandled promise;
+            // it reports the rejected answer to the host diagnostics channel. The host still
+            // owns the request and response decision.
             if (typeof port.report !== "function") throw error;
-            // default: Error가 아닌 거절은 그 값을 진단 이유로 담는다.
+            // default: a rejection that is not an Error carries its value as the diagnostic reason.
             await port.report(`exposure reply ${id}: ${String(error?.message ?? error)}`);
           }
         });
@@ -1377,21 +1377,21 @@ export function createExpose(port, load) {
     },
     changed: () => { for (const fn of bindings) fn(); },
   });
-  /* 연결은 선언을 읽은 뒤 한다. 선언되지 않은 명령이면 반환한 promise 가 거절된다. */
+  /* The connection is made after the declarations are read. The returned promise is rejected when the command is not declared. */
   const binding = (fn) => async (...args) => {
     await ready();
     return fn(...args);
   };
   return {
-    /** 요소를 이 문서에 등록된 명령에 연결한다. createBinder 의 bind, mark, delegate 다. */
+    /** Connects an element to a command registered in this document. It is bind, mark and delegate of createBinder. */
     bind: binding(binder.bind),
     mark: binding(binder.mark),
     delegate: binding(binder.delegate),
-    /** 이 문서에 선언된 명령을 레지스트리로 실행한다. */
+    /** Runs a command declared in this document through the registry. */
     run: binding(binder.run),
-    /** root 안에서 명령이나 dom 이름이 없는 조작 요소. */
+    /** The operable elements in root that have neither a command nor a dom name. */
     audit: (root) => binder.audit(root),
-    /** 연결이 바뀌면 fn 을 호출한다. 해제 함수를 반환한다. */
+    /** Calls fn when the connections change. Returns the release function. */
     onBinding(fn) {
       bindings.add(fn);
       return () => bindings.delete(fn);
@@ -1406,7 +1406,7 @@ export function createExpose(port, load) {
       binder.dispose();
       loaded?.clear();
       registered.clear();
-      // 기본값: 메인 페이지 안의 표면만 등록을 해제한다. 별도 문서의 포트에는 unregister 가 없고 그 등록은 문서와 함께 끝난다.
+      // default: only a surface inside the main page unregisters. The port of a separate document has no unregister, and its registration ends with the document.
       await port.unregister?.();
     },
   };

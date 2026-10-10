@@ -1,5 +1,5 @@
-//! sok 의 계약(docs/spec/cli.md)을 가짜 엔드포인트로 검사한다. 엔드포인트는 Unix socket 을 열고 endpoint.json 을
-//! 쓰며, 받은 요청을 기록하고 정한 응답을 돌려준다.
+//! Checks the contract of sok (docs/spec/cli.md) with a fake endpoint. The endpoint opens a Unix socket, writes endpoint.json,
+//! records the requests it receives and returns the specified responses.
 
 use std::io::{Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
 
-/// method 와 params 에 대한 응답. result 는 원래 JSON 이고, code 가 0 이 아니면 오류 응답이다. after 는 응답 뒤에
-/// 보낼 알림이고, close_after 가 참이면 응답(과 알림) 뒤에 연결을 닫는다.
+/// The response for a method and params. result is the original JSON, and the response is an error when code is not 0. after is a notification
+/// sent after the response, and when close_after is true the endpoint closes the connection after the response (and notifications).
 #[derive(Default)]
 struct Answer {
     result: String,
@@ -19,7 +19,7 @@ struct Answer {
     close_after: bool,
 }
 
-/// 가짜 엔드포인트가 요청마다 부르는 응답 함수.
+/// The response function that the fake endpoint calls for each request.
 type Respond = Arc<dyn Fn(&str, &Value) -> Answer + Send + Sync>;
 
 fn result(text: &str) -> Answer {
@@ -35,7 +35,7 @@ struct Fake {
     _socket: tempfile_dir::Dir,
 }
 
-/// 테스트가 끝나면 지우는 임시 폴더. 외부 crate 없이 std 로 만든다.
+/// A temporary folder removed when the test ends. It is made with std without an external crate.
 mod tempfile_dir {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -62,7 +62,7 @@ mod tempfile_dir {
 
     impl Drop for Dir {
         fn drop(&mut self) {
-            // 테스트 뒤 정리다. 지우지 못한 폴더는 다음 테스트에 영향을 주지 않는 고유 이름이다.
+            // Cleanup after the test. A folder that cannot be removed has a unique name that does not affect the next test.
             let _ = std::fs::remove_dir_all(&self.0);
         }
     }
@@ -110,7 +110,7 @@ fn serve(mut stream: UnixStream, requests: Arc<Mutex<Vec<Value>>>, respond: Resp
 }
 
 fn start(respond: impl Fn(&str, &Value) -> Answer + Send + Sync + 'static) -> Fake {
-    // Unix socket 경로는 104 바이트로 제한되므로 짧은 임시 폴더에 둔다.
+    // A Unix socket path is limited to 104 bytes, so the socket lives in a short temporary folder.
     let socket = tempfile_dir::Dir::new(Path::new("/tmp"));
     let address = socket.path().join("e.sock");
     let listener = UnixListener::bind(&address).expect("listen");
@@ -162,7 +162,7 @@ impl Fake {
     }
 }
 
-/// 경로 항목 검사가 바꾸는 paths.d 자리.
+/// The paths.d location that the path entry check changes.
 static PATHS: Mutex<PathBuf> = Mutex::new(PathBuf::new());
 
 fn run(args: &[&str]) -> (i32, String, String) {
@@ -198,7 +198,7 @@ fn unknown_command_exits_with_usage() {
     );
 }
 
-/// 쓰기를 언제나 거부하는 표준 오류.
+/// A standard error that always rejects writes.
 struct Unwritable;
 
 impl std::io::Write for Unwritable {
@@ -489,7 +489,7 @@ fn watch_prints_the_value_and_each_change() {
 #[test]
 fn the_default_configuration_directory_is_the_applications() {
     let home = tempfile_dir::Dir::new(&std::env::temp_dir());
-    // 이 테스트만 HOME 을 바꾼다. 다른 테스트는 --config-dir 을 주므로 HOME 을 읽지 않는다.
+    // Only this test changes HOME. The other tests pass --config-dir, so they do not read HOME.
     std::env::set_var("HOME", home.path());
     std::env::remove_var("XDG_CONFIG_HOME");
     let base = soksak_sok::platform::current()
@@ -507,8 +507,7 @@ fn the_default_configuration_directory_is_the_applications() {
     );
 }
 
-/// 선언된 command 하나를 보고하는 가짜 엔드포인트. exposure.list 는 그 command 를, command.run 은 받은 매개변수를
-/// 돌려준다.
+/// A fake endpoint that reports one declared command. exposure.list returns that command, and command.run returns the parameters it received.
 fn declared() -> Fake {
     let exposures = concat!(
         r#"{"status":[],"commands":[{"name":"fixture.do","description":"d","params":{"type":"object","properties":{"#,

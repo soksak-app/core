@@ -1,5 +1,5 @@
-//! 이 command line 의 경로 항목(docs/spec/cli.md)을 쓰고 지운다. 항목은 paths.d 폴더의 <identifier> 파일이며 sok
-//! 이 있는 폴더를 한 줄로 담는다.
+//! Writes and removes the path entry of this command line (docs/spec/cli.md). The entry is the file <identifier> of the paths.d folder and holds
+//! the folder that contains sok in one line.
 
 use std::io::{ErrorKind, Write};
 

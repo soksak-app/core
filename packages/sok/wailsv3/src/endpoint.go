@@ -1,7 +1,7 @@
 package sok
 
-// 실행 중인 애플리케이션의 로컬 엔드포인트(docs/spec/endpoint.md)에 연결해 JSON-RPC 요청을 보낸다. 프레임은 4바이트
-// 빅엔디언 길이와 UTF-8 JSON 본문이다.
+// Connects to the local endpoint of a running application (docs/spec/endpoint.md) and sends JSON-RPC requests. A frame
+// is a 4-byte big-endian length followed by a UTF-8 JSON body.
 
 import (
 	"encoding/binary"
@@ -17,17 +17,17 @@ import (
 	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
 
-// MaxFrameLength 는 프레임 본문의 최대 길이다.
+// MaxFrameLength is the maximum length of a frame body.
 const MaxFrameLength = 16 * 1024 * 1024
 
-// Endpoint 는 설정 폴더의 endpoint.json 이다.
+// Endpoint is the endpoint.json of the configuration directory.
 type Endpoint struct {
 	Transport string `json:"transport"`
 	Address   string `json:"address"`
 	PID       int    `json:"pid"`
 }
 
-// EndpointError 는 엔드포인트가 돌려준 JSON-RPC 오류다.
+// EndpointError is a JSON-RPC error that the endpoint returned.
 type EndpointError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -35,7 +35,8 @@ type EndpointError struct {
 
 func (e *EndpointError) Error() string { return fmt.Sprintf("%s (%d)", e.Message, e.Code) }
 
-// ReadEndpoint 는 configDir 의 endpoint.json 을 읽고, 이 플랫폼의 transport 이며 그 프로세스가 실행 중인지 확인한다.
+// ReadEndpoint reads endpoint.json of configDir and checks that its transport belongs to this platform and that its
+// process is running.
 func ReadEndpoint(configDir string) (Endpoint, error) {
 	file := filepath.Join(configDir, "endpoint.json")
 	data, err := os.ReadFile(file)
@@ -65,17 +66,18 @@ func ReadEndpoint(configDir string) (Endpoint, error) {
 	return endpoint, nil
 }
 
-// Client 는 엔드포인트 연결 하나다. 요청은 차례로 보내고 응답을 기다리며, 그 사이에 온 알림은 Notify 로 넘긴다.
+// Client is one endpoint connection. It sends requests one after another and waits for each response; notifications
+// that arrive in between go to Notify.
 type Client struct {
 	conn      net.Conn
 	nextID    int
 	closeOnce sync.Once
 	closeErr  error
-	// Notify 는 응답을 기다리는 동안 도착한 알림을 받는다.
+	// Notify receives the notifications that arrive while a response is awaited.
 	Notify func(method string, params json.RawMessage) error
 }
 
-// Dial 은 엔드포인트의 socket 에 연결한다.
+// Dial connects to the socket of the endpoint.
 func Dial(endpoint Endpoint) (*Client, error) {
 	conn, err := net.Dial("unix", endpoint.Address)
 	if err != nil {
@@ -84,8 +86,9 @@ func Dial(endpoint Endpoint) (*Client, error) {
 	return &Client{conn: conn, nextID: 1}, nil
 }
 
-// Close 는 연결을 닫는다.
-// Close 는 연결을 닫고 그 결과를 돌려준다. 두 번째부터는 첫 닫기의 결과를 돌려준다.
+// Close closes the connection.
+// Close closes the connection and returns its result. From the second call on, it returns the result of the first
+// close.
 func (c *Client) Close() error {
 	c.closeOnce.Do(func() {
 		if err := c.conn.Close(); err != nil {
@@ -118,7 +121,7 @@ type message struct {
 	Error  *EndpointError  `json:"error"`
 }
 
-// Read 는 다음 메시지 하나를 읽는다. 연결이 닫히면 "endpoint connection closed" 오류다.
+// Read reads the next message. When the connection is closed, it returns the error "endpoint connection closed".
 func (c *Client) read() (message, error) {
 	var header [4]byte
 	if _, err := io.ReadFull(c.conn, header[:]); err != nil {
@@ -142,7 +145,7 @@ func (c *Client) read() (message, error) {
 	return m, nil
 }
 
-// Request 는 method 를 보내고 그 결과를 원래 JSON 그대로 돌려준다. 결과가 없으면 null 이다.
+// Request sends the method and returns its result as the original JSON. Without a result, it returns null.
 func (c *Client) Request(method string, params any) (json.RawMessage, error) {
 	id := c.nextID
 	c.nextID++
@@ -179,7 +182,8 @@ func (c *Client) Request(method string, params any) (json.RawMessage, error) {
 	}
 }
 
-// Listen 은 연결이 닫힐 때까지 알림을 Notify 로 넘긴다. 반환값은 연결이 끝난 이유다.
+// Listen passes notifications to Notify until the connection closes. The return value is the reason the connection
+// ended.
 func (c *Client) Listen() error {
 	for {
 		m, err := c.read()

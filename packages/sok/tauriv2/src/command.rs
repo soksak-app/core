@@ -1,5 +1,5 @@
-//! 선언된 command 를 실행한다(docs/spec/cli.md). 매개변수 flag 는 고른 창의 exposure.list 가 보고하는 매개변수
-//! schema 로 해석하며, 맞지 않는 flag 와 값은 command 를 보내기 전에 거부한다.
+//! Runs a declared command (docs/spec/cli.md). The command interprets parameter flags with the parameter
+//! schema that exposure.list of the chosen window reports and rejects a flag or value that does not match before it sends the command.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -8,10 +8,10 @@ use serde_json::{Map, Value};
 
 use crate::{connect_to, indent, no_notify, select_window, Arguments, Error, Options};
 
-/// 선언된 command 와 함께 쓰는, 값을 받는 공통 option.
+/// Common options that take a value and are used with a declared command.
 const COMMON_VALUES: &[&str] = &["config-dir", "window", "project", "surface", "params"];
 
-/// 첫 위치 인자. 공통 option 의 값은 위치 인자가 아니다.
+/// The first positional argument. The value of a common option is not a positional argument.
 pub(crate) fn command_word(args: &[String]) -> Option<&str> {
     let mut i = 0;
     while i < args.len() {
@@ -27,7 +27,7 @@ pub(crate) fn command_word(args: &[String]) -> Option<&str> {
     None
 }
 
-/// 선언된 command 의 인자. flags 는 schema 로 해석하기 전의 매개변수 flag 다.
+/// The arguments of a declared command. flags are the parameter flags before the schema interprets them.
 struct CommandArguments {
     name: String,
     common: HashMap<String, String>,
@@ -57,7 +57,7 @@ fn parse_command(args: &[String]) -> Result<CommandArguments, Error> {
         };
         if !COMMON_VALUES.contains(&name) {
             parsed.flags.push(arg.clone());
-            // 값을 = 뒤에 주지 않은 flag 의 다음 인자는 그 값일 수 있다. boolean 인지는 schema 를 읽은 뒤 정한다.
+            // The next argument of a flag that has no value after = can be its value. The schema decides whether the flag is boolean after the command reads it.
             if inline.is_none() && i + 1 < args.len() && !args[i + 1].starts_with("--") {
                 i += 1;
                 parsed.flags.push(args[i].clone());
@@ -83,7 +83,7 @@ fn parse_command(args: &[String]) -> Result<CommandArguments, Error> {
     Ok(parsed)
 }
 
-/// 매개변수 선언의 type 이름. 이름 하나나 이름 목록이다.
+/// The type name of a parameter declaration: one name or a list of names.
 fn types(declared: &Value) -> Result<Vec<String>, String> {
     match declared.get("type") {
         None => Ok(vec![]),
@@ -98,7 +98,7 @@ fn types(declared: &Value) -> Result<Vec<String>, String> {
     }
 }
 
-/// enum 값의 텍스트. Go 의 fmt.Sprint 와 같은 표기다.
+/// The text of an enum value, written like fmt.Sprint of Go.
 fn option_text(option: &Value) -> String {
     match option {
         Value::String(text) => text.clone(),
@@ -106,7 +106,7 @@ fn option_text(option: &Value) -> String {
     }
 }
 
-/// flag 의 텍스트를 매개변수 schema 의 값으로 바꾼다.
+/// Converts the text of a flag to a value of the parameter schema.
 fn convert(name: &str, text: &str, declared: &Value) -> Result<Value, Error> {
     if let Some(options) = declared
         .get("enum")
@@ -123,7 +123,7 @@ fn convert(name: &str, text: &str, declared: &Value) -> Result<Value, Error> {
         )));
     }
     let kinds = types(declared)?;
-    // 목록에 null 이 있으면 텍스트 null 은 다른 type 보다 먼저 null 이다(docs/spec/cli.md).
+    // When the list holds null, the text null is null before any other type (docs/spec/cli.md).
     if text == "null" && kinds.iter().any(|kind| kind == "null") {
         return Ok(Value::Null);
     }
@@ -169,7 +169,7 @@ fn convert(name: &str, text: &str, declared: &Value) -> Result<Value, Error> {
     )))
 }
 
-/// 매개변수 flag 를 schema 로 해석한 매개변수 객체.
+/// The parameter object that the schema made from the parameter flags.
 fn parameters(
     command: &str,
     properties: &Map<String, Value>,
@@ -219,7 +219,7 @@ fn parameters(
     Ok(params)
 }
 
-/// 선언된 command 하나를 실행하고 결과를 출력한다.
+/// Runs one declared command and prints the result.
 pub(crate) fn run_command(
     args: &[String],
     stdout: &mut dyn Write,
@@ -265,11 +265,11 @@ pub(crate) fn run_command(
             }
         }
         None => {
-            // 기본값: 매개변수를 선언하지 않은 command 는 properties 가 없고 빈 매개변수 객체를 받는다.
+            // default: a command that declares no parameters has no properties and takes an empty parameter object.
             let empty = Map::new();
             let properties = command["params"]["properties"]
                 .as_object()
-                // 기본값: 매개변수를 선언하지 않은 command 는 properties 가 없고 빈 매개변수 객체를 받는다.
+                // default: a command that declares no parameters has no properties and takes an empty parameter object.
                 .unwrap_or(&empty);
             parameters(&parsed.name, properties, &parsed.flags)?
         }

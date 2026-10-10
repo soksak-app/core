@@ -1,7 +1,7 @@
 package tests
 
-// sok 의 계약(docs/spec/cli.md)을 가짜 엔드포인트로 검사한다. 엔드포인트는 Unix socket 을 열고 endpoint.json 을 쓰며,
-// 받은 요청을 기록하고 정한 응답을 돌려준다.
+// Checks the contract of sok (docs/spec/cli.md) with a fake endpoint. The endpoint opens a Unix socket, writes
+// endpoint.json, records the requests it receives and returns the responses that were set.
 
 import (
 	"bytes"
@@ -28,8 +28,9 @@ type fakeEndpoint struct {
 	requests  []map[string]any
 }
 
-// answer 는 method 와 params 에 대한 응답이다. result 는 원래 JSON 이고, code 가 0 이 아니면 오류 응답이다. after 는
-// 응답 뒤에 보낼 알림이고, closeAfter 가 참이면 응답(과 알림) 뒤에 연결을 닫는다.
+// answer is the response to a method and params. result is the original JSON, and the response is an error response
+// when code is not 0. after is the notification to send after the response, and when closeAfter is true the connection
+// is closed after the response (and the notification).
 type answer struct {
 	result     string
 	code       int
@@ -46,7 +47,7 @@ func writeFrame(conn net.Conn, body []byte) {
 
 func startEndpoint(t *testing.T, respond func(method string, params map[string]any) answer) *fakeEndpoint {
 	t.Helper()
-	// Unix socket 경로는 104 바이트로 제한되므로 짧은 임시 폴더에 둔다.
+	// A Unix socket path is limited to 104 bytes, so it is placed in a short temporary folder.
 	socketDir, err := os.MkdirTemp("/tmp", "sok")
 	if err != nil {
 		t.Fatal(err)
@@ -124,7 +125,7 @@ func (f *fakeEndpoint) last() map[string]any {
 	return params
 }
 
-// pathsDir 는 경로 항목 검사가 바꾸는 paths.d 자리다.
+// pathsDir is the paths.d slot that the path entry checks change.
 var pathsDir = "/nonexistent/paths.d"
 
 func run(args ...string) (int, string, string) {
@@ -143,7 +144,7 @@ func TestUnknownCommandExitsWithUsage(t *testing.T) {
 	}
 }
 
-// unwritable 은 쓰기를 언제나 거부하는 표준 오류다.
+// unwritable is a standard error that always rejects writes.
 type unwritable struct{}
 
 func (unwritable) Write([]byte) (int, error) { return 0, errors.New("standard error is closed") }
@@ -291,8 +292,8 @@ func TestTheDefaultConfigurationDirectoryIsTheApplications(t *testing.T) {
 	}
 }
 
-// declared 는 선언된 command 하나를 보고하는 가짜 엔드포인트다. exposure.list 는 그 command 를, command.run 은 받은
-// 매개변수를 돌려준다.
+// declared is a fake endpoint that reports one declared command. exposure.list returns that command, and command.run
+// returns the parameters it received.
 func declared(t *testing.T) *fakeEndpoint {
 	exposures := `{"status":[],"commands":[{"name":"fixture.do","description":"d","params":{"type":"object","properties":{` +
 		`"text":{"type":"string"},"count":{"type":"number"},"whole":{"type":"integer"},"flag":{"type":"boolean"},` +

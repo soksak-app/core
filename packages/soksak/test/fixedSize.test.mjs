@@ -89,8 +89,8 @@ test("dragging the boundary beside a px slot resizes it", () => {
 
 test("a card too narrow for two cannot be cut on that axis", () => {
   const grid = edges();
-  // 180 은 두 카드의 최소 96 과 그 사이 통로 24 를 담지 못한다. px 크기 때문이
-  // 아니다. 그 크기를 가진 채로도 넓으면 잘린다 — 아래의 400px 카드가 그렇다.
+  // 180 cannot hold the minimum 96 of two cards and the 24 gap between them. This is not caused by the px size.
+  // With that size, a wide card is also cut off, as the 400px card below shows.
   assert.equal(grid.card("left").width, 180);
   assert.equal(grid.canSplit("left", "x"), false, "180 < 96 + 24 + 96");
 });

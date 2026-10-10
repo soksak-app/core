@@ -1,5 +1,5 @@
-//! 실행 중인 애플리케이션의 로컬 엔드포인트(docs/spec/endpoint.md)에 연결해 JSON-RPC 요청을 보낸다. 프레임은
-//! 4바이트 빅엔디언 길이와 UTF-8 JSON 본문이다.
+//! Connects to the local endpoint of the running application (docs/spec/endpoint.md) and sends JSON-RPC requests. A frame is
+//! a 4-byte big-endian length followed by a UTF-8 JSON body.
 
 use std::io::{ErrorKind, Read, Write};
 use std::path::Path;
@@ -9,16 +9,16 @@ use serde_json::{json, Value};
 
 use crate::platform;
 
-/// 프레임 본문의 최대 길이.
+/// The maximum length of a frame body.
 pub const MAX_FRAME_LENGTH: usize = 16 * 1024 * 1024;
 
-/// 설정 폴더의 endpoint.json.
+/// The endpoint.json of the configuration folder.
 pub struct Endpoint {
     pub address: String,
     pub pid: i32,
 }
 
-/// 요청이 실패한 이유. 엔드포인트가 돌려준 JSON-RPC 오류는 code 를 가진다.
+/// The reason a request failed. A JSON-RPC error that the endpoint returned has a code.
 #[derive(Debug)]
 pub enum Failure {
     Endpoint { code: i64, message: String },
@@ -40,7 +40,7 @@ impl From<String> for Failure {
     }
 }
 
-/// config_dir 의 endpoint.json 을 읽고, 이 플랫폼의 transport 이며 그 프로세스가 실행 중인지 확인한다.
+/// Reads endpoint.json of config_dir and checks that its transport belongs to this platform and that its process is running.
 pub fn read_endpoint(config_dir: &Path) -> Result<Endpoint, String> {
     let file = config_dir.join("endpoint.json");
     let text = match std::fs::read_to_string(&file) {
@@ -62,7 +62,7 @@ pub fn read_endpoint(config_dir: &Path) -> Result<Endpoint, String> {
     let (Some(address), Some(pid)) = (address, pid) else {
         return Err(format!("{} has no address or pid", file.display()));
     };
-    // 기본값: transport 가 없는 파일은 빈 transport 로 읽고 아래에서 거부한다. Go 구현과 같은 문구를 낸다.
+    // default: a file without a transport reads as an empty transport and is rejected below. The text matches the Go implementation.
     let transport = value["transport"].as_str().unwrap_or("");
     if transport != "unix" {
         return Err(format!(
@@ -84,13 +84,13 @@ pub fn read_endpoint(config_dir: &Path) -> Result<Endpoint, String> {
     })
 }
 
-/// 엔드포인트 연결 하나. 요청은 차례로 보내고 응답을 기다리며, 그 사이에 온 알림은 notify 로 넘긴다.
+/// One connection to the endpoint. It sends requests one at a time, waits for each response, and passes notifications that arrive in between to notify.
 pub struct Client {
     stream: Box<dyn platform::Connection>,
     next_id: u64,
 }
 
-/// 엔드포인트가 보낸 메시지 하나.
+/// One message that the endpoint sent.
 struct Message {
     id: Option<u64>,
     method: Option<String>,
@@ -100,18 +100,18 @@ struct Message {
 }
 
 impl Client {
-    /// 엔드포인트의 주소에 연결한다.
+    /// Connects to the address of the endpoint.
     pub fn dial(endpoint: &Endpoint) -> Result<Client, String> {
         let stream = platform::current()?.connect(&endpoint.address)?;
         Ok(Client { stream, next_id: 1 })
     }
 
-    /// 연결을 닫는 함수를 돌려준다. 다른 thread 가 읽기를 끝내게 할 때 쓴다.
+    /// Returns a function that closes the connection. It lets another thread end a read.
     pub fn closer(&self) -> Result<Box<dyn Fn() -> Result<(), String> + Send>, String> {
         self.stream.closer()
     }
 
-    /// 연결을 닫고 그 결과를 돌려준다.
+    /// Closes the connection and returns the result.
     pub fn close(self) -> Result<(), String> {
         self.stream.close()
     }
@@ -168,7 +168,7 @@ impl Client {
             Some(value) => {
                 let error: Value =
                     serde_json::from_str(value.get()).map_err(|error| error.to_string())?;
-                // 기본값: message 가 없는 JSON-RPC 오류는 빈 message 와 code 로 보고한다.
+                // default: a JSON-RPC error without a message is reported with an empty message and code.
                 let message = error["message"].as_str().unwrap_or("").to_string();
                 let code = error["code"]
                     .as_i64()
@@ -186,7 +186,7 @@ impl Client {
         })
     }
 
-    /// method 를 보내고 결과를 원래 JSON 그대로 돌려준다. 결과가 없으면 null 이다.
+    /// Sends the method and returns the result as the original JSON. The result is null when there is none.
     pub fn request(
         &mut self,
         method: &str,
@@ -221,12 +221,12 @@ impl Client {
             return Ok(message
                 .result
                 .map(|result| result.get().to_string())
-                // 기본값: result 가 없는 응답은 결과가 없는 명령이며 출력은 null 이다(docs/spec/cli.md).
+                // default: a response without a result is a command without a result, and its output is null (docs/spec/cli.md).
                 .unwrap_or_else(|| "null".into()));
         }
     }
 
-    /// 연결이 닫힐 때까지 알림을 notify 로 넘긴다. 반환값은 연결이 끝난 이유다.
+    /// Passes notifications to notify until the connection closes. The return value is the reason the connection ended.
     pub fn listen(
         &mut self,
         notify: &mut dyn FnMut(&str, &RawValue) -> Result<(), String>,

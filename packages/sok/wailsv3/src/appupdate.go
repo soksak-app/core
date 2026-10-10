@@ -1,6 +1,7 @@
 package sok
 
-// 애플리케이션 업데이트의 후보 선택과 release 준비(docs/spec/installation.md#application-update).
+// Selects the candidate of an application update and prepares its release
+// (docs/spec/installation.md#application-update).
 
 import (
 	"errors"

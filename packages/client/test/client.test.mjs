@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { connect, EndpointError } from "../client.js";
 import { NO_REPLY, rpcError, sampleHandlers, startFakeEndpoint } from "@soksak/client/testing";
 
-// 종료된 프로세스의 pid 를 얻는다.
+// Obtains the pid of an exited process.
 function exitedPid() {
   return spawnSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"], { encoding: "utf8" }).stdout * 1;
 }
@@ -69,7 +69,7 @@ test("error replies become EndpointError with the code", async (t) => {
   });
 });
 
-/** 가짜 엔드포인트가 predicate 를 만족하는 요청을 받으면 이행한다. */
+/** Resolves when the fake endpoint receives a request that satisfies the predicate. */
 const requested = (server, predicate) => new Promise((resolve) => {
   const listener = (message) => {
     if (!predicate(message)) return;
@@ -162,7 +162,7 @@ test("concurrent watches of one name unwatch only after the last one ends", asyn
 
 test("a watch that ends before its subscription is confirmed is unsubscribed before the next watch", async (t) => {
   const sample = sampleHandlers();
-  // 첫 status.watch 의 응답을 테스트가 보낼 때까지 미룬다.
+  // Holds the response of the first status.watch until the test sends it.
   let confirm;
   let first = true;
   const handlers = {

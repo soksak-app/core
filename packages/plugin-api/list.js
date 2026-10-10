@@ -1,17 +1,17 @@
-// 목록을 제자리에서 갱신한다(F67). 다시 그리기가 바뀌지 않은 조작 요소를 문서에서 빼면, 누름과 뗌 사이에 그 그리기가
-// 오는 경우 WebKit 은 click 을 보내지 않는다(core docs/spec/exposure.md). 그래서 key 가 같은 요소는 문서에 둔 채
-// 고치고, 새 key 만 만들며, 순서가 틀린 요소만 옮긴다.
+// Updates a list in place (F67). When a redraw removes an operable element that did not change from the document and that redraw
+// comes between a press and a release, WebKit does not send click (core docs/spec/exposure.md). So elements with the same key stay in the document and are
+// edited, only new keys create elements, and only misordered elements are moved.
 
 const KEY = "listKey";
 
 /**
- * list 의 자식을 entries 의 순서로 맞춘다.
+ * Arranges the children of list in the order of entries.
  *
- *   key(entry)            요소를 가리키는 값. 같은 key 의 요소는 다시 쓴다. 두 entry 가 같은 key 를 가지면 실패한다.
- *   create(entry)         새 key 의 요소를 만든다.
- *   update(element, entry) 요소를 entry 에 맞게 고친다. 새로 만든 요소에도 부른다.
+ *     key(entry)            the value that identifies an element. An element with the same key is rewritten. Fails when two entries have the same key.
+ *     create(entry)         creates the element of a new key.
+ *     update(element, entry) edits the element to match entry. Also called for a newly created element.
  *
- * entries 에 없는 자식(글 노드 포함)은 뺀다.
+ * Children that are not in entries (including text nodes) are removed.
  */
 export function drawList(list, entries, { key, create, update }) {
   const kept = new Map();
@@ -34,7 +34,7 @@ export function drawList(list, entries, { key, create, update }) {
   const wanted = new Set(nodes);
   for (const child of [...list.childNodes]) if (!wanted.has(child)) child.remove();
   nodes.forEach((node, index) => {
-    // 기본값: index 가 자식 수와 같으면 그 자리가 끝이므로 null 로 끝에 넣는다.
+    // default: when index equals the number of children, that position is the end, so the element is inserted at the end with null.
     if (list.childNodes[index] !== node) list.insertBefore(node, list.childNodes[index] ?? null);
   });
 }

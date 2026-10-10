@@ -110,11 +110,11 @@ function seqFindings(entries) {
 /** The findings of the declared chains: each correlation identifier that starts a chain must reach its last event. */
 function chainFindings(entries, catalog) {
   const findings = [];
-  // 기본값: 사슬을 선언하지 않은 catalog 는 검사할 사슬이 없다.
+  // default: a catalog that declares no chain has no chain to check.
   for (const [name, hops] of Object.entries(catalog.chains ?? {})) {
     const seen = new Map();
     for (const { line, event } of entries) {
-      // 기본값: 입력에 속하지 않는 event 는 상관 식별자를 갖지 않는다.
+      // default: an event that does not belong to the input has no correlation identifier.
       for (const cid of event.cids ?? []) {
         if (!seen.has(cid)) seen.set(cid, { line, events: new Set() });
         seen.get(cid).events.add(event.event);

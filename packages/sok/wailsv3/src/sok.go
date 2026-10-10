@@ -1,5 +1,5 @@
-// Package sok 은 soksak 애플리케이션의 command line(docs/spec/cli.md)이다. 실행 중인 애플리케이션의 엔드포인트에
-// 요청을 보내고 결과를 JSON 으로 출력한다.
+// Package sok is the command line of the soksak application (docs/spec/cli.md). It sends requests to the endpoint of a
+// running application and prints the result as JSON.
 package sok
 
 import (
@@ -18,7 +18,7 @@ import (
 	"syscall"
 )
 
-// Usage 는 사용법이다.
+// Usage is the usage text.
 const Usage = `usage: sok <command> [options]
 
 commands:
@@ -52,17 +52,17 @@ window:
 common options:
   --config-dir DIR          configuration directory of the running application (default: this application's)`
 
-// UsageError 는 잘못 쓴 명령이다. 종료 상태 2 와 사용법으로 보고한다.
+// UsageError is a wrongly written command. It is reported with exit status 2 and the usage text.
 type UsageError struct{ message string }
 
 func (e UsageError) Error() string { return e.message }
 
 func usage(format string, args ...any) error { return UsageError{fmt.Sprintf(format, args...)} }
 
-// booleans 는 값을 받지 않는 flag 다.
+// booleans are the flags that take no value.
 var booleans = map[string]bool{"watch": true, "activate": true, "help": true, "diagnostics": true}
 
-// options 는 값을 받는 flag 다.
+// options are the flags that take a value.
 var options = map[string]bool{
 	"config-dir": true, "window": true, "project": true, "surface": true, "index": true, "value": true, "event": true,
 	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "delta-x": true, "delta-y": true, "key": true, "text": true, "modifiers": true,
@@ -143,7 +143,7 @@ func (a arguments) requiredNumber(name string) (any, error) {
 	return a.number(name)
 }
 
-// compact 는 nil 인 필드를 뺀 요청 매개변수다.
+// compact is the request parameters without the fields that are nil.
 func compact(fields ...any) map[string]any {
 	params := map[string]any{}
 	for i := 0; i+1 < len(fields); i += 2 {
@@ -161,15 +161,16 @@ func optional(a arguments, name string) any {
 	return nil
 }
 
-// plan 은 명령을 엔드포인트 요청으로 바꾼다. window 는 창을 고르는 함수다.
-// captureRequest 는 진단 build 에서 diagnostics.go 가 정하는 capture 요청이다. 일반 build 에서는 nil 이다.
+// plan turns the command into an endpoint request. window is the function that chooses the window.
+// captureRequest is the capture request that diagnostics.go defines in a diagnostic build. It is nil in a regular
+// build.
 var captureRequest func(window string) (request, error)
 
 type request struct {
 	method string
 	params map[string]any
 	watch  bool
-	// field 는 결과 객체에서 출력할 필드다. 비어 있으면 결과 전체를 출력한다.
+	// field is the field of the result object to print. When it is empty, the whole result is printed.
 	field string
 }
 
@@ -197,7 +198,8 @@ func plan(a arguments, window func() (string, error)) (request, error) {
 			return request{method: "exposure.list", params: compact("window", w)}, nil
 		})
 	case "capture":
-		// 진단 build 만 capture 요청을 둔다(diagnostics.go). 일반 build 의 sok 에는 진단 method 가 없다.
+		// Only the diagnostic build has the capture request (diagnostics.go). The sok of a regular build has no diagnostic
+		// methods.
 		if captureRequest == nil {
 			return request{}, usage("capture needs a diagnostic build of sok")
 		}
@@ -326,13 +328,13 @@ func plan(a arguments, window func() (string, error)) (request, error) {
 	return request{}, usage("unknown command: %s", command)
 }
 
-// windowEntry 는 windows.list 결과의 창 하나다.
+// windowEntry is one window of the windows.list result.
 type windowEntry struct {
 	Window  string  `json:"window"`
 	Project *string `json:"project"`
 }
 
-// selectWindow 는 --window, --project 또는 하나뿐인 창으로 요청할 창을 고른다.
+// selectWindow chooses the window to request with --window, --project or the only window.
 func selectWindow(a arguments, client *Client) (string, error) {
 	name, byName := a.values["window"]
 	project, byProject := a.values["project"]
@@ -376,7 +378,7 @@ func selectWindow(a arguments, client *Client) (string, error) {
 	return windows[0].Window, nil
 }
 
-// indent 는 JSON 을 키 순서를 그대로 두고 두 칸으로 들여 쓴다.
+// indent indents JSON by two spaces and keeps the key order.
 func indent(raw json.RawMessage) ([]byte, error) {
 	var out bytes.Buffer
 	if err := json.Indent(&out, raw, "", "  "); err != nil {
@@ -395,13 +397,15 @@ func compactLine(raw json.RawMessage) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// watch 는 status 값과 그 뒤의 변경을 한 줄씩 출력한다. SIGINT 나 SIGTERM 이 오면 연결을 닫고 성공으로 끝난다.
+// watch prints the status value and each later change, one per line. On SIGINT or SIGTERM it closes the connection and
+// ends successfully.
 func watch(client *Client, params map[string]any, stdout io.Writer) error {
 	stopped := make(chan struct{})
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(signals)
-	// 중단 신호를 받은 goroutine 은 연결을 닫은 결과를 보낸다. 닫기에 실패하면 watch 는 그 오류로 끝난다.
+	// The goroutine that receives the interrupt signal sends the result of closing the connection. When the close fails,
+	// watch ends with that error.
 	closed := make(chan error, 1)
 	go func() {
 		if _, ok := <-signals; ok {
@@ -419,7 +423,8 @@ func watch(client *Client, params map[string]any, stdout io.Writer) error {
 		if err := json.Unmarshal(raw, &changed); err != nil {
 			return nil, false, fmt.Errorf("status.changed has unexpected params: %w", err)
 		}
-		// 기본값: surface 가 없는 감시는 페이지 status 이며 surface 는 빈 문자열이고, 아래 비교는 nil 로 가린다.
+		// default: a watch without a surface is the page status and its surface is the empty string; the comparison below
+		// masks it with nil.
 		surface, _ := params["surface"].(string)
 		same := changed.Window == params["window"] && changed.Name == params["name"] &&
 			((changed.Surface == nil && params["surface"] == nil) || (changed.Surface != nil && *changed.Surface == surface))
@@ -468,25 +473,28 @@ func watch(client *Client, params map[string]any, stdout io.Writer) error {
 	return finish(client.Listen())
 }
 
-// Options 는 command line 이 속한 애플리케이션과 운영체제 자리다.
+// Options are the application and the operating system slots that the command line belongs to.
 type Options struct {
-	// Identifier 는 애플리케이션의 식별자이며 --config-dir 이 없을 때 설정 폴더 이름이고 경로 항목의 파일 이름이다.
+	// Identifier is the identifier of the application. It is the name of the configuration directory when --config-dir is
+	// absent and the file name of the path entry.
 	Identifier string
-	// PathsDir 는 경로 항목을 두는 폴더다(macOS 는 /etc/paths.d).
+	// PathsDir is the folder that holds path entries (/etc/paths.d on macOS).
 	PathsDir string
-	// PathsError 는 이 운영체제에 경로 항목 폴더가 없는 까닭이다. 있으면 sok path 가 그 오류로 실패한다.
+	// PathsError is the reason this operating system has no path entry folder. When it is set, sok path fails with that
+	// error.
 	PathsError error
-	// CoreVersion 은 plugin 을 고를 때 쓰는 core version 이다. 실행 파일은 이 package 의 CoreVersion 을 준다.
+	// CoreVersion is the core version used to choose plugins. The executable passes the CoreVersion of this Go package.
 	CoreVersion string
 }
 
-// Run 은 명령 하나를 실행하고 종료 상태를 돌려준다.
+// Run runs one command and returns the exit status.
 func Run(args []string, stdout, stderr io.Writer, options Options) int {
 	err := run(args, stdout, stderr, options)
 	if err == nil {
 		return 0
 	}
-	// 표준 오류에 오류를 쓰지 못하면 알릴 곳이 없으므로 종료 상태 3 으로 알린다(docs/spec/cli.md).
+	// When the error cannot be written to the standard error, there is no place to report it, so it is reported with exit
+	// status 3 (docs/spec/cli.md).
 	var invalid UsageError
 	if errors.As(err, &invalid) {
 		if _, writeErr := fmt.Fprintf(stderr, "sok: %s\n%s\n", err, Usage); writeErr != nil {
@@ -500,7 +508,7 @@ func Run(args []string, stdout, stderr io.Writer, options Options) int {
 	return 1
 }
 
-// connectTo 는 --config-dir 이나 이 애플리케이션의 설정 폴더에서 엔드포인트를 찾아 연결한다.
+// connectTo finds the endpoint in --config-dir or the configuration directory of this application and connects to it.
 func connectTo(values map[string]string, options Options) (*Client, error) {
 	configDir, err := configDirOf(values, options)
 	if err != nil {
@@ -518,7 +526,7 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 	if len(args) > 0 && args[0] == "app" {
 		return runApp(args[1:], stdout)
 	}
-	// 점이 있는 명령 단어는 선언된 command 다(docs/spec/cli.md).
+	// A command word with a dot is a declared command (docs/spec/cli.md).
 	if strings.Contains(commandWord(args), ".") {
 		return runCommand(args, stdout, options)
 	}
@@ -558,7 +566,8 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 		client, err = connectTo(a.values, options)
 		return client, err
 	}
-	// 명령이 성공했으면 연결을 닫은 결과도 보고한다. 실패했으면 그 실패가 결과다.
+	// When the command succeeded, the result of closing the connection is also reported. When it failed, that failure is
+	// the result.
 	defer func() {
 		if client != nil {
 			if closeErr := client.Close(); closeErr != nil && err == nil {
@@ -606,7 +615,7 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 	return err
 }
 
-// runFiles 는 실행 중인 애플리케이션 없이 파일을 쓰는 plugin, sidecar 명령을 실행한다.
+// runFiles runs the plugin and sidecar commands that write files without a running application.
 func runFiles(a arguments, stdout io.Writer) error {
 	action, err := a.positional(1, a.positionals[0]+" action")
 	if err != nil {

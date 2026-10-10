@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// 기록이 저장소에 관한 사실만 적는지 검사한다. 문서는 코드 블록 밖의 모든 줄을, 설정 파일(workflow, Makefile)은 주석 줄만
-// 검사하고, 위반을 `path:line` 으로 보고한다. 저장소마다 이 명령으로 자기 기록을 검사한다.
+// Checks that records state only facts about the repository. Documents are checked on every line outside code blocks, and configuration files (workflow, Makefile) only on comment lines,
+// and violations are reported as `path:line`. Each repository checks its own records with this command.
 //
 //   soksak-records [repository]
 import { execFileSync } from "node:child_process";
@@ -57,21 +57,21 @@ export function termChecked(file) {
   return /(?:^|\/)Makefile$/.test(file);
 }
 
-/** 기록에 쓰지 않는 표현과 그 범주. 색 코드와 UUID 같은 16진수 값은 커밋 참조가 아니다. */
+/** The expressions that records do not use, with their categories. Hexadecimal values such as color codes and UUIDs are not commit references. */
 export const RECORD_PATTERNS = [
   ["commit reference", /\((?:[0-9a-f]{7,40})\)|`[0-9a-f]{7,40}`|\b(?:commit|pin) [0-9a-f]{7,40}\b|\b[0-9a-f]{7,40}\.\.[0-9a-f]{7,40}\b/i],
   ["pull request number", /\bPR #?\d+\b|\bpull request #?\d+\b/i],
   ["CI run number", /\brun \d{8,}\b/i],
   ["personal path", /\/Users\/|~\/backup/],
   ["account of who found or requested", /\bFound (?:on|while)\b|\b(?:Requested|Reported|Found|Decided) by\b|\bthe user's (?:decision|request|report)\b|사용자 결정|사용자가 (?:보고|발견|결정)|\bas the user asked\b|\bthe user (?:asked|decided|requested)\b|사용자 요청|사용자가 요청|발견:|\d{4}-\d{2}-\d{2}(?:[^.\n]|\.(?! )){0,80}?발견했|사용자가(?:[^.\n]|\.(?! )){0,120}?보고했/i],
-  // macOS 는 운영 체제 이름이다. "Mac" 은 뒤에 글자가 없을 때만 그 컴퓨터를 가리킨다.
+  // macOS is an operating system name. "Mac" refers to that computer only when no letter follows it.
   ["local environment", /\b[Tt]his (?:machine|Mac)(?![A-Za-z])|이 (?:머신|Mac)(?![A-Za-z])/],
 ];
 
-// 마크다운 코드 블록을 같은 수의 빈 줄로 바꾼다. 위반의 줄 번호가 원본과 같게 유지된다.
+// Replaces a Markdown code block with the same number of blank lines. The line numbers of violations stay equal to the original.
 const withoutCode = (text) => text.replace(/^(`{3,}|~{3,}).*\n[\s\S]*?^\1\s*$/gm, (block) => block.replace(/[^\n]/g, ""));
 
-/** text 에서 기록 규칙을 어기는 줄을 `file:line: category: match` 로 돌려준다. kind 는 `document` 또는 `config`. */
+/** Returns the lines of text that break a record rule as `file:line: category: match`. kind is `document` or `config`. */
 export function recordViolations(text, file, kind = "document") {
   const lines = (kind === "document" ? withoutCode(text) : text).split("\n");
   const errors = [];
@@ -85,7 +85,7 @@ export function recordViolations(text, file, kind = "document") {
   return errors;
 }
 
-/** 검사할 파일의 종류. 문서는 `.md`, 설정은 workflow 와 Makefile 이다. 그 밖의 파일은 null. */
+/** The kind of a file to check. A document is `.md`, and a configuration is a workflow or a Makefile. Any other file is null. */
 export function recordKind(file) {
   if (file.endsWith(".md")) return "document";
   if (/^\.github\/workflows\/[^/]+\.ya?ml$/.test(file) || /(?:^|\/)Makefile$/.test(file)) return "config";
@@ -95,7 +95,7 @@ export function recordKind(file) {
 const COMMIT_TYPES = ["feat", "fix", "docs", "style", "refactor", "test", "chore"];
 const FOOTER = /^(?:Refs|Co-Authored-By|Signed-off-by|Generated(?: with| by)?|Reviewed-by)\b|^🤖|claude\.ai\/code/i;
 
-/** 커밋 메시지가 `type(scope): Subject (#ID)`, 빈 줄, 72자에서 줄을 바꾼 본문, 꼬리말 없음의 형식인지 검사한다. */
+/** Checks that a commit message has the form `type(scope): Subject (#ID)`, a blank line, a body wrapped at 72 characters and no footer. */
 export function commitMessageErrors(message) {
   const lines = message.replace(/\n+$/, "").split("\n");
   const errors = [];
@@ -120,7 +120,7 @@ export function commitMessageErrors(message) {
   return errors;
 }
 
-/** repository 가 추적하는 기록 파일의 위반. */
+/** The violations of the record files that the repository tracks. */
 export function repositoryRecordViolations(repository) {
   const tracked = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: repository, encoding: "utf8" })
     .split("\0").filter((file) => file && existsSync(join(repository, file)));
@@ -131,9 +131,9 @@ export function repositoryRecordViolations(repository) {
   }) };
 }
 
-// package manager 는 package 를 link 로 두므로 시작한 경로를 풀어서 이 module 과 비교한다.
+// A package manager places a package as a link, so the started path is resolved before it is compared with this module.
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
-  // 기본값: 사용법의 [repository] 를 생략하면 현재 폴더의 repository 를 검사한다.
+  // default: when [repository] of the usage is omitted, the repository in the current folder is checked.
   const { files, errors } = repositoryRecordViolations(resolve(process.argv[2] ?? "."));
   if (errors.length) {
     process.stderr.write(errors.map((error) => `${error}\n`).join(""));

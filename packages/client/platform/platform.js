@@ -1,9 +1,9 @@
-// 로컬 엔드포인트의 운영체제별 전송을 선택한다.
+// Selects the operating system transport of the local endpoint.
 //
-// 각 운영체제 모듈은 같은 이름의 값을 내보낸다.
-//   name                   운영체제 이름
-//   transport              전송 이름("unix" 또는 "pipe")
-//   createAddress(label)   사용자 전용 주소를 만들고 { address, remove } 를 반환한다
+// Each operating system module exports values of the same names.
+//   name                   operating system name
+//   transport              transport name ("unix" or "pipe")
+//   createAddress(label)   creates an owner-only address and returns { address, remove }
 const modules = {
   darwin: "./darwin/darwin.js",
   linux: "./linux/linux.js",

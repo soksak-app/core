@@ -15,13 +15,14 @@ import (
 	"unicode/utf8"
 )
 
-// InstallFormat 은 registry index 의 형식 번호다.
+// InstallFormat is the format number of the registry index.
 const InstallFormat = 1
 
-// Installed 는 설정 폴더 안에서 설치 상태를 담는 파일이다.
+// Installed is the file that holds the installation state inside the configuration directory.
 const Installed = "plugins/installed.json"
 
-// InstalledFormat 은 설치 상태 파일의 형식 번호다. 형식 2 는 설치 폴더를 설정 폴더에 대한 상대 경로로 기록한다.
+// InstalledFormat is the format number of the installation state file. Format 2 records the installation folder as a
+// path relative to the configuration directory.
 const InstalledFormat = 2
 
 // Platforms are the platform keys (`<os>-<arch>`) of sidecar releases.
@@ -29,12 +30,12 @@ var Platforms = []string{"darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64
 
 const descriptionMax = 200
 
-// Version 은 `x.y.z` version 이다.
+// Version is an `x.y.z` version.
 type Version [3]uint64
 
 func (v Version) String() string { return fmt.Sprintf("%d.%d.%d", v[0], v[1], v[2]) }
 
-// Compare 는 v 가 o 보다 앞이면 음수, 같으면 0, 뒤면 양수다.
+// Compare returns a negative number when v is before o, 0 when they are equal and a positive number when v is after o.
 func (v Version) Compare(o Version) int {
 	for i := range 3 {
 		if v[i] != o[i] {
@@ -47,7 +48,7 @@ func (v Version) Compare(o Version) int {
 	return 0
 }
 
-// quote 는 값을 JSON 텍스트로 쓴다. 오류 문구에서 받은 값을 그대로 보이게 한다.
+// quote writes the value as JSON text. It shows a value taken from an error text unchanged.
 func quote(value any) string {
 	var out bytes.Buffer
 	encoder := json.NewEncoder(&out)
@@ -58,8 +59,8 @@ func quote(value any) string {
 	return strings.TrimSuffix(out.String(), "\n")
 }
 
-// ParseVersion 은 숫자 세 자리를 점으로 이은 version 을 읽는다. 앞자리 0 과 uint32 를 넘는 수는 거부하므로 범위의
-// 상한을 계산할 때 넘치지 않는다.
+// ParseVersion reads a version of three numbers joined by dots. It rejects leading zeros and numbers above uint32, so
+// the computation of the upper bound of a range does not overflow.
 func ParseVersion(text string) (Version, error) {
 	var v Version
 	parts := strings.Split(text, ".")
@@ -79,18 +80,20 @@ func ParseVersion(text string) (Version, error) {
 	return v, nil
 }
 
-// Range 는 포함하는 하한 Min 과 포함하지 않는 상한 Below 다. Below 가 nil 이면 상한이 없다.
+// Range is the inclusive lower bound Min and the exclusive upper bound Below. When Below is nil, there is no upper
+// bound.
 type Range struct {
 	Min   Version
 	Below *Version
 }
 
-// Contains 는 v 가 범위 안에 있는지 알려 준다.
+// Contains reports whether v is inside the range.
 func (r Range) Contains(v Version) bool {
 	return v.Compare(r.Min) >= 0 && (r.Below == nil || v.Compare(*r.Below) < 0)
 }
 
-// ParseRange 는 `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z`, `>=x.y.z <a.b.c` 범위를 읽는다. `*` 는 `>=0.0.0`, 곧 모든 version 이다.
+// ParseRange reads the ranges `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z` and `>=x.y.z <a.b.c`. `*` is `>=0.0.0`, that
+// is, every version.
 func ParseRange(text string) (Range, error) {
 	if text == "*" {
 		return Range{Min: Version{}}, nil
@@ -111,7 +114,7 @@ func ParseRange(text string) (Range, error) {
 			}
 			return Range{min, &below}, nil
 		}
-		// >=x.y.z 는 하한만 있고 상한이 없다.
+		// >=x.y.z has only a lower bound and no upper bound.
 		if !found && rest != "" && !strings.ContainsAny(rest, " ") {
 			if min, err := ParseVersion(rest); err == nil {
 				return Range{Min: min}, nil
@@ -142,7 +145,7 @@ func ParseRange(text string) (Range, error) {
 	return Range{v, &below}, nil
 }
 
-// Satisfies 는 version 이 범위 안에 있는지 알려 준다. 둘 다 이미 검사한 값이어야 한다.
+// Satisfies reports whether the version is inside the range. Both must be values that were already checked.
 func Satisfies(version, rng string) bool {
 	v, err := ParseVersion(version)
 	if err != nil {
@@ -152,7 +155,7 @@ func Satisfies(version, rng string) bool {
 	return err == nil && r.Contains(v)
 }
 
-// isIdentifier 는 소문자로 시작하고 소문자, 숫자, - 만 쓰는 이름인지 알려 준다.
+// isIdentifier reports whether the name starts with a lowercase letter and uses only lowercase letters, digits and -.
 func isIdentifier(text string) bool {
 	if text == "" || text[0] < 'a' || text[0] > 'z' {
 		return false
@@ -193,7 +196,7 @@ func isSHA256(text string) bool {
 	return true
 }
 
-// DecodeJSON 은 JSON 텍스트를 형식 검사에 쓰는 값으로 읽는다. 수는 원래 텍스트를 지킨다.
+// DecodeJSON reads JSON text into the value that the format check uses. Numbers keep their original text.
 func DecodeJSON(data []byte) (any, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
@@ -262,7 +265,7 @@ func checkVersion(where string, value any) error {
 	return nil
 }
 
-// checkedVersion 은 checkVersion 을 통과한 version 문자열이다.
+// checkedVersion is a version string that passed checkVersion.
 func checkedVersion(where string, value any) (string, error) {
 	if err := checkVersion(where, value); err != nil {
 		return "", err
@@ -304,7 +307,7 @@ func checkSidecarRanges(where string, value any) error {
 	return nil
 }
 
-// FilePath 는 절대 `file:` URL 의 local 경로다. %XX 는 그 byte 로 읽는다.
+// FilePath is the local path of an absolute `file:` URL. %XX is read as that byte.
 func FilePath(url string) (string, error) {
 	rest, ok := strings.CutPrefix(url, "file://")
 	if !ok || !strings.HasPrefix(rest, "/") {
@@ -419,7 +422,8 @@ func ManifestDependencies(manifest map[string]any) (map[string]string, error) {
 // ReleaseName is the file name of a plugin release.
 func ReleaseName(id, version string) string { return id + "-" + version + ".tgz" }
 
-// SidecarFileName 은 sidecar 이름을 파일 이름과 폴더 이름에 쓰는 형태로 바꾼다. `@scope/name` 은 `scope-name` 이다.
+// SidecarFileName turns a sidecar name into the form used for file names and folder names. `@scope/name` becomes
+// `scope-name`.
 func SidecarFileName(name string) (string, error) {
 	if err := checkPackageJSONName("sidecar", name); err != nil {
 		return "", err
@@ -452,7 +456,7 @@ func SidecarReleaseName(name, version, platform string) (string, error) {
 	return file + "-" + version + "-" + platform + ".tar.gz", nil
 }
 
-// PluginInstallPath 는 설정 폴더 안에서 plugin version 하나를 푸는 폴더다.
+// PluginInstallPath is the folder inside the configuration directory into which one plugin version is extracted.
 func PluginInstallPath(id, version string) (string, error) {
 	if !isIdentifier(id) {
 		return "", fmt.Errorf("invalid plugin id %s", id)
@@ -478,13 +482,13 @@ func SidecarInstallPath(name, version, platform string) (string, error) {
 	return "sidecars/" + file + "/" + version + "/" + platform, nil
 }
 
-// Release 는 release release 의 주소와 hash 다.
+// Release is the address and hash of a release.
 type Release struct {
 	URL    string `json:"url"`
 	SHA256 string `json:"sha256"`
 }
 
-// PluginVersion 은 registry 의 plugin version 하나다.
+// PluginVersion is one plugin version of the registry.
 type PluginVersion struct {
 	Version string  `json:"version"`
 	Release Release `json:"release"`
@@ -494,7 +498,7 @@ type PluginVersion struct {
 	Sidecars map[string]string `json:"sidecars"`
 }
 
-// RegistryPlugin 은 registry 의 plugin 항목이다.
+// RegistryPlugin is a plugin entry of the registry.
 type RegistryPlugin struct {
 	ID          string          `json:"id"`
 	Package     string          `json:"package"`
@@ -505,49 +509,49 @@ type RegistryPlugin struct {
 	Versions    []PluginVersion `json:"versions"`
 }
 
-// SidecarVersion 은 registry 의 sidecar version 하나다.
+// SidecarVersion is one sidecar version of the registry.
 type SidecarVersion struct {
 	Version  string             `json:"version"`
 	Protocol int                `json:"protocol"`
 	Releases map[string]Release `json:"releases"`
 }
 
-// RegistrySidecar 는 registry 의 sidecar 항목이다.
+// RegistrySidecar is a sidecar entry of the registry.
 type RegistrySidecar struct {
 	Name       string           `json:"name"`
 	Repository string           `json:"repository"`
 	Versions   []SidecarVersion `json:"versions"`
 }
 
-// RegistryPack 은 함께 설치하는 plugin 묶음이다.
+// RegistryPack is a set of plugins that are installed together.
 type RegistryPack struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	Plugins     []string `json:"plugins"`
 }
 
-// RevokedPlugin 은 설치하면 안 되는 plugin version 이다.
+// RevokedPlugin is a plugin version that must not be installed.
 type RevokedPlugin struct {
 	ID      string `json:"id"`
 	Version string `json:"version"`
 	Reason  string `json:"reason"`
 }
 
-// RevokedSidecar 는 설치하거나 실행하면 안 되는 sidecar version 이다.
+// RevokedSidecar is a sidecar version that must not be installed or run.
 type RevokedSidecar struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
 	Reason  string `json:"reason"`
 }
 
-// Revoked 는 설치하거나 실행하면 안 되는 version 이다.
+// Revoked is a version that must not be installed or run.
 type Revoked struct {
 	Plugins  []RevokedPlugin  `json:"plugins"`
 	Sidecars []RevokedSidecar `json:"sidecars"`
 	Core     []RevokedCore    `json:"core,omitempty"`
 }
 
-// Index 는 검사한 registry index 다.
+// Index is a registry index that was checked.
 type Index struct {
 	Format   int               `json:"format"`
 	Plugins  []RegistryPlugin  `json:"plugins"`
@@ -578,7 +582,7 @@ type RevokedCore struct {
 	Reason  string `json:"reason"`
 }
 
-// entryWhere 는 항목의 이름이 문자열이면 그것을 붙인 위치다.
+// entryWhere is the location of an entry with its name appended when the name is a string.
 func entryWhere(kind string, m map[string]any, key string) string {
 	if name, ok := m[key].(string); ok {
 		return kind + " " + name
@@ -586,7 +590,7 @@ func entryWhere(kind string, m map[string]any, key string) string {
 	return kind
 }
 
-// ValidateRegistryPlugin 은 registry 의 plugin 항목 하나(`plugins/<id>.json`)를 검사한다.
+// ValidateRegistryPlugin checks one plugin entry of the registry (`plugins/<id>.json`).
 func ValidateRegistryPlugin(value any) error {
 	entry, err := object("registry plugin", value)
 	if err != nil {
@@ -658,7 +662,7 @@ func ValidateRegistryPlugin(value any) error {
 	return nil
 }
 
-// ValidateRegistrySidecar 는 registry 의 sidecar 항목 하나(`sidecars/<file name>.json`)를 검사한다.
+// ValidateRegistrySidecar checks one sidecar entry of the registry (`sidecars/<file name>.json`).
 func ValidateRegistrySidecar(value any) error {
 	entry, err := object("registry sidecar", value)
 	if err != nil {
@@ -790,7 +794,7 @@ func ValidateRegistryCore(value any) error {
 	return nil
 }
 
-// ValidateRegistryPack 은 registry 의 pack 항목 하나(`packs/<name>.json`)를 검사한다.
+// ValidateRegistryPack checks one pack entry of the registry (`packs/<name>.json`).
 func ValidateRegistryPack(value any) error {
 	entry, err := object("registry pack", value)
 	if err != nil {
@@ -827,7 +831,7 @@ func ValidateRegistryPack(value any) error {
 	return nil
 }
 
-// ValidateRevoked 는 registry 의 revoked 목록(`revoked.json`)을 검사한다.
+// ValidateRevoked checks the revoked list of the registry (`revoked.json`).
 func ValidateRevoked(value any) error {
 	revoked, err := object("registry revoked", value)
 	if err != nil {
@@ -887,7 +891,7 @@ func ValidateRevoked(value any) error {
 	return nil
 }
 
-// typed 는 검사한 값을 형식 구조체로 옮긴다.
+// typed moves a checked value into the format structure.
 func typed(value any, target any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -896,9 +900,9 @@ func typed(value any, target any) error {
 	return json.Unmarshal(data, target)
 }
 
-// ValidateRegistryIndex 는 registry index 를 검사한다. 항목마다 형식을 보고, 이름이 겹치지 않는지, pack 과
-// revoked 가 있는 plugin 과 sidecar 를 가리키는지, plugin version 마다 필요한 sidecar 범위를 채우는 sidecar
-// version 이 있는지 본다.
+// ValidateRegistryIndex checks the registry index. It checks the format of each entry, that names do not repeat, that
+// packs and revoked entries refer to existing plugins and sidecars, and that every plugin version has a sidecar version
+// that satisfies the sidecar ranges it needs.
 func ValidateRegistryIndex(value any) (*Index, error) {
 	root, err := object("registry index", value)
 	if err != nil {
@@ -1010,7 +1014,8 @@ func sortedNames(m map[string]string) []string {
 	return names
 }
 
-// InstalledPlugin 은 설치한 plugin 하나다. Path 는 설치가 쓰는 version 을 푼 폴더이며 설정 폴더에 대한 상대 경로다.
+// InstalledPlugin is one installed plugin. Path is the folder into which the version that the installation uses is
+// extracted, relative to the configuration directory.
 type InstalledPlugin struct {
 	Version  string            `json:"version"`
 	Path     string            `json:"path"`
@@ -1026,15 +1031,17 @@ type InstalledSidecar struct {
 	Path    string `json:"path"`
 }
 
-// InstalledState 는 설치 상태 파일(`plugins/installed.json`)이다. plugin id 마다 쓰는 version, 푼 폴더, 켜짐 여부, 그 version 의 sidecar
-// 범위, 되돌릴 이전 version 을 담고, sidecar 마다 모든 plugin 이 함께 쓰는 version 하나와 그 폴더를 담는다. 폴더는 설치가 기록하며 host 는 기록된 폴더만 읽는다.
+// InstalledState is the installation state file (`plugins/installed.json`). For each plugin id it holds the version in
+// use, the extracted folder, whether the plugin is enabled, the sidecar ranges of that version and the previous version
+// to return to. For each sidecar it holds the one version that all plugins share and its folder. The installation
+// records the folders and the host reads only the recorded folders.
 type InstalledState struct {
 	Format   int                         `json:"format"`
 	Plugins  map[string]InstalledPlugin  `json:"plugins"`
 	Sidecars map[string]InstalledSidecar `json:"sidecars"`
 }
 
-// checkPluginFolder 는 plugin 의 path 가 설치 규칙의 폴더 plugins/<id>/<version> 인지 검사한다.
+// checkPluginFolder checks that the path of a plugin is the folder plugins/<id>/<version> of the installation rule.
 func checkPluginFolder(where, id, version string, value any) error {
 	folder, err := PluginInstallPath(id, version)
 	if err != nil {
@@ -1046,7 +1053,8 @@ func checkPluginFolder(where, id, version string, value any) error {
 	return nil
 }
 
-// checkSidecarFolder 는 sidecar 의 path 가 설치 규칙의 폴더 sidecars/<file name>/<version>/<platform> 인지 검사한다.
+// checkSidecarFolder checks that the path of a sidecar is the folder sidecars/<file name>/<version>/<platform> of the
+// installation rule.
 func checkSidecarFolder(where, name, version string, value any) error {
 	file, err := SidecarFileName(name)
 	if err != nil {
@@ -1060,7 +1068,7 @@ func checkSidecarFolder(where, name, version string, value any) error {
 	return nil
 }
 
-// ValidateInstalled 는 설치 상태 파일을 검사한다.
+// ValidateInstalled checks the installation state file.
 func ValidateInstalled(value any) (*InstalledState, error) {
 	root, err := object(Installed, value)
 	if err != nil {
@@ -1195,7 +1203,7 @@ type SelectedSidecar struct {
 	Release Release
 }
 
-// Selection 은 설치할 plugin version 과 그 sidecar version 이다.
+// Selection is the plugin version to install and its sidecar versions.
 type Selection struct {
 	Plugin   *RegistryPlugin
 	Version  *PluginVersion
@@ -1210,11 +1218,12 @@ func revokedSidecar(index *Index, name, version string) bool {
 	return slices.ContainsFunc(index.Revoked.Sidecars, func(item RevokedSidecar) bool { return item.Name == name && item.Version == version })
 }
 
-// newer 는 검사한 index 의 두 version 중 a 가 더 새 것인지 알려 준다.
+// newer reports whether a is newer than the other of two versions of the checked index.
 func newer(a, b string) bool {
 	x, errA := ParseVersion(a)
 	y, errB := ParseVersion(b)
-	// 기본값: 검사한 index 의 version 만 비교하므로 읽기 실패는 없으며, 읽지 못한 version 은 더 새 것으로 보지 않는다.
+	// default: only versions of the checked index are compared, so reading cannot fail; a version that cannot be read is
+	// not treated as newer.
 	return errA == nil && errB == nil && x.Compare(y) > 0
 }
 

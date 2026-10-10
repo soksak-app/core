@@ -2,8 +2,8 @@
 
 package tests
 
-// 진단 build 가 아닌 sok 의 검사다. Go 파일은 build 제약으로 한 build 에만 속하므로 진단 build 의 검사는
-// src/diagnostics_test.go 에 있다(docs/spec/hosts.md 차이 C2).
+// These are checks of the sok that is not a diagnostic build. A Go file belongs to one build through its build
+// constraint, so the checks of the diagnostic build are in src/diagnostics_test.go (docs/spec/hosts.md difference C2).
 
 import (
 	"strings"

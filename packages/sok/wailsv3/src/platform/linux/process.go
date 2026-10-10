@@ -16,7 +16,7 @@ type linux struct{}
 
 func init() { platform.Register(linux{}) }
 
-// ProcessRunning 은 signal 0 으로 프로세스가 있는지 본다. 다른 사용자의 프로세스(EPERM)도 실행 중이다.
+// ProcessRunning checks with signal 0 whether the process exists. A process of another user (EPERM) is also running.
 func (linux) ProcessRunning(pid int) error {
 	if err := syscall.Kill(pid, 0); err != nil && !errors.Is(err, syscall.EPERM) {
 		return fmt.Errorf("process %d is not running: %w", pid, err)
@@ -60,7 +60,7 @@ func (linux) OpenApplication(string, []string) error {
 	return errors.New("application bundles are not implemented on linux")
 }
 
-// PathsDir 는 오류다. Linux 의 shell 에는 파일마다 PATH 항목을 더하는 폴더가 없다.
+// PathsDir is an error. The shell on Linux has no folder that adds a PATH entry for each file.
 func (linux) PathsDir() (string, error) {
 	return "", errors.New("path entries are not implemented on linux")
 }

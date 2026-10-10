@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
-// pnpm install 전에도 실행되도록 가짜 엔드포인트는 상대 경로로 가져온다.
+// The fake endpoint is imported by a relative path so that the test runs before pnpm install.
 import { sampleHandlers, startFakeEndpoint } from "@soksak/client/testing";
 
 const server = fileURLToPath(new URL("../mcp.js", import.meta.url));
@@ -13,7 +13,7 @@ const modernMeta = {
   "io.modelcontextprotocol/clientCapabilities": {},
 };
 
-// MCP 서버를 실행하고 요청 함수를 반환한다.
+// Starts the MCP server and returns the request function.
 function startMcp(t, args) {
   const child = spawn(process.execPath, [server, ...args], { stdio: ["pipe", "pipe", "pipe"] });
   const waiting = new Map();
@@ -40,7 +40,7 @@ function startMcp(t, args) {
     child,
     outputs,
     stderr: () => stderr,
-    // stderr 에 pattern 과 일치하는 내용이 나오면 이행한다.
+    // Resolves when stderr shows content that matches the pattern.
     stderrLine(pattern) {
       return new Promise((resolve) => {
         const waiter = () => {
@@ -62,7 +62,7 @@ function startMcp(t, args) {
         child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, ...(params === undefined ? {} : { params }) })}\n`);
       });
     },
-    // 모던 방식 요청.
+    // A request of the modern form.
     modern(method, params = {}) {
       return this.request(method, { ...params, _meta: modernMeta });
     },
@@ -108,7 +108,7 @@ test("legacy initialize handshake then tools/list", async (t) => {
     "input_key",
   ]);
   for (const name of names) assert.match(name, /^[A-Za-z0-9_.-]{1,128}$/);
-  // 알림에는 응답하지 않는다.
+  // A notification gets no response.
   assert.equal(mcp.outputs.length, 2);
 });
 
@@ -252,7 +252,7 @@ test("a stopped application is reported and the next call reconnects", async (t)
   assert.equal(parseText((await mcp.modern("tools/call", { name: "windows_list", arguments: {} })).result)[0].window, "main");
   const logged = mcp.stderrLine(/connection closed/);
   for (const connection of endpoint.connections) connection.socket.destroy();
-  // MCP 서버가 연결 종료를 받은 뒤에 다음 요청을 보낸다.
+  // Sends the next request after the MCP server received the connection end.
   await logged;
   const reconnected = endpoint.nextConnection();
   const again = await mcp.modern("tools/call", { name: "windows_list", arguments: {} });

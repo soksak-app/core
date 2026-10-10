@@ -1,5 +1,5 @@
-// 로컬 엔드포인트 전송 방식별 JSON-RPC 왕복 지연 측정.
-// 사용법: node bench/transport.mjs [--requests <n>] [--json]
+// Measures the JSON-RPC round-trip latency of each local endpoint transport.
+// Usage: node bench/transport.mjs [--requests <n>] [--json]
 
 import * as platform from "../platform/platform.js";
 import net from "node:net";
@@ -33,7 +33,7 @@ function parseArgs(argv) {
   return options;
 }
 
-// 요청 형식을 검사하고 고정 응답을 돌려준다.
+// Checks the request form and returns a fixed response.
 function handleServerSocket(socket, onError) {
   socket.setNoDelay?.(true);
   const reader = new FrameReader();
@@ -58,7 +58,7 @@ function handleServerSocket(socket, onError) {
   socket.on("error", onError);
 }
 
-// 하나의 영속 연결 위에서 id로 응답을 대응시킨다.
+// Matches responses by id over one persistent connection.
 class Client {
   #socket;
   #reader = new FrameReader();
@@ -119,7 +119,7 @@ class Client {
   }
 }
 
-// 오름차순 정렬 배열에서 nearest-rank 백분위수를 구한다.
+// Returns the nearest-rank percentile of an ascending sorted array.
 function percentile(sorted, p) {
   const rank = Math.ceil((p / 100) * sorted.length);
   return sorted[Math.min(sorted.length, Math.max(1, rank)) - 1];
@@ -144,7 +144,7 @@ async function runSequential(client, count) {
   };
 }
 
-// 동시 진행 요청 수를 CONCURRENCY로 유지한다.
+// Keeps the number of requests in flight at CONCURRENCY.
 async function runPipelined(client, count) {
   let issued = 0;
   const worker = async () => {
@@ -222,7 +222,7 @@ async function main() {
     }), options.requests),
   );
 
-  // 운영체제별 로컬 전송. 주소는 소유자 전용으로 만들고 측정 후 제거한다.
+  // The local transport of each operating system. The address is created for the owner only and removed after the measurement.
   const local = platform.createAddress("soksak-bench");
   try {
     rows.push(await benchTransport(`${platform.transport}-local`, local.address, () => local.address, options.requests));

@@ -1,8 +1,9 @@
-// 창 캡처(diagnostics.capture.still)가 남긴 PNG 를 읽는다. 8비트 RGB 와 RGBA, 비월 주사 없는 파일만 받는다.
+// Reads the PNG that a window capture (diagnostics.capture.still) left. It accepts only 8-bit RGB and RGBA files
+// without interlacing.
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 
-/** 파일 하나를 { width, height, pixel(x, y), alpha(x, y) } 로 읽는다. pixel 은 [r, g, b] 다. */
+/** Reads one file as { width, height, pixel(x, y), alpha(x, y) }. pixel is [r, g, b]. */
 export function readPng(path) {
   const file = readFileSync(path);
   if (file.readUInt32BE(0) !== 0x89504e47) throw new Error(`${path} is not a PNG`);
@@ -68,5 +69,5 @@ export function readPng(path) {
   };
 }
 
-/** 두 색의 가장 큰 채널 차이. */
+/** The largest channel difference of two colors. */
 export const distance = (a, b) => Math.max(...a.map((value, i) => Math.abs(value - b[i])));

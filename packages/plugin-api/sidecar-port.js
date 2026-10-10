@@ -1,13 +1,13 @@
-// 페이지의 사이드카 포트. 런타임의 포트는 호출마다 별도 요청으로 호스트에 전달하므로 두 전송이
-// 겹치면 도착 순서가 바뀔 수 있다. 사이드카는 받은 순서대로 처리하므로(예: 실행 뒤의 중단) 앞선
-// 전송이 끝난 뒤 다음 전송을 보낸다.
+// The sidecar port of a page. The port of the runtime passes each call to the host as a separate request, so if two transports
+// overlap, the arrival order can change. A sidecar handles messages in the order received (for example, an interruption after a run), so the next
+// transport is sent after the earlier transport finishes.
 
 /**
- * port 는 런타임의 page.sidecar(name) 이다. 반환한 send 는 호출한 순서대로 전달되고, 각 전송의
- * 결과(실패 포함)를 호출자에게 돌려준다. 실패한 전송은 다음 전송을 막지 않으며, 그 오류를 failed 에 알린다.
+ * port is page.sidecar(name) of the runtime. The returned send is delivered in the order called and returns the
+ * result of each transport (including a failure) to the caller. A failed transport does not block the next one, and its error is reported to failed.
  */
 export function orderedSidecar(port, failed) {
-  // 처리기가 없으면 실패한 전송이 체인을 거부된 채로 남겨 이후 전송을 모두 막으므로 경계에서 거부한다.
+  // Without a handler, a failed transport would leave the chain rejected and block every later transport, so the rejection is handled at the boundary.
   if (typeof failed !== "function") throw new TypeError("orderedSidecar requires a failure handler");
   let chain = Promise.resolve();
   return {
@@ -15,7 +15,7 @@ export function orderedSidecar(port, failed) {
     // that continues no input sends none.
     send(surface, body, cids = []) {
       const sent = chain.then(() => port.send(surface, body, cids));
-      // 내부 체인에서만 오류를 알린다. 호출자는 sent를 받으므로 실패 시 rejection이 전달된다.
+      // The error is reported only from the internal chain. The caller receives sent, so a failure is delivered as a rejection.
       chain = sent.catch(failed);
       return sent;
     },

@@ -50,7 +50,7 @@ for (const [label, corrupt] of [
 ]) test(`frame reader rejects ${label}`, () => assert.throws(() => read(corrupt(fixture()))));
 
 test("frames are listed in frame number order after the number passes four digits", (t) => {
-  // 한 process 의 녹화는 frame 번호를 이어서 매기므로 오래 실행한 뒤의 녹화는 9999 를 넘는다.
+  // The recording of one process continues the frame numbers, so a recording after a long run passes 9999.
   const directory = mkdtempSync(join(tmpdir(), "soksak-frame-order-"));
   t.after(() => rmSync(directory, { recursive: true }));
   for (const number of [9998, 9999, 10000, 10001]) writeFileSync(join(directory, `frame-${String(number).padStart(4, "0")}.bgra`), "");

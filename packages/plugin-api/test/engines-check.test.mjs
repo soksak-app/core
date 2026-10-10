@@ -10,9 +10,9 @@ const VERSION = "0.0.3";
 
 test("a plugin declares the core release of its plugin API", () => {
   assert.deepEqual(enginesErrors({ engines: { soksak: `^${VERSION}` } }, VERSION), []);
-  // * 는 모든 core version 에서 설치된다는 선언이다.
+  // * is a declaration that the plugin installs on every core version.
   assert.deepEqual(enginesErrors({ engines: { soksak: "*" } }, VERSION), []);
-  // >=<version> 은 그 version 부터의 core 에서 설치된다. 하한은 이 plugin-api 의 version 을 넘지 않는다.
+  // >=<version> installs on cores from that version on. The lower bound does not exceed the version of this plugin-api.
   assert.deepEqual(enginesErrors({ engines: { soksak: ">=0.0.2" } }, VERSION), []);
   assert.deepEqual(enginesErrors({ engines: { soksak: `>=${VERSION}` } }, VERSION), []);
   assert.deepEqual(enginesErrors({ engines: { soksak: ">=9.0.0" } }, VERSION),
@@ -34,7 +34,7 @@ test("the command checks the package.json of the given plugin repository", async
     writeFileSync(join(repository, "package.json"), JSON.stringify({ engines: { soksak: `^${version}` } }));
     assert.equal(execFileSync(process.execPath, [command, repository], { encoding: "utf8" }),
       `Engines check passed: engines.soksak is ^${version}\n`);
-    // 성공 줄은 검사한 범위를 그대로 적는다.
+    // The success line writes the checked range as it is.
     writeFileSync(join(repository, "package.json"), JSON.stringify({ engines: { soksak: "*" } }));
     assert.equal(execFileSync(process.execPath, [command, repository], { encoding: "utf8" }),
       "Engines check passed: engines.soksak is *\n");

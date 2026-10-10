@@ -99,7 +99,7 @@ test("the package of a staged page is read from its path", () => {
   assert.equal(pagePackage("/overlay.html"), null);
 });
 
-/** jsdom 없이 요소 하나를 흉내 낸다. 이벤트 생성자는 요소의 문서에서 읽는다. */
+/** Imitates one element without jsdom. The event constructors are read from the document of the element. */
 function element(rect = { left: 1, top: 2, width: 3, height: 4 }) {
   class Event { constructor(type, init) { this.type = type; this.init = init; } }
   class KeyboardEvent extends Event {}
@@ -137,7 +137,7 @@ test("registered entries answer requests and reject undeclared or unregistered n
   });
   assert.deepEqual(await replyPayload(() => entries.answer("command.run", { name: "probe.send", params: { data: "x" } })),
     { result: null });
-  // command.run 은 params 를 반드시 담는다. 빈 매개변수로 바꾸어 실행하지 않는다.
+  // command.run always carries params. It is not converted into empty parameters and run.
   assert.equal(await code(() => entries.answer("command.run", { name: "probe.send" })), EXPOSURE_ERRORS.invalidParams);
   assert.deepEqual(sent, ["x"]);
   assert.equal(await code(() => entries.answer("command.run", { name: "probe.send", params: { data: 1 } })),
@@ -190,7 +190,7 @@ test("a watched status reports each changed value once and ends with unwatch", a
   assert.equal(await entries.answer("status.watch", { name: "probe.lines" }, changed), null);
   assert.equal(await entries.answer("status.watch", { name: "probe.lines" }, changed), null, "a second watch is the same watch");
   assert.deepEqual(await entries.answer("status.next", { name: "probe.lines", version: 0 }), { version: 1, value: ["a"] });
-  // status.next 는 version 을 반드시 담는다. 없는 version 을 0 으로 보지 않는다.
+  // status.next always carries version. A missing version is not treated as 0.
   assert.equal((await replyPayload(() => entries.answer("status.next", { name: "probe.lines" }))).error?.code,
     EXPOSURE_ERRORS.invalidParams);
   const next = entries.answer("status.next", { name: "probe.lines", version: 1 });

@@ -1,4 +1,4 @@
-// 창 검사 반복 도구가 실행한 검사 수를 출력 색과 무관하게 세는지 검사한다.
+// Checks that the window check repeat tool counts the checks that ran regardless of the output color.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -14,13 +14,14 @@ function fixture(t) {
   t.after(() => rmSync(dir, { recursive: true }));
   const file = join(dir, "probe.test.mjs");
   writeFileSync(file, 'import test from "node:test";\ntest("probe passes", () => {});\n');
-  // 반복 도구는 부른 저장소의 실행 시작 모듈을 쓴다. 이 검사의 것은 아무것도 하지 않는다.
+  // The repeat tool uses the launch start module of the calling repository. The one of this check does nothing.
   writeFileSync(join(dir, "setup.mjs"), "export async function globalSetup() {}\n");
   return file;
 }
 
-// 반복 도구는 최상위 명령으로 실행된다. 이 검사의 node:test 실행 문맥(NODE_TEST_CONTEXT)은 넘기지 않는다.
-// 색은 검사가 정한 FORCE_COLOR 만 정한다. NO_COLOR 가 함께 있으면 node 가 경고를 출력에 넣는다.
+// The repeat tool runs as a top-level command, so the node:test execution context of this check (NODE_TEST_CONTEXT) is
+// not passed on. The color sets only the FORCE_COLOR that the check chooses. When NO_COLOR is also present, node puts a
+// warning into the output.
 const { NODE_TEST_CONTEXT, NO_COLOR, ...environment } = process.env;
 const run = (file, name, color = "3") => spawnSync(process.execPath,
   [repeat, "--setup", "./setup.mjs", "--file", file, "--name", name, "--count", "2"],
@@ -34,7 +35,7 @@ test("repeat counts passing runs when the test reporter writes colors", { timeou
 
 for (const color of ["3", "0"]) {
   test(`repeat rejects a name pattern that runs no test with FORCE_COLOR=${color}`, { timeout: 30000 }, (t) => {
-    // 이름이 맞는 검사가 없어도 node:test 는 파일 자체를 통과 결과 하나로 보고한다.
+    // Even when no check matches the name, node:test reports the file itself as one passed result.
     const result = run(fixture(t), "missing probe", color);
     assert.equal(result.status, 1, result.stdout + result.stderr);
     assert.match(result.stderr, /no test ran for "missing probe"/);

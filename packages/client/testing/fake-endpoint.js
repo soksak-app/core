@@ -1,4 +1,4 @@
-// 테스트용 엔드포인트 서버: 호스트와 같은 프레임과 JSON-RPC 형식으로 응답하고 endpoint.json 을 쓴다.
+// Endpoint server for tests: answers in the frame and JSON-RPC form of the host and writes endpoint.json.
 import { EventEmitter, once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
@@ -8,16 +8,16 @@ import { encodeFrame, FrameReader } from "../frame.js";
 import { createAddress, transport } from "../platform/platform.js";
 
 /**
- * handlers[method](params, connection) 는 결과 또는 그 promise 를 반환한다.
- * 오류 응답은 { code, message } 를 가진 객체를 throw 한다.
- * 선언되지 않은 method 는 호스트와 같이 응답 없이 연결을 닫는다.
+ * handlers[method](params, connection) returns a result or a promise of it.
+ * An error response throws an object that has { code, message }.
+ * A method that is not declared closes the connection without a response, like the host.
  */
 export async function startFakeEndpoint(handlers, { pid = process.pid } = {}) {
   const { address, remove } = createAddress("soksak-test");
   const configDir = mkdtempSync(join(tmpdir(), "soksak-config-"));
   const connections = new Set();
   const requests = [];
-  // "connection" 은 새 연결마다, "request" 는 선언된 요청마다 발생한다.
+  // "connection" is emitted for each new connection, "request" for each declared request.
   const events = new EventEmitter();
   const server = createServer((socket) => {
     const connection = {
@@ -69,7 +69,7 @@ export async function startFakeEndpoint(handlers, { pid = process.pid } = {}) {
     requests,
     connections,
     events,
-    /** 다음 method 요청을 받으면 그 메시지로 이행한다. 요청을 보내기 전에 호출한다. */
+    /** Resolves with the message when the next request of the method arrives. Call it before sending the request. */
     nextRequest(method) {
       return new Promise((resolve) => {
         const listener = (message) => {
@@ -80,11 +80,11 @@ export async function startFakeEndpoint(handlers, { pid = process.pid } = {}) {
         events.on("request", listener);
       });
     },
-    /** 다음 연결을 받으면 이행한다. */
+    /** Resolves when the next connection is accepted. */
     nextConnection() {
       return once(events, "connection");
     },
-    // 모든 연결에 알림을 보낸다.
+    // Sends a notification to every connection.
     notify(method, params) {
       for (const connection of connections) connection.notify(method, params);
     },
@@ -97,18 +97,18 @@ export async function startFakeEndpoint(handlers, { pid = process.pid } = {}) {
   };
 }
 
-/** 응답을 보내지 않도록 handler 가 반환하는 값. */
+/** The value that a handler returns so that no response is sent. */
 export const NO_REPLY = Symbol("no reply");
 
-/** 오류 응답용 객체를 만든다. */
+/** Creates the object for an error response. */
 export function rpcError(code, message) {
   return Object.assign(new Error(message), { code });
 }
 
-/** 창 하나와 선언 몇 개를 가진 기본 응답기. status 값은 values 에 두고 set 으로 바꾼다. */
+/** The default responder with one window and a few declarations. The status values are kept in values and changed with set. */
 export function sampleHandlers() {
   const values = new Map([["core.screen", "home"]]);
-  // 창 main 이 key 창인지. 아니면 activate 없는 move 가 1006 으로 실패한다.
+  // Whether the window main is the key window. If not, move without activate fails with 1006.
   const state = { key: true };
   const watchers = new Map();
   const entries = {
@@ -176,7 +176,7 @@ export function sampleHandlers() {
     values,
     watchers,
     state,
-    // 값을 바꾸고 감시 중인 연결에 status.changed 를 보낸다.
+    // Changes a value and sends status.changed to the connections that watch it.
     set(name, value) {
       values.set(name, value);
       for (const connection of watchers.get(name) ?? []) connection.notify("status.changed", { window: "main", name, value });

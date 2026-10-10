@@ -1,6 +1,7 @@
-// Package platform 은 command line 의 운영체제별 동작을 선언하고 현재 운영체제의 구현을 고른다. 운영체제별 구현은
-// platform/<os>/ 패키지가 init 에서 Register 로 등록하며, 명령은 모든 운영체제 패키지를 가져오므로 현재 운영체제의
-// 구현만 등록된다.
+// Package platform declares the operating system specific behavior of the command line and selects the implementation
+// of the current operating system. Each platform/<os>/ package registers its implementation with Register in init, and
+// the command imports the packages of all operating systems, so only the implementation of the current operating system
+// is registered.
 package platform
 
 import (
@@ -8,13 +9,14 @@ import (
 	"time"
 )
 
-// Platform 은 운영체제별 동작이다.
+// Platform is the operating system specific behavior.
 type Platform interface {
-	// ProcessRunning 은 pid 프로세스가 실행 중이면 nil 을 돌려준다.
+	// ProcessRunning returns nil when the process pid is running.
 	ProcessRunning(pid int) error
 	// Key is the release key (`<os>-<arch>`) of this platform; an architecture without a key is an error.
 	Key() (string, error)
-	// PathsDir 는 경로 항목을 두는 폴더다. 이 운영체제에 그런 폴더가 없으면 오류다(docs/spec/cli.md).
+	// PathsDir is the folder that holds path entries. It is an error when this operating system has no such folder
+	// (docs/spec/cli.md).
 	PathsDir() (string, error)
 	// ExtractBundle extracts the zip of an application bundle into the folder.
 	ExtractBundle(zipped, folder string) error
@@ -30,10 +32,10 @@ type Platform interface {
 
 var current Platform
 
-// Register 는 현재 운영체제의 구현을 등록한다.
+// Register registers the implementation of the current operating system.
 func Register(platform Platform) { current = platform }
 
-// Current 는 등록된 구현이다. 이 운영체제의 구현이 없으면 오류다.
+// Current is the registered implementation. It is an error when no implementation exists for this operating system.
 func Current() (Platform, error) {
 	if current == nil {
 		return nil, errors.New("no platform implementation is registered for this operating system")

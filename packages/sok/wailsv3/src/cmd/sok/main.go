@@ -1,4 +1,4 @@
-// sok 은 Wails 애플리케이션의 command line 이다(docs/spec/cli.md).
+// sok is the command line of the Wails application (docs/spec/cli.md).
 package main
 
 import (
@@ -19,7 +19,7 @@ func main() {
 		os.Exit(1)
 	}
 	paths, pathsErr := system.PathsDir()
-	// 식별자는 기본 설정 폴더와 경로 항목의 이름이다(docs/spec/projects.md#persistence).
+	// The identifier names the default configuration directory and the path entry (docs/spec/projects.md#persistence).
 	identifier := sok.Identity()
 	os.Exit(sok.Run(os.Args[1:], os.Stdout, os.Stderr, sok.Options{Identifier: identifier, PathsDir: paths, PathsError: pathsErr, CoreVersion: sok.CoreVersion}))
 }

@@ -1,15 +1,18 @@
-// 검사하는 애플리케이션의 event log에서 오류 event를 읽는다. 호스트 프로세스는 실행마다 `logs/host-<boot>.jsonl`에
-// 줄마다 event 하나를 쓰고, level 이 error 인 event 가 오류다(docs/spec/logging.md#files).
+// Reads error events from the event log of the application under check. The host process writes one event per line to
+// `logs/host-<boot>.jsonl` for each run, and an event with level error is an error (docs/spec/logging.md#files).
 import { existsSync, readdirSync, readFileSync, statSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // The event files of the processes of the application (docs/spec/logging.md#files): the host and every sidecar service.
 const HOST_LOG = /^(host|vt|files|shell)-\d+-\d+\.jsonl$/;
 
-/** 파일마다 마지막으로 읽은 위치를 기록하는 파일. 설정 폴더 옆에 두어 설정 폴더마다 하나다. */
+/**
+ * The file that records the last read position of each file. It is placed next to the configuration folder, so there is
+ * one per configuration folder.
+ */
 export const eventOffsetFile = (configDir) => `${configDir}.event-offsets`;
 
-/** 파일 이름 → 마지막으로 읽은 위치. 기록이 없으면 비어 있어 모든 파일을 처음부터 읽는다. */
+/** File name to last read position. Without a record it is empty, so every file is read from the start. */
 export function readEventOffsets(configDir) {
   const file = eventOffsetFile(configDir);
   if (!existsSync(file)) return {};
@@ -28,8 +31,8 @@ export function writeEventOffsets(configDir, offsets) {
 const RECORD_EVENT = /^(host|page|native|sidecar|plugin)\.record\.(error|warn|info|debug|trace)$/;
 
 /**
- * event 하나의 줄. 기록 event(`<layer>.record.<level>` `{where, text}`)는 글 형식의 줄 `<level> <layer> <where>: <text>` 이고
- * 다른 event 는 `<level> <layer> <event>: <fields>` 다.
+ * The line of one event. A record event (`<layer>.record.<level>` `{where, text}`) is the text line `<level> <layer>
+ * <where>: <text>`, and any other event is `<level> <layer> <event>: <fields>`.
  */
 export function eventLine(event) {
   if (RECORD_EVENT.test(event.event)) {
@@ -43,8 +46,9 @@ export function eventLine(event) {
 }
 
 /**
- * 모든 호스트 event log 에서 offsets 뒤에 쓰인 event 와 새 위치. 줄이 끝나지 않은 마지막 조각은 읽지 않고 다음에 읽는다.
- * 줄이 event 가 아니거나, 파일이 읽은 위치보다 짧거나, event log 가 하나도 없으면 파일 이름을 담은 오류다.
+ * The events written after offsets in every host event log, and the new positions. A last fragment whose line is not
+ * finished is not read and is read next time. When a line is not an event, a file is shorter than the read position, or
+ * no event log exists, the error contains the file name.
  */
 export function readEvents(configDir, offsets) {
   const logs = join(configDir, "logs");
@@ -79,22 +83,27 @@ export function readEvents(configDir, offsets) {
   return { events, offsets: next };
 }
 
-/** offsets 뒤에 쓰인 오류 event 의 줄(`error <layer> <where 또는 event>: <text 또는 fields>`)과 새 위치. */
+/**
+ * The lines of the error events written after offsets (`error <layer> <where or event>: <text or fields>`) and the new
+ * positions.
+ */
 export function readEventErrors(configDir, offsets) {
   const { events, offsets: next } = readEvents(configDir, offsets);
   return { errors: events.filter((event) => event.level === "error").map(eventLine), offsets: next };
 }
 
-/** offsets 뒤에 쓰인 모든 event 의 줄과 새 위치. */
+/** The lines of all events written after offsets and the new positions. */
 export function readEventLines(configDir, offsets) {
   const { events, offsets: next } = readEvents(configDir, offsets);
   return { lines: events.map(eventLine), offsets: next };
 }
 
 /**
- * offsets 뒤에 쓰인 event 의 줄 전체가 predicate 를 만족할 때까지 기다리고 그 줄을 돌려준다. 기록은 비동기 writer 가 배치 간격마다
- * 파일에 쓰므로, 호스트 event log 파일마다 변경 알림(fs.watch)을 걸어 알림이 올 때마다 다시 읽는다. 폴더의 알림은 다른 프로세스가
- * 파일에 덧붙이는 내용을 알리지 못하므로 새 파일을 알아채는 데만 쓴다. 기한이 지나면 읽은 줄을 담은 오류로 거부한다.
+ * Waits until a whole line of an event written after offsets satisfies the predicate and returns that line. An
+ * asynchronous writer writes the records to the file at every batch interval, so a change watch (fs.watch) is placed on
+ * each host event log file and the files are read again at each notification. The notification of a folder cannot
+ * report content that another process appends to a file, so it is used only to notice new files. When the deadline
+ * passes, it rejects with an error that holds the lines read.
  */
 export function untilEventLines(configDir, offsets, predicate, timeout) {
   return new Promise((resolve, reject) => {
@@ -150,7 +159,7 @@ export function untilEventLines(configDir, offsets, predicate, timeout) {
   });
 }
 
-/** offsets 뒤에 쓰인 event 의 줄 중 predicate 가 받아들이는 첫 줄을 timeout 안에 돌려준다. */
+/** Returns, within timeout, the first line among the event lines written after offsets that the predicate accepts. */
 export async function untilEventLine(configDir, offsets, predicate, timeout) {
   const lines = await untilEventLines(configDir, offsets, (all) => all.some(predicate), timeout);
   return lines.find(predicate);

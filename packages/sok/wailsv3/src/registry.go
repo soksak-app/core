@@ -1,7 +1,7 @@
 package sok
 
-// registry 폴더를 검사하고 index.json 을 쓴다(docs/spec/cli.md). 모든 검사를 통과할 때만 index.json 을 한 번에
-// 바꾼다.
+// Checks a registry folder and writes index.json (docs/spec/cli.md). index.json is replaced in one step only when every
+// check passes.
 
 import (
 	"archive/tar"
@@ -21,8 +21,8 @@ import (
 	"strings"
 )
 
-// readEntries 는 registry 의 한 폴더에서 *.json 파일을 이름 순서로 읽고, 항목을 검사한 뒤 파일 이름이 항목과
-// 맞는지 본다.
+// readEntries reads the *.json files of one registry folder in name order, checks each entry and checks that the file
+// name matches the entry.
 func readEntries(dir, kind string, validate func(any) error, fileName func(map[string]any) (string, error)) ([]any, error) {
 	names, err := filepath.Glob(filepath.Join(dir, kind, "*.json"))
 	if err != nil {
@@ -50,7 +50,7 @@ func readEntries(dir, kind string, validate func(any) error, fileName func(map[s
 	return entries, nil
 }
 
-// releaseFiles 는 tar.gz 의 최상위 파일 중 names 의 내용을 읽는다.
+// releaseFiles reads the content of names among the top-level files of a tar.gz.
 func releaseFiles(data []byte, names ...string) (map[string][]byte, error) {
 	zipped, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
@@ -80,13 +80,13 @@ func releaseFiles(data []byte, names ...string) (map[string][]byte, error) {
 	return found, nil
 }
 
-// readRelease 는 release 주소의 본문을 읽고 sha256 을 비교한다.
+// readRelease reads the body at the release address and compares its sha256.
 func readRelease(where string, release Release) ([]byte, error) {
 	data, err := DefaultFetcher.Read(release.URL, DefaultFetcher.Release)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", where, err)
 	}
-	// 오류는 file: 이면 경로를, https: 면 URL 을 밝힌다.
+	// For file: the error names the path, and for https: it names the URL.
 	shown := release.URL
 	if path, err := FilePath(release.URL); err == nil {
 		shown = path
@@ -156,7 +156,7 @@ func checkPluginRelease(index *Index, plugin *RegistryPlugin, version *PluginVer
 	return nil
 }
 
-// BuildRegistry 는 registry 폴더를 검사하고 index.json 을 쓴 뒤 그 경로와 항목 수를 돌려준다.
+// BuildRegistry checks the registry folder, writes index.json and returns its path and the number of entries.
 func BuildRegistry(dir string) (map[string]any, error) {
 	plugins, err := readEntries(dir, "plugins", ValidateRegistryPlugin, func(m map[string]any) (string, error) { return m["id"].(string), nil })
 	if err != nil {
@@ -187,7 +187,7 @@ func BuildRegistry(dir string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 파일 이름 순서는 @scope 이름의 순서와 다르므로 목록을 id 와 이름으로 다시 정렬한다.
+	// The order of file names differs from the order of @scope names, so the list is sorted again by id and name.
 	slices.SortFunc(index.Plugins, func(a, b RegistryPlugin) int { return strings.Compare(a.ID, b.ID) })
 	slices.SortFunc(index.Sidecars, func(a, b RegistrySidecar) int { return strings.Compare(a.Name, b.Name) })
 	slices.SortFunc(index.Packs, func(a, b RegistryPack) int { return strings.Compare(a.Name, b.Name) })
@@ -234,7 +234,7 @@ func BuildRegistry(dir string) (map[string]any, error) {
 	return map[string]any{"index": path, "plugins": len(index.Plugins), "sidecars": len(index.Sidecars), "packs": len(index.Packs), "core": cores}, nil
 }
 
-// runRegistry 는 `sok registry build <directory>` 를 실행한다.
+// runRegistry runs `sok registry build <directory>`.
 func runRegistry(a arguments, stdout io.Writer) error {
 	action, err := a.positional(1, "registry action")
 	if err != nil {

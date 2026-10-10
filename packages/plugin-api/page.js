@@ -1,7 +1,7 @@
-// 플러그인 페이지와 모달 페이지가 사용하는 인터페이스.
+// The interface that plugin pages and modal pages use.
 //
-// 표면과 모달은 각각 별도 문서라 메인 페이지의 스타일시트를 상속하지 않는다. 호스트가
-// 보낸 테마 토큰을 자기 루트에 설정한다.
+// A surface and a modal are separate documents, so they do not inherit the stylesheet of the main page. They set the theme
+// tokens that the host sent on their own root.
 import { page as runtimePage } from "@soksak/runtime";
 import {
   EXPOSURE, MANIFEST, SURFACE_CORE, createExpose, declarationMap, modulePath, orderedSidecar, pagePackage,
@@ -10,10 +10,10 @@ import {
 import { installDocumentErrors } from "./document-errors.js";
 import { createSurfaceCompositionController } from "./surface-composition.js";
 
-/* 사이드카 이름마다 하나의 포트. 같은 사이드카로 보내는 모든 전송이 한 순서를 따른다. */
+/* One port for each sidecar name. All transports to the same sidecar follow one order. */
 const sidecars = new Map();
 
-/** 런타임의 page. 사이드카 전송은 호출한 순서대로 전달된다. 네이티브 호스트가 없으면 null 이다. */
+/** The page of the runtime. Sidecar transports are delivered in the order they were called. It is null without a native host. */
 const publicRuntimePage = runtimePage ? Object.fromEntries(
   Object.entries(runtimePage).filter(([name]) => name !== "document" && name !== "image"),
 ) : null;
@@ -22,11 +22,11 @@ export const page = runtimePage ? Object.freeze({
   ...publicRuntimePage,
   sidecar(name) {
     if (!sidecars.has(name)) {
-      // 전송 실패는 애플리케이션 로그에 쓴다. 표면의 문서에는 콘솔을 읽는 곳이 없다.
+      // A transport failure is written to the application log. The document of a surface has no place that reads the console.
       sidecars.set(name, orderedSidecar(runtimePage.sidecar(name), (error) => {
-        // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
+        // default: the thrown value may not be an Error, so without message the value itself is written.
         runtimePage.report({ level: "error", where: `sidecar ${name}`, text: `send failed: ${error?.message ?? error}` })
-          // 이 기록이 실패하면 알릴 다른 곳이 없어 console 에 쓴다. 기본값: 던진 값이 Error 가 아니면 그 값을 적는다.
+          // When this record fails, there is no other place to report, so it is written to console. default: when the thrown value is not an Error, the value is written.
           .catch((reportError) => console.error(`report of a failed send failed: ${reportError?.message ?? reportError}`));
       }));
     }
@@ -34,22 +34,22 @@ export const page = runtimePage ? Object.freeze({
   },
 }) : null;
 
-// 이 문서의 오류와 처리되지 않은 rejection 은 발생할 때 애플리케이션 로그에 쓴다. 표면의 문서에는 콘솔을 읽는 곳이 없다.
+// The errors and unhandled rejections of this document are written to the application log when they occur. The document of a surface has no place that reads the console.
 if (page) {
   const surface = new URLSearchParams(location.search).get("id");
   installDocumentErrors({
     target: globalThis,
     report: (text) => page.report({ level: "error", where: surface ? `surface ${surface}` : "document", text })
-      // 이 기록이 실패하면 알릴 다른 곳이 없어 console 에 쓴다.
+      // When this record fails, there is no other place to report, so it is written to console.
       .catch((error) => console.error(`report of a document error failed: ${error.message}`)),
   });
 }
 
 /**
- * 받은 테마를 이 문서의 루트에 설정한다. 값이 바뀌면 다시 호출된다.
+ * Sets the received theme on the root of this document. It is called again when the value changes.
  *
- * 반환한 promise 는 첫 테마를 설정한 뒤 이행된다. 공개 항목을 그 뒤에 등록하면
- * 등록된 문서는 테마가 적용된 문서다.
+ * The returned promise is fulfilled after the first theme is set. When exposed entries are registered after that,
+ * the registered document is a document with the theme applied.
  */
 export function followTheme() {
   return new Promise((applied) => {
@@ -81,11 +81,11 @@ export async function ownManifest() {
 }
 
 /**
- * 이 문서가 등록할 수 있는 공개 항목. 같은 패키지의 plugin.json 선언에 코어 선언 중 표면
- * 문서 항목(core.surface.*)을 더한다.
+ * The exposed entries that this document can register: the plugin.json declarations of the same plugin plus the surface
+ * document entries (core.surface.*) of the core declarations.
  */
 async function ownDeclarations() {
-  // 기본값: exposes 는 plugin.json 의 선택 필드이며, 없는 플러그인은 코어 표면 항목만 등록한다.
+  // default: exposes is an optional field of plugin.json; a plugin without it registers only the core surface entries.
   const plugin = (await ownManifest()).exposes ?? {};
   const core = validateExposureFile(await fetchJson(`/${EXPOSURE}`)).exposes;
   const surfaceCore = Object.fromEntries(Object.entries(core)
@@ -93,21 +93,21 @@ async function ownDeclarations() {
   return declarationMap(surfaceCore, declarationMap(plugin));
 }
 
-/** 표면 페이지의 공개 항목 등록 함수. 네이티브 호스트가 없으면 null 이다. */
+/** The exposure registration function of a surface page. It is null without a native host. */
 export const expose = page?.exposure ? createExpose(page.exposure, ownDeclarations) : null;
 
-/** 선언한 모든 네이티브 앵커를 한 번에 붙이고 한 측정에서 함께 배치한다. */
+/** Attaches all declared native anchors at once and places them together in one measurement. */
 export async function createSurfaceComposition({ regions = {}, overlays = {} } = {}) {
   if (!runtimePage) return null;
   const declaration = (await ownManifest()).surface?.composition;
   return createSurfaceCompositionController(runtimePage, declaration, { regions, overlays }, window);
 }
 
-/* 표면 문서의 입력 기록. docs/spec/exposure.md 의 core.surface.input 이다. */
+/* The input record of the surface document. It is core.surface.input of docs/spec/exposure.md. */
 const INPUT_TYPES = ["pointerdown", "pointerup", "pointermove", "click", "wheel", "keydown"];
 const INPUT_KEPT = 32;
 
-/** 값이 바뀔 때 알리는 status 하나를 만든다. */
+/** Creates one status that reports when the value changes. */
 function observed(read) {
   const listeners = new Set();
   return {
@@ -123,7 +123,7 @@ function observed(read) {
   };
 }
 
-/** 모든 플러그인 표면 문서에 코어 표면 항목을 등록한다. */
+/** Registers the core surface entries in every plugin surface document. */
 function exposeSurfaceDocument() {
   const root = document.documentElement;
   const documentState = observed(() => ({
@@ -144,7 +144,7 @@ function exposeSurfaceDocument() {
   const input = observed(() => events.slice());
   for (const type of INPUT_TYPES) {
     addEventListener(type, (event) => {
-      // 기본값: 키 이벤트에는 좌표가 없고 포인터 이벤트에는 키가 없으므로 그 필드는 null 이다.
+      // default: a key event has no coordinates and a pointer event has no key, so those fields are null.
       events.push({ sequence: ++sequence, type, trusted: event.isTrusted, x: event.clientX ?? null, y: event.clientY ?? null, key: event.key ?? null });
       if (events.length > INPUT_KEPT) events.shift();
       input.notify();
@@ -154,7 +154,7 @@ function exposeSurfaceDocument() {
   addEventListener("resize", documentState.notify);
   visualViewport.addEventListener("resize", documentState.notify);
   new MutationObserver(documentState.notify).observe(root, { attributes: true, attributeFilter: ["style", "class"] });
-  // 조작 요소가 더해지거나 이름과 명령이 바뀌면 unbound 가 달라진다.
+  // unbound changes when an operable element is added or when its name and command change.
   new MutationObserver(documentState.notify).observe(root, {
     subtree: true, childList: true, attributes: true, attributeFilter: ["data-command", "data-expose", "role", "contenteditable"],
   });

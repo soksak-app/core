@@ -803,8 +803,8 @@ test("sweeping one divider ends its drag and no one else's", () => {
 
 test("a rule reaches the frame the host holds the plane inside", () => {
   const { host, grid, view } = mount({ bleed: 12 });
-  // 두 번째 카드만 가로로 나눈다. 그 선의 규칙은 왼쪽 끝이 판 안에서 멈추고 오른쪽
-  // 끝만 판의 가장자리에 닿으므로, 한 규칙 안에서 두 경우를 모두 볼 수 있다.
+  // Splits only the second card horizontally. The rule of that line is that the left end stops inside the board and the right
+  // end alone touches the edge of the board, so both cases are visible within one rule.
   grid.split([...grid.cards][1].id, "y");
   view.render();
 
@@ -815,7 +815,7 @@ test("a rule reaches the frame the host holds the plane inside", () => {
   assert.equal(stopping.length, 1, "and one stops against a card");
   assert.equal(spanning[0].style.left, "-12px", "the one that reaches bleeds past the edge");
   assert.equal(parseFloat(spanning[0].style.width), W + 24, "at both ends");
-  // 카드에 막힌 끝은 그 자리에 둔다. 거기서는 카드가 벽이다.
+  // An end blocked by a card stays in place. The card is the wall there.
   assert.equal(stopping[0].style.left, `${W / 2}px`, "the end a card stops is left where it stops");
   assert.equal(parseFloat(stopping[0].style.width), W / 2 + 12, "and the other end still bleeds");
 
@@ -981,7 +981,7 @@ test("installTheme puts one stylesheet first in the head and reuses it", () => {
   assert.equal(installTheme(doc), sheet, "a second call reuses the one that is there");
   assert.equal(doc.querySelectorAll("style").length, 2, "and adds no second sheet");
 
-  // 색과 크기를 직접 줄 수도 있다. 토큰 이름은 접두사를 따른다.
+  // The color and the size can also be given directly. The token names follow the prefix.
   const named = installTheme(doc, {
     prefix: "pane", palette: { line: "#123456" }, metrics: { gripLength: 40 },
   });

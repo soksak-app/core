@@ -1,2 +1,2 @@
-// Package darwin 은 macOS 의 command line 동작이다.
+// Package darwin is the command line behavior on macOS.
 package darwin

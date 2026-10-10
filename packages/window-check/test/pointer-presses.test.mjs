@@ -4,8 +4,8 @@ import test from "node:test";
 import { Session } from "../app.mjs";
 
 /**
- * 요청을 기록하고, fail 이 돌려준 코드로 입력을 실패시키는 연결. host.buttons 는 buttons 값이며 press 가 바꾸고
- * 감시자에게 알린다. 감시는 알림으로만 끝나고 시간 제한을 쓰지 않는다.
+ * A connection that records requests and fails the input with the code that fail returns. host.buttons is the buttons
+ * value, which press changes and reports to the watchers. The watch ends only by notification and uses no time limit.
  */
 function fakeClient(fail = () => null) {
   const requests = [];
@@ -33,7 +33,7 @@ function fakeClient(fail = () => null) {
       if (predicate(client.buttons)) resolve(client.buttons);
       else watches.add(watch);
     }),
-    /** 사람이 버튼을 누르거나 떼어 host.buttons 가 바뀐 것을 알린다. */
+    /** Reports that a person pressed or released a button and host.buttons changed. */
     press(mask) {
       client.buttons = { mask };
       for (const watch of [...watches]) {
@@ -46,10 +46,10 @@ function fakeClient(fail = () => null) {
   return client;
 }
 
-/** 대기 중인 promise 의 연속을 모두 실행한다. 시간을 기다리지 않는다. */
+/** Runs all continuations of waiting promises. It does not wait for time. */
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-/** AppKit 이 버튼을 보고하는 동안 누름과 뗌을 거부하는 host. */
+/** A host that rejects press and release while AppKit reports a button. */
 const heldRefuses = (params, buttons) => ((params.phase === "down" || params.phase === "up") && buttons.mask !== 0 ? 1007 : null);
 
 const app = { name: "fixture" };
@@ -75,13 +75,15 @@ test("a check session releases every press it left open", async () => {
 });
 
 test("a refused release keeps the press open until the held button is released", async (t) => {
-  // 시간 제한이 진행을 만들지 못하게 시간 함수를 멈춘다. 정리는 host.buttons 의 알림으로만 진행한다.
+  // Stops the time functions so that a time limit cannot create progress. The cleanup progresses only by the
+  // notification of host.buttons.
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"] });
   const client = fakeClient(heldRefuses);
   const s = new Session(app, client);
   await s.pointer(10, 20, "down");
   client.press(0x1);
-  // 거부된 사건이 누름인지 뗌인지는 열린 누름이 남는지를 정하므로, 오류가 단계와 자리를 밝힌다.
+  // Whether the rejected event was a press or a release decides whether an open press remains, so the error names the
+  // step and the location.
   await assert.rejects(s.pointer(10, 20, "up"), (error) => error.code === 1007 &&
     /^input\.pointer up of the left button at 10,20 in main: AppKit reports NSEvent\.pressedMouseButtons mask 0x1/.test(error.message));
   assert.deepEqual(open(s), [{ window: "main", x: 10, y: 20, button: "left" }]);
@@ -95,7 +97,8 @@ test("a refused release keeps the press open until the held button is released",
     "the cleanup sent a release while host.buttons reported a held button");
   client.press(0);
   await release;
-  // 정리가 끝낸 누름은 검사의 진단으로 남아 창 실행의 출력에서 뗌 대기가 실행됐음을 보인다.
+  // A press that the cleanup ended remains as a diagnostic of the check, so the output of the window run shows that the
+  // wait for the release ran.
   assert.equal(released.length, 1);
   assert.match(released[0], /^released open press: left at 10,20 in main after host\.buttons reported mask 0 \(waited \d+ms\)$/);
   assert.deepEqual(client.requests.slice(sent), [
@@ -103,7 +106,7 @@ test("a refused release keeps the press open until the held button is released",
     { method: "input.pointer", window: "main", x: 10, y: 20, phase: "up", button: "left" },
   ]);
   assert.deepEqual(open(s), []);
-  // 끝난 누름 뒤의 같은 버튼 누름은 전달된다(1008 이 아니다).
+  // A press of the same button after an ended press is delivered (it is not 1008).
   await s.pointer(10, 20, "down");
   await s.pointer(10, 20, "up");
 });

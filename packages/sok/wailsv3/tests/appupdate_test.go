@@ -1,6 +1,7 @@
 package tests
 
-// 애플리케이션 업데이트(docs/spec/installation.md#application-update)의 후보 선택과 release 준비를 검사한다.
+// Checks the candidate selection and the release preparation of the application update
+// (docs/spec/installation.md#application-update).
 
 import (
 	"archive/zip"

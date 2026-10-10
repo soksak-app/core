@@ -1,9 +1,9 @@
-// 활성 애플리케이션을 읽고 되돌린다. 기본 창 검사는 비활성 애플리케이션을 전제하므로, 애플리케이션을 활성화하는
-// 검사는 끝날 때 앞서 활성이던 애플리케이션을 다시 활성화한다.
+// Reads and restores the active application. The default window checks require an inactive application, so a check that
+// activates an application activates the application that was active before again when it ends.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 
-// osascript 의 JavaScript 로 스크립트를 실행하고 JSON 결과를 돌려준다.
+// Runs a script with the JavaScript of osascript and returns the JSON result.
 function jxa(body) {
   const script = `ObjC.import("AppKit");
 function run(argv) { const input = JSON.parse(argv[0]); ${body} }`;
@@ -25,21 +25,21 @@ const activate = jxa(`
 const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(input.pid);
 return JSON.stringify(!app.isNil() && app.activateWithOptions(0));`);
 
-/** 지금 활성인 애플리케이션의 프로세스 번호. */
+/** The process number of the application that is active now. */
 export function frontmostApp() {
   return frontmost();
 }
 
-/** 프로세스 pid 의 애플리케이션을 이름과 bundle identifier 로 적는다. */
+/** Describes the application of process pid by name and bundle identifier. */
 export function describeApp(pid) {
   const app = identify({ pid });
   return app === null ? `pid ${pid}, no running application` : `pid ${pid}, ${app.name ?? "no name"}, ${app.bundle ?? "no bundle identifier"}`;
 }
 
 /**
- * 검사 전 활성 애플리케이션을 세션의 기준 baseline 으로 읽는다. 기준이 검사할 호스트(hosts, { name, pid }) 중
- * 하나이면 세션의 모든 합성 포인터 측정이 활성 애플리케이션을 재게 되므로, 첫 검사 전에 그 애플리케이션과 호스트를
- * 밝혀 실패한다.
+ * Reads the application that is active before the checks as the baseline of the session. When the baseline is one of
+ * the hosts to check (hosts, { name, pid }), every synthetic pointer measurement of the session would measure an active
+ * application, so the check fails before the first check and names that application and host.
  */
 export function sessionBaseline({ hosts, read = frontmostApp, describe = describeApp }) {
   const baseline = read();
@@ -52,16 +52,17 @@ export function sessionBaseline({ hosts, read = frontmostApp, describe = describ
   return baseline;
 }
 
-/** 프로세스 pid 의 애플리케이션을 활성화한다. 활성화할 수 없으면 실패한다. */
+/** Activates the application of process pid. It fails when the application cannot be activated. */
 export function activateApp(pid) {
   assert.equal(activate({ pid }), true, `application ${pid} could not be activated`);
 }
 
 /**
- * 검사가 끝난 뒤 활성 애플리케이션을 세션의 기준 baseline 으로 되돌리고 확인한다. 검사한 호스트 host 가 활성이면
- * 기준을 다시 활성화하고 호스트가 비활성이 되기를 기다린다. 그 뒤 세션이 연 호스트(hosts) 중 하나가 활성이면
- * 실패한다. 검사는 다른 애플리케이션을 활성화하지 않으므로, 다른 애플리케이션이 활성이면 사용자가 바꾼 것이며
- * 그 애플리케이션을 빼앗지 않는다. 반환값은 복원 전후의 활성 애플리케이션이다.
+ * After the checks, restores the active application to the baseline of the session and verifies it. When the checked
+ * host host is active, it activates the baseline again and waits until the host is inactive. Then it fails if one of
+ * the hosts that the session opened (hosts) is active. The checks do not activate another application, so an active
+ * other application was changed by the user and is not taken away. The return value is the active application before
+ * and after the restore.
  */
 export async function restoreFrontmost({ name, baseline, host, hosts, read = frontmostApp, activate = activateApp, inactive }) {
   const before = read();
@@ -86,8 +87,9 @@ return JSON.stringify(list.slice(0, own).map((item) => ({ owner: item.kCGWindowO
   frame: { x: item.kCGWindowBounds.X, y: item.kCGWindowBounds.Y, width: item.kCGWindowBounds.Width, height: item.kCGWindowBounds.Height } })));`);
 
 /**
- * 프로세스 pid 의 맨 앞 창보다 앞에 있으면서 frame(화면 좌표)을 모두 덮는 일반 층 창. 창이 가려져 검사가 재지
- * 않을 때 그 까닭으로 적는다. pid 의 창이 창 목록에 없으면 실패한다.
+ * A window of the ordinary layer that is in front of the front window of process pid and covers the whole frame (screen
+ * coordinates). It is stated as the reason when the window is covered and the check does not measure. It fails when the
+ * window of pid is not in the window list.
  */
 export function coveringWindows(pid, frame) {
   const above = windowsAbove({ pid });

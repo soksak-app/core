@@ -1,4 +1,4 @@
-// linux 의 로컬 엔드포인트 전송: 소유자 전용 디렉터리의 Unix 도메인 소켓.
+// Local endpoint transport of linux: a Unix domain socket in an owner-only directory.
 import { chmodSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +6,7 @@ import { join } from "node:path";
 export const name = "linux";
 export const transport = "unix";
 
-/** 권한 0700 의 임시 디렉터리에 소켓 경로를 만든다. remove 는 디렉터리를 제거한다. */
+/** Creates the socket path in a temporary directory with permission 0700. remove deletes the directory. */
 export function createAddress(label) {
   const directory = mkdtempSync(join(tmpdir(), `${label}-`));
   chmodSync(directory, 0o700);

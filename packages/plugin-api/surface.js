@@ -1,4 +1,4 @@
-// DOM surface 모듈 계약. Workbench가 host 요소와 lifecycle을 소유한다.
+// The DOM surface module contract. The workbench owns the host element and the lifecycle.
 
 const callable = (value, name) => {
   if (typeof value !== "function") throw new TypeError(`surface module must export ${name}()`);
@@ -50,29 +50,29 @@ export function createSurfaceContext({
     // Aborts when the removal of the surface starts, before its regions are detached and before dispose runs
     // (docs/spec/plugins.md#surface-module-ownership).
     closing,
-    // 진단 빌드에서는 플러그인의 진단 모듈, release 빌드에서는 null 이다. 진단 모듈은 첫 화면 뒤에 불러오므로 workbench 가
-    // 모듈을 mount 하기 전에 채운 값을 읽는다.
+    // The diagnostics module of the plugin in a diagnostic build, and null in a release build. The diagnostics module is loaded after the first screen, so the workbench reads the value that it filled in
+    // before it mounts the module.
     get diagnostics() { return diagnostics(); },
-    // 탭 알림(docs/spec/plugins.md#tab-reports): 탭에 보일 제목, 카드 발의 하단 글과 작업 디렉터리를 워크벤치에 알린다.
+    // Tab reports (docs/spec/plugins.md#tab-reports): report to the workbench the title shown on the tab, the bottom text of the card header and the working directory.
     tab: Object.freeze({ title: tab.title, footer: tab.footer, directory: tab.directory, notify: tab.notify, modified: tab.modified, error: tab.error,
       // default: a tab opened without parameters has none (docs/spec/plugins.md#pluginjson).
       params: tab.params === undefined || tab.params === null ? null : Object.freeze(structuredClone(tab.params)) }),
-    // 이 탭을 만든 카드의 활성 탭이 그때 기록한 작업 디렉터리.
-    // 기본값: 원래 카드의 활성 탭이 디렉터리를 기록하지 않았으면 origin.directory 는 null 이다.
+    // The working directory that the active tab of the card that created this tab recorded at that time.
+    // default: origin.directory is null when the active tab of the original card did not record a directory.
     origin: Object.freeze({ directory: origin.directory ?? null }),
-    // 표면 창이 보이는 프로젝트의 정규 루트. 프로젝트가 없는 창에서는 null 이다.
+    // The canonical root of the project shown in the surface window. It is null in a window without a project.
     project: project === null ? null : Object.freeze({ root: project.root }),
-    // 코어 아이콘(docs/spec/plugins.md#icons): 이름의 24 단위 획 SVG 문자열. 없는 이름은 실패한다.
+    // Core icons (docs/spec/plugins.md#icons): the stroke SVG string of a name on a 24-unit grid. A name that does not exist fails.
     icon,
     runtime: Object.freeze({
       sidecar: callable(runtime.sidecar, "runtime.sidecar").bind(runtime),
       native: runtime.native,
       clipboard: runtime.clipboard,
-      // 링크 열기(docs/spec/plugins.md#opening-links).
+      // Opening links (docs/spec/plugins.md#opening-links).
       links: runtime.links,
       theme: runtime.theme,
       settings: runtime.settings,
-      // 이 표면의 실제 글자 배율. read() 는 현재 배율, on(fn) 은 배율이 바뀔 때 fn(배율) 을 부른다.
+      // The actual text size scale of this surface. read() returns the current scale, and on(fn) calls fn(scale) when the scale changes.
       textSize: runtime.textSize,
       // Writes an event of this surface to the performance trace with the plugin and surface ids
       // (docs/spec/plugins.md#tracing). The trace writes nothing while it is off.
@@ -99,7 +99,7 @@ export function createSurfaceContext({
     exposure: Object.freeze(runtime.exposure),
     events: Object.freeze({
       emit: (type, detail) => {
-        // 기본값: 그 이벤트에 등록한 수신자가 없으면 알릴 곳이 없다.
+        // default: when no receiver is registered for that event, there is no place to report.
         for (const listener of eventListeners.get(type) ?? []) listener(detail);
         runtime.emit(type, detail);
       },

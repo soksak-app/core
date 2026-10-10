@@ -1,10 +1,10 @@
-// 프레임 형식: 4바이트 빅엔디언 길이 + UTF-8 JSON 본문.
+// Frame form: a 4-byte big-endian length followed by a UTF-8 JSON body.
 
 export const MAX_FRAME_LENGTH = 16 * 1024 * 1024;
 
 const HEADER_LENGTH = 4;
 
-// 객체를 JSON으로 직렬화하고 길이 헤더를 붙인다.
+// Serializes an object to JSON and prepends the length header.
 export function encodeFrame(object) {
   const body = Buffer.from(JSON.stringify(object), "utf8");
   if (body.length > MAX_FRAME_LENGTH) {
@@ -16,12 +16,12 @@ export function encodeFrame(object) {
   return frame;
 }
 
-// 조각난 입력을 모아 완성된 프레임 단위로 객체를 반환한다.
+// Collects fragmented input and returns objects in units of complete frames.
 export class FrameReader {
   #chunks = [];
   #buffered = 0;
 
-  // 청크를 추가하고 완성된 객체를 순서대로 산출한다.
+  // Appends a chunk and yields the completed objects in order.
   *push(chunk) {
     if (chunk.length > 0) {
       this.#chunks.push(chunk);
@@ -30,7 +30,7 @@ export class FrameReader {
     while (this.#buffered >= HEADER_LENGTH) {
       const buffer = this.#flatten();
       const length = buffer.readUInt32BE(0);
-      // 본문 수신 전에 길이를 검사한다.
+      // Checks the length before the body is received.
       if (length > MAX_FRAME_LENGTH) {
         throw new RangeError(`Frame length ${length} exceeds limit ${MAX_FRAME_LENGTH}`);
       }
@@ -49,7 +49,7 @@ export class FrameReader {
     }
   }
 
-  // 남아 있는 미완성 바이트 수.
+  // The number of remaining bytes of an incomplete frame.
   get pending() {
     return this.#buffered;
   }

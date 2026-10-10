@@ -1,8 +1,9 @@
 package sok
 
-// registry index 와 release 를 위치에서 읽는다(docs/spec/installation.md#fetching). 위치는 https: URL 이나 절대
-// file: URL 이다. https: 는 운영체제가 신뢰하는 인증 기관으로 TLS 를 쓰고, https: 로의 redirect 만 5 번까지 따라가며,
-// 200 이 아닌 응답, 한도보다 큰 본문, 한도보다 느린 요청을 정한 문장으로 거부한다. 아무것도 저장해 두지 않는다.
+// Reads registry indexes and releases from a location (docs/spec/installation.md#fetching). A location is an https: URL
+// or an absolute file: URL. https: uses TLS with the certificate authorities that the operating system trusts, follows
+// redirects only to https: and at most 5 times, and rejects a response other than 200, a body larger than the limit and
+// a request slower than the limit with the specified sentence. Nothing is stored.
 
 import (
 	"context"
@@ -17,35 +18,35 @@ import (
 	"time"
 )
 
-// Limit 은 한 요청의 본문 크기와 시간의 한도다.
+// Limit is the limit of the body size and the time of one request.
 type Limit struct {
 	Bytes   int64
 	Timeout time.Duration
 }
 
-// Fetcher 는 위치를 읽는다. TLS 가 nil 이면 운영체제가 신뢰하는 인증 기관을 쓴다. 검사는 자기 인증 기관과 작은
-// 한도를 준다.
+// Fetcher reads a location. When TLS is nil, it uses the certificate authorities that the operating system trusts. A
+// check gives it its own certificate authority and small limits.
 type Fetcher struct {
 	TLS     *tls.Config
 	Index   Limit
 	Release Limit
 }
 
-// maxRedirects 는 따라가는 redirect 의 최대 수다.
+// maxRedirects is the maximum number of redirects that are followed.
 const maxRedirects = 5
 
-// DefaultFetcher 는 명세의 한도를 쓰는 Fetcher 다.
+// DefaultFetcher is the Fetcher that uses the limits of the specification.
 var DefaultFetcher = Fetcher{
 	Index:   Limit{Bytes: 8 << 20, Timeout: 60 * time.Second},
 	Release: Limit{Bytes: 256 << 20, Timeout: 600 * time.Second},
 }
 
-// errRedirect 는 따를 수 없는 redirect 다. 문장은 그대로 오류가 된다.
+// errRedirect is a redirect that cannot be followed. Its sentence becomes the error unchanged.
 type errRedirect struct{ text string }
 
 func (e errRedirect) Error() string { return e.text }
 
-// CheckLocation 은 위치가 https: URL 이나 절대 file: URL 인지 검사한다.
+// CheckLocation checks that the location is an https: URL or an absolute file: URL.
 func CheckLocation(location string) error {
 	if strings.HasPrefix(location, "https:") {
 		parsed, err := url.Parse(location)
@@ -63,7 +64,7 @@ func CheckLocation(location string) error {
 	return fmt.Errorf("%s: the URL must be https: or an absolute file: URL", location)
 }
 
-// Read 는 위치의 본문을 limit 안에서 읽는다.
+// Read reads the body of the location within limit.
 func (f Fetcher) Read(location string, limit Limit) ([]byte, error) {
 	if err := CheckLocation(location); err != nil {
 		return nil, err
@@ -116,7 +117,7 @@ func (f Fetcher) Read(location string, limit Limit) ([]byte, error) {
 	return data, nil
 }
 
-// failure 는 요청 오류를 명세의 문장으로 바꾼다.
+// failure turns a request error into the sentence of the specification.
 func (f Fetcher) failure(location string, limit Limit, ctx context.Context, err error) error {
 	var redirect errRedirect
 	if errors.As(err, &redirect) {

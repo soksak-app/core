@@ -1,5 +1,5 @@
-//! Linux 의 command line 동작. 엔드포인트는 macOS 처럼 Unix domain socket 이고, 설정 폴더는 Go 의 os.UserConfigDir 와
-//! 같은 $XDG_CONFIG_HOME 또는 ~/.config 다(docs/spec/cli.md).
+//! Command line behavior on Linux. The endpoint is a Unix domain socket as on macOS, and the configuration folder is $XDG_CONFIG_HOME or ~/.config like
+//! os.UserConfigDir of Go (docs/spec/cli.md).
 
 use std::os::unix::io::IntoRawFd;
 use std::os::unix::net::UnixStream;
@@ -10,7 +10,7 @@ use super::Connection;
 #[path = "process.rs"]
 mod process;
 
-/// Linux 구현.
+/// The Linux implementation.
 pub struct Linux;
 
 impl Connection for UnixStream {
@@ -26,7 +26,7 @@ impl Connection for UnixStream {
     }
 
     fn close(self: Box<Self>) -> Result<(), String> {
-        // 표준 라이브러리의 drop 은 close 의 결과를 버리므로 파일 기술자를 직접 닫는다.
+        // The drop of the standard library discards the result of close, so the code closes the file descriptor directly.
         let fd = (*self).into_raw_fd();
         if unsafe { libc::close(fd) } == 0 {
             Ok(())

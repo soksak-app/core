@@ -1,4 +1,4 @@
-//! registry build(docs/spec/cli.md)가 registry 폴더를 검사하고 index.json 을 쓰는지 검사한다.
+//! Checks that registry build (docs/spec/cli.md) checks the registry folder and writes index.json.
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
-/// 테스트마다 고유한 임시 폴더. 끝나면 지운다.
+/// A unique temporary folder for each test. It is removed at the end.
 struct Dir(PathBuf);
 
 impl Dir {
@@ -29,7 +29,7 @@ impl Dir {
 
 impl Drop for Dir {
     fn drop(&mut self) {
-        // 테스트 뒤 정리다. 지우지 못한 폴더는 다음 테스트에 영향을 주지 않는 고유 이름이다.
+        // Cleanup after the test. A folder that cannot be removed has a unique name that does not affect the next test.
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
@@ -50,7 +50,7 @@ fn run(args: &[&str]) -> (i32, String, String) {
     )
 }
 
-/// 경로마다 내용을 쓴다. 이름이 * 로 끝나면 실행 bit 를 붙인다.
+/// Writes the contents of each path. When the name ends with *, it sets the execute bit.
 fn write_tree(dir: &Path, files: &[(&str, &str)]) {
     for (name, content) in files {
         let (name, mode) = match name.strip_suffix('*') {
@@ -64,7 +64,7 @@ fn write_tree(dir: &Path, files: &[(&str, &str)]) {
     }
 }
 
-/// registry 폴더와 release 의 주소와 hash.
+/// The registry folder and the address and hash of a release.
 struct Registry {
     dir: Dir,
     _releases: Dir,
@@ -72,7 +72,7 @@ struct Registry {
     sidecar: (String, String),
 }
 
-/// pack 과 release 로 release 를 만들고 그 주소와 hash 를 담은 registry 폴더를 쓴다.
+/// Creates a release from a pack and a release, and writes a registry folder that holds its address and hash.
 fn registry_tree() -> Registry {
     let platform = soksak_sok::current_platform().expect("platform");
     let releases = Dir::new();

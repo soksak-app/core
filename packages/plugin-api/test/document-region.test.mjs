@@ -1,4 +1,4 @@
-// 문서 영역이 요소의 뷰포트 여백을 알리고, 호출 순서를 지키고, 자기 상태만 받는지 검사한다.
+// Checks that the document region reports the viewport margins of the element, keeps the call order and receives only its own state.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
@@ -6,7 +6,7 @@ import { attachRegion, regionInsets } from "../document-region.js";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-/** 요소의 사각형을 정할 수 있는 창. ResizeObserver 는 observe 한 요소와 콜백을 기록한다. */
+/** A window in which the rectangle of an element can be set. ResizeObserver records the observed element and the callback. */
 function fixture() {
   const { window } = new JSDOM("<body><div id=outer><div id=region></div></div></body>", { url: "https://example.test/" });
   const observed = [];
@@ -16,7 +16,7 @@ function fixture() {
     observe(node) { observed.push(node); }
     disconnect() { this.disconnected = true; callbacks.length = 0; }
   };
-  // 관찰은 animation frame 에서 시작한다. frame() 이 기다리는 콜백을 실행한다.
+  // The observation starts at an animation frame. frame() runs the waiting callback.
   const frames = [];
   window.requestAnimationFrame = (fn) => frames.push(fn);
   window.cancelAnimationFrame = () => {};
@@ -101,7 +101,7 @@ test("layout changes place the region once per change", async () => {
   const p = port();
   p.release();
   const region = attachRegion(p, f.element, "page", f.window, { report: f.report });
-  // 관찰은 다음 animation frame 에 시작한다(AGENTS.md).
+  // The observation starts at the next animation frame (AGENTS.md).
   assert.deepEqual(f.observed, [], "an element was observed before the next animation frame");
   f.frame();
   assert.deepEqual(f.observed.map((node) => node.id || node.tagName), ["region", "outer", "BODY", "HTML"]);
@@ -192,7 +192,7 @@ test("visibility: ancestor with display:none hides element", () => {
 
 test("visibility: normal element is visible", () => {
   const f = fixture();
-  // 요소는 mock getBoundingClientRect에서 받은 width와 height를 가진다
+  // The element has the width and height received from the mock getBoundingClientRect.
   const insets = regionInsets(f.element, f.window);
   assert.equal(insets.visible, true, "normal element with size is visible");
 });
@@ -205,17 +205,17 @@ test("visibility: propagates through attachRegion place", async () => {
   const region = attachRegion(p, f.element, "page", f.window, { report: f.report });
   await settle();
 
-  // 첫 place 호출이 visible=true인지 확인한다
+  // Check that the first place call has visible=true.
   const placeCallsBefore = p.calls.filter(([kind]) => kind === "place");
   assert.equal(placeCallsBefore.length, 1, "initial place call");
   assert.equal(placeCallsBefore[0][3], true, "initial visible is true");
 
-  // 요소를 숨긴다
+  // Hide the element.
   f.element.style.display = "none";
   f.resize({ left: 10, top: 40, right: 510, bottom: 440, width: 500, height: 400 });
   await settle();
 
-  // 새 place 호출이 visible=false인지 확인한다
+  // Check that the new place call has visible=false.
   const placeCallsAfter = p.calls.filter(([kind]) => kind === "place");
   assert.equal(placeCallsAfter.length, 2, "place called again on visibility change");
   assert.equal(placeCallsAfter[1][3], false, "visible is false when display:none");
