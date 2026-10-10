@@ -149,7 +149,7 @@ func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"plugin":{"package":"plugin-probe","version":"0.0.10","path":"plugins/probe/0.0.10","enabled":true,"sidecars":{}},"sidecars":{}}`
+	want := `{"plugin":{"version":"0.0.10","path":"plugins/probe/0.0.10","enabled":true,"sidecars":{}},"sidecars":{}}`
 	if string(data) != want {
 		t.Fatalf("install result %s", data)
 	}

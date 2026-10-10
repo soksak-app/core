@@ -21,14 +21,26 @@ fn write_installed(config: &Path, files: &[(&str, &str)]) {
 fn installed_fixture() -> tempfile::TempDir {
     let config = tempfile::tempdir().unwrap();
     let state = r#"{"format": 2, "plugins": {
-        "term": {"package": "@scope/plugin-term", "version": "0.1.0", "path": "plugins/term/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
-        "alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}},
-        "off": {"package": "plugin-off", "version": "1.0.0", "path": "plugins/off/1.0.0", "enabled": false, "sidecars": {}}},
+        "term": {"version": "0.1.0", "path": "plugins/term/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+        "alpha": {"version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}},
+        "off": {"version": "1.0.0", "path": "plugins/off/1.0.0", "enabled": false, "sidecars": {}}},
         "sidecars": {"@scope/sidecar-worker": {"version": "0.1.2", "path": "sidecars/scope-sidecar-worker/0.1.2/darwin-arm64"}}}"#;
     write_installed(
         config.path(),
         &[
             ("plugins/installed.json", state),
+            (
+                "plugins/term/0.1.0/package.json",
+                r#"{"name": "@scope/plugin-term"}"#,
+            ),
+            (
+                "plugins/alpha/1.0.0/package.json",
+                r#"{"name": "plugin-alpha"}"#,
+            ),
+            (
+                "plugins/off/1.0.0/package.json",
+                r#"{"name": "plugin-off"}"#,
+            ),
             (
                 "plugins/term/0.1.0/plugin.json",
                 r#"{"id": "term", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
@@ -71,6 +83,54 @@ fn installed_plugins_document_lists_enabled_plugins_by_id() {
     assert_eq!(
         text(installed::installed_plugins_document(empty.path(), true)),
         r#"{"plugins":[]}"#
+    );
+}
+
+// contract: installed.document.names-from-package-json
+#[test]
+fn installed_plugins_document_reads_the_name_from_the_package_json() {
+    let config = installed_fixture();
+    write_installed(
+        config.path(),
+        &[(
+            "plugins/alpha/1.0.0/package.json",
+            r#"{"name": "plugin-renamed"}"#,
+        )],
+    );
+    let renamed = text(installed::installed_plugins_document(config.path(), false));
+    assert!(
+        renamed.contains(r#"{"id":"alpha","package":"plugin-renamed","#),
+        "renamed document {renamed}"
+    );
+    let file = config.path().join("plugins/alpha/1.0.0/package.json");
+    std::fs::remove_file(&file).unwrap();
+    assert_eq!(
+        text(installed::installed_plugins_document(config.path(), false)),
+        format!(
+            r#"{{"error":"{}: no such file or directory"}}"#,
+            file.display()
+        )
+    );
+}
+
+// contract: installed.document.refuses-package
+#[test]
+fn installed_plugins_document_refuses_a_package_field() {
+    let config = installed_fixture();
+    write_installed(
+        config.path(),
+        &[(
+            "plugins/installed.json",
+            r#"{"format": 2, "plugins": {"alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}}}, "sidecars": {}}"#,
+        )],
+    );
+    let state = config.path().join("plugins/installed.json");
+    assert_eq!(
+        text(installed::installed_plugins_document(config.path(), false)),
+        format!(
+            r#"{{"error":"{}: plugins/installed.json alpha: unknown field package"}}"#,
+            state.display()
+        )
     );
 }
 

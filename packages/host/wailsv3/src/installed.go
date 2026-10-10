@@ -46,7 +46,11 @@ func enabledPlugins(configDir string) ([]installedPlugin, *sok.InstalledState, e
 		if !plugin.Enabled {
 			continue
 		}
-		plugins = append(plugins, installedPlugin{id: id, pkg: plugin.Package, version: plugin.Version, dir: filepath.Join(configDir, plugin.Path)})
+		name, err := sok.InstalledName(configDir, plugin)
+		if err != nil {
+			return nil, nil, err
+		}
+		plugins = append(plugins, installedPlugin{id: id, pkg: name, version: plugin.Version, dir: filepath.Join(configDir, plugin.Path)})
 	}
 	slices.SortFunc(plugins, func(a, b installedPlugin) int { return strings.Compare(a.id, b.id) })
 	return plugins, state, nil
@@ -283,7 +287,11 @@ func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 	// The package of an installed plugin is a plugin dependency, so it is not declared as a sidecar.
 	seen := map[string]bool{}
 	for _, plugin := range state.Plugins {
-		seen[plugin.Package] = true
+		name, err := sok.InstalledName(configDir, plugin)
+		if err != nil {
+			return nil, err
+		}
+		seen[name] = true
 	}
 	for _, plugin := range plugins {
 		file := filepath.Join(plugin.dir, "plugin.json")

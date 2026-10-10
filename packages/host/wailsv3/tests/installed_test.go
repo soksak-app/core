@@ -34,10 +34,13 @@ func installedFixture(t *testing.T) string {
 	config := t.TempDir()
 	writeInstalled(t, config, map[string]string{
 		"plugins/installed.json": `{"format": 2, "plugins": {
-			"term": {"package": "@scope/plugin-term", "version": "0.1.0", "path": "plugins/term/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
-			"alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}},
-			"off": {"package": "plugin-off", "version": "1.0.0", "path": "plugins/off/1.0.0", "enabled": false, "sidecars": {}}},
+			"term": {"version": "0.1.0", "path": "plugins/term/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+			"alpha": {"version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}},
+			"off": {"version": "1.0.0", "path": "plugins/off/1.0.0", "enabled": false, "sidecars": {}}},
 			"sidecars": {"@scope/sidecar-worker": {"version": "0.1.2", "path": "sidecars/scope-sidecar-worker/0.1.2/darwin-arm64"}}}`,
+		"plugins/term/0.1.0/package.json":                               `{"name": "@scope/plugin-term"}`,
+		"plugins/alpha/1.0.0/package.json":                              `{"name": "plugin-alpha"}`,
+		"plugins/off/1.0.0/package.json":                                `{"name": "plugin-off"}`,
 		"plugins/term/0.1.0/plugin.json":                                `{"id": "term", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
 		"plugins/term/0.1.0/ui/term.js":                                 "export const term = 1;",
 		"plugins/term/0.1.0/diagnostics.json":                           "{\n  \"module\": \"ui/d.js\",\n  \"exposes\": {}\n}\n",
@@ -61,6 +64,32 @@ func TestInstalledPluginsDocumentListsEnabledPluginsById(t *testing.T) {
 	}
 	if got := string(host.InstalledPluginsDocument(t.TempDir(), true)); got != `{"plugins":[]}` {
 		t.Fatalf("empty document %s", got)
+	}
+}
+
+// contract: installed.document.names-from-package-json
+func TestInstalledPluginsDocumentReadsTheNameFromThePackageJSON(t *testing.T) {
+	config := installedFixture(t)
+	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/package.json": `{"name": "plugin-renamed"}`})
+	if got := string(host.InstalledPluginsDocument(config, false)); !strings.Contains(got, `{"id":"alpha","package":"plugin-renamed",`) {
+		t.Fatalf("renamed document %s", got)
+	}
+	if err := os.Remove(filepath.Join(config, "plugins/alpha/1.0.0/package.json")); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(config, "plugins/alpha/1.0.0/package.json")
+	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+file+`: no such file or directory"}` {
+		t.Fatalf("missing package.json %s", got)
+	}
+}
+
+// contract: installed.document.refuses-package
+func TestInstalledPluginsDocumentRefusesAPackageField(t *testing.T) {
+	config := installedFixture(t)
+	writeInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 2, "plugins": {"alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}}}, "sidecars": {}}`})
+	want := `{"error":"` + filepath.Join(config, "plugins/installed.json") + `: plugins/installed.json alpha: unknown field package"}`
+	if got := string(host.InstalledPluginsDocument(config, false)); got != want {
+		t.Fatalf("package field %s", got)
 	}
 }
 

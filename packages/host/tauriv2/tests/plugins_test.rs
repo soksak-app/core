@@ -151,7 +151,7 @@ fn plugins_run_changes_the_installation_like_the_command() {
     .unwrap();
     let (plugins, seen) = new_plugins(config.path());
     let installed = plugins.run(request("install", json!("probe"))).unwrap();
-    let want = r#"{"plugin":{"package":"plugin-probe","version":"0.0.10","path":"plugins/probe/0.0.10","enabled":true,"sidecars":{}},"sidecars":{}}"#;
+    let want = r#"{"plugin":{"version":"0.0.10","path":"plugins/probe/0.0.10","enabled":true,"sidecars":{}},"sidecars":{}}"#;
     assert_eq!(serde_json::to_string(&installed).unwrap(), want);
     for action in ["update", "disable", "enable"] {
         plugins.run(request(action, json!("probe"))).unwrap();
