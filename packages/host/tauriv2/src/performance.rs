@@ -2,6 +2,7 @@
 //! observation is an event of the event log while the switch is on. The page turns it on and off with the call `performance`.
 
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -109,7 +110,7 @@ fn start_sampler() {
     let thread = std::thread::Builder::new()
         .name("performance-sampler".into())
         .spawn(move || loop {
-            observe("sampler", || memory_record(std::process::id()));
+            sample();
             // A message or the end of the channel stops the thread; the timeout is the interval of the samples.
             if !matches!(
                 stopped.recv_timeout(std::time::Duration::from_secs(5)),
@@ -131,6 +132,67 @@ fn end_sampler() {
     if sampler.thread.join().is_err() {
         crate::application_log::log_error("performance trace", "the sampler ended with a panic");
     }
+}
+
+/// The process registry: every sidecar process the host started or connected to, by pid, with the role and the name that
+/// make a memory reading attribute itself. A process leaves the registry when it ends or its connection ends.
+static PROCESSES: Mutex<BTreeMap<u32, (String, String)>> = Mutex::new(BTreeMap::new());
+
+/// Names a process for the sampler and stores the event `process` with its role, name and pid, so the samples attribute
+/// themselves. Naming a pid again replaces its role and name.
+pub fn process_add(role: &str, name: &str, pid: u32) {
+    PROCESSES
+        .lock()
+        .expect("the process registry")
+        .insert(pid, (role.to_string(), name.to_string()));
+    observe(
+        "host",
+        || json!({"event": "process", "role": role, "name": name, "pid": pid}),
+    );
+}
+
+/// Removes a process from the registry; a pid that is not named is ignored because both the end of a process and the end of
+/// its connection remove it.
+pub fn process_remove(pid: u32) {
+    PROCESSES.lock().expect("the process registry").remove(&pid);
+}
+
+/// Stores the resident size of the host and of every registered process, each as one event `host.sampler.memory`. A process
+/// whose size cannot be read is stored with its error.
+pub fn sample() {
+    observe("sampler", || memory_record(std::process::id()));
+    let named: Vec<(u32, (String, String))> = PROCESSES
+        .lock()
+        .expect("the process registry")
+        .iter()
+        .map(|(pid, process)| (*pid, process.clone()))
+        .collect();
+    for (pid, (role, name)) in named {
+        observe("sampler", || match resident_kb(pid) {
+            Ok(size) => {
+                json!({"event":"memory", "role":role, "name":name, "pid":pid, "rss_kb":size})
+            }
+            Err(error) => {
+                json!({"event":"memory", "role":role, "name":name, "pid":pid, "error":error})
+            }
+        });
+    }
+}
+
+/// Stores a phase of the life of a surface (`created`, `placed`, `destroyed`) as the event `surface` of the trace. A
+/// placement adds the frame `[x, y, w, h]` the host gave the native view and whether the view is visible.
+pub fn surface(phase: &str, surface: &str, placement: Option<([f64; 4], bool)>) {
+    observe("host", || {
+        let mut record = json!({"event": "surface", "phase": phase, "surface": surface});
+        if let Some(([x, y, w, h], visible)) = placement {
+            record["x"] = json!(x);
+            record["y"] = json!(y);
+            record["w"] = json!(w);
+            record["h"] = json!(h);
+            record["visible"] = json!(visible);
+        }
+        record
+    });
 }
 
 /// Whether the sampler of the trace runs.

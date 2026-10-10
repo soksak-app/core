@@ -2200,13 +2200,35 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
+	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
+		t.Fatal(err)
+	}
 	owner := &harnessOwner{root: "/only", seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, eventsService, "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	receiveSidecarMessage(t, owner.seen) // the echo
 	receiveSidecarMessage(t, owner.seen) // the notice of the reconnection
+	// The sampler names the service while it is connected and not after the connection ended.
+	sampledService := func() int {
+		host.PerformanceSample()
+		if err := log.Flush(5 * time.Second); err != nil {
+			t.Fatal(err)
+		}
+		count := 0
+		for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+			if event["event"] == "host.sampler.memory" && event["fields"].(map[string]any)["name"] == eventsService {
+				count++
+			}
+		}
+		return count
+	}
+	connected := sampledService()
 	sidecars.Stop()
+	if ended := sampledService(); connected == 0 || ended != connected {
+		t.Fatalf("samples of the service: %d while connected, %d after the connection ended", connected, ended)
+	}
 	listener.Close()
 	<-serverDone
 	if err := log.Flush(5 * time.Second); err != nil {

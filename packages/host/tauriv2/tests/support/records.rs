@@ -27,6 +27,26 @@ pub fn read_events(path: &Path) -> Vec<Value> {
         .collect()
 }
 
+/// Waits until the sampler of the performance trace has stored its first sample of the host, so that the sampler thread
+/// does not run among the samples that a test takes itself.
+pub fn wait_for_first_sample(config: &Path, log: &EventLog) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        log.flush(Duration::from_secs(5)).unwrap();
+        if read_events(&event_log_path(config))
+            .iter()
+            .any(|event| event["event"] == "host.sampler.memory")
+        {
+            return;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the sampler stored no sample of the host"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 /// The only host event log under the logs folder of a configuration folder.
 pub fn event_log_path(config: &Path) -> PathBuf {
     let mut paths: Vec<PathBuf> = std::fs::read_dir(config.join("logs"))

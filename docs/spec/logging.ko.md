@@ -107,6 +107,7 @@ catalog는 입력 종류마다 남겨야 하는 사슬도 선언한다. 첫 층�
 - 알림 센터: 상태, 게시된 알림, 눌린 알림마다 event `host.notification.event`(`type`, `authorization`, `window`, `surface`)를 level `info`로 저장하고, 실패마다 장소 `notification`의 `error` 기록을 저장한다;
 - 프로세스 질의: WebKit 자식에 대한 `ps` 질의가 실패하면 장소 `webkit children`의 `error` 기록이다. 프로세스가 없다는 `ps`의 답(상태 1과 빈 출력)은 실패가 아니다;
 - 애플리케이션 업데이트: host는 분리 실행하는 `sok app update`를 event log의 마지막 flush 전에 시작하고 event `host.update.start`(명령의 `pid`, `command` 줄)를 level `info`로 저장한다. 시작에 실패하면 `error` 기록이다. `sok`은 writer가 없는 짧은 프로세스이므로 결과는 종료 상태와 표준 오류의 메시지다([명령줄](cli.ko.md#출력과-종료-상태)). 분리 실행한 명령은 host의 표준 오류를 그대로 쓰므로 메시지는 `logs/host-<boot>.stderr`에 있다. 종료 상태는 읽는 쪽이 없다. 읽을 수 있는 host가 명령이 번들을 바꾸기 전에 끝나기 때문이다. 실패한 명령은 이전 번들을 되돌려 시작하며, 그 실행은 `log.open`으로 시작한다;
+- 메인 page 문서의 시작: page가 처음 적재하는 모듈이 필드 `time_origin`(문서 시계의 원점, `performance.timeOrigin`)과 `url`을 가진 event `page.start`를 내므로, 새 시계로 새 문서를 시작하는 reload가 timeline의 표시된 경계가 된다;
 - 사람이 보는 오류의 표시. 이것이 `error` event를 낸다.
 
 알림 observer, delegate, key-value observer, 타이머, task의 종료처럼 어떤 입구도 덮지 못하는 원천은 소스 lint가 선언이나 사유 주석이 없는 event를 나열한다. lint는 증명이 아니다. 범위는 실행 중에 판단한다: window check가 선언된 명령과 native 입력으로 선언된 원천을 하나씩 구동하고 그 선언된 event를 요구한다.

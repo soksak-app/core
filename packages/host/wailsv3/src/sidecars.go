@@ -1035,6 +1035,7 @@ func (c *Sidecars) launch(name string) (*sidecar, error) {
 		return nil, fmt.Errorf("sidecar %s: %w", name, err)
 	}
 	EmitHost(LevelInfo, "host.sidecar.start", map[string]any{"name": name, "pid": cmd.Process.Pid})
+	PerformanceProcessAdd("sidecar", name, cmd.Process.Pid)
 	process := &sidecar{
 		name: name, cmd: cmd, stdin: stdin,
 		outbox:         make(chan []byte, 256),
@@ -1140,13 +1141,6 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		if err := errors.Join(startErr, serviceLog.Close()); err != nil {
 			return nil, fmt.Errorf("sidecar %s: %w", name, err)
 		}
-		// 프로세스 등록부의 계기(V5-104): 뜨는 사이드카의 pid 와 역할을 남긴다.
-		PerformanceObserve("host", func() map[string]any {
-			return map[string]any{
-				"event": "process", "role": "sidecar", "name": name,
-				"pid": cmd.Process.Pid,
-			}
-		})
 		line, timedOut, err := serviceEndpointLine(cmd, stdout, c.ReadyTimeout)
 		if timedOut {
 			message := fmt.Sprintf("sidecar %s: the service did not print its endpoint within %v", name, c.ReadyTimeout)
@@ -1253,6 +1247,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		return nil, fmt.Errorf("sidecar %s: service protocol mismatch in hello response", name)
 	}
 	EmitHost(LevelInfo, "host.sidecar.connect", map[string]any{"name": name, "pid": endpoint.PID, "spawned": cmd != nil})
+	PerformanceProcessAdd("sidecar", name, endpoint.PID)
 	process := &sidecar{
 		name: name, cmd: cmd, conn: conn, persistent: true, version: response.Version, servicePID: endpoint.PID,
 		outbox: make(chan []byte, 256), exited: make(chan struct{}),
@@ -1440,6 +1435,7 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 		flushStderr(process.cmd)
 		EmitHost(LevelInfo, "host.sidecar.exit", map[string]any{"name": process.name, "pid": process.cmd.Process.Pid,
 			"status": exitStatus(process.cmd, process.waitErr), "stopping": true})
+		PerformanceProcessRemove(process.cmd.Process.Pid)
 		close(process.exited)
 		return
 	}
@@ -1455,6 +1451,7 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 	}
 	EmitHost(LevelInfo, "host.sidecar.exit", map[string]any{"name": process.name, "pid": process.cmd.Process.Pid,
 		"status": exit, "stopping": false})
+	PerformanceProcessRemove(process.cmd.Process.Pid)
 	close(process.exited)
 	LogError("sidecar "+process.name, "failed: "+reason)
 	for _, item := range owned {
@@ -1572,6 +1569,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	close(process.exited)
 	EmitHost(LevelInfo, "host.sidecar.disconnect", map[string]any{"name": process.name, "pid": process.servicePID,
 		"stopping": stopping, "violation": violation})
+	PerformanceProcessRemove(process.servicePID)
 	if violation != "" {
 		// 서비스가 프로토콜을 어겼다. 같은 메시지가 다음 연결도 끝내므로 곧바로 다시 맺지 않고, 다음 전송이
 		// 생성 경로로 다시 맺는다(docs/spec/terminal-runtime.md#service-transport).

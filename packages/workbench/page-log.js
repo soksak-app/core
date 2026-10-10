@@ -41,6 +41,14 @@ export function emitEvent(level, event, fields) {
   batcher?.emit(level, event, fields);
 }
 
+/**
+ * Queues the event `page.start`, which marks the start of this document in the timeline: a reload of the page starts a new
+ * document with a new clock, and the events that follow belong to it. `timeOrigin` is `performance.timeOrigin`.
+ */
+export function recordPageStart(location, timeOrigin) {
+  emitEvent("info", "page.start", { time_origin: timeOrigin, url: location.href });
+}
+
 // The calls of the log and of the performance switch are not recorded: a recorded `log` call would record itself. The range
 // reads of the debug timeline are not recorded either: the view reads in answer to the event that the writer announced after
 // it wrote, so a recorded read would write the event that triggers the next read. The calls that draw and place a native

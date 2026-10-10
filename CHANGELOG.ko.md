@@ -15,6 +15,12 @@
 - F147: `e2e/browser.test.mjs`의 창 검사가 browser card의 문서가 설정을 적용하는 같은 표시에서 색 구성의 변화를 받는 것을 보이는 card와 다른 card의 전체 화면으로 숨은 card에서 측정한다. 두 애플리케이션에서 증상이 재현되지 않았다.
 - F145.14: 두 host는 event `host.project.removal_allowed`(창이 끝나 허용된 제거), `host.workspace.settings`(설정 변경마다의 키), `host.notification.event`(알림 센터의 상태, 게시, 눌림 사건마다)를 저장하고, 알림 센터의 실패마다 장소 `notification`의 `error` 기록을 쓰며, WebKit 자식에 대한 `ps` 질의의 실패를 존재하지 않는 프로세스로 취급하지 않고 장소 `webkit children`의 `error` 기록으로 보고한다. Tauri host는 실패한 `kill`도 보고한다.
 - F145.13: 두 host는 분리 실행하는 `sok app update`를 event log의 마지막 flush 전에 시작하고, host의 표준 오류(`logs/host-<boot>.stderr`)를 주며(Wails host는 주지 않아 실패 메시지가 사라졌다), event `host.update.start`(`pid`, `command`)를 저장한다. 시작에 실패한 오류도 이제 저장된다. 다른 `sok` 명령의 실패는 그대로 종료 상태와 표준 오류의 메시지다.
+- F145.18: `make failures-check`(`make docs-check`에 포함, `scripts/check-failure-table.mjs`)가 host나 네이티브 라이브러리가 리터럴 장소로 쓰는 모든 오류 기록의 장소를 읽고, diagnostics의 실패 표가 영어나 한국어에서 그것을 빠뜨리면 실패한다. 표는 빠뜨렸던 약 백 곳의 행(host가 창에 전달하지 못하는 event, endpoint, 종료, 창, 표면, 문서, 이미지, 모달, 사이드카, WebKit 자식, 화면 캡처, 입력기)을 얻었다.
+- F145.17: browser, editor, hwp, shell, files plugin의 trace는 plugin API의 입구 `context.runtime.log`를 향해 각 저장소의 체크리스트(P17, E14, H12, P4, P20)로 추적한다. core 코드는 바뀌지 않았다.
+- F145.16: files와 shell 사이드카의 event 파일은 event 계약, 요청 봉투의 필드 `cids`, `sidecar.json`의 member `events`를 향해 각 저장소의 체크리스트(S18, S4)로 추적한다. core 코드는 바뀌지 않았다.
+- F145.15.3: 메인 page의 첫 모듈이 `time_origin`과 `url`을 가진 event `page.start`를 내므로, reload가 timeline의 표시된 경계가 된다.
+- F145.15.2: 두 host가 trace의 표면 생명주기를 단계 `created`, `placed`(`x`, `y`, `w`, `h`, `visible` 포함), `destroyed`를 가진 `host.trace.surface`로 저장한다. 이전에는 `destroyed`만 저장했다.
+- F145.15.1: 두 host가 시작하거나 연결한 사이드카 process의 프로세스 등록부를 두고, host와 등록된 process마다 `host.sampler.memory` event(`role`, `name`, `pid`, `rss_kb`, 또는 `error`)를 저장하며 process에 이름을 붙일 때 `host.trace.process`를 저장한다. sampler는 host process만 읽었다.
 - F150.8.1: 창 검사 `e2e/input-oracle.test.mjs`가 Tab, Escape, Backspace, Enter, Control+A에 대해 sidecar가 PTY에 쓴 것으로 기록한 바이트를 터미널의 독립 수신자 프로세스가 읽은 바이트와 비교한다. 두 애플리케이션에서 같다.
 - F150.8.2: 전체 입력 경로의 지연을 성능 trace 끔, 켬, 끔으로 측정했다(`e2e/input-latency.test.mjs`). 중앙값은 Wails 23~25 ms, Tauri 26~38 ms다.
 - F151.6: `sok debug timeline`이 설정 폴더의 host 이벤트 파일에서 filter(`--level`, `--layer`, `--text`, `--event`, `--surface`, `--session`, `--cid`, `--from`, `--to`, `--context`)를 통과한 행을 실행 중인 애플리케이션 없이 debug 화면의 글 줄로 출력한다. Go와 Rust 구현이 같은 줄을 출력하며 golden 파일 `packages/log-contract/fixtures/timeline`과 debug 화면 시험이 이를 검사한다. 시험과 관측: 두 구현이 두 검사 애플리케이션의 이벤트 파일에 같은 출력을 낸다.

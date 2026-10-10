@@ -198,8 +198,8 @@ impl Workspace {
                 let mut settings: Map<String, Value> = read(&path)?;
                 let mut set: Vec<String> = patch.keys().cloned().collect();
                 settings.extend(patch);
-                // 기본값: 요청의 remove 는 선택 인자이며 없으면 지울 키가 없다.
                 let mut removed = vec![];
+                // default: the member remove of the request is optional, and without it there is no key to remove.
                 for key in req.remove.unwrap_or_default() {
                     if settings.remove(&key).is_some() {
                         removed.push(key);
@@ -212,6 +212,7 @@ impl Workspace {
                     crate::event_log::Level::Info,
                     "host.workspace.settings",
                     json!({
+                        // default: a request without a project id changes the common settings.
                         "scope": req.id.as_deref().unwrap_or("common"),
                         "set": set.join(","),
                         "removed": removed.join(","),

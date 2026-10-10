@@ -46,6 +46,7 @@ lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/t
 lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
 lane("native tests", "js-ts", ["scripts/native-tests.mjs"], ["scripts/test/native-tests.test.mjs"]),
 lane("event catalog", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
+lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/test/check-failure-table.test.mjs"]),
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs"]),
 lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
 lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/test-evidence.test.mjs"]),
@@ -1484,6 +1485,35 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/tests/webkit_children_test.rs", id: "a_failed_ps_query_is_reported_and_a_missing_process_is_not" },
     ],
     expected: "Both hosts store an event for each removal that the end of a window allows, each settings change and each event of the notification center, record the failures of the notification center, and report a failed ps query without reporting a missing process.",
+    id: "F145.15",
+    implementation: [
+      { file: "packages/host/wailsv3/src/performance.go", symbol: "func PerformanceProcessAdd" },
+      { file: "packages/host/wailsv3/src/performance.go", symbol: "func PerformanceSurface" },
+      { file: "packages/host/tauriv2/src/performance.rs", symbol: "pub fn process_add" },
+      { file: "packages/host/tauriv2/src/performance.rs", symbol: "pub fn surface" },
+      { file: "packages/workbench/page-log.js", symbol: "export function recordPageStart" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/performance_processes_test.go", id: "TestTheSamplerReadsEveryRegisteredProcess" },
+      { file: "packages/host/wailsv3/tests/performance_processes_test.go", id: "TestSurfaceLifecycleEventsHoldTheGeometry" },
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestTheSamplerNamesARunningSidecarUntilItEnds" },
+      { file: "packages/host/tauriv2/tests/performance_test.rs", id: "the_sampler_reads_every_registered_process" },
+      { file: "packages/host/tauriv2/tests/performance_test.rs", id: "surface_lifecycle_events_hold_the_geometry" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "the_sampler_names_a_running_sidecar_until_it_ends" },
+      { file: "packages/workbench/test/page-log.test.mjs", id: "the start of a page is the event page.start with the origin of the document clock and its address" },
+    ],
+    expected: "The sampler of both hosts reads the host and every registered sidecar process, the surface lifecycle of the trace holds the geometry, and a document of the main page marks its start.",
+    levels: ["unit"],
+  },
+  {
+    id: "F145.18",
+    implementation: [
+      { file: "scripts/check-failure-table.mjs", symbol: "export function recordsMissingFromTable" },
+    ],
+    tests: [
+      { file: "scripts/test/check-failure-table.test.mjs", id: "every error record that a host or the native library writes at a literal place is in the failure table of the diagnostics" },
+    ],
+    expected: "Every error record that a host or the native library writes at a literal place is a row of the failure table of the diagnostics in both languages.",
     levels: ["unit"],
   },
   {

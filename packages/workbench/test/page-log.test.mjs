@@ -138,3 +138,13 @@ test("every host call is the event page.call with its name, arguments, duration 
   ]);
   for (const { fields } of seen) assert.ok(Number.isInteger(fields.micros) && fields.micros >= 0);
 });
+
+test("the start of a page is the event page.start with the origin of the document clock and its address", async () => {
+  const { recordPageStart } = await import("../page-log.js");
+  calls.length = 0;
+  recordPageStart({ href: "app://workbench/index.html?window=w1" }, 1791500000000.5);
+  await settled();
+  assert.deepEqual(events().map((event) => [event.level, event.event, event.fields]), [
+    ["info", "page.start", { time_origin: 1791500000000.5, url: "app://workbench/index.html?window=w1" }],
+  ]);
+});
