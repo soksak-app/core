@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F150.5.3.2: every application event that a host registers is the event `host.app.event` with the `kind` (`started`, `activated`, `deactivated`, `reopened`, `exit_requested`, `exit`) at the level `info`; the Wails host stores `started`, `activated`, `deactivated`, `exit_requested` and `exit`, the Tauri host `started`, `exit_requested` and `exit`.
 - F154.3: `make host-contract-check` builds the packages of both hosts and runs every test as a process of its own through the runner, in parallel, with a limit of 120 s for a test; the old output parsers are removed, and `--run` and `--only` run a part of the check without the contract audit.
 - F154.2: `scripts/test-discovery.mjs` builds the Go packages (`go test -c`) and the Rust packages (`cargo test --no-run`) through the runner and lists their tests, so each test runs as a process of its own in the working directory of its package; a package that does not build is a failure that names it, and a Rust test that is `#[ignore]` is a skip.
 - F154.1: `scripts/test-runner.mjs` runs a list of tests as separate processes in a bounded pool; each test has its own limit (at most 600 s), and the output names the start (`RUN`), the end (`PASS`, `FAIL`, `TIME`) and the elapsed time of each test, the tests in flight with their running time at an interval, the slowest tests and the totals.

@@ -399,6 +399,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 }
 
 func (h *Host) shouldQuit() bool {
+	RecordAppEvent("exit_requested")
 	h.mu.Lock()
 	windows := make([]*Surfaces, 0, len(h.windows))
 	unready := make([]*Surfaces, 0)

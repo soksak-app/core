@@ -158,6 +158,7 @@ func Run(assets fs.FS, options Options) error {
 		// (docs/spec/hosts.md#application-log).
 		ErrorHandler: func(err error) { LogError("wails", err) },
 		OnShutdown: func() {
+			RecordAppEvent("exit")
 			// 종료 전에 모든 창의 웹 프로세스를 죽인다. AppKit 은 XPC 서비스를 클라이언트보다
 			// 오래 살려두므로(V5-105), 죽이지 않으면 WebContent·GPU·Networking 프로세스가
 			// 앱 종료 후에도 남아 메모리를 차지한다.
@@ -203,7 +204,14 @@ func Run(assets fs.FS, options Options) error {
 	// 클라이언트는 endpoint.json 을 읽자마자 첫 창에 요청하므로 창을 등록한 뒤 쓴다. 쓰지 못하면
 	// 애플리케이션을 끝내고 그 오류를 반환한다.
 	unpublished := make(chan error, 1)
+	app.Event.OnApplicationEvent(events.Mac.ApplicationDidBecomeActive, func(*application.ApplicationEvent) {
+		RecordAppEvent("activated")
+	})
+	app.Event.OnApplicationEvent(events.Mac.ApplicationDidResignActive, func(*application.ApplicationEvent) {
+		RecordAppEvent("deactivated")
+	})
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		RecordAppEvent("started")
 		close(started)
 		// 알림 센터를 쓸 수 없으면 애플리케이션을 시작하지 않는다(docs/spec/hosts.md).
 		if err := host.startNotifications(); err != nil {

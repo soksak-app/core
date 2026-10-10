@@ -13,6 +13,7 @@
 
 use tauri::Manager;
 
+pub mod app_events;
 pub mod app_update;
 pub mod application_log;
 pub mod arguments;
@@ -311,6 +312,14 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         .build(context)
         .expect("failed to build the tauri application")
         .run(|app, event| {
+            match &event {
+                tauri::RunEvent::Ready => app_events::record_app_event("started"),
+                tauri::RunEvent::ExitRequested { .. } => {
+                    app_events::record_app_event("exit_requested")
+                }
+                tauri::RunEvent::Exit => app_events::record_app_event("exit"),
+                _ => {}
+            }
             if let tauri::RunEvent::ExitRequested {
                 code: None,
                 ref api,
