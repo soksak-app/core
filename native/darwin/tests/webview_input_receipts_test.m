@@ -1,29 +1,13 @@
 // 등록과 수신 완료의 필수 마우스 처리 API 부재를 경계에서 주입한다.
 #import <Cocoa/Cocoa.h>
 #import "webview_input.h"
+#import "support/records.h"
 #import "private/webkit.h"
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-/// The text that block writes to the standard error of the process.
-static NSString *capturedStandardError(void (^block)(void)) {
-    char path[] = "/tmp/webview_input_receipts_test.XXXXXX";
-    int file = mkstemp(path);
-    if (file < 0) { perror("mkstemp"); exit(1); }
-    fflush(stderr);
-    int saved = dup(STDERR_FILENO);
-    if (saved < 0 || dup2(file, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
-    block();
-    fflush(stderr);
-    if (dup2(saved, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
-    close(saved);
-    close(file);
-    NSString *written = [NSString stringWithContentsOfFile:@(path) encoding:NSUTF8StringEncoding error:nil];
-    unlink(path);
-    return written ?: @"";
 }
 static void until(BOOL (^condition)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
@@ -70,7 +54,7 @@ int main(void) { @autoreleasepool {
     check(!accepted, @"registration rejects an unavailable pending-mouse drain API");
     if (accepted) webviewInputUnregister(view);
     view.missingIgnore = YES;
-    NSString *refused = capturedStandardError(^{ check(!webviewInputRegister(view), @"registration rejects an unavailable pointer tracking API"); });
+    NSString *refused = capturedRecords(^{ check(!webviewInputRegister(view), @"registration rejects an unavailable pointer tracking API"); });
     view.missingIgnore = NO;
     check([refused containsString:@" error native webview input: _setIgnoresMouseMoveEvents: is unavailable"],
         [NSString stringWithFormat:@"a refused registration is recorded with its reason (got %@)", refused]);
@@ -108,7 +92,7 @@ int main(void) { @autoreleasepool {
     check(received && completed == 1 && view.drains == 2, @"successful receipt completes after the second drain");
     // 전송이 거부되면 대기를 실패로 끝내고 그 이유를 기록한다.
     view.hold=NO; view.held=nil; completed=0; received=YES;
-    NSString *refusedSend = capturedStandardError(^{
+    NSString *refusedSend = capturedRecords(^{
         webviewInputSendThen(view, @"pointerdown", 1, ^BOOL { return NO; }, ^(BOOL value) { received=value; completed++; });
         until(^BOOL { return completed > 0; });
     });
@@ -116,7 +100,7 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"a refused send ends the wait and is recorded (got %@)", refusedSend]);
     // 전송 전 drain 이 끝나기 전에 대기가 시간 초과로 끝나면 늦은 drain 은 보내지 않고 다시 완료하지 않는다.
     view.hold=YES; view.held=nil; completed=0; received=YES; sent=0;
-    NSString *timedOut = capturedStandardError(^{
+    NSString *timedOut = capturedRecords(^{
         webviewInputSendThen(view, @"pointerdown", 0.05, ^BOOL { sent++; return NO; },
             ^(BOOL value) { received=value; completed++; });
         until(^BOOL { return completed > 0; });
@@ -132,7 +116,7 @@ int main(void) { @autoreleasepool {
     view.held=nil; completed=0; received=YES; sent=0;
     webviewInputSendThen(view, @"pointerdown", 10, ^BOOL { sent++; return NO; },
         ^(BOOL value) { received=value; completed++; });
-    NSString *ended = capturedStandardError(^{ webviewInputUnregister(view); });
+    NSString *ended = capturedRecords(^{ webviewInputUnregister(view); });
     check([ended containsString:@" info native webview input: wait for pointerdown ended by the end of the registration"],
         [NSString stringWithFormat:@"a wait that the end of the registration completes is recorded (got %@)", ended]);
     check(view.held != nil && completed == 1 && !received, @"unregistration completes the pending wait once");

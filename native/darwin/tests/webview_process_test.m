@@ -4,6 +4,7 @@
 #import <WebKit/WebKit.h>
 #import <libproc.h>
 #import "webview_geometry.h"
+#import "support/records.h"
 #import "private/webkit.h"
 
 static int failures = 0;
@@ -11,24 +12,6 @@ static int failures = 0;
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-/// The text that block writes to the standard error of the process.
-static NSString *capturedStandardError(void (^block)(void)) {
-    char path[] = "/tmp/webview_process_test.XXXXXX";
-    int file = mkstemp(path);
-    if (file < 0) { perror("mkstemp"); exit(1); }
-    fflush(stderr);
-    int saved = dup(STDERR_FILENO);
-    if (saved < 0 || dup2(file, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
-    block();
-    fflush(stderr);
-    if (dup2(saved, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
-    close(saved);
-    close(file);
-    NSString *written = [NSString stringWithContentsOfFile:@(path) encoding:NSUTF8StringEncoding error:nil];
-    unlink(path);
-    return written ?: @"";
 }
 
 static void until(BOOL (^done)(void)) {
@@ -117,7 +100,7 @@ int main(void) { @autoreleasepool {
     [window orderBack:nil];
     SPLoaded *first = load(view, @"<p id='first'>first</p>");
 
-    NSString *ended = capturedStandardError(^{
+    NSString *ended = capturedRecords(^{
         check(sp_webview_kill_content_process(view),
               @"the WebContent process termination operation is available");
         until(^BOOL { return first.terminated; });

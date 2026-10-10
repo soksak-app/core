@@ -769,8 +769,8 @@
   - [~] F150.3 — P0: 두 host의 기록을 event writer로 옮긴다(계획 R3 단계): application log와 성능 trace가 지금의 서명 뒤에서 event writer로 쓰고, 시작 buffer가 writer가 생기기 전의 기록을 담고, panic hook과 fatal handler가 계약대로 기록하고, raw 표준 오류는 자기 파일로 가며, 글 기록 형식과 trace 형식과 그 writer와 parser는 제거한다.
     - [o] F150.3.1 — P0: window-check 하네스가 실행 중인 프로세스의 오류를 application log에 더해 그 event log(`logs/host-<boot>.jsonl`, level `error`인 event)에서도 읽어, 어느 쪽의 오류든 검사가 실패한다. 완료: `packages/window-check/test/event-log.test.mjs`, `packages/window-check/test/session-cleanup.test.mjs`.
     - [o] F150.3.2 — P0: host의 오류·정보 기록(`LogError`, `LogInfo`, `log_error`, `log_info`)이 지금의 서명 뒤에서 writer로 event를 쓰고, writer가 생기기 전에 쓴 기록은 크기가 제한된 시작 buffer가 담는다. 완료: `packages/host/wailsv3/tests/event_record_test.go`, `packages/host/tauriv2/tests/event_record_test.rs`, 그리고 그 기록을 읽는 두 애플리케이션의 window 검사(`e2e/application-log.test.mjs`, `e2e/page-asset.test.mjs`, `e2e/page-process.test.mjs`, `e2e/late-reply.test.mjs`, `e2e/plugin-outdated.test.mjs`, `e2e/sidebar.test.mjs`, `e2e/start-failure.test.mjs`). 진단 메서드 `diagnostics.log.flush`는 기록이 event log에 들어갈 때까지 기다린다.
-    - [~] F150.3.3 — P0: native 라이브러리가 `sp_log_info`와 `sp_log_error` 대신 `sp_event`로 기록하며 호출 지점마다 선언된 event 하나를 두고, window 검사는 그 기록을 event log에서 읽는다.
-    - [ ] F150.3.4 — P0: raw 표준 오류는 `logs/host-<boot>.stderr`로 가고, panic hook과 fatal handler는 계약대로 기록한다.
+    - [o] F150.3.3 — P0: native 라이브러리가 기록(`sp_log_error`, `sp_log_info`)을 표준 오류 대신 프로세스 ring의 event `native.record.error`와 `native.record.info`로 쓰고, window 검사는 그 기록을 event log에서 읽는다. fatal 경로는 F150.3.4까지 표준 오류에 남는다. 완료: `native/darwin/tests/application_log_test.m`, 두 애플리케이션의 `e2e/input-records.test.mjs`. 호출 지점마다 선언된 event 하나는 F150.5의 catalog에서 한다.
+    - [~] F150.3.4 — P0: raw 표준 오류는 `logs/host-<boot>.stderr`로 가고, panic hook과 fatal handler는 계약대로 기록한다.
     - [ ] F150.3.5 — P0: host, sidecar, page의 성능 trace가 event를 쓰고, trace 파일과 그 flag와 스위치는 제거한다.
     - [ ] F150.3.6 — P0: application log의 글 기록 형식과 그 writer와 reader를 제거하고 결과를 명세에 적는다.
   - [ ] F150.4 — P0: page에 batcher 위의 입구 `context.log.<level>(event, fields)`를 주고, `console.*`, `error`, `unhandledrejection`을 거기로 모으며, 성능 trace의 event별 중계를 제거한다(R4 단계).

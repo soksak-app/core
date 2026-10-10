@@ -1,52 +1,78 @@
-// The records of the native library are text records of the form `<time> <level> native <where>: <text>`, each on one
-// line of the standard error (docs/spec/diagnostics.md#forms). The host turns the standard error into the application log.
+// The records of the native library are events of the process ring (docs/spec/logging.md#writers): sp_log_error and
+// sp_log_info store `native.record.error` and `native.record.info` with the fields `where` and `text`. The host writer pulls
+// them from the ring.
 #import <Foundation/Foundation.h>
-#include <fcntl.h>
-#include <unistd.h>
+#include <time.h>
 #import "application_log.h"
+#import "event_ring.h"
 
-/// The standard error of the process while block runs.
-static NSString *captured(void (^block)(void)) {
-    char path[] = "/tmp/application_log_test.XXXXXX";
-    int file = mkstemp(path);
-    if (file < 0) { perror("mkstemp"); exit(1); }
-    int saved = dup(STDERR_FILENO);
-    if (saved < 0 || dup2(file, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
-    block();
-    if (dup2(saved, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
-    close(saved);
-    close(file);
-    NSString *written = [NSString stringWithContentsOfFile:@(path) encoding:NSUTF8StringEncoding error:nil];
-    unlink(path);
-    return written;
+/// The records that the process ring holds, decoded; a record that is not a JSON object stops the test.
+static void pulled(NSMutableArray<NSString *> *names, NSMutableArray<NSDictionary *> *fieldsOf) {
+    uint8_t buffer[1 << 16];
+    size_t used = sp_event_drain(buffer, sizeof buffer);
+    for (size_t offset = 0; offset < used;) {
+        uint32_t length;
+        memcpy(&length, buffer + offset, sizeof length);
+        const uint8_t *body = buffer + offset + 4;
+        uint8_t nameLength = body[9];
+        [names addObject:[[NSString alloc] initWithBytes:body + 10 length:nameLength encoding:NSUTF8StringEncoding]];
+        NSData *json = [NSData dataWithBytes:body + 10 + nameLength length:length - 10 - nameLength];
+        NSError *error = nil;
+        NSDictionary *fields = [NSJSONSerialization JSONObjectWithData:json options:0 error:&error];
+        if (![fields isKindOfClass:NSDictionary.class]) { fprintf(stderr, "FAIL: the fields are not a JSON object: %s\n", error.localizedDescription.UTF8String); exit(1); }
+        [fieldsOf addObject:fields];
+        offset += 4 + length;
+    }
 }
 
-/// Whether line is `<ISO-8601 time with milliseconds> <rest>\n` and returns rest through out.
-static BOOL splitTime(NSString *line, NSString **rest) {
-    NSRegularExpression *shape = [NSRegularExpression regularExpressionWithPattern:
-        @"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z (.*)\\n$" options:0 error:nil];
-    NSTextCheckingResult *match = [shape firstMatchInString:line options:0 range:NSMakeRange(0, line.length)];
-    if (!match) return NO;
-    *rest = [line substringWithRange:[match rangeAtIndex:1]];
-    return YES;
-}
-
-static BOOL check(const char *name, BOOL passed, NSString *written) {
-    fprintf(passed ? stdout : stderr, "%s: %s (written %s)\n", passed ? "PASS" : "FAIL", name, written.UTF8String ?: "nothing");
+static BOOL check(const char *name, BOOL passed, NSString *detail) {
+    fprintf(passed ? stdout : stderr, "%s: %s (%s)\n", passed ? "PASS" : "FAIL", name, detail.UTF8String ?: "nothing");
     return passed;
 }
 
 int main(void) { @autoreleasepool {
-    NSString *rest = nil;
-    NSString *written = captured(^{ sp_log_error("surface settle", "the DOM evaluation failed"); });
-    BOOL ok = check("an error is <time> error native <where>: <text>",
-        splitTime(written, &rest) && [rest isEqualToString:@"error native surface settle: the DOM evaluation failed"], written);
-    written = captured(^{ sp_log_info("input method", "insertText text=\"한\""); });
-    ok = check("an observation is <time> info native <where>: <text>",
-        splitTime(written, &rest) && [rest isEqualToString:@"info native input method: insertText text=\"한\""], written) && ok;
-    written = captured(^{ sp_log_info("input method", "first\nsecond"); });
-    ok = check("a line feed in the text is written as \\n and the record is one line",
-        splitTime(written, &rest) && [rest isEqualToString:@"info native input method: first\\nsecond"]
-        && [written componentsSeparatedByString:@"\n"].count == 2, written) && ok;
+    (void)sp_event_drain((uint8_t[64]){0}, 64);
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+    NSMutableArray<NSDictionary *> *fields = [NSMutableArray array];
+
+    struct timespec wall;
+    clock_gettime(CLOCK_REALTIME, &wall);
+    sp_log_error("surface settle", "the DOM evaluation failed");
+    sp_log_info("input method", "insertText text=\"한\"");
+    sp_log_info("input method", "first\nsecond\ttab \\ backslash \x01 control");
+    pulled(names, fields);
+    BOOL ok = check("an error is the event native.record.error with where and text",
+        names.count == 3 && [names[0] isEqualToString:@"native.record.error"] &&
+        [fields[0][@"where"] isEqualToString:@"surface settle"] && [fields[0][@"text"] isEqualToString:@"the DOM evaluation failed"],
+        names.description);
+    ok = check("an observation is the event native.record.info and keeps quotes and Korean text",
+        [names[1] isEqualToString:@"native.record.info"] && [fields[1][@"text"] isEqualToString:@"insertText text=\"한\""],
+        fields.description) && ok;
+    ok = check("a line feed, a tab, a backslash and a control character are kept in the text",
+        [fields[2][@"text"] isEqualToString:@"first\nsecond\ttab \\ backslash \x01 control"], fields.description) && ok;
+
+    // The time of the event is the time of the call.
+    sp_log_info("time", "now");
+    uint8_t buffer[256];
+    size_t used = sp_event_drain(buffer, sizeof buffer);
+    uint64_t ts;
+    memcpy(&ts, buffer + 4, sizeof ts);
+    struct timespec after;
+    clock_gettime(CLOCK_REALTIME, &after);
+    uint64_t low = (uint64_t)wall.tv_sec * 1000000u, high = (uint64_t)after.tv_sec * 1000000u + 999999u;
+    ok = check("the event carries the wall clock of the call", used > 0 && ts >= low && ts <= high + 1000000u,
+        [NSString stringWithFormat:@"%llu", ts]) && ok;
+
+    // A text that cannot fit the ring is refused and counted, and the call returns.
+    (void)sp_event_take_loss();
+    size_t huge = 3u << 20;
+    char *big = malloc(huge + 1);
+    memset(big, 'x', huge);
+    big[huge] = 0;
+    sp_log_info("huge", big);
+    free(big);
+    sp_event_ring_loss loss = sp_event_take_loss();
+    ok = check("a record larger than half of the ring is refused and counted", loss.events == 1,
+        [NSString stringWithFormat:@"%llu events", loss.events]) && ok;
     return ok ? 0 : 1;
 }}

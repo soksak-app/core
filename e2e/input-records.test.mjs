@@ -7,6 +7,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
+import { eventLine, readEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
 
@@ -45,7 +46,7 @@ for (const app of Object.values(APPS)) {
     `the terminal region ${terminal.surface} did not take the keyboard after the press`);
 
     const logs = join(app.configDir, "logs");
-    const logOffset = sizeOf(join(logs, "application.log"));
+    const eventOffsets = readEventOffsets(s.app.configDir);
     const traceOffset = sizeOf(join(logs, "performance.ndjson"));
     // Enter does not pass through the input method, so it reaches the sidecar in an application that is not active.
     await s.key("Enter", "down");
@@ -53,16 +54,20 @@ for (const app of Object.values(APPS)) {
     await readScreenUntil(s, terminal.surface, (lines) => lines.filter((line) => line.startsWith("sh-")).length >= 2,
       "the shell did not print a second prompt after Enter");
 
-    const log = readFrom(join(logs, "application.log"), logOffset).split("\n");
+    // The native library stores its records in the ring of the process, the writer of the host pulls them at its next batch,
+    // and the flush waits until they are in the event log.
+    await s.flushLog();
+    const log = readEvents(s.app.configDir, eventOffsets).events
+      .map((event) => ({ text: eventLine(event), ts: new Date(event.ts_us / 1000).toISOString() }));
     const trace = traceRecords(readFrom(join(logs, "performance.ndjson"), traceOffset));
     // Each layer must hold the key with its own fields; `find` names the record that the layer lacks.
-    const nativeLine = (pattern) => log.find((line) => pattern.test(line));
+    const nativeLine = (pattern) => log.find((line) => pattern.test(line.text));
     const traced = (match) => trace.find(match);
     const forEnter = (record) => record.surface === terminal.surface;
     const found = {
-      injected: nativeLine(/ info native input inject: \{"kind":"key","key":"Enter".*"down":true.*"result":"delivered".*"responder":"SPImageRegion"/),
-      nativeKeyDown: nativeLine(/ info native input method: \{"call":"keyDown","keyCode":36,/),
-      nativeReport: nativeLine(/ info native input report: \{"type":"key","key":"Enter"/),
+      injected: nativeLine(/^info native input inject: \{"kind":"key","key":"Enter".*"down":true.*"result":"delivered".*"responder":"SPImageRegion"/),
+      nativeKeyDown: nativeLine(/^info native input method: \{"call":"keyDown","keyCode":36,/),
+      nativeReport: nativeLine(/^info native input report: \{"type":"key","key":"Enter"/),
       hostRegion: traced((r) => r.layer === "host" && r.event === "region" && forEnter(r) && r.body?.key === "Enter"),
       pageRegion: traced((r) => r.layer === "page" && r.event === "region" && forEnter(r) && r.key === "Enter"),
       pageIme: traced((r) => r.layer === "page" && r.event === "ime" && forEnter(r) && r.key === "Enter"),
@@ -78,7 +83,7 @@ for (const app of Object.values(APPS)) {
     const missing = Object.entries(found).filter(([, record]) => !record).map(([name]) => name);
     assert.deepEqual(missing, [], `${app.name}: the typed Enter left no record in: ${missing.join(", ")}`);
     // The layers record the key in the order in which it travels.
-    const at = (record) => (typeof record === "string" ? record.slice(0, 24) : record.ts);
+    const at = (record) => record.ts;
     // The injection record is written after the delivery, so it is not part of the order of the hops that the delivery causes.
     const order = ["nativeKeyDown", "nativeReport", "hostRegion", "pageRegion", "pageSend", "hostSidecarSend",
       "vtRequest", "ptyWrite", "ptyRead"];

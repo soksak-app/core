@@ -1,5 +1,6 @@
 // 실제 생성한 스트림의 시작 완료를 보류하고 교체 뒤 전달하여 오류 소유를 검사한다.
 #import "../src/capture.m"
+#import "support/records.h"
 #import <objc/runtime.h>
 #include <signal.h>
 #include <unistd.h>
@@ -68,44 +69,28 @@ int main(void) { @autoreleasepool {
             check(current != old && starts.count == 2, @"the controlled records have distinct real stream identities");
             if (starts.count == 2) {
                 if (failed) setCaptureError(@"fixture current recording error");
-                FILE *log = tmpfile(); int saved = dup(STDERR_FILENO);
-                BOOL redirected = log != NULL && saved >= 0 && dup2(fileno(log), STDERR_FILENO) >= 0;
-                check(redirected, @"callback errors have an observable diagnostic output");
-                void (^oldStart)(NSError *) = starts[0];
-                oldStart(fault(@"fixture late start failure"));
-                check(strcmp(sp_capture_error(), failed ? "fixture current recording error" : "") == 0,
-                    @"late start preserves the exact current recording error");
-                if (!failed) {
-                    // 붙잡은 현재 시작 대신 고정 장치가 현재 시작 완료를 알린다.
-                    dispatch_semaphore_signal(captureStartDone);
-                    dispatch_semaphore_signal(captureFirstFrame);
-                    check(sp_capture_wait() == 1, @"late start cannot invalidate healthy first-frame readiness");
-                }
-                [captureSink stream:old didStopWithError:fault(@"fixture late delegate failure")];
-                check(strcmp(sp_capture_error(), failed ? "fixture current recording error" : "") == 0,
-                    @"late delegate preserves the exact current recording error");
-                if (!failed) {
-                    dispatch_semaphore_signal(captureFirstFrame);
-                    check(sp_capture_wait() == 1, @"late delegate cannot invalidate healthy first-frame readiness");
-                }
-                if (redirected) {
-                    check(fflush(stderr) == 0, @"the callback diagnostic output is flushed");
-                    BOOL restored = dup2(saved, STDERR_FILENO) >= 0;
-                    if (!restored) {
-                        fprintf(stdout, "FAIL: diagnostic output restoration failed: %s\n", strerror(errno));
-                        abort();
+                NSString *observed = capturedRecords(^{
+                    void (^oldStart)(NSError *) = starts[0];
+                    oldStart(fault(@"fixture late start failure"));
+                    check(strcmp(sp_capture_error(), failed ? "fixture current recording error" : "") == 0,
+                        @"late start preserves the exact current recording error");
+                    if (!failed) {
+                        // 붙잡은 현재 시작 대신 고정 장치가 현재 시작 완료를 알린다.
+                        dispatch_semaphore_signal(captureStartDone);
+                        dispatch_semaphore_signal(captureFirstFrame);
+                        check(sp_capture_wait() == 1, @"late start cannot invalidate healthy first-frame readiness");
                     }
-                    check(restored, @"diagnostic output is restored");
-                    rewind(log); char observed[8192] = {0};
-                    size_t count = fread(observed,1,sizeof observed-1,log);
-                    check(!ferror(log) && count > 0, @"the callback diagnostic is readable");
-                    check(fgetc(log) == EOF && !ferror(log), @"the diagnostic buffer contains the complete output");
-                    fprintf(stderr,"%s",observed);
-                    check(strstr(observed,"fixture late start failure") != NULL && strstr(observed,"fixture late delegate failure") != NULL,
-                        @"both late errors are reported instead of silently discarded");
-                }
-                if (saved >= 0) check(close(saved) == 0, @"the diagnostic saved descriptor is closed");
-                if (log != NULL) check(fclose(log) == 0, @"the temporary diagnostic file is closed");
+                    [captureSink stream:old didStopWithError:fault(@"fixture late delegate failure")];
+                    check(strcmp(sp_capture_error(), failed ? "fixture current recording error" : "") == 0,
+                        @"late delegate preserves the exact current recording error");
+                    if (!failed) {
+                        dispatch_semaphore_signal(captureFirstFrame);
+                        check(sp_capture_wait() == 1, @"late delegate cannot invalidate healthy first-frame readiness");
+                    }
+                });
+                fprintf(stderr, "%s", observed.UTF8String);
+                check([observed containsString:@"fixture late start failure"] && [observed containsString:@"fixture late delegate failure"],
+                    @"both late errors are reported instead of silently discarded");
                 check(captureStream == current, @"late callbacks preserve the replacement stream");
                 void (^currentStart)(NSError *) = starts[1];
                 currentStart(fault(@"fixture active start failure"));

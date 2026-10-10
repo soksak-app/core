@@ -4,6 +4,7 @@
 #import <objc/runtime.h>
 #include <unistd.h>
 #import "image_region.h"
+#import "support/records.h"
 #import "webview_geometry.h"
 
 static int failures = 0;
@@ -43,24 +44,6 @@ static void testEvent(void *context, const char *json) {
     }
     if (!collectedEvents) collectedEvents = [NSMutableArray new];
     [collectedEvents addObject:[NSString stringWithUTF8String:json]];
-}
-
-/// The text that block writes to the standard error of the process.
-static NSString *capturedStandardError(void (^block)(void)) {
-    char path[] = "/tmp/image_region_test.XXXXXX";
-    int file = mkstemp(path);
-    if (file < 0) { perror("mkstemp"); exit(1); }
-    fflush(stderr);
-    int saved = dup(STDERR_FILENO);
-    if (saved < 0 || dup2(file, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
-    block();
-    fflush(stderr);
-    if (dup2(saved, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
-    close(saved);
-    close(file);
-    NSString *written = [NSString stringWithContentsOfFile:@(path) encoding:NSUTF8StringEncoding error:nil];
-    unlink(path);
-    return written ?: @"";
 }
 
 // from 이후 insert 이벤트의 확정 문자열 목록.
@@ -469,7 +452,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         // arguments, the typed text and the state of the input document before and after (docs/spec/diagnostics.md).
         sp_region_focus(region8);
         {
-            NSString *records = capturedStandardError(^{
+            NSString *records = capturedRecords(^{
                 [(id<NSTextInputClient>)regionView setMarkedText:@"한" selectedRange:NSMakeRange(1, 0)
                     replacementRange:NSMakeRange(NSNotFound, 0)];
                 [(id<NSTextInputClient>)regionView insertText:@"한글" replacementRange:NSMakeRange(0, 1)];
@@ -607,7 +590,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         // An input that the region drops is recorded with its reason: a command that does nothing, an insert that is not
         // text, and a report to a region that is closed.
         {
-            NSString *records = capturedStandardError(^{
+            NSString *records = capturedRecords(^{
                 [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(noop:)];
                 [(id<NSTextInputClient>)regionView insertText:@42 replacementRange:NSMakeRange(NSNotFound, 0)];
             });
@@ -617,7 +600,7 @@ int main(int argc, char **argv) { @autoreleasepool {
                 [NSString stringWithFormat:@"TEST 8: an insert that is not text is recorded as dropped (got %@)", records]);
             [regionView retain];
             sp_region_close(region8);
-            NSString *closed = capturedStandardError(^{
+            NSString *closed = capturedRecords(^{
                 [(id<NSTextInputClient>)regionView insertText:@"x" replacementRange:NSMakeRange(NSNotFound, 0)];
             });
             [regionView release];

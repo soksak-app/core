@@ -7,6 +7,7 @@
 #include <time.h>
 #include <unistd.h>
 #import "application_log.h"
+#import "event_ring.h"
 
 // Writes the UTC time of now as `YYYY-MM-DDTHH:MM:SS.mmmZ` (24 characters and no terminator) to out. It uses clock_gettime
 // and integer arithmetic only, so a signal handler may call it.
@@ -41,29 +42,24 @@ static void formatTime(char *out) {
     out[23] = 'Z';
 }
 
-// Writes the record `<time> <level> native <where>: <text>\n` with one write; a short write is continued. The text of a
-// record is one line, so a line feed in it is written as `\n`.
-static void writeRecord(const char *level, const char *where, const char *text) {
-    NSString *escaped = [@(text) stringByReplacingOccurrencesOfString:@"\n" withString:@"\\n"];
-    char time[25];
-    formatTime(time);
-    time[24] = 0;
-    char *line = NULL;
-    int length = asprintf(&line, "%s %s native %s: %s\n", time, level, where, escaped.UTF8String);
-    if (length < 0) abort();
-    // 한 번의 write 는 같은 파일에 쓰는 다른 줄과 섞이지 않는다. 짧게 쓰인 나머지는 이어서 쓴다.
-    for (ssize_t offset = 0; offset < length;) {
-        ssize_t written = write(STDERR_FILENO, line + offset, (size_t)(length - offset));
-        if (written < 0 && errno == EINTR) continue;
-        if (written <= 0) abort();
-        offset += written;
+// Stores the record as the event `native.record.<level>` with the fields `where` and `text` (docs/spec/logging.md#writers).
+// The fields are built with the JSON serializer of Foundation, so a quote, a control character and any text is kept as it
+// is. The call does not wait: the ring refuses an event that does not fit and counts it. A text that cannot be serialized is a
+// defect of the caller and ends the process, as a record that cannot be stored has nowhere to report to.
+static void storeRecord(uint8_t level, const char *name, const char *where, const char *text) {
+    NSError *error = nil;
+    NSData *json = [NSJSONSerialization dataWithJSONObject:@{@"where": @(where), @"text": @(text)} options:0 error:&error];
+    if (json == nil) {
+        fprintf(stderr, "native record %s: %s\n", where, error.localizedDescription.UTF8String);
+        abort();
     }
-    free(line);
+    NSString *fields = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+    sp_event(level, name, fields.UTF8String);
 }
 
-void sp_log_error(const char *where, const char *text) { writeRecord("error", where, text); }
+void sp_log_error(const char *where, const char *text) { storeRecord(SP_EVENT_ERROR, "native.record.error", where, text); }
 
-void sp_log_info(const char *where, const char *text) { writeRecord("info", where, text); }
+void sp_log_info(const char *where, const char *text) { storeRecord(SP_EVENT_INFO, "native.record.info", where, text); }
 
 // An uncaught exception ends the process by an abort. Its line is written once, so the abort does not add a second.
 static volatile sig_atomic_t exceptionReported = 0;
@@ -118,9 +114,28 @@ static void fatalSignal(int signalNumber, siginfo_t *info, void *context) {
     raise(signalNumber);
 }
 
+// The process ends by an abort after this handler, and nothing pulls the ring before it ends, so the record goes to the
+// standard error as a line of the text form (F150.3.4 moves the fatal paths to the contract).
+static void writeFatalLine(const char *text) {
+    char time[25];
+    formatTime(time);
+    time[24] = 0;
+    char *line = NULL;
+    int length = asprintf(&line, "%s error native fatal: %s\n", time, text);
+    if (length < 0) abort();
+    for (ssize_t offset = 0; offset < length;) {
+        ssize_t written = write(STDERR_FILENO, line + offset, (size_t)(length - offset));
+        if (written < 0 && errno == EINTR) continue;
+        if (written <= 0) abort();
+        offset += written;
+    }
+    free(line);
+}
+
 static void uncaughtException(NSException *exception) {
-    NSString *text = [NSString stringWithFormat:@"uncaught exception %@: %@", exception.name, exception.reason];
-    sp_log_error("fatal", text.UTF8String);
+    NSString *escaped = [[NSString stringWithFormat:@"uncaught exception %@: %@", exception.name, exception.reason]
+        stringByReplacingOccurrencesOfString:@"\n" withString:@"\\n"];
+    writeFatalLine(escaped.UTF8String);
     exceptionReported = 1;
 }
 
@@ -132,7 +147,7 @@ void sp_log_install_fatal_handlers(void) {
         action.sa_flags = SA_SIGINFO | SA_ONSTACK;
         sigemptyset(&action.sa_mask);
         if (sigaction(kFatalSignals[index], &action, &previousActions[index]) != 0) {
-            sp_log_error("fatal", "install the signal handler failed");
+            writeFatalLine("install the signal handler failed");
         }
     }
     NSSetUncaughtExceptionHandler(&uncaughtException);

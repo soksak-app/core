@@ -1,10 +1,9 @@
-// Writes one text record `<time> error native <where>: <text>` to the standard error with one write
-// (docs/spec/diagnostics.md#forms). The time is the UTC time of the write with milliseconds. A line feed in the text is
-// written as the two characters `\n`, so a record is one line. The host turns the standard error into the application
-// log. A process that cannot write to its standard error has no place to report that, so it ends.
+// Stores one record as the event `native.record.error` with the fields `where` and `text` in the ring of the process
+// (docs/spec/logging.md#writers). The text is kept as it is, a line feed included. The call does not wait; the writer of the
+// host pulls the ring. A full ring refuses the record and counts it.
 void sp_log_error(const char *where, const char *text);
 
-// Writes one text record `<time> info native <where>: <text>`, in the same way, for a state that is not a failure:
+// Stores one record as the event `native.record.info`, in the same way, for a state that is not a failure:
 // each callback of the input method, each report to the page and the state of the document at that time.
 void sp_log_info(const char *where, const char *text);
 

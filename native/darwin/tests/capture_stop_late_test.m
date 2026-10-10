@@ -1,6 +1,7 @@
 // 실제 5000ms 제한이 지난 뒤 도착한 종료 완료가 다음 녹화의 오류와 결과를 바꾸지 않고, 그 오류를 버리지 않고
 // 진단 출력에 보고하는지 검사한다. 종료 완료는 고정 장치가 붙잡았다가 늦게 전달한다.
 #import "../src/capture.m"
+#import "support/records.h"
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
@@ -36,22 +37,16 @@ int main(void) { @autoreleasepool {
     // 다음 녹화는 오류 없이 진행 중이다.
     clearCaptureError();
     captureStream = (SCStream *)[NSObject new];
-    FILE *log = tmpfile(); int saved = dup(STDERR_FILENO);
-    BOOL redirected = log != NULL && saved >= 0 && dup2(fileno(log), STDERR_FILENO) >= 0;
-    if (held.completion != nil) {
-        held.completion([NSError errorWithDomain:@"capture.test" code:1
-            userInfo:@{NSLocalizedDescriptionKey: @"fixture late stop failure"}]);
-    }
-    fflush(stderr);
-    if (redirected) dup2(saved, STDERR_FILENO);
-    check(redirected, @"the late completion diagnostic output is observable");
+    NSString *observed = capturedRecords(^{
+        if (held.completion != nil) {
+            held.completion([NSError errorWithDomain:@"capture.test" code:1
+                userInfo:@{NSLocalizedDescriptionKey: @"fixture late stop failure"}]);
+        }
+    });
     check(strcmp(sp_capture_error(), "") == 0,
         [NSString stringWithFormat:@"a late stop completion leaves the later recording error unchanged (%s)", sp_capture_error()]);
-    char observed[4096] = {0};
-    if (log != NULL) { rewind(log); fread(observed, 1, sizeof observed - 1, log); fclose(log); }
-    if (saved >= 0) close(saved);
-    fprintf(stderr, "%s", observed);
-    check(strstr(observed, "fixture late stop failure") != NULL, @"the late stop error is reported instead of discarded");
+    fprintf(stderr, "%s", observed.UTF8String);
+    check([observed containsString:@"fixture late stop failure"], @"the late stop error is reported instead of discarded");
     [captureStream release]; captureStream = nil;
     [held release];
     fprintf(stderr, "%s: late stop completion isolation (%.1fms)\n", failures ? "FAIL" : "PASS",

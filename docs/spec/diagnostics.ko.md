@@ -12,7 +12,7 @@
 
 | 파일 | 쓰는 쪽 | 형태 | 한계 |
 |---|---|---|---|
-| `application.log` | 두 host의 실행 기록, `sp_log_error`와 `sp_log_info`를 거친 native 라이브러리, host가 시작한 sidecar의 standard error | 한 형식의 글 기록([형태](#형태)) | 실행이 열 때 100 MB이면 `application.log.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
+| `application.log` | 두 host의 실행 기록, native 라이브러리의 fatal 기록, host가 시작한 sidecar의 standard error | 한 형식의 글 기록([형태](#형태)) | 실행이 열 때 100 MB이면 `application.log.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
 | `host-<boot>.jsonl` | host 프로세스: 자신의 기록, `report`를 거친 page의 기록, native 라이브러리의 event | [로깅 계약](logging.ko.md)의 event | 100 MB에서 `host-<boot>.jsonl.1`로 회전하고 이전 세대 다섯 개를 남긴다 |
 | `<executable-name>.log` | 상주 service. host가 service의 standard error로 연다 | service가 쓰는 같은 형식의 글 기록 | host가 service를 시작할 때 100 MB이면 `<name>.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
 | `performance.ndjson` | page, 두 host, sidecar, sampler | 한 줄에 JSON event 하나 | 100 MB에서 `performance.ndjson.1`로 회전하고 이전 세대 다섯 개를 남긴다 |

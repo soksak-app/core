@@ -55,7 +55,7 @@ $(BUILD):
 
 # 모든 검사는 tests/support/no_activation.m 을 링크한다. 활성화를 선언하지 않은 검사는 종료할 때 활성이면 실패한다.
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
-	@clang $(CFLAGS) -I$(CURDIR)/src $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 # 측정 도구는 시험이 아니다. 숫자를 출력하고 단언하지 않으며 test 대상에 들어 있지 않다.
 $(BUILD)/%_benchmark: tests/%_benchmark.m $(LIBRARY) $(wildcard src/*.h)

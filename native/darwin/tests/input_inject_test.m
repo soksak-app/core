@@ -3,6 +3,7 @@
 // 창은 일반 NSWindow 이며 키 창 상태를 흉내 내지 않는다. 실제 애플리케이션 창과 같은 조건이다.
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
+#import "support/records.h"
 #import "private/webkit.h"
 #import "webview_input.h"
 
@@ -32,24 +33,6 @@ static NSRect awayFromPointer(NSSize size) {
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-/// The text that block writes to the standard error of the process.
-static NSString *capturedStandardError(void (^block)(void)) {
-    char path[] = "/tmp/input_inject_test.XXXXXX";
-    int file = mkstemp(path);
-    if (file < 0) { perror("mkstemp"); exit(1); }
-    fflush(stderr);
-    int saved = dup(STDERR_FILENO);
-    if (saved < 0 || dup2(file, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
-    block();
-    fflush(stderr);
-    if (dup2(saved, STDERR_FILENO) < 0) { perror("dup2"); exit(1); }
-    close(saved);
-    close(file);
-    NSString *written = [NSString stringWithContentsOfFile:@(path) encoding:NSUTF8StringEncoding error:nil];
-    unlink(path);
-    return written ?: @"";
 }
 
 /// Whether one line of records holds every part.
@@ -355,7 +338,7 @@ int main(void) { @autoreleasepool {
         NSWindow *recorded = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(120, 80))
             styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
         recorded.releasedWhenClosed = NO;
-        NSString *records = capturedStandardError(^{
+        NSString *records = capturedRecords(^{
             sp_input_key(recorded, "NoSuchKey", NULL, 0, true);
             sp_input_key(recorded, "Escape", NULL, 1, true);
             sp_input_key(recorded, "Escape", NULL, 1, false);

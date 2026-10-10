@@ -12,7 +12,7 @@ Every diagnostic file of an application is under `<config-dir>/logs/`. A person 
 
 | File | Writer | Form | Bound |
 |---|---|---|---|
-| `application.log` | the run record of both hosts, the native library through `sp_log_error` and `sp_log_info`, the standard error of the sidecars that the host starts | text records of one form ([Forms](#forms)) | renamed to `application.log.1` at 100 MB, when a run opens it, and the five earlier generations are kept |
+| `application.log` | the run record of both hosts, the fatal records of the native library, the standard error of the sidecars that the host starts | text records of one form ([Forms](#forms)) | renamed to `application.log.1` at 100 MB, when a run opens it, and the five earlier generations are kept |
 | `host-<boot>.jsonl` | the host process: its own records, the records of the page through `report`, and the events of the native library | events of the [logging contract](logging.md) | rotated at 100 MB to `host-<boot>.jsonl.1`, and the five earlier generations are kept |
 | `<executable-name>.log` | a persistent service, opened by the host as the standard error of the service | text records of the same form, written by the service | renamed to `<name>.1` at 100 MB, when the host starts the service, and the five earlier generations are kept |
 | `performance.ndjson` | the page, both hosts, the sidecars and the sampler | one JSON event per line | rotated at 100 MB to `performance.ndjson.1`, and the five earlier generations are kept |
