@@ -1142,6 +1142,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.3.1",
+    implementation: [
+      { file: "packages/window-check/event-log.mjs", symbol: "export function readEventErrors" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/event-log.test.mjs", id: "readEventErrors returns the events of level error and ignores the other levels" },
+      { file: "packages/window-check/test/session-cleanup.test.mjs", id: "an error event of the event log fails the check unless it is declared" },
+    ],
+    expected: "A window check fails on an error event of the event log of the application unless the check declares it, and names the file of a line that is not an event.",
+    levels: ["unit"],
+  },
+  {
     id: "F150.2.6.2",
     implementation: [
       { file: "packages/host/wailsv3/src/event_log.go", symbol: "func nativeEventOf" },

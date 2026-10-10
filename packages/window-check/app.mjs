@@ -11,6 +11,7 @@ import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
 import { pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { readErrors, readOffset, writeOffset } from "./application-log.mjs";
+import { readEventErrors, readEventOffsets, writeEventOffsets } from "./event-log.mjs";
 import { pasteboardDifference, readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
 // 검사하는 애플리케이션 실행 파일은 실행이 선언한다. SOKSAK_BINARY_WAILSV3 와 SOKSAK_BINARY_TAURIV2 가 각 앱의
@@ -203,6 +204,7 @@ export async function open(t, app) {
   }
   assertEndpointUsesCurrentBuild(endpoint, realpathSync(app.binary), statSync(app.binary).mtimeMs);
   session.logStart = readOffset(app.configDir);
+  session.eventStart = readEventOffsets(app.configDir);
   session.recordingsBefore = recordingFolders(app.configDir);
   return session;
 }
@@ -233,8 +235,12 @@ export async function finishSession(t, session, close) {
     // 검사 동안 애플리케이션 로그에 쓰인 오류 줄은 모두 진단으로 남기고, 검사가 선언하지 않은 오류는 검사의 실패다.
     // 문서의 오류 표시는 reload 가 지우므로 로그로 판정한다. 정리가 일으킨 오류도 포함하도록 정리 뒤에 읽는다.
     try {
-      const { errors, end } = readErrors(session.app.configDir, session.logStart);
-      writeOffset(session.app.configDir, end);
+      const text = readErrors(session.app.configDir, session.logStart);
+      writeOffset(session.app.configDir, text.end);
+      // The application writes its errors to the application log and, since the event contract, to its event log.
+      const events = readEventErrors(session.app.configDir, session.eventStart);
+      writeEventOffsets(session.app.configDir, events.offsets);
+      const errors = [...text.errors, ...events.errors];
       for (const line of errors) t.diagnostic(`application error: ${line}`);
       const undeclared = errors.filter((line) => !session.expectedErrors.some((pattern) => pattern.test(line)));
       if (undeclared.length) {

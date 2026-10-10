@@ -41,12 +41,21 @@ test("a cleanup failure is reported when the check body already failed", { timeo
 
 // 본문이 통과해도 검사 동안 애플리케이션 로그에 쓰인 오류 줄은 검사의 실패다. reload 가 문서에서 지운 오류도
 // 로그에는 남는다. 검사가 시작하기 전의 줄은 그 검사의 것이 아니고, 검사가 선언한 오류는 실패가 아니다(F31).
-function runLoggedError(t, expected) {
+/** The event log of a probe application: log.open, and an error event when the probe asks for one. */
+function writeEventLog(dir, eventError) {
+  const open = JSON.stringify({ ts_us: 1791000000000001, seq: 1, level: "info", layer: "host", event: "log.open", fields: { schema: 1 } });
+  const error = eventError === null ? "" : `\n${JSON.stringify({ ts_us: 1791000000000002, seq: 2, level: "error", layer: "host", event: eventError, fields: { text: "closed" } })}`;
+  writeFileSync(join(dir, "logs", "host-1-1.jsonl"), `${open}${error}\n`);
+}
+
+function runLoggedError(t, expected, eventError = null) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-session-log-error-"));
   // 검사는 읽은 위치를 설정 폴더 옆의 파일에 남긴다.
   t.after(() => rmSync(`${dir}.log-offset`, { force: true }));
+  t.after(() => rmSync(`${dir}.event-offsets`, { force: true }));
   t.after(() => rmSync(dir, { recursive: true }));
   mkdirSync(join(dir, "logs"));
+  writeEventLog(dir, eventError);
   const before = "2026-10-09T05:50:00.000Z error page rejected: an error of the previous check\n";
   writeFileSync(join(dir, "logs", "application.log"), before +
     "2026-10-09T05:50:01.000Z info page verify: 18 pass\n2026-10-09T05:50:02.000Z error page page: ResizeObserver loop completed with undelivered notifications. @ wails://localhost/:0\n");
@@ -58,6 +67,7 @@ test("probe body passes", async (t) => {
     app: { name: "probe", configDir: ${JSON.stringify(dir)} },
     cleanups: [],
     logStart: ${Buffer.byteLength(before)},
+    eventStart: {},
     expectedErrors: ${expected},
   };
   t.after(() => finishSession(t, session, () => {}));
@@ -67,6 +77,15 @@ test("probe body passes", async (t) => {
   return spawnSync(process.execPath, ["--test", "--test-reporter=tap", file],
     { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
 }
+
+test("an error event of the event log fails the check unless it is declared", { timeout: 30000 }, (t) => {
+  const undeclared = runLoggedError(t, "[]", "host.test.failed");
+  assert.equal(undeclared.status, 1, undeclared.stdout + undeclared.stderr);
+  assert.match(undeclared.stdout, /# application error: error host host\.test\.failed: \{"text":"closed"\}/);
+  assert.match(undeclared.stdout, /probe: the application logged 2 errors that the check did not declare/);
+  const declared = runLoggedError(t, "[/host\\.test\\.failed/, /ResizeObserver loop/]", "host.test.failed");
+  assert.equal(declared.status, 0, declared.stdout + declared.stderr);
+});
 
 test("an error line that the application logged during the check fails the check unless it is declared", { timeout: 30000 }, (t) => {
   const result = runLoggedError(t, "[]");
@@ -88,7 +107,9 @@ test("a recording folder that the check left fails the check and is removed", { 
   const dir = mkdtempSync(join(tmpdir(), "soksak-session-recording-"));
   t.after(() => rmSync(`${dir}.log-offset`, { force: true }));
   t.after(() => rmSync(dir, { recursive: true }));
+  t.after(() => rmSync(`${dir}.event-offsets`, { force: true }));
   mkdirSync(join(dir, "logs"));
+  writeEventLog(dir, null);
   writeFileSync(join(dir, "logs", "application.log"), "");
   mkdirSync(join(dir, "logs", "captures", "earlier"), { recursive: true });
   const file = join(dir, "probe.test.mjs");
@@ -98,7 +119,7 @@ import { join } from "node:path";
 import { finishSession, recordingFolders } from ${JSON.stringify(app)};
 test("probe body passes", async (t) => {
   const configDir = ${JSON.stringify(dir)};
-  const session = { app: { name: "probe", configDir }, cleanups: [], logStart: 0, expectedErrors: [],
+  const session = { app: { name: "probe", configDir }, cleanups: [], logStart: 0, eventStart: {}, expectedErrors: [],
     recordingsBefore: recordingFolders(configDir) };
   mkdirSync(join(configDir, "logs", "captures", "left"));
   writeFileSync(join(configDir, "logs", "captures", "left", "frame-0001.bgra"), "x");
