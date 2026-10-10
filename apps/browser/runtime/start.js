@@ -1,5 +1,5 @@
-// 브라우저 애플리케이션의 시작 문서(docs/spec/native-host.md#page-start). 저장소를 top-level await 로 읽으므로 page
-// 코드는 이 값이 준비된 뒤에 실행된다. 브라우저 탭에는 native 창 단추가 없다.
+// Start document of the browser application (docs/spec/native-host.md#page-start). The store is read with top-level await, so the page
+// code runs after this value is ready. A browser tab has no native window buttons.
 import { WorkspaceStore } from "./browser-storage.js";
 
 const store = await WorkspaceStore.open({ channel: false });

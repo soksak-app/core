@@ -1,13 +1,13 @@
 // Wails v3.
 //
-// 메인 페이지는 Wails 런타임을, 추가 웹뷰는 앱의 네이티브 브리지를 사용한다.
-// 웹뷰 설정의 자산 서버를 공유하므로 문서는 같은 스킴에서 로드된다.
+// The main page uses the Wails runtime, and additional webviews use the native bridge of the app.
+// They share the asset server of the webview configuration, so documents load from the same scheme.
 //
-// 바인딩된 메서드를 「패키지 · 타입 · 이름」으로 호출한다. Wails 는 호스트 패키지의
-// 가져오기 경로와 타입 이름인 github.com/soksak-app/core/packages/host/wailsv3/src.Host 를 사용한다.
+// Calls a bound method by "package, type, name". Wails uses the import path of the host package
+// and the type name, github.com/soksak-app/core/packages/host/wailsv3/src.Host.
 //
-// 런타임은 /wails/runtime.js 의 ES 모듈이므로 script 태그가 아니라 import 로
-// 로드한다. import 는 비동기이므로 아래 두 인터페이스는 완료를 기다린 뒤 호출한다.
+// The runtime is an ES module at /wails/runtime.js, so it is
+// loaded with import, not with a script tag. The import is asynchronous, so the two interfaces below call after it completes.
 import { HostWorkspaceStore } from "@soksak/workbench/host-store.js";
 import { hostWindows } from "@soksak/workbench/host-windows.js";
 import { settlingCalls } from "@soksak/workbench/host-calls.js";
@@ -17,16 +17,16 @@ import { createLifecycleListener } from "./listener-lifecycle.js";
 
 const SERVICE = "github.com/soksak-app/core/packages/host/wailsv3/src.Host";
 
-/* 런타임 모듈. import 는 한 번만 평가된다. */
+/* The runtime module. An import is evaluated only once. */
 const runtime = () => import("/wails/runtime.js");
 
-/** 바인딩된 메서드 호출. */
+/** A call of a bound method. */
 const call = (method, ...args) =>
   window.__soksakNative?.call
     ? Promise.resolve(window.__soksakNative.call(method, args))
     : runtime().then((r) => r.Call.ByName(`${SERVICE}.${method}`, ...args));
 
-/** 이벤트 수신. payload 는 `data` 필드에 담긴다. */
+/** Event reception. The payload is carried in the `data` field. */
 const listen = createLifecycleListener((event, fn) =>
   runtime().then(async (r) => {
     const name = await r.Window.Name();
@@ -102,12 +102,12 @@ const METHOD = {
   pluginsUseRegistry: "PluginsUseRegistry",
 };
 
-/* 메인 페이지의 호출. 페이지가 스스로 다시 읽기 전에 보낸 호출이 모두 답을 받게 센다(docs/spec/native-host.md#page-reload). */
+/* Calls of the main page. Counts them so that every call sent before the page reloads itself receives a reply (docs/spec/native-host.md#page-reload). */
 const mainCalls = settlingCalls((name, arg) => {
   const method = METHOD[name];
   if (!method) return Promise.reject(new Error(`unknown host call: ${name}`));
-  // 인자가 없는 호출은 인자를 보내지 않는다. undefined 를 하나 보내면 바인딩이
-  // 인자 수가 맞지 않는다고 거절한다.
+  // A call without arguments sends no arguments. Sending one undefined makes the binding
+  // reject the call because the argument count does not match.
   if (name === "sidecarSend") return call(method, arg.sidecar, arg.surface, arg.body, arg.cids);
   if (name === "imageCaret") return call(method, { surface: arg.surface, name: arg.name }, arg.x, arg.y, arg.width, arg.height);
   if (name === "imageText") return call(method, { surface: arg.surface, name: arg.name }, arg.text);
@@ -116,11 +116,11 @@ const mainCalls = settlingCalls((name, arg) => {
 
 export const host = {
   call: (name, arg) => mainCalls.call(name, arg),
-  // 보낸 호출이 모두 답을 받은 뒤 이 페이지를 다시 읽는다. 그 뒤의 호출은 보내지 않는다.
+  // Reloads this page after every sent call has received a reply. Calls after that are not sent.
   reload: () => mainCalls.settle().then(() => location.reload()),
   on: listen,
-  // 제목 표시줄이 투명하고 콘텐츠가 그 아래까지 차지하므로, 끄는 자리를 이 문서가
-  // 지정한다.
+  // The title bar is transparent and the content extends under it, so this document
+  // specifies the drag area.
   draggable(el) {
     el.style.setProperty("--wails-draggable", "drag");
   },
@@ -161,7 +161,7 @@ export const page = (() => {
   });
   const call = calls.call;
   const listen = createLifecycleListener((event, fn) => window.__soksakNative.on(event, fn));
-  // 표면 id 는 문서 주소의 id 다. 워크벤치가 표면을 그 탭 id 로 연다.
+  // The surface id is the id in the document address. The workbench opens the surface with that tab id.
   const surface = new URLSearchParams(location.search).get("id");
   return {
     theme(fn) {
@@ -178,16 +178,16 @@ export const page = (() => {
     },
     sidecar: (name) => ({
       send: (surface, body, cids = []) => call("sidecarSend", name, surface, body, cids),
-      // 사이드카 이벤트는 창의 모든 페이지가 받는다. 사이드카와 표면이 일치하는 것만 처리한다.
+      // Sidecar events are received by every page of the window. Only the events that match the sidecar and the surface are handled.
       on: (surface, fn) => listen("sidecar-message", (message) => {
         if (message.sidecar === name && message.surface === surface) fn(message.body);
       }),
-      // 사이드카 실패도 창의 모든 페이지가 받는다(docs/spec/sidecars.md#failure).
+      // Sidecar failures are also received by every page of the window (docs/spec/sidecars.md#failure).
       onFailure: (surface, fn) => listen("sidecar-failure", (failure) => {
         if (failure.sidecar === name && failure.surface === surface) fn(failure.reason);
       }),
     }),
-    // 공개 항목의 등록과 요청. 요청 이벤트에 surface 가 있으면 이 표면의 것만 처리한다.
+    // Registration and requests of exposed entries. When a request event has a surface, only the events of this surface are handled.
     exposure: {
       register: (kind, name) => call("exposureRegister", { surface, kind, name }),
       onRequest: (fn) => listen("exposure-request", (request) => {
@@ -195,7 +195,7 @@ export const page = (() => {
       }),
       reply: (id, payload) => call("exposureReply", { id, ...payload }),
     },
-    // 이 표면의 문서 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 상태를 이 표면에만 보낸다.
+    // The document region of this surface. The host verifies that the calling webview is the surface and sends the state only to this surface.
     document: {
       attach: (document) => call("documentAttach", { surface, document }),
       load: (document, url) => call("documentLoad", { surface, document, url }),
@@ -206,7 +206,7 @@ export const page = (() => {
         if (sent.surface === surface) fn(sent.document, sent.state);
       }),
     },
-    // 이 표면의 그림 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 이벤트를 이 표면에만 보낸다.
+    // The image region of this surface. The host verifies that the calling webview is the surface and sends events only to this surface.
     image: {
       attach: (name, sidecar) => call("imageAttach", { surface, name, sidecar }),
       focus: (name) => call("imageFocus", { surface, name }),
@@ -235,8 +235,8 @@ export const page = (() => {
   };
 })();
 
-/** 설정과 프로젝트 목록은 네이티브 호스트가 저장한다. */
+/** The native host stores settings and the project list. */
 export const openStore = async () => new HostWorkspaceStore(host);
 
-/** 창과 프로젝트 폴더는 네이티브 호스트가 관리한다. */
+/** The native host manages windows and project folders. */
 export const windows = hostWindows(host);

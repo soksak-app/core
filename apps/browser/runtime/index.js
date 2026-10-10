@@ -1,7 +1,7 @@
-// 브라우저 런타임. 네이티브 호스트가 없다.
+// Browser runtime. There is no native host.
 //
-// 페이지가 표면 자리를 직접 그리고, 표면과 모달 페이지는 열리지 않는다. 설정과
-// 프로젝트 목록은 IndexedDB 에 저장한다.
+// The page draws the surface areas itself, and surface pages and modal pages are not opened. Settings and
+// the project list are stored in IndexedDB.
 import { WorkspaceStore } from "./browser-storage.js";
 import { createClipboardBridge } from "@soksak/plugin-api";
 
