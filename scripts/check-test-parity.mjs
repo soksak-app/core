@@ -1142,6 +1142,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.2.6.1",
+    implementation: [
+      { file: "native/darwin/src/event_ring.m", symbol: "bool sp_event(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/event_ring_test.m", id: "a pulled record holds the time, the level, the name and the fields" },
+      { file: "native/darwin/tests/event_ring_test.m", id: "each refused event is counted" },
+    ],
+    expected: "The process ring stores the time, the level, the name and the fields of an event from any thread, returns the records in order, and counts the events it refuses.",
+    levels: ["native"],
+  },
+  {
     id: "F150.2.5",
     implementation: [
       { file: "packages/host/wailsv3/src/event_log.go", symbol: "func (l *EventLog) rotate" },

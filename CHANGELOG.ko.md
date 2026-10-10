@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.2.6.1: native 라이브러리에 프로세스의 ring이 생겼다: `sp_event(level, name, fields_json)`은 어느 스레드에서든 마이크로초 단위 wall clock, level, 이름(1~255바이트), field를 저장하고, `sp_event_drain`은 record를 순서대로 돌려주며, `sp_event_take_loss`는 없거나 비었거나 더 긴 이름, 열거에 없는 level, 없는 field, 가득 찬 4 MiB ring이 거부한 event의 수를 돌려준다.
 - F150.2.5: 두 host writer가 파일을 회전한다: 파일은 `rotate_bytes`(host에서 100 MB)를 넘게 될 줄 앞에서 닫히고, 최신 `generations`개(5)가 `.1`부터 `.5`로 보관되며, 가장 오래된 것은 지워지고, 새 파일은 `log.open`과 `log.rotated` `{bytes, kept, removed}`로 시작하되 `seq`는 이어진다. 양의 경계나 세대 수가 없는 writer는 시작을 거부하고, 실패한 회전 단계는 보고하되 writer는 가진 파일로 계속 쓴다.
 - F150.2.4.5: window 검사가 native 입력으로 주입한 `Enter`부터 그 키가 PTY에 닿은 뒤 셸이 출력하는 프롬프트까지의 시간을 성능 trace를 끄고, 켜고, 다시 끈 상태에서 잰다(각 12개 키). debug 빌드, 부하가 낮은 기계: Wails 중앙값은 끔 20.3 ms, 켬 19.5 ms, 다시 끔 17.5 ms이고 Tauri 중앙값은 끔 20.3 ms, 켬 23.1 ms, 다시 끔 19.7 ms이다. 즉 trace는 Tauri에서 키마다 약 3 ms가 들고 Wails에서는 산포를 넘는 비용이 없다. 이 숫자는 입력 경로를 event writer로 옮길 때의 기준선이다.
 - F150.2.4.4: 두 host는 application log 뒤에 event writer를 시작하고(`logs/host-<boot>.jsonl`, mode 0600, 첫 줄 `log.open`), 종료 때 flush하며, page 호출 `log`에 배치 중계로 답한다. 두 애플리케이션의 runtime이 그 호출 이름을 가진다. 두 애플리케이션의 debug 빌드를 재시작해 관측했다: 프로세스의 파일에 프로세스 식별자를 담은 `log.open`과 연속인 `seq`가 있고 application log에는 오류가 늘지 않았다.

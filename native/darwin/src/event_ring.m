@@ -2,6 +2,7 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #import "event_ring.h"
 
 // A record is an 8-byte header and the bytes of the event, padded to a multiple of 8. The header holds the length of the
@@ -123,4 +124,58 @@ sp_event_ring_loss sp_event_ring_take_loss(sp_event_ring *ring) {
     loss.events = atomic_exchange_explicit(&ring->lostEvents, 0, memory_order_relaxed);
     loss.bytes = atomic_exchange_explicit(&ring->lostBytes, 0, memory_order_relaxed);
     return loss;
+}
+
+// The capacity of the ring of the process: the events of a burst of PTY activity wait here until the writer of the host
+// pulls them.
+static const size_t processRingCapacity = 4u << 20;
+
+static sp_event_ring *processRing(void) {
+    static sp_event_ring *ring;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        ring = sp_event_ring_create(processRingCapacity);
+    });
+    return ring;
+}
+
+bool sp_event(uint8_t level, const char *name, const char *fields_json) {
+    sp_event_ring *ring = processRing();
+    if (!ring) return false;
+    size_t nameLength = name ? strlen(name) : 0;
+    if (nameLength == 0 || nameLength > 255 || level > SP_EVENT_TRACE || !fields_json) {
+        countLoss(ring, nameLength);
+        return false;
+    }
+    size_t fieldsLength = strlen(fields_json);
+    size_t length = 8 + 1 + 1 + nameLength + fieldsLength;
+    // The record is built in place of a heap allocation for the usual event and in one allocation for a large one.
+    uint8_t stack[512];
+    uint8_t *record = length <= sizeof stack ? stack : malloc(length);
+    if (!record) {
+        countLoss(ring, length);
+        return false;
+    }
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+    uint64_t micros = (uint64_t)now.tv_sec * 1000000u + (uint64_t)now.tv_nsec / 1000u;
+    memcpy(record, &micros, sizeof micros);
+    record[8] = level;
+    record[9] = (uint8_t)nameLength;
+    memcpy(record + 10, name, nameLength);
+    memcpy(record + 10 + nameLength, fields_json, fieldsLength);
+    bool stored = sp_event_ring_push(ring, record, length);
+    if (record != stack) free(record);
+    return stored;
+}
+
+size_t sp_event_drain(uint8_t *buffer, size_t capacity) {
+    sp_event_ring *ring = processRing();
+    return ring ? sp_event_ring_drain(ring, buffer, capacity) : 0;
+}
+
+sp_event_ring_loss sp_event_take_loss(void) {
+    sp_event_ring *ring = processRing();
+    sp_event_ring_loss none = {0, 0};
+    return ring ? sp_event_ring_take_loss(ring) : none;
 }

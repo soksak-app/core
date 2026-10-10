@@ -30,3 +30,19 @@ size_t sp_event_ring_drain(sp_event_ring *ring, uint8_t *buffer, size_t capacity
 
 // Returns the loss counted since the last call and resets it.
 sp_event_ring_loss sp_event_ring_take_loss(sp_event_ring *ring);
+
+// The ring of this process (docs/spec/logging.md#writers). It is created on the first call, so an event produced before
+// the writer of the host exists waits in it. Every thread of the process may call sp_event; the writer of the host drains.
+enum { SP_EVENT_ERROR = 0, SP_EVENT_WARN = 1, SP_EVENT_INFO = 2, SP_EVENT_DEBUG = 3, SP_EVENT_TRACE = 4 };
+
+// Stores an event: the wall clock in microseconds, the level, the name (1 to 255 bytes) and the fields as JSON text. It
+// copies the arguments, does not wait, and returns false, and counts the loss, for a missing or empty or too long name, a
+// level outside the enumeration, missing fields, a full ring, or an event that can never fit.
+bool sp_event(uint8_t level, const char *name, const char *fields_json);
+
+// Moves whole records of the process ring into `buffer`, as sp_event_ring_drain does. A record is the time in
+// microseconds (8 bytes, host byte order), the level (1 byte), the length of the name (1 byte), the name and the fields.
+size_t sp_event_drain(uint8_t *buffer, size_t capacity);
+
+// Returns the loss of the process ring since the last call and resets it.
+sp_event_ring_loss sp_event_take_loss(void);

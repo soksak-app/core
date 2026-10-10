@@ -124,6 +124,46 @@ int main(void) { @autoreleasepool {
     check(total == producers * perProducer && !duplicate && orderKept,
         [NSString stringWithFormat:@"%d producers deliver every event once and in order (%d of %d)", producers, total, producers * perProducer]);
 
+
+    // The ring of the process: sp_event stores the time, the level, the name and the fields, and sp_event_drain returns
+    // them in order as records of ts_us (8 bytes), level (1), name length (1), the name and the fields.
+    struct timespec wall;
+    clock_gettime(CLOCK_REALTIME, &wall);
+    uint64_t before = (uint64_t)wall.tv_sec * 1000000u + (uint64_t)wall.tv_nsec / 1000u;
+    check(sp_event(SP_EVENT_WARN, "native.test.first", "{\"index\":1}") && sp_event(SP_EVENT_ERROR, "native.test.second", "{}"),
+        @"sp_event accepts an event");
+    clock_gettime(CLOCK_REALTIME, &wall);
+    uint64_t after = (uint64_t)wall.tv_sec * 1000000u + (uint64_t)wall.tv_nsec / 1000u;
+    uint8_t pulled[1024];
+    size_t used = sp_event_drain(pulled, sizeof pulled);
+    uint32_t firstLength;
+    memcpy(&firstLength, pulled, sizeof firstLength);
+    uint64_t ts;
+    memcpy(&ts, pulled + 4, sizeof ts);
+    uint8_t level = pulled[4 + 8];
+    uint8_t nameLength = pulled[4 + 9];
+    NSString *name = [[NSString alloc] initWithBytes:pulled + 4 + 10 length:nameLength encoding:NSUTF8StringEncoding];
+    NSString *fields = [[NSString alloc] initWithBytes:pulled + 4 + 10 + nameLength length:firstLength - 10 - nameLength encoding:NSUTF8StringEncoding];
+    check(used > 0 && ts >= before && ts <= after && level == SP_EVENT_WARN && [name isEqualToString:@"native.test.first"] &&
+            [fields isEqualToString:@"{\"index\":1}"],
+        [NSString stringWithFormat:@"a pulled record holds the time, the level, the name and the fields (%@ %@)", name, fields]);
+    uint32_t secondLength;
+    memcpy(&secondLength, pulled + 4 + firstLength, sizeof secondLength);
+    check(used == 4 + firstLength + 4 + secondLength && pulled[4 + firstLength + 4 + 8] == SP_EVENT_ERROR,
+        @"the second record follows the first in order");
+    check(sp_event_drain(pulled, sizeof pulled) == 0, @"a drained process ring is empty");
+
+    // A name that is missing, empty, longer than 255 bytes or not under a layer, an unknown level and fields that are
+    // missing are refused and counted.
+    char longName[300];
+    memset(longName, 'a', sizeof longName);
+    longName[sizeof longName - 1] = 0;
+    (void)sp_event_take_loss();
+    check(!sp_event(SP_EVENT_INFO, NULL, "{}") && !sp_event(SP_EVENT_INFO, "", "{}") && !sp_event(SP_EVENT_INFO, longName, "{}") &&
+            !sp_event(99, "native.test.level", "{}") && !sp_event(SP_EVENT_INFO, "native.test.fields", NULL),
+        @"an event with no name, an empty name, a name over 255 bytes, an unknown level or no fields is refused");
+    check(sp_event_take_loss().events == 5, @"each refused event is counted");
+
     sp_event_ring_destroy(ring);
     sp_event_ring_destroy(small);
     sp_event_ring_destroy(shared);

@@ -755,7 +755,11 @@
     - [o] F150.2.2 — P0: host의 Rust writer: 큐, writer 스레드, 배치, `log.dropped`, 종료 때 flush; benchmark. 완료: `packages/host/tauriv2/tests/event_log_test.rs`, `make benchmark-rust`.
     - [o] F150.2.3 — P0: 같은 계약 사례를 가진 host의 Go writer. 완료: `packages/host/wailsv3/tests/event_log_test.go`, `make benchmark-go`.
     - [o] F150.2.5 — P0: 두 host writer의 로그 파일 회전: 100 MB, 5개 보관([logging](spec/logging.ko.md) 참조). 완료: `packages/host/wailsv3/tests/event_log_test.go`, `packages/host/tauriv2/tests/event_log_test.rs`.
-    - [ ] F150.2.6 — P0: native ring을 Go writer로 가져오는 cgo pull과 Rust writer로 가져오는 FFI pull, cgo·FFI를 건너는 benchmark.
+    - [~] F150.2.6 — P0: native ring을 두 host writer로 가져오는 pull과 cgo·FFI를 건너는 benchmark.
+      - [o] F150.2.6.1 — P0: native 프로세스의 ring: `sp_event`가 시각, level, 이름, field를 저장하고 `sp_event_drain`이 record를 순서대로 돌려주며 `sp_event_take_loss`가 거부한 event를 센다. 완료: `native/darwin/tests/event_ring_test.m`.
+      - [ ] F150.2.6.2 — P0: record를 Go writer로 가져오는 플랫폼 연산과, writer가 배치 간격마다 하는 pull. native 스레드는 Go를 부르면 안 되므로 polling하는 이유를 적는다.
+      - [ ] F150.2.6.3 — P0: 같은 플랫폼 연산과 pull을 Rust writer에 만든다.
+      - [ ] F150.2.6.4 — P0: cgo와 FFI를 건너는 pull의 benchmark.
     - [o] F150.2.4 — P0: page 배치 중계와 그 benchmark; 두 host에서 logging을 켜고 껐을 때 키 주입부터 PTY 쓰기까지의 입력 지연.
       - [o] F150.2.4.1 — P0: page 배치 모듈 `log-batch.js`: 한 턴의 event는 `batch` 호출 한 번으로 host에 가고, 한 번에 호출 하나만 진행하며, 큐가 가득 차면 event를 거부하고 다음 배치가 `page.log.dropped`로 시작하고, 실패한 호출은 event 수와 함께 보고한다. 완료: `packages/workbench/test/log-batch.test.mjs`.
       - [o] F150.2.4.2 — P0: 두 host의 writer는 프로세스의 다른 계층이 중계한 event를 그 event가 가진 계층과 시각 그대로 받는다(`EmitRelayed`, `emit_relayed`). 완료: `packages/host/wailsv3/tests/event_log_test.go`, `packages/host/tauriv2/tests/event_log_test.rs`.
