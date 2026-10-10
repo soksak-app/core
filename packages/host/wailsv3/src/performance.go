@@ -93,7 +93,7 @@ func performanceSamplerStart() {
 	go func() {
 		defer close(done)
 		for {
-			PerformanceObserve("sampler", func() map[string]any { return PerformanceMemory(os.Getpid()) })
+			PerformanceSample()
 			select {
 			case <-stop:
 				return
@@ -112,6 +112,71 @@ func performanceSamplerEnd() {
 	close(samplerStop)
 	<-samplerDone
 	samplerStop, samplerDone = nil, nil
+}
+
+// processes is the process registry: every sidecar process the host started or connected to, by pid, with the role and the
+// name that make a memory reading attribute itself. A process leaves the registry when it ends or its connection ends.
+var (
+	processesMu sync.Mutex
+	processes   = map[int]registeredProcess{}
+)
+
+type registeredProcess struct{ role, name string }
+
+// PerformanceProcessAdd names a process for the sampler and stores the event `process` with its role, name and pid, so the
+// samples attribute themselves. Naming a pid again replaces its role and name.
+func PerformanceProcessAdd(role, name string, pid int) {
+	processesMu.Lock()
+	processes[pid] = registeredProcess{role: role, name: name}
+	processesMu.Unlock()
+	PerformanceObserve("host", func() map[string]any {
+		return map[string]any{"event": "process", "role": role, "name": name, "pid": pid}
+	})
+}
+
+// PerformanceProcessRemove removes a process from the registry; a pid that is not named is ignored because both the end of
+// a process and the end of its connection remove it.
+func PerformanceProcessRemove(pid int) {
+	processesMu.Lock()
+	delete(processes, pid)
+	processesMu.Unlock()
+}
+
+// PerformanceSample stores the resident size of the host and of every registered process, each as one event
+// `host.sampler.memory`. A process whose size cannot be read is stored with its error.
+func PerformanceSample() {
+	PerformanceObserve("sampler", func() map[string]any { return PerformanceMemory(os.Getpid()) })
+	processesMu.Lock()
+	named := make(map[int]registeredProcess, len(processes))
+	for pid, process := range processes {
+		named[pid] = process
+	}
+	processesMu.Unlock()
+	for pid, process := range named {
+		PerformanceObserve("sampler", func() map[string]any {
+			record := map[string]any{"event": "memory", "role": process.role, "name": process.name, "pid": pid}
+			size, err := residentKB(pid)
+			if err != nil {
+				record["error"] = err.Error()
+			} else {
+				record["rss_kb"] = size
+			}
+			return record
+		})
+	}
+}
+
+// PerformanceSurface stores a phase of the life of a surface (`created`, `placed`, `destroyed`) as the event `surface` of
+// the trace. A placement adds the frame the host gave the native view and whether the view is visible.
+func PerformanceSurface(phase, surface string, placement *Placement) {
+	PerformanceObserve("host", func() map[string]any {
+		record := map[string]any{"event": "surface", "phase": phase, "surface": surface}
+		if placement != nil {
+			record["x"], record["y"], record["w"], record["h"] = placement.X, placement.Y, placement.W, placement.H
+			record["visible"] = placement.Visible
+		}
+		return record
+	})
 }
 
 // PerformanceSamplerRunning reports whether the sampler of the trace runs.

@@ -2218,6 +2218,8 @@ fn persistent_connections_are_recorded_as_events() {
             }
         });
         let writer = records::start_writer(Path::new(&config));
+        soksak_host_tauriv2::performance::command(serde_json::json!({"action": "on"})).unwrap();
+        records::wait_for_first_sample(Path::new(&config), &writer);
         let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
         let sidecars = Sidecars::new(
             &declare(&fixture, executable_directory.path()),
@@ -2230,8 +2232,12 @@ fn persistent_connections_are_recorded_as_events() {
             .unwrap();
         events.recv_timeout(STALL).unwrap(); // the echo
         events.recv_timeout(STALL).unwrap(); // the notice of the reconnection
+                                             // The sampler names the service while it is connected and not after the connection ended.
+        soksak_host_tauriv2::performance::sample();
         sidecars.stop();
+        soksak_host_tauriv2::performance::sample();
         service.join().unwrap();
+        soksak_host_tauriv2::performance::command(serde_json::json!({"action": "off"})).unwrap();
         writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
@@ -2276,4 +2282,10 @@ fn persistent_connections_are_recorded_as_events() {
             "host.sidecar.disconnect true"
         ]
     );
+    // One sample while the service is connected names it; the sample after the connection ended does not.
+    let sampled = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| event["event"] == "host.sampler.memory" && event["fields"]["name"] == ECHO)
+        .count();
+    assert_eq!(sampled, 1, "samples that name the service");
 }

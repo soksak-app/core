@@ -176,3 +176,107 @@ fn the_sampler_ends_when_the_trace_turns_off() {
     }
     in_child("the_sampler_ends_when_the_trace_turns_off");
 }
+
+/// The `fields` of the stored events named `name`.
+fn trace_fields(config: &std::path::Path, name: &str) -> Vec<serde_json::Value> {
+    records::read_events(&records::event_log_path(config))
+        .into_iter()
+        .filter(|event| event["event"] == name)
+        .map(|event| event["fields"].clone())
+        .collect()
+}
+
+// contract: performance.sampler.reads-every-registered-process
+#[test]
+fn the_sampler_reads_every_registered_process() {
+    if let Some(config) = std::env::var_os(CHILD) {
+        let writer = records::start_writer(std::path::Path::new(&config));
+        performance::command(json!({"action": "on"})).unwrap();
+        records::wait_for_first_sample(std::path::Path::new(&config), &writer);
+        let mut sleeper = Command::new("sleep").arg("30").spawn().unwrap();
+        performance::process_add("sidecar", "fixture", sleeper.id());
+        performance::sample();
+        performance::process_remove(sleeper.id());
+        // A removed process is not read again.
+        performance::sample();
+        // A registered process whose size cannot be read is reported with its error.
+        performance::process_add("sidecar", "ended", 1 << 30);
+        performance::sample();
+        performance::process_remove(1 << 30);
+        sleeper.kill().unwrap();
+        sleeper.wait().unwrap();
+        performance::command(json!({"action": "off"})).unwrap();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = in_child("the_sampler_reads_every_registered_process");
+    let samples = trace_fields(config.path(), "host.sampler.memory");
+    let fixture: Vec<_> = samples.iter().filter(|s| s["name"] == "fixture").collect();
+    assert_eq!(
+        fixture.len(),
+        1,
+        "the registered process was sampled {} times, want 1: {samples:?}",
+        fixture.len()
+    );
+    assert_eq!(fixture[0]["role"], "sidecar");
+    assert!(
+        fixture[0]["rss_kb"].as_u64().is_some_and(|size| size > 0),
+        "the sample holds no resident size: {}",
+        fixture[0]
+    );
+    let named = trace_fields(config.path(), "host.trace.process");
+    let named: Vec<_> = named.iter().filter(|p| p["name"] == "fixture").collect();
+    assert_eq!(named.len(), 1, "process events of the fixture: {named:?}");
+    assert_eq!(named[0]["role"], "sidecar");
+    assert!(named[0]["pid"].as_u64().is_some_and(|pid| pid > 0));
+    let ended: Vec<_> = samples.iter().filter(|s| s["name"] == "ended").collect();
+    assert_eq!(ended.len(), 1, "samples of the ended process: {ended:?}");
+    assert!(ended[0].get("rss_kb").is_none() && ended[0]["pid"] == (1u64 << 30));
+    assert!(
+        ended[0]["error"]
+            .as_str()
+            .is_some_and(|text| !text.is_empty()),
+        "a failed reading has no error: {}",
+        ended[0]
+    );
+}
+
+// contract: performance.surface.lifecycle-events-hold-the-geometry
+#[test]
+fn surface_lifecycle_events_hold_the_geometry() {
+    if let Some(config) = std::env::var_os(CHILD) {
+        let writer = records::start_writer(std::path::Path::new(&config));
+        performance::command(json!({"action": "on"})).unwrap();
+        performance::surface("created", "s1", None);
+        performance::surface("placed", "s1", Some(([1.0, 2.0, 30.0, 40.0], true)));
+        performance::surface("destroyed", "s1", None);
+        performance::command(json!({"action": "off"})).unwrap();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = in_child("surface_lifecycle_events_hold_the_geometry");
+    let events = trace_fields(config.path(), "host.trace.surface");
+    let phases: Vec<_> = events
+        .iter()
+        .map(|e| e["phase"].as_str().unwrap())
+        .collect();
+    assert_eq!(phases, ["created", "placed", "destroyed"]);
+    let placed = &events[1];
+    assert_eq!(placed["surface"], "s1");
+    assert_eq!(
+        [
+            &placed["x"],
+            &placed["y"],
+            &placed["w"],
+            &placed["h"],
+            &placed["visible"]
+        ],
+        [
+            &json!(1.0),
+            &json!(2.0),
+            &json!(30.0),
+            &json!(40.0),
+            &json!(true)
+        ]
+    );
+}

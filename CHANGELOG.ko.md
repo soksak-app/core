@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F145.15.3: 메인 page의 첫 모듈이 `time_origin`과 `url`을 가진 event `page.start`를 내므로, reload가 timeline의 표시된 경계가 된다.
+- F145.15.2: 두 host가 trace의 표면 생명주기를 단계 `created`, `placed`(`x`, `y`, `w`, `h`, `visible` 포함), `destroyed`를 가진 `host.trace.surface`로 저장한다. 이전에는 `destroyed`만 저장했다.
+- F145.15.1: 두 host가 시작하거나 연결한 사이드카 process의 프로세스 등록부를 두고, host와 등록된 process마다 `host.sampler.memory` event(`role`, `name`, `pid`, `rss_kb`, 또는 `error`)를 저장하며 process에 이름을 붙일 때 `host.trace.process`를 저장한다. sampler는 host process만 읽었다.
 - F150.8.1: 창 검사 `e2e/input-oracle.test.mjs`가 Tab, Escape, Backspace, Enter, Control+A에 대해 sidecar가 PTY에 쓴 것으로 기록한 바이트를 터미널의 독립 수신자 프로세스가 읽은 바이트와 비교한다. 두 애플리케이션에서 같다.
 - F150.8.2: 전체 입력 경로의 지연을 성능 trace 끔, 켬, 끔으로 측정했다(`e2e/input-latency.test.mjs`). 중앙값은 Wails 23~25 ms, Tauri 26~38 ms다.
 - F151.6: `sok debug timeline`이 설정 폴더의 host 이벤트 파일에서 filter(`--level`, `--layer`, `--text`, `--event`, `--surface`, `--session`, `--cid`, `--from`, `--to`, `--context`)를 통과한 행을 실행 중인 애플리케이션 없이 debug 화면의 글 줄로 출력한다. Go와 Rust 구현이 같은 줄을 출력하며 golden 파일 `packages/log-contract/fixtures/timeline`과 debug 화면 시험이 이를 검사한다. 시험과 관측: 두 구현이 두 검사 애플리케이션의 이벤트 파일에 같은 출력을 낸다.

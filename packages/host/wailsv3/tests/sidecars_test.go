@@ -1177,6 +1177,52 @@ func TestSidecarLifetimeIsRecordedAsEvents(t *testing.T) {
 	}
 }
 
+// contract: performance.sampler.names-the-sidecar-processes
+func TestTheSamplerNamesARunningSidecarUntilItEnds(t *testing.T) {
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
+	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
+		t.Fatal(err)
+	}
+	samples := func(named bool) int {
+		if err := log.Flush(5 * time.Second); err != nil {
+			t.Fatal(err)
+		}
+		count := 0
+		for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+			if event["event"] != "host.sampler.memory" {
+				continue
+			}
+			if _, has := event["fields"].(map[string]any)["name"]; has == named {
+				count++
+			}
+		}
+		return count
+	}
+	// The sampler stores a first sample of the host when it starts; wait for it so that it does not run among the samples below.
+	for deadline := time.Now().Add(5 * time.Second); samples(false) == 0; {
+		if time.Now().After(deadline) {
+			t.Fatal("the sampler stored no sample of the host")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	sidecars, _ := scriptSidecars(t, "#!/bin/sh\ncat >/dev/null\n")
+	owner := newFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	host.PerformanceSample()
+	if got := samples(true); got != 1 {
+		t.Fatalf("a running sidecar was sampled %d times by one sample, want 1", got)
+	}
+	sidecars.Stop()
+	host.PerformanceSample()
+	if got := samples(true); got != 1 {
+		t.Fatalf("a sidecar that ended was sampled again: %d samples in all, want 1", got)
+	}
+}
+
 // contract: sidecars.protocol.request-line-carries-cids
 func TestSidecarRequestCarriesTheCorrelationIdentifiers(t *testing.T) {
 	sidecars, record := echoSidecars(t)

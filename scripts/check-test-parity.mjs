@@ -1447,6 +1447,27 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.15",
+    implementation: [
+      { file: "packages/host/wailsv3/src/performance.go", symbol: "func PerformanceProcessAdd" },
+      { file: "packages/host/wailsv3/src/performance.go", symbol: "func PerformanceSurface" },
+      { file: "packages/host/tauriv2/src/performance.rs", symbol: "pub fn process_add" },
+      { file: "packages/host/tauriv2/src/performance.rs", symbol: "pub fn surface" },
+      { file: "packages/workbench/page-log.js", symbol: "export function recordPageStart" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/performance_processes_test.go", id: "TestTheSamplerReadsEveryRegisteredProcess" },
+      { file: "packages/host/wailsv3/tests/performance_processes_test.go", id: "TestSurfaceLifecycleEventsHoldTheGeometry" },
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestTheSamplerNamesARunningSidecarUntilItEnds" },
+      { file: "packages/host/tauriv2/tests/performance_test.rs", id: "the_sampler_reads_every_registered_process" },
+      { file: "packages/host/tauriv2/tests/performance_test.rs", id: "surface_lifecycle_events_hold_the_geometry" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "the_sampler_names_a_running_sidecar_until_it_ends" },
+      { file: "packages/workbench/test/page-log.test.mjs", id: "the start of a page is the event page.start with the origin of the document clock and its address" },
+    ],
+    expected: "The sampler of both hosts reads the host and every registered sidecar process, the surface lifecycle of the trace holds the geometry, and a document of the main page marks its start.",
+    levels: ["unit"],
+  },
+  {
     id: "F152",
     implementation: [
       { file: "packages/plugin-api/sidecar-port.js", symbol: "orderedSidecar requires a failure handler" },

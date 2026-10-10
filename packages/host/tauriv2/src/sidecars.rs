@@ -1444,6 +1444,8 @@ impl<O: Owner> Sidecars<O> {
                         .is_some_and(|stopping| stopping.violated)
                 };
                 let pid = child.id();
+                // The stop ends the process in every branch below, so the sampler stops reading it here.
+                crate::performance::process_remove(pid);
                 let stop_exit = |status: &str| {
                     crate::event_record::emit_host(
                         crate::event_log::Level::Info,
@@ -1608,11 +1610,7 @@ impl<O: Owner> Core<O> {
             "host.sidecar.start",
             serde_json::json!({"name": name, "pid": child.id()}),
         );
-        // 프로세스 등록부의 계기(V5-104): 뜨는 사이드카의 pid 와 역할을 남긴다.
-        crate::performance::observe("host", || {
-            serde_json::json!({"event": "process", "role": "sidecar", "name": name,
-                        "pid": child.id()})
-        });
+        crate::performance::process_add("sidecar", name, child.id());
         let mut stdin = child.stdin.take().ok_or("sidecar stdin is missing")?;
         let stdout = child.stdout.take().ok_or("sidecar stdout is missing")?;
 
@@ -2103,6 +2101,7 @@ impl<O: Owner> Core<O> {
                 serde_json::json!({"name": sidecar, "pid": reader_service_pid, "stopping": stopping,
                     "violation": violation.clone().unwrap_or_default()}),
             );
+            crate::performance::process_remove(reader_service_pid);
             let close_error =
                 Err("persistent service disconnected before close-owner ack".to_string());
             for (_, sender) in waiters.lock().expect("close waiters").drain() {
@@ -2150,6 +2149,7 @@ impl<O: Owner> Core<O> {
             "host.sidecar.connect",
             serde_json::json!({"name": name, "pid": endpoint.pid, "spawned": child.is_some()}),
         );
+        crate::performance::process_add("sidecar", name, endpoint.pid);
         // application 종료는 bootstrap child를 기다리거나 kill하지 않아야 한다.
         drop(child);
         Ok(Started {
@@ -2575,6 +2575,7 @@ fn fail<O: Owner>(
         "host.sidecar.exit",
         serde_json::json!({"name": sidecar, "pid": pid, "status": exit, "stopping": false}),
     );
+    crate::performance::process_remove(pid);
     // 쓰기 스레드는 모든 송신자가 사라지면 보관분을 쓰고 끝난다.
     drop(outbox);
     // 기본값: 프로토콜 위반이 없으면 출력이 끝난 것이 실패 원인이다(docs/spec/sidecars.md#failure).

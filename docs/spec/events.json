@@ -12,6 +12,7 @@
     "page.trace.<event>": { "layer": "page", "class": "call", "level": "debug", "fields": {}, "description": "The performance trace of the page, while it is on." },
     "host.trace.<event>": { "layer": "host", "class": "call", "level": "debug", "fields": {}, "description": "The performance trace of the host, while it is on." },
     "host.sampler.<event>": { "layer": "host", "class": "call", "level": "debug", "fields": {}, "description": "The sampler of the host, while the trace is on." },
+    "page.start": { "layer": "page", "class": "lifecycle", "level": "info", "fields": { "time_origin": "number", "url": "string" }, "description": "A document of the main page started; a reload starts a new document with a new clock." },
     "page.call": { "layer": "page", "class": "call", "level": "debug", "fields": { "name": "string", "args": "string", "micros": "number", "ok": "boolean", "truncated": "boolean" }, "description": "A host call of a page; `error` names a refused call." },
     "page.command": { "layer": "page", "class": "call", "level": "debug", "fields": { "name": "string", "micros": "number", "ok": "boolean" }, "description": "A command request that the page answered; `error` names a failed command." },
     "host.window.event": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "window": "string", "kind": "string" }, "description": "A window event that the host registered." },

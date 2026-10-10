@@ -678,6 +678,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 if let Ok(mut map) = views.0.lock() {
                     map.insert(handle, s.id.clone());
                 }
+                crate::performance::surface("created", &s.id, None);
                 handle
             };
             exposure::on_main(window, move || {
@@ -704,10 +705,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         let removed_ids: HashSet<String> = removed.iter().map(|(id, _)| id.clone()).collect();
         for (id, handle) in removed {
             // 표면 생명주기의 계기(V5-104): 목록에서 사라진 표면은 이 자리에서 파괴된다.
-            crate::performance::observe(
-                "host",
-                || serde_json::json!({"event": "surface", "phase": "destroyed", "surface": id}),
-            );
+            crate::performance::surface("destroyed", &id, None);
             if let Ok(mut named) = views.0.lock() {
                 named.remove(&handle);
             }
@@ -790,6 +788,7 @@ fn surface_handle_placement(
 ) -> Result<Placement, String> {
     let platform = platform::current()?;
     let [x, y, w, h] = exposure::on_main(window, move || platform.surface_frame(handle))?;
+    crate::performance::surface("placed", id, Some(([x, y, w, h], visible)));
     Ok(Placement {
         id: id.into(),
         x,

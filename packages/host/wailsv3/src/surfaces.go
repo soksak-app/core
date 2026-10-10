@@ -881,6 +881,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 			s.views[surface.ID] = view
 			s.named[uintptr(view.NativeView())] = surface.ID
 			created = append(created, surface.ID)
+			PerformanceSurface("created", surface.ID, nil)
 		}
 		alignedWant := Rect{}
 		if visible {
@@ -908,7 +909,9 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		if item.visible {
 			item.view.SetBounds(item.aligned.X, item.aligned.Y, item.aligned.W, item.aligned.H)
 		}
-		placed = append(placed, Placement{ID: item.id, Rect: Rect(system.SurfaceFrame(item.view.NativeView())), Visible: item.visible})
+		placement := Placement{ID: item.id, Rect: Rect(system.SurfaceFrame(item.view.NativeView())), Visible: item.visible}
+		PerformanceSurface("placed", item.id, &placement)
+		placed = append(placed, placement)
 	}
 
 	// 이 목록은 페이지만 작성하므로 목록에 없는 표면은 제거된 표면이다.
@@ -933,11 +936,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		s.mu.Unlock()
 		delete(s.compositionRevisions, id)
 		// 표면 생명주기의 계기(V5-104): 목록에서 사라진 표면은 이 자리에서 파괴된다.
-		PerformanceObserve("host", func() map[string]any {
-			return map[string]any{
-				"event": "surface", "phase": "destroyed", "surface": id,
-			}
-		})
+		PerformanceSurface("destroyed", id, nil)
 		gone = append(gone, id)
 	}
 	return gone, placed, nil

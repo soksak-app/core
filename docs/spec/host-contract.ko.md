@@ -225,6 +225,9 @@ fn invalid_json_closes_connection() {
 | `performance.trace.already-off-writes-nothing` | trace가 꺼져 있을 때의 `off` 요청은 event를 저장하지 않는다. | both |
 | `performance.trace.host-observation-is-an-event` | trace가 켜져 있는 동안 host의 관측(layer `host` 또는 `sampler`)은 이름이 field에 반복되지 않는 level `debug`의 event `host.trace.<event>` 또는 `host.sampler.<event>`로 event log에 저장되며 trace 파일의 줄이 아니다. event 이름이 없는 관측은 오류 `performance trace`로 보고하고 아무것도 저장하지 않는다. | both |
 | `performance.sampler.failed-reading-is-explicit` | 상주 크기를 얻지 못한 sampler 읽기는 `rss_host_kb` 대신 `error`를 기록한다. | both |
+| `performance.sampler.reads-every-registered-process` | trace가 켜져 있는 동안 표본 추출은 host와 프로세스 등록부의 각 process마다 `role`, `name`, `pid`, `rss_kb`를 담은 이벤트 `host.sampler.memory`를 하나씩 저장한다. process의 이름을 붙이면 이벤트 `host.trace.process`를 저장하고, 제거된 process는 다시 읽지 않으며, 크기를 읽을 수 없는 등록 process는 `rss_kb` 없이 `error`와 함께 저장한다. | both |
+| `performance.sampler.names-the-sidecar-processes` | host가 시작한 사이드카 process와 연결한 상주 service는 process가 끝나거나 연결이 끝날 때까지 프로세스 등록부에 있다. | both |
+| `performance.surface.lifecycle-events-hold-the-geometry` | trace는 표면의 단계를 단계 `created`, `placed`, `destroyed`를 가진 이벤트 `host.trace.surface`로 저장하고, 단계 `placed`는 `x`, `y`, `w`, `h`, `visible`을 담는다. | both |
 | `performance.clock.before-epoch-is-explicit` | 유닉스 epoch 이전의 trace 시각은 epoch가 아니라 오류다. | tauriv2 only: Rust host는 epoch부터의 기간으로 시각을 적으므로 그 이전에서 실패하고, Go는 모든 시각을 적는다 |
 | `log.open.rotates-at-100mb` | 100 MB 이상인 로그 파일을 열면 먼저 `<이름>.1`로 옮기고 이전 세대를 하나씩 뒤로 옮기며 다섯째를 지우고 새 파일을 시작한다. | both |
 | `log.open.appends-below-bound` | 더 작은 로그 파일을 열면 거기에 덧붙이고, 새 로그 파일은 mode 0600이다. | both |

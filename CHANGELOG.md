@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F145.15.3: the first module of the main page emits the event `page.start` with `time_origin` and `url`, so a reload is a marked boundary in the timeline.
+- F145.15.2: both hosts store the surface lifecycle of the trace as `host.trace.surface` with the phases `created`, `placed` (with `x`, `y`, `w`, `h` and `visible`) and `destroyed`; they stored `destroyed` alone.
+- F145.15.1: both hosts keep a process registry of the sidecar processes they started or connected to and store a `host.sampler.memory` event for the host and for each registered process (`role`, `name`, `pid`, `rss_kb`, or `error`), and `host.trace.process` when a process is named; the sampler read the host process alone.
 - F150.8.1: the window check `e2e/input-oracle.test.mjs` compares the bytes that the sidecar logs as written to the PTY for Tab, Escape, Backspace, Enter and Control+A with the bytes that an independent receiver process in the terminal read; they are the same on both applications.
 - F150.8.2: the latency of the whole input path was measured with the performance trace off, on and off again (`e2e/input-latency.test.mjs`); the medians are 23 to 25 ms on Wails and 26 to 38 ms on Tauri.
 - F151.6: `sok debug timeline` prints the rows of the host event files of the configuration directory that pass the filter (`--level`, `--layer`, `--text`, `--event`, `--surface`, `--session`, `--cid`, `--from`, `--to`, `--context`) as the text lines of the debug view without a running application; the Go and the Rust implementations print the same lines, which the golden files `packages/log-contract/fixtures/timeline` and the debug view test check. Unit and observation: both implementations print identical output for the event files of both check applications.

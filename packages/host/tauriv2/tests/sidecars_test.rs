@@ -1536,6 +1536,52 @@ fn the_lifetime_of_a_sidecar_is_recorded_as_events() {
     assert_eq!(pids.len(), 2, "processes {pids:?}");
 }
 
+// contract: performance.sampler.names-the-sidecar-processes
+#[test]
+fn the_sampler_names_a_running_sidecar_until_it_ends() {
+    // The writer of the records and the trace switch belong to the process, so the scenario runs in a child process.
+    if let Some(config) = std::env::var_os("SOKSAK_SAMPLER_CHILD") {
+        let (mut sidecars, _directory) = script_sidecars("#!/bin/sh\ncat >/dev/null\n");
+        sidecars.0.stop_timeout = STALL;
+        let writer = records::start_writer(Path::new(&config));
+        soksak_host_tauriv2::performance::command(serde_json::json!({"action": "on"})).unwrap();
+        records::wait_for_first_sample(Path::new(&config), &writer);
+        let (owner, _events) = owner("a", "/projects/a");
+        sidecars
+            .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+        soksak_host_tauriv2::performance::sample();
+        sidecars.stop();
+        soksak_host_tauriv2::performance::sample();
+        soksak_host_tauriv2::performance::command(serde_json::json!({"action": "off"})).unwrap();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "the_sampler_names_a_running_sidecar_until_it_ends",
+            "--nocapture",
+        ])
+        .env("SOKSAK_SAMPLER_CHILD", config.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let sampled = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| event["event"] == "host.sampler.memory" && event["fields"]["name"] == ECHO)
+        .count();
+    assert_eq!(
+        sampled, 1,
+        "a sidecar is named by the sample while it runs and not after it ended"
+    );
+}
+
 // contract: sidecars.protocol.request-line-carries-cids
 #[test]
 fn a_request_carries_the_correlation_identifiers() {
