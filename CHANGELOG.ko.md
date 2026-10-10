@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F145.16: files와 shell 사이드카의 event 파일은 event 계약, 요청 봉투의 필드 `cids`, `sidecar.json`의 member `events`를 향해 각 저장소의 체크리스트(S18, S4)로 추적한다. core 코드는 바뀌지 않았다.
 - F145.15.3: 메인 page의 첫 모듈이 `time_origin`과 `url`을 가진 event `page.start`를 내므로, reload가 timeline의 표시된 경계가 된다.
 - F145.15.2: 두 host가 trace의 표면 생명주기를 단계 `created`, `placed`(`x`, `y`, `w`, `h`, `visible` 포함), `destroyed`를 가진 `host.trace.surface`로 저장한다. 이전에는 `destroyed`만 저장했다.
 - F145.15.1: 두 host가 시작하거나 연결한 사이드카 process의 프로세스 등록부를 두고, host와 등록된 process마다 `host.sampler.memory` event(`role`, `name`, `pid`, `rss_kb`, 또는 `error`)를 저장하며 process에 이름을 붙일 때 `host.trace.process`를 저장한다. sampler는 host process만 읽었다.

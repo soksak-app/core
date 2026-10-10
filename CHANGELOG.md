@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F145.16: the event file of the files and shell sidecars is tracked in the checklists of their own repositories (S18 and S4), against the event contract, the field `cids` of the request envelope and the member `events` of `sidecar.json`; no core code changed.
 - F145.15.3: the first module of the main page emits the event `page.start` with `time_origin` and `url`, so a reload is a marked boundary in the timeline.
 - F145.15.2: both hosts store the surface lifecycle of the trace as `host.trace.surface` with the phases `created`, `placed` (with `x`, `y`, `w`, `h` and `visible`) and `destroyed`; they stored `destroyed` alone.
 - F145.15.1: both hosts keep a process registry of the sidecar processes they started or connected to and store a `host.sampler.memory` event for the host and for each registered process (`role`, `name`, `pid`, `rss_kb`, or `error`), and `host.trace.process` when a process is named; the sampler read the host process alone.
