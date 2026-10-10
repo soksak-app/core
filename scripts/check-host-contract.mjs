@@ -45,7 +45,7 @@ const TEST_FUNCTION = {
   rust: /^\s*(?:pub\s+)?(?:async\s+)?fn (\w+)\s*\(/,
 };
 
-/** Reads the test functions from the test source and the contract cases that each function declares.
+/** Reads the test functions from the test source and the contract cases that each function declares. */
 export function parseDeclarations(source, language, file) {
   const pattern = TEST_FUNCTION[language];
   if (!pattern) throw new Error(`unsupported language ${language}`);

@@ -132,7 +132,7 @@ test("the repository states a reason for every default and discarded error in pr
 test("the command lists repository candidates with locations and contract reasons", () => {
   const output = spawnSync(process.execPath, [join(ROOT, "scripts/check-fallbacks.mjs"), "--list"], { encoding: "utf8" });
   assert.equal(output.status, 0, output.stderr);
-  assert.match(output.stdout, /packages\/host\/tauriv2\/src\/exposure\.rs:\d+: defaulting unwrap \[reason=기본값:/);
+  assert.match(output.stdout, /packages\/host\/tauriv2\/src\/exposure\.rs:\d+: defaulting unwrap \[reason=(?:기본값|default):/);
   assert.match(output.stdout, /Fallback checks passed: \d+ occurrences listed; \d+ have a stated contract reason\./);
 
   const invalid = spawnSync(process.execPath, [join(ROOT, "scripts/check-fallbacks.mjs"), "--unknown"], { encoding: "utf8" });

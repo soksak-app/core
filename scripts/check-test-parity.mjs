@@ -1494,8 +1494,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/page-log.js", symbol: "export function recordPageStart" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/performance_processes_test.go", id: "TestTheSamplerReadsEveryRegisteredProcess" },
-      { file: "packages/host/wailsv3/tests/performance_processes_test.go", id: "TestSurfaceLifecycleEventsHoldTheGeometry" },
+      { file: "packages/host/wailsv3/tests/performance_test.go", id: "TestTheSamplerReadsEveryRegisteredProcess" },
+      { file: "packages/host/wailsv3/tests/performance_test.go", id: "TestSurfaceLifecycleEventsHoldTheGeometry" },
       { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestTheSamplerNamesARunningSidecarUntilItEnds" },
       { file: "packages/host/tauriv2/tests/performance_test.rs", id: "the_sampler_reads_every_registered_process" },
       { file: "packages/host/tauriv2/tests/performance_test.rs", id: "surface_lifecycle_events_hold_the_geometry" },
@@ -1770,9 +1770,11 @@ const FEATURE_LINKS = [
     id: "F155",
     implementation: [
       { file: "packages/host/tauriv2/src/startup.rs", symbol: "pub fn exit_on_failure_with" },
+      { file: "packages/host/wailsv3/src/startup.go", symbol: "func ExitOnFailureWith" },
     ],
     tests: [
       { file: "packages/host/tauriv2/tests/startup_test.rs", id: "a_failed_setup_step_writes_its_message_and_exits_with_status_one" },
+      { file: "packages/host/wailsv3/tests/startup_test.go", id: "TestAFailedStartupStepWritesItsMessageAndExitsWithStatusOne" },
     ],
     expected: "A failure of a startup step of the Tauri host writes its message and ends the process with the status 1 instead of aborting it.",
     levels: ["unit", "application"],

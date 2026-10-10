@@ -7,7 +7,6 @@ package main
 import (
 	"embed"
 	"fmt"
-	"log"
 	"os"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
@@ -26,7 +25,5 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	if err := host.Run(assets, options); err != nil {
-		log.Fatal(err)
-	}
+	host.ExitOnFailure(host.Run(assets, options))
 }
