@@ -1619,6 +1619,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F140",
+    implementation: [
+      { file: "packages/workbench/file-open.js", symbol: "export function chooseOpener" },
+    ],
+    tests: [
+      { file: "e2e/files.test.mjs", id: "the failure to open a file is shown in the message row of the file tree and not in the error display" },
+    ],
+    expected: "The failure of core.file.open for a file that no plugin opens is shown in the message row of the file tree of the files plugin and not in the error display of the main document.",
+    levels: ["application"],
+  },
+  {
     id: "F151",
     implementation: [
       { file: "packages/workbench/debug-ui.js", symbol: "export async function showDebugState" },
