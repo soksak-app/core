@@ -5,6 +5,7 @@
 ## 미배포
 
 - F139: 상태 `core.picker`는 `columns`, 곧 제목과 항목마다 아이콘과 이름의 x를 선택 레이어 기준으로 보고한다. 선택 레이어가 열릴 때 재는데, 네이티브 뷰가 그리는 동안 메인 문서가 선택 레이어를 숨겨 그 요소에 상자가 없기 때문이다.
+- F151.4.2: debug 타임라인의 행을 선택하고 선택 해제할 수 있다(`core.debug.timeline.select {row, selected}`, 각 행 앞의 단추). `core.debug.timeline.save`는 선택한 행의 글 줄을 타임라인 순서로 `debugSaveText`를 통해 `soksak-timeline-<time>.txt`로 저장한다(저장 창 취소는 오류가 아니고 빈 선택은 오류로 거부한다). 파일에 입력한 글자가 들어 있을 수 있다는 경고가 저장 단추 옆에 있고, `core.debug`가 `selected`, `warning`과 작업 `save-rows`를 보고한다. 단위 검증만 했다. window check `e2e/modal.test.mjs`와 저장 창은 실행 중인 애플리케이션에서 실행하지 않았다.
 - F151.4.1: 두 host의 host 호출 `debugSaveText({name, text})`는 page가 만든 글을 사람이 고른 곳에 저장한다. 파일 이름이 아닌 이름과 비었거나 16 MiB를 넘는 글을 거절하고, 같은 저장 창을 보이며, `{saved}`로 답한다.
 - F139: 노출이 DOM 이름 `core.picker.group-icon`, `core.picker.group-name`, `core.picker.item-icon`, `core.picker.item-name`과 상태 `core.picker`의 `groups`(`id`, `name`, `depth`)를 선언한다. `e2e/space-apps.test.mjs`가 각 항목의 아이콘 x와 이름 x가 제목과 같은지 확인한다. 검사 환경은 로드되지 않은 플러그인의 항목을 만들 수 없다. host에서 실행하지 않았다.
 - F150.7.4: `docs/spec/events.json`은 계층 `native`, `host`, `page`의 event catalog다. `make events-check`는 선언한 event마다 이를 적는 소스를 요구하고, `node scripts/check-events.mjs --logs <config-dir>…`는 창 검사가 남긴 host event 파일을 감사한다(선언된 event, 필수 field와 그 타입). 자리 표시자를 가진 catalog 이름은 계열을 선언한다. 감사가 `native.window.occlusion`이 `visible`을 숫자로 저장하는 결함을 찾았고, 이제 boolean이다.

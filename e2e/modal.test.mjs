@@ -394,6 +394,37 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
+  test(`${app.name}: the debug timeline selects rows and reports the count and the warning of the save`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const titles = HELP_TITLES[(await s.get("host.menu")).language];
+    s.cleanup(() => s.run("core.debug.close"));
+    s.cleanup(() => {
+      for (const folder of recordingFolders(s.app.configDir)) {
+        if (!s.recordingsBefore.includes(folder)) rmSync(join(s.app.configDir, "logs", "captures", folder), { recursive: true, force: true });
+      }
+    });
+    await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
+    await s.until("core.debug", (debug) => debug.open && debug.entries.length > 0, "the debug view did not list the files");
+    await s.run("core.debug.timeline");
+    const shown = await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.total > 1, "the timeline did not show rows");
+    assert.equal(shown.timeline.selected, 0);
+    assert.match(shown.timeline.warning, /입력한 글자/);
+    // The save panel needs a person, so the check does not run core.debug.timeline.save.
+    await s.run("core.debug.timeline.select", { row: 0, selected: true });
+    await s.run("core.debug.timeline.select", { row: 1, selected: true });
+    await s.run("core.debug.timeline.select", { row: 1, selected: true });
+    const two = await s.until("core.debug", (debug) => debug.timeline.selected === 2, "two selected rows were not reported");
+    assert.equal(two.error, null);
+    await s.run("core.debug.timeline.select", { row: 0, selected: false });
+    await s.until("core.debug", (debug) => debug.timeline.selected === 1, "the unselected row was not reported");
+    await assert.rejects(s.run("core.debug.timeline.select", { row: shown.timeline.total, selected: true }), /is not one of the/);
+    s.expectError(/^error page .*timeline row \d+ is not one of the \d+ rows/);
+  });
+}
+
+for (const app of Object.values(APPS)) {
   test(`${app.name}: the debug view filters the timeline by event name with context and shows a state file as a tree`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
