@@ -5,12 +5,15 @@ import test from "node:test";
 test("Wails page regions expose operations but only composition places geometry", async () => {
   // mock한 native 인터페이스를 거친 모든 호출을 기록한다
   const recorded = [];
+  const logged = [];
 
   // Wails native 인터페이스를 mock한다
   globalThis.window = {
     __soksakNative: {
       call(method, args) {
-        recorded.push([method, args]);
+        // The batches of events are kept apart: the calls of the page under test are asserted one by one.
+        if (method === "Log") logged.push([method, args]);
+        else recorded.push([method, args]);
         return Promise.resolve(method === "WaitPresented" ? { displayed: 42 } : undefined);
       },
       on(event, fn) {
@@ -50,7 +53,7 @@ test("Wails page regions expose operations but only composition places geometry"
 
   // A page of a surface reports a record of its own as an event of a batch of the host call log.
   await page.report({ level: "error", where: "sidecar @x/side", text: "send failed: gone" });
-  const [method, [request]] = recorded.at(-1);
+  const [method, [request]] = logged.at(-1);
   assert.equal(method, "Log");
   assert.equal(request.action, "batch");
   assert.equal(request.events.length, 1);

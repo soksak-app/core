@@ -26,6 +26,31 @@ const observed = (name, args, started, ok, error) => {
   if (observer) observer({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, error });
 };
 
+// The longest text of the arguments of a call in an event; a longer text is cut and the event says `truncated`.
+const CALL_ARGS_LIMIT = 1024;
+
+/** The text of the arguments of a host call and whether it was cut. */
+function callArguments(args) {
+  let text;
+  try {
+    text = JSON.stringify(args);
+  } catch (error) {
+    // default: arguments that JSON cannot serialize are recorded with the reason, as the call itself fails on them.
+    text = `unserializable: ${error.message}`;
+  }
+  return text.length > CALL_ARGS_LIMIT ? { args: text.slice(0, CALL_ARGS_LIMIT), truncated: true } : { args: text, truncated: false };
+}
+
+/**
+ * The event `page.call` of a host call (docs/spec/logging.md#automatic-entrances): the level is `debug`, and `warn` for a
+ * refused call. The main page and the documents of the surfaces make the event here so that both record a call alike.
+ */
+export function callEvent({ name, args, micros, ok, error }) {
+  const fields = { name, ...callArguments(args), micros, ok };
+  if (!ok) fields.error = error;
+  return { level: ok ? "debug" : "warn", event: "page.call", fields };
+}
+
 /**
  * call 을 감싸 진행 중인 호출을 센다. settle() 은 그때까지 보낸 호출이 모두 답을 받으면 끝나고, 그 뒤의 호출은
  * 보내지 않는다. 보내지 않은 호출은 다시 읽기가 멈춘 호출처럼 문서와 함께 끝나므로 끝나지 않는 약속을 돌려준다.

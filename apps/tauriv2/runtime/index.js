@@ -5,6 +5,7 @@
 import { HostWorkspaceStore } from "@soksak/workbench/host-store.js";
 import { hostWindows } from "@soksak/workbench/host-windows.js";
 import { settlingCalls } from "@soksak/workbench/host-calls.js";
+import { surfaceCalls } from "@soksak/workbench/surface-calls.js";
 import { createClipboardBridge } from "@soksak/plugin-api";
 import { createLifecycleListener } from "./listener-lifecycle.js";
 
@@ -166,28 +167,65 @@ export const host = (() => {
 
 export const clipboard = createClipboardBridge((name, payload) => host.call(name, payload), { allowPersist: true });
 
+/*
+ * The commands that a document of a surface calls, by the name its events carry (docs/spec/logging.md#automatic-entrances),
+ * and the arguments of each command from the arguments of the call. The names and arguments are those of the Wails runtime.
+ */
+function surfaceWire(surface) {
+  const request = (name, command) => [name, { command, arguments: (value) => ({ request: value }) }];
+  return Object.fromEntries([
+    ["theme", { command: "theme", arguments: () => ({}) }],
+    ["sidecarSend", { command: "sidecar_send", arguments: (sidecar, from, body) => ({ sidecar, surface: from, body }) }],
+    request("exposureRegister", "exposure_register"),
+    ["exposureReply", { command: "exposure_reply", arguments: (reply) => ({ request: JSON.stringify({ ...reply, ...(surface ? { surface } : {}) }) }) }],
+    request("documentAttach", "document_attach"),
+    request("documentLoad", "document_load"),
+    request("documentZoom", "document_zoom"),
+    request("documentGo", "document_go"),
+    request("documentDetach", "document_detach"),
+    request("imageAttach", "image_attach"),
+    request("imageFocus", "image_focus"),
+    ["imageCaret", { command: "image_caret", arguments: (value, x, y, w, h) => ({ request: value, x, y, w, h }) }],
+    ["imageText", { command: "image_text", arguments: (value, text) => ({ request: value, text }) }],
+    request("imageDetach", "image_detach"),
+    request("compositionPlace", "composition_place"),
+    ["modalContent", { command: "overlay_content", arguments: (id, instance) => ({ id, instance }) }],
+    ["modalReady", { command: "overlay_ready", arguments: (id, instance) => ({ id, instance }) }],
+    ["overlayPick", { command: "overlay_pick", arguments: (id, instance, key, value) => ({ id, instance, key, value }) }],
+  ]);
+}
+
 export const page = (() => {
   const invoke = hostInvoke();
+  const wire = surfaceWire(new URLSearchParams(location.search).get("id"));
+  const calls = surfaceCalls({
+    send: (name, ...args) => {
+      const entry = wire[name];
+      if (!entry) throw new Error(`unknown surface call: ${name}`);
+      return invoke(entry.command, entry.arguments(...args));
+    },
+    log: (request) => invoke("log", { request }),
+  });
+  const call = calls.call;
   const listen = createLifecycleListener((event, fn) => window.__TAURI__.event.listen(event, fn,
     { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
   // 표면 id 는 문서 주소의 id 다. 워크벤치가 표면을 그 탭 id 로 연다.
   const surface = new URLSearchParams(location.search).get("id");
   return {
     theme(fn) {
-      invoke("theme").then(fn);
+      call("theme").then(fn);
       listen("theme", (e) => fn(e.payload));
     },
-    // Stores a record of this document in the event log of the host as the event `page.record.<level>`, in a batch of one
-    // event of the host call log (docs/spec/diagnostics.md#forms, docs/spec/logging.md#writers).
+    // Stores a record of this document in the event log of the host as the event `page.record.<level>`, in the batch of the
+    // events of its turn (docs/spec/diagnostics.md#forms, docs/spec/logging.md#writers).
     report: async (record) => {
       if (!record || typeof record !== "object" || typeof record.level !== "string" || typeof record.where !== "string" || typeof record.text !== "string") {
         throw new TypeError("report requires {level, where, text} strings");
       }
-      return invoke("log", { request: { action: "batch", events: [{ ts_us: Date.now() * 1000, level: record.level,
-        event: `page.record.${record.level}`, fields: { where: record.where, text: record.text } }] } });
+      return calls.record(record.level, `page.record.${record.level}`, { where: record.where, text: record.text });
     },
     sidecar: (name) => ({
-      send: (surface, body) => invoke("sidecar_send", { sidecar: name, surface, body }),
+      send: (surface, body) => call("sidecarSend", name, surface, body),
       // 사이드카 이벤트는 창의 모든 페이지가 받는다. 사이드카와 표면이 일치하는 것만 처리한다.
       on: (surface, fn) => listen("sidecar-message", (e) => {
         if (e.payload.sidecar === name && e.payload.surface === surface) fn(e.payload.body);
@@ -199,37 +237,37 @@ export const page = (() => {
     }),
     // 공개 항목의 등록과 요청. 요청 이벤트에 surface 가 있으면 이 표면의 것만 처리한다.
     exposure: {
-      register: (kind, name) => invoke("exposure_register", { request: { surface, kind, name } }),
+      register: (kind, name) => call("exposureRegister", { surface, kind, name }),
       onRequest: (fn) => listen("exposure-request", (e) => {
         if (e.payload.surface === undefined || e.payload.surface === surface) fn(e.payload);
       }),
-      reply: (id, payload) => invoke("exposure_reply", { request: JSON.stringify({ id, ...payload, ...(surface ? { surface } : {}) }) }),
+      reply: (id, payload) => call("exposureReply", { id, ...payload }),
     },
     // 이 표면의 문서 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 상태를 이 표면에만 보낸다.
     document: {
-      attach: (document) => invoke("document_attach", { request: { surface, document } }),
-      load: (document, url) => invoke("document_load", { request: { surface, document, url } }),
-      zoom: (document, zoom) => invoke("document_zoom", { request: { surface, document, zoom } }),
-      go: (document, action, offset) => invoke("document_go", { request: offset === undefined ? { surface, document, action } : { surface, document, action, offset } }),
-      detach: (document) => invoke("document_detach", { request: { surface, document } }),
+      attach: (document) => call("documentAttach", { surface, document }),
+      load: (document, url) => call("documentLoad", { surface, document, url }),
+      zoom: (document, zoom) => call("documentZoom", { surface, document, zoom }),
+      go: (document, action, offset) => call("documentGo", offset === undefined ? { surface, document, action } : { surface, document, action, offset }),
+      detach: (document) => call("documentDetach", { surface, document }),
       onState: (fn) => listen("document-state", (e) => {
         if (e.payload.surface === surface) fn(e.payload.document, e.payload.state);
       }),
     },
     // 이 표면의 그림 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 이벤트를 이 표면에만 보낸다.
     image: {
-      attach: (name, sidecar) => invoke("image_attach", { request: { surface, name, sidecar } }),
-      focus: (name) => invoke("image_focus", { request: { surface, name } }),
-      caret: (name, x, y, w, h) => invoke("image_caret", { request: { surface, name }, x, y, w, h }),
-      text: (name, text) => invoke("image_text", { request: { surface, name }, text }),
-      detach: (name) => invoke("image_detach", { request: { surface, name } }),
+      attach: (name, sidecar) => call("imageAttach", { surface, name, sidecar }),
+      focus: (name) => call("imageFocus", { surface, name }),
+      caret: (name, x, y, w, h) => call("imageCaret", { surface, name }, x, y, w, h),
+      text: (name, text) => call("imageText", { surface, name }, text),
+      detach: (name) => call("imageDetach", { surface, name }),
       on: (fn) => listen("image-event", (e) => {
         if (e.payload.surface === surface) fn(e.payload.name, e.payload.event);
       }),
     },
     composition: {
       place: (revision, regions, overlays) =>
-        invoke("composition_place", { request: { surface, revision, regions, overlays } }),
+        call("compositionPlace", { surface, revision, regions, overlays }),
     },
     modal: {
       content(id, instance, fn, place) {
@@ -240,10 +278,10 @@ export const page = (() => {
         }), listen("modal-position", (e) => {
           const { payload } = e;
           if (payload.id === id && payload.instance === instance) place({ revision: payload.revision, card: payload.card });
-        })]).then(() => invoke("overlay_content", { id, instance })).then(fn);
+        })]).then(() => call("modalContent", id, instance)).then(fn);
       },
-      ready: (id, instance) => invoke("overlay_ready", { id, instance }),
-      answer: (id, instance, key, value) => invoke("overlay_pick", { id, instance, key, value }),
+      ready: (id, instance) => call("modalReady", id, instance),
+      answer: (id, instance, key, value) => call("overlayPick", id, instance, key, value),
     },
   };
 })();

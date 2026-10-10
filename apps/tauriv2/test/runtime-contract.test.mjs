@@ -5,6 +5,7 @@ import test from "node:test";
 test("Tauri page regions expose operations but only composition places geometry", async () => {
   // mock한 Tauri invoke를 거친 모든 호출을 기록한다
   const recorded = [];
+  const logged = [];
   const eventListeners = {};
 
   // Tauri 런타임 인터페이스를 mock한다
@@ -12,7 +13,9 @@ test("Tauri page regions expose operations but only composition places geometry"
     __TAURI__: {
       core: {
         invoke(command, args) {
-          recorded.push([command, args]);
+          // The batches of events are kept apart: the calls of the page under test are asserted one by one.
+          if (command === "log") logged.push([command, args]);
+          else recorded.push([command, args]);
           return Promise.resolve(command === "wait_presented" ? { displayed: 42 } : undefined);
         },
       },
@@ -82,7 +85,7 @@ test("Tauri page regions expose operations but only composition places geometry"
 
   // A page of a surface reports a record of its own as an event of a batch of the host call log.
   await page.report({ level: "error", where: "sidecar @x/side", text: "send failed: gone" });
-  const [command, { request }] = recorded.at(-1);
+  const [command, { request }] = logged.at(-1);
   assert.equal(command, "log");
   assert.equal(request.action, "batch");
   assert.equal(request.events.length, 1);
