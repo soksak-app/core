@@ -786,7 +786,7 @@
     - [ ] F150.5.3 — P0: 창·애플리케이션 이벤트를 각 host의 등록 helper 하나에서 기록한다.
     - [o] F150.5.4 — P0: page의 모든 `command.run` 요청은 trace가 켜져 있든 꺼져 있든 event `page.command`(이름, 시간, 결과)다. 완료: `packages/workbench/test/exposure-replies-sent.test.mjs`.
     - [ ] F150.5.5 — P0: sidecar 수명(launch, exit, 종료 상태)을 launch와 exit 한 곳에서 기록한다.
-    - [ ] F150.5.6 — P0: 사람이 보는 오류의 표시 경로가 `error` event를 낸다.
+    - [o] F150.5.6 — P0: 사람이 보는 오류의 표시 경로(`showError`)는 자리마다 오류가 바뀔 때 한 번 level `error`의 event `page.record.error`를 저장한다. F150.4.1의 기록이 이를 만들었고 `packages/workbench/test/shown-errors.test.mjs`가 이 경우를 검사한다.
   - [ ] F150.6 — P0: sidecar와 plugin이 따를 wire 계약을 core에서 정한다: 요청 봉투의 더하기 방식 상관 식별자 field `cids`, host가 sidecar에 연결할 때와 정책이 바뀔 때 보내는 연산 `log.policy`, host가 감시하는 파일 `<config-dir>/log-policy.json`. 다른 저장소의 catalog는 각자의 manifest에 선언한다. 각 sidecar와 plugin(vt, files, shell, terminal, browser, editor)의 채택은 각자의 저장소 체크리스트에서 관리하며 이 저장소의 항목이 아니다.
   - [ ] F150.7 — P0: native observer(애플리케이션과 창 활동, 입력 소스 변경, first responder 변경, 입력기 질의)를 기록하고 실행 중인 애플리케이션을 catalog에 대해 감사한다(R8 단계).
   - [ ] F150.8 — P0: 관측을 닫는다: 독립 수신자에 대한 입력 oracle, 활성화 등급의 한글 조합(F149.2), 전체 경로의 benchmark, core 0.0.11 릴리스와 registry 등록(R9 단계).
