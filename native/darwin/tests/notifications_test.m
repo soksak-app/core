@@ -1,6 +1,6 @@
-// 시스템 알림 모듈을 검사한다. 알림 센터는 애플리케이션 번들에서 실행된 프로세스만 받으므로, 같은 검사를
-// 번들 밖에서 실행해 시작이 명시적 오류로 실패하는지 보고(인자 없음), 번들 안에서 실행해 권한 상태를 한 번
-// 알리는지 본다(--bundled). 권한을 요청하거나 알림을 게시하지 않는다. 애플리케이션을 활성화하지 않는다.
+// Checks the system notification module. The notification center accepts only processes run from an application bundle, so the same check is
+// run outside a bundle to report that startup fails with an explicit error (no arguments), and inside a bundle to report the permission
+// state once (--bundled). It does not request permission or post a notification. It does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import "notifications.h"
 

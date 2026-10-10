@@ -1,15 +1,16 @@
-// 네이티브 입력 이벤트를 만들어 창의 뷰에 전달한다.
+// Creates native input events and delivers them to the views of a window.
 //
-// 키 이벤트는 -[NSWindow sendEvent:] 로 창의 응답자에게 전달한다. 포인터 이벤트는 창이
-// 활성 상태가 아니면 AppKit 이 첫 클릭으로 처리해 뷰에 전달하지 않으므로, 좌표의 뷰를
-// 히트 테스트해 누름을 전달하고 끌기와 뗌은 누름 대상에 전달한다. 이동은 좌표를 포함하는 추적 영역의
-// 소유자에게 전달한다. 어느 경우든 웹뷰는 네이티브 이벤트를 받아 페이지에 신뢰 이벤트를
-// 전달한다. 스크롤은 창 정보를 가진 이벤트로 만들어 -[NSWindow sendEvent:] 로 전달한다.
-// 시스템 커서를 움직이지 않고, sp_input_activate 외에는 애플리케이션을 활성화하지 않는다.
+// Key events are delivered to the responder of the window with -[NSWindow sendEvent:]. When a window is not active,
+// AppKit treats a pointer event as the first click and does not deliver it to the view, so the view at the coordinates
+// is hit-tested and receives the press, and a drag and a release are delivered to the press target. A move is
+// delivered to the owner of the tracking area that contains the coordinates. In every case the web view receives the
+// native event and delivers a trusted event to the page. A scroll is created as an event that carries window
+// information and is delivered with -[NSWindow sendEvent:]. The system cursor does not move, and no function except
+// sp_input_activate activates the application.
 //
-// WebKit 은 페이지가 활성(창이 키 창)일 때만 버튼 없는 이동으로 호버를 갱신한다
-// (WebFrame::handleMouseEvent). 그래서 키 창이 아닌 창의 이동은 SP_INPUT_INACTIVE 로 거부하고,
-// 호버가 필요한 호출자는 sp_input_activate 로 창을 실제로 활성화한 뒤 이동을 보낸다.
+// WebKit updates hover from a move without a button only when the page is active (the window is the key window)
+// (WebFrame::handleMouseEvent). A move in a window that is not the key window is therefore rejected with
+// SP_INPUT_INACTIVE, and a caller that needs hover activates the window with sp_input_activate before sending the move.
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "input_inject.h"
@@ -19,7 +20,7 @@
 #import "private/coregraphics.h"
 #import "private/webkit.h"
 
-// 콘텐츠 영역 왼쪽 위 기준 좌표를 창 좌표로 바꾼다. 콘텐츠 뷰의 좌표계 방향을 따른다.
+// Converts coordinates relative to the top-left of the content area into window coordinates. Follows the coordinate system direction of the content view.
 static NSPoint windowPoint(NSWindow *window, double x, double y) {
     NSView *content = window.contentView;
     NSPoint local = NSMakePoint(x, content.isFlipped ? y : content.bounds.size.height - y);
@@ -40,7 +41,7 @@ static NSView *hitView(NSWindow *window, NSPoint point) {
     return [content hitTest:[content.superview convertPoint:point fromView:nil]];
 }
 
-// 창과 버튼마다 누름을 받은 뷰가 뗌까지 같은 제스처를 받는다.
+// The view that received the press of a window and button receives the same gesture until the release.
 static char leftPressedViewKey, rightPressedViewKey;
 static const void *pressedViewKey(int button) {
     return button == 1 ? &rightPressedViewKey : &leftPressedViewKey;
@@ -55,7 +56,7 @@ static NSEvent *mouseEvent(NSWindow *window, NSEventType type, NSPoint point, NS
         context:nil eventNumber:0 clickCount:clicks pressure:pressure];
 }
 
-// 좌표를 포함하는 추적 영역의 소유자에게 이동을 전달한다. 겹친 뷰에서는 가장 위의 뷰만 받는다.
+// Delivers a move to the owner of the tracking area that contains the coordinates. With overlapping views, only the topmost view receives it.
 static bool moveTo(NSWindow *window, NSPoint point) {
     NSView *hit = hitView(window, point);
     if (!hit) return false;
@@ -72,15 +73,15 @@ static bool moveTo(NSWindow *window, NSPoint point) {
     return false;
 }
 
-// SP_INPUT_BUTTON_HELD 로 거부한 차례의 측정값. front 는 보유한 참조이며 heldDone 이 놓는다.
+// Measurement of the turn rejected with SP_INPUT_BUTTON_HELD. front is a retained reference that heldDone releases.
 typedef struct {
     NSUInteger buttons;
     NSRunningApplication *front;
-    // 거부한 이유. 전달했으면 빈 문자열이다.
+    // Reason for the rejection; an empty string when the input was delivered.
     const char *why;
 } SPHeld;
 
-// held 는 결과가 SP_INPUT_BUTTON_HELD 일 때 거부한 차례의 mask 와 최전면 애플리케이션을 받는다.
+// When the result is SP_INPUT_BUTTON_HELD, held receives the mask of the rejected turn and the frontmost application.
 static sp_input_result pointerInput(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
     SPHeld *held) {
     NSWindow *window = (__bridge NSWindow *)handle;
@@ -93,15 +94,15 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
         return SP_INPUT_DELIVERED;
     }
     if (phase == 4) {
-        // 공개 API 에는 창 정보를 가진 스크롤 이벤트를 만드는 방법이 없다. CGEvent 에 창 번호
-        // (필드 51)와 창 좌표(CGEventSetWindowLocation)를 넣으면 창과 locationInWindow 를
-        // 가진 NSEvent 가 되고, -[NSWindow sendEvent:] 가 좌표의 뷰에 전달한다. 둘 다 공개되지
-        // 않은 CoreGraphics 기능이므로 docs/operations/private-native-apis.md 에 기록하고
-        // tests/input_inject_test.m 이 실제 스크롤 여부를 검사한다.
+        // The public API has no way to create a scroll event that carries window information. Setting the window number
+        // (field 51) and the window location (CGEventSetWindowLocation) on a CGEvent yields an NSEvent with a window and
+        // locationInWindow, and -[NSWindow sendEvent:] delivers it to the view at the coordinates. Both are CoreGraphics
+        // features that are not public, so they are recorded in docs/operations/private-native-apis.md and
+        // tests/input_inject_test.m checks that the scroll actually happens.
         CGEventRef scroll = CGEventCreateScrollWheelEvent2(NULL, kCGScrollEventUnitPixel, 2,
             (int32_t)-deltaY, (int32_t)-deltaX, 0);
         if (!scroll) { held->why = "the scroll event cannot be created"; return SP_INPUT_REJECTED; }
-        // 원본 없는 이벤트는 실제 수정 키 상태를 물려받는다. 포인터 입력은 수정 키를 받지 않으므로 비운다.
+        // An event without a source inherits the real modifier key state. Pointer input takes no modifier keys, so the state is cleared.
         CGEventSetFlags(scroll, 0);
         NSPoint screen = [window convertPointToScreen:point];
         CGFloat top = NSMaxY(NSScreen.screens.firstObject.frame);
@@ -111,7 +112,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
         NSEvent *event = [NSEvent eventWithCGEvent:scroll];
         CFRelease(scroll);
         if (event.window != window) { held->why = "the scroll event has another window"; return SP_INPUT_REJECTED; }
-        // 실제 휠 이벤트는 앱의 이벤트 모니터가 표면 좌표계 단위로 바꾼다. sendEvent 는 모니터를 거치지 않는다.
+        // The event monitor of the application converts a real wheel event to surface coordinate units. sendEvent does not pass through the monitor.
         [window sendEvent:webviewScrollInViewUnits(event, hitView(window, point))];
         return SP_INPUT_DELIVERED;
     }
@@ -122,10 +123,10 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
         held->why = "the target view left the window";
         return SP_INPUT_REJECTED;
     }
-    // WebKit 은 마우스 이벤트의 눌린 버튼을 이벤트가 아니라 +[NSEvent pressedMouseButtons] 로 읽는다.
-    // AppKit 이 눌린 버튼을 보고하는 동안의 누름과 뗌은 WebKit 에서 pointerdown 이나 pointerup 대신
-    // pointermove 로 처리될 수 있으므로 전달하지 않고 알린다. 이 상태만으로 버튼 상태의 원인은 알 수 없으므로
-    // 거부한 같은 차례에 mask 와 최전면 애플리케이션을 측정해 함께 알린다.
+    // WebKit reads the pressed buttons of a mouse event from +[NSEvent pressedMouseButtons], not from the event.
+    // While AppKit reports a pressed button, WebKit can handle a press and a release as pointermove instead of pointerdown
+    // or pointerup, so they are not delivered and the rejection is reported. This state alone does not identify the cause
+    // of the button state, so the mask and the frontmost application are measured in the same rejected turn and reported together.
     NSUInteger buttons = NSEvent.pressedMouseButtons;
     if ((phase == 1 || phase == 3) && buttons != 0) {
         held->buttons = buttons;
@@ -136,12 +137,12 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
     BOOL right = button == 1;
     switch (phase) {
         case 1:
-            // 열린 누름은 전달된 뗌이 끝낸다. 거부된 뗌은 누름을 열어 두므로 다음 누름은 그 사실을 알린다.
+            // A delivered release ends an open press. A rejected release leaves the press open, so the next press reports that fact.
             if (objc_getAssociatedObject(window, pressedViewKey(button))) { held->why = "a press of this button is still open"; return SP_INPUT_PRESS_OPEN; }
             objc_setAssociatedObject(window, pressedViewKey(button), hit, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            // -[NSWindow sendEvent:] 는 누른 뷰가 받을 수 있으면 첫 응답자로 만든 뒤 누름을 전달한다.
-            // 이 경로는 뷰에 직접 전달하므로 같은 순서를 따른다. 호스트의 표면 웹뷰는 누름만으로
-            // 첫 응답자가 되지 않는다(e2e/shell.test.mjs). 창이나 앱을 활성화하지 않는다.
+            // -[NSWindow sendEvent:] makes the pressed view the first responder if it accepts, and then delivers the press.
+            // This path delivers directly to the view, so it follows the same order. The surface web view of the host does not
+            // become the first responder on a press alone (e2e/shell.test.mjs). The window and the application are not activated.
             if (hit != window.firstResponder && hit.acceptsFirstResponder) [window makeFirstResponder:hit];
             if (right) [hit rightMouseDown:mouseEvent(window, NSEventTypeRightMouseDown, point, 1, 1)];
             else [hit mouseDown:mouseEvent(window, NSEventTypeLeftMouseDown, point, 1, 1)];
@@ -161,7 +162,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
     }
 }
 
-// 주입한 입력의 결과 이름.
+// Name of the result of the injected input.
 static const char *resultName(sp_input_result result) {
     switch (result) {
         case SP_INPUT_DELIVERED: return "delivered";
@@ -174,7 +175,7 @@ static const char *resultName(sp_input_result result) {
     return "unknown";
 }
 
-// 주입한 포인터 입력 하나를 인자, 결과, 거부 이유와 함께 기록한다. 호출자가 결과를 받는 모든 경로가 쓴다.
+// Records one injected pointer input with its arguments, result, and rejection reason. Every path by which the caller receives a result uses it.
 static void logPointer(double x, double y, int phase, int button, double deltaX, double deltaY,
     sp_input_result result, const char *why) {
     NSString *text = [NSString stringWithFormat:
@@ -191,7 +192,7 @@ sp_input_result sp_input_pointer(void *handle, double x, double y, int phase, in
     return result;
 }
 
-// done 을 호출하고 held 의 참조를 놓는다. held 는 result 가 SP_INPUT_BUTTON_HELD 일 때만 보고한다.
+// Calls done and releases the reference of held. held is reported only when result is SP_INPUT_BUTTON_HELD.
 static void heldDone(sp_input_done done, void *context, sp_input_result result, SPHeld held) {
     if (result != SP_INPUT_BUTTON_HELD) {
         [held.front release];
@@ -207,7 +208,7 @@ static void heldDone(sp_input_done done, void *context, sp_input_result result, 
     [held.front release];
 }
 
-// 입력을 전달하고 결과를 곧바로 done 으로 알린다.
+// Delivers the input and reports the result to done immediately.
 static void pointerNow(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
     sp_input_done done, void *context) {
     SPHeld held = {0, nil, ""};
@@ -216,7 +217,7 @@ static void pointerNow(void *handle, double x, double y, int phase, int button, 
     heldDone(done, context, result, held);
 }
 
-// 좌표에서 이벤트를 받는 가장 안쪽 웹뷰.
+// Innermost web view that receives the event at the coordinates.
 static WKWebView *webViewAt(NSWindow *window, double x, double y) {
     NSView *view = hitView(window, windowPoint(window, x, y));
     while (view && ![view isKindOfClass:WKWebView.class]) view = view.superview;
@@ -230,8 +231,8 @@ void sp_input_pointer_then(void *handle, double x, double y, int phase, int butt
     while (pressed && ![pressed isKindOfClass:WKWebView.class]) pressed = pressed.superview;
     WKWebView *target = (WKWebView *)pressed;
     if (phase == 4 && target) {
-        // 새 문서의 스크롤 트리가 표시되기 전에 받은 휠 이벤트는 문서를 움직이지 않는다. 대상 웹뷰가 현재
-        // 상태를 표시한 뒤 전달한다. 제한 시간 안에 표시하지 않으면 전달하지 않고 알린다.
+        // A wheel event received before the scroll tree of a new document is rendered does not move the document. The event is
+        // delivered after the target web view has rendered its current state. When it does not render within the timeout, the event is not delivered and the failure is reported.
         __block BOOL finished = NO;
         [target _doAfterNextPresentationUpdate:^{
             if (finished) return;
@@ -254,8 +255,8 @@ void sp_input_pointer_then(void *handle, double x, double y, int phase, int butt
         pointerNow(handle, x, y, phase, button, deltaX, deltaY, done, context);
         return;
     }
-    // 문서가 pointerdown 이나 pointerup 을 받은 뒤 완료한다. 받은 뒤 WebKit 의 대기 중인 마우스 처리를
-    // 기다리므로, 뗌이 만드는 click 도 다음 요청보다 먼저 처리된다.
+    // Completes after the document has received pointerdown or pointerup. After receipt, it waits for the pending mouse
+    // handling of WebKit, so the click that a release creates is also processed before the next request.
     __block sp_input_result result = SP_INPUT_REJECTED;
     __block SPHeld held = {0, nil, "the press or release was not sent"};
     webviewInputSendThen(target, phase == 3 ? @"pointerup" : @"pointerdown", timeoutSeconds, ^BOOL {
@@ -276,9 +277,10 @@ static void collectVisibleWebViews(NSView *view, NSMutableArray<WKWebView *> *fo
     for (NSView *child in view.subviews) collectVisibleWebViews(child, found, visible);
 }
 
-// 창 안의 모든 웹뷰가 활성 상태를 웹 프로세스에 보낸 뒤 done 을 호출한다. WebKit 은 키 창 알림을
-// 받으면 활성 상태 전송을 예약하고, _doAfterActivityStateUpdate: 는 예약된 전송이 끝난 뒤(예약이
-// 없으면 즉시) 호출된다. 알림의 다른 관찰자가 모두 실행된 뒤 등록하도록 다음 메인 큐 차례에서 등록한다.
+// Calls done after every web view in the window has sent its activity state to the web process. When WebKit receives
+// the key window notification, it schedules the activity state transmission, and _doAfterActivityStateUpdate: is called
+// after the scheduled transmission finishes (immediately when none is scheduled). The registration is made in the next
+// main queue turn so that it runs after every other observer of the notification has run.
 static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitForAll, void (^done)(void)) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (target) {
@@ -324,18 +326,18 @@ static void activateWindow(NSWindow *window, WKWebView *target, BOOL waitForAll,
         stopWaiting();
         report(done, context, result);
     };
-    // 웹뷰가 활성 상태를 보낸 뒤에도 활성 상태인지 확인한다. 그 사이 다른 앱이나 창이 초점을 가져갈 수 있다.
+    // Checks that the window is still active after the web view sent its activity state. Another application or window can take focus in between.
     void (^applied)(void) = ^{
         finish(NSApp.isActive && window.isKeyWindow ? SP_ACTIVATE_DONE : SP_ACTIVATE_LOST);
     };
-    // 키 창 알림과 앱 활성 알림의 순서는 정해져 있지 않으므로 두 알림에서 모두 확인한다.
+    // The order of the key window notification and the application activation notification is not defined, so the check runs on both notifications.
     void (^check)(void) = ^{
         if (!waiting || !NSApp.isActive || !window.isKeyWindow) return;
         stopWaiting();
         afterWebViewsActive(window, target, waitForAll, applied);
     };
-    // 시스템은 활성화 요청을 거절할 수 있고(macOS 14 협조적 활성화), 활성화 직후 사용자가 다른 앱으로
-    // 포커스를 옮길 수도 있다. 제한 시간은 활성화와 웹뷰 상태 전송 전체에 적용해 멈춘 단계를 반드시 보고한다.
+    // The system can refuse an activation request (cooperative activation in macOS 14), and the user can move focus to
+    // another application right after activation. The timeout applies to the whole of activation and web view state transmission, so the stage at which it stopped is always reported.
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)),
         dispatch_get_main_queue(), ^{
             if (!waiting) finish(SP_ACTIVATE_PENDING);
@@ -366,7 +368,7 @@ void sp_input_activate_at(void *handle, double x, double y, double timeoutSecond
 
 typedef struct { const char *name; unsigned short code; } SPKey;
 
-// 이름 있는 키의 macOS 키 코드. 문자는 AppKit 이 키 코드와 현재 입력 소스로 계산한다.
+// macOS key code of a named key. AppKit derives a character from the key code and the current input source.
 static const SPKey keys[] = {
     {"Enter", 36}, {"Tab", 48}, {"Escape", 53}, {"Backspace", 51},
     {"Delete", 117}, {"Space", 49},
@@ -376,10 +378,10 @@ static const SPKey keys[] = {
     {"PageUp", 116}, {"PageDown", 121},
 };
 
-// 문자만 담은 NSEvent에는 물리 키 정체성이 없다. NSTextInputContext가 현재
-// 키보드 입력 소스를 적용하려면 키 코드가 필요하며, 한글 조합도 여기에
-// 포함된다. 아래 코드는 endpoint가 지정한 문자를 macOS ANSI 키보드 위치로
-// 변환하며, 알 수 없는 문자는 추측한 코드로 바꾸지 않고 거부한다.
+// An NSEvent that carries only a character has no physical key identity. NSTextInputContext needs a key code to
+// apply the current keyboard input source, and Korean composition is included. The code below converts the
+// character specified by the endpoint to a macOS ANSI keyboard position, and rejects an unknown character instead of
+// replacing it with a guessed code.
 static unsigned short characterKeyCode(unichar character) {
     static const char *letters = "abcdefghijklmnopqrstuvwxyz";
     static const unsigned short letterCodes[] = {0, 11, 8, 2, 14, 3, 5, 4, 34, 38, 40, 37, 46, 45, 31, 35, 12, 15, 1, 17, 32, 9, 13, 7, 16, 6};
@@ -420,8 +422,8 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
     NSString *characters = text ? [NSString stringWithUTF8String:text] : nil;
     NSEvent *event = nil;
     if (!text) {
-        // AppKit이 물리 키와 현재 입력 소스로부터 문자를 계산하게 한다. 이름 있는 키도 같다.
-        // 호출자의 문자를 직접 넣은 이벤트는 입력기를 거치지 않는다(조합 중 Backspace 등).
+        // AppKit derives the character from the physical key and the current input source. The same applies to a named key.
+        // An event with a character inserted directly from the caller does not pass through the input method (for example Backspace during composition).
         CGEventRef raw = CGEventCreateKeyboardEvent(NULL, code, down);
         if (raw) {
             CGEventSetFlags(raw, cgFlags(modifiers));
@@ -437,18 +439,18 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
             isARepeat:NO keyCode:code];
     }
     if (!event) { *why = "the key event cannot be created"; return SP_INPUT_REJECTED; }
-    // 사람의 키는 키 창에만 간다. 다른 창이 키 창이면 대상 창에 전달하지 않고 알린다.
+    // A human key goes only to the key window. When another window is the key window, the key is not delivered to the target window and the rejection is reported.
     NSWindow *keyWindow = NSApp.keyWindow;
     if (keyWindow && keyWindow != window) { *why = "another window is the key window"; return SP_INPUT_INACTIVE; }
-    // 대상 창이 키 창이면 사람의 키와 같이 -[NSApplication sendEvent:] 로 분배한다. 메뉴의 키 대응(Command+C,
-    // Command+V)도 AppKit 이 판단한다. 키 창이 없는 비활성 애플리케이션에는 사람의 키가 오지 않으므로, 창을
-    // 활성화하지 않는 검사를 위해 대상 창에 보낸다.
+    // When the target window is the key window, the key is dispatched with -[NSApplication sendEvent:] like a human key.
+    // AppKit also decides the menu key equivalents (Command+C, Command+V). An inactive application with no key window
+    // receives no human key, so the key is sent to the target window for checks that do not activate the window.
     if (keyWindow == window) [NSApp sendEvent:event];
     else [window sendEvent:event];
     return SP_INPUT_DELIVERED;
 }
 
-// text 의 JSON 문자열. text 가 NULL 이면 null 이다.
+// JSON string of text; null when text is NULL.
 static NSString *jsonText(const char *text) {
     if (!text) return @"null";
     NSData *data = [NSJSONSerialization dataWithJSONObject:[NSString stringWithUTF8String:text]

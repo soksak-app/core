@@ -1,6 +1,6 @@
-// 네이티브 입력 주입이 앱을 활성화하지 않고 웹뷰에 신뢰 이벤트로 도달하는지 검사한다.
+// Checks that native input injection reaches the web view as a trusted event without activating the application.
 //
-// 창은 일반 NSWindow 이며 키 창 상태를 흉내 내지 않는다. 실제 애플리케이션 창과 같은 조건이다.
+// The window is an ordinary NSWindow and does not imitate the key window state. This is the same condition as a real application window.
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
 #import "support/records.h"
@@ -10,8 +10,8 @@
 static int failures = 0;
 static NSString *lastEvaluationScript = nil;
 
-// 실제 포인터가 창 위에 있으면 AppKit 과 WebKit 이 그 이동도 처리하므로 검사 이벤트에 섞인다.
-// 창을 포인터에서 떨어진 곳에 두고, 측정 동안 포인터가 창에 들어오면 측정을 무효로 보고한다.
+// When the real pointer is over the window, AppKit and WebKit also process its moves, which mix into the test events.
+// The window is placed away from the pointer, and if the pointer enters the window during the measurement, the measurement is reported invalid.
 static void pointerOutside(NSWindow *window) {
     if (!NSPointInRect(NSEvent.mouseLocation, window.frame)) return;
     fprintf(stderr, "FAIL: the pointer is over the test window, so its movements reach the page too; "
@@ -84,7 +84,7 @@ static void received(void *context, sp_input_result result, const sp_input_held 
     SPReceipt *receipt = context;
     receipt->result = result;
     receipt->held = held != NULL;
-    // 완료 시점에 문서가 받은 누름과 뗌의 수. 메인 스레드에서 동기적으로 읽는다.
+    // The numbers of presses and releases that the document received at completion time. Read synchronously on the main thread.
     receipt->seen = [evaluate(receipt->view, @"probe.events.filter(e=>e.type==='pointerdown'||e.type==='pointerup').length") unsignedIntegerValue];
     receipt->done = YES;
 }
@@ -106,7 +106,7 @@ static SPReceipt pointerThen(NSWindow *window, WKWebView *view, double x, double
     return receipt;
 }
 
-// 누름과 뗌의 완료가 문서의 수신 뒤에 불리는지 검사한다. 수신은 페이지가 볼 수 없는 content world 가 알린다.
+// Checks that the completion of a press and release is called after the document receives them. A content world that the page cannot see reports the receipt.
 static void checkReceipts(void) {
     NSWindow *window = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(300, 200))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
@@ -119,7 +119,7 @@ static void checkReceipts(void) {
     until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
     [window orderBack:nil];
 
-    // 등록하지 않은 웹뷰는 수신을 알리지 않으므로 전달 즉시 완료한다.
+    // An unregistered web view does not report receipt, so the completion is immediate on delivery.
     SPReceipt unregistered = pointerThen(window, view, 50, 50, 1, 5);
     check(unregistered.result == SP_INPUT_DELIVERED, @"a press into an unregistered webview completes when it is delivered");
     pointerThen(window, view, 50, 50, 3, 5);
@@ -138,7 +138,7 @@ static void checkReceipts(void) {
     check(up.result == SP_INPUT_DELIVERED && up.seen == 2,
         [NSString stringWithFormat:@"a release completes after the document received it (%d, %lu events)", up.result, (unsigned long)up.seen]);
 
-    // 바쁜 문서는 끝난 뒤에 누름을 받으므로 완료도 그 뒤다.
+    // A busy document receives the press after it finishes, so the completion is also after that.
     [view evaluateJavaScript:@"{const end=Date.now()+1000; while(Date.now()<end){}} null" completionHandler:nil];
     SPTimed late = {NO, SP_INPUT_REJECTED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *lateState = &late;
@@ -148,7 +148,7 @@ static void checkReceipts(void) {
         [NSString stringWithFormat:@"a press completes only after a busy document is free to receive it (%d after %.3fs)", late.result, late.took]);
     pointerThen(window, view, 50, 50, 3, 5);
 
-    // 문서가 바쁘면 수신이 늦어지고, 제한 시간이 지나면 받지 않은 것으로 알린다.
+    // When the document is busy the receipt is late, and when the time limit passes it is reported as not received.
     [view evaluateJavaScript:@"{const end=Date.now()+2500; while(Date.now()<end){}} null" completionHandler:nil];
     SPTimed busy = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *busyState = &busy;
@@ -161,7 +161,7 @@ static void checkReceipts(void) {
     [window close];
 }
 
-// 끌기와 뗌은 좌표 아래의 다른 뷰가 아니라 누름을 받은 뷰로 전달해야 한다.
+// A drag and a release must be delivered to the view that received the press, not to another view under the coordinates.
 @interface SPPointerTarget : NSView
 @property(nonatomic) NSUInteger downs;
 @property(nonatomic) NSUInteger drags;
@@ -228,8 +228,8 @@ static void checkIndependentWindowKeys(void) {
     second.contentView = secondView;
     NSString *html = @"<input id='field'><script>window.keys=[];"
         "addEventListener('keydown',e=>keys.push(e.key),true);</script>";
-    // 둘째 창은 받은 키를 200 ms 늦게 기록한다. WebContent 는 전달된 키를 비동기로 처리하므로, 검사는 그 처리를
-    // 기다린 뒤에 판정해야 한다. 이 지연은 부하로 늦어진 처리를 재현한다.
+    // The second window records the received key 200 ms late. WebContent processes delivered keys asynchronously, so the check must
+    // wait for that processing before judging. This delay reproduces processing delayed by load.
     NSString *late = @"<input id='field'><script>window.keys=[];"
         "addEventListener('keydown',e=>{const key=e.key;setTimeout(()=>keys.push(key),200);},true);</script>";
     [firstView loadHTMLString:html baseURL:nil];
@@ -254,7 +254,7 @@ static void checkIndependentWindowKeys(void) {
     until(^BOOL { return [[evaluate(firstView, @"document.getElementById('field').value") description] isEqual:@"a"]; });
     check([evaluate(firstView, @"document.getElementById('field').value") isEqual:@"a"],
         @"the first window keeps its input");
-    // 두 창이 키를 처리할 때까지 기다린 뒤 판정하고, 받은 키를 남긴다.
+    // Waits until both windows have processed the key, then judges, and keeps the received key.
     until(^BOOL { return [evaluate(secondView, @"keys.length") integerValue] > 0; });
     NSArray *firstKeys = evaluate(firstView, @"keys");
     NSArray *secondKeys = evaluate(secondView, @"keys");
@@ -359,8 +359,8 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"keys reach the focused field in a window that is not key: %@", keysSeen]);
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], @"text input reaches the field");
 
-    // focus 된 입력은 WebKit 작업을 queue 에 남길 수 있다. 다음 네이티브 클릭은
-    // 여전히 down 을 up 보다 먼저 전달하고 DOM click 을 정확히 하나 합성해야 한다.
+    // Focused input can leave WebKit work in the queue. The next native click must
+    // still deliver down before up and synthesize exactly one DOM click.
     SPReceipt buttonDown = pointerThen(window, view, 50, 50, 1, 5);
     SPReceipt buttonUp = pointerThen(window, view, 50, 50, 3, 5);
     check(buttonDown.result == SP_INPUT_DELIVERED && buttonUp.result == SP_INPUT_DELIVERED,
@@ -369,12 +369,12 @@ int main(void) { @autoreleasepool {
     check([evaluate(view, @"window.buttonClicks") unsignedIntegerValue] == 1,
         @"a click after keyboard input synthesizes one DOM click");
 
-    // 창 안의 다른 웹뷰를 누르면 AppKit 과 같이 그 웹뷰가 키 입력을 받는다.
+    // When another web view in the window is pressed, that web view receives key input as in AppKit.
     WKWebView *child = [[WKWebView alloc] initWithFrame:NSMakeRect(220, 0, 180, 50)];
     [view addSubview:child];
     [child loadHTMLString:@"<!doctype html><input id='other' style='width:160px'><script>window.ready=true</script>" baseURL:nil];
     until(^BOOL { return [evaluate(child, @"Boolean(window.ready)") boolValue]; });
-    // WKWebView 는 뒤집힌 좌표계라 하위 뷰의 frame 이 곧 콘텐츠 영역 왼쪽 위 기준이다.
+    // WKWebView has a flipped coordinate system, so the frame of a subview is relative to the top left of the content area.
     check(sp_input_pointer(window, 300, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 300, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
         @"child webview click delivered");
     drain(child);
@@ -383,7 +383,7 @@ int main(void) { @autoreleasepool {
     NSString *childActiveElement = [evaluate(child, @"document.activeElement && document.activeElement.id") description];
     check([childActiveElement isEqual:@"other"],
         [NSString stringWithFormat:@"child page remains responsive and focuses its input after click (got %@)", childActiveElement]);
-    // 자식 웹뷰의 포커스 라우팅 검사에서는 입력 소스 변환 없이 영문 b를 명시한다.
+    // In the focus routing check of the child web view, English b is specified without input source conversion.
     check((sp_input_key(window, "b", "b", 0, true) == SP_INPUT_DELIVERED) && (sp_input_key(window, "b", "b", 0, false) == SP_INPUT_DELIVERED), @"key after child click accepted");
     until(^BOOL { return [[evaluate(child, @"document.getElementById('other').value") description] isEqual:@"b"]; });
     check([evaluate(child, @"document.getElementById('other').value") isEqual:@"b"], @"keys reach the pressed webview");

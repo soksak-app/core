@@ -1,6 +1,6 @@
-// 표시 대기가 단일 앱 DOM만 기다리는지 검사한다. 다른 웹뷰는 출처와 표시 여부에 관계없이
-// 독립적으로 렌더링하며, 바쁜 문서가 앱 DOM의 네이티브 배치를 막지 않아야 한다.
-// 애플리케이션을 활성화하지 않는다.
+// Checks that the display wait waits only for the single app DOM. Other webviews render independently, regardless of
+// origin and visibility, and a busy document must not block the native layout of the app DOM. The check does not
+// activate the application.
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
@@ -19,7 +19,7 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// 콜백 타임아웃으로 프로세스가 종료돼도 녹화 파일을 남기지 않는다.
+// Leaves no recording file even if the process is terminated by a callback timeout.
 static NSString *compositionDirectory;
 static void cleanupCompositionRecording(void) {
     if (compositionDirectory == nil) return;
@@ -38,7 +38,7 @@ static void until(BOOL (^done)(void)) {
     if (!done()) { fprintf(stderr, "FAIL: WebKit did not answer within 10 seconds\n"); exit(1); }
 }
 
-// 요청한 주소마다 같은 빈 문서를 돌려준다. 주소의 호스트가 출처를 정한다.
+// Returns the same empty document for every requested address. The host of the address sets the origin.
 @interface SPPageScheme : NSObject <WKURLSchemeHandler>
 @end
 @implementation SPPageScheme
@@ -53,7 +53,7 @@ static void until(BOOL (^done)(void)) {
 - (void)webView:(WKWebView *)view stopURLSchemeTask:(id<WKURLSchemeTask>)task {}
 @end
 
-// 바쁜 스크립트가 시작했다는 메시지를 받는다.
+// Receives the message that the busy script has started.
 @interface SPBusySignal : NSObject <WKScriptMessageHandler>
 @property BOOL started;
 @end
@@ -63,7 +63,7 @@ static void until(BOOL (^done)(void)) {
 }
 @end
 
-// 화면 갱신을 정해진 수만큼 센다.
+// Counts a fixed number of display refreshes.
 @interface SPFrames : NSObject
 @property int left;
 - (void)tick:(CADisplayLink *)link;
@@ -82,8 +82,9 @@ static void waitFrames(NSScreen *screen, int count) {
     until(^BOOL { return frames.left == 0; });
 }
 
-// 창의 배치 트랜잭션이 열린 동안 끝난 표시는 대기를 끝내지 않는다. 트랜잭션을 연 요청보다 새 요청이
-// 트랜잭션을 연장하면 이전 요청의 확정은 실패하고, 대기는 새 요청이 확정된 뒤에 끝난다.
+// A display that finishes while the layout transaction of the window is open does not end the wait. If a newer
+// request extends the transaction that an earlier request opened, the commit of the earlier request fails, and the
+// wait ends after the newer request commits.
 static void checkSettledWaitsForLayout(NSWindow *window, WKWebView *main) {
     __block int order = 0;
     __block int settledAt = 0;
@@ -103,7 +104,7 @@ static void checkSettledWaitsForLayout(NSWindow *window, WKWebView *main) {
             settledAt, committedAt]);
 }
 
-// 문서 불러오기가 끝나면 알린다.
+// Notifies when the document load finishes.
 @interface SPLoaded : NSObject <WKNavigationDelegate>
 @property BOOL finished;
 @end
@@ -122,8 +123,8 @@ static WKWebView *page(NSWindow *window, WKWebViewConfiguration *configuration, 
     return view;
 }
 
-// 실제 DOM 경계와 네이티브 영역의 합성은 준비 중에도 양쪽 경계를 보존해야 한다.
-// 표시 확인 뒤 커밋을 제어해 진행 중 트랜잭션의 프레임도 녹화한다.
+// The composition of the real DOM bounds and the native region must keep both bounds during preparation. Controls the
+// commit after the display confirmation and also records the frames of the transaction in progress.
 static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 400, 200)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
@@ -247,8 +248,9 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
 
 typedef struct { NSTimeInterval took; BOOL beforeRelease; double requested; double finished; double displayed; } SPWait;
 
-// busy 의 웹 프로세스를 붙잡은 뒤 메인 웹뷰 크기를 바꾸고, 표시 대기가 끝날 때까지의 시간과 그 대기가
-// busy 의 스크립트가 끝나기 전에 끝났는지 반환한다. 순서로 판정하므로 기계 부하와 무관하다.
+// Holds the web process of busy, resizes the main webview, and returns the time until the display wait ends and
+// whether that wait ended before the script of busy ended. The result is decided by order, so it does not depend on
+// machine load.
 static SPWait waitWhileBusy(WKWebView *main, WKWebView *busy, SPBusySignal *signal) {
     signal.started = NO;
     __block BOOL released = NO;
@@ -265,7 +267,7 @@ static SPWait waitWhileBusy(WKWebView *main, WKWebView *busy, SPBusySignal *sign
     __block NSTimeInterval took = 0;
     __block double displayed = 0;
     __block double finished = 0;
-    // 요청·완료·표시 시각은 모두 같은 시계(CACurrentMediaTime)로 잰다.
+    // The request, completion, and display times are all measured with the same clock (CACurrentMediaTime).
     double requested = CACurrentMediaTime() * 1000;
     surfaceLayoutAfterSettled(main, ^(double at, const char *error) {
         check(error == NULL, @"a displayed frame has no DOM error");
@@ -292,7 +294,7 @@ int main(void) { @autoreleasepool {
     WKWebViewConfiguration *configuration = [[WKWebViewConfiguration new] autorelease];
     [configuration setURLSchemeHandler:scheme forURLScheme:@"sptest"];
     [configuration.userContentController addScriptMessageHandler:signal name:@"busy"];
-    // 웹뷰마다 웹 프로세스를 따로 쓰도록 출처가 같은 문서도 별도 구성으로 만든다.
+    // Creates documents of the same origin as separate configurations so that each webview uses its own web process.
     WKWebView *main = page(window, configuration, NSMakeRect(0, 0, 200, 300), @"sptest://app/main");
     WKWebView *sameOrigin = page(window, [[configuration copy] autorelease], NSMakeRect(200, 0, 200, 300), @"sptest://app/document");
     WKWebView *external = page(window, [[configuration copy] autorelease], NSMakeRect(400, 0, 200, 300), @"sptest://external/page");
@@ -304,8 +306,9 @@ int main(void) { @autoreleasepool {
     checkRecordedComposition([[configuration copy] autorelease]);
     checkSettledWaitsForLayout(window, main);
 
-    // 열린 트랜잭션에서도 웹 프로세스의 새 배치 확인이 완료되어야 커밋 전에 기다릴 수 있다.
-    // 진단 추적은 이 트랜잭션의 시작, 앱 DOM 표시 확인, 커밋 시각을 녹화 프레임과 같은 시계로 남긴다.
+    // In an open transaction, the new layout confirmation of the web process must also complete before the wait can
+    // occur before the commit. The diagnostic trace records the start of this transaction, the app DOM display
+    // confirmation, and the commit time on the same clock as the recorded frames.
     surfaceLayoutTraceStart();
     double traceBegan = CACurrentMediaTime() * 1000;
     __block BOOL prepared = NO;
@@ -346,9 +349,10 @@ int main(void) { @autoreleasepool {
     SPWait visibleWait = waitWhileBusy(main, sameOrigin, signal);
     check(visibleWait.beforeRelease,
         [NSString stringWithFormat:@"a same-origin document does not own the app DOM presentation wait (%.3fs)", visibleWait.took]);
-    // 표시 시각은 요청보다 늦고, 대기를 마친 시점에서 한 번의 화면 갱신 안이다.
-    // 표시 시각은 디스플레이 링크 틱의 목표 시각이다. 메인 스레드가 늦으면 틱이 목표 시각을 지나서
-    // 도착하므로 표시 시각이 완료 시각보다 앞설 수 있다. 완료보다 늦다는 것은 약속이 아니다.
+    // The display time is later than the request and within one display refresh of the moment the wait ended. The
+    // display time is the target time of a display link tick. If the main thread is late, the tick arrives after its
+    // target time, so the display time can precede the completion time. Being later than the completion is not
+    // guaranteed.
     check(visibleWait.displayed > visibleWait.requested && visibleWait.displayed < visibleWait.finished + 100,
         [NSString stringWithFormat:@"the wait reports the display time of the presented frame (requested %.1fms, finished %.1fms, displayed %.1fms)",
             visibleWait.requested, visibleWait.finished, visibleWait.displayed]);

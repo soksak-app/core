@@ -1,4 +1,4 @@
-// 호스트가 공개하는 창 상태(host.window, host.screens, host.dock)의 네이티브 값을 읽는다.
+// Reads the native values of the window state that the host publishes (host.window, host.screens, host.dock).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
@@ -17,13 +17,16 @@ bool sp_window_set_main_webview(void *handle, void *mainHandle) {
     if (!window || ![main isKindOfClass:WKWebView.class] || main.window != window) return false;
     NSValue *registered = objc_getAssociatedObject(window, &mainWebviewKey);
     if (registered && registered.nonretainedObjectValue != main) return false;
-    // 배치 표시는 이 웹뷰의 다음 표시를 기다리므로 이 웹뷰는 화면 갱신 주기로 렌더링해야 한다.
+    // The layout indicator waits for the next presentation of this web view, so this web view must
+    // render at the display refresh rate.
     if (!registered && !surfaceLayoutRenderAtDisplayRate(main)) return false;
-    // 같은 이유로 창이 가려져도 문서를 숨기지 않는다. WebKit 은 가려진 창의 문서를 숨기고 animation frame 을
-    // 멈추므로, 가려진 창의 배치 표시와 그 표시를 기다리는 명령이 끝나지 않는다.
+    // For the same reason the document is not hidden when the window is occluded. WebKit hides the document
+    // of an occluded window and stops animation frames, so the layout indicator of an occluded window and
+    // the commands that wait for it would not finish.
     if (![main respondsToSelector:@selector(_setWindowOcclusionDetectionEnabled:)]) return false;
     main._windowOcclusionDetectionEnabled = NO;
-    // 다시 읽기와 page 변경이 이전 문서를 남기지 않도록 main frame 의 새 문서를 새 프로세스에서 연다.
+    // Open the new document of the main frame in a new process so that a reload and a page change do
+    // not keep the previous document.
     if (!sp_webview_replace_documents_in_new_process(main)) return false;
     objc_setAssociatedObject(window, &mainWebviewKey, [NSValue valueWithNonretainedObject:main], OBJC_ASSOCIATION_RETAIN);
     return true;
@@ -61,8 +64,8 @@ static NSDictionary *screenRect(NSRect rect) {
         @"width": @(rect.size.width), @"height": @(rect.size.height) };
 }
 
-// 창 기준 좌표(왼쪽 아래 원점)의 사각형을 콘텐츠 영역 왼쪽 위 기준으로 바꾼다. 콘텐츠 뷰는
-// 창 기준 좌표의 원점에 있다.
+// Converts a rectangle in window base coordinates (origin at the bottom left) to coordinates relative to
+// the top left of the content area. The content view is at the origin of the window base coordinates.
 static NSDictionary *windowRect(NSWindow *window, NSRect base) {
     CGFloat height = window.contentView.frame.size.height;
     return @{ @"x": @(base.origin.x), @"y": @(height - NSMaxY(base)),
@@ -70,7 +73,7 @@ static NSDictionary *windowRect(NSWindow *window, NSRect base) {
 }
 
 static void collectWebViews(NSView *view, NSMutableArray<WKWebView *> *found) {
-    // 부모가 자식보다 먼저 그려지고, 같은 부모의 하위 뷰는 뒤의 것이 위에 그려진다.
+    // A parent is drawn before its children, and among the subviews of one parent a later one is drawn above.
     if ([view isKindOfClass:WKWebView.class]) [found addObject:(WKWebView *)view];
     for (NSView *child in view.subviews) collectWebViews(child, found);
 }
@@ -113,7 +116,7 @@ char *sp_window_facts(void *handle) {
         row[@"view"] = @((unsigned long long)(uintptr_t)view);
         row[@"hidden"] = @(view.isHiddenOrHasHiddenAncestor);
         row[@"focused"] = @(webviewFocused(view));
-        // drawsBackground 는 비공개 KVC 키다. docs/operations/private-native-apis.md 참고.
+        // drawsBackground is a private KVC key. See docs/operations/private-native-apis.md.
         row[@"draws"] = [view valueForKey:@"drawsBackground"];
         row[@"alpha"] = @(view.underPageBackgroundColor.alphaComponent);
         row[@"main"] = @((BOOL)(view == mainWebview(window)));
@@ -126,8 +129,9 @@ char *sp_window_facts(void *handle) {
         [webviews addObject:row];
         [row release];
     }
-    // 첫 응답자와 그것을 담은 웹뷰. 키보드 입력이 어디로 가는지 보고한다.
-    // surface 는 첫 응답자를 담은 표면 뷰이며 nativeSurfaces 의 view 와 같은 기준이다.
+    // The first responder and the web view that contains it. Reports where keyboard input goes.
+    // surface is the surface view that contains the first responder and uses the same reference as
+    // view of nativeSurfaces.
     NSResponder *first = window.firstResponder;
     NSView *owner = [first isKindOfClass:NSView.class] ? (NSView *)first : nil;
     while (owner && ![owner isKindOfClass:WKWebView.class]) owner = owner.superview;
@@ -149,16 +153,18 @@ char *sp_window_facts(void *handle) {
         @"pointer": @{ @"x": @(NSEvent.mouseLocation.x), @"y": @(primaryTop() - NSEvent.mouseLocation.y) },
         @"content": @{ @"width": @(content.bounds.size.width), @"height": @(content.bounds.size.height) },
         @"scale": @(window.backingScaleFactor),
-        // 창이 어느 화면에도 놓이지 않으면 재생률을 정할 수 없으므로 null 이다.
+        // The refresh rate cannot be determined when the window is on no screen, so it is null.
         @"refreshRate": window.screen ? (id)@(window.screen.maximumFramesPerSecond) : (id)NSNull.null,
         @"key": @(window.isKeyWindow),
         @"zoomed": @(window.isZoomed),
         @"active": @(NSApp.isActive),
-        // 다른 창에 완전히 가려진 창은 WebKit 이 그리기를 늦추므로 표시 측정의 조건이다.
+        // WebKit delays drawing of a window that other windows fully cover, which is a condition
+        // of the presentation measurement.
         @"occluded": @((BOOL)((window.occlusionState & NSWindowOcclusionStateVisible) == 0)),
         @"children": @(window.childWindows.count),
-        // 앱 페이지를 그리는 WebContent 프로세스. 페이지 프로세스가 아직 없으면 0 이다(WKWebView 비공개 속성,
-        // docs/operations/private-native-apis.md).
+        // WebContent process that draws the app page. It is 0 while the page process does not
+        // exist yet (private
+        // WKWebView property, docs/operations/private-native-apis.md).
         @"pageProcess": @(mainWebview(window) ? mainWebview(window)._webProcessIdentifier : 0),
         @"controls": controls,
         @"webviews": webviews,
@@ -211,7 +217,7 @@ static NSMenu *dockMenu(void) {
     return [delegate respondsToSelector:@selector(applicationDockMenu:)] ? [delegate applicationDockMenu:NSApp] : nil;
 }
 
-// 메뉴 항목의 단축키. 단축키가 없으면 빈 문자열이다.
+// Shortcut of a menu item. It is an empty string when the item has no shortcut.
 static NSString *menuKey(NSMenuItem *item) {
     if (item.keyEquivalent.length == 0) return @"";
     NSEventModifierFlags mask = item.keyEquivalentModifierMask;
@@ -224,9 +230,10 @@ static NSString *menuKey(NSMenuItem *item) {
     return key;
 }
 
-// 시스템 선호 언어의 주 태그(예: "ko", "ja"). 어떤 언어가 지원되는지는 호출자의 표가 정하고
-// 표에 없으면 호출자가 기본 언어를 쓴다. 반환값은 sp_facts_free 로 해제한다. 페이지가 설정 언어를
-// 보내기 전의 초기 메뉴가 시스템 언어를 따르게 한다(docs/spec/host-contract.md 의 Application menu).
+// Primary tag of the preferred system language (for example "ko", "ja"). The caller's table decides which
+// languages are supported, and the caller uses the default language when the tag is not in the table. Free the
+// return value with sp_facts_free. It makes the initial menu, before the page sends the settings language,
+// follow the system language (Application menu in docs/spec/host-contract.md).
 char *sp_preferred_language(void) {
     NSArray<NSString *> *languages = [[NSUserDefaults standardUserDefaults] stringArrayForKey:@"AppleLanguages"];
     NSString *first = languages.firstObject ?: NSLocale.preferredLanguages.firstObject;
@@ -240,8 +247,8 @@ char *sp_menu_items(void) {
     NSMutableArray *menus = [NSMutableArray array];
     for (NSMenuItem *top in NSApp.mainMenu.itemArray) {
         NSMutableArray *items = [NSMutableArray array];
-        // AppKit 은 메뉴를 처음 열 때야 시스템 항목(예: 전체 화면 시작)을 늦게 넣는다.
-        // 열기 전의 항목 배열은 불완전하므로 update 로 확정한 뒤 읽는다.
+        // AppKit adds system items (for example, start full screen) late, only when the menu is first opened.
+        // The item array before opening is incomplete, so read it after confirming it with update.
         [top.submenu update];
         for (NSMenuItem *item in top.submenu.itemArray) {
             if (item.isSeparatorItem) continue;
@@ -264,9 +271,9 @@ bool sp_menu_select(const char *menu, const char *title) {
         if (index < 0) return false;
         NSMenuItem *item = [top.submenu itemAtIndex:index];
         if (!item.action) return false;
-        // performActionForItemAtIndex: 는 이 시스템에서 행위를 실행 루프로 미루므로(V5-108)
-        // 동등한 동기 형식으로 항목을 고른다. 대상이 없으면 응답자 사슬을 지나며, 전달
-        // 여부를 그대로 돌려준다.
+        // performActionForItemAtIndex: defers the action to the run loop on this system (V5-108), so choose
+        // the item with the equivalent synchronous form. Without a target it passes through the responder
+        // chain and returns whether the action was delivered.
         return [NSApp sendAction:item.action to:item.target from:item];
     }
     return false;
@@ -274,7 +281,8 @@ bool sp_menu_select(const char *menu, const char *title) {
 
 void *sp_app_main_window(void) {
     if (NSApp.mainWindow) return NSApp.mainWindow;
-    // 한 번도 활성화되지 않은 애플리케이션에는 주 창이 없다. 그때는 가장 앞의 보이는 창이다.
+    // An application that was never activated has no main window. In that case it is the frontmost
+    // visible window.
     for (NSWindow *window in NSApp.orderedWindows) {
         if (window.isVisible && window.canBecomeMainWindow) return window;
     }
@@ -295,7 +303,8 @@ bool sp_dock_select(const char *title) {
     return true;
 }
 
-// 창 하나의 가림 상태 관찰. 창의 연결 객체로 두어 창과 함께 해제되며 그때 관찰을 끝낸다.
+// Observation of the occlusion state of one window. It is an associated object of the window, so it is
+// released with the window, which ends the observation.
 @interface SPOcclusionObserver : NSObject
 @property(nonatomic, retain) id token;
 @end

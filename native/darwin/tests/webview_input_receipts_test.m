@@ -1,4 +1,4 @@
-// 등록과 수신 완료의 필수 마우스 처리 API 부재를 경계에서 주입한다.
+// Injects, at the boundary, the absence of the mouse handling APIs that registration and receipt completion require.
 #import <Cocoa/Cocoa.h>
 #import "webview_input.h"
 #import "support/records.h"
@@ -20,7 +20,8 @@ static void until(BOOL (^condition)(void)) {
 @property(nonatomic) BOOL missingDrain;
 @property(nonatomic) BOOL missingIgnore;
 @property(nonatomic) NSUInteger drains;
-// hold 이면 drain 콜백을 바로 실행하지 않고 held 에 보관한다. 시험이 원하는 시점에 실행한다.
+// If hold is set, does not run the drain callback immediately and keeps it in held. The test runs it at the moment it
+// chooses.
 @property(nonatomic) BOOL hold;
 @property(nonatomic, copy) void (^held)(void);
 @end
@@ -37,7 +38,7 @@ static void until(BOOL (^condition)(void)) {
 }
 @end
 
-// 별도 content world에서 수신 메시지를 주입한다. 실제 신뢰 입력 순서는 input_inject_test가 검증한다.
+// Injects a received message in a separate content world. input_inject_test verifies the real trusted input order.
 static void postReceipt(SPReceiptView *view) {
     [view evaluateJavaScript:@"webkit.messageHandlers.soksakInputReceipt.postMessage('pointerdown'); null"
         inFrame:nil inContentWorld:[WKContentWorld worldWithName:@"soksak-input"]
@@ -90,7 +91,7 @@ int main(void) { @autoreleasepool {
     }, ^(BOOL value) { received=value; completed++; });
     until(^BOOL { return completed > 0; });
     check(received && completed == 1 && view.drains == 2, @"successful receipt completes after the second drain");
-    // 전송이 거부되면 대기를 실패로 끝내고 그 이유를 기록한다.
+    // If sending is rejected, ends the wait as a failure and records the reason.
     view.hold=NO; view.held=nil; completed=0; received=YES;
     NSString *refusedSend = capturedRecords(^{
         webviewInputSendThen(view, @"pointerdown", 1, ^BOOL { return NO; }, ^(BOOL value) { received=value; completed++; });
@@ -98,7 +99,8 @@ int main(void) { @autoreleasepool {
     });
     check(!received && completed == 1 && [refusedSend containsString:@" error native webview input: send of pointerdown was refused"],
         [NSString stringWithFormat:@"a refused send ends the wait and is recorded (got %@)", refusedSend]);
-    // 전송 전 drain 이 끝나기 전에 대기가 시간 초과로 끝나면 늦은 drain 은 보내지 않고 다시 완료하지 않는다.
+    // If the wait times out before the drain before sending ends, the late drain is not sent and does not complete
+    // again.
     view.hold=YES; view.held=nil; completed=0; received=YES; sent=0;
     NSString *timedOut = capturedRecords(^{
         webviewInputSendThen(view, @"pointerdown", 0.05, ^BOOL { sent++; return NO; },
@@ -112,7 +114,7 @@ int main(void) { @autoreleasepool {
     check(sent == 0 && completed == 1 && !received,
         [NSString stringWithFormat:@"a timed-out wait cancels its held pre-send drain (sent %lu, completed %lu)",
             (unsigned long)sent, (unsigned long)completed]);
-    // 등록 해제가 대기를 끝내면 늦은 drain 도 보내지 않고 다시 완료하지 않는다.
+    // If unregistering ends the wait, the late drain is not sent and does not complete again.
     view.held=nil; completed=0; received=YES; sent=0;
     webviewInputSendThen(view, @"pointerdown", 10, ^BOOL { sent++; return NO; },
         ^(BOOL value) { received=value; completed++; });

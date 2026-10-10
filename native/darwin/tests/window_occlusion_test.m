@@ -1,7 +1,7 @@
-// 등록한 주 웹뷰와 붙인 표면 웹뷰는 창이 가려져도 문서를 숨기지 않고 animation frame 을 계속 실행하는지 검사한다.
-// 배치 표시와 프로젝트 명령은 주 웹뷰의 다음 표시를 기다리고, 표면의 캡처와 그림 확인은 표면의 렌더링을
-// 기다리므로 가려진 창에서도 끝나야 한다.
-// 애플리케이션을 활성화하지 않는다.
+// Checks that the registered main webview and the attached surface webviews keep running animation frames without
+// hiding the document even when the window is occluded. Layout display and project commands wait for the next display
+// of the main webview, and capture and drawing confirmation of a surface wait for the rendering of the surface, so
+// they must finish in an occluded window too. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "window_facts.h"
@@ -15,7 +15,7 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// 창 서버의 가림 상태 변경은 AppKit 이벤트로 도착한다. 애플리케이션 활성화 이벤트는 꺼내지 않는다.
+// Occlusion state changes of the window server arrive as AppKit events. Application activation events are not taken.
 static void pump(void) {
     NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAppKitDefined untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02]
         inMode:NSDefaultRunLoopMode dequeue:NO];
@@ -50,7 +50,7 @@ static NSString *visibility(WKWebView *view) {
     return [result autorelease];
 }
 
-// 문서에서 animation frame 하나를 기다린다. 5초 안에 오지 않으면 nil 이다.
+// Waits for one animation frame in the document. It is nil if none arrives within 5 seconds.
 static NSString *animationFrame(WKWebView *view) {
     __block NSString *frame = nil;
     [view callAsyncJavaScript:@"return await new Promise((resolve) => requestAnimationFrame(() => resolve('frame')));"
@@ -62,7 +62,7 @@ static NSString *animationFrame(WKWebView *view) {
     return [frame autorelease];
 }
 
-// WebKit 이 창의 가림 상태를 웹 프로세스의 activity state 로 반영한 뒤에 돌아온다.
+// Returns after WebKit has reflected the occlusion state of the window in the activity state of the web process.
 static void afterActivityState(WKWebView *view) {
     __block BOOL done = NO;
     [view _doAfterActivityStateUpdate:^{ done = YES; }];
@@ -101,7 +101,8 @@ int main(void) { @autoreleasepool {
     check([visibility(main) isEqualToString:@"visible"], @"the uncovered document is visible");
     check([visibility(surface) isEqualToString:@"visible"], @"the uncovered surface document is visible");
 
-    // AppKit 은 제목 막대가 있는 창을 Dock 과 메뉴 막대 밖으로 옮기므로, 가림 창은 실제 창 위치를 덮는다.
+    // AppKit moves a window with a title bar out of the Dock and menu bar areas, so the occluding window covers the
+    // real window position.
     NSWindow *cover = [[[NSWindow alloc] initWithContentRect:NSInsetRect(window.frame, -40, -40)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO] autorelease];
     [cover setReleasedWhenClosed:NO];

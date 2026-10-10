@@ -625,7 +625,7 @@
   - [o] F104.1 — P2: 영어 주석 규칙을 검사한다. 2026-10-08에 완료했다. `findKoreanComments`는 `packages/soksak`을 포함한 source 파일에서 한글을 담은 주석 줄을 각각 보고하고, 문자열과 생성 폴더는 빼놓는다. 이전 검사는 `packages/soksak` 밖의 영어 주석을 보고했다. `scripts/test/comment-language.test.mjs`가 5개 중 5개 통과한다. F104.2부터 F104.6까지 주석을 다시 쓰면 이 검사가 저장소 전체에서 실행된다.
   - [ ] F104.2 — P2: `packages/host`의 주석을 영어로 다시 쓴다.
   - [ ] F104.3 — P2: `packages/workbench`의 주석을 영어로 다시 쓴다.
-  - [ ] F104.4 — P2: `native/darwin`의 주석을 영어로 다시 쓴다.
+  - [o] F104.4 — P2: `native/darwin`의 주석을 영어로 다시 쓴다. 2026-10-11에 완료했다. `native/darwin`(`src`, `tests`, `Makefile`)의 95개 파일에서 한글을 담은 주석 1,327줄이 영어가 되었고, `node scripts/check-comment-language.mjs`가 `native/darwin`에 대해 0줄을 보고한다. 각 파일을 이전 내용과 주석을 뺀 채 비교하면 코드가 같고, `make -C native/darwin all`과 모든 native 시험 실행 파일의 빌드가 성공한다. 틀린 주석 세 개를 고쳤다(`document_view.m`의 `applyInsets` 주석은 문장 중간에서 끝났고, `sp_region_facts`는 `malloc()` 복사본을 정적 버퍼라고 적었고, `appearance.h`의 주석은 `bool dark`를 요청한 이름이라고 적었다).
   - [ ] F104.5 — P2: `packages/sok`, `packages/plugin-api`, `packages/window-check`, `packages/client`, `apps`의 주석을 영어로 다시 쓴다.
     - [o] F104.5.1 — P2: `apps`의 주석을 영어로 다시 쓴다. 2026-10-11에 완료했다. `apps`의 한글 주석 135줄이 영어이고, `scripts/check-comment-language.mjs`가 보고하는 줄이 없으며, 주석 줄만 바뀌었다. `packages/sok`, `packages/plugin-api`, `packages/window-check`, `packages/client`가 남는다.
   - [~] F104.6 — P2: `e2e`, `scripts`, Makefile과 나머지 파일의 주석을 영어로 다시 쓰고, `pnpm test`에서 저장소 전체 검사를 실행한다.

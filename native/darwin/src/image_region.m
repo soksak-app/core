@@ -1,7 +1,7 @@
-// 표면 위에 놓인 그림 영역.
+// An image region placed on a surface.
 //
-// IOSurface 는 계층의 contents 에 직접 붙여진다. 레이어는 장치 픽셀 좌표를 쓰므로
-// 레이어 배율은 한 단위가 덮는 장치 픽셀 수다. 포인터는 통과한다(hitTest → nil).
+// The IOSurface is attached directly to the contents of the layer. The layer uses device pixel coordinates, so
+// the layer scale is the number of device pixels that one unit covers. The pointer passes through (hitTest → nil).
 
 #import <Carbon/Carbon.h>
 #import <Cocoa/Cocoa.h>
@@ -25,17 +25,17 @@
 }
 @end
 
-// 그림 영역 구현.
+// Image region implementation.
 @interface SPImageRegion : NSTextView
 @property sp_region_event event;
 @property void *context;
 @property(retain) CALayer *imageLayer;
-@property(assign) CGImageRef snapshot;   // 호스트가 복사해 소유하는 불변 표시 스냅샷.
+@property(assign) CGImageRef snapshot;   // The immutable presentation snapshot that the host copies and owns.
 @property size_t presentedWidth;
 @property size_t presentedHeight;
 @property double presentedScale;
 @property(copy) NSString *presentationError;
-@property(assign) NSView *webSurface;  // 논리 표면 뷰. 우리가 소유하지 않음.
+@property(assign) NSView *webSurface;  // The logical surface view. Not owned by this object.
 @property NSEdgeInsets insets;
 @property NSPoint caretPos;
 @property double caretWidth;
@@ -46,10 +46,10 @@
 @property BOOL placed;
 @property BOOL closed;
 @property BOOL hasFocus;
-@property(copy) NSString *reportedPreedit;  // 마지막으로 보고한 조합 문자열.
-@property NSUInteger committedLength;       // 문서 앞에서 이미 insert 로 확정한 길이.
-@property(copy) NSString *unhandledKey;     // 입력기에 먼저 준 특수 키의 보고. 입력기가 처리하지 않으면 보고한다.
-@property NSUInteger reports;               // 보낸 보고의 수. 입력 컨텍스트가 키에 답했는지 확인한다.
+@property(copy) NSString *reportedPreedit;  // The composition string reported last.
+@property NSUInteger committedLength;       // The length from the document start already committed by insert.
+@property(copy) NSString *unhandledKey;     // The report of a special key given to the input method first. Reported if the input method does not handle it.
+@property NSUInteger reports;               // The number of reports sent. Used to check whether the input context answered a key.
 - (void)applyInsets;
 - (void)applyInsetsInTransaction;
 - (void)applyInsetsNow;
@@ -64,8 +64,8 @@
 - (void)observeSurface:(NSView *)surface;
 @end
 
-// 논리 표면 geometry 는 surface host 가 소유한다. Weak import 는 그 소유자가
-// 링크된 동안에도 기존 WKWebView 테스트 표면을 사용할 수 있게 한다.
+// The logical surface geometry is owned by the surface host. The weak import allows the existing WKWebView test
+// surface to be used even while that owner is linked.
 extern double sp_surface_scale(void *surface) __attribute__((weak_import));
 extern void *sp_surface_main_webview(void *surface) __attribute__((weak_import));
 extern void *sp_surface_native_plane(void *surface) __attribute__((weak_import));
@@ -113,8 +113,9 @@ static NSString *controlCharacterForANSIKeyCode(unsigned short keyCode) {
     }
 }
 
-// 숫자 키패드 키의 이름. 키패드가 아닌 키는 nil 이다. 응용 키패드 모드(ESC =)의 인코딩은 사이드카가 정하므로
-// 키패드 키는 입력기를 거치지 않고 이름으로 보고한다.
+// The name of a numeric keypad key. It is nil for a key that is not on the keypad. The sidecar decides the encoding
+// of the application keypad mode (ESC =),
+// so a keypad key is reported by name without passing through the input method.
 static NSString *keypadKeyName(unsigned short keyCode) {
     switch (keyCode) {
         case 82: return @"Keypad0";
@@ -138,18 +139,19 @@ static NSString *keypadKeyName(unsigned short keyCode) {
     }
 }
 
-// 한글 자모(U+1100–U+11FF, U+3130–U+318F, U+A960–U+A97F, U+D7B0–U+D7FF)나 음절(U+AC00–U+D7A3)이면 YES.
+// YES for a Hangul jamo (U+1100–U+11FF, U+3130–U+318F, U+A960–U+A97F, U+D7B0–U+D7FF) or a syllable (U+AC00–U+D7A3).
 static BOOL isHangul(unichar ch) {
     return (ch >= 0x1100 && ch <= 0x11FF) || (ch >= 0x3130 && ch <= 0x318F) || (ch >= 0xA960 && ch <= 0xA97F)
         || (ch >= 0xAC00 && ch <= 0xD7A3) || (ch >= 0xD7B0 && ch <= 0xD7FF);
 }
 
-// 살아 있는 그림 영역의 등록부(약 참조). 닫힌 영역은 dealloc 되면서 사라진다. 모든 영역 조작은
-// 메인 스레드다.
+// The registry of live image regions (weak references). A closed region disappears when it is deallocated. Every
+// region operation is
+// on the main thread.
 static NSHashTable *spLiveRegions = nil;
 
-// 눌림 이벤트의 지점이 같은 창의 어느 살아 있는 그림 영역 안인가? 그 영역을 반환한다(자기 자신
-// 포함, 없으면 nil). 마우스 눌림의 지점만 따진다.
+// Is the point of a press event inside a live image region of the same window? Returns that region (including the
+// region itself, nil if none). Only the point of a mouse press is considered.
 static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSEvent *event = NSApp.currentEvent;
     if (!event || event.window != view.window) return nil;
@@ -193,7 +195,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     };
     self.richText = NO;
     self.allowsUndo = NO;
-    // 입력기가 넣은 문자열만 문서에 둔다. AppKit 의 자동 편집은 터미널 입력을 바꾸므로 끈다.
+    // Only the string that the input method inserted is kept in the document. The automatic editing of AppKit changes
+    // terminal input, so it is turned off.
     self.automaticQuoteSubstitutionEnabled = NO;
     self.automaticDashSubstitutionEnabled = NO;
     self.automaticTextReplacementEnabled = NO;
@@ -220,8 +223,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     self.imageLayer = [[[CALayer alloc] init] autorelease];
     [self.layer addSublayer:self.imageLayer];
     self.imageLayer.contentsScale = 1;
-    // 래스터 픽셀은 늘리거나 줄이지 않는다. 새 기하와 일치하는 래스터가 준비된 뒤
-    // 바깥 표면 트랜잭션이 DOM과 함께 화면에 반영한다.
+    // Raster pixels are neither enlarged nor reduced. After a raster that matches the new geometry is ready,
+    // the outer surface transaction shows it on screen together with the DOM.
     self.imageLayer.contentsGravity = kCAGravityTopLeft;
     self.imageLayer.magnificationFilter = kCAFilterNearest;
     self.snapshot = NULL;
@@ -232,7 +235,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [NSNotificationCenter.defaultCenter removeObserver:self];
     [_reportedPreedit release];
     [_unhandledKey release];
-    // 레이어의 contents 를 정리한 후 불변 스냅샷을 해제한다.
+    // Releases the immutable snapshot after the contents of the layer are cleared.
     self.imageLayer.contents = nil;
     if (_snapshot) CGImageRelease(_snapshot);
     [_imageLayer release];
@@ -249,8 +252,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     return nil;
 }
 
-// NSTextView 는 updateTrackingAreas 에서 I-빔 커서 추적 영역을 다시 만든다.
-// 이 뷰는 포인터 적중 대상이 아니므로 그 영역을 제거하고 페이지의 커서를 유지한다.
+// NSTextView recreates the I-beam cursor tracking area in updateTrackingAreas.
+// This view is not a pointer hit target, so that area is removed and the cursor of the page is kept.
 - (void)updateTrackingAreas {
     [super updateTrackingAreas];
     for (NSTrackingArea *area in [[self.trackingAreas copy] autorelease]) {
@@ -259,8 +262,9 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 
-// Edit 메뉴의 붙여넣기는 페이지에 알려 선언된 붙여넣기 명령을 실행하게 한다. NSTextView 의 붙여넣기는 입력기의
-// 작업 공간인 입력 문서에 넣으므로 쓰지 않는다(docs/spec/terminal-runtime.md).
+// The Paste of the Edit menu notifies the page so that it runs the declared paste command. The paste of NSTextView
+// puts the text into the input document,
+// which is the workspace of the input method, so it is not used (docs/spec/terminal-runtime.md).
 - (void)paste:(id)sender {
     [self report:"{\"type\":\"action\",\"name\":\"paste\"}"];
 }
@@ -269,13 +273,14 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [self paste:sender];
 }
 
-// Edit 메뉴의 복사는 페이지의 복사 명령을 실행하게 한다. 명령은 사이드카가 가진 터미널 선택을 복사한다.
-// NSTextView 의 복사는 입력 문서의 선택을 쓰며, 빈 선택이면 페이스트보드를 비운다.
+// The Copy of the Edit menu makes the page run its copy command. The command copies the terminal selection that the
+// sidecar holds.
+// The copy of NSTextView uses the selection of the input document and clears the pasteboard for an empty selection.
 - (void)copy:(id)sender {
     [self report:"{\"type\":\"action\",\"name\":\"copy\"}"];
 }
 
-// 입력 문서를 편집하는 Edit 동작은 터미널 내용과 관계없으므로 끈다.
+// The Edit actions that edit the input document are turned off because they are unrelated to the terminal content.
 - (BOOL)validateUserInterfaceItem:(id<NSValidatedUserInterfaceItem>)item {
     SEL action = item.action;
     if (action == @selector(paste:) || action == @selector(pasteAsPlainText:) || action == @selector(copy:)) return YES;
@@ -287,7 +292,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     return [self validateUserInterfaceItem:item];
 }
 
-// 서비스 메뉴가 입력 문서를 읽거나 바꾸지 않게 한다. 입력 문서는 입력기의 작업 공간이며 터미널 내용이 아니다.
+// Keeps the Services menu from reading or changing the input document. The input document is the workspace of the
+// input method, not the terminal content.
 - (id)validRequestorForSendType:(NSPasteboardType)sendType returnType:(NSPasteboardType)returnType {
     return nil;
 }
@@ -307,13 +313,13 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSRect surfaceBounds = nativePlane.bounds;
     NSEdgeInsets insets = self.insets;
 
-    // 표면 geometry 는 AppKit point 로 표현한다. Backing scale 은 image layer 와
-    // raster 크기에 속하며, 영역 frame 이나 inset 좌표에는 속하지 않는다.
+    // The surface geometry is expressed in AppKit points. The backing scale belongs to the image layer and
+    // the raster size, not to the region frame or inset coordinates.
     // coordinates.
     CGFloat width = NSWidth(surfaceBounds) - (insets.left + insets.right);
     CGFloat height = NSHeight(surfaceBounds) - (insets.top + insets.bottom);
 
-    // 클립 뷰 위치: 표면의 superview 좌표계에서 계산
+    // Clip view position: computed in the coordinate system of the superview of the surface
     CGFloat clipX = NSMinX(surfaceBounds) + insets.left;
     CGFloat clipTop = insets.top;
     CGFloat clipY = nativePlane.isFlipped ? NSMinY(surfaceBounds) + clipTop : NSMaxY(surfaceBounds) - clipTop - height;
@@ -321,15 +327,16 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSRect clipFrame = NSMakeRect(clipX, clipY, MAX(width, 0), MAX(height, 0));
     clipView.frame = clipFrame;
 
-    // 영역 뷰는 클립 뷰 안에서 bounds를 차지한다. 기하 변경은 드래그 중 매 프레임
-    // 발생하므로 Core Animation이 이전 위치와 새 위치를 보간해서는 안 된다.
+    // The region view occupies its bounds inside the clip view. Geometry changes occur on every frame
+    // during a drag, so Core Animation must not interpolate between the old and new positions.
     self.frame = NSMakeRect(0, 0, MAX(width, 0), MAX(height, 0));
     self.imageLayer.frame = self.bounds;
     [self updateContentsScale];
 
-    // 표면의 숨김은 부모 뷰 계층이 처리한다. 자식 영역까지 그 상태를 자체 hidden
-    // 플래그에 저장하면, 표면을 다시 표시해도 applyInsets가 다시 호출되지 않는
-    // 전환에서 영역이 영구히 숨겨진다.
+    // The hiding of the surface is handled by the parent view hierarchy. If the child region also stored that state
+    // in its own hidden
+    // flag, the region would stay hidden permanently in a transition where showing the surface again
+    // does not call applyInsets again.
     self.hidden = !self.wanted || width < 1 || height < 1;
 }
 
@@ -340,7 +347,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [CATransaction commit];
 }
 
-// 준비 기하를 적용한다. 이 변경의 표시는 바깥 표면 트랜잭션이 소유한다.
+// Applies the prepared geometry. The outer surface transaction owns the presentation of this change.
 - (void)applyInsets {
     [self applyInsetsNow];
 }
@@ -373,9 +380,10 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [self observeSurface:clipView && clipView.superview ? clipView.superview : nil];
 }
 
-// 레이어 한 단위가 덮는 장치 픽셀 수. 표면을 담은 뷰 계층은 bounds 배율을 따로 가질 수 있으므로
-// (Wails 의 웹뷰 컨테이너는 한 단위가 0.5pt 다) 점 단위를 가정하지 않고 AppKit 에 묻는다.
-// 이 값을 contentsScale 로 두면 그림의 한 픽셀이 장치 한 픽셀로 표시된다.
+// The number of device pixels that one layer unit covers. The view hierarchy that holds the surface can have its own
+// bounds scale
+// (the webview container of one host has 0.5pt per unit), so AppKit is asked instead of assuming point units.
+// Setting this value as contentsScale presents one pixel of the image as one device pixel.
 - (CGFloat)backingPixelsPerUnit {
     NSRect bounds = self.bounds;
     if (NSWidth(bounds) <= 0) return 0;
@@ -434,9 +442,12 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     if (result && self.hasFocus) {
         SPImageRegion *pressed = spRegionUnderPress(self);
         if (pressed == self) {
-            // 눌림 통과로 웹뷰가 첫 응답자가 된 동안 초점 보고를 하지 않는다. 보고가 없으면 페이지의
-            // 포커스 명령도 이미 초점이 있다고 믿고 무연산으로 돌아가므로, 이 뷰가 응답자를 직접
-            // 되찾는다. 키보드 입력이 페이지로 색지 않도록 같은 이벤트 처리 뒤 즉시 실행한다.
+            // While the press passthrough makes the webview the first responder, no focus report is sent. Without a
+            // report, the focus
+            // command of the page also believes focus is already there and returns as a no-op, so this view takes the
+            // responder back
+            // itself. It runs right after the same event handling so that keyboard input is not delivered to the
+            // page.
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (!self.closed && self.window && self.window.firstResponder != self && self.hasFocus) {
                     [self.window makeFirstResponder:self];
@@ -445,10 +456,12 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
             return result;
         }
         if (pressed != nil) {
-            // 눌림이 다른 그림 영역 안이다 — 초점은 이 영역에서 그 영역으로 옮겨가는 실제 전환이다.
-            // 상실을 보고하고 응답자를 눌린 영역에게 넘긴다. 페이지 웹뷰가 응답자를 가진 창이
-            // 남으면 페이지가 키보드 초점을 얻어 activeElement 인 브라우저 주소창에 focus 가
-            // 재발화된다(V5-114). 같은 이벤트 처리 뒤 즉시 넘긴다.
+            // The press is inside another image region, so the focus moves for real from this region to that region.
+            // It reports the loss and hands the responder to the pressed region. If a window remains whose responder
+            // is
+            // the page webview, the page gets keyboard focus and focus fires again on the address bar that is the
+            // activeElement
+            // (V5-114). It hands over right after the same event handling.
             self.hasFocus = NO;
             [self report:"{\"type\":\"focus\",\"focused\":false}"];
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -472,19 +485,19 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         event.keyCode, [self jsonEscapedString:event.characters ?: @""],
         [self jsonEscapedString:event.charactersIgnoringModifiers ?: @""], (unsigned long)event.modifierFlags,
         event.isARepeat ? @"true" : @"false", event.timestamp] before:nil];
-    // Command 조합은 보고하지 않고 메뉴에 넘긴다.
+    // A Command combination is not reported but handed to the menu.
     if (event.modifierFlags & NSEventModifierFlagCommand) {
         [super keyDown:event];
         return;
     }
 
-    // NSTextView 가 AppKit 입력기 이벤트와 조합 상태의 수명주기를 소유한다.
+    // NSTextView owns the lifecycle of the AppKit input method events and the composition state.
     if ([self hasMarkedText]) {
         [super keyDown:event];
         return;
     }
 
-    // 특수 키 또는 Ctrl/Option 조합인지 확인한다.
+    // Checks whether the key is a special key or a Ctrl/Option combination.
     NSString *characters = event.charactersIgnoringModifiers;
     if (characters.length == 0) {
         [super keyDown:event];
@@ -507,11 +520,11 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         return;
     }
 
-    // 특수 키 판정 - function keys와 특정 문자 코드
+    // Special key decision: function keys and specific character codes
     BOOL isSpecialKey = NO;
     NSString *keyName = nil;
 
-    // 기능 키
+    // Function keys
     if (ch == NSUpArrowFunctionKey) {
         isSpecialKey = YES;
         keyName = @"Up";
@@ -536,7 +549,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     } else if (ch == NSPageDownFunctionKey) {
         isSpecialKey = YES;
         keyName = @"PageDown";
-    } else if (ch == NSDeleteFunctionKey) {  // 앞으로 지우기
+    } else if (ch == NSDeleteFunctionKey) {  // forward delete
         isSpecialKey = YES;
         keyName = @"Delete";
     } else if (ch == NSInsertFunctionKey) {
@@ -547,7 +560,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         NSUInteger fNum = ch - NSF1FunctionKey + 1;
         keyName = [NSString stringWithFormat:@"F%lu", (unsigned long)fNum];
     }
-    // 특정 문자들
+    // Specific characters
     else if (ch == '\r' || ch == NSEnterCharacter) {
         isSpecialKey = YES;
         keyName = @"Enter";
@@ -565,13 +578,13 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         keyName = @"Escape";
     }
 
-    // 특수 키이거나 Ctrl/Option 조합인 경우 key 이벤트를 보고한다.
+    // A special key or a Ctrl/Option combination reports a key event.
     if (isSpecialKey || hasCtrlOrOption) {
         BOOL shift = (flags & NSEventModifierFlagShift) != 0;
         BOOL alt = (flags & NSEventModifierFlagOption) != 0;
         BOOL ctrl = (flags & NSEventModifierFlagControl) != 0;
 
-        // BackTab은 shift:true로 보고한다.
+        // BackTab is reported as shift:true.
         if (ch == NSBackTabCharacter) {
             shift = YES;
         }
@@ -584,7 +597,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
                 alt ? "true" : "false",
                 ctrl ? "true" : "false"];
         } else {
-            // Ctrl/Option 조합 문자
+            // Ctrl/Option combination character
             NSString *keyCharacter = (flags & NSEventModifierFlagControl)
                 ? controlCharacterForANSIKeyCode(event.keyCode)
                 : nil;
@@ -607,9 +620,11 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
                 alt ? "true" : "false",
                 ctrl ? "true" : "false"];
         }
-        // 입력기가 아직 고칠 수 있는 문자열이 있으면 특수 키를 먼저 입력기에 준다(예: 조합 중 Backspace 는
-        // 한 → 하). 입력기가 키를 처리하지 않으면 AppKit 이 그 키의 명령을 요청하며, 그때 남은 문자열을
-        // 확정하고 원래 키를 보고한다(doCommandBySelector:).
+        // If the input method still has a string it can revise, the special key is given to the input method first
+        // (for example, Backspace
+        // during composition turns a syllable with a final consonant into one without it). If the input method does
+        // not handle the key, AppKit requests the command of that key, and
+        // then the remaining string is committed and the original key is reported (doCommandBySelector:).
         if (isSpecialKey && !hasCtrlOrOption && self.textStorage.length > self.committedLength) {
             self.unhandledKey = json;
             [super keyDown:event];
@@ -621,8 +636,10 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         return;
     }
 
-    // 일반 문자는 입력기로 넘긴다. 입력기는 활성 애플리케이션의 키 창에만 답한다. 애플리케이션이 한 번
-    // 활성화된 뒤에는 입력 컨텍스트가 그 밖의 창에 온 키를 받고도 문자를 넣지 않으므로, 답이 없으면 오류로 알린다.
+    // A normal character is passed to the input method. The input method answers only the key window of the active
+    // application. After the
+    // application has been activated once, the input context receives a key sent to another window but inserts no
+    // character, so no answer is reported as an error.
     NSUInteger before = self.reports;
     [super keyDown:event];
     if (self.reports == before && !(NSApp.isActive && self.window.isKeyWindow)) {
@@ -641,7 +658,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [self logInput:@"doCommandBySelector" fields:[NSString stringWithFormat:@"\"selector\":\"%@\",\"unhandledKey\":\"%@\"%@",
         [self jsonEscapedString:NSStringFromSelector(selector)], [self jsonEscapedString:self.unhandledKey ?: @""],
         dropped ? @",\"dropped\":\"noop\"" : @""] before:nil];
-    // 입력기가 처리하지 않은 특수 키는 명령이 아니라 원래 키로 보고한다.
+    // A special key that the input method did not handle is reported as the original key, not as a command.
     NSString *key = [[self.unhandledKey retain] autorelease];
     if (key) {
         self.unhandledKey = nil;
@@ -649,11 +666,11 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         [self report:key.UTF8String];
         return;
     }
-    // AppKit의 표준 키 바인딩은 아무 동작도 하지 않는 입력에 noop:을 보낸다.
-    // 이를 사이드카에 전달하면 키 입력이 아닌 selector가 터미널 오류가 된다.
+    // The standard key bindings of AppKit send noop: for input that performs no action.
+    // Passing it to the sidecar would make a selector that is not a key input a terminal error.
     if (selector == @selector(noop:)) return;
-    // NSTextInputClient 명령은 입력 스트림의 일부다. 이를 버리면 cancel, delete,
-    // accept 같은 IME 동작이 사라진다.
+    // NSTextInputClient commands are part of the input stream. Discarding them would lose IME actions
+    // such as cancel, delete, and accept.
     [self commitPending];
     NSString *name = NSStringFromSelector(selector);
     NSString *json = [NSString stringWithFormat:@"{\"type\":\"command\",\"selector\":\"%@\"}",
@@ -661,12 +678,17 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [self report:json.UTF8String];
 }
 
-// 입력기는 이전에 넣은 문자열을 교체 범위로 고쳐 쓸 수 있다(예: macOS 한국어 입력기의 ㅎ → 하 → 한).
-// 입력기는 조합 중인 음절의 문서 위치를 기억하므로, 조합하는 입력 소스가 선택된 동안 입력기가 넣은
-// 문자열은 확정한 뒤에도 문서에 남긴다. 새로 넣은 문자열의 시작보다 앞은 입력기가 더 고치지 않으므로
-// insert 로 확정하고, 그 뒤는 조합 문자열로 보고한다. 한국어 입력기는 한글만 조합하므로, 이 입력기가 넣은
-// 문자열이 한글 아닌 문자로 끝나면(예: 음절 뒤의 공백이나 숫자) 입력기가 더 고치지 않으므로 바로 확정한다.
-// 문서는 입력기의 조합을 끝낼 때 비운다.
+// The input method can rewrite a string it inserted earlier by using a replacement range (for example, the macOS
+// Korean input method composes a syllable in steps).
+// The input method remembers the document position of the syllable being composed, so while an input source that
+// composes is selected, the string the input method inserted
+// stays in the document even after it is committed. The input method no longer revises the part before the start of
+// the newly inserted string, so that part is
+// committed by insert, and the rest is reported as the composition string. The Korean input method composes only
+// Hangul, so when the string it inserted
+// ends with a non-Hangul character (for example, a space or digit after a syllable), the input method no longer
+// revises it and it is committed at once.
+// The document is cleared when the composition of the input method ends.
 - (void)insertText:(id)string replacementRange:(NSRange)range {
     NSString *text = [string isKindOfClass:NSAttributedString.class]
         ? [(NSAttributedString *)string string]
@@ -687,7 +709,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 // enters the document, and what the document holds is committed or reported as preedit.
 - (void)performInsertText:(id)string text:(NSString *)text range:(NSRange)range {
     if (range.location != NSNotFound && range.location < self.committedLength) {
-        // 이미 PTY 로 보낸 문자열은 되돌릴 수 없다. 교체를 버리지 않고 오류로 알린다.
+        // A string already sent to the PTY cannot be undone. The replacement is reported as an error instead of being
+        // discarded.
         NSString *reason = [NSString stringWithFormat:@"input method replaced committed text at %lu (committed %lu)",
             (unsigned long)range.location, (unsigned long)self.committedLength];
         sp_log_error("input method", [NSString stringWithFormat:@"%@: text \"%@\" replacement %@ state %@", reason,
@@ -739,7 +762,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [self logInput:@"unmarkText" fields:@"" before:before];
 }
 
-// 선택된 입력 소스가 입력기인지 확인한다. 자판(keyboard layout)은 넣은 문자열을 고쳐 쓰지 않는다.
+// Checks whether the selected input source is an input method. A keyboard layout does not rewrite the strings it
+// inserted.
 - (BOOL)selectedSourceComposes {
     NSString *identifier = self.inputContext.selectedKeyboardInputSource;
     if (!identifier) return NO;
@@ -754,13 +778,16 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     return composes;
 }
 
-// 선택된 입력 소스가 macOS 한국어 입력기이면 YES. 이 입력기는 한글 자모와 음절만 조합하며, 교체 범위로
-// 조합하는 동안 조합이 끝났다는 콜백을 보내지 않는다(음절 뒤 Space 는 음절 재확정 뒤 insert(" ") 이다).
+// YES if the selected input source is the macOS Korean input method. This input method composes only Hangul jamo and
+// syllables, and while composing by replacement range
+// it sends no callback that the composition ended (a Space after a syllable is insert(" ") after the syllable is
+// committed again).
 - (BOOL)selectedSourceComposesOnlyHangul {
     return [self.inputContext.selectedKeyboardInputSource hasPrefix:@"com.apple.inputmethod.Korean."];
 }
 
-// 문서의 확정 위치부터 end 까지를 확정 입력으로 보고한다. 문서는 바꾸지 않는다.
+// Reports the part of the document from the commit position to end as committed input. It does not change the
+// document.
 - (void)commitThrough:(NSUInteger)end {
     if (end <= self.committedLength) return;
     NSString *committed = [self.textStorage.string substringWithRange:
@@ -774,7 +801,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [self report:json.UTF8String];
 }
 
-// 확정 위치 뒤, 입력기가 아직 고칠 수 있는 문자열을 조합 문자열로 보고한다. 바뀐 경우에만 보고한다.
+// Reports the string after the commit position that the input method can still revise as the composition string.
+// Reports only when it changed.
 - (void)reportPreedit {
     NSString *storage = self.textStorage.string;
     NSString *preedit = self.committedLength <= storage.length ? [storage substringFromIndex:self.committedLength] : @"";
@@ -802,8 +830,9 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [self logInput:@"clearDocument" fields:@"" before:before];
 }
 
-// 명령·특수 키·포커스 해제·입력 소스 전환·닫기 전에 남은 문자열을 확정하고 입력기의 조합을 끝낸다.
-// 입력기가 marked text 를 가진 동안은 입력기가 확정을 결정한다.
+// Commits the remaining string and ends the composition of the input method before a command, a special key, focus
+// release, an input source switch, or close.
+// While the input method holds marked text, the input method decides the commit.
 - (void)commitPending {
     if (self.hasMarkedText || self.textStorage.length == 0) {
         [self logInput:@"commitPending" fields:@"\"skipped\":true" before:nil];
@@ -985,8 +1014,8 @@ void sp_region_place(void *handle, double left, double top, double right, double
     view.wanted = visible;
     view.placed = YES;
 
-    // 표면 프레임 변경 알림을 한 번만 등록한다. 배치는 모든 레이아웃 프레임에서 호출되므로
-    // 등록을 호출부에 직접 두면 같은 표면에 관찰자가 누적된다.
+    // Registers the surface frame change notification only once. Placement is called on every layout frame, so
+    // registering at the call site directly would accumulate observers on the same surface.
     NSView *clipView = view.superview;
     [view observeSurface:clipView && clipView.superview ? clipView.superview : nil];
 
@@ -1009,7 +1038,7 @@ bool sp_region_raster(void *handle, double *out) {
 bool sp_region_surface_placed(void *handle) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     SPImageRegion *view = (SPImageRegion *)handle;
-    // 영역은 클립 뷰 안에 있고 클립 뷰는 표면의 네이티브 평면 안에 있다.
+    // The region is inside the clip view, and the clip view is inside the native plane of the surface.
     NSView *nativePlane = view.superview.superview;
     return nativePlane && NSWidth(nativePlane.bounds) > 0 && NSHeight(nativePlane.bounds) > 0;
 }
@@ -1025,8 +1054,9 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
-    // IOSurfaceCopyValue 는 이름과 달리 CF_RETURNS_RETAINED 가 아니다(헤더를 보라).
-    // 돌려받은 값은 우리 것이 아니므로 해제하지 않는다. 해제하면 나중에 진짜 주인이 놓을 때 죽는다.
+    // Despite its name, IOSurfaceCopyValue is not CF_RETURNS_RETAINED (see the header).
+    // The returned value is not owned by this code, so it is not released. Releasing it would crash when the real
+    // owner releases it later.
     CFTypeRef nonceRef = IOSurfaceCopyValue(surface, CFSTR("soksak.frame"));
     BOOL nonceMatches = NO;
     if (nonceRef && CFGetTypeID(nonceRef) == CFDataGetTypeID()) {
@@ -1058,7 +1088,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
-    // scale 은 양수여야 한다.
+    // scale must be positive.
     if (scale <= 0) {
         [view reject:@"scale"];
         CFRelease(surface);
@@ -1079,7 +1109,8 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
-    // 그림은 창의 배율로 그려져야 한다. 다르면 글자 크기가 틀어지므로 표시하지 않는다.
+    // The image must be drawn at the scale of the window. A different scale distorts the text size, so it is not
+    // shown.
     if (!view.window || fabs(scale - view.window.backingScaleFactor) > 0.001) {
         [view reject:@"scale"];
         CFRelease(surface);
@@ -1093,8 +1124,9 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
-    // 모든 검증과 복사가 끝난 뒤에만 이전 스냅샷을 교체한다. 레이어는 공급자가 다시 쓸
-    // IOSurface를 직접 가리키지 않는다.
+    // The previous snapshot is replaced only after all validation and copying are done. The layer does not point
+    // directly at the
+    // IOSurface that the provider rewrites.
     CGImageRef previous = view.snapshot;
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
@@ -1166,10 +1198,10 @@ void sp_region_close(void *handle) {
     [view commitPending];
     view.closed = YES;
     view.event = NULL;
-    NSView *clipView = view.superview;  // sp_region_create 가 만든 클립 뷰.
+    NSView *clipView = view.superview;  // The clip view that sp_region_create made.
     [view removeFromSuperview];
-    [clipView removeFromSuperview];     // 빈 클립 뷰를 표면에 남기지 않는다.
-    [view release];                     // 손잡이가 들고 있던 +1.
+    [clipView removeFromSuperview];     // Does not leave an empty clip view on the surface.
+    [view release];                     // The +1 that the handle held.
 }
 
 const char *sp_region_facts(void *handle) {
@@ -1178,7 +1210,7 @@ const char *sp_region_facts(void *handle) {
     NSView *content = view.window.contentView;
     if (!content) return NULL;
 
-    // 프레임 정보 읽기
+    // Read the frame information
     NSRect frame = [view convertRect:view.bounds toView:content];
     double x = frame.origin.x;
     double y = content.isFlipped ? frame.origin.y : NSHeight(content.bounds) - NSMaxY(frame);
@@ -1187,13 +1219,13 @@ const char *sp_region_facts(void *handle) {
     int visible = view.isHiddenOrHasHiddenAncestor ? 0 : 1;
     int focused = view.hasFocus ? 1 : 0;
 
-    // 레이어 정보 읽기
+    // Read the layer information
     CGRect layerBounds = view.imageLayer.bounds;
     double layerWidth = layerBounds.size.width;
     double layerHeight = layerBounds.size.height;
     double contentsScale = view.imageLayer.contentsScale;
 
-    // IOSurface 정보 읽기 (현재 표시 중인 이미지)
+    // Read the IOSurface information (the image currently presented)
     int presentedWidth = 0;
     int presentedHeight = 0;
     double presentedScale = 0;
@@ -1206,12 +1238,12 @@ const char *sp_region_facts(void *handle) {
         hasPresented = YES;
     }
 
-    // JSON 생성 (cJSON 없이 직접 문자열 구성)
+    // Build the JSON (assembled directly as a string, without cJSON)
     NSMutableString *json = [NSMutableString string];
     [json appendString:@"{"];
     [json appendFormat:@"\"frame\":{\"x\":%.1f,\"y\":%.1f,\"width\":%.1f,\"height\":%.1f},", x, y, width, height];
     [json appendFormat:@"\"visible\":%@,", visible ? @"true" : @"false"];
-    // 래스터 크기는 배치된 영역의 backing 크기와 표면 배율로 정한다(sp_region_raster).
+    // The raster size is decided by the backing size of the placed region and the surface scale (sp_region_raster).
     [json appendFormat:@"\"placed\":%@,\"surfaceScale\":%.2f,", view.placed ? @"true" : @"false", surfaceScale(view.webSurface)];
     [json appendFormat:@"\"focused\":%@,", focused ? @"true" : @"false"];
     [json appendFormat:@"\"layer\":{\"bounds\":{\"x\":0,\"y\":0,\"width\":%.1f,\"height\":%.1f},\"contentsScale\":%.2f},",
@@ -1226,9 +1258,8 @@ const char *sp_region_facts(void *handle) {
         ? [NSString stringWithFormat:@"\"%@\"", view.presentationError] : @"null"];
     [json appendString:@"}"];
 
-    // 정적 버퍼에 결과를 반환 (호출자가 사용 후 해제해야 함)
+    // Return the result in a copy allocated with malloc() (the caller must free it after use)
     const char *result = [json UTF8String];
-    // 메모리를 malloc으로 할당하여 반환
     char *output = malloc(strlen(result) + 1);
     if (output) {
         strcpy(output, result);

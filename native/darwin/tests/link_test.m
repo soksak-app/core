@@ -7,7 +7,7 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// 열 수 있는 URL 은 사용자의 기본 애플리케이션을 띄우므로 이 검사는 여는 경로를 실행하지 않는다.
+// A URL that can be opened launches the user's default application, so this check does not run the open path.
 int main(void) { @autoreleasepool {
     char *missing = sp_link_open(NULL);
     check(missing && strcmp(missing, "link URL is missing") == 0, @"a missing URL is an error");

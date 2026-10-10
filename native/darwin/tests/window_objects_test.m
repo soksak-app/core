@@ -1,7 +1,9 @@
-// 창과 웹뷰에 붙인 라이브러리 객체의 살아 있는 수가 붙일 때 늘고, 화면에 보이던 창과 웹뷰를 닫은 뒤 처음 값으로
-// 돌아오는지 sp_window_objects_when 으로 검사한다. 프레임워크가 창을 닫는 동안 창을 자동 해제하는 경우를 창 하나를
-// 자동 해제해 재현하고, AppKit 의 [NSApp run] 처럼 이벤트 하나마다 자동 해제 풀 하나를 쓰는 반복으로 이벤트를 처리한다.
-// 화면에 보이던 창은 AppKit 이 닫기 애니메이션이 끝날 때까지 보유한다. 애플리케이션을 활성화하지 않는다.
+// Checks with sp_window_objects_when that the live count of library objects attached to a window and webview grows
+// when they are attached and returns to the initial value after the window and webview that were on screen are
+// closed. The case in which the framework autoreleases the window while closing it is reproduced by autoreleasing one
+// window, and events are handled with a loop that uses one autorelease pool per event, like [NSApp run] of AppKit.
+// AppKit retains a window that was on screen until its close animation ends. The check does not activate the
+// application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
@@ -41,7 +43,7 @@ static void counted(void *context, const sp_window_objects *counts, bool reached
     state->counts = *counts;
 }
 
-// done 이 불릴 때까지 이벤트를 하나씩 처리한다. 이벤트마다 자동 해제 풀 하나를 쓴다.
+// Handles events one by one until done is called. Uses one autorelease pool per event.
 static void handleEventsUntilCounted(SPCounted *state) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:15];
     while (state->calls == 0 && deadline.timeIntervalSinceNow > 0) {
@@ -66,7 +68,8 @@ int main(void) { @autoreleasepool {
         window = [[NSWindow alloc] initWithContentRect:NSMakeRect(60, 60, 600, 400)
             styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:NO];
         window.releasedWhenClosed = NO;
-        // 화면에 보이던 창을 닫아야 AppKit 의 닫기 애니메이션이 창을 보유한다. 활성화하지 않고 앞에 놓는다.
+        // The window that was on screen must be closed for the AppKit close animation to retain it. Puts it in front
+        // without activating.
         [window orderFront:nil];
         window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];
         WKWebView *main = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];
@@ -88,7 +91,8 @@ int main(void) { @autoreleasepool {
         @"one window with a logical surface and an attached webview counts %@ (expected %@)", describe(open), describe(expected)]);
 
     SPCounted state = {0};
-    // AppKit 의 이벤트 반복 하나. 창을 닫는 동안 자동 해제된 객체는 이 풀이 비워질 때 해제된다.
+    // One event loop iteration of AppKit. Objects autoreleased while the window closes are released when this pool is
+    // drained.
     @autoreleasepool {
         webviewInputUnregister(attached);
         webviewDetachSurface(attached);

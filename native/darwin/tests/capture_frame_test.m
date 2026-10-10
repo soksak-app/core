@@ -1,4 +1,4 @@
-// 네이티브 측정 리더는 선언한 압축 바이트 전체와 복원 체크섬을 검증한다.
+// The native measurement reader verifies the entire declared compressed bytes and the restored checksum.
 #import "support/capture_frame.m"
 
 static int failures;
@@ -22,7 +22,7 @@ int main(void) { @autoreleasepool {
     NSData *decoded = readCaptureFrame(frame);
     check(decoded.length == 100 && memcmp((const uint8_t *)decoded.bytes + 68, bytes + 82, 32) == 0,
         "a valid literal block restores every pixel and row-padding byte");
-    // 파일 길이를 수정해도 블록 뒤 쓰레기를 정상 픽셀로 받아들이면 안 된다.
+    // Even when the file length is corrected, garbage after the block must not be accepted as valid pixels.
     uint8_t extra = 0;
     [frame appendBytes:&extra length:1];
     length++;

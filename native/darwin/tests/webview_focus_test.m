@@ -1,5 +1,5 @@
-// 표면 웹뷰의 페이지가 요소에 초점을 줘도 창의 키보드 초점을 옮기지 못하고, 호스트는 옮길 수
-// 있는지 검사한다. 애플리케이션을 활성화하지 않는다.
+// Checks that a page of a surface webview cannot move the keyboard focus of the window by focusing an element, while
+// the host can move it. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import "webview_input.h"
 
@@ -18,7 +18,7 @@ static void until(BOOL (^done)(void)) {
     if (!done()) { fprintf(stderr, "FAIL: WebKit did not answer within 10 seconds\n"); exit(1); }
 }
 
-// 페이지가 입력 요소에 초점을 주고, 그 결과가 UI 프로세스에 도달할 때까지 기다린다.
+// Waits until the page focuses an input element and the result reaches the UI process.
 static void focusInPage(WKWebView *view) {
     __block BOOL done = NO;
     [view evaluateJavaScript:@"document.getElementById('field').focus(); document.activeElement.id"
@@ -29,7 +29,7 @@ static void focusInPage(WKWebView *view) {
     until(^BOOL { return settled; });
 }
 
-// 문서 불러오기가 끝나면 알린다.
+// Notifies when the document load finishes.
 @interface SPLoaded : NSObject <WKNavigationDelegate>
 @property BOOL finished;
 @end

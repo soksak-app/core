@@ -1,7 +1,8 @@
-// 운영체제의 종료 Apple event(kAEQuitApplication)를 sp_quit_request_install 의 처리기가 받아 메인 스레드에서 요청을
-// 알리고, 위임자의 applicationShouldTerminate: 에 넘기지 않는지 검사한다. 위임자는 창이 저장하는 동안 취소를 답하는
-// 애플리케이션 프레임워크를 흉내 내며, 그 경로를 지나면 보낸 쪽은 취소를 받는다. event 는 Apple event 관리자의
-// 처리기 배달로 보낸다. 애플리케이션을 활성화하지 않는다.
+// Checks that the handler of sp_quit_request_install receives the operating system quit Apple event
+// (kAEQuitApplication), reports the request on the main thread, and does not pass it to the delegate's
+// applicationShouldTerminate:. The delegate imitates an application framework that answers cancel while windows save;
+// a sender that reaches that path receives cancel. The event is sent through the handler delivery of the Apple event
+// manager. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import "quit_request.h"
 
@@ -23,8 +24,9 @@ static void check(BOOL condition, NSString *message) {
 }
 @end
 
-// 종료 event 를 설치된 처리기로 배달하고 처리기의 결과를 반환한다. replyOut 이 NULL 이 아니면 보낸 쪽이 답을 요구하는
-// 것처럼 답 event 를 만들어 처리기에 넘기고 그 위치에 돌려주며, 호출자가 AEDisposeDesc 로 해제한다.
+// Delivers a quit event to the installed handler and returns the handler result. If replyOut is not NULL, creates a
+// reply event as if the sender required an answer, passes it to the handler, and returns it at that location; the
+// caller releases it with AEDisposeDesc.
 static OSErr dispatchQuit(AppleEvent *replyOut) {
     NSAppleEventDescriptor *event = [NSAppleEventDescriptor appleEventWithEventClass:kCoreEventClass
         eventID:kAEQuitApplication targetDescriptor:[NSAppleEventDescriptor currentProcessDescriptor]
@@ -34,7 +36,7 @@ static OSErr dispatchQuit(AppleEvent *replyOut) {
         NSAppleEventDescriptor *sender = [NSAppleEventDescriptor currentProcessDescriptor];
         AECreateAppleEvent(kCoreEventClass, kAEAnswer, sender.aeDesc, kAutoGenerateReturnID, kAnyTransactionID, &reply);
     }
-    // 처리기는 refCon 을 쓰지 않지만 인터페이스가 null 을 받지 않는다.
+    // The handler does not use refCon, but the interface does not accept null.
     static int refCon;
     OSErr result = [[NSAppleEventManager sharedAppleEventManager] dispatchRawAppleEvent:event.aeDesc
         withRawReply:&reply handlerRefCon:(SRefCon)&refCon];
@@ -49,7 +51,7 @@ static OSErr replyError(const AppleEvent *reply) {
     return (OSErr)error;
 }
 
-// 실제 애플리케이션처럼 [NSApp run] 이 기본 처리기를 설치한 뒤에 검사한다.
+// Checks after [NSApp run] has installed the default handler, as in a real application.
 static void runChecks(SPCancellingDelegate *delegate) {
     __block int requests = 0;
     __block BOOL requestOnMain = NO;

@@ -2,16 +2,16 @@
 #import <UserNotifications/UserNotifications.h>
 #import "notifications.h"
 
-// 알림 센터의 대리자. 애플리케이션이 활성일 때도 배너를 보이고, 누른 알림의 식별자를 알린다.
+// Delegate of the notification center. Shows the banner even while the application is active, and reports the identifier of the clicked notification.
 @interface SPNotificationDelegate : NSObject <UNUserNotificationCenterDelegate>
 @end
 
 static sp_notification_event handler;
 static void *handlerContext;
 static SPNotificationDelegate *delegate;
-// 권한 요청, 게시, 제거의 마지막 실패. state 사건에 함께 알린다.
+// Last failure of an authorization request, post, or removal. Reported together with the state event.
 static NSString *lastError;
-// 게시를 요청한 뒤 지우지 않은 식별자. 게시가 끝나기 전에 지워진 알림은 끝난 뒤 다시 지운다.
+// Identifiers that were requested to post and not removed. A notification removed before its post finished is removed again after the post finishes.
 static NSMutableSet<NSString *> *current;
 
 static void emit(NSDictionary *event) {
@@ -30,7 +30,7 @@ static NSString *authorizationName(UNAuthorizationStatus status) {
     return [NSString stringWithFormat:@"unknown %ld", (long)status];
 }
 
-// 알림 센터의 현재 권한과 마지막 실패를 알린다. then 은 권한을 받아 메인 스레드에서 실행된다.
+// Reports the current authorization and the last failure of the notification center. then receives the authorization and runs on the main thread.
 static void reportState(void (^then)(UNAuthorizationStatus)) {
     void (^next)(UNAuthorizationStatus) = [[then copy] autorelease];
     [[UNUserNotificationCenter currentNotificationCenter] getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
@@ -68,7 +68,7 @@ static void fail(NSString *operation, NSError *error) {
 
 const char *sp_notifications_start(sp_notification_event event, void *context) {
     NSCAssert(NSThread.isMainThread, @"notifications require the UI thread");
-    // 번들 밖의 프로세스에서는 알림 센터를 여는 것만으로 예외가 나서 프로세스가 끝난다.
+    // In a process outside a bundle, opening the notification center raises an exception that ends the process.
     if (NSBundle.mainBundle.bundleIdentifier == nil) {
         return "system notifications require the process to run from an application bundle";
     }
@@ -110,7 +110,7 @@ void sp_notifications_post(const char *identifier, const char *title, const char
     [current addObject:name];
     reportState(^(UNAuthorizationStatus status) {
         if (status == UNAuthorizationStatusNotDetermined) {
-            // 첫 알림에서 한 번 권한을 요청한다. 결과는 다시 state 사건으로 알린다.
+            // Authorization is requested once at the first notification. The result is reported again as a state event.
             [[UNUserNotificationCenter currentNotificationCenter] requestAuthorizationWithOptions:UNAuthorizationOptionAlert
                 completionHandler:^(BOOL granted, NSError *error) {
                 if (error) {

@@ -1,19 +1,24 @@
-# macOS 공용 네이티브 라이브러리.
+# Shared native library for macOS.
 #
-# src/ 의 공용 소스를 정적 라이브러리 하나로 빌드하고, 사용하는 애플리케이션이 pkg-config 로
-# 헤더와 라이브러리 위치를 찾도록 soksak-darwin.pc 를 생성한다. 위치는 빌드 디렉터리의 절대 경로다. 빌드마다
-# 내용을 다시 만들고 내용이 바뀔 때만 파일을 다시 쓰므로, 작업 공간을 옮기면 새 위치를 가리키고 옮기지
-# 않으면 파일이 그대로 남는다.
+# Builds the shared sources in src/ into one static library and generates soksak-darwin.pc so that the applications
+# that use it find the header and library locations through pkg-config. The locations are absolute paths of the build
+# directory. Every build regenerates the content and rewrites the file only when the content changes, so moving the
+# workspace points the file at the new location and leaving it in place keeps the file unchanged.
 #
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
-#   make test             입력 주입, 마우스 버튼 감시, 창 상태, 창 단추 배치, 배치 트랜잭션 안의 제목줄 높이 표시, 다시 읽기의 시작 트랜잭션, 표시 대기, 웹뷰 초점, 문서 영역, 그림 영역, 닫은 창의 해제 검사, 창 객체 수 검사를 실행한다. 애플리케이션을 활성화하지 않는다
-#   make test-activation  창 활성화 후 호버 검사, 겹친 웹뷰 입력 검사(기준 실행·등록 실행), 웹 인스펙터 검사, 문서 영역의 OS 이벤트 대기열 클릭·키 검사, 그림 영역의 한국어 입력기 조합 검사를
-#                         실행한다. 애플리케이션을 활성화해 포커스를 가져간다
-#   make benchmark        기록 한 건의 호출 스레드 비용을 잰다(현재 글 기록과 event ring). 단언하지 않고 숫자를 출력한다
+#   make test             runs the checks for input injection, mouse button observation, window state, window button layout,
+#                         title bar height display inside a layout transaction, the start transaction of a re-read, display wait,
+#                         webview focus, document region, image region, release of a closed window, and window object count.
+#                         It does not activate the application
+#   make test-activation  runs the hover check after window activation, the overlapping webview input check (baseline run and
+#                         registered run), the web inspector check, the OS event queue click and key check of the document region,
+#                         and the Korean input method composition check of the image region.
+#                         It activates the application and takes the focus
+#   make benchmark        measures the calling thread cost of one record (the current text record and the event ring). It prints numbers and asserts nothing
 #   make repeat TEST=<name>_test COUNT=<n>
-#                         test 대상 검사 하나를 연속 n번 실행하고 첫 실패에서 실행 번호와 시스템 부하를 보고한다
+#                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
 #   make repeat-suite COUNT=<n>
-#                         test 대상 전체를 연속 n번 실행하고 첫 실패에서 실행 번호와 시스템 부하를 보고한다
+#                         runs the whole test target n times in a row and reports the run number and the system load at the first failure
 
 SHELL := /bin/sh
 
@@ -23,9 +28,10 @@ OBJECTS    := $(SOURCES:src/%.m=$(BUILD)/%.o)
 LIBRARY    := $(BUILD)/libsoksak-darwin.a
 PKGCONFIG  := $(BUILD)/soksak-darwin.pc
 FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo -framework IOSurface -framework Carbon -framework UserNotifications -lcompression -lz
-# 소스가 사용하는 가장 새로운 API 는 macOS 14.4 의 것이다(capture.m 의
-# getCurrentProcessShareableContentWithCompletionHandler).
-# 사용하는 빌드가 같은 최소 버전으로 컴파일·링크하도록 .pc 의 Cflags 와 Libs 에도 넣는다.
+# The newest API the sources use is from macOS 14.4 (getCurrentProcessShareableContentWithCompletionHandler in
+# capture.m).
+# The same minimum version is also put in Cflags and Libs of the .pc so that the builds that use it compile and link
+# with it.
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
@@ -40,7 +46,8 @@ $(LIBRARY): $(OBJECTS)
 	@rm -f $@
 	@ar rcs $@ $^
 
-# 파일 내용은 현재 위치에서 결정되므로 매 빌드 비교한다. pkgconfig-current 는 이 비교를 요구하는 표지다.
+# The file content depends on the current location, so every build compares it. pkgconfig-current marks that this
+# comparison is required.
 $(PKGCONFIG): pkgconfig-current | $(BUILD)
 	@printf '%s\n' \
 	  'Name: soksak-darwin' \
@@ -53,21 +60,23 @@ $(PKGCONFIG): pkgconfig-current | $(BUILD)
 $(BUILD):
 	@mkdir -p $@
 
-# 모든 검사는 tests/support/no_activation.m 을 링크한다. 활성화를 선언하지 않은 검사는 종료할 때 활성이면 실패한다.
+# Every check links tests/support/no_activation.m. A check that does not declare activation fails if the application
+# is active when it exits.
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
-# 측정 도구는 시험이 아니다. 숫자를 출력하고 단언하지 않으며 test 대상에 들어 있지 않다.
+# A measurement tool is not a test. It prints numbers, asserts nothing, and is not part of the test target.
 $(BUILD)/%_benchmark: tests/%_benchmark.m $(LIBRARY) $(wildcard src/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM) -o $@
 
 benchmark: $(BUILD)/event_ring_benchmark
 	@$(BUILD)/event_ring_benchmark
 
-# 수용 검사 본문을 포함하는 검사는 그 본문이 바뀌면 다시 빌드한다.
+# A check that includes the acceptance check body is rebuilt when that body changes.
 $(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_directory_checker_test: tests/capture_test.m
 
-# 알림 센터는 번들에서 실행된 프로세스만 받으므로 알림 검사는 번들 안에서도 실행한다.
+# Notification Center accepts only processes started from a bundle, so the notification check also runs inside a
+# bundle.
 $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test: $(BUILD)/notifications_test tests/support/notifications_test.plist
 	@mkdir -p $(dir $@)
 	@cp tests/support/notifications_test.plist $(BUILD)/notifications_test.app/Contents/Info.plist

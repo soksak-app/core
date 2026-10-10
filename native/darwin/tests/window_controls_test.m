@@ -1,5 +1,6 @@
-// 페이지가 요청한 높이로 제목줄을 만들면 AppKit 이 그 높이의 세로 가운데에 창 단추를 두고, 제목 변경과
-// 창 크기 변경 뒤에도 그 자리가 유지되는지 검사한다. 애플리케이션을 활성화하지 않는다.
+// Checks that when the page creates a title bar with the requested height, AppKit places the window buttons at the
+// vertical center of that height, and that the position holds after a title change and a window resize. The check
+// does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import "window_controls.h"
 
@@ -10,7 +11,8 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// 두 호스트의 창과 같이 제목 표시줄을 숨기고 콘텐츠가 창 전체를 차지하는 창. 도구막대는 없다.
+// A window like the windows of both hosts: the title bar is hidden and the content fills the whole window. It has no
+// toolbar.
 static NSWindow *hostLikeWindow(void) {
     NSWindow *window = [[[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 600, 400)
         styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable
@@ -22,9 +24,10 @@ static NSWindow *hostLikeWindow(void) {
     return window;
 }
 
-// 창 프레임과 콘텐츠 배치 영역의 차이로 잰 제목줄 높이와 windowTitlebarHeight 가 모두 row 이고,
-// 단추 위와 아래의 여백이 한 device pixel 안에서 같은지 검사한다. AppKit 은 단추를 device pixel 에 맞추므로,
-// 남는 높이가 pixel 수로 홀수이면 위와 아래는 한 pixel(1 / backingScaleFactor pt) 다르다.
+// Checks that both the title bar height measured as the difference between the window frame and the content layout
+// area and windowTitlebarHeight equal row, and that the margins above and below the button are equal within one
+// device pixel. AppKit snaps the button to device pixels, so if the remaining height is an odd number of pixels, the
+// top and bottom differ by one pixel (1 / backingScaleFactor pt).
 static void expectCentred(NSWindow *window, double row, NSString *when) {
     double bar = window.frame.size.height - window.contentLayoutRect.size.height;
     double reported = windowTitlebarHeight(window);
@@ -39,7 +42,7 @@ static void expectCentred(NSWindow *window, double row, NSString *when) {
             when, row, bar, reported, area[3], above, below, pixel]);
 }
 
-// 높이 설정이 실패하고 실패 문장이 expected 이며 제목줄이 그대로인지 검사한다.
+// Checks that setting the height fails, the failure text is expected, and the title bar stays unchanged.
 static void expectRejected(NSWindow *window, double height, const char *expected, NSString *what) {
     double before = window.frame.size.height - window.contentLayoutRect.size.height;
     char *failure = NULL;
@@ -68,15 +71,16 @@ int main(void) { @autoreleasepool {
     NSWindow *window = hostLikeWindow();
     [window orderBack:nil];
 
-    // 프레임 글자 배율 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3 의 첫 행(app.css 의 --chrome-row)과 그 사이 값이다.
-    // 마지막 두 값은 배율을 내릴 때 제목줄이 다시 낮아지는지 본다.
+    // The first row (--chrome-row of app.css) for frame font scales 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, and the
+    // values between them. The last two values check that the title bar becomes lower again when the scale decreases.
     const double rows[] = {40, 45, 54, 63, 72, 90, 108, 54, 40};
     for (size_t i = 0; i < sizeof rows / sizeof rows[0]; i++) {
         double row = rows[i];
         check(setHeight(window, row), [NSString stringWithFormat:@"the title bar takes the requested %.1fpt", row]);
         expectCentred(window, row, @"after the height is set");
 
-        // 제목을 바꾸면 AppKit 이 단추를 다시 배치한다. 단추는 AppKit 의 것이므로 자리는 그대로다.
+        // When the title changes, AppKit lays out the buttons again. The buttons belong to AppKit, so the position
+        // stays the same.
         window.title = [NSString stringWithFormat:@"renamed %zu", i];
         [window layoutIfNeeded];
         expectCentred(window, row, @"after a title change");
@@ -91,7 +95,8 @@ int main(void) { @autoreleasepool {
     }
     check(window.toolbar == nil, @"the window needs no toolbar for its title bar height");
 
-    // AppKit 은 0 이하의 높이를 사용자 지정 높이가 없다는 뜻으로 쓰고, 그 값으로는 다시 배치하지 않는다.
+    // AppKit uses a height of 0 or less to mean that there is no custom height, and it does not lay out again with
+    // that value.
     expectRejected(window, 0, "title bar height must be a positive finite number", @"a zero height");
     expectRejected(window, -1, "title bar height must be a positive finite number", @"a negative height");
     expectRejected(window, NAN, "title bar height must be a positive finite number", @"a NaN height");
@@ -100,7 +105,8 @@ int main(void) { @autoreleasepool {
     NSWindow *plain = [[[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 200, 100)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO] autorelease];
     [plain setReleasedWhenClosed:NO];
-    // 0 은 제목줄이 없는 창(전체 화면)의 높이이므로, 제목줄을 만들 수 없는 창은 음수로 알린다.
+    // 0 is the height of a window without a title bar (full screen), so a window that cannot have a title bar reports
+    // a negative value.
     check(windowTitlebarHeight(plain) < 0, @"a window without standard buttons reports that it cannot have a title bar");
     expectRejected(plain, 40, "the window has no standard buttons or content view for a title bar",
         @"a title bar height for a window without standard buttons");

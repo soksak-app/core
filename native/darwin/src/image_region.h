@@ -1,51 +1,53 @@
 #include <stdbool.h>
 
-// 표면 위에 놓인 그림 영역. 외부에서 제공한 IOSurface 를 보여주고, 키보드·IME·접근성을
-// 지원한다. 모든 함수는 메인 스레드에서 호출한다.
+// An image region placed on a surface. It shows an IOSurface provided from outside and supports the keyboard, the
+// input
+// method (IME), and accessibility. Every function is called on the main thread.
 
-// 이벤트가 발생하면 호출된다. json 은 JSON 객체를 나타내고 호출이 끝나면 해제된다.
-// 메인 스레드에서 호출된다.
+// Called when an event occurs. json represents a JSON object and is released when the call returns.
+// Called on the main thread.
 typedef void (*sp_region_event)(void *context, const char *json);
 
-// surface 웹뷰 위에 그림 영역을 만든다.
+// Creates an image region over the surface webview.
 void *sp_region_create(void *surface, const char *name, sp_region_event event, void *context);
 
-// 표면 뷰포트의 CSS 픽셀 여백(왼쪽, 위, 오른쪽, 아래)으로 영역을 정한다. 표면 크기가 바뀌면
-// 여백을 유지한다.
+// Sets the region by the CSS pixel margins (left, top, right, bottom) of the surface viewport. The margins are kept
+// when the surface size changes.
 void sp_region_place(void *region, double left, double top, double right, double bottom, bool visible);
 
-// 적용된 영역의 장치 픽셀 너비·높이와 CSS 픽셀당 장치 픽셀 배율을 out[0..2]에 쓴다.
-// 아직 배치되지 않았거나 크기와 배율을 얻을 수 없으면 false 다.
+// Writes the device pixel width and height of the applied region and the device pixels per CSS pixel to out[0..2].
+// Returns false if the region is not placed yet or the size and scale cannot be obtained.
 bool sp_region_raster(void *region, double *out);
 
-// 영역의 표면이 네이티브 크기를 가졌으면 true 다. 아직 배치되지 않은 표면의 영역은 래스터 크기를 갖지 않는다.
+// Returns true if the surface of the region has a native size. The region of a surface that is not placed yet has no
+// raster size.
 bool sp_region_surface_placed(void *region);
 
-// 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID, nonce 는 논스 대조용
-// 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기고, scale 은 이미지가 만들어진
-// 배율이다 (contentsScale 로 사용). 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.
+// Shows an external IOSurface. token_id is the global ID of the IOSurface, nonce is 16 bytes of data for the nonce
+// comparison, width and height are the size in device pixels, and scale is the scale at which the image was made
+// (used as contentsScale). Returns true on success and false if the surface is not found or the size does not match.
 bool sp_region_present(void *region, unsigned int token_id, const unsigned char *nonce, double width, double height, double scale);
 
-// 마지막 표시 거절 사유를 malloc() 문자열로 반환한다. 오류가 없으면 NULL 이다.
+// Returns the reason of the last presentation rejection as a malloc() string. Returns NULL if there is no error.
 char *sp_region_last_error(void *region);
 
-// 첫 응답자로 만들고 포커스 이벤트를 보낸다. 이전 응답자에서 벗어나면 포커스 해제 이벤트도
-// 보낸다.
+// Makes the region the first responder and sends a focus event. If it leaves the previous responder, it also sends a
+// focus release event.
 void sp_region_focus(void *region);
 
-// 캐럿(입력 커서) 위치를 받아 둔다. 캐럿 높이는 입력 메서드가 선택 창 위치를 정하는 데
-// 쓴다.
+// Stores the caret (input cursor) position. The input method uses the caret height to place its candidate window.
 void sp_region_caret(void *region, double x, double y, double w, double h);
 
-// 접근성 값으로 보일 문자열을 받아 둔다.
+// Stores the string that is exposed as the accessibility value.
 void sp_region_text(void *region, const char *utf8);
 
-// 창 좌표의 영역과 표시 여부, 포커스 상태 {x, y, width, height, visible, focused} 를
-// out[0..5] 에 쓴다.
+// Writes the region in window coordinates, the visibility, and the focus state {x, y, width, height, visible,
+// focused}
+// to out[0..5].
 void sp_region_frame(void *region, double *out);
 
-// 영역의 모든 정보를 JSON 으로 반환한다. 호출자가 malloc() 으로 할당된 문자열을 해제해야 한다.
+// Returns all information of the region as JSON. The caller must free the malloc() allocated string.
 const char *sp_region_facts(void *region);
 
-// 영역을 제거하고 해제한다. 이후 event 는 호출되지 않는다.
+// Removes and releases the region. event is not called afterward.
 void sp_region_close(void *region);

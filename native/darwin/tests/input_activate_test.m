@@ -1,7 +1,7 @@
-// 창을 활성화한 뒤 버튼 없는 이동이 페이지의 호버를 갱신하는지 검사한다.
+// Checks whether, after the window is activated, a move without a button updates the hover of the page.
 //
-// 이 검사는 애플리케이션을 활성화하므로 사용자의 포커스를 가져간다. make test 에 포함하지 않고
-// make test-activation 으로만 실행한다. 이동은 추적 영역 소유자에게 직접 전달하므로 실제 포인터 위치와 무관하다.
+// This check activates the application and so takes the user's focus. It is not part of make test and
+// runs only by make test-activation. The move is delivered directly to the tracking area owner, so it is independent of the real pointer position.
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
 #import "private/webkit.h"
@@ -13,7 +13,7 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// 활성화 알림은 애플리케이션 이벤트로 도착하므로 이벤트를 꺼내 처리하며 기다린다.
+// The activation notification arrives as an application event, so the check takes and processes events while waiting.
 static void until(BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
@@ -58,14 +58,14 @@ static SPActivation activate(NSWindow *window, double timeout) {
     return state;
 }
 
-// 활성 상태 전송이 끝났다고 알리지 않는 웹뷰.
+// A web view that does not report that the active state transmission has finished.
 @interface SPStalledWebView : WKWebView
 @end
 @implementation SPStalledWebView
 - (void)_doAfterActivityStateUpdate:(void (^)(void))completionHandler {}
 @end
 
-// 활성 상태 전송을 기다리는 동안 다른 창이 키 창이 되는 웹뷰.
+// A web view for which another window becomes the key window while it waits for the active state transmission.
 @interface SPYieldingWebView : WKWebView
 @property(assign) NSWindow *other;
 @end
@@ -76,7 +76,7 @@ static SPActivation activate(NSWindow *window, double timeout) {
 }
 @end
 
-// 키 창이 될 수 없는 창.
+// A window that cannot become the key window.
 @interface SPUnkeyableWindow : NSWindow
 @end
 @implementation SPUnkeyableWindow
@@ -92,11 +92,11 @@ static NSWindow *makeWindow(Class type, NSView *content) {
     return [window autorelease];
 }
 
-// 활성화가 멈춘 단계를 결과로 알리는지 조건을 만들어 확인한다.
+// Creates conditions to check that the stage at which activation stopped is reported in the result.
 static void checkFailures(void) {
     check(activate(nil, 1).result == SP_ACTIVATE_REJECTED, @"activating without a window is rejected");
 
-    // 활성화가 금지된 애플리케이션은 시스템이 활성화하지 않는다.
+    // The system does not activate an application whose activation is prohibited.
     NSWindow *refused = makeWindow(NSWindow.class, nil);
     SPActivation state = activate(refused, 1);
     check(state.result == SP_ACTIVATE_REFUSED && state.frontmost[0] != 0 && !NSApp.isActive,
@@ -110,8 +110,8 @@ static void checkFailures(void) {
     check(state.result == SP_ACTIVATE_PENDING,
         [NSString stringWithFormat:@"a webview that does not apply the active state reports pending (%d)", state.result]);
 
-    // 숨겨진 문서 뷰는 입력 대상이 아니다. 보이는 창이 활성화되는 동안 명시적
-    // 활성화 요청을 가지고 있으면 안 된다.
+    // A hidden document view is not an input target. While a visible window is being activated, it must not hold an explicit
+    // activation request.
     SPStalledWebView *hiddenStalled = [[[SPStalledWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     hiddenStalled.hidden = YES;
     NSWindow *hiddenWindow = makeWindow(NSWindow.class, hiddenStalled);
@@ -123,7 +123,7 @@ static void checkFailures(void) {
     [other orderFront:nil];
     SPYieldingWebView *yielding = [[[SPYieldingWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     yielding.other = other;
-    // 앱의 표면처럼 문서를 읽은 웹뷰로 검사한다.
+    // Checks with a web view that has loaded a document, like a surface of the application.
     [yielding loadHTMLString:@"<!doctype html><script>window.probe = true</script>" baseURL:nil];
     until(^BOOL { return [evaluate(yielding, @"Boolean(window.probe)") boolValue]; });
     NSWindow *lost = makeWindow(NSWindow.class, yielding);
@@ -131,7 +131,7 @@ static void checkFailures(void) {
     check(state.result == SP_ACTIVATE_LOST && other.isKeyWindow,
         [NSString stringWithFormat:@"a window that loses key status before the state is applied reports lost (%d)", state.result]);
 
-    // 앱이 활성인 상태에서 키 창이 될 수 없는 창을 활성화한다.
+    // Activates a window that cannot become the key window while the application is active.
     state = activate(other, 5);
     check(state.result == SP_ACTIVATE_DONE,
         [NSString stringWithFormat:@"an ordinary window activates (%d, frontmost %s)", state.result, state.frontmost]);
@@ -143,7 +143,7 @@ static void checkFailures(void) {
     for (NSWindow *window in @[pending, hiddenWindow, other, lost, unkeyable]) [window close];
 }
 
-// tests/support/no_activation.m: 이 검사는 make test-activation 에서 앱을 활성화한다.
+// tests/support/no_activation.m: this check activates the application in make test-activation.
 void sp_test_declare_activation(void);
 
 int main(void) { @autoreleasepool {
@@ -185,7 +185,7 @@ int main(void) { @autoreleasepool {
     check([evaluate(view, @"getComputedStyle(document.getElementById('target')).backgroundColor") isEqual:@"rgb(255, 0, 0)"],
         @"the :hover style applies to the element under the point");
 
-    // V5-5: 활성 키 창에서도 주입한 누름과 놓음이 페이지에 도달한다(기본 검사는 비활성 창에서 같은 호출을 쓴다).
+    // V5-5: Even in an active key window the injected press and release reach the page (the default check uses the same call in an inactive window).
     check(sp_input_pointer(window, 180, 120, 1, 0, 0, 0) == SP_INPUT_DELIVERED
         && sp_input_pointer(window, 180, 120, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
         @"press and release are delivered to the active key window");

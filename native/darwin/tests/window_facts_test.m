@@ -1,5 +1,5 @@
-// 창 상태 함수가 화면·창 좌표, 웹뷰 순서, 히트 테스트, 이동을 올바르게 보고하는지 검사한다.
-// 애플리케이션을 활성화하지 않는다.
+// Checks that the window state functions report screen and window coordinates, webview order, hit testing, and
+// movement correctly. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "window_facts.h"
@@ -18,8 +18,8 @@ static id parse(char *text) {
     return value;
 }
 
-// 창 서버의 가림 상태 변경은 AppKit 이벤트로 도착한다. 창과 화면 변경 이벤트만 꺼내 보낸다. 애플리케이션
-// 활성화 이벤트는 꺼내지 않는다(활성화는 검사 프로세스를 활성으로 만든다).
+// Occlusion state changes of the window server arrive as AppKit events. Takes and sends only window and screen change
+// events. Application activation events are not taken (activation would make the check process active).
 static void pumpOcclusion(void) {
     NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAppKitDefined untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02]
         inMode:NSDefaultRunLoopMode dequeue:NO];
@@ -56,7 +56,8 @@ int main(void) { @autoreleasepool {
         && [responderFacts[@"responder"][@"class"] length] > 0
         && responderFacts[@"responder"][@"main"] == (id)kCFBooleanTrue,
         [NSString stringWithFormat:@"a responder change is reported with its class: %@", responderFacts[@"responder"]]);
-    // 애플리케이션 메뉴는 하위 메뉴마다 제목과 항목의 제목, 단축키를 보고한다. 구분선은 뺀다.
+    // The application menu reports, for each submenu, the title and the item titles and shortcuts. Separators are
+    // left out.
     NSMenu *mainMenu = [[[NSMenu alloc] initWithTitle:@""] autorelease];
     NSMenuItem *viewItem = [[[NSMenuItem alloc] initWithTitle:@"View" action:nil keyEquivalent:@""] autorelease];
     NSMenu *viewMenu = [[[NSMenu alloc] initWithTitle:@"View"] autorelease];
@@ -87,12 +88,13 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the frame is reported at the moved top-left screen point: %@", facts[@"frame"]]);
     check(NSMaxY(window.frame) == primary - 80, @"the move places the frame top 80 points below the primary display top");
     check([facts[@"content"][@"width"] doubleValue] == 400 && [facts[@"content"][@"height"] doubleValue] == 300, @"content size");
-    // 재생률은 창이 놓인 화면의 최대 프레임 수다. 녹화 검사는 프레임 수 기준을 이 값에서 정한다.
+    // The refresh rate is the maximum frame rate of the screen that holds the window. Recording checks derive their
+    // frame count criterion from this value.
     check(window.screen != nil && [facts[@"refreshRate"] isKindOfClass:NSNumber.class]
         && [facts[@"refreshRate"] integerValue] == window.screen.maximumFramesPerSecond && [facts[@"refreshRate"] integerValue] > 0,
         [NSString stringWithFormat:@"the refresh rate of the window's screen is reported: %@", facts[@"refreshRate"]]);
-    // 앱 페이지가 그려지는 WebContent 프로세스. 메모리 검사가 이 프로세스만 잰다. 페이지를 읽기 전에는 프로세스가
-    // 없을 수 있으므로 페이지를 읽은 뒤 잰다.
+    // The WebContent process in which the app page is drawn. The memory check measures only this process. The process
+    // may not exist before the page is read, so the check measures after the page is read.
     __block BOOL pageLoaded = NO;
     [main loadHTMLString:@"<p>page</p>" baseURL:nil];
     [main evaluateJavaScript:@"1" completionHandler:^(id result, NSError *error) { (void)result; (void)error; pageLoaded = YES; }];
@@ -117,7 +119,8 @@ int main(void) { @autoreleasepool {
     check(mainFlagIsBoolean && childFlagIsBoolean && [views[0][@"main"] boolValue] && ![views[1][@"main"] boolValue],
         [NSString stringWithFormat:@"webview ownership flags are JSON booleans: %@, %@", views[0][@"main"], views[1][@"main"]]);
     NSDictionary *upper = views[1];
-    // WKWebView 는 뒤집힌 좌표계라 하위 뷰의 frame 이 곧 콘텐츠 영역 왼쪽 위 기준이다.
+    // WKWebView has a flipped coordinate system, so the frame of a subview is relative to the top left of the content
+    // area.
     check(main.isFlipped, @"the main webview is a flipped view");
     check([upper[@"x"] doubleValue] == 100 && [upper[@"y"] doubleValue] == 50 && [upper[@"width"] doubleValue] == 200
         && [upper[@"height"] doubleValue] == 100, [NSString stringWithFormat:@"child webview frame in window coordinates: %@", upper]);
@@ -153,7 +156,8 @@ int main(void) { @autoreleasepool {
         && [screens[0][@"scale"] doubleValue] >= 1, @"the primary display is reported at the screen origin with its scale");
     check(parse(sp_dock_items()) != nil, @"Dock items are reported as an array");
     check(!sp_dock_select("No such item"), @"an unknown Dock item is rejected");
-    // 창을 화면에 보이거나 치우면 창 서버가 가림 상태를 바꾸고, 관찰은 그 변경마다 호출된다.
+    // When the window is shown or hidden on screen, the window server changes the occlusion state, and the
+    // observation is called for each change.
     NSWindow *observed = [[[NSWindow alloc] initWithContentRect:NSMakeRect(40, 40, 200, 120)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
     [observed setReleasedWhenClosed:NO];

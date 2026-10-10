@@ -1,10 +1,12 @@
-// 닫은 창과 그 웹뷰, 공용 라이브러리가 창과 웹뷰에 붙인 네이티브 객체가 모두 해제되는지 검사한다.
-// 호스트가 프로젝트 창에 하는 순서대로 메인 웹뷰 등록, 첫 화면 표시 대기, 입력 등록, 파일 놓기, 가림 관찰,
-// 논리 표면, 붙인 표면 웹뷰, 모달 웹뷰, 문서 영역, 그림 영역, 배치 트랜잭션과 표시 대기를 붙인다. 그 뒤
-// 호스트가 소유한 핸들(그림 영역, 문서 영역, 붙인 표면 웹뷰, 논리 표면)만 라이브러리의 닫기 함수로 닫는다.
-// 메인 웹뷰와 모달 웹뷰는 창을 만든 프레임워크가 하는 것처럼 뷰 계층에서 빼고 놓기만 하며 입력 등록을
-// 해제하지 않는다. 해제되지 않은 웹뷰는 웹 콘텐츠 프로세스를 끝내지 않는다.
-// 애플리케이션을 활성화하지 않는다.
+// Checks that the closed window, its webviews, and all native objects that the shared library attached to the window
+// and webviews are released. In the order in which the host does it for a project window, attaches main webview
+// registration, first display wait, input registration, file drop, occlusion observation, logical surface, attached
+// surface webview, modal webview, document region, drawing region, layout transaction, and display wait. Then only
+// the handles owned by the host (drawing region, document region, attached surface webview, logical surface) are
+// closed with the close functions of the library. The main webview and the modal webview are only removed from the
+// view hierarchy and released, as the framework that created the window does, and their input registration is not
+// released. A webview that is not released does not end the web content process. The check does not activate the
+// application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
@@ -33,7 +35,8 @@ static void until(NSString *what, BOOL (^done)(void)) {
     if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
-// 수동 참조 계수에서는 __weak 를 쓸 수 없으므로 런타임의 약한 참조 칸을 쓴다. 칸은 객체가 해제되면 nil 이 된다.
+// Manual reference counting cannot use __weak, so the check uses the weak reference slot of the runtime. The slot
+// becomes nil when the object is released.
 enum { kTracked = 32 };
 static id weakSlots[kTracked];
 static const char *weakNames[kTracked];
@@ -46,7 +49,8 @@ static void track(const char *name, id object) {
     trackedCount++;
 }
 
-// objc_loadWeak 는 객체를 자동 해제 풀에 넣어 수명을 늘리므로 읽기마다 풀을 비운다.
+// objc_loadWeak extends the lifetime by putting the object in the autorelease pool, so the check drains the pool
+// after every read.
 static BOOL released(int index) {
     BOOL alive;
     @autoreleasepool { alive = objc_loadWeak(&weakSlots[index]) != nil; }
@@ -79,7 +83,7 @@ static void documentChanged(void *context, const char *state) {}
 static void regionEvent(void *context, const char *json) {}
 static void fileDropped(void *context, const char *json) {}
 
-// 놓기 뷰가 놓은 수신기. 호스트는 여기서 수신기를 해제한다.
+// The receiver that the drop view dropped. The host releases the receiver here.
 static NSMutableArray<NSString *> *releasedReceivers;
 static void fileDropReleased(void *context) { [releasedReceivers addObject:(NSString *)context]; }
 
@@ -119,7 +123,7 @@ int main(void) { @autoreleasepool {
         check(sp_window_file_drop(main, fileDropped, fileDropReleased, @"second"), @"the window replaces its file drop receiver");
         check([releasedReceivers isEqualToArray:@[@"first"]],
             [NSString stringWithFormat:@"a replaced file drop receiver is released once (released %@)", releasedReceivers]);
-        // 가림 관찰의 블록이 잡은 객체는 관찰이 끝나야 해제된다.
+        // Objects that the block of the occlusion observation captured are released only when the observation ends.
         NSObject *occlusionCapture = [[NSObject new] autorelease];
         check(sp_window_observe_occlusion(window, ^{ [occlusionCapture self]; }), @"the window occlusion is observed");
 
@@ -138,7 +142,7 @@ int main(void) { @autoreleasepool {
         [window.contentView addSubview:attached positioned:NSWindowAbove relativeTo:nil];
         check(webviewInputRegister(attached) && webviewIgnorePageFocus(attached), @"an attached surface webview registers for input");
         webviewAttachSurface(attached, main);
-        // 모달처럼 창을 채우는 웹뷰. 입력은 등록하지만 표면에 붙이지 않는다.
+        // A webview that fills the window, like a modal. It registers input but is not attached to a surface.
         WKWebView *modal = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];
         [window.contentView addSubview:modal positioned:NSWindowAbove relativeTo:nil];
         check(webviewInputRegister(modal) && webviewIgnorePageFocus(modal), @"a modal webview registers for input");
@@ -174,7 +178,8 @@ int main(void) { @autoreleasepool {
         [modal removeFromSuperview];
     }
 
-    // 호스트가 창을 닫을 때 하는 정리: 영역과 문서, 붙인 웹뷰, 표면을 닫고 배치를 취소한 뒤 창을 닫는다.
+    // Cleanup that the host does when it closes a window: closes the regions and documents, attached webviews, and
+    // surfaces, cancels the layout, and then closes the window.
     @autoreleasepool {
         sp_region_close(region);
         sp_document_close(document);

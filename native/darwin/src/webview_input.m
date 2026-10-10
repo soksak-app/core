@@ -2,8 +2,8 @@
 #import <objc/runtime.h>
 #import "webview_input.h"
 #import "application_log.h"
-// _setIgnoresMouseMoveEvents: 는 키보드, 클릭, 드래그를 끄지 않고 pointer tracking 만
-// 제어한다. 그 이벤트를 받는 webview 는 AppKit 의 hit test 가 선택한다.
+// _setIgnoresMouseMoveEvents: controls only pointer tracking and does not disable keyboard, click, or
+// drag input. The AppKit hit test selects the web view that receives those events.
 #import "private/webkit.h"
 #import "webview_geometry.h"
 #import "window_objects.h"
@@ -11,8 +11,8 @@
 static NSHashTable *inputViews;
 static NSMapTable<NSWindow *, WKWebView *> *lastPointerTargets;
 
-// 추적을 켠 바로 그 이동은 WebKit의 추적 소유자에게 도달하지 않을 수 있다.
-// 새 대상의 첫 이동을 전달해 페이지가 현재 위치의 커서를 계산하게 한다.
+// The move that turns tracking on may not reach the tracking owner of WebKit.
+// Delivering the first move of the new target lets the page compute the cursor at the current position.
 static void refreshPointerCursor(WKWebView *view, NSEvent *event) {
     if (NSEvent.pressedMouseButtons != 0) return;
     [view updateTrackingAreas];
@@ -24,7 +24,8 @@ static void refreshPointerCursor(WKWebView *view, NSEvent *event) {
     }
 }
 
-// 문서가 받은 신뢰 포인터 이벤트를 알리는 스크립트. 페이지와 분리된 content world 에서 실행한다.
+// Script that reports the trusted pointer events the document received. It runs in a content world
+// separate from the page.
 static NSString *const kReceiptWorld = @"soksak-input";
 static NSString *const kReceiptMessage = @"soksakInputReceipt";
 static NSString *const kReceiptScript =
@@ -39,7 +40,7 @@ static NSString *const kReceiptScript =
 - (void)dealloc { [_type release]; [_done release]; [super dealloc]; }
 @end
 
-// 한 웹뷰의 수신 대기. 사용자 콘텐츠 컨트롤러가 이 객체를 보유한다.
+// The receipt waits of one web view. The user content controller retains this object.
 @interface SPInputReceipts : NSObject <WKScriptMessageHandler>
 @property(nonatomic, retain) NSMutableArray<SPInputWait *> *waits;
 @end
@@ -62,9 +63,10 @@ static NSString *const kReceiptScript =
 }
 @end
 
-// 한 웹뷰의 입력 등록. 웹뷰의 연결 객체이므로 웹뷰와 함께 해제된다. WebKit 의 사용자 콘텐츠 컨트롤러는 메시지
-// 처리기를 등록한 동안 자기 자신을 보유하므로, 처리기를 제거하지 않으면 웹뷰가 해제된 뒤에도 컨트롤러와 그
-// 컨트롤러에 등록된 다른 처리기가 남는다. 이 객체는 등록 해제나 웹뷰 해제 때 처리기를 제거한다.
+// The input registration of one web view. It is an associated object of the web view, so it is released
+// with the web view. The user content controller of WebKit retains itself while a message handler is
+// registered; without removing the handler, the controller and the other handlers registered on it remain
+// after the web view is released. This object removes the handler on unregistration or web view release.
 @interface SPInputRegistration : NSObject
 @property(nonatomic, retain) WKUserContentController *controller;
 @property(nonatomic, retain) SPInputReceipts *receipts;
@@ -108,7 +110,7 @@ static BOOL hasPendingMouseDrain(WKWebView *view) {
     return NO;
 }
 
-// 수신 대기가 시간 안에 끝나지 않았음을 기록한다.
+// Logs that a receipt wait did not end within its time.
 static void logReceiptTimeout(NSString *type, NSTimeInterval timeout) {
     sp_log_error("webview input", [NSString stringWithFormat:@"receipt of %@ did not arrive within %g seconds", type, timeout].UTF8String);
 }
@@ -122,7 +124,8 @@ static void installReceipts(WKWebView *view) {
     [controller addScriptMessageHandler:handler contentWorld:world name:kReceiptMessage];
     [controller addUserScript:[[[WKUserScript alloc] initWithSource:kReceiptScript
         injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES inContentWorld:world] autorelease]];
-    // 이미 읽은 문서에는 사용자 스크립트가 적용되지 않으므로 같은 world 에서 한 번 실행한다.
+    // A user script does not apply to a document that is already loaded, so run the script once in
+    // the same world.
     if (view.URL) [view evaluateJavaScript:kReceiptScript inFrame:nil inContentWorld:world completionHandler:nil];
     SPInputRegistration *registration = [[SPInputRegistration new] autorelease];
     registration.controller = controller;
@@ -173,17 +176,18 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
         [handler.waits removeObject:wait];
         wait.done(NO);
     });
-    // 터미널 입력 뒤에는 네이티브 그림 영역이 첫 응답자일 수 있다. 이 상태에서 창이
-    // 비활성화되어 있으면 WebKit이 대상 페이지를 마우스 처리 경로에서 제외할 수 있어
-    // drain 콜백이 다음 합성 포인터까지 도달하지 않는다. WebKit의 대기 중인 마우스
-    // 작업을 기다리기 전에 대상 웹뷰를 응답자로 복원한다. 페이지에는 아래에서 보내는
-    // 포인터 하나만 전달하며, 네이티브 그림 영역 포커스는 호출자가 다시 소유한다.
+    // After terminal input the native drawing region can be the first responder. When the window is
+    // inactive in that state, WebKit can exclude the target page from the mouse handling path, so the
+    // drain callback does not arrive until the next synthetic pointer. Before waiting for the pending
+    // mouse work of WebKit, restore the target web view as the responder. Only the one pointer sent
+    // below reaches the page; the caller takes back the focus of the native drawing region.
     NSWindow *window = view.window;
     NSResponder *first = window.firstResponder;
     BOOL targetOwnsResponder = first == view ||
         ([first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:view]);
     if (window && !targetOwnsResponder) [window makeFirstResponder:view];
-    // 시간 초과나 등록 해제가 drain 전에 대기를 끝냈으면 이미 완료를 보고했으므로 보내지 않는다.
+    // When a timeout or an unregistration ended the wait before the drain, completion is already
+    // reported, so nothing is sent.
     void (^sendAfterDrain)(void) = ^{
         if (![handler.waits containsObject:wait]) return;
         BOOL sent = send();
@@ -203,7 +207,8 @@ static NSEvent *routePointer(NSEvent *event) {
     NSView *content = window.contentView;
     NSPoint point = [content.superview convertPoint:event.locationInWindow fromView:nil];
     NSView *hit = [content hitTest:point];
-    // 등록한 웹뷰 안에 다른 등록한 웹뷰(문서 영역)가 있으면 가장 안쪽의 웹뷰만 이동을 받는다.
+    // When a registered web view contains another registered web view (a document region), only the
+    // innermost web view receives moves.
     NSView *target = hit;
     while (target && ![inputViews containsObject:target]) target = target.superview;
     WKWebView *previous = [lastPointerTargets objectForKey:window];
@@ -232,7 +237,8 @@ BOOL webviewInputRegister(WKWebView *view) {
         lastPointerTargets = [[NSMapTable weakToWeakObjectsMapTable] retain];
         [NSNotificationCenter.defaultCenter addObserverForName:NSApplicationDidBecomeActiveNotification object:NSApp queue:nil
             usingBlock:^(NSNotification *note) { [lastPointerTargets removeAllObjects]; }];
-        // 마우스 이탈 이벤트에서는 추적 대상을 변경하지 않는다. 휠 이벤트는 표면 좌표계의 단위로 바꾼다.
+        // A mouse-exit event does not change the tracking target. A wheel event is converted to
+        // the units of the surface coordinate system.
         [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMouseMoved | NSEventMaskMouseEntered | NSEventMaskScrollWheel
             handler:^NSEvent *(NSEvent *event) {
                 if (event.type != NSEventTypeScrollWheel) return routePointer(event);
@@ -258,9 +264,9 @@ void webviewInputUnregister(WKWebView *view) {
 
 BOOL webviewIgnorePageFocus(WKWebView *view) {
     NSCAssert(NSThread.isMainThread, @"webview focus belongs to the main thread");
-    // 페이지가 요소에 focus 를 주면 WebKit 은 first responder 를 web view 로 옮긴다
-    // (PageClientImpl::makeFirstResponder). 로드를 마친 표면이 열린 메뉴나 입력 중인
-    // 페이지에서 키 입력을 가져가게 된다.
+    // When the page gives focus to an element, WebKit moves the first responder to the web view
+    // (PageClientImpl::makeFirstResponder). A surface that finished loading would then take key input
+    // from an open menu or a page that is receiving input.
     if (![view respondsToSelector:@selector(_setShouldSuppressFirstResponderChanges:)]) {
         sp_log_error("webview input", "_setShouldSuppressFirstResponderChanges: is unavailable");
         return NO;

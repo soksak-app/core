@@ -1,4 +1,4 @@
-// 소유 네이티브 측정은 압축 파일의 크기와 체크섬을 검사한 뒤 픽셀을 읽는다.
+// The owning native measurement checks the size and checksum of the compressed file before it reads pixels.
 #import <Foundation/Foundation.h>
 #include <compression.h>
 #include <zlib.h>

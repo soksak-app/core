@@ -1,4 +1,4 @@
-// UI 호출자의 이벤트 잠금을 해제한 뒤에만 콜백을 실행하는지 검사한다.
+// Checks that callbacks run only after the event lock of the UI caller is released.
 #import <Foundation/Foundation.h>
 #import "ui_queue.h"
 

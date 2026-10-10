@@ -2,12 +2,13 @@
 #import "window_controls.h"
 #import "private/appkit.h"
 
-// AppKit 이 창 단추를 소유한다. 단추를 다른 뷰로 옮기면 AppKit 이 제목이나 녹화 표시가 바뀔 때
-// (-[NSThemeFrame _updateButtons]) 되찾아 가고, 되돌리는 사이에 단추가 사라지거나 제목줄 자리로
-// 당겨진 프레임이 화면에 나온다(측정: 창 이동·크기 변경 48회당 1~2 프레임). 대신 제목줄 높이를 정해
-// AppKit 이 그 높이의 세로 가운데에 단추를 두게 한다.
+// AppKit owns the window buttons. When a button is moved to another view, AppKit takes it back when the
+// title or the recording indicator changes (-[NSThemeFrame _updateButtons]), and while it is restored the
+// button disappears or a frame with the button pulled into the title bar position appears on screen
+// (measured: 1 to 2 frames per 48 window moves and resizes). Instead, set the title bar height so that
+// AppKit places the buttons at the vertical center of that height.
 
-// 제목줄을 가질 수 없는 창은 표준 단추나 콘텐츠 뷰가 없다.
+// A window that cannot have a title bar has no standard buttons or content view.
 static BOOL titled(NSWindow *window) {
     return [window standardWindowButton:NSWindowCloseButton] && window.contentView;
 }
@@ -15,15 +16,18 @@ static BOOL titled(NSWindow *window) {
 double windowTitlebarHeight(void *handle) {
     NSCAssert(NSThread.isMainThread, @"Window controls belong to the main thread");
     NSWindow *window = (NSWindow *)handle;
-    // 0 은 제목줄이 없는 창(전체 화면)의 높이이므로 제목줄을 만들 수 없는 창은 -1 이다.
+    // 0 is the height of a window without a title bar (full screen), so a window that cannot have a
+    // title bar gives -1.
     if (!titled(window)) return -1;
     return window.frame.size.height - window.contentLayoutRect.size.height;
 }
 
-// AppKit 의 setTitlebarHeight: 는 SDK 헤더에 없다(docs/operations/private-native-apis.md). 0 이하의 값은
-// 사용자 지정 높이를 지우지만 다시 배치하지 않으므로 받지 않는다. 전체 화면 전환은 들어갈 때 값을 저장하고
-// 나올 때 되돌리므로, 전체 화면 동안 정한 값은 나올 때 사라지고 그동안 제목줄은 보이지 않는다. 그때는 높이를 바꾸지
-// 않고 성공한다. 호출자는 windowTitlebarHeight 의 0 으로 그 상태를 알리고, 페이지는 창이 나온 뒤 행을 다시 준비한다.
+// setTitlebarHeight: of AppKit is not in the SDK headers (docs/operations/private-native-apis.md). A value
+// of 0 or less clears the custom height without laying out again, so it is not accepted. Full screen
+// transitions save the value on entry and restore it on exit, so a value set during full screen is lost on
+// exit and the title bar is not visible meanwhile. In that case the call succeeds without changing the
+// height. The caller learns that state from the 0 of windowTitlebarHeight, and the page prepares the rows
+// again after the window exits full screen.
 bool windowSetTitlebarHeight(void *handle, double height, char **failure) {
     NSCAssert(NSThread.isMainThread, @"Window controls belong to the main thread");
     NSWindow *window = (NSWindow *)handle;
@@ -42,7 +46,7 @@ bool windowSetTitlebarHeight(void *handle, double height, char **failure) {
     return true;
 }
 
-// 위치를 읽을 때 위치를 고치지 않는다. 호출자는 실제 geometry 가 필요하다.
+// Reading the position does not correct the position. The caller needs the actual geometry.
 void windowControls(void *handle, double *out) {
     NSCAssert(NSThread.isMainThread, @"Window controls belong to the main thread");
     NSWindow *window = (NSWindow *)handle;

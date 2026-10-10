@@ -1,4 +1,5 @@
-// 실제 인수 검사에 양수 프레임 수와 종료 오류를 주입하여 잘못된 통과를 검증한다.
+// Injects a positive frame count and an end error into the actual argument check to verify that no wrong
+// pass occurs.
 #import <Cocoa/Cocoa.h>
 #import "capture.h"
 

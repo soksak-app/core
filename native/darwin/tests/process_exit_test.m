@@ -1,5 +1,5 @@
-// sp_process_when_exited 가 끝나는 프로세스, 이미 끝난 프로세스, 기한 안에 끝나지 않는 프로세스를 구별하는지 검사한다.
-// 애플리케이션을 활성화하지 않는다.
+// Checks that sp_process_when_exited distinguishes a process that exits, a process that has already exited, and a process that does not exit within the deadline.
+// It does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <spawn.h>
 #import <sys/wait.h>
@@ -38,7 +38,7 @@ static pid_t spawnSleep(const char *seconds) {
     return pid;
 }
 
-// done 이 불릴 때까지 메인 실행 반복을 돌린다.
+// Runs the main run loop until done is called.
 static void runUntilAnswered(SPExited *state) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:15];
     while (state->calls == 0 && deadline.timeIntervalSinceNow > 0) {
@@ -52,7 +52,7 @@ int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
 
-    // 다른 프로세스가 회수하는 자식처럼 이 검사는 종료를 알림으로만 받는다. 회수는 답을 받은 뒤에 한다.
+    // Like a child that another process reaps, this test receives the exit only as a notification. Reaping is done after the reply.
     pid_t ending = spawnSleep("0.3");
     SPExited ended = {0};
     sp_process_when_exited(ending, 10, answered, &ended);
@@ -78,7 +78,7 @@ int main(void) { @autoreleasepool {
         kill(running, SIGTERM);
         waitpid(running, NULL, 0);
     }
-    // 기한 뒤에 끝난 프로세스는 답을 다시 주지 않는다.
+    // A process that exits after the deadline does not give the reply again.
     [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
     check(missed.calls == 1, [NSString stringWithFormat:@"the answer is given once (calls %d)", missed.calls]);
     check(!NSApp.isActive, @"application stays inactive");

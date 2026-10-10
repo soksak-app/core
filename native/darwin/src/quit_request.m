@@ -1,8 +1,8 @@
 #import <Cocoa/Cocoa.h>
 #import "quit_request.h"
 
-// 종료 event 를 보류하고 호스트에 알린다. 애플리케이션 프레임워크의 applicationShouldTerminate: 는 창이 저장하는 동안
-// 취소를 답하므로, 운영체제의 종료 요청은 그 경로 대신 호스트의 종료 요청을 실행하고 끝나기 직전에 답한다.
+// Holds the quit event and notifies the host. applicationShouldTerminate: of the application framework replies cancel
+// while windows are saving, so the quit request of the operating system runs the quit request of the host instead of that path and replies just before the host ends.
 @interface SPQuitRequest : NSObject
 @property(copy) void (^request)(void);
 @property(retain) NSMutableArray<NSValue *> *suspended;

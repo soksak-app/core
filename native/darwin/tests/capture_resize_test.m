@@ -1,6 +1,6 @@
-// 녹화 중 창이 커져도 마지막 프레임이 장치 픽셀 해상도로 창 전체를 담는지 실제 스트림으로 검사한다.
-// 스트림 출력 크기는 시작할 때 정해지므로 따라가지 않으면 커진 창이 축소되어 기록된다.
-// 애플리케이션을 활성화하지 않는다.
+// Checks with a real stream that, when the window grows during a recording, the last frame holds the entire window at device pixel resolution.
+// The stream output size is fixed at start; if it is not followed, the enlarged window is recorded scaled down.
+// Does not activate the application.
 #import "../src/capture.m"
 
 static int failures;
@@ -9,7 +9,7 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// 창 화면의 display link 콜백마다 다음 표시 목표 시각(ms, mach 절대 시각)을 기록한다.
+// Records the next presentation target time (ms, mach absolute time) at each display link callback of the window screen.
 @interface SPPresentation : NSObject
 @property (nonatomic) int ticks;
 @property (nonatomic) double target;
@@ -49,12 +49,12 @@ int main(void) { @autoreleasepool {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!onScreen() && deadline.timeIntervalSinceNow > 0) spin(0.01);
     check(onScreen(), @"the window server shows the capture window");
-    // 첫 합성 프레임이 안정될 때까지 창을 바꾸지 않는다(capture_cycles_test 와 같다).
+    // Does not change the window until the first composited frame is stable (same as capture_cycles_test).
     spin(3);
     double scale = window.backingScaleFactor;
 
-    // 바꾼 창은 다음 화면 갱신에 커밋되고 그 다음 갱신에 표시된다. 두 번째 display link 콜백의 목표
-    // 시각(호스트의 host.window.presented 와 같은 기준)을 돌려준다.
+    // A changed window is committed at the next screen update and presented at the update after that. Returns the target
+    // time of the second display link callback (same reference as host.window.presented of the host).
     double (^presentedAfterChange)(void) = ^double {
         SPPresentation *presentation = [[SPPresentation new] autorelease];
         CADisplayLink *link = [window.contentView displayLinkWithTarget:presentation selector:@selector(tick:)];
@@ -65,8 +65,8 @@ int main(void) { @autoreleasepool {
         check(presentation.ticks >= 2, [NSString stringWithFormat:@"the display link reports the next presentation (%d ticks)", presentation.ticks]);
         return presentation.target;
     };
-    // 녹화의 index 번째(1부터) 프레임이 창 크기 points 를 장치 픽셀로 담는지 검사한다. 프레임 번호는 녹화 사이에
-    // 이어지므로 디렉터리의 파일 순서로 고른다.
+    // Checks that the index-th (from 1) frame of a recording holds the window size points in device pixels. Frame numbers continue
+    // across recordings, so the frame is chosen by the file order of the directory.
     BOOL (^frameIs)(NSString *, int, NSSize, NSString *) = ^BOOL(NSString *directory, int number, NSSize points, NSString *label) {
         NSArray *files = [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:directory error:nil]
             sortedArrayUsingSelector:@selector(compare:)];
@@ -88,7 +88,7 @@ int main(void) { @autoreleasepool {
             label, number, head[0], head[1], info[2], info[3], info[4], width, height]);
         return ok;
     };
-    // 창을 녹화하는 동안 change 를 실행하고, 그 표시 뒤에 멈춘다. 프레임 수를 돌려주고 디렉터리는 directory 에 남긴다.
+    // Runs change while recording the window and stops after its presentation. Returns the frame count and leaves the directory in directory.
     int (^record)(NSString *, void (^)(void), NSString **) = ^int(NSString *label, void (^change)(void), NSString **directoryOut) {
         char template[] = "/tmp/soksak-capture-resize-XXXXXX";
         if (mkdtemp(template) == NULL) { check(NO, [NSString stringWithFormat:@"%@: the capture directory is created", label]); return 0; }
@@ -117,7 +117,7 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"capture files are removed (%@)", removal]);
     };
 
-    // 녹화 중 창이 커지면 커진 창의 표시 뒤 마지막 프레임은 커진 창을 장치 픽셀로 담는다.
+    // When the window grows during a recording, the last frame after the presentation of the grown window holds the grown window in device pixels.
     NSString *directory = nil;
     int frames = record(@"growing", ^{
         [window setFrame:NSMakeRect(80, 80, 320, 160) display:YES];
@@ -126,7 +126,7 @@ int main(void) { @autoreleasepool {
     if (frames > 0) frameIs(directory, frames, NSMakeSize(320, 160), @"growing");
     remove(directory);
 
-    // 녹화 밖에서 줄인 창의 새 녹화는 첫 프레임부터 줄인 창의 크기다. 앞 녹화가 바꾼 출력 크기를 이어받지 않는다.
+    // A new recording of a window shrunk outside a recording has the shrunk window size from the first frame. It does not inherit the output size changed by the previous recording.
     [window setFrame:NSMakeRect(80, 80, 200, 100) display:YES];
     presentedAfterChange();
     directory = nil;

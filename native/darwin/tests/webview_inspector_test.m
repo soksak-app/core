@@ -1,9 +1,10 @@
-// 표면 웹뷰의 웹 인스펙터를 열어도 표면이 호스트가 정한 자리에 남는지 검사한다. 인스펙터를 창에
-// 붙이면 WebKit 이 검사 대상 뷰를 창의 남은 자리로 옮기고, 인스펙터를 닫아도 되돌리지 않는다.
-// 표면의 자리는 페이지가 정하므로 그 이동은 화면을 깨뜨린다.
+// Checks that opening the web inspector of a surface webview leaves the surface at the position the host set.
+// Attaching the inspector to the window makes WebKit move the inspected view into the remaining space of the window
+// and not move it back when the inspector closes. The page sets the position of the surface, so that move breaks the
+// display.
 //
-// 인스펙터는 WKWebView 의 비공개 항목 `_inspector` 로 연다(검사 전용,
-// docs/operations/private-native-apis.md 참고). 인스펙터 창이 열리므로 애플리케이션을 활성화한다.
+// The inspector is opened through the private WKWebView member `_inspector` (check only, see
+// docs/operations/private-native-apis.md). The inspector window opens, so the check activates the application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
@@ -16,7 +17,8 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// 앱 이벤트를 꺼내 처리하며 기다린다. 이 검사는 앱을 활성화하며, 활성화와 인스펙터 창 이벤트는 이벤트로 도착한다.
+// Waits while it takes app events and handles them. This check activates the app, and the activation and inspector
+// window events arrive as events.
 static void until(BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
@@ -26,7 +28,7 @@ static void until(BOOL (^done)(void)) {
     }
 }
 
-// 창 좌표의 표면 프레임.
+// The surface frame in window coordinates.
 static NSRect frameOf(WKWebView *view) {
     double rect[4] = {0, 0, 0, 0};
     webviewGetFrame(view, rect);
@@ -37,7 +39,7 @@ static NSString *describe(NSRect rect) {
     return [NSString stringWithFormat:@"%.0f,%.0f %.0fx%.0f", rect.origin.x, rect.origin.y, rect.size.width, rect.size.height];
 }
 
-// tests/support/no_activation.m: 이 검사는 make test-activation 에서 앱을 활성화한다.
+// tests/support/no_activation.m: this check activates the app in make test-activation.
 void sp_test_declare_activation(void);
 
 int main(void) { @autoreleasepool {
@@ -49,7 +51,8 @@ int main(void) { @autoreleasepool {
         styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskResizable
         backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
-    // 인스펙터는 개발자 도구를 켠 페이지에서만 열린다. 애플리케이션의 디버그 빌드도 이 값을 켠다.
+    // The inspector opens only in a page with developer tools enabled. The debug build of the application also
+    // enables this value.
     WKWebViewConfiguration *configuration = [[WKWebViewConfiguration new] autorelease];
     [configuration.preferences setValue:@YES forKey:@"developerExtrasEnabled"];
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds
@@ -82,7 +85,7 @@ int main(void) { @autoreleasepool {
     until(^BOOL { return inspector.visible; });
     check(inspector.visible, @"the inspector opens");
 
-    // 인스펙터를 창에 붙인다. 사용자가 인스펙터의 도킹 단추로 하는 동작이다.
+    // Attaches the inspector to the window. A user does this with the dock button of the inspector.
     [inspector attach];
     until(^BOOL { return inspector.inspectorWebView.window == window; });
     check(inspector.inspectorWebView.window == window, [NSString stringWithFormat:

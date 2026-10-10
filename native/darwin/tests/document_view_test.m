@@ -1,7 +1,7 @@
-// 문서 영역 웹뷰의 이동, 기록, 상태 보고, 배치, 격리를 검사한다. 기본 실행은 애플리케이션을 활성화하지 않고,
-// 끝날 때 활성화되지 않았음을 확인한다. --activation 실행은 앱을 활성화해 OS 이벤트 대기열의 클릭과 키를 검사한다.
+// Checks navigation, history, status reporting, placement, and isolation of the document region web view. The default run does not activate the application and
+// confirms at the end that it was not activated. The --activation run activates the application and checks clicks and keys of the OS event queue.
 //
-// 검사 문서는 이 프로세스가 루프백 주소에서 제공한다.
+// This process serves the test documents on a loopback address.
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
@@ -26,7 +26,7 @@ static void until(NSString *what, BOOL (^done)(void)) {
     if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
-// 검사 문서. 경로마다 제목과 본문이 다르다.
+// Test documents. Each path has a different title and body.
 static NSString *pageFor(NSString *path) {
     if ([path isEqualToString:@"/one"]) {
         return @"<!doctype html><title>One</title><body style='height:3000px;margin:0'>"
@@ -45,13 +45,13 @@ static NSString *pageFor(NSString *path) {
     return nil;
 }
 
-// 서버가 마지막으로 받은 요청의 User-Agent 헤더.
+// The User-Agent header of the last request that the server received.
 static NSString *requestAgent;
 
-// 응답하지 않는 요청의 연결. 검사가 끝날 때 닫는다.
+// Connections of requests that are not answered. They are closed when the test ends.
 static NSMutableArray *held;
 
-// 한 요청에 한 응답을 보내고 연결을 닫는 HTTP 서버. /slow 에는 응답하지 않는다.
+// An HTTP server that sends one response per request and closes the connection. It does not respond to /slow.
 static nw_listener_t serve(void) {
     nw_parameters_t parameters = nw_parameters_create_secure_tcp(NW_PARAMETERS_DISABLE_PROTOCOL, NW_PARAMETERS_DEFAULT_CONFIGURATION);
     nw_endpoint_t local = nw_endpoint_create_host("127.0.0.1", "0");
@@ -100,7 +100,7 @@ static NSDictionary *latest;
 static int reports;
 static int nativeEvents;
 static NSDictionary *latestNativeEvent;
-// 설정되어 있으면 모든 보고를 이 조건으로 검사하고, 어긋난 보고를 남긴다.
+// When set, every report is checked against this condition, and a report that deviates is recorded.
 static BOOL (^expected)(NSDictionary *state);
 static NSDictionary *mismatch;
 
@@ -133,7 +133,7 @@ static id evaluate(WKWebView *view, NSString *script) {
     return [result autorelease];
 }
 
-// 표면 안의 WKWebView 수. 표면 자신의 내부 뷰는 WKWebView 가 아니다.
+// The number of WKWebViews in the surface. The internal view of the surface itself is not a WKWebView.
 static NSUInteger documents(NSView *surface) {
     NSUInteger count = 0;
     for (NSView *child in surface.subviews) {
@@ -157,11 +157,11 @@ static void pumpEvents(NSString *what, BOOL (^done)(void)) {
     if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
-// tests/support/no_activation.m: 이 검사는 make test-activation 에서 앱을 활성화한다.
+// tests/support/no_activation.m: this check activates the application in make test-activation.
 void sp_test_declare_activation(void);
 
 int main(int argc, char **argv) { @autoreleasepool {
-    // --activation 은 앱을 활성화해 OS 이벤트 대기열의 클릭과 키를 검사한다. make test-activation 만 사용한다.
+    // activation activates the application and checks clicks and keys of the OS event queue. Used only by make test-activation.
     BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
     if (activation) sp_test_declare_activation();
     [NSApplication sharedApplication];
@@ -187,7 +187,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     NSView *nativePlane = (NSView *)sp_surface_native_plane(surface);
 
     window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
-    // 저장소 디렉터리는 검사가 끝나면 지운다.
+    // The store directory is deleted when the test ends.
     NSString *stores = [NSTemporaryDirectory() stringByAppendingPathComponent:
         [NSString stringWithFormat:@"soksak-document-store-%d", getpid()]];
     NSString *storeA = [stores stringByAppendingPathComponent:@"a"];
@@ -212,7 +212,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     sp_document_frame(document, frame);
     check(frame[0] == 10 && frame[1] == 20 && frame[2] == 560 && frame[3] == 390,
         [NSString stringWithFormat:@"the region follows the surface size: %g %g %g %g", frame[0], frame[1], frame[2], frame[3]]);
-    // 여백보다 작아졌던 표면이 다시 커져도 영역은 여백으로 정해진다.
+    // Even when a surface that had become smaller than the margins grows again, the margins determine the region.
     webviewSetFrame(surface, 0, 0, 30, 50);
     webviewSetFrame(surface, 0, 0, 500, 400);
     sp_document_frame(document, frame);
@@ -229,7 +229,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     sp_document_frame(document, frame);
     check(frame[4] == 1, @"restoring a visible surface restores a document placed while the surface was hidden");
 
-    // 글자 배율(docs/spec/text-size.md)은 페이지 확대이며 배치와 배율 변경 뒤에도 유지된다.
+    // The text size (docs/spec/text-size.md) is page zoom and is kept after placement and scale changes.
     check(sp_document_zoom(document, 1.5) && view.pageZoom == 1.5, @"the document page zoom is the text size factor");
     sp_document_place(document, 10, 20, 30, 40, true);
     webviewSetFrame(surface, 0, 0, 520, 420);
@@ -238,10 +238,10 @@ int main(int argc, char **argv) { @autoreleasepool {
         @"an invalid page zoom is rejected and leaves the zoom unchanged");
     check(sp_document_zoom(document, 1) && view.pageZoom == 1, @"the document page zoom returns to 1");
 
-    // V5-103 정책: 파일 주소는 그 파일이 있는 디렉터리까지 읽기 권한을 받아 연다. 번들 안의
-    // 앱에서는 파일이 실제로 뜬다(V5-103 의 앱 실측). 이 검사 실행 파일은 번들이 없어
-    // WebKit 이 파일 탐색을 내부 오류로 끝내므로, 여기서는 주소가 받아들여지고 탐색이
-    // 시작되었음을 증명한다 — 거부된 주소와 달리 상태에 탐색의 결과가 남는다.
+    // V5-103 policy: a file address is opened with read permission granted up to the directory that holds the file. In a bundled
+    // application the file is really displayed (application measurement of V5-103). This test executable has no bundle,
+    // so WebKit ends the file navigation with an internal error; here the test proves that the address is accepted and the navigation
+    // has started, because, unlike a rejected address, the navigation result remains in the status.
     check(sp_document_load(document, "file:///etc/hosts"), @"a file address is accepted");
     settle(@"the file navigation did not report", ^BOOL(NSDictionary *state) {
         return ([state[@"url"] isEqual:@"file:///etc/hosts"] || state[@"error"] != NSNull.null)
@@ -253,7 +253,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     settle(@"the first document did not load", ^BOOL(NSDictionary *state) {
         return [state[@"title"] isEqual:@"One"] && ![state[@"loading"] boolValue];
     });
-    // 문서는 같은 WebKit 위의 Safari 사용자 에이전트를 보낸다(docs/spec/native-surfaces.md#document-regions).
+    // The document sends the Safari user agent of the same WebKit (docs/spec/native-surfaces.md#document-regions).
     NSString *safari = [NSBundle bundleWithPath:@"/Applications/Safari.app"].infoDictionary[@"CFBundleShortVersionString"];
     NSArray *parts = [safari componentsSeparatedByString:@"."];
     NSString *suffix = [NSString stringWithFormat:@" Version/%@.%@ Safari/605.1.15", parts[0], parts[1]];
@@ -321,7 +321,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     check([latest[@"url"] hasSuffix:@"/one"] && ![latest[@"canGoBack"] boolValue] && latest[@"error"] == NSNull.null,
         [NSString stringWithFormat:@"the state reports the loaded document: %@", latest]);
 
-    // 읽기를 막 끝낸 문서에 보낸 네이티브 휠 스크롤도 요청한 거리만큼 문서를 움직이고, 그 위치가 보고된다.
+    // A native wheel scroll sent to a document that has just finished loading also moves the document by the requested distance, and that position is reported.
     __block sp_input_result scrollResult = SP_INPUT_REJECTED;
     sp_input_pointer_then(window, 250, 200, 4, 0, 0, 120, 5, scrollDone, &scrollResult);
     until(@"the native scroll was not delivered", ^BOOL { return scrollResult != SP_INPUT_REJECTED; });
@@ -374,7 +374,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         return [state[@"title"] isEqual:@"Two"] && ![state[@"loading"] boolValue] && [state[@"canGoBack"] boolValue];
     });
     check(latest[@"error"] == NSNull.null, @"a new navigation clears the previous error");
-    // 세션 기록은 오래된 항목부터이고 index 는 현재 항목이다.
+    // The session history starts with the oldest entry, and index is the current entry.
     NSArray *entries = latest[@"history"][@"entries"];
     check(entries.count == 2 && [entries[0][@"url"] hasSuffix:@"/one"] && [entries[0][@"title"] isEqual:@"One"]
         && [entries[1][@"title"] isEqual:@"Two"] && [latest[@"history"][@"index"] intValue] == 1,
@@ -411,8 +411,8 @@ int main(int argc, char **argv) { @autoreleasepool {
     });
     check(documents(nativePlane) == 1, @"a new-window link does not create another view");
 
-    // 읽는 중인 문서를 새 이동이 대신하면, 이전 문서의 읽기가 끝났다고 보고하지 않는다. 제목은 읽기가
-    // 끝난 뒤의 보고에 올 수 있으므로 이 조건에 넣지 않는다.
+    // When a new navigation replaces a document that is still loading, the end of loading of the previous document is not reported. The title may arrive in the report after
+    // the loading ends, so it is not part of this condition.
     check(sp_document_load(document, [base stringByAppendingString:@"/slow"].UTF8String), @"a slow address is accepted");
     settle(@"the slow document did not start", ^BOOL(NSDictionary *state) {
         return [state[@"url"] hasSuffix:@"/slow"] && [state[@"loading"] boolValue];
@@ -432,7 +432,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     sp_document_background(document, false);
     check(view.contentFilters.count == 0, @"clearing the background state removes the blur");
 
-    // 문서의 요소와 기록된 요청이 상태에 실린다.
+    // The elements of the document and the recorded requests are carried in the status.
     check(sp_document_load(document, [base stringByAppendingString:@"/inspect"].UTF8String), @"the inspect address is accepted");
     settle(@"the inspect document did not report its elements and requests", ^BOOL(NSDictionary *state) {
         NSArray *entries = state[@"requests"][@"entries"];
@@ -456,7 +456,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         return [[[state[@"elements"][@"nodes"] lastObject] objectForKey:@"tag"] isEqual:@"section"];
     });
 
-    // 포인터 아래 링크의 주소가 상태의 link 다. 링크 밖으로 나가면 빈 글이다.
+    // The address of the link under the pointer is link in the status. Outside a link it is an empty string.
     check([latest[@"link"] isEqual:@""], [NSString stringWithFormat:@"a document without a pointed link reports an empty link: %@", latest[@"link"]]);
     evaluate(view, @"const a = document.createElement('a'); a.href = '/target'; a.textContent = 'go'; document.body.append(a);"
         " a.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); null");
@@ -468,7 +468,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         return [state[@"link"] isEqual:@""];
     });
 
-    // 같은 디렉터리의 문서는 사이트 데이터를 공유하고, 다른 디렉터리의 문서는 공유하지 않는다.
+    // Documents in the same directory share site data, and documents in different directories do not.
     void *same = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, changed, NULL);
     void *other = sp_document_create(surface, storeB.fileSystemRepresentation, NULL, NULL, changed, NULL);
     check(same != NULL && other != NULL, @"documents are created for a shared and a separate store directory");
@@ -498,7 +498,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     sp_document_close(same);
     sp_document_close(other);
 
-    // 닫기 직전에 보고를 예약해 두고, 닫은 뒤 그 차례가 지나도 보고가 없는지 본다.
+    // Schedules a report just before closing and checks that no report arrives after that turn passes following the close.
     evaluate(view, @"scrollTo(0, 10); null");
     sp_document_close(document);
     int after = reports;

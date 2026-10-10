@@ -1,8 +1,10 @@
-// 표면 문서 안의 외부 문서 웹뷰.
+// An external document webview inside a surface document.
 //
-// 상태는 WKWebView 의 KVO 속성과 WKNavigationDelegate 로 읽는다. 스크롤 위치는 문서 전용
-// 콘텐츠 월드(WKContentWorld)의 스크립트가 scroll 이벤트마다 보낸다. 그 월드와 메시지
-// 처리기는 문서 페이지의 스크립트에서 보이지 않는다.
+// The state is read from the KVO properties of WKWebView and from WKNavigationDelegate. The scroll position is sent
+// on
+// every scroll event by a script in a content world (WKContentWorld) dedicated to the document. That world and its
+// message
+// handler are not visible to the scripts of the document page.
 #import <Cocoa/Cocoa.h>
 #import <CoreImage/CoreImage.h>
 #import <WebKit/WebKit.h>
@@ -22,9 +24,11 @@ static NSString *const kScrollScript = @"(() => {"
     "post();"
     "})();";
 
-// 문서의 요소와 Performance API 가 기록한 요청을 보내는 스크립트(docs/spec/native-surfaces.md#document-regions).
-// 호스트의 콘텐츠 월드에서 실행되므로 페이지 스크립트는 이 처리기에 보낼 수 없다. 페이지 캐시에서 돌아온
-// 문서는 스크립트를 다시 실행하지 않으므로 pageshow 에서도 보낸다.
+// The script that sends the elements of the document and the requests recorded by the Performance API
+// (docs/spec/native-surfaces.md#document-regions).
+// It runs in the content world of the host, so page scripts cannot send to this handler. A document restored from the
+// page cache
+// does not run its scripts again, so the script also sends on pageshow.
 // Forwards each message that a plugin document posts to its own window (docs/spec/native-surfaces.md#document-regions).
 // The script runs in the host's content world, so it sees the message events of the page world without giving the
 // page access to the handler; other documents have no message channel.
@@ -92,7 +96,8 @@ static CGFloat documentSurfaceScale(NSView *surface) {
     return sp_surface_scale(surface);
 }
 
-// 스크롤과 문서 내용 메시지 처리기. 사용자 콘텐츠 컨트롤러가 처리기를 보유하므로 뷰를 약하게 가리킨다.
+// The message handler for scroll and document content. The user content controller retains the handler, so it points
+// to the view weakly.
 @interface SPDocumentScroll : NSObject <WKScriptMessageHandler>
 @property(assign) SPDocumentView *view;
 @end
@@ -110,18 +115,21 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 @property(retain) id eventMonitor;
 @property(retain) SPDocumentScroll *scroll;
 @property(copy) NSString *failure;
-// 진행 중인 주 프레임 이동. 요청하거나 시작한 때부터 끝나거나 실패할 때까지 읽는 중으로 보고한다.
-// 대체된 이전 이동이 취소되면 새 이동이 시작되기 전에 WKWebView.loading 이 NO 가 되기 때문이다.
+// The main frame navigation in progress. From the time it is requested or started until it ends or fails, it is
+// reported as loading,
+// because when the replaced earlier navigation is cancelled, WKWebView.loading becomes NO before the new navigation
+// starts.
 @property(retain) WKNavigation *navigation;
 @property(assign) NSView *webSurface;
 @property NSPoint offset;
-// 현재 문서의 요소와 기록된 요청. 이동이 시작되면 비우고 새 문서가 보낸 값으로 바꾼다.
+// The elements and recorded requests of the current document. They are cleared when a navigation starts and replaced
+// by the values sent by the new document.
 @property(copy) NSDictionary *elements;
 @property(copy) NSDictionary *requests;
-// 포인터 아래 링크의 주소. 없으면 빈 글이다.
+// The address of the link under the pointer. It is an empty string if there is none.
 @property(copy) NSString *link;
 @property NSEdgeInsets insets;
-// 글자 배율(docs/spec/text-size.md). 페이지 확대로 적용한다.
+// The text scale (docs/spec/text-size.md). It is applied as page zoom.
 @property double zoom;
 @property BOOL wanted;
 @property BOOL placed;
@@ -272,7 +280,7 @@ static NSString *pluginContentType(NSString *path) {
     if (appearance) self.appearance = appearance;
 }
 
-// 같은 실행 루프 차례의 여러 변경을 한 번의 보고로 묶는다.
+// Combines several changes of the same run loop turn into one report.
 - (void)report {
     if (self.closed || self.pending) return;
     self.pending = YES;
@@ -285,7 +293,8 @@ static NSString *pluginContentType(NSString *path) {
     CFRunLoopWakeUp(CFRunLoopGetMain());
 }
 
-// 세션 기록. 항목은 오래된 것부터이고 index 는 현재 항목의 위치다. 첫 로드 전에는 비어 있고 -1 이다.
+// The session history. Entries are ordered from oldest, and index is the position of the current entry. Before the
+// first load it is empty and index is -1.
 - (NSDictionary *)history {
     WKBackForwardList *list = self.backForwardList;
     NSMutableArray *entries = [NSMutableArray array];
@@ -338,7 +347,7 @@ static NSString *pluginContentType(NSString *path) {
     return YES;
 }
 
-// 이동이 끝났다. 진행 중인 이동이 아니면 대체된 이동이므로 무시한다.
+// The navigation finished. If it is not the navigation in progress, it is a replaced navigation and is ignored.
 - (void)settle:(WKNavigation *)navigation {
     if (navigation == self.navigation) self.navigation = nil;
 }
@@ -352,7 +361,7 @@ static NSString *pluginContentType(NSString *path) {
 }
 
 - (void)fail:(NSError *)error {
-    // 새 이동이 이전 이동을 취소한 경우는 실패가 아니다.
+    // A new navigation that cancelled the earlier navigation is not a failure.
     if ([error.domain isEqualToString:NSURLErrorDomain] && error.code == NSURLErrorCancelled) return;
     self.failure = error.localizedDescription;
     sp_log_info("document view", [NSString stringWithFormat:@"navigation failed: %@ (%@ %ld) %@", error.localizedDescription,
@@ -398,7 +407,8 @@ static BOOL webAddress(NSURL *url) {
     if (!webAddress(action.request.URL)) {
         self.failure = [NSString stringWithFormat:@"%@ is not a web address", action.request.URL.absoluteString];
         sp_log_info("document view", [NSString stringWithFormat:@"navigation refused: %@", self.failure].UTF8String);
-        // 거부한 주 프레임 이동은 시작되지 않는다. 진행 중인 이동은 이 결정을 받은 이동이다.
+        // A main frame navigation that was refused does not start. The navigation in progress is the one that
+        // received this decision.
         if (action.targetFrame.isMainFrame) self.navigation = nil;
         [self report];
         decisionHandler(WKNavigationActionPolicyCancel);
@@ -407,15 +417,16 @@ static BOOL webAddress(NSURL *url) {
     decisionHandler(WKNavigationActionPolicyAllow);
 }
 
-// 새 창을 요청한 이동은 같은 영역에서 연다.
+// A navigation that requested a new window is opened in the same region.
 - (WKWebView *)webView:(WKWebView *)view createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
     forNavigationAction:(WKNavigationAction *)action windowFeatures:(WKWindowFeatures *)features {
     if (webAddress(action.request.URL)) [self request:[self loadRequest:action.request]];
     return nil;
 }
 
-// 여백을 표면 뷰의 AppKit point 좌표로 바꾼다. 표면 웹뷰와 문서 웹뷰는
-// CSS 픽셀은 글자 배율(페이지 확대)만큼 point 보다 크고, backing 배율은 WebKit raster에만 적용한다.
+// Converts the insets to AppKit point coordinates of the surface view. A CSS pixel is larger than a point by the text
+// scale
+// (page zoom), and the backing scale applies only to the WebKit raster.
 - (void)applyInsets {
     NSView *surface = self.webSurface;
     if (!surface) return;
@@ -437,8 +448,8 @@ static BOOL webAddress(NSURL *url) {
     if (self.placed) [self applyInsets];
 }
 
-// 표면 크기가 바뀌면 영역을 여백으로 다시 정한다. 비례 조정(autoresizing)은 표면이 여백보다
-// 작아졌던 크기를 잃는다.
+// When the surface size changes, the region is set again from the insets. Autoresizing loses the size from before
+// the surface became smaller than the insets.
 - (void)viewWillMoveToSuperview:(NSView *)superview {
     if (self.superview) {
         [NSNotificationCenter.defaultCenter removeObserver:self name:NSViewFrameDidChangeNotification object:self.superview];
@@ -460,8 +471,9 @@ static BOOL webAddress(NSURL *url) {
 
 @end
 
-// 디렉터리마다 영구 데이터 저장소 하나. 같은 디렉터리를 쓰는 두 저장소 객체는 같은 파일을 따로 쓰므로
-// 한 디렉터리의 문서는 모두 같은 저장소를 쓴다. 저장소는 프로세스가 끝날 때까지 유지한다.
+// One persistent data store per directory. Two store objects that use the same directory write the same files
+// separately, so
+// all documents of one directory use the same store. The store is kept until the process ends.
 static WKWebsiteDataStore *storeForDirectory(const char *path) {
     static NSMutableDictionary<NSString *, WKWebsiteDataStore *> *stores;
     if (!stores) stores = [NSMutableDictionary new];
@@ -479,9 +491,11 @@ static WKWebsiteDataStore *storeForDirectory(const char *path) {
     return store;
 }
 
-// 영역 문서가 사용자 에이전트 뒤에 붙이는 Safari 이름. 브라우저 이름이 없는 WebKit 사용자 에이전트에는
-// 사이트가 축소된 페이지를 보내고, Google 검색의 기본 페이지에는 다크 테마가 없다. 버전은 시스템 Safari 의
-// 버전이며, 읽지 못하면 nil 이다.
+// The Safari name that a document region appends after the user agent. Sites send a reduced page to a WebKit user
+// agent
+// without a browser name, and the default page of a search engine has no dark theme. The version is the version of
+// the system
+// Safari, and it is nil if it cannot be read.
 static NSString *safariApplicationName(void) {
     NSString *version = [NSBundle bundleWithPath:@"/Applications/Safari.app"].infoDictionary[@"CFBundleShortVersionString"];
     NSArray<NSString *> *parts = [version componentsSeparatedByString:@"."];
@@ -548,7 +562,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     view.pageZoom = view.zoom;
     [view _setOverrideDeviceScaleFactor:sp_surface_scale(surface)];
     for (NSString *key in observedKeys()) [view addObserver:view forKeyPath:key options:0 context:NULL];
-    return view; // sp_document_close 까지 호출자가 이 참조를 소유한다.
+    return view; // The caller owns this reference until sp_document_close.
 }
 
 void sp_document_set_message(void *handle, sp_document_message message, void *context) {
@@ -589,8 +603,9 @@ bool sp_document_load(void *handle, const char *address) {
     SPDocumentView *view = (SPDocumentView *)handle;
     NSURL *url = address ? [NSURL URLWithString:[NSString stringWithUTF8String:address]] : nil;
     if (!url || !webAddress(url)) return false;
-    // 파일 주소는 파일이 있는 디렉터리까지 읽기 권한을 주어 연다. WKWebView 의
-    // loadRequest 로는 파일을 열 수 없고 loadFileURL 이 필요하다.
+    // A file address is opened with read access granted up to the directory that holds the file. A file cannot be
+    // opened with
+    // loadRequest of WKWebView, and loadFileURL is required.
     if ([url.scheme.lowercaseString isEqualToString:@"file"]) {
         NSURL *directory = [url URLByDeletingLastPathComponent] ?: [NSURL fileURLWithPath:@"/"];
         [view request:[view loadFileURL:url allowingReadAccessToURL:directory]];
@@ -656,7 +671,8 @@ void sp_document_background(void *handle, bool enabled) {
         view.contentFilters = @[];
         return;
     }
-    // 표면 문서의 CSS blur(3px) 와 같은 반경이다. 뷰의 한 단위는 CSS 픽셀에 pageZoom 을 곱한 값이다.
+    // The same radius as the CSS blur(3px) of the surface document. One unit of the view is the CSS pixel multiplied
+    // by pageZoom.
     CIFilter *blur = [CIFilter filterWithName:@"CIGaussianBlur"];
     [blur setValue:@(3 * ((WKWebView *)view).pageZoom) forKey:kCIInputRadiusKey];
     view.contentFilters = @[ blur ];
