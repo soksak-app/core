@@ -3,6 +3,9 @@
 use std::fs;
 use std::path::Path;
 
+#[path = "support/records.rs"]
+mod records;
+
 use serde_json::{json, Value};
 use soksak_host_tauriv2::platform;
 use soksak_host_tauriv2::projects::folder;
@@ -273,5 +276,63 @@ fn a_project_text_size_override_is_rejected() {
     assert_eq!(
         refused.err(),
         Some(format!("{}: textSize is common-only", path.display()))
+    );
+}
+
+// contract: workspace.settings.records-each-change
+#[test]
+fn each_settings_change_is_recorded_with_its_keys() {
+    // The writer of the records belongs to the process, so the scenario runs in a child process.
+    if let Some(config) = std::env::var_os("SOKSAK_SETTINGS_CHILD") {
+        let config = std::path::PathBuf::from(config);
+        let root = tempfile::tempdir().unwrap();
+        let writer = records::start_writer(&config);
+        let store = Workspace::new(config.clone());
+        for request in [
+            json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+            json!({"kind":"settings", "patch":{"mode":"light", "gap":6}}),
+            json!({"kind":"settings", "remove":["gap", "missing"]}),
+            json!({"kind":"settings", "id":"prj-test", "patch":{"gap":12}}),
+        ] {
+            apply(&store, request);
+        }
+        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "each_settings_change_is_recorded_with_its_keys",
+            "--nocapture",
+        ])
+        .env("SOKSAK_SETTINGS_CHILD", config.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let seen: Vec<String> = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| event["event"] == "host.workspace.settings")
+        .map(|event| {
+            let fields = &event["fields"];
+            format!(
+                "{} set={} removed={}",
+                fields["scope"].as_str().unwrap(),
+                fields["set"].as_str().unwrap(),
+                fields["removed"].as_str().unwrap()
+            )
+        })
+        .collect();
+    assert_eq!(
+        seen,
+        [
+            "common set=gap,mode removed=",
+            "common set= removed=gap",
+            "prj-test set=gap removed="
+        ]
     );
 }

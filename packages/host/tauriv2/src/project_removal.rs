@@ -42,7 +42,7 @@ impl Removals {
     }
 
     /// Resolves every request that the window `owner` has not answered with true, because a window that ends keeps
-    /// no tab.
+    /// no tab. Each allowed removal is the event `host.project.removal_allowed` with the window and the project.
     pub fn abandon(&self, owner: &str) {
         let Ok(mut pending) = self.pending.lock() else {
             return;
@@ -54,6 +54,11 @@ impl Removals {
             .collect();
         for id in ended {
             if let Some((_, reply)) = pending.remove(&id) {
+                crate::event_record::emit_host(
+                    crate::event_log::Level::Info,
+                    "host.project.removal_allowed",
+                    serde_json::json!({"window": owner, "project": id}),
+                );
                 // The asking command ended its wait, so no one receives the answer.
                 if let Err(error) = reply.send(true) {
                     crate::application_log::log_error("project removal", error);

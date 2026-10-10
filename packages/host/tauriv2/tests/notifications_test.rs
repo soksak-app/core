@@ -1,4 +1,9 @@
-use soksak_host_tauriv2::notifications::{validate_notification, NotificationRequest};
+#[path = "support/records.rs"]
+mod records;
+
+use soksak_host_tauriv2::notifications::{
+    record_event, validate_notification, NotificationRequest,
+};
 
 fn request(surface: &str, title: &str, body: &str) -> NotificationRequest {
     NotificationRequest {
@@ -41,4 +46,80 @@ fn notification_rejects_invalid_fields() {
         validate_notification(&request(&"s".repeat(257), "", ""), true).expect_err("surface");
     assert!(error.contains("surface"), "{error}");
     assert!(validate_notification(&request("tab-1", "title", &"b".repeat(1025)), false).is_err());
+}
+
+// contract: notifications.event.records-each-event-and-failure
+#[test]
+fn each_notification_event_and_failure_is_recorded() {
+    // The writer of the records belongs to the process, so the scenario runs in a child process.
+    if let Some(config) = std::env::var_os("SOKSAK_NOTIFICATION_CHILD") {
+        let config = std::path::PathBuf::from(config);
+        let writer = records::start_writer(&config);
+        for raw in [
+            r#"{"type":"state","authorization":"granted","error":null}"#,
+            r#"{"type":"state","authorization":"denied","error":"post refused"}"#,
+            r#"{"type":"posted","identifier":"[\"w1\",\"tab-1\"]"}"#,
+            r#"{"type":"activated","identifier":"nope"}"#,
+            "not json",
+            r#"{"type":"other"}"#,
+        ] {
+            let _ = record_event(raw);
+        }
+        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "each_notification_event_and_failure_is_recorded",
+            "--nocapture",
+        ])
+        .env("SOKSAK_NOTIFICATION_CHILD", config.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = records::read_events(&records::event_log_path(config.path()));
+    let seen: Vec<String> = events
+        .iter()
+        .filter(|event| event["event"] == "host.notification.event")
+        .map(|event| {
+            let fields = &event["fields"];
+            ["type", "authorization", "window", "surface"]
+                .map(|name| fields[name].as_str().unwrap())
+                .join("|")
+        })
+        .collect();
+    assert_eq!(
+        seen,
+        ["state|granted||", "state|denied||", "posted||w1|tab-1"]
+    );
+    let failures: Vec<&str> = events
+        .iter()
+        .filter(|event| {
+            event["event"] == "host.record.error" && event["fields"]["where"] == "notification"
+        })
+        .map(|event| event["fields"]["text"].as_str().unwrap())
+        .collect();
+    let wants = [
+        "post refused",
+        "activated notification \"nope\" has no window and surface",
+        "notification event \"not json\"",
+        "has an unknown type",
+    ];
+    assert_eq!(
+        failures.len(),
+        wants.len(),
+        "notification failures {failures:?}"
+    );
+    for (failure, want) in failures.iter().zip(wants) {
+        assert!(
+            failure.contains(want),
+            "{failure:?} does not contain {want:?}"
+        );
+    }
 }

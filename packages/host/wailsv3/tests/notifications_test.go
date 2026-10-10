@@ -1,11 +1,58 @@
 package host_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
+
+// contract: notifications.event.records-each-event-and-failure
+func TestEachNotificationEventAndFailureIsRecorded(t *testing.T) {
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	h := &host.Host{}
+	for _, raw := range []string{
+		`{"type":"state","authorization":"granted","error":null}`,
+		`{"type":"state","authorization":"denied","error":"post refused"}`,
+		`{"type":"posted","identifier":"[\"w1\",\"tab-1\"]"}`,
+		`{"type":"activated","identifier":"nope"}`,
+		`not json`,
+		`{"type":"other"}`,
+	} {
+		host.HandleNotificationEvent(h, raw)
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var seen, failures []string
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		fields, _ := event["fields"].(map[string]any)
+		switch event["event"] {
+		case "host.notification.event":
+			seen = append(seen, strings.Join([]string{fields["type"].(string), fields["authorization"].(string), fields["window"].(string), fields["surface"].(string)}, "|"))
+		case "host.record.error":
+			if fields["where"] == "notification" {
+				failures = append(failures, fields["text"].(string))
+			}
+		}
+	}
+	if want := []string{"state|granted||", "state|denied||", "posted||w1|tab-1"}; !slices.Equal(seen, want) {
+		t.Fatalf("host.notification.event events = %q, want %q", seen, want)
+	}
+	wants := []string{`post refused`, `the window "w1" of a posted notification is closed`, `activated notification "nope" has no window and surface`, `notification event "not json"`, `has an unknown type`}
+	if len(failures) != len(wants) {
+		t.Fatalf("notification failures = %q, want %d", failures, len(wants))
+	}
+	for index, want := range wants {
+		if !strings.Contains(failures[index], want) {
+			t.Fatalf("notification failure %d = %q, want it to contain %q", index, failures[index], want)
+		}
+	}
+}
 
 // contract: notifications.request.accepts-tab-notices
 func TestNotificationAcceptsTabNotices(t *testing.T) {

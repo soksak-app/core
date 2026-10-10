@@ -53,7 +53,7 @@ func notificationIdentifier(window, surface string) string {
 func (h *Host) startNotifications() error {
 	var err error
 	application.InvokeSync(func() {
-		err = system.StartNotifications(func(event string) { go h.notificationEvent(event) })
+		err = system.StartNotifications(func(event string) { go HandleNotificationEvent(h, event) })
 	})
 	if err != nil {
 		return fmt.Errorf("system notifications: %w", err)
@@ -61,8 +61,8 @@ func (h *Host) startNotifications() error {
 	return nil
 }
 
-// notificationEvent 는 알림 센터의 사건을 창에 알린다. 권한 상태는 모든 창에, 누른 알림은 그 창에 간다.
-func (h *Host) notificationEvent(raw string) {
+// HandleNotificationEvent 는 알림 센터의 사건을 창에 알린다. 권한 상태는 모든 창에, 누른 알림은 그 창에 간다.
+func HandleNotificationEvent(h *Host, raw string) {
 	var event struct {
 		Type          string  `json:"type"`
 		Authorization string  `json:"authorization"`
@@ -75,6 +75,10 @@ func (h *Host) notificationEvent(raw string) {
 	}
 	switch event.Type {
 	case "state":
+		EmitHost(LevelInfo, "host.notification.event", map[string]any{"type": event.Type, "authorization": event.Authorization, "window": "", "surface": ""})
+		if event.Error != nil {
+			LogError("notification", *event.Error)
+		}
 		h.mu.Lock()
 		h.notifications = NotificationState{Authorization: event.Authorization, Error: event.Error}
 		h.mu.Unlock()
@@ -85,6 +89,7 @@ func (h *Host) notificationEvent(raw string) {
 			h.notificationFailed(fmt.Sprintf("%s notification %q has no window and surface", event.Type, event.Identifier))
 			return
 		}
+		EmitHost(LevelInfo, "host.notification.event", map[string]any{"type": event.Type, "authorization": "", "window": target[0], "surface": target[1]})
 		h.mu.Lock()
 		var owner *Surfaces
 		for _, s := range h.windows {
@@ -107,8 +112,9 @@ func (h *Host) notificationEvent(raw string) {
 	}
 }
 
-// notificationFailed 는 실패를 알림 상태의 오류로 모든 창에 알린다.
+// notificationFailed 는 실패를 알림 상태의 오류로 모든 창에 알리고 기록한다. 창이 없으면 알림 상태가 오류를 보이지 못한다.
 func (h *Host) notificationFailed(reason string) {
+	LogError("notification", reason)
 	h.mu.Lock()
 	h.notifications.Error = &reason
 	h.mu.Unlock()

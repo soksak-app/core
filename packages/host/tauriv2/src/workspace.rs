@@ -196,12 +196,27 @@ impl Workspace {
                     self.directory.join("settings.json")
                 };
                 let mut settings: Map<String, Value> = read(&path)?;
+                let mut set: Vec<String> = patch.keys().cloned().collect();
                 settings.extend(patch);
                 // 기본값: 요청의 remove 는 선택 인자이며 없으면 지울 키가 없다.
+                let mut removed = vec![];
                 for key in req.remove.unwrap_or_default() {
-                    settings.remove(&key);
+                    if settings.remove(&key).is_some() {
+                        removed.push(key);
+                    }
                 }
                 write(&path, &settings)?;
+                set.sort();
+                removed.sort();
+                crate::event_record::emit_host(
+                    crate::event_log::Level::Info,
+                    "host.workspace.settings",
+                    json!({
+                        "scope": req.id.as_deref().unwrap_or("common"),
+                        "set": set.join(","),
+                        "removed": removed.join(","),
+                    }),
+                );
                 return Ok(Value::Null);
             }
             _ => return Err(format!("unknown workspace operation: {}", req.kind)),

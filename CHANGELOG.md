@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F145.14: both hosts store the events `host.project.removal_allowed` (a removal that the end of a window allows), `host.workspace.settings` (the keys of each settings change) and `host.notification.event` (each state, posted and activated event of the notification center), write each failure of the notification center as an `error` record of the place `notification`, and report a failed `ps` query of the WebKit children as an `error` record of the place `webkit children` instead of treating it as a process that does not exist; the Tauri host reports a `kill` that fails.
 - F145.13: both hosts start the detached `sok app update` before the final flush of the event log, give it the standard error of the host (`logs/host-<boot>.stderr`; the Wails host gave it none, so a failure message was lost) and store the event `host.update.start` (`pid`, `command`); the error of a start that fails is now stored. The failure of every other `sok` command remains its exit status and its message on the standard error.
 - F150.8.1: the window check `e2e/input-oracle.test.mjs` compares the bytes that the sidecar logs as written to the PTY for Tab, Escape, Backspace, Enter and Control+A with the bytes that an independent receiver process in the terminal read; they are the same on both applications.
 - F150.8.2: the latency of the whole input path was measured with the performance trace off, on and off again (`e2e/input-latency.test.mjs`); the medians are 23 to 25 ms on Wails and 26 to 38 ms on Tauri.

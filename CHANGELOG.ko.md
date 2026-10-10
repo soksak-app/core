@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F145.14: 두 host는 event `host.project.removal_allowed`(창이 끝나 허용된 제거), `host.workspace.settings`(설정 변경마다의 키), `host.notification.event`(알림 센터의 상태, 게시, 눌림 사건마다)를 저장하고, 알림 센터의 실패마다 장소 `notification`의 `error` 기록을 쓰며, WebKit 자식에 대한 `ps` 질의의 실패를 존재하지 않는 프로세스로 취급하지 않고 장소 `webkit children`의 `error` 기록으로 보고한다. Tauri host는 실패한 `kill`도 보고한다.
 - F145.13: 두 host는 분리 실행하는 `sok app update`를 event log의 마지막 flush 전에 시작하고, host의 표준 오류(`logs/host-<boot>.stderr`)를 주며(Wails host는 주지 않아 실패 메시지가 사라졌다), event `host.update.start`(`pid`, `command`)를 저장한다. 시작에 실패한 오류도 이제 저장된다. 다른 `sok` 명령의 실패는 그대로 종료 상태와 표준 오류의 메시지다.
 - F150.8.1: 창 검사 `e2e/input-oracle.test.mjs`가 Tab, Escape, Backspace, Enter, Control+A에 대해 sidecar가 PTY에 쓴 것으로 기록한 바이트를 터미널의 독립 수신자 프로세스가 읽은 바이트와 비교한다. 두 애플리케이션에서 같다.
 - F150.8.2: 전체 입력 경로의 지연을 성능 trace 끔, 켬, 끔으로 측정했다(`e2e/input-latency.test.mjs`). 중앙값은 Wails 23~25 ms, Tauri 26~38 ms다.

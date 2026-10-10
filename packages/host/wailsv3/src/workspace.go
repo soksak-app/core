@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
@@ -224,13 +226,29 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 		if err := readJSON(path, &settings); err != nil {
 			return nil, err
 		}
+		set := make([]string, 0, len(req.Patch))
 		for key, value := range req.Patch {
 			settings[key] = value
+			set = append(set, key)
 		}
+		var removed []string
 		for _, key := range req.Remove {
-			delete(settings, key)
+			if _, has := settings[key]; has {
+				delete(settings, key)
+				removed = append(removed, key)
+			}
 		}
-		return nil, writeJSON(path, settings)
+		if err := writeJSON(path, settings); err != nil {
+			return nil, err
+		}
+		scope := "common"
+		if req.ID != "" {
+			scope = req.ID
+		}
+		sort.Strings(set)
+		sort.Strings(removed)
+		EmitHost(LevelInfo, "host.workspace.settings", map[string]any{"scope": scope, "set": strings.Join(set, ","), "removed": strings.Join(removed, ",")})
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("unknown workspace operation: %s", req.Kind)
 	}
