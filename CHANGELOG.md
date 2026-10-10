@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F145.15.4: the window check `e2e/event-log.test.mjs` observes on both applications that the trace stores the placed surface with its geometry, the memory of the sidecar process and the start of each page document after a reload.
 - F111.4: the hwp window check is split into `e2e/hwp.test.mjs` (opening, drawing and the keyboard focus while the application is inactive) and `e2e/activation/hwp.test.mjs` (typing, selecting and saving in the active key window), with the shared steps in `e2e/hwp-support.mjs`; the Tauri host does not pass the active check reliably (F111.4).
 - F155: the Tauri host ends with its message and the status 1 when a startup step fails, and stores the failure in the event log, instead of aborting the process and showing the crash dialog of the system.
 - F104.6.3: the comment language check reaches the comments after a string with a backslash before a line feed and after a regular expression literal, and the repository test runs in `pnpm test`; 16 comment lines in `scripts` are in English.

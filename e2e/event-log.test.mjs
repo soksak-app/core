@@ -46,3 +46,35 @@ for (const app of Object.values(APPS)) {
     assert.match(closed, /"window":"[^"]+"/);
   });
 }
+
+// The trace of the host (docs/spec/performance-trace.md): with the trace on, the host stores the lifecycle of a surface with its
+// geometry, the sampler stores the memory of the host and of every registered sidecar process, and a reload of the main page
+// starts a new document that the event `page.start` marks.
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the trace stores the surface geometry, the memory of the sidecar and the start of each page document`, { timeout: 90000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    const { fresh } = await import("./fixture.mjs");
+    const { ensureTerminals } = await import("./terminal-screen.mjs");
+    const offsets = currentEventOffsets(app.configDir);
+    await fresh(s, { performanceTrace: true });
+    const [terminal] = await ensureTerminals(s, 1);
+    await s.until("terminal.session", (state) => Boolean(state.sessionId), `${terminal.surface} did not open a sidecar session`, { surface: terminal.surface });
+    await s.flushLog();
+    // The surface is placed hidden first and visible with its geometry after the layout of the window.
+    const placed = await untilEventLine(app.configDir, offsets, (line) => {
+      if (!line.includes("host.trace.surface") || !line.includes(terminal.surface)) return false;
+      const fields = JSON.parse(line.slice(line.indexOf("{")));
+      return fields.phase === "placed" && fields.visible === true && fields.w > 0 && fields.h > 0;
+    }, 30000);
+    assert.ok(placed.includes(terminal.surface), `the placed surface event names no surface: ${placed}`);
+    const memory = await untilEventLine(app.configDir, offsets,
+      (line) => line.includes("host.sampler.memory") && line.includes('"role":"sidecar"') && line.includes('"rss_kb"'), 60000);
+    assert.match(memory, /"pid":[0-9]+/, `the memory event of the sidecar holds no process: ${memory}`);
+    await s.run("host.window.reload");
+    await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), "the reloaded page did not report ready");
+    await s.flushLog();
+    const starts = await untilEventLine(app.configDir, offsets, (line) => line.includes("page.start") && line.includes('"url"'), 30000);
+    assert.match(starts, /"time_origin":[0-9.]+/, `the page start event holds no clock origin: ${starts}`);
+  });
+}
