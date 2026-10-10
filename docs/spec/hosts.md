@@ -159,6 +159,8 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 
 ## Process lifecycle
 
+A failure of a startup step ends the process with its message on the standard error and the status 1, in both hosts. The Tauri host does not return a failure of its setup steps to the event loop, because the launch callback of the event loop cannot unwind: the failure would abort the process and the system would show its crash dialog without the message.
+
 The hosts own three child-process families, each with one rule.
 
 **WebKit XPC die with the application.** Every exit path kills each window's WebContent process through the native `_killWebContentProcessAndResetState` before the process ends. A termination signal requests the normal quit on both hosts, so the windows save and the sidecars stop as for `host.quit`; a second signal ends the process when the quit does not end. The Wails host kills the WebContent processes in its shutdown step, and the Tauri host kills the WebContent process of each window that closes while the application quits. Without the kill, macOS keeps the WebContent, GPU, and Networking processes alive after the client dies.

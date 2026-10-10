@@ -57,6 +57,7 @@ pub mod start;
 pub mod surfaces;
 pub mod window_events;
 pub use surfaces::surface_owner_id;
+pub mod startup;
 pub mod termination;
 mod theme;
 pub mod webkit_children;
@@ -158,45 +159,50 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
     // The plugin setup runs before the window of the settings file is created, so the endpoint is opened here.
     let endpoint = tauri::plugin::Builder::<tauri::Wry>::new("endpoint")
         .setup(|app, _api| {
-            // Termination signals are received from before the endpoint opens. The first one requests the normal quit
-            // that host.quit requests; the event loop runs it and ends after the ready windows saved and the sidecars
-            // stopped. When a save stalls, the next signal ends the process with the default action (docs/spec/hosts.md).
-            let quit = app.clone();
-            termination::on_termination(Box::new(move || quit.exit(0)))?;
-            let directory = config_directory(app)?;
-            // Harvests the WebKit children that the previous run left behind into the record, and takes the WebKit that
-            // is running now as the baseline so that it does not overwrite another application's children (V5-113). No
-            // window exists yet, so this run has no WebKit.
-            crate::webkit_children::reap_recorded(&directory);
-            crate::webkit_children::snapshot_baseline();
-            let foreign = std::process::Command::new("sh")
-                .arg("-c")
-                .arg("ps -axo command= | grep -c 'com.apple.WebKit.' || true")
-                .output()
-                .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-                // default: the startup does not stop when the ps of the baseline count report fails. This report is
-                // only an observation and is not used for the harvest decision.
-                .unwrap_or_else(|_| "unknown".into());
-            crate::application_log::log_info(
-                "webkit children",
-                format!("baseline {foreign} foreign WebKit processes"),
-            );
-            exposure::start(app, &directory)?;
-            // The event log and the stderr file are opened after the endpoint holds the process lock, so no other run writes
-            // the same files (docs/spec/hosts.md#application-log). The run record waits in the start buffer until the writer
-            // exists.
-            let events = std::sync::Arc::new(event_log::EventLog::start_host(&directory)?);
-            event_record::use_host_event_log(Some(std::sync::Arc::clone(&events)));
-            // The debug view follows the event file of the host: every window learns that the writer wrote.
-            let notices_app = app.clone();
-            let (observe, stop) = debug_follow::coalesce_log_notices(move |path, size| {
-                windows::notify_log_written(&notices_app, path, size)
-            });
-            events.set_on_write(observe);
-            tauri::Manager::manage(app, LogNoticeStop(std::sync::Mutex::new(Some(stop))));
-            tauri::Manager::manage(app, events);
-            application_log::start_standard_error(&directory, soksak_sok::identity::identity())?;
-            Ok(())
+            startup::exit_on_failure((|| -> Result<(), Box<dyn std::error::Error>> {
+                // Termination signals are received from before the endpoint opens. The first one requests the normal quit
+                // that host.quit requests; the event loop runs it and ends after the ready windows saved and the sidecars
+                // stopped. When a save stalls, the next signal ends the process with the default action (docs/spec/hosts.md).
+                let quit = app.clone();
+                termination::on_termination(Box::new(move || quit.exit(0)))?;
+                let directory = config_directory(app)?;
+                // Harvests the WebKit children that the previous run left behind into the record, and takes the WebKit that
+                // is running now as the baseline so that it does not overwrite another application's children (V5-113). No
+                // window exists yet, so this run has no WebKit.
+                crate::webkit_children::reap_recorded(&directory);
+                crate::webkit_children::snapshot_baseline();
+                let foreign = std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg("ps -axo command= | grep -c 'com.apple.WebKit.' || true")
+                    .output()
+                    .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+                    // default: the startup does not stop when the ps of the baseline count report fails. This report is
+                    // only an observation and is not used for the harvest decision.
+                    .unwrap_or_else(|_| "unknown".into());
+                crate::application_log::log_info(
+                    "webkit children",
+                    format!("baseline {foreign} foreign WebKit processes"),
+                );
+                exposure::start(app, &directory)?;
+                // The event log and the stderr file are opened after the endpoint holds the process lock, so no other run writes
+                // the same files (docs/spec/hosts.md#application-log). The run record waits in the start buffer until the writer
+                // exists.
+                let events = std::sync::Arc::new(event_log::EventLog::start_host(&directory)?);
+                event_record::use_host_event_log(Some(std::sync::Arc::clone(&events)));
+                // The debug view follows the event file of the host: every window learns that the writer wrote.
+                let notices_app = app.clone();
+                let (observe, stop) = debug_follow::coalesce_log_notices(move |path, size| {
+                    windows::notify_log_written(&notices_app, path, size)
+                });
+                events.set_on_write(observe);
+                tauri::Manager::manage(app, LogNoticeStop(std::sync::Mutex::new(Some(stop))));
+                tauri::Manager::manage(app, events);
+                application_log::start_standard_error(
+                    &directory,
+                    soksak_sok::identity::identity(),
+                )?;
+                Ok(())
+            })())
         })
         .build();
     tauri::Builder::default()
@@ -257,60 +263,62 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             }
         })
         .setup(move |app| {
-            // When the notification center cannot be used, the application does not start (docs/spec/hosts.md).
-            notifications::start(app.handle())?;
-            // A termination request of the operating system runs the same termination as host.quit and answers after
-            // RunEvent::Exit has finished the save (docs/spec/hosts.md#process-lifecycle).
-            let quit = app.handle().clone();
-            platform::current()?.on_quit_request(Box::new(move || quit.exit(0)))?;
-            let dock = app.handle().clone();
-            platform::current()?.install_dock_menu(Box::new(move || {
-                if let Err(error) = windows::window_new_on_main(dock.clone()) {
-                    log_error("window new", error);
-                }
-            }))?;
-            // Before the page sends the setting language, the menu is built in the system language. The language state
-            // is shared by set_menu_language and the host.menu report (docs/spec/host-contract.md).
-            let language = menu::initial_language()?;
-            let menu = menu::build(app.handle(), &language)?;
-            app.manage(menu::MenuLanguage(std::sync::Mutex::new(language)));
-            app.set_menu(menu)?;
-            let directory = config_directory(app.handle())?;
-            installed_directory
-                .set(directory.clone())
-                .map_err(|_| "the configuration directory of installed plugins is already set")?;
-            app.manage(workspace::Workspace::new(directory.clone()));
-            let handle = app.handle().clone();
-            // Applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page
-            // that reloads uses the installed executables (docs/spec/installation.md#applying-a-change).
-            let applying = app.handle().clone();
-            let installed = directory.clone();
-            app.manage(plugins::Plugins::new(
-                directory.clone(),
-                Box::new(move || {
-                    let declarations = installed::installed_sidecars(&installed)
-                        .map_err(|error| format!("installed plugins: {error}"))?;
-                    applying.state::<WindowSidecars>().declare(&declarations)
-                }),
-                Box::new(move |change| windows::notify_plugins(&handle, change)),
-            )?);
-            let declarations = installed::installed_sidecars(&directory)
-                .map_err(|error| format!("installed plugins: {error}"))?;
-            let sidecars = WindowSidecars::new(&declarations, directory)?;
-            let changed = app.handle().clone();
-            sidecars.on_closing_changed(move || crate::exposure::sidecars_changed(&changed));
-            app.manage(sidecars);
-            let main = app
-                .get_webview_window("main")
-                .ok_or("the configuration has no main window")?;
-            windows::register(main.as_ref().window())?;
-            // host.buttons holds the value of the operating system before endpoint.json is written. When it cannot be
-            // watched, the application does not start.
-            exposure::watch_buttons(app.handle())?;
-            // A client sends a request to the first window as soon as it reads endpoint.json, so the file is written
-            // after the window is registered.
-            exposure::publish(app.handle(), "main")?;
-            Ok(())
+            startup::exit_on_failure((|| -> Result<(), Box<dyn std::error::Error>> {
+                // When the notification center cannot be used, the application does not start (docs/spec/hosts.md).
+                notifications::start(app.handle())?;
+                // A termination request of the operating system runs the same termination as host.quit and answers after
+                // RunEvent::Exit has finished the save (docs/spec/hosts.md#process-lifecycle).
+                let quit = app.handle().clone();
+                platform::current()?.on_quit_request(Box::new(move || quit.exit(0)))?;
+                let dock = app.handle().clone();
+                platform::current()?.install_dock_menu(Box::new(move || {
+                    if let Err(error) = windows::window_new_on_main(dock.clone()) {
+                        log_error("window new", error);
+                    }
+                }))?;
+                // Before the page sends the setting language, the menu is built in the system language. The language state
+                // is shared by set_menu_language and the host.menu report (docs/spec/host-contract.md).
+                let language = menu::initial_language()?;
+                let menu = menu::build(app.handle(), &language)?;
+                app.manage(menu::MenuLanguage(std::sync::Mutex::new(language)));
+                app.set_menu(menu)?;
+                let directory = config_directory(app.handle())?;
+                installed_directory.set(directory.clone()).map_err(|_| {
+                    "the configuration directory of installed plugins is already set"
+                })?;
+                app.manage(workspace::Workspace::new(directory.clone()));
+                let handle = app.handle().clone();
+                // Applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page
+                // that reloads uses the installed executables (docs/spec/installation.md#applying-a-change).
+                let applying = app.handle().clone();
+                let installed = directory.clone();
+                app.manage(plugins::Plugins::new(
+                    directory.clone(),
+                    Box::new(move || {
+                        let declarations = installed::installed_sidecars(&installed)
+                            .map_err(|error| format!("installed plugins: {error}"))?;
+                        applying.state::<WindowSidecars>().declare(&declarations)
+                    }),
+                    Box::new(move |change| windows::notify_plugins(&handle, change)),
+                )?);
+                let declarations = installed::installed_sidecars(&directory)
+                    .map_err(|error| format!("installed plugins: {error}"))?;
+                let sidecars = WindowSidecars::new(&declarations, directory)?;
+                let changed = app.handle().clone();
+                sidecars.on_closing_changed(move || crate::exposure::sidecars_changed(&changed));
+                app.manage(sidecars);
+                let main = app
+                    .get_webview_window("main")
+                    .ok_or("the configuration has no main window")?;
+                windows::register(main.as_ref().window())?;
+                // host.buttons holds the value of the operating system before endpoint.json is written. When it cannot be
+                // watched, the application does not start.
+                exposure::watch_buttons(app.handle())?;
+                // A client sends a request to the first window as soon as it reads endpoint.json, so the file is written
+                // after the window is registered.
+                exposure::publish(app.handle(), "main")?;
+                Ok(())
+            })())
         })
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();

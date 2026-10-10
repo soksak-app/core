@@ -9,15 +9,16 @@ struct Latest {
     stopped: bool,
 }
 
+/// The observer of the writes that the writer calls, and the function that stops the thread behind it.
+pub type LogNotices = (
+    Box<dyn Fn(&Path, u64) + Send + Sync>,
+    Box<dyn FnOnce() + Send>,
+);
+
 /// Wraps `emit` for the observer of the writes of the event log. The observer returns at once, so the writer never waits for a
 /// window; the notices that arrive while `emit` runs become one notice with the latest path and size. The returned function
 /// stops the thread that calls `emit` and waits until it returned.
-pub fn coalesce_log_notices(
-    emit: impl Fn(&Path, u64) + Send + 'static,
-) -> (
-    Box<dyn Fn(&Path, u64) + Send + Sync>,
-    Box<dyn FnOnce() + Send>,
-) {
+pub fn coalesce_log_notices(emit: impl Fn(&Path, u64) + Send + 'static) -> LogNotices {
     let shared = Arc::new((
         Mutex::new(Latest {
             notice: None,

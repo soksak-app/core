@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F155: Tauri 호스트가 시작 단계의 실패에서 프로세스를 abort시켜 시스템 충돌 대화상자를 보이는 대신, 메시지와 상태 1로 끝나고 실패를 event log에 저장한다.
 - F104.6.3: 주석 언어 검사가 줄바꿈 앞에 역슬래시가 있는 문자열 뒤와 정규식 리터럴 뒤의 주석에 닿고, 저장소 시험이 `pnpm test`에서 실행된다. `scripts`의 주석 16줄이 영어다.
 - F104.5: `packages/sok`, `packages/plugin-api`, `packages/window-check`, `packages/client`, `packages/mcp`, `packages/soksak`, `packages/log-contract`의 주석 1,070줄이 영어이며, `scripts/check-comment-language.mjs`가 나열하지 않는 `packages/plugin-api/records-check.js`의 6줄을 포함한다. 주석 줄만 바뀌었고 해당 테스트가 통과한다.
 - F104.2.1: `packages/host/wailsv3`의 주석(85개 파일의 1,798줄)이 영어이다. `scripts/check-comment-language.mjs`가 이곳에서 보고하는 줄이 없고, 모든 파일의 코드가 주석을 뺀 채 같으며, macOS에서 `go vet`과 `tests`의 컴파일이 성공한다.

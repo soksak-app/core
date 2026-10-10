@@ -1767,6 +1767,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F155",
+    implementation: [
+      { file: "packages/host/tauriv2/src/startup.rs", symbol: "pub fn exit_on_failure_with" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/startup_test.rs", id: "a_failed_setup_step_writes_its_message_and_exits_with_status_one" },
+    ],
+    expected: "A failure of a startup step of the Tauri host writes its message and ends the process with the status 1 instead of aborting it.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F154.4.3",
     implementation: [
       { file: "scripts/node-tests.mjs", symbol: "export function parseTestScript" },

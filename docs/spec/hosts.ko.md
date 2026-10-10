@@ -160,6 +160,8 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 
 ## 프로세스 생명주기
 
+시작 단계의 실패는 두 호스트 모두 그 메시지를 표준 오류에 쓰고 상태 1로 프로세스를 끝낸다. Tauri 호스트는 setup 단계의 실패를 event loop에 돌려주지 않는다. event loop의 시작 callback은 unwind할 수 없어서 실패가 프로세스를 abort시키고, 시스템이 메시지 없이 충돌 대화상자를 보이기 때문이다.
+
 호스트는 세 자식 프로세스 계열을 각각 하나의 규칙으로 소유한다.
 
 **WebKit XPC 는 애플리케이션과 함께 죽는다.** 모든 종료 경로는 프로세스가 끝나기 전에 네이티브 `_killWebContentProcessAndResetState` 로 각 창의 WebContent 프로세스를 죽인다. 종료 신호는 두 호스트 모두에서 정상 quit 를 요청하므로 `host.quit` 처럼 창이 저장하고 사이드카가 멈춘다. quit 가 끝나지 않으면 두 번째 신호가 프로세스를 끝낸다. Wails 호스트는 종료 단계에서 WebContent 프로세스를 죽이고, Tauri 호스트는 애플리케이션이 종료하는 동안 닫히는 각 창의 WebContent 프로세스를 죽인다. 죽이지 않으면 macOS 는 클라이언트가 죽은 뒤에도 WebContent·GPU·Networking 프로세스를 살려 둔다.
