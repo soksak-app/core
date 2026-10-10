@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F104.4: `native/darwin`의 주석(`src`, `tests`, `Makefile`의 95개 파일 1,327줄)이 영어이다. `scripts/check-comment-language.mjs`가 그곳에서 한 줄도 보고하지 않고, 모든 파일의 코드는 주석을 빼면 같으며, `make -C native/darwin all`과 native 시험 실행 파일의 빌드가 성공한다. 틀린 주석 세 개(`applyInsets`, `sp_region_facts`, `appearance.h`의 주석)를 고쳤다.
 - F154.4.3: `pnpm verify:windows`가 창 검사 파일을 파일마다 자기 프로세스로 test runner에 하나씩 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 10초마다 실행 중인 파일, 파일마다 600초 한도를 쓴다.
 - F154.4.2: `make -C native/darwin test`가 native 시험을 test runner로 하나씩 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 실행 중인 시험의 10초 간격 줄, 시험마다 120초 한도를 쓰며 `NATIVE_TEST_ONLY=<text>`로 범위를 정한다.
 - F154.4.1: `pnpm test`가 workspace의 Node 시험 파일을 파일마다 자기 프로세스로 test runner에 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 실행 중인 파일, 가장 느린 파일, 파일마다 120초 한도를 쓰며 `--only <text>`로 범위를 정한다.
