@@ -1,4 +1,4 @@
-//! 사이드카 채널 테스트. 가짜 창과 셸 스크립트 사이드카를 사용한다.
+//! Sidecar channel tests. They use a fake window and shell script sidecars.
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -13,8 +13,8 @@ use soksak_host_tauriv2::sidecars::{
     ClosingSurface, Failure, Message, Owner, SidecarDeclaration, Sidecars,
 };
 
-/// 멈춘 검사를 끝내는 상한이다. 성공은 받은 event 와 끝난 process 로 판정하며 이 시간으로 판정하지 않는다.
-/// 부하가 큰 기계에서도 sidecar 의 답과 종료는 이 안에 온다.
+/// The upper limit that ends a stalled check. Success is decided by the received event and the ended process and not by
+/// this time. Even on a heavily loaded machine, the answer and the end of the sidecar come within this time.
 const STALL: Duration = Duration::from_secs(120);
 
 #[derive(Clone)]
@@ -22,7 +22,7 @@ struct FakeOwner {
     key: String,
     root: String,
     sent: Sender<Message>,
-    // 실패를 단언하는 검사만 실패 채널을 가진다.
+    // Only a check that asserts a failure has a failure channel.
     failed: Option<Sender<Failure>>,
 }
 
@@ -39,7 +39,7 @@ impl Owner for FakeOwner {
     fn deliver_failure(&self, failure: Failure) {
         match &self.failed {
             Some(failed) => failed.send(failure).expect("failure receiver"),
-            // 실패를 단언하지 않는 검사의 실패는 검사 출력에 남긴다.
+            // The failure of a check that does not assert failures is left in the check output.
             None => eprintln!("sidecar failure: {failure:?}"),
         }
     }
@@ -58,7 +58,7 @@ fn owner(key: &str, root: &str) -> (FakeOwner, Receiver<Message>) {
     )
 }
 
-/// 실패 이벤트도 받는 창.
+/// A window that also receives failure events.
 fn failing_owner(key: &str, root: &str) -> (FakeOwner, Receiver<Message>, Receiver<Failure>) {
     let (sent, received) = channel();
     let (failed, failures) = channel();
@@ -80,12 +80,12 @@ fn raw(text: &str) -> Box<RawValue> {
 
 type Files = Vec<(&'static str, String)>;
 
-/// 사이드카 @fixture/sidecar-echo 하나와 그 sidecar.json 내용.
+/// One sidecar @fixture/sidecar-echo and the content of its sidecar.json.
 fn files(sidecar: &str) -> Files {
     vec![("@fixture/sidecar-echo", sidecar.to_string())]
 }
 
-/// folder 에 설치된 사이드카들의 선언.
+/// The declarations of the sidecars installed in folder.
 fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
     files
         .iter()
@@ -104,7 +104,8 @@ fn create(files: &Files, directory: &Path) -> Result<Sidecars<FakeOwner>, String
 
 const ECHO: &str = "@fixture/sidecar-echo";
 
-/// 받은 줄을 그대로 출력하고 요청 기록 파일에 남기는 fake 사이드카 @fixture/sidecar-echo 를 선언한다.
+/// Declares the fake sidecar @fixture/sidecar-echo, which prints the received line as it is and leaves it in the
+/// request record file.
 fn echo_sidecars() -> (Sidecars<FakeOwner>, tempfile::TempDir) {
     let directory = tempfile::tempdir().unwrap();
     let record = directory.path().join("requests");
@@ -116,8 +117,9 @@ fn echo_sidecars() -> (Sidecars<FakeOwner>, tempfile::TempDir) {
         directory.path(),
     )
     .unwrap();
-    // stop 은 stdin 을 닫고 echo 가 남은 줄을 기록하고 끝나기를 기다린다. 기한이 짧으면 부하 속에서 기록 전에
-    // 강제로 끝내므로 기한을 STALL 로 둔다. echo 는 EOF 에 곧 끝나므로 검사가 느려지지 않는다.
+    // stop closes stdin and waits for echo to record the remaining lines and end. With a short deadline it would be
+    // ended by force before recording under load, so the deadline is set to STALL. echo ends soon at EOF, so the check
+    // does not become slow.
     sidecars.stop_timeout = STALL;
     (sidecars, directory)
 }
@@ -167,7 +169,7 @@ fn messages_reach_the_owning_window_only() {
 fn a_surface_keeps_the_root_it_was_opened_with() {
     let (sidecars, directory) = echo_sidecars();
     let (before, _before_events) = owner("a", "/projects/a");
-    // 같은 창이 다른 프로젝트로 바뀐 뒤에도 이미 열린 표면은 처음 root 로 보낸다.
+    // Even after the same window changed to another project, an already opened surface sends with the first root.
     let (after, _after_events) = owner("a", "/projects/b");
     sidecars
         .send(&before, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
@@ -201,11 +203,11 @@ fn closing_a_surface_keeps_other_sessions() {
             .send(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
             .unwrap();
     }
-    // 표면 동기화는 제거된 표면만 닫는다.
+    // The surface synchronization closes only the removed surfaces.
     sidecars
         .retain(&window, &|surface| surface != "s1")
         .unwrap();
-    // 창의 프로젝트가 빠진 뒤에도 닫히지 않은 세션은 처음 root 로 보낸다.
+    // Even after the project of the window was removed, a session that was not closed sends with the first root.
     let (released, _released_events) = owner("a", "");
     sidecars
         .send(
@@ -379,7 +381,8 @@ fn persistent_transport_accepts_a_non_canonical_config_directory() {
     )
     .unwrap();
     let (window, _events) = owner("a", "/projects/test");
-    // 실행 파일이 없으므로 서비스 시작에서 실패하고, 그 전에 설정 디렉터리 아래에 서비스 디렉터리를 만든다.
+    // There is no executable, so the service start fails, and before that the service directory is created under the
+    // configuration directory.
     let error = sidecars.send(&window, ECHO, "s1", &raw("{}"));
     assert!(error.unwrap_err().contains("sidecar"));
     assert!(
@@ -405,26 +408,26 @@ fn plugins_without_sidecars_declare_none() {
 // contract: sidecars.send.fails-fast-when-sidecar-not-keeping-up, sidecars.send.slow-sidecar-does-not-block-others, sidecars.stop.honors-stop-timeout
 #[test]
 fn slow_sidecar_does_not_block_other_sends() {
-    // 느린 사이드카는 stdin을 읽지 않고, 다른 사이드카는 정상적으로 동작한다.
-    // 느린 사이드카에 256번 이상 보내면 언젠가는 "is not keeping up" 오류로 실패한다.
-    // 이 테스트는 두 가지 성질을 확인한다:
-    // 1. 느린 사이드카 채널이 가득 찼을 때도, 빠른 사이드카로의 send() 는 블로킹되지 않는다.
-    // 2. stop() 이 stop_timeout 을 지키고 있다.
+    // The slow sidecar does not read stdin, and the other sidecar works normally. If more than 256 are sent to the slow
+    // sidecar, it eventually fails with an "is not keeping up" error. This test checks two properties:
+    // 1. Even when the channel of the slow sidecar is full, send() to the fast sidecar does not block.
+    // 2. stop() keeps stop_timeout.
 
     let directory = tempfile::tempdir().unwrap();
 
-    // 느린 사이드카: stdin 을 읽지 않으므로 pipe 가 차고 stop 은 기한 뒤 kill 한다. cat 처럼 stdin 을 읽는 program 은
-    // 읽는 속도가 부하에 달려 있어 채널이 차는지가 정해지지 않는다.
+    // The slow sidecar: it does not read stdin, so the pipe fills and stop kills it after the deadline. A program that
+    // reads stdin, such as cat, has a read speed that depends on the load, so whether the channel fills is not
+    // determined.
     let slow_program = directory.path().join("slow");
     std::fs::write(&slow_program, "#!/bin/sh\nexec sleep 600\n").unwrap();
     std::fs::set_permissions(&slow_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-    // 빠른 사이드카: 받은 줄을 그대로 출력한다.
+    // The fast sidecar: it prints the received line as it is.
     let fast_program = directory.path().join("fast");
     std::fs::write(&fast_program, "#!/bin/sh\ntee /dev/null\n").unwrap();
     std::fs::set_permissions(&fast_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-    // 두 사이드카를 선언한 프런트엔드
+    // A frontend that declares the two sidecars.
     let files: Files = vec![
         (
             "@fixture/sidecar-slow",
@@ -436,11 +439,12 @@ fn slow_sidecar_does_not_block_other_sends() {
         ),
     ];
     let mut sidecars = create(&files, directory.path()).unwrap();
-    // 테스트를 위해 기한을 100ms로 설정한다.
+    // The deadline is set to 100 ms for the test.
     sidecars.stop_timeout = Duration::from_millis(100);
     let (owner, _events) = owner("a", "/projects/test");
 
-    // 빠른 사이드카의 첫 send 는 그 프로세스를 띄운다. 기동 시간은 성질 1 과 무관하므로 먼저 띄우고 기록만 한다.
+    // The first send to the fast sidecar starts that process. The start time is unrelated to property 1, so it is
+    // started first and only recorded.
     let started = std::time::Instant::now();
     sidecars
         .send(
@@ -455,28 +459,28 @@ fn slow_sidecar_does_not_block_other_sends() {
         started.elapsed()
     );
 
-    // 느린 사이드카에 채널이 가득 찰 때까지 보낸다.
+    // Send to the slow sidecar until its channel is full.
     let large_body = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
     let mut last_err = None;
     for i in 0..500 {
         if let Err(e) = sidecars.send(&owner, "@fixture/sidecar-slow", "s1", &large_body) {
             last_err = Some(e.clone());
             if e.contains("is not keeping up") {
-                break; // 채널이 가득 찬 것을 확인했다
+                break; // the channel was observed to be full
             }
             panic!("send {}: unexpected error: {}", i, e);
         }
     }
 
-    // 마침내 "is not keeping up" 오류를 받았는지 확인한다.
+    // Check that the "is not keeping up" error was finally received.
     assert!(
         last_err.is_some() && last_err.as_ref().unwrap().contains("is not keeping up"),
         "want 'is not keeping up', got {:?}",
         last_err
     );
 
-    // 성질 1: 느린 사이드카 채널이 가득 찼을 때도 빠른 사이드카 send() 는 블로킹되지 않는다.
-    // send() 는 이미 띄운 프로세스의 채널에 넣고 즉시 돌아올 뿐이므로 50ms 미만이어야 한다.
+    // Property 1: even when the channel of the slow sidecar is full, send() to the fast sidecar does not block. send()
+    // only puts into the channel of the already started process and returns at once, so it must take less than 50 ms.
     let start = std::time::Instant::now();
     sidecars
         .send(
@@ -493,10 +497,9 @@ fn slow_sidecar_does_not_block_other_sends() {
         send_elapsed
     );
 
-    // 성질 2: stop() 이 stop_timeout(100ms) 을 지키고 있다.
-    // 200ms 기한으로 단언하면, 기본 5초와 명확히 구별된다.
-    // 이전 코드는 send 와 stop 을 함께 재서 110ms 단언했는데, 이는
-    // "OS 가 프로세스를 죽이고 수거하는 데 10ms 이하" 라는 불합리한 주장이었다.
+    // Property 2: stop() keeps stop_timeout (100 ms). Asserting with a 200 ms deadline distinguishes it clearly from
+    // the default 5 seconds. The earlier code measured send and stop together and asserted 110 ms, which was the
+    // unreasonable claim that "the OS kills and reaps the process in 10 ms or less".
     let start = std::time::Instant::now();
     sidecars.stop();
     let stop_elapsed = start.elapsed();
@@ -510,12 +513,13 @@ fn slow_sidecar_does_not_block_other_sends() {
 // contract: sidecars.stop.graceful-on-stdin-eof
 #[test]
 fn stop_graceful_shutdown() {
-    // 사이드카가 실제로 stdin 을 읽고 있을 때 stop() 이 stdin EOF 에 의해 정상 종료되는지 검증한다.
-    // 측정은 사이드카가 send 의 에코를 받은 뒤 시작해서, 기한(1초)까지 기다리지 않고 즉시 종료되는지 확인한다.
+    // Verifies that, when the sidecar actually reads stdin, stop() ends normally by stdin EOF. The measurement starts
+    // after the sidecar received the echo of send, and checks that it ends at once without waiting for the deadline (1
+    // second).
 
     let directory = tempfile::tempdir().unwrap();
 
-    // 사이드카: 받은 줄을 그대로 에코하고 stdin EOF에 정상 종료한다.
+    // The sidecar: it echoes the received line as it is and ends normally at stdin EOF.
     let graceful_program = directory.path().join("graceful");
     std::fs::write(
         &graceful_program,
@@ -530,12 +534,13 @@ fn stop_graceful_shutdown() {
     )];
 
     let mut sidecars = create(&files, directory.path()).unwrap();
-    // stop() 은 기한이 지나야만 강제로 끝낸다. 기한보다 먼저 돌아오면 사이드카가 stdin EOF 로 스스로 끝난 것이다.
-    // 기한은 기계 부하 속의 프로세스 종료 시간보다 충분히 길게 STALL 로 둔다.
+    // stop() ends by force only after the deadline passes. If it returns before the deadline, the sidecar ended by
+    // itself at stdin EOF. The deadline is set to STALL, which is sufficiently longer than the process end time on a
+    // loaded machine.
     sidecars.stop_timeout = STALL;
     let (owner, events) = owner("a", "/projects/test");
 
-    // 사이드카를 시작한다.
+    // Start the sidecar.
     sidecars
         .send(
             &owner,
@@ -545,8 +550,8 @@ fn stop_graceful_shutdown() {
         )
         .unwrap();
 
-    // 사이드카가 실제로 stdin 을 읽고 있음을 확인한다: 에코 이벤트를 기다린다.
-    // 이렇게 하면 shell 프로세스 기동 시간이 측정에 포함되지 않는다.
+    // Check that the sidecar actually reads stdin: wait for the echo event. In this way the start time of the shell
+    // process is not included in the measurement.
     let event = events
         .recv_timeout(STALL)
         .expect("no echo event; the test stalled");
@@ -555,7 +560,7 @@ fn stop_graceful_shutdown() {
         ("@fixture/sidecar-graceful", "s1")
     );
 
-    // 이제 stop() 호출을 시간 측정한다. stdin EOF에 정상 종료되어야 한다.
+    // Now measure the time of the stop() call. It must end normally at stdin EOF.
     let start = std::time::Instant::now();
     sidecars.stop();
     let elapsed = start.elapsed();
@@ -571,9 +576,10 @@ fn stop_graceful_shutdown() {
 // contract: sidecars.stop.closes-unread-output
 #[test]
 fn stop_closes_unread_output() {
-    // 멈추는 동안의 프로토콜 실패를 로그에 쓰고, 호스트가 더 읽지 않는 출력의 읽기 끝을 닫아, 그 뒤 파이프가 담는 것보다
-    // 많이 쓰는 사이드카도 강제 종료 없이 끝나는지 검증한다. 출력은 호스트가 닫지 않은 표면의 닫기 응답이다. 그 프로세스의
-    // 종료는 닫힌 파이프 때문이므로 보고하지 않는다.
+    // Verifies that the protocol failure while stopping is written to the log and the host closes the read end of the
+    // output that it no longer reads, so that a sidecar that writes more than the following pipe holds also ends
+    // without a forced kill. The output is the close response for a surface that the host did not close. The end of
+    // that process is caused by the closed pipe, so it is not reported.
     let Some(stderr) = logged_by_child("stop_closes_unread_output") else {
         records::capturing(stop_closes_unread_output_in_child);
         return;
@@ -605,7 +611,8 @@ fn stop_closes_unread_output_in_child() {
         r#"{"executable":"talkative","protocol":1}"#.to_string(),
     )];
     let mut sidecars = create(&files, directory.path()).unwrap();
-    // stop() 은 기한이 지나야만 강제로 끝낸다. 기한보다 먼저 돌아오면 사이드카가 출력을 다 쓰고 스스로 끝난 것이다.
+    // stop() ends by force only after the deadline passes. If it returns before the deadline, the sidecar wrote all of
+    // its output and ended by itself.
     sidecars.stop_timeout = STALL;
     let (owner, events) = owner("a", "/projects/test");
     sidecars
@@ -633,9 +640,10 @@ fn stop_closes_unread_output_in_child() {
 // contract: sidecars.stop.reads-output-to-end
 #[test]
 fn stop_reads_output_to_its_end() {
-    // 멈추는 동안 호스트가 출력을 끝까지 읽는지 검증한다. 사이드카는 중지 전에 받은 닫기에 입력이 끝난 뒤에야 답하고,
-    // 그다음 파이프가 담는 것보다 많이 쓴 뒤 모든 쓰기가 성공했을 때만 finished 를 기록한다. 애플리케이션이 끝날 때 창
-    // 닫기가 보낸 closed 에 files 사이드카가 답하는 순서와 같다.
+    // Verifies that the host reads the output to its end while stopping. The sidecar answers a close that it received
+    // before the stop only after its input ended, then writes more than the pipe holds, and records finished only when
+    // all writes succeeded. This is the same as the order in which the files sidecar answers the closed that the window
+    // close sends when the application ends.
     let Some(stderr) = logged_by_child("stop_reads_output_to_its_end") else {
         records::capturing(|| {
             let (mut sidecars, directory) = script_sidecars(
@@ -679,7 +687,8 @@ fn stop_reads_output_to_its_end() {
 // contract: sidecars.stop.reports-exit-status
 #[test]
 fn stop_reports_exit_status() {
-    // 멈추는 동안 0 이 아닌 종료 상태나 신호로 끝난 사이드카를 두 호스트에 같은 형식으로 로그에 쓰는지 검증한다.
+    // Verifies that a sidecar that ended with a nonzero exit status or a signal while stopping is written to the log in
+    // the same format by both hosts.
     let Some(stderr) = logged_by_child("stop_reports_exit_status") else {
         records::capturing(|| {
             for ending in ["exit 3", "kill -TERM $$"] {
@@ -818,13 +827,13 @@ fn the_relay_records_every_message_with_its_whole_body() {
 // contract: sidecars.stop.forgets-running-sidecars
 #[test]
 fn close_during_stop_sends_nothing() {
-    // stop 이 입력을 끝낸 뒤 프로세스가 끝나기 전의 표면 닫기와 창 닫기가 아무것도 보내지 않는지 검증한다.
-    // 애플리케이션이 끝날 때 stop 과 함께 창이 닫히며 표면을 닫는다.
+    // Verifies that, after stop ended the input and before the process ended, the surface close and the window close
+    // send nothing. When the application ends, the windows close together with stop and close their surfaces.
     use std::io::{BufRead, Write};
     let directory = tempfile::tempdir().unwrap();
-    // 사이드카: 시작할 때 ended 와 release 를 읽고 쓰기로 열어 둔다. 받은 줄을 에코하고, 입력이 끝나면 ended 에 한 줄을
-    // 쓰고 release 에 한 줄이 올 때까지 살아 있다. 사이드카가 두 파이프를 열어 두므로 쓴 줄은 버려지지 않고 여는
-    // 쪽은 막히지 않는다.
+    // The sidecar: at the start it opens ended and release for writing and reading. It echoes the received line, and
+    // when the input ends it writes one line to ended and stays alive until one line arrives in release. The sidecar
+    // keeps both pipes open, so the line it wrote is not discarded and the side that opens them is not blocked.
     let ended = directory.path().join("ended");
     let release = directory.path().join("release");
     for fifo in [&ended, &release] {
@@ -848,7 +857,7 @@ fn close_during_stop_sends_nothing() {
     )
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    // 검사가 도중에 끝나도 사이드카가 남지 않게 release 에 한 줄을 쓴다.
+    // Writes one line to release so that no sidecar remains even if the check ends midway.
     struct Release(std::path::PathBuf);
     impl Drop for Release {
         fn drop(&mut self) {
@@ -885,7 +894,7 @@ fn close_during_stop_sends_nothing() {
 
     std::thread::scope(|scope| {
         let stopping = scope.spawn(|| sidecars.stop());
-        // 사이드카가 ended 에 쓰면 stop 은 입력을 끝냈고 프로세스는 아직 실행 중이다.
+        // When the sidecar writes to ended, stop has ended the input and the process is still running.
         let mut line = String::new();
         std::io::BufReader::new(std::fs::File::open(&ended).expect("open ended"))
             .read_line(&mut line)
@@ -906,7 +915,7 @@ fn close_during_stop_sends_nothing() {
 // contract: sidecars.stop.kills-after-timeout
 #[test]
 fn stop_forced_kill() {
-    // 기한을 초과해도 종료하지 않는 사이드카를 kill 하고 그 kill 을 로그에 쓰는지 검증한다.
+    // Verifies that a sidecar that does not end after the deadline is killed and that kill is written to the log.
     let Some(stderr) = logged_by_child("stop_forced_kill") else {
         records::capturing(stop_forced_kill_in_child);
         return;
@@ -926,8 +935,8 @@ fn stop_forced_kill() {
 fn stop_forced_kill_in_child() {
     let directory = tempfile::tempdir().unwrap();
 
-    // 사이드카: stdin 을 읽지 않으므로 stdin EOF 뒤에도 계속 실행한다. background 명령의 stdin 은 shell 에 따라 /dev/null 이
-    // 되어 곧바로 끝날 수 있으므로 쓰지 않는다.
+    // The sidecar: it does not read stdin, so it keeps running after stdin EOF. The stdin of a background command can
+    // become /dev/null depending on the shell and end at once, so it is not used.
     let stubborn_program = directory.path().join("stubborn");
     std::fs::write(&stubborn_program, "#!/bin/sh\nexec sleep 600\n").unwrap();
     std::fs::set_permissions(&stubborn_program, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -938,11 +947,11 @@ fn stop_forced_kill_in_child() {
     )];
 
     let mut sidecars = create(&files, directory.path()).unwrap();
-    // 테스트를 위해 기한을 100ms로 설정한다.
+    // The deadline is set to 100 ms for the test.
     sidecars.stop_timeout = Duration::from_millis(100);
     let (owner, _events) = owner("a", "/projects/test");
 
-    // 사이드카를 시작한다.
+    // Start the sidecar.
     sidecars
         .send(
             &owner,
@@ -952,13 +961,14 @@ fn stop_forced_kill_in_child() {
         )
         .unwrap();
 
-    // stop() 호출. 기한 후 kill 되어야 한다.
+    // Call stop(). It must be killed after the deadline.
     let start = std::time::Instant::now();
     sidecars.stop();
     let elapsed = start.elapsed();
 
-    // stop() 은 기한까지 기다린 뒤 kill 한다. 기한보다 먼저 돌아오면 기다리지 않은 것이고, 상한은 멈춤만 잡는다.
-    // kill 뒤 process 가 끝나는 시간은 부하에 따라 늘어나므로 상한으로 성공을 판정하지 않는다.
+    // stop() kills after it waited for the deadline. If it returns before the deadline, it did not wait, and the upper
+    // limit catches only a stop. The time for the process to end after the kill grows with the load, so success is not
+    // decided by the upper limit.
     assert!(
         elapsed >= sidecars.stop_timeout && elapsed <= STALL,
         "forced kill stop took {:?}, want at least the {:?} deadline",
@@ -967,9 +977,9 @@ fn stop_forced_kill_in_child() {
     );
 }
 
-/// 로그는 표준 오류이므로 로그를 단언하는 검사는 같은 검사를 자식 process 로 실행해 그 출력을 읽는다. 자식 process 이면
-/// None 을 반환하고 검사는 사이드카를 실행한다. 부모 process 이면 test 이름의 검사를 자식으로 실행하고, 그 검사가
-/// 통과했을 때 표준 오류를 반환한다.
+/// The log is the standard error, so a check that asserts the log runs the same check in a child process and reads its
+/// output. In the child process it returns None and the check runs the sidecar. In the parent process it runs the check
+/// of the test name as a child and returns the standard error when that check passed.
 fn logged_by_child(test: &str) -> Option<String> {
     if std::env::var_os("SOKSAK_SIDECAR_LOG_CHILD").is_some() {
         return None;
@@ -984,10 +994,10 @@ fn logged_by_child(test: &str) -> Option<String> {
     Some(stderr)
 }
 
-/// 사이드카 메시지 한 줄의 줄바꿈 앞 최대 크기(docs/spec/sidecars.md#messages).
+/// The maximum size of one sidecar message line before the line feed (docs/spec/sidecars.md#messages).
 const MESSAGE_LIMIT: usize = 64 << 20;
 
-/// 검사가 끝나거나 실패해도 fake 사이드카 프로세스를 남기지 않도록 drop 에서 사이드카를 종료한다.
+/// Ends the sidecar in drop so that no fake sidecar process remains even if the check ends or fails.
 struct Stopping(Sidecars<FakeOwner>);
 
 impl std::ops::Deref for Stopping {
@@ -1003,7 +1013,8 @@ impl Drop for Stopping {
     }
 }
 
-/// script 를 실행하는 fake 사이드카를 선언한 채널과 그 디렉터리를 만든다. script 안의 DIR 은 그 디렉터리로 바뀐다.
+/// Creates a channel that declares a fake sidecar running script, and its directory. DIR in script is replaced with
+/// that directory.
 fn script_sidecars(script: &str) -> (Stopping, tempfile::TempDir) {
     let directory = tempfile::tempdir().unwrap();
     let program = directory.path().join("fake");
@@ -1021,8 +1032,9 @@ fn script_sidecars(script: &str) -> (Stopping, tempfile::TempDir) {
     (Stopping(sidecars), directory)
 }
 
-/// 요청 하나를 읽은 뒤 줄바꿈 앞이 size byte 인 s1 메시지를 보내고 then 을 실행하는 스크립트와 본문 문자 수.
-/// 본문은 문자열 하나이고 셸 파이프라인이 쓰므로 스크립트 프로세스는 쓰기가 끝날 때까지 기다린다.
+/// A script that reads one request, sends an s1 message of size bytes before the line feed, and runs then, and the
+/// number of characters of the body. The body is one string and a shell pipeline writes it, so the script process waits
+/// until the write ends.
 fn padded_message_script(size: usize, then: &str) -> (String, usize) {
     let (prefix, suffix) = (r#"{"surface":"s1","body":""#, r#""}"#);
     let padding = size - prefix.len() - suffix.len();
@@ -1034,7 +1046,7 @@ fn padded_message_script(size: usize, then: &str) -> (String, usize) {
     )
 }
 
-/// fake 사이드카가 기록한 프로세스 id.
+/// The process id that the fake sidecar recorded.
 fn process_id(directory: &Path) -> i32 {
     std::fs::read_to_string(directory.join("pid"))
         .unwrap()
@@ -1043,9 +1055,9 @@ fn process_id(directory: &Path) -> i32 {
         .unwrap()
 }
 
-/// 프로세스 pid 가 끝나고 회수되었는지 검사한다.
+/// Checks that the process pid ended and was reaped.
 fn assert_ended(pid: i32) {
-    // SAFETY: 신호 0 은 프로세스 존재만 검사하고 아무 신호도 보내지 않는다.
+    // SAFETY: signal 0 only checks the existence of the process and sends no signal.
     let result = unsafe { libc::kill(pid, 0) };
     let error = std::io::Error::last_os_error();
     assert!(
@@ -1156,7 +1168,7 @@ fn an_output_close_notifies_each_surface() {
             "{surface}: {failure:?}"
         );
     }
-    // 실패 뒤의 전송은 새 프로세스를 시작한다.
+    // A send after a failure starts a new process.
     sidecars
         .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
@@ -1185,11 +1197,11 @@ fn closed_surface_messages_are_discarded_and_unknown_ones_fail() {
             .send(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
             .unwrap();
     }
-    // 표면 동기화가 제거된 s2 를 닫는다.
+    // The surface synchronization closes the removed s2.
     sidecars
         .retain(&window, &|surface| surface != "s2")
         .unwrap();
-    // s2 의 늦은 메시지는 버려지고, 그 뒤의 s1 메시지가 첫 이벤트다.
+    // The late message of s2 is discarded, and the s1 message after it is the first event.
     let event = events
         .recv_timeout(STALL)
         .expect("no sidecar event; the test stalled");
@@ -1211,7 +1223,8 @@ fn closed_surface_messages_are_discarded_and_unknown_ones_fail() {
     assert_ended(process_id(directory.path()));
 }
 
-/// script 를 실행하는 사이드카 @fixture/sidecar-echo 와, closing 이 바뀔 때마다 그 값을 받는 채널.
+/// The sidecar @fixture/sidecar-echo that runs script, and the channel that receives the value whenever closing
+/// changes.
 fn closing_sidecars(
     script: &str,
 ) -> (
@@ -1245,7 +1258,7 @@ fn closing_of(surface: &str) -> Vec<ClosingSurface> {
 // contract: sidecars.close.answer-ends-closing
 #[test]
 fn closed_surface_stays_closing_until_the_sidecar_answers() {
-    // 받은 줄을 그대로 돌려준다. closed 줄을 돌려주면 그것이 closed 의 답이다.
+    // It returns the received line as it is. If it returns a closed line, that is the answer to closed.
     let (sidecars, snapshots, _directory) = closing_sidecars("#!/bin/sh\ntee /dev/null\n");
     let (window, _events) = owner("a", "/projects/closing");
     sidecars
@@ -1260,7 +1273,7 @@ fn closed_surface_stays_closing_until_the_sidecar_answers() {
 // contract: sidecars.close.failed-answer-is-logged
 #[test]
 fn failed_close_answer_is_logged() {
-    // 로그는 표준 오류이므로 같은 검사를 자식 process 로 실행해 그 출력을 읽는다.
+    // The log is the standard error, so the same check runs in a child process and its output is read.
     if std::env::var_os("SOKSAK_CLOSE_LOG_CHILD").is_some() {
         records::capturing(|| {
             let script = "#!/bin/sh\nwhile read line; do case \"$line\" in *closed*) printf '{\"surface\":\"s1\",\"closed\":true,\"error\":\"busy\"}\\n';; *) echo \"$line\";; esac; done\n";
@@ -1393,7 +1406,7 @@ fn close_answer_for_an_open_surface_fails_the_sidecar() {
 // contract: sidecars.close.process-end-clears-closing
 #[test]
 fn ended_sidecar_leaves_no_closing_surface() {
-    // 첫 요청에 답하고, closed 를 받으면 답하지 않고 끝난다.
+    // It answers the first request, and when it receives closed it ends without answering.
     let (sidecars, snapshots, _directory) =
         closing_sidecars("#!/bin/sh\nread line\necho \"$line\"\nread line\nexit 0\n");
     let (window, _events) = owner("a", "/projects/closing");

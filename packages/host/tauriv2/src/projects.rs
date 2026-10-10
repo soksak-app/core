@@ -1,4 +1,4 @@
-//! 프로젝트 폴더 확인, 폴더 선택, 프로젝트 생성.
+//! Project folder check, folder selection and project creation.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,19 +9,19 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::platform;
 
-/// 확인한 프로젝트 디렉터리.
+/// A checked project directory.
 #[derive(Debug, Serialize)]
 pub struct Folder {
-    /// 심볼릭 링크를 해석한 정규 경로.
+    /// The canonical path with symbolic links resolved.
     pub root: String,
-    /// 같은 디렉터리를 가리키는 경로에 같은 값을 갖는 식별값.
+    /// An identifier that has the same value for paths that point to the same directory.
     pub identity: String,
 }
 
-/// root 를 프로젝트 디렉터리로 확인한다.
+/// Checks root as a project directory.
 ///
-/// `~` 와 `~/` 로 시작하는 경로는 home 기준으로 해석한다. 경로가 비었거나, 존재하지 않거나,
-/// 디렉터리가 아니거나, UTF-8 이 아니면 오류를 반환한다.
+/// A path that starts with `~` or `~/` is resolved relative to home. It returns an error when the path is empty, does
+/// not exist, is not a directory, or is not UTF-8.
 pub fn folder(root: &str, home: &Path) -> Result<Folder, String> {
     if root.trim().is_empty() {
         return Err("project directory is empty".into());
@@ -48,8 +48,8 @@ pub fn folder(root: &str, home: &Path) -> Result<Folder, String> {
     })
 }
 
-/// 폴더를 확인하지 못한 오류를 요청한 경로 하나를 담은 계약 문구로 바꾼다. 두 호스트가 같은 문구를 낸다
-/// (docs/spec/host-contract.md 의 workspace.folder.messages).
+/// Converts the error of a folder check into the contract text that carries the one requested path. Both hosts produce
+/// the same text (workspace.folder.messages in docs/spec/host-contract.md).
 fn folder_error(path: &Path, error: std::io::Error) -> String {
     match error.kind() {
         std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory => {
@@ -71,12 +71,12 @@ fn folder_error(path: &Path, error: std::io::Error) -> String {
     }
 }
 
-/// 사용자 홈 디렉터리 기준으로 root 를 프로젝트 디렉터리로 확인한다.
+/// Checks root as a project directory relative to the home directory of the user.
 pub(crate) fn project_folder(app: &AppHandle, root: String) -> Result<Folder, String> {
     folder(&root, &app.path().home_dir().map_err(|e| e.to_string())?)
 }
 
-/// 폴더 선택 대화상자를 열고 선택한 경로를 반환한다. 취소하면 None 이다.
+/// Opens the folder selection dialog and returns the selected path. It is None when canceled.
 pub(crate) fn folder_choose(window: &Window) -> Result<Option<String>, String> {
     window
         .dialog()
@@ -100,7 +100,7 @@ pub(crate) struct CreateProject {
     name: String,
 }
 
-/// parent 아래에 name 폴더를 만들고 프로젝트 디렉터리로 확인한다.
+/// Creates the folder name under parent and checks it as a project directory.
 pub(crate) fn project_create(app: &AppHandle, request: CreateProject) -> Result<Folder, String> {
     let parent = project_folder(app, request.parent)?;
     let name = request.name.trim();

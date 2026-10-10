@@ -1,4 +1,4 @@
-//! native/darwin 의 마우스 버튼 감시 호출.
+//! The mouse button watch calls of native/darwin.
 
 use std::ffi::c_void;
 use std::sync::OnceLock;
@@ -9,7 +9,7 @@ extern "C" {
     fn sp_mouse_buttons_watch(changed: Changed, context: *mut c_void) -> bool;
 }
 
-/// 마우스 버튼 mask 를 받는 함수. 감시는 프로세스에 하나이므로 하나만 둔다.
+/// The function that receives the mouse button mask. The watch is one per process, so only one is kept.
 static RECEIVER: OnceLock<Box<dyn Fn(u64) + Send + Sync>> = OnceLock::new();
 
 extern "C" fn changed(_context: *mut c_void, mask: u64) {
@@ -18,7 +18,7 @@ extern "C" fn changed(_context: *mut c_void, mask: u64) {
     }
 }
 
-/// native/darwin 의 sp_mouse_buttons_watch 로 감시를 설치한다. 메인 스레드에서 호출한다.
+/// Installs the watch with sp_mouse_buttons_watch of native/darwin. Call it on the main thread.
 pub fn watch(receive: Box<dyn Fn(u64) + Send + Sync>) -> Result<(), String> {
     RECEIVER
         .set(receive)

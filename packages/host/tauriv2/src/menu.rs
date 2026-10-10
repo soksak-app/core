@@ -1,14 +1,15 @@
-//! 애플리케이션 메뉴.
+//! The application menu.
 //!
-//! docs/spec/host-contract.md 의 "Application menu" 표가 메뉴의 계약이다. [`MENUS`] 와
-//! [`ITEMS`] 가 그 표이고 [`build`] 가 표의 언어로 메뉴를 만든다. source 가 "title" 인 항목은
-//! 표의 제목을 쓰고 "system" 인 항목은 프레임워크가 준 제목과 단축키를 유지한다. 두 호스트가
-//! 같은 표를 싣는지 scripts/check-host-parity.mjs 가 기계로 검사한다.
+//! The "Application menu" table of docs/spec/host-contract.md is the contract of the menu. [`MENUS`] and [`ITEMS`] are
+//! that table, and [`build`] builds the menu in a language of the table. An item whose source is "title" uses the title
+//! of the table, and an item whose source is "system" keeps the title and shortcut that the framework provides.
+//! scripts/check-host-parity.mjs checks mechanically that both hosts carry the same table.
 
 use tauri::menu::{AboutMetadata, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Manager, Wry};
 
-/// 상위 메뉴의 계약 표. (id, ko, en). app 제목은 애플리케이션 이름이므로 비워 둔다.
+/// The contract table of the top-level menus. (id, ko, en). The title of app is the application name, so it is left
+/// empty.
 pub const MENUS: &[(&str, &str, &str)] = &[
     ("app", "", ""),
     ("file", "파일", "File"),
@@ -18,9 +19,9 @@ pub const MENUS: &[(&str, &str, &str)] = &[
     ("help", "도움말", "Help"),
 ];
 
-/// 메뉴 항목의 계약 표. (menu, id, source, ko, en, key). source 가 "system" 인 항목은
-/// 프레임워크 제목을 유지하고 "title" 인 항목은 표의 제목을 쓴다. 한 행이 한 줄이어야
-/// scripts/check-host-parity.mjs 가 행을 읽을 수 있으므로 이 표는 줄맞춤에서 뺀다.
+/// The contract table of the menu items. (menu, id, source, ko, en, key). An item whose source is "system" keeps the
+/// framework title, and an item whose source is "title" uses the title of the table. Each row must be one line so that
+/// scripts/check-host-parity.mjs can read the rows, so this table is excluded from alignment.
 #[rustfmt::skip]
 pub const ITEMS: &[(&str, &str, &str, &str, &str, &str)] = &[
     ("app", "about", "title", "정보", "About", ""),
@@ -46,10 +47,11 @@ pub const ITEMS: &[(&str, &str, &str, &str, &str, &str)] = &[
     ("help", "debug", "title", "디버그", "Debug", ""),
 ];
 
-/// 표의 언어와 그 제목 열. 계약 표에 언어 열을 더하면 이 표도 함께 늘어난다.
+/// The languages of the table and their title columns. When a language column is added to the contract table, this
+/// table grows with it.
 const LANGUAGES: &[(&str, usize)] = &[("ko", 1), ("en", 2)];
 
-/// 기본 언어. 시스템 언어가 표의 언어가 아닐 때 초기 메뉴가 쓴다.
+/// The default language. The initial menu uses it when the system language is not a language of the table.
 const DEFAULT_LANGUAGE: &str = "en";
 
 /// The menu, table id and menu item id of the items that run a page command. The menu item id is the name of the
@@ -61,11 +63,12 @@ const PAGE_COMMANDS: &[(&str, &str, &str)] = &[
     ("help", "debug", "core.debug.open"),
 ];
 
-/// 현재 메뉴 언어. 페이지가 설정 언어를 보내기 전에는 시스템 언어에서 정한 초기 값이다.
-/// [`set_language`] 가 메뉴를 다시 만들지 않을지를 이 값으로 정한다.
+/// The current menu language. Before the page sends the setting language, it is the initial value decided from the
+/// system language. [`set_language`] uses this value to decide that the menu is not rebuilt.
 pub struct MenuLanguage(pub std::sync::Mutex<String>);
 
-/// 언어 태그의 표 제목 열 위치를 반환한다. 표의 언어가 아니면 명시적인 오류이다.
+/// Returns the position of the title column of a language tag in the table. It is an explicit error when the language
+/// is not in the table.
 pub fn language_column(language: &str) -> Result<usize, String> {
     LANGUAGES
         .iter()
@@ -74,7 +77,8 @@ pub fn language_column(language: &str) -> Result<usize, String> {
         .ok_or_else(|| format!("the menu table has no language {language:?}"))
 }
 
-/// 상위 메뉴의 언어별 제목. app 메뉴는 제목이 애플리케이션 이름이므로 표가 비워 둔다.
+/// The titles of the top-level menus by language. The title of the app menu is the application name, so the table
+/// leaves it empty.
 pub fn menu_title(id: &str, language: &str) -> Result<String, String> {
     let column = language_column(language)?;
     MENUS
@@ -84,14 +88,14 @@ pub fn menu_title(id: &str, language: &str) -> Result<String, String> {
         .and_then(|(_, ko, en)| column_title(&[ko, en], column))
 }
 
-/// 계약 표에서 (menu, id) 항목의 언어별 제목.
+/// The titles by language of the item (menu, id) in the contract table.
 pub fn item_title(menu: &str, id: &str, language: &str) -> Result<String, String> {
     let column = language_column(language)?;
     item_row(menu, id).and_then(|row| column_title(&[row.3, row.4], column))
 }
 
-/// 계약 표의 key 형식(host.menu 보고 형식)을 메뉴 라이브러리의 단축키 형식으로 바꾼다.
-/// 수정 키는 cmd, shift, ctrl, opt 순서로 + 로 이어붙이고 마지막 칸이 키다.
+/// Converts the key format of the contract table (the host.menu report format) into the shortcut format of the menu
+/// library. The modifier keys are joined with + in the order cmd, shift, ctrl, opt, and the last cell is the key.
 pub fn accelerator(key: &str) -> Result<String, String> {
     let parts: Vec<&str> = key.split('+').collect();
     let Some((last, modifiers)) = parts.split_last() else {
@@ -127,9 +131,10 @@ pub fn runs_page_command(id: &str) -> bool {
     PAGE_COMMANDS.iter().any(|(_, _, command)| *command == id)
 }
 
-/// 페이지가 설정 언어를 보내기 전의 초기 메뉴 언어. 시스템 선호 언어의 주 태그를 표의
-/// 언어에서 찾고 표에 없으면 기본 언어를 쓴다(docs/spec/host-contract.md 의 Application menu).
-/// 시스템 언어 조사는 플랫폼 계층이 제공하고, 시스템 언어를 읽지 못하면 오류다.
+/// The initial menu language before the page sends the setting language. The main tag of the system preferred language
+/// is looked up in the languages of the table, and the default language is used when the table does not have it
+/// (Application menu in docs/spec/host-contract.md). The platform layer provides the system language lookup, and it is
+/// an error when the system language cannot be read.
 pub fn initial_language() -> Result<String, String> {
     let tag = crate::platform::current()?.preferred_language()?;
     if LANGUAGES.iter().any(|(tag_name, _)| *tag_name == tag) {
@@ -139,8 +144,8 @@ pub fn initial_language() -> Result<String, String> {
     }
 }
 
-/// 메뉴 언어를 바꾼다. 표의 언어가 아니면 명시적인 오류이고 언어가 같으면 메뉴를 다시
-/// 만들지 않는다. [`MenuLanguage`] 는 setup 이 관리 상태로 등록한다.
+/// Changes the menu language. It is an explicit error when the language is not in the table, and the menu is not
+/// rebuilt when the language is the same. [`MenuLanguage`] is registered as managed state by setup.
 pub fn set_language(app: &AppHandle, language: &str) -> Result<(), String> {
     language_column(language)?;
     let state = app.state::<MenuLanguage>();
@@ -157,8 +162,8 @@ pub fn set_language(app: &AppHandle, language: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 계약 표로 애플리케이션 메뉴를 만든다. language 는 표의 언어다. 상위 메뉴의 순서는
-/// [`MENUS`] 를 따르고 app 메뉴(첫 번째 하위 메뉴)의 제목은 애플리케이션 이름이다.
+/// Builds the application menu from the contract table. language is a language of the table. The order of the top-level
+/// menus follows [`MENUS`], and the title of the app menu (the first submenu) is the application name.
 pub fn build(app: &AppHandle, language: &str) -> Result<Menu<Wry>, String> {
     language_column(language)?;
     let menu = Menu::new(app).map_err(|error| error.to_string())?;
@@ -177,7 +182,8 @@ pub fn build(app: &AppHandle, language: &str) -> Result<Menu<Wry>, String> {
     Ok(menu)
 }
 
-/// app 메뉴를 만든다. about·hide·quit 는 "앱이름 제목" 꼴이고 제목은 계약표에서 온다.
+/// Builds the app menu. about, hide and quit take the form "application name title", and the title comes from the
+/// contract table.
 fn app_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String> {
     let package = app.package_info();
     let bundle = &app.config().bundle;
@@ -225,10 +231,10 @@ fn app_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String> 
     .map_err(string)
 }
 
-/// file 메뉴를 만든다. 윈도우 닫기 제목은 표에서 온다. close-all 은 만들지 않는다. 측정하면
-/// 애플리케이션이 시작을 마칠 때(NSApp finishLaunching) 시스템이 close-window 의 performClose:
-/// 항목 곁에 "Close All" 대체 항목(isAlternate)을 스스로 더하므로 계약 표에는 있지만 여기서
-/// 만들 항목이 없다.
+/// Builds the file menu. The title of close window comes from the table. close-all is not built. Measurement shows that
+/// when the application finishes starting (NSApp finishLaunching), the system adds a "Close All" alternate item
+/// (isAlternate) next to the performClose: item of close-window by itself, so the contract table has it but there is no
+/// item to build here.
 fn file_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String> {
     let close_window =
         PredefinedMenuItem::close_window(app, Some(&item_title("file", "close-window", language)?))
@@ -243,7 +249,7 @@ fn file_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String>
     .map_err(string)
 }
 
-/// edit 메뉴를 만든다. 항목 제목은 표에서 오고 단축키는 프레임워크가 준다.
+/// Builds the edit menu. The item titles come from the table and the framework provides the shortcuts.
 fn edit_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String> {
     let undo = PredefinedMenuItem::undo(app, Some(&item_title("edit", "undo", language)?))
         .map_err(string)?;
@@ -269,11 +275,8 @@ fn edit_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String>
     .map_err(string)
 }
 
-/// view 메뉴를 만든다. 전체 화면과 글자 크기 항목의 제목은 표에서 온다. 글자 크기 항목의
-/// 메뉴 항목 id 는 페이지로 보내는 명령 이름이다(docs/spec/text-size.md).
-/// view 메뉴를 만든다. 전체 화면 항목은 만들지 않는다. 측정하면 시스템이 앱 시작을 마칠 때
-/// View 메뉴에 자기 전체 화면 항목(keyEquivalent f)을 항상 먼저 삽입하므로(Close All 과 같은
-/// 사례, 접근성에서는 숨는다) 계약표에는 있지만 여기서 만들 항목이 없다.
+/// Builds the view menu. The titles of the full screen and text size items come from the table. The menu item id of a
+/// text size item is the command name sent to the page (docs/spec/text-size.md).
 fn view_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String> {
     let mut text_items = Vec::new();
     for (_, row, command) in PAGE_COMMANDS.iter().filter(|(menu, ..)| *menu == "view") {
@@ -287,9 +290,9 @@ fn view_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String>
         .map_err(string)?;
         text_items.push(item);
     }
-    // 전체 화면 항목은 프레임워크가 준 제목과 단축키를 쓴다. 시스템이 보기 메뉴에 스스로
-    // 넣는다는 과거 측정과 달리 이 앱들에서는 메뉴를 열어도 오지 않음을 실측했다(2026-09-30,
-    // V5-112) — 계약표의 system 행을 여기서 만든다.
+    // The full screen item uses the title and shortcut that the framework provides. The system does not add its own
+    // item to the view menu of these applications when the menu is opened (measured, V5-112), so the system row of the
+    // contract table is built here.
     let fullscreen = PredefinedMenuItem::fullscreen(app, None).map_err(string)?;
     let items: Vec<&dyn IsMenuItem<Wry>> = text_items
         .iter()
@@ -314,7 +317,7 @@ fn help_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String>
         .map_err(string)
 }
 
-/// window 메뉴를 만든다. 새 창 제목과 단축키는 표에서 온다.
+/// Builds the window menu. The title and shortcut of the new window come from the table.
 fn window_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, String> {
     let new_window = MenuItem::with_id(
         app,
@@ -335,17 +338,17 @@ fn window_submenu(app: &AppHandle, language: &str) -> Result<Submenu<Wry>, Strin
     .map_err(string)
 }
 
-/// 구분 항목을 만든다. 보고는 구분 항목을 빼고 항목 순서만 다룬다.
+/// Builds a separator item. The report leaves out separator items and covers only the order of the items.
 fn separator(app: &AppHandle) -> Result<PredefinedMenuItem<Wry>, String> {
     PredefinedMenuItem::separator(app).map_err(string)
 }
 
-/// tauri 오류를 문자열 오류로 바꾼다.
+/// Converts a tauri error into a string error.
 fn string(error: tauri::Error) -> String {
     error.to_string()
 }
 
-/// 계약 표에서 (menu, id) 항목 행을 찾는다.
+/// Finds the row of the item (menu, id) in the contract table.
 fn item_row(
     menu: &str,
     id: &str,
@@ -367,12 +370,12 @@ fn item_row(
     Ok((row.0, row.1, row.2, row.3, row.4, row.5))
 }
 
-/// 계약 표에서 (menu, id) 항목의 key 형식 단축키.
+/// The key-format shortcut of the item (menu, id) in the contract table.
 fn item_key(menu: &str, id: &str) -> Result<&'static str, String> {
     item_row(menu, id).map(|row| row.5)
 }
 
-/// 표의 제목 열 중 언어 열의 값을 고른다.
+/// Chooses the value of the language column among the title columns of the table.
 fn column_title(cells: &[&'static str], column: usize) -> Result<String, String> {
     cells
         .get(column - 1)

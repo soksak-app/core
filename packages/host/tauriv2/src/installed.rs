@@ -1,6 +1,7 @@
-//! 설정 폴더에 설치된 plugin 을 페이지에 제공하고 그 sidecar 를 찾는다(docs/spec/installation.md 의 설치된 plugin
-//! 제공). 파일은 설치가 installed.json 에 기록한 폴더에서만 읽는다. 설치 상태는 요청마다 읽으므로 변경 뒤에 불러온
-//! 페이지는 그 변경을 본다. 형식 검사는 command line sok 의 구현을 쓴다.
+//! Provides the plugins installed in the configuration folder to the page and finds their sidecars (the provision of
+//! installed plugins in docs/spec/installation.md). A file is read only from the folder that the installation recorded
+//! in installed.json. The installation state is read at every request, so a page loaded after a change sees that
+//! change. The format check uses the implementation of the command line sok.
 
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
@@ -13,10 +14,10 @@ use soksak_sok::install::InstalledState;
 use crate::application_log::log_error;
 use crate::sidecars::SidecarDeclaration;
 
-/// 페이지가 설치된 plugin 목록을 읽는 경로.
+/// The path through which the page reads the list of installed plugins.
 pub const INSTALLED_PLUGINS_PATH: &str = "/installed-plugins.json";
 
-/// 켜진 설치 plugin 하나와 그 파일 폴더.
+/// One enabled installed plugin and its file folder.
 struct InstalledPlugin {
     id: String,
     package: String,
@@ -24,8 +25,9 @@ struct InstalledPlugin {
     dir: PathBuf,
 }
 
-/// 켜진 설치 plugin 을 id 순서로 돌려준다. 설치 폴더는 설정 폴더에 대한 상대 경로로 기록되며, 형식 1 파일의 변환
-/// 보고는 애플리케이션 로그인 표준 오류에 쓴다(docs/spec/installation.md).
+/// Returns the enabled installed plugins in id order. The installation folder is recorded as a path relative to the
+/// configuration folder, and the conversion report of a format 1 file is written to the standard error, which is the
+/// application log (docs/spec/installation.md).
 fn enabled_plugins(config_dir: &Path) -> Result<(Vec<InstalledPlugin>, InstalledState), String> {
     let state = soksak_sok::plugins::read_installed(config_dir)?;
     let mut plugins = vec![];
@@ -55,7 +57,7 @@ pub fn plugin_folder(config_dir: &Path, plugin: &str) -> Result<PathBuf, String>
         .ok_or_else(|| format!("plugin {plugin} is not installed and enabled"))
 }
 
-/// JSON 텍스트에서 문자열 밖의 공백을 지운다. 키 순서와 문자열은 그대로 둔다.
+/// Removes the whitespace outside strings from JSON text. The key order and the strings stay as they are.
 fn compact(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let (mut quoted, mut escaped) = (false, false);
@@ -79,8 +81,9 @@ fn compact(text: &str) -> String {
     out
 }
 
-/// /installed-plugins.json 의 내용. plugin 마다 설치된 plugin.json 을 manifest 로 담아 page 가 첫 화면 전에 plugin 을
-/// 등록하게 한다. 설치 상태를 읽을 수 없으면 { "error" } 문서다.
+/// The content of /installed-plugins.json. For each plugin it holds the installed plugin.json as the manifest, so that
+/// the page registers the plugins before the first screen. When the installation state cannot be read, it is an {
+/// "error" } document.
 pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u8> {
     #[derive(Serialize)]
     struct Entry {
@@ -93,7 +96,8 @@ pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u
     }
     let failure = |error: String| {
         serde_json::to_vec(&serde_json::json!({ "error": error }))
-            // 기본값: 문자열 하나의 직렬화는 실패하지 않으며, 실패하면 고정된 오류 문서를 쓴다.
+            // default: the serialization of one string does not fail, and when it fails, a fixed error document is
+            // used.
             .unwrap_or_else(|_| br#"{"error":"the error text cannot be encoded"}"#.to_vec())
     };
     let plugins = match enabled_plugins(config_dir) {
@@ -126,7 +130,7 @@ pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u
         if diagnostics {
             let file = plugin.dir.join("diagnostics.json");
             match std::fs::read_to_string(&file) {
-                // 기본값: diagnostics.json 이 없는 plugin 은 진단 선언이 없다.
+                // default: a plugin without diagnostics.json has no diagnostic declaration.
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return failure(format!("{}: {error}", file.display())),
                 Ok(text) => match RawValue::from_string(compact(&text)) {
@@ -149,14 +153,14 @@ pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u
     }
 }
 
-/// /modules/<package>/<path> 가 무엇을 가리키는지.
+/// What /modules/<package>/<path> points to.
 #[derive(Debug, PartialEq)]
 pub enum Module {
-    /// 애플리케이션 frontend 의 package 다.
+    /// The package of the application frontend.
     Frontend,
-    /// 켜진 설치 plugin 의 package 지만 파일이 없거나 경로가 틀렸다.
+    /// A package of an enabled installed plugin, but the file is missing or the path is wrong.
     Missing,
-    /// 켜진 설치 plugin 의 파일이다.
+    /// A file of an enabled installed plugin.
     File(PathBuf),
 }
 
@@ -228,7 +232,7 @@ pub fn installed_shared(config_dir: &Path, url_path: &str) -> Result<Module, Str
     Ok(inside_package(&plugin.dir, &parts))
 }
 
-/// /modules/<package>/<path> 가 켜진 설치 plugin 의 파일이면 그 경로를 돌려준다.
+/// Returns the path when /modules/<package>/<path> is a file of an enabled installed plugin.
 pub fn installed_module(config_dir: &Path, url_path: &str) -> Result<Module, String> {
     let Some(rest) = url_path.strip_prefix("/modules/") else {
         return Ok(Module::Frontend);
@@ -246,13 +250,14 @@ pub fn installed_module(config_dir: &Path, url_path: &str) -> Result<Module, Str
     Ok(inside_package(&plugin.dir, &parts[count..]))
 }
 
-/// 켜진 설치 plugin 의 plugin.json dependencies 가 지정한 sidecar 를 설치가 기록한 폴더와 함께 돌려준다.
+/// Returns the sidecars that the plugin.json dependencies of an enabled installed plugin specify, together with the
+/// folder that the installation recorded.
 /// A dependency that names the package of an installed plugin is not a sidecar.
 pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, String> {
     #[derive(serde::Deserialize)]
     struct Manifest {
-        // 기본값: sidecar 를 쓰지 않는 plugin 의 plugin.json 에는 dependencies 가 없다.
-        // 두 host 가 같은 순서로 사이드카를 선언하도록 이름 순서로 읽는다.
+        // default: the plugin.json of a plugin that uses no sidecar has no dependencies.
+        // They are read in name order so that both hosts declare the sidecars in the same order.
         #[serde(default)]
         dependencies: std::collections::BTreeMap<String, String>,
     }
@@ -294,7 +299,7 @@ pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, 
     Ok(declarations)
 }
 
-/// 아무 asset 도 없는 provider. frontend asset 을 InstalledAssets 로 옮기는 동안 Context 에 둔다.
+/// A provider without any asset. It is kept in Context while the frontend assets are moved to InstalledAssets.
 pub struct NoAssets;
 
 impl<R: tauri::Runtime> tauri::Assets<R> for NoAssets {
@@ -314,8 +319,8 @@ impl<R: tauri::Runtime> tauri::Assets<R> for NoAssets {
     }
 }
 
-/// 설치된 plugin 을 제공하는 asset provider. 다른 경로는 애플리케이션 frontend 가 제공한다. 설정 폴더는 host 의
-/// setup 이 정한다.
+/// The asset provider that provides the installed plugins. The application frontend provides the other paths. The setup
+/// of the host decides the configuration folder.
 pub struct InstalledAssets<R: tauri::Runtime> {
     pub frontend: Box<dyn tauri::Assets<R>>,
     pub config_dir: Arc<OnceLock<PathBuf>>,

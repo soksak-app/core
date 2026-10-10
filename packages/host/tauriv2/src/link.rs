@@ -1,4 +1,4 @@
-//! 사용자의 기본 애플리케이션으로 링크를 연다. 절대 http, https, mailto URL 만 연다.
+//! Opens a link in the default application of the user. It opens only absolute http, https and mailto URLs.
 
 use serde::Deserialize;
 use tauri::Window;
@@ -6,7 +6,7 @@ use tauri::Window;
 use crate::exposure;
 use crate::platform;
 
-/// 열 수 있는 URL 의 최대 글자 수.
+/// The maximum number of characters of a URL that can be opened.
 const MAX_LENGTH: usize = 8192;
 
 #[derive(Debug, Deserialize)]
@@ -14,7 +14,7 @@ pub(crate) struct OpenRequest {
     pub url: String,
 }
 
-/// 절대 http, https, mailto URL 만 허용한다.
+/// Allows only absolute http, https and mailto URLs.
 pub fn validate_link(value: &str) -> Result<(), String> {
     if value.chars().count() > MAX_LENGTH {
         return Err(format!("link URL is longer than {MAX_LENGTH} characters"));

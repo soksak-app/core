@@ -1,4 +1,5 @@
-//! 표면 동기화가 배치를 시작하고 창 덮개를 놓고 표면을 맞추는 순서와, 실패할 때 시작한 배치를 남기지 않는지 검사한다.
+//! Checks the order in which the surface synchronization starts the placement, puts the window covers and fits the
+//! surfaces, and that a started placement does not remain on a failure.
 
 use std::cell::RefCell;
 
@@ -35,7 +36,8 @@ fn run(
     (result.map(|(value, ())| value), calls.into_inner())
 }
 
-// 배치를 시작한 뒤의 실패는 그 배치를 취소한다. 배치가 시작되지 않았다면 취소할 것이 없다.
+// A failure after the placement started cancels that placement. If the placement did not start, there is nothing to
+// cancel.
 fn begun_layout_ends(calls: &[&str]) -> bool {
     !calls.contains(&"begin") || calls.contains(&"cancel") || calls.contains(&"steps")
 }

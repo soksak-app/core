@@ -1,7 +1,7 @@
-//! 창 입력 감시, 웹뷰 포인터 라우팅 등록, 네이티브 입력 전달, 위치 판정.
+//! Window input watching, webview pointer routing registration, native input delivery and position decision.
 //!
-//! 표면은 네이티브 뷰이므로 표면에 대한 입력은 페이지에 전달되지 않고 창만 받는다.
-//! 포인터 라우팅은 native/darwin 에서 WebKit 비공개 입력 API 하나를 사용한다.
+//! A surface is a native view, so input on a surface is not delivered to the page and only the window receives it.
+//! Pointer routing uses one private WebKit input API in native/darwin.
 
 use std::cell::Cell;
 use std::ffi::{c_char, c_void, CString};
@@ -46,33 +46,33 @@ extern "C" {
     ) -> i32;
 }
 
-/// sp_input_pointer 의 결과 값.
+/// The result value of sp_input_pointer.
 const SP_INPUT_DELIVERED: i32 = 0;
 const SP_INPUT_INACTIVE: i32 = 2;
 const SP_INPUT_UNRECEIVED: i32 = 3;
 const SP_INPUT_BUTTON_HELD: i32 = 4;
 const SP_INPUT_PRESS_OPEN: i32 = 5;
 
-/// native/darwin 의 sp_input_held. SP_INPUT_BUTTON_HELD 로 거부한 차례의 상태다.
+/// sp_input_held of native/darwin. The state of the attempt that was rejected with SP_INPUT_BUTTON_HELD.
 #[repr(C)]
 struct SpInputHeld {
     mask: u64,
-    /// 최전면 애플리케이션의 pid. 최전면 애플리케이션이 없으면 -1 이다.
+    /// The pid of the frontmost application. It is -1 when there is no frontmost application.
     pid: i32,
-    /// 번들 식별자. 없으면 NULL 이다.
+    /// The bundle identifier. It is NULL when there is none.
     bundle_identifier: *const c_char,
 }
 
 type Delivered = Box<dyn FnOnce(Delivery) + Send>;
 
 extern "C" fn delivered(context: *mut c_void, result: i32, held: *const SpInputHeld) {
-    // context 는 pointer 가 Box::into_raw 로 넘긴 값이고 라이브러리는 done 을 한 번 호출한다.
+    // context is the value that pointer passed with Box::into_raw, and the library calls done once.
     let done = unsafe { Box::from_raw(context as *mut Delivered) };
     done(match result {
         SP_INPUT_DELIVERED => Delivery::Delivered,
         SP_INPUT_INACTIVE => Delivery::Inactive,
         SP_INPUT_UNRECEIVED => Delivery::Unreceived,
-        // 라이브러리는 SP_INPUT_BUTTON_HELD 일 때만 held 를 넘기고 done 이 반환할 때까지 유효하게 둔다.
+        // The library passes held only for SP_INPUT_BUTTON_HELD and keeps it valid until done returns.
         SP_INPUT_BUTTON_HELD => Delivery::ButtonHeld(button_held(
             unsafe { held.as_ref() }
                 .expect("sp_input_pointer_then reported SP_INPUT_BUTTON_HELD without its state"),
@@ -82,7 +82,7 @@ extern "C" fn delivered(context: *mut c_void, result: i32, held: *const SpInputH
     });
 }
 
-/// sp_input_held 를 읽는다. pid 가 -1 이면 최전면 애플리케이션이 없다.
+/// Reads sp_input_held. When pid is -1, there is no frontmost application.
 fn button_held(held: &SpInputHeld) -> ButtonHeld {
     let frontmost = (held.pid >= 0).then(|| FrontmostApplication {
         bundle_identifier: (!held.bundle_identifier.is_null()).then(|| {
@@ -98,8 +98,8 @@ fn button_held(held: &SpInputHeld) -> ButtonHeld {
     }
 }
 
-/// 창에 포인터 입력을 전달하고 결과를 done 으로 알린다. 누름과 뗌은 문서가 받은 뒤 알린다.
-/// 메인 스레드에서 호출한다.
+/// Delivers pointer input to the window and reports the result with done. A press and a release are reported after the
+/// document received them. Call it on the main thread.
 pub fn pointer(window: Handle, pointer: Pointer, receive: Duration, done: Delivered) {
     let context = Box::into_raw(Box::new(done)) as *mut c_void;
     unsafe {
@@ -120,7 +120,7 @@ pub fn pointer(window: Handle, pointer: Pointer, receive: Duration, done: Delive
 
 type Activated = Box<dyn FnOnce(Result<(), String>) + Send>;
 
-/// sp_input_activate 의 결과 값.
+/// The result value of sp_input_activate.
 const SP_ACTIVATE_DONE: i32 = 0;
 const SP_ACTIVATE_REFUSED: i32 = 2;
 const SP_ACTIVATE_NOT_KEY: i32 = 3;
@@ -133,7 +133,7 @@ struct Activation {
 }
 
 extern "C" fn activated(context: *mut c_void, result: i32, frontmost: *const c_char) {
-    // context 는 activate 가 Box::into_raw 로 넘긴 값이고 라이브러리는 done 을 한 번 호출한다.
+    // context is the value that activate passed with Box::into_raw, and the library calls done once.
     let activation = unsafe { Box::from_raw(context as *mut Activation) };
     let frontmost = if frontmost.is_null() {
         "unknown".to_string()
@@ -149,7 +149,7 @@ extern "C" fn activated(context: *mut c_void, result: i32, frontmost: *const c_c
     ));
 }
 
-/// 활성화 결과를 멈춘 단계와 최전면 애플리케이션을 적은 오류로 바꾼다.
+/// Converts the activation result into an error that states the stopped stage and the frontmost application.
 fn activation_result(result: i32, timeout: f64, frontmost: &str) -> Result<(), String> {
     match result {
         SP_ACTIVATE_DONE => Ok(()),
@@ -167,7 +167,7 @@ fn activation_result(result: i32, timeout: f64, frontmost: &str) -> Result<(), S
     }
 }
 
-/// 애플리케이션을 활성화하고 창을 키 창으로 만든 뒤 done 을 호출한다. 메인 스레드에서 호출한다.
+/// Activates the application, makes the window the key window and then calls done. Call it on the main thread.
 pub fn activate(window: Handle, x: f64, y: f64, timeout: Duration, done: Activated) {
     let context = Box::into_raw(Box::new(Activation { timeout, done })) as *mut c_void;
     unsafe {
@@ -182,8 +182,8 @@ pub fn activate(window: Handle, x: f64, y: f64, timeout: Duration, done: Activat
     }
 }
 
-/// 창에 키 입력을 전달하고 전달 여부를 반환한다. 메인 스레드에서 호출한다. NUL 문자를 포함한
-/// 키 이름과 문자열은 오류를 반환한다.
+/// Delivers key input to the window and returns whether it was delivered. Call it on the main thread. A key name or a
+/// string that contains a NUL character returns an error.
 pub fn key(window: Handle, key: &Key) -> Result<Delivery, String> {
     let name = CString::new(key.key.as_str()).map_err(|e| e.to_string())?;
     let text = key
@@ -209,7 +209,8 @@ pub fn key(window: Handle, key: &Key) -> Result<Delivery, String> {
     })
 }
 
-/// 콘텐츠 영역 왼쪽 위 기준 점 x, y 에 있는 뷰와 그 상위 뷰 목록을 반환한다. 메인 스레드에서 호출한다.
+/// Returns the view at the point x, y relative to the upper left of the content area and the list of its ancestor
+/// views. Call it on the main thread.
 pub fn hit(window: Handle, x: f64, y: f64) -> Result<Hit, String> {
     unsafe {
         let window = window as *mut AnyObject;
@@ -221,7 +222,7 @@ pub fn hit(window: Handle, x: f64, y: f64) -> Result<Hit, String> {
             return Err("window has no content view".into());
         }
         let content_bounds: NSRect = msg_send![content, bounds];
-        // hitTest: 는 받는 뷰의 부모 좌표를 사용한다.
+        // hitTest: uses the parent coordinates of the receiving view.
         let local = NSPoint {
             x,
             y: content_bounds.size.y - y,
@@ -273,7 +274,7 @@ pub fn hit(window: Handle, x: f64, y: f64) -> Result<Hit, String> {
     }
 }
 
-/// 애플리케이션 웹뷰를 공통 네이티브 포인터 라우팅에 등록하고 등록 여부를 반환한다.
+/// Registers an application webview in the common native pointer routing and returns whether it was registered.
 pub fn register(view: &PlatformWebview) -> bool {
     extern "C" {
         fn webviewInputRegister(view: *const c_void) -> Bool;
@@ -281,7 +282,8 @@ pub fn register(view: &PlatformWebview) -> bool {
     unsafe { webviewInputRegister(view.inner().cast()).as_bool() }
 }
 
-/// 웹뷰의 페이지가 요소에 초점을 줘도 창의 키보드 초점을 옮기지 않게 하고 성공 여부를 반환한다.
+/// Makes the page of a webview not move the keyboard focus of the window when it focuses an element, and returns
+/// whether it succeeded.
 pub fn ignore_page_focus(view: &PlatformWebview) -> bool {
     extern "C" {
         fn webviewIgnorePageFocus(view: *const c_void) -> Bool;
@@ -289,19 +291,19 @@ pub fn ignore_page_focus(view: &PlatformWebview) -> bool {
     unsafe { webviewIgnorePageFocus(view.inner().cast()).as_bool() }
 }
 
-/// 창이 받는 입력의 대상 뷰와 위치를 전달한다.
+/// Passes the target view and the position of the input that the window receives.
 ///
-/// pressed 는 입력을 받는 뷰부터 창 콘텐츠 뷰까지의 뷰 주소 목록을 받는다. AppKit 이 정한
-/// 대상 뷰를 이 앱이 만든 뷰와 비교하므로 좌표를 변환하지 않는다. 키 입력은 창의 first
-/// responder 를 대상으로 한다. 스스로 포커스를 잡는 페이지(예: 검색 필드에 포커스를 두는
-/// google.com)도 이 경로로 페이지 모델의 선택 표면을 갱신한다.
+/// pressed receives the list of view addresses from the view that received the input to the window content view. The
+/// target view that AppKit decided is compared with the views that this application created, so coordinates are not
+/// converted. Key input targets the first responder of the window. A page that takes the focus by itself (for example a
+/// page that focuses a search field) also updates the selected surface of the page model through this path.
 ///
-/// pointed 는 왼쪽 버튼 드래그의 각 단계를 (단계, x, y) 로 받는다. 단계는 0 누름, 1 이동,
-/// 2 놓음이고 y 는 콘텐츠 뷰 위쪽 기준이다. 경계선의 잡기 영역은 카드 사이 간격보다 넓어서,
-/// 간격이 한 줄이면 잡기 영역 전체가 표면 위에 놓이고 페이지는 누름을 받지 못한다. 그래서
-/// 이 경로는 좌표를 변환해 전달하고 호출자가 페이지 좌표로 바꾼다.
+/// pointed receives each step of a left-button drag as (phase, x, y). The phase is 0 press, 1 move, 2 release, and y is
+/// relative to the top of the content view. The grab area of a boundary is wider than the gap between cards, so when
+/// the gap is one line the whole grab area lies over a surface and the page does not receive the press. This path
+/// therefore converts and passes the coordinates, and the caller converts them to page coordinates.
 ///
-/// 감시기는 이벤트를 바꾸지 않고 반환하므로 원래 대상 뷰도 이벤트를 받는다.
+/// The monitor returns the event unchanged, so the original target view also receives the event.
 pub fn watch(
     window: Handle,
     pressed: Box<dyn Fn(Vec<Handle>) -> bool>,
@@ -316,8 +318,9 @@ pub fn watch(
     const NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED: u64 = 6;
 
     let window = window as *mut AnyObject;
-    // 버튼을 이 앱의 뷰에서 눌렀는지 기록한다. 페이지에서 시작한 드래그는 페이지가 처리한다.
-    // 그 드래그를 전달하면 화면을 다시 그리는 스레드에 포인터 이동마다 메시지가 추가된다.
+    // Records whether the button was pressed in a view of this application. A drag that started in the page is handled
+    // by the page. Delivering that drag would add a message to the thread that redraws the screen for every pointer
+    // move.
     let dragging = Cell::new(false);
     let handler = RcBlock::new(move |event: *mut AnyObject| -> *mut AnyObject {
         unsafe {
@@ -335,7 +338,8 @@ pub fn watch(
             let kind: u64 = msg_send![event, type];
             let point: NSPoint = msg_send![event, locationInWindow];
             let bounds: NSRect = msg_send![content, bounds];
-            // 이동과 놓음은 뷰를 다시 판정하지 않는다. 누름이 이 앱이 전달할 드래그인지 정했다.
+            // A move and a release do not decide the view again. The press decided whether the drag is one that this
+            // application delivers.
             if kind == NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED || kind == NS_EVENT_TYPE_LEFT_MOUSE_UP {
                 if dragging.get() {
                     let phase = if kind == NS_EVENT_TYPE_LEFT_MOUSE_DRAGGED {
@@ -394,7 +398,7 @@ pub fn watch(
     }
 }
 
-/// 입력 감시기를 제거한다. 0 은 무시한다.
+/// Removes an input monitor. 0 is ignored.
 pub fn unwatch(monitor: Handle) {
     if monitor == 0 {
         return;

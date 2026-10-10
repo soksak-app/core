@@ -1,4 +1,4 @@
-//! 디렉터리 식별.
+//! Directory identification.
 
 use std::fs::OpenOptions;
 use std::os::windows::fs::OpenOptionsExt;
@@ -10,7 +10,7 @@ use ::windows::Win32::Storage::FileSystem::{
     GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS,
 };
 
-/// 볼륨 일련번호와 파일 인덱스로 디렉터리를 식별한다.
+/// Identifies a directory by the volume serial number and the file index.
 pub fn identity(path: &Path) -> Result<String, String> {
     let file = OpenOptions::new()
         .read(true)

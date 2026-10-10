@@ -1,12 +1,13 @@
-//! 진단 빌드의 엔드포인트 메서드. cargo 기능 `diagnostics` 로만 포함한다.
+//! The endpoint methods of a diagnostic build. They are included only by the cargo feature `diagnostics`.
 //!
-//! 화면에 표시된 결과는 페이지에서 읽을 수 없다. 표면과 모달은 이 앱이 만든 네이티브 뷰이고 창
-//! 서버가 합성한다. 그래서 캡처는 화면 영역이 아니라 창을 대상으로 한다. 화면 영역은 앞에 있는
-//! 창을 기록하고, 창을 앞으로 가져오면 측정 대상 상태가 바뀐다.
+//! The result shown on the screen cannot be read from the page. Surfaces and modals are native views that this
+//! application creates, and the window server composes them. A capture therefore targets a window and not a screen
+//! region. A screen region records the frontmost window, and bringing a window to the front changes the state under
+//! measurement.
 //!
-//! 끌기 경로와 경계선 위치는 페이지가 정하고, 각 단계의 시각은 호스트가 정한다. 앞에 있지 않은
-//! 창의 문서는 숨김 상태로 처리되어 타이머가 1 초 가까이 지연된다. 호스트의 시계는 창 위치와
-//! 관계없이 지연되지 않는다.
+//! The page decides the drag path and the boundary position, and the host decides the time of each step. The document
+//! of a window that is not frontmost is handled as hidden, and its timers are delayed by nearly one second. The clock
+//! of the host is not delayed regardless of the window position.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -24,13 +25,14 @@ use crate::platform;
 use crate::recording::{layout_trace, Capture, Recording, Target};
 use crate::workspace::Workspace;
 
-/// 끌기 한 단계의 간격. 페이지도 같은 값으로 단계 수를 계산한다.
+/// The interval of one drag step. The page calculates the number of steps with the same value.
 const FRAME: Duration = Duration::from_millis(16);
 
-/// 진행 중인 녹화.
+/// A recording in progress.
 static RECORDING: Recording = Recording::new();
 
-/// 플랫폼의 창 녹화 연산. 둘째 값은 멈출 때 기록에 포함할 마지막 표시 시각(ms)이다.
+/// The window recording operation of the platform. The second value is the last presentation time (ms) to include in
+/// the record when it stops.
 struct PlatformCapture(&'static dyn platform::Platform, f64);
 
 impl Capture for PlatformCapture {
@@ -52,14 +54,14 @@ fn recorder() -> Result<PlatformCapture, Failure> {
     Ok(PlatformCapture(platform::current().map_err(internal)?, 0.0))
 }
 
-/// 캡처 디렉터리 이름을 구분하는 번호.
+/// The number that distinguishes the names of capture directories.
 static CAPTURES: AtomicU64 = AtomicU64::new(0);
 
 fn internal(error: impl ToString) -> Failure {
     Failure::new(-32603, error.to_string())
 }
 
-/// 진단 메서드를 실행한다.
+/// Runs a diagnostic method.
 pub(crate) fn call(
     host: &Host,
     window: &Window,
@@ -103,8 +105,9 @@ pub(crate) fn call(
             };
             capture_stop(window, after)
         }
-        // 메인 페이지가 처리하는 진단 메서드. 표면의 exposure 답은 페이지에서 나가기 전에 붙잡아야 요청이 끝난 뒤에
-        // 도착하므로 표면 답 붙잡기도 페이지가 처리한다(docs/spec/endpoint.md).
+        // Diagnostic methods that the main page handles. The exposure reply of a surface must be caught before it
+        // leaves the page, because otherwise it arrives after the request ended, so the page also handles the catching
+        // of surface replies (docs/spec/endpoint.md).
         "diagnostics.transcript"
         | "diagnostics.surface.hold"
         | "diagnostics.surface.held"
@@ -148,8 +151,8 @@ pub(crate) fn call(
     }
 }
 
-/// 창의 앱 페이지 WebContent process 가 JavaScript 객체를 수집하게 한다. 메모리 검사가 수집 시점과 관계없이 남은
-/// 메모리를 재도록 재기 전에 부른다.
+/// Makes the app page WebContent process of the window collect JavaScript objects. It is called before a memory check
+/// measures, so that the check measures the remaining memory regardless of the collection time.
 fn page_collect(window: &Window) -> Result<Value, Failure> {
     let target = window.clone();
     on_main(window, move || {
@@ -161,10 +164,12 @@ fn page_collect(window: &Window) -> Result<Value, Failure> {
     Ok(Value::Null)
 }
 
-/// 애플리케이션이 이벤트 하나를 처리한 뒤 창과 웹뷰에 붙인 라이브러리 객체의 살아 있는 수를 반환한다. 닫은 창의
-/// 객체는 그 창을 닫은 이벤트 반복의 자동 해제 풀이 비워질 때 해제되고, 풀은 애플리케이션이 이벤트를 처리할 때
-/// 비워진다. 창 검사가 닫은 창의 해제를 사용자 입력 없이 재도록 이벤트 하나를 넣고 그 뒤에 센다. AppKit 은 화면에
-/// 있던 창을 닫기 애니메이션이 끝날 때까지 유지하므로, equal 을 주면 수가 equal 과 같아질 때 응답한다.
+/// Returns the number of live library objects that are attached to windows and webviews after the application handled
+/// one event. The objects of a closed window are released when the autorelease pool of the event loop iteration that
+/// closed the window is drained, and the pool is drained when the application handles an event. A window check inserts
+/// one event and counts after it, so that it measures the release of a closed window without user input. AppKit keeps a
+/// window that was on the screen until its close animation ends, so when equal is given, the method answers when the
+/// count equals equal.
 fn native_objects(window: &Window, params: &Map<String, Value>) -> Result<Value, Failure> {
     let expected = params
         .get("equal")
@@ -187,7 +192,8 @@ fn native_objects(window: &Window, params: &Map<String, Value>) -> Result<Value,
         )
     })
     .map_err(internal)?;
-    // 라이브러리는 이벤트를 처리한 뒤 TIMEOUT 안에 답하므로, 이벤트 처리 시간까지 두 배를 기다린다.
+    // The library answers within TIMEOUT after it handles the event, so twice that time is awaited to include the event
+    // handling time.
     let (counts, reached) = rx.recv_timeout(2 * TIMEOUT).map_err(|_| {
         Failure::new(
             crate::endpoint::TIMED_OUT,
@@ -204,8 +210,8 @@ fn native_objects(window: &Window, params: &Map<String, Value>) -> Result<Value,
     Ok(counts.payload())
 }
 
-/// pid 의 프로세스가 끝나면 응답한다. 창 검사가 닫은 창의 WebContent 프로세스가 끝나는 것을 커널의 종료 알림으로
-/// 기다린다.
+/// Answers when the process pid ends. A window check awaits the end of the WebContent process of a closed window with
+/// the exit notification of the kernel.
 fn process_exit(window: &Window, params: &Map<String, Value>) -> Result<Value, Failure> {
     let pid = platform::parse_process_id(params.get("pid")).map_err(Failure::params)?;
     let (tx, rx) = std::sync::mpsc::channel();
@@ -224,7 +230,8 @@ fn process_exit(window: &Window, params: &Map<String, Value>) -> Result<Value, F
         )
     })
     .map_err(internal)?;
-    // 라이브러리는 TIMEOUT 안에 답하므로, 메인 스레드가 답을 보낼 시간까지 두 배를 기다린다.
+    // The library answers within TIMEOUT, so twice that time is awaited to include the time for the main thread to send
+    // the answer.
     let exited = rx.recv_timeout(2 * TIMEOUT).map_err(|_| {
         Failure::new(
             crate::endpoint::TIMED_OUT,
@@ -240,8 +247,9 @@ fn process_exit(window: &Window, params: &Map<String, Value>) -> Result<Value, F
     Ok(Value::Null)
 }
 
-/// 창을 포커스를 주지 않고 한 장 찍어 `<config-dir>/captures/still-*/window.png` 로 쓰고 경로를 반환한다.
-/// 개발 중 눈으로 확인하는 관측 자료이며, 요청자가 확인한 뒤 그 디렉터리를 지운다.
+/// Takes one still image of the window without giving it focus, writes it to `<config-dir>/captures/still-*/window.png`
+/// and returns the path. It is observation material that a person checks visually during development, and the requester
+/// deletes the directory after checking.
 fn capture_still(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
@@ -253,7 +261,7 @@ fn capture_still(window: &Window) -> Result<Value, Failure> {
         .duration_since(UNIX_EPOCH)
         .map_err(internal)?
         .as_millis();
-    // 녹화와 같이 캡처마다 비공개 디렉터리를 만든다.
+    // As in a recording, a private directory is created for each capture.
     let directory = window
         .state::<Workspace>()
         .directory()
@@ -285,7 +293,7 @@ pub(crate) fn capture_windows(app: &tauri::AppHandle) -> Result<Vec<String>, Str
     Ok(paths)
 }
 
-/// select 가 있으면 그 입력 소스를 선택하고, 현재 선택된 키보드 입력 소스를 반환한다.
+/// Selects the input source select when it is given, and returns the currently selected keyboard input source.
 fn input_source(window: &Window, params: Map<String, Value>) -> Result<Value, Failure> {
     let select = match params.get("select") {
         None | Some(Value::Null) => None,
@@ -303,7 +311,7 @@ fn input_source(window: &Window, params: Map<String, Value>) -> Result<Value, Fa
     Ok(json!({"current": current}))
 }
 
-/// `<config-dir>/test-project` 를 빈 폴더 설정으로 만들고 페이지에 그 프로젝트만 열도록 요청한다.
+/// Creates `<config-dir>/test-project` with an empty folder setting and requests the page to open only that project.
 fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let root = window.state::<Workspace>().directory().join("test-project");
@@ -317,7 +325,7 @@ fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<
         "root".into(),
         Value::String(root.to_string_lossy().into_owned()),
     );
-    // settings 는 기본값 위에 적용할 공통 설정이다. 주어지면 객체여야 한다.
+    // settings is the common setting to apply over the defaults. It must be an object when given.
     if let Some(settings) = request.get("settings") {
         if !settings.is_object() {
             return Err(Failure::params(
@@ -329,8 +337,9 @@ fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<
     exposure::parsed(&host.page(window, "diagnostics.fixture", params, TIMEOUT)?)
 }
 
-/// 경계선 하나의 왕복 끌기를 페이지에 요청하고 단계 시각을 보낸다. 끌기가 끝나고 창이 그 결과를
-/// 그린 뒤 응답한다. capture 이면 끌기 전에 창 기록을 시작하고 기록 디렉터리를 반환한다.
+/// Requests the page to drag one boundary back and forth and sends the step times. It answers after the drag ends and
+/// the window has drawn the result. When capture is set, it starts the window record before the drag and returns the
+/// record directory.
 fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<Value, Failure> {
     if !matches!(params.get("axis").and_then(Value::as_str), Some("x" | "y")) {
         return Err(Failure::params("axis must be x or y"));
@@ -345,9 +354,11 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         Some(Value::Bool(capture)) => capture,
         Some(_) => return Err(Failure::params("capture must be a boolean")),
     };
-    // 기본값: 없거나 숫자가 아닌 값은 0 으로 두어 바로 아래 검사가 잘못된 인자로 거부한다.
+    // default: a missing or non-numeric value is set to 0 so that the check right below rejects it as an invalid
+    // argument.
     let ms = params["ms"].as_f64().unwrap_or_default();
-    // 기본값: 없거나 숫자가 아닌 값은 0 으로 두어 바로 아래 검사가 잘못된 인자로 거부한다.
+    // default: a missing or non-numeric value is set to 0 so that the check right below rejects it as an invalid
+    // argument.
     let times = params["times"].as_u64().unwrap_or_default();
     if ms <= 0.0 || times < 1 {
         return Err(Failure::params(
@@ -371,7 +382,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         window,
         &format!(
             "diagnostics: drag {}:{} by {},{} in {per} steps, {times} times",
-            // 기본값: 로그 문장만 만든다. 축은 페이지가 검사하고 잘못된 값을 오류로 답한다.
+            // default: only the log text is built. The page checks the axis and answers an invalid value as an error.
             params["axis"].as_str().unwrap_or_default(),
             params["line"],
             params["dx"],
@@ -381,7 +392,8 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     let app = window.app_handle().clone();
     let label = window.label().to_string();
     let length = FRAME * steps as u32;
-    // 기록하면 걸음을 보낸 시각을 프레임과 같은 시계로 남긴다. 걸음부터 화면까지의 지연을 잴 수 있다.
+    // When recording, the time at which the step was sent is kept on the same clock as the frames, so that the delay
+    // from the step to the screen can be measured.
     let sent = std::sync::Arc::new(std::sync::Mutex::new(Vec::<f64>::new()));
     let clock = if frames.is_some() {
         Some(platform::current().map_err(internal)?)
@@ -389,7 +401,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         None
     };
     let recorded = sent.clone();
-    // 페이지는 끌기를 시작할 때 이전 단계를 버리므로 단계는 요청 이벤트를 보낸 뒤 보낸다.
+    // The page discards the previous steps when it starts a drag, so the steps are sent after the request event.
     let result = host.page_then(
         window,
         "diagnostics.drag",
@@ -397,7 +409,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         Some(TIMEOUT + length),
         move || tick(app, label, steps, clock, recorded),
     );
-    // 끌기의 성공과 관계없이 기록을 멈춘다.
+    // The record is stopped regardless of the success of the drag.
     let layouts = (|| -> Result<_, Failure> {
         if frames.is_some() {
             let platform = platform::current().map_err(internal)?;
@@ -419,8 +431,8 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
                 )))
             }
         };
-        // 마지막 배치가 커밋되고 표시될 때까지 기다린다. 다음 표시 한 번만 기다리면 마지막 단계의
-        // 커밋보다 앞선 표시에서 끝날 수 있다. Wails 호스트도 같은 시점을 기다린다.
+        // Waits until the last placement is committed and presented. Waiting for one next presentation could end at a
+        // presentation before the commit of the last step. The Wails host waits for the same point.
         let context = crate::windows::window_data(window).map_err(internal)?;
         let settled = crate::surfaces::when_settled(&context.running).map_err(internal)?;
         if settled.recv_timeout(TIMEOUT).is_err() {
@@ -453,7 +465,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
         }
         Ok(Value::Object(merged))
     })();
-    // 요청자가 프레임 폴더를 받지 못하면 녹화를 멈추고 폴더를 지운다.
+    // When the requester cannot receive the frame folder, the recording is stopped and the folder is deleted.
     if let Err(error) = finished {
         if frames.is_some() {
             let cleanup =
@@ -470,8 +482,8 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     finished
 }
 
-/// 페이지에 끌기 단계 시각을 steps 번 보낸다. 각 단계는 시작 시각 기준의 예정 시각에 보낸다.
-/// 한 단계씩 잠들면 각 단계의 실행 시간이 이후 단계에 누적된다.
+/// Sends the drag step time to the page steps times. Each step is sent at its scheduled time relative to the start
+/// time. If each step slept in turn, the execution time of each step would accumulate into the later steps.
 fn tick(
     app: tauri::AppHandle,
     label: String,
@@ -501,7 +513,8 @@ fn tick(
     });
 }
 
-/// 창 기록을 시작하고 기록 디렉터리를 반환한다. display 이면 창이 있는 디스플레이에서 이 앱의 창을 기록한다.
+/// Starts the window record and returns the record directory. When display is set, it records the windows of this
+/// application on the display that holds the window.
 fn capture_start(window: &Window, display: bool) -> Result<PathBuf, Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
@@ -537,7 +550,8 @@ fn capture_start(window: &Window, display: bool) -> Result<PathBuf, Failure> {
     Ok(directory)
 }
 
-/// after 의 표시 시각까지 기록한 뒤 진행 중인 기록을 끝내고 디렉터리와 프레임 수를 반환한다.
+/// Records until the presentation time after, ends the record in progress and returns the directory and the number of
+/// frames.
 fn capture_stop(window: &Window, after: f64) -> Result<Value, Failure> {
     let recorder = PlatformCapture(recorder()?.0, after);
     let (directory, count) = RECORDING.finish(&recorder).map_err(internal)?;
@@ -562,18 +576,18 @@ fn capture_stop(window: &Window, after: f64) -> Result<Value, Failure> {
     finished
 }
 
-/// 한 창에서 붙잡은 모달 내용 응답.
+/// The modal content replies that were held for one window.
 #[derive(Default)]
 struct ModalHold {
-    /// (놓았는지, 붙잡은 응답 수)
+    /// (whether it was released, the number of replies held)
     state: Mutex<(bool, u32)>,
     changed: Condvar,
 }
 
-/// 창 이름별로 main webview navigation callback 처리를 늦출 밀리초.
+/// The milliseconds by which the handling of the main webview navigation callback is delayed, by window name.
 static NAVIGATION_DELAYS: Mutex<Option<HashMap<String, u64>>> = Mutex::new(None);
 
-/// 창의 이후 navigation callback 처리를 ms 밀리초 늦춘다. 0 은 지연을 없앤다.
+/// Delays the later handling of the navigation callback of the window by ms milliseconds. 0 removes the delay.
 fn navigation_delay(window: &str, ms: u64) {
     let mut delays = NAVIGATION_DELAYS.lock().expect("navigation delays");
     let delays = delays.get_or_insert_with(HashMap::new);
@@ -584,14 +598,15 @@ fn navigation_delay(window: &str, ms: u64) {
     }
 }
 
-/// 창의 지연만큼 기다린 뒤 navigation callback 처리를 실행하고, 끝났음을 진단 기록에 남긴다.
+/// Waits for the delay of the window, runs the handling of the navigation callback, and records the end in the
+/// diagnostic record.
 pub(crate) fn handle_navigation(window: &Window, handle: impl FnOnce()) {
     let delay = NAVIGATION_DELAYS
         .lock()
         .expect("navigation delays")
         .as_ref()
         .and_then(|delays| delays.get(window.label()).copied())
-        // 기본값: 지연을 지정하지 않은 창은 기다리지 않는다.
+        // default: a window with no specified delay does not wait.
         .unwrap_or(0);
     std::thread::sleep(std::time::Duration::from_millis(delay));
     handle();
@@ -601,8 +616,8 @@ pub(crate) fn handle_navigation(window: &Window, handle: impl FnOnce()) {
     );
 }
 
-/// 창 이름별로 모달 내용 응답을 붙잡는다. 검사는 모달 문서가 처음 내용을 이후 이벤트보다 늦게
-/// 받는 순서를 만든다.
+/// Holds the modal content replies by window name. A check creates the order in which the modal document receives its
+/// first content later than the following events.
 static MODAL_HOLDS: Mutex<Option<HashMap<String, Arc<ModalHold>>>> = Mutex::new(None);
 
 fn modal_hold_of(window: &str) -> Option<Arc<ModalHold>> {
@@ -614,7 +629,7 @@ fn modal_hold_of(window: &str) -> Option<Arc<ModalHold>> {
         .cloned()
 }
 
-/// 창 window 의 응답을 붙잡은 동안 반환하지 않는다.
+/// Does not return while the replies of the window window are held.
 pub(crate) fn hold_modal_content(window: &str) {
     let Some(hold) = modal_hold_of(window) else {
         return;
@@ -627,7 +642,8 @@ pub(crate) fn hold_modal_content(window: &str) {
     }
 }
 
-/// on 이면 창의 모달 내용 응답을 붙잡기 시작하고, 아니면 붙잡은 응답을 보내고 붙잡기를 멈춘다.
+/// When on is set, starts to hold the modal content replies of the window; otherwise sends the held replies and stops
+/// holding.
 fn modal_hold(window: &str, on: bool) {
     let mut holds = MODAL_HOLDS.lock().expect("modal holds");
     let holds = holds.get_or_insert_with(HashMap::new);
@@ -639,8 +655,7 @@ fn modal_hold(window: &str, on: bool) {
     }
 }
 
-/// 창에서 모달 내용 응답을 하나 붙잡으면 답한다.
-/// 알림 센터가 아직 보이는 이 애플리케이션의 알림을 반환한다.
+/// Returns the notifications of this application that the notification center still shows.
 fn delivered_notifications(window: &Window) -> Result<Value, Failure> {
     let (tx, rx) = std::sync::mpsc::channel();
     on_main(window, move || {

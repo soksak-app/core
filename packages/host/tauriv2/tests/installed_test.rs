@@ -1,4 +1,5 @@
-//! 설정 폴더에 설치된 plugin 의 제공과 그 sidecar 찾기(docs/spec/installation.md 의 설치된 plugin 제공)를 검사한다.
+//! Checks the provision of the plugins installed in the configuration folder and finding their sidecars (the provision
+//! of installed plugins in docs/spec/installation.md).
 
 use std::borrow::Cow;
 use std::path::Path;
@@ -8,7 +9,7 @@ use soksak_host_tauriv2::installed::{self, InstalledAssets, Module};
 use tauri::utils::assets::{AssetKey, AssetsIter, CspHash};
 use tauri::Assets;
 
-/// 경로마다 내용을 설정 폴더에 쓴다.
+/// Writes the content to the configuration folder for each path.
 fn write_installed(config: &Path, files: &[(&str, &str)]) {
     for (name, content) in files {
         let file = config.join(name);
@@ -17,7 +18,7 @@ fn write_installed(config: &Path, files: &[(&str, &str)]) {
     }
 }
 
-/// 켜진 plugin 둘과 꺼진 plugin 하나, 그리고 sidecar 하나를 설치한 설정 폴더.
+/// A configuration folder in which two enabled plugins, one disabled plugin and one sidecar are installed.
 fn installed_fixture() -> tempfile::TempDir {
     let config = tempfile::tempdir().unwrap();
     let state = r#"{"format": 2, "plugins": {
@@ -184,7 +185,7 @@ fn installed_plugins_document_reports_an_invalid_state() {
     );
 }
 
-/// 경로를 그대로 돌려주는 frontend.
+/// A frontend that returns the path as it is.
 struct Frontend;
 
 impl Assets<tauri::Wry> for Frontend {

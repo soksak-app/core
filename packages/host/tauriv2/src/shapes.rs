@@ -1,6 +1,7 @@
-//! 표면 위에 그리는 도형.
+//! The shapes drawn over a surface.
 //!
-//! 도형은 웹뷰가 아닌 레이어 기반 뷰이므로 채움 색과 선 색의 알파가 표면 내용 위에 합성된다.
+//! A shape is a layer-backed view and not a webview, so the alpha of the fill color and the line color is composed over
+//! the surface content.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -12,7 +13,7 @@ use crate::platform::{self, Handle};
 use crate::surfaces::Rect;
 use crate::windows::{native_owner, window_data};
 
-/// 페이지가 표면 위에 그리는 사각형.
+/// A rectangle that the page draws over a surface.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ShapeRequest {
@@ -24,23 +25,23 @@ pub(crate) struct ShapeRequest {
     line: [f64; 4],
 }
 
-/// 화면에 있는 도형 뷰. id 로 찾는다.
+/// A shape view on the screen. It is found by id.
 #[derive(Default)]
 pub(crate) struct Shapes(pub Mutex<HashMap<String, Handle>>);
 
-/// 페이지의 0-255 색 채널을 AppKit 의 0-1 범위로 바꾼다. 알파는 이미 0-1 범위이다.
+/// Converts the 0-255 color channels of the page into the 0-1 range of AppKit. The alpha is already in the 0-1 range.
 fn srgba(c: [f64; 4]) -> [f64; 4] {
     [c[0] / 255.0, c[1] / 255.0, c[2] / 255.0, c[3]]
 }
 
-/// 도형을 만들거나 옮기고 스타일을 적용한다.
+/// Creates or moves a shape and applies its style.
 pub(crate) fn set(window: &Window, request: ShapeRequest) -> Result<(), String> {
     let context = window_data(window)?;
     let shapes = &context.shapes;
     let platform = platform::current()?;
 
-    // 도형은 콘텐츠 뷰에 직접 추가하므로 좌표는 원점이 왼쪽 아래인 AppKit 좌표이다. 자식
-    // 웹뷰는 Tauri 가 좌표를 변환하지만 도형은 여기서 변환한다.
+    // A shape is added directly to the content view, so its coordinates are AppKit coordinates with the origin at the
+    // lower left. Tauri converts the coordinates of a child webview, but a shape is converted here.
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let content = window
         .inner_size()
@@ -80,7 +81,7 @@ pub(crate) fn set(window: &Window, request: ShapeRequest) -> Result<(), String> 
     )
 }
 
-/// id 의 도형을 제거한다.
+/// Removes the shape of id.
 pub(crate) fn clear(window: &Window, id: String) -> Result<(), String> {
     let context = window_data(window)?;
     let shapes = &context.shapes;

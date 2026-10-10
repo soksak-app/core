@@ -1,4 +1,4 @@
-//! native/darwin 의 키보드 입력 소스 호출. 진단 빌드에만 들어간다.
+//! The keyboard input source calls of native/darwin. They are included only in diagnostic builds.
 
 use std::ffi::{c_char, c_void, CStr, CString};
 
@@ -8,7 +8,7 @@ extern "C" {
     fn free(pointer: *mut c_void);
 }
 
-/// 현재 선택된 키보드 입력 소스의 식별자를 반환한다. 메인 스레드에서 호출한다.
+/// Returns the identifier of the currently selected keyboard input source. Call it on the main thread.
 pub fn current() -> Result<String, String> {
     let pointer = unsafe { sp_input_source_current() };
     if pointer.is_null() {
@@ -21,7 +21,7 @@ pub fn current() -> Result<String, String> {
     Ok(identifier)
 }
 
-/// 켜져 있는 입력 소스 가운데 identifier 를 선택한다. 메인 스레드에서 호출한다.
+/// Selects identifier among the enabled input sources. Call it on the main thread.
 pub fn select(identifier: &str) -> Result<(), String> {
     let wanted =
         CString::new(identifier).map_err(|_| "input source identifier contains NUL".to_owned())?;

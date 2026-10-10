@@ -1,4 +1,4 @@
-//! 표면 동기화, 표시 확인, 배치, 표면 입력 전달.
+//! Surface synchronization, presentation check, placement and surface input delivery.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -19,10 +19,10 @@ use crate::windows::{
     window_data, with_native_owner, Chrome, NativeFailure, TitlebarChange,
 };
 
-/// 표면 웹뷰가 문서보다 먼저 실행하는 스크립트.
+/// The script that the surface webviews run before the document.
 pub(crate) struct Background;
 
-/// 페이지가 선언한 표면 하나. 좌표는 페이지 뷰포트 기준 CSS 픽셀이다.
+/// One surface that the page declared. The coordinates are CSS pixels relative to the page viewport.
 #[derive(Debug, Deserialize)]
 pub(crate) struct Surface {
     id: String,
@@ -31,9 +31,9 @@ pub(crate) struct Surface {
     w: f64,
     h: f64,
     visible: bool,
-    /// 페이지가 이 표면을 흐리게 표시하도록 요청했는지 나타낸다.
+    /// Shows whether the page requested to dim this surface.
     dim: bool,
-    /// 표면을 소유한 plugin 의 id. 문서 영역은 그 plugin 의 package 문서를 연다.
+    /// The id of the plugin that owns the surface. A document region opens the plugin document of that plugin.
     plugin: String,
     composition: SurfaceComposition,
 }
@@ -163,7 +163,7 @@ pub(crate) fn require_region(
     Ok(())
 }
 
-/// surface가 첫 frame을 배치하기 전에 불변 composition contract를 등록한다.
+/// Registers the immutable composition contract before the surface places its first frame.
 pub(crate) fn declare(webview: &Webview, request: CompositionDeclareRequest) -> Result<(), String> {
     if request.surface.is_empty() {
         return Err("composition declaration requires a surface".into());
@@ -194,7 +194,7 @@ pub(crate) fn declare(webview: &Webview, request: CompositionDeclareRequest) -> 
     Ok(())
 }
 
-/// 표면이 이 창에 붙어 있는지. 창의 상태를 읽지 못하면 오류다.
+/// Whether the surface is attached to this window. It is an error when the state of the window cannot be read.
 pub(crate) fn surface_attached(window: &Window, surface: &str) -> Result<bool, String> {
     Ok(window_data(window)?
         .surface_hosts
@@ -213,8 +213,8 @@ pub(crate) fn surface_handle(window: &Window, surface: &str) -> Result<Handle, S
         .ok_or_else(|| format!("surface {surface:?} is not attached"))
 }
 
-/// press를 받은 native view에 해당하는 logical surface를 찾는다.
-/// 알 수 없는 view는 workbench card를 활성화하지 않는다.
+/// Finds the logical surface that corresponds to the native view that received the press. An unknown view does not
+/// activate a workbench card.
 pub fn surface_owner_id(named: &HashMap<Handle, String>, view: Handle) -> Option<&str> {
     named
         .get(&view)
@@ -222,14 +222,15 @@ pub fn surface_owner_id(named: &HashMap<Handle, String>, view: Handle) -> Option
         .map(String::as_str)
 }
 
-/// 직접 주입한 누름의 좌표가 표면 또는 그 문서에 있는 경우 페이지에 표면 누름을 전달한다.
-/// 직접 주입은 AppKit 로컬 이벤트 감시기를 거치지 않으므로 감시기와 별도로 호출한다.
+/// When the coordinates of a directly injected press are in a surface or its document, delivers the surface press to
+/// the page. A direct injection does not pass through the AppKit local event monitor, so this is called separately from
+/// the monitor.
 pub(crate) fn press_at(window: &Window, x: f64, y: f64) -> Result<(), NativeFailure> {
     let platform = platform::current().map_err(NativeFailure::Failed)?;
     let target = window.clone();
     let id = with_native_owner(window, move |handle| {
         let hit = platform.hit(handle, x, y)?;
-        // 등록은 Destroyed 가 지우므로 창이 열려 있는 이 단계에서 읽는다.
+        // Destroyed deletes the registration, so it is read in this step, while the window is open.
         let data = window_data(&target)?;
         let named = data.views.0.lock().map_err(|e| e.to_string())?;
         let documents = data.documents.names();
@@ -248,12 +249,13 @@ pub(crate) fn press_at(window: &Window, x: f64, y: f64) -> Result<(), NativeFail
 
 #[derive(Debug, Deserialize)]
 pub struct SyncRequest {
-    /// 연속적인 배치 갱신이 종료되었는지 나타낸다.
+    /// Shows whether a continuous placement update ended.
     settled: bool,
     #[serde(default)]
     overlays: Vec<WindowOverlayRequest>,
     surfaces: Vec<Surface>,
-    /// 다음 그리기가 보일 첫 행의 높이(pt). 배치 트랜잭션 안에서 창 제목줄을 이 높이로 정한다
+    /// The height (pt) of the first row that the next draw will show. The window title bar is set to this height inside
+    /// the placement transaction.
     /// (docs/spec/native-surfaces.md#title-bar-height).
     titlebar: f64,
 }
@@ -273,7 +275,7 @@ fn visible_overlay() -> bool {
     true
 }
 
-/// 페이지 좌표의 사각형.
+/// A rectangle in page coordinates.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub(crate) struct Rect {
     pub x: f64,
@@ -282,7 +284,7 @@ pub(crate) struct Rect {
     pub h: f64,
 }
 
-/// 표면 하나가 실제로 놓인 위치. 페이지 좌표이다.
+/// The position where a surface was actually placed. It is in page coordinates.
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Placement {
     id: String,
@@ -293,8 +295,9 @@ pub(crate) struct Placement {
     visible: bool,
 }
 
-/// 준비의 답. chrome 은 호스트가 이 트랜잭션에서 제목줄을 정한 뒤의 창 단추 영역과 제목줄 높이이고, 페이지는 이
-/// 준비의 표시를 확인한 뒤 그것을 커밋된 상태로 읽는다.
+/// The answer of a preparation. chrome is the window button area and the title bar height after the host set the title
+/// bar in this transaction, and the page reads it as committed state after it checks the presentation of this
+/// preparation.
 #[derive(Serialize)]
 pub(crate) struct PreparedSurfaces {
     ticket: u64,
@@ -311,7 +314,7 @@ pub(crate) struct PresentRequest {
     wait_for_presentation: bool,
 }
 
-/// 드래그의 한 단계. phase 는 누름 0, 이동 1, 놓음 2 이다.
+/// One step of a drag. phase is 0 for press, 1 for move and 2 for release.
 #[derive(Clone, Serialize)]
 struct InputStep {
     phase: u8,
@@ -319,19 +322,19 @@ struct InputStep {
     y: f64,
 }
 
-/// 각 표면이 그리는 뷰. 누름을 받은 뷰를 표면과 대응시킨다.
+/// The view that each surface draws. It maps the view that received a press to a surface.
 #[derive(Default)]
 pub(crate) struct Views(pub Arc<Mutex<HashMap<Handle, String>>>);
 
-/// 창의 입력 감시기. 감시를 시작하지 않았으면 None 이다.
+/// The input monitor of a window. It is None when the watch was not started.
 #[derive(Default)]
 pub(crate) struct Watching(pub Arc<Mutex<Option<Handle>>>);
 
-/// 연속 크기 변경 중인 표면. 표면은 프레임마다가 아니라 연속 변경의 시작과 끝을 받는다.
-/// 연속 갱신이 진행 중인지와 페이지가 커밋했는지 나타낸다.
+/// The surface in a continuous resize. A surface receives the start and the end of a continuous resize and not every
+/// frame. It shows whether a continuous update is in progress and whether the page committed.
 ///
-/// 페이지는 커밋마다 두 값을 보고한다. run-began, run-ended, page-ready 는 프레임마다가 아니라
-/// 이 상태가 바뀔 때만 발생한다.
+/// The page reports two values at every commit. run-began, run-ended and page-ready occur only when this state changes
+/// and not at every frame.
 #[derive(Default)]
 pub(crate) struct Running {
     pub prepared: AtomicU64,
@@ -340,8 +343,8 @@ pub(crate) struct Running {
     settled: Mutex<Vec<std::sync::mpsc::Sender<()>>>,
 }
 
-/// 연속 갱신이 끝나면 값을 받는 수신자를 반환한다. 진행 중인 갱신이 없으면 이미 값이 있다.
-/// 진단 메서드 diagnostics.drag 만 사용한다.
+/// Returns the receiver that gets a value when the continuous update ends. When no update is in progress, it already
+/// has a value. Only the diagnostic method diagnostics.drag uses it.
 #[cfg(feature = "diagnostics")]
 pub(crate) fn when_settled(running: &Running) -> Result<std::sync::mpsc::Receiver<()>, String> {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -359,12 +362,12 @@ pub(crate) fn label_for(window: &Window, id: &str) -> String {
     format!("surface-{}-{id}", window.label())
 }
 
-/// 논리 좌표 사각형을 디스플레이 픽셀 격자의 안쪽으로 맞춘다.
+/// Fits a logical coordinate rectangle inward to the display pixel grid.
 ///
-/// 소수 논리 좌표에 놓인 뷰는 그릴 때 반올림된다. 바깥쪽으로 반올림하면 페이지가 선언한
-/// 영역보다 넓게 덮고, 카드 테두리는 그 영역 안쪽 한 줄에 있으므로 뷰가 테두리를 가린다.
-/// 안쪽으로 맞추면 각 가장자리에 최대 1 장치 픽셀의 카드 배경이 남고, 그 위치에는 원래 카드
-/// 배경이 있다. Wails 호스트도 backingAlignedRect 로 같은 방향으로 맞춘다.
+/// A view placed at fractional logical coordinates is rounded when it is drawn. Rounding outward covers more than the
+/// area that the page declared, and the card border is one line inside that area, so the view would hide the border.
+/// Fitting inward leaves at most 1 device pixel of the card background at each edge, and the card background was at
+/// that position originally. The Wails host also fits in the same direction with backingAlignedRect.
 pub(crate) fn aligned(x: f64, y: f64, w: f64, h: f64, scale: f64) -> (f64, f64, f64, f64) {
     let step = 1.0 / scale;
     let left = (x * scale).ceil() / scale;
@@ -379,10 +382,10 @@ pub(crate) fn aligned(x: f64, y: f64, w: f64, h: f64, scale: f64) -> (f64, f64, 
     )
 }
 
-/// 창의 누름 감시를 한 번 시작한다.
+/// Starts the press watch of the window once.
 ///
-/// 표면에 대한 누름은 표면 뷰가 받고 페이지는 받지 못하므로, 창을 감시하고 표면 id 를
-/// 페이지에 전달한다.
+/// A press on a surface is received by the surface view and not by the page, so the window is watched and the surface
+/// id is passed to the page.
 fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<(), String> {
     if watching.0.lock().map_err(|e| e.to_string())?.is_some() {
         return Ok(());
@@ -430,10 +433,10 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
     .map_err(|e| e.to_string())
 }
 
-/// 웹뷰를 네이티브 포인터 라우팅에 등록한다.
+/// Registers a webview in the native pointer routing.
 ///
-/// 명령은 AppKit 스레드 밖에서 실행된다. 겹치는 웹뷰를 사용 가능하다고 알리기 전에 등록
-/// 실패를 호출자에게 반환한다.
+/// Commands run outside the AppKit thread. Before it announces that an overlapping webview is usable, it returns a
+/// registration failure to the caller.
 pub(crate) fn isolate_webview(view: &Webview, page_focus: PageFocus) -> Result<(), String> {
     let platform = platform::current()?;
     let (tx, rx) = mpsc::channel();
@@ -446,7 +449,7 @@ pub(crate) fn isolate_webview(view: &Webview, page_focus: PageFocus) -> Result<(
             });
         match tx.send(isolated) {
             Ok(()) => {}
-            // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+            // A failure after the request ended was not reported by that request, so it is left as an error line.
             Err(mpsc::SendError(Err(error))) => log_error("surface focus", error),
             Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
                 "surface",
@@ -462,16 +465,16 @@ pub(crate) fn isolate_webview(view: &Webview, page_focus: PageFocus) -> Result<(
     }
 }
 
-/// 웹뷰의 페이지가 요소에 초점을 줄 때 창의 키보드 초점도 옮기는지 나타낸다. 메인 페이지만 옮긴다.
-/// 표면과 모달은 사용자의 클릭이나 호스트를 통해서만 초점을 받는다.
+/// Shows whether the window keyboard focus also moves when the page of a webview focuses an element. Only the main page
+/// moves it. Surfaces and modals receive the focus only through a click of the user or through the host.
 #[derive(Clone, Copy)]
 pub(crate) enum PageFocus {
     Allowed,
     Ignored,
 }
 
-/// 배치를 시작하기 전에 동기화 요청 전체를 검사하고 창 오버레이를 반환한다. `held` 와
-/// `plugins` 는 창이 이미 받은 표면의 composition 선언과 plugin 이다.
+/// Checks the whole synchronization request before the placement starts and returns the window overlays. `held` and
+/// `plugins` are the composition declarations and the plugins of the surfaces that the window has already received.
 pub fn check_sync_request(
     request: &SyncRequest,
     held: &HashMap<String, SurfaceComposition>,
@@ -520,10 +523,12 @@ pub fn check_sync_request(
         .collect()
 }
 
-/// 창 덮개를 놓고 표면 배치 트랜잭션을 시작한 뒤 창 제목줄을 정하고 표면을 맞춘다. 창 덮개는 배치를 시작하기 전에
-/// 놓으므로 덮개가 거부되면 시작한 배치가 없다. 제목줄을 정하지 못하면 표면을 맞추지 않고 배치를 취소한다. 표면을
-/// 맞추지 못하면 restore 로 이전 제목줄을 되돌린 뒤 취소한다. 취소는 트랜잭션을 커밋하므로 되돌리지 않으면 새 제목줄이
-/// 이전 행과 함께 표시된다. steps 는 titlebar 의 답을 읽고, 성공하면 그 답을 함께 반환한다.
+/// Places the window covers, starts the surface placement transaction, then sets the window title bar and fits the
+/// surfaces. The window covers are placed before the placement starts, so no placement has started when a cover is
+/// rejected. If the title bar cannot be set, the surfaces are not fitted and the placement is canceled. If the surfaces
+/// cannot be fitted, the previous title bar is restored with restore and then the placement is canceled. A cancel
+/// commits the transaction, so without the restore the new title bar would be shown together with the previous rows.
+/// steps reads the answer of titlebar and returns that answer together when it succeeds.
 pub fn run_layout<C, T>(
     overlays: impl FnOnce() -> Result<(), String>,
     begin: impl FnOnce() -> Result<(), String>,
@@ -554,7 +559,8 @@ pub fn run_layout<C, T>(
     }
 }
 
-/// 페이지가 선언한 표면에 창의 자식 웹뷰를 맞추고 표면 배치 트랜잭션을 준비한다.
+/// Fits the child webviews of the window to the surfaces that the page declared, and prepares the surface placement
+/// transaction.
 pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurfaces, String> {
     let context = window_data(window)?;
     let views = &context.views;
@@ -571,8 +577,8 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     if !request.settled {
         announce_run(window, running, true)?;
     }
-    // 페이지가 커밋했으므로 창이 화면에 있고 표면이 존재한다. 앱이 그려진 뒤 실행할 작업은
-    // 여기서 시작한다.
+    // The page committed, so the window is on the screen and the surfaces exist. The work to run after the app is drawn
+    // starts here.
     if let Ok(mut first) = running.first.lock() {
         if !*first {
             *first = true;
@@ -593,7 +599,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         main.with_webview(move |webview| {
             match tx.send(platform.view_id(&webview)) {
                 Ok(()) => {}
-                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                // A failure after the request ended was not reported by that request, so it is left as an error line.
                 Err(mpsc::SendError(Err(error))) => log_error("main webview handle", error),
                 Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
                     "surface",
@@ -654,7 +660,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 .lock()
                 .map_err(|e| e.to_string())?
                 .insert(s.id.clone(), s.plugin.clone());
-            // 크기가 0 인 웹뷰는 보이지 않고 일부 플랫폼은 거부하므로 숨긴 표면으로 처리한다.
+            // A webview of size 0 is not visible and some platforms reject it, so it is handled as a hidden surface.
             let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
             context.images.set_surface_visible(&s.id, visible);
             let (ax, ay, aw, ah) = aligned(s.x, s.y, s.w.max(1.0), s.h.max(1.0), scale);
@@ -682,8 +688,8 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 handle
             };
             exposure::on_main(window, move || {
-                // 준비 단계에서는 DOM이 아직 표시되지 않았을 수 있다. 표면은
-                // present에서 같은 티켓이 확정될 때까지 항상 숨긴다.
+                // In the preparation step the DOM may not be presented yet. The surface always stays hidden until the
+                // same ticket is settled in present.
                 platform.set_surface_hidden_handle(handle, true)?;
                 platform.set_surface_alpha_handle(handle, solid)?;
                 if visible {
@@ -693,7 +699,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             })?;
         }
 
-        // 표면 목록은 페이지만 작성하므로 목록에 없는 표면은 제거된 표면이다.
+        // Only the page writes the surface list, so a surface that is not in the list is a removed surface.
         let alive: HashSet<String> = request.surfaces.iter().map(|s| s.id.clone()).collect();
         let removed: Vec<(String, Handle)> = surface_hosts
             .lock()
@@ -704,7 +710,8 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             .collect();
         let removed_ids: HashSet<String> = removed.iter().map(|(id, _)| id.clone()).collect();
         for (id, handle) in removed {
-            // 표면 생명주기의 계기(V5-104): 목록에서 사라진 표면은 이 자리에서 파괴된다.
+            // The trigger of the surface lifecycle (V5-104): a surface that disappeared from the list is destroyed at
+            // this point.
             crate::performance::surface("destroyed", &id, None);
             if let Ok(mut named) = views.0.lock() {
                 named.remove(&handle);
@@ -731,14 +738,15 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 .remove(&id);
             exposure::surface_closed(window, &id);
         }
-        // 제거된 표면만 사이드카에 알린다. 표면이 아닌 사이드카 세션(플러그인 상태 모듈의 세션)은 표면 목록에 없으므로,
-        // 목록에 없다는 이유로 닫으면 그 세션의 root 와 감시가 사라진다.
+        // Only removed surfaces are announced to the sidecars. A sidecar session that is not a surface (the session of
+        // a plugin state module) is not in the surface list, so closing it because it is not in the list would lose the
+        // root and the watch of that session.
         window
             .state::<WindowSidecars>()
             .retain(window, &|id: &str| !removed_ids.contains(id))?;
 
-        // 각 표면의 실제 위치를 반환한다. 호스트는 페이지가 선언한 사각형을 디스플레이 픽셀에
-        // 맞추므로 두 값의 차이를 페이지에 알린다.
+        // Returns the actual position of each surface. The host fits the rectangles that the page declared to display
+        // pixels, so the difference between the two values is reported to the page.
         let mut placed = Vec::with_capacity(request.surfaces.len());
         for s in &request.surfaces {
             let Some(handle) = surface_hosts
@@ -752,7 +760,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
             placed.push(surface_handle_placement(window, handle, &s.id, visible)?);
         }
-        // DOM 표시를 기다리기 전에 적용한 크기의 이미지 준비를 시작한다.
+        // Before it waits for the DOM presentation, it starts the image preparation of the size that was applied.
         Ok(PreparedSurfaces {
             ticket,
             placements: placed,
@@ -769,8 +777,8 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     };
     let (prepared, change) =
         run_layout(place_overlays, begin, set_titlebar, steps, restore, cancel)?;
-    // 배치를 맞춘 뒤 이미지 raster 갱신이 실패해도 시작한 배치를 남기지 않는다. 취소는 트랜잭션을 커밋하므로 제목줄을
-    // 먼저 되돌린다.
+    // Even if the image raster update fails after the placement was fitted, no started placement remains. A cancel
+    // commits the transaction, so the title bar is restored first.
     if let Err(error) = crate::composition::refresh_image_rasters(window) {
         log_failure("surface layout title bar restore", restore(change));
         cancel();
@@ -779,7 +787,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     Ok(prepared)
 }
 
-/// 표면 웹뷰의 현재 위치를 페이지 좌표로 반환한다.
+/// Returns the current position of the surface webview in page coordinates.
 fn surface_handle_placement(
     window: &Window,
     handle: Handle,
@@ -799,7 +807,8 @@ fn surface_handle_placement(
     })
 }
 
-/// DOM 이 그린 준비의 표시를 확인한다. 이후 준비와 AppKit 이벤트 루프를 막지 않는다.
+/// Checks the presentation mark of the preparation that the DOM drew. It does not block later preparations or the
+/// AppKit event loop.
 pub(crate) async fn present(
     window: Window,
     request: PresentRequest,
@@ -813,11 +822,11 @@ pub(crate) async fn present(
     let placements = request.placements;
     let presentation_settled = request.settled;
     let wait_for_presentation = presentation_settled || request.wait_for_presentation;
-    // 연속 divider gesture 동안 native surface frame과 DOM은
-    // display cycle마다 commit된다. frame마다 application presentation을 기다리면
-    // 다음 transaction이 WebKit refresh 뒤로 직렬화되므로, DOM barrier는 정착된 frame만 유지한다.
-    // raster barrier는 모든 frame이 유지한다. 연속 배치도 새 영역 크기를 이전 raster와 함께 commit하지
-    // 않는다(docs/spec/surface-composition.md).
+    // During a continuous divider gesture, the native surface frame and the DOM are committed at every display cycle.
+    // Waiting for the application presentation at every frame would serialize the next transaction behind the WebKit
+    // refresh, so the DOM barrier keeps only the settled frames. The raster barrier is kept for every frame. Even a
+    // continuous placement does not commit the new region size together with the previous raster
+    // (docs/spec/surface-composition.md).
     let dom = if wait_for_presentation {
         let (dom_tx, dom_rx) = mpsc::channel();
         main.with_webview(move |view| {
@@ -836,7 +845,7 @@ pub(crate) async fn present(
                 )
             });
             if let Err(error) = outcome {
-                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                // A failure after the request ended was not reported by that request, so it is left as an error line.
                 if let Err(mpsc::SendError(Err(error))) = dom_tx.send(Err(error)) {
                     log_error("DOM presentation", error);
                 }
@@ -873,9 +882,8 @@ pub(crate) async fn present(
         .map_err(|error| error.to_string())?,
     );
     if let Some(Err(error)) = ready {
-        // presentation 실패는 sync가 native transaction을 연 뒤에 발생한다.
-        // 반환하기 전에 그 transaction을 해제하여
-        // 다음 split이 실패한 owner 뒤에서 무한히 기다리지 않게 한다.
+        // A presentation failure occurs after sync opened the native transaction. The transaction is released before
+        // returning so that the next split does not wait forever behind the failed owner.
         let target = window.clone();
         let cancel_error = platform::current()?.enqueue_ui(Box::new(move || {
             log_failure("surface layout cancel", cancel_window_layout(&target));
@@ -886,7 +894,7 @@ pub(crate) async fn present(
         return Err(error);
     }
     let (ui_tx, mut ui_rx) = tauri::async_runtime::channel(1);
-    // 커밋은 AppKit 다시 그리기를 호출할 수 있으므로 Tao 이벤트 잠금 밖에서 실행한다.
+    // A commit can call an AppKit redraw, so it runs outside the Tao event lock.
     platform::current()?.enqueue_ui(Box::new(move || {
         let result = (|| -> Result<Vec<Placement>, String> {
             let platform = platform::current()?;
@@ -934,7 +942,7 @@ pub(crate) async fn present(
             if !committed {
                 return Err(format!("surface preparation {ticket} is no longer current"));
             }
-            // 준비 갱신과 종료 판정을 같은 UI 스레드에서 순서대로 실행한다.
+            // The preparation update and the end decision run in order on the same UI thread.
             if committed
                 && presentation_settled
                 && context.running.prepared.load(Ordering::Relaxed) == ticket
@@ -945,15 +953,16 @@ pub(crate) async fn present(
             Ok(placed)
         })();
         if let Err(failure) = ui_tx.try_send(result) {
-            // 받는 쪽만 채널을 닫을 수 있으므로 지금 닫혀 있지 않으면 보낼 때 채널이 가득 찼던 것이다. 채널은 이
-            // 결과 하나만 받으므로 가득 찬 채널은 결과를 버린 실패다.
+            // Only the receiving side can close the channel, so if it is not closed now, the channel was full when the
+            // result was sent. The channel receives only this one result, so a full channel is a failure that discarded
+            // the result.
             let closed = ui_tx.is_closed();
             match (closed, failure.into_inner()) {
                 (false, _) => log_error(
                     "surface placement",
                     "the result channel is full and the result was dropped",
                 ),
-                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                // A failure after the request ended was not reported by that request, so it is left as an error line.
                 (true, Err(error)) => log_error("surface placement", error),
                 (true, Ok(_)) => crate::application_log::log_info(
                     "surface",
@@ -968,8 +977,8 @@ pub(crate) async fn present(
         .ok_or("the main webview closed before presenting")?
 }
 
-/// run-began 과 run-ended 를 발생시킨다. 페이지는 후속 갱신이 있는지 보고하고, 이 함수는 그
-/// 값이 바뀔 때만 이벤트를 발생시킨다.
+/// Raises run-began and run-ended. The page reports whether a later update follows, and this function raises an event
+/// only when that value changes.
 fn announce_run(window: &Window, running: &Running, going: bool) -> Result<(), String> {
     {
         let mut held = running.going.lock().map_err(|e| e.to_string())?;
@@ -992,7 +1001,7 @@ fn announce_run(window: &Window, running: &Running, going: bool) -> Result<(), S
     emit_window(window, name, ()).map_err(|e| e.to_string())
 }
 
-/// 논리 표면의 네이티브 핸들을 만든다. 실패와 0 핸들은 표면 id 를 담은 오류다.
+/// Creates the native handle of a logical surface. A failure and a 0 handle are an error that holds the surface id.
 pub fn create_logical_surface_handle(
     create: impl FnOnce() -> Result<crate::platform::Handle, String>,
     id: &str,
@@ -1004,7 +1013,7 @@ pub fn create_logical_surface_handle(
     Ok(handle)
 }
 
-/// 창이 닫힐 때 닫는 네이티브 객체.
+/// The native objects that are closed when the window closes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowNative {
     Document(Handle),
@@ -1012,11 +1021,13 @@ pub enum WindowNative {
     Surface(Handle),
 }
 
-/// 닫히는 창의 논리 표면마다 문서 영역과 그림 영역을 닫은 뒤 표면을 닫는다. 표면은 id 순서로 닫는다.
+/// For each logical surface of a closing window, closes the document regions and the image regions and then closes the
+/// surface. Surfaces are closed in id order.
 ///
-/// 논리 표면은 메인 웹뷰를 보유하고 문서 영역은 자기 웹 콘텐츠 프로세스를 가지므로, 닫지 않은 표면과 영역은 창이
-/// 닫힌 뒤에도 웹뷰와 그 웹 콘텐츠 프로세스를 남긴다. 한 객체를 닫지 못해도 나머지를 닫고 모든 실패를 반환한다.
-/// close 는 네이티브 객체 하나를 닫으며 메인 스레드에서 호출된다.
+/// A logical surface holds a main webview and a document region has its own web content process, so a surface and a
+/// region that are not closed leave the webview and its web content process behind even after the window closed. If one
+/// object cannot be closed, the others are still closed and all failures are returned. close closes one native object
+/// and is called on the main thread.
 pub fn close_window_surfaces(
     surfaces: HashMap<String, Handle>,
     documents: &documents::Documents,

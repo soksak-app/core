@@ -1,4 +1,5 @@
-//! host.buttons 의 값과 그 알림 테스트. 엔드포인트의 창과 페이지는 가짜 서비스가 대신한다.
+//! Tests of the value of host.buttons and its notifications. A fake service replaces the window and the page of the
+//! endpoint.
 
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
@@ -8,7 +9,7 @@ use serde_json::{json, Map, Value};
 use soksak_host_tauriv2::buttons::Buttons;
 use soksak_host_tauriv2::endpoint::{self, raw, Connection, Endpoint, Failure, Service};
 
-/// 창 w1 만 가지고 host.buttons 를 buttons 의 값으로 답하는 서비스.
+/// A service that has only the window w1 and answers host.buttons with the value of buttons.
 struct Fake {
     buttons: OnceLock<Arc<Buttons>>,
 }
@@ -58,7 +59,7 @@ fn request(connection: &mut Box<dyn Connection>, id: u64, method: &str, params: 
     reply
 }
 
-/// host.buttons 의 다음 알림의 mask.
+/// The mask of the next notification of host.buttons.
 fn next_mask(connection: &mut Box<dyn Connection>) -> Value {
     let got = endpoint::read_frame(connection)
         .unwrap()
@@ -95,7 +96,7 @@ fn buttons_notify_each_mask_change() {
         request(&mut connection, 2, "status.get", watch.clone())["result"],
         json!({"mask": 0})
     );
-    // 같은 mask 의 보고는 알리지 않는다. 다음 알림은 다음의 다른 mask 다.
+    // A report of the same mask is not announced. The next notification is the next different mask.
     buttons.report(0);
     buttons.report(1);
     assert_eq!(next_mask(&mut connection), 1);
@@ -104,7 +105,7 @@ fn buttons_notify_each_mask_change() {
     buttons.report(0);
     assert_eq!(next_mask(&mut connection), 3);
     assert_eq!(next_mask(&mut connection), 0);
-    // 남은 알림이 있으면 이 요청의 답보다 먼저 온다.
+    // A remaining notification arrives before the answer to this request.
     assert_eq!(
         request(&mut connection, 3, "status.get", watch)["result"],
         json!({"mask": 0})

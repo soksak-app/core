@@ -1,5 +1,6 @@
-//! 진단 build 의 --registry-ca(docs/spec/hosts.md#application-arguments)를 검사한다. 신뢰를 실제 TLS 연결로 보는
-//! 검사는 sok 의 fetch 검사가 맡고, 여기서는 인자를 읽고 인증 기관을 받기에 넘기는지를 본다.
+//! Checks --registry-ca of a diagnostic build (docs/spec/hosts.md#application-arguments). The check of the sok fetch
+//! checks trust with a real TLS connection, and here it is checked that the argument is read and the certificate
+//! authority is passed to the download.
 #![cfg(feature = "diagnostics")]
 
 use soksak_host_tauriv2::command_line::{apply_arguments, parse_arguments};

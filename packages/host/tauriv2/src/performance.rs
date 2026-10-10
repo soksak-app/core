@@ -60,7 +60,7 @@ pub fn command(request: Value) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// at 을 ISO-8601(밀리초)로 바꾼다. 에포크 이전 시각은 이 형식으로 적을 수 없으므로 오류다.
+/// Converts at to ISO-8601 (milliseconds). A time before the epoch cannot be written in this format, so it is an error.
 pub fn timestamp(at: SystemTime) -> Result<String, String> {
     let since = at
         .duration_since(UNIX_EPOCH)
@@ -78,7 +78,7 @@ pub fn timestamp(at: SystemTime) -> Result<String, String> {
     ))
 }
 
-/// 날수를 역·월·일로 바꾼다(Howard Hinnant 의 civil_from_days).
+/// Converts the number of days into year, month and day (civil_from_days by Howard Hinnant).
 fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let z = days + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
@@ -200,8 +200,7 @@ pub fn sampler_running() -> bool {
     SAMPLER.lock().expect("the sampler").is_some()
 }
 
-/// sampler 가 기록하는 pid 의 메모리 사건.
-/// 읽기에 실패하면 크기 대신 그 오류를 기록한다.
+/// The memory event of pid that the sampler records. When the read fails, it records the error instead of the size.
 pub fn memory_record(pid: u32) -> Value {
     match resident_kb(pid) {
         Ok(size) => json!({"event":"memory", "rss_host_kb":size}),
@@ -209,7 +208,7 @@ pub fn memory_record(pid: u32) -> Value {
     }
 }
 
-/// pid 의 상주 크기(KB). ps 를 실행하지 못하거나 크기를 돌려주지 않으면(프로세스가 끝났으면) 오류다.
+/// The resident size of pid (KB). It is an error when ps cannot run or returns no size (when the process has ended).
 fn resident_kb(pid: u32) -> Result<u64, String> {
     let output = std::process::Command::new("ps")
         .args(["-o", "rss=", "-p", &pid.to_string()])

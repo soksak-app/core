@@ -1,11 +1,12 @@
-//! 표면 페이지 안의 문서 영역. docs/spec/native-surfaces.md 의 "문서 영역"이다.
+//! Document regions in a surface page. This is the "document region" of docs/spec/native-surfaces.md.
 //!
-//! 표면 페이지가 자기 요소 하나에 외부 문서를 붙인다. 호스트는 그 표면 웹뷰 안에 문서 웹뷰를 두고,
-//! 페이지가 알린 여백으로 배치하며, 문서 상태를 그 표면에만 보낸다. 문서 웹뷰는 표면 웹뷰의 하위
-//! 뷰이므로 표면과 함께 옮겨지고 숨겨진다. 표면이 제거되거나 표면 페이지가 다시 읽히면 닫는다.
+//! A surface page attaches an external document to one of its elements. The host places a document webview inside the
+//! webview of that surface, lays it out with the insets that the page reported, and sends the document state only to
+//! that surface. The document webview is a subview of the surface webview, so it moves and hides together with the
+//! surface. It is closed when the surface is removed or the surface page is loaded again.
 //!
-//! 명령은 메인 스레드 밖에서 실행되고 네이티브 작업은 메인 스레드에서 실행한다. 메인 스레드에서
-//! 시작한 정리는 기다리지 않는다.
+//! Commands run outside the main thread and native work runs on the main thread. A cleanup that started on the main
+//! thread is not awaited.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -20,11 +21,12 @@ use crate::platform::{self, Handle};
 use crate::surfaces::{require_region, surface_handle};
 use crate::windows::{emit_window, window_data};
 
-/// 문서 영역의 영구 사이트 데이터를 두는 설정 디렉터리 안의 디렉터리. 앱 문서의 저장소와 다르다
+/// The directory inside the configuration directory that holds the persistent site data of document regions. It differs
+/// from the storage of the app document.
 /// (docs/spec/native-surfaces.md#document-regions).
 const DOCUMENT_DATA: &str = "document-data";
 
-/// 표면 페이지의 문서 영역 호출. 필드는 호출마다 필요한 것만 쓴다.
+/// A document region call of a surface page. Each call uses only the fields that it needs.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Request {
     pub surface: String,
@@ -68,7 +70,8 @@ pub fn document_message(surface: &str, document: &str, value: &str) -> Result<Me
 }
 
 impl Request {
-    /// 문서의 글자 배율(docs/spec/text-size.md). 없거나 유한한 양수가 아니면 오류다.
+    /// The text scale of the document (docs/spec/text-size.md). It is an error when it is absent or not a finite
+    /// positive number.
     pub fn zoom_factor(&self) -> Result<f64, String> {
         match self.zoom {
             Some(zoom) if zoom.is_finite() && zoom > 0.0 => Ok(zoom),
@@ -77,7 +80,7 @@ impl Request {
     }
 }
 
-/// document-state 이벤트의 값.
+/// The value of the document-state event.
 #[derive(Clone, Serialize)]
 struct State {
     surface: String,
@@ -92,11 +95,11 @@ struct Event {
     event: Value,
 }
 
-/// 표면과 문서 이름의 쌍.
+/// A pair of a surface and a document name.
 pub type Key = (String, String);
 
-/// 호출한 표면 caller 가 request.surface 이고 문서 이름이 올바른지 확인하고 키를 반환한다.
-/// caller 가 None 이면 호출한 웹뷰는 이 창의 표면이 아니다.
+/// Checks that the calling surface caller is request.surface and that the document name is valid, and returns the key.
+/// When caller is None, the calling webview is not a surface of this window.
 pub fn check(caller: Option<&str>, request: &Request) -> Result<Key, String> {
     if caller != Some(request.surface.as_str()) {
         return Err(format!(
@@ -114,7 +117,8 @@ pub fn check(caller: Option<&str>, request: &Request) -> Result<Key, String> {
     Ok((request.surface.clone(), request.document.clone()))
 }
 
-/// 창의 문서 영역. 값은 문서 웹뷰의 주소이고, 만드는 중인 영역은 0 이다.
+/// The document regions of a window. The value is the address of the document webview, and 0 for a region that is being
+/// created.
 #[derive(Default)]
 pub struct Documents(Mutex<HashMap<Key, Handle>>);
 
@@ -122,11 +126,12 @@ impl Documents {
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<Key, Handle>> {
         self.0
             .lock()
-            // 기본값: 잠금을 쥔 채 멈춘 스레드도 맵을 한 번의 넣기, 빼기, 읽기로만 바꾸므로 맵은 일관되고, 그 멈춤은 패닉 보고로 이미 알려졌다.
+            // default: a thread that stopped while holding the lock also changed the map only by one insert, remove or
+            // read, so the map is consistent, and that stop was already reported as a panic report.
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    /// 이름을 차지한다. 같은 이름이 이미 있으면 오류다.
+    /// Takes a name. It is an error when the same name already exists.
     pub fn reserve(&self, key: &Key) -> Result<(), String> {
         let mut all = self.lock();
         if all.contains_key(key) {
@@ -136,7 +141,8 @@ impl Documents {
         Ok(())
     }
 
-    /// 차지한 이름에 만든 문서의 주소를 적는다. 그 사이에 이름이 제거되었으면 false 다.
+    /// Writes the address of the created document to the taken name. It is false when the name was removed in the
+    /// meantime.
     pub fn set(&self, key: &Key, handle: Handle) -> bool {
         match self.lock().get_mut(key) {
             Some(slot) => {
@@ -147,7 +153,7 @@ impl Documents {
         }
     }
 
-    /// 만들어진 문서의 주소를 반환한다.
+    /// Returns the address of a created document.
     pub fn get(&self, key: &Key) -> Result<Handle, String> {
         match self.lock().get(key) {
             Some(&handle) if handle != 0 => Ok(handle),
@@ -155,14 +161,14 @@ impl Documents {
         }
     }
 
-    /// 이름을 제거하고 그 문서의 주소를 반환한다. 만드는 중이던 이름이면 주소는 0 이다.
+    /// Removes a name and returns the address of its document. The address is 0 when the name was being created.
     pub fn remove(&self, key: &Key) -> Result<Handle, String> {
         self.lock()
             .remove(key)
             .ok_or_else(|| format!("document {:?} is not attached", key.1))
     }
 
-    /// 표면의 이름을 모두 제거하고 만들어진 문서의 주소를 반환한다.
+    /// Removes every name of a surface and returns the addresses of the created documents.
     pub fn remove_surface(&self, surface: &str) -> Vec<Handle> {
         let mut removed = Vec::new();
         self.lock().retain(|key, handle| {
@@ -177,7 +183,7 @@ impl Documents {
         removed
     }
 
-    /// 만들어진 문서의 주소별 키.
+    /// The key of each address of a created document.
     pub fn names(&self) -> HashMap<Handle, Key> {
         self.lock()
             .iter()
@@ -186,7 +192,7 @@ impl Documents {
             .collect()
     }
 
-    /// 만들어진 문서의 주소.
+    /// The addresses of created documents.
     pub fn all(&self) -> Vec<Handle> {
         self.lock()
             .values()
@@ -196,7 +202,7 @@ impl Documents {
     }
 }
 
-/// 호출한 웹뷰의 표면 id 를 확인하고 요청의 키와 창을 반환한다.
+/// Checks the surface id of the calling webview and returns the key and the window of the request.
 fn owner(webview: &Webview, request: &Request) -> Result<(Key, Window), String> {
     let window = webview.window();
     crate::exposure::authorize_main_caller(webview.label(), window.label(), "surface operations")?;
@@ -204,13 +210,13 @@ fn owner(webview: &Webview, request: &Request) -> Result<(Key, Window), String> 
     Ok((key, window))
 }
 
-/// 표면 안에 숨긴 문서 영역을 만든다. 같은 이름이 이미 있으면 오류다.
+/// Creates a hidden document region inside a surface. It is an error when the same name already exists.
 pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> {
     let (key, window) = owner(webview, &request)?;
     let platform = platform::current()?;
     let data = window_data(&window)?;
     require_region(&data.compositions, &key.0, &key.1, "document", None)?;
-    // 이름을 먼저 차지한다. 네이티브 작업을 기다리는 동안 잠금을 쥐지 않는다.
+    // The name is taken first. The lock is not held while waiting for native work.
     data.documents.reserve(&key)?;
     let handle = match create(webview, &window, &key, platform, data.overlay.dialog()) {
         Ok(handle) => handle,
@@ -219,7 +225,8 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
             return Err(error);
         }
     };
-    // 만드는 동안 표면이 제거되었으면 만든 문서를 닫는다. 등록과 닫기는 메인 스레드의 한 작업에서 한다.
+    // When the surface was removed during creation, the created document is closed. The registration and the close
+    // happen in one task of the main thread.
     let registry = data.clone();
     let stored = key.clone();
     let registered = on_main(&window, move || {
@@ -238,7 +245,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     Ok(())
 }
 
-/// 표면 웹뷰 안에 문서 웹뷰를 만들고 주소를 반환한다.
+/// Creates a document webview inside the surface webview and returns its address.
 fn create(
     webview: &Webview,
     window: &Window,
@@ -354,7 +361,7 @@ fn create(
     })
 }
 
-/// 열린 문서 영역에 대해 메인 스레드에서 work 를 실행한다.
+/// Runs work on the main thread for an open document region.
 fn with_document<T: Send + 'static>(
     webview: &Webview,
     request: &Request,
@@ -363,8 +370,8 @@ fn with_document<T: Send + 'static>(
     let (key, window) = owner(webview, request)?;
     let data = window_data(&window)?;
     require_region(&data.compositions, &key.0, &key.1, "document", None)?;
-    // 조회와 사용을 메인 스레드의 한 작업에서 한다. 닫기도 메인 스레드에서 등록 해제와 함께 일어나므로,
-    // 조회한 주소는 이 작업 동안 해제되지 않는다.
+    // The lookup and the use happen in one task of the main thread. A close also happens on the main thread together
+    // with the unregistration, so the looked-up address is not released during this task.
     on_main(&window, move || work(data.documents.get(&key)?))
 }
 
@@ -400,7 +407,7 @@ pub(crate) fn load(webview: &Webview, request: Request) -> Result<(), String> {
     })
 }
 
-/// 문서의 페이지 확대를 글자 배율로 정한다.
+/// Sets the page zoom of a document as the text scale.
 pub(crate) fn zoom(webview: &Webview, request: Request) -> Result<(), String> {
     let platform = platform::current()?;
     let zoom = request.zoom_factor()?;
@@ -413,7 +420,8 @@ pub(crate) fn zoom(webview: &Webview, request: Request) -> Result<(), String> {
     })
 }
 
-/// go 요청의 동작 번호와 거리. entry 는 0 이 아닌 offset 이 필요하고 다른 동작은 offset 을 받지 않는다.
+/// The action number and the distance of a go request. entry needs a nonzero offset, and the other actions take no
+/// offset.
 pub fn go_action(request: &Request) -> Result<(i32, i32), String> {
     let action = match request.action.as_str() {
         "back" => 0,
@@ -434,7 +442,7 @@ pub fn go_action(request: &Request) -> Result<(i32, i32), String> {
     }
 }
 
-/// 기록 이동, 기록 항목 열기, 다시 읽기, 멈춤을 실행하고 실행했는지 반환한다.
+/// Runs history navigation, opening a history entry, reload and stop, and returns whether it ran.
 pub(crate) fn go(webview: &Webview, request: Request) -> Result<bool, String> {
     let platform = platform::current()?;
     let (action, offset) = go_action(&request)?;
@@ -448,7 +456,7 @@ pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> 
     let data = window_data(&window)?;
     require_region(&data.compositions, &key.0, &key.1, "document", None)?;
     let platform = platform::current()?;
-    // 등록 해제와 닫기를 메인 스레드의 한 작업에서 한다.
+    // The unregistration and the close happen in one task of the main thread.
     on_main(&window, move || {
         let handle = data.documents.remove(&key)?;
         if handle != 0 {
@@ -460,7 +468,8 @@ pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> 
     Ok(())
 }
 
-/// 표면의 문서 영역을 모두 닫는다. 메인 스레드 작업을 기다리지 않으므로 어느 스레드에서나 호출한다.
+/// Closes every document region of a surface. It does not wait for main-thread work, so it can be called from any
+/// thread.
 pub(crate) fn close_surface(window: &Window, surface: &str) {
     let Ok(data) = window_data(window) else {
         return;
@@ -471,8 +480,8 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
     };
     let host = window.clone();
     let surface = surface.to_string();
-    // 등록 해제와 닫기를 메인 스레드의 한 작업에서 한다. 문서를 쓰는 다른 작업도 메인 스레드에서
-    // 조회하므로 해제된 주소를 쓰지 않는다.
+    // The unregistration and the close happen in one task of the main thread. Other work that uses a document also
+    // looks it up on the main thread, so a released address is not used.
     log_failure(
         "document close",
         window
@@ -490,7 +499,7 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
     );
 }
 
-/// 대화 상자가 열린 동안 문서 영역을 흐리게 표시한다. 기다리지 않는다.
+/// Dims the document regions while a dialog is open. It does not wait.
 pub(crate) fn set_background(window: &Window, enabled: bool) {
     let Ok(data) = window_data(window) else {
         return;
@@ -499,7 +508,8 @@ pub(crate) fn set_background(window: &Window, enabled: bool) {
         Ok(platform) => platform,
         Err(error) => return log_error("document background", error),
     };
-    // 문서 주소는 메인 스레드에서 조회한다. 닫기와 같은 스레드이므로 해제된 주소를 쓰지 않는다.
+    // The document address is looked up on the main thread. It is the same thread as the close, so a released address
+    // is not used.
     log_failure(
         "document background",
         window

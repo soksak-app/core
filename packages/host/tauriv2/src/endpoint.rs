@@ -1,10 +1,11 @@
-//! 로컬 엔드포인트의 JSON-RPC 2.0 서버.
+//! The JSON-RPC 2.0 server of the local endpoint.
 //!
-//! 각 메시지는 4 바이트 빅엔디언 길이와 그 길이의 JSON 객체 하나이다. 길이 제한 초과, 잘못된 JSON,
-//! JSON-RPC 2.0 객체가 아닌 값, 선언하지 않은 메서드를 받으면 응답하지 않고 연결을 닫는다. 요청은
-//! 각자의 스레드에서 실행하고 `id` 로 응답을 구분한다. 창과 페이지에 대한 처리는 [`Service`] 가
-//! 맡고, 이 파일은 전송, 매개변수의 `window`, 연결별 감시 목록, 알림을 처리한다. 전송은
-//! `platform/<os>/endpoint.*` 가 제공한다. 형식은 docs/spec/endpoint.md 에 정의한다.
+//! Each message is a 4-byte big-endian length followed by one JSON object of that length. A message that exceeds the
+//! length limit, malformed JSON, a value that is not a JSON-RPC 2.0 object, or an undeclared method closes the
+//! connection without a response. Requests run on their own threads and responses are told apart by `id`. [`Service`]
+//! handles windows and pages, and this file handles the transport, the `window` parameter, the watch list of each
+//! connection and the notifications. The transport is provided by `platform/<os>/endpoint.*`. The format is defined in
+//! docs/spec/endpoint.md.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
@@ -23,31 +24,31 @@ use crate::platform::{self, Listener};
 
 pub use crate::platform::Connection;
 
-/// 메시지 본문의 최대 길이.
+/// The maximum length of a message body.
 pub const MAX_FRAME: usize = 16 * 1024 * 1024;
 
-/// 잘못된 매개변수.
+/// Invalid parameters.
 pub const INVALID_PARAMS: i64 = -32602;
-/// 선언되지 않은 이름.
+/// An undeclared name.
 pub const UNKNOWN_NAME: i64 = 1001;
-/// 선언되었지만 등록되지 않은 이름.
+/// A name that is declared but not registered.
 pub const NOT_REGISTERED: i64 = 1002;
-/// 창이나 소유 문서가 없다.
+/// There is no window or owner document.
 pub const MISSING_DOCUMENT: i64 = 1003;
-/// 이 플랫폼에서 네이티브 입력을 전달할 수 없다.
+/// Native input cannot be delivered on this platform.
 pub const NO_INPUT: i64 = 1004;
-/// 소유 문서가 제한 시간 안에 응답하지 않았다.
+/// The owner document did not respond within the time limit.
 pub const TIMED_OUT: i64 = 1005;
-/// 창이 활성 상태가 아니다. 포인터 이동은 키 창이 필요하다.
+/// The window is not active. A pointer move needs the key window.
 pub const NOT_ACTIVE: i64 = 1006;
-/// AppKit이 눌린 마우스 버튼을 보고해 합성 누름이나 뗌을 전달하지 않았다.
+/// AppKit reports a pressed mouse button, so a synthetic press or release was not delivered.
 pub const BUTTON_HELD: i64 = 1007;
-/// 그 창에서 그 버튼의 합성 누름이 아직 열려 있어 누름을 전달하지 않았다.
+/// A synthetic press of that button is still open in that window, so the press was not delivered.
 pub const PRESS_OPEN: i64 = 1008;
-/// 등록된 명령이나 상태 처리 함수가 실패했다.
+/// A registered command or state handler failed.
 pub const HANDLER_FAILED: i64 = -32000;
 
-/// 모든 빌드가 선언하는 메서드.
+/// The methods that every build declares.
 const METHODS: &[&str] = &[
     "windows.list",
     "exposure.list",
@@ -61,11 +62,11 @@ const METHODS: &[&str] = &[
     "input.key",
 ];
 
-/// 진단 기록을 켜고 끄는 구독 메서드. 진단 빌드에만 있다.
+/// The subscription methods that turn the diagnostic record on and off. They exist only in diagnostic builds.
 #[cfg(feature = "diagnostics")]
 const TRANSCRIPT: &str = "diagnostics.transcript";
 
-/// 진단 빌드만 선언하는 메서드.
+/// The methods that only a diagnostic build declares.
 #[cfg(feature = "diagnostics")]
 const DIAGNOSTICS: &[&str] = &[
     "diagnostics.fixture",
@@ -91,14 +92,14 @@ const DIAGNOSTICS: &[&str] = &[
 #[cfg(not(feature = "diagnostics"))]
 const DIAGNOSTICS: &[&str] = &[];
 
-/// JSON-RPC 오류 응답의 code 와 message.
+/// The code and message of a JSON-RPC error response.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Failure {
     pub code: i64,
     pub message: String,
 }
 
-/// 없는 창의 오류 1003.
+/// Error 1003 for a window that does not exist.
 pub fn missing_window(window: &str) -> Failure {
     Failure::new(
         MISSING_DOCUMENT,
@@ -114,25 +115,25 @@ impl Failure {
         }
     }
 
-    /// 잘못된 매개변수 오류.
+    /// The invalid parameters error.
     pub fn params(message: impl Into<String>) -> Self {
         Self::new(INVALID_PARAMS, message)
     }
 }
 
-/// host 가 만든 값을 응답 텍스트로 쓴다. 페이지가 보낸 값은 받은 텍스트 그대로 중계한다.
+/// Uses a value that the host created as the response text. A value that the page sent is relayed as the received text.
 pub fn raw(value: &Value) -> Result<Box<RawValue>, Failure> {
     serde_json::value::to_raw_value(value).map_err(|error| Failure::new(-32603, error.to_string()))
 }
 
-/// 엔드포인트 요청을 창과 페이지에서 실행한다.
+/// Runs endpoint requests in windows and pages.
 pub trait Service: Send + Sync + 'static {
-    /// `windows.list` 의 결과를 반환한다.
+    /// Returns the result of `windows.list`.
     fn windows(&self) -> Result<Value, Failure>;
-    /// 창 식별자 window 의 창이 있는지 반환한다.
+    /// Returns whether the window with the window identifier window exists.
     fn exists(&self, window: &str) -> bool;
-    /// 창 window 에서 method 를 실행한다. params 에는 `window` 가 없다. 호출은 응답이 준비될
-    /// 때까지 기다린다. 결과는 응답에 쓸 JSON 텍스트이며, 페이지가 보낸 값은 받은 텍스트 그대로다.
+    /// Runs method in the window window. params does not hold `window`. The call waits until the response is ready. The
+    /// result is the JSON text for the response, and a value that the page sent is the received text.
     fn call(
         &self,
         window: &str,
@@ -141,7 +142,8 @@ pub trait Service: Send + Sync + 'static {
     ) -> Result<Box<RawValue>, Failure>;
 }
 
-/// 감시 하나. surface 는 감시가 지정한 표면이며, 지정한 감시와 지정하지 않은 감시는 서로 다르다.
+/// One watch. surface is the surface that the watch specified, and a watch that specified one differs from a watch that
+/// did not.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Watch {
     pub window: String,
@@ -150,7 +152,7 @@ pub struct Watch {
 }
 
 impl Watch {
-    /// 페이지에 보낼 감시 요청의 params.
+    /// The params of the watch request to send to the page.
     pub fn params(&self) -> Map<String, Value> {
         let mut params = Map::new();
         params.insert("name".into(), Value::String(self.name.clone()));
@@ -161,7 +163,8 @@ impl Watch {
     }
 }
 
-/// 연결 하나의 쓰기 대상과 감시 목록. changes 는 구독마다 마지막으로 받은 변경의 순번이다.
+/// The write target and the watch list of one connection. changes is the sequence number of the change that was last
+/// received for each subscription.
 struct Peer {
     writer: Arc<Mutex<Box<dyn Connection>>>,
     watches: HashSet<Watch>,
@@ -170,11 +173,12 @@ struct Peer {
     changes: HashMap<Topic, u64>,
 }
 
-/// 연결이 구독하는 대상. 페이지에 보내는 구독 변경은 대상마다 받은 순서로 실행한다.
+/// The target that a connection subscribes to. The subscription changes sent to the page run in the order received for
+/// each target.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum Topic {
     Status(Watch),
-    /// 창의 진단 기록. 진단 빌드에만 있다.
+    /// The diagnostic record of a window. It exists only in diagnostic builds.
     #[cfg(feature = "diagnostics")]
     Transcript(String),
 }
@@ -188,7 +192,7 @@ impl Topic {
         }
     }
 
-    /// 페이지에 보낼 시작 또는 종료 요청.
+    /// The start or stop request to send to the page.
     fn request(&self, on: bool) -> (&'static str, Map<String, Value>) {
         match self {
             Topic::Status(watch) => (
@@ -232,13 +236,13 @@ impl Topic {
     }
 }
 
-/// 요청에 대한 응답을 쓸 대상.
+/// The target to which the response of a request is written.
 struct Answer {
     writer: Arc<Mutex<Box<dyn Connection>>>,
     id: Option<Value>,
 }
 
-/// 성공 응답. result 는 받은 텍스트 그대로 쓴다.
+/// A success response. result is written as the received text.
 #[derive(Serialize)]
 struct Success<'a> {
     jsonrpc: &'static str,
@@ -273,7 +277,7 @@ impl Answer {
     }
 }
 
-/// 구독 변경 하나. last 는 종료 변경 뒤에 이 대상을 구독한 연결이 없는지 나타낸다.
+/// One subscription change. last shows that no connection subscribes to this target after a stop change.
 struct Change {
     peer: u64,
     order: u64,
@@ -282,7 +286,7 @@ struct Change {
     answer: Option<Answer>,
 }
 
-/// 대상 하나의 대기 중인 변경. page 는 페이지가 이 대상을 따르고 있는지 나타낸다.
+/// The pending changes of one target. page shows whether the page follows this target.
 #[derive(Default)]
 struct Line {
     changes: VecDeque<Change>,
@@ -296,16 +300,17 @@ struct Shared {
     lines: Mutex<HashMap<Topic, Line>>,
     next: AtomicU64,
     orders: AtomicU64,
-    /// 엔드포인트가 멈추어 연결을 닫기 시작했는지. 연결의 닫는 이유를 가른다.
+    /// Whether the endpoint stopped and started to close the connections. It distinguishes the reason for closing a
+    /// connection.
     stopping: AtomicBool,
 }
 
-/// 연결에 알림을 보낸다. 엔드포인트가 멈춘 뒤에는 보낼 연결이 없다.
+/// Sends a notification to the connections. After the endpoint stops there is no connection to send to.
 #[derive(Clone)]
 pub struct Notifier(Arc<Shared>);
 
 impl Notifier {
-    /// 창 window 의 name 을 표면 지정 없이 감시하는 연결이 있는지 반환한다.
+    /// Returns whether a connection watches name of the window window without a surface specification.
     pub fn watched(&self, window: &str, name: &str) -> bool {
         watched(
             &self.0,
@@ -317,7 +322,8 @@ impl Notifier {
         )
     }
 
-    /// 창에 매이지 않은 상태 name 을 표면 지정 없이 감시하는 연결에 창마다 `status.changed` 를 보낸다.
+    /// Sends `status.changed` for each window to the connections that watch the state name, which is not bound to a
+    /// window, without a surface specification.
     pub fn notify_watchers(&self, name: &str, value: &RawValue) {
         let mut windows: Vec<String> = match self.0.peers.lock() {
             Ok(peers) => peers
@@ -338,7 +344,7 @@ impl Notifier {
         }
     }
 
-    /// 창 window 의 감시를 반환한다.
+    /// Returns the watches of the window window.
     pub fn watches(&self, window: &str) -> Vec<Watch> {
         let mut watches: Vec<Watch> = match self.0.peers.lock() {
             Ok(peers) => peers
@@ -354,14 +360,14 @@ impl Notifier {
         watches
     }
 
-    /// 창 window 의 기록을 요청한 연결이 있는지 반환한다.
+    /// Returns whether a connection requested the record of the window window.
     #[cfg(feature = "diagnostics")]
     pub fn transcribed(&self, window: &str) -> bool {
         transcribed(&self.0, window)
     }
 
-    /// 창 window 의 name 을 감시하는 연결에 `status.changed` 를 보낸다. surface 는 감시가 지정한 표면이다.
-    /// value 는 받은 텍스트 그대로 보내므로 페이지 값의 키 순서가 바뀌지 않는다.
+    /// Sends `status.changed` to the connections that watch name of the window window. surface is the surface that the
+    /// watch specified. value is sent as the received text, so the key order of the page value does not change.
     pub fn changed(&self, window: &str, name: &str, surface: Option<&str>, value: &RawValue) {
         #[derive(Serialize)]
         struct Params<'a> {
@@ -395,7 +401,7 @@ impl Notifier {
         self.send(|peer| peer.watches.contains(&key), &message);
     }
 
-    /// 창 window 의 기록을 요청한 연결에 `diagnostics.log` 를 보낸다.
+    /// Sends `diagnostics.log` to the connections that requested the record of the window window.
     #[cfg(feature = "diagnostics")]
     pub fn log(&self, window: &str, line: &str) {
         let message = json!({"jsonrpc": "2.0", "method": "diagnostics.log",
@@ -422,7 +428,7 @@ impl Notifier {
     }
 }
 
-/// 열린 로컬 엔드포인트와 그 endpoint.json.
+/// An open local endpoint and its endpoint.json.
 pub struct Endpoint {
     shared: Arc<Shared>,
     listener: Arc<dyn Listener>,
@@ -430,15 +436,15 @@ pub struct Endpoint {
     address: String,
     directory: PathBuf,
     file: PathBuf,
-    // 이 엔드포인트가 게시하는 endpoint.json 내용. 닫을 때 파일이 이 내용일 때만 지운다.
+    // The content of the endpoint.json that this endpoint publishes. At close, the file is deleted only when it has
+    // this content.
     record: Value,
     published: AtomicBool,
     stopped: Arc<AtomicBool>,
 }
 
-/// 하나의 application process가 하나의 configuration directory를 소유한다. file handle은
-/// endpoint가 존재하는 동안 열린 상태로 유지된다. file 자체도 owner PID를 기록하므로
-/// 강제 종료된 process를 명시적으로 교체할 수 있다.
+/// One application process owns one configuration directory. The file handle stays open while the endpoint exists. The
+/// file itself also records the owner PID, so a process that was terminated by force can be replaced explicitly.
 struct ProcessLock {
     path: PathBuf,
     _file: File,
@@ -502,8 +508,8 @@ impl Drop for ProcessLock {
 }
 
 impl Endpoint {
-    /// sockets 디렉터리에 application 이름의 엔드포인트를 연다. `<directory>/endpoint.json` 은
-    /// 첫 창을 등록한 뒤 [`Endpoint::publish`] 가 쓴다.
+    /// Opens the endpoint of the application name in the sockets directory. `<directory>/endpoint.json` is written by
+    /// [`Endpoint::publish`] after the first window is registered.
     pub fn start(
         sockets: &Path,
         directory: &Path,
@@ -568,8 +574,8 @@ impl Endpoint {
         Ok(endpoint)
     }
 
-    /// 창 window 가 등록되어 있으면 endpoint.json 을 쓴다. 파일을 읽은 클라이언트가 그 창에 바로
-    /// 요청할 수 있도록 첫 창을 등록한 뒤 한 번 호출한다.
+    /// Writes endpoint.json when the window window is registered. It is called once after the first window is
+    /// registered, so that a client that read the file can send requests to that window at once.
     pub fn publish(&self, window: &str) -> Result<(), String> {
         if !self.shared.service.exists(window) {
             return Err(format!(
@@ -582,23 +588,23 @@ impl Endpoint {
         write_record(&self.directory, &self.file, &self.record)
     }
 
-    /// 소켓 경로 또는 파이프 이름.
+    /// The socket path or the pipe name.
     pub fn address(&self) -> &str {
         &self.address
     }
 
-    /// 이 엔드포인트의 연결에 알림을 보내는 값.
+    /// The value that sends notifications to the connections of this endpoint.
     pub fn notifier(&self) -> Notifier {
         Notifier(self.shared.clone())
     }
 
-    /// 새 연결을 받지 않고 주소 파일과 endpoint.json 을 제거한다. 여러 번 호출할 수 있다.
+    /// Stops accepting new connections and removes the address file and endpoint.json. It can be called several times.
     pub fn stop(&self) {
         if self.stopped.swap(true, Ordering::Relaxed) {
             return;
         }
         self.listener.remove();
-        // 다른 프로세스가 대체한 endpoint.json 은 그 프로세스의 것이므로 지우지 않는다.
+        // An endpoint.json that another process replaced belongs to that process, so it is not deleted.
         match std::fs::read(&self.file) {
             Err(error) if error.kind() == ErrorKind::NotFound => {}
             Err(error) => log_error(&self.file.display().to_string(), error),
@@ -639,17 +645,17 @@ impl Drop for Endpoint {
     }
 }
 
-/// 애플리케이션이 소켓을 두는 디렉터리. 사용자별 임시 디렉터리 아래에 있다.
+/// The directory in which the application places its sockets. It is under the temporary directory of the user.
 pub fn socket_directory() -> std::path::PathBuf {
     std::env::temp_dir().join("soksak")
 }
 
-/// 엔드포인트 주소 address 에 연결한다.
+/// Connects to the endpoint address address.
 pub fn connect(address: &str) -> Result<Box<dyn Connection>, String> {
     platform::current()?.endpoint_connect(address)
 }
 
-/// 메시지 하나를 길이와 함께 쓴다.
+/// Writes one message with its length.
 pub fn write_frame<W: Write + ?Sized, T: Serialize + ?Sized>(
     writer: &mut W,
     message: &T,
@@ -668,15 +674,15 @@ pub fn write_frame<W: Write + ?Sized, T: Serialize + ?Sized>(
     writer.flush().map_err(|e| e.to_string())
 }
 
-/// 메시지 본문을 읽는 데 실패한 이유.
+/// The reason for a failure to read a message body.
 enum BodyError {
-    /// 본문 길이가 한도를 넘는다.
+    /// The body length exceeds the limit.
     TooLarge(usize),
-    /// 연결을 읽지 못한다.
+    /// The connection cannot be read.
     Io(String),
 }
 
-/// 메시지 하나의 본문을 읽는다. 메시지 경계에서 연결이 닫히면 None 을 반환한다.
+/// Reads the body of one message. It returns None when the connection is closed at a message boundary.
 fn read_body<R: Read + ?Sized>(reader: &mut R) -> Result<Option<Vec<u8>>, BodyError> {
     let mut prefix = [0u8; 4];
     let mut filled = 0;
@@ -705,7 +711,7 @@ fn read_body<R: Read + ?Sized>(reader: &mut R) -> Result<Option<Vec<u8>>, BodyEr
     Ok(Some(body))
 }
 
-/// 메시지 하나를 읽는다. 메시지 경계에서 연결이 닫히면 None 을 반환한다.
+/// Reads one message. It returns None when the connection is closed at a message boundary.
 pub fn read_frame<R: Read + ?Sized>(reader: &mut R) -> Result<Option<Value>, String> {
     match read_body(reader) {
         Ok(None) => Ok(None),
@@ -719,7 +725,7 @@ pub fn read_frame<R: Read + ?Sized>(reader: &mut R) -> Result<Option<Value>, Str
     }
 }
 
-/// 파일 이름을 바꿔 endpoint.json 을 한 번에 쓴다.
+/// Writes endpoint.json at once by renaming a file.
 fn write_record(directory: &Path, file: &Path, record: &Value) -> Result<(), String> {
     platform::current()?.create_private_directories(directory)?;
     let mut temporary = tempfile::NamedTempFile::new_in(directory).map_err(|e| e.to_string())?;
@@ -731,14 +737,14 @@ fn write_record(directory: &Path, file: &Path, record: &Value) -> Result<(), Str
     Ok(())
 }
 
-/// 시각을 초 단위 UTC ISO 8601 문자열로 바꾼다.
+/// Converts a time to an ISO 8601 UTC string in seconds.
 fn timestamp(time: SystemTime) -> Result<String, String> {
     let seconds = time
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .map_err(|e| format!("the system clock is before 1970: {e}"))? as i64;
     let (days, rest) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
-    // 1970-01-01 기준 일 수를 그레고리력 날짜로 바꾼다(Howard Hinnant 의 civil_from_days).
+    // Converts the number of days since 1970-01-01 to a Gregorian date (civil_from_days by Howard Hinnant).
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z - era * 146_097;
@@ -756,14 +762,14 @@ fn timestamp(time: SystemTime) -> Result<String, String> {
     ))
 }
 
-/// 검사를 통과한 요청.
+/// A request that passed the check.
 struct Request {
     id: Option<Value>,
     method: String,
     params: Option<Value>,
 }
 
-/// JSON-RPC 2.0 요청 객체이면 반환한다.
+/// Returns the request when it is a JSON-RPC 2.0 request object.
 fn parse(message: Value) -> Option<Request> {
     let Value::Object(mut object) = message else {
         return None;
@@ -792,8 +798,8 @@ fn declared(method: &str) -> bool {
     METHODS.contains(&method) || DIAGNOSTICS.contains(&method)
 }
 
-/// 연결 하나의 요청을 읽고 실행한다. 구독 변경은 받은 순서로 적용하고, 나머지 요청은 각자의
-/// 스레드에서 실행한다.
+/// Reads and runs the requests of one connection. Subscription changes are applied in the order received, and the other
+/// requests run on their own threads.
 fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
     let writer = match connection.try_clone() {
         Ok(writer) => Arc::new(Mutex::new(writer)),
@@ -850,7 +856,8 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         let shared = shared.clone();
         std::thread::spawn(move || {
             let outcome = run(&shared, &request.method, request.params);
-            // 시간 초과는 요청한 쪽이 받는 오류이지만, 그 요청이 어느 메서드의 무엇을 기다렸는지는 이 기록만 남긴다.
+            // A timeout is an error that the requesting side receives, but only this record keeps which method and what
+            // it waited for.
             if let Err(failure) = &outcome {
                 if failure.code == TIMED_OUT {
                     log_error(
@@ -872,13 +879,13 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
     forget(&shared, peer);
 }
 
-/// 연결의 구독을 바꾸는 메서드.
+/// The methods that change the subscriptions of a connection.
 #[cfg(feature = "diagnostics")]
 const SUBSCRIPTIONS: &[&str] = &["status.watch", "status.unwatch", TRANSCRIPT];
 #[cfg(not(feature = "diagnostics"))]
 const SUBSCRIPTIONS: &[&str] = &["status.watch", "status.unwatch"];
 
-/// params 를 검사하고 창의 이름을 꺼낸다.
+/// Checks params and takes out the window name.
 fn target(
     shared: &Shared,
     method: &str,
@@ -905,7 +912,7 @@ fn target(
     Ok((window, params))
 }
 
-/// 구독 변경 요청의 대상과 시작 여부를 반환한다.
+/// Returns the target of a subscription change request and whether it starts.
 fn subscription(
     shared: &Shared,
     method: &str,
@@ -927,8 +934,9 @@ fn subscription(
     }
 }
 
-/// 연결 peer 의 구독을 바로 바꾸고, 페이지에 보낼 변경을 대상의 줄에 넣는다. 두 작업을 연결 목록
-/// 잠금 안에서 실행하므로 줄의 순서는 구독 변경을 적용한 순서와 같다.
+/// Changes the subscription of the connection peer at once and puts the change to send to the page into the queue of
+/// the target. Both operations run inside the lock of the connection list, so the order of the queue equals the order
+/// in which the subscription changes were applied.
 fn change(shared: &Arc<Shared>, peer: u64, topic: Topic, on: bool, answer: Option<Answer>) {
     let start = {
         let Ok(mut peers) = shared.peers.lock() else {
@@ -959,7 +967,7 @@ fn change(shared: &Arc<Shared>, peer: u64, topic: Topic, on: bool, answer: Optio
     }
 }
 
-/// 대상 topic 의 줄에 있는 변경을 순서대로 페이지에 보내고 응답한다.
+/// Sends the changes in the queue of the target topic to the page in order and answers.
 fn drain(shared: &Shared, topic: Topic) {
     loop {
         let (next, page) = {
@@ -985,7 +993,7 @@ fn drain(shared: &Shared, topic: Topic) {
             match shared.service.call(topic.window(), method, params) {
                 Ok(result) => (Ok(result), true),
                 Err(failure) => {
-                    // 이 연결이 그 뒤에 이 대상을 다시 바꾸지 않았으면 시작을 되돌린다.
+                    // If this connection did not change this target again after that, the start is reverted.
                     if let Ok(mut peers) = shared.peers.lock() {
                         if let Some(state) = peers.get_mut(&next.peer) {
                             if state.changes.get(&topic) == Some(&next.order) {
@@ -997,7 +1005,7 @@ fn drain(shared: &Shared, topic: Topic) {
                 }
             }
         } else if !next.on && next.last && page {
-            // 페이지가 종료 요청에 실패해도 이후 시작 요청은 페이지에 다시 보낸다.
+            // Even if the page fails a stop request, a later start request is sent to the page again.
             (shared.service.call(topic.window(), method, params), false)
         } else {
             (raw(&Value::Null), page)
@@ -1013,7 +1021,7 @@ fn drain(shared: &Shared, topic: Topic) {
     }
 }
 
-/// 구독 변경이 아닌 요청 하나를 실행한다.
+/// Runs one request that is not a subscription change.
 fn run(shared: &Shared, method: &str, params: Option<Value>) -> Result<Box<RawValue>, Failure> {
     if method == "windows.list" {
         return shared.service.windows().and_then(|list| raw(&list));
@@ -1022,7 +1030,7 @@ fn run(shared: &Shared, method: &str, params: Option<Value>) -> Result<Box<RawVa
     shared.service.call(&window, method, params)
 }
 
-/// params 의 name 을 반환한다.
+/// Returns name of params.
 fn name(params: &Map<String, Value>) -> Result<String, Failure> {
     match params.get("name") {
         Some(Value::String(name)) if valid_name(name) => Ok(name.clone()),
@@ -1032,7 +1040,7 @@ fn name(params: &Map<String, Value>) -> Result<String, Failure> {
     }
 }
 
-/// 이름이 `<소유자>.<이름>` 형식인지 반환한다. 각 부분은 소문자, 숫자, 하이픈이다.
+/// Returns whether the name has the form `<owner>.<name>`. Each part is lowercase letters, digits and hyphens.
 pub fn valid_name(name: &str) -> bool {
     let parts: Vec<&str> = name.split('.').collect();
     parts.len() >= 2
@@ -1044,7 +1052,7 @@ pub fn valid_name(name: &str) -> bool {
         })
 }
 
-/// params 의 name 과 surface 로 감시 키를 만든다.
+/// Builds the watch key from name and surface of params.
 fn watch_key(window: &str, params: &Map<String, Value>) -> Result<Watch, Failure> {
     let surface = match params.get("surface") {
         None => None,
@@ -1058,7 +1066,7 @@ fn watch_key(window: &str, params: &Map<String, Value>) -> Result<Watch, Failure
     })
 }
 
-/// 감시 key 를 가진 연결이 있는지 반환한다.
+/// Returns whether a connection has the watch key key.
 fn watched(shared: &Shared, key: &Watch) -> bool {
     shared
         .peers
@@ -1066,7 +1074,7 @@ fn watched(shared: &Shared, key: &Watch) -> bool {
         .is_ok_and(|peers| peers.values().any(|peer| peer.watches.contains(key)))
 }
 
-/// 창 window 의 기록을 요청한 연결이 있는지 반환한다.
+/// Returns whether a connection requested the record of the window window.
 #[cfg(feature = "diagnostics")]
 fn transcribed(shared: &Shared, window: &str) -> bool {
     shared
@@ -1075,8 +1083,8 @@ fn transcribed(shared: &Shared, window: &str) -> bool {
         .is_ok_and(|peers| peers.values().any(|peer| peer.transcript.contains(window)))
 }
 
-/// 닫힌 연결의 구독을 받은 순서의 마지막 변경으로 끝낸다. 남은 구독자가 없는 대상은 페이지에
-/// 종료를 요청한다.
+/// Ends the subscriptions of a closed connection with the last change in the order received. A target that has no
+/// remaining subscriber is asked to stop in the page.
 fn forget(shared: &Arc<Shared>, peer: u64) {
     let topics: Vec<Topic> = match shared.peers.lock() {
         Ok(peers) => match peers.get(&peer) {

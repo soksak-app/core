@@ -1,4 +1,4 @@
-//! 애플리케이션 안의 plugin 작업(docs/spec/installation.md#plugin-operations-in-the-application)을 검사한다.
+//! Checks the plugin operations in the application (docs/spec/installation.md#plugin-operations-in-the-application).
 
 use std::ffi::CString;
 use std::io::Write;
@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use serde_json::{json, Value};
 use soksak_host_tauriv2::plugins::{Changed, Plugins, RegistryRequest, RunRequest};
 
-/// sok 명령을 실행하고 그 JSON 출력을 돌려준다.
+/// Runs the sok command and returns its JSON output.
 fn sok_json(args: &[&str]) -> Value {
     let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
     let (mut stdout, mut stderr) = (vec![], vec![]);
@@ -36,8 +36,8 @@ fn write_tree(dir: &Path, files: &[(&str, &str)]) {
     }
 }
 
-/// tests/fixtures/plugin-probe(sidecar 가 없는 plugin probe 0.0.10)의 release 와 그 registry.
-/// 폴더는 값이 사라질 때 지운다.
+/// The release of tests/fixtures/plugin-probe (plugin probe 0.0.10 without a sidecar) and its registry. The folder is
+/// deleted when the value is dropped.
 struct Registry {
     index: String,
     release: String,
@@ -236,11 +236,12 @@ fn plugins_run_rejects_invalid_and_concurrent_operations() {
             .expect("rejected");
         assert_eq!(error, want);
     }
-    // release 를 FIFO 로 바꾸면 설치는 그 FIFO 를 읽는 동안 멈춘다. FIFO 를 쓰기로 연 순간 설치는 실행 중이다.
+    // If the release is replaced with a FIFO, the installation stops while it reads that FIFO. The installation is
+    // running at the moment the FIFO is opened for writing.
     let data = std::fs::read(&registry.release).unwrap();
     std::fs::remove_file(&registry.release).unwrap();
     let fifo = CString::new(registry.release.as_str()).unwrap();
-    // SAFETY: fifo 는 NUL 로 끝나는 경로이고 mkfifo 는 그 경로만 읽는다.
+    // SAFETY: fifo is a NUL-terminated path and mkfifo reads only that path.
     assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o644) }, 0, "mkfifo");
     let plugins = Arc::new(plugins);
     let first = {

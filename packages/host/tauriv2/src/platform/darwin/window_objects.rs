@@ -1,11 +1,11 @@
-//! 창과 웹뷰에 붙인 라이브러리 객체의 살아 있는 수를 센다. 구현은 native/darwin 의 window_objects.m 이다. 진단
-//! 빌드에만 들어간다.
+//! Counts the live library objects attached to windows and webviews. The implementation is window_objects.m of
+//! native/darwin. It is included only in diagnostic builds.
 
 use std::ffi::c_void;
 
 use super::super::WindowObjects;
 
-/// native/darwin 의 sp_window_objects 와 같은 배치. macOS 는 LP64 이므로 C 의 long 은 i64 다.
+/// The same layout as sp_window_objects of native/darwin. macOS is LP64, so the long of C is i64.
 #[repr(C)]
 struct Counts {
     window_compositions: i64,
@@ -25,7 +25,7 @@ extern "C" {
 type Done = Box<dyn FnOnce(WindowObjects, bool) + Send>;
 
 extern "C" fn counted(context: *mut c_void, counts: *const Counts, reached: bool) {
-    // context 는 when 이 Box::into_raw 로 넘긴 값이고 라이브러리는 done 을 한 번 호출한다.
+    // context is the value that when passed with Box::into_raw, and the library calls done once.
     let done = unsafe { Box::from_raw(context.cast::<Done>()) };
     let counts = unsafe { &*counts };
     done(
@@ -38,10 +38,10 @@ extern "C" fn counted(context: *mut c_void, counts: *const Counts, reached: bool
     );
 }
 
-/// 애플리케이션이 이벤트 하나를 처리한 뒤 수가 expected 와 같아질 때, 또는 seconds 가 지날 때의 수를 done 에
-/// 준다. 메인 스레드에서 호출한다.
+/// Gives done the count after the application handled one event when the count equals expected, or the count when
+/// seconds elapsed. Call it on the main thread.
 pub fn when(expected: Option<WindowObjects>, seconds: f64, done: Done) {
-    // 라이브러리는 호출하는 동안 expected 를 복사한다.
+    // The library copies expected during the call.
     let wanted = expected.map(|counts| Counts {
         window_compositions: counts.window_compositions,
         surface_hosts: counts.surface_hosts,

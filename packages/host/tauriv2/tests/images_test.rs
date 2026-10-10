@@ -1,4 +1,4 @@
-//! 그림 봉투의 의사결정 로직과 표현 확인을 검사한다.
+//! Checks the decision logic of image envelopes and the confirmation of their representation.
 
 use serde_json::json;
 use soksak_host_tauriv2::application_log::start_standard_error;
@@ -39,7 +39,7 @@ fn reserve_rejects_empty_sidecar() {
     let images = Images::default();
     let key: Key = ("tab-1".to_string(), "view".to_string());
 
-    // 빈 sidecar로 reserve 시도
+    // Try reserve with an empty sidecar.
     let result = images.reserve(&key, "owner", "");
     assert!(result.is_err(), "expected error for empty sidecar");
     assert!(
@@ -47,7 +47,7 @@ fn reserve_rejects_empty_sidecar() {
         "expected 'requires a sidecar' error"
     );
 
-    // 이미지가 등록되지 않았는지 확인
+    // Check that the image was not registered.
     assert!(
         images.get(&key).is_err(),
         "image should not be registered after failed reserve"
@@ -58,7 +58,7 @@ fn reserve_rejects_empty_sidecar() {
 #[test]
 fn unattached_image_is_refused() {
     let images = Images::default();
-    let nonce_b64 = "AAAAAAAAAAAAAAAAAAAAAA=="; // 0 byte 16개
+    let nonce_b64 = "AAAAAAAAAAAAAAAAAAAAAA=="; // 16 zero bytes
     let body = json!({
         "image": {
             "name": "view",
@@ -78,7 +78,7 @@ fn unattached_image_is_refused() {
     })
     .to_string();
 
-    // 이미지가 등록되지 않았으므로 notAttached 오류를 반환해야 함
+    // Since the image is not registered, a notAttached error must be returned.
     match decide(&body, "sidecar-a", "tab-1", &images) {
         Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
@@ -102,7 +102,7 @@ fn image_from_another_sidecar_is_refused() {
         .reserve(&key, "owner-a", "sidecar-a")
         .expect("reserve");
     images.set(&key, 100);
-    // 구성된 현재 래스터이므로 거부 이유는 보낸 사이드카뿐이다.
+    // This is the configured current raster, so the only reason for the rejection is the sidecar that sent it.
     let configured = images
         .configure_raster(&key, 800, 600, 2.0, true)
         .unwrap()
@@ -115,7 +115,7 @@ fn image_from_another_sidecar_is_refused() {
         }
         _ => panic!("expected Reply(notAttached) for different sidecar"),
     }
-    // 대조: 연결한 사이드카가 보낸 같은 봉투는 표시된다.
+    // Contrast: the same envelope that the connected sidecar sent is displayed.
     assert!(
         matches!(
             decide(&body, "sidecar-a", "tab-1", &images),
@@ -131,7 +131,7 @@ fn attached_image_is_presented() {
     let images = Images::default();
     let key: Key = ("tab-1".to_string(), "view".to_string());
 
-    // 사이드카가 이미지를 등록
+    // The sidecar registers the image.
     images
         .reserve(&key, "owner-a", "sidecar-a")
         .expect("reserve");
@@ -161,7 +161,7 @@ fn attached_image_is_presented() {
     })
     .to_string();
 
-    // 같은 사이드카가 같은 이미지를 보내면 Present를 반환해야 함
+    // When the same sidecar sends the same image, Present must be returned.
     match decide(&body, "sidecar-a", "tab-1", &images) {
         Decision::Present {
             id,
@@ -374,7 +374,7 @@ fn presentation_wait_tracks_the_visible_current_raster() {
     assert!(images.wait_current(Duration::ZERO).is_ok());
 }
 
-/// 자식 프로세스에 설정 디렉터리를 알리는 환경 변수.
+/// The environment variable that tells the child process the configuration directory.
 const APPLICATION_LOG_CHILD: &str = "SOKSAK_APPLICATION_LOG_CHILD";
 
 // contract: images.wait.timeout-writes-no-log-line
@@ -394,7 +394,8 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
             .configure_raster(&key, 800, 600, 2.0, true)
             .unwrap()
             .unwrap();
-        // 제한 시간이 0 이면 기다리기 전에 끝나므로, 기다림이 제한 시간에 끝나는 경로를 지나도록 짧은 시간을 준다.
+        // With a time limit of 0, the wait ends before it waits, so a short time is given so that the path where the
+        // wait ends at the time limit is exercised.
         assert_eq!(
             images.wait_current(Duration::from_millis(20)),
             Err("presentationTimeout".to_string())
@@ -566,7 +567,7 @@ fn failed_present_is_reported() {
 fn unsupported_image_is_refused() {
     let images = Images::default();
 
-    // 포맷이 잘못된 경우
+    // The case where the format is invalid.
     let body_wrong_format = json!({
         "image": {
             "name": "view",
@@ -578,7 +579,7 @@ fn unsupported_image_is_refused() {
             "width": 800,
             "height": 600,
             "scale": 2.0,
-            "format": "rgba8",  // 잘못된 포맷
+            "format": "rgba8",  // invalid format
             "generation": 1,
             "raster": 1,
             "sequence": 1
@@ -597,14 +598,14 @@ fn unsupported_image_is_refused() {
         _ => panic!("expected Reply(unsupported) for wrong format"),
     }
 
-    // nonce 길이가 잘못된 경우
+    // The case where the nonce length is invalid.
     let body_wrong_nonce = json!({
         "image": {
             "name": "view",
             "token": {
                 "kind": "iosurface-global",
                 "id": 12345u32,
-                "nonce": "short"  // 16바이트가 아님
+                "nonce": "short"  // not 16 bytes
             },
             "width": 800,
             "height": 600,
@@ -628,7 +629,7 @@ fn unsupported_image_is_refused() {
         _ => panic!("expected Reply(unsupported) for wrong nonce length"),
     }
 
-    // token.kind이 잘못된 경우
+    // The case where token.kind is invalid.
     let body_wrong_kind = json!({
         "image": {
             "name": "view",
@@ -665,7 +666,7 @@ fn unsupported_image_is_refused() {
 fn non_image_body_is_not_handled() {
     let images = Images::default();
 
-    // 이미지 필드가 없는 경우
+    // The case where there is no image field.
     let body_no_image = json!({
         "other": "data"
     })
@@ -673,16 +674,16 @@ fn non_image_body_is_not_handled() {
 
     match decide(&body_no_image, "sidecar-a", "tab-1", &images) {
         Decision::NotImage => {
-            // 정상
+            // Valid.
         }
         _ => panic!("expected NotImage for body without image field"),
     }
 
-    // 잘못된 JSON
+    // Invalid JSON.
     let body_invalid = "not json";
     match decide(body_invalid, "sidecar-a", "tab-1", &images) {
         Decision::NotImage => {
-            // 정상
+            // Valid.
         }
         _ => panic!("expected NotImage for invalid JSON"),
     }
@@ -694,7 +695,7 @@ fn reply_escapes_names() {
     let images = Images::default();
     let nonce_b64 = "AAAAAAAAAAAAAAAAAAAAAA==";
 
-    // 이름에 따옴표를 포함
+    // Include a quotation mark in the name.
     let body = json!({
         "image": {
             "name": "a\"b",
@@ -714,15 +715,15 @@ fn reply_escapes_names() {
     })
     .to_string();
 
-    // 등록되지 않은 이미지이므로 Reply가 반환되어야 함
+    // The image is not registered, so Reply must be returned.
     match decide(&body, "sidecar-a", "tab-1", &images) {
         Decision::Reply { name, json, .. } => {
             assert_eq!(name, "a\"b");
-            // 응답을 문자열로 변환하여 JSON 유효성 확인
+            // Convert the response to a string and check that the JSON is valid.
             let response_str = serde_json::to_string(&json).unwrap();
             assert!(serde_json::from_str::<serde_json::Value>(&response_str).is_ok());
 
-            // 이름이 올바르게 이스케이프되었는지 확인
+            // Check that the name is escaped correctly.
             assert_eq!(json["image"]["name"], "a\"b");
         }
         _ => panic!("expected Reply"),
@@ -737,7 +738,7 @@ fn surface_close_removes_only_its_images() {
     let surface_1_img_2: Key = ("tab-1".to_string(), "other".to_string());
     let surface_2_img: Key = ("tab-2".to_string(), "view".to_string());
 
-    // tab-1에 2개 이미지 등록
+    // Register 2 images in tab-1.
     images
         .reserve(&surface_1_img_1, "owner", "sidecar")
         .expect("reserve");
@@ -747,23 +748,23 @@ fn surface_close_removes_only_its_images() {
         .expect("reserve");
     images.set(&surface_1_img_2, 200);
 
-    // tab-2에 1개 이미지 등록
+    // Register 1 image in tab-2.
     images
         .reserve(&surface_2_img, "owner", "sidecar")
         .expect("reserve");
     images.set(&surface_2_img, 300);
 
-    // tab-1 표면의 모든 이미지 제거
+    // Remove all images of the surface tab-1.
     let removed = images.remove_surface("tab-1");
     assert_eq!(removed.len(), 2);
     assert!(removed.contains(&100));
     assert!(removed.contains(&200));
 
-    // tab-1의 이미지는 더 이상 접근 불가
+    // The images of tab-1 can no longer be accessed.
     assert!(images.get(&surface_1_img_1).is_err());
     assert!(images.get(&surface_1_img_2).is_err());
 
-    // tab-2의 이미지는 여전히 접근 가능
+    // The image of tab-2 can still be accessed.
     assert_eq!(images.get(&surface_2_img).unwrap(), 300);
 }
 
@@ -773,7 +774,7 @@ fn presentation_failure_is_reported() {
     let images = Images::default();
     let key: Key = ("tab-1".to_string(), "view".to_string());
 
-    // 이미지 등록
+    // Register the image.
     images.reserve(&key, "owner", "sidecar-a").expect("reserve");
     images.set(&key, 100);
     let configured = images
@@ -804,7 +805,7 @@ fn presentation_failure_is_reported() {
     let received_response = Arc::new(Mutex::new(None));
     let response_clone = Arc::clone(&received_response);
 
-    // handle_envelope 호출, onMain이 false 반환 (표시 실패)
+    // Call handle_envelope, and onMain returns false (presentation failure).
     let handled = handle_envelope(
         &body,
         "sidecar-a",
@@ -914,13 +915,13 @@ fn invalidating_a_sidecar_resends_its_configure_and_leaves_other_sidecars() {
         .configure_raster(&browser, 800, 600, 2.0, true)
         .unwrap()
         .unwrap();
-    // 같은 크기의 재구성은 전송하지 않는다 — 상태가 이미 구성되었기 때문이다.
+    // A reconfiguration of the same size is not sent, because the state is already configured.
     assert!(images
         .configure_raster(&terminal, 800, 600, 2.0, true)
         .unwrap()
         .is_none());
 
-    // 연결이 끊긴 사이드카의 configure 상태만 무효화한다(V5-106).
+    // Only the configure state of the sidecar whose connection was lost is invalidated (V5-106).
     let invalidated = images.invalidate_sidecar("sidecar-a");
     assert_eq!(invalidated, 1, "exactly sidecar-a's images are invalidated");
     assert_eq!(
@@ -929,7 +930,8 @@ fn invalidating_a_sidecar_resends_its_configure_and_leaves_other_sidecars() {
         "an unknown sidecar invalidates nothing"
     );
 
-    // 무효화된 사이드카의 같은 크기 구성은 다시 전송된다 — 새 연결의 서비스는 그림 상태가 없다.
+    // The configuration of the same size for the invalidated sidecar is sent again, because the service of the new
+    // connection has no image state.
     let resent = images
         .configure_raster(&terminal, 800, 600, 2.0, true)
         .unwrap()
@@ -937,7 +939,7 @@ fn invalidating_a_sidecar_resends_its_configure_and_leaves_other_sidecars() {
     assert_eq!(resent.name, "view");
     assert_eq!(resent.sidecar, "sidecar-a");
 
-    // 다른 사이드카의 영역은 무효화되지 않았으므로 같은 크기 재구성은 여전히 전송하지 않는다.
+    // The region of the other sidecar was not invalidated, so a reconfiguration of the same size is still not sent.
     assert!(images
         .configure_raster(&browser, 800, 600, 2.0, true)
         .unwrap()
@@ -955,8 +957,8 @@ fn shown_surface_reconfigures_its_raster() {
         .configure_raster(&key, 800, 600, 2.0, true)
         .unwrap()
         .unwrap();
-    // 숨긴 동안 받은 frame 은 native layer 가 해제되어 표시되지 않는다. 다시 보이면 같은 크기라도 새 raster 를
-    // 설정해야 하며, 숨긴 동안의 raster 를 기다리지 않는다.
+    // A frame received while hidden is not displayed because the native layer was released. When it is shown again, a
+    // new raster must be set even for the same size, and it does not wait for a raster from the hidden period.
     images.set_surface_visible(&key.0, false);
     images.set_surface_visible(&key.0, true);
     let shown = images
@@ -1019,8 +1021,9 @@ fn presentation_outcome_names_the_current_frame_of_a_failure() {
     }
 }
 
-// 같은 표면 문서에서 그림 영역을 떼었다가 다시 붙이면 세대가 그대로이므로, 다시 붙인 영역의 래스터는 사이드카가 이미
-// 받은 래스터보다 커야 한다. 사이드카는 (세대, 래스터)가 커지지 않은 구성을 지난 구성으로 보고 무시한다.
+// When an image region is detached and attached again in the same surface document, the generation stays the same, so
+// the raster of the region that was attached again must be larger than the raster that the sidecar already received.
+// The sidecar treats a configuration whose (generation, raster) did not grow as an old configuration and ignores it.
 // contract: images.transfer.reattach-continues-raster
 #[test]
 fn reattaching_in_the_same_generation_continues_the_raster() {
@@ -1051,7 +1054,7 @@ fn reattaching_in_the_same_generation_continues_the_raster() {
         before.generation,
         before.raster
     );
-    // 표면의 모든 영역을 뗀 뒤에도 같다.
+    // It is the same after all regions of the surface were detached.
     images.remove_surface(&key.0);
     attach(&images);
     let again = configure(&images, 800);
@@ -1065,7 +1068,7 @@ fn reattaching_in_the_same_generation_continues_the_raster() {
     );
 }
 
-// 그림 영역 호출의 실패는 호출 이름을 밝힌다(G1.4-112).
+// The failure of an image region call states the call name (G1.4-112).
 // contract: images.calls.name-the-call
 #[test]
 fn an_image_call_failure_names_the_call() {
@@ -1078,7 +1081,7 @@ fn an_image_call_failure_names_the_call() {
     );
 }
 
-/// 자식 프로세스에 설정 디렉터리를 알리는 환경 변수.
+/// The environment variable that tells the child process the configuration directory.
 const IMAGE_FRAME_CHILD: &str = "SOKSAK_IMAGE_FRAME_CHILD";
 
 // A frame that the host refuses, and an envelope that is not valid, leave a record with the frame and the current state

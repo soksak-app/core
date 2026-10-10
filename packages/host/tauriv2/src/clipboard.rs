@@ -33,7 +33,7 @@ pub fn validate_png_payload(bytes: &[u8]) -> Result<(), String> {
         .map_err(|reason| format!("clipboard PNG header is invalid: {reason}"))
 }
 
-// 서명 뒤의 첫 청크는 13바이트 IHDR 이다(PNG 명세 11.2.2).
+// The first chunk after the signature is the 13-byte IHDR (PNG specification 11.2.2).
 fn validate_png_header(bytes: &[u8]) -> Result<(), &'static str> {
     let chunk = bytes.get(8..33).ok_or("the IHDR chunk is truncated")?;
     if chunk[0..4] != [0, 0, 0, 13] || &chunk[4..8] != b"IHDR" {
@@ -63,7 +63,7 @@ fn validate_png_header(bytes: &[u8]) -> Result<(), &'static str> {
     Ok(())
 }
 
-// PNG 가 쓰는 CRC-32(다항식 0xEDB88320).
+// The CRC-32 that PNG uses (polynomial 0xEDB88320).
 fn crc32(bytes: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;
     for byte in bytes {
@@ -176,7 +176,8 @@ fn persist_png_at(root: &Path, bytes: &[u8]) -> Result<String, String> {
     validate_png_payload(bytes)?;
     let directory = root.join("clipboard");
     platform::current()?.create_private_directories(&directory)?;
-    // tempfile 은 이름이 겹치지 않는 새 파일을 소유자만 읽고 쓰는 권한(0600)으로 만든다.
+    // tempfile creates a new file with a name that does not collide, with permission 0600 so that only the owner reads
+    // and writes it.
     let mut file = tempfile::Builder::new()
         .prefix("pasted-image-")
         .suffix(".png")
@@ -194,7 +195,8 @@ mod tests {
     // contract: clipboard.persist-png.writes-exact-bytes, clipboard.persist-png.owner-only-mode
     #[test]
     fn persists_each_png_to_a_new_owner_only_file() {
-        // 1x1 RGBA PNG 의 서명과 IHDR. 뒤의 바이트는 검사하지 않으므로 두 파일을 구별하는 데 쓴다.
+        // The signature and IHDR of a 1x1 RGBA PNG. The following bytes are not checked, so they are used to tell the
+        // two files apart.
         let png: Vec<u8> = [
             0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
             0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
@@ -208,7 +210,7 @@ mod tests {
         let permissions = std::fs::metadata(&first).unwrap().permissions();
         let mode = std::os::unix::fs::PermissionsExt::mode(&permissions);
         assert_eq!(mode & 0o777, 0o600, "clipboard image mode {mode:o}");
-        // 두 번째 저장은 새 파일을 만들고 첫 파일을 덮어쓰지 않는다.
+        // The second save creates a new file and does not overwrite the first file.
         let second = persist_png_at(root.path(), &other).unwrap();
         assert_ne!(first, second);
         assert_eq!(std::fs::read(&first).unwrap(), png);

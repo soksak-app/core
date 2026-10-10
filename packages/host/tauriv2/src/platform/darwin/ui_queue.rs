@@ -1,4 +1,4 @@
-//! 프레임워크 이벤트 잠금 밖의 메인 큐 실행.
+//! Main queue execution outside the framework event lock.
 
 pub fn enqueue(work: Box<dyn FnOnce() + Send>) {
     extern "C" {

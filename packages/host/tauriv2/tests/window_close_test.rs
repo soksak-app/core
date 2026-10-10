@@ -1,5 +1,5 @@
-//! 닫히는 창의 논리 표면과 그 문서 영역, 그림 영역을 닫는 순서와 실패 보고, 닫히는 창의 네이티브 주소 사용을
-//! 검사한다.
+//! Checks the order and the failure report of closing the logical surfaces of a closing window and their document
+//! regions and image regions, and the use of the native address of a closing window.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,7 +24,7 @@ fn closing_a_window_closes_each_surface_after_its_regions() {
         documents.reserve(&k).unwrap();
         assert!(documents.set(&k, handle));
     }
-    // 만드는 중인 문서 영역은 닫을 핸들이 없다.
+    // A document region that is being created has no handle to close.
     documents.reserve(&key("tab-2", "pending")).unwrap();
     images
         .reserve(&key("tab-1", "view"), "owner", "sidecar")
@@ -93,7 +93,8 @@ fn closing_a_window_reports_every_failure_and_closes_the_rest() {
     );
 }
 
-/// 시험의 메인 스레드. 다른 스레드가 보낸 작업은 메인 스레드가 다음 단계를 실행하기 전에 차례대로 실행한다.
+/// The main thread of the test. Work that another thread sent is run in order before the main thread runs the next
+/// step.
 #[derive(Default)]
 struct FakeMain {
     pending: Mutex<Vec<MainStep>>,
@@ -110,10 +111,10 @@ impl FakeMain {
     }
 }
 
-/// 시험의 창. 닫기는 runtime 처럼 메인 스레드에서 창을 닫는다.
+/// A window of the test. A close closes the window on the main thread like the runtime.
 struct FakeWindow {
     closed: AtomicBool,
-    /// 주소를 읽을 때 메인 스레드에 이 창의 닫기를 보낸다.
+    /// When the address is read, it sends the close of this window to the main thread.
     close_on_read: AtomicBool,
 }
 
@@ -138,7 +139,8 @@ fn fake_use(main: &Arc<FakeMain>, window: &Arc<FakeWindow>) -> Result<String, Na
             Ok(Some(FAKE_HANDLE))
         },
         move |handle| {
-            // 네이티브 코드는 받은 창에 메시지를 보낸다. 닫힌 창의 주소를 받으면 그 창에 메시지를 보낸다.
+            // The native code sends a message to the window it received. If it receives the address of a closed window,
+            // it sends a message to that window.
             if native.closed.load(Ordering::SeqCst) {
                 return Err(format!(
                     "native code messaged the closed window {handle:#x}"
@@ -149,8 +151,9 @@ fn fake_use(main: &Arc<FakeMain>, window: &Arc<FakeWindow>) -> Result<String, Na
     )
 }
 
-// 창의 네이티브 주소는 그 주소를 쓰는 메인 스레드 단계에서 읽는다. 읽은 뒤 메인 스레드가 처리한 닫기는
-// 그 단계 뒤에 오고, 단계 전에 닫힌 창은 네이티브 코드에 넘기지 않고 Closed 로 답한다.
+// The native address of a window is read in the main-thread step that uses the address. A close that the main thread
+// handled after reading comes after that step, and a window that closed before the step is not passed to the native
+// code and is answered as Closed.
 // contract: window-close.native-window.used-in-reading-step
 #[test]
 fn a_close_after_the_handle_read_does_not_reach_native_code() {
@@ -162,7 +165,7 @@ fn a_close_after_the_handle_read_does_not_reach_native_code() {
     assert_eq!(fake_use(&main, &window), Ok("facts of 0x5157".to_string()));
     assert_eq!(fake_use(&main, &window), Err(NativeFailure::Closed));
     assert!(window.closed.load(Ordering::SeqCst));
-    // 닫힌 창의 요청은 없는 창의 오류 1003 으로 끝난다.
+    // The request of a closed window ends with error 1003 for a window that does not exist.
     let failure = native_failure("w2", -32603)(NativeFailure::Closed);
     assert_eq!(
         (failure.code, failure.message.as_str()),

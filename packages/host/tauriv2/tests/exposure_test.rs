@@ -1,4 +1,4 @@
-//! 페이지 요청 중계와 호스트 항목 테스트. 페이지는 요청을 받는 함수가 대신한다.
+//! Tests of the page request relay and the host entries. A function that receives requests replaces the page.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -11,17 +11,17 @@ use soksak_host_tauriv2::windows::{list_entries, window_entry, ListStep};
 
 const WAIT: Duration = Duration::from_secs(5);
 
-/// 문서가 보내는 응답 텍스트.
+/// The response text that a document sends.
 fn text(value: Value) -> Box<RawValue> {
     serde_json::value::to_raw_value(&value).unwrap()
 }
 
-/// 받은 그대로의 응답 텍스트.
+/// The response text as received.
 fn text_of(body: &str) -> Box<RawValue> {
     RawValue::from_string(body.to_string()).unwrap()
 }
 
-/// 중계한 결과 텍스트를 값으로 읽는다.
+/// Reads the relayed result text as a value.
 fn value(text: &RawValue) -> Value {
     serde_json::from_str(text.get()).unwrap()
 }
@@ -45,7 +45,7 @@ fn reply_from_target_document_resolves_request() {
 // contract: exposure.relay.keeps-value-text
 #[test]
 fn reply_keeps_the_text_and_key_order_of_the_page_value() {
-    // 페이지는 응답을 JSON 텍스트로 보낸다. 중계는 그 값의 키 순서를 바꾸지 않는다.
+    // The page sends the response as JSON text. The relay does not change the key order of that value.
     let relay = Arc::new(Relay::default());
     let replying = relay.clone();
     let result = relay.request("main", Some(WAIT), move |id| {
@@ -174,7 +174,7 @@ fn request_without_timeout_waits_until_the_document_closes() {
     let closing = relay.clone();
     let failure = relay
         .request("surface-main-a", None, move |_| {
-            // 응답 대기가 시작된 뒤 다른 스레드가 문서 종료를 알린다.
+            // After the wait for the response started, another thread announces the end of the document.
             std::thread::spawn(move || closing.abandon("surface-main-a"));
             Ok(())
         })
@@ -251,7 +251,7 @@ fn host_entries_are_appended_as_registered() {
         .unwrap();
     assert_eq!(quit["result"], json!({"type": "null"}));
     assert!(exposure::with_host_entries(&text(json!([]))).is_err());
-    // 페이지 항목은 받은 텍스트 그대로 남는다.
+    // The page entries remain as the received text.
     let kept = exposure::with_host_entries(&text_of(r#"{"dom":[],"commands":[],"status":[{"name":"core.layout","schema":{},"description":"Layout."}]}"#)).unwrap();
     assert!(
         kept.get()
@@ -491,7 +491,8 @@ fn view_work_dropped_by_a_closing_webview_reports_no_result() {
     assert_eq!(exposure::received(&rx), Err("view failed".into()));
 }
 
-// host.windows 목록 항목은 닫기가 받아들여진 창을 빼고, 다른 창의 조회 실패는 오류로 보고한다.
+// The host.windows list entries leave out a window whose close was accepted, and report the lookup failure of another
+// window as an error.
 // contract: exposure.windows.closing-window-omitted
 #[test]
 fn a_closing_window_is_left_out_without_querying_it() {
@@ -543,7 +544,8 @@ fn an_open_window_lists_its_title_project_and_key_state() {
     );
 }
 
-/// 시험의 메인 스레드. 다른 스레드가 보낸 작업은 메인 스레드가 다음 작업을 처리하기 전에 차례대로 실행한다.
+/// The main thread of the test. Work that another thread sent is run in order before the main thread handles the next
+/// work.
 #[derive(Default)]
 struct FakeMain {
     pending: Mutex<Vec<Box<dyn FnOnce() + Send>>>,
@@ -558,8 +560,8 @@ impl FakeMain {
         }
     }
 
-    /// tauri-runtime-wry 의 send_user_message 처럼, 메인 스레드에서는 바로 답하고 다른 스레드에서는
-    /// 먼저 보낸 작업이 처리된 뒤에 답한다.
+    /// Like send_user_message of tauri-runtime-wry, it answers at once on the main thread, and on another thread it
+    /// answers after the work sent earlier was handled.
     fn query<T>(&self, answer: impl FnOnce() -> T) -> T {
         if !self.running.load(Ordering::SeqCst) {
             self.run_pending();
@@ -577,12 +579,12 @@ impl FakeMain {
     }
 }
 
-/// 시험의 창. 닫기는 runtime 처럼 closing 을 세운 뒤 창을 runtime 에서 뺀다.
+/// A window of the test. A close sets closing like the runtime and then removes the window from the runtime.
 struct FakeWindow {
     label: &'static str,
     closing: AtomicBool,
     present: AtomicBool,
-    /// closing 을 읽을 때 메인 스레드에 이 창의 닫기를 보낸다.
+    /// When closing is read, it sends the close of this window to the main thread.
     close_on_read: AtomicBool,
 }
 
@@ -630,8 +632,8 @@ fn fake_list(main: &Arc<FakeMain>, windows: &[Arc<FakeWindow>]) -> Result<Value,
     )
 }
 
-// host.windows 는 창의 closing 과 제목, 초점을 한 메인 스레드 단계에서 읽는다. 목록 중에 메인 스레드가
-// 처리한 닫기는 그 창을 목록에서 빼거나 넣을 뿐 목록을 실패시키지 않는다.
+// host.windows reads the closing, the title and the focus of a window in one main-thread step. A close that the main
+// thread handled during the list only removes that window from the list or puts it in, and does not make the list fail.
 // contract: exposure.windows.listed-in-one-main-thread-step
 #[test]
 fn a_close_during_the_list_does_not_fail_the_list() {

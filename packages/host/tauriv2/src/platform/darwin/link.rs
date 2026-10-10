@@ -5,7 +5,7 @@ extern "C" {
     fn free(pointer: *mut c_void);
 }
 
-/// URL 을 그 스킴의 사용자 기본 애플리케이션으로 연다. 메인 스레드에서 호출한다.
+/// Opens a URL in the default application of the user for its scheme. Call it on the main thread.
 pub fn open(url: &str) -> Result<(), String> {
     let url = CString::new(url).map_err(|_| "link URL contains a NUL byte".to_string())?;
     let failure = unsafe { sp_link_open(url.as_ptr()) };

@@ -1,12 +1,12 @@
-//! 표면 페이지의 외부 그림 표시 영역. docs/spec/sidecars.md 의 "그림 봉투"와 관련된다.
+//! The external image display region of a surface page. It is related to the "image envelope" of docs/spec/sidecars.md.
 //!
-//! 표면 페이지가 그림을 네이티브 영역에 표시하도록 요청한다. 호스트는 표면 웹뷰 안에
-//! 그림 영역을 만들고, 페이지가 알린 여백으로 배치하며, 사이드카가 보낸 그림을 영역에
-//! 표시한다. 그림 영역은 표면 웹뷰의 하위 뷰이므로 표면과 함께 옮겨지고 숨겨진다.
-//! 표면이 제거되거나 표면 페이지가 다시 읽히면 닫는다.
+//! A surface page requests that an image be displayed in a native region. The host creates an image region inside the
+//! surface webview, places it with the insets that the page reported, and shows the image that the sidecar sent in the
+//! region. The image region is a subview of the surface webview, so it moves and hides together with the surface. It is
+//! closed when the surface is removed or the surface page is loaded again.
 //!
-//! 명령은 메인 스레드 밖에서 실행되고 네이티브 작업은 메인 스레드에서 실행한다. 메인 스레드에서
-//! 시작한 정리는 기다리지 않는다.
+//! Commands run outside the main thread and native work runs on the main thread. A cleanup that started on the main
+//! thread is not awaited.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
@@ -22,7 +22,7 @@ use crate::platform::{self, Handle};
 use crate::surfaces::{require_region, surface_handle};
 use crate::windows::{emit_window, window_data};
 
-/// 표면 페이지의 그림 영역 호출.
+/// An image region call of a surface page.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Request {
     pub surface: String,
@@ -30,15 +30,15 @@ pub struct Request {
     pub sidecar: Option<String>,
 }
 
-/// 표면과 그림 이름의 쌍.
+/// A pair of a surface and an image name.
 pub type Key = (String, String);
 
-/// 그림 영역을 등록한 사이드카 소유자.
+/// The sidecar owner that registered the image region.
 pub struct Owner {
     pub sidecar_owner: String,
 }
 
-/// 호출한 표면 caller 가 request.surface 이고 그림 이름이 올바른지 확인하고 키를 반환한다.
+/// Checks that the calling surface caller is request.surface and that the image name is valid, and returns the key.
 pub fn check(caller: Option<&str>, request: &Request) -> Result<Key, String> {
     if caller != Some(request.surface.as_str()) {
         return Err(format!("this image is not surface {:?}", request.surface));
@@ -53,7 +53,7 @@ pub fn check(caller: Option<&str>, request: &Request) -> Result<Key, String> {
     Ok((request.surface.clone(), request.name.clone()))
 }
 
-/// 창의 그림 영역.
+/// The image regions of a window.
 #[derive(Clone, Default)]
 pub struct Images {
     shared: Arc<Shared>,
@@ -69,23 +69,26 @@ struct Shared {
 struct Inner {
     handles: HashMap<Key, Handle>,
     owners: HashMap<Key, String>,
-    sidecars: HashMap<Key, String>, // image별 sidecar 이름
+    sidecars: HashMap<Key, String>, // sidecar name of each image
     states: HashMap<Key, RasterState>,
     generations: HashMap<String, u64>,
     surface_visibility: HashMap<String, bool>,
-    /// 뗀 그림 영역이 마지막으로 쓴 (세대, 래스터). 같은 세대에서 다시 붙인 영역은 그 다음 래스터부터 센다. 사이드카는
-    /// (세대, 래스터)가 커지지 않은 구성을 지난 구성으로 보고 무시하기 때문이다. 표면의 세대가 바뀌면 지운다.
+    /// The last (generation, raster) that a detached image region used. A region attached again in the same generation
+    /// counts from the next raster, because the sidecar treats a configuration whose (generation, raster) did not grow
+    /// as an old configuration and ignores it. It is cleared when the generation of the surface changes.
     detached_rasters: HashMap<Key, (u64, u64)>,
     next_generation: u64,
 }
 
 impl Inner {
-    /// 표면에서 뗀 영역의 래스터 기록을 지운다. 표면의 세대가 바뀌면 새 세대가 이전 구성보다 크므로 기록이 필요 없다.
+    /// Clears the raster record of the regions detached from a surface. When the generation of the surface changes, the
+    /// new generation is larger than the previous configuration, so the record is not needed.
     fn forget_detached_rasters(&mut self, surface: &str) {
         self.detached_rasters.retain(|key, _| key.0 != surface);
     }
 
-    /// 영역의 이름을 지우고, 같은 세대에서 다시 붙일 때 이어 셀 래스터를 남긴다.
+    /// Clears the name of a region and keeps the raster from which to continue counting when it is attached again in
+    /// the same generation.
     fn detach(&mut self, key: &Key) -> Option<Handle> {
         let handle = self.handles.remove(key)?;
         self.owners.remove(key);
@@ -113,7 +116,7 @@ struct RasterState {
     presentation_error: Option<String>,
 }
 
-/// 공급자가 보낸 프레임이 속한 래스터와 그 크기, 순번.
+/// The raster, its size and the sequence number to which a frame that a supplier sent belongs.
 #[derive(Clone, Copy, Debug)]
 struct FrameIdentity {
     generation: u64,
@@ -141,7 +144,8 @@ impl Images {
         self.shared
             .inner
             .lock()
-            // 기본값: 잠금을 쥔 채 멈춘 스레드도 상태를 한 번의 넣기, 빼기, 읽기로만 바꾸므로 상태는 일관되고, 그 멈춤은 패닉 보고로 이미 알려졌다.
+            // default: a thread that stopped while holding the lock also changed the state only by one insert, remove
+            // or read, so the state is consistent, and that stop was already reported as a panic report.
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
@@ -149,7 +153,7 @@ impl Images {
         self.shared.changed.notify_all();
     }
 
-    /// 새 표면 문서가 시작될 때 이전 프레임과 구별할 세대를 만든다.
+    /// Creates a generation that distinguishes frames from the previous frames when a new surface document starts.
     pub fn begin_generation(&self, surface: &str) -> u64 {
         let mut inner = self.lock();
         inner.next_generation += 1;
@@ -167,7 +171,7 @@ impl Images {
         generation
     }
 
-    /// 제거한 표면의 현재 세대를 끝낸다. 번호는 다시 쓰지 않는다.
+    /// Ends the current generation of a removed surface. The number is not reused.
     pub fn end_generation(&self, surface: &str) {
         let mut inner = self.lock();
         inner.generations.remove(surface);
@@ -180,7 +184,7 @@ impl Images {
         self.changed();
     }
 
-    /// 바깥 SurfaceHost의 표시 상태를 기록한다.
+    /// Records the visibility state of the outer SurfaceHost.
     pub fn set_surface_visible(&self, surface: &str, visible: bool) {
         let mut inner = self.lock();
         if inner.surface_visibility.get(surface).copied() == Some(visible) {
@@ -192,10 +196,9 @@ impl Images {
         if visible {
             for (key, state) in inner.states.iter_mut() {
                 if key.0 == surface {
-                    // surface를 숨기면 native pixel이 해제된다. surface가 돌아오면
-                    // 같은 raster를 다시 configure해야 한다.
-                    // 숨겨진 generation의 frame이 surface 표시 후에 수락되지 않도록
-                    // revision을 증가시킨다.
+                    // Hiding the surface releases the native pixels. When the surface returns, the same raster must be
+                    // configured again. The revision is increased so that a frame of a hidden generation is not
+                    // accepted after the surface is shown.
                     state.raster += 1;
                     state.configured = false;
                     state.last_sequence = 0;
@@ -205,7 +208,7 @@ impl Images {
         self.changed();
     }
 
-    /// 이름을 차지한다. sidecar 가 없거나 빈 문자열이면 오류를 반환한다.
+    /// Takes a name. It returns an error when there is no sidecar or it is an empty string.
     pub fn reserve(&self, key: &Key, owner: &str, sidecar: &str) -> Result<(), String> {
         if sidecar.is_empty() {
             return Err(format!("image {:?}: reserve requires a sidecar", key.1));
@@ -242,7 +245,7 @@ impl Images {
         Ok(())
     }
 
-    /// 차지한 이름에 만든 그림 영역의 주소를 적는다.
+    /// Writes the address of the created image region to the taken name.
     pub fn set(&self, key: &Key, handle: Handle) -> bool {
         match self.lock().handles.get_mut(key) {
             Some(slot) => {
@@ -253,7 +256,7 @@ impl Images {
         }
     }
 
-    /// 만들어진 그림 영역의 주소를 반환한다.
+    /// Returns the address of a created image region.
     pub fn get(&self, key: &Key) -> Result<Handle, String> {
         match self.lock().handles.get(key) {
             Some(&handle) if handle != 0 => Ok(handle),
@@ -261,10 +264,11 @@ impl Images {
         }
     }
 
-    /// 그림 영역을 등록한 사이드카 소유자를 반환한다.
+    /// Returns the sidecar owner that registered the image region.
     pub fn get_owner(&self, key: &Key) -> Result<String, String> {
         let inner = self.lock();
-        // 기본값: 등록하지 않은 영역에는 주소가 없고, 주소 0 은 만드는 중이라 붙지 않은 영역이다.
+        // default: a region that is not registered has no address, and address 0 is a region that is being created and
+        // not attached.
         if inner.handles.get(key).map(|&h| h != 0).unwrap_or(false) {
             inner
                 .owners
@@ -276,10 +280,11 @@ impl Images {
         }
     }
 
-    /// 그림 영역을 등록한 사이드카 이름을 반환한다.
+    /// Returns the name of the sidecar that registered the image region.
     pub fn get_sidecar(&self, key: &Key) -> Result<String, String> {
         let inner = self.lock();
-        // 기본값: 등록하지 않은 영역에는 주소가 없고, 주소 0 은 만드는 중이라 붙지 않은 영역이다.
+        // default: a region that is not registered has no address, and address 0 is a region that is being created and
+        // not attached.
         if inner.handles.get(key).map(|&h| h != 0).unwrap_or(false) {
             inner
                 .sidecars
@@ -291,7 +296,7 @@ impl Images {
         }
     }
 
-    /// 이름을 제거하고 그 그림 영역의 주소를 반환한다.
+    /// Removes a name and returns the address of its image region.
     pub fn remove(&self, key: &Key) -> Result<Handle, String> {
         let mut inner = self.lock();
         match inner.detach(key) {
@@ -303,7 +308,7 @@ impl Images {
         }
     }
 
-    /// 표면의 이름을 모두 제거하고 만들어진 그림 영역의 주소를 반환한다.
+    /// Removes every name of a surface and returns the addresses of the created image regions.
     pub fn remove_surface(&self, surface: &str) -> Vec<Handle> {
         let mut removed = Vec::new();
         let mut inner = self.lock();
@@ -320,13 +325,13 @@ impl Images {
                 }
             }
         }
-        // 문서 영역의 정리는 바깥 SurfaceHost의 표시 상태를 바꾸지 않는다.
-        // 표면 자체가 닫힐 때 end_generation이 그 상태를 제거한다.
+        // The cleanup of document regions does not change the visibility state of the outer SurfaceHost. end_generation
+        // removes that state when the surface itself closes.
         self.changed();
         removed
     }
 
-    /// 만들어진 그림 영역의 주소별 키.
+    /// The key of each address of a created image region.
     pub fn names(&self) -> HashMap<Handle, Key> {
         let inner = self.lock();
         inner
@@ -337,7 +342,7 @@ impl Images {
             .collect()
     }
 
-    /// 재로드 전에 표면이 사용하는 사이드카를 반환한다.
+    /// Returns the sidecar that the surface uses before the reload.
     pub fn sidecars_for_surface(&self, surface: &str) -> Vec<String> {
         let inner = self.lock();
         let mut sidecars = HashSet::new();
@@ -349,7 +354,7 @@ impl Images {
         sidecars.into_iter().collect()
     }
 
-    /// 만들어진 그림 영역의 주소.
+    /// The addresses of created image regions.
     pub fn all(&self) -> Vec<Handle> {
         self.lock()
             .handles
@@ -359,13 +364,13 @@ impl Images {
             .collect()
     }
 
-    /// 영역 자체와 바깥 표면이 모두 표시된 그림의 핸들을 반환한다.
+    /// Returns the handles of images whose region itself and outer surface are both shown.
     pub fn visible(&self) -> Vec<(Key, Handle)> {
         self.visible_where(|_, _| true)
     }
 
-    /// 그 사이드카가 그리는 보이는 영역. 영속 사이드카의 연결이 다시 맺혔을 때 그
-    /// 사이드카의 configure 를 다시 보내는 데 쓴다(V5-106).
+    /// The visible regions that the sidecar draws. They are used to send the configure of the sidecar again when the
+    /// connection of a persistent sidecar is established again (V5-106).
     pub fn visible_for_sidecar(&self, sidecar: &str) -> Vec<(Key, Handle)> {
         self.visible_where(|inner, key| {
             inner.sidecars.get(key).map(String::as_str) == Some(sidecar)
@@ -385,18 +390,21 @@ impl Images {
                     .surface_visibility
                     .get(&key.0)
                     .copied()
-                    // 기본값: 숨김을 알리지 않은 표면은 보인다(숨길 때만 surface_visibility 에 적는다).
+                    // default: a surface that did not report hiding is visible (it is written to surface_visibility
+                    // only when it is hidden).
                     .unwrap_or(true);
-                // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
+                // default: the address of a region that is not registered is 0, the same as a region that is not
+                // attached.
                 let handle = inner.handles.get(key).copied().unwrap_or_default();
                 (state.visible && outer && handle != 0).then(|| (key.clone(), handle))
             })
             .collect()
     }
 
-    /// 그 사이드카의 연결이 끊겼다고 표시한다(V5-106). configure 를 받아든 연결이 죽었으므로
-    /// configure 상태도 함께 죽는다 — 같은 크기라도 다시 보내야 새 연결의 서비스가 그림
-    /// 상태를 만든다. 표시 순서 기록도 지운다 — 새 연결의 프레임은 순번을 처음부터 센다.
+    /// Marks that the connection of the sidecar was lost (V5-106). The connection that received configure died, so the
+    /// configure state dies with it: even for the same size, configure must be sent again so that the service of the
+    /// new connection creates the image state. The record of the presentation order is also cleared, because the frames
+    /// of the new connection count the sequence number from the start.
     pub fn invalidate_sidecar(&self, sidecar: &str) -> usize {
         let mut inner = self.lock();
         let mut invalidated = 0;
@@ -422,7 +430,7 @@ impl Images {
         invalidated
     }
 
-    /// 적용된 네이티브 래스터가 달라졌을 때 리비전을 올리고 보낼 설정을 반환한다.
+    /// Increases the revision when the applied native raster changed, and returns the configuration to send.
     pub fn configure_raster(
         &self,
         key: &Key,
@@ -436,9 +444,10 @@ impl Images {
             .surface_visibility
             .get(&key.0)
             .copied()
-            // 기본값: 숨김을 알리지 않은 표면은 보인다(숨길 때만 surface_visibility 에 적는다).
+            // default: a surface that did not report hiding is visible (it is written to surface_visibility only when
+            // it is hidden).
             .unwrap_or(true);
-        // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
+        // default: the address of a region that is not registered is 0, the same as a region that is not attached.
         if inner.handles.get(key).copied().unwrap_or_default() == 0 {
             return Err(format!("image {:?} is not attached", key.1));
         }
@@ -485,10 +494,10 @@ impl Images {
         }))
     }
 
-    /// 래스터가 없는 0 크기 배치에서도 영역의 표시 상태를 기록한다.
+    /// Records the visibility state of a region even for a placement of size 0 that has no raster.
     pub fn set_visible(&self, key: &Key, visible: bool) -> Result<(), String> {
         let mut inner = self.lock();
-        // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
+        // default: the address of a region that is not registered is 0, the same as a region that is not attached.
         if inner.handles.get(key).copied().unwrap_or_default() == 0 {
             return Err(format!("image {:?} is not attached", key.1));
         }
@@ -513,7 +522,7 @@ impl Images {
         }
     }
 
-    /// 현재 공급자와 정확한 래스터에 속하며 증가하는 프레임인지 확인한다.
+    /// Checks that the frame belongs to the current supplier and the exact raster and is increasing.
     fn authorize_frame(
         &self,
         key: &Key,
@@ -529,7 +538,7 @@ impl Images {
             sequence,
         } = frame;
         let mut inner = self.lock();
-        // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
+        // default: the address of a region that is not registered is 0, the same as a region that is not attached.
         let attached = inner.handles.get(key).copied().unwrap_or_default() != 0;
         let sender_matches = inner
             .sidecars
@@ -555,7 +564,7 @@ impl Images {
         Ok(())
     }
 
-    /// 프레임이 메인 스레드에서 표시되기 직전에도 현재 래스터인지 검사한다.
+    /// Checks that the frame is still the current raster just before it is presented on the main thread.
     fn frame_status(
         &self,
         key: &Key,
@@ -564,7 +573,7 @@ impl Images {
         sequence: i32,
     ) -> Result<(), &'static str> {
         let inner = self.lock();
-        // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
+        // default: the address of a region that is not registered is 0, the same as a region that is not attached.
         let attached = inner.handles.get(key).copied().unwrap_or_default() != 0;
         let Some(state) = inner.states.get(key) else {
             return Err("notAttached");
@@ -578,7 +587,7 @@ impl Images {
         Ok(())
     }
 
-    /// 거부한 프레임과 비교할 수 있도록 영역의 현재 프레임 상태를 글로 돌려준다.
+    /// Returns the current frame state of a region as text so that it can be compared with a rejected frame.
     fn frame_state(&self, key: &Key) -> String {
         let inner = self.lock();
         match inner.states.get(key) {
@@ -598,7 +607,7 @@ impl Images {
         }
     }
 
-    /// 현재 래스터의 프레임이 네이티브 표시 저장소에 복사되었음을 기록한다.
+    /// Records that the frame of the current raster was copied to the native display storage.
     fn mark_presented(&self, key: &Key, generation: u64, raster: u64, sequence: i32) {
         let mut inner = self.lock();
         let Some(state) = inner.states.get_mut(key) else {
@@ -647,9 +656,10 @@ impl Images {
                 .surface_visibility
                 .get(&key.0)
                 .copied()
-                // 기본값: 숨김을 알리지 않은 표면은 보인다(숨길 때만 surface_visibility 에 적는다).
+                // default: a surface that did not report hiding is visible (it is written to surface_visibility only
+                // when it is hidden).
                 .unwrap_or(true);
-            // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
+            // default: the address of a region that is not registered is 0, the same as a region that is not attached.
             inner.handles.get(key).copied().unwrap_or_default() == 0
                 || !state.visible
                 || !surface_visible
@@ -660,8 +670,9 @@ impl Images {
         })
     }
 
-    /// 표시 장벽이 아직 기다리는 그림 영역을 표면과 이름 순서로 적는다. 장벽이 시간을 넘기면 오류에 붙여 어느
-    /// 영역이 표시되지 않았는지 보고한다. 기다리는 영역이 없으면 "none" 이다.
+    /// Lists the image regions that the presentation barrier still waits for, in the order of surface and name. When
+    /// the barrier times out, the list is attached to the error to report which regions were not presented. It is
+    /// "none" when no region is waited for.
     pub fn pending_rasters(&self) -> String {
         let inner = self.lock();
         let mut pending: Vec<String> = inner
@@ -669,7 +680,8 @@ impl Images {
             .iter()
             .filter_map(|(key, state)| {
                 let known = inner.surface_visibility.get(&key.0).copied();
-                // 기본값: 등록하지 않은 영역의 주소는 0 이며 붙지 않은 영역과 같다.
+                // default: the address of a region that is not registered is 0, the same as a region that is not
+                // attached.
                 let attached = inner.handles.get(key).copied().unwrap_or_default() != 0;
                 let presented = state.last_sequence > 0
                     && state.presented_raster == state.raster
@@ -706,12 +718,12 @@ impl Images {
         pending.join(", ")
     }
 
-    /// 보이는 모든 그림 영역이 현재 래스터를 표시했는지 반환한다.
+    /// Returns whether all visible image regions presented the current raster.
     pub fn current_presented(&self) -> bool {
         Self::current_presented_locked(&self.lock())
     }
 
-    /// 보이는 모든 그림 영역이 현재 래스터를 표시하거나 제한 시간이 끝날 때까지 기다린다.
+    /// Waits until all visible image regions present the current raster or the time limit ends.
     pub fn wait_current(&self, timeout: Duration) -> Result<(), String> {
         let deadline = Instant::now() + timeout;
         let mut inner = self.lock();
@@ -733,10 +745,12 @@ impl Images {
                 .shared
                 .changed
                 .wait_timeout(inner, remaining)
-                // 기본값: 잠금을 쥔 채 멈춘 스레드도 상태를 한 번의 넣기, 빼기, 읽기로만 바꾸므로 상태는 일관되고, 그 멈춤은 패닉 보고로 이미 알려졌다.
+                // default: a thread that stopped while holding the lock also changed the state only by one insert,
+                // remove or read, so the state is consistent, and that stop was already reported as a panic report.
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             inner = next;
-            // 제한 시간의 실패는 호출자가 기다리던 영역을 담아 그 요청에 답한다(docs/spec/hosts.md#application-log).
+            // The failure of the time limit answers that request with the regions that the caller waited for
+            // (docs/spec/hosts.md#application-log).
             if result.timed_out() && !Self::current_presented_locked(&inner) {
                 return Err("presentationTimeout".to_string());
             }
@@ -744,7 +758,7 @@ impl Images {
     }
 }
 
-/// 호출한 표면 caller 의 웹뷰와 요청된 표면을 확인하고 window 를 반환한다.
+/// Checks the webview of the calling surface caller and the requested surface, and returns the window.
 fn owner(webview: &Webview, request: &Request) -> Result<(Key, tauri::Window), String> {
     let window = webview.window();
     crate::exposure::authorize_main_caller(webview.label(), window.label(), "surface operations")?;
@@ -752,7 +766,8 @@ fn owner(webview: &Webview, request: &Request) -> Result<(Key, tauri::Window), S
     Ok((key, window))
 }
 
-/// 만든 그림 영역을 창에 등록하고 핸들을 반환한다. 만드는 동안 표면이 제거되면 닫는다.
+/// Registers the created image region in the window and returns the handle. When the surface is removed during
+/// creation, it is closed.
 fn create(
     _webview: &Webview,
     window: &tauri::Window,
@@ -766,7 +781,7 @@ fn create(
 
     on_main(window, move || {
         let event = Box::new(move |json: String| {
-            // 네이티브 입력은 소유 표면에만 보낸다. 파싱·전송 실패는 숨기지 않는다.
+            // Native input is sent only to the owning surface. A parse or send failure is not hidden.
             let event_surface = surface_id.clone();
             let event_name = event_name.clone();
             let result = (|| {
@@ -782,9 +797,8 @@ fn create(
                         "body": event,
                     })
                 });
-                // 포커스 전이는 성능 트레이스의 타임라인에도 남는다(V5-114, performance-trace
-                // 스펙이 약속한 창 이벤트 줄). 트레이스가 꺼져 있으면 line 이 아무 것도 쓰지
-                // 않는다.
+                // A focus transition is also left in the timeline of the performance trace (V5-114, the window event
+                // line that the performance-trace specification promises). When the trace is off, line writes nothing.
                 if event.get("type").and_then(|value| value.as_str()) == Some("focus") {
                     crate::performance::observe("host", || {
                         serde_json::json!({
@@ -824,7 +838,7 @@ fn create(
     })
 }
 
-/// 만들어진 그림 영역에 대해 메인 스레드에서 run 을 실행한다.
+/// Runs run on the main thread for a created image region.
 fn with_image<T: Send + 'static>(
     webview: &Webview,
     request: &Request,
@@ -845,8 +859,7 @@ fn with_image<T: Send + 'static>(
     })
 }
 
-/// 호출한 표면 페이지의 요소에 그림 영역을 붙인다.
-/// 그림 영역 호출 call 의 실패를 돌려준다(docs/spec/native-host.md#host-calls).
+/// Returns the failure of the image region call call (docs/spec/native-host.md#host-calls).
 pub fn image_call_error(call: &str, error: String) -> String {
     format!("{call}: {error}")
 }
@@ -870,7 +883,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     };
     require_region(&data.compositions, &key.0, &key.1, "image", Some(sidecar))?;
 
-    // 이름을 먼저 차지한다. 네이티브 작업을 기다리는 동안 잠금을 쥐지 않는다.
+    // The name is taken first. The lock is not held while waiting for native work.
     data.images.reserve(&key, "", sidecar)?;
     let handle = match create(webview, &window, &key, platform) {
         Ok(handle) => handle,
@@ -909,7 +922,7 @@ pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> 
     Ok(())
 }
 
-/// 그림 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다.
+/// Makes the image region the first responder and sends the focus event.
 pub(crate) fn focus(webview: &Webview, request: Request) -> Result<(), String> {
     let platform = platform::current()?;
     with_image(webview, &request, move |handle| {
@@ -919,7 +932,7 @@ pub(crate) fn focus(webview: &Webview, request: Request) -> Result<(), String> {
     Ok(())
 }
 
-/// 캐럿(입력 커서) 위치를 받아 둔다.
+/// Stores the caret (text cursor) position.
 pub(crate) fn caret(
     webview: &Webview,
     request: Request,
@@ -935,7 +948,7 @@ pub(crate) fn caret(
     Ok(())
 }
 
-/// 접근성 값으로 보일 문자열을 받아 둔다.
+/// Stores the string that is shown as the accessibility value.
 pub(crate) fn text(webview: &Webview, request: Request, text: String) -> Result<(), String> {
     let platform = platform::current()?;
     with_image(webview, &request, move |handle| {
@@ -944,7 +957,7 @@ pub(crate) fn text(webview: &Webview, request: Request, text: String) -> Result<
     Ok(())
 }
 
-/// 그림 영역을 닫는다.
+/// Closes an image region.
 pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> {
     let (key, window) = owner(webview, &request)?;
     let Ok(data) = window_data(&window) else {
@@ -953,7 +966,7 @@ pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> 
     require_region(&data.compositions, &key.0, &key.1, "image", None)?;
     let platform = platform::current()?;
 
-    // 등록 해제와 닫기를 메인 스레드의 한 작업에서 한다.
+    // The unregistration and the close happen in one task of the main thread.
     on_main(&window, move || {
         let handle = data.images.remove(&key)?;
         if handle != 0 {
@@ -965,7 +978,8 @@ pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> 
     Ok(())
 }
 
-/// 표면의 그림 영역을 모두 닫는다. 등록부 제거는 즉시 하고 native close만 메인 스레드에서 실행한다.
+/// Closes every image region of a surface. The registry is removed at once, and only the native close runs on the main
+/// thread.
 pub(crate) fn close_surface(window: &tauri::Window, surface: &str) {
     let Ok(data) = window_data(window) else {
         return;
@@ -994,22 +1008,22 @@ pub(crate) fn close_surface(window: &tauri::Window, surface: &str) {
     );
 }
 
-/// 이미지 봉투 의사 결정의 결과.
+/// The result of the decision on an image envelope.
 #[derive(Debug)]
 pub enum Decision {
-    /// 본문에 이미지 필드가 없음. 호출자가 페이지로 전달해야 함.
+    /// The body has no image field. The caller must pass it to the page.
     NotImage,
-    /// 응답을 사이드카에 보낼 오류.
+    /// The error to send to the sidecar as the response.
     Reply {
         name: String,
         json: serde_json::Value,
-        /// 거부한 프레임: 거부 이유와 generation, raster, sequence.
+        /// A rejected frame: the rejection reason and the generation, raster and sequence.
         reason: String,
         generation: u64,
         raster: u64,
         sequence: i32,
     },
-    /// 표시할 이미지.
+    /// The image to display.
     Present {
         id: u32,
         nonce: [u8; 16],
@@ -1039,13 +1053,13 @@ fn image_reply(reason: &str, name: &str, generation: u64, raster: u64, sequence:
     }
 }
 
-/// 이미지 봉투를 파싱하고 유효성을 검사하여 의사 결정을 반환한다.
-/// body 는 "image" 필드를 포함하는 JSON 객체여야 한다.
-/// 이미지 봉투가 아니면 NotImage 를 반환한다.
-/// 유효하지 않으면 Reply 를 반환한다.
-/// 유효하고 등록되어 있으면 Present 를 반환한다.
+/// Parses and validates an image envelope and returns the decision.
+/// body must be a JSON object that holds an "image" field.
+/// It returns NotImage when it is not an image envelope.
+/// It returns Reply when it is not valid.
+/// It returns Present when it is valid and registered.
 pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> Decision {
-    // 이벤트 본문을 파싱하여 image 필드 확인
+    // Parses the event body and checks the image field.
     let obj: serde_json::Value = match serde_json::from_str(body_str) {
         Ok(obj) => obj,
         Err(_) => return Decision::NotImage,
@@ -1055,7 +1069,7 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
         return Decision::NotImage;
     };
 
-    // 이미지 봉투 구조 정의
+    // Defines the structure of the image envelope.
     #[derive(Deserialize)]
     struct ImageEnvelope {
         name: String,
@@ -1087,7 +1101,7 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
         }
     };
 
-    // 포맷과 토큰 종류 검증
+    // Validates the format and the token kind.
     if envelope.format != "bgra8" || envelope.token.kind != "iosurface-global" {
         return image_reply(
             "unsupported",
@@ -1098,7 +1112,7 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
         );
     }
 
-    // nonce 를 base64 에서 디코딩하여 [u8; 16] 배열로 변환
+    // Decodes the nonce from base64 into a [u8; 16] array.
     let decoded_nonce =
         match base64::engine::general_purpose::STANDARD.decode(&envelope.token.nonce) {
             Ok(bytes) => bytes,
@@ -1113,7 +1127,7 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
             }
         };
 
-    // 디코딩된 nonce 가 정확히 16바이트여야 함
+    // The decoded nonce must be exactly 16 bytes.
     if decoded_nonce.len() != 16 {
         return image_reply(
             "unsupported",
@@ -1124,7 +1138,7 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
         );
     }
 
-    // nonce 를 [u8; 16] 배열로 변환
+    // Converts the nonce into a [u8; 16] array.
     let mut nonce: [u8; 16] = [0; 16];
     nonce.copy_from_slice(&decoded_nonce[..16]);
 
@@ -1159,8 +1173,8 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
     }
 }
 
-/// 이미지 표시 후 응답을 생성한다.
-/// 표시가 되었으면 consumed 응답을, 실패했으면 그 까닭을 오류로 반환한다.
+/// Creates the response after an image is presented.
+/// It returns the consumed response when it was presented, and the reason as an error when it failed.
 pub fn after_present(
     outcome: Result<(), &str>,
     name: &str,
@@ -1185,8 +1199,8 @@ pub fn after_present(
     }
 }
 
-/// 이미지 봉투를 처리한다. 메인 스레드에서 실행할 작업과 응답 전송 방식을 인자로 받는다.
-/// 봉투를 처리했으면 true, 아니면 false를 반환한다.
+/// Handles an image envelope. It takes the work to run on the main thread and the way to send the response as
+/// arguments. It returns true when the envelope was handled and false otherwise.
 pub fn handle_envelope<OnMain, SendResponse>(
     body_str: &str,
     sender: &str,
@@ -1210,9 +1224,9 @@ where
     )
 }
 
-/// image envelope를 처리하고, 일시적인 native presentation 실패 후 필요하면 새 raster를 요청한다.
-/// recovery callback은 의도적으로 response와 분리되어 있다. 따라서 caller는 원래 error를 숨기지 않고
-/// 자신의 transport로 sidecar를 다시 configure할 수 있다.
+/// Handles the image envelope and, after a temporary native presentation failure, requests a new raster when needed.
+/// The recovery callback is deliberately separate from the response. The caller can therefore configure the sidecar
+/// again over its own transport without hiding the original error.
 pub fn handle_envelope_with_recovery<OnMain, SendResponse, Recover>(
     body_str: &str,
     sender: &str,
@@ -1268,8 +1282,8 @@ where
                             .frame_status(&current_key, generation, raster, sequence)
                             .map_err(str::to_string)?;
                         let platform = platform::current()?;
-                        // 네이티브 래스터가 프레임과 다르면 그 프레임은 이전 래스터의 것이다. 기록에는 네이티브
-                        // 래스터를 남기고 보낸 쪽에는 stale 로 답한다.
+                        // When the native raster differs from the frame, that frame belongs to the previous raster. The
+                        // record keeps the native raster and the sender is answered with stale.
                         let actual = platform
                             .image_raster(handle)?
                             .ok_or_else(|| "staleRaster native=none".to_string())?;
@@ -1359,8 +1373,9 @@ where
     }
 }
 
-/// 호스트가 거부한 프레임을 거부 이유와 영역의 현재 프레임 상태와 함께 기록한다. 지원하지 않는 프레임은 사이드카의
-/// 결함이므로 오류이고, 떼어졌거나 대체된 프레임은 정상 경합이므로 관측이다.
+/// Records a frame that the host rejected together with the rejection reason and the current frame state of the region.
+/// An unsupported frame is a defect of the sidecar, so it is an error, and a detached or replaced frame is a normal
+/// race, so it is an observation.
 #[allow(clippy::too_many_arguments)]
 fn log_refused_frame(
     surface: &str,
@@ -1388,9 +1403,10 @@ fn log_refused_frame(
     );
 }
 
-/// 표시하지 못한 프레임의 상세 detail 을 응답 사유와 로그 줄로 바꾼다. 대체된 프레임(stale, notAttached,
-/// staleRaster ...)은 표시 실패가 아니라 무효화된 프레임이므로 두 번째 값이 참이다. current 는 실패한 영역의 현재
-/// 프레임 상태이며 표시 실패의 줄에만 남긴다.
+/// Converts the detail of a frame that could not be presented into the response reason and the log line. A replaced
+/// frame (stale, notAttached, staleRaster ...) is an invalidated frame and not a presentation failure, so the second
+/// value is true. current is the current frame state of the failed region and is kept only in the line of a
+/// presentation failure.
 #[allow(clippy::too_many_arguments)]
 pub fn presentation_outcome(
     surface: &str,

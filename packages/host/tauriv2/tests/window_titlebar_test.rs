@@ -1,12 +1,13 @@
-//! 표면 준비가 담는 창 제목줄 높이의 검사를 확인한다(docs/spec/native-surfaces.md#title-bar-height). 두 host 는
-//! 같은 값을 같은 문장으로, 배치 트랜잭션을 시작하기 전에 거부한다.
+//! Checks the check of the window title bar height that a surface preparation holds
+//! (docs/spec/native-surfaces.md#title-bar-height). Both hosts reject the same value with the same text before the
+//! placement transaction starts.
 
 use std::collections::HashMap;
 
 use soksak_host_tauriv2::surfaces::{check_sync_request, SyncRequest};
 use soksak_host_tauriv2::windows::validate_titlebar_height;
 
-/// 페이지가 보내는 형태의 표면 동기화 요청이다. JSON 은 NaN 과 무한대를 담을 수 없다.
+/// A surface synchronization request in the form that the page sends. JSON cannot hold NaN and infinity.
 fn titlebar_request(titlebar: f64) -> SyncRequest {
     serde_json::from_value(
         serde_json::json!({"settled": true, "surfaces": [], "titlebar": titlebar}),

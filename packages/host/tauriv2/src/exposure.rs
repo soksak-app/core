@@ -1,9 +1,10 @@
-//! 엔드포인트 요청의 창 선택, 호스트 항목, 페이지 요청 중계.
+//! Window selection of endpoint requests, host entries and relay of page requests.
 //!
-//! 호스트는 `windows.list`, `input.pointer`, `input.key`, 소유자가 `host` 인 이름을 직접 처리한다.
-//! 나머지 요청은 창의 메인 페이지에 `exposure-request` 이벤트로 보내고 `exposure_reply` 명령으로
-//! 응답을 받는다. 메인 페이지가 표면 페이지의 이름을 요청하면 `exposure_forward` 명령으로 표면
-//! 페이지에 전달한다. 호출한 문서는 명령의 웹뷰로 구분한다. 형식은 docs/spec/exposure.md 에 정의한다.
+//! The host handles `windows.list`, `input.pointer`, `input.key` and the names whose owner is `host` itself. The other
+//! requests are sent to the main page of the window with the `exposure-request` event, and the response is received
+//! with the `exposure_reply` command. When the main page requests a name of a surface page, the request is forwarded to
+//! the surface page with the `exposure_forward` command. The calling document is distinguished by the webview of the
+//! command. The format is defined in docs/spec/exposure.md.
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -27,19 +28,20 @@ use crate::windows::{self, window_data, with_native_owner, NativeFailure};
 
 pub use crate::platform::{ButtonHeld, Delivery, FrontmostApplication, Key, Pointer};
 
-/// 문서가 응답해야 하는 시간.
+/// The time within which a document must respond.
 pub const TIMEOUT: Duration = Duration::from_secs(10);
 
-/// 애플리케이션 활성화를 기다리는 시간.
+/// The time to wait for the application activation.
 const ACTIVATION: Duration = Duration::from_secs(5);
 
-/// input.pointer 의 누름과 뗌이 문서의 수신을 기다리는 시간.
+/// The time that the press and release of input.pointer wait for the document to receive them.
 const RECEIPT: Duration = Duration::from_secs(2);
 
-/// endpoint.json 과 소켓 이름에 쓰는 애플리케이션 이름.
+/// The application name used for endpoint.json and the socket name.
 const APPLICATION: &str = "tauriv2";
 
-/// 호스트가 선언하는 항목. 형식은 plugin.json 의 exposes 와 같고, 각 종류 안에서 이름 순서이다.
+/// The entries that the host declares. The format is the same as exposes of plugin.json, and each kind is in name
+/// order.
 fn host_declarations() -> Value {
     let rect = json!({"type": "object", "properties": {
         "x": {"type": "number"}, "y": {"type": "number"},
@@ -166,8 +168,7 @@ fn host_declarations() -> Value {
     })
 }
 
-/// 페이지의 `exposure.list` 결과에 호스트 항목을 등록된 항목으로 추가한다.
-/// 소유자가 host 인 이름이 이 요청 방식으로 선언되었는지 확인한다. 선언되지 않은 이름은 1001 이다.
+/// Checks that the name whose owner is host is declared for this request method. An undeclared name is 1001.
 pub fn check_host_name(method: &str, name: &str) -> Result<(), Failure> {
     let kind = match method {
         "status.get" | "status.watch" | "status.unwatch" | "status.next" => "status",
@@ -188,8 +189,8 @@ pub fn check_host_name(method: &str, name: &str) -> Result<(), Failure> {
     }
 }
 
-/// 페이지가 보낸 exposure.list 에 host 항목을 더한다. 페이지 항목은 받은 텍스트 그대로 두고, 종류는 이름
-/// 순서로 쓴다(Wails host 와 같다).
+/// Adds the host entries to the exposure.list that the page sent. The page entries stay as the received text, and each
+/// kind is written in name order (the same as the Wails host).
 pub fn with_host_entries(listed: &RawValue) -> Result<Box<RawValue>, Failure> {
     let Ok(mut lists) = serde_json::from_str::<BTreeMap<String, Vec<Box<RawValue>>>>(listed.get())
     else {
@@ -231,7 +232,8 @@ fn optional_number(params: &Map<String, Value>, name: &str) -> Result<f64, Failu
     }
 }
 
-/// 1007 오류의 메시지를 만든다. 거부한 차례의 mask 와 최전면 애플리케이션을 적는다(docs/spec/exposure.md).
+/// Builds the message of error 1007. It states the mask of the rejected press and the frontmost application
+/// (docs/spec/exposure.md).
 pub fn button_held_message(held: &ButtonHeld) -> String {
     let frontmost = match &held.frontmost {
         None => "no application".to_string(),
@@ -250,7 +252,7 @@ pub fn button_held_message(held: &ButtonHeld) -> String {
     )
 }
 
-/// `input.pointer` 의 매개변수를 읽는다.
+/// Reads the parameters of `input.pointer`.
 pub fn pointer(params: &Map<String, Value>) -> Result<Pointer, Failure> {
     let phase = match params.get("phase").and_then(Value::as_str) {
         Some("move") => 0,
@@ -289,7 +291,7 @@ pub fn pointer(params: &Map<String, Value>) -> Result<Pointer, Failure> {
     })
 }
 
-/// `input.key` 의 매개변수를 읽는다.
+/// Reads the parameters of `input.key`.
 pub fn key(params: &Map<String, Value>) -> Result<Key, Failure> {
     let key = match params.get("key") {
         Some(Value::String(key)) if !key.is_empty() => key.clone(),
@@ -337,12 +339,12 @@ type Waiting = (String, Sender<Result<Box<RawValue>, Failure>>);
 
 pub use crate::endpoint::raw;
 
-/// 응답 텍스트를 host 가 읽는 값으로 바꾼다.
+/// Converts a response text into a value that the host reads.
 pub fn parsed(text: &RawValue) -> Result<Value, Failure> {
     serde_json::from_str(text.get()).map_err(|error| Failure::new(-32603, error.to_string()))
 }
 
-/// 페이지가 보낸 응답 `{id, result}` 또는 `{id, error}`. result 는 받은 텍스트 그대로 둔다.
+/// The response `{id, result}` or `{id, error}` that the page sent. result stays as the received text.
 #[derive(Deserialize)]
 struct Answer {
     id: Option<u64>,
@@ -352,22 +354,23 @@ struct Answer {
     error: Option<Value>,
 }
 
-/// 문서에 보낸 요청과 그 응답의 대응.
+/// The correspondence between the requests sent to documents and their responses.
 #[derive(Default)]
 pub struct Relay {
     next: AtomicU64,
     pending: Mutex<HashMap<u64, Waiting>>,
-    /// 시간이 초과된 최근 요청의 id, 문서, 보낸 시각, 제한 시간. 늦은 답의 지연을 오류에 밝히기 위해
-    /// EXPIRED_LIMIT 개까지 기억하고 가장 오래된 것을 버린다(docs/spec/exposure.md#errors).
+    /// The id, document, send time and time limit of recent requests that timed out. To state the delay of a late reply
+    /// in its error, up to EXPIRED_LIMIT of them are kept and the oldest is discarded (docs/spec/exposure.md#errors).
     expired: Mutex<std::collections::VecDeque<(u64, String, std::time::Instant, Duration)>>,
 }
 
-/// 늦은 답을 위해 기억하는 시간 초과 요청 수.
+/// The number of timed-out requests that are kept for late replies.
 const EXPIRED_LIMIT: usize = 256;
 
 impl Relay {
-    /// send 로 요청 id 를 문서 target 에 보내고 target 의 응답을 timeout 동안 기다린다. timeout 이
-    /// None 이면 응답이나 문서 종료까지 기다린다. send 가 실패하면 문서가 없는 것으로 처리한다.
+    /// Sends the request id to the document target with send, and waits for the response of target for timeout. When
+    /// timeout is None, it waits for the response or the end of the document. When send fails, the document is treated
+    /// as absent.
     pub fn request(
         &self,
         target: &str,
@@ -386,7 +389,8 @@ impl Relay {
             return Err(Failure::new(MISSING_DOCUMENT, error));
         }
         let Some(timeout) = timeout else {
-            // 기본값: 답을 보낼 쪽이 사라지면 문서가 닫힌 것이므로 그 오류로 답한다.
+            // default: when the side that would send the reply is gone, the document is closed, so the request answers
+            // with that error.
             return rx.recv().unwrap_or_else(|_| {
                 Err(Failure::new(MISSING_DOCUMENT, format!("{target} closed")))
             });
@@ -401,7 +405,7 @@ impl Relay {
                     .remove(&id)
                     .is_none();
                 if taken {
-                    // 제한 시간과 같은 때에 답이 요청을 가져갔으면 그 답이 곧 전달된다.
+                    // If a reply took the request at the same time as the time limit, that reply is delivered next.
                     return rx
                         .recv()
                         .map_err(|_| Failure::new(MISSING_DOCUMENT, format!("{target} closed")))?;
@@ -425,9 +429,9 @@ impl Relay {
         }
     }
 
-    /// 문서 from 의 응답 `{id, result}` 또는 `{id, error}` 를 기다리는 요청에 전달한다. 전달했으면
-    /// true 이다. 다른 문서에 보낸 요청의 id 는 전달하지 않는다. result 는 받은 텍스트 그대로 전달하므로
-    /// 페이지 값의 키 순서가 바뀌지 않는다.
+    /// Delivers the response `{id, result}` or `{id, error}` of the document from to the request that waits for it. It
+    /// returns true when delivered. The id of a request sent to another document is not delivered. result is delivered
+    /// as the received text, so the key order of the page value does not change.
     pub fn reply(&self, from: &str, payload: &RawValue) -> Result<(), String> {
         let Answer { id, result, error } =
             serde_json::from_str::<Answer>(payload.get()).map_err(|error| error.to_string())?;
@@ -445,22 +449,23 @@ impl Relay {
         };
         let outcome = match error {
             Some(error) if !error.is_null() => Err(Failure::new(
-                // 기본값: 코드가 없는 페이지 오류는 JSON-RPC 내부 오류(-32603)로 알린다.
+                // default: a page error without a code is reported as a JSON-RPC internal error (-32603).
                 error.get("code").and_then(Value::as_i64).unwrap_or(-32603),
                 error
                     .get("message")
                     .and_then(Value::as_str)
-                    // 기본값: 문장이 없는 페이지 오류는 일반 문장으로 같은 오류를 알린다.
+                    // default: a page error without a message is reported as the same error with a generic message.
                     .unwrap_or("the document failed"),
             )),
-            // 기본값: 값을 돌려주지 않은 명령의 답에는 result 가 없고, 그 결과는 null 이다.
+            // default: the reply of a command that returned no value has no result, and its result is null.
             _ => result.map_or_else(|| raw(&Value::Null), Ok),
         };
         tx.send(outcome)
             .map_err(|_| format!("exposure reply {id} has no matching request"))
     }
 
-    /// 기다리는 요청이 없는 답 id 의 오류. 시간이 초과된 요청이면 보낸 뒤의 지연과 제한 시간을 밝힌다.
+    /// The error of a reply id that no request waits for. For a request that timed out, it states the delay after
+    /// sending and the time limit.
     fn unmatched(&self, id: u64, from: &str) -> Result<String, String> {
         let mut expired = self.expired.lock().map_err(|e| e.to_string())?;
         let Some(index) = expired
@@ -477,7 +482,7 @@ impl Relay {
         ))
     }
 
-    /// 문서 target 에 보낸 요청을 모두 오류 1003 으로 끝낸다.
+    /// Ends every request sent to the document target with error 1003.
     pub fn abandon(&self, target: &str) {
         self.abandon_matching(|held| held == target);
     }
@@ -519,7 +524,7 @@ impl Relay {
     }
 }
 
-/// 애플리케이션의 엔드포인트, 중계, 마지막으로 보낸 host.window 값.
+/// The endpoint of the application, the relay, and the host.window value that was sent last.
 #[derive(Default)]
 pub(crate) struct Exposure {
     pub relay: Relay,
@@ -527,7 +532,7 @@ pub(crate) struct Exposure {
     reported: Mutex<HashMap<String, Value>>,
 }
 
-/// 엔드포인트를 연다. endpoint.json 은 publish 가 쓴다.
+/// Opens the endpoint. publish writes endpoint.json.
 pub(crate) fn start(app: &AppHandle, directory: &std::path::Path) -> Result<(), String> {
     let endpoint = Endpoint::start(
         &crate::endpoint::socket_directory(),
@@ -541,7 +546,7 @@ pub(crate) fn start(app: &AppHandle, directory: &std::path::Path) -> Result<(), 
         .map_err(|_| "the endpoint is already started".to_string())
 }
 
-/// 첫 창 window 를 등록한 뒤 endpoint.json 을 쓴다.
+/// Writes endpoint.json after the first window window is registered.
 pub(crate) fn publish(app: &AppHandle, window: &str) -> Result<(), String> {
     app.state::<Exposure>()
         .endpoint
@@ -550,21 +555,22 @@ pub(crate) fn publish(app: &AppHandle, window: &str) -> Result<(), String> {
         .publish(window)
 }
 
-/// 엔드포인트를 닫고 소켓과 endpoint.json 을 제거한다.
+/// Closes the endpoint and removes the socket and endpoint.json.
 pub(crate) fn stop(app: &AppHandle) {
     if let Some(endpoint) = app.state::<Exposure>().endpoint.get() {
         endpoint.stop();
     }
 }
 
-/// 진단 기록의 줄 하나를 애플리케이션 로그에 쓰고 창 window 의 기록을 요청한 연결에도 보낸다.
+/// Writes one line of the diagnostic record to the application log and also sends it to the connections that requested
+/// the record of the window window.
 pub(crate) fn note(window: &Window, line: &str) {
     crate::application_log::transcript_entry(window.label(), line).log();
     log(window, line);
 }
 
-/// 창 window 의 기록을 요청한 연결에 줄 하나를 보낸다.
-/// 진단 빌드가 아니면 보낼 곳이 없다.
+/// Sends one line to the connections that requested the record of the window window.
+/// Without a diagnostic build there is no place to send it to.
 #[cfg(feature = "diagnostics")]
 pub(crate) fn log(window: &Window, line: &str) {
     if let Some(endpoint) = window.state::<Exposure>().endpoint.get() {
@@ -574,8 +580,9 @@ pub(crate) fn log(window: &Window, line: &str) {
 #[cfg(not(feature = "diagnostics"))]
 pub(crate) fn log(_window: &Window, _line: &str) {}
 
-/// 표면을 대상으로 한 연산은 창의 메인 페이지만 호출한다. caller 는 호출한 웹뷰, window 는 창의 레이블이며,
-/// 메인 페이지의 웹뷰 레이블은 창 레이블과 같다. 다른 웹뷰의 호출은 거부한다.
+/// An operation that targets a surface is called only by the main page of the window. caller is the calling webview and
+/// window is the label of the window; the webview label of the main page equals the window label. A call from another
+/// webview is rejected.
 pub fn authorize_main_caller(caller: &str, window: &str, operation: &str) -> Result<(), String> {
     if caller != window {
         return Err(format!(
@@ -585,7 +592,7 @@ pub fn authorize_main_caller(caller: &str, window: &str, operation: &str) -> Res
     Ok(())
 }
 
-/// 명령을 호출한 웹뷰가 창의 메인 페이지인지 확인한다.
+/// Checks that the webview that called the command is the main page of the window.
 fn main_page(webview: &Webview) -> Result<Window, String> {
     let window = webview.window();
     authorize_main_caller(webview.label(), window.label(), "exposure operations")?;
@@ -597,12 +604,13 @@ fn emit_to(app: &AppHandle, label: &str, event: &str, payload: Value) -> Result<
         .map_err(|e| e.to_string())
 }
 
-/// 호출한 문서의 응답을 기다리는 요청에 전달한다. 제한 시간이 지난 응답은 버린다.
-/// 제거된 표면이 보낸 늦은 답의 관측 줄.
+/// The observation line of a late reply that a removed surface sent.
 pub fn removed_surface_reply(id: u64, surface: &str) -> String {
     format!("exposure reply {id} of removed surface {surface:?} arrived after its request ended")
 }
 
+/// Delivers the response of the calling document to the request that waits for it. A response after the time limit is
+/// discarded.
 pub fn reply_target(window: &str, request: &Value) -> Result<String, String> {
     match request.get("surface") {
         None => Ok(window.to_string()),
@@ -613,8 +621,8 @@ pub fn reply_target(window: &str, request: &Value) -> Result<String, String> {
     }
 }
 
-/// 문서의 응답 텍스트를 기다리는 요청에 전달한다. 텍스트는 받은 그대로 중계하고, 응답을 보낸 문서를 고르는
-/// 데만 읽는다.
+/// Delivers the response text of a document to the request that waits for it. The text is relayed as received and is
+/// read only to choose the document that sent the response.
 pub(crate) fn reply(webview: &Webview, request: String) -> Result<(), String> {
     let window = main_page(webview)?;
     let text = RawValue::from_string(request)
@@ -623,8 +631,8 @@ pub(crate) fn reply(webview: &Webview, request: String) -> Result<(), String> {
     let target = reply_target(window.label(), &routing)?;
     if let Some(surface) = routing.get("surface").and_then(Value::as_str) {
         if !crate::surfaces::surface_attached(&window, surface)? {
-            // 표면을 제거할 때 그 표면의 요청은 이미 1003 으로 끝났다. 늦은 답은 답할 요청이 없으므로 버리고 관측으로
-            // 남긴다(docs/spec/exposure.md).
+            // When a surface is removed, the requests of that surface have already ended with 1003. A late reply is
+            // discarded because no request is left to answer, and it is left as an observation (docs/spec/exposure.md).
             let id = routing
                 .get("id")
                 .and_then(Value::as_u64)
@@ -641,13 +649,13 @@ pub struct Changed {
     name: String,
     #[serde(default)]
     surface: Option<String>,
-    /// 페이지가 보낸 값의 JSON 텍스트. 키 순서를 바꾸지 않고 연결에 보낸다. 값이 없는 변경은 값이 null 인
-    /// 변경이다.
+    /// The JSON text of the value that the page sent. It is sent to the connections without changing the key order. A
+    /// change without a value is a change whose value is null.
     #[serde(default)]
     value: Option<String>,
 }
 
-/// 페이지가 이름 name 의 상태 변경을 보낼 수 있는지 확인한다. host 상태는 host 만 바꾼다.
+/// Checks that the page can send a state change of the name name. Only the host changes host state.
 pub fn check_page_status_change(name: &str) -> Result<(), String> {
     if name.starts_with("host.") {
         return Err(format!("the page cannot change host status {name}"));
@@ -655,7 +663,7 @@ pub fn check_page_status_change(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 메인 페이지가 보낸 상태 변경을 감시하는 연결에 보낸다.
+/// Sends a state change that the main page sent to the connections that watch it.
 pub(crate) fn changed(webview: &Webview, request: Changed) -> Result<(), String> {
     let window = main_page(webview)?;
     check_page_status_change(&request.name)?;
@@ -682,16 +690,17 @@ pub(crate) struct Forward {
     method: String,
     #[serde(default)]
     params: Value,
-    /// 이 요청의 제한 시간(ms). 없으면 10 초다. 선언의 timeout 을 페이지가 전달한다.
+    /// The time limit of this request (ms). It is 10 seconds when absent. The page passes the timeout of the
+    /// declaration.
     #[serde(default)]
     timeout: Value,
 }
 
-/// 전달 요청이 지정할 수 있는 가장 긴 제한 시간(ms).
+/// The longest time limit that a forward request can specify (ms).
 const MAX_FORWARD_TIMEOUT: u64 = 600_000;
 
-/// 전달 요청의 제한 시간을 정한다. status.next 는 값이 바뀔 때까지 답하지 않으므로 제한 시간이
-/// 없고(None), timeout 을 받지 않는다. timeout 은 1 이상 600000 이하의 정수 ms 다.
+/// Sets the time limit of a forward request. status.next does not answer until the value changes, so it has no time
+/// limit (None) and accepts no timeout. timeout is an integer in ms from 1 to 600000.
 pub fn forward_timeout(method: &str, timeout: &Value) -> Result<Option<Duration>, Failure> {
     if timeout.is_null() {
         return Ok((method != "status.next").then_some(TIMEOUT));
@@ -710,8 +719,8 @@ pub fn forward_timeout(method: &str, timeout: &Value) -> Result<Option<Duration>
     Ok(Some(Duration::from_millis(ms as u64)))
 }
 
-/// 메인 페이지의 요청을 표면 페이지에 보내고 그 응답을 `{result}` 또는 `{error}` 로 반환한다. result 는
-/// 표면 페이지가 보낸 텍스트 그대로다.
+/// Sends a request of the main page to a surface page and returns the response as `{result}` or `{error}`. result is
+/// the text that the surface page sent, as received.
 pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValue>, String> {
     let window = main_page(webview)?;
     let label = label_for(&window, &request.surface);
@@ -723,7 +732,7 @@ pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValu
 			MISSING_DOCUMENT,
 			format!("surface {} does not exist", request.surface),
 		)),
-        // status.next 는 제한 시간이 없다. 표면이 닫히면 1003 이다.
+        // status.next has no time limit. When the surface closes, it ends with 1003.
         Ok(timeout) => window
             .state::<Exposure>()
 			.relay
@@ -750,7 +759,7 @@ pub(crate) struct Register {
     name: String,
 }
 
-/// 표면 페이지의 등록을 메인 페이지에 전달한다. 표면 페이지는 자신의 표면 id 로만 등록한다.
+/// Passes the registration of a surface page to the main page. A surface page registers only with its own surface id.
 pub(crate) fn register(webview: &Webview, request: Register) -> Result<(), String> {
     let window = webview.window();
     if webview.label() != label_for(&window, &request.surface) {
@@ -763,7 +772,7 @@ pub(crate) fn register(webview: &Webview, request: Register) -> Result<(), Strin
     if !matches!(request.kind.as_str(), "status" | "command" | "dom") {
         return Err(format!("unknown exposure kind {}", request.kind));
     }
-    // 표면이 등록하는 코어 이름은 core.surface.* 뿐이다(docs/spec/exposure.md).
+    // The only core names that a surface registers are core.surface.* (docs/spec/exposure.md).
     let name = &request.name;
     let core = name.starts_with("core.") && !name.starts_with("core.surface.");
     if !crate::endpoint::valid_name(name) || name.starts_with("host.") || core {
@@ -789,8 +798,8 @@ pub(crate) fn register(webview: &Webview, request: Register) -> Result<(), Strin
     )
 }
 
-/// 표면 페이지의 등록을 다시 읽힌 메인 페이지에 다시 알린다. 표면은 메인 페이지가 다시 읽혀도
-/// 남으므로, 새 페이지는 이전 페이지가 받은 등록을 이 호출로 받는다.
+/// Notifies the reloaded main page again of the registrations of the surface pages. A surface remains when the main
+/// page is reloaded, so the new page receives the registrations that the previous page received through this call.
 pub(crate) fn replay_registrations(window: &Window) {
     let Ok(data) = window_data(window) else {
         return;
@@ -811,7 +820,7 @@ pub(crate) fn replay_registrations(window: &Window) {
     }
 }
 
-/// 표면 페이지가 닫히거나 다시 읽힐 때 그 등록과 대기 중인 요청을 제거한다.
+/// Removes the registrations and the pending requests of a surface page when it closes or reloads.
 pub(crate) fn surface_closed(window: &Window, surface: &str) {
     window
         .state::<Exposure>()
@@ -832,13 +841,14 @@ pub(crate) fn surface_closed(window: &Window, surface: &str) {
     }
 }
 
-/// 메인 페이지가 다시 읽힐 때 그 페이지에 보낸 요청을 끝낸다.
+/// Ends the requests sent to the main page when it reloads.
 pub(crate) fn page_reloaded(window: &Window) {
     window.state::<Exposure>().relay.abandon(window.label());
     windows_changed(window.app_handle());
 }
 
-/// 다시 읽힌 메인 페이지에 이 창의 감시와 진단 기록을 다시 요청한다. 페이지는 준비를 알린 뒤 호출한다.
+/// Requests the watches and the diagnostic record of this window again from the reloaded main page. The page calls it
+/// after it reports that it is ready.
 pub(crate) fn rewatch(window: &Window) {
     let Some(notifier) = window
         .state::<Exposure>()
@@ -876,7 +886,8 @@ pub(crate) fn rewatch(window: &Window) {
     });
 }
 
-/// 창이 닫힐 때 창의 문서에 보낸 요청을 끝내고 창의 상태 기록을 제거한다.
+/// When the window closes, ends the requests sent to the documents of the window and removes the state record of the
+/// window.
 pub(crate) fn window_closed(window: &Window) {
     let state = window.state::<Exposure>();
     let main = window.label().to_string();
@@ -889,8 +900,8 @@ pub(crate) fn window_closed(window: &Window) {
     };
 }
 
-/// 창 목록이 바뀌었을 수 있을 때 호출한다. host.windows 를 감시하는 창마다 windows.list 결과를 보낸다.
-/// 창 목록은 창 레지스트리를 잠그므로 별도 스레드에서 읽는다.
+/// Called when the window list may have changed. Sends the windows.list result to each window that watches
+/// host.windows. The window list locks the window registry, so it is read on a separate thread.
 pub(crate) fn windows_changed(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
@@ -930,9 +941,9 @@ pub(crate) fn windows_changed(app: &AppHandle) {
     });
 }
 
-/// host.buttons 의 감시를 설치한다. 바뀐 값은 한 스레드가 받은 차례대로 감시하는 연결에 보낸다. 엔드포인트의
-/// 쓰기는 연결을 기다릴 수 있으므로 메인 스레드에서 보내지 않는다. 메인 스레드에서 endpoint.json 을 쓰기 전에
-/// 호출한다(docs/spec/exposure.md#host-entries).
+/// Installs the watch of host.buttons. A changed value is sent to the watching connections by one thread in the order
+/// received. A write of the endpoint can wait for a connection, so it is not sent from the main thread. It is called
+/// before endpoint.json is written on the main thread (docs/spec/exposure.md#host-entries).
 pub(crate) fn watch_buttons(app: &AppHandle) -> Result<(), String> {
     let (send, receive) = mpsc::channel::<Value>();
     let notifying = app.clone();
@@ -971,7 +982,7 @@ pub(crate) fn watch_buttons(app: &AppHandle) -> Result<(), String> {
         .map_err(|error| format!("mouse buttons: {error}"))
 }
 
-/// host.sidecars 의 현재 값이다.
+/// The current value of host.sidecars.
 /// The value of the host status name of window for the debug view: `host.window`, `host.sidecars` or `host.screens`
 /// (docs/spec/debug.md).
 pub(crate) fn host_status(window: &Window, name: &str) -> Result<Value, String> {
@@ -993,8 +1004,8 @@ fn sidecars_status(app: &AppHandle) -> Value {
     json!({ "closing": sidecars.closing(), "outdated": sidecars.outdated() })
 }
 
-/// host.sidecars 가 바뀌었을 때 호출한다. 감시하는 창마다 새 값을 보낸다. 창 목록은 창 레지스트리를 잠그므로
-/// 별도 스레드에서 읽는다.
+/// Called when host.sidecars changed. Sends the new value to each watching window. The window list locks the window
+/// registry, so it is read on a separate thread.
 pub(crate) fn sidecars_changed(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
@@ -1036,8 +1047,9 @@ pub(crate) fn sidecars_changed(app: &AppHandle) {
     });
 }
 
-/// 창의 host.window 값이 바뀌었을 수 있을 때 호출한다. 감시하는 연결이 있으면 값을 계산하고,
-/// 마지막으로 보낸 값과 다르면 보낸다. 네이티브 값은 메인 스레드에서 읽으므로 별도 스레드에서 계산한다.
+/// Called when the host.window value of a window may have changed. If a connection watches it, the value is calculated
+/// and sent when it differs from the value sent last. Native values are read on the main thread, so the calculation
+/// runs on a separate thread.
 pub(crate) fn window_changed(window: &Window) {
     let watched = window
         .state::<Exposure>()
@@ -1051,7 +1063,8 @@ pub(crate) fn window_changed(window: &Window) {
     std::thread::spawn(move || {
         let value = match window_status(&window) {
             Ok(value) => value,
-            // 상태를 읽기 전에 닫힌 창은 알릴 상태가 없다. 창의 닫기는 window_closed 가 알린다.
+            // A window that closed before its state was read has no state to report. window_closed reports the close of
+            // the window.
             Err(error) if error.code == MISSING_DOCUMENT => return,
             Err(error) => {
                 log_error("host.window", error.message);
@@ -1083,8 +1096,8 @@ fn internal(error: impl ToString) -> Failure {
     Failure::new(-32603, error.to_string())
 }
 
-/// 창의 네이티브 주소를 쓴 작업의 실패를 code 의 오류로 바꾼다. 작업의 메인 스레드 단계 전에 닫힌 창은 없는
-/// 창과 같다.
+/// Converts the failure of an operation that wrote the native address of a window into an error with code. A window
+/// that closed before the main-thread step of the operation is the same as a window that does not exist.
 pub fn native_failure(window: &str, code: i64) -> impl Fn(NativeFailure) -> Failure + '_ {
     move |failure| match failure {
         NativeFailure::Closed => missing_window(window),
@@ -1092,7 +1105,7 @@ pub fn native_failure(window: &str, code: i64) -> impl Fn(NativeFailure) -> Fail
     }
 }
 
-/// 메인 스레드에서 work 를 실행하고 결과를 기다린다.
+/// Runs work on the main thread and waits for the result.
 pub(crate) fn on_main<T: Send + 'static>(
     window: &Window,
     work: impl FnOnce() -> Result<T, String> + Send + 'static,
@@ -1100,7 +1113,7 @@ pub(crate) fn on_main<T: Send + 'static>(
     app_on_main(window.app_handle(), work)
 }
 
-/// 메인 스레드에서 work 를 실행하고 결과를 기다린다. 메인 스레드에서 부르면 바로 실행한다.
+/// Runs work on the main thread and waits for the result. When it is called on the main thread, it runs at once.
 pub(crate) fn app_on_main<T: Send + 'static>(
     app: &AppHandle,
     work: impl FnOnce() -> Result<T, String> + Send + 'static,
@@ -1109,7 +1122,7 @@ pub(crate) fn app_on_main<T: Send + 'static>(
     app.run_on_main_thread(move || {
         match tx.send(work()) {
             Ok(()) => {}
-            // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+            // A failure after the request ended was not reported by that request, so it is left as an error line.
             Err(mpsc::SendError(Err(error))) => log_error("main-thread work", error),
             Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
                 "exposure",
@@ -1121,11 +1134,10 @@ pub(crate) fn app_on_main<T: Send + 'static>(
     rx.recv().map_err(|e| e.to_string())?
 }
 
-/// AppKit 메인 스레드 실행기를 통해 메인 WebView를 반환한다.
+/// Returns the main WebView through the AppKit main-thread executor.
 ///
-/// Tauri endpoint worker와 비동기 명령은 창의 WebView registry를 직접 조회할 수 없다.
-/// macOS에서 registry는 네이티브 WebKit 객체를 가지므로 읽기 전용 조회도 메인 스레드에서
-/// 실행한다.
+/// The Tauri endpoint worker and the asynchronous commands cannot look up the WebView registry of a window directly. On
+/// macOS the registry holds native WebKit objects, so even a read-only lookup runs on the main thread.
 pub(crate) fn root_view_on_main(window: &Window) -> Result<Webview, String> {
     let target = window.clone();
     on_main(window, move || {
@@ -1133,8 +1145,8 @@ pub(crate) fn root_view_on_main(window: &Window) -> Result<Webview, String> {
     })
 }
 
-/// 웹뷰 작업의 결과를 받는다. 웹뷰가 파괴되어 작업을 실행하지 않고 버리면 송신자가 결과 없이 사라지므로 None 이다.
-/// 작업이 보낸 오류는 그대로 반환한다.
+/// Receives the result of a webview task. When the webview is destroyed and discards the task without running it, the
+/// sender disappears without a result, so the value is None. An error that the task sent is returned as it is.
 pub fn received<T>(rx: &mpsc::Receiver<Result<T, String>>) -> Result<Option<T>, String> {
     match rx.recv() {
         Ok(result) => result.map(Some),
@@ -1142,7 +1154,7 @@ pub fn received<T>(rx: &mpsc::Receiver<Result<T, String>>) -> Result<Option<T>, 
     }
 }
 
-/// 웹뷰의 네이티브 뷰로 work 를 실행한다. 닫히는 웹뷰가 작업을 실행하지 않으면 None 이다.
+/// Runs work with the native view of a webview. It is None when a closing webview does not run the task.
 fn with_view_if_present<T: Send + 'static>(
     webview: &Webview,
     work: impl FnOnce(&tauri::webview::PlatformWebview) -> Result<T, String> + Send + 'static,
@@ -1152,7 +1164,7 @@ fn with_view_if_present<T: Send + 'static>(
         .with_webview(move |view| {
             match tx.send(work(&view)) {
                 Ok(()) => {}
-                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                // A failure after the request ended was not reported by that request, so it is left as an error line.
                 Err(mpsc::SendError(Err(error))) => log_error("webview work", error),
                 Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
                     "exposure",
@@ -1164,7 +1176,7 @@ fn with_view_if_present<T: Send + 'static>(
     received(&rx)
 }
 
-/// 웹뷰의 네이티브 뷰로 work 를 실행하고 결과를 기다린다.
+/// Runs work with the native view of a webview and waits for the result.
 pub(crate) fn with_view<T: Send + 'static>(
     webview: &Webview,
     work: impl FnOnce(&tauri::webview::PlatformWebview) -> Result<T, String> + Send + 'static,
@@ -1174,7 +1186,7 @@ pub(crate) fn with_view<T: Send + 'static>(
         .with_webview(move |view| {
             match tx.send(work(&view)) {
                 Ok(()) => {}
-                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                // A failure after the request ended was not reported by that request, so it is left as an error line.
                 Err(mpsc::SendError(Err(error))) => log_error("webview work", error),
                 Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
                     "exposure",
@@ -1186,12 +1198,12 @@ pub(crate) fn with_view<T: Send + 'static>(
     rx.recv().map_err(|e| e.to_string())?
 }
 
-/// 창의 host.window 값을 계산한다. 메인 스레드가 아닌 스레드에서 호출한다.
+/// Calculates the host.window value of a window. It is called from a thread that is not the main thread.
 fn window_status(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let target = window.clone();
     let (context, facts, named, documents, regions) = with_native_owner(window, move |handle| {
-        // 등록은 Destroyed 가 지우므로 창이 열려 있는 이 단계에서 읽는다.
+        // Destroyed deletes the registration, so it is read in this step, while the window is open.
         let context = window_data(&target)?;
         let facts = platform.window_facts(handle)?;
         let named: HashMap<_, _> = context
@@ -1226,10 +1238,12 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     let mut surfaces = Vec::new();
     let mut attached = Vec::new();
     let mut webview_frames = Vec::new();
-    // 모달 웹뷰 잠금은 메인 스레드 작업을 기다리기 전에 푼다. 메인 스레드의 모달 배치가 같은 잠금을
-    // 기다리므로, 잠금을 쥔 채 with_view 를 기다리면 두 스레드가 서로를 기다린다.
+    // The lock of the modal webviews is released before waiting for main-thread work. The modal placement on the main
+    // thread waits for the same lock, so waiting for with_view while holding the lock would make the two threads wait
+    // for each other.
     let modal_webview = overlay.view.lock().map_err(internal)?.clone();
-    // 닫히는 모달 웹뷰는 작업을 실행하지 않고 버린다. 그 모달은 그릴 뷰가 없으므로 frame 없이 보고한다.
+    // A closing modal webview discards the task without running it. That modal has no view to draw, so it is reported
+    // without a frame.
     let modal_view = modal_webview
         .map(|view| {
             with_view_if_present(&view, move |view| platform.view_id(view)).map_err(internal)
@@ -1287,15 +1301,16 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
             );
         } else if modal.is_object() && modal_view == Some(address) {
             modal["frame"] = rect(view);
-            // native surface 순서는 별도의 compositor plane에서 보고되므로 그 index는
-            // webview subtree index와 비교할 수 없다. modal은 그 plane 전체 위에
-            // 붙으므로 다음 순서를 갖는다.
+            // The order of native surfaces is reported in a separate compositor plane, so its index cannot be compared
+            // with the index of the webview subtree. The modal is attached above that whole plane, so it has the next
+            // order.
             modal["order"] = json!(native_surfaces.len());
             modal["background"] = json!({"draws": view["draws"], "alpha": view["alpha"]});
         }
     }
-    // 첫 응답자와 그것을 담은 웹뷰의 종류. 등록되지 않은 웹뷰는 webview, 웹뷰 밖의 뷰(예: 이미지
-    // 영역)는 native 다. surface 는 첫 응답자를 담은 표면이다.
+    // The first responder and the kind of webview that holds it. A webview that is not registered is webview, and a
+    // view outside the webviews (for example an image region) is native. surface is the surface that holds the first
+    // responder.
     let responder_facts = &facts["responder"];
     let class = responder_facts["class"]
         .as_str()
@@ -1354,9 +1369,10 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     }))
 }
 
-/// 메인 페이지를 같은 WebContent 프로세스에서 다시 읽고, 새 페이지가 준비를 알릴 때까지 기다린다. 준비된 페이지는
-/// 먼저 대기 중인 저장을 끝낸다(docs/spec/projects.md#persistence). WebKit 은 새 페이지가 보이는 내용을 처음 그릴 때까지
-/// 이전 페이지를 화면에 두고, 이전 페이지의 정리는 새 페이지의 시작 문서 요청이 한다(docs/spec/native-host.md#page-start).
+/// Reloads the main page in the same WebContent process and waits until the new page reports that it is ready. The
+/// ready page first finishes the pending save (docs/spec/projects.md#persistence). WebKit keeps the previous page on
+/// the screen until the new page first draws visible content, and the cleanup of the previous page is done by the start
+/// document request of the new page (docs/spec/native-host.md#page-start).
 fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
     let ready = window_data(window)
         .map_err(internal)?
@@ -1376,8 +1392,8 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
         .map_err(internal)?
         .push(tx);
     if ready {
-        // 준비된 페이지는 보낸 호출이 모두 답을 받은 뒤 스스로 다시 읽는다. 호스트가 다시 읽으면 그 순간 쓰고 있던
-        // 응답이 사라진다(docs/spec/native-host.md#page-reload).
+        // A ready page reloads itself after all the calls it sent have received their answers. If the host reloaded it,
+        // the response being written at that moment would be lost (docs/spec/native-host.md#page-reload).
         crate::windows::emit_window(window, "page-reload", serde_json::json!({}))
             .map_err(internal)?;
     } else {
@@ -1399,9 +1415,8 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
     }
 }
 
-/// 메인 페이지와 표시 중인 앱 문서가 현재 배치를 그릴 때까지 기다린다.
-/// 창을 전체 화면으로 바꾸거나 되돌리고 전환이 끝난 뒤 반환한다. macOS 는 전환 중의 요청을
-/// 무시하므로 네이티브 코드가 그 전환이 끝난 뒤에 이어서 처리한다.
+/// Changes the window to full screen or back, and returns after the transition ends. macOS ignores a request during a
+/// transition, so the native code continues to handle it after that transition ends.
 fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let (tx, rx) = mpsc::channel();
@@ -1429,8 +1444,9 @@ fn fullscreen(window: &Window, on: bool) -> Result<Value, Failure> {
     }
 }
 
-/// 창의 표면 배치 트랜잭션과 현재 그림 래스터가 확정되고 메인 문서와 보이는 앱 문서가 그 배치를
-/// 표시할 때까지 기다리고, 그 화면의 표시 시각(ms, mach 절대 시각)을 반환한다.
+/// Waits until the surface placement transaction and the current image raster of the window are settled and the main
+/// document and the visible app document present that placement, and returns the presentation time of that screen (ms,
+/// mach absolute time).
 pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
     let deadline = Instant::now() + timeout;
     let data = window_data(window).map_err(internal)?;
@@ -1446,7 +1462,8 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
                 Box::new(move |displayed| {
                     match done.send(displayed) {
                         Ok(()) => {}
-                        // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                        // A failure after the request ended was not reported by that request, so it is left as an error
+                        // line.
                         Err(mpsc::SendError(Err(error))) => log_error("presentation", error),
                         Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
                             "exposure",
@@ -1455,7 +1472,7 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
                     }
                 }),
             ) {
-                // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                // A failure after the request ended was not reported by that request, so it is left as an error line.
                 if let Err(mpsc::SendError(Err(error))) = failed.send(Err(error)) {
                     log_error("presentation", error);
                 }
@@ -1490,7 +1507,8 @@ pub(crate) fn presented(window: &Window, timeout: Duration) -> Result<f64, Failu
                 ),
             ));
         };
-        // 표시 장벽 대기의 계기(V5-104): 이 대기가 타임아웃에 걸리면 화면이 멈춘다.
+        // The trigger of the wait for the presentation barrier (V5-104): when this wait times out, the screen is
+        // stopped.
         let barrier_started = std::time::Instant::now();
         let barrier = data.images.wait_current(remaining);
         crate::performance::observe("host", || {
@@ -1525,12 +1543,12 @@ pub(crate) fn inject_presentation_failure(window: &Window) -> Result<(), Failure
     on_main(window, move || platform.inject_settled_failure()).map_err(internal)
 }
 
-/// 창 좌표의 점을 소유한 문서나 뷰를 반환한다.
+/// Returns the document or view that owns the point in window coordinates.
 fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let target = window.clone();
     let (found, context) = with_native_owner(window, move |handle| {
-        // 등록은 Destroyed 가 지우므로 창이 열려 있는 이 단계에서 읽는다.
+        // Destroyed deletes the registration, so it is read in this step, while the window is open.
         Ok((platform.hit(handle, x, y)?, window_data(&target)?))
     })
     .map_err(native_failure(window.label(), -32603))?;
@@ -1567,11 +1585,11 @@ fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
     Ok(json!({"kind": "native", "identifier": found.identifier, "view": hit_view}))
 }
 
-/// 엔드포인트 요청을 이 애플리케이션의 창에서 실행한다.
+/// Runs endpoint requests in the windows of this application.
 pub(crate) struct Host(pub AppHandle);
 
 impl Host {
-    /// 창의 메인 페이지에 요청을 보내고 응답을 기다린다.
+    /// Sends a request to the main page of the window and waits for the response.
     pub(crate) fn page(
         &self,
         window: &Window,
@@ -1582,9 +1600,10 @@ impl Host {
         self.page_then(window, method, params, Some(timeout), || {})
     }
 
-    /// page 와 같고, 요청을 보낸 뒤 응답을 기다리기 전에 sent 를 호출한다. timeout 이 None 이면 답이나
-    /// 페이지 종료까지 기다린다. 준비되지 않은 페이지는 요청을 받지 못하므로 1003 을 반환한다. 요청을
-    /// 등록한 뒤 준비 여부를 보므로, 그 사이 다시 읽힌 페이지의 요청은 여기서 거부되거나 abandon 으로 끝난다.
+    /// The same as page, and calls sent after the request is sent and before it waits for the response. When timeout is
+    /// None, it waits for the answer or the end of the page. A page that is not ready cannot receive the request, so
+    /// 1003 is returned. The readiness is checked after the request is registered, so a request of a page that was
+    /// reloaded in between is rejected here or ends with abandon.
     pub(crate) fn page_then(
         &self,
         window: &Window,
@@ -1614,8 +1633,8 @@ impl Host {
             })
     }
 
-    /// host.menu 가 보고하는 현재 메뉴 언어. 메뉴를 다시 만들지 않을지 정하는 상태와 같은
-    /// 값이다.
+    /// The current menu language that host.menu reports. It is the same value as the state that decides whether the
+    /// menu is not rebuilt.
     fn menu_language(&self) -> Result<String, Failure> {
         self.0
             .state::<crate::menu::MenuLanguage>()
@@ -1625,7 +1644,7 @@ impl Host {
             .map_err(|_| internal("the menu language state is poisoned"))
     }
 
-    /// 소유자가 host 인 이름의 요청을 실행한다.
+    /// Runs the request of a name whose owner is host.
     fn host_entry(
         &self,
         window: &Window,
@@ -1653,8 +1672,8 @@ impl Host {
                 on_main(window, move || platform.dock_items()).map_err(internal)
             }
             ("status.get", "host.menu") => {
-                // 언어는 호스트 상태에서 읽는다. 제목에서 유추하지 않는다
-                // (docs/spec/host-contract.md 의 Application menu).
+                // The language is read from the host state. It is not inferred from the title (Application menu in
+                // docs/spec/host-contract.md).
                 let language = self.menu_language()?;
                 let platform = platform::current().map_err(internal)?;
                 let menus = on_main(window, move || platform.menu_items()).map_err(internal)?;
@@ -1749,7 +1768,7 @@ impl Host {
         })
     }
 
-    /// 포인터 입력을 메인 스레드에서 전달한다. activate 이면 먼저 창을 활성화한다.
+    /// Delivers pointer input on the main thread. When activate is set, the window is activated first.
     fn input_pointer(&self, window: &Window, pointer: Pointer) -> Result<Value, Failure> {
         let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
         if pointer.activate {
@@ -1763,7 +1782,8 @@ impl Host {
                     Box::new(move |result| {
                         match tx.send(result) {
                             Ok(()) => {}
-                            // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+                            // A failure after the request ended was not reported by that request, so it is left as an
+                            // error line.
                             Err(mpsc::SendError(Err(error))) => log_error("activation", error),
                             Err(mpsc::SendError(Ok(()))) => crate::application_log::log_info(
                                 "exposure",
@@ -1774,7 +1794,7 @@ impl Host {
                 )
             })
             .map_err(native_failure(window.label(), NO_INPUT))?;
-            // 라이브러리는 ACTIVATION 이 지나면 멈춘 단계로 done 을 호출하므로 결과는 항상 도착한다.
+            // The library calls done with the stopped stage after ACTIVATION elapsed, so the result always arrives.
             rx.recv()
                 .map_err(|e| e.to_string())
                 .and_then(|result| result)
@@ -1797,7 +1817,7 @@ impl Host {
             )
         })
         .map_err(native_failure(window.label(), NO_INPUT))?;
-        // 라이브러리는 RECEIPT 가 지나면 Unreceived 로 done 을 호출하므로 결과는 항상 도착한다.
+        // The library calls done with Unreceived after RECEIPT elapsed, so the result always arrives.
         match rx
             .recv()
             .map_err(|e| Failure::new(NO_INPUT, e.to_string()))?
@@ -1831,7 +1851,7 @@ impl Host {
         }
     }
 
-    /// 키 입력을 메인 스레드에서 전달한다.
+    /// Delivers key input on the main thread.
     fn input_key(&self, window: &Window, key: Key) -> Result<Value, Failure> {
         let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
         match with_native_owner(window, move |handle| platform.input_key(handle, &key)) {
@@ -1865,8 +1885,8 @@ impl Service for Host {
         params: Map<String, Value>,
     ) -> Result<Box<RawValue>, Failure> {
         let window = windows::find(&self.0, window).ok_or_else(|| missing_window(window))?;
-        // 모든 엔드포인트 메서드의 시간과 결과를 성능 트레이스에 남긴다(V5-104).
-        // 거부도 그대로 기록한다 — 어긋난 값은 오류 문자열이 담는다.
+        // The time and result of every endpoint method are recorded in the performance trace (V5-104). A rejection is
+        // recorded as it is: a mismatched value is contained in the error string.
         let started = std::time::Instant::now();
         let outcome = self.dispatch(&window, method, params);
         crate::performance::observe("host", || {
@@ -1906,13 +1926,15 @@ impl Host {
                 let name = params
                     .get("name")
                     .and_then(Value::as_str)
-                    // 기본값: 이름이 없는 요청은 host 항목이 아니므로 그대로 페이지에 보내고, 페이지가 인자를 검사한다.
+                    // default: a request without a name is not a host entry, so it is sent to the page as it is, and
+                    // the page checks the arguments.
                     .unwrap_or_default()
                     .to_string();
                 if name == "host" || name.starts_with("host.") {
                     return raw(&self.host_entry(window, method, &name, &params)?);
                 }
-                // 메인 페이지는 표면에 전달한 명령을 선언의 제한 시간 안에 끝내므로 command.run 에는 제한을 두지 않는다.
+                // The main page ends a command forwarded to a surface within the time limit of its declaration, so
+                // command.run has no limit.
                 let timeout = if method == "command.run" {
                     None
                 } else {

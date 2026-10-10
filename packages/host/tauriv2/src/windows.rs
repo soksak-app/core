@@ -1,4 +1,4 @@
-//! 프로젝트 창, 창 등록부, 준비/닫기/종료, 창 상태, 창 버튼.
+//! Project windows, the window registry, ready/close/exit, window state and window buttons.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -22,42 +22,45 @@ use crate::sidecars::WindowSidecars;
 use crate::surfaces::{Rect, Running, SurfaceComposition, Views, Watching};
 use crate::theme::CurrentTheme;
 
-/// 창 하나의 상태.
+/// The state of one window.
 #[derive(Default)]
 pub(crate) struct WindowData {
     pub overlay: Overlay,
     pub shapes: Shapes,
     pub theme: CurrentTheme,
     pub views: Views,
-    /// 논리 SurfaceHost의 핸들. DOM WebView가 아니라 main WebView 아래 native host다.
+    /// The handle of the logical SurfaceHost. It is a native host below the main WebView and not a DOM WebView.
     pub surface_hosts: Mutex<HashMap<String, Handle>>,
     pub watching: Watching,
     pub running: Running,
     pub root: Mutex<String>,
     pub ready: AtomicBool,
-    /// 막지 않은 닫기 요청을 받은 창. 이 창은 Destroyed 전에 runtime 에서 사라지므로 목록에 넣지 않는다.
+    /// The windows that received a close request that was not blocked. These windows disappear from the runtime before
+    /// Destroyed, so they are not put in the list.
     pub closing: AtomicBool,
-    /// 다음 페이지 준비를 기다리는 요청.
+    /// The requests that wait for the next page to be ready.
     pub readied: Mutex<Vec<std::sync::mpsc::Sender<()>>>,
-    /// 표면 페이지가 등록한 항목 (표면, 종류, 이름). 메인 페이지가 다시 읽히면 새 페이지에 다시 알린다.
+    /// The items (surface, kind, name) that surface pages registered. When the main page is reloaded, the new page is
+    /// notified again.
     pub registrations: Mutex<Vec<(String, String, String)>>,
-    /// 표면 페이지의 문서 영역.
+    /// The document regions of surface pages.
     pub documents: crate::documents::Documents,
-    /// 표면 페이지의 그림 영역.
+    /// The image regions of surface pages.
     pub images: crate::images::Images,
-    /// 메인 페이지가 선언하고 호스트가 영역 호출 권한 검사에 쓰는 표면 합성.
+    /// The surface composition that the main page declared and that the host uses to check the authority of region
+    /// calls.
     pub compositions: Mutex<HashMap<String, SurfaceComposition>>,
     /// The plugin of each surface that declared its composition; its document regions serve that plugin's package.
     pub surface_plugins: Mutex<HashMap<String, String>>,
-    /// 표면별로 마지막에 적용한 완전한 합성 리비전.
+    /// The complete composition revision applied last for each surface.
     pub composition_revisions: Mutex<HashMap<String, u64>>,
 }
 
-/// 앱 DOM 재로드는 모든 플러그인 문서를 교체하지만 터미널 세션은 종료하지 않는다.
+/// A reload of the app DOM replaces all plugin documents but does not end the terminal sessions.
 ///
-/// Tauri는 main-webview `PageLoadEvent::Started` callback에서 이것을 호출한다. 여기서 cleanup은
-/// 의도적으로 동기적이다. 이전 image handle이 같은 AppKit run loop에서 제거 대기 중인 동안
-/// 교체 page가 새 native image를 붙이면 안 되기 때문이다.
+/// Tauri calls this from the main-webview `PageLoadEvent::Started` callback. The cleanup here is deliberately
+/// synchronous: while the previous image handle waits for removal in the same AppKit run loop, the replacement page
+/// must not attach a new native image.
 pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     let owner = native_owner(window)?;
@@ -90,9 +93,9 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         for image in data.images.remove_surface(&surface) {
             platform.close_image(image)?;
         }
-        // persistent sidecar는 reconnect를 받는 즉시 새 래스터를 보낼 수 있다.
-        // 새 프레임이 이전 IOSurface 종료와 경합하거나 그 token을 재사용하지 않도록
-        // 모든 이전 native image를 먼저 제거한다.
+        // A persistent sidecar can send a new raster as soon as it receives the reconnect. All previous native images
+        // are removed first so that a new frame does not race with the termination of the previous IOSurface or reuse
+        // its token.
         for sidecar in sidecars {
             window.state::<WindowSidecars>().send(
                 &window,
@@ -110,7 +113,7 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
     Ok(())
 }
 
-/// 애플리케이션의 창 등록부와 프로젝트 소유 창.
+/// The window registry and the project-owned windows of the application.
 #[derive(Default)]
 pub(crate) struct Windows {
     pub(crate) quit: crate::quit::Quit,
@@ -123,7 +126,7 @@ pub(crate) struct Windows {
     owners: Mutex<HashMap<String, String>>,
 }
 
-/// 창의 상태를 반환한다.
+/// Returns the state of the window.
 pub(crate) fn window_data(window: &Window) -> Result<Arc<WindowData>, String> {
     window
         .state::<Windows>()
@@ -135,22 +138,22 @@ pub(crate) fn window_data(window: &Window) -> Result<Arc<WindowData>, String> {
         .ok_or_else(|| "project window is closed".into())
 }
 
-/// 창의 메인 웹뷰를 반환한다.
+/// Returns the main webview of the window.
 pub(crate) fn root_view(window: &Window) -> Option<Webview> {
     window.get_webview(window.label())
 }
 
-/// 창의 네이티브 주소를 반환한다.
+/// Returns the native address of the window.
 pub(crate) fn native_owner(window: &Window) -> Result<Handle, String> {
     platform::current()?.window_handle(window)
 }
 
-/// 창의 네이티브 주소를 쓰는 작업의 실패.
+/// The failure of an operation that writes the native address of a window.
 #[derive(Debug, PartialEq)]
 pub enum NativeFailure {
-    /// 창이 작업의 메인 스레드 단계 전에 닫혔다. 네이티브 코드는 창을 받지 않았다.
+    /// The window closed before the main-thread step of the operation. The native code did not receive the window.
     Closed,
-    /// 주소를 읽지 못했거나 네이티브 코드가 실패했다.
+    /// The address could not be read or the native code failed.
     Failed(String),
 }
 
@@ -163,13 +166,14 @@ impl std::fmt::Display for NativeFailure {
     }
 }
 
-/// 메인 스레드의 한 단계에서 실행할 작업.
+/// The work to run in one step of the main thread.
 pub type MainStep = Box<dyn FnOnce() + Send>;
 
-/// owner 로 창의 네이티브 주소를 읽고 그 주소로 work 를 실행한다. 읽기와 실행은 on_main 이 실행하는 한 메인
-/// 스레드 단계에 있다. 창의 닫기는 메인 스레드가 처리하고 그 처리에서 runtime 이 NSWindow 를 닫고 놓으므로,
-/// 단계를 나누면 그 사이의 닫기가 닫힌 창의 주소를 네이티브 코드에 넘긴다. 단계 전에 닫힌 창은 owner 가 None 이고
-/// work 를 실행하지 않고 Closed 를 반환한다.
+/// Reads the native address of the window with owner and runs work with that address. The read and the run are in one
+/// main-thread step that on_main runs. The close of a window is handled by the main thread, and in that handling the
+/// runtime closes and releases the NSWindow, so if the step were split, a close between the parts would pass the
+/// address of a closed window to the native code. A window that closed before the step has owner None, does not run
+/// work and returns Closed.
 pub fn use_owner<W: Send + 'static, T: Send + 'static>(
     window: W,
     on_main: impl FnOnce(MainStep) -> Result<(), String>,
@@ -185,7 +189,7 @@ pub fn use_owner<W: Send + 'static, T: Send + 'static>(
         };
         match tx.send(result) {
             Ok(()) => {}
-            // 요청이 끝난 뒤의 실패는 그 요청이 보고하지 않았으므로 오류 줄로 남긴다.
+            // A failure after the request ended was not reported by that request, so it is left as an error line.
             Err(mpsc::SendError(Err(error))) => log_error("native window work", error),
             Err(mpsc::SendError(Ok(_))) => crate::application_log::log_info(
                 "window",
@@ -198,9 +202,10 @@ pub fn use_owner<W: Send + 'static, T: Send + 'static>(
         .map_err(|e| NativeFailure::Failed(e.to_string()))?
 }
 
-/// 등록되어 있고 닫기가 받아들여지지 않은 창의 네이티브 주소. 닫히는 창이나 Destroyed 가 등록을 지운 창은
-/// None 이다. 메인 스레드에서 호출한다. 닫기 요청을 막지 않으면 runtime 은 같은 메인 스레드 처리에서 closing 을
-/// 세운 뒤 창을 닫으므로, 메인 스레드에서 closing 이 아니면 창은 열려 있다.
+/// The native address of a window that is registered and whose close was not accepted. It is None for a window that is
+/// closing or a window whose registration Destroyed deleted. Call it on the main thread. If the close request is not
+/// blocked, the runtime sets closing in the same main-thread handling and then closes the window, so a window that is
+/// not closing on the main thread is open.
 fn open_owner(window: &Window) -> Result<Option<Handle>, String> {
     let open = window
         .state::<Windows>()
@@ -215,8 +220,8 @@ fn open_owner(window: &Window) -> Result<Option<Handle>, String> {
     native_owner(window).map(Some)
 }
 
-/// 메인 스레드의 한 단계에서 창의 네이티브 주소를 읽고 그 주소로 work 를 실행한다. 그 단계 전에 닫힌 창은
-/// work 를 실행하지 않고 Closed 이다.
+/// Reads the native address of the window in one step of the main thread and runs work with that address. A window that
+/// closed before that step does not run work and is Closed.
 pub(crate) fn with_native_owner<T: Send + 'static>(
     window: &Window,
     work: impl FnOnce(Handle) -> Result<T, String> + Send + 'static,
@@ -234,8 +239,8 @@ pub(crate) fn with_native_owner<T: Send + 'static>(
     )
 }
 
-/// 창의 열린 표면 배치 트랜잭션을 취소한다. 닫힌 창의 트랜잭션은 그 창의 Destroyed 가 취소하므로 취소할 것이
-/// 없다.
+/// Cancels the open surface placement transaction of the window. The transaction of a closed window is canceled by
+/// Destroyed of that window, so there is nothing to cancel.
 pub(crate) fn cancel_window_layout(window: &Window) -> Result<(), String> {
     let platform = platform::current()?;
     match with_native_owner(window, move |owner| platform.cancel_layout(owner)) {
@@ -244,7 +249,7 @@ pub(crate) fn cancel_window_layout(window: &Window) -> Result<(), String> {
     }
 }
 
-/// 창의 웹뷰에 이벤트를 보낸다. main 창이면 애플리케이션 수신기에도 보낸다.
+/// Sends an event to the webview of the window. For the main window, it is also sent to the application receiver.
 pub(crate) fn emit_window<S: Serialize + Clone>(
     window: &Window,
     event: &str,
@@ -262,7 +267,7 @@ pub(crate) fn emit_window<S: Serialize + Clone>(
     })
 }
 
-/// 모든 창에 workspace-changed 를 보낸다.
+/// Sends workspace-changed to all windows.
 pub(crate) fn notify_workspace(app: &AppHandle) {
     for window in app.windows().values() {
         if let Err(error) = emit_window(window, "workspace-changed", ()) {
@@ -303,7 +308,7 @@ pub(crate) fn notify_sidecars(app: &AppHandle) {
     }
 }
 
-/// 모든 창에 plugins-changed 를 보낸다.
+/// Sends plugins-changed to all windows.
 pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
     for window in app.windows().values() {
         if let Err(error) = emit_window(window, "plugins-changed", change.clone()) {
@@ -312,7 +317,7 @@ pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
     }
 }
 
-/// 등록된 창 중 label 의 창을 반환한다.
+/// Returns the window with the label label among the registered windows.
 pub(crate) fn find(app: &AppHandle, label: &str) -> Option<Window> {
     let registered = app
         .state::<Windows>()
@@ -325,9 +330,11 @@ pub(crate) fn find(app: &AppHandle, label: &str) -> Option<Window> {
     app.get_window(label)
 }
 
-/// 등록된 창의 식별자, 제목, 소유 프로젝트 id, 키 창 여부를 창 식별자 순서로 반환한다.
+/// Returns the identifier, the title, the owning project ids and the key window state of the registered windows in the
+/// order of window identifiers.
 pub(crate) fn list(app: &AppHandle) -> Result<serde_json::Value, String> {
-    // 식별자와 상태를 한 번에 읽는다. 따로 읽으면 그 사이에 Destroyed 가 등록을 지울 수 있다.
+    // The identifiers and the state are read at once. If they were read separately, Destroyed could delete the
+    // registration in between.
     let mut registered: Vec<(String, Arc<WindowData>)> = app
         .state::<Windows>()
         .windows
@@ -358,13 +365,13 @@ pub(crate) fn list(app: &AppHandle) -> Result<serde_json::Value, String> {
     )
 }
 
-/// host.windows 목록의 한 번의 메인 스레드 단계.
+/// One main-thread step of the host.windows list.
 pub type ListStep = Box<dyn FnOnce() -> Result<Vec<serde_json::Value>, String> + Send>;
 
-/// 창마다 entry 로 목록 항목을 만든다. 모든 창의 entry 를 on_main 이 실행하는 한 메인 스레드 단계에서
-/// 만든다. 창의 닫기는 메인 스레드가 처리하므로, 한 단계 안에서는 closing 을 읽은 뒤 조회하기 전에 창이
-/// runtime 에서 빠지지 않는다. 메인 스레드에서 부른 창 조회는 기다리지 않고 바로 처리된다
-/// (tauri-runtime-wry 의 send_user_message).
+/// Creates the list entry with entry for each window. The entries of all windows are created in one main-thread step
+/// that on_main runs. The close of a window is handled by the main thread, so within one step the window does not leave
+/// the runtime between reading closing and the lookup. A window lookup made on the main thread is handled at once
+/// without waiting (send_user_message of tauri-runtime-wry).
 pub fn list_entries<W: Send + 'static>(
     windows: Vec<W>,
     on_main: impl FnOnce(ListStep) -> Result<Vec<serde_json::Value>, String>,
@@ -380,8 +387,9 @@ pub fn list_entries<W: Send + 'static>(
     Ok(serde_json::Value::Array(listed))
 }
 
-/// host.windows 의 창 하나. 닫기가 받아들여진 창은 조회하지 않고 None 이다. 그 창은 Destroyed 전에
-/// runtime 에서 사라져 제목과 초점 조회가 실패하기 때문이다. 다른 창의 조회 실패는 오류로 반환한다.
+/// One window of host.windows. A window whose close was accepted is not looked up and is None, because that window
+/// disappears from the runtime before Destroyed and the lookup of its title and focus fails. The lookup failure of
+/// another window is returned as an error.
 pub fn window_entry(
     label: &str,
     closing: bool,
@@ -403,7 +411,7 @@ pub fn window_entry(
     })))
 }
 
-/// 창에 열린 프로젝트 id 목록을 반환한다.
+/// Returns the list of project ids opened in the window.
 pub(crate) fn opened(app: &AppHandle) -> Result<Vec<String>, String> {
     Ok(app
         .state::<Windows>()
@@ -415,17 +423,18 @@ pub(crate) fn opened(app: &AppHandle) -> Result<Vec<String>, String> {
         .collect())
 }
 
-/// 프로젝트를 열지 않은 창의 제목. 첫 창의 제목은 tauri.conf.json 이 같은 값으로 선언한다.
+/// The title of a window that has no project open. tauri.conf.json declares the title of the first window with the same
+/// value.
 const WINDOW_TITLE: &str = "soksak / Tauri v2";
 
 fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Window, String> {
     let created = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
         .title(title)
         .inner_size(1200.0, 760.0)
-        // 놓인 파일은 창의 파일 놓기 뷰가 받는다(docs/spec/native-surfaces.md).
+        // A dropped file is received by the file drop view of the window (docs/spec/native-surfaces.md).
         .disable_drag_drop_handler()
         .background_color(Color(16, 17, 23, 255))
-        // 창은 register 가 첫 화면 표시를 준비한 뒤에 보인다.
+        // The window is shown after register has prepared the presentation of the first screen.
         .visible(false);
     let created = platform::current()?.prepare_window(created)?;
     let window = created
@@ -438,7 +447,7 @@ fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Wi
     Ok(window)
 }
 
-/// 새 프로젝트 창을 연다.
+/// Opens a new project window.
 pub(crate) fn window_new_on_main(app: AppHandle) -> Result<(), String> {
     let id = app
         .state::<Windows>()
@@ -453,7 +462,7 @@ pub(crate) fn window_new_on_main(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// AppKit event-loop thread를 막지 않고 그 thread에 생성을 예약한다.
+/// Schedules the creation on the AppKit event-loop thread without blocking that thread.
 pub(crate) fn window_new(app: AppHandle) -> Result<(), String> {
     let task = app.clone();
     let (tx, rx) = mpsc::channel();
@@ -469,7 +478,8 @@ pub(crate) fn window_new(app: AppHandle) -> Result<(), String> {
     rx.recv().map_err(|e| e.to_string())?
 }
 
-/// 창을 등록부에 추가하고 창 이벤트를 처리한다. 창 버튼은 페이지가 준비될 때와 창 크기가 바뀔 때 배치한다.
+/// Adds the window to the registry and handles the window events. The window buttons are placed when the page is ready
+/// and when the window size changes.
 pub(crate) fn register(window: Window) -> Result<(), String> {
     let context = Arc::new(WindowData::default());
     window
@@ -483,13 +493,13 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     let main = root_view(&window).ok_or("the main webview is gone")?;
     let main = crate::exposure::with_view(&main, move |view| platform.view_id(view))?;
     platform.set_main_webview(owner, main)?;
-    // 창은 첫 화면이 표시된 뒤에 보인다(docs/spec/native-host.md#page-start). 창은 숨긴 채 만들어지고, 투명하게
-    // 화면에 올라간 뒤 첫 화면이 표시되면 불투명해진다.
+    // The window is shown after the first screen is presented (docs/spec/native-host.md#page-start). The window is
+    // created hidden, put on the screen transparent, and becomes opaque when the first screen is presented.
     platform.reveal_after_load(owner)?;
     window.show().map_err(|e| e.to_string())?;
-    // 네이티브 뷰는 DOM 위에 놓였으므로 놓인 파일은 페이지가 그 점의 DOM 요소를 기준으로 처리한다.
+    // The native view lies over the DOM, so the page handles a dropped file relative to the DOM element at that point.
     let dropped = window.clone();
-    // 내용의 해석과 오류 보고는 페이지가 한다(core.drop).
+    // The page interprets the content and reports errors (core.drop).
     platform.file_drop(
         main,
         Box::new(move |json| {
@@ -498,7 +508,8 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             }
         }),
     )?;
-    // host.window 를 감시하는 연결에 가림 상태 변경을 알린다. Tauri 는 이 변경을 창 이벤트로 보내지 않는다.
+    // Notifies the connections that watch host.window of the change of the occlusion state. Tauri does not send this
+    // change as a window event.
     let occluded = window.clone();
     platform.observe_occlusion(
         owner,
@@ -507,7 +518,8 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             crate::exposure::window_changed(&occluded)
         }),
     )?;
-    // 제목줄은 페이지가 첫 행 높이로 요청할 때까지 처음 높이를 갖는다. 창이 보이기 전에 정한다.
+    // The title bar has its initial height until the page requests the height of the first row. It is set before the
+    // window is shown.
     initial_titlebar(&window)?;
     let host = window.clone();
     let window_events_label = window.label().to_string();
@@ -537,7 +549,8 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             }
         }
         tauri::WindowEvent::CloseRequested { .. } => {
-            // 막지 않은 닫기 요청이다. 창은 곧 runtime 에서 사라지므로 목록에서 뺀다.
+            // This is a close request that was not blocked. The window will soon disappear from the runtime, so it is
+            // removed from the list.
             context.closing.store(true, Ordering::Relaxed);
             // While the application quits, the web process of the window is killed: AppKit keeps XPC services alive
             // longer than their client, so the WebContent process would outlive the application
@@ -561,7 +574,8 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                 "window close",
                 platform.enqueue_ui(Box::new(move || {
                     log_failure("surface layout cancel", platform.cancel_layout(owner));
-                    // 논리 표면은 메인 웹뷰를 보유하므로 닫지 않으면 메인 웹뷰와 그 웹 콘텐츠 프로세스가 남는다.
+                    // A logical surface holds the main webview, so if it is not closed, the main webview and its web
+                    // content process remain.
                     let surfaces = match natives.surface_hosts.lock() {
                         Ok(mut surfaces) => std::mem::take(&mut *surfaces),
                         Err(error) => {
@@ -637,7 +651,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     Ok(())
 }
 
-/// 창 위치와 크기. 위치는 물리 픽셀, 크기는 논리 픽셀이다.
+/// The window position and size. The position is in physical pixels and the size is in logical pixels.
 #[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct Geometry {
     x: i32,
@@ -655,8 +669,8 @@ pub(crate) struct OpenProject {
     geometry: Option<Geometry>,
 }
 
-/// 프로젝트를 연다. 이미 열린 프로젝트는 소유 창을 활성화하고, separate 이고 요청 창이 다른
-/// 프로젝트를 소유하면 새 창을 만든다.
+/// Opens a project. An already open project activates its owning window, and a separate request creates a new window
+/// when the requesting window owns another project.
 pub(crate) fn project_open(
     window: &Window,
     request: OpenProject,
@@ -747,7 +761,8 @@ fn project_open_on_main(
     Ok(serde_json::json!({"local": owner.label() == window.label()}))
 }
 
-/// 프로젝트 id 와 창의 연결을 해제한다. 프로젝트가 남지 않은 창은 라이브러리를 보이므로 프로젝트 root 와 제목을 비운다.
+/// Releases the link between a project id and a window. A window with no remaining project shows the library, so the
+/// project root and the title are cleared.
 pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String> {
     let registry = window.state::<Windows>();
     let mut owners = registry.owners.lock().map_err(|e| e.to_string())?;
@@ -757,7 +772,7 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
         .is_some_and(|label| !owners.values().any(|other| other == label));
     drop(owners);
     if let (Some(label), true) = (released, empty) {
-        // 창이 이미 닫혔으면 비울 상태가 없다.
+        // When the window is already closed, there is no state to clear.
         if let Some(owner) = window.app_handle().get_window(&label) {
             window_data(&owner)?
                 .root
@@ -805,7 +820,8 @@ pub(crate) fn project_remove_answer(
     window.state::<Windows>().removals.answer(id, allowed)
 }
 
-/// 일반 상태 창의 위치와 크기를 반환한다. 최대화, 전체 화면, 최소화 상태이면 None 이다.
+/// Returns the position and size of a window in the normal state. It is None for a maximized, full screen or minimized
+/// window.
 pub(crate) fn window_state(window: &Window) -> Result<Option<Geometry>, String> {
     if window.is_maximized().map_err(|e| e.to_string())?
         || window.is_fullscreen().map_err(|e| e.to_string())?
@@ -813,8 +829,9 @@ pub(crate) fn window_state(window: &Window) -> Result<Option<Geometry>, String> 
     {
         return Ok(None);
     }
-    // 위치와 크기는 창 좌표로 저장한다. 물리 픽셀로 저장하면 배율이 2 인 화면에서 같은 수가 두 배
-    // 떨어진 자리를 가리켜, 다시 열 때마다 창이 화면 밖으로 밀려난다.
+    // The position and size are stored in window coordinates. If they were stored in physical pixels, the same number
+    // would point twice as far on a screen with scale 2, and the window would be pushed off the screen at every
+    // reopening.
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
     let at = window
         .outer_position()
@@ -832,8 +849,9 @@ pub(crate) fn window_state(window: &Window) -> Result<Option<Geometry>, String> 
     }))
 }
 
-/// 메인 페이지가 시작했음을 기록한다. 시작 문서 요청이 답하기 전에 부른다. 창을 준비되지 않은 상태로 두고,
-/// 이전 페이지에 보낸 요청을 끝내고, 이전 페이지의 표면 문서와 그림 영역과 모달을 정리한다.
+/// Records that the main page started. Call it before the start document request answers. It leaves the window not
+/// ready, ends the requests sent to the previous page, and cleans up the surface documents, the image regions and the
+/// modals of the previous page.
 pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     data.ready.store(false, Ordering::Relaxed);
@@ -859,7 +877,7 @@ pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
     emit_window(window, "page-ready", ()).map_err(|e| e.to_string())
 }
 
-/// 창을 닫는다.
+/// Closes a window.
 pub(crate) fn window_close(window: &Window) -> Result<(), String> {
     window_data(window)?.ready.store(false, Ordering::Relaxed);
     window.close().map_err(|e| e.to_string())
@@ -885,7 +903,8 @@ pub(crate) fn window_close_kept(window: &Window) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// 종료 요청을 처리한다. 준비된 창이 있으면 종료를 막고 각 창에 닫기 요청을 보낸다.
+/// Handles a termination request. When a ready window exists, it blocks the termination and sends a close request to
+/// each window.
 pub(crate) fn quit(app: &AppHandle, api: tauri::ExitRequestApi) {
     let registry = app.state::<Windows>();
     let waiting: Vec<_> = registry
@@ -913,20 +932,22 @@ pub(crate) fn quit(app: &AppHandle, api: tauri::ExitRequestApi) {
     }
 }
 
-/// 창을 만들 때 정하는 제목줄 높이(pt)다. 프레임 글자 배율 1 의 첫 행 높이와 같다
-/// (packages/workbench/app.css 의 --chrome-h).
+/// The title bar height (pt) that is set when a window is created. It equals the height of the first row at frame text
+/// scale 1 (--chrome-h of packages/workbench/app.css).
 const INITIAL_TITLEBAR_HEIGHT: f64 = 40.0;
 
-/// 창의 제목줄을 처음 높이로 만든다. AppKit 이 그 높이의 세로 가운데에 창 단추를 둔다.
+/// Creates the title bar of the window with its initial height. AppKit places the window buttons at the vertical center
+/// of that height.
 ///
-/// AppKit 은 메인 스레드에서 뷰를 배치한다. 창 등록은 메인 스레드 밖에서도 실행되고, 메인 스레드에서 답을
-/// 기다리면 그 자리에서 멈추므로 메인 스레드에 예약한다. 창을 만드는 즉시 예약하므로 페이지가 제목줄 높이를
-/// 요청하기 전에 실행된다.
+/// AppKit places views on the main thread. The window registration also runs outside the main thread, and waiting for
+/// an answer on the main thread would stop there, so this is scheduled on the main thread. It is scheduled as soon as
+/// the window is created, so it runs before the page requests the title bar height.
 fn initial_titlebar(window: &Window) -> Result<(), String> {
     let target = window.clone();
     window
         .run_on_main_thread(move || {
-            // 주소는 그 주소를 쓰는 이 단계에서 읽는다. 그 전에 닫힌 창은 제목줄을 정할 것이 없다.
+            // The address is read in this step, which uses the address. A window that closed before has no title bar to
+            // set.
             let result = open_owner(&target).and_then(|owner| match owner {
                 Some(handle) => {
                     platform::current()?.set_titlebar_height(handle, INITIAL_TITLEBAR_HEIGHT)
@@ -940,8 +961,9 @@ fn initial_titlebar(window: &Window) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// 표면 준비가 담은 제목줄 높이(pt)를 검사한다. 첫 행은 40pt 에서 프레임 글자 배율 3 의 108pt 사이다.
-/// AppKit 은 0 이하의 값을 사용자 지정 높이가 없다는 뜻으로 쓰므로 그 값도 이 범위 밖이다.
+/// Checks the title bar height (pt) that a surface preparation holds. The first row is between 40 pt and 108 pt, which
+/// is frame text scale 3. AppKit uses a value of 0 or less to mean that there is no custom height, so such a value is
+/// also outside this range.
 pub fn validate_titlebar_height(height: f64) -> Result<(), String> {
     if height.is_nan() || !(32.0..=200.0).contains(&height) {
         return Err("title bar height must be a finite number from 32 through 200 points".into());
@@ -949,9 +971,10 @@ pub fn validate_titlebar_height(height: f64) -> Result<(), String> {
     Ok(())
 }
 
-/// 창의 제목줄을 height(pt)로 만들고 그 뒤의 창 단추 영역과 제목줄 높이를 반환한다. 표면 준비가 창의 배치
-/// 트랜잭션 안에서 메인 스레드에서 호출하므로 새 높이는 그 트랜잭션의 커밋과 함께 화면에 나간다. 전체 화면인 창은
-/// 높이를 바꾸지 않고 row 0 을 반환한다.
+/// Creates the title bar of the window with height (pt) and returns the window button area and the title bar height
+/// after it. A surface preparation calls it on the main thread inside the placement transaction of the window, so the
+/// new height reaches the screen together with the commit of that transaction. A window in full screen does not change
+/// the height and returns row 0.
 pub(crate) fn titlebar_chrome(handle: Handle, height: f64) -> Result<TitlebarChange, String> {
     let platform = platform::current()?;
     let previous = platform.titlebar_height(handle)?;
@@ -966,13 +989,15 @@ pub(crate) fn titlebar_chrome(handle: Handle, height: f64) -> Result<TitlebarCha
     })
 }
 
-/// 표면 준비가 정한 제목줄. chrome 은 정한 뒤의 창 값이고 previous 는 준비 전의 높이(pt)다. 전체 화면이면 0 이다.
+/// The title bar that a surface preparation set. chrome is the window value after it was set and previous is the height
+/// (pt) before the preparation. It is 0 for full screen.
 pub(crate) struct TitlebarChange {
     pub(crate) chrome: Chrome,
     pub(crate) previous: f64,
 }
 
-/// 준비 전의 제목줄 높이로 되돌린다. 전체 화면에서 정한 것이 없으면(0) 되돌릴 것이 없다. 메인 스레드에서 호출한다.
+/// Restores the title bar height before the preparation. When nothing was set in full screen (0), there is nothing to
+/// restore. Call it on the main thread.
 pub(crate) fn restore_titlebar(handle: Handle, previous: f64) -> Result<(), String> {
     if previous <= 0.0 {
         return Ok(());
@@ -980,9 +1005,9 @@ pub(crate) fn restore_titlebar(handle: Handle, previous: f64) -> Result<(), Stri
     platform::current()?.set_titlebar_height(handle, previous)
 }
 
-/// 페이지의 첫 그리기가 보일 첫 행의 높이(pt). 공통 설정 textSize 의 round(max(40, 36 × textSize)) 이고, 설정이
-/// 없으면 40 이다(docs/spec/native-surfaces.md#title-bar-height). textSize 는 공통 전용이므로 페이지는 같은 값으로 첫
-/// 행을 그린다.
+/// The height (pt) of the first row that the first draw of the page will show. It is round(max(40, 36 × textSize)) of
+/// the common setting textSize, and 40 when the setting is absent (docs/spec/native-surfaces.md#title-bar-height).
+/// textSize is common only, so the page draws the first row with the same value.
 pub fn start_titlebar_height(common: &serde_json::Value) -> Result<f64, String> {
     let Some(value) = common.get("textSize") else {
         return Ok(INITIAL_TITLEBAR_HEIGHT);
@@ -999,9 +1024,10 @@ pub fn start_titlebar_height(common: &serde_json::Value) -> Result<f64, String> 
     Ok((36.0 * factor).max(INITIAL_TITLEBAR_HEIGHT).round())
 }
 
-/// 시작 문서에 답하기 전에 창의 제목줄을 공통 설정의 첫 행 높이로 정한다. 아직 보이지 않는 새 창은 바로 정하고, 이전
-/// 페이지를 보이는 창은 새 ticket 의 시작 트랜잭션 안에서 정해 새 페이지의 첫 표시와 함께 커밋한다
-/// (docs/spec/native-surfaces.md#title-bar-height). 전체 화면인 창은 높이를 바꾸지 않는다.
+/// Before it answers the start document, sets the title bar of the window to the first row height of the common
+/// setting. A new window that is not visible yet is set at once, and a window that shows the previous page is set
+/// inside the start transaction of a new ticket and committed together with the first presentation of the new page
+/// (docs/spec/native-surfaces.md#title-bar-height). A window in full screen does not change the height.
 pub(crate) fn start_titlebar(window: &Window, common: &serde_json::Value) -> Result<(), String> {
     let height = start_titlebar_height(common)?;
     let handle = native_owner(window)?;
@@ -1029,15 +1055,15 @@ pub(crate) fn start_titlebar(window: &Window, common: &serde_json::Value) -> Res
     rx.recv().map_err(|e| e.to_string())?
 }
 
-/// 페이지가 첫 줄을 그리는 데 쓰는 창의 값. controls 는 창 단추 영역이고 row 는 제목줄 높이(pt)다.
-/// 전체 화면처럼 제목줄이 없으면 row 는 0 이다.
+/// The values of the window that the page uses to draw the first line. controls is the window button area and row is
+/// the title bar height (pt). row is 0 when there is no title bar, as in full screen.
 #[derive(Clone, Serialize)]
 pub(crate) struct Chrome {
     controls: Rect,
     row: f64,
 }
 
-/// 창 단추 영역과 제목줄 높이를 반환한다.
+/// Returns the window button area and the title bar height.
 pub(crate) fn window_chrome(window: &Window) -> Result<Chrome, String> {
     let controls = window_controls(window)?;
     let handle = native_owner(window)?;
@@ -1046,7 +1072,8 @@ pub(crate) fn window_chrome(window: &Window) -> Result<Chrome, String> {
     Ok(Chrome { controls, row })
 }
 
-/// 창 버튼이 차지하는 영역을 페이지 좌표로 반환한다. 페이지는 첫 줄에서 그 영역을 비운다.
+/// Returns the area that the window buttons occupy in page coordinates. The page leaves that area empty in its first
+/// line.
 pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
     let handle = native_owner(window)?;
     let (x, y, w, h) = platform::current()?.window_controls(handle)?;

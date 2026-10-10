@@ -1,4 +1,4 @@
-//! 설정과 프로젝트 목록 저장소, 프로젝트 디렉터리 확인 테스트.
+//! Tests of the settings and project list store and the project directory check.
 
 use std::fs;
 use std::path::Path;
@@ -145,7 +145,7 @@ fn config_directory_is_created_and_canonical() {
     );
 }
 
-/// 플랫폼의 사용자 전용 디렉터리 생성이다.
+/// The platform operation that creates directories for the current user only.
 fn create(path: &Path) -> Result<(), String> {
     platform::current()?.create_private_directories(path)
 }

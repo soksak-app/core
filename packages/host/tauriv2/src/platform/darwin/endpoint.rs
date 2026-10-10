@@ -1,8 +1,9 @@
-//! 로컬 엔드포인트의 Unix 도메인 소켓.
+//! The Unix domain socket of the local endpoint.
 //!
-//! 소켓은 호출자가 정한 디렉터리에 둔다(애플리케이션은 사용자별 임시 디렉터리 아래 `soksak/`).
-//! 설정 디렉터리 경로는 소켓 경로의 길이 제한(104 바이트)을 넘을 수 있다. 디렉터리는 현재 사용자만
-//! 접근할 수 있고, 다른 권한이나 다른 소유자의 디렉터리이면 열지 않는다.
+//! The socket is placed in a directory that the caller decides (the application uses `soksak/` under the temporary
+//! directory of the user). The path of the configuration directory can exceed the length limit of a socket path (104
+//! bytes). The directory is accessible only to the current user, and a directory with other permissions or another
+//! owner is not opened.
 
 use std::fs;
 use std::io::{Read, Write};
@@ -20,17 +21,16 @@ extern "C" {
     fn setsid() -> i32;
 }
 
-/// `kill` 이 번호의 프로세스가 없을 때 알리는 오류 번호.
+/// The error number that `kill` reports when no process has the number.
 const ESRCH: i32 = 3;
-/// `kill` 이 다른 사용자의 프로세스에 신호를 거부할 때 알리는 오류 번호.
+/// The error number that `kill` reports when it refuses to signal a process of another user.
 const EPERM: i32 = 1;
 
-/// persistent service endpoint의 프로세스가 아직 존재하는지 확인한다.
+/// Checks whether the process of the persistent service endpoint still exists.
 ///
-/// 시그널을 받을 수 있는 프로세스만 존재한다. 기다리지 않은 스폰은 좀비로 남아
-/// kill(pid, 0) 을 통과하므로(V5-106), 통과한 프로세스는 상태를 읽어 좀비를 가려낸다 —
-/// 좀비는 이미 끝났고, 그 endpoint 는 낡은 것이다. 다른 사용자의 프로세스에 대한 거부(EPERM)는 그
-/// 프로세스가 있다는 뜻이다.
+/// Only a process that can receive a signal exists. A spawn that was not awaited remains as a zombie and passes
+/// kill(pid, 0) (V5-106), so the state of a process that passed is read to tell zombies apart: a zombie has already
+/// ended and its endpoint is old. A refusal (EPERM) for a process of another user means that the process exists.
 pub fn service_process_exists(pid: u32) -> Result<bool, String> {
     if pid == 0 {
         return Ok(false);
@@ -106,7 +106,7 @@ pub fn wait_service_process_end(pid: u32, timeout: std::time::Duration) -> Resul
     result
 }
 
-/// 끝난 프로세스의 wait 상태를 `exit status <code>` 나 `signal <number>` 로 쓴다.
+/// Writes the wait status of an ended process as `exit status <code>` or `signal <number>`.
 pub fn exit_status(status: std::process::ExitStatus) -> Result<String, String> {
     use std::os::unix::process::ExitStatusExt;
     if let Some(signal) = status.signal() {
@@ -121,11 +121,11 @@ pub fn exit_status(status: std::process::ExitStatus) -> Result<String, String> {
     }
 }
 
-/// command 가 setsid 로 새 session 의 leader 가 되게 한다.
+/// Makes command the leader of a new session with setsid.
 pub fn new_session(command: &mut std::process::Command) {
     use std::os::unix::process::CommandExt;
-    // pre_exec 의 함수는 fork 와 exec 사이의 자식에서 실행되므로 async-signal-safe 인 setsid 만 부른다. 실패하면
-    // spawn 이 그 오류를 반환한다.
+    // The function of pre_exec runs in the child between fork and exec, so only setsid, which is async-signal-safe, is
+    // called. If it fails, spawn returns that error.
     unsafe {
         command.pre_exec(|| {
             if setsid() == -1 {
@@ -136,14 +136,15 @@ pub fn new_session(command: &mut std::process::Command) {
     }
 }
 
-/// 번호 pid 의 프로세스가 끝났는지 반환한다.
+/// Returns whether the process with the number pid has ended.
 fn ended(pid: i32) -> bool {
     let result = unsafe { kill(pid, 0) };
     result != 0 && std::io::Error::last_os_error().raw_os_error() == Some(ESRCH)
 }
 
-/// directory 에서 끝난 프로세스가 남긴 name 의 소켓을 제거한다. 강제 종료된 프로세스는 자기
-/// 소켓을 지우지 못한다. 번호의 프로세스가 있으면 다른 프로그램이어도 남긴다.
+/// Removes the socket of the name name that an ended process left in directory. A process that was terminated by force
+/// cannot delete its own socket. When a process with the number exists, the socket is kept even if it is another
+/// program.
 fn remove_ended(directory: &Path, name: &str) -> Result<(), String> {
     let entries = fs::read_dir(directory).map_err(|e| format!("{}: {e}", directory.display()))?;
     for entry in entries {
@@ -170,7 +171,8 @@ fn remove_ended(directory: &Path, name: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// path 를 현재 사용자만 접근할 수 있는 디렉터리로 만든다. 이미 있으면 소유자와 권한을 확인한다.
+/// Creates path as a directory that only the current user can access. When it already exists, the owner and the
+/// permissions are checked.
 pub fn private_directory(path: &Path) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
@@ -256,15 +258,16 @@ impl Connection for Stream {
 
     fn close(&self) -> Result<(), String> {
         match self.0.shutdown(Shutdown::Both) {
-            // 상대가 먼저 끊었거나 이미 닫은 연결은 닫힌 상태이므로 실패가 아니다.
+            // A connection that the peer closed first or that was already closed is in the closed state, so it is not a
+            // failure.
             Err(error) if error.kind() == std::io::ErrorKind::NotConnected => Ok(()),
             result => result.map_err(|error| error.to_string()),
         }
     }
 }
 
-/// `<directory>/<name>-<pid>.sock` 소켓을 연다. 끝난 프로세스의 소켓과, 종료한 같은 번호의
-/// 프로세스가 남긴 같은 경로의 소켓 파일을 먼저 제거한다.
+/// Opens the socket `<directory>/<name>-<pid>.sock`. First it removes the socket of an ended process and the socket
+/// file of the same path that an ended process with the same number left.
 pub fn listen(directory: &Path, name: &str) -> Result<Box<dyn Listener>, String> {
     private_directory(directory)?;
     remove_ended(directory, name)?;
@@ -280,7 +283,7 @@ pub fn listen(directory: &Path, name: &str) -> Result<Box<dyn Listener>, String>
     Ok(Box::new(Socket { listener, path }))
 }
 
-/// 소켓 경로 address 에 연결한다.
+/// Connects to the socket path address.
 pub fn connect(address: &str) -> Result<Box<dyn Connection>, String> {
     let stream = UnixStream::connect(address).map_err(|e| format!("{address}: {e}"))?;
     Ok(Box::new(Stream(stream)))

@@ -1,15 +1,16 @@
-//! 진단 녹화의 상태. cargo 기능 `diagnostics` 로만 포함한다.
+//! The state of a diagnostic recording. It is included only by the cargo feature `diagnostics`.
 //!
-//! 녹화는 한 번에 하나다. 시작이 어느 단계에서 실패하든, 그리고 요청이 녹화 폴더를 요청자에게
-//! 돌려주기 전에 실패하든 녹화를 멈추고 폴더를 지운다. 남은 녹화는 다음 녹화를 막고, 남은 폴더는
-//! 요청자가 지울 수 없다.
+//! There is one recording at a time. Whichever stage a start fails in, and when a request fails before it returns the
+//! recording folder to the requester, the recording is stopped and the folder is deleted. A remaining recording blocks
+//! the next recording, and a remaining folder cannot be deleted by the requester.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde_json::{json, Value};
 
-/// 녹화를 끝낸 요청의 응답이다. 프레임 폴더와 수, 녹화가 상한에 도달했는지, 프레임 사이 가장 긴 간격을 담는다.
+/// The response of the request that ended a recording. It holds the frame folder and the number of frames, whether the
+/// recording reached the limit, and the longest interval between frames.
 pub fn stop_payload(
     directory: &Path,
     count: i32,
@@ -20,7 +21,8 @@ pub fn stop_payload(
     json!({"frames": directory.to_string_lossy(), "count": count, "limited": limited, "longestGap": longest_gap, "layouts": layout_trace(layouts)})
 }
 
-/// 배치 트랜잭션 기록을 {ticket, begun, presented, committed} 로 바꾼다. 일어나지 않은 단계는 null 이다.
+/// Converts the placement transaction record into {ticket, begun, presented, committed}. A stage that did not happen is
+/// null.
 pub fn layout_trace(records: &[[f64; 5]]) -> Value {
     let stage = |value: f64| {
         if value.is_nan() {
@@ -45,23 +47,23 @@ pub fn layout_trace(records: &[[f64; 5]]) -> Value {
     )
 }
 
-/// 녹화 대상. display 이면 창이 있는 디스플레이에서 이 앱의 창을 녹화한다. 창 녹화는 창이 다른
-/// Space(전체 화면)로 옮겨지면 멈춘다.
+/// The recording target. When display is set, the windows of this application on the display that holds the window are
+/// recorded. A window recording stops when the window is moved to another Space (full screen).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Target {
     pub window: isize,
     pub display: bool,
 }
 
-/// 녹화 장치. 플랫폼 구현이나 검사의 가짜가 제공한다.
+/// The recording device. A platform implementation or a fake of a check provides it.
 pub trait Capture {
-    /// 창 서버 번호 target.window 의 창을 녹화 대상으로 정한다.
+    /// Sets the window with the window server number target.window as the recording target.
     fn open(&self, target: Target) -> Result<(), String>;
-    /// directory 에 프레임 기록을 시작한다.
+    /// Starts to record frames in directory.
     fn start(&self, directory: &Path) -> Result<(), String>;
-    /// 첫 프레임이 기록되었는지 반환한다.
+    /// Returns whether the first frame was recorded.
     fn wait(&self) -> Result<bool, String>;
-    /// 기록을 끝내고 기록한 프레임 수를 반환한다.
+    /// Ends the recording and returns the number of recorded frames.
     fn stop(&self) -> Result<i32, String>;
 }
 
@@ -69,7 +71,7 @@ struct State {
     directory: Option<PathBuf>,
 }
 
-/// 진행 중인 녹화의 폴더.
+/// The folder of the recording in progress.
 pub struct Recording {
     state: Mutex<State>,
 }
@@ -87,8 +89,8 @@ impl Recording {
         }
     }
 
-    /// directory 를 make 로 만들고 target 을 그 폴더에 녹화하기 시작한다. 첫 프레임이
-    /// 기록된 뒤 반환한다. 실패하면 녹화를 멈추고 폴더를 지운다.
+    /// Creates directory with make and starts to record target in that folder. It returns after the first frame was
+    /// recorded. On a failure it stops the recording and deletes the folder.
     pub fn start(
         &self,
         capture: &dyn Capture,
@@ -102,7 +104,8 @@ impl Recording {
         }
         make(directory)?;
         let started = (|| -> Result<(), String> {
-            // 준비는 그때의 창 크기로 출력 크기를 정하므로 같은 대상도 녹화마다 다시 준비한다.
+            // The preparation decides the output size from the window size at that time, so even the same target is
+            // prepared again for every recording.
             capture.open(target)?;
             capture.start(directory)?;
             match capture.wait() {
@@ -133,7 +136,7 @@ impl Recording {
         }
     }
 
-    /// 진행 중인 녹화를 멈추고 폴더를 지운다. 녹화가 없으면 아무 일도 하지 않는다.
+    /// Stops the recording in progress and deletes the folder. It does nothing when there is no recording.
     pub fn abort(&self, capture: &dyn Capture) -> Result<(), String> {
         let directory = match self.state.lock() {
             Ok(mut state) => state.directory.take(),
@@ -157,7 +160,8 @@ impl Recording {
         Ok(())
     }
 
-    /// 진행 중인 녹화를 끝내고 폴더와 프레임 수를 반환한다. 폴더는 요청자가 지운다.
+    /// Ends the recording in progress and returns the folder and the number of frames. The requester deletes the
+    /// folder.
     pub fn finish(&self, capture: &dyn Capture) -> Result<(PathBuf, i32), String> {
         let directory = self
             .state
@@ -180,7 +184,7 @@ impl Recording {
         Ok((directory, count))
     }
 
-    /// 진행 중인 녹화의 폴더.
+    /// The folder of the recording in progress.
     pub fn running(&self) -> Option<PathBuf> {
         self.state
             .lock()

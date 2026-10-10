@@ -1,8 +1,8 @@
-//! macOS 구현.
+//! The macOS implementation.
 //!
-//! 창, 웹뷰, 표면 배치, 입력, 캡처, Dock 기능은 native/darwin 라이브러리와 AppKit 공개
-//! 인터페이스를 호출한다. 로컬 엔드포인트는 Unix 도메인 소켓이다. 포인터 라우팅은 native/darwin 에서 WebKit 비공개 입력 API 하나를
-//! 사용한다.
+//! The window, webview, surface placement, input, capture and Dock functions call the native/darwin library and the
+//! public AppKit interface. The local endpoint is a Unix domain socket. Pointer routing uses one private WebKit input
+//! API in native/darwin.
 
 use std::fs::Metadata;
 use std::io::{Read, Write};
@@ -73,7 +73,8 @@ mod window;
 #[path = "window_objects.rs"]
 mod window_objects;
 
-/// AppKit 이 이벤트 위치로 반환하는 점. objc2 가 메시지 반환값의 배치를 알아야 하므로 선언한다.
+/// The point that AppKit returns for the event location. It is declared because objc2 must know the layout of the
+/// message return value.
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct NSPoint {
@@ -86,7 +87,7 @@ unsafe impl objc2::Encode for NSPoint {
         objc2::Encoding::Struct("CGPoint", &[<f64 as objc2::Encode>::ENCODING; 2]);
 }
 
-/// AppKit 좌표의 사각형. NSPoint 와 같은 이유로 선언한다.
+/// A rectangle in AppKit coordinates. It is declared for the same reason as NSPoint.
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct NSRect {
@@ -108,7 +109,7 @@ unsafe impl objc2::Encode for NSRect {
         objc2::Encoding::Struct("CGRect", &[NSPoint::ENCODING, NSPoint::ENCODING]);
 }
 
-/// macOS 플랫폼 구현.
+/// The macOS platform implementation.
 pub struct Darwin;
 
 impl Platform for Darwin {

@@ -1,9 +1,9 @@
-//! 운영체제의 종료 요청.
+//! Termination requests of the operating system.
 
 use crate::platform;
 
-/// 운영체제의 종료 요청을 받으면 quit 를 한 번 호출하게 한다. 그 뒤의 종료 요청은 운영체제의
-/// 기본 동작으로 프로세스를 끝낸다.
+/// Makes the first termination request of the operating system call quit once. The termination requests after it end
+/// the process with the default action of the operating system.
 pub fn on_termination(quit: Box<dyn Fn() + Send>) -> Result<(), String> {
     platform::current()?.on_termination(quit)
 }

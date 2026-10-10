@@ -1,6 +1,6 @@
-//! 네이티브 모달의 표시, 배치, 내용 갱신, 준비 확인, 선택 전달, 닫기.
+//! Display, placement, content update, ready check, choice delivery and close of native modals.
 //!
-//! 페이지의 [data-native-modal] 요소는 메인 창 안의 자식 웹뷰가 그린다.
+//! The [data-native-modal] element of the page is drawn by a child webview inside the main window.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -16,27 +16,28 @@ use crate::platform;
 use crate::surfaces::{aligned, isolate_webview, PageFocus, Rect};
 use crate::windows::{emit_window, root_view, window_data};
 
-/// [data-native-modal] 요소를 main DOM에 표시하는 데 필요한 값.
+/// The values that are needed to show a [data-native-modal] element in the main DOM.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct OverlayRequest {
     mode: String,
     card: Rect,
-    /// 요소의 id. 요소를 그리는 뷰의 이름으로 사용한다.
+    /// The id of the element. It is used as the name of the view that draws the element.
     id: String,
-    /// 모달 문서의 접근성 이름.
+    /// The accessibility name of the modal document.
     title: String,
     rect: Rect,
     class_name: String,
     html: String,
     css: String,
-    /// 배경 위에 합성한 요소의 테두리 색. 아래 표면의 밝기와 관계없이 같은 색으로 보인다.
+    /// The border color of the element composed over the backdrop. It looks the same regardless of the brightness of
+    /// the surface below.
     border: String,
-    /// 요소를 그리는 네이티브 뷰의 모서리 반경.
+    /// The corner radius of the native view that draws the element.
     radius: f64,
 }
 
-/// 모달 웹뷰가 로드 후 요청하는 내용.
+/// The content that the modal webview requests after it loads.
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct OverlayContent {
@@ -49,29 +50,29 @@ pub(crate) struct OverlayContent {
     border: String,
 }
 
-/// 모달 웹뷰가 현재 그리는 모달.
+/// The modal that the modal webview draws now.
 ///
-/// 페이지는 한 번에 [data-native-modal] 요소 하나를 표시하고 다음 요소를 표시하기 전에 닫으므로
-/// 기록 하나에 모달 id 를 함께 저장한다.
+/// The page shows one [data-native-modal] element at a time and closes it before it shows the next, so one record
+/// stores the modal id too.
 #[derive(Debug, Clone, Default)]
 struct Modal {
     instance: u64,
-    /// 요소의 id. main DOM callback은 모든 호출에 이 값을 보낸다.
+    /// The id of the element. The main DOM callback sends this value with every call.
     id: String,
     content: OverlayContent,
-    /// 내용이나 위치를 바꿀 때마다 오른다. 모달 페이지는 이보다 오래된 값을 버린다.
+    /// It increases whenever the content or the position changes. The modal page discards a value older than this.
     revision: u64,
     radius: f64,
-    /// 페이지 좌표의 사각형. 모서리 설정에도 사용한다.
+    /// The rectangle in page coordinates. It is also used for the corner setting.
     at: Rect,
-    /// 이번 표시에서 창 표시를 시작했는지 나타낸다. 모달 문서는 렌더링할 때마다 준비를 보고하고,
-    /// 다시 표시하면 키보드 포커스를 다시 가져간다.
+    /// Shows whether this display started to show the window. The modal document reports readiness at every render, and
+    /// when it is shown again it takes the keyboard focus again.
     shown: bool,
-    /// 웹뷰를 표시하고 키보드 초점을 넘겼는지 나타낸다. host.window 가 이 값을 보고한다.
+    /// Shows whether the webview is shown and passed the keyboard focus. host.window reports this value.
     visible: bool,
 }
 
-/// 메인 창 안의 모달 웹뷰와 그 웹뷰가 표시하는 모달.
+/// The modal webview inside the main window and the modal that the webview shows.
 #[derive(Default)]
 pub(crate) struct Overlay {
     pub view: Mutex<Option<Webview>>,
@@ -80,7 +81,7 @@ pub(crate) struct Overlay {
 }
 
 impl Overlay {
-    /// 열린 모달의 요소 id, 모드, 표시 여부를 반환한다.
+    /// Returns the element id, the mode and the visibility of the open modal.
     pub fn open_state(&self) -> Option<(String, String, bool)> {
         self.open.lock().ok().and_then(|open| {
             open.as_ref()
@@ -88,14 +89,14 @@ impl Overlay {
         })
     }
 
-    /// 열린 모달이 dialog 모드인지 반환한다.
+    /// Returns whether the open modal is in dialog mode.
     pub fn dialog(&self) -> bool {
         self.open
             .lock()
             .is_ok_and(|open| open.as_ref().is_some_and(|m| m.content.mode == "dialog"))
     }
 
-    /// 모달 기록과 모달 웹뷰를 제거한다.
+    /// Removes the modal record and the modal webview.
     pub fn discard(&self) -> Result<(), String> {
         *self.open.lock().map_err(|e| e.to_string())? = None;
         let view = self.view.lock().map_err(|e| e.to_string())?.take();
@@ -107,7 +108,8 @@ impl Overlay {
     }
 }
 
-/// 열린 모달 웹뷰의 새 위치. 카드가 위치를 정하고, 이 요청은 손잡이 드래그로 전달된다.
+/// The new position of an open modal webview. The card decides the position, and this request is passed by the handle
+/// drag.
 #[derive(Debug, Deserialize)]
 pub(crate) struct PlaceRequest {
     id: String,
@@ -123,8 +125,8 @@ struct ModalPosition {
     card: Rect,
 }
 
-/// 열린 모달의 새 내용. 페이지가 측정한 요소 내용만 담는다. 열린 모달은 위치와 크기를 유지한다.
-/// 내용의 field 는 id 와 같은 객체에 있다.
+/// The new content of an open modal. It holds only the element content that the page measured. An open modal keeps its
+/// position and size. The content fields are in the same object as id.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct UpdateRequest {
@@ -138,7 +140,7 @@ pub(crate) struct UpdateRequest {
     border: String,
 }
 
-/// 모달 페이지가 받는 모달 하나의 새 내용.
+/// The new content of one modal that the modal page receives.
 #[derive(Clone, Serialize)]
 struct ModalContentEvent {
     instance: u64,
@@ -147,15 +149,15 @@ struct ModalContentEvent {
     content: OverlayContent,
 }
 
-/// 모달의 내용과 그 내용의 변경 번호.
+/// The content of a modal and the change number of that content.
 #[derive(Debug, Default, Serialize)]
 pub(crate) struct RevisedContent {
     revision: u64,
     content: OverlayContent,
 }
 
-/// 모달 페이지가 보고하는 컨트롤과 그 값. 쌍 대신 이름 있는 필드를 사용한다. 쌍을 인덱스로
-/// 읽으면 문자열의 첫 문자를 답 전체로 읽은 적이 있다.
+/// The control that the modal page reports and its value. It uses named fields instead of a pair. Reading a pair by
+/// index once read the first character of a string as the whole answer.
 #[derive(Debug, Clone, Serialize)]
 struct Picked {
     id: String,
@@ -163,7 +165,7 @@ struct Picked {
     value: String,
 }
 
-/// 창의 메인 웹뷰와 표면 웹뷰에 모달 배경 상태를 설정한다.
+/// Sets the modal backdrop state on the main webview and the surface webviews of a window.
 pub(crate) fn set_background(window: &Window, enabled: bool) -> Result<(), String> {
     documents::set_background(window, enabled);
     for view in window.webviews() {
@@ -175,7 +177,7 @@ pub(crate) fn set_background(window: &Window, enabled: bool) -> Result<(), Strin
     Ok(())
 }
 
-/// 모달 웹뷰를 콘텐츠 좌표에 배치한다.
+/// Places the modal webview at content coordinates.
 fn place_overlay(view: &Webview, at: Rect) -> Result<(), String> {
     let platform = platform::current()?;
     view.with_webview(move |webview| {
@@ -187,13 +189,14 @@ fn place_overlay(view: &Webview, at: Rect) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
-/// 모달 요소 하나를 메인 창 안의 웹뷰에 그린다. 뷰는 문서가 내용을 그렸다고 보고할 때까지 숨긴다.
+/// Draws one modal element in a webview inside the main window. The view stays hidden until the document reports that
+/// it drew the content.
 pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, String> {
     let context = window_data(window)?;
     let state = &context.overlay;
 
-    // 이전 네이티브 뷰를 제거한다. 표시마다 고유 번호를 부여해, 같은 id 의 이전 문서가 늦게
-    // 보낸 메시지가 다음 표시에 영향을 주지 않게 한다.
+    // Removes the previous native view. A unique number is assigned to every display, so a message that the previous
+    // document of the same id sent late does not affect the next display.
     state.discard()?;
     let instance = state.next.fetch_add(1, Ordering::Relaxed) + 1;
     let scale = window.scale_factor().map_err(|e| e.to_string())?;
@@ -268,10 +271,10 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
     Ok(at)
 }
 
-/// 열린 모달 웹뷰를 옮기고 크기를 바꾼 뒤 적용한 사각형을 반환한다.
+/// Moves and resizes the open modal webview and returns the rectangle that was applied.
 ///
-/// 적용한 사각형은 페이지 사각형을 디스플레이 픽셀에 맞춘 값이다. 두 값이 다르므로 차이를
-/// 페이지에 알린다.
+/// The applied rectangle is the page rectangle fitted to display pixels. The two values differ, so the difference is
+/// reported to the page.
 pub(crate) fn place(window: &Window, request: PlaceRequest) -> Result<Rect, String> {
     let context = window_data(window)?;
     let state = &context.overlay;
@@ -322,8 +325,8 @@ pub(crate) fn place(window: &Window, request: PlaceRequest) -> Result<Rect, Stri
     Ok(at)
 }
 
-/// id 와 instance 가 현재 모달과 같으면 모달 내용을 반환한다. 다른 모달이면 번호 0 의 빈 내용을
-/// 반환하고, 모달 페이지는 그것을 버린다.
+/// Returns the modal content when id and instance equal the current modal. For another modal it returns empty content
+/// with number 0, and the modal page discards it.
 pub(crate) fn content(
     window: &Window,
     id: String,
@@ -342,15 +345,16 @@ pub(crate) fn content(
             revision: modal.revision,
             content: modal.content.clone(),
         })
-        // 기본값: 다른 모달의 요청에는 번호 0 의 빈 내용으로 답하고 모달 페이지가 그것을 버린다(위 설명).
+        // default: a request of another modal is answered with empty content of number 0, and the modal page discards
+        // it (the description above).
         .unwrap_or_default();
-    // 검사가 응답을 붙잡았으면 놓을 때까지 보내지 않는다.
+    // When a check holds the response, it is not sent until it is released.
     #[cfg(feature = "diagnostics")]
     crate::diagnostics::hold_modal_content(window.label());
     Ok(content)
 }
 
-/// 이번 표시의 문서가 렌더링되면 모달 웹뷰를 표시한다.
+/// Shows the modal webview when the document of this display has rendered.
 pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), String> {
     let context = window_data(window)?;
     let state = &context.overlay;
@@ -414,7 +418,7 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
     .map_err(|e| e.to_string())
 }
 
-/// id 의 모달이 열려 있으면 닫고 메인 웹뷰에 포커스를 돌려준다.
+/// Closes the modal of id if it is open and returns the focus to the main webview.
 pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
     let context = window_data(window)?;
     let state = &context.overlay;
@@ -426,17 +430,15 @@ pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
         }
         *held = None;
     }
-    // `discard`는 open 기록도 지운다. 같은 mutex를 잡은 상태에서 호출하지 않는다.
-    // 그렇게 하면 main thread가 자신의 lock을 기다리며 모든 endpoint request의 처리를
-    // 멈춘다.
+    // `discard` also clears the open record. It is not called while holding the same mutex. Otherwise the main thread
+    // waits for its own lock and stops the handling of every endpoint request.
     state.discard()?;
     exposure::window_changed(window);
-    // terminal image region은 `resignFirstResponder`를 동기적으로 보고한다. 여기서 `set_focus`를
-    // 호출하면 현재 Tauri invoke가 아직 WebKit dispatch lock을 소유한 상태에서 main WebView에
-    // 다시 진입하므로, focus callback이 event loop를 deadlock시킬 수 있다.
-    // 먼저 hide command에서 반환한 뒤 다음 AppKit turn에서 focus를 복원한다.
-    // 그 turn 전에 교체 modal이 열렸을 수 있다. 그 경우 이전 복원은
-    // 교체 child WebView의 focus를 가져가지 않아야 한다.
+    // The terminal image region reports `resignFirstResponder` synchronously. Calling `set_focus` here re-enters the
+    // main WebView while the current Tauri invoke still owns the WebKit dispatch lock, so the focus callback can
+    // deadlock the event loop. The focus is restored in the next AppKit turn after the hide command returns. A
+    // replacement modal may have opened before that turn. In that case the earlier restoration must not take the focus
+    // of the replacement child WebView.
     let host = window.clone();
     platform::current()?
         .enqueue_ui(Box::new(move || {
@@ -457,8 +459,8 @@ pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
     Ok(())
 }
 
-/// 현재 모달 문서의 선택을 페이지에 전달한다. 이전 문서는 뷰가 제거된 뒤에도 답을 보낼 수
-/// 있으므로 id 와 instance 를 확인한다.
+/// Passes the choice of the current modal document to the page. The previous document can send its answer even after
+/// its view was removed, so id and instance are checked.
 pub(crate) fn pick(
     window: &Window,
     id: String,
@@ -482,8 +484,8 @@ pub(crate) fn pick(
     Ok(())
 }
 
-/// 열린 모달의 내용을 뷰를 다시 만들지 않고 바꾼다. 페이지 상태를 바꾸는 컨트롤이 있는 모달은
-/// 열린 동안 다시 그려지고, 뷰를 다시 만들면 깜박인다.
+/// Changes the content of an open modal without recreating the view. A modal with a control that changes the page state
+/// is redrawn while it is open, and recreating the view would make it flicker.
 pub(crate) fn update(window: &Window, request: UpdateRequest) -> Result<(), String> {
     let context = window_data(window)?;
     let overlay = &context.overlay;
@@ -506,7 +508,7 @@ pub(crate) fn update(window: &Window, request: UpdateRequest) -> Result<(), Stri
         modal.revision += 1;
         (modal.instance, modal.revision)
     };
-    // 모든 페이지가 이벤트를 받으므로 id 를 포함하고, 각 모달 페이지는 자신의 이벤트만 사용한다.
+    // Every page receives the event, so it includes id, and each modal page uses only its own event.
     emit_window(
         window,
         "modal-content",

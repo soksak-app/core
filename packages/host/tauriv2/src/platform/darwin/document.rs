@@ -1,4 +1,4 @@
-//! 표면 문서 안의 외부 문서 웹뷰. 구현은 native/darwin 의 document_view.m 이다.
+//! The external document webview inside a surface document. The implementation is document_view.m of native/darwin.
 
 use std::ffi::{c_char, c_void, CStr, CString};
 
@@ -35,7 +35,7 @@ extern "C" {
     fn sp_document_close(document: *mut c_void);
 }
 
-/// 문서 핸들별 상태 수신 함수. 메인 스레드에서만 쓴다.
+/// The state receiver of each document handle. It is used only on the main thread.
 struct Receiver(Box<dyn Fn(String)>);
 struct EventReceiver(Box<dyn Fn(String) + Send>);
 
@@ -64,7 +64,7 @@ extern "C" fn event(context: *mut c_void, value: *const c_char) {
     (receiver.0)(value);
 }
 
-/// 표면 웹뷰 안에 문서 웹뷰를 숨긴 상태로 만든다. 메인 스레드에서 호출한다.
+/// Creates a hidden document webview inside the surface webview. Call it on the main thread.
 pub fn create(
     surface: Handle,
     store: &str,
@@ -101,7 +101,7 @@ pub fn load(document: Handle, url: &str) -> Result<bool, String> {
     Ok(unsafe { sp_document_load(document as *mut c_void, url.as_ptr()) })
 }
 
-/// 문서의 페이지 확대를 정한다. 유한한 양수가 아니면 false 다.
+/// Sets the page zoom of the document. It is false when the value is not a finite positive number.
 pub fn zoom(document: Handle, zoom: f64) -> bool {
     unsafe { sp_document_zoom(document as *mut c_void, zoom) }
 }
@@ -127,12 +127,12 @@ pub fn post(document: Handle, json: &str) -> Result<bool, String> {
     Ok(unsafe { sp_document_post(document as *mut c_void, json.as_ptr()) })
 }
 
-/// 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3 을 실행하고 실행했는지 반환한다.
+/// Runs back 0, forward 1, reload 2 and stop 3, and returns whether it ran.
 pub fn go(document: Handle, action: i32, offset: i32) -> bool {
     unsafe { sp_document_go(document as *mut c_void, action, offset) }
 }
 
-/// 표면 뷰포트의 CSS 픽셀 여백으로 문서 영역을 정한다.
+/// Sets the document region with the CSS pixel insets of the surface viewport.
 pub fn place(document: Handle, insets: Insets, visible: bool) {
     unsafe {
         sp_document_place(
@@ -146,7 +146,7 @@ pub fn place(document: Handle, insets: Insets, visible: bool) {
     }
 }
 
-/// 대화 상자가 열린 동안 문서를 흐리게 표시한다.
+/// Dims the document while a dialog is open.
 pub fn background(document: Handle, enabled: bool) {
     unsafe { sp_document_background(document as *mut c_void, enabled) }
 }
@@ -155,7 +155,7 @@ pub fn appearance(document: Handle, dark: bool) {
     unsafe { sp_document_appearance(document as *mut c_void, dark) }
 }
 
-/// 문서 웹뷰를 제거하고 상태 수신 함수를 해제한다.
+/// Removes the document webview and releases the state receiver.
 pub fn close(document: Handle) {
     unsafe { sp_document_close(document as *mut c_void) };
     if let Some(receiver) = RECEIVERS.with(|all| all.borrow_mut().remove(&document)) {

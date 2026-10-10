@@ -1,4 +1,4 @@
-//! 표면 그림 영역. 구현은 native/darwin 의 image_region.m 이다.
+//! The image region of a surface. The implementation is image_region.m of native/darwin.
 
 use std::ffi::{c_char, c_void, CStr, CString};
 
@@ -40,7 +40,7 @@ extern "C" {
     fn sp_region_close(region: *mut c_void);
 }
 
-/// 그림 영역 핸들별 이벤트 수신 함수. 메인 스레드에서만 쓴다.
+/// The event receiver of each image region handle. It is used only on the main thread.
 struct Receiver(Box<dyn Fn(String)>);
 
 thread_local! {
@@ -56,7 +56,7 @@ extern "C" fn event_callback(context: *mut c_void, json: *const c_char) {
     (receiver.0)(json);
 }
 
-/// 표면 웹뷰 위에 그림 영역을 만든다. 메인 스레드에서 호출한다.
+/// Creates an image region over the surface webview. Call it on the main thread.
 pub fn create(surface: Handle, name: &str, receive: Box<dyn Fn(String)>) -> Result<Handle, String> {
     let name = CString::new(name).map_err(|e| e.to_string())?;
     let receiver = Box::into_raw(Box::new(Receiver(receive)));
@@ -77,12 +77,13 @@ pub fn create(surface: Handle, name: &str, receive: Box<dyn Fn(String)>) -> Resu
     Ok(handle)
 }
 
-/// 표면 뷰포트의 CSS 픽셀 여백으로 영역을 정한다.
+/// Sets the region with the CSS pixel insets of the surface viewport.
 pub fn place(image: Handle, left: f64, top: f64, right: f64, bottom: f64, visible: bool) {
     unsafe { sp_region_place(image as *mut c_void, left, top, right, bottom, visible) }
 }
 
-/// 영역의 표면이 네이티브 크기를 가졌는지. 아직 배치되지 않은 표면의 영역은 래스터 크기를 갖지 않는다.
+/// Whether the surface of the region has a native size. The region of a surface that is not placed yet has no raster
+/// size.
 pub fn surface_placed(image: Handle) -> bool {
     unsafe { sp_region_surface_placed(image as *mut c_void) }
 }
@@ -112,7 +113,8 @@ pub fn facts(image: Handle) -> Result<String, String> {
     result
 }
 
-/// 외부 IOSurface 를 표시한다. 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.
+/// Displays an external IOSurface. It returns true on success, and false when it was not found or the size does not
+/// match.
 pub fn present(
     image: Handle,
     token_id: u32,
@@ -149,24 +151,24 @@ pub fn present(
     }
 }
 
-/// 첫 응답자로 만들고 포커스 이벤트를 보낸다.
+/// Makes it the first responder and sends the focus event.
 pub fn focus(image: Handle) {
     unsafe { sp_region_focus(image as *mut c_void) }
 }
 
-/// 캐럿(입력 커서) 위치를 받아 둔다.
+/// Stores the caret (text cursor) position.
 pub fn caret(image: Handle, x: f64, y: f64, w: f64, h: f64) {
     unsafe { sp_region_caret(image as *mut c_void, x, y, w, h) }
 }
 
-/// 접근성 값으로 보일 문자열을 받아 둔다.
+/// Stores the string that is shown as the accessibility value.
 pub fn text(image: Handle, utf8: &str) -> Result<(), String> {
     let utf8 = CString::new(utf8).map_err(|e| e.to_string())?;
     unsafe { sp_region_text(image as *mut c_void, utf8.as_ptr()) }
     Ok(())
 }
 
-/// 영역을 제거하고 해제한다.
+/// Removes and releases the region.
 pub fn close(image: Handle) {
     unsafe { sp_region_close(image as *mut c_void) };
     if let Some(receiver) = RECEIVERS.with(|all| all.borrow_mut().remove(&image)) {

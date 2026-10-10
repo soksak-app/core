@@ -1,4 +1,4 @@
-//! 사이드카 지속 전송 테스트. 가짜 창과 서비스 엔드포인트 하네스를 사용한다.
+//! Sidecar persistent transport tests. They use a fake window and a service endpoint harness.
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -38,7 +38,7 @@ impl Owner for FakeOwner {
         let _ = self.sent.send(message);
     }
     fn deliver_failure(&self, failure: Failure) {
-        // 이 검사들은 실패를 단언하지 않으므로 실패는 검사 출력에 남긴다.
+        // These checks do not assert failures, so failures are left in the check output.
         eprintln!("sidecar failure: {failure:?}");
     }
 }
@@ -61,12 +61,12 @@ fn raw(text: &str) -> Box<RawValue> {
 
 type Files = Vec<(&'static str, String)>;
 
-/// 사이드카 @fixture/sidecar-echo 하나와 그 sidecar.json 내용.
+/// One sidecar @fixture/sidecar-echo and the content of its sidecar.json.
 fn files(sidecar: &str) -> Files {
     vec![("@fixture/sidecar-echo", sidecar.to_string())]
 }
 
-/// folder 에 설치된 사이드카들의 선언.
+/// The declarations of the sidecars installed in folder.
 fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
     files
         .iter()
@@ -81,7 +81,7 @@ fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
 
 const ECHO: &str = "@fixture/sidecar-echo";
 
-/// 멈춘 검사를 끝내는 상한이다. 성공은 받은 event 로 판정하며 이 시간으로 판정하지 않는다.
+/// The upper limit that ends a stalled check. Success is decided by the received event and not by this time.
 const STALL: Duration = Duration::from_secs(120);
 
 // contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one
@@ -105,10 +105,11 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     )
     .unwrap();
 
-    // 연결마다 스레드로 담는다 — 실제 서비스처럼 동시에 받아야 한 인사가 다른 연결의
-    // 요청 왕복 뒤에 줄서지 않는다. 넉 연결을 받는다: 두 초기 연결과, 검사가 연결을
-    // 닫을 때마다 다시 맺는 자동 재시작의 연결(V5-106). 요청을 기다리다 기한이 지나면
-    // 조용히 끝난다 — 재시작 연결은 검사가 끝날 때까지 요청을 받지 않는다.
+    // Each connection is handled by a thread, so that, as in a real service, a hello is not queued behind the request
+    // round trip of another connection. Four connections are accepted: the two initial connections and the connections
+    // of the automatic restart that connects again whenever the check closes a connection (V5-106). If the deadline
+    // passes while waiting for a request, it ends quietly: the restart connection does not receive a request until the
+    // check ends.
     let service = std::thread::spawn(move || {
         let mut workers = Vec::new();
         for stream in listener.incoming().take(4) {
@@ -190,9 +191,9 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     .unwrap();
     let service = thread::spawn(move || {
         let mut workers = Vec::new();
-        // 이 서비스는 연결을 제멋대로 끊지 않는다(V5-106 의 자동 재시작과 연결 순서가
-        // 경합하지 않게). `drop` 요청을 받은 연결만 끊고, 그 외 요청은 되돌린다.
-        // close-owner 에는 실패로 답해 stop 이 기한을 기다리지 않게 한다.
+        // This service does not cut a connection arbitrarily (so that the automatic restart of V5-106 does not race
+        // with the connection order). It cuts only the connection that received a `drop` request and returns the other
+        // requests. It answers close-owner with a failure so that stop does not wait for the deadline.
         for _ in 0..4 {
             let (mut stream, _) = match listener.accept() {
                 Ok((stream, _)) => (stream, ()),
@@ -232,8 +233,8 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
                         writeln!(stream, "{reply}").unwrap();
                         return;
                     }
-                    // 페이지 요청의 operation 은 body 안에 있다. drop 은 이 연결을 끊는
-                    // 검사 신호다.
+                    // The operation of a page request is inside the body. drop is the check signal that cuts this
+                    // connection.
                     if request["body"]["operation"] == "drop" {
                         stream.shutdown(Shutdown::Both).unwrap();
                         return;
@@ -269,9 +270,9 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
         .unwrap();
     assert_eq!(first_events.recv_timeout(STALL).unwrap().surface, "s1");
     assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
-    // 서비스가 두 연결을 끊게 한다. 끊김은 연결 이벤트로 기다린다(V5-106). 자동 재시작은
-    // EOF 에만 반응하므로, 각 인스턴스의 연결 이벤트가 도착했다는 것이 서비스가 그 연결을
-    // 끊었다는 증거다.
+    // Make the service cut the two connections. The cut is awaited as a connection event (V5-106). The automatic
+    // restart reacts only to EOF, so the arrival of the connection event of each instance is the evidence that the
+    // service cut that connection.
     first
         .send(&first_owner, ECHO, "s1", &raw(r#"{"operation":"drop"}"#))
         .unwrap();
@@ -313,12 +314,13 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     assert_eq!(first_events.recv_timeout(STALL).unwrap().surface, "s1");
     assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
 
-    // 서비스는 close-owner 에 실패로 답한다. 종료는 제한 시간까지 기다리지 않고 바로 끝난다.
+    // The service answers close-owner with a failure. The stop ends at once without waiting for the time limit.
     let stopping = std::time::Instant::now();
     first.stop();
     second.stop();
     let elapsed = stopping.elapsed();
-    // 실패한 close-owner 답은 stop 의 기한을 기다리지 않고 끝난다. 기한까지 걸렸으면 답을 기다리지 않은 것이다.
+    // The failed close-owner answer ends without waiting for the deadline of stop. If it took until the deadline, it
+    // did not wait for the answer.
     assert!(
         elapsed < first.stop_timeout,
         "close-owner failure was not reported before the {:?} stop deadline: {elapsed:?}",
@@ -632,7 +634,7 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
 // contract: sidecars-transport.stop.own-close-is-not-a-read-error
 #[test]
 fn persistent_stop_does_not_log_its_own_close_as_a_read_error() {
-    // 로그는 표준 오류이므로 같은 검사를 자식 process 로 실행해 그 출력을 읽는다.
+    // The log is the standard error, so the same check runs as a child process and its output is read.
     if std::env::var_os("SOKSAK_OWN_CLOSE_CHILD").is_none() {
         let output = std::process::Command::new(std::env::current_exe().unwrap())
             .args([
@@ -668,7 +670,7 @@ fn persistent_stop_does_not_log_its_own_close_as_a_read_error() {
         serde_json::to_vec(&endpoint).unwrap(),
     )
     .unwrap();
-    // 서비스는 shutdown 에 답한 뒤에도 연결을 닫지 않는다. 연결은 host 가 닫는다.
+    // The service does not close the connection even after it answered shutdown. The host closes the connection.
     let (release, released) = std::sync::mpsc::channel::<()>();
     let service = std::thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
@@ -732,7 +734,8 @@ fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {
     )
     .unwrap();
 
-    // 서비스는 closed 에 바로 답하지 않고 close-owner 를 받은 뒤에 답한다. 그 답은 중지가 시작된 뒤에 온다.
+    // The service does not answer closed at once and answers after it received close-owner. That answer comes after the
+    // stop started.
     let service = std::thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
         stream
@@ -869,7 +872,7 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
         config_directory.path().to_path_buf(),
     )
     .unwrap();
-    // 레이아웃에 표면이 없고 이 프로세스가 보낸 표면도 없으면 빈 배열을 보낸다.
+    // If the layout has no surface and this process sent no surface either, an empty array is sent.
     assert_eq!(
         sidecars.retain_sessions(&[]).unwrap(),
         2,
@@ -903,8 +906,8 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
 // contract: sidecars.retain.rejects-after-stop
 #[test]
 fn persistent_retain_after_stop_sends_nothing() {
-    // 멈춘 뒤의 retain 은 서비스에 붙지 않고 멈춤으로 실패한다. 이 host 는 멈춤 확인과 보내기를 한 잠금 안에서 하므로
-    // 서비스를 준비한 뒤 보내기 전에 끼어드는 stop 은 없다.
+    // A retain after the stop does not attach to the service and fails with the stop. This host checks the stop and
+    // sends inside one lock, so no stop intervenes between preparing the service and sending.
     let executable_directory = tempfile::tempdir().unwrap();
     let config_directory = tempfile::tempdir().unwrap();
     let service_directory = config_directory.path().join("services/echo");
@@ -996,14 +999,14 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
                     )
                     .unwrap();
                 if connection_index == 0 {
-                    // 첫 연결은 요청 하나를 되돌린 뒤 스스로 끊는다.
+                    // The first connection returns one request and then cuts itself.
                     line.clear();
                     reader.read_line(&mut line).unwrap();
                     stream.write_all(line.as_bytes()).unwrap();
                     stream.shutdown(Shutdown::Both).unwrap();
                     return;
                 }
-                // 다시 맺은 연결은 요청을 계속 되돌린다.
+                // The connection that was established again keeps returning requests.
                 loop {
                     line.clear();
                     if reader.read_line(&mut line).unwrap() == 0 {
@@ -1030,14 +1033,15 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
         .unwrap();
     assert_eq!(events.recv_timeout(STALL).unwrap().surface, "s1");
 
-    // 연결이 끊기면 전송 없이 다시 맞아야 한다 — 연결 이벤트가 그 증거다(V5-106).
+    // When the connection is cut, it must be matched again without a send: the connection event is the evidence
+    // (V5-106).
     let revived = events.recv_timeout(STALL).unwrap();
     assert_eq!(revived.surface, "s1");
     let notice: serde_json::Value = serde_json::from_str(revived.body.get()).unwrap();
     assert_eq!(notice["event"], "connection");
     assert_eq!(notice["connected"], true);
 
-    // 다음 전송은 다시 맺은 연결로 지나간다.
+    // The next send passes through the connection that was established again.
     sidecars
         .send(&owner, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
@@ -1057,8 +1061,8 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("failed-revive.sock");
-    // 이 수신기는 첫 연결만 받고 닫힌다. 엔드포인트의 pid 는 이 검사 프로세스이므로 살아
-    // 있고, 재시작은 같은 소켓에 연결을 시도해 거절된다.
+    // This receiver accepts only the first connection and closes. The pid of the endpoint is this check process, so it
+    // is alive, and the restart tries to connect to the same socket and is refused.
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
         "protocol": 1,
@@ -1104,7 +1108,7 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
     assert_eq!(events.recv_timeout(STALL).unwrap().surface, "s1");
     service.join().unwrap();
 
-    // 재시작이 실패하면 연결 끊김과 그 까닭이 표면에 알려진다(V5-106).
+    // When the restart fails, the connection loss and its reason are reported to the surface (V5-106).
     let failure = events.recv_timeout(STALL).unwrap();
     assert_eq!(failure.surface, "s1");
     let notice: serde_json::Value = serde_json::from_str(failure.body.get()).unwrap();
@@ -1119,7 +1123,7 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
     sidecars.stop();
 }
 
-/// 사이드카 메시지와 실패를 따로 받는 창.
+/// A window that receives sidecar messages and failures separately.
 #[derive(Clone)]
 struct FailureOwner {
     sent: Sender<Message>,
@@ -1141,8 +1145,9 @@ impl Owner for FailureOwner {
     }
 }
 
-/// 연결 하나에 hello 로 답하고 요청 한 줄을 받은 뒤 payload 를 쓰는 서비스. host 가 연결을 닫으면 끝난다.
-/// payload 를 다 쓰기 전에 host 가 닫으면 쓰기 오류는 기대한 결과다.
+/// A service that answers a connection with hello, receives one request line and then writes payload. It ends when the
+/// host closes the connection. If the host closes before payload is written completely, the write error is an expected
+/// result.
 fn expect_connection_failure(payload: Vec<u8>, reason: &str) {
     let executable_directory = tempfile::tempdir().unwrap();
     let config_directory = tempfile::tempdir().unwrap();
@@ -1172,7 +1177,7 @@ fn expect_connection_failure(payload: Vec<u8>, reason: &str) {
         thread::spawn(move || {
             let _ = writer.write_all(&payload);
         });
-        // host 가 연결을 닫으면 읽기가 EOF 로 끝난다.
+        // When the host closes the connection, the read ends with EOF.
         std::io::copy(&mut reader, &mut std::io::sink()).unwrap();
     });
     let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
@@ -1225,8 +1230,8 @@ fn persistent_transport_fails_the_connection_on_an_oversize_line() {
     );
 }
 
-// 영속 사이드카의 시작(service 연결과 hello)은 다른 사이드카로의 전송을 기다리게 하지 않는다. service 는 hello 에
-// 500 ms 늦게 답하고, 그동안 이미 실행 중인 다른 사이드카로 보낸다.
+// The start of a persistent sidecar (the service connection and hello) does not make sends to other sidecars wait. The
+// service answers hello 500 ms late, and meanwhile sends go to another sidecar that is already running.
 // contract: sidecars.send.start-does-not-block-other-sidecars
 #[test]
 fn persistent_start_does_not_delay_other_sidecars() {
@@ -1263,7 +1268,7 @@ fn persistent_start_does_not_delay_other_sidecars() {
             "{{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}}"
         )
         .unwrap();
-        // 연결이 끝날 때까지 받은 줄을 버린다.
+        // Discard the received lines until the connection ends.
         let mut line = String::new();
         while reader.read_line(&mut line).unwrap_or(0) > 0 {
             line.clear();
@@ -1326,7 +1331,7 @@ fn persistent_start_does_not_delay_other_sidecars() {
     server.join().unwrap();
 }
 
-/// sidecar 로 보내고 그 결과를 limit 안에 돌려준다. 돌아오지 않으면 검사가 실패한다.
+/// Sends to the sidecar and returns the result within limit. If it does not return, the check fails.
 fn send_within(
     sidecars: Sidecars<FakeOwner>,
     window: FakeOwner,
@@ -1342,7 +1347,7 @@ fn send_within(
         .unwrap_or_else(|_| panic!("the send did not return within {limit:?}"))
 }
 
-// hello 를 받고 답하지 않는 service 로의 시작은 5초 뒤 정해진 문장으로 실패한다.
+// A start with a service that receives hello and does not answer fails after 5 seconds with the defined text.
 // contract: sidecars-transport.hello.times-out
 #[test]
 fn persistent_start_fails_when_hello_is_not_answered() {
@@ -1387,9 +1392,10 @@ fn persistent_start_fails_when_hello_is_not_answered() {
     server.join().unwrap();
 }
 
-// 새로 시작한 service 가 endpoint 를 출력하지 않으면 시작은 ready 상한 뒤 정해진 문장으로 실패하고, 호스트는 그
-// service 를 끝내고 회수한다. 검사는 기본 30초 대신 1초를 준다. service 는 상한보다 늦게 일을 시작하므로 부하와
-// 상관없이 시작하자마자 끝나며, 검사는 그 고유한 경로로 실행 중인 process 가 남지 않았는지 본다.
+// If a newly started service does not print an endpoint, the start fails with the defined text after the ready upper
+// limit, and the host ends and reaps that service. The check gives 1 second instead of the default 30 seconds. The
+// service starts its work later than the upper limit, so it ends as soon as it starts regardless of the load, and the
+// check looks at whether a running process remains on its unique path.
 // contract: sidecars-transport.startup.times-out
 #[test]
 fn persistent_start_fails_when_the_service_prints_no_endpoint() {
@@ -1422,7 +1428,8 @@ fn persistent_start_fails_when_the_service_prints_no_endpoint() {
     );
 }
 
-// 새로 시작한 service 의 표준 오류는 설정 디렉터리의 그 실행 파일 이름 로그에 쌓인다.
+// The standard error of a newly started service accumulates in the log of the executable name in the configuration
+// directory.
 // contract: log.service.standard-error-goes-to-service-log
 #[test]
 fn persistent_service_writes_its_standard_error_to_its_log() {
@@ -1445,7 +1452,7 @@ fn persistent_service_writes_its_standard_error_to_its_log() {
     );
 }
 
-/// 검사가 시작하게 한 service 를 검사가 끝날 때 끝낸다.
+/// Ends the service that the check made start when the check ends.
 struct EndService(i32);
 
 impl Drop for EndService {
@@ -1460,8 +1467,9 @@ impl Drop for EndService {
     }
 }
 
-// 호스트가 시작한 service 는 새 session 의 leader 다. 그래서 애플리케이션의 프로세스 그룹과 터미널의 신호를 받지
-// 않는다. service 는 자기 번호를 파일에 쓰고 endpoint 를 출력한 뒤 검사가 끝낼 때까지 남는다.
+// A service that the host started is the leader of a new session. It therefore does not receive the signals of the
+// process group of the application and of the terminal. The service writes its number to a file, prints an endpoint,
+// and remains until the check ends it.
 // contract: sidecars-transport.persistent.starts-in-new-session
 #[test]
 fn persistent_service_starts_in_a_new_session() {
@@ -1521,7 +1529,7 @@ fn persistent_service_starts_in_a_new_session() {
         .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(events.recv_timeout(STALL).unwrap().surface, "surface");
-    // service 는 endpoint 를 출력하기 전에 번호를 썼다.
+    // The service wrote its number before it printed the endpoint.
     let pid: i32 = std::fs::read_to_string(&pid_path)
         .unwrap()
         .trim()
@@ -1544,7 +1552,7 @@ fn persistent_service_starts_in_a_new_session() {
     server.join().unwrap();
 }
 
-// 서비스 로그를 열 수 없으면 서비스를 시작하지 않고 정해진 문장으로 실패한다.
+// If the service log cannot be opened, the service is not started and the start fails with the defined text.
 // contract: log.service.open-failure-fails-start
 #[test]
 fn persistent_start_fails_when_the_service_log_cannot_open() {
@@ -1558,7 +1566,7 @@ fn persistent_start_fails_when_the_service_log_cannot_open() {
     .unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
     let config_directory = tempfile::tempdir().unwrap();
-    // logs 가 파일이면 로그 디렉터리를 만들 수 없다.
+    // If logs is a file, the log directory cannot be created.
     std::fs::write(config_directory.path().join("logs"), "").unwrap();
     let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
@@ -1576,7 +1584,7 @@ fn persistent_start_fails_when_the_service_log_cannot_open() {
     assert!(!started.exists(), "the service started");
 }
 
-// 새로 시작한 service 가 endpoint 를 출력하기 전에 끝나면 시작은 정해진 문장으로 실패한다.
+// If a newly started service ends before it prints an endpoint, the start fails with the defined text.
 // contract: sidecars-transport.startup.exits-before-endpoint
 #[test]
 fn persistent_start_fails_when_the_service_exits_before_its_endpoint() {
