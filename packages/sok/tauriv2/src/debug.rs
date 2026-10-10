@@ -312,8 +312,9 @@ fn parse_events(file: &str, text: &str) -> Result<Vec<Row>, String> {
         None => "",
     };
     let mut rows = vec![];
+    // A file without a line is what a process that ended before its first write leaves: it has no row.
     if !text.contains('\n') {
-        return Err(format!("{file}: the file is empty"));
+        return Ok(vec![]);
     }
     for (index, raw) in whole.split('\n').enumerate() {
         rows.push(row_of(file, index + 1, raw)?);

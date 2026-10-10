@@ -352,7 +352,8 @@ func parseEvents(file string, data []byte) ([]eventRow, error) {
 		rows = append(rows, row)
 	}
 	if len(rows) == 0 {
-		return nil, fmt.Errorf("%s: the file is empty", file)
+		// A file without a line is what a process that ended before its first write leaves: it has no row.
+		return nil, nil
 	}
 	if rows[0].name != "log.open" {
 		return nil, fmt.Errorf("%s: the first line is not log.open: %s", file, jsString(rows[0].name))

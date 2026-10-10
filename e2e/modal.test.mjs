@@ -356,6 +356,14 @@ for (const app of Object.values(APPS)) {
     await s.run("core.debug.view", { path: capture.path });
     const image = await s.until("core.debug", (debug) => debug.viewing?.kind === "image", "the debug view did not show the capture");
     assert.deepEqual({ path: image.viewing.path, size: image.viewing.size, length: image.viewing.length }, { path: capture.path, size: capture.size, length: 0 });
+    // The modal has the height of the card with the loaded image: the image is shown whole (at its width of the card) inside the
+    // modal and not cut to the first rows of pixels. The frame of the modal follows the load of the image, so the check waits for it.
+    const picture = await s.rect("core.debug.image");
+    const shown = await s.until("host.window", (host) => host.modal?.frame && host.modal.frame.height >= picture.height / 2,
+      "the modal did not take the height of the card with the image");
+    assert.ok(picture.height >= 100, `the image of the capture is only ${picture.height} points high in the debug view`);
+    assert.ok(picture.y + picture.height <= shown.modal.frame.y + shown.modal.frame.height + 1,
+      `the image is cut by the modal: image ${JSON.stringify(picture)}, modal ${JSON.stringify(shown.modal.frame)}`);
     await s.run("core.debug.list");
     await assert.rejects(s.run("core.debug.save", { path: "settings.json" }),
       /debug: settings.json is not a file under logs\//);

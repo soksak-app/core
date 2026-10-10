@@ -1767,6 +1767,34 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F156",
+    implementation: [
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function viewDebugFile" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-image-ui.test.mjs", id: "the modal is placed again with the height of the card when the image has loaded" },
+      { file: "e2e/modal.test.mjs", id: "Help > Debug records the state, lists the logs folder and refuses a path outside it" },
+    ],
+    expected: "The native modal of the debug view has the height of the card with the loaded image.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F157",
+    implementation: [
+      { file: "packages/workbench/debug-timeline.js", symbol: "export const DRAW_LIMIT" },
+      { file: "packages/workbench/debug-timeline.js", symbol: "export const FOLLOW_INTERVAL_MS" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the timeline draws the newest rows up to the draw limit and states how many rows it leaves out" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the timeline follows a file that grows all the time with a pause between two updates and loses no line" },
+      { file: "packages/workbench/test/debug-timeline.test.mjs", id: "a file without a line has no row, as a process that ended before its first write left it" },
+      { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestTimelineReadsAFileWithoutALineAsNoRows" },
+      { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "timeline_reads_a_file_without_a_line_as_no_rows" },
+    ],
+    expected: "The page of the debug view keeps answering when an event file is large and grows: the timeline draws a bounded number of lines, spaces the updates, and reads a file without a line as no row.",
+    levels: ["unit"],
+  },
+  {
     id: "F155",
     implementation: [
       { file: "packages/host/tauriv2/src/startup.rs", symbol: "pub fn exit_on_failure_with" },

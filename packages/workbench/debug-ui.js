@@ -10,7 +10,7 @@ import { commandOf, delegate, mark, run } from "./commands.js";
 import { registry } from "./exposure.js";
 import { hideError, showError } from "./shown-errors.js";
 import { newestFirst } from "./debug-order.js";
-import { CLEAR_FILTER, contextRows, eventLine, filterRows, hostEventFiles, LAYERS, LEVELS, mergeRows, parseAppended, parseEvents, ROW_LIMIT } from "./debug-timeline.js";
+import { CLEAR_FILTER, DRAW_LIMIT, FOLLOW_INTERVAL_MS, contextRows, eventLine, filterRows, hostEventFiles, LAYERS, LEVELS, mergeRows, parseAppended, parseEvents, ROW_LIMIT } from "./debug-timeline.js";
 import { compareStates, parseState, stateFiles, stateLines } from "./debug-state.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 
@@ -67,7 +67,7 @@ const SELECTION_WARNING = "저장한 파일에는 입력한 글자가 들어 있
 /** The timeline part of the status core.debug. */
 function timelineState() {
   if (timeline === null) return null;
-  return { sources: timeline.files, limited: timeline.limited, following: timeline.following, appended: timeline.appended, total: timeline.rows.length, shown: timeline.shown.length, lines: timeline.lines.length, selected: timeline.selected.size, warning: SELECTION_WARNING, ...timeline.filter };
+  return { sources: timeline.files, limited: timeline.limited, following: timeline.following, appended: timeline.appended, total: timeline.rows.length, shown: timeline.shown.length, lines: timeline.lines.length, drawn: Math.min(timeline.lines.length, DRAW_LIMIT), omitted: Math.max(0, timeline.lines.length - DRAW_LIMIT), selected: timeline.selected.size, warning: SELECTION_WARNING, ...timeline.filter };
 }
 
 /** The state part of the status core.debug. */
@@ -169,7 +169,11 @@ function drawTimeline() {
   mark(follow, "core.debug.timeline.follow", { on: !timeline.following });
   follow.textContent = timeline.following ? "따라가기 멈춤" : "따라가기 다시 시작";
   timelineRows.textContent = "";
-  for (const { row, match } of timeline.lines) {
+  const omitted = Math.max(0, timeline.lines.length - DRAW_LIMIT);
+  const omittedLabel = timelineView.querySelector('[data-expose="core.debug.timeline.omitted"]');
+  omittedLabel.hidden = omitted === 0;
+  omittedLabel.textContent = `앞쪽 ${omitted}행은 그리지 않음`;
+  for (const { row, match } of timeline.lines.slice(omitted)) {
     const index = timeline.positions.get(row);
     const selected = timeline.selected.has(row);
     const pick = document.createElement("div");
@@ -304,7 +308,7 @@ function makeCard() {
         '<div class="dbg-card__rows" data-expose="core.debug.state.tree"></div>' +
       '</div>' +
       '<div class="dbg-card__timeline" hidden>' +
-        '<div class="dbg-card__bar"><span class="dbg-card__cut" hidden>행 한도에서 읽기를 멈춤</span></div>' +
+        '<div class="dbg-card__bar"><span class="dbg-card__cut" hidden>행 한도에서 읽기를 멈춤</span><span class="dbg-card__cut" data-expose="core.debug.timeline.omitted" hidden></span></div>' +
         '<div class="dbg-card__filters"></div>' +
         '<div class="dbg-card__save"><span class="dbg-card__warning" data-expose="core.debug.timeline.warning"></span></div>' +
         '<div class="dbg-card__rows" data-expose="core.debug.timeline.rows"></div>' +
@@ -384,6 +388,11 @@ export async function openDebug() {
   view = card.querySelector(".dbg-card__view");
   text = view.querySelector(".dbg-card__text");
   image = view.querySelector(".dbg-card__image");
+  // An image has no height before it loads, so the card measured at the first draw is too low for the native modal. The load of
+  // the image places the modal again with the height of the card that holds it; an image that the list replaced is not drawn.
+  image.addEventListener("load", () => {
+    if (viewing?.kind === "image") draw();
+  });
   timelineView = card.querySelector(".dbg-card__timeline");
   timelineRows = timelineView.querySelector(".dbg-card__rows");
   stateBox = card.querySelector(".dbg-card__state");
@@ -539,6 +548,8 @@ export async function showDebugTimeline() {
 
 /* The reads that follow the files, one after another: a notice that arrives during a read waits, so a line is read once. */
 let reading = Promise.resolve();
+/* The end of the last update that added rows (performance.now()), which spaces the next update. */
+let lastGrowth = -Infinity;
 
 /**
  * Reads the lines that grew in `paths` and merges them into the shown timeline in time order. The rows keep their identity, so the
@@ -551,6 +562,9 @@ function followGrowth(paths) {
     const current = timeline;
     if (card === null || current === null || !current.following) return null;
     try {
+      // The timer spaces the updates of a file that grows at every moment (FOLLOW_INTERVAL_MS); a notice that arrives later waits less.
+      const wait = lastGrowth + FOLLOW_INTERVAL_MS - performance.now();
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
       const reads = [];
       let total = current.rows.length;
       for (const path of paths) {
@@ -574,6 +588,7 @@ function followGrowth(paths) {
       timeline = { ...timeline, limited: stopped };
       // A notice that adds nothing draws nothing: the host calls of a draw are recorded events, and each of them is written.
       if (added.length > 0 || limitChanged) draw();
+      if (added.length > 0) lastGrowth = performance.now();
       return null;
     } catch (reason) {
       if (timeline !== null && timeline.cursors === current.cursors) timeline = { ...timeline, following: false };

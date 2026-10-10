@@ -1090,6 +1090,12 @@
                 "shown": {
                   "type": "number"
                 },
+                "drawn": {
+                  "type": "number"
+                },
+                "omitted": {
+                  "type": "number"
+                },
                 "level": {
                   "enum": ["error", "warn", "info", "debug", "trace"]
                 },
@@ -3971,6 +3977,10 @@
       {
         "name": "core.debug.timeline.save",
         "description": "The button that saves the selected rows of the timeline."
+      },
+      {
+        "name": "core.debug.timeline.omitted",
+        "description": "The note that states how many of the oldest lines of the timeline the view leaves out of the draw; hidden when it draws every line."
       },
       {
         "name": "core.debug.timeline.warning",

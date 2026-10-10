@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F156: the debug view places the native modal again when an image loads, so the modal has the height of the card with the image.
+- F157: the timeline of the debug view draws the newest 1000 lines and states how many it leaves out, spaces the updates that follow a growing file by 500 ms, and reads a file without a line as no row, in the view and in `sok debug timeline`; the page no longer stops answering on large event files.
 - F154.3: the full run of `make host-contract-check` (1586 tests in 480 s) found one Tauri test that waited 120 s for a message that the service never sends, so it passed only at the limit of the runner; the wait is removed and the test takes 0.3 s. The contract cases of `sok debug timeline` and the scope of the notification case are written in the table.
 - F145.15.4: the window check `e2e/event-log.test.mjs` observes on both applications that the trace stores the placed surface with its geometry, the memory of the sidecar process and the start of each page document after a reload.
 - F111.4: the hwp window check is split into `e2e/hwp.test.mjs` (opening, drawing and the keyboard focus while the application is inactive) and `e2e/activation/hwp.test.mjs` (typing, selecting and saving in the active key window), with the shared steps in `e2e/hwp-support.mjs`; the Tauri host does not pass the active check reliably (F111.4).

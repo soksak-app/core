@@ -81,7 +81,7 @@ test("the timeline lists the rows of the host event files by time and filters th
   });
   await ui.showDebugTimeline();
   assert.deepEqual(rowsText().map((text) => text.split(" ").slice(1, 4).join(" ")), ["info host log.open", "debug host host.window.created", "warn page page.call.slow"]);
-  assert.deepEqual(ui.debugState().timeline, { sources: ["logs/host-a.jsonl"], limited: [], following: true, appended: 0, total: 3, shown: 3, selected: 0, warning: WARNING, level: "trace", layer: "all", text: "", event: "", surface: "", session: "", cid: "", from: "", to: "", context: "0", lines: 3 });
+  assert.deepEqual(ui.debugState().timeline, { sources: ["logs/host-a.jsonl"], limited: [], following: true, appended: 0, total: 3, shown: 3, selected: 0, warning: WARNING, level: "trace", layer: "all", text: "", event: "", surface: "", session: "", cid: "", from: "", to: "", context: "0", lines: 3, drawn: 3, omitted: 0 });
   ui.filterDebugTimeline({ level: "warn" });
   assert.equal(rowsText().length, 1);
   ui.filterDebugTimeline({ level: "trace", layer: "host", text: "WINDOW" });
@@ -347,4 +347,45 @@ test("a change notice while no timeline is shown reads nothing", async (t) => {
   const { changed } = await openView(t, { entries: [entry("logs/host-a.jsonl")], readRange: read });
   await changed("logs/host-a.jsonl", HOST.length);
   assert.equal(read.file.calls.length, 0);
+});
+
+test("the timeline draws the newest rows up to the draw limit and states how many rows it leaves out", async (t) => {
+  const { DRAW_LIMIT } = await import("../debug-timeline.js");
+  const count = DRAW_LIMIT * 3;
+  const rows = [open("a"), ...Array.from({ length: count }, (_, index) => line({ ts_us: 100 + index, seq: index + 1, level: "info", layer: "host", event: "host.fixture.row", fields: { n: index } }))];
+  const { ui } = await openView(t, { entries: [entry("logs/host-a.jsonl")], readRange: served(rows.join("\n") + "\n") });
+  await ui.showDebugTimeline();
+  const drawn = rowsText();
+  assert.equal(drawn.length, DRAW_LIMIT, "the page drew every row of the file");
+  assert.match(drawn.at(-1), new RegExp(`n=${count - 1}$`), "the newest row is the last drawn row");
+  assert.match(drawn[0], new RegExp(`n=${count - DRAW_LIMIT}$`), "the first drawn row is the oldest of the newest rows");
+  const state = ui.debugState().timeline;
+  assert.deepEqual([state.total, state.lines, state.drawn, state.omitted], [count + 1, count + 1, DRAW_LIMIT, count + 1 - DRAW_LIMIT]);
+  const label = document.querySelector('[data-expose="core.debug.timeline.omitted"]');
+  assert.equal(label.hidden, false);
+  assert.match(label.textContent, new RegExp(`앞쪽 ${count + 1 - DRAW_LIMIT}행은 그리지 않음`));
+  // A filter that leaves fewer rows than the limit draws all of them and hides the label.
+  ui.filterDebugTimeline({ text: "n=5 " });
+  assert.equal(document.querySelector('[data-expose="core.debug.timeline.omitted"]').hidden, true);
+  assert.equal(ui.debugState().timeline.omitted, 0);
+});
+
+test("the timeline follows a file that grows all the time with a pause between two updates and loses no line", async (t) => {
+  const { FOLLOW_INTERVAL_MS } = await import("../debug-timeline.js");
+  const read = served(HOST);
+  const { ui, changed } = await openView(t, { entries: [entry("logs/host-a.jsonl")], readRange: read });
+  await ui.showDebugTimeline();
+  const stamps = [];
+  const original = read.file.calls.push.bind(read.file.calls);
+  read.file.calls.push = (call) => { stamps.push(performance.now()); return original(call); };
+  // The page redraws every row at each update, so a file that grows at every moment would keep the page busy for ever: the
+  // second update waits until the interval since the first one ended, and it reads what grew meanwhile.
+  read.file.text += lineAt(25, 5);
+  await changed("logs/host-a.jsonl", read.file.text.length);
+  read.file.text += lineAt(40, 6);
+  await changed("logs/host-a.jsonl", read.file.text.length);
+  const updates = stamps.filter((_, index) => read.file.calls.slice(-stamps.length)[index].offset > 0);
+  assert.equal(updates.length >= 2, true, `the file was read ${updates.length} times after it grew`);
+  assert.ok(updates.at(-1) - updates[0] >= FOLLOW_INTERVAL_MS - 50, `the updates are ${updates.at(-1) - updates[0]} ms apart, less than ${FOLLOW_INTERVAL_MS} ms`);
+  assert.equal(ui.debugState().timeline.total, 5, "a line that grew was not read");
 });

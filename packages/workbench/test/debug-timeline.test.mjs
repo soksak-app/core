@@ -18,7 +18,6 @@ test("the lines of a file become rows in the order of the file and the log.open 
 
 test("a file that does not follow the event contract is rejected with its name and what was found", () => {
   const bad = (text, expected) => assert.throws(() => parseEvents("logs/host-b1.jsonl", text), expected);
-  bad("", /logs\/host-b1\.jsonl: the file is empty/);
   bad(`${event(1, 0, "info", "host", "host.window.created")}\n`, /logs\/host-b1\.jsonl: the first line is not log\.open: "host\.window\.created"/);
   bad(`${line({ ts_us: 1, seq: 0, level: "info", layer: "host", event: "log.open", fields: { schema: 2 } })}\n`, /logs\/host-b1\.jsonl: schema 2 is not 1/);
   bad(`${open("b1")}\nnot json\n`, /logs\/host-b1\.jsonl:2: not JSON: not json/);
@@ -146,4 +145,8 @@ test("the golden files give the lines that `sok debug timeline` prints for each 
     const printed = contextRows(rows, filter).map(({ row, match }) => (match || Number(filter.context) === 0 ? "" : "  ") + eventLine(row));
     assert.deepEqual(printed, lines, name);
   }
+});
+
+test("a file without a line has no row, as a process that ended before its first write left it", () => {
+  assert.deepEqual(parseEvents("logs/host-b1.jsonl", ""), []);
 });

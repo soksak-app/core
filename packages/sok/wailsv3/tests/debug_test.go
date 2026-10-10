@@ -66,7 +66,6 @@ func TestTimelineRefusesWhatBreaksTheContract(t *testing.T) {
 	}
 	open := `{"ts_us":1,"seq":0,"level":"info","layer":"host","event":"log.open","fields":{"schema":1}}` + "\n"
 	cases := []struct{ name, text, want string }{
-		{"empty", "", "logs/host-b1.jsonl: the file is empty"},
 		{"first line", `{"ts_us":1,"seq":0,"level":"info","layer":"host","event":"host.x"}` + "\n", `logs/host-b1.jsonl: the first line is not log.open: "host.x"`},
 		{"schema", `{"ts_us":1,"seq":0,"level":"info","layer":"host","event":"log.open","fields":{"schema":2}}` + "\n", "logs/host-b1.jsonl: schema 2 is not 1"},
 		{"not json", open + "not json\n", "logs/host-b1.jsonl:2: not JSON: not json"},
@@ -114,5 +113,23 @@ func TestTimelineRefusesAnInvalidFilterValueAsAUsageError(t *testing.T) {
 		if stdout, stderr, code := runTimeline(t, timelineFixtures, c.args...); code != 2 || stdout != "" || !strings.Contains(stderr, c.want) {
 			t.Errorf("%v: code %d stdout %q stderr %q want %q", c.args, code, stdout, stderr, c.want)
 		}
+	}
+}
+
+// contract: cli.debug.timeline-errors
+func TestTimelineReadsAFileWithoutALineAsNoRows(t *testing.T) {
+	dir := t.TempDir()
+	logs := filepath.Join(dir, "logs")
+	if err := os.MkdirAll(logs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	open := `{"ts_us":1,"seq":0,"level":"info","layer":"host","event":"log.open","fields":{"schema":1}}` + "\n"
+	for name, text := range map[string]string{"host-a.jsonl": "", "host-b.jsonl": open} {
+		if err := os.WriteFile(filepath.Join(logs, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if stdout, stderr, code := runTimeline(t, dir); code != 0 || strings.Count(stdout, "\n") != 1 {
+		t.Errorf("code %d stdout %q stderr %q: the empty file must have no row and the other file one", code, stdout, stderr)
 	}
 }

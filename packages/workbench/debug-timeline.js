@@ -10,6 +10,20 @@ const SCHEMA = 1;
  */
 export const ROW_LIMIT = 100000;
 
+/**
+ * The number of lines that the view draws as elements. A page that draws one element pair for each of 100000 rows stops
+ * answering, so the view draws the newest lines that pass the filter and states how many it leaves out; the filters narrow
+ * the lines, and the selection and the status count every row.
+ */
+export const DRAW_LIMIT = 1000;
+
+/**
+ * The time in milliseconds that a following update waits after the previous update that added rows. The notices of a file that
+ * grows at every moment have no upper rate, and each update merges and filters every row and draws the lines again, so the page
+ * would never be idle; no line is lost, because the next read starts at the cursor of the file and reads what grew meanwhile.
+ */
+export const FOLLOW_INTERVAL_MS = 500;
+
 /** The levels from the most to the least severe; a level filter shows its level and the more severe ones. */
 export const LEVELS = ["error", "warn", "info", "debug", "trace"];
 /** The layers of an event. */
@@ -69,7 +83,8 @@ function rowsOf(file, text, first) {
  */
 export function parseEvents(file, text) {
   const rows = rowsOf(file, text, 1);
-  if (rows.length === 0) throw new Error(`${file}: the file is empty`);
+  // A file without a line is what a process that ended before its first write leaves: it has no row.
+  if (rows.length === 0) return rows;
   if (rows[0].event !== "log.open") throw new Error(`${file}: the first line is not log.open: ${found(rows[0].event)}`);
   if (rows[0].fields?.schema !== SCHEMA) throw new Error(`${file}: schema ${rows[0].fields?.schema} is not ${SCHEMA}`);
   return rows;
