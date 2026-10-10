@@ -391,7 +391,8 @@ function checkContributes(where, id, contributes) {
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "exposes", "settings",
-    "state", "data", "sidebars", "extends", "contributes"]);
+    "state", "data", "sidebars", "extends", "contributes", "events"]);
+  validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
   const where = `plugin ${id}`;
@@ -562,9 +563,21 @@ export function checkProjectData(plugin, data, key, value) {
  *   protocol    메시지 형식 버전. 현재 1
  *   helpers     optional; the helper programs of the sidecar, each with the name of its package.json and its executable
  */
+/**
+ * `events` of a manifest names the file of the event catalog of the package, a path inside the package like `executable`
+ * (docs/spec/logging.md#catalog). It is optional.
+ */
+function validateEventsPath(where, events) {
+  if (events === undefined) return;
+  if (!isText(events) || events.startsWith("/") || events.split("/").includes("..")) {
+    throw new Error(`${where}: events must be a path inside the package`);
+  }
+}
+
 export function validateSidecar(sidecar) {
   if (!isObject(sidecar)) throw new Error("sidecar.json: expected an object");
-  only("sidecar.json", sidecar, ["executable", "protocol", "helpers", "transport"]);
+  only("sidecar.json", sidecar, ["executable", "protocol", "helpers", "transport", "events"]);
+  validateEventsPath("sidecar.json", sidecar.events);
   const { executable } = sidecar;
   if (!isText(executable) || executable.startsWith("/") || executable.split("/").includes("..")) {
     throw new Error("sidecar.json: executable must be a path inside the package");

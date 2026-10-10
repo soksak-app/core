@@ -55,6 +55,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `sidebars` | 아니오 | 로컬 기본 세트와 선택적인 네 변 `card` 연결([기본 사이드바 세트](#기본-사이드바-세트)) |
 | `preview` | 아니오 | `{ "ink": "--<토큰>" }`: 라이브러리 미리보기에서 플러그인 카드의 색을 정하는 테마 토큰 이름. `surface`가 필요하다 |
 | `dependencies` | 아니오 | `{ "<package>": "<version range>" }`: plugin이 필요로 하는 sidecar와 plugin, 그리고 plugin이 함께 동작하는 그 version의 범위([version과 범위](installation.ko.md#version과-범위)). 의존은 표면 페이지나 상태 모듈이 쓰는 [사이드카](sidecars.ko.md)를 가리키며 그때 `surface`나 `state`가 필요하거나, plugin이 기여하는 [확장 지점](#확장-지점)을 가진 plugin을 가리키며 plugin을 설치하면 그것도 설치된다. registry index나 `installed.json`의 plugin이 그 이름을 가지면 의존은 plugin을 가리키고, 아니면 sidecar를 가리킨다. plugin이 다른 sidecar와 plugin에 요구하는 것의 유일한 선언이다 |
+| `events` | 아니오 | plugin의 event catalog 파일의 패키지 안 경로([logging](logging.ko.md#catalog)). 릴리스는 그 파일을 담는다 |
 | `extends` | 아니오 | `{ "<point>": { "version": "x.y.z", "schema": <스키마>, "modules"?: { "<bare specifier>": "<경로>" } } }`: 다른 plugin이 기여하는 [확장 지점](#확장-지점). `surface`가 필요하다 |
 | `contributes` | 아니오 | `{ "<plugin id>.<point>": [ { "range": "<version range>", "module": "<경로>", ... } ] }`: plugin이 다른 plugin의 확장 지점에 기여하는 항목 |
 | `state` | 아니오 | `{ "module": "ui/state.js" }`: 표면 밖의 상태를 갖는 [플러그인 상태](#플러그인-상태) 모듈. `sections`가 필요하다 |

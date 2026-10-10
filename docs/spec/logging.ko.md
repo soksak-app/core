@@ -87,7 +87,7 @@ event가 아닌 raw 파일이 둘 있다. `logs/<role>-<boot>.stderr`는 프로�
 
 ## catalog
 
-event를 내는 각 저장소는 `events.json`에 event를 선언한다(이 저장소는 [events.json](events.json)이며 계층 `native`, `host`, `page`를 소유한다. `page.record.<level>`처럼 자리 표시자를 가진 이름은 계열을 선언한다. `make events-check`는 선언한 event마다 이를 적는 소스를 요구하고, `node scripts/check-events.mjs --logs <config-dir>…`는 창 검사가 남긴 host event 파일을 감사한다): event마다 이름, 층, class, level, 필수 field와 그 타입, 가릴 인자, 인자의 크기 상한, 설명. 저장소는 다른 모든 검사에서 자기 소스를 검사하듯 자기 소스를 자기 catalog로 검사한다. 이 저장소는 catalog의 schema와 `native`·`host` 층, page의 event를 소유한다. plugin이나 sidecar는 manifest(`events`)에 자기 catalog를 선언하고, viewer가 설치된 manifest의 catalog를 읽는다. 이 저장소는 그것을 이름으로 부르지 않는다.
+event를 내는 각 저장소는 `events.json`에 event를 선언한다(이 저장소는 [events.json](events.json)이며 계층 `native`, `host`, `page`를 소유한다. `page.record.<level>`처럼 자리 표시자를 가진 이름은 계열을 선언한다. `make events-check`는 선언한 event마다 이를 적는 소스를 요구하고, `node scripts/check-events.mjs --logs <config-dir>…`는 창 검사가 남긴 host event 파일을 감사한다): event마다 이름, 층, class, level, 필수 field와 그 타입, 가릴 인자, 인자의 크기 상한, 설명. 저장소는 다른 모든 검사에서 자기 소스를 검사하듯 자기 소스를 자기 catalog로 검사한다. 이 저장소는 catalog의 schema와 `native`·`host` 층, page의 event를 소유한다. plugin이나 sidecar는 manifest(`events`, `executable`처럼 패키지 안의 경로)에 자기 catalog 파일을 적고, 릴리스는 그 파일을 담으며, viewer가 설치된 manifest의 catalog를 읽는다. 이 저장소는 그것을 이름으로 부르지 않는다.
 
 catalog는 입력 종류마다 남겨야 하는 사슬도 선언한다. 첫 층에서 마지막 층까지 event의 순서 있는 목록이다(예: `native.input.key_down`, host 중계, `page.terminal.send`, `sidecar.vt.pty_write`). 로그 감사는 입력의 선언된 사슬이 모두 완결되어 있기를 요구한다.
 

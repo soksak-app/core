@@ -15,6 +15,7 @@ A sidecar is a program in its own repository with a `package.json` and a `sideca
 | `executable` | Path of the built executable inside the sidecar |
 | `protocol` | Message format version. The current version is `1` |
 | `helpers` | Optional array of helper programs. Each item has `name` (the `name` of the helper's `package.json`) and `executable` (the path inside the helper's folder) |
+| `events` | Optional path inside the package of the file with the event catalog of the sidecar ([logging](logging.md#catalog)); the release packs the file |
 
 A plugin declares the sidecars its page uses, each with a version range, as the `dependencies` of its `plugin.json` ([plugins](plugins.md#pluginjson)). Installation extracts each sidecar's release into the configuration directory.
 

@@ -425,3 +425,13 @@ test("a surface names its save command among its declared commands", () => {
   assert.throws(() => validateManifest({ ...card, exposes, surface: { ...card.surface, save: "probe.write" } }),
     /surface save must name a command declared in exposes/);
 });
+
+test("a sidecar manifest and a plugin manifest name the file of their event catalog inside the package", () => {
+  const sidecar = { executable: "build/worker", protocol: 1, events: "events.json" };
+  assert.equal(validateSidecar(sidecar), sidecar);
+  for (const events of ["../events.json", "/events.json", "", 7]) {
+    assert.throws(() => validateSidecar({ ...sidecar, events }), /sidecar\.json: events must be a path inside the package/, `sidecar events ${events}`);
+    assert.throws(() => validateManifest({ ...card, events }), /plugin\.json: events must be a path inside the package/, `plugin events ${events}`);
+  }
+  assert.equal(validateManifest({ ...card, events: "events.json" }).events, "events.json");
+});

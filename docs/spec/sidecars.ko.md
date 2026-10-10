@@ -15,6 +15,7 @@
 | `executable` | 빌드된 실행 파일의 sidecar 안 경로 |
 | `protocol` | 메시지 형식 버전. 현재 버전은 `1` |
 | `helpers` | 선택 필드. 헬퍼 프로그램 목록. 각 항목은 `name`(헬퍼 `package.json`의 `name`)과 `executable`(헬퍼 폴더 안의 경로)을 가진다 |
+| `events` | 선택 필드. sidecar의 event catalog 파일의 패키지 안 경로([logging](logging.ko.md#catalog)). 릴리스는 그 파일을 담는다 |
 
 플러그인은 페이지가 사용하는 사이드카를 version 범위와 함께 `plugin.json`의 `dependencies`로 선언한다([플러그인](plugins.ko.md#pluginjson)). 설치는 각 사이드카의 release를 설정 디렉터리에 푼다.
 
