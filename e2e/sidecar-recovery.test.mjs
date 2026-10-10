@@ -40,6 +40,8 @@ test("a killed terminal sidecar recovers without an application restart", async 
     // Kills the persistent service. The session and the picture state disappear together with the service.
     const { endpoint: killed } = serviceEndpoint(app.configDir);
     assert.ok(Number.isInteger(killed.pid) && killed.pid > 0, "the service endpoint has no pid");
+    // The host logs the lost connection once when it restarts the service.
+    session.expectError(/^error host sidecar @soksak\/sidecar-vt-alacritty: connection lost; restarted$/);
     process.kill(killed.pid, "SIGKILL");
 
     // Recovery: the surface attaches to the reopened session. A sessionId different from that of the dead session must arrive.
