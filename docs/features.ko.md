@@ -624,7 +624,7 @@
 - [ ] F104 — P2: 모든 주석을 영어로 쓴다. 입력: 한국어 주석이 있는 core의 source 파일. 동작: core의 주석 10,573줄이 한글을 담는다. 기대 동작: 주석은 영어이고, `scripts/check-comment-language.mjs`가 `pnpm test`에서 저장소 전체를 검사하며 보고하는 줄이 없다.
   - [o] F104.1 — P2: 영어 주석 규칙을 검사한다. 2026-10-08에 완료했다. `findKoreanComments`는 `packages/soksak`을 포함한 source 파일에서 한글을 담은 주석 줄을 각각 보고하고, 문자열과 생성 폴더는 빼놓는다. 이전 검사는 `packages/soksak` 밖의 영어 주석을 보고했다. `scripts/test/comment-language.test.mjs`가 5개 중 5개 통과한다. F104.2부터 F104.6까지 주석을 다시 쓰면 이 검사가 저장소 전체에서 실행된다.
   - [ ] F104.2 — P2: `packages/host`의 주석을 영어로 다시 쓴다.
-  - [ ] F104.3 — P2: `packages/workbench`의 주석을 영어로 다시 쓴다.
+  - [o] F104.3 — P2: `packages/workbench`의 주석을 영어로 다시 쓴다. 2026-10-11에 완료했다. 한글을 담았던 `packages/workbench`의 주석 2,368줄(파일 138개)이 영어이고, `node scripts/check-comment-language.mjs`가 이 폴더에서 보고하는 줄이 0이다(이전 2,368). `기본값:`으로 시작하던 주석은 `default:`로 시작한다. 주석만 바뀌었다. 바뀐 파일마다 주석을 뺀 코드가 기준과 같고, 바뀐 script마다 `node --check`가 통과하며, `packages/workbench`의 `node --test --experimental-test-module-mocks test/`가 macOS에서 420개 중 420개 통과한다.
   - [ ] F104.4 — P2: `native/darwin`의 주석을 영어로 다시 쓴다.
   - [ ] F104.5 — P2: `packages/sok`, `packages/plugin-api`, `packages/window-check`, `packages/client`, `apps`의 주석을 영어로 다시 쓴다.
   - [ ] F104.6 — P2: `e2e`, `scripts`, Makefile과 나머지 파일의 주석을 영어로 다시 쓰고, `pnpm test`에서 저장소 전체 검사를 실행한다.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F104.3: `packages/workbench`의 주석을 영어로 썼다. `scripts/check-comment-language.mjs`가 이 폴더에서 보고하는 줄이 없으며, 코드, 문자열, 식별자는 바뀌지 않았다.
 - F154.4.3: `pnpm verify:windows`가 창 검사 파일을 파일마다 자기 프로세스로 test runner에 하나씩 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 10초마다 실행 중인 파일, 파일마다 600초 한도를 쓴다.
 - F154.4.2: `make -C native/darwin test`가 native 시험을 test runner로 하나씩 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 실행 중인 시험의 10초 간격 줄, 시험마다 120초 한도를 쓰며 `NATIVE_TEST_ONLY=<text>`로 범위를 정한다.
 - F154.4.1: `pnpm test`가 workspace의 Node 시험 파일을 파일마다 자기 프로세스로 test runner에 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 실행 중인 파일, 가장 느린 파일, 파일마다 120초 한도를 쓰며 `--only <text>`로 범위를 정한다.
