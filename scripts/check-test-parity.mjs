@@ -2295,6 +2295,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/picker-layer.test.mjs", id: "a grouped picker draws headings that take no press and counts only the items" },
+      { file: "packages/workbench/test/picker-layer.test.mjs", id: "the icon and the name of a heading and of an item carry declared dom names and the headings are reported" },
       { file: "packages/workbench/test/picker-columns.test.mjs", id: "the icon and the name of a heading and of its items share one column at every depth" },
       { file: "e2e/space-apps.test.mjs", id: "a fullscreen card lists the apps of the space by card and switches to a picked one" },
     ],

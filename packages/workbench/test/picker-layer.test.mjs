@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-import { fillPicker, pickerItems } from "../picker-layer.js";
+import { fillPicker, pickerGroups, pickerItems } from "../picker-layer.js";
 
 // 선택 레이어는 묶음 제목을 누름을 받지 않는 요소로 그리고, 고르는 index 는 항목만 센다(docs/spec/example-model.md).
 test("a grouped picker draws headings that take no press and counts only the items", () => {
@@ -36,4 +36,20 @@ test("an ungrouped picker draws its items with no heading and no group", () => {
   assert.equal(el.querySelectorAll(".picker__group").length, 0);
   assert.equal(el.querySelector(".picker__head").textContent, "탭 1개");
   assert.deepEqual(pickerItems(el), [{ key: "t1", name: "터미널", active: false, group: null }]);
+});
+
+// 열의 x 를 창 검사가 재도록 제목과 항목의 그림과 이름은 선언된 dom 이름을 달고, 제목은 core.picker 의 groups 로 보고된다.
+test("the icon and the name of a heading and of an item carry declared dom names and the headings are reported", () => {
+  const { document } = new JSDOM("<div id=picker></div>").window;
+  const el = document.getElementById("picker");
+  fillPicker(el, "스페이스 앱 3개", [
+    { heading: { id: "a", name: "카드 1", depth: 0, map: "" }, items: [{ key: "a:t1", name: "터미널", mark: ">", svg: "" }] },
+    { heading: { id: "b", name: "카드 2", depth: 2, map: "" }, items: [{ key: "b:t2", name: "없는 플러그인", mark: "?", svg: "" }] },
+  ], () => {});
+  const exposed = (name) => [...el.querySelectorAll(`[data-expose="${name}"]`)].map((node) => node.textContent);
+  assert.deepEqual(exposed("core.picker.group-name"), ["카드 1", "카드 2"]);
+  assert.deepEqual(exposed("core.picker.item-name"), ["터미널", "없는 플러그인"]);
+  assert.equal(el.querySelectorAll('svg[data-expose="core.picker.group-icon"]').length, 2);
+  assert.equal(el.querySelectorAll('svg[data-expose="core.picker.item-icon"]').length, 2);
+  assert.deepEqual(pickerGroups(el), [{ id: "a", name: "카드 1", depth: 0 }, { id: "b", name: "카드 2", depth: 2 }]);
 });

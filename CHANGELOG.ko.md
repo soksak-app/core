@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F139: 노출이 DOM 이름 `core.picker.group-icon`, `core.picker.group-name`, `core.picker.item-icon`, `core.picker.item-name`과 상태 `core.picker`의 `groups`(`id`, `name`, `depth`)를 선언한다. `e2e/space-apps.test.mjs`가 각 항목의 아이콘 x와 이름 x가 제목과 같은지 확인한다. 검사 환경은 로드되지 않은 플러그인의 항목을 만들 수 없다. host에서 실행하지 않았다.
 - F150.7.4: `docs/spec/events.json`은 계층 `native`, `host`, `page`의 event catalog다. `make events-check`는 선언한 event마다 이를 적는 소스를 요구하고, `node scripts/check-events.mjs --logs <config-dir>…`는 창 검사가 남긴 host event 파일을 감사한다(선언된 event, 필수 field와 그 타입). 자리 표시자를 가진 catalog 이름은 계열을 선언한다. 감사가 `native.window.occlusion`이 `visible`을 숫자로 저장하는 결함을 찾았고, 이제 boolean이다.
 - F151.5: `debug-state.js`를 workbench 패키지의 files 목록에 넣고, `page` 멤버가 배열인 state 파일(host가 쓰는 형태)을 트리로 보인다.
 - F150.6.1: 사이드카로 가는 페이지 요청은 이어받는 입력의 상관 식별자를 나를 수 있다. 사이드카 포트의 `send(surface, body, cids)`, 두 runtime의 host 호출 `sidecarSend`, 두 host가 `cids`를 전달하고, 요청 줄은 목록이 비어 있지 않을 때만 `root`와 `body` 사이에 필드 `cids`를 가진다.

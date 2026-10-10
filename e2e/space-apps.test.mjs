@@ -36,6 +36,20 @@ for (const app of Object.values(APPS)) {
       `the groups do not follow the arrangement: ${JSON.stringify(menu.items)}`);
     assert.equal(menu.items.find((item) => item.active)?.group, "terminal");
 
+    // 같은 깊이의 제목과 항목은 아이콘의 x 가 같고 이름의 x 가 같다(제목은 core.picker 의 groups 순서, 항목은 items 순서).
+    // 검사 환경은 불러오지 않은 플러그인의 탭을 만들 수 없으므로 불러온 플러그인의 항목만 잰다.
+    assert.deepEqual(menu.groups.map((group) => group.id), ["terminal", b, c],
+      `the headings do not follow the arrangement: ${JSON.stringify(menu.groups)}`);
+    for (const [at, item] of menu.items.entries()) {
+      const heading = menu.groups.findIndex((group) => group.id === item.group);
+      const [groupIcon, groupName, itemIcon, itemName] = await Promise.all([
+        s.rect("core.picker.group-icon", heading), s.rect("core.picker.group-name", heading),
+        s.rect("core.picker.item-icon", at), s.rect("core.picker.item-name", at)]);
+      assert.ok(itemIcon.width > 0 && itemName.width > 0, `${item.key}: the item has no icon or name box: ${JSON.stringify({ itemIcon, itemName })}`);
+      assert.equal(itemIcon.x, groupIcon.x, `${item.key}: the icon x differs from the heading icon x at depth ${menu.groups[heading].depth}`);
+      assert.equal(itemName.x, groupName.x, `${item.key}: the name x differs from the heading name x at depth ${menu.groups[heading].depth}`);
+    }
+
     // C 의 탭을 고르면 전체 화면이 C 로 옮겨 가고 그 탭을 보인다.
     const target = menu.items.findIndex((item) => item.group === c);
     await s.run("core.picker.pick", { index: target });

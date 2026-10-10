@@ -24,7 +24,8 @@ export function fillPicker(el, ask, groups, mark) {
       title.className = "picker__group";
       title.dataset.group = heading.id;
       title.style.setProperty("--depth", String(heading.depth));
-      title.innerHTML = `<svg viewBox="0 0 16 10" aria-hidden="true">${heading.map}</svg><span class="picker__group-name"></span>`;
+      title.innerHTML = `<svg data-expose="core.picker.group-icon" viewBox="0 0 16 10" aria-hidden="true">${heading.map}</svg>` +
+        '<span class="picker__group-name" data-expose="core.picker.group-name"></span>';
       title.querySelector(".picker__group-name").textContent = heading.name;
       el.appendChild(title);
     }
@@ -41,8 +42,8 @@ export function fillPicker(el, ask, groups, mark) {
       }
       // 기본값: 플러그인 표시는 16 단위 그림이고, 다른 크기의 그림을 넘기는 항목만 viewBox 를 함께 준다.
       const box = item.viewBox === undefined ? "0 0 16 16" : item.viewBox;
-      b.innerHTML = `<svg viewBox="${box}" aria-hidden="true">${item.svg}</svg>` +
-        '<span class="picker__name"></span><small></small>';
+      b.innerHTML = `<svg data-expose="core.picker.item-icon" viewBox="${box}" aria-hidden="true">${item.svg}</svg>` +
+        '<span class="picker__name" data-expose="core.picker.item-name"></span><small></small>';
       b.querySelector(".picker__name").textContent = item.name;
       b.querySelector("small").textContent = item.mark;
       mark(b, keys.length, item);
@@ -60,5 +61,14 @@ export function pickerItems(el) {
     name: b.querySelector(".picker__name").textContent,
     active: b.dataset.active === "true",
     group: b.dataset.group === undefined ? null : b.dataset.group,
+  }));
+}
+
+/** 그려진 묶음 제목의 상태. 제목은 그려진 순서이며 depth 는 들여쓰기 단계다. */
+export function pickerGroups(el) {
+  return [...el.querySelectorAll(".picker__group")].map((g) => ({
+    id: g.dataset.group,
+    name: g.querySelector(".picker__group-name").textContent,
+    depth: Number(g.style.getPropertyValue("--depth")),
   }));
 }

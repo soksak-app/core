@@ -1169,7 +1169,7 @@
       },
       {
         "name": "core.picker",
-        "description": "Whether the add, tab, tool or space apps menu is open, its title, and its items in order; group is the card of an item in a grouped menu and null otherwise.",
+        "description": "Whether the add, tab, tool or space apps menu is open, its title, its items in order and its group headings in order; group is the card of an item in a grouped menu and null otherwise, and a heading reports the card id, its name and its indentation depth.",
         "schema": {
           "type": "object",
           "properties": {
@@ -1196,6 +1196,17 @@
                   "group": {
                     "type": ["string", "null"]
                   }
+                }
+              }
+            },
+            "groups": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "name": { "type": "string" },
+                  "depth": { "type": "integer" }
                 }
               }
             }
@@ -3621,6 +3632,26 @@
       {
         "name": "core.picker.item",
         "description": "The items of the open add or tab menu in order.",
+        "many": true
+      },
+      {
+        "name": "core.picker.item-icon",
+        "description": "The icon slots of the items of the open menu in item order; at one depth they stand in the column of core.picker.group-icon.",
+        "many": true
+      },
+      {
+        "name": "core.picker.item-name",
+        "description": "The names of the items of the open menu in item order; at one depth they start at the x of core.picker.group-name.",
+        "many": true
+      },
+      {
+        "name": "core.picker.group-icon",
+        "description": "The map icons of the group headings of the open grouped menu in heading order.",
+        "many": true
+      },
+      {
+        "name": "core.picker.group-name",
+        "description": "The names of the group headings of the open grouped menu in heading order.",
         "many": true
       },
       {
