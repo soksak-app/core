@@ -1618,6 +1618,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F151.5",
+    implementation: [
+      { file: "packages/workbench/debug-state.js", symbol: "export function compareStates" },
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function showDebugState" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-state.test.mjs", id: "a comparison lists the paths whose values differ, including paths present in one file" },
+      { file: "packages/workbench/test/debug-state-ui.test.mjs", id: "a state file is shown as a tree and two state files are compared" },
+    ],
+    expected: "The debug view shows a state file as a tree, compares two state files by the paths whose values differ, and rejects a file that is not a state with its name and what was found.",
+    levels: ["unit"],
+  },
+  {
     id: "F151.3",
     implementation: [
       { file: "packages/workbench/debug-timeline.js", symbol: "export function contextRows" },

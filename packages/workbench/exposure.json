@@ -1011,7 +1011,7 @@
       },
       {
         "name": "core.debug",
-        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files that were truncated, the counts of all rows, rows that pass the filter and shown lines with the context rows, and its filter or null, the scroll position of the shown content in points, the running or last save operation, and the error of the last failed step or operation or null.",
+        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files that were truncated, the counts of all rows, rows that pass the filter and shown lines with the context rows, and its filter or null, the shown state file with its path, the number of tree lines, the state file it is compared with or null and the number of differences, or null, the scroll position of the shown content in points, the running or last save operation, and the error of the last failed step or operation or null.",
         "schema": {
           "type": "object",
           "properties": {
@@ -1117,6 +1117,15 @@
                 "lines": {
                   "type": "number"
                 }
+              }
+            },
+            "state": {
+              "type": ["object", "null"],
+              "properties": {
+                "path": { "type": "string" },
+                "lines": { "type": "number" },
+                "with": { "type": ["string", "null"] },
+                "differences": { "type": "number" }
               }
             },
             "scroll": {
@@ -1861,6 +1870,38 @@
         "result": {
           "type": "null"
         }
+      },
+      {
+        "name": "core.debug.state",
+        "description": "Shows one state file of the logs folder as a tree of its keys and values in the open debug view; a file that is not a state file of the list, or whose content is not a state, is an error.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
+        "name": "core.debug.state.compare",
+        "description": "Compares the shown state file with the state file at with and lists the paths whose values differ; an empty with ends the comparison; a with that is not another state file of the list is an error.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "with": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
       },
       {
         "name": "core.debug.timeline",
@@ -3735,6 +3776,37 @@
       {
         "name": "core.debug.file",
         "description": "The rows of the files of the logs folder in path order.",
+        "many": true
+      },
+      {
+        "name": "core.debug.state",
+        "description": "The 상태 buttons of the state file rows in path order.",
+        "many": true
+      },
+      {
+        "name": "core.debug.state.list",
+        "description": "The button of the state view that shows the list of files again."
+      },
+      {
+        "name": "core.debug.state.with",
+        "description": "The selection box of the state file that the shown state file is compared with."
+      },
+      {
+        "name": "core.debug.state.differences",
+        "description": "The container of the differences between the compared state files."
+      },
+      {
+        "name": "core.debug.state.difference",
+        "description": "The paths whose values differ, each as the path with the value in the shown file and in the other file.",
+        "many": true
+      },
+      {
+        "name": "core.debug.state.tree",
+        "description": "The container of the lines of the shown state file."
+      },
+      {
+        "name": "core.debug.state.line",
+        "description": "The lines of the shown state file in file order, each a key with its value or the number of its members, indented by depth.",
         "many": true
       },
       {
