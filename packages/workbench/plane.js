@@ -24,7 +24,7 @@ import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "
 import { icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run } from "./commands.js";
-import { fillPicker, pickerItems } from "./picker-layer.js";
+import { fillPicker, pickerGroups, pickerItems } from "./picker-layer.js";
 import { disposeSurface, focusSurface, mountSurface, placePluginPlaceholder } from "./surface-modules.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
@@ -630,6 +630,7 @@ export const pickerState = () => ({
   open: picker !== null,
   title: picker ? pickerEl.getAttribute("aria-label") : "",
   items: picker ? pickerItems(pickerEl) : [],
+  groups: picker ? pickerGroups(pickerEl) : [],
 });
 
 /* 카드 도구 버튼의 data-do 와 core.card.menu 의 menu 값. */
