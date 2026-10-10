@@ -1,0 +1,4 @@
+{"ts_us":1791500000000000,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":1,"pid":4242,"role":"host","boot":"b1"}}
+{"ts_us":1791500000100000,"seq":2,"level":"info","layer":"native","event":"native.input.key_down","window":"w1","surface":"tab-x","cids":["b1.1"],"fields":{"keyCode":36,"characters":"\r"}}
+{"ts_us":1791500000200000,"seq":3,"level":"debug","layer":"page","event":"page.call","window":"w1","surface":"tab-x","session":"s1","cids":["b1.1","b1.2"],"fields":{"name":"Café","ok":true}}
+{"ts_us":1791500000200000,"seq":4,"level":"warn","layer":"page","event":"page.console.error","fields":{"text":"boom"}}

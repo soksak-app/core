@@ -131,3 +131,19 @@ test("context rows add the rows before and after each row that passes, once, mar
   assert.deepEqual(shape({ event: "closed", context: "9" }), ["0", "1", "2", "3", "4", "5*"]);
   assert.deepEqual(shape({ event: "nothing", context: "3" }), []);
 });
+
+// The golden files of `sok debug timeline` (docs/spec/debug.md#timeline-command): the files and the expected lines of each filter,
+// which the view, `sok` for Go and `sok` for Rust all produce.
+test("the golden files give the lines that `sok debug timeline` prints for each filter", async () => {
+  const { readFileSync } = await import("node:fs");
+  const folder = new URL("../../log-contract/fixtures/timeline/", import.meta.url);
+  const rows = mergeRows(["host-b1.jsonl", "host-b2.jsonl"].map((name) => parseEvents(`logs/${name}`, readFileSync(new URL(`logs/${name}`, folder), "utf8"))));
+  const cases = JSON.parse(readFileSync(new URL("cases.json", folder), "utf8"));
+  assert.ok(cases.length >= 7);
+  for (const { name, args, lines } of cases) {
+    const filter = { ...CLEAR_FILTER };
+    for (let index = 0; index < args.length; index += 2) filter[args[index].slice(2)] = args[index + 1];
+    const printed = contextRows(rows, filter).map(({ row, match }) => (match || Number(filter.context) === 0 ? "" : "  ") + eventLine(row));
+    assert.deepEqual(printed, lines, name);
+  }
+});

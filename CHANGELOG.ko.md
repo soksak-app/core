@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F151.6: `sok debug timeline`이 설정 폴더의 host 이벤트 파일에서 filter(`--level`, `--layer`, `--text`, `--event`, `--surface`, `--session`, `--cid`, `--from`, `--to`, `--context`)를 통과한 행을 실행 중인 애플리케이션 없이 debug 화면의 글 줄로 출력한다. Go와 Rust 구현이 같은 줄을 출력하며 golden 파일 `packages/log-contract/fixtures/timeline`과 debug 화면 시험이 이를 검사한다. 시험과 관측: 두 구현이 두 검사 애플리케이션의 이벤트 파일에 같은 출력을 낸다.
 - F150.6.3: `sidecar.json`과 `plugin.json`의 필드 `events`는 패키지의 event catalog 파일의 패키지 안 경로다. 검증기는 이를 받고 패키지 밖의 경로는 거절한다.
 - F150.3.7: host 프로세스가 성능 trace의 스위치를 가진다. 파일 `performance`, 파일 `logs/performance.ndjson`, service 폴더의 flag는 더 이상 없다. 표식은 event `host.trace.on`과 `host.trace.off`이고, 표본 추출은 trace가 꺼지면 끝난다(스위치보다 오래 산 표본 추출 스레드가 다른 검사의 시작 버퍼에 써서 두 번에 한 번 실패하게 했다). 두 host는 영구 service를 `--log-dir <config-dir>/logs`로 시작하며 vt sidecar가 이를 요구한다.
 - F151.2.3: 호출 `overlayUpdate`와 `overlayPlace`는 `page.call`로 기록하지 않는다. 네이티브 모달을 그리고 놓는 호출(class `frame`)이고, event 파일을 따라가는 debug 타임라인은 늘어난 행마다 다시 그려 기록하면 끝없이 스스로 먹이가 되었기 때문이다.

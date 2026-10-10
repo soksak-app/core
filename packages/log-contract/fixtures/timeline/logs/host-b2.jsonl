@@ -1,0 +1,2 @@
+{"ts_us":1791500000150000,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":1,"pid":4343,"role":"host","boot":"b2"}}
+{"ts_us":1791500000300456,"seq":2,"level":"error","layer":"sidecar","event":"sidecar.vt.pty_write","surface":"tab-y","cids":["b2.7"],"fields":{"hex":"0d","text":"\r"}}

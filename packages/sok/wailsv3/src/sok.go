@@ -30,6 +30,8 @@ commands:
   dom rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
   input pointer [window] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
+  debug timeline [--level L] [--layer L] [--text T] [--event E] [--surface S] [--session S] [--cid C] [--from T] [--to T] [--context N]
+                            prints the rows of the host event files that pass the filter
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
   app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
@@ -64,6 +66,7 @@ var booleans = map[string]bool{"watch": true, "activate": true, "help": true, "d
 var options = map[string]bool{
 	"config-dir": true, "window": true, "project": true, "surface": true, "index": true, "value": true, "event": true,
 	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "delta-x": true, "delta-y": true, "key": true, "text": true, "modifiers": true,
+	"level": true, "layer": true, "session": true, "cid": true, "from": true, "to": true, "context": true,
 }
 
 type arguments struct {
@@ -535,6 +538,9 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 	}
 	if len(a.positionals) > 0 && (a.positionals[0] == "plugin" || a.positionals[0] == "sidecar") {
 		return runFiles(a, stdout)
+	}
+	if len(a.positionals) > 0 && a.positionals[0] == "debug" {
+		return runDebug(a, stdout, options)
 	}
 	if len(a.positionals) > 0 && a.positionals[0] == "path" {
 		action, err := a.positional(1, "path action")

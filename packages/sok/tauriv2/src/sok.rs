@@ -10,6 +10,7 @@ use serde_json::{Map, Value};
 
 pub mod appupdate;
 mod command;
+mod debug;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
 pub mod endpoint;
@@ -40,6 +41,8 @@ commands:
   dom rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
   input pointer [window] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
+  debug timeline [--level L] [--layer L] [--text T] [--event E] [--surface S] [--session S] [--cid C] [--from T] [--to T] [--context N]
+                            prints the rows of the host event files that pass the filter
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
   app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
@@ -104,6 +107,13 @@ const OPTIONS: &[&str] = &[
     "key",
     "text",
     "modifiers",
+    "level",
+    "layer",
+    "session",
+    "cid",
+    "from",
+    "to",
+    "context",
 ];
 
 struct Arguments {
@@ -723,6 +733,9 @@ fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result
         Some("plugin" | "sidecar")
     ) {
         return release::run_files(&a.positionals, &a.values, stdout, a.flag("diagnostics"));
+    }
+    if a.positionals.first().map(String::as_str) == Some("debug") {
+        return debug::run_debug(&a, stdout, options);
     }
     if a.positionals.first().map(String::as_str) == Some("path") {
         let action = a.positional(1, "path action")?;

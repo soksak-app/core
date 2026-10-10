@@ -1619,6 +1619,42 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F151",
+    implementation: [
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function showDebugState" },
+      { file: "packages/workbench/debug-timeline.js", symbol: "export function filterRows" },
+      { file: "packages/sok/wailsv3/src/debug.go", symbol: "func runDebug" },
+      { file: "packages/sok/tauriv2/src/debug.rs", symbol: "pub(crate) fn run_debug" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline.test.mjs", id: "the golden files give the lines that `sok debug timeline` prints for each filter" },
+      { file: "packages/workbench/test/debug-state.test.mjs", id: "a comparison lists the paths whose values differ, including paths present in one file" },
+      { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestTimelinePrintsTheGoldenLinesOfEveryFilter" },
+      { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "timeline_prints_the_golden_lines_of_every_filter" },
+    ],
+    expected: "The debug view shows the host event files as a filtered, followed and saved timeline and the state files as a tree, and the command line prints the same timeline rows.",
+    levels: ["unit"],
+  },
+  {
+    id: "F151.6",
+    implementation: [
+      { file: "packages/sok/tauriv2/src/debug.rs", symbol: "pub(crate) fn run_debug" },
+      { file: "packages/sok/wailsv3/src/debug.go", symbol: "func runDebug" },
+      { file: "packages/workbench/debug-timeline.js", symbol: "export function eventLine" },
+    ],
+    tests: [
+      { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "timeline_prints_the_golden_lines_of_every_filter" },
+      { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "timeline_refuses_what_breaks_the_contract" },
+      { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "timeline_refuses_an_invalid_filter_value_as_a_usage_error" },
+      { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestTimelinePrintsTheGoldenLinesOfEveryFilter" },
+      { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestTimelineRefusesWhatBreaksTheContract" },
+      { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestTimelineRefusesAnInvalidFilterValueAsAUsageError" },
+      { file: "packages/workbench/test/debug-timeline.test.mjs", id: "the golden files give the lines that `sok debug timeline` prints for each filter" },
+    ],
+    expected: "The command sok debug timeline prints the text lines of the debug timeline for the host event files of a configuration directory with the same filter, order and context, and both implementations print the same lines for the golden files.",
+    levels: ["unit"],
+  },
+  {
     id: "F151.5",
     implementation: [
       { file: "packages/workbench/debug-state.js", symbol: "export function compareStates" },
