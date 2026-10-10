@@ -37,7 +37,7 @@ let recorded = null;
 let entries = [];
 /** The file that the view shows, {path, size, truncated}, or null while the list is shown. */
 let viewing = null;
-/** The timeline of the host event files {files, truncated, rows, shown, lines, filter}, or null while the list or a file is shown. */
+/** The timeline of the host event files {files, truncated, rows, positions, selected, shown, lines, filter}, or null while the list or a file is shown. */
 let timeline = null;
 /** The state file that the view shows {path, state, lines, with, differences}, or null while another content is shown. */
 let stateShown = null;
@@ -56,10 +56,13 @@ export function onDebugDrawn(fn) {
   drawn = fn;
 }
 
+/** The warning beside the save of the selected rows (docs/spec/logging.md#privacy). */
+const SELECTION_WARNING = "저장한 파일에는 입력한 글자가 들어 있을 수 있다.";
+
 /** The timeline part of the status core.debug. */
 function timelineState() {
   if (timeline === null) return null;
-  return { sources: timeline.files, truncated: timeline.truncated, total: timeline.rows.length, shown: timeline.shown.length, lines: timeline.lines.length, ...timeline.filter };
+  return { sources: timeline.files, truncated: timeline.truncated, total: timeline.rows.length, shown: timeline.shown.length, lines: timeline.lines.length, selected: timeline.selected.size, warning: SELECTION_WARNING, ...timeline.filter };
 }
 
 /** The state part of the status core.debug. */
@@ -159,12 +162,20 @@ function drawTimeline() {
   timelineView.querySelector(".dbg-card__cut").hidden = timeline.truncated.length === 0;
   timelineRows.textContent = "";
   for (const { row, match } of timeline.lines) {
+    const index = timeline.positions.get(row);
+    const selected = timeline.selected.has(row);
+    const pick = document.createElement("div");
+    pick.className = "dbg-card__pick";
+    pick.dataset.selected = String(selected);
+    const choose = button(`select:${index}`, "core.debug.timeline.select", selected ? "●" : "○", "core.debug.timeline.select", { row: index, selected: !selected });
+    choose.setAttribute("aria-label", selected ? "행 선택 해제" : "행 선택");
     const el = document.createElement("div");
     el.className = "dbg-card__line";
     if (!match) el.dataset.context = "true";
     el.dataset.expose = "core.debug.timeline.row";
     el.textContent = eventLine(row);
-    timelineRows.appendChild(el);
+    pick.append(choose, el);
+    timelineRows.appendChild(pick);
   }
 }
 
@@ -285,6 +296,7 @@ function makeCard() {
       '<div class="dbg-card__timeline" hidden>' +
         '<div class="dbg-card__bar"><span class="dbg-card__cut" hidden>앞부분 생략</span></div>' +
         '<div class="dbg-card__filters"></div>' +
+        '<div class="dbg-card__save"><span class="dbg-card__warning" data-expose="core.debug.timeline.warning"></span></div>' +
         '<div class="dbg-card__rows" data-expose="core.debug.timeline.rows"></div>' +
       '</div>' +
     '</div>';
@@ -294,6 +306,8 @@ function makeCard() {
   el.querySelector(".dbg-card__view .dbg-card__bar").prepend(button("list", "core.debug.list", "목록", "core.debug.list", {}));
   mark(el.querySelector(".dbg-card__state select"), "core.debug.state.compare", {}, "with");
   el.querySelector(".dbg-card__state .dbg-card__bar").prepend(button("state-list", "core.debug.state.list", "목록", "core.debug.list", {}));
+  el.querySelector(".dbg-card__save").prepend(button("timeline-save", "core.debug.timeline.save", "선택한 행 저장", "core.debug.timeline.save", {}));
+  el.querySelector(".dbg-card__warning").textContent = SELECTION_WARNING;
   el.querySelector(".dbg-card__timeline .dbg-card__bar").prepend(button("timeline-list", "core.debug.timeline.list", "목록", "core.debug.list", {}));
   const text = document.createElement("input");
   text.type = "text";
@@ -464,7 +478,7 @@ export async function showDebugTimeline() {
     }));
     const rows = mergeRows(loaded.map((file) => file.rows));
     const filter = { ...CLEAR_FILTER };
-    timeline = { files, truncated: loaded.filter((file) => file.truncated).map((file) => file.path), rows, shown: filterRows(rows, filter), lines: contextRows(rows, filter), filter };
+    timeline = { files, truncated: loaded.filter((file) => file.truncated).map((file) => file.path), rows, positions: new Map(rows.map((row, index) => [row, index])), selected: new Set(), shown: filterRows(rows, filter), lines: contextRows(rows, filter), filter };
     viewing = null;
     stateShown = null;
     text.textContent = "";
@@ -538,6 +552,18 @@ export function filterDebugTimeline(change) {
   draw();
 }
 
+/** Selects or unselects the row at `row` (its position among all rows of the timeline, from 0); the same call again changes nothing. */
+export function selectDebugRow(row, selected) {
+  if (!card) throw new Error("the debug view is not open");
+  if (timeline === null) throw new Error("the debug timeline is not shown");
+  if (typeof selected !== "boolean") throw new Error(`timeline selected must be a boolean, found ${JSON.stringify(selected)}`);
+  if (!Number.isInteger(row) || row < 0 || row >= timeline.rows.length) throw new Error(`timeline row ${JSON.stringify(row)} is not one of the ${timeline.rows.length} rows`);
+  const chosen = timeline.rows[row];
+  if (selected) timeline.selected.add(chosen);
+  else timeline.selected.delete(chosen);
+  draw();
+}
+
 /** Runs one save operation of the open view and answers the host's {saved}. */
 async function saving(action, path, save) {
   if (!card) throw new Error("the debug view is not open");
@@ -562,3 +588,15 @@ export const saveDebugFile = (path) => saving("save", path, () => debug.save({ p
 
 /** Saves logs/ as one gzip-compressed tar file where the person chooses. */
 export const saveDebugFiles = () => saving("save-all", null, () => debug.saveAll());
+
+/** Saves the text lines of the selected timeline rows, in timeline order, where the person chooses; the person may cancel. */
+export async function saveDebugRows() {
+  if (card && timeline === null) throw new Error("the debug timeline is not shown");
+  const stamp = new Date().toISOString().replace(/[-:]|\.\d+/g, "");
+  const name = `soksak-timeline-${stamp}.txt`;
+  return saving("save-rows", name, () => {
+    const lines = timeline.rows.filter((row) => timeline.selected.has(row)).map(eventLine);
+    if (lines.length === 0) throw new Error("no timeline row is selected");
+    return debug.saveText({ name, text: `${lines.join("\n")}\n` });
+  });
+}

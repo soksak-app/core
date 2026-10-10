@@ -1011,7 +1011,7 @@
       },
       {
         "name": "core.debug",
-        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files that were truncated, the counts of all rows, rows that pass the filter and shown lines with the context rows, and its filter or null, the shown state file with its path, the number of tree lines, the state file it is compared with or null and the number of differences, or null, the scroll position of the shown content in points, the running or last save operation, and the error of the last failed step or operation or null.",
+        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files that were truncated, the counts of all rows, rows that pass the filter and shown lines with the context rows, the number of selected rows and the warning that a saved file can hold typed text, and its filter or null, the shown state file with its path, the number of tree lines, the state file it is compared with or null and the number of differences, or null, the scroll position of the shown content in points, the running or last save operation, and the error of the last failed step or operation or null.",
         "schema": {
           "type": "object",
           "properties": {
@@ -1116,6 +1116,12 @@
                 },
                 "lines": {
                   "type": "number"
+                },
+                "selected": {
+                  "type": "number"
+                },
+                "warning": {
+                  "type": "string"
                 }
               }
             },
@@ -1140,7 +1146,8 @@
                 "action": {
                   "enum": [
                     "save",
-                    "save-all"
+                    "save-all",
+                    "save-rows"
                   ]
                 },
                 "path": {
@@ -1836,6 +1843,23 @@
         "timeout": 600000
       },
       {
+        "name": "core.debug.timeline.save",
+        "description": "Saves the text lines of the selected rows of the shown debug timeline, in timeline order and one line each, through the save panel as soksak-timeline-<UTC time>.txt where the person chooses; answers the chosen path, or null when the person cancels. A selection without a row is an error. The saved file can hold typed text.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "saved": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "timeout": 600000
+      },
+      {
         "name": "core.debug.save-all",
         "description": "Saves the logs folder as one gzip-compressed tar file through the save panel where the person chooses; answers the chosen path, or null when the person cancels.",
         "params": {
@@ -1925,6 +1949,24 @@
           "type": "null"
         },
         "timeout": 60000
+      },
+      {
+        "name": "core.debug.timeline.select",
+        "description": "Selects or unselects one row of the shown debug timeline: row is its position among all rows of the timeline from 0, in time order, whatever the filter shows, and selected is true or false; the same call again changes nothing.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "row": {
+              "type": "integer"
+            },
+            "selected": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
       },
       {
         "name": "core.debug.timeline.filter",
@@ -3887,6 +3929,19 @@
       {
         "name": "core.debug.timeline.context",
         "description": "The selection box of the number of rows shown before and after each row that passes the filter."
+      },
+      {
+        "name": "core.debug.timeline.select",
+        "description": "The buttons that select or unselect the rows of the timeline, one before each row; a selected row's container has data-selected true.",
+        "many": true
+      },
+      {
+        "name": "core.debug.timeline.save",
+        "description": "The button that saves the selected rows of the timeline."
+      },
+      {
+        "name": "core.debug.timeline.warning",
+        "description": "The warning beside the save button that the saved file can hold typed text."
       },
       {
         "name": "core.debug.timeline.rows",

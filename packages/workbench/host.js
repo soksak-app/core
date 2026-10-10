@@ -401,6 +401,7 @@ export const debug = native ? {
   record: (page) => tell("debugRecord", { page }),
   save: (request) => tell("debugSave", request),
   saveAll: () => tell("debugSaveAll"),
+  saveText: (request) => tell("debugSaveText", request),
   read: (request) => tell("debugRead", request),
 } : null;
 

@@ -12,7 +12,7 @@ const HOST = [
   line({ ts_us: 20, seq: 1, level: "debug", layer: "host", event: "host.window.created", window: "w1" }),
 ].join("\n") + "\n";
 
-async function openView(t, { entries, read }) {
+async function openView(t, { entries, read, saveText = async () => ({ saved: null }) }) {
   const dom = new JSDOM("<body><div id=plane></div></body>");
   globalThis.document = dom.window.document;
   globalThis.CSS = { escape: (value) => value };
@@ -20,7 +20,7 @@ async function openView(t, { entries, read }) {
   const hidden = [];
   t.mock.module("../host.js", { namedExports: {
     native: false,
-    debug: { record: async () => ({ path: "logs/state.json" }), files: async () => entries, read, save: async () => {}, saveAll: async () => {} },
+    debug: { record: async () => ({ path: "logs/state.json" }), files: async () => entries, read, save: async () => {}, saveAll: async () => {}, saveText },
     overlay: { show: () => {}, update: () => {}, place: () => {}, hide: () => {} },
   } });
   t.mock.module("../compositor.js", { namedExports: { standIn: () => {} } });
@@ -46,6 +46,7 @@ async function openView(t, { entries, read }) {
   return { ui, shown, hidden };
 }
 
+const WARNING = "저장한 파일에는 입력한 글자가 들어 있을 수 있다.";
 const rowsText = () => [...document.querySelectorAll('[data-expose="core.debug.timeline.row"]')].map((row) => row.textContent);
 const entry = (path) => ({ path, size: 10, modified: 1 });
 
@@ -56,7 +57,7 @@ test("the timeline lists the rows of the host event files by time and filters th
   });
   await ui.showDebugTimeline();
   assert.deepEqual(rowsText().map((text) => text.split(" ").slice(1, 4).join(" ")), ["info host log.open", "debug host host.window.created", "warn page page.call.slow"]);
-  assert.deepEqual(ui.debugState().timeline, { sources: ["logs/host-a.jsonl"], truncated: [], total: 3, shown: 3, level: "trace", layer: "all", text: "", event: "", surface: "", session: "", cid: "", from: "", to: "", context: "0", lines: 3 });
+  assert.deepEqual(ui.debugState().timeline, { sources: ["logs/host-a.jsonl"], truncated: [], total: 3, shown: 3, selected: 0, warning: WARNING, level: "trace", layer: "all", text: "", event: "", surface: "", session: "", cid: "", from: "", to: "", context: "0", lines: 3 });
   ui.filterDebugTimeline({ level: "warn" });
   assert.equal(rowsText().length, 1);
   ui.filterDebugTimeline({ level: "trace", layer: "host", text: "WINDOW" });
@@ -147,4 +148,85 @@ test("every filter control of the timeline points to the filter command with its
     assert.equal(el.dataset.value, el.dataset.set);
     assert.equal(el.dataset.expose, `core.debug.timeline.${el.dataset.set}`);
   }
+});
+
+const savedTexts = () => {
+  const saves = [];
+  return { saves, saveText: async (request) => { saves.push(request); return { saved: "/chosen/timeline.txt" }; } };
+};
+
+test("rows are selected and unselected by index, and the status reports the count and the warning", async (t) => {
+  const { ui } = await openView(t, {
+    entries: [entry("logs/host-a.jsonl")],
+    read: async ({ path }) => ({ path, size: HOST.length, truncated: false, kind: "text", text: HOST }),
+  });
+  await ui.showDebugTimeline();
+  assert.equal(ui.debugState().timeline.selected, 0);
+  assert.equal(ui.debugState().timeline.warning, WARNING);
+  ui.selectDebugRow(2, true);
+  ui.selectDebugRow(2, true);
+  ui.selectDebugRow(0, true);
+  assert.equal(ui.debugState().timeline.selected, 2);
+  const picks = [...document.querySelectorAll('[data-expose="core.debug.timeline.select"]')];
+  assert.equal(picks.length, 3);
+  assert.deepEqual(picks.map((el) => el.closest("[data-selected]")?.dataset.selected ?? "none"), ["true", "false", "true"]);
+  ui.selectDebugRow(2, false);
+  assert.equal(ui.debugState().timeline.selected, 1);
+  assert.throws(() => ui.selectDebugRow(3, true), /timeline row 3 is not one of the 3 rows/);
+  assert.throws(() => ui.selectDebugRow(0, "yes"), /timeline selected must be a boolean, found "yes"/);
+  assert.throws(() => ui.selectDebugRow(-1, true), /timeline row -1 is not one of the 3 rows/);
+  const warning = document.querySelector('[data-expose="core.debug.timeline.warning"]');
+  assert.equal(warning.textContent, ui.debugState().timeline.warning);
+});
+
+test("the selected rows are saved in timeline order as one text, and a cancelled save panel is not an error", async (t) => {
+  const { saves, saveText } = savedTexts();
+  const { ui } = await openView(t, {
+    entries: [entry("logs/host-a.jsonl")],
+    read: async ({ path }) => ({ path, size: HOST.length, truncated: false, kind: "text", text: HOST }),
+    saveText,
+  });
+  await ui.showDebugTimeline();
+  ui.selectDebugRow(2, true);
+  ui.selectDebugRow(1, true);
+  ui.filterDebugTimeline({ level: "warn" });
+  assert.deepEqual(await ui.saveDebugRows(), { saved: "/chosen/timeline.txt" });
+  assert.equal(saves.length, 1);
+  assert.match(saves[0].name, /^soksak-timeline-\d{8}T\d{6}Z\.txt$/);
+  assert.deepEqual(saves[0].text.split("\n"), [
+    "1970-01-01T00:00:00.000020Z debug host host.window.created window=w1",
+    '1970-01-01T00:00:00.000030Z warn page page.call.slow name="windows.list"',
+    "",
+  ]);
+  assert.deepEqual(ui.debugState().operation, { action: "save-rows", path: saves[0].name, state: "done" });
+  assert.equal(ui.debugState().error, null);
+});
+
+test("a cancelled save panel leaves no error and an empty selection is refused with an error", async (t) => {
+  const { ui, shown } = await openView(t, {
+    entries: [entry("logs/host-a.jsonl")],
+    read: async ({ path }) => ({ path, size: HOST.length, truncated: false, kind: "text", text: HOST }),
+    saveText: async () => ({ saved: null }),
+  });
+  await ui.showDebugTimeline();
+  await assert.rejects(ui.saveDebugRows(), /no timeline row is selected/);
+  assert.match(ui.debugState().error, /^save-rows: no timeline row is selected/);
+  assert.equal(shown.at(-1).where, "debug");
+  ui.selectDebugRow(0, true);
+  assert.deepEqual(await ui.saveDebugRows(), { saved: null });
+  assert.equal(ui.debugState().error, null);
+  assert.equal(ui.debugState().operation.state, "done");
+  ui.listDebugFiles();
+  await assert.rejects(ui.saveDebugRows(), /the debug timeline is not shown/);
+});
+
+test("the select buttons and the save button of the timeline point to declared commands and have dom names", async (t) => {
+  const { ui } = await openView(t, {
+    entries: [entry("logs/host-a.jsonl")],
+    read: async ({ path }) => ({ path, size: HOST.length, truncated: false, kind: "text", text: HOST }),
+  });
+  await ui.showDebugTimeline();
+  const picks = [...document.querySelectorAll('[data-expose="core.debug.timeline.select"]')];
+  assert.ok(picks.length > 0 && picks.every((el) => el.dataset.command === "core.debug.timeline.select"));
+  assert.equal(document.querySelector('[data-expose="core.debug.timeline.save"]').dataset.command, "core.debug.timeline.save");
 });

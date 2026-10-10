@@ -1632,6 +1632,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F151.4.2",
+    implementation: [
+      { file: "packages/workbench/debug-ui.js", symbol: "export function selectDebugRow" },
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function saveDebugRows" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "rows are selected and unselected by index, and the status reports the count and the warning" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the selected rows are saved in timeline order as one text, and a cancelled save panel is not an error" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "a cancelled save panel leaves no error and an empty selection is refused with an error" },
+    ],
+    expected: "The debug timeline selects and unselects rows, reports the number of selected rows and the warning that a saved file can hold typed text, saves the text lines of the selected rows in timeline order, treats a cancelled save panel as no error, and refuses an empty selection with an error.",
+    levels: ["unit"],
+  },
+  {
     id: "F151.3",
     implementation: [
       { file: "packages/workbench/debug-timeline.js", symbol: "export function contextRows" },
