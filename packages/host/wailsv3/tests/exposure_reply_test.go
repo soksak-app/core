@@ -56,7 +56,7 @@ func TestExposureReplyTargetsTheMainDocumentOrOneSurface(t *testing.T) {
 	if surface, err := host.ReplySurface(reply.Surface); err != nil || surface != "tab-1" {
 		t.Fatalf("a surface reply targets %q (%v), want tab-1", surface, err)
 	}
-	// null, 빈 문자열, 숫자, 객체는 메인 문서의 답이 아니라 오류다.
+	// null, an empty string, a number, and an object are errors and not replies of the main document.
 	for _, body := range []string{`null`, `""`, `3`, `{}`} {
 		if err := json.Unmarshal([]byte(`{"id":3,"surface":`+body+`,"result":null}`), &reply); err != nil {
 			t.Fatal(err)
@@ -69,7 +69,7 @@ func TestExposureReplyTargetsTheMainDocumentOrOneSurface(t *testing.T) {
 
 // contract: exposure-reply.removed-surface-discarded
 func TestReplyOfARemovedSurfaceIsAnObservation(t *testing.T) {
-	// 표면을 제거할 때 그 표면의 요청은 이미 1003 으로 끝났으므로 늦은 답은 오류가 아니라 관측이다.
+	// When a surface is removed, the requests of that surface already ended with 1003, so a late reply is an observation and not an error.
 	if got, want := host.RemovedSurfaceReply(7228, "tab-4sswjb"), `exposure reply 7228 of removed surface "tab-4sswjb" arrived after its request ended`; got != want {
 		t.Fatalf("observation %q, want %q", got, want)
 	}

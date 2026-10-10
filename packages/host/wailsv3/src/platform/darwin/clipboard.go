@@ -63,7 +63,7 @@ func (implementation) ClipboardRead(kind string) (platform.ClipboardValue, error
 	if err != nil {
 		return platform.ClipboardValue{}, err
 	}
-	// 기본값: 문자열이 아닌 status 는 빈 문자열이 되어 아래 clipboardStatus 가 받아들이지 않은 오류로 알린다.
+	// default: a status that is not a string becomes an empty string, and clipboardStatus below reports it as a not accepted error.
 	status, _ := result["status"].(string)
 	if status == "absent" {
 		return platform.ClipboardValue{}, nil

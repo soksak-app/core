@@ -11,7 +11,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// 상위 메뉴의 계약 표. (id, ko, en). app 제목은 애플리케이션 이름이므로 비워 둔다.
+// The contract table of the top-level menus. (id, ko, en). The title of app is the application name, so it is left empty.
 var menuTable = []struct{ id, ko, en string }{
 	{"app", "", ""},
 	{"file", "파일", "File"},
@@ -21,8 +21,8 @@ var menuTable = []struct{ id, ko, en string }{
 	{"help", "도움말", "Help"},
 }
 
-// 메뉴 항목의 계약 표. (menu, id, source, ko, en, key). source 가 "system" 인 항목은
-// 프레임워크 제목을 유지하고 "title" 인 항목은 표의 제목을 쓴다.
+// The contract table of the menu items. (menu, id, source, ko, en, key). An item whose source is "system" keeps
+// the framework title, and an item whose source is "title" uses the title of the table.
 var itemTable = []struct{ menu, id, source, ko, en, key string }{
 	{"app", "about", "title", "정보", "About", ""},
 	{"app", "services", "system", "", "", ""},
@@ -47,10 +47,10 @@ var itemTable = []struct{ menu, id, source, ko, en, key string }{
 	{"help", "debug", "title", "디버그", "Debug", ""},
 }
 
-// menuRoles 는 계약 표의 항목 id 가 쓰는 Wails 역할이다. app 항목도 언어표 제목과 함께 여기를 지나며
-// close-all 은 close-window 의 performClose: 역할이 시스템과 함께 제공하므로 여기에
-// 없다. fullscreen 은 시스템이 보기 메뉴에 스스로 넣는다는 과거 측정과 달리 이 앱들에서는
-// 메뉴를 열어도 오지 않음을 실측했다(2026-09-30, V5-112) — 여기서 만든다.
+// menuRoles are the Wails roles that the item ids of the contract table use. The app items also pass through here with the titles of the language table, and
+// close-all is not here because the performClose: role of close-window provides it together with the system.
+// fullscreen was measured: unlike an earlier measurement that said the system adds it to the View menu by itself, in these apps it does not
+// appear even when the menu opens (2026-09-30, V5-112), so it is created here.
 var menuRoles = map[string]application.Role{
 	"about":              application.About,
 	"services":           application.ServicesMenu,
@@ -69,9 +69,9 @@ var menuRoles = map[string]application.Role{
 	"bring-all-to-front": application.BringAllToFront,
 }
 
-// menuCommands 는 글자 크기 항목이 주 창 페이지에 보내는 명령이다(docs/spec/text-size.md).
-// 메뉴 단축키는 어느 뷰가 키보드 포커스를 가져도 동작하므로 네이티브 터미널 영역이나 브라우저
-// 문서에서도 명령이 실행된다.
+// menuCommands are the commands that the text size items send to the main window page (docs/spec/text-size.md).
+// Menu shortcuts work whichever view has the keyboard focus, so the commands also run from a native terminal region or a browser
+// document.
 var menuCommands = map[string]string{
 	"text-larger":  "core.text.larger",
 	"text-smaller": "core.text.smaller",
@@ -85,44 +85,44 @@ func MenuCommand(id string) (string, bool) {
 	return command, ok
 }
 
-// menuModifiers 는 계약 표의 단축키 수정 키를 Wails 수정 키로 바꾼다.
+// menuModifiers converts the shortcut modifier keys of the contract table to Wails modifier keys.
 var menuModifiers = map[string]string{
 	"cmd":   "CmdOrCtrl",
 	"shift": "Shift",
 	"ctrl":  "Ctrl",
-	// Wails 는 "OptOrAlt" 를 인식하지 않고 "OptionOrAlt" 를 인식한다.
+	// Wails does not recognize "OptOrAlt" but recognizes "OptionOrAlt".
 	"opt": "OptionOrAlt",
 }
 
-// menuWindowNew 는 메뉴의 새 창 항목이 창을 여는 함수다. Run 이 Host.WindowNew 를 연결한다.
-// Dock 메뉴(installDock)도 같은 함수를 받는다. 메뉴는 Run 이 만들고 Run 이 연결하므로 항목을
-// 클릭하는 시점에는 정해져 있다.
+// menuWindowNew is the function with which the new window item of the menu opens a window. Run connects Host.WindowNew.
+// The Dock menu (installDock) receives the same function. Run creates and connects the menu, so it is set by the time
+// an item is clicked.
 var menuWindowNew func()
 
-// menuLanguage 는 애플리케이션 메뉴의 현재 언어다. Run 이 InitialMenuLanguage 로 정하고
-// SetMenuLanguage 가 바꾼다. 메뉴를 만드는 스레드와 host.menu 를 읽는 스레드가 다르므로 잠금으로
-// 지킨다.
+// menuLanguage is the current language of the application menu. Run sets it with InitialMenuLanguage and
+// SetMenuLanguage changes it. The thread that builds the menu differs from the thread that reads host.menu, so a lock
+// protects it.
 var (
 	menuLanguageMu sync.Mutex
 	menuLanguage   string
 )
 
-// currentMenuLanguage 는 현재 메뉴 언어를 반환한다.
+// currentMenuLanguage returns the current menu language.
 func currentMenuLanguage() string {
 	menuLanguageMu.Lock()
 	defer menuLanguageMu.Unlock()
 	return menuLanguage
 }
 
-// assignMenuLanguage 는 메뉴 언어를 정한다.
+// assignMenuLanguage sets the menu language.
 func assignMenuLanguage(language string) {
 	menuLanguageMu.Lock()
 	menuLanguage = language
 	menuLanguageMu.Unlock()
 }
 
-// titleOf 는 계약 표의 언어 제목 열을 고른다. 표의 언어가 아니면 오류를 반환한다. 지원하지 않는
-// 언어는 조용한 기본값 대신 오류로 알린다.
+// titleOf selects the language title column of the contract table. It returns an error when the language is not in the table. An unsupported
+// language is reported as an error and not replaced silently by a default.
 func titleOf(language, ko, en string) (string, error) {
 	switch language {
 	case "ko":
@@ -133,16 +133,16 @@ func titleOf(language, ko, en string) (string, error) {
 	return "", fmt.Errorf("menu language %q is not in the menu table", language)
 }
 
-// menuLanguageInTable 은 language 가 계약 표의 언어인지 반환한다.
+// menuLanguageInTable returns whether language is a language of the contract table.
 func menuLanguageInTable(language string) bool {
 	_, err := titleOf(language, "", "")
 	return err == nil
 }
 
-// InitialMenuLanguage 는 시스템 선호 언어의 주 태그를 계약 표의 언어와 대응해 반환한다. 표에
-// 없는 언어는 기본 언어 en 이다. 페이지가 설정 언어를 알리기 전의 초기 메뉴가 시스템 언어를
-// 따르게 한다(docs/spec/host-contract.md 의 Application menu). 시스템 언어를 읽지 못하면 오류다. UI 스레드에서
-// 호출한다.
+// InitialMenuLanguage returns the main tag of the system preferred language mapped to a language of the contract table. A language that is not in
+// the table is the default language en. It makes the initial menu, before the page reports the settings language, follow the system language
+// (Application menu of docs/spec/host-contract.md). It is an error when the system language cannot be read. Call it on the UI
+// thread.
 func InitialMenuLanguage() (string, error) {
 	tag, err := system.PreferredLanguage()
 	if err != nil {
@@ -154,21 +154,21 @@ func InitialMenuLanguage() (string, error) {
 	return tag, nil
 }
 
-// ApplicationMenu 는 현재 언어의 애플리케이션 메뉴를 반환한다. Run 이 InitialMenuLanguage 로
-// 언어를 정한 뒤에 부른다.
+// ApplicationMenu returns the application menu in the current language. Call it after Run set the
+// language with InitialMenuLanguage.
 func ApplicationMenu() (*application.Menu, error) {
 	return ApplicationMenuFor(currentMenuLanguage())
 }
 
-// ApplicationMenuFor 는 language 의 계약 표 제목으로 애플리케이션 메뉴를 만든다. Wails 기본
-// 메뉴의 View 메뉴는 메인 웹뷰 전체를 확대하거나 메인 페이지를 다시 읽는다. 배치와 네이티브
-// 표면은 웹뷰 확대를 따르지 않고, 다시 읽기는 페이지 상태를 바꾼다. 그래서 View 메뉴에는 전체
-// 화면과 글자 크기 항목만 둔다.
-// menuAppName 은 app 메뉴의 제목과 about·hide·quit 의 접두에 쓰는 애플리케이션 이름이다.
-// Run 이 Wails Options.Name 으로 정한다.
+// ApplicationMenuFor builds the application menu with the contract table titles of language. The View menu of the Wails default
+// menu zooms the whole main web view or reads the main page again. The layout and the native
+// surfaces do not follow a web view zoom, and reading again changes the page state. So the View menu has only the full
+// screen and text size items.
+// menuAppName is the application name used for the title of the app menu and the prefix of about, hide and quit.
+// Run sets it with the Wails Options.Name.
 var menuAppName = "soksak"
 
-// SetMenuAppName 은 app 메뉴가 쓸 애플리케이션 이름을 정한다.
+// SetMenuAppName sets the application name that the app menu uses.
 func SetMenuAppName(name string) { menuAppName = name }
 
 func ApplicationMenuFor(language string) (*application.Menu, error) {
@@ -178,8 +178,8 @@ func ApplicationMenuFor(language string) (*application.Menu, error) {
 	menu := application.NewMenu()
 	for _, row := range menuTable {
 		if row.id == "app" {
-			// app 메뉴의 제목은 애플리케이션 이름이고 항목 제목은 계약표에서 온다.
-			// about·hide·quit 는 "앱이름 제목" 꼴이다.
+			// The title of the app menu is the application name, and the item titles come from the contract table.
+			// about, hide and quit have the form "<application name> <title>".
 			submenu := menu.AddSubmenu(menuAppName)
 			if err := addMenuItems(submenu, row.id, language); err != nil {
 				return nil, err
@@ -198,12 +198,12 @@ func ApplicationMenuFor(language string) (*application.Menu, error) {
 	return menu, nil
 }
 
-// addMenuItems 는 계약 표의 menu 항목을 submenu 에 순서대로 만든다. close-all 은 close-window 의
-// performClose: 역할이 시스템과 함께 제공하므로 만들지 않는다.
+// addMenuItems builds the menu items of the contract table in order in submenu. close-all is not built because the performClose: role
+// of close-window provides it together with the system.
 func addMenuItems(submenu *application.Menu, menu, language string) error {
-	// close-all 은 만들지 않는다. 측정하면 시스템이 앱 시작을 마칠 때 close-window 의 performClose:
-	// 곁에 Close All 대체 항목을 스스로 놓는다(접근성에서는 숨는다). 계약표에는 있지만 여기서 만들
-	// 항목이 없다. fullscreen 은 시스템이 넣어 주지 않음을 실측했으므로(V5-112) 여기서 만든다.
+	// close-all is not built. It was measured that when the system finishes the application start, it places a substitute Close All item
+	// beside the performClose: of close-window (it is hidden from accessibility). The contract table has it but there is
+	// no item to build here. fullscreen was measured not to be added by the system (V5-112), so it is built here.
 	for _, row := range itemTable {
 		if row.menu != menu || row.id == "close-all" {
 			continue
@@ -216,7 +216,7 @@ func addMenuItems(submenu *application.Menu, menu, language string) error {
 		if err != nil {
 			return err
 		}
-		// app 의 about·hide·quit 는 "앱이름 제목" 꼴로 제목을 바꾼다.
+		// The about, hide and quit of app change the title to the form "<application name> <title>".
 		if menu == "app" && (row.id == "about" || row.id == "hide" || row.id == "quit") {
 			title = menuAppName + " " + title
 		}
@@ -242,9 +242,9 @@ func addMenuItems(submenu *application.Menu, menu, language string) error {
 	return nil
 }
 
-// addTitleItem 은 계약 표의 제목을 쓰는 항목을 만든다. 글자 크기 항목은 표의 제목과 단축키로
-// 명령 항목을 만들고, 나머지는 역할 항목의 제목을 표의 제목으로 바꾼다. 역할이 동작을 유지하므로
-// close-window 는 창을 닫고 undo·redo·cut·copy·paste·select-all 은 편집 동작을 수행한다.
+// addTitleItem builds an item that uses the title of the contract table. A text size item builds a command item with the title and
+// shortcut of the table, and the others change the title of a role item to the title of the table. The role keeps the behavior, so
+// close-window closes the window and undo, redo, cut, copy, paste and select-all perform the edit actions.
 func addTitleItem(submenu *application.Menu, id, title, accelerator string) error {
 	if command, ok := menuCommands[id]; ok {
 		item := submenu.Add(title)
@@ -269,7 +269,7 @@ func addTitleItem(submenu *application.Menu, id, title, accelerator string) erro
 	return nil
 }
 
-// addSystemItem 은 프레임워크가 제공하는 제목과 단축키를 유지하는 역할 항목을 만든다.
+// addSystemItem builds a role item that keeps the title and shortcut that the framework provides.
 func addSystemItem(submenu *application.Menu, id string) error {
 	role, ok := menuRoles[id]
 	if !ok {
@@ -281,15 +281,15 @@ func addSystemItem(submenu *application.Menu, id string) error {
 	return nil
 }
 
-// addRoleItem 은 역할 항목을 submenu 에 넣고 그 항목을 반환한다. Menu.AddRole 이 메뉴를
-// 반환하므로 방금 넣은 역할 항목을 역할로 찾는다.
+// addRoleItem puts a role item into submenu and returns that item. Menu.AddRole returns the menu, so
+// the role item just put in is found by its role.
 func addRoleItem(submenu *application.Menu, role application.Role) *application.MenuItem {
 	submenu.AddRole(role)
 	return submenu.FindByRole(role)
 }
 
-// menuAccelerator 는 계약 표의 단축키(cmd+w)를 Wails 단축키(CmdOrCtrl+w)로 바꾼다. 빈 키는 빈
-// 단축키이고 표에 없는 수정 키는 오류를 반환한다.
+// menuAccelerator converts a shortcut of the contract table (cmd+w) to a Wails shortcut (CmdOrCtrl+w). An empty key is an empty
+// shortcut, and a modifier key that is not in the table returns an error.
 func menuAccelerator(key string) (string, error) {
 	if key == "" {
 		return "", nil
@@ -306,9 +306,9 @@ func menuAccelerator(key string) (string, error) {
 	return strings.Join(append(out, parts[len(parts)-1]), "+"), nil
 }
 
-// SetMenuLanguage 는 애플리케이션 메뉴의 언어를 바꾸고 메뉴를 다시 만들어 설치한다. language 는
-// 계약 표의 언어여야 하고 현재 언어와 같으면 아무것도 하지 않는다. 시작할 때와 같은 구성으로
-// 메인 스레드에서 메뉴를 다시 만들어 Menu.Set 으로 설치한다.
+// SetMenuLanguage changes the language of the application menu, rebuilds the menu, and installs it. language must be
+// a language of the contract table, and when it equals the current language, nothing happens. It rebuilds the menu on the main thread with the same configuration
+// as at the start and installs it with Menu.Set.
 func (h *Host) SetMenuLanguage(ctx context.Context, languageJSON json.RawMessage) error {
 	language, err := argument[string]("language", languageJSON)
 	if err != nil {
@@ -333,8 +333,8 @@ func (h *Host) SetMenuLanguage(ctx context.Context, languageJSON json.RawMessage
 	return failure
 }
 
-// runMenuCommand 는 애플리케이션 주 창의 메인 페이지에 명령 실행을 요청한다. 주 창은 UI 스레드에서
-// 읽는다. 주 창이 없으면 기록한다.
+// runMenuCommand requests the main page of the main application window to run a command. The main window is
+// read on the UI thread. It is recorded when there is no main window.
 func runMenuCommand(command string) {
 	var main unsafe.Pointer
 	var err error

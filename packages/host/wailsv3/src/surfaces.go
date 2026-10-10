@@ -1,8 +1,8 @@
-// 표면 동기화, 표시 확인, 배치와 표면 입력 전달.
+// Surface synchronization, display confirmation, layout, and delivery of surface input.
 //
-// 페이지는 커밋할 때마다 각 표면의 영역을 선언한다. 표면은 선언된 영역에 메인 창의
-// 자식으로 추가한 네이티브 웹뷰다. 네이티브 웹뷰의 메시지는 bindings.go 가 처리하고,
-// 포인터 입력은 운영체제 구현이 전달한다.
+// The page declares the region of each surface at every commit. A surface is a native web view added to the main window as a
+// child at the declared region. bindings.go handles the messages of a native web view, and
+// the operating system implementation delivers pointer input.
 
 package host
 
@@ -23,10 +23,10 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// platformRect 는 운영체제 구현이 사용하는 영역이다. Rect 와 필드가 같으므로 서로 변환한다.
+// platformRect is the region that the operating system implementation uses. It has the same fields as Rect, so they are converted to each other.
 type platformRect = platform.Rect
 
-// Rect 는 페이지 뷰포트 기준 CSS 픽셀 단위의 영역이다.
+// Rect is a region in CSS pixels relative to the page viewport.
 type Rect struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
@@ -37,9 +37,9 @@ type Rect struct {
 type Surface struct {
 	ID      string `json:"id"`
 	Visible bool   `json:"visible"`
-	// 페이지가 초점을 잃은 표면을 흐리게 표시하도록 요청했는지 나타낸다.
+	// Tells whether the page requested that a surface that lost focus be dimmed.
 	Dim bool `json:"dim"`
-	// Plugin 은 표면을 소유한 plugin 의 id 다. 문서 영역은 그 plugin 의 package 문서를 연다.
+	// Plugin is the id of the plugin that owns the surface. A document region opens the plugin document of that plugin.
 	Plugin      string             `json:"plugin"`
 	Composition SurfaceComposition `json:"composition"`
 	Rect
@@ -132,11 +132,11 @@ func (s *Surfaces) requireRegion(surface, name, kind, sidecar string) error {
 }
 
 type SyncRequest struct {
-	// 연속적인 배치 갱신이 종료되었는지 나타낸다.
+	// Tells whether the continuous layout update ended.
 	Settled  bool                   `json:"settled"`
 	Surfaces []Surface              `json:"surfaces"`
 	Overlays []WindowOverlayRequest `json:"overlays,omitempty"`
-	// 다음 그리기가 보일 첫 행의 높이(pt). 배치 트랜잭션 안에서 창 제목줄을 이 높이로 정한다
+	// The height (pt) of the first row that the next draw will show. Inside a layout transaction, the window title bar is set to this height
 	// (docs/spec/native-surfaces.md#title-bar-height).
 	Titlebar float64 `json:"titlebar"`
 }
@@ -149,7 +149,7 @@ type WindowOverlayRequest struct {
 	Visible *bool   `json:"visible"`
 }
 
-// nativeWebviewOptions 는 표면과 모달 웹뷰의 생성 값이다.
+// nativeWebviewOptions are the creation values of surface and modal web views.
 type nativeWebviewOptions struct {
 	URL                 string
 	Name                string
@@ -158,7 +158,7 @@ type nativeWebviewOptions struct {
 	FillParent          bool
 }
 
-// nativeWebview 는 앱이 만든 웹뷰다. 핸들과 레지스트리는 AppKit 주 스레드에서 읽고 바꾼다.
+// nativeWebview is a web view that the app created. The handle and the registry are read and changed on the AppKit main thread.
 type nativeWebview struct {
 	owner   *Surfaces
 	id      uint64
@@ -170,58 +170,58 @@ var nativeViews = map[uint64]*nativeWebview{}
 var nativeSerial uint64
 
 type Surfaces struct {
-	// prepareNative 는 메인 웹뷰를 등록하고 창을 준비한다. 창을 만들 때 정한다.
+	// prepareNative registers the main web view and prepares the window. It is decided when the window is created.
 	prepareNative func()
 	window        *application.WebviewWindow
-	// host 는 이 창을 만든 호스트다. name 은 엔드포인트의 창 식별자이고 title 은 창 제목이다.
+	// host is the host that created this window. name is the window identifier of the endpoint and title is the window title.
 	host     *Host
 	name     string
 	title    string
 	projects map[string]bool
 	root     string
 	ready    bool
-	// readied 는 다음 WindowReady 를 기다리는 채널이다. Host.mu 로 보호한다.
+	// readied is the channel that waits for the next WindowReady. Host.mu protects it.
 	readied []chan struct{}
 	monitor uintptr
 
-	// 호스트 호출 사이의 모달 상태와 테마를 보호한다.
-	// 뷰는 주 스레드에서만 다루므로 잠금이 필요 없고, 이 잠금을 잡은 경로는 주 스레드를
-	// 기다리지 않는다.
+	// Protects the modal state and the theme between host calls.
+	// Views are handled only on the main thread, so no lock is needed for them, and a path that holds this lock does not wait
+	// for the main thread.
 	mu           sync.Mutex
 	views        map[string]*nativeWebview
 	compositions map[string]SurfaceComposition
 	// surfacePlugins is the plugin of each surface that declared its composition.
 	surfacePlugins       map[string]string
 	compositionRevisions map[string]uint64
-	// 표면은 네이티브 뷰이므로 표면을 누른 입력은 페이지에 도달하지 않는다. 이 맵은 누른
-	// 뷰를 페이지가 사용하는 표면 id 로 바꾼다.
+	// A surface is a native view, so input that pressed a surface does not reach the page. This map converts the pressed
+	// view to the surface id that the page uses.
 	named map[uintptr]string
-	// 연속 크기 변경 중인 표면. 표면은 프레임마다 호출을 받지 않고 연속 변경의 시작과
-	// 끝을 받는다.
+	// Surfaces in a continuous resize. A surface does not receive a call for every frame; it receives the start and
+	// the end of the continuous change.
 	live map[string]bool
-	// registrations 는 표면 페이지가 등록한 항목이다. 메인 페이지가 다시 읽히면 새 페이지에 다시 알린다.
+	// registrations are the entries that surface pages registered. When the main page is read again, the new page is told again.
 	registrations map[string][]SurfaceRegistration
-	// 연속 갱신이 진행 중인지 나타낸다. 페이지가 커밋마다 알리고, 이 값으로 run-began 과
-	// run-ended 를 프레임마다가 아니라 연속 갱신의 시작과 끝에만 발행한다.
+	// Tells whether a continuous update is in progress. The page announces it at every commit, and with this value run-began and
+	// run-ended are published only at the start and the end of a continuous update and not for every frame.
 	running bool
-	// settled 는 연속 갱신이 끝나기를 기다리는 채널이다. run-ended 를 발행할 때 닫는다.
+	// settled is the channel that waits for the continuous update to end. It is closed when run-ended is published.
 	settled         []chan struct{}
 	lastPreparation uint64
-	// 페이지가 커밋했는지 나타낸다. page-ready 를 한 번만 발행한다.
+	// Tells whether the page committed. page-ready is published only once.
 	first sync.Once
-	// 모달은 메인 창 안의 웹뷰이고, 표시할 때마다 만들고 닫을 때 제거한다. 인스턴스 번호로
-	// 이전 표시의 응답을 거부한다.
+	// A modal is a web view inside the main window. It is created for each display and removed when it closes. The instance number
+	// rejects the reply of an earlier display.
 	nextModal uint64
 	modal     *modal
 	shapes    map[string]*nativeShape
-	// documents 는 표면 페이지가 붙인 문서 영역이다.
+	// documents are the document regions that the surface pages attached.
 	documents *Documents
-	// images 는 표면 페이지가 붙인 그림 영역이다.
+	// images are the picture regions that the surface pages attached.
 	images   *Images
 	sidecars *Sidecars
 	watch    sync.Once
 
-	// 메인 페이지가 마지막으로 정한 테마. 페이지는 로드한 뒤 Theme 을 호출한다.
+	// The theme that the main page set last. The page calls Theme after it loads.
 	theme Theme
 }
 
@@ -237,26 +237,26 @@ func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 		shapes:               map[string]*nativeShape{},
 		documents:            NewDocuments(),
 		images:               NewImages(),
-		// 아직 테마를 받지 않았을 때의 값. 빈 맵이 아니면 JSON 에 null 이 실리고,
-		// 이 값을 받는 페이지는 토큰을 순회하다 멈춘다.
+		// The value for the case in which no theme was received yet. If it is not an empty map, null is carried in the JSON,
+		// and a page that receives it stops while iterating over the tokens.
 		theme: Theme{Tokens: map[string]string{}},
 	}
 	return s
 }
 
-// Emit 은 이벤트를 이 창의 단일 앱 DOM에 전달한다.
+// Emit delivers an event to the single app DOM of this window.
 func (s *Surfaces) Emit(name string, data ...any) {
 	s.window.EmitEvent(name, data...)
 }
 
-// ProjectRoot 는 이 창의 프로젝트 디렉터리를 반환한다.
+// ProjectRoot returns the project directory of this window.
 func (s *Surfaces) ProjectRoot() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.root
 }
 
-// SidecarSend 는 이 창의 표면 페이지가 보낸 메시지를 사이드카에 전달한다.
+// SidecarSend passes a message that a surface page of this window sent to a sidecar.
 func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage, cids []string) error {
 	return s.sidecars.SendWithCids(s, name, surface, body, cids)
 }
@@ -268,15 +268,15 @@ func (s *Surfaces) sidecarSendFrom(viewID uint64, name, surface string, body jso
 	return s.SidecarSend(name, surface, body, cids)
 }
 
-// SidecarReconnected 는 영속 사이드카의 연결이 끊긴 뒤 다시 맺히면 그 사이드카의 그림
-// configure 를 다시 보낸다(V5-106) — 이전 연결이 확인한 configure 상태는 연결과 함께 죽는다.
+// SidecarReconnected sends the picture configure of a persistent sidecar again when its connection is made again after it was lost
+// (V5-106); the configure state that the earlier connection confirmed ended with that connection.
 func (s *Surfaces) SidecarReconnected(sidecar string) {
 	if err := s.RefreshSidecarRasters(sidecar); err != nil {
 		LogError(fmt.Sprintf("sidecar %s reconnection reconfigure", sidecar), err)
 	}
 }
 
-// DecideImageEnvelope 은 사이드카가 보낸 이미지 봉투를 결정하고 처리한다.
+// DecideImageEnvelope decides and handles the image envelope that a sidecar sent.
 func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.RawMessage) bool {
 	sidecars := s.sidecars
 	return HandleEnvelope(body, sidecarName, surface, s.images,
@@ -308,8 +308,8 @@ func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.Ra
 	)
 }
 
-// run 은 run-began 과 run-ended 를 발행한다. 페이지가 갱신이 더 있는지 알리고, 이 함수는
-// 그 값이 바뀔 때만 이벤트를 발행한다.
+// run publishes run-began and run-ended. The page announces whether more updates follow, and this function
+// publishes an event only when that value changes.
 func (s *Surfaces) run(going bool) {
 	if s.running == going {
 		return
@@ -326,8 +326,8 @@ func (s *Surfaces) run(going bool) {
 	s.Emit("run-ended")
 }
 
-// whenSettled 는 연속 갱신이 끝나면 닫히는 채널을 반환한다. 진행 중인 갱신이 없으면 닫힌
-// 채널이다.
+// whenSettled returns a channel that closes when the continuous update ends. When no update is in progress, it is a closed
+// channel.
 func (s *Surfaces) whenSettled() <-chan struct{} {
 	done := make(chan struct{})
 	application.InvokeSync(func() {
@@ -340,8 +340,8 @@ func (s *Surfaces) whenSettled() <-chan struct{} {
 	return done
 }
 
-// resizing 은 표면의 연속 크기 변경을 시작하거나 끝낸다. 두 호출은 짝을 이루므로 표면별
-// 상태를 여기에 두고 바뀐 경우만 전달한다.
+// resizing starts or ends the continuous resize of a surface. The two calls form a pair, so the state of each surface
+// is kept here and only a change is passed on.
 func (s *Surfaces) resizing(id string, view *nativeWebview, live bool) {
 	if s.live[id] == live {
 		return
@@ -354,7 +354,7 @@ func (s *Surfaces) resizing(id string, view *nativeWebview, live bool) {
 	system.SetWebviewResizing(view.NativeView(), live)
 }
 
-// press 는 표면 또는 표면이 소유한 문서 웹뷰의 id 를 발행한다. 누름의 의미는 페이지가 결정한다.
+// press publishes the id of a surface or of a document web view that the surface owns. The page decides the meaning of the press.
 func (s *Surfaces) press(view uintptr) bool {
 	id, ok := SurfaceOwnerID(s.named, view)
 	if !ok {
@@ -368,15 +368,15 @@ func (s *Surfaces) press(view uintptr) bool {
 	if !ok {
 		return false
 	}
-	// AppKit의 로컬 마우스 감시기 안에서 Wails의 EmitEvent를 동기 실행하면
-	// 현재 NSEvent 처리가 재진입하여 다음 버튼 이벤트가 WebView에 이동으로
-	// 전달될 수 있다. 원래 이벤트가 반환된 뒤 같은 메인 런루프 순서로 발행한다.
+	// If Wails EmitEvent ran synchronously inside the local mouse monitor of AppKit,
+	// the handling of the current NSEvent would be re-entered and the next button event could be
+	// delivered to the WebView as a move. It is published in the same main run loop order after the original event returns.
 	application.InvokeAsync(func() { s.Emit("surface-pressed", id) })
 	return true
 }
 
-// pressAt 은 직접 주입한 누름의 좌표가 표면 또는 그 문서에 있는 경우 표면 누름을 발행한다.
-// 직접 주입은 AppKit 로컬 이벤트 감시기를 거치지 않으므로 감시기와 별도로 호출한다.
+// pressAt publishes a surface press when the coordinates of a directly injected press are in a surface or its document.
+// A direct injection does not pass through the local event monitor of AppKit, so this is called separately from the monitor.
 func (s *Surfaces) pressAt(x, y float64) error {
 	var got struct {
 		View uint64 `json:"view"`
@@ -392,34 +392,34 @@ func (s *Surfaces) pressAt(x, y float64) error {
 	return nil
 }
 
-// SurfaceOwnerID 는 입력을 받은 native view 가 속한 논리 surface 를 찾는다.
-// map 항목은 논리 surface 를 생성할 때 추가되고 surface 와 함께 제거된다.
-// 알 수 없는 native view 는 card 를 활성화해서는 안 된다.
+// SurfaceOwnerID finds the logical surface to which the native view that received the input belongs.
+// A map entry is added when a logical surface is created and removed together with the surface.
+// An unknown native view must not activate a card.
 func SurfaceOwnerID(named map[uintptr]string, view uintptr) (string, bool) {
 	id, ok := named[view]
 	return id, ok && id != ""
 }
 
-// point 는 왼쪽 단추 끌기의 한 단계를 페이지 좌표로 발행한다. phase 는 누름 0, 이동 1,
-// 뗌 2 이다.
+// point publishes one step of a left button drag in page coordinates. phase is 0 for press, 1 for move and
+// 2 for release.
 //
-// 경계의 잡기 영역은 두 카드 사이 통로보다 넓으므로, 통로 폭이 선 하나이면 그 영역이
-// 표면 아래에 있다. 페이지가 위치를 자기 경계와 비교한다.
+// The grab region of a boundary is wider than the passage between two cards, so when the passage width is one line, that region is
+// under a surface. The page compares the position with its own boundary.
 func (s *Surfaces) point(phase int, x float64, y float64) {
-	// 표면 누름과 같은 이유로 네이티브 이벤트 감시기에서 DOM 이벤트를 동기
-	// 실행하지 않는다. 메인 런루프가 입력 이벤트를 먼저 완료하게 한다.
+	// For the same reason as a surface press, the DOM event is not run synchronously in the native event monitor.
+	// The main run loop completes the input event first.
 	step := InputStep{Phase: phase, X: x, Y: y}
 	application.InvokeAsync(func() { s.Emit("surface-input", step) })
 }
 
-// InputStep 은 페이지가 받는 끌기의 한 단계다.
+// InputStep is one step of a drag that the page receives.
 type InputStep struct {
 	Phase int     `json:"phase"`
 	X     float64 `json:"x"`
 	Y     float64 `json:"y"`
 }
 
-// alphaFor 는 표면의 불투명도를 반환한다. 흐리게 표시할지는 페이지가 결정한다.
+// alphaFor returns the opacity of a surface. The page decides whether to dim it.
 func alphaFor(dim bool) float64 {
 	if dim {
 		return 0.45
@@ -434,7 +434,7 @@ func max1(v float64) float64 {
 	return v
 }
 
-// ValidateRect 는 native view 에 전달되어서는 안 되는 geometry 를 거부한다.
+// ValidateRect rejects geometry that must not be passed to a native view.
 func ValidateRect(name string, x, y, width, height float64) error {
 	if math.IsNaN(x) || math.IsNaN(y) || math.IsNaN(width) || math.IsNaN(height) ||
 		math.IsInf(x, 0) || math.IsInf(y, 0) || math.IsInf(width, 0) || math.IsInf(height, 0) {
@@ -446,7 +446,7 @@ func ValidateRect(name string, x, y, width, height float64) error {
 	return nil
 }
 
-// aligned 는 페이지 좌표의 영역을 디스플레이 픽셀에 맞춘다. UI 스레드에서 호출한다.
+// aligned fits a region in page coordinates to the display pixels. Call it on the UI thread.
 func aligned(win *application.WebviewWindow, at Rect) (Rect, error) {
 	got, err := system.AlignRect(win.NativeWindow(), platformRect{X: at.X, Y: at.Y, W: max1(at.W), H: max1(at.H)})
 	if err != nil {
@@ -455,8 +455,8 @@ func aligned(win *application.WebviewWindow, at Rect) (Rect, error) {
 	return Rect(got), nil
 }
 
-// CheckSyncRequest 는 배치를 시작하기 전에 동기화 요청 전체를 검사하고 창 오버레이를
-// 반환한다. held 와 plugins 는 창이 이미 받은 표면의 composition 선언과 plugin 이다.
+// CheckSyncRequest checks the whole synchronization request before the layout starts and returns the window
+// overlays. held and plugins are the composition declarations and the plugins of the surfaces that the window already received.
 func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugins map[string]string) ([]platform.WindowOverlay, error) {
 	if err := ValidateTitlebarHeight(req.Titlebar); err != nil {
 		return nil, err
@@ -494,9 +494,9 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugi
 	return windowOverlays, nil
 }
 
-// SyncSurfaces 는 표면 뷰를 페이지가 선언한 영역에 맞춘다.
+// SyncSurfaces fits the surface views to the regions that the page declared.
 //
-// AppKit 호출이고 서비스 호출은 자기 고루틴에서 도착하므로 작업은 주 스레드에서 실행한다.
+// It is an AppKit call and service calls arrive in their own goroutines, so the work runs on the main thread.
 func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	win, ok := s.window, s.window != nil
 	if !ok {
@@ -508,8 +508,8 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	if err != nil {
 		return PreparedSurfaces{}, err
 	}
-	// 페이지가 커밋했으므로 창이 화면에 있고 표면이 있다. 애플리케이션이 그려진 뒤에
-	// 한 번 실행할 작업은 여기서 시작한다.
+	// The page committed, so the window is on the screen and the surfaces exist. Work to run once after the application is drawn
+	// starts here.
 	s.first.Do(func() { s.Emit("page-ready") })
 	var prepared PreparedSurfaces
 	type applyResult struct {
@@ -569,17 +569,17 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	gone := outcome.gone
 	prepared.Placements = outcome.placements
 	prepared.Chrome = outcome.chrome
-	// 제거된 표면을 사이드카와 메인 페이지의 노출 등록에 알린다. 주 스레드 밖에서 호출한다.
+	// Tells the sidecars and the exposure registration of the main page about the removed surfaces. Call it outside the main thread.
 	for _, id := range gone {
 		s.sidecars.Close(id)
 	}
 	s.surfacesClosed(gone)
-	// 연속 frame 은 native 위치만 갱신한다. divider 단계마다 image raster 를 다시
-	// 구성하면 sidecar 작업이 display queue 뒤에 직렬화된다. 아래의 settled frame 이
-	// 기준이 되는 raster 갱신을 수행한다.
+	// A continuous frame updates only the native position. If the image raster were rebuilt
+	// at every divider step, the sidecar work would be serialized behind the display queue. The settled frame below
+	// performs the raster update that serves as the reference.
 	if req.Settled {
 		if err := s.refreshImageRasters(); err != nil {
-			// 취소는 트랜잭션을 커밋하므로, 그리기 전의 행과 맞도록 제목줄을 먼저 되돌린다.
+			// A cancel commits the transaction, so the title bar is restored first to match the row before drawing.
 			restore := outcome.restore
 			if cancel := system.EnqueueUI(func() {
 				if failure := restore(); failure != nil {
@@ -597,8 +597,8 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	return prepared, nil
 }
 
-// RunLayout 은 창 덮개를 놓은 뒤 표면 배치 트랜잭션을 시작한다. 덮개를 배치보다 먼저 놓으므로 덮개가 거부되면
-// 시작한 배치가 없다.
+// RunLayout starts the surface layout transaction after it places the window cover. The cover is placed before the layout, so when the cover is rejected,
+// no layout was started.
 func RunLayout(overlays, begin func() error) error {
 	if err := overlays(); err != nil {
 		return err
@@ -606,10 +606,10 @@ func RunLayout(overlays, begin func() error) error {
 	return begin()
 }
 
-// ApplyOrCancel 은 시작한 배치에서 창 제목줄을 정한 뒤 표면을 맞추고, 둘 중 하나가 실패하면 배치를 취소한다. 제목줄을
-// 정하지 못하면 표면을 맞추지 않는다. 표면을 맞추지 못하면 titlebar 가 돌려준 restore 로 이전 제목줄을 되돌린 뒤
-// 취소한다. 취소는 트랜잭션을 커밋하므로 되돌리지 않으면 새 제목줄이 이전 행과 함께 표시된다. 되돌리기와 취소의
-// 실패는 그 오류에 덧붙인다.
+// ApplyOrCancel sets the window title bar in the started layout and then fits the surfaces, and cancels the layout when either of them fails. When the title bar
+// cannot be set, it does not fit the surfaces. When the surfaces cannot be fitted, it restores the previous title bar with the restore that titlebar returned and then
+// cancels. A cancel commits the transaction, so unless it is restored, the new title bar would be shown with the previous row. A failure of
+// the restore and of the cancel is appended to that error.
 func ApplyOrCancel(titlebar func() (restore func() error, err error), apply, cancel func() error) error {
 	restore, err := titlebar()
 	if err == nil {
@@ -629,7 +629,7 @@ func ApplyOrCancel(titlebar func() (restore func() error, err error), apply, can
 	return err
 }
 
-// watchInput 은 창의 표면 입력을 이 창에 전달한다. UI 스레드에서 호출한다.
+// watchInput delivers the surface input of a window to this window. Call it on the UI thread.
 func (s *Surfaces) watchInput(win *application.WebviewWindow) {
 	monitor, err := system.WatchInput(win.NativeWindow(), platform.Input{Press: s.press, Point: s.point})
 	if err != nil {
@@ -639,23 +639,23 @@ func (s *Surfaces) watchInput(win *application.WebviewWindow) {
 	s.monitor = monitor
 }
 
-// Placement 는 표면 하나의 실제 위치를 페이지 좌표로 나타낸다. 페이지가 선언한 영역을
-// 호스트가 디스플레이 픽셀에 맞추므로 두 값이 다르고, 페이지는 그 차이를 전달받는다.
+// Placement is the actual position of one surface in page coordinates. The host fits the region that the page declared to the display pixels,
+// so the two values differ, and the page receives that difference.
 type Placement struct {
 	ID string `json:"id"`
 	Rect
 	Visible bool `json:"visible"`
 }
 
-// PreparedSurfaces 는 준비의 답이다. Chrome 은 호스트가 이 트랜잭션에서 제목줄을 정한 뒤의 창 단추 영역과 제목줄
-// 높이이고, 페이지는 이 준비의 표시를 확인한 뒤 그것을 커밋된 상태로 읽는다.
+// PreparedSurfaces is the reply of the preparation. Chrome is the window button region and the title bar height after the host set the title bar in this transaction,
+// and the page reads it as the committed state after it confirmed the display of this preparation.
 type PreparedSurfaces struct {
 	Ticket     uint64      `json:"ticket"`
 	Placements []Placement `json:"placements"`
 	Chrome     Chrome      `json:"chrome"`
 }
 
-// PresentRequest 는 DOM 표시 확인 요청이다. PresentSurfaces 는 AppKit 스레드를 막지 않고 확인한다.
+// PresentRequest is the DOM display confirmation request. PresentSurfaces confirms without blocking the AppKit thread.
 type PresentRequest struct {
 	Ticket              uint64      `json:"ticket"`
 	Placements          []Placement `json:"placements"`
@@ -673,9 +673,9 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 		err    error
 	}
 	done := make(chan result, 1)
-	// settled frame 은 DOM document 와 image raster 를 확인한다. 연속 frame 은 다음
-	// display cycle 이 document 나 raster callback 뒤에 직렬화되지 않도록 native 준비
-	// 뒤에 commit 한다. 이 전환은 frame 검사가 다룬다.
+	// A settled frame checks the DOM document and the image raster. A continuous frame commits after the native preparation so that the next
+	// display cycle is not serialized behind a document or raster callback. The frame check handles
+	// this transition.
 	go func() {
 		var waiting error
 		if req.Settled || req.WaitForPresentation {
@@ -693,8 +693,8 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 				timer.Stop()
 			}
 		}
-		// 연속 frame 도 commit 전에 보이는 image 영역마다 준비된 크기의 raster 가 표시되기를 기다린다.
-		// 기다리지 않으면 표면 크기 변경이 영역을 넓힌 채 이전 raster 를 보인다
+		// A continuous frame also waits, before the commit, for each visible picture region to display a raster of the prepared size.
+		// Without waiting, a surface resize would show the previous raster while the region is enlarged
 		// (docs/spec/surface-composition.md).
 		if waiting == nil {
 			waiting = s.refreshImageRasters()
@@ -709,7 +709,7 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 				}
 			}
 		}
-		// 커밋과 취소는 프레임워크 이벤트 잠금 밖에서 실행한다.
+		// The commit and the cancel run outside the framework event lock.
 		if err := system.EnqueueUI(func() {
 			if waiting != nil {
 				if err := system.CancelLayout(win.NativeWindow()); err != nil {
@@ -754,8 +754,8 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	return placed, nil
 }
 
-// CreateLogicalSurfaceHandle 은 native 생성 실패를 그대로 전달하고 nil handle 을 거부한다.
-// 창을 만들지 않고 실패 contract 를 테스트할 수 있도록 callback 을 분리한다.
+// CreateLogicalSurfaceHandle passes a native creation failure as it is and rejects a nil handle.
+// The callback is separated so that the failure contract can be tested without creating a window.
 func CreateLogicalSurfaceHandle(create func() (unsafe.Pointer, error), id string) (unsafe.Pointer, error) {
 	handle, err := create()
 	if err != nil {
@@ -767,7 +767,7 @@ func CreateLogicalSurfaceHandle(create func() (unsafe.Pointer, error), id string
 	return handle, nil
 }
 
-// WindowNativeKind 는 창이 닫힐 때 닫는 네이티브 객체의 종류다.
+// WindowNativeKind is the kind of native object that is closed when the window closes.
 type WindowNativeKind int
 
 const (
@@ -776,7 +776,7 @@ const (
 	WindowNativeSurface
 )
 
-// WindowNative 는 창이 닫힐 때 닫는 네이티브 객체다.
+// WindowNative is a native object that is closed when the window closes.
 type WindowNative struct {
 	Kind   WindowNativeKind
 	Handle unsafe.Pointer
@@ -793,12 +793,12 @@ func (kind WindowNativeKind) String() string {
 	}
 }
 
-// CloseWindowSurfaces 는 닫히는 창의 논리 표면마다 문서 영역과 그림 영역을 닫은 뒤 표면을 닫는다. 표면은 id
-// 순서로 닫는다.
+// CloseWindowSurfaces closes, for each logical surface of the closing window, its document regions and picture regions and then closes the surface. Surfaces are closed in id
+// order.
 //
-// 논리 표면은 메인 웹뷰를 보유하고 문서 영역은 자기 웹 콘텐츠 프로세스를 가지므로, 닫지 않은 표면과 영역은 창이
-// 닫힌 뒤에도 웹뷰와 그 웹 콘텐츠 프로세스를 남긴다. 한 객체를 닫지 못해도 나머지를 닫고 모든 실패를 반환한다.
-// close 는 네이티브 객체 하나를 닫으며 UI 스레드에서 호출된다.
+// A logical surface holds a main web view and a document region has its own web content process, so a surface and a region that are not closed leave the web view and its web content process after the window
+// closed. Even when one object cannot be closed, the rest are closed and all failures are returned.
+// close closes one native object and is called on the UI thread.
 func CloseWindowSurfaces(surfaces map[string]unsafe.Pointer, documents *Documents, images *Images, close func(WindowNative) error) error {
 	ids := make([]string, 0, len(surfaces))
 	for id := range surfaces {
@@ -835,9 +835,9 @@ func createLogicalSurface(create func() (unsafe.Pointer, error), owner *Surfaces
 	return &nativeWebview{owner: owner, handle: handle, logical: true}, nil
 }
 
-// apply 는 표면 뷰를 만들고 옮기고 제거하며, 뷰가 제거된 id 를 반환한다. 그 뒤의 셸은
-// 호출자가 이 스레드 밖에서 종료한다. 요청은 SyncSurfaces 가 배치를 시작하기 전에
-// CheckSyncRequest 로 검사했다.
+// apply creates, moves and removes the surface views, and returns the ids whose views were removed. The caller ends the shells after that
+// outside this thread. SyncSurfaces checked the request with
+// CheckSyncRequest before it started the layout.
 func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]string, []Placement, error) {
 	if !req.Settled {
 		s.run(true)
@@ -902,8 +902,8 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		s.surfacePlugins[item.id] = item.decl.Plugin
 		s.mu.Unlock()
 		s.images.SetSurfaceVisible(item.id, item.visible)
-		// PresentSurfaces 가 대응하는 애플리케이션 DOM frame 이 표시되었음을
-		// 확인할 때까지 native view 를 숨긴 상태로 둔다.
+		// The native view is kept hidden until PresentSurfaces confirms that the corresponding application DOM frame
+		// was displayed.
 		item.view.SetHidden(true)
 		system.SetSurfaceAlphaHandle(item.view.NativeView(), alphaFor(item.decl.Dim))
 		if item.visible {
@@ -914,7 +914,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		placed = append(placed, placement)
 	}
 
-	// 이 목록은 페이지만 작성하므로 목록에 없는 표면은 제거된 표면이다.
+	// Only the page writes this list, so a surface that is not in the list is a removed surface.
 	var gone []string
 	for id, view := range s.views {
 		if wanted[id] {
@@ -935,7 +935,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		delete(s.surfacePlugins, id)
 		s.mu.Unlock()
 		delete(s.compositionRevisions, id)
-		// 표면 생명주기의 계기(V5-104): 목록에서 사라진 표면은 이 자리에서 파괴된다.
+		// Instrument of the surface lifecycle (V5-104): a surface that disappeared from the list is destroyed at this point.
 		PerformanceSurface("destroyed", id, nil)
 		gone = append(gone, id)
 	}
@@ -1026,7 +1026,7 @@ func (v *nativeWebview) setBackground(enabled bool) {
 	})
 }
 
-// execJS 는 주 스레드에서 호출한다.
+// Call execJS on the main thread.
 func (v *nativeWebview) execJS(script string) {
 	if v.handle == nil {
 		return

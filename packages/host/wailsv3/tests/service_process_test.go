@@ -10,9 +10,9 @@ import (
 
 // contract: sidecars-transport.endpoint.zombie-service-does-not-exist
 func TestAZombieServiceProcessDoesNotExist(t *testing.T) {
-	// 기다리지 않은 스폰은 좀비로 남는다. kill(pid, 0) 은 좀비를 통과시키므로(V5-106)
-	// 좀비는 존재하지 않는 것이다 — 낡은 endpoint 를 버리고 재스폰하는 판정이 좀비에
-	// 막혀서는 안 된다.
+	// A spawn that was not waited for stays as a zombie. kill(pid, 0) passes a zombie (V5-106), so
+	// a zombie does not exist: the decision to discard a stale endpoint and respawn must not
+	// be blocked by a zombie.
 	sleep := exec.Command("sleep", "30")
 	if err := sleep.Start(); err != nil {
 		t.Fatalf("start sleep failed: %v", err)
@@ -20,7 +20,7 @@ func TestAZombieServiceProcessDoesNotExist(t *testing.T) {
 	if err := sleep.Process.Kill(); err != nil {
 		t.Fatalf("kill sleep failed: %v", err)
 	}
-	// 좀비가 되기를 기다린다 — 부모가 기다리지 않았으므로 죽은 뒤에도 표에 남는다.
+	// Waits for it to become a zombie: the parent did not wait, so it stays in the table after it dies.
 	time.Sleep(100 * time.Millisecond)
 	current, err := platform.Current()
 	if err != nil {
@@ -38,15 +38,15 @@ func TestAZombieServiceProcessDoesNotExist(t *testing.T) {
 	}
 }
 
-// 다른 사용자의 프로세스에는 신호 확인이 거부된다. 거부(EPERM)는 그 번호의 프로세스가 있다는 뜻이므로 그 service
-// 프로세스는 존재한다.
+// The signal check is refused for a process of another user. A refusal (EPERM) means that a process with that number exists, so that service
+// process exists.
 // contract: sidecars-transport.endpoint.foreign-service-process-exists
 func TestAServiceProcessOfAnotherUserExists(t *testing.T) {
 	current, err := platform.Current()
 	if err != nil {
 		t.Fatalf("platform failed: %v", err)
 	}
-	// 1 은 root 가 실행하는 launchd 다.
+	// 1 is launchd, which root runs.
 	exists, err := current.ServiceProcessExists(1)
 	if err != nil {
 		t.Fatalf("inspect process 1: %v", err)

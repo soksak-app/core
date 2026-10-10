@@ -11,8 +11,8 @@ import (
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
-// TestEveryPendingReplyIsFlushedAfterTheQueueDrains 는 쓰기 queue 가 가득 찼을 때 버퍼링된
-// 모든 reply 와 close 가 queue 를 비운 뒤 올바른 순서로 기록되는지 검증한다.
+// TestEveryPendingReplyIsFlushedAfterTheQueueDrains verifies that, when the write queue is full, all
+// buffered replies and closes are written in the correct order after the queue is emptied.
 // contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain, flush.buffer.consumed-acks-not-coalesced, flush.buffer.delivered-after-queued-bodies, sidecars.close.buffered-close-is-recorded
 func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	written := captureLog(t)
@@ -22,7 +22,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 		t.Fatal(err)
 	}
 	received := filepath.Join(directory, "received")
-	// 사이드카는 FIFO 를 읽기로 여는 순간 블록한다. 그동안 stdin 을 읽지 않는다. 폴링이 아니다.
+	// The sidecar blocks the moment it opens the FIFO for reading. Meanwhile it does not read stdin. This is not polling.
 	script := "#!/bin/sh\nread _ < " + fifo + "\nexec cat > " + received + "\n"
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -32,13 +32,13 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := newFakeOwner("/p")
-	// 닫을 표면을 먼저 등록한다(Close 는 등록된 표면만 알린다).
+	// Registers the surfaces to close first (Close notifies only registered surfaces).
 	for _, s := range []string{"s1", "s2", "s3"} {
 		if err := sidecars.Send(owner, echoSidecar, s, json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// 큐와 파이프 버퍼를 가득 채운다.
+	// Fills the queue and the pipe buffer.
 	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
 	full := false
 	for i := 0; i < 4000 && !full; i++ {
@@ -52,7 +52,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	if !full {
 		t.Fatal("the queue never filled")
 	}
-	// 가득 찬 상태에서 표면·이름이 다른 반납 셋과 닫힘 둘.
+	// Three returns and two closes with different surfaces and names in the full state.
 	for i, name := range []string{"a", "b", "c"} {
 		bodyMap := host.AfterPresent(true, "", name, 1, 1, i+1)
 		bodyBytes, _ := json.Marshal(bodyMap)
@@ -60,7 +60,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// 같은 그림 a 에 다른 sequence 로 다시 보낸다. immutable frame ack는 모두 도착해야 한다.
+	// Sends again to the same picture a with a different sequence. All immutable frame acks must arrive.
 	bodyMap := host.AfterPresent(true, "", "a", 1, 1, 4)
 	bodyBytes, _ := json.Marshal(bodyMap)
 	if err := sidecars.SendResponse(echoSidecar, "s1", "a", json.RawMessage(bodyBytes)); err != nil {
@@ -74,14 +74,14 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 			t.Errorf("the log has no %q:\n%s", want, written())
 		}
 	}
-	// 사이드카를 풀어 준다. 그 뒤로 아무것도 더 보내지 않는다.
+	// Releases the sidecar. Nothing more is sent after that.
 	f, err := os.OpenFile(fifo, os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.Write([]byte("go\n"))
 	f.Close()
-	sidecars.Stop() // 큐와 보관분을 모두 쓴 뒤 stdin 을 닫는다. cat 이 끝난다.
+	sidecars.Stop() // Writes the queue and all held messages and then closes stdin. cat ends.
 	data, err := os.ReadFile(received)
 	if err != nil {
 		t.Fatal(err)
@@ -97,8 +97,8 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 			t.Errorf("close %s never reached the sidecar", s)
 		}
 	}
-	// 실제 JSON 필드 순서는 Marshal 결과를 기반으로 함. 각 immutable frame ack가
-	// 정확히 한 번씩 도착해야 하며, 같은 image의 새 sequence가 이전 frame을 덮어쓰지 않는다.
+	// The actual JSON field order is based on the Marshal result. Each immutable frame ack
+	// must arrive exactly once, and a new sequence of the same image does not overwrite the previous frame.
 	for _, pattern := range []string{
 		`"name":"a","raster":1,"sequence":1`,
 		`"name":"b","raster":1,"sequence":2`,
@@ -110,7 +110,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 		}
 	}
 
-	// 순서: 닫힘과 반납은 큐에 먼저 들어간 큰 본문들보다 뒤에 온다.
+	// Order: the closes and the returns come after the large bodies that entered the queue first.
 	last := strings.LastIndex(text, `"data":"`)
 	if last < 0 {
 		t.Fatal("no queued body arrived")
@@ -125,8 +125,8 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	}
 }
 
-// TestOrderIsCorrectWhenStopFlushesBufferedMessages 는 Stop() 이 stdin 을 닫기 전에
-// 버퍼링된 모든 메시지를 기록하여 메시지를 잃지 않는지 검증한다.
+// TestOrderIsCorrectWhenStopFlushesBufferedMessages verifies that Stop() writes all
+// buffered messages before it closes stdin, so no message is lost.
 // contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain
 func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	directory := t.TempDir()
@@ -143,17 +143,17 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = stall // Stop() 이 cat 이 5MB 를 받고 끝날 때까지 기다리게 한다. 기한은 멈춤만 잡는다
+	sidecars.StopTimeout = stall // Makes Stop() wait until cat receives 5MB and ends. The deadline catches only a hang
 	owner := newFakeOwner("/p")
 
-	// 표면 등록
+	// Surface registration
 	for _, s := range []string{"s1", "s2"} {
 		if err := sidecars.Send(owner, echoSidecar, s, json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	// 큐를 가득 채운다.
+	// Fills the queue.
 	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
 	full := false
 	for i := 0; i < 4000 && !full; i++ {
@@ -168,7 +168,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 		t.Fatal("the queue never filled")
 	}
 
-	// 가득 찬 상태에서 보관할 메시지들
+	// The messages to hold in the full state
 	for i, name := range []string{"x", "y", "z"} {
 		bodyMap := host.AfterPresent(true, "", name, 1, 1, i+1)
 		bodyBytes, _ := json.Marshal(bodyMap)
@@ -178,7 +178,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	}
 	sidecars.Close("s2")
 
-	// 사이드카를 풀어 준다.
+	// Releases the sidecar.
 	f, err := os.OpenFile(fifo, os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +186,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	f.Write([]byte("go\n"))
 	f.Close()
 
-	// Stop() 을 호출하면 보관분을 모두 쓴 뒤 stdin 을 닫아야 한다.
+	// Calling Stop() must write all held messages and then close stdin.
 	sidecars.Stop()
 
 	data, err := os.ReadFile(received)
@@ -195,7 +195,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	}
 	text := string(data)
 
-	// 모든 보관 메시지가 도착했는지 확인
+	// Checks that all held messages arrived
 	for _, want := range []string{`"name":"x"`, `"name":"y"`, `"name":"z"`, `"surface":"s2","root":"/p","closed":true`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("buffered message %s was lost", want)

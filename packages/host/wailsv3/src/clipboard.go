@@ -39,7 +39,7 @@ type ClipboardPersistRequest struct {
 	Data string `json:"data"`
 }
 
-// ValidateClipboardRead 는 명시적 사용자 붙여넣기에서 지원하는 형식을 읽는 요청만 허용한다.
+// ValidateClipboardRead allows only a request that reads a supported format in an explicit user paste.
 func ValidateClipboardRead(kind string, userInitiated bool) error {
 	if !userInitiated {
 		return fmt.Errorf("clipboard read requires an explicit user paste")
@@ -131,7 +131,7 @@ func (h *Host) ClipboardPersistPNG(ctx context.Context, requestJSON json.RawMess
 
 var pngSignature = []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
 
-// PersistClipboardPNG 는 소유한 PNG 를 주어진 config 디렉터리 아래에 기록한다.
+// PersistClipboardPNG writes the owned PNG under the given config directory.
 func PersistClipboardPNG(root string, bytes []byte) (string, error) {
 	if len(bytes) == 0 || len(bytes) > clipboardMaxBytes {
 		return "", fmt.Errorf("clipboard PNG size is invalid")
@@ -176,7 +176,7 @@ func PersistClipboardPNG(root string, bytes []byte) (string, error) {
 	return "", fmt.Errorf("cannot allocate a unique clipboard image path")
 }
 
-// validatePNGHeader 는 서명 뒤의 첫 청크가 13바이트 IHDR 인지 검사한다(PNG 명세 11.2.2).
+// validatePNGHeader checks that the first chunk after the signature is a 13-byte IHDR (PNG specification 11.2.2).
 func validatePNGHeader(bytes []byte) error {
 	if len(bytes) < 33 {
 		return errors.New("the IHDR chunk is truncated")

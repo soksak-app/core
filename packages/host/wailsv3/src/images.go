@@ -1,12 +1,12 @@
 package host
 
-// 표면 페이지의 외부 그림 표시 영역. docs/spec/sidecars.md 의 "그림 봉투"와 관련된다.
+// The display region for external pictures in a surface page, related to the picture envelope of docs/spec/sidecars.md.
 //
-// 표면 페이지가 그림을 네이티브 영역에 표시하도록 요청한다. 호스트는 표면 웹뷰 안에
-// 그림 영역을 만들고, 페이지가 알린 여백으로 배치하며, 사이드카가 보낸 그림을 영역에
-// 표시한다. 그림 영역은 표면 웹뷰의 하위 뷰이므로 표면과 함께 옮겨지고 숨겨진다.
-// 표면이 제거되거나 표면 페이지가 다시 읽히면 닫는다. 그림 영역은 사이드카가 보낸
-// 그림 봉투(image envelope)를 표시하는데, 호스트는 사이드카의 진정성을 검증한다.
+// A surface page requests that a picture be shown in a native region. The host creates a picture region inside the surface web view,
+// lays it out with the margins that the page reported, and shows in the region the picture that a sidecar sent. The picture region is a subview of the
+// surface web view, so it moves and hides together with the surface.
+// It closes when the surface is removed or the surface page is read again. The picture region shows the picture
+// envelope (image envelope) that a sidecar sent, and the host verifies the authenticity of the sidecar.
 
 import (
 	"encoding/base64"
@@ -22,24 +22,24 @@ import (
 	"unsafe"
 )
 
-// imageStore 는 그림 영역의 영구 데이터 저장소 이름이다.
+// imageStore is the name of the persistent data store of a picture region.
 const imageStore = "soksak-images"
 
 var imageName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
-// ImageRequest 는 표면 페이지의 그림 영역 호출이다.
+// ImageRequest is a picture region call of a surface page.
 type ImageRequest struct {
 	Surface string `json:"surface"`
 	Name    string `json:"name"`
 	Sidecar string `json:"sidecar,omitempty"`
 }
 
-// ImageKey 는 표면과 그림 이름의 쌍이다.
+// ImageKey is the pair of a surface and a picture name.
 type ImageKey struct {
 	Surface, Name string
 }
 
-// CheckImage 는 표면 호출자의 surface 소유권을 확인하고 키를 반환한다.
+// CheckImage checks the surface ownership of the surface caller and returns the key.
 func CheckImage(caller string, req ImageRequest) (ImageKey, error) {
 	if caller == "" || caller != req.Surface {
 		return ImageKey{}, fmt.Errorf("this image is not surface %q", req.Surface)
@@ -61,7 +61,7 @@ func (s *Surfaces) checkImage(viewID uint64, req ImageRequest) (ImageKey, error)
 	return CheckImage(caller, req)
 }
 
-// ImageCallError 는 그림 영역 호출 call 의 실패를 돌려준다(docs/spec/native-host.md#host-calls).
+// ImageCallError returns the failure of the picture region call call (docs/spec/native-host.md#host-calls).
 func ImageCallError(call string, err error) error {
 	if err == nil {
 		return nil
@@ -69,13 +69,13 @@ func ImageCallError(call string, err error) error {
 	return fmt.Errorf("%s: %w", call, err)
 }
 
-// ImageOwner 는 그림 영역을 등록한 사이드카와 소유자를 기록한다.
+// ImageOwner records the sidecar that registered a picture region and its owner.
 type ImageOwner struct {
 	SidecarName  string
 	SidecarOwner SidecarOwner
 }
 
-// Images 는 창의 그림 영역이다.
+// Images are the picture regions of a window.
 type Images struct {
 	mu             sync.Mutex
 	handles        map[ImageKey]unsafe.Pointer
@@ -83,14 +83,14 @@ type Images struct {
 	states         map[ImageKey]*ImageRasterState
 	generations    map[string]uint64
 	surfaceVisible map[string]bool
-	// 뗀 그림 영역이 마지막으로 쓴 세대와 래스터. 같은 세대에서 다시 붙인 영역은 그 다음 래스터부터 센다. 사이드카는
-	// (세대, 래스터)가 커지지 않은 구성을 지난 구성으로 보고 무시하기 때문이다. 표면의 세대가 바뀌면 지운다.
+	// The generation and the raster that a detached picture region used last. A region attached again in the same generation counts from the next raster, because the sidecar
+	// ignores a configuration whose (generation, raster) did not increase as a past configuration. It is cleared when the generation of the surface changes.
 	detachedRasters map[ImageKey][2]uint64
 	nextGeneration  uint64
 	changed         chan struct{}
 }
 
-// ImageRasterState 는 호스트가 허용한 현재 전송 세대와 정확한 네이티브 래스터다.
+// ImageRasterState is the current send generation that the host allowed and the exact native raster.
 type ImageRasterState struct {
 	Generation, Raster uint64
 	Width, Height      int
@@ -103,7 +103,7 @@ type ImageRasterState struct {
 	PresentationError  string
 }
 
-// ImageConfigure 는 권한 있는 사이드카에 보낼 새 래스터 설정이다.
+// ImageConfigure is the new raster configuration to send to the authorized sidecar.
 type ImageConfigure struct {
 	Name       string       `json:"name"`
 	Generation uint64       `json:"generation"`
@@ -127,14 +127,14 @@ func NewImages() *Images {
 	}
 }
 
-// changedLocked 는 이미지 표시 대기자에게 상태 변경을 알린다. i.mu 를 잡은 상태에서 호출한다.
+// changedLocked announces a state change to the waiters for picture display. Call it while holding i.mu.
 func (i *Images) changedLocked() {
 	close(i.changed)
 	i.changed = make(chan struct{})
 }
 
-// BeginGeneration 은 새 표면 문서가 시작될 때 이전 프레임과 구별할 세대를 만든다. 표면에 남아 있는 그림
-// 영역도 새 세대로 옮기고 구성을 지우므로, 영역을 닫기 전에 대기 중이던 이전 세대의 프레임은 거부된다.
+// BeginGeneration creates a generation that distinguishes frames from earlier ones when a new surface document starts. It also moves the picture
+// regions that remain on the surface to the new generation and clears their configuration, so a frame of an earlier generation that was pending before the region closed is rejected.
 func (i *Images) BeginGeneration(surface string) uint64 {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -152,7 +152,7 @@ func (i *Images) BeginGeneration(surface string) uint64 {
 	return i.nextGeneration
 }
 
-// EndGeneration 은 제거한 표면의 현재 세대를 끝낸다. 번호는 다시 쓰지 않는다.
+// EndGeneration ends the current generation of a removed surface. The number is not reused.
 func (i *Images) EndGeneration(surface string) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -173,7 +173,7 @@ func (i *Images) EndGeneration(surface string) {
 	i.changedLocked()
 }
 
-// SetSurfaceVisible 은 바깥 SurfaceHost의 표시 상태를 기록한다.
+// SetSurfaceVisible records the visibility of the outer SurfaceHost.
 func (i *Images) SetSurfaceVisible(surface string, visible bool) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -186,8 +186,8 @@ func (i *Images) SetSurfaceVisible(surface string, visible bool) {
 			if key.Surface != surface {
 				continue
 			}
-			// 표면을 숨기면 native pixel 이 해제되므로 다시 보이면 같은 크기라도 새 raster 를 설정한다. 숨긴 동안의
-			// raster 에 속한 frame 은 그 뒤에 받지 않는다.
+			// Hiding a surface releases the native pixels, so when it is shown again a new raster is set even for the same size. A frame that belongs to
+			// a raster of the hidden period is not received afterward.
 			state.Raster++
 			state.Configured = false
 			state.LastSequence = 0
@@ -196,7 +196,7 @@ func (i *Images) SetSurfaceVisible(surface string, visible bool) {
 	i.changedLocked()
 }
 
-// Reserve 는 이름을 차지한다. owner 가 nil 이면 오류를 반환한다.
+// Reserve takes a name. It returns an error when owner is nil.
 func (i *Images) Reserve(key ImageKey, owner *ImageOwner) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -224,8 +224,8 @@ func (i *Images) Reserve(key ImageKey, owner *ImageOwner) error {
 	return nil
 }
 
-// forgetDetachedRastersLocked 는 표면에서 뗀 영역의 래스터 기록을 지운다. 표면의 세대가 바뀌면 새 세대가 이전
-// 구성보다 크므로 기록이 필요 없다.
+// forgetDetachedRastersLocked clears the raster records of regions detached from a surface. When the generation of the surface changes, the new generation is larger than the earlier
+// configuration, so the records are not needed.
 func (i *Images) forgetDetachedRastersLocked(surface string) {
 	for key := range i.detachedRasters {
 		if key.Surface == surface {
@@ -234,7 +234,7 @@ func (i *Images) forgetDetachedRastersLocked(surface string) {
 	}
 }
 
-// detachLocked 는 영역의 이름을 지우고, 같은 세대에서 다시 붙일 때 이어 셀 래스터를 남긴다.
+// detachLocked clears the name of a region and keeps the raster from which counting continues when it is attached again in the same generation.
 func (i *Images) detachLocked(key ImageKey) {
 	if state := i.states[key]; state != nil {
 		i.detachedRasters[key] = [2]uint64{state.Generation, state.Raster}
@@ -244,7 +244,7 @@ func (i *Images) detachLocked(key ImageKey) {
 	delete(i.states, key)
 }
 
-// Set 은 차지한 이름에 만든 그림 영역을 적는다.
+// Set writes the created picture region to the reserved name.
 func (i *Images) Set(key ImageKey, handle unsafe.Pointer) bool {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -255,7 +255,7 @@ func (i *Images) Set(key ImageKey, handle unsafe.Pointer) bool {
 	return true
 }
 
-// Get 은 만들어진 그림 영역을 반환한다.
+// Get returns the created picture region.
 func (i *Images) Get(key ImageKey) (unsafe.Pointer, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -265,7 +265,7 @@ func (i *Images) Get(key ImageKey) (unsafe.Pointer, error) {
 	return nil, fmt.Errorf("image %q is not attached", key.Name)
 }
 
-// GetOwner 는 그림 영역을 등록한 사이드카 소유자를 반환한다.
+// GetOwner returns the sidecar owner that registered the picture region.
 func (i *Images) GetOwner(key ImageKey) (*ImageOwner, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -275,7 +275,7 @@ func (i *Images) GetOwner(key ImageKey) (*ImageOwner, error) {
 	return nil, fmt.Errorf("image %q is not attached", key.Name)
 }
 
-// Remove 는 이름을 제거하고 그 그림 영역을 반환한다.
+// Remove removes the name and returns its picture region.
 func (i *Images) Remove(key ImageKey) (unsafe.Pointer, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -288,7 +288,7 @@ func (i *Images) Remove(key ImageKey) (unsafe.Pointer, error) {
 	return handle, nil
 }
 
-// RemoveSurface 는 표면의 이름을 모두 제거하고 만들어진 그림 영역을 반환한다.
+// RemoveSurface removes all names of a surface and returns the created picture regions.
 func (i *Images) RemoveSurface(surface string) []unsafe.Pointer {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -302,19 +302,19 @@ func (i *Images) RemoveSurface(surface string) []unsafe.Pointer {
 			removed = append(removed, handle)
 		}
 	}
-	// 문서 영역의 정리는 바깥 SurfaceHost의 표시 상태를 바꾸지 않는다.
-	// 표면 자체가 닫힐 때 EndGeneration이 그 상태를 제거한다.
+	// The cleanup of document regions does not change the visibility of the outer SurfaceHost.
+	// EndGeneration removes that state when the surface itself closes.
 	i.changedLocked()
 	return removed
 }
 
-// Visible 은 영역 자체와 바깥 표면이 모두 표시된 그림의 핸들을 반환한다.
+// Visible returns the handles of the pictures for which both the region itself and the outer surface are visible.
 func (i *Images) Visible() map[ImageKey]unsafe.Pointer {
 	return i.visibleWhere(func(key ImageKey) bool { return true })
 }
 
-// VisibleForSidecar 는 그 사이드카가 그리는 보이는 그림만 반환한다. 영속 사이드카의
-// 연결이 다시 맺혔을 때 그 사이드카의 configure 를 다시 보내는 데 쓴다(V5-106).
+// VisibleForSidecar returns only the visible pictures that the sidecar draws. It is used to send the configure of a persistent sidecar again
+// when the connection to that sidecar is made again (V5-106).
 func (i *Images) VisibleForSidecar(sidecar string) map[ImageKey]unsafe.Pointer {
 	return i.visibleWhere(func(key ImageKey) bool {
 		owner := i.owners[key]
@@ -338,10 +338,10 @@ func (i *Images) visibleWhere(belongs func(ImageKey) bool) map[ImageKey]unsafe.P
 	return visible
 }
 
-// InvalidateSidecar 는 그 사이드카의 연결이 끊겼다고 표시한다(V5-106). configure 를
-// 받아든 연결이 죽었으므로 configure 상태도 함께 죽는다 — 같은 크기라도 다시 보내야
-// 새 연결의 서비스가 그림 상태를 만든다. 표시 순서 기록도 지운다 — 새 연결의 프레임은
-// 순번을 처음부터 센다.
+// InvalidateSidecar marks that the connection to that sidecar was lost (V5-106). The connection that
+// received the configure is dead, so the configure state ends with it; the configure must be sent again even for the same size
+// so that the service of the new connection builds the picture state. The display order record is also cleared; the frames of the new connection
+// count their sequence numbers from the start.
 func (i *Images) InvalidateSidecar(sidecar string) int {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -366,7 +366,7 @@ func (i *Images) InvalidateSidecar(sidecar string) int {
 	return invalidated
 }
 
-// ConfigureRaster 는 적용된 네이티브 래스터가 달라졌을 때 리비전을 올리고 보낼 설정을 반환한다.
+// ConfigureRaster raises the revision when the applied native raster changed and returns the configuration to send.
 func (i *Images) ConfigureRaster(key ImageKey, width, height int, scale float64, visible bool) (*ImageConfigure, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -400,7 +400,7 @@ func (i *Images) ConfigureRaster(key ImageKey, width, height int, scale float64,
 		Width: width, Height: height, Scale: scale, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner}, nil
 }
 
-// SetVisible 은 래스터가 없는 0 크기 배치에서도 영역의 표시 상태를 기록한다.
+// SetVisible records the visibility of a region even in a layout of size 0 that has no raster.
 func (i *Images) SetVisible(key ImageKey, visible bool) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -415,7 +415,7 @@ func (i *Images) SetVisible(key ImageKey, visible bool) error {
 	return nil
 }
 
-// FrameStatus 는 프레임이 메인 스레드에서 표시되기 직전에도 현재 래스터인지 검사한다.
+// FrameStatus checks that a frame is the current raster also immediately before it is displayed on the main thread.
 func (i *Images) FrameStatus(key ImageKey, generation, raster uint64, sequence int) string {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -429,7 +429,7 @@ func (i *Images) FrameStatus(key ImageKey, generation, raster uint64, sequence i
 	return ""
 }
 
-// MarkPresented 는 현재 래스터의 프레임이 네이티브 표시 저장소에 복사되었음을 기록한다.
+// MarkPresented records that the frame of the current raster was copied to the native display storage.
 func (i *Images) MarkPresented(key ImageKey, generation, raster uint64, sequence int) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -445,7 +445,7 @@ func (i *Images) MarkPresented(key ImageKey, generation, raster uint64, sequence
 	}
 }
 
-// MarkPresentationFailed 는 현재 raster 의 native presentation 실패를 기록한다.
+// MarkPresentationFailed records the native presentation failure of the current raster.
 func (i *Images) MarkPresentationFailed(key ImageKey, generation, raster uint64, sequence int, reason string) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -458,7 +458,7 @@ func (i *Images) MarkPresentationFailed(key ImageKey, generation, raster uint64,
 	i.changedLocked()
 }
 
-// currentPresentedLocked 는 보이는 모든 유효한 그림 영역이 현재 래스터를 표시했는지 반환한다.
+// currentPresentedLocked returns whether every visible valid picture region displayed the current raster.
 func (i *Images) currentPresentedLocked() bool {
 	for key, state := range i.states {
 		surfaceVisible, known := i.surfaceVisible[key.Surface]
@@ -470,8 +470,8 @@ func (i *Images) currentPresentedLocked() bool {
 	return true
 }
 
-// PendingRasters 는 표시 장벽이 아직 기다리는 그림 영역을 표면과 이름 순서로 적는다. 장벽이 시간을 넘기면 오류에
-// 붙여 어느 영역이 표시되지 않았는지 보고한다. 기다리는 영역이 없으면 "none" 이다.
+// PendingRasters lists, in the order of surface and name, the picture regions that the display barrier still waits for. When the barrier times out, the list is attached to the error to report
+// which regions were not displayed. It is "none" when no region is waited for.
 func (i *Images) PendingRasters() string {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -499,19 +499,19 @@ func (i *Images) PendingRasters() string {
 	return strings.Join(pending, ", ")
 }
 
-// CurrentPresented 는 보이는 모든 그림 영역이 현재 래스터를 표시했는지 반환한다.
+// CurrentPresented returns whether every visible picture region displayed the current raster.
 func (i *Images) CurrentPresented() bool {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return i.currentPresentedLocked()
 }
 
-// WaitCurrent 는 보이는 모든 그림 영역이 현재 래스터를 표시하거나 제한 시간이 끝날 때까지 기다린다.
+// WaitCurrent waits until every visible picture region displays the current raster or the time limit ends.
 func (i *Images) WaitCurrent(timeout time.Duration) bool {
 	return i.WaitCurrentError(timeout) == nil
 }
 
-// WaitCurrentError 는 현재 raster 를 기다리거나 그 정확한 실패를 반환한다.
+// WaitCurrentError waits for the current raster or returns its exact failure.
 func (i *Images) WaitCurrentError(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
@@ -549,7 +549,7 @@ func (i *Images) WaitCurrentError(timeout time.Duration) error {
 	}
 }
 
-// RetryConfigure 는 설정 전송 실패 시 같은 래스터를 다음 완전한 배치에서 다시 보내게 한다.
+// RetryConfigure makes the same raster be sent again in the next complete layout when sending the configuration failed.
 func (i *Images) RetryConfigure(key ImageKey, generation, raster uint64) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -559,7 +559,7 @@ func (i *Images) RetryConfigure(key ImageKey, generation, raster uint64) {
 	}
 }
 
-// AuthorizeFrame 은 봉투가 현재 공급자와 정확한 래스터에 속하고 순번이 증가하는지 확인한다.
+// AuthorizeFrame checks that the envelope belongs to the current provider and the exact raster and that its sequence number increases.
 func (i *Images) AuthorizeFrame(key ImageKey, sender string, generation, raster uint64,
 	width, height int, scale float64, sequence int) string {
 	i.mu.Lock()
@@ -577,7 +577,7 @@ func (i *Images) AuthorizeFrame(key ImageKey, sender string, generation, raster 
 	return ""
 }
 
-// Names 는 만들어진 그림 영역의 주소별 키다.
+// Names are the keys of the created picture regions by address.
 func (i *Images) Names() map[uint64]ImageKey {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -590,7 +590,7 @@ func (i *Images) Names() map[uint64]ImageKey {
 	return names
 }
 
-// All 은 만들어진 그림 영역이다.
+// All are the created picture regions.
 func (i *Images) All() []unsafe.Pointer {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -603,7 +603,7 @@ func (i *Images) All() []unsafe.Pointer {
 	return all
 }
 
-// CloseSurface 는 표면의 그림 영역을 모두 닫는다. UI 스레드에서 호출한다.
+// CloseSurface closes all picture regions of a surface. Call it on the UI thread.
 func (i *Images) CloseSurface(surface string, close func(unsafe.Pointer)) {
 	handles := i.RemoveSurface(surface)
 	for _, handle := range handles {
@@ -611,13 +611,13 @@ func (i *Images) CloseSurface(surface string, close func(unsafe.Pointer)) {
 	}
 }
 
-// Decision 은 이미지 봉투 의사 결정의 결과다.
+// Decision is the result of the decision on an image envelope.
 type Decision interface{}
 
-// NotImage 는 본문에 이미지 필드가 없음을 나타낸다.
+// NotImage means that the body has no image field.
 type NotImage struct{}
 
-// Reply 는 사이드카에 보낼 오류 응답을 나타낸다. Reason 과 Generation, Raster, Sequence 는 거부한 프레임이다.
+// Reply is the error reply to send to the sidecar. Reason, Generation, Raster and Sequence belong to the rejected frame.
 type Reply struct {
 	Name               string
 	JSON               map[string]interface{}
@@ -626,7 +626,7 @@ type Reply struct {
 	Sequence           int
 }
 
-// Present 는 표시할 이미지를 나타낸다.
+// Present is the image to display.
 type Present struct {
 	ID         uint32
 	Nonce      [16]byte
@@ -647,11 +647,11 @@ func imageReply(reason, name string, generation, raster uint64, sequence int) *R
 	}, Reason: reason, Generation: generation, Raster: raster, Sequence: sequence}
 }
 
-// Decide 는 이미지 봉투를 파싱하고 유효성을 검사하여 의사 결정을 반환한다.
-// body 는 "image" 필드를 포함하는 JSON 객체여야 한다.
-// 이미지 봉투가 아니면 NotImage 를 반환한다.
-// 유효하지 않으면 Reply 를 반환한다.
-// 유효하고 등록되어 있으면 Present 를 반환한다.
+// Decide parses and validates an image envelope and returns the decision.
+// body must be a JSON object that contains the "image" field.
+// It returns NotImage when it is not an image envelope.
+// It returns Reply when it is not valid.
+// It returns Present when it is valid and registered.
 func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 	var obj map[string]interface{}
 	if err := json.Unmarshal(bodyBytes, &obj); err != nil {
@@ -689,23 +689,23 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 		return &NotImage{}
 	}
 
-	// 포맷과 토큰 종류 검증
+	// Validates the format and the token kind
 	if envelope.Format != "bgra8" || envelope.Token.Kind != "iosurface-global" {
 		return imageReply("unsupported", envelope.Name, envelope.Generation, envelope.Raster, envelope.Sequence)
 	}
 
-	// nonce 를 base64 에서 디코딩하여 [16]byte 배열로 변환
+	// Decodes the nonce from base64 and converts it to a [16]byte array
 	decodedNonce, err := base64.StdEncoding.DecodeString(envelope.Token.Nonce)
 	if err != nil {
 		return imageReply("unsupported", envelope.Name, envelope.Generation, envelope.Raster, envelope.Sequence)
 	}
 
-	// 디코딩된 nonce 가 정확히 16바이트여야 함
+	// The decoded nonce must be exactly 16 bytes
 	if len(decodedNonce) != 16 {
 		return imageReply("unsupported", envelope.Name, envelope.Generation, envelope.Raster, envelope.Sequence)
 	}
 
-	// nonce 를 [16]byte 배열로 변환
+	// Converts the nonce to a [16]byte array
 	var nonce [16]byte
 	copy(nonce[:], decodedNonce)
 
@@ -721,8 +721,8 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 	}
 }
 
-// AfterPresent 는 이미지 표시 후 응답을 생성한다.
-// ok 가 true 면 consumed 응답을 반환하고, false 면 reason 을 오류로 반환한다.
+// AfterPresent builds the reply after the image is displayed.
+// It returns a consumed reply when ok is true, and returns reason as an error when it is false.
 func AfterPresent(ok bool, reason, name string, generation, raster uint64, sequence int) map[string]interface{} {
 	if ok {
 		return map[string]interface{}{
@@ -740,8 +740,8 @@ func AfterPresent(ok bool, reason, name string, generation, raster uint64, seque
 	}
 }
 
-// presentationReason 은 메인 스레드 표시 실패를 응답 이유로 바꾼다. 메인 스레드 작업 전에 떼어진 프레임
-// (notAttached)은 표시 실패가 아니라 무효화된 프레임이므로 stale 이다. 알 수 없는 이유는 presentFailed 다.
+// presentationReason converts a main thread presentation failure to a reply reason. A frame that was detached before the main thread task
+// (notAttached) is an invalidated frame and not a presentation failure, so it is stale. An unknown reason is presentFailed.
 func presentationReason(reason string) string {
 	if strings.HasPrefix(reason, "staleRaster") {
 		return "stale"
@@ -756,9 +756,9 @@ func presentationReason(reason string) string {
 	}
 }
 
-// PresentationOutcome 은 표시하지 못한 프레임의 상세 detail 을 응답 사유와 로그 줄로 바꾼다. 대체된 프레임(stale,
-// notAttached, staleRaster ...)은 표시 실패가 아니라 무효화된 프레임이므로 invalidated 가 참이다. current 는 실패한
-// 영역의 현재 프레임 상태이며 표시 실패의 줄에만 남긴다.
+// PresentationOutcome converts the detail detail of a frame that could not be displayed to a reply reason and a log line. A replaced frame (stale,
+// notAttached, staleRaster ...) is an invalidated frame and not a presentation failure, so invalidated is true. current is the current frame state of the failed
+// region and is kept only in the line of a presentation failure.
 func PresentationOutcome(surface, name string, generation, raster uint64, sequence int, token uint32, detail, current string) (reason string, invalidated bool, entry Entry) {
 	frame := fmt.Sprintf("surface=%s name=%s generation=%d raster=%d sequence=%d token=%d reason=%s",
 		surface, name, generation, raster, sequence, token, detail)
@@ -769,7 +769,7 @@ func PresentationOutcome(surface, name string, generation, raster uint64, sequen
 	return reason, false, Entry{"error", "host", "image present", frame + " current " + current}
 }
 
-// FrameState 는 거부한 프레임과 비교할 수 있도록 영역의 현재 프레임 상태를 글로 돌려준다.
+// FrameState returns the current frame state of a region as text so that it can be compared with a rejected frame.
 func (i *Images) FrameState(key ImageKey) string {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -782,8 +782,8 @@ func (i *Images) FrameState(key ImageKey) string {
 		state.PresentedRaster, state.PresentedSequence)
 }
 
-// logRefusedFrame 은 호스트가 거부한 프레임을 거부 이유와 영역의 현재 프레임 상태와 함께 기록한다. 지원하지 않는
-// 프레임은 사이드카의 결함이므로 오류이고, 떼어졌거나 대체된 프레임은 정상 경합이므로 관측이다.
+// logRefusedFrame records a frame that the host rejected together with the reason for the rejection and the current frame state of the region. An unsupported
+// frame is a defect of the sidecar, so it is an error, and a detached or replaced frame is a normal race, so it is an observation.
 func logRefusedFrame(surface, sender string, images *Images, name string, generation, raster uint64, sequence int, reason string) {
 	level := "info"
 	if reason == "unsupported" {
@@ -793,9 +793,9 @@ func logRefusedFrame(surface, sender string, images *Images, name string, genera
 		surface, name, sender, generation, raster, sequence, reason, images.FrameState(ImageKey{Surface: surface, Name: name}))})
 }
 
-// HandleEnvelope 는 이미지 봉투를 처리한다. 메인 스레드에서 실행할 작업, 응답 전송 방식, 표시 실패 뒤의
-// 복구를 인자로 받는다. recoverFrame 은 현재 프레임이 네이티브 이유로 실패한 뒤 그 이유와 함께 호출된다
-// (notFound 는 표시할 IOSurface 가 없으므로 새 래스터 구성을 요청한다). 봉투를 처리했으면 true 를 반환한다.
+// HandleEnvelope handles an image envelope. It takes as arguments the work to run on the main thread, the way to send the reply, and the recovery after a presentation failure.
+// recoverFrame is called, after the current frame failed for a native reason, with that reason
+// (notFound has no IOSurface to display, so it requests a new raster configuration). It returns true when it handled the envelope.
 func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, onMain func(func() error) error,
 	sendResponse func(string, map[string]interface{}) error, recoverFrame func(reason string) error) bool {
 	decision := Decide(bodyBytes, sender, surface, images)
@@ -827,7 +827,7 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 			if status := images.FrameStatus(key, d.Generation, d.Raster, d.Sequence); status != "" {
 				return errors.New(status)
 			}
-			// 네이티브 래스터가 프레임과 다르면 그 프레임은 이전 래스터의 것이다. 기록에는 네이티브 래스터를 남긴다.
+			// When the native raster differs from the frame, that frame belongs to an earlier raster. The record keeps the native raster.
 			width, height, scale, presentable := system.RasterImage(handle)
 			if !presentable {
 				return errors.New("staleRaster native=none")
@@ -835,7 +835,7 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 			if width != d.Width || height != d.Height || math.Abs(scale-d.Scale) > 0.000001 {
 				return fmt.Errorf("staleRaster native=%dx%d@%v frame=%dx%d@%v", width, height, scale, d.Width, d.Height, d.Scale)
 			}
-			// 플랫폼에 이미지를 표시한다
+			// Displays the image on the platform
 			return system.PresentImage(handle, d.ID, d.Nonce, float64(d.Width), float64(d.Height), d.Scale)
 		})
 

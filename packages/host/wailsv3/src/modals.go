@@ -1,7 +1,7 @@
-// 네이티브 모달의 표시, 배치, 갱신, 숨김, 내용 전달, 준비 알림과 선택 전달.
+// Display, layout, update, hiding, content delivery, ready notification, and pick delivery of native modals.
 //
-// 페이지는 [data-native-modal] 요소를 열 때 그 내용을 보낸다. 모달은 같은 창에 추가한
-// 다른 웹뷰가 렌더링한다.
+// The page sends the content of a [data-native-modal] element when it opens it. A modal is rendered by another web view added to the
+// same window.
 
 package host
 
@@ -13,7 +13,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// OverlayRequest 는 [data-native-modal] 요소를 다른 뷰에서 렌더링하는 데 필요한 값이다.
+// OverlayRequest holds the values needed to render a [data-native-modal] element in another view.
 type OverlayRequest struct {
 	Mode      string  `json:"mode"`
 	Card      Rect    `json:"card"`
@@ -27,7 +27,7 @@ type OverlayRequest struct {
 	Radius    float64 `json:"radius"`
 }
 
-// OverlayContent 는 모달 뷰가 로드한 뒤 요청하는 내용이다.
+// OverlayContent is the content that a modal view requests after it loads.
 type OverlayContent struct {
 	Mode      string `json:"mode"`
 	Card      Rect   `json:"card"`
@@ -38,36 +38,36 @@ type OverlayContent struct {
 	Border    string `json:"border"`
 }
 
-// UpdateRequest 는 열린 모달의 새 내용이다. 페이지가 요소에서 잰 값만 담는다. 이미 열린
-// 모달은 위치와 크기를 유지한다.
+// UpdateRequest is the new content of an open modal. It holds only the values that the page measured from the element. An already open
+// modal keeps its position and size.
 type UpdateRequest struct {
 	ID string `json:"id"`
 	OverlayContent
 }
 
-// modal 은 자식 모달 웹뷰가 지금 그리는 내용이다.
+// modal is the content that the child modal web view currently draws.
 //
-// 페이지는 [data-native-modal] 요소를 한 번에 하나만 표시하고 다음 요소를 표시하기 전에
-// 닫으므로, 기록 하나에 어느 모달인지를 함께 둔다.
+// The page shows only one [data-native-modal] element at a time and closes it before showing the next element,
+// so one record also holds which modal it is.
 type modal struct {
 	instance uint64
-	// 요소의 id. 모달 페이지는 모든 호출에 이 값을 넣고, 다른 id 의 호출은 닫힌 모달이
-	// 마지막으로 보낸 것이다.
+	// The id of the element. The modal page puts this value in every call, and a call with another id is the last one
+	// that a closed modal sent.
 	id      string
 	content OverlayContent
-	// revision 은 내용이나 위치를 바꿀 때마다 오른다. 모달 페이지는 이보다 오래된 값을 버린다.
+	// revision rises whenever the content or the position changes. The modal page discards a value older than this.
 	revision uint64
-	// 페이지가 렌더링을 마쳐 웹뷰 표시를 시작했는지 나타낸다. 같은 표시를 두 번 하지 않는다.
+	// Tells whether the page finished rendering and started to show the web view. The same display is not done twice.
 	shown bool
-	// 웹뷰를 표시하고 키보드 초점을 넘겼는지 나타낸다. host.window 가 이 값을 보고한다.
+	// Tells whether the web view was shown and the keyboard focus was handed over. host.window reports this value.
 	visible bool
 	radius  float64
-	// view 는 이 인스턴스의 child WebView 이다. 숨긴 상태로 생성되고,
-	// 이 인스턴스가 교체되거나 닫힐 때 닫힌다.
+	// view is the child WebView of this instance. It is created hidden and
+	// is closed when this instance is replaced or closed.
 	view *nativeWebview
 }
 
-// OverlayPick 은 모달 페이지가 바꾼 키와 값을 발행한다. 의미는 메인 페이지가 결정한다.
+// OverlayPick publishes the key and value that the modal page changed. The main page decides the meaning.
 func (s *Surfaces) OverlayPick(id string, instance uint64, key string, value string) error {
 	s.mu.Lock()
 	current := s.modal != nil && s.modal.id == id && s.modal.instance == instance
@@ -80,8 +80,8 @@ func (s *Surfaces) OverlayPick(id string, instance uint64, key string, value str
 	return nil
 }
 
-// OverlayShow 는 표시된 요소 하나를 숨긴 자식 웹뷰에서 렌더링한다. 웹뷰는 자기 문서가
-// 렌더링을 마쳤다고 알린 뒤에 표시된다.
+// OverlayShow renders one shown element in a hidden child web view. The web view is shown after its document
+// reports that it finished rendering.
 func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 	win, ok := s.window, s.window != nil
 	if !ok {
@@ -142,15 +142,15 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 	return at, nil
 }
 
-// PlaceRequest 는 열린 모달 뷰의 새 영역이다. 페이지가 결정한다. 카드 손잡이를 끌면
-// 위치가 바뀌고 새 내용은 크기를 바꾼다.
+// PlaceRequest is the new region of an open modal view. The page decides it. Dragging the card handle
+// changes the position, and new content changes the size.
 type PlaceRequest struct {
 	ID   string `json:"id"`
 	Rect Rect   `json:"rect"`
 	Card Rect   `json:"card"`
 }
 
-// OverlayPlace 는 메인 창 안에서 자식 웹뷰의 영역을 바꾼다.
+// OverlayPlace changes the region of the child web view inside the main window.
 func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 	win, ok := s.window, s.window != nil
 	if !ok {
@@ -195,7 +195,7 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 	return at, nil
 }
 
-// OverlayHide 는 자식 웹뷰를 제거하고 키보드 초점을 메인 웹뷰로 되돌린다.
+// OverlayHide removes the child web view and returns the keyboard focus to the main web view.
 func (s *Surfaces) OverlayHide(id string) error {
 	s.mu.Lock()
 	if s.modal == nil || s.modal.id != id {
@@ -214,8 +214,8 @@ func (s *Surfaces) OverlayHide(id string) error {
 	return nil
 }
 
-// discardOverlay 는 탐색이 커밋될 때 이전 메인 문서의 모달을 제거한다. 그 DOM 과 응답
-// 콜백이 사라졌으므로 네이티브 뷰의 소유자가 없다.
+// discardOverlay removes the modal of the previous main document when a navigation commits. Its DOM and reply
+// callbacks are gone, so the native view has no owner.
 func (s *Surfaces) discardOverlay() {
 	s.mu.Lock()
 	var view *nativeWebview
@@ -230,8 +230,8 @@ func (s *Surfaces) discardOverlay() {
 	s.setBackground(false)
 }
 
-// OverlayUpdate 는 뷰를 다시 만들지 않고 열린 모달의 내용을 바꾼다. 컨트롤이 페이지 상태를
-// 바꾸는 모달은 열린 동안 다시 그려진다.
+// OverlayUpdate changes the content of an open modal without recreating the view. A modal whose controls change the page state
+// is drawn again while it is open.
 func (s *Surfaces) OverlayUpdate(req UpdateRequest) error {
 	content := req.OverlayContent
 	s.mu.Lock()
@@ -260,8 +260,8 @@ func (s *Surfaces) OverlayUpdate(req UpdateRequest) error {
 	return nil
 }
 
-// emitModalEvent 는 child WebView bridge 로 갱신을 전달한다. Wails window event 는
-// 애플리케이션 WebView 범위에 한정되므로 native child document 를 안정적으로 갱신할 수 없다.
+// emitModalEvent delivers an update through the child WebView bridge. A Wails window event is
+// limited to the scope of the application WebView, so it cannot update a native child document reliably.
 func emitModalEvent(view *nativeWebview, event string, data any) error {
 	if view == nil {
 		return fmt.Errorf("modal event %s has no native webview", event)
@@ -281,7 +281,7 @@ func emitModalEvent(view *nativeWebview, event string, data any) error {
 	return dispatchErr
 }
 
-// ModalContentEvent 는 모달 페이지가 받는 모달 하나의 새 내용이다.
+// ModalContentEvent is the new content of one modal that the modal page receives.
 type ModalContentEvent struct {
 	Instance uint64         `json:"instance"`
 	ID       string         `json:"id"`
@@ -289,18 +289,18 @@ type ModalContentEvent struct {
 	Content  OverlayContent `json:"content"`
 }
 
-// RevisedContent 는 모달의 내용과 그 내용의 변경 번호다.
+// RevisedContent is the content of a modal and the change number of that content.
 type RevisedContent struct {
 	Revision uint64         `json:"revision"`
 	Content  OverlayContent `json:"content"`
 }
 
-// holdModalContent 는 진단 빌드에서 창 s 의 모달 내용 응답을 보내기 전에 호출된다. 검사가
-// 응답을 붙잡았으면 놓을 때까지 반환하지 않는다. 다른 빌드에서는 nil 이다.
+// holdModalContent is called in a diagnostic build before the modal content reply of window s is sent. When a check
+// holds the reply, it does not return until the reply is released. It is nil in other builds.
 var holdModalContent func(s *Surfaces)
 
-// ModalContent 는 모달 뷰가 로드한 뒤 요청한 내용을 반환한다. 다른 모달이면 번호 0 의 빈
-// 내용을 반환하고, 모달 페이지는 그것을 버린다.
+// ModalContent returns the content that a modal view requested after it loaded. For another modal, it returns empty content with number 0,
+// and the modal page discards it.
 func (s *Surfaces) ModalContent(id string, instance uint64) RevisedContent {
 	var answer RevisedContent
 	s.mu.Lock()
@@ -314,8 +314,8 @@ func (s *Surfaces) ModalContent(id string, instance uint64) RevisedContent {
 	return answer
 }
 
-// ModalReady 는 이번 표시를 한 번만 드러낸다. 제거된 문서가 늦게 보낸 알림은 같은
-// 모달의 새 표시를 드러내거나 초점을 옮기지 않는다.
+// ModalReady reveals this display only once. A notification that a removed document sent late does not reveal a new display of the same
+// modal and does not move the focus.
 func (s *Surfaces) ModalReady(id string, instance uint64) error {
 	s.mu.Lock()
 	live := s.modal
@@ -354,8 +354,8 @@ func (s *Surfaces) ModalReady(id string, instance uint64) error {
 	return nil
 }
 
-// rendered 는 모달 문서가 렌더링을 마쳤음을 알린다. 갱신된 내용이 그 문서에 도달했는지는
-// 이 알림으로만 확인할 수 있으므로 진단 기록에도 남긴다.
+// rendered reports that the modal document finished rendering. Only this notification can confirm whether the updated content reached that document,
+// so it is also kept in the diagnostic record.
 func (s *Surfaces) rendered(id string) {
 	s.Emit("modal-rendered", id)
 	s.note("diagnostics: modal rendered " + id)
@@ -368,7 +368,7 @@ func (s *Surfaces) dialog() bool {
 	return s.modal != nil && s.modal.content.Mode == "dialog"
 }
 
-// setBackground 는 대화 상자가 열렸는지를 메인 문서와 표면 문서에 알린다.
+// setBackground tells the main document and the surface documents whether a dialog is open.
 func (s *Surfaces) setBackground(enabled bool) {
 	if win, ok := s.window, s.window != nil; ok {
 		win.ExecJS(fmt.Sprintf("window.__soksakBackground = %t", enabled))

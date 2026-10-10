@@ -1,4 +1,4 @@
-// 프로젝트 폴더 확인, 폴더 선택, 프로젝트 생성과 프로젝트 열기.
+// Project folder check, folder selection, project creation, and project opening.
 
 package host
 
@@ -24,7 +24,7 @@ type ProjectFolder struct {
 	Identity string `json:"identity"`
 }
 
-// ProjectFolder 는 root 의 실제 경로와 디렉터리 식별자를 반환한다.
+// ProjectFolder returns the real path and the directory identifier of root.
 func (h *Host) ProjectFolder(rootJSON json.RawMessage) (ProjectFolder, error) {
 	root, err := argument[string]("root", rootJSON)
 	if err != nil {
@@ -33,8 +33,8 @@ func (h *Host) ProjectFolder(rootJSON json.RawMessage) (ProjectFolder, error) {
 	return ResolveProjectFolder(root)
 }
 
-// ResolveProjectFolder 는 ~ 를 홈 디렉터리로 바꾸고 심볼릭 링크를 따라간 디렉터리 root 의
-// 실제 경로와 디렉터리 식별자를 반환한다. root 가 디렉터리가 아니면 실패한다.
+// ResolveProjectFolder replaces ~ with the home directory and returns the real path and the directory identifier of the directory root
+// after following symbolic links. It fails when root is not a directory.
 func ResolveProjectFolder(root string) (ProjectFolder, error) {
 	if strings.TrimSpace(root) == "" {
 		return ProjectFolder{}, fmt.Errorf("project directory is empty")
@@ -70,8 +70,8 @@ func ResolveProjectFolder(root string) (ProjectFolder, error) {
 	return ProjectFolder{Root: path, Identity: identity}, err
 }
 
-// folderError 는 폴더를 확인하지 못한 오류를 요청한 경로 하나를 담은 계약 문구로 바꾼다. 두 호스트가 같은 문구를
-// 낸다(docs/spec/host-contract.md 의 workspace.folder.messages).
+// folderError converts the error of a folder that could not be checked to the contract sentence that carries the one requested path. Both hosts produce the same sentence
+// (workspace.folder.messages of docs/spec/host-contract.md).
 func folderError(path string, err error) error {
 	switch {
 	case errors.Is(err, fs.ErrNotExist), errors.Is(err, syscall.ENOTDIR):
@@ -147,7 +147,7 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 	owner.setTitle(req.Title + titleSuffix)
 	if req.Geometry != nil && req.Geometry.Width > 0 && req.Geometry.Height > 0 {
 		application.InvokeSync(func() {
-			// Wails 창 크기는 정수 논리 픽셀이므로 저장된 크기를 가장 가까운 정수로 둔다.
+			// A Wails window size is in integer logical pixels, so the stored size is set to the nearest integer.
 			owner.window.SetSize(int(math.Round(req.Geometry.Width)), int(math.Round(req.Geometry.Height)))
 			owner.window.SetPosition(int(req.Geometry.X), int(req.Geometry.Y))
 			prepareWindow(owner.window)
@@ -182,7 +182,7 @@ func (h *Host) ProjectRelease(idJSON json.RawMessage) error {
 	delete(h.owners, id)
 	empty := owner != nil && len(owner.projects) == 0
 	h.mu.Unlock()
-	// 프로젝트가 남지 않은 창은 라이브러리를 보이므로 프로젝트 root 와 제목을 비운다.
+	// A window that has no project left shows the library, so the project root and the title are cleared.
 	if empty {
 		owner.mu.Lock()
 		owner.root = ""

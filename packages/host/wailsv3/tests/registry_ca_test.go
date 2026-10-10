@@ -2,7 +2,7 @@
 
 package host_test
 
-// 진단 build 의 --registry-ca(docs/spec/hosts.md#application-arguments)를 검사 소유 TLS server 로 검사한다.
+// Checks --registry-ca of a diagnostic build (docs/spec/hosts.md#application-arguments) with a TLS server owned by the check.
 
 import (
 	"encoding/pem"

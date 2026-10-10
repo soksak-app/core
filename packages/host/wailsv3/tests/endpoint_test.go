@@ -23,23 +23,23 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// fakeBackend 는 창 하나("main")와 그 페이지를 흉내 낸다. 페이지 요청은 기록하고 null 로 답한다.
+// fakeBackend imitates one window ("main") and its page. It records page requests and replies with null.
 type fakeBackend struct {
 	mu       sync.Mutex
 	requests []string
-	// bodies 는 페이지 요청의 params 다. requests 와 같은 순서다.
+	// bodies are the params of the page requests. They are in the same order as requests.
 	bodies   []string
 	commands []string
 	keys     []host.KeyInput
 	pointers []host.PointerInput
-	// held 가 있으면 holdMethod 의 첫 요청은 entered 에 신호를 보내고 held 가 닫힐 때까지 답하지 않는다.
+	// When held exists, the first request of holdMethod signals entered and does not reply until held closes.
 	held       chan struct{}
 	holdMethod string
 	entered    chan struct{}
 	holding    bool
-	// unwatched 는 페이지가 status.unwatch 를 받을 때마다 신호를 받는다.
+	// unwatched receives a signal each time the page receives status.unwatch.
 	unwatched chan struct{}
-	// failures 는 메서드마다 페이지 요청이 돌려줄 오류다.
+	// failures are the errors that a page request returns for each method.
 	failures map[string]error
 }
 
@@ -110,8 +110,8 @@ func (b *fakeBackend) seen() ([]string, []string) {
 	return append([]string(nil), b.requests...), append([]string(nil), b.commands...)
 }
 
-// serve 는 루프백 리스너로 엔드포인트를 시작하고, 창 main 이 있으면 endpoint.json 을 쓴다. 엔드포인트의 전송은 운영체제 구현이
-// 만들고, 이 검사는 전송과 무관한 요청 처리를 확인한다.
+// serve starts the endpoint with a loopback listener and, when the window main exists, writes endpoint.json. The transport of the endpoint is created by the operating system implementation,
+// and this check verifies the request handling, which is independent of the transport.
 func serve(t *testing.T, backend host.Backend) (*host.Endpoint, string, string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -235,8 +235,8 @@ func call(t *testing.T, conn net.Conn, id int, method string, params any) messag
 	return got
 }
 
-// expectClosed 는 서버가 답하지 않고 연결을 닫았는지 확인한다. 읽지 않은 바이트가 남은 연결을
-// 닫으면 운영체제가 재설정을 보내므로 그것도 닫힘이다.
+// expectClosed checks that the server closed the connection without replying. When a connection that has unread bytes is
+// closed, the operating system sends a reset, and that also counts as closed.
 func expectClosed(t *testing.T, conn net.Conn) {
 	t.Helper()
 	got, err := receive(t, conn)
@@ -297,7 +297,7 @@ func TestEndpointClosesOnUndeclaredMethod(t *testing.T) {
 	}
 }
 
-// builtWith 은 이 검사 바이너리가 빌드 태그 tag 로 빌드되었는지 반환한다.
+// builtWith returns whether this check binary was built with the build tag tag.
 func builtWith(tag string) bool {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
@@ -348,12 +348,12 @@ func TestEndpointRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(got.Result, &windows); err != nil || len(windows) != 1 || windows[0].Window != "main" {
 		t.Fatalf("windows.list result %s (%v)", got.Result, err)
 	}
-	// 한 연결이 여러 요청을 보낸다.
+	// One connection sends several requests.
 	got = call(t, conn, 8, "status.get", map[string]any{"window": "main", "name": "core.layout"})
 	if got.Error != nil || string(got.Result) != "null" {
 		t.Fatalf("status.get failed: %+v", got)
 	}
-	// 페이지는 window 를 뺀 params 를 받는다.
+	// The page receives params without window.
 	backend.mu.Lock()
 	bodies := append([]string(nil), backend.bodies...)
 	backend.mu.Unlock()
@@ -605,7 +605,7 @@ func TestWatchersBelongToTheirConnection(t *testing.T) {
 	if err := json.Unmarshal(got.Params, &change); err != nil || change.Window != "main" || change.Name != "core.layout" || change.Value != 1 {
 		t.Fatalf("status.changed params %s", got.Params)
 	}
-	// 두 번째 연결은 감시하지 않았으므로 알림 대신 자기 요청의 답을 먼저 받는다.
+	// The second connection did not watch, so it receives the reply to its own request first and not a notification.
 	if got := call(t, second, 2, "status.watch", watch); got.Error != nil {
 		t.Fatalf("second status.watch: %+v", got)
 	}
@@ -620,7 +620,7 @@ func TestWatchersBelongToTheirConnection(t *testing.T) {
 	if got := call(t, first, 4, "windows.list", nil); got.Method != "" {
 		t.Fatalf("unwatched connection received a notification: %+v", got)
 	}
-	// 페이지는 첫 감시와 마지막 해제만 받는다.
+	// The page receives only the first watch and the last release.
 	requests, _ := backend.seen()
 	watches := 0
 	for _, method := range requests {
@@ -631,7 +631,7 @@ func TestWatchersBelongToTheirConnection(t *testing.T) {
 	if watches != 1 {
 		t.Fatalf("page received %v", requests)
 	}
-	// 연결이 닫히면 그 연결의 감시가 사라지고 페이지가 해제를 받는다.
+	// When a connection closes, the watches of that connection disappear and the page receives the release.
 	_ = second.Close()
 	select {
 	case <-backend.unwatched:
@@ -689,7 +689,7 @@ func TestSurfaceWatchesAreSeparate(t *testing.T) {
 	if got := call(t, conn, 4, "status.unwatch", named); got.Error != nil {
 		t.Fatalf("status.unwatch: %+v", got)
 	}
-	// 표면 감시를 해제해도 같은 이름의 표면 없는 감시는 남는다.
+	// Releasing the watch of a surface leaves the watch of the same name without a surface.
 	if !endpoint.Watching("main", "probe.lines") {
 		t.Fatal("unwatching the surface watch removed the watch without surface")
 	}
@@ -725,7 +725,7 @@ func TestSubscriptionChangesKeepArrivalOrder(t *testing.T) {
 	}
 	request(1, "status.watch")
 	<-backend.entered
-	// 첫 감시의 페이지 답이 오기 전에 해제와 감시를 연달아 보낸다.
+	// Sends a release and a watch in succession before the page reply to the first watch arrives.
 	request(2, "status.unwatch")
 	request(3, "status.watch")
 	close(backend.held)
@@ -764,7 +764,7 @@ func TestPendingSubscriptionDoesNotBlockOtherRequests(t *testing.T) {
 	if got := call(t, conn, 1, "status.watch", watch); got.Error != nil {
 		t.Fatalf("status.watch: %+v", got)
 	}
-	// 페이지가 감시 해제에 답하기 전에 감시와 상태 읽기를 보낸다.
+	// Sends a watch and a status read before the page replies to the watch release.
 	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 2, "method": "status.unwatch", "params": watch})
 	<-backend.entered
 	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 3, "method": "status.watch", "params": watch})
@@ -814,7 +814,7 @@ func TestEndpointSocketIsRemovedOnClose(t *testing.T) {
 	}
 }
 
-// socketParent 는 소켓 경로 길이 제한 안에 드는 짧은 임시 디렉터리다.
+// socketParent is a short temporary directory that fits within the socket path length limit.
 func socketParent(t *testing.T) string {
 	t.Helper()
 	parent, err := os.MkdirTemp("", "sp")
@@ -850,7 +850,7 @@ func TestEndpointFilesArePrivateToTheUser(t *testing.T) {
 	}
 }
 
-// endedProcess 는 끝난 프로세스의 번호를 반환한다.
+// endedProcess returns the number of an ended process.
 func endedProcess(t *testing.T) int {
 	t.Helper()
 	command := exec.Command("/usr/bin/true")
@@ -905,7 +905,7 @@ func TestSocketDirectoryOpenToOthersIsRefused(t *testing.T) {
 
 // contract: endpoint.socket.refuses-foreign-owner
 func TestSocketDirectoryOfAnotherUserIsRefused(t *testing.T) {
-	// /usr 는 root 소유다. 검사는 권한보다 소유자를 먼저 본다.
+	// /usr is owned by root. The check looks at the owner before the permissions.
 	_, _, err := listen(t, "/usr", "test-owner")
 	if err == nil || !strings.Contains(err.Error(), "belongs to another user") {
 		t.Fatalf("got %v, want an owner error", err)
@@ -929,7 +929,7 @@ func TestSocketPathThatIsNotADirectoryIsRefused(t *testing.T) {
 	}
 }
 
-// lateBackend 는 창 main 을 등록한 뒤에만 그 창을 가진다.
+// lateBackend has the window main only after that window is registered.
 type lateBackend struct {
 	*fakeBackend
 	registered atomic.Bool

@@ -1,6 +1,6 @@
 //go:build diagnostics
 
-// 진단 녹화 상태 테스트. 녹화 장치는 가짜가 대신한다. 진단 빌드에서만 컴파일한다.
+// Diagnostic recording state tests. A fake replaces the recording device. They are compiled only in a diagnostic build.
 package host_test
 
 import (
@@ -15,7 +15,7 @@ import (
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
-// fakeCapture 는 호출을 기록하고 지정한 단계에서 실패한다.
+// fakeCapture records the calls and fails at the specified stage.
 type fakeCapture struct {
 	calls     []string
 	failOpen  bool
@@ -142,7 +142,7 @@ func TestAbortedRecordingIsStoppedAndRemovedAndAllowsTheNext(t *testing.T) {
 	if err := recording.Start(fake, window, second); err != nil {
 		t.Fatal(err)
 	}
-	// 준비는 그때의 창 크기로 출력 크기를 정하므로 같은 창도 녹화마다 다시 준비한다.
+	// The preparation decides the output size from the window size at that time, so the same window is prepared again for each recording.
 	expectCalls(t, fake, "open 7", "start", "wait", "stop", "open 7", "start", "wait")
 }
 

@@ -87,7 +87,7 @@ func TestASamePidDifferentInstanceIsNeverKilled(t *testing.T) {
 	}
 }
 
-// 기록이 없으면 갱신은 이 실행의 WebKit 자식 기록을 새로 쓰고, 그 파일은 현재 사용자만 읽고 쓴다.
+// When there is no record, the refresh writes the record of the WebKit children of this run anew, and that file is read and written only by the current user.
 // contract: webkit-children.record.owner-only
 func TestTheWebKitChildRecordIsOwnerOnly(t *testing.T) {
 	config := t.TempDir()
@@ -103,7 +103,7 @@ func TestTheWebKitChildRecordIsOwnerOnly(t *testing.T) {
 }
 
 // contract: webkit-children.record.concurrent-refreshes
-// 여러 창의 페이지 적재가 동시에 기록을 갱신해도 모든 갱신이 성공하고 기록은 마지막으로 쓴 내용이다(F68).
+// Even when the page loads of several windows refresh the record at the same time, all refreshes succeed and the record is the content written last (F68).
 func TestConcurrentWebKitRecordWritesAllSucceed(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "webkit-children.json")
 	const writers = 32

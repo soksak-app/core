@@ -1,13 +1,13 @@
 //go:build diagnostics
 
-// 진단 빌드의 엔드포인트 메서드.
+// Endpoint methods of the diagnostic build.
 //
-// 이 파일은 diagnostics 빌드 태그로만 컴파일되고, init 에서 diagnosticMethods 에 메서드를
-// 추가한다. 다른 빌드에는 이 메서드가 선언되지 않으므로 엔드포인트가 연결을 닫는다. 형식은
-// docs/spec/endpoint.md 의 진단 빌드 절에 정의한다.
+// This file is compiled only with the diagnostics build tag and adds methods to diagnosticMethods in init.
+// Other builds do not declare these methods, so the endpoint closes the connection. The form is
+// defined in the diagnostic build section of docs/spec/endpoint.md.
 //
-// 페이지는 화면에 합성된 결과를 읽을 수 없다. 표면과 모달은 이 애플리케이션이 만든 OS 뷰이고
-// 합성은 윈도 서버가 수행하므로, 녹화는 화면 영역이 아니라 창 번호를 지정한다.
+// The page cannot read the composited result on the screen. Surfaces and modals are OS views that this application created, and the window server
+// performs the composition, so a recording names a window number instead of a screen region.
 
 package host
 
@@ -28,7 +28,7 @@ import (
 )
 
 func init() {
-	// --registry-ca 는 registry 받기가 신뢰하는 인증 기관이다(docs/spec/hosts.md#application-arguments).
+	// --registry-ca is the certificate authority that the registry download trusts (docs/spec/hosts.md#application-arguments).
 	declaredArguments["registry-ca"] = func(options *Options) *string { return &options.RegistryCA }
 	argumentEffects = append(argumentEffects, func(options Options) error {
 		if options.RegistryCA == "" {
@@ -70,14 +70,14 @@ func init() {
 	}
 }
 
-// logTopic 은 diagnostics.log 알림을 받는 연결의 topic 이름이다. 상태 이름은 점으로 구분한
-// 소문자이므로 이 값과 겹치지 않는다.
+// logTopic is the topic name of a connection that receives diagnostics.log notifications. Status names are lowercase
+// and separated by dots, so they do not collide with this value.
 const logTopic = "#diagnostics.log"
 
-// frameStep 은 끌기 한 걸음의 길이다. 페이지가 같은 값으로 걸음 수를 센다.
+// frameStep is the length of one step of a drag. The page counts the steps with the same value.
 const frameStep = 16 * time.Millisecond
 
-// diagnosticHost 는 엔드포인트의 호스트를 반환한다.
+// diagnosticHost returns the host of the endpoint.
 func diagnosticHost(e *Endpoint, params json.RawMessage) (*Host, *Surfaces, error) {
 	window, err := e.window(params)
 	if err != nil {
@@ -94,9 +94,9 @@ func diagnosticHost(e *Endpoint, params json.RawMessage) (*Host, *Surfaces, erro
 	return backend.h, s, nil
 }
 
-// diagnosticPageMethod 는 메인 페이지가 처리하는 진단 메서드를 그 페이지에 보낸다. 표면의 exposure 답은 페이지에서
-// 나가기 전에 붙잡아야 요청이 끝난 뒤에 도착하므로 diagnostics.surface.hold 와 diagnostics.surface.held 는 페이지가
-// 처리한다(docs/spec/endpoint.md).
+// diagnosticPageMethod sends a diagnostic method that the main page handles to that page. The exposure reply of a surface must be held
+// before it leaves the page so that it arrives after the request ends, so the page handles diagnostics.surface.hold and diagnostics.surface.held
+// (docs/spec/endpoint.md).
 func diagnosticPageMethod(method string) endpointMethod {
 	return func(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 		h, s, err := diagnosticHost(e, params)
@@ -120,8 +120,8 @@ func diagnosticPresentationFailure(e *Endpoint, _ *endpointConn, params json.Raw
 	return nil, nil
 }
 
-// diagnosticFixture 는 <config-dir>/test-project 를 빈 폴더 설정으로 만들고, 페이지가 다른
-// 프로젝트를 닫고 공통 설정을 기본값으로 되돌린 뒤 그 프로젝트를 새 배치로 열게 한다.
+// diagnosticFixture creates <config-dir>/test-project as an empty folder configuration and makes the page close other
+// projects, reset the common settings to their defaults, and open that project with a new layout.
 func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
@@ -138,7 +138,7 @@ func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage) (an
 	if err := writeJSON(filepath.Join(root, ".soksak", "settings.json"), Record{}); err != nil {
 		return nil, err
 	}
-	// settings 는 기본값 위에 적용할 공통 설정이다. 주어지면 객체여야 한다.
+	// settings are the common settings applied over the defaults. When given, it must be an object.
 	var request struct {
 		Settings json.RawMessage `json:"settings"`
 	}
@@ -156,7 +156,7 @@ func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage) (an
 	return h.ask(s, "diagnostics.fixture", page, pageTimeout)
 }
 
-// dragPlan 은 경계 하나를 왕복하는 끌기다. 각 반복은 왕복이므로 경계는 제자리로 돌아온다.
+// dragPlan is a drag that goes to a boundary and back. Each iteration is a round trip, so the boundary returns to its place.
 type dragPlan struct {
 	Axis  string  `json:"axis"`
 	Line  int     `json:"line"`
@@ -166,7 +166,7 @@ type dragPlan struct {
 	Times int     `json:"times"`
 }
 
-// steps 는 한 방향 이동의 걸음 수다. 페이지가 같은 식으로 센다.
+// steps is the number of steps of a one-way move. The page counts them in the same way.
 func (p dragPlan) steps() int {
 	if n := int(math.Round(float64(p.MS) / float64(frameStep/time.Millisecond))); n > 1 {
 		return n
@@ -174,10 +174,10 @@ func (p dragPlan) steps() int {
 	return 1
 }
 
-// recording 은 진행 중인 녹화다.
+// recording is a recording in progress.
 var recording Recording
 
-// platformCapture 는 플랫폼의 창 녹화 연산이다. after 는 멈출 때 녹화에 포함할 마지막 표시 시각이다.
+// platformCapture is the window recording operation of the platform. after is the last display time to include in the recording when it stops.
 type platformCapture struct {
 	platform.Capturer
 	after float64
@@ -207,7 +207,7 @@ func captureStopPayload(c captureStatus, directory string, count int, records []
 	}
 }
 
-// recorder 는 이 플랫폼의 녹화 장치를 반환한다.
+// recorder returns the recording device of this platform.
 func recorder() (platformCapture, error) {
 	capturer, ok := system.(platform.Capturer)
 	if !ok {
@@ -216,11 +216,11 @@ func recorder() (platformCapture, error) {
 	return platformCapture{Capturer: capturer}, nil
 }
 
-// diagnosticDrag 는 페이지에 끌기를 요청하고 걸음의 시각을 보낸다.
+// diagnosticDrag requests a drag from the page and sends the time of each step.
 //
-// 페이지는 경계를 찾아 걸음마다 입력을 적용한다. 창이 앞에 없으면 브라우저가 문서의 시계를
-// 늦추므로 걸음의 시각은 호스트가 diagnostics-tick 이벤트로 보낸다. 페이지가 끌기를 마치고
-// 답하면 마지막 배치가 표시될 때까지 기다린 뒤 답한다.
+// The page finds the boundary and applies the input at each step. When the window is not in front, the browser
+// slows the clock of the document, so the host sends the time of each step as a diagnostics-tick event. When the page finishes the drag and
+// replies, the host waits until the last layout is displayed and then replies.
 func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
@@ -241,7 +241,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 		return nil, rpcError(codeInvalidParams, "ms must be positive and times must be at least 1")
 	}
 	var frames string
-	// 녹화하면 걸음을 보낸 시각을 프레임과 같은 시계로 기록한다. 걸음부터 화면까지의 지연을 잴 수 있다.
+	// When recording, the time at which the step was sent is recorded on the same clock as the frames. This allows measuring the delay from a step to the screen.
 	var clock func() float64
 	if p.Capture {
 		frames, err = startCapture(h, s, false)
@@ -260,7 +260,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	ticks := plan.steps() * 2 * plan.Times
 	s.note(fmt.Sprintf("diagnostics: drag %s:%d by %g,%g in %d steps, %d times", plan.Axis, plan.Line, plan.DX, plan.DY, plan.steps(), plan.Times))
 	stop := make(chan struct{})
-	// 페이지가 드래그 요청을 받은 뒤에 첫 틱이 도착하도록 요청을 보낸 다음 틱을 시작한다.
+	// The tick starts after the request is sent so that the first tick arrives after the page received the drag request.
 	reply := h.relay.Request(relayTarget{owner: s}, time.Duration(ticks)*frameStep+pageTimeout, func(id uint64) error {
 		s.window.EmitEvent("exposure-request", map[string]any{"id": id, "method": "diagnostics.drag", "params": plan})
 		go func() {
@@ -297,7 +297,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 		}
 	}
 	if err != nil {
-		// 요청자가 프레임 폴더를 받지 못하면 녹화를 멈추고 폴더를 지운다.
+		// When the requester does not receive the frame folder, the recording stops and the folder is deleted.
 		if p.Capture {
 			if capture, captureErr := recorder(); captureErr == nil {
 				if abortErr := recording.Abort(capture); abortErr != nil {
@@ -319,7 +319,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	return result, nil
 }
 
-// layoutTrace 는 배치 트랜잭션 기록을 {ticket, begun, presented, committed} 로 바꾼다. 일어나지 않은 단계는 null 이다.
+// layoutTrace converts the layout transaction record to {ticket, begun, presented, committed}. A stage that did not happen is null.
 func layoutTrace(records [][5]float64) []map[string]any {
 	layouts := make([]map[string]any, 0, len(records))
 	stage := func(value float64) any {
@@ -336,7 +336,7 @@ func layoutTrace(records [][5]float64) []map[string]any {
 	return layouts
 }
 
-// dragResult 는 페이지의 끌기 응답을 확인하고, 마지막 배치가 표시될 때까지 기다린 뒤 결과를 반환한다.
+// dragResult checks the drag reply of the page, waits until the last layout is displayed, and returns the result.
 func dragResult(s *Surfaces, reply ExposureResult) (map[string]any, error) {
 	if reply.Error != nil {
 		return nil, reply.Error
@@ -356,14 +356,14 @@ func dragResult(s *Surfaces, reply ExposureResult) (map[string]any, error) {
 	return result, nil
 }
 
-// startCapture 는 창 s 의 녹화를 설정 디렉터리 아래 새 폴더에 시작하고 첫 프레임을 기다린다.
-// display 이면 창이 있는 디스플레이에서 이 앱의 창을 녹화한다.
+// startCapture starts the recording of window s in a new folder under the configuration directory and waits for the first frame.
+// With display, it records the windows of this application on the display that holds the window.
 func startCapture(h *Host, s *Surfaces, display bool) (string, error) {
 	capture, err := recorder()
 	if err != nil {
 		return "", err
 	}
-	// 윈도 서버의 창 목록 조회는 답을 기다리므로 창 번호만 주 스레드에서 읽는다.
+	// The window list query of the window server waits for a reply, so only the window number is read on the main thread.
 	var numbers []int
 	application.InvokeSync(func() { numbers, err = capture.WindowNumbers(s.window.NativeWindow()) })
 	if err != nil {
@@ -379,8 +379,8 @@ func startCapture(h *Host, s *Surfaces, display bool) (string, error) {
 	return directory, nil
 }
 
-// diagnosticCaptureStill 은 창을 포커스를 주지 않고 한 장 찍어 <config-dir>/captures/still-*/window.png 로
-// 쓰고 경로를 반환한다. 개발 중 눈으로 확인하는 관측 자료이며, 요청자가 확인한 뒤 그 디렉터리를 지운다.
+// diagnosticCaptureStill takes one picture of a window without giving it focus, writes it to <config-dir>/captures/still-*/window.png, and returns
+// the path. It is observation material for visual checks during development, and the requester deletes that directory after checking.
 func diagnosticCaptureStill(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
@@ -408,7 +408,7 @@ func captureStill(h *Host, s *Surfaces) (string, error) {
 	if len(numbers) == 0 {
 		return "", errors.New("the window has no window server number")
 	}
-	// 녹화와 같이 캡처마다 비공개 디렉터리를 만든다.
+	// As with a recording, each capture creates a private directory.
 	directory := filepath.Join(h.workspace.directory, "logs", "captures", fmt.Sprintf("still-%s-%d", s.name, time.Now().UnixNano()))
 	system, err := platform.Current()
 	if err != nil {
@@ -443,7 +443,7 @@ func debugCaptureWindows(h *Host) ([]string, error) {
 	return paths, nil
 }
 
-// diagnosticCaptureStart 는 창 녹화를 시작하고 프레임 폴더를 반환한다.
+// diagnosticCaptureStart starts the window recording and returns the frame folder.
 func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
@@ -467,8 +467,8 @@ func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage
 	return map[string]any{"frames": directory}, nil
 }
 
-// diagnosticCaptureStop 은 after 의 표시 시각까지 녹화한 뒤 녹화를 끝내고 프레임 폴더와 프레임 수를
-// 반환한다.
+// diagnosticCaptureStop records up to the display time of after, ends the recording, and returns the frame folder and the number of
+// frames.
 func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	if _, _, err := diagnosticHost(e, params); err != nil {
 		return nil, err
@@ -506,7 +506,7 @@ type captureStatusAdapter struct{ platformCapture }
 func (c captureStatusAdapter) Limited() bool       { return c.CaptureLimited() }
 func (c captureStatusAdapter) LongestGap() float64 { return c.CaptureLongestGap() }
 
-// diagnosticInputSource 는 select 가 있으면 그 입력 소스를 선택하고, 현재 선택된 키보드 입력 소스를 반환한다.
+// diagnosticInputSource selects that input source when select is given, and returns the currently selected keyboard input source.
 // diagnosticLogFlush waits until the records written so far are in the event log of the host.
 func diagnosticLogFlush(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	if _, err := e.window(params); err != nil {
@@ -548,8 +548,8 @@ func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	return map[string]string{"current": current}, nil
 }
 
-// transcriptTopic 은 diagnostics.transcript 의 params 에서 연결의 diagnostics.log 구독과 방향을 읽는다.
-// 페이지는 첫 구독과 마지막 해제에서 호출 기록의 시작과 종료를 받는다.
+// transcriptTopic reads the diagnostics.log subscription and direction of the connection from the params of diagnostics.transcript.
+// The page receives the start and end of the call record at the first subscription and the last release.
 func transcriptTopic(e *Endpoint, params json.RawMessage) (topic, bool, error) {
 	window, err := e.window(params)
 	if err != nil {
@@ -567,17 +567,17 @@ func transcriptTopic(e *Endpoint, params json.RawMessage) (topic, bool, error) {
 	return topic{window, logTopic, ""}, *p.On, nil
 }
 
-// modalHold 는 한 창에서 붙잡은 모달 내용 응답이다.
+// modalHold is a held modal content reply of one window.
 type modalHold struct {
-	// release 가 닫히면 붙잡은 응답을 보낸다.
+	// The held reply is sent when release closes.
 	release chan struct{}
-	// held 는 첫 응답을 붙잡으면 닫힌다.
+	// held closes when the first reply is held.
 	held chan struct{}
 	once sync.Once
 }
 
-// modalHoldSet 은 창별로 모달 내용 응답을 붙잡는다. 검사는 모달 문서가 처음 내용을 이후
-// 이벤트보다 늦게 받는 순서를 만든다.
+// modalHoldSet holds the modal content reply per window. A check creates the order in which a modal document receives its first content later than the following
+// events.
 type modalHoldSet struct {
 	mu      sync.Mutex
 	windows map[*Surfaces]*modalHold
@@ -585,7 +585,7 @@ type modalHoldSet struct {
 
 var modalHolds = &modalHoldSet{windows: map[*Surfaces]*modalHold{}}
 
-// wait 는 창 s 의 응답을 붙잡은 동안 반환하지 않는다.
+// wait does not return while the reply of window s is held.
 func (set *modalHoldSet) wait(s *Surfaces) {
 	set.mu.Lock()
 	hold := set.windows[s]
@@ -597,8 +597,8 @@ func (set *modalHoldSet) wait(s *Surfaces) {
 	<-hold.release
 }
 
-// diagnosticModalHold 는 on 이면 창의 모달 내용 응답을 붙잡기 시작하고, 아니면 붙잡은 응답을
-// 보내고 붙잡기를 멈춘다.
+// diagnosticModalHold starts holding the modal content reply of the window when on is set; otherwise it sends the held reply
+// and stops holding.
 func diagnosticModalHold(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
@@ -626,8 +626,8 @@ func diagnosticModalHold(e *Endpoint, _ *endpointConn, params json.RawMessage) (
 	return nil, nil
 }
 
-// diagnosticModalHeld 는 창에서 모달 내용 응답을 하나 붙잡으면 답한다.
-// diagnosticNotifications 는 알림 센터가 아직 보이는 이 애플리케이션의 알림을 반환한다.
+// diagnosticModalHeld replies when the window has held one modal content reply.
+// diagnosticNotifications returns the notifications of this application that the notification center still shows.
 func diagnosticNotifications(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	if _, _, err := diagnosticHost(e, params); err != nil {
 		return nil, err
@@ -668,7 +668,7 @@ func diagnosticModalHeld(e *Endpoint, _ *endpointConn, params json.RawMessage) (
 	return nil, nil
 }
 
-// navigationDelaySet 은 창마다 main webview navigation callback 처리를 늦출 시간이다.
+// navigationDelaySet is the time by which the handling of the main webview navigation callback is delayed for each window.
 type navigationDelaySet struct {
 	mu      sync.Mutex
 	windows map[*Surfaces]time.Duration
@@ -676,8 +676,8 @@ type navigationDelaySet struct {
 
 var navigationDelays = navigationDelaySet{windows: map[*Surfaces]time.Duration{}}
 
-// diagnosticPageCollect 는 창의 앱 페이지 WebContent process 가 JavaScript 객체를 수집하게 한다. 메모리 검사가
-// 수집 시점과 관계없이 남은 메모리를 재도록 재기 전에 부른다.
+// diagnosticPageCollect makes the WebContent process of the app page of the window collect JavaScript objects. It is called before a memory check measures so that
+// the check measures the remaining memory independently of the collection time.
 func diagnosticPageCollect(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
@@ -692,10 +692,10 @@ func diagnosticPageCollect(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	return nil, err
 }
 
-// diagnosticNativeObjects 는 애플리케이션이 이벤트 하나를 처리한 뒤 창과 웹뷰에 붙인 라이브러리 객체의 살아 있는 수를
-// 반환한다. 닫은 창의 객체는 그 창을 닫은 이벤트 반복의 자동 해제 풀이 비워질 때 해제되고, 풀은 애플리케이션이
-// 이벤트를 처리할 때 비워진다. 창 검사가 닫은 창의 해제를 사용자 입력 없이 재도록 이벤트 하나를 넣고 그 뒤에 센다.
-// AppKit 은 화면에 있던 창을 닫기 애니메이션이 끝날 때까지 유지하므로, equal 을 주면 수가 equal 과 같아질 때 응답한다.
+// diagnosticNativeObjects returns the number of live library objects attached to windows and web views after the application handled one event.
+// The objects of a closed window are released when the autorelease pool of the event loop iteration that closed the window is drained, and the pool is drained when the application
+// handles an event. A window check inserts one event so that it can measure the release of a closed window without user input, and counts after it.
+// AppKit keeps a window that was on the screen until its close animation ends, so with equal the method replies when the count becomes equal to equal.
 func diagnosticNativeObjects(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	if _, _, err := diagnosticHost(e, params); err != nil {
 		return nil, err
@@ -728,7 +728,7 @@ func diagnosticNativeObjects(e *Endpoint, _ *endpointConn, params json.RawMessag
 			answers <- answer{counts, reached}
 		})
 	})
-	// 라이브러리는 이벤트를 처리한 뒤 pageTimeout 안에 답하므로, 이벤트 처리 시간까지 두 배를 기다린다.
+	// The library replies within pageTimeout after it handles the event, so the wait is doubled to include the event handling time.
 	select {
 	case a := <-answers:
 		if !a.reached {
@@ -740,8 +740,8 @@ func diagnosticNativeObjects(e *Endpoint, _ *endpointConn, params json.RawMessag
 	}
 }
 
-// diagnosticProcessExit 는 pid 의 프로세스가 끝나면 응답한다. 창 검사가 닫은 창의 WebContent 프로세스가 끝나는 것을
-// 커널의 종료 알림으로 기다린다.
+// diagnosticProcessExit replies when the process pid ends. A window check waits for the WebContent process of a closed window to end through
+// the exit notification of the kernel.
 func diagnosticProcessExit(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	if _, _, err := diagnosticHost(e, params); err != nil {
 		return nil, err
@@ -764,7 +764,7 @@ func diagnosticProcessExit(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	application.InvokeSync(func() {
 		waiter.WhenProcessExited(pid, pageTimeout.Seconds(), func(exited bool) { answers <- exited })
 	})
-	// 라이브러리는 pageTimeout 안에 답하므로, 메인 스레드가 답을 보낼 시간까지 두 배를 기다린다.
+	// The library replies within pageTimeout, so the wait is doubled to include the time for the main thread to send the reply.
 	select {
 	case exited := <-answers:
 		if !exited {
@@ -776,7 +776,7 @@ func diagnosticProcessExit(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	}
 }
 
-// diagnosticNavigationDelay 는 창의 이후 navigation callback 처리를 ms 밀리초 늦춘다. 0 은 지연을 없앤다.
+// diagnosticNavigationDelay delays the later navigation callback handling of the window by ms milliseconds. 0 removes the delay.
 func diagnosticNavigationDelay(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
@@ -801,7 +801,7 @@ func diagnosticNavigationDelay(e *Endpoint, _ *endpointConn, params json.RawMess
 	return nil, nil
 }
 
-// handle 은 창의 지연만큼 기다린 뒤 callback 처리를 실행하고, 끝났음을 진단 기록에 남긴다.
+// handle waits for the delay of the window, runs the callback handling, and records in the diagnostic record that it finished.
 func (d *navigationDelaySet) handle(s *Surfaces, handle func()) {
 	d.mu.Lock()
 	delay := d.windows[s]

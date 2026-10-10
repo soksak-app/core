@@ -26,15 +26,15 @@ static void injectPointer(void *window, double x, double y, int phase, int butto
     sp_input_pointer_then(window, x, y, phase, button, deltaX, deltaY, receive, delivered, (void *)handle);
 }
 
-// 누름이 지나가는 뷰 하나가 표면인지 알린다. 표면이면 0 이 아닌 값을 반환하고, 적중한
-// 뷰에서 위로 올라가는 탐색은 거기서 멈춘다.
+// Announces whether a view that a press passes through is a surface. For a surface it returns a non-zero value, and the upward
+// search from the hit view stops there.
 extern int surfaceHit(uintptr_t owner, void* view);
 
-// 왼쪽 단추 끌기의 한 단계를 페이지 좌표로 알린다. phase 는 누름 0, 이동 1, 뗌 2 이다.
+// Announces one step of a left button drag in page coordinates. phase is 0 for press, 1 for move and 2 for release.
 extern void surfacePoint(uintptr_t owner, int phase, double x, double y);
 
-// 뷰에서 콘텐츠 뷰까지 올라가며 첫 표면을 알린다. 표면을 찾았는지 반환한다. 이 값은
-// 입력이 페이지가 아니라 이 앱의 뷰에서 시작했는지를 나타낸다.
+// Announces the first surface found while going up from a view to the content view. It returns whether a surface was found. This value
+// shows whether the input started in a view of this app and not in the page.
 static int surfaceWalk(uintptr_t owner, NSView* view, NSView* content) {
     while (view != nil && view != content) {
         if (surfaceHit(owner, (void*)view)) {
@@ -45,23 +45,23 @@ static int surfaceWalk(uintptr_t owner, NSView* view, NSView* content) {
     return 0;
 }
 
-// 표면은 네이티브 뷰이므로 표면 위의 입력은 페이지에 도달하지 않는다. 앱의 모니터
-// 하나가 모든 누름, 끌기와 키 입력을 받아 입력 대상 뷰와 위치를 알린다.
+// A surface is a native view, so input over a surface does not reach the page. One monitor of the app
+// receives all presses, drags and key inputs and announces the target view and the position of the input.
 //
-// 누름의 대상은 hitTest: 로 찾는다. 키 입력의 대상은 창의 first responder 이고, 스스로
-// 초점을 잡은 페이지가 first responder 가 된다. google.com 은 로드할 때 검색 칸에 초점을
-// 두므로, 이 처리가 없으면 페이지 모델은 마지막으로 누른 표면을 계속 가리킨다. 두 경우
-// 모두 좌표를 변환하지 않으므로 페이지의 영역과 어긋나지 않는다.
+// The target of a press is found with hitTest:. The target of a key input is the first responder of the window, and a page that
+// took the focus by itself becomes the first responder. A page that focuses a search field when it loads would otherwise leave the page model
+// pointing at the surface pressed last without this handling. In both cases
+// the coordinates are not converted, so they do not drift from the region of the page.
 //
-// 끌기의 위치는 변환해야 한다. 경계의 잡기 영역은 두 카드 사이 통로보다 넓으므로, 통로
-// 폭이 선 하나이면 그 영역 전체가 표면 위에 있어 그 안의 누름이 페이지에 도달하지 않는다.
-// 페이지가 위치의 의미를 결정하고, 이 함수는 페이지 뷰가 채운 콘텐츠 뷰의 높이로 페이지
-// 좌표를 계산한다.
+// The position of a drag must be converted. The grab region of a boundary is wider than the passage between two cards, so when the passage
+// width is one line, that whole region is over a surface and a press inside it does not reach the page.
+// The page decides the meaning of the position, and this function computes the page
+// coordinates from the height of the content view that the page view filled.
 //
-// 페이지에서 시작한 끌기는 페이지가 처리하므로 전달하지 않는다. 전달하면 포인터 이동마다
-// 평면을 다시 그리는 스레드에 메시지가 하나씩 쌓인다.
+// A drag that started in the page is handled by the page, so it is not delivered. Delivering it would pile up one message per pointer move on the thread
+// that redraws the plane.
 //
-// 모니터는 이벤트를 바꾸지 않고 반환하므로 뷰도 이벤트를 받는다.
+// The monitor returns the event without changing it, so the view also receives the event.
 static uintptr_t surfaceWatchMouse(void* nsWindow, uintptr_t owner) {
     __block int surfaceDragging = 0;
     NSWindow* window = (NSWindow*)nsWindow;
@@ -108,7 +108,7 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// watchers 는 모니터 번호별 입력 수신 핸들이다. 주 스레드에서만 읽고 바꾼다.
+// watchers are the input receiver handles of each monitor number. They are read and changed only on the main thread.
 var watchers = map[uintptr]cgo.Handle{}
 var pointerSequence sync.Mutex
 
@@ -132,7 +132,7 @@ func (implementation) WatchInput(window unsafe.Pointer, input platform.Input) (u
 	return monitor, nil
 }
 
-// InjectPointer 는 native/darwin 의 sp_input_pointer_then 으로 입력을 전달한다. 앱을 활성화하지 않는다.
+// InjectPointer delivers input with sp_input_pointer_then of native/darwin. It does not activate the application.
 func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
 	pointerSequence.Lock()
 	var once sync.Once
@@ -147,8 +147,8 @@ func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, 
 	return nil
 }
 
-// inputDelivered 는 sp_input_pointer_then 의 결과를 알린다. 라이브러리는 결과가 SP_INPUT_BUTTON_HELD 일 때만
-// held 를 넘기고 done 이 반환할 때까지 유효하게 둔다.
+// inputDelivered announces the result of sp_input_pointer_then. The library passes held only when the result is SP_INPUT_BUTTON_HELD
+// and keeps it valid until done returns.
 //
 //export inputDelivered
 func inputDelivered(context unsafe.Pointer, result C.int, held *C.sp_input_held) {
@@ -171,8 +171,8 @@ func inputDelivered(context unsafe.Pointer, result C.int, held *C.sp_input_held)
 	}
 }
 
-// buttonHeld 는 sp_input_held 를 읽는다. pid 가 -1 이면 최전면 애플리케이션이 없다. 상태 없이 이 결과를 알린 것은
-// 라이브러리의 계약 위반이므로 이름을 밝혀 멈춘다.
+// buttonHeld reads sp_input_held. When pid is -1, there is no frontmost application. A notification of this result without a state is
+// a contract violation of the library, so it stops and names the violation.
 func buttonHeld(held *C.sp_input_held) platform.ButtonHeld {
 	if held == nil {
 		panic("sp_input_pointer_then reported SP_INPUT_BUTTON_HELD without its state")
@@ -204,7 +204,7 @@ func inputActivated(context unsafe.Pointer, result C.int, frontmost *C.char) {
 	a.done(activationResult(C.sp_activate_result(result), a.timeout, name))
 }
 
-// activationResult 는 sp_input_activate 의 결과를 멈춘 단계와 최전면 애플리케이션을 적은 오류로 바꾼다.
+// activationResult converts the result of sp_input_activate to an error that names the stage where it stopped and the frontmost application.
 func activationResult(result C.sp_activate_result, timeout float64, frontmost string) error {
 	switch result {
 	case C.SP_ACTIVATE_DONE:
@@ -222,13 +222,13 @@ func activationResult(result C.sp_activate_result, timeout float64, frontmost st
 	}
 }
 
-// ActivateWindow 는 native/darwin 의 sp_input_activate 로 창을 키 창으로 만든다.
+// ActivateWindow makes the window the key window with sp_input_activate of native/darwin.
 func (implementation) ActivateWindow(window unsafe.Pointer, x, y, timeout float64, done func(error)) error {
 	C.activateWindowAt(window, C.double(x), C.double(y), C.double(timeout), C.uintptr_t(cgo.NewHandle(activation{timeout, done})))
 	return nil
 }
 
-// InjectKey 는 native/darwin 의 sp_input_key 로 입력을 전달한다. text 가 비어 있으면 key 를 입력한다.
+// InjectKey delivers input with sp_input_key of native/darwin. When text is empty, it types key.
 func (implementation) InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (platform.PointerResult, error) {
 	name := C.CString(key)
 	defer C.free(unsafe.Pointer(name))

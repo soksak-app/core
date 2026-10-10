@@ -1,9 +1,9 @@
-// Package platform 은 네이티브 호스트의 운영체제별 동작을 선언하고 현재 운영체제의 구현을 선택한다.
+// Package platform declares the operating system specific behavior of the native host and selects the implementation of the current operating system.
 //
-// 운영체제별 구현은 platform/<os>/ 패키지가 init 에서 Register 로 등록한다. host 패키지가
-// 모든 운영체제 패키지를 가져오므로 현재 운영체제의 구현만 등록된다.
+// The package platform/<os>/ registers the operating system specific implementation with Register in init. The host package
+// imports all operating system packages, so only the implementation of the current operating system is registered.
 //
-// 창과 뷰는 unsafe.Pointer 핸들로 전달한다. 핸들을 받는 함수는 UI 스레드에서 호출한다.
+// Windows and views are passed as unsafe.Pointer handles. Call a function that receives a handle on the UI thread.
 package platform
 
 import (
@@ -20,24 +20,24 @@ import (
 	"unsafe"
 )
 
-// Rect 는 페이지 뷰포트 기준 CSS 픽셀 단위의 영역이다.
+// Rect is a region in CSS pixels relative to the page viewport.
 type Rect struct {
 	X, Y, W, H float64
 }
 
-// DOMOverlay 는 표면 뷰포트 기준 CSS 픽셀 여백과 표시 여부다.
+// DOMOverlay is the CSS pixel margin relative to the surface viewport and the display state.
 type DOMOverlay struct {
 	Left, Top, Right, Bottom float64
 	Visible                  bool
 }
 
-// WindowOverlay 는 native hit 소유 판정에 참여해야 하는 메인 DOM 영역이다.
+// WindowOverlay is a main DOM region that must take part in the native hit ownership decision.
 type WindowOverlay struct {
 	X, Y, W, H float64
 	Visible    bool
 }
 
-// ClipboardValue 는 빈 clipboard 와 작업 오류를 구분한다.
+// ClipboardValue distinguishes an empty clipboard from an operation error.
 type ClipboardValue struct {
 	Present bool
 	Type    string
@@ -57,53 +57,53 @@ func VisibleWindowOverlayRects(overlays []WindowOverlay) []float64 {
 	return values
 }
 
-// WebviewOptions 는 앱이 만드는 네이티브 웹뷰의 생성 값이다.
+// WebviewOptions are the creation values of a native web view that the app creates.
 type WebviewOptions struct {
-	// Identifier 는 웹뷰가 보낸 메시지에 붙는 번호다.
+	// Identifier is the number attached to the messages that the web view sent.
 	Identifier uint64
-	// Name 은 창 히트 테스트가 반환하는 네이티브 뷰 식별자다. 비어 있으면 식별자를 설정하지 않는다.
+	// Name is the native view identifier that the window hit test returns. When empty, no identifier is set.
 	Name string
-	// Script 는 각 문서가 시작할 때 실행하는 스크립트다.
+	// Script is the script that runs when each document starts.
 	Script              string
 	X, Y, Width, Height float64
 	Hidden, Transparent bool
-	// FillParent 는 부모 뷰의 크기를 따라 크기를 바꿀지 나타낸다.
+	// FillParent tells whether the view resizes with the size of its parent view.
 	FillParent bool
-	// Receive 는 웹뷰의 문서가 보낸 메시지를 받는다. UI 스레드 밖에서 호출된다.
+	// Receive receives the messages that the document of the web view sent. It is called outside the UI thread.
 	Receive func(identifier uint64, body string)
-	// Committed 는 웹뷰가 새 문서를 표시하기 시작했음을 받는다. UI 스레드 밖에서 호출된다.
+	// Committed receives that the web view started to show a new document. It is called outside the UI thread.
 	Committed func(identifier uint64)
 }
 
-// Input 은 표면 위 입력을 받는 함수들이다.
+// Input is the functions that receive the input over a surface.
 type Input struct {
-	// Press 는 누른 뷰가 표면인지 반환하고, 표면이면 그 사실을 전달한다.
+	// Press returns whether the pressed view is a surface and, for a surface, passes that fact.
 	Press func(view uintptr) bool
-	// Point 는 왼쪽 단추 끌기의 한 단계를 페이지 좌표로 전달한다. phase 는 누름 0, 이동 1, 뗌 2 이다.
+	// Point passes one step of a left button drag in page coordinates. phase is 0 for press, 1 for move and 2 for release.
 	Point func(phase int, x, y float64)
 }
 
-// InputSources 는 키보드 입력 소스 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며,
-// 진단 코드는 Current() 의 값을 이 인터페이스로 확인해 사용한다. 두 연산 모두 메인 스레드에서 호출한다.
+// InputSources are the keyboard input source operations. Only the platform implementation of a diagnostic build (tag diagnostics) provides them, and
+// diagnostic code uses them by checking the value of Current() against this interface. Call both operations on the main thread.
 type InputSources interface {
-	// InputSource 는 현재 선택된 키보드 입력 소스의 식별자를 반환한다.
+	// InputSource returns the identifier of the currently selected keyboard input source.
 	InputSource() (string, error)
-	// SelectInputSource 는 켜져 있는 입력 소스 가운데 identifier 를 선택한다.
+	// SelectInputSource selects identifier among the enabled input sources.
 	SelectInputSource(identifier string) error
 }
 
-// WindowObjects 는 공용 라이브러리가 창과 웹뷰에 붙인 객체 가운데 그 수명이 창과 웹뷰의 해제를 나타내는
-// 객체의 살아 있는 수다. 닫은 창과 그 웹뷰가 해제되면 그 창의 객체 수가 빠진다.
+// WindowObjects is the number of live objects, among the objects that the common library attached to windows and web views, whose lifetime shows the release of the window and the web view.
+// When a closed window and its web views are released, the object count of that window drops.
 type WindowObjects struct {
-	// WindowCompositions 는 창의 콘텐츠 뷰 안에서 메인 웹뷰를 보유하는 합성 뷰의 수다.
+	// WindowCompositions is the number of composition views that hold the main web view inside the content view of a window.
 	WindowCompositions int64
-	// SurfaceHosts 는 논리 표면과 표면에 붙인 웹뷰의 컨테이너 수다.
+	// SurfaceHosts is the number of containers of logical surfaces and of the web views attached to the surfaces.
 	SurfaceHosts int64
-	// InputRegistrations 는 입력을 등록한 웹뷰(메인, 모달, 표면 웹뷰)의 등록 수다.
+	// InputRegistrations is the number of registrations of the web views (main, modal, surface web views) that registered input.
 	InputRegistrations int64
 }
 
-// Payload 는 diagnostics.native.objects 의 응답이다.
+// Payload is the reply of diagnostics.native.objects.
 func (o WindowObjects) Payload() map[string]int64 {
 	return map[string]int64{
 		"windowCompositions": o.WindowCompositions,
@@ -112,17 +112,17 @@ func (o WindowObjects) Payload() map[string]int64 {
 	}
 }
 
-// String 은 오류 메시지에 쓰는 수의 표기다.
+// String is the notation of the counts used in error messages.
 func (o WindowObjects) String() string {
 	return fmt.Sprintf("windowCompositions %d, surfaceHosts %d, inputRegistrations %d",
 		o.WindowCompositions, o.SurfaceHosts, o.InputRegistrations)
 }
 
-// ErrWindowObjectsEqual 은 diagnostics.native.objects 의 equal 이 잘못되었을 때의 오류다.
+// ErrWindowObjectsEqual is the error for an invalid equal of diagnostics.native.objects.
 var ErrWindowObjectsEqual = errors.New("equal must be an object of windowCompositions, surfaceHosts and inputRegistrations, each a non-negative integer")
 
-// ParseWindowObjects 는 diagnostics.native.objects 의 equal 을 읽는다. 세 이름 외의 이름, 빠진 이름, 정수가 아니거나
-// 음수인 값은 ErrWindowObjectsEqual 로 거부한다.
+// ParseWindowObjects reads the equal of diagnostics.native.objects. A name other than the three names, a missing name, and a value that is not an integer or
+// is negative are rejected with ErrWindowObjectsEqual.
 func ParseWindowObjects(raw json.RawMessage) (WindowObjects, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil || len(fields) != 3 {
@@ -133,7 +133,7 @@ func ParseWindowObjects(raw json.RawMessage) (WindowObjects, error) {
 		if !ok {
 			return 0, false
 		}
-		// json.Number 는 따옴표 안의 숫자도 받으므로 any 로 읽어 JSON 숫자인지 확인한다.
+		// json.Number also accepts a number inside quotes, so the value is read as any and checked to be a JSON number.
 		decoder := json.NewDecoder(bytes.NewReader(value))
 		decoder.UseNumber()
 		var decoded any
@@ -156,11 +156,11 @@ func ParseWindowObjects(raw json.RawMessage) (WindowObjects, error) {
 	return WindowObjects{WindowCompositions: compositions, SurfaceHosts: hosts, InputRegistrations: registrations}, nil
 }
 
-// ErrProcessID 는 diagnostics.process.exit 의 pid 가 잘못되었을 때의 오류다.
+// ErrProcessID is the error for an invalid pid of diagnostics.process.exit.
 var ErrProcessID = errors.New("pid must be a positive integer")
 
-// ParseProcessID 는 diagnostics.process.exit 의 pid 를 읽는다. 없거나, JSON 정수가 아니거나, 1 부터 2147483647 사이가
-// 아니면 ErrProcessID 로 거부한다.
+// ParseProcessID reads the pid of diagnostics.process.exit. A pid that is missing, is not a JSON integer, or is not between 1 and 2147483647 is
+// rejected with ErrProcessID.
 func ParseProcessID(raw json.RawMessage) (int32, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
@@ -179,132 +179,132 @@ func ParseProcessID(raw json.RawMessage) (int32, error) {
 	return int32(pid), nil
 }
 
-// ProcessExitWaiter 는 프로세스의 종료를 기다리는 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며,
-// 진단 코드는 Current() 의 값을 이 인터페이스로 확인해 사용한다.
+// ProcessExitWaiter is the operation that waits for the exit of a process. Only the platform implementation of a diagnostic build (tag diagnostics) provides it, and
+// diagnostic code uses it by checking the value of Current() against this interface.
 type ProcessExitWaiter interface {
-	// WhenProcessExited 는 pid 의 프로세스가 끝나면 true 를, seconds 안에 끝나지 않으면 false 를 done 에 준다. 이미
-	// 없는 프로세스는 끝난 것이다. UI 스레드에서 호출하고 done 도 UI 스레드에서 불린다.
+	// WhenProcessExited gives done true when the process pid ends and false when it does not end within seconds. A process that
+	// no longer exists has ended. Call it on the UI thread, and done is also called on the UI thread.
 	WhenProcessExited(pid int32, seconds float64, done func(exited bool))
 }
 
-// WindowObjectCounter 는 WindowObjects 를 세는 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며,
-// 진단 코드는 Current() 의 값을 이 인터페이스로 확인해 사용한다.
+// WindowObjectCounter is the operation that counts WindowObjects. Only the platform implementation of a diagnostic build (tag diagnostics) provides it, and
+// diagnostic code uses it by checking the value of Current() against this interface.
 type WindowObjectCounter interface {
-	// WindowObjectsWhen 은 애플리케이션이 이벤트 하나를 처리해 그 이벤트 반복의 자동 해제 풀을 비운 뒤, 수가 expected
-	// 와 같아질 때 그 수와 true 를 done 에 준다. seconds 안에 같아지지 않으면 그때의 수와 false 를 준다. expected 가
-	// nil 이면 이벤트 뒤의 수와 true 를 준다. UI 스레드에서 호출하고 done 도 UI 스레드에서 불린다.
+	// WindowObjectsWhen gives done the count and true when the count becomes equal to expected after the application handled one event and drained the autorelease pool of that event loop iteration.
+	// When it does not become equal within seconds, it gives the count at that time and false. When expected is
+	// nil, it gives the count after the event and true. Call it on the UI thread, and done is also called on the UI thread.
 	WindowObjectsWhen(expected *WindowObjects, seconds float64, done func(counts WindowObjects, reached bool))
 }
 
-// Capturer 는 창 녹화 연산이다. 진단 빌드(태그 diagnostics)의 플랫폼 구현만 제공하며, 진단
-// 코드는 Current() 의 값을 이 인터페이스로 확인해 사용한다.
+// Capturer is the window recording operation. Only the platform implementation of a diagnostic build (tag diagnostics) provides it, and
+// diagnostic code uses it by checking the value of Current() against this interface.
 type Capturer interface {
-	// WindowNumbers 는 창과 자식 창의 윈도 서버 번호를 반환한다. 창 자신의 번호가 처음이다.
+	// WindowNumbers returns the window server numbers of the window and its child windows. The number of the window itself comes first.
 	WindowNumbers(window unsafe.Pointer) ([]int, error)
-	// CaptureOpen 은 윈도 서버 번호 windowNumber 의 창을 녹화 대상으로 정한다. display 이면 창이 있는
-	// 디스플레이에서 이 앱의 창을 녹화한다.
+	// CaptureOpen makes the window with the window server number windowNumber the recording target. With display, it records the windows of this app on the display
+	// that holds the window.
 	CaptureOpen(windowNumber int, display bool) error
-	// CaptureStart 는 directory 에 프레임 기록을 시작한다.
+	// CaptureStart starts the frame recording in directory.
 	CaptureStart(directory string) error
-	// CaptureWait 는 첫 프레임이 기록되었는지 반환한다.
+	// CaptureWait returns whether the first frame was recorded.
 	CaptureWait() (bool, error)
-	// CaptureStop 은 녹화를 끝내고 기록한 프레임 수를 반환한다.
-	// after 는 녹화에 포함할 마지막 표시 시각(ms, 표시 시각과 같은 시계)이고, 0 이면 호출 시각이다.
+	// CaptureStop ends the recording and returns the number of recorded frames.
+	// after is the last display time (ms, on the same clock as the display time) to include in the recording, and 0 means the time of the call.
 	CaptureStop(after float64) (int, error)
-	// CaptureLimited 는 마지막 녹화가 frame 상한에 도달했는지 알린다.
+	// CaptureLimited tells whether the last recording reached the frame limit.
 	CaptureLimited() bool
-	// CaptureLongestGap 은 마지막으로 멈춘 녹화에서 연속한 프레임 사이의 가장 긴 표시 간격(ms)이다.
+	// CaptureLongestGap is the longest display interval (ms) between consecutive frames in the recording stopped last.
 	CaptureLongestGap() float64
-	// CaptureClock 은 현재 시각(ms)이다. 기록 프레임의 표시 시각과 같은 시계다.
+	// CaptureClock is the current time (ms). It is on the same clock as the display time of the recorded frames.
 	CaptureClock() float64
-	// DeliveredNotifications 는 알림 센터가 아직 보이는 이 애플리케이션의 알림을 [{identifier, title, body}] JSON 으로
-	// done 에 준다. UI 스레드에서 호출하고 done 도 UI 스레드에서 불린다.
+	// DeliveredNotifications gives done the notifications of this application that the notification center still shows, as [{identifier, title, body}] JSON.
+	// Call it on the UI thread, and done is also called on the UI thread.
 	DeliveredNotifications(done func(json string))
-	// LayoutTraceStart 는 배치 트랜잭션마다 시작, 앱 DOM 표시 확인, 커밋 시각의 기록을 시작한다. UI 스레드에서 부른다.
+	// LayoutTraceStart starts recording, for each layout transaction, the start, the app DOM display confirmation, and the commit time. Call it on the UI thread.
 	LayoutTraceStart()
-	// LayoutTraceStop 은 기록을 멈추고 트랜잭션마다 ticket, begun, presented, committed(ms, 표시 시각과 같은 시계)를
-	// 반환한다. 일어나지 않은 단계는 NaN 이다. UI 스레드에서 부른다.
+	// LayoutTraceStop stops the recording and returns, for each transaction, ticket, begun, presented and committed (ms, on the same clock as the display time).
+	// A stage that did not happen is NaN. Call it on the UI thread.
 	LayoutTraceStop() ([][5]float64, error)
-	// CaptureStill 은 윈도 서버 번호 windowNumber 의 창을 포커스를 주지 않고 한 장 찍어 path 에 PNG 로 쓴다.
-	// 관측 자료다.
+	// CaptureStill takes one picture of the window with the window server number windowNumber without giving it focus and writes it to path as PNG.
+	// It is observation material.
 	CaptureStill(windowNumber int, path string) error
 }
 
-// Platform 은 운영체제마다 다른 동작이다.
+// Platform is the behavior that differs for each operating system.
 //
-// 오류를 반환하지 않는 함수는 오류를 반환하는 생성 함수가 만든 핸들만 받는다.
+// A function that does not return an error receives only a handle that a creation function returning an error made.
 type Platform interface {
-	// EnqueueUI 는 현재 프레임워크 이벤트 콜백이 끝난 뒤 메인 큐에서 work 를 한 번 실행한다.
+	// EnqueueUI runs work once on the main queue after the current framework event callback ends.
 	EnqueueUI(work func()) error
-	// PrepareWindow 는 창의 콘텐츠 뷰와 메인 웹뷰의 크기를 맞춘다.
+	// PrepareWindow fits the sizes of the content view of the window and the main web view.
 	PrepareWindow(window unsafe.Pointer) error
-	// Fullscreen 은 창을 전체 화면으로 바꾸거나 되돌리고, 전환이 끝나면 done 을 UI 스레드에서
-	// 호출한다. 전환 중에 온 요청은 그 전환이 끝난 뒤에 처리한다.
+	// Fullscreen switches the window to full screen or back and calls done on the UI thread when the transition
+	// ends. A request that arrives during a transition is handled after that transition ends.
 	Fullscreen(window unsafe.Pointer, on bool, done func()) error
 
-	// TitlebarHeight 는 창의 제목줄 높이(pt)를 반환한다. 전체 화면처럼 제목줄을 보이지 않는 동안 0 이고,
-	// 창에 단추가 없으면 오류를 반환한다. UI 스레드에서 호출한다.
+	// TitlebarHeight returns the title bar height (pt) of the window. It is 0 while the title bar is not shown, as in full screen, and
+	// it returns an error when the window has no buttons. Call it on the UI thread.
 	TitlebarHeight(window unsafe.Pointer) (float64, error)
-	// SetTitlebarHeight 는 창의 제목줄을 height(pt)로 만든다. AppKit 이 그 높이의 세로 가운데에 창 단추를
-	// 두므로 호스트는 단추를 옮기지 않는다. 창에 단추가 없으면 오류를 반환한다. 전체 화면인 창은 제목줄을 보이지 않고
-	// AppKit 이 나올 때 들어갈 때의 높이를 되돌리므로 높이를 바꾸지 않고 성공한다. UI 스레드에서 호출한다.
+	// SetTitlebarHeight sets the title bar of the window to height (pt). AppKit places the window buttons at the vertical center of that height,
+	// so the host does not move the buttons. It returns an error when the window has no buttons. A full screen window does not show the title bar, and
+	// AppKit restores the height at which it entered when it leaves, so the call succeeds without changing the height. Call it on the UI thread.
 	SetTitlebarHeight(window unsafe.Pointer, height float64) error
-	// WindowControls 는 창 단추가 차지하는 영역을 페이지 좌표로 반환한다.
+	// WindowControls returns the region that the window buttons occupy in page coordinates.
 	WindowControls(window unsafe.Pointer) (Rect, error)
-	// WindowFacts 는 창의 프레임, 활성 상태, 창 단추와 웹뷰를 JSON 으로 반환한다. 형식은
-	// native/darwin/src/window_facts.h 의 sp_window_facts 와 같다. UI 스레드에서 호출한다.
+	// WindowFacts returns the frame, the active state, the window buttons and the web views of the window as JSON. The form is
+	// the same as sp_window_facts of native/darwin/src/window_facts.h. Call it on the UI thread.
 	WindowFacts(window unsafe.Pointer) (string, error)
 	SetMainWebview(window unsafe.Pointer) error
-	// RevealAfterLoad 는 창을 투명하게 두고, 메인 웹뷰의 첫 읽기가 끝난 뒤 다음 표시가 끝나면 불투명하게 한다.
-	// 창을 화면에 올리는 일은 호출자가 이 호출 뒤에 한다(native/darwin/src/window_reveal.h). UI 스레드에서 호출한다.
+	// RevealAfterLoad keeps the window transparent and makes it opaque when the next display ends after the first load of the main web view finished.
+	// The caller puts the window on the screen after this call (native/darwin/src/window_reveal.h). Call it on the UI thread.
 	RevealAfterLoad(window unsafe.Pointer) error
-	// FileDrop 은 main 웹뷰의 창에 놓인 파일을 dropped 로 받는다. json 은 {"urls":[...],"x":..,"y":..}
-	// (페이지 좌표) 다. UI 스레드에서 호출한다.
+	// FileDrop receives, as dropped, the files that were dropped on the window of the main web view. json is {"urls":[...],"x":..,"y":..}
+	// (page coordinates). Call it on the UI thread.
 	FileDrop(main unsafe.Pointer, dropped func(json string)) error
 	MainWebview(window unsafe.Pointer) (unsafe.Pointer, error)
-	// KillWebContentProcess 는 현재 WebContent 프로세스를 종료한다. 애플리케이션 종료가 WebKit 자식 프로세스를 남기지
-	// 않으려고 부른다.
+	// KillWebContentProcess ends the current WebContent process. The application termination calls it so that WebKit child processes are not left
+	// behind.
 	KillWebContentProcess(view unsafe.Pointer) error
-	// CollectGarbage 는 view 의 WebContent process 들이 JavaScript 객체를 수집하게 한다. 진단 build 의 메모리 측정이
-	// 쓴다. UI 스레드에서 호출한다.
+	// CollectGarbage makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
+	// uses it. Call it on the UI thread.
 	CollectGarbage(view unsafe.Pointer) error
-	// ConfigureMainWindow 는 창의 메인 웹뷰 배경을 투명하게 하고 창의 외관을 dark 에 맞춘다. UI 스레드에서 호출한다.
+	// ConfigureMainWindow makes the background of the main web view of the window transparent and fits the appearance of the window to dark. Call it on the UI thread.
 	ConfigureMainWindow(window unsafe.Pointer, dark bool) error
 	ClipboardRead(kind string) (ClipboardValue, error)
 	ClipboardWriteText(text string) error
 	ClipboardWritePNG(bytes []byte) error
-	// OpenLink 는 URL 을 그 스킴의 사용자 기본 애플리케이션으로 연다. UI 스레드에서 호출한다.
+	// OpenLink opens a URL with the default application of the user for its scheme. Call it on the UI thread.
 	OpenLink(url string) error
-	// StartNotifications 는 운영체제의 알림 센터를 쓰기 시작하고 그 사건 JSON 을 receive 로 UI 스레드에서
-	// 넘긴다({"type":"state",...} 와 {"type":"activated","identifier":...}). UI 스레드에서 호출한다.
+	// StartNotifications starts using the notification center of the operating system and passes its event JSON to receive on the UI thread
+	// ({"type":"state",...} and {"type":"activated","identifier":...}). Call it on the UI thread.
 	StartNotifications(receive func(event string)) error
-	// PostNotification 은 identifier 의 알림을 게시하거나 바꾼다. UI 스레드에서 호출한다.
+	// PostNotification posts or replaces the notification of identifier. Call it on the UI thread.
 	PostNotification(identifier, title, body string) error
-	// RemoveNotification 은 identifier 의 알림을 지운다. UI 스레드에서 호출한다.
+	// RemoveNotification removes the notification of identifier. Call it on the UI thread.
 	RemoveNotification(identifier string) error
-	// WindowHit 는 창 좌표 (x, y) 의 히트 테스트 결과 {view, main, identifier} 를 JSON 으로 반환한다.
-	// UI 스레드에서 호출한다.
+	// WindowHit returns the hit test result {view, main, identifier} at the window coordinates (x, y) as JSON.
+	// Call it on the UI thread.
 	WindowHit(window unsafe.Pointer, x, y float64) (string, error)
-	// MoveWindow 는 창 프레임의 왼쪽 위를 화면 좌표 (x, y) 로 옮긴다. UI 스레드에서 호출한다.
+	// MoveWindow moves the top left of the window frame to the screen coordinates (x, y). Call it on the UI thread.
 	MoveWindow(window unsafe.Pointer, x, y float64) error
-	// Screens 는 디스플레이 [{x, y, width, height, scale}] 를 화면 좌표의 JSON 으로 반환한다.
-	// UI 스레드에서 호출한다.
+	// Screens returns the displays [{x, y, width, height, scale}] as JSON in screen coordinates.
+	// Call it on the UI thread.
 	Screens() (string, error)
 
-	// CreateWebview 는 창의 메인 웹뷰 위에 네이티브 웹뷰를 추가하고 그 핸들을 반환한다.
+	// CreateWebview adds a native web view above the main web view of the window and returns its handle.
 	CreateWebview(window unsafe.Pointer, options WebviewOptions) (unsafe.Pointer, error)
-	// NavigateWebview 는 메인 문서 주소 기준으로 url 을 연다. url 이 잘못되었으면 false 를 반환한다.
+	// NavigateWebview opens url relative to the address of the main document. It returns false when url is invalid.
 	NavigateWebview(view unsafe.Pointer, url string) bool
 	SetWebviewBounds(view unsafe.Pointer, x, y, width, height float64)
 	SetWebviewHidden(view unsafe.Pointer, hidden bool)
-	// SetWebviewBackground 는 문서의 window.__soksakBackground 값을 정한다.
+	// SetWebviewBackground sets the value of window.__soksakBackground of the document.
 	SetWebviewBackground(view unsafe.Pointer, enabled bool)
 	EvaluateScript(view unsafe.Pointer, script string)
-	// CloseWebview 는 웹뷰를 제거하고 핸들을 해제한다.
+	// CloseWebview removes the web view and releases the handle.
 	CloseWebview(view unsafe.Pointer)
-	// WebviewFrame 은 뷰의 현재 영역을 페이지 좌표로 반환한다.
+	// WebviewFrame returns the current region of the view in page coordinates.
 	WebviewFrame(view unsafe.Pointer) Rect
-	// CreateSurface 는 메인 DOM webview 아래에 논리 SurfaceHost 를 만든다.
+	// CreateSurface creates a logical SurfaceHost below the main DOM web view.
 	CreateSurface(main unsafe.Pointer) (unsafe.Pointer, error)
 	CloseSurface(surface unsafe.Pointer)
 	SetSurfaceBounds(surface unsafe.Pointer, x, y, width, height float64)
@@ -312,22 +312,22 @@ type Platform interface {
 	SetSurfaceHiddenHandle(surface unsafe.Pointer, hidden bool)
 	SetSurfaceAlphaHandle(surface unsafe.Pointer, alpha float64)
 	SetWindowOverlays(main unsafe.Pointer, overlays []WindowOverlay) error
-	// SetWebviewAlpha 는 뷰의 불투명도를 정한다.
+	// SetWebviewAlpha sets the opacity of the view.
 	SetWebviewAlpha(view unsafe.Pointer, alpha float64)
-	// SetSurfaceOverlays 는 네이티브 입력보다 먼저 처리할 선언된 DOM 오버레이를 설정한다.
+	// SetSurfaceOverlays sets the declared DOM overlays to process before the native input.
 	SetSurfaceOverlays(view unsafe.Pointer, overlays []DOMOverlay)
-	// SetWebviewResizing 은 연속 크기 변경의 시작과 종료를 뷰에 전달한다.
+	// SetWebviewResizing passes the start and the end of a continuous resize to the view.
 	SetWebviewResizing(view unsafe.Pointer, live bool)
-	// ConfigureModal 은 모달 웹뷰의 접근성 이름과 모서리 반경을 정한다.
+	// ConfigureModal sets the accessibility name and the corner radius of a modal web view.
 	ConfigureModal(view unsafe.Pointer, title string, radius float64)
-	// FocusModal 은 키보드 초점을 모달 웹뷰로 옮기거나 메인 웹뷰로 되돌린다.
+	// FocusModal moves the keyboard focus to the modal web view or returns it to the main web view.
 	FocusModal(view unsafe.Pointer, take bool)
-	// AlignRect 는 페이지 좌표의 영역을 디스플레이 픽셀에 안쪽으로 맞춘다.
+	// AlignRect fits a region in page coordinates inward to the display pixels.
 	AlignRect(window unsafe.Pointer, at Rect) (Rect, error)
 
-	// CreateDocument 는 표면 웹뷰 surface 안에 외부 문서 웹뷰를 숨긴 상태로 만든다. directory 는 영구
-	// 데이터 저장소가 사이트 데이터를 두는 절대 경로다. changed 는 상태 JSON({url, title, loading, progress, canGoBack, canGoForward,
-	// error, scroll}) 을 UI 스레드에서 받는다.
+	// CreateDocument creates a hidden external document web view inside the surface web view surface. directory is the absolute path at which the persistent
+	// data store keeps the site data. changed receives the state JSON ({url, title, loading, progress, canGoBack, canGoForward,
+	// error, scroll}) on the UI thread.
 	// folder and plugin are the installed folder and the id of the plugin whose surface owns the region; the region serves
 	// sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions).
 	CreateDocument(surface unsafe.Pointer, directory, folder, plugin string, changed func(state string)) (unsafe.Pointer, error)
@@ -338,132 +338,132 @@ type Platform interface {
 	PostDocument(document unsafe.Pointer, json string) bool
 	// LoadDocument opens an http, https, file or sok address; it returns false for another address.
 	LoadDocument(document unsafe.Pointer, url string) bool
-	// ZoomDocument 는 문서의 페이지 확대를 정한다. 유한한 양수가 아니면 false 를 반환한다.
+	// ZoomDocument sets the page zoom of the document. It returns false when the value is not a finite positive number.
 	ZoomDocument(document unsafe.Pointer, zoom float64) bool
-	// GoDocument 는 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3, 현재에서 offset 만큼 떨어진 기록 항목 4 를
-	// 실행하고 실행했는지 반환한다.
+	// GoDocument runs back 0, forward 1, reload 2, stop 3, and the history entry that is offset away from the current one 4,
+	// and returns whether it ran.
 	GoDocument(document unsafe.Pointer, action, offset int) bool
-	// PlaceDocument 는 표면 뷰포트의 CSS 픽셀 여백으로 문서 영역을 정한다.
+	// PlaceDocument sets the document region with the CSS pixel margins of the surface viewport.
 	PlaceDocument(document unsafe.Pointer, left, top, right, bottom float64, visible bool)
-	// SetDocumentBackground 는 대화 상자가 열린 동안 문서를 흐리게 표시한다.
+	// SetDocumentBackground dims the document while a dialog is open.
 	SetDocumentBackground(document unsafe.Pointer, enabled bool)
-	// SetDocumentAppearance 는 문서 웹뷰와 그 웹 콘텐츠의 명시적인 테마를 설정한다.
+	// SetDocumentAppearance sets the explicit theme of the document web view and its web content.
 	SetDocumentAppearance(document unsafe.Pointer, dark bool)
-	// CloseDocument 는 문서 웹뷰를 제거한다. 이후 changed 는 호출되지 않는다.
+	// CloseDocument removes the document web view. changed is not called afterward.
 	CloseDocument(document unsafe.Pointer)
 
-	// CreateImage 는 표면 웹뷰 surface 안에 외부 그림 표시 영역을 만든다. event 는
-	// 키보드·IME·입력 이벤트를 JSON 문자열({key, insert, compose, focus, size, error})으로
-	// 메인 스레드에서 받는다.
+	// CreateImage creates an external picture display region inside the surface web view surface. event receives
+	// keyboard, IME and input events as a JSON string ({key, insert, compose, focus, size, error})
+	// on the main thread.
 	CreateImage(surface unsafe.Pointer, name string, event func(json string)) (unsafe.Pointer, error)
-	// PlaceImage 는 표면 뷰포트의 CSS 픽셀 여백으로 그림 영역을 정한다.
+	// PlaceImage sets the picture region with the CSS pixel margins of the surface viewport.
 	PlaceImage(image unsafe.Pointer, left, top, right, bottom float64, visible bool)
-	// RasterImage 는 적용된 그림 영역의 장치 픽셀 크기와 CSS 픽셀당 장치 픽셀 배율을 반환한다.
+	// RasterImage returns the device pixel size of the applied picture region and the ratio of device pixels per CSS pixel.
 	RasterImage(image unsafe.Pointer) (width, height int, scale float64, ok bool)
-	// SurfacePlacedImage 는 영역의 표면이 네이티브 크기를 가졌는지 반환한다. 아직 배치되지 않은 표면의 영역은 래스터 크기를 갖지 않는다.
+	// SurfacePlacedImage returns whether the surface of the region has a native size. A region of a surface that is not laid out yet has no raster size.
 	SurfacePlacedImage(image unsafe.Pointer) bool
-	// PresentImage 는 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID,
-	// nonce 는 논스 대조용 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기이고,
-	// scale 은 이미지가 만들어진 배율이다 (contentsScale 로 사용).
-	// 실패하면 네이티브 거부 이유(notFound, forbidden, size, unsupported 등)를 오류 문자열로 반환한다.
+	// PresentImage displays an external IOSurface. token_id is the global ID of the IOSurface,
+	// nonce is the 16-byte data to compare with the nonce, width and height are the size in device pixels,
+	// and scale is the scale at which the image was created (used as contentsScale).
+	// On failure, it returns the native rejection reason (notFound, forbidden, size, unsupported and others) as an error string.
 	PresentImage(image unsafe.Pointer, token_id uint32, nonce [16]byte, width, height, scale float64) error
-	// FocusImage 는 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다.
+	// FocusImage makes the region the first responder and sends a focus event.
 	FocusImage(image unsafe.Pointer)
-	// CaretImage 는 캐럿(입력 커서) 위치를 받아 둔다.
+	// CaretImage stores the caret (input cursor) position.
 	CaretImage(image unsafe.Pointer, x, y, w, h float64)
-	// TextImage 는 접근성 값으로 보일 문자열을 받아 둔다.
+	// TextImage stores the string to show as the accessibility value.
 	TextImage(image unsafe.Pointer, utf8 string)
-	// FactsImage 는 영역의 모든 정보를 JSON 으로 반환한다.
+	// FactsImage returns all information of the region as JSON.
 	FactsImage(image unsafe.Pointer) (string, error)
-	// CloseImage 는 그림 영역을 제거한다. 이후 event 는 호출되지 않는다.
+	// CloseImage removes the picture region. event is not called afterward.
 	CloseImage(image unsafe.Pointer)
 
-	// BeginLayout 은 표면 배치 트랜잭션을 시작한다. 배치가 가능해지면 ready 를 UI 스레드에서 호출한다.
+	// BeginLayout starts a surface layout transaction. When the layout becomes possible, it calls ready on the UI thread.
 	BeginLayout(window unsafe.Pointer, ticket uint64, ready func(allowed bool)) error
-	// CommitLayout 은 ticket 의 배치를 확정하고 확정했는지 반환한다.
+	// CommitLayout fixes the layout of ticket and returns whether it fixed it.
 	CommitLayout(window unsafe.Pointer, ticket uint64) bool
-	// CancelLayout 은 진행 중인 배치를 취소한다.
+	// CancelLayout cancels the layout in progress.
 	CancelLayout(window unsafe.Pointer) error
-	// StartPageTitlebar 는 새 페이지가 시작될 때 창의 제목줄을 height(pt)로 정한다. 보이는 창은 ticket 의 시작
-	// 트랜잭션 안에서 정하고 새 페이지의 첫 표시와 함께 커밋한다(surfaceLayoutStartPage). 정한 뒤나 실패한 뒤 ready 를
-	// UI 스레드에서 호출한다. UI 스레드에서 호출한다.
+	// StartPageTitlebar sets the title bar of the window to height (pt) when a new page starts. For a visible window, it sets it inside the start
+	// transaction of ticket and commits it together with the first display of the new page (surfaceLayoutStartPage). It calls ready on the
+	// UI thread after setting it or after a failure. Call it on the UI thread.
 	StartPageTitlebar(window unsafe.Pointer, ticket uint64, height float64, ready func(error)) error
-	// AfterPresentation 은 열린 배치를 커밋하기 전에 앱 문서의 표시 준비를 확인한다.
+	// AfterPresentation checks the display readiness of the app document before the open layout is committed.
 	AfterPresentation(window unsafe.Pointer, done func()) error
-	// AfterSettled 는 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 웹뷰와 보이는 앱 문서가 화면을
-	// 표시한 뒤 done 을 UI 스레드에서 호출한다. displayed 는 그 화면이 표시되는 시각(ms, mach 절대 시각)이다.
+	// AfterSettled calls done on the UI thread after the main web view and the visible app document displayed the screen, in a state
+	// in which the window has no open surface layout transaction. displayed is the time (ms, mach absolute time) at which that screen is displayed.
 	AfterSettled(window unsafe.Pointer, done func(displayed float64, err error)) error
-	// InjectSettledFailure 는 진단 빌드에서 다음 settled 대기를 실패하게 한다.
+	// InjectSettledFailure makes the next settled wait fail in a diagnostic build.
 	InjectSettledFailure(window unsafe.Pointer) error
 
-	// CreateShape 는 표면 위에 그리는 도형 뷰를 만든다. 창에 콘텐츠 뷰가 없으면 nil 핸들을 반환한다.
+	// CreateShape creates a shape view that is drawn over a surface. It returns a nil handle when the window has no content view.
 	CreateShape(window unsafe.Pointer, x, y, w, h float64) (unsafe.Pointer, error)
 	SetShapeFrame(shape unsafe.Pointer, x, y, w, h float64)
-	// SetShapeStyle 은 모서리 반경, 선 두께, 채움 색과 선 색을 정한다. 색은 0-1 범위의 sRGB 와 알파다.
+	// SetShapeStyle sets the corner radius, the line width, the fill color and the line color. The colors are sRGB in the range 0-1 and alpha.
 	SetShapeStyle(shape unsafe.Pointer, radius, lineWidth float64, fill, line [4]float64)
-	// RaiseShape 는 도형을 형제 뷰들 위로 올린다.
+	// RaiseShape raises the shape above its sibling views.
 	RaiseShape(shape unsafe.Pointer)
 	DestroyShape(shape unsafe.Pointer)
 
-	// WatchInput 은 창의 누름, 끌기와 키 입력을 감시하고 감시 번호를 반환한다.
+	// WatchInput watches the presses, drags and key inputs of the window and returns the watch number.
 	WatchInput(window unsafe.Pointer, input Input) (uintptr, error)
-	// UnwatchInput 은 WatchInput 이 반환한 감시를 해제한다.
+	// UnwatchInput releases the watch that WatchInput returned.
 	UnwatchInput(monitor uintptr)
 
-	// WatchButtons 는 운영체제가 보고하는 눌린 마우스 버튼 mask 의 감시를 설치한다. 설치한 차례에 현재 mask 를,
-	// 그 뒤 어느 애플리케이션에 전달된 마우스 버튼의 누름이나 뗌마다 그 차례의 mask 를 changed 로 UI 스레드에서
-	// 알린다. 같은 mask 도 다시 알린다. 애플리케이션이 시작한 뒤 UI 스레드에서 한 번 호출한다.
+	// WatchButtons installs the watch of the mask of pressed mouse buttons that the operating system reports. It reports the current mask at the time of installation, and
+	// after that, for every press or release of a mouse button delivered to any application, it reports the mask of that time through changed on the UI thread.
+	// It also reports the same mask again. Call it once on the UI thread after the application started.
 	WatchButtons(changed func(mask uint64)) error
 
-	// InjectPointer 는 창의 콘텐츠 영역 좌표 (x, y) 에 포인터 입력을 전달하고 그 결과를 반환한다.
-	// phase 는 이동 0, 누름 1, 끌기 2, 뗌 3, 스크롤 4 이고 button 은 왼쪽 0, 오른쪽 1 이다.
-	// 누름과 뗌은 좌표의 문서가 그 이벤트를 받거나 receive 초가 지난 뒤 done 을 UI 스레드에서 호출한다.
-	// 다른 단계는 전달한 즉시 호출한다. held 는 결과가 PointerButtonHeld 일 때 거부한 차례의 상태다.
+	// InjectPointer delivers a pointer input at the content area coordinates (x, y) of the window and returns the result.
+	// phase is 0 for move, 1 for press, 2 for drag, 3 for release and 4 for scroll, and button is 0 for left and 1 for right.
+	// For a press and a release, it calls done on the UI thread after the document at the coordinates received the event or receive seconds passed.
+	// For other phases, it calls done immediately after delivery. held is the state of the rejection when the result is PointerButtonHeld.
 	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY, receive float64, done func(result PointerResult, held ButtonHeld)) error
-	// ActivateWindow 는 애플리케이션과 창을 활성화한다. 좌표의 웹뷰만 활성 상태를 받은 뒤
-	// done(nil) 을, timeout 초 안에 끝나지 않으면 멈춘 단계를 적은 오류로 done 을 UI 스레드에서
-	// 호출한다. 좌표가 네이티브 표면이면 웹뷰 상태를 기다리지 않는다.
+	// ActivateWindow activates the application and the window. It calls done(nil) on the UI thread after only the web view at the coordinates received the active state,
+	// or calls done with an error that names the stage where it stopped when it does not finish within timeout seconds.
+	// When the coordinates are a native surface, it does not wait for the web view state.
 	ActivateWindow(window unsafe.Pointer, x, y, timeout float64, done func(error)) error
-	// InjectKey 는 창에 키 입력을 전달하고 전달했는지 반환한다. modifiers 는 1 Shift, 2 Control,
-	// 4 Option, 8 Command 의 비트 합이다.
+	// InjectKey delivers a key input to the window and returns whether it delivered it. modifiers is the bit sum of 1 Shift, 2 Control,
+	// 4 Option and 8 Command.
 	InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (PointerResult, error)
 
-	// Listen 은 directory 안에 로컬 엔드포인트의 리스너를 만든다. directory 는 현재 사용자 전용이어야
-	// 한다. application 은 주소 이름에 들어간다.
-	// 리스너를 닫으면 주소도 제거된다.
+	// Listen creates the listener of the local endpoint in directory. directory must be exclusive to the current user.
+	// application is part of the address name.
+	// When the listener is closed, the address is also removed.
 	Listen(directory, application string) (net.Listener, Endpoint, error)
-	// ServiceProcessExists 는 애플리케이션 재시작 뒤 endpoint 를 재사용하기 전에
-	// 보존된 sidecar service 프로세스가 아직 살아 있는지 확인한다. 확인하지 못하면 오류다.
+	// ServiceProcessExists checks, before an endpoint is reused after the application restarted,
+	// whether the preserved sidecar service process is still alive. It is an error when this cannot be determined.
 	ServiceProcessExists(pid int) (bool, error)
 	// WaitServiceProcessEnd waits until the service process pid ends, for at most timeout, and answers whether it ended.
 	// A process that does not exist has ended. The wait uses the kernel notification of the end of a process, which
 	// also reports a process that stays as a zombie, so it does not poll (docs/spec/terminal-runtime.md#updates).
 	WaitServiceProcessEnd(pid int, timeout time.Duration) (bool, error)
-	// NewSession 은 command 가 새 session 에서 시작하게 한다. 영구 service 는 애플리케이션 프로세스가 아니라
-	// 설정 디렉터리에 속하므로 애플리케이션의 프로세스 그룹과 터미널의 신호를 받지 않는다. command 를 시작하기
-	// 전에 호출한다.
+	// NewSession makes command start in a new session. A persistent service belongs to the configuration directory and not to the application process,
+	// so it does not receive the signals of the process group and the terminal of the application. Call it before starting
+	// command.
 	NewSession(command *exec.Cmd) error
-	// ExitStatus 는 끝난 프로세스의 종료를 `exit status <code>` 나 `signal <number>` 로 쓴다. 두 호스트가 같은 글로
-	// 사이드카의 종료를 로그에 쓴다(docs/spec/sidecars.md#declaration-and-startup).
+	// ExitStatus writes the exit of an ended process as `exit status <code>` or `signal <number>`. Both hosts write the exit of a
+	// sidecar to the log with the same text (docs/spec/sidecars.md#declaration-and-startup).
 	ExitStatus(state *os.ProcessState) (string, error)
-	// SecureServiceDirectory 는 영구 service 디렉터리 path 를 현재 사용자만 접근하게 한다.
+	// SecureServiceDirectory makes the persistent service directory path accessible only to the current user.
 	SecureServiceDirectory(path string) error
 
-	// OnTermination 은 종료 신호(SIGTERM, SIGINT, SIGHUP)를 처음 받으면 quit 를 호출하게 한다. 그
-	// 뒤의 종료 신호는 기본 동작으로 프로세스를 끝낸다.
+	// OnTermination makes quit be called when the first termination signal (SIGTERM, SIGINT, SIGHUP) is received. A termination
+	// signal after that ends the process with the default action.
 	OnTermination(quit func()) error
-	// OnQuitRequest 는 운영체제의 종료 요청(Dock 의 종료, 로그아웃, 재시작, 다른 프로그램의 quit Apple event)을
-	// 받으면 quit 를 호출하게 하고, 그 요청에는 AnswerQuitRequests 까지 답하지 않는다. 애플리케이션이 시작한 뒤
-	// UI 스레드에서 호출한다.
+	// OnQuitRequest makes quit be called when a termination request of the operating system (quit from the Dock, logout, restart, a quit Apple event of another program) is
+	// received, and that request is not answered until AnswerQuitRequests. Call it on the UI thread after the application
+	// started.
 	OnQuitRequest(quit func()) error
-	// AnswerQuitRequests 는 받은 종료 요청에 오류 없이 답한다. 저장을 마치고 끝나기 직전에 UI 스레드에서 호출한다.
+	// AnswerQuitRequests answers the received termination requests without an error. Call it on the UI thread right before the application ends after the save finished.
 	AnswerQuitRequests()
-	// CancelQuitRequests 는 받은 종료 요청에 userCanceledErr 로 답한다. 창이 수정된 탭을 지켜 애플리케이션이 끝나지 않을 때
-	// UI 스레드에서 호출한다.
+	// CancelQuitRequests answers the received termination requests with userCanceledErr. Call it on the UI thread when a window protects a modified
+	// tab and the application does not end.
 	CancelQuitRequests()
 
-	// InstantWindowResize 는 창 확대와 애니메이션 크기 변경을 한 화면 갱신 안에 끝나게 한다.
-	// 창을 만들기 전에 호출한다.
+	// InstantWindowResize makes the window zoom and the animated resize end within one screen update.
+	// Call it before creating a window.
 	InstantWindowResize() error
 
 	// PullNativeEvents moves whole records of the native event ring into buffer and returns the number of bytes written;
@@ -477,83 +477,83 @@ type Platform interface {
 	// the native ring (docs/spec/logging.md#automatic-entrances). A second call installs nothing more.
 	ObserveActivity() error
 
-	// ReplaceStandardError 는 프로세스의 표준 오류를 file 로 바꾼다. 이후 시작하는 자식 프로세스도 그
-	// descriptor 를 물려받는다(docs/spec/hosts.md#application-log).
+	// ReplaceStandardError replaces the standard error of the process with file. Child processes started afterward also inherit that
+	// descriptor (docs/spec/hosts.md#application-log).
 	ReplaceStandardError(file *os.File) error
 
-	// InstallDock 은 Dock 메뉴를 등록한다. 새 창 항목은 newWindow 를 호출한다.
+	// InstallDock registers the Dock menu. The new window item calls newWindow.
 	InstallDock(newWindow func()) error
-	// DockItems 는 Dock 메뉴 항목의 제목을 JSON 배열로 반환한다. UI 스레드에서 호출한다.
+	// DockItems returns the titles of the Dock menu items as a JSON array. Call it on the UI thread.
 	DockItems() (string, error)
-	// MenuItems 는 애플리케이션 메뉴를 JSON 배열로 반환한다. 하위 메뉴마다 {title, items: [{title, key}]} 다.
-	// UI 스레드에서 호출한다.
+	// MenuItems returns the application menu as a JSON array. Each submenu is {title, items: [{title, key}]}.
+	// Call it on the UI thread.
 	MenuItems() (string, error)
-	// PreferredLanguage 는 시스템 선호 언어의 주 태그(예: "ko")를 반환한다. 초기 메뉴 언어를
-	// 계약 표의 언어와 대응할 때 쓴다. UI 스레드에서 호출한다.
+	// PreferredLanguage returns the main tag (for example "ko") of the system preferred language. It is used to map the initial menu language to
+	// a language of the contract table. Call it on the UI thread.
 	PreferredLanguage() (string, error)
 	// OSVersion returns the product version of the operating system, such as "26.6.2" (docs/spec/debug.md).
 	OSVersion() (string, error)
-	// MenuSelect 는 제목이 menu 인 하위 메뉴에서 제목이 title 인 항목을 실행한다. UI 스레드에서 호출한다.
+	// MenuSelect runs the item with the title title in the submenu with the title menu. Call it on the UI thread.
 	MenuSelect(menu, title string) error
-	// MainWindow 는 애플리케이션의 주 창 핸들이다. 없으면 nil 이다. UI 스레드에서 호출한다.
+	// MainWindow is the handle of the main window of the application. It is nil when there is none. Call it on the UI thread.
 	MainWindow() (unsafe.Pointer, error)
-	// DockSelect 는 제목이 title 인 Dock 메뉴 항목을 실행한다. UI 스레드에서 호출한다.
+	// DockSelect runs the Dock menu item with the title title. Call it on the UI thread.
 	DockSelect(title string) error
 
-	// DirectoryIdentity 는 디렉터리를 식별하는 문자열을 반환한다.
+	// DirectoryIdentity returns the string that identifies a directory.
 	DirectoryIdentity(path string, info os.FileInfo) (string, error)
-	// CreatePrivateDirectories 는 path 에서 없는 디렉터리를 현재 사용자 전용 권한으로 만든다. 이미 있는 디렉터리의
-	// 권한은 바꾸지 않는다.
+	// CreatePrivateDirectories creates the missing directories of path with permissions exclusive to the current user. It does not change the permissions of a directory
+	// that already exists.
 	CreatePrivateDirectories(path string) error
-	// AppendPrivateFile 은 path 의 파일을 덧붙이기로 연다. 없으면 현재 사용자만 읽고 쓰는 파일로 만든다. 있는
-	// 파일의 권한은 바꾸지 않는다.
+	// AppendPrivateFile opens the file at path for appending. When it does not exist, it creates a file that only the current user reads and writes. It does not change the permissions of an existing
+	// file.
 	AppendPrivateFile(path string) (*os.File, error)
-	// CreatePrivateFile 은 path 에 현재 사용자만 읽고 쓰는 새 파일을 만들어 쓰기로 연다. path 가 이미 있으면
-	// os.ErrExist 인 오류다.
+	// CreatePrivateFile creates a new file at path that only the current user reads and writes and opens it for writing. When path already exists, the error is
+	// os.ErrExist.
 	CreatePrivateFile(path string) (*os.File, error)
-	// WritePrivateFile 은 path 의 파일 내용을 data 로 바꾼다. 없으면 현재 사용자만 읽고 쓰는 파일로 만든다. 있는
-	// 파일의 권한은 바꾸지 않는다.
+	// WritePrivateFile replaces the content of the file at path with data. When it does not exist, it creates a file that only the current user reads and writes. It does not change the permissions of an existing
+	// file.
 	WritePrivateFile(path string, data []byte) error
-	// PrivateDirectory 는 현재 사용자만 접근할 수 있는 디렉터리를 상위 디렉터리와 함께 만든다. 이미 있으면 종류,
-	// 소유자, 권한을 확인한다. 진단 빌드의 녹화와 캡처가 쓴다.
+	// PrivateDirectory creates a directory that only the current user can access, together with its parent directories. When it already exists, it checks the kind,
+	// the owner and the permissions. The recording and the capture of a diagnostic build use it.
 	PrivateDirectory(path string) error
 }
 
-// PointerResult 는 포인터 입력 전달의 결과다.
+// PointerResult is the result of delivering a pointer input.
 type PointerResult int
 
 const (
-	// PointerDelivered 는 입력을 전달했다는 뜻이다.
+	// PointerDelivered means that the input was delivered.
 	PointerDelivered PointerResult = iota
-	// PointerRejected 는 창, 좌표 또는 단계가 올바르지 않아 전달하지 않았다는 뜻이다.
+	// PointerRejected means that the input was not delivered because the window, the coordinates or the phase is not valid.
 	PointerRejected
-	// PointerInactive 는 버튼 없는 이동이고 창이 키 창이 아니어서 전달하지 않았다는 뜻이다.
+	// PointerInactive means that the input is a move without a button and the window is not the key window, so it was not delivered.
 	PointerInactive
-	// PointerUnreceived 는 누름이나 뗌을 전달했지만 문서가 제한 시간 안에 받지 않았다는 뜻이다.
+	// PointerUnreceived means that a press or a release was delivered but the document did not receive it within the time limit.
 	PointerUnreceived
-	// PointerButtonHeld 는 AppKit 이 눌린 마우스 버튼을 보고해 합성 누름이나 뗌을 전달하지 않았다는 뜻이다.
+	// PointerButtonHeld means that AppKit reported a pressed mouse button, so the synthetic press or release was not delivered.
 	PointerButtonHeld
-	// PointerPressOpen 은 그 창에서 그 버튼의 합성 누름이 아직 열려 있어 누름을 전달하지 않았다는 뜻이다.
+	// PointerPressOpen means that the synthetic press of that button in that window is still open, so the press was not delivered.
 	PointerPressOpen
 )
 
-// ButtonHeld 는 PointerButtonHeld 로 거부한 차례에 AppKit 이 보고한 상태다.
+// ButtonHeld is the state that AppKit reported at the time of the rejection with PointerButtonHeld.
 type ButtonHeld struct {
-	// Mask 는 NSEvent.pressedMouseButtons 값이다.
+	// Mask is the value of NSEvent.pressedMouseButtons.
 	Mask uint64
-	// Frontmost 는 최전면 애플리케이션이다. AppKit 이 최전면 애플리케이션을 보고하지 않으면 nil 이다.
+	// Frontmost is the frontmost application. It is nil when AppKit does not report a frontmost application.
 	Frontmost *FrontmostApplication
 }
 
-// FrontmostApplication 은 최전면 애플리케이션이다. BundleIdentifier 는 번들 식별자가 없으면 빈 문자열이다.
+// FrontmostApplication is the frontmost application. BundleIdentifier is an empty string when there is no bundle identifier.
 type FrontmostApplication struct {
 	BundleIdentifier string
 	PID              int
 }
 
-// Endpoint 는 로컬 엔드포인트의 전송과 주소다.
+// Endpoint is the transport and the address of the local endpoint.
 type Endpoint struct {
-	// Transport 는 unix 또는 pipe 다.
+	// Transport is unix or pipe.
 	Transport string
 	Address   string
 }
@@ -563,7 +563,7 @@ var (
 	current Platform
 )
 
-// Register 는 현재 운영체제의 구현을 등록한다. 두 번 등록하면 실패한다.
+// Register registers the implementation of the current operating system. A second registration fails.
 func Register(p Platform) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -573,7 +573,7 @@ func Register(p Platform) {
 	current = p
 }
 
-// Current 는 등록된 구현을 반환한다. 등록된 구현이 없으면 오류를 반환한다.
+// Current returns the registered implementation. It returns an error when no implementation is registered.
 func Current() (Platform, error) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -583,35 +583,35 @@ func Current() (Platform, error) {
 	return current, nil
 }
 
-// Dispatcher 는 웹뷰가 UI 스레드에서 알린 문서 commit 과 메시지를 UI 스레드 밖의 handler 에 넘긴다. 수신자는 주
-// 스레드를 기다릴 수 있으므로 handler 를 부르기 전에 WebKit 으로 반환한다.
+// Dispatcher passes the document commits and the messages that a web view announced on the UI thread to a handler outside the UI thread. A receiver can wait for the main
+// thread, so the dispatcher returns to WebKit before it calls the handler.
 //
-// WebKit 은 한 웹뷰의 commit 과 그 뒤 문서의 메시지를 받은 순서대로 알린다. handler 는 각자의 고루틴에서 실행되므로,
-// 같은 웹뷰에서는 메시지를 받기 전에 받은 commit 의 처리가 끝난 뒤에 메시지 handler 를 부르고, commit 끼리도 받은
-// 순서대로 처리한다. 새 문서의 첫 요청이 이전 문서의 정리보다 먼저 실행되지 않게 하기 위해서다. 다른 웹뷰는
-// 기다리지 않는다.
+// WebKit announces the commit of a web view and the messages of the later document in the order received. The handlers run in their own goroutines, so
+// for the same web view, the message handler is called after the handling of the commit received before the message finished, and commits are also handled in the
+// order received. This keeps the first request of a new document from running before the cleanup of the previous document. Another web view
+// is not waited for.
 type Dispatcher struct {
-	// Receive 는 웹뷰의 문서가 보낸 메시지를 받는다.
+	// Receive receives the messages that the document of the web view sent.
 	Receive func(identifier uint64, body string)
-	// Committed 는 웹뷰가 새 문서를 표시하기 시작했음을 받는다.
+	// Committed receives that the web view started to show a new document.
 	Committed func(identifier uint64)
-	// Held 는 메시지가 같은 웹뷰의 앞선 commit 처리를 기다리기 시작할 때 웹뷰 번호로 호출된다. 검사가 보류를
-	// 관찰하는 지점이며, nil 이면 호출하지 않는다.
+	// Held is called with the web view number when a message starts to wait for the handling of an earlier commit of the same web view. It is the point at which a check observes
+	// the hold, and it is not called when nil.
 	Held func(identifier uint64)
 
 	mu sync.Mutex
-	// views 는 처리 중인 commit 이 있는 웹뷰의 순서다. 받은 commit 을 모두 처리하면 지운다.
+	// views is the order of the web views that have a commit in progress. It is cleared when every received commit is handled.
 	views map[uint64]*documentOrder
 }
 
-// documentOrder 는 웹뷰 하나에서 받은 commit 수와 처리를 마친 commit 수다. changed 는 처리를 마칠 때마다 닫고 새로
-// 만든다.
+// documentOrder is the number of commits received and the number of commits whose handling finished for one web view. changed is closed and recreated
+// each time a handling finishes.
 type documentOrder struct {
 	received, handled uint64
 	changed           chan struct{}
 }
 
-// wait 은 order 의 처리를 마친 commit 이 count 개가 될 때까지 기다린다.
+// wait waits until the number of commits of order whose handling finished is count.
 func (d *Dispatcher) wait(order *documentOrder, count uint64) {
 	for {
 		d.mu.Lock()
@@ -625,15 +625,15 @@ func (d *Dispatcher) wait(order *documentOrder, count uint64) {
 	}
 }
 
-// Handle 은 수신 함수를 바꾼다. 웹뷰를 만들 때 UI 스레드에서 부르며, 다른 스레드의 Commit 과 Message 가 같은
-// 잠금 안에서 읽는다.
+// Handle changes the receiver function. It is called on the UI thread when a web view is created, and Commit and Message on other threads read it inside the same
+// lock.
 func (d *Dispatcher) Handle(receive func(identifier uint64, body string), committed func(identifier uint64)) {
 	d.mu.Lock()
 	d.Receive, d.Committed = receive, committed
 	d.mu.Unlock()
 }
 
-// Commit 은 UI 스레드에서 받은 commit 을 handler 에 넘긴다. 같은 웹뷰의 앞선 commit 처리가 끝난 뒤에 부른다.
+// Commit passes a commit received on the UI thread to handler. It is called after the handling of the earlier commit of the same web view finished.
 func (d *Dispatcher) Commit(identifier uint64) {
 	d.mu.Lock()
 	handler := d.Committed
@@ -666,7 +666,7 @@ func (d *Dispatcher) Commit(identifier uint64) {
 	}()
 }
 
-// Message 는 UI 스레드에서 받은 메시지를 handler 에 넘긴다. 그 전에 받은 같은 웹뷰의 commit 처리가 끝난 뒤에 부른다.
+// Message passes a message received on the UI thread to handler. It is called after the handling of the commit of the same web view received before it finished.
 func (d *Dispatcher) Message(identifier uint64, body string) {
 	d.mu.Lock()
 	handler := d.Receive

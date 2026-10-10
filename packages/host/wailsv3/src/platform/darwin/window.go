@@ -29,7 +29,7 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// implementation 은 macOS 의 platform.Platform 이다.
+// implementation is the platform.Platform of macOS.
 type implementation struct{}
 
 func init() { platform.Register(implementation{}) }
@@ -57,7 +57,7 @@ func nativeFullscreenDone(value C.uintptr_t) {
 }
 
 func (implementation) TitlebarHeight(window unsafe.Pointer) (float64, error) {
-	// 0 은 제목줄이 없는 창(전체 화면)의 높이이고, 음수는 제목줄을 만들 수 없는 창이다.
+	// 0 is the height of a window without a title bar (full screen), and a negative value is a window that cannot have a title bar.
 	row := float64(C.windowTitlebarHeight(window))
 	if row < 0 {
 		return 0, errors.New("the window has no standard buttons or content view for a title bar")
@@ -80,7 +80,7 @@ func (implementation) WindowControls(window unsafe.Pointer) (platform.Rect, erro
 	return platform.Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}, nil
 }
 
-// facts 는 native/darwin 이 반환한 JSON 문자열을 Go 문자열로 옮기고 해제한다.
+// facts moves the JSON string returned by native/darwin into a Go string and releases it.
 func facts(text *C.char, what string) (string, error) {
 	if text == nil {
 		return "", fmt.Errorf("%s: the window is gone", what)

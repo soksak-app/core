@@ -20,7 +20,7 @@ extern void nativeCommitted(unsigned long long identifier);
 
 @implementation SPNativeBridge
 - (void)userContentController:(WKUserContentController *)controller didReceiveScriptMessage:(WKScriptMessage *)message {
-    // 애플리케이션 출처의 메인 프레임 문서만 호스트를 호출할 수 있다.
+    // Only a main frame document of the application origin can call the host.
     WKSecurityOrigin *origin = message.frameInfo.securityOrigin;
     if (!message.frameInfo.isMainFrame || ![origin.protocol isEqualToString:self.scheme]
         || ![origin.host isEqualToString:self.host] || ![message.body isKindOfClass:NSString.class]) return;
@@ -33,7 +33,7 @@ extern void nativeCommitted(unsigned long long identifier);
 @end
 
 @interface SPNativeWebview : WKWebView <WKNavigationDelegate>
-// 호스트가 이 웹뷰의 메시지에 붙이는 번호. NSView 의 identifier 와 다르다.
+// The number that the host attaches to the messages of this web view. It differs from the identifier of the NSView.
 @property unsigned long long messageIdentifier;
 @property(copy) NSURL *baseURL;
 @property BOOL backgroundEnabled;
@@ -56,8 +56,8 @@ extern void nativeCommitted(unsigned long long identifier);
 }
 @end
 
-// 공개 NSView 계층에서 프레임워크의 메인 웹뷰를 찾는다.
-// 앱이 추가한 웹뷰는 제외하므로 설정 원본으로 선택되지 않는다.
+// Finds the main web view of the framework in the public NSView hierarchy.
+// Web views that the app added are excluded, so they are not selected as the source of the configuration.
 static WKWebView *mainWebview(NSView *parent) {
     if ([parent isKindOfClass:WKWebView.class] && ![parent isKindOfClass:SPNativeWebview.class]) return (WKWebView *)parent;
     for (NSView *child in parent.subviews) {
@@ -89,9 +89,9 @@ void nativeWindowPrepare(void *handle) {
     NSWindow *window = (NSWindow *)handle;
     WKWebView *root = sp_window_main_webview(handle);
     if (!root) return;
-    // Wails v3.0.0-beta.27 은 콘텐츠 뷰를 WKWebView 보다 1pt 작게 만든다.
-    // 공개 배치 API 로 자동 크기 조정 여백을 0 으로 만들고 메인 웹뷰를 콘텐츠 bounds에 맞춘다.
-    // 창 크기를 웹뷰의 이전 크기로 역전파하지 않으므로 이후 창 크기도 그대로 유지된다.
+    // Wails v3.0.0-beta.27 makes the content view 1pt smaller than the WKWebView.
+    // The public layout API sets the autoresizing margins to 0 and fits the main web view to the content bounds.
+    // It does not propagate the window size back to the previous size of the web view, so the later window size is also kept.
     if (!NSEqualSizes(root.frame.size, window.contentView.bounds.size)) {
         root.frame = root.superview.bounds;
     }
@@ -126,9 +126,9 @@ void *nativeWebviewCreate(void *handle, unsigned long long identifier, const cha
     WKWebView *root = sp_window_main_webview(handle);
     if (!root || !root.URL || !webviewInputRegister(root)) return NULL;
 
-    // 복사한 설정은 프레임워크의 공개 WKURLSchemeHandler, 프로세스 풀과 데이터 저장소를 유지한다.
-    // 스크립트 컨트롤러는 앱의 것으로 교체한다. 추가 문서가 메인 페이지의 Wails
-    // runtime-ready 메시지를 보내면 안 된다.
+    // The copied configuration keeps the public WKURLSchemeHandler, the process pool and the data store of the framework.
+    // The script controller is replaced with the one of the app. An additional document must not send the Wails
+    // runtime-ready message of the main page.
     WKWebViewConfiguration *configuration = [root.configuration copy];
     WKUserContentController *controller = [[WKUserContentController alloc] init];
     SPNativeBridge *bridge = [[SPNativeBridge alloc] init];
@@ -157,19 +157,19 @@ void *nativeWebviewCreate(void *handle, unsigned long long identifier, const cha
         @try {
             [view setValue:@NO forKey:@"drawsBackground"];
             if ([[view valueForKey:@"drawsBackground"] boolValue]) { [view release]; return NULL; }
-        // 기본값: 키를 모르는 WebKit 은 예외를 던지고, 이 함수의 NULL 은 호출자가 웹뷰를 만들지 못한 오류로 알린다.
+        // default: WebKit throws an exception for an unknown key, and the NULL of this function is reported by the caller as an error that the web view could not be created.
         } @catch (NSException *error) { [view release]; return NULL; }
     }
-    // 표면과 모달의 페이지는 창의 키보드 초점을 옮기지 않는다. 메인 페이지는 옮긴다.
+    // The pages of surfaces and modals do not move the keyboard focus of the window. The main page does.
     if (!webviewInputRegister(view) || !webviewIgnorePageFocus(view)) { [view release]; return NULL; }
-    // 새 표면은 메인 웹뷰 위, 기존 모달 아래에 둔다. 모달은 여기서 숨긴 상태로 두고
-    // 렌더링을 마치면 위로 올린다.
+    // A new surface is placed above the main web view and below the existing modals. A modal is kept hidden here
+    // and raised when it finishes rendering.
     [window.contentView addSubview:view positioned:NSWindowAbove relativeTo:root];
-    // fillParent 인 모달은 창에 직접 놓고, 모든 표면은 투명 여부와 관계없이
-    // SurfaceHost에 붙인다. 혼합 표면의 DOM 웹뷰 아래에 네이티브 평면이 있어야 한다.
+    // A modal with fillParent is placed directly in the window, and every surface is attached to
+    // SurfaceHost regardless of transparency. The native plane must be below the DOM web view of a mixed surface.
     if (!fillParent) webviewAttachSurface(view, root);
     nativeWebviewBounds(view, x, y, width, height);
-    return view; // nativeWebviewClose 까지 Go 가 이 참조를 소유한다.
+    return view; // Go owns this reference until nativeWebviewClose.
 }
 
 bool nativeWebviewNavigate(void *handle, const char *url) {

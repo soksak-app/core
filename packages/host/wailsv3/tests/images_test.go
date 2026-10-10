@@ -44,12 +44,12 @@ func configuredEnvelope(t *testing.T, configuration *host.ImageConfigure, sequen
 	return body
 }
 
-// declareImages 는 directory 에 설치된 사이드카 하나의 선언이다.
+// declareImages is the declaration of one sidecar installed in directory.
 func declareImages(directory, sidecar string) []host.SidecarDeclaration {
 	return []host.SidecarDeclaration{{Name: imageSidecar, Folder: directory, Data: []byte(sidecar)}}
 }
 
-// fakeImageOwner 는 받은 사이드카 이벤트를 기록하는 창이다.
+// fakeImageOwner is a window that records the sidecar events it received.
 type fakeImageOwner struct {
 	root   string
 	mu     sync.Mutex
@@ -85,7 +85,7 @@ func (o *fakeImageOwner) next(t *testing.T) host.SidecarMessage {
 	return o.events[len(o.events)-1]
 }
 
-// echoSidecarsForImages 는 받은 줄을 그대로 출력하는 fake 사이드카를 선언한 채널을 만든다.
+// echoSidecarsForImages creates a channel that declares a fake sidecar that outputs the lines it received as they are.
 func echoSidecarsForImages(t *testing.T) (*host.Sidecars, string) {
 	t.Helper()
 	directory := t.TempDir()
@@ -104,7 +104,7 @@ func echoSidecarsForImages(t *testing.T) (*host.Sidecars, string) {
 // contract: images.envelope.rejects-unattached-image, images.envelope.refusal-echoes-name-and-sequence
 func TestUnattachedImageIsRefused(t *testing.T) {
 	images := host.NewImages()
-	nonce := "AAAAAAAAAAAAAAAAAAAAAA==" // 0 바이트 16개
+	nonce := "AAAAAAAAAAAAAAAAAAAAAA==" // 16 zero bytes
 	body := map[string]any{
 		"image": map[string]any{
 			"name": "view",
@@ -124,7 +124,7 @@ func TestUnattachedImageIsRefused(t *testing.T) {
 	}
 	bodyBytes, _ := json.Marshal(body)
 
-	// 이미지가 등록되지 않았으므로 notAttached 오류를 반환해야 함
+	// Since the image is not registered, it must return a notAttached error
 	decision := host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
 	reply, ok := decision.(*host.Reply)
 	if !ok {
@@ -134,7 +134,7 @@ func TestUnattachedImageIsRefused(t *testing.T) {
 	if !strings.Contains(imageData["error"].(string), "notAttached") {
 		t.Fatalf("expected notAttached error, got %v", imageData["error"])
 	}
-	// 거절 응답은 봉투의 이름과 순번을 그대로 돌려준다.
+	// The rejection reply returns the name and the sequence number of the envelope as they are.
 	if reply.Name != "view" || imageData["name"] != "view" || imageData["sequence"] != 1 {
 		t.Fatalf("refusal did not echo name and sequence: reply name %q, image %v", reply.Name, imageData)
 	}
@@ -173,7 +173,7 @@ func TestImageFromAnotherSidecarIsRefused(t *testing.T) {
 	}
 	bodyBytes, _ := json.Marshal(body)
 
-	// 다른 사이드카가 같은 이미지를 보내면 notAttached 오류를 반환해야 함
+	// When another sidecar sends the same image, it must return a notAttached error
 	decision := host.Decide(bodyBytes, "sidecar-b", "tab-1", images)
 	reply, ok := decision.(*host.Reply)
 	if !ok {
@@ -198,7 +198,7 @@ func TestAttachedImageIsPresented(t *testing.T) {
 	images.Set(key, unsafe.Pointer(&a))
 	configured := configureImage(t, images, key, 800, 600, 2.0)
 
-	// 0부터 15까지의 16바이트다. 0이 아닌 값이어야 nonce 복사를 구별할 수 있다.
+	// 16 bytes from 0 to 15. The values must be non-zero so that a copy of the nonce can be told apart.
 	nonce := "AAECAwQFBgcICQoLDA0ODw=="
 	body := map[string]any{
 		"image": map[string]any{
@@ -219,7 +219,7 @@ func TestAttachedImageIsPresented(t *testing.T) {
 	}
 	bodyBytes, _ := json.Marshal(body)
 
-	// 같은 사이드카가 같은 이미지를 보내면 Present를 반환해야 함
+	// When the same sidecar sends the same image, it must return Present
 	decision := host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
 	present, ok := decision.(*host.Present)
 	if !ok {
@@ -331,7 +331,7 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	if images.WaitCurrent(0) {
 		t.Fatal("visible raster passed before a frame was presented")
 	}
-	// 메인 스레드 표시가 성공한 것으로 응답하는 onMain 으로 봉투를 처리한다.
+	// Handles the envelope with onMain, which replies that the main thread display succeeded.
 	var response map[string]interface{}
 	if !host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
 		func(func() error) error { return nil },
@@ -407,7 +407,7 @@ func TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine(t *testing.T
 			t.Fatalf("attach image: %v", err)
 		}
 		configureImage(t, images, key, 800, 600, 2.0)
-		// 제한 시간이 0 이면 기다리기 전에 끝나므로, 기다림이 제한 시간에 끝나는 경로를 지나도록 짧은 시간을 준다.
+		// With a time limit of 0 it ends before waiting, so a short time is given so that the path in which the wait ends at the time limit is exercised.
 		if err := images.WaitCurrentError(20 * time.Millisecond); err == nil || err.Error() != "presentationTimeout" {
 			t.Fatalf("the presentation wait ended with %v", err)
 		}
@@ -537,7 +537,7 @@ func TestFailedPresentIsReported(t *testing.T) {
 func TestUnsupportedImageIsRefused(t *testing.T) {
 	images := host.NewImages()
 
-	// 포맷이 잘못된 경우
+	// The case of a wrong format
 	bodyWrongFormat := map[string]any{
 		"image": map[string]any{
 			"name": "view",
@@ -549,7 +549,7 @@ func TestUnsupportedImageIsRefused(t *testing.T) {
 			"width":      800,
 			"height":     600,
 			"scale":      2.0,
-			"format":     "rgba8", // 잘못된 포맷
+			"format":     "rgba8", // A wrong format
 			"generation": uint64(1),
 			"raster":     uint64(1),
 			"sequence":   1,
@@ -567,14 +567,14 @@ func TestUnsupportedImageIsRefused(t *testing.T) {
 		t.Fatalf("expected unsupported error, got %v", imageData["error"])
 	}
 
-	// nonce 길이가 잘못된 경우
+	// The case of a wrong nonce length
 	bodyWrongNonce := map[string]any{
 		"image": map[string]any{
 			"name": "view",
 			"token": map[string]any{
 				"kind":  "iosurface-global",
 				"id":    uint32(12345),
-				"nonce": "short", // 16바이트가 아님
+				"nonce": "short", // Not 16 bytes
 			},
 			"width":      800,
 			"height":     600,
@@ -597,7 +597,7 @@ func TestUnsupportedImageIsRefused(t *testing.T) {
 		t.Fatalf("expected unsupported error, got %v", imageData["error"])
 	}
 
-	// token.kind이 잘못된 경우
+	// The case of a wrong token.kind
 	bodyWrongKind := map[string]any{
 		"image": map[string]any{
 			"name": "view",
@@ -632,7 +632,7 @@ func TestUnsupportedImageIsRefused(t *testing.T) {
 func TestNonImageBodyIsNotHandled(t *testing.T) {
 	images := host.NewImages()
 
-	// 이미지 필드가 없는 경우
+	// The case without an image field
 	bodyNoImage := map[string]any{
 		"other": "data",
 	}
@@ -644,7 +644,7 @@ func TestNonImageBodyIsNotHandled(t *testing.T) {
 		t.Fatalf("expected NotImage for body without image field, got %T", decision)
 	}
 
-	// 잘못된 JSON
+	// Invalid JSON
 	decision = host.Decide([]byte("not json"), "sidecar-a", "tab-1", images)
 	_, ok = decision.(*host.NotImage)
 	if !ok {
@@ -655,7 +655,7 @@ func TestNonImageBodyIsNotHandled(t *testing.T) {
 // contract: images.envelope.refusal-preserves-quoted-name
 func TestReplyEscapesNames(t *testing.T) {
 	images := host.NewImages()
-	nonce := "AAAAAAAAAAAAAAAAAAAAAA==" // 0 바이트 16개
+	nonce := "AAAAAAAAAAAAAAAAAAAAAA==" // 16 zero bytes
 	body := map[string]any{
 		"image": map[string]any{
 			"name": "a\"b",
@@ -675,14 +675,14 @@ func TestReplyEscapesNames(t *testing.T) {
 	}
 	bodyBytes, _ := json.Marshal(body)
 
-	// 등록되지 않은 이미지이므로 Reply가 반환되어야 함
+	// The image is not registered, so Reply must be returned
 	decision := host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
 	reply, ok := decision.(*host.Reply)
 	if !ok {
 		t.Fatalf("expected Reply, got %T", decision)
 	}
 
-	// 응답을 JSON으로 변환하여 유효성 확인
+	// Converts the reply to JSON to check validity
 	responseBytes, err := json.Marshal(reply.JSON)
 	if err != nil {
 		t.Fatalf("failed to marshal response: %v", err)
@@ -691,7 +691,7 @@ func TestReplyEscapesNames(t *testing.T) {
 		t.Fatalf("response is not valid JSON: %v", err)
 	}
 
-	// 이름이 올바르게 이스케이프되었는지 확인
+	// Checks that the name is escaped correctly
 	imageData := reply.JSON["image"].(map[string]interface{})
 	if imageData["name"] != "a\"b" {
 		t.Fatalf("expected name a\"b, got %v", imageData["name"])
@@ -709,7 +709,7 @@ func TestSurfaceCloseRemovesOnlyItsImages(t *testing.T) {
 
 	owner := &host.ImageOwner{SidecarName: "sidecar", SidecarOwner: newFakeImageOwner("")}
 
-	// tab-1에 2개 이미지 등록
+	// Registers 2 images in tab-1
 	if err := images.Reserve(key1, owner); err != nil {
 		t.Fatal(err)
 	}
@@ -720,19 +720,19 @@ func TestSurfaceCloseRemovesOnlyItsImages(t *testing.T) {
 	}
 	images.Set(key2, unsafe.Pointer(&b))
 
-	// tab-2에 1개 이미지 등록
+	// Registers 1 image in tab-2
 	if err := images.Reserve(key3, owner); err != nil {
 		t.Fatal(err)
 	}
 	images.Set(key3, unsafe.Pointer(&c))
 
-	// tab-1 표면의 모든 이미지 제거
+	// Removes all images of the tab-1 surface
 	removed := images.RemoveSurface("tab-1")
 	if len(removed) != 2 {
 		t.Fatalf("expected 2 removed images, got %d", len(removed))
 	}
 
-	// 제거된 이미지 핸들 확인
+	// Checks the removed image handles
 	removedPtrs := map[unsafe.Pointer]bool{}
 	for _, ptr := range removed {
 		removedPtrs[ptr] = true
@@ -741,7 +741,7 @@ func TestSurfaceCloseRemovesOnlyItsImages(t *testing.T) {
 		t.Fatalf("wrong handles removed")
 	}
 
-	// tab-1의 이미지는 더 이상 접근 불가
+	// The images of tab-1 are no longer accessible
 	if _, err := images.Get(key1); err == nil {
 		t.Fatal("tab-1 image1 should not exist after removal")
 	}
@@ -749,7 +749,7 @@ func TestSurfaceCloseRemovesOnlyItsImages(t *testing.T) {
 		t.Fatal("tab-1 image2 should not exist after removal")
 	}
 
-	// tab-2의 이미지는 여전히 접근 가능
+	// The images of tab-2 are still accessible
 	if got, err := images.Get(key3); err != nil || got != unsafe.Pointer(&c) {
 		t.Fatalf("tab-2 image should still exist: %v", err)
 	}
@@ -760,7 +760,7 @@ func TestReserveRejectsNilOwner(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
 
-	// nil owner로 reserve 시도
+	// Tries reserve with a nil owner
 	err := images.Reserve(key, nil)
 	if err == nil {
 		t.Fatal("expected error for nil owner, got nil")
@@ -769,7 +769,7 @@ func TestReserveRejectsNilOwner(t *testing.T) {
 		t.Fatalf("expected 'owner is required' error, got %v", err)
 	}
 
-	// 이미지가 등록되지 않았는지 확인
+	// Checks that no image was registered
 	if _, err := images.Get(key); err == nil {
 		t.Fatal("image should not be registered after failed reserve")
 	}
@@ -781,7 +781,7 @@ func TestEnvelopeFromTheAttachedSidecarIsPresented(t *testing.T) {
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
 
 	var a int
-	// 특정 사이드카가 attachment 한 이미지
+	// The images that a specific sidecar attached
 	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
 	if err := images.Reserve(key, owner); err != nil {
 		t.Fatalf("reserve failed: %v", err)
@@ -809,7 +809,7 @@ func TestEnvelopeFromTheAttachedSidecarIsPresented(t *testing.T) {
 	}
 	bodyBytes, _ := json.Marshal(body)
 
-	// 같은 사이드카가 같은 이미지를 보내면 Present를 반환해야 함
+	// When the same sidecar sends the same image, it must return Present
 	decision := host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
 	present, ok := decision.(*host.Present)
 	if !ok {
@@ -825,7 +825,7 @@ func TestEnvelopeFromAnotherSidecarIsRefused(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
 	attachImage(t, images, key)
-	// 구성된 현재 래스터이므로 거부 이유는 보낸 사이드카뿐이다.
+	// This is the configured current raster, so the only reason for rejection is the sidecar that sent it.
 	configured := configureImage(t, images, key, 800, 600, 2.0)
 	envelope := configuredEnvelope(t, configured, 1)
 	reply, ok := host.Decide(envelope, "sidecar-b", key.Surface, images).(*host.Reply)
@@ -835,7 +835,7 @@ func TestEnvelopeFromAnotherSidecarIsRefused(t *testing.T) {
 	if image := reply.JSON["image"].(map[string]interface{}); image["error"] != "notAttached" {
 		t.Fatalf("another sidecar was answered %v, want notAttached", image)
 	}
-	// 대조: 연결한 사이드카가 보낸 같은 봉투는 표시된다.
+	// Contrast: the same envelope that the connected sidecar sent is displayed.
 	if _, ok := host.Decide(envelope, "sidecar-a", key.Surface, images).(*host.Present); !ok {
 		t.Fatal("the attaching sidecar's envelope for the configured raster was not presented")
 	}
@@ -874,12 +874,12 @@ func TestPresentationFailureIsReported(t *testing.T) {
 	}
 	bodyBytes, _ := json.Marshal(body)
 
-	// 가짜 onMain 이 false 를 반환하도록 설정
+	// Sets the fake onMain to return false
 	var receivedImageName string
 	var receivedResponse map[string]interface{}
 	handled := host.HandleEnvelope(bodyBytes, "sidecar-a", "tab-1", images,
 		func(func() error) error {
-			// 메인 스레드 작업을 실행하지 못한 표시 실패다.
+			// This is a presentation failure in which the main thread task could not run.
 			return errors.New("main thread unavailable")
 		},
 		func(imageName string, response map[string]interface{}) error {
@@ -941,7 +941,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 	}
 }
 
-// attachImage 는 사이드카 sidecar-a 의 그림 영역을 key 에 연결한다.
+// attachImage connects the picture region of the sidecar sidecar-a to key.
 func attachImage(t *testing.T, images *host.Images, key host.ImageKey) {
 	t.Helper()
 	var handle int
@@ -951,7 +951,7 @@ func attachImage(t *testing.T, images *host.Images, key host.ImageKey) {
 	}
 }
 
-// noRecovery 는 표시 실패가 없어야 하는 사례에서 복구 호출을 실패로 기록한다.
+// noRecovery records a recovery call as a failure in cases that must have no presentation failure.
 func noRecovery(t *testing.T) func(string) error {
 	return func(reason string) error {
 		t.Errorf("unexpected recovery for %q", reason)
@@ -1050,12 +1050,12 @@ func TestInvalidatingASidecarResendsItsConfigureAndLeavesOtherSidecars(t *testin
 	images.Set(browser, unsafe.Pointer(&b))
 	configureImage(t, images, terminal, 800, 600, 2.0)
 	configureImage(t, images, browser, 800, 600, 2.0)
-	// 같은 크기의 재구성은 전송하지 않는다 — 상태가 이미 구성되었기 때문이다.
+	// A reconfiguration of the same size is not sent, because the state is already configured.
 	if configuration, err := images.ConfigureRaster(terminal, 800, 600, 2.0, true); err != nil || configuration != nil {
 		t.Fatalf("same-size reconfigure sent again: %v %v", configuration, err)
 	}
 
-	// 연결이 끊긴 사이드카의 configure 상태만 무효화한다(V5-106).
+	// Invalidates only the configure state of the sidecar whose connection was lost (V5-106).
 	if invalidated := images.InvalidateSidecar("sidecar-a"); invalidated != 1 {
 		t.Fatalf("exactly sidecar-a's images are invalidated, got %d", invalidated)
 	}
@@ -1063,7 +1063,7 @@ func TestInvalidatingASidecarResendsItsConfigureAndLeavesOtherSidecars(t *testin
 		t.Fatalf("an unknown sidecar invalidates nothing, got %d", invalidated)
 	}
 
-	// 무효화된 사이드카의 같은 크기 구성은 다시 전송된다 — 새 연결의 서비스는 그림 상태가 없다.
+	// A configuration of the same size for the invalidated sidecar is sent again, because the service of the new connection has no picture state.
 	resent, err := images.ConfigureRaster(terminal, 800, 600, 2.0, true)
 	if err != nil || resent == nil {
 		t.Fatalf("the invalidated sidecar's configure was not resent at the same size: %v %v", resent, err)
@@ -1072,7 +1072,7 @@ func TestInvalidatingASidecarResendsItsConfigureAndLeavesOtherSidecars(t *testin
 		t.Fatalf("the resent configure belongs to %q", resent.Sidecar)
 	}
 
-	// 다른 사이드카의 영역은 무효화되지 않았으므로 같은 크기 재구성은 여전히 전송하지 않는다.
+	// The regions of another sidecar were not invalidated, so a reconfiguration of the same size is still not sent.
 	if configuration, err := images.ConfigureRaster(browser, 800, 600, 2.0, true); err != nil || configuration != nil {
 		t.Fatalf("the other sidecar's same-size reconfigure sent again: %v %v", configuration, err)
 	}
@@ -1088,8 +1088,8 @@ func TestShownSurfaceReconfiguresItsRaster(t *testing.T) {
 		t.Fatalf("attach image: %v", err)
 	}
 	first := configureImage(t, images, key, 800, 600, 2)
-	// 숨긴 동안 받은 frame 은 native layer 가 해제되어 표시되지 않는다. 다시 보이면 같은 크기라도 새 raster 를
-	// 설정해야 하며, 숨긴 동안의 raster 를 기다리지 않는다.
+	// A frame received while hidden is not displayed because the native layer was released. When it is shown again, a new raster must be
+	// set even for the same size, and the raster of the hidden period is not waited for.
 	images.SetSurfaceVisible(key.Surface, false)
 	images.SetSurfaceVisible(key.Surface, true)
 	shown, err := images.ConfigureRaster(key, 800, 600, 2, true)
@@ -1125,8 +1125,8 @@ func TestPresentationOutcomeNamesTheCurrentFrameOfAFailure(t *testing.T) {
 	}
 }
 
-// 같은 표면 문서에서 그림 영역을 떼었다가 다시 붙이면 세대가 그대로이므로, 다시 붙인 영역의 래스터는 사이드카가 이미
-// 받은 래스터보다 커야 한다. 사이드카는 (세대, 래스터)가 커지지 않은 구성을 지난 구성으로 보고 무시한다.
+// When a picture region is detached from the same surface document and attached again, the generation stays the same, so the raster of the attached region must be larger than the raster the sidecar already
+// received. The sidecar ignores a configuration whose (generation, raster) did not increase as a past configuration.
 // contract: images.transfer.reattach-continues-raster
 func TestReattachingInTheSameGenerationContinuesTheRaster(t *testing.T) {
 	images := host.NewImages()
@@ -1150,7 +1150,7 @@ func TestReattachingInTheSameGenerationContinuesTheRaster(t *testing.T) {
 		t.Fatalf("configuration after reattaching is (%d, %d), want generation %d and a raster above %d",
 			after.Generation, after.Raster, before.Generation, before.Raster)
 	}
-	// 표면의 모든 영역을 뗀 뒤에도 같다.
+	// It is the same after all regions of the surface are detached.
 	images.RemoveSurface(key.Surface)
 	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
 		t.Fatalf("attach image after removing the surface regions: %v", err)
@@ -1162,8 +1162,8 @@ func TestReattachingInTheSameGenerationContinuesTheRaster(t *testing.T) {
 	}
 }
 
-// 표면 페이지의 ImageCaret 와 ImageText 는 요청 뒤에 좌표와 글을 함께 보낸다. 인자 해석은 그 목록대로 하고,
-// 다음 단계인 호출자 확인에서 실패해야 한다(G1.4-109).
+// ImageCaret and ImageText of a surface page send the coordinates and the text together after the request. The arguments are decoded as listed, and
+// the call must fail at the next step, the caller check (G1.4-109).
 // contract: host-calls.native.image-argument-lists
 func TestNativeImageCallsDecodeTheirOwnArguments(t *testing.T) {
 	surfaces := host.NewSurfaces(nil, nil)
@@ -1180,7 +1180,7 @@ func TestNativeImageCallsDecodeTheirOwnArguments(t *testing.T) {
 	}
 }
 
-// 그림 영역 호출의 실패는 호출 이름을 밝힌다(G1.4-112).
+// The failure of a picture region call names the call (G1.4-112).
 // contract: images.calls.name-the-call
 func TestImageCallFailuresNameTheCall(t *testing.T) {
 	if err := host.ImageCallError("imageDetach", errors.New(`image "view" is not attached`)); err == nil ||

@@ -1,4 +1,4 @@
-// 테마 조회, 설정과 페이지 전달.
+// Theme query, setting, and delivery to the page.
 
 package host
 
@@ -6,25 +6,25 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// Theme 은 메인 페이지의 테마다. 호스트가 제공하는 페이지에 전달한다.
+// Theme is the theme of the main page. The host passes it to the pages that it provides.
 type Theme struct {
 	Scheme string            `json:"scheme"`
 	Tokens map[string]string `json:"tokens"`
 }
 
-// Theme 은 현재 테마를 반환한다. 페이지는 로드한 뒤 한 번 호출하고 이후 변경은 theme
-// 이벤트로 받는다.
+// Theme returns the current theme. The page calls it once after it loads and receives later changes through the theme
+// event.
 func (s *Surfaces) Theme() Theme {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.theme
 }
 
-// SetTheme 은 테마를 기록하고 열린 페이지에 발행한다. 메인 페이지는 렌더링마다가 아니라
-// 테마를 선택할 때 호출한다.
+// SetTheme records the theme and publishes it to the open pages. The main page calls it when the theme is selected and not at every
+// render.
 func (s *Surfaces) SetTheme(theme Theme) error {
-	// 토큰이 없는 테마를 그대로 두면 다음 Theme 호출이 JSON 의 null 을 반환하고,
-	// 그것을 받은 페이지는 토큰을 순회하다 멈춘다.
+	// If a theme without tokens were left as it is, the next Theme call would return JSON null,
+	// and a page that receives it would stop while iterating over the tokens.
 	if theme.Tokens == nil {
 		theme.Tokens = map[string]string{}
 	}

@@ -2,7 +2,7 @@
 
 package darwin
 
-// 표면 문서 안의 외부 문서 웹뷰. 구현은 native/darwin 의 document_view.m 이다.
+// The external document web view inside a surface document. The implementation is document_view.m of native/darwin.
 
 /*
 #include <stdbool.h>
@@ -43,7 +43,7 @@ import (
 	"unsafe"
 )
 
-// documents 는 문서 핸들별 상태 수신 핸들이다. UI 스레드에서만 읽고 바꾼다.
+// documents are the state receiver handles of each document handle. They are read and changed only on the UI thread.
 var documents = map[unsafe.Pointer]cgo.Handle{}
 var documentEvents = map[unsafe.Pointer]cgo.Handle{}
 var documentMessages = map[unsafe.Pointer]cgo.Handle{}

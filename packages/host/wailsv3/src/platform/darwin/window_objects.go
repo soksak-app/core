@@ -2,8 +2,8 @@
 
 package darwin
 
-// 창과 웹뷰에 붙인 라이브러리 객체의 살아 있는 수를 센다. 구현은 native/darwin 의 window_objects.m 이다. 진단 빌드에만
-// 들어간다.
+// Counts the live library objects attached to windows and web views. The implementation is window_objects.m of native/darwin. It is included only in
+// diagnostic builds.
 
 /*
 #cgo CFLAGS: -x objective-c -fmodules
@@ -31,7 +31,7 @@ import (
 
 //export windowObjectsCounted
 func windowObjectsCounted(handle C.uintptr_t, compositions, hosts, registrations C.long, reached C.bool) {
-	// handle 은 WindowObjectsWhen 이 만든 값이고 라이브러리는 done 을 한 번 호출한다.
+	// handle is the value that WindowObjectsWhen created, and the library calls done once.
 	h := cgo.Handle(handle)
 	done := h.Value().(func(platform.WindowObjects, bool))
 	h.Delete()
@@ -42,8 +42,8 @@ func windowObjectsCounted(handle C.uintptr_t, compositions, hosts, registrations
 	}, bool(reached))
 }
 
-// WindowObjectsWhen 은 애플리케이션이 이벤트 하나를 처리한 뒤 수가 expected 와 같아질 때, 또는 seconds 가 지날 때의
-// 수를 done 에 준다. 메인 스레드에서 호출한다.
+// WindowObjectsWhen gives done the count at the time when the count becomes equal to expected after the application handled one event, or when seconds pass.
+// Call it on the main thread.
 func (implementation) WindowObjectsWhen(expected *platform.WindowObjects, seconds float64,
 	done func(platform.WindowObjects, bool)) {
 	var wanted *C.sp_window_objects

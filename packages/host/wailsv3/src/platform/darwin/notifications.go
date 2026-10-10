@@ -21,7 +21,7 @@ import (
 	"unsafe"
 )
 
-// notificationReceiver 는 알림 센터 사건을 받는 함수다. 알림 센터는 프로세스에 하나이므로 하나만 둔다.
+// notificationReceiver is the function that receives the notification center events. There is one notification center per process, so only one is kept.
 var notificationReceiver func(string)
 
 //export notificationEvent

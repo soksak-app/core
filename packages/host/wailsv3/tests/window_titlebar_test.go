@@ -1,5 +1,5 @@
-// 표면 준비가 담는 창 제목줄 높이의 검사를 확인한다(docs/spec/native-surfaces.md#title-bar-height). 두 host 는
-// 같은 값을 같은 문장으로, 배치 트랜잭션을 시작하기 전에 거부한다.
+// Checks the validation of the window title bar height that a surface preparation carries (docs/spec/native-surfaces.md#title-bar-height). Both hosts
+// reject the same value with the same sentence before they start the layout transaction.
 package host_test
 
 import (
@@ -10,7 +10,7 @@ import (
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
-// titlebarRequest 는 페이지가 보내는 형태의 표면 동기화 요청이다. JSON 은 NaN 과 무한대를 담을 수 없다.
+// titlebarRequest is a surface synchronization request in the form that the page sends. JSON cannot carry NaN and infinity.
 func titlebarRequest(t *testing.T, titlebar string) host.SyncRequest {
 	t.Helper()
 	var request host.SyncRequest

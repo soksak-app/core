@@ -1,6 +1,6 @@
 package host_test
 
-// 애플리케이션 인자의 규칙(docs/spec/hosts.md#application-arguments)을 검사한다.
+// Checks the rules of the application arguments (docs/spec/hosts.md#application-arguments).
 
 import (
 	"testing"

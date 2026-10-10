@@ -1,4 +1,4 @@
-// 창 객체 수 응답 테스트. 수는 공용 라이브러리가 세며 여기서는 응답의 이름과 값만 검사한다.
+// Window object count reply tests. The common library counts them, and here only the names and values of the reply are checked.
 package host_test
 
 import (

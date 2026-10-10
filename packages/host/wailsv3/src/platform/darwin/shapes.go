@@ -5,21 +5,21 @@ package darwin
 /*
 #import <Cocoa/Cocoa.h>
 
-// AppKit 좌표의 영역을 백킹 스토어의 픽셀 격자에 안쪽으로 맞춘다. 뷰는 페이지가
-// 선언한 영역보다 넓게 덮지 않는다.
+// Fits a region in AppKit coordinates inward to the pixel grid of the backing store. A view does not cover more than the region
+// that the page declared.
 //
-// 바깥쪽으로 맞추면 틀린다. 페이지의 선은 두 카드 사이의 통로에 있고, 통로 폭이 선
-// 하나이면 두 표면이 양쪽에서 반 픽셀 떨어져 있다. 바깥쪽으로 키우면 두 표면이 선을
-// 덮어 페이지의 초점 표시가 사라진다.
+// Fitting outward is wrong. The line of the page is in the passage between two cards, and when the passage width is one line,
+// the two surfaces are half a pixel away on each side. If they were enlarged outward, the two surfaces would cover the line and the focus indicator
+// of the page would disappear.
 //
-// 안쪽으로 맞추면 각 가장자리에 최대 반 픽셀의 카드 배경이 남는다. 그 배경은 표면
-// 뒤에 원래 있는 것이다.
+// Fitting inward leaves at most half a pixel of the card background at each edge. That background is originally behind
+// the surface.
 static NSRect surfaceAligned(NSWindow* window, double x, double y, double w, double h) {
     return [window backingAlignedRect:NSMakeRect(x, y, w, h) options:NSAlignAllEdgesInward];
 }
 
-// 도형 뷰를 디스플레이 픽셀에 맞춰 옮겨 가장자리를 선명하게 유지한다. 영역은 페이지가
-// 선언한 대로 콘텐츠 뷰의 왼쪽 위에서 잰 페이지 좌표다.
+// Moves the shape view to the display pixels to keep the edges sharp. The region is in page coordinates measured from the top left of the content view,
+// as the page declared.
 static void shapeSetFrame(void* handle, double x, double y, double w, double h) {
     NSView* view = (NSView*)handle;
     NSWindow* window = [view window];
@@ -28,7 +28,7 @@ static void shapeSetFrame(void* handle, double x, double y, double w, double h) 
     view.frame = surfaceAligned(window, x, up, w, h);
 }
 
-// 도형을 형제 뷰들 위로 올린다.
+// Raises the shape above its sibling views.
 static void surfaceRaise(void* handle) {
     NSView* view = (NSView*)handle;
     NSView* parent = [view superview];
@@ -36,9 +36,9 @@ static void surfaceRaise(void* handle) {
     [parent addSubview:view positioned:NSWindowAbove relativeTo:nil];
 }
 
-// 페이지가 표면 위에 그리는 도형에 쓰는 레이어 기반 NSView 를 만든다. 레이어가 있는
-// NSView 는 알파가 있는 색을 받아 뒤의 내용 위에 합성한다. WKWebView 는 WebKit 이 불투명
-// 배경을 그리고 그 배경을 끄는 키가 비공개이므로 이 합성을 할 수 없다.
+// Creates the layer-backed NSView used for the shapes that the page draws over a surface. An NSView with a layer
+// accepts a color with alpha and composites it over the content behind. WKWebView cannot do this composition because WebKit draws an opaque
+// background and the key to turn that background off is private.
 static void* shapeCreate(void* nsWindow, double x, double y, double w, double h) {
     NSWindow* window = (NSWindow*)nsWindow;
     if (window == nil || [window contentView] == nil) return NULL;
@@ -61,8 +61,8 @@ static void shapeSetStyle(void* handle, double radius, double lineWidth,
         [[NSColor colorWithSRGBRed:lr green:lg blue:lb alpha:la] CGColor];
 }
 
-// 도형 뷰를 제거하고 alloc 이 반환한 참조를 해제한다. 상위 뷰는 removeFromSuperview
-// 까지 자기 참조를 따로 갖는다.
+// Removes the shape view and releases the reference that alloc returned. The superview keeps its own reference until
+// removeFromSuperview.
 static void shapeDestroy(void* handle) {
     NSView* view = (NSView*)handle;
     [view removeFromSuperview];

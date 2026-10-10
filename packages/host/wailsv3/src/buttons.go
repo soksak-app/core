@@ -7,22 +7,22 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// Buttons 는 host.buttons 의 값이다. 버튼 source(platform.WatchButtons)가 보고한 눌린 마우스 버튼 mask 를
-// 보관하고, mask 가 바뀌면 changed 로 새 값을 알린다. input.pointer 는 이 mask 가 0 이 아닌 동안 누름과 뗌을
-// 1007 로 거부하므로, 거부된 뗌의 열린 누름은 이 값이 0 이 된 뒤 끝낼 수 있다(docs/spec/exposure.md#host-entries).
+// Buttons is the value of host.buttons. It keeps the mask of pressed mouse buttons that the button source (platform.WatchButtons) reported
+// and announces the new value through changed when the mask changes. While the mask is not 0, input.pointer rejects press and release
+// with 1007, so the open press of a rejected release can end after this value becomes 0 (docs/spec/exposure.md#host-entries).
 type Buttons struct {
 	mu      sync.Mutex
 	mask    uint64
 	changed func(value map[string]any)
 }
 
-// NewButtons 는 mask 0 의 host.buttons 를 만든다. changed 는 바뀐 값마다 보고한 차례대로 한 번 호출된다.
+// NewButtons creates host.buttons with mask 0. changed is called once for each changed value, in the order of the reports.
 func NewButtons(changed func(value map[string]any)) *Buttons {
 	return &Buttons{changed: changed}
 }
 
-// Report 는 source 가 읽은 mask 를 기록한다. 기록한 값과 다르면 새 값을 알린다. 알림의 순서가 보고의 순서와
-// 같도록 잠금 안에서 알린다. changed 는 막히지 않아야 한다.
+// Report records the mask that the source read. When it differs from the recorded value, it announces the new value. It announces inside the lock so that
+// the order of the announcements equals the order of the reports. changed must not block.
 func (b *Buttons) Report(mask uint64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -33,7 +33,7 @@ func (b *Buttons) Report(mask uint64) {
 	b.changed(buttonsValue(mask))
 }
 
-// Value 는 host.buttons 의 현재 값 {mask} 다.
+// Value is the current value {mask} of host.buttons.
 func (b *Buttons) Value() map[string]any {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -42,7 +42,7 @@ func (b *Buttons) Value() map[string]any {
 
 func buttonsValue(mask uint64) map[string]any { return map[string]any{"mask": mask} }
 
-// watchButtons 는 운영체제의 버튼 감시를 설치해 host.buttons 를 채운다. 감시는 설치한 차례에 현재 mask 를 알린다.
+// watchButtons installs the button watch of the operating system and fills host.buttons. The watch reports the current mask at the time of installation.
 func (h *Host) watchButtons() error {
 	var err error
 	application.InvokeSync(func() { err = system.WatchButtons(h.buttons.Report) })

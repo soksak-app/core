@@ -9,7 +9,7 @@ import (
 	sys "golang.org/x/sys/windows"
 )
 
-// DirectoryIdentity 는 볼륨 일련번호와 파일 인덱스로 디렉터리를 식별한다.
+// DirectoryIdentity identifies a directory by the volume serial number and the file index.
 func (implementation) DirectoryIdentity(path string, _ os.FileInfo) (string, error) {
 	name, err := sys.UTF16PtrFromString(path)
 	if err != nil {

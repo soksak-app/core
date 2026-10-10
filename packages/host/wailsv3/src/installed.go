@@ -1,8 +1,8 @@
 package host
 
-// 설정 폴더에 설치된 plugin 을 페이지에 제공하고 그 sidecar 를 찾는다(docs/spec/installation.md 의 설치된 plugin
-// 제공). 파일은 설치가 installed.json 에 기록한 폴더에서만 읽는다. 설치 상태는 요청마다 읽으므로 변경 뒤에 불러온
-// 페이지는 그 변경을 본다. 형식 검사는 command line sok 의 구현을 쓴다.
+// Provides the plugins installed in the configuration folder to the page and finds their sidecars (the section on providing installed plugins of docs/spec/installation.md). A file is read only from
+// the folder that the installation recorded in installed.json. The install state is read for every request, so a page loaded after a change sees that change.
+// The format check uses the implementation of the command line sok.
 
 import (
 	"bytes"
@@ -22,20 +22,20 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// diagnosticPlugins 는 진단 build 에서 참이다. diagnostics.go 의 init 이 켜며, 참이면 /installed-plugins.json 이
-// 설치된 package 의 diagnostics.json 을 담는다.
+// diagnosticPlugins is true in a diagnostic build. The init of diagnostics.go turns it on, and when it is true, /installed-plugins.json
+// holds the diagnostics.json of the installed plugins.
 var diagnosticPlugins bool
 
-// InstalledPluginsPath 는 페이지가 설치된 plugin 목록을 읽는 경로다.
+// InstalledPluginsPath is the path from which the page reads the list of installed plugins.
 const InstalledPluginsPath = "/installed-plugins.json"
 
-// installedPlugin 은 켜진 설치 plugin 하나와 그 파일 폴더다.
+// installedPlugin is one enabled installed plugin and its file folder.
 type installedPlugin struct {
 	id, pkg, version, dir string
 }
 
-// enabledPlugins 는 켜진 설치 plugin 을 id 순서로 돌려준다. 설치 폴더는 설정 폴더에 대한 상대 경로로 기록되며, 형식
-// 1 파일의 변환 보고는 애플리케이션 로그인 표준 오류에 쓴다(docs/spec/installation.md).
+// enabledPlugins returns the enabled installed plugins in the order of their ids. The install folder is recorded as a path relative to the configuration folder, and the conversion report of
+// a format 1 file is written to the standard error, which is the application log (docs/spec/installation.md).
 func enabledPlugins(configDir string) ([]installedPlugin, *sok.InstalledState, error) {
 	state, err := sok.ReadInstalled(configDir)
 	if err != nil {
@@ -70,8 +70,8 @@ func PluginFolder(configDir, plugin string) (string, error) {
 	return plugins[index].dir, nil
 }
 
-// InstalledPluginsDocument 는 /installed-plugins.json 의 내용이다. plugin 마다 설치된 plugin.json 을 manifest 로 담아
-// page 가 첫 화면 전에 plugin 을 등록하게 한다. 설치 상태를 읽을 수 없으면 { "error" } 문서다.
+// InstalledPluginsDocument is the content of /installed-plugins.json. For each plugin, it holds the installed plugin.json as a manifest so that
+// the page registers the plugins before the first screen. When the install state cannot be read, it is a { "error" } document.
 func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {
 	type entry struct {
 		ID          string          `json:"id"`
@@ -113,7 +113,7 @@ func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {
 			data, err := os.ReadFile(file)
 			switch {
 			case errors.Is(err, os.ErrNotExist):
-				// 기본값: diagnostics.json 이 없는 plugin 은 진단 선언이 없다.
+				// default: a plugin without diagnostics.json has no diagnostic declaration.
 			case err != nil:
 				return failure(err)
 			case !json.Valid(data):
@@ -135,8 +135,8 @@ func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {
 	return data
 }
 
-// InstalledModule 은 /modules/<package>/<path> 가 켜진 설치 plugin 의 파일이면 그 경로를 돌려준다. installed 가
-// 거짓이면 그 package 는 애플리케이션 frontend 의 것이다. 경로가 틀리면 found 가 거짓이다.
+// InstalledModule returns the path when /modules/<package>/<path> is a file of an enabled installed plugin. When installed is
+// false, that module belongs to the application frontend. When the path is wrong, found is false.
 func InstalledModule(configDir, urlPath string) (file string, installed, found bool, err error) {
 	rest, ok := strings.CutPrefix(urlPath, "/modules/")
 	if !ok {
@@ -225,7 +225,7 @@ func InstalledShared(configDir, urlPath string) (file string, shared, found bool
 	return file, true, found, nil
 }
 
-// InstalledAssets 는 설치된 plugin 을 제공하는 asset server middleware 다. 다른 경로는 다음 handler 가 제공한다.
+// InstalledAssets is the asset server middleware that serves the installed plugins. The next handler serves other paths.
 func InstalledAssets(configDir string) application.Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -276,7 +276,7 @@ func InstalledAssets(configDir string) application.Middleware {
 	}
 }
 
-// InstalledSidecars 는 켜진 설치 plugin 의 plugin.json dependencies 가 지정한 sidecar 를 설치가 기록한 폴더와 함께 돌려준다.
+// InstalledSidecars returns the sidecars that the plugin.json dependencies of the enabled installed plugins specify, together with the folder that the installation recorded.
 // A dependency that names the package of an installed plugin is not a sidecar.
 func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 	plugins, state, err := enabledPlugins(configDir)
@@ -305,7 +305,7 @@ func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 		if err := json.Unmarshal(data, &manifest); err != nil {
 			return nil, fmt.Errorf("%s: %w", file, err)
 		}
-		// 두 host 가 같은 순서로 사이드카를 선언하도록 이름 순서로 읽는다.
+		// Reads in the order of names so that both hosts declare the sidecars in the same order.
 		for _, name := range slices.Sorted(maps.Keys(manifest.Dependencies)) {
 			if seen[name] {
 				continue

@@ -1,5 +1,5 @@
-// 애플리케이션 로그 테스트(docs/spec/hosts.md#application-log). 표준 오류 교체는 프로세스 전체에 영향을
-// 주므로 자식 프로세스에서 확인한다.
+// Application log tests (docs/spec/hosts.md#application-log). Replacing the standard error affects the whole process,
+// so it is checked in a child process.
 package host_test
 
 import (
@@ -21,7 +21,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// standardErrorChild 는 자식 프로세스에 설정 디렉터리를 알리는 환경 변수다.
+// standardErrorChild is the environment variable that tells the child process the configuration directory.
 const standardErrorChild = "SOKSAK_APPLICATION_LOG_CHILD"
 
 // contract: log.open.rotates-at-100mb
@@ -189,8 +189,8 @@ func TestLogErrorWritesAnErrorEventToTheEventLog(t *testing.T) {
 	}
 }
 
-// page 가 받는 binding 실패는 page 가 한 번 기록한다. host 가 쓰는 Wails transport 가 그 실패를 다시 기록하면
-// 실패 하나가 두 줄로 남는다(docs/spec/hosts.md#application-log).
+// A binding failure that the page receives is recorded once by the page. If the Wails transport that the host uses recorded that failure again,
+// one failure would leave two lines (docs/spec/hosts.md#application-log).
 // contract: log.binding-failure.returned-not-logged
 func TestTheTransportReturnsAFailedCallWithoutLoggingIt(t *testing.T) {
 	var logged strings.Builder

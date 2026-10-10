@@ -1,4 +1,4 @@
-// 표면 위에 그리는 외곽선 도형.
+// The outline shapes drawn over a surface.
 
 package host
 
@@ -8,10 +8,10 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// ShapeRequest 는 페이지가 표면 위에 그리는 사각형이다.
+// ShapeRequest is the rectangle that the page draws over a surface.
 //
-// 도형은 웹뷰가 아니라 레이어 기반 뷰다. 채움과 선은 알파를 갖고 표면의 내용 위에
-// 합성된다. 웹뷰는 WebKit 이 불투명 배경을 그리므로 이 합성을 할 수 없다.
+// A shape is a layer-backed view and not a web view. The fill and the line have alpha and are composited over the content of the surface.
+// A web view cannot do this composition because WebKit draws an opaque background.
 type ShapeRequest struct {
 	ID        string     `json:"id"`
 	Rect      Rect       `json:"rect"`
@@ -21,12 +21,12 @@ type ShapeRequest struct {
 	Line      [4]float64 `json:"line"`
 }
 
-// nativeShape 는 표면 위에 그리는 레이어 기반 뷰다. 주 스레드에서만 다룬다.
+// nativeShape is the layer-backed view drawn over a surface. Handle it only on the main thread.
 type nativeShape struct{ handle unsafe.Pointer }
 
 func (v *nativeShape) destroy() { system.DestroyShape(v.handle) }
 
-// SetShape 는 사각형을 그리고, 처음 사용할 때 뷰를 만든다.
+// SetShape draws a rectangle and creates the view on the first use.
 func (s *Surfaces) SetShape(req ShapeRequest) error {
 	win, ok := s.window, s.window != nil
 	if !ok {
@@ -34,8 +34,8 @@ func (s *Surfaces) SetShape(req ShapeRequest) error {
 	}
 	x, y := req.Rect.X, req.Rect.Y
 	w, h := max1(req.Rect.W), max1(req.Rect.H)
-	// 도형은 뷰이고 뷰는 주 스레드에서만 다룬다. 이 맵도 그렇게 다루면 잠금이 필요
-	// 없고, 주 스레드가 잠금을 기다리는 일도 없다.
+	// A shape is a view and a view is handled only on the main thread. If this map is handled in the same way, no lock is needed
+	// and the main thread never waits for a lock.
 	var err error
 	application.InvokeSync(func() {
 		shape := s.shapes[req.ID]
@@ -59,7 +59,7 @@ func (s *Surfaces) SetShape(req ShapeRequest) error {
 	return err
 }
 
-// ClearShape 는 사각형을 제거한다.
+// ClearShape removes the rectangle.
 func (s *Surfaces) ClearShape(id string) error {
 	application.InvokeSync(func() {
 		shape, ok := s.shapes[id]
@@ -72,7 +72,7 @@ func (s *Surfaces) ClearShape(id string) error {
 	return nil
 }
 
-// srgba 는 페이지의 0-255 채널을 AppKit 이 받는 0-1 범위로 바꾼다. 알파는 이미 그 범위다.
+// srgba converts the 0-255 channels of the page to the 0-1 range that AppKit accepts. Alpha is already in that range.
 func srgba(c [4]float64) [4]float64 {
 	return [4]float64{c[0] / 255, c[1] / 255, c[2] / 255, c[3]}
 }
