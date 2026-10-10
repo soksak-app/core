@@ -40,14 +40,15 @@ for (const app of Object.values(APPS)) {
     // 검사 환경은 불러오지 않은 플러그인의 탭을 만들 수 없으므로 불러온 플러그인의 항목만 잰다.
     assert.deepEqual(menu.groups.map((group) => group.id), ["terminal", b, c],
       `the headings do not follow the arrangement: ${JSON.stringify(menu.groups)}`);
+    // 선택 레이어는 네이티브 뷰가 그리는 동안 메인 문서에서 숨겨지므로 열은 열릴 때 재어 core.picker 의 columns 로 보고된다.
+    assert.equal(menu.columns.items.length, menu.items.length);
+    assert.equal(menu.columns.groups.length, menu.groups.length);
     for (const [at, item] of menu.items.entries()) {
       const heading = menu.groups.findIndex((group) => group.id === item.group);
-      const [groupIcon, groupName, itemIcon, itemName] = await Promise.all([
-        s.rect("core.picker.group-icon", heading), s.rect("core.picker.group-name", heading),
-        s.rect("core.picker.item-icon", at), s.rect("core.picker.item-name", at)]);
-      assert.ok(itemIcon.width > 0 && itemName.width > 0, `${item.key}: the item has no icon or name box: ${JSON.stringify({ itemIcon, itemName })}`);
-      assert.equal(itemIcon.x, groupIcon.x, `${item.key}: the icon x differs from the heading icon x at depth ${menu.groups[heading].depth}`);
-      assert.equal(itemName.x, groupName.x, `${item.key}: the name x differs from the heading name x at depth ${menu.groups[heading].depth}`);
+      const itemBox = menu.columns.items[at];
+      const headingBox = menu.columns.groups[heading];
+      assert.equal(itemBox.icon, headingBox.icon, `${item.key}: the icon x differs from the heading icon x at depth ${menu.groups[heading].depth}`);
+      assert.equal(itemBox.name, headingBox.name, `${item.key}: the name x differs from the heading name x at depth ${menu.groups[heading].depth}`);
     }
 
     // C 의 탭을 고르면 전체 화면이 C 로 옮겨 가고 그 탭을 보인다.

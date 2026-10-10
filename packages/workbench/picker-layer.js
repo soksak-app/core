@@ -64,6 +64,22 @@ export function pickerItems(el) {
   }));
 }
 
+const columnX = (node, origin) => Math.round((node.getBoundingClientRect().left - origin) * 100) / 100;
+
+/**
+ * The columns of the drawn headings and items: the x of the icon and of the name of each, relative to the left edge of the
+ * picker. The main document hides the picker once the native view draws it, so the columns are measured while the layout is
+ * alive and kept in the status.
+ */
+export function pickerColumns(el) {
+  const origin = el.getBoundingClientRect().left;
+  const of = (row, icon, name) => ({ icon: columnX(row.querySelector(`[data-expose="${icon}"]`), origin), name: columnX(row.querySelector(`[data-expose="${name}"]`), origin) });
+  return {
+    groups: [...el.querySelectorAll(".picker__group")].map((g) => of(g, "core.picker.group-icon", "core.picker.group-name")),
+    items: [...el.querySelectorAll(".picker__item")].map((b) => of(b, "core.picker.item-icon", "core.picker.item-name")),
+  };
+}
+
 /** 그려진 묶음 제목의 상태. 제목은 그려진 순서이며 depth 는 들여쓰기 단계다. */
 export function pickerGroups(el) {
   return [...el.querySelectorAll(".picker__group")].map((g) => ({

@@ -1209,6 +1209,13 @@
                   "depth": { "type": "integer" }
                 }
               }
+            },
+            "columns": {
+              "type": "object",
+              "properties": {
+                "groups": { "type": "array", "items": { "type": "object", "properties": { "icon": { "type": "number" }, "name": { "type": "number" } } } },
+                "items": { "type": "array", "items": { "type": "object", "properties": { "icon": { "type": "number" }, "name": { "type": "number" } } } }
+              }
             }
           }
         }

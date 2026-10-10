@@ -24,7 +24,7 @@ import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "
 import { icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run } from "./commands.js";
-import { fillPicker, pickerGroups, pickerItems } from "./picker-layer.js";
+import { fillPicker, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
 import { disposeSurface, focusSurface, mountSurface, placePluginPlaceholder } from "./surface-modules.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
@@ -631,6 +631,7 @@ export const pickerState = () => ({
   title: picker ? pickerEl.getAttribute("aria-label") : "",
   items: picker ? pickerItems(pickerEl) : [],
   groups: picker ? pickerGroups(pickerEl) : [],
+  columns: picker ? picker.columns : { groups: [], items: [] },
 });
 
 /* 카드 도구 버튼의 data-do 와 core.card.menu 의 menu 값. */
@@ -716,7 +717,7 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   };
   pickerEl.style.left = `${rect.x}px`;
   pickerEl.style.top = `${rect.y}px`;
-  picker = { anchor, pick, rect, keys };
+  picker = { anchor, pick, rect, keys, columns: pickerColumns(pickerEl) };
   pickerChanged();
   // DOM 은 네이티브 뷰 위에 그릴 수 없고, 웹뷰는 DOM 을 렌더링하는 네이티브 뷰다.
   // 애플리케이션이 이 요소를 받아 그런 뷰에 렌더링하므로 아래의 표면은 계속 실행된다.

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-import { fillPicker, pickerGroups, pickerItems } from "../picker-layer.js";
+import { fillPicker, pickerColumns, pickerGroups, pickerItems } from "../picker-layer.js";
 
 // 선택 레이어는 묶음 제목을 누름을 받지 않는 요소로 그리고, 고르는 index 는 항목만 센다(docs/spec/example-model.md).
 test("a grouped picker draws headings that take no press and counts only the items", () => {
@@ -52,4 +52,26 @@ test("the icon and the name of a heading and of an item carry declared dom names
   assert.equal(el.querySelectorAll('svg[data-expose="core.picker.group-icon"]').length, 2);
   assert.equal(el.querySelectorAll('svg[data-expose="core.picker.item-icon"]').length, 2);
   assert.deepEqual(pickerGroups(el), [{ id: "a", name: "카드 1", depth: 0 }, { id: "b", name: "카드 2", depth: 2 }]);
+});
+
+// The main document hides the picker once the native view draws it, so the columns are measured while the layout is alive and
+// reported in the status: the x of the icon and of the name of each heading and item, relative to the picker.
+test("the columns of the headings and the items are measured relative to the picker", () => {
+  const { document } = new JSDOM("<div id=picker></div>").window;
+  const el = document.getElementById("picker");
+  fillPicker(el, "스페이스 앱 2개", [
+    { heading: { id: "a", name: "카드 1", depth: 0, map: "" }, items: [{ key: "a:t1", name: "터미널", mark: ">", svg: "" }] },
+    { heading: { id: "b", name: "카드 2", depth: 1, map: "" }, items: [{ key: "b:t2", name: "브라우저", mark: ">", svg: "" }] },
+  ], () => {});
+  // A layout engine gives each element a box; the test gives boxes that follow the depth, so the check reads the rule of the
+  // function (relative to the picker, icon before name) and not the layout of one engine.
+  const depthOf = (node) => Number((node.closest(".picker__group, .picker__item")).style.getPropertyValue("--depth") || 0);
+  const x = (node) => 100 + depthOf(node) * 12 + (node.matches("svg") ? 8 : 38);
+  for (const node of el.querySelectorAll("[data-expose]")) {
+    node.getBoundingClientRect = () => ({ x: x(node), y: 0, left: x(node), top: 0, width: 14, height: 14, right: x(node) + 14, bottom: 14 });
+  }
+  el.getBoundingClientRect = () => ({ x: 100, y: 0, left: 100, top: 0, width: 300, height: 200, right: 400, bottom: 200 });
+  const columns = pickerColumns(el);
+  assert.deepEqual(columns.groups, [{ icon: 8, name: 38 }, { icon: 20, name: 50 }]);
+  assert.deepEqual(columns.items, [{ icon: 8, name: 38 }, { icon: 20, name: 50 }]);
 });
