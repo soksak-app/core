@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F150.8.1: 창 검사 `e2e/input-oracle.test.mjs`가 Tab, Escape, Backspace, Enter, Control+A에 대해 sidecar가 PTY에 쓴 것으로 기록한 바이트를 터미널의 독립 수신자 프로세스가 읽은 바이트와 비교한다. 두 애플리케이션에서 같다.
+- F150.8.2: 전체 입력 경로의 지연을 성능 trace 끔, 켬, 끔으로 측정했다(`e2e/input-latency.test.mjs`). 중앙값은 Wails 23~25 ms, Tauri 26~38 ms다.
 - F151.6: `sok debug timeline`이 설정 폴더의 host 이벤트 파일에서 filter(`--level`, `--layer`, `--text`, `--event`, `--surface`, `--session`, `--cid`, `--from`, `--to`, `--context`)를 통과한 행을 실행 중인 애플리케이션 없이 debug 화면의 글 줄로 출력한다. Go와 Rust 구현이 같은 줄을 출력하며 golden 파일 `packages/log-contract/fixtures/timeline`과 debug 화면 시험이 이를 검사한다. 시험과 관측: 두 구현이 두 검사 애플리케이션의 이벤트 파일에 같은 출력을 낸다.
 - F150.6.3: `sidecar.json`과 `plugin.json`의 필드 `events`는 패키지의 event catalog 파일의 패키지 안 경로다. 검증기는 이를 받고 패키지 밖의 경로는 거절한다.
 - F150.3.7: host 프로세스가 성능 trace의 스위치를 가진다. 파일 `performance`, 파일 `logs/performance.ndjson`, service 폴더의 flag는 더 이상 없다. 표식은 event `host.trace.on`과 `host.trace.off`이고, 표본 추출은 trace가 꺼지면 끝난다(스위치보다 오래 산 표본 추출 스레드가 다른 검사의 시작 버퍼에 써서 두 번에 한 번 실패하게 했다). 두 host는 영구 service를 `--log-dir <config-dir>/logs`로 시작하며 vt sidecar가 이를 요구한다.
