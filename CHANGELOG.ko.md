@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F150.7.3: 그림 영역은 자신이 답하는 입력기 질의(`markedRange`, `selectedRange`, `hasMarkedText`, `firstRectForCharacterRange`, `characterIndexForPoint`)마다 인자, 답, 포커스를 가진 level `debug`의 event `native.input.query`를 기록한다.
+- F150.7.2: native 라이브러리는 창의 first responder 변경마다 창 번호와 변경 전후의 class를 가진 event `native.window.first_responder`를 기록한다. 창은 갱신마다 이전 갱신의 first responder와 비교한다. 창을 key-value observing으로 관찰하면 Wails host가 첫 창 표시에서 죽었기 때문이다.
 - F150.7.1: native 라이브러리는 애플리케이션(활성화, 숨김), 창(key, main, 최소화, 가림), 입력 소스의 알림을 ring의 event `native.app.*`, `native.window.*`, `native.input.source_changed`로 기록하고, 두 host는 writer를 시작할 때 플랫폼 연산 `ObserveActivity`로 observer를 설치한다.
 - F151.3: 디버그 화면의 타임라인이 level, layer, 글 외에 event 이름(`event`), `surface`, `session`, correlation identifier(`cid`), 경계를 포함하는 UTC 시간 범위(`from`, `to`)로 거르고, 통과한 행 앞뒤 `context`개 행을 `data-context`로 표시해 보인다. 잘못된 값은 member와 찾은 값을 밝힌 오류로 거부하고, `core.debug`는 member와 `lines`(context 행을 포함한 보이는 줄 수)를 보고한다. 실행 중인 애플리케이션에서 관측하지 않았다.
 - F150.5.3.2: host가 등록하는 모든 애플리케이션 event는 `kind`(`started`, `activated`, `deactivated`, `reopened`, `exit_requested`, `exit`)를 가진 event `host.app.event`이며 level은 `info`다. Wails host는 `started`, `activated`, `deactivated`, `exit_requested`, `exit`를, Tauri host는 `started`, `exit_requested`, `exit`를 저장한다.

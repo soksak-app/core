@@ -650,6 +650,21 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(second.size.width == 3 && second.size.height == 20 && second.origin.y != first.origin.y,
             @"TEST 9: a new caret replaces the reported rect");
 
+        // Each query of the input method is an event with the name of the query and its answer.
+        NSArray<NSDictionary *> *queryEvents = capturedEvents(^{
+            [(id<NSTextInputClient>)regionView firstRectForCharacterRange:charRange actualRange:NULL];
+            [(id<NSTextInputClient>)regionView markedRange];
+            [(id<NSTextInputClient>)regionView selectedRange];
+            [(id<NSTextInputClient>)regionView hasMarkedText];
+            [(id<NSTextInputClient>)regionView characterIndexForPoint:NSMakePoint(1, 2)];
+        });
+        NSMutableArray<NSString *> *queried = [NSMutableArray array];
+        for (NSDictionary *event in queryEvents) {
+            if ([event[@"name"] isEqual:@"native.input.query"]) [queried addObject:event[@"fields"][@"call"]];
+        }
+        NSArray *wantQueries = @[@"firstRectForCharacterRange", @"markedRange", @"selectedRange", @"hasMarkedText", @"characterIndexForPoint"];
+        check([queried isEqualToArray:wantQueries], [NSString stringWithFormat:@"TEST 9: the queries of the input method are events (got: %@)", queried]);
+
         sp_region_close(region9);
     }
 

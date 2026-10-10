@@ -799,8 +799,8 @@
   - [ ] F150.6 — P0: core에서 sidecar와 plugin이 따르는 wire 계약을 정한다. 요청 봉투에 더하는 상관 식별자 필드 `cids`와, host가 설정 `diagnostics.log`에서 써서 모든 프로세스가 파일 시스템 event로 감시하는 파일 `<config-dir>/log-policy.json`이다. 프로토콜 연산은 정책을 나르지 않는다(`docs/spec/logging.md`). 다른 저장소의 catalog는 각자의 manifest에 선언한다.
   - [~] F150.7 — P0: native observer(애플리케이션과 창 활동, 입력 소스 변경, first responder 변경, 입력기 질의)를 기록하고 실행 중인 애플리케이션을 catalog에 대해 감사한다(R8 단계).
     - [o] F150.7.1 — P0: native 라이브러리가 애플리케이션과 창의 활동(활성화, 숨김, key·main 창, 가림 상태)과 입력 소스 변경을 ring의 event로 기록한다. host가 시작 때 `ObserveActivity`로 observer를 설치한다. 완료: `native/darwin/tests/activity_observers_test.m`와 두 애플리케이션의 window check `e2e/event-log.test.mjs`. 2026-10-10 debug 빌드에서 관측했다: Wails는 활성화, key, main, occlusion, 입력 소스 event를, Tauri는 occlusion과 입력 소스 event를 저장한다.
-    - [ ] F150.7.2 — P0: first responder 변경 전후를 event로 기록한다.
-    - [ ] F150.7.3 — P0: 입력기 질의(`NSTextInputClient`의 질의)를 event로 기록한다.
+    - [o] F150.7.2 — P0: first responder 변경 전후를 event로 기록한다. 완료: `native/darwin/tests/activity_observers_test.m`. 2026-10-10 두 애플리케이션의 debug 빌드에서 관측했다: 애플리케이션의 첫 창이 포커스를 받을 때 `native.window.first_responder`가 저장된다.
+    - [o] F150.7.3 — P0: 입력기 질의(`NSTextInputClient`의 질의)를 event로 기록한다. 완료: `native/darwin/tests/image_region_test.m`. 2026-10-10 두 애플리케이션의 debug 빌드에서 관측했다: window check `e2e/input-records.test.mjs`가 각 event log에 `native.input.query`를 100건쯤 남긴다.
     - [ ] F150.7.4 — P0: 실행 중인 애플리케이션을 선언된 catalog와 대조하는 감사(`make events-check`)를 만든다.
   - [ ] F150.8 — P0: 관측을 닫는다: 독립 수신자에 대한 입력 oracle, 활성화 등급의 한글 조합(F149.2), 전체 경로의 benchmark, core 0.0.11 릴리스와 registry 등록(R9 단계).
 - [~] F151 — P1: debug 화면을 F150의 parser 위에서 Console 수준의 viewer로 만든다([관측 기반 계획](plans/observability.ko.md)의 S6 단계): 필터와 따라가기가 있는 타임라인, 상태 보기, 파일 목록, 선택 저장, 명령 `sok debug timeline`.

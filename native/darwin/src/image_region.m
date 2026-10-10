@@ -9,6 +9,7 @@
 #import <IOSurface/IOSurface.h>
 #import <QuartzCore/QuartzCore.h>
 #import "application_log.h"
+#import "event_ring.h"
 #import "image_region.h"
 #import "webview_geometry.h"
 
@@ -820,19 +821,52 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     if (notification.object == self.inputContext) [self commitPending];
 }
 
+// One query of the input method as the event `native.input.query` at the level debug: the name of the query, its arguments
+// and its answer (fields is `"name":value,…`). The queries arrive while a syllable is composed, so they are not records of
+// the state of the document.
+- (void)logQuery:(NSString *)call fields:(NSString *)fields {
+    NSString *json = [NSString stringWithFormat:@"{\"call\":\"%@\",%@\"focus\":%@}", call,
+        fields.length ? [fields stringByAppendingString:@","] : @"", self.hasFocus ? @"true" : @"false"];
+    sp_event(SP_EVENT_DEBUG, "native.input.query", json.UTF8String);
+}
+
+- (NSRange)markedRange {
+    NSRange range = [super markedRange];
+    [self logQuery:@"markedRange" fields:[NSString stringWithFormat:@"\"answer\":%@", [self jsonRange:range]]];
+    return range;
+}
+
+- (NSRange)selectedRange {
+    NSRange range = [super selectedRange];
+    [self logQuery:@"selectedRange" fields:[NSString stringWithFormat:@"\"answer\":%@", [self jsonRange:range]]];
+    return range;
+}
+
+- (BOOL)hasMarkedText {
+    BOOL marked = [super hasMarkedText];
+    [self logQuery:@"hasMarkedText" fields:[NSString stringWithFormat:@"\"answer\":%@", marked ? @"true" : @"false"]];
+    return marked;
+}
+
 - (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
     if (actualRange) *actualRange = NSMakeRange(NSNotFound, 0);
 
     NSWindow *window = self.window;
-    if (!window) return NSZeroRect;
-
-    NSRect caretRect = NSMakeRect(self.caretPos.x, self.caretPos.y,
-        self.caretWidth, self.caretHeight);
-    NSRect converted = [self convertRect:caretRect toView:window.contentView];
-    return [window convertRectToScreen:converted];
+    NSRect answer = NSZeroRect;
+    if (window) {
+        NSRect caretRect = NSMakeRect(self.caretPos.x, self.caretPos.y,
+            self.caretWidth, self.caretHeight);
+        NSRect converted = [self convertRect:caretRect toView:window.contentView];
+        answer = [window convertRectToScreen:converted];
+    }
+    [self logQuery:@"firstRectForCharacterRange" fields:[NSString stringWithFormat:
+        @"\"range\":%@,\"answer\":{\"x\":%.1f,\"y\":%.1f,\"width\":%.1f,\"height\":%.1f}", [self jsonRange:range],
+        answer.origin.x, answer.origin.y, answer.size.width, answer.size.height]];
+    return answer;
 }
 
 - (NSUInteger)characterIndexForPoint:(NSPoint)point {
+    [self logQuery:@"characterIndexForPoint" fields:[NSString stringWithFormat:@"\"x\":%.1f,\"y\":%.1f,\"answer\":null", point.x, point.y]];
     return NSNotFound;
 }
 
