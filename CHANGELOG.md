@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F160: the checklist registers every result of the audit of the records (the sources of core, of the sidecars and plugins, and the mapping of test results to the logs), F160.1 to F160.23, and F161 for the failures of the full run of the window checks.
 - F154.4.3: `pnpm verify:windows --when-idle <seconds>` starts each window-check file only after the person gave no input for that long, so the checks neither take the focus of the person nor fail on the input of the person; the runner names a waiting test with `WAIT`.
 - F156: the debug view places the native modal again when an image loads, so the modal has the height of the card with the image.
 - F157: the timeline of the debug view draws the newest 1000 lines and states how many it leaves out, spaces the updates that follow a growing file by 500 ms, and reads a file without a line as no row, in the view and in `sok debug timeline`; the page no longer stops answering on large event files.
