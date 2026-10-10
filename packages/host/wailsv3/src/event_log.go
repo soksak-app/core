@@ -100,6 +100,13 @@ type EventLog struct {
 	pullLoss     func() (uint64, uint64)
 	done         chan struct{}
 	closeOnce    sync.Once
+	onWrite      atomic.Pointer[func(path string, size int64)]
+}
+
+// SetOnWrite sets the observer that the writer calls after it wrote a batch, with the path of the file and its size. It is
+// called on the goroutine of the writer, so it must not wait.
+func (l *EventLog) SetOnWrite(observer func(path string, size int64)) {
+	l.onWrite.Store(&observer)
 }
 
 // StartEventLog creates the folder (mode 0700) and the file (mode 0600), writes log.open and starts the writer.
@@ -381,6 +388,8 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 		// A failed write is reported on the standard error; the writer keeps running for the next batch.
 		if _, err := file.Write(batch); err != nil {
 			fmt.Fprintf(os.Stderr, "event writer: %v\n", err)
+		} else if observer := l.onWrite.Load(); observer != nil {
+			(*observer)(file.Name(), size)
 		}
 		batch = batch[:0]
 	}

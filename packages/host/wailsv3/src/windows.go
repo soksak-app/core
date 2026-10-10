@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -143,6 +144,21 @@ type WindowGeometry struct {
 
 func (h *Host) WindowNew() {
 	h.newWindow(fmt.Sprintf("project-window-%d", atomic.AddUint64(&h.nextWindow, 1)), "/")
+}
+
+// announceLogWrite tells every window the host event `debug-log-changed` with the path of the event file under the
+// configuration folder and its size.
+func (h *Host) announceLogWrite(path string, size int64) {
+	h.mu.Lock()
+	windows := make([]*Surfaces, 0, len(h.windows))
+	for _, s := range h.windows {
+		windows = append(windows, s)
+	}
+	h.mu.Unlock()
+	notice := map[string]any{"path": "logs/" + filepath.Base(path), "size": size}
+	for _, s := range windows {
+		s.Emit("debug-log-changed", notice)
+	}
 }
 
 func (h *Host) notifyWorkspace() {

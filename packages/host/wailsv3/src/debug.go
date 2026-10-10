@@ -169,6 +169,60 @@ func DebugRead(configDir, relative string) (DebugReadResult, error) {
 	return DebugReadResult{Path: relative, Size: size, Truncated: start > 0, Kind: "text", Text: string(data)}, nil
 }
 
+// DebugRangeResult is the answer of the debugReadRange call: the whole lines that follow the offset (up to debugReadLimit
+// bytes), the offset after them, and the size of the file when it was read.
+type DebugRangeResult struct {
+	Path string `json:"path"`
+	Size int64  `json:"size"`
+	Next int64  `json:"next"`
+	Text string `json:"text"`
+}
+
+// DebugRangeRequest is the argument of the debugReadRange call.
+type DebugRangeRequest struct {
+	Path   string `json:"path"`
+	Offset int64  `json:"offset"`
+}
+
+// DebugReadRange returns the whole lines of the text file relative under <config-dir>/logs/ from offset, at most
+// debugReadLimit bytes, so a reader that keeps Next continues a file over the limit and follows a file that grows. A line
+// that is not written to its end is not returned; it is read when its end is written. An offset outside the file, an offset
+// inside a character and a file that is not text are errors that name the file.
+func DebugReadRange(configDir, relative string, offset int64) (DebugRangeResult, error) {
+	full, err := debugLogFile(configDir, relative)
+	if err != nil {
+		return DebugRangeResult{}, err
+	}
+	file, err := os.Open(full)
+	if err != nil {
+		return DebugRangeResult{}, fmt.Errorf("debug: %s: %w", relative, err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return DebugRangeResult{}, fmt.Errorf("debug: %s: %w", relative, err)
+	}
+	size := info.Size()
+	if offset < 0 || offset > size {
+		return DebugRangeResult{}, fmt.Errorf("debug: offset %d is not in %s (0 to %d)", offset, relative, size)
+	}
+	data := make([]byte, min(size-offset, int64(debugReadLimit)))
+	read, err := file.ReadAt(data, offset)
+	if err != nil && err != io.EOF {
+		return DebugRangeResult{}, fmt.Errorf("debug: %s: %w", relative, err)
+	}
+	data = data[:read]
+	if len(data) > 0 && !utf8.RuneStart(data[0]) {
+		return DebugRangeResult{}, fmt.Errorf("debug: offset %d is not at the start of a character of %s", offset, relative)
+	}
+	end := bytes.LastIndexByte(data, '\n') + 1
+	data = data[:end]
+	if !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
+		return DebugRangeResult{}, fmt.Errorf("debug: %s is not text", relative)
+	}
+	return DebugRangeResult{Path: relative, Size: size, Next: offset + int64(end), Text: string(data)}, nil
+}
+
 // debugReadImage returns the PNG file as a data address.
 func debugReadImage(file *os.File, relative string, size int64) (DebugReadResult, error) {
 	if size > debugImageLimit {
@@ -459,6 +513,15 @@ func (h *Host) DebugSaveText(ctx context.Context, requestJSON json.RawMessage) (
 		return DebugSaved{}, err
 	}
 	return DebugSaved{Saved: chosen}, nil
+}
+
+// DebugReadRange is the page's debugReadRange call.
+func (h *Host) DebugReadRange(ctx context.Context, requestJSON json.RawMessage) (DebugRangeResult, error) {
+	request, err := argument[DebugRangeRequest]("request", requestJSON)
+	if err != nil {
+		return DebugRangeResult{}, err
+	}
+	return DebugReadRange(h.configDir, request.Path, request.Offset)
 }
 
 // DebugSaveAll is the page's debugSaveAll call: it saves the logs folder as one gzip-compressed tar file.

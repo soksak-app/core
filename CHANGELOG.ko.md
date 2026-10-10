@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F151.2.1, F151.2.2: 두 host의 host 호출 `debugReadRange({path, offset})`는 `logs/` 아래 파일의 온전한 줄을 offset부터 돌려주고 그 뒤의 offset을 알린다. host는 event 기록기가 한 묶음을 쓴 뒤 모든 창에 host event `debug-log-changed {path, size}`를 알린다(기록기가 observer를 부르고, 창에 알리는 동안 오는 알림은 하나가 된다).
 - F139: 상태 `core.picker`는 `columns`, 곧 제목과 항목마다 아이콘과 이름의 x를 선택 레이어 기준으로 보고한다. 선택 레이어가 열릴 때 재는데, 네이티브 뷰가 그리는 동안 메인 문서가 선택 레이어를 숨겨 그 요소에 상자가 없기 때문이다.
 - F151.4.2: debug 타임라인의 행을 선택하고 선택 해제할 수 있다(`core.debug.timeline.select {row, selected}`, 각 행 앞의 단추). `core.debug.timeline.save`는 선택한 행의 글 줄을 타임라인 순서로 `debugSaveText`를 통해 `soksak-timeline-<time>.txt`로 저장한다(저장 창 취소는 오류가 아니고 빈 선택은 오류로 거부한다). 파일에 입력한 글자가 들어 있을 수 있다는 경고가 저장 단추 옆에 있고, `core.debug`가 `selected`, `warning`과 작업 `save-rows`를 보고한다. 단위 검증만 했다. window check `e2e/modal.test.mjs`와 저장 창은 실행 중인 애플리케이션에서 실행하지 않았다.
 - F151.4.1: 두 host의 host 호출 `debugSaveText({name, text})`는 page가 만든 글을 사람이 고른 곳에 저장한다. 파일 이름이 아닌 이름과 비었거나 16 MiB를 넘는 글을 거절하고, 같은 저장 창을 보이며, `{saved}`로 답한다.

@@ -337,3 +337,33 @@ func TestAnEventLogWithoutARotationBoundIsRefused(t *testing.T) {
 		t.Fatalf("error %v", err)
 	}
 }
+
+// contract: log.writer.announces-each-write-to-the-observer
+func TestTheWriterAnnouncesEachWriteToItsObserver(t *testing.T) {
+	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	type announced struct {
+		path string
+		size int64
+	}
+	announcements := make(chan announced, 16)
+	log.SetOnWrite(func(path string, size int64) { announcements <- announced{path, size} })
+	if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": 1}) {
+		t.Fatal("the event was refused")
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-announcements:
+		info, err := os.Stat(got.path)
+		if err != nil || filepath.Base(got.path) != "host-b1.jsonl" || got.size != info.Size() {
+			t.Fatalf("announced %+v, the file is %v (%v)", got, info, err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the write was not announced")
+	}
+	log.Close()
+}

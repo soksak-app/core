@@ -98,7 +98,8 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         debug_save,
         debug_save_text,
         debug_save_all,
-        debug_read
+        debug_read,
+        debug_read_range
     ]
 }
 
@@ -691,6 +692,16 @@ fn debug_save(
 ) -> Result<crate::debug::Saved, String> {
     let Argument(request) = request;
     crate::debug::save(&window, request)
+}
+
+/// Reads the whole lines of one text file of the logs folder from an offset.
+#[tauri::command(async)]
+fn debug_read_range(
+    window: Window,
+    request: Argument<crate::debug::RangeRequest>,
+) -> Result<crate::debug::RangeResult, String> {
+    let Argument(request) = request;
+    crate::debug::read_range_file(&window, request)
 }
 
 /// Saves text that the page built through the save panel.

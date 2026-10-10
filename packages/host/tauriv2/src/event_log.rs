@@ -102,7 +102,11 @@ struct Loss {
     bytes: AtomicU64,
 }
 
+/// The observer that the writer calls after it wrote a batch, with the path of the file and its size.
+type WriteObserver = Box<dyn Fn(&Path, u64) + Send + Sync>;
+
 pub struct EventLog {
+    on_write: Arc<Mutex<Option<WriteObserver>>>,
     sender: SyncSender<Message>,
     queued_events: Arc<AtomicUsize>,
     queue_events: usize,
@@ -150,6 +154,12 @@ fn now_us() -> u64 {
 }
 
 impl EventLog {
+    /// Sets the observer that the writer calls after it wrote a batch, with the path of the file and its size. It runs on the
+    /// thread of the writer, so it must not wait.
+    pub fn set_on_write(&self, observer: WriteObserver) {
+        *self.on_write.lock().expect("the observer of the writes") = Some(observer);
+    }
+
     /// Starts the writer of the host in `logs/` of the configuration folder; the boot identifier is the start time in
     /// seconds and the process identifier.
     pub fn start_host(config: &Path) -> Result<EventLog, String> {
@@ -210,6 +220,7 @@ impl EventLog {
             .custom_flags(libc::O_CLOEXEC)
             .open(&path)
             .map_err(|e| format!("{}: {e}", path.display()))?;
+        let on_write: Arc<Mutex<Option<WriteObserver>>> = Arc::new(Mutex::new(None));
         let (sender, receiver) = sync_channel(options.queue_events + RESERVED_FOR_REQUESTS);
         let queued_events = Arc::new(AtomicUsize::new(0));
         let queued_bytes = Arc::new(AtomicUsize::new(0));
@@ -237,6 +248,7 @@ impl EventLog {
             let loss = Arc::clone(&loss);
             let interval = options.batch_interval;
             let path_for_writer = path.clone();
+            let observer = Arc::clone(&on_write);
             let rotate_bytes = options.rotate_bytes;
             let generations = options.generations;
             let pull = options.pull;
@@ -245,7 +257,14 @@ impl EventLog {
                 .name("event-log-writer".into())
                 .spawn(move || {
                     write_loop(
-                        Output::new(file, path_for_writer, rotate_bytes, generations, &open),
+                        Output::new(
+                            file,
+                            path_for_writer,
+                            rotate_bytes,
+                            generations,
+                            &open,
+                            observer,
+                        ),
                         receiver,
                         queued_bytes,
                         queued_events,
@@ -259,6 +278,7 @@ impl EventLog {
                 .map_err(|e| format!("event writer thread: {e}"))?
         };
         Ok(EventLog {
+            on_write,
             sender,
             queued_events,
             queue_events: options.queue_events,
@@ -416,6 +436,7 @@ struct Output {
     /// The bytes of the current file, written or waiting in the batch.
     size: u64,
     seq: u64,
+    on_write: Arc<Mutex<Option<WriteObserver>>>,
 }
 
 impl Output {
@@ -425,6 +446,7 @@ impl Output {
         rotate_bytes: u64,
         generations: usize,
         open: &Pending,
+        on_write: Arc<Mutex<Option<WriteObserver>>>,
     ) -> Output {
         Output {
             file,
@@ -435,6 +457,7 @@ impl Output {
             batch: String::new(),
             size: 0,
             seq: 0,
+            on_write,
         }
     }
 
@@ -518,6 +541,13 @@ impl Output {
         }
         if let Err(error) = self.file.write_all(self.batch.as_bytes()) {
             eprintln!("event writer: {error}");
+        } else if let Some(observer) = self
+            .on_write
+            .lock()
+            .expect("the observer of the writes")
+            .as_ref()
+        {
+            observer(&self.path, self.size);
         }
         self.batch.clear();
     }

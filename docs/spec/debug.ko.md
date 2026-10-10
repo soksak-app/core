@@ -25,6 +25,8 @@ host 호출 `debugFiles()`는 `<config-dir>/logs/` 아래 모든 파일을 `path
 - `core.debug.save {path}`는 host 호출 `debugSave({path})`를 실행한다. host는 파일 이름으로 macOS 저장 창을 보이고 고른 곳에 파일을 복사한다. 고른 경로 `{saved}`로, 취소하면 `{saved: null}`로 답한다. `logs/` 밖이거나 파일이 없는 `path`는 그 경로를 밝히는 오류로 거부한다.
 - `core.debug.save-all`은 host 호출 `debugSaveAll()`을 실행한다. host는 이름 `soksak-<host>-debug-<time>.tar.gz`로 저장 창을 보이고 `<config-dir>/logs/`를 gzip으로 압축한 tar 파일로 쓴다. `debugSave`처럼 답한다.
 - host 호출 `debugSaveText({name, text})`는 page가 만든 글(예: 타임라인에서 고른 행)을 저장한다. host는 파일 이름이 아닌 `name`(빈 이름, `.`, `..`, `/`나 `\`를 가진 이름)과 비었거나 16 MiB를 넘는 `text`를 무엇을 찾았는지 밝히는 오류로 거절하고, `name`으로 저장 창을 보여 고른 곳에 글을 쓰며, `debugSave`처럼 `{saved}`로 답한다.
+- host 호출 `debugReadRange({path, offset})`는 `logs/` 아래의 텍스트 파일 `path`를 바이트 `offset`부터 읽는다. offset 뒤의 온전한 줄(최대 262144바이트)과 그 뒤의 offset을 `{path, size, next, text}`로 답한다. 끝까지 쓰이지 않은 줄은 그 끝이 쓰일 때까지 기다리므로 `next`를 가진 읽는 쪽은 한도를 넘는 파일을 이어 읽고 늘어나는 파일을 따라간다. 파일 밖의 offset, 글자 안의 offset, 텍스트가 아닌 파일은 파일을 밝히는 오류다.
+- <a id="following"></a>host는 event 기록기가 자기 파일에 한 묶음을 쓴 뒤 모든 창에 host event `debug-log-changed {path, size}`를 알린다. 창에 알리는 동안 오는 쓰기 알림은 마지막 크기를 가진 알림 하나가 된다. 파일을 따라가는 화면은 자기 `next`부터 `debugReadRange`로 늘어난 줄을 읽는다.
 
 ## 보기
 

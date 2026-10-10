@@ -321,3 +321,21 @@ fn a_log_without_a_rotation_bound_is_refused() {
         Ok(_) => panic!("a log without a generation count started"),
     }
 }
+
+// contract: log.writer.announces-each-write-to-the-observer
+#[test]
+fn the_writer_announces_each_write_to_its_observer() {
+    let directory = tempfile::tempdir().unwrap();
+    let log = EventLog::start(options(directory.path())).unwrap();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    log.set_on_write(Box::new(move |path, size| {
+        let _ = sender.send((path.to_path_buf(), size));
+    }));
+    assert!(log.emit(Level::Info, "host.test.event", &json!({"index": 1})));
+    log.flush(Duration::from_secs(5)).unwrap();
+    let (path, size) = receiver
+        .recv_timeout(Duration::from_secs(5))
+        .expect("the write was not announced");
+    assert_eq!(path.file_name().unwrap(), "host-b1.jsonl");
+    assert_eq!(size, std::fs::metadata(&path).unwrap().len());
+}

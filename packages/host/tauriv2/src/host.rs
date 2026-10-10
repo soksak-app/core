@@ -24,6 +24,7 @@ pub mod clipboard;
 pub mod command_line;
 mod composition;
 pub mod debug;
+pub mod debug_follow;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
 pub mod documents;
@@ -62,6 +63,9 @@ pub mod workspace;
 
 use application_log::log_error;
 use sidecars::WindowSidecars;
+
+/// The stop of the thread that announces the writes of the event log to the windows.
+struct LogNoticeStop(std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>);
 
 /// 시작할 때 읽은 애플리케이션 인자(docs/spec/hosts.md#application-arguments).
 static ARGUMENTS: std::sync::OnceLock<command_line::Arguments> = std::sync::OnceLock::new();
@@ -179,6 +183,13 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             // exists.
             let events = std::sync::Arc::new(event_log::EventLog::start_host(&directory)?);
             event_record::use_host_event_log(Some(std::sync::Arc::clone(&events)));
+            // The debug view follows the event file of the host: every window learns that the writer wrote.
+            let notices_app = app.clone();
+            let (observe, stop) = debug_follow::coalesce_log_notices(move |path, size| {
+                windows::notify_log_written(&notices_app, path, size)
+            });
+            events.set_on_write(observe);
+            tauri::Manager::manage(app, LogNoticeStop(std::sync::Mutex::new(Some(stop))));
             tauri::Manager::manage(app, events);
             application_log::start_standard_error(&directory, soksak_sok::identity::identity())?;
             Ok(())
@@ -347,6 +358,15 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     app.state::<WindowSidecars>().stop();
                 }
                 exposure::stop(app);
+                if let Some(stop) = app
+                    .state::<LogNoticeStop>()
+                    .0
+                    .lock()
+                    .expect("the stop of the log notices")
+                    .take()
+                {
+                    stop();
+                }
                 if let Err(error) = app
                     .state::<std::sync::Arc<event_log::EventLog>>()
                     .flush(std::time::Duration::from_secs(2))

@@ -95,6 +95,7 @@ const METHOD = {
   debugRecord: "DebugRecord",
   debugSave: "DebugSave",
   debugSaveText: "DebugSaveText",
+  debugReadRange: "DebugReadRange",
   debugSaveAll: "DebugSaveAll",
   debugRead: "DebugRead",
   pluginsRun: "PluginsRun",

@@ -126,6 +126,10 @@ func Run(assets fs.FS, options Options) error {
 	}
 	host.events = eventLog
 	UseHostEventLog(eventLog)
+	// The debug view follows the event file of the host: every window learns that the writer wrote (docs/spec/debug.md#following).
+	observeWrites, stopNotices := CoalesceLogNotices(host.announceLogWrite)
+	eventLog.SetOnWrite(observeWrites)
+	defer stopNotices()
 	if err := StartStandardError(configDirectory, identifier); err != nil {
 		return err
 	}

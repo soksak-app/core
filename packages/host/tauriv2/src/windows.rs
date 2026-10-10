@@ -1,6 +1,7 @@
 //! 프로젝트 창, 창 등록부, 준비/닫기/종료, 창 상태, 창 버튼.
 
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
@@ -266,6 +267,24 @@ pub(crate) fn notify_workspace(app: &AppHandle) {
     for window in app.windows().values() {
         if let Err(error) = emit_window(window, "workspace-changed", ()) {
             log_error("workspace-changed", error);
+        }
+    }
+}
+
+/// Sends the host event `debug-log-changed` to every window with the path of the event file under the configuration folder and
+/// its size (docs/spec/debug.md#following).
+pub(crate) fn notify_log_written(app: &AppHandle, path: &Path, size: u64) {
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        log_error(
+            "debug-log-changed",
+            format!("{} has no file name", path.display()),
+        );
+        return;
+    };
+    let notice = serde_json::json!({"path": format!("logs/{name}"), "size": size});
+    for window in app.windows().values() {
+        if let Err(error) = emit_window(window, "debug-log-changed", notice.clone()) {
+            log_error("debug-log-changed", error);
         }
     }
 }
