@@ -62,10 +62,13 @@ function installedConfiguration(t) {
   };
   const folder = (id, version) => `plugins/${id}/${version}`;
   write("plugins/installed.json", JSON.stringify({ format: 2, plugins: {
-    probe: { package: "@fixture/probe", version: "0.1.0", path: folder("probe", "0.1.0"), enabled: true, sidecars: {} },
-    alpha: { package: "plugin-alpha", version: "1.0.0", path: folder("alpha", "1.0.0"), enabled: true, sidecars: {} },
-    off: { package: "plugin-off", version: "1.0.0", path: folder("off", "1.0.0"), enabled: false, sidecars: {} },
+    probe: { version: "0.1.0", path: folder("probe", "0.1.0"), enabled: true, sidecars: {} },
+    alpha: { version: "1.0.0", path: folder("alpha", "1.0.0"), enabled: true, sidecars: {} },
+    off: { version: "1.0.0", path: folder("off", "1.0.0"), enabled: false, sidecars: {} },
   }, sidecars: {} }));
+  write("plugins/probe/0.1.0/package.json", JSON.stringify({ name: "@fixture/probe" }));
+  write("plugins/alpha/1.0.0/package.json", JSON.stringify({ name: "plugin-alpha" }));
+  write("plugins/off/1.0.0/package.json", JSON.stringify({ name: "plugin-off" }));
   write("plugins/probe/0.1.0/plugin.json", JSON.stringify(MANIFESTS.probe));
   write("plugins/probe/0.1.0/ui/probe.js", "export function mount() {}\n");
   write("plugins/probe/0.1.0/ui/vendor/library.js", "export const library = 1;\n");
@@ -105,6 +108,17 @@ test("an application without a host stages the enabled installed plugins as a ho
   assert.deepEqual(JSON.parse(readFileSync(join(app, "out/installed-plugins.json"), "utf8")).plugins[1].diagnostics, DIAGNOSTICS);
   assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--installed", join(configuration, "missing")], { cwd: app, stdio: "pipe" }),
     /installed\.json does not exist; install plugins with sok first/);
+});
+
+test("staging refuses an installed.json entry that holds package", (t) => {
+  const app = fixtureApp(t);
+  const configuration = installedConfiguration(t);
+  const file = join(configuration, "plugins/installed.json");
+  const installed = JSON.parse(readFileSync(file, "utf8"));
+  installed.plugins.alpha.package = "plugin-alpha";
+  writeFileSync(file, JSON.stringify(installed));
+  assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--installed", configuration], { cwd: app, stdio: "pipe" }),
+    (error) => error.stderr.toString().includes(`${file}: plugins/installed.json alpha: unknown field package`));
 });
 
 test("a native application stages no plugin and no installed plugin document", (t) => {
