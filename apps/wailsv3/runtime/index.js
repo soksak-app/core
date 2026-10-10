@@ -53,7 +53,6 @@ const METHOD = {
   setTheme: "SetTheme",
   setMenuLanguage: "SetMenuLanguage",
   theme: "Theme",
-  report: "Report",
   overlayShow: "OverlayShow",
   overlayPlace: "OverlayPlace",
   setShape: "SetShape",
@@ -107,12 +106,6 @@ const mainCalls = settlingCalls((name, arg) => {
   // 인자가 없는 호출은 인자를 보내지 않는다. undefined 를 하나 보내면 바인딩이
   // 인자 수가 맞지 않는다고 거절한다.
   if (name === "sidecarSend") return call(method, arg.sidecar, arg.surface, arg.body);
-  if (name === "report") {
-    if (!arg || typeof arg !== "object" || typeof arg.level !== "string" || typeof arg.where !== "string" || typeof arg.text !== "string") {
-      return Promise.reject(new TypeError("report requires {level, where, text} strings"));
-    }
-    return call(method, { level: arg.level, where: arg.where, text: arg.text });
-  }
   if (name === "imageCaret") return call(method, { surface: arg.surface, name: arg.name }, arg.x, arg.y, arg.width, arg.height);
   if (name === "imageText") return call(method, { surface: arg.surface, name: arg.name }, arg.text);
   return arg === undefined ? call(method) : call(method, arg);
@@ -142,12 +135,14 @@ export const page = (() => {
       call("Theme").then(fn);
       listen("theme", fn);
     },
-    // 이 문서의 기록 하나를 호스트의 애플리케이션 로그에 쓴다(docs/spec/diagnostics.md#forms).
+    // Stores a record of this document in the event log of the host as the event `page.record.<level>`, in a batch of one
+    // event of the host call log (docs/spec/diagnostics.md#forms, docs/spec/logging.md#writers).
     report: async (record) => {
       if (!record || typeof record !== "object" || typeof record.level !== "string" || typeof record.where !== "string" || typeof record.text !== "string") {
         throw new TypeError("report requires {level, where, text} strings");
       }
-      return call("Report", { level: record.level, where: record.where, text: record.text });
+      return call("Log", { action: "batch", events: [{ ts_us: Date.now() * 1000, level: record.level,
+        event: `page.record.${record.level}`, fields: { where: record.where, text: record.text } }] });
     },
     sidecar: (name) => ({
       send: (surface, body) => call("SidecarSend", name, surface, body),

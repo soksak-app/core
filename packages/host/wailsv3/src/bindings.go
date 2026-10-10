@@ -90,26 +90,6 @@ func (h *Host) OverlayHide(ctx context.Context, idJSON json.RawMessage) error {
 	return s.OverlayHide(id)
 }
 
-// Report 는 페이지의 기록 하나를 layer page 의 글 기록으로 로그에 적고 이 창의 진단 기록을 켠 연결에 보낸다. 페이지는
-// 파일을 쓸 수 없고, 페이지의 콘솔은 디버거 밖에서 보이지 않는다.
-func (h *Host) Report(ctx context.Context, recordJSON json.RawMessage) error {
-	record, err := argument[PageRecord]("record", recordJSON)
-	if err != nil {
-		return err
-	}
-	entry, err := PageEntry(record)
-	if err != nil {
-		return err
-	}
-	s, err := h.surface(ctx)
-	if err != nil {
-		return err
-	}
-	Log(entry)
-	s.log(entry.Line())
-	return nil
-}
-
 func (h *Host) SetTheme(ctx context.Context, themeJSON json.RawMessage) error {
 	theme, err := argument[Theme]("theme", themeJSON)
 	if err != nil {

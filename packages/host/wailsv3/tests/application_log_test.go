@@ -255,28 +255,6 @@ func readHostEventLog(t *testing.T, config string) []map[string]any {
 	return support.ReadEvents(t, support.EventLogPath(t, config))
 }
 
-// A record that the page reports has the layer `page`; the host checks its level and its place before it writes it.
-// contract: log.page.record-form
-func TestAPageRecordHasTheLayerPageAndRejectsAnInvalidLevelOrPlace(t *testing.T) {
-	entry, err := host.PageEntry(host.PageRecord{Level: "error", Where: "library plugins", Text: "first\nsecond"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := `error page library plugins: first\nsecond`; entry.Line() != want {
-		t.Fatalf("line %q, want %q", entry.Line(), want)
-	}
-	for name, record := range map[string]host.PageRecord{
-		"a level that is not error or info": {Level: "warning", Where: "w", Text: "t"},
-		"an empty place":                    {Level: "info", Where: "", Text: "t"},
-		"a place that holds the separator":  {Level: "info", Where: "a: b", Text: "t"},
-		"a place with a line feed":          {Level: "info", Where: "a\nb", Text: "t"},
-	} {
-		if _, err := host.PageEntry(record); err == nil {
-			t.Fatalf("%s was accepted", name)
-		}
-	}
-}
-
 // A line of the diagnostic transcript of a window, and an error that the transcript carries, also reach the application log.
 // contract: log.transcript.line-reaches-the-application-log
 func TestTranscriptLinesReachTheApplicationLog(t *testing.T) {

@@ -66,7 +66,6 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
         theme,
         set_theme,
         set_menu_language,
-        report,
         exposure_reply,
         exposure_changed,
         exposure_forward,
@@ -164,17 +163,22 @@ fn performance(
     )
 }
 
-/// Relays a batch of page events to the event writer of the host (docs/spec/logging.md#writers).
+/// Relays a batch of page events to the event writer of the host (docs/spec/logging.md#writers) and shows the page records of
+/// the batch in the transcript of the window.
 #[tauri::command(async)]
 fn log(
     window: Window,
     request: Argument<serde_json::Map<String, serde_json::Value>>,
-) -> Result<serde_json::Value, String> {
+) -> Result<(), String> {
     let Argument(request) = request;
-    crate::event_relay::log_command(
+    let lines = crate::event_relay::log_command(
         &window.state::<std::sync::Arc<crate::event_log::EventLog>>(),
         serde_json::Value::Object(request),
-    )
+    )?;
+    for line in lines {
+        exposure::log(&window, &line);
+    }
+    Ok(())
 }
 
 /// 창의 위치와 크기를 반환한다.
@@ -436,25 +440,6 @@ fn set_theme(window: Window, theme: Argument<Theme>) -> Result<(), String> {
 fn set_menu_language(app: AppHandle, language: Argument<String>) -> Result<(), String> {
     let Argument(language) = language;
     menu::set_language(&app, &language)
-}
-
-/// 페이지가 보낸 기록 하나를 layer page 의 글 기록으로 표준 오류와 창의 기록을 요청한 연결에 보낸다. 페이지에는 쓸
-/// 파일이 없고, 디버거 밖에서 실행할 때 페이지 콘솔은 읽지 않는다.
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PageRecord {
-    level: String,
-    r#where: String,
-    text: String,
-}
-
-#[tauri::command]
-fn report(window: Window, record: Argument<PageRecord>) -> Result<(), String> {
-    let Argument(record) = record;
-    let entry = crate::application_log::page_entry(&record.level, &record.r#where, &record.text)?;
-    entry.log();
-    exposure::log(&window, &entry.line());
-    Ok(())
 }
 
 /// 호스트가 보낸 요청에 대한 문서의 응답을 받는다.

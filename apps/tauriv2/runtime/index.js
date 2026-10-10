@@ -19,7 +19,7 @@ const COMMAND = {
   setTheme: "set_theme",
   setMenuLanguage: "set_menu_language",
   theme: "theme",
-  report: "report",
+ 
   overlayShow: "overlay_show",
   overlayPlace: "overlay_place",
   setShape: "set_shape",
@@ -80,12 +80,6 @@ const ARG = {
     return { language: v };
   },
   theme: () => ({}),
-  report: (v) => {
-    if (!v || typeof v !== "object" || typeof v.level !== "string" || typeof v.where !== "string" || typeof v.text !== "string") {
-      throw new TypeError("report requires {level, where, text} strings");
-    }
-    return { record: { level: v.level, where: v.where, text: v.text } };
-  },
   overlayShow: (v) => ({ request: v }),
   overlayPlace: (v) => ({ request: v }),
   setShape: (v) => ({ request: v }),
@@ -183,12 +177,14 @@ export const page = (() => {
       invoke("theme").then(fn);
       listen("theme", (e) => fn(e.payload));
     },
-    // 이 문서의 기록 하나를 호스트의 애플리케이션 로그에 쓴다(docs/spec/diagnostics.md#forms).
+    // Stores a record of this document in the event log of the host as the event `page.record.<level>`, in a batch of one
+    // event of the host call log (docs/spec/diagnostics.md#forms, docs/spec/logging.md#writers).
     report: async (record) => {
       if (!record || typeof record !== "object" || typeof record.level !== "string" || typeof record.where !== "string" || typeof record.text !== "string") {
         throw new TypeError("report requires {level, where, text} strings");
       }
-      return invoke("report", { record: { level: record.level, where: record.where, text: record.text } });
+      return invoke("log", { request: { action: "batch", events: [{ ts_us: Date.now() * 1000, level: record.level,
+        event: `page.record.${record.level}`, fields: { where: record.where, text: record.text } }] } });
     },
     sidecar: (name) => ({
       send: (surface, body) => invoke("sidecar_send", { sidecar: name, surface, body }),

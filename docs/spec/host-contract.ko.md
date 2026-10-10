@@ -241,7 +241,6 @@ fn invalid_json_closes_connection() {
 | `platform.private.writes-owner-only-file` | private write 연산은 없는 파일을 mode 0600으로 만들고, 있는 파일의 내용을 바꾸며, 있는 파일의 mode는 유지한다. | both |
 | `log.application.start-replaces-standard-error` | 애플리케이션 로그를 시작하면 실행의 첫 줄을 쓰고 그 파일을 프로세스와 그 프로세스가 시작하는 자식의 표준 오류로 만든다. | both |
 | `log.error.line-form` | 헬퍼로 쓴 호스트 오류는 애플리케이션 로그의 기록 `<time> error host <where>: <text>`다. | both |
-| `log.page.record-form` | page는 host 호출 `report`로 기록 `{level, where, text}`를 보내고, host는 이를 `<time> <level> page <where>: <text>`로 쓰며, `error`나 `info`가 아닌 level, 빈 place, `: `나 줄바꿈을 담은 place는 거부한다. | both |
 | `log.transcript.line-reaches-the-application-log` | 창의 진단 기록 줄은 `info host transcript <window>: <line>`으로도 쓰고, Wails host는 진단 기록이 싣는 오류를 `error host <operation> <window>: <error>`로도 써서, 진단 기록을 요청한 연결이 없어도 그 줄이 남는다. | both |
 | `log.info.record-form` | `LogInfo`(Go)나 `log_info`(Rust)로 쓴 호스트 관측은 애플리케이션 로그의 기록 `<time> info host <where>: <text>`다. | both |
 | `log.record.one-line` | 기록은 한 줄이다. 본문의 줄바꿈은 두 글자 `\n`으로 쓰고, 시각을 뺀 항목은 `<level> <layer> <where>: <text>`다. | both |
@@ -539,3 +538,4 @@ fn invalid_json_closes_connection() {
 | `log.record.flush-stores-the-records-written-so-far` | 기록 flush는 지금까지 쓴 기록이 event log에 들어갈 때까지 기다리고, 붙은 writer가 없으면 곧바로 돌아온다. | both |
 | `log.batch.stores-page-events-in-order` | `log` 중계는 `batch` 요청의 event를 page가 준 `ts_us`와 writer의 `seq`로, 순서대로, 계층 `page`에 저장한다. | both |
 | `log.batch.rejects-an-invalid-batch-without-writing` | `log` 중계는 `batch`가 아닌 action, 배열이 아닌 `events`, `page.`로 시작하지 않는 event 이름, 계약에 없는 level, 양의 정수가 아닌 `ts_us`, 객체가 아닌 `fields`에 대해 배치 전체를 거부하고 그 배치는 아무것도 쓰지 않으며, 오류는 `events[<index>]`를 가리킨다. | both |
+| `log.batch.returns-the-transcript-lines-of-page-records` | `log` 중계는 배치의 page 기록(문자열 field `where`와 `text`를 가진 `page.record.<level>`)의 줄 `<level> page <where>: <text>`을 돌려주며 host는 그것을 창의 transcript에 보이고, 그 문자열 field가 아닌 page 기록은 거부한다. | both |

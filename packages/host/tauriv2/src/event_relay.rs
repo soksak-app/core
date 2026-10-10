@@ -12,6 +12,8 @@ struct Relayed {
     level: Level,
     event: String,
     fields: Box<serde_json::value::RawValue>,
+    /// The record of the page that the event carries, when it is a `page.record.<level>` event.
+    record: Option<crate::application_log::Entry>,
 }
 
 fn level_of(name: &str) -> Option<Level> {
@@ -34,10 +36,12 @@ fn relayed_of(item: &Value) -> Result<Relayed, String> {
         .and_then(Value::as_u64)
         .filter(|ts| *ts > 0)
         .ok_or_else(|| "ts_us must be a positive integer".to_string())?;
-    let level = object
+    let level_name = object
         .get("level")
         .and_then(Value::as_str)
-        .and_then(level_of)
+        .filter(|name| level_of(name).is_some())
+        .ok_or_else(|| "level must be one of error, warn, info, debug, trace".to_string())?;
+    let level = level_of(level_name)
         .ok_or_else(|| "level must be one of error, warn, info, debug, trace".to_string())?;
     let event = object
         .get("event")
@@ -53,17 +57,30 @@ fn relayed_of(item: &Value) -> Result<Relayed, String> {
             "the event {event:?} does not start with its layer \"page\""
         ));
     }
+    let record = if event.starts_with("page.record.") {
+        let text_of = |name: &str| fields.get(name).and_then(Value::as_str);
+        let (Some(place), Some(text)) = (text_of("where"), text_of("text")) else {
+            return Err("fields where and text must be strings".into());
+        };
+        Some(crate::application_log::Entry::new(
+            level_name, "page", place, text,
+        ))
+    } else {
+        None
+    };
     Ok(Relayed {
         ts_us,
         level,
         event: event.to_string(),
         fields: to_raw_value(fields)
             .map_err(|error| format!("fields cannot be serialized: {error}"))?,
+        record,
     })
 }
 
-/// Validates a batch request of the page and queues its events into the writer of the host.
-pub fn log_command(log: &EventLog, request: Value) -> Result<Value, String> {
+/// Validates a batch request of the page, queues its events into the writer of the host, and returns the lines
+/// `<level> page <where>: <text>` of the records of the page in it, which the host shows in the transcript of the window.
+pub fn log_command(log: &EventLog, request: Value) -> Result<Vec<String>, String> {
     match request.get("action").and_then(Value::as_str) {
         None => return Err("action must be batch".into()),
         Some("batch") => {}
@@ -78,11 +95,15 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<Value, String> {
         .enumerate()
         .map(|(index, item)| relayed_of(item).map_err(|error| format!("events[{index}]: {error}")))
         .collect::<Result<Vec<_>, _>>()?;
+    let mut lines = Vec::new();
     for (index, event) in events.into_iter().enumerate() {
         // The batch was validated as a whole, so a refusal here is a defect of the validation; nothing is written after
         // it.
         log.emit_relayed(event.ts_us, "page", event.level, &event.event, event.fields)
             .map_err(|error| format!("events[{index}]: {error}"))?;
+        if let Some(record) = event.record {
+            lines.push(record.line());
+        }
     }
-    Ok(Value::Null)
+    Ok(lines)
 }

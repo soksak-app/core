@@ -12,6 +12,8 @@ function microsNow() {
 export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS }) {
   let queue = [];
   let lost = 0;
+  // The functions that end the waits of the events that the next batch carries.
+  let waiters = [];
   let scheduled = false;
   let sending = null;
 
@@ -19,7 +21,9 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     scheduled = false;
     if (sending || (queue.length === 0 && lost === 0)) return;
     const events = queue;
+    const mine = waiters;
     queue = [];
+    waiters = [];
     if (lost > 0) {
       // The refused events had no place in the queue; the loss is stored in front of the events that follow it.
       events.unshift({ ts_us: microsNow(), level: "warn", event: "page.log.dropped",
@@ -35,6 +39,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     })();
     await sending;
     sending = null;
+    for (const end of mine) end();
     if (queue.length > 0 || lost > 0) await send();
   };
 
@@ -56,10 +61,20 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     return true;
   };
 
+  // Queues an event like `emit`, and returns a promise that ends when the batch that carries the event was relayed, or at once
+  // when the queue refused the event. The failure of the relay is reported through `report`, not through this promise.
+  const emitAndWait = (level, event, fields = {}) => new Promise((resolve) => {
+    if (!emit(level, event, fields)) {
+      resolve();
+      return;
+    }
+    waiters.push(resolve);
+  });
+
   const flush = async () => {
     await send();
     while (sending) await sending;
   };
 
-  return { emit, flush };
+  return { emit, emitAndWait, flush };
 }

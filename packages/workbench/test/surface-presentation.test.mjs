@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
+import { recordsOf, settled, shownRecord } from "./support/records.mjs";
 
 test("native preparation cannot present before DOM drawing and presents each ticket once", async () => {
   const dom = new JSDOM('<div id="plane"></div>');
@@ -12,7 +13,7 @@ test("native preparation cannot present before DOM drawing and presents each tic
     page: (path) => path,
     call: async (name, request) => {
       calls.push({ name, request });
-      if (name === "report") return;
+      if (name === "log") return;
       if (name === fail) { fail = null; throw new Error(`injected ${name} failure`); }
       if (name === "syncSurfaces") return {
         ticket: calls.length,
@@ -71,7 +72,8 @@ test("native preparation cannot present before DOM drawing and presents each tic
     }
     await new Promise((resolve) => setImmediate(resolve));
     // 배치를 요청한 쪽이 그 실패를 받아 보고하므로 대기열은 같은 실패를 다시 쓰지 않는다(docs/spec/hosts.md#application-log).
-    assert.deepEqual(calls.filter((call) => call.name === "report").map((call) => call.request), [],
+    await settled();
+    assert.deepEqual(calls.flatMap((call) => recordsOf(call.name, call.request)), [],
       `${stage} rejection that the place request received must not be written again by the layout queue`);
     calls.length = 0;
     await surfaces.place(changed);

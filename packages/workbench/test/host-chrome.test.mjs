@@ -14,7 +14,7 @@ test("the preparation carries the title bar height and the presented chrome is t
     page: (path) => path,
     call: async (name, request) => {
       calls.push({ name, request });
-      if (name === "report") return;
+      if (name === "log") return;
       if (name === "syncSurfaces") {
         prepared++;
         return {

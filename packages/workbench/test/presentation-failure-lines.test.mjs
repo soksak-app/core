@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
+import { recordsOf, settled, shownRecord } from "./support/records.mjs";
 
 const TIMEOUT = "the current image raster did not present within 10s; pending tab-1/view generation 2 raster 1 sequence 0 presented 0/0 surface visible";
 
@@ -13,13 +14,12 @@ test("one presentation timeout writes one page error line", async () => {
   globalThis.document = dom.window.document;
   // 문서의 animation frame. Node 에는 없으므로 요청한 자리에서 실행한다.
   globalThis.requestAnimationFrame = (run) => run(0);
-  const shown = (record) => `${record.level} page ${record.where}: ${record.text}`;
   const lines = [];
   mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},
     page: (path) => path,
     call: async (name, request) => {
-      if (name === "report") { lines.push(shown(request)); return; }
+      if (name === "log") { for (const record of recordsOf(name, request)) lines.push(shownRecord(record)); return; }
       if (name === "syncSurfaces") return {
         ticket: 1,
         placements: [{ id: "tab-1", x: 0, y: 0, w: 10, h: 10, visible: true }],

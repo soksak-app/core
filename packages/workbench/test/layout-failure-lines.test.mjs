@@ -5,18 +5,18 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
+import { recordsOf, settled, shownRecord } from "./support/records.mjs";
 
 const TIMEOUT = "the current image raster did not present within 10s; pending tab-1/view generation 2 raster 1 sequence 0 presented 0/0 surface visible";
 
 const dom = new JSDOM('<div id="applicationError"></div><button id="projectTab"></button>');
 globalThis.document = dom.window.document;
-const shown = (record) => `${record.level} page ${record.where}: ${record.text}`;
 const lines = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
   on: () => {},
   page: (path) => path,
   call: async (name, request) => {
-    if (name === "report") { lines.push(shown(request)); return; }
+    if (name === "log") { for (const record of recordsOf(name, request)) lines.push(shownRecord(record)); return; }
     throw new Error(`unexpected host call ${name}`);
   },
 } } });

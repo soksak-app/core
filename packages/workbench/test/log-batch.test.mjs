@@ -83,3 +83,40 @@ test("an event with a level outside the contract is refused with an error", () =
   const batcher = createEventBatcher({ call: async () => {}, report: assert.ifError });
   assert.throws(() => batcher.emit("loud", "page.test.event", {}), /level/);
 });
+
+test("emitAndWait ends when the batch that carries the event was relayed, and the events of one turn share the batch", async () => {
+  const calls = [];
+  let release;
+  const batcher = createEventBatcher({
+    call: (request) => { calls.push(request.events.map((event) => event.event)); return new Promise((resolve) => { release = resolve; }); },
+    report: assert.ifError,
+  });
+  const first = batcher.emitAndWait("info", "page.test.a", {});
+  const second = batcher.emitAndWait("info", "page.test.b", {});
+  let ended = 0;
+  first.then(() => { ended += 1; });
+  second.then(() => { ended += 1; });
+  await settle();
+  assert.deepEqual(calls, [["page.test.a", "page.test.b"]], "one call carries both events");
+  assert.equal(ended, 0, "the wait ended before the relay answered");
+  release();
+  await Promise.all([first, second]);
+  assert.equal(ended, 2);
+});
+
+test("emitAndWait ends for an event that the full queue refused and for a batch whose call failed", async () => {
+  const reports = [];
+  let attempt = 0;
+  const batcher = createEventBatcher({
+    call: async () => { if (++attempt === 1) throw new Error("host closed"); },
+    report: (error) => reports.push(error.message),
+    maxEvents: 1,
+  });
+  const kept = batcher.emitAndWait("info", "page.test.kept", {});
+  const refused = batcher.emitAndWait("info", "page.test.refused", {});
+  await Promise.all([kept, refused]);
+  // The refused event is counted in page.log.dropped, which travels in the batch of the kept event.
+  assert.deepEqual(reports, ["page event batch of 2 events failed: host closed"]);
+  await batcher.emitAndWait("info", "page.test.after", {});
+  assert.equal(attempt, 2, "the next event was relayed after the failure");
+});

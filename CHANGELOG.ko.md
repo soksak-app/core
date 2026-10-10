@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.4.1: page의 기록(`report`, `log`, 시작 오류, 순서가 있는 호출의 실패)은 `where`와 `text` field를 가진 event `page.record.<level>`이며 기다리지 않고 큐에 넣어 host 호출 `log`의 배치로 중계한다(`emitAndWait`는 그 event를 실은 배치가 중계되면 대기를 끝낸다). host 호출 `report`, `PageRecord`, `PageEntry`는 두 host와 두 runtime에서 제거했고, `log` 중계는 배치의 page 기록의 줄을 돌려주어 host가 창의 transcript에 보이며, surface 문서의 runtime page `report`는 event 하나의 배치다.
 - F150.3.6: Rust host의 기록은 Go host의 `Entry`처럼 구조화된 `Entry`(`level`, `layer`, `place`, `text`)로 다니고 `Entry::log`로 저장되며 `Entry::line`으로 그 줄이 보인다. 줄을 다시 기록으로 파싱하는 `log_entry`와 두 host의 시각이 붙은 줄(`record_line`, `RecordLine`)은 제거했고, `presentation_outcome`은 결과의 `Entry`를 돌려준다.
 - F150.3.5.2: 두 host의 trace 관측(`PerformanceObserve`, `performance::observe`, sampler)은 `performance.ndjson`의 줄 대신 event 이름을 field에 반복하지 않는 level `debug`의 event `host.trace.<event>`와 `host.sampler.<event>`로 event log에 저장된다. event 이름이 없는 관측은 오류 `performance trace`로 보고한다. 표식 `trace_on`과 `trace_off`는 trace 파일이 제거될 때까지 그 파일에 남는다.
 - F150.3.5.1: page의 trace가 event마다 `performance` 호출 한 번 대신 batcher와 host 호출 `log`를 거쳐 event `page.trace.<event>`(level `debug`, `ts_us`에 page의 wall clock, 두 번째 시각 없음)를 낸다. `performance` 호출은 `on`과 `off`만 받고, 끄기는 수락한 event가 중계될 때까지 기다린다. page의 trace를 읽는 window 검사는 event log를 읽는다(`traceRows`, `currentEventOffsets`). page batcher는 `packages/workbench`의 files 목록에 들어갔다. trace를 켠 입력 지연(debug 빌드): Tauri 중앙값 21.3 ms(끔 19.2 ms), Wails 18.6 ms(끔 18.1 ms).

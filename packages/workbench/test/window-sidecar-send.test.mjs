@@ -2,6 +2,7 @@
 // (docs/spec/sidecars.md#page-interface).
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import { recordsOf, settled, shownRecord } from "./support/records.mjs";
 
 const calls = [];
 let failFirst = true;
@@ -24,6 +25,7 @@ test("a send after a failed send to the same sidecar is delivered and the failur
   await sidecar.send("tab-a", { n: 2 });
   const sends = calls.filter(([name]) => name === "sidecarSend").map(([, payload]) => payload.body.n);
   assert.deepEqual(sends, [1, 2], "the second send never reached the host");
-  const reports = calls.filter(([name]) => name === "report").map(([, record]) => record);
+  await settled();
+  const reports = calls.flatMap(([name, payload]) => recordsOf(name, payload));
   assert.deepEqual(reports, [{ level: "error", where: "sidecar @x/side", text: "send failed: gone" }]);
 });

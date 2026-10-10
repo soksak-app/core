@@ -4,6 +4,7 @@ package host
 // whole batch before it writes any event, then stores every event in the layer `page` with the time the page gave it.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -17,10 +18,13 @@ type relayedEvent struct {
 	level    Level
 	event    string
 	fields   json.RawMessage
+	// record is the record of the page that the event carries, when it is a `page.record.<level>` event.
+	record *Entry
 }
 
-// LogCommand validates a batch request of the page and queues its events into the writer of the host.
-func LogCommand(log *EventLog, request map[string]any) (any, error) {
+// LogCommand validates a batch request of the page, queues its events into the writer of the host, and returns the lines
+// `<level> page <where>: <text>` of the records of the page in it, which the host shows in the transcript of the window.
+func LogCommand(log *EventLog, request map[string]any) ([]string, error) {
 	action, ok := request["action"].(string)
 	if !ok {
 		return nil, fmt.Errorf("action must be batch")
@@ -47,7 +51,13 @@ func LogCommand(log *EventLog, request map[string]any) (any, error) {
 			return nil, fmt.Errorf("events[%d]: %w", index, err)
 		}
 	}
-	return nil, nil
+	var lines []string
+	for _, event := range events {
+		if event.record != nil {
+			lines = append(lines, event.record.Line())
+		}
+	}
+	return lines, nil
 }
 
 func relayedEventOf(item any) (relayedEvent, error) {
@@ -78,17 +88,38 @@ func relayedEventOf(item any) (relayedEvent, error) {
 	if !strings.HasPrefix(name, "page.") {
 		return relayedEvent{}, fmt.Errorf("the event %q does not start with its layer %q", name, "page")
 	}
-	return relayedEvent{tsMicros: int64(ts), level: Level(level), event: name, fields: text}, nil
+	var record *Entry
+	if strings.HasPrefix(name, "page.record.") {
+		where, okWhere := fields["where"].(string)
+		body, okText := fields["text"].(string)
+		if !okWhere || !okText {
+			return relayedEvent{}, fmt.Errorf("fields where and text must be strings")
+		}
+		record = &Entry{Level: level, Layer: "page", Where: where, Text: body}
+	}
+	return relayedEvent{tsMicros: int64(ts), level: Level(level), event: name, fields: text, record: record}, nil
 }
 
-// Log relays a batch of page events to the event writer of the host.
-func (h *Host) Log(requestJSON json.RawMessage) (any, error) {
+// Log relays a batch of page events to the event writer of the host and shows its page records in the transcript of the
+// window.
+func (h *Host) Log(ctx context.Context, requestJSON json.RawMessage) error {
 	request, err := argument[map[string]any]("request", requestJSON)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if h.events == nil {
-		return nil, fmt.Errorf("the event writer is not running")
+		return fmt.Errorf("the event writer is not running")
 	}
-	return LogCommand(h.events, request)
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	lines, err := LogCommand(h.events, request)
+	if err != nil {
+		return err
+	}
+	for _, line := range lines {
+		s.log(line)
+	}
+	return nil
 }

@@ -3,14 +3,14 @@
 // the level.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import { recordsOf, settled, shownRecord } from "./support/records.mjs";
 
-const shown = (record) => `${record.level} page ${record.where}: ${record.text}`;
 const lines = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
   on: () => {},
   page: (path) => path,
   call: async (name, payload) => {
-    if (name === "report") lines.push(shown(payload));
+    for (const record of recordsOf(name, payload)) lines.push(shownRecord(record));
   },
 } } });
 const { log, report, surfaceContextRuntime } = await import("../host.js");

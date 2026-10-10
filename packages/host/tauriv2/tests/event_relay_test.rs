@@ -109,3 +109,35 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
     log.flush(Duration::from_secs(5)).unwrap();
     assert_eq!(read(&path).len(), 1, "an invalid batch wrote events");
 }
+
+// contract: log.batch.returns-the-transcript-lines-of-page-records
+#[test]
+fn a_relayed_batch_returns_the_transcript_lines_of_its_page_records() {
+    let directory = tempfile::tempdir().unwrap();
+    let log = start(directory.path());
+    let record = |level: &str, place: &str, text: &str, index: u64| {
+        json!({"ts_us": 1_791_000_000_000_000u64 + index, "level": level, "event": format!("page.record.{level}"),
+               "fields": {"where": place, "text": text}})
+    };
+    let request = json!({"action": "batch", "events": [
+        record("error", "surface probe", "mount failed\nsecond line", 1),
+        event("page.trace.action", 2),
+        record("info", "page", "ready", 3),
+    ]});
+    let lines = log_command(&log, request).unwrap();
+    assert_eq!(
+        lines,
+        [
+            "error page surface probe: mount failed\\nsecond line",
+            "info page page: ready"
+        ]
+    );
+    let bad = json!({"action": "batch", "events": [
+        {"ts_us": 1, "level": "info", "event": "page.record.info", "fields": {"where": 7}}
+    ]});
+    let error = log_command(&log, bad).unwrap_err();
+    assert!(
+        error.contains("events[0]: fields where and text must be strings"),
+        "{error}"
+    );
+}

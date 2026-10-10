@@ -1116,14 +1116,14 @@ const FEATURE_LINKS = [
   {
     id: "F138",
     implementation: [
-      { file: "packages/host/wailsv3/src/application_log.go", symbol: "func PageEntry" },
-      { file: "packages/host/tauriv2/src/application_log.rs", symbol: "pub fn page_entry" },
+      { file: "packages/host/wailsv3/src/event_relay.go", symbol: "func LogCommand" },
+      { file: "packages/host/tauriv2/src/event_relay.rs", symbol: "pub fn log_command" },
       { file: "packages/window-check/event-log.mjs", symbol: "export function eventLine" },
       { file: "native/darwin/src/application_log.m", symbol: "void sp_log_info" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestAPageRecordHasTheLayerPageAndRejectsAnInvalidLevelOrPlace" },
-      { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "a_page_record_has_the_layer_page_and_rejects_an_invalid_level_or_place" },
+      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestARelayedBatchReturnsTheTranscriptLinesOfItsPageRecords" },
+      { file: "packages/host/tauriv2/tests/event_relay_test.rs", id: "a_relayed_batch_returns_the_transcript_lines_of_its_page_records" },
       { file: "packages/window-check/test/event-log.test.mjs", id: "a record event reads as the line of the text form, and another event as its name and fields" },
       { file: "packages/workbench/test/report-record.test.mjs", id: "a line `<where>: <text>` is split at its first `: `" },
     ],
@@ -1142,15 +1142,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.4.1",
+    implementation: [
+      { file: "packages/workbench/page-log.js", symbol: "export function reportRecord" },
+      { file: "packages/workbench/log-batch.js", symbol: "export function createEventBatcher" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/page-log.test.mjs", id: "a failure is the event page.record.error with the place and the text, and the wait ends when it was relayed" },
+      { file: "packages/workbench/test/log-batch.test.mjs", id: "emitAndWait ends when the batch that carries the event was relayed, and the events of one turn share the batch" },
+      { file: "apps/wailsv3/test/runtime-contract.test.mjs", id: "Wails page regions expose operations but only composition places geometry" },
+      { file: "e2e/host-records.test.mjs", id: "the event log holds the run record and the records the page reports" },
+    ],
+    expected: "A failure and an observation of the page are events page.record.<level> relayed in a batch of the host call log, and the host call report does not exist.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F150.3.6",
     implementation: [
       { file: "packages/host/tauriv2/src/application_log.rs", symbol: "pub struct Entry" },
       { file: "packages/host/wailsv3/src/application_log.go", symbol: "type Entry struct" },
     ],
     tests: [
-      { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "a_page_record_has_the_layer_page_and_rejects_an_invalid_level_or_place" },
+      { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "a_record_is_one_line_and_escapes_a_line_feed" },
       { file: "packages/host/tauriv2/tests/images_test.rs", id: "presentation_outcome_names_the_current_frame_of_a_failure" },
-      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestAPageRecordHasTheLayerPageAndRejectsAnInvalidLevelOrPlace" },
+      { file: "packages/host/wailsv3/tests/event_relay_test.go", id: "TestARelayedBatchReturnsTheTranscriptLinesOfItsPageRecords" },
     ],
     expected: "A record travels as a structured entry that is stored as an event and shown as its line, in both hosts.",
     levels: ["unit"],

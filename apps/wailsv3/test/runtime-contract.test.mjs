@@ -48,10 +48,18 @@ test("Wails page regions expose operations but only composition places geometry"
   // 테스트 전에 기록된 호출을 지운다(모듈 import가 호출을 만들었을 수 있다)
   recorded.length = 0;
 
-  // A page of a surface reports a record of its own through the same host call as the main page.
+  // A page of a surface reports a record of its own as an event of a batch of the host call log.
   await page.report({ level: "error", where: "sidecar @x/side", text: "send failed: gone" });
-  assert.deepEqual(recorded.at(-1), ["Report", [{ level: "error", where: "sidecar @x/side", text: "send failed: gone" }]]);
+  const [method, [request]] = recorded.at(-1);
+  assert.equal(method, "Log");
+  assert.equal(request.action, "batch");
+  assert.equal(request.events.length, 1);
+  const [event] = request.events;
+  assert.deepEqual({ level: event.level, event: event.event, fields: event.fields },
+    { level: "error", event: "page.record.error", fields: { where: "sidecar @x/side", text: "send failed: gone" } });
+  assert.ok(Number.isInteger(event.ts_us) && event.ts_us > 1.7e15, "the event carries the wall clock in microseconds");
   await assert.rejects(async () => page.report("send failed"), /report requires \{level, where, text\} strings/);
+  await assert.rejects(host.call("report", { level: "info", where: "page", text: "ready" }), /unknown host call: report/);
   await page.document.attach("doc");
   assert.deepEqual(recorded.at(-1), ["DocumentAttach", [{ surface: "s1", document: "doc" }]]);
   await page.document.load("doc", "https://example.test");
@@ -62,10 +70,6 @@ test("Wails page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["CompositionPlace", [{ revision: 1, regions: [], overlays: [] }]]);
   assert.deepEqual(await host.call("waitPresented"), { displayed: 42 });
   assert.deepEqual(recorded.at(-1), ["WaitPresented", []]);
-  await host.call("report", { level: "info", where: "page", text: "ready" });
-  assert.deepEqual(recorded.at(-1), ["Report", [{ level: "info", where: "page", text: "ready" }]]);
-  await assert.rejects(host.call("report", "ready"), /report requires \{level, where, text\} strings/);
-  await assert.rejects(host.call("report", { level: "info", where: "page" }), /report requires \{level, where, text\} strings/);
   await host.call("sidecarSend", { sidecar: "x", surface: "s1", body: { value: 1 } });
   assert.deepEqual(recorded.at(-1), ["SidecarSend", ["x", "s1", { value: 1 }]]);
   await host.call("imageAttach", { surface: "s1", name: "img", sidecar: "x" });

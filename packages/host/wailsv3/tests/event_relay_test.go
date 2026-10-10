@@ -71,3 +71,33 @@ func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 		t.Fatalf("an invalid batch wrote events: %s", raw)
 	}
 }
+
+// contract: log.batch.returns-the-transcript-lines-of-page-records
+func TestARelayedBatchReturnsTheTranscriptLinesOfItsPageRecords(t *testing.T) {
+	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := func(level, where, text string, index int) map[string]any {
+		return map[string]any{"ts_us": float64(1_791_000_000_000_000 + index), "level": level, "event": "page.record." + level,
+			"fields": map[string]any{"where": where, "text": text}}
+	}
+	request := map[string]any{"action": "batch", "events": []any{
+		record("error", "surface probe", "mount failed\nsecond line", 1),
+		relayEvent("page.trace.action", 2),
+		record("info", "page", "ready", 3),
+	}}
+	lines, err := host.LogCommand(log, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"error page surface probe: mount failed\\nsecond line", "info page page: ready"}
+	if len(lines) != len(want) || lines[0] != want[0] || lines[1] != want[1] {
+		t.Fatalf("lines %q, want %q", lines, want)
+	}
+	// A record event whose fields are not the strings where and text is refused with the batch.
+	bad := map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "level": "info", "event": "page.record.info", "fields": map[string]any{"where": 7}}}}
+	if _, err := host.LogCommand(log, bad); err == nil || !strings.Contains(err.Error(), "events[0]: fields where and text must be strings") {
+		t.Fatalf("error %v", err)
+	}
+}
