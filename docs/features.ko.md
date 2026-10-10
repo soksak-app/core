@@ -837,7 +837,7 @@
     - [o] F145.10.2 — P1: 창의 page process를 기록하듯 두 host에서 surface와 modal의 WebContent process 종료를 기록한다.
   - [o] F145.11 — P1: application log에 닿지 않는 `s.log`의 줄의 기록을 더한다.
   - [o] F145.12 — P1: relay와 전체 화면 timeout의 기록을 더한다.
-  - [ ] F145.13 — P1: 분리 실행한 `sok app update`의 결과와 `sok`의 실패의 기록을 더한다.
+  - [o] F145.13 — P1: 분리 실행한 `sok app update`의 결과와 `sok`의 실패의 기록을 더한다. 입력: Wails host는 분리 실행한 명령에 표준 오류를 주지 않아 실패한 업데이트의 메시지가 null 장치로 갔고, 두 host는 명령을 마지막 flush와 종료 요청에 대한 답 뒤에 시작해 시작에 실패한 오류가 저장되지 않았다. 결정: `sok`은 writer가 없는 짧은 프로세스이므로([logging](spec/logging.ko.md#입구)) 어떤 `sok` 명령의 실패든 종료 상태와 표준 오류의 메시지이며([cli](spec/cli.ko.md#출력과-종료-상태)), 코드는 모든 경로에서 이미 그렇게 쓰고, 소스 점검에서 버려진 오류 결과가 없었다. 표준 오류를 읽는 쪽이 없던 실행은 분리 실행한 명령뿐이다. 완료: 두 host가 명령에 host의 표준 오류(`logs/host-<boot>.stderr`)를 주고, 마지막 flush 전에 시작하며(`StartAppUpdate`, `start_update`), `host.update.start`(`pid`, `command`)를 저장한다. 분리 실행한 명령의 종료 상태는 읽는 쪽이 없다. 명령이 번들을 바꾸기 전에 host가 끝나기 때문이다. 실패한 명령은 이전 번들을 되돌려 시작하며 그 실행은 `log.open`으로 시작한다. Red: Wails `TestTheDetachedUpdateCommandKeepsItsErrorsAndIsRecordedWhenItStarts`가 `undefined: host.StartAppUpdate`로 빌드에 실패했고, Tauri `the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts`가 `unresolved import soksak_host_tauriv2::app_update::start_update`로 빌드에 실패했다. Green: 두 검사가 통과하며, 가짜 `sok`의 실패 메시지가 표준 오류 파일에 있고 명령의 pid를 가진 `host.update.start` event가 하나 있다(Wails와 Tauri의 `app_update_test`, macOS arm64, 2026-10-11).
   - [ ] F145.14 — P1: 창이 끝나서 허용된 제거, 설정 정리, 알림, `ps` 실패의 기록을 더한다.
   - [ ] F145.15 — P1: 명세가 나열하고 코드에 없는 page, host, native 라이브러리, plugin의 event별 trace(`session_start`, 창과 surface event, 모든 process의 sampler)의 기록을 더한다.
   - [ ] F145.16 — P1: files와 shell sidecar의 글 기록 형식(`log.Fatalf`, 요청, watch, spawn, exit, `Close`가 버리는 종료 상태)의 기록을 더한다.

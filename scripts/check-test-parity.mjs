@@ -1447,6 +1447,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F145.13",
+    implementation: [
+      { file: "packages/host/wailsv3/src/app_update.go", symbol: "StartAppUpdate" },
+      { file: "packages/host/tauriv2/src/app_update.rs", symbol: "start_update" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/app_update_test.go", id: "TestTheDetachedUpdateCommandKeepsItsErrorsAndIsRecordedWhenItStarts" },
+      { file: "packages/host/tauriv2/tests/app_update_test.rs", id: "the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts" },
+    ],
+    expected: "The detached update command keeps the standard error of the host, and both hosts store host.update.start with the pid and the command line before the final flush.",
+    levels: ["unit"],
+  },
+  {
     id: "F152",
     implementation: [
       { file: "packages/plugin-api/sidecar-port.js", symbol: "orderedSidecar requires a failure handler" },

@@ -483,6 +483,7 @@ fn invalid_json_closes_connection() {
 | `app-update.replace.restores-the-bundle-when-the-start-fails` | 옮긴 뒤 시작이 실패하면 새 번들을 지우고 이전 번들을 되돌려 시작하며 시작의 메시지로 실패한다. | both |
 | `app-update.replace.refuses-before-it-changes-anything` | 응용 프로그램 번들이 아닌 target이나 bundle, 둘이 같은 폴더인 경우, 기한(60초) 뒤에도 실행 중인 프로세스는 target이 바뀌기 전에 실패한다. | both |
 | `app-update.apply.starts-sok-from-a-copy-and-checks-the-bundle` | 업데이트를 적용하면 실행 중인 번들의 `sok`을 `<config-dir>/updates/sok`에 복사하고 `sok app update --wait <pid> --bundle <bundle> --target <실행 중인 번들> [-- <인자>]`를 새 세션으로 준비한다. `updates/` 밖의 번들, `Info.plist`가 없는 폴더, 응용 프로그램 번들 밖의 애플리케이션은 거부한다. | both |
+| `app-update.apply.records-the-detached-command` | 분리 실행한 명령은 host의 표준 오류를 그대로 쓰므로 그 메시지는 실행의 표준 오류 파일에 있고, host는 명령을 시작할 때 명령의 `pid`와 `command` 줄을 가진 event `host.update.start`를 저장한다. 시작할 수 없는 명령은 그 명령을 이름으로 가리키는 오류다. | both |
 | `cli.plugin.install-extracts-and-records` | `sok registry use`는 검사한 index를 `file:` URL로 기록한다. `sok plugin install`은 plugin과 그 sidecar version을 mode와 함께 풀고, 푼 폴더마다 절대 `path`를 담아 `installed.json`을 쓰고, plugin 항목과 sidecar version을 출력하며, 되풀이하면 아무것도 바꾸지 않는다. | both |
 | `cli.plugin.install-modes-ignore-the-umask` | umask 077에서도 `sok plugin install`은 실행 파일을 mode 0755로, 다른 파일을 mode 0644로 쓴다. | both |
 | `cli.plugin.install-failure-keeps-state` | `plugins/registry.json`이 없거나, hash가 index와 다른 release이거나, 폴더 밖 항목을 담은 release이면 `sok plugin install`은 종료 상태 1이며 `installed.json`, version 폴더, 푼 파일을 남기지 않는다. | both |

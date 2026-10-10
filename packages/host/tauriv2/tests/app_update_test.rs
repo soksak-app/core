@@ -4,7 +4,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use soksak_host_tauriv2::app_update::{prepare_start, read_state, stage};
+#[path = "support/records.rs"]
+mod records;
+
+use soksak_host_tauriv2::app_update::{prepare_start, read_state, stage, start_update};
 use soksak_sok::fetch::Fetcher;
 use soksak_sok::plugins::use_registry;
 
@@ -140,4 +143,81 @@ fn the_update_starts_sok_from_a_copy_beside_the_updates_and_checks_the_staged_bu
             "{name} was accepted"
         );
     }
+}
+
+// contract: app-update.apply.records-the-detached-command
+#[test]
+fn the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts() {
+    // The standard error and the writer of the records belong to the process, so the scenario runs in a child process.
+    if let Some(config) = std::env::var_os("SOKSAK_UPDATE_CHILD") {
+        let config = PathBuf::from(config);
+        let running = config.join("running/soksak.app");
+        std::fs::create_dir_all(running.join("Contents/MacOS")).unwrap();
+        let executable = running.join("Contents/MacOS/soksak-tauriv2");
+        std::fs::write(
+            running.join("Contents/MacOS/sok"),
+            "#!/bin/sh\necho 'sok: the bundle is not an application bundle' >&2\nexit 1\n",
+        )
+        .unwrap();
+        let staged = config.join("updates/0.0.9/soksak.app");
+        std::fs::create_dir_all(staged.join("Contents")).unwrap();
+        std::fs::write(staged.join("Contents/Info.plist"), "<plist/>").unwrap();
+        soksak_host_tauriv2::application_log::start_standard_error(&config, "check").unwrap();
+        let writer = records::start_writer(&config);
+        let mut command = prepare_start(&config, &executable, &staged, 4321, &[]).unwrap();
+        let mut child = start_update(&mut command).unwrap();
+        child.wait().unwrap();
+        let mut missing = Command::new(config.join("missing-sok"));
+        let error = start_update(&mut missing).unwrap_err();
+        assert!(error.contains("missing-sok"), "{error}");
+        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        std::fs::write(config.join("child-pid"), child.id().to_string()).unwrap();
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts",
+            "--nocapture",
+        ])
+        .env("SOKSAK_UPDATE_CHILD", config.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // The boot of the child names the file, so the folder is searched for the only standard error file.
+    let files: Vec<PathBuf> = std::fs::read_dir(config.path().join("logs"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "stderr")
+        })
+        .collect();
+    assert_eq!(files.len(), 1, "standard error files {files:?}");
+    let standard_error = std::fs::read_to_string(&files[0]).unwrap();
+    assert!(
+        standard_error.contains("sok: the bundle is not an application bundle"),
+        "the standard error file of the host holds {standard_error:?}"
+    );
+    let pid: u64 = std::fs::read_to_string(config.path().join("child-pid"))
+        .unwrap()
+        .parse()
+        .unwrap();
+    let started: Vec<serde_json::Value> =
+        records::read_events(&records::event_log_path(config.path()))
+            .into_iter()
+            .filter(|event| event["event"] == "host.update.start")
+            .collect();
+    assert_eq!(started.len(), 1, "host.update.start events {started:?}");
+    assert_eq!(started[0]["fields"]["pid"].as_u64(), Some(pid));
+    let line = started[0]["fields"]["command"].as_str().unwrap();
+    assert!(
+        line.contains("app update --wait 4321 --bundle"),
+        "the command line is {line:?}"
+    );
 }

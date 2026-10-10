@@ -1,7 +1,7 @@
 //! The host calls of the application update (docs/spec/installation.md#application-update).
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
@@ -140,10 +140,35 @@ pub fn prepare_start(
     if !arguments.is_empty() {
         command.arg("--").args(arguments);
     }
+    // The command outlives this process, so its failure message has no other reader than the standard error file of this run
+    // (docs/spec/logging.md#files); the command keeps the standard error of the host.
+    command.stderr(Stdio::inherit());
     crate::platform::current()
         .and_then(|platform| platform.new_session(&mut command))
         .map_err(|error| format!("application update: {error}"))?;
     Ok(command)
+}
+
+/// Starts the detached command that replaces the bundle and stores the event `host.update.start` with the pid of the
+/// command and its command line. The command waits for the end of this process, so the host starts it before the final
+/// flush of the event log, which then holds the event and the error of a start that fails.
+pub fn start_update(command: &mut Command) -> Result<Child, String> {
+    let child = command.spawn().map_err(|error| {
+        format!(
+            "application update: start {}: {error}",
+            command.get_program().to_string_lossy()
+        )
+    })?;
+    let line: Vec<String> = std::iter::once(command.get_program())
+        .chain(command.get_args())
+        .map(|part| part.to_string_lossy().into_owned())
+        .collect();
+    crate::event_record::emit_host(
+        crate::event_log::Level::Info,
+        "host.update.start",
+        serde_json::json!({"pid": child.id(), "command": line.join(" ")}),
+    );
+    Ok(child)
 }
 
 /// The argument of the appUpdateApply call.

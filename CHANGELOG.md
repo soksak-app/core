@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F145.13: both hosts start the detached `sok app update` before the final flush of the event log, give it the standard error of the host (`logs/host-<boot>.stderr`; the Wails host gave it none, so a failure message was lost) and store the event `host.update.start` (`pid`, `command`); the error of a start that fails is now stored. The failure of every other `sok` command remains its exit status and its message on the standard error.
 - F150.8.1: the window check `e2e/input-oracle.test.mjs` compares the bytes that the sidecar logs as written to the PTY for Tab, Escape, Backspace, Enter and Control+A with the bytes that an independent receiver process in the terminal read; they are the same on both applications.
 - F150.8.2: the latency of the whole input path was measured with the performance trace off, on and off again (`e2e/input-latency.test.mjs`); the medians are 23 to 25 ms on Wails and 26 to 38 ms on Tauri.
 - F151.6: `sok debug timeline` prints the rows of the host event files of the configuration directory that pass the filter (`--level`, `--layer`, `--text`, `--event`, `--surface`, `--session`, `--cid`, `--from`, `--to`, `--context`) as the text lines of the debug view without a running application; the Go and the Rust implementations print the same lines, which the golden files `packages/log-contract/fixtures/timeline` and the debug view test check. Unit and observation: both implementations print identical output for the event files of both check applications.

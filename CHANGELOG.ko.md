@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F145.13: 두 host는 분리 실행하는 `sok app update`를 event log의 마지막 flush 전에 시작하고, host의 표준 오류(`logs/host-<boot>.stderr`)를 주며(Wails host는 주지 않아 실패 메시지가 사라졌다), event `host.update.start`(`pid`, `command`)를 저장한다. 시작에 실패한 오류도 이제 저장된다. 다른 `sok` 명령의 실패는 그대로 종료 상태와 표준 오류의 메시지다.
 - F150.8.1: 창 검사 `e2e/input-oracle.test.mjs`가 Tab, Escape, Backspace, Enter, Control+A에 대해 sidecar가 PTY에 쓴 것으로 기록한 바이트를 터미널의 독립 수신자 프로세스가 읽은 바이트와 비교한다. 두 애플리케이션에서 같다.
 - F150.8.2: 전체 입력 경로의 지연을 성능 trace 끔, 켬, 끔으로 측정했다(`e2e/input-latency.test.mjs`). 중앙값은 Wails 23~25 ms, Tauri 26~38 ms다.
 - F151.6: `sok debug timeline`이 설정 폴더의 host 이벤트 파일에서 filter(`--level`, `--layer`, `--text`, `--event`, `--surface`, `--session`, `--cid`, `--from`, `--to`, `--context`)를 통과한 행을 실행 중인 애플리케이션 없이 debug 화면의 글 줄로 출력한다. Go와 Rust 구현이 같은 줄을 출력하며 golden 파일 `packages/log-contract/fixtures/timeline`과 debug 화면 시험이 이를 검사한다. 시험과 관측: 두 구현이 두 검사 애플리케이션의 이벤트 파일에 같은 출력을 낸다.

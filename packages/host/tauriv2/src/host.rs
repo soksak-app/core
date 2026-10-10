@@ -351,7 +351,12 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     .lock()
                     .expect("pending update")
                     .take();
-                if update.is_some() {
+                if let Some(mut command) = update {
+                    // The command waits for the end of this process, so it starts here, before the flush that stores its event
+                    // and the error of a start that fails.
+                    if let Err(error) = app_update::start_update(&mut command) {
+                        log_error("application update", error);
+                    }
                     app.state::<WindowSidecars>().detach();
                 } else {
                     app.state::<WindowSidecars>().stop();
@@ -376,12 +381,6 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 match platform::current() {
                     Ok(platform) => platform.answer_quit_requests(),
                     Err(error) => log_error("quit request answer", error),
-                }
-                // The command waits for the end of this process, so it starts last and in its own session.
-                if let Some(mut command) = update {
-                    if let Err(error) = command.spawn() {
-                        log_error("application update", error);
-                    }
                 }
             }
             if let tauri::RunEvent::ExitRequested { api, .. } = event {

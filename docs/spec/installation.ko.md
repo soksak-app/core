@@ -62,7 +62,7 @@ Registry index `index.json`은 `format` 1과 다음 목록을 가진다.
 | --- | --- |
 | `appUpdateState()` | `{ version, available }`을 돌려준다. `version`은 실행 중인 core의 버전이고 `available`은 후보의 `{ version, release: { url, sha256 } }` 또는 `null`이다. index의 오류로 거부된다 |
 | `appUpdateStage({ version })` | 후보 `version`의 release를 받고 `sha256`을 확인하고 `<config-dir>/updates/<version>/`을 지운 뒤 `ditto -x -k`로 그 안에 zip을 풀고, `Contents/Info.plist`의 `CFBundleShortVersionString`이 `version`인 `<name>.app` 하나를 담았는지 확인해 그 번들의 경로 `{ bundle }`을 돌려준다. 실패하면 단계를 밝힌 메시지로 거부된다 |
-| `appUpdateApply({ bundle })` | 실행 중인 애플리케이션의 `sok` 실행 파일을 `<config-dir>/updates/sok`에 복사하고, `sok app update --wait <pid> --bundle <bundle> --target <실행 중인 번들>`을 새 세션에서 시작한 뒤 `host.quit`처럼 애플리케이션을 종료한다. 다만 상주 service에 `close-owner`와 `shutdown`을 보내지 않으므로 service와 그 세션은 계속 실행된다 |
+| `appUpdateApply({ bundle })` | 실행 중인 애플리케이션의 `sok` 실행 파일을 `<config-dir>/updates/sok`에 복사하고, `sok app update --wait <pid> --bundle <bundle> --target <실행 중인 번들>`을 애플리케이션의 표준 오류와 event `host.update.start`([logging](logging.ko.md#입구))와 함께 새 세션에서 시작한 뒤 `host.quit`처럼 애플리케이션을 종료한다. 다만 상주 service에 `close-owner`와 `shutdown`을 보내지 않으므로 service와 그 세션은 계속 실행된다 |
 
 `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]`는 프로세스 `<pid>`가 끝날 때까지 기다리고, `<target>`을 `<target>.previous`로 옮기고, `<bundle>`을 `<target>`으로 옮기고, `<target>.previous`를 지우고, `--` 뒤의 인자로 `<target>`을 시작한다. `<target>`을 옮긴 뒤 한 단계가 실패하면 `<target>.previous`를 되돌리고 그 번들을 시작하며 그 단계의 메시지로 실패한다.
 

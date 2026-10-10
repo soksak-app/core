@@ -6,12 +6,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
@@ -124,5 +127,57 @@ func TestTheUpdateStartsSokFromACopyBesideTheUpdatesAndChecksTheStagedBundle(t *
 		if _, err := host.PrepareAppUpdateStart(args[0], args[1], args[2], 4321, nil); err == nil {
 			t.Fatalf("%s was accepted", name)
 		}
+	}
+}
+
+// contract: app-update.apply.records-the-detached-command
+func TestTheDetachedUpdateCommandKeepsItsErrorsAndIsRecordedWhenItStarts(t *testing.T) {
+	config := t.TempDir()
+	running := filepath.Join(t.TempDir(), "soksak.app")
+	if err := os.MkdirAll(filepath.Join(running, "Contents", "MacOS"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	executable := filepath.Join(running, "Contents", "MacOS", "soksak-wailsv3")
+	if err := os.WriteFile(filepath.Join(running, "Contents", "MacOS", "sok"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	staged := filepath.Join(config, "updates", "0.0.9", "soksak.app")
+	if err := os.MkdirAll(filepath.Join(staged, "Contents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staged, "Contents", "Info.plist"), []byte("<plist/>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	command, err := host.PrepareAppUpdateStart(config, executable, staged, 4321, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The command ends after this process, so its message has no reader but the standard error file of the run.
+	if command.Stderr != os.Stderr {
+		t.Fatalf("the standard error of the command is %v, want the standard error of the host", command.Stderr)
+	}
+	log := support.StartWriter(t, config)
+	started := exec.Command("/bin/sh", "-c", "exit 0")
+	if err := host.StartAppUpdate(started); err != nil {
+		t.Fatal(err)
+	}
+	if err := started.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	failing := exec.Command(filepath.Join(config, "missing-sok"), "app", "update")
+	if err := host.StartAppUpdate(failing); err == nil || !strings.Contains(err.Error(), "missing-sok") {
+		t.Fatalf("a command that cannot start gave %v, want an error that names it", err)
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var seen []map[string]any
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		if event["event"] == "host.update.start" {
+			seen = append(seen, event["fields"].(map[string]any))
+		}
+	}
+	if len(seen) != 1 || seen[0]["pid"] != float64(started.Process.Pid) || seen[0]["command"] != "/bin/sh -c exit 0" {
+		t.Fatalf("host.update.start events = %v, want one for pid %d with the command line", seen, started.Process.Pid)
 	}
 }
