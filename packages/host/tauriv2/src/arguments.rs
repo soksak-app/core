@@ -1,6 +1,6 @@
-//! 페이지가 보낸 host 호출 인자를 해석한다(docs/spec/native-host.md#host-calls). Tauri 의 인자 해석은 serde 의
-//! 문장으로 거부하므로, 명령은 인자를 [Argument] 로 받아 이 decoder 로 해석하고 Wails host 의 인자 decoder 와
-//! 같은 문장으로 거부한다.
+//! Decodes the arguments of a host call that the page sent (docs/spec/native-host.md#host-calls). Tauri rejects an
+//! argument with the wording of serde, so a command receives its arguments as [Argument] and decodes them with this
+//! decoder, which rejects an argument with the same wording as the argument decoder of the Wails host.
 
 use serde::de::{
     self, DeserializeOwned, DeserializeSeed, Expected, IntoDeserializer, Unexpected, Visitor,
@@ -8,7 +8,8 @@ use serde::de::{
 use serde_json::Value;
 use std::fmt;
 
-/// 명령 인자 하나. 명령 인자 이름과 같은 key 의 값을 T 로 해석한다. 보내지 않은 인자는 null 이다.
+/// One command argument. It decodes the value of the key that equals the command argument name as T. An argument that
+/// was not sent is null.
 pub struct Argument<T>(pub T);
 
 const NULL: Value = Value::Null;
@@ -19,7 +20,7 @@ impl<'a, R: tauri::Runtime, T: DeserializeOwned> tauri::ipc::CommandArg<'a, R> f
     ) -> Result<Self, tauri::ipc::InvokeError> {
         let value = match command.message.payload() {
             tauri::ipc::InvokeBody::Json(Value::Object(arguments)) => {
-                // 기본값: 보내지 않은 인자는 Wails host 처럼 null 로 해석한다.
+                // default: an argument that was not sent decodes as null, as in the Wails host.
                 arguments.get(command.key).unwrap_or(&NULL)
             }
             tauri::ipc::InvokeBody::Json(other) => {
@@ -38,7 +39,8 @@ impl<'a, R: tauri::Runtime, T: DeserializeOwned> tauri::ipc::CommandArg<'a, R> f
     }
 }
 
-/// 객체만 받는 선택 field 를 객체 값으로 읽는다. 객체가 아닌 값은 Wails host 의 map field 처럼 거부한다.
+/// Reads an optional field that accepts only an object as an object value. A value that is not an object is rejected,
+/// as the map field of the Wails host does.
 pub fn optional_object<'de, D: de::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<Value>, D::Error> {
@@ -47,12 +49,12 @@ pub fn optional_object<'de, D: de::Deserializer<'de>>(
         .map(|object| object.map(Value::Object))
 }
 
-/// 이름이 name 인 인자 value 를 T 로 해석한다.
+/// Decodes the argument value with the name name as T.
 pub fn decode<T: DeserializeOwned>(name: &str, value: &Value) -> Result<T, String> {
     T::deserialize(Node(value)).map_err(|error| error.message(name))
 }
 
-/// JSON 값의 형식 이름.
+/// The type name of a JSON value.
 pub(crate) fn kind(value: &Value) -> &'static str {
     match value {
         Value::Null => "null",
@@ -64,7 +66,8 @@ pub(crate) fn kind(value: &Value) -> &'static str {
     }
 }
 
-/// 해석 실패. path 는 실패한 자리부터 인자 쪽으로 쌓은 `.field` 와 `[index]` 다.
+/// A decoding failure. path is the `.field` and `[index]` segments accumulated from the failed position toward the
+/// argument.
 #[derive(Debug)]
 pub struct Error {
     path: Vec<String>,
@@ -114,7 +117,8 @@ impl de::Error for Error {
         Error::problem("is missing".to_string()).at(format!(".{field}"))
     }
 
-    // serde 가 직접 만드는 형식 오류(내부 Content 를 거친 해석)를 이 decoder 의 형식 이름으로 쓴다.
+    // Uses the type error that serde creates itself (decoding through the internal Content) as the type name of this
+    // decoder.
     fn invalid_type(unexpected: Unexpected, expected: &dyn Expected) -> Self {
         let actual = match unexpected {
             Unexpected::Unit | Unexpected::Option => "null".to_string(),
@@ -143,11 +147,11 @@ impl de::Error for Error {
     }
 }
 
-/// 해석할 JSON 값 하나.
+/// One JSON value to decode.
 struct Node<'de>(&'de Value);
 
 impl<'de> Node<'de> {
-    /// 정수 field 의 값. min 과 max 는 field 형식의 범위다.
+    /// The value of an integer field. min and max are the range of the field type.
     fn integer(&self, min: i128, max: i128) -> Result<i128, Error> {
         let Value::Number(number) = self.0 else {
             return Err(Error::mismatch("a number", self.0));
@@ -164,7 +168,7 @@ impl<'de> Node<'de> {
         }
     }
 
-    /// 객체를 field 로 읽는다. skip_null 이면 값이 null 인 field 를 건너뛴다.
+    /// Reads an object as fields. When skip_null is set, a field whose value is null is skipped.
     fn object<V: Visitor<'de>>(self, visitor: V, skip_null: bool) -> Result<V::Value, Error> {
         match self.0 {
             Value::Object(fields) => visitor.visit_map(Fields {
@@ -199,7 +203,8 @@ impl<'de> de::Deserializer<'de> for Node<'de> {
                 } else if let Some(value) = number.as_i64() {
                     visitor.visit_i64(value)
                 } else {
-                    // 기본값: JSON 수는 u64, i64, f64 중 하나이므로 앞의 둘이 아니면 f64 다.
+                    // default: a JSON number is one of u64, i64 and f64, so a number that is neither of the first two
+                    // is f64.
                     visitor.visit_f64(number.as_f64().unwrap_or_default())
                 }
             }
@@ -238,7 +243,7 @@ impl<'de> de::Deserializer<'de> for Node<'de> {
 
     fn deserialize_f64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
         match self.0 {
-            // 기본값: serde_json 의 수는 모두 f64 로 읽힌다.
+            // default: every number of serde_json is read as f64.
             Value::Number(number) => visitor.visit_f64(number.as_f64().unwrap_or_default()),
             other => Err(Error::mismatch("a number", other)),
         }
@@ -294,7 +299,8 @@ impl<'de> de::Deserializer<'de> for Node<'de> {
         name: &'static str,
         visitor: V,
     ) -> Result<V::Value, Error> {
-        // serde_json 의 RawValue 는 이 이름의 newtype 으로 원문을 요구한다. 값의 원문은 serde_json 이 만든다.
+        // The RawValue of serde_json requires the original text through a newtype of this name. serde_json creates the
+        // original text of the value.
         if name == "$serde_json::private::RawValue" {
             return de::Deserializer::deserialize_newtype_struct(self.0, name, visitor)
                 .map_err(<Error as de::Error>::custom);
@@ -312,7 +318,7 @@ impl<'de> de::Deserializer<'de> for Node<'de> {
         }
     }
 
-    // 고정 길이 배열([T; N])은 tuple 로 읽힌다. 길이가 다르면 거부한다.
+    // A fixed-length array ([T; N]) is read as a tuple. A different length is rejected.
     fn deserialize_tuple<V: Visitor<'de>>(self, len: usize, visitor: V) -> Result<V::Value, Error> {
         match self.0 {
             Value::Array(items) if items.len() != len => {
@@ -335,7 +341,7 @@ impl<'de> de::Deserializer<'de> for Node<'de> {
         self.object(visitor, false)
     }
 
-    // 구조체의 null field 는 빠진 field 다(docs/spec/native-host.md#host-calls).
+    // A null field of a struct is a missing field (docs/spec/native-host.md#host-calls).
     fn deserialize_struct<V: Visitor<'de>>(
         self,
         _name: &'static str,
@@ -366,7 +372,7 @@ impl<'de> de::Deserializer<'de> for Node<'de> {
     }
 }
 
-/// 배열의 원소. 오류에 원소의 번호를 붙인다.
+/// An array element. The error names the index of the element.
 struct Items<'de> {
     items: std::slice::Iter<'de, Value>,
     index: usize,
@@ -390,7 +396,7 @@ impl<'de> de::SeqAccess<'de> for Items<'de> {
     }
 }
 
-/// 객체의 field. 오류에 field 이름을 붙인다.
+/// An object field. The error names the field.
 struct Fields<'de> {
     fields: serde_json::map::Iter<'de>,
     key: Option<(&'de str, &'de Value)>,

@@ -1,7 +1,7 @@
-//! 페이지가 호출하는 Tauri 명령과 명령 등록.
+//! The Tauri commands that the page calls, and the command registration.
 //!
-//! 각 명령은 역할별 모듈의 함수를 호출한다. 명령 이름과 인자 이름은 페이지 런타임
-//! (`apps/tauriv2/runtime/index.js`)의 호출과 일치해야 한다.
+//! Each command calls a function of the module of its role. The command names and the argument names must match the
+//! calls of the page runtime (`apps/tauriv2/runtime/index.js`).
 
 use serde_json::value::RawValue;
 
@@ -25,7 +25,7 @@ use crate::theme::{self, Theme};
 use crate::windows::{self, Geometry, OpenProject};
 use crate::workspace;
 
-/// 모든 명령을 등록하는 핸들러를 반환한다.
+/// Returns the handler that registers every command.
 pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
     tauri::generate_handler![
         project_folder,
@@ -103,14 +103,14 @@ pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
     ]
 }
 
-/// 경로를 프로젝트 디렉터리로 확인하고 정규 경로와 식별값을 반환한다.
+/// Resolves the path as a project directory and returns the canonical path and the identifier.
 #[tauri::command(async)]
 fn project_folder(app: AppHandle, root: Argument<String>) -> Result<Folder, String> {
     let Argument(root) = root;
     projects::project_folder(&app, root)
 }
 
-/// 프로젝트를 창에 연다.
+/// Opens a project in a window.
 #[tauri::command(async)]
 fn project_open(
     window: Window,
@@ -120,7 +120,7 @@ fn project_open(
     windows::project_open(&window, request)
 }
 
-/// 프로젝트와 창의 연결을 해제한다.
+/// Releases the link between a project and a window.
 #[tauri::command]
 fn project_release(window: Window, id: Argument<String>) -> Result<(), String> {
     let Argument(id) = id;
@@ -152,7 +152,7 @@ struct RemovalAnswer {
     allowed: bool,
 }
 
-/// 성능 트레이스를 켜고 끄고 페이지 줄을 중계한다(V5-104).
+/// Turns the performance trace on or off and relays the page lines (V5-104).
 #[tauri::command(async)]
 fn performance(
     request: Argument<serde_json::Map<String, serde_json::Value>>,
@@ -179,19 +179,19 @@ fn log(
     Ok(())
 }
 
-/// 창의 위치와 크기를 반환한다.
+/// Returns the position and size of a window.
 #[tauri::command]
 fn window_state(window: Window) -> Result<Option<Geometry>, String> {
     windows::window_state(&window)
 }
 
-/// 페이지가 창 닫기 요청을 처리할 준비가 되었음을 기록한다.
+/// Records that the page is ready to handle a window close request.
 #[tauri::command]
 fn window_ready(window: Window) -> Result<(), String> {
     windows::window_ready(&window)
 }
 
-/// 창을 닫는다.
+/// Closes a window.
 #[tauri::command]
 fn window_close(window: Window) -> Result<(), String> {
     windows::window_close(&window)
@@ -203,13 +203,13 @@ fn window_close_kept(window: Window) -> Result<(), String> {
     windows::window_close_kept(&window)
 }
 
-/// 새 프로젝트 창을 연다.
+/// Opens a new project window.
 #[tauri::command(async)]
 fn window_new(app: AppHandle) -> Result<(), String> {
     windows::window_new(app)
 }
 
-/// 설정과 프로젝트 목록 저장소 요청을 실행한다.
+/// Runs a request of the settings and project list store.
 #[tauri::command(async)]
 fn workspace(
     app: AppHandle,
@@ -219,20 +219,20 @@ fn workspace(
     workspace::handle(&app, request)
 }
 
-/// 프로젝트 폴더 선택 대화상자를 연다.
+/// Opens the project folder selection dialog.
 #[tauri::command(async)]
 fn folder_choose(window: Window) -> Result<Option<String>, String> {
     projects::folder_choose(&window)
 }
 
-/// 프로젝트 폴더를 만든다.
+/// Creates a project folder.
 #[tauri::command(async)]
 fn project_create(app: AppHandle, request: Argument<CreateProject>) -> Result<Folder, String> {
     let Argument(request) = request;
     projects::project_create(&app, request)
 }
 
-/// 페이지가 선언한 표면에 창의 자식 웹뷰를 맞춘다.
+/// Fits the child webview of a window to the surface that the page declared.
 #[tauri::command(async)]
 fn sync_surfaces(
     window: Window,
@@ -242,7 +242,7 @@ fn sync_surfaces(
     surfaces::sync(&window, request)
 }
 
-/// DOM 이 그린 표면 준비의 표시를 확인한다.
+/// Checks the presentation mark of a surface preparation that the DOM drew.
 #[tauri::command]
 async fn present_surfaces(
     window: Window,
@@ -252,41 +252,41 @@ async fn present_surfaces(
     surfaces::present(window, request).await
 }
 
-/// 마지막 안정 프레임의 DOM과 네이티브 래스터 표시를 기다린다.
+/// Waits for the DOM and native raster presentation of the last stable frame.
 #[tauri::command]
 async fn wait_presented(window: Window) -> Result<f64, String> {
     exposure::presented(&window, exposure::TIMEOUT).map_err(|error| error.message)
 }
 
-/// 모달 요소를 메인 창 안의 웹뷰에 그린다.
+/// Draws a modal element in a webview inside the main window.
 #[tauri::command]
 fn overlay_show(window: Window, request: Argument<OverlayRequest>) -> Result<Rect, String> {
     let Argument(request) = request;
     modals::show(&window, request)
 }
 
-/// 열린 모달의 웹뷰를 옮긴다.
+/// Moves the webview of an open modal.
 #[tauri::command]
 fn overlay_place(window: Window, request: Argument<PlaceRequest>) -> Result<Rect, String> {
     let Argument(request) = request;
     modals::place(&window, request)
 }
 
-/// 도형을 그리거나 갱신한다.
+/// Draws or updates a shape.
 #[tauri::command]
 fn set_shape(window: Window, request: Argument<ShapeRequest>) -> Result<(), String> {
     let Argument(request) = request;
     shapes::set(&window, request)
 }
 
-/// 도형을 제거한다.
+/// Removes a shape.
 #[tauri::command]
 fn clear_shape(window: Window, id: Argument<String>) -> Result<(), String> {
     let Argument(id) = id;
     shapes::clear(&window, id)
 }
 
-/// 모달 문서가 그릴 내용을 반환한다. 메인 스레드가 필요 없다.
+/// Returns the content that a modal document draws. It does not need the main thread.
 #[tauri::command(async)]
 fn overlay_content(
     window: Window,
@@ -298,14 +298,14 @@ fn overlay_content(
     modals::content(&window, id, instance)
 }
 
-/// 열린 모달의 내용을 바꾼다.
+/// Replaces the content of an open modal.
 #[tauri::command]
 fn overlay_update(window: Window, request: Argument<UpdateRequest>) -> Result<(), String> {
     let Argument(request) = request;
     modals::update(&window, request)
 }
 
-/// 모달 문서의 렌더링 완료를 받아 모달 웹뷰를 표시한다.
+/// Receives the render completion of a modal document and shows the modal webview.
 #[tauri::command]
 fn overlay_ready(
     window: Window,
@@ -317,14 +317,14 @@ fn overlay_ready(
     modals::ready(&window, id, instance)
 }
 
-/// 모달을 닫는다.
+/// Closes a modal.
 #[tauri::command]
 fn overlay_hide(window: Window, id: Argument<String>) -> Result<(), String> {
     let Argument(id) = id;
     modals::hide(&window, id)
 }
 
-/// 모달 문서의 선택을 페이지에 전달한다.
+/// Passes the choice of a modal document to the page.
 #[tauri::command]
 fn overlay_pick(
     window: Window,
@@ -340,13 +340,13 @@ fn overlay_pick(
     modals::pick(&window, id, instance, key, value)
 }
 
-/// 창 버튼이 차지하는 영역을 반환한다.
+/// Returns the area that the window buttons occupy.
 #[tauri::command]
 fn window_controls(window: Window) -> Result<windows::Chrome, String> {
     windows::window_chrome(&window)
 }
 
-/// 표면 페이지가 보낸 메시지를 사이드카에 전달한다.
+/// Passes a message that a surface page sent to the sidecar.
 #[tauri::command]
 fn sidecar_send(
     window: Window,
@@ -364,14 +364,14 @@ fn sidecar_send(
         .send_with_cids(&window, &sidecar, &surface, &body, &cids)
 }
 
-/// retain 요청의 표면 하나. 표면과 그 표면을 연 프로젝트 루트다.
+/// One surface of a retain request: the surface and the project root that opened it.
 #[derive(serde::Deserialize)]
 struct RetainedSurface {
     surface: String,
     root: String,
 }
 
-/// 모든 프로젝트 레이아웃이 가진 표면 목록.
+/// The surface list that every project layout holds.
 #[derive(serde::Deserialize)]
 struct RetainRequest {
     surfaces: Vec<RetainedSurface>,
@@ -396,8 +396,8 @@ fn sidecars_replace(window: Window, request: Argument<ReplaceRequest>) -> Result
     window.state::<WindowSidecars>().replace(&request.sidecar)
 }
 
-/// 영속 사이드카 서비스에서 어떤 레이아웃에도 없는 표면의 세션을 닫고 닫은 수를 반환한다
-/// (docs/spec/terminal-runtime.md). 서비스를 기다리므로 async 명령이다.
+/// Closes the sessions of the surfaces that no layout holds in the persistent sidecar service and returns the number
+/// closed (docs/spec/terminal-runtime.md). It waits for the service, so it is an async command.
 #[tauri::command(async)]
 fn sidecars_retain(
     window: Window,
@@ -421,42 +421,42 @@ fn sidecars_retain(
     Ok(serde_json::json!({ "closed": closed }))
 }
 
-/// 현재 테마를 반환한다.
+/// Returns the current theme.
 #[tauri::command]
 fn theme(window: Window) -> Result<Theme, String> {
     theme::get(&window)
 }
 
-/// 페이지의 현재 테마를 기록하고 다른 페이지에 전달한다.
+/// Records the current theme of a page and passes it to the other pages.
 #[tauri::command]
 fn set_theme(window: Window, theme: Argument<Theme>) -> Result<(), String> {
     let Argument(theme) = theme;
     theme::set(&window, theme)
 }
 
-/// 페이지가 유효 메뉴 언어를 알린다. 표의 언어가 아니면 명시적인 오류이고 언어가 같으면
-/// 메뉴를 다시 만들지 않는다(docs/spec/host-contract.md 의 Application menu).
+/// The page reports the effective menu language. A language that is not in the table is an explicit error, and the same
+/// language does not rebuild the menu (Application menu in docs/spec/host-contract.md).
 #[tauri::command]
 fn set_menu_language(app: AppHandle, language: Argument<String>) -> Result<(), String> {
     let Argument(language) = language;
     menu::set_language(&app, &language)
 }
 
-/// 호스트가 보낸 요청에 대한 문서의 응답을 받는다.
+/// Receives the reply of a document to a request that the host sent.
 #[tauri::command]
 fn exposure_reply(webview: Webview, request: Argument<String>) -> Result<(), String> {
     let Argument(request) = request;
     exposure::reply(&webview, request)
 }
 
-/// 메인 페이지가 보낸 상태 변경을 감시하는 연결에 보낸다.
+/// Sends a state change that the main page sent to the connections that watch it.
 #[tauri::command]
 fn exposure_changed(webview: Webview, request: Argument<Changed>) -> Result<(), String> {
     let Argument(request) = request;
     exposure::changed(&webview, request)
 }
 
-/// 메인 페이지의 요청을 표면 페이지에 보내고 응답을 반환한다.
+/// Sends a request of the main page to a surface page and returns the reply.
 #[tauri::command(async)]
 fn exposure_forward(
     webview: Webview,
@@ -466,21 +466,21 @@ fn exposure_forward(
     exposure::forward(&webview, request)
 }
 
-/// 표면 페이지의 항목 등록을 메인 페이지에 전달한다.
+/// Passes the item registration of a surface page to the main page.
 #[tauri::command]
 fn exposure_register(webview: Webview, request: Argument<Register>) -> Result<(), String> {
     let Argument(request) = request;
     exposure::register(&webview, request)
 }
 
-/// 호출한 표면 페이지의 요소에 문서 영역을 붙인다.
+/// Attaches a document region to an element of the calling surface page.
 #[tauri::command(async)]
 fn document_attach(webview: Webview, request: Argument<documents::Request>) -> Result<(), String> {
     let Argument(request) = request;
     documents::attach(&webview, request)
 }
 
-/// native 배치 전에 surface의 불변 composition 선언을 등록한다.
+/// Registers the immutable composition declaration of the surface before the native placement.
 #[tauri::command(async)]
 fn composition_declare(
     webview: Webview,
@@ -490,7 +490,7 @@ fn composition_declare(
     surfaces::declare(&webview, request)
 }
 
-/// 호출한 표면 페이지의 완전한 합성 리비전을 배치한다.
+/// Places the complete composition revision of the calling surface page.
 #[tauri::command(async)]
 fn composition_place(
     webview: Webview,
@@ -500,7 +500,7 @@ fn composition_place(
     composition::place(&webview, request)
 }
 
-/// 문서 영역에 http 또는 https 주소를 연다.
+/// Opens an http or https address in a document region.
 #[tauri::command(async)]
 fn document_load(webview: Webview, request: Argument<documents::Request>) -> Result<(), String> {
     let Argument(request) = request;
@@ -514,28 +514,28 @@ fn document_post(webview: Webview, request: Argument<documents::Request>) -> Res
     documents::post(&webview, request)
 }
 
-/// 문서 영역의 페이지 확대를 글자 배율로 정한다.
+/// Sets the page zoom of a document region as the text scale.
 #[tauri::command(async)]
 fn document_zoom(webview: Webview, request: Argument<documents::Request>) -> Result<(), String> {
     let Argument(request) = request;
     documents::zoom(&webview, request)
 }
 
-/// 문서 영역의 기록 이동, 다시 읽기, 멈춤을 실행한다.
+/// Runs history navigation, reload and stop of a document region.
 #[tauri::command(async)]
 fn document_go(webview: Webview, request: Argument<documents::Request>) -> Result<bool, String> {
     let Argument(request) = request;
     documents::go(&webview, request)
 }
 
-/// 문서 영역을 닫는다.
+/// Closes a document region.
 #[tauri::command(async)]
 fn document_detach(webview: Webview, request: Argument<documents::Request>) -> Result<(), String> {
     let Argument(request) = request;
     documents::detach(&webview, request)
 }
 
-/// 호출한 표면 페이지의 요소에 그림 영역을 붙인다.
+/// Attaches an image region to an element of the calling surface page.
 #[tauri::command(async)]
 fn image_attach(webview: Webview, request: Argument<images::Request>) -> Result<(), String> {
     let Argument(request) = request;
@@ -543,14 +543,14 @@ fn image_attach(webview: Webview, request: Argument<images::Request>) -> Result<
         .map_err(|error| images::image_call_error("imageAttach", error))
 }
 
-/// 그림 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다.
+/// Makes the image region the first responder and sends the focus event.
 #[tauri::command(async)]
 fn image_focus(webview: Webview, request: Argument<images::Request>) -> Result<(), String> {
     let Argument(request) = request;
     images::focus(&webview, request).map_err(|error| images::image_call_error("imageFocus", error))
 }
 
-/// 캐럿(입력 커서) 위치를 받아 둔다.
+/// Stores the caret (text cursor) position.
 #[tauri::command(async)]
 fn image_caret(
     webview: Webview,
@@ -569,7 +569,7 @@ fn image_caret(
         .map_err(|error| images::image_call_error("imageCaret", error))
 }
 
-/// 접근성 값으로 보일 문자열을 받아 둔다.
+/// Stores the string that is shown as the accessibility value.
 #[tauri::command(async)]
 fn image_text(
     webview: Webview,
@@ -582,7 +582,7 @@ fn image_text(
         .map_err(|error| images::image_call_error("imageText", error))
 }
 
-/// 그림 영역을 닫는다.
+/// Closes an image region.
 #[tauri::command(async)]
 fn image_detach(webview: Webview, request: Argument<images::Request>) -> Result<(), String> {
     let Argument(request) = request;
@@ -716,7 +716,7 @@ fn debug_save_all(window: Window) -> Result<crate::debug::Saved, String> {
     crate::debug::save_all(&window)
 }
 
-/// registry 주소, 검사한 index, 설치 상태를 돌려준다.
+/// Returns the registry address, the checked index and the installation state.
 #[tauri::command(async)]
 fn plugins_state(
     plugins: tauri::State<'_, crate::plugins::Plugins>,
@@ -724,7 +724,7 @@ fn plugins_state(
     plugins.state()
 }
 
-/// sok plugin <action> <plugin> 과 같은 plugin 작업을 실행한다.
+/// Runs a plugin action, the same as sok plugin <action> <plugin>.
 #[tauri::command(async)]
 fn plugins_run(
     plugins: tauri::State<'_, crate::plugins::Plugins>,
@@ -734,7 +734,7 @@ fn plugins_run(
     plugins.run(request)
 }
 
-/// sok registry use <index> 와 같이 registry index 를 정한다.
+/// Sets the registry index, the same as sok registry use <index>.
 #[tauri::command(async)]
 fn plugins_use_registry(
     plugins: tauri::State<'_, crate::plugins::Plugins>,
@@ -744,7 +744,7 @@ fn plugins_use_registry(
     plugins.use_registry(request)
 }
 
-/// 호출한 창의 탭 알림을 시스템 알림으로 게시한다.
+/// Posts the tab notification of the calling window as a system notification.
 #[tauri::command(async)]
 fn notify(
     window: Window,
@@ -754,7 +754,7 @@ fn notify(
     crate::notifications::notify(&window, request)
 }
 
-/// 호출한 창의 탭 알림을 지운다.
+/// Clears the tab notification of the calling window.
 #[tauri::command(async)]
 fn notification_remove(
     window: Window,
@@ -764,7 +764,7 @@ fn notification_remove(
     crate::notifications::remove(&window, request)
 }
 
-/// 알림 센터가 마지막으로 알린 권한 상태를 반환한다.
+/// Returns the permission state that the notification center reported last.
 #[tauri::command(async)]
 fn notification_state() -> Result<crate::notifications::NotificationState, String> {
     crate::notifications::state()

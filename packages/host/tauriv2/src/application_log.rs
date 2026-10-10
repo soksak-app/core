@@ -1,4 +1,4 @@
-//! 애플리케이션 로그(docs/spec/hosts.md#application-log).
+//! Application log (docs/spec/hosts.md#application-log).
 
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -45,7 +45,7 @@ pub fn entry_line(level: &str, layer: &str, place: &str, text: impl std::fmt::Di
     )
 }
 
-/// 호스트의 오류 기록에서 시각을 뺀 줄이다. place 는 실패한 연산이나 대상이고 text 는 실패 내용이다.
+/// A host error line without its time. place is the failed operation or its target and text is the failure.
 pub fn error_line(place: &str, text: impl std::fmt::Display) -> String {
     entry_line("error", "host", place, text)
 }
@@ -55,37 +55,39 @@ pub fn log_record(level: &str, layer: &str, place: &str, text: impl std::fmt::Di
     crate::event_record::emit_record(level, layer, place, text.to_string());
 }
 
-/// 창 label 의 진단 기록 줄 line 이 애플리케이션 로그에도 쓰는 기록 줄이다. 진단 기록은 그것을 켠 연결에만 가므로 이
-/// 기록이 없으면 연결이 없을 때 그 줄이 사라진다.
+/// The record line of a window's diagnostic record, which is also written to the application log. The diagnostic record
+/// goes only to the connections that enabled it, so without this record the line is lost when no connection exists.
 pub fn transcript_entry(label: &str, line: &str) -> Entry {
     Entry::new("info", "host", &format!("transcript {label}"), line)
 }
 
-/// 호스트의 오류 기록 하나를 쓴다.
+/// Writes one error record of the host.
 pub fn log_error(place: &str, text: impl std::fmt::Display) {
     log_record("error", "host", place, text);
 }
 
-/// 호스트의 관측 기록 하나를 쓴다. 관측은 예상된 상태를 기록하며 실패가 아니다.
+/// Writes one observation record of the host. An observation records an expected state and is not a failure.
 pub fn log_info(place: &str, text: impl std::fmt::Display) {
     log_record("info", "host", place, text);
 }
 
-/// result 가 실패이면 그 오류를 place 의 오류 줄로 쓴다. 결과를 호출자에게 돌려줄 수 없는 작업이 쓴다.
+/// Writes the error of result as the error line of place when result failed. It is used by an operation whose result
+/// cannot be returned to the caller.
 pub fn log_failure(place: &str, result: Result<(), String>) {
     if let Err(error) = result {
         log_error(place, error);
     }
 }
 
-/// 로그 파일이 이전 세대로 넘어가는 크기다(docs/spec/diagnostics.md#files). 기록은 많을수록 좋으므로 한 세션을 덮을 만큼
-/// 크게 둔다.
+/// The size at which the log file rotates to the previous generation (docs/spec/diagnostics.md#files). More records are
+/// better, so the size is large enough to cover one session.
 pub const ROTATE_BYTES: u64 = 100 * 1024 * 1024;
 
-/// 남기는 이전 세대의 수다.
+/// The number of previous generations that are kept.
 pub const GENERATIONS: u32 = 5;
 
-/// path 를 이전 세대 path.1 로 넘기고, 이전 세대는 하나씩 뒤로 옮기며, 마지막 세대는 지운다.
+/// Rotates path to the previous generation path.1, moves each previous generation back by one, and deletes the last
+/// generation.
 pub fn rotate_generations(path: &Path) -> Result<(), String> {
     let numbered = |generation: u32| {
         let mut name = path.as_os_str().to_owned();
@@ -110,13 +112,14 @@ pub fn rotate_generations(path: &Path) -> Result<(), String> {
         .map_err(|error| format!("rotate {}: {error}", path.display()))
 }
 
-/// 영속 서비스 program 의 표준 오류를 받는 로그 경로다. basename 은 실행 파일 이름이다.
+/// The log path that receives the standard error of the persistent service program. basename is the name of the
+/// executable.
 pub fn service_log_path(config: &Path, basename: &str) -> PathBuf {
     config.join("logs").join(format!("{basename}.log"))
 }
 
-/// 로그 파일 path 를 mode 0600 의 덧붙이기로 연다. 10 MB 이상인 파일은 먼저 path.1 로 옮겨 이전
-/// 세대를 대체한다. 그 파일에 쓰는 다른 프로세스가 없을 때만 부른다.
+/// Opens the log file path for appending with mode 0600. A file of 10 MB or more is first moved to path.1 and replaces
+/// the previous generation. Call it only when no other process writes to that file.
 pub fn open_log(path: &Path) -> Result<File, String> {
     let platform = platform::current()?;
     if let Some(directory) = path.parent() {

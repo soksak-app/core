@@ -1,4 +1,4 @@
-//! WebKit 자식 수확 판정의 계약(V5-113).
+//! The contract of the harvest decision for WebKit children (V5-113).
 
 #[path = "support/records.rs"]
 mod records;
@@ -40,7 +40,8 @@ fn a_same_pid_different_instance_is_never_killed() {
     );
 }
 
-// 기록이 없으면 갱신은 이 실행의 WebKit 자식 기록을 새로 쓰고, 그 파일은 현재 사용자만 읽고 쓴다.
+// Without a record, the update newly writes the record of the WebKit children of this run, and only the current user
+// can read and write that file.
 // contract: webkit-children.record.owner-only
 #[test]
 fn the_webkit_child_record_is_owner_only() {
@@ -54,7 +55,8 @@ fn the_webkit_child_record_is_owner_only() {
 }
 
 // contract: webkit-children.record.concurrent-refreshes
-/// 여러 창의 페이지 적재가 동시에 기록을 갱신해도 모든 갱신이 성공하고 .new 파일이 남지 않는다(F68).
+/// Even if the page loads of several windows update the record at the same time, all updates succeed and no .new file
+/// remains (F68).
 #[test]
 fn concurrent_webkit_record_writes_all_succeed() {
     let directory = tempfile::tempdir().expect("temporary directory");

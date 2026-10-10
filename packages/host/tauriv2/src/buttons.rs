@@ -1,8 +1,9 @@
-//! host.buttons 의 값.
+//! The value of host.buttons.
 //!
-//! 버튼 source(Platform::watch_buttons)가 보고한 눌린 마우스 버튼 mask 를 보관하고, mask 가 바뀌면 새 값을
-//! 알린다. input.pointer 는 이 mask 가 0 이 아닌 동안 누름과 뗌을 1007 로 거부하므로, 거부된 뗌의 열린 누름은
-//! 이 값이 0 이 된 뒤 끝낼 수 있다(docs/spec/exposure.md#host-entries).
+//! Stores the mask of the pressed mouse buttons that the button source (Platform::watch_buttons) reported, and
+//! announces the new value when the mask changes. input.pointer rejects a press and a release with 1007 while this mask
+//! is not 0, so the open press of a rejected release can be ended after this value becomes 0
+//! (docs/spec/exposure.md#host-entries).
 
 use std::sync::Mutex;
 
@@ -16,7 +17,7 @@ pub struct Buttons {
 }
 
 impl Buttons {
-    /// mask 0 의 host.buttons 를 만든다. changed 는 바뀐 값마다 보고한 차례대로 한 번 호출된다.
+    /// Creates host.buttons with mask 0. changed is called once for each changed value, in the order of the reports.
     pub fn new(changed: impl Fn(Value) + Send + Sync + 'static) -> Self {
         Buttons {
             mask: Mutex::new(0),
@@ -24,8 +25,9 @@ impl Buttons {
         }
     }
 
-    /// source 가 읽은 mask 를 기록한다. 기록한 값과 다르면 새 값을 알린다. 알림의 순서가 보고의 순서와 같도록
-    /// 잠금 안에서 알린다. changed 는 막히지 않아야 한다.
+    /// Records the mask that the source read. A value that differs from the recorded value is announced as the new
+    /// value. The announcement is made inside the lock so that the order of the announcements equals the order of the
+    /// reports. changed must not block.
     pub fn report(&self, mask: u64) {
         let Ok(mut current) = self.mask.lock() else {
             log_error("host.buttons", "the button state is poisoned");
@@ -38,7 +40,7 @@ impl Buttons {
         (self.changed)(value(mask));
     }
 
-    /// host.buttons 의 현재 값 {mask} 다.
+    /// The current value {mask} of host.buttons.
     pub fn value(&self) -> Value {
         match self.mask.lock() {
             Ok(mask) => value(*mask),

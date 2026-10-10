@@ -1,4 +1,4 @@
-//! 탭 알림을 운영체제의 알림 센터로 게시한다(docs/spec/plugins.md#tab-reports).
+//! Posts tab notifications to the notification center of the operating system (docs/spec/plugins.md#tab-reports).
 
 use std::sync::Mutex;
 
@@ -10,7 +10,7 @@ use crate::exposure;
 use crate::platform;
 use crate::windows::emit_window;
 
-/// 탭 하나의 시스템 알림이다. 지울 때는 surface 만 쓴다.
+/// The system notification of one tab. Only surface is used to clear it.
 #[derive(Debug, Deserialize)]
 pub struct NotificationRequest {
     pub surface: String,
@@ -20,20 +20,20 @@ pub struct NotificationRequest {
     pub body: String,
 }
 
-/// 알림 센터의 권한과 권한 요청, 게시, 제거의 마지막 실패다.
+/// The permission of the notification center and the last failure of a permission request, a post and a removal.
 #[derive(Clone, Default, Serialize)]
 pub struct NotificationState {
     authorization: String,
     error: Option<String>,
 }
 
-/// 알림 센터가 마지막으로 알린 권한 상태.
+/// The permission state that the notification center reported last.
 static STATE: Mutex<NotificationState> = Mutex::new(NotificationState {
     authorization: String::new(),
     error: None,
 });
 
-/// 제어 문자 없는 1 에서 limit 글자의 텍스트만 허용한다.
+/// Allows only text of 1 to limit characters without control characters.
 fn notification_text(field: &str, value: &str, limit: usize) -> Result<(), String> {
     let length = value.chars().count();
     if length == 0 || length > limit || value.chars().any(char::is_control) {
@@ -44,7 +44,7 @@ fn notification_text(field: &str, value: &str, limit: usize) -> Result<(), Strin
     Ok(())
 }
 
-/// 알림 요청을 확인한다. removal 이면 표면만 확인한다.
+/// Checks a notification request. For removal, only the surface is checked.
 pub fn validate_notification(request: &NotificationRequest, removal: bool) -> Result<(), String> {
     notification_text("surface", &request.surface, 256)?;
     if removal {
@@ -54,12 +54,13 @@ pub fn validate_notification(request: &NotificationRequest, removal: bool) -> Re
     notification_text("body", &request.body, 1024)
 }
 
-/// 알림 센터의 식별자다. 누른 알림을 창 이름과 표면으로 돌려받는다.
+/// The identifier of the notification center. A notification that was pressed is returned as a window name and a
+/// surface.
 fn identifier(window: &str, surface: &str) -> String {
     serde_json::json!([window, surface]).to_string()
 }
 
-/// 알림 센터를 쓰기 시작한다. 애플리케이션 준비 중 메인 스레드에서 한 번 부른다.
+/// Starts to use the notification center. It is called once on the main thread while the application is being prepared.
 pub(crate) fn start(app: &AppHandle) -> Result<(), String> {
     let handle = app.clone();
     platform::current()?
@@ -79,11 +80,11 @@ struct Event {
     identifier: String,
 }
 
-/// 알림 센터가 알린, 기록을 마친 사건이다.
+/// An event that the notification center reported and that has been recorded.
 pub enum Reported {
-    /// 권한 상태와 마지막 실패.
+    /// The permission state and the last failure.
     State(NotificationState),
-    /// 창 `window` 의 표면 `surface` 의 알림이 게시되었거나(`posted`) 눌렸다(`activated`).
+    /// The notification of the surface `surface` of the window `window` was posted (`posted`) or pressed (`activated`).
     Notice {
         kind: String,
         window: String,
@@ -91,8 +92,9 @@ pub enum Reported {
     },
 }
 
-/// 알림 센터의 사건 하나를 해석하고 event `host.notification.event` 로 기록한다. 해석하지 못하는 사건과 알림 센터가 알린 실패는
-/// `notification` 의 오류로 기록하고, 해석하지 못한 사건은 그 사유를 오류로 돌려준다.
+/// Interprets one event of the notification center and records it as the event `host.notification.event`. An event that
+/// cannot be interpreted and a failure that the notification center reported are recorded as an error of
+/// `notification`, and an event that could not be interpreted returns its reason as an error.
 pub fn record_event(raw: &str) -> Result<Reported, String> {
     let rejected = |reason: String| {
         log_error("notification", &reason);
@@ -123,7 +125,8 @@ pub fn record_event(raw: &str) -> Result<Reported, String> {
             }))
         }
         "posted" | "activated" => {
-            // 기본값: 읽지 못한 식별자는 빈 목록이 되어 바로 아래에서 알림 실패로 보고된다.
+            // default: an identifier that could not be read becomes an empty list, which is reported as a notification
+            // failure right below.
             let target: Vec<String> = serde_json::from_str(&parsed.identifier).unwrap_or_default();
             let [window, surface] = target.as_slice() else {
                 return rejected(format!(
@@ -151,7 +154,8 @@ pub fn record_event(raw: &str) -> Result<Reported, String> {
     }
 }
 
-/// 알림 센터의 사건을 창에 알린다. 권한 상태는 모든 창에, 누른 알림은 그 창에 간다.
+/// Reports an event of the notification center to the windows. The permission state goes to every window, and a pressed
+/// notification goes to its window.
 fn event(app: &AppHandle, raw: String) {
     match record_event(&raw) {
         Err(reason) => set_error(app, reason),
@@ -190,13 +194,14 @@ fn event(app: &AppHandle, raw: String) {
     }
 }
 
-/// 실패를 기록하고 알림 상태의 오류로 모든 창에 알린다. 창이 없으면 알림 상태가 오류를 보이지 못한다.
+/// Records the failure and reports it to every window as the error of the notification state. Without a window, the
+/// notification state cannot show the error.
 fn failed(app: &AppHandle, reason: String) {
     log_error("notification", &reason);
     set_error(app, reason);
 }
 
-/// 기록한 실패를 알림 상태의 오류로 모든 창에 알린다.
+/// Reports the recorded failure to every window as the error of the notification state.
 fn set_error(app: &AppHandle, reason: String) {
     if let Ok(mut state) = STATE.lock() {
         state.error = Some(reason);
@@ -219,7 +224,7 @@ fn emit_state(app: &AppHandle) {
     }
 }
 
-/// 마지막으로 알린 권한 상태를 반환한다. 페이지가 시작할 때 읽는다.
+/// Returns the permission state that was reported last. The page reads it when it starts.
 pub(crate) fn state() -> Result<NotificationState, String> {
     STATE
         .lock()
@@ -227,7 +232,7 @@ pub(crate) fn state() -> Result<NotificationState, String> {
         .map_err(|error| error.to_string())
 }
 
-/// 호출한 창의 탭 알림을 시스템 알림으로 게시한다.
+/// Posts the tab notification of the calling window as a system notification.
 pub(crate) fn notify(window: &Window, request: NotificationRequest) -> Result<(), String> {
     validate_notification(&request, false)?;
     let name = identifier(window.label(), &request.surface);
@@ -236,7 +241,7 @@ pub(crate) fn notify(window: &Window, request: NotificationRequest) -> Result<()
     })
 }
 
-/// 호출한 창의 탭 알림을 지운다.
+/// Clears the tab notification of the calling window.
 pub(crate) fn remove(window: &Window, request: NotificationRequest) -> Result<(), String> {
     validate_notification(&request, true)?;
     let name = identifier(window.label(), &request.surface);

@@ -1,4 +1,5 @@
-//! Windows 에서 구현하지 않은 플랫폼 기능. 모든 함수가 "not implemented on windows" 오류를 반환한다.
+//! The platform functions that are not implemented on Windows. Every function returns a "not implemented on windows"
+//! error.
 
 use std::path::Path;
 
@@ -11,7 +12,7 @@ use super::super::{
     PersistentStream, Pointer, Raster, WindowBuilder, WindowOverlay,
 };
 
-/// operation 을 이름에 포함한 오류를 반환한다.
+/// Returns an error that contains operation in its name.
 fn missing<T>(operation: &str) -> Result<T, String> {
     Err(format!("{operation} is not implemented on windows"))
 }
@@ -430,7 +431,8 @@ pub fn on_quit_request(_quit: Box<dyn Fn()>) -> Result<(), String> {
     missing("quit requests")
 }
 
-/// 받은 종료 요청이 없으므로 답할 것이 없다. on_quit_request 가 실패하면 애플리케이션이 시작하지 않는다.
+/// No termination request was received, so there is nothing to answer. When on_quit_request fails, the application does
+/// not start.
 pub fn answer_quit_requests() {}
 pub fn cancel_quit_requests() {}
 

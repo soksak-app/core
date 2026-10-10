@@ -1,17 +1,20 @@
-//! 애플리케이션 인자(docs/spec/hosts.md#application-arguments). 두 host 는 같은 규칙과 문장으로 인자를 읽는다.
+//! Application arguments (docs/spec/hosts.md#application-arguments). Both hosts read the arguments with the same rules
+//! and wording.
 
-/// 애플리케이션 인자.
+/// The application arguments.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Arguments {
-    /// 설정 디렉터리. 없으면 사용자 설정 디렉터리 아래 이 build 의 식별자 디렉터리를 쓴다.
+    /// The configuration directory. When it is absent, the identifier directory of this build under the user
+    /// configuration directory is used.
     pub config_dir: Option<String>,
-    /// 진단 build 의 --registry-ca. registry 받기가 신뢰하는 인증 기관의 PEM 파일이다.
+    /// --registry-ca of a diagnostic build. The PEM file of the certificate authority that the registry download
+    /// trusts.
     #[cfg(feature = "diagnostics")]
     pub registry_ca: Option<String>,
 }
 
-/// 읽은 인자를 창을 열기 전에 적용한다. 진단 build 의 --registry-ca 는 registry 받기의 인증 기관을 정한다.
-/// release build 에는 적용할 인자가 없다.
+/// Applies the arguments that were read before a window opens. --registry-ca of a diagnostic build sets the certificate
+/// authority of the registry download. A release build has no argument to apply.
 #[cfg_attr(not(feature = "diagnostics"), allow(unused_variables))]
 pub fn apply_arguments(arguments: &Arguments) -> Result<(), String> {
     #[cfg(feature = "diagnostics")]
@@ -22,7 +25,7 @@ pub fn apply_arguments(arguments: &Arguments) -> Result<(), String> {
     Ok(())
 }
 
-/// 애플리케이션 인자를 읽는다. 선언하지 않은 인자, 값 없는 flag, 두 번 준 flag 는 오류다.
+/// Reads the application arguments. An undeclared argument, a flag without a value and a flag given twice are errors.
 pub fn parse_arguments(args: impl IntoIterator<Item = String>) -> Result<Arguments, String> {
     let mut parsed = Arguments::default();
     let mut args = args.into_iter();

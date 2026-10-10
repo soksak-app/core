@@ -1,4 +1,4 @@
-//! native/darwin 의 창 캡처 호출.
+//! The window capture calls of native/darwin.
 
 use std::ffi::{c_char, c_int, CStr, CString};
 
@@ -30,19 +30,19 @@ extern "C" fn delivered(context: *mut std::ffi::c_void, json: *const c_char) {
     );
 }
 
-/// 알림 센터가 아직 보이는 알림 목록을 done 에 준다. 메인 스레드에서 호출한다.
+/// Gives done the list of notifications that the notification center still shows. Call it on the main thread.
 pub fn delivered_notifications(done: Box<dyn FnOnce(String) + Send>) {
     let context = Box::into_raw(Box::new(done)).cast();
     unsafe { sp_notifications_delivered(delivered, context) }
 }
 
-/// 배치 트랜잭션 시각의 기록을 시작한다. 메인 스레드에서 호출한다.
+/// Starts to record the times of placement transactions. Call it on the main thread.
 pub fn layout_trace_start() {
     unsafe { surfaceLayoutTraceStart() }
 }
 
-/// 기록을 멈추고 트랜잭션마다 ticket, begun, presented, committed, requested 를 반환한다. 메인 스레드에서 호출한다.
-/// 값 수는 native 의 SURFACE_LAYOUT_TRACE_STAGES 와 같다.
+/// Stops the record and returns ticket, begun, presented, committed and requested for each transaction. Call it on the
+/// main thread. The number of values equals SURFACE_LAYOUT_TRACE_STAGES of native.
 pub fn layout_trace_stop() -> Result<Vec<[f64; 5]>, String> {
     const CAPACITY: usize = 4096;
     let mut values = vec![0.0; CAPACITY * 5];
@@ -61,19 +61,20 @@ pub fn layout_trace_stop() -> Result<Vec<[f64; 5]>, String> {
         .collect())
 }
 
-/// 창 번호의 창을 캡처 대상으로 준비한다. display 이면 창이 있는 디스플레이에서 이 앱의 창을 캡처한다.
+/// Prepares the window with the window number as a capture target. When display is set, it captures the windows of this
+/// application on the display that holds the window.
 fn last_error(operation: &str) -> String {
     let message = unsafe { CStr::from_ptr(sp_capture_error()) };
     format!("{operation}: {}", message.to_string_lossy())
 }
 
-// 호출별 오류를 읽고 해제하며 녹화의 공유 오류는 조회하지 않는다.
+// It reads and releases the error of each call, and does not look up the shared error of the recording.
 fn call_result(operation: &str, success: bool, error: *mut c_char) -> Result<(), String> {
     if !error.is_null() {
         let message = unsafe { CStr::from_ptr(error) }
             .to_str()
             .map(|message| format!("{operation}: {message}"))
-            // 기본값: 없음. UTF-8 이 아닌 오류 문장은 그 사실을 담은 오류로 보고한다.
+            // default: none. An error text that is not UTF-8 is reported as an error that states that fact.
             .unwrap_or_else(|error| format!("{operation}: native error is invalid UTF-8: {error}"));
         unsafe { libc::free(error.cast()) };
         return Err(message);
@@ -90,7 +91,7 @@ pub fn open(window_number: isize, display: bool) -> Result<(), String> {
     call_result("capture open failed", prepared, error)
 }
 
-/// directory 에 프레임 기록을 시작한다. NUL 문자를 포함한 경로는 무시한다.
+/// Starts to record frames in directory. A path that contains a NUL character is ignored.
 pub fn start(directory: &str) -> Result<(), String> {
     let where_to = CString::new(directory)
         .map_err(|_| "capture start failed: directory contains NUL".to_owned())?;
@@ -99,7 +100,8 @@ pub fn start(directory: &str) -> Result<(), String> {
     call_result("capture start failed", started, error)
 }
 
-/// after 의 표시 시각(ms, 0 이면 호출 시각)까지 기록한 뒤 기록을 끝내고 기록한 프레임 수를 반환한다.
+/// Records until the presentation time after (ms, the call time when 0), ends the record and returns the number of
+/// recorded frames.
 pub fn stop(after: f64) -> Result<i32, String> {
     let frames = unsafe { sp_capture_stop(after) };
     let error = unsafe { CStr::from_ptr(sp_capture_error()) };
@@ -110,22 +112,22 @@ pub fn stop(after: f64) -> Result<i32, String> {
     }
 }
 
-/// 마지막 녹화가 유한한 프레임 상한에 도달해 자동으로 멈췄는지 반환한다.
+/// Returns whether the last recording reached the finite frame limit and stopped automatically.
 pub fn limited() -> bool {
     unsafe { sp_capture_limited() }
 }
 
-/// 마지막으로 멈춘 기록에서 연속한 프레임 사이의 가장 긴 표시 간격(ms).
+/// The longest presentation interval (ms) between consecutive frames in the record that was stopped last.
 pub fn longest_gap() -> f64 {
     unsafe { sp_capture_longest_gap() }
 }
 
-/// 현재 시각(ms). 기록 프레임의 표시 시각과 같은 시계다.
+/// The current time (ms). It is on the same clock as the presentation time of the recorded frames.
 pub fn clock() -> f64 {
     unsafe { sp_capture_clock() }
 }
 
-/// 첫 프레임을 기다리고 기록 여부를 반환한다.
+/// Waits for the first frame and returns whether it was recorded.
 pub fn wait() -> Result<bool, String> {
     if unsafe { sp_capture_wait() != 0 } {
         Ok(true)
@@ -134,7 +136,7 @@ pub fn wait() -> Result<bool, String> {
     }
 }
 
-/// 창 번호의 창을 포커스를 주지 않고 한 장 찍어 path 에 PNG 로 쓴다.
+/// Takes one still image of the window with the window number without giving it focus and writes it as PNG to path.
 pub fn still(window_number: isize, path: &str) -> Result<(), String> {
     let target =
         CString::new(path).map_err(|_| "still capture failed: path contains NUL".to_owned())?;

@@ -1,5 +1,5 @@
-//! host 호출 인자의 해석을 검사한다(docs/spec/native-host.md#host-calls). 두 host 는 같은 인자를 같은 문장으로
-//! 거부한다.
+//! Checks the decoding of host call arguments (docs/spec/native-host.md#host-calls). Both hosts reject the same
+//! arguments with the same text.
 
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -14,7 +14,7 @@ fn refusal<T: serde::de::DeserializeOwned>(name: &str, value: Value) -> String {
     }
 }
 
-/// 고정 길이 배열을 가진 인자.
+/// An argument that holds a fixed-length array.
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct Shape {
@@ -74,14 +74,14 @@ fn arguments_are_refused_with_the_shared_messages() {
         refusal::<Shape>("request", json!({"fill": [0, 0, 0]})),
         "argument request.fill must be an array of 4 items"
     );
-    // 선택 field 는 빠지거나 null 일 수 있다.
+    // An optional field can be missing or null.
     decode::<documents::Request>(
         "request",
         &json!({"surface": "s", "document": "d", "url": null}),
     )
     .expect("optional fields may be missing or null");
-    // 값이 없는 상태 변경은 값이 null 인 변경이다. Tauri runtime adapter 는 값을 JSON 텍스트로 보내고, 값이
-    // undefined 이면 field 를 보내지 않는다.
+    // A state change without a value is a change whose value is null. The Tauri runtime adapter sends the value as JSON
+    // text, and when the value is undefined it does not send the field.
     decode::<exposure::Changed>("request", &json!({"name": "core.grid"}))
         .expect("a status change may lack its value");
 }

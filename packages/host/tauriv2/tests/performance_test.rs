@@ -113,7 +113,7 @@ fn already_off_writes_nothing() {
 // contract: performance.sampler.failed-reading-is-explicit
 #[test]
 fn sampler_reports_a_failed_reading() {
-    // 존재하지 않는 pid 의 상주 크기는 읽을 수 없다. 0 으로 바꾸지 않고 오류로 기록한다.
+    // The resident size of a pid that does not exist cannot be read. It is recorded as an error and not converted to 0.
     let record = performance::memory_record(1 << 30);
     assert!(
         record.get("rss_host_kb").is_none(),

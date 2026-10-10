@@ -1,12 +1,12 @@
-//! 사이드카 채널.
+//! The sidecar channel.
 //!
 //! The configuration files staged with the frontend decide the available sidecars. For each plugin in the plugins of
 //! environment.json, the host reads the sidecars of modules/<plugin>/plugin.json, and for each sidecar it reads
 //! the executable and protocol of modules/<sidecar>/sidecar.json. The executable is in the directory of the
 //! application executable under the name basename(executable). A sidecar is identified by its name.
 //!
-//! 선언된 사이드카를 처음 사용할 때 실행하고, 표면 페이지와 사이드카 사이에서 한 줄 JSON
-//! 메시지를 전달한다. 메시지 본문은 해석하지 않는다. 형식은 docs/spec/sidecars.md 에 정의한다.
+//! Starts a declared sidecar at its first use and relays one-line JSON messages between surface pages and the sidecar.
+//! The message body is not interpreted. The format is defined in docs/spec/sidecars.md.
 
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -27,54 +27,54 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use tauri::Window;
 
-/// 사이드카가 보낸 메시지를 페이지에 전달하는 이벤트 값.
+/// The event value that passes a message sent by a sidecar to the page.
 #[derive(Clone, Serialize)]
 pub struct Message {
     /// The sidecar that sent the message.
     pub sidecar: String,
-    /// 메시지를 받을 표면 id.
+    /// The id of the surface that receives the message.
     pub surface: String,
-    /// 해석하지 않은 메시지 본문.
+    /// The message body, not interpreted.
     pub body: Box<RawValue>,
 }
 
-/// 사이드카 실패를 페이지에 알리는 이벤트 값(docs/spec/sidecars.md#failure).
+/// The event value that reports a sidecar failure to the page (docs/spec/sidecars.md#failure).
 #[derive(Clone, Debug, Serialize)]
 pub struct Failure {
     /// The sidecar that failed.
     pub sidecar: String,
-    /// 실패한 프로세스에 요청을 보낸 표면 id.
+    /// The id of the surface that sent a request to the failed process.
     pub surface: String,
-    /// 실패 원인.
+    /// The cause of the failure.
     pub reason: String,
 }
 
-/// 사이드카 outbox 채널의 메시지 유형.
+/// The message kinds of the outbox channel of a sidecar.
 enum Outgoing {
-    /// 사이드카로 전송할 한 줄.
+    /// One line to send to the sidecar.
     Line(Vec<u8>),
-    /// 사이드카 stdin 을 닫으라는 신호.
+    /// A signal to close the stdin of the sidecar.
     Close,
 }
 
-/// 사이드카로 응답을 전송하는 인터페이스.
+/// The interface that sends responses to a sidecar.
 pub trait ResponseSender: Send {
-    /// 응답 JSON 을 사이드카에 전송한다. 이미지 이름을 키로 사용한다.
+    /// Sends the response JSON to the sidecar. The image name is used as the key.
     fn send(&self, surface: &str, image: &str, body: &RawValue) -> Result<(), String>;
 }
 
-/// 표면을 소유한 창. 사이드카 메시지의 root 를 제공하고 이벤트를 받는다.
+/// The window that owns a surface. It provides the root of sidecar messages and receives events.
 pub trait Owner: Clone + Send + 'static {
-    /// 소유 창을 구분하는 값.
+    /// The value that distinguishes the owning window.
     fn key(&self) -> String;
-    /// 사이드카 요청의 root 로 보내는 프로젝트 디렉터리.
+    /// The project directory that is sent as the root of sidecar requests.
     fn root(&self) -> Result<String, String>;
-    /// 사이드카가 보낸 메시지를 창의 페이지에 전달한다.
+    /// Passes a message that the sidecar sent to the page of the window.
     fn deliver(&self, message: Message);
-    /// 사이드카 실패를 창의 페이지에 전달한다.
+    /// Passes a sidecar failure to the page of the window.
     fn deliver_failure(&self, failure: Failure);
-    /// 이미지 봉투를 결정하여 처리한다. 기본 구현은 없음.
-    /// 반환값: 이미지 봉투를 처리했는지 여부.
+    /// Decides and handles an image envelope. There is no default implementation.
+    /// Return value: whether the image envelope was handled.
     fn decide_image_envelope(
         &self,
         _sidecar_name: &str,
@@ -84,9 +84,10 @@ pub trait Owner: Clone + Send + 'static {
     ) -> bool {
         false
     }
-    /// 영속 사이드카의 연결이 끊긴 뒤 다시 맺히면 호출된다(V5-106). 창은 그 사이드카의
-    /// 그림 configure 를 다시 보내야 한다 — 이전 연결이 확인한 configure 상태는 연결과
-    /// 함께 죽었다. 기본 구현은 없음: 그림을 소유하지 않은 소유자는 다시 보낼 것이 없다.
+    /// Called when the connection of a persistent sidecar is established again after it was lost (V5-106). The window
+    /// must send the image configure of that sidecar again, because the configure state that the previous connection
+    /// confirmed died with the connection. There is no default implementation: an owner that owns no image has nothing
+    /// to send again.
     fn sidecar_reconnected(&self, _sidecar: &str) {}
 }
 
@@ -110,13 +111,14 @@ struct Event {
     body: Box<RawValue>,
 }
 
-/// closed 를 담았는지 먼저 본다. closed 가 있으면 그 줄은 closed 에 대한 답이다(docs/spec/sidecars.md#messages).
+/// It first checks whether the line holds closed. When closed is present, the line is the answer to closed
+/// (docs/spec/sidecars.md#messages).
 #[derive(Deserialize)]
 struct CloseProbe {
     closed: Option<bool>,
 }
 
-/// closed 에 대한 사이드카의 답. error 는 닫지 못한 까닭이다.
+/// The answer of the sidecar to closed. error is the reason why it could not close.
 #[derive(Deserialize)]
 struct CloseAnswer {
     surface: String,
@@ -124,20 +126,20 @@ struct CloseAnswer {
     error: Option<String>,
 }
 
-/// 호스트가 closed 를 보냈고 사이드카가 아직 답하지 않은 표면(host.sidecars).
+/// The surfaces for which the host sent closed and the sidecar has not answered yet (host.sidecars).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ClosingSurface {
     /// The sidecar that received closed.
     pub sidecar: String,
-    /// 닫힌 표면 id.
+    /// The id of the closed surface.
     pub surface: String,
 }
 
-/// closing 이 바뀐 뒤 잠금 밖에서 부르는 알림.
+/// A notification that is called outside the lock after closing changed.
 type ClosingChanged = Arc<dyn Fn() + Send + Sync>;
 
-/// line 이 closed 에 대한 답이면 처리한다. 답이 아니면 Ok(false), 처리했으면 Ok(true), 프로토콜을 어겼으면 그
-/// 까닭을 반환한다. 닫지 못한 까닭은 로그에 쓴다.
+/// Handles line when it is an answer to closed. It returns Ok(false) when it is not an answer, Ok(true) when it was
+/// handled, and the reason when the protocol was violated. The reason why it could not close is written to the log.
 fn close_answer<O: Owner>(
     state: &Arc<Mutex<State<O>>>,
     sidecar: &str,
@@ -337,8 +339,7 @@ fn forget_closing<O>(state: &mut State<O>, sidecar: &str) -> Option<ClosingChang
     state.closing_changed.clone()
 }
 
-/// 읽기 스레드의 응답 전송기. 사이드카 outbox 채널로 응답을 전송한다.
-/// 소유 창이 없어 버리는 사이드카 메시지를 본문과 함께 기록한다.
+/// Records a sidecar message that is dropped because no window owns it, together with its body.
 fn log_dropped_message(sidecar: &str, surface: &str, body: &str) {
     crate::application_log::log_info(
         &format!("sidecar {sidecar}"),
@@ -346,7 +347,8 @@ fn log_dropped_message(sidecar: &str, surface: &str, body: &str) {
     );
 }
 
-/// 채널이 가득 차면 응답을 State.pending_replies 에 버퍼링한다.
+/// The response sender of the read thread. It sends responses to the outbox channel of the sidecar.
+/// When the channel is full, the response is buffered in State.pending_replies.
 struct ReadThreadResponseSender<O: Owner> {
     sidecar_name: String,
     tx: SyncSender<Outgoing>,
@@ -369,7 +371,7 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
         match self.tx.try_send(Outgoing::Line(line.clone())) {
             Ok(()) => Ok(()),
             Err(TrySendError::Full(_)) => {
-                // 채널이 가득 차면 immutable 응답을 전송 순서대로 보관한다.
+                // When the channel is full, immutable responses are kept in the order of sending.
                 let mut state = self.state.lock().expect("sidecar state");
                 let key = format!("{}:{}:{}", surface, image, body.get());
                 state
@@ -391,7 +393,8 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
     }
 }
 
-/// 기다리던 요청이 끝난 뒤에 도착한 서비스의 답을 남긴다. 실패한 답은 그 요청이 보고하지 않았으므로 오류 줄이다.
+/// Records the answer of the service that arrived after the request that waited for it ended. A failed answer was not
+/// reported by that request, so it is an error line.
 fn late_reply(sidecar: &str, operation: &str, result: Result<(), String>) {
     match result {
         Ok(()) => crate::application_log::log_info(
@@ -405,8 +408,9 @@ fn late_reply(sidecar: &str, operation: &str, result: Result<(), String>) {
     }
 }
 
-/// 영속 연결의 쓰기 스레드가 끝날 때 연결을 닫는다. 서비스가 먼저 연결을 끊었으면 소켓은 이미 연결되지 않은 상태
-/// (ENOTCONN)이고 그 끊김은 읽기 스레드가 연결 상실로 남기므로, 그 경우는 관측이다.
+/// Closes the connection when the write thread of a persistent connection ends. If the service closed the connection
+/// first, the socket is already not connected (ENOTCONN) and the read thread records that loss as a connection loss, so
+/// that case is an observation.
 fn shut_down_writer(name: &str, writer: &mut dyn PersistentStream) {
     match writer.shutdown() {
         Ok(()) => {}
@@ -439,9 +443,9 @@ fn write_pending_socket<O>(
     let (replies, closes) = {
         let mut state = state.lock().expect("sidecar state");
         (
-            // 기본값: 보관분이 없는 사이드카에는 쓸 반납과 닫힘이 없다.
+            // default: a sidecar without held items has no returns and closes to write.
             state.pending_replies.remove(name).unwrap_or_default(),
-            // 기본값: 보관분이 없는 사이드카에는 쓸 반납과 닫힘이 없다.
+            // default: a sidecar without held items has no returns and closes to write.
             state.pending_closes.remove(name).unwrap_or_default(),
         )
     };
@@ -459,14 +463,15 @@ fn write_socket_line(stream: &mut dyn PersistentStream, name: &str, line: &[u8])
     true
 }
 
-/// 보관분을 한꺼번에 꺼내 반납 먼저, 닫힘 나중으로 쓴다. 보관분은 큐가 가득 찬 뒤에 생기므로 큐보다 뒤에 나간다.
+/// Takes out the held items at once and writes the returns first and the closes last. The held items arise after the
+/// queue is full, so they go out after the queue.
 fn write_pending<O: Owner>(state: &Mutex<State<O>>, name: &str, stdin: &mut ChildStdin) -> bool {
     let (replies, closes) = {
         let mut state = state.lock().expect("sidecar state");
         (
-            // 기본값: 보관분이 없는 사이드카에는 쓸 반납과 닫힘이 없다.
+            // default: a sidecar without held items has no returns and closes to write.
             state.pending_replies.remove(name).unwrap_or_default(),
-            // 기본값: 보관분이 없는 사이드카에는 쓸 반납과 닫힘이 없다.
+            // default: a sidecar without held items has no returns and closes to write.
             state.pending_closes.remove(name).unwrap_or_default(),
         )
     };
@@ -476,18 +481,19 @@ fn write_pending<O: Owner>(state: &Mutex<State<O>>, name: &str, stdin: &mut Chil
         .all(|line| write_line(stdin, name, line))
 }
 
-/// 서비스가 retain 에 답하기를 기다리는 시간. 세션을 닫는 데 걸리는 시간을 포함한다.
+/// The time to wait for the service to answer retain. It includes the time it takes to close the sessions.
 const RETAIN_TIMEOUT: Duration = Duration::from_secs(10);
 static RETAIN_REQUESTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
-/// 사이드카 메시지 한 줄의 줄바꿈 앞 최대 byte 수(docs/spec/sidecars.md#messages). 수 MB 의
-/// schema snapshot 을 열 배 이상의 여유로 담고, 메시지 하나에 잡는 메모리를 이 크기로 제한한다.
+/// The maximum number of bytes of one sidecar message line before the line feed (docs/spec/sidecars.md#messages). It
+/// holds a schema snapshot of several MB with a margin of more than ten times, and it limits the memory held for one
+/// message to this size.
 const MESSAGE_LIMIT: usize = 64 << 20;
 
-/// 등록한 뒤에 띄울 쓰기 또는 읽기 스레드.
+/// The write or read thread to start after the registration.
 type Thread = Box<dyn FnOnce() + Send>;
 
-/// 시작한 사이드카와 그 스레드.
+/// A started sidecar and its threads.
 struct Started {
     process: Process,
     threads: Vec<Thread>,
@@ -495,21 +501,21 @@ struct Started {
 
 struct Process {
     child: Option<Child>,
-    outbox: SyncSender<Outgoing>, // 용량 256인 채널
+    outbox: SyncSender<Outgoing>, // channel with capacity 256
     persistent: Option<PersistentConnection>,
-    /// 이 프로세스에 요청을 보낸 표면. 실패를 알릴 표면이다.
+    /// The surfaces that sent a request to this process. They are the surfaces to which a failure is reported.
     surfaces: HashSet<String>,
 }
 
 type RetainWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<usize, String>>>>>;
-/// close 와 shutdown 요청마다 서비스의 결과를 받는다.
+/// Receives the result of the service for every close and shutdown request.
 type ReplyWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>;
 
 struct PersistentConnection {
     /// The version that the service sent in its hello reply, or `None` when the reply had none.
     version: Option<String>,
     close_waiters: ReplyWaiters,
-    /// retain 요청마다 서비스가 닫은 세션 수나 오류를 받는다.
+    /// Receives the number of sessions that the service closed, or an error, for every retain request.
     retain_waiters: RetainWaiters,
     shutdown_waiters: ReplyWaiters,
     /// Whether the owner of this connection was closed and the service was told to shut down. The close of a
@@ -532,58 +538,65 @@ struct Replacement {
 
 struct State<O> {
     running: HashMap<String, Process>,
-    /// 시작 중인 사이드카. 시작은 잠금 밖에서 하며, 끝나면 Core::started 로 알린다.
+    /// The sidecars that are starting. A start is done outside the lock and announced with Core::started when it ends.
     starting: HashSet<String>,
     /// For each sidecar, the surfaces whose closed was sent and not answered, with the number of those closes. A
     /// surface closed again before the answer receives one answer per close.
     closing: std::collections::BTreeMap<String, std::collections::BTreeMap<String, usize>>,
-    /// closing 이 바뀐 뒤 잠금 밖에서 부르는 알림. 호스트가 host.sidecars 를 알린다.
+    /// A notification that is called outside the lock after closing changed. The host announces host.sidecars.
     closing_changed: Option<ClosingChanged>,
     owners: HashMap<String, O>,
-    // 표면을 처음 보낼 때의 프로젝트 디렉터리. 사이드카는 root 와 표면으로 세션을 찾으므로, 창의
-    // 프로젝트가 바뀐 뒤에도 이미 열린 표면의 요청과 닫힘은 이 root 로 보낸다.
+    // The project directory at the time a surface is first sent. A sidecar finds a session by root and surface, so even
+    // after the project of the window changed, requests and closes of an already opened surface are sent with this
+    // root.
     roots: HashMap<String, String>,
     stopped: bool,
-    // pending_replies: 각 사이드카별로 immutable 이미지 응답을 전송 순서대로 버퍼링한다.
-    // pending_closes: 각 사이드카별로 표면의 닫힘 메시지를 버퍼링한다 (surface → close message)
+    // pending_replies: buffers the immutable image responses of each sidecar in the order of sending.
+    // pending_closes: buffers the close messages of the surfaces of each sidecar (surface → close message).
     pending_replies: HashMap<String, Vec<Vec<u8>>>,
     pending_closes: HashMap<String, Vec<Vec<u8>>>,
-    // 연결이 끊겼고 아직 소유 표면에 알리지 않은 영속 사이드카(V5-106). 끊김을 알린
-    // 시작이 이 기록을 소진한다 — 첫 시작은 알림이 없다.
+    // Persistent sidecars whose connection was lost and whose owning surfaces were not notified yet (V5-106). The start
+    // that announces the loss consumes this record. The first start has no notification.
     unannounced_loss: std::collections::HashSet<String>,
     /// The persistent services that `replace` closes, with the running and the installed version, which the
     /// reconnection after the close writes to the log.
     replacing: HashMap<String, Replacement>,
-    /// 멈추는 표준 입출력 사이드카마다 읽기 스레드가 출력의 끝까지 쓰는 기록이다(docs/spec/sidecars.md#messages).
+    /// For each stopping standard-I/O sidecar, the record that the read thread writes until the end of the output
+    /// (docs/spec/sidecars.md#messages).
     stopping: HashMap<String, Stopping>,
 }
 
-/// 멈추는 표준 입출력 사이드카의 기록. stop 이 실행 중인 목록을 비운 뒤에도 읽기 스레드는 출력을 끝까지 읽는다.
+/// The record of a stopping standard-I/O sidecar. The read thread reads the output to its end even after stop emptied
+/// the list of running sidecars.
 #[derive(Default)]
 struct Stopping {
-    /// 이 프로세스에 요청을 보낸 표면. 멈추는 동안 그 표면의 메시지는 위반이 아니다.
+    /// The surfaces that sent a request to this process. While stopping, the messages of those surfaces are not a
+    /// violation.
     surfaces: HashSet<String>,
     /// The closes, with their number, that stop moved out of closing. The sidecar answers them on its way out, so
     /// such an answer is not a violation.
     closing: std::collections::BTreeMap<String, usize>,
-    /// 멈추는 동안 프로토콜을 어겨 읽기를 멈췄다. 닫은 파이프가 일으킨 종료는 보고하지 않는다.
+    /// Reading stopped because the protocol was violated while stopping. An end that the closed pipe caused is not
+    /// reported.
     violated: bool,
 }
 
-/// 사이드카 채널의 스레드 공유 부분. 읽기 스레드가 연결 끊김을 감지하면 같은 시작
-/// 경로로 다시 시작해야 하므로(V5-106) 시작에 필요한 구성과 상태를 여기 둔다.
+/// The part of the sidecar channel that threads share. When the read thread detects a lost connection, it must start
+/// again through the same start path (V5-106), so the configuration and the state needed for the start are kept here.
 struct Core<O> {
-    /// 선언된 사이드카. 설치가 실행 중에 선언을 더하므로 state 와 따로 잠근다.
+    /// The declared sidecars. An installation adds declarations while running, so they are locked separately from
+    /// state.
     declarations: RwLock<Declarations>,
     config_directory: PathBuf,
     state: Arc<Mutex<State<O>>>,
-    /// 시작이 끝날 때마다 알린다. 같은 사이드카의 요청과 stop 이 기다린다.
+    /// Announces every end of a start. The requests and stop of the same sidecar wait for it.
     started: Condvar,
-    /// 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 상한.
+    /// The upper limit of the time until a newly started persistent service prints its endpoint.
     ready_timeout: Duration,
 }
 
-/// 선언된 사이드카의 실행 파일, 영속 여부, 영속 실행 파일 basename 을 쓰는 사이드카.
+/// A sidecar that uses the executable of a declared sidecar, whether it is persistent, and the basename of the
+/// persistent executable.
 #[derive(Default)]
 struct Declarations {
     /// The sidecar and the path of its executable.
@@ -607,7 +620,7 @@ impl<O> Core<O> {
             .unwrap_or_default()
     }
 
-    /// 선언된 사이드카 name 의 실행 파일과 영속 여부.
+    /// The executable and the persistence of the declared sidecar name.
     fn declaration(&self, name: &str) -> Option<(PathBuf, bool)> {
         let declarations = self.declarations.read().expect("sidecar declarations");
         let program = declarations.declared.get(name)?.clone();
@@ -615,14 +628,14 @@ impl<O> Core<O> {
     }
 }
 
-/// 애플리케이션 하나의 사이드카 프로세스와 표면 소유 창을 관리한다.
+/// Manages the sidecar processes and the surface-owning windows of one application.
 pub struct Sidecars<O: Owner> {
     core: Arc<Core<O>>,
-    /// 테스트에서 주입 가능한 Stop() 기한. 기본값 5초.
+    /// The Stop() deadline, which a test can inject. The default is 5 seconds.
     pub stop_timeout: Duration,
 }
 
-/// 설치된 사이드카 하나. data 는 그 sidecar.json 의 내용이고 folder 는 그것을 담은 폴더다.
+/// One installed sidecar. data is the content of its sidecar.json and folder is the folder that holds it.
 #[derive(Clone, Debug)]
 pub struct SidecarDeclaration {
     pub name: String,
@@ -644,8 +657,8 @@ pub struct OutdatedSidecar {
 }
 
 impl<O: Owner> Sidecars<O> {
-    /// 선언된 사이드카로 채널을 생성한다. 실행 파일은 각 folder 안의 executable 경로다.
-    /// canonical application configuration directory로 sidecar channel을 생성한다.
+    /// Creates the channel with the declared sidecars. The executable is the executable path inside each folder.
+    /// Creates the sidecar channel with the canonical application configuration directory.
     pub fn new(
         declarations: &[SidecarDeclaration],
         config_directory: PathBuf,
@@ -784,8 +797,9 @@ impl<O: Owner> Sidecars<O> {
         Ok(changed)
     }
 
-    /// 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 상한을 바꾼다. 검사가 기본 30초 대신 짧은 상한을 준다.
-    /// 다른 참조가 생기기 전, 만든 직후에만 부른다.
+    /// Changes the upper limit of the time until a newly started persistent service prints its endpoint. A check gives
+    /// a short limit instead of the default 30 seconds. Call it only right after creation, before another reference
+    /// exists.
     pub fn with_ready_timeout(mut self, limit: Duration) -> Self {
         Arc::get_mut(&mut self.core)
             .expect("the ready timeout is set before the sidecars are shared")
@@ -793,8 +807,8 @@ impl<O: Owner> Sidecars<O> {
         self
     }
 
-    /// owner 창의 표면 surface 에서 온 body 를 사이드카 name 에 전달한다.
-    /// 뮤텍스 밖에서 직렬화하고 논블로킹 채널로 전송하므로, 사이드카가 느려도 다른 전송을 차단하지 않는다.
+    /// Passes body that came from the surface surface of the window owner to the sidecar name. It is serialized outside
+    /// the mutex and sent over a non-blocking channel, so a slow sidecar does not block other sends.
     pub fn send(
         &self,
         owner: &O,
@@ -818,11 +832,11 @@ impl<O: Owner> Sidecars<O> {
         let current = owner.root()?;
         let root = {
             let state = self.core.state.lock().map_err(|e| e.to_string())?;
-            // 기본값: 디렉터리를 기록하지 않은 표면은 창의 현재 프로젝트 루트에서 시작한다.
+            // default: a surface with no recorded directory starts from the current project root of the window.
             state.roots.get(surface).cloned().unwrap_or(current)
         };
 
-        // JSON 직렬화는 뮤텍스 밖에서 한다.
+        // The JSON serialization is done outside the mutex.
         let mut line = serde_json::to_vec(&Request {
             surface,
             root: Some(&root),
@@ -858,12 +872,12 @@ impl<O: Owner> Sidecars<O> {
                 "discarding disconnected persistent connection",
             );
         }
-        // 끊김을 알린 적 없는 첫 시작은 알림이 없다. 시작이 앞선 연결 끊김의 기록을
-        // 소진하면 이 호출이 연결 알림을 보낸다(V5-106). 시작에 실패하면 이 전송의
-        // 오류가 그 실패를 호출자에게 전한다.
+        // The first start, for which no loss was announced, has no notification. When the start consumes the record of
+        // an earlier connection loss, this call sends the connection notification (V5-106). If the start fails, the
+        // error of this send conveys that failure to the caller.
         let (mut state, started) = Core::ensure(&self.core, state, name)?;
         let restarted = started && state.unannounced_loss.remove(name);
-        // 시작하는 동안 잠금을 놓았으므로 표면의 소유자를 다시 확인한다.
+        // The lock was released during the start, so the owner of the surface is checked again.
         if let Some(other) = state.owners.get(surface) {
             if other.key() != owner.key() {
                 return Err(format!("surface {surface} belongs to another window"));
@@ -881,7 +895,7 @@ impl<O: Owner> Sidecars<O> {
             && is_outdated(&self.core, name, process);
         process.surfaces.insert(surface.to_string());
 
-        // 논블로킹으로 채널에 전송한다. 채널이 가득 차면 "is not keeping up" 오류를 반환한다.
+        // It sends to the channel without blocking. When the channel is full, it returns an "is not keeping up" error.
         let delivered = process
             .outbox
             .try_send(Outgoing::Line(line))
@@ -897,17 +911,17 @@ impl<O: Owner> Sidecars<O> {
         delivered
     }
 
-    /// 이미 실행 중인 영속 사이드카를 반환한다.
+    /// Returns the persistent sidecar that is already running.
     ///
-    /// 페이지가 호스트에서 그림 등록을 먼저 제거한 경우에도 다시 읽기 복구는
-    /// 영속 표면 작업을 초기화해야 한다.
+    /// Even when the page removed the image registration from the host first, the recovery after a reload must
+    /// initialize the persistent surface work.
     pub fn running_persistent_names(&self) -> Result<Vec<String>, String> {
         let state = self.core.state.lock().map_err(|e| e.to_string())?;
         let mut names: Vec<_> = state
             .running
             .iter()
             .filter(|(name, process)| {
-                // 기본값: persistent 를 선언하지 않은 사이드카는 창마다 실행된다.
+                // default: a sidecar that did not declare persistent runs for each window.
                 self.core
                     .declaration(name)
                     .is_some_and(|(_, persistent)| persistent)
@@ -922,7 +936,7 @@ impl<O: Owner> Sidecars<O> {
         Ok(names)
     }
 
-    /// owner 창의 표면 중 alive 에 없는 것을 실행 중인 모든 사이드카에 알린다.
+    /// Notifies all running sidecars of the surfaces of the window owner that are not in alive.
     pub fn retain(&self, owner: &O, alive: &dyn Fn(&str) -> bool) -> Result<(), String> {
         let mut state = self.core.state.lock().map_err(|e| e.to_string())?;
         let key = owner.key();
@@ -958,7 +972,7 @@ impl<O: Owner> Sidecars<O> {
                     .or_default() += 1;
                 closed_any = true;
             }
-            // 채널 전송을 시도할 프로세스들을 먼저 수집한다 (borrow 충돌 방지).
+            // First collects the processes to which a channel send will be tried (to avoid a borrow conflict).
             let processes: Vec<(String, Result<(), TrySendError<Outgoing>>)> = state
                 .running
                 .iter()
@@ -968,7 +982,8 @@ impl<O: Owner> Sidecars<O> {
                 })
                 .collect();
 
-            // 큐가 가득 찬 항목만 순서대로 버퍼링한다. 연결이 끊긴 항목은 실패를 보고한다.
+            // Only the items for which the queue is full are buffered in order. An item whose connection is lost
+            // reports a failure.
             for (name, result) in processes {
                 if let Err(error) = result {
                     if matches!(error, TrySendError::Full(_)) {
@@ -1139,7 +1154,8 @@ impl<O: Owner> Sidecars<O> {
         }
     }
 
-    /// closed 를 보냈고 답을 받지 않은 표면을 사이드카와 표면 순으로 반환한다(host.sidecars).
+    /// Returns the surfaces for which closed was sent and no answer was received, in the order of sidecar and surface
+    /// (host.sidecars).
     pub fn closing(&self) -> Vec<ClosingSurface> {
         let state = self.core.state.lock().expect("sidecar state");
         state
@@ -1154,7 +1170,7 @@ impl<O: Owner> Sidecars<O> {
             .collect()
     }
 
-    /// closing 이 바뀔 때 잠금 밖에서 부를 알림을 정한다.
+    /// Sets the notification to call outside the lock when closing changes.
     pub fn on_closing_changed(&self, changed: impl Fn() + Send + Sync + 'static) {
         self.core
             .state
@@ -1163,9 +1179,10 @@ impl<O: Owner> Sidecars<O> {
             .closing_changed = Some(Arc::new(changed));
     }
 
-    /// 각 영속 서비스에서 surfaces(표면, 루트) 에 없는 이 애플리케이션의 세션을 닫고 닫은 세션 수를
-    /// 반환한다(docs/spec/terminal-runtime.md). 이 프로세스가 이미 메시지를 보낸 표면은 목록에 없어도
-    /// 남긴다. 서비스가 떠 있지 않고 엔드포인트도 없으면 세션이 없으므로 건너뛴다.
+    /// Closes the sessions of this application in each persistent service that are not in surfaces (surface, root), and
+    /// returns the number of closed sessions (docs/spec/terminal-runtime.md). A surface to which this process already
+    /// sent a message is kept even if it is not in the list. When no service is running and there is no endpoint, there
+    /// is no session, so it is skipped.
     pub fn retain_sessions(&self, surfaces: &[(String, String)]) -> Result<usize, String> {
         let mut total = 0;
         let mut names: Vec<String> = self
@@ -1258,8 +1275,8 @@ impl<O: Owner> Sidecars<O> {
         Ok(total)
     }
 
-    /// 사이드카에 응답(이미지 반납 등)을 전달한다. ResponseSender와 동일한 역할을 한다.
-    /// 채널이 가득 차면 응답을 surface:image 별로 버퍼링했다가 쓰기 스레드가 전송한다.
+    /// Passes a response (such as an image return) to the sidecar. It has the same role as ResponseSender. When the
+    /// channel is full, the response is buffered for each surface:image and the write thread sends it.
     pub fn send_response(
         &self,
         name: &str,
@@ -1287,11 +1304,11 @@ impl<O: Owner> Sidecars<O> {
             .get(name)
             .ok_or_else(|| format!("sidecar {name} is not running"))?;
 
-        // 논블로킹으로 채널에 전송한다. 채널이 가득 차면 버퍼링한다.
+        // It sends to the channel without blocking. When the channel is full, it buffers.
         match process.outbox.try_send(Outgoing::Line(line.clone())) {
             Ok(()) => Ok(()),
             Err(TrySendError::Full(_)) => {
-                // 채널이 가득 찼으므로 immutable 응답을 전송 순서대로 보관한다.
+                // The channel is full, so immutable responses are kept in the order of sending.
                 let key = format!("{}:{}:{}", surface, image, body.get());
                 state
                     .pending_replies
@@ -1310,8 +1327,8 @@ impl<O: Owner> Sidecars<O> {
         }
     }
 
-    /// 모든 사이드카를 종료한다. 채널에 Close 신호를 보내 쓰기 스레드를 종료하고 stdin을 닫은 후
-    /// 프로세스 종료를 대기하고, 기한 초과 시 강제 종료한다.
+    /// Terminates all sidecars. It sends the Close signal to the channel so that the write thread ends and closes
+    /// stdin, waits for the process to end, and kills it by force when the deadline passes.
     pub fn stop(&self) {
         self.stop_all(false);
     }
@@ -1326,12 +1343,14 @@ impl<O: Owner> Sidecars<O> {
         let (processes, changed): (Vec<(String, Process)>, Option<ClosingChanged>) = {
             let mut state = self.core.state.lock().expect("sidecar state");
             state.stopped = true;
-            // 시작 중인 사이드카는 끝나면 등록되므로, 그 시작을 기다린 뒤 실행 중인 목록을 비운다.
+            // A sidecar that is starting is registered when it ends, so the list of running sidecars is emptied after
+            // waiting for that start.
             while !state.starting.is_empty() {
                 state = self.core.started.wait(state).expect("sidecar state");
             }
-            // 표준 입출력 사이드카는 끝나므로 닫기에 답하지 않는다. 지속 service 는 중지 전에 보낸 닫기에
-            // close-owner 응답보다 먼저 답하므로 그 표면은 답이나 연결의 끝까지 둔다(docs/spec/sidecars.md#messages).
+            // A standard-I/O sidecar ends, so it does not answer a close. A persistent service answers a close that was
+            // sent before the stop earlier than the close-owner response, so that surface is kept until the answer or
+            // the end of the connection (docs/spec/sidecars.md#messages).
             let stdio: Vec<String> = state
                 .running
                 .iter()
@@ -1353,7 +1372,7 @@ impl<O: Owner> Sidecars<O> {
     /// Stops processes, which are out of the running list, by the stop rules and waits until they end
     /// (docs/spec/sidecars.md#declaration-and-startup). With `detach` a persistent service only loses its connection.
     fn stop_processes(&self, processes: Vec<(String, Process)>, detach: bool) {
-        // 모든 프로세스를 병렬로 기다린다.
+        // Waits for all processes in parallel.
         let deadline = std::time::Instant::now() + self.stop_timeout;
         let mut handles = Vec::new();
         for (name, process) in processes {
@@ -1398,12 +1417,13 @@ impl<O: Owner> Sidecars<O> {
                     }
                     return;
                 }
-                // Close 신호를 보낸다. 쓰기 스레드가 이를 받으면 블로킹 루프를 빠져나가고 stdin을 close한다.
+                // Sends the Close signal. When the write thread receives it, it leaves the blocking loop and closes
+                // stdin.
                 match process.outbox.try_send(Outgoing::Close) {
                     Ok(()) => {}
                     Err(TrySendError::Full(close)) => {
-                        // 채널이 가득 참: 별도 스레드에서 블로킹 send를 시도한다.
-                        // 이 스레드는 stop()을 막지 않는다.
+                        // The channel is full: a blocking send is tried on a separate thread. This thread does not
+                        // block stop().
                         let tx = process.outbox.clone();
                         let close_name = name.clone();
                         thread::spawn(move || {
@@ -1416,7 +1436,7 @@ impl<O: Owner> Sidecars<O> {
                         });
                     }
                     Err(TrySendError::Disconnected(_)) => {
-                        // 채널이 닫혔다. 쓰기 스레드가 이미 끝난 것이니 아무것도 보내지 않는다.
+                        // The channel is closed. The write thread has already ended, so nothing is sent.
                     }
                 }
 
@@ -1424,9 +1444,9 @@ impl<O: Owner> Sidecars<O> {
                     return;
                 };
 
-                // wait-timeout 크레이트를 사용하여 SIGCHLD 기반 대기 (폴링 없음).
-                // 크레이트는 남은 시간을 ms 로 내려 poll 에 넘기므로 기한보다 1ms 안쪽 먼저 돌아올 수 있다.
-                // 기한에 닿을 때까지 남은 시간만큼 다시 기다려 기한 전에 kill 하지 않는다.
+                // Waits based on SIGCHLD with the wait-timeout crate (no polling). The crate passes the remaining time
+                // to poll rounded down to ms, so it can return up to 1 ms before the deadline. It waits again for the
+                // time that remains until the deadline is reached, so it does not kill before the deadline.
                 let waited = loop {
                     let remaining = deadline.saturating_duration_since(std::time::Instant::now());
                     match child.wait_timeout(remaining) {
@@ -1434,7 +1454,8 @@ impl<O: Owner> Sidecars<O> {
                         other => break other,
                     }
                 };
-                // 종료의 보고는 위반 뒤 닫은 파이프가 일으킨 종료를 빼고 쓴다(docs/spec/sidecars.md#declaration-and-startup).
+                // The report of the end omits an end that the pipe closed after a violation caused
+                // (docs/spec/sidecars.md#declaration-and-startup).
                 let violated = |state: &Arc<Mutex<State<O>>>| {
                     state
                         .lock()
@@ -1464,7 +1485,7 @@ impl<O: Owner> Sidecars<O> {
                         }
                     }
                     Ok(None) => {
-                        // 기한 초과. 강제 종료.
+                        // The deadline passed. Kill by force.
                         match child.kill() {
                             Ok(()) => log_error(
                                 &format!("sidecar {name}"),
@@ -1481,7 +1502,7 @@ impl<O: Owner> Sidecars<O> {
                         }
                     }
                     Err(e) => {
-                        // wait() 오류. 이미 종료되었거나 이미 waited.
+                        // A wait() error. The process has already ended or has already been waited for.
                         log_error(&format!("sidecar {name}"), format!("wait: {e}"));
                     }
                 }
@@ -1489,7 +1510,7 @@ impl<O: Owner> Sidecars<O> {
             handles.push(handle);
         }
 
-        // 모든 스레드가 완료될 때까지 기다린다.
+        // Waits until all threads complete.
         for handle in handles {
             if let Err(e) = handle.join() {
                 log_error("sidecar stop", format!("thread join: {e:?}"));
@@ -1498,14 +1519,15 @@ impl<O: Owner> Sidecars<O> {
     }
 }
 
-/// service 가 hello 에 답하기까지의 상한(docs/spec/terminal-runtime.md).
+/// The upper limit of the time until the service answers hello (docs/spec/terminal-runtime.md).
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// 새로 시작한 영속 service 가 endpoint 를 출력하기까지의 기본 상한(docs/spec/terminal-runtime.md).
+/// The default upper limit of the time until a newly started persistent service prints its endpoint
+/// (docs/spec/terminal-runtime.md).
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// 새로 시작한 service 가 stdout 에 출력하는 첫 줄을 읽는다. limit 안에 줄이 오지 않으면 그 service 를
-/// 끝내고 회수한 뒤 실패하고, 그 정리의 실패를 오류 뒤에 붙인다.
+/// Reads the first line that a newly started service prints to stdout. When no line arrives within limit, it ends and
+/// reaps that service and fails, and appends the failure of that cleanup after the error.
 fn service_endpoint_line(
     name: &str,
     child: &mut Child,
@@ -1517,7 +1539,7 @@ fn service_endpoint_line(
     thread::spawn(move || {
         let mut line = String::new();
         let read = BufReader::new(stdout).read_line(&mut line).map(|_| line);
-        // 받는 쪽은 상한이 지나면 끝나고, 그 시간 초과는 시작의 오류로 보고된다.
+        // The receiving side ends when the limit passes, and that timeout is reported as the error of the start.
         if sender.send(read).is_err() {
             crate::application_log::log_info(
                 &format!("sidecar {reader_name}"),
@@ -1532,7 +1554,7 @@ fn service_endpoint_line(
                 "sidecar {name}: the service did not print its endpoint within {}s",
                 limit.as_secs()
             );
-            // service 가 끝나면 stdout 이 닫혀 읽기 스레드도 끝난다.
+            // When the service ends, stdout is closed and the read thread ends too.
             if let Err(error) = child.kill() {
                 return Err(format!("{message}; ending the service failed: {error}"));
             }
@@ -1545,9 +1567,10 @@ fn service_endpoint_line(
 }
 
 impl<O: Owner> Core<O> {
-    /// 실행 중인 사이드카를 확인하고, 없으면 시작해 등록한다. state 를 쥔 채 부르고 쥔 채 돌려받는다. 시작은
-    /// 프로세스 기동과 영속 service 의 연결과 인증을 기다리므로 잠금을 놓은 채 한다. 그동안 다른 사이드카의 요청은
-    /// 기다리지 않고, 같은 사이드카의 요청은 그 시작이 끝나기를 기다린다. 두 번째 값은 이 호출이 시작했는지다.
+    /// Checks the running sidecar and, if there is none, starts and registers it. It is called while holding state and
+    /// returns while holding it. The start waits for the process to start and for the connection and authentication of
+    /// a persistent service, so it is done with the lock released. Meanwhile requests of other sidecars do not wait,
+    /// and requests of the same sidecar wait for that start to end. The second value is whether this call started it.
     fn ensure<'a>(
         core: &'a Arc<Self>,
         mut state: MutexGuard<'a, State<O>>,
@@ -1572,7 +1595,8 @@ impl<O: Owner> Core<O> {
         state.starting.remove(name);
         core.started.notify_all();
         let Started { process, threads } = started?;
-        // stop 은 시작이 끝나기를 기다린 뒤 실행 중인 목록을 비우므로, 멈추는 중에 끝난 시작도 등록해 stop 이 정리한다.
+        // stop empties the list of running sidecars after it waited for the starts to end, so a start that ended while
+        // stopping is also registered and stop cleans it up.
         state.running.insert(name.to_string(), process);
         for thread in threads {
             thread::spawn(thread);
@@ -1583,13 +1607,13 @@ impl<O: Owner> Core<O> {
         Ok((state, true))
     }
 
-    /// 사이드카를 시작한다. 영속 선언이면 서비스에 붙고, 아니면 창의 자식 프로세스로 띄운다. 쓰기와 읽기 스레드는
-    /// 등록한 뒤에 띄우도록 돌려준다.
+    /// Starts a sidecar. A persistent declaration attaches to the service, and otherwise it is started as a child
+    /// process of the window. The write and read threads are returned so that they are started after the registration.
     fn start(core: &Arc<Self>, name: &str) -> Result<Started, String> {
         let (program, persistent) = core
             .declaration(name)
             .ok_or_else(|| format!("sidecar {name} is not declared by any plugin"))?;
-        // 기본값: persistent 를 선언하지 않은 사이드카는 창마다 실행된다.
+        // default: a sidecar that did not declare persistent runs for each window.
         if persistent {
             return Self::start_persistent(core, name, &program);
         }
@@ -1614,13 +1638,14 @@ impl<O: Owner> Core<O> {
         let mut stdin = child.stdin.take().ok_or("sidecar stdin is missing")?;
         let stdout = child.stdout.take().ok_or("sidecar stdout is missing")?;
 
-        // 용량 256인 동기 채널 생성
+        // Creates a synchronous channel with capacity 256.
         let (tx, rx) = sync_channel::<Outgoing>(256);
 
-        // 쓰기 스레드: outbox 채널에서 읽어 stdin에 쓴다
-        // 순서는 ① 큐에 있는 모든 것을 비블로킹으로 쓴다 ② 큐가 비었으면 보관분을 모두 쓴다 ③ 그다음 채널에서 블록 수신한다.
-        // 이렇게 하면 보관분(큐가 가득 찼을 때만 생김)이 큐에 먼저 있던 메시지보다 뒤에 나가므로 순서가 맞다.
-        // 채널이 닫혀 종료할 때도 보관분을 전부 쓴 뒤 stdin을 닫는다.
+        // The write thread reads from the outbox channel and writes to stdin. The order is: (1) write everything in the
+        // queue without blocking, (2) when the queue is empty, write all held items, (3) then receive from the channel
+        // with blocking. In this way the held items (which arise only when the queue is full) go out after the messages
+        // that were in the queue earlier, so the order is correct. When the thread ends because the channel is closed,
+        // it also writes all held items before it closes stdin.
         let write_name = name.to_string();
         let state_clone = Arc::clone(&core.state);
 
@@ -1655,7 +1680,8 @@ impl<O: Owner> Core<O> {
             }
         }));
 
-        // 읽기 스레드: stdout에서 읽어 이벤트를 전달하고, 출력이 끝나거나 프로토콜을 어기면 실패를 처리한다
+        // The read thread reads from stdout and passes events, and handles a failure when the output ends or the
+        // protocol is violated.
         let state = Arc::clone(&core.state);
         let sidecar = name.to_string();
         let tx_clone = tx.clone();
@@ -1663,7 +1689,7 @@ impl<O: Owner> Core<O> {
         threads.push(Box::new(move || {
             let mut reader = BufReader::new(stdout);
             let violation = relay(&mut reader, &state, &sidecar, &tx_clone);
-            // 읽기 끝을 닫아 아직 쓰는 프로세스가 쓰기에서 막히지 않게 한다.
+            // The read end is closed so that a process that is still writing is not blocked in a write.
             drop(reader);
             drop(tx_clone);
             fail(&state, &sidecar, pid, violation);
@@ -1712,15 +1738,15 @@ impl<O: Owner> Core<O> {
                 if !current()?.service_process_exists(endpoint.pid)? {
                     std::fs::remove_file(&endpoint_path)
                         .map_err(|e| format!("sidecar {name}: remove stale endpoint: {e}"))?;
-                    // 하나뿐인 생성 경로에 다시 진입한다. stale endpoint는
-                    // 명시적인 crash 복구 경우이며 fallback transport가 아니다.
+                    // It re-enters the only creation path. A stale endpoint is an explicit crash recovery case and not
+                    // a fallback transport.
                     return Self::start_persistent(core, name, program);
                 }
                 endpoint
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                // 서비스는 이 호스트보다 오래 살므로 호스트의 표준 오류가 아니라 자기 로그 파일에 쓴다
-                // (docs/spec/hosts.md#application-log). endpoint 가 없으므로 그 파일에 쓰는 서비스가 없다.
+                // The service outlives this host, so it writes to its own log file and not to the standard error of the
+                // host (docs/spec/hosts.md#application-log). There is no endpoint, so no service writes to that file.
                 let service_log = crate::application_log::open_log(
                     &crate::application_log::service_log_path(config, basename),
                 )
@@ -1734,8 +1760,9 @@ impl<O: Owner> Core<O> {
                     .stdin(Stdio::null())
                     .stdout(Stdio::piped())
                     .stderr(Stdio::from(service_log));
-                // 영구 service 는 이 애플리케이션 프로세스의 수명이 아니라 설정 디렉터리에 속한다. 애플리케이션이
-                // 비정상 종료해도 service 가 함께 종료되지 않도록 새 session 을 시작한다.
+                // A persistent service belongs to the configuration directory and not to the lifetime of this
+                // application process. A new session is started so that the service does not end together with the
+                // application when the application terminates abnormally.
                 current()?
                     .new_session(&mut command)
                     .map_err(|e| format!("sidecar {name}: new session: {e}"))?;
@@ -1771,13 +1798,12 @@ impl<O: Owner> Core<O> {
         let mut stream = current()?
             .connect_service(&endpoint.socket)
             .map_err(|e| format!("sidecar {name}: connect authenticated service: {e}"))?;
-        // 인사 왕복에만 읽기 기한을 둔다(V5-106). 같은 사이드카의 요청과 stop 은 이 시작을 기다리므로,
-        // 소켓을 받아 놓고 답하지 않는 서비스가 그 요청을 멈추게 해서는 안 된다. 기한이
-        // 지나면 연결은 실패이고, 끊김 기록이 다음 시작에게 같은 경로를 다시 시도하게 한다.
-        // 왕복이 끝나면 이어지는 읽기 스레드를 위해 무한 대기로 돌린다.
-        // macOS 는 SO_RCVTIMEO 에 0(해제)을 EINVAL 로 거부하므로, 해제는 하루 기한으로
-        // 대신한다. 이어지는 읽기 스레드는 하루에 한 번 WouldBlock 으로 깨어나 다시
-        // 기다린다.
+        // The read deadline is set only for the hello round trip (V5-106). The requests and stop of the same sidecar
+        // wait for this start, so a service that accepted the socket and does not answer must not stop those requests.
+        // When the deadline passes, the connection is a failure, and the connection loss record makes the next start
+        // try the same path again. When the round trip ends, the deadline is set back to waiting indefinitely for the
+        // read thread that follows. macOS rejects 0 (clear) for SO_RCVTIMEO with EINVAL, so clearing is replaced by a
+        // deadline of one day. The read thread that follows wakes up once a day with WouldBlock and waits again.
         const NO_READ_DEADLINE: Duration = Duration::from_secs(24 * 60 * 60);
         stream
             .set_read_deadline(Some(HELLO_TIMEOUT))
@@ -1819,7 +1845,7 @@ impl<O: Owner> Core<O> {
             let reason = response
                 .get("error")
                 .and_then(|v| v.as_str())
-                // 기본값: 사이드카 오류에 문장이 없으면 일반 문장으로 같은 실패를 알린다.
+                // default: when the sidecar error has no text, the same failure is reported with a generic text.
                 .unwrap_or("invalid hello response");
             return Err(format!(
                 "sidecar {name}: authentication handshake failed: {reason}"
@@ -1835,9 +1861,9 @@ impl<O: Owner> Core<O> {
             .get("version")
             .and_then(|v| v.as_str())
             .map(str::to_string);
-        // 인사가 성공했으니 읽기 기한을 하루로 늘린다. macOS 는 상대가 닫은 소켓의
-        // SO_RCVTIMEO 설정을 EINVAL 으로 거부하므로 이 단계의 실패는 닫힌 연결이다 —
-        // 인사에 답하고 곧 닫는 서비스는 살아 있는 연결이 아니다.
+        // The hello succeeded, so the read deadline is extended to one day. macOS rejects the SO_RCVTIMEO setting of a
+        // socket that the peer closed with EINVAL, so a failure in this step is a closed connection: a service that
+        // answers hello and closes soon is not a live connection.
         stream
             .set_read_deadline(Some(NO_READ_DEADLINE))
             .map_err(|e| format!("sidecar {name}: hello deadline extend: {e}"))?;
@@ -1924,13 +1950,13 @@ impl<O: Owner> Core<O> {
             }
             let _connection_guard = ConnectionGuard(Arc::clone(&reader_connected));
             let mut reader = BufReader::new(reader_stream);
-            // 연결이 끝나면 None, 서비스가 프로토콜을 어기면 그 까닭이다
+            // None when the connection ends, and the reason when the service violates the protocol.
             // (docs/spec/terminal-runtime.md#service-transport).
             let violation = (|| -> Option<String> {
                 let mut line = Vec::new();
                 loop {
                     line.clear();
-                    // 한도와 줄바꿈 하나까지만 읽는다.
+                    // It reads only up to the limit and one line feed.
                     let read = match reader
                         .by_ref()
                         .take(MESSAGE_LIMIT as u64 + 1)
@@ -2088,7 +2114,8 @@ impl<O: Owner> Core<O> {
                     changed = forget_closing(&mut state, &sidecar);
                     was_current = true;
                 } else if state.stopped {
-                    // 중지가 실행 목록에서 뺀 연결이다. 답하지 않은 닫기는 service 가 스스로 마친다.
+                    // This connection was removed from the running list by stop. A close that was not answered is
+                    // finished by the service itself.
                     changed = forget_closing(&mut state, &sidecar);
                 }
             }
@@ -2127,8 +2154,9 @@ impl<O: Owner> Core<O> {
                 }
             }
             if let Some(reason) = violation {
-                // 서비스가 프로토콜을 어겼다. 같은 메시지가 다음 연결도 끝내므로 곧바로 다시 맺지 않고, 다음
-                // 전송이 생성 경로로 다시 맺는다(docs/spec/terminal-runtime.md#service-transport).
+                // The service violated the protocol. The same message would end the next connection too, so it does not
+                // connect again at once, and the next send connects again through the creation path
+                // (docs/spec/terminal-runtime.md#service-transport).
                 log_error(&format!("sidecar {sidecar}"), format!("failed: {reason}"));
                 for (surface, owner) in owned {
                     owner.deliver_failure(Failure {
@@ -2139,8 +2167,9 @@ impl<O: Owner> Core<O> {
                 }
                 return;
             }
-            // 연결이 끊겼다. 다음 전송을 기다리지 않고 즉시 다시 맺는다 — 서비스가 살아 있으면
-            // 다시 붙고, 죽었으면 start_persistent 의 낡은 endpoint 정리가 재스폰한다(V5-106).
+            // The connection was lost. It connects again at once without waiting for the next send: if the service is
+            // alive it attaches again, and if it died the cleanup of the stale endpoint in start_persistent spawns it
+            // again (V5-106).
             if was_current {
                 revive_persistent(&reader_core, &sidecar);
             }
@@ -2151,7 +2180,7 @@ impl<O: Owner> Core<O> {
             serde_json::json!({"name": name, "pid": endpoint.pid, "spawned": child.is_some()}),
         );
         crate::performance::process_add("sidecar", name, endpoint.pid);
-        // application 종료는 bootstrap child를 기다리거나 kill하지 않아야 한다.
+        // The termination of the application must not wait for the bootstrap child or kill it.
         drop(child);
         Ok(Started {
             process: Process {
@@ -2202,16 +2231,13 @@ fn await_replaced_service<O: Owner>(core: &Arc<Core<O>>, name: &str) {
         .remove(name);
 }
 
-/// 끊긴 영속 연결을 다시 맺고 결과를 소유 표면에 알린다(V5-106). 이미 다른 경로가 다시
-/// 시작했거나 종료 중이면 아무 일도 하지 않는다. 한 번의 연결 끊김에 한 번만 시도한다 —
-/// 실패는 알림으로 보고하고, 다음 전송이 같은 경로를 다시 지나간다.
-/// 끊긴 영속 연결을 다시 맺고 결과를 소유 표면에 알린다(V5-106). 이미 다른 경로가 다시
-/// 시작했거나 종료 중이면 아무 일도 하지 않는다. 한 번의 연결 끊김에 한 번만 시도한다 —
-/// 실패는 알림으로 보고하고, 다음 전송이 같은 경로를 다시 지나간다. 단, 연결이 거부된
-/// 첫 시도는 endpoint 가 더는 듣지 않는다는 증거다(재활용된 pid 가 kill(pid, 0) 을 통과시켜도
-/// 소켓은 죽었다). 끊김 기록이 있는 재시작에서만 endpoint 를 버리고 한 번 더 시도한다.
-/// 전송 경로의 계약은 그대로다: 차가운 전송의 live-unreachable 보고는 endpoint 를 바꾸지
-/// 않는다.
+/// Connects a lost persistent connection again and notifies the owning surfaces of the result (V5-106). It does nothing
+/// when another path already started it again or the channel is terminating. It tries once for one connection loss: a
+/// failure is reported as a notification, and the next send passes through the same path again. However, the first
+/// attempt in which the connection is refused is evidence that the endpoint no longer listens (the socket is dead even
+/// when a recycled pid passes kill(pid, 0)). Only in a restart that has a connection loss record, it discards the
+/// endpoint and tries once more. The contract of the send path is unchanged: the live-unreachable report of a cold send
+/// does not replace the endpoint.
 fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
     await_replaced_service(core, name);
     let mut outcome = revive_attempt(core, name);
@@ -2288,7 +2314,7 @@ pub fn connection_loss_report(
     }
 }
 
-/// 재시작 한 번. 이미 다른 경로가 다시 시작했으면 Ok(false), 시작에 실패하면 Err.
+/// One restart. It is Ok(false) when another path already started it again, and Err when the start failed.
 fn revive_attempt<O: Owner>(core: &Arc<Core<O>>, name: &str) -> Result<bool, String> {
     let state = core.state.lock().expect("sidecar state");
     if state.stopped || state.running.contains_key(name) {
@@ -2298,15 +2324,15 @@ fn revive_attempt<O: Owner>(core: &Arc<Core<O>>, name: &str) -> Result<bool, Str
     Ok(started && state.unannounced_loss.remove(name))
 }
 
-/// start_persistent 의 연결 실패 문장인가. 문장은 이 파일의 connect_service 오류에서
-/// 만들어진다.
+/// Whether it is the connection failure text of start_persistent. The text is built from the connect_service error of
+/// this file.
 fn refused_connect(reason: &str, name: &str) -> bool {
     reason.starts_with(&format!("sidecar {name}: connect authenticated service:"))
 }
 
-/// 다시 맺긴 영속 연결을 소유 표면에 알린다(V5-106). 창은 그 사이드카의 그림 configure 를
-/// 다시 보내고([Owner::sidecar_reconnected]), 표면은 연결 이벤트를 받아 자기 세션을 다시
-/// 연다. 시작에 실패했으면 연결 끊김과 그 까닭을 알린다.
+/// Notifies the owning surfaces of a persistent connection that was established again (V5-106). The window sends the
+/// image configure of that sidecar again ([Owner::sidecar_reconnected]), and the surface receives the connection event
+/// and opens its session again. If the start failed, it announces the connection loss and its reason.
 fn notify_connection<O: Owner>(core: &Arc<Core<O>>, name: &str, outcome: Result<(), String>) {
     let surfaces: Vec<(String, O)> = {
         let state = core.state.lock().expect("sidecar state");
@@ -2346,14 +2372,14 @@ fn notify_connection<O: Owner>(core: &Arc<Core<O>>, name: &str, outcome: Result<
     }
 }
 
-/// 영속 연결의 답 하나(closed-owner, shutdown, retained).
+/// One answer of a persistent connection (closed-owner, shutdown, retained).
 struct Reply {
     request: String,
     result: Result<(), String>,
     closed: usize,
 }
 
-/// 답의 field 형을 검사한다. 형이 틀리면 연결을 끝낼 까닭을 돌려준다
+/// Checks the field types of an answer. If a type is wrong, it returns the reason to end the connection.
 /// (docs/spec/terminal-runtime.md#service-transport).
 fn reply_of(
     operation: &str,
@@ -2391,7 +2417,7 @@ fn reply_of(
     let result = if ok {
         Ok(())
     } else {
-        // 기본값: 서비스 오류에 문장이 없으면 작업 이름으로 같은 실패를 알린다.
+        // default: when the service error has no text, the same failure is reported with the name of the operation.
         Err(reason.unwrap_or_else(|| format!("{operation} failed")))
     };
     Ok(Reply {
@@ -2401,9 +2427,9 @@ fn reply_of(
     })
 }
 
-/// 표준 출력의 메시지를 소유 창에 전달한다. 출력이 끝나면 None 을, 프로토콜을 어기거나 읽기가
-/// 실패하면 그 까닭을 반환한다. 한 줄은 줄바꿈 앞이 MESSAGE_LIMIT byte 를 넘으면 그 이상 버퍼링하지
-/// 않고 실패한다(docs/spec/sidecars.md#failure).
+/// Passes the messages of the standard output to the owning window. It returns None when the output ends, and the
+/// reason when the protocol is violated or the read fails. A line that exceeds MESSAGE_LIMIT bytes before its line feed
+/// is not buffered any further and fails (docs/spec/sidecars.md#failure).
 fn relay<O: Owner>(
     reader: &mut impl BufRead,
     state: &Arc<Mutex<State<O>>>,
@@ -2413,7 +2439,7 @@ fn relay<O: Owner>(
     let mut line = Vec::new();
     loop {
         line.clear();
-        // 한도와 줄바꿈 하나까지만 읽는다.
+        // It reads only up to the limit and one line feed.
         let read = match reader
             .by_ref()
             .take(MESSAGE_LIMIT as u64 + 1)
@@ -2437,7 +2463,7 @@ fn relay<O: Owner>(
             Ok(event) => event,
             Err(error) => return Some(format!("invalid message: {error}")),
         };
-        // state lock은 절대 poison 되면 안 된다. 다른 스레드의 panic은 치명적.
+        // The state lock must never be poisoned. A panic of another thread is fatal.
         let (owner, addressed) = {
             let state = state.lock().expect("sidecar state");
             let addressed = state
@@ -2450,8 +2476,9 @@ fn relay<O: Owner>(
                     .is_some_and(|stopping| stopping.surfaces.contains(&event.surface));
             (state.owners.get(&event.surface).cloned(), addressed)
         };
-        // 이 프로세스에 보낸 적 없는 표면의 메시지는 프로토콜 위반이다. 보낸 적이 있고 소유 창이 없으면 표면이
-        // 닫힌 뒤 사이드카가 보낸 메시지이므로 버린다(docs/spec/sidecars.md#messages).
+        // A message for a surface that was never sent to this process is a protocol violation. A surface that was sent
+        // to and has no owning window sent its message after it closed, so the message is discarded
+        // (docs/spec/sidecars.md#messages).
         if !addressed {
             return Some(format!("unknown surface {}", event.surface));
         }
@@ -2464,7 +2491,7 @@ fn relay<O: Owner>(
             tx: tx.clone(),
             state: Arc::clone(state),
         };
-        // 이미지 봉투 여부 확인 및 처리
+        // Checks and handles whether it is an image envelope.
         if try_handle_image_envelope(
             &owner,
             sidecar,
@@ -2497,8 +2524,8 @@ fn trace_message(event: &str, sidecar: &str, surface: &str, body: &RawValue) {
     });
 }
 
-/// 끝난 사이드카의 종료를 `exit status <code>` 나 `signal <number>` 로 쓴다(docs/spec/sidecars.md#declaration-and-startup).
-/// 종료를 읽지 못하면 그 까닭을 같은 자리에 쓴다.
+/// Writes the end of an ended sidecar as `exit status <code>` or `signal <number>`
+/// (docs/spec/sidecars.md#declaration-and-startup). If the end cannot be read, the reason is written in the same place.
 fn exit_text(status: std::process::ExitStatus) -> String {
     match crate::platform::current().and_then(|platform| platform.exit_status(status)) {
         Ok(text) => text,
@@ -2506,9 +2533,10 @@ fn exit_text(status: std::process::ExitStatus) -> String {
     }
 }
 
-/// 출력이 끝났거나 프로토콜을 어긴 표준 입출력 사이드카를 처리한다. 종료 중이면 stop 이 프로세스를
-/// 기다린다. 아니면 프로세스를 실행 중인 사이드카에서 빼고 끝낸 뒤, 그 프로세스에 보낸 표면의 소유
-/// 창마다 실패를 알린다. 실패 뒤의 프로토콜 상태는 정의되지 않으므로 프로세스를 끝낸다.
+/// Handles a standard-I/O sidecar whose output ended or whose protocol was violated. While terminating, stop waits for
+/// the process. Otherwise it removes the process from the running sidecars, ends it, and reports the failure to the
+/// owning window of each surface that sent to that process. The protocol state after a failure is undefined, so the
+/// process is ended.
 fn fail<O: Owner>(
     state: &Arc<Mutex<State<O>>>,
     sidecar: &str,
@@ -2525,7 +2553,8 @@ fn fail<O: Owner>(
             .and_then(|process| process.child.as_ref())
             .map(|child| child.id());
         if state.stopped || current != Some(pid) {
-            // 멈추는 중이다. 위반은 로그에 쓰고 실패 이벤트는 보내지 않는다. 종료의 보고는 stop 이 정한다.
+            // It is stopping. The violation is written to the log and no failure event is sent. stop decides the report
+            // of the end.
             if let Some(violation) = violation {
                 if let Some(stopping) = state.stopping.get_mut(sidecar) {
                     stopping.violated = true;
@@ -2577,9 +2606,10 @@ fn fail<O: Owner>(
         serde_json::json!({"name": sidecar, "pid": pid, "status": exit, "stopping": false}),
     );
     crate::performance::process_remove(pid);
-    // 쓰기 스레드는 모든 송신자가 사라지면 보관분을 쓰고 끝난다.
+    // The write thread writes the held items and ends when all senders are gone.
     drop(outbox);
-    // 기본값: 프로토콜 위반이 없으면 출력이 끝난 것이 실패 원인이다(docs/spec/sidecars.md#failure).
+    // default: when there is no protocol violation, the end of the output is the cause of the failure
+    // (docs/spec/sidecars.md#failure).
     let mut reason = violation.unwrap_or_else(|| format!("output closed: {exit}"));
     for failure in failures {
         reason = format!("{reason}; {failure}");
@@ -2594,7 +2624,7 @@ fn fail<O: Owner>(
     }
 }
 
-/// 이벤트가 이미지 봉투인지 확인하고 처리한다. 봉투면 true 를 반환한다.
+/// Checks whether the event is an image envelope and handles it. It returns true for an envelope.
 fn try_handle_image_envelope<O: Owner>(
     owner: &O,
     sidecar_name: &str,
@@ -2602,11 +2632,12 @@ fn try_handle_image_envelope<O: Owner>(
     body: &RawValue,
     response_sender: &dyn ResponseSender,
 ) -> bool {
-    // 이미지 봉투 여부 확인 및 결정을 요청한다.
+    // Checks whether it is an image envelope and requests the decision.
     owner.decide_image_envelope(sidecar_name, surface, body, response_sender)
 }
 
-/// 사이드카 채널에서 사용하는 창. 창 레이블로 구분하고 창의 프로젝트 디렉터리를 root 로 사용한다.
+/// The window used by the sidecar channel. It is distinguished by the window label and uses the project directory of
+/// the window as root.
 pub(crate) type WindowSidecars = Sidecars<Window>;
 
 impl Owner for Window {

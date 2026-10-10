@@ -1,5 +1,6 @@
-//! 애플리케이션 안의 plugin 작업(docs/spec/installation.md#plugin-operations-in-the-application). 설정 폴더의 plugin
-//! 설치를 command line 의 installer library 로 바꾼다. 작업은 한 번에 하나만 실행하고, 바꾼 뒤 알린다.
+//! Plugin operations in the application (docs/spec/installation.md#plugin-operations-in-the-application). It turns the
+//! plugin installation of the configuration folder into the installer library of the command line. Only one operation
+//! runs at a time, and it announces the change after it.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, TryLockError};
@@ -7,27 +8,29 @@ use std::sync::{Mutex, TryLockError};
 use serde_json::Value;
 use soksak_sok::plugins::{self, PluginActionResult, PluginsState};
 
-/// pluginsRun 호출의 인자. plugin 은 문자열이 아닌 값을 거부하기 위해 형을 정하지 않고 받는다.
+/// The arguments of the pluginsRun call. plugin is received without a fixed type so that a value that is not a string
+/// is rejected.
 #[derive(Debug, serde::Deserialize)]
 pub struct RunRequest {
     pub action: String,
     pub plugin: Value,
 }
 
-/// pluginsUseRegistry 호출의 인자. index 는 문자열이 아닌 값을 거부하기 위해 형을 정하지 않고 받는다.
+/// The arguments of the pluginsUseRegistry call. index is received without a fixed type so that a value that is not a
+/// string is rejected.
 #[derive(Debug, serde::Deserialize)]
 pub struct RegistryRequest {
     pub index: Value,
 }
 
-/// plugins-changed event 의 값.
+/// The value of the plugins-changed event.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct Changed {
     pub action: String,
     pub plugin: String,
 }
 
-/// 설정 폴더의 plugin 설치를 바꾼다.
+/// Changes the plugin installation of the configuration folder.
 pub struct Plugins {
     config_dir: PathBuf,
     core: String,
@@ -39,7 +42,7 @@ pub struct Plugins {
 }
 
 impl Plugins {
-    /// 이 애플리케이션의 core version 과 platform 으로 작업한다.
+    /// Works with the core version and the platform of this application.
     pub fn new(
         config_dir: PathBuf,
         apply: Box<dyn Fn() -> Result<(), String> + Send + Sync>,
@@ -55,17 +58,17 @@ impl Plugins {
         })
     }
 
-    /// plugin 을 설치하는 설정 폴더.
+    /// The configuration folder in which plugins are installed.
     pub fn config_dir(&self) -> &Path {
         &self.config_dir
     }
 
-    /// registry 주소, 검사한 index, 설치 상태를 돌려준다.
+    /// Returns the registry address, the checked index and the installation state.
     pub fn state(&self) -> Result<PluginsState, String> {
         plugins::read_plugins_state(&self.config_dir)
     }
 
-    /// sok registry use <index> 와 같이 registry index 를 정하고 그 출력을 돌려준다.
+    /// Sets the registry index like sok registry use <index> and returns its output.
     pub fn use_registry(&self, request: RegistryRequest) -> Result<Value, String> {
         let index = match request.index.as_str() {
             Some(index) if !index.is_empty() => index.to_string(),
@@ -88,7 +91,7 @@ impl Plugins {
         Ok(serde_json::json!({ "index": url }))
     }
 
-    /// sok plugin <action> <plugin> 과 같은 작업을 실행하고 그 출력을 돌려준다.
+    /// Runs the same operation as sok plugin <action> <plugin> and returns its output.
     pub fn run(&self, request: RunRequest) -> Result<PluginActionResult, String> {
         match request.action.as_str() {
             "install" | "update" | "remove" | "enable" | "disable" => {}

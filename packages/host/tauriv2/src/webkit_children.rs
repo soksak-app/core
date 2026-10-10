@@ -1,24 +1,25 @@
-//! 이 실행이 만든 WebKit XPC 자식의 기록과 다음 시작의 수확(V5-113).
+//! The record of the WebKit XPC children that this run created, and the harvest at the next start (V5-113).
 //!
-//! 밤샘 V5-105의 시작 정리는 판별이 불가능해(살아 있는 WebKit 도 소켓·경로 증명이 없다)
-//! 제거되었다. 여기의 규칙은 선례를 따른다 — Chromium 의 SingletonLock 은 자기 사용자 데이터
-//! 디렉터리에 hostname-PID 를 기록하고 자기 기록만 신뢰한다. 이 실행도 자기 설정 디렉터리에
-//! 자기가 만든 WebKit 자식의 pid 를 기록하고, 다음 시작이 그 기록만 수확한다. 기록되지 않은
-//! 프로세스는 무조건 불가침이다.
+//! The startup cleanup of V5-105 was removed because it cannot make a reliable decision (a live WebKit has no socket or
+//! path proof either). The rule here follows an established precedent: the SingletonLock of a browser writes
+//! hostname-PID into its own user data directory and trusts only its own record. This run also records the pid of the
+//! WebKit children that it created in its own configuration directory, and the next start harvests only that record. A
+//! process that is not recorded is never touched.
 //!
-//! 죽일 수 있는 조건은 셋 모두다: 기록되었고(우리가 만들었다), 지금도 그 pid 가 WebKit
-//! 프로세스이며(재활용 방어), 시작 시각이 기록과 같고(같은 인스턴스), 기록한 호스트 프로세스가
-//! 죽었다(살아 있는 형제 인스턴스의 자식이 아니다).
+//! All three conditions must hold to kill: it was recorded (we created it), that pid is still a WebKit process
+//! (protection against pid reuse), the start time equals the record (the same instance), and the recorded host process
+//! is dead (it is not the child of a live sibling instance).
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
-/// 기록 파일 이름. 설정 디렉터리의 뿌리에 둔다.
+/// The name of the record file. It is placed at the root of the configuration directory.
 const RECORD: &str = "webkit-children.json";
 
-/// 이 실행이 시작할 때 이미 떠 있던 WebKit XPC — 남의 것이다. 기록에서 뺀다.
+/// The WebKit XPC processes that were already running when this run started belong to someone else. They are removed
+/// from the record.
 static BASELINE: OnceLock<Vec<u32>> = OnceLock::new();
 
 #[derive(Serialize, Deserialize)]
@@ -31,14 +32,14 @@ struct Record {
 struct Child {
     pid: u32,
     kind: String,
-    /// 프로세스의 시작 시각(ps lstart). pid 재활용 방어 — 같은 pid 를 다른 프로세스가 쓰면
-    /// 값이 다르다. 같은 기계에서 형식은 변하지 않으므로 문자열 그대로 비교한다.
+    /// The start time of the process (ps lstart). Protection against pid reuse: when another process uses the same pid,
+    /// the value differs. The format does not change on the same machine, so the strings are compared as they are.
     lstart: String,
 }
 
-/// ps 를 args 로 실행해 표준 출력을 돌려준다. pid 하나를 묻는 질의(-p)에서 그 프로세스가 없으면 ps 는 출력 없이 상태 1 로
-/// 끝나며, 이는 실패가 아니라 "그 프로세스가 없다"는 답이다. 그 밖의 실패는 질의와 ps 의 메시지를 담은 오류이고, 호출자가
-/// 기록한다.
+/// Runs ps with args and returns the standard output. In a query for one pid (-p), ps ends with status 1 and no output
+/// when that process does not exist, and that is not a failure but the answer "that process does not exist". Any other
+/// failure is an error that holds the query and the message of ps, and the caller records it.
 fn ps_query(args: &[&str]) -> Result<String, String> {
     let output = std::process::Command::new("ps")
         .args(args)
@@ -59,12 +60,14 @@ fn ps_query(args: &[&str]) -> Result<String, String> {
     ))
 }
 
-/// 실패한 ps 질의를 기록한다. 질의의 답이 없으면 호출자는 판정을 죽이는 쪽이 아니라 죽이지 않는 쪽으로 정한다.
+/// Records a failed ps query. Without an answer to the query, the caller decides toward not killing and not toward
+/// killing.
 fn ps_failed(error: String) {
     crate::application_log::log_error("webkit children", error);
 }
 
-/// 살아 있는 WebKit XPC 의 (pid, 종류) 목록. ps 가 실패하면 그 오류를 기록하고 빈 목록을 돌려준다.
+/// The list of (pid, kind) of the live WebKit XPC processes. When ps fails, it records that error and returns an empty
+/// list.
 fn webkit_processes() -> Vec<(u32, String)> {
     let output = match ps_query(&["-axo", "pid=,command="]) {
         Ok(output) => output,
@@ -92,7 +95,8 @@ fn webkit_processes() -> Vec<(u32, String)> {
     found
 }
 
-/// pid 의 프로세스가 살아 있는가. ps 로 묻는다(시그널을 쓰지 않는다). ps 가 실패하면 기록하고 없다고 답한다.
+/// Whether the process pid is alive. It asks ps (no signal is used). When ps fails, it records the failure and answers
+/// that the process does not exist.
 fn exists(pid: u32) -> bool {
     match ps_query(&["-o", "pid=", "-p", &pid.to_string()]) {
         Ok(output) => !output.trim().is_empty(),
@@ -103,8 +107,9 @@ fn exists(pid: u32) -> bool {
     }
 }
 
-/// pid 프로세스의 시작 시각. 없으면 빈 문자열이다 — 빈 문자열은 기록의 어떤 lstart 와도 같지 않으므로 판정이 그 항목을
-/// 죽이지 않는다(모호하면 죽이지 않는다). ps 가 실패하면 기록하고 빈 문자열을 돌려준다.
+/// The start time of the process pid. It is an empty string when the process does not exist: an empty string equals no
+/// lstart of the record, so the decision does not kill that entry (when it is ambiguous, it does not kill). When ps
+/// fails, it records the failure and returns an empty string.
 fn start_time(pid: u32) -> String {
     match ps_query(&["-o", "lstart=", "-p", &pid.to_string()]) {
         Ok(output) => output.trim().to_string(),
@@ -115,8 +120,9 @@ fn start_time(pid: u32) -> String {
     }
 }
 
-/// pid 프로세스의 명령줄. 없으면 빈 문자열이다 — 형제 인스턴스 판정은 `soksak` 문구를 찾지 못해 거짓이 되고, 수확은 계속
-/// 진행된다. ps 가 실패하면 기록하고 빈 문자열을 돌려준다.
+/// The command line of the process pid. It is an empty string when the process does not exist: the sibling instance
+/// decision cannot find the `soksak` text and is false, and the harvest continues. When ps fails, it records the
+/// failure and returns an empty string.
 fn command(pid: u32) -> String {
     match ps_query(&["-o", "command=", "-p", &pid.to_string()]) {
         Ok(output) => output.trim().to_string(),
@@ -127,14 +133,15 @@ fn command(pid: u32) -> String {
     }
 }
 
-/// 시작 시점의 WebKit XPC 를 기준선으로 찍는다. 이 실행이 WebKit 을 만들기 전에 한 번만
-/// 유효하다(그 뒤의 호출은 아무 일도 하지 않는다). 기준선에 든 프로세스는 남의 것이다.
+/// Takes the WebKit XPC processes at the start as the baseline. It is valid only once, before this run creates a WebKit
+/// (later calls do nothing). A process in the baseline belongs to someone else.
 pub fn snapshot_baseline() {
     BASELINE.get_or_init(|| webkit_processes().into_iter().map(|(pid, _)| pid).collect());
 }
 
-/// 이 실행의 WebKit 자식을 기록한다. 페이지 적재마다 부른다 — WebKit 이 죽은 자식을 교체하면
-/// 페이지가 다시 뜨므로 기록이 교체를 따라간다. 자식 집합이 바뀌었을 때만 쓴다(원자적 교체).
+/// Records the WebKit children of this run. It is called at every page load: when WebKit replaces a dead child, the
+/// page loads again, so the record follows the replacement. It writes only when the set of children changed (an atomic
+/// replacement).
 pub fn refresh(config: &Path) {
     let Some(baseline) = BASELINE.get() else {
         return;
@@ -155,7 +162,7 @@ pub fn refresh(config: &Path) {
             .collect(),
     };
     let target = record_path(config);
-    // 내용이 같으면 다시 쓰지 않는다.
+    // It does not write again when the content is the same.
     if let Ok(previous) = std::fs::read(&target) {
         if let Ok(previous_record) = serde_json::from_slice::<Record>(&previous) {
             if previous_record
@@ -178,11 +185,11 @@ pub fn refresh(config: &Path) {
     }
 }
 
-/// 기록 쓰기를 하나씩 실행한다. 두 쓰기가 같은 .new 파일을 쓰면 먼저 이름을 바꾼 쓰기가 다른 쓰기의 파일을
-/// 가져가고 나머지 이름 바꾸기가 실패한다(F68).
+/// Runs record writes one at a time. If two writes use the same .new file, the write that renames first takes the file
+/// of the other, and the rename of the other fails (F68).
 static RECORD_WRITES: Mutex<()> = Mutex::new(());
 
-/// 기록 파일 target 을 bytes 로 원자적으로 교체한다. 옆의 .new 파일에 쓰고 이름을 바꾼다.
+/// Replaces the record file target with bytes atomically. It writes the .new file next to it and renames it.
 pub fn write_record(target: &Path, bytes: &[u8]) -> Result<(), String> {
     let _turn = RECORD_WRITES
         .lock()
@@ -198,11 +205,11 @@ fn record_path(config: &Path) -> PathBuf {
     config.join(RECORD)
 }
 
-/// 지난 실행이 기록한 WebKit 자식을 수확한다. 이 실행이 WebKit 을 만들기 전에 한 번 부른다.
-/// 죽일 조건이 하나라도 성립하지 않으면 그 항목은 건드리지 않는다.
+/// Harvests the WebKit children that the previous run recorded. Call it once before this run creates a WebKit. If any
+/// condition to kill does not hold, the entry is not touched.
 pub fn reap_recorded(config: &Path) {
     let Ok(bytes) = std::fs::read(record_path(config)) else {
-        return; // 기록이 없으면 수확할 것도 없다.
+        return; // There is no record, so there is nothing to harvest.
     };
     let record: Record = match serde_json::from_slice(&bytes) {
         Ok(record) => record,
@@ -215,10 +222,10 @@ pub fn reap_recorded(config: &Path) {
         }
     };
     if record.host_pid == std::process::id() {
-        return; // 우리 기록이다 — 이 실행의 페이지 적재가 다시 쓴다.
+        return; // The record is ours: the page load of this run writes it again.
     }
     if exists(record.host_pid) && command(record.host_pid).contains("soksak") {
-        // 살아 있는 형제 인스턴스의 자식이다.
+        // The child of a live sibling instance.
         crate::application_log::log_info(
             "webkit children",
             format!(
@@ -271,8 +278,9 @@ pub fn reap_recorded(config: &Path) {
     }
 }
 
-/// 기록된 자식 하나의 수확 판정. 죽일 수 있으면 Ok, 아니면 이유를 돌려준다.
-/// 셋의 관측은 호출자가 얻는다 — 판정 자체는 순수해서 계약 검사가 기계적으로 다룬다.
+/// The harvest decision for one recorded child. It returns Ok when it can be killed, and otherwise the reason. The
+/// caller obtains the observations of the three conditions: the decision itself is pure, so the contract check handles
+/// it mechanically.
 pub fn reap_decision(alive: bool, is_webkit: bool, same_start: bool) -> Result<(), &'static str> {
     if !alive {
         return Err("already dead; nothing to reap");

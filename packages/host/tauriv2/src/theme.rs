@@ -1,7 +1,7 @@
-//! 테마 저장과 전달.
+//! Theme storage and delivery.
 //!
-//! 표면과 모달은 별도 문서이고 메인 페이지의 스타일시트를 상속하지 않는다. 그래서 테마 값을
-//! 전달하고 각 페이지가 자신의 루트에 설정한다.
+//! Surfaces and modals are separate documents and do not inherit the stylesheet of the main page. The theme value is
+//! therefore passed on, and each page sets it on its own root.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -11,31 +11,31 @@ use tauri::Window;
 
 use crate::windows::{emit_window, window_data};
 
-/// 페이지의 테마. 호스트가 만드는 페이지에 전달한다.
+/// The theme of the page. It is passed to the pages that the host creates.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub(crate) struct Theme {
     scheme: String,
     tokens: HashMap<String, String>,
 }
 
-/// 페이지가 마지막으로 선언한 테마.
+/// The theme that the page declared last.
 #[derive(Default)]
 pub(crate) struct CurrentTheme(Mutex<Theme>);
 
-/// 현재 테마를 반환한다. 페이지는 로드할 때 요청한다.
+/// Returns the current theme. The page requests it when it loads.
 pub(crate) fn get(window: &Window) -> Result<Theme, String> {
     let context = window_data(window)?;
     let theme = context.theme.0.lock().map_err(|e| e.to_string())?.clone();
     Ok(theme)
 }
 
-/// window의 현재 theme이 dark scheme을 사용하는지 반환한다.
+/// Returns whether the current theme of the window uses the dark scheme.
 pub(crate) fn is_dark(window: &Window) -> Result<bool, String> {
     Ok(get(window)?.scheme == "dark")
 }
 
-/// 페이지가 현재 사용하는 테마를 기록하고 창의 페이지에 전달한다. 페이지는 렌더링마다가 아니라
-/// 테마를 선택할 때 호출한다.
+/// Records the theme that the page currently uses and passes it to the pages of the window. The page calls it when it
+/// selects a theme and not at every rendering.
 pub(crate) fn set(window: &Window, theme: Theme) -> Result<(), String> {
     let context = window_data(window)?;
     *context.theme.0.lock().map_err(|e| e.to_string())? = theme.clone();

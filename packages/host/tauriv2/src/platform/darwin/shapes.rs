@@ -1,7 +1,7 @@
-//! 표면 위에 그리는 도형 뷰.
+//! The shape views drawn over a surface.
 //!
-//! 도형은 웹뷰가 아닌 레이어 기반 NSView 이다. 채움 색과 선 색의 알파가 표면 내용 위에
-//! 합성된다. 웹뷰는 WebKit 이 불투명한 배경을 그리고, 이를 끄는 키는 비공개이다.
+//! A shape is a layer-backed NSView and not a webview. The alpha of the fill color and the line color is composed over
+//! the surface content. A webview draws an opaque background in WebKit, and the key that turns it off is private.
 
 use objc2::msg_send;
 use objc2::runtime::{AnyClass, AnyObject};
@@ -9,7 +9,8 @@ use objc2::runtime::{AnyClass, AnyObject};
 use super::super::{Frame, Handle};
 use super::NSRect;
 
-/// 창 콘텐츠 뷰에 레이어 기반 뷰를 추가하고 주소를 반환한다. 만들지 못하면 0 을 반환한다.
+/// Adds a layer-backed view to the window content view and returns the address. It returns 0 when it could not create
+/// it.
 pub fn create(window: Handle, rect: Frame) -> Handle {
     unsafe {
         let window = window as *mut AnyObject;
@@ -26,16 +27,17 @@ pub fn create(window: Handle, rect: Frame) -> Handle {
         }
         let _: () = msg_send![view, setWantsLayer: true];
         let content: *mut AnyObject = msg_send![window, contentView];
-        // NSWindowAbove 는 1 이다. 뷰를 기존 형제 뷰 위에 추가한다.
+        // NSWindowAbove is 1. It adds the view above the existing sibling views.
         let _: () = msg_send![content, addSubview: view, positioned: 1isize, relativeTo: std::ptr::null_mut::<AnyObject>()];
         view as Handle
     }
 }
 
-/// 도형 뷰를 배치하고 형제 뷰 위로 올린다.
+/// Places the shape view and raises it above its sibling views.
 ///
-/// 나중에 추가한 뷰가 먼저 추가한 뷰 위에 있으므로, 표면 웹뷰보다 먼저 그린 도형은 표면 아래에
-/// 놓인다. 소수 좌표의 가장자리는 흐리게 그려지므로 표면과 같이 디스플레이 픽셀에 맞춘다.
+/// A view added later is above a view added earlier, so a shape that was drawn before the surface webview lies below
+/// the surface. The edges of fractional coordinates are drawn blurred, so they are fitted to display pixels like the
+/// surface.
 pub fn place(view: Handle, rect: Frame) {
     unsafe {
         let view = view as *mut AnyObject;
@@ -47,27 +49,27 @@ pub fn place(view: Handle, rect: Frame) {
     }
 }
 
-/// 뷰가 속한 창의 디스플레이 픽셀에 사각형을 맞춘다.
+/// Fits the rectangle to the display pixels of the window that holds the view.
 unsafe fn aligned_in_window(view: *mut AnyObject, rect: Frame) -> NSRect {
     let window: *mut AnyObject = msg_send![view, window];
     if window.is_null() {
         return NSRect::from(rect);
     }
-    // NSAlignAllEdgesInward 는 MinX|MinY|MaxX|MaxY 로 하위 네 옵션 비트이다.
+    // NSAlignAllEdgesInward is MinX|MinY|MaxX|MaxY, the four lower option bits.
     msg_send![window, backingAlignedRect: NSRect::from(rect), options: 15usize]
 }
 
-/// 뷰를 콘텐츠 뷰의 모든 형제 뷰 위로 올린다.
+/// Raises the view above all sibling views of the content view.
 unsafe fn raise(view: *mut AnyObject) {
     let parent: *mut AnyObject = msg_send![view, superview];
     if parent.is_null() {
         return;
     }
-    // NSWindowAbove 는 1 이다.
+    // NSWindowAbove is 1.
     let _: () = msg_send![parent, addSubview: view, positioned: 1isize, relativeTo: std::ptr::null_mut::<AnyObject>()];
 }
 
-/// 도형의 모서리 반경, 선 두께, 채움 색, 선 색을 설정한다.
+/// Sets the corner radius, line width, fill color and line color of the shape.
 pub fn style(view: Handle, radius: f64, line_width: f64, fill: [f64; 4], line: [f64; 4]) {
     unsafe {
         let view = view as *mut AnyObject;
@@ -92,7 +94,7 @@ pub fn style(view: Handle, radius: f64, line_width: f64, fill: [f64; 4], line: [
     }
 }
 
-/// 도형 뷰를 제거한다.
+/// Removes the shape view.
 pub fn destroy(view: Handle) {
     unsafe {
         let view = view as *mut AnyObject;
@@ -100,7 +102,7 @@ pub fn destroy(view: Handle) {
             return;
         }
         let _: () = msg_send![view, removeFromSuperview];
-        // alloc 이 반환한 참조를 해제한다. 상위 뷰의 참조는 위 줄에서 해제되었다.
+        // Releases the reference that alloc returned. The reference of the parent view was released in the line above.
         let _: () = msg_send![view, release];
     }
 }

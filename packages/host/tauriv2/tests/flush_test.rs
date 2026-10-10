@@ -1,7 +1,7 @@
-//! Tauri sidecar의 flush 테스트
+//! Flush tests of the Tauri sidecar.
 //!
-//! 이 테스트는 write queue가 가득 찼을 때 buffering 메커니즘이 동작하는지 검증한다.
-//! write thread는 recv()에서 block되기 전에 buffer된 message를 올바르게 flush한다.
+//! These tests verify that the buffering mechanism works when the write queue is full. The write thread correctly
+//! flushes the buffered messages before it blocks in recv().
 
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
@@ -32,7 +32,7 @@ impl Owner for FakeOwner {
         let _ = self.sent.send(message);
     }
     fn deliver_failure(&self, failure: Failure) {
-        // 이 검사들은 실패를 단언하지 않으므로 실패는 검사 출력에 남긴다.
+        // These checks do not assert failures, so failures are left in the check output.
         eprintln!("sidecar failure: {failure:?}");
     }
 }
@@ -55,12 +55,12 @@ fn raw(text: &str) -> Box<RawValue> {
 
 type Files = Vec<(&'static str, String)>;
 
-/// 사이드카 @fixture/sidecar-echo 하나와 그 sidecar.json 내용.
+/// One sidecar @fixture/sidecar-echo and the content of its sidecar.json.
 fn files(sidecar: &str) -> Files {
     vec![("@fixture/sidecar-echo", sidecar.to_string())]
 }
 
-/// folder 에 설치된 사이드카들의 선언.
+/// The declarations of the sidecars installed in folder.
 fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
     files
         .iter()
@@ -135,7 +135,7 @@ fn every_pending_reply_scenario() {
     let fifo_path = directory.path().join("go");
     let fifo_str = fifo_path.display().to_string();
 
-    // mkfifo를 호출하여 FIFO 생성
+    // Creates a FIFO by calling mkfifo.
     let output = std::process::Command::new("mkfifo")
         .arg(&fifo_str)
         .output()
@@ -162,12 +162,12 @@ fn every_pending_reply_scenario() {
 
     let (owner, _events) = owner("a", "/p");
 
-    // 먼저 surface를 등록한다
+    // First register the surface.
     for s in &["s1", "s2", "s3"] {
         sidecars.send(&owner, ECHO, s, &raw(r#"{}"#)).unwrap();
     }
 
-    // queue를 채우도록 큰 message를 queue에 넣는다
+    // Put a large message in the queue to fill the queue.
     let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
     let mut full = false;
     for _i in 0..4000 {
@@ -179,7 +179,7 @@ fn every_pending_reply_scenario() {
     }
     assert!(full, "the queue never filled");
 
-    // queue가 가득 찼을 때 response를 보낸다
+    // Send a response when the queue is full.
     for (i, name) in ["a", "b", "c"].iter().enumerate() {
         let response_json = serde_json::json!({
             "image": {
@@ -198,7 +198,7 @@ fn every_pending_reply_scenario() {
             .unwrap();
     }
 
-    // 같은 image "a"를 새 불변 sequence로 다시 보낸다.
+    // Send the same image "a" again with a new immutable sequence.
     let response_json = serde_json::json!({
         "image": {
             "consumed": {
@@ -215,12 +215,12 @@ fn every_pending_reply_scenario() {
         .send_response(ECHO, "s1", "a", &response_body)
         .unwrap();
 
-    // surface를 닫는다
+    // Close the surface.
     sidecars
         .retain(&owner, &|s| !matches!(s, "s2" | "s3"))
         .expect("retain");
 
-    // FIFO에서 sidecar를 해제한다
+    // Release the sidecar from the FIFO.
     let fifo_file = std::fs::OpenOptions::new()
         .write(true)
         .open(&fifo_path)
@@ -233,7 +233,7 @@ fn every_pending_reply_scenario() {
 
     let data = std::fs::read_to_string(received).unwrap();
 
-    // 세 response가 모두 전송되었는지 검증한다
+    // Verify that all three responses were sent.
     for want in &[r#""name":"a""#, r#""name":"b""#, r#""name":"c""#] {
         assert!(
             data.contains(want),
@@ -242,7 +242,7 @@ fn every_pending_reply_scenario() {
         );
     }
 
-    // close가 전송되었는지 검증한다
+    // Verify that the close was sent.
     for s in &[
         r#""surface":"s2","root":"/p","closed":true"#,
         r#""surface":"s3","root":"/p","closed":true"#,
@@ -250,8 +250,8 @@ fn every_pending_reply_scenario() {
         assert!(data.contains(s), "close {} never reached the sidecar", s);
     }
 
-    // 모든 불변 consumed ack는 정확히 한 번 도착해야 한다. 특히 image a의 새
-    // sequence가 이전 frame을 대체하면 안 된다.
+    // Every immutable consumed ack must arrive exactly once. In particular, the new sequence of image a must not
+    // replace the previous frame.
     let consumed: Vec<Value> = data
         .lines()
         .filter_map(|line| serde_json::from_str::<Value>(line).ok())
@@ -274,7 +274,7 @@ fn every_pending_reply_scenario() {
         );
     }
 
-    // 순서를 검증한다: close와 reply는 queue에 넣은 body 뒤에 왔다
+    // Verify the order: the close and the reply came after the body that was put in the queue.
     let last_body = data.rfind(r#""data":""#).expect("no queued body arrived");
     for want in &[
         r#""name":"a""#,
@@ -294,7 +294,7 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
     let fifo_path = directory.path().join("go");
     let fifo_str = fifo_path.display().to_string();
 
-    // mkfifo를 호출하여 FIFO 생성
+    // Creates a FIFO by calling mkfifo.
     let output = std::process::Command::new("mkfifo")
         .arg(&fifo_str)
         .output()
@@ -321,12 +321,12 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
 
     let (owner, _events) = owner("a", "/p");
 
-    // surface를 등록한다
+    // Register the surface.
     for s in &["s1", "s2"] {
         sidecars.send(&owner, ECHO, s, &raw(r#"{}"#)).unwrap();
     }
 
-    // queue를 채우도록 큰 message를 queue에 넣는다
+    // Put a large message in the queue to fill the queue.
     let big = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
     let mut full = false;
     for _i in 0..4000 {
@@ -338,7 +338,7 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
     }
     assert!(full, "the queue never filled");
 
-    // buffer된 response를 queue에 넣는다
+    // Put the buffered response in the queue.
     for (i, name) in ["x", "y", "z"].iter().enumerate() {
         let response_json = serde_json::json!({
             "image": {
@@ -359,7 +359,7 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
 
     sidecars.retain(&owner, &|s| s != "s2").expect("retain");
 
-    // FIFO에서 sidecar를 해제한다
+    // Release the sidecar from the FIFO.
     let fifo_file = std::fs::OpenOptions::new()
         .write(true)
         .open(&fifo_path)
@@ -372,7 +372,7 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
 
     let data = std::fs::read_to_string(received).unwrap();
 
-    // buffer된 message가 모두 전송되었는지 검증한다
+    // Verify that all buffered messages were sent.
     for want in &[
         r#""name":"x""#,
         r#""name":"y""#,

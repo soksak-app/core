@@ -48,7 +48,7 @@ fn parse_read(value: Value, kind: &str) -> Result<ClipboardValue, String> {
         Some("error") => Err(value
             .get("error")
             .and_then(Value::as_str)
-            // 기본값: 네이티브 오류에 문장이 없으면 일반 문장으로 같은 오류를 알린다.
+            // default: when the native error has no text, the same error is reported with a generic text.
             .unwrap_or("clipboard read failed")
             .into()),
         Some("ok") => match kind {
@@ -111,7 +111,7 @@ fn write_response(pointer: *mut c_char) -> Result<(), String> {
         Some("error") => Err(value
             .get("error")
             .and_then(Value::as_str)
-            // 기본값: 네이티브 오류에 문장이 없으면 일반 문장으로 같은 오류를 알린다.
+            // default: when the native error has no text, the same error is reported with a generic text.
             .unwrap_or("clipboard write failed")
             .into()),
         _ => Err("clipboard write was not accepted".into()),

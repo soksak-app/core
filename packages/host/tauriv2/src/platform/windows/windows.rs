@@ -1,7 +1,7 @@
-//! Windows 구현.
+//! The Windows implementation.
 //!
-//! 디렉터리 식별을 구현한다. 로컬 엔드포인트(named pipe)를 포함한 나머지 기능은 unsupported 에서 "not implemented on windows"
-//! 오류를 반환한다.
+//! It implements directory identification. The other functions, including the local endpoint (named pipe), return a
+//! "not implemented on windows" error from unsupported.
 
 use std::fs::Metadata;
 use std::path::Path;
@@ -22,7 +22,7 @@ mod identity;
 #[path = "unsupported.rs"]
 mod unsupported;
 
-/// Windows 플랫폼 구현.
+/// The Windows platform implementation.
 pub struct Windows;
 
 impl Platform for Windows {
@@ -76,7 +76,7 @@ impl Platform for Windows {
     fn screens(&self) -> Result<Value, String> {
         unsupported::screens()
     }
-    /// Windows 애플리케이션은 마지막 창이 닫히면 종료한다.
+    /// A Windows application ends when its last window closes.
     fn stays_open_without_windows(&self) -> bool {
         false
     }

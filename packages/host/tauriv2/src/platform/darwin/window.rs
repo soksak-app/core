@@ -1,4 +1,4 @@
-//! 창 설정, 창 버튼, 창 번호.
+//! Window settings, window buttons and window numbers.
 
 use std::ffi::{c_char, c_void, CStr};
 
@@ -13,8 +13,8 @@ use tauri::Window;
 
 use super::super::{Frame, Handle, WindowBuilder};
 
-/// 프로젝트 창의 제목 표시줄을 페이지 위에 겹치고 제목을 숨긴다. 비활성 창의 클릭도
-/// 웹뷰에 전달한다.
+/// Overlays the title bar of the project window on the page and hides the title. A click on an inactive window is also
+/// passed to the webview.
 pub fn prepare(builder: WindowBuilder<'_>) -> WindowBuilder<'_> {
     builder
         .title_bar_style(tauri::TitleBarStyle::Overlay)
@@ -22,7 +22,7 @@ pub fn prepare(builder: WindowBuilder<'_>) -> WindowBuilder<'_> {
         .accept_first_mouse(true)
 }
 
-/// 창의 NSWindow 주소를 반환한다.
+/// Returns the NSWindow address of the window.
 pub fn handle(window: &Window) -> Result<Handle, String> {
     window
         .ns_window()
@@ -57,7 +57,7 @@ pub fn reveal_after_load(window: Handle) -> Result<(), String> {
     Err(message)
 }
 
-/// 창 버튼의 현재 영역을 배치를 바꾸지 않고 읽는다.
+/// Reads the current area of the window buttons without changing the placement.
 pub fn controls(window: Handle) -> Frame {
     let mut rect = [0.0; 4];
     unsafe {
@@ -69,7 +69,7 @@ pub fn controls(window: Handle) -> Frame {
     (rect[0], rect[1], rect[2], rect[3])
 }
 
-/// 창을 전체 화면으로 바꾸거나 되돌리고 전환이 끝나면 done 을 호출한다.
+/// Changes the window to full screen or back, and calls done when the transition ends.
 pub fn fullscreen(window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
     extern "C" {
         fn sp_window_fullscreen(window: *mut c_void, on: bool, done: &Block<dyn Fn()>) -> bool;
@@ -82,7 +82,7 @@ pub fn fullscreen(window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), S
     }
 }
 
-/// 창의 가림 상태가 바뀔 때마다 changed 를 호출한다(NSWindowDidChangeOcclusionStateNotification).
+/// Calls changed whenever the occlusion state of the window changes (NSWindowDidChangeOcclusionStateNotification).
 pub fn observe_occlusion(window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
     extern "C" {
         fn sp_window_observe_occlusion(window: *mut c_void, changed: &Block<dyn Fn()>) -> bool;
@@ -95,12 +95,13 @@ pub fn observe_occlusion(window: Handle, changed: Box<dyn Fn()>) -> Result<(), S
     }
 }
 
-/// 창의 제목줄 높이를 반환한다. 제목줄을 가질 수 없는 창이면 오류를 반환한다.
+/// Returns the title bar height of the window. It returns an error for a window that cannot have a title bar.
 pub fn titlebar_height(window: Handle) -> Result<f64, String> {
     extern "C" {
         fn windowTitlebarHeight(window: *mut c_void) -> f64;
     }
-    // 0 은 제목줄이 없는 창(전체 화면)의 높이이고, 음수는 제목줄을 만들 수 없는 창이다.
+    // 0 is the height of a window without a title bar (full screen), and a negative value means a window that cannot
+    // get a title bar.
     let row = unsafe { windowTitlebarHeight(window as *mut c_void) };
     if row >= 0.0 {
         Ok(row)
@@ -109,7 +110,8 @@ pub fn titlebar_height(window: Handle) -> Result<f64, String> {
     }
 }
 
-/// 창의 제목줄을 height(pt)로 만든다. 만들 수 없으면 native 의 실패 문장을 반환한다.
+/// Creates the title bar of the window with height (pt). If it cannot be created, it returns the failure text of
+/// native.
 pub fn set_titlebar_height(window: Handle, height: f64) -> Result<(), String> {
     extern "C" {
         fn windowSetTitlebarHeight(
@@ -131,11 +133,11 @@ pub fn set_titlebar_height(window: Handle, height: f64) -> Result<(), String> {
 }
 
 #[cfg(feature = "diagnostics")]
-/// 창 서버가 이 창과 이 창에 붙은 창에 부여한 번호를 반환한다.
+/// Returns the number that the window server assigned to this window and the windows attached to it.
 ///
-/// 캡처 도구는 창 번호로 창 서버의 합성 결과(페이지, 표면, 모달)를 읽는다. 창을 앞으로
-/// 가져오지 않고 다른 창의 포커스도 가져오지 않는다. 화면 영역 캡처는 앞에 있는 창을
-/// 기록하고, 창을 앞으로 가져오면 측정 대상 상태가 바뀐다.
+/// The capture tool reads the composition result of the window server (page, surfaces, modals) by window number. It
+/// does not bring the window to the front and does not take the focus from another window. A screen region capture
+/// records the frontmost window, and bringing a window to the front changes the state under measurement.
 pub fn numbers(window: Handle) -> Vec<isize> {
     unsafe {
         let window = window as *mut AnyObject;
@@ -155,7 +157,7 @@ pub fn numbers(window: Handle) -> Vec<isize> {
     }
 }
 
-/// native/darwin 이 반환한 JSON 문자열을 읽고 해제한다.
+/// Reads and releases the JSON string that native/darwin returned.
 pub(super) fn facts_value(text: *mut c_char, what: &str) -> Result<Value, String> {
     extern "C" {
         fn sp_facts_free(text: *mut c_char);
@@ -169,7 +171,7 @@ pub(super) fn facts_value(text: *mut c_char, what: &str) -> Result<Value, String
     parsed
 }
 
-/// 창의 프레임, 활성 상태, 창 버튼과 웹뷰.
+/// The frame, the active state, the window buttons and the webviews of the window.
 pub fn facts(window: Handle) -> Result<Value, String> {
     extern "C" {
         fn sp_window_facts(window: *mut c_void) -> *mut c_char;
@@ -180,7 +182,7 @@ pub fn facts(window: Handle) -> Result<Value, String> {
     )
 }
 
-/// 창 프레임의 왼쪽 위를 화면 좌표로 옮긴다.
+/// Moves the upper left of the window frame to screen coordinates.
 pub fn move_to(window: Handle, x: f64, y: f64) -> Result<(), String> {
     extern "C" {
         fn sp_window_move(window: *mut c_void, x: f64, y: f64) -> bool;
@@ -192,7 +194,7 @@ pub fn move_to(window: Handle, x: f64, y: f64) -> Result<(), String> {
     }
 }
 
-/// 디스플레이 목록.
+/// The display list.
 pub fn screens() -> Result<Value, String> {
     extern "C" {
         fn sp_screens() -> *mut c_char;
@@ -200,7 +202,7 @@ pub fn screens() -> Result<Value, String> {
     facts_value(unsafe { sp_screens() }, "display list")
 }
 
-/// 창 확대와 애니메이션 크기 변경을 한 화면 갱신 안에 끝나게 한다.
+/// Makes the window zoom and the animated size change finish within one screen update.
 pub fn instant_resize() {
     extern "C" {
         fn windowResizeInstant();

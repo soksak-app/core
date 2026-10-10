@@ -1,5 +1,5 @@
-//! 애플리케이션 로그 테스트(docs/spec/hosts.md#application-log). 표준 오류 교체는 프로세스 전체에 영향을
-//! 주므로 자식 프로세스에서 확인한다.
+//! Application log tests (docs/spec/hosts.md#application-log). Replacing the standard error affects the whole process,
+//! so it is checked in a child process.
 
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
@@ -10,7 +10,7 @@ mod records;
 
 use soksak_host_tauriv2::application_log::{log_error, open_log, start_standard_error};
 
-/// 자식 프로세스에 설정 디렉터리를 알리는 환경 변수.
+/// The environment variable that tells the child process the configuration directory.
 const CHILD: &str = "SOKSAK_APPLICATION_LOG_CHILD";
 
 const NAME: &str =

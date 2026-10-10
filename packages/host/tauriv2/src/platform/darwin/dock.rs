@@ -1,4 +1,4 @@
-//! Dock 메뉴.
+//! The Dock menu.
 
 use std::ffi::{c_char, CString};
 
@@ -7,8 +7,8 @@ use serde_json::Value;
 
 use super::window::facts_value;
 
-/// 시스템 선호 언어의 주 태그를 반환한다(window_facts.h 의 sp_preferred_language).
-/// 그 태그가 계약 표의 언어인지는 호출자가 정한다.
+/// Returns the main tag of the system preferred language (sp_preferred_language of window_facts.h). The caller decides
+/// whether that tag is a language of the contract table.
 pub fn preferred_language() -> Result<String, String> {
     extern "C" {
         fn sp_preferred_language() -> *mut std::ffi::c_char;
@@ -17,12 +17,12 @@ pub fn preferred_language() -> Result<String, String> {
     if value.is_null() {
         return Ok(String::new());
     }
-    // native/darwin 이 strdup 으로 만든 문자열이므로 해제까지 여기서 맡는다.
+    // native/darwin creates the string with strdup, so releasing it is also done here.
     let tag = unsafe { std::ffi::CString::from_raw(value) };
     Ok(tag.to_string_lossy().into_owned())
 }
 
-/// Dock 메뉴에 새 창 항목을 설치한다.
+/// Installs the new window item in the Dock menu.
 pub fn install(new_window: Box<dyn Fn()>) -> Result<(), String> {
     extern "C" {
         fn appInstallDockMenu(new_window: &Block<dyn Fn()>) -> bool;
@@ -35,7 +35,7 @@ pub fn install(new_window: Box<dyn Fn()>) -> Result<(), String> {
     }
 }
 
-/// 애플리케이션 메뉴.
+/// The application menu.
 pub fn menu() -> Result<Value, String> {
     extern "C" {
         fn sp_menu_items() -> *mut c_char;
@@ -43,7 +43,7 @@ pub fn menu() -> Result<Value, String> {
     facts_value(unsafe { sp_menu_items() }, "application menu")
 }
 
-/// Dock 메뉴 항목의 제목 목록.
+/// The list of titles of the Dock menu items.
 pub fn items() -> Result<Value, String> {
     extern "C" {
         fn sp_dock_items() -> *mut c_char;
@@ -51,7 +51,7 @@ pub fn items() -> Result<Value, String> {
     facts_value(unsafe { sp_dock_items() }, "Dock menu")
 }
 
-/// 제목이 menu 인 하위 메뉴에서 제목이 title 인 애플리케이션 메뉴 항목을 실행한다.
+/// Runs the application menu item with the title title in the submenu with the title menu.
 pub fn menu_select(menu: &str, title: &str) -> Result<(), String> {
     extern "C" {
         fn sp_menu_select(menu: *const c_char, title: *const c_char) -> bool;
@@ -65,7 +65,7 @@ pub fn menu_select(menu: &str, title: &str) -> Result<(), String> {
     }
 }
 
-/// 애플리케이션의 주 창 핸들. 없으면 0 이다.
+/// The main window handle of the application. It is 0 when there is none.
 pub fn main_window() -> super::Handle {
     extern "C" {
         fn sp_app_main_window() -> *mut std::ffi::c_void;
@@ -73,7 +73,7 @@ pub fn main_window() -> super::Handle {
     unsafe { sp_app_main_window() as super::Handle }
 }
 
-/// 제목이 title 인 Dock 메뉴 항목을 실행한다.
+/// Runs the Dock menu item with the title title.
 pub fn select(title: &str) -> Result<(), String> {
     extern "C" {
         fn sp_dock_select(title: *const c_char) -> bool;

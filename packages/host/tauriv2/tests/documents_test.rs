@@ -1,4 +1,4 @@
-//! 문서 영역 요청의 소유 표면 검사와 창의 문서 영역 목록을 검사한다.
+//! Checks the owning surface check of document region requests and the document region list of a window.
 
 use soksak_host_tauriv2::documents::{check, go_action, Documents, Key, Request};
 

@@ -1,4 +1,5 @@
-//! 현재 사용자 전용 파일과 디렉터리의 platform 연산 테스트(docs/spec/hosts.md#platform-interface).
+//! Tests of the platform operations for files and directories of the current user only
+//! (docs/spec/hosts.md#platform-interface).
 
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
@@ -22,7 +23,7 @@ fn create_private_directories_makes_missing_directories_owner_only() {
     for path in [&middle, &leaf] {
         assert_eq!(mode(path), 0o700, "{}", path.display());
     }
-    // 이미 있는 디렉터리의 권한은 바꾸지 않는다.
+    // The permissions of an existing directory are not changed.
     current.create_private_directories(root.path()).unwrap();
     assert_eq!(mode(root.path()), 0o755);
 }
@@ -42,7 +43,7 @@ fn append_private_file_creates_an_owner_only_file_and_appends() {
     }
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "first\nsecond\n");
     assert_eq!(mode(&path), 0o600);
-    // 이미 있는 파일의 권한은 바꾸지 않는다.
+    // The permissions of an existing file are not changed.
     let shared = directory.path().join("shared.log");
     std::fs::write(&shared, "").unwrap();
     std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o644)).unwrap();
@@ -79,7 +80,7 @@ fn write_private_file_creates_an_owner_only_file_and_replaces_its_contents() {
     }
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "second\n");
     assert_eq!(mode(&path), 0o600);
-    // 이미 있는 파일의 권한은 바꾸지 않는다.
+    // The permissions of an existing file are not changed.
     let shared = directory.path().join("shared.json");
     std::fs::write(&shared, "").unwrap();
     std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o644)).unwrap();

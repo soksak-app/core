@@ -1,4 +1,5 @@
-//! 로컬 엔드포인트의 전송, 프레임, JSON-RPC 처리, 감시 목록 테스트. 창과 페이지는 가짜 서비스가 대신한다.
+//! Tests of the transport, the frames, the JSON-RPC handling and the watch list of the local endpoint. A fake service
+//! replaces the window and the page.
 
 use std::io::Write;
 use std::path::Path;
@@ -13,7 +14,7 @@ use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
 use soksak_host_tauriv2::endpoint::{self, raw, Connection, Endpoint, Failure, Service, Watch};
 
-/// 요청을 기록하고 창 w1 만 가진 서비스.
+/// A service that records requests and has only the window w1.
 struct Fake {
     calls: Mutex<Vec<(String, String, Value)>>,
     seen: Mutex<Sender<(String, String, Value)>>,
@@ -78,8 +79,8 @@ impl Service for Fake {
     }
 }
 
-/// config 안의 sockets 디렉터리에 엔드포인트를 열고 창 w1 로 endpoint.json 을 쓴다. 소켓 경로는
-/// 길이 제한 안에 든다.
+/// Opens the endpoint in the sockets directory inside config and writes endpoint.json with the window w1. The socket
+/// path is within the length limit.
 fn start(config: &Path, application: &str, service: Arc<Fake>) -> Endpoint {
     let endpoint = Endpoint::start(&config.join("sockets"), config, application, service).unwrap();
     endpoint.publish("w1").unwrap();
@@ -346,7 +347,7 @@ fn endpoint_files_are_private_to_the_user() {
     assert_eq!(mode(&config.path().join("endpoint.json")), 0o600);
 }
 
-/// 끝난 프로세스의 번호.
+/// The number of an ended process.
 fn ended_process() -> u32 {
     let mut child = std::process::Command::new("/usr/bin/true").spawn().unwrap();
     child.wait().unwrap();
@@ -402,7 +403,7 @@ fn a_socket_directory_open_to_others_is_refused() {
 // contract: endpoint.socket.refuses-foreign-owner
 #[test]
 fn a_socket_directory_of_another_user_is_refused() {
-    // /usr 는 root 소유다. 검사는 권한보다 소유자를 먼저 본다.
+    // /usr is owned by root. The check looks at the owner before the permissions.
     let config = tempfile::tempdir().unwrap();
     let (fake, _) = Fake::new();
     let refused = Endpoint::start(Path::new("/usr"), config.path(), "test-owner", fake)
@@ -456,7 +457,7 @@ fn watchers_belong_to_their_connection() {
         }]
     );
 
-    // 두 번째 연결은 감시하지 않았으므로 알림 대신 자신의 응답을 먼저 받는다.
+    // The second connection did not watch, so it receives its own response first and not a notification.
     notifier.changed("w1", "core.layout", None, &raw(&json!(1)).unwrap());
     assert_eq!(
         receive(&mut first),
@@ -473,7 +474,7 @@ fn watchers_belong_to_their_connection() {
         2
     );
 
-    // 두 번째 연결의 감시 해제는 첫 번째 연결의 감시를 바꾸지 않는다.
+    // Unwatching by the second connection does not change the watch of the first connection.
     request(
         &mut second,
         3,
@@ -488,7 +489,7 @@ fn watchers_belong_to_their_connection() {
     );
     notifier.changed("w1", "core.layout", None, &raw(&json!(2)).unwrap());
     assert_eq!(receive(&mut first).unwrap()["params"]["value"], 2);
-    // 페이지는 두 연결의 감시 가운데 첫 감시만 받는다.
+    // The page receives only the first watch of the watches of the two connections.
     let page_watches = fake
         .calls()
         .iter()
@@ -500,7 +501,7 @@ fn watchers_belong_to_their_connection() {
         .iter()
         .any(|(_, method, _)| method == "status.unwatch"));
 
-    // 마지막 감시자의 연결이 닫히면 페이지에 감시 해제를 요청한다.
+    // When the connection of the last watcher closes, the page is asked to unwatch.
     while seen.try_recv().is_ok() {}
     drop(first);
     let (window, method, params) = seen.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -613,7 +614,8 @@ fn names_must_have_the_owner_form() {
     endpoint.stop();
 }
 
-/// 감시 요청을 처리 완료 순서로 기록하는 페이지. 첫 status.unwatch 는 gate 가 열릴 때까지 끝나지 않는다.
+/// A page that records watch requests in the order of completion. The first status.unwatch does not finish until gate
+/// opens.
 struct GatedPage {
     order: Mutex<Vec<String>>,
     gate: Mutex<Option<Receiver<()>>>,
@@ -680,7 +682,8 @@ fn subscription_changes_reach_the_page_in_arrival_order() {
     );
     assert_eq!(calls.recv().unwrap(), "status.watch");
 
-    // 감시 해제와 감시를 연달아 보낸다. 페이지가 감시 해제를 끝내기 전에 다른 요청의 응답을 받는다.
+    // An unwatch and a watch are sent one after the other. The response to another request is received before the page
+    // finishes the unwatch.
     send(
         &mut connection,
         json!({"jsonrpc": "2.0", "id": 2, "method": "status.unwatch", "params": topic}),
@@ -713,7 +716,7 @@ fn subscription_changes_reach_the_page_in_arrival_order() {
     endpoint.stop();
 }
 
-/// 창 main 을 등록한 뒤에만 그 창을 가진 서비스.
+/// A service that has the window main only after it was registered.
 struct Late(std::sync::atomic::AtomicBool);
 
 impl Service for Late {
@@ -776,7 +779,7 @@ fn closing_an_already_disconnected_connection_succeeds() {
     let endpoint = start(config.path(), "test-close", service);
     let connection = open(&endpoint);
     assert_eq!(connection.close(), Ok(()));
-    // 이미 끊긴 연결을 다시 닫는 것은 실패가 아니다. 셧다운이 끝난 소켓은 ENOTCONN 을 돌려준다.
+    // Closing an already closed connection again is not a failure. A socket whose shutdown is done returns ENOTCONN.
     assert_eq!(
         connection.close(),
         Ok(()),

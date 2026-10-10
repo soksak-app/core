@@ -1,7 +1,7 @@
-//! 공통 설정, 프로젝트 설정, 프로젝트 목록 저장소.
+//! The common settings, the project settings and the project list store.
 //!
-//! 설정 디렉터리의 `projects.json` 은 프로젝트 목록, `settings.json` 은 공통 설정이다. 프로젝트
-//! 설정은 프로젝트 디렉터리의 `.soksak/settings.json` 에 저장한다.
+//! `projects.json` in the configuration directory is the project list and `settings.json` is the common settings. The
+//! project settings are stored in `.soksak/settings.json` of the project directory.
 
 use std::fs;
 use std::io::Write;
@@ -16,8 +16,9 @@ use tauri::{AppHandle, Manager};
 use crate::projects::project_folder;
 use crate::windows::{emit_window, opened};
 
-/// 설정 디렉터리를 만들고 정규 경로를 반환한다. 빈 경로는 현재 디렉터리로 바꾸지 않고 거부한다.
-/// create 는 없는 디렉터리를 현재 사용자 전용 권한으로 만든다(`Platform::create_private_directories`).
+/// Creates the configuration directory and returns the canonical path. An empty path is rejected and not replaced with
+/// the current directory. create creates a missing directory with permissions for the current user only
+/// (`Platform::create_private_directories`).
 pub fn prepare_config_directory(
     path: &Path,
     create: impl FnOnce(&Path) -> Result<(), String>,
@@ -30,17 +31,18 @@ pub fn prepare_config_directory(
         .map_err(|error| format!("{}: {error}", path.display()))
 }
 
-/// 프로젝트 설정이 덮어쓸 수 없는 공통 설정(docs/spec/projects.md#persistence). 호스트는 페이지 시작 전에 공통 설정의
-/// textSize 로 창 제목줄을 정한다(docs/spec/native-surfaces.md#title-bar-height).
+/// The common settings that a project setting cannot override (docs/spec/projects.md#persistence). The host sets the
+/// window title bar from textSize of the common settings before the page starts
+/// (docs/spec/native-surfaces.md#title-bar-height).
 const COMMON_ONLY: [&str; 2] = ["projectOpening", "textSize"];
 
-/// 설정 디렉터리 하나의 저장소. 쓰기 요청은 순서대로 실행한다.
+/// The store of one configuration directory. Write requests run in order.
 pub struct Workspace {
     directory: PathBuf,
     writing: Mutex<()>,
 }
 
-/// 저장소 요청. kind 는 snapshot, add, patch, remove, move, settings 중 하나이다.
+/// A store request. kind is one of snapshot, add, patch, remove, move and settings.
 #[derive(Deserialize)]
 pub struct Request {
     kind: String,
@@ -72,7 +74,7 @@ fn write(path: &Path, value: &impl serde::Serialize) -> Result<(), String> {
 }
 
 impl Workspace {
-    /// directory 를 설정 디렉터리로 사용하는 저장소를 만든다.
+    /// Creates a store that uses directory as the configuration directory.
     pub fn new(directory: PathBuf) -> Self {
         Self {
             directory,
@@ -80,17 +82,17 @@ impl Workspace {
         }
     }
 
-    /// 설정 디렉터리.
+    /// The configuration directory.
     pub fn directory(&self) -> &Path {
         &self.directory
     }
 
-    /// 요청을 실행하고 결과를 반환한다.
+    /// Runs a request and returns the result.
     ///
-    /// snapshot 은 프로젝트 목록(각 프로젝트의 settings 포함)과 공통 설정을 반환한다. add 는
-    /// 추가하거나 같은 root 또는 identity 의 기존 프로젝트를 반환한다. settings 는 null 을,
-    /// 없는 프로젝트의 patch 는 false 를, 범위를 벗어난 move 는 null 을, 나머지는 true 를
-    /// 반환한다. 파일을 읽지 못하면 파일을 바꾸지 않고 오류를 반환한다.
+    /// snapshot returns the project list (including the settings of each project) and the common settings. add adds a
+    /// project or returns the existing project with the same root or identity. settings returns null, patch of a
+    /// missing project returns false, move out of range returns null, and the others return true. When a file cannot be
+    /// read, it returns an error without changing the file.
     pub fn apply(&self, req: Request) -> Result<Value, String> {
         let _writing = self.writing.lock().map_err(|e| e.to_string())?;
         let registry = self.directory.join("projects.json");
@@ -144,7 +146,8 @@ impl Workspace {
                 let Some(at) = at else {
                     return Ok(false.into());
                 };
-                // 기본값: 요청의 patch 는 선택 인자이며 없으면 바꿀 값이 없다.
+                // default: patch of a request is an optional argument, and when it is absent there is no value to
+                // change.
                 for (key, value) in req.patch.unwrap_or_default() {
                     if ![
                         "title",
@@ -179,7 +182,8 @@ impl Workspace {
                 projects.insert(to as usize, project);
             }
             "settings" => {
-                // 기본값: 요청의 patch 는 선택 인자이며 없으면 바꿀 값이 없다.
+                // default: patch of a request is an optional argument, and when it is absent there is no value to
+                // change.
                 let patch = req.patch.unwrap_or_default();
                 let path = if req.id.is_some() {
                     let at = at.ok_or("unknown project")?;
@@ -227,10 +231,10 @@ impl Workspace {
     }
 }
 
-/// 페이지의 저장소 요청을 실행한다.
+/// Runs a store request of the page.
 ///
-/// add 는 프로젝트 경로를 확인한 정규 경로와 식별값으로 바꾼다. snapshot 은 창에 열린 프로젝트
-/// id 를 open 에 추가한다. 변경 요청 뒤에는 모든 창에 workspace-changed 를 보낸다.
+/// add replaces the project path with the checked canonical path and identifier. snapshot adds the project ids open in
+/// the window to open. After a request that changes data, workspace-changed is sent to all windows.
 pub(crate) fn handle(app: &AppHandle, mut request: Request) -> Result<Value, String> {
     if request.kind == "add" {
         let project = request.project.as_mut().ok_or("project is missing")?;

@@ -1,7 +1,8 @@
-//! 호스트가 사용하는 플랫폼 기능의 인터페이스와 현재 운영체제 구현의 선택.
+//! The interface of the platform functions that the host uses and the selection of the implementation of the current
+//! operating system.
 //!
-//! 운영체제별 코드는 이 디렉터리 아래 `<os>/` 에만 둔다. 다른 파일은 [`current`] 가 반환하는
-//! [`Platform`] 으로만 네이티브 기능을 호출한다.
+//! Operating-system-specific code is placed only in `<os>/` under this directory. Other files call native functions
+//! only through the [`Platform`] that [`current`] returns.
 
 use std::fs::Metadata;
 use std::io::{Read, Write};
@@ -13,14 +14,15 @@ use serde_json::Value;
 use tauri::webview::PlatformWebview;
 use tauri::{AppHandle, WebviewWindowBuilder, Window, Wry};
 
-/// 활성 platform이 제공하는 인증된 persistent sidecar stream이다.
+/// An authenticated persistent sidecar stream that the active platform provides.
 pub trait PersistentStream: Read + Write + Send {
     fn try_clone(&self) -> Result<Box<dyn PersistentStream>, String>;
-    /// 연결의 양쪽 방향을 닫는다. 호출자가 연결되지 않은 소켓(ENOTCONN)을 가려내도록 io 오류를 그대로 반환한다.
+    /// Closes both directions of the connection. The io error is returned as it is so that the caller can tell an
+    /// unconnected socket (ENOTCONN).
     fn shutdown(&self) -> std::io::Result<()>;
-    /// 다음 읽기를 기한 안에 끝나게 한다. None 은 무한 대기다. 인사(hello) 왕복이
-    /// 상태 잠금을 쥔 채 무한히 멈추지 않게 한다(V5-106). 이어지는 읽기 스레드는 다시
-    /// 무한 대기로 돌려놓는다.
+    /// Makes the next read finish within the deadline. None waits indefinitely. It keeps the hello round trip from
+    /// stopping forever while it holds the state lock (V5-106). The read thread that follows is set back to wait
+    /// indefinitely.
     fn set_read_deadline(&self, timeout: Option<std::time::Duration>) -> Result<(), String>;
 }
 
@@ -32,22 +34,23 @@ mod darwin;
 #[path = "windows/windows.rs"]
 mod windows;
 
-/// 공용 라이브러리가 창과 웹뷰에 붙인 객체 가운데 그 수명이 창과 웹뷰의 해제를 나타내는 객체의 살아 있는 수.
-/// 닫은 창과 그 웹뷰가 해제되면 그 창의 객체 수가 빠진다.
+/// The number of live objects, among those that the shared library attached to windows and webviews, whose lifetime
+/// shows the release of the window and the webview. When a closed window and its webviews are released, the object
+/// count of that window decreases.
 #[cfg(feature = "diagnostics")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct WindowObjects {
-    /// 창의 콘텐츠 뷰 안에서 메인 웹뷰를 보유하는 합성 뷰의 수.
+    /// The number of composite views that hold the main webview in the content view of the window.
     pub window_compositions: i64,
-    /// 논리 표면과 표면에 붙인 웹뷰의 컨테이너 수.
+    /// The number of logical surfaces and containers of the webviews attached to the surfaces.
     pub surface_hosts: i64,
-    /// 입력을 등록한 웹뷰(메인, 모달, 표면 웹뷰)의 등록 수.
+    /// The number of registrations of webviews that registered input (main, modal and surface webviews).
     pub input_registrations: i64,
 }
 
 #[cfg(feature = "diagnostics")]
 impl WindowObjects {
-    /// diagnostics.native.objects 의 응답.
+    /// The response of diagnostics.native.objects.
     pub fn payload(&self) -> Value {
         serde_json::json!({
             "windowCompositions": self.window_compositions,
@@ -56,8 +59,8 @@ impl WindowObjects {
         })
     }
 
-    /// diagnostics.native.objects 의 equal 을 읽는다. 세 이름 외의 이름, 빠진 이름, 정수가 아니거나 음수인 값은
-    /// 거부한다.
+    /// Reads equal of diagnostics.native.objects. A name other than the three names, a missing name, and a value that
+    /// is not an integer or is negative are rejected.
     pub fn from_equal(value: &Value) -> Result<Self, String> {
         const INVALID: &str = "equal must be an object of windowCompositions, surfaceHosts and inputRegistrations, each a non-negative integer";
         let fields = value
@@ -79,8 +82,8 @@ impl WindowObjects {
     }
 }
 
-/// diagnostics.process.exit 의 pid 를 읽는다. 없거나, JSON 정수가 아니거나, 1 부터 2147483647 사이가 아니면
-/// 거부한다.
+/// Reads the pid of diagnostics.process.exit. It is rejected when it is missing, is not a JSON integer, or is not
+/// between 1 and 2147483647.
 #[cfg(feature = "diagnostics")]
 pub fn parse_process_id(value: Option<&Value>) -> Result<i32, String> {
     value
@@ -90,7 +93,7 @@ pub fn parse_process_id(value: Option<&Value>) -> Result<i32, String> {
         .ok_or_else(|| "pid must be a positive integer".to_string())
 }
 
-/// 오류 메시지에 쓰는 수의 표기.
+/// The notation of a number used in an error message.
 #[cfg(feature = "diagnostics")]
 impl std::fmt::Display for WindowObjects {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -102,100 +105,104 @@ impl std::fmt::Display for WindowObjects {
     }
 }
 
-/// 네이티브 창, 뷰, 입력 감시기를 가리키는 주소.
+/// An address that points to a native window, view or input monitor.
 pub type Handle = usize;
 
-/// x, y, 너비, 높이 순서의 사각형.
+/// A rectangle in the order x, y, width, height.
 pub type Frame = (f64, f64, f64, f64);
 
-/// 프로젝트 창 생성기.
+/// The project window builder.
 pub type WindowBuilder<'a> = WebviewWindowBuilder<'a, Wry, AppHandle<Wry>>;
 
-/// 로컬 엔드포인트의 연결 하나.
+/// One connection of the local endpoint.
 pub trait Connection: Read + Write + Send {
-    /// 같은 연결을 가리키는 다른 값을 반환한다. 읽기와 쓰기를 다른 스레드에서 실행할 때 사용한다.
+    /// Returns another value that points to the same connection. It is used when reading and writing run on different
+    /// threads.
     fn try_clone(&self) -> Result<Box<dyn Connection>, String>;
-    /// 읽기 대기 시간을 설정한다. None 은 제한하지 않는다.
+    /// Sets the read timeout. None means no limit.
     fn set_read_timeout(&self, timeout: Option<Duration>) -> Result<(), String>;
-    /// 연결의 읽기와 쓰기를 모두 닫는다.
+    /// Closes both reading and writing of the connection.
     fn close(&self) -> Result<(), String>;
 }
 
-/// 로컬 엔드포인트의 수신 주소.
+/// The listening address of the local endpoint.
 pub trait Listener: Send + Sync {
-    /// 다음 연결을 기다린다.
+    /// Waits for the next connection.
     fn accept(&self) -> Result<Box<dyn Connection>, String>;
-    /// endpoint.json 의 transport 값.
+    /// The transport value of endpoint.json.
     fn transport(&self) -> &'static str;
-    /// endpoint.json 의 address 값.
+    /// The address value of endpoint.json.
     fn address(&self) -> String;
-    /// 주소가 만든 파일을 제거한다.
+    /// Removes the file that the address created.
     fn remove(&self);
 }
 
-/// 네이티브 입력으로 전달하는 포인터 동작. 좌표는 콘텐츠 영역 왼쪽 위 기준 포인트 값이다.
+/// A pointer action that is delivered as native input. Coordinates are values in points relative to the upper left of
+/// the content area.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pointer {
     pub x: f64,
     pub y: f64,
-    /// 0 이동, 1 누름, 2 끌기, 3 뗌, 4 스크롤.
+    /// 0 move, 1 press, 2 drag, 3 release, 4 scroll.
     pub phase: i32,
-    /// 0 왼쪽, 1 오른쪽.
+    /// 0 left, 1 right.
     pub button: i32,
     pub delta_x: f64,
     pub delta_y: f64,
-    /// 이동 전에 애플리케이션을 활성화하고 창을 키 창으로 만든다. phase 가 0 일 때만 참이다.
+    /// Activates the application and makes the window the key window before the move. It is true only when phase is 0.
     pub activate: bool,
 }
 
-/// Delivery::ButtonHeld 로 거부한 차례에 AppKit 이 보고한 상태.
+/// The state that AppKit reported in the attempt that was rejected with Delivery::ButtonHeld.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ButtonHeld {
-    /// NSEvent.pressedMouseButtons 값.
+    /// The NSEvent.pressedMouseButtons value.
     pub mask: u64,
-    /// 최전면 애플리케이션. AppKit 이 최전면 애플리케이션을 보고하지 않으면 None 이다.
+    /// The frontmost application. It is None when AppKit reports no frontmost application.
     pub frontmost: Option<FrontmostApplication>,
 }
 
-/// 최전면 애플리케이션.
+/// The frontmost application.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrontmostApplication {
-    /// 번들 식별자. 없으면 None 이다.
+    /// The bundle identifier. It is None when there is none.
     pub bundle_identifier: Option<String>,
     pub pid: i32,
 }
 
-/// 포인터 입력 전달 결과.
+/// The result of delivering pointer input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Delivery {
-    /// 창에 전달했다.
+    /// It was delivered to the window.
     Delivered,
-    /// 창, 좌표, 단계가 올바르지 않다.
+    /// The window, coordinates or phase are not valid.
     Rejected,
-    /// 버튼 없는 이동이며 창이 키 창이 아니다.
+    /// A move without a button, and the window is not the key window.
     Inactive,
-    /// 누름이나 뗌을 전달했지만 문서가 제한 시간 안에 받지 않았다.
+    /// A press or a release was delivered, but the document did not receive it within the time limit.
     Unreceived,
-    /// AppKit이 눌린 마우스 버튼을 보고해 합성 누름이나 뗌을 전달하지 않았다. 값은 거부한 차례의 상태다.
+    /// AppKit reports a pressed mouse button, so a synthetic press or release was not delivered. The value is the state
+    /// of the rejected attempt.
     ButtonHeld(ButtonHeld),
-    /// 그 창에서 그 버튼의 합성 누름이 아직 열려 있어 누름을 전달하지 않았다.
+    /// A synthetic press of that button is still open in that window, so the press was not delivered.
     PressOpen,
 }
 
-/// 네이티브 입력으로 전달하는 키 동작.
+/// A key action that is delivered as native input.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Key {
-    /// 키 이름 또는 문자 하나.
+    /// A key name or one character.
     pub key: String,
-    /// 입력할 문자열. None 이면 key 를 사용한다.
+    /// The string to type. When it is None, key is used.
     pub text: Option<String>,
-    /// 비트 합: 1 Shift, 2 Control, 4 Option, 8 Command.
+    /// A bit sum: 1 Shift, 2 Control, 4 Option, 8 Command.
     pub modifiers: u32,
     pub down: bool,
 }
 
-/// 창 좌표의 한 점에 있는 뷰. chain 은 leaf 뷰부터 콘텐츠 뷰까지의 주소이며 identifier 는 leaf 뷰의
-/// 식별자다. view_class 와 view_frame 은 그 leaf 의 실제 클래스와 콘텐츠 좌표 프레임이다.
+/// The view at a point in window coordinates. chain is the addresses from the leaf view to the content view, and
+/// identifier is the identifier of the leaf view. view_class and view_frame are the actual class and the
+/// content-coordinate frame of that leaf.
 pub struct Hit {
     pub chain: Vec<Handle>,
     pub identifier: String,
@@ -203,10 +210,7 @@ pub struct Hit {
     pub view_frame: Option<Frame>,
 }
 
-/// 운영체제가 제공하는 창, 웹뷰, 표면 배치, 도형, 입력, 캡처, Dock, 디렉터리 식별, 엔드포인트 기능.
-///
-/// 구현하지 않은 기능은 "not implemented" 오류를 반환한다.
-/// 표면 뷰포트의 CSS 픽셀 여백(왼쪽, 위, 오른쪽, 아래).
+/// The CSS pixel insets of the surface viewport (left, top, right, bottom).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Insets {
     pub left: f64,
@@ -215,14 +219,14 @@ pub struct Insets {
     pub bottom: f64,
 }
 
-/// 선언된 DOM 오버레이의 표면 뷰포트 기준 CSS 픽셀 여백과 표시 여부.
+/// The CSS pixel insets and the visibility of a declared DOM overlay, relative to the surface viewport.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DOMOverlay {
     pub insets: Insets,
     pub visible: bool,
 }
 
-/// 메인 DOM 평면의 전역 overlay와 그 CSS 좌표.
+/// A global overlay of the main DOM plane and its CSS coordinates.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WindowOverlay {
     pub x: f64,
@@ -232,7 +236,7 @@ pub struct WindowOverlay {
     pub visible: bool,
 }
 
-/// 사용자의 system clipboard에서 읽은 값이다. `Absent`는 error가 아니다.
+/// A value read from the system clipboard of the user. `Absent` is not an error.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClipboardValue {
     Absent,
@@ -249,7 +253,7 @@ pub fn visible_window_overlay_rects(overlays: &[WindowOverlay]) -> Vec<f64> {
         .collect()
 }
 
-/// 적용된 그림 영역의 장치 픽셀 크기와 CSS 픽셀당 장치 픽셀 배율.
+/// The device pixel size of an applied image region and the device pixels per CSS pixel.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Raster {
     pub width: u32,
@@ -257,54 +261,61 @@ pub struct Raster {
     pub scale: f64,
 }
 
+/// The window, webview, surface placement, shape, input, capture, Dock, directory identification and endpoint functions
+/// that the operating system provides.
+///
+/// A function that is not implemented returns a "not implemented" error.
 pub trait Platform: Send + Sync {
-    /// 현재 프레임워크 이벤트 콜백이 끝난 뒤 메인 큐에서 work 를 한 번 실행한다.
+    /// Runs work once on the main queue after the current framework event callback ends.
     fn enqueue_ui(&self, work: Box<dyn FnOnce() + Send>) -> Result<(), String>;
 
-    // 창
+    // Window
 
-    /// 프로젝트 창 생성기에 운영체제별 창 설정을 적용한다.
+    /// Applies the operating-system-specific window settings to the project window builder.
     fn prepare_window<'a>(&self, builder: WindowBuilder<'a>) -> Result<WindowBuilder<'a>, String>;
-    /// 창의 네이티브 주소를 반환한다.
+    /// Returns the native address of the window.
     fn window_handle(&self, window: &Window) -> Result<Handle, String>;
     fn set_main_webview(&self, window: Handle, main: Handle) -> Result<(), String>;
-    /// 창을 투명하게 두고, 메인 웹뷰의 첫 읽기가 끝난 뒤 다음 표시가 끝나면 불투명하게 한다. 창을 화면에 올리는
-    /// 일은 호출자가 이 호출 뒤에 한다(native/darwin/src/window_reveal.h). UI 스레드에서 호출한다.
+    /// Keeps the window transparent, and makes it opaque when the next presentation ends after the first load of the
+    /// main webview ended. The caller puts the window on the screen after this call
+    /// (native/darwin/src/window_reveal.h). Call it on the UI thread.
     fn reveal_after_load(&self, window: Handle) -> Result<(), String>;
     fn set_main_appearance(&self, view: &PlatformWebview, dark: bool) -> Result<(), String>;
-    /// 창을 전체 화면으로 바꾸거나 되돌리고, 전환이 끝나면 done 을 호출한다. 전환 중에 온 요청은
-    /// 그 전환이 끝난 뒤에 처리한다.
+    /// Changes the window to full screen or back, and calls done when the transition ends. A request that arrives
+    /// during a transition is handled after that transition ends.
     fn fullscreen(&self, window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String>;
-    /// 창의 가림 상태가 바뀔 때마다 changed 를 UI 스레드에서 호출한다. 관찰은 창과 함께 끝난다.
+    /// Calls changed on the UI thread whenever the occlusion state of the window changes. The observation ends with the
+    /// window.
     fn observe_occlusion(&self, window: Handle, changed: Box<dyn Fn()>) -> Result<(), String>;
 
-    /// 창의 제목줄 높이(pt)를 반환한다. 전체 화면처럼 제목줄을 보이지 않는 동안 0 이고, 창에 단추가 없으면
-    /// 오류를 반환한다. UI 스레드에서 호출한다.
+    /// Returns the title bar height (pt) of the window. It is 0 while the title bar is not shown, as in full screen,
+    /// and it returns an error when the window has no buttons. Call it on the UI thread.
     fn titlebar_height(&self, window: Handle) -> Result<f64, String>;
-    /// 창의 제목줄을 height(pt)로 만든다. AppKit 이 그 높이의 세로 가운데에 창 단추를 두므로 호스트는 단추를
-    /// 옮기지 않는다. 창에 단추가 없으면 오류를 반환한다. 전체 화면인 창은 제목줄을 보이지 않고 AppKit 이 나올 때
-    /// 들어갈 때의 높이를 되돌리므로 높이를 바꾸지 않고 성공한다. UI 스레드에서 호출한다.
+    /// Creates the title bar of the window with height (pt). AppKit places the window buttons at the vertical center of
+    /// that height, so the host does not move the buttons. It returns an error when the window has no buttons. A window
+    /// in full screen does not show a title bar, and AppKit restores the height when it leaves or enters full screen,
+    /// so it succeeds without changing the height. Call it on the UI thread.
     fn set_titlebar_height(&self, window: Handle, height: f64) -> Result<(), String>;
-    /// 창 버튼이 차지하는 영역을 페이지 좌표로 반환한다.
+    /// Returns the area that the window buttons occupy in page coordinates.
     fn window_controls(&self, window: Handle) -> Result<Frame, String>;
     #[cfg(feature = "diagnostics")]
-    /// 창 서버가 창과 창에 붙은 창에 부여한 번호를 반환한다.
+    /// Returns the number that the window server assigned to the window and the windows attached to it.
     fn window_numbers(&self, window: &Window) -> Result<Vec<isize>, String>;
-    /// 창 좌표의 점에 있는 뷰를 반환한다. 메인 스레드에서 호출한다.
+    /// Returns the view at a point in window coordinates. Call it on the main thread.
     fn hit(&self, window: Handle, x: f64, y: f64) -> Result<Hit, String>;
-    /// 창의 프레임, 활성 상태, 창 버튼과 웹뷰를 JSON 으로 반환한다. 형식은
-    /// native/darwin/src/window_facts.h 의 sp_window_facts 와 같다. 메인 스레드에서 호출한다.
+    /// Returns the frame, the active state, the window buttons and the webviews of the window as JSON. The format is
+    /// the same as sp_window_facts of native/darwin/src/window_facts.h. Call it on the main thread.
     fn window_facts(&self, window: Handle) -> Result<Value, String>;
-    /// 창 프레임의 왼쪽 위를 화면 좌표 (x, y) 로 옮긴다. 메인 스레드에서 호출한다.
+    /// Moves the upper left of the window frame to the screen coordinates (x, y). Call it on the main thread.
     fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String>;
-    /// 디스플레이 [{x, y, width, height, scale}] 를 화면 좌표로 반환한다. 메인 스레드에서 호출한다.
+    /// Returns the displays [{x, y, width, height, scale}] in screen coordinates. Call it on the main thread.
     fn screens(&self) -> Result<Value, String>;
-    /// 창이 모두 닫혀도 애플리케이션을 유지하는지 반환한다.
+    /// Returns whether the application stays alive when all windows are closed.
     fn stays_open_without_windows(&self) -> bool;
 
-    // 웹뷰
+    // Webview
 
-    /// 창 좌표의 사각형을 웹뷰의 부모 좌표로 변환해 배치한다.
+    /// Converts a rectangle in window coordinates into the parent coordinates of the webview and places it.
     fn place_webview(
         &self,
         view: &PlatformWebview,
@@ -313,9 +324,9 @@ pub trait Platform: Send + Sync {
         w: f64,
         h: f64,
     ) -> Result<(), String>;
-    /// 웹뷰의 현재 위치와 크기를 페이지 좌표로 반환한다.
+    /// Returns the current position and size of the webview in page coordinates.
     fn webview_frame(&self, view: &PlatformWebview) -> Result<[f64; 4], String>;
-    /// 메인 DOM 웹뷰 아래에 논리 SurfaceHost를 만든다. 이 호출은 DOM 웹뷰를 만들지 않는다.
+    /// Creates a logical SurfaceHost under the main DOM webview. This call does not create a DOM webview.
     fn create_surface(&self, main: Handle) -> Result<Handle, String>;
     fn close_surface(&self, surface: Handle) -> Result<(), String>;
     fn place_surface(&self, surface: Handle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String>;
@@ -323,36 +334,40 @@ pub trait Platform: Send + Sync {
     fn set_surface_hidden_handle(&self, surface: Handle, hidden: bool) -> Result<(), String>;
     fn set_surface_alpha_handle(&self, surface: Handle, alpha: f64) -> Result<(), String>;
     fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String>;
-    /// main 웹뷰의 창에 놓인 파일을 받는다. receive 는 {"urls":[...],"x":..,"y":..}(페이지 좌표) 를 받는다.
+    /// Receives the files dropped on the window of the main webview. receive receives {"urls":[...],"x":..,"y":..}
+    /// (page coordinates).
     fn file_drop(&self, main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), String>;
-    /// 표면 웹뷰를 main 웹뷰의 표면 컨테이너에 등록한다.
+    /// Registers a surface webview in the surface container of the main webview.
     fn attach_surface(&self, view: &PlatformWebview, main: Handle) -> Result<(), String>;
-    /// 표면 웹뷰와 그 SurfaceHost를 표면 컨테이너에서 제거한다.
+    /// Removes a surface webview and its SurfaceHost from the surface container.
     fn detach_surface(&self, view: &PlatformWebview) -> Result<(), String>;
-    /// SurfaceHost와 그 두 평면의 표시 여부를 함께 설정한다.
+    /// Sets the visibility of the SurfaceHost and of its two planes together.
     fn set_surface_hidden(&self, view: &PlatformWebview, hidden: bool) -> Result<(), String>;
-    /// 네이티브 입력보다 먼저 처리할 선언된 DOM 오버레이를 설정한다.
+    /// Sets the declared DOM overlays that are handled before native input.
     fn set_surface_overlays(&self, surface: Handle, overlays: &[DOMOverlay]) -> Result<(), String>;
-    /// 웹뷰의 불투명도를 설정한다.
+    /// Sets the opacity of the webview.
     fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String>;
-    /// 현재 WebContent 프로세스를 종료한다. 애플리케이션 종료가 WebKit 자식 프로세스를 남기지 않으려고 부른다.
+    /// Terminates the current WebContent process. It is called so that the termination of the application leaves no
+    /// WebKit child process.
     fn kill_web_content_process(&self, view: &PlatformWebview) -> Result<(), String>;
-    /// view 의 WebContent process 들이 JavaScript 객체를 수집하게 한다. 진단 build 의 메모리 측정이 쓴다.
+    /// Makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
+    /// uses it.
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String>;
-    /// 연속적인 크기 변경의 시작과 종료를 웹뷰에 전달한다.
+    /// Passes the start and the end of a continuous resize to the webview.
     fn set_live_resize(&self, view: &PlatformWebview, live: bool) -> Result<(), String>;
-    /// 웹뷰를 같은 부모의 다른 뷰 위로 올린다.
+    /// Raises the webview above another view of the same parent.
     fn raise_webview(&self, view: &PlatformWebview) -> Result<(), String>;
-    /// 웹뷰의 모서리를 radius 논리 픽셀만큼 둥글게 자른다.
+    /// Clips the corners of the webview so that they are rounded by radius logical pixels.
     fn round_corners(&self, view: &PlatformWebview, radius: f64) -> Result<(), String>;
-    /// 웹뷰를 창의 첫 응답자로 만들어 키보드 입력을 받게 한다. 창이 거절하면 오류를 반환한다.
+    /// Makes the webview the first responder of the window so that it receives keyboard input. It returns an error when
+    /// the window refuses.
     fn focus_webview(&self, view: &PlatformWebview) -> Result<(), String>;
 
-    // 문서 영역
+    // Document region
 
-    /// 표면 웹뷰 surface 안에 외부 문서 웹뷰를 숨긴 상태로 만든다. store 는 영구 데이터 저장소가
-    /// 사이트 데이터를 두는 절대 경로다. changed 는 상태 JSON({url, title, loading, progress, canGoBack, canGoForward,
-    /// error, scroll}) 을 메인 스레드에서 받는다. 메인 스레드에서 호출한다.
+    /// Creates a hidden external document webview inside the surface webview surface. store is the absolute path in
+    /// which the persistent data store keeps the site data. changed receives the state JSON ({url, title, loading,
+    /// progress, canGoBack, canGoForward, error, scroll}) on the main thread. Call it on the main thread.
     /// folder and plugin are the installed folder and the id of the plugin whose surface owns the region; the region
     /// serves sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions).
     fn create_document(
@@ -378,45 +393,47 @@ pub trait Platform: Send + Sync {
     fn post_document(&self, document: Handle, json: &str) -> Result<bool, String>;
     /// Opens an http, https, file or sok address; returns false for another address. Called on the main thread.
     fn load_document(&self, document: Handle, url: &str) -> Result<bool, String>;
-    /// 문서의 페이지 확대를 정한다. 유한한 양수가 아니면 false 다.
+    /// Sets the page zoom of the document. It is false when the value is not a finite positive number.
     fn zoom_document(&self, document: Handle, zoom: f64) -> Result<bool, String>;
-    /// 뒤로 0, 앞으로 1, 다시 읽기 2, 멈춤 3 을 실행하고 실행했는지 반환한다. 메인 스레드에서 호출한다.
+    /// Runs back 0, forward 1, reload 2 and stop 3, and returns whether it ran. Call it on the main thread.
     fn go_document(&self, document: Handle, action: i32, offset: i32) -> Result<bool, String>;
-    /// 표면 뷰포트의 CSS 픽셀 여백으로 문서 영역을 정한다. 메인 스레드에서 호출한다.
+    /// Sets the document region with the CSS pixel insets of the surface viewport. Call it on the main thread.
     fn place_document(&self, document: Handle, insets: Insets, visible: bool)
         -> Result<(), String>;
-    /// 대화 상자가 열린 동안 문서를 흐리게 표시한다. 메인 스레드에서 호출한다.
+    /// Dims the document while a dialog is open. Call it on the main thread.
     fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String>;
-    /// native document webview appearance를 현재 host scheme으로 설정한다.
+    /// Sets the appearance of the native document webview to the current host scheme.
     fn set_document_appearance(&self, document: Handle, dark: bool) -> Result<(), String>;
-    /// 문서 웹뷰를 제거한다. 이후 changed 는 호출되지 않는다. 메인 스레드에서 호출한다.
+    /// Removes the document webview. changed is not called afterwards. Call it on the main thread.
     fn close_document(&self, document: Handle) -> Result<(), String>;
-    /// 입력 체인에서 웹뷰를 식별하는 뷰 주소를 반환한다.
+    /// Returns the view address that identifies the webview in the input chain.
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String>;
 
-    // 그림 영역
+    // Image region
 
-    /// 표면 웹뷰 surface 안에 외부 그림 표시 영역을 만든다. name 은 영역 이름이다.
-    /// event 는 키보드·IME·입력 이벤트를 JSON 문자열({key, insert, compose, focus, size, error})으로
-    /// 메인 스레드에서 받는다. 메인 스레드에서 호출한다.
+    /// Creates an external image display region inside the surface webview surface. name is the region name. event
+    /// receives keyboard, IME and input events as a JSON string ({key, insert, compose, focus, size, error}) on the
+    /// main thread. Call it on the main thread.
     fn create_image(
         &self,
         surface: Handle,
         name: &str,
         event: Box<dyn Fn(String)>,
     ) -> Result<Handle, String>;
-    /// 표면 뷰포트의 CSS 픽셀 여백으로 그림 영역을 정한다. 메인 스레드에서 호출한다.
+    /// Sets the image region with the CSS pixel insets of the surface viewport. Call it on the main thread.
     fn place_image(&self, image: Handle, insets: Insets, visible: bool) -> Result<(), String>;
-    /// 적용된 그림 영역의 래스터 기하를 반환한다. 아직 유효한 크기가 없으면 None 이다.
+    /// Returns the raster geometry of the applied image region. It is None when there is no valid size yet.
     fn image_raster(&self, image: Handle) -> Result<Option<Raster>, String>;
-    /// 영역의 표면이 네이티브 크기를 가졌는지. 아직 배치되지 않은 표면의 영역은 래스터 크기를 갖지 않는다.
+    /// Whether the surface of the region has a native size. The region of a surface that is not placed yet has no
+    /// raster size.
     fn image_surface_placed(&self, image: Handle) -> Result<bool, String>;
-    /// 그림 영역의 현재 프레임, 표시 래스터와 오류를 JSON 으로 반환한다. 메인 스레드에서 호출한다.
+    /// Returns the current frame, the displayed raster and the error of the image region as JSON. Call it on the main
+    /// thread.
     fn image_facts(&self, image: Handle) -> Result<String, String>;
-    /// 외부 IOSurface 를 표시한다. token_id 는 IOSurface 의 전역 ID, nonce 는 논스 대조용
-    /// 16바이트 데이터, width·height 는 장치 픽셀 단위의 크기, scale 은 이미지가 만들어진
-    /// 배율이다. 성공하면 true, 찾지 못했거나 크기가 맞지 않으면 false 를 반환한다.
-    /// 메인 스레드에서 호출한다.
+    /// Displays an external IOSurface. token_id is the global ID of the IOSurface, nonce is the 16 bytes of data to
+    /// check the nonce, width and height are the size in device pixels, and scale is the scale at which the image was
+    /// created. It returns true on success, and false when it was not found or the size does not match. Call it on the
+    /// main thread.
     fn present_image(
         &self,
         image: Handle,
@@ -426,31 +443,32 @@ pub trait Platform: Send + Sync {
         height: f64,
         scale: f64,
     ) -> Result<bool, String>;
-    /// 영역을 첫 응답자로 만들고 포커스 이벤트를 보낸다. 메인 스레드에서 호출한다.
+    /// Makes the region the first responder and sends the focus event. Call it on the main thread.
     fn focus_image(&self, image: Handle) -> Result<(), String>;
-    /// 캐럿(입력 커서) 위치를 받아 둔다. 메인 스레드에서 호출한다.
+    /// Stores the caret (text cursor) position. Call it on the main thread.
     fn caret_image(&self, image: Handle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String>;
-    /// 접근성 값으로 보일 문자열을 받아 둔다. 메인 스레드에서 호출한다.
+    /// Stores the string that is shown as the accessibility value. Call it on the main thread.
     fn text_image(&self, image: Handle, utf8: &str) -> Result<(), String>;
-    /// 그림 영역을 제거한다. 이후 event 는 호출되지 않는다. 메인 스레드에서 호출한다.
+    /// Removes the image region. event is not called afterwards. Call it on the main thread.
     fn close_image(&self, image: Handle) -> Result<(), String>;
 
-    // 표면 배치
+    // Surface placement
 
-    /// 창의 표면 배치 트랜잭션 ticket 을 시작하고 시작 허용 여부를 ready 에 전달한다.
+    /// Starts the surface placement transaction ticket of the window and passes to ready whether the start is allowed.
     fn begin_layout(
         &self,
         window: Handle,
         ticket: u64,
         ready: Box<dyn Fn(bool)>,
     ) -> Result<(), String>;
-    /// 표면 배치 트랜잭션 ticket 을 확정하고 확정 여부를 반환한다.
+    /// Settles the surface placement transaction ticket and returns whether it was settled.
     fn commit_layout(&self, window: Handle, ticket: u64) -> Result<bool, String>;
-    /// 창의 진행 중인 표면 배치 트랜잭션을 취소한다.
+    /// Cancels the surface placement transaction in progress of the window.
     fn cancel_layout(&self, window: Handle) -> Result<(), String>;
-    /// 새 페이지가 시작될 때 창의 제목줄을 height(pt)로 정한다. 보이는 창은 ticket 의 시작 트랜잭션 안에서 정하고
-    /// 새 페이지의 첫 표시와 함께 커밋한다(surfaceLayoutStartPage). 정한 뒤나 실패한 뒤 ready 를 UI 스레드에서
-    /// 호출한다. UI 스레드에서 호출한다.
+    /// Sets the title bar of the window to height (pt) when a new page starts. A visible window is set inside the start
+    /// transaction of ticket and committed together with the first presentation of the new page
+    /// (surfaceLayoutStartPage). ready is called on the UI thread after the title bar is set or after a failure. Call
+    /// it on the UI thread.
     fn start_page_titlebar(
         &self,
         window: Handle,
@@ -458,26 +476,29 @@ pub trait Platform: Send + Sync {
         height: f64,
         ready: Box<dyn Fn(Result<(), String>)>,
     ) -> Result<(), String>;
-    /// 열린 배치를 커밋하기 전에 앱 문서의 표시 준비를 확인한다.
+    /// Checks the presentation readiness of the app document before the open placement is committed.
     fn after_presentation(&self, view: &PlatformWebview, done: Box<dyn Fn()>)
         -> Result<(), String>;
-    /// 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 문서와 표시 중인 문서의 렌더링이 끝난 뒤 done 을
-    /// 호출한다. 인자는 그 화면이 표시되는 시각(ms, mach 절대 시각)이다.
+    /// When the window has no open surface placement transaction, calls done after the rendering of the main document
+    /// and the shown document ended. The argument is the time (ms, mach absolute time) at which that screen is
+    /// presented.
     fn after_settled(
         &self,
         view: &PlatformWebview,
         done: Box<dyn Fn(Result<f64, String>)>,
     ) -> Result<(), String>;
-    /// 다음 settled 표시 대기를 진단 목적으로 한 번 실패시킨다.
+    /// Makes the next wait for a settled presentation fail once, for diagnostic purposes.
     fn inject_settled_failure(&self) -> Result<(), String>;
 
-    // 도형
+    // Shape
 
-    /// 창 콘텐츠 뷰에 도형 뷰를 만들고 주소를 반환한다. 만들지 못하면 0 을 반환한다.
+    /// Creates a shape view in the window content view and returns the address. It returns 0 when it could not create
+    /// it.
     fn create_shape(&self, window: Handle, frame: Frame) -> Result<Handle, String>;
-    /// 도형 뷰를 배치하고 형제 뷰 위로 올린다.
+    /// Places the shape view and raises it above its sibling views.
     fn place_shape(&self, shape: Handle, frame: Frame) -> Result<(), String>;
-    /// 도형의 모서리 반경, 선 두께, 채움 색, 선 색을 설정한다. 색은 0-1 범위의 RGBA 이다.
+    /// Sets the corner radius, line width, fill color and line color of the shape. The colors are RGBA in the range
+    /// 0-1.
     fn style_shape(
         &self,
         shape: Handle,
@@ -486,31 +507,31 @@ pub trait Platform: Send + Sync {
         fill: [f64; 4],
         line: [f64; 4],
     ) -> Result<(), String>;
-    /// 도형 뷰를 제거한다.
+    /// Removes the shape view.
     fn destroy_shape(&self, shape: Handle) -> Result<(), String>;
 
-    // 입력
+    // Input
 
-    /// 웹뷰를 공통 포인터 라우팅에 등록하고 등록 여부를 반환한다.
+    /// Registers a webview in the common pointer routing and returns whether it was registered.
     fn register_input(&self, view: &PlatformWebview) -> Result<bool, String>;
-    /// 웹뷰의 페이지가 창의 키보드 초점을 옮기지 못하게 하고 적용 여부를 반환한다.
+    /// Keeps the page of a webview from moving the keyboard focus of the window, and returns whether it was applied.
     fn ignore_page_focus(&self, view: &PlatformWebview) -> Result<bool, String>;
-    /// 창의 입력을 감시하고 감시기 주소를 반환한다.
+    /// Watches the input of the window and returns the address of the monitor.
     ///
-    /// pressed 는 입력을 받은 뷰부터 콘텐츠 뷰까지의 주소 목록을 받고, 입력이 이 앱의 뷰에
-    /// 있으면 true 를 반환한다. pointed 는 그 뷰에서 시작한 왼쪽 버튼 드래그의 단계
-    /// (0 누름, 1 이동, 2 놓음)와 콘텐츠 뷰 위쪽 기준 좌표를 받는다.
+    /// pressed receives the list of addresses from the view that received the input to the content view, and returns
+    /// true when the input is in a view of this application. pointed receives the phases of a left-button drag that
+    /// started in that view (0 press, 1 move, 2 release) and the coordinates relative to the top of the content view.
     fn watch_input(
         &self,
         window: Handle,
         pressed: Box<dyn Fn(Vec<Handle>) -> bool>,
         pointed: Box<dyn Fn(u8, f64, f64)>,
     ) -> Result<Handle, String>;
-    /// 입력 감시기를 제거한다.
+    /// Removes an input monitor.
     fn unwatch_input(&self, monitor: Handle) -> Result<(), String>;
-    /// 창에 포인터 입력을 전달하고 결과를 반환한다. activate 는 사용하지 않는다. 메인 스레드에서 호출한다.
-    /// 누름과 뗌은 좌표의 문서가 그 이벤트를 받거나 receive 가 지난 뒤 done 을 메인 스레드에서
-    /// 호출한다. 다른 단계는 전달한 즉시 호출한다.
+    /// Delivers pointer input to the window and returns the result. activate is not used. Call it on the main thread.
+    /// For a press and a release, done is called on the main thread after the document at the coordinates received the
+    /// event or after receive elapsed. For the other phases it is called as soon as the input is delivered.
     fn input_pointer(
         &self,
         window: Handle,
@@ -518,9 +539,9 @@ pub trait Platform: Send + Sync {
         receive: Duration,
         done: Box<dyn FnOnce(Delivery) + Send>,
     ) -> Result<(), String>;
-    /// 애플리케이션을 활성화하고 창을 키 창으로 만든다. 창의 웹뷰가 활성 상태를 반영하면
-    /// done(Ok), timeout 안에 끝나지 않으면 멈춘 단계를 적은 done(Err) 를 메인 스레드에서 호출한다.
-    /// 메인 스레드에서 호출한다.
+    /// Activates the application and makes the window the key window. On the main thread it calls done(Ok) when the
+    /// webview of the window reflects the active state, and done(Err) that states the stopped stage when it does not
+    /// finish within timeout. Call it on the main thread.
     fn input_activate(
         &self,
         window: Handle,
@@ -529,44 +550,48 @@ pub trait Platform: Send + Sync {
         timeout: Duration,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String>;
-    /// 창에 키 입력을 전달하고 전달 여부를 반환한다. 메인 스레드에서 호출한다.
+    /// Delivers key input to the window and returns whether it was delivered. Call it on the main thread.
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String>;
 
-    // 캡처
+    // Capture
 
     #[cfg(feature = "diagnostics")]
-    /// 창 번호의 창을 캡처 대상으로 준비한다. display 이면 창이 있는 디스플레이에서 이 앱의 창을 캡처한다.
+    /// Prepares the window with the window number as a capture target. When display is set, it captures the windows of
+    /// this application on the display that holds the window.
     fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// directory 에 프레임 기록을 시작한다.
+    /// Starts to record frames in directory.
     fn capture_start(&self, directory: &str) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// 첫 프레임을 기다리고 기록 여부를 반환한다.
+    /// Waits for the first frame and returns whether it was recorded.
     fn capture_wait(&self) -> Result<bool, String>;
     #[cfg(feature = "diagnostics")]
-    /// after 의 표시 시각(ms, 0 이면 호출 시각)까지 기록한 뒤 기록을 끝내고 기록한 프레임 수를 반환한다.
+    /// Records until the presentation time after (ms, the call time when 0), ends the record and returns the number of
+    /// recorded frames.
     fn capture_stop(&self, after: f64) -> Result<i32, String>;
     #[cfg(feature = "diagnostics")]
-    /// 마지막 녹화가 유한한 프레임 상한에 도달해 자동으로 멈췄는지 반환한다.
+    /// Returns whether the last recording reached the finite frame limit and stopped automatically.
     fn capture_limited(&self) -> Result<bool, String>;
     #[cfg(feature = "diagnostics")]
-    /// 마지막으로 멈춘 기록에서 연속한 프레임 사이의 가장 긴 표시 간격(ms).
+    /// The longest presentation interval (ms) between consecutive frames in the record that was stopped last.
     fn capture_longest_gap(&self) -> Result<f64, String>;
     #[cfg(feature = "diagnostics")]
-    /// 현재 시각(ms). 기록 프레임의 표시 시각과 같은 시계다.
+    /// The current time (ms). It is on the same clock as the presentation time of the recorded frames.
     fn capture_clock(&self) -> Result<f64, String>;
     #[cfg(feature = "diagnostics")]
-    /// 창 번호의 창을 포커스를 주지 않고 한 장 찍어 path 에 PNG 로 쓴다. 관측 자료다.
+    /// Takes one still image of the window with the window number without giving it focus and writes it as PNG to path.
+    /// It is observation material.
     fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// 알림 센터가 아직 보이는 이 애플리케이션의 알림을 [{identifier, title, body}] JSON 으로 done 에 준다.
-    /// 메인 스레드에서 호출하고 done 도 메인 스레드에서 불린다.
+    /// Gives done the notifications of this application that the notification center still shows as JSON [{identifier,
+    /// title, body}]. Call it on the main thread, and done is called on the main thread too.
     fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// 애플리케이션이 이벤트 하나를 처리해 그 이벤트 반복의 자동 해제 풀을 비운 뒤, 창과 웹뷰에 붙인 라이브러리
-    /// 객체의 수가 expected 와 같아질 때 그 수와 true 를 done 에 준다. seconds 안에 같아지지 않으면 그때의 수와
-    /// false 를 준다. expected 가 None 이면 이벤트 뒤의 수와 true 를 준다. 메인 스레드에서 호출하고 done 도 메인
-    /// 스레드에서 불린다.
+    /// After the application handled one event and drained the autorelease pool of that event loop iteration, gives
+    /// done the count of library objects attached to windows and webviews and true when the count equals expected. If
+    /// the count does not equal expected within seconds, it gives the count at that time and false. When expected is
+    /// None, it gives the count after the event and true. Call it on the main thread, and done is called on the main
+    /// thread too.
     fn window_objects_when(
         &self,
         expected: Option<WindowObjects>,
@@ -574,8 +599,8 @@ pub trait Platform: Send + Sync {
         done: Box<dyn FnOnce(WindowObjects, bool) + Send>,
     ) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// pid 의 프로세스가 끝나면 true 를, seconds 안에 끝나지 않으면 false 를 done 에 준다. 이미 없는 프로세스는 끝난
-    /// 것이다. 메인 스레드에서 호출하고 done 도 메인 스레드에서 불린다.
+    /// Gives done true when the process pid ends and false when it does not end within seconds. A process that no
+    /// longer exists has ended. Call it on the main thread, and done is called on the main thread too.
     fn when_process_exited(
         &self,
         pid: i32,
@@ -583,43 +608,46 @@ pub trait Platform: Send + Sync {
         done: Box<dyn FnOnce(bool) + Send>,
     ) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// 배치 트랜잭션마다 시작, 앱 DOM 표시 확인, 커밋 시각의 기록을 시작한다. 메인 스레드에서 호출한다.
+    /// Starts to record the start, the app DOM presentation check and the commit times of each placement transaction.
+    /// Call it on the main thread.
     fn layout_trace_start(&self) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// 기록을 멈추고 트랜잭션마다 ticket, begun, presented, committed(ms, 표시 시각과 같은 시계)를
-    /// 반환한다. 일어나지 않은 단계는 NaN 이다. 메인 스레드에서 호출한다.
+    /// Stops the record and returns ticket, begun, presented and committed (ms, on the same clock as the presentation
+    /// time) of each transaction. A stage that did not happen is NaN. Call it on the main thread.
     fn layout_trace_stop(&self) -> Result<Vec<[f64; 5]>, String>;
 
-    // 입력 소스
+    // Input source
 
     #[cfg(feature = "diagnostics")]
-    /// 현재 선택된 키보드 입력 소스의 식별자를 반환한다. 메인 스레드에서 호출한다.
+    /// Returns the identifier of the currently selected keyboard input source. Call it on the main thread.
     fn input_source(&self) -> Result<String, String>;
     #[cfg(feature = "diagnostics")]
-    /// 켜져 있는 입력 소스 가운데 identifier 를 선택한다. 메인 스레드에서 호출한다.
+    /// Selects identifier among the enabled input sources. Call it on the main thread.
     fn select_input_source(&self, identifier: &str) -> Result<(), String>;
 
-    // 종료 요청
+    // Termination request
 
-    /// 종료 신호(SIGTERM, SIGINT, SIGHUP)를 처음 받으면 quit 를 호출하게 한다. 그 뒤의 종료
-    /// 신호는 기본 동작으로 프로세스를 끝낸다.
+    /// Makes the first termination signal (SIGTERM, SIGINT, SIGHUP) call quit. The termination signals after it end the
+    /// process with the default action.
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String>;
-    /// 운영체제의 종료 요청(Dock 의 종료, 로그아웃, 재시작, 다른 프로그램의 quit Apple event)을 받으면 quit 를
-    /// 호출하게 하고, 그 요청에는 answer_quit_requests 까지 답하지 않는다. 애플리케이션이 시작한 뒤 메인
-    /// 스레드에서 호출한다.
+    /// Makes a termination request of the operating system (quit from the Dock, logout, restart, a quit Apple event
+    /// from another program) call quit, and does not answer that request until answer_quit_requests. Call it on the
+    /// main thread after the application started.
     fn on_quit_request(&self, quit: Box<dyn Fn()>) -> Result<(), String>;
-    /// 받은 종료 요청에 오류 없이 답한다. 저장을 마치고 끝나기 직전에 메인 스레드에서 호출한다.
+    /// Answers the termination request that was received without an error. Call it on the main thread just before the
+    /// application ends after the save finished.
     fn answer_quit_requests(&self);
-    /// 받은 종료 요청에 userCanceledErr 로 답한다. 창이 수정된 탭을 지켜 애플리케이션이 끝나지 않을 때 메인 스레드에서
-    /// 호출한다.
+    /// Answers the termination request that was received with userCanceledErr. Call it on the main thread when a window
+    /// protects a modified tab and the application does not end.
     fn cancel_quit_requests(&self);
 
-    // 창 동작
+    // Window behavior
 
-    /// 창 확대와 애니메이션 크기 변경을 한 화면 갱신 안에 끝나게 한다. 창을 만들기 전에 호출한다.
+    /// Makes the window zoom and the animated size change finish within one screen update. Call it before the window is
+    /// created.
     fn instant_window_resize(&self) -> Result<(), String>;
 
-    // 표준 오류
+    // Standard error
 
     /// Moves whole records of the native event ring into `buffer` and returns the number of bytes written; 0 means the ring
     /// is empty (docs/spec/logging.md#writers).
@@ -629,78 +657,83 @@ pub trait Platform: Send + Sync {
     /// Installs the observers that record the activity of the application and of its windows as events of the native ring
     /// (docs/spec/logging.md#automatic-entrances). A second call installs nothing more.
     fn observe_activity(&self) -> Result<(), String>;
-    /// 프로세스의 표준 오류를 file 로 바꾼다. 이후 시작하는 자식 프로세스도 그 descriptor 를
-    /// 물려받는다(docs/spec/hosts.md#application-log).
+    /// Replaces the standard error of the process with file. A child process that starts afterwards also inherits that
+    /// descriptor (docs/spec/hosts.md#application-log).
     fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String>;
     /// Installs the handlers that write a fatal signal or an uncaught exception as an error line before the process ends.
     fn install_fatal_handlers(&self) -> Result<(), String>;
 
     // Dock
 
-    /// Dock 메뉴에 새 창 항목을 설치한다. 항목을 선택하면 new_window 를 호출한다.
+    /// Installs the new window item in the Dock menu. When the item is selected, new_window is called.
     fn install_dock_menu(&self, new_window: Box<dyn Fn()>) -> Result<(), String>;
 
-    // 클립보드. 구현은 호출자가 메인 스레드에서 호출한다는 계약을 따른다.
+    // Clipboard. The implementations follow the contract that the caller calls them on the main thread.
     fn clipboard_read(&self, kind: &str) -> Result<ClipboardValue, String>;
     fn clipboard_write_text(&self, text: &str) -> Result<(), String>;
     fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String>;
-    /// URL 을 그 스킴의 사용자 기본 애플리케이션으로 연다. 메인 스레드에서 호출한다.
+    /// Opens a URL in the default application of the user for its scheme. Call it on the main thread.
     fn open_link(&self, url: &str) -> Result<(), String>;
-    /// 운영체제가 보고하는 눌린 마우스 버튼 mask 의 감시를 설치한다. 설치한 차례에 현재 mask 를, 그 뒤 어느
-    /// 애플리케이션에 전달된 마우스 버튼의 누름이나 뗌마다 그 차례의 mask 를 changed 로 메인 스레드에서 알린다.
-    /// 같은 mask 도 다시 알린다. 메인 스레드에서 한 번 호출한다.
+    /// Installs the watch of the mask of the pressed mouse buttons that the operating system reports. At the
+    /// installation it reports the current mask, and afterwards at every press or release of a mouse button delivered
+    /// to any application it reports the mask of that attempt through changed on the main thread. The same mask is also
+    /// reported again. Call it once on the main thread.
     fn watch_buttons(&self, changed: Box<dyn Fn(u64) + Send + Sync>) -> Result<(), String>;
-    /// 운영체제의 알림 센터를 쓰기 시작하고 그 사건 JSON 을 receive 로 메인 스레드에서 넘긴다
-    /// ({"type":"state",...} 와 {"type":"activated","identifier":...}). 메인 스레드에서 호출한다.
+    /// Starts to use the notification center of the operating system and passes its event JSON to receive on the main
+    /// thread ({"type":"state",...} and {"type":"activated","identifier":...}). Call it on the main thread.
     fn start_notifications(&self, receive: Box<dyn Fn(String) + Send + Sync>)
         -> Result<(), String>;
-    /// identifier 의 알림을 게시하거나 바꾼다. 메인 스레드에서 호출한다.
+    /// Posts or replaces the notification of identifier. Call it on the main thread.
     fn post_notification(&self, identifier: &str, title: &str, body: &str) -> Result<(), String>;
-    /// identifier 의 알림을 지운다. 메인 스레드에서 호출한다.
+    /// Clears the notification of identifier. Call it on the main thread.
     fn remove_notification(&self, identifier: &str) -> Result<(), String>;
-    /// Dock 메뉴 항목의 제목 목록을 반환한다. 메인 스레드에서 호출한다.
+    /// Returns the list of titles of the Dock menu items. Call it on the main thread.
     fn dock_items(&self) -> Result<Value, String>;
-    /// 애플리케이션 메뉴를 반환한다. 하위 메뉴마다 {title, items: [{title, key}]} 다. 메인 스레드에서 호출한다.
+    /// Returns the application menu. Each submenu is {title, items: [{title, key}]}. Call it on the main thread.
     fn menu_items(&self) -> Result<Value, String>;
 
-    /// 시스템 선호 언어의 주 태그. 지원 여부는 호출자의 표가 정한다.
+    /// The main tag of the system preferred language. The table of the caller decides whether it is supported.
     fn preferred_language(&self) -> Result<String, String>;
     /// The product version of the operating system, such as "26.6.2" (docs/spec/debug.md).
     fn os_version(&self) -> Result<String, String>;
-    /// 제목이 menu 인 하위 메뉴에서 제목이 title 인 항목을 실행한다. 메인 스레드에서 호출한다.
+    /// Runs the item with the title title in the submenu with the title menu. Call it on the main thread.
     fn menu_select(&self, menu: &str, title: &str) -> Result<(), String>;
-    /// 애플리케이션의 주 창 핸들. 없으면 0 이다. 메인 스레드에서 호출한다.
+    /// The main window handle of the application. It is 0 when there is none. Call it on the main thread.
     fn main_window(&self) -> Result<Handle, String>;
-    /// 제목이 title 인 Dock 메뉴 항목을 실행한다. 메인 스레드에서 호출한다.
+    /// Runs the Dock menu item with the title title. Call it on the main thread.
     fn dock_select(&self, title: &str) -> Result<(), String>;
 
-    // 디렉터리 식별
+    // Directory identification
 
-    /// 같은 디렉터리를 가리키는 경로에 같은 값을 반환한다.
+    /// Returns the same value for paths that point to the same directory.
     fn directory_identity(&self, path: &Path, metadata: &Metadata) -> Result<String, String>;
-    /// path 에서 없는 디렉터리를 현재 사용자 전용 권한으로 만든다. 이미 있는 디렉터리의 권한은 바꾸지 않는다.
+    /// Creates a missing directory at path with permissions for the current user only. The permissions of an existing
+    /// directory are not changed.
     fn create_private_directories(&self, path: &Path) -> Result<(), String>;
-    /// path 의 파일을 덧붙이기로 연다. 없으면 현재 사용자만 읽고 쓰는 파일로 만든다. 있는 파일의 권한은 바꾸지 않는다.
+    /// Opens the file at path for appending. If it does not exist, it is created as a file that only the current user
+    /// reads and writes. The permissions of an existing file are not changed.
     fn append_private_file(&self, path: &Path) -> Result<std::fs::File, String>;
-    /// path 에 현재 사용자만 읽고 쓰는 새 파일을 만들어 쓰기로 연다. path 가 이미 있으면 AlreadyExists 오류다.
+    /// Creates a new file at path that only the current user reads and writes, and opens it for writing. It is an
+    /// AlreadyExists error when path already exists.
     fn create_private_file(&self, path: &Path) -> std::io::Result<std::fs::File>;
-    /// path 의 파일 내용을 data 로 바꾼다. 없으면 현재 사용자만 읽고 쓰는 파일로 만든다. 있는 파일의 권한은 바꾸지 않는다.
+    /// Replaces the content of the file at path with data. If it does not exist, it is created as a file that only the
+    /// current user reads and writes. The permissions of an existing file are not changed.
     fn write_private_file(&self, path: &Path, data: &[u8]) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
-    /// 현재 사용자만 접근할 수 있는 디렉터리를 상위 디렉터리와 함께 만든다.
+    /// Creates a directory that only the current user can access, together with its parent directories.
     fn private_directory(&self, path: &Path) -> Result<(), String>;
 
-    // 엔드포인트
+    // Endpoint
 
-    /// directory 안에 이름 name 의 로컬 엔드포인트 주소를 연다. directory 는 현재 사용자 전용이어야 한다.
+    /// Opens the local endpoint address with the name name in directory. directory must be for the current user only.
     fn endpoint_listen(&self, directory: &Path, name: &str) -> Result<Box<dyn Listener>, String>;
-    /// 로컬 엔드포인트 주소에 연결한다.
+    /// Connects to a local endpoint address.
     fn endpoint_connect(&self, address: &str) -> Result<Box<dyn Connection>, String>;
-    /// persistent sidecar service socket에 연결한다.
+    /// Connects to the persistent sidecar service socket.
     fn connect_service(&self, address: &str) -> Result<Box<dyn PersistentStream>, String>;
-    /// service directory를 현재 사용자 전용으로 만든다.
+    /// Makes the service directory for the current user only.
     fn secure_service_directory(&self, path: &Path) -> Result<(), String>;
-    /// persistent service endpoint의 프로세스가 아직 존재하는지 확인한다.
+    /// Checks whether the process of the persistent service endpoint still exists.
     fn service_process_exists(&self, pid: u32) -> Result<bool, String>;
     /// Waits until the service process `pid` ends, for at most `timeout`, and answers whether it ended. A process that
     /// does not exist has ended. The wait uses the kernel notification of the end of a process, which also reports a
@@ -710,15 +743,16 @@ pub trait Platform: Send + Sync {
         pid: u32,
         timeout: std::time::Duration,
     ) -> Result<bool, String>;
-    /// command 가 새 session 에서 시작하게 한다. 영구 service 는 애플리케이션 프로세스가 아니라 설정 디렉터리에
-    /// 속하므로 애플리케이션의 프로세스 그룹과 터미널의 신호를 받지 않는다. command 를 시작하기 전에 호출한다.
+    /// Makes command start in a new session. A persistent service belongs to the configuration directory and not to the
+    /// application process, so it does not receive the signals of the process group of the application and of the
+    /// terminal. Call it before command starts.
     fn new_session(&self, command: &mut std::process::Command) -> Result<(), String>;
-    /// 끝난 프로세스의 종료를 `exit status <code>` 나 `signal <number>` 로 쓴다. 두 호스트가 같은 글로 사이드카의 종료를
-    /// 로그에 쓴다(docs/spec/sidecars.md#declaration-and-startup).
+    /// Writes the end of an ended process as `exit status <code>` or `signal <number>`. Both hosts write the end of a
+    /// sidecar to the log with the same text (docs/spec/sidecars.md#declaration-and-startup).
     fn exit_status(&self, status: std::process::ExitStatus) -> Result<String, String>;
 }
 
-/// 현재 운영체제의 구현을 반환한다.
+/// Returns the implementation of the current operating system.
 pub fn current() -> Result<&'static dyn Platform, String> {
     #[cfg(target_os = "macos")]
     return Ok(&darwin::Darwin);

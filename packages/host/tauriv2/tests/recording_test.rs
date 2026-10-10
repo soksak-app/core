@@ -1,4 +1,5 @@
-//! 진단 녹화 상태 테스트. 녹화 장치는 가짜가 대신한다. 진단 빌드에서만 컴파일한다.
+//! Tests of the diagnostic recording state. A fake replaces the recording device. They are compiled only in diagnostic
+//! builds.
 #![cfg(feature = "diagnostics")]
 
 use std::cell::RefCell;
@@ -6,7 +7,7 @@ use std::path::Path;
 
 use soksak_host_tauriv2::recording::{stop_payload, Capture, Recording, Target};
 
-/// 호출을 기록하고 지정한 단계에서 실패하는 녹화 장치.
+/// A recording device that records calls and fails at the specified stage.
 #[derive(Default)]
 struct Fake {
     calls: RefCell<Vec<String>>,
@@ -146,7 +147,8 @@ fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
     recording.abort(&fake).unwrap();
     assert!(!first.exists());
     recording.start(&fake, WINDOW, &second, &make).unwrap();
-    // 준비는 그때의 창 크기로 출력 크기를 정하므로 같은 창도 녹화마다 다시 준비한다.
+    // The preparation decides the output size from the window size at that time, so even the same window is prepared
+    // again for every recording.
     assert_eq!(
         calls(&fake),
         ["open 7", "start", "wait", "stop", "open 7", "start", "wait"]

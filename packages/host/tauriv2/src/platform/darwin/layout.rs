@@ -1,4 +1,4 @@
-//! 표면 배치 트랜잭션.
+//! The surface placement transaction.
 
 use std::ffi::{c_char, c_void, CStr};
 
@@ -7,7 +7,7 @@ use tauri::webview::PlatformWebview;
 
 use super::super::Handle;
 
-/// 창의 표면 배치 트랜잭션 ticket 을 시작한다. 시작 허용 여부는 ready 에 전달한다.
+/// Starts the surface placement transaction ticket of the window. Whether the start is allowed is passed to ready.
 pub fn begin(window: Handle, ticket: u64, ready: Box<dyn Fn(bool)>) {
     extern "C" {
         fn surfaceLayoutBegin(owner: *mut c_void, ticket: u64, ready: &Block<dyn Fn(i32)>);
@@ -16,7 +16,7 @@ pub fn begin(window: Handle, ticket: u64, ready: Box<dyn Fn(bool)>) {
     unsafe { surfaceLayoutBegin(window as *mut c_void, ticket, &ready) }
 }
 
-/// 표면 배치 트랜잭션 ticket 을 확정하고 확정 여부를 반환한다.
+/// Settles the surface placement transaction ticket and returns whether it was settled.
 pub fn commit(window: Handle, ticket: u64) -> bool {
     extern "C" {
         fn surfaceLayoutCommit(owner: *mut c_void, ticket: u64) -> bool;
@@ -24,7 +24,7 @@ pub fn commit(window: Handle, ticket: u64) -> bool {
     unsafe { surfaceLayoutCommit(window as *mut c_void, ticket) }
 }
 
-/// 창의 진행 중인 표면 배치 트랜잭션을 취소한다.
+/// Cancels the surface placement transaction in progress of the window.
 pub fn cancel(window: Handle) {
     extern "C" {
         fn surfaceLayoutCancel(owner: *mut c_void);
@@ -32,8 +32,9 @@ pub fn cancel(window: Handle) {
     unsafe { surfaceLayoutCancel(window as *mut c_void) }
 }
 
-/// 새 페이지가 시작될 때 창의 제목줄을 height(pt)로 정한다. 보이는 창은 ticket 의 시작 트랜잭션 안에서 정하고 새
-/// 페이지의 첫 표시와 함께 커밋한다. 정한 결과는 ready 에 전달한다.
+/// Sets the title bar of the window to height (pt) when a new page starts. A visible window is set inside the start
+/// transaction of ticket and committed together with the first presentation of the new page. The result is passed to
+/// ready.
 pub fn start_page(
     window: Handle,
     ticket: u64,
@@ -60,7 +61,7 @@ pub fn start_page(
     unsafe { surfaceLayoutStartPage(window as *mut c_void, ticket, height, &ready) }
 }
 
-/// 열린 배치를 커밋하기 전에 앱 문서의 표시 준비를 확인한다.
+/// Checks the presentation readiness of the app document before the open placement is committed.
 pub fn after_presentation(view: &PlatformWebview, done: Box<dyn Fn()>) {
     extern "C" {
         fn surfaceLayoutAfterPresentation(view: *mut c_void, done: &Block<dyn Fn()>);
@@ -69,8 +70,8 @@ pub fn after_presentation(view: &PlatformWebview, done: Box<dyn Fn()>) {
     unsafe { surfaceLayoutAfterPresentation(view.inner().cast(), &done) }
 }
 
-/// 창에 열린 표면 배치 트랜잭션이 없는 상태에서 메인 문서와 표시 중인 앱 문서의 렌더링 완료를 확인한
-/// 뒤 그 화면의 표시 시각(ms)으로 done 을 호출한다.
+/// When the window has no open surface placement transaction, checks the render completion of the main document and the
+/// visible app document, and then calls done with the presentation time (ms) of that screen.
 pub fn after_settled(view: &PlatformWebview, done: Box<dyn Fn(Result<f64, String>)>) {
     extern "C" {
         fn surfaceLayoutAfterSettled(view: *mut c_void, done: &Block<dyn Fn(f64, *const c_char)>);

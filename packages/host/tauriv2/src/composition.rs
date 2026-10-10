@@ -1,4 +1,4 @@
-//! 표면 하나의 모든 네이티브 영역과 선언된 DOM 오버레이를 완전한 스냅샷으로 배치한다.
+//! Places all native regions and the declared DOM overlays of one surface as one complete snapshot.
 
 use std::collections::{HashMap, HashSet};
 
@@ -50,19 +50,22 @@ fn send_image_configurations(
     Ok(())
 }
 
-/// 래스터 크기를 정하지 못한 영역의 측정 상태(배치, 크기, 표면 배율)를 오류에 싣는다.
+/// Puts the measured state (placement, size, surface scale) of a region whose raster size could not be determined into
+/// the error.
 fn raster_facts(platform: &dyn platform::Platform, handle: platform::Handle) -> String {
-    // 기본값: 측정 상태를 읽지 못하면 그 오류 문장을 대신 싣는다. 어느 쪽이든 오류 보고에 들어간다.
+    // default: when the measured state cannot be read, the text of that error is put in its place. Either way it enters
+    // the error report.
     platform.image_facts(handle).unwrap_or_else(|error| error)
 }
 
-/// 그림 영역의 래스터 결정을 성능 트레이스에 남긴다. configured 는 사이드카에 보낼 크기를 정한 것이고, deferred 는
-/// 표면이 아직 배치되지 않아 크기를 정하지 못하고 미룬 것이다(docs/spec/performance-trace.md).
+/// Records the raster decision of an image region in the performance trace. configured means that the size to send to
+/// the sidecar was determined, and deferred means that the surface is not placed yet, so the size could not be
+/// determined and was postponed (docs/spec/performance-trace.md).
 fn observe_raster(key: &Key, phase: &str, from: &str, raster: Option<&platform::Raster>) {
     crate::performance::observe("host", || {
         serde_json::json!({
             "event": "image.raster", "surface": key.0, "name": key.1, "phase": phase, "from": from,
-            // 기본값: 미룬 결정에는 크기가 없으므로 0을 적는다.
+            // default: a postponed decision has no size, so 0 is written.
             "width": raster.map_or(0, |raster| raster.width),
             "height": raster.map_or(0, |raster| raster.height),
             "scale": raster.map_or(0.0, |raster| raster.scale),
@@ -70,7 +73,8 @@ fn observe_raster(key: &Key, phase: &str, from: &str, raster: Option<&platform::
     });
 }
 
-/// 보이는 영역의 래스터를 측정해 다시 보낼 configure 를 모은다. selection 이 대상을 고른다.
+/// Measures the raster of the visible regions and collects the configure messages to send again. selection chooses the
+/// targets.
 fn collect_raster_configurations(
     window: &Window,
     from: &'static str,
@@ -84,7 +88,8 @@ fn collect_raster_configurations(
         let mut configurations = Vec::new();
         let result = (|| -> Result<(), String> {
             for (key, handle) in selection(&data.images) {
-                // 아직 배치되지 않은 표면의 영역은 래스터 크기가 없다. 표면을 배치하는 다음 준비에서 갱신한다.
+                // A region of a surface that is not placed yet has no raster size. The next preparation that places the
+                // surface updates it.
                 if !platform.image_surface_placed(handle)? {
                     observe_raster(&key, "deferred", from, None);
                     continue;
@@ -117,16 +122,17 @@ fn collect_raster_configurations(
     })
 }
 
-/// 표면 복귀나 바깥 크기 변경은 DOM 여백이 같아도 실제 네이티브 래스터를 갱신해야 한다.
+/// A surface restore or an outer size change must update the actual native raster even when the DOM insets are the
+/// same.
 pub(crate) fn refresh_image_rasters(window: &Window) -> Result<(), String> {
     let configurations =
         collect_raster_configurations(window, "refresh", |images| images.visible())?;
     send_image_configurations(window, configurations)
 }
 
-/// 영속 사이드카의 연결이 다시 맺히면 그 사이드카의 그림 configure 를 다시 보낸다(V5-106).
-/// 새 연결의 서비스는 그림 상태가 없고, 크기가 같아도 configure 상태는 연결과 함께
-/// 죽었으므로([Images::invalidate_sidecar]) 같은 크기의 재전송이 일어난다.
+/// When the connection of a persistent sidecar is established again, sends the image configure messages of that sidecar
+/// again (V5-106). The service of the new connection has no image state, and the configure state died together with the
+/// connection even if the size is the same ([Images::invalidate_sidecar]), so the same size is sent again.
 pub(crate) fn refresh_sidecar_rasters(window: &Window, sidecar: &str) -> Result<(), String> {
     window_data(window)?.images.invalidate_sidecar(sidecar);
     let sidecar = sidecar.to_string();
@@ -136,7 +142,7 @@ pub(crate) fn refresh_sidecar_rasters(window: &Window, sidecar: &str) -> Result<
     send_image_configurations(window, configurations)
 }
 
-/// 영역이나 덮개 하나의 배치. 여백은 이름과 같은 객체에 있다.
+/// The placement of one region or cover. The insets are in the object of the same name.
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct CompositionPlacement {
     name: String,
@@ -191,7 +197,7 @@ fn exact_placements(
     Ok(got)
 }
 
-/// 호출한 표면의 모든 네이티브 영역과 DOM 오버레이를 한 완전한 리비전으로 배치한다.
+/// Places all native regions and DOM overlays of the calling surface as one complete revision.
 pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Result<(), String> {
     let window = webview.window();
     crate::exposure::authorize_main_caller(
@@ -226,7 +232,7 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
         .iter()
         .map(|region| region.name.clone())
         .collect();
-    // 기본값: overlays 를 선언하지 않은 표면에는 오버레이가 없다.
+    // default: a surface that declared no overlays has no overlay.
     let overlay_names = declaration.overlays.clone().unwrap_or_default();
     let regions = exact_placements(request.regions, &region_names, "regions")?;
     let overlays = exact_placements(request.overlays, &overlay_names, "overlays")?;
@@ -247,7 +253,7 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
             .composition_revisions
             .lock()
             .map_err(|e| e.to_string())?;
-        // 기본값: 아직 배치를 받지 않은 표면의 마지막 판은 0 이다.
+        // default: the last revision of a surface that has not received a placement is 0.
         if revision <= revisions.get(&surface).copied().unwrap_or_default() {
             return Err(format!("stale composition revision {revision}"));
         }
