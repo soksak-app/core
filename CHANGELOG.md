@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F111.4: the hwp window check is split into `e2e/hwp.test.mjs` (opening, drawing and the keyboard focus while the application is inactive) and `e2e/activation/hwp.test.mjs` (typing, selecting and saving in the active key window), with the shared steps in `e2e/hwp-support.mjs`; the Tauri host does not pass the active check reliably (F111.4).
 - F155: the Tauri host ends with its message and the status 1 when a startup step fails, and stores the failure in the event log, instead of aborting the process and showing the crash dialog of the system.
 - F104.6.3: the comment language check reaches the comments after a string with a backslash before a line feed and after a regular expression literal, and the repository test runs in `pnpm test`; 16 comment lines in `scripts` are in English.
 - F104.5: the comments of `packages/sok`, `packages/plugin-api`, `packages/window-check`, `packages/client`, `packages/mcp`, `packages/soksak` and `packages/log-contract` (1,070 lines) are English, including 6 lines of `packages/plugin-api/records-check.js` that `scripts/check-comment-language.mjs` does not list; only comment lines changed and the owning tests pass.
