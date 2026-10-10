@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R5.4: `plugins/installed.json` holds no `package`; `sok`, both hosts and the staging of the workbench read the `name` of an installed plugin from the `package.json` in its recorded `path`, and the Go and Rust readers refuse a plugin that holds `package` with `<file>: plugins/installed.json <id>: unknown field package`; the output of `sok plugin install` no longer has `package`.
 - F154.4.3: `pnpm verify:windows` runs each window-check file as a process of its own through the test runner, one at a time, with `RUN`, `PASS`, `FAIL` and `TIME` lines, the file in flight every 10 s and a limit of 600 s for a file.
 - F154.4.2: `make -C native/darwin test` runs the native tests one at a time through the test runner with `RUN`, `PASS`, `FAIL` and `TIME` lines, a line every 10 s for the test in flight and a limit of 120 s for each test; `NATIVE_TEST_ONLY=<text>` scopes a run.
 - F154.4.1: `pnpm test` runs each Node test file of the workspace as a process of its own through the test runner with `RUN`, `PASS`, `FAIL` and `TIME` lines, the files in flight, the slowest files and a limit of 120 s for each file; `--only <text>` scopes a run.

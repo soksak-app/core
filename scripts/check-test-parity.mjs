@@ -1700,6 +1700,31 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "R5.4",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/plugins.go", symbol: "func InstalledName" },
+      { file: "packages/sok/tauriv2/src/plugins.rs", symbol: "pub fn installed_name" },
+      { file: "packages/sok/wailsv3/src/install.go", symbol: "func ValidateInstalled" },
+      { file: "packages/sok/tauriv2/src/install.rs", symbol: "pub fn validate_installed" },
+      { file: "packages/host/wailsv3/src/installed.go", symbol: "func enabledPlugins" },
+      { file: "packages/host/tauriv2/src/installed.rs", symbol: "fn enabled_plugins" },
+      { file: "packages/workbench/stage.mjs", symbol: "function enabledInstalledPlugins" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginDependentsReadTheNameFromThePackageJSONOfTheInstalledPlugin" },
+      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestReadInstalledRefusesAPackageField" },
+      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_dependents_read_the_name_from_the_package_json_of_the_installed_plugin" },
+      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "read_installed_refuses_a_package_field" },
+      { file: "packages/host/wailsv3/tests/installed_test.go", id: "TestInstalledPluginsDocumentReadsTheNameFromThePackageJSON" },
+      { file: "packages/host/wailsv3/tests/installed_test.go", id: "TestInstalledPluginsDocumentRefusesAPackageField" },
+      { file: "packages/host/tauriv2/tests/installed_test.rs", id: "installed_plugins_document_reads_the_name_from_the_package_json" },
+      { file: "packages/host/tauriv2/tests/installed_test.rs", id: "installed_plugins_document_refuses_a_package_field" },
+      { file: "packages/workbench/test/stage.test.mjs", id: "staging refuses an installed.json entry that holds package" },
+    ],
+    expected: "installed.json holds no package; the hosts, sok and the staging read the name of an installed plugin from its package.json and refuse an installed.json that holds package with an error that names the file and the field.",
+    levels: ["unit"],
+  },
+  {
     id: "F154.4.3",
     implementation: [
       { file: "scripts/node-tests.mjs", symbol: "export function parseTestScript" },

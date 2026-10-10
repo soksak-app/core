@@ -66,7 +66,7 @@ These commands change the files of the [installation layout](installation.md#ins
 `sok plugin install <id>` reads the index that `plugins/registry.json` names and `plugins/installed.json` (none means nothing is installed), selects the versions for the core version of this `sok` and the platform it runs on ([version selection](installation.md#version-selection)), and then:
 
 1. reads each selected release that is not installed yet, compares its `sha256`, and extracts it into a temporary folder beside its install path that it renames into place;
-2. writes `plugins/installed.json` in one step: the plugin with its package, version, `enabled: true`, the sidecar ranges of that version and, when it replaces another version, `previous`; the selected sidecar versions; and no sidecar that no plugin names;
+2. writes `plugins/installed.json` in one step: the plugin with its version, `enabled: true`, the sidecar ranges of that version and, when it replaces another version, `previous`; the selected sidecar versions; and no sidecar that no plugin names;
 3. deletes every plugin folder and version folder other than the version in use and `previous` of an installed plugin, and every sidecar folder and version folder that `installed.json` does not name.
 
 A plugin already installed at the selected version is left unchanged. A failure in step 1 or 2 leaves `installed.json` unchanged and reports the step; a failure in step 3 reports the folder it could not delete. Extraction accepts only regular files and folders at relative paths without `..`, and keeps mode 0755 for a file with an executable bit and 0644 otherwise. The command prints `{ plugin, sidecars }`: the entry of the plugin in `installed.json` and the sidecar versions it uses.
