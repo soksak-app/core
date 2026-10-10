@@ -13,6 +13,19 @@ function nonFinite(value, path) {
   return null;
 }
 
+// The observer of the calls (docs/spec/logging.md#automatic-entrances): it receives {name, args, micros, ok, error} once for
+// every call that the wrapper handles, after the call ended or was refused. One observer is installed for the page.
+let observer = null;
+
+/** Installs the observer of the host calls, or removes it with null. */
+export function observeHostCalls(next) {
+  observer = next;
+}
+
+const observed = (name, args, started, ok, error) => {
+  if (observer) observer({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, error });
+};
+
 /**
  * call 을 감싸 진행 중인 호출을 센다. settle() 은 그때까지 보낸 호출이 모두 답을 받으면 끝나고, 그 뒤의 호출은
  * 보내지 않는다. 보내지 않은 호출은 다시 읽기가 멈춘 호출처럼 문서와 함께 끝나므로 끝나지 않는 약속을 돌려준다.
@@ -28,16 +41,20 @@ export function settlingCalls(call) {
   return {
     call(name, ...args) {
       if (settled) return new Promise(() => {});
+      const started = performance.now();
       for (const arg of args) {
         const found = nonFinite(arg, "");
         if (found) {
           const where = found.path ? found.path : "the argument";
-          return Promise.reject(new TypeError(`host call ${name}: ${where} is ${found.value}, which JSON sends as null`));
+          const error = new TypeError(`host call ${name}: ${where} is ${found.value}, which JSON sends as null`);
+          observed(name, args, started, false, error.message);
+          return Promise.reject(error);
         }
       }
       pending += 1;
       const result = Promise.resolve().then(() => call(name, ...args));
-      result.then(answered, answered);
+      result.then(() => { observed(name, args, started, true, undefined); answered(); },
+        (error) => { observed(name, args, started, false, error instanceof Error ? error.message : String(error)); answered(); });
       return result;
     },
     settle() {

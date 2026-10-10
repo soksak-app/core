@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { settlingCalls } from "../host-calls.js";
+import { observeHostCalls, settlingCalls } from "../host-calls.js";
 
 test("settling waits for the calls already sent and sends no later call", async () => {
   const sent = [];
@@ -50,4 +50,21 @@ test("a call with a number that JSON cannot carry is refused before it is sent",
   await calls.call("syncSurfaces", { surfaces: [{ id: "a", x: 0, y: 1.5, hidden: null }] });
   assert.deepEqual(sent.map(([name]) => name), ["syncSurfaces"], "a call with a non-finite number was sent");
   await calls.settle();
+});
+
+test("an observer sees every call with its arguments, its duration and its outcome", async () => {
+  const seen = [];
+  observeHostCalls((call) => seen.push(call));
+  const calls = settlingCalls((name) => (name === "bad" ? Promise.reject(new Error("refused")) : Promise.resolve("done")));
+  await calls.call("good", { a: 1 });
+  await assert.rejects(calls.call("bad"), /refused/);
+  await assert.rejects(calls.call("nan", { x: NaN }), /NaN/);
+  observeHostCalls(null);
+  await calls.call("unobserved");
+  assert.deepEqual(seen.map(({ name, args, ok, error }) => ({ name, args, ok, error })), [
+    { name: "good", args: [{ a: 1 }], ok: true, error: undefined },
+    { name: "bad", args: [], ok: false, error: "refused" },
+    { name: "nan", args: [{ x: NaN }], ok: false, error: "host call nan: x is NaN, which JSON sends as null" },
+  ]);
+  for (const { micros } of seen) assert.ok(Number.isInteger(micros) && micros >= 0, `duration ${micros}`);
 });

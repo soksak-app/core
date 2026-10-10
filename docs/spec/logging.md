@@ -95,7 +95,7 @@ The catalog also declares the chains an input kind must leave, as the ordered li
 
 These entrances record without a call site writing the record:
 
-- the page calls of the host (one wrapper in the Go host, one invoke interceptor in the Rust host);
+- the host calls of the main page: the wrapper that both runtimes put around `host.call` (`settlingCalls`) emits the event `page.call` with the fields `name`, `args` (the JSON of the arguments, cut at 1024 characters with `truncated: true`), `micros`, `ok` and, for a refused call, `error`. It is at the level `debug`, and `warn` for a refused call. The calls `log` and `performance` are not recorded, because a recorded `log` call would record itself;
 - window and application events (one registration helper in each host);
 - registry commands (`timed` of the page);
 - sidecar lifetime (launch and exit);

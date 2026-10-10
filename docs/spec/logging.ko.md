@@ -95,7 +95,7 @@ catalog는 입력 종류마다 남겨야 하는 사슬도 선언한다. 첫 층�
 
 다음 입구는 호출 지점이 기록을 쓰지 않아도 기록한다.
 
-- host의 page 호출(Go host는 감싸는 함수 하나, Rust host는 invoke 인터셉터 하나);
+- 메인 page의 host 호출: 두 runtime이 `host.call` 둘레에 두는 감싸개(`settlingCalls`)가 필드 `name`, `args`(인자의 JSON, 1024자에서 자르며 `truncated: true`), `micros`, `ok`, 거절된 호출이면 `error`를 가진 event `page.call`을 낸다. level은 `debug`이고 거절된 호출은 `warn`이다. 호출 `log`와 `performance`는 기록하지 않는다. 기록된 `log` 호출이 자기 자신을 기록하기 때문이다;
 - 창·애플리케이션 이벤트(각 host의 등록 helper 하나);
 - registry 명령(page의 `timed`);
 - sidecar 수명(launch와 exit);

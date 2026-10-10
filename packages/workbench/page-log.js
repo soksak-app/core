@@ -3,6 +3,7 @@
 // without waiting and relays the records of one turn to the host in one batch through the call `log`. A page without the
 // application host (the browser example) writes to its console.
 import { host } from "@soksak/runtime";
+import { observeHostCalls } from "./host-calls.js";
 import { createEventBatcher } from "./log-batch.js";
 import { recordOf } from "./report-record.js";
 
@@ -38,6 +39,34 @@ export function reportRecord(level, line) {
 /** Queues an event of a plugin or of the page with its level, name and fields; nothing happens in a page without a host. */
 export function emitEvent(level, event, fields) {
   batcher?.emit(level, event, fields);
+}
+
+// The calls of the log and of the performance switch are not recorded: a recorded `log` call would record itself.
+const UNRECORDED_CALLS = new Set(["log", "performance"]);
+// The longest text of the arguments of a call in an event; a longer text is cut and the event says `truncated`.
+const CALL_ARGS_LIMIT = 1024;
+
+/** The text of the arguments of a host call and whether it was cut. */
+function callArguments(args) {
+  let text;
+  try {
+    text = JSON.stringify(args);
+  } catch (error) {
+    // default: arguments that JSON cannot serialize are recorded with the reason, as the call itself fails on them.
+    text = `unserializable: ${error.message}`;
+  }
+  return text.length > CALL_ARGS_LIMIT ? { args: text.slice(0, CALL_ARGS_LIMIT), truncated: true } : { args: text, truncated: false };
+}
+
+// Every host call of the page is the event `page.call` at the level `debug`, and a refused call is at the level `warn`
+// (docs/spec/logging.md#automatic-entrances). The callers report their own failures; the event does not fail a window check.
+if (batcher) {
+  observeHostCalls(({ name, args, micros, ok, error }) => {
+    if (UNRECORDED_CALLS.has(name)) return;
+    const fields = { name, ...callArguments(args), micros, ok };
+    if (!ok) fields.error = error;
+    batcher.emit(ok ? "debug" : "warn", "page.call", fields);
+  });
 }
 
 // The methods of the console and the level of the event that each one makes. A console is the output of code that does not
