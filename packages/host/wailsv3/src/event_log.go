@@ -182,6 +182,9 @@ func StartHostEventLog(config string) (*EventLog, error) {
 	if _, err := system.PullNativeEvents(make([]byte, 1)); err != nil {
 		return nil, err
 	}
+	if err := system.ObserveActivity(); err != nil {
+		return nil, err
+	}
 	return StartEventLog(EventLogOptions{
 		Pull: system.PullNativeEvents,
 		PullLoss: func() (uint64, uint64) {

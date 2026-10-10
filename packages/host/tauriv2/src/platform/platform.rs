@@ -626,6 +626,9 @@ pub trait Platform: Send + Sync {
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String>;
     /// Returns the events and bytes that the native ring refused since the last call.
     fn take_native_event_loss(&self) -> Result<(u64, u64), String>;
+    /// Installs the observers that record the activity of the application and of its windows as events of the native ring
+    /// (docs/spec/logging.md#automatic-entrances). A second call installs nothing more.
+    fn observe_activity(&self) -> Result<(), String>;
     /// 프로세스의 표준 오류를 file 로 바꾼다. 이후 시작하는 자식 프로세스도 그 descriptor 를
     /// 물려받는다(docs/spec/hosts.md#application-log).
     fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String>;

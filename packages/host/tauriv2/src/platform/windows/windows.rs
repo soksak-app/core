@@ -446,6 +446,9 @@ impl Platform for Windows {
     fn take_native_event_loss(&self) -> Result<(u64, u64), String> {
         unsupported::take_native_event_loss()
     }
+    fn observe_activity(&self) -> Result<(), String> {
+        unsupported::observe_activity()
+    }
     fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String> {
         unsupported::replace_standard_error(file)
     }

@@ -41,3 +41,31 @@ NSString *capturedRecords(void (^block)(void)) {
     }
     return lines;
 }
+
+NSArray<NSDictionary *> *capturedEvents(void (^block)(void)) {
+    uint8_t buffer[1 << 16];
+    while (sp_event_drain(buffer, sizeof buffer) > 0) {}
+    block();
+    NSMutableArray *events = [NSMutableArray array];
+    size_t used;
+    while ((used = sp_event_drain(buffer, sizeof buffer)) > 0) {
+        for (size_t offset = 0; offset < used;) {
+            uint32_t length;
+            memcpy(&length, buffer + offset, sizeof length);
+            const uint8_t *body = buffer + offset + 4;
+            uint8_t level = body[8];
+            uint8_t nameLength = body[9];
+            NSString *name = [[NSString alloc] initWithBytes:body + 10 length:nameLength encoding:NSUTF8StringEncoding];
+            NSData *json = [NSData dataWithBytes:body + 10 + nameLength length:length - 10 - nameLength];
+            NSError *error = nil;
+            NSDictionary *fields = [NSJSONSerialization JSONObjectWithData:json options:0 error:&error];
+            if (level > 4 || ![fields isKindOfClass:NSDictionary.class]) {
+                fprintf(stderr, "records: %s is not an event of the ring: %s\n", name.UTF8String, error.localizedDescription.UTF8String);
+                exit(1);
+            }
+            [events addObject:@{@"name": name, @"level": @(level), @"fields": fields}];
+            offset += 4 + length;
+        }
+    }
+    return events;
+}

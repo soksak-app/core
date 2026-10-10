@@ -7,6 +7,7 @@ package darwin
 #cgo LDFLAGS: -framework Cocoa
 #cgo pkg-config: soksak-darwin
 #include "event_ring.h"
+#include "activity_observers.h"
 */
 import "C"
 
@@ -25,4 +26,9 @@ func (implementation) PullNativeEvents(buffer []byte) (int, error) {
 func (implementation) TakeNativeEventLoss() (uint64, uint64, error) {
 	loss := C.sp_event_take_loss()
 	return uint64(loss.events), uint64(loss.bytes), nil
+}
+
+func (implementation) ObserveActivity() error {
+	C.sp_observe_activity()
+	return nil
 }

@@ -580,6 +580,9 @@ impl Platform for Darwin {
     fn take_native_event_loss(&self) -> Result<(u64, u64), String> {
         events::take_loss()
     }
+    fn observe_activity(&self) -> Result<(), String> {
+        events::observe_activity()
+    }
     fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String> {
         standard_error::replace(file)
     }

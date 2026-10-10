@@ -131,6 +131,10 @@ func (implementation) TakeNativeEventLoss() (uint64, uint64, error) {
 	return 0, 0, unsupported("native event loss")
 }
 
+func (implementation) ObserveActivity() error {
+	return unsupported("activity observers")
+}
+
 func (implementation) ReplaceStandardError(*os.File) error {
 	return unsupported("standard error replacement")
 }

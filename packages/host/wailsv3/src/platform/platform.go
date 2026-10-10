@@ -473,6 +473,10 @@ type Platform interface {
 	// TakeNativeEventLoss returns the events and bytes that the native ring refused since the last call.
 	TakeNativeEventLoss() (events, bytes uint64, err error)
 
+	// ObserveActivity installs the observers that record the activity of the application and of its windows as events of
+	// the native ring (docs/spec/logging.md#automatic-entrances). A second call installs nothing more.
+	ObserveActivity() error
+
 	// ReplaceStandardError 는 프로세스의 표준 오류를 file 로 바꾼다. 이후 시작하는 자식 프로세스도 그
 	// descriptor 를 물려받는다(docs/spec/hosts.md#application-log).
 	ReplaceStandardError(file *os.File) error

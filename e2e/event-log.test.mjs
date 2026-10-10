@@ -26,6 +26,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(events[0].fields.role, "host");
     assert.equal(events[0].fields.schema, 1);
     assert.ok(events.some((event) => event.event === "host.app.event" && event.fields.kind === "started"), `${path} holds no application event started`);
+    assert.ok(events.some((event) => event.event === "native.window.occlusion"), `${path} holds no native window event: the host did not install the activity observers`);
     events.forEach((event, index) => assert.equal(event.seq, index + 1, `${path} line ${index + 1} has seq ${event.seq}`));
   });
 }

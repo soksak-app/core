@@ -96,6 +96,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
 
   lane("Darwin clipboard", "objective-c", ["native/darwin/src/clipboard.m"], ["native/darwin/tests/clipboard_test.m"], { sharedTests: true }),
   lane("Darwin link open", "objective-c", ["native/darwin/src/link.m"], ["native/darwin/tests/link_test.m"], { sharedTests: true }),
+  lane("Darwin activity observers", "objective-c", ["native/darwin/src/activity_observers.m"], ["native/darwin/tests/activity_observers_test.m"], { sharedTests: true }),
   lane("Darwin notifications", "objective-c", ["native/darwin/src/notifications.m"], ["native/darwin/tests/notifications_test.m"], { sharedTests: true }),
   lane("Darwin document and surface", "objective-c", [
     "native/darwin/src/document_view.m",

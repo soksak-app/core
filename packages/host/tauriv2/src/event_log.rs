@@ -156,6 +156,7 @@ impl EventLog {
         let system = crate::platform::current()?;
         // A platform that cannot pull the native ring fails here, at the start, instead of running without native events.
         system.pull_native_events(&mut [0u8; 1])?;
+        system.observe_activity()?;
         EventLog::start(Options {
             directory: config.join("logs"),
             role: "host".into(),
