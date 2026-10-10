@@ -35,7 +35,7 @@ fn enabled_plugins(config_dir: &Path) -> Result<(Vec<InstalledPlugin>, Installed
         }
         plugins.push(InstalledPlugin {
             id: id.clone(),
-            package: plugin.package.clone(),
+            package: soksak_sok::plugins::installed_name(config_dir, plugin)?,
             version: plugin.version.clone(),
             dir: config_dir.join(&plugin.path),
         });
@@ -257,6 +257,10 @@ pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, 
         dependencies: std::collections::BTreeMap<String, String>,
     }
     let (plugins, state) = enabled_plugins(config_dir)?;
+    let mut names = std::collections::BTreeSet::new();
+    for plugin in state.plugins.values() {
+        names.insert(soksak_sok::plugins::installed_name(config_dir, plugin)?);
+    }
     let mut declarations: Vec<SidecarDeclaration> = vec![];
     for plugin in plugins {
         let file = plugin.dir.join("plugin.json");
@@ -266,9 +270,7 @@ pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, 
             serde_json::from_str(&text).map_err(|error| format!("{}: {error}", file.display()))?;
         for name in manifest.dependencies.into_keys() {
             // The package of an installed plugin is a plugin dependency, so it is not declared as a sidecar.
-            if declarations.iter().any(|item| item.name == name)
-                || state.plugins.values().any(|plugin| plugin.package == name)
-            {
+            if declarations.iter().any(|item| item.name == name) || names.contains(&name) {
                 continue;
             }
             let sidecar = state.sidecars.get(&name).ok_or_else(|| {

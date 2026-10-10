@@ -79,11 +79,16 @@ function enabledInstalledPlugins(configuration) {
   return Object.entries(installed.plugins)
     .filter(([, plugin]) => plugin.enabled === true)
     .map(([id, plugin]) => {
-      if (typeof plugin.package !== "string" || typeof plugin.version !== "string" || typeof plugin.path !== "string") {
-        throw new Error(`${file}: plugin ${id} requires package, version and path`);
+      if ("package" in plugin) throw new Error(`${file}: plugins/installed.json ${id}: unknown field package`);
+      if (typeof plugin.version !== "string" || typeof plugin.path !== "string") {
+        throw new Error(`${file}: plugin ${id} requires version and path`);
       }
       // 파일은 설치가 설정 디렉터리에 대한 상대 경로로 기록한 폴더에서만 읽는다(docs/spec/installation.md).
-      return { id, package: plugin.package, version: plugin.version, dir: join(configuration, plugin.path) };
+      // 이름은 그 폴더의 package.json 의 name 이다.
+      const dir = join(configuration, plugin.path);
+      const { name } = readJson(join(dir, "package.json"));
+      if (typeof name !== "string") throw new Error(`${join(dir, "package.json")}: expected a package.json name`);
+      return { id, package: name, version: plugin.version, dir };
     })
     .sort((a, b) => (a.id < b.id ? -1 : 1));
 }

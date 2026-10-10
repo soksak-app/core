@@ -433,6 +433,21 @@ fn installed_dependencies(
     manifest_dependencies_of(&file.display().to_string(), &data)
 }
 
+/// Reads the name of the package.json in the recorded folder of an installed plugin.
+pub fn installed_name(config_dir: &Path, plugin: &InstalledPlugin) -> Result<String, String> {
+    let file = config_dir.join(&plugin.path).join("package.json");
+    let data =
+        std::fs::read(&file).map_err(|error| crate::files::file_error(file.display(), &error))?;
+    let value: Value = serde_json::from_slice(&data)
+        .map_err(|error| format!("{} is not valid JSON: {error}", file.display()))?;
+    let package = value
+        .as_object()
+        .ok_or_else(|| format!("{}: package.json: expected an object", file.display()))?;
+    install::check_package_json_name("package.json name", package.get("name"))
+        .map(str::to_string)
+        .map_err(|error| format!("{}: {error}", file.display()))
+}
+
 impl DependencyPlan<'_> {
     /// The plugin.json dependencies of the version in use of a planned plugin.
     fn manifest(&mut self, id: &str) -> Result<BTreeMap<String, String>, String> {
@@ -471,15 +486,15 @@ impl DependencyPlan<'_> {
         }
         let index = self.index;
         let current = self.state.plugins.get(id).cloned();
-        let package = index
-            .plugins
-            .iter()
-            .find(|entry| entry.id == id)
-            .map(|entry| entry.package.clone())
-            .or_else(|| current.as_ref().map(|plugin| plugin.package.clone()))
-            // default: a plugin that neither the index nor installed.json lists has no package, so no plugin names
-            // it, and resolve_install reports that it is not in the registry.
-            .unwrap_or_default();
+        let package = match index.plugins.iter().find(|entry| entry.id == id) {
+            Some(entry) => entry.package.clone(),
+            None => match &current {
+                Some(plugin) => installed_name(self.config_dir, plugin)?,
+                // default: a plugin that neither the index nor installed.json lists has no package, so no plugin
+                // names it, and resolve_install reports that it is not in the registry.
+                None => String::new(),
+            },
+        };
         let needs = self.needs(id, &package)?;
         let satisfied = current.as_ref().is_some_and(|plugin| {
             needs
@@ -531,18 +546,19 @@ impl DependencyPlan<'_> {
             }
         };
         for name in providers.keys() {
-            let dependency = index
+            let mut dependency = index
                 .plugins
                 .iter()
                 .find(|entry| &entry.package == name)
-                .map(|entry| entry.id.clone())
-                .or_else(|| {
-                    self.state
-                        .plugins
-                        .iter()
-                        .find(|(_, plugin)| &plugin.package == name)
-                        .map(|(other, _)| other.clone())
-                });
+                .map(|entry| entry.id.clone());
+            if dependency.is_none() {
+                for (other, plugin) in &self.state.plugins {
+                    if &installed_name(self.config_dir, plugin)? == name {
+                        dependency = Some(other.clone());
+                        break;
+                    }
+                }
+            }
             let Some(dependency) = dependency else {
                 return Err(format!(
                     "{id} {}: dependency {name} is neither a plugin nor a sidecar of the registry",
@@ -594,7 +610,6 @@ impl DependencyPlan<'_> {
         self.dependencies.insert(id.to_string(), dependencies);
         self.providers.insert(id.to_string(), providers);
         let entry = InstalledPlugin {
-            package: selection.plugin.package.clone(),
             version: version.clone(),
             path: plugin_path,
             enabled: current.is_none_or(|plugin| plugin.enabled),
@@ -713,13 +728,13 @@ pub fn change_plugin(
         return Err(format!("plugin {id} is not installed"));
     };
     if action == "remove" || action == "disable" {
+        let name = installed_name(config_dir, plugin)?;
         // A plugin whose package another enabled plugin names as a dependency is neither removed nor disabled.
         for (other, dependent) in &state.plugins {
             if other == id || !dependent.enabled {
                 continue;
             }
-            if let Some(range) = installed_dependencies(config_dir, dependent)?.get(&plugin.package)
-            {
+            if let Some(range) = installed_dependencies(config_dir, dependent)?.get(&name) {
                 return Err(format!("plugin {id} is required by {other} {range}"));
             }
         }

@@ -5,6 +5,7 @@
 ## 미배포
 
 - F104.5.1, F104.6.1: `apps`, `e2e`(`e2e/hwp.test.mjs` 제외), `scripts`, Makefile의 주석이 영어이다. `scripts/check-comment-language.mjs`가 이 파일들에서 보고하는 주석 줄이 없고, 주석 줄만 바뀌었다.
+- R5.4: `plugins/installed.json`이 `package`를 담지 않는다. `sok`, 두 host, workbench staging은 설치된 plugin의 `name`을 기록된 `path`의 `package.json`에서 읽고, Go와 Rust reader는 `package`를 담은 plugin을 `<file>: plugins/installed.json <id>: unknown field package`로 거부한다. `sok plugin install`의 출력에 더 이상 `package`가 없다.
 - F154.4.3: `pnpm verify:windows`가 창 검사 파일을 파일마다 자기 프로세스로 test runner에 하나씩 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 10초마다 실행 중인 파일, 파일마다 600초 한도를 쓴다.
 - F154.4.2: `make -C native/darwin test`가 native 시험을 test runner로 하나씩 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 실행 중인 시험의 10초 간격 줄, 시험마다 120초 한도를 쓰며 `NATIVE_TEST_ONLY=<text>`로 범위를 정한다.
 - F154.4.1: `pnpm test`가 workspace의 Node 시험 파일을 파일마다 자기 프로세스로 test runner에 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 실행 중인 파일, 가장 느린 파일, 파일마다 120초 한도를 쓰며 `--only <text>`로 범위를 정한다.

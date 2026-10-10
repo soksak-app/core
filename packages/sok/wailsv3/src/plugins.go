@@ -445,6 +445,27 @@ func installedDependencies(configDir string, plugin InstalledPlugin) (map[string
 	return manifestDependenciesOf(file, data)
 }
 
+// InstalledName reads the name of the package.json in the recorded folder of an installed plugin.
+func InstalledName(configDir string, plugin InstalledPlugin) (string, error) {
+	file := filepath.Join(configDir, plugin.Path, "package.json")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return "", fileError(file, err)
+	}
+	value, err := DecodeJSON(data)
+	if err != nil {
+		return "", fmt.Errorf("%s is not valid JSON: %w", file, err)
+	}
+	pkg, err := object("package.json", value)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", file, err)
+	}
+	if err := checkPackageJSONName("package.json name", pkg["name"]); err != nil {
+		return "", fmt.Errorf("%s: %w", file, err)
+	}
+	return pkg["name"].(string), nil
+}
+
 // manifest is the plugin.json dependencies of the version in use of a planned plugin.
 func (p *dependencyPlan) manifest(id string) (map[string]string, error) {
 	if dependencies, ok := p.dependencies[id]; ok {
@@ -484,9 +505,15 @@ func (p *dependencyPlan) place(id string, provider bool, path []string) error {
 		return fmt.Errorf("plugin dependency cycle: %s", strings.Join(append(slices.Clone(path[i:]), id), " -> "))
 	}
 	current, installed := p.state.Plugins[id]
-	pkg := current.Package
+	pkg := ""
 	if i := slices.IndexFunc(p.index.Plugins, func(entry RegistryPlugin) bool { return entry.ID == id }); i >= 0 {
 		pkg = p.index.Plugins[i].Package
+	} else if installed {
+		name, err := InstalledName(p.configDir, current)
+		if err != nil {
+			return err
+		}
+		pkg = name
 	}
 	needs, err := p.needs(id, pkg)
 	if err != nil {
@@ -538,7 +565,14 @@ func (p *dependencyPlan) place(id string, provider bool, path []string) error {
 			dependency = p.index.Plugins[i].ID
 		}
 		for _, other := range sortedPluginIDs(p.state.Plugins) {
-			if dependency == "" && p.state.Plugins[other].Package == name {
+			if dependency != "" {
+				break
+			}
+			otherName, err := InstalledName(p.configDir, p.state.Plugins[other])
+			if err != nil {
+				return err
+			}
+			if otherName == name {
 				dependency = other
 			}
 		}
@@ -592,7 +626,7 @@ func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed b
 		return err
 	}
 	p.dependencies[id], p.providers[id] = dependencies, providers
-	entry := InstalledPlugin{Package: selection.Plugin.Package, Version: version, Path: pluginPath, Enabled: true, Sidecars: maps.Clone(selection.Version.Sidecars)}
+	entry := InstalledPlugin{Version: version, Path: pluginPath, Enabled: true, Sidecars: maps.Clone(selection.Version.Sidecars)}
 	if installed {
 		entry.Enabled = current.Enabled
 		entry.Previous = current.Version
@@ -712,6 +746,10 @@ func ChangePlugin(configDir, id, action string) (any, error) {
 		return nil, fmt.Errorf("plugin %s is not installed", id)
 	}
 	if action == "remove" || action == "disable" {
+		name, err := InstalledName(configDir, plugin)
+		if err != nil {
+			return nil, err
+		}
 		// A plugin whose package another enabled plugin names as a dependency is neither removed nor disabled.
 		for _, other := range sortedPluginIDs(state.Plugins) {
 			dependent := state.Plugins[other]
@@ -722,7 +760,7 @@ func ChangePlugin(configDir, id, action string) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			if rng, ok := dependencies[plugin.Package]; ok {
+			if rng, ok := dependencies[name]; ok {
 				return nil, fmt.Errorf("plugin %s is required by %s %s", id, other, rng)
 			}
 		}

@@ -110,7 +110,6 @@ func TestPluginInstallExtractsCheckedReleasesAndRecordsTheState(t *testing.T) {
 	code, stdout, stderr := run("plugin", "install", "probe", "--config-dir", config)
 	want := `{
   "plugin": {
-    "package": "@scope/plugin-probe",
     "version": "0.2.0",
     "path": "plugins/probe/0.2.0",
     "enabled": true,
@@ -530,7 +529,6 @@ func TestPluginInstallInstallsThePluginDependencies(t *testing.T) {
 	stdout := succeeds(t, "plugin", "install", "ext", "--config-dir", config)
 	want := `{
   "plugin": {
-    "package": "@scope/plugin-ext",
     "version": "1.0.0",
     "path": "plugins/ext/1.0.0",
     "enabled": true,
@@ -667,5 +665,48 @@ func TestPluginRemoveAndDisableRefuseAPluginThatAnEnabledPluginRequires(t *testi
 	succeeds(t, "plugin", "disable", "base", "--config-dir", config)
 	if stdout := succeeds(t, "plugin", "remove", "base", "--config-dir", config); stdout != "null\n" {
 		t.Fatalf("remove base %q", stdout)
+	}
+}
+
+// contract: cli.plugin.installed-reads-name-from-package-json
+func TestPluginDependentsReadTheNameFromThePackageJSONOfTheInstalledPlugin(t *testing.T) {
+	config := t.TempDir()
+	useRegistry(t, config, dependencyRegistry(t, base("1.0.0"), ext("^1.0.0")))
+	succeeds(t, "plugin", "install", "ext", "--config-dir", config)
+	if text := readText(t, filepath.Join(config, "plugins/installed.json")); strings.Contains(text, `"package"`) {
+		t.Fatalf("installed.json holds package: %s", text)
+	}
+	file := filepath.Join(config, "plugins/base/1.0.0/package.json")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed := strings.Replace(string(data), "@scope/plugin-base", "@scope/plugin-renamed", 1)
+	if renamed == string(data) {
+		t.Fatalf("package.json does not name the plugin: %s", data)
+	}
+	if err := os.WriteFile(file, []byte(renamed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	succeeds(t, "plugin", "disable", "base", "--config-dir", config)
+	if installedOf(t, config).Plugins["base"].Enabled {
+		t.Fatal("base is still enabled")
+	}
+}
+
+// contract: cli.plugin.installed-refuses-package
+func TestReadInstalledRefusesAPackageField(t *testing.T) {
+	config := t.TempDir()
+	installed := filepath.Join(config, "plugins", "installed.json")
+	if err := os.MkdirAll(filepath.Dir(installed), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	text := `{"format": 2, "plugins": {"side": {"package": "plugin-side", "version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}}, "sidecars": {}}`
+	if err := os.WriteFile(installed, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := sok.ReadInstalled(config)
+	if err == nil || err.Error() != installed+": plugins/installed.json side: unknown field package" {
+		t.Fatalf("installed.json with package: %v", err)
 	}
 }
