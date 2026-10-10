@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F142: the window check `e2e/terminal-fullscreen-fit.test.mjs` measures that a terminal has the rows, columns and region geometry of its card in the presentation that ends the full screen; the symptom did not reproduce on either application.
 - F147: the window checks in `e2e/browser.test.mjs` measure that a document of a browser card receives each change of the color scheme in the same presentation that applies the setting, in a visible card and in a card hidden by the full screen of another card; the symptom did not reproduce on either application.
 - F150.8.1: the window check `e2e/input-oracle.test.mjs` compares the bytes that the sidecar logs as written to the PTY for Tab, Escape, Backspace, Enter and Control+A with the bytes that an independent receiver process in the terminal read; they are the same on both applications.
 - F150.8.2: the latency of the whole input path was measured with the performance trace off, on and off again (`e2e/input-latency.test.mjs`); the medians are 23 to 25 ms on Wails and 26 to 38 ms on Tauri.
