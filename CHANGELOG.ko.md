@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F151.3: 디버그 화면의 타임라인이 level, layer, 글 외에 event 이름(`event`), `surface`, `session`, correlation identifier(`cid`), 경계를 포함하는 UTC 시간 범위(`from`, `to`)로 거르고, 통과한 행 앞뒤 `context`개 행을 `data-context`로 표시해 보인다. 잘못된 값은 member와 찾은 값을 밝힌 오류로 거부하고, `core.debug`는 member와 `lines`(context 행을 포함한 보이는 줄 수)를 보고한다. 실행 중인 애플리케이션에서 관측하지 않았다.
 - F150.5.3.2: host가 등록하는 모든 애플리케이션 event는 `kind`(`started`, `activated`, `deactivated`, `reopened`, `exit_requested`, `exit`)를 가진 event `host.app.event`이며 level은 `info`다. Wails host는 `started`, `activated`, `deactivated`, `exit_requested`, `exit`를, Tauri host는 `started`, `exit_requested`, `exit`를 저장한다.
 - F150.5.2: 표면 문서의 runtime `page` 객체가 보내는 모든 host 호출은 event `page.call`이다(메인 page와 같은 필드와 level이며 하나의 `callEvent`가 만든다). 문서의 batcher에 쌓이므로 한 turn의 호출은 host 호출 `log` 한 번으로 간다. 문서의 `report`도 같은 batcher 뒤에 쌓이고, Tauri runtime은 Wails runtime과 같은 호출 이름과 인자로 command와 인자를 정한다. 중계가 실패하면 문서의 console에 쓴다.
 - F154.3: `make host-contract-check`는 두 호스트의 패키지를 빌드하고 모든 시험을 실행기로 시험마다 자기 프로세스에서 병렬로 실행하며 시험마다 한도는 120초다. 옛 출력 파서는 제거했고, `--run`과 `--only`는 계약 검사 없이 일부만 실행한다.

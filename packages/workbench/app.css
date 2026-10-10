@@ -496,10 +496,11 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .dbg-card__cut{font-size:var(--text-small);color:var(--muted)}
 .dbg-card__image{display:block;max-width:100%;height:auto;border:var(--bw) solid var(--edge);border-radius:var(--r-xs)}
 .dbg-card__text{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--font-mono,ui-monospace,monospace);font-size:var(--text-small);line-height:var(--line-height);color:var(--fg)}
-.dbg-card__filters{display:flex;align-items:center;gap:var(--space-2);margin:0 0 var(--space-3)}
+.dbg-card__filters{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin:0 0 var(--space-3)}
 .dbg-card__filters .set-text{flex:1 1 auto;min-width:0}
 .dbg-card__rows{font-family:var(--font-mono,ui-monospace,monospace);font-size:var(--text-small);line-height:var(--line-height);color:var(--fg)}
 .dbg-card__line{white-space:pre-wrap;overflow-wrap:anywhere}
+.dbg-card__line[data-context]{color:var(--muted)}
 .dbg-row__facts{font-size:var(--text-small);color:var(--muted);font-variant-numeric:tabular-nums}
 
 /* select. 화살표는 감싼 요소가 그리고 select 자체는 기본 모양을 쓰지 않는다. */
