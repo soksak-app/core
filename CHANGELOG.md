@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F154.2: `scripts/test-discovery.mjs` builds the Go packages (`go test -c`) and the Rust packages (`cargo test --no-run`) through the runner and lists their tests, so each test runs as a process of its own in the working directory of its package; a package that does not build is a failure that names it, and a Rust test that is `#[ignore]` is a skip.
 - F154.1: `scripts/test-runner.mjs` runs a list of tests as separate processes in a bounded pool; each test has its own limit (at most 600 s), and the output names the start (`RUN`), the end (`PASS`, `FAIL`, `TIME`) and the elapsed time of each test, the tests in flight with their running time at an interval, the slowest tests and the totals.
 - F150.5.3.1: every window event that a host registers is the event `host.window.event` with the `window` and the `kind` (`resize`, `move`, `scale_factor_changed`, `show`, `hide`, `occlusion_changed`, `focus`, `lost_focus`, `close_requested`, `closed`, `web_process_ended`, `navigation_committed`) in the event log; the three kinds that arrive in streams are at the level `debug`. Observed in both applications: a new window that opens and closes stores `closed`.
 - F150.5.5.2: both hosts store the connection to a persistent service as the event `host.sidecar.connect` (`name`, `pid`, `spawned`) and its end as `host.sidecar.disconnect` (`name`, `pid`, `stopping`, `violation`) at the level `info`.
