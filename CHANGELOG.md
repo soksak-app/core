@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F151.1: the debug view has a 타임라인 button (`core.debug.timeline`) that merges the events of `logs/host-<boot>.jsonl` into rows sorted by time then `seq`, each as one text line, with a level, a layer and a text filter (`core.debug.timeline.filter`); a file that breaks the event structure is refused with its name, line and the value found, and `core.debug` reports `timeline`.
 - F150.2.1: the native library has an event ring (`event_ring.h`): a bounded lock-free ring that many producer threads push variable-length events into without a lock, an allocation or a system call, and that one consumer drains; a full ring or an event larger than half of it returns false and counts the lost events and bytes. `make -C native/darwin benchmark` measures a push (about 80 to 100 ns on the calling thread) against the present text record (about 1.1 microseconds, with a worst case in the tens to hundreds of microseconds).
 - F150.1: `docs/spec/logging.md` states the event contract (structure, classes and policy, writers, files, catalog, privacy, limits); `@soksak/log-contract` audits a log against a catalog (declared events and fields, consecutive `seq` with gaps explained by `log.dropped`, declared chains) and holds the golden catalog and golden lines; the terms `event`, `event class` and `correlation identifier` are defined.
 - F149.1: a window check types Enter through the native input of the endpoint on both hosts and requires the records of every layer of the input path, in time order, in the application log and the performance trace.

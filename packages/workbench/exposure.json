@@ -1011,7 +1011,7 @@
       },
       {
         "name": "core.debug",
-        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the scroll position of the shown content in points, the running or last save operation, and the error of the last failed step or operation or null.",
+        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files that were truncated, the counts of all and shown rows and its filter or null, the scroll position of the shown content in points, the running or last save operation, and the error of the last failed step or operation or null.",
         "schema": {
           "type": "object",
           "properties": {
@@ -1064,6 +1064,34 @@
                 },
                 "length": {
                   "type": "number"
+                }
+              }
+            },
+            "timeline": {
+              "type": ["object", "null"],
+              "properties": {
+                "files": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "truncated": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "shown": {
+                  "type": "number"
+                },
+                "level": {
+                  "enum": ["error", "warn", "info", "debug", "trace"]
+                },
+                "layer": {
+                  "enum": ["all", "native", "host", "page", "plugin", "sidecar"]
+                },
+                "text": {
+                  "type": "string"
                 }
               }
             },
@@ -1805,6 +1833,39 @@
         "params": {
           "type": "object",
           "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.debug.timeline",
+        "description": "Shows the rows of the host event files of the logs folder in time order in the open debug view; a file that is not events, or a folder without a host event file, is an error.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
+        "name": "core.debug.timeline.filter",
+        "description": "Sets the filter of the shown debug timeline: level is the least severe level shown, layer is a layer or all, and text is a case-insensitive part of the text line of a row. A member that is not given keeps its value; at least one member is required.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "level": {
+              "enum": ["error", "warn", "info", "debug", "trace"]
+            },
+            "layer": {
+              "enum": ["all", "native", "host", "page", "plugin", "sidecar"]
+            },
+            "text": {
+              "type": "string"
+            }
+          }
         },
         "result": {
           "type": "null"
@@ -3629,6 +3690,35 @@
       {
         "name": "core.debug.file",
         "description": "The rows of the files of the logs folder in path order.",
+        "many": true
+      },
+      {
+        "name": "core.debug.timeline",
+        "description": "The button that shows the timeline of the host event files."
+      },
+      {
+        "name": "core.debug.timeline.list",
+        "description": "The button of the timeline that shows the list of files again."
+      },
+      {
+        "name": "core.debug.timeline.level",
+        "description": "The selection box of the least severe level that the timeline shows."
+      },
+      {
+        "name": "core.debug.timeline.layer",
+        "description": "The selection box of the layer that the timeline shows."
+      },
+      {
+        "name": "core.debug.timeline.text",
+        "description": "The text field of the part of a row that the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.rows",
+        "description": "The container of the rows of the timeline."
+      },
+      {
+        "name": "core.debug.timeline.row",
+        "description": "The rows of the timeline in time order, each the text line of one event.",
         "many": true
       },
       {

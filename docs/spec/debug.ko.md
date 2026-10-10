@@ -29,6 +29,15 @@ host 호출 `debugFiles()`는 `<config-dir>/logs/` 아래 모든 파일을 `path
 
 모든 파일은 모든 행의 같은 칸에 보기 단추와 저장 단추를 가진다. `core.debug.view {path}`는 host 호출 `debugRead({path})`를 실행하고, 이 호출은 글 파일에는 `{path, size, truncated, kind, text}`로, PNG 파일에는 `{path, size, truncated, kind, image}`로 답한다. `kind`는 `text`나 `image`다. 글 파일의 `text`는 파일의 내용이고, 파일이 더 크면 마지막 262144 byte(문자 경계에서 시작)이며 이때 `truncated`는 true다. PNG 파일의 `image`는 파일 전체의 `data:image/png;base64,` 주소이고 `truncated`는 false다. `logs/` 밖이거나 파일이 아니거나 16 MB보다 큰 PNG 파일이거나 이름이 `.png`인데 PNG signature로 시작하지 않거나 내용이 UTF-8 글이 아닌 다른 파일인 `path`는 그 경로를 밝히는 오류로 거부하고, 화면은 그 오류를 보인다. 화면은 글이나 이미지를 경로와 크기와 함께 보이고, `truncated`가 true이면 `앞부분 생략`을 밝히며, `core.debug.list`를 실행해 목록을 다시 보이는 목록 단추를 둔다. 글은 쓰인 순서(오래된 줄이 먼저)를 유지하고, 화면은 가장 새 줄이 있는 글의 끝으로 스크롤한 채 열린다.
 
+## 타임라인
+
+목록 위의 타임라인 단추는 `core.debug.timeline`을 실행한다. 이 명령은 host 프로세스의 event 파일(`logs/host-<boot>.jsonl`, [logging](logging.ko.md#파일). 회전된 세대 `.1`부터 `.5`는 읽지 않는다)을 `debugRead`로 읽고 그 event를 행 하나의 목록으로 보인다. 폴더에 그런 파일이 없으면 오류로 실패한다.
+
+- 파일은 [logging](logging.ko.md#event)의 event 구조를 따라야 한다: 모든 줄은 정수 `ts_us`와 `seq`, 계약이 선언한 `level`과 `layer`, 문자열 `event`를 가진 JSON 객체이고, `fields`가 있으면 객체다. 첫 줄은 reader가 아는 schema 번호의 `log.open`이다. 이를 어긴 파일은 파일, 줄, 찾은 값을 밝히는 오류로 거부하고, 화면은 그 오류를 보인다. 파일의 글이 잘렸으면(`truncated`가 true) 첫 줄이 일부뿐이므로, reader는 그 줄을 건너뛰고 `log.open`을 요구하지 않으며 화면은 `앞부분 생략`을 밝힌다.
+- 모든 파일의 행은 `ts_us`, `seq`, 파일 경로 순으로 정렬한다. 행 하나는 글 한 줄이다: 마이크로초까지의 UTC 시각, `level`, `layer`, `event`, 있으면 `window=`, `surface=`, `session=`, `cids=`, 그리고 field마다 `name=<JSON 값>`.
+- `core.debug.timeline.filter {level, layer, text}`가 필터를 정한다. 주지 않은 member는 값을 유지하고 하나 이상은 필요하다. `level`은 보이는 가장 낮은 수준(`error`, `warn`, `info`, `debug`, `trace`이며 그 수준이나 더 심각한 행이 통과한다), `layer`는 `all`이나 layer, `text`는 행의 글 한 줄에 대한 대소문자 무시 부분 문자열이다. 새 타임라인은 `trace`, `all`, 빈 글로 시작한다. 화면은 level 선택 상자, layer 선택 상자, 글 입력 칸을 두고 각각 이 명령을 가리키며, `core.debug.list`를 실행하는 목록 단추를 둔다.
+- 화면은 가장 새 행이 있는 끝으로 스크롤한 채 열리고, 필터가 바뀌어도 스크롤 위치를 유지한다.
+
 ## Status
 
-`core.debug`는 `{open, recorded, entries, viewing, scroll, operation, error}`를 보고한다: 화면이 열렸는지, 열기가 쓴 상태 파일의 경로나 `null`, 목록의 순서대로 나열된 항목 `{path, size, modified}`, 보이는 파일 `{path, size, truncated, kind, length}`(`length`는 보이는 글의 문자 수이며 이미지는 0)나 `null`, 보이는 내용의 스크롤 위치(point, 내용이 시작을 지나 당겨진 동안은 native modal이 보고한 대로 음수이고 숫자가 아닌 값은 거부한다), 실행 중이거나 마지막 작업 `{action, path, state}`(`action`은 `save`나 `save-all`, `path`는 저장한 파일이나 `null`, `state`는 `running`, `done`, `failed`), 마지막 실패한 단계나 작업의 오류나 `null`. 화면이 열려 있는 동안 `core.screen`은 `modal` `debug`를 보고한다.
+`core.debug`는 `{open, recorded, entries, viewing, timeline, scroll, operation, error}`를 보고한다: 화면이 열렸는지, 열기가 쓴 상태 파일의 경로나 `null`, 목록의 순서대로 나열된 항목 `{path, size, modified}`, 보이는 파일 `{path, size, truncated, kind, length}`(`length`는 보이는 글의 문자 수이며 이미지는 0)나 `null`, 보이는 타임라인 `{files, truncated, total, shown, level, layer, text}`(읽은 파일, 글이 잘린 파일, 행 수, 필터를 통과한 수, 필터)나 `null`, 보이는 내용의 스크롤 위치(point, 내용이 시작을 지나 당겨진 동안은 native modal이 보고한 대로 음수이고 숫자가 아닌 값은 거부한다), 실행 중이거나 마지막 작업 `{action, path, state}`(`action`은 `save`나 `save-all`, `path`는 저장한 파일이나 `null`, `state`는 `running`, `done`, `failed`), 마지막 실패한 단계나 작업의 오류나 `null`. 화면이 열려 있는 동안 `core.screen`은 `modal` `debug`를 보고한다.

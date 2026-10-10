@@ -1375,6 +1375,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F151.1",
+    implementation: [
+      { file: "packages/workbench/debug-timeline.js", symbol: "export function parseEvents" },
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function showDebugTimeline" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-timeline.test.mjs", id: "rows of several files are merged by time, then seq, then file" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the timeline lists the rows of the host event files by time and filters them" },
+    ],
+    expected: "The debug view shows the host event files as a timeline of rows in time order with level, layer and text filters, and rejects a file that breaks the event structure with its name and line.",
+    levels: ["unit"],
+  },
+  {
     id: "F137",
     implementation: [
       { file: "packages/sok/tauriv2/src/appupdate.rs", symbol: "pub type OpenApplication" },
