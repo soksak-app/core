@@ -603,6 +603,7 @@ pub(crate) fn run_debug(
         a.values
             .get(name)
             .cloned()
+            // default: a filter flag that is not given has the default of the filter (docs/spec/debug.md#timeline-command).
             .unwrap_or_else(|| default.to_string())
     };
     let filter = Filter {

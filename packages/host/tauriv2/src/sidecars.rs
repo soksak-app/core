@@ -2101,6 +2101,7 @@ impl<O: Owner> Core<O> {
                 crate::event_log::Level::Info,
                 "host.sidecar.disconnect",
                 serde_json::json!({"name": sidecar, "pid": reader_service_pid, "stopping": stopping,
+                    // default: a disconnect without a violation records an empty violation text.
                     "violation": violation.clone().unwrap_or_default()}),
             );
             let close_error =

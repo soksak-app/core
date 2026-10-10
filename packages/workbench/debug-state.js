@@ -81,6 +81,7 @@ export function compareStates(first, second) {
   const right = leaves(second);
   const differences = [];
   for (const [path, a] of left) {
+    // default: a path that the other state file lacks has no value there, which the comparison reports as a difference.
     const b = right.get(path) ?? null;
     if (a !== b) differences.push({ path, a, b });
   }

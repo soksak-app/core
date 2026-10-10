@@ -102,6 +102,7 @@ export function eventLine(row) {
     if (row[name] !== undefined) parts.push(`${name}=${row[name]}`);
   }
   if (row.cids !== undefined) parts.push(`cids=${row.cids.join(",")}`);
+  // default: an event line without fields has no field text.
   for (const [name, value] of Object.entries(row.fields ?? {})) parts.push(`${name}=${JSON.stringify(value)}`);
   return parts.join(" ");
 }
@@ -123,6 +124,7 @@ function boundOf(name, value) {
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
   // A date that the calendar does not have (for example February 30) moves to another day in Date.UTC.
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day || hour > 23 || minute > 59 || second > 59) throw invalid();
+  // default: a time bound without fractional digits has zero microseconds.
   return date.getTime() * 1000 + Number((match[7] ?? "").padEnd(6, "0"));
 }
 
@@ -158,6 +160,7 @@ export function filterRows(rows, filter) {
     && (name === "" || row.event.toLowerCase().includes(name))
     && (surface === "" || row.surface === surface)
     && (session === "" || row.session === session)
+    // default: a row without correlation identifiers matches no cid filter.
     && (cid === "" || (row.cids?.includes(cid) ?? false))
     && (first === null || row.ts_us >= first)
     && (last === null || row.ts_us <= last)

@@ -196,6 +196,7 @@ function drawState() {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = label;
+    // default: a state view that compares with no other file has no selected comparison file.
     if (value === (stateShown.with ?? "")) option.setAttribute("selected", "");
     choice.appendChild(option);
   }
@@ -204,6 +205,7 @@ function drawState() {
     const el = document.createElement("div");
     el.className = "dbg-card__line";
     el.dataset.expose = "core.debug.state.difference";
+    // default: a path that exists in only one of the compared files has no value in the other, shown as (없음).
     el.textContent = `${path}: ${a ?? "(없음)"} -> ${b ?? "(없음)"}`;
     stateDiffs.appendChild(el);
   }

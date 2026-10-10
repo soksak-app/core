@@ -206,6 +206,7 @@ func stringify(value any, present bool) string {
 		}
 		parts := make([]string, len(names))
 		for i, name := range names {
+			// default: the name comes from the members of this object, so the lookup finds it.
 			last, _ := v.get(name)
 			parts[i] = jsString(name) + ":" + stringify(last, true)
 		}
@@ -395,6 +396,7 @@ func eventLine(row eventRow) string {
 			continue
 		}
 		seen[m.name] = true
+		// default: the name comes from the members of this object, so the lookup finds it.
 		last, _ := row.fields.get(m.name)
 		parts = append(parts, m.name+"="+stringify(last, true))
 	}
