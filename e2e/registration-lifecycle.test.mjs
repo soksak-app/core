@@ -1,4 +1,4 @@
-// 문서 재읽기 중 등록 손실을 성능 기록과 함께 보고한다.
+// Reports a registration loss during a document reload together with the performance record.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
@@ -41,7 +41,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const log = await s.transcript();
     s.cleanup(() => log.stop());
-    // 호스트가 다시 읽힌 메인 페이지의 navigation callback 을 새 페이지가 시작한 뒤에 처리하게 한다.
+    // Makes the host process the navigation callback of the reloaded main page after the new page has started.
     await s.request("diagnostics.navigation.delay", { ms: 1500 });
     s.cleanup(() => s.request("diagnostics.navigation.delay", { ms: 0 }));
     const shell = await fresh(s);

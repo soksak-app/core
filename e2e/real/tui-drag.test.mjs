@@ -1,4 +1,4 @@
-// 마우스 보고를 켠 fixture TUI 에서 제3지점 뒤 즉시 재시도한다. 실패한 뒤의 회복은 통과로 바꾸지 않는다.
+// After a mouse-reporting fixture TUI is switched on, retries immediately after the third point. A recovery after a failure is not turned into a pass.
 import assert from "node:assert/strict";
 import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -89,10 +89,10 @@ for (const app of Object.values(APPS)) {
             return up && value.entries.some((entry) => entry.kind === "pointer-result" && entry.body.inputId === up.body.inputId);
           }, "the current drag has no matching mouse-up result", { surface, timeout: 5000 });
         } catch (error) { waitError = String(error); }
-        // 제스처 뒤 PTY 전송 상태를 잰다. 쓰기 성공과 자식 수신을 구분하는 관측이며,
-        // 커널 큐는 알림이 없어 샘플으로만 볼 수 있다: 직후와 선택 정착 뒤에 한 번씩 잰다.
-        // 표본 사이 written 가 자라면 자식이 mouse-up 뒤 출력을 했다는 뜻이라 파싱과
-        // 렌더링 단계를 나누는 증거가 된다.
+        // Measures the PTY transfer state after the gesture. This observation separates a successful write from reception by the child,
+        // and the kernel queue has no notification, so it can only be seen by samples: it is measured once right after and once after the selection settles.
+        // If written grows between the samples, the child produced output after mouse-up, which is evidence that separates the parsing and
+        // rendering stages.
         const ptySamples = [];
         let ptyPendingError;
         const ptyStarted = performance.now();
@@ -118,9 +118,9 @@ for (const app of Object.values(APPS)) {
         }
         trace = await s.run("terminal.pointer.trace", { action: "stop" }, surface);
         const displayed = await s.presented();
-        // 선택 상태의 확정과 그 칠의 래스터 제시는 별개다. 마지막 제시 시각만 넘기면 아직 칠이
-        // 스트림에 못 미친 프레임에서 녹화가 멈출 수 있으므로 제시 간격과 합성 지연을 덮는 여유를
-        // 더해 녹화 마지막 프레임이 확정된 선택을 담게 한다.
+        // The commitment of the selection state and the raster presentation of its fill are separate. Passing only the last presentation time could stop the recording at a frame in which the fill
+        // has not yet reached the stream, so a margin that covers the presentation interval and the composition delay
+        // is added so that the last recorded frame holds the committed selection.
         await recording.stop({ after: displayed.displayed + 0.25 });
         const files = frames(recording.frames);
         const samples = files.map((file) => {
@@ -152,13 +152,13 @@ for (const app of Object.values(APPS)) {
           terminal: await s.get("terminal.session", surface), selectionByFrame,
         };
       } finally {
-        // 녹화를 멈추지 못한 실패는 세션 정리가 멈춘다(Session.record).
+        // A failure to stop the recording stops the session cleanup (Session.record).
         rmSync(recording.frames, { recursive: true, force: true });
       }
     };
 
     const failures = [];
-    // 제3지점 세 영역을 한 번씩 거치고 가운데 주기는 느린 drag 로 한다. 간헐 실패의 반복은 repeat target 으로 한다.
+    // Passes through the three areas of the third point once each, and the middle cycle uses a slow drag. The repeat of an intermittent failure uses the repeat target.
     const plan = [{ third: 0, steps: 30 }, { third: 1, steps: 90 }, { third: 2, steps: 30 }];
     for (const [repeat, { third, steps }] of plan.entries()) {
       const cycle = { steps, third, repeat, first: await measure(steps, { waitForSelection: true }) };

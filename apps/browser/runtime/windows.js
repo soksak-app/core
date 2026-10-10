@@ -1,6 +1,6 @@
-// 브라우저 런타임의 창 인터페이스. 창은 브라우저 탭이다.
+// Window interface of the browser runtime. A window is a browser tab.
 //
-// 폴더는 확인할 수 없으므로 입력한 경로를 그대로 사용하고, 식별자는 경로에서 만든다.
+// A folder cannot be verified, so the entered path is used as it is, and the identifier is derived from the path.
 
 export const windows = {
   createsFolders: false,
@@ -22,7 +22,7 @@ export const windows = {
   chooseFolder: () => Promise.reject(new Error("The browser runtime cannot choose folders")),
   createFolder: () => Promise.reject(new Error("The browser runtime cannot create folders")),
   /**
-   * 다른 프로젝트가 열린 탭에서 별도 창 열기를 요청하면 새 탭에서 열고 `local: false` 를 반환한다.
+   * A request for a separate window from a tab that has another project open opens a new tab and returns `local: false`.
    */
   async openProject({ id, separate, current }) {
     if (!separate || current === null || current === id) return { local: true };

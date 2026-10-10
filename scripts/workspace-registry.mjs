@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// 워크스페이스 registry(docs/spec/plugins.md#repositories). scripts/workspace-registry.json 이 core checkout 기준 상대
-// 폴더로 선언한 plugin repository 를 pack 하고, 그 plugin 이 쓰는 sidecar 를 선언된 sidecar repository 에서 build 해
-// 현재 플랫폼으로 release 한 뒤, 그 결과로 registry 파일을 쓰고 `sok registry build` 로 index.json 을 만든다
-// (docs/spec/cli.md). build 와 window check 는 이 registry 에서 plugin 을 설치한다. Network 는 쓰지 않는다.
+// The workspace registry (docs/spec/plugins.md#repositories). Packs the plugin repositories that scripts/workspace-registry.json declares as folders
+// relative to the core checkout, builds the sidecars those plugins use from the declared sidecar repositories and releases them
+// for the current platform, then writes the registry files from the result and creates index.json with `sok registry build`
+// (docs/spec/cli.md). Builds and window checks install plugins from this registry. It uses no network.
 //
-//   node scripts/workspace-registry.mjs --sok <sok 실행 파일> --out <registry 폴더> [--diagnostics]
+//   node scripts/workspace-registry.mjs --sok <sok executable> --out <registry folder> [--diagnostics]
 //
-// --diagnostics 는 plugin 을 진단 package 로 pack 한다. 진단 build 와 window check 가 이 registry 에서 설치한다.
+// --diagnostics packs the plugins as diagnostic packages. Diagnostic builds and window checks install from this registry.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -20,9 +20,9 @@ const read = (url) => JSON.parse(readFileSync(url, "utf8"));
 const folderText = (value) => typeof value === "string" && value !== "" && !value.startsWith("/");
 
 /**
- * scripts/workspace-registry.json 의 선언을 검사한다. plugins 는 plugin repository 폴더, sidecars 는
- * {repository, folder}(folder 는 repository 안에서 sidecar.json 을 가진 폴더), packs 는 registry pack 항목이다.
- * 폴더는 core checkout 기준 상대 경로다.
+ * Checks the declarations of scripts/workspace-registry.json. plugins are plugin repository folders, sidecars are
+ * {repository, folder} (folder is the folder in the repository that holds sidecar.json), and packs are registry pack entries.
+ * Folders are paths relative to the core checkout.
  */
 export function checkDeclaration(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${DECLARATION}: expected an object`);
@@ -40,27 +40,27 @@ export function checkDeclaration(value) {
   return value;
 }
 
-/** package.json repository 의 주소. 문자열이거나 { url } 이다. */
+/** The address of the package.json repository. It is a string or { url }. */
 export function repositoryText(repository) {
   const url = typeof repository === "string" ? repository : repository?.url;
   if (typeof url !== "string" || url === "") throw new Error("package.json repository has no url");
   return url;
 }
 
-/** plugin 하나의 registry 항목. pack 은 `sok plugin pack` 의 출력이다. */
+/** The registry entry of one plugin. pack is the output of `sok plugin pack`. */
 export function pluginEntry(manifest, pkg, pack) {
   return {
     id: manifest.id, package: pkg.name, name: manifest.name, description: pkg.description, license: pkg.license,
     repository: repositoryText(pkg.repository),
     versions: [{
       version: pkg.version, release: { url: pathToFileURL(pack.release).href, sha256: pack.sha256 },
-      // 기본값: sidecar 를 쓰지 않는 plugin 의 plugin.json 에는 dependencies 가 없다.
+      // default: the plugin.json of a plugin that uses no sidecar has no dependencies.
       engines: { soksak: pkg.engines?.soksak }, sidecars: manifest.dependencies ?? {},
     }],
   };
 }
 
-/** sidecar 하나의 registry 항목. release 는 `sok sidecar release` 의 출력이다. */
+/** The registry entry of one sidecar. release is the output of `sok sidecar release`. */
 export function sidecarEntry(pkg, declaration, release) {
   return {
     name: pkg.name, repository: repositoryText(pkg.repository),
@@ -75,7 +75,7 @@ function sok(binary, args) {
   return JSON.parse(execFileSync(binary, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }));
 }
 
-/** sidecar repository 의 `make build` 가 sidecar.json 이 가리키는 실행 파일을 쓴다. */
+/** `make build` of the sidecar repository writes the executable that sidecar.json points to. */
 function buildSidecar(repository) {
   execFileSync("make", ["-C", repository, "build"], { stdio: ["ignore", "inherit", "inherit"] });
 }
@@ -85,7 +85,7 @@ function write(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-/** registry 폴더를 새로 쓰고 index.json 을 만든다. 출력 폴더의 이전 항목은 지운다. */
+/** Writes the registry folder anew and creates index.json. Earlier entries in the output folder are removed. */
 export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
   const declaration = checkDeclaration(read(new URL(DECLARATION, root)));
   const folder = (relative) => fileURLToPath(new URL(relative.endsWith("/") ? relative : `${relative}/`, root));
@@ -105,7 +105,7 @@ export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
     const pkg = read(pathToFileURL(join(dir, "package.json")));
     const pack = sok(binary, ["plugin", "pack", dir, releases, ...(diagnostics ? ["--diagnostics"] : [])]);
     write(join(out, "plugins", `${manifest.id}.json`), pluginEntry(manifest, pkg, pack));
-    // 기본값: sidecar 를 쓰지 않는 plugin 의 plugin.json 에는 dependencies 가 없다.
+    // default: the plugin.json of a plugin that uses no sidecar has no dependencies.
     for (const name of Object.keys(manifest.dependencies ?? {})) {
       if (!declared.has(name)) throw new Error(`${DECLARATION}: plugin ${manifest.id} uses ${name}, which no declared sidecar folder holds`);
       used.add(name);

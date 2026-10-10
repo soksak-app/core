@@ -1,19 +1,19 @@
-// 두 호스트의 공개 API 면을 기계로 비교한다(docs/spec/host-parity.md).
+// Mechanically compares the public API surfaces of the two hosts (docs/spec/host-parity.md).
 //
-// 명제 1(공개 바인딩)은 각 프론트엔드 런타임이 받아들이는 host.call 이름 집합과 그 이름이 각 호스트
-// 구현에 실제로 연결되는지를 검사한다. 명제 2(엔드포인트 메서드)는 각 호스트가 선언하는 엔드포인트
-// 메서드 집합을 빌드 맛별로 비교한다. 명제 3(메뉴 계약 표)은 호스트 계약 명세의 메뉴 표와 양쪽 호스트의
-// 메뉴 빌더 표가 같은지 검사한다. 실제 메뉴 바 비교는 창 검사 계층이 담당하고 명제 4·5는 다음 확장이다.
+// Proposition 1 (public bindings) checks the set of host.call names that each frontend runtime accepts and whether each name is actually connected
+// to the implementation of each host. Proposition 2 (endpoint methods) compares the set of endpoint methods that each host declares
+// per build flavor. Proposition 3 (menu contract table) checks that the menu table of the host contract specification and the menu builder tables of both hosts are the same.
+// The comparison of the actual menu bar belongs to the window check layer, and propositions 4 and 5 are the next extension.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 
-/** 카멜 케이스 메서드 이름을 스네이크 케이스로 바꾼다. 바인딩 이름 비교의 정규형이다. */
+/** Converts a camel case method name to snake case. It is the normal form for comparing binding names. */
 export const snake = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/([A-Z])([A-Z][a-z])/g, '$1_$2').toLowerCase();
 
-/** 런타임의 호출 이름 표(COMMAND, METHOD)에서 host.call 이름 집합을 읽는다. */
+/** Reads the set of host.call names from the call name tables of a runtime (COMMAND, METHOD). */
 export function runtimeCalls(runtime, tableDeclaration, file) {
   const table = runtime.indexOf(tableDeclaration);
   if (table < 0) throw new Error(`${file} has no ${tableDeclaration} table`);
@@ -21,7 +21,7 @@ export function runtimeCalls(runtime, tableDeclaration, file) {
   return new Set([...body.matchAll(/([a-z][a-zA-Z0-9]*):\s*"/g)].map((match) => snake(match[1])));
 }
 
-/** Rust generate_handler! 의 명령 이름 집합. */
+/** The set of command names of Rust generate_handler!. */
 export function rustHandlers(bindings) {
   const start = bindings.indexOf('generate_handler![');
   if (start < 0) throw new Error('bindings.rs has no generate_handler!');
@@ -29,7 +29,7 @@ export function rustHandlers(bindings) {
     .split(/[\s,]+/).filter((name) => /^[a-z][a-z0-9_]*$/.test(name)));
 }
 
-/** Go 호스트 패키지 전체에서 바인딩된 Host 구조체의 내보낸 메서드 이름 집합. */
+/** The set of exported method names of the bound Host struct over all Go host packages. */
 export function goHostMethods(sources) {
   const methods = new Set();
   for (const [file, source] of Object.entries(sources)) {
@@ -38,7 +38,7 @@ export function goHostMethods(sources) {
   return methods;
 }
 
-/** Rust 엔드포인트가 선언하는 메서드 이름 집합(빌드 맛별). */
+/** The set of method names that the Rust endpoint declares (per build flavor). */
 export function rustEndpointMethods(source) {
   const collect = (name) => {
     const declaration = `const ${name}: &[&str] = &[`;
@@ -48,7 +48,7 @@ export function rustEndpointMethods(source) {
     return new Set(body.split(/[\s,]+/).map((value) => value.replaceAll('"', '')).filter((value) => value.includes('.')));
   };
   const diagnostics = collect('DIAGNOSTICS');
-  // 진단 빌드의 transcript 메서드는 상수 이름으로 배열에 들어가 있으므로 상수 선언에서 얻는다.
+  // The transcript methods of the diagnostic build are in the array by constant name, so they are taken from the constant declarations.
   const transcript = source.match(/const TRANSCRIPT: &str = "([a-z][a-z0-9_.]*)"/);
   if (transcript) diagnostics.add(transcript[1]);
   return { base: collect('METHODS'), diagnostics };
@@ -61,7 +61,7 @@ function goMapKeys(source, declaration) {
   return new Set([...body.matchAll(/"([a-z][a-z0-9_.]*)":/g)].map((match) => match[1]));
 }
 
-/** Go 엔드포인트가 선언하는 메서드 이름 집합(빌드 맛별). */
+/** The set of method names that the Go endpoint declares (per build flavor). */
 export function goEndpointMethods(endpoint, diagnosticsSource) {
   const assigned = (source) => [...source.matchAll(/^\s*diagnostic(Methods|Subscriptions)\["([a-z][a-z0-9_.]*)"\] =/gm)]
     .map((match) => match[2]);
@@ -78,7 +78,7 @@ export function goEndpointMethods(endpoint, diagnosticsSource) {
   return { base, diagnostics: diagnosticOnly };
 }
 
-/** 명제 3: 호스트 계약 명세의 메뉴 표를 읽는다. */
+/** Proposition 3: reads the menu table of the host contract specification. */
 export function specMenuTables(specMarkdown) {
   const section = specMarkdown.slice(specMarkdown.indexOf('## Application menu'), specMarkdown.indexOf('## Contract cases'));
   if (!section) throw new Error('host contract spec has no Application menu section');
@@ -86,7 +86,7 @@ export function specMenuTables(specMarkdown) {
     const start = section.indexOf(header);
     if (start < 0) throw new Error(`Application menu section has no ${header.replace(/\|/g, '')} table`);
     const lines = section.slice(start, section.indexOf('\n\n', start)).split('\n');
-    // 괄호로 묶은 자리표(예: "(애플리케이션 이름)")는 호스트 표의 빈 값과 같다.
+    // A placeholder in parentheses (for example "(application name)") equals an empty value of the host table.
     const cells = (line) => line.split('|').slice(1, -1)
       .map((cell) => cell.trim()).map((cell) => (/^\(.*\)$/.test(cell) ? "" : cell));
     return { header: cells(lines[0]), rows: lines.slice(2).map(cells) };
@@ -99,7 +99,7 @@ export function specMenuTables(specMarkdown) {
   };
 }
 
-/** 명제 3: Rust 메뉴 빌더의 표를 읽는다. */
+/** Proposition 3: reads the table of the Rust menu builder. */
 export function rustMenuTables(source) {
   const rows = (name, width) => {
     const start = source.indexOf(`pub const ${name}: &[`);
@@ -111,7 +111,7 @@ export function rustMenuTables(source) {
   return { menus: rows('MENUS', 3), items: rows('ITEMS', 6) };
 }
 
-/** 명제 3: Go 메뉴 빌더의 표를 읽는다. */
+/** Proposition 3: reads the table of the Go menu builder. */
 export function goMenuTables(source) {
   const rows = (name, width) => {
     const start = source.indexOf(`var ${name} = []struct{`);
@@ -123,7 +123,7 @@ export function goMenuTables(source) {
   return { menus: rows('menuTable', 3), items: rows('itemTable', 6) };
 }
 
-/** 명제 3: 명세 표와 두 호스트 빌더의 표가 같은지 비교한다. */
+/** Proposition 3: compares the specification table with the tables of the two host builders. */
 export function auditMenuTables(spec, rust, go) {
   const failures = [];
   const compare = (name, expected, actual) => {
@@ -140,7 +140,7 @@ export function auditMenuTables(spec, rust, go) {
   return failures;
 }
 
-/** 주입된 소스에 대해 명제 1·2·3을 판정하고 실패 목록을 돌려준다. */
+/** Judges propositions 1, 2, and 3 on the injected sources and returns the list of failures. */
 export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtime, wailsv3HostSources,
   tauriv2EndpointSource, wailsv3EndpointSource, wailsv3DiagnosticsSource,
   hostContractSpec, tauriv2MenuSource, wailsv3MenuSource }) {

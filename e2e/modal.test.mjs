@@ -1,4 +1,4 @@
-// 모달의 표시 순서, 배경, 입력, 이동, 크기 변경 및 제거를 검사한다.
+// Checks the display order, the background, the input, the move, the resize and the removal of a modal.
 import assert from "node:assert/strict";
 import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -9,7 +9,7 @@ import { APPS, open, recordingFolders } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 
-/** 빈 문서 하나를 주는 루프백 서버의 주소. 검사가 끝나면 닫는다. */
+/** The address of a loopback server that serves one empty document. The check closes it when it ends. */
 async function serveDocument(s) {
   const server = createServer((request, response) => {
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
@@ -20,13 +20,13 @@ async function serveDocument(s) {
   return `http://127.0.0.1:${server.address().port}/modal`;
 }
 
-/** 모달 웹뷰가 자기 배경을 칠하지 않는지 확인한다. */
+/** Checks that the modal web view does not paint its own background. */
 function transparent(modal) {
   assert.equal(modal.background.draws, false, "the native webview must not paint a background before its DOM");
   assert.equal(modal.background.alpha, 0, "the under-page background must also be transparent");
 }
 
-/** 설정 모달이 모든 네이티브 표면 위에서 창 전체를 덮는지 확인한다. */
+/** Checks that the settings modal covers the whole window above all native surfaces. */
 function settingsAboveSurfaces(state) {
   const { modal } = state;
   assert.ok(modal && modal.id === "settings" && modal.shown, `settings must be shown: ${JSON.stringify(modal)}`);
@@ -42,7 +42,7 @@ function settingsAboveSurfaces(state) {
     "the settings webview must cover background native content");
 }
 
-/** 배경 흐림이 메인 문서와 보이는 플러그인 표면 문서에 enabled 대로 적용되었는지 확인한다. */
+/** Checks that the background blur is applied to the main document and the documents of the visible plugin surfaces as enabled says. */
 async function background(s, enabled) {
   await s.until("core.window.document", (doc) => doc.background === enabled,
     `the main document background state must be ${enabled}`);
@@ -54,14 +54,14 @@ async function background(s, enabled) {
   }
 }
 
-/** 설정 모달을 열고 문서가 렌더를 보고할 때까지 기다린다. */
+/** Opens the settings modal and waits until the document reports its render. */
 async function openSettings(s) {
   await s.run("core.settings.open");
   return s.until("core.modal", (modal) => modal?.id === "settings" && modal.document !== null,
     "settings did not render");
 }
 
-/** 이름과 키로 설정 모달 컨트롤을 찾는다. */
+/** Finds a settings modal control by name and key. */
 async function control(s, name, key) {
   const { controls } = await s.until("core.settings-modal",
     (modal) => modal.controls.some((c) => c.name === name && c.key === key), `settings control ${key} did not appear`);
@@ -75,7 +75,7 @@ async function openSidebars(s) {
   await control(s, "core.settings-modal.create", "sets:create");
 }
 
-/** 모달 문서의 사각형이 메인 문서의 카드 사각형과 같아질 때까지 기다린다. */
+/** Waits until the rectangle of the modal document equals the card rectangle of the main document. */
 async function modalAt(s, card) {
   return s.until("core.modal", (modal) => ["x", "y", "width", "height"].every((k) => modal?.document?.rect[k] === card[k]),
     `the modal document did not move to ${JSON.stringify(card)}`);
@@ -83,7 +83,7 @@ async function modalAt(s, card) {
 
 const rectOf = ({ x, y, width, height }) => ({ x, y, width, height });
 
-/** 프레임의 8 픽셀 간격 표본의 평균 밝기(0–255). */
+/** The mean brightness (0-255) of the samples of the frame at intervals of 8 pixels. */
 function brightness(frame) {
   let sum = 0;
   let count = 0;
@@ -109,7 +109,7 @@ for (const app of Object.values(APPS)) {
     try {
       await s.run("core.settings.open");
       s.cleanup(() => s.run("core.settings.close"));
-      // core.settings-modal 의 open 은 메인 페이지의 상태다. 모달이 화면에 있는지는 host.window 의 modal.shown 이 알린다.
+      // open of core.settings-modal is a state of the main page. modal.shown of host.window reports whether the modal is on the screen.
       await s.until("host.window", (w) => w.modal?.id === "settings" && w.modal.shown, "settings was not shown");
       ({ displayed } = await s.presented());
     } finally {
@@ -122,7 +122,7 @@ for (const app of Object.values(APPS)) {
     const after = captured.filter((frame) => frame.time >= displayed);
     assert.ok(first.time < displayed && after.length > 0,
       `the recording does not span the presented time ${displayed}: ${first.time}..${captured.at(-1).time}`);
-    // 대화 상자의 scrim 은 창 전체를 어둡게 한다. 표시 시각 이후의 프레임은 모두 열기 전 프레임보다 어둡다.
+    // The scrim of a dialog darkens the whole window. Every frame after the display time is darker than the frames before the opening.
     const before = brightness(first);
     for (const frame of after) {
       assert.ok(brightness(frame) < before * 0.9,
@@ -150,7 +150,7 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => s.request("diagnostics.modal.hold", { on: false }));
     await s.run("core.settings.open");
     await s.request("diagnostics.modal.held");
-    // 첫 응답을 붙잡은 동안 내용 이벤트가 모달을 그리고 위치 이벤트가 모달을 옮긴다.
+    // While the first reply is held, the content event draws the modal and the position event moves the modal.
     await s.run("core.settings-modal.nav", { section: "sidebars" });
     const shown = await s.until("core.modal", (modal) => modal?.document?.loaded === false,
       "the content event did not render the modal before its first answer");
@@ -207,7 +207,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const [browser] = await s.surfaces("browser");
     assert.ok(browser, "a browser surface must be visible");
-    // 주소가 없는 브라우저는 문서 영역을 숨기므로 주소를 열어 문서 영역을 보이게 한다.
+    // A browser without an address hides the document region, so the check opens an address to show the document region.
     const url = await serveDocument(s);
     await s.run("browser.navigate", { url }, browser.surface);
     await s.until("browser.location", (at) => at.url === url && !at.loading, `the browser did not load ${url}`, { surface: browser.surface });
@@ -217,7 +217,7 @@ for (const app of Object.values(APPS)) {
     await s.presented();
     settingsAboveSurfaces(await s.get("host.window"));
     await background(s, true);
-    // 브라우저 표면의 가운데 오른쪽은 그 표면의 문서 영역이다.
+    // The right center of the browser surface is the document region of that surface.
     const frame = browser.applied;
     const point = { x: frame.x + frame.w - 4, y: frame.y + frame.h / 2 };
     const modalHit = await s.run("host.hit", point);
@@ -228,7 +228,7 @@ for (const app of Object.values(APPS)) {
       modalHit.view.frame.y <= point.y && point.y < modalHit.view.frame.y + modalHit.view.frame.height,
     `the settings hit view frame must contain ${JSON.stringify(point)}: ${JSON.stringify(modalHit.view)}`);
 
-    // 모달 안을 눌러 키보드 초점을 모달 문서에 둔 뒤 Escape 를 보낸다.
+    // Presses inside the modal to put the keyboard focus on the modal document, then sends Escape.
     const card = await s.rect("core.settings-modal.card");
     await s.click(card.x + card.width / 2, card.y + card.height - 8);
     await s.press("Escape");
@@ -264,7 +264,7 @@ for (const app of Object.values(APPS)) {
       const { document } = await s.until("core.modal", (modal) => modal?.id === "picker" && modal.document !== null,
         `${name} menu did not render`);
       assert.equal(document.bodyBackground, "rgba(0, 0, 0, 0)", `${name} must not shade the background`);
-      // 메뉴는 열릴 때 키보드 초점을 받으므로 네이티브 Escape 가 메뉴 문서에 도달한다.
+      // A menu receives the keyboard focus when it opens, so the native Escape reaches the menu document.
       await s.press("Escape");
       await s.until("host.window", (w) => w.modal === null, `${name} must retain Escape cancellation`);
     }

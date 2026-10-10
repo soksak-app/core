@@ -1,4 +1,4 @@
-// 검사 설정에 속한 서비스와 자식만 센다. 다른 실행 중인 앱의 세션은 건드리지 않는다.
+// Counts only the services and children that belong to the check configuration. Sessions of other running apps are not touched.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";

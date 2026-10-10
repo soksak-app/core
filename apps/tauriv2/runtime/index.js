@@ -1,7 +1,7 @@
 // Tauri v2.
 //
-// 커맨드를 이름으로 호출한다. Tauri 가 페이지 스크립트보다 먼저 인터페이스를
-// 주입하므로 대기가 필요 없다. 표면과 모달 페이지도 같은 인터페이스를 사용한다.
+// Invokes a command by name. Tauri injects the interface before the page scripts,
+// so no waiting is needed. Surface pages and modal pages use the same interface.
 import { HostWorkspaceStore } from "@soksak/workbench/host-store.js";
 import { hostWindows } from "@soksak/workbench/host-windows.js";
 import { settlingCalls } from "@soksak/workbench/host-calls.js";
@@ -67,7 +67,7 @@ const COMMAND = {
   pluginsUseRegistry: "plugins_use_registry",
 };
 
-// 커맨드마다 인자의 이름이 다르다. 이름은 Rust 쪽 서명이 정한다.
+// The argument names differ per command. The Rust signature determines the names.
 const ARG = {
   workspace: (request) => ({ request }),
   windowNew: () => ({}), folderChoose: () => ({}), projectCreate: (request) => ({ request }),
@@ -90,8 +90,8 @@ const ARG = {
   overlayUpdate: (v) => ({ request: v }),
   overlayHide: (v) => ({ id: v }),
   windowControls: () => ({}),
-  // 응답과 상태 값은 JSON 텍스트로 보낸다. Tauri 는 command 인자를 키 순서를 바꾸는 값으로 읽으므로, 텍스트로
-  // 보내야 host 가 페이지 값의 키 순서를 그대로 중계한다(docs/spec/exposure.md).
+  // Responses and state values are sent as JSON text. Tauri reads a command argument as a value that changes key order, so it must be sent
+  // as text for the host to relay the key order of the page value unchanged (docs/spec/exposure.md).
   exposureReply: (request) => ({ request: JSON.stringify(request) }),
   exposureChanged: (request) => ({ request: { ...request, value: JSON.stringify(request.value) } }),
   exposureForward: (request) => ({ request }),
@@ -134,8 +134,8 @@ const ARG = {
 };
 
 /**
- * Tauri 의 invoke. 호스트 명령이 실패하면 Tauri 는 호스트의 오류 값(대개 문자열)을 그대로 reject 하므로, 페이지가
- * error.message 로 읽을 수 있도록 그 값을 담은 Error 로 바꾼다.
+ * Tauri invoke. When a host command fails, Tauri rejects with the error value of the host (usually a string) as it is, so the value is
+ * wrapped in an Error that the page can read as error.message.
  */
 function hostInvoke() {
   const { invoke } = window.__TAURI__.core;
@@ -149,7 +149,7 @@ export const host = (() => {
   const invoke = hostInvoke();
   const listen = createLifecycleListener((event, fn) => window.__TAURI__.event.listen(event, fn,
     { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
-  // 메인 페이지의 호출. 페이지가 스스로 다시 읽기 전에 보낸 호출이 모두 답을 받게 센다(docs/spec/native-host.md#page-reload).
+  // Calls of the main page. Counts them so that every call sent before the page reloads itself receives a reply (docs/spec/native-host.md#page-reload).
   const mainCalls = settlingCalls((name, arg) => {
     const command = COMMAND[name];
     if (!command) return Promise.reject(new Error(`unknown host call: ${name}`));
@@ -157,12 +157,12 @@ export const host = (() => {
   });
   return {
     call: (name, arg) => mainCalls.call(name, arg),
-    // 보낸 호출이 모두 답을 받은 뒤 이 페이지를 다시 읽는다. 그 뒤의 호출은 보내지 않는다.
+    // Reloads this page after every sent call has received a reply. Calls after that are not sent.
     reload: () => mainCalls.settle().then(() => location.reload()),
-    // Tauri 이벤트는 값을 `payload` 필드에 담는다.
+    // A Tauri event carries its value in the `payload` field.
     on: (event, fn) => listen(event, (e) => fn(e.payload)),
-    // 제목 표시줄이 투명하고 콘텐츠가 그 아래까지 차지하므로, 끄는 자리를 이
-    // 문서가 지정한다.
+    // The title bar is transparent and the content extends under it, so this
+    // document specifies the drag area.
     draggable(el) {
       el.setAttribute("data-tauri-drag-region", "");
     },
@@ -213,7 +213,7 @@ export const page = (() => {
   const call = calls.call;
   const listen = createLifecycleListener((event, fn) => window.__TAURI__.event.listen(event, fn,
     { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
-  // 표면 id 는 문서 주소의 id 다. 워크벤치가 표면을 그 탭 id 로 연다.
+  // The surface id is the id in the document address. The workbench opens the surface with that tab id.
   const surface = new URLSearchParams(location.search).get("id");
   return {
     theme(fn) {
@@ -230,16 +230,16 @@ export const page = (() => {
     },
     sidecar: (name) => ({
       send: (surface, body, cids = []) => call("sidecarSend", name, surface, body, cids),
-      // 사이드카 이벤트는 창의 모든 페이지가 받는다. 사이드카와 표면이 일치하는 것만 처리한다.
+      // Sidecar events are received by every page of the window. Only the events that match the sidecar and the surface are handled.
       on: (surface, fn) => listen("sidecar-message", (e) => {
         if (e.payload.sidecar === name && e.payload.surface === surface) fn(e.payload.body);
       }),
-      // 사이드카 실패도 창의 모든 페이지가 받는다(docs/spec/sidecars.md#failure).
+      // Sidecar failures are also received by every page of the window (docs/spec/sidecars.md#failure).
       onFailure: (surface, fn) => listen("sidecar-failure", (e) => {
         if (e.payload.sidecar === name && e.payload.surface === surface) fn(e.payload.reason);
       }),
     }),
-    // 공개 항목의 등록과 요청. 요청 이벤트에 surface 가 있으면 이 표면의 것만 처리한다.
+    // Registration and requests of exposed entries. When a request event has a surface, only the events of this surface are handled.
     exposure: {
       register: (kind, name) => call("exposureRegister", { surface, kind, name }),
       onRequest: (fn) => listen("exposure-request", (e) => {
@@ -247,7 +247,7 @@ export const page = (() => {
       }),
       reply: (id, payload) => call("exposureReply", { id, ...payload }),
     },
-    // 이 표면의 문서 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 상태를 이 표면에만 보낸다.
+    // The document region of this surface. The host verifies that the calling webview is the surface and sends the state only to this surface.
     document: {
       attach: (document) => call("documentAttach", { surface, document }),
       load: (document, url) => call("documentLoad", { surface, document, url }),
@@ -258,7 +258,7 @@ export const page = (() => {
         if (e.payload.surface === surface) fn(e.payload.document, e.payload.state);
       }),
     },
-    // 이 표면의 그림 영역. 호스트는 호출한 웹뷰가 surface 인지 확인하고 이벤트를 이 표면에만 보낸다.
+    // The image region of this surface. The host verifies that the calling webview is the surface and sends events only to this surface.
     image: {
       attach: (name, sidecar) => call("imageAttach", { surface, name, sidecar }),
       focus: (name) => call("imageFocus", { surface, name }),
@@ -275,7 +275,7 @@ export const page = (() => {
     },
     modal: {
       content(id, instance, fn, place) {
-        // 이벤트는 모든 페이지가 받는다. 자기 모달의 것만 취한다.
+        // Events are received by every page. Only the events of its own modal are taken.
         return Promise.all([listen("modal-content", (e) => {
           const { payload } = e;
           if (payload.id === id && payload.instance === instance) fn({ revision: payload.revision, content: payload.content });
@@ -290,8 +290,8 @@ export const page = (() => {
   };
 })();
 
-/** 설정과 프로젝트 목록은 네이티브 호스트가 저장한다. */
+/** The native host stores settings and the project list. */
 export const openStore = async () => new HostWorkspaceStore(host);
 
-/** 창과 프로젝트 폴더는 네이티브 호스트가 관리한다. */
+/** The native host manages windows and project folders. */
 export const windows = hostWindows(host);

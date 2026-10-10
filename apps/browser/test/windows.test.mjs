@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { windows } from "../runtime/windows.js";
 
-// 브라우저 전역 객체를 대신하는 fixture. 열린 주소를 기록한다.
+// A fixture that stands in for the browser global object. It records the opened addresses.
 function browserGlobals(allowed = true) {
   const opened = [];
   globalThis.location = new URL("https://example.test/index.html?project=old");

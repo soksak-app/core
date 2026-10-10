@@ -1,5 +1,5 @@
-// 실제 입력 등급 터미널 검사: 사람의 마우스와 키보드가 지나는 경로(창 서버, 키 창, 메뉴 키 대응)로 터미널
-// 선택, 복사, 붙여넣기, 휠을 검사한다. 사용자가 승인한 실행에서 pnpm -F @soksak/e2e verify:real 로만 실행한다.
+// Real-input-tier terminal check: selection, copy, paste and wheel of the terminal go through the path of a person's mouse and keyboard (window server, key window, menu key equivalents).
+// Run it only with `pnpm -F @soksak/e2e verify:real` in a run that the user approved.
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,12 +15,12 @@ import { LAUNCH, PROMPT } from "../fixture-tui.mjs";
 import { activateFinder, appPid, bringFront, click, closeFinderWindow, dragPath, finderItemCenter, frontWindowAt, key, KEYS,
   dragPasteboard, openFinderWindow, post, postWithCursorSamples, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
 
-// 터미널 한 칸의 중심 화면 좌표.
+// Center screen coordinate of one terminal cell.
 function cellPoint(origin, session, column, row) {
   return { x: origin.x + (column + 0.5) * session.cellWidth, y: origin.y + (row + 0.5) * session.cellHeight };
 }
 
-// 표시된 마지막 화면에서 한 칸 중심의 픽셀을 읽는다.
+// Reads the pixel at the center of one cell in the last displayed screen.
 async function cellPixel(s, surface, session, column, row) {
   await s.request("diagnostics.capture.start", {});
   const displayed = await s.presented();
@@ -37,7 +37,7 @@ async function cellPixel(s, surface, session, column, row) {
   }
 }
 
-// 표시된 마지막 화면에서, 화면 상태가 빈 칸(커서 칸 제외)과 마지막 열 오른쪽 여백에 그려진 픽셀이 있는 칸을 찾는다.
+// Finds the cells in the last displayed screen whose screen state is blank (except the cursor cell) and that hold a drawn pixel, and the margin to the right of the last column.
 async function blankCellsWithPixels(s, surface) {
   const lines = await readScreenUntil(s, surface, () => true, "the screen did not read");
   const session = await s.get("terminal.session", surface);
@@ -77,7 +77,7 @@ async function blankCellsWithPixels(s, surface) {
   }
 }
 
-// 터미널에 한 줄을 쓰고, 그 줄의 행과 화면 원점을 돌려준다. 검사는 창을 앞으로 가져온 뒤 실제 입력을 보낸다.
+// Writes one line to the terminal and returns the row of that line and the screen origin. The check brings the window to the front and then sends real input.
 async function prepare(t, app, line, { fullscreen = false } = {}) {
   requireTrusted();
   const s = await open(t, app);
@@ -86,7 +86,7 @@ async function prepare(t, app, line, { fullscreen = false } = {}) {
   const [terminal] = await ensureTerminals(s, 1);
   const surface = terminal.surface;
   if (fullscreen) {
-    // 고정 배치의 터미널보다 넓은 화면이 필요한 검사는 터미널 카드를 전체 화면으로 하고 끝날 때 되돌린다.
+    // A check that needs a screen wider than the terminal of the fixed layout makes the terminal card full screen and restores it when the check ends.
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface)).id;
     const before = (await s.get("terminal.session", surface)).cols;
     await s.run("core.card.fullscreen", { card });
@@ -102,7 +102,7 @@ async function prepare(t, app, line, { fullscreen = false } = {}) {
   return { s, surface, session, origin, row: lines.indexOf(line) };
 }
 
-/** Command+V 부터 붙여넣은 텍스트가 화면에 나오기까지의 한도(ms). */
+/** Limit (ms) from Command+V until the pasted text appears on the screen. */
 const PASTE_LIMIT = 500;
 
 const same = (a, b) => a.every((value, index) => Math.abs(value - b[index]) <= 8);
@@ -161,21 +161,21 @@ for (const app of Object.values(APPS)) {
     writePasteboard([{ "public.utf8-plain-text": Buffer.from(marker).toString("base64") }]);
     const started = performance.now();
     key(KEYS.v, ["command"]);
-    // key 는 osascript 를 시작해 이벤트를 보내고 돌아온다. 키가 보내진 시각은 started 와 posted 사이다.
+    // key starts osascript, sends the event and returns. The time at which the key was sent lies between started and posted.
     const posted = performance.now();
-    // 다른 키 없이 붙여넣은 텍스트가 화면에 나와야 한다. 입력기 문서에 남으면 다음 키까지 나오지 않는다.
+    // The pasted text must appear on the screen without another key. Text that remains in the input-method document does not appear until the next key.
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes(marker)),
       "Command+V did not paste the clipboard text without another key");
     const elapsed = performance.now() - started;
     t.diagnostic(`${app.name}: Command+V text shown ${elapsed.toFixed(0)} ms after the post started and ` +
       `${(performance.now() - posted).toFixed(0)} ms after it returned`);
-    // 입력기 문서에 머문 텍스트는 다른 계기로 확정될 때까지 몇 초 동안 나오지 않았다(V5-42).
+    // Text that stayed in the input-method document did not appear for several seconds until another trigger committed it (V5-42).
     assert.ok(elapsed <= PASTE_LIMIT, `Command+V text appeared ${elapsed.toFixed(0)} ms after the key (limit ${PASTE_LIMIT} ms)`);
     assert.equal((await s.get("terminal.session", surface)).error, undefined);
   });
 }
 
-// 1x1 PNG. 붙여넣으면 설정 디렉터리의 clipboard 폴더에 소유 파일로 저장된다.
+// A 1x1 PNG. Pasting it stores it as an owned file in the clipboard folder of the configuration directory.
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==", "base64");
 
 for (const app of Object.values(APPS)) {
@@ -186,7 +186,7 @@ for (const app of Object.values(APPS)) {
     await s.until("host.window", (window) => window.responder?.surface === surface, "the terminal did not take native focus");
     writePasteboard([{ "public.png": PNG.toString("base64") }]);
     key(KEYS.v, ["command"]);
-    // 긴 경로는 터미널 폭에서 줄바꿈되므로 줄을 이어 읽는다.
+    // A long path wraps at the terminal width, so the lines are joined when read.
     const quoted = /'([^']*\/pasted-image-[^'/]*\.png)'/;
     const lines = await readScreenUntil(s, surface, (screen) => quoted.test(screen.join("")),
       "Command+V did not paste the clipboard image as a quoted path");
@@ -203,14 +203,14 @@ for (const app of Object.values(APPS)) {
     const { s, surface, session, origin, row } = await prepare(t, app, "COPYME");
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("BEFORE-COPY").toString("base64") }]);
     const before = (await s.get("terminal.session", surface)).selectionReleases;
-    // 선택은 포인터가 칸의 가운데를 지나야 그 칸을 덮으므로 첫 칸의 왼쪽 가장자리 가까이에서 누른다.
+    // A selection covers a cell only when the pointer passes the middle of that cell, so the press happens near the left edge of the first cell.
     const start = cellPoint(origin, session, 0, row);
     dragPath({ ...start, x: start.x - 0.3 * session.cellWidth }, cellPoint(origin, session, 5, row));
     await s.until("terminal.session", (value) => value.selectionReleases === before + 1,
       "the sidecar did not answer the release of a real drag", { surface });
     await s.until("terminal.session", () => pasteboardText() === "COPYME",
       `the drag selection did not reach the general pasteboard (it holds ${JSON.stringify(pasteboardText())})`, { surface });
-    // 다른 애플리케이션이 클립보드를 바꾼 뒤 Command+C 는 선택을 다시 복사한다.
+    // After another application changes the clipboard, Command+C copies the selection again.
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("CHANGED").toString("base64") }]);
     key(KEYS.c, ["command"]);
     await s.until("terminal.session", () => pasteboardText() === "COPYME",
@@ -227,13 +227,13 @@ for (const app of Object.values(APPS)) {
     const top = filled.find((line) => line.trim());
     const point = cellPoint(origin, session, 3, 3);
     post([{ type: "move", x: point.x, y: point.y }, { type: "wheel", x: point.x, y: point.y, lines: 5 }]);
-    // 앱의 이벤트 모니터가 줄 단위 휠을 뷰 단위로 바꾸므로 움직인 줄 수는 보고만 한다.
+    // The event monitor of the app converts a line wheel into a view wheel, so the number of moved lines is only reported.
     const scrolled = await s.until("terminal.session", (value) => value.scrollback?.offset > 0,
       "a real wheel did not move the viewport toward older output", { surface });
     t.diagnostic(`${app.name}: a five-line wheel moved the viewport ${scrolled.scrollback.offset} of ${scrolled.scrollback.history} lines`);
     const lines = await readScreenUntil(s, surface, (screen) => !screen.includes("ROW59"), "the viewport still shows the newest row");
     assert.notEqual(lines.find((line) => line.trim()), top, "the top row did not change");
-    // 입력은 가장 새 출력으로 되돌린다. 포커스를 준 뒤 입력기와 무관한 Escape 키를 보낸다.
+    // Input returns to the newest output. After focus is given, the Escape key, which is unrelated to the input method, is sent.
     click(point.x, point.y);
     await s.until("host.window", (window) => window.responder?.surface === surface, "the terminal did not take native focus");
     key(KEYS.escape);
@@ -249,7 +249,7 @@ for (const app of Object.values(APPS)) {
     await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 200 ]; do printf 'ITEM%03d\\n' $i; i=$((i+1)); done | less\r" }, surface);
     await readScreenUntil(s, surface, (lines) => lines[0] === "ITEM000", "less did not show the first item");
     const point = cellPoint(origin, session, 3, 3);
-    // 새 출력 쪽으로 굴리면 less 가 아래로 스크롤한다.
+    // Scrolling toward the newest output makes less scroll down.
     post([{ type: "move", x: point.x, y: point.y }, { type: "wheel", x: point.x, y: point.y, lines: -3 }]);
     const lines = await readScreenUntil(s, surface, (screen) => screen[0] !== "ITEM000" && /^ITEM\d{3}$/.test(screen[0]),
       "a wheel on the alternate screen did not scroll less");
@@ -263,7 +263,7 @@ for (const app of Object.values(APPS)) {
     const { s, surface, session, origin, row } = await prepare(t, app, "LEFTEDGE");
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("BEFORE").toString("base64") }]);
     const before = (await s.get("terminal.session", surface)).selectionReleases;
-    // 줄의 처음을 선택하려는 끌기는 포인터가 뷰의 왼쪽 밖으로 나가기 쉽다.
+    // A drag that selects the start of a line easily moves the pointer out of the left side of the view.
     const start = cellPoint(origin, session, 5, row);
     dragPath(start, { x: origin.x - 20, y: start.y });
     await s.until("terminal.session", (value) => value.selectionReleases === before + 1,
@@ -274,7 +274,7 @@ for (const app of Object.values(APPS)) {
   });
 }
 
-// 화면에 선택으로 그려진 글자. 선택한 칸은 테마의 선택 배경으로 그리고 화면 셀에는 색이 없으므로 칸의 배경 픽셀을 읽는다.
+// Characters drawn as a selection on the screen. The selected cell is drawn with the selection background of the theme and a screen cell carries no color, so the background pixel of the cell is read.
 async function selectedCharacters(s, surface, row) {
   await s.run("terminal.screen.read", {}, surface);
   const lines = await s.get("terminal.screen", surface);
@@ -312,7 +312,7 @@ for (const app of Object.values(APPS)) {
       const typed = pasted.find((text) => text.startsWith("sh-3.2$ ") && text.length > 8).slice(8);
       t.diagnostic(`${app.name} ${name}: shown ${JSON.stringify(shown)} pasted ${JSON.stringify(typed)}`);
       assert.equal(typed, shown, `the ${name} drag pasted other characters than it showed as selected`);
-      // 붙여넣은 입력 줄을 지운다(Control+U).
+      // Clears the pasted input line (Control+U).
       key(32, ["control"]);
       await readScreenUntil(s, surface, (lines) => !lines.some((text) => text.startsWith("sh-3.2$ ") && text.length > 8),
         "the pasted input was not cleared");
@@ -320,7 +320,7 @@ for (const app of Object.values(APPS)) {
   });
 }
 
-// 화면 좌표 한 점의 표시된 픽셀.
+// Displayed pixel at one screen coordinate.
 async function screenPixel(s, point) {
   await s.request("diagnostics.capture.start", {});
   const displayed = await s.presented();
@@ -344,14 +344,14 @@ for (const app of Object.values(APPS)) {
     const newest = await s.until("terminal.session", (value) => value.scrollback?.history > 0 && value.scrollback.offset === 0,
       "the output did not exceed the screen", { surface });
 
-    // 기록이 있으면 스크롤하기 전에도 스크롤바가 보이고 손잡이는 트랙 맨 아래에 있다.
+    // With a history, the scrollbar is visible even before scrolling and the handle is at the very bottom of the track.
     const track = await s.rect("terminal.scrollbar", undefined, surface);
     const bottomThumb = await s.rect("terminal.scrollbar.thumb", undefined, surface);
     assert.ok(track.width > 0 && bottomThumb.height >= 16, `the scrollbar is not shown with history: ${JSON.stringify({ track, bottomThumb })}`);
     assert.ok(Math.abs(bottomThumb.y + bottomThumb.height - (track.y + track.height)) <= 1,
       `the thumb is not at the bottom at the newest output: ${JSON.stringify({ track, bottomThumb })}`);
 
-    // 손잡이를 맨 위로 끌면 가장 오래된 기록이 보인다.
+    // Dragging the handle to the very top shows the oldest history.
     const trackTop = (await screenCenter(s, track)).y - track.height / 2;
     const start = await screenCenter(s, bottomThumb);
     dragPath(start, { x: start.x, y: trackTop - 30 });
@@ -361,7 +361,7 @@ for (const app of Object.values(APPS)) {
     const topThumb = await screenCenter(s, await s.rect("terminal.scrollbar.thumb", undefined, surface));
     const withThumb = await screenPixel(s, topThumb);
 
-    // 맨 아래로 끌면 가장 새 출력으로 돌아온다. 위쪽 자리의 픽셀은 손잡이가 떠난 뒤 달라야 한다.
+    // Dragging to the very bottom returns to the newest output. The pixel at the upper position must differ after the handle has left.
     dragPath(topThumb, { x: topThumb.x, y: trackTop + track.height + 30 });
     await s.until("terminal.session", (value) => value.scrollback.offset === 0,
       "dragging the thumb to the bottom did not return to the newest output", { surface });
@@ -382,7 +382,7 @@ for (const app of Object.values(APPS)) {
     const steps = [{ type: "move", x: point.x, y: point.y }];
     for (let i = 0; i < 8; i++) steps.push({ type: "wheel", x: point.x, y: point.y, lines: 2, wait: 40 });
     for (let i = 0; i < 8; i++) steps.push({ type: "wheel", x: point.x, y: point.y, lines: -2, wait: 40 });
-    // 트랙패드처럼 작은 픽셀 이동을 짧은 간격으로 많이 보낸다.
+    // Sends many small pixel movements at short intervals like a trackpad.
     for (let i = 0; i < 60; i++) steps.push({ type: "wheel", unit: "pixel", x: point.x, y: point.y, lines: i < 30 ? 5 : -5, wait: 8 });
     post(steps);
     const displayed = await s.presented();
@@ -390,8 +390,8 @@ for (const app of Object.values(APPS)) {
     try {
       const files = frames(directory);
       assert.ok(files.length > 10, `the recording has only ${files.length} frames`);
-      // 글자 픽셀: 터미널 영역(스크롤바 열 제외) 안의 밝은 픽셀 수를 줄 간격마다 센다.
-      // 글자가 사라진 프레임을 해석하도록 영역 중앙과 영역 위 카드 머리의 색을 함께 적는다.
+      // Glyph pixels: counts the bright pixels inside the terminal area (without the scrollbar column) at every line interval.
+      // To interpret frames in which the glyphs disappeared, it records the colors at the center of the area and at the card header above the area together.
       const samples = [];
       const counts = files.map((file) => {
         const frame = readFrame(file);
@@ -448,7 +448,7 @@ for (const app of Object.values(APPS)) {
   });
 }
 
-// 링크를 여는 검사는 사용자의 기본 브라우저에 example.com 탭을 연다. 사용자가 승인한 실행에서만 돈다.
+// The check that opens a link opens an example.com tab in the default browser of the user. It runs only in a run that the user approved.
 const LINK = "https://example.com/soksak-link-check";
 
 for (const app of Object.values(APPS)) {
@@ -460,10 +460,10 @@ for (const app of Object.values(APPS)) {
     const point = cellPoint(origin, session, 3, linkRow);
     const log = await s.transcript();
     s.cleanup(() => log.stop());
-    // 누름 없는 이동은 손 모양 포인터와 포인터 아래 링크를 알린다.
+    // A move without a press reports a hand-shaped pointer and the link under the pointer.
     const cells = (await s.get("terminal.screen", surface))[linkRow].slice(0, 8).map((cell) => cell.link ?? null);
     assert.deepEqual(cells, Array(8).fill(LINK), "the screen does not carry the link on its cells");
-    // 포인터는 링크 밖의 칸에서 링크 칸으로 들어온다. 같은 점으로의 이동은 페이지에 이동을 알리지 않는다.
+    // The pointer enters the link cell from a cell outside the link. A move to the same point does not report the move to the page.
     const outside = cellPoint(origin, session, 20, linkRow);
     post([{ type: "move", x: outside.x, y: outside.y }, { type: "move", x: point.x, y: point.y }]);
     await s.until("terminal.session", (value) => value.link === LINK,
@@ -481,8 +481,8 @@ for (const app of Object.values(APPS)) {
   });
 }
 
-// 휠 스크롤 측정. 줄 i 는 i % 97 번째 열에 '#' 하나를 가진다. 각 녹화 프레임의 맨 위 행에서 '#' 의 열을 읽으면
-// 그 프레임이 보인 줄을 97 을 법으로 알 수 있고, 이웃 프레임의 차이로 이동한 줄 수를 얻는다.
+// Wheel scroll measurement. Line i has one '#' in column i % 97. Reading the column of '#' in the top row of each recorded frame
+// gives the line that the frame showed modulo 97, and the difference between neighboring frames gives the number of moved lines.
 const MARKS = 97;
 
 function topMark(frame, region, session) {
@@ -520,7 +520,7 @@ for (const app of Object.values(APPS)) {
     const point = cellPoint(origin, session, 50, 5);
     post([{ type: "move", x: point.x, y: point.y }]);
     await s.request("diagnostics.capture.start", {});
-    // 사람이 휠을 계속 굴리듯 16 ms 마다 3줄씩 120번 보낸다.
+    // Sends 3 lines every 16 ms, 120 times, like a person who keeps turning the wheel.
     const steps = [];
     for (let i = 0; i < 120; i++) steps.push({ type: "wheel", x: point.x, y: point.y, lines: 3 });
     const sent = post(steps);
@@ -540,7 +540,7 @@ for (const app of Object.values(APPS)) {
         const mark = topMark(frame, region, session);
         assert.notEqual(mark, null, `frame at ${frame.time} ms shows no line mark in the top row`);
         if (previous !== null) {
-          // 위로 스크롤하면 맨 위 줄 번호가 줄어든다. 차이를 (-48, 48] 로 옮겨 이동한 줄 수를 얻는다.
+          // Scrolling up decreases the top line number. Mapping the difference into (-48, 48] gives the number of moved lines.
           let delta = ((previous - mark) % MARKS + MARKS) % MARKS;
           if (delta > MARKS / 2) delta -= MARKS;
           if (delta < 0) backward++;
@@ -554,7 +554,7 @@ for (const app of Object.values(APPS)) {
       const inputEnd = sent.at(-1);
       const firstMove = shown.find((item) => item.moved > 0);
       const settled = shown.find((item) => item.moved === moved);
-      // 입력이 이어지는 동안 화면이 바뀌지 않은 가장 긴 시간.
+      // Longest time during which the screen did not change while the input continued.
       let stall = 0;
       let changedAt = firstMove?.time ?? inputStart;
       for (let index = 1; index < shown.length; index++) {
@@ -592,11 +592,11 @@ for (const app of Object.values(APPS)) {
     await s.until("terminal.session", (value) => value.scrollback?.history > 0, "the output did not exceed the screen", { surface });
     const thumb = await screenCenter(s, await s.rect("terminal.scrollbar.thumb", undefined, surface));
     const text = cellPoint(origin, session, 3, 2);
-    // 포인터가 글자 위에서 손잡이로 들어온다. 표시된 뒤의 시스템 커서를 읽는다.
+    // The pointer enters the handle from above the glyphs. Reads the system cursor after it is displayed.
     post([{ type: "move", x: text.x, y: text.y }, { type: "move", x: thumb.x, y: thumb.y }]);
     await s.presented();
     assert.equal(systemCursor(), "openHand", "the pointer over the scrollbar thumb is not an open hand");
-    // 창이 다시 키 창이 되면 AppKit 이 커서 영역을 다시 만든다. 포인터가 손잡이 위에 있는 채로 다시 활성화한다.
+    // When the window becomes the key window again, AppKit rebuilds the cursor rects. The window is activated again while the pointer stays on the handle.
     activateFinder();
     await s.until("host.window", (window) => window.active === false, "the application stayed active");
     await bringFront(s, app, await s.rect("terminal.scrollbar.thumb", undefined, surface));
@@ -651,7 +651,7 @@ for (const app of Object.values(APPS)) {
     const seen = {};
     seen.dividerAfterText = await read(divider);
     seen.closeAfterText = await read(close);
-    // 터미널이 계속 출력하는 동안(네이티브 표면이 갱신되는 동안) 디바이더 위의 커서를 여러 번 읽는다.
+    // While the terminal keeps printing (while the native surface is updated), reads the cursor over the divider several times.
     await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 3000 ]; do echo line$i; i=$((i+1)); done\r" }, surface);
     post([{ type: "move", x: divider.x, y: divider.y }]);
     seen.dividerDuringOutput = [];
@@ -659,7 +659,7 @@ for (const app of Object.values(APPS)) {
       await s.presented();
       seen.dividerDuringOutput.push(systemCursor());
     }
-    // 포인터가 디바이더 위에 있는 채로 다른 카드에 포커스를 준다. 카드마다 종류와 응답자를 함께 적는다.
+    // Gives focus to another card while the pointer stays on the divider. Each card records its kind and responder together.
     seen.focus = [];
     for (const card of grid.cards.filter((item) => item.tabs.length)) {
       await s.run("core.card.focus", { card: card.id });
@@ -668,11 +668,11 @@ for (const app of Object.values(APPS)) {
       seen.focus.push({ card: card.id, plugin, cursor: systemCursor(), responder: (await s.get("host.window")).responder });
     }
     seen.dividerAfterFocus = seen.focus.find((item) => item.cursor !== "resizeLeftRight")?.cursor ?? "resizeLeftRight";
-    // 포인터가 아이콘 위에 있는 채로 카드마다 포커스를 준다.
+    // Gives focus to each card while the pointer stays on the icon.
     post([{ type: "move", x: close.x - 3, y: close.y }, { type: "move", x: close.x, y: close.y }]);
     await s.presented();
-    // 포커스가 카드 폭을 바꾸면 아이콘이 포인터 밑에서 떠날 수 있다. 아이콘이 포인터 밑에 남아 있으면 손, 떠났으면 손이
-    // 아니어야 한다.
+    // When focus changes the card width, the icon can leave from under the pointer. The cursor must be a hand if the icon stays under the pointer
+    // and must not be a hand if it left.
     seen.closeAfterFocus = [];
     for (const card of grid.cards.filter((item) => item.tabs.length)) {
       await s.run("core.card.focus", { card: card.id });
@@ -682,11 +682,11 @@ for (const app of Object.values(APPS)) {
       const under = Math.abs(at.x - close.x) <= now.width / 2 && Math.abs(at.y - close.y) <= now.height / 2;
       seen.closeAfterFocus.push({ card: card.id, under, cursor: systemCursor() });
     }
-    // 포인터가 디바이더 위에 있는 채로 디바이더가 떠나면 크기 조절 커서도 떠나야 한다.
+    // When the divider leaves while the pointer stays on the divider, the resize cursor must leave too.
     post([{ type: "move", x: divider.x, y: divider.y - 3 }, { type: "move", x: divider.x, y: divider.y }]);
     await s.presented();
     const line = (await s.get("core.grid")).cards.find((card) => card.active === surface)?.c1;
-    // 디바이더 사각형은 문서 좌표이고 격자 선은 판 좌표다.
+    // The divider rectangle is in document coordinates and the grid lines are in board coordinates.
     const current = await s.get("core.grid");
     const moveFrom = current.lines.x;
     const center = vertical.x + vertical.width / 2 - current.plane.x;
@@ -711,7 +711,7 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a real pointer move is reported with ?1003 and a real Shift drag selects while ?1002 is on`, { timeout: 90000 }, async (t) => {
     const { s, surface, session, origin, row } = await prepare(t, app, "SHIFTSELECT");
-    // 입력 COUNT 바이트를 원시 모드로 읽어 R<ID>:<16진수> 로 쓴다. 명령 줄의 글자가 표시와 같지 않게 %s 로 만든다.
+    // Reads the input COUNT bytes in raw mode and writes them as R<ID>:<hexadecimal>. It uses %s so that the characters of the command line differ from the display.
     const read = async (id, on, count, off) => {
       await s.run("terminal.input", { bytes: `printf '${on}'; stty raw -echo; printf 'WAIT%s\\r\\n' ${id}; ` +
         `R=$(dd bs=1 count=${count} 2>/dev/null | od -An -tx1 | tr -d ' \\n'); stty sane; printf '${off}'; printf 'R%s:%s\\n' ${id} "$R"\r` }, surface);
@@ -722,17 +722,17 @@ for (const app of Object.values(APPS)) {
       return Buffer.from(lines.find((line) => line.startsWith(`R${id}:`)).slice(`R${id}:`.length).trim(), "hex").toString("latin1");
     };
 
-    // ?1003: 버튼 없이 움직인 포인터를 칸이 바뀔 때 알린다.
+    // ?1003: reports a pointer that moved without a button when the cell changes.
     const motion = "\x1b[<35;10;5M";
     await read("MOTION", "\\033[?1003h\\033[?1006h", motion.length, "\\033[?1003l\\033[?1006l");
     post([{ type: "move", ...cellPoint(origin, session, 9, 4) }]);
     assert.equal(await result("MOTION"), motion, "?1003 did not report a real pointer move");
 
-    // ?1002 에서도 Shift 를 누른 끌기는 알리지 않고 글자를 선택한다. 뒤에 쓴 Z 가 PTY 의 첫 바이트여야 한다.
+    // Even in ?1002, a drag with Shift pressed is not reported and selects text. The Z written afterward must be the first byte of the PTY.
     await read("SHIFT", "\\033[?1002h\\033[?1006h", 1, "\\033[?1002l\\033[?1006l");
     const before = (await s.get("terminal.session", surface)).selectionReleases;
-    // 선택은 포인터가 칸의 가운데를 지나야 그 칸을 덮으므로 첫 칸의 왼쪽 가장자리 가까이에서 누르고 마지막 칸의 가운데를
-    // 지나 뗀다(docs/spec/terminal-runtime.md).
+    // A selection covers a cell only when the pointer passes the middle of that cell, so the press happens near the left edge of the first cell and the release passes the middle of the last cell
+    // (docs/spec/terminal-runtime.md).
     const from = { ...cellPoint(origin, session, 0, row), x: cellPoint(origin, session, 0, row).x - 0.3 * session.cellWidth };
     const to = { ...cellPoint(origin, session, 4, row), x: cellPoint(origin, session, 4, row).x + 0.3 * session.cellWidth };
     const steps = [{ type: "move", ...from, modifiers: ["shift"] }, { type: "down", ...from, modifiers: ["shift"] }];
@@ -757,15 +757,15 @@ for (const app of Object.values(APPS)) {
       const lines = await readScreenUntil(s, surface, (screen) => screen.some((line) => line.startsWith(`R${id}:`)), `${id} did not finish`);
       return Buffer.from(lines.find((line) => line.startsWith(`R${id}:`)).slice(`R${id}:`.length).trim(), "hex").toString("latin1");
     };
-    // 전체 화면 TUI 는 흔히 ?1003 을 쓴다: Shift를 누르면 motion 보고는 활성 상태로 남지만 텍스트 선택은 Shift가 소유한다.
+    // A full-screen TUI often uses ?1003: with Shift pressed, motion reporting stays active but Shift owns text selection.
     await read("SHIFT1003", "\\033[?1003h\\033[?1006h", 1, "\\033[?1003l\\033[?1006l");
     const before = (await s.get("terminal.session", surface)).selectionReleases;
     const start = cellPoint(origin, session, 0, row);
     const from = { ...start, x: start.x - 0.3 * session.cellWidth };
     const end = cellPoint(origin, session, 4, row);
     const to = { ...end, x: end.x + 0.3 * session.cellWidth };
-    // ?1003 은 누르지 않은 이동도 보고하므로 호버 move 를 넣지 않는다. 읽기가 1바이트이므로 호버의
-    // motion 보고가 그 한 바이트를 먹는다. 누름·끌기·뗌만 남겨 첫 바이트가 Z 임을 증명한다.
+    // ?1003 also reports moves without a press, so no hover move is added. The read is 1 byte, so the motion report of the hover
+    // would consume that byte. Keeping only press, drag and release proves that the first byte is Z.
     const steps = [{ type: "down", ...from, modifiers: ["shift"] }];
     for (let i = 1; i <= 8; i++) steps.push({ type: "drag", x: from.x + (to.x - from.x) * i / 8, y: from.y, modifiers: ["shift"] });
     steps.push({ type: "up", ...to, modifiers: ["shift"] });
@@ -901,14 +901,14 @@ for (const app of Object.values(APPS)) {
       assert.equal(first.mouse.reported, true,
         `round-trip ${attempt + 1}: first drag was not reported; before=${JSON.stringify(before)} window=${JSON.stringify(firstWindow)}`);
 
-      // 성공한 drag 다음에 세 번째 지점 클릭과 즉시 재시도가 이어진다.
+      // After the successful drag, a click at a third point and an immediate retry follow.
       click(third.x, third.y);
       dragPath(from, to, 12);
       await s.until("terminal.session", (value) => value.mouse.phase === "up" || value.error !== undefined,
         `round-trip ${attempt + 1}: third-point retry did not finish`, { surface });
       const repeated = await s.get("terminal.session", surface);
       if (repeated.error !== undefined || repeated.mouse.reported !== true || repeated.mouse.written !== true) {
-        // 직접 재시도가 실패한 뒤에만 다른 카드를 거쳐 돌아와 다시 재시도한다.
+        // Only after the direct retry fails, the check goes through another card, returns and retries.
         await s.run("core.card.focus", { card: other.id });
         await s.until("core.grid", (value) => value.cards.some((item) => item.id === other.id && item.focused),
           `round-trip ${attempt + 1}: other card did not focus`);
@@ -934,7 +934,7 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: real keypad keys send SS3 sequences in application keypad mode and characters otherwise`, { timeout: 90000 }, async (t) => {
     const { s, surface, session, origin } = await prepare(t, app, "KEYPAD");
-    // 키는 초점을 가진 터미널 영역에 간다.
+    // The key goes to the terminal area that has the focus.
     const focus = cellPoint(origin, session, 2, 0);
     click(focus.x, focus.y);
     await s.until("host.window", (window) => window.regions.some((region) => region.surface === surface && region.focused),
@@ -948,7 +948,7 @@ for (const app of Object.values(APPS)) {
       const lines = await readScreenUntil(s, surface, (screen) => screen.some((line) => line.startsWith(`R${id}:`)), `${id} did not finish`);
       return Buffer.from(lines.find((line) => line.startsWith(`R${id}:`)).slice(`R${id}:`.length).trim(), "hex").toString("latin1");
     };
-    // 키 코드 87 은 키패드 5, 76 은 키패드 Enter 다.
+    // Key code 87 is keypad 5 and 76 is keypad Enter.
     const keypad = () => { key(87); key(76); };
     await read("APPLICATION", "\\033=", 6, "\\033>");
     keypad();
@@ -1003,16 +1003,16 @@ for (const app of Object.values(APPS)) {
     await s.run("host.window.move", { x: rightAlignedX, y: initial.y });
     await s.until("host.window", (window) => window.frame.x === rightAlignedX, "the terminal window did not move to the visible right edge");
     let target = await bringFront(s, app, view);
-    // Finder 창은 터미널 영역 아래, 앱 창 안에 둔다. 끌어 놓는 점은 가려지지 않는다.
+    // The Finder window is placed under the terminal area, inside the app window. The drop point is not covered.
     const { frame } = await s.get("host.window");
     const top = Math.round(target.y + view.height / 2 + 30);
     const bounds = { x: Math.round(frame.x + 20), y: top, width: 500, height: Math.min(220, Math.round(frame.y + frame.height) - top) };
     const finder = openFinderWindow(directory, bounds);
     s.cleanup(() => closeFinderWindow(finder));
-    // 끌기는 Finder 창에서 시작한다. Finder 를 앞으로 가져오되 놓는 점은 앱 창이어야 한다.
+    // The drag starts in the Finder window. Finder is brought to the front, but the drop point must be in the app window.
     activateFinder();
-    // 다른 Finder 창이 데스크톱에 열려 있을 수 있다. 이 터미널 view의 가운데가 가려지지
-    // 않았다고 가정하지 않고 노출된 지점을 고른다.
+    // Another Finder window can be open on the desktop. The check does not assume that the center of this terminal view is not covered
+    // and picks an exposed point.
     const pid = appPid(app);
     const candidates = [];
     for (let row = 1; row < 8; row++) {
@@ -1043,7 +1043,7 @@ for (const app of Object.values(APPS)) {
       const front = frontWindowAt(from.x, from.y);
       assert.equal(front?.owner, "Finder", `${name} is not in the frontmost window at ${from.x},${from.y}: ${JSON.stringify(front)}`);
       const board = dragPasteboard();
-      // 사람처럼 누른 뒤 잠시 멈춰야 Finder 가 끌기로 인식한다.
+      // Finder recognizes a drag only when a person presses and then pauses briefly.
       const steps = [{ type: "move", ...from }, { type: "down", ...from, wait: 300 }];
       for (let i = 1; i <= 20; i++) {
         steps.push({ type: "drag", x: from.x + (target.x - from.x) * i / 20, y: from.y + (target.y - from.y) * i / 20 });
@@ -1064,7 +1064,7 @@ for (const app of Object.values(APPS)) {
       const drop = await s.get("core.drop");
       assert.deepEqual({ surface: drop.surface, command: drop.command, error: drop.error, urls: drop.urls.map((url) => decodeURIComponent(new URL(url).pathname)) },
         { surface, command: "terminal.drop", error: null, urls: [join(directory, name)] }, `core.drop ${JSON.stringify(drop)}`);
-      // 붙여넣은 입력 줄을 지운다. 그 뒤 화면에서 빈 칸은 그림에서도 비어 있어야 한다. 놓기는 창에 아무것도 남기지 않는다.
+      // Clears the pasted input line. After that, a blank cell on the screen must also be blank in the picture. The drop leaves nothing in the window.
       await s.run("terminal.input", { bytes: "\u0015" }, surface);
       await readScreenUntil(s, surface, (screen) => !screen.join("").includes(name), `the input line of ${name} was not cleared`);
       const residue = await blankCellsWithPixels(s, surface);

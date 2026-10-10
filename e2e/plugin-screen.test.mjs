@@ -1,4 +1,4 @@
-// 라이브러리의 플러그인 페이지: 설명, 버전, 사이드카, 검색, 플러그인 작업을 검사한다(docs/spec/installation.md 의 Plugin screen).
+// The plugin page of the library: checks the description, the version, the sidecars, the search and the plugin actions (Plugin screen in docs/spec/installation.md).
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -7,7 +7,7 @@ import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
-/** 플러그인 페이지를 보이고, 검사가 끝나면 프로젝트 페이지와 작업 화면으로 돌아간다. */
+/** Shows the plugin page and, when the check ends, returns to the project page and the work screen. */
 async function showPlugins(s) {
   s.cleanup(async () => {
     if ((await s.get("core.screen")).screen !== "library") return;
@@ -21,7 +21,7 @@ async function showPlugins(s) {
     "the plugin page did not list plugins");
 }
 
-/** 카드가 보이는 plugin 의 작업 이름을 문서 순서로 반환한다. */
+/** Returns the action names of the visible plugin cards in document order. */
 const actionsOf = (library, plugin) => library.plugins.actions.filter((item) => item.plugin === plugin).map((item) => item.action);
 
 for (const app of Object.values(APPS)) {
@@ -42,7 +42,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(terminal.sidecars.length > 0, `terminal lists no sidecar: ${JSON.stringify(terminal)}`);
     assert.ok(terminal.sidecars.every((sidecar) => typeof sidecar.version === "string"),
       `a terminal sidecar has no installed version: ${JSON.stringify(terminal.sidecars)}`);
-    // The card offers 업데이트 only when the registry lists a version newer than the installed one.
+    // The card offers the update action only when the registry lists a version newer than the installed one.
     const update = plugins.updates.some((item) => item.id === "files") ? ["update"] : [];
     assert.deepEqual(actionsOf(library, "files"), [...update, "disable", "remove"]);
 
@@ -55,7 +55,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.library", (value) => value.plugins.shown.join() === library.plugins.shown.join(),
       "an empty query did not list every plugin");
 
-    // 프로젝트 목록 명령은 프로젝트 페이지를 보인다.
+    // The project list command shows the project page.
     await s.run("core.library.return");
     await s.until("core.screen", (screen) => screen.screen === "workspace", "the library did not return to the workspace");
     await s.run("core.projects.browse");
@@ -68,7 +68,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
-    // 검사가 중간에 실패해도 다음 검사가 같은 설치에서 시작하도록 files 를 다시 켠다.
+    // Turns files on again so that the next check starts from the same installation even if a check fails midway.
     s.cleanup(async () => {
       const now = (await s.get("core.plugins")).plugins.find((row) => row.id === "files");
       if (!now.installed.enabled) await s.run("core.plugins.enable", { plugin: "files" });
@@ -148,14 +148,14 @@ for (const app of Object.values(APPS)) {
     const ask = async () => (await s.until("core.picker", (picker) => picker.open && picker.title.includes("저장하지 않은 변경이 있습니다"),
       "the plugin change did not ask about the modified tab")).items.map((item) => item.name);
     assert.deepEqual(await ask(), ["저장하고 적용", "저장하지 않고 적용", "적용하지 않기"]);
-    // 적용하지 않기 keeps the page, and the card offers to apply the change.
+    // The action that declines to apply keeps the page, and the card offers to apply the change.
     await s.run("core.picker.pick", { index: 2 });
     const kept = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === "browser").state === "reload",
       "적용하지 않기 did not leave the browser change waiting for a reload");
     assert.equal(kept.reload, true);
     assert.equal(await page(), before, "적용하지 않기 reloaded the window");
 
-    // core.plugins.apply asks again, and 저장하지 않고 적용 reloads the window without writing the file.
+    // core.plugins.apply asks again, and the action that applies without saving reloads the window without writing the file.
     const applying = s.run("core.plugins.apply", {});
     assert.deepEqual(await ask(), ["저장하고 적용", "저장하지 않고 적용", "적용하지 않기"]);
     await s.run("core.picker.pick", { index: 1 });

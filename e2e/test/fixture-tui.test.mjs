@@ -15,7 +15,7 @@ test("SGR mouse reports are parsed with zero-based cells, and a cut report is ke
 test("a drag selects the cells from the press up to the release cell, and a click clears the selection", () => {
   const column = HEADER.indexOf(HEADER_WORD);
   let selection = null;
-  // ?1003 은 누르지 않은 움직임도 보고한다. 그 보고는 선택을 바꾸지 않는다.
+  // ?1003 also reports motion without a press. That report does not change the selection.
   selection = select(selection, { code: 35, col: 40, row: 1, release: false });
   assert.equal(selection, null);
   selection = select(selection, { code: 0, col: column, row: 1, release: false });

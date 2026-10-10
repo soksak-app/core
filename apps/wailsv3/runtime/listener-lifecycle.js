@@ -1,4 +1,4 @@
-/** native listener를 등록하고 이 페이지가 unload될 때 모든 등록을 해제한다. */
+/** Registers native listeners and releases every registration when this page unloads. */
 export function createLifecycleListener(register, root = globalThis.window) {
   const active = new Set();
   let unloaded = false;
@@ -14,7 +14,7 @@ export function createLifecycleListener(register, root = globalThis.window) {
     for (const entry of active) dispose(entry, entry.off);
   };
   for (const event of ["pagehide", "beforeunload", "unload"]) {
-    // default: 계약 테스트는 DOM root를 제공하지 않을 수 있으며, 이때 등록할 native listener가 없다.
+    // default: The contract test may not provide a DOM root, and then there is no native listener to register.
     root?.addEventListener?.(event, unload, { once: true });
   }
   return (event, listener) => {

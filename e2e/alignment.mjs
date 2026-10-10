@@ -1,14 +1,14 @@
 import { pixel } from "@soksak/window-check/frame.mjs";
 
-// 카드 사이 간격의 배경. midnight 테마의 --bg(#101117)다.
+// Background of the gap between cards. It is --bg (#101117) of the midnight theme.
 const PAGE = [16, 17, 23];
 
-// 셸 카드 왼쪽의 고정 사이드바 카드 배경과, 셸 카드를 오른쪽 고정 사이드바와 묶는 레일을 측정한다. 셸 표면의
-// 가로 구간과 측정 행은 at 으로 받는다(outside.mjs 의 셸 입력 구분선). 레일은 셸 카드의 행에서만 셸 카드의 왼쪽
-// 가장자리를 지나므로 그 행에서 잰다. 측정하지 못하면 측정하지 못한 항목과 그 자리의 픽셀을 missing 으로 반환한다.
+// Measures the background of the fixed sidebar card to the left of the shell card and the rail that joins the shell card to the right fixed sidebar. The horizontal
+// span and the measured row of the shell surface are given by at (the shell input divider of outside.mjs). The rail passes the left
+// edge of the shell card only in the rows of the shell card, so it is measured in those rows. When a measurement fails, it returns the items that could not be measured and the pixels at their positions as missing.
 export function alignment(frame, at) {
   const y = at.row;
-  // 사이드바 카드는 내용에 따라 머리와 행의 색이 다르므로, 간격 배경이 시작되기 전까지를 사이드바로 본다.
+  // The head and the rows of a sidebar card differ in color by content, so everything before the gap background starts is taken as the sidebar.
   const page = (x) => pixel(frame, x, y).every((value, i) => Math.abs(value - PAGE[i]) <= 5);
   let x = Math.round(at.card.l - 20 * at.scale);
   if (x < 0 || page(x)) {
@@ -34,9 +34,9 @@ export function alignment(frame, at) {
 }
 
 /**
- * 처음 측정한 배치와 이 프레임의 배치가 다른 가장 큰 거리(점). 터미널은 크기가 바뀌는 동안 이전 크기의 래스터를
- * 왼쪽에 붙여 보이므로 오른쪽 안쪽 여백(contentRight)은 커질 수 있다. 그 여백은 터미널의 평소 배경인 카드 색이고,
- * 정렬이 막으려는 것은 내용이 카드 밖으로 나가거나 왼쪽 끝이 움직이는 것이므로 그 여백이 줄어든 만큼만 센다.
+ * The largest distance (points) between the first measured layout and the layout of this frame. While the terminal is resized, the raster of the previous size is
+ * shown attached to the left, so the right inner margin (contentRight) can grow. That margin has the card color, which is the usual background of the terminal,
+ * and the alignment must prevent content leaving the card or the left edge moving, so only the amount by which that margin shrinks is counted.
  */
 export function alignmentDelta(initial, geometry) {
   return Math.max(...Object.keys(initial).map((key) => key === "contentRight"

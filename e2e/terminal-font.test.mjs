@@ -1,4 +1,4 @@
-// 터미널 글꼴: font.family 우선순위 목록에서 설치된 첫 family 를 쓰고, 없는 family 는 오류가 아님을 검사한다.
+// Terminal font: checks that the first installed family of the font.family priority list is used and that a family that does not exist is not an error.
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
@@ -51,7 +51,7 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => s.run("core.settings.change", { key: SETTING, value: DEFAULT, scope: "common" }));
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
-    // Menlo 에는 한글이 없어 대체 글꼴로 그리며, 그 폭은 두 칸보다 좁다.
+    // Menlo has no Hangul and it is drawn with a fallback font, and its width is narrower than two cells.
     await s.run("core.settings.change", { key: SETTING, value: "Menlo", scope: "common" });
     const session = await s.until("terminal.session", (value) => value.font === "Menlo", "the terminal did not apply Menlo", { surface });
     await s.run("terminal.input", { bytes: "clear; printf '\\n한\\n'\r" }, surface);

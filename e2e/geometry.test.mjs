@@ -1,13 +1,13 @@
-// 창 크기 변경 뒤 표면의 문서 좌표와 네이티브 입력을 검사한다. 배율 변경은
-// native/darwin/tests/webview_geometry_test.m 이 검사한다.
+// Checks the document coordinates and the native input of a surface after a window resize. native/darwin/tests/webview_geometry_test.m
+// checks a change of the scale.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh as prepare } from "./fixture.mjs";
 
 /**
- * 표시 완료 후 네이티브 표면, DOM 슬롯, 표면 문서의 배율과 크기가 일치할 때까지 기다리고
- * 표면의 창 좌표 프레임을 반환한다.
+ * Waits until the scale and size of the native surface, the DOM slot and the surface document match after the display completes,
+ * and returns the window-coordinate frame of the surface.
  */
 async function geometry(s, surface, scale) {
   const content = (await s.get("host.window")).content;
@@ -33,12 +33,12 @@ async function geometry(s, surface, scale) {
   return { state, frame };
 }
 
-/** 표면의 마지막 기기 픽셀 행을 네이티브 입력으로 누르고, 문서가 받은 좌표를 확인한다. */
+/** Presses the last device pixel row of the surface with native input and checks the coordinates that the document received. */
 async function clickLastPixel(s, surface, scale) {
   const { state, frame } = await geometry(s, surface, scale);
   const x = frame.width / 2, y = frame.height - 0.5 / scale;
   const point = { x: frame.x + x, y: frame.y + y };
-  // DOM 표면은 메인 페이지에 마운트되므로 그 점의 소유자는 페이지다.
+  // A DOM surface is mounted in the main page, so the page owns that point.
   assert.deepEqual(await s.run("host.hit", point), { kind: "page" });
   const seen = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
   const fresh = (list) => list.filter((e) => e.sequence > seen);

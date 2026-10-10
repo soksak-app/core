@@ -1,13 +1,13 @@
-// 운영체제별 코드가 platform/<os>/ 아래에만 있는지 검사한다.
+// Checks that operating-system-specific code exists only under platform/<os>/.
 //
-// 다른 운영체제를 추가할 때 디렉터리 하나를 추가하면 되도록, 운영체제 조건과 운영체제
-// 접미사 파일은 소유 패키지의 platform/<os>/ 에만 둔다. 다음은 검사하지 않는다.
+// So that adding another operating system needs only one more directory, operating-system conditions and operating-system
+// suffix files are placed only in platform/<os>/ of the owning package. The following are not checked.
 //
-//   native/<os>/                      디렉터리 이름이 운영체제를 나타낸다
-//   scripts/check-build-environment.sh 빌드 도구가 실행 중인 호스트를 확인한다
-//   Cargo.toml                        대상별 의존성 표는 선언이다
-//   platform/platform.{go,rs,js}      구현 선택 파일
-//   scripts/check-platforms.mjs       이 검사 자신
+//   native/<os>/                      the directory name denotes the operating system
+//   scripts/check-build-environment.sh the build tool checks the running host
+//   Cargo.toml                        the target-specific dependency tables are declarations
+//   platform/platform.{go,rs,js}      implementation selection files
+//   scripts/check-platforms.mjs       this check itself
 //
 //   node scripts/check-platforms.mjs
 import { execFileSync } from "node:child_process";
@@ -19,8 +19,8 @@ const SOURCE = /\.(js|mjs|go|rs|m|h|sh)$/;
 const SKIPPED = [
   /^native\/[^/]+\//,
   /^scripts\/check-build-environment\.sh$/,
-  // 이 파일은 command supervisor가 현재 호스트를 지원하는지 확인한다.
-  // 이는 실행 환경 계약이며 OS 구현이 아니다.
+  // This file checks whether the command supervisor supports the current host.
+  // That is an execution environment contract, not an OS implementation.
   /^scripts\/test-command\.mjs$/,
   /(^|\/)platform\/platform\.(go|rs|js)$/,
   /^scripts\/check-platforms\.mjs$/,
@@ -32,8 +32,8 @@ const RULES = [
   { what: "Node process.platform", pattern: /\bprocess\.platform\b/ },
 ];
 
-// platform adapter는 domain 디렉터리 아래에 묶일 수도 있다(예:
-// platform/pty.rs). 소유 platform root는 여전히 명시적이다.
+// A platform adapter may be grouped under a domain directory (for example
+// platform/pty.rs). The owning platform root is still explicit.
 const inPlatform = (path) => /(^|\/)platform\//.test(path);
 const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { cwd: ROOT, encoding: "utf8" }).split("\0").filter((path) => path && existsSync(`${ROOT}${path}`));

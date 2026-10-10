@@ -4,14 +4,14 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
-/** 프로세스의 RSS(KB). */
+/** RSS (KB) of the process. */
 function resident(pid) {
   const text = execFileSync("ps", ["-o", "rss=", "-p", String(pid)], { encoding: "utf8" }).trim();
   assert.match(text, /^\d+$/, `RSS of ${pid} was not measurable`);
   return Number(text);
 }
 
-/** 프로세스의 physical footprint(바이트). 상주 메모리는 해제한 page 를 할당기가 붙들고 있으면 줄지 않는다. */
+/** Physical footprint (bytes) of the process. Resident memory does not shrink while the allocator holds released pages. */
 function footprint(pid) {
   const match = execFileSync("footprint", ["-p", String(pid), "-f", "bytes"], { encoding: "utf8" }).match(/Footprint: (\d+) B/);
   assert.ok(match, `footprint of ${pid} was not measurable`);
@@ -19,8 +19,8 @@ function footprint(pid) {
 }
 
 /**
- * 창이 가진 웹 문서의 목록. 다시 읽기가 이전 페이지의 표면 문서, 문서 영역, 그림 영역을 남기면 목록이 커진다. 문서 id 는
- * 다시 읽을 때마다 새로 정해지므로 수만 비교한다.
+ * List of the web documents that the window holds. If a reload leaves the surface document, the document region and the picture region of the previous page, the list grows. The document id is
+ * assigned anew at every reload, so only the number is compared.
  */
 function inventory(window) {
   return {
@@ -33,10 +33,10 @@ function inventory(window) {
 
 const RELOADS = 20;
 
-// main page 를 다시 읽으면 host 는 새 문서를 새 WebContent process 에서 열고 이전 process 는 이전 문서와 함께 끝난다
-// (docs/operations/private-native-apis.md). 같은 process 에서 다시 읽으면 WebKit 의 querySelectorAll 결과 캐시가 이전
-// 문서를 메모리 압박 전까지 남긴다. 검사는 다시 읽을 때마다 page process 가 바뀌고 이전 process 가 끝나는지, 다시 읽은
-// 뒤의 page footprint 와 host 메모리, 창의 문서를 판정한다.
+// When the main page reloads, the host opens the new document in a new WebContent process, and the previous process ends together with the previous document
+// (docs/operations/private-native-apis.md). A reload in the same process would keep the previous document until memory pressure through the querySelectorAll result cache of WebKit.
+// The check judges whether the page process changes at every reload and the previous process ends, and the page footprint, the host memory
+// and the documents of the window after the reload.
 const PAGE_GROWTH = 64 * 1024 * 1024;
 
 for (const app of Object.values(APPS)) {
@@ -49,7 +49,7 @@ for (const app of Object.values(APPS)) {
     await session.request("diagnostics.page.collect", {});
     const footprintBefore = footprint(first);
     const before = inventory(await session.get("host.window"));
-    // 검사가 연결한 호스트의 process. 같은 이름의 다른 앱이나 번들 안의 사이드카는 재지 않는다.
+    // Process of the host that the check connected. Another app of the same name and sidecars inside the bundle are not measured.
     const host = session.client.endpoint.pid;
     const hostBefore = resident(host);
     const processes = [first];

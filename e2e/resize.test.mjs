@@ -1,5 +1,5 @@
-// 창을 최대화하고 되돌리는 과정을 녹화해, 끝난 뒤 앱 배치가 창 크기와 맞는지 검사하고 변경 중 배치가
-// 창보다 늦은 프레임 수를 보고한다.
+// Records the maximize and restore of the window, checks that the app layout matches the window size after the change ends, and reports
+// the number of frames in which the layout was later than the window during the change.
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
@@ -9,23 +9,23 @@ import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 
 /**
- * 배치의 오른쪽·아래 끝과 창 끝 사이의 여백이 기준과 이만큼(pt) 넘게 다른 프레임은 배치가 창보다 늦은 프레임이다.
- * 커질 때는 여백이 벌어지고, 줄어들 때는 이전 배치가 창 밖으로 잘려 여백이 사라진다.
+ * A frame in which the margin between the right and bottom edges of the layout and the window edges differs from the reference by more than this amount (pt) is a frame in which the layout is later than the window.
+ * When the window grows, the margin widens; when it shrinks, the previous layout is clipped outside the window and the margin disappears.
  */
 const LAG = 12;
 
-/** 창이 새 크기에 도달한 뒤 배치가 따라오기까지 허용하는 시간(ms). */
+/** Time (ms) allowed for the layout to follow after the window reaches the new size. */
 const CATCH_UP = 150;
 
-/** 배치가 따라오는 구간까지 녹화하려고 표시 시각 뒤로 더 담는 시간(ms). */
+/** Time (ms) added after the display time so that the recording also covers the interval in which the layout follows. */
 const SETTLE = 100;
 
-/** 카드 테두리와 글자보다 어두운 밝기. 창 배경과 빈 영역은 이보다 어둡다. */
+/** Brightness darker than the card border and the glyphs. The window background and the empty area are darker than this. */
 const BRIGHT = 70;
 
 /**
- * 프레임에서 창 크기와 밝은 픽셀이 있는 가장 오른쪽 열·가장 아래 행을 창 포인트로 잰다.
- * 버퍼는 녹화 시작 크기로 고정되고, 커진 창은 contentScale 만큼 줄어 담긴다.
+ * Measures in window points the window size and the rightmost column and the lowest row that hold a bright pixel in the frame.
+ * The buffer is fixed at the recording start size, and a grown window is stored reduced by contentScale.
  */
 function measure(frame) {
   const ratio = frame.contentScale * frame.scale;
@@ -51,27 +51,27 @@ function measure(frame) {
   };
 }
 
-/** 창 크기를 바꾸는 change 를 녹화하고, 배치가 새 크기로 표시될 때까지의 프레임을 잰다. */
+/** Records the change that resizes the window and measures the frames until the layout is displayed at the new size. */
 const right = (w) => Math.max(...w.surfaces.filter((x) => x.visible).map((x) => x.frame.x + x.frame.width));
 
-/** 창 오른쪽 끝과 가장 오른쪽 표면 사이의 거리. 배치는 창 크기와 관계없이 이 거리를 유지한다. */
+/** Distance between the right edge of the window and the rightmost surface. The layout keeps this distance regardless of the window size. */
 const margin = (w) => w.content.width - right(w);
 
 async function record(s, change, sized) {
   const kept = margin(await s.get("host.window"));
   const { frames: directory } = await s.request("diagnostics.capture.start");
-  // 녹화는 창 크기의 프레임을 초당 60 장까지 담으므로 측정한 뒤 바로 지운다.
+  // The recording stores frames of the window size at up to 60 per second, so it is deleted right after the measurement.
   try {
-    // 녹화는 이 표시 시각의 화면까지 담는다. 앱이 커밋한 화면은 표시 대기가 끝난 뒤에 표시된다.
+    // The recording covers the screen up to this display time. A screen that the app committed is displayed after the display wait ends.
     let displayed = 0;
     try {
       await change();
-      // 창이 새 크기에 도달하고 표면이 그 크기의 배치로 옮겨진 뒤 그 배치가 표시될 때까지 기다린다.
+      // Waits until the window reaches the new size, the surface moves to the layout of that size and that layout is displayed.
       await s.until("host.window", (w) => sized(w) && Math.abs(margin(w) - kept) < 1,
         "the surfaces did not follow the window");
       ({ displayed } = await s.presented());
     } finally {
-      // 창이 새 크기에 도달한 뒤 배치가 따라오는 구간까지 담는다.
+      // Covers the interval in which the layout follows after the window reaches the new size.
       await s.request("diagnostics.capture.stop", { after: displayed ? displayed + SETTLE : 0 });
     }
     return { displayed, measured: frames(directory).map((path) => measure(readFrame(path))) };
@@ -81,9 +81,9 @@ async function record(s, change, sized) {
 }
 
 /**
- * 변경이 끝나 표시된 마지막 프레임의 배치가 창 크기와 맞는지 확인하고, 변경 중 배치가 창보다 늦은
- * 프레임 수를 보고한다. 창 프레임과 WebKit 내용은 따로 표시되므로(WebKit/WebKit#72971,
- * tauri-apps/tao#1207) 변경 중의 늦은 프레임은 측정값으로만 남긴다.
+ * Checks that the layout of the last displayed frame after the change ends matches the window size, and reports the number of frames in which the layout
+ * was later than the window during the change. The window frame and the WebKit content are displayed separately (WebKit/WebKit#72971,
+ * tauri-apps/tao#1207), so late frames during the change remain only as a measured value.
  */
 function assertSettled(t, { displayed, measured }, label) {
   assert.ok(measured.length > 1, `${label}: only ${measured.length} frames were recorded`);
@@ -112,7 +112,7 @@ for (const app of Object.values(APPS)) {
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const before = (await s.get("host.window")).frame;
-    // 창이 있는 화면의 사용 가능 영역이 최대화한 창의 프레임이다.
+    // The usable area of the screen that holds the window is the frame of the maximized window.
     const screen = (await s.get("host.screens")).find((x) => before.x >= x.x && before.x < x.x + x.width
       && before.y >= x.y && before.y < x.y + x.height);
     const same = (a, b) => ["x", "y", "width", "height"].every((key) => Math.abs(a[key] - b[key]) < 1);

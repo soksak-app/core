@@ -6,8 +6,8 @@ import { alignmentDelta } from "../alignment.mjs";
 const initial = { contentLeft: 1, contentRight: 1, sidebar: 13, rail: 6 };
 
 test("a terminal raster that lags inside its card on the right is aligned", () => {
-  // 크기가 바뀌는 동안 터미널은 이전 크기의 래스터를 왼쪽에 붙여 보인다. 오른쪽 안쪽 여백이 커질 뿐 카드 밖으로
-  // 나가지 않는다.
+  // While the size changes, the terminal shows the raster of the earlier size attached to the left. Only the right inner margin grows; the raster does not
+  // leave the card.
   assert.equal(alignmentDelta(initial, { ...initial, contentRight: 131 }), 0);
 });
 

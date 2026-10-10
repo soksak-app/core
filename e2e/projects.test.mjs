@@ -1,4 +1,4 @@
-// 파일 저장·설정 상속·프로젝트 창의 실제 네이티브 동작을 검사한다.
+// Checks the real native behavior of file saving, settings inheritance and project windows.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,7 +13,7 @@ import { openStages, systemState } from "./open-report.mjs";
 
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 
-// 실행 중인 앱이 같은 파일을 읽으므로 호스트처럼 임시 파일에 쓴 뒤 이름을 바꾼다. 앱은 부분 파일을 읽지 않는다.
+// The running application reads the same file, so the check writes to a temporary file like the host and then renames it. The application never reads a partial file.
 const write = (path, value) => {
   const temporary = `${path}.${process.pid}.tmp`;
   writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
@@ -24,11 +24,11 @@ const mode = async (s) => (await s.get("core.settings")).values.mode;
 
 const settings = (s, patch, scope) => s.run("core.settings.set", { patch, scope });
 
-/** 창 목록에서 known 에 없는 창 하나. */
+/** One window of the window list that is not in known. */
 const added = (list, known) => list.find((w) => !known.includes(w.window)).window;
 
-/** 설정 모달 컨트롤이 나타날 때까지 기다리고 그 컨트롤을 반환한다. */
-/** 프로젝트를 활성화하고, 실패하면 그 창의 페이지 상태와 네이티브 상태를 보고한다. */
+/** Waits until the settings modal control appears and returns that control. */
+/** Activates the project and, if it fails, reports the page state and the native state of that window. */
 async function activate(s, id, label) {
   try {
     await s.run("core.project.activate", { id });
@@ -45,7 +45,7 @@ async function control(s, name, key, predicate = () => true, message = `settings
   return controls.find((c) => c.name === name && c.key === key);
 }
 
-/** 설정 모달 컨트롤이 가리키는 명령을 실행한다. value 는 값 입력 컨트롤의 값이다. */
+/** Runs the command that a settings modal control points to. value is the value of a value input control. */
 async function press(s, name, key, value) {
   const { command } = await control(s, name, key);
   const params = { ...command.params };
@@ -53,19 +53,19 @@ async function press(s, name, key, value) {
   await s.run(command.name, params);
 }
 
-/** 설정 모달이 열리고 네이티브 모달이 표시될 때까지 기다린다. */
+/** Waits until the settings modal is open and the native modal is displayed. */
 async function openSettings(s) {
   await s.run("core.settings.open");
   await s.until("host.window", (w) => w.modal?.id === "settings" && w.modal.shown, "settings did not render");
 }
 
-/** 설정 모달을 닫는다. */
+/** Closes the settings modal. */
 async function closeSettings(s) {
   await s.run("core.settings.close");
   await s.until("host.window", (w) => w.modal === null, "settings did not close");
 }
 
-/** 설정 범위 탭. 제목, 선택 여부, 인덱스. */
+/** The settings scope tabs: title, whether selected, and index. */
 async function scopeTabs(s) {
   const { controls } = await s.until("core.settings-modal",
     (modal) => modal.controls.some((c) => c.name === "core.settings-modal.scope"), "scope tabs did not render");
@@ -143,7 +143,7 @@ for (const app of Object.values(APPS)) {
     const secondRoot = join(temporary, "second"); mkdirSync(secondRoot);
     const thirdRoot = join(temporary, "third"); mkdirSync(thirdRoot);
     const alias = join(temporary, "alias"); symlinkSync(secondRoot, alias);
-    // 폴더 삭제는 앱 정리와 별개로 가장 마지막에 실행한다(정리는 등록의 역순).
+    // The deletion of the folder runs last, separately from the cleanup of the application (the cleanup runs in the reverse order of registration).
     s.cleanup(() => rmSync(temporary, { recursive: true, force: true }));
     s.cleanup(async () => {
       for (const window of await s.get("host.windows")) {
@@ -220,7 +220,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(read(join(second.root, ".soksak/settings.json")).mode, "light");
     assert.equal(read(join(config, "settings.json")).mode, "dark");
     const commonWidth = read(join(config, "settings.json")).sidebarWidth;
-    // 다른 절에 다녀와도 프로젝트 범위가 유지된다.
+    // The project scope is kept even after a visit to another section.
     await press(child, "core.settings-modal.nav", "nav:sidebars");
     await press(child, "core.settings-modal.nav", "nav:general");
     await press(child, "core.settings-modal.set", "sidebarWidth", "240");
@@ -296,8 +296,8 @@ for (const app of Object.values(APPS)) {
     const saved = read(join(config, "projects.json")).find((p) => p.id === second.id);
     assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).title, "Saved space");
     assert.equal(saved.spaces.find((x) => x.id === saved.activeSpaceId).layout.windowSidebars.right.width, 213);
-    // 저장한 위치와 크기는 호스트가 보고하는 창 좌표와 같은 단위여야 한다. 화면 배율이 2 인 곳에서
-    // 물리 픽셀로 저장하면 같은 파일이 다른 자리를 가리키고, 창은 화면 밖으로 밀려난다.
+    // The saved position and size must have the same unit as the window coordinates that the host reports. If a position is saved
+    // in physical pixels where the display scale is 2, the same file points to another position and the window is pushed off the screen.
     assert.deepEqual(saved.geometry, { x: beforeClose.x + 30, y: beforeClose.y + 20,
       width: beforeClose.width, height: beforeClose.height },
       `the saved geometry is not in window points (${JSON.stringify(beforeClose)})`);
@@ -354,7 +354,7 @@ for (const app of Object.values(APPS)) {
     });
     const first = await s.get("core.project");
     const config = dirname(first.root);
-    // 저장한 프로젝트를 다른 창에서 열고 닫아, 열리지 않은 저장 기록으로 둔다.
+    // Opens and closes the saved project in another window, so that it stays as a saved record that is not open.
     await settings(s, { projectOpening: "windows" }, "common");
     const saved = await s.run("core.project.open", { root, color: "#7fe3b0" });
     const child = s.on(added(await s.windows(2, "project window was not created"), [s.window]));
@@ -363,7 +363,7 @@ for (const app of Object.values(APPS)) {
     await child.close();
     await s.windows(1, "project window did not close");
 
-    // 다른 환경에서 저장된 배치: 셸 카드의 첫 탭이 이 환경에 없는 플러그인 gone 의 것이다.
+    // A layout saved in another environment: the first tab of the shell card belongs to the plugin gone, which is not in this environment.
     const records = read(join(config, "projects.json"));
     const record = records.find((p) => p.id === saved.id);
     const shell = record.spaces.find((x) => x.id === record.activeSpaceId).layout.state.cards.find((c) => c.id === "terminal");
@@ -371,11 +371,11 @@ for (const app of Object.values(APPS)) {
     write(join(config, "projects.json"), records);
     const stored = readFileSync(join(config, "projects.json"), "utf8");
 
-    // 라이브러리는 그 탭을 자리 표시 칸으로 그린다(docs/spec/plugins.md).
+    // The library draws that tab as a placeholder cell (docs/spec/plugins.md).
     await s.run("core.projects.browse");
     const library = await s.until("core.library", (value) => value.previews?.[saved.id]?.length > 0, "the library did not draw the saved layout");
     assert.equal(library.previewErrors?.[saved.id], undefined, "the library reported the layout of a plugin that is not loaded as an error");
-    // 열면 그 탭은 설치되지 않은 이유의 자리 표시이며 다른 탭은 그대로 열린다.
+    // When opened, that tab is a placeholder that gives the reason why it is not installed, and the other tabs open as they are.
     await settings(s, { projectOpening: "tabs" }, "common");
     await s.run("core.project.activate", { id: saved.id });
     await s.until("core.project", (value) => value?.id === saved.id, "the project did not open");
@@ -384,7 +384,7 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(surfaces.filter((surface) => surface.placeholder !== null).map((surface) => [surface.plugin, surface.placeholder]),
       [["gone", "missing"]]);
     assert.equal(await s.get("core.page.error"), null, "opening the layout reported an error");
-    // 저장해도 그 탭은 바뀌지 않는다.
+    // Saving does not change that tab.
     await s.run("core.projects.flush");
     const after = read(join(config, "projects.json")).find((p) => p.id === saved.id);
     const kept = after.spaces.find((x) => x.id === after.activeSpaceId).layout.state.cards.find((c) => c.id === "terminal");
@@ -398,7 +398,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: the first project opened from the library replies and replaces the library in the same window`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
-    // 늦은 응답의 단계를 보고하도록 성능 기록을 켠다.
+    // Turns the performance record on so that the stage of a late reply is reported.
     await fresh(s, { performanceTrace: true });
     for (const project of await s.get("core.projects")) await s.run("core.project.close", { id: project.id });
     assert.equal(await s.get("core.project"), null, "the check did not start from the library");
@@ -428,7 +428,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(opened.root, root);
     await s.windows(1, "the first project opened another window instead of replacing the library");
     await s.until("core.project", (project) => project?.id === opened.id, "the library window did not show the project");
-    // 프로젝트를 닫고 연 과정에서 페이지 오류가 나면 검사는 실패한다. 오류는 화면에만 보이고 명령은 성공한다.
+    // If a page error occurs in the process of closing and opening the project, the check fails. The error is shown only on the screen and the command succeeds.
     assert.equal(await s.get("core.page.error"), null, "closing and opening projects reported a page error");
   });
 
@@ -455,7 +455,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.project.close", { id: opened.id });
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
       `the window still reports the closed project ${await project()}`);
-    // 라이브러리를 보이는 창의 제목에는 닫은 프로젝트의 이름이 없다.
+    // The title of a window that shows the library does not hold the name of the closed project.
     const { title } = (await s.get("host.windows")).find((item) => item.window === s.window);
     assert.ok(!title.includes(basename(root)), `the window title still names the closed project: ${title}`);
   });
@@ -475,8 +475,8 @@ for (const app of Object.values(APPS)) {
     });
     const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
 
-    // 같은 애플리케이션의 새 창으로 검사 창을 덮는다. 사용자 창이 다른 창 뒤에 있을 때와 같은 가림 상태다.
-    // core.card.sidebar.set 은 초점과 창 순서를 바꾸지 않고 판의 표시를 기다린 뒤 답한다.
+    // Covers the check window with a new window of the same application. It is the same covered state as when the user window is behind another window.
+    // core.card.sidebar.set answers after it waits for the display of the plane, without changing the focus and the window order.
     const covered = (await s.get("host.window")).frame;
     await s.run("core.window.new");
     const windows = await s.windows(2, "the covering window did not open");
@@ -492,7 +492,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.card.sidebar.set", { card: card.id, side: "top", set: "off" });
     const shown = (await s.get("core.grid")).cards.find((candidate) => candidate.id === card.id);
     assert.equal(shown.sidebars.top?.set ?? "off", "off", `the top sidebar of ${card.id} in ${opened.id} was not turned off`);
-    // 가림이 풀리면 두 창의 위치와 상태, 맨 앞 애플리케이션을 적어 창 순서가 바뀐 원인을 분류한다.
+    // When the covering is released, the check writes the positions and states of the two windows and the frontmost application to classify the cause of a changed window order.
     const after = await s.get("host.window");
     if (after.occluded !== true) {
       const state = ({ frame, occluded, active }) => JSON.stringify({ frame, occluded, active });

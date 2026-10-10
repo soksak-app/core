@@ -1,4 +1,4 @@
-// 선언된 섹션 방향·출력과 실제 DOM·네이티브 좌표를 전체화면과 복귀 상태에서 검사한다.
+// Checks the declared section orientation and output against the real DOM and native coordinates in the full-screen and restored states.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
@@ -71,8 +71,8 @@ for (const app of Object.values(APPS))
               boxes.push(await s.rect("core.sidebar.section", offset + i));
             const presentation = current.sidebars[side];
             assert.equal(presentation.requestedCollapsed, false, "automatic folding changed the user choice");
-            // 일반 카드 높이에는 위와 아래가 함께 들어가지 않으므로 한 면만 들어가는 크기로 열리고 다른 면은 접힌다. 어느
-            // 면이 열리는지는 그 카드에서 마지막으로 조작한 면이 정하므로(docs/spec/example-model.md) 열린 면을 표시에서 읽는다.
+            // An ordinary card height cannot hold the top and the bottom side together, so it opens at a size that holds one side and the other side is folded. Which
+            // side opens is set by the side that was last operated in that card (docs/spec/example-model.md), so the open side is read from the display.
             const opposite = current.sidebars[side === "top" ? "bottom" : "top"];
             const autoCollapsed = !fullscreen && (side === "top" || side === "bottom") && !opposite.autoCollapsed;
             assert.equal(presentation.autoCollapsed, autoCollapsed, `${side} automatic folding: ${JSON.stringify(presentation)}`);

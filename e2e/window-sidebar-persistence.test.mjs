@@ -1,4 +1,4 @@
-// 창 열과 카드 내부 링크의 독립 저장을 실제 섹션·네이티브 좌표·녹화 경계로 검사한다.
+// Checks the independent storage of the window columns and the links inside cards with real sections, native coordinates, and recording boundaries.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
@@ -80,7 +80,7 @@ for (const app of Object.values(APPS))
       const target = initial.cards.find((card) => card.tabs.some((tab) => tab.plugin === "terminal"));
       assert.ok(target, "terminal fixture absent");
       const terminal = target.tabs.find((tab) => tab.plugin === "terminal");
-      // 터미널의 오른쪽 오버라이드가 고정 사이드바를 터미널 카드에 묶는다.
+      // The right override of the terminal binds the fixed sidebar to the terminal card.
       await keepCommonSettings(s);
       await s.run("core.settings.link", { place: "window-right", plugin: "terminal", set: "set-install", scope: "common" });
       const windowBar = (await s.until("core.sidebars", (bars) => bars.some(
@@ -236,7 +236,7 @@ for (const app of Object.values(APPS))
           );
           assert.equal(stop.limited, false);
           assert.ok(stop.longestGap <= 100, `${label}: missing frames ${stop.longestGap}ms`);
-          // 완전한 버퍼를 한 장씩 읽어 검사한다. 모든 장치 픽셀 버퍼를 동시에 보유하지 않는다.
+          // Reads and checks the complete buffers one at a time. It does not hold all device pixel buffers at once.
           for (const path of captured) readFrame(path);
           const last = readFrame(captured.at(-1));
           borders(last, result.grid, result.columns);

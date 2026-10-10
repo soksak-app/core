@@ -1,10 +1,10 @@
-// 녹화 프레임이나 정지 캡처에서 레일 경계선의 색을 잰다.
+// Measures the color of the rail boundary line in a recorded frame or a still capture.
 import assert from "node:assert/strict";
 import { pixel } from "@soksak/window-check/frame.mjs";
 
 /**
- * core.rail 의 모든 고리마다 세로 변 하나의 1/4 과 3/4 지점에서 레일 색(midnight 어두운 테마 --rail)을 찾는다. 변의
- * 가운데는 두 카드 사이 경계선의 손잡이가 덮을 수 있으므로 재지 않는다.
+ * For every loop of core.rail, finds the rail color (--rail of the dark midnight theme) at 1/4 and 3/4 of one vertical side. The middle of a side
+ * is not measured, because the handle of the boundary line between two cards can cover it.
  */
 export function railPixels(frame,grid,rail){
  const scale=frame.scale*frame.contentScale;

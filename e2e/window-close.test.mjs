@@ -46,13 +46,13 @@ for (const app of Object.values(APPS)) {
       "closing the window did not ask about the modified tab")).items.map((item) => item.name);
     await child.run("host.window.close");
     assert.deepEqual(await ask(), QUESTION);
-    // 닫지 않기 keeps the window and the modified tab.
+    // The choice not to close keeps the window and the modified tab.
     await child.run("core.picker.pick", { index: 2 });
     await child.until("core.picker", (picker) => !picker.open, "닫지 않기 did not close the question");
     assert.equal((await s.get("host.windows")).length, 2, "닫지 않기 closed the window");
     assert.equal((await child.get("editor.document", tab)).modified, true);
 
-    // 저장하지 않고 닫기 closes the window without writing the file.
+    // The choice to close without saving closes the window without writing the file.
     await child.run("host.window.close");
     assert.deepEqual(await ask(), QUESTION);
     await child.run("core.picker.pick", { index: 1 });

@@ -1,6 +1,6 @@
-// 브라우저 예제 검사(docs/operations/examples.md#browser-example-check). 스테이징된 브라우저 예제를 루프백
-// 서버로 제공하고 headless Chrome 에서 라이브러리 폼으로 프로젝트를 연 뒤, 콘솔 오류, 처리되지 않은 예외,
-// 오류 수준의 브라우저 로그가 없는지 확인한다.
+// Browser example check (docs/operations/examples.md#browser-example-check). Serves the staged browser example from a loopback
+// server, opens a project through the library form in headless Chrome, and verifies that there are no console errors,
+// unhandled exceptions, or error-level browser log entries.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
@@ -11,12 +11,12 @@ import test from "node:test";
 
 const BUILD = new URL("../build/", import.meta.url).pathname;
 const CHROME = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-/* 한 단계를 기다리는 가장 긴 시간. 넘으면 그 단계가 끝나지 않은 것으로 실패한다. */
+/* The longest time to wait for one step. A step that exceeds it fails as not finished. */
 const STEP = 20000;
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json",
   ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".txt": "text/plain" };
 
-/** build 디렉터리를 제공하는 루프백 서버. replaced 는 경로마다 build 파일 대신 보낼 JSON 이다. */
+/** A loopback server that serves the build directory. replaced maps a path to JSON that is sent instead of the build file. */
 function serve(replaced = {}) {
   const server = createServer((request, response) => {
     const path = normalize(decodeURIComponent(new URL(request.url, "http://x").pathname)).replace(/^\/+/, "");
@@ -32,7 +32,7 @@ function serve(replaced = {}) {
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server)));
 }
 
-/** headless Chrome 을 띄우고 DevTools 주소를 반환한다. 포트는 Chrome 이 표준 오류에 알린다. */
+/** Starts headless Chrome and returns the DevTools address. Chrome reports the port on standard error. */
 function launch(profile) {
   const chrome = spawn(CHROME, ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`,
     "--no-first-run", "--no-default-browser-check", "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
@@ -48,7 +48,7 @@ function launch(profile) {
   return { chrome, address };
 }
 
-/** DevTools 연결. send 는 명령의 결과를, on 은 이벤트를 받는다. */
+/** The DevTools connection. send returns the result of a command, and on receives events. */
 async function devtools(url) {
   const socket = new WebSocket(url);
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = () => reject(new Error(`cannot connect ${url}`)); });
@@ -75,8 +75,8 @@ async function devtools(url) {
 }
 
 /**
- * 제공한 브라우저 예제에서 라이브러리 폼으로 프로젝트를 열고 사이드바 섹션이 마운트되기를 기다린다. 페이지에서
- * 식을 계산하는 evaluate 와 모은 오류를 돌려준다.
+ * Opens a project through the library form in the served browser example and waits for the sidebar section to mount. Returns
+ * evaluate, which evaluates an expression in the page, and the collected errors.
  */
 async function openProject(t, replaced, opened = `async () => {
     if (document.body.dataset.screen !== "workspace") return false;
@@ -93,7 +93,7 @@ async function openProject(t, replaced, opened = `async () => {
   t.after(() => server.close());
   const profile = mkdtempSync(join(tmpdir(), "soksak-browser-example-"));
   const { chrome, address } = launch(profile);
-  // Chrome 이 끝나야 profile 폴더에 더 쓰지 않으므로, 종료 사건을 받은 뒤 지운다.
+  // Chrome writes to the profile folder until it exits, so the folder is removed after the exit event arrives.
   t.after(async () => {
     const exited = chrome.exitCode === null ? new Promise((resolve) => chrome.once("exit", resolve)) : null;
     chrome.kill();
@@ -119,15 +119,15 @@ async function openProject(t, replaced, opened = `async () => {
   await page("Log.enable");
   await page("Page.enable");
 
-  /** 페이지에서 식을 계산하고 값을 반환한다. 페이지의 예외는 실패다. */
+  /** Evaluates an expression in the page and returns the value. An exception in the page is a failure. */
   const evaluate = async (expression) => {
     const { result, exceptionDetails } = await page("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
     if (exceptionDetails) throw new Error(`${expression}: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
     return result.value;
   };
   /**
-   * 페이지에서 조건 식이 참이 될 때까지 기다린다. 문서가 바뀔 때마다 다시 계산하고, STEP 안에 참이 되지 않으면
-   * 마지막 값을 적어 실패한다.
+   * Waits until a condition expression is true in the page. It evaluates the expression again whenever the document changes, and if it is not true within STEP,
+   * it fails and reports the last value.
    */
   const until = (condition, what) => evaluate(`new Promise((resolve, reject) => {
     const check = async () => { try { return await (${condition})(); } catch (error) { return false; } };
@@ -141,7 +141,7 @@ async function openProject(t, replaced, opened = `async () => {
   await page("Page.navigate", { url: `${origin}/` });
   await until(`() => document.body?.dataset.screen === "library" && document.querySelector('[data-expose="core.library.add"]')`,
     "the library did not show");
-  // 사람이 하듯 폼을 열고 경로를 입력하고 연다. 조작 요소는 선언된 명령에 연결되어 있다.
+  // Opens the form, enters the path, and opens it as a person does. The controls are bound to declared commands.
   await evaluate(`document.querySelector('[data-expose="core.library.add"]').click()`);
   await until(`() => document.querySelector('[data-expose="core.library.form.parent"]')`, "the folder form did not open");
   await evaluate(`(() => { const input = document.querySelector('[data-expose="core.library.form.parent"]');
@@ -167,10 +167,10 @@ test("a project opens in the served browser example without a console error", as
 });
 
 test("a tab of a plugin that is not loaded opens as a placeholder card without an error", async (t) => {
-  // 환경의 workspace 가 terminal 탭을 두므로, terminal 을 뺀 플러그인 목록에서는 그 탭이 placeholder 다(docs/spec/plugins.md).
+  // The workspace of the environment holds a terminal tab, so in a plugin list without terminal that tab is a placeholder (docs/spec/plugins.md).
   const installed = JSON.parse(readFileSync(join(BUILD, "installed-plugins.json"), "utf8"));
   assert.ok(installed.plugins.some((plugin) => plugin.id === "terminal"), "the staged plugin list has no terminal plugin");
-  // 열림은 자리 표시가 보이는 것으로 판정한다.
+  // The open is judged by the placeholder being visible.
   const { evaluate, errors } = await openProject(t, {
     "installed-plugins.json": { plugins: installed.plugins.filter((plugin) => plugin.id !== "terminal") },
   }, `() => document.body.dataset.screen === "workspace" && document.querySelector("[data-plugin-placeholder]")`);

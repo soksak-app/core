@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { checkLinkedPanels } from "../linked-panels.mjs";
 
-// 연결 사이드바 검사기에 선언된 상태·명령 경계의 잘못된 결과를 주입한다.
+// Injects wrong results at the declared status and command boundaries of the linked sidebar checker.
 async function check(fault) {
   const sides = ["top", "bottom", "left", "right"];
   const card = { id: "card", active: "tab", tabs: [{ id: "tab", plugin: "fixture" }], sidebars: {} };
@@ -40,14 +40,14 @@ async function check(fault) {
       const panel = card.sidebars[params.side],
         own = saved[params.side];
       if (name === "core.card.sidebar.toggle") {
-        // 클릭은 보이는 상태를 뒤집어 저장한다. 공간 부족으로 접혀 보이는 면은 펼침을 저장한다.
+        // A click stores the inverted visible state. A face that looks collapsed for lack of space stores expanded.
         if (fault !== "noop-fold") {
           const stored = !panel.collapsed;
           Object.assign(panel, { requestedCollapsed: stored, collapsed: stored || panel.autoCollapsed });
           own.collapsed = stored;
         }
       } else if (name === "core.card.sidebar.size") {
-        // 끌기는 크기와 펼침을 저장한다.
+        // A drag stores the size and the expanded state.
         panel.size = params.size;
         Object.assign(panel, { requestedCollapsed: false, collapsed: panel.autoCollapsed });
         own.collapsed = false;

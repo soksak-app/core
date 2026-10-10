@@ -1,4 +1,4 @@
-// 정지 PNG의 실제 불투명 픽셀과 네이티브 경계를 검사한다. 미리보기의 표시 상태를 판정에 쓰지 않는다.
+// Checks the real opaque pixels of a still PNG and the native bounds. The display state of the preview is not used for the verdict.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { realpathSync, unlinkSync, rmdirSync } from "node:fs";

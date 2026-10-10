@@ -14,7 +14,7 @@ else
   exit 1
 fi
 
-# GitHub runner 의 pnpm/action-setup 처럼 npm package 밖의 단독 실행 파일로 설치한 pnpm 도 그 version 을 보고하면 맞는 toolchain 이다.
+# A pnpm installed as a standalone executable outside an npm package, such as pnpm/action-setup on a GitHub runner, is also a matching toolchain when it reports that version.
 standalone=$(mktemp -d)
 trap 'rm -rf "$standalone"' EXIT
 declared=$(node -p 'require("./package.json").packageManager.slice("pnpm@".length)')

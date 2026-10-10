@@ -34,9 +34,9 @@ function groupExists(pid) {
   }
 }
 
-// macOS 의 kill(-pgid, sig) 는 그룹에 신호를 받을 수 있는 구성원이 없으면 EPERM 을 돌려준다. 끝났지만 부모가 아직 거두지
-// 않은 구성원(좀비)은 거둬질 때까지 그룹에 남고, 좀비만 남은 그룹도 이 답을 받는다. 그래서 거부된 확인은 프로세스 표에서
-// 그룹의 구성원과 상태를 읽어 판정한다.
+// kill(-pgid, sig) of macOS returns EPERM when the group has no member that can receive the signal. A member that has ended but whose parent has not yet reaped it
+// (a zombie) stays in the group until it is reaped, and a group that holds only zombies also receives this answer. So a rejected check
+// reads the members of the group and their states from the process table and judges from them.
 function groupMembers(pgid) {
   const table = childProcess.execFileSync('ps', ['-A', '-o', 'pid=,pgid=,stat='], { encoding: 'utf8' });
   const members = [];
@@ -56,7 +56,7 @@ function signalGroup(pid, signal) {
     process.kill(-pid, signal);
   } catch (error) {
     if (error.code === 'ESRCH') return;
-    // 거부된 신호와 그룹을 남겨야 어느 단계의 신호가 실패했는지 알 수 있다. 코드는 그대로 둔다.
+    // The rejected signal and the group must be kept to tell which step's signal failed. The code is left as it is.
     error.message = `${signal} to process group ${pid}: ${error.message}`;
     throw error;
   }
@@ -76,7 +76,7 @@ async function cleanupGroup(pid, termAlreadySent = false) {
     try { return !groupExists(pid); }
     catch (error) {
       if (error.code !== 'EPERM') throw error;
-      // 거부만으로는 부재를 알 수 없다. 프로세스 표에 실행 중인 구성원이 없으면(없거나 좀비뿐이면) 그룹에는 끝낼 프로세스가 없다.
+      // The rejection alone does not show absence. When the process table has no running member (none, or only zombies), the group has no process to end.
       const members = groupMembers(pid);
       record('verify', error, members);
       return members.every((member) => member.state.startsWith('Z'));
@@ -211,8 +211,8 @@ export function runCommand(options) {
             try {
               signalGroup(child.pid, 'SIGKILL');
             } catch (error) {
-              // SIGTERM 으로 구성원이 모두 끝나 좀비만 남은 그룹에 보낸 강제 종료를 macOS 는 EPERM 으로 거부한다. 그룹에
-              // 실행 중인 구성원이 남았는지는 정리 단계가 확인하고, 남았으면 그때 실패한다. 다른 거부는 신호 실패다.
+              // macOS rejects with EPERM a forced termination sent to a group in which SIGTERM ended every member and only zombies remain. The cleanup
+              // step checks whether a running member remains in the group and fails then if one remains. Another rejection is a signal failure.
               if (error.code !== 'EPERM') reportSignalError(error);
               else process.stderr.write(`command process-group signal refused: ${error.message}; cleanup verifies the group\n`);
             }

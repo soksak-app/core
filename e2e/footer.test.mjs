@@ -1,5 +1,5 @@
-// 세로 경계를 끄는 동안 표면 아래 footer 의 어두운 테두리가 비지 않는지 녹화로 검사한다.
-// 1×·2× 배율과 반 포인트 표면 크기는 native/darwin/tests/webview_geometry_test.m 이 검사한다.
+// Checks by recording that the dark border of the footer below the surface does not become empty while the vertical boundary is turned off.
+// native/darwin/tests/webview_geometry_test.m checks the 1x and 2x scales and half-point surface sizes.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
@@ -24,8 +24,8 @@ for (const app of Object.values(APPS)) {
       const frame = readFrame(path);
       const scale = frame.contentScale * frame.scale;
       const contentBottom = Math.round(frame.content.height * scale);
-      // 표면의 아래 끝은 측정용 배경으로 칠한 터미널 래스터의 마지막 행으로 찾는다. 그 행과 표면 아래 끝의
-      // 거리는 첫 프레임에서 선언된 자리로 잰다.
+      // The bottom edge of the surface is the last row of the terminal raster painted with the measurement background. The distance between that row and the bottom edge of the surface
+      // is measured against the declared position in the first frame.
       const x = Math.round(marks.cx * scale);
       const line = rasterRow(frame, marks.colour, { from: contentBottom - 1, to: Math.round(marks.top * scale) });
       if (!line) return;
@@ -47,7 +47,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  // 카드의 내용 발은 활성 탭의 플러그인이 알린 하단 글을 보인다. 터미널은 작업 디렉터리다(docs/spec/plugins.md#tab-reports).
+  // The content foot of a card shows the bottom text that the plugin of the active tab reports. For a terminal it is the working directory (docs/spec/plugins.md#tab-reports).
   test(`${app.name}: the content footer shows the footer text that the active tab's plugin reports`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

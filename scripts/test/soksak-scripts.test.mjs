@@ -136,7 +136,7 @@ test("boundary audit reports core sources that name a declared plugin or sidecar
 });
 
 test("native and host contract tests stage the frontend without resetting an application bundle", { timeout: 60000 }, async () => {
-  // window check 가 쓰는 debug 앱의 실행 파일을 test 실행이 지우지 않는다. 계획만 읽고 실행하지 않는다.
+  // A test run must not remove the executable of the debug app that window checks use. It only reads the plan and does not run it.
   for (const target of ["native-test", "host-contract-check"]) {
     const plan = await run("make", ["-n", target], { cwd: root });
     assert.equal(plan.code, 0, plan.stderr);
@@ -272,7 +272,7 @@ test("break inventory lists only requested, known entries", { timeout: 5000 }, a
   ]);
   assert.equal(invalid.code, 2);
   assert.match(invalid.stderr, /Unknown break id/);
-  // 목록과 잘못된 id 는 결함을 넣은 복사본이 필요 없으므로 복사본을 만들지 않는다.
+  // A list and an invalid id need no copy with an injected defect, so no copy is made.
   assert.deepEqual((await copies()).filter((name) => !before.has(name)), [],
     "listing or rejecting break ids left a package copy");
 });
@@ -304,7 +304,7 @@ test("release marker scanner finds the diagnostic registry authority argument", 
 });
 
 test("release marker scanner finds capture code in an executable without symbols", { timeout: 2000 }, () => {
-  // 기호를 벗긴 실행 파일에는 sp_capture_ 기호가 없지만 ObjC 클래스 이름은 문자열로 남는다.
+  // An executable with symbols stripped has no sp_capture_ symbol, but the ObjC class names remain as strings.
   const errors = [];
   findReleaseMarkers(errors, "stripped", "\u0000SPCapture\u0000frame-%04d.bgra\u0000");
   assert.equal(errors.length, 1, errors.join("\n"));

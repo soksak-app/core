@@ -1,11 +1,11 @@
-// 닫은 프로젝트 창이 그 창과 웹뷰, 공용 라이브러리가 창과 웹뷰에 붙인 객체, 페이지의 WebContent 프로세스를 남기지
-// 않는지 검사한다.
+// Checks that a closed project window leaves behind no window, no webview, no object that the shared library attached to the window and
+// webview, and no WebContent process of the page.
 //
-// diagnostics.native.objects 는 라이브러리 객체의 살아 있는 수를 애플리케이션이 이벤트 하나를 처리한 뒤에 센다. 닫은
-// 창의 객체는 그 창을 닫은 이벤트 반복의 자동 해제 풀이 비워질 때 해제되고, 풀은 애플리케이션이 이벤트를 처리할 때
-// 비워지므로, 검사는 사용자 입력 없이 그 해제를 잰다. AppKit 은 화면에 있던 창을 닫기 애니메이션이 끝날 때까지
-// 유지하고 풀을 비우는 동안 자동 해제된 객체를 다음 비우기에서 해제하므로, 마지막 창을 닫은 뒤에는 처음 수를 equal
-// 로 주고, 라이브러리가 이벤트를 넣어 풀을 비울 때마다 비교한 결과를 받는다.
+// diagnostics.native.objects counts the live number of library objects after the application handles one event. The objects of a closed
+// window are released when the autorelease pool of the event loop iteration that closed the window is drained, and the pool is
+// drained when the application handles an event, so the check measures that release without user input. AppKit keeps a window that was on screen
+// until the close animation ends and releases objects autoreleased during a drain at the next drain, so after the last window is closed it passes the initial count as equal,
+// and receives the result of the comparison each time the library posts an event and drains the pool.
 import assert from "node:assert/strict";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -55,7 +55,7 @@ for (const app of Object.values(APPS)) {
       pageProcesses.push(pageProcess);
       const showing = await counts(s);
       measured.push(showing);
-      // 열린 창의 합성 뷰, 표면, 입력 등록이 세어져야 닫은 뒤의 값이 해제를 나타낸다.
+      // The composition view, surface, and input registration of an open window must be counted so that the value after closing shows the release.
       assert.ok(showing.windowCompositions > before.windowCompositions && showing.surfaceHosts > before.surfaceHosts &&
         showing.inputRegistrations > before.inputRegistrations,
         `${label}: the open project window is not counted: before ${JSON.stringify(before)}, open ${JSON.stringify(showing)}`);
@@ -65,15 +65,15 @@ for (const app of Object.values(APPS)) {
       await s.until("core.projects", (projects) => !projects.some((project) => project.id === opened.id),
         `${label}: the project did not leave the registry`);
     }
-    // 수가 10초 안에 before 로 돌아오지 않으면 요청이 그때의 수를 담은 오류로 실패한다.
+    // If the count does not return to before within 10 seconds, the request fails with an error that holds the count at that time.
     const after = await counts(s, before).catch((error) => {
       throw new Error(`${app.name}: ${CYCLES} closed project windows left native objects: ${error.message}; ` +
         `before ${JSON.stringify(before)}, while open ${JSON.stringify(measured)}`);
     });
     t.diagnostic(`${app.name}: before ${JSON.stringify(before)}, open ${JSON.stringify(measured)}, after ${JSON.stringify(after)}`);
     assert.deepEqual(after, before);
-    // WebKit 은 페이지가 모두 해제된 WebContent 프로세스를 끝낸다. 프로세스는 수가 돌아온 뒤에 끝날 수 있으므로 종료를
-    // 기다린다.
+    // WebKit ends a WebContent process whose pages are all released. The process may end after the count returns, so the check waits
+    // for the exit.
     for (const pid of pageProcesses) {
       await s.request("diagnostics.process.exit", { pid }).catch((error) => {
         throw new Error(`${app.name}: the page process of a closed project window is still running: ${error.message}; ` +

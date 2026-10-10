@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { turnOffCardSidebars } from "../card-sidebar-choices.mjs";
 
-// 준비 중 실패를 주입하여 임시 off 선택의 복원을 검사한다.
+// Injects a failure during preparation and checks the restoration of the temporary off choice.
 test("turning off card sidebars restores the saved selections after setup fails", async () => {
   const original = {
     left: { set: "original" },

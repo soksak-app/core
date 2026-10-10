@@ -1,12 +1,12 @@
-// 글자 크기 명령이 누른 카드나 프레임의 글자를 키우고, 판은 창 안에 남는지 검사한다(docs/spec/text-size.md).
-// 명령은 애플리케이션 메뉴 항목으로 실행하므로 메뉴에서 페이지 명령까지의 경로도 함께 검사한다.
+// Checks that the text size command enlarges the text of the pressed card or frame and that the board stays inside the window (docs/spec/text-size.md).
+// The command runs as an application menu item, so the path from the menu to the page command is checked as well.
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
-// 애플리케이션 메뉴는 하나의 ko/en 표로 만들어지므로 검사도 메뉴 언어를 따라간다.
+// The application menu is built from one ko/en table, so the check follows the menu language.
 const TITLES = {
   ko: { menu: "보기", larger: "글자 크게", reset: "글자 기본 크기" },
   en: { menu: "View", larger: "Bigger Text", reset: "Default Text Size" },
@@ -16,11 +16,11 @@ const menuTitles = async (s) => {
   return TITLES[menu.language] ?? TITLES.en;
 };
 
-// 글꼴의 줄 높이는 픽셀로 반올림되므로 요소 크기는 배율과 정확히 같게 커지지 않는다. 목표 배율의 5% 안이면
-// 그 배율로 커진 것으로 본다.
+// The line height of a font is rounded to pixels, so an element size does not grow exactly by the scale. A size within 5% of the target scale
+// counts as grown by that scale.
 const grew = (before, after, factor) => Math.abs(after / before - factor) <= factor * 0.05;
 
-/** 문서 좌표 사각형의 가운데를 누른다. */
+/** Presses the center of a rectangle in document coordinates. */
 async function press(s, rect) {
   const x = (rect.document?.x ?? 0) + rect.x + rect.width / 2;
   const y = (rect.document?.y ?? 0) + rect.y + rect.height / 2;
@@ -44,7 +44,7 @@ for (const app of Object.values(APPS)) {
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === terminalTab.id));
     await s.presented();
 
-    // 카드를 누르면 그 카드가 범위이고, 메뉴 항목은 그 카드의 배율만 바꾼다.
+    // When a card is pressed, that card is the scope, and the menu item changes only the scale of that card.
     await press(s, await s.rect("terminal.view", undefined, terminalTab.id));
     await s.until("core.text", (value) => value.scope.kind === "card" && value.scope.card === card.id,
       "pressing the card did not make it the text size scope");
@@ -54,26 +54,26 @@ for (const app of Object.values(APPS)) {
       "the menu item did not enlarge the pressed card");
     assert.equal(cardText.frame, 1, "enlarging a card must not change the frame factor");
     await s.presented();
-    // 터미널은 13pt 에 배율을 곱한 글자 크기로 칸을 다시 잰다(docs/spec/text-size.md).
+    // A terminal measures its cells again with the font size of 13pt multiplied by the scale (docs/spec/text-size.md).
     const after = await s.until("terminal.session", (value) => value.cellHeight !== session.cellHeight ? value : null,
       "the terminal cell height did not change with the card factor", { surface: terminalTab.id });
     assert.ok(grew(session.cellHeight, after.cellHeight, 1.1),
       `the terminal cell height must grow by the card factor: ${session.cellHeight} → ${after.cellHeight}`);
 
-    // 카드 배율은 레이아웃과 함께 저장되어 다시 읽은 뒤에도 남는다.
+    // The card scale is stored with the layout and stays after reading again.
     const documentBefore = (await s.get("core.window.document")).timeOrigin;
     await s.run("host.window.reload");
     await s.until("core.window.document", (doc) => doc.timeOrigin !== documentBefore && doc.readyState === "complete",
       "the main document did not reload");
     await s.until("core.text", (value) => value.cards[card.id] === 1.1, "the card factor did not survive a reload");
 
-    // 프레임을 누르면 프레임이 범위이고, 스페이스 줄이 커지며 판은 창 안에 남는다.
+    // When the frame is pressed, the frame is the scope, the space row grows, and the board stays inside the window.
     const window = await s.get("host.window");
     const spaceTab = await s.rect("core.space-tab", 0);
     await press(s, spaceTab);
     await s.until("core.text", (value) => value.scope.kind === "frame", "pressing the frame did not make it the scope");
-    // 1 에서 세 단계(1.1, 1.25, 1.5)를 올린다. 단계마다 표시를 기다려, 그 배율에서 판과 네이티브 표면이 같은 device
-    // pixel 에 앉는지 페이지 검증(V7b)이 판정하게 한다(F36).
+    // Raises three steps (1.1, 1.25, 1.5) from 1. Waits for the display at each step so that the page verification (V7b) judges whether the board and the native surface sit on the same device
+    // pixel at that scale (F36).
     for (const factor of [1.1, 1.25, 1.5]) {
       await s.run("host.menu.select", { menu: titles.menu, title: titles.larger });
       await s.until("core.text", (value) => value.frame === factor, `the frame factor did not reach ${factor}`);
@@ -88,7 +88,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(cardRect.y + cardRect.height <= window.content.height + 0.5,
       `the plane must stay inside the window: card bottom ${cardRect.y + cardRect.height}, content ${window.content.height}`);
 
-    // 기본 크기는 현재 범위(프레임)를 1 로 되돌린다.
+    // The default size returns the current scope (the frame) to 1.
     await s.run("host.menu.select", { menu: titles.menu, title: titles.reset });
     await s.until("core.text", (value) => value.frame === 1 && value.cards[card.id] === 1.1,
       "restoring the frame must not change the card factor");

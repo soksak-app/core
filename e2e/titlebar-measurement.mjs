@@ -1,37 +1,37 @@
-// 녹화 프레임 하나에서 창 단추의 가운데와 첫 행의 가운데를 픽셀로 잰다(docs/spec/native-surfaces.md#title-bar-height).
-// 판정이 어긋난 프레임과 잴 수 없는 프레임을 거부하는지 test/titlebar-measurement.test.mjs 가 검사한다.
+// Measures in pixels the center of the window buttons and the center of the first row in one recorded frame (docs/spec/native-surfaces.md#title-bar-height).
+// test/titlebar-measurement.test.mjs checks that it rejects frames whose judgement is off and frames that cannot be measured.
 import { pixel } from "@soksak/window-check/frame.mjs";
 
-/** 단추 가운데와 첫 행 가운데가 다를 수 있는 가장 큰 거리(px). */
+/** The largest distance (px) by which the button center and the first-row center may differ. */
 export const TOLERANCE = 0.5;
 
-/** 프레임 배율 factor 에서 첫 행의 높이(px). 페이지의 --chrome-row 와 같은 식이다. */
+/** The height (px) of the first row at frame scale factor. It is the same formula as --chrome-row of the page. */
 export const rowHeight = (factor) => Math.round(Math.max(40, 36 * factor));
 
-// 단추를 찾기 시작하는 행(창 위 기준 pt). 창의 둥근 모서리는 이 행 위에 있다. 제목줄은 32pt 보다 낮지 않으므로
-// 14pt 단추의 위는 9pt 보다 위에 있지 않다.
+// The row (pt from the top of the window) where the search for buttons starts. The rounded corner of the window is above this row. The title bar is not lower than 32pt, so
+// the top of a 14pt button is not above 9pt.
 const START = 8;
-// 제목줄은 200pt 보다 높지 않다. 첫 행의 아래 테두리는 이 행 안에 있다.
+// The title bar is not higher than 200pt. The lower border of the first row is inside this row.
 const LIMIT = 202;
-// 첫 행 바탕과 아래 테두리(--card 와 --edge)는 채널마다 18 이상 다르다.
+// The first-row background and the lower border (--card and --edge) differ by 18 or more per channel.
 const EDGE = 6;
-// 창 단추(비활성 창의 회색 단추도)는 첫 행 바탕과 이보다 크게 다르다.
+// The window buttons (also the gray buttons of an inactive window) differ from the first-row background by more than this.
 const INK = 16;
-// 단추 영역 오른쪽 끝에서 바탕 색과 아래 테두리를 재는 열까지의 거리(pt). 첫 행은 단추 영역 오른쪽에 12px 여백을 둔다.
+// The distance (pt) from the right end of the button area to the column where the background color and the lower border are measured. The first row has a 12px margin to the right of the button area.
 const GAP = 6;
 
 const differs = (a, b, tolerance) => a.some((value, index) => Math.abs(value - b[index]) > tolerance);
 
 /**
- * 프레임 frame(readFrame 의 결과)에서 첫 행의 아래 끝 row 와 창 단추의 세로 가운데 buttons 를 창 위 기준 pt 로 잰다.
- * buttons 는 host.window 의 controls(창 좌표 pt)이며 가로 위치만 쓴다.
+ * In frame frame (the result of readFrame), measures the lower end row of the first row and the vertical center buttons of the window buttons in pt from the top of the window.
+ * buttons are the controls of host.window (window coordinates, pt), and only the horizontal position is used.
  *
- * 첫 행: 단추 영역 오른쪽의 빈 열을 START 부터 아래로 읽어, 첫 행 바탕과 다른 첫 줄(아래 테두리)이 끝나는 곳이 행의
- * 아래 끝이다. 행의 위는 창의 위이므로 행의 가운데는 row / 2 다.
- * 단추: 각 단추의 가운데 절반 열에서 START 부터 테두리 위까지 바탕과 INK 넘게 다른 첫 행과 마지막 행의 가운데다.
- * 원을 지나는 세로 열은 원의 가운데에 대해 대칭이므로 단추가 옆으로 옮겨져도 가운데는 같다.
+ * First row: reads the empty column to the right of the button area downward from START, and the place where the first line that differs from the first-row background (the lower border) ends is the
+ * lower end of the row. The top of the row is the top of the window, so the center of the row is row / 2.
+ * Buttons: in the middle half column of each button, from START to above the border, the center of the first and the last row that differ from the background by more than INK.
+ * A vertical column through a circle is symmetric about the center of the circle, so the center is the same even if the button moves sideways.
  *
- * 잴 수 없으면 그 까닭과 자리를 missing 으로 반환한다. 잴 수 없는 프레임은 통과가 아니다.
+ * When it cannot measure, it returns the reason and the place as missing. A frame that cannot be measured is not a pass.
  */
 export function measureTitlebar(frame, buttons) {
   if (!Array.isArray(buttons) || buttons.length === 0) throw new Error("the window reports no button frames");
@@ -76,7 +76,7 @@ export function measureTitlebar(frame, buttons) {
   return { time: frame.time, row, buttons: centre, difference: centre - row / 2 };
 }
 
-/** 단추 가운데가 첫 행 가운데와 tolerance 넘게 다르거나 잴 수 없는 프레임. */
+/** A frame whose button center differs from the first-row center by more than tolerance, or that cannot be measured. */
 export function misaligned(measured, tolerance = TOLERANCE) {
   return measured.filter((frame) => frame.missing !== undefined || Math.abs(frame.difference) > tolerance);
 }

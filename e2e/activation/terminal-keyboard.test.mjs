@@ -1,9 +1,9 @@
-// 활성화 등급 창 검사: 네이티브 키로 세 터미널에 명령을 입력하고 편집하고 실행한다.
+// Activation-tier window check: types, edits and runs commands in three terminals with native keys.
 //
-// 터미널 그림 영역은 일반 문자를 입력기(입력 컨텍스트)로 넘긴다. OS 입력기는 활성 애플리케이션의 키 창에만
-// 답하고, 애플리케이션이 한 번 활성화된 뒤에는 그 밖의 창에 온 문자 키에 답하지 않는다. 그래서 이 검사는
-// 앱을 활성화해 사용자 포커스를 가져간다. 기본 창 검사(pnpm -F @soksak/e2e verify)에 포함하지 않고,
-// 사용자가 승인한 실행에서 pnpm -F @soksak/e2e verify:activation 으로만 실행한다.
+// The terminal drawing region passes ordinary characters to the input method (input context). The OS input method answers only the key window of the active application,
+// and once the application has been activated it does not answer character keys that arrive at any other window. So this check
+// activates the app and takes the user's focus. It is not part of the default window check (pnpm -F @soksak/e2e verify);
+// a run that the user approved runs it only through pnpm -F @soksak/e2e verify:activation.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -16,8 +16,8 @@ import { ensureTerminals, readScreenUntil, textLines } from "../terminal-screen.
 
 const ABC = "com.apple.keylayout.ABC";
 
-// 입력 컨텍스트는 문서마다 입력 소스를 기억하고, 포커스를 받으면 그 입력 소스로 바꿀 수 있다.
-// 그래서 영문 명령을 입력하기 전에, 포커스를 준 뒤 영문 자판을 고른다.
+// An input context remembers an input source per document and can switch to that input source when it receives focus.
+// So before typing English commands, the check gives focus and then selects the English layout.
 async function selectABC(session) {
   const selected = await session.request("diagnostics.input.source", { select: ABC });
   assert.equal(selected.current, ABC, `input source ${ABC} was not selected`);
@@ -63,13 +63,13 @@ for (const app of Object.values(APPS)) {
     const terminals = await ensureTerminals(s, 3);
     assert.equal(terminals.length, 3);
     await s.presented();
-    // 입력기는 활성 애플리케이션의 키 창에만 답하므로 앱을 활성화한다. 키 창은 포인터 위치를 이동으로 받으므로
-    // 창을 포인터 밖에 둔다.
+    // The input method answers only the key window of the active application, so the app is activated. The key window receives the pointer position as a movement, so
+    // the window is placed away from the pointer.
     await s.keepPointerOutside();
     const first = await s.rect("terminal.view", undefined, terminals[0].surface);
     await s.pointer(first.document.x + first.x + first.width / 2, first.document.y + first.y + first.height / 2,
       "move", { activate: true });
-    // 검사가 끝나면 이전 입력 소스로 되돌린다.
+    // When the check ends, the previous input source is restored.
     await s.selectInputSource(ABC);
     for (const [index, terminal] of terminals.entries()) {
       await t.test(`terminal ${index + 1}`, { timeout: 30000 }, async () => {
@@ -128,7 +128,7 @@ for (const app of Object.values(APPS)) {
           "typing after output required another click");
         assert.equal(next.filter((row) => row === continued).length, 1, "continued input must execute once without refocusing");
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} continued input`);
-        // 화살표 키: Left 두 번 뒤 입력은 줄 가운데에 들어가고, Up 은 앞 명령을 다시 불러온다.
+        // Arrow keys: input after two Left presses goes into the middle of the line, and Up recalls the previous command.
         const arrowed = `a${index}q${index}bc`;
         for (const ch of `echo a${index}${index}bc`) await s.press(ch === " " ? "Space" : ch);
         for (let step = 0; step < 3; step++) await s.press("ArrowLeft");
@@ -140,7 +140,7 @@ for (const app of Object.values(APPS)) {
         const recalled = await readScreenUntil(s, surface, (lines) => lines.filter((row) => row === arrowed).length === 2,
           "native Up did not recall the previous command");
         assert.equal(recalled.filter((row) => row === arrowed).length, 2, "the recalled command must run once more");
-        // read 의 입력 줄이 표시된 뒤 Ctrl+C 를 보내고, 새 프롬프트를 확인한 뒤 다음 줄을 입력한다.
+        // After the input line of read is shown, Ctrl+C is sent; after the new prompt is confirmed, the next line is typed.
         for (const ch of "read x") await s.press(ch === " " ? "Space" : ch);
         await s.press("Enter");
         await readScreenUntil(s, surface, (lines) => lines.join("").includes("read x") &&
@@ -254,7 +254,7 @@ for (const app of Object.values(APPS)) {
       host.regions.some((region) => region.surface === surface && region.focused),
     "the terminal did not receive native focus in the active window");
 
-    // 다른 프로젝트 창이 키 창이 되면 사람의 키는 첫 창에 닿지 않는다. 진단 키도 다른 창에 전달하지 않고 거부한다.
+    // When another project window becomes the key window, human keys do not reach the first window. The diagnostic key does not deliver to another window either and is rejected.
     const project = temporaryProject(s, "soksak-terminal-key-window-");
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
     await s.run("core.project.open", { root: project, color: "#7fe3b0" });

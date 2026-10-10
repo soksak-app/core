@@ -1,7 +1,7 @@
-// soksak 워크벤치를 실행하는 Wails v3 애플리케이션.
+// A Wails v3 application that runs the soksak workbench.
 //
-// 스테이징이 src/frontend/ 에 프런트엔드를 배치하고, 이 파일이 그 디렉터리를 포함한다.
-// 창, 표면, 모달, 사이드카와 로컬 엔드포인트는 github.com/soksak-app/core/packages/host/wailsv3 패키지가 처리한다.
+// Staging places the frontend in src/frontend/, and this file embeds that directory.
+// Windows, surfaces, modals, sidecars, and the local endpoint are handled by the github.com/soksak-app/core/packages/host/wailsv3 package.
 package main
 
 import (
@@ -17,7 +17,7 @@ import (
 var assets embed.FS
 
 func main() {
-	// 인자는 창을 열기 전에 읽는다. 잘못된 인자는 상태 2 로 끝낸다(docs/spec/hosts.md#application-arguments).
+	// The arguments are read before the window opens. An invalid argument ends with status 2 (docs/spec/hosts.md#application-arguments).
 	options, err := host.ParseArguments(os.Args[1:])
 	if err == nil {
 		err = host.ApplyArguments(options)

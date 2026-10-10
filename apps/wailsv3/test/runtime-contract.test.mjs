@@ -1,13 +1,13 @@
-// Wails 런타임은 개별 영역 배치를 노출하지 않고 완전한 합성만 보낸다.
+// The Wails runtime does not expose placement of individual regions and sends only the complete composition.
 import assert from "node:assert/strict";
 import test from "node:test";
 
 test("Wails page regions expose operations but only composition places geometry", async () => {
-  // mock한 native 인터페이스를 거친 모든 호출을 기록한다
+  // Records every call that goes through the mocked native interface.
   const recorded = [];
   const logged = [];
 
-  // Wails native 인터페이스를 mock한다
+  // Mocks the Wails native interface.
   globalThis.window = {
     __soksakNative: {
       call(method, args) {
@@ -17,7 +17,7 @@ test("Wails page regions expose operations but only composition places geometry"
         return Promise.resolve(method === "WaitPresented" ? { displayed: 42 } : undefined);
       },
       on(event, fn) {
-        // 이벤트 전달을 흉내 낸다: image-event를 s1에 한 번, s2에 한 번, 모두 두 번 보낸다
+        // Simulates event delivery: sends an image-event once to s1 and once to s2, twice in total.
         if (event === "image-event") {
           setTimeout(() => {
             fn({ surface: "s1", name: "test-img", event: { type: "test" } });
@@ -29,12 +29,12 @@ test("Wails page regions expose operations but only composition places geometry"
     },
   };
 
-  // surface id가 있는 location을 mock한다
+  // Mocks a location that has a surface id.
   globalThis.location = {
     search: "?id=s1",
   };
 
-  // URLSearchParams를 mock한다
+  // Mocks URLSearchParams.
   globalThis.URLSearchParams = class {
     constructor(search) {
       this.search = search;
@@ -45,10 +45,10 @@ test("Wails page regions expose operations but only composition places geometry"
     }
   };
 
-  // 런타임 모듈을 import한다(전역 값을 붙잡는 IIFE다)
+  // Imports the runtime module (an IIFE that captures global values).
   const { host, page } = await import("../runtime/index.js");
 
-  // 테스트 전에 기록된 호출을 지운다(모듈 import가 호출을 만들었을 수 있다)
+  // Clears the calls recorded before the test (the module import may have produced calls).
   recorded.length = 0;
 
   // A page of a surface reports a record of its own as an event of a batch of the host call log.
@@ -82,7 +82,7 @@ test("Wails page regions expose operations but only composition places geometry"
   await host.call("imageText", { surface: "s1", name: "img", text: "accessible" });
   assert.deepEqual(recorded.at(-1), ["ImageText", [{ surface: "s1", name: "img" }, "accessible"]]);
 
-  // 테스트: image.attach는 ImageAttach를 [request]로 호출해야 한다
+  // Test: image.attach must call ImageAttach with [request]
   await page.image.attach("v", "@x/side");
   assert.deepEqual(
     recorded[recorded.length - 1],
@@ -104,7 +104,7 @@ test("Wails page regions expose operations but only composition places geometry"
     "composition.place: sends one complete request"
   );
 
-  // 테스트: image.focus는 ImageFocus를 [request]로 호출해야 한다
+  // Test: image.focus must call ImageFocus with [request]
   await page.image.focus("v");
   assert.deepEqual(
     recorded[recorded.length - 1],
@@ -112,7 +112,7 @@ test("Wails page regions expose operations but only composition places geometry"
     "image.focus: sends ImageFocus with [request]"
   );
 
-  // 테스트: image.caret은 ImageCaret을 [request, x, y, w, h]의 개별 인자로 호출해야 한다
+  // Test: image.caret must call ImageCaret with the separate arguments [request, x, y, w, h]
   await page.image.caret("v", 1, 2, 3, 4);
   assert.deepEqual(
     recorded[recorded.length - 1],
@@ -120,7 +120,7 @@ test("Wails page regions expose operations but only composition places geometry"
     "image.caret: sends ImageCaret with [request, x, y, w, h] as separate args"
   );
 
-  // 테스트: image.text는 ImageText를 [request, text]의 개별 인자로 호출해야 한다
+  // Test: image.text must call ImageText with the separate arguments [request, text]
   await page.image.text("v", "hello");
   assert.deepEqual(
     recorded[recorded.length - 1],
@@ -128,7 +128,7 @@ test("Wails page regions expose operations but only composition places geometry"
     "image.text: sends ImageText with [request, text] as separate args"
   );
 
-  // 테스트: image.detach는 ImageDetach를 [request]로 호출해야 한다
+  // Test: image.detach must call ImageDetach with [request]
   await page.image.detach("v");
   assert.deepEqual(
     recorded[recorded.length - 1],
@@ -136,16 +136,16 @@ test("Wails page regions expose operations but only composition places geometry"
     "image.detach: sends ImageDetach with [request]"
   );
 
-  // 테스트: image.on은 surface로 이벤트를 걸러야 한다
+  // Test: image.on must filter events by surface
   let receivedEvents = [];
   await page.image.on((name, event) => {
     receivedEvents.push({ name, event });
   });
 
-  // 이벤트가 처리되기를 기다린다
+  // Waits until the events are handled.
   await new Promise((resolve) => setTimeout(resolve, 50));
 
-  // s2가 아닌 s1의 이벤트만 받아야 한다
+  // It must receive only the events of s1, not of s2
   assert.equal(receivedEvents.length, 1, "image.on: receives exactly 1 event");
   assert.deepEqual(
     receivedEvents[0],

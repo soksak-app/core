@@ -1,4 +1,4 @@
-// 제어된 프레임으로 경계 거부와 진단 출처를 검증한다. 실제 렌더링 실패 원인을 대신하지 않는다.
+// Verifies the boundary rejection and the diagnostic origin with controlled frames. It does not stand in for the cause of an actual rendering failure.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { recordedEdges } from "../sidebar-gesture-recording.mjs";

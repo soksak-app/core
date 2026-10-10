@@ -1,7 +1,7 @@
-// 실제 입력 등급 창 검사: 입력 도구가 사용자와 같은 경로로 이벤트를 보내는지 검사한다.
+// Real-input-tier window check: checks that the input tool sends events by the same path as the user.
 //
-// 이 등급은 CGEventPost 로 HID 이벤트를 보내므로 사용자의 포인터와 키보드를 쓰고 앱을 활성화한다. 기본 창 검사에
-// 포함하지 않고, 사용자가 승인한 실행에서 pnpm -F @soksak/e2e verify:real 로만 실행한다.
+// This tier sends HID events with CGEventPost, so it uses the pointer and the keyboard of the user and activates the application. It is not part of the default window checks,
+// and runs only in a run that the user approved, with pnpm -F @soksak/e2e verify:real.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -42,7 +42,7 @@ for (const app of Object.values(APPS)) {
     await s.until("terminal.session", (session) => session.scrollback?.history > 20, "the rows did not exceed the screen", { surface });
     const view = await s.rect("terminal.view", undefined, surface);
     await bringFront(s, app, view);
-    // HID 시스템에 Shift 키 상태를 게시한다. 원본 없는 이벤트는 이 플래그를 물려받는다.
+    // Posts the Shift key state to the HID system. An event without an origin inherits this flag.
     post([{ type: "key", code: 56, down: true, modifiers: ["shift"] }]);
     s.cleanup(() => post([{ type: "key", code: 56, down: false }]));
     const seen = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
@@ -72,7 +72,7 @@ for (const app of Object.values(APPS)) {
     const grip = await s.rect("core.card.sidebar.grip", 0);
     const point = await bringFront(s, app, grip);
     post([{ type: "move", ...point }, { type: "down", ...point, clicks: 1 }, { type: "up", ...point, clicks: 1 }]);
-    // 누름은 곧바로 접고 저장된 폭을 바꾸지 않는다.
+    // A press collapses immediately and does not change the stored width.
     const done = await s.until("core.grid", (value) => value.cards.find((item) => item.id === card.id)?.sidebars?.left?.collapsed === true,
       "a posted click on the divider did not fold the sidebar");
     assert.equal(done.cards.find((item) => item.id === card.id).sidebars.left.size, 300, "the click changed the stored width");

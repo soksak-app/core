@@ -1,7 +1,7 @@
-// 활성화 등급 창 검사: 진단 키의 Command+C, Command+V 가 사람의 키처럼 Edit 메뉴를 실행하는지 검사한다.
+// Activation-tier window check: checks that the diagnostic keys Command+C and Command+V run the Edit menu like human keys.
 //
-// 진단 키는 NSApplication 의 분배를 거친다. 메뉴 키 대응의 동작은 활성 애플리케이션의 키 창으로 가므로 이 검사는
-// 앱을 활성화한다. 사용자가 승인한 실행에서 pnpm -F @soksak/e2e verify:activation 으로만 실행한다.
+// A diagnostic key goes through the dispatch of NSApplication. The key-equivalent behavior of the menu goes to the key window of the active application, so this check
+// activates the app. A run that the user approved runs it only through pnpm -F @soksak/e2e verify:activation.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -26,12 +26,12 @@ for (const app of Object.values(APPS)) {
     await s.pointer(view.document.x + view.x + 5, view.document.y + view.y + 5, "move", { activate: true });
     await s.until("host.window", (window) => window.active === true && window.key === true, "the window did not become key");
 
-    // 끌어서 선택한 뒤 다른 앱이 클립보드를 바꾸면 Command+C 가 선택을 다시 복사한다.
+    // After a drag selection, when another app changes the clipboard, Command+C copies the selection again.
     const cell = (column) => ({ x: view.document.x + view.x + (column + 0.5) * session.cellWidth,
       y: view.document.y + view.y + (row + 0.5) * session.cellHeight });
     const before = session.selectionReleases;
-    // 선택은 포인터가 칸의 가운데를 지나야 그 칸을 덮으므로 첫 칸의 왼쪽 가장자리 가까이에서 누르고 마지막 칸의 가운데를
-    // 지나 뗀다(docs/spec/terminal-runtime.md).
+    // A selection covers a cell only when the pointer passes the middle of the cell, so the press is near the left edge of the first cell and the release is after the middle of the last cell
+    // (docs/spec/terminal-runtime.md).
     const shift = 0.3 * session.cellWidth;
     await s.pointer(cell(0).x - shift, cell(0).y, "down");
     await s.pointer(cell(3).x, cell(3).y, "drag");

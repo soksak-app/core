@@ -6,20 +6,20 @@ docs-check:
 	@node scripts/check-docs.mjs
 	@node packages/plugin-api/records-check.js
 
-# 문서와 설정 주석이 저장소에 관한 사실만 적는지 검사한다(AGENTS.md Documentation).
+# Checks that the documents and configuration comments state only facts about the repository (AGENTS.md Documentation).
 records-check:
 	@node packages/plugin-api/records-check.js
 
-# RANGE 의 커밋 메시지 형식을 검사한다. 예: make commits-check RANGE=origin/main..HEAD
+# Checks the commit message form of RANGE. Example: make commits-check RANGE=origin/main..HEAD
 commits-check:
 	@test -n "$(RANGE)" || { echo "make commits-check RANGE=<revision range>" >&2; exit 2; }
 	@node packages/plugin-api/commits-check.js "$(RANGE)"
 
-# 이 checkout 의 git hook 폴더를 .githooks 로 정한다. commit-msg hook 이 커밋 메시지 형식을 검사한다.
+# Sets the git hook folder of this checkout to .githooks. The commit-msg hook checks the commit message form.
 hooks:
 	@git config core.hooksPath .githooks
 
-# release 빌드를 만들고, 스테이징된 프런트엔드와 release 실행 파일에 진단 코드가 없는지 검사한다.
+# Builds release and checks that the staged frontend and the release executables hold no diagnostic code.
 release-check: wailsv3-build-release tauriv2-build-release registry-manifest-check
 	@node scripts/check-release.mjs --macos-minimum $(MACOS_MINIMUM) --wailsv3-bundle "$(WAILS_RELEASE_BUNDLE)" --tauriv2-bundle "$(TAURI_RELEASE_BUNDLE)"
 
@@ -28,9 +28,9 @@ release-check: wailsv3-build-release tauriv2-build-release registry-manifest-che
 registry-manifest-check:
 	@node scripts/check-registry-manifests.mjs
 
-# 실행 중인 애플리케이션의 main page process 메모리를 시작, 유휴, 다시 읽기 뒤에 잰다(docs/operations/examples.md).
-# APP 은 wailsv3 또는 tauriv2, CONFIG 는 그 애플리케이션의 설정 폴더, BUILD 는 release(기본) 또는 debug 다.
-# HOST 는 wailsv3 또는 tauriv2 다. 빌드한 디버그 번들의 복사본으로 애플리케이션 업데이트가 번들을 교체하는지 검사한다.
+# Measures the memory of the main page process of a running application at start, idle, and after reload (docs/operations/examples.md).
+# APP is wailsv3 or tauriv2, CONFIG is the configuration folder of that application, BUILD is release (default) or debug.
+# HOST is wailsv3 or tauriv2. Checks with a copy of the built debug bundle that an application update replaces the bundle.
 app-update-check:
 	@case "$(HOST)" in wailsv3|tauriv2) ;; *) echo "app-update-check requires HOST=wailsv3|tauriv2" >&2; exit 2;; esac
 	@node scripts/check-app-update.mjs --host $(HOST) --bundle target/debug/soksak-$(HOST).app --registry target/registry/index.json
@@ -41,17 +41,17 @@ page-memory:
 	@case "$(BUILD)" in ''|release|debug) ;; *) echo "page-memory requires BUILD=release|debug" >&2; exit 2;; esac
 	@node scripts/measure-page-memory.mjs --sok $(if $(filter debug,$(BUILD)),target/debug/soksak-$(APP).app,target/release/$(APP)/soksak.app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --idle-minutes $(or $(MINUTES),60) --reloads $(or $(RELOADS),20)
 
-# 코어, 플러그인, 사이드카가 서로의 이름을 코드에 적지 않았는지 검사한다.
+# Checks that core, plugin, and sidecar sources do not name each other.
 boundaries:
 	@node scripts/check-boundaries.mjs
 
-# docs/spec/events.json 에 선언한 모든 event 의 이름을 소스가 적는지 검사한다. 창 검사가 남긴 로그의 감사는
-# `node scripts/check-events.mjs --logs <설정 폴더>...` 이다(docs/operations/examples.md).
+# Checks that the sources name every event declared in docs/spec/events.json. The audit of the logs that window checks leave is
+# `node scripts/check-events.mjs --logs <configuration folder>...` (docs/operations/examples.md).
 events-check:
 	@node scripts/check-events.mjs
 
-# registry window check 의 TLS 인증서(docs/operations/examples.md). 검사 소유 인증 기관과 127.0.0.1 의 server 인증서를
-# 만든다. 진단 build 의 check 애플리케이션은 --registry-ca <폴더>/ca.pem 으로 시작한다. 이미 있으면 바꾸지 않는다.
+# The TLS certificates of the registry window check (docs/operations/examples.md). Creates a certificate authority owned by the check and a server certificate for 127.0.0.1.
+# The check application of a diagnostic build starts with --registry-ca <folder>/ca.pem. An existing certificate is not replaced.
 E2E_REGISTRY_TLS = $(or $(SOKSAK_CONFIG_ROOT),$(TMPDIR))/soksak-check-registry-tls
 e2e-registry-tls:
 	@test -n "$(or $(SOKSAK_CONFIG_ROOT),$(TMPDIR))" || { echo "e2e-registry-tls needs TMPDIR or SOKSAK_CONFIG_ROOT" >&2; exit 2; }
@@ -64,13 +64,13 @@ e2e-registry-tls:
 	  openssl x509 -req -in server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial -days 3650 -extfile server.ext -out server.pem 2>/dev/null; \
 	  rm -f server.csr ca.srl server.ext; echo "$(E2E_REGISTRY_TLS)"
 
-# 창 검사가 엔드포인트의 선언된 항목과 네이티브 입력만 쓰는지 검사한다.
-# 스테이징한 브라우저 예제에서 프로젝트를 열고 페이지 오류가 없는지 headless Chrome 으로 검사한다.
+# Checks that window checks use only the declared entries of the endpoint and native input.
+# Opens a project in the staged browser example and checks with headless Chrome that no page error occurs.
 browser-example-check: browser-frontend
 	@pnpm -F @soksak/browser check
 
-# 브라우저 예제는 host 가 없으므로 BROWSER_CONFIG 에 BROWSER_PLUGINS 를 설치하고, 스테이징이 그 설치를 host 처럼
-# 제공한다(docs/spec/plugins.md 의 스테이징 배치).
+# The browser example has no host, so BROWSER_PLUGINS are installed into BROWSER_CONFIG and the staging provides that installation as a host does
+# (the staging layout of docs/spec/plugins.md).
 BROWSER_CONFIG = target/browser-config
 BROWSER_PLUGINS = terminal browser
 
@@ -86,25 +86,25 @@ browser-example: browser-frontend
 e2e-check:
 	@node scripts/check-e2e.mjs
 
-# UI 조작이 명령을 거치고, 표시한 이름이 모두 선언되고 등록되었는지 검사한다.
+# Checks that UI operations run commands and that every displayed name is declared and registered.
 exposure-check:
 	@node scripts/check-exposure.mjs
 
-# 전체 소스·테스트 목록의 연결을 검사한다. 동작 검증 결과와 구분한다.
+# Checks the connection of the full source and test lists. It is separate from the result of behavior verification.
 parity-check:
 	@node scripts/check-test-parity.mjs
 
-# 두 호스트의 공개 API 면(호출 이름·연결·엔드포인트 메서드)이 같은지 기계로 검사한다(docs/spec/host-parity.md).
+# Mechanically checks that the public API surfaces of the two hosts (call names, connections, endpoint methods) are the same (docs/spec/host-parity.md).
 host-parity-check:
 	@node scripts/check-host-parity.mjs
 
-# JS/TS, Rust, Go, Objective-C, shell 테스트 케이스는 같은 관측 가능한 케이스 계약을 사용한다.
+# JS/TS, Rust, Go, Objective-C, and shell test cases use the same observable case contract.
 language-test: native-darwin
 	@$(MAKE) -C native/darwin $(CURDIR)/native/darwin/build/appearance_test
 	@node scripts/language-test-adapters.mjs scripts/language-test-cases.json
 
-# Rust 패키지의 각 테스트를 새 프로세스에서 혼자 실행한다. 다른 테스트가 만든 상태나 시간 순서에 기대는 테스트를 찾는다.
-# 첫 실패에서 테스트 이름을 보고한다. MANIFEST 는 패키지가 속한 작업 공간의 Cargo.toml 이고 FEATURES 는 cargo 의 --features 값이다.
+# Runs each test of a Rust package alone in a new process. Finds tests that depend on state another test created or on test order.
+# Reports the test name at the first failure. MANIFEST is the Cargo.toml of the workspace that holds the package and FEATURES is the --features value of cargo.
 MANIFEST ?= Cargo.toml
 rust-tests-alone:
 	@case "$(PACKAGE)" in '') echo "rust-tests-alone requires PACKAGE=<cargo package> [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
@@ -118,9 +118,9 @@ rust-tests-alone:
 	  [ $$count -gt 0 ] || { echo "rust-tests-alone found no tests in $(PACKAGE)" >&2; exit 1; }; \
 	  echo "$(PACKAGE): $$count tests pass alone"
 
-# Rust 패키지의 테스트를 COUNT 번 차례로 실행한다. TEST 를 주면 그 이름의 테스트만 실행한다.
-# 간헐 실패를 재현하고 수용하는 대상이다. 첫 실패에서 실행 번호, 시스템 부하, 그 실행의 출력을 보고한다.
-# 기록기의 비용을 잰다. 시험이 아니며 숫자를 출력하고 단언하지 않는다. Rust writer 는 cargo bench 로, native ring 은 native/darwin 의 benchmark 로 잰다.
+# Runs the tests of a Rust package COUNT times in sequence. With TEST, runs only the test of that name.
+# This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
+# Measures the cost of the recorder. It is not a test: it prints numbers and asserts nothing. The Rust writer is measured with cargo bench and the native ring with the benchmark of native/darwin.
 benchmark-rust:
 	@$(CARGO_ENV) cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_log_benchmark --bench event_native_benchmark
 
@@ -141,9 +141,9 @@ rust-repeat:
 	  done; \
 	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"
 
-# Go 패키지의 테스트를 COUNT 번 차례로 실행한다. TEST 는 go test -run 정규식이고 TAGS 는 go test -tags 값이다.
-# 빌드된 테스트 파일이 없거나(build tag) 이름이 맞는 테스트가 없는 실행은 실패다.
-# 간헐 실패를 재현하고 수용하는 대상이다. 첫 실패에서 실행 번호, 시스템 부하, 그 실행의 출력을 보고한다.
+# Runs the tests of a Go package COUNT times in sequence. TEST is the go test -run regular expression and TAGS is the go test -tags value.
+# A run with no built test file (build tag) or no test of a matching name fails.
+# This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
 go-repeat:
 	@case "$(PACKAGE)" in '') echo "go-repeat requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "go-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
@@ -157,10 +157,10 @@ go-repeat:
 	  done; \
 	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"
 
-# 저장소 루트에서 Node 테스트 파일의 이름 패턴에 맞는 테스트를 COUNT 번 차례로 실행한다.
-# 간헐 실패를 재현하고 수용하는 대상이다. 첫 실패에서 실행 번호, 시스템 부하, 그 실행의 출력을 보고한다.
-# 실행한 테스트는 기계 형식인 TAP 결과에서 센다. 사람이 읽는 출력은 환경에 따라 색 코드가 붙고, 이름이 맞는 테스트가
-# 없으면 파일 자체가 통과 결과 하나로 보고되므로 제목이 이름 패턴에 맞고 건너뛰지 않은 결과만 센다.
+# Runs the tests whose name matches the pattern in a Node test file COUNT times in sequence from the repository root.
+# This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
+# The executed tests are counted in the TAP result, which is machine-readable. The human-readable output carries color codes depending on the environment, and when no test matches the name
+# the file itself is reported as one passing result, so only results whose title matches the name pattern and that are not skipped are counted.
 node-repeat: SHELL := /bin/bash -o pipefail
 node-repeat:
 	@case "$(FILE)" in '') echo "node-repeat requires FILE=<test file> NAME=<test name pattern> COUNT=<n>" >&2; exit 2;; esac
@@ -176,13 +176,13 @@ node-repeat:
 	  done; \
 	  echo "$(FILE) $(NAME): $(COUNT) of $(COUNT) runs pass"
 
-# 운영체제별 코드가 platform/<os>/ 아래에만 있는지 검사한다.
+# Checks that operating-system-specific code exists only under platform/<os>/.
 platforms:
 	@node scripts/check-platforms.mjs
 
-# 두 네이티브 호스트의 원본을 Windows 대상으로 기본 build 와 진단 build 로 컴파일한다. platforms 와 hosts-check 의
-# 파일 배치 검사는 Windows 구현(platform/windows/)과 공용 코드의 운영체제 API 사용을 확인하지 않으므로 이 검사가
-# 컴파일로 확인한다. 호스트 테스트는 macOS 에서만 실행하므로(docs/spec/host-contract.md) 컴파일 대상이 아니다.
+# Compiles the sources of the two native hosts for the Windows target in the default build and the diagnostic build. The file layout checks of platforms and hosts-check
+# do not check the Windows implementation (platform/windows/) or the operating system API use of shared code, so this check
+# verifies them by compilation. Host tests run only on macOS (docs/spec/host-contract.md), so they are not compiled.
 WINDOWS_GOARCH      = arm64
 windows-build-check:
 	@echo "START: wailsv3 host go vet GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
@@ -192,7 +192,7 @@ windows-build-check:
 	@cd packages/host/wailsv3 && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet -tags diagnostics ./src/...
 	@echo "PASS: wailsv3 diagnostics host for windows/$(WINDOWS_GOARCH)"
 
-# 두 네이티브 호스트와 두 네이티브 앱의 파일 구조가 허용된 차이만 갖는지 검사한다.
+# Checks that the file structures of the two native hosts and the two native apps differ only in the allowed ways.
 hosts-check: windows-build-check
 	@node scripts/check-hosts.mjs
 
@@ -212,13 +212,13 @@ verify: prepare docs-check exposure-check parity-check host-parity-check
 	@pnpm build
 	@git diff --exit-code -- packages/soksak/dist
 
-# 애플리케이션. 두 네이티브 앱과 사이드카 실행 파일은 target/{debug,release} 에 놓인다. 각 앱은 environment.json 으로 프런트엔드를 조립하고, 빌드 전에
-# 프런트엔드를 앱 디렉터리에 스테이징한다. 두 네이티브 앱은 go:embed 와
-# generate_context! 로 스테이징된 프런트엔드를 컴파일 시점에 포함한다.
+# Applications. The two native apps and the sidecar executables are placed in target/{debug,release}. Each app assembles its frontend from environment.json and stages the
+# frontend into the app directory before the build. The two native apps include the staged frontend at compile time with go:embed and
+# generate_context!.
 #
-# 각 앱은 debug 와 release 두 프로필로 빌드한다. release 는 각 도구의 표준 축소
-# 옵션(cargo release 프로필, Go 의 -s -w -trimpath)을 사용한다. debug 는 진단 빌드(Go 태그·cargo
-# 기능 diagnostics)다. While the declared release version is 0.0.x, release is a diagnostic build too, so a defect on a
+# Each app is built in two profiles, debug and release. release uses the standard size-reducing
+# options of each tool (the cargo release profile, -s -w -trimpath of Go). debug is a diagnostic build (the Go tag and the cargo
+# feature diagnostics). While the declared release version is 0.0.x, release is a diagnostic build too, so a defect on a
 # user's machine is recorded when it appears (AGENTS.md); a later version series builds release without diagnostics.
 COMMA := ,
 # The declared release version is the RELEASE constant of scripts/check-versions.mjs.
@@ -228,24 +228,24 @@ DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "
         wailsv3 wailsv3-release wailsv3-build wailsv3-build-release \
         examples-verify examples-size
 
-# rustup 은 cargo 를 여기에 설치하고 셸 프로필에 경로를 추가한다. make 의 셸은
-# 프로필을 읽지 않는다.
+# rustup installs cargo here and adds the path to the shell profile. The shell of make
+# does not read the profile.
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 
-# 네이티브 앱의 최소 macOS 버전. 캡처 코드가 macOS 14.4 의
-# getCurrentProcessShareableContentWithCompletionHandler API 를
-# 사용한다. Go 는 CGO_CFLAGS 로 모든 cgo 패키지에, 링커에는 -extldflags 로 전달한다.
-# Rust 와 cc 는 MACOSX_DEPLOYMENT_TARGET 을 읽는다.
+# The minimum macOS version of the native apps. The capture code uses the macOS 14.4 API
+# getCurrentProcessShareableContentWithCompletionHandler.
+# Go passes it to every cgo package through CGO_CFLAGS and to the linker through -extldflags.
+# Rust and cc read MACOSX_DEPLOYMENT_TARGET.
 MACOS_MINIMUM = 14.4
 export PKG_CONFIG_PATH := $(CURDIR)/native/darwin/build
-# go build 는 cgo 가 링크하는 정적 라이브러리의 내용을 캐시 키에 넣지 않고 CGO_CFLAGS 는 넣는다.
-# 라이브러리 해시를 CGO_CFLAGS 에 넣어 라이브러리가 바뀌면 cgo 패키지를 다시 컴파일하고 다시 링크한다.
+# go build puts CGO_CFLAGS into the cache key but not the contents of the static libraries that cgo links.
+# Putting the library hash into CGO_CFLAGS recompiles and relinks the cgo packages when a library changes.
 GO_ENV       = CGO_CFLAGS="-O2 -g -mmacosx-version-min=$(MACOS_MINIMUM) -DSOKSAK_DARWIN_LIBRARY=$$(shasum -a 256 native/darwin/build/libsoksak-darwin.a | cut -c1-16)"
 GO_LINK      = -extldflags=-mmacosx-version-min=$(MACOS_MINIMUM)
 CARGO_ENV    = MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)
 
-# macOS 의 알림 센터는 번들에서 실행된 프로세스만 받으므로 애플리케이션은 번들에서 실행한다
-# (docs/spec/hosts.md). 사이드카도 번들의 Contents/MacOS 에 둔다.
+# The notification center of macOS delivers only to processes started from a bundle, so applications run from the bundle
+# (docs/spec/hosts.md). Sidecars are also placed in Contents/MacOS of the bundle.
 TAURI_DEBUG_BUNDLE   = target/debug/soksak-tauriv2.app
 TAURI_RELEASE_BUNDLE = target/release/tauriv2/soksak.app
 WAILS_DEBUG_BUNDLE   = target/debug/soksak-wailsv3.app
@@ -255,44 +255,44 @@ TAURI_RELEASE = $(TAURI_RELEASE_BUNDLE)/Contents/MacOS/soksak-tauriv2
 WAILS_DEBUG   = $(WAILS_DEBUG_BUNDLE)/Contents/MacOS/soksak-wailsv3
 WAILS_RELEASE = $(WAILS_RELEASE_BUNDLE)/Contents/MacOS/soksak-wailsv3
 
-# 번들의 Info.plist 와 Dock 아이콘을 쓴다. 첫 인자는 번들, 둘째 인자는 애플리케이션이다. 앱 이름은
-# Info.plist 의 CFBundleDisplayName 이 정한다(지원 언어는 같은 plist 의 CFBundleLocalizations 선언).
-# 이름을 언어마다 다르게 주게 되는 날에는 그 언어의 .lproj/InfoPlist.strings 를 그때 다시 둔다.
-# 번들의 Contents 는 build 마다 새로 만든다. 이전 build 가 넣은 파일(bundle 에 더 이상 넣지 않는 sidecar 등)이
-# 남으면 bundle 이 지금의 build 와 달라지기 때문이다.
+# Writes the Info.plist and the Dock icon of the bundle. The first argument is the bundle and the second is the application. The app name
+# is set by CFBundleDisplayName of Info.plist (the supported languages are declared in CFBundleLocalizations of the same plist).
+# When the name differs by language, the .lproj/InfoPlist.strings of that language is added again at that time.
+# The Contents of the bundle are created anew at each build. A file that an earlier build put there (such as a sidecar that the bundle no longer holds)
+# would otherwise make the bundle differ from the current build.
 bundle-info = rm -rf $(1)/Contents && mkdir -p $(1)/Contents/MacOS $(1)/Contents/Resources \
 	&& cp apps/$(2)/platform/darwin/Info.plist $(1)/Contents/Info.plist \
 	&& cp apps/$(2)/platform/darwin/AppIcon.icns $(1)/Contents/Resources/AppIcon.icns
-# 디버그 번들은 release 애플리케이션 옆에서 실행되도록 Info.plist 의 release 식별자에 .dev 를 붙이고 번들 이름을
-# 실행 파일 이름으로 쓴다(docs/spec/hosts.md#frontend-and-executables). 첫 인자는 번들, 둘째 인자는 애플리케이션이다.
+# So that the debug bundle runs beside the release application, appends .dev to the release identifier in Info.plist and uses the bundle name
+# as the executable name (docs/spec/hosts.md#frontend-and-executables). The first argument is the bundle and the second is the application.
 bundle-dev = plutil -replace CFBundleIdentifier -string "$$(plutil -extract CFBundleIdentifier raw $(1)/Contents/Info.plist).dev" $(1)/Contents/Info.plist \
 	&& plutil -replace CFBundleName -string soksak-$(2) $(1)/Contents/Info.plist
-# 번들 안의 실행 파일과 Info.plist 를 ad hoc 서명으로 봉인하고 LaunchServices 에 다시 등록한다. Dock 은
-# 등록된 번들 정보로 아이콘을 보이며, 번들 안의 파일만 바뀌면 LaunchServices 는 등록을 새로 읽지 않는다.
+# Seals the executables and the Info.plist in the bundle with an ad hoc signature and registers the bundle with LaunchServices again. The Dock
+# shows the icon from the registered bundle information, and LaunchServices does not reread the registration when only files inside the bundle change.
 LSREGISTER = /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 
-# command line sok(docs/spec/cli.md)을 build 해 번들의 실행 파일 옆에 둔다. 첫 인자는 번들, 둘째 인자는 profile 이다.
+# Builds the command line sok (docs/spec/cli.md) and places it beside the executables of the bundle. The first argument is the bundle and the second is the profile.
 sok-wailsv3 = go build -C packages/sok/wailsv3 $(if $(filter release,$(2)),-trimpath -ldflags "-s -w") $(if $(filter debug,$(2)),-tags "diagnostics dev",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
 sok-tauriv2 = cargo build -p soksak-sok-tauriv2 $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features diagnostics$(COMMA)dev,$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
 native-darwin:
 	@$(MAKE) -C native/darwin
 
-# 워크스페이스 registry. scripts/workspace-registry.json 이 선언한 sibling plugin repository 를 진단 package 로 pack
-# 하고, 그 plugin 이 쓰는 sidecar 를 선언된 sidecar repository 에서 build 해 현재 플랫폼으로 release 한 뒤
-# target/registry 에 index.json 을 만든다(docs/spec/plugins.md#repositories). 진단 build 와 window check 가 여기서
-# 설치한다.
+# The workspace registry. Packs the sibling plugin repositories that scripts/workspace-registry.json declares as diagnostic builds,
+# builds the sidecars those plugins use from the declared sidecar repositories and releases them for the current platform, and then
+# creates index.json in target/registry (docs/spec/plugins.md#repositories).
+# Diagnostic builds and window checks install from here.
 REGISTRY = target/registry
 
 registry:
 	@cargo build -p soksak-sok-tauriv2
 	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY) --diagnostics
 
-# CONFIG 설정 폴더에 workspace registry 의 plugin 을 모두 설치한다. 애플리케이션은 bundle 에 plugin 을 담지 않으므로
-# window check 와 개발 실행은 애플리케이션을 시작하기 전에 이것으로 설치한다. 워크스페이스 plugin 은 version 을 바꾸지
-# 않고 고치므로, 같은 version 이 이미 설치되어 있으면 설치가 아무것도 바꾸지 않는다. 그래서 설치된 plugin 을 먼저
-# 지우고 다시 설치한다.
+# Installs every plugin of the workspace registry into the CONFIG configuration folder. Applications do not hold plugins in the bundle, so
+# window checks and development runs install with this target before they start the application. Workspace plugins are changed without changing
+# the version, so when the same version is already installed the installation changes nothing. Therefore the installed plugins are
+# removed first and installed again.
 install-plugins: registry
 	@test -n "$(CONFIG)" || { echo "make install-plugins CONFIG=<configuration directory>" >&2; exit 2; }
 	@target/debug/sok registry use $(REGISTRY)/index.json --config-dir "$(CONFIG)"
@@ -301,20 +301,20 @@ install-plugins: registry
 	@for id in $$(node -e 'console.log(JSON.parse(require("fs").readFileSync("$(REGISTRY)/index.json", "utf8")).plugins.map((p) => p.id).join(" "))'); do \
 		target/debug/sok plugin install $$id --config-dir "$(CONFIG)" || exit 1; done
 
-# 프런트엔드를 배치한다. 인자는 추가 플래그다. debug 는 페이지 진단 모듈을 넣고(--diagnostics), release 는 넣지
-# 않는다. plugin 과 sidecar 는 bundle 에 넣지 않으며 설정 폴더에 설치한다(make install-plugins).
+# Stages the frontend. The argument is an extra flag. debug includes the page diagnostic module (--diagnostics) and release does not
+# include it. Plugins and sidecars are not put in the bundle; they are installed into the configuration folder (make install-plugins).
 stage-wailsv3 = pnpm -F @soksak/wailsv3 exec soksak-stage src/frontend $(1)
 stage-tauriv2 = pnpm -F @soksak/tauriv2 exec soksak-stage src/frontend $(1)
 
-# 배치는 bundle 을 건드리지 않는다. bundle 은 build target 만 다시 만든다. 검사가 쓰는 debug 앱의 실행 파일이
-# native-test 같은 검사 target 의 배치로 지워지지 않게 하기 위해서다.
+# Staging does not touch the bundle. The bundle is rebuilt only by the build targets. This keeps the executable of the debug app that checks use
+# from being removed by the staging of a check target such as native-test.
 frontend-wailsv3: build
 	@$(call stage-wailsv3,--diagnostics)
 
 frontend-tauriv2: build
 	@$(call stage-tauriv2,--diagnostics)
 
-# generate_context! 가 프런트엔드를 포함하므로 크레이트를 다시 빌드하게 한다.
+# generate_context! includes the frontend, so this rebuilds the crate.
 tauriv2-build: native-darwin frontend-tauriv2
 	@$(call bundle-info,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@$(call bundle-dev,$(TAURI_DEBUG_BUNDLE),tauriv2)
@@ -359,8 +359,8 @@ wailsv3: wailsv3-build
 wailsv3-release: wailsv3-build-release
 	@./$(WAILS_RELEASE)
 
-# 네이티브 코드의 단위 검사. 공용 입력 검사와 두 호스트의 테스트를 실행하는 호스트 계약 검사를 실행한다.
-# sidecar 의 검사는 각 sidecar repository 가 실행한다.
+# Unit checks of native code. Runs the shared input check and the host contract check, which runs the tests of the two hosts.
+# The checks of a sidecar run in each sidecar repository.
 native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) rust-format-check
 	@$(MAKE) rust-clippy-check
@@ -368,34 +368,34 @@ native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) -C native/darwin test
 	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags "$(GO_LINK)"
 
-# 저장소가 추적하는 모든 Go 파일이 gofmt 형식인지 검사한다. 형식이 다른 파일을 모두 보고하고 실패한다.
+# Checks that every Go file the repository tracks is in gofmt form. Reports every file of a different form and fails.
 go-format-check:
 	@files=$$(git ls-files '*.go'); \
 	  unformatted=$$(gofmt -l $$files) || exit 1; \
 	  if [ -n "$$unformatted" ]; then echo "Go files not in gofmt format:" >&2; echo "$$unformatted" >&2; exit 1; fi; \
 	  echo "Go format check passed: $$(echo $$files | wc -w | tr -d ' ') files"
 
-# Rust 워크스페이스의 모든 패키지와 test 를 진단 build 와 일반 build 에서 clippy 경고 없이 검사한다.
+# Checks every package and test of the Rust workspace in the diagnostic build and the default build without clippy warnings.
 rust-clippy-check: native-darwin
 	@$(CARGO_ENV) cargo clippy --workspace --tests --features soksak-host-tauriv2/diagnostics -- -D warnings
 	@$(CARGO_ENV) cargo clippy --workspace --tests -- -D warnings
 	@echo "Rust clippy check passed: 1 workspace, diagnostics and default builds"
 
-# Rust 워크스페이스의 모든 패키지가 rustfmt 형식인지 검사한다.
+# Checks that every package of the Rust workspace is in rustfmt form.
 rust-format-check:
 	@cargo fmt --all --check
 	@echo "Rust format check passed: 1 workspace"
 
-# 두 호스트의 테스트를 기본 구성과 진단 구성으로 실행하고, 호스트 계약 사례(docs/spec/host-contract.md)를
-# 같은 수준으로 실행하는지 결과로 검사한다.
+# Runs the tests of the two hosts in the default configuration and the diagnostic configuration and checks from the results that the host contract cases
+# (docs/spec/host-contract.md) run at the same level.
 host-contract-check: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags "$(GO_LINK)"
 
-# 이미 실행 중인 앱의 창을 로컬 엔드포인트로 순차 검사한다. 하네스는 앱을 실행하지 않는다.
+# Checks the windows of already running apps in sequence through the local endpoint. The harness does not start the apps.
 examples-verify: docs-check e2e-check exposure-check
 	@pnpm -F @soksak/e2e run verify
 
-# 두 앱의 두 프로필 빌드와 각 크기.
+# The two-profile builds of the two apps and their sizes.
 examples-size: tauriv2-build tauriv2-build-release wailsv3-build-release wailsv3-build
 	@printf "%-10s %10s %10s\n" "" debug release
 	@printf "%-10s %9.1fM %9.1fM\n" tauriv2 \

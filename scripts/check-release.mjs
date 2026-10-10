@@ -2,12 +2,12 @@
 // (AGENTS.md), so its executables carry the diagnostic methods and the frontend embeds the page diagnostic module; a
 // later version series carries no diagnostic code and embeds the release page diagnostic module.
 //
-// 진단 코드(호스트의 진단 메서드, 창 녹화, 페이지 진단 모듈)는 진단 빌드에만 들어간다. 이 검사는 지정한
-// 번들의 Contents/MacOS 에 있는 모든 실행 파일을 읽는다. 두 애플리케이션은 프런트엔드를 압축 없이 실행 파일에
-// 넣으므로, 워크벤치가 배포하는 모든 파일과 release 페이지 진단 모듈이 실행 파일에 원문 그대로 있어야
-// 프런트엔드를 검사할 수 있다. 하나라도 없으면 프런트엔드를 읽을 수 없다는 오류를 낸다. 워크벤치는 애플리케이션
-// package.json 의 의존성으로 찾는다. 플러그인과 사이드카는 번들에 없고 설정 폴더에 설치된다(docs/spec/installation.md).
-// `make release-check` 가 release 빌드를 먼저 실행한다.
+// Diagnostic code (the diagnostic methods of the host, window recording, the page diagnostic module) is included only in diagnostic builds. This check
+// reads every executable in Contents/MacOS of the given bundle. Both applications put the frontend into the executable without compression,
+// so every file that the workbench publishes and the release page diagnostic module must appear verbatim in the executable for
+// the frontend to be checked. If any is missing, the frontend cannot be read and the check reports an error. The workbench is found as a dependency of the application
+// package.json. Plugins and sidecars are not in the bundle; they are installed into the configuration folder (docs/spec/installation.md).
+// `make release-check` runs the release build first.
 //
 // The check also compares each bundle with the macOS minimum of the Makefile (`MACOS_MINIMUM`): Info.plist declares it
 // in LSMinimumSystemVersion, the application executable is built for it, and no other executable is built for a newer
@@ -23,14 +23,14 @@ const ROOT = new URL("../", import.meta.url).pathname;
 
 const APPS = ["wailsv3", "tauriv2"];
 
-/** 진단 코드의 표지. 진단 메서드 이름, 녹화 라이브러리 기호, 사이드카 진단 심볼이다. */
+/** The markers of diagnostic code: diagnostic method names, recording library symbols, and sidecar diagnostic symbols. */
 const MARKS = [
   { what: "diagnostic method", pattern: /diagnostics\.(fixture|drag|knob|transcript|capture|modal|surface)/ },
   { what: "window capture symbol", pattern: /sp_capture_/ },
-  // 기호를 벗긴 release 실행 파일에는 sp_capture_ 가 없다. 녹화의 ObjC 클래스 이름은 문자열로 남는다.
+  // A release executable with symbols stripped has no sp_capture_. The ObjC class names of the recording remain as strings.
   { what: "window capture class", pattern: /SPCapture/ },
   { what: "sidecar diagnostic symbol", pattern: /sp_diag_/ },
-  // release build 는 진단 인자 --registry-ca 를 선언하지 않는다(docs/spec/hosts.md#application-arguments).
+  // The release build does not declare the diagnostic argument --registry-ca (docs/spec/hosts.md#application-arguments).
   { what: "diagnostic argument", pattern: /registry-ca/ },
 ];
 
@@ -46,7 +46,7 @@ export function auditDiagnostics(errors, label, text, required) {
   if (!MARKS[0].pattern.test(text)) errors.push(`${label}: lacks the diagnostic methods that a 0.0.x release carries`);
 }
 
-// 텍스트에서 진단 표지를 찾는다. 발견하면 errors 배열에 추가한다.
+// Finds diagnostic markers in the text. Adds each one found to the errors array.
 export const find = (errors, label, text) => {
   for (const mark of MARKS) {
     if (mark.pattern.test(text)) errors.push(`${label}: contains a ${mark.what} (${mark.pattern.exec(text)[0]})`);
@@ -56,9 +56,9 @@ export const find = (errors, label, text) => {
 const latin1 = (bytes) => Buffer.from(bytes).toString("latin1");
 
 /**
- * 애플리케이션 실행 파일에 포함된 프런트엔드를 검사한다. text 는 실행 파일을 latin1 로 읽은 내용이다.
- * published 는 워크벤치가 배포하는 파일 {path, bytes}, releaseModule 은 release 페이지 진단 모듈의
- * 바이트다. 배포 파일이나 release 모듈이 원문으로 없으면 프런트엔드를 읽을 수 없다는 오류를 낸다.
+ * Checks the frontend included in an application executable. text is the executable read as latin1.
+ * published is the files {path, bytes} that the workbench publishes, and releaseModule is the bytes of the release page diagnostic module.
+ * If a published file or the release module is not present verbatim, the check reports that the frontend cannot be read.
  */
 export function auditFrontend(errors, label, text, { published, pageModule, pageModuleName }) {
   const missing = published.filter((file) => !text.includes(latin1(file.bytes))).map((file) => file.path);
@@ -111,12 +111,12 @@ export function auditMinimum(errors, bundle, minimum, plist, executables) {
   }
 }
 
-/** from 패키지의 의존성으로 name 패키지의 디렉터리를 찾는다. */
+/** Finds the directory of package name by the dependencies of package from. */
 function packageDir(from, name) {
   return dirname(createRequire(join(from, "package.json")).resolve(`${name}/package.json`));
 }
 
-/** 디렉터리 항목은 그 아래 파일로 펼친다. */
+/** Expands a directory entry into the files below it. */
 function* expand(dir, path) {
   const full = join(dir, path);
   if (!statSync(full).isDirectory()) yield path;
@@ -136,7 +136,7 @@ function applicationSources(app, diagnostic) {
   return { published, pageModule: readFileSync(join(workbench, module)), pageModuleName: `page diagnostics module ${module}` };
 }
 
-// CLI 로 직접 실행될 때만 검사를 수행한다.
+// Runs the check only when executed directly as a CLI.
 if (import.meta.main) {
   const bundles = new Map();
   let minimum;
@@ -165,14 +165,14 @@ if (import.meta.main) {
   const diagnostic = diagnosticRelease(version);
 
   for (const app of APPS) {
-    // 애플리케이션과 command line sok 은 번들의 Contents/MacOS 에 있다(docs/spec/hosts.md).
+    // The application and the command line sok are in Contents/MacOS of the bundle (docs/spec/hosts.md).
     const executables = join(bundles.get(app), "Contents", "MacOS");
     const executable = join(executables, `soksak-${app}`);
     if (!existsSync(executable)) {
       errors.push(`${executable}: missing; run the release build first`);
       continue;
     }
-    // 실행 파일은 바이트로 읽는다. 표지는 ASCII 이므로 latin1 로 해석해도 위치가 바뀌지 않는다.
+    // The executable is read as bytes. The markers are ASCII, so interpreting as latin1 does not change positions.
     const built = [];
     for (const name of readdirSync(executables)) {
       const path = join(executables, name);

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { auditHostParity, auditMenuTables, goMenuTables, rustMenuTables, snake, specMenuTables } from "../check-host-parity.mjs";
 
-// 주입 검사의 기준 소스. 실제 소스에서 이름 하나만 바꿔 각 실패가 기계적으로 나오는지 증명한다.
+// The base sources of the injection checks. Changing only one name in the real sources proves that each failure is produced mechanically.
 const sources = () => ({
   tauriv2Runtime: 'const COMMAND = {\n  windowNew: "window_new",\n  overlayShow: "overlay_show",\n};',
   tauriv2Bindings: 'generate_handler![\n  window_new,\n  overlay_show,\n]',

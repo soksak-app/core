@@ -114,7 +114,7 @@ for (const app of Object.values(APPS)) {
     await s.until("editor.document", (value) => value.path === path && value.version !== null,
       "the editor tab did not read its file after the reload", { surface });
 
-    // Closing a modified tab asks; 닫지 않기 keeps it, and 저장하지 않고 닫기 closes it without writing.
+    // Closing a modified tab asks; the keep-open choice keeps it, and the discard choice closes it without writing.
     await s.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, surface);
     document = await s.until("editor.document", (value) => value.modified, "editor.edit did not modify the text", { surface });
     assert.deepEqual(await s.run("core.tab.close", { tab: surface }), { closed: false });

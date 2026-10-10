@@ -1,4 +1,4 @@
-// core 창 검사는 cargo 가 정한 build 출력 폴더에서 앱 실행 파일을 찾아 harness 에 선언한다(F25.1).
+// The core window check finds the application executable in the build output folder that cargo sets and declares it to the harness (F25.1).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { debugBinaries, targetDirectory } from "../setup.mjs";

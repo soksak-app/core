@@ -1,9 +1,9 @@
-// 활성화 등급 창 검사: 실제 macOS 입력기로 터미널에 한글을 입력한다.
+// Activation-tier window check: types Hangul into the terminal through the real macOS input method.
 //
-// OS 입력기는 활성 애플리케이션의 키 창만 처리하므로 이 검사는 앱을 활성화해 사용자 포커스를
-// 가져가고, 진단 빌드의 diagnostics.input.source 로 입력 소스를 바꾼다. 끝나면 이전 입력 소스를
-// 되돌린다. 기본 창 검사(pnpm -F @soksak/e2e verify)에 포함하지 않고, 사용자가 승인한 실행에서
-// pnpm -F @soksak/e2e verify:activation 으로만 실행한다.
+// The OS input method serves only the key window of the active application, so this check activates the app and takes the user's focus,
+// and switches the input source through diagnostics.input.source of the diagnostic build. At the end it restores the previous input source.
+// It is not part of the default window check (pnpm -F @soksak/e2e verify); a run that the user approved runs it
+// only through pnpm -F @soksak/e2e verify:activation.
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
@@ -16,9 +16,9 @@ import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 const ABC = "com.apple.keylayout.ABC";
 const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
 
-// 커서 칸과 그 오른쪽 칸에서 표면 배경과 다른 픽셀의 비율을 잰다. 캡처는 창을 앞으로 가져오지 않는다.
+// Measures the ratio of pixels that differ from the surface background in the cursor cell and the cell to its right. The capture does not bring the window to the front.
 async function cursorCellCoverage(s, surface, offset = 0) {
-  // screen.read 응답이 현재 커서를 terminal.cursor 에 반영한다.
+  // The screen.read reply carries the current cursor into terminal.cursor.
   await s.run("terminal.screen.read", {}, surface);
   await s.request("diagnostics.capture.start", {});
   const displayed = await s.presented();
@@ -49,7 +49,7 @@ async function cursorCellCoverage(s, surface, offset = 0) {
       }
       return different / total;
     };
-    // 블록 커서 아래의 글자 획은 반전되어 어둡다. 둘째 칸의 어두운 픽셀 비율은 글자 오른쪽 절반의 잉크다.
+    // The glyph stroke under a block cursor is inverted and dark. The ratio of dark pixels in the second cell is the ink of the right half of the glyph.
     const darkInCell = (col) => {
       const x0 = Math.round((region.frame.x + col * state.cellWidth) * frame.scale);
       const y0 = Math.round((region.frame.y + cursor.row * state.cellHeight) * frame.scale);
@@ -90,7 +90,7 @@ for (const app of Object.values(APPS)) {
       const original = (await s.request("diagnostics.input.source")).current;
       s.cleanup(() => s.request("diagnostics.input.source", { select: original }));
 
-      // 키 창은 포인터 위치를 이동으로 받으므로 창을 포인터 밖에 둔다.
+      // The key window receives the pointer position as a movement, so the window is placed away from the pointer.
       await s.keepPointerOutside();
       const view = await s.rect("terminal.view", undefined, surface);
       const x = view.document.x + view.x + view.width / 2;
@@ -101,18 +101,18 @@ for (const app of Object.values(APPS)) {
         host.regions.some((region) => region.surface === surface && region.focused),
       "the terminal did not receive native focus in the active window");
 
-      // 네이티브 콜백과 PTY 입력 대기열을 기록한다. 결과는 아래에서 순서와 횟수로 검사한다.
+      // Records the native callbacks and the PTY input queue. The results are checked below by order and count.
       await s.run("terminal.ime.trace", { action: "start" }, surface);
       s.cleanup(() => s.run("terminal.ime.trace", { action: "stop" }, surface));
 
-      // 사용자 보고 순서: 영문 자판으로 ddd, 한국어 2벌식으로 바꿔 한글(g k s r m f), Space, Enter.
+      // Order from the user report: ddd with the English layout, then Hangul with the Korean 2-set layout (g k s r m f), Space, Enter.
       assert.equal((await s.request("diagnostics.input.source", { select: ABC })).current, ABC);
       for (const typed of ["d", "dd", "ddd"]) {
         await s.press("d");
         await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith(typed)),
           `the ABC key did not produce ${typed}`);
       }
-      // 좁은 글자 뒤의 빈 칸에서는 커서가 한 칸만 덮는다.
+      // In the empty cell after a narrow glyph, the cursor covers only one cell.
       const narrow = await cursorCellCoverage(s, surface);
       t.diagnostic(`${app.name}: narrow cursor coverage ${JSON.stringify({ col: narrow.cursor.col, first: narrow.first, second: narrow.second })}`);
       assert.ok(narrow.first > 0.9 && narrow.second < 0.1,
@@ -128,7 +128,7 @@ for (const app of Object.values(APPS)) {
           (value.text === `한${preedit}` && ["ㄱ", "그", "글"].includes(preedit)),
           `the ${key} key did not show the ${JSON.stringify(preedit)} preedit`, { surface });
         if (preedit === "글") {
-          // 선택 범위가 글 뒤를 가리키므로 커서는 조합 글자 다음 칸에 그린다.
+          // The selection range points after the text, so the cursor is drawn in the cell after the composed glyph.
           assert.equal(compose.selectedRange?.location, compose.text.length,
             "the input method did not select the end of the preedit");
           preeditWidth = compose.text.length * 2;
@@ -137,13 +137,13 @@ for (const app of Object.values(APPS)) {
           t.diagnostic(`${app.name}: preedit 글 cursor coverage ${JSON.stringify(measured)}`);
           assert.ok(measured.first > 0.9 && measured.second < 0.1,
             `the block cursor is not after the wide preedit: ${JSON.stringify(measured)}`);
-          // 넓은 조합 글자의 오른쪽 절반도 그려진다.
+          // The right half of a wide composed glyph is drawn as well.
           assert.ok(measured.preeditSecond > 0.02,
             `the right half of the wide preedit glyph is missing: ${JSON.stringify(measured)}`);
         }
       }
-      // F8-16: Space 는 입력기가 처리하지 않는 키이므로 글과 공백이 다음 키 없이 PTY 에 도착한다.
-      // 셸이 남은 조합 문자열과 공백을 반향하면 커서가 그 표시 폭만큼 이동한다.
+      // F8-16: Space is a key that the input method does not handle, so the text and the space reach the PTY without a following key.
+      // When the shell echoes the remaining composition string and the space, the cursor moves by their display width.
       await s.press("Space");
       await s.until("terminal.compose", (compose) => compose.text === "",
         "the Space key left a preedit", { surface });
@@ -168,7 +168,7 @@ for (const app of Object.values(APPS)) {
       assert.ok(!output.some((line) => /[ㄱ-ㅣ]/.test(line)), `jamo reached the PTY: ${JSON.stringify(output)}`);
       t.diagnostic(`${app.name}: screen rows with the command: ${JSON.stringify(commandRows)}`);
 
-      // 같은 세션에서 이어서 조합한 음절도 한 번씩 순서대로 PTY 에 도착한다.
+      // Syllables that are composed afterwards in the same session also reach the PTY once each, in order.
       for (const key of ["g", "k", "s", "Space"]) await s.press(key);
       await s.until("terminal.compose", (compose) => compose.text === "", "the second syllable left a preedit", { surface });
       await s.press("Enter");
@@ -176,7 +176,7 @@ for (const app of Object.values(APPS)) {
         "the shell did not run the second committed command");
       assert.ok(!second.some((line) => /[ㄱ-ㅣ]/.test(line)), `jamo reached the PTY: ${JSON.stringify(second)}`);
 
-      // F8-16-1: 음절 뒤 숫자도 다음 키 없이 PTY 에 도착한다.
+      // F8-16-1: A digit after a syllable also reaches the PTY without a following key.
       for (const key of ["g", "k", "s", "1"]) await s.press(key);
       await s.until("terminal.compose", (compose) => compose.text === "", "the digit after a syllable left a preedit", { surface });
       await readScreenUntil(s, surface, (lines) => lines.some((line) => line.trimEnd().endsWith("한1")),
@@ -185,7 +185,7 @@ for (const app of Object.values(APPS)) {
       await readScreenUntil(s, surface, (lines) => lines.some((line) => /한1: command not found/.test(line)),
         "the shell did not run the command with the digit");
 
-      // F8-20: 조합 중 Backspace 는 입력기가 음절을 편집하고(한 → 하) PTY 에는 최종 음절만 도착한다.
+      // F8-20: During composition, Backspace is handled by the input method, which edits the syllable (one syllable becomes another), and only the final syllable reaches the PTY.
       for (const key of ["g", "k", "s", "Backspace"]) await s.press(key);
       await s.until("terminal.compose", (compose) => compose.text === "하", "Backspace did not edit the composition to 하", { surface });
       await s.press("Enter");

@@ -12,7 +12,7 @@ test("drag measurement rejects a stationary, incomplete, or non-returning gestur
 });
 
 test("every layout held for two frames must appear in the recording, and shorter ones may be replaced", () => {
-  // 걸음은 16ms 간격이다. 0 → -10 → -20(세 걸음 유지) → -10 → 0(끝).
+  // The steps are 16ms apart. 0 -> -10 -> -20 (held for three steps) -> -10 -> 0 (end).
   const ticks = [0, 16, 32, 48, 64, 80];
   const boundary = [100, 90, 80, 80, 80, 90, 100];
   const sample = (time, offset) => ({ time, position: 200 + offset });
@@ -25,7 +25,7 @@ test("every layout held for two frames must appear in the recording, and shorter
 });
 
 test("a start position held for less than one presentation may be replaced between round trips", () => {
-  // 왕복 사이의 시작 위치는 더 새 배치로 대신될 수 있다(docs/spec/native-surfaces.md). 먼 끝은 매 왕복 보인다.
+  // The start position between round trips can be replaced by a newer layout (docs/spec/native-surfaces.md). The far end is visible in every round trip.
   assert.equal(assertRoundTrips([100, 150, 200, 150, 200, 150, 100], 2), 100);
   assert.throws(() => assertRoundTrips([100, 150, 200, 200, 200, 150, 100], 2), /far end/);
   assert.throws(() => assertRoundTrips([150, 200, 150, 200, 150, 100], 2), /start/);
@@ -94,8 +94,8 @@ test("glyph measurement distinguishes translation from stretching and missing te
   assert.throws(() => glyphShape(frame, area), /no glyph/);
 });
 
-// 터미널의 기본 배경은 카드 색이다. 카드(테두리 10..110, 머리 행 20)와 그 안에서 측정용 배경으로 칠한 터미널
-// 래스터(행 100..120)만 있는 프레임.
+// The default background of the terminal is the card color. A frame that has only the card (border 10..110, head row 20) and, inside it, the terminal
+// raster (rows 100..120) painted with the measurement background.
 const MEASURED = [30, 30, 30];
 function terminalFixture() {
   const frame = { width: 200, height: 160, stride: 800, scale: 1, data: Buffer.alloc(800 * 160) };
@@ -116,7 +116,7 @@ test("the raster row locates the measured terminal background and its overflow p
   const inside = outside(frame, marks);
   assert.deepEqual({ out: inside.out, card: inside.card, surface: inside.surface },
     { out: 0, card: { l: 10, r: 110 }, surface: { l: 11, r: 109 } });
-  // 래스터가 카드보다 3px 오른쪽으로 나가 테두리와 통로에 그려진 프레임.
+  // A frame in which the raster goes 3px to the right beyond the card and is drawn on the border and the gutter.
   paint(109, 100, 114, 120, MEASURED);
   assert.equal(outside(frame, marks).out, 3);
 });
@@ -124,10 +124,10 @@ test("the raster row locates the measured terminal background and its overflow p
 test("the raster row reads the longest measured run from the empty rows at the bottom", () => {
   const { frame, paint } = terminalFixture();
   assert.deepEqual(rasterRow(frame, MEASURED, { from: 149, to: 30 }), { y: 119, l: 11, r: 109 });
-  // 크기가 바뀌는 동안 이전 크기의 래스터가 왼쪽에 붙고 오른쪽은 카드 색으로 남는다.
+  // While the size changes, the raster of the previous size sticks to the left and the right stays in the card color.
   paint(90, 100, 110, 120, [25, 27, 36]);
   assert.deepEqual(rasterRow(frame, MEASURED, { from: 149, to: 30 }), { y: 119, l: 11, r: 89 });
-  // 글자 획이 배경을 LINE 보다 짧게 나눈 행은 건너뛴다.
+  // A row where a glyph stroke divides the background into runs shorter than LINE is skipped.
   for (let x = 30; x < 90; x += 30) paint(x, 119, x + 1, 120, [204, 204, 204]);
   assert.deepEqual(rasterRow(frame, MEASURED, { from: 149, to: 30 }), { y: 118, l: 11, r: 89 });
   assert.equal(rasterRow(frame, MEASURED, { from: 99, to: 30 }), null);

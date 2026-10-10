@@ -58,7 +58,7 @@ test('reports expected and actual test counts without hiding mismatch', async ()
 });
 
 test('the node case counts its tests when the reporter writes colors', { timeout: 30_000 }, async () => {
-  // 이 검사의 node:test 실행 문맥(NODE_TEST_CONTEXT)은 자식 검사에 넘기지 않는다.
+  // The node:test execution context (NODE_TEST_CONTEXT) of this check is not passed to the child check.
   const saved = { color: process.env.FORCE_COLOR, context: process.env.NODE_TEST_CONTEXT };
   process.env.FORCE_COLOR = '3';
   delete process.env.NODE_TEST_CONTEXT;

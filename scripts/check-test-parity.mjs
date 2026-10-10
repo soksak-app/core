@@ -1,4 +1,4 @@
-// 구현·테스트 파일 소유를 검사한다. 이 구조 검사는 동작 검증을 대신하지 않는다.
+// Checks the ownership of implementation and test files. This structural check does not replace behavior verification.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, extname } from "node:path";
@@ -13,7 +13,7 @@ const languages = {
   "objective-c": new Set([".m"]),
   "native-interface": new Set([".h"]),
   declaration: new Set([".json"]),
-  // 빌드 선언은 확장자가 없는 Makefile 이다.
+  // The build declaration is a Makefile, which has no extension.
   build: new Set(["Makefile"]),
 };
 
@@ -27,7 +27,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
   sharedTests: options.sharedTests ?? false,
 });
 
-// 기존 구성요소 연결도 파일 목록으로 유지한다. 동작 증거로 해석하지 않는다.
+// The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
   lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/language-repeat.test.mjs", "scripts/test/node-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs"], { testLanguage: "js-ts" }),
   lane("native library pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs"], { testLanguage: "js-ts" }),
@@ -149,9 +149,9 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("Workbench documents", "document", ["packages/workbench/index.html", "packages/workbench/overlay.html"], ["packages/workbench/test/published-imports.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
 ];
 
-// feature 링크는 파일 소유자보다 강하다: 한 기능의 구현, behavior 테스트,
-// 기대 결과, 검증 수준을 지명한다.
-// inventory는 구조적으로 남고, behavior는 참조된 테스트가 증명한다.
+// A feature link is stronger than a file owner: it names the implementation, the behavior test,
+// the expected result, and the verification level of one feature.
+// The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
     id: "V5-118",
@@ -3298,7 +3298,7 @@ const FEATURE_LINKS = [
   },
 ];
 
-// 생성 산출물은 원본과의 일치 검사 대상이며 독립 구현으로 세지 않는다.
+// Generated output is checked for agreement with its source and is not counted as an independent implementation.
 const GENERATED_ROOTS = new Map([
   ["packages/soksak/dist/", "generated library output; verified by make verify"],
   ["apps/tauriv2/gen/schemas/", "generated Tauri permission schemas"],
