@@ -7,7 +7,7 @@ const callable = (value, name) => {
 const readyReleases = new WeakMap();
 
 export function createSurfaceContext({
-  root, surfaceId, pluginId, declarations = {}, composition = null, diagnostics = () => null, runtime = {},
+  root, surfaceId, pluginId, declarations = {}, composition = null, closing, diagnostics = () => null, runtime = {},
   tab, origin = { directory: null }, project = null, icon,
   // default: the surface of a plugin without extension points has no contributions, and every point is undeclared.
   contributions = (point) => { throw new Error(`extension point ${point} is not declared by ${pluginId}`); },
@@ -25,6 +25,7 @@ export function createSurfaceContext({
     throw new TypeError("surface context requires tab.title, tab.footer, tab.directory, tab.notify, tab.modified, and tab.error");
   }
   if (typeof icon !== "function") throw new TypeError("surface context requires icon(name)");
+  if (!(closing instanceof AbortSignal)) throw new TypeError("surface context requires the closing signal");
   if (typeof diagnostics !== "function") throw new TypeError("surface context requires diagnostics()");
   const listeners = new Set();
   const eventListeners = new Map();
@@ -46,6 +47,9 @@ export function createSurfaceContext({
     root, surfaceId, pluginId,
     declarations: Object.freeze(structuredClone(declarations)),
     composition,
+    // Aborts when the removal of the surface starts, before its regions are detached and before dispose runs
+    // (docs/spec/plugins.md#surface-module-ownership).
+    closing,
     // 진단 빌드에서는 플러그인의 진단 모듈, release 빌드에서는 null 이다. 진단 모듈은 첫 화면 뒤에 불러오므로 workbench 가
     // 모듈을 mount 하기 전에 채운 값을 읽는다.
     get diagnostics() { return diagnostics(); },

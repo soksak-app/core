@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.4.3: 표면의 context에 `context.closing`이 있다. 워크벤치는 표면 제거가 시작될 때 모듈 composition의 region을 떼기 전과 `dispose` 전에 이 `AbortSignal`을 abort한다. fixture 초기화 1초쯤 뒤 떼어진 region에 입력이 닿던 오류(`terminal input failed: image view is detached`)는 detach와 `dispose` 사이에 plugin이 사이드카의 커서 event를 처리해서 생겼다. 신호를 읽지 않는 모듈은 떼어진 region의 거절을 그대로 받는다.
 - F150.4.2: plugin이 `context.runtime.log.<level>(event, fields)`로 event log의 event를 저장한다(level은 `error`, `warn`, `info`, `debug`, `trace`이고 event 이름은 `plugin.<plugin>.<event>`이며 field에 표면이 붙는다). page의 batcher에 큐로 들어간다. host 호출 `log`는 접두 `page.`와 `plugin.`을 받고 접두가 가리키는 계층으로 저장한다. page가 콘솔에 쓰는 것은 field `text`를 가진 event `page.console.<method>`로 저장하며(`console.error`와 `console.warn`은 level `warn`이므로 콘솔은 window 검사를 실패시키지 않는다), 중계 실패는 수집 전의 콘솔에 쓰이고 다시 event가 되지 않는다. 커밋된 체크리스트 검사(`scripts/test/checklist.test.mjs`, 한도 3초)는 부하 평균 16에서 한 번 4.2초가 걸렸고 단독 3회는 0.8~1.3초였으므로 부하로 분류한다.
 - F150.4.1: page의 기록(`report`, `log`, 시작 오류, 순서가 있는 호출의 실패)은 `where`와 `text` field를 가진 event `page.record.<level>`이며 기다리지 않고 큐에 넣어 host 호출 `log`의 배치로 중계한다(`emitAndWait`는 그 event를 실은 배치가 중계되면 대기를 끝낸다). host 호출 `report`, `PageRecord`, `PageEntry`는 두 host와 두 runtime에서 제거했고, `log` 중계는 배치의 page 기록의 줄을 돌려주어 host가 창의 transcript에 보이며, surface 문서의 runtime page `report`는 event 하나의 배치다.
 - F150.3.6: Rust host의 기록은 Go host의 `Entry`처럼 구조화된 `Entry`(`level`, `layer`, `place`, `text`)로 다니고 `Entry::log`로 저장되며 `Entry::line`으로 그 줄이 보인다. 줄을 다시 기록으로 파싱하는 `log_entry`와 두 host의 시각이 붙은 줄(`record_line`, `RecordLine`)은 제거했고, `presentation_outcome`은 결과의 `Entry`를 돌려준다.

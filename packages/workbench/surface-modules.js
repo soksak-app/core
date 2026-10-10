@@ -197,8 +197,9 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     let factor = surfaceTextSize(surface.surfaceId);
     // 진단 모듈. 모듈을 불러오기 전에 채운다.
     let diagnostics = null;
+    const closing = new AbortController();
     const context = createSurfaceContext({
-      root: shadow, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
+      root: shadow, closing: closing.signal, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
       declarations: surface.declarations, composition, diagnostics: () => diagnostics, contributions: surface.contributions,
       tab: { title: (text) => reportTitle(surface.surfaceId, text),
         footer: (text) => reportFooter(surface.surfaceId, text),
@@ -240,7 +241,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     });
     const state = context.status.subscribe(onState);
     onState(context.status.read());
-    entry = { slot, host, shadow, context, state, exposure: null, composition: compositionReady.promise, compositions,
+    entry = { slot, host, shadow, context, closing, state, exposure: null, composition: compositionReady.promise, compositions,
       mounted: null, ready: null, authorized: false, disposed: false, surfaceId: surface.surfaceId,
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
@@ -342,6 +343,7 @@ export async function disposeSurface(surfaceId) {
   if (!entry) return;
   if (entry.disposing) return entry.disposing;
   entry.disposed = true;
+  entry.closing.abort();
   entry.disposing = (async () => {
     // 여기서 승인을 기다리지 않는다. 제거된 탭은 모듈이 mount를 허가받은 적이 없다는
     // 이유만으로 layout commit을 살려 두면 안 된다.

@@ -141,3 +141,21 @@ test("a tab that leaves the layout during its mount reads the factor it was moun
   assert.equal(globalThis.readFactor, 1.5);
   dom.window.close();
 });
+
+test("a surface announces its removal through context.closing before the module is disposed", async () => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  const { mountSurface, disposeSurface } = await import("../surface-modules.js");
+  globalThis.closingSeen = [];
+  const moduleUrl = `data:text/javascript,${encodeURIComponent(`export function mount(root, context) {
+    globalThis.closingSeen.push(["mount", context.closing.aborted]);
+    context.closing.addEventListener("abort", () => globalThis.closingSeen.push(["abort", true]));
+    return { dispose() { globalThis.closingSeen.push(["dispose", context.closing.aborted]); } };
+  }`)}`;
+  const surfaceId = "tab-closing";
+  await mountSurface(document.querySelector("#slot"),
+    { module: moduleUrl, surfaceId, pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] });
+  await disposeSurface(surfaceId);
+  assert.deepEqual(globalThis.closingSeen, [["mount", false], ["abort", true], ["dispose", true]]);
+  dom.window.close();
+});
