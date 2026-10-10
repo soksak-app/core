@@ -1,4 +1,4 @@
-// 이 창의 플러그인 작업 상태 하나(plugin-operations.js). core.plugins status 와 설정 창의 플러그인 절이 함께 쓴다.
+// The one plugin operation state of this window (plugin-operations.js). The core.plugins status and the plugin section of the settings window use it together.
 import { host } from "@soksak/runtime";
 import { pluginUnits } from "./environment.js";
 import { createAppUpdate } from "./app-update.js";
@@ -12,7 +12,7 @@ export const pluginOperations = createPluginOperations({ host, loaded: pluginUni
 /** The application update of this window (app-update.js), which redraws the same listeners. */
 export const appUpdate = createAppUpdate({ host, plugins: () => pluginOperations.state(), changed: notify });
 
-/** 플러그인 작업 상태가 바뀔 때마다 fn 을 부른다. */
+/** Calls fn whenever the plugin operation state changes. */
 export function onPluginOperations(fn) {
   listeners.add(fn);
 }

@@ -2,14 +2,14 @@
 <meta charset="utf-8">
 <title>native modal</title>
 <!--
-  메인 페이지의 [data-native-modal] 요소 하나를 렌더링한다.
+  Renders one [data-native-modal] element of the main page.
 
-  DOM 은 네이티브 뷰 위에 그릴 수 없고, 웹뷰는 DOM 을 렌더링하는 네이티브 뷰다. 이
-  페이지는 메인창 내부의 별도 네이티브 웹뷰에 로드되므로 표면 위에 그려지고,
-  표면은 계속 실행된다.
+  The DOM cannot be drawn over a native view, and a web view is a native view that renders the DOM. This
+  page is loaded in a separate native web view inside the main window, so it is drawn over the surfaces
+  and the surfaces keep running.
 
-  요소의 클래스 이름과 마크업과 페이지의 스타일시트를 받는다. data-key 를 가진 요소의
-  클릭은 메인 페이지에 보고된다.
+  It receives the class name and markup of the element and the stylesheet of the page. A click on an element with data-key
+  is reported to the main page.
 -->
 <style>
   /* 스크립트보다 먼저 적용되도록 마크업에 둔다. 웹뷰는 자기 문서를 그리기 전까지
@@ -41,7 +41,7 @@
   let sheet = null;
   let root = null;
   let pendingCard = null;
-  // 처음 내용 응답을 처리했는지. 응답이 버려졌어도 참이다.
+  // Whether the first content response was processed. It is true even when the response was discarded.
   let loaded = false;
 
   function place({ x, y, w, h }) {
@@ -53,8 +53,8 @@
     report();
   }
 
-  /* 이 문서의 상태를 메인 페이지에 보고한다. 메인 페이지는 core.modal 로 공개한다
-     (docs/spec/exposure.md). 렌더 전에는 보고할 요소가 없다. */
+  /* Reports the state of this document to the main page. The main page exposes it as core.modal
+     (docs/spec/exposure.md). Before the render there is no element to report. */
   function report() {
     if (!root) return;
     const r = root.getBoundingClientRect();
@@ -74,8 +74,8 @@
     if (!sheet) {
       document.head.insertAdjacentHTML("beforeend", `<style id="page"></style>`);
       sheet = document.getElementById("page");
-      // 페이지의 스타일시트는 body 규칙까지 통째로 온다. 이 블록을 그 뒤에 넣어
-      // 우선하게 한다.
+      // The stylesheet of the page arrives whole, including the body rules. This block is put after it
+      // so that it takes precedence.
       document.head.insertAdjacentHTML("beforeend", `<style>
         html, body { margin: 0; padding: 0; height: 100%; background: transparent !important }
         /* 복사한 workbench 시트의 body::before 배경은 메인 문서 전용이다. 네이티브
@@ -102,38 +102,38 @@
     root.setAttribute("role", "dialog");
     root.setAttribute("aria-modal", String(mode === "dialog"));
     root.setAttribute("aria-label", title);
-    // 같은 내용을 다시 그리면 그 스크롤 위치를 유지한다. 다른 내용은 data-scroll-key 가 달라 위에서 시작한다.
+    // When the same content is drawn again, its scroll position is kept. Other content has a different data-scroll-key and starts at the top.
     const positions = scrollPositions(root);
     updateContent(root, html);
     root.style.borderColor = border;
-    // 새 위치가 없으면 이미 적용한 위치를 유지한다.
+    // When there is no new position, the position already applied is kept.
     const at = card ?? pendingCard;
     pendingCard = null;
     if (at) place(at);
     else report();
-    // 카드 크기를 적용한 뒤 복원해야 스크롤 범위가 이전 크기로 잘리지 않는다.
+    // The position must be restored after the card size is applied, so that the scroll range is not clipped to the previous size.
     restoreScroll(root, positions);
     reportScroll();
 
-    // 뷰는 메인 페이지가 잰 크기로 만들어졌으므로 여기서 잴 것이 없다. 이 호출은
-    // 내용이 렌더링되었다는 것만 보고하며, 그때가 뷰를 표시할 수 있는 시점이다.
+    // The view was created with the size that the main page measured, so there is nothing to measure here. This call
+    // only reports that the content was rendered, and that is the time when the view can be shown.
     page.modal.ready(id, instance);
   }
 
-  /* 로드 시 한 번, 이후 내용이 바뀔 때마다 호출한다. 뷰를 다시 만들면 깜빡인다. 처음 내용은
-     호출의 응답으로 오므로 더 늦게 바뀐 위치보다 나중에 도착할 수 있다. 호스트가 붙인 변경
-     번호로 오래된 값을 버린다. */
+  /* Called once at load and then every time the content changes. Recreating the view makes it flicker. The first content
+     comes as the response of a call, so it can arrive later than a position that changed later. A stale value is discarded by the change
+     number that the host attaches. */
   const order = modalOrder(render, place);
   page.modal.content(id, instance, order.content, order.position).then(() => {
     loaded = true;
     report();
   });
 
-  /* 응답은 (key, value) 하나다. 거두는 방법은 메인 문서와 같은 것을 쓴다. */
+  /* The response is one (key, value). The same way of collecting it as in the main document is used. */
   const send = (key, value) => page.modal.answer(id, instance, key, value);
 
-  /* 보이는 내용(data-scroll-key)의 스크롤 위치를 내용을 소유한 페이지에 알린다(docs/spec/settings.md). 그 요소가 없는
-     내용(메뉴)은 알리지 않는다. */
+  /* Reports the scroll position of the visible content (data-scroll-key) to the page that owns the content (docs/spec/settings.md). Content
+     without that element (a menu) is not reported. */
   function reportScroll() {
     const keyed = root?.querySelector("[data-scroll-key]");
     if (keyed) send("scroll", String(keyed.scrollTop));
@@ -144,8 +144,8 @@
 
   onAnswer(document, send);
 
-  /* 그립 드래그도 같은 응답으로 보낸다. 이 뷰는 카드의 위치를 알지 않으므로 이동
-     거리만 전달하고 위치는 카드를 소유한 페이지가 정한다. */
+  /* A grip drag is also sent through the same response. This view does not know the position of the card, so it passes only the move
+     distance and the page that owns the card decides the position. */
   onGripDrag(document, (dx, dy) => send("move", `${dx},${dy}`));
   showValue(document);
 </script>

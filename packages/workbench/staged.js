@@ -1,26 +1,26 @@
-// stage.mjs 가 배포 루트에 만들어 넣는 파일 이름.
-// 이 목록은 선언과 실제를 맞추기 위해 stage.mjs 가 import 해서 검증한다.
+// The names of the files that stage.mjs creates in the publish root.
+// stage.mjs imports this list and verifies it so that the declaration and the actual files match.
 //
-// 배포 루트 파일(모듈이 직접 import 가능):
-// - always: 모든 빌드에서 생성
-// - diagnostics: --diagnostics 플래그 있을 때만 생성
-// - served: host 가 제공하는 문서. 스테이징은 --installed 일 때만 쓴다
+// Publish root files (modules can import them directly):
+// - always: created in every build
+// - diagnostics: created only with the --diagnostics flag
+// - served: documents that the host provides. Staging writes them only with --installed
 //
-// 주의: modules/ 아래로 복사되는 패키지 파일들은 여기 선언하지 않는다.
-//      각 패키지의 files 배열로 관리하고, stage.mjs 가 그것을 복사할 뿐이다.
+// Note: the files copied under modules/ are not declared here.
+//      They are managed by the files array of each plugin or sidecar, and stage.mjs only copies them.
 export const STAGED = Object.freeze({
   always: Object.freeze([
-    "diagnostics.js", // --diagnostics면 observe.js 복사본, 아니면 release-diagnostics.js 복사본
-    "environment.json", // 애플리케이션 설정
-    "runtime/start.js", // 애플리케이션 runtime 의 시작 문서 모듈
+    "diagnostics.js", // a copy of observe.js with diagnostics, otherwise a copy of release-diagnostics.js
+    "environment.json", // application settings
+    "runtime/start.js", // the start document module of the application runtime
   ]),
   diagnostics: Object.freeze([
-    "transcript.js", // 진단 모듈이 사용하는 호출 기록기
-    "resize-loop.js", // 진단 모듈이 사용하는 ResizeObserver 루프 기록기
-    "surface-reply-hold.js", // 진단 모듈이 사용하는 표면 exposure 답 붙잡기
+    "transcript.js", // the call recorder that the diagnostics module uses
+    "resize-loop.js", // the ResizeObserver loop recorder that the diagnostics module uses
+    "surface-reply-hold.js", // the hold of surface exposure replies that the diagnostics module uses
   ]),
-  // 네이티브 host 가 요청마다 만들어 제공하는 문서. 호스트가 없는 애플리케이션은 --installed 스테이징이 쓴다.
+  // A document that the native host creates and provides for each request. An application without a host uses the --installed staging.
   served: Object.freeze([
-    "installed-plugins.json", // 켜진 설치 플러그인과 그 manifest(docs/spec/installation.md)
+    "installed-plugins.json", // The enabled installed plugins and their manifests (docs/spec/installation.md)
   ]),
 });

@@ -1,24 +1,24 @@
-// 탭 알림을 운영체제의 알림으로 게시한다(docs/spec/plugins.md#tab-reports). 알림 목록이 바뀔 때마다 새로
-// 생기거나 바뀐 알림은 게시하고, 지워진 알림은 지운다. 누른 알림은 그 탭을 고른다.
+// Posts tab notices as operating system notifications (docs/spec/plugins.md#tab-reports). Whenever the notice list changes, a notice that is new
+// or changed is posted, and a notice that was removed is removed. Pressing a notice selects its tab.
 import { notificationCenter } from "./host.js";
 import { onTabReports, tabNotices } from "./tab-reports.js";
 
-/** 권한이 거부된 동안 알림 도움말의 마지막 줄. */
+/** The last line of the notification help while the permission is denied. */
 export const DENIED_LINE = "System notifications are turned off for this application.";
 
 /**
- * post({surface,title,body}) 와 remove({surface}) 는 호스트 호출, notices() 는 [탭, 텍스트] 목록, tabName(탭) 은
- * 탭의 이름, select(탭) 은 core.tab.select 실행이다.
+ * post({surface,title,body}) and remove({surface}) are host calls, notices() is the list of [tab, text], tabName(tab) is the name of the
+ * tab, and select(tab) runs core.tab.select.
  */
 export function createSystemNotifications({ post, remove, notices, tabName, select }) {
   const posted = new Map();
-  // 알림 센터가 받아들인 뒤 지우지 않은 탭.
+  // The tabs whose notice the notification center accepted and that have not been removed.
   const accepted = [];
   let current = { authorization: "notDetermined", error: null };
   const listeners = new Set();
   const changed = () => { for (const listener of listeners) listener(); };
   const failed = (operation) => (error) => {
-    // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
+    // default: a rejection value may not be an Error, so the value itself is written.
     current = { ...current, error: `${operation}: ${error?.message ?? error}` };
     changed();
   };
@@ -43,7 +43,7 @@ export function createSystemNotifications({ post, remove, notices, tabName, sele
       }
     },
     setState(state) {
-      // 기본값: 호스트의 알림 상태는 오류가 있을 때만 error 를 싣는다.
+      // default: the notification state of the host carries error only when there is an error.
       current = { authorization: state.authorization, error: state.error ?? null };
       changed();
     },
@@ -62,22 +62,22 @@ export function createSystemNotifications({ post, remove, notices, tabName, sele
   };
 }
 
-/* 탭 이름과 탭 고르기는 판이 정한다. */
+/* The plane decides the tab names and the tab selection. */
 let nameOf = (tab) => tab;
 let selectTab = () => Promise.reject(new Error("no tab selection is configured"));
 
-/** 이 창의 시스템 알림. 애플리케이션이 없으면 게시하지 않는다. */
+/** The system notifications of this window. Without the application, nothing is posted. */
 export const systemNotifications = createSystemNotifications({
-  // 기본값: 위 주석대로 호스트가 없는 브라우저 예제는 시스템 알림을 게시하지 않는다.
+  // default: as stated above, the browser example without a host posts no system notifications.
   post: (request) => notificationCenter?.post(request) ?? Promise.resolve(),
-  // 기본값: 호스트가 없는 브라우저 예제에는 지울 시스템 알림이 없다.
+  // default: the browser example without a host has no system notification to remove.
   remove: (request) => notificationCenter?.remove(request) ?? Promise.resolve(),
   notices: tabNotices,
   tabName: (tab) => nameOf(tab),
   select: (tab) => selectTab(tab),
 });
 
-/** 판이 탭 이름을 찾는 함수와 core.tab.select 를 실행하는 함수를 준다. */
+/** The plane provides the function that finds a tab name and the function that runs core.tab.select. */
 export function configureSystemNotifications({ tabName, select }) {
   nameOf = tabName;
   selectTab = select;
@@ -89,10 +89,10 @@ if (notificationCenter) {
   notificationCenter.onPosted((post) => systemNotifications.posted(post));
   notificationCenter.onActivated((activation) => {
     systemNotifications.activated(activation).catch((error) =>
-      // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
+      // default: a rejection value may not be an Error, so the value itself is written.
       systemNotifications.setState({ ...systemNotifications.state(), error: `activate: ${error?.message ?? error}` }));
   });
   notificationCenter.state().then((state) => systemNotifications.setState(state),
-    // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
+    // default: a rejection value may not be an Error, so the value itself is written.
     (error) => systemNotifications.setState({ ...systemNotifications.state(), error: `state: ${error?.message ?? error}` }));
 }

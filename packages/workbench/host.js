@@ -1,11 +1,11 @@
-// 네이티브 표면과 모달 뷰를 애플리케이션에 요청한다.
+// Requests native surfaces and modal views from the application.
 //
-// 플러그인 모듈은 애플리케이션 DOM 에 마운트된다. 페이지는 논리 표면의 프레임을
-// 선언하고 호스트는 네이티브 문서·그림 영역을 그 표면에 배치한다.
-// 모달 문서는 메인창 내부의 별도 네이티브 웹뷰에 표시된다.
+// Plugin modules mount into the application DOM. A page declares the frame of a logical surface, and the host places
+// the native document and picture regions on that surface.
+// A modal document is shown in a separate native web view inside the main window.
 //
-// 이 파일은 애플리케이션마다 복제하지 않는다. 애플리케이션별 차이는 전송 방식뿐이고
-// 런타임 모듈(@soksak/runtime)이 담당한다.
+// This file is not duplicated per application. The only difference between applications is the transport, which the
+// runtime module (@soksak/runtime) handles.
 import { reportRecord } from "./page-log.js";
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
@@ -13,11 +13,11 @@ import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar }
 import { registerSurfacePort, registry } from "./exposure.js";
 
 /**
- * 계산된 CSS 색을 [r, g, b, a] 로 반환한다. 알파가 없으면 1 이다.
+ * Returns the computed CSS color as [r, g, b, a]. The alpha is 1 when the color has none.
  *
- * 브라우저는 color-mix 의 결과를 color(srgb r g b / a) 로 직렬화하고, 그 표기의
- * 채널은 0..1 이다. rgb() 표기의 채널은 0..255 이므로 눈금을 맞춘다. 호스트는 색을
- * 0..255 로 받는다.
+ * The browser serializes the result of color-mix as color(srgb r g b / a), whose channels range over 0..1. The
+ * channels of the rgb() notation range over 0..255, so this function scales them to match. The host receives colors
+ * as 0..255.
  */
 function rgba(css) {
   const text = String(css).trim();
@@ -28,10 +28,10 @@ function rgba(css) {
 }
 
 /**
- * colour 를 ground 위에 합성한 불투명 색을 반환한다.
+ * Returns the opaque color that results from compositing colour over ground.
  *
- * 페이지의 일부 색은 반투명이고 페이지 안에서는 판 위에 합성된다. 네이티브 모달은
- * 아래 표면 위에 합성되므로, 반투명 보더가 흰 페이지 위에서 사라진다.
+ * Some colors of the page are translucent and are composited over the plane inside the page. A native modal is
+ * composited over the surfaces below it, so a translucent border would vanish over a white page.
  */
 function over(colour, ground) {
   const [r, g, b, a] = rgba(colour);
@@ -40,34 +40,34 @@ function over(colour, ground) {
   return `rgb(${mix(r, br)}, ${mix(g, bg)}, ${mix(b, bb)})`;
 }
 
-/** 판 기준 사각형을 페이지 기준으로 변환한다. */
+/** Converts a rectangle relative to the plane into one relative to the page. */
 function toPage(rect) {
   const plane = document.getElementById("plane").getBoundingClientRect();
   return { x: plane.left + rect.x, y: plane.top + rect.y, w: rect.w, h: rect.h };
 }
 
-/** 페이지 기준 사각형을 판 기준으로 되돌린다. 애플리케이션은 페이지 좌표로 답한다. */
+/** Converts a rectangle relative to the page back into one relative to the plane. The application answers in page coordinates. */
 function toPlane(rect) {
   const plane = document.getElementById("plane").getBoundingClientRect();
   return { x: rect.x - plane.left, y: rect.y - plane.top, w: rect.w, h: rect.h };
 }
 
 /**
- * 모달 렌더링에 필요한 값. show 와 update 가 같은 형태를 전송한다.
+ * The values that modal rendering needs. show and update send the same shape.
  *
- * 스타일시트는 문서가 실제로 가진 규칙을 읽는다. `<style>` 요소만 모으면 링크로
- * 걸린 시트가 빠지고, 모달은 규칙 없는 마크업만 받는다.
+ * The style sheets read the rules that the document actually holds. Collecting only `<style>` elements would miss
+ * sheets attached by link, and the modal would receive markup without rules.
  */
 function drawing(el) {
   const style = getComputedStyle(el);
   return {
     mode: el.dataset.nativeModal,
     card: cardFrame(el),
-    // 기본값: 이름표가 없는 모달은 제목이 빈 문자열이다.
+    // default: a modal without a label has an empty string as its title.
     title: el.getAttribute("aria-label") || "",
     className: el.className,
     html: el.innerHTML,
-    // 메인 문서의 native paint clip 은 메인 문서의 표면을 따르며, 대화상자 문서에 복사하지 않는다(docs/spec/native-modals.md).
+    // The native paint clip of the main document follows the surfaces of the main document and is not copied into the dialog document (docs/spec/native-modals.md).
     css: [...document.styleSheets]
       .filter((sheet) => !document.adoptedStyleSheets.includes(sheet) && !sheet.ownerNode?.hasAttribute("data-native-paint-clip"))
       .map((sheet) => [...sheet.cssRules].map((rule) => rule.cssText).join("\n"))
@@ -88,7 +88,7 @@ function overlayFrame(el, rect) {
     : toPage(rect);
 }
 
-/** 앱 DOM 모달을 통과한 네이티브 입력이 네이티브 표면에 전달되지 않게 한다. */
+/** Keeps native input that passed through an application DOM modal from reaching the native surfaces. */
 function windowOverlays() {
   if (!shown) return [];
   const el = document.getElementById(shown);
@@ -101,32 +101,32 @@ function windowOverlays() {
 }
 
 /**
- * 이 페이지를 애플리케이션이 실행하는가.
+ * Whether the application runs this page.
  *
- * 표면과 모달과 도형을 누가 그리는지가 이 값으로 갈린다. 애플리케이션이 그리면
- * 네이티브 뷰이고, 아니면 이 문서가 DOM 으로 모사한다. 그리는 방법이 정말로 다르므로
- * 갈림 자체는 남고, 갈리는 자리는 이 값 하나다.
+ * This value decides who draws surfaces, modals and shapes. When the application draws them they are native views;
+ * otherwise this document imitates them with DOM. The way of drawing really differs, so the branch itself remains,
+ * and this value is the single place where it branches.
  */
 export const native = Boolean(bridge);
 
-// 호스트의 다시 읽기 요청. 보낸 호출이 모두 답을 받은 뒤 이 페이지를 다시 읽는다(docs/spec/native-host.md#page-reload).
+// The reload request of the host. The page is read again after every call it sent has received its reply (docs/spec/native-host.md#page-reload).
 if (bridge) bridge.on("page-reload", () => bridge.reload());
 
 /*
- * 사이드카 이름마다 하나의 순서 포트. 호스트는 전송 호출을 동시에 처리할 수 있으므로, 앞선 전송이
- * 끝난 뒤 다음 전송을 호출해야 사이드카가 보낸 순서대로 받는다. 같은 사이드카를 쓰는 모든 표면이
- * 이 순서를 공유한다.
+ * One ordered port per sidecar name. The host can process send calls concurrently, so the next send must be called
+ * only after the previous one has finished; then the sidecar receives the messages in the order they were sent. All
+ * surfaces that use the same sidecar share this order.
  */
 const orderedSidecars = new Map();
 function orderedSidecarPort(name) {
   if (!orderedSidecars.has(name)) {
     orderedSidecars.set(name, orderedSidecar({
-      // 실패 listener 가 설치된 뒤에 요청을 보내야 그 요청이 부른 실패를 놓치지 않는다.
+      // The request must be sent after the failure listener is installed so that a failure caused by the request is not missed.
       send: (surface, body, cids) => listenSidecarFailures()
         .then(() => bridge.call("sidecarSend", { sidecar: name, surface, body, cids })),
-    // 호출자가 받는 거부와 별개로, 실패한 전송은 애플리케이션 로그에 남긴다.
+    // Separately from the rejection that the caller receives, a failed send is written to the application log.
     }, (error) => {
-      // 기본값: 던진 값이 Error 가 아닐 수 있으므로 message 가 없으면 그 값을 그대로 적는다.
+      // default: the thrown value may not be an Error, so when it has no message the value itself is written as it is.
       report(`sidecar ${name}: send failed: ${error?.message ?? error}`);
     }));
   }
@@ -134,16 +134,16 @@ function orderedSidecarPort(name) {
 }
 
 /*
- * 사이드카 실패 handler. 키는 사이드카 이름과 표면이다. 문서마다 sidecar-failure listener 하나가
- * handler 를 부르고, handler 가 없는 실패는 페이지 오류로 보고한다(docs/spec/sidecars.md#page-interface).
+ * Sidecar failure handlers. The key is the sidecar name and the surface. One sidecar-failure listener per document
+ * calls the handler, and a failure without a handler is reported as a page error (docs/spec/sidecars.md#page-interface).
  */
 const failureHandlers = new Map();
 const failureKey = (name, surface) => JSON.stringify([name, surface]);
 let failureListener = null;
 function listenSidecarFailures() {
-  // 기본값: 문서의 첫 요청이나 구독이 listener 를 설치하고, 이후에는 같은 설치를 기다린다.
+  // default: the first request or subscription of a document installs the listener, and later ones wait for the same installation.
   failureListener ??= Promise.resolve(bridge.on("sidecar-failure", (failure) => {
-    // 기본값: 등록한 handler 가 없는 표면은 받을 곳이 없으므로 페이지 오류로 보고한다.
+    // default: a surface without a registered handler has nowhere to receive the failure, so the failure is reported as a page error.
     const handlers = [...(failureHandlers.get(failureKey(failure.sidecar, failure.surface)) ?? [])];
     if (handlers.length === 0) {
       dispatchEvent(new ErrorEvent("error", {
@@ -156,7 +156,7 @@ function listenSidecarFailures() {
   return failureListener;
 }
 
-/** 사이드카 name 의 표면 surface 에 대한 실패를 fn(reason) 으로 받는다. 등록 후 해제 함수로 완료된다. */
+/** Receives the failures of the surface surface of the sidecar name through fn(reason). The returned unsubscribe function completes after registration. */
 function onSidecarFailure(name, surface, fn) {
   if (typeof fn !== "function") return Promise.reject(new TypeError("sidecar onFailure requires a listener"));
   const key = failureKey(name, surface);
@@ -170,9 +170,9 @@ function onSidecarFailure(name, surface, fn) {
 }
 
 /**
- * 네이티브 표면을 만들지 않고 선언된 background 세션 명령을 보낸다.
- * 탭 id를 사이드카 표면 키로 유지해 나중에 표시되는 표면이 같은 영속 actor에
- * 다시 연결되게 한다.
+ * Sends a declared background session command without creating a native surface.
+ * The tab id stays the sidecar surface key so that a surface shown later reattaches to the same persistent
+ * actor.
  */
 export function windowSidecar(name) {
   if (!bridge) return null;
@@ -186,22 +186,22 @@ export function windowSidecar(name) {
 }
 
 /**
- * 영속 사이드카 서비스에서 surfaces 에 없는 이 애플리케이션의 세션을 닫게 하고 {closed} 를 반환한다.
- * 호스트가 없는 페이지에는 사이드카 세션이 없으므로 null 을 반환한다.
+ * Makes the persistent sidecar service close the sessions of this application that are not in surfaces, and returns {closed}.
+ * A page without a host has no sidecar sessions, so the function returns null.
  */
 export function retainSidecarSessions(surfaces) {
   if (!bridge) return Promise.resolve(null);
   return bridge.call("sidecarsRetain", { surfaces });
 }
 
-/* 이 문서에 표면 모듈이 마운트되므로 모든 네이티브 연산은 호스트 경계를 넘기
-   전에 명시적인 표면 범위로 제한한다. */
+/* Surface modules mount into this document, so every native operation is limited to an explicit surface scope
+   before it crosses the host boundary. */
 export function surfaceContextRuntime(surface, declarations = {}) {
   const { surfaceId } = surface;
   if (typeof surfaceId !== "string" || !surfaceId) throw new TypeError("surface runtime requires surface.surfaceId");
   const invoke = (name, payload) => name === "report"
     ? reportRecord("error", payload)
-    // 기본값: 매개변수가 없는 호출은 payload 를 생략한다.
+    // default: a call without parameters omits the payload.
     : bridge.call(name, { ...(payload ?? {}), surface: surfaceId });
   const listeners = new Map();
   const on = (name, fn) => {
@@ -252,14 +252,14 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     theme,
     call(name, payload) {
       if (name.includes(".")) {
-        // 기본값: 매개변수가 없는 명령은 payload 를 생략한다.
+        // default: a command without parameters omits the payload.
         return registry.handle({ method: "command.run", params: { name, params: payload ?? {}, surface: surfaceId } })
           .then((reply) => reply.error ? Promise.reject(new Error(reply.error.message)) : reply.result);
       }
       return invoke(name, payload);
     },
     sidecar(name) {
-      // 기본값: sidecars 는 plugin.json 의 선택 필드이며 없으면 사이드카가 없다(docs/spec/plugins.md).
+      // default: sidecars is an optional field of plugin.json, and without it the plugin has no sidecars (docs/spec/plugins.md).
       const declared = surface.sidecars ?? [];
       if (name !== undefined) throw new Error("surface runtime sidecar() takes no argument; it uses the declared sidecar");
       if (declared.length !== 1) throw new Error(`surface runtime requires exactly one declared sidecar, got ${declared.length}`);
@@ -280,58 +280,58 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     exposure: createExpose(port, async () => {
       const core = registry.surfaceDeclarations();
       return {
-        // 기본값: 선언 파일에 없는 종류(status, commands, dom)는 그 플러그인이 더하는 항목이 없다.
+        // default: a kind that the declaration file lacks (status, commands, dom) means the plugin adds no entries of that kind.
         status: [...core.status, ...(declarations.status ?? [])],
-        // 기본값: 선언 파일에 없는 종류는 그 플러그인이 더하는 항목이 없다.
+        // default: a kind that the declaration file lacks means the plugin adds no entries of that kind.
         commands: [...core.commands, ...(declarations.commands ?? [])],
-        // 기본값: 선언 파일에 없는 종류는 그 플러그인이 더하는 항목이 없다.
+        // default: a kind that the declaration file lacks means the plugin adds no entries of that kind.
         dom: [...core.dom, ...(declarations.dom ?? [])],
       };
     }),
-    // 클립보드 bridge payload는 이미 타입 있는 호스트 계약을 따른다. 특히
-    // writeText는 surface 범위 객체가 아니라 문자열을 담는다.
+    // The clipboard bridge payload follows the host contract, which is already typed. In particular,
+    // writeText carries a string, not a surface-scoped object.
     clipboard: createClipboardBridge((name, payload) => bridge.call(name, payload), { allowPersist: true }),
-    // 링크 열기는 다른 호스트 요청처럼 호출 관찰자(watchCalls)에게 알린다.
+    // Opening a link notifies the call observer (watchCalls) like other host requests.
     links: createLinkBridge((name, payload) => tell(name, payload)),
   };
 }
 
-/* 표면의 exposure 답을 보내는 함수. 진단 빌드의 진단 모듈만 설치해 표면의 답을 붙잡는다. */
+/* The function that sends the exposure reply of a surface. Only the diagnostic module of a diagnostic build installs it, to intercept the reply of the surface. */
 let replyGate = null;
 
 /**
- * 표면의 exposure 답을 fn(surface, send) 로 보낸다. send() 는 답을 호스트에 보내고 그 응답을 반환하며, fn 은 그 결과를
- * 반환한다. null 은 설치한 함수를 지운다.
+ * Sends the exposure reply of a surface through fn(surface, send). send() sends the reply to the host and returns the response, and fn
+ * returns that result. null removes the installed function.
  */
 export function gateSurfaceReplies(fn) {
   replyGate = fn;
 }
 
-/* 호출과 그 답을 받는 함수. 진단 빌드의 진단 모듈만 설치한다. */
+/* The function that receives calls and their replies. Only the diagnostic module of a diagnostic build installs it. */
 let watcher = null;
 
 /**
- * 애플리케이션 호출을 fn(name, payload, answered) 로 알린다. answered 는 답의 promise 다.
- * fn 이 보내는 report 호출은 알리지 않는다.
+ * Notifies fn(name, payload, answered) of an application call. answered is the promise of the reply.
+ * The report calls that fn sends are not notified.
  */
 export function watchCalls(fn) {
   watcher = fn;
 }
 
-/** 실패 한 줄을 애플리케이션 로그로 보낸다. 호스트가 없는 문서(브라우저 예제)의 로그는 콘솔의 오류 수준이다. */
+/** Sends one failure line to the application log. For a document without a host (the browser example), the log is the error level of the console. */
 /** Reloads this page after every sent call has its answer (docs/spec/native-host.md#page-reload). */
 export const reloadPage = () => bridge.reload();
 
 export const report = (line) => reportRecord("error", line);
 
 /**
- * 관측 줄 하나를 애플리케이션 로그로 보낸다. 실패가 아닌 기록(포커스 전이, 저장 형식 변환)이다. 호스트가 없는
- * 문서(브라우저 예제)는 콘솔의 정보 수준에 쓴다. 실패는 report 로 보낸다.
+ * Sends one observation line to the application log. It is a record that is not a failure (a focus transition, a stored format conversion). A document
+ * without a host (the browser example) writes it to the info level of the console. A failure is sent with report.
  */
 export const log = (line) => reportRecord("info", line);
 
-/* 애플리케이션에는 콘솔이 없다. 여기서 실패를 잡으면 기록되지 않으므로 잡지
-   않는다. 문서의 unhandledrejection 이 애플리케이션 로그로 전달한다. */
+/* The application has no console. A failure caught here would not be recorded, so it is not caught.
+   The unhandledrejection event of the document forwards it to the application log. */
 const tell = (name, payload) => {
   const answered = bridge.call(name, payload);
   if (watcher) watcher(name, payload, answered);
@@ -339,50 +339,50 @@ const tell = (name, payload) => {
 };
 
 /**
- * 앞선 호출이 끝난 뒤에 보낸다.
+ * Sends after the previous call has finished.
  *
- * 모달의 호출은 보낸 순서대로 적용되어야 한다. 창을 만드는 호출이 가장 느리고,
- * 애플리케이션에 따라 호출마다 다른 스레드에서 처리되므로, 기다리지 않으면 나중
- * 호출이 먼저 도착해 아직 없는 창을 옮기려 한다.
+ * The calls of a modal must apply in the order they were sent. The call that creates the window is the slowest, and
+ * depending on the application each call is processed on a different thread, so without waiting a later call
+ * arrives first and tries to move a window that does not exist yet.
  */
 let turn = Promise.resolve();
 const tellInTurn = (name, payload) => {
   const answered = turn.then(() => tell(name, payload));
-  // 실패해도 다음 호출은 보낸다. 그 실패를 여기서 삼키면 아무 데도 남지 않으므로
-  // 애플리케이션 로그에 적는다.
+  // The next call is sent even when this one fails. Swallowing the failure here would leave no record anywhere, so
+  // it is written to the application log.
   turn = answered.catch((why) => reportRecord("error", `host ${name} failed: ${why}`));
   return answered;
 };
 
 let last = "";
-// 레이아웃 준비와 표시는 하나의 트랜잭션이다. 네이티브 합성기는 창마다 활성
-// ticket 하나만 가지므로 두 호출 사이에 다음 준비 작업을 호스트로 보내지 않는다.
+// Layout preparation and display form one transaction. The native compositor has only one active ticket per window,
+// so no next preparation is sent to the host between the two calls.
 let layoutTurn = Promise.resolve();
 let layoutFrame = layoutTurn;
 let layoutResult = layoutTurn;
 
 /**
- * 레이아웃 단계 step 이 끝나면 이행되는 순서 promise. 실패한 트랜잭션이 다음 독립 레이아웃을 막지 않게 실패에서도 이행한다.
- * 그 실패는 이 단계를 담은 place 의 답으로 호출자가 받아 보고하므로 여기서 다시 쓰지 않는다(docs/spec/hosts.md#application-log).
+ * The ordering promise that is fulfilled when layout step step ends. It is fulfilled on failure too, so that a failed transaction does not block the next independent layout.
+ * The caller receives that failure as the reply of the place that contains this step and reports it, so it is not written again here (docs/spec/hosts.md#application-log).
  */
 const layoutStepEnd = (step) => step.then(() => undefined, () => undefined);
 let layoutPresented = false;
-/* 호스트가 표시를 확인한 가장 최근 준비의 창 단추 영역과 제목줄 높이({controls, row}). 커밋된 상태이고, 표시를
-   확인하기 전에는 null 이다(docs/spec/native-surfaces.md#title-bar-height). */
+/* The window button area and title bar height ({controls, row}) of the most recent preparation whose display the host confirmed. It is committed state, and
+   it is null before a display is confirmed (docs/spec/native-surfaces.md#title-bar-height). */
 let presentedChrome = null;
 const surfacePreparedListeners = new Set();
 let lastPreparedSurfaces = [];
 
-/** 준비된 native surface를 위한 workbench lifecycle listener를 등록한다. */
-/** 창에 놓인 파일 {urls, x, y}(페이지 좌표) 를 받는다. 애플리케이션이 없으면 놓인 파일도 없다. */
+/** Registers the workbench lifecycle listener for prepared native surfaces. */
+/** Receives the files dropped on the window {urls, x, y} (page coordinates). Without an application there are no dropped files. */
 export function onFilesDropped(listener) {
   if (native) bridge.on("files-dropped", listener);
 }
 
 /**
- * 운영체제의 알림 센터(docs/spec/plugins.md#tab-reports). 애플리케이션이 없으면 null 이다.
- * onState 는 {authorization, error}, onPosted 는 알림 센터가 받아들인 알림의, onActivated 는 누른 알림의
- * {surface} 를 받는다.
+ * The notification center of the operating system (docs/spec/plugins.md#tab-reports). It is null without an application.
+ * onState receives {authorization, error}, onPosted receives the notification that the notification center accepted, and onActivated receives the
+ * {surface} of the notification that was clicked.
  */
 export const notificationCenter = native ? {
   post: (request) => tell("notify", request),
@@ -414,7 +414,7 @@ export function onSurfacePrepared(listener) {
   return () => surfacePreparedListeners.delete(listener);
 }
 
-/** 준비의 답이 담은 창 단추 영역과 제목줄 높이를 검사한다. 검증 W 가 이 값을 첫 행과 비교한다. */
+/** Validates the window button area and title bar height contained in the reply of a preparation. Check W compares this value with the first row. */
 function checkChrome(chrome) {
   const area = chrome?.controls;
   if (!area || ![area.x, area.y, area.w, area.h, chrome.row].every(Number.isFinite) || chrome.row < 0) {
@@ -428,38 +428,37 @@ function notifySurfacePrepared(placements) {
 }
 
 /**
- * 창 자체를 다루는 인터페이스. 애플리케이션이 없으면 null.
+ * The interface that handles the window itself. It is null without an application.
  *
- * 창의 프레임은 OS 가 그린다. 모서리, 그림자, 리사이즈, 단추를 이 예제가 다시
- * 만들지 않는다. 제목 표시줄만 투명하고 콘텐츠가 창 전체를 차지하므로, 창이 그리는
- * 단추가 페이지 위에 배치된다. 이 인터페이스는 그 영역과 끄는 영역을 담당한다.
+ * The OS draws the frame of the window. This example does not recreate the corners, shadow, resizing or buttons. Only the title bar is
+ * transparent and the content fills the whole window, so the buttons that the window draws are placed over the page. This interface handles
+ * that area and the area for dragging.
  */
 export const chrome = native ? {
   draggable: (el) => bridge.draggable(el),
-  /** 창이 그리는 단추가 차지하는 영역과 제목줄 높이. 단추를 그리지 않는 창이면 폭이 0 이다. */
+  /** The area that the buttons drawn by the window occupy, and the title bar height. For a window that draws no buttons the width is 0. */
   controls: () => tellInTurn("windowControls"),
   /**
-   * 표시를 확인한 가장 최근 준비의 {controls, row}. 제목줄 높이는 준비가 담고 호스트가 그 트랜잭션에서 정하므로
-   * 이것이 화면에 커밋된 단추 영역이다. 표시를 확인한 준비가 없으면 null 이다.
+   * The {controls, row} of the most recent preparation whose display was confirmed. The preparation carries the title bar height and the host decides it in that transaction,
+   * so this is the button area committed to the screen. It is null when no preparation has been confirmed.
    */
   presented: () => presentedChrome,
 } : null;
 
-/** 표면 인터페이스. 애플리케이션이 없으면 아무 일도 하지 않는다. */
+/** The surface interface. Without an application it does nothing. */
 export const surfaces = native ? {
-    /* 애플리케이션이 그리는 플러그인 종류. 표면을 가진 플러그인은 모두 여기서
-       그리므로 등록소가 그 목록이다. 여기에 이름을 적으면 플러그인을 더할 때마다
-       이 파일을 고쳐야 한다. */
+    /* The plugin kinds that the application draws. Every plugin that has a surface is drawn here, so the registry is that
+       list. Writing names here would require editing this file whenever a plugin is added. */
     get kinds() {
       return plugins().map((p) => p.id);
     },
 
-    /** 실패 한 줄을 애플리케이션 로그로 전송한다. */
+    /** Sends one failure line to the application log. */
     report: (line) => reportRecord("error", line),
 
     theme: (values) => tellInTurn("setTheme", values),
 
-    /** 애플리케이션 메뉴의 언어. 같은 언어의 반복 전송은 호스트가 무시한다. */
+    /** The language of the application menu. The host ignores a repeated send of the same language. */
     menuLanguage: (language) => tellInTurn("setMenuLanguage", language),
 
     place(record) {
@@ -473,28 +472,28 @@ export const surfaces = native ? {
         ...toPage(s.applied),
       }));
 
-      // place 는 렌더마다 호출되고 divider 드래그 중에는 매 프레임 호출된다.
-      // 직전과 같은 요청은 전송하지 않는다.
+      // place is called on every render, and on every frame while a divider is dragged.
+      // A request identical to the previous one is not sent.
       const request = {
-        // 마지막 갱신인지, 갱신이 이어지는 중인지. 이어지는 동안 뷰가 커지면
-        // 아직 렌더링되지 않은 영역이 흰색으로 보인다.
+        // Whether this is the last update or updates continue. While they continue and the view grows,
+        // the area that has not been rendered yet appears white.
         settled: record.settled !== false,
-        // terminal raster는 페이지의 DOM frame 뒤에 commit해야 한다. 다른
-        // surface는 연속 frame을 즉시 commit할 수 있다.
+        // The terminal raster must commit after the DOM frame of the page. Other
+        // surfaces can commit consecutive frames immediately.
         waitForPresentation: record.surfaces.some(({ surface, visible }) =>
           visible === true && surface?.composition?.kind === "hybrid" &&
           surface.composition.regions?.some(({ kind }) => kind === "image") === true),
         overlays: windowOverlays(),
         surfaces,
-        // 다음 그리기가 보일 첫 행의 높이(pt). 호스트가 이 준비의 트랜잭션에서 창 제목줄을 이 높이로 정한다.
+        // The height (pt) of the first row that the next drawing will show. The host sets the window title bar to this height in the transaction of this preparation.
         titlebar: record.titlebar,
       };
       const key = JSON.stringify(request);
       if (key !== last) {
         last = key;
-        // layoutTurn은 surface 준비와 표시의 transaction 순서다.
-        // 전역 command turn도 함께 기다리지 않는다: 그렇게 하면 관련 없는
-        // 호스트 호출이 divider 단계마다 frame 하나를 더할 수 있다.
+        // layoutTurn is the transaction order of surface preparation and display.
+        // It does not also wait for the global command turn: doing so would let an unrelated
+        // host call add one frame per divider step.
         const scheduled = layoutTurn.then(() => tell("syncSurfaces", request));
         layoutFrame = scheduled;
         layoutResult = scheduled.then((frame) => {
@@ -521,8 +520,8 @@ export const surfaces = native ? {
         layoutPresented = true;
         layoutTurn = layoutStepEnd(presentedLayout);
       }
-      // 이전 ticket이 커밋되기 전에 새 동기화가 네이티브 ticket을 교체하지 않도록
-      // 동기화와 표시 호출을 함께 처리한다.
+      // Handles the synchronization and the display call together so that a new synchronization does not replace the native ticket
+      // before the previous ticket is committed.
       const result = layoutResult;
       return result.then((placed) =>
         placed.map((p) => ({ id: p.id, visible: p.visible, ...toPlane(p) }))).catch((error) => {
@@ -530,22 +529,22 @@ export const surfaces = native ? {
           throw error;
         });
     },
-    // 표면 배치 RPC가 끝난 뒤에 호출해야 페이지가 네이티브 래스터 이벤트를 계속 처리할 수 있다.
+    // Call it after the surface placement RPC has ended so that the page can keep handling native raster events.
     waitPresented: () => tell("waitPresented"),
     /**
-     * 마지막으로 보낸 요청을 잊어, 다음 배치가 그 요청과 같아도 보내게 한다. 창의 상태가 요청 없이 바뀌었을 때
-     * (전체 화면에서 나온 창의 제목줄을 AppKit 이 되돌렸을 때) 페이지가 부른다.
+     * Forgets the last sent request so that the next placement is sent even when it equals that request. The page calls it when the state of the window changed without a request
+     * (when AppKit restored the title bar of a window that left full screen).
      */
     forget() {
       last = "";
     },
 } : {
   kinds: [],
-  // 호스트가 없는 문서의 실패는 콘솔의 오류 수준에 쓴다(docs/spec/plugins.md).
+  // A failure of a document without a host is written to the error level of the console (docs/spec/plugins.md).
   report: (line) => console.error(line),
   theme: () => {},
   menuLanguage: () => {},
-  // 호스트가 없으면 이 문서가 앉힌 자리가 실제 자리다. 컴포지터는 그 답을 기록한다.
+  // Without a host, the place where this document seats the surface is the actual place. The compositor records that reply.
   place: (record) => record.surfaces.map((s) => ({ id: s.id, ...s.applied })),
   waitPresented: async () => null,
   forget: () => {},
@@ -554,12 +553,12 @@ export const surfaces = native ? {
 let pick = null;
 let shown = null;
 
-/* 열린 모달 문서가 마지막으로 보고한 상태. docs/spec/exposure.md 의 core.modal 이다. */
+/* The state that the open modal document reported last. It is core.modal of docs/spec/exposure.md. */
 let modalDocument = null;
 const modalListeners = new Set();
 const modalChanged = () => { for (const fn of modalListeners) fn(); };
 
-/** 열린 모달과 그 문서가 보고한 상태. 열린 모달이 없으면 null 이다. */
+/** The open modal and the state its document reported. It is null when no modal is open. */
 export function modalState() {
   if (!shown) return null;
   const el = document.getElementById(shown);
@@ -567,29 +566,29 @@ export function modalState() {
   return { id: shown, mode: el.dataset.nativeModal, document: modalDocument };
 }
 
-/** 모달 상태가 바뀌면 fn 을 호출한다. 해제 함수를 반환한다. */
+/** Calls fn when the modal state changes. Returns an unsubscribe function. */
 export function onModalState(fn) {
   modalListeners.add(fn);
   return () => modalListeners.delete(fn);
 }
 
-/* 애플리케이션이 페이지로 보내는 입력의 수신자. 판이 등록한다. */
+/* The receiver of input that the application sends to the page. The plane registers it. */
 let onPress = () => {};
 let onInput = () => {};
 
 /**
- * 애플리케이션의 입력을 받을 함수를 등록한다.
+ * Registers the function that receives input from the application.
  *
- *   press(id)   표면 위의 누름. 표면은 네이티브 뷰이므로 그 위의 클릭은 이 문서에
- *               도달하지 않는다. 애플리케이션이 표면 id 를 전달한다.
- *   input(step) 왼쪽 버튼의 누름, 이동, 놓음. 좌표는 이 문서의 것이다. divider 의
- *               잡는 영역은 통로보다 넓어서 통로가 선 하나 폭이면 그 영역 전체가
- *               표면 아래에 놓인다.
+ *   press(id)   A press on a surface. A surface is a native view, so a click on it does not
+ *               reach this document. The application passes the surface id.
+ *               input(step) Press, move and release of the left button. The coordinates belong to this document. The grab area of a divider
+ *               is wider than the gap, so when the gap is one line wide, that whole area lies
+ *               below the surface.
  */
-/* 호스트 애플리케이션 메뉴가 이 창에 실행을 요청한 명령. */
+/* The command that the host application menu asked this window to run. */
 let onMenu = () => {};
 
-/** 애플리케이션 메뉴 항목이 명령 이름을 보낼 때 호출할 함수를 등록한다. */
+/** Registers the function to call when an application menu item sends a command name. */
 export function onMenuCommand(fn) {
   onMenu = fn;
 }
@@ -603,12 +602,12 @@ if (native) {
   bridge.on("surface-pressed", (id) => onPress(id));
   bridge.on("menu-command", (message) => onMenu(message?.name));
   bridge.on("surface-input", (step) => onInput(step));
-  // 모달은 여러 번 응답하므로 여기서 구독을 해제하지 않고 hide 에서 해제한다.
-  // 답에는 어느 모달의 것인지가 함께 온다. 닫힌 모달이 마지막으로 보낸 답이 다음
-  // 모달의 수신자에게 가지 않도록 그것으로 거른다.
+  // A modal replies several times, so the subscription is not released here but in hide.
+  // The reply carries the modal it belongs to. It is used to filter out the last reply of a closed modal so that it
+  // does not reach the receiver of the next modal.
   bridge.on("overlay-pick", ({ id, key, value }) => {
     if (id !== shown) return;
-    // 모달 문서의 상태 보고는 응답이 아니다. 요소의 수신자에게 전달하지 않는다.
+    // The state report of a modal document is not a response. It is not forwarded to the receiver of the element.
     if (key === "document") {
       modalDocument = JSON.parse(value);
       modalChanged();
@@ -618,9 +617,9 @@ if (native) {
   });
 }
 
-/* 표면 위에 그리는 도형. 네이티브 뷰 하나이고 웹뷰가 아니다 — 채움과 선이 알파를
-   갖고 표면이 보여주는 것 위에 합성된다. 웹뷰는 WebKit 이 자기 배경을 칠하므로
-   그렇게 할 수 없다. */
+/* A shape drawn over a surface. It is one native view and not a web view: its fill and line have alpha and are
+   composited over what the surface shows. A web view cannot do this because WebKit paints its own
+   background. */
 export const shapes = native ? {
     set(id, rect, style) {
       tellInTurn("setShape", {
@@ -640,25 +639,25 @@ export const shapes = native ? {
 };
 
 /**
- * 표면 위에 그리는 모달. 애플리케이션은 요소를 통째로 받아 자기 창에 그린다.
+ * A modal drawn over a surface. The application receives the whole element and draws it in its own window.
  *
- * conceal 은 이 문서의 요소를 감추는 방법이다. 요소마다 다르므로 부르는 쪽이 준다.
- * 애플리케이션이 없으면 감추지 않고 이 문서가 그대로 그린다.
+ * conceal is the way to hide the element of this document. It differs per element, so the caller supplies it.
+ * Without an application the element is not hidden and this document draws it as it is.
  */
 export const overlay = native ? {
     show(el, rect, onPick) {
-      // 이 인터페이스는 한 번에 하나를 표시한다. 표시 중인 것을 닫지 않으면 그 창은
-      // 애플리케이션에 남고 아무도 그것을 가리키지 않는다.
+      // This interface shows one modal at a time. If the one on display is not closed, its window stays
+      // in the application and nothing refers to it.
       if (shown) this.hide();
       pick = onPick;
-      // 이 길로 오는 요소는 [data-native-modal] 이다. 표식만 두고 검사하지 않으면
-      // 마크업과 동작이 따로 놀고, 표식 없는 요소가 조용히 뷰를 얻는다.
+      // The elements that arrive this way are [data-native-modal]. If only the marker is placed and not checked,
+      // the markup and the behavior diverge, and an element without the marker silently gets a view.
       if (!["dialog", "menu"].includes(el.dataset.nativeModal)) {
         throw new Error(`${el.id || el.className} needs data-native-modal="dialog" or "menu"`);
       }
-      // 뷰 이름은 요소 id 를 사용한다. id 가 없는 요소가 둘이면 같은 뷰를 공유한다.
+      // The view name is the element id. Two elements without an id share the same view.
       if (!el.id) throw new Error("a [data-native-modal] element needs an id");
-      // 보조기술이 오버레이를 부르는 이름이다.
+      // The name by which assistive technology announces the overlay.
       const name = el.getAttribute("aria-label");
       if (!name) throw new Error(`${el.id} needs an aria-label to name its overlay`);
       shown = el.id;
@@ -675,24 +674,24 @@ export const overlay = native ? {
     },
 
     /**
-     * 이 요소의 모달 뷰의 위치를 갱신한다. 위치는 페이지가 결정한다.
+     * Updates the position of the modal view of this element. The page decides the position.
      *
-     * 표시 중인 것이 이 요소가 아니면 아무 일도 하지 않는다. 이 인터페이스는 한
-     * 번에 하나를 표시하고, 자기 것이 아닌 창을 옮기거나 닫는 호출자는 다른
-     * 기능의 창을 건드린다.
+     * Does nothing when the one on display is not this element. This interface shows one at a
+     * time, and a caller that moves or closes a window that is not its own touches the window of
+     * another feature.
      */
     place(el, rect) {
       if (shown !== el.id) return;
       tellInTurn("overlayPlace", { id: shown, rect: overlayFrame(el, rect), card: cardFrame(el) });
     },
 
-    /** 이 요소의 모달 뷰의 내용을 교체한다. 뷰를 다시 만들면 깜빡인다. */
+    /** Replaces the content of the modal view of this element. Recreating the view flickers. */
     update(el) {
       if (shown !== el.id) return;
       tellInTurn("overlayUpdate", { id: shown, ...drawing(el) });
     },
 
-    /** 이 요소의 모달 뷰를 닫는다. */
+    /** Closes the modal view of this element. */
     hide(el) {
       if (el && shown !== el.id) return;
       const id = shown;

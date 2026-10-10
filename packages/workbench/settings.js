@@ -1,28 +1,28 @@
-// 판 외부의 설정값. 테마, 모드, 형태.
+// Settings outside the plane: theme, mode and shape.
 //
-// 값이 바뀌면 판의 배치도 바뀌지만 이 모듈은 판을 호출하지 않고 변경만 통지한다.
-// 설정이 판을 참조하면 설정을 추가할 때마다 호출할 판의 함수를 정해야 한다.
+// A changed value also changes the layout of the plane, but this module does not call the plane; it only notifies the change.
+// If settings referred to the plane, every added setting would require choosing which plane function to call.
 
-/* ── 테마 ──────────────────────────────────────────────────────────────────
-   축이 둘이다. 테마가 형태와 색을 정하고, 모드가 그 테마의 dark 와 light 중
-   하나를 선택한다. 모든 테마는 양쪽 값을 모두 갖는다.
+/* ── Theme ──────────────────────────────────────────────────────────────────
+   There are two axes. The theme sets the shape and the colors, and the mode selects one of the dark and light
+   variants of that theme. Every theme has both.
 
-   형태(모서리 반경, 통로 폭, 보더 굵기, 폰트, 글자 크기)는 모드와 무관하다.
-   밝기가 바뀐다고 모서리가 바뀔 이유는 없다.
+   The shape (corner radius, gap width, border width, font, font size) does not depend on the mode.
+   There is no reason for the corners to change when the brightness changes.
 
-   선의 색은 역할별로 넷이다. 하나의 강조색을 농도만 바꿔 쓰면 무엇이 한 묶음인지
-   보이지 않는다.
+   There are four line colors, one per role. If one accent color were reused with only its density changed, it
+   would not show what belongs together.
 
-     edge   카드와 상자의 테두리. 바탕에서 한 단계만 밝다
-     rule   판을 나누는 경계선과 divider
-     rail   사이드바와 카드를 하나로 묶는 선
-     focus  지금 입력을 받는 곳
+     edge   the border of a card and a box. One step lighter than the background
+     rule   the boundary line that divides the plane, and the divider
+     rail   the line that joins a sidebar and a card into one
+     focus  the place that currently receives input
 
-   통로가 0이면 카드가 서로 붙고 경계선 하나를 두 카드가 공유한다. 그 상태를
-   이음새라고 부르며 통로 값에서 나온다. 별도의 설정값을 두지 않는다.
+   When the gap is 0 the cards touch and the two cards share one boundary line. That state
+   is called the seam and is derived from the gap value. There is no separate setting for it.
 
-   적용은 값을 루트에 심는 것이다. 표면과 모달은 각자 다른 문서라 이 문서의
-   스타일시트를 물려받지 못하므로, 호스트가 이 값들을 그대로 실어 보낸다.     */
+   Applying means setting the values on the root. A surface and a modal are separate documents and cannot inherit
+   the style sheet of this document, so the host sends these values as they are.     */
 
 import { host as bridge } from "@soksak/runtime";
 import { log, surfaces as host } from "./host.js";
@@ -32,8 +32,8 @@ import { chooseLink, resolveSidebar } from "./sidebar-sets.js";
 import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
 import { setTraceEnabled } from "./performance.js";
 
-/* 고를 수 있는 폰트. 테마가 이 중 하나를 기본으로 지정하고 설정에서 바꾼다.
-   설치되지 않은 이름은 목록의 다음 이름으로 넘어간다. */
+/* The selectable fonts. A theme designates one of them as its default, and the settings change it.
+   A name that is not installed falls through to the next name of the list. */
 export const FONTS = [
   { id: "mono-system", name: "시스템 고정폭",
     stack: "ui-monospace,SFMono-Regular,Menlo,monospace" },
@@ -88,7 +88,7 @@ export const THEMES = [
              edge: "#ecd9cd", rule: "#f3e6dd", rail: "#b1552f", focus: "#a56a17",
              no: "#b23a3a" } },
 
-  /* 통로 0. 카드가 서로 붙고 경계선 하나를 공유한다. */
+  /* Gap 0. The cards touch and share one boundary line. */
   { name: "slate", shape: { r: "0px", gap: "0px", bw: "1px", font: "sans-inter", size: "13px" },
     dark: { bg: "#15171a", card: "#1c1f23", fg: "#e6e9ee", muted: "#8d939d",
             edge: "#2c3036", rule: "#2c3036", rail: "#6b7480", focus: "#c7ced8",
@@ -121,7 +121,7 @@ export const THEMES = [
              edge: "#e0d8c8", rule: "#eae3d7", rail: "#a8926b", focus: "#7a5c2e",
              no: "#a8443c" } },
 
-  /* 통로 0. */
+  /* Gap 0. */
   { name: "paper", shape: { r: "0px", gap: "0px", bw: "1px", font: "sans-system", size: "13px" },
     dark: { bg: "#0d0d0e", card: "#151517", fg: "#e9e9ea", muted: "#8f8f93",
             edge: "#26262a", rule: "#26262a", rail: "#6a6a70", focus: "#e0e0e2",
@@ -134,16 +134,16 @@ export const THEMES = [
 export const MODES = ["dark", "light"];
 
 /**
- * 현재 설정. 객체 하나이며 그대로 JSON 저장 형식이다.
+ * The current settings. A single object that is the JSON storage format as it is.
  *
- * 값마다 변수를 두면 저장할 목록을 따로 관리해야 하고 값을 추가할 때마다 그 목록을
- * 수정해야 한다.
+ * With a variable per value, the list of stored values would need separate management and would have to
+ * be edited whenever a value is added.
  */
 export const defaults = {
   projectOpening: "windows",
   theme: THEMES[0].name,
   mode: "dark",
-  /* 애플리케이션 메뉴의 언어. auto = 시스템 언어(지원하지 않으면 en). */
+  /* The language of the application menu. auto = the system language (en if it is not supported). */
   language: "auto",
 
   /* The performance trace, present in every build. When it is on, the layers store the events of the trace in the event
@@ -151,44 +151,44 @@ export const defaults = {
      0.0.x it is on by default, so a defect is recorded when it appears (AGENTS.md, docs/spec/settings.md). */
   "diagnostics.performance": true,
 
-  /* 프로젝트 탭의 위치. top = 크롬 행, left = 왼쪽 세로 목록. */
+  /* The position of the project tabs. top = the chrome row, left = the vertical list on the left. */
   projectTabs: "top",
-  /* 좌·우 영역의 표시 여부. 무엇을 표시할지는 links 가 정한다. */
+  /* Whether the left and right regions are shown. links decides what they show. */
   left: true,
   right: true,
-  /* 포커스를 잃은 표면의 흐림 처리 여부. */
+  /* Whether a surface that lost focus is dimmed. */
   dim: false,
-  /* 포커스 카드의 표시 방식. border = 테두리, corner = 네 모서리 표식. */
+  /* How the focused card is shown. border = a border, corner = marks at the four corners. */
   focusInd: "border",
-  /* 카드가 가로지르는 구간의 경계선을 어디에 그리는지.
-     over = 표면 위, under = 카드 아래, none = 그리지 않음. */
+  /* Where the boundary line of the section that a card crosses is drawn.
+     over = over the surface, under = under the card, none = not drawn. */
   fullRule: "under",
-  /* 아래 넷은 테마가 기본값을 정하고 그 다음부터는 사용자가 지정한 값을 사용한다.
-     테마를 다시 고르면 그 테마의 값으로 돌아간다. */
-  /* 통로의 절반 폭(px). 0 이면 카드가 선 하나를 공유한다. */
+  /* The next four are given defaults by the theme, and from then on the value the user specified is used.
+     Choosing the theme again returns them to the values of that theme. */
+  /* The half width (px) of the gap. When it is 0 the cards share one line. */
   gap: parseFloat(THEMES[0].shape.gap),
-  /* 카드의 모서리 반경(px). --r-sm 과 --r-xs 가 여기서 나온다. */
+  /* The corner radius (px) of a card. --r-sm and --r-xs are derived from it. */
   radius: parseFloat(THEMES[0].shape.r),
-  /* 폰트. FONTS 의 id 다. */
+  /* The font: an id of FONTS. */
   font: THEMES[0].shape.font,
-  /* 글자 크기(px). */
+  /* The font size (px). */
   size: parseFloat(THEMES[0].shape.size),
-  /* 프레임 크롬과 모든 카드에 적용하는 글자 크기 배율. TEXT_STEPS 의 값이다(docs/spec/text-size.md). */
+  /* The scale of the text size applied to the frame chrome and every card: a value of TEXT_STEPS (docs/spec/text-size.md). */
   textSize: 1,
 
-  /* 사이드바는 세트를 조합해서 만든다. 세트 하나가 섹션을 순서대로 담고 links 가
-     그 세트를 자리에 연결한다. 연결은 제목이 아니라 id 로 한다. 기본값은
-     environment.json 의 sidebars 가 정한다(setSidebarDefaults). */
+  /* A sidebar is made by combining sets. A set holds sections in order, and links connects
+     a set to a position. A link uses the id, not the title. The defaults are decided by the
+     sidebars of environment.json (setSidebarDefaults). */
   sets: [],
   links: [],
 
-  /* 배치 값(pt). 카드 사이드바의 최소·최대 폭과 새 사이드바의 초기 폭이다(docs/spec/settings.md). */
+  /* Layout values (pt): the minimum and maximum width of a card sidebar and the initial width of a new sidebar (docs/spec/settings.md). */
   sidebarMinWidth: 120,
   sidebarMaxWidth: 480,
   sidebarWidth: 190,
 };
 
-/* 배치 값의 범위. 정수만 받는다. 세 값이 한 범위를 함께 써서 같은 값이 같은 슬라이더 위치에 놓인다. */
+/* The range of the layout values. Only integers are accepted. The three values share one range so that the same value is at the same slider position. */
 const WIDTH_RANGE = [60, 800];
 export const LAYOUT_RANGES = {
   sidebarMinWidth: WIDTH_RANGE,
@@ -196,22 +196,22 @@ export const LAYOUT_RANGES = {
   sidebarWidth: WIDTH_RANGE,
 };
 
-/* 애플리케이션 메뉴가 지원하는 언어. 새 언어는 이 선언과 호스트 계약의 메뉴 표에 함께 추가된다. */
+/* The languages that the application menu supports. A new language is added to this declaration and to the menu table of the host contract together. */
 export const MENU_LANGUAGES = [
   { id: "ko", label: "한국어" },
   { id: "en", label: "English" },
 ];
-/* 시스템 언어가 표에 없을 때 쓰는 기본 언어. */
+/* The default language used when the system language is not in the table. */
 const DEFAULT_LANGUAGE = "en";
 
-/* 형태 값의 범위(px). 정수만 받고 설정 창의 슬라이더도 이 범위를 쓴다. */
+/* The range (px) of the shape values. Only integers are accepted, and the slider of the settings window uses the same range. */
 export const SHAPE_RANGES = {
   gap: [0, 24],
   radius: [0, 24],
   size: [10, 18],
 };
 
-/* 선택지 하나를 받는 core 설정. 설정 창의 선택 컨트롤은 이 순서로 선택지를 보인다(docs/spec/settings.md#values). */
+/* The core settings that take one choice. The select control of the settings window shows the choices in this order (docs/spec/settings.md#values). */
 export const CHOICES = {
   projectOpening: ["tabs", "windows"],
   theme: THEMES.map((theme) => theme.name),
@@ -224,13 +224,13 @@ export const CHOICES = {
   language: ["auto", ...MENU_LANGUAGES.map((language) => language.id)],
 };
 
-/* 정수 범위를 받는 core 설정. 배치 값과 형태 값은 키가 겹치지 않는다. */
+/* The core settings that take an integer range. The layout values and the shape values do not share keys. */
 const RANGES = { ...LAYOUT_RANGES, ...SHAPE_RANGES };
 
-/* boolean 을 받는 core 설정. */
+/* The core settings that take a boolean. */
 const SWITCHES = ["left", "right", "dim", "diagnostics.performance"];
 
-/** 유효 설정을 검사한다. 사이드바 세트와 연결, 그리고 카드 안 사이드바의 처음 폭이 최소와 최대 사이에 있는지. */
+/** Validates the effective settings: the sidebar sets and links, and whether the initial width of a sidebar inside a card is between the minimum and the maximum. */
 function checkValues(values) {
   checkSidebars(values);
   if (!(values.sidebarMinWidth <= values.sidebarWidth && values.sidebarWidth <= values.sidebarMaxWidth)) {
@@ -240,10 +240,10 @@ function checkValues(values) {
 
 let settings = structuredClone(defaults);
 const pluginDefinitions = new Map();
-/* 환경의 manifest. 저장된 세트의 섹션과 연결의 플러그인을 이 목록으로 검사한다. */
+/* The manifest of the environment. The sections of the stored sets and the plugins of the links are validated against this list. */
 let manifestList = [];
 
-/** 유효 설정의 sets 와 links 를 environment.json 의 sidebars 와 같은 함수로 검사한다. */
+/** Validates the sets and links of the effective settings with the same function as the sidebars of environment.json. */
 function checkSidebars(values) {
   const sidebars = { sets: values.sets, links: values.links };
   validateSidebars(sidebars, "settings", new Set(manifestList.map((manifest) => manifest.id)));
@@ -258,7 +258,7 @@ let writing = Promise.resolve();
 let changes = 0;
 let revision = 0;
 
-/** 값 하나를 그 설정의 선언된 형식으로 검사한다. sets 와 links 는 checkSidebars 가 유효 설정 전체로 검사한다. */
+/** Validates one value in the declared format of its setting. sets and links are validated by checkSidebars over the whole effective settings. */
 function validateValue(key, value) {
   const choices = CHOICES[key];
   if (choices && !choices.includes(value)) {
@@ -290,26 +290,26 @@ function validateValue(key, value) {
 }
 
 /**
- * 불러오지 않은 플러그인의 저장된 설정인가. 그런 key 는 첫 `.` 앞이 불러온 플러그인이 아닌 플러그인 id 이며,
- * 파일에 그대로 두고 검사하지도 적용하지도 않는다(docs/spec/plugins.md).
+ * Whether this is a stored setting of a plugin that is not loaded. The part of such a key before the first `.` is a plugin id that is not a loaded plugin,
+ * and the key stays in the file as it is, neither validated nor applied (docs/spec/plugins.md).
  */
 function keptSetting(key) {
   const dot = key.indexOf(".");
   return !Object.hasOwn(defaults, key) && dot > 0 && !manifestList.some((manifest) => manifest.id === key.slice(0, dot));
 }
 
-/** 적용할 설정만 남긴다. 불러오지 않은 플러그인의 설정은 저장소에만 있다. */
+/** Keeps only the settings to apply. The settings of a plugin that is not loaded exist only in the store. */
 function applied(values) {
   return Object.fromEntries(Object.entries(values).filter(([key]) => !keptSetting(key)));
 }
 
 /**
- * 프로젝트 설정이 덮어쓸 수 없는 공통 전용 키(docs/spec/projects.md#persistence). 호스트는 페이지 시작 전에 공통 설정의
- * textSize 로 창 제목줄을 정하므로 프레임 배율은 공통 전용이다(docs/spec/native-surfaces.md#title-bar-height).
+ * The common-only keys that a project setting cannot override (docs/spec/projects.md#persistence). The host decides the window title bar from the
+ * textSize of the common settings before the page starts, so the frame scale is common-only (docs/spec/native-surfaces.md#title-bar-height).
  */
 const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);
 
-/** 프로젝트 설정에 공통 전용 키가 있으면 오류다. */
+/** It is an error when a project setting holds a common-only key. */
 function checkCommonOnly(values) {
   for (const key of COMMON_ONLY) {
     if (Object.hasOwn(values, key)) throw new Error(`project settings: ${key} is common-only`);
@@ -325,12 +325,12 @@ function validateValues(values, where) {
   }
 }
 
-/** 영속 설정을 불러오기 전에 검증된 플러그인 설정을 등록한다. */
+/** Registers the validated plugin settings before the persistent settings are loaded. */
 export function setPluginSettings(manifests, applicationValues = {}) {
   if (store) throw new Error("plugin settings must be set before settings are connected");
   manifestList = manifests;
   for (const manifest of manifests) {
-    // 기본값: settings 는 plugin.json 의 선택 필드이며 없으면 플러그인 설정이 없다(docs/spec/plugins.md).
+    // default: settings is an optional field of plugin.json, and without it the plugin has no settings (docs/spec/plugins.md).
     for (const [local, definition] of Object.entries(manifest.settings ?? {})) {
       const key = `${manifest.id}.${local}`;
       if (pluginDefinitions.has(key) || Object.hasOwn(defaults, key)) {
@@ -338,7 +338,7 @@ export function setPluginSettings(manifests, applicationValues = {}) {
       }
       pluginDefinitions.set(key, Object.freeze({ ...definition, plugin: manifest.id, local }));
       defaults[key] = definition.default;
-      // 기본값: environment.json 이 초기 값을 주지 않은 플러그인은 초기 값이 없다.
+      // default: a plugin to which environment.json gives no initial value has no initial value.
       if (Object.hasOwn(applicationValues[manifest.id] ?? {}, local)) {
         validateValue(key, applicationValues[manifest.id][local]);
         defaults[key] = applicationValues[manifest.id][local];
@@ -360,7 +360,7 @@ export function pluginSettings(pluginId) {
   return values;
 }
 
-/** environment.json 의 사이드바 기본값을 등록한다. 설정 저장소를 연결하기 전에 호출한다. */
+/** Registers the sidebar defaults of environment.json. Call it before the settings store is connected. */
 export function setSidebarDefaults(sidebars) {
   if (store) throw new Error("sidebar defaults must be set before settings are connected");
   defaults.sets = structuredClone(sidebars.sets);
@@ -372,8 +372,8 @@ export function setSidebarDefaults(sidebars) {
 const projectSettingsFile = (project) => `${project.root}/.soksak/settings.json`;
 
 /**
- * 시작 문서의 스냅샷으로 첫 화면의 설정을 적용한다(docs/spec/native-host.md#page-start). id 는 창이 여는 프로젝트이고
- * 라이브러리면 null 이다. 저장소 연결과 이후의 변경은 connectSettings 가 맡는다.
+ * Applies the settings of the first screen from the snapshot of the start document (docs/spec/native-host.md#page-start). id is the project that the window opens, and
+ * it is null for the library. Connecting the store and later changes are handled by connectSettings.
  */
 export function beginSettings(snapshot, id) {
   const nextCommon = snapshot.common;
@@ -429,20 +429,20 @@ export async function selectProject(id) {
 
 export const settingProject = () => projectId;
 export const scopedValue = (key, scope) => scope === "common"
-  // 기본값: 저장된 공통 값이 없는 설정은 기본값이다.
+  // default: a setting without a stored common value takes its default value.
   ? (common[key] ?? defaults[key]) : settings[key];
 export const overridden = (key) => Object.hasOwn(overrides, key);
 export const flushSettings = () => writing;
 export const reset = (key) => set({ [key]: undefined }, "project");
 
-/** 이름으로 테마를 반환한다. 목록에 없는 이름이면 예외를 던진다. */
+/** Returns the theme by name. Throws when the name is not in the list. */
 function themeOf(name) {
   const found = THEMES.find((t) => t.name === name);
   if (!found) throw new Error(`unknown theme: ${name}`);
   return found;
 }
 
-/** 현재 토큰 값. 표면과 모달이 같은 값을 받는다. */
+/** The current token values. A surface and a modal receive the same values. */
 function themeTokens() {
   const theme = themeOf(settings.theme);
   const c = theme[settings.mode];
@@ -450,15 +450,15 @@ function themeTokens() {
     "--bg": c.bg, "--card": c.card, "--fg": c.fg, "--muted": c.muted,
     "--edge": c.edge, "--rule": c.rule, "--rail": c.rail, "--focus": c.focus,
     "--no": c.no,
-    // 형태 넷은 테마가 아니라 설정이 보관한다. 테마는 선택 시 한 번 값을
-    // 설정한다(applyTheme). 여기서 테마 값을 쓰면 사용자가 바꾼 값이 지워진다.
+    // The four shape values are kept by the settings, not by the theme. A theme sets the values once when it is
+    // selected (applyTheme). Writing the theme values here would erase the values the user changed.
     "--r": `${settings.radius}px`, "--half-gap": `${halfGap()}px`,
     "--bw": theme.shape.bw,
     "--font": fontOf(settings.font).stack, "--size": `${settings.size}px`,
   };
 }
 
-/** id 로 폰트를 반환한다. 목록에 없는 id 이면 예외를 던진다. */
+/** Returns the font by id. Throws when the id is not in the list. */
 function fontOf(id) {
   const found = FONTS.find((f) => f.id === id);
   if (!found) throw new Error(`unknown font: ${id}`);
@@ -466,27 +466,27 @@ function fontOf(id) {
 }
 
 /**
- * 이음새. 통로가 0 이면 카드가 선 하나를 공유하고, 아니면 통로가 카드를 떼어 놓는다.
+ * The seam. When the gap is 0 the cards share one line; otherwise the gap separates the cards.
  *
- * 별도의 설정값을 두지 않는다. 두 값을 두면 통로 0 이면서 이음새가 gap 인 상태가
- * 생기고, 그 상태에는 그릴 것이 없다.
+ * There is no separate setting for it. With two values there could be a state with gap 0 and a seam of gap, and
+ * there is nothing to draw in that state.
  */
 const seam = () => (settings.gap === 0 ? "line" : "gap");
 
-/* 애플리케이션이 서비스하는 페이지는 별도 문서라 이 문서의 스타일시트를 상속하지
-   않는다. 토큰 값을 전송하면 그쪽에서 자기 루트에 설정한다. */
+/* A page that the application serves is a separate document and does not inherit the style sheet of this document.
+   It receives the token values that are sent and sets them on its own root. */
 const pageTheme = () => ({ scheme: settings.mode, tokens: themeTokens() });
 
 /**
- * 테마와 모드를 적용한다.
+ * Applies the theme and the mode.
  *
- * 값을 루트에 설정한다. 스타일시트를 교체하지 않으므로 사용자가 색 입력으로 지정한
- * 값이 유지된다.
+ * Sets the values on the root. The style sheet is not replaced, so the values the user specified with a color input
+ * are kept.
  */
 export function applyTheme(name, next, scope) {
   if (!MODES.includes(next)) throw new Error(`unknown mode: ${next}`);
   const theme = themeOf(name);
-  // 테마 선택이 형태 네 값도 함께 설정한다.
+  // Choosing a theme also sets the four shape values.
   return set({
     theme: theme.name, mode: next,
     gap: parseFloat(theme.shape.gap), radius: parseFloat(theme.shape.r),
@@ -494,13 +494,13 @@ export function applyTheme(name, next, scope) {
   }, scope);
 }
 
-/** 설정값 하나를 반환한다. */
+/** Returns one setting value. */
 export const value = (key) => settings[key];
 
 /**
- * 설정의 일부를 변경하고, 값을 적용한 뒤 변경을 통지한다.
+ * Changes part of the settings, applies the values and then notifies the change.
  *
- * 변경 경로는 이 함수 하나다. 값마다 함수를 두면 적용을 누락한 함수가 생긴다.
+ * This function is the only path of change. With a function per value, some function would omit the application.
  */
 export function set(patch, scope = projectId ? "project" : "common") {
   const id = scope === "project" ? projectId : null;
@@ -539,52 +539,52 @@ export function set(patch, scope = projectId ? "project" : "common") {
 
 let savedListener = () => {};
 
-/** 저장 중인 설정 변경이 있는지 반환한다. */
+/** Returns whether a settings change is being saved. */
 export const saving = () => changes > 0;
 
-/** 저장 중인 변경이 모두 저장되면 fn 을 호출한다. */
+/** Calls fn when every change that is being saved has been saved. */
 export function onSaved(fn) {
   savedListener = fn;
 }
 
-/** 값을 문서 루트에 설정한다. 시작 시 한 번, 이후 변경할 때마다 호출한다. */
+/** Sets the values on the document root. It is called once at start and then on every change. */
 export function install() {
   const root = document.documentElement;
   root.style.colorScheme = settings.mode;
-  // 스타일시트가 모드에 따라 다른 색을 고를 때 읽는다(로고의 글자).
+  // It is read when the style sheet chooses a different color per mode (the letters of the logo).
   root.dataset.mode = settings.mode;
-  // 스타일시트가 읽는 두 값. 표시만 바뀌므로 판을 다시 만들지 않는다.
+  // The two values that the style sheet reads. Only the display changes, so the plane is not recreated.
   root.dataset.focusInd = settings.focusInd;
   root.dataset.fullRule = settings.fullRule;
   root.dataset.seam = seam();
-  // 프레임 크롬의 CSS zoom 이 읽는 프레임 글자 배율은 여기서 쓰지 않는다. 준비한 배치의 그리기가 쓴다(frame-text.js).
-  // 표면은 자기 실제 배율을 다시 읽는다.
+  // The frame text scale that the CSS zoom of the frame chrome reads is not written here. The drawing of the prepared layout uses it (frame-text.js).
+  // A surface reads its actual scale again.
   notifyTextSize();
   for (const [token, value] of Object.entries(themeTokens())) {
     root.style.setProperty(token, value);
   }
-  // 호스트가 서비스하는 페이지는 이 문서의 스타일시트를 상속하지 않으므로 값을
-  // 따로 전송한다.
+  // A page that the host serves does not inherit the style sheet of this document, so the values are
+  // sent separately.
   host.theme(pageTheme());
-  // 애플리케이션 메뉴의 언어. 유효 언어가 바뀔 때만 호스트가 메뉴를 다시 만든다.
+  // The language of the application menu. The host recreates the menu only when the effective language changes.
   host.menuLanguage(menuLanguage());
 }
 
-/** 애플리케이션 메뉴의 유효 언어. 설정이 auto 이면 시스템 언어의 주 태그를 표에서 찾고 없으면 기본 언어다. */
+/** The effective language of the application menu. When the setting is auto, the primary tag of the system language is looked up in the table, and the default language is used if it is not found. */
 export function menuLanguage() {
   const chosen = settings.language;
   if (chosen !== "auto") return chosen;
-  // 기본값: navigator.language 는 삽입 문맥 등에서 비울 수 있고 그때 계약의 기본 언어가 시스템 언어를 대신한다.
+  // default: navigator.language can be empty in an embedded context and similar cases, and then the default language of the contract replaces the system language.
   const tag = (navigator.language ?? DEFAULT_LANGUAGE).split("-")[0].toLowerCase();
   return MENU_LANGUAGES.some((language) => language.id === tag) ? tag : DEFAULT_LANGUAGE;
 }
-/** 카드의 모서리 반경(px). 이음새가 line 이면 카드는 각지다. */
+/** The corner radius (px) of a card. When the seam is line, the cards are square. */
 export const cardRadius = () => (seam() === "line" ? 0 : settings.radius);
 
-/* 설정 변경 수신자. 판 하나가 연결된다. */
+/* The receiver of settings changes. One plane is connected. */
 const listeners = new Set();
 
-/** 설정이 바뀔 때 호출할 함수를 등록한다. */
+/** Registers the function to call when the settings change. */
 export function onSettingsChange(fn) {
   if (typeof fn !== "function") throw new TypeError("settings listener must be a function");
   listeners.add(fn);
@@ -593,47 +593,47 @@ export function onSettingsChange(fn) {
 
 const announce = () => { for (const fn of listeners) fn(); };
 
-/** 세트 전부를 반환한다. 사이드바 편집 시 선택 목록으로 사용한다. */
+/** Returns every set. It is used as the list of choices when a sidebar is edited. */
 export const sets = () => settings.sets;
 
 /**
- * 사이드바 선택 하나를 바꾼다. choice 는 세트 id, off, inherit 이다(docs/spec/settings.md 의 사이드바 선택).
+ * Changes one sidebar choice. choice is a set id, off or inherit (the sidebar choice in docs/spec/settings.md).
  */
 export function link(place, plugin, choice, scope) {
   return set({ links: chooseLink(scopedValue("links", scope), place, plugin, choice) }, scope);
 }
 
-/** 해당 위치에 보일 세트를 반환한다. left, right 는 plugin 의 선택이 일반 선택보다 앞선다. 없으면 null. */
+/** Returns the set to show at the position. For left and right, the choice of a plugin takes precedence over the general choice. Returns null when there is none. */
 export const linkedSet = (place, plugin) => resolveSidebar(settings.links, settings.sets, place, plugin);
 
-/** 현재 테마 이름과 모드를 반환한다. */
+/** Returns the current theme name and mode. */
 export const themeName = () => settings.theme;
 export const modeName = () => settings.mode;
 
 /**
- * 통로의 절반 폭(px). 판이 gap 을 이 값의 두 배로 설정한다.
+ * The half width (px) of the gap. The plane sets gap to twice this value.
  *
- * 설정이 0 이면 선 굵기의 절반을 반환한다. 통로가 0 이면 카드의 rect 가 맞닿아
- * 경계선을 그릴 자리가 없고, 네이티브 표면 둘도 맞닿아 선이 표면 뒤로 들어간다.
- * 선 하나만큼 벌리면 그 자리가 곧 두 카드의 공유 보더다.
+ * When the setting is 0, returns half the line width. With a gap of 0 the rects of the cards touch, so
+ * there is no place to draw the boundary line, and two native surfaces also touch, so the line goes behind the surfaces.
+ * If the cards are separated by one line, that place becomes the border that the two cards share.
  */
 export function halfGap() {
   if (settings.gap > 0) return settings.gap;
   return parseFloat(themeOf(settings.theme).shape.bw) / 2;
 }
 
-/** 현재 테마의 선 굵기(px). 카드 보더와 레일이 이 굵기로 그려진다. */
+/** The line width (px) of the current theme. The card border and the rail are drawn with this width. */
 export const borderWidth = () => parseFloat(themeOf(settings.theme).shape.bw);
 
 /**
- * 판이 stage 안으로 들어와 있는 거리(px). 뷰의 bleed 가 이 값이다.
+ * The distance (px) by which the plane extends into the stage. It is the bleed of the view.
  *
- * stage 의 안쪽 여백이고, 선이 그만큼 판 밖으로 나가 stage 의 테두리에 닿는다.
- * 통로의 절반이 아니다: 이음새에서는 스타일시트가 그 여백을 0 으로 만드는데 절반은
- * 선 굵기의 절반이므로, 절반을 주면 선이 여백 없는 판 밖으로 나가 테두리 위에
- * 그려진다.
+ * It is the inner margin of the stage, and the line extends out of the plane by that amount to reach the border of the stage.
+ * It is not half the gap: at the seam the style sheet sets that margin to 0, and half the gap is
+ * half the line width, so using the half would put the line outside a plane that has no margin and
+ * draw it over the border.
  */
 export const stagePad = () => (seam() === "line" ? 0 : halfGap());
 
-/** 설정에 들어 있는 통로 값(px). 슬라이더가 표시하는 값이다. */
+/** The gap value (px) held in the settings. It is the value the slider shows. */
 export const gapSetting = () => settings.gap;

@@ -1,14 +1,14 @@
-// [data-native-modal] 카드의 입력 처리. 메인 문서와 오버레이 뷰가 함께 사용한다.
+// Input handling of a [data-native-modal] card. The main document and the overlay view use it together.
 //
-// 카드는 메인 문서에 하나, 네이티브 뷰에 사본 하나가 있다. 두 문서가 같은 입력을
-// 처리해야 하므로 여기에 둔다.
+// A card has one copy in the main document and one in the native view. It is placed here
+// because both documents must handle the same input.
 
 /**
- * root 안의 컨트롤이 답한 (key, value) 를 send 로 전달한다.
+ * Passes the (key, value) that a control inside root answered to send.
  *
- * 누름은 value 가 비어 있고, 값 변경은 그 값을 담는다. 컨트롤마다 리스너를 등록하지
- * 않는다. 네이티브 뷰는 이 요소의 사본을 렌더링하므로 거기 등록한 리스너가 동작하지
- * 않는다.
+ * A press has an empty value, and a value change carries that value. No listener is registered
+ * for each control. The native view renders a copy of this element, so a listener registered
+ * there does not work.
  */
 export function onAnswer(root, send) {
   root.addEventListener("click", (e) => {
@@ -19,7 +19,7 @@ export function onAnswer(root, send) {
     const el = e.target.closest("[data-set]");
     if (el) send(el.dataset.set, el.type === "checkbox" ? String(el.checked) : el.value);
   });
-  // 메뉴는 Escape 로 취소한다. dialog 는 자기 닫기 버튼으로만 닫는다.
+  // A menu is canceled with Escape. A dialog is closed only by its own close button.
   root.addEventListener("keydown", (e) => {
     const menu = '[data-native-modal="menu"]';
     if (e.key === "Escape" && root.querySelector(menu)) send("", "");
@@ -27,13 +27,13 @@ export function onAnswer(root, send) {
 }
 
 /**
- * root 안의 [data-grip] 을 드래그하면 moved(dx, dy) 를 호출한다.
+ * Dragging a [data-grip] inside root calls moved(dx, dy).
  *
- * 이동 거리를 화면 좌표 차이로 계산한다. 오버레이 뷰는 드래그를 따라 이동하므로 뷰
- * 내부 좌표는 매 프레임 기준이 바뀌고, movementX 는 OS 델타가 없는 이벤트에서 0 이다.
- * 위치 결정은 카드를 소유한 문서가 담당한다.
+ * The movement distance is computed as a difference of screen coordinates. The overlay view moves with the drag, so the
+ * coordinates inside the view change reference every frame, and movementX is 0 for an event without an OS delta.
+ * The owning document of the card decides the position.
  *
- * [data-grip] 내부의 button 은 제외한다. 닫기 버튼 클릭이 드래그가 되면 안 된다.
+ * A button inside [data-grip] is excluded. A click on the close button must not become a drag.
  */
 export function onGripDrag(root, moved) {
   root.addEventListener("mousedown", (e) => {
@@ -61,10 +61,10 @@ export function onGripDrag(root, moved) {
 }
 
 /**
- * range 입력을 드래그하는 동안 옆의 output 텍스트를 갱신한다.
+ * While a range input is dragged, updates the output text next to it.
  *
- * 설정 변경 보고는 change 에서만 한다. input 마다 보고하면 카드를 다시 그리면서
- * 드래그 중인 요소가 교체된다. 이 표시는 보고하지 않고 여기서만 갱신한다.
+ * A settings change is reported only on change. Reporting on every input would redraw the card and
+ * replace the element being dragged. This display is not reported and is updated only here.
  */
 export function showValue(root) {
   root.addEventListener("input", (e) => {

@@ -1,7 +1,7 @@
-// 카드 사이드바 경계선의 포인터 입력을 선언된 명령으로 전달한다.
+// Passes the pointer input of the card sidebar boundary line to declared commands.
 const DRAG_THRESHOLD = 3;
 export function bindSidebarGrip(el, handle, side, defaults, run) {
-  // 경계선의 움직임으로 끌기와 누름을 구분한다.
+  // Distinguishes a drag from a press by the movement of the boundary line.
   let dragged = false;
   handle.addEventListener("pointerdown", (event) => {
     event.stopPropagation();
@@ -11,13 +11,13 @@ export function bindSidebarGrip(el, handle, side, defaults, run) {
     const rect = handle.parentElement.getBoundingClientRect();
     const initialSize = side === "left" || side === "right" ? rect.width : rect.height;
     if (!Number.isFinite(initialSize) || initialSize < 0) throw new Error("invalid sidebar drag extent");
-    // 접힌 면은 포인터가 최소 크기에 닿을 때 연다. 그 전에 최소 크기로 열면 경계가 포인터보다 앞선다.
+    // A collapsed side opens when the pointer reaches the minimum size. If it opened at the minimum size before that, the boundary would run ahead of the pointer.
     const folded = el.dataset[`sidebar${side[0].toUpperCase()}${side.slice(1)}`] === "folded";
     const move = (e) => {
       if (!dragged && Math.hypot(e.clientX - startX, e.clientY - startY) < DRAG_THRESHOLD) return;
       dragged = true;
       const clamp = (raw) => Math.min(defaults.max, Math.max(defaults.min, raw));
-      // 누른 위치의 오프셋과 반대편 영역을 제외하고 실제 이동량만 더한다.
+      // Adds only the actual movement, excluding the offset of the press position and the area on the opposite side.
       const delta = side === "left" ? e.clientX - startX
         : side === "right" ? startX - e.clientX
         : side === "top" ? e.clientY - startY

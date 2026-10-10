@@ -1,17 +1,17 @@
 /**
- * 호출 기록기. 호출과 그 답을 한 줄씩 애플리케이션 로그에 보낸다.
+ * The call recorder. It sends each call and its reply to the application log, one line each.
  *
- * 애플리케이션은 페이지의 호출을 여러 스레드에서 동시에 처리할 수 있다. 줄을 받는 즉시
- * 보내면 먼저 보낸 줄이 나중에 도착할 수 있으므로, 앞 줄의 전송이 끝난 뒤 다음 줄을 보낸다.
+ * The application can handle the calls of the page on several threads at the same time. If a line were sent
+ * as soon as it is received, an earlier line could arrive later, so the next line is sent after the transmission of the previous line ends.
  *
- * send(line) 은 줄 하나를 애플리케이션에 보내고 그 완료를 promise 로 반환한다.
+ * send(line) sends one line to the application and returns its completion as a promise.
  */
-// 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
+// default: a rejection value may not be an Error, so the value itself is written.
 export function createTranscript(send, reportError = (error) => console.error("transcript send failed:", error?.message ?? error)) {
   let recording = false;
   let sent = Promise.resolve();
 
-  /** 답이 없는 호출을 한 가지로 적는다. 프레임워크마다 빈 답의 모양이 다르다. */
+  /** Writes a call without a reply in one form. Each framework has a different form of an empty reply. */
   const say = (value) => {
     const empty = value == null ||
       (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0);
@@ -19,21 +19,21 @@ export function createTranscript(send, reportError = (error) => console.error("t
   };
 
   return {
-    /** 기록을 켜거나 끈다. */
+    /** Turns the recording on or off. */
     set(on) {
       recording = on === true;
     },
 
     /**
-     * 호출 name 의 답 answered 가 나오면 줄을 보낸다. 줄은 답이 나온 순서대로 보낸다.
-     * 실패한 호출은 부르는 쪽이 보고하므로 적지 않는다.
+     * When the reply answered of the call name appears, it sends a line. Lines are sent in the order the replies appeared.
+     * A failed call is reported by the caller, so it is not written.
      */
     record(name, payload, answered) {
       if (!recording) return;
       Promise.resolve(answered).then((answer) => {
         const line = `host ${name} ${say(payload)} -> ${say(answer)}`;
         sent = sent.then(() => send(line)).then(undefined, reportError);
-      // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
+      // default: a rejection value may not be an Error, so the value itself is written.
       }, (error) => reportError(new Error(`host ${name} failed before transcript: ${error?.message ?? error}`)));
     },
   };

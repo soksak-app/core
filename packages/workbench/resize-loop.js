@@ -1,40 +1,40 @@
-// ResizeObserver 루프가 한 frame 안에 전달하지 못한 관찰을 기록하는 진단 기록기(G1.4-115).
+// Diagnostic recorder for the observations that a ResizeObserver loop could not deliver within one frame (G1.4-115).
 //
-// WebKit 은 ResizeObserver callback 이 그 frame 의 관찰 round 가 이미 지나간 요소의 크기를 바꾸면 그 관찰을 다음
-// frame 으로 미루고 "ResizeObserver loop completed with undelivered notifications." 를 error 이벤트로 알린다.
-// 미룬 관찰은 다음 frame 의 관찰 round 에 전달되므로, 오류 뒤 그 frame 의 callback 이 받은 대상과 크기를 모아
-// 그다음 frame 에 report 로 보낸다. 오류가 난 frame 에서 실행된 callback 과 그 observer 를 만든 코드도 보내므로,
-// 관찰 round 가 지나간 요소의 크기를 바꾼 callback 을 찾을 수 있다(F32). 진단 빌드에서만 실행된다.
+// When a ResizeObserver callback changes the size of an element that the observation round of that frame has already passed, WebKit
+// defers that observation to the next frame and reports "ResizeObserver loop completed with undelivered notifications." as an error event.
+// The deferred observation is delivered in the observation round of the next frame, so after the error this recorder collects the targets and sizes that the callbacks of that frame
+// received and sends them with report in the following frame. It also sends the callbacks that ran in the frame of the error and the code that created their observers,
+// so the callback that changed the size of an element after its observation round can be found (F32). It runs only in diagnostic builds.
 //
-// DOM 변경은 관찰 round 의 callback slot 별로 나눈다(F43). slot 은 callback 하나와 그 뒤 microtask checkpoint 이며,
-// 다음 callback 직전에 takeRecords 로 가져온 기록과 그 사이 MutationObserver 에 전달된 기록이 그 slot 의 변경이다.
-// error 이벤트는 round 가 끝난 뒤 보내지므로 그때 가져온 기록은 마지막 slot 의 변경이고, 그 뒤 다음 frame 의
-// rAF 까지 전달된 기록은 round 뒤의 변경이다.
+// DOM mutations are divided by the callback slot of the observation round (F43). A slot is one callback and the microtask checkpoint after it.
+// The records that takeRecords fetches right before the next callback, together with the records delivered to the MutationObserver in between, are the mutations of that slot.
+// The error event is sent after the round ends, so the records fetched then are the mutations of the last slot, and the records delivered after that
+// until the rAF of the next frame are the mutations after the round.
 //
-// 변경 기록에는 그 변경을 만든 코드가 없다. body 의 dataset 쓰기(화면 전환의 data-screen 등)는 slot 안에서 쓴 코드의
-// stack 을 그 slot 의 줄로 함께 보내, round 안에서 화면을 바꾼 경로를 측정으로 찾는다(F43).
+// A mutation record does not name the code that made the mutation. A dataset write on body (such as data-screen of a screen switch) sends the
+// stack of the code that wrote it inside the slot as a line of that slot, so the path that changed the screen inside the round can be found by measurement (F43).
 
-/** observer 를 만든 코드의 위치. stack 에서 이 파일 밖의 첫 줄이다. */
+/** Location of the code that created the observer: the first line of the stack outside this file. */
 function creator() {
-  // 기본값: stack 이 없는 엔진에는 위치 줄이 없고, 그때는 위치를 알 수 없음을 그대로 적는다.
+  // default: an engine without a stack has no location line, and then the record states that the location is unknown.
   const lines = (new Error().stack ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
-  // 기본값: 이 파일 밖의 줄이 없으면 위치를 알 수 없음을 그대로 적는다.
+  // default: if there is no line outside this file, the record states that the location is unknown.
   return lines.find((line) => !line.includes("resize-loop.js") && !/^Error\b/.test(line)) ?? "unknown creator";
 }
 
-/** 이 파일 밖의 호출 stack. 안쪽 frame 부터 " < " 로 잇는다. */
+/** Call stack outside this file, joined with " < " starting from the innermost frame. */
 function callStack() {
-  // 기본값: stack 이 없는 엔진에는 위치 줄이 없으므로 빈 글로 읽고 아래에서 알 수 없음을 적는다.
+  // default: an engine without a stack has no location line, so it is read as empty text and the unknown stack is written below.
   const lines = (new Error().stack ?? "").split("\n").map((line) => line.trim())
     .filter((line) => line && !line.includes("resize-loop.js") && !/^Error\b/.test(line));
-  // 기본값: stack 이 없는 엔진에는 위치 줄이 없고, 그때는 stack 을 알 수 없음을 그대로 적는다.
+  // default: an engine without a stack has no location line, and then the record states that the stack is unknown.
   return lines.length ? lines.join(" < ") : "unknown stack";
 }
 
-/** dataset 의 key 를 속성 이름으로 적는다. */
+/** Writes the key of the dataset as an attribute name. */
 const dataName = (key) => `data-${String(key).replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
 
-/** 관찰 대상을 로그에서 알아볼 수 있게 적는다. */
+/** Writes the observed target so it can be recognized in the log. */
 function describe(element) {
   let text = element.tagName.toLowerCase();
   if (element.id) text += `#${element.id}`;
@@ -46,51 +46,51 @@ function describe(element) {
   return text;
 }
 
-/** 변경 기록을 로그에서 알아볼 수 있게 적는다. */
+/** Writes the mutation record so it can be recognized in the log. */
 function change(record) {
   const what = record.type === "attributes" ? `attributes ${record.attributeName}` : record.type;
   return `${what} of ${record.target.nodeType === 1 ? describe(record.target) : record.target.nodeName}`;
 }
 
-/** 변경 목록을 같은 항목 하나로 줄여 적는다. */
+/** Condenses the mutation list into one identical item. */
 function changes(list) {
   return list.length ? [...new Set(list)].join(", ") : "nothing";
 }
 
 /**
- * view 의 ResizeObserver 를 기록하는 하위 클래스로 바꾸고, 루프 오류가 난 frame 의 callback slot 별 변경과 round 뒤의
- * 변경, 다음 frame 에 전달된 관찰을 report(line) 로 보낸다. 바꾼 뒤 만든 observer 만 기록한다. slot 안에서 body 의
- * dataset 을 쓴 코드는 trace() 의 stack 으로 보낸다.
+ * Replaces the ResizeObserver of view with a subclass that records, and sends the mutations of each callback slot of the frame with the loop error, the
+ * mutations after the round, and the observations delivered in the next frame through report(line). Only observers created after the replacement are recorded. The code that wrote
+ * the dataset of body inside a slot is sent as the stack of trace().
  */
 export function watchResizeLoop(view, report, locate = creator, trace = callStack) {
   const Native = view.ResizeObserver;
   let collected = null;
-  // 이번 frame 의 첫 callback 에서 아직 전달되지 않았던 변경. 첫 callback 전에 전달된 기록은 이전 frame 의 것과
-  // 구별되지 않으므로 담지 않는다.
+  // Mutations not yet delivered at the first callback of this frame. Records delivered before the first callback cannot be
+  // distinguished from those of the previous frame, so they are not included.
   let before = [];
-  // 이번 frame 에 실행된 callback slot. 다음 frame 의 rAF 가 비우며, 그 rAF 는 다음 frame 의 관찰 round 보다 먼저 실행된다.
+  // Callback slots that ran in this frame. The rAF of the next frame clears them, and that rAF runs before the observation round of the next frame.
   let slots = [];
-  // 루프 오류 뒤 다음 frame 의 rAF 까지 일어난 변경. 오류가 없으면 null 이다.
+  // Mutations that happened after the loop error until the rAF of the next frame. null if there was no error.
   let after = null;
   let clearing = false;
-  /** 지금 기록이 속하는 목록. 오류 뒤면 round 뒤, round 안이면 마지막 slot, 첫 callback 직전이면 round 전이다. */
+  /** List that the current record belongs to: after the round if the error occurred, the last slot inside the round, before the round right before the first callback. */
   const current = () => {
     if (after) return after;
     if (clearing) return slots.at(-1).changed;
     return before;
   };
   const mutations = new view.MutationObserver((records) => {
-    // 첫 callback 전에 전달된 기록은 담지 않는다(before 참고).
+    // Records delivered before the first callback are not included (see before).
     if (!after && !clearing) return;
     const into = current();
     for (const record of records) into.push(change(record));
   });
   mutations.observe(view.document, { subtree: true, childList: true, attributes: true, characterData: true });
-  /** 아직 전달되지 않은 기록을 지금 slot 의 변경으로 가져온다. */
+  /** Fetches the records not yet delivered as the mutations of the current slot. */
   const take = (into) => {
     for (const record of mutations.takeRecords()) into.push(change(record));
   };
-  // body 의 dataset 을 쓰는 코드를 slot 안에서 기록한다. dataset 은 body 의 속성을 그대로 쓰고 지운다.
+  // Records the code that writes the dataset of body inside a slot. dataset reads and clears the attributes of body directly.
   const body = view.document.body;
   const dataset = body.dataset;
   const write = (what) => {
@@ -111,15 +111,15 @@ export function watchResizeLoop(view, report, locate = creator, trace = callStac
   const sized = (entry) => `${describe(entry.target)} ${Math.round(entry.contentRect.width)}x${Math.round(entry.contentRect.height)}`;
   view.ResizeObserver = class extends Native {
     constructor(callback) {
-      // observer 를 만든 시각도 적는다. 관찰 round 도중에 만든 observer 는 첫 관찰의 일부를 다음 frame 으로 미룬다(F32).
+      // It also records the time when the observer was created. An observer created during the observation round defers part of its first observation to the next frame (F32).
       const label = `${locate()} created at ${view.performance.now().toFixed(1)}ms`;
       super((entries, observer) => {
         if (collected) {
           for (const entry of entries) collected.push(sized(entry));
         }
-        // 이 callback 전까지의 기록은 앞 slot, 첫 callback 이면 round 전의 변경이다.
+        // Records before this callback belong to the previous slot, or to the changes before the round if this is the first callback.
         take(current());
-        // 시각은 performance trace 의 배치 단계와 같은 시계다. 오류가 난 frame 의 callback 과 배치 그리기를 대조한다.
+        // The time uses the same clock as the layout stages of the performance trace. It matches the callbacks of the frame with the error against the layout draw.
         slots.push({ ran: `${label} at ${view.performance.now().toFixed(1)}ms on ${[...entries].map(sized).join(", ")}`, changed: [], writes: [] });
         if (!clearing) {
           clearing = true;
@@ -135,7 +135,7 @@ export function watchResizeLoop(view, report, locate = creator, trace = callStac
   };
   view.addEventListener("error", (event) => {
     if (!/^ResizeObserver loop/.test(event.message) || collected || after) return;
-    // error 이벤트는 round 뒤에 보내지므로 지금까지의 기록은 마지막 slot 의 변경이다.
+    // The error event is sent after the round, so the records so far are the mutations of the last slot.
     take(current());
     report(`resize observer loop: before the round, undelivered at the first callback: ${changes(before)}`);
     if (!slots.length) report("resize observer loop: this frame ran no callback");
@@ -144,7 +144,7 @@ export function watchResizeLoop(view, report, locate = creator, trace = callStac
       for (const written of slot.writes) report(`resize observer loop: in the round callback ${index + 1} ${written}`);
     });
     after = [];
-    // 다음 frame 의 rAF 는 그 frame 의 관찰 round 전에 실행되고, 그다음 frame 의 rAF 는 그 round 뒤에 실행된다.
+    // The rAF of the next frame runs before the observation round of that frame, and the rAF of the frame after it runs after that round.
     view.requestAnimationFrame(() => {
       take(after);
       report(`resize observer loop: after the round changed ${changes(after)}`);

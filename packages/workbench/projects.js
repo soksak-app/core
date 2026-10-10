@@ -1,4 +1,4 @@
-// 프로젝트 목록은 공유 저장소에, 활성 프로젝트와 창 소유권은 실행 중인 창에 저장한다.
+// The project list is stored in the shared store; the active project and the window ownership are stored in the running window.
 import { issueId } from "./ids.js";
 import { beginSettings, selectProject, value, flushSettings } from "./settings.js";
 import { windows } from "@soksak/runtime";
@@ -16,55 +16,49 @@ let changed = () => {};
 let savedLayout = "";
 let writing = Promise.resolve();
 let refreshing = Promise.resolve();
-/* 첫 화면에 그렸고 아직 활성화하지 않은 프로젝트. initialise 의 활성화가 이어받는다. */
+/* Project that was drawn on the first screen and is not activated yet. The activation of initialise takes it over. */
 let begun = null;
 
 export const all = () => projects;
 
 /**
- * 모든 프로젝트의 모든 공간 레이아웃이 가진 탭을 표면과 그 프로젝트 루트로 반환한다. 이 목록에 없는 표면의
- * 사이드카 세션은 다시 붙을 곳이 없다(docs/spec/terminal-runtime.md).
+ * Returns the tabs of the layouts of all spaces of all projects as surfaces with the root of their project. A sidecar session of a surface that is not in this list has nowhere to attach again (docs/spec/terminal-runtime.md).
  */
 export function layoutSurfaces() {
   return projects.flatMap((project) => project.spaces.flatMap((space) => {
     const cards = space.layout?.state?.cards;
     if (!Array.isArray(cards)) throw new Error(`project ${project.id} space ${space.id} has no layout cards`);
-    // 기본값: 자리 카드는 data 가 null 이므로 탭이 없다.
+    // default: a seat card has null data, so it has no tabs.
     return cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => ({ surface: tab.id, root: project.root })));
   }));
 }
-// 기본값: 활성 프로젝트가 없는 창(라이브러리)은 null 이다.
+// default: a window without an active project (the library) has null.
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
 export const local = () => projects.filter((p) => owned.has(p.id));
 export const inLibrary = () => browsing;
 export const isOpen = (id) => openProjects.has(id) || owned.has(id);
 /**
- * 판을 바꾸는 전환(라이브러리 열기, 프로젝트 활성화)을 받은 순서대로 끝낸다.
+ * Finishes the transitions that change the plane (opening the library, activating a project) in the order received.
  *
- * 라이브러리 열기는 판을 비우는 동안 기다린다. 그 사이에 시작한 활성화가 먼저 판을 채우면
- * 늦게 끝난 비우기가 활성 프로젝트의 판을 지운다.
+ * Opening the library waits while the plane is emptied. If an activation started meanwhile filled the plane first, the emptying that finished later would erase the plane of the active project.
  */
 let switching = Promise.resolve();
 function inTurn(run) {
   const done = switching.then(run);
-  // 실패는 done 을 받은 호출자가 보고한다(명령, 라이브러리, 창 활성화, 시작 문서). 다음 전환은 앞의 실패와
-  // 상관없이 실행한다.
+  // The caller that received done reports a failure (command, library, window activation, start document). The next transition runs regardless of an earlier failure.
   switching = done.then(undefined, () => undefined);
   return done;
 }
 
 /*
- * 라이브러리 상태와 화면은 판을 비우는 그리기에서 함께 바뀐다(showLibrary). 그 그리기는 관찰 round 보다 먼저 실행되는
- * animation frame 이므로, 판이 비고 라이브러리가 보이는 것이 한 frame 에 함께 나타나고 작업 영역을 숨기는 전환이 round
- * 안에서 실행되지 않는다. 측정한 사실: 이전에는 이 전환이 files 트리 observer 의 callback slot 안에서 실행되었다(F43).
- * 그 slot 에서 전환을 시작한 경로는 진단 기록기(resize-loop.js)가 body dataset 쓰기의 stack 으로 보고한다.
+ * The library state and the screen change together in the drawing that empties the plane (showLibrary). That drawing is an animation frame, which runs before the observation round, so the emptied plane and the visible library appear in one frame, and the transition that hides the work area does not run inside the round. Measured fact: previously this transition ran inside a callback slot of the files tree observer (F43). A path that started a transition in that slot is reported by the diagnostic recorder (resize-loop.js) through the stack of the body dataset write.
  */
 function showLibrary() {
   browsing = true;
   changed();
 }
 
-/** 판을 비우고 그 그리기에서 라이브러리를 보인다. 그리기가 실패해도 전환은 라이브러리로 끝난다. 실패는 배치 대기열이 보였다. */
+/** Empties the plane and shows the library in that drawing. Even if the drawing fails, the transition ends at the library. The layout queue reported the failure. */
 async function emptyToLibrary() {
   await listener.empty(showLibrary);
   browsing = true;
@@ -84,11 +78,11 @@ export const pin = (id, pinned) => store.patch(id, { pinned });
 export function onSwitch(callbacks) { listener = callbacks; }
 export function onChange(fn) { changed = fn; }
 
-/** 프로젝트 id 의 플러그인 plugin 데이터 key 를 value 로 저장한다(docs/spec/plugins.md#project-data). */
+/** Stores the plugin data key of plugin for project id with value (docs/spec/plugins.md#project-data). */
 async function setPluginData(id, plugin, key, value) {
   const project = projects.find((p) => p.id === id);
   if (!project) throw new Error(`Unknown project: ${id}`);
-  // 기본값: 플러그인 데이터를 한 번도 저장하지 않은 프로젝트에는 plugins 가 없다.
+  // default: a project that never stored plugin data has no plugins.
   const plugins = { ...(project.plugins ?? {}), [plugin]: { ...(project.plugins?.[plugin] ?? {}), [key]: value } };
   await store.patch(id, { plugins });
   project.plugins = plugins;
@@ -100,10 +94,10 @@ async function setPluginData(id, plugin, key, value) {
  * initialise then checks the folder, owns the window and reports its failures.
  */
 export function begin(snapshot) {
-  // 기본값: 브라우저 예제의 저장소는 다른 창이 없으므로 open 을 싣지 않는다.
+  // default: the store of the browser example has no other window, so it carries no open.
   openProjects = new Set(snapshot.open ?? []);
   projects = snapshot.projects;
-  // 기본값: project 를 지정하지 않았거나 등록부에 없는 project 를 지정한 창은 라이브러리로 시작한다.
+  // default: a window that names no project, or a project that is not in the registry, starts at the library.
   const requested = projects.find((p) => p.id === new URL(location.href).searchParams.get("project")) ?? null;
   const layout = requested?.spaces.find((s) => s.id === requested.activeSpaceId)?.layout;
   let opened = null;
@@ -112,10 +106,10 @@ export function begin(snapshot) {
       checkSpace(requested, requested.activeSpaceId);
       opened = requested;
     } catch {
-      // 판이 열 수 없는 배치는 initialise 의 활성화가 그 오류를 보고하고 라이브러리에 남는다.
+      // For a layout that the plane cannot open, the activation of initialise reports the error and the window stays at the library.
     }
   }
-  // 기본값: 연 project 가 없으면 설정에도 project 가 없다.
+  // default: when no project was opened, the settings have no project either.
   beginSettings(snapshot, opened?.id ?? null);
   if (!opened) {
     changed();
@@ -124,7 +118,7 @@ export function begin(snapshot) {
   activeProjectId = opened.id;
   browsing = false;
   begun = opened.id;
-  // 작업 공간 화면이 판에 크기를 주므로 화면을 먼저 바꾸고 판을 그린다. 크기 없이 그린 판은 다음 frame 에 다시 그려진다.
+  // The work area screen gives the plane its size, so the screen changes first and then the plane is drawn. A plane drawn without a size is drawn again on the next frame.
   changed();
   listener.load(layout);
   opened.spaces.find((s) => s.id === opened.activeSpaceId).layout = listener.save();
@@ -135,7 +129,7 @@ export async function initialise(storage) {
   store = storage;
   configureStates({
     sidecar: windowSidecar,
-    // 기본값: 플러그인 데이터를 저장하지 않은 프로젝트의 데이터는 비어 있다.
+    // default: the data of a project that stored no plugin data is empty.
     data: { get: (id, plugin) => projects.find((p) => p.id === id)?.plugins?.[plugin] ?? {}, set: setPluginData },
   });
   await refresh();
@@ -148,7 +142,7 @@ export async function initialise(storage) {
   if (first) {
     try { await activate(first.id); } catch (error) { failed(error); }
   }
-  // 첫 화면에 그린 프로젝트를 활성화하지 못했으면 라이브러리로 돌아간다.
+  // When the project drawn on the first screen could not be activated, the window returns to the library.
   if (begun !== null && !owned.has(begun)) await leaveBegun();
   begun = null;
   await windows.ready();
@@ -170,7 +164,7 @@ async function answerRemoval(id) {
 
 function failed(error) { dispatchEvent(new ErrorEvent("error", { message: error.message })); }
 
-/** 첫 화면에 그렸지만 열지 못한 프로젝트를 닫고 라이브러리를 보인다. */
+/** Closes the project that was drawn on the first screen but could not be opened, and shows the library. */
 async function leaveBegun() {
   activeProjectId = null;
   savedLayout = "";
@@ -179,16 +173,14 @@ async function leaveBegun() {
   await emptyToLibrary();
 }
 
-/** 등록부를 다시 읽는다. 이 창의 활성 프로젝트가 등록부에서 사라졌으면 true 로 끝난다. */
+/** Reads the registry again. Resolves true when the active project of this window disappeared from the registry. */
 function refresh() {
   refreshing = refreshing.then(readProjects, readProjects);
   return refreshing;
 }
 
 /**
- * 등록부를 다시 읽고, 이 창의 활성 프로젝트가 사라졌으면 프로젝트 탭 닫기처럼 이 창의 남은 첫 프로젝트를 연다.
- * 남은 프로젝트가 없으면 readProjects 가 보인 라이브러리에 남는다(docs/spec/projects.md#settings).
- * 활성화는 refresh 를 기다리므로 readProjects 안에서 하지 않는다.
+ * Reads the registry again, and when the active project of this window disappeared, opens the first remaining project of this window, as closing a project tab does. When no project remains, the window stays at the library that readProjects showed (docs/spec/projects.md#settings). The activation waits for refresh, so it is not done inside readProjects.
  */
 async function reread() {
   if (!(await refresh())) return;
@@ -200,10 +192,9 @@ async function readProjects() {
   const snapshot = await store.snapshot();
   const listed = new Set(snapshot.projects.map((p) => p.id));
   const removedProjects = projects.some((p) => !listed.has(p.id));
-  // 아래의 정리는 저장된 레이아웃의 탭만 남긴다. 남는 활성 프로젝트의 판에 아직 저장하지 않은 탭이 있으면 그 표면도
-  // 남도록 먼저 저장한다. 지운 프로젝트는 저장하지 않는다.
+  // The cleanup below keeps only the tabs of the stored layouts. If the plane of the remaining active project has tabs that are not stored yet, they are stored first so that their surfaces remain too. The removed project is not stored.
   if (removedProjects && listed.has(activeProjectId)) await keep();
-  // 기본값: 브라우저 예제의 저장소는 다른 창이 없으므로 open 을 싣지 않는다.
+  // default: the store of the browser example has no other window, so it carries no open.
   openProjects = new Set(snapshot.open ?? []);
   const previous = new Map(projects.map((p) => [p.id, p]));
   projects = snapshot.projects.map((p) => {
@@ -222,9 +213,7 @@ async function readProjects() {
     await emptyToLibrary();
   } else if (removed.length && !browsing) listener?.update();
   if (removedProjects) {
-    // 지운 프로젝트의 탭은 어떤 레이아웃에도 없다. 그 프로젝트를 지운 창이든 보이던 창이든, 이 창의 그 표면 모듈을 먼저
-    // 정리하고 사이드카 세션을 끝낸다. 모듈이 남아 있으면 끝난 세션을 다시 열며, 지운 프로젝트의 폴더가 없으면 그 열기는
-    // 실패한다(F44). 호스트는 남은 모듈의 표면 세션을 retain 에서 남긴다(docs/spec/terminal-runtime.md).
+    // The tabs of a removed project are in no layout. Whether this window removed the project or only showed it, this window first cleans up the surface modules of those surfaces and ends the sidecar sessions. If a module remains, it reopens the ended session, and when the folder of the removed project does not exist, that opening fails (F44). The host keeps the surface sessions of the remaining modules in retain (docs/spec/terminal-runtime.md).
     const remaining = layoutSurfaces();
     await listener.retain(new Set(remaining.map((item) => item.surface)));
     await retainSidecarSessions(remaining);
@@ -267,9 +256,8 @@ async function showProject(id) {
   savedLayout = "";
   listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout);
   changed();
-  // 불러온 레이아웃이 네이티브 합성기에 도달한 뒤에만 프로젝트 명령이 완료된다.
-  // 먼저 반환하면 이전 프레임이 호출자에게 노출되고 영역이 비어 있는 상태를
-  // 프로젝트 복원 성공으로 보고하게 된다.
+  // A project command completes only after the loaded layout has reached the native compositor.
+  // If it returned earlier, the previous frame would be exposed to the caller, and a state with empty regions would be reported as a successful project restore.
   await listener.presented();
 }
 
@@ -277,7 +265,7 @@ export function activate(id) {
   return inTurn(() => activateInTurn(id));
 }
 
-/** 프로젝트의 활성 스페이스 배치를 판이 열 수 있는지 검사한다. 실패하면 프로젝트·창·저장 기록을 바꾸기 전에 그 오류를 던진다. */
+/** Checks whether the plane can open the layout of the active space of the project. On failure it throws the error before it changes the project, the window or the stored records. */
 function checkProject(project) {
   checkSpace(project, project.activeSpaceId);
 }
@@ -295,14 +283,14 @@ async function activateInTurn(id) {
   const project = projects.find((p) => p.id === id);
   if (!project) throw new Error(`Unknown project: ${id}`);
   checkProject(project);
-  // 첫 화면에 그린 프로젝트의 활성화는 이전 프로젝트가 없으므로 창 자리를 저장하지 않는다.
+  // Activating the project drawn on the first screen has no previous project, so the window position is not stored.
   const resumed = begun === id;
   await keep();
   if (!resumed) await saveGeometry();
   const folder = await windows.folder(project.root);
   if (folder.identity !== project.identity) throw new Error(`Project directory has changed: ${project.root}`);
   const result = await windows.openProject({
-    // 기본값: 창을 한 번도 닫지 않은 프로젝트는 저장된 창 자리가 없다(null).
+    // default: a project whose window was never closed has no stored window position (null).
     id, root: project.root, title: project.title, geometry: project.geometry ?? null,
     separate: value("projectOpening") === "windows", current: active() && !owned.has(id) ? activeProjectId : null,
   });
@@ -332,14 +320,12 @@ export async function close(id) {
   // The window that shows the project asks here; another window shows it, the host asks that window.
   const asked = id === activeProjectId && !browsing ? await listener.settleTabs() : await windows.askRemoveProject(id);
   if (!asked) return false;
-  // 아래의 정리는 저장된 레이아웃의 탭을 남긴다. 활성 프로젝트의 판에 아직 저장하지 않은 탭이 있으면 그 표면도 남도록
-  // 먼저 저장한다.
+  // The cleanup below keeps the tabs of the stored layouts. If the plane of the active project has tabs that are not stored yet, they are stored first so that their surfaces remain too.
   await keep();
   await windows.releaseProject(id);
   owned.delete(id);
   await store.remove(id);
-  // 지운 프로젝트를 끝내는 일은 다른 창과 같은 readProjects 가 한다. 저장소의 바뀜 알림이 이 refresh 보다 먼저 읽었으면
-  // 그 알림의 reread 가 다음 프로젝트를 연다. 그 활성화도 같은 전환 순서를 지나므로 아래의 activate 는 그 뒤에 끝난다.
+  // Ending the removed project is done by the same readProjects as in other windows. If the change notification of the store read before this refresh, the reread of that notification opens the next project. That activation passes through the same transition order, so the activate below finishes after it.
   await refresh();
   if (active() && !browsing) listener.update();
   if (!active()) {
@@ -374,7 +360,7 @@ export function activateSpace(id) {
   if (id === project.activeSpaceId) return;
   const space = project.spaces.find((s) => s.id === id);
   if (!space) throw new Error(`Unknown space: ${id}`);
-  // 판이 열 수 없는 배치면 활성 스페이스를 바꾸기 전에 실패한다.
+  // If the plane cannot open the layout, it fails before the active space is changed.
   checkSpace(project, space.id);
   keep();
   project.activeSpaceId = id;
@@ -386,7 +372,7 @@ export function closeSpace(id) {
   if (project.spaces.length === 1) return;
   const at = project.spaces.findIndex((s) => s.id === id);
   if (at < 0) throw new Error(`Unknown space: ${id}`);
-  // 활성 스페이스를 닫으면 다음 스페이스를 연다. 판이 그 배치를 열 수 없으면 아무것도 지우기 전에 실패한다.
+  // Closing the active space opens the next space. If the plane cannot open that layout, it fails before anything is removed.
   const rest = project.spaces.filter((s) => s.id !== id);
   const next = id === project.activeSpaceId ? rest[Math.min(at, rest.length - 1)] : null;
   if (next) checkSpace(project, next.id);
@@ -394,7 +380,7 @@ export function closeSpace(id) {
   project.spaces.splice(at, 1);
   if (next) project.activeSpaceId = next.id;
   restore();
-  // 닫은 공간의 탭은 어떤 레이아웃에도 없으므로 그 사이드카 세션을 끝낸다.
+  // The tabs of the closed space are in no layout, so their sidecar sessions end.
   retainSidecarSessions(layoutSurfaces()).catch(failed);
 }
 

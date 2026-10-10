@@ -1,4 +1,4 @@
-// 프로젝트 목록과 생성·열기 화면. 콘텐츠 웹뷰와 셸은 프로젝트를 열 때 생성한다.
+// Project list and the create/open screen. The content webview and the shell are created when a project is opened.
 import * as projects from "./projects.js";
 import { fresh } from "./plane.js";
 import { windows } from "@soksak/runtime";
@@ -20,35 +20,35 @@ const element = (tag, cls, text) => {
 };
 
 /**
- * 라이브러리 화면을 만든다. rendered 는 화면을 다시 그리거나 양식을 열고 닫을 때
- * 호출된다.
+ * Creates the library screen. rendered is called when the screen is drawn again or
+ * a form is opened or closed.
  */
-/* 호스트의 폴더 오류 문구(docs/spec/host-contract.md 의 workspace.folder.messages)와 카드에 보일 이유. 카드는 경로를
-   바로 위 줄에 보이므로 이유에는 경로를 넣지 않는다. */
+/* Folder error messages of the host (workspace.folder.messages in docs/spec/host-contract.md) and the reason shown on the card. The card shows the path
+   on the line directly above, so the reason does not contain the path. */
 const FOLDER_REASONS = [
   ['project directory does not exist: ', '폴더가 없습니다.'],
   ['project directory is not readable: ', '폴더를 읽을 권한이 없습니다.'],
   ['not a project directory: ', '폴더가 아니라 파일입니다.'],
 ];
 
-/** 폴더 오류 문구를 카드의 이유로 바꾼다. 계약에 없는 문구는 그대로 보인다. */
+/** Converts a folder error message to the reason of the card. A message that is not in the contract is shown unchanged. */
 function folderReason(message) {
   const known = FOLDER_REASONS.find(([prefix]) => message.startsWith(prefix));
   return known ? known[1] : `폴더를 확인할 수 없습니다: ${message}`;
 }
 
-/* 라이브러리의 두 페이지(docs/spec/installation.md 의 Plugin screen). */
+/* The two pages of the library (Plugin screen in docs/spec/installation.md). */
 const PAGES = [['projects', '프로젝트'], ['plugins', '플러그인']];
 
-/** 플러그인 카드의 상태 글. */
+/** Status text of a plugin card. */
 const PLUGIN_STATES = { loaded: '사용 중', disabled: '사용 안 함', available: '설치 안 됨', reload: '창을 다시 불러오면 적용' };
 // The states of contributions to extension points (docs/spec/plugins.md#extension-points); invalid shows through the error display.
 const CONTRIBUTION_STATES = { connected: '연결됨', 'provider-missing': '제공자 없음', 'version-mismatch': 'version 불일치', invalid: '오류' };
 
-/** 사이드카 줄. 설치된 버전이 있으면 그 버전을, 없으면 선언한 범위를 보인다. */
+/** Sidecar line. It shows the installed version if there is one, otherwise the declared range. */
 function sidecarLine(sidecars) {
   if (!sidecars.length) return '사이드카 없음';
-  // 기본값: 버전도 범위도 모르는 사이드카(host 가 없는 창)는 이름만 보인다.
+  // default: a sidecar whose version and range are unknown (a window without a host) shows only its name.
   return `사이드카 ${sidecars.map((item) => [item.name, item.version ?? item.range].filter(Boolean).join(' ')).join(', ')}`;
 }
 
@@ -69,9 +69,9 @@ export function createLibrary(root, rendered = () => {}) {
     </main>
     <footer class="library-footer"><span class="library-count"></span><button type="button" class="library-return" data-expose="core.library.return" data-command="core.library.return" hidden>작업 화면으로 돌아가기</button><button type="button" data-action="window" data-expose="core.library.window" data-command="core.library.window">＋ 새 창</button></footer>`;
   const grid = root.querySelector('.library-grid');
-  // 프로젝트 id 마다 그 카드와 카드를 만든 값이다. 같은 값이면 render 가 카드를 다시 만들지 않는다.
+  // For each project id, its card and the value that built the card. If the value is the same, render does not rebuild the card.
   const cards = new Map();
-  // 플러그인 id 마다 그 카드와 카드를 만든 값, 그리고 목록 위의 실패 글이다.
+  // For each plugin id, its card and the value that built the card, and the failure text above the list.
   const pluginCards = new Map();
   const outdatedRows = new Map();
   const updateList = { key: null, node: null };
@@ -85,7 +85,7 @@ export function createLibrary(root, rendered = () => {}) {
   const pages = root.querySelector('.library-pages');
   const pluginSearch = root.querySelector('[data-expose="core.library.plugins.search"]');
   const pluginList = root.querySelector('.library-plugins');
-  /* 보이는 페이지와 플러그인 검색어. 작업 화면을 보이는 동안에도 유지한다. */
+  /* Visible page and plugin search term. They are kept while the work screen is shown. */
   let page = 'projects';
   let pluginQuery = '';
   for (const [id, label] of PAGES) {
@@ -98,7 +98,7 @@ export function createLibrary(root, rendered = () => {}) {
   const back = root.querySelector('.library-return');
   let pending = false;
 
-  // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 보인다.
+  // default: a rejection value may not be an Error, so the value itself is shown.
   const fail = (reason) => showError(error, 'library', String(reason.message ?? reason));
   async function perform(work) {
     if (pending) return;
@@ -108,7 +108,7 @@ export function createLibrary(root, rendered = () => {}) {
     finally { pending = false; root.removeAttribute('aria-busy'); render(); }
   }
   function record(root) {
-    // 기본값: 모든 색을 이미 쓰고 있으면 첫 색을 다시 쓴다.
+    // default: if every color is already in use, the first color is used again.
     return projects.open({ root, color:TINTS.find(t=>!projects.all().some(p=>p.color===t)) ?? TINTS[0], layout:fresh() });
   }
   let formMode = null;
@@ -122,7 +122,7 @@ export function createLibrary(root, rendered = () => {}) {
     const creates = mode === 'create';
     const heading = element('h2', '', creates?'새 폴더로 프로젝트 만들기':'기존 폴더로 프로젝트 만들기');
     const fields = element('form', 'library-fields');
-    // 두 경로를 나란히 보여 사용자가 새 폴더를 만들지 이미 있는 폴더를 쓸지 바로 고른다.
+    // Shows both paths side by side so the user chooses at once whether to create a new folder or use an existing folder.
     const toggle=element('div','library-form__toggle');
     const newFolder=element('button','ui-button',creates?'● 새 폴더 만들기':'○ 새 폴더 만들기');
     newFolder.type='button'; newFolder.dataset.expose='core.library.form.mode-new';
@@ -139,7 +139,7 @@ export function createLibrary(root, rendered = () => {}) {
     }
     const name=creates?field('name','프로젝트 폴더 이름','my-project','core.library.form.name'):null;
     const parent=field('parent',creates?'생성 위치':'폴더 경로','/Users/…','core.library.form.parent');
-    // 두 모드 모두 네이티브 선택기로 경로를 고를 수 있다.
+    // In both modes the path can be chosen with the native picker.
     const choose=element('button','ui-button','폴더 선택'); choose.type='button'; choose.dataset.expose='core.library.form.choose';
     mark(choose,'core.library.choose-folder');
     parent.parentElement.append(choose);
@@ -147,7 +147,7 @@ export function createLibrary(root, rendered = () => {}) {
     const cancel=element('button','ui-button','취소'); cancel.type='button'; cancel.dataset.expose='core.library.form.cancel'; mark(cancel,'core.library.form.cancel');
     const submit=element('button','ui-button library-primary',creates?'생성 후 열기':'프로젝트로 열기'); submit.type='button'; submit.dataset.expose='core.library.form.submit'; mark(submit,'core.library.form.submit');
     actions.append(cancel,submit); fields.append(actions); form.append(heading,toggle,fields);
-    // Enter 는 제출 명령을 실행한다. 폼의 기본 제출은 쓰지 않는다.
+    // Enter runs the submit command. The default submission of the form is not used.
     fields.addEventListener('keydown',(event)=>{ if(event.key==='Enter'){ event.preventDefault(); submit.click(); } });
     fields.querySelector('input').focus();
     rendered();
@@ -168,8 +168,8 @@ export function createLibrary(root, rendered = () => {}) {
   }
   delegate(root);
 
-  /* 프로젝트 폴더를 읽을 수 있는지. 경로마다 호스트에 한 번 묻고, 프로젝트 목록이 바뀌면 다시 묻는다. 읽을 수 없으면
-     호스트가 알린 이유를 담는다(docs/spec/projects.md). */
+  /* Whether the project folder can be read. It asks the host once for each path and asks again when the project list changes. If the folder cannot be read,
+     it holds the reason that the host reported (docs/spec/projects.md). */
   const folders=new Map();
   let foldersFor=null;
   function checkFolders(all) {
@@ -184,10 +184,10 @@ export function createLibrary(root, rendered = () => {}) {
       ).then(()=>{ if(foldersFor===roots) render(); });
     }
   }
-  /** 프로젝트 목록이 바뀌었다. 폴더를 다시 확인한다. */
+  /** The project list changed. Checks the folders again. */
   function refreshFolders() { foldersFor=null; }
 
-  /** 보이는 페이지의 탭과 그 페이지의 요소만 보인다. */
+  /** Only the tab of the visible page and the elements of that page are shown. */
   function showPage() {
     for (const tab of pages.children) {
       const on = JSON.parse(tab.dataset.params).page === page;
@@ -200,7 +200,7 @@ export function createLibrary(root, rendered = () => {}) {
     pluginList.hidden = !plugins;
   }
 
-  /** 플러그인 카드 하나. 이름, id, 상태, 설명, 버전, 사이드카, 작업 단추, 그 플러그인의 마지막 작업 글이다. */
+  /** One plugin card: name, id, status, description, version, sidecar, action buttons, and the last action text of that plugin. */
   function pluginCard(row, status) {
     const card = element('article', 'library-plugin'); card.dataset.pluginId = row.id; card.setAttribute('role', 'listitem');
     card.dataset.state = row.state;
@@ -228,7 +228,7 @@ export function createLibrary(root, rendered = () => {}) {
       const action = (label, name, params = { plugin: row.id }) => {
         const button = element('button', 'ui-button', label); button.type = 'button'; button.dataset.expose = 'core.library.plugins.action'; button.dataset.action = name;
         mark(button, `core.plugins.${name}`, params);
-        // 작업이 실행되는 동안에는 어느 작업도 시작하지 않는다.
+        // While an action runs, no other action starts.
         button.disabled = status.operation?.state === 'running';
         actions.append(button);
       };
@@ -287,12 +287,12 @@ export function createLibrary(root, rendered = () => {}) {
     return row;
   }
 
-  /** 플러그인 페이지. 상태를 읽지 못한 글과 검색어에 맞는 플러그인 카드다. */
+  /** Plugin page: the text for a status that could not be read and the plugin cards that match the search term. */
   function renderPlugins() {
     if (pluginSearch.value !== pluginQuery) pluginSearch.value = pluginQuery;
     const status = pluginOperations.status();
     const failure = pluginOperations.failure();
-    // 바뀌지 않은 플러그인 카드는 문서에 그대로 둔다(render 의 프로젝트 카드와 같은 까닭이다).
+    // A plugin card that did not change stays in the document (same reason as the project cards in render).
     const wanted = [];
     if (failure) {
       const key = JSON.stringify(failure);
@@ -366,12 +366,12 @@ export function createLibrary(root, rendered = () => {}) {
       wanted.push(card);
     }
     for (const id of [...pluginCards.keys()]) if (!rows.some((row) => row.id === id)) pluginCards.delete(id);
-    // 상태를 읽지 못하면 카드가 없고 그 까닭은 위의 글이 보인다.
+    // If the status cannot be read, there is no card and the reason is shown in the text above.
     if (!rows.length && failure?.kind !== 'state') wanted.push(noPlugins);
     place(pluginList, wanted);
   }
 
-  /** 프로젝트 하나의 카드. folder 는 그 폴더를 읽은 결과다. */
+  /** Card of one project. folder is the result of reading its folder. */
   function projectCard(project, folder) {
       const card=element('article','library-project'); card.dataset.projectId=project.id; card.setAttribute('role','listitem');
       card.dataset.open=String(projects.isOpen(project.id));
@@ -388,9 +388,9 @@ export function createLibrary(root, rendered = () => {}) {
         time.dateTime=new Date(project.lastOpened).toISOString(); time.title=new Date(project.lastOpened).toLocaleString('ko'); meta.append(time);
       }
       text.append(meta);
-      // 폴더를 읽을 수 없는 프로젝트는 열기 전에 그 까닭을 보인다.
+      // A project whose folder cannot be read shows the reason before it is opened.
       if(folder?.error) {
-        // 열 수 없는 폴더의 카드는 누를 수 없다. 이유는 카드에 보이고, 기록은 제거 버튼으로 지운다.
+        // The card of a folder that cannot be opened cannot be pressed. The reason is shown on the card, and the remove button deletes the record.
         choose.disabled=true;
         card.dataset.folderError=folder.error;
         const missing=element('p','library-project__missing');
@@ -411,11 +411,11 @@ export function createLibrary(root, rendered = () => {}) {
     return card;
   }
 
-  /** parent 의 자식을 nodes 의 순서로 맞춘다. 제자리에 있는 요소는 옮기지 않고, nodes 에 없는 자식은 뺀다. */
+  /** Arranges the children of parent in the order of nodes. An element already in place is not moved, and a child that is not in nodes is removed. */
   function place(parent, nodes) {
     const keep=new Set(nodes);
     for(const child of [...parent.children]) if(!keep.has(child)) child.remove();
-    // 기본값: index 가 자식 수와 같으면 그 자리가 끝이므로 null 로 끝에 넣는다.
+    // default: if index equals the number of children, that position is the end, so null inserts at the end.
     nodes.forEach((node, index)=>{ if(parent.children[index]!==node) parent.insertBefore(node, parent.children[index] ?? null); });
   }
 
@@ -438,15 +438,15 @@ export function createLibrary(root, rendered = () => {}) {
     const query=search.value.trim().toLocaleLowerCase();
     const shown=all.filter(p=>`${p.title} ${p.root}`.toLocaleLowerCase().includes(query));
     if(sort.value==='name') shown.sort((a,b)=>a.title.localeCompare(b.title));
-    // 기본값: 한 번도 열지 않은 프로젝트는 lastOpened 가 없으므로 가장 오래된 것으로 정렬한다.
+    // default: a project that was never opened has no lastOpened, so it sorts as the oldest.
     if(sort.value==='recent') shown.sort((a,b)=>(b.lastOpened??0)-(a.lastOpened??0));
     if(sort.value==='open') shown.sort((a,b)=>Number(projects.isOpen(b.id))-Number(projects.isOpen(a.id)));
-    // 바뀌지 않은 카드와 그 조작 요소는 문서에 그대로 둔다. 다시 만들면 누름과 뗌 사이의 다시 그리기가 click 을
-    // 잃는다(docs/spec/exposure.md). 카드의 내용을 정하는 값이 같으면 이전 카드를 쓰고, 순서가 틀린 요소만 옮긴다.
+    // A card that did not change and its controls stay in the document. Rebuilding them lets a redraw between press and release lose the
+    // click (docs/spec/exposure.md). If the value that determines the card content is the same, the previous card is used and only misordered elements are moved.
     const wanted=[];
     for(const project of shown) {
       const folder=folders.get(project.root);
-      // 기본값: 아직 읽지 않았거나 읽은 폴더에는 오류가 없으므로 그 값은 null 이다.
+      // default: a folder that has not been read yet or was read without an error has no error, so the value is null.
       const key=JSON.stringify([project, projects.isOpen(project.id), folder?.error ?? null]);
       const kept=cards.get(project.id);
       if(kept?.key===key) {
@@ -465,7 +465,7 @@ export function createLibrary(root, rendered = () => {}) {
     const empty=root.querySelector('.library-empty');empty.hidden=all.length>0;
     rendered();
   }
-  /** 화면의 상태. 미리보기 사각형은 뷰포트 기준이다. */
+  /** Screen state. The preview rectangle is relative to the viewport. */
   function state() {
     const previews={}, previewErrors={}, folderErrors={};
     for(const card of grid.querySelectorAll('.library-project')) {
@@ -476,12 +476,12 @@ export function createLibrary(root, rendered = () => {}) {
         const r=pane.getBoundingClientRect();return {card:pane.dataset.cardId,x:r.x,y:r.y,w:r.width,h:r.height};
       });
     }
-    // 기본값: 폴더 이름 칸은 새 폴더를 만들 때만 있으므로 없는 칸의 값은 null 이다.
+    // default: the folder name field exists only when a new folder is created, so the value of a missing field is null.
     const input=(name)=>form.querySelector(`input[name="${name}"]`)?.value ?? null;
     return {
       page,
       plugins:{query:pluginQuery, shown:[...pluginList.querySelectorAll('.library-plugin')].map(card=>card.dataset.pluginId),
-        // core.library.plugins.action 의 순번과 같은 문서 순서다.
+        // Document order, the same as the sequence number of core.library.plugins.action.
         actions:[...pluginList.querySelectorAll('[data-expose="core.library.plugins.action"]')].map(button=>({
           plugin:button.closest('.library-plugin').dataset.pluginId, action:button.dataset.action, disabled:button.disabled,
         }))},
@@ -496,12 +496,12 @@ export function createLibrary(root, rendered = () => {}) {
     };
   }
   const SORTS=['saved','name','recent','open'];
-  /* 명령이 부르는 연산. */
+  /* Operations that the commands call. */
   const actions={
     page(next){
       if(!PAGES.some(([id])=>id===next)) throw new Error(`unknown library page ${next}`);
       page=next;
-      // 플러그인 페이지는 보일 때 host 의 상태를 읽는다. 읽기 실패는 상태의 error 로 보고된다.
+      // The plugin page reads the state of the host when it is shown. A read failure is reported as the error of the state.
       if(page==='plugins') { pluginOperations.refresh(); pluginOperations.refreshOutdated(); appUpdate.refresh(); }
       render();
     },
@@ -518,7 +518,7 @@ export function createLibrary(root, rendered = () => {}) {
     sort(order){ if(!SORTS.includes(order)) throw new Error(`unknown sort ${order}`); sort.value=order; render(); },
     open:(id)=>perform(()=>projects.activate(id)),
     pin:(id,pinned)=>perform(()=>projects.pin(id,pinned)),
-    // 프로젝트 탭의 닫기와 같은 연산이다. 기록과 스페이스만 지우고 폴더는 건드리지 않는다.
+    // Same operation as closing a project tab. It deletes only the record and the space and does not touch the folder.
     remove:(id)=>perform(()=>projects.close(id)),
     newWindow:()=>perform(()=>projects.newWindow()),
     back(){ if(back.hidden) throw new Error('there is no workspace to return to'); return perform(()=>projects.activate(projects.active().id)); },
@@ -528,7 +528,7 @@ export function createLibrary(root, rendered = () => {}) {
     chooseFolder(){ formField('parent'); return perform(async()=>{ const path=await windows.chooseFolder(); if(path) formField('parent').value=path; }); },
     submitForm,
   };
-  // 플러그인 페이지는 plugins-changed 와 작업마다 바뀐 상태를 다시 그린다.
+  // The plugin page redraws the state that plugins-changed and each action changed.
   onPluginOperations(()=>{ if(page==='plugins') render(); });
   onContributionsChange(()=>{ if(page==='plugins') render(); });
   return {render, refreshFolders, state, actions};

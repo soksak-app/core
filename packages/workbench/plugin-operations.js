@@ -1,14 +1,14 @@
-// 설치된 플러그인 작업과 core.plugins status(docs/spec/installation.md 의 Plugin screen 과 애플리케이션 안의 plugin
-// 작업). host 는 pluginsState 와 pluginsRun 을 제공하며,
-// host 가 없으면 창이 불러온 플러그인만 보이고 작업은 없다.
+// Operations on installed plugins and the core.plugins status (Plugin screen in docs/spec/installation.md and plugin
+// operations inside the application). The host provides pluginsState and pluginsRun;
+// without a host, only the plugins that the window loaded are shown and there are no operations.
 
 import { compareVersions } from "./version-range.js";
 
 export const PLUGIN_ACTIONS = ["install", "update", "remove", "enable", "disable"];
 
 /**
- * 플러그인이 이름을 댄 사이드카를 이름 순서의 {name, range, version} 으로 만든다. 설치된 플러그인은 installed.json
- * 항목의 범위와 설치된 사이드카 버전을, 아니면 가장 새 registry 버전의 범위를, 아니면 불러온 manifest 의 dependencies 를 쓴다.
+ * Builds the sidecars that a plugin names as {name, range, version} in name order. For an installed plugin it uses the range of the installed.json
+ * entry and the installed sidecar version; otherwise the range of the newest registry version; otherwise the dependencies of the loaded manifest.
  */
 function sidecarsOf(record, entry, unit, state) {
   let ranges;
@@ -17,7 +17,7 @@ function sidecarsOf(record, entry, unit, state) {
   else ranges = Object.entries(unit.dependencies);
   return ranges.sort(([a], [b]) => a.localeCompare(b)).map(([name, range]) => ({
     name, range,
-    // 기본값: host 상태가 없거나 설치되지 않은 사이드카는 버전을 모른다(null).
+    // default: a sidecar without host state or not installed has an unknown version (null).
     version: state?.installed.sidecars[name]?.version ?? null,
   }));
 }
@@ -28,8 +28,8 @@ export function hasUpdate(row) {
 }
 
 /**
- * 목록 행을 id 순서로 만든다. loaded 는 창이 불러온 플러그인 {id, name, description, version, sidecars},
- * state 는 host 의 pluginsState 결과이며 host 가 없으면 null 이다.
+ * Builds the list rows in id order. loaded is the plugins that the window loaded, {id, name, description, version, sidecars};
+ * state is the result of pluginsState of the host, and null if there is no host.
  */
 export function pluginRows(loaded, state) {
   const byId = new Map(loaded.map((unit) => [unit.id, unit]));
@@ -40,7 +40,7 @@ export function pluginRows(loaded, state) {
     }));
   }
   const installed = state.installed.plugins;
-  // index 가 없거나 읽지 못했으면 registry 플러그인이 없다.
+  // If the index is absent or could not be read, there are no registry plugins.
   const indexed = new Map(Array.isArray(state.index?.plugins) ? state.index.plugins.map((entry) => [entry.id, entry]) : []);
   const ids = [...new Set([...byId.keys(), ...Object.keys(installed), ...indexed.keys()])].sort();
   return ids.map((id) => {
@@ -53,24 +53,24 @@ export function pluginRows(loaded, state) {
     else if (!unit && !record) status = "available";
     else status = "reload";
     const latest = entry ? entry.versions.map((v) => v.version).sort(compareVersions).at(-1) : null;
-    // 기본값: 이름과 설명은 불러온 manifest, registry 항목, plugin id 순서로 정한다(docs/spec/installation.md).
+    // default: name and description are decided in the order of the loaded manifest, the registry entry, and the plugin id (docs/spec/installation.md).
     const about = unit ?? entry ?? { name: id, description: "" };
     return {
       id, name: about.name, description: about.description, state: status,
       installed: record ? { version: record.version, enabled: record.enabled } : null, latest,
-      // installed.json 에만 있는 플러그인도 그 항목이 사이드카를 가진다.
+      // A plugin that exists only in installed.json also has sidecars in that entry.
       sidecars: sidecarsOf(record, entry, unit, state),
     };
   });
 }
 
 /**
- * 플러그인 작업 상태. host 가 null 이면 작업 없이 불러온 플러그인만 보고한다. changed 는 상태가 바뀔 때마다
- * 불린다.
+ * Plugin operation state. If host is null, it reports only the loaded plugins, without operations. changed is called
+ * whenever the state changes.
  */
 export function createPluginOperations({ host, loaded, changed }) {
   let state = null;
-  // 읽기 실패는 {kind, message} 다. kind 는 registry index 를 읽지 못한 index 나 plugin 상태를 읽지 못한 state 다.
+  // A read failure is {kind, message}. kind is index if the registry index could not be read, or state if the plugin state could not be read.
   let failure = null;
   let operation = null;
   // The outdated persistent services that the host reports: `[{sidecar, running, installed, sessions}]`.
@@ -99,7 +99,7 @@ export function createPluginOperations({ host, loaded, changed }) {
     }
   }
 
-  /** host 의 상태를 다시 읽는다. 읽지 못하면 그 오류를 failure 로 보고한다. */
+  /** Reads the state of the host again. If it cannot be read, that error is reported as failure. */
   async function refresh() {
     if (!host) return;
     try {
@@ -113,7 +113,7 @@ export function createPluginOperations({ host, loaded, changed }) {
     }
   }
 
-  /** 작업 하나를 실행한다. 실행 전에 running 으로, 끝난 뒤 done 이나 failed 로 기록한다. */
+  /** Runs one operation. It records running before the run and done or failed after it ends. */
   async function runAction(action, plugin) {
     if (!PLUGIN_ACTIONS.includes(action)) throw new Error(`unknown plugin action ${action}`);
     if (!host) throw new Error("plugin operations need a native host");
@@ -136,20 +136,20 @@ export function createPluginOperations({ host, loaded, changed }) {
     for (const update of status().updates) await runAction("update", update.id);
   }
 
-  /** registry index 를 정하고 상태를 다시 읽는다(docs/spec/installation.md). */
+  /** Sets the registry index and reads the state again (docs/spec/installation.md). */
   async function useRegistry(index) {
     if (!host) throw new Error("plugin operations need a native host");
     await host.call("pluginsUseRegistry", { index });
     await refresh();
   }
 
-  /** core.plugins status 의 값. */
+  /** Value of the core.plugins status. */
   function status() {
     const rows = host && !state ? [] : pluginRows(loaded(), state);
     return {
-      // 기본값: 상태를 읽기 전이나 읽지 못했으면 registry 주소가 없다(null).
+      // default: before the state is read or if it could not be read, there is no registry address (null).
       registry: state?.registry ?? null,
-      // 기본값: 읽기 실패가 없으면 error 는 null 이다(core.plugins).
+      // default: if there is no read failure, error is null (core.plugins).
       error: failure?.message ?? null,
       plugins: rows,
       operation,
@@ -160,10 +160,10 @@ export function createPluginOperations({ host, loaded, changed }) {
   }
 
   /**
-   * 첫 실행이면 starter pack 의 plugin 을 pack 의 순서대로 설치하고 true 를 돌려준다(docs/spec/installation.md 의 첫
-   * 실행). 호출자는 설치한 plugin 을 불러오도록 page 를 다시 불러온다. registry 가 없으면 environment 의 기본
-   * registry(defaultRegistry)를 먼저 정한다. 둘 다 없으면 기록하고, plugin 이 없는 창이 그 이유를 밝히도록 show 로
-   * 알린 뒤 false 다.
+   * On the first run, installs the plugins of the starter pack in the order of the pack and returns true (first run in
+   * docs/spec/installation.md). The caller reloads the page so it loads the installed plugins. If there is no registry, it first sets the
+   * default registry of the environment (defaultRegistry). If neither exists, it records this, notifies with show so a window without plugins
+   * states the reason, and returns false.
    */
   async function installStarter(pack, defaultRegistry, log, show) {
     if (!host || pack === null || !state?.firstRun) return false;

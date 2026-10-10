@@ -1,13 +1,12 @@
-// 페이지 쪽 진단 메서드.
+// Diagnostic methods on the page side.
 //
-// 진단 빌드의 호스트가 exposure-request 로 요청하면 이 문서에서 그 일을 한다. 설정과
-// 프로젝트를 검사 전 상태로 되돌리는 diagnostics.fixture, 이름으로 지정한 경계를 호스트의
-// 시각에 맞춰 끄는 diagnostics.drag, 호출 기록을 켜고 끄는 diagnostics.transcript, 표면의
-// exposure 답을 그 표면이 제거될 때까지 붙잡는 diagnostics.surface.hold 와
-// diagnostics.surface.held 다. 끌기의 걸음은 호스트 이벤트 diagnostics-tick 으로 온다.
+// When the host of a diagnostic build requests them with exposure-request, this document performs them: diagnostics.fixture, which returns
+// the settings and projects to the state before the check; diagnostics.drag, which drives a boundary given by name on the clock of the host;
+// diagnostics.transcript, which turns the call record on and off; and diagnostics.surface.hold and
+// diagnostics.surface.held, which hold the exposure reply of a surface until that surface is removed. The steps of a drag arrive as the host event diagnostics-tick.
 //
-// 두 애플리케이션이 이 파일을 함께 실행하므로, 어떻게 끄는지는 한 번만 적힌다.
-// 호스트가 요청하지 않으면 실행되지 않는다.
+// Both applications run this file, so how to drive a drag is written only once.
+// It does not run unless the host requests it.
 import { registry } from "./exposure.js";
 import { gateSurfaceReplies, log, native, watchCalls } from "./host.js";
 import { createTranscript } from "./transcript.js";
@@ -17,7 +16,7 @@ import { watchResizeLoop } from "./resize-loop.js";
 import { host } from "@soksak/runtime";
 import { currentGrid, surfaceInput } from "./plane.js";
 
-// ResizeObserver 루프가 미룬 관찰을 애플리케이션 log 에 남긴다(G1.4-115). 판과 영역이 observer 를 만들기 전에 바꾼다.
+// Writes the observations that the ResizeObserver loop deferred to the application log (G1.4-115). It is replaced before the plane and the regions create observers.
 watchResizeLoop(globalThis, log);
 
 registry.method("diagnostics.fixture", async ({ root, settings: overrides }) => {
@@ -30,14 +29,14 @@ registry.method("diagnostics.fixture", async ({ root, settings: overrides }) => 
   const plane = await import("./plane.js");
   await projects.flush();
   for (const project of [...projects.all()]) await projects.close(project.id);
-  // 검사가 준 공통 설정은 기본값과 한 번에 적용한다. 열리는 표면이 그 값으로 시작하고 변경 알림은 한 번이다.
+  // The common settings given by the check are applied together with the defaults in one step. A surface that opens starts with those values, and the change notification is sent once.
   await settings.set({ ...structuredClone(settings.defaults), ...overrides }, "common");
   await projects.open({ root, color: "#ffb36b", layout: plane.fresh() });
   await projects.flush();
   return { root };
 });
 
-// 호출 기록기. 기록기가 이 패키지에 있으므로 두 애플리케이션이 같은 형식과 순서로 남긴다.
+// Call recorder. The recorder is in this package, so both applications write the same format and order.
 const transcript = createTranscript(log);
 if (native) watchCalls((name, payload, answered) => transcript.record(name, payload, answered));
 
@@ -56,7 +55,7 @@ registry.method("diagnostics.page.request", async ({ path }) => {
   return { path, status: response.status };
 });
 
-// 붙잡은 표면의 답은 호스트가 그 표면을 제거했다고 알린 뒤에 보낸다(docs/spec/endpoint.md). 그 답은 요청이 끝난 뒤에 도착한다.
+// The reply of a held surface is sent after the host reports that it removed the surface (docs/spec/endpoint.md). That reply arrives after the request has ended.
 const replyHold = createSurfaceReplyHold(log);
 gateSurfaceReplies(replyHold.gate);
 host?.on("exposure-registered", (event) => {
@@ -85,22 +84,22 @@ host?.on("diagnostics-tick", () => {
 });
 
 /**
- * 걸음의 시각은 호스트가 준다.
+ * The time of a step is given by the host.
  *
- * 창이 앞에 없으면 브라우저는 이 문서를 숨은 것으로 보고 setTimeout 을 1초 가까이로
- * 묶는다. 16ms 를 요청한 걸음이 그만큼 늘어나면 끌기는 사람이 끄는 속도가 아니게 되고,
- * 그 속도에서만 드러나는 결함은 드러나지 않는다. 호스트의 시계는 창이 어디에 있든
- * 늦춰지지 않으므로, 끌기가 무엇인지는 여기에 적히고 걸음이 언제인지는 호스트가
- * diagnostics-tick 이벤트로 준다.
+ * When the window is not in front, the browser treats this document as hidden and throttles setTimeout to nearly one second.
+ * If a step requested at 16 ms stretches that much, the drag no longer runs at the speed of a person dragging, and a
+ * defect that appears only at that speed does not appear. The clock of the host is not delayed wherever the window is,
+ * so this file states what the drag is, and the host gives the time of each step
+ * with the diagnostics-tick event.
  *
- * 도착한 걸음은 세어 둔다. 이 문서가 한 걸음을 처리하는 동안 다음 걸음이 오면, 그것을
- * 기다리는 쪽이 아직 없기 때문이다.
+ * Arrived steps are counted. If the next step arrives while this document is processing one step, nothing is
+ * waiting for it yet.
  */
 let pending = 0;
 let waiting = null;
 
-/* 이 문서가 기다리기 전에 도착한 걸음의 수와, 그렇게 밀린 걸음의 수. 둘 다 0 이면
-   이 문서가 호스트의 걸음을 제때 따라간 것이고, 끌기는 요청한 모양 그대로다. */
+/* Number of steps that arrived before this document waited, and number of steps that were queued that way. If both are 0,
+   this document kept up with the steps of the host in time, and the drag has exactly the requested shape. */
 let deepest = 0;
 let late = 0;
 
@@ -116,17 +115,17 @@ const tick = () => {
   });
 };
 
-/** 한 걸음의 길이. 화면이 갱신되는 간격이다. 호스트가 같은 값으로 걸음을 보낸다. */
+/** Length of one step: the interval at which the screen updates. The host sends steps with the same value. */
 const FRAME = 16;
 
 /**
- * 이름으로 지정한 경계를 흔들고, 끝나면 걸린 시간과 늦은 걸음을 반환한다.
+ * Shakes the boundary given by name and, when it ends, returns the elapsed time and the late steps.
  *
- * 좌표가 아니라 축과 선 번호로 지정한다. 좌표로 지정하면 창의 크기가 달라질 때마다
- * 그 값을 다시 정해야 하고, 빗나가도 아무 일도 일어나지 않는다.
+ * The boundary is given by axis and line number, not by coordinates. With coordinates, the values would have to be set again
+ * whenever the window size differs, and a miss does nothing.
  *
- * 각 걸음은 표면 위의 누름과 같은 경로로 전달된다. 호스트는 steps × 2 × times 개의
- * diagnostics-tick 이벤트를 FRAME 간격으로 보낸다.
+ * Each step is delivered through the same path as a press on a surface. The host sends steps × 2 × times
+ * diagnostics-tick events at the FRAME interval.
  */
 async function shake({ axis, line, dx, dy, ms, times }) {
   const divider = document.querySelector(
@@ -136,19 +135,19 @@ async function shake({ axis, line, dx, dy, ms, times }) {
   const from = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
   const steps = Math.max(1, Math.round(ms / FRAME));
 
-  // 한 번 누른 채로 왕복한다. 놓았다 다시 누르면, 경계가 최소 카드 크기에서 멈춰
-  // 지정한 만큼 이동하지 못했을 때 다음 누름이 빗나간다.
-  // 앞선 끌기가 받아 두고 쓰지 않은 걸음은 이 끌기의 것이 아니다. 남겨 두면 이
-  // 끌기가 그만큼을 한 번에 소비해 요청보다 빨리 끝난다.
+  // It moves back and forth with one press held. If the pointer were released and pressed again, the next press would miss when the boundary stopped at the minimum card size
+  // and did not move by the given amount.
+  // Steps that an earlier drag received and did not use do not belong to this drag. If they were kept, this
+  // drag would consume them at once and end earlier than requested.
   pending = 0;
   waiting = null;
   late = 0;
   deepest = 0;
   surfaceInput({ phase: 0, x: from.x, y: from.y });
-  // 걸음마다 격자에 놓인 경계의 위치. 경계는 이웃 선에 붙거나 최소 크기에서 멈추므로
-  // 포인터 위치와 같지 않다. 녹화한 화면이 어느 걸음의 배치인지는 이 값으로 찾는다.
+  // Position of the boundary on the grid at each step. The boundary snaps to a neighboring line or stops at the minimum size, so
+  // it is not equal to the pointer position. The layout of a recorded screen is matched to its step with this value.
   const boundary = [currentGrid().boundaryPos(axis, line)];
-  // 걸음마다 이 문서가 입력을 적용하고 배치를 계산한 시간(ms). 초반 걸음이 느린지 본다.
+  // Time (ms) in which this document applied the input and computed the layout at each step. It shows whether the early steps are slow.
   const handled = [];
   const began = performance.now();
   for (let turn = 0; turn < times; turn++) {
@@ -157,15 +156,15 @@ async function shake({ axis, line, dx, dy, ms, times }) {
   }
   const took = performance.now() - began;
   surfaceInput({ phase: 2, x: from.x, y: from.y });
-  // 이 시계는 페이지의 것이다. 창이 앞에 없으면 브라우저가 그것을 늦추므로, 걸린
-  // 시간을 함께 반환한다.
+  // This clock belongs to the page. The browser throttles it when the window is not in front, so the elapsed
+  // time is returned together.
   return {
     from, steps: times * 2 * steps, took: Math.round(took), asked: times * 2 * steps * FRAME,
     late, deepest, boundary, handled,
   };
 }
 
-/** 누른 지점을 오프셋의 한 비율에서 다른 비율까지 옮기고, 걸음마다 moved 를 부른다. */
+/** Moves the pressed point from one fraction of the offset to another and calls moved at each step. */
 async function sweep(from, dx, dy, start, end, steps, moved, handled) {
   for (let i = 1; i <= steps; i++) {
     await tick();

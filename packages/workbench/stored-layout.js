@@ -1,9 +1,9 @@
-// 저장된 스페이스 배치를 검사한다. 배치를 여는 것과 라이브러리 미리보기가 같은 검사를 써서, 열 수 없는 배치를
-// 미리보기가 걸러서 그리지 않는다(docs/spec/projects.md).
+// Checks a stored space layout. Opening a layout and the library preview use the same check, so the preview
+// filters out a layout that cannot be opened and does not draw it (docs/spec/projects.md).
 import { pluginUnits } from "./environment.js";
 import { windowSidebar } from "./window-sidebars.js";
 
-/** 저장 배치 kept 가 현재 환경에서 열 수 없으면 그 이유로 예외를 던진다. */
+/** Throws an exception with the reason if the stored layout kept cannot be opened in the current environment. */
 export function checkStoredLayout(kept) {
   if (Object.hasOwn(kept, "sidebars") && (!kept.sidebars || typeof kept.sidebars !== "object" || Array.isArray(kept.sidebars)))
     throw new Error("invalid stored sidebar choices");
@@ -22,7 +22,7 @@ export function checkStoredLayout(kept) {
       }
       const tabs = card.data?.tabs;
       if (!Array.isArray(tabs) || !tabs.length) throw new Error(`invalid stored content card ${card.id}`);
-      // 불러오지 않은 플러그인의 탭은 placeholder 로 열리고, 불러온 플러그인은 표면이 있어야 한다(docs/spec/plugins.md).
+      // A tab of a plugin that is not loaded opens as a placeholder, and a loaded plugin must have a surface (docs/spec/plugins.md).
       for (const tab of tabs) {
         const unit = units.find(item => item.id === tab.plugin);
         if (unit && !unit.surface) throw new Error(`stored tab plugin ${tab.plugin} has no surface`);

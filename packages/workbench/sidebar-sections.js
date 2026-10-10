@@ -1,22 +1,22 @@
-// 사이드바가 보이는 세트의 섹션을 그린다(docs/spec/plugins.md#sections).
+// Draws the sections of the set that a sidebar shows (docs/spec/plugins.md#sections).
 //
-// 사이드바의 id마다 섹션 선택과 접힘을 유지한다.
-// list 는 방향에 따라 모든 섹션을 배치하고 tabs 는 고른 섹션 하나만 마운트한다.
-// 탭 선택과 섹션 접힘은 사이드바마다 이 모듈이 보관한다.
+// Keeps the section selection and collapse for each sidebar id.
+// list lays out all sections according to the direction, and tabs mounts only the one selected section.
+// This module holds the tab selection and the section collapse for each sidebar.
 import { bind } from "./commands.js";
 import { icon } from "./icons.js";
 import { registry } from "./exposure.js";
 import { hasSection, section } from "./registry.js";
 
-/* 사이드바 id 마다 고른 탭과 접힌 섹션. */
+/* Selected tab and collapsed sections for each sidebar id. */
 const choices = new Map();
-/* 그린 세트 요소마다 그 사이드바, 세트, 섹션 항목. */
+/* For each drawn set element, its sidebar, set and section items. */
 const drawn = new Map();
 const listeners = new Set();
 
 const notify = () => { for (const fn of listeners) fn(); };
 
-/** 섹션의 마운트 상태가 바뀌면 fn 을 호출한다. */
+/** Calls fn when the mount state of a section changes. */
 export function onSectionsChange(fn) {
   listeners.add(fn);
 }
@@ -26,15 +26,15 @@ function choiceOf(sidebar) {
   return choices.get(sidebar);
 }
 
-/** 항목의 모듈을 해제한다. 마운트가 끝나지 않았으면 끝난 뒤 해제한다. */
+/** Releases the module of an item. If the mount has not finished, it releases after the mount finishes. */
 function unmount(entry) {
   if (!entry.mount) return;
   const pending = entry.mount;
   entry.mount = null;
   entry.mounted = false;
   entry.error = null;
-  // 해제 중의 마운트 실패와 해제 실패는 페이지 오류로 보고한다(docs/spec/plugins.md). 항목은 이미 해제되어
-  // core.sidebars 의 error 로는 보이지 않는다.
+  // A mount failure and a release failure during the release are reported as page errors (docs/spec/plugins.md). The item has already been released,
+  // so it does not appear as the error of core.sidebars.
   pending.then((result) => result.dispose()).catch((error) => {
     dispatchEvent(new ErrorEvent("error", { message: `section ${entry.section.id}: ${error.message}` }));
   });
@@ -42,12 +42,12 @@ function unmount(entry) {
 }
 
 /**
- * 섹션 모듈이 받는 문맥. card 와 surface 에 더해, 섹션을 가진 플러그인의 status 를 따라가는
- * status(name, fn) 과 요소를 그 플러그인의 명령에 연결하는 bind(el, name, params, options) 를 준다.
+ * Context that a section module receives. In addition to card and surface, it provides status(name, fn), which follows the status of the plugin that owns the section,
+ * and bind(el, name, params, options), which connects an element to the command of that plugin.
  */
 function sectionContext(entry, context) {
   const owner = entry.section.id.slice(0, entry.section.id.indexOf("."));
-  // 섹션은 자기 플러그인과 코어의 이름만 쓴다(docs/spec/plugins.md#sections).
+  // A section uses only the names of its own plugin and of the core (docs/spec/plugins.md#sections).
   const own = (name) => {
     if (!name.startsWith(`${owner}.`) && !name.startsWith("core.")) {
       throw new Error(`section ${entry.section.id} cannot use ${name}`);
@@ -57,7 +57,7 @@ function sectionContext(entry, context) {
     card: context.card,
     surface: context.surface,
     orientation: context.orientation,
-    // 코어 아이콘. 표면 문맥의 icon 과 같다(docs/spec/plugins.md#icons).
+    // Core icon. Same as icon of the surface context (docs/spec/plugins.md#icons).
     icon,
     status(name, fn) {
       own(name);
@@ -99,7 +99,7 @@ function mount(entry, context) {
   });
 }
 
-/** 세트 요소 하나의 모든 섹션을 해제하고 기록을 지운다. */
+/** Releases all sections of one set element and clears its record. */
 export function clearSet(container) {
   const record = drawn.get(container);
   if (!record) return;
@@ -116,12 +116,12 @@ export function clearSet(container) {
   notify();
 }
 
-/** 문서에서 빠진 세트 요소의 섹션을 해제한다. */
+/** Releases the sections of a set element that left the document. */
 function sweep() {
   for (const container of [...drawn.keys()]) if (!container.isConnected) clearSet(container);
 }
 
-/** 고른 탭과 접힘을 요소와 마운트에 반영한다. */
+/** Applies the selected tab and the collapse to the elements and the mounts. */
 function apply(record) {
   const choice = choiceOf(record.sidebar);
   for (const entry of record.entries) {
@@ -142,17 +142,17 @@ function apply(record) {
 }
 
 /**
- * container 에 사이드바 sidebar 의 세트 set 을 그린다. context 는 섹션 모듈이 받는 {card, surface} 다.
- * 세트, 레이아웃, 섹션 목록, 문맥이 같으면 요소와 마운트를 유지한다.
+ * Draws the set set of sidebar sidebar in container. context is {card, surface}, which the section modules receive.
+ * If the set, layout, section list and context are the same, the elements and mounts are kept.
  */
 export function drawSet(container, sidebar, set, context) {
   if (context.orientation !== "horizontal" && context.orientation !== "vertical") throw new Error("section orientation must be horizontal or vertical");
   sweep();
   if (set.layout !== "list" && set.layout !== "tabs") throw new Error(`set ${set.id} layout must be list or tabs`);
-  // 불러오지 않은 플러그인의 섹션은 세트에 남지만 그리지 않는다(docs/spec/plugins.md).
+  // The sections of a plugin that is not loaded remain in the set but are not drawn (docs/spec/plugins.md).
   const sections = set.sections.filter(hasSection).map(section);
   const choice = choiceOf(sidebar);
-  // 기본값: 섹션이 없는 세트에는 고를 탭이 없다(null).
+  // default: a set without sections has no tab to select (null).
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;
   const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface, context.orientation, context.window === true]);
   let record = drawn.get(container);
@@ -165,7 +165,7 @@ export function drawSet(container, sidebar, set, context) {
     container.dataset.layout = set.layout;
     container.dataset.expose = "core.sidebar";
     delete container.dataset.html;
-    // 세트 제목 줄은 없다. 섹션이 사이드바 맨 위에서 시작한다.
+    // There is no set title line. The sections start at the top of the sidebar.
     container.replaceChildren();
     let strip = null;
     if (set.layout === "tabs") {
@@ -180,14 +180,14 @@ export function drawSet(container, sidebar, set, context) {
       element.className = "set__section";
       element.dataset.expose = "core.sidebar.section";
       element.dataset.section = section.id;
-      // fill 섹션은 list 레이아웃에서 남은 높이를 나눠 갖는다(docs/spec/plugins.md#sections).
+      // A fill section shares the remaining height in the list layout (docs/spec/plugins.md#sections).
       if (section.fill) element.dataset.fill = "true";
       const entry = { section, element, header: null, tab: null, body: document.createElement("div"),
         mount: null, mounted: false, error: null, observing: [] };
       entry.body.className = "set__body";
       if (context.surface) entry.body.dataset.surface = context.surface;
       if (context.window) entry.body.dataset.windowSidebar = "";
-      // 섹션이 그린 내용은 core.sidebars 의 text 로 드러나므로, 내용이 바뀌면 알린다.
+      // The content that a section drew is exposed as text of core.sidebars, so a change of the content is notified.
       entry.watcher = typeof MutationObserver === "function" ? new MutationObserver(notify) : null;
       entry.watcher?.observe(entry.body, { subtree: true, childList: true, characterData: true });
       const params = { sidebar, section: section.id };
@@ -230,7 +230,7 @@ function recordsOf(sidebar, section) {
   return records;
 }
 
-/** tabs 레이아웃 사이드바에서 섹션 하나를 고른다. */
+/** Selects one section in a sidebar with the tabs layout. */
 export function selectSection(sidebar, section) {
   const records = recordsOf(sidebar, section);
   if (records[0].layout !== "tabs") throw new Error(`sidebar ${sidebar} does not use the tabs layout`);
@@ -240,7 +240,7 @@ export function selectSection(sidebar, section) {
   choiceListener();
 }
 
-/** list 레이아웃 사이드바에서 섹션 하나를 접거나 편다. */
+/** Collapses or expands one section in a sidebar with the list layout. */
 export function foldSection(sidebar, section) {
   const records = recordsOf(sidebar, section);
   if (records[0].layout !== "list") throw new Error(`sidebar ${sidebar} does not use the list layout`);
@@ -252,19 +252,19 @@ export function foldSection(sidebar, section) {
   choiceListener();
 }
 
-/* 사용자가 탭을 고르거나 섹션을 접었을 때 부를 함수. 문서가 스페이스 저장을 연결한다. */
+/* Function to call when the user selects a tab or collapses a section. The document connects the space save to it. */
 let choiceListener = () => {};
 
-/** 사용자가 탭을 고르거나 섹션을 접으면 fn 을 호출한다. */
+/** Calls fn when the user selects a tab or collapses a section. */
 export function onChoicesChange(fn) {
   choiceListener = fn;
 }
 
-/** 사이드바마다 고른 탭과 접은 섹션. 스페이스가 저장한다(docs/spec/projects.md#persistence). */
+/** Selected tab and collapsed sections of each sidebar. The space stores them (docs/spec/projects.md#persistence). */
 export const sidebarChoices = () => Object.fromEntries([...choices].map(([sidebar, choice]) =>
   [sidebar, { tab: choice.tab, folded: [...choice.folded] }]));
 
-/** 저장된 선택으로 바꾸고 그린 사이드바에 적용한다. 스페이스를 열 때 부른다. */
+/** Replaces them with the stored selection and applies it to the drawn sidebars. Called when a space is opened. */
 export function restoreSidebarChoices(saved) {
   choices.clear();
   for (const [sidebar, { tab, folded }] of Object.entries(saved)) choices.set(sidebar, { tab, folded: new Set(folded) });
@@ -272,7 +272,7 @@ export function restoreSidebarChoices(saved) {
   notify();
 }
 
-/** 문서 순서의 그린 사이드바. core.sidebars 의 값이다. */
+/** Drawn sidebars in document order. The value of core.sidebars. */
 export function sidebarsState() {
   return [...document.querySelectorAll(".set[data-sidebar]")].map((container) => drawn.get(container)).filter(Boolean)
     .map((record) => {
@@ -282,16 +282,16 @@ export function sidebarsState() {
         tab: record.layout === "tabs" ? choice.tab : null,
         card: record.context.card, surface: record.context.surface,
         placement: record.context.window ? "window" : "card",
-        // 기본값: 카드 사이드바 문맥에는 창 사이드바의 plugin 과 side 가 없다.
+        // default: the context of a card sidebar has no plugin and side of a window sidebar.
         plugin: record.context.plugin ?? null,
-        // 기본값: 카드 사이드바 문맥에는 창 사이드바의 plugin 과 side 가 없다.
+        // default: the context of a card sidebar has no plugin and side of a window sidebar.
         side: record.context.side ?? null,
         rect: (() => { const {x,y,width:w,height:h} = record.container.getBoundingClientRect(); return {x,y,w,h}; })(),
         sections: record.entries.map((entry) => ({
           id: entry.section.id, name: entry.section.name,
           folded: record.layout === "list" && choice.folded.has(entry.section.id),
           mounted: entry.mounted, error: entry.error, text: entry.body.textContent,
-          // 탭 글자가 탭 폭에 다 들어가는지. 줄바꿈이나 줄어듦으로 잘리면 true 다.
+          // Whether the tab text fits in the tab width. It is true if wrapping or shrinking cuts it off.
           clipped: entry.tab ? entry.tab.scrollWidth > entry.tab.clientWidth || entry.tab.scrollHeight > entry.tab.clientHeight : false,
           controls: entry.body.querySelectorAll('[data-expose="core.sidebar.section.control"]').length,
         })),

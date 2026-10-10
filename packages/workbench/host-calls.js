@@ -1,8 +1,8 @@
-// 페이지가 보낸 호스트 호출의 진행. 페이지가 스스로 다시 읽기 전에 보낸 호출이 모두 답을 받게 한다
-// (docs/spec/native-host.md#page-reload). 두 애플리케이션의 런타임이 각자의 호출을 이것으로 감싼다.
-// JSON 이 담을 수 없는 수(NaN, Infinity)가 든 호출은 보내지 않고 거부한다(docs/spec/native-host.md#host-calls).
+// The progress of the host calls that the page sent. It makes every call sent before the page reloads itself receive a reply
+// (docs/spec/native-host.md#page-reload). The runtimes of both applications wrap their own calls with it.
+// A call that holds a number JSON cannot carry (NaN, Infinity) is rejected without being sent (docs/spec/native-host.md#host-calls).
 
-/** arg 안의 첫 유한하지 않은 수의 경로와 값. 없으면 null 이다. */
+/** The path and value of the first non-finite number in arg. It is null when there is none. */
 function nonFinite(value, path) {
   if (typeof value === "number") return Number.isFinite(value) ? null : { path, value };
   if (value === null || typeof value !== "object") return null;
@@ -52,8 +52,8 @@ export function callEvent({ name, args, micros, ok, error }) {
 }
 
 /**
- * call 을 감싸 진행 중인 호출을 센다. settle() 은 그때까지 보낸 호출이 모두 답을 받으면 끝나고, 그 뒤의 호출은
- * 보내지 않는다. 보내지 않은 호출은 다시 읽기가 멈춘 호출처럼 문서와 함께 끝나므로 끝나지 않는 약속을 돌려준다.
+ * Wraps call and counts the calls in progress. settle() finishes when every call sent until then has received a reply, and calls after that are
+ * not sent. A call that is not sent ends together with the document, like a call stopped by a reload, so it returns a promise that never settles.
  */
 export function settlingCalls(call) {
   let pending = 0;

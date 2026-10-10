@@ -1,28 +1,28 @@
-// 플러그인과 섹션의 등록소.
+// Registry of plugins and sections.
 //
-// 플러그인은 `+` 메뉴 항목과 표면 두 가지를 갖고 사이드바는 갖지 않는다. 사이드바
-// 구성은 사용자가 세트로 조합하고 설정에서 연결한다. 플러그인이 사이드바를 소유하면
-// 사용자가 변경할 수 없다.
+// A plugin has two things, a `+` menu item and a surface, and it has no sidebar. The sidebar
+// composition is assembled by the user as sets and connected in the settings. If a plugin owned a sidebar,
+// the user could not change it.
 //
-// 섹션은 사이드바에 표시할 수 있는 항목 하나다. 등록 방식은 플러그인과 같고 표면이
-// 없다는 점만 다르다.
+// A section is one item that a sidebar can show. It is registered the same way as a plugin, except that it has
+// no surface.
 
 const registeredPlugins = [];
 const registeredSections = [];
 
 /**
- * 플러그인 하나를 등록한다.
+ * Registers one plugin.
  *
  * @param {object} plugin
- * @param {string} plugin.id    플러그인 종류의 id. 탭이 이 값을 갖는다
- * @param {string} plugin.name  `+` 메뉴에 표시할 이름
- * @param {string} plugin.mark  메뉴 오른쪽 표시이자 탭 제목의 접두사
- * @param {string} plugin.svg   16×16 뷰박스 기준 아이콘 경로
- * @param {string|null} plugin.ink 라이브러리 미리보기 색의 테마 토큰 이름. 없으면 기본 색
- * @param {object|null} plugin.background 영속 background 세션 선언
- * @param {(tabId: string) => {module: string, composition: object}} plugin.surface 표면이 표시할
- *        문서와 검증된 합성 권한 선언. 표면 하나는 탭 하나이므로
- *        인자는 탭의 id 다
+ * @param {string} plugin.id    id of the plugin kind; a tab holds this value
+ *        @param {string} plugin.name  name shown in the `+` menu
+ *        @param {string} plugin.mark  mark on the right of the menu and prefix of the tab title
+ *        @param {string} plugin.svg   icon path on a 16×16 viewBox
+ *        @param {string|null} plugin.ink theme token name of the library preview color; the default color if absent
+ *        @param {object|null} plugin.background declaration of the persistent background session
+ *        @param {(tabId: string) => {module: string, composition: object}} plugin.surface document that the surface shows
+ *        and the validated composition permission declaration. One surface is one tab, so
+ *        the argument is the id of the tab
  */
 export function registerPlugin(plugin) {
   if (registeredPlugins.some((p) => p.id === plugin.id)) {
@@ -32,12 +32,12 @@ export function registerPlugin(plugin) {
 }
 
 /**
- * 사이드바에 표시할 수 있는 섹션 하나를 등록한다.
+ * Registers one section that a sidebar can show.
  *
  * @param {object} section
- * @param {string} section.id    세트가 이 id 로 참조한다
- * @param {string} section.name  사이드바에 표시할 이름
- * @param {string|{horizontal:string, vertical:string}} section.module  공통 또는 방향별 모듈 주소
+ * @param {string} section.id    a set refers to the section by this id
+ * @param {string} section.name  name shown in the sidebar
+ * @param {string|{horizontal:string, vertical:string}} section.module  module address, common or per direction
  */
 export function registerSection(section) {
   if (registeredSections.some((s) => s.id === section.id)) {
@@ -46,32 +46,32 @@ export function registerSection(section) {
   registeredSections.push(section);
 }
 
-/** 플러그인을 등록 순서로 반환한다. `+` 메뉴가 이 순서를 사용한다. */
+/** Returns the plugins in registration order. The `+` menu uses this order. */
 export const plugins = () => registeredPlugins;
 
-/** id 로 조회한다. 등록되지 않은 id 면 예외를 던진다. */
+/** Looks up by id. Throws if the id is not registered. */
 export function plugin(id) {
   const found = registeredPlugins.find((p) => p.id === id);
   if (!found) throw new Error(`unknown plugin: ${id}`);
   return found;
 }
 
-/** 등록된 플러그인인지 반환한다. 저장된 배치는 다른 환경에서 만들어졌을 수 있다. */
+/** Returns whether the plugin is registered. A stored layout may have been made in another environment. */
 export const hasPlugin = (id) => registeredPlugins.some((p) => p.id === id);
 
-/** 고정 창 사이드바 카드인지 판정한다. 등록 검증은 환경과 저장 경계에서 수행한다. */
+/** Decides whether it is a fixed window sidebar card. Registration is validated at the environment and storage boundaries. */
 export const isPlace = (id) => id === "left" || id === "right";
 
-/** id 로 조회한다. 등록되지 않은 id 면 예외를 던진다. */
+/** Looks up by id. Throws if the id is not registered. */
 export function section(id) {
   const found = registeredSections.find((s) => s.id === id);
   if (!found) throw new Error(`unknown section: ${id}`);
   return found;
 }
 
-/** 섹션 id 목록의 이름을 순서대로 반환한다. 등록되지 않은 id 면 예외를 던진다. 저장된 세트는 불러올 때 검사된다. */
-/** 등록된 섹션인가. 불러오지 않은 플러그인의 섹션은 세트에 남지만 등록되지 않는다(docs/spec/plugins.md). */
+/** Returns the names of a list of section ids in order. Throws if an id is not registered. A stored set is validated when it is loaded. */
+/** Whether a section is registered. The section of a plugin that is not loaded remains in the set but is not registered (docs/spec/plugins.md). */
 export const hasSection = (id) => registeredSections.some((s) => s.id === id);
 
-/** 섹션 이름. 불러오지 않은 플러그인의 섹션은 id 와 "(불러오지 않음)" 이다. */
+/** Section name. The section of a plugin that is not loaded is shown as its id and the Korean text for "not loaded" in parentheses. */
 export const sectionNames = (ids) => ids.map((id) => (hasSection(id) ? section(id).name : `${id} (불러오지 않음)`));

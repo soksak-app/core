@@ -1,11 +1,11 @@
-// 사이드바 세트 목록의 만들기, 편집, 삭제(docs/spec/settings.md).
+// Creating, editing, and deleting the sidebar set list (docs/spec/settings.md).
 //
-// 목록을 받아 새 목록을 반환한다. 저장은 설정의 set() 이 한다. 받은 목록은 바꾸지 않는다.
+// Takes a list and returns a new list. The set() of the settings stores it. The received list is not changed.
 
 const LAYOUTS = ["list", "tabs"];
 const TITLE_MAX = 40;
 
-/** 제목 "새 세트", 배치 list, 섹션이 없는 세트를 끝에 더한다. id 는 쓰지 않은 가장 작은 set-<n> 이다. */
+/** Appends a set with the title (the Korean text for "new set"), the layout list, and no sections at the end. The id is the smallest unused set-<n>. */
 export function createSet(sets) {
   const used = new Set(sets.map((s) => s.id));
   let n = 1;
@@ -13,7 +13,7 @@ export function createSet(sets) {
   return [...sets, { id: `set-${n}`, title: "새 세트", sections: [], layout: "list" }];
 }
 
-/** 세트 하나의 제목이나 배치를 바꾼다. 섹션은 changeRow 가 바꾼다. */
+/** Changes the title or the layout of one set. changeRow changes the sections. */
 export function updateSet(sets, id, change) {
   for (const key of Object.keys(change)) {
     if (!["title", "layout"].includes(key)) throw new Error(`set update has unknown field ${key}`);
@@ -35,15 +35,15 @@ export function updateSet(sets, id, change) {
 }
 
 /**
- * 세트의 섹션 행 하나를 바꾼다(docs/spec/settings.md 의 사이드바 절).
+ * Changes one section row of a set (sidebar section in docs/spec/settings.md).
  *
- *   choose  index 행을 section 으로 바꾼다
- *   up      index 행을 위 행과 바꾼다
- *   down    index 행을 아래 행과 바꾼다
- *   remove  index 행을 뺀다
- *   add     세트에 없는 등록 섹션 중 registered 순서로 첫 섹션을 끝에 더한다
+ *   choose  changes the row index to section
+ *   up      swaps the row index with the row above
+ *   down    swaps the row index with the row below
+ *   remove  removes the row index
+ *   add     appends at the end the first registered section, in registered order, that the set does not have
  *
- * registered 는 등록된 섹션 id 를 플러그인과 선언 순서로 담는다. 같은 섹션이 두 번 들어가게 하는 변경은 거부한다.
+ * registered holds the registered section ids in the order of plugins and declarations. A change that would put the same section in twice is rejected.
  */
 export function changeRow(sets, id, { action, index, section }, registered) {
   const at = sets.findIndex((s) => s.id === id);
@@ -79,8 +79,8 @@ export function changeRow(sets, id, { action, index, section }, registered) {
 }
 
 /**
- * 사이드바 선택 하나를 바꾼 연결 목록을 반환한다(docs/spec/settings.md 의 사이드바 선택).
- * choice 는 세트 id 또는 off 다. plugin 이 null 이면 left, right 의 일반 선택이다.
+ * Returns the link list with one sidebar choice changed (sidebar choice in docs/spec/settings.md).
+ * choice is a set id or off. When plugin is null, it is the general choice of left or right.
  */
 export function chooseLink(links, place, plugin, choice) {
   if (!["left", "right", "window-left", "window-right", "card-left", "card-right", "card-top", "card-bottom"].includes(place)) throw new Error(`unknown place ${place}`);
@@ -92,8 +92,8 @@ export function chooseLink(links, place, plugin, choice) {
 }
 
 /**
- * 사이드바에 보일 세트를 반환한다. 없거나 사용 안 함이면 null.
- * 일반 창, 플러그인 창, 카드 사방의 연결을 각각 독립적으로 선택한다.
+ * Returns the set that the sidebar shows. It is null when there is none or when it is disabled.
+ * The links of the general window, the plugin window, and the four sides of a card are chosen independently.
  */
 export function resolveSidebar(links, sets, place, plugin) {
   const chosen = links.find(link => link.place === place && link.plugin === plugin);
@@ -103,7 +103,7 @@ export function resolveSidebar(links, sets, place, plugin) {
   return set;
 }
 
-/** 세트와 그 세트를 가리키는 연결을 함께 뺀다. */
+/** Removes a set together with the links that point to it. */
 export function deleteSet(sets, links, id) {
   if (!sets.some((s) => s.id === id)) throw new Error(`unknown set ${id}`);
   return { sets: sets.filter((s) => s.id !== id), links: links.filter((l) => l.set !== id) };

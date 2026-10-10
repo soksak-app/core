@@ -1,17 +1,18 @@
-// 메인 문서(index.html)의 오류 표시와 배치 배선. 배치 대기열이 판의 배치, 판이 없는 창의 첫 행, 프로젝트 전환의 빈 판을
-// 하나씩 표시하고, 그 실패를 받아 오류 표시로 보인다. 그 배치를 기다리는 프로젝트 전환과 코어 명령은 같은 실패를 다시
-// 쓰지 않는다(docs/spec/hosts.md#application-log). 문서, 호스트, 판, 컴포지터는 호출자가 넘긴다.
+// Error display and layout wiring of the main document (index.html). The layout queue shows the plane layout, the first row of
+// a window without a plane, and the empty plane of a project switch one at a time, and receives their failures as error
+// displays. The project switch and the core command that wait for such a layout do not report the same failure again
+// (docs/spec/hosts.md#application-log). The caller passes the document, host, plane and compositor.
 import { createLayoutQueue, drawPrepared, nextTask } from "./layout-queue.js";
 import { frameLayout } from "./frame-text.js";
 import { trace } from "./performance.js";
 import { showError as showShownError } from "./shown-errors.js";
 
 /**
- * 메인 문서의 오류 배너에 오류를 보이는 함수를 만든다. 보이는 순간 기록한다(shown-errors.js). 배너가 없으면 header
- * 뒤에 만든다.
+ * Creates the function that shows an error in the error banner of the main document. It logs the error at the moment it
+ * appears (shown-errors.js). If the banner does not exist, it creates the banner after the header.
  *
- *   document  메인 문서
- *   changed   코어 상태가 바뀌었음을 알린다(core-exposure.js 의 coreChanged)
+ *   document  main document
+ *   changed   reports that the core state changed (coreChanged of core-exposure.js)
  */
 export function createErrorDisplay({ document, changed }) {
   return function showError(reason, detail = "") {
@@ -28,44 +29,44 @@ export function createErrorDisplay({ document, changed }) {
 }
 
 /**
- * 처리되지 않은 오류를 보이고 애플리케이션 로그로 보낸다. 애플리케이션에는 콘솔이 없다. 위치와 stack 은 로그에만 남긴다.
+ * Shows an unhandled error and sends it to the application log. The application has no console. The location and stack stay only in the log.
  *
- *   target     error 와 unhandledrejection 사건을 받는 창
- *   showError  createErrorDisplay 의 함수
+ *   target     window that receives the error and unhandledrejection events
+ *   showError  function of createErrorDisplay
  */
 export function reportUncaught(target, showError) {
   target.addEventListener("error", (e) => showError(e.message, ` @ ${e.filename}:${e.lineno}`));
   target.addEventListener("unhandledrejection", (e) => {
-    // 기본값: rejection 값이 Error 가 아니면 stack 이 없다.
+    // default: a rejection value that is not an Error has no stack.
     const stack = e.reason instanceof Error && e.reason.stack ? `\n${e.reason.stack}` : "";
     showError(e.reason instanceof Error ? e.reason.message : e.reason, stack);
   });
 }
 
 /**
- * 메인 문서의 배치 대기열과 그 배치를 예약하고 기다리는 함수를 만든다.
+ * Creates the layout queue of the main document and the functions that schedule and wait for its layouts.
  *
- *   document   슬롯을 읽는 메인 문서
- *   showError  createErrorDisplay 의 함수
- *   setVerify, log  검증 행과 관측 줄을 받는다(core-exposure.js, host.js)
- *   surfaces   호스트의 표면 인터페이스(host.js 의 surfaces). waitPresented 를 쓴다
+ *   document   main document that reads the slots
+ *   showError  function of createErrorDisplay
+ *   setVerify, log  receive the verification row and the observation line (core-exposure.js, host.js)
+ *   surfaces   surface interface of the host (surfaces of host.js); uses waitPresented
  *   plane      { currentGrid, settle, clear }(plane.js)
  *   compositor { publishAhead, publish }(compositor.js)
- *   textSize   지금 설정의 프레임 배율
- *   rendered   마지막 렌더가 커밋한 표시의 promise(index.html 의 onRender)
- *   waitSurfaceCompositionDeclared  표면 모듈의 합성 선언을 기다린다(surface-modules.js)
+ *   textSize   frame scale of the current setting
+ *   rendered   promise of the presentation that the last render committed (onRender of index.html)
+ *   waitSurfaceCompositionDeclared  waits for the composition declaration of the surface modules (surface-modules.js)
  */
 export function createPageLayout({
   document, showError, setVerify, log, surfaces, plane, compositor, textSize, rendered, waitSurfaceCompositionDeclared,
 }) {
   let failure = null;
-  /* 표시되기 전에 더 새 배치로 대신된 배치의 수. 움직임이 멈춘 표시에서 애플리케이션 로그에
-     한 줄로 남긴다. 움직이는 동안 배치마다 호스트를 부르면 표시가 그만큼 늦어진다. */
+  /* Number of layouts replaced by a newer layout before they were presented. It is written as one line to the application log
+     when the motion has stopped. Calling the host for each layout during the motion delays the presentation by that much. */
   let supersededLayouts = 0;
   const layouts = createLayoutQueue({
     failed(error) {
       failure = error;
-      // 기본값: Error 가 아닌 거절은 그 값 자체를 문자열로 보인다.
+      // default: a rejection that is not an Error is shown as its own value converted to a string.
       const message = String(error?.message ?? error);
       console.error(`surface presentation failed: ${message}`);
       showError(`surface presentation failed: ${message}`);
@@ -76,49 +77,49 @@ export function createPageLayout({
     },
   });
   let layoutEpoch = 0;
-  /* 성능 기록의 배치 번호. 기록이 켜져 있으면 배치마다 대기, 준비 응답, DOM 그리기 전후, animation frame, 표시의
-     시각(performance.now, ms)을 남겨 배치가 화면에 늦게 나오는 단계를 가린다. */
+  /* Layout number of the performance trace. While the trace is on, each layout records the times (performance.now, ms) of the wait,
+     the prepare reply, before and after the DOM draw, the animation frame and the presentation, so the stage that delays the layout on screen can be identified. */
   let layoutTraceId = 0;
 
   return {
-    /** 마지막으로 실패한 배치의 오류. 그 뒤의 렌더가 표시되면 clearFailure 가 거둔다. */
+    /** Error of the last layout that failed. clearFailure removes it when a later render is presented. */
     failure: () => failure,
     clearFailure() {
       failure = null;
     },
-    /** 대신된 배치의 수를 한 줄로 남기고 센 수를 비운다. */
+    /** Writes the number of replaced layouts as one line and resets the count. */
     reportSuperseded() {
       if (supersededLayouts === 0) return;
       log(`layout: ${supersededLayouts} waiting layouts were replaced by newer layouts before presentation`);
       supersededLayouts = 0;
     },
-    /** 프로젝트 전환이 불러온 배치의 표시를 기다린다(projects.js 의 onSwitch). */
+    /** Waits for the presentation of the layout that a project switch loaded (onSwitch of projects.js). */
     async presented() {
-      // 불러온 배치가 실패하면 대기열의 failed 가 그 실패를 보였다. 표시되지 않은 배치의 표시는 기다리지 않는다.
+      // If the loaded layout fails, failed of the queue has already shown the failure. It does not wait for the presentation of a layout that is not presented.
       if (!(await layouts.wait())) return;
-      // `draw()`는 onRender 커밋이 끝나기 전에 반환한다. 최신 네이티브 배치가
-      // 대기 중이면 프로젝트 명령은 완료되지 않은 상태다.
+      // `draw()` returns before the onRender commit finishes. While the latest native layout
+      // is pending, the project command is not complete.
       await rendered();
       await surfaces.waitPresented();
     },
     /**
-     * 프로젝트 전환이 판을 비운다(projects.js 의 onSwitch). 판을 지우는 그리기가 show 로 라이브러리 화면을 그린다. 그
-     * 그리기는 관찰 round 보다 먼저 실행되는 animation frame 에서 실행되므로, 작업 영역을 숨기는 화면 전환이 round 안에서
-     * 관찰된 요소의 크기를 바꾸지 않는다(F43).
+     * A project switch clears the plane (onSwitch of projects.js). The draw that clears the plane draws the library screen with show. That
+     * draw runs in the animation frame that runs before the observation round, so the screen switch that hides the workspace does not change
+     * the size of an element observed inside the round (F43).
      */
     async empty(show) {
-      // 전환은 그 전에 준비한 판의 그리기를 취소한다. 그 그리기가 새 프레임 배율을 쓰는 그리기였을 수 있으므로, 판을 지우는
-      // 그리기가 지금 배율을 쓰고 그 첫 행을 준비에 담는다(docs/spec/native-surfaces.md#title-bar-height).
+      // The switch cancels the draw of the plane prepared before it. That draw may have used the new frame scale, so the draw
+      // that clears the plane uses the current scale and includes its first row in the preparation (docs/spec/native-surfaces.md#title-bar-height).
       const epoch = ++layoutEpoch;
       const layout = frameLayout({
         factor: textSize(), publishAhead: compositor.publishAhead, publish: compositor.publish,
         frame: nextTask, clearPlane: plane.clear, show,
       });
       layouts.run(() => drawPrepared({ epoch, current: () => layoutEpoch, ...layout }));
-      // 판을 비운 배치가 실패하면 대기열의 failed 가 그 실패를 보였다.
+      // If the layout that cleared the plane fails, failed of the queue has already shown the failure.
       await layouts.wait();
     },
-    /** 판이 만든 배치를 예약한다(plane.js 의 onLayout 수신자). */
+    /** Schedules the layout that the plane produced (receiver of onLayout of plane.js). */
     onLayout(made, draw, seated, titlebar) {
       const epoch = layoutEpoch;
       const id = ++layoutTraceId;
@@ -138,9 +139,9 @@ export function createPageLayout({
       }));
     },
     /**
-     * 첫 행을 준비한 배치로 그린다. 판이 있으면 판을 다시 그리고, 판이 없는 창(라이브러리)은 표면 없이 첫 행의 높이를 담은
-     * 준비 뒤에 지금 설정의 프레임 배율을 쓴다. 준비가 창 제목줄을 같은 트랜잭션에서 정하므로 행과 단추가 같은 프레임에
-     * 바뀐다(docs/spec/native-surfaces.md#title-bar-height).
+     * Draws the first row with the prepared layout. If a plane exists, it redraws the plane. A window without a plane (library) applies the
+     * current frame scale of the setting after a preparation that carries the height of the first row without a surface. The preparation sets the window title bar in the same transaction,
+     * so the row and the button change in the same frame (docs/spec/native-surfaces.md#title-bar-height).
      */
     drawFrame() {
       if (plane.currentGrid()) {
@@ -154,11 +155,11 @@ export function createPageLayout({
       layouts.run(() => drawPrepared({ epoch, current: () => layoutEpoch, ...layout }));
     },
     /**
-     * 판의 그리기 순서. 배치를 바꾼 코어 명령은 이것을 기다린 뒤 답한다. 슬롯은 가장 새 배치를 그린 뒤에 읽으므로, 이 명령이나
-     * 뒤의 명령이 해제한 표면의 슬롯은 남아 있지 않다(docs/spec/exposure.md#registration).
+     * Draw order of the plane. A core command that changed the layout replies after waiting for it. The slots are read after the newest layout is drawn,
+     * so no slot remains for a surface that this command or a later command released (docs/spec/exposure.md#registration).
      */
     async drawn() {
-      // 가장 새 배치가 실패하면 대기열의 failed 가 그 실패를 보였다. 표시되지 않은 배치의 슬롯은 기다리지 않는다.
+      // If the newest layout fails, failed of the queue has already shown the failure. It does not wait for the slot of a layout that is not presented.
       if (!(await layouts.wait())) return;
       const ids = [...document.querySelectorAll("[data-native-surface-id]")]
         .map((slot) => slot.dataset.nativeSurfaceId);

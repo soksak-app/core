@@ -1,10 +1,10 @@
-// 검증의 계산 중 판과 컴포지터를 읽지 않는 부분. verify.js 가 판에서 읽은 값을 넘긴다.
+// The parts of the verification computation that do not read the plane or the compositor. verify.js passes the values it read from the plane.
 import { isPlace } from "./registry.js";
 import { windowSidebar } from "./window-sidebars.js";
 
 /**
- * 레일 묶음마다 이어진 사각형 무리의 수를 더해, 레일 외곽선이 가져야 할 닫힌 고리 수를 반환한다.
- * 두 사각형은 가로·세로 간격이 모두 gap(+0.5) 이하일 때 이어진다.
+ * Adds up the number of connected rectangle clusters of each rail group and returns the number of closed loops that the rail outline must have.
+ * Two rectangles are connected when both their horizontal and vertical gaps are at most gap (+0.5).
  */
 export function expectedRailLoops(groups, gap) {
   let loops = 0;
@@ -29,8 +29,8 @@ export function expectedRailLoops(groups, gap) {
 }
 
 /**
- * 창 사이드바의 배치와 폭을 검증한다. 선언값이 아니라 그려진 폭을 잰다. 선언값은 요청이고 검증 대상은 결과다.
- * 각 쪽에는 사이드바가 하나이며, 그 쪽 가장자리 열에 전체 높이로 서고 저장 폭을 넘지 않는다.
+ * Verifies the placement and the width of the window sidebars. It measures the drawn width, not the declared value. The declared value is a request, and the subject of verification is the result.
+ * Each side has one sidebar, which stands in the edge column of that side at full height and does not exceed the stored width.
  */
 export function windowSidebarsPlaced(grid) {
   const places = grid.cards.filter(card => isPlace(card.id));

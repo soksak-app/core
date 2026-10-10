@@ -205,7 +205,7 @@ function drawState() {
     const el = document.createElement("div");
     el.className = "dbg-card__line";
     el.dataset.expose = "core.debug.state.difference";
-    // default: a path that exists in only one of the compared files has no value in the other, shown as (없음).
+    // default: a path that exists in only one of the compared files has no value in the other, shown as the Korean text for "none" in parentheses.
     el.textContent = `${path}: ${a ?? "(없음)"} -> ${b ?? "(없음)"}`;
     stateDiffs.appendChild(el);
   }

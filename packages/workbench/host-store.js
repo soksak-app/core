@@ -1,6 +1,6 @@
-// 네이티브 호스트에 설정 파일과 프로젝트 목록의 읽기·쓰기를 요청하는 저장소.
+// A store that asks the native host to read and write the settings file and the project list.
 //
-// 네이티브 애플리케이션의 런타임 모듈이 openStore() 에서 이 저장소를 생성한다.
+// The runtime module of a native application creates this store in openStore().
 
 export class HostWorkspaceStore {
   constructor(host) {

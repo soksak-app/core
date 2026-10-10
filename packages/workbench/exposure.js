@@ -1,12 +1,12 @@
-// 메인 페이지의 공개 항목 등록소.
+// Registry of the exposed entries of the main page.
 //
-// 코어(exposure.json)와 불러온 플러그인(plugin.json 의 exposes)의 선언을 갖고, 코어
-// 항목의 등록과 표면 페이지의 등록을 받는다. 네이티브 호스트가 보낸 exposure-request
-// 에 답하고, 표면이 등록한 이름의 요청은 그 표면으로 전달한다. 명세는
-// docs/spec/exposure.md 에 있다.
+// Holds the declarations of the core (exposure.json) and of the loaded plugins (exposes in plugin.json), and
+// accepts the registration of core entries and of surface pages. It answers the exposure-request that the native
+// host sends and forwards a request for a name that a surface registered to that surface. The specification is
+// docs/spec/exposure.md.
 //
-// 호스트가 없는 브라우저 런타임에서도 등록소는 이 문서 안에서 동작한다. 그때는 요청을
-// 받는 경로와 표면이 없다.
+// In a browser runtime without a host, the registry also works inside this document. Then there is no path that
+// receives requests and no surface.
 import { host } from "@soksak/runtime";
 import { timed, trace } from "./performance.js";
 import { emitEvent } from "./page-log.js";
@@ -15,35 +15,35 @@ import {
   exposureEntries, replyPayload, validateExposes, validateExposureFile,
 } from "@soksak/plugin-api";
 
-/** 코어 dom 항목의 요소. 메인 문서에서 data-expose 속성으로 찾는다. */
+/** Elements of a core dom entry. They are found in the main document by the data-expose attribute. */
 const byAttribute = (name) => () => [...document.querySelectorAll(`[data-expose="${name}"]`)];
 
 const ownerOf = (name) => name.slice(0, name.indexOf("."));
 
-/** 표면 문서가 등록하는 이름인지. 플러그인 이름과 core.surface.* 이다. */
+/** Whether the name is registered by a surface document: a plugin name or core.surface.*. */
 const surfaceName = (name) => ownerOf(name) !== "core" || name.startsWith(SURFACE_CORE);
 
-/** 감시 하나의 키. 표면을 지정한 감시와 지정하지 않은 감시는 서로 다르다. */
-// 기본값: 위 주석대로 표면을 지정하지 않은 감시의 표면은 null 이다.
+/** The key of one watch. A watch that names a surface and a watch that does not are different. */
+// default: as stated above, the surface of a watch that names no surface is null.
 const watchKey = (name, surface) => JSON.stringify([name, surface ?? null]);
 
-// 이 문서에 마운트된 표면 모듈의 요청 수신자를 보관한다.
+// Holds the request receivers of the surface modules mounted in this document.
 const surfacePorts = new Map();
 
 /**
- * 등록소 하나를 만든다.
+ * Creates one registry.
  *
- *   call(name, arg)  호스트 호출. exposureChanged 와 exposureForward 에 사용한다.
- *                    호스트가 없으면 null 이다
- *   report(error)    host 가 거부한 상태 변경의 오류를 보고한다. call 이 있으면 필요하다
+ *   call(name, arg)  host call. Used for exposureChanged and exposureForward.
+ *   It is null when there is no host.
+ *   report(error)    reports the error of a state change that the host refused. Required when call exists.
  *
- * 연결 후 configure 로 문서가 아는 값을 받는다.
+ * After the connection, configure receives the values that the document knows.
  *
- *   surfacePlugin(surface)  표면을 소유한 플러그인 id. 모르는 표면이면 null
- *   preferred()             이름을 등록한 표면이 여럿일 때 고를 순서. 표면 id 배열
- *   registrationChanged()   표면의 등록이 바뀐 뒤 호출된다
+ *   surfacePlugin(surface)  id of the plugin that owns the surface, or null for an unknown surface
+ *   preferred()             order to choose from when several surfaces registered a name: an array of surface ids
+ *   registrationChanged()   called after the registration of a surface changed
  */
-/** 이 문서가 답하는 명령이 timeout 을 선언하지 않았을 때 답을 기다리는 시간(ms). */
+/** Time (ms) to wait for a reply when a command that this document answers declares no timeout. */
 const REPLY_TIMEOUT = 10_000;
 
 export function createRegistry({ call = null, report = null } = {}) {
@@ -52,30 +52,30 @@ export function createRegistry({ call = null, report = null } = {}) {
   const coreDeclared = new Map();
   const core = exposureEntries(coreDeclared);
   const methods = new Map();
-  /* 선언 키마다 그 항목을 등록한 표면. 등록 순서를 유지한다. */
+  /* For each declaration key, the surfaces that registered the entry. Registration order is kept. */
   const surfaces = new Map();
   const surfaceNames = (surface) => [...surfaces].filter(([, owners]) => owners.has(surface)).map(([key]) => key);
   const registrationTrace = (phase, surface, fields = {}) => trace("surface.registration", {
     phase, surface, timeOrigin: performance.timeOrigin, hasPort: surfacePorts.has(surface), ...fields,
     get names() { return surfaceNames(surface); },
   });
-  /* 소유 플러그인을 아직 모르는 표면의 등록. 표면을 담은 배치를 불러오면 revisit 이 반영한다. */
+  /* Registrations of surfaces whose owner plugin is not known yet. revisit applies them when the layout that holds the surface is loaded. */
   const pending = new Map();
-  /* 감시 중인 표면 status. 감시 키마다 따라가는 표면, 요청한 표면, 마지막 버전. */
+  /* Surface statuses being watched: for each watch key, the followed surface, the requested surface and the last version. */
   const following = new Map();
   let options = {
     surfacePlugin: () => null, preferred: () => [], registrationChanged: () => {},
-    // 코어 명령이 실행된 뒤 기다릴 작업. 문서는 판의 그리기를 넘겨, 배치를 바꾼 명령이 그려진 뒤 답하게 한다.
+    // Work to wait for after a core command ran. The document passes the drawing of the plane, so a command that changed the layout replies after it is drawn.
     settled: () => undefined,
-    // 이 문서 안의 관찰이 실패하면 호출된다. 페이지 오류로 보고한다(docs/spec/plugins.md#sections).
+    // Called when an observation inside this document fails. It is reported as a page error (docs/spec/plugins.md#sections).
     failed: (error) => dispatchEvent(new ErrorEvent("error", { message: error.message })),
   };
   let forwards = 0;
-  /* 이 문서 안에서 surface status 를 따라가는 관찰자. 섹션 모듈이 사용한다. */
+  /* Observers that follow a surface status inside this document. Section modules use them. */
   const observers = new Set();
-  /* 플러그인 상태 모듈이 이 문서에 등록한 항목. 플러그인 id 마다 항목 표와 status 의 read·subscribe. */
+  /* Entries that plugin state modules registered in this document: for each plugin id, the entry table and the read and subscribe of statuses. */
   const pages = new Map();
-  /** 플러그인 상태 모듈이 이름을 등록했으면 그 항목 표. */
+  /** The entry table when a plugin state module registered the name. */
   const pageOf = (kind, name) => {
     const page = pages.get(ownerOf(name));
     return page?.entries.registered(kind, name) ? page : null;
@@ -84,12 +84,12 @@ export function createRegistry({ call = null, report = null } = {}) {
   const changed = (name, value, surface) => {
     if (!call) return;
     call("exposureChanged", surface === undefined ? { name, value } : { name, surface, value }).then(undefined, (error) =>
-      // 기본값: 거부 값은 Error 가 아닐 수 있으므로 그 값 자체를 적는다.
+      // default: a refusal value may not be an Error, so the value itself is written.
       report(new Error(`status ${name} change was refused: ${error?.message ?? error}`, { cause: error })));
   };
 
   /**
-   * 요청을 표면에 전달한다. 명령 선언에 timeout 이 있으면 호스트가 그 시간만큼 기다린다.
+   * Forwards a request to a surface. When the command declaration has a timeout, the host waits for that time.
    */
   async function forward(surface, method, params) {
     if (!call) throw new ExposureError(EXPOSURE_ERRORS.gone, `surface ${surface} has no host`);
@@ -99,11 +99,11 @@ export function createRegistry({ call = null, report = null } = {}) {
     if (timeout !== undefined) request.timeout = timeout;
     const reply = await call("exposureForward", request);
     if (reply.error) throw new ExposureError(reply.error.code, reply.error.message);
-    // 기본값: 결과를 싣지 않은 답은 결과가 null 인 명령의 답이다.
+    // default: a reply that carries no result is the reply of a command whose result is null.
     return reply.result ?? null;
   }
 
-  /** 항목을 등록한 표면 중 요청을 받을 표면. 요청이 표면을 지정하면 그 표면이다. */
+  /** The surface that receives a request among the surfaces that registered the entry. When the request names a surface, it is that surface. */
   function pick(kind, name, requested) {
     const owners = surfaces.get(declarationKey(kind, name));
     if (requested !== undefined) {
@@ -115,14 +115,14 @@ export function createRegistry({ call = null, report = null } = {}) {
     }
     if (!owners?.size) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `${kind} ${name} is not registered`);
     const first = options.preferred().find((surface) => owners.has(surface));
-    // 기본값: 선호하는 표면이 등록하지 않았으면 마지막에 등록한 표면이 답한다.
+    // default: when the preferred surface has not registered, the surface registered last answers.
     return first ?? [...owners.keys()].at(-1);
   }
 
   /**
-   * 표면 status 의 변경을 따라간다. status.next 를 반복해서 전달하고, 답이 올 때마다
-   * exposureChanged 를 호출한다. 호스트는 status.next 에 대기 시간을 두지 않는다.
-   * 감시가 끝나거나 전달이 실패하면(표면이 사라진 경우 등) 멈춘다.
+   * Follows the changes of a surface status. It repeats status.next and calls exposureChanged on every
+   * answer. The host puts no wait time on status.next.
+   * It stops when the watch ends or the forwarding fails (for example when the surface disappeared).
    */
   async function follow(key, name, watch) {
     while (following.get(key) === watch) {
@@ -140,26 +140,23 @@ export function createRegistry({ call = null, report = null } = {}) {
     if (following.get(key) === watch) following.delete(key);
   }
 
-  /** 같은 표면을 따라가는 다른 감시가 없으면 표면의 감시를 끝낸다. */
+  /** Ends the watch of the surface when no other watch follows the same surface. */
   async function release(watch, name) {
     const shared = [...following.values()].some((other) => other.surface === watch.surface && other.name === name);
     if (!shared) await forward(watch.surface, "status.unwatch", { name });
   }
 
   /**
-   * 이 문서가 실행하는 명령은 선언의 timeout(없으면 10초) 안에 끝나지 않으면 실패로 끝낸다. 표면으로 전달하는 명령은
-   * 호스트가 같은 시간을 적용한다. 코어 명령에서는 handler 실행에만 적용한다. 그 뒤의 배치 표시는 표시 경로의 각
-   * 기다림이 자기 한도로 실패하므로, 이 한도가 그 구체적인 실패를 가로채지 않는다.
+   * A command that this document runs fails when it does not finish within the timeout of its declaration (10 seconds when there is none). For a command forwarded to a surface, the host applies the same time. For a core command, this limit applies only to the execution of the handler. The placement display after it is bounded by each wait of the display path with its own limit, so this limit does not intercept that specific failure.
    */
   function bounded(name, entry, run) {
-    // 기본값: timeout 을 선언하지 않은 명령은 10초 안에 끝난다(docs/spec/exposure.md).
+    // default: a command that declares no timeout finishes within 10 seconds (docs/spec/exposure.md).
     const limit = entry?.declaration.timeout ?? REPLY_TIMEOUT;
     let timer;
     const expired = new Promise((_, reject) => {
       timer = setTimeout(() => reject(new ExposureError(EXPOSURE_ERRORS.failed, `command ${name} did not reply within ${limit}ms`)), limit);
     });
-    // handler 의 동기 예외도 이 Promise 의 거부가 되어야 경쟁이 끝나고 타이머가 해제된다. 아니면 예외가 먼저 호출자에게
-    // 가고, 남은 타이머가 한도 뒤에 아무도 받지 않는 응답 없음 거부를 만든다.
+    // A synchronous exception of the handler must also become a rejection of this Promise so that the race ends and the timer is cleared. Otherwise the exception goes to the caller first, and the remaining timer makes a no-reply rejection after the limit that nobody receives.
     const running = new Promise((resolve) => { resolve(run()); });
     return Promise.race([running, expired]).finally(() => clearTimeout(timer));
   }
@@ -187,13 +184,13 @@ export function createRegistry({ call = null, report = null } = {}) {
   }
 
   async function dispatch(method, params) {
-    // 기본값: 매개변수가 없는 요청은 params 를 생략한다.
+    // default: a request without parameters omits params.
     if (methods.has(method)) return methods.get(method)(params ?? {});
     if (method === "exposure.list") return list();
     const name = params?.name;
     const kind = METHOD_KINDS[method];
     const found = kind && typeof name === "string" ? declared.get(declarationKey(kind, name)) : undefined;
-    // 상태 모듈이 등록한 이름은 표면을 지정하지 않은 요청에 이 문서가 답한다(docs/spec/exposure.md#choosing-a-surface).
+    // For a name that a state module registered, this document answers a request that names no surface (docs/spec/exposure.md#choosing-a-surface).
     const page = found && params.surface === undefined ? pageOf(kind, name) : null;
     if (page) {
       const answering = () => page.entries.answer(method, params, changed);
@@ -219,7 +216,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     const surface = pick(kind, name, requested);
     const result = await forward(surface, method, method === "status.watch" ? { name } : params);
     if (method === "status.watch") {
-      // 표면의 문서는 이름마다 값 하나를 따라가므로 각 감시는 버전 0 부터 받는다.
+      // The document of a surface follows one value per name, so each watch receives from version 0.
       const watch = { surface, requested, name, version: 0, external: true, local: new Set() };
       following.set(key, watch);
       follow(key, name, watch);
@@ -227,7 +224,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     return result;
   }
 
-  /** 선언 형식의 목록. 항목마다 registered 가 붙는다. */
+  /** List in the declaration format. registered is added to each entry. */
   function list() {
     const out = { status: [], commands: [], dom: [] };
     const keyOf = Object.fromEntries(Object.entries(EXPOSE_KINDS).map(([key, kind]) => [kind, key]));
@@ -235,28 +232,28 @@ export function createRegistry({ call = null, report = null } = {}) {
       out[keyOf[kind]].push({
         ...declaration,
         registered: surfaceName(declaration.name)
-          // 기본값: 그 이름을 등록한 표면이 없으면 표면 등록 수는 0 이다.
+          // default: when no surface registered the name, the number of registered surfaces is 0.
           ? (surfaces.get(key)?.size ?? 0) > 0 || Boolean(pageOf(kind, declaration.name)) : core.registered(kind, declaration.name),
       });
     }
     return out;
   }
 
-  /** 이름을 등록한 표면 중 이 문서의 요청이 쓸 표면. wanted 가 등록했으면 그 표면이고, 없으면 null 이다. */
+  /** The surface that a request of this document uses among the surfaces that registered the name: wanted when it registered, otherwise null. */
   function target(kind, name, wanted, exact = false) {
     if (pageOf(kind, name)) return null;
     const owners = surfaces.get(declarationKey(kind, name));
     if (!owners?.size) return null;
     if (wanted && owners.has(wanted)) return wanted;
     if (exact) return null;
-    // 기본값: 선호하는 표면이 등록하지 않았으면 마지막에 등록한 표면이 답한다.
+    // default: when the preferred surface has not registered, the surface registered last answers.
     return options.preferred().find((surface) => owners.has(surface)) ?? [...owners.keys()].at(-1);
   }
 
-  /** 관찰의 실패를 이름과 표면을 붙여 보고한다. */
+  /** Reports the failure of an observation with the name and the surface attached. */
   const observeFailed = (name, surface) => (error) => options.failed(new Error(`${name} on ${surface}: ${error.message}`));
 
-  /** 관찰자의 감시를 끝낸다. 다른 관찰자나 외부 감시가 없으면 표면의 감시도 끝낸다. */
+  /** Ends the watch of an observer. When no other observer or external watch remains, the watch of the surface ends too. */
   function detach(observer) {
     if (observer.stopPage) {
       const stop = observer.stopPage;
@@ -275,7 +272,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     release(watch, observer.name).catch(observeFailed(observer.name, watch.surface));
   }
 
-  /** 관찰자가 따라갈 표면을 다시 정한다. 표면이 바뀌면 감시를 옮긴다. */
+  /** Decides again which surface an observer follows. When the surface changes, the watch moves. */
   function reattach(observer) {
     const pageEntry = pageOf("status", observer.name)?.statuses.get(observer.name);
     if (pageEntry) {
@@ -328,7 +325,7 @@ export function createRegistry({ call = null, report = null } = {}) {
       options = { ...options, ...values };
     },
 
-    /** 선언을 더한다. owner 는 core 또는 플러그인 id 다. */
+    /** Adds declarations. owner is core or a plugin id. */
     declare(owner, exposes) {
       validateExposes(owner, exposes);
       const own = declarationMap(exposes);
@@ -342,7 +339,7 @@ export function createRegistry({ call = null, report = null } = {}) {
       }
     },
 
-    /** 코어 status 를 등록한다. subscribe(fn) 은 해제 함수를 반환한다. */
+    /** Registers a core status. subscribe(fn) returns a function that unsubscribes. */
     status: (name, read, subscribe) => core.status(name, read, subscribe),
     command: (name, run) => core.command(name, async (params) => {
       const result = await bounded(name, coreDeclared.get(declarationKey("command", name)), () => run(params));
@@ -353,34 +350,30 @@ export function createRegistry({ call = null, report = null } = {}) {
       }
       return result;
     }),
-    /** 코어 dom 항목을 등록한다. 요소는 요청 시점에 data-expose 속성으로 찾는다. */
+    /** Registers a core dom entry. The elements are found by the data-expose attribute when requested. */
     dom: (name, provide = byAttribute(name)) => core.dom(name, provide),
 
     /**
-     * 이 문서의 코어 명령 하나를 실행한다. 선언의 params 스키마로 검사한다. 문서의 UI 가
-     * 조작을 이 경로로 수행하므로, 사람의 조작과 외부 요청이 같은 명령을 거친다.
+     * Runs one core command of this document. It is validated by the params schema of the declaration. The UI of the document performs operations through this path, so a human operation and an external request go through the same command.
      */
     run: (name, params = {}, surface) => answer("command.run",
       surface === undefined ? { name, params } : { name, params, surface }),
 
     /**
-     * 표면 status 하나를 이 문서 안에서 따라간다. fn(value, surface) 는 현재 값과 그 뒤의 변경마다
-     * 호출된다. surface 가 그 이름을 등록했으면 그 표면을, 아니면 요청의 기본 선택을 따라가고,
-     * 등록한 표면이 없으면 fn(null, null) 이다. 등록이 바뀌면 표면을 다시 고른다. 해제 함수를 반환한다.
+     * Returns the surface that a request of this document uses for the entry (see target): wanted when it registered the name, otherwise the preferred surface, or null when no surface registered. With exact, only wanted is accepted.
      */
     chosen: (kind, name, wanted, exact = false) => target(kind, name, wanted, exact),
 
     runOwned(name, params, owner) {
       if (pageOf("command", name)) return answer("command.run", { name, params });
       const surface = target("command", name, owner, true);
-      // 기본값: 오류 문장에서 소유자 없음(null)을 none 으로 적는다.
+      // default: the error sentence writes a missing owner (null) as none.
       if (surface === null) return Promise.reject(new ExposureError(EXPOSURE_ERRORS.unregistered, `owner ${owner ?? "none"} has not registered command ${name}`));
       return answer("command.run", { name, params, surface });
     },
 
     /**
-     * 플러그인 owner 의 상태 모듈이 이 문서에 항목을 등록하는 표를 만든다. 플러그인마다 하나이며,
-     * clear() 가 항목을 모두 제거한다(docs/spec/plugins.md#plugin-state).
+     * Creates the table into which the state module of plugin owner registers entries in this document. There is one per plugin, and clear() removes all entries (docs/spec/plugins.md#plugin-state).
      */
     plugin(owner) {
       if (pages.has(owner)) throw new Error(`plugin ${owner} state is already registered`);
@@ -410,11 +403,11 @@ export function createRegistry({ call = null, report = null } = {}) {
       };
     },
 
-    /** 코어 status 하나를 이 문서 안에서 따라간다. fn(value, "core") 이며 해제 함수를 반환한다. */
+    /** Follows one core status inside this document. fn is called as fn(value, "core"), and the function returns an unsubscribe function. */
     observeCore: (name, fn) => core.follow(name, (value) => fn(value, "core")),
 
     observe(name, surface, fn, { exact = false } = {}) {
-      // 기본값: 표면을 지정하지 않은 관찰은 원하는 표면이 null 이다.
+      // default: an observation that names no surface has null as the wanted surface.
       const observer = { name, wanted: surface ?? null, exact, fn, surface: undefined, watch: null, listener: null,
         pageEntry: null, stopPage: null };
       observer.listener = (value, from) => fn(value, from);
@@ -426,18 +419,17 @@ export function createRegistry({ call = null, report = null } = {}) {
       };
     },
 
-    /** 선언된 이름인지. */
+    /** Whether the name is declared. */
     declared: (kind, name) => declared.has(declarationKey(kind, name)),
 
-    /** 요청 이름으로 처리하는 메서드를 등록한다. 진단 메서드가 사용한다. */
+    /** Registers a method that handles a request by its name. Diagnostic methods use it. */
     method(name, fn) {
       if (methods.has(name)) throw new Error(`method ${name} is already registered`);
       methods.set(name, fn);
     },
 
     /**
-     * 표면의 등록 또는 표면의 제거를 반영한다. 선언과 맞지 않는 등록은 반영하지 않고
-     * 예외를 던진다.
+     * Applies the registration or the removal of a surface. A registration that does not match the declaration is not applied, and an exception is thrown.
      */
     registered({ surface, kind, name, closed }) {
       if (closed) {
@@ -454,7 +446,7 @@ export function createRegistry({ call = null, report = null } = {}) {
       }
       const plugin = options.surfacePlugin(surface);
       if (plugin === null) {
-        // 메인 페이지가 다시 읽히면 호스트는 배치를 불러오기 전에 등록을 다시 보낸다.
+        // When the main page is read again, the host sends the registrations again before it loads the layout.
         if (!pending.has(surface)) pending.set(surface, []);
         pending.get(surface).push({ kind, name });
         registrationTrace("pending", surface, { kind, name });
@@ -472,8 +464,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     },
 
     /**
-     * 소유 플러그인을 알게 된 표면의 보류된 등록을 반영한다. 선언이나 플러그인과 맞지 않는
-     * 등록은 반영하지 않고, 모아서 예외로 던진다.
+     * Applies the pending registrations of surfaces whose owner plugin became known. Registrations that do not match the declaration or the plugin are not applied; they are collected and thrown as one exception.
      */
     revisit() {
       const errors = [];
@@ -491,11 +482,11 @@ export function createRegistry({ call = null, report = null } = {}) {
       if (errors.length) throw new Error(errors.join("; "));
     },
 
-    /** 이 항목을 등록한 표면 id. 등록 순서다. */
-    // 기본값: 등록한 표면이 없는 항목의 등록자는 비어 있다.
+    /** Ids of the surfaces that registered this entry, in registration order. */
+    // default: an entry that no surface registered has no registrants.
     registrants: (kind, name) => [...(surfaces.get(declarationKey(kind, name))?.keys() ?? [])],
 
-    /** 표면을 닫을 때 등록·보류·감시를 모두 제거한다. */
+    /** Removes all registrations, pending registrations and watches when a surface is closed. */
     unregisterSurface(surface) {
       registrationTrace("disposed", surface);
       for (const [key, owners] of surfaces) {
@@ -509,14 +500,14 @@ export function createRegistry({ call = null, report = null } = {}) {
       registrationChanged();
     },
 
-    /** 표면이 등록한 항목. `<kind> <name>` 형식이다. */
+    /** Entries that a surface registered, in the form `<kind> <name>`. */
     namesOf: surfaceNames,
 
-    /** 요청 하나에 답한다. 결과는 {result} 또는 {error: {code, message}} 다. */
+    /** Answers one request. The result is {result} or {error: {code, message}}. */
     handle: ({ method, params }) => replyPayload(async () => {
-      // 모든 core·플러그인 명령의 시간을 성능 트레이스에 남긴다(V5-104).
+      // Records the time of every core and plugin command in the performance trace (V5-104).
       const result = await answer(method, params);
-      // 코어와 마운트된 플러그인은 앱 문서를 공유한다. 별도 문서가 지정한 원점은 유지한다.
+      // The core and the mounted plugins share the application document. An origin that a separate document specified is kept.
       if (method === "dom.rect" && result && result.document === undefined) return { ...result, document: { x: 0, y: 0 } };
       return result;
     }),
@@ -534,8 +525,7 @@ export function createRegistry({ call = null, report = null } = {}) {
   };
 }
 
-/** 이 문서의 등록소. 거부된 상태 변경은 page 의 처리되지 않은 rejection 처리기가 애플리케이션 log 와
- * applicationError 에 보고한다. */
+/** The registry of this document. A refused state change is reported to the application log and applicationError by the unhandled rejection handler of the page. */
 export const registry = createRegistry(host
   ? { call: (name, arg) => host.call(name, arg), report: (error) => Promise.reject(error) }
   : {});
@@ -571,7 +561,7 @@ export async function dispatchSurfaceRequest(request) {
   return true;
 }
 
-/** 보류된 표면 등록을 반영한다. 선언과 맞지 않는 등록은 report(줄)로 오류 줄을 남긴다. */
+/** Applies the pending surface registrations. A registration that does not match the declaration leaves an error line through report(line). */
 export function revisitRegistrations(report) {
   if (typeof report !== "function") throw new TypeError("revisitRegistrations requires report(line)");
   try {
@@ -581,25 +571,24 @@ export function revisitRegistrations(report) {
   }
 }
 
-/** 코어 선언 파일(exposure.json)의 내용을 검사해 등록소에 더한다. page 는 첫 화면 전에 JSON module 로 가져온다. */
+/** Validates the content of the core declaration file (exposure.json) and adds it to the registry. The page imports it as a JSON module before the first screen. */
 export function installExposure(document) {
   registry.declare("core", validateExposureFile(document).exposes);
 }
 
 /**
- * 등록소를 호스트에 연결한다. 호스트가 없으면 문서가 아는 값만 받는다.
+ * Connects the registry to the host. Without a host, it receives only the values that the document knows.
  *
- * 등록이 선언과 맞지 않으면 values.report(줄)로 오류 줄을 남긴다. 표면의 호출은 호스트가 이미 받았으므로
- * 그 표면에 실패를 돌려줄 경로가 없다.
+ * When a registration does not match the declaration, values.report(line) leaves an error line. The host has already received the call of the surface, so there is no path that returns the failure to that surface.
  */
 export async function connectExposure({ report, ...values }) {
   if (typeof report !== "function") throw new TypeError("connectExposure requires report(line)");
   registry.configure({
     ...values,
-    // default: 호출자가 실패 hook을 주지 않으면 workbench가 보고를 맡는다.
+    // default: when the caller gives no failure hook, the workbench handles the report.
     failed: values.failed ?? ((error) => {
       if (!host) return false;
-      // default: Error가 아닌 거절은 그 값을 진단 이유로 담는다.
+      // default: a rejection that is not an Error carries its value as the diagnostic reason.
       report(`exposure settled failed: ${String(error?.message ?? error)}`);
       return true;
     }),

@@ -1,11 +1,11 @@
-// 표시를 한 번에 하나씩 실행하고, 그 뒤에는 가장 새 배치 하나만 기다리게 한다.
-// 표시 하나는 화면 한 프레임 이상 걸리므로 포인터 입력이 표시보다 빨리 도착할 수 있다.
-// 기다리는 배치를 모두 차례로 실행하면 화면이 밀린 배치 수만큼 포인터보다 늦는다.
-// 가장 새 배치는 앞선 입력을 모두 담으므로, 기다리던 이전 배치를 대신하고 그 배치의
-// 준비와 그리기는 실행되지 않는다. 대신한 배치는 superseded 로 알린다.
+// Runs presentations one at a time, and after that lets only the newest layout wait.
+// One presentation takes at least one screen frame, so pointer input can arrive faster than presentations.
+// If every waiting layout ran in turn, the screen would lag behind the pointer by the number of queued layouts.
+// The newest layout holds all earlier input, so it replaces the waiting earlier layout, and the
+// preparation and drawing of that layout are not run. The replacing layout is reported as superseded.
 //
-// 실패한 배치는 failed 가 받아 보고하고, run 의 답은 { status: "failed" } 로 이행한다. 그 실패를 받은 요청자는 대기열이므로
-// 배치를 예약하거나 기다린 쪽은 같은 실패를 거절로 다시 받지 않는다(docs/spec/hosts.md#application-log).
+// A failed layout is received and reported by failed, and the reply of run is fulfilled with { status: "failed" }. The requester that received the failure is the queue,
+// so the side that scheduled or awaited the layout does not receive the same failure again as a rejection (docs/spec/hosts.md#application-log).
 export function createLayoutQueue({ failed, superseded }) {
   let active = null;
   let pending = null;
@@ -48,15 +48,15 @@ export function createLayoutQueue({ failed, superseded }) {
       return latest;
     },
     /**
-     * 가장 새 배치가 끝날 때까지 기다리고, 그 배치가 끝까지 실행되었으면 true, 실패했으면 false 를 반환한다. 기다리는
-     * 동안 더 새 배치가 예약되면 그 배치를 다시 기다린다. 대신된 배치는 그리지 않고 끝나므로, 그 끝에서 멈추면 그 배치가
-     * 지우려던 슬롯이 문서에 남아 있다. 실패는 failed 가 이미 보고했다(docs/spec/hosts.md#application-log).
+     * Waits until the newest layout ends, and returns true if that layout ran to the end and false if it failed. If a newer layout is scheduled
+     * during the wait, it waits for that layout again. A superseded layout ends without drawing, so stopping at its end would leave in the document the slot
+     * that layout was going to clear. The failure was already reported by failed (docs/spec/hosts.md#application-log).
      */
     async wait() {
       for (;;) {
         const awaited = latest;
         const outcome = await awaited;
-        // 기본값: 끝까지 실행된 배치의 답은 그 일의 반환값이며 drawPrepared 는 값을 반환하지 않는다.
+        // default: the reply of a layout that ran to the end is the return value of that work, and drawPrepared returns no value.
         if (awaited === latest) return outcome?.status !== "failed";
       }
     },
@@ -64,11 +64,11 @@ export function createLayoutQueue({ failed, superseded }) {
 }
 
 /**
- * 배치 하나를 그린다. 네이티브 준비 응답(prepare)이 트랜잭션의 시작과 적용을 확인한 뒤 DOM 을 그린다(draw). 요청
- * 시작만으로 준비를 확정하면 새 DOM 이 이전 네이티브 영역 아래에 먼저 표시된다. 그리기는 준비 뒤 다음 task 에서
- * 실행한다(frame(work), nextTask). 준비 응답이 이행된 microtask checkpoint 는 ResizeObserver callback 의 것일 수 있고,
- * task 는 관찰 round 밖에서 실행된다(F43). 그린 뒤에는 해당 호스트 표시(presented)까지 기다려, 다음 배치가 DOM 을 먼저
- * 교체하지 못하게 한다. 준비하는 동안이나 그리기를 기다리는 동안 current() 가 epoch 와 달라지면 그리지 않는다.
+ * Draws one layout. After the native preparation reply (prepare) confirms the start and the application of the transaction, it draws the DOM (draw). If the preparation were confirmed
+ * by the start of the request alone, the new DOM would be shown first under the earlier native region. The drawing runs in the next task after the preparation
+ * (frame(work), nextTask). The microtask checkpoint where the preparation reply was fulfilled can belong to a ResizeObserver callback, and
+ * a task runs outside the observation round (F43). After drawing, it waits for the host presentation (presented) so that the next layout cannot
+ * replace the DOM first. If current() differs from epoch while preparing or while waiting to draw, it does not draw.
  */
 export async function drawPrepared({ epoch, current, prepare, draw, frame, presented }) {
   if (epoch !== current()) return;
@@ -85,10 +85,10 @@ export async function drawPrepared({ epoch, current, prepare, draw, frame, prese
 }
 
 /**
- * 다음 task 에서 work 를 실행하고 끝난다. work 가 던지면 그 오류로 실패한다. 준비 응답은 어느 microtask checkpoint 에서든
- * 이행될 수 있고, ResizeObserver callback 의 checkpoint 에서 그리면 관찰 round 가 이미 전달한 요소의 크기가 바뀌어 WebKit 이
- * loop 오류를 낸다(F43). task 는 렌더링 갱신과 그 관찰 round 사이에 실행되지 않는다. animation frame 과 달리 화면 갱신을
- * 기다리지 않으므로, 호스트가 표시를 기다리며 일으키는 렌더링 갱신이 이 그리기를 담는다(F92).
+ * Runs work in the next task and ends. If work throws, it fails with that error. A preparation reply can be fulfilled at any microtask
+ * checkpoint, and drawing at the checkpoint of a ResizeObserver callback changes the size of an element that the observation round already delivered, so WebKit raises a
+ * loop error (F43). A task does not run between a rendering update and its observation round. Unlike an animation frame, it does not wait for a screen update,
+ * so the rendering update that the host causes while it waits for the presentation carries this drawing (F92).
  */
 export function nextTask(work) {
   return new Promise((resolve, reject) => {

@@ -1,14 +1,14 @@
-// 선택 레이어의 내용. 물음 한 줄과 묶음마다 제목(있으면)과 항목을 그린다. 제목은 누름을 받지 않으며 고르는 index 는
-// 항목만 센다(docs/spec/example-model.md#card-fullscreen). 위치와 열기·닫기는 plane.js 가 한다.
+// The content of the picker layer. It draws one question line and, for each group, the title (if any) and the items. A title does not receive presses, and the chosen index counts only
+// items (docs/spec/example-model.md#card-fullscreen). plane.js does the positioning and the opening and closing.
 
 /**
- * el 을 비우고 물음 ask 와 묶음 groups 를 그린 뒤, 고르는 순서의 항목 key 를 반환한다.
+ * Empties el, draws the question ask and the groups groups, and returns the item keys in choosing order.
  *
  *   groups  [{ heading: null | { id, name, depth, map }, items: [{ key, name, mark, svg, viewBox?, active?, notice? }] }]
- *           map 은 묶음 제목 그림의 SVG 내용, depth 는 제목의 들여쓰기 단계다.
- *   mark    (button, index, item) 항목 단추에 고르기 명령을 붙인다.
+ *           map is the SVG content of the group title icon, and depth is the indentation level of the title.
+ *   mark    (button, index, item) attaches the choose command to an item button.
  *
- * 항목 이름과 제목은 `textContent` 로 설정한다. 탭 제목은 사용자 입력이므로 마크업으로 넣으면 레이어 구조를 바꿀 수 있다.
+ * Item names and titles are set with `textContent`. A tab title is user input, so inserting it as markup could change the layer structure.
  */
 export function fillPicker(el, ask, groups, mark) {
   const document = el.ownerDocument;
@@ -40,7 +40,7 @@ export function fillPicker(el, ask, groups, mark) {
         b.dataset.group = heading.id;
         b.style.setProperty("--depth", String(heading.depth));
       }
-      // 기본값: 플러그인 표시는 16 단위 그림이고, 다른 크기의 그림을 넘기는 항목만 viewBox 를 함께 준다.
+      // default: a plugin mark is a 16-unit icon, and only an item that passes an icon of another size also gives a viewBox.
       const box = item.viewBox === undefined ? "0 0 16 16" : item.viewBox;
       b.innerHTML = `<svg data-expose="core.picker.item-icon" viewBox="${box}" aria-hidden="true">${item.svg}</svg>` +
         '<span class="picker__name" data-expose="core.picker.item-name"></span><small></small>';
@@ -54,7 +54,7 @@ export function fillPicker(el, ask, groups, mark) {
   return keys;
 }
 
-/** 그려진 항목의 상태. 묶음이 없는 항목의 group 은 null 이다. */
+/** The state of a drawn item. The group of an item without a group is null. */
 export function pickerItems(el) {
   return [...el.querySelectorAll(".picker__item")].map((b) => ({
     key: b.dataset.key,
@@ -80,7 +80,7 @@ export function pickerColumns(el) {
   };
 }
 
-/** 그려진 묶음 제목의 상태. 제목은 그려진 순서이며 depth 는 들여쓰기 단계다. */
+/** The state of a drawn group title. Titles are in drawing order, and depth is the indentation level. */
 export function pickerGroups(el) {
   return [...el.querySelectorAll(".picker__group")].map((g) => ({
     id: g.dataset.group,

@@ -1,23 +1,23 @@
-// 라이브러리의 프로젝트 미리보기. 활성 스페이스의 저장 배치를 카드 격자로 그린다.
+// The project preview of the library. It draws the stored layout of the active space as a card grid.
 import { hasPlugin, isPlace, plugin } from "./registry.js";
 import { checkStoredLayout } from "./stored-layout.js";
 import { showError } from "./shown-errors.js";
 
-/** className 을 가진 요소를 만든다. */
+/** Creates an element that has className. */
 function part(tag, className) {
   const el = document.createElement(tag);
   el.className = className;
   return el;
 }
 
-// 미리보기의 창 사이드바 열은 내용 카드와 구분한다.
+// The window sidebar column of the preview is distinguished from content cards.
 const aside=(id)=>isPlace(id);
 
 export function preview(project) {
   const el=part('div','library-preview'); el.setAttribute('aria-hidden','true');
   const layout=project.spaces.find(s=>s.id===project.activeSpaceId)?.layout;
   if (!layout) return el;
-  // 여는 것과 같은 검사로 열 수 없는 배치는 그리지 않고 그 이유를 보인다.
+  // A layout that cannot be opened by the same check that opens it is not drawn, and the reason is shown.
   try {
     checkStoredLayout(layout);
   } catch (error) {
@@ -29,7 +29,7 @@ export function preview(project) {
     return el;
   }
   const {cards,xs,ys}=layout.state;
-  // 분할 위치는 격자 인덱스로 유지하고, 표시 비율은 미리보기에서 정한다.
+  // The split position is kept as a grid index, and the display ratio is decided in the preview.
   el.style.gridTemplateColumns=xs.slice(1).map((_,column)=>
     cards.some(c=>!aside(c.id)&&c.c0<=column&&column<c.c1)?'minmax(0,1fr)':'minmax(0,.22fr)').join(' ');
   el.style.gridTemplateRows=`repeat(${ys.length-1},minmax(0,1fr))`;
@@ -37,12 +37,12 @@ export function preview(project) {
     const pane=part('div','library-preview__pane');
     pane.dataset.cardId=card.id;
     pane.style.gridArea=`${card.r0+1} / ${card.c0+1} / ${card.r1+1} / ${card.c1+1}`;
-    // 기본값: 자리 카드는 data 가 null 이므로 탭이 없다.
+    // default: a place card has data null, so it has no tab.
     const tabs=card.data?.tabs ?? [];
-    // 검사를 통과한 내용 카드에는 등록된 플러그인의 활성 탭이 있다. 자리 카드에는 탭이 없다.
+    // A content card that passed the check has the active tab of a registered plugin. A place card has no tab.
     const active=tabs.find(t=>t.id===card.data?.activeId);
     pane.dataset.plugin=aside(card.id)?'sidebar':active.plugin;
-    // 불러오지 않은 플러그인의 탭은 표시 없이 placeholder 자리로 그린다(docs/spec/plugins.md).
+    // A tab of a plugin that is not loaded is drawn as a placeholder slot without a display (docs/spec/plugins.md).
     if(active&&!hasPlugin(active.plugin)) pane.dataset.placeholder='true';
     else if(active) {
       const {ink}=plugin(active.plugin);

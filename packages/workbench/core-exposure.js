@@ -1,10 +1,10 @@
-// 코어의 공개 항목. exposure.json 이 선언한 status, command, dom 을 등록소에 등록한다.
+// Exposed entries of the core. Registers the status, command and dom entries that exposure.json declares in the registry.
 //
-// 값은 모듈이 가진 상태와 문서의 요소에서 읽는다. 임의 코드를 실행하는 항목은 없다.
+// Values are read from the state that modules hold and from the elements of the document. No entry runs arbitrary code.
 //
-// status 의 변경은 coreChanged() 호출로 알린다. 문서가 판의 렌더, 프로젝트와 설정의
-// 변경, 모달과 라이브러리의 그리기 뒤에 호출하고, 등록소는 감시 중인 값 중 달라진
-// 것만 호스트에 보낸다.
+// A change of a status is announced by calling coreChanged(). The document calls it after the render of the
+// plane, after changes of projects and settings, and after the drawing of modals and the library; the
+// registry sends only the watched values that changed to the host.
 import { contributionsState, onContributionsChange } from "./contributions.js";
 import { checkOpenPath } from "./file-open.js";
 import { registry, connectExposure, revisitRegistrations, whenRepliesSent } from "./exposure.js";
@@ -41,12 +41,12 @@ import { foldSection, onSectionsChange, selectSection, sidebarsState } from "./s
 import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 
-/* 감시 중인 코어 status 의 수신자. */
+/* Receivers of the watched core statuses. */
 const watchers = new Set();
 let scheduled = false;
 
 /**
- * 코어 상태가 바뀌었을 수 있음을 알린다. 같은 작업 안의 여러 호출은 한 번으로 묶는다.
+ * Announces that the core state may have changed. Several calls within the same task are merged into one.
  */
 export function coreChanged() {
   revisitRegistrations(report);
@@ -58,18 +58,17 @@ export function coreChanged() {
   });
 }
 
-/* 마지막으로 창에 놓인 파일과 그 처리 결과. docs/spec/native-surfaces.md 의 core.drop 이다. */
+/* The file last dropped on the window and the result of its handling: core.drop of docs/spec/native-surfaces.md. */
 let lastDrop = null;
 
 /**
- * 창에 놓인 파일을 그 점의 DOM 요소가 속한 표면에 넘긴다. 네이티브 뷰는 DOM 위에 놓였으므로 표면은 DOM 으로
- * 찾고, 그 표면의 플러그인이 선언한 놓기 명령을 그 표면에서 실행한다.
+ * Passes a file dropped on the window to the surface that owns the DOM element at that point. A native view is placed over the DOM, so the surface is found through the DOM, and the drop command that the plugin of that surface declared runs on that surface.
  */
 async function dropFiles(payload) {
   const record = { urls: null, x: null, y: null, surface: null, command: null, error: null };
   log(`drop: received ${payload}`);
   try {
-    // 호스트는 네이티브 놓기 뷰가 만든 JSON 문자열을 그대로 보낸다.
+    // The host sends the JSON string that the native drop view made as it is.
     const { urls, x, y } = JSON.parse(payload);
     Object.assign(record, { urls, x, y });
     if (!Array.isArray(urls) || urls.length === 0 || urls.some((url) => typeof url !== "string") ||
@@ -97,7 +96,7 @@ const applyPluginChange = createPluginApply({
   settle: settleModifiedTabs, flush: projects.flush, reload: () => whenRepliesSent().then(reloadPage),
 });
 
-/** core.plugins.<action> 명령의 처리기. plugin 은 비어 있지 않은 문자열이다(docs/spec/installation.md 의 Plugin screen). */
+/** Handler of the core.plugins.<action> commands. plugin is a non-empty string (Plugin screen of docs/spec/installation.md). */
 function pluginCommand(action) {
   return async ({ plugin }) => {
     if (typeof plugin !== "string" || plugin === "") {
@@ -107,7 +106,7 @@ function pluginCommand(action) {
   };
 }
 
-/** 코어 status 하나를 등록한다. 값은 coreChanged 가 호출될 때 다시 읽는다. */
+/** Registers one core status. The value is read again when coreChanged is called. */
 function status(name, read) {
   registry.status(name, read, (fn) => {
     const run = () => fn(read());
@@ -118,7 +117,7 @@ function status(name, read) {
 
 let verified = null;
 
-/** 마지막 검증 결과를 기록한다. */
+/** Records the last verification result. */
 export function setVerify(rows) {
   verified = { failed: rows.filter((row) => !row.ok).length, rows };
   coreChanged();
@@ -131,9 +130,9 @@ const planeOrigin = () => {
 
 const shift = (rect, origin) => ({ x: rect.x + origin.x, y: rect.y + origin.y, w: rect.w, h: rect.h });
 
-/** 활성 공간의 탭과 저장된 공간의 탭에서 표면의 플러그인을 찾는다. */
+/** Finds the plugin of a surface among the tabs of the active space and the tabs of the stored spaces. */
 function surfacePlugin(surface) {
-  // 기본값: 판을 만들기 전에는 카드가 없다.
+  // default: there is no card before the plane is created.
   for (const card of currentGrid()?.cards ?? []) {
     const tab = tabsOf(card).find((t) => t.id === surface);
     if (tab) return tab.plugin;
@@ -141,7 +140,7 @@ function surfacePlugin(surface) {
   for (const project of projects.local()) {
     for (const space of project.spaces) {
       for (const card of space.layout.state.cards) {
-        // 기본값: 자리 카드는 data 가 null 이므로 탭이 없다.
+        // default: a seat card has null data, so it has no tabs.
         const tab = (card.data?.tabs ?? []).find((t) => t.id === surface);
         if (tab) return tab.plugin;
       }
@@ -150,12 +149,12 @@ function surfacePlugin(surface) {
   return null;
 }
 
-/** 요청을 받을 표면의 순서. 포커스된 카드의 탭, 그 다음 보이는 표면이다. */
+/** Order of the surfaces that receive a request: the tab of the focused card, then the visible surfaces. */
 function preferred() {
   const grid = currentGrid();
   const card = grid && focused() ? grid.card(focused()) : null;
   const first = card ? activeTab(card)?.id : null;
-  // 기본값: 아직 합성을 보고하지 않은 창에는 보이는 표면이 없다.
+  // default: a window that has not reported a composition yet has no visible surfaces.
   const visible = (latest()?.surfaces ?? []).filter((s) => s.visible).map((s) => s.id);
   return [first, ...visible].filter(Boolean);
 }
@@ -175,12 +174,12 @@ function gridState() {
       fullscreen: card.id === fullscreen,
       id: card.id, x: rect.x, y: rect.y, w: rect.w, h: rect.h,
       c0: card.c0, c1: card.c1, r0: card.r0, r1: card.r1,
-      // 기본값: px 폭을 정하지 않은 카드는 width 가 null 이다.
+      // default: a card without a fixed px width has null width.
       fixed: Boolean(card.fixed), width: card.width ?? null, focused: card.id === focused(),
       pane: el.querySelector(".chrome__acts") ? pane++ : null,
       tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title, label: tabLabel(id), notice: tabNotice(id), footer: tabFooter(id),
         modified: tabModified(id), error: tabError(id) })),
-      // 내용 발이 보이는 글(docs/spec/example-model.md). 기본값: 아직 그리지 않은 카드에는 발의 글 요소가 없으므로 빈 글이다.
+      // Text that the content footer shows (docs/spec/example-model.md). default: a card that is not drawn yet has no footer text element, so the text is empty.
       status: el.querySelector(":scope > .status .status__text")?.textContent ?? "",
       active: tabs.length ? activeTab(card).id : null,
       acts: cardActs(card.id),
@@ -196,7 +195,7 @@ function gridState() {
 }
 
 function surfacesState() {
-  // 불러오지 않은 플러그인의 탭은 표면 대신 자리 표시가 보이며, placeholder 에 그 이유를 보고한다(docs/spec/plugins.md).
+  // The tab of a plugin that is not loaded shows a placeholder instead of a surface, and the placeholder reports the reason (docs/spec/plugins.md).
   const placeholders = [...document.querySelectorAll("[data-plugin-placeholder]")].map((el) => ({
     surface: el.dataset.surfaceId, plugin: el.dataset.plugin, visible: true, placeholder: el.dataset.pluginPlaceholder,
   }));
@@ -212,8 +211,7 @@ function surfacesState() {
 
 const withOpen = (project) => ({ ...project, open: projects.isOpen(project.id) });
 
-/** 키보드 초점이 있는 요소의 공개 이름과 순서. 공개 이름이 없으면 null 이다. */
-/** 공개 이름의 요소에 키보드 초점을 준다. */
+/** Gives keyboard focus to the element of a dom name. */
 function focusElement(name, index = 0) {
   if (!registry.list().dom.some((entry) => entry.name === name)) throw new Error(`unknown dom ${name}`);
   const el = document.querySelectorAll(`[data-expose="${name}"]`)[index];
@@ -221,10 +219,10 @@ function focusElement(name, index = 0) {
   el.focus();
 }
 
-/** 설정 하나를 입력 값으로 바꾼다. 컨트롤은 문자열을 주므로 현재 값의 타입으로 변환한다. */
+/** Changes one setting to the input value. A control gives a string, so it is converted to the type of the current value. */
 function changeSetting(key, input, scope) {
   if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
-  // 기본값: scope 는 선택 매개변수이며 생략하면 전역 범위다(exposure.json 의 core.settings.change).
+  // default: scope is an optional parameter, and when it is omitted the global scope is used (core.settings.change in exposure.json).
   const now = scopedValue(key, scope ?? "common");
   const next = typeof now === "boolean" ? input === true || input === "true"
     : typeof now === "number" ? Number(input) : String(input);
@@ -238,13 +236,12 @@ function need(project, id) {
 }
 
 /**
- * 코어 항목을 등록하고 등록소를 호스트에 연결한다.
+ * Registers the core entries and connects the registry to the host.
  *
- *   library  createLibrary 의 반환값
+ *   library  return value of createLibrary
  */
 /**
- * drawn 은 판이 예약된 그리기를 모두 마치면 이행되는 promise 를 반환한다. 코어 명령은 실행 뒤 그
- * 그리기를 기다린 다음 답한다. 명령이 배치를 바꾸면 답을 받은 쪽은 이미 그려진 배치를 읽는다.
+ * drawn returns a promise that is fulfilled when the plane has finished all scheduled drawing. A core command waits for that drawing after it ran and then replies. When a command changes the layout, the receiver of the reply reads the layout that is already drawn.
  */
 export async function installCoreExposure({ library, renames, chrome, drawn }) {
   status("core.window.document", () => ({
@@ -262,10 +259,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
     modal: settingsModalState().open ? "settings" : debugState().open ? "debug" : pickerState().open ? "picker" : null,
   }));
   status("core.page.audit", () => ({ unbound: audit(document.body) }));
-  // WebKit 이 문서를 숨기면 animation frame 이 멈추므로 표시 상태의 변화를 알린다.
+  // WebKit stops animation frames when it hides the document, so a change of the visibility state is announced.
   document.addEventListener("visibilitychange", coreChanged);
   onBinding(coreChanged);
-  // 기본값: 오류를 보이지 않는 문서의 core.page.error 는 null 이다(exposure.json).
+  // default: core.page.error of a document that shows no error is null (exposure.json).
   status("core.page.error", () => document.getElementById("applicationError")?.textContent ?? null);
   status("core.projects", () => projects.all().map(withOpen));
   status("core.project", () => {
@@ -307,9 +304,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   status("core.rename", renames.state);
   status("core.focus", () => focusState(document));
   status("core.pointer", trackPointer(document, coreChanged));
-  // 문서 포커스 전이 관측(V5-114). 터미널 영역은 클릭 투명이라 누르면 문서가 포커스를 되찾고, activeElement 로
-  // 남아 있던 주소창이 그 순간 포커스를 받아 보일 수 있다. 전이마다 성능 트레이스와 진단 로그에 한 줄을 남기고
-  // core.focus 를 알린다. 표면의 요소는 shadow root 안에 있으므로 사건의 실제 대상에서 이름을 읽는다.
+  // Observation of document focus transitions (V5-114). The terminal region is click-transparent, so a press makes the document take focus back, and the address bar that remained as activeElement can receive focus and become visible at that moment. Every transition leaves one line in the performance trace and the diagnostic log and announces core.focus. The elements of a surface are inside a shadow root, so the name is read from the actual target of the event.
   document.addEventListener("focusin", (event) => {
     trace("focus", { phase: "in", element: focusName(event) });
     log(`focus in ${focusName(event)}`);
@@ -337,10 +332,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
     await changeSetting(key, input, scope);
   });
   registry.command("core.settings.theme", async ({ name, mode, scope }) => {
-    // 기본값: mode 를 생략하면 현재 모드, scope 를 생략하면 전역 범위다(exposure.json 의 core.settings.theme).
+    // default: when mode is omitted, the current mode is used, and when scope is omitted, the global scope is used (core.settings.theme in exposure.json).
     await applyTheme(name, mode ?? scopedValue("mode", scope ?? "common"), scope);
   });
-  // 사이드바 선택과 세트 변경의 거부는 잘못된 요청 인자다(docs/spec/settings.md).
+  // A refusal of a sidebar selection or a set change is an invalid request argument (docs/spec/settings.md).
   const invalid = (run) => async (params) => {
     try {
       return await run(params);
@@ -388,14 +383,14 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.debug.timeline.follow", ({ on }) => followDebugTimeline(on));
   registry.command("core.debug.timeline.select", ({ row, selected }) => { selectDebugRow(row, selected); });
   registry.command("core.debug.timeline.save", () => saveDebugRows());
-  // 프로젝트 목록은 라이브러리의 프로젝트 페이지를 보인다.
+  // The project list shows the projects page of the library.
   registry.command("core.projects.browse", async () => {
     await projects.browse();
     library.actions.page("projects");
   });
   registry.command("core.projects.flush", async () => { await projects.flush(); });
   registry.command("core.project.open", ({ root, color = "#ffb36b" }) => {
-    // 창 크기는 아래 등록된 resize 마커가, 프로젝트 열기는 여기가 담당한다(V5-104).
+    // The resize marker registered below covers the window size, and this command covers opening a project (V5-104).
     trace("action", { kind: "project.open", root });
     return projects.open({ root, color, layout: fresh() });
   });
@@ -455,7 +450,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
     await pluginOperations.useRegistry(index);
     await appUpdate.refresh();
   });
-  // 플러그인 관리는 설정 창을 닫고 라이브러리의 플러그인 페이지를 보인다.
+  // Plugin management closes the settings window and shows the plugins page of the library.
   registry.command("core.plugins.browse", async () => {
     closeSettings();
     if (!projects.inLibrary()) await projects.browse();
@@ -528,7 +523,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
     return { position: moved };
   });
 
-  // 배치를 유지하고 모든 카드에 공정한 몫을 준다(packages/soksak/docs/layout.md#balancing).
+  // Keeps the layout and gives every card a fair share (packages/soksak/docs/layout.md#balancing).
   registry.command("core.layout.balance", () => {
     const grid = currentGrid();
     if (!grid) throw new Error("the window shows no layout");
@@ -550,7 +545,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   await connectExposure({ surfacePlugin, preferred, registrationChanged: coreChanged, settled: drawn, report });
 }
 
-// 창 크기 변화의 행위 마커(V5-104). 로그의 닻 — 무엇을 했을 때 무엇이 일어났나.
+// Action marker for window size changes (V5-104). It marks the log so that an event can be matched to the action that preceded it.
 addEventListener("resize", () => {
   trace("action", { kind: "resize", width: innerWidth, height: innerHeight });
 });

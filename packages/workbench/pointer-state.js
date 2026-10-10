@@ -1,10 +1,10 @@
-// 메인 문서가 받은 마지막 pointer 순서. 누름과 뗌 사이에 누른 요소가 교체되면 브라우저는 click 을 만들지 않으므로,
-// 사라진 click 을 가릴 수 있도록 누름, 뗌, click 의 대상 이름과 뗄 때 누른 요소가 문서에 남아 있었는지 기록한다.
+// The last pointer sequence that the main document received. If the pressed element is replaced between a press and a release, the browser creates no click,
+// so to identify a lost click it records the target names of the press, the release, and the click, and whether the pressed element was still in the document at the release.
 import { focusName } from "./focus-state.js";
 
 /**
- * document 의 pointerdown, pointerup, click 을 기록하고 바뀔 때마다 changed 를 부른다. 반환값은 현재 기록을 돌려주는
- * 함수이며, 기록은 { sequence, down, up, pressedConnected, click } 이다. 누름마다 sequence 가 늘고 나머지가 새로 시작한다.
+ * Records pointerdown, pointerup, and click of document and calls changed on each change. The return value is a function that returns the current record,
+ * which is { sequence, down, up, pressedConnected, click }. sequence grows on each press and the other fields start anew.
  */
 export function trackPointer(document, changed) {
   let sequence = 0;

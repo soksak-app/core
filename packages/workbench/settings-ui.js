@@ -1,18 +1,18 @@
-// 설정 모달.
+// The settings modal.
 //
-// 560px 카드. 헤더에 제목과 닫기 버튼, 왼쪽에 절 목록, 오른쪽에 「이름 124px +
-// 컨트롤」 행이 들어간다. 행은 묶음으로 나뉘고 묶음마다 이름과 설명 한 줄을 갖는다.
+// A 560px card. The header holds the title and the close button, the left holds the list of sections, and the right holds rows of the form "name 124px +
+// control". Rows are divided into groups, and each group has a name and a one-line description.
 //
-// 설정의 형식마다 컨트롤은 하나다(docs/spec/settings.md 의 Controls). 켜고 끄는 값은
-// 스위치, 나열된 값 중 하나는 선택 상자, 테마는 견본 격자, 경계가 있는 정수는 슬라이더,
-// 문자열과 주소는 글자 입력, 세트 참조는 선택 상자다. 기본 select 와 checkbox 는 테마의
-// 색을 따르지 않으므로 컨트롤은 app.css 의 모양을 쓴다.
+// Each setting format has one control (Controls in docs/spec/settings.md). An on/off value is a
+// switch, one of listed values is a select box, a theme is a swatch grid, a bounded integer is a slider,
+// a string and an address are a text input, and a set reference is a select box. The default select and checkbox do not follow the colors of the theme,
+// so the controls use the appearance of app.css.
 //
-// [data-native-modal] 요소다. DOM 은 네이티브 표면 위에 그릴 수 없으므로 호스트가
-// 이 요소를 별도 뷰에 렌더링한다. 그 뷰는 사본이므로 여기서 등록한 리스너가 동작하지
-// 않는다. 모든 컨트롤에 data-key 또는 data-set 을 붙이고 응답을 answer() 하나로
-// 받는다. 각 컨트롤은 data-command 로 실행할 코어 명령을 가리키고, answer() 는 그
-// 명령을 실행한다.
+// This is a [data-native-modal] element. A DOM cannot be drawn over a native surface, so the host
+// renders this element in a separate view. That view is a copy, so a listener registered here does
+// not work. Every control gets data-key or data-set, and the responses are received by the single function answer(). Each control
+// points with data-command to the core command to run, and answer() runs that
+// command.
 import { standIn } from "./compositor.js";
 import { native, overlay } from "./host.js";
 import { active } from "./projects.js";
@@ -28,28 +28,28 @@ import {
   settingDefinitions,
 } from "./settings.js";
 
-/* 열려 있는 동안에만 존재한다. 숨겨 두면 표시 여부를 CSS 가 결정하게 되고,
-   [hidden] 은 display 를 정하는 규칙을 이기지 못한다. */
+/* It exists only while open. If it were kept hidden, CSS would decide whether it is shown, and
+   [hidden] cannot override a rule that sets display. */
 let scrim = null;
 let card = null;
 let nav = null;
 let body = null;
 
-/** 현재 절. 닫아도 유지하고 다시 열 때 같은 절을 표시한다. */
+/** The current section. It is kept after closing, and the same section is shown when the modal opens again. */
 let here = "general";
 let scope = "common";
-/** 플러그인 절에서 페이지를 연 플러그인 id. null 이면 목록을 보인다. */
+/** The id of the plugin whose page is open in the plugin section. When it is null, the list is shown. */
 let chosen = null;
-/** 플러그인 목록의 검색어. */
+/** The search term of the plugin list. */
 let query = "";
-/** 사이드바 절에서 편집 중인 세트 id. 없으면 null. */
+/** The id of the set being edited in the sidebar section. null when there is none. */
 let editing = null;
 const value = (key) => scopedValue(key, scope);
 const themeName = () => value("theme");
 const modeName = () => value("mode");
 const gapSetting = () => value("gap");
 
-/** 「이름 + 컨트롤」 한 행을 만든다. */
+/** Creates one row of the form "name + control". */
 function row(label, control) {
   const el = document.createElement("label");
   el.className = "set-row";
@@ -58,7 +58,7 @@ function row(label, control) {
   name.textContent = label;
   el.append(name, control);
   const field = control.matches("[data-set]") ? control : control.querySelector("[data-set]");
-  // 기본값: 설정 컨트롤이 없는 행(버튼만 있는 행)은 키가 없다.
+  // default: a row without a setting control (a row with only a button) has no key.
   const key = field?.dataset.set;
   if (scope === "project" && key && overridden(key)) {
     const resetButton = press(`reset:${key}`, "전역값 사용");
@@ -69,9 +69,9 @@ function row(label, control) {
 }
 
 /**
- * 행 묶음 하나를 만든다. 이름, 설명 한 줄, 그리고 행들.
+ * Creates one group of rows: a name, a one-line description, and the rows.
  *
- * 행을 나란히 두기만 하면 무엇이 배치를 바꾸고 무엇이 표시만 바꾸는지 보이지 않는다.
+ * If rows were only placed side by side, it would not show which of them change the layout and which change only the display.
  */
 function group(name, text, children) {
   const el = document.createElement("section");
@@ -86,22 +86,22 @@ function group(name, text, children) {
   return el;
 }
 
-/* 현재 값을 프로퍼티가 아니라 속성으로 설정한다.
-   호스트에 전송하는 것은 innerHTML 이고 직렬화되는 것은 속성뿐이다.
-   checked/selected/value 를 프로퍼티로만 설정하면 사본이 초기값으로 렌더링된다. */
+/* Sets the current value as an attribute, not as a property.
+   What is sent to the host is innerHTML, and only attributes are serialized.
+   If checked/selected/value were set only as properties, the copy would render with the initial values. */
 
 /**
- * 값을 입력하는 컨트롤의 명령. 설정 이름이면 core.settings.change, 사이드바 연결
- * (link:<자리>:<플러그인>)이면 core.settings.link 다.
+ * The command of a control that inputs a value. For a setting name it is core.settings.change, and for a sidebar link
+ * (link:<position>:<plugin>) it is core.settings.link.
  */
 function valueCommand(el, key) {
   const [kind, place, plugin] = key.split(":");
-  // 기본값: link:left: 처럼 플러그인 부분이 빈 키는 일반 선택이므로 plugin 은 null 이다(docs/spec/settings.md).
+  // default: a key such as link:left: whose plugin part is empty is a general choice, so plugin is null (docs/spec/settings.md).
   if (kind === "link") mark(el, "core.settings.link", { place, plugin: plugin || null, scope }, "set");
   else mark(el, "core.settings.change", { key, scope });
 }
 
-/** 선택 상자를 만든다. 명령은 호출자가 연결한다. 현재 값이 선택지에 없으면 예외를 던진다. */
+/** Creates a select box. The caller connects the command. Throws when the current value is not among the choices. */
 function selectBox(key, options, now) {
   if (!options.some(([value]) => value === now)) throw new Error(`unknown settings choice ${String(now)} for ${key}`);
   const wrap = document.createElement("span");
@@ -120,14 +120,14 @@ function selectBox(key, options, now) {
   return wrap;
 }
 
-/** 설정의 선택 상자. 선택한 값이 key 와 함께 core.settings.change 나 core.settings.link 로 간다. */
+/** The select box of a setting. The selected value goes with key to core.settings.change or core.settings.link. */
 function choose(key, options, now) {
   const wrap = selectBox(key, options, now);
   valueCommand(wrap.firstChild, key);
   return wrap;
 }
 
-/** 설정의 선택지에 이름을 붙인다. 선택지와 순서는 settings.js 의 CHOICES 가 정한다. */
+/** Gives names to the choices of a setting. The choices and their order are decided by CHOICES in settings.js. */
 function named(key, labels) {
   return CHOICES[key].map((choice) => {
     if (!Object.hasOwn(labels, choice)) throw new Error(`settings choice ${choice} of ${key} has no label`);
@@ -136,8 +136,8 @@ function named(key, labels) {
 }
 
 /**
- * 범위 탭. 설정이 아니라 보이는 범위를 고르는 버튼을 한 줄에 늘어놓는다. 버튼이므로 select 와 달리 change 가
- * 아니라 click 으로 도착하고, key 에 값을 함께 실어 보낸다.
+ * The scope tabs. They place buttons that choose the visible scope, not a setting, in one line. They are buttons, so unlike a select they arrive as a click, not as a
+ * change, and they send the value together in key.
  */
 function scopeTabs(options, now) {
   const el = document.createElement("span");
@@ -155,7 +155,7 @@ function scopeTabs(options, now) {
   return el;
 }
 
-/** 켜고 끄는 값. */
+/** An on/off value. */
 function toggle(key, now) {
   const el = document.createElement("input");
   el.type = "checkbox";
@@ -167,7 +167,7 @@ function toggle(key, now) {
   return el;
 }
 
-/** range 입력과 값 표시를 만든다. */
+/** Creates a range input and a value display. */
 function slide(key, min, max, now, unit) {
   const wrap = document.createElement("span");
   wrap.className = "set-slide";
@@ -185,7 +185,7 @@ function slide(key, min, max, now, unit) {
   return wrap;
 }
 
-/** 한 줄 문자열 입력. 값은 change 로 도착한다. */
+/** A one-line string input. The value arrives as change. */
 function text(key, maxLength, now) {
   const el = document.createElement("input");
   el.type = "text";
@@ -198,7 +198,7 @@ function text(key, maxLength, now) {
   return el;
 }
 
-/** 버튼을 만든다. */
+/** Creates a button. */
 function press(key, label) {
   const el = document.createElement("button");
   el.className = "ui-button";
@@ -211,10 +211,10 @@ function press(key, label) {
 }
 
 /**
- * 테마 견본 하나를 만든다.
+ * Creates one theme swatch.
  *
- * 바탕, 카드, 테두리, 레일, 포커스 다섯 값을 한 상자에 그린다. 두 칸만 칠하면 테마
- * 사이의 차이가 보이지 않는다. 모서리도 그 테마의 값으로 그린다.
+ * It draws five values in one box: background, card, border, rail and focus. If only two cells were painted, the differences between
+ * themes would not show. The corners are also drawn with the value of that theme.
  */
 function swatch(theme) {
   const el = document.createElement("button");
@@ -226,9 +226,9 @@ function swatch(theme) {
   el.dataset.on = String(theme.name === themeName());
   const c = theme[modeName()];
   const gap = parseFloat(theme.shape.gap);
-  // 견본은 42px 이므로 실제 값을 그대로 쓰면 통로가 상자를 채운다. 절반으로 줄이되
-  // 통로가 0 인 테마는 1px 을 남기고 그 자리를 경계선 색으로 칠한다. 그 1px 이 두
-  // 카드가 공유하는 선이다.
+  // The swatch is 42px, so using the actual value as it is would let the gap fill the box. The gap is halved, but
+  // a theme with gap 0 keeps 1px and paints it with the boundary line color. That 1px is the line that the two
+  // cards share.
   const slit = gap === 0 ? 1 : Math.max(2, Math.round(gap / 2));
   const between = gap === 0 ? c.rule : c.bg;
   const r = Math.min(parseFloat(theme.shape.r) / 2, 5);
@@ -294,7 +294,7 @@ function drawGeneral() {
   ]));
 }
 
-/** 버튼 하나를 만든다. key 로 응답을 찾고 name 으로 공개하며 명령을 가리킨다. */
+/** Creates a button. It finds the response by key, exposes it by name, and points to a command. */
 function button(key, name, label, command, params, on = null) {
   const el = document.createElement("button");
   el.className = "ui-button";
@@ -307,19 +307,19 @@ function button(key, name, label, command, params, on = null) {
   return el;
 }
 
-/** 세트 선택 상자의 세트 항목. 값은 세트 id 다. */
-// 기본값: 섹션이 없는 세트는 섹션 없음으로 보인다.
+/** The set entries of the set select box. The value is the set id. */
+// default: a set without sections is shown as having no section.
 const setItems = () => value("sets").map((s) => [s.id, `${s.title} — ${sectionNames(s.sections).join(" · ") || "섹션 없음"}`]);
-/** 일반 선택의 항목: 사용 안 함과 모든 세트. */
+/** The entries of a general choice: not used and every set. */
 const generalOptions = () => [["off", "사용 안 함"], ...setItems()];
-/** 선택 상자에 보일 현재 선택. 세트 id 또는 off 다. */
+/** The current choice to show in the select box: a set id or off. */
 function choiceOf(place, plugin) {
   const found = value("links").find((l) => l.place === place && l.plugin === plugin);
   if (!found) return "off";
   return found.set;
 }
 
-/** 플러그인 설정 형식의 컨트롤(docs/spec/settings.md 의 Controls). 형식마다 하나다. */
+/** The controls of the plugin setting formats (Controls in docs/spec/settings.md), one per format. */
 const DECLARED_CONTROLS = {
   enum: (key, definition, now) => choose(key, definition.values.map((item) => [item, item]), now),
   integer: (key, definition, now) => slide(key, definition.minimum, definition.maximum, now, ""),
@@ -327,14 +327,14 @@ const DECLARED_CONTROLS = {
   address: (key, definition, now) => text(key, 2048, now),
 };
 
-/** 설정 한 행. 선언된 형식의 컨트롤이다. */
+/** One setting row. It is the control of the declared format. */
 function declaredRow(key, definition) {
   if (!Object.hasOwn(DECLARED_CONTROLS, definition.type)) throw new Error(`setting ${key} has no control for type ${definition.type}`);
   const control = DECLARED_CONTROLS[definition.type](key, definition, value(key));
   const el = row(definition.label, control);
   el.dataset.row = key;
   if (!definition.description) return [el];
-  // 설명은 행 바로 아래 한 줄이다. core.settings-modal 의 rows 가 행과 함께 보고한다.
+  // The description is one line right below the row. The rows of core.settings-modal report it together with the row.
   const note = document.createElement("p");
   note.className = "set-caption";
   note.dataset.describes = key;
@@ -342,13 +342,13 @@ function declaredRow(key, definition) {
   return [el, note];
 }
 
-/** 세트 한 줄의 설명. 제목, 배치, 섹션 이름. */
-// 기본값: 섹션이 없는 세트는 섹션 없음으로 보인다.
+/** The description of one set line: title, layout and section names. */
+// default: a set without sections is shown as having no section.
 const setLine = (s) => `${s.title} · ${s.layout === "tabs" ? "탭" : "목록"} · ${sectionNames(s.sections).join(", ") || "섹션 없음"}`;
 
-/** 플러그인 목록. 플러그인 관리 단추, 검색 칸, 검색어에 맞는 불러온 플러그인의 행이다. 행은 이름만 보인다. */
+/** The plugin list: the plugin management button, the search field, and the rows of the loaded plugins that match the search term. A row shows only the name. */
 function drawPluginList() {
-  // 설치, 제거, 설명은 라이브러리의 플러그인 페이지가 보인다(docs/spec/installation.md 의 Plugin screen).
+  // The plugin page of the library shows installation, removal and the description (Plugin screen in docs/spec/installation.md).
   const manage = button("plugins:manage", "core.settings-modal.manage", "플러그인 관리", "core.plugins.browse", {});
   const search = document.createElement("input");
   search.type = "search";
@@ -375,7 +375,7 @@ function drawPluginList() {
     [row("", manage), row("찾기", search), list]));
 }
 
-/** 불러온 플러그인 한 개의 설정 페이지. 목록으로 돌아가는 버튼, 설정, 섹션, 사이드바 선택이다. */
+/** The settings page of one loaded plugin: the button that returns to the list, the settings, the sections and the sidebar choices. */
 function drawPluginPage(unit) {
   const back = button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", { plugin: null });
   body.append(group(unit.name, unit.id, [row("", back)]));
@@ -420,7 +420,7 @@ const SIZE_LABELS = {
   sidebarWidth: "처음 폭",
 };
 
-/** 섹션 행 하나의 선택 상자. 등록된 모든 섹션을 플러그인마다 optgroup 으로 묶는다. */
+/** The select box of one section row. It groups every registered section by plugin with optgroup. */
 function sectionSelect(s, index, now) {
   const wrap = document.createElement("span");
   wrap.className = "select-field";
@@ -440,8 +440,8 @@ function sectionSelect(s, index, now) {
     }
     el.append(optgroup);
   }
-  // 불러오지 않은 플러그인의 섹션은 선택지에 없으므로 현재 값으로만 보인다. 선택 상자가 다른 섹션을 고른 것처럼
-  // 보이지 않도록 그 값을 따로 둔다(docs/spec/plugins.md).
+  // The section of a plugin that is not loaded is not among the choices, so it is shown only as the current value. That value is kept separately so that the select box does not appear to
+  // have chosen another section (docs/spec/plugins.md).
   if (!hasSection(now)) {
     const kept = document.createElement("optgroup");
     kept.label = "불러오지 않음";
@@ -456,7 +456,7 @@ function sectionSelect(s, index, now) {
   return wrap;
 }
 
-/** 세트 편집. 이름, 배치, 섹션 행(선택 상자와 ▲ ▼ −), 그리고 + 하나. */
+/** Set editing: the name, the layout, the section rows (a select box and the buttons up, down and remove), and one add button. */
 function setEditor(s) {
   const title = document.createElement("input");
   title.type = "text";
@@ -519,10 +519,10 @@ const SECTIONS = [
   ["sidebars", "사이드바", drawSidebars],
 ];
 
-/** 이 모달의 이름. 보이는 제목이자 호스트가 창에 붙이는 이름이다. */
+/** The name of this modal. It is the visible title and also the name that the host gives to the window. */
 const NAME = "설정";
 
-/** 카드 요소를 만든다. 모달을 열 때 호출한다. */
+/** Creates the card element. Call it when the modal opens. */
 function makeCard() {
   const el = document.createElement("div");
   el.className = "set-card";
@@ -541,64 +541,64 @@ function makeCard() {
       '<nav class="set-card__nav"></nav>' +
       '<div class="set-card__pane"></div>' +
     '</div>';
-  // 호스트가 없으면 이 문서의 카드가 입력을 받는다. 컨트롤이 가리키는 명령을 실행한다.
+  // Without a host, the card of this document receives the input. It runs the command that the control points to.
   delegate(el);
-  // 호스트가 있으면 이 요소는 렌더링되지 않는다. 그립 드래그는 사본이 있는 뷰에서
-  // 발생하고 그 결과가 answer() 로 전달된다.
+  // With a host, this element is not rendered. A grip drag happens in the view that holds the copy,
+  // and its result is passed to answer().
   onGripDrag(el, (dx, dy) => run("core.settings-modal.move", { dx, dy }));
   showValue(el);
   return el;
 }
 
-/* 모달을 그리거나 닫을 때 호출할 함수. 공개 항목이 등록한다. */
+/* The function to call when the modal is drawn or closed. The public entry registers it. */
 let drawn = () => {};
 
-/* 네이티브 모달이 보고한 보이는 내용의 스크롤 위치(포인트). 이 문서가 그리면 pane 에서 읽는다. */
+/* The scroll position (points) of the visible content that the native modal reported. When this document draws, it is read from the pane. */
 let paneScroll = 0;
 
-/** 보이는 내용의 키. 절, 범위, 플러그인 페이지, 편집하는 세트가 같으면 같은 내용이다(docs/spec/settings.md). */
+/** The key of the visible content. The content is the same when the section, the scope, the plugin page and the edited set are the same (docs/spec/settings.md). */
 const scrollKey = () => JSON.stringify([here, scope, here === "plugins" ? chosen : null, here === "sidebars" ? editing : null]);
 
-/** 모달을 그리거나 닫을 때 호출할 함수를 등록한다. */
+/** Registers the function to call when the modal is drawn or closed. */
 export function onSettingsDrawn(fn) {
   drawn = fn;
 }
 
 /**
- * 열린 모달의 공개 컨트롤. 이름마다 문서 순서의 번호를 붙인다. 네이티브 모달은 이
- * 요소의 사본을 그리므로 두 문서의 순서가 같다.
+ * The public controls of the open modal. Each name gets a number in document order. A native modal draws a copy of this
+ * element, so the order is the same in both documents.
  */
 export function settingsModalState() {
   if (!card) return { open: false, controls: [] };
   const counts = new Map();
   const controls = [...card.querySelectorAll("[data-expose]")].map((el) => {
     const name = el.dataset.expose;
-    // 기본값: 이름이 처음 나온 컨트롤의 순번은 0 이다.
+    // default: the index of a control whose name appears for the first time is 0.
     const index = counts.get(name) ?? 0;
     counts.set(name, index + 1);
-    // 기본값: data-on 이 없는 컨트롤은 체크 상자이면 체크 상태, 아니면 켬 상태가 없다(null).
+    // default: a control without data-on has the checked state if it is a checkbox, and otherwise no on state (null).
     const on = el.dataset.on ?? (el.type === "checkbox" ? String(el.checked) : null);
     return {
       name, index,
-      // 기본값: 키도 설정도 가리키지 않는 컨트롤은 key 가 null 이다.
+      // default: a control that points to neither a key nor a setting has a null key.
       key: el.dataset.key ?? el.dataset.set ?? null,
       label: el.tagName === "SELECT" ? "" : el.textContent.trim(),
       on: on === null ? null : on === "true",
       value: "value" in el && el.tagName !== "BUTTON" ? String(el.value) : null,
       command: commandOf(el),
-      // 선택 상자는 고를 수 있는 값을 문서 순서로 보고한다.
+      // A select box reports its selectable values in document order.
       options: el.tagName === "SELECT" ? [...el.querySelectorAll("option")].map((o) => o.value) : null,
-      // 섹션 행의 선택 상자는 플러그인마다 optgroup 으로 묶는다. 묶음의 이름과 값을 보고한다.
+      // The select box of a section row is grouped by plugin with optgroup. It reports the name and the values of each group.
       groups: el.tagName === "SELECT" && el.querySelector("optgroup")
         ? [...el.querySelectorAll("optgroup")].map((g) => ({ label: g.label, values: [...g.querySelectorAll("option")].map((o) => o.value) }))
         : null,
     };
   });
-  // 선언된 설정의 행 이름과 설명. 플러그인 페이지가 manifest 의 label 과 description 으로 그린다.
+  // The row name and the description of a declared setting. The plugin page draws them from the label and the description of the manifest.
   const rows = [...card.querySelectorAll(".set-row[data-row]")].map((el) => ({
     key: el.dataset.row,
     name: el.querySelector(".set-row__name").textContent,
-    // 기본값: description 이 없는 설정 행은 설명이 null 이다.
+    // default: a setting row without a description has a null description.
     description: card.querySelector(`[data-describes="${CSS.escape(el.dataset.row)}"]`)?.textContent ?? null,
   }));
   const r = card.getBoundingClientRect();
@@ -608,7 +608,7 @@ export function settingsModalState() {
     card: { x: r.left, y: r.top, w: r.width, h: r.height }, controls };
 }
 
-/** 모달의 절을 바꾼다. */
+/** Changes the section of the modal. */
 export function showSection(id) {
   if (!card) throw new Error("settings are not open");
   if (!SECTIONS.some(([known]) => known === id)) throw new Error(`unknown settings section ${id}`);
@@ -616,7 +616,7 @@ export function showSection(id) {
   drawSettings();
 }
 
-/** 플러그인 절에서 불러온 플러그인 하나의 페이지를 연다. null 이면 목록으로 돌아간다. */
+/** Opens the page of one loaded plugin in the plugin section. When it is null, returns to the list. */
 export function showPlugin(id) {
   if (!card) throw new Error("settings are not open");
   if (id !== null && !pluginUnits().some((unit) => unit.id === id)) throw new Error(`unknown plugin ${id}`);
@@ -624,7 +624,7 @@ export function showPlugin(id) {
   drawSettings();
 }
 
-/** 플러그인 목록의 검색어를 바꾼다. */
+/** Changes the search term of the plugin list. */
 export function searchPlugins(text) {
   if (!card) throw new Error("settings are not open");
   if (typeof text !== "string") throw new Error("query must be a string");
@@ -632,7 +632,7 @@ export function searchPlugins(text) {
   drawSettings();
 }
 
-/** 사이드바 절에서 세트 하나의 편집을 연다. null 이면 편집을 닫는다. */
+/** Opens the editing of one set in the sidebar section. When it is null, closes the editing. */
 export function editSet(id) {
   if (!card) throw new Error("settings are not open");
   if (id !== null && !value("sets").some((s) => s.id === id)) throw new Error(`unknown set ${id}`);
@@ -640,7 +640,7 @@ export function editSet(id) {
   drawSettings();
 }
 
-/** 모달의 범위를 바꾼다. 프로젝트 범위는 프로젝트가 선택된 동안만 있다. */
+/** Changes the scope of the modal. The project scope exists only while a project is selected. */
 export function showScope(next) {
   if (!card) throw new Error("settings are not open");
   if (next !== "common" && !(next === "project" && settingProject())) throw new Error(`scope ${next} is not available`);
@@ -648,14 +648,14 @@ export function showScope(next) {
   drawSettings();
 }
 
-/** 모달 카드를 옮긴다. */
+/** Moves the modal card. */
 export function moveSettings(dx, dy) {
   if (!card) throw new Error("settings are not open");
   moveBy(dx, dy);
   queueMicrotask(() => drawn());
 }
 
-/** 카드를 다시 그리고, 열려 있으면 호스트 뷰의 내용도 갱신한다. */
+/** Draws the card again and, when it is open, also updates the content of the host view. */
 export function drawSettings() {
   if (!card) return;
   queueMicrotask(() => drawn());
@@ -672,11 +672,11 @@ export function drawSettings() {
     b.textContent = name;
     nav.appendChild(b);
   }
-  // 같은 내용을 다시 그리면 그 스크롤 위치를 유지한다. 다른 내용은 data-scroll-key 가 달라 위에서 시작한다.
+  // When the same content is drawn again, its scroll position is kept. Other content has a different data-scroll-key and starts at the top.
   const positions = scrollPositions(card);
   body.textContent = "";
   body.dataset.scrollKey = scrollKey();
-  // 범위 탭은 모든 절의 컨트롤 위에 있다.
+  // The scope tabs are above the controls of every section.
   const tabs = scopeTabs([["common", "전역"], ...(settingProject() ? [["project", "프로젝트"]] : [])], scope);
   tabs.className = "set-scope-tabs";
   tabs.setAttribute("role", "group");
@@ -693,8 +693,8 @@ export function drawSettings() {
   }
   SECTIONS.find(([id]) => id === here)[2]();
   overlay.update(card);
-  // 내용이 바뀌면 카드의 크기도 바뀐다. 자리를 다시 알리지 않으면 뷰는 이전 크기를
-  // 유지하고 그 안의 카드가 늘어나거나 잘린다.
+  // When the content changes, the size of the card changes too. If the position is not notified again, the view
+  // keeps the previous size and the card inside it grows or is cut off.
   const rect = cardRect();
   if (native) overlay.place(card, rect);
   else standIn(true, rect);
@@ -702,20 +702,20 @@ export function drawSettings() {
 }
 
 /**
- * 카드의 응답 하나를 처리한다. key 가 대상, value 가 값이다.
+ * Handles one response of the card. key is the target and value is the value.
  *
- * 컨트롤마다 리스너를 등록하지 않는다. 네이티브 뷰는 이 요소의 사본을 렌더링하므로
- * 거기 등록한 리스너가 동작하지 않는다. 응답한 컨트롤을 이 문서의 카드에서 찾아 그
- * 컨트롤의 명령을 실행한다. 누름은 value 가 비어 있고, 값 입력은 그 값을 더한다.
+ * A listener is not registered per control. A native view renders a copy of this element, so a
+ * listener registered there does not work. The control that responded is found in the card of this document and the
+ * command of that control is run. A press has an empty value, and a value input adds that value.
  */
 function answer(key, val) {
   if (!card || key === "") return;
-  // 사본의 머리를 끈 거리. 머리가 가리키는 이동 명령을 실행한다.
+  // The distance by which the header of the copy was dragged. It runs the move command that the header points to.
   if (key === "move") {
     const [dx, dy] = val.split(",").map(Number);
     return run("core.settings-modal.move", { dx, dy });
   }
-  // 네이티브 모달이 보이는 내용의 스크롤 위치를 알린다. 위치는 상태로만 쓰며 명령이 아니다.
+  // The native modal reports the scroll position of the visible content. The position is used only as state and is not a command.
   if (key === "scroll") {
     const top = Number(val);
     if (!Number.isFinite(top) || top < 0) throw new Error(`settings scroll position is invalid: ${val}`);
@@ -730,7 +730,7 @@ function answer(key, val) {
   return run(found.name, found.params);
 }
 
-/** 카드의 위치와 크기를 판 기준으로 측정해 반환한다. 호스트가 이 좌표로 뷰를 배치한다. */
+/** Measures the position and size of the card relative to the plane and returns them. The host places the view with these coordinates. */
 function cardRect() {
   const plane = document.getElementById("plane").getBoundingClientRect();
   const r = card.getBoundingClientRect();
@@ -738,9 +738,9 @@ function cardRect() {
 }
 
 /**
- * 그립을 드래그한 거리만큼 카드를 이동한다. 창 안에 8px 을 남긴다.
+ * Moves the card by the distance the grip was dragged. 8px is left inside the window.
  *
- * 현재 위치는 요소에서 읽는다. 별도 변수로 보관하면 두 값이 어긋난다.
+ * The current position is read from the element. If it were kept in a separate variable, the two values would diverge.
  */
 function moveBy(dx, dy) {
   const r = card.getBoundingClientRect();
@@ -752,11 +752,11 @@ function moveBy(dx, dy) {
   else standIn(true, rect);
 }
 
-/** 모달을 연다. 호스트가 있으면 네이티브 뷰가, 없으면 이 문서가 렌더링한다. */
+/** Opens the modal. With a host a native view renders it, and without a host this document renders it. */
 export function openSettings() {
   if (card) return;
-  // 오버레이가 모달이 열린 동안 판의 포인터 입력을 차단한다. 없으면 카드 옆 divider
-  // 드래그가 동작한다. 호스트가 카드를 렌더링해도 오버레이는 이 문서에 남는다.
+  // While the modal is open, the overlay blocks the pointer input of the plane. Without it, dragging a divider
+  // beside the card would work. Even when the host renders the card, the overlay stays in this document.
   scrim = document.createElement("div");
   scrim.className = "set-scrim";
   scrim.dataset.expose = "core.settings-modal.scrim";
@@ -769,8 +769,8 @@ export function openSettings() {
 
   const rect = cardRect();
   if (native) {
-    // 애플리케이션이 렌더링하므로 여기서는 표시하지 않는다. 위치와 크기는 이 요소에서
-    // 읽어야 하므로 display 가 아니라 visibility 로 숨긴다.
+    // The application renders it, so it is not shown here. The position and size must be read from this element,
+    // so it is hidden with visibility, not display.
     card.style.visibility = "hidden";
     overlay.show(card, rect, answer);
   } else {
@@ -778,7 +778,7 @@ export function openSettings() {
   }
 }
 
-/** 모달을 닫고 오버레이와 카드를 제거한다. */
+/** Closes the modal and removes the overlay and the card. */
 export function closeSettings() {
   if (!card) return;
   queueMicrotask(() => drawn());
@@ -791,6 +791,6 @@ export function closeSettings() {
   body = null;
 }
 
-// 가장자리로 drag된 settings 카드는 크기가 바뀐 부모 창 안에 남아야 한다.
-// 그 native webview는 같은 clamp된 DOM 사각형을 따른다.
+// A settings card dragged to an edge must stay inside the parent window whose size changed.
+// Its native webview follows the same clamped DOM rectangle.
 addEventListener("resize", () => { if (card) moveBy(0, 0); });

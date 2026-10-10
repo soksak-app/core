@@ -1,70 +1,70 @@
-// 네이티브 표면을 모사하는 컴포지터.
+// Compositor that simulates native surfaces.
 //
-// declared 와 applied 를 한 커밋의 한 레코드에 함께 담는다. 따로 읽으면 서로 다른
-// 시점의 두 값을 빼게 되어 차이를 해석할 수 없다.
+// declared and applied share one record of one commit. Read separately, they would be two values of different
+// times, and their difference could not be interpreted.
 //
-// 판의 구조를 알지 않는다. 표면의 위치와 내용은 판이 슬롯 요소의 data 속성에
-// 기록하고, 이 모듈은 그 속성을 읽어 측정하고 보고한다.
+// This module does not know the structure of the plane. The plane writes the position and content of a surface
+// into data attributes of the slot element, and this module reads those attributes to measure and report.
 import { plugin } from "./registry.js";
 import { native, surfaces as app } from "./host.js";
 import { chromeRow, drawnFrameText } from "./frame-text.js";
 
 const plane = document.getElementById("plane");
 
-/* 커밋 완료 수신자. 검증이 여기에 연결된다. */
+/* Receiver of completed commits. Verification connects here. */
 let listener = null;
 
-/** 커밋마다 호출할 함수를 등록한다. */
+/** Registers the function that is called on every commit. */
 export function onCommit(fn) {
   listener = fn;
 }
 
-/* 실행의 두 끝을 듣는 쪽. */
+/* Listener for the two ends of a run. */
 let edge = null;
 
 /**
- * 실행이 시작되고 끝날 때 호출할 함수를 등록한다.
+ * Registers the function that is called when a run starts and when it ends.
  *
- * 애플리케이션도 커밋이 전하는 settled 로 같은 두 끝을 잡는다. 페이지 안에서 그
- * 두 끝을 알아야 하는 쪽은 여기에 붙는다.
+ * The application also detects the same two ends through the settled flag that the commit carries. Code inside
+ * the page that has to know those two ends attaches here.
  */
 export function onRun(fn) {
   edge = fn;
 }
 
-/** 지금 갱신이 이어지는 중인지. */
+/** Whether updates are continuing now. */
 let going = false;
 
 let seq = 0;
 let latestRecord = null;
 let aheadRecord = null;
-/* 미리 게시한 커밋의 번호. 그 번호로 커밋이 이루어졌을 때만 예측 레코드가 생긴다. */
+/* Number of the commit published ahead. The ahead record exists only when a commit with that number is made. */
 let aheadSeq = -1;
 let aheadComplete = false;
 const drawn = new Map();
 
-/** 슬롯이 속한 카드의 요소. 판이 기록한 data-card-id 를 가진 조상이다. */
+/** Element of the card that owns the slot: the ancestor that has the data-card-id the plane wrote. */
 const cardEl = (slot) => slot.closest("[data-card-id]");
 
-/** 마지막 커밋 레코드를 반환한다. 없으면 null. */
+/** Returns the last commit record, or null when there is none. */
 export const latest = () => latestRecord;
 
 /**
- * 직전 렌더에서 미리 게시한 레코드. 미리 게시하지 않았으면 null.
+ * Record published ahead by the previous render, or null when nothing was published ahead.
  *
- * 렌더가 끝나면 측정한 레코드가 마지막 커밋이 되므로, 예측이 맞았는지는 그때 이 값과
- * 비교해야 알 수 있다.
+ * When the render ends, the measured record becomes the last commit, so whether the prediction was right can
+ * be known only by comparing against this value then.
  */
 export const ahead = () => aheadRecord;
 
-/* 호스트가 실제 위치까지 답한 마지막 레코드. 답은 비동기로 오므로 최신 커밋에는
-   아직 없을 수 있다. 선언과 적용을 비교하는 검사는 이것을 읽는다. */
+/* Last record for which the host answered up to the actual position. The answer arrives asynchronously, so the
+   latest commit may not have it yet. The check that compares declaration and application reads this value. */
 let seatedRecord = null;
 
-/** 실제 위치까지 채워진 마지막 레코드. 없으면 null. */
+/** Last record filled up to the actual position, or null when there is none. */
 export const seated = () => seatedRecord;
 
-/** 최신 DOM commit이 호스트의 native 배치 답을 기다리는 중인지 여부. */
+/** Whether the latest DOM commit is waiting for the native placement answer of the host. */
 export const placementPending = () => Boolean(
   latestRecord && (!seatedRecord || latestRecord.seq > seatedRecord.seq),
 );
@@ -83,41 +83,43 @@ function surfaceEl(id) {
 }
 
 /**
- * 이 표면을 지금 표시하는가.
+ * Whether this surface is shown now.
  *
- * DOM 은 네이티브 표면 위에 그릴 수 없으므로, 표면 위에 무언가를 그리는 동안
- * capture-hidden 으로 표면을 숨기고 DOM 이 스냅샷을 그린다.
+ * The DOM cannot draw over a native surface, so while something is drawn over a surface, capture-hidden hides
+ * the surface and the DOM draws a snapshot.
  */
 const effectiveVisible = (slot) => {
   const { width, height } = slot.getBoundingClientRect();
   return slot.dataset.nativeCaptureHidden !== "true" && slot.closest("[hidden]") === null && width > 0 && height > 0;
 };
 
-/* 이 커밋이 마지막 갱신인지, 갱신이 이어지는 중인지.
-   경계를 끄는 동안 매 프레임 커밋이 발생하고 놓으면 멈춘다. 뷰는 끄는 동안 divider 에
-   data-dragging 을 설정하고 놓을 때 마지막 렌더 전에 제거하므로, 마지막 렌더는 true 를
-   반환한다.
+/* Whether this commit is the last update, or updates are continuing.
+   While a divider is dragged, a commit occurs on every frame, and it stops on release. The view sets
+   data-dragging on the divider while dragging and removes it before the last render on release, so the last
+   render returns true.
 
-   표면을 그리는 쪽은 이 값으로 적용 방식을 선택한다. 변경 원인이 아니라 갱신이 더
-   있는지만 전달한다. */
+   The code that draws surfaces selects its way of applying by this value. It conveys only whether more updates
+   follow, not the cause of the change. */
 const settled = () => plane.querySelector(".sp-divider[data-dragging]") === null;
 
-/** 표면 슬롯 목록. 판이 기록한 data 속성을 그대로 읽는다. */
+/** List of surface slots. Reads the data attributes that the plane wrote as they are. */
 const slots = () =>
   plane.querySelectorAll("[data-native-surface][data-native-surface-id]");
 
-/* 페인트 클립을 담는 스타일 노드. body::before 는 요소가 아니므로 인라인 스타일로 자를 수
-   없어 문서 안의 스타일 노드에 리터럴 경로를 쓴다. 커스텀 프로퍼티로 전달하면 WebKit 이
-   body::before 의 클립을 잘못 그려 문서 전체가 지워진다. */
+/* Style node that holds the paint clip. body::before is not an element, so inline style cannot clip it; a
+   literal path is written into a style node of the document. Passing it through a custom property makes WebKit
+   draw the clip of body::before wrongly and the whole document disappears. */
 let paintClip = null;
-/** 페인트 클립에 마지막으로 쓴 배치 레코드의 순번. */
+/** Sequence number of the placement record last written into the paint clip. */
 let clippedSeq = 0;
-/** 호스트에 마지막으로 보낸 배치 요청: 답의 구멍(rects, 답 전에는 null)과 그것을 그린 커밋의 순번(drawnSeq). */
+/** Placement request last sent to the host: the holes of the answer (rects, null before the answer) and the sequence number of the commit that drew it (drawnSeq). */
 let sentPlacement = null;
 
 /**
- * 다음 프레임에 seq 커밋의 구멍을 클립에 쓴다. 답은 요청 순서와 다르게 올 수 있다. 부하에서 끌기 중의 앞 배치 답이
- * 뒤 배치 답보다 늦게 오면 앞 배치의 구멍이 뒤 배치의 구멍을 덮으므로, 이미 쓴 것보다 새 커밋의 구멍만 쓴다.
+ * Writes the holes of commit seq into the clip on the next frame. Answers can arrive in an order different from
+ * the requests. Under load, if the answer of an earlier placement during a drag arrives later than the answer
+ * of a later placement, the holes of the earlier placement would overwrite those of the later one, so only the
+ * holes of a commit newer than the one already written are written.
  */
 function clipNextFrame(seq, rects) {
   requestAnimationFrame(() => {
@@ -127,7 +129,7 @@ function clipNextFrame(seq, rects) {
   });
 }
 
-/** 앱 배경에서 표시 중인 네이티브 표면 사각형만 실제 픽셀 구멍으로 제외한다. */
+/** Excludes only the rectangles of the shown native surfaces from the app background as holes in actual pixels. */
 function syncNativePaintClip(rects) {
   if (!native) {
     paintClip?.remove();
@@ -136,21 +138,21 @@ function syncNativePaintClip(rects) {
   }
   const width = Math.max(1, window.innerWidth);
   const height = Math.max(1, window.innerHeight);
-  // 구멍은 바깥 사각형과 반대 방향으로 감아 기본 nonzero 규칙이 그것을 빼게 한다.
-  // evenodd 키워드 형식은 엔진마다 지원이 다르지만 감기 방향은 path() 를 아는 모든
-  // 엔진이 같게 해석한다.
+  // A hole is wound opposite to the outer rectangle so that the default nonzero rule subtracts it. The evenodd
+  // keyword form is supported differently by each engine, but every engine that knows path() interprets the
+  // winding direction the same way.
   const holes = rects.map((rect) =>
     `M${rect.x},${rect.y}v${rect.h}h${rect.w}v${-rect.h}Z`).join("");
-  // 커밋마다 새 data URL 을 만들면 웹 프로세스가 URL 마다 디코드한 이미지를 남겨 창 크기
-  // 조절만으로 메모리가 쌓인다(V5-96-14-6-4-7). 경로는 이미지 리소스를 만들지 않으므로
-  // 커밋마다 다시 써도 남는 것이 없다. 경로 좌표는 요소의 테두리 상자를 기준으로 하고
-  // body::before 는 inset:0 의 고정 위치이므로 뷰포트 좌표를 그대로 쓴다.
-  // 클립은 body::before 에만 건다. 배경을 칠하는 곳은 거기뿐이고, clip-path 는 마스크와
-  // 달리 잘린 영역에서 포인터 이벤트도 막으므로 body 를 자르면 구멍 위에서 끌기가 끊긴다.
+  // Creating a new data URL for every commit makes the web process keep a decoded image per URL, so memory grows
+  // from window resizing alone (V5-96-14-6-4-7). A path creates no image resource, so rewriting it on every
+  // commit leaves nothing behind. Path coordinates refer to the border box of the element, and body::before is
+  // fixed with inset:0, so viewport coordinates are used as they are.
+  // The clip is applied only to body::before. The background is painted only there, and unlike a mask,
+  // clip-path also blocks pointer events in the clipped area, so clipping body would interrupt a drag over a hole.
   const rule = `body::before{clip-path:path("M0,0H${width}V${height}H0Z${holes}")}`;
   if (!paintClip) {
     paintClip = document.createElement("style");
-    // 모달 문서는 메인 문서의 스타일을 복사하지만 이 clip 은 복사하지 않는다(docs/spec/native-modals.md).
+    // The modal document copies the styles of the main document but does not copy this clip (docs/spec/native-modals.md).
     paintClip.dataset.nativePaintClip = "";
     document.head.appendChild(paintClip);
   }
@@ -158,9 +160,9 @@ function syncNativePaintClip(rects) {
 }
 
 /**
- * 현재 슬롯을 측정해 커밋한다. 지연이 설정되어 있으면 그만큼 늦게 적용한다.
+ * Measures the current slots and commits them.
  *
- * 호출로만 동작한다. 위치 변경을 감시하지 않고, 위치를 정한 쪽이 호출한다. 커밋은 그려진 첫 행의 높이를 담는다.
+ * Works only by call. It does not watch position changes; the code that decides the position calls it. The commit holds the height of the first drawn row.
  */
 export function publish() {
   const mine = ++seq;
@@ -182,20 +184,21 @@ export function publish() {
   return deliver(mine, snapshot, chromeRow(drawnFrameText()));
 }
 
-/** 이 스냅샷을 커밋하고, 실행이 시작되거나 끝났으면 그 끝을 알린다. titlebar 는 그 배치의 첫 행 높이다. */
+/** Commits this snapshot and reports the edge of a run when a run started or ended. titlebar is the height of the first row of that placement. */
 function deliver(mine, snapshot, titlebar) {
   const running = !settled();
   if (running !== going) {
     going = running;
-    // 기본값: 실행 경계 수신자는 등록한 때만 있다.
+    // default: the run-edge listener exists only when one was registered.
     edge?.(going);
   }
   return commit(mine, snapshot, !running, titlebar);
 }
 
 /**
- * 다음 카드 배치를 준비한다. 위치를 계산할 수 없는 기존 표면은 먼저 숨긴다. titlebar 는 다음 그리기가 보일 첫 행의
- * 높이이고, 호스트가 같은 트랜잭션에서 창 제목줄을 그 높이로 정한다(docs/spec/native-surfaces.md#title-bar-height).
+ * Prepares the next card placement. An existing surface whose position cannot be calculated is hidden first.
+ * titlebar is the height of the first row that the next drawing will show, and the host sets the window title
+ * bar to that height in the same transaction (docs/spec/native-surfaces.md#title-bar-height).
  */
 export function publishAhead(rects, seated, titlebar) {
   aheadRecord = null;
@@ -220,10 +223,11 @@ export function publishAhead(rects, seated, titlebar) {
       title: slot.dataset.nativeTitle,
       plugin: slot.dataset.nativePlugin,
       dim: seat?.dim === true,
-      // 기본값: 앉을 자리가 없는 표면에는 예측한 띠가 없다(null).
+      // default: a surface without a seat has no predicted bands (null).
       bands: seat?.bands ?? null,
-      // 준비는 창의 레이어 트랜잭션 안에서 적용되어 커밋 전에는 화면에 나오지 않는다. 위치를 잰 표면은
-      // 새 자리에 보인 채로 두어, 화면에 보이는 표면이 그동안 입력을 받게 한다. 자리를 잴 수 없는 표면만 숨긴다.
+      // The preparation is applied inside the layer transaction of the window and does not appear on screen before
+      // the commit. A surface whose position was measured stays visible at its new seat, so the surface that is
+      // visible on screen receives input meanwhile. Only a surface whose seat cannot be measured is hidden.
       visible: measurable,
       frame: measurable ? {
         x: card.x + inset.left,
@@ -239,30 +243,30 @@ export function publishAhead(rects, seated, titlebar) {
 }
 
 /**
- * 네이티브 상태를 쓰는 유일한 함수.
+ * The only function that writes native state.
  *
- * `deliver` 가 앞선 커밋을 취소하고 시퀀스는 커질 뿐이므로, 여기 도착하는 스냅샷은
- * 언제나 가장 최근의 것이다.
+ * `deliver` cancels earlier commits and the sequence only grows, so the snapshot that arrives here is always
+ * the most recent one.
  */
 function commit(mine, snapshot, final, titlebar) {
   const record = { seq: mine, settled: final, drawn: mine !== aheadSeq, titlebar, surfaces: [] };
   const kinds = app.kinds;
   for (const s of snapshot) {
-    // 호스트가 없으면 이 모듈이 표면을 모사하므로 적용 위치도 여기서 정한다.
-    // 호스트가 있으면 호스트가 실제로 앉힌 자리를 답으로 주고, 아래에서 그것으로
-    // 바꿔 넣는다.
+    // Without a host, this module simulates the surface, so it decides the applied position here too.
+    // With a host, the host answers with the seat it actually applied, and the answer replaces this value
+    // below.
     const seat = { ...s.frame };
     const declared = {
       id: s.id, plugin: s.plugin, layer: s.layer, declared: s.frame, applied: seat,
       visible: s.visible, dim: s.dim,
-      // 기본값: 측정한 커밋의 표면에는 예측한 띠가 없다(null).
+      // default: a surface of a measured commit has no predicted bands (null).
       bands: s.bands ?? null,
-      // 표면이 표시할 대상은 플러그인이 정한다. 호스트가 종류로 분기하면 플러그인을
-      // 추가할 때마다 호스트를 수정해야 한다.
+      // The plugin decides what a surface shows. If the host branched by kind, the host would have to change
+      // every time a plugin is added.
       surface: plugin(s.plugin).surface(s.id),
     };
-    // 호스트가 네이티브로 그리는 표면에는 모사 요소를 만들지 않는다. 둘 다 만들면
-    // DOM 사본이 네이티브 뷰 아래에 남는다.
+    // No simulation element is created for a surface that the host draws natively. If both were created, the
+    // DOM copy would remain below the native view.
     if (kinds.includes(s.plugin)) {
       record.surfaces.push(declared);
       continue;
@@ -273,8 +277,8 @@ function commit(mine, snapshot, final, titlebar) {
     el.style.zIndex = String(50 + s.layer);
     el.dataset.hidden = String(!s.visible);
     el.dataset.dim = String(s.dim);
-    // 라벨은 값이 바뀔 때만 갱신한다. 커밋은 프레임마다 발생하지만 제목과 레이어는
-    // 거의 바뀌지 않으므로, 매번 쓰면 표면 내용이 프레임마다 다시 생성된다.
+    // The label is updated only when its value changes. A commit occurs on every frame, but the title and layer
+    // rarely change, so writing every time would recreate the content of the surface on every frame.
     const label = `<b>${s.title}</b><br>네이티브 표면 · ${s.plugin} · layer ${s.layer}`;
     if (el.dataset.label !== label) { el.innerHTML = label; el.dataset.label = label; }
     record.surfaces.push(declared);
@@ -285,23 +289,24 @@ function commit(mine, snapshot, final, titlebar) {
     }
   }
   latestRecord = record;
-  // 예측이 그 번호 그대로 커밋되었을 때만 예측 레코드다. 지연이 걸려 있으면 뒤이은
-  // 측정 커밋이 그것을 대신하고, 예측은 게시되지 않는다.
+  // The ahead record exists only when the prediction was committed under that same number. A measured commit that
+  // follows the prediction has its own number, so the prediction is not published.
   if (mine === aheadSeq && aheadComplete) aheadRecord = record;
-  // 무엇을 호스트에 보낼지는 이 모듈이 정하지 않는다. 이 판의 표면만으로는 부족하고,
-  // 다른 스페이스의 표면도 살아 있어야 한다.
+  // This module does not decide what is sent to the host. The surfaces of this plane alone are not enough; the
+  // surfaces of other spaces must stay alive too.
   //
-  // 수신자의 반환값을 그대로 반환한다. 렌더링 전에 커밋한 쪽이 이 값을 기다린다.
-  // 기본값: 커밋 수신자를 등록하기 전의 커밋은 알릴 곳이 없다.
+  // Returns the value of the listener as it is. The code that committed before rendering waits for this value.
+  // default: a commit before a listener is registered has nowhere to report to.
   const answered = listener?.(record);
   if (answered && typeof answered.then === "function") {
-    // 준비 응답은 표시 확인이 아니다. 이 요청의 배치를 그린 커밋이 있을 때만 그 구멍을 클립에 쓴다. 그린 커밋이
-    // 이 요청과 같아 보내지 않은 경우에도 그 커밋이 drawnSeq 를 남긴다.
+    // A preparation reply is not a confirmation of display. Its holes are written into the clip only when a commit
+    // drew the placement of this request. When the drawing commit equals this request and nothing was sent, that
+    // commit leaves the drawnSeq.
     const entry = { rects: null, drawnSeq: record.drawn ? record.seq : 0 };
     sentPlacement = entry;
     return answered.then((placed) => {
       seat(record, placed);
-      // 콜백 시점의 DOM은 다음 배치를 이미 그렸을 수 있으므로 여기서 좌표를 보존한다.
+      // The DOM at callback time may already have drawn the next placement, so the coordinates are kept here.
       const origin = plane.getBoundingClientRect();
       entry.rects = record.surfaces.filter((surface) =>
         surface.visible && app.kinds.includes(surface.plugin)).map(({ applied }) => ({
@@ -311,24 +316,24 @@ function commit(mine, snapshot, final, titlebar) {
       return placed;
     });
   }
-  // 그린 커밋이 직전에 보낸 요청과 같아 보내지 않았으면 화면에는 그 요청의 배치가 보인다. 그 답의 구멍을 쓰고,
-  // 답이 아직 오지 않았으면 답이 올 때 쓴다.
+  // When the drawing commit equals the request sent just before and nothing was sent, the screen shows the
+  // placement of that request. Its holes are written, or, if the answer has not arrived yet, when it arrives.
   if (native && record.drawn && !answered && sentPlacement) {
     sentPlacement.drawnSeq = record.seq;
     if (sentPlacement.rects) clipNextFrame(record.seq, sentPlacement.rects);
   }
-  // 호스트가 없으면 이 모듈이 앉힌 자리가 곧 실제 자리다. 호스트가 있는데 답이
-  // 없으면 직전과 같은 요청이라 전송되지 않은 것이고, 마지막으로 답한 자리가 그대로
-  // 유효하다. 그때 이 레코드를 넣으면 모사한 자리가 실제 자리로 기록된다.
+  // Without a host, the seat this module placed is the actual seat. With a host but no answer, the request equals
+  // the previous one and was not sent, so the seat last answered stays valid. Storing this record then would
+  // record the simulated seat as the actual seat.
   if (!native) seatedRecord = record;
   return answered;
 }
 
 /**
- * 호스트가 답한 실제 위치를 레코드에 넣는다.
+ * Puts the actual position that the host answered into the record.
  *
- * 선언한 사각형과 실제로 앉은 자리는 다르다. 호스트가 디스플레이 픽셀에 맞춰
- * 정렬하기 때문이다. 그 차이를 검증기가 잴 수 있어야 하므로 답을 그대로 기록한다.
+ * The declared rectangle and the actual seat differ, because the host aligns to display pixels. The verifier
+ * must be able to measure that difference, so the answer is recorded as it is.
  */
 function seat(record, placed) {
   const at = new Map(placed.map((p) => [p.id, p]));
@@ -347,23 +352,23 @@ function seat(record, placed) {
 }
 
 /**
- * 표면을 숨기고 같은 위치에 `.standin` 을 표시한다.
+ * Hides the surface and shows a `.standin` at the same position.
  *
- * 네이티브 표면은 OS 뷰이므로 DOM 이 그 위에 그릴 수 없다. DOM 을 표면 위에 그리는
- * 동안 capture-hidden 으로 표면을 숨기고 `.standin` 을 대신 표시하며, 표면 갱신은
- * 그동안 중단하고 종료 시 복원한다.
+ * A native surface is an OS view, so the DOM cannot draw over it. While the DOM draws over a surface,
+ * capture-hidden hides the surface and a `.standin` is shown instead; surface updates are suspended meanwhile
+ * and restored at the end.
  *
- * `.standin` 은 표면과 동일하게 표시한다. 표면을 숨기는 동안 화면이 변하면 안 된다.
+ * The `.standin` is displayed identically to the surface. The screen must not change while the surface is hidden.
  *
- * `over` 를 지정하면 그 영역과 겹치는 표면만 숨긴다. 드롭 구획은 판 전체를 대상으로
- * 하지만, 선택 레이어는 작아서 전체를 숨기면 겹치지 않는 표면의 갱신까지 중단된다.
+ * When `over` is given, only the surfaces that overlap that area are hidden. The drop region targets the whole
+ * plane, but the picker layer is small, so hiding everything would suspend updates of non-overlapping surfaces too.
  */
 export function standIn(on, over) {
   const area = over ? plane.getBoundingClientRect() : null;
   const kinds = app.kinds;
   for (const slot of slots()) {
-    // 네이티브 표면은 실행 중인 페이지와 프로그램을 표시한다. DOM 을 그리려고 숨기면
-    // 사용자가 보던 화면이 정지 이미지로 바뀌므로 숨기지 않는다.
+    // A native surface shows a running page or program. Hiding it to draw the DOM would turn what the user was
+    // watching into a still image, so it is not hidden.
     if (kinds.includes(slot.dataset.nativePlugin)) {
       delete slot.dataset.nativeCaptureHidden;
       continue;
@@ -379,15 +384,15 @@ export function standIn(on, over) {
     slot.innerHTML = "";
     if (!hide) continue;
 
-    // 표면이 마지막으로 표시한 내용을 복제한다. 모델에서 다시 만들면 숨기는 시점이
-    // 아니라 현재 모델을 표시하고, 커밋 지연 중에는 두 값이 다르다.
+    // Clones what the surface last showed. Rebuilding from the model would show the current model, not the one at
+    // the time of hiding, and the two differ when the model changed after the last commit.
     const id = slot.dataset.nativeSurfaceId;
     const shown = drawn.get(id);
     if (!shown) continue;
     const el = document.createElement("div");
     el.className = "standin";
     el.innerHTML = shown.innerHTML;
-    // 표면이 있던 위치에 배치한다. 선언 위치에 두면 적용 오차만큼 어긋난다.
+    // Placed at the position where the surface was. At the declared position it would be off by the applied error.
     const rec = latestRecord?.surfaces.find((x) => x.id === id);
     if (rec) el.style.transform =
       `translate(${rec.applied.x - rec.declared.x}px,${rec.applied.y - rec.declared.y}px)`;
