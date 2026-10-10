@@ -43,6 +43,7 @@ const MATRIX = [
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
 lane("test runner", "js-ts", ["scripts/test-runner.mjs"], ["scripts/test/test-runner.test.mjs"]),
 lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
+lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
 lane("event catalog", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs"]),
 lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
@@ -1657,6 +1658,18 @@ const FEATURE_LINKS = [
       { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "timeline_prints_the_golden_lines_of_every_filter" },
     ],
     expected: "The debug view shows the host event files as a filtered, followed and saved timeline and the state files as a tree, and the command line prints the same timeline rows.",
+    levels: ["unit"],
+  },
+  {
+    id: "F154.4.1",
+    implementation: [
+      { file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" },
+    ],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "each test file of a package is a test with the folder and the flags of its package" },
+      { file: "scripts/test/node-tests.test.mjs", id: "the discovered files run through the runner, each in the folder of its package" },
+    ],
+    expected: "Every Node test file of the workspace runs as a process of its own through the test runner with its own limit and the same output as the other long suites.",
     levels: ["unit"],
   },
   {

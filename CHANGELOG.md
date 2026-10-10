@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F154.4.1: `pnpm test` runs each Node test file of the workspace as a process of its own through the test runner with `RUN`, `PASS`, `FAIL` and `TIME` lines, the files in flight, the slowest files and a limit of 120 s for each file; `--only <text>` scopes a run.
 - F107: a stored link to a set that only a removed plugin declared no longer fails the load of the settings; `validateSidebars` keeps the link of a plugin that is not loaded, and a link of a loaded plugin to a missing set still fails.
 - F140: the window check in `e2e/files.test.mjs` observes that the failure to open a file is shown in the message row of the file tree (status `files.open` of the files plugin) and not in the error display of the main document.
 - F142: the window check `e2e/terminal-fullscreen-fit.test.mjs` measures that a terminal has the rows, columns and region geometry of its card in the presentation that ends the full screen; the symptom did not reproduce on either application.
