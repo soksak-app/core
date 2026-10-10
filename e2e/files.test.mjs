@@ -331,3 +331,55 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => s.run("files.bookmarks.remove", { path: file.path }));
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the failure to open a file is shown in the message row of the file tree and not in the error display`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    // Without the editor, which opens every file, no plugin opens the files of the check. Each change of the plugin reloads the window.
+    const page = async () => (await s.get("host.window")).pageProcess;
+    const reloaded = async (before, message) => {
+      await s.until("host.window", (value) => value.pageProcess !== 0 && value.pageProcess !== before, message);
+      await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `${message}: the new page did not report ready`);
+    };
+    s.cleanup(async () => {
+      if ((await s.get("core.plugins")).plugins.find((row) => row.id === "editor").installed.enabled) return;
+      const before = await page();
+      await s.run("core.plugins.enable", { plugin: "editor" });
+      await reloaded(before, "enabling editor did not reload the window");
+    });
+    const beforeDisable = await page();
+    await s.run("core.plugins.disable", { plugin: "editor" });
+    await reloaded(beforeDisable, "disabling editor did not reload the window");
+    const project = await s.get("core.project");
+    const folder = `files-open-check-${process.pid}`;
+    mkdirSync(join(project.root, folder));
+    writeFileSync(join(project.root, folder, "note.zzz"), "note\n");
+    writeFileSync(join(project.root, folder, "other.zzz"), "other\n");
+    s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
+    const rowIndex = (tree, row) => tree.entries.findIndex((entry) => entry.path === row);
+    const clickRow = async (tree, row) => {
+      const holder = await s.rect("core.sidebar.section.control", controlIndex(await s.get("core.sidebars"), "left", "files.tree", HOLDER));
+      const at = rowIndex(tree, row);
+      assert.ok(at >= 0, `${row} is not a row of the tree`);
+      await s.click(holder.x + holder.width / 2, holder.y + (at + 0.5) * ROW);
+    };
+    await s.run("files.refresh");
+    let tree = await s.until("files.tree", (value) => rowIndex(value, folder) >= 0, "files.tree did not list the folder");
+    await clickRow(tree, folder);
+    tree = await s.until("files.tree", (value) => rowIndex(value, `${folder}/note.zzz`) >= 0, "a click on the folder did not open it");
+    await clickRow(tree, `${folder}/note.zzz`);
+    await s.until("files.selection", (value) => value === `${folder}/note.zzz`, "a click on the file did not select it");
+    assert.deepEqual(await s.get("files.open"), { error: null });
+    // The window check fails on every application error that is logged, so the main document showing the failure would fail it.
+    await s.press("Enter");
+    const failure = await s.until("files.open", (value) => value.error !== null, "Enter on a file that no plugin opens left no failure");
+    assert.match(failure.error, /note\.zzz/, `the failure does not name the file: ${failure.error}`);
+    const message = (await s.get("core.sidebars")).find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree")?.text;
+    assert.match(message, /열 수 없음: /, `the message row does not show the failure: ${message}`);
+    // Selecting another path ends the failure.
+    await clickRow(tree, `${folder}/other.zzz`);
+    await s.until("files.open", (value) => value.error === null, "selecting another path did not end the failure");
+  });
+}

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F140: `e2e/files.test.mjs`의 창 검사가 파일을 열지 못한 실패가 main document의 오류 표시가 아니라 파일 트리의 메시지 행(files plugin의 status `files.open`)에 보이는 것을 관측한다.
 - F142: 창 검사 `e2e/terminal-fullscreen-fit.test.mjs`가 전체 화면이 끝나는 표시에서 터미널이 card의 rows, cols, region 기하를 가지는 것을 측정한다. 두 애플리케이션에서 증상이 재현되지 않았다.
 - F147: `e2e/browser.test.mjs`의 창 검사가 browser card의 문서가 설정을 적용하는 같은 표시에서 색 구성의 변화를 받는 것을 보이는 card와 다른 card의 전체 화면으로 숨은 card에서 측정한다. 두 애플리케이션에서 증상이 재현되지 않았다.
 - F150.8.1: 창 검사 `e2e/input-oracle.test.mjs`가 Tab, Escape, Backspace, Enter, Control+A에 대해 sidecar가 PTY에 쓴 것으로 기록한 바이트를 터미널의 독립 수신자 프로세스가 읽은 바이트와 비교한다. 두 애플리케이션에서 같다.
