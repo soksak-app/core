@@ -124,7 +124,7 @@ pub fn observe(config: &Path, layer: &str, fields: impl FnOnce() -> Value) {
             .lock()
             .map_err(|error| format!("performance writer lock: {error}"))?;
         if enabled(config)? {
-            line(&target(config), layer, fields())?;
+            crate::event_record::emit_trace(layer, fields())?;
         }
         Ok::<(), String>(())
     })();

@@ -1142,6 +1142,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F150.3.5.2",
+    implementation: [
+      { file: "packages/host/wailsv3/src/event_record.go", symbol: "func emitTrace" },
+      { file: "packages/host/tauriv2/src/event_record.rs", symbol: "pub fn emit_trace" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/event_record_test.go", id: "TestAHostObservationOfTheTraceIsAnEventAndNotALineOfTheTraceFile" },
+      { file: "packages/host/tauriv2/tests/event_record_test.rs", id: "a_host_observation_of_the_trace_is_an_event_and_not_a_line_of_the_trace_file" },
+    ],
+    expected: "An observation of the host or the sampler is stored as an event of the event log without the name in its fields, and an observation without a name is reported.",
+    levels: ["unit"],
+  },
+  {
     id: "F150.3.5.1",
     implementation: [
       { file: "packages/workbench/performance.js", symbol: "export function createTracer" },

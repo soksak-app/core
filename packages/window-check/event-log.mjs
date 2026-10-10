@@ -155,19 +155,21 @@ export async function untilEventLine(configDir, offsets, predicate, timeout) {
   return lines.find(predicate);
 }
 
-const TRACE_PREFIX = "page.trace.";
+// The prefixes of the events of the trace and the layer of the row that each one makes.
+const TRACE_PREFIXES = [["page.trace.", "page"], ["host.trace.", "host"], ["host.sampler.", "sampler"]];
 
 /**
- * The events of the trace of the page as rows in the shape of the trace file of earlier runs: the layer, the event name
- * without the prefix, the time as an ISO-8601 text with milliseconds, and the fields of the event.
+ * The events of the trace of the page, the host and the sampler as rows in the shape of the trace file of earlier runs: the
+ * layer, the event name without the prefix, the time as an ISO-8601 text with milliseconds, and the fields of the event.
  */
 export function traceRows(events) {
-  return events.filter((event) => event.event.startsWith(TRACE_PREFIX)).map((event) => ({
-    layer: event.layer,
-    event: event.event.slice(TRACE_PREFIX.length),
-    ts: new Date(event.ts_us / 1000).toISOString(),
-    ...event.fields,
-  }));
+  const rows = [];
+  for (const event of events) {
+    const match = TRACE_PREFIXES.find(([prefix]) => event.event.startsWith(prefix));
+    if (!match) continue;
+    rows.push({ layer: match[1], event: event.event.slice(match[0].length), ts: new Date(event.ts_us / 1000).toISOString(), ...event.fields });
+  }
+  return rows;
 }
 
 /**

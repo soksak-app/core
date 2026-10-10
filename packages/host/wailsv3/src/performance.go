@@ -101,7 +101,8 @@ func PerformanceEnabled(config string) (bool, error) {
 
 var performanceMu sync.Mutex
 
-// PerformanceObserve 는 활성 계측만 구성·기록하고 오류를 보고한다. 측정한 동작은 그대로 진행한다.
+// PerformanceObserve builds and stores an observation only while the trace is on, as an event of the event log
+// (`host.trace.<event>`, `host.sampler.<event>`), and reports an error. The measured operation goes on.
 func PerformanceObserve(config, layer string, fields func() map[string]any) {
 	performanceMu.Lock()
 	defer performanceMu.Unlock()
@@ -113,7 +114,7 @@ func PerformanceObserve(config, layer string, fields func() map[string]any) {
 	if !enabled {
 		return
 	}
-	if err := PerformanceLine(PerformanceTarget(config), layer, fields()); err != nil {
+	if err := emitTrace(layer, fields()); err != nil {
 		logPerformanceError(err)
 	}
 }

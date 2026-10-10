@@ -99,10 +99,16 @@ pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
             return;
         }
     };
+    store_event(parsed, layer, &name, place, fields);
+}
+
+/// Hands an event to the writer of the host, or to the start buffer while no writer exists. `place` names the record in the
+/// reports of a refusal.
+fn store_event(level: Level, layer: &str, name: &str, place: &str, fields: Box<RawValue>) {
     let now = now_us();
     let mut records = records();
     if let Some(log) = records.log.clone() {
-        if let Err(error) = log.emit_relayed(now, layer, parsed, &name, fields) {
+        if let Err(error) = log.emit_relayed(now, layer, level, name, fields) {
             eprintln!("event writer: the record {place:?} of {layer} cannot be stored: {error}");
         }
         return;
@@ -115,10 +121,42 @@ pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
     records.buffer.push(Buffered {
         ts_us: now,
         layer: layer.to_string(),
-        level: parsed,
-        event: name,
+        level,
+        event: name.to_string(),
         fields,
     });
+}
+
+/// Stores an observation of the trace of the host as the event `host.<kind>.<event>`, where kind is `trace` for the layer
+/// `host` and `sampler` for the layer `sampler`. The fields hold the name of the event in `event`, which the name of the
+/// stored event replaces.
+pub fn emit_trace(layer: &str, fields: serde_json::Value) -> Result<(), String> {
+    let kind = match layer {
+        "host" => "trace",
+        "sampler" => "sampler",
+        other => {
+            return Err(format!(
+                "the layer {other:?} of an observation is not host or sampler"
+            ))
+        }
+    };
+    let serde_json::Value::Object(mut fields) = fields else {
+        return Err("the fields of an observation must be an object".into());
+    };
+    let event = match fields.remove("event") {
+        Some(serde_json::Value::String(event)) if !event.is_empty() => event,
+        _ => return Err("event must be a string".into()),
+    };
+    let text = to_raw_value(&fields)
+        .map_err(|error| format!("the fields of {event} cannot be serialized: {error}"))?;
+    store_event(
+        Level::Debug,
+        "host",
+        &format!("host.{kind}.{event}"),
+        &event,
+        text,
+    );
+    Ok(())
 }
 
 /// Waits until the records written so far are in the event log, at most `deadline`. The paths that end the process (a panic

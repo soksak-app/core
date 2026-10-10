@@ -5,6 +5,7 @@ package host_test
 
 import (
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -133,4 +134,68 @@ func TestFlushRecordsStoresTheRecordsWrittenSoFarWithoutWaitingForTheBatchInterv
 	if len(events) != 2 || events[1]["fields"].(map[string]any)["text"] != "stored before the interval" {
 		t.Fatalf("events %v", events)
 	}
+}
+
+// contract: performance.trace.host-observation-is-an-event
+func TestAHostObservationOfTheTraceIsAnEventAndNotALineOfTheTraceFile(t *testing.T) {
+	log := useEventLog(t)
+	config := t.TempDir()
+	if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := host.PerformanceDisable(config); err != nil {
+			t.Error(err)
+		}
+	})
+	before, err := os.ReadFile(host.PerformanceTarget(config))
+	if err != nil {
+		t.Fatal(err)
+	}
+	host.PerformanceObserve(config, "host", func() map[string]any {
+		return map[string]any{"event": "region", "surface": "tab-1", "body": map[string]any{"key": "Enter"}}
+	})
+	host.PerformanceObserve(config, "sampler", func() map[string]any {
+		return map[string]any{"event": "memory", "rss_host_kb": float64(42)}
+	})
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	// The sampler that "on" starts stores its own events into the same writer, so the events are found by name.
+	find := func(name string, accept func(map[string]any) bool) map[string]any {
+		for _, event := range events {
+			if event["event"] == name && accept(event) {
+				return event
+			}
+		}
+		t.Fatalf("no %s in %v", name, events)
+		return nil
+	}
+	region := find("host.trace.region", func(map[string]any) bool { return true })
+	memory := find("host.sampler.memory", func(event map[string]any) bool { return event["fields"].(map[string]any)["rss_host_kb"] == float64(42) })
+	fields, _ := region["fields"].(map[string]any)
+	if region["event"] != "host.trace.region" || region["layer"] != "host" || region["level"] != "debug" ||
+		fields["surface"] != "tab-1" || fields["body"].(map[string]any)["key"] != "Enter" {
+		t.Fatalf("host observation %v", region)
+	}
+	if _, has := fields["event"]; has {
+		t.Fatalf("the name of the event is repeated in its fields: %v", fields)
+	}
+	if memory["event"] != "host.sampler.memory" || memory["fields"].(map[string]any)["rss_host_kb"] != float64(42) {
+		t.Fatalf("sampler observation %v", memory)
+	}
+	after, err := os.ReadFile(host.PerformanceTarget(config))
+	if err != nil || string(after) != string(before) {
+		t.Fatalf("an observation of the host changed the trace file: %v", err)
+	}
+	// An observation without an event name is refused with an error and stores nothing.
+	host.PerformanceObserve(config, "host", func() map[string]any { return map[string]any{"surface": "tab-1"} })
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events = readEventLog(t, log.Path())
+	find("host.record.error", func(event map[string]any) bool {
+		return event["fields"].(map[string]any)["where"] == "performance trace"
+	})
 }

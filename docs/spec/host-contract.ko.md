@@ -226,6 +226,7 @@ fn invalid_json_closes_connection() {
 | `performance.trace.enable-without-services` | service 폴더가 없어도 trace를 켜면 출력 파일이 만들어진다. | both |
 | `performance.trace.already-off-writes-nothing` | 이미 비활성인 추적을 끄면 출력을 만들거나 덧붙이지 않는다. | both |
 | `performance.trace.line-records-writer-pid` | host 줄은 그 줄을 쓰는 프로세스를 `pid`로 기록한다. | both |
+| `performance.trace.host-observation-is-an-event` | trace가 켜져 있는 동안 host의 관측(layer `host` 또는 `sampler`)은 이름이 field에 반복되지 않는 level `debug`의 event `host.trace.<event>` 또는 `host.sampler.<event>`로 event log에 저장되며 trace 파일의 줄이 아니다. event 이름이 없는 관측은 오류 `performance trace`로 보고하고 아무것도 저장하지 않는다. | both |
 | `performance.trace.rotates-at-100mb` | 100 MB 이상인 출력에 host 줄을 덧붙이면 먼저 그 출력을 `performance.ndjson.1`로 옮기고 이전 세대를 하나씩 뒤로 옮기며 다섯째를 지우고 새 출력을 시작한다. | both |
 | `performance.sampler.failed-reading-is-explicit` | 상주 크기를 얻지 못한 sampler 읽기는 `rss_host_kb` 대신 `error`를 기록한다. | both |
 | `performance.clock.before-epoch-is-explicit` | 유닉스 epoch 이전의 trace 시각은 epoch가 아니라 오류다. | tauriv2 only: Rust host는 epoch부터의 기간으로 시각을 적으므로 그 이전에서 실패하고, Go는 모든 시각을 적는다 |
@@ -244,7 +245,7 @@ fn invalid_json_closes_connection() {
 | `log.transcript.line-reaches-the-application-log` | 창의 진단 기록 줄은 `info host transcript <window>: <line>`으로도 쓰고, Wails host는 진단 기록이 싣는 오류를 `error host <operation> <window>: <error>`로도 써서, 진단 기록을 요청한 연결이 없어도 그 줄이 남는다. | both |
 | `log.info.record-form` | `LogInfo`(Go)나 `log_info`(Rust)로 쓴 호스트 관측은 애플리케이션 로그의 기록 `<time> info host <where>: <text>`다. | both |
 | `log.record.one-line` | 기록은 한 줄이다. 본문의 줄바꿈은 두 글자 `\n`으로 쓰고, 시각을 뺀 항목은 `<level> <layer> <where>: <text>`다. | both |
-| `sidecars.trace.relay-records-every-message-with-its-body` | performance trace가 켜진 동안 host가 sidecar로 보내는 각 요청은 trace event `sidecar.send`, 받는 각 메시지는 `sidecar.receive`이며, layer `host`에 `sidecar`, `surface`, 본문 전체를 담는다. | both |
+| `sidecars.trace.relay-records-every-message-with-its-body` | performance trace가 켜진 동안 host가 sidecar로 보내는 각 요청은 event log의 event `host.trace.sidecar.send`, 받는 각 메시지는 `host.trace.sidecar.receive`이며, field에 `sidecar`, `surface`, 본문 전체를 담는다. | both |
 | `sidecars.stderr.lines-are-written-as-records` | 표준 입출력 사이드카의 표준 오류 각 줄과 줄바꿈 없이 끝난 마지막 글은 기록 `<time> info sidecar <name>: <line>`으로 쓴다. | both |
 | `log.panic.writes-an-error-line` | 애플리케이션 로그를 연 뒤 host가 panic하면 기본 panic 메시지보다 먼저 `error host panic: <file>:<line>: <message>`를 쓴다. | tauriv2 only: Go runtime은 panic의 stack을 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다 |
 | `log.fatal-signal.writes-an-error-line` | 애플리케이션 로그를 연 뒤 host process가 fatal signal을 받으면 그 signal로 process가 끝나기 전에 `error: fatal: <signal name>`을 한 번 쓴다. | tauriv2 only: Go runtime은 fatal signal을 스스로 처리하고 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다 |

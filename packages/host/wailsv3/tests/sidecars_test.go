@@ -1094,6 +1094,7 @@ func TestTheRelayRecordsEveryMessageWithItsWholeBody(t *testing.T) {
 	script := "#!/bin/sh\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\",\"text\":\"\\ud55c\"}}'\nwhile read line; do :; done\n"
 	sidecars, directory := scriptSidecars(t, script)
 	sidecars.StopTimeout = stall
+	log := useEventLog(t)
 	// The sidecars resolve the configuration directory, so the switch names the resolved path.
 	directory, err := filepath.EvalSymlinks(directory)
 	if err != nil {
@@ -1110,33 +1111,28 @@ func TestTheRelayRecordsEveryMessageWithItsWholeBody(t *testing.T) {
 		t.Fatalf("event = %+v", event)
 	}
 	sidecars.Stop()
-	data, err := os.ReadFile(host.PerformanceTarget(directory))
-	if err != nil {
+	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
 	var sent, received map[string]any
-	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
-		var record map[string]any
-		if err := json.Unmarshal([]byte(line), &record); err != nil {
-			t.Fatalf("a line of the trace is not one JSON object: %q", line)
-		}
+	for _, record := range readEventLog(t, log.Path()) {
 		switch record["event"] {
-		case "sidecar.send":
+		case "host.trace.sidecar.send":
 			sent = record
-		case "sidecar.receive":
+		case "host.trace.sidecar.receive":
 			received = record
 		}
 	}
-	if sent == nil || sent["layer"] != "host" || sent["sidecar"] != echoSidecar || sent["surface"] != "s1" {
+	if sent == nil || sent["layer"] != "host" || sent["fields"].(map[string]any)["sidecar"] != echoSidecar || sent["fields"].(map[string]any)["surface"] != "s1" {
 		t.Fatalf("the request was not recorded: %v", sent)
 	}
-	if body, _ := sent["body"].(map[string]any); body["operation"] != "input" || body["bytes"] != "7ZWc" {
-		t.Fatalf("the request body was not recorded whole: %v", sent["body"])
+	if body, _ := sent["fields"].(map[string]any)["body"].(map[string]any); body["operation"] != "input" || body["bytes"] != "7ZWc" {
+		t.Fatalf("the request body was not recorded whole: %v", sent["fields"])
 	}
-	if received == nil || received["surface"] != "s1" {
+	if received == nil || received["fields"].(map[string]any)["surface"] != "s1" {
 		t.Fatalf("the message was not recorded: %v", received)
 	}
-	if body, _ := received["body"].(map[string]any); body["event"] != "state" || body["text"] != "한" {
-		t.Fatalf("the message body was not recorded whole: %v", received["body"])
+	if body, _ := received["fields"].(map[string]any)["body"].(map[string]any); body["event"] != "state" || body["text"] != "한" {
+		t.Fatalf("the message body was not recorded whole: %v", received["fields"])
 	}
 }

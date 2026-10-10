@@ -70,7 +70,12 @@ func emitRecord(e Entry) {
 		fmt.Fprintf(os.Stderr, "event writer: the record %q of %s cannot be serialized: %v\n", e.Where, e.Layer, err)
 		return
 	}
-	name := e.Layer + ".record." + e.Level
+	storeEvent(level, e.Layer, e.Layer+".record."+e.Level, e.Where, fields)
+}
+
+// storeEvent hands an event to the writer of the host, or to the start buffer while no writer exists. place names the record
+// in the reports of a refusal.
+func storeEvent(level Level, layer, name, place string, fields json.RawMessage) {
 	now := time.Now().UnixMicro()
 	records.Lock()
 	defer records.Unlock()
@@ -80,12 +85,43 @@ func emitRecord(e Entry) {
 			records.lostBytes += uint64(len(fields) + len(name))
 			return
 		}
-		records.buffer = append(records.buffer, bufferedRecord{tsMicros: now, layer: e.Layer, level: level, event: name, fields: fields})
+		records.buffer = append(records.buffer, bufferedRecord{tsMicros: now, layer: layer, level: level, event: name, fields: fields})
 		return
 	}
-	if _, err := records.log.EmitRelayed(now, e.Layer, level, name, fields); err != nil {
-		fmt.Fprintf(os.Stderr, "event writer: the record %q of %s cannot be stored: %v\n", e.Where, e.Layer, err)
+	if _, err := records.log.EmitRelayed(now, layer, level, name, fields); err != nil {
+		fmt.Fprintf(os.Stderr, "event writer: the record %q of %s cannot be stored: %v\n", place, layer, err)
 	}
+}
+
+// emitTrace stores an observation of the trace of the host as the event `host.<kind>.<event>`, where kind is `trace` for the
+// layer `host` and `sampler` for the layer `sampler`. The fields hold the name of the event in `event`, which the name of the
+// stored event replaces.
+func emitTrace(layer string, fields map[string]any) error {
+	var kind string
+	switch layer {
+	case "host":
+		kind = "trace"
+	case "sampler":
+		kind = "sampler"
+	default:
+		return fmt.Errorf("the layer %q of an observation is not host or sampler", layer)
+	}
+	event, ok := fields["event"].(string)
+	if !ok || event == "" {
+		return fmt.Errorf("event must be a string")
+	}
+	rest := make(map[string]any, len(fields))
+	for key, value := range fields {
+		if key != "event" {
+			rest[key] = value
+		}
+	}
+	text, err := json.Marshal(rest)
+	if err != nil {
+		return fmt.Errorf("the fields of %s cannot be serialized: %w", event, err)
+	}
+	storeEvent(LevelDebug, "host", "host."+kind+"."+event, event, text)
+	return nil
 }
 
 // FlushRecords waits until the records written so far are in the event log, at most deadline. The paths that end the process

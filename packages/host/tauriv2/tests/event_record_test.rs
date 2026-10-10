@@ -7,10 +7,11 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use soksak_host_tauriv2::application_log::{log_error, log_info, log_record};
 use soksak_host_tauriv2::event_log::{EventLog, Options};
 use soksak_host_tauriv2::event_record::{flush_records, use_host_event_log, START_BUFFER_RECORDS};
+use soksak_host_tauriv2::performance;
 
 /// The records of the host are process-wide, so the tests of this file run one at a time.
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -183,4 +184,65 @@ fn flush_records_stores_the_records_written_so_far_without_waiting_for_the_batch
     use_host_event_log(None);
     assert_eq!(events.len(), 2, "{events:?}");
     assert_eq!(events[1]["fields"]["text"], "stored before the interval");
+}
+
+// contract: performance.trace.host-observation-is-an-event
+#[test]
+fn a_host_observation_of_the_trace_is_an_event_and_not_a_line_of_the_trace_file() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    use_host_event_log(None);
+    let directory = tempfile::tempdir().unwrap();
+    let log = start(directory.path(), 64);
+    use_host_event_log(Some(Arc::clone(&log)));
+    let config = tempfile::tempdir().unwrap();
+    performance::command(config.path(), json!({"action": "on"})).unwrap();
+    let before = fs::read_to_string(performance::target(config.path())).unwrap();
+    performance::observe(
+        config.path(),
+        "host",
+        || json!({"event": "region", "surface": "tab-1", "body": {"key": "Enter"}}),
+    );
+    performance::observe(
+        config.path(),
+        "sampler",
+        || json!({"event": "memory", "rss_host_kb": 42}),
+    );
+    let after = fs::read_to_string(performance::target(config.path())).unwrap();
+    performance::observe(config.path(), "host", || json!({"surface": "tab-1"}));
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    performance::disable(config.path()).unwrap();
+    use_host_event_log(None);
+    let events = read(&path);
+    // The sampler that `on` starts stores its own events into the same writer, so the events are found by name.
+    let named = |name: &str, accept: &dyn Fn(&Value) -> bool| -> Value {
+        events
+            .iter()
+            .find(|event| event["event"] == name && accept(event))
+            .unwrap_or_else(|| panic!("no {name} in {events:?}"))
+            .clone()
+    };
+    let region = named("host.trace.region", &|_| true);
+    let memory = named("host.sampler.memory", &|event| {
+        event["fields"]["rss_host_kb"] == 42
+    });
+    let refused = named("host.record.error", &|event| {
+        event["fields"]["where"] == "performance trace"
+    });
+    assert_eq!(region["event"], "host.trace.region", "{region}");
+    assert_eq!(region["layer"], "host");
+    assert_eq!(region["level"], "debug");
+    assert_eq!(region["fields"]["surface"], "tab-1");
+    assert_eq!(region["fields"]["body"]["key"], "Enter");
+    assert!(region["fields"].get("event").is_none(), "{region}");
+    assert_eq!(memory["event"], "host.sampler.memory");
+    assert_eq!(memory["fields"]["rss_host_kb"], 42);
+    assert_eq!(
+        before, after,
+        "an observation of the host changed the trace file"
+    );
+    assert_eq!(
+        refused["event"], "host.record.error",
+        "an observation without a name was not reported: {refused}"
+    );
 }

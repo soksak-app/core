@@ -59,7 +59,7 @@ for (const app of Object.values(APPS)) {
     await s.flushLog();
     const events = readEvents(s.app.configDir, eventOffsets).events;
     const log = events.map((event) => ({ text: eventLine(event), ts: new Date(event.ts_us / 1000).toISOString() }));
-    // The trace of the page is in the event log; the host and the sidecar still write the trace file.
+    // The trace of the page and of the host is in the event log; the sidecar still writes the trace file.
     const trace = [...traceRows(events), ...traceRecords(readFrom(join(logs, "performance.ndjson"), traceOffset))];
     // Each layer must hold the key with its own fields; `find` names the record that the layer lacks.
     const nativeLine = (pattern) => log.find((line) => pattern.test(line.text));

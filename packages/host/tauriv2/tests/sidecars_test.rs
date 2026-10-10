@@ -757,6 +757,8 @@ fn the_relay_records_every_message_with_its_whole_body() {
         "#!/bin/sh\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\",\"text\":\"\\ud55c\"}}'\nwhile read line; do :; done\n",
     );
     sidecars.0.stop_timeout = STALL;
+    let events_directory = tempfile::tempdir().unwrap();
+    let writer = records::start_writer(events_directory.path());
     // The sidecars resolve the configuration directory, so the switch names the resolved path.
     let config = std::fs::canonicalize(directory.path()).unwrap();
     soksak_host_tauriv2::performance::enable(&config).unwrap();
@@ -774,27 +776,25 @@ fn the_relay_records_every_message_with_its_whole_body() {
         .expect("no event; the test stalled");
     assert_eq!(event.surface, "s1");
     sidecars.stop();
-    let text = std::fs::read_to_string(soksak_host_tauriv2::performance::target(&config)).unwrap();
-    let records: Vec<serde_json::Value> = text
-        .lines()
-        .map(|line| serde_json::from_str(line).expect("every line is one JSON object"))
-        .collect();
-    let sent = records
-        .iter()
-        .find(|record| record["event"] == "sidecar.send")
-        .expect("the request was not recorded");
+    writer.flush(STALL).unwrap();
+    let records_of_the_run = records::read_events(writer.path());
+    soksak_host_tauriv2::event_record::use_host_event_log(None);
+    let find = |name: &str| {
+        records_of_the_run
+            .iter()
+            .find(|record| record["event"] == name)
+            .cloned()
+    };
+    let sent = find("host.trace.sidecar.send").expect("the request was not recorded");
     assert_eq!(sent["layer"], "host");
-    assert_eq!(sent["sidecar"], ECHO);
-    assert_eq!(sent["surface"], "s1");
-    assert_eq!(sent["body"]["operation"], "input");
-    assert_eq!(sent["body"]["bytes"], "7ZWc");
-    let received = records
-        .iter()
-        .find(|record| record["event"] == "sidecar.receive")
-        .expect("the message was not recorded");
-    assert_eq!(received["surface"], "s1");
-    assert_eq!(received["body"]["event"], "state");
-    assert_eq!(received["body"]["text"], "한");
+    assert_eq!(sent["fields"]["sidecar"], ECHO);
+    assert_eq!(sent["fields"]["surface"], "s1");
+    assert_eq!(sent["fields"]["body"]["operation"], "input");
+    assert_eq!(sent["fields"]["body"]["bytes"], "7ZWc");
+    let received = find("host.trace.sidecar.receive").expect("the message was not recorded");
+    assert_eq!(received["fields"]["surface"], "s1");
+    assert_eq!(received["fields"]["body"]["event"], "state");
+    assert_eq!(received["fields"]["body"]["text"], "한");
 }
 
 // contract: sidecars.stop.forgets-running-sidecars

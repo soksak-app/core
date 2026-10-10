@@ -8,7 +8,7 @@
 
 ## 출력
 
-host 계층, sidecar, sampler의 이벤트는 구성 디렉터리의 `logs/performance.ndjson`에 덧붙고, 페이지의 이벤트는 event log에 있다(위 참조). 모든 줄이 하나의 이벤트 객체로 최소한 `ts`(밀리초를 포함한 ISO-8601), `pid`(기록한 프로세스), `layer`(`page`, `host`, `vt-core`, `files`, `shell`, `sampler`), `event` 를 담고 나머지 필드는 이벤트마다 다르다. 한 파일이 모든 계층을 담으므로 한 타임라인에서 앱 전체를 읽는다. 파일은 100 MB 에서 `performance.ndjson.1` 로 로테이션하며 이전 세대 다섯 개(`.1`부터 `.5`까지. 로테이션마다 이전 세대를 하나씩 뒤로 옮기고 다섯째를 지운다)를 남긴다; 로테이션과 파일은 트레이스의 소유물이므로 스위치가 꺼진 재시작에도 옛 로그는 남는다. 각 프로세스 시작은 `session_start` 이벤트로 표시하고 기록자의 역할을 담는다.
+sidecar의 이벤트는 구성 디렉터리의 `logs/performance.ndjson`에 덧붙는다. 페이지, host, sampler의 이벤트는 event log `logs/host-<boot>.jsonl`에 있다. 페이지는 `page.trace.<event>`(위 참조), host는 `host.trace.<event>`, sampler는 `host.sampler.<event>`이고 모두 level `debug`이며 event의 이름은 field가 아니라 event 이름에 있다. host는 trace를 바꿀 때 표식 `trace_on`과 `trace_off`를 파일에 쓴다. 모든 줄이 하나의 이벤트 객체로 최소한 `ts`(밀리초를 포함한 ISO-8601), `pid`(기록한 프로세스), `layer`(`page`, `host`, `vt-core`, `files`, `shell`, `sampler`), `event` 를 담고 나머지 필드는 이벤트마다 다르다. 한 파일이 모든 계층을 담으므로 한 타임라인에서 앱 전체를 읽는다. 파일은 100 MB 에서 `performance.ndjson.1` 로 로테이션하며 이전 세대 다섯 개(`.1`부터 `.5`까지. 로테이션마다 이전 세대를 하나씩 뒤로 옮기고 다섯째를 지운다)를 남긴다; 로테이션과 파일은 트레이스의 소유물이므로 스위치가 꺼진 재시작에도 옛 로그는 남는다. 각 프로세스 시작은 `session_start` 이벤트로 표시하고 기록자의 역할을 담는다.
 
 ## 생산자
 
