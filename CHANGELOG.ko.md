@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.7.4: `docs/spec/events.json`은 계층 `native`, `host`, `page`의 event catalog다. `make events-check`는 선언한 event마다 이를 적는 소스를 요구하고, `node scripts/check-events.mjs --logs <config-dir>…`는 창 검사가 남긴 host event 파일을 감사한다(선언된 event, 필수 field와 그 타입). 자리 표시자를 가진 catalog 이름은 계열을 선언한다. 감사가 `native.window.occlusion`이 `visible`을 숫자로 저장하는 결함을 찾았고, 이제 boolean이다.
 - F151.5: `debug-state.js`를 workbench 패키지의 files 목록에 넣고, `page` 멤버가 배열인 state 파일(host가 쓰는 형태)을 트리로 보인다.
 - F150.6.1: 사이드카로 가는 페이지 요청은 이어받는 입력의 상관 식별자를 나를 수 있다. 사이드카 포트의 `send(surface, body, cids)`, 두 runtime의 host 호출 `sidecarSend`, 두 host가 `cids`를 전달하고, 요청 줄은 목록이 비어 있지 않을 때만 `root`와 `body` 사이에 필드 `cids`를 가진다.
 - F151.5: 디버그 화면이 상태 파일 `logs/state-<time>.json`을 key와 값의 트리로 보이고(`core.debug.state`, 상태 파일 행의 상태 단추) 다른 상태 파일과 값이 다른 경로를 나열해 비교한다(`core.debug.state.compare`). 상태가 아닌 파일은 파일과 찾은 값을 밝혀 거부하고, `core.debug`는 `state`를 보고한다. 원본 `.stderr`와 `.crash` 파일은 목록에 나열되고 글로 보인다. 실행 중인 애플리케이션에서 관측하지 않았다.

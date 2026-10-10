@@ -70,7 +70,7 @@ void sp_observe_activity(void) {
             NSWindow *window = note.object;
             if (![window isKindOfClass:NSWindow.class]) return;
             emit(@"native.window.occlusion", @{@"window": @(window.windowNumber),
-                @"visible": @((window.occlusionState & NSWindowOcclusionStateVisible) != 0)});
+                @"visible": [NSNumber numberWithBool:(window.occlusionState & NSWindowOcclusionStateVisible) != 0]});
         }];
         [center addObserverForName:NSTextInputContextKeyboardSelectionDidChangeNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
             emit(@"native.input.source_changed", @{});

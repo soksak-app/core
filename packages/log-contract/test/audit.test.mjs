@@ -79,3 +79,28 @@ test("the golden lines and the golden catalog pass the audit", async () => {
     assert.deepEqual(auditLog(name, read(name), golden), [], name);
   }
 });
+
+test("a family name with a placeholder declares every event of the family, and a layer outside the catalog is left to its own catalog", () => {
+  const family = {
+    schema: 1,
+    layers: ["host", "page"],
+    events: {
+      "log.open": catalog.events["log.open"],
+      "page.record.<level>": { layer: "page", class: "lifecycle", level: "info", fields: { where: "string", text: "string" } },
+      "page.trace.<event>": { layer: "page", class: "call", level: "debug", fields: {} },
+    },
+  };
+  const text = [
+    open,
+    line(2, "page.record.error", { where: "w", text: "t" }, { layer: "page" }),
+    line(3, "page.trace.command", { name: "x" }, { layer: "page" }),
+    line(4, "page.trace.sidecar.send", {}, { layer: "page" }),
+    line(5, "plugin.terminal.send", { n: 1 }, { layer: "plugin" }),
+    line(6, "page.record.error", { where: "w" }, { layer: "page" }),
+    line(7, "page.unknown.thing", {}, { layer: "page" }),
+  ].join("\n");
+  assert.deepEqual(auditLog("host-b1.jsonl", text, family), [
+    { line: 6, message: "field text is required by page.record.error" },
+    { line: 7, message: "event page.unknown.thing is not declared" },
+  ]);
+});

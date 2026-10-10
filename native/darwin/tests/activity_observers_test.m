@@ -42,7 +42,8 @@ int main(void) { @autoreleasepool {
     check([key[@"window"] intValue] == (int)window.windowNumber, @"the key event names the window number");
     check([key[@"first_responder"] isEqual:NSStringFromClass([field class])], @"the key event names the class of the first responder");
     NSDictionary *occlusion = events.count > 5 ? events[5][@"fields"] : @{};
-    check([occlusion[@"visible"] isKindOfClass:NSNumber.class], @"the occlusion event says whether the window is visible");
+    check([occlusion[@"visible"] isKindOfClass:NSNumber.class] && CFGetTypeID((__bridge CFTypeRef)occlusion[@"visible"]) == CFBooleanGetTypeID(),
+        @"the occlusion event says whether the window is visible as a boolean");
 
     // The first responder of a window changes without a notification: each change is an event with the classes before and after.
     NSTextField *other = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 60, 100, 30)];

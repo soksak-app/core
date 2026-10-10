@@ -46,16 +46,32 @@ function typeOf(value) {
   return typeof value;
 }
 
+/**
+ * The declaration of an event name. A catalog name with a placeholder such as `page.record.<level>` declares every event of
+ * its family: a placeholder stands for one or more characters of `a-z`, `0-9`, `_` and `.`.
+ */
+function declaration(catalog, name) {
+  if (catalog.events[name] !== undefined) return catalog.events[name];
+  for (const [declared, value] of Object.entries(catalog.events)) {
+    if (!declared.includes("<")) continue;
+    const pattern = declared.split(/<[a-z_]+>/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[a-z0-9_.]+");
+    if (new RegExp(`^${pattern}$`).test(name)) return value;
+  }
+  return undefined;
+}
+
 /** The findings of the structure of one event line. */
 function lineFindings(entry, catalog) {
   const { line, event } = entry;
   const findings = [];
+  // A catalog names the layers it owns; the events of another layer belong to the catalog of another repository.
+  if (catalog.layers !== undefined && LAYERS.has(event.layer) && !catalog.layers.includes(event.layer)) return findings;
   const report = (message) => findings.push({ line, message });
   if (!Number.isInteger(event.seq)) report("seq must be an integer");
   if (!Number.isInteger(event.ts_us)) report("ts_us must be an integer");
   if (!LEVELS.has(event.level)) report(`level ${event.level} is not one of ${[...LEVELS].join(", ")}`);
   if (!LAYERS.has(event.layer)) report(`layer ${event.layer} is not one of ${[...LAYERS].join(", ")}`);
-  const declared = catalog.events[event.event];
+  const declared = declaration(catalog, event.event);
   if (declared === undefined) {
     if (event.undeclared !== true) report(`event ${event.event} is not declared`);
     return findings;
