@@ -9,6 +9,7 @@
 // 받는 경로와 표면이 없다.
 import { host } from "@soksak/runtime";
 import { timed, trace } from "./performance.js";
+import { emitEvent } from "./page-log.js";
 import {
   EXPOSE_KINDS, EXPOSURE_ERRORS, ExposureError, METHOD_KINDS, SURFACE_CORE, declarationKey, declarationMap,
   exposureEntries, replyPayload, validateExposes, validateExposureFile,
@@ -163,9 +164,26 @@ export function createRegistry({ call = null, report = null } = {}) {
     return Promise.race([running, expired]).finally(() => clearTimeout(timer));
   }
 
+  // Every command request is the event `page.command` (docs/spec/logging.md#automatic-entrances), whether or not the
+  // trace is on.
+  async function recorded(name, run) {
+    const started = performance.now();
+    const micros = () => Math.round((performance.now() - started) * 1000);
+    try {
+      const result = await run();
+      emitEvent("debug", "page.command", { name, micros: micros(), ok: true });
+      return result;
+    } catch (error) {
+      emitEvent("warn", "page.command", { name, micros: micros(), ok: false,
+        // default: a thrown value that is not an Error is recorded as its own text.
+        error: String(error?.message ?? error) });
+      throw error;
+    }
+  }
+
   function answer(method, params) {
     return method === "command.run" && typeof params?.name === "string"
-      ? timed(params.name, () => dispatch(method, params)) : dispatch(method, params);
+      ? recorded(params.name, () => timed(params.name, () => dispatch(method, params))) : dispatch(method, params);
   }
 
   async function dispatch(method, params) {

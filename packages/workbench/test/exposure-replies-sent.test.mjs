@@ -2,6 +2,7 @@
 // reloads its own window still answers (docs/spec/installation.md#applying-a-change).
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import { settled } from "./support/records.mjs";
 
 const handlers = new Map();
 const calls = [];
@@ -28,4 +29,26 @@ test("whenRepliesSent resolves after the reply of a running command request is s
   release(null);
   await waiting;
   assert.equal(sent, true, "whenRepliesSent resolved before the reply was sent");
+});
+
+test("a command request is the event page.command with its name, duration and outcome", async () => {
+  registry.declare("core", { status: [], dom: [], commands: [
+    { name: "core.fixture.fine", description: "Succeeds.", params: { type: "object", properties: {} }, result: { type: "null" } },
+    { name: "core.fixture.broken", description: "Fails.", params: { type: "object", properties: {} }, result: { type: "null" } },
+  ] });
+  registry.command("core.fixture.fine", () => null);
+  registry.command("core.fixture.broken", () => { throw new Error("broken on purpose"); });
+  await connectExposure({ settled: async () => {}, report: () => {} });
+  calls.length = 0;
+  handlers.get("exposure-request")({ id: 21, method: "command.run", params: { name: "core.fixture.fine", params: {} } });
+  handlers.get("exposure-request")({ id: 22, method: "command.run", params: { name: "core.fixture.broken", params: {} } });
+  await whenRepliesSent();
+  await settled();
+  const events = calls.filter(([name]) => name === "log").flatMap(([, payload]) => payload.events).filter(({ event }) => event === "page.command");
+  // An event is stored when its command ends, so the order is the order of the ends.
+  assert.deepEqual(events.map(({ level, fields }) => [level, fields.name, fields.ok, fields.error]).sort((a, b) => a[1].localeCompare(b[1])), [
+    ["warn", "core.fixture.broken", false, "broken on purpose"],
+    ["debug", "core.fixture.fine", true, undefined],
+  ]);
+  for (const { fields } of events) assert.ok(Number.isInteger(fields.micros) && fields.micros >= 0);
 });

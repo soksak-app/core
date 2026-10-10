@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F150.5.4: page의 모든 `command.run` 요청은 성능 trace가 켜져 있든 꺼져 있든 필드 `name`, `micros`, `ok`, `error`를 가진 event `page.command`다(level `debug`, 실패한 명령은 `warn`).
 - F150.5.1: 메인 page의 모든 host 호출은 event `page.call`이다(level `debug`, 거절된 호출은 `warn`). 필드는 `name`, `args`(1024자에서 자름), `micros`, `ok`, `error`이며, 두 runtime이 `host.call` 둘레에 두는 감싸개가 기록한다. 호출 `log`와 `performance`는 기록하지 않는다.
 - F150.4.3: 표면의 context에 `context.closing`이 있다. 워크벤치는 표면 제거가 시작될 때 모듈 composition의 region을 떼기 전과 `dispose` 전에 이 `AbortSignal`을 abort한다. fixture 초기화 1초쯤 뒤 떼어진 region에 입력이 닿던 오류(`terminal input failed: image view is detached`)는 detach와 `dispose` 사이에 plugin이 사이드카의 커서 event를 처리해서 생겼다. 신호를 읽지 않는 모듈은 떼어진 region의 거절을 그대로 받는다.
 - F150.4.2: plugin이 `context.runtime.log.<level>(event, fields)`로 event log의 event를 저장한다(level은 `error`, `warn`, `info`, `debug`, `trace`이고 event 이름은 `plugin.<plugin>.<event>`이며 field에 표면이 붙는다). page의 batcher에 큐로 들어간다. host 호출 `log`는 접두 `page.`와 `plugin.`을 받고 접두가 가리키는 계층으로 저장한다. page가 콘솔에 쓰는 것은 field `text`를 가진 event `page.console.<method>`로 저장하며(`console.error`와 `console.warn`은 level `warn`이므로 콘솔은 window 검사를 실패시키지 않는다), 중계 실패는 수집 전의 콘솔에 쓰이고 다시 event가 되지 않는다. 커밋된 체크리스트 검사(`scripts/test/checklist.test.mjs`, 한도 3초)는 부하 평균 16에서 한 번 4.2초가 걸렸고 단독 3회는 0.8~1.3초였으므로 부하로 분류한다.

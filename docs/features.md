@@ -784,7 +784,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
     - [o] F150.5.1 — P0: The host calls of the main page are the event `page.call` (name, arguments, duration, outcome). Done: `packages/workbench/test/host-calls.test.mjs`, `packages/workbench/test/page-log.test.mjs`.
     - [ ] F150.5.2 — P0: Record the host calls of a surface document (`page`) as the same event.
     - [ ] F150.5.3 — P0: Record the window and application events in one registration helper of each host.
-    - [ ] F150.5.4 — P0: Record the registry commands in `timed`.
+    - [o] F150.5.4 — P0: Every `command.run` request of the page is the event `page.command` (name, duration, outcome) whether or not the trace is on. Done: `packages/workbench/test/exposure-replies-sent.test.mjs`.
     - [ ] F150.5.5 — P0: Record the lifetime of the sidecars (launch, exit, exit status) in one place for launch and one for exit.
     - [ ] F150.5.6 — P0: Make the display path of errors that a person sees emit the `error` event.
   - [ ] F150.6 — P0: Fix the wire contract that sidecars and plugins write against, in core: the additive correlation identifier field `cids` of the request envelope, the operation `log.policy` that the host sends to a sidecar when it connects and when the policy changes, and the file `<config-dir>/log-policy.json` that the host watches; the catalogs of the other repositories are declared in their own manifests. The adoption by each sidecar and plugin (vt, files, shell, terminal, browser, editor) is tracked in the checklist of its own repository and is not an item of this one.

@@ -784,7 +784,7 @@
     - [o] F150.5.1 — P0: 메인 page의 host 호출은 `page.call` event다(이름, 인자, 시간, 결과). 완료: `packages/workbench/test/host-calls.test.mjs`, `packages/workbench/test/page-log.test.mjs`.
     - [ ] F150.5.2 — P0: 표면 문서(`page`)의 host 호출을 같은 event로 기록한다.
     - [ ] F150.5.3 — P0: 창·애플리케이션 이벤트를 각 host의 등록 helper 하나에서 기록한다.
-    - [ ] F150.5.4 — P0: registry 명령을 `timed` 하나에서 기록한다.
+    - [o] F150.5.4 — P0: page의 모든 `command.run` 요청은 trace가 켜져 있든 꺼져 있든 event `page.command`(이름, 시간, 결과)다. 완료: `packages/workbench/test/exposure-replies-sent.test.mjs`.
     - [ ] F150.5.5 — P0: sidecar 수명(launch, exit, 종료 상태)을 launch와 exit 한 곳에서 기록한다.
     - [ ] F150.5.6 — P0: 사람이 보는 오류의 표시 경로가 `error` event를 낸다.
   - [ ] F150.6 — P0: sidecar와 plugin이 따를 wire 계약을 core에서 정한다: 요청 봉투의 더하기 방식 상관 식별자 field `cids`, host가 sidecar에 연결할 때와 정책이 바뀔 때 보내는 연산 `log.policy`, host가 감시하는 파일 `<config-dir>/log-policy.json`. 다른 저장소의 catalog는 각자의 manifest에 선언한다. 각 sidecar와 plugin(vt, files, shell, terminal, browser, editor)의 채택은 각자의 저장소 체크리스트에서 관리하며 이 저장소의 항목이 아니다.
