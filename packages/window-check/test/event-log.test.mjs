@@ -1,11 +1,12 @@
 // 창 검사가 애플리케이션의 event log(docs/spec/logging.md#files)에서 검사 동안 쓰인 오류 event를 읽는지 검사한다.
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { readEventErrors, readEventOffsets, writeEventOffsets } from "../event-log.mjs";
+import { eventLine, readEventErrors, readEventLines, readEventOffsets, untilEventLine, untilEventLines, writeEventOffsets } from "../event-log.mjs";
 
 function configDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-event-log-"));
@@ -72,4 +73,79 @@ test("the offsets of the event logs are kept beside the configuration folder", (
   writeFileSync(`${dir}.event-offsets`, "[1]");
   assert.throws(() => readEventOffsets(dir), /expected an object of byte offsets/);
   rmSync(`${dir}.event-offsets`);
+});
+
+test("a record event reads as the line of the text form, and another event as its name and fields", () => {
+  const record = { level: "error", layer: "host", event: "host.record.error", fields: { where: "page asset", text: "/missing.js: not found" } };
+  assert.equal(eventLine(record), "error host page asset: /missing.js: not found");
+  assert.equal(eventLine({ ...record, level: "info", event: "page.record.info", layer: "page", fields: { where: "verify", text: "18 pass" } }), "info page verify: 18 pass");
+  assert.equal(eventLine({ level: "warn", layer: "host", event: "host.test.warned", fields: { index: 1 } }), 'warn host host.test.warned: {"index":1}');
+  assert.throws(() => eventLine({ level: "error", layer: "host", event: "host.record.error", fields: { where: "x" } }), /where and text/);
+});
+
+test("readEventErrors prints a record event as the line of the text form", (t) => {
+  const dir = configDir(t);
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"),
+    line(1, "error", "host.record.error", { where: "page asset", text: "/missing.js: not found" }) +
+    line(2, "info", "host.record.info", { where: "sidecar", text: "started" }));
+  assert.deepEqual(readEventErrors(dir, {}).errors, ["error host page asset: /missing.js: not found"]);
+});
+
+test("readEventLines returns the lines of every event after the offsets", (t) => {
+  const dir = configDir(t);
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"),
+    line(1, "info", "host.record.info", { where: "sidecar", text: "started" }) + line(2, "warn", "host.test.warned", { index: 1 }));
+  const first = readEventLines(dir, {});
+  assert.deepEqual(first.lines, ["info host sidecar: started", 'warn host host.test.warned: {"index":1}']);
+  assert.deepEqual(readEventLines(dir, first.offsets).lines, []);
+});
+
+test("untilEventLine returns the first line after the offsets that the predicate accepts, and names the lines it saw on a timeout", async (t) => {
+  const dir = configDir(t);
+  const file = join(dir, "logs", "host-1-10.jsonl");
+  writeFileSync(file, line(1, "info", "host.record.info", { where: "early", text: "before the offsets" }));
+  const { offsets } = readEventLines(dir, {});
+  // The file changes after the watch is installed: the record arrives while the check waits.
+  setImmediate(() => appendFileSync(file, line(2, "info", "page.record.info", { where: "page", text: "focus in a" }, "page")));
+  assert.equal(await untilEventLine(dir, offsets, (text) => text.endsWith("focus in a"), 5000), "info page page: focus in a");
+  await assert.rejects(untilEventLine(dir, offsets, (text) => text.includes("never"), 100),
+    /no event line matched within 100 ms; the lines after the offsets: \[.*focus in a/);
+});
+
+test("untilEventLines waits for a predicate over all the lines after the offsets", async (t) => {
+  const dir = configDir(t);
+  const file = join(dir, "logs", "host-1-10.jsonl");
+  writeFileSync(file, line(1, "error", "host.record.error", { where: "a", text: "first" }));
+  setImmediate(() => appendFileSync(file, line(2, "error", "host.record.error", { where: "b", text: "second" })));
+  const lines = await untilEventLines(dir, {}, (all) => all.filter((entry) => entry.startsWith("error ")).length >= 2, 5000);
+  assert.deepEqual(lines, ["error host a: first", "error host b: second"]);
+});
+
+test("untilEventLines sees a record that another process appends to an existing file", async (t) => {
+  const dir = configDir(t);
+  const file = join(dir, "logs", "host-1-10.jsonl");
+  writeFileSync(file, line(1, "info", "log.open"));
+  const { offsets } = readEventLines(dir, {});
+  // The writer of the application is another process: it appends to its file after the check started to wait (the child
+  // process takes longer to start than the check takes to install its watchers), and no entry of the folder changes.
+  const appender = spawn(process.execPath, ["-e", `
+    const { appendFileSync } = require("node:fs");
+    appendFileSync(${JSON.stringify(file)}, ${JSON.stringify(line(2, "info", "host.record.info", { where: "w", text: "appended" }))});
+  `], { stdio: "inherit" });
+  t.after(() => appender.kill());
+  const lines = await untilEventLines(dir, offsets, (all) => all.includes("info host w: appended"), 3000);
+  assert.deepEqual(lines, ["info host w: appended"]);
+});
+
+test("untilEventLines sees a file that another process creates", async (t) => {
+  const dir = configDir(t);
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open"));
+  const { offsets } = readEventLines(dir, {});
+  const creator = spawn(process.execPath, ["-e", `
+    const { writeFileSync } = require("node:fs");
+    writeFileSync(${JSON.stringify(join(dir, "logs", "host-2-20.jsonl"))}, ${JSON.stringify(line(1, "info", "host.record.info", { where: "w", text: "new file" }))});
+  `], { stdio: "inherit" });
+  t.after(() => creator.kill());
+  const lines = await untilEventLines(dir, offsets, (all) => all.includes("info host w: new file"), 3000);
+  assert.deepEqual(lines, ["info host w: new file"]);
 });

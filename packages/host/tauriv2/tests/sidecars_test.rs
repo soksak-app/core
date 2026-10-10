@@ -5,6 +5,9 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Duration;
 
+#[path = "support/records.rs"]
+mod records;
+
 use serde_json::value::RawValue;
 use soksak_host_tauriv2::sidecars::{
     ClosingSurface, Failure, Message, Owner, SidecarDeclaration, Sidecars,
@@ -572,7 +575,7 @@ fn stop_closes_unread_output() {
     // 많이 쓰는 사이드카도 강제 종료 없이 끝나는지 검증한다. 출력은 호스트가 닫지 않은 표면의 닫기 응답이다. 그 프로세스의
     // 종료는 닫힌 파이프 때문이므로 보고하지 않는다.
     let Some(stderr) = logged_by_child("stop_closes_unread_output") else {
-        stop_closes_unread_output_in_child();
+        records::capturing(stop_closes_unread_output_in_child);
         return;
     };
     let want =
@@ -634,35 +637,37 @@ fn stop_reads_output_to_its_end() {
     // 그다음 파이프가 담는 것보다 많이 쓴 뒤 모든 쓰기가 성공했을 때만 finished 를 기록한다. 애플리케이션이 끝날 때 창
     // 닫기가 보낸 closed 에 files 사이드카가 답하는 순서와 같다.
     let Some(stderr) = logged_by_child("stop_reads_output_to_its_end") else {
-        let (mut sidecars, directory) = script_sidecars(
+        records::capturing(|| {
+            let (mut sidecars, directory) = script_sidecars(
             "#!/bin/sh\nclosed=\nwhile read line; do case \"$line\" in *'\"closed\":true'*) closed=1;; *) echo \"$line\";; esac; done\n\
              [ -n \"$closed\" ] || exit 4\necho '{\"surface\":\"s1\",\"closed\":true}' || exit 5\n\
              i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"body\":\"late\"}' || exit 5; i=$((i+1)); done\n\
              echo finished > DIR/finished\nexit 0\n",
         );
-        sidecars.0.stop_timeout = STALL;
-        let (window, events) = owner("a", "/projects/test");
-        sidecars
-            .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
-            .unwrap();
-        let event = events
-            .recv_timeout(STALL)
-            .expect("no echo event; the test stalled");
-        assert_eq!(event.surface, "s1");
-        sidecars.retain(&window, &|_| false).unwrap();
-        let start = std::time::Instant::now();
-        sidecars.stop();
-        let elapsed = start.elapsed();
-        assert!(
-            elapsed < sidecars.stop_timeout,
-            "stop took {elapsed:?} and reached the {:?} deadline",
-            sidecars.stop_timeout
-        );
-        let finished = std::fs::read_to_string(directory.path().join("finished"));
-        assert!(
-            matches!(&finished, Ok(text) if text == "finished\n"),
-            "the sidecar did not complete its writes on its way out: finished = {finished:?}"
-        );
+            sidecars.0.stop_timeout = STALL;
+            let (window, events) = owner("a", "/projects/test");
+            sidecars
+                .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
+                .unwrap();
+            let event = events
+                .recv_timeout(STALL)
+                .expect("no echo event; the test stalled");
+            assert_eq!(event.surface, "s1");
+            sidecars.retain(&window, &|_| false).unwrap();
+            let start = std::time::Instant::now();
+            sidecars.stop();
+            let elapsed = start.elapsed();
+            assert!(
+                elapsed < sidecars.stop_timeout,
+                "stop took {elapsed:?} and reached the {:?} deadline",
+                sidecars.stop_timeout
+            );
+            let finished = std::fs::read_to_string(directory.path().join("finished"));
+            assert!(
+                matches!(&finished, Ok(text) if text == "finished\n"),
+                "the sidecar did not complete its writes on its way out: finished = {finished:?}"
+            );
+        });
         return;
     };
     assert!(
@@ -676,21 +681,23 @@ fn stop_reads_output_to_its_end() {
 fn stop_reports_exit_status() {
     // 멈추는 동안 0 이 아닌 종료 상태나 신호로 끝난 사이드카를 두 호스트에 같은 형식으로 로그에 쓰는지 검증한다.
     let Some(stderr) = logged_by_child("stop_reports_exit_status") else {
-        for ending in ["exit 3", "kill -TERM $$"] {
-            let (mut sidecars, _directory) = script_sidecars(&format!(
-                "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n{ending}\n"
-            ));
-            sidecars.0.stop_timeout = STALL;
-            let (window, events) = owner("a", "/projects/test");
-            sidecars
-                .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
-                .unwrap();
-            let event = events
-                .recv_timeout(STALL)
-                .expect("no echo event; the test stalled");
-            assert_eq!(event.surface, "s1");
-            sidecars.stop();
-        }
+        records::capturing(|| {
+            for ending in ["exit 3", "kill -TERM $$"] {
+                let (mut sidecars, _directory) = script_sidecars(&format!(
+                    "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n{ending}\n"
+                ));
+                sidecars.0.stop_timeout = STALL;
+                let (window, events) = owner("a", "/projects/test");
+                sidecars
+                    .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
+                    .unwrap();
+                let event = events
+                    .recv_timeout(STALL)
+                    .expect("no echo event; the test stalled");
+                assert_eq!(event.surface, "s1");
+                sidecars.stop();
+            }
+        });
         return;
     };
     for want in [
@@ -711,21 +718,23 @@ fn the_standard_error_of_a_sidecar_is_written_as_records() {
     // record of level info, layer sidecar and the name of the sidecar, and the last text without a line feed too.
     let Some(stderr) = logged_by_child("the_standard_error_of_a_sidecar_is_written_as_records")
     else {
-        let (mut sidecars, _directory) = script_sidecars(
+        records::capturing(|| {
+            let (mut sidecars, _directory) = script_sidecars(
             "#!/bin/sh\necho 'first line' >&2\nprintf 'no line feed' >&2\nwhile read line; do echo \"$line\"; done\n",
         );
-        sidecars.0.stop_timeout = STALL;
-        let (window, events) = owner("a", "/projects/test");
-        sidecars
-            .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
-            .unwrap();
-        let event = events
-            .recv_timeout(STALL)
-            .expect("no echo event; the test stalled");
-        assert_eq!(event.surface, "s1");
-        sidecars.stop();
-        // The reader of the standard error ends with the process; let it write its last record.
-        std::thread::sleep(Duration::from_millis(200));
+            sidecars.0.stop_timeout = STALL;
+            let (window, events) = owner("a", "/projects/test");
+            sidecars
+                .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
+                .unwrap();
+            let event = events
+                .recv_timeout(STALL)
+                .expect("no echo event; the test stalled");
+            assert_eq!(event.surface, "s1");
+            sidecars.stop();
+            // The reader of the standard error ends with the process; let it write its last record.
+            std::thread::sleep(Duration::from_millis(200));
+        });
         return;
     };
     for want in [
@@ -881,7 +890,7 @@ fn close_during_stop_sends_nothing() {
 fn stop_forced_kill() {
     // 기한을 초과해도 종료하지 않는 사이드카를 kill 하고 그 kill 을 로그에 쓰는지 검증한다.
     let Some(stderr) = logged_by_child("stop_forced_kill") else {
-        stop_forced_kill_in_child();
+        records::capturing(stop_forced_kill_in_child);
         return;
     };
     let want =
@@ -1235,16 +1244,18 @@ fn closed_surface_stays_closing_until_the_sidecar_answers() {
 fn failed_close_answer_is_logged() {
     // 로그는 표준 오류이므로 같은 검사를 자식 process 로 실행해 그 출력을 읽는다.
     if std::env::var_os("SOKSAK_CLOSE_LOG_CHILD").is_some() {
-        let script = "#!/bin/sh\nwhile read line; do case \"$line\" in *closed*) printf '{\"surface\":\"s1\",\"closed\":true,\"error\":\"busy\"}\\n';; *) echo \"$line\";; esac; done\n";
-        let (sidecars, snapshots, _directory) = closing_sidecars(script);
-        let (window, _events) = owner("a", "/projects/closing");
-        sidecars
-            .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
-            .unwrap();
-        sidecars.retain(&window, &|_| false).unwrap();
-        assert_eq!(snapshots.recv_timeout(STALL).unwrap(), closing_of("s1"));
-        assert_eq!(snapshots.recv_timeout(STALL).unwrap(), vec![]);
-        sidecars.stop();
+        records::capturing(|| {
+            let script = "#!/bin/sh\nwhile read line; do case \"$line\" in *closed*) printf '{\"surface\":\"s1\",\"closed\":true,\"error\":\"busy\"}\\n';; *) echo \"$line\";; esac; done\n";
+            let (sidecars, snapshots, _directory) = closing_sidecars(script);
+            let (window, _events) = owner("a", "/projects/closing");
+            sidecars
+                .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+                .unwrap();
+            sidecars.retain(&window, &|_| false).unwrap();
+            assert_eq!(snapshots.recv_timeout(STALL).unwrap(), closing_of("s1"));
+            assert_eq!(snapshots.recv_timeout(STALL).unwrap(), vec![]);
+            sidecars.stop();
+        });
         return;
     }
     let output = std::process::Command::new(std::env::current_exe().unwrap())
@@ -1389,6 +1400,7 @@ fn a_dropped_sidecar_message_is_recorded() {
             "com.soksak.test",
         )
         .unwrap();
+        let writer = records::start_writer(std::path::Path::new(&config));
         let (sidecars, _directory) = script_sidecars(
             "#!/bin/sh\nread open1\nread open2\nread closed2\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s1\",\"body\":\"after\"}'\nexec sleep 600\n",
         );
@@ -1406,6 +1418,7 @@ fn a_dropped_sidecar_message_is_recorded() {
             .recv_timeout(STALL)
             .expect("no sidecar event; the test stalled");
         assert_eq!(event.surface, "s1");
+        writer.flush(STALL).unwrap();
         return;
     }
     let config = tempfile::tempdir().unwrap();
@@ -1426,10 +1439,9 @@ fn a_dropped_sidecar_message_is_recorded() {
         output.status,
         String::from_utf8_lossy(&output.stdout)
     );
-    let log = std::fs::read_to_string(soksak_host_tauriv2::application_log::application_log_path(
+    let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
-    ))
-    .unwrap();
+    )));
     let want = format!(
         " info host sidecar {ECHO}: message for surface s2 dropped: no window owns the surface: \"late\""
     );

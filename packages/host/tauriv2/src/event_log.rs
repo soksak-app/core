@@ -263,14 +263,14 @@ impl EventLog {
     /// serialized once, and only after the queue is known to have room for another event.
     pub fn emit<T: Serialize>(&self, level: Level, event: &str, fields: &T) -> bool {
         if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
-            self.count_loss(event.len());
+            self.count_loss(1, event.len() as u64);
             return false;
         }
         let fields = match to_raw_value(fields) {
             Ok(fields) => fields,
             Err(error) => {
                 // A value that cannot be serialized is a defect of the caller: it is recorded in place of the event.
-                self.count_loss(event.len());
+                self.count_loss(1, event.len() as u64);
                 eprintln!("event writer: the fields of {event} cannot be serialized: {error}");
                 return false;
             }
@@ -300,7 +300,7 @@ impl EventLog {
             ));
         }
         if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
-            self.count_loss(event.len());
+            self.count_loss(1, event.len() as u64);
             return Ok(false);
         }
         Ok(self.enqueue(ts_us, Cow::Owned(layer.to_string()), level, event, fields))
@@ -316,7 +316,7 @@ impl EventLog {
     ) -> bool {
         let bytes = fields.get().len() + event.len();
         if self.queued_bytes.load(Ordering::Relaxed) + bytes > self.queue_bytes {
-            self.count_loss(bytes);
+            self.count_loss(1, bytes as u64);
             return false;
         }
         let pending = Pending {
@@ -334,15 +334,17 @@ impl EventLog {
             Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {
                 self.queued_bytes.fetch_sub(bytes, Ordering::Relaxed);
                 self.queued_events.fetch_sub(1, Ordering::Relaxed);
-                self.count_loss(bytes);
+                self.count_loss(1, bytes as u64);
                 false
             }
         }
     }
 
-    fn count_loss(&self, bytes: usize) {
-        self.loss.events.fetch_add(1, Ordering::Relaxed);
-        self.loss.bytes.fetch_add(bytes as u64, Ordering::Relaxed);
+    /// Adds events and bytes that a producer of this process refused before they reached the writer; the writer records
+    /// them as a `log.dropped`.
+    pub fn count_loss(&self, events: u64, bytes: u64) {
+        self.loss.events.fetch_add(events, Ordering::Relaxed);
+        self.loss.bytes.fetch_add(bytes, Ordering::Relaxed);
     }
 
     /// Writes everything that is queued and waits until it is on disk, at most `deadline`.

@@ -440,6 +440,11 @@ export class Session {
     };
   }
 
+  /** Waits until the records the application wrote so far are in its event log. */
+  flushLog() {
+    return this.request("diagnostics.log.flush");
+  }
+
   key(key, phase, options = {}) {
     return this.request("input.key", { key, phase, ...options });
   }

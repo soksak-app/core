@@ -5,6 +5,9 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Stdio};
 
+#[path = "support/records.rs"]
+mod records;
+
 use soksak_host_tauriv2::application_log::{
     application_log_path, log_error, open_log, start_application_log,
 };
@@ -127,21 +130,23 @@ fn start_application_log_writes_the_start_line_and_takes_the_standard_error_of_t
 
 // contract: log.error.line-form
 #[test]
-fn log_error_writes_an_error_line_to_the_application_log() {
+fn log_error_writes_an_error_event_to_the_event_log() {
     if let Some(config) = std::env::var_os(CHILD) {
         if let Err(error) = start_application_log(std::path::Path::new(&config), "com.soksak.test")
         {
             println!("{error}");
             std::process::exit(2);
         }
+        let log = records::start_writer(std::path::Path::new(&config));
         log_error("surface input", "the window has no content view");
+        log.flush(std::time::Duration::from_secs(5)).unwrap();
         return;
     }
     let config = tempfile::tempdir().unwrap();
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
-            "log_error_writes_an_error_line_to_the_application_log",
+            "log_error_writes_an_error_event_to_the_event_log",
             "--nocapture",
             "--test-threads=1",
         ])
@@ -155,13 +160,14 @@ fn log_error_writes_an_error_line_to_the_application_log() {
         output.status,
         String::from_utf8_lossy(&output.stdout)
     );
-    let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
-    let lines: Vec<&str> = log.lines().collect();
+    let events = records::read_events(&records::event_log_path(config.path()));
     assert!(
-        lines.len() == 2
-            && is_record(lines[1])
-            && lines[1].ends_with(" error host surface input: the window has no content view"),
-        "application log {lines:?}"
+        events.len() == 2
+            && events[1]["event"] == "host.record.error"
+            && events[1]["level"] == "error"
+            && events[1]["fields"]["where"] == "surface input"
+            && events[1]["fields"]["text"] == "the window has no content view",
+        "event log {events:?}"
     );
 }
 
@@ -213,21 +219,23 @@ fn a_record_is_one_line_and_escapes_a_line_feed() {
 
 // contract: log.info.record-form
 #[test]
-fn log_info_writes_an_info_record_to_the_application_log() {
+fn log_info_writes_an_info_event_to_the_event_log() {
     if let Some(config) = std::env::var_os(CHILD) {
         if let Err(error) = start_application_log(std::path::Path::new(&config), "com.soksak.test")
         {
             println!("{error}");
             std::process::exit(2);
         }
+        let log = records::start_writer(std::path::Path::new(&config));
         soksak_host_tauriv2::application_log::log_info("webkit children", "pid 7: gone");
+        log.flush(std::time::Duration::from_secs(5)).unwrap();
         return;
     }
     let config = tempfile::tempdir().unwrap();
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
-            "log_info_writes_an_info_record_to_the_application_log",
+            "log_info_writes_an_info_event_to_the_event_log",
             "--nocapture",
             "--test-threads=1",
         ])
@@ -241,13 +249,14 @@ fn log_info_writes_an_info_record_to_the_application_log() {
         output.status,
         String::from_utf8_lossy(&output.stdout)
     );
-    let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
-    let lines: Vec<&str> = log.lines().collect();
+    let events = records::read_events(&records::event_log_path(config.path()));
     assert!(
-        lines.len() == 2
-            && is_record(lines[1])
-            && lines[1].ends_with(" info host webkit children: pid 7: gone"),
-        "application log {lines:?}"
+        events.len() == 2
+            && events[1]["event"] == "host.record.info"
+            && events[1]["level"] == "info"
+            && events[1]["fields"]["where"] == "webkit children"
+            && events[1]["fields"]["text"] == "pid 7: gone",
+        "event log {events:?}"
     );
 }
 

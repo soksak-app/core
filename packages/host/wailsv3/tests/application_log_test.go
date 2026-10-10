@@ -14,8 +14,10 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -138,29 +140,32 @@ func TestStartApplicationLogWritesTheStartLineAndTakesTheStandardErrorOfTheProce
 }
 
 // contract: log.error.line-form
-func TestLogErrorWritesAnErrorLineToTheApplicationLog(t *testing.T) {
+func TestLogErrorWritesAnErrorEventToTheEventLog(t *testing.T) {
 	if config := os.Getenv(applicationLogChild); config != "" {
-		if err := host.StartApplicationLog(config, "com.soksak.test"); err != nil {
+		log, err := host.StartHostEventLog(config)
+		if err != nil {
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}
+		host.UseHostEventLog(log)
 		host.LogError("surface input", errors.New("the window has no content view"))
+		if err := log.Flush(5 * time.Second); err != nil {
+			os.Stdout.WriteString(err.Error() + "\n")
+			os.Exit(2)
+		}
 		return
 	}
 	config := t.TempDir()
-	command := exec.Command(os.Args[0], "-test.run=^TestLogErrorWritesAnErrorLineToTheApplicationLog$")
+	command := exec.Command(os.Args[0], "-test.run=^TestLogErrorWritesAnErrorEventToTheEventLog$")
 	command.Env = append(os.Environ(), applicationLogChild+"="+config)
 	if output, err := command.Output(); err != nil {
 		t.Fatalf("child ended with %v, output %q", err, output)
 	}
-	data, err := os.ReadFile(host.ApplicationLogPath(config))
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	recordLine := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z (error|info) (page|host|native|sidecar) .+: .*$`)
-	if len(lines) != 2 || !recordLine.MatchString(lines[1]) || !strings.HasSuffix(lines[1], " error host surface input: the window has no content view") {
-		t.Fatalf("application log %q", lines)
+	events := readHostEventLog(t, config)
+	if len(events) != 2 || events[1]["event"] != "host.record.error" || events[1]["level"] != "error" ||
+		events[1]["fields"].(map[string]any)["where"] != "surface input" ||
+		events[1]["fields"].(map[string]any)["text"] != "the window has no content view" {
+		t.Fatalf("event log %v", events)
 	}
 }
 
@@ -195,30 +200,39 @@ func TestARecordIsOneLineAndEscapesALineFeed(t *testing.T) {
 
 // A host observation is a record of level info through LogInfo.
 // contract: log.info.record-form
-func TestLogInfoWritesAnInfoRecordToTheApplicationLog(t *testing.T) {
+func TestLogInfoWritesAnInfoEventToTheEventLog(t *testing.T) {
 	if config := os.Getenv(applicationLogChild); config != "" {
-		if err := host.StartApplicationLog(config, "com.soksak.test"); err != nil {
+		log, err := host.StartHostEventLog(config)
+		if err != nil {
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}
+		host.UseHostEventLog(log)
 		host.LogInfo("webkit children", "pid 7: gone")
+		if err := log.Flush(5 * time.Second); err != nil {
+			os.Stdout.WriteString(err.Error() + "\n")
+			os.Exit(2)
+		}
 		return
 	}
 	config := t.TempDir()
-	command := exec.Command(os.Args[0], "-test.run=^TestLogInfoWritesAnInfoRecordToTheApplicationLog$")
+	command := exec.Command(os.Args[0], "-test.run=^TestLogInfoWritesAnInfoEventToTheEventLog$")
 	command.Env = append(os.Environ(), applicationLogChild+"="+config)
 	if output, err := command.Output(); err != nil {
 		t.Fatalf("child ended with %v, output %q", err, output)
 	}
-	data, err := os.ReadFile(host.ApplicationLogPath(config))
-	if err != nil {
-		t.Fatal(err)
+	events := readHostEventLog(t, config)
+	if len(events) != 2 || events[1]["event"] != "host.record.info" || events[1]["level"] != "info" ||
+		events[1]["fields"].(map[string]any)["where"] != "webkit children" ||
+		events[1]["fields"].(map[string]any)["text"] != "pid 7: gone" {
+		t.Fatalf("event log %v", events)
 	}
-	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	record := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z info host webkit children: pid 7: gone$`)
-	if len(lines) != 2 || !record.MatchString(lines[1]) {
-		t.Fatalf("application log %q", lines)
-	}
+}
+
+// readHostEventLog returns the events of the only host event log under the logs folder of a configuration folder.
+func readHostEventLog(t *testing.T, config string) []map[string]any {
+	t.Helper()
+	return support.ReadEvents(t, support.EventLogPath(t, config))
 }
 
 // A record that the page reports has the layer `page`; the host checks its level and its place before it writes it.

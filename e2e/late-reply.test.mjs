@@ -3,12 +3,11 @@
 // 진단 메서드 diagnostics.surface.hold 가 표면의 답을 호스트가 그 표면을 제거할 때까지 붙잡으므로, 답은 시간에 기대지
 // 않고 요청이 끝난 뒤에 도착한다(docs/spec/endpoint.md).
 import assert from "node:assert/strict";
-import { statSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, failure, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { applicationLog, readLines, withoutTime } from "@soksak/window-check/application-log.mjs";
+import { readEventLines } from "@soksak/window-check/event-log.mjs";
 import { heldRepliesSent, lateReplyFindings } from "./late-reply.mjs";
 
 /** 탭 id 가 있는 카드. */
@@ -29,7 +28,7 @@ for (const app of Object.values(APPS)) {
     "the new browser tab did not become ready");
     const transcript = await s.transcript();
     s.cleanup(() => transcript.stop());
-    const offset = statSync(applicationLog(s.app.configDir)).size;
+    const offsets = s.eventStart;
 
     await s.request("diagnostics.surface.hold", { surface: tab });
     const pending = failure(s.run("core.surface.hit", { x: 0, y: 0 }, tab));
@@ -41,7 +40,8 @@ for (const app of Object.values(APPS)) {
     const sent = heldRepliesSent(tab, 1);
     await transcript.until((lines) => lines.includes(sent), `the page did not report "${sent}"`);
 
-    const lines = readLines(s.app.configDir, offset).lines.map(withoutTime);
+    await s.flushLog();
+    const { lines } = readEventLines(s.app.configDir, offsets);
     const { observations, errors } = lateReplyFindings(lines, tab);
     assert.deepEqual(errors, [], `the late reply of ${tab} wrote error lines`);
     assert.equal(observations.length, 1,

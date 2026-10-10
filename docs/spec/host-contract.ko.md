@@ -532,5 +532,9 @@ fn invalid_json_closes_connection() {
 | `log.native.pulls-at-the-batch-interval` | writer는 배치 간격마다 native ring을 pull하므로, 나중에 도착한 record는 flush 요청 없이 저장된다. | both |
 | `log.native.platform-pulls-the-ring` | 플랫폼은 빈 native ring을 0바이트와 손실 없음으로 pull하고, 빈 buffer로의 pull은 거부한다. | both |
 | `log.native.host-writer-starts-with-the-platform-pull` | host의 writer는 플랫폼의 pull과 함께 시작하고 `log.open`을 먼저 쓴다. | both |
+| `log.record.error-and-info-are-events` | level이 `error`나 `info`인 host 기록과 page가 보고한 기록은 호출한 시각과 줄바꿈을 포함한 원문 그대로의 `text`를 가진 event `<layer>.record.<level>`로 event log에 저장된다. | both |
+| `log.record.start-buffer-holds-records-until-the-writer-exists` | host의 writer가 생기기 전에 쓴 기록은 시작 buffer에서 기다리고, writer는 그 기록을 쓴 시각 그대로 순서대로 받는다. | both |
+| `log.record.start-buffer-counts-its-loss` | 시작 buffer는 1024개를 담고 그 너머의 기록은 거부하며, writer는 거부한 기록을 그 수와 함께 `log.dropped`로 기록한다. | both |
+| `log.record.flush-stores-the-records-written-so-far` | 기록 flush는 지금까지 쓴 기록이 event log에 들어갈 때까지 기다리고, 붙은 writer가 없으면 곧바로 돌아온다. | both |
 | `log.batch.stores-page-events-in-order` | `log` 중계는 `batch` 요청의 event를 page가 준 `ts_us`와 writer의 `seq`로, 순서대로, 계층 `page`에 저장한다. | both |
 | `log.batch.rejects-an-invalid-batch-without-writing` | `log` 중계는 `batch`가 아닌 action, 배열이 아닌 `events`, `page.`로 시작하지 않는 event 이름, 계약에 없는 level, 양의 정수가 아닌 `ts_us`, 객체가 아닌 `fields`에 대해 배치 전체를 거부하고 그 배치는 아무것도 쓰지 않으며, 오류는 `events[<index>]`를 가리킨다. | both |

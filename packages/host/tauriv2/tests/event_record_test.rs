@@ -1,0 +1,186 @@
+//! The records of the host (docs/spec/logging.md#writers): an error or an observation of the host, and a record that the
+//! page reports, are events `<layer>.record.<level>` with the fields `where` and `text`. A bounded start buffer holds the
+//! records written before the writer exists and counts the records it refuses.
+
+use std::fs;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use serde_json::Value;
+use soksak_host_tauriv2::application_log::{log_error, log_info, log_record};
+use soksak_host_tauriv2::event_log::{EventLog, Options};
+use soksak_host_tauriv2::event_record::{flush_records, use_host_event_log, START_BUFFER_RECORDS};
+
+/// The records of the host are process-wide, so the tests of this file run one at a time.
+static SERIAL: Mutex<()> = Mutex::new(());
+
+fn read(path: &Path) -> Vec<Value> {
+    fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+fn start(directory: &Path, queue_events: usize) -> Arc<EventLog> {
+    Arc::new(
+        EventLog::start(Options {
+            directory: directory.to_path_buf(),
+            role: "host".into(),
+            boot: "b1".into(),
+            queue_events,
+            queue_bytes: 64 << 20,
+            batch_interval: Duration::from_millis(20),
+            rotate_bytes: 1 << 30,
+            generations: 5,
+            pull: None,
+            pull_loss: None,
+        })
+        .unwrap(),
+    )
+}
+
+fn micros() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_micros() as u64
+}
+
+// contract: log.record.error-and-info-are-events
+#[test]
+fn an_error_an_observation_and_a_page_record_are_events_with_where_and_text() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    use_host_event_log(None);
+    let directory = tempfile::tempdir().unwrap();
+    let log = start(directory.path(), 64);
+    use_host_event_log(Some(Arc::clone(&log)));
+    log_error("surface input", "the window has no content view");
+    log_info("webkit children", "pid 7: gone");
+    log_record("error", "page", "start", "first\nsecond");
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    use_host_event_log(None);
+    let events = read(&path);
+    let want = [
+        (
+            "error",
+            "host",
+            "host.record.error",
+            "surface input",
+            "the window has no content view",
+        ),
+        (
+            "info",
+            "host",
+            "host.record.info",
+            "webkit children",
+            "pid 7: gone",
+        ),
+        (
+            "error",
+            "page",
+            "page.record.error",
+            "start",
+            "first\nsecond",
+        ),
+    ];
+    assert_eq!(events.len(), 1 + want.len(), "{events:?}");
+    for (index, (level, layer, event, place, text)) in want.iter().enumerate() {
+        let got = &events[1 + index];
+        assert_eq!(got["level"], *level, "{got}");
+        assert_eq!(got["layer"], *layer, "{got}");
+        assert_eq!(got["event"], *event, "{got}");
+        assert_eq!(got["fields"]["where"], *place, "{got}");
+        assert_eq!(got["fields"]["text"], *text, "{got}");
+    }
+}
+
+// contract: log.record.start-buffer-holds-records-until-the-writer-exists
+#[test]
+fn records_written_before_the_writer_exists_are_stored_in_order_with_their_own_time() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    use_host_event_log(None);
+    let before = micros();
+    log_error("early", "first");
+    log_info("early", "second");
+    let after = micros();
+    let directory = tempfile::tempdir().unwrap();
+    let log = start(directory.path(), 64);
+    use_host_event_log(Some(Arc::clone(&log)));
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    use_host_event_log(None);
+    let events = read(&path);
+    assert_eq!(events.len(), 3, "{events:?}");
+    assert_eq!(events[1]["fields"]["text"], "first");
+    assert_eq!(events[2]["fields"]["text"], "second");
+    for event in &events[1..] {
+        let ts = event["ts_us"].as_u64().unwrap();
+        assert!(
+            (before..=after).contains(&ts),
+            "ts_us {ts} is outside [{before}, {after}]: the record took the time of the attach"
+        );
+    }
+}
+
+// contract: log.record.start-buffer-counts-its-loss
+#[test]
+fn the_start_buffer_refuses_records_beyond_its_bound_and_the_writer_counts_them() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    use_host_event_log(None);
+    let extra = 6;
+    for _ in 0..START_BUFFER_RECORDS + extra {
+        log_info("flood", "record");
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let log = start(directory.path(), 4 * START_BUFFER_RECORDS);
+    use_host_event_log(Some(Arc::clone(&log)));
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(10)).unwrap();
+    use_host_event_log(None);
+    let events = read(&path);
+    let stored = events
+        .iter()
+        .filter(|event| event["event"] == "host.record.info")
+        .count();
+    let dropped: u64 = events
+        .iter()
+        .filter(|event| event["event"] == "log.dropped")
+        .map(|event| event["fields"]["count"].as_u64().unwrap())
+        .sum();
+    assert_eq!(stored, START_BUFFER_RECORDS);
+    assert_eq!(dropped, extra as u64);
+}
+
+// contract: log.record.flush-stores-the-records-written-so-far
+#[test]
+fn flush_records_stores_the_records_written_so_far_without_waiting_for_the_batch_interval() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    use_host_event_log(None);
+    assert_eq!(flush_records(Duration::from_secs(1)), Ok(()));
+    let directory = tempfile::tempdir().unwrap();
+    let log = Arc::new(
+        EventLog::start(Options {
+            directory: directory.path().to_path_buf(),
+            role: "host".into(),
+            boot: "b1".into(),
+            queue_events: 64,
+            queue_bytes: 64 << 20,
+            batch_interval: Duration::from_secs(30),
+            rotate_bytes: 1 << 30,
+            generations: 5,
+            pull: None,
+            pull_loss: None,
+        })
+        .unwrap(),
+    );
+    use_host_event_log(Some(Arc::clone(&log)));
+    log_info("flush", "stored before the interval");
+    flush_records(Duration::from_secs(5)).unwrap();
+    let events = read(log.path());
+    use_host_event_log(None);
+    assert_eq!(events.len(), 2, "{events:?}");
+    assert_eq!(events[1]["fields"]["text"], "stored before the interval");
+}

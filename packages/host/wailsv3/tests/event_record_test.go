@@ -1,0 +1,136 @@
+// The records of the host (docs/spec/logging.md#writers): an error or an observation of the host, and a record that the
+// page reports, are events `<layer>.record.<level>` with the fields `where` and `text`. A bounded start buffer holds the
+// records written before the writer exists and counts the records it refuses.
+package host_test
+
+import (
+	"errors"
+	"testing"
+	"time"
+
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+)
+
+// useEventLog starts a writer, makes it the writer of the records of the host, and detaches it when the test ends.
+func useEventLog(t *testing.T) *host.EventLog {
+	t.Helper()
+	// Records that earlier tests wrote while no writer was attached wait in the start buffer; they are not this test's.
+	host.UseHostEventLog(nil)
+	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	host.UseHostEventLog(log)
+	t.Cleanup(func() { host.UseHostEventLog(nil) })
+	return log
+}
+
+// contract: log.record.error-and-info-are-events
+func TestAnErrorAnObservationAndAPageRecordAreEventsWithWhereAndText(t *testing.T) {
+	log := useEventLog(t)
+	host.LogError("surface input", errors.New("the window has no content view"))
+	host.LogInfo("webkit children", "pid 7: gone")
+	host.Log(host.Entry{Level: "error", Layer: "page", Where: "start", Text: "first\nsecond"})
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	want := []struct{ level, layer, event, where, text string }{
+		{"error", "host", "host.record.error", "surface input", "the window has no content view"},
+		{"info", "host", "host.record.info", "webkit children", "pid 7: gone"},
+		{"error", "page", "page.record.error", "start", "first\nsecond"},
+	}
+	if len(events) != 1+len(want) {
+		t.Fatalf("events %v", events)
+	}
+	for index, w := range want {
+		event := events[1+index]
+		fields := event["fields"].(map[string]any)
+		if event["level"] != w.level || event["layer"] != w.layer || event["event"] != w.event || fields["where"] != w.where || fields["text"] != w.text {
+			t.Fatalf("event %d is %v, want %+v", index, event, w)
+		}
+	}
+}
+
+// contract: log.record.start-buffer-holds-records-until-the-writer-exists
+func TestRecordsWrittenBeforeTheWriterExistsAreStoredInOrderWithTheirOwnTime(t *testing.T) {
+	host.UseHostEventLog(nil)
+	before := time.Now().UnixMicro()
+	host.LogError("early", "first")
+	host.LogInfo("early", "second")
+	after := time.Now().UnixMicro()
+	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	host.UseHostEventLog(log)
+	t.Cleanup(func() { host.UseHostEventLog(nil) })
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	if len(events) != 3 || events[1]["fields"].(map[string]any)["text"] != "first" || events[2]["fields"].(map[string]any)["text"] != "second" {
+		t.Fatalf("events %v", events)
+	}
+	for _, event := range events[1:] {
+		if ts := int64(event["ts_us"].(float64)); ts < before || ts > after {
+			t.Fatalf("ts_us %d is outside [%d, %d]: the record took the time of the attach", ts, before, after)
+		}
+	}
+}
+
+// contract: log.record.start-buffer-counts-its-loss
+func TestTheStartBufferRefusesRecordsBeyondItsBoundAndTheWriterCountsThem(t *testing.T) {
+	host.UseHostEventLog(nil)
+	const extra = 6
+	for index := 0; index < host.StartBufferRecords+extra; index++ {
+		host.LogInfo("flood", "record")
+	}
+	options := eventLogOptions(t.TempDir())
+	options.QueueEvents = 4 * host.StartBufferRecords
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host.UseHostEventLog(log)
+	t.Cleanup(func() { host.UseHostEventLog(nil) })
+	if err := log.Flush(10 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	stored, dropped := 0, float64(0)
+	for _, event := range readEventLog(t, log.Path()) {
+		switch event["event"] {
+		case "host.record.info":
+			stored++
+		case "log.dropped":
+			dropped += event["fields"].(map[string]any)["count"].(float64)
+		}
+	}
+	if stored != host.StartBufferRecords || dropped != extra {
+		t.Fatalf("stored %d of %d, dropped %v of %d", stored, host.StartBufferRecords+extra, dropped, extra)
+	}
+}
+
+// contract: log.record.flush-stores-the-records-written-so-far
+func TestFlushRecordsStoresTheRecordsWrittenSoFarWithoutWaitingForTheBatchInterval(t *testing.T) {
+	host.UseHostEventLog(nil)
+	if err := host.FlushRecords(time.Second); err != nil {
+		t.Fatalf("without a writer there is nothing to wait for: %v", err)
+	}
+	options := eventLogOptions(t.TempDir())
+	options.BatchInterval = 30 * time.Second
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host.UseHostEventLog(log)
+	t.Cleanup(func() { host.UseHostEventLog(nil) })
+	host.LogInfo("flush", "stored before the interval")
+	if err := host.FlushRecords(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	if len(events) != 2 || events[1]["fields"].(map[string]any)["text"] != "stored before the interval" {
+		t.Fatalf("events %v", events)
+	}
+}

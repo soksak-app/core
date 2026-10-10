@@ -48,6 +48,7 @@ func init() {
 	diagnosticMethods["diagnostics.modal.held"] = diagnosticModalHeld
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
 	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
+	diagnosticMethods["diagnostics.log.flush"] = diagnosticLogFlush
 	diagnosticMethods["diagnostics.capture.still"] = diagnosticCaptureStill
 	debugCaptures = debugCaptureWindows
 	diagnosticMethods["diagnostics.notifications"] = diagnosticNotifications
@@ -506,6 +507,14 @@ func (c captureStatusAdapter) Limited() bool       { return c.CaptureLimited() }
 func (c captureStatusAdapter) LongestGap() float64 { return c.CaptureLongestGap() }
 
 // diagnosticInputSource 는 select 가 있으면 그 입력 소스를 선택하고, 현재 선택된 키보드 입력 소스를 반환한다.
+// diagnosticLogFlush waits until the records written so far are in the event log of the host.
+func diagnosticLogFlush(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	if _, err := e.window(params); err != nil {
+		return nil, err
+	}
+	return nil, FlushRecords(10 * time.Second)
+}
+
 func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	if _, err := e.window(params); err != nil {
 		return nil, err

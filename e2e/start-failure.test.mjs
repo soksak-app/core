@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { readErrors } from "@soksak/window-check/application-log.mjs";
+import { readEventErrors } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
@@ -27,12 +27,15 @@ for (const app of Object.values(APPS)) {
     });
     writeFileSync(file, JSON.stringify({ ...rest, sidecars: Object.keys(dependencies) }, null, 2));
 
-    const pattern = /^error: page: installed plugin terminal \S+ \(@soksak\/plugin-terminal\): plugin\.json: unknown field sidecars/;
+    const pattern = /^error page page: installed plugin terminal \S+ \(@soksak\/plugin-terminal\): plugin\.json: unknown field sidecars/;
     s.expectError(pattern);
+    // The reload of a page that cannot start ends with the timeout of its request, which the host records (docs/spec/diagnostics.md).
+    s.expectError(/^error host endpoint timeout: command\.run: the reloaded page did not report ready within 10s$/);
     // 시작이 멈춘 page 는 준비를 알리지 않으므로 다시 읽기 명령은 기한을 넘긴다. page 는 시작 중에 오류를 기록하므로
     // 그 기한이 지난 뒤에는 기록이 로그에 있다.
     await assert.rejects(s.run("host.window.reload"), /did not|not ready|within/);
-    const { errors } = readErrors(s.app.configDir, s.logStart);
+    await s.flushLog();
+    const { errors } = readEventErrors(s.app.configDir, s.eventStart);
     const line = errors.find((item) => pattern.test(item));
     assert.ok(line, `the start failure wrote no error line: ${JSON.stringify(errors)}`);
     t.diagnostic(`logged: ${line}`);

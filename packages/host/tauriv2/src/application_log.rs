@@ -22,11 +22,19 @@ pub fn record_line(level: &str, layer: &str, place: &str, text: impl std::fmt::D
     format!("{now} {}", entry_line(level, layer, place, text))
 }
 
-/// 시각이 없는 기록 줄 entry 에 쓰는 시각을 붙여 표준 오류에 한 번의 write 로 쓴다.
+/// Stores a record given as the line `<level> <layer> <place>: <text>` of the text form (see [`entry_line`]). A line of
+/// another form is reported on the standard error and not stored.
 pub fn log_entry(entry: &str) {
-    let now = crate::performance::timestamp(std::time::SystemTime::now())
-        .expect("clock is before the Unix epoch");
-    eprintln!("{now} {entry}");
+    let mut parts = entry.splitn(3, ' ');
+    let (Some(level), Some(layer), Some(rest)) = (parts.next(), parts.next(), parts.next()) else {
+        eprintln!("event writer: the record line {entry:?} is not <level> <layer> <place>: <text>");
+        return;
+    };
+    let Some((place, text)) = rest.split_once(": ") else {
+        eprintln!("event writer: the record line {entry:?} is not <level> <layer> <place>: <text>");
+        return;
+    };
+    log_record(level, layer, place, text);
 }
 
 /// 페이지가 `report` 호출로 보낸 기록을 layer page 의 시각이 없는 기록 줄로 만든다. level 이 error 나 info 가 아니거나, place 가
@@ -52,11 +60,9 @@ pub fn error_line(place: &str, text: impl std::fmt::Display) -> String {
     entry_line("error", "host", place, text)
 }
 
-/// 기록 하나를 표준 오류에 한 번의 write 로 쓴다. 표준 오류는 start_application_log 뒤에 애플리케이션 로그다.
-/// 표준 오류에 쓰지 못하면 eprint! 처럼 panic 한다. 그 실패를 알릴 다른 곳이 없다.
+/// Stores a record as an event of the writer of the host (event_record.rs).
 pub fn log_record(level: &str, layer: &str, place: &str, text: impl std::fmt::Display) {
-    let line = format!("{}\n", record_line(level, layer, place, text));
-    eprint!("{line}");
+    crate::event_record::emit_record(level, layer, place, text.to_string());
 }
 
 /// 창 label 의 진단 기록 줄 line 이 애플리케이션 로그에도 쓰는 기록 줄이다. 진단 기록은 그것을 켠 연결에만 가므로 이
@@ -191,6 +197,9 @@ pub fn install_panic_hook() {
             None => "an unknown location".to_string(),
         };
         log_error("panic", format!("{location}: {message}"));
+        if let Err(error) = crate::event_record::flush_records(std::time::Duration::from_secs(2)) {
+            eprintln!("event writer: the record of the panic is not stored: {error}");
+        }
         previous(info);
     }));
 }

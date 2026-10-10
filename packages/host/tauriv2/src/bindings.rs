@@ -172,7 +172,7 @@ fn log(
 ) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
     crate::event_relay::log_command(
-        &window.state::<crate::event_log::EventLog>(),
+        &window.state::<std::sync::Arc<crate::event_log::EventLog>>(),
         serde_json::Value::Object(request),
     )
 }

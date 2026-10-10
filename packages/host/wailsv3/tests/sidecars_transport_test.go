@@ -1668,6 +1668,11 @@ func TestPersistentServiceOfAnotherVersionIsReportedOutdated(t *testing.T) {
 // text is a pointer to value.
 func text(value string) *string { return &value }
 
+// recordText gives the records written so far as the text of a log.
+type recordText func() string
+
+func (r recordText) String() string { return r() }
+
 // syncBuffer is a log writer that the test and the reader goroutines share.
 type syncBuffer struct {
 	mutex  sync.Mutex
@@ -1688,10 +1693,7 @@ func (b *syncBuffer) String() string {
 
 // contract: sidecars-transport.persistent.lost-connection-writes-an-error-line
 func TestPersistentTransportWritesAnErrorLineForALostConnection(t *testing.T) {
-	var logged syncBuffer
-	previous := log.Writer()
-	log.SetOutput(&logged)
-	defer log.SetOutput(previous)
+	logged := recordText(captureLog(t))
 	root := t.TempDir()
 	socketDirectory, err := os.MkdirTemp("", "sp-lost")
 	if err != nil {
@@ -1911,10 +1913,7 @@ func replaceSidecars(t *testing.T, root string, service *replaceService) *host.S
 
 // contract: sidecars-transport.replace.replaces-an-outdated-service
 func TestAnOutdatedServiceIsReplaced(t *testing.T) {
-	var logged syncBuffer
-	previous := log.Writer()
-	log.SetOutput(&logged)
-	defer log.SetOutput(previous)
+	logged := recordText(captureLog(t))
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
 	sidecars := replaceSidecars(t, root, service)

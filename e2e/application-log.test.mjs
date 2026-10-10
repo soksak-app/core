@@ -5,10 +5,11 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
+import { readEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the application log file holds the lines the page reports`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the event log holds the records the page reports and the application log holds the run line`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -19,15 +20,17 @@ for (const app of Object.values(APPS)) {
     const transcript = await s.transcript();
     s.cleanup(() => transcript.stop());
     const line = "focus in core.library.search";
+    const offsets = readEventOffsets(s.app.configDir);
     await s.run("core.focus.set", { name: "core.library.search" });
-    // 호스트는 줄을 표준 오류에 쓴 뒤 그 줄을 기록 연결에 보낸다. 그래서 알림이 오면 줄은 이미 파일에 있다.
-    await transcript.until((lines) => lines.includes(line), `the page did not report "${line}"`);
+    // The transcript holds the record in the text form of the application log.
+    await transcript.until((lines) => lines.includes(`info page page: ${line}`), `the page did not report "${line}"`);
     const file = join(s.app.configDir, "logs", "application.log");
     assert.ok(existsSync(file), `${file} does not exist`);
     const log = readFileSync(file, "utf8").split("\n");
     assert.ok(log.some((entry) => /^\S+ info host run: \S+ pid \d+$/.test(entry)),
       `${file} has no run start line: ${JSON.stringify(log.slice(0, 5))}`);
-    assert.ok(log.some((entry) => entry.endsWith(` info page page: ${line}`)), `${file} does not hold "${line}": ${JSON.stringify(log.slice(-5))}`);
+    // The writer stores the record at its next batch, so the check reads the event log until the record is there.
+    assert.equal(await untilEventLine(s.app.configDir, offsets, (entry) => entry === `info page page: ${line}`, 10000), `info page page: ${line}`);
   });
 }
 

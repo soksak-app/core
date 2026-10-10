@@ -180,6 +180,13 @@ func StartHostEventLog(config string) (*EventLog, error) {
 	})
 }
 
+// CountLoss adds events and bytes that a producer of this process refused before they reached the writer; the writer
+// records them as a log.dropped.
+func (l *EventLog) CountLoss(events, bytes uint64) {
+	l.lostEvents.Add(events)
+	l.lostBytes.Add(bytes)
+}
+
 // Path is the file that this writer writes.
 func (l *EventLog) Path() string { return l.path }
 

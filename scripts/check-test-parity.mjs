@@ -1000,7 +1000,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/tests/page_process_test.rs", id: "the_page_process_end_is_an_error_line" },
       { file: "packages/host/wailsv3/tests/sidecars_transport_test.go", id: "TestPersistentTransportWritesAnErrorLineForALostConnection" },
       { file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_lost_connection_is_reported_as_an_error_line" },
-      { file: "packages/host/tauriv2/tests/panic_hook_test.rs", id: "a_panic_writes_an_error_line_to_the_application_log" },
+      { file: "packages/host/tauriv2/tests/panic_hook_test.rs", id: "a_panic_writes_an_error_event_to_the_event_log" },
       { file: "packages/host/tauriv2/tests/fatal_signal_test.rs", id: "a_fatal_signal_writes_an_error_line_to_the_application_log" },
     ],
     expected: "The end of a page process, a lost connection to a persistent service, a panic of the Tauri host and a fatal signal each write one error line to the application log.",
@@ -1140,6 +1140,21 @@ const FEATURE_LINKS = [
     ],
     expected: "Every declared workspace version is the version of the release that carries the records of the application log.",
     levels: ["unit"],
+  },
+  {
+    id: "F150.3.2",
+    implementation: [
+      { file: "packages/host/wailsv3/src/event_record.go", symbol: "func emitRecord" },
+      { file: "packages/host/tauriv2/src/event_record.rs", symbol: "pub fn emit_record" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/event_record_test.go", id: "TestAnErrorAnObservationAndAPageRecordAreEventsWithWhereAndText" },
+      { file: "packages/host/tauriv2/tests/event_record_test.rs", id: "an_error_an_observation_and_a_page_record_are_events_with_where_and_text" },
+      { file: "e2e/application-log.test.mjs", id: "the event log holds the records the page reports and the application log holds the run line" },
+      { file: "e2e/page-process.test.mjs", id: "the end of the web content process is written to the event log" },
+    ],
+    expected: "The records of the host and of the page are events of the event log with where and text, a start buffer holds them until the writer exists, and a running application stores them.",
+    levels: ["unit", "application"],
   },
   {
     id: "F150.3.1",
@@ -1731,8 +1746,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/application_log.rs", symbol: "error_line" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestLogErrorWritesAnErrorLineToTheApplicationLog" },
-      { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "log_error_writes_an_error_line_to_the_application_log" },
+      { file: "packages/host/wailsv3/tests/application_log_test.go", id: "TestLogErrorWritesAnErrorEventToTheEventLog" },
+      { file: "packages/host/tauriv2/tests/application_log_test.rs", id: "log_error_writes_an_error_event_to_the_event_log" },
     ],
     expected: "Every host failure is written to the application log as an error line that window checks read.",
     levels: ["unit", "application"],

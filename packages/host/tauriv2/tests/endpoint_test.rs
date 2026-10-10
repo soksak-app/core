@@ -6,6 +6,9 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[path = "support/records.rs"]
+mod records;
+
 use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
 use soksak_host_tauriv2::endpoint::{self, raw, Connection, Endpoint, Failure, Service, Watch};
@@ -815,6 +818,7 @@ fn the_endpoint_records_why_a_connection_closes() {
         let config = Path::new(&config);
         soksak_host_tauriv2::application_log::start_application_log(config, "com.soksak.test")
             .unwrap();
+        let writer = records::start_writer(config);
         let (fake, calls) = Fake::new();
         let endpoint = start(config, "test-close-reason", fake);
         let mut connection = open(&endpoint);
@@ -852,6 +856,7 @@ fn the_endpoint_records_why_a_connection_closes() {
             }
         }
         endpoint.stop();
+        writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
     let config = tempfile::tempdir().unwrap();
@@ -872,10 +877,9 @@ fn the_endpoint_records_why_a_connection_closes() {
         output.status,
         String::from_utf8_lossy(&output.stderr)
     );
-    let log = std::fs::read_to_string(soksak_host_tauriv2::application_log::application_log_path(
+    let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
-    ))
-    .unwrap();
+    )));
     for reason in [
         "frame of 1195725856 bytes exceeds the limit of 16777216",
         "frame is not a JSON-RPC 2.0 request: {not json",
@@ -903,6 +907,7 @@ fn the_endpoint_records_a_timeout_of_a_request() {
         let config = Path::new(&config);
         soksak_host_tauriv2::application_log::start_application_log(config, "com.soksak.test")
             .unwrap();
+        let writer = records::start_writer(config);
         let (fake, _calls) = Fake::new();
         *fake.timing_out.lock().unwrap() = Some("status.get".to_string());
         let endpoint = start(config, "test-timeout", fake);
@@ -915,6 +920,7 @@ fn the_endpoint_records_a_timeout_of_a_request() {
         );
         assert_eq!(reply["error"]["code"], endpoint::TIMED_OUT);
         endpoint.stop();
+        writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
     let config = tempfile::tempdir().unwrap();
@@ -935,10 +941,9 @@ fn the_endpoint_records_a_timeout_of_a_request() {
         output.status,
         String::from_utf8_lossy(&output.stdout)
     );
-    let log = std::fs::read_to_string(soksak_host_tauriv2::application_log::application_log_path(
+    let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
-    ))
-    .unwrap();
+    )));
     let want =
         " error host endpoint timeout: status.get: the document did not reply within 10000 ms";
     assert!(log.contains(want), "no {want:?} in {log}");

@@ -120,6 +120,9 @@ pub(crate) fn call(
         }
         "diagnostics.modal.held" => modal_held(window.label()),
         "diagnostics.input.source" => input_source(window, params),
+        "diagnostics.log.flush" => crate::event_record::flush_records(TIMEOUT)
+            .map(|()| Value::Null)
+            .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error)),
         "diagnostics.capture.still" => capture_still(window),
         "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.page.collect" => page_collect(window),

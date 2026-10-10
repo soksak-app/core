@@ -9,6 +9,9 @@ use soksak_host_tauriv2::images::{
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[path = "support/records.rs"]
+mod records;
+
 fn configured_envelope(configuration: &Configure, sequence: i32) -> String {
     json!({
         "image": {
@@ -383,6 +386,7 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
             println!("{error}");
             std::process::exit(2);
         }
+        let writer = records::start_writer(std::path::Path::new(&config));
         let images = Images::default();
         let key: Key = ("tab-1".to_string(), "view".to_string());
         images.reserve(&key, "owner", "sidecar-a").unwrap();
@@ -396,6 +400,7 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
             images.wait_current(Duration::from_millis(20)),
             Err("presentationTimeout".to_string())
         );
+        writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
     let config = tempfile::tempdir().unwrap();
@@ -421,6 +426,13 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
     assert!(
         lines.len() == 1 && lines[0].contains(" info host run: com.soksak.test pid "),
         "a presentation timeout wrote host lines: {lines:?}"
+    );
+    // The event log holds log.open and no record of the host.
+    let events = records::read_events(&records::event_log_path(config.path()));
+    assert_eq!(
+        events.len(),
+        1,
+        "a presentation timeout wrote events: {events:?}"
     );
 }
 
@@ -1084,6 +1096,7 @@ const IMAGE_FRAME_CHILD: &str = "SOKSAK_IMAGE_FRAME_CHILD";
 fn image_frame_refusals_are_recorded() {
     if let Some(config) = std::env::var_os(IMAGE_FRAME_CHILD) {
         start_application_log(std::path::Path::new(&config), "com.soksak.test").unwrap();
+        let writer = records::start_writer(std::path::Path::new(&config));
         let images = Images::default();
         let key: Key = ("tab-1".to_string(), "view".to_string());
         images.reserve(&key, "owner", "sidecar-a").unwrap();
@@ -1128,6 +1141,7 @@ fn image_frame_refusals_are_recorded() {
             on_main,
             send,
         ));
+        writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
     let config = tempfile::tempdir().unwrap();
@@ -1155,7 +1169,9 @@ fn image_frame_refusals_are_recorded() {
         .find_map(|line| line.split_once("frame generation=").map(|(_, rest)| rest))
         .map(|rest| format!("generation={rest}"))
         .expect("the child printed the frame");
-    let log = std::fs::read_to_string(application_log_path(config.path())).unwrap();
+    let log = records::text_of(&records::read_events(&records::event_log_path(
+        config.path(),
+    )));
     for want in [
         format!(" info host image frame: surface=tab-1 name=view sender=sidecar-b {frame} sequence=1 refused: notAttached current generation="),
         format!(" error host image frame: surface=tab-1 name=view sender=sidecar-a {frame} sequence=2 refused: unsupported current generation="),

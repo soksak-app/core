@@ -77,6 +77,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.modal.held",
     "diagnostics.presentation.failure",
     "diagnostics.input.source",
+    "diagnostics.log.flush",
     "diagnostics.notifications",
     "diagnostics.navigation.delay",
     "diagnostics.page.collect",

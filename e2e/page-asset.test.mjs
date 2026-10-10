@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { readErrors, readOffset } from "@soksak/window-check/application-log.mjs";
+import { readEventOffsets, untilEventLines } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
@@ -14,7 +14,7 @@ for (const app of Object.values(APPS)) {
     const first = `/missing-${process.pid}-first.js`;
     const second = `/missing-${process.pid}-second.js`;
     s.expectError(new RegExp(`^error host page asset: /missing-${process.pid}-(first|second)\\.js: not found$`));
-    const before = readOffset(app.configDir);
+    const before = readEventOffsets(app.configDir);
     // The page requests each file twice; the host reports a path once.
     for (const path of [first, second, first]) {
       const answer = await s.request("diagnostics.page.request", { path });
@@ -22,7 +22,10 @@ for (const app of Object.values(APPS)) {
       // The start document does not answer a missing file; the status is the error of the host's file server.
       assert.ok(answer.status >= 400, `${path} was answered with status ${answer.status}`);
     }
-    const { errors } = readErrors(app.configDir, before);
+    // The error records reach the file at the next batch of the writer, so the check waits for both of them.
+    const lines = await untilEventLines(app.configDir, before,
+      (all) => all.filter((line) => line.startsWith("error ") && line.includes(`missing-${process.pid}`)).length >= 2, 10000);
+    const errors = lines.filter((line) => line.startsWith("error "));
     assert.deepEqual(errors.filter((line) => line.includes(`missing-${process.pid}`)).sort(), [
       `error host page asset: ${first}: not found`,
       `error host page asset: ${second}: not found`,

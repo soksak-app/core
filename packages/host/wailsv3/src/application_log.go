@@ -3,10 +3,10 @@ package host
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
@@ -65,12 +65,9 @@ func TranscriptFailure(window, where string, err error) Entry {
 	return Entry{"error", "host", where + " " + window, err}
 }
 
-// Log 는 기록 하나를 표준 logger 의 출력에 한 번의 write 로 쓴다. 그 출력은 표준 오류이고 표준 오류는
-// StartApplicationLog 뒤에 애플리케이션 로그다. 쓰지 못하면 그 실패를 알릴 곳이 없으므로 panic 한다.
+// Log stores a record as an event of the writer of the host (event_record.go).
 func Log(e Entry) {
-	if _, err := fmt.Fprintln(log.Writer(), RecordLine(e)); err != nil {
-		panic(fmt.Sprintf("write the application log: %v", err))
-	}
+	emitRecord(e)
 }
 
 // ErrorLine 은 호스트의 오류 기록에서 시각을 뺀 줄이다. where 는 실패한 연산이나 대상이고 text 는 실패 내용이다.
@@ -111,6 +108,9 @@ func PageEntry(record PageRecord) (Entry, error) {
 // fatalError 는 오류 기록을 쓰고 프로세스를 상태 1 로 끝낸다. 로그를 연 뒤의 치명적 실패가 쓴다.
 func fatalError(where string, text any) {
 	LogError(where, text)
+	if err := FlushRecords(2 * time.Second); err != nil {
+		fmt.Fprintf(os.Stderr, "event writer: the record of the failure is not stored: %v\n", err)
+	}
 	os.Exit(1)
 }
 

@@ -7,6 +7,9 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
+#[path = "support/records.rs"]
+mod records;
+
 use serde_json::value::RawValue;
 use serde_json::Value;
 use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
@@ -94,7 +97,9 @@ fn a_buffered_close_is_recorded() {
             "com.soksak.test",
         )
         .unwrap();
+        let writer = records::start_writer(Path::new(&config));
         every_pending_reply_scenario();
+        writer.flush(std::time::Duration::from_secs(5)).unwrap();
         return;
     }
     let config = tempfile::tempdir().unwrap();
@@ -115,10 +120,9 @@ fn a_buffered_close_is_recorded() {
         output.status,
         String::from_utf8_lossy(&output.stdout)
     );
-    let log = std::fs::read_to_string(soksak_host_tauriv2::application_log::application_log_path(
+    let log = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
-    ))
-    .unwrap();
+    )));
     for surface in ["s2", "s3"] {
         let want = format!(" info host sidecar {ECHO}: close {surface}: outbox full, buffered");
         assert!(log.contains(&want), "no {want:?} in {log}");

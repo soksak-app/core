@@ -28,6 +28,7 @@ mod diagnostics;
 pub mod documents;
 pub mod endpoint;
 pub mod event_log;
+pub mod event_record;
 pub mod event_relay;
 pub mod exposure;
 pub mod images;
@@ -174,7 +175,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             // 애플리케이션 로그는 엔드포인트가 process lock 을 잡은 뒤에 연다. 그래서 같은 파일에 쓰는
             // 다른 실행이 없다(docs/spec/hosts.md#application-log).
             application_log::start_application_log(&directory, soksak_sok::identity::identity())?;
-            tauri::Manager::manage(app, event_log::EventLog::start_host(&directory)?);
+            let events = std::sync::Arc::new(event_log::EventLog::start_host(&directory)?);
+            event_record::use_host_event_log(Some(std::sync::Arc::clone(&events)));
+            tauri::Manager::manage(app, events);
             Ok(())
         })
         .build();
@@ -334,7 +337,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 }
                 exposure::stop(app);
                 if let Err(error) = app
-                    .state::<event_log::EventLog>()
+                    .state::<std::sync::Arc<event_log::EventLog>>()
                     .flush(std::time::Duration::from_secs(2))
                 {
                     log_error("event log flush", error);

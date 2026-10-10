@@ -16,6 +16,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 const echoSidecar = "@fixture/sidecar-echo"
@@ -913,14 +914,7 @@ func TestFailedCloseAnswerIsLogged(t *testing.T) {
 	script := "#!/bin/sh\nwhile read line; do case \"$line\" in *closed*) printf '{\"surface\":\"s1\",\"closed\":true,\"error\":\"busy\"}\\n';; *) echo \"$line\";; esac; done\n"
 	sidecars := closingSidecars(t, script)
 	snapshots := closingSnapshots(sidecars)
-	var written strings.Builder
-	var mu sync.Mutex
-	log.SetOutput(writerFunc(func(p []byte) (int, error) {
-		mu.Lock()
-		defer mu.Unlock()
-		return written.Write(p)
-	}))
-	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	written := captureLog(t)
 	owner := newFakeOwner("/projects/closing")
 	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
@@ -930,10 +924,8 @@ func TestFailedCloseAnswerIsLogged(t *testing.T) {
 	if got := nextClosing(t, snapshots); len(got) != 0 {
 		t.Fatalf("closing after the failed answer = %v, want none", got)
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	if want := "error host sidecar @fixture/sidecar-echo: close s1: busy\n"; !strings.Contains(written.String(), want) {
-		t.Fatalf("log %q does not contain %q", written.String(), want)
+	if want := "error host sidecar @fixture/sidecar-echo: close s1: busy\n"; !strings.Contains(written(), want) {
+		t.Fatalf("log %q does not contain %q", written(), want)
 	}
 }
 
@@ -1054,20 +1046,15 @@ func TestEndedSidecarLeavesNoClosingSurface(t *testing.T) {
 	}
 }
 
-// captureLog 는 검사가 끝날 때까지 애플리케이션 로그를 기록하고, 그때까지 기록한 내용을 반환하는 함수를 돌려준다.
+// captureLog attaches a writer of events to the records of the host until the test ends and returns a function that gives
+// the records written so far, one line each in the text form `<time> <level> <layer> <where>: <text>`.
 func captureLog(t *testing.T) func() string {
-	var written strings.Builder
-	var mu sync.Mutex
-	log.SetOutput(writerFunc(func(p []byte) (int, error) {
-		mu.Lock()
-		defer mu.Unlock()
-		return written.Write(p)
-	}))
-	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	log := useEventLog(t)
 	return func() string {
-		mu.Lock()
-		defer mu.Unlock()
-		return written.String()
+		if err := log.Flush(5 * time.Second); err != nil {
+			t.Fatal(err)
+		}
+		return support.TextOf(readEventLog(t, log.Path()))
 	}
 }
 

@@ -1,15 +1,13 @@
-// The end of the WebContent process of a window is written to the application log (docs/spec/diagnostics.md).
-import { withoutTime } from "@soksak/window-check/application-log.mjs";
+// The end of the WebContent process of a window is written to the event log (docs/spec/diagnostics.md).
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
+import { readEventLines } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the end of the web content process is written to the application log`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the end of the web content process is written to the event log`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -24,8 +22,9 @@ for (const app of Object.values(APPS)) {
     await s.until("host.windows", (list) => list.some((window) => !window.ready), "the new page did not start");
     await s.windows(1, "the window did not load its page again");
     // The log keeps the lines of earlier runs; this check reads from the position where it started.
-    const log = readFileSync(join(s.app.configDir, "logs", "application.log")).subarray(s.logStart).toString("utf8");
-    assert.equal(log.split("\n").map(withoutTime).filter((line) => line === "error host page process: main: terminated").length, 1,
-      "the application log does not hold one line for the end of the page process");
+    await s.flushLog();
+    const { lines } = readEventLines(s.app.configDir, s.eventStart);
+    assert.equal(lines.filter((line) => line === "error host page process: main: terminated").length, 1,
+      "the event log does not hold one record for the end of the page process");
   });
 }

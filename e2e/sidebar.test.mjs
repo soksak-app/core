@@ -4,8 +4,9 @@ import { createServer } from "node:http";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
+import { readEventLines, readEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
-import { readFileSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
@@ -497,14 +498,14 @@ for (const app of Object.values(APPS)) {
     await s.run("core.card.focus", { card: "browser" });
     const mounted = (value) => value.find((item) => item.sidebar === sidebar)?.sections.find((item) => item.id === "browser.tabs")?.mounted;
     await s.until("core.sidebars", mounted, "the right sidebar did not mount browser.tabs");
-    const file = join(s.app.configDir, "logs", "application.log");
-    const offset = readFileSync(file).length;
+    const offsets = readEventOffsets(s.app.configDir);
     // 섹션은 첫 화면 뒤에 비동기로 마운트된다. 그때 따르는 core 상태는 이미 등록되어 있어야 한다(docs/spec/plugins.md#sections).
     await s.run("host.window.reload");
     await s.until("core.sidebars", mounted, "the right sidebar did not mount browser.tabs after the reload");
     await s.presented();
-    const errors = readFileSync(file).subarray(offset).toString("utf8").split("\n").filter((line) => line.includes("is not registered"));
-    assert.deepEqual(errors, [], `${file} recorded errors while the reloaded page mounted its sections`);
+    await s.flushLog();
+    const errors = readEventLines(s.app.configDir, offsets).lines.filter((line) => line.includes("is not registered"));
+    assert.deepEqual(errors, [], "the event log recorded errors while the reloaded page mounted its sections");
   });
 }
 
