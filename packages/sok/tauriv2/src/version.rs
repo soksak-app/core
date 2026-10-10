@@ -1,5 +1,5 @@
-//! 이 command line 이 속한 core release 의 version. plugin 의 engines.soksak 과 비교한다. Cargo.toml 의 version 이며
-//! scripts/check-versions.mjs 가 다른 manifest 의 version 과 같은지 검사한다.
+//! The version of the core release that this command line belongs to. It is compared with engines.soksak of a plugin. It is the version of Cargo.toml, and
+//! scripts/check-versions.mjs checks that it equals the version of the other manifests.
 
-/// core release 의 version.
+/// The version of the core release.
 pub const CORE_VERSION: &str = env!("CARGO_PKG_VERSION");

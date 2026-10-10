@@ -1,6 +1,6 @@
-//! 설정 폴더에 plugin 을 설치하고 바꾼다(docs/spec/cli.md, docs/spec/installation.md). release 는 임시 폴더에 푼
-//! 뒤 이름을 바꿔 제자리에 두고, installed.json 은 마지막에 한 번에 바꾸므로 실패한 설치는 이전 설치를 바꾸지
-//! 않는다.
+//! Installs and changes plugins in the configuration folder (docs/spec/cli.md, docs/spec/installation.md). The command unpacks a release into a temporary folder,
+//! renames it into place, and changes installed.json once at the end, so a failed installation does not change the
+//! previous installation.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{Read, Write};
@@ -18,10 +18,10 @@ use crate::registry::{read_release, release_files};
 use crate::release::{current_platform, print_json, replace_file};
 use crate::{config_dir_of, Error, Options};
 
-/// 설정 폴더 안에서 설치가 읽는 registry index 의 주소를 담는 파일.
+/// The file in the configuration folder that holds the address of the registry index that installation reads.
 pub const REGISTRY_FILE: &str = "plugins/registry.json";
 
-/// 절대 경로의 `file:` URL. 경로 문자 중 URL 에서 뜻을 가진 문자와 공백은 %XX 로 쓴다.
+/// An absolute `file:` URL. Path characters that have a meaning in a URL, and spaces, are written as %XX.
 fn file_url(path: &Path) -> Result<String, String> {
     let text = path
         .to_str()
@@ -37,8 +37,8 @@ fn file_url(path: &Path) -> Result<String, String> {
     Ok(out)
 }
 
-/// 경로, `file:` URL, `https:` URL 의 registry index 를 읽고 검사한다. 경로는 그 절대 `file:` URL 이 된다. 돌려주는
-/// 주소는 읽은 index 의 URL 이다.
+/// Reads and checks a registry index given as a path, a `file:` URL or an `https:` URL. A path becomes its absolute `file:` URL. The returned
+/// address is the URL of the index that was read.
 pub fn read_index_at(location: &str, fetcher: &Fetcher) -> Result<(Index, String), String> {
     let url = if location.contains(':') {
         location.to_string()
@@ -47,7 +47,7 @@ pub fn read_index_at(location: &str, fetcher: &Fetcher) -> Result<(Index, String
         file_url(&path)?
     };
     let data = fetcher.read(&url, fetcher.index)?;
-    // 오류는 file: 이면 경로를, https: 면 URL 을 밝힌다.
+    // For file: the error names the path, and for https: it names the URL.
     let shown = if url.starts_with("file:") {
         install::file_path(&url)?
     } else {
@@ -60,7 +60,7 @@ pub fn read_index_at(location: &str, fetcher: &Fetcher) -> Result<(Index, String
     Ok((index, url))
 }
 
-/// registry index 를 검사하고 그 주소를 plugins/registry.json 에 쓴다.
+/// Checks the registry index and writes its address to plugins/registry.json.
 pub fn use_registry(
     config_dir: &Path,
     location: &str,
@@ -82,7 +82,7 @@ fn create_parent(path: &Path) -> Result<(), String> {
         .map_err(|error| crate::files::file_error(parent.display(), &error))
 }
 
-/// plugins/registry.json 이 지정한 index 를 읽는다.
+/// Reads the index that plugins/registry.json specifies.
 pub(crate) fn read_registry(config_dir: &Path) -> Result<Index, String> {
     let Some(url) = read_registry_url(config_dir)? else {
         return Err(format!(
@@ -93,7 +93,7 @@ pub(crate) fn read_registry(config_dir: &Path) -> Result<Index, String> {
     Ok(read_index_at(&url, &Fetcher::default())?.0)
 }
 
-/// plugins/registry.json 의 index 주소를 읽는다. 파일이 없으면 None 이다.
+/// Reads the index address of plugins/registry.json. It is None when the file does not exist.
 fn read_registry_url(config_dir: &Path) -> Result<Option<String>, String> {
     let path = config_dir.join(REGISTRY_FILE);
     let text = match std::fs::read_to_string(&path) {
@@ -123,19 +123,19 @@ fn read_registry_url(config_dir: &Path) -> Result<Option<String>, String> {
     Ok(Some(url.to_string()))
 }
 
-/// 애플리케이션이 plugin 목록에 쓰는 registry 와 설치 상태
-/// (docs/spec/installation.md#plugin-operations-in-the-application). 구조체 그대로 쓰므로 key 는 선언 순서다.
+/// The registry and the installation state that the application uses for the plugin list
+/// (docs/spec/installation.md#plugin-operations-in-the-application). The structure is written as it is, so the key order is the declaration order.
 #[derive(serde::Serialize)]
 pub struct PluginsState {
     pub registry: Option<String>,
     pub index: IndexState,
     pub installed: InstalledState,
-    /// plugins/installed.json 이 없으면 true 다. 애플리케이션은 이때 starter pack 을 설치한다.
+    /// True when plugins/installed.json does not exist. The application installs the starter pack then.
     #[serde(rename = "firstRun")]
     pub first_run: bool,
 }
 
-/// registry 가 없으면 Missing, 읽고 검사했으면 Checked, 읽거나 검사하지 못했으면 그 오류다.
+/// Missing when there is no registry, Checked when the index was read and checked, and the error when it could not be read or checked.
 #[derive(serde::Serialize)]
 #[serde(untagged)]
 pub enum IndexState {
@@ -144,8 +144,8 @@ pub enum IndexState {
     Failed { error: String },
 }
 
-/// registry 주소, 검사한 index, 설치 상태를 읽는다. index 를 읽지 못하면 그 오류를 index 자리에
-/// 담고, 설치 상태를 읽지 못하면 실패한다.
+/// Reads the registry address, the checked index and the installation state. When the index cannot be read, the error is placed in the index
+/// field, and when the installation state cannot be read, the function fails.
 pub fn read_plugins_state(config_dir: &Path) -> Result<PluginsState, String> {
     let installed = read_installed(config_dir)?;
     let first_run = !config_dir
@@ -171,7 +171,7 @@ pub fn read_plugins_state(config_dir: &Path) -> Result<PluginsState, String> {
     })
 }
 
-/// sok plugin <action> <id> 의 출력. install 과 update 는 설치 결과, 나머지는 plugin 항목이나 null 이다.
+/// The output of sok plugin <action> <id>. install and update output the installation result, and the others output a plugin entry or null.
 #[derive(serde::Serialize)]
 #[serde(untagged)]
 pub enum PluginActionResult {
@@ -179,8 +179,8 @@ pub enum PluginActionResult {
     Changed(Option<InstalledPlugin>),
 }
 
-/// sok plugin <action> <id> 와 같은 작업을 실행하고 그 출력을 돌려준다.
-/// action 은 install, update, remove, enable, disable 중 하나다.
+/// Runs the same operation as sok plugin <action> <id> and returns its output.
+/// action is one of install, update, remove, enable and disable.
 pub fn run_plugin_action(
     config_dir: &Path,
     action: &str,
@@ -203,8 +203,8 @@ pub fn run_plugin_action(
     }
 }
 
-/// plugins/installed.json 을 읽는다. 파일이 없으면 아무것도 설치하지 않은 상태다. 현재 형식이 아닌 파일은
-/// 오류다(docs/spec/installation.md).
+/// Reads plugins/installed.json. When the file does not exist, nothing is installed. A file that is not in the current format is
+/// an error (docs/spec/installation.md).
 pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
     let path = config_dir.join(INSTALLED);
     let text = match std::fs::read_to_string(&path) {
@@ -219,7 +219,7 @@ pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
     install::validate_installed(&value).map_err(|error| format!("{}: {error}", path.display()))
 }
 
-/// installed.json 을 한 번에 바꾼다.
+/// Changes installed.json once.
 fn write_installed(config_dir: &Path, state: &InstalledState) -> Result<(), String> {
     let mut out = vec![];
     print_json(&mut out, state)?;
@@ -228,8 +228,8 @@ fn write_installed(config_dir: &Path, state: &InstalledState) -> Result<(), Stri
     replace_file(&path, &out)
 }
 
-/// tar.gz release 를 target 옆 임시 폴더에 푼 뒤 이름을 바꿔 target 에 둔다. 일반 파일과 폴더만 받고, 절대 경로와
-/// `..` 는 거부한다.
+/// Unpacks a tar.gz release into a temporary folder next to target, then renames it to target. It accepts only regular files and folders and rejects absolute paths and
+/// `..`.
 fn extract(data: &[u8], target: &Path) -> Result<(), String> {
     create_parent(target)?;
     let name = target
@@ -254,7 +254,7 @@ fn extract_into(data: &[u8], temp: &Path) -> Result<(), String> {
         let mut entry = entry.map_err(|error| error.to_string())?;
         let raw = String::from_utf8(entry.path_bytes().into_owned())
             .map_err(|_| "release entry name is not UTF-8".to_string())?;
-        // 기본값: 끝의 / 는 폴더 항목의 표기일 뿐이므로 없으면 이름을 그대로 쓴다.
+        // default: a trailing / only marks a folder entry, so the name is used unchanged when there is none.
         let name = raw.strip_suffix('/').unwrap_or(&raw);
         if name.is_empty() || name.starts_with('/') || name.split('/').any(|part| part == "..") {
             return Err(format!("release entry {raw} leaves the folder"));
@@ -289,7 +289,7 @@ fn extract_into(data: &[u8], temp: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// 아직 없는 version 폴더에 release 를 확인해 푼다.
+/// Verifies a release and unpacks it into a version folder that does not exist yet.
 fn install_release(at: &str, release: &Release, target: &Path) -> Result<(), String> {
     match std::fs::metadata(target) {
         Ok(_) => return Ok(()),
@@ -300,7 +300,7 @@ fn install_release(at: &str, release: &Release, target: &Path) -> Result<(), Str
     extract(&data, target).map_err(|error| format!("{at}: {error}"))
 }
 
-/// plugin 설치의 출력. 구조체 그대로 쓰므로 key 는 선언 순서이며 Go 구현과 같은 byte 를 쓴다.
+/// The output of a plugin installation. The structure is written as it is, so the key order is the declaration order and the bytes match the Go implementation.
 #[derive(serde::Serialize)]
 pub struct PluginResult {
     plugin: InstalledPlugin,
@@ -635,7 +635,7 @@ impl DependencyPlan<'_> {
     }
 }
 
-/// 어느 plugin 도 지정하지 않은 sidecar 를 지운다.
+/// Removes a sidecar that no plugin specifies.
 fn drop_unnamed_sidecars(state: &mut InstalledState) {
     let plugins = &state.plugins;
     state.sidecars.retain(|name, _| {
@@ -645,11 +645,11 @@ fn drop_unnamed_sidecars(state: &mut InstalledState) {
     });
 }
 
-/// 폴더 안의 항목 이름. 폴더가 없으면 빈 목록이다.
+/// The entry names in a folder. The list is empty when the folder does not exist.
 fn folder_names(path: &Path) -> Result<Vec<(String, bool)>, String> {
     let listing = match std::fs::read_dir(path) {
         Ok(listing) => listing,
-        // 기본값: 아직 아무것도 설치하지 않은 설정 폴더에는 이 폴더가 없다.
+        // default: a configuration folder in which nothing has been installed yet has no such folder.
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
         Err(error) => return Err(crate::files::file_error(path.display(), &error)),
     };
@@ -670,8 +670,8 @@ fn folder_names(path: &Path) -> Result<Vec<(String, bool)>, String> {
     Ok(names)
 }
 
-/// 설치된 plugin 의 쓰는 version 과 previous 가 아닌 plugin 폴더와 version 폴더, installed.json 이 지정하지 않은
-/// sidecar 폴더와 version 폴더를 지운다. 지우지 못한 폴더를 모두 보고한다.
+/// Removes the plugin folders and version folders that are neither the version in use nor the previous version of an installed plugin, and the sidecar folders and
+/// version folders that installed.json does not specify. It reports every folder that it could not remove.
 fn prune_folders(config_dir: &Path, state: &InstalledState) -> Result<(), String> {
     let mut failures = vec![];
     let mut remove = |path: PathBuf| {
@@ -717,7 +717,7 @@ fn prune_folders(config_dir: &Path, state: &InstalledState) -> Result<(), String
     }
 }
 
-/// 설치된 plugin 을 지우거나 켜고 끈다.
+/// Removes, enables or disables an installed plugin.
 pub fn change_plugin(
     config_dir: &Path,
     id: &str,
@@ -753,7 +753,7 @@ pub fn change_plugin(
     Ok(state.plugins.get(id).cloned())
 }
 
-/// registry use 와 plugin install, update, remove, enable, disable, list 를 실행한다.
+/// Runs registry use and plugin install, update, remove, enable, disable and list.
 pub(crate) fn run_plugins(
     positionals: &[String],
     values: &HashMap<String, String>,
@@ -778,7 +778,7 @@ pub(crate) fn run_plugins(
         "plugin install" | "plugin update" | "plugin remove" | "plugin enable"
         | "plugin disable" => {
             let action = positionals[1].as_str();
-            // platform 은 버전을 고르는 install 과 update 에만 필요하다.
+            // platform is needed only by install and update, which choose a version.
             let platform = if action == "install" || action == "update" {
                 current_platform()?
             } else {

@@ -11,14 +11,14 @@ use sha2::{Digest, Sha256};
 use crate::install::{self, check_platform};
 use crate::{platform, Error};
 
-/// release 에 넣는 파일 하나. path 는 폴더 기준 상대 경로이며 / 로 나눈다.
+/// One file in a release. path is relative to the folder and split by /.
 struct ReleaseEntry {
     path: String,
     source: PathBuf,
     executable: bool,
 }
 
-/// sok 이 실행되는 플랫폼 key.
+/// The platform key on which sok runs.
 pub fn current_platform() -> Result<String, String> {
     platform::current()?.key()
 }
@@ -27,8 +27,8 @@ fn leaves(path: &str) -> bool {
     path.is_empty() || path.starts_with('/') || path.split('/').any(|part| part == "..")
 }
 
-/// package.json 과 files 의 경로를 release 항목으로 모은다. 폴더는 그 아래 파일까지 모으고, symbolic link 나 일반
-/// 파일도 폴더도 아닌 파일은 거부한다.
+/// Collects the paths of package.json and files as release entries. A folder includes the files below it, and the function rejects a symbolic link or a file that is neither a regular
+/// file nor a folder.
 fn collect(dir: &Path, listed: &[String]) -> Result<Vec<ReleaseEntry>, String> {
     fn add(
         dir: &Path,
@@ -81,7 +81,7 @@ fn collect(dir: &Path, listed: &[String]) -> Result<Vec<ReleaseEntry>, String> {
     }
     let mut entries = BTreeMap::new();
     for path in std::iter::once("package.json").chain(listed.iter().map(String::as_str)) {
-        // 기본값: 끝의 / 는 폴더를 가리키는 표기일 뿐이므로 없으면 경로를 그대로 쓴다.
+        // default: a trailing / only marks a folder, so the path is used unchanged when there is none.
         let path = path.strip_suffix('/').unwrap_or(path);
         if leaves(path) {
             return Err(format!("{path} leaves the directory"));
@@ -91,7 +91,7 @@ fn collect(dir: &Path, listed: &[String]) -> Result<Vec<ReleaseEntry>, String> {
     Ok(entries.into_values().collect())
 }
 
-/// 같은 폴더의 임시 파일에 쓴 뒤 이름을 바꿔 path 를 한 번에 바꾼다. write 가 실패하면 임시 파일을 지운다.
+/// Writes to a temporary file in the same folder and renames it to change path once. When the write fails, it removes the temporary file.
 fn replace_with(
     path: &Path,
     write: impl FnOnce(&mut std::fs::File) -> Result<(), String>,
@@ -124,14 +124,14 @@ fn replace_with(
     })
 }
 
-/// data 로 path 를 한 번에 바꾼다.
+/// Changes path once with data.
 pub fn replace_file(path: &Path, data: &[u8]) -> Result<(), String> {
     replace_with(path, |file| {
         file.write_all(data).map_err(|error| error.to_string())
     })
 }
 
-/// 항목을 output 에 쓰고 그 sha256 을 돌려준다.
+/// Writes the entries to output and returns their sha256.
 fn write_release(entries: &[ReleaseEntry], output: &Path) -> Result<String, String> {
     let mut sum = String::new();
     replace_with(output, |file| {
@@ -165,7 +165,7 @@ fn write_release(entries: &[ReleaseEntry], output: &Path) -> Result<String, Stri
     Ok(sum)
 }
 
-/// 쓴 byte 의 sha256 을 함께 계산한다.
+/// Also computes the sha256 of the written bytes.
 struct HashingWriter<'a> {
     inner: &'a mut std::fs::File,
     hash: Sha256,
@@ -183,12 +183,12 @@ impl Write for HashingWriter<'_> {
     }
 }
 
-/// byte 를 소문자 16진수로 쓴다.
+/// Writes bytes as lowercase hexadecimal.
 pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-/// 폴더의 JSON 파일 하나를 읽는다.
+/// Reads one JSON file of the folder.
 pub fn read_json_file(dir: &Path, name: &str) -> Result<Value, String> {
     let path = dir.join(name);
     let text = std::fs::read_to_string(&path)
@@ -197,7 +197,7 @@ pub fn read_json_file(dir: &Path, name: &str) -> Result<Value, String> {
         .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))
 }
 
-/// 결과를 두 칸 들여쓰기로 쓴다.
+/// Writes the result with two-space indentation.
 pub fn print_json<T: serde::Serialize + ?Sized>(
     stdout: &mut dyn Write,
     value: &T,
@@ -206,7 +206,7 @@ pub fn print_json<T: serde::Serialize + ?Sized>(
     writeln!(stdout, "{text}").map_err(|error| error.to_string())
 }
 
-/// 출력 폴더를 만들고 그 안의 절대 경로를 돌려준다.
+/// Creates the output folder and returns the absolute path inside it.
 fn output_path(dir: &str, name: &str) -> Result<PathBuf, String> {
     let absolute = std::path::absolute(dir).map_err(|error| format!("{dir}: {error}"))?;
     std::fs::create_dir_all(&absolute)
@@ -229,17 +229,17 @@ fn listed_files(pkg: &Map<String, Value>) -> Result<Vec<String>, String> {
     Ok(listed)
 }
 
-/// plugin 폴더를 검사하고 `<id>-<version>.tgz` 를 쓴다.
-/// files 의 경로 하나가 path 이거나 path 를 담은 폴더인지.
+/// Checks the plugin folder and writes `<id>-<version>.tgz`.
+/// Whether a path of files is path or a folder that contains path.
 fn covers(listed: &[String], path: &str) -> bool {
     listed.iter().any(|file| {
-        // 기본값: 끝의 / 는 폴더를 가리키는 표기일 뿐이므로 없으면 경로를 그대로 쓴다.
+        // default: a trailing / only marks a folder, so the path is used unchanged when there is none.
         let folder = format!("{}/", file.strip_suffix('/').unwrap_or(file));
         path == file || path.starts_with(&folder)
     })
 }
 
-/// plugin.json 이 불러오는 module 과 그 이름: surface, section 마다의 module, state.
+/// The modules that plugin.json loads and their names: the surface, the module of each section, and the state.
 fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
     let mut modules = vec![];
     let mut add = |what: String, value: &Value| {
@@ -264,8 +264,8 @@ fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
     modules
 }
 
-/// plugin 폴더의 diagnostics.json 과 그 module 경로. diagnostics.json 이 없으면 비어 있다. 두 파일은 files 에
-/// 나열하지 않는다(docs/spec/plugins.md).
+/// diagnostics.json of the plugin folder and its module paths. It is empty when diagnostics.json does not exist. Neither file is
+/// listed in files (docs/spec/plugins.md).
 fn diagnostic_files(dir: &Path, listed: &[String]) -> Result<Vec<String>, String> {
     if !dir.join("diagnostics.json").exists() {
         return Ok(vec![]);
@@ -290,7 +290,7 @@ fn diagnostic_files(dir: &Path, listed: &[String]) -> Result<Vec<String>, String
     Ok(vec!["diagnostics.json".into(), module.to_string()])
 }
 
-/// plugin 폴더를 검사하고 `<id>-<version>.tgz` 를 쓴다. diagnostics 가 참이면 진단 선언도 담는다.
+/// Checks the plugin folder and writes `<id>-<version>.tgz`. When diagnostics is true, it also includes the diagnostic declarations.
 fn run_pack(dir: &str, out: &str, diagnostics: bool, stdout: &mut dyn Write) -> Result<(), String> {
     let dir = Path::new(dir);
     let pkg = read_json_file(dir, "package.json")?;
@@ -331,7 +331,7 @@ fn run_pack(dir: &str, out: &str, diagnostics: bool, stdout: &mut dyn Write) -> 
     )
 }
 
-/// SHA256SUMS 를 release 이름마다 sha256 으로 읽는다. 파일이 없으면 빈 목록이다.
+/// Reads SHA256SUMS as a sha256 for each release name. The list is empty when the file does not exist.
 fn read_sums(path: &Path) -> Result<BTreeMap<String, String>, String> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
@@ -339,7 +339,7 @@ fn read_sums(path: &Path) -> Result<BTreeMap<String, String>, String> {
         Err(error) => return Err(crate::files::file_error(path.display(), &error)),
     };
     let mut sums = BTreeMap::new();
-    // 기본값: 마지막 줄 끝의 줄바꿈은 선택이므로 없으면 텍스트를 그대로 나눈다.
+    // default: the line feed at the end of the last line is optional, so the text is split unchanged when there is none.
     let body = text.strip_suffix('\n').unwrap_or(&text);
     for (i, line) in body.split('\n').enumerate() {
         match line.split_once("  ") {
@@ -358,7 +358,7 @@ fn read_sums(path: &Path) -> Result<BTreeMap<String, String>, String> {
     Ok(sums)
 }
 
-/// SHA256SUMS 를 release 이름 순서로 쓴다.
+/// Writes SHA256SUMS in release name order.
 fn write_sums(path: &Path, sums: &BTreeMap<String, String>) -> Result<(), String> {
     let text: String = sums
         .iter()
@@ -396,7 +396,7 @@ fn run_release(dir: &str, out: &str, platform: &str, stdout: &mut dyn Write) -> 
     let file = install::sidecar_release_name(name, version, platform)?;
     let entries = collect(dir, &listed)?;
     let output = output_path(out, &file)?;
-    // SHA256SUMS 를 먼저 읽으므로 그 파일이 틀리면 release 를 쓰지 않는다.
+    // SHA256SUMS is read first, so a wrong file stops the command before it writes a release.
     let sums_path = output.with_file_name("SHA256SUMS");
     let mut sums = read_sums(&sums_path)?;
     let sum = write_release(&entries, &output)?;
@@ -409,7 +409,7 @@ fn run_release(dir: &str, out: &str, platform: &str, stdout: &mut dyn Write) -> 
     )
 }
 
-/// 실행 중인 애플리케이션 없이 파일을 쓰는 plugin, sidecar 명령을 실행한다.
+/// Runs the plugin and sidecar commands that write files without a running application.
 pub(crate) fn run_files(
     positionals: &[String],
     values: &std::collections::HashMap<String, String>,

@@ -1,8 +1,8 @@
-//! sok 은 Tauri 애플리케이션의 command line 이다(docs/spec/cli.md).
+//! sok is the command line of the Tauri application (docs/spec/cli.md).
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    // 식별자는 기본 설정 폴더와 경로 항목의 이름이다(docs/spec/projects.md#persistence).
+    // The identifier is the name of the default configuration folder and of the path entry (docs/spec/projects.md#persistence).
     let identifier = soksak_sok::identity::identity();
     let paths = match soksak_sok::platform::current() {
         Ok(platform) => platform.paths_dir(),

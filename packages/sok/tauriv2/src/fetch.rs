@@ -1,6 +1,6 @@
-//! registry index 와 release 를 위치에서 읽는다(docs/spec/installation.md#fetching). 위치는 https: URL 이나 절대
-//! file: URL 이다. https: 는 운영체제가 신뢰하는 인증 기관으로 TLS 를 쓰고, https: 로의 redirect 만 5 번까지 따라가며,
-//! 200 이 아닌 응답, 한도보다 큰 본문, 한도보다 느린 요청을 정한 문장으로 거부한다. 아무것도 저장해 두지 않는다.
+//! Reads a registry index and a release from a location (docs/spec/installation.md#fetching). A location is an https: URL or an absolute
+//! file: URL. https: uses TLS with the certificate authorities that the operating system trusts, follows only redirects to https: up to 5 times,
+//! and rejects a response other than 200, a body over the limit and a request slower than the limit with the specified sentences. It stores nothing.
 
 use std::time::{Duration, Instant};
 
@@ -9,14 +9,14 @@ use ureq::tls::{Certificate, RootCerts, TlsConfig};
 use crate::files::file_error;
 use crate::install::file_path;
 
-/// 한 요청의 본문 크기와 시간의 한도.
+/// The limits of body size and time of one request.
 #[derive(Clone, Copy, Debug)]
 pub struct Limit {
     pub bytes: u64,
     pub timeout: Duration,
 }
 
-/// 위치를 읽는다. roots 가 None 이면 운영체제가 신뢰하는 인증 기관을 쓴다. 검사는 자기 인증 기관과 작은 한도를 준다.
+/// Reads the location. When roots is None it uses the certificate authorities that the operating system trusts. A check passes its own certificate authority and small limits.
 #[derive(Clone, Debug)]
 pub struct Fetcher {
     pub roots: Option<Vec<Vec<u8>>>,
@@ -24,14 +24,14 @@ pub struct Fetcher {
     pub release: Limit,
 }
 
-/// 따라가는 redirect 의 최대 수.
+/// The maximum number of redirects that are followed.
 const MAX_REDIRECTS: usize = 5;
 
-/// 진단 build 의 host 가 --registry-ca 로 정한 인증 기관(docs/spec/hosts.md#application-arguments).
+/// The certificate authority that the host of a diagnostic build sets with --registry-ca (docs/spec/hosts.md#application-arguments).
 #[cfg(feature = "diagnostics")]
 static REGISTRY_AUTHORITIES: std::sync::OnceLock<Vec<Vec<u8>>> = std::sync::OnceLock::new();
 
-/// path 의 PEM 파일이 담은 인증 기관만 registry 받기가 신뢰하게 한다. 진단 build 의 host 가 --registry-ca 로 부른다.
+/// Makes registry fetching trust only the certificate authorities in the PEM file at path. The host of a diagnostic build calls it for --registry-ca.
 #[cfg(feature = "diagnostics")]
 pub fn use_registry_authorities(path: &std::path::Path) -> Result<(), String> {
     let data = std::fs::read(path).map_err(|error| file_error(path.display(), &error))?;
@@ -55,7 +55,7 @@ pub fn use_registry_authorities(path: &std::path::Path) -> Result<(), String> {
 }
 
 impl Default for Fetcher {
-    /// 명세의 한도를 쓰는 Fetcher. 진단 build 에서 --registry-ca 가 정한 인증 기관이 있으면 그것만 신뢰한다.
+    /// A Fetcher with the limits of the specification. In a diagnostic build it trusts only the certificate authority that --registry-ca sets, when there is one.
     fn default() -> Self {
         #[cfg(feature = "diagnostics")]
         let roots = REGISTRY_AUTHORITIES.get().cloned();
@@ -75,7 +75,7 @@ impl Default for Fetcher {
     }
 }
 
-/// 위치가 https: URL 이나 절대 file: URL 인지 검사한다.
+/// Checks that the location is an https: URL or an absolute file: URL.
 pub fn check_location(location: &str) -> Result<(), String> {
     let other = || format!("{location}: the URL must be https: or an absolute file: URL");
     if let Some(rest) = location.strip_prefix("https://") {
@@ -92,7 +92,7 @@ pub fn check_location(location: &str) -> Result<(), String> {
     Err(other())
 }
 
-/// 상대 Location 을 현재 URL 에 대해 푼다. 현재 URL 에 scheme 이 없으면 풀 수 없다.
+/// Resolves a relative Location against the current URL. It cannot resolve it when the current URL has no scheme.
 fn resolve(current: &str, location: &str) -> Option<String> {
     if location.contains("://") {
         return Some(location.to_string());
@@ -111,7 +111,7 @@ fn resolve(current: &str, location: &str) -> Option<String> {
 }
 
 impl Fetcher {
-    /// 위치의 본문을 limit 안에서 읽는다.
+    /// Reads the body of the location within limit.
     pub fn read(&self, location: &str, limit: Limit) -> Result<Vec<u8>, String> {
         check_location(location)?;
         if location.starts_with("file:") {
@@ -172,7 +172,7 @@ impl Fetcher {
             if status != 200 {
                 return Err(format!("{location}: HTTP {status}"));
             }
-            // 한도와 같은 크기의 본문은 받으므로 한 byte 더 읽어 넘는지 본다.
+            // A body of exactly the limit size is accepted, so the code reads one byte more to see whether the body exceeds the limit.
             let larger = || format!("{location}: larger than {} bytes", limit.bytes);
             let data = response
                 .body_mut()
@@ -191,7 +191,7 @@ impl Fetcher {
         Err(format!("{location}: more than {MAX_REDIRECTS} redirects"))
     }
 
-    /// 요청 오류를 명세의 문장으로 바꾼다.
+    /// Converts a request error to the sentence of the specification.
     fn failure(
         &self,
         location: &str,

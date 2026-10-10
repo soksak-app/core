@@ -1,5 +1,5 @@
-//! soksak 애플리케이션의 command line(docs/spec/cli.md). 실행 중인 애플리케이션의 엔드포인트에 요청을 보내고 결과를
-//! JSON 으로 출력한다.
+//! The command line of the soksak application (docs/spec/cli.md). It sends a request to the endpoint of the running application and prints the result as
+//! JSON.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -29,7 +29,7 @@ pub use release::current_platform;
 
 use endpoint::{Client, Failure};
 
-/// 사용법.
+/// The usage text.
 pub const USAGE: &str = "usage: sok <command> [options]
 
 commands:
@@ -63,7 +63,7 @@ window:
 common options:
   --config-dir DIR          configuration directory of the running application (default: this application's)";
 
-/// 명령이 실패한 이유. Usage 는 잘못 쓴 명령이며 종료 상태 2 와 사용법으로 보고한다.
+/// The reason a command failed. Usage is a command written wrongly and is reported with exit status 2 and the usage text.
 enum Error {
     Usage(String),
     Failed(String),
@@ -211,7 +211,7 @@ impl Arguments {
     }
 }
 
-/// 정수인 수는 JSON 정수로 쓴다. Go 의 float64 직렬화와 같은 표기다.
+/// A number that is an integer is written as a JSON integer, like the float64 serialization of Go.
 fn number_value(value: f64) -> Value {
     if value.fract() == 0.0 && value.abs() < 1e15 {
         Value::from(value as i64)
@@ -220,7 +220,7 @@ fn number_value(value: f64) -> Value {
     }
 }
 
-/// None 인 필드를 뺀 요청 매개변수.
+/// The request parameters without the fields that are None.
 fn compact(fields: Vec<(&str, Option<Value>)>) -> Map<String, Value> {
     fields
         .into_iter()
@@ -232,7 +232,7 @@ pub(crate) struct Request {
     method: &'static str,
     params: Option<Map<String, Value>>,
     watch: bool,
-    /// 결과 객체에서 출력할 필드. None 이면 결과 전체를 출력한다.
+    /// The field of the result object to print. When None, the whole result is printed.
     field: Option<&'static str>,
 }
 
@@ -261,7 +261,7 @@ fn plan(
             watch: false,
             field: None,
         }),
-        // 진단 build 만 capture 요청을 둔다(diagnostics.rs). 일반 build 의 sok 에는 진단 method 가 없다.
+        // Only the diagnostic build has the capture request (diagnostics.rs). The sok of a regular build has no diagnostic methods.
         #[cfg(feature = "diagnostics")]
         "capture" => Ok(diagnostics::capture(window()?)),
         #[cfg(not(feature = "diagnostics"))]
@@ -411,7 +411,7 @@ fn no_notify(_: &str, _: &RawValue) -> Result<(), String> {
     Ok(())
 }
 
-/// --window, --project 또는 하나뿐인 창으로 요청할 창을 고른다.
+/// Chooses the window to request from --window, --project or the only window.
 fn select_window(a: &Arguments, client: &mut Client) -> Result<String, Error> {
     let by_name = a.values.get("window");
     let by_project = a.values.get("project");
@@ -463,7 +463,7 @@ fn select_window(a: &Arguments, client: &mut Client) -> Result<String, Error> {
         .ok_or_else(|| Error::Failed("windows.list returned a window without a name".into()))
 }
 
-/// JSON 을 키 순서를 그대로 두고 두 칸으로 들여 쓴다. Go 의 json.Indent 와 같은 결과다.
+/// Writes JSON with two-space indentation and keeps the key order. The result equals json.Indent of Go.
 pub fn indent(raw: &str) -> Result<String, String> {
     serde_json::from_str::<&RawValue>(raw)
         .map_err(|error| format!("endpoint returned invalid JSON: {error}"))?;
@@ -533,7 +533,7 @@ pub fn indent(raw: &str) -> Result<String, String> {
     Ok(out)
 }
 
-/// JSON 의 공백을 뺀 한 줄.
+/// The JSON on one line without whitespace.
 fn compact_line(raw: &str) -> Result<String, String> {
     let value: &RawValue = serde_json::from_str(raw)
         .map_err(|error| format!("endpoint returned invalid JSON: {error}"))?;
@@ -561,14 +561,14 @@ fn compact_line(raw: &str) -> Result<String, String> {
     Ok(out)
 }
 
-/// status 값과 그 뒤의 변경을 한 줄씩 출력한다. SIGINT 나 SIGTERM 이 오면 연결을 닫고 성공으로 끝난다.
+/// Prints the status value and each later change on its own line. On SIGINT or SIGTERM it closes the connection and ends successfully.
 fn watch(
     client: &mut Client,
     params: Map<String, Value>,
     stdout: &mut dyn Write,
 ) -> Result<(), Error> {
     let stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    // 중단 신호를 받은 thread 는 연결을 닫은 결과를 보낸다. 닫기에 실패하면 watch 는 그 오류로 끝난다.
+    // The thread that received the interrupt signal sends the result of closing the connection. When closing fails, watch ends with that error.
     let (closed_tx, closed_rx) = std::sync::mpsc::sync_channel::<Result<(), String>>(1);
     {
         let close = client.closer()?;
@@ -576,7 +576,7 @@ fn watch(
         platform::current()?.on_interrupt(Box::new(move || {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
             if let Err(unsent) = closed_tx.send(close()) {
-                // watch 가 이미 끝나 결과를 받을 곳이 없으면 닫기 실패를 표준 오류에 쓴다.
+                // When watch has already ended and nothing can receive the result, the close failure is written to standard error.
                 if let Err(error) = unsent.0 {
                     eprintln!("sok: {error}");
                 }
@@ -610,7 +610,7 @@ fn watch(
         }
         let changed: Value = serde_json::from_str(raw.get())
             .map_err(|error| format!("status.changed has unexpected params: {error}"))?;
-        // 기본값: surface 가 없는 알림은 페이지 status 이며 surface 자리는 없음(None)이다.
+        // default: a notification without a surface is a page status, and its surface is none (None).
         let changed_surface = changed
             .get("surface")
             .filter(|value| !value.is_null())
@@ -645,18 +645,18 @@ fn watch(
     finish(Error::Failed(reason))
 }
 
-/// command line 이 속한 애플리케이션과 운영체제 자리.
+/// The application and the operating system that this command line belongs to.
 pub struct Options<'a> {
-    /// 애플리케이션의 식별자이며 --config-dir 이 없을 때 설정 폴더 이름이고 경로 항목의 파일 이름이다.
+    /// The identifier of the application. It is the configuration folder name when --config-dir is absent and the file name of the path entry.
     pub identifier: &'a str,
-    /// 경로 항목을 두는 폴더(macOS 는 /etc/paths.d). 이 운영체제에 그런 폴더가 없으면 그 까닭이며, sok path 가
-    /// 그 오류로 실패한다.
+    /// The folder that holds path entries (/etc/paths.d on macOS). When this operating system has no such folder, it holds the reason, and sok path
+    /// fails with that error.
     pub paths_dir: Result<&'a Path, String>,
-    /// plugin 을 고를 때 쓰는 core version. 실행 파일은 이 crate 의 version 을 준다.
+    /// The core version used to choose plugins. The executable supplies the version of this crate.
     pub core_version: &'a str,
 }
 
-/// 명령 하나를 실행하고 종료 상태를 돌려준다.
+/// Runs one command and returns the exit status.
 pub fn run(
     args: &[String],
     stdout: &mut dyn Write,
@@ -664,7 +664,7 @@ pub fn run(
     options: &Options,
 ) -> i32 {
     let result = execute(args, stdout, options);
-    // 표준 오류에 오류를 쓰지 못하면 알릴 곳이 없으므로 종료 상태 3 으로 알린다(docs/spec/cli.md).
+    // When the error cannot be written to standard error, there is nowhere to report it, so the code reports it with exit status 3 (docs/spec/cli.md).
     let (written, status) = match result {
         Ok(()) => return 0,
         Err(Error::Usage(message)) => (writeln!(stderr, "sok: {message}\n{USAGE}"), 2),
@@ -676,8 +676,8 @@ pub fn run(
     }
 }
 
-/// --config-dir 이나 이 애플리케이션의 설정 폴더에서 엔드포인트를 찾아 연결한다.
-/// --config-dir 이나 이 애플리케이션의 설정 폴더.
+/// Finds the endpoint in config-dir or the configuration folder of this application and connects to it.
+/// config-dir or the configuration folder of this application.
 pub(crate) fn config_dir_of(
     values: &HashMap<String, String>,
     options: &Options,
@@ -707,7 +707,7 @@ fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result
     if args.first().map(String::as_str) == Some("app") {
         return appupdate::run_app(&args[1..], stdout);
     }
-    // 점이 있는 명령 단어는 선언된 command 다(docs/spec/cli.md).
+    // A command word with a dot is a declared command (docs/spec/cli.md).
     if command::command_word(args).is_some_and(|word| word.contains('.')) {
         return command::run_command(args, stdout, options);
     }
@@ -758,13 +758,13 @@ fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result
     connect(&mut client)?;
     let mut client = client.expect("connected above");
     let outcome = send(&mut client, request, stdout);
-    // 명령이 성공했으면 연결을 닫은 결과도 보고한다. 실패했으면 그 실패가 결과다.
+    // When the command succeeded, the code also reports the result of closing the connection. When it failed, that failure is the result.
     let closed = client.close();
     outcome?;
     closed.map_err(Error::Failed)
 }
 
-/// 계획한 요청을 보내고 결과를 출력한다.
+/// Sends the planned request and prints the result.
 fn send(client: &mut Client, request: Request, stdout: &mut dyn Write) -> Result<(), Error> {
     if request.watch {
         return watch(client, request.params.expect("status has params"), stdout);

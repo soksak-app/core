@@ -1,4 +1,4 @@
-//! plugin 설치(docs/spec/cli.md)가 release 를 확인해 풀고 installed.json 을 한 번에 바꾸는지 검사한다.
+//! Checks that plugin installation (docs/spec/cli.md) verifies and unpacks a release and changes installed.json once.
 
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
-/// 테스트마다 고유한 임시 폴더. 끝나면 지운다.
+/// A unique temporary folder for each test. It is removed at the end.
 struct Dir(PathBuf);
 
 impl Dir {
@@ -31,7 +31,7 @@ impl Dir {
 
 impl Drop for Dir {
     fn drop(&mut self) {
-        // 테스트 뒤 정리다. 지우지 못한 폴더는 다음 테스트에 영향을 주지 않는 고유 이름이다.
+        // Cleanup after the test. A folder that cannot be removed has a unique name that does not affect the next test.
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
@@ -58,7 +58,7 @@ fn run_json(args: &[&str]) -> Value {
     serde_json::from_str(&stdout).expect("JSON result")
 }
 
-/// 경로마다 내용을 쓴다. 이름이 * 로 끝나면 실행 bit 를 붙인다.
+/// Writes the contents of each path. When the name ends with *, it sets the execute bit.
 fn write_tree(dir: &Path, files: &[(&str, &str)]) {
     for (name, content) in files {
         let (name, mode) = match name.strip_suffix('*') {
@@ -76,7 +76,7 @@ fn read_text(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
 }
 
-/// plugin probe 의 version 마다 pack 한 release 와 sidecar 0.1.0 의 release 로 registry 를 만들고 build 한다.
+/// Builds a registry for each version of plugin probe from its packed release and the release of sidecar 0.1.0.
 struct Registry {
     dir: Dir,
     _work: Vec<Dir>,
@@ -92,7 +92,7 @@ fn plugin_versions(versions: &[&str]) -> Registry {
     plugin_versions_for("0.0.2", versions)
 }
 
-/// plugin 이 core version core 를 요구하는 registry.
+/// A registry whose plugin requires core version core.
 fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
     let platform = soksak_sok::current_platform().expect("platform");
     let releases = Dir::new();
@@ -222,7 +222,7 @@ fn plugin_install_extracts_checked_releases_and_records_the_state() {
     let sidecar_path = format!(r#""path": "sidecars/scope-sidecar-worker/0.1.0/{platform}""#);
     assert!(installed.contains(&sidecar_path), "{installed}");
     assert!(installed.contains(r#""version": "0.2.0""#), "{installed}");
-    // 같은 version 을 다시 설치하면 아무것도 바꾸지 않는다.
+    // Installing the same version again changes nothing.
     let (code, again, _) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);
     assert_eq!((code, again), (0, stdout));
     assert_eq!(
@@ -231,7 +231,7 @@ fn plugin_install_extracts_checked_releases_and_records_the_state() {
     );
 }
 
-/// package.json 과 plugin.json 옆에 폴더 밖 경로를 담은 release 를 쓰고 그 sha256 을 돌려준다.
+/// Writes a release that holds a path outside the folder next to package.json and plugin.json, and returns its sha256.
 fn unsafe_release(path: &Path) -> String {
     let mut data = vec![];
     {
@@ -249,7 +249,7 @@ fn unsafe_release(path: &Path) -> String {
             header.set_entry_type(tar::EntryType::Regular);
             header.set_size(content.len() as u64);
             header.set_mode(0o644);
-            // tar crate 는 .. 를 담은 이름을 set_path 에서 거부하므로 이름 칸에 직접 쓴다.
+            // The tar crate rejects a name that holds .. in set_path, so the check writes it directly into the name field.
             header.as_gnu_mut().unwrap().name[..name.len()].copy_from_slice(name.as_bytes());
             header.set_cksum();
             release.append(&header, content.as_bytes()).unwrap();
@@ -279,7 +279,7 @@ fn plugin_install_failure_keeps_the_previous_state() {
         config.0.join("plugins/registry.json").display()
     );
     assert_eq!((code, stderr), (1, want));
-    // index 를 쓴 뒤 release 가 바뀌면 hash 비교가 설치를 멈춘다.
+    // When the release changes after the index was written, the hash comparison stops the installation.
     let registry = plugin_versions(&["0.2.0"]);
     run_json(&[
         "registry",
@@ -307,7 +307,7 @@ fn plugin_install_failure_keeps_the_previous_state() {
         !config.0.join("plugins/installed.json").exists()
             && !config.0.join("plugins/probe/0.2.0").exists()
     );
-    // 폴더 밖 경로를 담은 release 는 풀지 않는다.
+    // A release that holds a path outside the folder is not unpacked.
     let sum = unsafe_release(&release);
     let entry = registry.dir.0.join("plugins/probe.json");
     replace_in(
@@ -405,7 +405,7 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
     );
 }
 
-/// read_plugins_state 의 결과를 JSON 문장으로 만든다.
+/// Converts the result of read_plugins_state to a JSON text.
 fn state_json(config: &Dir) -> String {
     let state = soksak_sok::plugins::read_plugins_state(&config.0).expect("plugins state");
     serde_json::to_string(&state).expect("state JSON")
@@ -436,7 +436,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.2.0");
     assert_eq!(state["installed"]["plugins"]["probe"]["enabled"], true);
     assert_eq!(state["firstRun"], false);
-    // 읽지 못한 index 는 오류를 index 자리에 담고, 설치 상태는 그대로 보고한다.
+    // An index that could not be read puts its error in the index field, and the installation state is reported unchanged.
     std::fs::remove_file(registry.index()).unwrap();
     let state: Value = serde_json::from_str(&state_json(&config)).unwrap();
     let error = state["index"]["error"].as_str().expect("index error");
@@ -536,7 +536,7 @@ fn an_installed_file_of_another_format_is_rejected() {
 fn plugin_install_sets_the_modes_whatever_the_umask() {
     use std::os::unix::fs::PermissionsExt;
     let platform = soksak_sok::current_platform().expect("platform");
-    // 실행 파일 sok 은 이 crate 의 core version 으로 plugin 을 고른다.
+    // The executable sok chooses plugins with the core version of this crate.
     let registry = plugin_versions_for(soksak_sok::version::CORE_VERSION, &["0.2.0"]);
     let config = Dir::new();
     run_json(&[
@@ -546,7 +546,7 @@ fn plugin_install_sets_the_modes_whatever_the_umask() {
         "--config-dir",
         config.text(),
     ]);
-    // 프로세스의 umask 는 실행 파일 단위이므로 umask 077 의 shell 에서 sok 을 실행한다.
+    // The umask of a process applies per executable, so the check runs sok in a shell with umask 077.
     let output = std::process::Command::new("sh")
         .args([
             "-c",

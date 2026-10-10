@@ -8,13 +8,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-/// Registry index 의 형식 번호.
+/// The format number of the registry index.
 pub const INSTALL_FORMAT: u64 = 1;
 
-/// 설치 상태 파일의 형식 번호. 형식 2 는 설치 폴더를 설정 폴더에 대한 상대 경로로 기록한다.
+/// The format number of the installation state file. Format 2 records the installation folder as a path relative to the configuration folder.
 pub const INSTALLED_FORMAT: u64 = 2;
 
-/// 설정 폴더 안에서 설치 상태를 담는 파일.
+/// The file in the configuration folder that holds the installation state.
 pub const INSTALLED: &str = "plugins/installed.json";
 
 /// The platform keys (`<os>-<arch>`) of sidecar releases.
@@ -29,7 +29,7 @@ pub const PLATFORMS: [&str; 6] = [
 
 const DESCRIPTION_MAX: usize = 200;
 
-/// `x.y.z` version. 각 자리는 u32 범위이므로 범위의 상한을 계산할 때 넘치지 않는다.
+/// A `x.y.z` version. Each part is in the u32 range, so computing the upper bound of a range does not overflow.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Version(pub [u64; 3]);
 
@@ -39,12 +39,12 @@ impl std::fmt::Display for Version {
     }
 }
 
-/// 값을 JSON 텍스트로 쓴다. 오류 문구에서 받은 값을 그대로 보이게 한다.
+/// Writes a value as JSON text so that an error text shows the received value unchanged.
 fn quote(value: &Value) -> String {
     value.to_string()
 }
 
-/// 숫자 세 자리를 점으로 이은 version 을 읽는다. 앞자리 0 과 u32 를 넘는 수는 거부한다.
+/// Reads a version of three numbers joined by dots. It rejects a leading 0 and a number over u32.
 pub fn parse_version(text: &str) -> Result<Version, String> {
     let invalid = || {
         format!(
@@ -69,22 +69,22 @@ pub fn parse_version(text: &str) -> Result<Version, String> {
     Ok(Version(version))
 }
 
-/// 포함하는 하한 min 과 포함하지 않는 상한 below.
+/// An inclusive lower bound min and an exclusive upper bound below.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Range {
     pub min: Version,
-    /// 포함하지 않는 상한. None 이면 상한이 없다.
+    /// The exclusive upper bound. None means there is no upper bound.
     pub below: Option<Version>,
 }
 
 impl Range {
-    /// version 이 범위 안에 있는지.
+    /// Whether the version is inside the range.
     pub fn contains(&self, version: Version) -> bool {
         version >= self.min && self.below.is_none_or(|below| version < below)
     }
 }
 
-/// `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z`, `>=x.y.z <a.b.c` 범위를 읽는다. `*` 는 `>=0.0.0`, 곧 모든 version 이다.
+/// Reads the ranges `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z` and `>=x.y.z <a.b.c`. `*` is `>=0.0.0`, that is, every version.
 pub fn parse_range(text: &str) -> Result<Range, String> {
     if text == "*" {
         return Ok(Range {
@@ -106,7 +106,7 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
                 });
             }
         } else if !rest.is_empty() && !rest.contains(' ') {
-            // >=x.y.z 는 하한만 있고 상한이 없다.
+            // >=x.y.z has only a lower bound and no upper bound.
             if let Ok(min) = parse_version(rest) {
                 return Ok(Range { min, below: None });
             }
@@ -137,7 +137,7 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
     })
 }
 
-/// version 이 범위 안에 있는지. 둘 다 이미 검사한 값이어야 한다.
+/// Whether the version is inside the range. Both must be values that were already checked.
 pub fn satisfies(version: &str, range: &str) -> bool {
     matches!((parse_version(version), parse_range(range)), (Ok(v), Ok(r)) if r.contains(v))
 }
@@ -149,12 +149,12 @@ fn is_lower_word(text: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
-/// 소문자로 시작하고 소문자, 숫자, - 만 쓰는 이름인지.
+/// Whether the name starts with a lowercase letter and uses only lowercase letters, digits and -.
 pub(crate) fn is_identifier(text: &str) -> bool {
     text.as_bytes().first().is_some_and(u8::is_ascii_lowercase) && is_lower_word(text)
 }
 
-/// `name` 이나 `@scope/name` 형태인지.
+/// Whether the name has the form `name` or `@scope/name`.
 fn is_package_json_name(text: &str) -> bool {
     match text.strip_prefix('@') {
         Some(scoped) => scoped
@@ -205,17 +205,17 @@ fn text(value: Option<&Value>) -> Option<&str> {
         .filter(|text| !text.is_empty())
 }
 
-/// 값이 수 1 인지. `1.0` 은 serde_json 이 실수로 읽어 as_u64 가 없으므로 거부한다.
+/// Whether the value is the number 1. serde_json reads `1.0` as a float that has no as_u64, so the code rejects it.
 fn is_one(value: Option<&Value>) -> bool {
     value.and_then(Value::as_u64) == Some(1)
 }
 
 fn shown(value: Option<&Value>) -> String {
-    // 기본값: 없는 필드는 JSON null 로 보인다.
+    // default: a missing field appears as JSON null.
     quote(value.unwrap_or(&Value::Null))
 }
 
-/// version 을 검사하고 그 텍스트를 돌려준다.
+/// Checks the version and returns its text.
 pub(crate) fn check_version<'a>(at: &str, value: Option<&'a Value>) -> Result<&'a str, String> {
     let Some(text) = value.and_then(Value::as_str) else {
         return Err(format!(
@@ -237,7 +237,7 @@ fn check_range(at: &str, value: Option<&Value>) -> Result<(), String> {
         .map_err(|error| format!("{at}: {error}"))
 }
 
-/// package 이름을 검사하고 그 텍스트를 돌려준다.
+/// Checks the name of package.json and returns its text.
 pub(crate) fn check_package_json_name<'a>(
     at: &str,
     value: Option<&'a Value>,
@@ -258,7 +258,7 @@ fn check_sidecar_ranges(at: &str, value: Option<&Value>) -> Result<(), String> {
     Ok(())
 }
 
-/// 절대 `file:` URL 의 local 경로. %XX 는 그 byte 로 읽는다.
+/// The local path of an absolute `file:` URL. %XX reads as that byte.
 pub fn file_path(url: &str) -> Result<String, String> {
     let rest = url
         .strip_prefix("file://")
@@ -364,7 +364,7 @@ pub fn release_name(id: &str, version: &str) -> String {
     format!("{id}-{version}.tgz")
 }
 
-/// Sidecar 이름을 파일 이름과 폴더 이름에 쓰는 형태로 바꾼다. `@scope/name` 은 `scope-name` 이다.
+/// Converts a sidecar name to the form used for file names and folder names. `@scope/name` becomes `scope-name`.
 pub fn sidecar_file_name(name: &str) -> Result<String, String> {
     check_package_json_name("sidecar", Some(&Value::from(name)))?;
     Ok(match name.strip_prefix('@') {
@@ -394,7 +394,7 @@ pub fn sidecar_release_name(name: &str, version: &str, platform: &str) -> Result
     ))
 }
 
-/// 설정 폴더 안에서 plugin version 하나를 푸는 폴더.
+/// The folder in the configuration folder that unpacks one plugin version.
 pub fn plugin_install_path(id: &str, version: &str) -> Result<String, String> {
     if !is_identifier(id) {
         return Err(format!("invalid plugin id {id}"));
@@ -416,20 +416,20 @@ pub fn sidecar_install_path(name: &str, version: &str, platform: &str) -> Result
     ))
 }
 
-/// Release release 의 주소와 hash.
+/// The address and hash of a release.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct Release {
     pub url: String,
     pub sha256: String,
 }
 
-/// Plugin version 이 지원하는 core 범위.
+/// The core range that a plugin version supports.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Engines {
     pub soksak: String,
 }
 
-/// Registry 의 plugin version 하나.
+/// One plugin version of the registry.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PluginVersion {
     pub version: String,
@@ -438,7 +438,7 @@ pub struct PluginVersion {
     pub sidecars: BTreeMap<String, String>,
 }
 
-/// Registry 의 plugin 항목.
+/// A plugin entry of the registry.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RegistryPlugin {
     pub id: String,
@@ -450,7 +450,7 @@ pub struct RegistryPlugin {
     pub versions: Vec<PluginVersion>,
 }
 
-/// Registry 의 sidecar version 하나.
+/// One sidecar version of the registry.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SidecarVersion {
     pub version: String,
@@ -458,7 +458,7 @@ pub struct SidecarVersion {
     pub releases: BTreeMap<String, Release>,
 }
 
-/// Registry 의 sidecar 항목.
+/// A sidecar entry of the registry.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RegistrySidecar {
     pub name: String,
@@ -466,7 +466,7 @@ pub struct RegistrySidecar {
     pub versions: Vec<SidecarVersion>,
 }
 
-/// 함께 설치하는 plugin 묶음.
+/// A bundle of plugins that are installed together.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RegistryPack {
     pub name: String,
@@ -474,7 +474,7 @@ pub struct RegistryPack {
     pub plugins: Vec<String>,
 }
 
-/// 설치하면 안 되는 plugin version.
+/// A plugin version that must not be installed.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RevokedPlugin {
     pub id: String,
@@ -482,7 +482,7 @@ pub struct RevokedPlugin {
     pub reason: String,
 }
 
-/// 설치하거나 실행하면 안 되는 sidecar version.
+/// A sidecar version that must not be installed or run.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RevokedSidecar {
     pub name: String,
@@ -497,7 +497,7 @@ pub struct RevokedCore {
     pub reason: String,
 }
 
-/// 설치하거나 실행하면 안 되는 version.
+/// A version that must not be installed or run.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Revoked {
     pub plugins: Vec<RevokedPlugin>,
@@ -522,7 +522,7 @@ pub struct RegistryCore {
     pub versions: Vec<CoreRelease>,
 }
 
-/// 검사한 registry index.
+/// The checked registry index.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Index {
     pub format: u64,
@@ -535,7 +535,7 @@ pub struct Index {
     pub revoked: Revoked,
 }
 
-/// 항목의 이름이 문자열이면 그것을 붙인 위치.
+/// The location with the entry name appended when the name is a string.
 fn entry_at(kind: &str, map: &Map<String, Value>, key: &str) -> String {
     match map.get(key).and_then(Value::as_str) {
         Some(name) => format!("{kind} {name}"),
@@ -543,7 +543,7 @@ fn entry_at(kind: &str, map: &Map<String, Value>, key: &str) -> String {
     }
 }
 
-/// Registry 의 plugin 항목 하나(`plugins/<id>.json`)를 검사한다.
+/// Checks one plugin entry of the registry (`plugins/<id>.json`).
 pub fn validate_registry_plugin(value: &Value) -> Result<(), String> {
     let entry = object("registry plugin", Some(value))?;
     let at = entry_at("registry plugin", entry, "id");
@@ -602,7 +602,7 @@ pub fn validate_registry_plugin(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// Registry 의 sidecar 항목 하나(`sidecars/<file name>.json`)를 검사한다.
+/// Checks one sidecar entry of the registry (`sidecars/<file name>.json`).
 pub fn validate_registry_sidecar(value: &Value) -> Result<(), String> {
     let entry = object("registry sidecar", Some(value))?;
     let at = entry_at("registry sidecar", entry, "name");
@@ -687,7 +687,7 @@ pub fn validate_registry_core(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// Registry 의 pack 항목 하나(`packs/<name>.json`)를 검사한다.
+/// Checks one pack entry of the registry (`packs/<name>.json`).
 pub fn validate_registry_pack(value: &Value) -> Result<(), String> {
     let entry = object("registry pack", Some(value))?;
     let at = entry_at("registry pack", entry, "name");
@@ -712,7 +712,7 @@ pub fn validate_registry_pack(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// Registry 의 revoked 목록(`revoked.json`)을 검사한다.
+/// Checks the revoked list of the registry (`revoked.json`).
 pub fn validate_revoked(value: &Value) -> Result<(), String> {
     let revoked = object("registry revoked", Some(value))?;
     only(
@@ -749,13 +749,13 @@ pub fn validate_revoked(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// 검사한 값을 형식 구조체로 옮긴다.
+/// Moves the checked values to the format structures.
 fn typed<T: for<'de> Deserialize<'de>>(value: &Value) -> Result<T, String> {
     serde_json::from_value(value.clone()).map_err(|error| error.to_string())
 }
 
-/// Registry index 를 검사한다. 항목마다 형식을 보고, 이름이 겹치지 않는지, pack 과 revoked 가 있는 plugin 과
-/// sidecar 를 가리키는지, plugin version 마다 필요한 sidecar 범위를 채우는 sidecar version 이 있는지 본다.
+/// Checks the registry index. For each entry it checks the format, that names do not overlap, that packs and revoked entries refer to existing plugins and
+/// sidecars, and that each plugin version has sidecar versions that satisfy the sidecar ranges it requires.
 pub fn validate_registry_index(value: &Value) -> Result<Index, String> {
     let root = object("registry index", Some(value))?;
     only(
@@ -886,11 +886,11 @@ pub fn validate_registry_index(value: &Value) -> Result<Index, String> {
     Ok(index)
 }
 
-/// 설치한 plugin 하나.
+/// One installed plugin.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct InstalledPlugin {
     pub version: String,
-    /// 설치가 쓰는 version 을 푼 절대 폴더.
+    /// The absolute folder in which the version that the installation uses is unpacked.
     pub path: String,
     pub enabled: bool,
     pub sidecars: BTreeMap<String, String>,
@@ -905,9 +905,9 @@ pub struct InstalledSidecar {
     pub path: String,
 }
 
-/// 설치 상태 파일(`plugins/installed.json`). plugin id 마다 package 이름, 쓰는 version, 푼 폴더, 켜짐 여부, 그
-/// version 의 sidecar 범위, 되돌릴 이전 version 을 담고, sidecar 마다 모든 plugin 이 함께 쓰는 version 하나와 그
-/// 폴더를 담는다. 폴더는 설치가 기록하며 host 는 기록된 폴더만 읽는다.
+/// The installation state file (`plugins/installed.json`). For each plugin id it holds the package.json name, the version in use, the unpacked folder, whether the plugin is enabled, the
+/// sidecar ranges of that version and the previous version to restore. For each sidecar it holds the one version that all plugins share and its
+/// folder. The installation records the folder, and the host reads only recorded folders.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct InstalledState {
     pub format: u64,
@@ -915,7 +915,7 @@ pub struct InstalledState {
     pub sidecars: BTreeMap<String, InstalledSidecar>,
 }
 
-/// plugin 의 path 가 설치 규칙의 폴더 plugins/<id>/<version> 인지 검사한다.
+/// Checks that the path of a plugin is the folder plugins/<id>/<version> of the installation rule.
 fn check_plugin_folder(
     at: &str,
     id: &str,
@@ -929,7 +929,7 @@ fn check_plugin_folder(
     }
 }
 
-/// sidecar 의 path 가 설치 규칙의 폴더 sidecars/<file name>/<version>/<platform> 인지 검사한다.
+/// Checks that the path of a sidecar is the folder sidecars/<file name>/<version>/<platform> of the installation rule.
 fn check_sidecar_folder(
     at: &str,
     name: &str,
@@ -944,7 +944,7 @@ fn check_sidecar_folder(
 }
 
 impl InstalledState {
-    /// 아무것도 설치하지 않은 상태.
+    /// The state in which nothing is installed.
     pub fn empty() -> Self {
         InstalledState {
             format: INSTALLED_FORMAT,
@@ -954,7 +954,7 @@ impl InstalledState {
     }
 }
 
-/// 설치 상태 파일을 검사한다.
+/// Checks the installation state file.
 pub fn validate_installed(value: &Value) -> Result<InstalledState, String> {
     let root = object(INSTALLED, Some(value))?;
     only(INSTALLED, root, &["format", "plugins", "sidecars"])?;
@@ -1071,7 +1071,7 @@ pub struct SelectedSidecar {
     pub release: Release,
 }
 
-/// 설치할 plugin version 과 그 sidecar version.
+/// The plugin version to install and its sidecar versions.
 #[derive(Clone, Debug)]
 pub struct Selection<'a> {
     pub plugin: &'a RegistryPlugin,

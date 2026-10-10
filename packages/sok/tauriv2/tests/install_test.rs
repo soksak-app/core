@@ -1,4 +1,4 @@
-//! 설치 형식(docs/spec/installation.md)의 검사와 version 선택을 검사한다.
+//! Checks the installation formats (docs/spec/installation.md) and the version selection.
 
 use serde_json::{json, Value};
 use soksak_sok::install::{self, InstalledPlugin, InstalledSidecar, InstalledState, Selection};
@@ -65,7 +65,7 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
     }
     assert!(install::satisfies("0.0.9", ">=0.0.2 <0.1.0"));
     assert!(!install::satisfies("0.1.0", ">=0.0.2 <0.1.0"));
-    // * 는 >=0.0.0, 곧 상한이 없는 모든 version 이다.
+    // * is >=0.0.0, that is, every version, with no upper bound.
     let any = install::parse_range("*").expect("*");
     assert_eq!(
         (any.min.to_string(), any.below),
@@ -82,7 +82,7 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
             "* does not contain {version}"
         );
     }
-    // >=x.y.z 는 하한만 있고 상한이 없다.
+    // >=x.y.z has only a lower bound and no upper bound.
     let lower = install::parse_range(">=0.0.6").expect(">=0.0.6");
     assert_eq!(
         (lower.min.to_string(), lower.below),
@@ -332,13 +332,13 @@ fn versions(selection: &Selection) -> Vec<String> {
 fn installation_resolves_newest_usable_plugin_and_sidecar_versions() {
     let index = install::validate_registry_index(&index()).expect("index");
     let empty = InstalledState::empty();
-    // 0.3.0 은 revoked 이므로 0.2.0 을 고르고, sidecar 는 darwin-arm64 asset 이 있는 가장 새 0.1.1 을 고른다.
+    // 0.3.0 is revoked, so the check selects 0.2.0, and for the sidecar it selects 0.1.1, the newest version that has a darwin-arm64 asset.
     let arm = install::resolve_install(&index, "probe", "0.0.2", "darwin-arm64", &empty, &[])
         .expect("darwin-arm64");
     assert_eq!(arm.version.version, "0.2.0");
     assert_eq!(versions(&arm), ["@scope/sidecar-worker 0.1.1"]);
     assert_eq!(arm.sidecars[0].release.url, "file:///releases/c");
-    // darwin-x64 asset 은 0.1.0 에만 있다.
+    // The darwin-x64 asset exists only in 0.1.0.
     let x64 = install::resolve_install(&index, "probe", "0.0.2", "darwin-x64", &empty, &[])
         .expect("darwin-x64");
     assert_eq!(versions(&x64), ["@scope/sidecar-worker 0.1.0"]);
@@ -401,7 +401,7 @@ fn installed(id: &str, version: &str, range: &str, used: &str) -> InstalledState
 fn installation_keeps_one_sidecar_version_that_satisfies_every_installed_plugin() {
     let index = install::validate_registry_index(&index()).expect("index");
     let other = |range: &str, used: &str| installed("other", "1.0.0", range, used);
-    // 다른 plugin 이 0.1.0 을 쓰고 있고 그 version 이 두 범위를 채우므로 더 새 0.1.1 대신 0.1.0 을 그대로 둔다.
+    // Another plugin uses 0.1.0 and that version satisfies both ranges, so the check keeps 0.1.0 instead of the newer 0.1.1.
     let kept = install::resolve_install(
         &index,
         "probe",
@@ -412,7 +412,7 @@ fn installation_keeps_one_sidecar_version_that_satisfies_every_installed_plugin(
     )
     .expect("kept");
     assert_eq!(versions(&kept), ["@scope/sidecar-worker 0.1.0"]);
-    // 다른 plugin 의 범위가 0.1.0 만 허용하면 두 범위를 채우는 0.1.0 을 고른다.
+    // When the range of another plugin allows only 0.1.0, the check selects 0.1.0, which satisfies both ranges.
     let exact = install::resolve_install(
         &index,
         "probe",
@@ -423,12 +423,12 @@ fn installation_keeps_one_sidecar_version_that_satisfies_every_installed_plugin(
     )
     .expect("exact");
     assert_eq!(versions(&exact), ["@scope/sidecar-worker 0.1.0"]);
-    // 범위를 함께 채우는 version 이 없으면 각 plugin 과 범위를 밝혀 실패한다.
+    // When no version satisfies the ranges together, selection fails and names each plugin and range.
     rejects(
         install::resolve_install(&index, "probe", "0.0.2", "darwin-arm64", &other("^0.2.0", "0.2.0"), &[]),
         "sidecar @scope/sidecar-worker has no version for darwin-arm64 that satisfies every installed plugin: probe 0.2.0 needs ^0.1.0, other 1.0.0 needs ^0.2.0",
     );
-    // 같은 plugin 의 이전 version 범위는 새 version 을 막지 않는다.
+    // The range of a previous version of the same plugin does not block the new version.
     let own = installed("probe", "0.1.0", "0.1.0", "0.1.0");
     let again = install::resolve_install(&index, "probe", "0.0.2", "darwin-arm64", &own, &[])
         .expect("self");

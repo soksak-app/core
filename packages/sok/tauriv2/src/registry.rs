@@ -1,5 +1,4 @@
-//! registry 폴더를 검사하고 index.json 을 쓴다(docs/spec/cli.md). 모든 검사를 통과할 때만 index.json 을 한 번에
-//! 바꾼다.
+//! Checks the registry folder and writes index.json (docs/spec/cli.md). The command changes index.json once and only when every check passes.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -15,7 +14,7 @@ use crate::Error;
 type Validate = fn(&Value) -> Result<(), String>;
 type FileName = fn(&Value) -> Result<String, String>;
 
-/// registry 의 한 폴더에서 *.json 파일을 이름 순서로 읽고, 항목을 검사한 뒤 파일 이름이 항목과 맞는지 본다.
+/// Reads the *.json files of one folder of the registry in name order, checks the entries, and then checks that each file name matches its entry.
 fn read_entries(
     dir: &Path,
     kind: &str,
@@ -25,7 +24,7 @@ fn read_entries(
     let folder = dir.join(kind);
     let listing = match std::fs::read_dir(&folder) {
         Ok(listing) => listing,
-        // 기본값: 폴더가 없는 registry 는 그 종류의 항목이 없다.
+        // default: a registry without the folder has no entries of that kind.
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
         Err(error) => return Err(crate::files::file_error(folder.display(), &error)),
     };
@@ -56,7 +55,7 @@ fn read_entries(
     Ok(entries)
 }
 
-/// tar.gz 의 최상위 파일 중 names 의 내용을 읽는다.
+/// Reads the contents of the top-level files of a tar.gz that are listed in names.
 pub(crate) fn release_files(
     data: &[u8],
     names: &[&str],
@@ -84,13 +83,13 @@ pub(crate) fn release_files(
     Ok(found)
 }
 
-/// release 주소의 본문을 읽고 sha256 을 비교한다.
+/// Reads the body at the address of a release and compares the sha256.
 pub(crate) fn read_release(at: &str, release: &Release) -> Result<Vec<u8>, String> {
     let fetcher = crate::fetch::Fetcher::default();
     let data = fetcher
         .read(&release.url, fetcher.release)
         .map_err(|error| format!("{at}: {error}"))?;
-    // 오류는 file: 이면 경로를, https: 면 URL 을 밝힌다.
+    // For file: the error names the path, and for https: it names the URL.
     let shown = if release.url.starts_with("file:") {
         install::file_path(&release.url).map_err(|error| format!("{at}: {error}"))?
     } else {
@@ -172,7 +171,7 @@ fn check_plugin_release(
     Ok(())
 }
 
-/// registry 폴더를 검사하고 index.json 을 쓴 뒤 그 경로와 항목 수를 돌려준다.
+/// Checks the registry folder, writes index.json, and returns its path and the number of entries.
 pub fn build_registry(dir: &Path) -> Result<Value, String> {
     let plugins = read_entries(dir, "plugins", install::validate_registry_plugin, |value| {
         value["id"]
@@ -199,7 +198,7 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
         root["core"] = read_json_file(dir, "core.json")?;
     }
     let mut index = install::validate_registry_index(&root)?;
-    // 파일 이름 순서는 @scope 이름의 순서와 다르므로 목록을 id 와 이름으로 다시 정렬한다.
+    // File name order differs from the order of @scope names, so the list is sorted again by id and name.
     index.plugins.sort_by(|a, b| a.id.cmp(&b.id));
     index.sidecars.sort_by(|a, b| a.name.cmp(&b.name));
     index.packs.sort_by(|a, b| a.name.cmp(&b.name));
@@ -229,7 +228,7 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
         }
     }
     let mut out = vec![];
-    // 구조체 그대로 쓰므로 key 는 선언 순서이며 Go 구현과 같은 byte 를 쓴다.
+    // The structure is written as it is, so the key order is the declaration order and the bytes match the Go implementation.
     print_json(&mut out, &index)?;
     let path = std::path::absolute(dir.join("index.json")).map_err(|error| error.to_string())?;
     replace_file(&path, &out)?;
@@ -239,7 +238,7 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
     )
 }
 
-/// `sok registry build <directory>` 를 실행한다.
+/// Runs `sok registry build <directory>`.
 pub(crate) fn run_registry(positionals: &[String], stdout: &mut dyn Write) -> Result<(), Error> {
     let action = positionals
         .get(1)

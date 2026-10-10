@@ -1,7 +1,7 @@
-//! Windows 의 command line 동작. 아직 구현하지 않은 동작은 "<operation> is not implemented on windows" 오류를 돌려준다.
+//! Command line behavior on Windows. A behavior that is not implemented yet returns the error "<operation> is not implemented on windows".
 
 #[path = "unsupported.rs"]
 mod unsupported;
 
-/// Windows 구현.
+/// The Windows implementation.
 pub struct Windows;

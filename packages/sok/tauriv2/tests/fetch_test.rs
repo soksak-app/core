@@ -1,4 +1,4 @@
-//! 위치를 읽는 규칙(docs/spec/installation.md#fetching)을 검사 소유의 TLS server 로 검사한다. 외부 network 는 쓰지 않는다.
+//! Checks the rules for reading a location (docs/spec/installation.md#fetching) with a TLS server owned by the check. It uses no external network.
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
@@ -10,7 +10,7 @@ use rcgen::{BasicConstraints, CertificateParams, CertifiedIssuer, IsCa, KeyPair}
 use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
 use soksak_sok::fetch::{Fetcher, Limit};
 
-/// 경로에 대한 server 의 응답.
+/// The response of the server for a path.
 enum Reply {
     Body(Vec<u8>),
     Status(u16),
@@ -18,11 +18,11 @@ enum Reply {
     Slow(Duration, Vec<u8>),
 }
 
-/// 검사 소유의 TLS server. 검사가 만든 인증 기관의 인증서를 쓴다.
+/// The TLS server owned by the check. It uses the certificate of a certificate authority that the check created.
 struct Server {
     url: String,
     ca: Vec<u8>,
-    /// 진단 build 의 --registry-ca 검사가 파일로 쓰는 인증 기관.
+    /// The certificate authority that the --registry-ca check of the diagnostic build writes to a file.
     #[cfg(feature = "diagnostics")]
     ca_pem: String,
 }
@@ -64,7 +64,7 @@ fn serve(handler: fn(&str) -> Reply) -> Server {
                     let mut reader = BufReader::new(&mut tls);
                     loop {
                         let mut line = String::new();
-                        // 검사 server 다. 연결을 끊은 client 는 응답을 받지 않는다.
+                        // A server of the check. A client that closed its connection receives no response.
                         if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
                             break;
                         }
@@ -91,7 +91,7 @@ fn serve(handler: fn(&str) -> Reply) -> Server {
                     head.push_str(&format!("Location: {location}\r\n"));
                 }
                 head.push_str("\r\n");
-                // 검사 server 다. 시간이 지나 client 가 끊은 연결에는 쓸 수 없다.
+                // A server of the check. It cannot write to a connection that the client closed after the time limit.
                 let _ = tls.write_all(head.as_bytes());
                 let _ = tls.write_all(&body);
                 let _ = tls.flush();
@@ -108,7 +108,7 @@ fn serve(handler: fn(&str) -> Reply) -> Server {
     }
 }
 
-/// server 의 인증 기관을 신뢰하고 작은 한도를 쓰는 Fetcher.
+/// A Fetcher that trusts the certificate authority of the server and uses small limits.
 fn fetcher(server: &Server) -> Fetcher {
     let limit = Limit {
         bytes: 16,
@@ -131,7 +131,7 @@ fn an_https_location_is_read_over_tls() {
         fetcher.read(&url, fetcher.index),
         Ok(br#"{"format":1}"#.to_vec())
     );
-    // 신뢰하지 않는 인증서는 연결하지 못한다.
+    // A certificate that is not trusted cannot connect.
     let error = Fetcher::default()
         .read(&url, fetcher.index)
         .expect_err("untrusted");
@@ -236,7 +236,7 @@ fn other_schemes_are_rejected() {
         fetcher.read(&format!("file://{}", file.display()), fetcher.index),
         Ok(b"{}".to_vec())
     );
-    // 검사 뒤 정리다. 지우지 못한 폴더는 다음 검사에 영향을 주지 않는 고유 이름이다.
+    // Cleanup after the check. A folder that cannot be removed has a unique name that does not affect the next check.
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -262,7 +262,7 @@ fn registry_use_records_an_https_index() {
         std::fs::read_to_string(config.join("plugins/registry.json")).expect("registry.json"),
         format!("{{\"format\":1,\"index\":\"{url}\"}}\n")
     );
-    // 검사 뒤 정리다. 지우지 못한 폴더는 다음 검사에 영향을 주지 않는 고유 이름이다.
+    // Cleanup after the check. A folder that cannot be removed has a unique name that does not affect the next check.
     let _ = std::fs::remove_dir_all(&config);
 }
 
@@ -281,6 +281,6 @@ fn a_diagnostic_build_trusts_the_registry_authorities_of_a_file() {
         fetcher.read(&format!("{}/index.json", server.url), fetcher.index),
         Ok(b"index".to_vec())
     );
-    // 검사 뒤 정리다. 지우지 못한 폴더는 다음 검사에 영향을 주지 않는 고유 이름이다.
+    // Cleanup after the check. A folder that cannot be removed has a unique name that does not affect the next check.
     let _ = std::fs::remove_dir_all(&folder);
 }

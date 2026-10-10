@@ -1,4 +1,4 @@
-//! plugin pack 과 sidecar release(docs/spec/cli.md)가 쓰는 release 와 SHA256SUMS 를 검사한다.
+//! Checks the releases and SHA256SUMS that plugin pack and sidecar release (docs/spec/cli.md) write.
 
 use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
-/// 테스트마다 고유한 임시 폴더. 끝나면 지운다.
+/// A unique temporary folder for each test. It is removed at the end.
 struct Dir(PathBuf);
 
 impl Dir {
@@ -27,7 +27,7 @@ impl Dir {
 
 impl Drop for Dir {
     fn drop(&mut self) {
-        // 테스트 뒤 정리다. 지우지 못한 폴더는 다음 테스트에 영향을 주지 않는 고유 이름이다.
+        // Cleanup after the test. A folder that cannot be removed has a unique name that does not affect the next test.
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
@@ -48,7 +48,7 @@ fn run(args: &[&str]) -> (i32, String, String) {
     )
 }
 
-/// 경로마다 내용을 쓴다. 이름이 * 로 끝나면 실행 bit 를 붙인다.
+/// Writes the contents of each path. When the name ends with *, it sets the execute bit.
 fn write_tree(dir: &Path, files: &[(&str, &str)]) {
     for (name, content) in files {
         let (name, mode) = match name.strip_suffix('*') {
@@ -155,7 +155,7 @@ fn plugin_pack_writes_a_sorted_release_of_the_listed_files() {
         ]
     );
     assert_eq!(entries[3].content, "b");
-    // 같은 폴더를 다시 pack 하면 같은 byte 를 쓴다.
+    // Packing the same folder again writes the same bytes.
     let (code, again, _) = run(&["plugin", "pack", text(&dir.0), text(&out)]);
     assert_eq!((code, again), (0, stdout));
 }
@@ -291,7 +291,7 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
         );
         sums.push(format!("{sum}  {name}"));
     }
-    // 같은 이름의 세 번째 release 는 첫 줄을 바꾸고, 줄은 release 이름 순서다.
+    // A third release with the same name changes the first line, and the lines are in release name order.
     let written = std::fs::read_to_string(out.0.join("SHA256SUMS")).unwrap();
     assert_eq!(written, format!("{}\n{}\n", sums[1], sums[2]));
     let tree = sidecar_tree("0.1.0");
