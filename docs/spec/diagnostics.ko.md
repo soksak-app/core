@@ -15,7 +15,6 @@
 | `host-<boot>.stderr` | host 프로세스의 raw 표준 오류: 런타임의 crash 출력과 native 라이브러리의 fatal 줄 | 글 | 실행이 열 때 100 MB이면 `host-<boot>.stderr.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
 | `host-<boot>.jsonl` | host 프로세스: 자신의 기록, page의 기록(실패와 관측은 `page.record.<level>` event이며 host 호출 `log`의 배치로 중계한다), native 라이브러리의 event | [로깅 계약](logging.ko.md)의 event | 100 MB에서 `host-<boot>.jsonl.1`로 회전하고 이전 세대 다섯 개를 남긴다 |
 | `<executable-name>.log` | 상주 service. host가 service의 standard error로 연다 | service가 쓰는 같은 형식의 글 기록 | host가 service를 시작할 때 100 MB이면 `<name>.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
-| `performance.ndjson` | sidecar와 두 host의 스위치 표식(page, host, sampler의 event는 `host-<boot>.jsonl`의 `page.trace.<event>`, `host.trace.<event>`, `host.sampler.<event>`) | 한 줄에 JSON event 하나 | 100 MB에서 `performance.ndjson.1`로 회전하고 이전 세대 다섯 개를 남긴다 |
 | `state-<time>.json` | debug view가 열릴 때 두 host | JSON 문서 하나 | 없음. 열 때마다 파일 하나 |
 | `captures/…` | 진단 빌드의 두 host | PNG와 frame 파일 | 요청한 쪽이 지운다 |
 
@@ -33,7 +32,7 @@
    - `<text>`는 줄의 나머지다. 그 안의 줄바꿈은 두 글자 `\n`으로 써서 기록 하나가 항상 한 줄이다.
 
    모든 실패는 level `error`의 기록을 쓰고, 그 밖의 기록은 level `info`다. 쓰는 쪽은 level마다 helper 하나를 가진다(Go `LogError`와 `LogInfo`, Rust `log_error`와 `log_info`, native 라이브러리 `sp_log_error`와 `sp_log_info`, page는 level을 받는 `report`). host의 helper와 `report`는 `where`와 `text` field를 가진 event `<layer>.record.<level>`를 event log에 저장하고, 글 형태는 window-check 하네스와 debug 화면이 그 event를 보이는 보기다. 두 host에 모두 있는 지점은 두 host에서 같은 `<where>`와 `<text>`를 쓴다. host는 읽는 sidecar의 표준 오류 줄마다 level `info`, layer `sidecar`, `<where>`가 sidecar 이름인 기록으로 쓰고, 상주 service는 같은 layer와 `<where>`로 자기 표준 오류를 이 형식으로 쓴다. 형식이 없는 글은 runtime이 쓰는 runtime의 crash 출력(Go panic과 fatal signal 보고, Rust 기본 panic hook의 메시지)뿐이다.
-2. **Event.** `performance.ndjson`의 한 줄: `ts`(밀리초가 있는 ISO-8601), `pid`, `layer`, `event`와 그 event의 필드를 가진 JSON 객체. event는 무슨 일이 언제 일어났는지를 계층을 가로지르는 한 시간선의 순서로 기록한다.
+2. **Event.** event 파일의 한 줄: [event 계약](logging.ko.md#event)의 JSON 객체로 `ts_us`, `seq`, `level`, `layer`, `event`와 그 event의 필드를 가진다. event는 무슨 일이 언제 일어났는지를 계층을 가로지르는 한 시간선의 순서로 기록한다.
 3. **State file.** `state-<time>.json`: 한 시점의 애플리케이션 상태로, `time`, `host`, `versions`, `windows`, `page`를 가진다. 쓰는 쪽이 읽지 못한 부분은 그 오류와 함께 기록하고 파일 쓰기를 멈추지 않는다.
 
 ## 규칙

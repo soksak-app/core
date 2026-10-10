@@ -1,28 +1,13 @@
 // A key typed into a terminal leaves a record in every layer of the input path, with the typed text and the time
 // (docs/spec/diagnostics.md#rules). The check types through the native input of the endpoint, then reads the records that the
-// typing appended to the application log and the performance trace of the application.
+// typing appended to the event log of the application.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { eventLine, currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
+import { eventLine, currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
-
-/** The size of a file, or 0 when it does not exist yet. */
-const sizeOf = (path) => (existsSync(path) ? statSync(path).size : 0);
-
-/** The text that a file gained after `offset` bytes. */
-function readFrom(path, offset) {
-  return existsSync(path) ? readFileSync(path).subarray(offset).toString("utf8") : "";
-}
-
-/** The records of the performance trace that the typing appended, as objects. */
-function traceRecords(text) {
-  return text.split("\n").filter((line) => line.startsWith("{")).map((line) => JSON.parse(line));
-}
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a typed key leaves a record in every layer of the input path`, { timeout: 60000 }, async (t) => {
@@ -45,9 +30,7 @@ for (const app of Object.values(APPS)) {
       item.surface === terminal.surface && item.name === "view" && item.focused),
     `the terminal region ${terminal.surface} did not take the keyboard after the press`);
 
-    const logs = join(app.configDir, "logs");
     const eventOffsets = currentEventOffsets(s.app.configDir);
-    const traceOffset = sizeOf(join(logs, "performance.ndjson"));
     // Enter does not pass through the input method, so it reaches the sidecar in an application that is not active.
     await s.key("Enter", "down");
     await s.key("Enter", "up");
@@ -57,10 +40,12 @@ for (const app of Object.values(APPS)) {
     // The native library stores its records in the ring of the process, the writer of the host pulls them at its next batch,
     // and the flush waits until they are in the event log.
     await s.flushLog();
+    // The sidecar writes its own event file in batches, so the check waits until the read of the prompt after Enter is in it.
+    await untilEventLine(s.app.configDir, eventOffsets, (text) => text.includes("sidecar.vt.pty_read") && text.includes("sh-"), 10000);
     const events = readEvents(s.app.configDir, eventOffsets).events;
     const log = events.map((event) => ({ text: eventLine(event), ts: new Date(event.ts_us / 1000).toISOString() }));
-    // The trace of the page and of the host is in the event log; the sidecar still writes the trace file.
-    const trace = [...traceRows(events), ...traceRecords(readFrom(join(logs, "performance.ndjson"), traceOffset))];
+    // The trace of the page and of the host is in the event log.
+    const trace = traceRows(events);
     // Each layer must hold the key with its own fields; `find` names the record that the layer lacks.
     const nativeLine = (pattern) => log.find((line) => pattern.test(line.text));
     const traced = (match) => trace.find(match);

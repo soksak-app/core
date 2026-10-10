@@ -5,7 +5,6 @@ package host_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -137,25 +136,20 @@ func TestFlushRecordsStoresTheRecordsWrittenSoFarWithoutWaitingForTheBatchInterv
 }
 
 // contract: performance.trace.host-observation-is-an-event
-func TestAHostObservationOfTheTraceIsAnEventAndNotALineOfTheTraceFile(t *testing.T) {
+func TestAHostObservationOfTheTraceIsAnEvent(t *testing.T) {
 	log := useEventLog(t)
-	config := t.TempDir()
-	if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err != nil {
+	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := host.PerformanceDisable(config); err != nil {
+		if _, err := host.PerformanceCommand(map[string]any{"action": "off"}); err != nil {
 			t.Error(err)
 		}
 	})
-	before, err := os.ReadFile(host.PerformanceTarget(config))
-	if err != nil {
-		t.Fatal(err)
-	}
-	host.PerformanceObserve(config, "host", func() map[string]any {
+	host.PerformanceObserve("host", func() map[string]any {
 		return map[string]any{"event": "region", "surface": "tab-1", "body": map[string]any{"key": "Enter"}}
 	})
-	host.PerformanceObserve(config, "sampler", func() map[string]any {
+	host.PerformanceObserve("sampler", func() map[string]any {
 		return map[string]any{"event": "memory", "rss_host_kb": float64(42)}
 	})
 	if err := log.Flush(5 * time.Second); err != nil {
@@ -185,12 +179,8 @@ func TestAHostObservationOfTheTraceIsAnEventAndNotALineOfTheTraceFile(t *testing
 	if memory["event"] != "host.sampler.memory" || memory["fields"].(map[string]any)["rss_host_kb"] != float64(42) {
 		t.Fatalf("sampler observation %v", memory)
 	}
-	after, err := os.ReadFile(host.PerformanceTarget(config))
-	if err != nil || string(after) != string(before) {
-		t.Fatalf("an observation of the host changed the trace file: %v", err)
-	}
 	// An observation without an event name is refused with an error and stores nothing.
-	host.PerformanceObserve(config, "host", func() map[string]any { return map[string]any{"surface": "tab-1"} })
+	host.PerformanceObserve("host", func() map[string]any { return map[string]any{"surface": "tab-1"} })
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}

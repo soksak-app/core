@@ -67,7 +67,7 @@
     },
     {
       "term": "performance trace",
-      "definition": "The file logs/performance.ndjson under the configuration directory: one JSON event per line from the page, the host and the sidecars.",
+      "definition": "The events page.trace.*, host.trace.*, host.sampler.* and sidecar trace events that the layers store in the event files under logs/ while the setting diagnostics.performance is on.",
       "rejected": [
         "perf trace"
       ],

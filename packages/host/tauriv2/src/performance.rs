@@ -1,242 +1,35 @@
-//! 성능 트레이스의 호스트 스위치와 기록기(docs/spec/performance-trace.md).
-//! 스위치·중계 오류는 호출자에게 반환하고, 수동 계측 오류는 stderr 에 보고한다.
+//! The switch and the sampler of the performance trace (docs/spec/performance-trace.md). The process holds the switch; an
+//! observation is an event of the event log while the switch is on. The page turns it on and off with the call `performance`.
 
-use serde_json::{json, Map, Value};
-use std::fs;
-use std::io::{ErrorKind, Write};
-use std::path::{Path, PathBuf};
+use serde_json::{json, Value};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-static WRITING: Mutex<()> = Mutex::new(());
+static ON: AtomicBool = AtomicBool::new(false);
+/// Orders the requests of the page to switch the trace.
+static SWITCHING: Mutex<()> = Mutex::new(());
 
-/// 구성 디렉터리가 가리키는 트레이스 대상.
-pub fn target(config: &Path) -> PathBuf {
-    config.join("logs").join("performance.ndjson")
+/// Whether the trace of this process is on.
+pub fn enabled() -> bool {
+    ON.load(Ordering::Acquire)
 }
 
-/// 서비스 플래그를 쓴 뒤 호스트 실행 스위치를 켠다.
-pub fn enable(config: &Path) -> Result<PathBuf, String> {
-    let target = target(config);
-    crate::platform::current()?
-        .create_private_directories(&config.join("logs"))
-        .map_err(|error| format!("create logs directory: {error}"))?;
-    if let Err(error) = write_sidecar_flags(config, &target) {
-        return Err(rollback_enable(config, error));
+/// Builds and stores an observation only while the trace is on, as an event of the event log (`host.trace.<event>`,
+/// `host.sampler.<event>`), and reports an error. The measured operation goes on.
+pub fn observe(layer: &str, fields: impl FnOnce() -> Value) {
+    if !enabled() {
+        return;
     }
-    if let Err(error) = crate::platform::current().and_then(|platform| {
-        platform.write_private_file(
-            &config.join("performance"),
-            format!("{}\n", target.display()).as_bytes(),
-        )
-    }) {
-        return Err(rollback_enable(
-            config,
-            format!("write performance switch: {error}"),
-        ));
-    }
-    Ok(target)
-}
-
-fn rollback_enable(config: &Path, error: String) -> String {
-    match disable(config) {
-        Ok(()) => error,
-        Err(cleanup) => format!("{error}; {cleanup}"),
-    }
-}
-
-fn report_errors(errors: Vec<String>) -> Result<(), String> {
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors.join("; "))
-    }
-}
-
-/// 실행·서비스 플래그를 지우고 모든 정리 오류를 반환한다.
-pub fn disable(config: &Path) -> Result<(), String> {
-    let mut errors = Vec::new();
-    if let Err(error) = fs::remove_file(config.join("performance")) {
-        if error.kind() != ErrorKind::NotFound {
-            errors.push(format!("remove performance switch: {error}"));
-        }
-    }
-    let entries = match fs::read_dir(config.join("services")) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == ErrorKind::NotFound => return report_errors(errors),
-        Err(error) => {
-            errors.push(format!("read performance services: {error}"));
-            return report_errors(errors);
-        }
-    };
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error) => {
-                errors.push(format!("read performance service entry: {error}"));
-                continue;
-            }
-        };
-        match entry.file_type() {
-            Ok(kind) if !kind.is_dir() => continue,
-            Err(error) => {
-                errors.push(format!(
-                    "read performance service type {}: {error}",
-                    entry.path().display()
-                ));
-                continue;
-            }
-            _ => {}
-        }
-        let flag = entry.path().join("performance");
-        if let Err(error) = fs::remove_file(&flag) {
-            if error.kind() != ErrorKind::NotFound {
-                errors.push(format!(
-                    "remove performance flag {}: {error}",
-                    flag.display()
-                ));
-            }
-        }
-    }
-    report_errors(errors)
-}
-
-/// 호스트 실행 플래그를 읽는다. 읽기·내용 오류는 상태로 바꾸지 않는다.
-pub fn enabled(config: &Path) -> Result<bool, String> {
-    let data = match fs::read(config.join("performance")) {
-        Ok(data) => data,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(format!("read performance switch: {error}")),
-    };
-    if data != format!("{}\n", target(config).display()).as_bytes() {
-        return Err(format!(
-            "invalid performance switch in {}",
-            config.display()
-        ));
-    }
-    Ok(true)
-}
-
-/// 활성 계측만 구성·기록하고 오류를 보고한다. 측정한 동작은 그대로 진행한다.
-pub fn observe(config: &Path, layer: &str, fields: impl FnOnce() -> Value) {
-    let result = (|| {
-        let _writing = WRITING
-            .lock()
-            .map_err(|error| format!("performance writer lock: {error}"))?;
-        if enabled(config)? {
-            crate::event_record::emit_trace(layer, fields())?;
-        }
-        Ok::<(), String>(())
-    })();
-    if let Err(error) = result {
+    if let Err(error) = crate::event_record::emit_trace(layer, fields()) {
         crate::application_log::log_error("performance trace", error);
     }
 }
 
-/// 서비스 생성·재접속 전에 유효 실행 스위치를 전파한다.
-pub fn sync_services(config: &Path) -> Result<(), String> {
-    let _writing = WRITING
-        .lock()
-        .map_err(|error| format!("performance writer lock: {error}"))?;
-    if enabled(config)? {
-        write_sidecar_flags(config, &target(config))
-    } else {
-        disable(config)
-    }
-}
-
-/// 서비스 디렉터리마다 대상 경로를 담은 플래그 파일을 쓴다.
-pub fn write_sidecar_flags(config: &Path, target: &Path) -> Result<(), String> {
-    let entries = match fs::read_dir(config.join("services")) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(()),
-        Err(error) => return Err(format!("read performance services: {error}")),
-    };
-    let platform = crate::platform::current()?;
-    let mut errors = Vec::new();
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error) => {
-                errors.push(format!("read performance service entry: {error}"));
-                continue;
-            }
-        };
-        match entry.file_type() {
-            Ok(kind) if !kind.is_dir() => continue,
-            Err(error) => {
-                errors.push(format!(
-                    "read performance service type {}: {error}",
-                    entry.path().display()
-                ));
-                continue;
-            }
-            _ => {}
-        }
-        let flag = entry.path().join("performance");
-        if let Err(error) =
-            platform.write_private_file(&flag, format!("{}\n", target.display()).as_bytes())
-        {
-            errors.push(format!("write performance flag {error}"));
-        }
-    }
-    report_errors(errors)
-}
-
-/// 한 계층의 이벤트를 기록하고 잘못된 이벤트·쓰기 실패를 반환한다.
-pub fn line(target: &Path, layer: &str, fields: Value) -> Result<(), String> {
-    let event = fields
-        .get("event")
-        .and_then(Value::as_str)
-        .ok_or("event must be a string")?;
-    let mut record = Map::new();
-    record.insert("ts".into(), json!(now_iso8601_ms()?));
-    record.insert("pid".into(), json!(std::process::id()));
-    record.insert("layer".into(), json!(layer));
-    record.insert("event".into(), json!(event));
-    if let Value::Object(extra) = fields {
-        for (key, value) in extra {
-            if key != "event" {
-                record.insert(key, value);
-            }
-        }
-    }
-    append(target, &Value::Object(record))
-}
-
-/// 출력이 이전 세대로 넘어가는 크기(docs/spec/performance-trace.md). 로그와 같은 한도와 세대 수를 쓴다.
-const ROTATE_BYTES: u64 = crate::application_log::ROTATE_BYTES;
-
-fn append(target: &Path, record: &Value) -> Result<(), String> {
-    let mut line =
-        serde_json::to_vec(record).map_err(|error| format!("encode performance event: {error}"))?;
-    line.push(b'\n');
-    // 한도에 이른 출력은 이전 세대(.1)로 남기고 새 파일에 쓴다. 이전 세대는 GENERATIONS 개까지 남는다.
-    match std::fs::metadata(target) {
-        Ok(meta) if meta.len() >= ROTATE_BYTES => {
-            crate::application_log::rotate_generations(target).map_err(|error| {
-                format!("rotate performance output {}: {error}", target.display())
-            })?;
-        }
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => {
-            return Err(format!(
-                "inspect performance output {}: {error}",
-                target.display()
-            ))
-        }
-    }
-    let mut file = crate::platform::current()?
-        .append_private_file(target)
-        .map_err(|error| format!("open performance output {error}"))?;
-    file.write_all(&line)
-        .map_err(|error| format!("append performance output {}: {error}", target.display()))
-}
-
 /// Runs the switch requests of the page in the order they arrive. The events of the page travel through the call `log`
-/// (event_relay.rs), not through this call.
-pub fn command(config: &Path, request: Value) -> Result<Value, String> {
+/// (event_relay.rs), not through this call. Turning the trace on stores the event `host.trace.on` and starts the sampler;
+/// turning it off stores `host.trace.off` before the switch goes off.
+pub fn command(request: Value) -> Result<Value, String> {
     let action = request
         .get("action")
         .and_then(Value::as_str)
@@ -244,42 +37,26 @@ pub fn command(config: &Path, request: Value) -> Result<Value, String> {
     if !["on", "off"].contains(&action) {
         return Err(format!("action must be on or off, not {action}"));
     }
-    let _writing = WRITING
+    let _switching = SWITCHING
         .lock()
-        .map_err(|error| format!("performance writer lock: {error}"))?;
-    let enabled = enabled(config)?;
+        .map_err(|error| format!("performance switch lock: {error}"))?;
     match action {
         "on" => {
-            if enabled {
-                return Ok(Value::Null);
+            if !ON.swap(true, Ordering::AcqRel) {
+                observe("host", || json!({"event": "on"}));
+                start_sampler();
             }
-            let target = enable(config)?;
-            if let Err(error) = line(&target, "host", json!({"event":"trace_on"})) {
-                return Err(rollback_enable(config, error));
-            }
-            spawn_sampler(config);
-            Ok(Value::Null)
         }
         "off" => {
-            let mut errors = Vec::new();
-            if enabled {
-                if let Err(error) = line(&target(config), "host", json!({"event":"trace_off"})) {
-                    errors.push(error);
-                }
+            if enabled() {
+                observe("host", || json!({"event": "off"}));
+                ON.store(false, Ordering::Release);
+                end_sampler();
             }
-            if let Err(error) = disable(config) {
-                errors.push(error);
-            }
-            report_errors(errors)?;
-            Ok(Value::Null)
         }
         _ => unreachable!("validated performance action"),
     }
-}
-
-/// 유닉스 시각(밀리초)을 ISO-8601 로 바꾼다(종속성을 더하지 않는다).
-fn now_iso8601_ms() -> Result<String, String> {
-    timestamp(SystemTime::now())
+    Ok(Value::Null)
 }
 
 /// at 을 ISO-8601(밀리초)로 바꾼다. 에포크 이전 시각은 이 형식으로 적을 수 없으므로 오류다.
@@ -314,19 +91,51 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     (if month <= 2 { year + 1 } else { year }, month, day)
 }
 
-/// 메모리 샘플러(V5-104). 트레이스가 켜져 있는 동안 5초마다 이 프로세스의 상주
-/// 크기를 한 줄로 남긴다. 사이드카 pid 는 프로세스 등록부 줄(process 이벤트)에
-/// 쌓이므로 로그 소비자가 짝지는다. 꺼지면 대기로 돌아간다.
-pub fn spawn_sampler(config: &Path) {
-    static SPAWNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    if SPAWNED.swap(true, std::sync::atomic::Ordering::AcqRel) {
+/// The sampler stores the resident size of the host every 5 seconds while the trace is on. It ends with the switch: turning
+/// the trace off waits until the thread returned, and turning it on again starts a new one.
+struct Sampler {
+    stop: std::sync::mpsc::Sender<()>,
+    thread: std::thread::JoinHandle<()>,
+}
+
+static SAMPLER: Mutex<Option<Sampler>> = Mutex::new(None);
+
+fn start_sampler() {
+    let mut sampler = SAMPLER.lock().expect("the sampler");
+    if sampler.is_some() {
         return;
     }
-    let config = config.to_path_buf();
-    std::thread::spawn(move || loop {
-        observe(&config, "sampler", || memory_record(std::process::id()));
-        std::thread::sleep(std::time::Duration::from_secs(5));
-    });
+    let (stop, stopped) = std::sync::mpsc::channel::<()>();
+    let thread = std::thread::Builder::new()
+        .name("performance-sampler".into())
+        .spawn(move || loop {
+            observe("sampler", || memory_record(std::process::id()));
+            // A message or the end of the channel stops the thread; the timeout is the interval of the samples.
+            if !matches!(
+                stopped.recv_timeout(std::time::Duration::from_secs(5)),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ) {
+                return;
+            }
+        })
+        .expect("the thread of the sampler");
+    *sampler = Some(Sampler { stop, thread });
+}
+
+fn end_sampler() {
+    let Some(sampler) = SAMPLER.lock().expect("the sampler").take() else {
+        return;
+    };
+    // Dropping the sender ends the channel, which stops the thread at its next wait.
+    drop(sampler.stop);
+    if sampler.thread.join().is_err() {
+        crate::application_log::log_error("performance trace", "the sampler ended with a panic");
+    }
+}
+
+/// Whether the sampler of the trace runs.
+pub fn sampler_running() -> bool {
+    SAMPLER.lock().expect("the sampler").is_some()
 }
 
 /// sampler 가 기록하는 pid 의 메모리 사건.

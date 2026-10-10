@@ -155,14 +155,10 @@ struct RemovalAnswer {
 /// 성능 트레이스를 켜고 끄고 페이지 줄을 중계한다(V5-104).
 #[tauri::command(async)]
 fn performance(
-    window: Window,
     request: Argument<serde_json::Map<String, serde_json::Value>>,
 ) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
-    crate::performance::command(
-        window.state::<crate::workspace::Workspace>().directory(),
-        serde_json::Value::Object(request),
-    )
+    crate::performance::command(serde_json::Value::Object(request))
 }
 
 /// Relays a batch of page events to the event writer of the host (docs/spec/logging.md#writers) and shows the page records of

@@ -4,11 +4,11 @@
 
 성능 트레이스는 [진단](diagnostics.ko.md)의 기록 중 event 형태다. 애플리케이션이 시간과 메모리를 무엇에 쓰는지 기록하는 영구 장치다. 모든 빌드에 있고 사용 후 제거되지 않는다. 스위치는 선언된 설정 `diagnostics.performance`([설정](settings.md))이고, false 인 동안 어떤 계층도 기록 일을 하지 않는다 — 파일이 만들어지지 않고 포맷팅이 돌지 않는다.
 
-페이지는 비활성 상태나 활성화 응답 대기 중에 이벤트를 구성·중계하지 않는다. 페이지의 이벤트는 [이벤트 계약](logging.ko.md#writer)의 event `page.trace.<event>`다. 페이지는 그것을 기다리지 않고 큐에 넣고, 한 턴의 event를 host 호출 `log` 한 번의 배치로 host에 중계하며, host는 그것을 `logs/performance.ndjson`이 아니라 event log `logs/host-<boot>.jsonl`에 저장한다. 스위치 요청은 순서를 유지한다. 비활성화는 새 이벤트를 즉시 중단하고 이미 수락한 event가 중계될 때까지 기다린 뒤 실행된다. 스위치 실패는 설정 동작을 거부하고, 중계 실패는 측정한 명령의 결과를 바꾸지 않고 배치의 event 수와 함께 명시적으로 보고한다.
+페이지는 비활성 상태나 활성화 응답 대기 중에 이벤트를 구성·중계하지 않는다. 페이지의 이벤트는 [이벤트 계약](logging.ko.md#writer)의 event `page.trace.<event>`다. 페이지는 그것을 기다리지 않고 큐에 넣고, 한 턴의 event를 host 호출 `log` 한 번의 배치로 host에 중계하며, host는 그것을 event log `logs/host-<boot>.jsonl`에 저장한다. 스위치 요청은 순서를 유지한다. 비활성화는 새 이벤트를 즉시 중단하고 이미 수락한 event가 중계될 때까지 기다린 뒤 실행된다. 스위치 실패는 설정 동작을 거부하고, 중계 실패는 측정한 명령의 결과를 바꾸지 않고 배치의 event 수와 함께 명시적으로 보고한다.
 
 ## 출력
 
-sidecar의 이벤트는 구성 디렉터리의 `logs/performance.ndjson`에 덧붙는다. 페이지, host, sampler의 이벤트는 event log `logs/host-<boot>.jsonl`에 있다. 페이지는 `page.trace.<event>`(위 참조), host는 `host.trace.<event>`, sampler는 `host.sampler.<event>`이고 모두 level `debug`이며 event의 이름은 field가 아니라 event 이름에 있다. host는 trace를 바꿀 때 표식 `trace_on`과 `trace_off`를 파일에 쓴다. 모든 줄이 하나의 이벤트 객체로 최소한 `ts`(밀리초를 포함한 ISO-8601), `pid`(기록한 프로세스), `layer`(`page`, `host`, `vt-core`, `files`, `shell`, `sampler`), `event` 를 담고 나머지 필드는 이벤트마다 다르다. 한 파일이 모든 계층을 담으므로 한 타임라인에서 앱 전체를 읽는다. 파일은 100 MB 에서 `performance.ndjson.1` 로 로테이션하며 이전 세대 다섯 개(`.1`부터 `.5`까지. 로테이션마다 이전 세대를 하나씩 뒤로 옮기고 다섯째를 지운다)를 남긴다; 로테이션과 파일은 트레이스의 소유물이므로 스위치가 꺼진 재시작에도 옛 로그는 남는다. 각 프로세스 시작은 `session_start` 이벤트로 표시하고 기록자의 역할을 담는다.
+trace의 모든 event는 [event 계약](logging.ko.md)의 event다. page는 `page.trace.<event>`, host는 `host.trace.<event>`, 표본 추출은 `host.sampler.<event>`를 event log `logs/host-<boot>.jsonl`에 모두 level `debug`로 저장하고, event 이름은 필드가 아니라 event 이름에 둔다. sidecar는 `sidecar.<name>.<event>`를 `logs/` 아래 자기 event 파일에 저장한다([sidecars](sidecars.ko.md)). [debug 화면](debug.ko.md)의 타임라인 하나가 이 파일들을 함께 읽는다. 스위치가 켜질 때 host는 event `host.trace.on`을, 꺼지기 전에 `host.trace.off`를 저장한다. trace 파일도, 표식 줄도, 자체 회전도 없다. event 파일은 계약의 규칙대로 회전한다.
 
 ## 생산자
 
@@ -19,11 +19,9 @@ sidecar의 이벤트는 구성 디렉터리의 `logs/performance.ndjson`에 덧�
 - **사이드카**(`vt-core`, `files`, `shell`) — 요청 처리의 연산·시간·결과. `vt-core` 는 요청마다 `request` 이벤트 `{operation, surface, owner, connection, idle_us, us}`(`us`는 요청을 읽은 때부터 다음 요청을 읽기 전까지의 시간, `idle_us`는 입력 루프가 그 요청을 기다린 시간, `connection`은 서비스가 받은 연결의 순번)를, 연결의 읽기가 1초 이상 기다린 뒤 데이터를 받으면 `read_wait` 이벤트 `{waited_us, pending_polls, since_last_poll_us, bytes}`(깨어나지 않은 작업은 시도 한 번, 읽을 것이 없다고 들은 읽기는 여러 번)를, 출력 한 줄을 host 에 쓰는 데 10 ms 이상 걸리면 `output_blocked` 이벤트 `{us, bytes}` 를 남긴다. host 가 읽기를 멈추면 출력 채널이 찬 뒤 사이드카의 입력 루프도 멈추기 때문이다. `vt-core` 는 프레임을 그린 이유(`output`, `blink`, `resize`, `metrics`, `selection`)와 그리기·전송·consumed 대기 시간을 각각의 필드로, 래스터 크기를 담은 프레임 이벤트; PTY 읽기 바이트 수와 앞뒤 격자를 담은 PTY 재조정; 세션 생명주기를 더한다.
 - **샘플러** — 5초마다 등록부가 이름 붙인 모든 프로세스의 상주 크기, 메모리 판독이 스스로 귀명되도록. 크기를 얻지 못한 판독은 크기 대신 `error`를 기록한다.
 
-## 플래그 전달
+## 스위치
 
-페이지는 이미 읽는 설정에서 `diagnostics.performance` 를 읽고 `host.performance` 명령으로 호스트에게 전한다 — 설정이 true 로 바뀌면 `on`, false 로 바뀌면 `off`, 저장된 설정이 시작부터 true 이면 기동에 한 번. `on` 은 호스트가 로그 경로를 담은 `performance` 플래그 파일을 각 사이드카의 서비스 디렉터리에 쓰게 한다; 사이드카는 이벤트마다 쓰기 전에 플래그를 읽으므로 호스트와 사이드카 사이의 프로토콜은 바뀌지 않는다. 연결은 호스트가 플래그를 쓴 순간부터 쓰고(트레이스가 꺼져 있을 때 맺은 연결도 그렇다), 호스트가 지웠으면 쓰지 않는다. 그래서 트레이스를 켜고 끄는 것이 모든 층에 바로 적용된다. `line` 은 페이지 이벤트를 중계하며 트레이스가 꺼져 있는 동안 거부된다 — 꺼진 트레이스는 파일을 만들지 않는다.
-
-호스트는 로그 경로를 담은 `<config-dir>/performance`의 실행 스위치를 소유한다. 여기서 `<config-dir>`는 명령행 경로 별칭이 아니라 호스트가 심볼릭 링크를 해소한 설정 디렉터리다. 서비스 플래그는 파생 출력이며 호스트 상태를 결정하지 않는다. 시작 시 페이지가 유효 설정을 전파하기 전에 잔여 실행·서비스 플래그를 제거한다. 서비스 디렉터리가 없어도 활성화된다. 이미 비활성인 스위치는 이벤트를 기록하지 않는다. 잘못된 페이지 이벤트와 파일 시스템 실패는 스위치·중계 요청을 거부한다. 수동 계측 오류는 측정한 동작의 결과를 바꾸지 않고 보고한다. 실행 경로 부재는 비활성, 서비스 경로 부재는 설치된 서비스 부재를 뜻하며 그 밖의 읽기 오류는 명시적인 실패다.
+host 프로세스가 스위치를 가진다. 파일이 스위치를 갖지 않고 sidecar에 닿는 flag도 없다. page는 이미 읽은 설정에서 `diagnostics.performance`를 읽어 host 호출 `performance`로 host에 알린다. 설정이 true가 되면 `on`, false가 되면 `off`, 저장된 설정이 이미 true이면 시작할 때 한 번 `on`이다. 이 호출은 동작 `on`과 `off`만 받고 다른 동작은 오류로 거절하며, 스위치를 바꾸지 않는 요청은 아무것도 저장하지 않는다. trace를 켜면 `host.trace.on`을 저장하고 표본 추출을 시작한다. 표본 추출은 trace가 켜진 동안 5초마다 `host.sampler.memory`를 저장한다. 끄면 `host.trace.off`를 저장하고 표본 추출을 끝내며, 다시 켜면 새로 시작한다. 프로세스는 언제나 trace를 끈 채 시작한다. 수동 계측은 측정한 동작의 결과를 바꾸지 않고 실패를 보고한다.
 
 ## 읽기
 

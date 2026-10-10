@@ -1,153 +1,37 @@
-// 성능 트레이스의 호스트 스위치와 기록기(docs/spec/performance-trace.md).
-// 스위치·중계 오류는 호출자에게 반환하고, 수동 계측 오류는 stderr 에 보고한다.
+// The switch and the sampler of the performance trace (docs/spec/performance-trace.md). The process holds the switch; an
+// observation is an event of the event log while the switch is on. The page turns it on and off with the call `performance`.
 package host
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
-// PerformanceTarget 은 구성 디렉터리가 가리키는 트레이스 대상이다.
-func PerformanceTarget(config string) string {
-	return filepath.Join(config, "logs", "performance.ndjson")
-}
+var (
+	performanceOn atomic.Bool
+	// performanceMu orders the requests of the page to switch the trace.
+	performanceMu sync.Mutex
+)
 
-// PerformanceEnable 은 서비스 플래그를 쓴 뒤 호스트 실행 스위치를 켠다.
-func PerformanceEnable(config string) (string, error) {
-	target := PerformanceTarget(config)
-	system, err := platform.Current()
-	if err != nil {
-		return "", err
-	}
-	if err := system.CreatePrivateDirectories(filepath.Join(config, "logs")); err != nil {
-		return "", fmt.Errorf("create logs directory: %w", err)
-	}
-	if err := performanceWriteFlags(config, target); err != nil {
-		return "", errors.Join(err, PerformanceDisable(config))
-	}
-	if err := system.WritePrivateFile(filepath.Join(config, "performance"), []byte(target+"\n")); err != nil {
-		return "", errors.Join(fmt.Errorf("write performance switch: %w", err), PerformanceDisable(config))
-	}
-	return target, nil
-}
-
-// PerformanceDisable 은 실행·서비스 플래그를 지우고 모든 정리 오류를 반환한다.
-func PerformanceDisable(config string) error {
-	var failures []error
-	if err := performanceRemoveFlag(filepath.Join(config, "performance")); err != nil {
-		failures = append(failures, fmt.Errorf("remove performance switch: %w", err))
-	}
-	entries, err := os.ReadDir(servicesDir(config))
-	if err != nil {
-		if !os.IsNotExist(err) {
-			failures = append(failures, fmt.Errorf("read performance services: %w", err))
-		}
-		return errors.Join(failures...)
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		flag := filepath.Join(servicesDir(config), entry.Name(), "performance")
-		if err := performanceRemoveFlag(flag); err != nil {
-			failures = append(failures, fmt.Errorf("remove performance flag %s: %w", flag, err))
-		}
-	}
-	return errors.Join(failures...)
-}
-
-func performanceRemoveFlag(path string) error {
-	info, err := os.Lstat(path)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if info.IsDir() {
-		return fmt.Errorf("%s is a directory", path)
-	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
-}
-
-// PerformanceEnabled 는 호스트 실행 플래그를 읽는다. 읽기·내용 오류는 상태로 바꾸지 않는다.
-func PerformanceEnabled(config string) (bool, error) {
-	data, err := os.ReadFile(filepath.Join(config, "performance"))
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("read performance switch: %w", err)
-	}
-	if string(data) != PerformanceTarget(config)+"\n" {
-		return false, fmt.Errorf("invalid performance switch in %s", config)
-	}
-	return true, nil
-}
-
-var performanceMu sync.Mutex
+// PerformanceEnabled reports whether the trace of this process is on.
+func PerformanceEnabled() bool { return performanceOn.Load() }
 
 // PerformanceObserve builds and stores an observation only while the trace is on, as an event of the event log
 // (`host.trace.<event>`, `host.sampler.<event>`), and reports an error. The measured operation goes on.
-func PerformanceObserve(config, layer string, fields func() map[string]any) {
-	performanceMu.Lock()
-	defer performanceMu.Unlock()
-	enabled, err := PerformanceEnabled(config)
-	if err != nil {
-		logPerformanceError(err)
-		return
-	}
-	if !enabled {
+func PerformanceObserve(layer string, fields func() map[string]any) {
+	if !performanceOn.Load() {
 		return
 	}
 	if err := emitTrace(layer, fields()); err != nil {
-		logPerformanceError(err)
+		LogError("performance trace", err)
 	}
-}
-
-func logPerformanceError(err error) { LogError("performance trace", err) }
-
-// PerformanceSyncServices 는 서비스 생성·재접속 전에 유효 실행 스위치를 전파한다.
-func PerformanceSyncServices(config string) error {
-	performanceMu.Lock()
-	defer performanceMu.Unlock()
-	enabled, err := PerformanceEnabled(config)
-	if err != nil {
-		return err
-	}
-	if enabled {
-		return performanceWriteFlags(config, PerformanceTarget(config))
-	}
-	return PerformanceDisable(config)
-}
-
-// PerformanceLine 은 한 계층의 이벤트를 기록하고 잘못된 이벤트·쓰기 실패를 반환한다.
-func PerformanceLine(target, layer string, fields map[string]any) error {
-	event, ok := fields["event"].(string)
-	if !ok {
-		return fmt.Errorf("event must be a string")
-	}
-	record := map[string]any{"ts": performanceNow(), "pid": os.Getpid(), "layer": layer, "event": event}
-	for key, value := range fields {
-		if key != "event" {
-			record[key] = value
-		}
-	}
-	return performanceAppend(target, record)
 }
 
 // Performance 는 페이지의 성능 요청을 처리한다.
@@ -156,12 +40,13 @@ func (h *Host) Performance(requestJSON json.RawMessage) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return PerformanceCommand(h.configDir, request)
+	return PerformanceCommand(request)
 }
 
 // PerformanceCommand runs the switch requests of the page in the order they arrive. The events of the page travel through
-// the call log (event_relay.go), not through this call.
-func PerformanceCommand(config string, request map[string]any) (any, error) {
+// the call log (event_relay.go), not through this call. Turning the trace on stores the event `host.trace.on` and starts the
+// sampler; turning it off stores `host.trace.off` before the switch goes off.
+func PerformanceCommand(request map[string]any) (any, error) {
 	action, ok := request["action"].(string)
 	if !ok {
 		return nil, fmt.Errorf("action must be on or off")
@@ -171,109 +56,70 @@ func PerformanceCommand(config string, request map[string]any) (any, error) {
 	}
 	performanceMu.Lock()
 	defer performanceMu.Unlock()
-	enabled, err := PerformanceEnabled(config)
-	if err != nil {
-		return nil, err
-	}
-	target := PerformanceTarget(config)
 	switch action {
 	case "on":
-		if enabled {
+		if performanceOn.Swap(true) {
 			return nil, nil
 		}
-		target, err := PerformanceEnable(config)
-		if err != nil {
-			return nil, err
-		}
-		if err := PerformanceLine(target, "host", map[string]any{"event": "trace_on"}); err != nil {
-			return nil, errors.Join(err, PerformanceDisable(config))
-		}
-		performanceSampler(config)
-		return nil, nil
+		PerformanceObserve("host", func() map[string]any { return map[string]any{"event": "on"} })
+		performanceSamplerStart()
 	case "off":
-		var writeErr error
-		if enabled {
-			writeErr = PerformanceLine(target, "host", map[string]any{"event": "trace_off"})
+		if !performanceOn.Load() {
+			return nil, nil
 		}
-		return nil, errors.Join(writeErr, PerformanceDisable(config))
+		PerformanceObserve("host", func() map[string]any { return map[string]any{"event": "off"} })
+		performanceOn.Store(false)
+		performanceSamplerEnd()
 	}
-	panic("validated performance action is unreachable")
+	return nil, nil
 }
 
-func servicesDir(config string) string { return filepath.Join(config, "services") }
+// The sampler stores the resident size of the host every 5 seconds while the trace is on. It ends with the switch: turning
+// the trace off waits until the goroutine returned, and turning it on again starts a new one.
+var (
+	samplerMu   sync.Mutex
+	samplerStop chan struct{}
+	samplerDone chan struct{}
+)
 
-func performanceWriteFlags(config, target string) error {
-	entries, err := os.ReadDir(servicesDir(config))
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("read performance services: %w", err)
-	}
-	system, err := platform.Current()
-	if err != nil {
-		return err
-	}
-	var failures []error
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		flag := filepath.Join(servicesDir(config), entry.Name(), "performance")
-		if err := system.WritePrivateFile(flag, []byte(target+"\n")); err != nil {
-			failures = append(failures, fmt.Errorf("write performance flag %s: %w", flag, err))
-		}
-	}
-	return errors.Join(failures...)
-}
-
-// performanceRotateBytes 는 출력이 이전 세대로 넘어가는 크기다(docs/spec/performance-trace.md). 이전 세대의 수는 로그와
-// 같다(logGenerations).
-const performanceRotateBytes = logRotateBytes
-
-func performanceAppend(target string, record map[string]any) error {
-	encoded, err := json.Marshal(record)
-	if err != nil {
-		return fmt.Errorf("encode performance event: %w", err)
-	}
-	// 한도에 이른 출력은 이전 세대(.1)로 남기고 새 파일에 쓴다. 이전 세대는 logGenerations 개까지 남는다.
-	if info, err := os.Stat(target); err == nil && info.Size() >= performanceRotateBytes {
-		if err := rotateGenerations(target); err != nil {
-			return fmt.Errorf("rotate performance output %s: %w", target, err)
-		}
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("inspect performance output %s: %w", target, err)
-	}
-	system, err := platform.Current()
-	if err != nil {
-		return err
-	}
-	file, err := system.AppendPrivateFile(target)
-	if err != nil {
-		return fmt.Errorf("open performance output %s: %w", target, err)
-	}
-	_, writeErr := file.Write(append(encoded, '\n'))
-	closeErr := file.Close()
-	if err := errors.Join(writeErr, closeErr); err != nil {
-		return fmt.Errorf("append performance output %s: %w", target, err)
-	}
-	return nil
-}
-
-// performanceSampler 는 활성 트레이스의 호스트 상주 크기를 5초마다 기록한다.
-func performanceSampler(config string) {
-	if !performanceSamplerOnce.CompareAndSwap(false, true) {
+func performanceSamplerStart() {
+	samplerMu.Lock()
+	defer samplerMu.Unlock()
+	if samplerStop != nil {
 		return
 	}
+	stop, done := make(chan struct{}), make(chan struct{})
+	samplerStop, samplerDone = stop, done
 	go func() {
+		defer close(done)
 		for {
-			PerformanceObserve(config, "sampler", func() map[string]any { return PerformanceMemory(os.Getpid()) })
-			time.Sleep(5 * time.Second)
+			PerformanceObserve("sampler", func() map[string]any { return PerformanceMemory(os.Getpid()) })
+			select {
+			case <-stop:
+				return
+			case <-time.After(5 * time.Second):
+			}
 		}
 	}()
 }
 
-var performanceSamplerOnce atomic.Bool
+func performanceSamplerEnd() {
+	samplerMu.Lock()
+	defer samplerMu.Unlock()
+	if samplerStop == nil {
+		return
+	}
+	close(samplerStop)
+	<-samplerDone
+	samplerStop, samplerDone = nil, nil
+}
+
+// PerformanceSamplerRunning reports whether the sampler of the trace runs.
+func PerformanceSamplerRunning() bool {
+	samplerMu.Lock()
+	defer samplerMu.Unlock()
+	return samplerStop != nil
+}
 
 // PerformanceMemory 는 sampler 가 기록하는 pid 의 메모리 사건이다.
 // 읽기에 실패하면 크기 대신 그 오류를 기록한다.
@@ -297,5 +143,3 @@ func residentKB(pid int) (uint64, error) {
 	}
 	return value, nil
 }
-
-func performanceNow() string { return time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00") }

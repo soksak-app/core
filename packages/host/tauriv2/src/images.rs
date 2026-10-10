@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use tauri::{Manager, Webview};
+use tauri::Webview;
 
 use crate::application_log::{log_error, log_failure};
 use crate::exposure::{self, on_main};
@@ -774,30 +774,26 @@ fn create(
                     .map_err(|error| format!("{event_surface}/{event_name}: {error}"))?;
                 // Every event of a native region is recorded with its whole body before it is relayed
                 // (docs/spec/diagnostics.md). It writes nothing while the performance trace is off.
-                if let Some(workspace) = host.try_state::<crate::workspace::Workspace>() {
-                    crate::performance::observe(workspace.directory(), "host", || {
-                        serde_json::json!({
-                            "event": "region",
-                            "surface": event_surface,
-                            "name": event_name,
-                            "body": event,
-                        })
-                    });
-                }
+                crate::performance::observe("host", || {
+                    serde_json::json!({
+                        "event": "region",
+                        "surface": event_surface,
+                        "name": event_name,
+                        "body": event,
+                    })
+                });
                 // 포커스 전이는 성능 트레이스의 타임라인에도 남는다(V5-114, performance-trace
                 // 스펙이 약속한 창 이벤트 줄). 트레이스가 꺼져 있으면 line 이 아무 것도 쓰지
                 // 않는다.
                 if event.get("type").and_then(|value| value.as_str()) == Some("focus") {
-                    if let Some(workspace) = host.try_state::<crate::workspace::Workspace>() {
-                        crate::performance::observe(workspace.directory(), "host", || {
-                            serde_json::json!({
-                                "event": "focus",
-                                "surface": event_surface,
-                                "name": event_name,
-                                "focused": event.get("focused"),
-                            })
-                        });
-                    }
+                    crate::performance::observe("host", || {
+                        serde_json::json!({
+                            "event": "focus",
+                            "surface": event_surface,
+                            "name": event_name,
+                            "focused": event.get("focused"),
+                        })
+                    });
                 }
                 let report_surface = event_surface.clone();
                 let report_name = event_name.clone();

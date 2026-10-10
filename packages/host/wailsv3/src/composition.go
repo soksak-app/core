@@ -76,7 +76,7 @@ func rasterFacts(handle unsafe.Pointer) string {
 // observeRaster 는 그림 영역의 래스터 결정을 성능 트레이스에 남긴다. configured 는 사이드카에 보낼 크기를 정한 것이고,
 // deferred 는 표면이 아직 배치되지 않아 크기를 정하지 못하고 미룬 것이다(docs/spec/performance-trace.md).
 func (s *Surfaces) observeRaster(key ImageKey, phase, from string, width, height int, scale float64) {
-	PerformanceObserve(s.host.configDir, "host", func() map[string]any {
+	PerformanceObserve("host", func() map[string]any {
 		return map[string]any{"event": "image.raster", "surface": key.Surface, "name": key.Name, "phase": phase,
 			"from": from, "width": width, "height": height, "scale": scale}
 	})

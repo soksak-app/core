@@ -646,7 +646,7 @@ func (e *Endpoint) run(c *endpointConn, req request, method endpointMethod) {
 	// 거부도 그대로 기록한다 — 어긋난 값은 오류 문자열이 담는다.
 	started := time.Now()
 	result, err := method(e, c, req.Params)
-	PerformanceObserve(e.configDir, "host", func() map[string]any {
+	PerformanceObserve("host", func() map[string]any {
 		fields := map[string]any{
 			"event": "endpoint", "name": methodOf(req), "us": time.Since(started).Microseconds(),
 			"ok": err == nil,

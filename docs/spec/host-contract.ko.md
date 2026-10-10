@@ -219,20 +219,13 @@ fn invalid_json_closes_connection() {
 | `flush.buffer.consumed-acks-not-coalesced` | 버퍼에 넣은 consumed 응답은 같은 이미지의 두 응답을 포함해 각각 한 번 도착한다. | both |
 | `flush.buffer.delivered-after-queued-bodies` | 버퍼에 넣은 응답과 닫기 알림은 이미 대기열에 있던 본문 뒤에 도착한다. | both |
 | `images.invalidate.sidecar-connection-loss-resends-configure` | 사이드카의 그림을 무효화하면 같은 크기의 configure 를 다시 보내고 다른 사이드카의 그림은 그대로 둔다. | both |
-| `performance.trace.enable-writes-log-and-sidecar-flags` | 트레이스를 켜면 로그 파일을 만들고 이미 있는 모든 서비스 디렉터리에 로그 경로 플래그를 쓴다. | both |
-| `performance.trace.owner-only-files` | performance switch, 모든 service performance flag, trace 출력은 mode 0600이다. | both |
-| `performance.trace.disable-removes-flags-keeps-log` | 트레이스를 끄면 사이드카 플래그를 지우고 로그 파일은 남긴다. | both |
 | `performance.trace.switch-accepts-on-and-off-only` | `performance` 호출은 동작 `on`과 `off`만 받으며, `line`을 포함한 다른 동작은 `action must be on or off`로 실패하고 아무것도 쓰지 않는다. | both |
-| `performance.trace.enable-without-services` | service 폴더가 없어도 trace를 켜면 출력 파일이 만들어진다. | both |
-| `performance.trace.already-off-writes-nothing` | 이미 비활성인 추적을 끄면 출력을 만들거나 덧붙이지 않는다. | both |
-| `performance.trace.line-records-writer-pid` | host 줄은 그 줄을 쓰는 프로세스를 `pid`로 기록한다. | both |
+| `performance.trace.switch-is-held-by-the-process` | 프로세스가 스위치를 가진다. `on`은 trace를 켜고 `off`는 끄며, 켜진 동안의 관측만 event `host.trace.on`과 `host.trace.off` 사이에 저장되고, 그 뒤에 파일 `performance`, 파일 `logs/performance.ndjson`, service 폴더의 flag는 없다. | both |
+| `performance.sampler.ends-with-the-switch` | 표본 추출은 trace가 켜진 동안 돌고, 꺼지면 끝나며, 다시 켜면 새로 시작한다. | both |
+| `performance.trace.already-off-writes-nothing` | trace가 꺼져 있을 때의 `off` 요청은 event를 저장하지 않는다. | both |
 | `performance.trace.host-observation-is-an-event` | trace가 켜져 있는 동안 host의 관측(layer `host` 또는 `sampler`)은 이름이 field에 반복되지 않는 level `debug`의 event `host.trace.<event>` 또는 `host.sampler.<event>`로 event log에 저장되며 trace 파일의 줄이 아니다. event 이름이 없는 관측은 오류 `performance trace`로 보고하고 아무것도 저장하지 않는다. | both |
-| `performance.trace.rotates-at-100mb` | 100 MB 이상인 출력에 host 줄을 덧붙이면 먼저 그 출력을 `performance.ndjson.1`로 옮기고 이전 세대를 하나씩 뒤로 옮기며 다섯째를 지우고 새 출력을 시작한다. | both |
 | `performance.sampler.failed-reading-is-explicit` | 상주 크기를 얻지 못한 sampler 읽기는 `rss_host_kb` 대신 `error`를 기록한다. | both |
 | `performance.clock.before-epoch-is-explicit` | 유닉스 epoch 이전의 trace 시각은 epoch가 아니라 오류다. | tauriv2 only: Rust host는 epoch부터의 기간으로 시각을 적으므로 그 이전에서 실패하고, Go는 모든 시각을 적는다 |
-| `performance.trace.switch-reports-filesystem-errors` | 스위치 요청은 폴더와 flag의 실패를 돌려준다. | both |
-| `performance.trace.invalid-switch-and-cleanup-errors` | 잘못된 스위치 읽기와 플래그 디렉터리는 오류이며 정리는 잘못된 디렉터리를 보존한다. | both |
-| `performance.trace.derive-service-flags-and-reset` | 새 서비스는 호스트 스위치를 받는다. 초기화와 비활성 재접속은 잔여 플래그를 제거하고 비활성 계측은 이벤트를 구성하지 않는다. | both |
 | `log.open.rotates-at-100mb` | 100 MB 이상인 로그 파일을 열면 먼저 `<이름>.1`로 옮기고 이전 세대를 하나씩 뒤로 옮기며 다섯째를 지우고 새 파일을 시작한다. | both |
 | `log.open.appends-below-bound` | 더 작은 로그 파일을 열면 거기에 덧붙이고, 새 로그 파일은 mode 0600이다. | both |
 | `platform.private.creates-owner-only-directories` | private directory 생성 연산은 경로에서 없는 모든 디렉터리를 mode 0700으로 만들고 이미 있는 디렉터리의 mode는 유지한다. | both |

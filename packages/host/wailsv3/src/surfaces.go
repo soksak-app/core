@@ -290,7 +290,7 @@ func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.Ra
 		func(image string, response map[string]interface{}) error {
 			// Every answer to a frame, consumed or refused with its reason, is an image.frame event of the performance
 			// trace, so a frame that the host does not present is visible in the timeline (docs/spec/performance-trace.md).
-			PerformanceObserve(s.host.configDir, "host", func() map[string]any {
+			PerformanceObserve("host", func() map[string]any {
 				return map[string]any{"event": "image.frame", "surface": surface, "name": image, "response": response}
 			})
 			responseBytes, err := json.Marshal(response)
@@ -933,7 +933,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		s.mu.Unlock()
 		delete(s.compositionRevisions, id)
 		// 표면 생명주기의 계기(V5-104): 목록에서 사라진 표면은 이 자리에서 파괴된다.
-		PerformanceObserve(s.host.configDir, "host", func() map[string]any {
+		PerformanceObserve("host", func() map[string]any {
 			return map[string]any{
 				"event": "surface", "phase": "destroyed", "surface": id,
 			}

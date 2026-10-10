@@ -151,7 +151,17 @@ fn the_start_buffer_refuses_records_beyond_its_bound_and_the_writer_counts_them(
         .filter(|event| event["event"] == "log.dropped")
         .map(|event| event["fields"]["count"].as_u64().unwrap())
         .sum();
-    assert_eq!(stored, START_BUFFER_RECORDS);
+    let others: Vec<&Value> = events
+        .iter()
+        .filter(|event| {
+            !["host.record.info", "log.dropped", "log.open"]
+                .contains(&event["event"].as_str().unwrap_or(""))
+        })
+        .collect();
+    assert_eq!(
+        stored, START_BUFFER_RECORDS,
+        "the other events of the buffer: {others:?}"
+    );
     assert_eq!(dropped, extra as u64);
 }
 
@@ -188,30 +198,22 @@ fn flush_records_stores_the_records_written_so_far_without_waiting_for_the_batch
 
 // contract: performance.trace.host-observation-is-an-event
 #[test]
-fn a_host_observation_of_the_trace_is_an_event_and_not_a_line_of_the_trace_file() {
+fn a_host_observation_of_the_trace_is_an_event() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     use_host_event_log(None);
     let directory = tempfile::tempdir().unwrap();
     let log = start(directory.path(), 64);
     use_host_event_log(Some(Arc::clone(&log)));
-    let config = tempfile::tempdir().unwrap();
-    performance::command(config.path(), json!({"action": "on"})).unwrap();
-    let before = fs::read_to_string(performance::target(config.path())).unwrap();
+    performance::command(json!({"action": "on"})).unwrap();
     performance::observe(
-        config.path(),
         "host",
         || json!({"event": "region", "surface": "tab-1", "body": {"key": "Enter"}}),
     );
-    performance::observe(
-        config.path(),
-        "sampler",
-        || json!({"event": "memory", "rss_host_kb": 42}),
-    );
-    let after = fs::read_to_string(performance::target(config.path())).unwrap();
-    performance::observe(config.path(), "host", || json!({"surface": "tab-1"}));
+    performance::observe("sampler", || json!({"event": "memory", "rss_host_kb": 42}));
+    performance::observe("host", || json!({"surface": "tab-1"}));
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
-    performance::disable(config.path()).unwrap();
+    performance::command(json!({"action": "off"})).unwrap();
     use_host_event_log(None);
     let events = read(&path);
     // The sampler that `on` starts stores its own events into the same writer, so the events are found by name.
@@ -237,10 +239,6 @@ fn a_host_observation_of_the_trace_is_an_event_and_not_a_line_of_the_trace_file(
     assert!(region["fields"].get("event").is_none(), "{region}");
     assert_eq!(memory["event"], "host.sampler.memory");
     assert_eq!(memory["fields"]["rss_host_kb"], 42);
-    assert_eq!(
-        before, after,
-        "an observation of the host changed the trace file"
-    );
     assert_eq!(
         refused["event"], "host.record.error",
         "an observation without a name was not reported: {refused}"

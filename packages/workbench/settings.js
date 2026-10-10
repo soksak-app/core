@@ -146,8 +146,8 @@ export const defaults = {
   /* 애플리케이션 메뉴의 언어. auto = 시스템 언어(지원하지 않으면 en). */
   language: "auto",
 
-  /* The performance trace, present in every build. When it is on, every layer appends to
-     <config-dir>/logs/performance.ndjson; when it is off, no layer does any file work. While the release version is
+  /* The performance trace, present in every build. When it is on, the layers store the events of the trace in the event
+     files under <config-dir>/logs; when it is off, no layer builds or stores one. While the release version is
      0.0.x it is on by default, so a defect is recorded when it appears (AGENTS.md, docs/spec/settings.md). */
   "diagnostics.performance": true,
 

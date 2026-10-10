@@ -1108,9 +1108,6 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 	if err := current.SecureServiceDirectory(serviceDir); err != nil {
 		return nil, fmt.Errorf("sidecar %s: secure service directory: %w", name, err)
 	}
-	if err := PerformanceSyncServices(c.configDir); err != nil {
-		return nil, fmt.Errorf("sidecar %s: performance switch: %w", name, err)
-	}
 	endpointPath := filepath.Join(serviceDir, "endpoint.json")
 	var endpoint persistentEndpoint
 	var cmd *exec.Cmd
@@ -1119,7 +1116,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 			return nil, fmt.Errorf("sidecar %s: invalid endpoint: %w", name, err)
 		}
 	} else if errors.Is(err, os.ErrNotExist) {
-		cmd = exec.Command(program, "--service-dir", serviceDir)
+		cmd = exec.Command(program, "--service-dir", serviceDir, "--log-dir", filepath.Join(c.configDir, "logs"))
 		// 영구 service 는 이 애플리케이션 프로세스의 수명이 아니라 configuration
 		// 디렉터리에 속한다. 애플리케이션이 비정상 종료해도 복구 service 가 함께
 		// 종료되지 않도록 새 session 을 시작한다.
@@ -1144,7 +1141,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 			return nil, fmt.Errorf("sidecar %s: %w", name, err)
 		}
 		// 프로세스 등록부의 계기(V5-104): 뜨는 사이드카의 pid 와 역할을 남긴다.
-		PerformanceObserve(c.configDir, "host", func() map[string]any {
+		PerformanceObserve("host", func() map[string]any {
 			return map[string]any{
 				"event": "process", "role": "sidecar", "name": name,
 				"pid": cmd.Process.Pid,
@@ -1899,7 +1896,7 @@ func (c *Sidecars) traceMessage(event, sidecar, surface string, body json.RawMes
 	if c.configDir == "" {
 		return
 	}
-	PerformanceObserve(c.configDir, "host", func() map[string]any {
+	PerformanceObserve("host", func() map[string]any {
 		return map[string]any{"event": event, "sidecar": sidecar, "surface": surface, "body": body}
 	})
 }

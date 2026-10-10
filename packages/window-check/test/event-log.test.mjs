@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { currentEventOffsets, eventLine, traceRows, readEventErrors, readEventLines, readEventOffsets, untilEventLine, untilEventLines, writeEventOffsets } from "../event-log.mjs";
+import { currentEventOffsets, eventLine, readEvents, traceRows, readEventErrors, readEventLines, readEventOffsets, untilEventLine, untilEventLines, writeEventOffsets } from "../event-log.mjs";
 
 function configDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-event-log-"));
@@ -177,4 +177,22 @@ test("currentEventOffsets is the end of the complete lines of every host event l
   assert.deepEqual(readEventLines(dir, now).lines, [], "nothing is after the end");
   appendFileSync(first, ',"level":"info","layer":"host","event":"host.record.info","fields":{"where":"c","text":"d"}}\n');
   assert.deepEqual(readEventLines(dir, now).lines, ["info host c: d"], "the unfinished line is read once it is complete");
+});
+
+test("the event file of a sidecar is read with the files of the host, and its events become rows with the surface, the session and the cids", (t) => {
+  const dir = configDir(t);
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open", { schema: 1 }) + line(2, "error", "host.test.failed", { where: "w", text: "t" }));
+  const sidecar = (seq, event, fields, extra = {}) =>
+    `${JSON.stringify({ ts_us: 1791000000000000 + seq, seq, level: "info", layer: "sidecar", event, fields, ...extra })}\n`;
+  writeFileSync(join(dir, "logs", "vt-1-11.jsonl"),
+    sidecar(1, "log.open", { schema: 1, pid: 11, role: "vt", boot: "1-11" }) +
+    sidecar(2, "sidecar.vt.pty_write", { bytes: 1, hex: "0d", text: "\r", ok: true }, { session: "s-1", cids: ["b1.7"] }) +
+    sidecar(3, "sidecar.vt.request", { operation: "input", body: { surface: "tab-1" } }, { surface: "tab-1" }));
+  const { events, errors } = readEventErrors(dir, {});
+  assert.deepEqual(errors, ['error host host.test.failed: {"where":"w","text":"t"}']);
+  const rows = traceRows(readEvents(dir, {}).events);
+  assert.deepEqual(rows.map(({ layer, event, surface, session, cids, hex }) => ({ layer, event, surface, session, cids, hex })), [
+    { layer: "vt-core", event: "pty_write", surface: undefined, session: "s-1", cids: ["b1.7"], hex: "0d" },
+    { layer: "vt-core", event: "request", surface: "tab-1", session: undefined, cids: undefined, hex: undefined },
+  ]);
 });

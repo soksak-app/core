@@ -219,20 +219,13 @@ Items:
 | `flush.buffer.consumed-acks-not-coalesced` | Each buffered consumed acknowledgement arrives once, including two for the same image. | both |
 | `flush.buffer.delivered-after-queued-bodies` | Buffered replies and close notices arrive after the bodies already queued. | both |
 | `images.invalidate.sidecar-connection-loss-resends-configure` | Invalidating a sidecar's images re-sends its configure at the same size and leaves other sidecars' images untouched. | both |
-| `performance.trace.enable-writes-log-and-sidecar-flags` | Enabling the trace creates the log file and writes the log-path flag into every existing service directory. | both |
-| `performance.trace.owner-only-files` | The performance switch, every service performance flag and the trace output have mode 0600. | both |
-| `performance.trace.disable-removes-flags-keeps-log` | Disabling the trace removes the sidecar flags and keeps the log file. | both |
 | `performance.trace.switch-accepts-on-and-off-only` | The `performance` call accepts the actions `on` and `off` only; any other action, `line` included, fails with `action must be on or off` and writes nothing. | both |
-| `performance.trace.enable-without-services` | Enabling the trace without a service directory creates the output. | both |
-| `performance.trace.already-off-writes-nothing` | Disabling an already disabled trace does not create or append output. | both |
-| `performance.trace.line-records-writer-pid` | A host line records the process that writes it as `pid`. | both |
+| `performance.trace.switch-is-held-by-the-process` | The process holds the switch: `on` turns the trace on, `off` turns it off, only the observation made while it is on is stored, between the events `host.trace.on` and `host.trace.off`, and no file `performance`, no file `logs/performance.ndjson` and no flag in a service directory exists afterwards. | both |
+| `performance.sampler.ends-with-the-switch` | The sampler runs while the trace is on, ends when the trace turns off, and a new one starts when it turns on again. | both |
+| `performance.trace.already-off-writes-nothing` | An `off` request while the trace is off stores no event. | both |
 | `performance.trace.host-observation-is-an-event` | While the trace is on, an observation of the host (layer `host` or `sampler`) is stored as the event `host.trace.<event>` or `host.sampler.<event>` of level `debug` in the event log, without the name in its fields and not as a line of the trace file; an observation without an event name is reported as an error `performance trace` and stores nothing. | both |
-| `performance.trace.rotates-at-100mb` | A host line appended to an output of 100 MB or more first moves that output to `performance.ndjson.1`, moves the earlier generations up by one and drops the fifth, and starts a new one. | both |
 | `performance.sampler.failed-reading-is-explicit` | A sampler reading that cannot obtain a resident size records `error` instead of `rss_host_kb`. | both |
 | `performance.clock.before-epoch-is-explicit` | A trace timestamp before the Unix epoch is an error, not the epoch. | tauriv2 only: the Rust host formats timestamps from a duration since the epoch, which fails before it, while Go formats any time |
-| `performance.trace.switch-reports-filesystem-errors` | Switch requests return directory and flag failures. | both |
-| `performance.trace.invalid-switch-and-cleanup-errors` | Invalid switch reads and invalid flag directories are errors; cleanup preserves the invalid directory. | both |
-| `performance.trace.derive-service-flags-and-reset` | New services receive the host switch; reset and disabled reattachment remove stale flags, and disabled observation does not format events. | both |
 | `log.open.rotates-at-100mb` | Opening a log file of 100 MB or more first moves it to `<name>.1`, moves the earlier generations up by one, drops the fifth, and starts a new file. | both |
 | `log.open.appends-below-bound` | Opening a smaller log file appends to it, and a new log file has mode 0600. | both |
 | `platform.private.creates-owner-only-directories` | The private-directory creation operation creates every missing directory of a path with mode 0700 and keeps the mode of an existing directory. | both |

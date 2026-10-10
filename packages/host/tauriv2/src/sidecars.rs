@@ -25,7 +25,7 @@ use crate::platform::{current, PersistentStream};
 use crate::windows::{emit_window, window_data};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use tauri::{Manager, Window};
+use tauri::Window;
 
 /// 사이드카가 보낸 메시지를 페이지에 전달하는 이벤트 값.
 #[derive(Clone, Serialize)]
@@ -832,13 +832,7 @@ impl<O: Owner> Sidecars<O> {
         })
         .map_err(|e| e.to_string())?;
         line.push(b'\n');
-        trace_message(
-            &self.core.config_directory,
-            "sidecar.send",
-            name,
-            surface,
-            body,
-        );
+        trace_message("sidecar.send", name, surface, body);
 
         let mut state = self.core.state.lock().map_err(|e| e.to_string())?;
         if state.stopped {
@@ -1615,7 +1609,7 @@ impl<O: Owner> Core<O> {
             serde_json::json!({"name": name, "pid": child.id()}),
         );
         // 프로세스 등록부의 계기(V5-104): 뜨는 사이드카의 pid 와 역할을 남긴다.
-        crate::performance::observe(&core.config_directory, "host", || {
+        crate::performance::observe("host", || {
             serde_json::json!({"event": "process", "role": "sidecar", "name": name,
                         "pid": child.id()})
         });
@@ -1668,10 +1662,9 @@ impl<O: Owner> Core<O> {
         let sidecar = name.to_string();
         let tx_clone = tx.clone();
         let pid = child.id();
-        let relay_config = core.config_directory.clone();
         threads.push(Box::new(move || {
             let mut reader = BufReader::new(stdout);
-            let violation = relay(&mut reader, &state, &sidecar, &tx_clone, &relay_config);
+            let violation = relay(&mut reader, &state, &sidecar, &tx_clone);
             // 읽기 끝을 닫아 아직 쓰는 프로세스가 쓰기에서 막히지 않게 한다.
             drop(reader);
             drop(tx_clone);
@@ -1708,8 +1701,6 @@ impl<O: Owner> Core<O> {
         current()?
             .create_private_directories(&service_dir)
             .map_err(|e| format!("sidecar {name}: create service directory: {e}"))?;
-        // 성능 트레이스가 켜져 있으면 나중에 뜨는 사이드카에도 플래그를 쓴다(V5-104).
-        crate::performance::sync_services(config)?;
         current()?
             .secure_service_directory(&service_dir)
             .map_err(|e| format!("sidecar {name}: service directory permissions: {e}"))?;
@@ -1740,6 +1731,8 @@ impl<O: Owner> Core<O> {
                 command
                     .arg("--service-dir")
                     .arg(&service_dir)
+                    .arg("--log-dir")
+                    .arg(config.join("logs"))
                     .stdin(Stdio::null())
                     .stdout(Stdio::piped())
                     .stderr(Stdio::from(service_log));
@@ -2054,13 +2047,7 @@ impl<O: Owner> Core<O> {
                         ) {
                             continue;
                         }
-                        trace_message(
-                            &reader_core.config_directory,
-                            "sidecar.receive",
-                            &sidecar,
-                            &event.surface,
-                            &event.body,
-                        );
+                        trace_message("sidecar.receive", &sidecar, &event.surface, &event.body);
                         owner.deliver(Message {
                             sidecar: sidecar.clone(),
                             surface: event.surface,
@@ -2421,7 +2408,6 @@ fn relay<O: Owner>(
     state: &Arc<Mutex<State<O>>>,
     sidecar: &str,
     tx: &SyncSender<Outgoing>,
-    config: &Path,
 ) -> Option<String> {
     let mut line = Vec::new();
     loop {
@@ -2487,13 +2473,7 @@ fn relay<O: Owner>(
         ) {
             continue;
         }
-        trace_message(
-            config,
-            "sidecar.receive",
-            sidecar,
-            &event.surface,
-            &event.body,
-        );
+        trace_message("sidecar.receive", sidecar, &event.surface, &event.body);
         owner.deliver(Message {
             sidecar: sidecar.to_string(),
             surface: event.surface,
@@ -2504,8 +2484,8 @@ fn relay<O: Owner>(
 
 /// Writes a request that the host sends to a sidecar, or a message that it receives, as a trace event with its whole
 /// body (docs/spec/diagnostics.md). It writes nothing while the performance trace is off.
-fn trace_message(config: &Path, event: &str, sidecar: &str, surface: &str, body: &RawValue) {
-    crate::performance::observe(config, "host", || {
+fn trace_message(event: &str, sidecar: &str, surface: &str, body: &RawValue) {
+    crate::performance::observe("host", || {
         serde_json::json!({
             "event": event,
             "sidecar": sidecar,
@@ -2684,16 +2664,14 @@ impl Owner for Window {
                 // Every answer to a frame, consumed or refused with its reason, is an image.frame event of the
                 // performance trace, so a frame that the host does not present is visible in the timeline
                 // (docs/spec/performance-trace.md).
-                if let Some(workspace) = window.try_state::<crate::workspace::Workspace>() {
-                    crate::performance::observe(workspace.directory(), "host", || {
-                        serde_json::json!({
-                            "event": "image.frame",
-                            "surface": surface,
-                            "name": image,
-                            "response": response,
-                        })
-                    });
-                }
+                crate::performance::observe("host", || {
+                    serde_json::json!({
+                        "event": "image.frame",
+                        "surface": surface,
+                        "name": image,
+                        "response": response,
+                    })
+                });
                 let text = serde_json::to_string(&response).map_err(|e| e.to_string())?;
                 let body = RawValue::from_string(text).map_err(|e| e.to_string())?;
                 response_sender.send(surface, image, &body)

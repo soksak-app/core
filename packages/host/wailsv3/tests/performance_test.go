@@ -1,211 +1,97 @@
-// 성능 트레이스 호스트 쪽 계약(docs/spec/performance-trace.md, V5-104).
-// 켜기는 로그 파일과 사이드카 플래그 파일을 만들고, 끄기는 플래그를 지운다.
-// 페이지 줄 중계는 객체 형식을 검증하고 대상에 덧붙인다.
+// The switch of the performance trace of the host (docs/spec/performance-trace.md): the process holds it, the page turns it
+// on and off, an observation is an event of the event log while it is on, and its markers are events too. No file holds the
+// switch and no flag reaches a service.
 package host_test
 
 import (
-	"encoding/json"
-	"fmt"
-	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
-func tempConfig(t *testing.T) string {
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "services", "fixture-service"), 0o700); err != nil {
+func traceEvents(t *testing.T, config string, log *host.EventLog) []string {
+	t.Helper()
+	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
-	return dir
-}
-
-// contract: performance.trace.enable-writes-log-and-sidecar-flags
-func TestEnableWritesTheLogAndTheSidecarFlags(t *testing.T) {
-	config := tempConfig(t)
-	target, err := host.PerformanceEnable(config)
-	if err != nil {
-		t.Fatal(err)
+	var names []string
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		if name, _ := event["event"].(string); strings.HasPrefix(name, "host.trace.") {
+			names = append(names, name)
+		}
 	}
-	if target != filepath.Join(config, "logs", "performance.ndjson") {
-		t.Fatalf("target %q", target)
-	}
-	flag, err := os.ReadFile(filepath.Join(config, "services", "fixture-service", "performance"))
-	if err != nil {
-		t.Fatal("every existing service directory receives the flag")
-	}
-	if strings.TrimSpace(string(flag)) != target {
-		t.Fatalf("flag %q points elsewhere", flag)
-	}
-	if err := host.PerformanceLine(target, "host", map[string]any{"event": "trace_on"}); err != nil {
-		t.Fatal(err)
-	}
-	text, err := os.ReadFile(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var record map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(string(text))), &record); err != nil {
-		t.Fatalf("every line is one JSON object: %v", err)
-	}
-	if record["layer"] != "host" || record["event"] != "trace_on" {
-		t.Fatalf("record %v", record)
-	}
-}
-
-// contract: performance.trace.disable-removes-flags-keeps-log
-func TestDisableRemovesTheFlagsButKeepsTheLog(t *testing.T) {
-	config := tempConfig(t)
-	target, err := host.PerformanceEnable(config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := host.PerformanceLine(target, "host", map[string]any{"event": "trace_on"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := host.PerformanceDisable(config); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(config, "services", "fixture-service", "performance")); !os.IsNotExist(err) {
-		t.Fatal("disable removes the flag")
-	}
-	if _, err := os.Stat(target); err != nil {
-		t.Fatal("the log belongs to the trace, not the switch")
-	}
+	return names
 }
 
 // contract: performance.trace.switch-accepts-on-and-off-only
 func TestTheSwitchAcceptsOnAndOffOnly(t *testing.T) {
-	config := tempConfig(t)
 	for _, request := range []map[string]any{
 		{},
 		{"action": 7},
 		{"action": "line", "line": map[string]any{"event": "focus"}},
 		{"action": "toggle"},
 	} {
-		if _, err := host.PerformanceCommand(config, request); err == nil || !strings.Contains(err.Error(), "action must be on or off") {
+		if _, err := host.PerformanceCommand(request); err == nil || !strings.Contains(err.Error(), "action must be on or off") {
 			t.Errorf("request %v: error %v", request, err)
 		}
 	}
-	if _, err := os.Stat(host.PerformanceTarget(config)); !os.IsNotExist(err) {
-		t.Fatalf("a refused request created output: %v", err)
+	if host.PerformanceEnabled() {
+		t.Fatal("a refused request turned the trace on")
 	}
 }
 
-// contract: performance.trace.enable-without-services
-func TestEnableWithoutServicesCreatesTheOutput(t *testing.T) {
+// contract: performance.trace.switch-is-held-by-the-process
+func TestTheProcessHoldsTheSwitchAndNoFileDoes(t *testing.T) {
 	config := t.TempDir()
-	if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err != nil {
+	if err := os.MkdirAll(filepath.Join(config, "services", "fixture-service"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		if err := host.PerformanceDisable(config); err != nil {
-			t.Error(err)
+	log := support.StartWriter(t, config)
+	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
+	observe := func() {
+		host.PerformanceObserve("host", func() map[string]any { return map[string]any{"event": "probe", "n": 1} })
+	}
+	observe()
+	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
+		t.Fatal(err)
+	}
+	if !host.PerformanceEnabled() {
+		t.Fatal("the trace is off after on")
+	}
+	observe()
+	if _, err := host.PerformanceCommand(map[string]any{"action": "off"}); err != nil {
+		t.Fatal(err)
+	}
+	if host.PerformanceEnabled() {
+		t.Fatal("the trace is on after off")
+	}
+	observe()
+	// Only the observation made while the trace was on is stored, between the markers.
+	if got, want := strings.Join(traceEvents(t, config, log), " "), "host.trace.on host.trace.probe host.trace.off"; got != want {
+		t.Fatalf("trace events %q, want %q", got, want)
+	}
+	// The switch is not a file, the trace is not a file, and a service directory holds no flag.
+	for _, path := range []string{"performance", filepath.Join("logs", "performance.ndjson"), filepath.Join("services", "fixture-service", "performance")} {
+		if _, err := os.Stat(filepath.Join(config, path)); !os.IsNotExist(err) {
+			t.Fatalf("%s exists after the switch: %v", path, err)
 		}
-	})
-	if _, err := os.Stat(host.PerformanceTarget(config)); err != nil {
-		t.Fatalf("enabling without a service directory created no output: %v", err)
 	}
 }
 
 // contract: performance.trace.already-off-writes-nothing
 func TestAlreadyOffWritesNothing(t *testing.T) {
-	config := tempConfig(t)
-	if err := os.MkdirAll(filepath.Join(config, "logs"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := host.PerformanceCommand(config, map[string]any{"action": "off"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(host.PerformanceTarget(config)); !os.IsNotExist(err) {
-		t.Fatalf("disabled trace created output: %v", err)
-	}
-}
-
-// contract: performance.trace.switch-reports-filesystem-errors
-func TestSwitchReportsFilesystemErrors(t *testing.T) {
-	t.Run("service-directory", func(t *testing.T) {
-		config := t.TempDir()
-		if err := os.WriteFile(filepath.Join(config, "services"), []byte("not a directory"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err == nil {
-			t.Fatal("enable hid an invalid services directory")
-		}
-	})
-	t.Run("service-flag", func(t *testing.T) {
-		config := tempConfig(t)
-		if err := os.Mkdir(filepath.Join(config, "services", "fixture-service", "performance"), 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err == nil {
-			t.Fatal("enable hid a service flag write failure")
-		}
-	})
-}
-
-// contract: performance.trace.invalid-switch-and-cleanup-errors
-func TestInvalidSwitchAndCleanupErrors(t *testing.T) {
 	config := t.TempDir()
-	if err := os.Mkdir(filepath.Join(config, "performance"), 0o700); err != nil {
+	log := support.StartWriter(t, config)
+	if _, err := host.PerformanceCommand(map[string]any{"action": "off"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := host.PerformanceCommand(config, map[string]any{"action": "off"}); err == nil || !strings.Contains(err.Error(), "performance switch") {
-		t.Fatalf("invalid switch was hidden: %v", err)
-	}
-	if err := os.Remove(filepath.Join(config, "performance")); err != nil {
-		t.Fatal(err)
-	}
-	flag := filepath.Join(config, "services", "fixture-service", "performance")
-	if err := os.MkdirAll(flag, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := host.PerformanceDisable(config); err == nil {
-		t.Fatal("disable removed an invalid flag directory instead of reporting it")
-	}
-	if stat, err := os.Stat(flag); err != nil || !stat.IsDir() {
-		t.Fatalf("invalid flag directory was removed: %v", err)
-	}
-}
-
-// contract: performance.trace.derive-service-flags-and-reset
-func TestDeriveServiceFlagsAndReset(t *testing.T) {
-	config := t.TempDir()
-	if _, err := host.PerformanceCommand(config, map[string]any{"action": "on"}); err != nil {
-		t.Fatal(err)
-	}
-	flag := filepath.Join(config, "services", "fixture-service", "performance")
-	if err := os.MkdirAll(filepath.Dir(flag), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := host.PerformanceSyncServices(config); err != nil {
-		t.Fatal(err)
-	}
-	if data, err := os.ReadFile(flag); err != nil || string(data) != host.PerformanceTarget(config)+"\n" {
-		t.Fatalf("new service did not receive the active target: %q %v", data, err)
-	}
-	if err := host.PerformanceDisable(config); err != nil {
-		t.Fatal(err)
-	}
-	for _, path := range []string{flag, filepath.Join(config, "performance")} {
-		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			t.Fatalf("reset retained %s: %v", path, err)
-		}
-	}
-	formatted := 0
-	host.PerformanceObserve(config, "host", func() map[string]any { formatted++; return map[string]any{"event": "focus"} })
-	if formatted != 0 {
-		t.Fatalf("disabled observation formatted %d events", formatted)
-	}
-	if err := os.WriteFile(flag, []byte(host.PerformanceTarget(config)+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := host.PerformanceSyncServices(config); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(flag); !os.IsNotExist(err) {
-		t.Fatalf("disabled reattachment retained stale flag: %v", err)
+	if names := traceEvents(t, config, log); len(names) != 0 {
+		t.Fatalf("an off request while the trace was off stored %v", names)
 	}
 }
 
@@ -225,95 +111,30 @@ func TestSamplerReportsAFailedReading(t *testing.T) {
 	}
 }
 
-// contract: performance.trace.line-records-writer-pid
-func TestAHostLineCarriesTheWriterPid(t *testing.T) {
-	target := filepath.Join(t.TempDir(), "performance.ndjson")
-	if err := host.PerformanceLine(target, "host", map[string]any{"event": "focus"}); err != nil {
+// contract: performance.sampler.ends-with-the-switch
+func TestTheSamplerEndsWhenTheTraceTurnsOff(t *testing.T) {
+	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
+	before := host.PerformanceSamplerRunning()
+	if before {
+		t.Fatal("a sampler runs while the trace is off")
+	}
+	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
 	}
-	text, err := os.ReadFile(target)
-	if err != nil {
+	if !host.PerformanceSamplerRunning() {
+		t.Fatal("no sampler runs while the trace is on")
+	}
+	if _, err := host.PerformanceCommand(map[string]any{"action": "off"}); err != nil {
 		t.Fatal(err)
 	}
-	var record map[string]any
-	if err := json.Unmarshal(text, &record); err != nil {
+	if host.PerformanceSamplerRunning() {
+		t.Fatal("the sampler runs after the trace turned off")
+	}
+	// Turning the trace on again starts a sampler again.
+	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
 	}
-	if pid, _ := record["pid"].(float64); int(pid) != os.Getpid() {
-		t.Fatalf("a host line does not name the writing process: %v", record)
-	}
-}
-
-// A trace file rotates at 100 MB and keeps the five earlier generations, so the records cover a long session.
-// contract: performance.trace.rotates-at-100mb
-func TestTraceRotatesAtOneHundredMegabytesAndKeepsFiveGenerations(t *testing.T) {
-	target := filepath.Join(t.TempDir(), "performance.ndjson")
-	small := strings.Repeat("x", 10*1024*1024-1) + "\n"
-	if err := os.WriteFile(target, []byte(small), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := host.PerformanceLine(target, "host", map[string]any{"event": "below"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(target + ".1"); !os.IsNotExist(err) {
-		t.Fatalf("a file of 10 MB was rotated: %v", err)
-	}
-	// Six rotations: the oldest generation is dropped and the others move up.
-	for generation := 1; generation <= 6; generation++ {
-		full := strings.Repeat(string(rune('a'+generation)), 100*1024*1024-1) + "\n"
-		if err := os.WriteFile(target, []byte(full), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if err := host.PerformanceLine(target, "host", map[string]any{"event": "after"}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for generation := 1; generation <= 5; generation++ {
-		head := make([]byte, 1)
-		file, err := os.Open(fmt.Sprintf("%s.%d", target, generation))
-		if err != nil {
-			t.Fatalf("generation %d is missing: %v", generation, err)
-		}
-		if _, err := file.Read(head); err != nil {
-			t.Fatal(err)
-		}
-		file.Close()
-		// The newest rotated file is .1 (written sixth, letter 'g'); .5 is the second written ('c').
-		if want := byte('a' + 7 - generation); head[0] != want {
-			t.Fatalf("generation %d starts with %q, want %q", generation, head[0], want)
-		}
-	}
-	if _, err := os.Stat(target + ".6"); !os.IsNotExist(err) {
-		t.Fatalf("a sixth earlier generation was kept: %v", err)
-	}
-	current, err := os.ReadFile(target)
-	if err != nil || strings.Count(string(current), "\n") != 1 || !strings.Contains(string(current), `"event":"after"`) {
-		t.Fatalf("the new line did not start a new output: %v %q", err, current)
-	}
-}
-
-// 스위치, 서비스 플래그, 트레이스 출력은 현재 사용자만 읽고 쓴다.
-// contract: performance.trace.owner-only-files
-func TestEnableCreatesOwnerOnlyFiles(t *testing.T) {
-	config := tempConfig(t)
-	target, err := host.PerformanceEnable(config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := host.PerformanceLine(target, "host", map[string]any{"event": "trace_on"}); err != nil {
-		t.Fatal(err)
-	}
-	for _, path := range []string{
-		filepath.Join(config, "performance"),
-		filepath.Join(config, "services", "fixture-service", "performance"),
-		target,
-	} {
-		info, err := os.Stat(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if info.Mode().Perm() != 0o600 {
-			t.Fatalf("%s has mode %o, want 600", path, info.Mode().Perm())
-		}
+	if !host.PerformanceSamplerRunning() {
+		t.Fatal("no sampler runs after the trace turned on again")
 	}
 }

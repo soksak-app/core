@@ -1095,14 +1095,11 @@ func TestTheRelayRecordsEveryMessageWithItsWholeBody(t *testing.T) {
 	sidecars, directory := scriptSidecars(t, script)
 	sidecars.StopTimeout = stall
 	log := useEventLog(t)
-	// The sidecars resolve the configuration directory, so the switch names the resolved path.
-	directory, err := filepath.EvalSymlinks(directory)
-	if err != nil {
+	_ = directory
+	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := host.PerformanceEnable(directory); err != nil {
-		t.Fatal(err)
-	}
+	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
 	owner := newFakeOwner("/projects/test")
 	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"input","bytes":"7ZWc"}`)); err != nil {
 		t.Fatalf("send: %v", err)

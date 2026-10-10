@@ -1396,7 +1396,7 @@ func (s *Surfaces) presented() (float64, error) {
 		// 표시 장벽 대기의 계기(V5-104): 이 대기가 타임아웃에 걸리면 화면이 멈춘다.
 		barrierStarted := time.Now()
 		barrierErr := s.images.WaitCurrentError(remaining)
-		PerformanceObserve(s.host.configDir, "host", func() map[string]any {
+		PerformanceObserve("host", func() map[string]any {
 			return map[string]any{
 				"event": "barrier", "wait_us": time.Since(barrierStarted).Microseconds(),
 				"ok": barrierErr == nil,

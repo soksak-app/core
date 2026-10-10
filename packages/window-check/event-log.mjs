@@ -3,7 +3,8 @@
 import { existsSync, readdirSync, readFileSync, statSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const HOST_LOG = /^host-.+\.jsonl$/;
+// The event files of the processes of the application (docs/spec/logging.md#files): the host and every sidecar service.
+const HOST_LOG = /^(host|vt|files|shell)-\d+-\d+\.jsonl$/;
 
 /** 파일마다 마지막으로 읽은 위치를 기록하는 파일. 설정 폴더 옆에 두어 설정 폴더마다 하나다. */
 export const eventOffsetFile = (configDir) => `${configDir}.event-offsets`;
@@ -156,7 +157,7 @@ export async function untilEventLine(configDir, offsets, predicate, timeout) {
 }
 
 // The prefixes of the events of the trace and the layer of the row that each one makes.
-const TRACE_PREFIXES = [["page.trace.", "page"], ["host.trace.", "host"], ["host.sampler.", "sampler"]];
+const TRACE_PREFIXES = [["page.trace.", "page"], ["host.trace.", "host"], ["host.sampler.", "sampler"], ["sidecar.vt.", "vt-core"]];
 
 /**
  * The events of the trace of the page, the host and the sampler as rows in the shape of the trace file of earlier runs: the
@@ -167,7 +168,10 @@ export function traceRows(events) {
   for (const event of events) {
     const match = TRACE_PREFIXES.find(([prefix]) => event.event.startsWith(prefix));
     if (!match) continue;
-    rows.push({ layer: match[1], event: event.event.slice(match[0].length), ts: new Date(event.ts_us / 1000).toISOString(), ...event.fields });
+    // The surface, the session and the correlation identifiers of an event are members of the line and not of its fields.
+    const context = {};
+    for (const key of ["surface", "session", "cids"]) if (event[key] !== undefined) context[key] = event[key];
+    rows.push({ layer: match[1], event: event.event.slice(match[0].length), ts: new Date(event.ts_us / 1000).toISOString(), ...context, ...event.fields });
   }
   return rows;
 }

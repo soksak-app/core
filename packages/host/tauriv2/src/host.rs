@@ -274,7 +274,6 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             installed_directory
                 .set(directory.clone())
                 .map_err(|_| "the configuration directory of installed plugins is already set")?;
-            crate::performance::disable(&directory)?;
             app.manage(workspace::Workspace::new(directory.clone()));
             let handle = app.handle().clone();
             // Applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page

@@ -1,6 +1,6 @@
 // 설정 창의 절(일반, 플러그인, 사이드바), 세트 만들기·편집·삭제, 배치 값 설정을 검사한다(docs/spec/settings.md).
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -361,12 +361,14 @@ for (const app of Object.values(APPS)) {
     await keepCommonSettings(s);
     // 호스트는 설정 디렉터리의 심볼릭 링크를 해소한 경로를 사용한다.
     const config = realpathSync(app.configDir);
-    const file = join(config, "logs", "performance.ndjson");
-    const flag = join(config, "performance");
     const services = join(config, "services");
-    const serviceFlags = () => existsSync(services) ? readdirSync(services, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory()).map((entry) => join(services, entry.name, "performance")) : [];
-    // The events of the trace of the page are in the event log; the file of the trace holds what the sidecars write.
+    // The process of the host holds the switch: the switch writes no file of the configuration folder and no flag into a
+    // service directory (docs/spec/performance-trace.md#the-switch). A file that an earlier build left stays as it was.
+    const switchFiles = () => Object.fromEntries([join(config, "performance"), join(config, "logs", "performance.ndjson"),
+      ...(existsSync(services) ? readdirSync(services, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory()).map((entry) => join(services, entry.name, "performance")) : [])]
+      .filter((path) => existsSync(path)).map((path) => [path, statSync(path).mtimeMs]));
+    // The events of the trace of the page and of the host are in the event log.
     const traced = async (offsets) => {
       await s.flushLog();
       return traceRows(readEvents(config, offsets).events);
@@ -375,23 +377,16 @@ for (const app of Object.values(APPS)) {
       scope: "common", patch: { "diagnostics.performance": enabled },
     });
     await change(false);
-    assert.ok(!existsSync(flag), "disabled host retained its runtime switch");
+    const files = switchFiles();
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.length).id;
     const before = currentEventOffsets(config);
     await s.run("core.card.focus", { card });
     assert.deepEqual(await traced(before), [], "disabled focus changed the trace output");
     await change(true);
-    assert.equal(readFileSync(flag, "utf8"), `${file}\n`, "enabled host switch does not contain its trace target");
-    for (const serviceFlag of serviceFlags()) {
-      assert.equal(readFileSync(serviceFlag, "utf8"), `${file}\n`, `enabled service flag does not contain its trace target: ${serviceFlag}`);
-    }
+    assert.deepEqual(switchFiles(), files, "enabling the trace wrote a file or a service flag");
     await s.run("core.card.focus", { card });
     await change(false);
-    assert.ok(!existsSync(flag), "host disable retained its runtime switch");
-    for (const serviceFlag of serviceFlags()) {
-      assert.ok(!existsSync(serviceFlag), `host disable retained a service flag: ${serviceFlag}`);
-    }
-    assert.ok(existsSync(file), "enabled tracing did not create its declared output");
+    assert.deepEqual(switchFiles(), files, "disabling the trace wrote a file or a service flag");
     const events = await traced(before);
     const after = currentEventOffsets(config);
     assert.ok(events.some((line) => line.layer === "page" && line.event === "action"

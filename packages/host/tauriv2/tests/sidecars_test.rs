@@ -751,6 +751,25 @@ fn the_standard_error_of_a_sidecar_is_written_as_records() {
 // contract: sidecars.trace.relay-records-every-message-with-its-body
 #[test]
 fn the_relay_records_every_message_with_its_whole_body() {
+    // The switch of the trace belongs to the process, so the check runs in a child process that nothing else shares it with.
+    if std::env::var_os("SOKSAK_RELAY_TRACE_CHILD").is_none() {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "the_relay_records_every_message_with_its_whole_body",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("SOKSAK_RELAY_TRACE_CHILD", "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "the child check failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
     // Every request that the host sends to a sidecar and every message that it receives is a trace event with its whole
     // body, in the order of the relay (docs/spec/diagnostics.md).
     let (mut sidecars, directory) = script_sidecars(
@@ -759,9 +778,8 @@ fn the_relay_records_every_message_with_its_whole_body() {
     sidecars.0.stop_timeout = STALL;
     let events_directory = tempfile::tempdir().unwrap();
     let writer = records::start_writer(events_directory.path());
-    // The sidecars resolve the configuration directory, so the switch names the resolved path.
-    let config = std::fs::canonicalize(directory.path()).unwrap();
-    soksak_host_tauriv2::performance::enable(&config).unwrap();
+    let _ = &directory;
+    soksak_host_tauriv2::performance::command(serde_json::json!({"action": "on"})).unwrap();
     let (window, events) = owner("a", "/projects/test");
     sidecars
         .send(
