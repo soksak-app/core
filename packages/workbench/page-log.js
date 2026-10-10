@@ -41,8 +41,12 @@ export function emitEvent(level, event, fields) {
   batcher?.emit(level, event, fields);
 }
 
-// The calls of the log and of the performance switch are not recorded: a recorded `log` call would record itself.
-const UNRECORDED_CALLS = new Set(["log", "performance"]);
+// The calls of the log and of the performance switch are not recorded: a recorded `log` call would record itself. The range
+// reads of the debug timeline are not recorded either: the view reads in answer to the event that the writer announced after
+// it wrote, so a recorded read would write the event that triggers the next read. The calls that draw and place a native
+// modal are of the class `frame` (docs/spec/logging.md#classes), which is stored as aggregates and not as one event per call;
+// a view that follows the event file draws again for every row it appends, so recorded draws would feed it forever.
+const UNRECORDED_CALLS = new Set(["log", "performance", "debugReadRange", "overlayUpdate", "overlayPlace"]);
 // Every host call of the page is the event `page.call` at the level `debug`, and a refused call is at the level `warn`
 // (docs/spec/logging.md#automatic-entrances). The callers report their own failures; the event does not fail a window check.
 if (batcher) {

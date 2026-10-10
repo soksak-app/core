@@ -118,13 +118,16 @@ test("a failed relay is reported on the original console and does not become a c
   assert.ok(reported.some((line) => line.includes("page event batch of 1 events failed: host closed")));
 });
 
-test("every host call is the event page.call with its name, arguments, duration and outcome, except the calls of the log itself", async () => {
+test("every host call is the event page.call with its name, arguments, duration and outcome, except the calls of the log itself and the range reads of the debug timeline", async () => {
   const { settlingCalls } = await import("../host-calls.js");
   calls.length = 0;
   const wrapped = settlingCalls((name) => (name === "bad" ? Promise.reject(new Error("refused")) : Promise.resolve()));
   await wrapped.call("good", { a: 1 });
   await assert.rejects(wrapped.call("bad"), /refused/);
   await wrapped.call("log", { action: "batch", events: [] });
+  await wrapped.call("debugReadRange", { path: "logs/host-a.jsonl", offset: 0 });
+  await wrapped.call("overlayUpdate", { id: "debug", html: "<p></p>" });
+  await wrapped.call("overlayPlace", { id: "debug", rect: { x: 0, y: 0, w: 1, h: 1 } });
   await wrapped.call("big", { text: "x".repeat(5000) });
   await settled();
   const seen = events().filter(({ event }) => event === "page.call");

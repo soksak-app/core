@@ -1011,7 +1011,7 @@
       },
       {
         "name": "core.debug",
-        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files that were truncated, the counts of all rows, rows that pass the filter and shown lines with the context rows, the number of selected rows and the warning that a saved file can hold typed text, and its filter or null, the shown state file with its path, the number of tree lines, the state file it is compared with or null and the number of differences, or null, the scroll position of the shown content in points, the running or last save operation, and the error of the last failed step or operation or null.",
+        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files whose reading stopped at the row limit, whether it follows the growing files and the number of rows appended since it was shown, the counts of all rows, rows that pass the filter and shown lines with the context rows, the number of selected rows and the warning that a saved file can hold typed text, and its filter or null, the shown state file with its path, the number of tree lines, the state file it is compared with or null and the number of differences, or null, the scroll position of the shown content in points, the running or last save operation, and the error of the last failed step or operation or null.",
         "schema": {
           "type": "object",
           "properties": {
@@ -1074,9 +1074,15 @@
                   "type": "array",
                   "items": { "type": "string" }
                 },
-                "truncated": {
+                "limited": {
                   "type": "array",
                   "items": { "type": "string" }
+                },
+                "following": {
+                  "type": "boolean"
+                },
+                "appended": {
+                  "type": "number"
                 },
                 "total": {
                   "type": "number"
@@ -1958,8 +1964,24 @@
         "timeout": 60000
       },
       {
+        "name": "core.debug.timeline.follow",
+        "description": "Stops or resumes following the host event files in the shown debug timeline: with on true the timeline first reads the lines that grew while it was stopped and then appends the lines that later change notices report, with on false it appends nothing; the same call again changes nothing, and an appended line that is not an event is an error that stops following.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
         "name": "core.debug.timeline.select",
-        "description": "Selects or unselects one row of the shown debug timeline: row is its position among all rows of the timeline from 0, in time order, whatever the filter shows, and selected is true or false; the same call again changes nothing.",
+        "description": "Selects or unselects one row of the shown debug timeline: row is its position among all rows of the timeline from 0, in time order at the time of the call, whatever the filter shows, and selected is true or false; the same call again changes nothing. A selection stays on its row when appended rows change the positions.",
         "params": {
           "type": "object",
           "properties": {
@@ -3896,6 +3918,10 @@
       {
         "name": "core.debug.timeline.list",
         "description": "The button of the timeline that shows the list of files again."
+      },
+      {
+        "name": "core.debug.timeline.follow",
+        "description": "The button of the timeline that stops following the growing host event files, or resumes it."
       },
       {
         "name": "core.debug.timeline.level",

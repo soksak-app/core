@@ -403,6 +403,8 @@ export const debug = native ? {
   saveAll: () => tell("debugSaveAll"),
   saveText: (request) => tell("debugSaveText", request),
   read: (request) => tell("debugRead", request),
+  readRange: (request) => tell("debugReadRange", request),
+  onChanged: (listener) => bridge.on("debug-log-changed", listener),
 } : null;
 
 export function onSurfacePrepared(listener) {

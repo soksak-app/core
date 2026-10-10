@@ -4,6 +4,12 @@
 /** The schema number of the event files that the timeline reads. */
 const SCHEMA = 1;
 
+/**
+ * The number of rows at which the timeline stops reading the files. A file is read at least one range and the read ends
+ * after the range that reaches the limit, so the timeline holds up to one range (262144 bytes of lines) more per file.
+ */
+export const ROW_LIMIT = 100000;
+
 /** The levels from the most to the least severe; a level filter shows its level and the more severe ones. */
 export const LEVELS = ["error", "warn", "info", "debug", "trace"];
 /** The layers of an event. */
@@ -50,26 +56,28 @@ function rowOf(file, number, raw) {
   return { file, line: number, ...event };
 }
 
-/**
- * The rows of the text of one event file, in the order of the file. The first line must be `log.open` with the schema number
- * that this reader knows. A truncated text starts inside a line (docs/spec/debug.md): its first, partial line is skipped and
- * the `log.open` check does not apply.
- */
-export function parseEvents(file, text, truncated) {
+/** The rows of whole lines of one file; `first` is the number of the first line of `text` in the file, from 1. */
+function rowsOf(file, text, first) {
   const lines = text.split("\n");
   if (lines.at(-1) === "") lines.pop();
-  if (truncated) {
-    if (lines.length < 2) throw new Error(`${file}: the truncated text has no complete line`);
-    lines.shift();
-  }
-  if (lines.length === 0) throw new Error(`${file}: the file is empty`);
-  const offset = truncated ? 2 : 1;
-  const rows = lines.map((raw, index) => rowOf(file, index + offset, raw));
-  if (!truncated) {
-    if (rows[0].event !== "log.open") throw new Error(`${file}: the first line is not log.open: ${found(rows[0].event)}`);
-    if (rows[0].fields?.schema !== SCHEMA) throw new Error(`${file}: schema ${rows[0].fields?.schema} is not ${SCHEMA}`);
-  }
+  return lines.map((raw, index) => rowOf(file, index + first, raw));
+}
+
+/**
+ * The rows of the text of one event file from its start, in the order of the file. The first line must be `log.open` with
+ * the schema number that this reader knows.
+ */
+export function parseEvents(file, text) {
+  const rows = rowsOf(file, text, 1);
+  if (rows.length === 0) throw new Error(`${file}: the file is empty`);
+  if (rows[0].event !== "log.open") throw new Error(`${file}: the first line is not log.open: ${found(rows[0].event)}`);
+  if (rows[0].fields?.schema !== SCHEMA) throw new Error(`${file}: schema ${rows[0].fields?.schema} is not ${SCHEMA}`);
   return rows;
+}
+
+/** The rows of lines that were appended to a file after its `first` - 1 lines; an empty text has no row. */
+export function parseAppended(file, text, first) {
+  return rowsOf(file, text, first);
 }
 
 /** The rows of several files sorted by time, then `seq`, then file; the arguments are not changed. */

@@ -10,7 +10,7 @@ import { commandOf, delegate, mark, run } from "./commands.js";
 import { registry } from "./exposure.js";
 import { hideError, showError } from "./shown-errors.js";
 import { newestFirst } from "./debug-order.js";
-import { CLEAR_FILTER, contextRows, eventLine, filterRows, hostEventFiles, LAYERS, LEVELS, mergeRows, parseEvents } from "./debug-timeline.js";
+import { CLEAR_FILTER, contextRows, eventLine, filterRows, hostEventFiles, LAYERS, LEVELS, mergeRows, parseAppended, parseEvents, ROW_LIMIT } from "./debug-timeline.js";
 import { compareStates, parseState, stateFiles, stateLines } from "./debug-state.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 
@@ -37,7 +37,12 @@ let recorded = null;
 let entries = [];
 /** The file that the view shows, {path, size, truncated}, or null while the list is shown. */
 let viewing = null;
-/** The timeline of the host event files {files, truncated, rows, positions, selected, shown, lines, filter}, or null while the list or a file is shown. */
+/**
+ * The timeline of the host event files {files, limited, rows, positions, selected, shown, lines, filter, following, appended, cursors},
+ * or null while the list or a file is shown. `cursors` maps each file to {next, line, size}: the byte offset after the last whole line
+ * read, the number of lines read and the size at the last read. A new timeline has a new `cursors` map, which identifies the timeline
+ * to a read that finishes after the timeline was replaced.
+ */
 let timeline = null;
 /** The state file that the view shows {path, state, lines, with, differences}, or null while another content is shown. */
 let stateShown = null;
@@ -62,7 +67,7 @@ const SELECTION_WARNING = "저장한 파일에는 입력한 글자가 들어 있
 /** The timeline part of the status core.debug. */
 function timelineState() {
   if (timeline === null) return null;
-  return { sources: timeline.files, truncated: timeline.truncated, total: timeline.rows.length, shown: timeline.shown.length, lines: timeline.lines.length, selected: timeline.selected.size, warning: SELECTION_WARNING, ...timeline.filter };
+  return { sources: timeline.files, limited: timeline.limited, following: timeline.following, appended: timeline.appended, total: timeline.rows.length, shown: timeline.shown.length, lines: timeline.lines.length, selected: timeline.selected.size, warning: SELECTION_WARNING, ...timeline.filter };
 }
 
 /** The state part of the status core.debug. */
@@ -159,7 +164,10 @@ function drawTimeline() {
       field.setAttribute("value", value);
     }
   }
-  timelineView.querySelector(".dbg-card__cut").hidden = timeline.truncated.length === 0;
+  timelineView.querySelector(".dbg-card__cut").hidden = timeline.limited.length === 0;
+  const follow = timelineView.querySelector('[data-key="timeline-follow"]');
+  mark(follow, "core.debug.timeline.follow", { on: !timeline.following });
+  follow.textContent = timeline.following ? "따라가기 멈춤" : "따라가기 다시 시작";
   timelineRows.textContent = "";
   for (const { row, match } of timeline.lines) {
     const index = timeline.positions.get(row);
@@ -294,7 +302,7 @@ function makeCard() {
         '<div class="dbg-card__rows" data-expose="core.debug.state.tree"></div>' +
       '</div>' +
       '<div class="dbg-card__timeline" hidden>' +
-        '<div class="dbg-card__bar"><span class="dbg-card__cut" hidden>앞부분 생략</span></div>' +
+        '<div class="dbg-card__bar"><span class="dbg-card__cut" hidden>행 한도에서 읽기를 멈춤</span></div>' +
         '<div class="dbg-card__filters"></div>' +
         '<div class="dbg-card__save"><span class="dbg-card__warning" data-expose="core.debug.timeline.warning"></span></div>' +
         '<div class="dbg-card__rows" data-expose="core.debug.timeline.rows"></div>' +
@@ -308,7 +316,9 @@ function makeCard() {
   el.querySelector(".dbg-card__state .dbg-card__bar").prepend(button("state-list", "core.debug.state.list", "목록", "core.debug.list", {}));
   el.querySelector(".dbg-card__save").prepend(button("timeline-save", "core.debug.timeline.save", "선택한 행 저장", "core.debug.timeline.save", {}));
   el.querySelector(".dbg-card__warning").textContent = SELECTION_WARNING;
-  el.querySelector(".dbg-card__timeline .dbg-card__bar").prepend(button("timeline-list", "core.debug.timeline.list", "목록", "core.debug.list", {}));
+  el.querySelector(".dbg-card__timeline .dbg-card__bar").prepend(
+    button("timeline-list", "core.debug.timeline.list", "목록", "core.debug.list", {}),
+    button("timeline-follow", "core.debug.timeline.follow", "따라가기 멈춤", "core.debug.timeline.follow", { on: false }));
   const text = document.createElement("input");
   text.type = "text";
   text.className = "set-text";
@@ -464,21 +474,54 @@ export function listDebugFiles() {
   draw();
 }
 
-/** Shows the rows of the event files of the host in `logs/` in time order. */
+/**
+ * Reads the whole lines of one event file from the cursor in ranges (`debugReadRange`) up to the end of the file, or until the
+ * rows read reach `room`; each call reads at least one range. Answers the rows, the cursor after them and whether the read
+ * stopped at the limit before the end of the file. A line that is not written to its end stays unread: the read ends when a range
+ * adds no line. The cursor is not changed, so a read that fails leaves the file as it was.
+ */
+async function readLines(path, cursor, room) {
+  const rows = [];
+  let { next, line, size } = cursor;
+  for (;;) {
+    const read = await debug.readRange({ path, offset: next });
+    if (read.path !== path) throw new Error(`${path}: the range read answered ${read.path}`);
+    const parsed = line === 0 ? parseEvents(path, read.text) : parseAppended(path, read.text, line + 1);
+    rows.push(...parsed);
+    line += parsed.length;
+    const progress = read.next > next;
+    next = read.next;
+    size = read.size;
+    if (!progress || next >= size) return { rows, cursor: { next, line, size }, limited: false };
+    if (rows.length >= room) return { rows, cursor: { next, line, size }, limited: true };
+  }
+}
+
+/** The timeline with `rows` (in time order) and the positions, the rows that pass its filter and the lines recomputed. */
+function withRows(base, rows) {
+  return { ...base, rows, positions: new Map(rows.map((row, index) => [row, index])), shown: filterRows(rows, base.filter), lines: contextRows(rows, base.filter) };
+}
+
+/** Shows the rows of the event files of the host in `logs/` in time order, read in ranges from the start of each file. */
 export async function showDebugTimeline() {
   if (!card) throw new Error("the debug view is not open");
   failure = null;
   try {
     const files = hostEventFiles(entries);
     if (files.length === 0) throw new Error("logs/ has no host event file");
-    const loaded = await Promise.all(files.map(async (path) => {
-      const read = await debug.read({ path });
-      if (read.kind !== "text") throw new Error(`${path}: the timeline needs a text file, found ${read.kind}`);
-      return { path, truncated: read.truncated, rows: parseEvents(path, read.text, read.truncated) };
-    }));
-    const rows = mergeRows(loaded.map((file) => file.rows));
+    const cursors = new Map();
+    const limited = [];
+    const loaded = [];
+    let total = 0;
+    for (const path of files) {
+      const read = await readLines(path, { next: 0, line: 0, size: 0 }, ROW_LIMIT - total);
+      cursors.set(path, read.cursor);
+      if (read.limited) limited.push(path);
+      loaded.push(read.rows);
+      total += read.rows.length;
+    }
     const filter = { ...CLEAR_FILTER };
-    timeline = { files, truncated: loaded.filter((file) => file.truncated).map((file) => file.path), rows, positions: new Map(rows.map((row, index) => [row, index])), selected: new Set(), shown: filterRows(rows, filter), lines: contextRows(rows, filter), filter };
+    timeline = withRows({ files, limited, selected: new Set(), filter, following: true, appended: 0, cursors }, mergeRows(loaded));
     viewing = null;
     stateShown = null;
     text.textContent = "";
@@ -489,6 +532,78 @@ export async function showDebugTimeline() {
     throw reason;
   } finally {
     draw();
+  }
+}
+
+/* The reads that follow the files, one after another: a notice that arrives during a read waits, so a line is read once. */
+let reading = Promise.resolve();
+
+/**
+ * Reads the lines that grew in `paths` and merges them into the shown timeline in time order. The rows keep their identity, so the
+ * selection stays on the same rows; the filter stays. A read that fails stops following and shows the error; the answer is that
+ * error, or null. A read that finishes after the timeline was replaced or stopped is discarded and leaves the cursors, so the next
+ * read starts there.
+ */
+function followGrowth(paths) {
+  const run = reading.then(async () => {
+    const current = timeline;
+    if (card === null || current === null || !current.following) return null;
+    try {
+      const reads = [];
+      let total = current.rows.length;
+      for (const path of paths) {
+        const read = await readLines(path, current.cursors.get(path), ROW_LIMIT - total);
+        reads.push({ path, read });
+        total += read.rows.length;
+      }
+      if (timeline === null || timeline.cursors !== current.cursors || !timeline.following) return null;
+      const added = reads.flatMap(({ path, read }) => {
+        current.cursors.set(path, read.cursor);
+        return read.rows;
+      });
+      const limited = new Set(timeline.limited);
+      for (const { path, read } of reads) {
+        if (read.limited) limited.add(path);
+        else limited.delete(path);
+      }
+      const stopped = timeline.files.filter((path) => limited.has(path));
+      const limitChanged = stopped.join() !== timeline.limited.join();
+      if (added.length > 0) timeline = withRows({ ...timeline, appended: timeline.appended + added.length }, mergeRows([timeline.rows, added]));
+      timeline = { ...timeline, limited: stopped };
+      // A notice that adds nothing draws nothing: the host calls of a draw are recorded events, and each of them is written.
+      if (added.length > 0 || limitChanged) draw();
+      return null;
+    } catch (reason) {
+      if (timeline !== null && timeline.cursors === current.cursors) timeline = { ...timeline, following: false };
+      fail("follow", reason);
+      draw();
+      return reason;
+    }
+  });
+  reading = run;
+  return run;
+}
+
+/* The host event `debug-log-changed {path, size}` (docs/spec/debug.md#following): reads what grew while the timeline follows. */
+if (debug) {
+  debug.onChanged(({ path }) => {
+    if (timeline === null || !timeline.following || !timeline.cursors.has(path)) return;
+    // A failed read is shown by the error display and stops following; the notice has no caller to throw to.
+    return followGrowth([path]);
+  });
+}
+
+/** Stops or resumes following the files; resuming first reads what grew while stopped. The same call again changes nothing. */
+export async function followDebugTimeline(on) {
+  if (!card) throw new Error("the debug view is not open");
+  if (timeline === null) throw new Error("the debug timeline is not shown");
+  if (typeof on !== "boolean") throw new Error(`timeline follow must be a boolean, found ${JSON.stringify(on)}`);
+  failure = null;
+  timeline = { ...timeline, following: on };
+  draw();
+  if (on) {
+    const failed = await followGrowth(timeline.files);
+    if (failed !== null) throw failed;
   }
 }
 
