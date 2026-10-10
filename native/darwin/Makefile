@@ -93,58 +93,67 @@ $(BUILD)/capture_metadata_test: src/capture.m
 
 $(BUILD)/capture_resize_test: src/capture.m
 
-test: $(BUILD)/activity_observers_test $(BUILD)/application_log_test $(BUILD)/application_log_fatal_test $(BUILD)/event_ring_test $(BUILD)/capture_callback_test $(BUILD)/capture_cleanup_test $(BUILD)/capture_preparation_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_cycles_test $(BUILD)/capture_stop_late_test $(BUILD)/capture_directory_checker_test $(BUILD)/capture_frame_test $(BUILD)/capture_storage_test $(BUILD)/capture_metadata_test $(BUILD)/capture_resize_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_checker_test $(BUILD)/capture_pressure_test $(BUILD)/webview_input_receipts_test $(BUILD)/notifications_test.app/Contents/MacOS/notifications_test $(BUILD)/window_motion_test $(BUILD)/input_inject_test $(BUILD)/mouse_buttons_test $(BUILD)/window_facts_test $(BUILD)/window_controls_test $(BUILD)/window_titlebar_layout_test $(BUILD)/window_titlebar_reload_test $(BUILD)/surface_layout_test $(BUILD)/webview_focus_test $(BUILD)/webview_geometry_test $(BUILD)/webview_process_test $(BUILD)/document_view_test $(BUILD)/document_plugin_test $(BUILD)/document_typing_test $(BUILD)/document_press_test $(BUILD)/image_region_test $(BUILD)/ui_queue_test $(BUILD)/surface_host_test $(BUILD)/clipboard_test $(BUILD)/link_test $(BUILD)/capture_test $(BUILD)/dock_menu_test $(BUILD)/appearance_test $(BUILD)/window_occlusion_test $(BUILD)/window_reveal_test $(BUILD)/window_release_test $(BUILD)/window_objects_test $(BUILD)/process_exit_test $(BUILD)/webview_navigation_test $(BUILD)/quit_request_test
-	@$(BUILD)/activity_observers_test
-	@$(BUILD)/application_log_test
-	@$(BUILD)/application_log_fatal_test
-	@$(BUILD)/event_ring_test
-	@$(BUILD)/surface_host_test
-	@$(BUILD)/ui_queue_test
-	@$(BUILD)/window_motion_test
-	@$(BUILD)/input_inject_test
-	@$(BUILD)/mouse_buttons_test
-	@$(BUILD)/webview_input_receipts_test
-	@$(BUILD)/window_facts_test
-	@$(BUILD)/window_occlusion_test
-	@$(BUILD)/window_reveal_test
-	@$(BUILD)/window_release_test
-	@$(BUILD)/window_objects_test
-	@$(BUILD)/process_exit_test
-	@$(BUILD)/quit_request_test
-	@$(BUILD)/webview_navigation_test
-	@$(BUILD)/window_controls_test
-	@$(BUILD)/window_titlebar_layout_test
-	@$(BUILD)/window_titlebar_reload_test
-	@$(BUILD)/surface_layout_test
-	@$(BUILD)/webview_focus_test
-	@$(BUILD)/webview_geometry_test
-	@$(BUILD)/webview_process_test
-	@$(BUILD)/document_view_test
-	@$(BUILD)/document_plugin_test
-	@$(BUILD)/document_typing_test
-	@$(BUILD)/document_press_test
-	@$(BUILD)/image_region_test
-	@$(BUILD)/clipboard_test
-	@$(BUILD)/link_test
-	@$(BUILD)/capture_test
-	@$(BUILD)/capture_checker_test
-	@$(BUILD)/capture_file_checker_test
-	@$(BUILD)/capture_directory_checker_test
-	@$(BUILD)/capture_lifecycle_test
-	@$(BUILD)/capture_cycles_test
-	@$(BUILD)/capture_stop_late_test
-	@$(BUILD)/capture_callback_test
-	@$(BUILD)/capture_cleanup_test
-	@$(BUILD)/capture_preparation_test
-	@$(BUILD)/capture_pressure_test
-	@$(BUILD)/capture_storage_test
-	@$(BUILD)/capture_metadata_test
-	@$(BUILD)/capture_resize_test
-	@$(BUILD)/capture_frame_test
-	@$(BUILD)/dock_menu_test
-	@$(BUILD)/appearance_test
-	@$(BUILD)/notifications_test
-	@$(BUILD)/notifications_test.app/Contents/MacOS/notifications_test --bundled
+# The native tests in the order they run: executables of the build folder, with an argument after a comma. They run one at a time
+# through the test runner (scripts/native-tests.mjs), which writes the start, the end and the elapsed time of each; NATIVE_TEST_ONLY=<text>
+# runs only the entries that contain the text.
+NATIVE_TESTS = activity_observers_test \
+  application_log_test \
+  application_log_fatal_test \
+  event_ring_test \
+  surface_host_test \
+  ui_queue_test \
+  window_motion_test \
+  input_inject_test \
+  mouse_buttons_test \
+  webview_input_receipts_test \
+  window_facts_test \
+  window_occlusion_test \
+  window_reveal_test \
+  window_release_test \
+  window_objects_test \
+  process_exit_test \
+  quit_request_test \
+  webview_navigation_test \
+  window_controls_test \
+  window_titlebar_layout_test \
+  window_titlebar_reload_test \
+  surface_layout_test \
+  webview_focus_test \
+  webview_geometry_test \
+  webview_process_test \
+  document_view_test \
+  document_plugin_test \
+  document_typing_test \
+  document_press_test \
+  image_region_test \
+  clipboard_test \
+  link_test \
+  capture_test \
+  capture_checker_test \
+  capture_file_checker_test \
+  capture_directory_checker_test \
+  capture_lifecycle_test \
+  capture_cycles_test \
+  capture_stop_late_test \
+  capture_callback_test \
+  capture_cleanup_test \
+  capture_preparation_test \
+  capture_pressure_test \
+  capture_storage_test \
+  capture_metadata_test \
+  capture_resize_test \
+  capture_frame_test \
+  dock_menu_test \
+  appearance_test \
+  notifications_test \
+  notifications_test.app/Contents/MacOS/notifications_test,--bundled
+
+comma := ,
+NATIVE_TEST_EXECUTABLES := $(foreach entry,$(NATIVE_TESTS),$(firstword $(subst $(comma), ,$(entry))))
+NATIVE_TEST_RUNNER := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../scripts/native-tests.mjs)
+
+test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS)
 
 test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_ime_test
 	@$(BUILD)/input_activate_test

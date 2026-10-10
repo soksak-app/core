@@ -44,6 +44,7 @@ lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/tes
 lane("test runner", "js-ts", ["scripts/test-runner.mjs"], ["scripts/test/test-runner.test.mjs"]),
 lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
 lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
+lane("native tests", "js-ts", ["scripts/native-tests.mjs"], ["scripts/test/native-tests.test.mjs"]),
 lane("event catalog", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs"]),
 lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
@@ -1696,6 +1697,18 @@ const FEATURE_LINKS = [
       { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "timeline_prints_the_golden_lines_of_every_filter" },
     ],
     expected: "The debug view shows the host event files as a filtered, followed and saved timeline and the state files as a tree, and the command line prints the same timeline rows.",
+    levels: ["unit"],
+  },
+  {
+    id: "F154.4.2",
+    implementation: [
+      { file: "scripts/native-tests.mjs", symbol: "export async function runNativeTests" },
+    ],
+    tests: [
+      { file: "scripts/test/native-tests.test.mjs", id: "the native tests run one at a time, each with its start and end, and a failure fails the run" },
+      { file: "scripts/test/native-tests.test.mjs", id: "a native test over its limit is killed and fails the run" },
+    ],
+    expected: "The native tests run one at a time through the test runner, each with its start, its end, its elapsed time and its own limit.",
     levels: ["unit"],
   },
   {
