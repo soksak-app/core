@@ -2,6 +2,7 @@
 // page are the events `page.record.error` and `page.record.info` with the fields `where` and `text`. The page queues them
 // without waiting and relays the records of one turn to the host in one batch through the call `log`. A page without the
 // application host (the browser example) writes to its console.
+import { LOG_LEVELS } from "@soksak/plugin-api";
 import { host } from "@soksak/runtime";
 import { boundedJson, byteLength, cutBytes } from "./bounded-json.js";
 import { callEvent, observeHostCalls } from "./host-calls.js";
@@ -55,10 +56,22 @@ if (batcher) {
   });
 }
 
-/** Queues an event of a plugin or of the page with its level, name and fields; nothing happens in a page without a host. */
-export function emitEvent(level, event, fields) {
+/**
+ * Queues an event of a plugin or of the page with its level, name, fields and the correlation identifiers `cids` of its chain
+ * (docs/spec/logging.md#operation-chains); nothing happens in a page without a host.
+ */
+export function emitEvent(level, event, fields, cids = undefined) {
   // events: forwarded
-  batcher?.emit(level, event, fields);
+  batcher?.emit(level, event, fields, cids);
+}
+
+/**
+ * Whether an event of the level is stored: every level is stored in a page with a host and none in a page without one. The policy
+ * that selects levels by the class of the event arrives with the log policy of the writers (docs/spec/logging.md#classes).
+ */
+export function eventEnabled(level) {
+  if (!LOG_LEVELS.includes(level)) throw new TypeError(`event level ${JSON.stringify(level)} is not one of ${LOG_LEVELS.join(", ")}`);
+  return batcher !== null;
 }
 
 /**
