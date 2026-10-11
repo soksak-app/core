@@ -10,7 +10,8 @@
     "./exposure-check": "./exposure-check.js",
     "./package.json": "./package.json",
     "./records-check": "./records-check.js",
-    "./events-check": "./events-check.js"
+    "./events-check": "./events-check.js",
+    "./screen-hash": "./screen-hash.js"
   },
   "files": [
     "index.js",
@@ -18,6 +19,7 @@
     "document-errors.js",
     "document-region.js",
     "image-region.js",
+    "screen-hash.js",
     "page.js",
     "sidecar-port.js",
     "surface-composition.js",

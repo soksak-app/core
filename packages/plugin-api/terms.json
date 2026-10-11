@@ -125,6 +125,25 @@
       "definition": "The one comment form (default|silent): <reason> that states why a source of occurrences stores no event.",
       "rejected": [],
       "allowed": []
+    },
+    {
+      "term": "replay",
+      "definition": "Rebuilding the screen of a terminal session from its stored inputs with the replay executable of its sidecar, to compare the stored hashes of the screens (docs/spec/replay.md).",
+      "rejected": [
+        "session re-run",
+        "session rerun"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "screen hash",
+      "definition": "The SHA-256 of the canonical bytes of a terminal screen that docs/spec/replay.md defines; a sidecar and a page store it per frame record.",
+      "rejected": [
+        "screen digest",
+        "screen checksum",
+        "frame hash"
+      ],
+      "allowed": []
     }
   ]
 }

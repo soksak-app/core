@@ -61,7 +61,7 @@ event는 class 하나에 속하며 catalog가 이를 선언한다. class가 저�
 
 설정 `diagnostics.log`가 상세히 저장할 category를 고른다. host는 적용 중인 정책을 `<config-dir>/log-policy.json`에 쓴다. 모든 프로세스가 파일 시스템 event로 이 파일을 감시하고 바뀌면 다시 읽는다. 정책을 나르는 프로토콜 연산은 없다. 정책을 읽지 못한 프로세스는 `lifecycle`, `input`, `call`, `io`를 저장한다.
 
-화면의 셀 같은 큰 값은 event에 쓰지 않고 크기와 hash를 쓴다. 값은 `frame` category를 켜 두는 동안 저장한다.
+화면의 셀 같은 큰 값은 event에 쓰지 않고 크기와 hash를 쓴다. 값은 `frame` category를 켜 두는 동안 저장한다. 터미널 화면의 내용은 저장하지 않는다. 입력과 화면마다의 hash를 저장하며, [재생](replay.ko.md)이 내용을 파생한다.
 
 ## writer
 

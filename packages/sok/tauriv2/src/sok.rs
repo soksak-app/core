@@ -28,6 +28,7 @@ pub mod platform;
 pub mod plugins;
 mod registry;
 mod release;
+mod replay;
 pub mod routine;
 pub mod version;
 pub use logged::{logged, run_logged, Command};
@@ -50,6 +51,8 @@ commands:
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
                             prints one page of the events of the event files that pass the filter
+  debug replay SESSION [--until SEQUENCE]
+                            replays the session with the replay executable of its sidecar and compares every stored screen hash
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
   app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
@@ -130,6 +133,7 @@ const OPTIONS: &[&str] = &[
     "around",
     "earlier",
     "later",
+    "until",
 ];
 
 struct Arguments {

@@ -56,7 +56,11 @@ importers:
 
   packages/host/wailsv3: {}
 
-  packages/log-contract: {}
+  packages/log-contract:
+    devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
 
   packages/mcp:
     dependencies:

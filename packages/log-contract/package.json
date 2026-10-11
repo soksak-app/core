@@ -12,6 +12,9 @@
     "index.js",
     "fixtures"
   ],
+  "devDependencies": {
+    "@soksak/plugin-api": "workspace:*"
+  },
   "scripts": {
     "test": "node --test test/"
   },

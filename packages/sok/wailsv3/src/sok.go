@@ -32,6 +32,8 @@ commands:
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
                             prints one page of the events of the event files that pass the filter
+  debug replay SESSION [--until SEQUENCE]
+                            replays the session with the replay executable of its sidecar and compares every stored screen hash
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
   app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
@@ -67,7 +69,7 @@ var options = map[string]bool{
 	"config-dir": true, "window": true, "project": true, "surface": true, "index": true, "value": true, "event": true,
 	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "delta-x": true, "delta-y": true, "key": true, "text": true, "modifiers": true,
 	"level": true, "layer": true, "session": true, "cid": true, "from": true, "to": true,
-	"channel": true, "class": true, "event-prefix": true, "run": true, "order": true, "limit": true, "after": true, "around": true, "earlier": true, "later": true,
+	"channel": true, "class": true, "event-prefix": true, "run": true, "order": true, "limit": true, "after": true, "around": true, "earlier": true, "later": true, "until": true,
 }
 
 type arguments struct {

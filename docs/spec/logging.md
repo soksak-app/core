@@ -61,7 +61,7 @@ An event belongs to one class, which the catalog declares. The class decides how
 
 The setting `diagnostics.log` selects the categories that are stored in detail. The host writes the effective policy to `<config-dir>/log-policy.json`. Every process watches the file through file system events and reloads it when it changes; no protocol operation carries the policy. A process that cannot read the policy stores `lifecycle`, `input`, `call` and `io`.
 
-A large value, such as the cells of a screen, is not written into an event; its size and hash are. The value is stored while the `frame` category is switched on.
+A large value, such as the cells of a screen, is not written into an event; its size and hash are. The value is stored while the `frame` category is switched on. The content of a terminal screen is not stored: its inputs and the hash of each screen are, and [replay](replay.md) derives the content.
 
 ## Writers
 
