@@ -1,5 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #import "window_controls.h"
+#import "application_log.h"
 #import "private/appkit.h"
 
 // AppKit owns the window buttons. When a button is moved to another view, AppKit takes it back when the
@@ -34,10 +35,12 @@ bool windowSetTitlebarHeight(void *handle, double height, char **failure) {
     *failure = NULL;
     if (!isfinite(height) || height <= 0) {
         *failure = strdup("title bar height must be a positive finite number");
+        sp_log_error("window controls", *failure);
         return false;
     }
     if (!titled(window)) {
         *failure = strdup("the window has no standard buttons or content view for a title bar");
+        sp_log_error("window controls", *failure);
         return false;
     }
     if (window.styleMask & NSWindowStyleMaskFullScreen) return true;

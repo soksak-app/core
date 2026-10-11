@@ -1,5 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #import "clipboard.h"
+#import "support/records.h"
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
@@ -61,6 +62,9 @@ int main(void) { @autoreleasepool {
     [board setData:[NSData dataWithBytes:"bad" length:3] forType:NSPasteboardTypePNG];
     NSDictionary *badPNG = readJSON(sp_clipboard_read_png(clipboard));
     check([badPNG[@"status"] isEqual:@"error"], @"malformed PNG is an explicit decode error");
+    NSArray<NSDictionary *> *refusals = capturedEvents(^{ free(sp_clipboard_read_text(NULL)); });
+    check(refusals.count == 1 && [refusals[0][@"name"] isEqual:@"native.record.error"] && [refusals[0][@"fields"][@"where"] isEqual:@"clipboard"]
+        && [refusals[0][@"fields"][@"text"] isEqual:@"invalid clipboard"], @"a refused clipboard call is one error record that states the reason");
     [board clearContents];
     NSDictionary *missingPNG = readJSON(sp_clipboard_read_png(clipboard));
     check([missingPNG[@"status"] isEqual:@"absent"], @"missing PNG is not coerced from text");

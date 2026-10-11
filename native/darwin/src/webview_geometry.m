@@ -95,18 +95,27 @@ static void reconfigureSurfaceWebviews(NSView *root) {
 }
 - (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
     NSArray<NSURL *> *urls = [self fileURLs:sender];
-    if (!self.event || urls.count == 0) return NO;
+    if (!self.event || urls.count == 0) {
+        sp_log_error("file drop", "the drop was refused: the view has no receiver or the pasteboard holds no file URL");
+        return NO;
+    }
     NSPoint point = [self convertPoint:sender.draggingLocation fromView:nil];
     NSMutableArray<NSString *> *strings = [NSMutableArray arrayWithCapacity:urls.count];
     // The file manager provides a file reference URL (file:///.file/id=...). The page and the surface use paths, so it is converted to a path URL.
     for (NSURL *url in urls) {
         NSURL *path = url.filePathURL;
-        if (!path) return NO;
+        if (!path) {
+            sp_log_error("file drop", [NSString stringWithFormat:@"the drop was refused: %@ is not a file path URL", url.absoluteString].UTF8String);
+            return NO;
+        }
         [strings addObject:path.absoluteString];
     }
     NSData *json = [NSJSONSerialization dataWithJSONObject:@{@"urls": strings, @"x": @(point.x), @"y": @(point.y)}
         options:0 error:NULL];
-    if (!json) return NO;
+    if (!json) {
+        sp_log_error("file drop", "the drop was refused: the dropped URLs could not be serialized");
+        return NO;
+    }
     NSString *text = [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] autorelease];
     self.event(self.context, text.UTF8String);
     return YES;
@@ -481,7 +490,10 @@ static SPWindowComposition *windowComposition(WKWebView *main) {
 bool sp_window_file_drop(void *mainHandle, sp_file_drop_event event, sp_file_drop_release release, void *context) {
     NSCAssert(NSThread.isMainThread, @"file drop requires the UI thread");
     SPWindowComposition *composition = windowComposition((WKWebView *)mainHandle);
-    if (!composition || !event) return false;
+    if (!composition || !event) {
+        sp_log_error("file drop", "the window has no composition or the receiver is missing");
+        return false;
+    }
     SPFileDropView *view = composition.fileDrop;
     if (!view) {
         view = [[[SPFileDropView alloc] initWithFrame:composition.bounds] autorelease];
@@ -498,7 +510,10 @@ void *sp_surface_create(void *mainHandle) {
     NSCAssert(NSThread.isMainThread, @"surface creation requires the UI thread");
     WKWebView *main = (WKWebView *)mainHandle;
     SPWindowComposition *composition = windowComposition(main);
-    if (!composition) return NULL;
+    if (!composition) {
+        sp_log_error("surface", "the main web view has no window composition to create a surface in");
+        return NULL;
+    }
     SPSurfaceHost *surface = [[SPSurfaceHost alloc] initWithFrame:NSZeroRect];
     surface.mainWebview = main;
     surface.hidden = YES;
@@ -679,7 +694,10 @@ void webviewSetSurfaceAlpha(void *handle, double alpha) {
 
 bool sp_webview_kill_content_process(void *handle) {
     WKWebView *view = (WKWebView *)handle;
-    if (!view || ![view respondsToSelector:@selector(_killWebContentProcessAndResetState)]) return false;
+    if (!view || ![view respondsToSelector:@selector(_killWebContentProcessAndResetState)]) {
+        sp_log_error("webview process", "_killWebContentProcessAndResetState is unavailable");
+        return false;
+    }
     [view _killWebContentProcessAndResetState];
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
     while (view._webProcessIdentifier != 0 && deadline.timeIntervalSinceNow > 0) {
@@ -701,7 +719,10 @@ bool sp_webview_collect_garbage(void *handle) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
     WKProcessPool *pool = view.configuration.processPool;
-    if (!view || ![pool respondsToSelector:@selector(_garbageCollectJavaScriptObjectsForTesting)]) return false;
+    if (!view || ![pool respondsToSelector:@selector(_garbageCollectJavaScriptObjectsForTesting)]) {
+        sp_log_error("webview process", "_garbageCollectJavaScriptObjectsForTesting is unavailable");
+        return false;
+    }
     [pool _garbageCollectJavaScriptObjectsForTesting];
 #pragma clang diagnostic pop
     return true;

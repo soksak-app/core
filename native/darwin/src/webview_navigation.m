@@ -31,7 +31,7 @@ static BOOL handled(SEL selector) {
 }
 
 - (BOOL)respondsToSelector:(SEL)selector {
-    if (selector == @selector(webView:decidePolicyForNavigationAction:preferences:decisionHandler:)) return NO;
+    if (selector == @selector(webView:decidePolicyForNavigationAction:preferences:decisionHandler:)) return NO; // silent: the answer NO selects the variant of the delegate method without preferences, which is the contract of the forwarder
     return handled(selector) || [self.target respondsToSelector:selector];
 }
 
@@ -57,7 +57,7 @@ static BOOL handled(SEL selector) {
 
 // Whether the navigation stays within the same document: only the fragment differs.
 static BOOL sameDocument(NSURL *from, NSURL *to) {
-    if (!from || !to || !to.fragment) return NO;
+    if (!from || !to || !to.fragment) return NO; // silent: a missing address or fragment means the navigation changes the document, which is the result of the predicate
     NSURLComponents *a = [NSURLComponents componentsWithURL:from resolvingAgainstBaseURL:NO];
     NSURLComponents *b = [NSURLComponents componentsWithURL:to resolvingAgainstBaseURL:NO];
     a.fragment = nil;

@@ -14,6 +14,7 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "input_inject.h"
+#import "observe.h"
 #import "application_log.h"
 #import "webview_input.h"
 #import "webview_geometry.h"
@@ -348,10 +349,10 @@ static void activateWindow(NSWindow *window, WKWebView *target, BOOL waitForAll,
         afterWebViewsActive(window, target, waitForAll, applied);
         return;
     }
-    keyObserver = [center addObserverForName:NSWindowDidBecomeKeyNotification object:window queue:nil
-        usingBlock:^(NSNotification *note) { check(); }];
-    appObserver = [center addObserverForName:NSApplicationDidBecomeActiveNotification object:NSApp queue:nil
-        usingBlock:^(NSNotification *note) { check(); }];
+    keyObserver = sp_observe_notification("input_inject.key_window", SP_OBSERVE_RECORD, NSWindowDidBecomeKeyNotification, window, nil,
+        ^(NSNotification *note) { check(); });
+    appObserver = sp_observe_notification("input_inject.app_active", SP_OBSERVE_RECORD, NSApplicationDidBecomeActiveNotification, NSApp, nil,
+        ^(NSNotification *note) { check(); });
     [window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
 }

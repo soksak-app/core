@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <stdatomic.h>
 #import "window_objects.h"
+#import "observe.h"
 
 // An object is usually released on the main thread, but the library does not decide which thread drops
 // the last reference, so the count uses atomic operations.
@@ -89,15 +90,14 @@ static void installDrain(void) {
     if (drainMonitor) return;
     // A local monitor is called when -[NSApplication sendEvent:] dispatches the event. The autorelease pool of
     // that iteration is emptied after sendEvent: returns, so the count is compared in the next main queue turn.
-    drainMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskApplicationDefined handler:^NSEvent *(NSEvent *event) {
+    drainMonitor = sp_observe_local_monitor("window_objects.drain", SP_OBSERVE_COUNT, NSEventMaskApplicationDefined, ^NSEvent *(NSEvent *event) {
         if (event.subtype != kDrainSubtype) return event;
         drainPending = NO;
         dispatch_async(dispatch_get_main_queue(), ^{ compareWaiters(); });
         return nil;
-    }];
-    idleObserver = CFRunLoopObserverCreateWithHandler(NULL, kCFRunLoopBeforeWaiting, true, INT_MAX,
-        ^(CFRunLoopObserverRef observer, CFRunLoopActivity activity) { postDrain(); });
-    CFRunLoopAddObserver(CFRunLoopGetMain(), idleObserver, kCFRunLoopCommonModes);
+    });
+    // The run loop waits at the rate of its turns, so the deliveries are counted.
+    idleObserver = sp_observe_run_loop("window_objects.idle", SP_OBSERVE_COUNT, CFRunLoopGetMain(), kCFRunLoopBeforeWaiting, true, INT_MAX, ^{ postDrain(); });
 }
 
 void sp_window_objects_when(const sp_window_objects *expected, double seconds, sp_window_objects_done done,

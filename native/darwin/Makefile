@@ -105,7 +105,8 @@ $(BUILD)/capture_resize_test: src/capture.m
 # The native tests in the order they run: executables of the build folder, with an argument after a comma. They run one at a time
 # through the test runner (scripts/native-tests.mjs), which writes the start, the end and the elapsed time of each; NATIVE_TEST_ONLY=<text>
 # runs only the entries that contain the text.
-NATIVE_TESTS = activity_observers_test \
+NATIVE_TESTS = observe_test \
+  activity_observers_test \
   application_log_test \
   application_log_fatal_test \
   event_ring_test \
@@ -135,6 +136,7 @@ NATIVE_TESTS = activity_observers_test \
   document_typing_test \
   document_press_test \
   image_region_test \
+  input_source_test \
   clipboard_test \
   link_test \
   capture_test \

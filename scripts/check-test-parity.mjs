@@ -136,6 +136,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("Darwin process exit", "objective-c", ["native/darwin/src/process_exit.m"], ["native/darwin/tests/process_exit_test.m"], { sharedTests: true }),
   lane("Darwin application log", "objective-c", ["native/darwin/src/application_log.m"], ["native/darwin/tests/application_log_test.m"], { sharedTests: true }),
   lane("Darwin event ring", "objective-c", ["native/darwin/src/event_ring.m"], ["native/darwin/tests/event_ring_test.m"], { sharedTests: true }),
+  lane("Darwin observe", "objective-c", ["native/darwin/src/observe.m"], ["native/darwin/tests/observe_test.m"], { sharedTests: true }),
   lane("Darwin mouse buttons", "objective-c", ["native/darwin/src/mouse_buttons.m"], ["native/darwin/tests/mouse_buttons_test.m"], { sharedTests: true }),
   lane("Darwin quit request", "objective-c", ["native/darwin/src/quit_request.m"], ["native/darwin/tests/quit_request_test.m"], { sharedTests: true }),
   lane("Darwin webview navigation", "objective-c", ["native/darwin/src/webview_navigation.m"], ["native/darwin/tests/webview_navigation_test.m"], { sharedTests: true }),

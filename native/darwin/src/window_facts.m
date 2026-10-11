@@ -3,6 +3,8 @@
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 #import "window_facts.h"
+#import "observe.h"
+#import "application_log.h"
 #import "webview_geometry.h"
 #import "private/webkit.h"
 #import "surface_layout.h"
@@ -14,20 +16,35 @@ bool sp_window_set_main_webview(void *handle, void *mainHandle) {
     NSCAssert(NSThread.isMainThread, @"window registration requires the UI thread");
     NSWindow *window = (NSWindow *)handle;
     WKWebView *main = (WKWebView *)mainHandle;
-    if (!window || ![main isKindOfClass:WKWebView.class] || main.window != window) return false;
+    if (!window || ![main isKindOfClass:WKWebView.class] || main.window != window) {
+        sp_log_error("window facts", "the main web view to register is missing or belongs to another window");
+        return false;
+    }
     NSValue *registered = objc_getAssociatedObject(window, &mainWebviewKey);
-    if (registered && registered.nonretainedObjectValue != main) return false;
+    if (registered && registered.nonretainedObjectValue != main) {
+        sp_log_error("window facts", "the window already has another main web view");
+        return false;
+    }
     // The layout indicator waits for the next presentation of this web view, so this web view must
     // render at the display refresh rate.
-    if (!registered && !surfaceLayoutRenderAtDisplayRate(main)) return false;
+    if (!registered && !surfaceLayoutRenderAtDisplayRate(main)) {
+        sp_log_error("window facts", "the main web view cannot render at the display rate");
+        return false;
+    }
     // For the same reason the document is not hidden when the window is occluded. WebKit hides the document
     // of an occluded window and stops animation frames, so the layout indicator of an occluded window and
     // the commands that wait for it would not finish.
-    if (![main respondsToSelector:@selector(_setWindowOcclusionDetectionEnabled:)]) return false;
+    if (![main respondsToSelector:@selector(_setWindowOcclusionDetectionEnabled:)]) {
+        sp_log_error("window facts", "_setWindowOcclusionDetectionEnabled: is unavailable");
+        return false;
+    }
     main._windowOcclusionDetectionEnabled = NO;
     // Open the new document of the main frame in a new process so that a reload and a page change do
     // not keep the previous document.
-    if (!sp_webview_replace_documents_in_new_process(main)) return false;
+    if (!sp_webview_replace_documents_in_new_process(main)) {
+        sp_log_error("window facts", "the main web view cannot open its documents in a new process");
+        return false;
+    }
     objc_setAssociatedObject(window, &mainWebviewKey, [NSValue valueWithNonretainedObject:main], OBJC_ASSOCIATION_RETAIN);
     return true;
 }
@@ -48,7 +65,10 @@ static BOOL webviewFocused(NSView *view) {
 
 static char *copyJSON(id value) {
     NSData *data = [NSJSONSerialization dataWithJSONObject:value options:0 error:nil];
-    if (!data) return NULL;
+    if (!data) {
+        sp_log_error("window facts", "the facts could not be serialized");
+        return NULL;
+    }
     char *text = malloc(data.length + 1);
     memcpy(text, data.bytes, data.length);
     text[data.length] = 0;
@@ -92,7 +112,10 @@ static void collectSurfaces(NSWindow *window, NSView *view, NSMutableArray *foun
 
 char *sp_window_facts(void *handle) {
     NSWindow *window = (NSWindow *)handle;
-    if (!window || !window.contentView || !mainWebview(window)) return NULL;
+    if (!window || !window.contentView || !mainWebview(window)) {
+        sp_log_error("window facts", "the window has no content view or no registered main web view");
+        return NULL;
+    }
     NSView *content = window.contentView;
     NSMutableArray *controls = [NSMutableArray array];
     for (NSUInteger kind = NSWindowCloseButton; kind <= NSWindowZoomButton; kind++) {
@@ -177,7 +200,10 @@ char *sp_window_facts(void *handle) {
 char *sp_window_hit(void *handle, double x, double y) {
     NSWindow *window = (NSWindow *)handle;
     NSView *content = window.contentView;
-    if (!window || !content || !mainWebview(window)) return NULL;
+    if (!window || !content || !mainWebview(window)) {
+        sp_log_error("window facts", "the window has no content view or no registered main web view for a hit test");
+        return NULL;
+    }
     NSPoint base = NSMakePoint(x, content.frame.size.height - y);
     NSView *hit = [content hitTest:[content.superview convertPoint:base fromView:nil]];
     NSView *owner = hit;
@@ -207,7 +233,10 @@ char *sp_screens(void) {
 
 bool sp_window_move(void *handle, double x, double y) {
     NSWindow *window = (NSWindow *)handle;
-    if (!window) return false;
+    if (!window) {
+        sp_log_error("window facts", "the window to move is missing");
+        return false;
+    }
     [window setFrameOrigin:NSMakePoint(x, primaryTop() - y - window.frame.size.height)];
     return true;
 }
@@ -261,21 +290,31 @@ char *sp_menu_items(void) {
 }
 
 bool sp_menu_select(const char *menu, const char *title) {
-    if (!menu || !title) return false;
+    if (!menu || !title) {
+        sp_log_error("window facts", "the menu or the item title to select is missing");
+        return false;
+    }
     NSString *menuTitle = [NSString stringWithUTF8String:menu];
     NSString *itemTitle = [NSString stringWithUTF8String:title];
     for (NSMenuItem *top in NSApp.mainMenu.itemArray) {
         NSString *name = top.submenu.title.length ? top.submenu.title : top.title;
         if (![name isEqualToString:menuTitle]) continue;
         NSInteger index = [top.submenu indexOfItemWithTitle:itemTitle];
-        if (index < 0) return false;
+        if (index < 0) {
+            sp_log_error("window facts", [NSString stringWithFormat:@"the menu %@ has no item %@", menuTitle, itemTitle].UTF8String);
+            return false;
+        }
         NSMenuItem *item = [top.submenu itemAtIndex:index];
-        if (!item.action) return false;
+        if (!item.action) {
+            sp_log_error("window facts", [NSString stringWithFormat:@"the menu item %@ has no action", itemTitle].UTF8String);
+            return false;
+        }
         // performActionForItemAtIndex: defers the action to the run loop on this system (V5-108), so choose
         // the item with the equivalent synchronous form. Without a target it passes through the responder
         // chain and returns whether the action was delivered.
         return [NSApp sendAction:item.action to:item.target from:item];
     }
+    sp_log_error("window facts", [NSString stringWithFormat:@"the main menu has no menu %@", menuTitle].UTF8String);
     return false;
 }
 
@@ -298,7 +337,10 @@ char *sp_dock_items(void) {
 bool sp_dock_select(const char *title) {
     NSMenu *menu = dockMenu();
     NSInteger index = menu && title ? [menu indexOfItemWithTitle:[NSString stringWithUTF8String:title]] : -1;
-    if (index < 0) return false;
+    if (index < 0) {
+        sp_log_error("window facts", "the dock menu has no item with the requested title");
+        return false;
+    }
     [menu performActionForItemAtIndex:index];
     return true;
 }
@@ -322,11 +364,14 @@ static const char occlusionObserverKey;
 bool sp_window_observe_occlusion(void *handle, void (^changed)(void)) {
     NSCAssert(NSThread.isMainThread, @"occlusion observation requires the UI thread");
     NSWindow *window = (NSWindow *)handle;
-    if (!window || !changed) return false;
+    if (!window || !changed) {
+        sp_log_error("window facts", "the window or the callback of the occlusion observation is missing");
+        return false;
+    }
     void (^callback)(void) = [[changed copy] autorelease];
     SPOcclusionObserver *observer = [[SPOcclusionObserver new] autorelease];
-    observer.token = [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidChangeOcclusionStateNotification
-        object:window queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *notification) { callback(); }];
+    observer.token = sp_observe_notification("window_facts.occlusion", SP_OBSERVE_RECORD, NSWindowDidChangeOcclusionStateNotification,
+        window, NSOperationQueue.mainQueue, ^(NSNotification *notification) { callback(); });
     objc_setAssociatedObject(window, &occlusionObserverKey, observer, OBJC_ASSOCIATION_RETAIN);
     return true;
 }

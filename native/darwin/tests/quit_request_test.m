@@ -5,6 +5,7 @@
 // manager. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import "quit_request.h"
+#import "support/records.h"
 
 static int failures = 0;
 
@@ -55,13 +56,27 @@ static OSErr replyError(const AppleEvent *reply) {
 static void runChecks(SPCancellingDelegate *delegate) {
     __block int requests = 0;
     __block BOOL requestOnMain = NO;
-    check(sp_quit_request_install(^{
-        requests++;
-        requestOnMain = NSThread.isMainThread;
-    }), @"the quit request handler installs once");
+    __block BOOL installed = NO;
+    NSArray<NSDictionary *> *installing = capturedEvents(^{
+        installed = sp_quit_request_install(^{
+            requests++;
+            requestOnMain = NSThread.isMainThread;
+        });
+    });
+    check(installed, @"the quit request handler installs once");
+    check(installing.count == 1 && [installing[0][@"name"] isEqual:@"native.observe.registered"] && [installing[0][@"fields"][@"source"] isEqual:@"quit_request"]
+        && [installing[0][@"fields"][@"kind"] isEqual:@"apple_event"], [NSString stringWithFormat:@"the installation is one registration event: %@", installing]);
     check(!sp_quit_request_install(^{ }), @"a second installation is rejected");
 
-    OSErr result = dispatchQuit(NULL);
+    __block OSErr result = noErr;
+    NSArray<NSDictionary *> *quitting = capturedEvents(^{
+        result = dispatchQuit(NULL);
+        sp_quit_request_answer();
+    });
+    NSMutableArray<NSString *> *quitNames = [NSMutableArray array];
+    for (NSDictionary *event in quitting) [quitNames addObject:[NSString stringWithFormat:@"%@:%@", event[@"name"], event[@"fields"][@"source"] ?: event[@"fields"][@"text"]]];
+    check([quitNames isEqualToArray:@[@"native.observe.delivered:quit_request", @"native.record.info:the host answered the quit request"]],
+        [NSString stringWithFormat:@"the quit request is one delivery and its answer is one record: %@", quitNames]);
     check(result == noErr, [NSString stringWithFormat:@"the handler accepts the quit event (%d)", result]);
     check(requests == 1 && requestOnMain, [NSString stringWithFormat:@"the request runs once on the main thread (%d)", requests]);
     check(delegate.terminateCalls == 0,

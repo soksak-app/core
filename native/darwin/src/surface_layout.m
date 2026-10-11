@@ -2,6 +2,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "surface_layout.h"
 #import "application_log.h"
+#import "observe.h"
 #import "window_controls.h"
 #import "window_facts.h"
 #import "private/webkit.h"
@@ -287,10 +288,11 @@ void surfaceLayoutInjectSettledFailure(void) {
         [self commitAfterPresentation];
         return;
     }
-    [_webview addObserver:self forKeyPath:@"loading" options:0 context:NULL];
+    sp_observe_key_path("surface_layout.loading", SP_OBSERVE_RECORD, _webview, self, @"loading", 0);
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    sp_observe_delivered("surface_layout.loading");
     if (_webview.loading) {
         _started = YES;
         return;

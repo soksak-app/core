@@ -2,6 +2,7 @@
 #import <objc/runtime.h>
 #import "activity_observers.h"
 #import "event_ring.h"
+#import "observe.h"
 
 static void emit(NSString *name, NSDictionary *fields) {
     NSError *error = nil;
@@ -41,7 +42,6 @@ static void recordResponder(NSWindow *window) {
 void sp_observe_activity(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
         NSDictionary<NSNotificationName, NSString *> *application = @{
             NSApplicationDidBecomeActiveNotification: @"native.app.activated",
             NSApplicationDidResignActiveNotification: @"native.app.deactivated",
@@ -51,7 +51,7 @@ void sp_observe_activity(void) {
         // events: native.app.activated, native.app.deactivated, native.app.hidden, native.app.unhidden
         for (NSNotificationName notification in application) {
             NSString *name = application[notification];
-            [center addObserverForName:notification object:nil queue:nil usingBlock:^(NSNotification *note) { emit(name, @{}); }];
+            sp_observe_notification("activity.app", SP_OBSERVE_STORED, notification, nil, nil, ^(NSNotification *note) { emit(name, @{}); });
         }
         NSDictionary<NSNotificationName, NSString *> *windows = @{
             NSWindowDidBecomeKeyNotification: @"native.window.key",
@@ -64,19 +64,20 @@ void sp_observe_activity(void) {
         // events: native.window.key, native.window.resign_key, native.window.main, native.window.resign_main, native.window.miniaturized, native.window.deminiaturized
         for (NSNotificationName notification in windows) {
             NSString *name = windows[notification];
-            [center addObserverForName:notification object:nil queue:nil usingBlock:^(NSNotification *note) { emit(name, windowFields(note)); }];
+            sp_observe_notification("activity.window", SP_OBSERVE_STORED, notification, nil, nil, ^(NSNotification *note) { emit(name, windowFields(note)); });
         }
-        [center addObserverForName:NSWindowDidUpdateNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
+        // A window updates at the rate of its frames, so the deliveries are counted and the change of the first responder is the event.
+        sp_observe_notification("activity.update", SP_OBSERVE_COUNT, NSWindowDidUpdateNotification, nil, nil, ^(NSNotification *note) {
             if ([note.object isKindOfClass:NSWindow.class]) recordResponder(note.object);
-        }];
-        [center addObserverForName:NSWindowDidChangeOcclusionStateNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
+        });
+        sp_observe_notification("activity.occlusion", SP_OBSERVE_STORED, NSWindowDidChangeOcclusionStateNotification, nil, nil, ^(NSNotification *note) {
             NSWindow *window = note.object;
             if (![window isKindOfClass:NSWindow.class]) return;
             emit(@"native.window.occlusion", @{@"window": @(window.windowNumber),
                 @"visible": [NSNumber numberWithBool:(window.occlusionState & NSWindowOcclusionStateVisible) != 0]});
-        }];
-        [center addObserverForName:NSTextInputContextKeyboardSelectionDidChangeNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
+        });
+        sp_observe_notification("activity.input_source", SP_OBSERVE_STORED, NSTextInputContextKeyboardSelectionDidChangeNotification, nil, nil, ^(NSNotification *note) {
             emit(@"native.input.source_changed", @{});
-        }];
+        });
     });
 }

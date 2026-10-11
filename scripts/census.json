@@ -5,6 +5,12 @@
       "^packages/host/wailsv3/src/routine/routine\\.go$",
       "^packages/sok/"
     ],
+    "m.registration": [
+      "^native/darwin/src/observe\\.m$"
+    ],
+    "m.delegate": [
+      "^native/darwin/src/observe\\.m$"
+    ],
     "go.recover": [
       "^packages/host/wailsv3/src/routine/routine\\.go$"
     ],
@@ -14,9 +20,6 @@
     ]
   },
   "pending": {
-    "m.registration": "F160.3",
-    "m.delegate": "F160.3",
-    "m.error-return": "F160.3",
     "rs.ok-discard": "F160.27"
   }
 }

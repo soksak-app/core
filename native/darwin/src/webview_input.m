@@ -2,6 +2,7 @@
 #import <objc/runtime.h>
 #import "webview_input.h"
 #import "application_log.h"
+#import "observe.h"
 // _setIgnoresMouseMoveEvents: controls only pointer tracking and does not disable keyboard, click, or
 // drag input. The AppKit hit test selects the web view that receives those events.
 #import "private/webkit.h"
@@ -235,18 +236,19 @@ BOOL webviewInputRegister(WKWebView *view) {
     if (!inputViews) {
         inputViews = [[NSHashTable weakObjectsHashTable] retain];
         lastPointerTargets = [[NSMapTable weakToWeakObjectsMapTable] retain];
-        [NSNotificationCenter.defaultCenter addObserverForName:NSApplicationDidBecomeActiveNotification object:NSApp queue:nil
-            usingBlock:^(NSNotification *note) { [lastPointerTargets removeAllObjects]; }];
+        sp_observe_notification("webview_input.app_active", SP_OBSERVE_RECORD, NSApplicationDidBecomeActiveNotification, NSApp, nil,
+            ^(NSNotification *note) { [lastPointerTargets removeAllObjects]; });
         // A mouse-exit event does not change the tracking target. A wheel event is converted to
         // the units of the surface coordinate system.
-        [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMouseMoved | NSEventMaskMouseEntered | NSEventMaskScrollWheel
-            handler:^NSEvent *(NSEvent *event) {
+        // Pointer moves and wheel events arrive at the rate of the device, so the deliveries are counted.
+        sp_observe_local_monitor("webview_input.pointer", SP_OBSERVE_COUNT, NSEventMaskMouseMoved | NSEventMaskMouseEntered | NSEventMaskScrollWheel,
+            ^NSEvent *(NSEvent *event) {
                 if (event.type != NSEventTypeScrollWheel) return routePointer(event);
                 NSView *content = event.window.contentView;
                 if (!content) return event;
                 NSView *hit = [content hitTest:[content.superview convertPoint:event.locationInWindow fromView:nil]];
                 return webviewScrollInViewUnits(event, hit);
-            }];
+            });
     }
     [inputViews addObject:view];
     installReceipts(view);

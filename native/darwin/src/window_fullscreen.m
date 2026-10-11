@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "window_fullscreen.h"
+#import "observe.h"
 
 // SPFullscreen waits for the full screen transition of one window. macOS ignores -toggleFullScreen: during
 // a transition, so after the transition ends it toggles once more if the state differs from the requested one.
@@ -22,12 +23,11 @@ static BOOL isFullscreen(NSWindow *window) {
 - (instancetype)initWithWindow:(NSWindow *)window {
     if ((self = [super init])) {
         _window = window;
-        NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
         for (NSNotificationName name in @[NSWindowDidEnterFullScreenNotification, NSWindowDidExitFullScreenNotification]) {
-            [center addObserver:self selector:@selector(settled:) name:name object:window];
+            sp_observe_notification_selector("window_fullscreen.settled", SP_OBSERVE_RECORD, self, @selector(settled:), name, window);
         }
         for (NSNotificationName name in @[NSWindowWillEnterFullScreenNotification, NSWindowWillExitFullScreenNotification]) {
-            [center addObserver:self selector:@selector(started:) name:name object:window];
+            sp_observe_notification_selector("window_fullscreen.started", SP_OBSERVE_RECORD, self, @selector(started:), name, window);
         }
     }
     return self;
@@ -38,9 +38,11 @@ static BOOL isFullscreen(NSWindow *window) {
     [super dealloc];
 }
 - (void)started:(NSNotification *)notification {
+    sp_observe_delivered("window_fullscreen.started");
     self.changing = YES;
 }
 - (void)settled:(NSNotification *)notification {
+    sp_observe_delivered("window_fullscreen.settled");
     self.changing = NO;
     if (isFullscreen(self.window) != self.want) {
         // A request that arrived during the transition. Apply it now.

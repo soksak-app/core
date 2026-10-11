@@ -11,6 +11,7 @@
 #import "application_log.h"
 #import "event_ring.h"
 #import "image_region.h"
+#import "observe.h"
 #import "webview_geometry.h"
 
 @class SPImageRegion;
@@ -214,8 +215,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     self.importsGraphics = NO;
     self.displaysLinkToolTips = NO;
     self.reportedPreedit = @"";
-    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(inputSourceChanged:)
-        name:NSTextInputContextKeyboardSelectionDidChangeNotification object:nil];
+    sp_observe_notification_selector("image_region.input_source", SP_OBSERVE_RECORD, self, @selector(inputSourceChanged:),
+        NSTextInputContextKeyboardSelectionDidChangeNotification, nil);
     self.editable = YES;
     self.selectable = YES;
     self.wantsLayer = YES;
@@ -284,7 +285,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 - (BOOL)validateUserInterfaceItem:(id<NSValidatedUserInterfaceItem>)item {
     SEL action = item.action;
     if (action == @selector(paste:) || action == @selector(pasteAsPlainText:) || action == @selector(copy:)) return YES;
-    if (action == @selector(cut:) || action == @selector(selectAll:) || action == @selector(delete:)) return NO;
+    if (action == @selector(cut:) || action == @selector(selectAll:) || action == @selector(delete:)) return NO; // silent: a turned-off Edit action is the answer of the menu validation, which AppKit shows as a disabled item
     return [super validateUserInterfaceItem:item];
 }
 
@@ -370,8 +371,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     self.observedSurface = surface;
     if (!surface) return;
     surface.postsFrameChangedNotifications = YES;
-    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(surfaceResized:)
-        name:NSViewFrameDidChangeNotification object:surface];
+    sp_observe_notification_selector("image_region.resized", SP_OBSERVE_COUNT, self, @selector(surfaceResized:),
+        NSViewFrameDidChangeNotification, surface);
 }
 
 - (void)viewDidMoveToSuperview {
@@ -401,6 +402,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)surfaceResized:(NSNotification *)notification {
+    sp_observe_delivered("image_region.resized");
     if (self.placed) [self applyInsets];
 }
 
@@ -766,7 +768,10 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 // inserted.
 - (BOOL)selectedSourceComposes {
     NSString *identifier = self.inputContext.selectedKeyboardInputSource;
-    if (!identifier) return NO;
+    if (!identifier) {
+        sp_log_error("input method", "the input context has no selected keyboard input source");
+        return NO;
+    }
     NSArray *sources = (NSArray *)TISCreateInputSourceList(
         (CFDictionaryRef)@{(id)kTISPropertyInputSourceID: identifier}, false);
     BOOL composes = NO;
@@ -845,6 +850,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)inputSourceChanged:(NSNotification *)notification {
+    sp_observe_delivered("image_region.input_source");
     // The change itself is the event `native.input.source_changed` of the activity observers; this region only reacts to it.
     if (notification.object == self.inputContext) [self commitPending];
 }

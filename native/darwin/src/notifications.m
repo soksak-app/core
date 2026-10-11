@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <UserNotifications/UserNotifications.h>
 #import "notifications.h"
+#import "observe.h"
 
 // Delegate of the notification center. Shows the banner even while the application is active, and reports the identifier of the clicked notification.
 @interface SPNotificationDelegate : NSObject <UNUserNotificationCenterDelegate>
@@ -53,10 +54,12 @@ static void fail(NSString *operation, NSError *error) {
 @implementation SPNotificationDelegate
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center willPresentNotification:(UNNotification *)notification
          withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
+    sp_observe_delivered("notifications.delegate");
     completionHandler(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList);
 }
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center didReceiveNotificationResponse:(UNNotificationResponse *)response
          withCompletionHandler:(void (^)(void))completionHandler {
+    sp_observe_delivered("notifications.delegate");
     NSString *identifier = [[response.notification.request.identifier copy] autorelease];
     BOOL opened = [response.actionIdentifier isEqualToString:UNNotificationDefaultActionIdentifier];
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -76,7 +79,13 @@ const char *sp_notifications_start(sp_notification_event event, void *context) {
     handler = event;
     handlerContext = context;
     delegate = [[SPNotificationDelegate alloc] init];
-    [UNUserNotificationCenter currentNotificationCenter].delegate = delegate;
+    if (!sp_observe_delegate("notifications.delegate", SP_OBSERVE_RECORD, [UNUserNotificationCenter currentNotificationCenter], delegate)) {
+        [delegate release];
+        delegate = nil;
+        handler = NULL;
+        handlerContext = NULL;
+        return "the notification center takes no delegate";
+    }
     reportState(nil);
     return NULL;
 }

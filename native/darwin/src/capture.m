@@ -108,7 +108,7 @@ static BOOL frameStatus(CMSampleBufferRef sample, SCFrameStatus *status) {
     CFTypeRef value = frameInfo(sample, SCStreamFrameInfoStatus);
     int number = 0;
     if (value == NULL || CFGetTypeID(value) != CFNumberGetTypeID()
-        || !CFNumberGetValue(value, kCFNumberIntType, &number)) return NO;
+        || !CFNumberGetValue(value, kCFNumberIntType, &number)) return NO; // silent: the answer NO is the result of the reader, and its caller records the capture error "has no status"
     *status = (SCFrameStatus)number;
     return YES;
 }

@@ -1,11 +1,18 @@
 #import <Cocoa/Cocoa.h>
 #import "clipboard.h"
+#import "application_log.h"
 
 static char *json(NSDictionary *value) {
     NSData *data = [NSJSONSerialization dataWithJSONObject:value options:0 error:NULL];
-    if (!data) return NULL;
+    if (!data) {
+        sp_log_error("clipboard", "the reply could not be serialized");
+        return NULL;
+    }
     char *result = malloc(data.length + 1);
-    if (!result) return NULL;
+    if (!result) {
+        sp_log_error("clipboard", "the reply could not be allocated");
+        return NULL;
+    }
     memcpy(result, data.bytes, data.length);
     result[data.length] = 0;
     return result;
@@ -16,6 +23,7 @@ static char *status(NSString *value) {
 }
 
 static char *errorResult(NSString *reason) {
+    sp_log_error("clipboard", reason.UTF8String);
     return json(@{ @"status": @"error", @"error": reason });
 }
 

@@ -1,6 +1,7 @@
 // Shows a new window after its first screen is presented (window_reveal.h).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "observe.h"
 #import "window_facts.h"
 #import "window_reveal.h"
 #import "private/webkit.h"
@@ -29,12 +30,13 @@
 - (void)start {
     _observing = YES;
     // Initial also reports a load that already ended at registration.
-    [_webview addObserver:self forKeyPath:@"loading" options:NSKeyValueObservingOptionInitial context:NULL];
+    sp_observe_key_path("window_reveal.loading", SP_OBSERVE_RECORD, _webview, self, @"loading", NSKeyValueObservingOptionInitial);
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
     // Wait until a load starts. A load that already ended at registration still has its URL. A failed load
     // clears the URL when it ends, so the end is judged as an end that follows an observed start.
+    sp_observe_delivered("window_reveal.loading");
     if (!_observing) return;
     if (_webview.loading) {
         _started = YES;

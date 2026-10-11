@@ -10,6 +10,7 @@
 #import <WebKit/WebKit.h>
 #import "application_log.h"
 #import "document_view.h"
+#import "observe.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
 #import "webview_input.h"
@@ -265,14 +266,14 @@ static NSString *pluginContentType(NSString *path) {
 
 - (void)installEventMonitor {
     SPDocumentView *document = self;
-    self.eventMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown
-        handler:^NSEvent *(NSEvent *event) {
+    self.eventMonitor = sp_observe_local_monitor("document_view.click", SP_OBSERVE_RECORD, NSEventMaskLeftMouseDown,
+        ^NSEvent *(NSEvent *event) {
             NSWindow *window = event.window;
             NSView *content = window.contentView;
             NSView *hit = content ? [content hitTest:[content convertPoint:event.locationInWindow fromView:nil]] : nil;
             if (hit == document || [hit isDescendantOf:document]) [document reportEvent:"{\"type\":\"click\"}"];
             return event;
-        }];
+        });
 }
 
 - (void)surfaceAppearanceChanged:(NSNotification *)notification {
@@ -331,9 +332,14 @@ static NSString *pluginContentType(NSString *path) {
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
-    if (object == self) [self report];
-    else if (object == self.webSurface && [keyPath isEqualToString:@"effectiveAppearance"])
+    if (object == self) {
+        // The progress of a load changes at the rate of the load, so the changes of the state are counted.
+        sp_observe_delivered("document_view.state");
+        [self report];
+    } else if (object == self.webSurface && [keyPath isEqualToString:@"effectiveAppearance"]) {
+        sp_observe_delivered("document_view.appearance");
         [self surfaceAppearanceChanged:nil];
+    }
 }
 
 - (void)request:(WKNavigation *)navigation {
@@ -342,7 +348,7 @@ static NSString *pluginContentType(NSString *path) {
 }
 
 - (BOOL)requestIfStarted:(WKNavigation *)navigation {
-    if (!navigation) return NO;
+    if (!navigation) return NO; // silent: a nil navigation is the answer that WebKit started no load, and the caller returns it to the host
     [self request:navigation];
     return YES;
 }
@@ -461,11 +467,12 @@ static BOOL webAddress(NSURL *url) {
     [super viewDidMoveToSuperview];
     if (!self.superview) return;
     self.superview.postsFrameChangedNotifications = YES;
-    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(surfaceResized:)
-        name:NSViewFrameDidChangeNotification object:self.superview];
+    sp_observe_notification_selector("document_view.resized", SP_OBSERVE_COUNT, self, @selector(surfaceResized:),
+        NSViewFrameDidChangeNotification, self.superview);
 }
 
 - (void)surfaceResized:(NSNotification *)notification {
+    sp_observe_delivered("document_view.resized");
     if (self.placed) [self applyInsets];
 }
 
@@ -557,11 +564,11 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     }
     [nativePlane addSubview:view];
     [view installEventMonitor];
-    [surface addObserver:view forKeyPath:@"effectiveAppearance" options:0 context:NULL];
+    sp_observe_key_path("document_view.appearance", SP_OBSERVE_RECORD, surface, view, @"effectiveAppearance", 0);
     view.zoom = 1;
     view.pageZoom = view.zoom;
     [view _setOverrideDeviceScaleFactor:sp_surface_scale(surface)];
-    for (NSString *key in observedKeys()) [view addObserver:view forKeyPath:key options:0 context:NULL];
+    for (NSString *key in observedKeys()) sp_observe_key_path("document_view.state", SP_OBSERVE_COUNT, view, view, key, 0);
     return view; // The caller owns this reference until sp_document_close.
 }
 

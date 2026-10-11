@@ -4,6 +4,7 @@
 #import <spawn.h>
 #import <sys/wait.h>
 #import "process_exit.h"
+#import "support/records.h"
 
 extern char **environ;
 
@@ -68,10 +69,21 @@ int main(void) { @autoreleasepool {
     check(gone.calls == 1 && gone.exited, [NSString stringWithFormat:
         @"a process that no longer exists is reported as exited (calls %d, exited %d)", gone.calls, gone.exited]);
 
-    pid_t running = spawnSleep("30");
-    SPExited missed = {0};
-    sp_process_when_exited(running, 0.2, answered, &missed);
-    runUntilAnswered(&missed);
+    __block pid_t running = spawnSleep("30");
+    __block SPExited missed = {0};
+    NSArray<NSDictionary *> *waiting = capturedEvents(^{
+        sp_process_when_exited(running, 0.2, answered, &missed);
+        runUntilAnswered(&missed);
+    });
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+    for (NSDictionary *event in waiting) [names addObject:event[@"name"]];
+    NSUInteger registered = [names indexOfObject:@"native.observe.registered"];
+    NSUInteger timeout = [names indexOfObject:@"native.process.exit_timeout"];
+    check(registered != NSNotFound && timeout != NSNotFound && registered < timeout && [waiting[registered][@"fields"][@"source"] isEqual:@"process_exit"],
+        [NSString stringWithFormat:@"the wait is a registration event and the missed deadline follows it: %@", names]);
+    NSDictionary *late = timeout == NSNotFound ? @{} : waiting[timeout];
+    check([late[@"level"] intValue] == 1 && [late[@"fields"][@"pid"] intValue] == running && [late[@"fields"][@"seconds"] doubleValue] == 0.2,
+        [NSString stringWithFormat:@"the missed deadline is one event at the level warn with the pid and the seconds: %@", late]);
     check(missed.calls == 1 && !missed.exited, [NSString stringWithFormat:
         @"a process that runs past the bound is reported as not exited (calls %d, exited %d)", missed.calls, missed.exited]);
     if (running) {
