@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+
+	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 const (
@@ -154,7 +156,7 @@ func (c *Sidecars) recordReply(sidecar, surface string, cids []string, body json
 	if len(cids) == 0 && !failed {
 		return
 	}
-	if err := checkCids(cids); err != nil {
+	if err := sok.CheckCids(cids); err != nil {
 		LogError("sidecar "+sidecar, fmt.Sprintf("the cids of a reply of surface %s are refused: %v", surface, err))
 		cids = nil
 	}
@@ -166,7 +168,7 @@ func (c *Sidecars) recordReply(sidecar, surface string, cids []string, body json
 	if failed {
 		level = LevelWarn
 		// silent: the text of an error is cut to 1,024 bytes after its code, and the event has no field that states the cut.
-		text, _ := cutText(fmt.Sprintf("%d: %s", codeInternal, failure), CallTextBytes)
+		text, _ := sok.CutText(fmt.Sprintf("%d: %s", codeInternal, failure), CallTextBytes)
 		fields["error"] = text
 	}
 	if len(cids) == 0 {
@@ -181,7 +183,7 @@ func (c *Sidecars) recordReply(sidecar, surface string, cids []string, body json
 func (c *Sidecars) failRequests(sidecar, reason string) {
 	surfaces, byCid := c.requests.failed(sidecar)
 	// silent: the reason is cut to 1,024 bytes after its code, and the event has no field that states the cut.
-	text, _ := cutText(fmt.Sprintf("%d: %s", codeInternal, reason), CallTextBytes)
+	text, _ := sok.CutText(fmt.Sprintf("%d: %s", codeInternal, reason), CallTextBytes)
 	for _, surface := range surfaces {
 		EmitHostCids(LevelWarn, "host.sidecar.reply", byCid[surface], map[string]any{
 			"name": sidecar, "surface": surface, "bytes": 0, "ok": false, "error": text,

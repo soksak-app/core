@@ -1,0 +1,156 @@
+//! Checks the options of the shared event writer that the hosts and the tool start (docs/spec/logging.md#writers): the layer
+//! and the clock of its own events, the thread entrance, the rotation that a writer may omit, the correlation identifiers,
+//! and the source of events that cannot call into the writer.
+
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use serde_json::{json, Value};
+use soksak_sok::event_bounds::Fields;
+use soksak_sok::event_log::{EventLog, Level, Options, PullSink, RelayedEvent};
+
+struct Dir(PathBuf);
+
+impl Dir {
+    fn new(label: &str) -> Dir {
+        let path = std::env::temp_dir().join(format!("sok-options{}-{label}", std::process::id()));
+        std::fs::create_dir_all(&path).unwrap();
+        Dir(path)
+    }
+}
+
+impl Drop for Dir {
+    fn drop(&mut self) {
+        if let Err(error) = std::fs::remove_dir_all(&self.0) {
+            panic!("{}: {error}", self.0.display());
+        }
+    }
+}
+
+fn options(directory: &Path, boot: &str) -> Options {
+    Options {
+        directory: directory.to_path_buf(),
+        role: "probe".into(),
+        boot: boot.into(),
+        layer: "host",
+        clock: || 42,
+        spawn: |body| {
+            std::thread::Builder::new()
+                .name("probe-writer".into())
+                .spawn(body)
+                .map_err(|error| error.to_string())
+        },
+        queue_events: 64,
+        queue_bytes: 1 << 20,
+        batch_interval: Duration::from_millis(10),
+        rotate_bytes: 0,
+        generations: 0,
+        pull: None,
+    }
+}
+
+fn stored_lines(path: &Path) -> Vec<Value> {
+    std::fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap_or_else(|error| panic!("{line:?}: {error}")))
+        .collect()
+}
+
+#[test]
+fn a_writer_is_refused_when_only_one_of_the_rotation_options_is_set() {
+    for (bytes, generations) in [(100u64, 0usize), (0, 2)] {
+        let directory = Dir::new("refused");
+        let mut refused = options(&directory.0, "refused");
+        refused.rotate_bytes = bytes;
+        refused.generations = generations;
+        assert!(
+            EventLog::start(refused).is_err(),
+            "rotate_bytes {bytes} with generations {generations} was accepted"
+        );
+    }
+}
+
+#[test]
+fn a_writer_without_rotation_stores_the_layer_the_clock_and_the_cids_of_its_options() {
+    let directory = Dir::new("plain");
+    let log = EventLog::start(options(&directory.0, "plain")).unwrap();
+    assert!(log.emit_cids(
+        Level::Info,
+        "host.probe.event",
+        &["c1".into(), "c2".into()],
+        &json!({"n": 1})
+    ));
+    assert!(!log.emit_cids(Level::Info, "host.probe.bad", &["a\"b".into()], &json!({})));
+    log.flush(Duration::from_secs(5)).unwrap();
+    log.close();
+    let lines = stored_lines(log.path());
+    let events: Vec<&str> = lines.iter().map(|l| l["event"].as_str().unwrap()).collect();
+    assert_eq!(events, ["log.open", "host.probe.event", "log.dropped"]);
+    for line in &lines {
+        assert_eq!(line["layer"], "host");
+        assert_eq!(line["mono_ns"], 42);
+    }
+    assert_eq!(lines[1]["cids"], json!(["c1", "c2"]));
+}
+
+#[test]
+fn a_writer_rotates_at_its_bound_and_the_new_file_starts_with_log_open_and_log_rotated() {
+    let directory = Dir::new("rotating");
+    let mut rotating = options(&directory.0, "rotating");
+    rotating.rotate_bytes = 600;
+    rotating.generations = 2;
+    let log = EventLog::start(rotating).unwrap();
+    for _ in 0..20 {
+        log.emit(
+            Level::Info,
+            "host.probe.event",
+            &json!({"text": "x".repeat(100)}),
+        );
+    }
+    log.flush(Duration::from_secs(5)).unwrap();
+    log.close();
+    let mut first_generation = log.path().as_os_str().to_owned();
+    first_generation.push(".1");
+    assert!(PathBuf::from(first_generation).exists());
+    let lines = stored_lines(log.path());
+    assert!(lines.len() >= 3);
+    assert_eq!(lines[0]["event"], "log.open");
+    assert_eq!(lines[1]["event"], "log.rotated");
+}
+
+#[test]
+fn a_writer_stores_the_events_and_the_loss_of_its_pull_source() {
+    let directory = Dir::new("pulling");
+    let mut pulling = options(&directory.0, "pulling");
+    let mut delivered = false;
+    pulling.pull = Some(Box::new(move |sink: &mut dyn PullSink| {
+        if delivered {
+            return;
+        }
+        delivered = true;
+        sink.accept(RelayedEvent {
+            ts_us: 7,
+            mono_ns: 9,
+            layer: "native".into(),
+            level: Level::Warn,
+            event: "native.probe.event".into(),
+            cids: Vec::new(),
+            fields: Fields::whole(
+                serde_json::value::RawValue::from_string(r#"{"a":1}"#.into()).unwrap(),
+            ),
+        });
+        sink.lost(3, 30, "the source was full");
+    }));
+    let log = EventLog::start(pulling).unwrap();
+    log.flush(Duration::from_secs(5)).unwrap();
+    log.close();
+    let lines = stored_lines(log.path());
+    assert_eq!(lines.len(), 3, "{lines:?}");
+    assert_eq!(lines[1]["event"], "native.probe.event");
+    assert_eq!(lines[1]["layer"], "native");
+    assert_eq!(lines[1]["mono_ns"], 9);
+    assert_eq!(lines[2]["event"], "log.dropped");
+    assert_eq!(lines[2]["fields"]["reason"], "the source was full");
+    assert_eq!(lines[2]["fields"]["count"], 3);
+}

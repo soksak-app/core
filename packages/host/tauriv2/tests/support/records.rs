@@ -8,12 +8,12 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use serde_json::Value;
 use soksak_host_tauriv2::application_log::entry_line;
-use soksak_host_tauriv2::event_log::EventLog;
+use soksak_host_tauriv2::event_log::{self, EventLog};
 use soksak_host_tauriv2::event_record::use_host_event_log;
 
 /// Starts the writer of the host in `logs/` of `config` and makes it the writer of the records.
 pub fn start_writer(config: &Path) -> Arc<EventLog> {
-    let log = Arc::new(EventLog::start_host(config).unwrap());
+    let log = Arc::new(event_log::start_host(config).unwrap());
     use_host_event_log(Some(Arc::clone(&log)));
     log
 }
