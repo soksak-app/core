@@ -262,3 +262,14 @@ test('soksak-events is a command of the package, and it fails with the file and 
   assert.equal(run('--unknown').status, 1);
   assert.match(run('--unknown').stderr, /usage: soksak-events/);
 });
+
+test('the record calls of the native library are emit sites of the declared records, and a record in another function does not accept a return', () => {
+  assert.deepEqual(census({
+    'a.m': '- (BOOL)f {\n    sp_log_error("where", "text");\n    return NO;\n}\n- (BOOL)g {\n    sp_log_info("where", "text");\n    return NO;\n}\n',
+  }), []);
+  assert.deepEqual(census({
+    'a.m': '- (BOOL)f {\n    sp_log_error("where", "text");\n    return YES;\n}\n- (BOOL)g {\n    return NO;\n}\n',
+  }), ['a.m:6 m.error-return']);
+  const records = { ...catalog, events: { 'native.record.<level>': { layer: 'host', class: 'lifecycle', level: ['error', 'info'], fields: { where: 'string', text: 'string' } } } };
+  assert.deepEqual(checker.emitFindings(records, new Map([['a.m', 'void f(void) {\n    sp_log_error("w", "t");\n    sp_log_info("w", "t");\n}\n']]), CATALOG), []);
+});

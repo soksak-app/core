@@ -28,7 +28,8 @@ const MARKER_REACH = 5;
 /**
  * The entrances that store an event, by language. `level`, `event` and `fields` are the positions of the arguments of the
  * call (`fields` is absent when the call has none); `fixed` is the level of an entrance that has no level argument; `only`
- * limits an entrance to the files it is local to.
+ * limits an entrance to the files it is local to. `name` is the event of an entrance that stores one event and gives no name argument
+ * (`event` is then the position of its first argument).
  */
 const ENTRANCES = {
   go: [
@@ -45,6 +46,8 @@ const ENTRANCES = {
   m: [
     { re: /\bsp_event\s*\(/g, level: 0, event: 1, fields: 2 },
     { re: /\bstoreRecord\s*\(/g, level: 0, event: 1 },
+    { re: /\bsp_log_error\s*\(/g, fixed: 'error', name: 'native.record.error', event: 0 },
+    { re: /\bsp_log_info\s*\(/g, fixed: 'info', name: 'native.record.info', event: 0 },
     { re: /\bemit\s*\(/g, fixed: 'info', event: 0, fields: 1, only: /(^|\/)activity_observers\.m$/ },
   ],
 };
@@ -304,7 +307,7 @@ export function sitesOf(path, text) {
         at: match.index,
         line: source.lineAt(args[entrance.event][0]),
         call: source.lineAt(match.index),
-        name: literalName(source, args[entrance.event]),
+        name: entrance.name ?? literalName(source, args[entrance.event]),
         levels: entrance.fixed ? [entrance.fixed] : levelsOf(source, args[entrance.level]),
         fields: fieldsOf(source, args[entrance.fields]),
       });
