@@ -6,6 +6,7 @@ package platform
 
 import (
 	"errors"
+	"os"
 	"time"
 )
 
@@ -31,6 +32,10 @@ type Platform interface {
 	// MonotonicNanos is the system-wide monotonic clock in nanoseconds that the events carry as mono_ns
 	// (docs/spec/logging.md#event). It is the clock of the native library, so events of different processes compare.
 	MonotonicNanos() (uint64, error)
+	// LockFile takes an exclusive advisory lock on the open file and waits until it holds it, so the processes that update one
+	// index exclude each other (docs/spec/logging.md#index). UnlockFile releases it; closing the file releases it too.
+	LockFile(file *os.File) error
+	UnlockFile(file *os.File) error
 }
 
 var current Platform

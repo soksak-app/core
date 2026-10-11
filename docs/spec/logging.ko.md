@@ -186,7 +186,7 @@ Bloom filter는 `8 × 바이트` 비트를 가진다. 항목의 hash는 UTF-8 �
 - `rows`는 객체 `{role, boot, file, offset, event}`의 목록이다: 프로세스, 줄을 가진 파일(설정 디렉터리 기준 `logs/...`), 줄의 바이트 offset, 파일에 적힌 event 객체인 줄.
 - `next`는 `after`로 넘길 cursor 또는 `null`이다.
 - `tail`은 질의가 읽은 시점에 각 프로세스의 색인이 덮는 가장 큰 `seq`다. 파일을 따라가는 client는 이를 `since`로 시작한다([debug](debug.ko.md#타임라인)).
-- `scanned`는 `{files, segments, read, lines, rebuilt}`다: channel의 파일 수, 그 segment 수, 줄을 읽은 segment 수, 해석한 줄 수, 질의 중에 파일 전체로 만든 색인 수.
+- `scanned`는 `{files, segments, read, lines, rebuilt}`다: channel의 파일 수, 그 segment 수, 줄을 읽은 segment 수, 검사한 줄 수, 질의 중에 파일 전체로 만든 색인 수.
 
 **평가.** 질의는 각 파일의 색인을 최신으로 맞춘 뒤 행을 가질 수 있는 segment만 남긴다: 시간 범위가 경계와 cursor에 겹치고, level(그 level과 더 심각한 level), layer, class의 비트가 값을 담으며, event 이름이나 앞부분, surface, session, cid의 filter가 받아들이는 segment다. 남긴 segment를 `min_ts_us` 순(`desc`는 `max_ts_us` 내림차순)으로 읽고, segment의 줄을 하나씩 완전히 검사하며, 지금까지 찾은 key가 가장 작은(`desc`는 가장 큰) 행 `limit + 1`개를 유지한다. 다음 segment가 유지한 행보다 앞서는 행을 가질 수 없으면 멈춘다. 그래서 page의 비용은 파일 크기가 아니라 행을 가질 수 있는 segment의 수에 달려 있다. `text`만 있는 질의는 channel의 모든 segment를 읽는다. event 구조를 어기는 줄은 오류 `<file>:<line>: <reason>`이다.
 

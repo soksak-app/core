@@ -5,6 +5,7 @@ package linux
 import (
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
 	"syscall"
 	"time"
@@ -69,6 +70,22 @@ func (linux) MonotonicNanos() (uint64, error) {
 		return 0, fmt.Errorf("the monotonic clock cannot be read: %w", err)
 	}
 	return uint64(now.Sec)*1_000_000_000 + uint64(now.Nsec), nil
+}
+
+// LockFile takes flock(LOCK_EX) on the file, which excludes the other open files of the same file in every process.
+func (linux) LockFile(file *os.File) error {
+	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX); err != nil {
+		return fmt.Errorf("%s cannot be locked: %w", file.Name(), err)
+	}
+	return nil
+}
+
+// UnlockFile releases the lock of LockFile.
+func (linux) UnlockFile(file *os.File) error {
+	if err := unix.Flock(int(file.Fd()), unix.LOCK_UN); err != nil {
+		return fmt.Errorf("%s cannot be unlocked: %w", file.Name(), err)
+	}
+	return nil
 }
 
 // PathsDir is an error. The shell on Linux has no folder that adds a PATH entry for each file.
