@@ -142,6 +142,7 @@ pub fn replay_input_problem(kind: &str, text: &str) -> Option<String> {
             },
         },
         _ => {
+            // default: colors that are not an object are refused below with the value shown.
             let members = colors.and_then(|text| serde_json::from_str::<Ordered>(text).ok());
             let Some(Ordered(members)) = members else {
                 return Some(format!(
@@ -176,6 +177,7 @@ fn fields_of(text: &str) -> (Value, Option<String>) {
     let colors = serde_json::from_str::<
         std::collections::HashMap<String, Box<serde_json::value::RawValue>>,
     >(text)
+    // default: fields that are not an object have no colors, which the form check of a theme refuses.
     .ok()
     .and_then(|members| members.get("colors").map(|raw| raw.get().to_string()));
     (fields, colors)
