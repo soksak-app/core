@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.24.11.3: debug 화면은 host의 알림마다 `tail`부터 질의로 바로 답하고 자기 간격이 없다(`FOLLOW_INTERVAL_MS` 제거). host가 알림의 비율을 제한하고 화면 자신의 질의 기록은 변경을 알리지 않으므로 따라가기는 맴돌지 않고 끝난다. `debug-timeline-ui.test.mjs`로 검증했다.
 - F160.24.11.2: 두 host가 색인이 줄을 덮은 뒤 색인기와 색인을 갱신하는 모든 질의에서 event log의 변경 알림을 250 ms에 한 번까지, 합쳐진 알림을 세어(`coalesced`) endpoint의 host 상태 `host.log`(`{path, size, notices, coalesced}`)와 host event `debug-log-changed`로 발행한다. writer는 더 이상 알림을 먹이지 않는다. Go와 Rust의 `debug.follow.*` 사례로 검증했다.
 - F160.24.11.1: Go와 Rust 구현에서 event 파일 색인의 갱신이 `announcing`, 곧 앞선 갱신 뒤에 색인한 줄에서 log만 읽는 호출의 기록(`logQuery`의 `host.binding.call`, `log.query`의 `host.endpoint.call`)을 뺀 수와, 덮는 파일의 크기 `size`를 보고한다. 색인 바이트는 그대로다. `TestLogIndexCountsTheLinesThatAnnounceAChange`와 `index_counts_the_lines_that_announce_a_change`로 검증했다.
 - F160.24: 설정 폴더의 event 파일을 channel, level, class, layer, event, 표면, session, `cids`, run, 글, 시간으로 묻는 하나의 질의(`log.query`, `sok debug query`)가 각 파일 옆의 Bloom filter가 있는 segment 색인으로 답하고, debug 화면이 이 질의로 쪽을 넘긴다. 1,000,000건(169 MB) 로그의 색인은 3~5초에 만들어지고 첫 쪽은 12~38 ms에 나온다. 쪽의 `scanned`에서 로그 파일 수의 이름은 `logs`다.

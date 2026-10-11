@@ -1862,16 +1862,15 @@ const FEATURE_LINKS = [
     id: "F157",
     implementation: [
       { file: "packages/workbench/debug-timeline.js", symbol: "export const HOLD_LIMIT" },
-      { file: "packages/workbench/debug-timeline.js", symbol: "export const FOLLOW_INTERVAL_MS" },
     ],
     tests: [
       { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the view holds at most 2000 rows and refuses an older page beyond them with an error" },
       { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the rows beyond the hold limit leave the view from the old end and are counted" },
-      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the timeline follows a file that grows all the time with a pause between two updates and loses no row" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the timeline asks at each notice without a pause of its own and loses no row" },
       { file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestQueryRefusesWhatBreaksTheContract" },
       { file: "packages/sok/tauriv2/tests/debug_test.rs", id: "query_refuses_what_breaks_the_contract" },
     ],
-    expected: "The page of the debug view keeps answering when an event file is large and grows: the timeline holds and draws a bounded number of rows, spaces the updates, and reads a file without a line as no row.",
+    expected: "The page of the debug view keeps answering when an event file is large and grows: the timeline holds and draws a bounded number of rows, answers each notice of the host without a timer of its own, and reads a file without a line as no row.",
     levels: ["unit"],
   },
   {

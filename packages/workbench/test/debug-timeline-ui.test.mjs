@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-import { FOLLOW_INTERVAL_MS, HOLD_LIMIT, PAGE_ROWS } from "../debug-timeline.js";
+import * as timelineModule from "../debug-timeline.js";
+import { HOLD_LIMIT, PAGE_ROWS } from "../debug-timeline.js";
 
 const LEVELS = ["error", "warn", "info", "debug", "trace"];
 
@@ -400,20 +401,19 @@ test("a query that fails while following stops following and is shown with its f
   assert.equal(ui.debugState().timeline.held, 3);
 });
 
-test("the timeline follows a file that grows all the time with a pause between two updates and loses no row", async (t) => {
+test("the timeline asks at each notice without a pause of its own and loses no row", async (t) => {
   const query = served(SMALL);
   const { ui, changed } = await openView(t, { query });
   await ui.showDebugTimeline();
-  const stamps = [];
-  const original = query.log.requests.push.bind(query.log.requests);
-  query.log.requests.push = (request) => { stamps.push(performance.now()); return original(request); };
-  // The page redraws every row at each update, so a file that grows at every moment would keep the page busy for ever: the
-  // second update waits until the interval since the first one ended, and it asks for what grew meanwhile.
+  // The rate of the notices is bounded by the host (docs/spec/debug.md#following), so the view has no timer: the second notice is
+  // answered at once and asks for what grew meanwhile.
+  assert.equal("FOLLOW_INTERVAL_MS" in timelineModule, false, "the view keeps an interval of its own");
+  const started = performance.now();
   query.log.rows.push(row(4, 40));
   await changed("logs/host-a.jsonl");
   query.log.rows.push(row(5, 50));
   await changed("logs/host-a.jsonl");
-  assert.equal(stamps.length >= 2, true, `the host was asked ${stamps.length} times after the file grew`);
-  assert.ok(stamps.at(-1) - stamps[0] >= FOLLOW_INTERVAL_MS - 50, `the updates are ${stamps.at(-1) - stamps[0]} ms apart, less than ${FOLLOW_INTERVAL_MS} ms`);
+  const elapsed = performance.now() - started;
+  assert.ok(elapsed < 250, `the two notices took ${elapsed} ms, the view waited between them`);
   assert.equal(ui.debugState().timeline.held, 5, "a row that grew was not added");
 });

@@ -10,7 +10,7 @@ import { commandOf, delegate, mark, run } from "./commands.js";
 import { registry } from "./exposure.js";
 import { hideError, showError } from "./shown-errors.js";
 import { newestFirst } from "./debug-order.js";
-import { CHANNELS, CLEAR_FILTER, FOLLOW_INTERVAL_MS, HOLD_LIMIT, PAGE_ROWS, compareRows, eventLine, isEventFile, keyOf, LAYERS, LEVELS, mergeRows, queryOf, rowId } from "./debug-timeline.js";
+import { CHANNELS, CLEAR_FILTER, HOLD_LIMIT, PAGE_ROWS, compareRows, eventLine, isEventFile, keyOf, LAYERS, LEVELS, mergeRows, queryOf, rowId } from "./debug-timeline.js";
 import { compareStates, parseState, stateFiles, stateLines } from "./debug-state.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 
@@ -492,8 +492,6 @@ export function listDebugFiles() {
 
 /* The reads and changes of the timeline, one after another: a notice that arrives during a read waits, so a row is read once. */
 let reading = Promise.resolve();
-/* The end of the last update that added rows (performance.now()), which spaces the next update. */
-let lastGrowth = -Infinity;
 
 /** Runs `task` after the earlier tasks of the timeline; the task's own result or failure is the answer. */
 function exclusive(task) {
@@ -564,9 +562,6 @@ function followGrowth() {
     const current = timeline;
     if (card === null || current === null || !current.following) return null;
     try {
-      // The timer spaces the updates of a file that grows at every moment (FOLLOW_INTERVAL_MS); a notice that arrives later waits less.
-      const wait = lastGrowth + FOLLOW_INTERVAL_MS - performance.now();
-      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
       const request = { ...queryOf(current.filter), order: "asc", limit: PAGE_ROWS, since: current.tail };
       let next = { ...current };
       let tail = null;
@@ -585,10 +580,7 @@ function followGrowth() {
       if (timeline === null || timeline.token !== current.token || !timeline.following) return null;
       timeline = { ...timeline, rows: next.rows, ids: next.ids, omitted: next.omitted, older: next.older, tail, appended: timeline.appended + appended };
       // A notice that adds nothing draws nothing: the host calls of a draw are recorded events, and each of them is written.
-      if (appended > 0) {
-        draw();
-        lastGrowth = performance.now();
-      }
+      if (appended > 0) draw();
       return null;
     } catch (reason) {
       if (timeline !== null && timeline.token === current.token) timeline = { ...timeline, following: false };
@@ -599,7 +591,7 @@ function followGrowth() {
   });
 }
 
-/* The host event `debug-log-changed {path, size}` (docs/spec/debug.md#following): asks for what grew while the timeline follows. */
+/* The host event `debug-log-changed {path, size, notices, coalesced}` (docs/spec/debug.md#following): asks for what grew while the timeline follows. The host bounds the rate of the notices. */
 if (debug) {
   debug.onChanged(({ path }) => {
     if (timeline === null || !timeline.following || !isEventFile(path)) return;
