@@ -135,6 +135,7 @@ func boundedArguments(args []json.RawMessage) (string, bool) {
 		}
 		room := CallTextBytes - text.Len()
 		if len(arg) > room {
+			// silent: the length of arg is over room, so the cut is known and the event says truncated.
 			part, _ := cutText(arg, room)
 			text.WriteString(part)
 			return text.String(), true

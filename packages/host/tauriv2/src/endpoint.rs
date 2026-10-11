@@ -20,6 +20,8 @@ use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
 
 use crate::application_log::{log_error, log_info};
+use crate::bounds::ENDPOINT_TOPIC_CHANGES;
+use crate::buffer_bounds::record_buffer_drop;
 use crate::endpoint_record::Call;
 use crate::platform::{self, Listener};
 
@@ -186,6 +188,15 @@ enum Topic {
 }
 
 impl Topic {
+    /// The name of the target in the messages about it.
+    fn name(&self) -> &str {
+        match self {
+            Topic::Status(watch) => &watch.name,
+            #[cfg(feature = "diagnostics")]
+            Topic::Transcript(_) => TRANSCRIPT,
+        }
+    }
+
     fn window(&self) -> &str {
         match self {
             Topic::Status(watch) => &watch.window,
@@ -858,7 +869,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         };
         if SUBSCRIPTIONS.contains(&request.method.as_str()) {
             match subscription(&shared, &request.method, request.params) {
-                Ok((topic, on)) => change(&shared, peer, topic, on, Some(answer)),
+                Ok((topic, on)) => change(&shared, peer, topic, on, Some(answer), body.len()),
                 Err(failure) => answer.send(Err(failure)),
             }
             continue;
@@ -946,31 +957,61 @@ fn subscription(
 
 /// Changes the subscription of the connection peer at once and puts the change to send to the page into the queue of
 /// the target. Both operations run inside the lock of the connection list, so the order of the queue equals the order
-/// in which the subscription changes were applied.
-fn change(shared: &Arc<Shared>, peer: u64, topic: Topic, on: bool, answer: Option<Answer>) {
-    let start = {
+/// in which the subscription changes were applied. A request is refused, and not applied, when `ENDPOINT_TOPIC_CHANGES`
+/// changes of the target wait for the page already: the refusal is the event `host.buffer.dropped` and an error answer.
+/// The release of the subscriptions of a closed connection has no answer and is not refused, because its number of
+/// changes is the number of targets that the connection held. `size` is the size of the request in bytes.
+fn change(
+    shared: &Arc<Shared>,
+    peer: u64,
+    topic: Topic,
+    on: bool,
+    answer: Option<Answer>,
+    size: usize,
+) {
+    let (start, refused) = {
         let Ok(mut peers) = shared.peers.lock() else {
             return;
         };
-        let order = shared.orders.fetch_add(1, Ordering::Relaxed);
-        if let Some(state) = peers.get_mut(&peer) {
-            topic.set(state, on);
-            state.changes.insert(topic.clone(), order);
-        }
-        let last = !on && !peers.values().any(|other| topic.held(other));
         let Ok(mut lines) = shared.lines.lock() else {
             return;
         };
-        let line = lines.entry(topic.clone()).or_default();
-        line.changes.push_back(Change {
-            peer,
-            order,
-            on,
-            last,
-            answer,
-        });
-        !std::mem::replace(&mut line.running, true)
+        let waiting = lines.get(&topic).map_or(0, |line| line.changes.len());
+        if answer.is_some() && waiting >= ENDPOINT_TOPIC_CHANGES {
+            (false, answer)
+        } else {
+            let order = shared.orders.fetch_add(1, Ordering::Relaxed);
+            if let Some(state) = peers.get_mut(&peer) {
+                topic.set(state, on);
+                state.changes.insert(topic.clone(), order);
+            }
+            let last = !on && !peers.values().any(|other| topic.held(other));
+            let line = lines.entry(topic.clone()).or_default();
+            line.changes.push_back(Change {
+                peer,
+                order,
+                on,
+                last,
+                answer,
+            });
+            (!std::mem::replace(&mut line.running, true), None)
+        }
     };
+    if let Some(answer) = refused {
+        record_buffer_drop(
+            "endpoint topic changes",
+            size,
+            &format!("{ENDPOINT_TOPIC_CHANGES} messages"),
+        );
+        answer.send(Err(Failure::new(
+            HANDLER_FAILED,
+            format!(
+                "the subscription changes of {} are not keeping up: {ENDPOINT_TOPIC_CHANGES} changes are pending, so this change is refused",
+                topic.name()
+            ),
+        )));
+        return;
+    }
     if start {
         let shared = shared.clone();
         crate::routine::spawn_named("endpoint-drain", move || drain(&shared, topic));
@@ -1109,7 +1150,7 @@ fn forget(shared: &Arc<Shared>, peer: u64) {
         Err(_) => return,
     };
     for topic in topics {
-        change(shared, peer, topic, false, None);
+        change(shared, peer, topic, false, None, 0);
     }
     if let Ok(mut peers) = shared.peers.lock() {
         peers.remove(&peer);

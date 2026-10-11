@@ -6,25 +6,27 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::json;
-use serde_json::value::{to_raw_value, RawValue};
 
+use crate::bounds::{cut_text, Fields, RECORD_PLACE_BYTES, RECORD_TEXT_BYTES};
 use crate::event_log::{EventLog, Level};
 
 /// The number of records that the start buffer holds; a record beyond it is refused and counted.
 pub const START_BUFFER_RECORDS: usize = 1024;
+pub use crate::bounds::START_BUFFER_BYTES;
 
 struct Buffered {
     ts_us: u64,
     layer: String,
     level: Level,
     event: String,
-    fields: Box<RawValue>,
+    fields: Fields,
 }
 
 #[derive(Default)]
 struct Records {
     log: Option<Arc<EventLog>>,
     buffer: Vec<Buffered>,
+    buffer_bytes: usize,
     lost_events: u64,
     lost_bytes: u64,
 }
@@ -34,6 +36,7 @@ struct Records {
 static RECORDS: Mutex<Records> = Mutex::new(Records {
     log: None,
     buffer: Vec::new(),
+    buffer_bytes: 0,
     lost_events: 0,
     lost_bytes: 0,
 });
@@ -58,13 +61,14 @@ fn now_us() -> u64 {
 pub fn use_host_event_log(log: Option<Arc<EventLog>>) {
     let mut records = records();
     let buffered = std::mem::take(&mut records.buffer);
+    records.buffer_bytes = 0;
     let (lost_events, lost_bytes) = (
         std::mem::take(&mut records.lost_events),
         std::mem::take(&mut records.lost_bytes),
     );
     if let Some(log) = log.as_ref() {
         for record in buffered {
-            if let Err(error) = log.emit_relayed(
+            if let Err(error) = log.emit_fields(
                 record.ts_us,
                 &record.layer,
                 record.level,
@@ -79,7 +83,8 @@ pub fn use_host_event_log(log: Option<Arc<EventLog>>) {
     records.log = log;
 }
 
-/// Stores a record as the event `<layer>.record.<level>`.
+/// Stores a record as the event `<layer>.record.<level>`. The place and the text are cut to `RECORD_PLACE_BYTES` and
+/// `RECORD_TEXT_BYTES` on a character boundary, and the fields say `truncated` when either was cut.
 pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
     let parsed = match level {
         "error" => Level::Error,
@@ -90,7 +95,13 @@ pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
         }
     };
     let name = format!("{layer}.record.{level}");
-    let fields = match to_raw_value(&json!({"where": place, "text": text})) {
+    let (stored_place, cut_place) = cut_text(place, RECORD_PLACE_BYTES);
+    let (stored_text, cut_body) = cut_text(&text, RECORD_TEXT_BYTES);
+    let mut record = json!({"where": stored_place, "text": stored_text});
+    if cut_place || cut_body {
+        record["truncated"] = json!(true);
+    }
+    let fields = match Fields::of(&record) {
         Ok(fields) => fields,
         Err(error) => {
             eprintln!(
@@ -105,20 +116,27 @@ pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
 
 /// Hands an event to the writer of the host, or to the start buffer while no writer exists. `place` names the record in the
 /// reports of a refusal.
-fn store_event(level: Level, layer: &str, name: &str, place: &str, fields: Box<RawValue>) {
+///
+/// The start buffer holds at most `START_BUFFER_RECORDS` records and `START_BUFFER_BYTES` bytes; a record beyond either is
+/// refused and counted in the writer.
+fn store_event(level: Level, layer: &str, name: &str, place: &str, fields: Fields) {
     let now = now_us();
     let mut records = records();
     if let Some(log) = records.log.clone() {
-        if let Err(error) = log.emit_relayed(now, layer, level, name, fields) {
+        if let Err(error) = log.emit_fields(now, layer, level, name, fields) {
             eprintln!("event writer: the record {place:?} of {layer} cannot be stored: {error}");
         }
         return;
     }
-    if records.buffer.len() >= START_BUFFER_RECORDS {
+    let size = fields.text.get().len() + name.len();
+    if records.buffer.len() >= START_BUFFER_RECORDS
+        || records.buffer_bytes + size > START_BUFFER_BYTES
+    {
         records.lost_events += 1;
-        records.lost_bytes += (fields.get().len() + name.len()) as u64;
+        records.lost_bytes += size as u64;
         return;
     }
+    records.buffer_bytes += size;
     records.buffer.push(Buffered {
         ts_us: now,
         layer: layer.to_string(),
@@ -148,7 +166,7 @@ pub fn emit_trace(layer: &str, fields: serde_json::Value) -> Result<(), String> 
         Some(serde_json::Value::String(event)) if !event.is_empty() => event,
         _ => return Err("event must be a string".into()),
     };
-    let text = to_raw_value(&fields)
+    let text = Fields::of(&fields)
         .map_err(|error| format!("the fields of {event} cannot be serialized: {error}"))?;
     // events: host.trace.<event>, host.sampler.<event>
     store_event(
@@ -169,7 +187,7 @@ pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
         eprintln!("event writer: the event {event:?} does not start with host.");
         return;
     }
-    match to_raw_value(&fields) {
+    match Fields::of(&fields) {
         // events: forwarded
         Ok(text) => store_event(level, "host", event, event, text),
         Err(error) => {
@@ -190,13 +208,13 @@ pub fn emit_host_placed(
     if !event.starts_with("host.") {
         return Err(format!("the event {event:?} does not start with host."));
     }
-    let fields = to_raw_value(&fields)
+    let fields = Fields::of(&fields)
         .map_err(|error| format!("the fields of {event} cannot be serialized: {error}"))?;
     let log = records().log.clone();
     let Some(log) = log else {
         return Err("the event log of the host is not attached".to_string());
     };
-    let seq = log.emit_placed(level, event, fields, deadline)?;
+    let seq = log.emit_placed_fields(level, event, fields, deadline)?;
     Ok((log.boot().to_string(), seq))
 }
 

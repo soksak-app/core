@@ -230,8 +230,20 @@ func (l *EventLog) EmitPlaced(level Level, event string, fields json.RawMessage,
 	if !json.Valid(fields) {
 		return 0, fmt.Errorf("the fields of %s are not JSON", event)
 	}
+	return l.emitPlaced(level, event, fields, 0, deadline)
+}
+
+// emitPlaced is EmitPlaced for fields that are JSON, or, when produced is not 0, the first bytes of the text that the
+// producer stopped at the bound after it had written produced bytes.
+func (l *EventLog) emitPlaced(level Level, event string, fields []byte, produced int, deadline time.Duration) (uint64, error) {
 	placed := make(chan uint64, 1)
-	if !l.enqueuePlaced(time.Now().UnixMicro(), "host", level, event, fields, placed) {
+	stored, truncated := json.RawMessage(fields), 0
+	if produced > 0 {
+		stored, truncated = headFields(fields, produced)
+	} else {
+		stored, truncated = capFields(stored)
+	}
+	if !l.enqueueStored(time.Now().UnixMicro(), "host", level, event, stored, truncated, placed) {
 		return 0, fmt.Errorf("the event writer refused %s because its queue was full", event)
 	}
 	if err := l.Flush(deadline); err != nil {
@@ -261,12 +273,15 @@ func (l *EventLog) Emit(level Level, event string, fields any) bool {
 		l.countLoss(len(event))
 		return false
 	}
-	text, err := json.Marshal(fields)
+	text, produced, err := boundedMarshal(fields, EventFieldsLimitBytes)
 	if err != nil {
 		// A value that cannot be serialized is a defect of the caller; it is counted in place of the event.
 		l.countLoss(len(event))
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return false
+	}
+	if produced > 0 {
+		return l.enqueueCut(time.Now().UnixMicro(), "host", level, event, text, produced)
 	}
 	return l.enqueue(time.Now().UnixMicro(), "host", level, event, text)
 }
@@ -295,12 +310,39 @@ func (l *EventLog) EmitRelayed(tsMicros int64, layer string, level Level, event 
 	return l.enqueue(tsMicros, layer, level, event, fields), nil
 }
 
+// emitRelayedCut queues an event of the records of the host like EmitRelayed for fields that the producer cut: prefix is
+// the first bytes of the text and produced the number of bytes the producer had written.
+func (l *EventLog) emitRelayedCut(tsMicros int64, layer string, level Level, event string, prefix []byte, produced int) (bool, error) {
+	if !slices.Contains(layers, layer) {
+		return false, fmt.Errorf("the layer %q of %s is not one of %v", layer, event, layers)
+	}
+	if !strings.HasPrefix(event, layer+".") {
+		return false, fmt.Errorf("the event %q does not start with its layer %q", event, layer)
+	}
+	if l.queuedEvents.Load() >= l.queueEvents {
+		l.countLoss(len(event))
+		return false, nil
+	}
+	return l.enqueueCut(tsMicros, layer, level, event, prefix, produced), nil
+}
+
 func (l *EventLog) enqueue(tsMicros int64, layer string, level Level, event string, text json.RawMessage) bool {
 	return l.enqueuePlaced(tsMicros, layer, level, event, text, nil)
 }
 
 func (l *EventLog) enqueuePlaced(tsMicros int64, layer string, level Level, event string, text json.RawMessage, placed chan uint64) bool {
 	text, truncated := capFields(text)
+	return l.enqueueStored(tsMicros, layer, level, event, text, truncated, placed)
+}
+
+// enqueueCut queues an event whose producer stopped the serialization of its fields at the bound: prefix is the first bytes
+// of the text, and produced is the number of bytes that the producer had written when it stopped.
+func (l *EventLog) enqueueCut(tsMicros int64, layer string, level Level, event string, prefix []byte, produced int) bool {
+	text, truncated := headFields(prefix, produced)
+	return l.enqueueStored(tsMicros, layer, level, event, text, truncated, nil)
+}
+
+func (l *EventLog) enqueueStored(tsMicros int64, layer string, level Level, event string, text json.RawMessage, truncated int, placed chan uint64) bool {
 	bytes := len(text) + len(event)
 	if l.queuedBytes.Load()+int64(bytes) > l.queueBytes {
 		l.countLoss(bytes)
@@ -327,14 +369,21 @@ func capFields(text json.RawMessage) (json.RawMessage, int) {
 	if len(text) <= EventFieldsLimitBytes {
 		return text, 0
 	}
+	return headFields(text, len(text))
+}
+
+// headFields returns the fields `{"head": <the first EventHeadBytes bytes of text>}` of an event that was cut, and size, the
+// size of the text before the cut or the number of bytes that the producer had written when it stopped.
+func headFields(text []byte, size int) (json.RawMessage, int) {
+	// silent: the event states the size before the cut in truncated, so the flag of the cut adds nothing.
 	head, _ := cutText(text, EventHeadBytes)
 	cut, err := json.Marshal(map[string]string{"head": head})
 	if err != nil {
 		// A string serializes without failure, so this is a defect of the serializer; the event keeps its size and no head.
 		fmt.Fprintf(os.Stderr, "event writer: the head of an event over the size bound cannot be serialized: %v\n", err)
-		return json.RawMessage(`{}`), len(text)
+		return json.RawMessage(`{}`), size
 	}
-	return cut, len(text)
+	return cut, size
 }
 
 func (l *EventLog) countLoss(bytes int) {

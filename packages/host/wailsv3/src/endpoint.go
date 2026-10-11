@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
@@ -356,7 +357,7 @@ func (e *Endpoint) accept(listener net.Listener) {
 		if err != nil {
 			return
 		}
-		c := &endpointConn{conn: conn, topics: map[topic]bool{}, out: make(chan []byte, 256), done: make(chan struct{})}
+		c := &endpointConn{conn: conn, topics: map[topic]bool{}, out: make(chan []byte, EndpointOutputFrames), done: make(chan struct{})}
 		e.mu.Lock()
 		e.conns[c] = true
 		e.mu.Unlock()
@@ -458,6 +459,8 @@ type endpointConn struct {
 	conn   net.Conn
 	topics map[topic]bool
 	out    chan []byte
+	// queued is the number of bytes of the frames in out and in the write that is in progress.
+	queued atomic.Int64
 	done   chan struct{}
 	once   sync.Once
 }
@@ -473,15 +476,31 @@ func (c *endpointConn) close(reason string) {
 	})
 }
 
-// send puts one frame into the write queue. When the queue is full, the connection does not read, so it is closed.
+// send puts one frame into the write queue. The queue holds at most EndpointOutputFrames frames and EndpointOutputBytes
+// bytes. When the queue is full, the connection does not read, so the frame is refused, the refusal is the event
+// `host.buffer.dropped`, and the connection is closed.
 func (c *endpointConn) send(body []byte) {
+	size := int64(len(body))
+	if c.queued.Add(size) > EndpointOutputBytes {
+		c.queued.Add(-size)
+		c.refuse(len(body), fmt.Sprintf("%d bytes", EndpointOutputBytes))
+		return
+	}
 	select {
 	case c.out <- body:
 	case <-c.done:
+		c.queued.Add(-size)
 	default:
-		LogError("endpoint", "closing a connection that does not read")
-		c.close("the output queue is full")
+		c.queued.Add(-size)
+		c.refuse(len(body), fmt.Sprintf("%d messages", EndpointOutputFrames))
 	}
+}
+
+// refuse records the frame that the full write queue refused and closes the connection, which does not read.
+func (c *endpointConn) refuse(bytes int, limit string) {
+	recordBufferDrop("endpoint output queue", bytes, limit)
+	LogError("endpoint", "closing a connection that does not read")
+	c.close("the output queue is full")
 }
 
 func (c *endpointConn) write() {
@@ -490,6 +509,7 @@ func (c *endpointConn) write() {
 		case <-c.done:
 			return
 		case body := <-c.out:
+			c.queued.Add(-int64(len(body)))
 			frame := binary.BigEndian.AppendUint32(make([]byte, 0, 4+len(body)), uint32(len(body)))
 			if _, err := c.conn.Write(append(frame, body...)); err != nil {
 				LogError("endpoint connection write", err)
@@ -563,11 +583,17 @@ func (e *Endpoint) changeInOrder(c *endpointConn, req request, parse subscriptio
 		routine.Go("endpoint-reply", func() { e.reply(c, req, nil, err) })
 		return
 	}
-	e.enqueue(t, func() {
+	if !e.enqueue(t, true, func() {
 		err := e.change(c, t, on)
 		recordEndpointCall(req, started, err)
 		e.reply(c, req, nil, err)
-	})
+	}) {
+		// The page does not answer the changes of this topic as fast as the client sends them; the change is refused.
+		refused := rpcError(codeHandler, "the subscription changes of %s are not keeping up: %d changes are pending, so this change is refused", t.name, EndpointTopicChanges)
+		recordBufferDrop("endpoint topic changes", len(req.Params), fmt.Sprintf("%d messages", EndpointTopicChanges))
+		recordEndpointCall(req, started, refused)
+		routine.Go("endpoint-reply", func() { e.reply(c, req, nil, refused) })
+	}
 }
 
 // change changes the topic subscription of connection c and, for the first subscription or the last release, notifies the page. When the page
@@ -583,15 +609,21 @@ func (e *Endpoint) change(c *endpointConn, t topic, on bool) error {
 	return err
 }
 
-// enqueue puts job into the queue of topic t and starts a goroutine when none is running.
-func (e *Endpoint) enqueue(t topic, job func()) {
+// enqueue puts job into the queue of topic t and starts a goroutine when none is running. A bounded job is refused, and
+// enqueue returns false, when EndpointTopicChanges jobs wait already; the release of the subscriptions of a closed
+// connection is not bounded, because the number of its jobs is the number of topics the connection held.
+func (e *Endpoint) enqueue(t topic, bounded bool, job func()) bool {
 	e.queueMu.Lock()
 	defer e.queueMu.Unlock()
 	pending, running := e.queues[t]
+	if bounded && len(pending) >= EndpointTopicChanges {
+		return false
+	}
 	e.queues[t] = append(pending, job)
 	if !running {
 		routine.Go("endpoint-drain", func() { e.drain(t) })
 	}
+	return true
 }
 
 // drain runs the jobs in order until the queue of topic t is empty.
@@ -623,7 +655,7 @@ func (e *Endpoint) drop(c *endpointConn, reason string) {
 	}
 	e.mu.Unlock()
 	for _, t := range held {
-		e.enqueue(t, func() {
+		e.enqueue(t, false, func() {
 			if err := e.change(c, t, false); err != nil {
 				LogError("endpoint release", fmt.Sprintf("%s on %s: %v", t.name, t.window, err))
 			}

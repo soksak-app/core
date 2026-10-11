@@ -18,7 +18,7 @@ use serde::Serialize;
 use serde_json::json;
 use serde_json::value::{to_raw_value, RawValue};
 
-use crate::bounds::{cut_text, EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES};
+use crate::bounds::{cut_text, Fields, EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES};
 
 /// The schema number of the lines that this writer writes.
 pub const SCHEMA: u64 = 1;
@@ -320,6 +320,17 @@ impl EventLog {
         fields: Box<RawValue>,
         deadline: Duration,
     ) -> Result<u64, String> {
+        self.emit_placed_fields(level, event, Fields::whole(fields), deadline)
+    }
+
+    /// Like `emit_placed` for fields that a producer serialized up to the bound.
+    pub fn emit_placed_fields(
+        &self,
+        level: Level,
+        event: &str,
+        fields: Fields,
+        deadline: Duration,
+    ) -> Result<u64, String> {
         let (placed, receiver) = sync_channel(1);
         if !self.enqueue(
             now_us(),
@@ -346,7 +357,7 @@ impl EventLog {
             self.count_loss(1, event.len() as u64);
             return false;
         }
-        let fields = match to_raw_value(fields) {
+        let fields = match Fields::of(fields) {
             Ok(fields) => fields,
             Err(error) => {
                 // A value that cannot be serialized is a defect of the caller: it is recorded in place of the event.
@@ -368,6 +379,18 @@ impl EventLog {
         level: Level,
         event: &str,
         fields: Box<RawValue>,
+    ) -> Result<bool, String> {
+        self.emit_fields(ts_us, layer, level, event, Fields::whole(fields))
+    }
+
+    /// Like `emit_relayed` for fields that a producer serialized up to the bound.
+    pub fn emit_fields(
+        &self,
+        ts_us: u64,
+        layer: &str,
+        level: Level,
+        event: &str,
+        fields: Fields,
     ) -> Result<bool, String> {
         if !LAYERS.contains(&layer) {
             return Err(format!(
@@ -399,10 +422,14 @@ impl EventLog {
         layer: Cow<'static, str>,
         level: Level,
         event: &str,
-        fields: Box<RawValue>,
+        fields: Fields,
         placed: Option<SyncSender<u64>>,
     ) -> bool {
-        let (fields, truncated) = cap_fields(fields);
+        // Fields that the producer cut at the bound are stored as they are; the others are cut here when they are over it.
+        let (fields, truncated) = match fields.truncated {
+            Some(size) => (fields.text, Some(size)),
+            None => cap_fields(fields.text),
+        };
         let bytes = fields.get().len() + event.len();
         if self.queued_bytes.load(Ordering::Relaxed) + bytes > self.queue_bytes {
             self.count_loss(1, bytes as u64);

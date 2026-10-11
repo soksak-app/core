@@ -318,11 +318,22 @@ fn an_event_over_the_size_bound_is_stored_cut_with_its_original_size() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let config = tempfile::tempdir().unwrap();
     let log = roomy_writer(config.path());
-    emit_host(
+    // The text reaches the writer whole, as the fields of a relayed event do; a producer that serializes a value stops at the
+    // bound before it (bounds.producer.fields-are-cut-while-serialized).
+    let oversize =
+        RawValue::from_string(serde_json::json!({"text": "é".repeat(3 << 20)}).to_string())
+            .unwrap();
+    log.emit_relayed(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_micros() as u64,
+        "host",
         soksak_host_tauriv2::event_log::Level::Info,
         "host.test.oversize",
-        serde_json::json!({"text": "é".repeat(3 << 20)}),
-    );
+        oversize,
+    )
+    .unwrap();
     emit_host(
         soksak_host_tauriv2::event_log::Level::Info,
         "host.test.small",

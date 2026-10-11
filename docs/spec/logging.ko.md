@@ -82,15 +82,19 @@ event가 싣는 모든 buffer와 값에는 상한이 있고, 생산자는 값을
 
 | 상한 | 값 | 도달하면 |
 | --- | --- | --- |
-| event의 fields | JSON 글 1,048,576바이트 | writer는 `fields`를 `{"head": <글의 첫 4,096바이트, 문자 경계에서 자름>}`로, `truncated`를 원래 크기로 정해 event를 저장한다. 큐에는 저장한 크기만큼 청구한다. native ring은 한 번의 pull인 262,144바이트를 넘게 싣지 않는다. |
+| event의 fields | JSON 글 1,048,576바이트 | writer는 `fields`를 `{"head": <글의 첫 4,096바이트, 문자 경계에서 자름>}`로, `truncated`를 원래 크기로 정해 event를 저장한다. 큐에는 저장한 크기만큼 청구한다. native ring은 한 번의 pull인 262,144바이트를 넘게 싣지 않는다. host의 생산자는 이 상한에서 fields의 직렬화를 멈추므로 `truncated`는 writer가 글을 쟀을 때는 그 크기이고, 생산자가 멈췄을 때는 멈출 때까지 쓴 바이트 수이며, 이는 상한보다 크고 값의 크기보다 작다. |
 | 호출 event(`page.call`, `host.endpoint.call`, `host.binding.call`)의 `args`와 `error` | 1,024바이트, 문자 경계에서 자름 | 상한까지 저장하고 event에 `truncated: true`가 붙는다. page는 `args`를 직렬화하는 동안 자르며 값 전체를 직렬화하지 않는다. |
 | `page.console.<method>`의 `text` | 8,192바이트, 문자 경계에서 자름 | 글은 인자를 직렬화하는 동안 상한까지만 만들고, event에 `truncated: true`가 붙는다. |
-| page writer의 큐 | event 4,096개 | page는 거절한 event를 세어 뒤따르는 event 앞에 `page.log.dropped`를 저장한다. |
+| page나 plugin의 event `fields` | JSON 글 65,536바이트 | page는 fields를 상한까지만 직렬화하고, event는 `fields` `{"head": <글의 첫 4,096바이트>, "truncated": true}`로 큐에 넣는다. JSON으로 직렬화할 수 없는 fields는 호출자의 오류다. |
+| record(`page.record.<level>`, `host.record.<level>`, `sidecar.record.<level>`)의 `text`와 `where` | 각각 8,192바이트와 1,024바이트, 문자 경계에서 자름 | 생산자가 복사하기 전에 자르고 fields에 `truncated: true`가 붙는다. |
+| page writer의 큐 | event 4,096개와 4,194,304바이트(각 event의 fields와 이름의 바이트) | page는 거절한 event와 그 바이트를 세어 뒤따르는 event 앞에 `page.log.dropped`(`count`, `bytes`, `reason`)를 저장하며, 거절한 상한마다 event 하나를 저장한다. |
 | host writer의 큐 | event 8,192개와 16 MiB | writer는 거절한 event를 세어 `log.dropped`로 저장한다. |
 | sidecar의 보류 응답(256줄의 쓰기 큐가 빈 뒤에 쓴다) | 메시지 1,024개와 4,194,304바이트 | 응답은 오류 `sidecar <name>: the pending replies reached <bound>, so a reply of surface <surface> is dropped`로 거절되고 `host.buffer.dropped`를 저장한다. |
 | sidecar의 보류 close | 메시지 1,024개와 4,194,304바이트 | close는 보내지 않고, 표면은 답을 기다리는 목록에 올리지 않으며, `host.buffer.dropped`를 저장하고, sidecar는 끝날 때까지 그 표면의 session을 가진다. |
 | relay의 만료된 요청(늦은 응답) | 요청 256개 | 가장 오래된 요청을 잊으므로 그 요청의 늦은 응답은 `exposure reply <id> has no matching request`로 답하고 `host.buffer.dropped`를 저장한다. |
-| host record의 시작 buffer | record 1,024개 | 거절한 record는 writer가 생기면 세어서 `log.dropped`로 저장한다. |
+| host record의 시작 buffer | record 1,024개와 4,194,304바이트 | 거절한 record는 writer가 생기면 세어서 `log.dropped`로 저장한다. |
+| page의 답을 기다리는 endpoint topic 하나의 구독 변경 | 변경 256개 | 변경은 적용하지 않고 거절하며, client는 오류 `-32000: the subscription changes of <name> are not keeping up: 256 changes are pending, so this change is refused`를 받고 `host.buffer.dropped`를 저장한다. 닫힌 연결의 구독 해제는 거절하지 않는다. 그 연결이 가졌던 topic마다 변경 하나뿐이다. |
+| endpoint 연결의 출력 큐(Wails host) | frame 256개와 16,777,216바이트 | frame을 거절하고 `host.buffer.dropped`를 저장하며, 읽지 않는 연결을 닫는다. Tauri host는 연결을 쥔 채 각 frame을 소켓에 쓰므로 큐가 없다. |
 
 모든 `host.buffer.dropped` event는 `count`가 1이고 거절한 메시지의 크기를 담으므로, 거절이 쏟아지면 event도 쏟아진다. 이는 writer의 큐가 상한으로 막고 다시 센다.
 

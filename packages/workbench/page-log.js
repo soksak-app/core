@@ -23,6 +23,11 @@ const batcher = host
   ? createEventBatcher({ call: (request) => host.call("log", request), report: (error) => rawConsole.error(error.message) })
   : null;
 
+// The longest place and text of a record in an event, in bytes; a longer one is cut on a character boundary and the event says
+// `truncated` (docs/spec/logging.md#bounds).
+const RECORD_WHERE_LIMIT = 1024;
+const RECORD_TEXT_LIMIT = 8192;
+
 /**
  * Stores a record of the page and returns a promise that ends when the batch that carries it was relayed. `level` is `error`
  * for a failure and `info` for a state without a failure; `line` is `<where>: <text>`, and a line without `: ` has the place
@@ -33,8 +38,12 @@ export function reportRecord(level, line) {
     (level === "error" ? rawConsole.error : rawConsole.info)(line);
     return Promise.resolve();
   }
-  const { where, text } = recordOf(level, line);
-  return batcher.emitAndWait(level, `page.record.${level}`, { where, text });
+  const record = recordOf(level, line);
+  const where = cutBytes(record.where, RECORD_WHERE_LIMIT);
+  const text = cutBytes(record.text, RECORD_TEXT_LIMIT);
+  const fields = { where: where.text, text: text.text };
+  if (where.truncated || text.truncated) fields.truncated = true;
+  return batcher.emitAndWait(level, `page.record.${level}`, fields);
 }
 
 /** Queues an event of a plugin or of the page with its level, name and fields; nothing happens in a page without a host. */

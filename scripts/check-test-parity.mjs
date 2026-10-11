@@ -1869,6 +1869,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F160.6.4",
+    implementation: [
+      { file: "packages/host/tauriv2/src/bounds.rs", symbol: "pub fn bounded_serialize" },
+      { file: "packages/host/wailsv3/src/bounds.go", symbol: "func boundedMarshal" },
+      { file: "packages/workbench/log-batch.js", symbol: "export function createEventBatcher" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/producer_bounds_test.rs", id: "the_fields_of_a_host_event_are_cut_while_they_are_serialized" },
+      { file: "packages/host/wailsv3/tests/producer_bounds_test.go", id: "TestTheFieldsOfAHostEventAreCutWhileTheyAreSerialized" },
+      { file: "packages/workbench/test/page-bounds.test.mjs", id: "the fields of an event of a plugin over 65536 bytes are replaced by their head while they are serialized" },
+    ],
+    expected: "A producer cuts the fields, the records and the queues to their bounds while it serializes them, and every cut or refusal is stored.",
+    levels: ["unit"],
+  },
+  {
     id: "F160.11",
     implementation: [
       { file: "scripts/test-runner.mjs", symbol: "export async function runTests" },
