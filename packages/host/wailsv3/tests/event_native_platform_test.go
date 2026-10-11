@@ -3,6 +3,8 @@
 package host_test
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -91,5 +93,63 @@ func TestTheHostWriterStartsWithThePullOfThePlatform(t *testing.T) {
 		if event["layer"] != "native" {
 			t.Fatalf("events %v", events)
 		}
+	}
+}
+
+// contract: log.native.shutdown-flushes-the-observers-before-the-writer
+func TestTheShutdownFlushesTheNativeObserversBeforeTheWriterFlush(t *testing.T) {
+	log, err := host.StartHostEventLog(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(log.Close)
+	flushed := false
+	err = host.FlushEventLog(log, func() error {
+		flushed = true
+		// The flush of the observers stores the tail of a counted source; the writer flush that follows writes it.
+		log.Emit(host.LevelInfo, "host.test.observer_tail", map[string]any{"count": 3})
+		return nil
+	}, 5*time.Second)
+	if err != nil || !flushed {
+		t.Fatalf("the shutdown flush returned %v, observers flushed %v", err, flushed)
+	}
+	found := false
+	for _, event := range readEventLog(t, log.Path()) {
+		found = found || event["event"] == "host.test.observer_tail"
+	}
+	if !found {
+		t.Fatal("the event stored by the flush of the observers is not in the file after the shutdown flush")
+	}
+}
+
+// contract: log.native.shutdown-reports-a-failed-observer-flush
+func TestTheShutdownReportsAFailedObserverFlushAndStillFlushesTheWriter(t *testing.T) {
+	log, err := host.StartHostEventLog(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(log.Close)
+	log.Emit(host.LevelInfo, "host.test.before_failure", map[string]any{})
+	err = host.FlushEventLog(log, func() error { return fmt.Errorf("refused by the platform") }, 5*time.Second)
+	if err == nil || !strings.Contains(err.Error(), "native observers") || !strings.Contains(err.Error(), "refused by the platform") {
+		t.Fatalf("the failed flush of the observers returned %v", err)
+	}
+	found := false
+	for _, event := range readEventLog(t, log.Path()) {
+		found = found || event["event"] == "host.test.before_failure"
+	}
+	if !found {
+		t.Fatal("the writer was not flushed after the observer flush failed")
+	}
+}
+
+// contract: log.native.platform-flushes-the-observers
+func TestThePlatformFlushesTheNativeObserversWithoutAnError(t *testing.T) {
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := system.FlushNativeObservers(); err != nil {
+		t.Fatal(err)
 	}
 }

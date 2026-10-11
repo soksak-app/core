@@ -462,6 +462,9 @@ impl Platform for Windows {
     fn take_native_event_loss(&self, channel: u8) -> Result<(u64, u64), String> {
         unsupported::take_native_event_loss(channel)
     }
+    fn flush_native_observers(&self) -> Result<(), String> {
+        unsupported::flush_native_observers()
+    }
     fn observe_activity(&self) -> Result<(), String> {
         unsupported::observe_activity()
     }

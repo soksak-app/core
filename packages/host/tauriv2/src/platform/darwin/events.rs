@@ -9,8 +9,14 @@ extern "C" {
     fn sp_event_take_loss(channel: u8) -> Loss;
     fn sp_event_set_policy(levels: *const i8) -> bool;
     fn sp_observe_activity();
+    fn sp_observe_flush();
     fn sp_mono_ns() -> u64;
     fn sp_event_set_boot(boot: *const std::ffi::c_char) -> bool;
+}
+
+pub fn flush_native_observers() -> Result<(), String> {
+    unsafe { sp_observe_flush() };
+    Ok(())
 }
 
 pub fn observe_activity() -> Result<(), String> {

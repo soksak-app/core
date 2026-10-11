@@ -99,7 +99,7 @@ int main(void) { @autoreleasepool {
         && [named(selector, @"native.observe.registered")[0][@"fields"][@"kind"] isEqual:@"notification_selector"]
         && named(selector, @"native.observe.delivered").count == 2, @"a selector is registered and its delivery is an event");
     NSArray<NSDictionary *> *keyPath = capturedEvents(^{
-        check(sp_observe_key_path("test.key_path", SP_OBSERVE_RECORD, target, target, @"value", 0), @"a key path registration succeeds");
+        check(sp_observe_key_path("test.key_path", SP_OBSERVE_RECORD, target, target, @"value", 0, NULL), @"a key path registration succeeds");
         target.value = 3;
         [target removeObserver:target forKeyPath:@"value"];
     });
@@ -162,7 +162,7 @@ int main(void) { @autoreleasepool {
     NSArray<NSDictionary *> *refused = capturedEvents(^{
         check(sp_observe_notification("test.refused", SP_OBSERVE_RECORD, probe, nil, nil, nil) == nil, @"a registration without a handler returns nil");
         check(!sp_observe_delegate("test.refused", SP_OBSERVE_RECORD, [[NSObject alloc] init], target), @"an owner without a delegate property refuses the delegate");
-        check(!sp_observe_key_path("test.refused", SP_OBSERVE_RECORD, nil, target, @"value", 0), @"a missing target refuses the key path");
+        check(!sp_observe_key_path("test.refused", SP_OBSERVE_RECORD, nil, target, @"value", 0, NULL), @"a missing target refuses the key path");
     });
     NSArray *failed = named(refused, @"native.observe.failed");
     check(failed.count == 3 && [failed[0][@"level"] intValue] == 0 && [failed[0][@"fields"][@"source"] isEqual:@"test.refused"]

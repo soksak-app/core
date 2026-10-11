@@ -85,6 +85,10 @@ static NSString *const kPageScript = @"(() => {"
     "elements(); requests();"
     "})();";
 
+// The contexts of the key paths that the document view registers; a notification with another context belongs to the platform.
+static char kStateContext;
+static char kAppearanceContext;
+
 static NSArray<NSString *> *observedKeys(void) {
     return @[ @"URL", @"title", @"loading", @"estimatedProgress", @"canGoBack", @"canGoForward" ];
 }
@@ -332,7 +336,10 @@ static NSString *pluginContentType(NSString *path) {
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
-    if (object == self) {
+    if (context != &kStateContext && context != &kAppearanceContext) {
+        // The platform registers the view as an observer of itself too (a corner radius of the view); those are not ours.
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+    } else if (object == self) {
         // The progress of a load changes at the rate of the load, so the changes of the state are counted.
         sp_observe_delivered("document_view.state");
         [self report];
@@ -564,11 +571,11 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     }
     [nativePlane addSubview:view];
     [view installEventMonitor];
-    sp_observe_key_path("document_view.appearance", SP_OBSERVE_RECORD, surface, view, @"effectiveAppearance", 0);
+    sp_observe_key_path("document_view.appearance", SP_OBSERVE_RECORD, surface, view, @"effectiveAppearance", 0, &kAppearanceContext);
     view.zoom = 1;
     view.pageZoom = view.zoom;
     [view _setOverrideDeviceScaleFactor:sp_surface_scale(surface)];
-    for (NSString *key in observedKeys()) sp_observe_key_path("document_view.state", SP_OBSERVE_COUNT, view, view, key, 0);
+    for (NSString *key in observedKeys()) sp_observe_key_path("document_view.state", SP_OBSERVE_COUNT, view, view, key, 0, &kStateContext);
     return view; // The caller owns this reference until sp_document_close.
 }
 
@@ -700,10 +707,10 @@ void sp_document_close(void *handle) {
         [NSEvent removeMonitor:view.eventMonitor];
         view.eventMonitor = nil;
     }
-    [view.webSurface removeObserver:view forKeyPath:@"effectiveAppearance"];
+    [view.webSurface removeObserver:view forKeyPath:@"effectiveAppearance" context:&kAppearanceContext];
     view.event = NULL;
     view.eventContext = NULL;
-    for (NSString *key in observedKeys()) [view removeObserver:view forKeyPath:key];
+    for (NSString *key in observedKeys()) [view removeObserver:view forKeyPath:key context:&kStateContext];
     view.scroll.view = nil;
     [view.configuration.userContentController removeAllScriptMessageHandlers];
     view.navigationDelegate = nil;

@@ -36,9 +36,12 @@ id sp_observe_notification(const char *source, sp_observe_mode mode, NSNotificat
 // the event `native.observe.failed` when the observer or the selector is missing.
 bool sp_observe_notification_selector(const char *source, sp_observe_mode mode, id observer, SEL selector, NSNotificationName name, id object);
 
-// Registers `observer` for the key path of `target`. observeValueForKeyPath calls sp_observe_delivered(source). Returns false after the
-// event `native.observe.failed` when an argument is missing.
-bool sp_observe_key_path(const char *source, sp_observe_mode mode, id target, id observer, NSString *keyPath, NSKeyValueObservingOptions options);
+// Registers `observer` for the key path of `target` with `context`. observeValueForKeyPath calls sp_observe_delivered(source). Returns
+// false after the event `native.observe.failed` when an argument is missing. An observer that is a view of the platform receives the
+// notifications that the platform registers on it too, so its observeValueForKeyPath compares `context` with the one it registered
+// and passes every other notification to its superclass.
+bool sp_observe_key_path(const char *source, sp_observe_mode mode, id target, id observer, NSString *keyPath, NSKeyValueObservingOptions options,
+    void *context);
 
 // Registers a monitor of the events delivered to this application (local) or to other applications (global), and returns its token, or
 // nil, after the event `native.observe.failed`, when the platform or a missing handler refuses it. Main thread only.

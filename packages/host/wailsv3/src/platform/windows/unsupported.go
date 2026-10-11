@@ -150,6 +150,10 @@ func (implementation) SetEventBoot(string) error {
 	return unsupported("event boot identifier")
 }
 
+func (implementation) FlushNativeObservers() error {
+	return unsupported("native observer flush")
+}
+
 func (implementation) ObserveActivity() error {
 	return unsupported("activity observers")
 }

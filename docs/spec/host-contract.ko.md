@@ -635,6 +635,9 @@ fn invalid_json_closes_connection() {
 | `log.native.platform-pulls-the-ring` | 플랫폼은 빈 native ring을 0바이트와 손실 없음으로 pull하고, 빈 buffer로의 pull은 거부한다. | both |
 | `log.native.platform-reads-the-clock-and-takes-the-boot` | 플랫폼은 양수이고 줄어들지 않으며 시간과 함께 늘어나는 monotonic clock(나노초)을 읽고, 실행의 boot 식별자를 native 계층의 상관 식별자용으로 받는다. 빈 식별자와 영문자, 숫자, `-`, `_` 외의 문자가 있는 식별자는 거부한다. | both |
 | `log.native.host-writer-starts-with-the-platform-pull` | host의 writer는 플랫폼의 pull과 함께 시작하고 `log.open`을 먼저 쓴다. | both |
+| `log.native.platform-flushes-the-observers` | 플랫폼은 마지막 요약 뒤에 전달이 있는 native observer의 모든 counted source의 요약을 저장하고 오류 없이 응답한다. | both |
+| `log.native.shutdown-flushes-the-observers-before-the-writer` | host의 종료는 native observer를 먼저 flush하고 event writer를 나중에 flush하므로, observer flush가 저장한 event는 종료 flush가 반환될 때 파일에 있다. | both |
+| `log.native.shutdown-reports-a-failed-observer-flush` | native observer의 flush가 실패해도 writer의 flush는 건너뛰지 않고, 결과는 observer flush와 그 원인을 이름으로 밝힌다. | both |
 | `log.writer.stores-class` | writer의 모든 줄은 catalog가 그 event 이름에 선언한 class인 `class`를 담으며, writer 자신의 event의 줄도 그렇다. | both |
 | `log.writer.marks-undeclared` | catalog가 이름을 선언하지 않은 event는 `class` 없이 `undeclared` `true`로 저장하며 버리지 않는다. | both |
 | `log.writer.splits-files-by-level` | level `error`, `warn`, `info`는 `<role>-<boot>.jsonl`에, `debug`와 `trace`는 `<role>-<boot>.debug.jsonl`에 간다. 후자는 첫 해당 event가 `log.open`을 첫 줄로 하여 만들며, `seq`는 두 파일에 걸쳐 이어지고 두 파일을 합치면 모든 `seq`가 한 번씩 있다. | both |

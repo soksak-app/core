@@ -192,8 +192,17 @@ int main(int argc, char **argv) { @autoreleasepool {
         [NSString stringWithFormat:@"soksak-document-store-%d", getpid()]];
     NSString *storeA = [stores stringByAppendingPathComponent:@"a"];
     NSString *storeB = [stores stringByAppendingPathComponent:@"b"];
-    void *document = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, changed, NULL);
+    __block void *document = NULL;
+    NSArray<NSDictionary *> *creation = capturedEvents(^{
+        document = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, changed, NULL);
+        // The first deliveries of the observed properties arrive on the run loop after the creation.
+        NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.3];
+        while (until.timeIntervalSinceNow > 0) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:until];
+    });
     check(document != NULL, @"a document view is created inside the surface");
+    NSMutableArray *failedEntrances = [NSMutableArray array];
+    for (NSDictionary *event in creation) if ([event[@"name"] isEqual:@"native.observe.failed"]) [failedEntrances addObject:event[@"fields"]];
+    check(failedEntrances.count == 0, [NSString stringWithFormat:@"creating a document view stores no failed registration or delivery: %@", failedEntrances]);
     WKWebView *view = (WKWebView *)document;
     check([view.appearance.name isEqual:NSAppearanceNameDarkAqua],
         @"a document inherits the owner's resolved dark appearance");
