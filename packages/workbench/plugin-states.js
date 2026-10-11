@@ -1,9 +1,10 @@
 // Mounts the plugin state modules for each project that the window shows (docs/spec/plugins.md#plugin-state).
 //
 // When the window shows another project or the library, it first releases all state modules and clears their registrations.
-import { checkProjectData } from "@soksak/plugin-api";
+import { checkProjectData, createPluginRuntime } from "@soksak/plugin-api";
 import { registry } from "./exposure.js";
 import { log } from "./host.js";
+import { pluginRecords } from "./plugin-records.js";
 
 const states = [];
 let options = null;
@@ -91,10 +92,13 @@ function contextOf(state, project, table, failures) {
     if (!Object.hasOwn(stored, key)) return structuredClone(declared[key].default);
     return checkProjectData(state.plugin, declared, key, stored[key].value);
   };
+  // The recording functions of a surface runtime, without a surface (docs/spec/plugins.md#plugin-state).
+  const { trace, log: eventLog } = createPluginRuntime({ pluginId: state.plugin, hooks: pluginRecords });
   const port = state.sidecars?.length === 1 ? options.sidecar(state.sidecars[0]) : null;
   return {
     project: { id: project.id, root: project.root },
     exposure: { status: table.status, command: table.command },
+    runtime: Object.freeze({ trace, log: eventLog }),
     sidecar: {
       send(body) {
         if (!port) throw new Error(`plugin ${state.plugin} state requires exactly one declared sidecar`);

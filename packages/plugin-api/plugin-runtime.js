@@ -1,5 +1,6 @@
 // The recording functions of the runtime that a plugin receives, `runtime.trace` and `runtime.log` (docs/spec/plugins.md#tracing,
-// docs/spec/plugins.md#logging). A surface context builds them with this function.
+// docs/spec/plugins.md#logging). A surface context and the context of a state module build them with this one function, so both
+// give a plugin the same calls, checks and gates.
 
 export const LOG_LEVELS = Object.freeze(["error", "warn", "info", "debug", "trace"]);
 
@@ -10,13 +11,14 @@ const CID = /^[^"\\\u0000-\u001f\u007f]+$/;
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
 /**
- * Builds `{trace, log}` for the plugin `pluginId` and its surface `surfaceId`. `hooks` is what the page offers:
+ * Builds `{trace, log}` for the plugin `pluginId`. `surfaceId` is the surface that the events belong to, or null for the state
+ * module, whose events have no surface. `hooks` is what the page offers:
  *   log(level, event, fields, cids)  stores an event; logEnabled(level) tells whether the level is stored
  *   trace(event, fields)             writes a trace event; traceEnabled() tells whether the trace is on
  * A page without a host offers none of them, and the calls then store nothing and build nothing. The function of a pair is not
  * accepted without its query, because it could not skip the building of the fields.
  */
-export function createPluginRuntime({ pluginId, surfaceId, hooks }) {
+export function createPluginRuntime({ pluginId, surfaceId = null, hooks }) {
   for (const [store, query] of [["log", "logEnabled"], ["trace", "traceEnabled"]]) {
     if (hooks[store] !== undefined && typeof hooks[query] !== "function") throw new TypeError(`runtime.${store} requires runtime.${query}`);
     if (hooks[query] !== undefined && typeof hooks[store] !== "function") throw new TypeError(`runtime.${query} requires runtime.${store}`);
@@ -37,7 +39,7 @@ export function createPluginRuntime({ pluginId, surfaceId, hooks }) {
     if (!hooks.trace) return;
     const built = fieldsOf("trace", fields, hooks.traceEnabled);
     if (built === null) return;
-    hooks.trace(event, { ...built, plugin: pluginId, surface: surfaceId });
+    hooks.trace(event, { ...built, plugin: pluginId, ...(surfaceId === null ? {} : { surface: surfaceId }) });
   };
   // default: a page without a host (the browser application, a test) has no trace, as a trace that is off.
   trace.enabled = () => hooks.traceEnabled?.() ?? false;
@@ -68,7 +70,7 @@ export function createPluginRuntime({ pluginId, surfaceId, hooks }) {
     if (built === null) return;
     if ("surface" in built) throw new TypeError("log fields must not name the surface; the context adds it");
     if (!enabled(level)) return;
-    hooks.log(level, `plugin.${pluginId}.${event}`, { ...built, surface: surfaceId }, cids);
+    hooks.log(level, `plugin.${pluginId}.${event}`, surfaceId === null ? { ...built } : { ...built, surface: surfaceId }, cids);
   }]));
   log.enabled = enabled;
   return { trace, log: Object.freeze(log) };

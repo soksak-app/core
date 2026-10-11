@@ -106,6 +106,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 - `exposure.status(name, read, subscribe)`와 `exposure.command(name, run)`: 플러그인이 선언한 status와 명령을 애플리케이션 문서의 등록소에 등록한다. `subscribe(fn)`은 여러 번 호출될 수 있고 그 구독을 멈추는 함수를 반환한다. 이 항목은 `surface`가 없는 요청에 같은 이름의 어떤 표면 등록보다 먼저 답하고([표면 선택](exposure.ko.md#표면-선택)), dispose가 제거한다.
 - `sidecar`: 플러그인이 선언한 유일한 사이드카의 `{send(body), on(fn), onFailure(fn)}`. `onFailure`는 세션의 각 [사이드카 실패](sidecars.ko.md#실패) 이유를 받는다. 세션 식별자는 `state:<플러그인 id>:<프로젝트 id>`이므로 호스트는 사이드카에 프로젝트 디렉터리를 `root`로 준다([사이드카](sidecars.ko.md#메시지)).
 - `data.get(key)`와 `data.set(key, value)`: 플러그인의 [프로젝트 데이터](#프로젝트-데이터).
+- `runtime`: `{trace, log}`이며 표면 컨텍스트의 `runtime`에 있는 같은 이름의 함수와 인자, 검사, gate가 같다([Tracing](#tracing), [Logging](#logging)). event에는 플러그인 id가 붙고 `surface` field는 없으며, host가 없는 문서는 아무것도 저장하지 않는다.
 
 상태 모듈은 `package.json`의 `files`에 나열한 파일이며, 나열하지 않으면 `sok plugin pack`이 실패한다. 마운트나 해제의 실패는 페이지 오류로 보고한다.
 

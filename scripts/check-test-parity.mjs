@@ -1980,6 +1980,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F160.32.4",
+    implementation: [
+      { file: "packages/workbench/plugin-states.js", symbol: "function contextOf" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plugin-states.test.mjs", id: "a state module is mounted for the shown project, answers its commands, stores data, and is disposed on switch" },
+      { file: "packages/workbench/test/plugin-records.test.mjs", id: "an event of a state module has the plugin in its name and no surface in its fields" },
+    ],
+    expected: "The context of a state module has the runtime functions trace and log of a surface context, without a surface.",
+    levels: ["unit"],
+  },
+  {
     id: "F160.32.5",
     implementation: [
       { file: "packages/plugin-api/events-check.js", symbol: "const relativeName" },

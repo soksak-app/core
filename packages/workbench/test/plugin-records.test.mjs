@@ -42,3 +42,12 @@ test("the trace of a plugin builds no object while the trace is off", async () =
   assert.equal(built, 0);
   assert.deepEqual(batches(), []);
 });
+
+test("an event of a state module has the plugin in its name and no surface in its fields", async () => {
+  calls.length = 0;
+  const { log, trace } = createPluginRuntime({ pluginId: "probe", hooks: pluginRecords });
+  log.info("started", { project: "p1" });
+  assert.equal(trace.enabled(), false);
+  await settled();
+  assert.deepEqual(batches().map(({ event, fields }) => ({ event, fields })), [{ event: "plugin.probe.started", fields: { project: "p1" } }]);
+});

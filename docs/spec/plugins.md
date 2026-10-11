@@ -106,6 +106,7 @@ A plugin without a surface, or with state that no single tab owns, declares a `s
 - `exposure.status(name, read, subscribe)` and `exposure.command(name, run)`: register the plugin's declared statuses and commands in the application document's registry. `subscribe(fn)` may be called more than once and returns a function that stops that subscription. These entries answer requests without `surface` before any surface registration of the same name ([choosing a surface](exposure.md#choosing-a-surface)), and dispose removes them.
 - `sidecar`: `{send(body), on(fn), onFailure(fn)}` for the plugin's only declared sidecar; `onFailure` receives the reason of each [sidecar failure](sidecars.md#failure) of the session. The session identifier is `state:<plugin id>:<project id>`, so the host gives the sidecar the project directory as `root` ([sidecars](sidecars.md#messages)).
 - `data.get(key)` and `data.set(key, value)`: the plugin's [project data](#project-data).
+- `runtime`: `{trace, log}`, the functions of the surface context's `runtime` of the same names, with the same arguments, checks and gates ([tracing](#tracing), [logging](#logging)). The events carry the plugin id and no `surface` field, and a document without a host stores nothing.
 
 The state module is a file listed in the `files` of `package.json`; `sok plugin pack` fails when it is not listed. A mount or dispose failure is reported as a page error.
 
