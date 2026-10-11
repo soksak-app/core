@@ -1373,13 +1373,34 @@ func TestTheSamplerNamesARunningSidecarUntilItEnds(t *testing.T) {
 		t.Fatal(err)
 	}
 	host.PerformanceSample()
-	if got := samples(true); got != 1 {
-		t.Fatalf("a running sidecar was sampled %d times by one sample, want 1", got)
+	// The periodic sampler of the trace runs besides the two samples of this test, so under load a further sample can fall while the
+	// sidecar runs. The order of the records states the contract: a sample names the sidecar while it runs, and none names it after
+	// its exit record.
+	if got := samples(true); got < 1 {
+		t.Fatalf("a running sidecar was named by %d samples, want at least 1", got)
 	}
 	sidecars.Stop()
 	host.PerformanceSample()
-	if got := samples(true); got != 1 {
-		t.Fatalf("a sidecar that ended was sampled again: %d samples in all, want 1", got)
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	exit, named := -1, []int{}
+	for index, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		fields, _ := event["fields"].(map[string]any)
+		if event["event"] == "host.sidecar.exit" && fields["name"] == echoSidecar {
+			exit = index
+		}
+		if event["event"] == "host.sampler.memory" && fields["name"] == echoSidecar {
+			named = append(named, index)
+		}
+	}
+	if exit < 0 || len(named) == 0 {
+		t.Fatalf("the sidecar has an exit record at %d and %d samples that name it", exit, len(named))
+	}
+	for _, index := range named {
+		if index > exit {
+			t.Fatalf("a sample names the sidecar after it ended: samples at %v, exit at %d", named, exit)
+		}
 	}
 }
 
