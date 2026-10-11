@@ -14,6 +14,7 @@ use soksak_host_tauriv2::event_record::{flush_records, use_host_event_log, START
 use soksak_host_tauriv2::performance;
 
 /// The records of the host are process-wide, so the tests of this file run one at a time.
+use soksak_host_tauriv2::platform;
 static SERIAL: Mutex<()> = Mutex::new(());
 
 fn read(path: &Path) -> Vec<Value> {
@@ -106,9 +107,11 @@ fn records_written_before_the_writer_exists_are_stored_in_order_with_their_own_t
     let before = micros();
     log_error("early", "first");
     log_info("early", "second");
+    let mono_before = platform::current().unwrap().monotonic_ns().unwrap();
     let after = micros();
     let directory = tempfile::tempdir().unwrap();
     let log = start(directory.path(), 64);
+    let mono_after = platform::current().unwrap().monotonic_ns().unwrap();
     use_host_event_log(Some(Arc::clone(&log)));
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
@@ -125,6 +128,11 @@ fn records_written_before_the_writer_exists_are_stored_in_order_with_their_own_t
         );
     }
 }
+        let mono = event["mono_ns"].as_u64().unwrap();
+        assert!(
+            (mono_before..=mono_after).contains(&mono),
+            "mono_ns {mono} is outside [{mono_before}, {mono_after}]: the record took the clock of the attach"
+        );
 
 // contract: log.record.start-buffer-counts-its-loss
 #[test]

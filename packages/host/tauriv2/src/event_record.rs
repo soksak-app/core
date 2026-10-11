@@ -8,13 +8,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::json;
 use serde_json::value::{to_raw_value, RawValue};
 
-use crate::event_log::{EventLog, Level};
+use crate::event_log::{monotonic_ns, valid_cid, EventLog, Level, RelayedEvent};
 
 /// The number of records that the start buffer holds; a record beyond it is refused and counted.
 pub const START_BUFFER_RECORDS: usize = 1024;
 
 struct Buffered {
     ts_us: u64,
+    mono_ns: u64,
+    cids: Vec<String>,
     layer: String,
     level: Level,
     event: String,
@@ -64,13 +66,15 @@ pub fn use_host_event_log(log: Option<Arc<EventLog>>) {
     );
     if let Some(log) = log.as_ref() {
         for record in buffered {
-            if let Err(error) = log.emit_relayed(
-                record.ts_us,
-                &record.layer,
-                record.level,
-                &record.event,
-                record.fields,
-            ) {
+            if let Err(error) = log.emit_relayed(RelayedEvent {
+                ts_us: record.ts_us,
+                mono_ns: record.mono_ns,
+                layer: record.layer,
+                level: record.level,
+                event: record.event,
+                cids: record.cids,
+                fields: record.fields,
+            }) {
                 eprintln!("event writer: a buffered record cannot be stored: {error}");
             }
         }
@@ -100,16 +104,32 @@ pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
         }
     };
     // events: host.record.<level>, sidecar.record.<level>
-    store_event(parsed, layer, &name, place, fields);
+    store_event(parsed, layer, &name, place, Vec::new(), fields);
 }
 
 /// Hands an event to the writer of the host, or to the start buffer while no writer exists. `place` names the record in the
 /// reports of a refusal.
-fn store_event(level: Level, layer: &str, name: &str, place: &str, fields: Box<RawValue>) {
+fn store_event(
+    level: Level,
+    layer: &str,
+    name: &str,
+    place: &str,
+    cids: Vec<String>,
+    fields: Box<RawValue>,
+) {
     let now = now_us();
+    let mono_ns = monotonic_ns();
     let mut records = records();
     if let Some(log) = records.log.clone() {
-        if let Err(error) = log.emit_relayed(now, layer, level, name, fields) {
+        if let Err(error) = log.emit_relayed(RelayedEvent {
+            ts_us: now,
+            mono_ns,
+            layer: layer.to_string(),
+            level,
+            event: name.to_string(),
+            cids,
+            fields,
+        }) {
             eprintln!("event writer: the record {place:?} of {layer} cannot be stored: {error}");
         }
         return;
@@ -121,6 +141,8 @@ fn store_event(level: Level, layer: &str, name: &str, place: &str, fields: Box<R
     }
     records.buffer.push(Buffered {
         ts_us: now,
+        mono_ns,
+        cids,
         layer: layer.to_string(),
         level,
         event: name.to_string(),
@@ -156,6 +178,7 @@ pub fn emit_trace(layer: &str, fields: serde_json::Value) -> Result<(), String> 
         "host",
         &format!("host.{kind}.{event}"),
         &event,
+        Vec::new(),
         text,
     );
     Ok(())
@@ -171,7 +194,7 @@ pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
     }
     match to_raw_value(&fields) {
         // events: forwarded
-        Ok(text) => store_event(level, "host", event, event, text),
+        Ok(text) => store_event(level, "host", event, event, Vec::new(), text),
         Err(error) => {
             eprintln!("event writer: the fields of {event} cannot be serialized: {error}")
         }

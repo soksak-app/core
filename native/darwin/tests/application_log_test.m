@@ -5,6 +5,7 @@
 #include <time.h>
 #import "application_log.h"
 #import "event_ring.h"
+#import "support/records.h"
 
 /// The records that the process ring holds, decoded; a record that is not a JSON object stops the test.
 static void pulled(NSMutableArray<NSString *> *names, NSMutableArray<NSDictionary *> *fieldsOf) {
@@ -13,14 +14,9 @@ static void pulled(NSMutableArray<NSString *> *names, NSMutableArray<NSDictionar
     for (size_t offset = 0; offset < used;) {
         uint32_t length;
         memcpy(&length, buffer + offset, sizeof length);
-        const uint8_t *body = buffer + offset + 4;
-        uint8_t nameLength = body[9];
-        [names addObject:[[NSString alloc] initWithBytes:body + 10 length:nameLength encoding:NSUTF8StringEncoding]];
-        NSData *json = [NSData dataWithBytes:body + 10 + nameLength length:length - 10 - nameLength];
-        NSError *error = nil;
-        NSDictionary *fields = [NSJSONSerialization JSONObjectWithData:json options:0 error:&error];
-        if (![fields isKindOfClass:NSDictionary.class]) { fprintf(stderr, "FAIL: the fields are not a JSON object: %s\n", error.localizedDescription.UTF8String); exit(1); }
-        [fieldsOf addObject:fields];
+        NSDictionary *record = decodedRecord(buffer + offset + 4, length);
+        [names addObject:record[@"name"]];
+        [fieldsOf addObject:record[@"fields"]];
         offset += 4 + length;
     }
 }

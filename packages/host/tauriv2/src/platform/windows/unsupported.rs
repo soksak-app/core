@@ -452,6 +452,14 @@ pub fn pull_native_events(_buffer: &mut [u8]) -> Result<usize, String> {
     missing("native event pull")
 }
 
+pub fn monotonic_ns() -> Result<u64, String> {
+    missing("monotonic clock")
+}
+
+pub fn set_event_boot(_boot: &str) -> Result<(), String> {
+    missing("native event boot identifier")
+}
+
 pub fn take_native_event_loss() -> Result<(u64, u64), String> {
     missing("native event loss")
 }

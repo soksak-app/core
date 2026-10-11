@@ -124,7 +124,11 @@ fn start_standard_error_writes_the_start_line_and_takes_the_standard_error_of_th
         "host line\nchild line\n"
     );
     // The run record is an event of the event log, not a line of the stderr file.
-    let events = records::read_events(&records::event_log_path(config.path()));
+    // The activity observers that the writer installs store native events of their own; these checks concern the host.
+    let events: Vec<_> = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| event["layer"] != "native")
+        .collect();
     let run = events.last().unwrap();
     assert!(
         run["event"] == "host.record.info"
@@ -168,7 +172,11 @@ fn log_error_writes_an_error_event_to_the_event_log() {
         output.status,
         String::from_utf8_lossy(&output.stdout)
     );
-    let events = records::read_events(&records::event_log_path(config.path()));
+    // The activity observers that the writer installs store native events of their own; these checks concern the host.
+    let events: Vec<_> = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| event["layer"] != "native")
+        .collect();
     // The run record precedes it.
     let record = events.last().unwrap();
     assert!(
@@ -227,7 +235,11 @@ fn log_info_writes_an_info_event_to_the_event_log() {
         output.status,
         String::from_utf8_lossy(&output.stdout)
     );
-    let events = records::read_events(&records::event_log_path(config.path()));
+    // The activity observers that the writer installs store native events of their own; these checks concern the host.
+    let events: Vec<_> = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| event["layer"] != "native")
+        .collect();
     // The run record precedes it.
     let record = events.last().unwrap();
     assert!(

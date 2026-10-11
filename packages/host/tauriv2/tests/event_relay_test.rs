@@ -34,7 +34,7 @@ fn start(directory: &Path) -> EventLog {
 }
 
 fn event(name: &str, index: u64) -> Value {
-    json!({"ts_us": 1_791_000_000_000_000u64 + index, "level": "info", "event": name, "fields": {"index": index}})
+    json!({"ts_us": 1_791_000_000_000_000u64 + index, "mono_ns": 5_000_000_000u64 + index, "level": "info", "event": name, "fields": {"index": index}})
 }
 
 // contract: log.batch.stores-page-events-in-order
@@ -60,17 +60,50 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
     let directory = tempfile::tempdir().unwrap();
     let log = start(directory.path());
     let bad = |field: &str, value: Value| {
-        let mut item =
-            json!({"ts_us": 1, "level": "info", "event": "page.test.event", "fields": {}});
+        let mut item = json!({"ts_us": 1, "mono_ns": 1, "level": "info", "event": "page.test.event", "fields": {}});
         item[field] = value;
         json!({"action": "batch", "events": [item]})
     };
     let cases: Vec<(&str, Value, &str)> = vec![
-        ("no action", json!({"events": []}), "action must be batch"),
+        (
+            "no action",
+            json!({"events": []}),
+            "action must be batch or clock",
+        ),
         (
             "another action",
             json!({"action": "line", "events": []}),
-            "action must be batch, not \"line\"",
+            "action must be batch or clock, not \"line\"",
+        ),
+        (
+            "no clock",
+            bad("mono_ns", json!(0)),
+            "events[0]: mono_ns must be a positive integer",
+        ),
+        (
+            "a clock that is text",
+            bad("mono_ns", json!("now")),
+            "events[0]: mono_ns must be a positive integer",
+        ),
+        (
+            "cids that are not a list",
+            bad("cids", json!("b1.1")),
+            "events[0]: cids must be an array of non-empty strings without a quote, a backslash or a control character",
+        ),
+        (
+            "an identifier with a quote",
+            bad("cids", json!(["b1.\"1"])),
+            "events[0]: cids must be an array of non-empty strings without a quote, a backslash or a control character",
+        ),
+        (
+            "an empty identifier",
+            bad("cids", json!([""])),
+            "events[0]: cids must be an array of non-empty strings without a quote, a backslash or a control character",
+        ),
+        (
+            "an identifier that is a number",
+            bad("cids", json!([7])),
+            "events[0]: cids must be an array of non-empty strings without a quote, a backslash or a control character",
         ),
         (
             "no events",
@@ -116,7 +149,7 @@ fn a_relayed_batch_returns_the_transcript_lines_of_its_page_records() {
     let directory = tempfile::tempdir().unwrap();
     let log = start(directory.path());
     let record = |level: &str, place: &str, text: &str, index: u64| {
-        json!({"ts_us": 1_791_000_000_000_000u64 + index, "level": level, "event": format!("page.record.{level}"),
+        json!({"ts_us": 1_791_000_000_000_000u64 + index, "mono_ns": 5_000_000_000u64 + index, "level": level, "event": format!("page.record.{level}"),
                "fields": {"where": place, "text": text}})
     };
     let request = json!({"action": "batch", "events": [
@@ -124,7 +157,7 @@ fn a_relayed_batch_returns_the_transcript_lines_of_its_page_records() {
         event("page.trace.action", 2),
         record("info", "page", "ready", 3),
     ]});
-    let lines = log_command(&log, request).unwrap();
+    let lines = log_command(&log, request).unwrap().lines;
     assert_eq!(
         lines,
         [
@@ -133,13 +166,56 @@ fn a_relayed_batch_returns_the_transcript_lines_of_its_page_records() {
         ]
     );
     let bad = json!({"action": "batch", "events": [
-        {"ts_us": 1, "level": "info", "event": "page.record.info", "fields": {"where": 7}}
+        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "page.record.info", "fields": {"where": 7}}
     ]});
     let error = log_command(&log, bad).unwrap_err();
     assert!(
         error.contains("events[0]: fields where and text must be strings"),
         "{error}"
     );
+}
+
+// contract: log.batch.stores-clock-and-cids-of-page-events
+#[test]
+fn a_relayed_batch_stores_the_clock_and_the_cids_that_the_page_gave() {
+    let directory = tempfile::tempdir().unwrap();
+    let log = start(directory.path());
+    let mut with = event("page.test.input", 1);
+    with["cids"] = json!(["b1.4", "b1.5"]);
+    let request = json!({"action": "batch", "events": [with, event("page.test.plain", 2)]});
+    log_command(&log, request).unwrap();
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    let events = read(&path);
+    assert_eq!(events.len(), 3, "{events:?}");
+    assert_eq!(events[1]["mono_ns"], 5_000_000_001u64);
+    assert_eq!(events[1]["cids"], json!(["b1.4", "b1.5"]));
+    assert_eq!(events[2]["mono_ns"], 5_000_000_002u64);
+    assert!(events[2].get("cids").is_none(), "{}", events[2]);
+}
+
+// contract: log.batch.answers-the-clock-request
+#[test]
+fn the_clock_request_answers_both_clocks_of_the_host_and_stores_no_event() {
+    let directory = tempfile::tempdir().unwrap();
+    let log = start(directory.path());
+    let first = log_command(&log, json!({"action": "clock"}))
+        .unwrap()
+        .clock
+        .unwrap();
+    let second = log_command(&log, json!({"action": "clock"}))
+        .unwrap()
+        .clock
+        .unwrap();
+    assert!(first.ts_us > 1_700_000_000_000_000 && first.mono_ns > 0);
+    assert!(second.ts_us >= first.ts_us && second.mono_ns >= first.mono_ns);
+    assert!(log_command(&log, json!({"action": "clock"}))
+        .unwrap()
+        .lines
+        .is_empty());
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    assert_eq!(read(&path).len(), 1, "a clock request stored an event");
 }
 
 // contract: log.batch.stores-plugin-events-in-the-layer-plugin

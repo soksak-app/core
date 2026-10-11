@@ -3,7 +3,7 @@
 
 /** The records {level, where, text} of the events of a host call `log`; none for another call. */
 export function recordsOf(name, request) {
-  if (name !== "log") return [];
+  if (name !== "log" || request.action !== "batch") return [];
   return request.events
     .filter((event) => event.event.startsWith("page.record."))
     .map((event) => ({ level: event.level, where: event.fields.where, text: event.fields.text }));

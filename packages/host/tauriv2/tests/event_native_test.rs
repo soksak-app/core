@@ -10,14 +10,29 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 use soksak_host_tauriv2::event_log::{EventLog, Options};
 
-/// A record as the native library drains it: a 4-byte length, then the time (8 bytes), the level (1 byte), the length of
-/// the name (1 byte), the name and the fields, in the byte order of the host.
+/// A record as the native library drains it: a 4-byte length, then the wall clock (8 bytes), the monotonic clock (8), the
+/// level (1 byte), the length of the name (1 byte), the length of the cids (2), the name, the cids as a list separated by
+/// commas and the fields, in the byte order of the host.
 fn native_record(ts: u64, level: u8, name: &str, fields: &str) -> Vec<u8> {
+    native_record_with(ts, ts % 1_000_000 + 9_000, level, "", name, fields)
+}
+
+fn native_record_with(
+    ts: u64,
+    mono: u64,
+    level: u8,
+    cids: &str,
+    name: &str,
+    fields: &str,
+) -> Vec<u8> {
     let mut body = Vec::new();
     body.extend_from_slice(&ts.to_ne_bytes());
+    body.extend_from_slice(&mono.to_ne_bytes());
     body.push(level);
     body.push(name.len() as u8);
+    body.extend_from_slice(&(cids.len() as u16).to_ne_bytes());
     body.extend_from_slice(name.as_bytes());
+    body.extend_from_slice(cids.as_bytes());
     body.extend_from_slice(fields.as_bytes());
     let mut record = (body.len() as u32).to_ne_bytes().to_vec();
     record.extend_from_slice(&body);
@@ -96,6 +111,8 @@ fn the_writer_stores_pulled_native_records_in_the_layer_native() {
     assert_eq!(events[2]["event"], "native.test.second");
     assert_eq!(events[1]["layer"], "native");
     assert_eq!(events[1]["ts_us"], 1_791_000_000_000_001u64);
+    assert_eq!(events[1]["mono_ns"], 9_001u64);
+    assert!(events[1].get("cids").is_none());
     assert_eq!(events[1]["level"], "warn");
     assert_eq!(events[1]["seq"], 2);
     assert_eq!(events[1]["fields"]["index"], 1);
@@ -113,6 +130,23 @@ fn a_refused_native_record_and_the_loss_of_the_ring_are_counted_as_dropped() {
             native_record(1_791_000_000_000_002, 2, "host.test.forged", "{}"),
             native_record(1_791_000_000_000_003, 2, "native.test.fields", "{broken"),
             native_record(1_791_000_000_000_004, 9, "native.test.level", "{}"),
+            native_record_with(
+                1_791_000_000_000_006,
+                5,
+                2,
+                "b1.\"1",
+                "native.test.cid",
+                "{}",
+            ),
+            native_record_with(
+                1_791_000_000_000_007,
+                5,
+                2,
+                "b1.1,,b1.2",
+                "native.test.cid",
+                "{}",
+            ),
+            native_record_with(1_791_000_000_000_008, 0, 2, "", "native.test.clock", "{}"),
             truncated,
         ]
         .concat(),
@@ -137,7 +171,45 @@ fn a_refused_native_record_and_the_loss_of_the_ring_are_counted_as_dropped() {
     };
     assert_eq!(stored, 1, "{events:?}");
     assert_eq!(dropped("the native ring was full"), 3, "{events:?}");
-    assert_eq!(dropped("a native record was refused"), 4, "{events:?}");
+    assert_eq!(dropped("a native record was refused"), 7, "{events:?}");
+}
+
+// contract: log.native.stores-clock-and-cids-of-pulled-records
+#[test]
+fn a_pulled_native_record_keeps_its_clock_and_cids() {
+    let ring = Arc::new(Mutex::new(FakeRing {
+        bytes: [
+            native_record_with(
+                1_791_000_000_000_001,
+                77_000_000_001,
+                2,
+                "b1.4,b1.5",
+                "native.test.input",
+                r#"{"k":1}"#,
+            ),
+            native_record_with(
+                1_791_000_000_000_002,
+                77_000_000_002,
+                2,
+                "",
+                "native.test.plain",
+                "{}",
+            ),
+        ]
+        .concat(),
+        ..FakeRing::default()
+    }));
+    let directory = tempfile::tempdir().unwrap();
+    let log = start(directory.path(), &ring, Duration::from_millis(20));
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    let events = read(&path);
+    assert_eq!(events.len(), 3, "{events:?}");
+    assert_eq!(events[1]["mono_ns"], 77_000_000_001u64);
+    assert_eq!(events[1]["cids"], serde_json::json!(["b1.4", "b1.5"]));
+    assert_eq!(events[1]["fields"]["k"], 1);
+    assert_eq!(events[2]["mono_ns"], 77_000_000_002u64);
+    assert!(events[2].get("cids").is_none());
 }
 
 // contract: log.native.pulls-at-the-batch-interval

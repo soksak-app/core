@@ -37,13 +37,35 @@ sp_event_ring_loss sp_event_ring_take_loss(sp_event_ring *ring);
 // the writer of the host exists waits in it. Every thread of the process may call sp_event; the writer of the host drains.
 enum { SP_EVENT_ERROR = 0, SP_EVENT_WARN = 1, SP_EVENT_INFO = 2, SP_EVENT_DEBUG = 3, SP_EVENT_TRACE = 4 };
 
-// Stores an event: the wall clock in microseconds, the level, the name (1 to 255 bytes) and the fields as JSON text. It
-// copies the arguments, does not wait, and returns false, and counts the loss, for a missing or empty or too long name, a
-// level outside the enumeration, missing fields, a full ring, or an event that can never fit.
+// The monotonic clock of the records in nanoseconds: `clock_gettime_nsec_np(CLOCK_UPTIME_RAW)`, which is mach_absolute_time
+// converted to nanoseconds. It is comparable across the processes of one boot, does not step, and does not advance while
+// the machine sleeps.
+uint64_t sp_mono_ns(void);
+
+// Stores an event: the wall clock in microseconds, the monotonic clock, the level, the name (1 to 255 bytes) and the
+// fields as JSON text. It copies the arguments, does not wait, and returns false, and counts the loss, for a missing or
+// empty or too long name, a level outside the enumeration, missing fields, a full ring, or an event that can never fit.
 bool sp_event(uint8_t level, const char *name, const char *fields_json);
 
-// Moves whole records of the process ring into `buffer`, as sp_event_ring_drain does. A record is the time in
-// microseconds (8 bytes, host byte order), the level (1 byte), the length of the name (1 byte), the name and the fields.
+// Stores an event like sp_event, with the correlation identifiers of the inputs it belongs to: `cids` is a list of
+// identifiers separated by ',' (an empty list for none). A missing list, a list over 65535 bytes, and a list with a '"', a
+// '\\' or a control character are refused and counted like a refused name.
+bool sp_event_cids(uint8_t level, const char *name, const char *cids, const char *fields_json);
+
+// Sets the boot identifier of the run, which the host chose for its event files: letters, digits, '-' and '_' (at most 64
+// bytes). The correlation identifiers of this process are `<boot>.<n>`. Returns false, and keeps the earlier identifier, for
+// a missing, empty or longer identifier or one with another character.
+bool sp_event_set_boot(const char *boot);
+
+// Writes the next correlation identifier `<boot>.<n>` (n counts from 1 in this process) as a string to `buffer` and returns
+// true. Returns false, and writes nothing, when the boot identifier is not set or the buffer is too small. Safe from any
+// thread.
+bool sp_cid_new(char *buffer, size_t capacity);
+
+// Moves whole records of the process ring into `buffer`, as sp_event_drain does. A record is, in host byte order, the wall
+// clock in microseconds (8 bytes), the monotonic clock in nanoseconds (8), the level (1), the length of the name (1), the
+// length of the cids (2), the name, the cids (the list of sp_event_cids) and the fields.
+enum { SP_EVENT_HEADER_BYTES = 20 };
 size_t sp_event_drain(uint8_t *buffer, size_t capacity);
 
 // Returns the loss of the process ring since the last call and resets it.

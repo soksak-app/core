@@ -6,7 +6,7 @@ import test from "node:test";
 import { CLEAR_FILTER, contextRows, eventLine, filterRows, hostEventFiles, mergeRows, parseAppended, parseEvents } from "../debug-timeline.js";
 
 const line = (event) => JSON.stringify(event);
-const open = (boot, ts_us = 1) => line({ ts_us, seq: 0, level: "info", layer: "host", event: "log.open", fields: { schema: 1, boot } });
+const open = (boot, ts_us = 1) => line({ ts_us, seq: 0, level: "info", layer: "host", event: "log.open", fields: { schema: 2, boot } });
 const event = (ts_us, seq, level, layer, name, extra = {}) => line({ ts_us, seq, level, layer, event: name, ...extra });
 
 test("the lines of a file become rows in the order of the file and the log.open line is kept", () => {
@@ -19,7 +19,7 @@ test("the lines of a file become rows in the order of the file and the log.open 
 test("a file that does not follow the event contract is rejected with its name and what was found", () => {
   const bad = (text, expected) => assert.throws(() => parseEvents("logs/host-b1.jsonl", text), expected);
   bad(`${event(1, 0, "info", "host", "host.window.created")}\n`, /logs\/host-b1\.jsonl: the first line is not log\.open: "host\.window\.created"/);
-  bad(`${line({ ts_us: 1, seq: 0, level: "info", layer: "host", event: "log.open", fields: { schema: 2 } })}\n`, /logs\/host-b1\.jsonl: schema 2 is not 1/);
+  bad(`${line({ ts_us: 1, seq: 0, level: "info", layer: "host", event: "log.open", fields: { schema: 1 } })}\n`, /logs\/host-b1\.jsonl: schema 1 is not 2/);
   bad(`${open("b1")}\nnot json\n`, /logs\/host-b1\.jsonl:2: not JSON: not json/);
   bad(`${open("b1")}\n[1]\n`, /logs\/host-b1\.jsonl:2: not an event object: \[1\]/);
   bad(`${open("b1")}\n${event(5, 1, "loud", "host", "x.y.z")}\n`, /logs\/host-b1\.jsonl:2: level "loud" is not one of/);

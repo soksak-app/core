@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #include <stdatomic.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -139,16 +140,32 @@ static sp_event_ring *processRing(void) {
     return ring;
 }
 
-bool sp_event(uint8_t level, const char *name, const char *fields_json) {
+uint64_t sp_mono_ns(void) { return clock_gettime_nsec_np(CLOCK_UPTIME_RAW); }
+
+// Whether the list of identifiers can be stored: no '"', no '\\' and no control character, so a host writes it as the strings
+// of a JSON array without escaping, and at most what the 2-byte length of a record holds.
+static bool validCids(const char *cids, size_t *length) {
+    size_t count = strlen(cids);
+    if (count > UINT16_MAX) return false;
+    for (size_t index = 0; index < count; index++) {
+        unsigned char c = (unsigned char)cids[index];
+        if (c < 0x20 || c == 0x7f || c == '"' || c == '\\') return false;
+    }
+    *length = count;
+    return true;
+}
+
+bool sp_event_cids(uint8_t level, const char *name, const char *cids, const char *fields_json) {
     sp_event_ring *ring = processRing();
     if (!ring) return false;
     size_t nameLength = name ? strlen(name) : 0;
-    if (nameLength == 0 || nameLength > 255 || level > SP_EVENT_TRACE || !fields_json) {
+    size_t cidsLength = 0;
+    if (nameLength == 0 || nameLength > 255 || level > SP_EVENT_TRACE || !fields_json || !cids || !validCids(cids, &cidsLength)) {
         countLoss(ring, nameLength);
         return false;
     }
     size_t fieldsLength = strlen(fields_json);
-    size_t length = 8 + 1 + 1 + nameLength + fieldsLength;
+    size_t length = SP_EVENT_HEADER_BYTES + nameLength + cidsLength + fieldsLength;
     // The record is built in place of a heap allocation for the usual event and in one allocation for a large one.
     uint8_t stack[512];
     uint8_t *record = length <= sizeof stack ? stack : malloc(length);
@@ -159,14 +176,54 @@ bool sp_event(uint8_t level, const char *name, const char *fields_json) {
     struct timespec now;
     clock_gettime(CLOCK_REALTIME, &now);
     uint64_t micros = (uint64_t)now.tv_sec * 1000000u + (uint64_t)now.tv_nsec / 1000u;
+    uint64_t mono = sp_mono_ns();
+    uint16_t cidsField = (uint16_t)cidsLength;
     memcpy(record, &micros, sizeof micros);
-    record[8] = level;
-    record[9] = (uint8_t)nameLength;
-    memcpy(record + 10, name, nameLength);
-    memcpy(record + 10 + nameLength, fields_json, fieldsLength);
+    memcpy(record + 8, &mono, sizeof mono);
+    record[16] = level;
+    record[17] = (uint8_t)nameLength;
+    memcpy(record + 18, &cidsField, sizeof cidsField);
+    memcpy(record + SP_EVENT_HEADER_BYTES, name, nameLength);
+    memcpy(record + SP_EVENT_HEADER_BYTES + nameLength, cids, cidsLength);
+    memcpy(record + SP_EVENT_HEADER_BYTES + nameLength + cidsLength, fields_json, fieldsLength);
     bool stored = sp_event_ring_push(ring, record, length);
     if (record != stack) free(record);
     return stored;
+}
+
+bool sp_event(uint8_t level, const char *name, const char *fields_json) {
+    // events: forwarded
+    return sp_event_cids(level, name, "", fields_json);
+}
+
+// The boot identifier of the run: a string that is never changed or freed once published, so a reader on another thread
+// holds a valid pointer. A replacement leaks the earlier one; the host sets it once.
+static _Atomic(const char *) bootIdentifier;
+static _Atomic uint64_t lastCid;
+
+bool sp_event_set_boot(const char *boot) {
+    size_t length = boot ? strlen(boot) : 0;
+    if (length == 0 || length > 64) return false;
+    for (size_t index = 0; index < length; index++) {
+        char c = boot[index];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_')) return false;
+    }
+    const char *copy = strdup(boot);
+    if (!copy) return false;
+    atomic_store_explicit(&bootIdentifier, copy, memory_order_release);
+    return true;
+}
+
+bool sp_cid_new(char *buffer, size_t capacity) {
+    const char *boot = atomic_load_explicit(&bootIdentifier, memory_order_acquire);
+    if (!boot || !buffer) return false;
+    uint64_t next = atomic_fetch_add_explicit(&lastCid, 1, memory_order_relaxed) + 1;
+    int written = snprintf(buffer, capacity, "%s.%llu", boot, (unsigned long long)next);
+    if (written < 0 || (size_t)written >= capacity) {
+        if (capacity > 0) buffer[0] = 0;
+        return false;
+    }
+    return true;
 }
 
 size_t sp_event_drain(uint8_t *buffer, size_t capacity) {

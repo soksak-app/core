@@ -10,6 +10,7 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 
 // useEventLog starts a writer, makes it the writer of the records of the host, and detaches it when the test ends.
 func useEventLog(t *testing.T) *host.EventLog {
@@ -56,10 +57,22 @@ func TestAnErrorAnObservationAndAPageRecordAreEventsWithWhereAndText(t *testing.
 func TestRecordsWrittenBeforeTheWriterExistsAreStoredInOrderWithTheirOwnTime(t *testing.T) {
 	host.UseHostEventLog(nil)
 	before := time.Now().UnixMicro()
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
 	host.LogError("early", "first")
+	monoBefore, err := system.MonotonicNanos()
+	if err != nil {
+		t.Fatal(err)
+	}
 	host.LogInfo("early", "second")
 	after := time.Now().UnixMicro()
 	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	monoAfter, err := system.MonotonicNanos()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,6 +90,9 @@ func TestRecordsWrittenBeforeTheWriterExistsAreStoredInOrderWithTheirOwnTime(t *
 			t.Fatalf("ts_us %d is outside [%d, %d]: the record took the time of the attach", ts, before, after)
 		}
 	}
+		if mono := uint64(event["mono_ns"].(float64)); mono < monoBefore || mono > monoAfter {
+			t.Fatalf("mono_ns %d is outside [%d, %d]: the record took the clock of the attach", mono, monoBefore, monoAfter)
+		}
 }
 
 // contract: log.record.start-buffer-counts-its-loss

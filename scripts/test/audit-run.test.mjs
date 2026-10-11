@@ -7,7 +7,7 @@ import test from 'node:test';
 import { auditRun } from '../audit-run.mjs';
 
 const catalog = {
-  schema: 1,
+  schema: 2,
   layers: ['host', 'sidecar'],
   events: {
     'log.open': { layer: 'host', class: 'lifecycle', level: 'info', fields: { schema: 'number', pid: 'number', role: 'string', boot: 'string' } },
@@ -22,8 +22,8 @@ const catalog = {
 
 const BOOT = '1-2';
 const US = 1_791_000_000_000_000;
-const event = (seq, name, fields, extra = {}) => JSON.stringify({ ts_us: US + seq * 1000, seq, level: 'info', layer: 'host', event: name, fields, ...extra });
-const open = (role, boot, seq = 1) => event(seq, 'log.open', { schema: 1, pid: 3, role, boot }, { layer: role === 'host' ? 'host' : 'sidecar' });
+const event = (seq, name, fields, extra = {}) => JSON.stringify({ ts_us: US + seq * 1000, mono_ns: 7_000_000_000 + seq * 1_000_000, seq, level: 'info', layer: 'host', event: name, fields, ...extra });
+const open = (role, boot, seq = 1) => event(seq, 'log.open', { schema: 2, pid: 3, role, boot }, { layer: role === 'host' ? 'host' : 'sidecar' });
 const start = (seq, name) => event(seq, 'host.test.start', { name, run: 'run-1' });
 const end = (seq, name, result = 'pass') => event(seq, 'host.test.end', { name, run: 'run-1', result });
 const failure = (seq, text) => event(seq, 'host.record.error', { where: 'place', text }, { level: 'error' });
@@ -105,7 +105,7 @@ test('an error outside every test, and a start mark without an end mark, are fin
 });
 
 test('the logs of every layer under the configuration folders of the marks are audited, and a sidecar error is placed by time', (t) => {
-  const sidecar = (seq, text, offset) => JSON.stringify({ ts_us: US + offset, seq, level: 'error', layer: 'sidecar', event: 'sidecar.record.error', fields: { where: 'vt', text } });
+  const sidecar = (seq, text, offset) => JSON.stringify({ ts_us: US + offset, mono_ns: 7_000_000_000 + offset * 1000, seq, level: 'error', layer: 'sidecar', event: 'sidecar.record.error', fields: { where: 'vt', text } });
   const { folder, config } = fixture(t, {
     files: {
       [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), event(3, 'host.window.event', { window: 'w' }), end(4, 't1')],

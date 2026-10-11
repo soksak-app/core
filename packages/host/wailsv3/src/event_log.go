@@ -23,8 +23,41 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
-// EventLogSchema is the schema number of the lines that this writer writes.
-const EventLogSchema = 1
+// EventLogSchema is the schema number of the lines that this writer writes. Schema 2 adds `mono_ns` to every line.
+const EventLogSchema = 2
+
+// monotonicNanos reads the monotonic clock of the records (docs/spec/logging.md#event). A clock that cannot be read is a
+// defect of the platform: it is reported on the standard error (once, because every later event repeats it) and the event
+// stores 0, which the audit of the contract refuses.
+func monotonicNanos() uint64 {
+	system, err := platform.Current()
+	if err == nil {
+		var nanos uint64
+		if nanos, err = system.MonotonicNanos(); err == nil {
+			return nanos
+		}
+	}
+	clockFailure.Do(func() { fmt.Fprintf(os.Stderr, "event writer: the monotonic clock cannot be read: %v\n", err) })
+	return 0
+}
+
+var clockFailure sync.Once
+
+// checkCids refuses a list of correlation identifiers that the line of an event cannot carry: an identifier is not empty and
+// holds no quote, no backslash and no control character, so a native record and a line write it without escaping.
+func checkCids(cids []string) error {
+	for _, cid := range cids {
+		if cid == "" {
+			return fmt.Errorf("a cid is empty")
+		}
+		for _, c := range cid {
+			if c < 0x20 || c == 0x7f || c == '"' || c == '\\' {
+				return fmt.Errorf("the cid %q holds a quote, a backslash or a control character", cid)
+			}
+		}
+	}
+	return nil
+}
 
 // Level is the level of an event.
 type Level string
@@ -65,9 +98,13 @@ type EventLogOptions struct {
 // pendingEvent is one event waiting for the writer. seq is assigned when the writer serializes it.
 type pendingEvent struct {
 	tsMicros int64
-	layer    string
-	level    Level
-	event    string
+	// monoNs is the monotonic clock at the occurrence.
+	monoNs uint64
+	// cids are the correlation identifiers of the inputs the event belongs to.
+	cids  []string
+	layer string
+	level Level
+	event string
 	// fields is the fields as JSON text, serialized once by the producer.
 	fields json.RawMessage
 	bytes  int
@@ -154,7 +191,7 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 		pullLoss:    options.PullLoss,
 		done:        make(chan struct{}),
 	}
-	open := &pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelInfo, event: "log.open", fields: fields}
+	open := &pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), layer: "host", level: LevelInfo, event: "log.open", fields: fields}
 	routine.Go("event-log-writer", func() { log.write(file, options.BatchInterval, open) })
 	return log, nil
 }
@@ -196,6 +233,9 @@ func StartHostEventLog(config string) (*EventLog, error) {
 	if _, err := system.PullNativeEvents(make([]byte, 1)); err != nil {
 		return nil, err
 	}
+	if err := system.SetEventBoot(processBoot()); err != nil {
+		return nil, err
+	}
 	if err := system.ObserveActivity(); err != nil {
 		return nil, err
 	}
@@ -231,7 +271,7 @@ func (l *EventLog) EmitPlaced(level Level, event string, fields json.RawMessage,
 		return 0, fmt.Errorf("the fields of %s are not JSON", event)
 	}
 	placed := make(chan uint64, 1)
-	if !l.enqueuePlaced(time.Now().UnixMicro(), "host", level, event, fields, placed) {
+	if !l.enqueuePlaced(time.Now().UnixMicro(), monotonicNanos(), "host", level, event, nil, fields, placed) {
 		return 0, fmt.Errorf("the event writer refused %s because its queue was full", event)
 	}
 	if err := l.Flush(deadline); err != nil {
@@ -268,45 +308,87 @@ func (l *EventLog) Emit(level Level, event string, fields any) bool {
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return false
 	}
-	return l.enqueue(time.Now().UnixMicro(), "host", level, event, text)
+	return l.enqueue(time.Now().UnixMicro(), monotonicNanos(), "host", level, event, nil, text)
+}
+
+// EmitCids queues an event of the layer host like Emit, with the correlation identifiers of the inputs it belongs to. An
+// identifier that a line cannot carry is a defect of the caller: it is reported on the standard error, counted as lost, and
+// the event is refused.
+func (l *EventLog) EmitCids(level Level, event string, cids []string, fields any) bool {
+	if err := checkCids(cids); err != nil {
+		l.countLoss(len(event))
+		fmt.Fprintf(os.Stderr, "event writer: the cids of %s are refused: %v\n", event, err)
+		return false
+	}
+	if l.queuedEvents.Load() >= l.queueEvents {
+		l.countLoss(len(event))
+		return false
+	}
+	text, err := json.Marshal(fields)
+	if err != nil {
+		l.countLoss(len(event))
+		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
+		return false
+	}
+	return l.enqueue(time.Now().UnixMicro(), monotonicNanos(), "host", level, event, cids, text)
 }
 
 // layers are the layers of the event contract (docs/spec/logging.md#event).
 var layers = []string{"native", "host", "page", "plugin", "sidecar"}
 
-// EmitRelayed queues an event that another layer of this process produced, with the time and the layer it carries. The
-// event name must start with the layer, so the name and the layer cannot disagree. It returns an error for a layer
-// outside the contract, a name that does not start with it, or fields that are not JSON, and false, with the loss
+// RelayedEvent is an event that another layer of this process produced, with the clocks and the layer it carries.
+type RelayedEvent struct {
+	TsMicros int64
+	MonoNs   uint64
+	Layer    string
+	Level    Level
+	Event    string
+	Cids     []string
+	Fields   json.RawMessage
+}
+
+// EmitRelayed queues an event that another layer of this process produced. The event name must start with the layer, so
+// the name and the layer cannot disagree. It returns an error for a layer outside the contract, a name that does not start
+// with it, fields that are not JSON, a monotonic clock of 0 or a cid that a line cannot carry, and false, with the loss
 // counted, when the queue has no room.
-func (l *EventLog) EmitRelayed(tsMicros int64, layer string, level Level, event string, fields json.RawMessage) (bool, error) {
-	if !slices.Contains(layers, layer) {
-		return false, fmt.Errorf("the layer %q of %s is not one of %v", layer, event, layers)
+func (l *EventLog) EmitRelayed(e RelayedEvent) (bool, error) {
+	if !slices.Contains(layers, e.Layer) {
+		return false, fmt.Errorf("the layer %q of %s is not one of %v", e.Layer, e.Event, layers)
 	}
-	if !strings.HasPrefix(event, layer+".") {
-		return false, fmt.Errorf("the event %q does not start with its layer %q", event, layer)
+	if !strings.HasPrefix(e.Event, e.Layer+".") {
+		return false, fmt.Errorf("the event %q does not start with its layer %q", e.Event, e.Layer)
 	}
-	if !json.Valid(fields) {
-		return false, fmt.Errorf("the fields of %s are not JSON", event)
+	if !json.Valid(e.Fields) {
+		return false, fmt.Errorf("the fields of %s are not JSON", e.Event)
+	}
+	if e.MonoNs == 0 {
+		return false, fmt.Errorf("the mono_ns of %s is 0", e.Event)
+	}
+	if err := checkCids(e.Cids); err != nil {
+		return false, fmt.Errorf("the cids of %s: %w", e.Event, err)
 	}
 	if l.queuedEvents.Load() >= l.queueEvents {
-		l.countLoss(len(event))
+		l.countLoss(len(e.Event))
 		return false, nil
 	}
-	return l.enqueue(tsMicros, layer, level, event, fields), nil
+	return l.enqueue(e.TsMicros, e.MonoNs, e.Layer, e.Level, e.Event, e.Cids, e.Fields), nil
 }
 
-func (l *EventLog) enqueue(tsMicros int64, layer string, level Level, event string, text json.RawMessage) bool {
-	return l.enqueuePlaced(tsMicros, layer, level, event, text, nil)
+func (l *EventLog) enqueue(tsMicros int64, monoNs uint64, layer string, level Level, event string, cids []string, text json.RawMessage) bool {
+	return l.enqueuePlaced(tsMicros, monoNs, layer, level, event, cids, text, nil)
 }
 
-func (l *EventLog) enqueuePlaced(tsMicros int64, layer string, level Level, event string, text json.RawMessage, placed chan uint64) bool {
+func (l *EventLog) enqueuePlaced(tsMicros int64, monoNs uint64, layer string, level Level, event string, cids []string, text json.RawMessage, placed chan uint64) bool {
 	text, truncated := capFields(text)
 	bytes := len(text) + len(event)
+	for _, cid := range cids {
+		bytes += len(cid)
+	}
 	if l.queuedBytes.Load()+int64(bytes) > l.queueBytes {
 		l.countLoss(bytes)
 		return false
 	}
-	pending := &pendingEvent{tsMicros: tsMicros, layer: layer, level: level, event: event, fields: text, bytes: bytes, truncated: truncated, placed: placed}
+	pending := &pendingEvent{tsMicros: tsMicros, monoNs: monoNs, cids: cids, layer: layer, level: level, event: event, fields: text, bytes: bytes, truncated: truncated, placed: placed}
 	l.queuedBytes.Add(int64(bytes))
 	l.queuedEvents.Add(1)
 	select {
@@ -376,17 +458,19 @@ func (l *EventLog) Close() {
 // line is assembled without parsing them again.
 type eventRecord struct {
 	TsMicros int64           `json:"ts_us"`
+	MonoNs   uint64          `json:"mono_ns"`
 	Seq      uint64          `json:"seq"`
 	Level    Level           `json:"level"`
 	Layer    string          `json:"layer"`
 	Event    string          `json:"event"`
+	Cids     []string        `json:"cids,omitempty"`
 	Fields   json.RawMessage `json:"fields"`
 	// Truncated is the size in bytes of the fields before they were cut; it is absent for an event that was not cut.
 	Truncated int `json:"truncated,omitempty"`
 }
 
 func eventLine(seq uint64, e *pendingEvent) ([]byte, error) {
-	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, Seq: seq, Level: e.level, Layer: e.layer, Event: e.event, Fields: e.fields, Truncated: e.truncated})
+	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, MonoNs: e.monoNs, Seq: seq, Level: e.level, Layer: e.layer, Event: e.event, Cids: e.cids, Fields: e.fields, Truncated: e.truncated})
 	if err != nil {
 		return nil, err
 	}
@@ -476,7 +560,7 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 			if next != file {
 				file = next
 				size = 0
-				appendLine(&pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelInfo, event: "log.open", fields: l.openFields})
+				appendLine(&pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), layer: "host", level: LevelInfo, event: "log.open", fields: l.openFields})
 				name := "null"
 				if removed != "" {
 					quoted, err := json.Marshal(removed)
@@ -486,7 +570,7 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 						name = string(quoted)
 					}
 				}
-				appendLine(&pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelInfo, event: "log.rotated",
+				appendLine(&pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), layer: "host", level: LevelInfo, event: "log.rotated",
 					fields: json.RawMessage(fmt.Sprintf(`{"bytes":%d,"kept":%d,"removed":%s}`, full, l.generations, name))})
 			}
 			appendLine(e)
@@ -507,7 +591,7 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 		// The fields are numbers and a fixed text, so they are written as text without a serializer that can fail.
 		fields := json.RawMessage(fmt.Sprintf(`{"from_seq":%d,"to_seq":%d,"count":%d,"bytes":%d,"reason":%q}`,
 			from, seq, events, bytes, reason))
-		push(&pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelWarn, event: "log.dropped", fields: fields})
+		push(&pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), layer: "host", level: LevelWarn, event: "log.dropped", fields: fields})
 	}
 	// pullNative takes the records of the native ring. No event source reaches the writer from there: a native thread
 	// must not call into Go, so the writer pulls at its batch interval and when it flushes.
@@ -629,8 +713,12 @@ const (
 // nativeLevels maps the level byte of a native record to the level of the contract.
 var nativeLevels = []Level{LevelError, LevelWarn, LevelInfo, LevelDebug, LevelTrace}
 
-// nativeEventOf decodes the record at the start of buffer: a 4-byte length, then the time in microseconds (8 bytes), the
-// level (1 byte), the length of the name (1 byte), the name and the fields as JSON text, in the byte order of the host.
+// nativeHeaderBytes is the size of the fixed part of a native record (native/darwin/src/event_ring.h).
+const nativeHeaderBytes = 20
+
+// nativeEventOf decodes the record at the start of buffer: a 4-byte length, then the wall clock in microseconds (8 bytes),
+// the monotonic clock in nanoseconds (8), the level (1 byte), the length of the name (1 byte), the length of the cids (2
+// bytes), the name, the cids as a list separated by commas and the fields as JSON text, in the byte order of the host.
 // It returns the number of bytes the record takes. When the length itself is wrong it returns 0, so the caller
 // abandons the rest of the buffer.
 func nativeEventOf(buffer []byte) (int, *pendingEvent, error) {
@@ -638,27 +726,39 @@ func nativeEventOf(buffer []byte) (int, *pendingEvent, error) {
 		return 0, nil, fmt.Errorf("%d bytes are left, which is less than a length", len(buffer))
 	}
 	length := int(binary.NativeEndian.Uint32(buffer))
-	if length < 10 || 4+length > len(buffer) {
+	if length < nativeHeaderBytes || 4+length > len(buffer) {
 		return 0, nil, fmt.Errorf("the length %d does not fit %d bytes", length, len(buffer)-4)
 	}
 	total := 4 + length
 	body := buffer[4:total]
-	level := int(body[8])
-	nameLength := int(body[9])
+	level := int(body[16])
+	nameLength := int(body[17])
+	cidsLength := int(binary.NativeEndian.Uint16(body[18:]))
 	if level >= len(nativeLevels) {
 		return total, nil, fmt.Errorf("the level %d is not defined", level)
 	}
-	if 10+nameLength > len(body) {
-		return total, nil, fmt.Errorf("the name of %d bytes does not fit the record", nameLength)
+	if nativeHeaderBytes+nameLength+cidsLength > len(body) {
+		return total, nil, fmt.Errorf("the name of %d bytes and the cids of %d bytes do not fit the record", nameLength, cidsLength)
 	}
-	name := string(body[10 : 10+nameLength])
+	name := string(body[nativeHeaderBytes : nativeHeaderBytes+nameLength])
 	if !strings.HasPrefix(name, "native.") {
 		return total, nil, fmt.Errorf("the event %q does not start with its layer \"native\"", name)
 	}
-	fields := body[10+nameLength:]
+	mono := binary.NativeEndian.Uint64(body[8:])
+	if mono == 0 {
+		return total, nil, fmt.Errorf("the monotonic clock of %s is 0", name)
+	}
+	var cids []string
+	if cidsLength > 0 {
+		cids = strings.Split(string(body[nativeHeaderBytes+nameLength:nativeHeaderBytes+nameLength+cidsLength]), ",")
+		if err := checkCids(cids); err != nil {
+			return total, nil, fmt.Errorf("the cids of %s: %w", name, err)
+		}
+	}
+	fields := body[nativeHeaderBytes+nameLength+cidsLength:]
 	if !json.Valid(fields) || len(fields) == 0 || fields[0] != '{' {
 		return total, nil, fmt.Errorf("the fields of %s are not a JSON object", name)
 	}
-	return total, &pendingEvent{tsMicros: int64(binary.NativeEndian.Uint64(body)), layer: "native", level: nativeLevels[level],
+	return total, &pendingEvent{tsMicros: int64(binary.NativeEndian.Uint64(body)), monoNs: mono, cids: cids, layer: "native", level: nativeLevels[level],
 		event: name, fields: append(json.RawMessage(nil), fields...)}, nil
 }

@@ -12,6 +12,7 @@ test("Wails page regions expose operations but only composition places geometry"
     __soksakNative: {
       call(method, args) {
         // The batches of events are kept apart: the calls of the page under test are asserted one by one.
+        if (method === "Log" && args[0].action === "clock") return Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 });
         if (method === "Log") logged.push([method, args]);
         else recorded.push([method, args]);
         return Promise.resolve(method === "WaitPresented" ? { displayed: 42 } : undefined);
@@ -61,6 +62,7 @@ test("Wails page regions expose operations but only composition places geometry"
   assert.deepEqual({ level: event.level, event: event.event, fields: event.fields },
     { level: "error", event: "page.record.error", fields: { where: "sidecar @x/side", text: "send failed: gone" } });
   assert.ok(Number.isInteger(event.ts_us) && event.ts_us > 1.7e15, "the event carries the wall clock in microseconds");
+  assert.ok(Number.isInteger(event.mono_ns) && event.mono_ns > 0, "the event carries the monotonic clock in nanoseconds");
   await assert.rejects(async () => page.report("send failed"), /report requires \{level, where, text\} strings/);
   await assert.rejects(host.call("report", { level: "info", where: "page", text: "ready" }), /unknown host call: report/);
   await page.document.attach("doc");

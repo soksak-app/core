@@ -6,7 +6,12 @@ import test from "node:test";
 async function surface(native) {
   const calls = [];
   globalThis.window = { __TAURI__: {
-    core: { invoke: (command, args) => { calls.push([command, args]); return native(command, args); } },
+    core: { invoke: (command, args) => {
+      // The request for the clocks of the host is answered here; the batches are what the tests assert.
+      if (command === "log" && args.request.action === "clock") return Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 });
+      calls.push([command, args]);
+      return native(command, args);
+    } },
     event: { listen: async () => () => {} },
     webview: { getCurrentWebview: () => ({ label: "surface" }) },
   } };
@@ -37,6 +42,7 @@ test("the calls of one turn are the events page.call in one log batch, with the 
       assert.equal(event.fields.truncated, false);
       assert.ok(Number.isInteger(event.fields.micros) && event.fields.micros >= 0);
       assert.ok(Number.isInteger(event.ts_us) && event.ts_us > 1.7e15);
+      assert.ok(Number.isInteger(event.mono_ns) && event.mono_ns > 0);
     }
     assert.equal(calls.filter(([command]) => command !== "log").length, 3, "the calls themselves are not delayed or repeated");
   } finally {

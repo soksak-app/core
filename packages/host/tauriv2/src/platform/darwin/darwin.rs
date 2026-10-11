@@ -581,6 +581,12 @@ impl Platform for Darwin {
     fn take_native_event_loss(&self) -> Result<(u64, u64), String> {
         events::take_loss()
     }
+    fn monotonic_ns(&self) -> Result<u64, String> {
+        events::monotonic_ns()
+    }
+    fn set_event_boot(&self, boot: &str) -> Result<(), String> {
+        events::set_boot(boot)
+    }
     fn observe_activity(&self) -> Result<(), String> {
         events::observe_activity()
     }

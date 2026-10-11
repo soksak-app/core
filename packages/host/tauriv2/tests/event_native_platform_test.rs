@@ -16,6 +16,20 @@ fn the_platform_pulls_an_empty_native_ring_as_zero_bytes_and_no_loss() {
     assert!(system.pull_native_events(&mut []).is_err());
 }
 
+// contract: log.native.platform-reads-the-clock-and-takes-the-boot
+#[test]
+fn the_platform_reads_a_monotonic_clock_and_takes_the_boot_identifier() {
+    let system = platform::current().unwrap();
+    let first = system.monotonic_ns().unwrap();
+    std::thread::sleep(Duration::from_millis(5));
+    let second = system.monotonic_ns().unwrap();
+    assert!(first > 0 && second >= first + 4_000_000, "{first} {second}");
+    assert!(system.set_event_boot("b1-7_x").is_ok());
+    for bad in ["", "a,b", "a\"b", "a.b", &"x".repeat(65)] {
+        assert!(system.set_event_boot(bad).is_err(), "{bad:?} was accepted");
+    }
+}
+
 // contract: log.native.host-writer-starts-with-the-platform-pull
 #[test]
 fn the_host_writer_starts_with_the_pull_of_the_platform() {
@@ -25,6 +39,12 @@ fn the_host_writer_starts_with_the_pull_of_the_platform() {
     log.flush(Duration::from_secs(5)).unwrap();
     let text = std::fs::read_to_string(path).unwrap();
     let lines: Vec<&str> = text.lines().collect();
-    assert_eq!(lines.len(), 1, "{lines:?}");
     assert!(lines[0].contains("\"event\":\"log.open\""), "{}", lines[0]);
+    // The activity observers that the writer installs store native events after log.open and nothing else follows.
+    assert!(
+        lines[1..]
+            .iter()
+            .all(|line| line.contains("\"layer\":\"native\"")),
+        "{lines:?}"
+    );
 }

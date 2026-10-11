@@ -37,6 +37,8 @@ const StartBufferRecords = 1024
 
 type bufferedRecord struct {
 	tsMicros int64
+	monoNs   uint64
+	cids     []string
 	layer    string
 	level    Level
 	event    string
@@ -66,7 +68,8 @@ func UseHostEventLog(log *EventLog) {
 		return
 	}
 	for _, record := range buffered {
-		if _, err := log.EmitRelayed(record.tsMicros, record.layer, record.level, record.event, record.fields); err != nil {
+		if _, err := log.EmitRelayed(RelayedEvent{TsMicros: record.tsMicros, MonoNs: record.monoNs, Layer: record.layer, Level: record.level,
+			Event: record.event, Cids: record.cids, Fields: record.fields}); err != nil {
 			fmt.Fprintf(os.Stderr, "event writer: a buffered record cannot be stored: %v\n", err)
 		}
 	}
@@ -91,13 +94,14 @@ func emitRecord(e Entry) {
 		return
 	}
 	// events: host.record.<level>, sidecar.record.<level>
-	storeEvent(level, e.Layer, e.Layer+".record."+e.Level, e.Where, fields)
+	storeEvent(level, e.Layer, e.Layer+".record."+e.Level, e.Where, nil, fields)
 }
 
 // storeEvent hands an event to the writer of the host, or to the start buffer while no writer exists. place names the record
 // in the reports of a refusal.
-func storeEvent(level Level, layer, name, place string, fields json.RawMessage) {
+func storeEvent(level Level, layer, name, place string, cids []string, fields json.RawMessage) {
 	now := time.Now().UnixMicro()
+	mono := monotonicNanos()
 	records.Lock()
 	defer records.Unlock()
 	if records.log == nil {
@@ -106,10 +110,10 @@ func storeEvent(level Level, layer, name, place string, fields json.RawMessage) 
 			records.lostBytes += uint64(len(fields) + len(name))
 			return
 		}
-		records.buffer = append(records.buffer, bufferedRecord{tsMicros: now, layer: layer, level: level, event: name, fields: fields})
+		records.buffer = append(records.buffer, bufferedRecord{tsMicros: now, monoNs: mono, cids: cids, layer: layer, level: level, event: name, fields: fields})
 		return
 	}
-	if _, err := records.log.EmitRelayed(now, layer, level, name, fields); err != nil {
+	if _, err := records.log.EmitRelayed(RelayedEvent{TsMicros: now, MonoNs: mono, Layer: layer, Level: level, Event: name, Cids: cids, Fields: fields}); err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the record %q of %s cannot be stored: %v\n", place, layer, err)
 	}
 }
@@ -142,7 +146,7 @@ func emitTrace(layer string, fields map[string]any) error {
 		return fmt.Errorf("the fields of %s cannot be serialized: %w", event, err)
 	}
 	// events: host.trace.<event>, host.sampler.<event>
-	storeEvent(LevelDebug, "host", "host."+kind+"."+event, event, text)
+	storeEvent(LevelDebug, "host", "host."+kind+"."+event, event, nil, text)
 	return nil
 }
 
