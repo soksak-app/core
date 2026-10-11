@@ -24,6 +24,22 @@ for (const vector of fixture.rejected) {
   });
 }
 
+// The viewport, the selection and the theme enter the hash only through the drawn cells and the cursor (docs/spec/replay.md#view-state).
+test("the vectors fix the drawn screen under a scrolled viewport, a selection and a theme", async () => {
+  const byName = new Map(fixture.vectors.map((vector) => [vector.name, vector]));
+  const scrolled = byName.get("scrolled viewport with the cursor outside it");
+  const selected = byName.get("selected cells with the highlight colors");
+  const themed = byName.get("the same text under another theme");
+  const plain = byName.get("ascii with hidden cursor");
+  assert.ok(scrolled && selected && themed && plain, "the three view vectors exist");
+  assert.equal(scrolled.screen.cursor.visible, false);
+  assert.equal(scrolled.screen.cursor.row, 0);
+  assert.equal(scrolled.screen.cursor.col, 2);
+  assert.notEqual(selected.screen.cells[0].bg, null);
+  assert.notEqual(themed.hash, selected.hash);
+  assert.deepEqual(themed.screen.cells.map((cell) => cell.grapheme), selected.screen.cells.map((cell) => cell.grapheme));
+});
+
 test("two screens that differ in one cell have different hashes", async () => {
   const [one] = fixture.vectors;
   const other = structuredClone(one.screen);

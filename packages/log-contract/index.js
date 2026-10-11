@@ -367,5 +367,74 @@ export function policyAllows(policy, kind, level) {
   return POLICY_VALUES.indexOf(policy.classes[kind]) >= POLICY_VALUES.indexOf(level);
 }
 
+/** The kinds of replay input (docs/spec/replay.md#records). */
+export const REPLAY_INPUT_KINDS = ["output", "write", "resize", "selection", "viewport", "theme"];
+const SELECTION_ACTIONS = ["start", "update", "end", "clear"];
+const THEME_REQUIRED = ["foreground", "background", "selection"];
+
+const shown = (value) => (value === undefined ? "undefined" : JSON.stringify(value));
+
+/**
+ * The problem of the fields of one replay input of `kind`, as text, or null when the fields are in the form of the contract.
+ * The kind of an event is the sidecar's choice of name; the fields are the contract's.
+ */
+export function replayInputProblem(kind, fields) {
+  if (!REPLAY_INPUT_KINDS.includes(kind)) return `replay input ${kind} is not one of ${REPLAY_INPUT_KINDS.join(", ")}`;
+  const integerFrom = (name, min) => (Number.isInteger(fields[name]) && fields[name] >= min ? null : `${kind}: ${name} must be an integer from ${min}, found ${shown(fields[name])}`);
+  const sequence = integerFrom("sequence", 1);
+  if (sequence !== null) return sequence;
+  if (kind === "output" || kind === "write") {
+    return typeof fields.hex === "string" && /^(?:[0-9a-f]{2})+$/.test(fields.hex) ? null : `${kind}: hex must be lowercase hexadecimal text of whole bytes, found ${shown(fields.hex)}`;
+  }
+  if (kind === "resize") return integerFrom("rows", 1) || integerFrom("cols", 1);
+  if (kind === "selection") {
+    if (!SELECTION_ACTIONS.includes(fields.action)) return `selection: action must be start, update, end or clear, found ${shown(fields.action)}`;
+    if (fields.action === "start" || fields.action === "update") return integerFrom("edge", 0) || integerFrom("row", 0);
+    return fields.edge === undefined && fields.row === undefined ? null : `selection: ${fields.action} takes no edge and no row`;
+  }
+  if (kind === "viewport") {
+    if (fields.lines !== undefined && fields.newest !== undefined) return "viewport: lines and newest are exclusive";
+    if (fields.lines === undefined && fields.newest === undefined) return "viewport: lines (a non-zero integer) or newest (true) is required";
+    if (fields.newest !== undefined) return fields.newest === true ? null : `viewport: newest must be true, found ${shown(fields.newest)}`;
+    return Number.isInteger(fields.lines) && fields.lines !== 0 ? null : `viewport: lines must be a non-zero integer, found ${shown(fields.lines)}`;
+  }
+  const colors = fields.colors;
+  if (colors === null || typeof colors !== "object" || Array.isArray(colors)) return `theme: colors must be an object of colors, found ${shown(colors)}`;
+  for (const name of THEME_REQUIRED) if (colors[name] === undefined) return `theme: colors.${name} is required`;
+  for (const [name, color] of Object.entries(colors)) {
+    if (typeof color !== "string" || !/^#[0-9a-f]{6}$/.test(color)) return `theme: colors.${name} must be "#rrggbb" in lowercase, found ${shown(color)}`;
+  }
+  return null;
+}
+
+/**
+ * The problem of the replay inputs of one session, `[{kind, fields}]` in the order they were applied, as text, or null: each
+ * input is in form, the sequences run from 1 without a gap, the first input is a theme, and a selection start or update lies inside the grid of the
+ * last resize, and a selection update or end follows a selection start.
+ */
+export function replaySessionProblem(inputs) {
+  let previous = 0;
+  let selecting = false;
+  let size = null;
+  for (const [index, { kind, fields }] of inputs.entries()) {
+    const at = index + 1;
+    const problem = replayInputProblem(kind, fields);
+    if (problem !== null) return `input ${at}: ${problem}`;
+    if (fields.sequence !== previous + 1) return `input ${at} has sequence ${fields.sequence} and the sequence after ${previous} is ${previous + 1}`;
+    previous = fields.sequence;
+    if (index === 0 && kind !== "theme") return `input 1 is a ${kind} and the first input of a session is a theme`;
+    if (kind === "resize") size = fields;
+    if (kind === "selection") {
+      if (fields.action === "start" || fields.action === "update") {
+        if (size === null) return `input ${at} is a selection ${fields.action} before any resize`;
+        if (fields.row >= size.rows || fields.edge > size.cols) return `input ${at} is a selection ${fields.action} at edge ${fields.edge} row ${fields.row} outside the grid of ${size.rows} rows and ${size.cols} columns`;
+      }
+      if ((fields.action === "update" || fields.action === "end") && !selecting) return `input ${at} is a selection ${fields.action} and no selection has started`;
+      selecting = fields.action === "start" || fields.action === "update";
+    }
+  }
+  return null;
+}
+
 /** Whether the text of a policy file is one that a writer truncated and is writing: a reader waits for the next notification and reports nothing. */
 export const policyIsBeingWritten = (text) => text.trim() === "";
