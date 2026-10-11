@@ -110,7 +110,7 @@ func runReplayWith(t *testing.T, run func([]string, io.Writer, io.Writer, sok.Op
 func TestReplayReportsEqualWhenEveryStoredHashIsTheReplayedOne(t *testing.T) {
 	config := replayConfig(t, standardEvents(), fakeReplay, "fake")
 	stdout, stderr, code := runReplay(t, config, "s1")
-	if code != 0 || stdout != "replay session s1: 2 sidecar frames and 2 page frames equal\n" || stderr != "" {
+	if code != 0 || stdout != "replay session s1: 2 sidecar frames and 2 page frames equal in 1 segments\n" || stderr != "" {
 		t.Errorf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
 }
@@ -121,10 +121,10 @@ func TestReplayStopsAtTheSequenceOfUntil(t *testing.T) {
 	events.sidecar[2] = input(1030, 4, 2, "s1", "0d0a0a")
 	config := replayConfig(t, events, fakeReplay, "fake")
 	stdout, stderr, code := runReplay(t, config, "s1", "--until", "1")
-	if code != 0 || stdout != "replay session s1: 1 sidecar frames and 1 page frames equal\n" || stderr != "" {
+	if code != 0 || stdout != "replay session s1: 1 sidecar frames and 1 page frames equal in 1 segments\n" || stderr != "" {
 		t.Errorf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
-	if _, stderr, code := runReplay(t, config, "s1", "--until", "2"); code != 1 || !strings.Contains(stderr, "sok: replay divergence: session s1 sequence 2 layer sidecar expected "+digits(5)+" found "+digits(4)+"\n") {
+	if _, stderr, code := runReplay(t, config, "s1", "--until", "2"); code != 1 || !strings.Contains(stderr, "sok: replay divergence: session s1 segment b1 sequence 2 layer sidecar expected "+digits(5)+" found "+digits(4)+"\n") {
 		t.Errorf("until 2: code %d stderr %q", code, stderr)
 	}
 	if _, stderr, code := runReplay(t, config, "s1", "--until", "x"); code != 2 || !strings.Contains(stderr, "sok: --until must be a non-negative integer, found \"x\"") {
@@ -175,11 +175,11 @@ func TestReplayReportsTheFirstDivergenceWithItsLayer(t *testing.T) {
 		c.change(&events)
 		config := replayConfig(t, events, fakeReplay, "fake")
 		stdout, stderr, code := runReplayWith(t, sok.Main, config, "s1")
-		message := fmt.Sprintf("replay divergence: session s1 sequence %d layer %s expected %s found %s", c.seq, c.layer, c.want, c.found)
+		message := fmt.Sprintf("replay divergence: session s1 segment b1 sequence %d layer %s expected %s found %s", c.seq, c.layer, c.want, c.found)
 		if code != 1 || stdout != "" || stderr != "sok: "+message+"\n" {
 			t.Errorf("%s: code %d stdout %q stderr %q, want %q", c.name, code, stdout, stderr, message)
 		}
-		fields := fmt.Sprintf(`"fields":{"expected":"%s","found":"%s","layer":"%s","sequence":%d,"session":"s1"}`, c.want, c.found, c.layer, c.seq)
+		fields := fmt.Sprintf(`"fields":{"expected":"%s","found":"%s","layer":"%s","segment":"b1","sequence":%d,"session":"s1"}`, c.want, c.found, c.layer, c.seq)
 		if line := divergence(t, config); !strings.Contains(line, `"level":"error"`) || !strings.Contains(line, fields) {
 			t.Errorf("%s: event %s, want the level error and %s", c.name, line, fields)
 		}
@@ -222,5 +222,113 @@ func TestReplayRefusesWhatItCannotCompare(t *testing.T) {
 	want := "sok: replay session s1: sidecar events of more than one role: fake, other\n"
 	if _, stderr, code := runReplay(t, config, "s1"); code != 1 || stderr != want {
 		t.Errorf("two roles: code %d stderr %q, want %q", code, stderr, want)
+	}
+}
+
+// segmentEvents is a second run of the sidecar (boot b2) whose sequence restarts at 1: three inputs of 3, 1 and 1 bytes, each
+// followed by a frame record of the sidecar and of the page; the page frames name the segment they received.
+func segmentEvents(session string) replayEvents {
+	pageFrame := func(ts, seq, sequence int, hash string) string {
+		return strings.Replace(frame("page", ts, seq, sequence, session, hash), `"rows":2`, `"segment":"b2","rows":2`, 1)
+	}
+	return replayEvents{
+		sidecar: []string{
+			input(2010, 2, 1, session, "00ff10"),
+			frame("sidecar", 2020, 3, 1, session, digits(3)),
+			input(2030, 4, 2, session, "aa"),
+			frame("sidecar", 2040, 5, 2, session, digits(4)),
+			input(2050, 6, 3, session, "bb"),
+			frame("sidecar", 2060, 7, 3, session, digits(5)),
+		},
+		page: []string{pageFrame(2025, 4, 1, digits(3)), pageFrame(2045, 5, 2, digits(4)), pageFrame(2065, 6, 3, digits(5))},
+	}
+}
+
+// segmentedConfig is the session of standardEvents (boot b1, its page frames naming b1) followed by segmentEvents (boot b2).
+func segmentedConfig(t *testing.T, change func(first, second *replayEvents)) string {
+	t.Helper()
+	first, second := standardEvents(), segmentEvents("s1")
+	for index, line := range first.page {
+		first.page[index] = strings.Replace(line, `"rows":2`, `"segment":"b1","rows":2`, 1)
+	}
+	if change != nil {
+		change(&first, &second)
+	}
+	config := replayConfig(t, replayEvents{sidecar: first.sidecar, page: append(first.page, second.page...)}, fakeReplay, "fake")
+	open := `{"ts_us":2000,"mono_ns":2000,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":2,"pid":2,"role":"fake","boot":"b2"}}`
+	writeReplayFile(t, filepath.Join(config, "logs", "fake-b2.jsonl"), strings.Join(append([]string{open}, second.sidecar...), "\n")+"\n", 0o600)
+	return config
+}
+
+// contract: cli.debug.replay-segments
+func TestReplayComparesEachSegmentOfASessionWhoseSequenceRestarts(t *testing.T) {
+	config := segmentedConfig(t, nil)
+	stdout, stderr, code := runReplay(t, config, "s1")
+	if code != 0 || stdout != "replay session s1: 5 sidecar frames and 5 page frames equal in 2 segments\n" || stderr != "" {
+		t.Errorf("code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+	// A divergence in the second segment names the segment, which the sequence alone does not.
+	altered := segmentedConfig(t, func(_, second *replayEvents) {
+		second.sidecar[3] = frame("sidecar", 2040, 5, 2, "s1", digits(9))
+	})
+	stdout, stderr, code = runReplayWith(t, sok.Main, altered, "s1")
+	want := "sok: replay divergence: session s1 segment b2 sequence 2 layer sidecar expected " + digits(4) + " found " + digits(9) + "\n"
+	if code != 1 || stdout != "" || stderr != want {
+		t.Errorf("code %d stdout %q stderr %q, want %q", code, stdout, stderr, want)
+	}
+	fields := `"fields":{"expected":"` + digits(4) + `","found":"` + digits(9) + `","layer":"sidecar","segment":"b2","sequence":2,"session":"s1"}`
+	if line := divergence(t, altered); !strings.Contains(line, fields) {
+		t.Errorf("event %s, want %s", line, fields)
+	}
+	// --until applies to the sequence of each segment.
+	stdout, stderr, code = runReplay(t, config, "s1", "--until", "1")
+	if code != 0 || stdout != "replay session s1: 2 sidecar frames and 2 page frames equal in 2 segments\n" || stderr != "" {
+		t.Errorf("until 1: code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+}
+
+// contract: cli.debug.replay-holds-one-segment
+func TestReplayHoldsTheEventLinesOfOneSegmentAtATime(t *testing.T) {
+	config := segmentedConfig(t, nil)
+	result, err := sok.ReplayLogs(config, "s1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The segments hold 4 and 6 event lines; the session holds 10.
+	if result.Segments != 2 || result.HeldLines != 6 {
+		t.Errorf("segments %d held lines %d, want 2 and 6", result.Segments, result.HeldLines)
+	}
+}
+
+// contract: cli.debug.replay-segment-errors
+func TestReplayRefusesAPageFrameThatNamesNoSegmentOfTheSession(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(first, second *replayEvents)
+		want   string
+	}{
+		{"a page frame without a segment in a session with two", func(first, _ *replayEvents) {
+			first.page[0] = frame("page", 1025, 2, 1, "s1", digits(2))
+		}, "sok: replay session s1: the page frame record at sequence 1 has no fields.segment, and the session has 2 segments\n"},
+		{"a page frame of a segment the session does not have", func(first, _ *replayEvents) {
+			first.page[0] = strings.Replace(first.page[0], `"segment":"b1"`, `"segment":"b9"`, 1)
+		}, "sok: replay session s1: the page frame record at sequence 1 names the segment b9, which the session does not have\n"},
+		{"a page frame whose segment is not text", func(first, _ *replayEvents) {
+			first.page[0] = strings.Replace(first.page[0], `"segment":"b1"`, `"segment":7`, 1)
+		}, "sok: replay session s1: the page frame record at sequence 1 has a fields.segment that is not text\n"},
+	}
+	for _, c := range cases {
+		config := segmentedConfig(t, c.change)
+		if _, stderr, code := runReplay(t, config, "s1"); code != 1 || stderr != c.want {
+			t.Errorf("%s: code %d stderr %q, want %q", c.name, code, stderr, c.want)
+		}
+	}
+	// The events of two runs of the sidecar that alternate in time are not segments.
+	config := segmentedConfig(t, func(first, _ *replayEvents) {
+		first.sidecar = append(first.sidecar, input(3000, 6, 3, "s1", "00"))
+	})
+	want := "sok: replay session s1: the sidecar events of the segments b1 and b2 are interleaved\n"
+	if _, stderr, code := runReplay(t, config, "s1"); code != 1 || stderr != want {
+		t.Errorf("interleaved: code %d stderr %q, want %q", code, stderr, want)
 	}
 }

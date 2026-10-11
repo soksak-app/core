@@ -153,7 +153,8 @@ fn replay_reports_equal_when_every_stored_hash_is_the_replayed_one() {
     let (stdout, stderr, code) = run_replay(&config, &["s1"]);
     assert!(
         code == 0
-            && stdout == "replay session s1: 2 sidecar frames and 2 page frames equal\n"
+            && stdout
+                == "replay session s1: 2 sidecar frames and 2 page frames equal in 1 segments\n"
             && stderr.is_empty(),
         "code {code} stdout {stdout:?} stderr {stderr:?}"
     );
@@ -168,13 +169,14 @@ fn replay_stops_at_the_sequence_of_until() {
     let (stdout, stderr, code) = run_replay(&config, &["s1", "--until", "1"]);
     assert!(
         code == 0
-            && stdout == "replay session s1: 1 sidecar frames and 1 page frames equal\n"
+            && stdout
+                == "replay session s1: 1 sidecar frames and 1 page frames equal in 1 segments\n"
             && stderr.is_empty(),
         "code {code} stdout {stdout:?} stderr {stderr:?}"
     );
     let (_, stderr, code) = run_replay(&config, &["s1", "--until", "2"]);
     let want = format!(
-        "sok: replay divergence: session s1 sequence 2 layer sidecar expected {} found {}\n",
+        "sok: replay divergence: session s1 segment b1 sequence 2 layer sidecar expected {} found {}\n",
         digits(5),
         digits(4)
     );
@@ -262,14 +264,14 @@ fn replay_reports_the_first_divergence_with_its_layer() {
         );
         let (stdout, stderr, code) = run_replay_with(soksak_sok::run_logged, &config, &["s1"]);
         let message = format!(
-            "replay divergence: session s1 sequence {sequence} layer {layer} expected {expected} found {found}"
+            "replay divergence: session s1 segment b1 sequence {sequence} layer {layer} expected {expected} found {found}"
         );
         assert!(
             code == 1 && stdout.is_empty() && stderr == format!("sok: {message}\n"),
             "{name}: code {code} stdout {stdout:?} stderr {stderr:?}, want {message:?}"
         );
         let fields = format!(
-            r#""fields":{{"expected":"{expected}","found":"{found}","layer":"{layer}","sequence":{sequence},"session":"s1"}}"#
+            r#""fields":{{"expected":"{expected}","found":"{found}","layer":"{layer}","segment":"b1","sequence":{sequence},"session":"s1"}}"#
         );
         let line = divergence(&config);
         assert!(
@@ -356,4 +358,152 @@ fn replay_refuses_what_it_cannot_compare() {
         code == 1 && stderr == want,
         "two roles: code {code} stderr {stderr:?}, want {want:?}"
     );
+}
+
+/// A second run of the sidecar (boot b2) whose sequence restarts at 1: three inputs of 3, 1 and 1 bytes, each followed by a frame
+/// record of the sidecar and of the page; the page frames name the segment they received.
+fn segment_events(session: &str) -> Events {
+    let page_frame = |ts: i64, seq: i64, sequence: i64, hash: &str| {
+        frame("page", ts, seq, sequence, session, hash).replacen(
+            r#""rows":2"#,
+            r#""segment":"b2","rows":2"#,
+            1,
+        )
+    };
+    Events {
+        sidecar: vec![
+            input(2010, 2, 1, session, "00ff10"),
+            frame("sidecar", 2020, 3, 1, session, &digits(3)),
+            input(2030, 4, 2, session, "aa"),
+            frame("sidecar", 2040, 5, 2, session, &digits(4)),
+            input(2050, 6, 3, session, "bb"),
+            frame("sidecar", 2060, 7, 3, session, &digits(5)),
+        ],
+        page: vec![
+            page_frame(2025, 4, 1, &digits(3)),
+            page_frame(2045, 5, 2, &digits(4)),
+            page_frame(2065, 6, 3, &digits(5)),
+        ],
+    }
+}
+
+/// The session of `standard_events` (boot b1, its page frames naming b1) followed by `segment_events` (boot b2).
+fn segmented_config(name: &str, change: impl Fn(&mut Events, &mut Events)) -> PathBuf {
+    let mut first = standard_events();
+    let mut second = segment_events("s1");
+    for line in first.page.iter_mut() {
+        *line = line.replacen(r#""rows":2"#, r#""segment":"b1","rows":2"#, 1);
+    }
+    change(&mut first, &mut second);
+    let mut page = first.page.clone();
+    page.extend(second.page.clone());
+    let config = replay_config(
+        name,
+        &Events {
+            sidecar: first.sidecar,
+            page,
+        },
+        FAKE_REPLAY,
+        "fake",
+    );
+    let open = r#"{"ts_us":2000,"mono_ns":2000,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":2,"pid":2,"role":"fake","boot":"b2"}}"#;
+    write_file(
+        &config.join("logs/fake-b2.jsonl"),
+        &event_file(open.to_string(), &second.sidecar),
+        0o600,
+    );
+    config
+}
+
+// contract: cli.debug.replay-segments
+#[test]
+fn replay_compares_each_segment_of_a_session_whose_sequence_restarts() {
+    let config = segmented_config("replay-segments", |_, _| {});
+    let (stdout, stderr, code) = run_replay(&config, &["s1"]);
+    assert!(
+        code == 0
+            && stdout
+                == "replay session s1: 5 sidecar frames and 5 page frames equal in 2 segments\n"
+            && stderr.is_empty(),
+        "code {code} stdout {stdout:?} stderr {stderr:?}"
+    );
+    // A divergence in the second segment names the segment, which the sequence alone does not.
+    let altered = segmented_config("replay-segments-altered", |_, second| {
+        second.sidecar[3] = frame("sidecar", 2040, 5, 2, "s1", &digits(9));
+    });
+    let (stdout, stderr, code) = run_replay_with(soksak_sok::run_logged, &altered, &["s1"]);
+    let want = format!(
+        "sok: replay divergence: session s1 segment b2 sequence 2 layer sidecar expected {} found {}\n",
+        digits(4),
+        digits(9)
+    );
+    assert!(
+        code == 1 && stdout.is_empty() && stderr == want,
+        "code {code} stdout {stdout:?} stderr {stderr:?}, want {want:?}"
+    );
+    let fields = format!(
+        r#""fields":{{"expected":"{}","found":"{}","layer":"sidecar","segment":"b2","sequence":2,"session":"s1"}}"#,
+        digits(4),
+        digits(9)
+    );
+    let line = divergence(&altered);
+    assert!(line.contains(&fields), "event {line}, want {fields}");
+    // --until applies to the sequence of each segment.
+    let (stdout, stderr, code) = run_replay(&config, &["s1", "--until", "1"]);
+    assert!(
+        code == 0
+            && stdout
+                == "replay session s1: 2 sidecar frames and 2 page frames equal in 2 segments\n"
+            && stderr.is_empty(),
+        "until 1: code {code} stdout {stdout:?} stderr {stderr:?}"
+    );
+}
+
+// contract: cli.debug.replay-holds-one-segment
+#[test]
+fn replay_holds_the_event_lines_of_one_segment_at_a_time() {
+    let config = segmented_config("replay-holds", |_, _| {});
+    let result = soksak_sok::replay::replay_logs(&config, "s1", None).expect("the replay");
+    // The segments hold 4 and 6 event lines; the session holds 10.
+    assert_eq!(
+        (result.segments, result.held_lines),
+        (2, 6),
+        "segments and held lines"
+    );
+}
+
+// contract: cli.debug.replay-segment-errors
+#[test]
+fn replay_refuses_a_page_frame_that_names_no_segment_of_the_session() {
+    type Change = fn(&mut Events, &mut Events);
+    let cases: Vec<(&str, Change, &str)> = vec![
+        (
+            "a page frame without a segment in a session with two",
+            |first, _| first.page[0] = frame("page", 1025, 2, 1, "s1", &digits(2)),
+            "sok: replay session s1: the page frame record at sequence 1 has no fields.segment, and the session has 2 segments\n",
+        ),
+        (
+            "a page frame of a segment the session does not have",
+            |first, _| first.page[0] = first.page[0].replacen(r#""segment":"b1""#, r#""segment":"b9""#, 1),
+            "sok: replay session s1: the page frame record at sequence 1 names the segment b9, which the session does not have\n",
+        ),
+        (
+            "a page frame whose segment is not text",
+            |first, _| first.page[0] = first.page[0].replacen(r#""segment":"b1""#, r#""segment":7"#, 1),
+            "sok: replay session s1: the page frame record at sequence 1 has a fields.segment that is not text\n",
+        ),
+        (
+            "the events of two runs of the sidecar alternate in time",
+            |first, _| first.sidecar.push(input(3000, 6, 3, "s1", "00")),
+            "sok: replay session s1: the sidecar events of the segments b1 and b2 are interleaved\n",
+        ),
+    ];
+    for (index, (name, change, want)) in cases.into_iter().enumerate() {
+        let config = segmented_config(&format!("replay-segment-errors-{index}"), change);
+        let (_, stderr, code) = run_replay(&config, &["s1"]);
+        assert!(
+            code == 1 && stderr == want,
+            "{name}: code {code} stderr {stderr:?}, want {want:?}"
+        );
+    }
 }

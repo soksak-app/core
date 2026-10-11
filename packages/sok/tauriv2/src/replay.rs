@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use crate::debug::{js_string, Json};
 use crate::event_log::{EventLog, Level};
 use crate::files::{file_error, os_reason};
-use crate::log_query::{parse_log_query, query_logs};
+use crate::log_query::{parse_log_query, query_logs, LogRow};
 use crate::plugins::read_installed;
 use crate::routine::spawn_named;
 use crate::{config_dir_of, Arguments, Error, Options};
@@ -35,6 +35,8 @@ pub(crate) fn set_run_log(log: Option<Arc<EventLog>>) {
 #[derive(Debug)]
 pub struct ReplayDivergence {
     pub session: String,
+    /// The boot of the run of the sidecar that produced the screen (docs/spec/replay.md#segments).
+    pub segment: String,
     pub sequence: i64,
     /// The layer of the stored hash: `sidecar` or `page`.
     pub layer: String,
@@ -47,8 +49,8 @@ impl std::fmt::Display for ReplayDivergence {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             formatter,
-            "replay divergence: session {} sequence {} layer {} expected {} found {}",
-            self.session, self.sequence, self.layer, self.expected, self.found
+            "replay divergence: session {} segment {} sequence {} layer {} expected {} found {}",
+            self.session, self.segment, self.sequence, self.layer, self.expected, self.found
         )
     }
 }
@@ -56,7 +58,7 @@ impl std::fmt::Display for ReplayDivergence {
 /// Why a replay did not end with equal hashes.
 #[derive(Debug)]
 pub enum ReplayFailure {
-    Divergence(ReplayDivergence),
+    Divergence(Box<ReplayDivergence>),
     Failed(String),
 }
 
@@ -66,17 +68,23 @@ impl From<String> for ReplayFailure {
     }
 }
 
-/// The frame records that were compared and found equal.
+/// The frame records that were compared and found equal, the segments of the session and the greatest number of event lines that
+/// the replay held at once (the lines of one segment).
 #[derive(Debug, Default)]
 pub struct ReplayResult {
     pub sidecar_frames: usize,
     pub page_frames: usize,
+    pub segments: usize,
+    pub held_lines: usize,
 }
 
+/// A frame record of the session. `segment` is the boot of the run of the sidecar: of the row for a record of the sidecar, and
+/// the `fields.segment` that the page stored for a record of the page, which is empty when it stored none.
 struct Frame {
     sequence: i64,
     hash: String,
     layer: &'static str,
+    segment: String,
 }
 
 fn replay_error(session: &str, text: impl AsRef<str>) -> ReplayFailure {
@@ -104,20 +112,21 @@ fn integer_from_one(value: Option<&Value>) -> Option<i64> {
     }
 }
 
-/// Replays the session from the event files of the configuration directory and compares the frame records. `until` is the
-/// greatest sequence that is replayed and compared; `None` replays the whole session. A stored hash that differs from the replayed
-/// one is returned as `ReplayFailure::Divergence`.
-pub fn replay_logs(
+/// The function that a scan of a session calls for each row: the row, its event, its layer and its sequence.
+type ReplayVisit<'a> =
+    dyn FnMut(&LogRow, &Value, &'static str, Option<i64>) -> Result<(), ReplayFailure> + 'a;
+
+/// Calls `visit` for each row of the session in the order of the query, with the event, its layer and its sequence (`None` when it has
+/// none). A row of a layer other than sidecar and page is not visited, and neither is a row with a sequence above `until`.
+fn scan_replay_session(
     config_dir: &Path,
     session: &str,
     until: Option<i64>,
-) -> Result<ReplayResult, ReplayFailure> {
+    visit: &mut ReplayVisit,
+) -> Result<(), ReplayFailure> {
     let params =
         json!({"channel": "all", "session": session, "order": "asc", "limit": 5000}).to_string();
     let mut query = parse_log_query(&params)?;
-    let mut sidecar_lines: Vec<String> = vec![];
-    let mut roles: BTreeSet<String> = BTreeSet::new();
-    let mut frames: Vec<Frame> = vec![];
     loop {
         let page = query_logs(config_dir, &query, None)?;
         for row in &page.rows {
@@ -133,25 +142,67 @@ pub fn replay_logs(
                     format!("{} offset {}: the event has no layer", row.file, row.offset),
                 ));
             };
-            let fields = &event["fields"];
-            let sequence = integer_from_one(fields.get("sequence"));
+            let sequence = integer_from_one(event["fields"].get("sequence"));
             if let (Some(sequence), Some(until)) = (sequence, until) {
                 if sequence > until {
                     continue;
                 }
             }
             let layer: &'static str = match layer {
-                "sidecar" => {
-                    roles.insert(row.role.clone());
-                    sidecar_lines.push(row.event.get().to_string());
-                    "sidecar"
-                }
+                "sidecar" => "sidecar",
                 "page" => "page",
                 _ => continue,
             };
-            if event["class"].as_str() != Some("frame") {
-                continue;
+            visit(row, &event, layer, sequence)?;
+        }
+        match page.next {
+            Some(next) => query.after = Some(next),
+            None => return Ok(()),
+        }
+    }
+}
+
+/// Replays the session from the event files of the configuration directory and compares the frame records. `until` is the
+/// greatest sequence that is replayed and compared; `None` replays the whole session. A stored hash that differs from the replayed
+/// one is returned as `ReplayFailure::Divergence`.
+///
+/// A session is a list of segments, one for each run (boot) of the sidecar, because the sequence restarts at 1 in a new run
+/// (docs/spec/replay.md#segments). The first scan reads the frame records and the boots; the second scan collects the event lines
+/// of one segment at a time, runs the replay executable on them and compares that segment, so the lines of the session are never
+/// held together.
+pub fn replay_logs(
+    config_dir: &Path,
+    session: &str,
+    until: Option<i64>,
+) -> Result<ReplayResult, ReplayFailure> {
+    let mut roles: BTreeSet<String> = BTreeSet::new();
+    let mut segments: Vec<String> = vec![];
+    let mut frames: Vec<Frame> = vec![];
+    scan_replay_session(
+        config_dir,
+        session,
+        until,
+        &mut |row, event, layer, sequence| {
+            if layer == "sidecar" {
+                roles.insert(row.role.clone());
+                if segments.last() != Some(&row.boot) {
+                    if segments.contains(&row.boot) {
+                        return Err(replay_error(
+                            session,
+                            format!(
+                                "the sidecar events of the segments {} and {} are interleaved",
+                                row.boot,
+                                segments.last().expect("a segment exists")
+                            ),
+                        ));
+                    }
+                    segments.push(row.boot.clone());
+                }
             }
+            if event["class"].as_str() != Some("frame") {
+                return Ok(());
+            }
+            let fields = &event["fields"];
             let (Some(sequence), Some(hash)) =
                 (sequence, fields.get("hash").and_then(Value::as_str))
             else {
@@ -172,23 +223,35 @@ pub fn replay_logs(
                     ),
                 ));
             }
+            let segment = if layer == "sidecar" {
+                row.boot.clone()
+            } else {
+                match fields.get("segment") {
+                    None | Some(Value::Null) => String::new(),
+                    Some(Value::String(stored)) => stored.clone(),
+                    Some(_) => {
+                        return Err(replay_error(
+                            session,
+                            format!("the page frame record at sequence {sequence} has a fields.segment that is not text"),
+                        ))
+                    }
+                }
+            };
             frames.push(Frame {
                 sequence,
                 hash: hash.to_string(),
                 layer,
+                segment,
             });
-        }
-        match page.next {
-            Some(next) => query.after = Some(next),
-            None => break,
-        }
-    }
-    let Some(role) = roles.iter().next().cloned() else {
+            Ok(())
+        },
+    )?;
+    if segments.is_empty() {
         return Err(replay_error(
             session,
             "the event files hold no event of the layer sidecar for it",
         ));
-    };
+    }
     if roles.len() > 1 {
         let names: Vec<&str> = roles.iter().map(String::as_str).collect();
         return Err(replay_error(
@@ -196,22 +259,131 @@ pub fn replay_logs(
             format!("sidecar events of more than one role: {}", names.join(", ")),
         ));
     }
+    let role = roles.iter().next().cloned().expect("a role exists");
     if !frames.iter().any(|frame| frame.layer == "sidecar") {
         return Err(replay_error(session, "no frame record to compare"));
     }
-    let (folder, executable) = replay_executable(config_dir, session, &role)?;
-    let mut input = String::new();
-    for line in &sidecar_lines {
-        input.push_str(line);
-        input.push('\n');
+    // A page frame names the segment it received; a session with one segment needs no name.
+    for frame in frames.iter_mut().filter(|frame| frame.layer == "page") {
+        if frame.segment.is_empty() {
+            if segments.len() != 1 {
+                return Err(replay_error(
+                    session,
+                    format!(
+                        "the page frame record at sequence {} has no fields.segment, and the session has {} segments",
+                        frame.sequence,
+                        segments.len()
+                    ),
+                ));
+            }
+            frame.segment = segments[0].clone();
+        } else if !segments.contains(&frame.segment) {
+            return Err(replay_error(
+                session,
+                format!(
+                    "the page frame record at sequence {} names the segment {}, which the session does not have",
+                    frame.sequence, frame.segment
+                ),
+            ));
+        }
     }
-    let replayed = run_replay_executable(session, &folder, &executable, input)?;
-    // The records are compared in the order of sequence, a record of the sidecar before a record of the page.
+    let (folder, executable) = replay_executable(config_dir, session, &role)?;
+    let mut result = ReplayResult {
+        segments: segments.len(),
+        ..ReplayResult::default()
+    };
+    let mut next = 0;
+    let mut lines: Vec<String> = vec![];
+    // Replays and compares the segments up to and including `through`, the first of them with the lines held now.
+    let mut finish = |through: Option<usize>,
+                      lines: &mut Vec<String>,
+                      result: &mut ReplayResult|
+     -> Result<(), ReplayFailure> {
+        let Some(through) = through else {
+            return Ok(());
+        };
+        while next <= through {
+            compare_replay_segment(
+                session,
+                &segments[next],
+                &frames,
+                &folder,
+                &executable,
+                lines,
+                result,
+            )?;
+            lines.clear();
+            next += 1;
+        }
+        Ok(())
+    };
+    scan_replay_session(
+        config_dir,
+        session,
+        until,
+        &mut |row, _event, layer, _sequence| {
+            if layer != "sidecar" {
+                return Ok(());
+            }
+            let Some(index) = segments.iter().position(|boot| *boot == row.boot) else {
+                return Err(replay_error(
+                    session,
+                    format!(
+                        "the event files changed during the replay: the segment {} was not there before",
+                        row.boot
+                    ),
+                ));
+            };
+            finish(index.checked_sub(1), &mut lines, &mut result)?;
+            lines.push(row.event.get().to_string());
+            result.held_lines = result.held_lines.max(lines.len());
+            Ok(())
+        },
+    )?;
+    finish(segments.len().checked_sub(1), &mut lines, &mut result)?;
+    Ok(result)
+}
+
+/// Runs the replay executable on the lines of the segment and compares the frame records of the segment in the order of
+/// sequence, a record of the sidecar before a record of the page. A segment with no frame record of the sidecar runs nothing:
+/// its page frame records have none to equal.
+fn compare_replay_segment(
+    session: &str,
+    segment: &str,
+    all: &[Frame],
+    folder: &Path,
+    executable: &str,
+    lines: &[String],
+    result: &mut ReplayResult,
+) -> Result<(), ReplayFailure> {
+    let mut frames: Vec<&Frame> = all
+        .iter()
+        .filter(|frame| frame.segment == segment)
+        .collect();
     frames.sort_by_key(|frame| (frame.sequence, frame.layer != "sidecar"));
-    let mut result = ReplayResult::default();
+    let replayed = if frames.iter().any(|frame| frame.layer == "sidecar") {
+        let mut input = String::new();
+        for line in lines {
+            input.push_str(line);
+            input.push('\n');
+        }
+        run_replay_executable(session, folder, executable, input)?
+    } else {
+        BTreeMap::new()
+    };
     let mut stored: BTreeSet<i64> = BTreeSet::new();
-    for frame in &frames {
+    for frame in frames {
         let hash = replayed.get(&frame.sequence);
+        let divergence = |layer: &str, expected: String| {
+            ReplayFailure::Divergence(Box::new(ReplayDivergence {
+                session: session.to_string(),
+                segment: segment.to_string(),
+                sequence: frame.sequence,
+                layer: layer.to_string(),
+                expected,
+                found: frame.hash.clone(),
+            }))
+        };
         if frame.layer == "sidecar" {
             let Some(hash) = hash else {
                 return Err(replay_error(
@@ -224,13 +396,7 @@ pub fn replay_logs(
             };
             stored.insert(frame.sequence);
             if *hash != frame.hash {
-                return Err(ReplayFailure::Divergence(ReplayDivergence {
-                    session: session.to_string(),
-                    sequence: frame.sequence,
-                    layer: "sidecar".to_string(),
-                    expected: hash.clone(),
-                    found: frame.hash.clone(),
-                }));
+                return Err(divergence("sidecar", hash.clone()));
             }
             result.sidecar_frames += 1;
             continue;
@@ -240,17 +406,11 @@ pub fn replay_logs(
             _ => "none".to_string(),
         };
         if expected != frame.hash {
-            return Err(ReplayFailure::Divergence(ReplayDivergence {
-                session: session.to_string(),
-                sequence: frame.sequence,
-                layer: "page".to_string(),
-                expected,
-                found: frame.hash.clone(),
-            }));
+            return Err(divergence("page", expected));
         }
         result.page_frames += 1;
     }
-    Ok(result)
+    Ok(())
 }
 
 /// Finds the installed sidecar that declares the replay role and returns its folder and the declared path of its replay executable.
@@ -451,8 +611,8 @@ pub(crate) fn run_replay(
     match replay_logs(&config_dir, session, until) {
         Ok(result) => writeln!(
             stdout,
-            "replay session {session}: {} sidecar frames and {} page frames equal",
-            result.sidecar_frames, result.page_frames
+            "replay session {session}: {} sidecar frames and {} page frames equal in {} segments",
+            result.sidecar_frames, result.page_frames, result.segments
         )
         .map_err(|error| Error::Failed(error.to_string())),
         Err(ReplayFailure::Divergence(divergence)) => {
@@ -464,6 +624,7 @@ pub(crate) fn run_replay(
                         "sok.replay.divergence",
                         &json!({
                             "session": divergence.session,
+                            "segment": divergence.segment,
                             "sequence": divergence.sequence,
                             "layer": divergence.layer,
                             "expected": divergence.expected,

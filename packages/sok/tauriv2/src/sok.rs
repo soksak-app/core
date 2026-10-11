@@ -31,7 +31,7 @@ pub mod platform;
 pub mod plugins;
 mod registry;
 mod release;
-mod replay;
+pub mod replay;
 pub mod routine;
 pub mod version;
 pub use logged::{logged, run_logged, start_tool_event_log, Command};

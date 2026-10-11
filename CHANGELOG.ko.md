@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.25.8: [replay](docs/spec/replay.ko.md#segment)는 replay segment(sidecar의 한 실행이 만든 event이며 `sequence`가 1부터 다시 시작한다)를 정의하고, 두 도구의 `sok debug replay`는 segment마다 재생 실행 파일을 한 번 시작해 각 segment를 자기 저장 hash와 비교하며, 불일치와 `sok.replay.divergence`에 segment(`segment`)를 밝히고, 한 번에 한 segment의 event 줄만 보관하며(`held_lines`), segment가 여럿인 session에서 `fields.segment`가 없거나 모르는 page frame 기록을 거부한다. 용어 `replay segment`를 선언한다
 - F160.25.7: 두 도구의 `sok sidecar release`는 `sidecar.json`이 선언한 `replay.executable`을 `files`가 나열하지 않으면 그 파일 이름을 담은 오류로, 실행 파일 없는 `replay`도 거부한다(계약 사례 `cli.release.requires-the-replay-executable`)
 - F160.3.2.1: 두 host가 종료할 때 writer의 마지막 flush 전에 native observer를 flush하므로 counted source의 마지막 전달분이 기록되고(`FlushNativeObservers`, `flush_native_observers`, 계약 사례 `log.native.platform-flushes-the-observers`, `log.native.shutdown-*`), 문서 view는 AppKit이 view에 등록한 알림 때문에 `native.observe.failed`를 저장하지 않는다. `sp_observe_key_path`가 context를 받고 view는 다른 context의 알림을 상위 class에 넘긴다
 - F160.9.3: 창 검사가 시작하는 fixture가 공통 설정을 행위자 `diagnostics.fixture`로 바꾸므로, 창 검사가 행위자 없는 설정 변경 때문에 `fresh`에서 실패하지 않는다. fixture는 `diagnostic-fixture.js`에 있고 시험이 있다.

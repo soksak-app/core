@@ -29,7 +29,9 @@ var (
 
 // ReplayDivergence is the first stored hash that differs from the replayed one.
 type ReplayDivergence struct {
-	Session  string
+	Session string
+	// Segment is the boot of the run of the sidecar that produced the screen (docs/spec/replay.md#segments).
+	Segment  string
 	Sequence int64
 	// Layer is the layer of the stored hash: sidecar or page.
 	Layer string
@@ -39,19 +41,23 @@ type ReplayDivergence struct {
 }
 
 func (d ReplayDivergence) Error() string {
-	return fmt.Sprintf("replay divergence: session %s sequence %d layer %s expected %s found %s", d.Session, d.Sequence, d.Layer, d.Expected, d.Found)
+	return fmt.Sprintf("replay divergence: session %s segment %s sequence %d layer %s expected %s found %s", d.Session, d.Segment, d.Sequence, d.Layer, d.Expected, d.Found)
 }
 
-// ReplayResult counts the frame records that were compared and found equal.
+// ReplayResult counts the frame records that were compared and found equal, the segments of the session and the greatest
+// number of event lines that the replay held at once (the lines of one segment).
 type ReplayResult struct {
 	SidecarFrames, PageFrames int
+	Segments, HeldLines       int
 }
 
-// replayFrame is a frame record of the session.
+// replayFrame is a frame record of the session. segment is the boot of the run of the sidecar: of the row for a record of the
+// sidecar, and the fields.segment that the page stored for a record of the page, which is empty when it stored none.
 type replayFrame struct {
 	sequence int64
 	hash     string
 	layer    string
+	segment  string
 }
 
 // replayEvent is the part of an event line that the replay reads.
@@ -62,6 +68,7 @@ type replayEvent struct {
 	Fields  struct {
 		Sequence any `json:"sequence"`
 		Hash     any `json:"hash"`
+		Segment  any `json:"segment"`
 	} `json:"fields"`
 }
 
@@ -69,128 +76,211 @@ func replayError(session, format string, args ...any) error {
 	return fmt.Errorf("replay session %s: %s", session, fmt.Sprintf(format, args...))
 }
 
-// ReplayLogs replays the session from the event files of the configuration directory and compares the frame records. until
-// is the greatest sequence that is replayed and compared; nil replays the whole session. A stored hash that differs from the
-// replayed one is returned as a ReplayDivergence.
-func ReplayLogs(configDir, session string, until *int64) (ReplayResult, error) {
-	var result ReplayResult
-	var sidecarLines []json.RawMessage
-	roles := map[string]bool{}
-	var frames []replayFrame
+// scanReplaySession calls visit for each row of the session in the order of the query, with the sequence of the event (0 when
+// it has none). A row of a layer other than sidecar and page is not visited, and neither is a row with a sequence above until.
+func scanReplaySession(configDir, session string, until *int64, visit func(row LogRow, event replayEvent, sequence int64) error) error {
 	params, err := json.Marshal(map[string]any{"channel": "all", "session": session, "order": "asc", "limit": queryMaxLimit})
 	if err != nil {
-		return result, err
+		return err
 	}
 	query, err := ParseLogQuery(params)
 	if err != nil {
-		return result, err
+		return err
 	}
 	for {
 		page, err := QueryLogs(configDir, query, nil)
 		if err != nil {
-			return result, err
+			return err
 		}
 		for _, row := range page.Rows {
 			var event replayEvent
 			if err := json.Unmarshal(row.Event, &event); err != nil {
-				return result, replayError(session, "%s offset %d: %v", row.File, row.Offset, err)
+				return replayError(session, "%s offset %d: %v", row.File, row.Offset, err)
 			}
 			if event.Layer == "" {
-				return result, replayError(session, "%s offset %d: the event has no layer", row.File, row.Offset)
+				return replayError(session, "%s offset %d: the event has no layer", row.File, row.Offset)
 			}
-			sequence, hasSequence := int64(0), false
+			sequence := int64(0)
 			if n, isNumber := event.Fields.Sequence.(float64); isNumber && n >= 1 && n == math.Trunc(n) {
-				sequence, hasSequence = int64(n), true
+				sequence = int64(n)
 			}
-			if hasSequence && until != nil && sequence > *until {
+			if sequence != 0 && until != nil && sequence > *until {
 				continue
 			}
-			switch event.Layer {
-			case "sidecar":
-				roles[row.Role] = true
-				sidecarLines = append(sidecarLines, row.Event)
-			case "page":
-			default:
+			if event.Layer != "sidecar" && event.Layer != "page" {
 				continue
 			}
-			if event.Class != "frame" {
-				continue
+			if err := visit(row, event, sequence); err != nil {
+				return err
 			}
-			hash, isText := event.Fields.Hash.(string)
-			if !hasSequence || !isText {
-				return result, replayError(session, "%s offset %d: a frame record needs an integer fields.sequence from 1 and a string fields.hash", row.File, row.Offset)
-			}
-			if !screenHashText.MatchString(hash) {
-				return result, replayError(session, "sequence %d layer %s: the stored hash is not 64 lowercase hexadecimal characters: %s", sequence, event.Layer, jsString(hash))
-			}
-			frames = append(frames, replayFrame{sequence: sequence, hash: hash, layer: event.Layer})
 		}
 		if page.Next == nil {
-			break
+			return nil
 		}
 		query.After = page.Next
 	}
-	if len(sidecarLines) == 0 {
+}
+
+// ReplayLogs replays the session from the event files of the configuration directory and compares the frame records. until
+// is the greatest sequence that is replayed and compared; nil replays the whole session. A stored hash that differs from the
+// replayed one is returned as a ReplayDivergence.
+//
+// A session is a list of segments, one for each run (boot) of the sidecar, because the sequence restarts at 1 in a new run
+// (docs/spec/replay.md#segments). The first scan reads the frame records and the boots; the second scan collects the event lines of
+// one segment at a time, runs the replay executable on them and compares that segment, so the lines of the session are never
+// held together.
+func ReplayLogs(configDir, session string, until *int64) (ReplayResult, error) {
+	var result ReplayResult
+	roles := map[string]bool{}
+	var segments []string
+	var frames []replayFrame
+	err := scanReplaySession(configDir, session, until, func(row LogRow, event replayEvent, sequence int64) error {
+		if event.Layer == "sidecar" {
+			roles[row.Role] = true
+			if len(segments) == 0 || segments[len(segments)-1] != row.Boot {
+				if slices.Contains(segments, row.Boot) {
+					return replayError(session, "the sidecar events of the segments %s and %s are interleaved", row.Boot, segments[len(segments)-1])
+				}
+				segments = append(segments, row.Boot)
+			}
+		}
+		if event.Class != "frame" {
+			return nil
+		}
+		hash, isText := event.Fields.Hash.(string)
+		if sequence == 0 || !isText {
+			return replayError(session, "%s offset %d: a frame record needs an integer fields.sequence from 1 and a string fields.hash", row.File, row.Offset)
+		}
+		if !screenHashText.MatchString(hash) {
+			return replayError(session, "sequence %d layer %s: the stored hash is not 64 lowercase hexadecimal characters: %s", sequence, event.Layer, jsString(hash))
+		}
+		frame := replayFrame{sequence: sequence, hash: hash, layer: event.Layer}
+		if event.Layer == "sidecar" {
+			frame.segment = row.Boot
+		} else if stored, present := event.Fields.Segment.(string); present {
+			frame.segment = stored
+		} else if event.Fields.Segment != nil {
+			return replayError(session, "the page frame record at sequence %d has a fields.segment that is not text", sequence)
+		}
+		frames = append(frames, frame)
+		return nil
+	})
+	if err != nil {
+		return result, err
+	}
+	if len(segments) == 0 {
 		return result, replayError(session, "the event files hold no event of the layer sidecar for it")
 	}
 	if len(roles) > 1 {
-		names := make([]string, 0, len(roles))
-		for role := range roles {
-			names = append(names, role)
-		}
-		sort.Strings(names)
-		return result, replayError(session, "sidecar events of more than one role: %s", strings.Join(names, ", "))
+		return result, replayError(session, "sidecar events of more than one role: %s", strings.Join(slices.Sorted(maps.Keys(roles)), ", "))
 	}
-	var role string
-	for name := range roles {
-		role = name
-	}
+	role := slices.Collect(maps.Keys(roles))[0]
 	if !slices.ContainsFunc(frames, func(f replayFrame) bool { return f.layer == "sidecar" }) {
 		return result, replayError(session, "no frame record to compare")
+	}
+	// A page frame names the segment it received; a session with one segment needs no name.
+	for index, frame := range frames {
+		if frame.layer != "page" {
+			continue
+		}
+		switch {
+		case frame.segment == "" && len(segments) == 1:
+			frames[index].segment = segments[0]
+		case frame.segment == "":
+			return result, replayError(session, "the page frame record at sequence %d has no fields.segment, and the session has %d segments", frame.sequence, len(segments))
+		case !slices.Contains(segments, frame.segment):
+			return result, replayError(session, "the page frame record at sequence %d names the segment %s, which the session does not have", frame.sequence, frame.segment)
+		}
 	}
 	folder, executable, err := replayExecutable(configDir, session, role)
 	if err != nil {
 		return result, err
 	}
-	var input bytes.Buffer
-	for _, line := range sidecarLines {
-		input.Write(line)
-		input.WriteByte('\n')
+	result.Segments = len(segments)
+	next := 0
+	var lines [][]byte
+	// finish replays and compares the segments up to and including the segment index that has the lines held now.
+	finish := func(through int) error {
+		for ; next <= through; next++ {
+			if err := compareReplaySegment(session, segments[next], frames, folder, executable, lines, &result); err != nil {
+				return err
+			}
+			lines = nil
+		}
+		return nil
 	}
-	replayed, err := runReplayExecutable(session, folder, executable, input.Bytes())
+	err = scanReplaySession(configDir, session, until, func(row LogRow, event replayEvent, sequence int64) error {
+		if event.Layer != "sidecar" {
+			return nil
+		}
+		index := slices.Index(segments, row.Boot)
+		if index < 0 {
+			return replayError(session, "the event files changed during the replay: the segment %s was not there before", row.Boot)
+		}
+		if err := finish(index - 1); err != nil {
+			return err
+		}
+		lines = append(lines, row.Event)
+		result.HeldLines = max(result.HeldLines, len(lines))
+		return nil
+	})
 	if err != nil {
 		return result, err
 	}
-	// The records are compared in the order of sequence, a record of the sidecar before a record of the page.
+	return result, finish(len(segments) - 1)
+}
+
+// compareReplaySegment runs the replay executable on the lines of the segment and compares the frame records of the segment in
+// the order of sequence, a record of the sidecar before a record of the page. A segment with no frame record of the sidecar
+// runs nothing: its page frame records have none to equal.
+func compareReplaySegment(session, segment string, all []replayFrame, folder, executable string, lines [][]byte, result *ReplayResult) error {
+	var frames []replayFrame
+	for _, frame := range all {
+		if frame.segment == segment {
+			frames = append(frames, frame)
+		}
+	}
 	sort.SliceStable(frames, func(i, j int) bool {
 		if frames[i].sequence != frames[j].sequence {
 			return frames[i].sequence < frames[j].sequence
 		}
 		return frames[i].layer == "sidecar" && frames[j].layer != "sidecar"
 	})
+	var replayed map[int64]string
+	if slices.ContainsFunc(frames, func(f replayFrame) bool { return f.layer == "sidecar" }) {
+		var input bytes.Buffer
+		for _, line := range lines {
+			input.Write(line)
+			input.WriteByte('\n')
+		}
+		var err error
+		if replayed, err = runReplayExecutable(session, folder, executable, input.Bytes()); err != nil {
+			return err
+		}
+	}
 	stored := map[int64]bool{}
 	for _, frame := range frames {
 		hash, reported := replayed[frame.sequence]
 		if frame.layer == "sidecar" {
 			if !reported {
-				return result, replayError(session, "the replay executable reported no hash for the frame record at sequence %d", frame.sequence)
+				return replayError(session, "the replay executable reported no hash for the frame record at sequence %d", frame.sequence)
 			}
 			stored[frame.sequence] = true
 			if hash != frame.hash {
-				return result, ReplayDivergence{Session: session, Sequence: frame.sequence, Layer: "sidecar", Expected: hash, Found: frame.hash}
+				return ReplayDivergence{Session: session, Segment: segment, Sequence: frame.sequence, Layer: "sidecar", Expected: hash, Found: frame.hash}
 			}
 			result.SidecarFrames++
 			continue
 		}
 		if !stored[frame.sequence] {
-			return result, ReplayDivergence{Session: session, Sequence: frame.sequence, Layer: "page", Expected: "none", Found: frame.hash}
+			return ReplayDivergence{Session: session, Segment: segment, Sequence: frame.sequence, Layer: "page", Expected: "none", Found: frame.hash}
 		}
 		if hash != frame.hash {
-			return result, ReplayDivergence{Session: session, Sequence: frame.sequence, Layer: "page", Expected: hash, Found: frame.hash}
+			return ReplayDivergence{Session: session, Segment: segment, Sequence: frame.sequence, Layer: "page", Expected: hash, Found: frame.hash}
 		}
 		result.PageFrames++
 	}
-	return result, nil
+	return nil
 }
 
 // replayExecutable finds the installed sidecar that declares the replay role and returns its folder and the declared path of
@@ -314,12 +404,12 @@ func runReplay(a arguments, stdout io.Writer, options Options) error {
 	var diverged ReplayDivergence
 	if errors.As(err, &diverged) {
 		if log := runLog.Load(); log != nil {
-			log.Emit(LevelError, "sok.replay.divergence", map[string]any{"session": diverged.Session, "sequence": diverged.Sequence, "layer": diverged.Layer, "expected": diverged.Expected, "found": diverged.Found})
+			log.Emit(LevelError, "sok.replay.divergence", map[string]any{"session": diverged.Session, "segment": diverged.Segment, "sequence": diverged.Sequence, "layer": diverged.Layer, "expected": diverged.Expected, "found": diverged.Found})
 		}
 	}
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(stdout, "replay session %s: %d sidecar frames and %d page frames equal\n", session, result.SidecarFrames, result.PageFrames)
+	_, err = fmt.Fprintf(stdout, "replay session %s: %d sidecar frames and %d page frames equal in %d segments\n", session, result.SidecarFrames, result.PageFrames, result.Segments)
 	return err
 }
