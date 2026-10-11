@@ -75,6 +75,14 @@ writer는 프로세스에서 event를 파일의 줄로 바꾸는 부분이다.
 
 event를 쓰는 각 저장소는 자기 작은 writer 구현을 가지며 `packages/log-contract/fixtures`의 golden lines와 golden catalog로 시험한다. 저장소 사이에 runtime 코드를 공유하지 않으며 sidecar는 실행 중에 core 릴리스에 의존하지 않는다.
 
+## 상한
+
+event가 싣는 모든 buffer와 값에는 상한이 있고, 생산자는 값을 복사하거나 직렬화하기 전에 상한까지 자르므로 기록 비용은 값의 크기에 따르지 않는다. 상한에서 생기는 손실은 조용하지 않다. 세어서 catalog의 event로 저장한다.
+
+| 상한 | 값 | 도달하면 |
+| --- | --- | --- |
+| 호출 event(`page.call`, `host.endpoint.call`)의 `args`와 `error` | 1024바이트, 문자 경계에서 자름 | 상한까지 저장하고 event에 `truncated: true`가 붙는다 |
+
 ## 파일
 
 프로세스 실행 하나가 설정 폴더 아래 `logs/<role>-<boot>.jsonl`을 쓴다. host 프로세스는 native 라이브러리, page, plugin의 event도 담는다. 각 writer는 자기 파일만 100 MB에서 회전하고 이전 세대 5개(`.1`에서 `.5`)를 남기며 다른 프로세스의 파일은 회전하지 않는다. 회전이 일으키는 유일한 손실은 가장 오래된 세대이며 writer가 회전을 기록한다.
@@ -99,6 +107,7 @@ catalog는 입력 종류마다 남겨야 하는 사슬도 선언한다. 첫 층�
 - 표면 문서의 host 호출: 각 application의 runtime `page` 객체는 모든 호출을 `surfaceCalls`(`packages/workbench/surface-calls.js`)로 보내고, 이것이 두 runtime에서 같은 이름과 같은 인자로 같은 event `page.call`을 낸다(인자는 Wails runtime이 넘기는 호출의 인자다). event는 문서의 batcher를 거치므로 한 turn의 호출은 호출 `log` 한 번으로 host에 가고, 문서의 `report`도 같은 batcher 뒤에 쌓여 문서의 기록과 호출이 순서를 지킨다. 호출 `log`는 기록하지 않는다. 중계가 실패하면 문서의 console에 쓴다. 문서에는 달리 알릴 곳이 없기 때문이다;
 - 창 event: host가 창에 등록하는 모든 event는 `window`와 `kind`를 가진 event `host.window.event`다. host는 자기 framework가 알리는 kind를 낸다(Wails는 `show`, `hide`, `focus`, `lost_focus`, `web_process_ended`, `navigation_committed`를, Tauri는 `occlusion_changed`를 알린다). 그래서 host가 저장하는 kind는 [host 계약](host-contract.ko.md)의 목록의 부분집합이다;
 - 애플리케이션 event: host가 애플리케이션에 등록하는 모든 event는 `kind`를 가진 event `host.app.event`다. host는 자기 framework가 알리는 kind를 저장한다(Wails는 `started`, `activated`, `deactivated`, `exit_requested`, `exit`를, Tauri는 `started`, `exit_requested`, `exit`를 알린다);
+- endpoint 메서드: [endpoint](endpoint.md) client의 모든 요청은 필드 `name`(메서드), `args`(받은 그대로의 params, 요청에 없으면 `null`이며, 복사하기 전에 문자 경계에서 1024바이트로 자르고 잘렸으면 `truncated: true`), `micros`(요청을 받은 때부터 결과까지), `ok`, 실패한 요청이면 `error`(client가 받는 코드와 메시지 `<code>: <message>`이며 같은 방식으로 자른다)를 가진 event `host.endpoint.call`이다. level은 `debug`이고 실패한 요청은 `warn`이며, 성능 trace가 켜져 있는지와 상관없다. 구독 변경(`status.watch`, `status.unwatch`)은 답을 쓸 때 기록하고, event는 답을 쓰기 전에 저장한다;
 - registry 명령: page는 요청 `command.run`에 모두 함수 하나로 답하며, 그 함수가 필드 `name`, `micros`, `ok`, 실패한 명령이면 `error`를 가진 event `page.command`를 낸다(level은 `debug`, 실패한 명령은 `warn`). 성능 trace가 켜져 있든 꺼져 있든 같다;
 - native 활동: native 라이브러리는 애플리케이션(`native.app.activated`, `native.app.deactivated`, `native.app.hidden`, `native.app.unhidden`), 창(창 번호와 first responder의 class를 가진 `native.window.key`, `native.window.resign_key`, `native.window.main`, `native.window.resign_main`, `native.window.miniaturized`, `native.window.deminiaturized`, 그리고 `visible`을 가진 `native.window.occlusion`), 입력 소스(`native.input.source_changed`)의 알림과 창의 first responder 변경마다(창 번호와 class `from`, `to`를 가진 `native.window.first_responder`. 창이 다음에 갱신될 때 이전 갱신의 first responder와 비교해 기록한다. AppKit은 text field의 창과 field editor를 거치므로 포커스 이동 하나가 event 여럿일 수 있다) level `info`로 기록한다. 그림 영역이 답하는 입력기 질의마다 level `debug`의 `native.input.query`가 `call`(`markedRange`, `selectedRange`, `hasMarkedText`, `firstRectForCharacterRange`, `characterIndexForPoint`), 인자, `answer`, 영역의 `focus`와 함께 있다. host는 writer를 시작할 때 observer를 설치한다;
 - sidecar 수명: 표준 입출력 sidecar 프로세스는 host가 시작할 때 event `host.sidecar.start`(`name`, `pid`), 끝났을 때 `host.sidecar.exit`(`name`, `pid`, `status`, `stopping`)이고, 영구 service 연결은 `host.sidecar.connect`(`name`, `pid`, `spawned`)와 `host.sidecar.disconnect`(`name`, `pid`, `stopping`, `violation`)이며 모두 level은 `info`다;
