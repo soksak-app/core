@@ -80,6 +80,7 @@ var eventClasses = map[string]Class{
 	"page.window.operation":         ClassCall,
 	"sok.command":                   ClassCall,
 	"sok.panic":                     ClassLifecycle,
+	"sok.replay.divergence":         ClassFrame,
 }
 
 var eventClassFamilies = []struct {

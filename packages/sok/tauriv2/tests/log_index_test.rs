@@ -191,6 +191,59 @@ fn index_follows_appended_lines_and_is_rebuilt_when_stale() {
     assert_eq!(read_log_index(&path).expect("info").events, 40);
 }
 
+// contract: log.index.counts-the-lines-that-announce-a-change
+#[test]
+fn index_counts_the_lines_that_announce_a_change() {
+    let path = temp_file("index-announcing");
+    let read = |seq: i64, event: &str, name: &str| {
+        format!(
+            r#"{{"ts_us":{},"mono_ns":{seq},"seq":{seq},"level":"debug","layer":"host","event":"{event}","fields":{{"name":"{name}"}}}}"#,
+            1000 + seq
+        ) + "\n"
+    };
+    let other = |seq: i64| event_line_of(seq) + "\n";
+    let first = format!(
+        "{}{}{}{}",
+        event_line_of(1) + "\n",
+        read(2, "host.binding.call", "logQuery"),
+        read(3, "host.endpoint.call", "log.query"),
+        other(4)
+    );
+    std::fs::write(&path, &first).expect("write");
+    let update = update_log_index(&path).expect("first update");
+    assert_eq!(
+        (update.lines, update.announcing, update.size),
+        (4, 2, first.len() as i64),
+        "the records of the two calls that read the log do not announce a change, log.open and the other event do: {update:?}"
+    );
+    // A call with the same name in another event, and another call in the same event, announce a change.
+    let second = format!(
+        "{}{}{}",
+        read(5, "host.binding.call", "logQuery"),
+        read(6, "host.binding.call", "debugFiles"),
+        read(7, "page.call", "logQuery")
+    );
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .expect("append");
+    write!(file, "{second}").expect("write");
+    drop(file);
+    let update = update_log_index(&path).expect("second update");
+    assert_eq!(
+        (update.announcing, update.size),
+        (2, (first.len() + second.len()) as i64),
+        "{update:?}"
+    );
+    // An update of a current index announces nothing.
+    let update = update_log_index(&path).expect("current update");
+    assert_eq!(
+        (update.changed, update.announcing, update.size),
+        (false, 0, (first.len() + second.len()) as i64),
+        "{update:?}"
+    );
+}
+
 // contract: log.index.refuses-a-damaged-index-and-a-broken-line
 #[test]
 fn index_refuses_a_damaged_index_and_a_broken_line() {

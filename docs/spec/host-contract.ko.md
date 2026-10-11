@@ -495,19 +495,24 @@ fn invalid_json_closes_connection() {
 | `log.query.follows-the-tail-with-since` | 앞선 답의 `tail`을 `since`로 준 질의는 그 뒤에 덧붙은 행을 돌려주며 앞선 답이 담은 행보다 `ts_us`가 이른 행도 돌려주고, 프로세스의 `seq` 이하의 행은 뺀다. | both |
 | `log.query.resolves-a-run-to-the-range-of-its-marks` | `run`은 질의를 channel의 모든 파일에서 그 run의 가장 이른 `host.test.start`부터 가장 늦은 `host.test.end`까지의 시간 범위로 한정하고, start가 없는 run은 오류 `log query run "<run>" has no host.test.start in the channel`이다. | both |
 | `log.query.refuses-invalid-parameters` | 선언하지 않은 항목과 매개변수의 잘못된 값은 명세의 오류 문구로 거절하고, event 구조를 어기는 줄이 있는 파일을 읽는 질의는 파일과 줄을 밝히며 실패한다. | both |
+| `log.query.answers-the-rows-around-a-row` | `around`가 있는 질의는 key 앞의 `earlier`개 행과 뒤의 `later`개 행을 key에 있는 행과 함께 channel의 파일에서 filter 없이 key 순서로 돌려주고, 각 행에 `context`(이웃은 true, key의 행은 false)를 표시하며 `next`는 null이다. 행이 없는 key는 이웃만 돌려준다. `packages/log-contract/fixtures/query/cases.json`의 golden `around` 사례와 그 글 줄(context 행은 공백 둘로 들여 쓴다)은 두 구현에서 같다. `channel`, `earlier`, `later` 외의 항목, `around` 없는 `earlier`나 `later`, 잘못된 cursor, 0에서 500을 벗어난 개수는 명세의 오류 문구로 거절하며, 답의 줄 글은 8,388,608바이트 이하다. | both |
 | `log.query.reads-only-the-segments-that-can-hold-a-row` | segment가 여럿인 로그에서 `cid`, `event`, `surface`, 시간 범위로 묻는 질의는 색인이 받아들이는 segment만 읽고(`scanned.read`), `text`가 있는 질의는 모든 segment를 읽는다. | both |
 | `log.query.answers-a-million-events-within-the-limit` | event 1,000,000개의 로그가 첫 page, `cid`, event 이름, surface, 시간 범위, level, `text`로 묻는 page를 test가 밝힌 한도 안에서 답하고 색인 생성도 한도 안에 끝나며, test는 시간을 출력한다. | both |
 | `log.query.reads-the-files-the-writer-wrote` | 질의는 writer가 만든 모든 세대에 걸쳐 main 파일을 channel `other`로, debug 파일을 channel `debug`로 읽는다. | both |
 | `log.query.matches-the-class-the-writer-stored` | 질의 필터 `class`는 색인의 class 비트를 통해 writer가 줄에 저장한 class와 맞는다. | both |
 | `log.index.matches-the-golden-digest` | 구현이 각 golden event 파일에서 만든 색인의 SHA-256이 golden 값과 같고, 최신 색인의 갱신은 아무것도 바꾸지 않는다. | both |
 | `log.index.follows-appended-lines-and-is-rebuilt-when-stale` | 색인을 만든 뒤 덧붙은 줄은 부분 segment부터 색인하고, 마지막 줄바꿈 뒤의 바이트는 줄바꿈이 쓰인 뒤 색인하며, 더 작은 파일, 다른 첫 줄, 같은 크기에서 다른 수정 시각은 색인을 처음부터 다시 만든다. | both |
+| `log.index.counts-the-lines-that-announce-a-change` | 색인 갱신은 `announcing`, 곧 앞선 갱신 뒤에 색인한 줄에서 log만 읽는 호출의 기록(`logQuery`의 `host.binding.call`과 `log.query`의 `host.endpoint.call`)을 뺀 수와, 덮는 파일의 크기 `size`를 보고한다. 갱신이 다시 읽는 부분 segment는 두 번 세지 않고, 최신 색인의 갱신은 아무것도 알리지 않는다. | both |
 | `log.index.refuses-a-damaged-index-and-a-broken-line` | 다른 버전의 색인, 검사합이 맞지 않는 block이나 기록, block보다 짧은 파일은 색인을 밝히는 오류이고, event 구조를 어기는 줄과 schema 2의 `log.open`이 아닌 첫 줄은 파일과 줄을 밝히는 오류이며 색인은 이전 상태를 유지한다. | both |
 | `log.index.moves-with-the-generations-of-a-rotation` | 회전은 가득 찬 파일의 색인을 최신으로 맞추고 색인 파일을 세대와 함께 바꾸어, 닫힌 세대가 만들기 없이 색인으로 답하게 하고 지워진 세대의 색인을 지운다. | both |
 | `log.writer.indexes-each-batch-it-wrote` | host의 writer가 batch를 쓴 뒤 질의 없이도 그 파일의 색인이 batch의 줄을 덮고, writer의 회전은 닫힌 세대의 색인을 완전하게 남긴다. | both |
 | `log.writer.stores-an-event-for-each-index-built-from-the-file` | 파일 전체로 만든 색인은 파일, 이유, 줄 수, 바이트, 마이크로초를 가진 event `host.log.index_rebuilt`이고, 증분 갱신은 event를 저장하지 않으며, 실패한 갱신은 문구마다 한 번 장소 `log index`의 `error` 기록으로 보인다. | both |
 | `log.endpoint.query-answers-one-page` | diagnostics가 없는 빌드의 endpoint 메서드 `log.query`가 질의의 page로 답하고, 매개변수를 invalid-params 오류와 질의의 문구로 거절하며, `window`를 받지 않는다. | both |
+| `log.endpoint.query-answers-the-rows-around-a-row` | endpoint 메서드 `log.query`는 `around`가 있으면 `context` 표시를 가진 그 행 둘레의 행과 null인 `next`를 답하고, 다른 filter 항목은 코드 `-32602`와 질의의 오류 문구로 거절한다. | both |
 | `debug.log-query.answers-the-query-of-the-endpoint` | host 호출 `logQuery`가 같은 요청에 endpoint 메서드 `log.query`와 같은 page로 답하고, 오류는 질의의 오류 문구다. | both |
-| `debug.follow.coalesces-writes-into-a-notice` | event log 쓰기의 observer는 창을 기다리지 않고 돌아오며, 창에 알리는 동안 오는 알림은 마지막 경로와 크기를 가진 알림 하나가 된다. | both |
+| `debug.follow.coalesces-writes-into-a-notice` | event log의 변경 알림은 창을 기다리지 않고 돌아오며, 알림은 250 ms 이상 간격으로 발행되고(시험은 더 짧은 간격으로 확인한다), 그동안 온 알림은 마지막 경로와 크기를 가진 알림 하나가 된다. `notices`는 발행한 알림 수이고 `notices + coalesced`는 알림 전체 수이며, `host.log`의 값은 가장 최근 알림이고 첫 알림 전에는 0 값이다. | both |
+| `debug.follow.announces-only-changes-that-are-not-log-reads` | `announcing`이 0인 색인 갱신은 알림을 발행하지 않고, `announcing`이 0보다 큰 갱신은 그 갱신의 파일과 크기를 담은 알림을 발행한다. | both |
+| `debug.follow.query-announces-the-lines-it-indexes` | 색인을 최신으로 만든 질의는 그 줄의 알림을 발행하고, 이미 최신인 색인의 질의는 발행하지 않는다. | both |
 | `log.writer.announces-each-write-to-the-observer` | host의 기록기는 한 묶음을 쓴 뒤 파일의 경로와 크기로 observer를 부른다. | both |
 | `debug.read.returns-the-end-of-a-text-file` | `debugRead`는 `logs/` 아래 글 파일의 전체 내용을, 더 크면 문자 경계에서 시작하는 마지막 262144 byte를 `truncated` true와 함께 `kind` `text`인 `{path, size, truncated, kind, text}`로 답한다. | both |
 | `debug.read.returns-a-png-file-as-an-image` | `debugRead`는 PNG 파일 전체의 `data:image/png;base64,` 주소를 `kind` `image`인 `{path, size, truncated, kind, image}`로 답하고, PNG signature로 시작하지 않는 `.png` 파일과 16 MB보다 큰 PNG 파일은 거부한다. | both |
@@ -562,6 +567,10 @@ fn invalid_json_closes_connection() {
 | `cli.debug.query-golden-lines` | `sok debug query`가 모든 사례에서 `packages/log-contract/fixtures/query`의 golden page의 글 줄을 debug 화면과 같은 줄로 출력하고, 행이 page 뒤에 더 있으면 표준 오류에 `more: --after <cursor>`를 쓴다. | both |
 | `cli.debug.query-errors` | `sok debug query`는 event 파일이 event 구조를 어기면 파일과 줄 번호를 담은 오류로, `logs/` 폴더가 없으면 폴더를 담은 오류로 실패한다. | both |
 | `cli.debug.query-flag-values` | `sok debug query`는 잘못된 flag 값을 질의의 오류 문구를 가진 사용법 오류로 거부하고, 명령에 없는 flag를 거부한다. | both |
+| `cli.debug.replay-equal` | `sok debug replay <session>`은 session의 sidecar event의 role을 선언한 설치된 sidecar의 재생 실행 파일을 실행하고, 저장된 모든 hash가 재생한 hash와 같으면 `replay session <session>: <n> sidecar frames and <m> page frames equal`을 출력한다. | both |
+| `cli.debug.replay-until` | `sok debug replay --until <sequence>`는 실행 파일에 그 순번까지의 event만 주고 그 순번까지의 frame 기록만 비교한다. 음이 아닌 정수가 아닌 값은 사용법 오류다. | both |
+| `cli.debug.replay-divergence` | `sok debug replay`는 순번 순서로, 같은 순번이면 sidecar를 page보다 먼저 보아 저장된 hash가 재생한 hash와 다른 첫 곳에서 상태 1로 끝나며, `sok: replay divergence: session <session> sequence <n> layer <layer> expected <hash> found <hash>`를 쓰고 event `sok.replay.divergence`를 저장한다(sidecar frame 기록이 없는 page frame 기록이면 `expected`는 `none`). | both |
+| `cli.debug.replay-errors` | `sok debug replay`는 sidecar event가 없는 session, 두 role의 sidecar event가 있는 session, 그 role을 선언한 설치된 sidecar가 없는 경우, frame 기록이 없는 경우, 소문자 16진 64자가 아닌 저장된 hash, 실패하거나 `{"sequence", "hash"}`가 아닌 줄을 출력하거나 frame 기록의 hash를 출력하지 않는 재생 실행 파일에서 불일치가 아닌 오류로 실패한다. | both |
 | `cli.log.records-each-command-with-its-result` | `sok`을 실행할 때마다 대상 설정 디렉터리에 `logs/sok-<boot>.jsonl`을 쓴다. `seq` 1의 `log.open`, 이어서 명령 단어, 공백으로 이은 인자, 마이크로초, `ok`, `status`, 상태가 0이 아니면 표준 오류의 첫 줄인 `error`를 담은 `sok.command`가 level `debug` 또는 `warn`으로 저장되며, 모든 줄이 층 `sok`, `ts_us`, `mono_ns`를 가진다. | both |
 | `cli.log.records-a-panic-with-its-stack` | 명령의 panic은 `sok.panic`(thread `main`, 글, panic한 함수를 가리키는 stack)과 상태 4의 `sok.command`를 저장하고, `sok: panic: <text>`를 표준 오류의 맨 앞에 쓰며, 호출자에게 닿지 않고 상태 4를 돌려준다. | both |
 | `cli.log.records-a-panic-of-a-routine-and-ends-the-process` | 도구가 시작한 goroutine이나 thread의 panic은 routine의 이름과 stack을 담은 `sok.panic`을 저장하고 프로세스를 상태 4로 끝낸다. | both |

@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-import { FOLLOW_INTERVAL_MS, HOLD_LIMIT, PAGE_ROWS } from "../debug-timeline.js";
+import * as timelineModule from "../debug-timeline.js";
+import { HOLD_LIMIT, PAGE_ROWS } from "../debug-timeline.js";
 
 const LEVELS = ["error", "warn", "info", "debug", "trace"];
 
@@ -36,6 +37,19 @@ function answer(rows, request) {
     && (request.since?.[`${r.role}-${r.boot}`] === undefined || r.event.seq > request.since[`${r.role}-${r.boot}`]);
   const key = (r) => [r.event.ts_us, r.role, r.boot, r.event.seq];
   const compare = (a, b) => { const [x, y] = [key(a), key(b)]; for (let i = 0; i < 4; i += 1) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
+  if (request.around !== undefined) {
+    // The rows around a key, without a filter: the rows before it, the row at it (not context) and the rows after it.
+    const sorted = rows.toSorted(compare);
+    const cursor = { role: request.around.role, boot: request.around.boot, event: { ts_us: request.around.ts_us, seq: request.around.seq } };
+    const at = sorted.findIndex((r) => compare(r, cursor) >= 0);
+    const start = at < 0 ? sorted.length : at;
+    const exact = at >= 0 && compare(sorted[at], cursor) === 0;
+    const mark = (list, context) => list.map((r) => ({ ...r, context }));
+    const found = [...mark(sorted.slice(Math.max(0, start - request.earlier), start), true), ...(exact ? mark([sorted[at]], false) : []), ...mark(sorted.slice(start + (exact ? 1 : 0), start + (exact ? 1 : 0) + request.later), true)];
+    const tail = {};
+    for (const r of rows) tail[`${r.role}-${r.boot}`] = Math.max(tail[`${r.role}-${r.boot}`] ?? 0, r.event.seq);
+    return { rows: found, next: null, tail, scanned: { logs: 1, segments: 1, read: 1, lines: found.length, rebuilt: 0 } };
+  }
   const ascending = (request.order ?? "asc") === "asc";
   let found = rows.filter(matches).toSorted(compare);
   if (!ascending) found.reverse();
@@ -113,7 +127,7 @@ test("the timeline asks for the newest page and shows it oldest first with the s
   assert.deepEqual(query.log.requests, [{ channel: "other", level: "trace", order: "desc", limit: PAGE_ROWS }]);
   assert.deepEqual(names(), ["log.open", "host.window.created", "page.call.slow"]);
   assert.deepEqual(ui.debugState().timeline, {
-    following: true, appended: 0, held: 3, older: false, omitted: 0, selected: 0, warning: WARNING,
+    following: true, appended: 0, held: 3, older: false, omitted: 0, context: 0, selected: 0, warning: WARNING,
     channel: "other", level: "trace", class: "", layer: "all", text: "", event: "", event_prefix: "", surface: "", session: "", cid: "", run: "", from: "", to: "",
   });
   assert.equal(document.querySelector('[data-key="timeline-older"]').hidden, true);
@@ -400,20 +414,76 @@ test("a query that fails while following stops following and is shown with its f
   assert.equal(ui.debugState().timeline.held, 3);
 });
 
-test("the timeline follows a file that grows all the time with a pause between two updates and loses no row", async (t) => {
+test("the timeline asks at each notice without a pause of its own and loses no row", async (t) => {
   const query = served(SMALL);
   const { ui, changed } = await openView(t, { query });
   await ui.showDebugTimeline();
-  const stamps = [];
-  const original = query.log.requests.push.bind(query.log.requests);
-  query.log.requests.push = (request) => { stamps.push(performance.now()); return original(request); };
-  // The page redraws every row at each update, so a file that grows at every moment would keep the page busy for ever: the
-  // second update waits until the interval since the first one ended, and it asks for what grew meanwhile.
+  // The rate of the notices is bounded by the host (docs/spec/debug.md#following), so the view has no timer: the second notice is
+  // answered at once and asks for what grew meanwhile.
+  assert.equal("FOLLOW_INTERVAL_MS" in timelineModule, false, "the view keeps an interval of its own");
+  const started = performance.now();
   query.log.rows.push(row(4, 40));
   await changed("logs/host-a.jsonl");
   query.log.rows.push(row(5, 50));
   await changed("logs/host-a.jsonl");
-  assert.equal(stamps.length >= 2, true, `the host was asked ${stamps.length} times after the file grew`);
-  assert.ok(stamps.at(-1) - stamps[0] >= FOLLOW_INTERVAL_MS - 50, `the updates are ${stamps.at(-1) - stamps[0]} ms apart, less than ${FOLLOW_INTERVAL_MS} ms`);
+  const elapsed = performance.now() - started;
+  assert.ok(elapsed < 250, `the two notices took ${elapsed} ms, the view waited between them`);
   assert.equal(ui.debugState().timeline.held, 5, "a row that grew was not added");
+});
+
+const TEN = Array.from({ length: 10 }, (_, index) => row(index + 1, 10 * (index + 1), "host.app.event", { level: index % 2 === 0 ? "warn" : "debug" }));
+
+test("the context of a row brings its neighbours in key order whatever the filter is, marks them, and a new filter removes them", async (t) => {
+  const query = served(TEN);
+  const { ui } = await openView(t, { query });
+  await ui.showDebugTimeline();
+  await ui.filterDebugTimeline({ level: "warn" });
+  assert.deepEqual(rowsText().map((text) => text.split(" ")[0].slice(0, 25)).length, 5, "the five rows of level warn");
+  const calls = query.log.requests.length;
+  // The third shown row is the event of seq 5; its two neighbours on each side are asked for.
+  await ui.contextDebugRow(2);
+  assert.deepEqual(query.log.requests.slice(calls), [{ channel: "other", around: { ts_us: 50, role: "host", boot: "a", seq: 5 }, earlier: timelineModule.CONTEXT_ROWS, later: timelineModule.CONTEXT_ROWS }]);
+  const texts = rowsText();
+  assert.equal(texts.length, 10, "the five rows of level warn and the five neighbours that the filter left out, which are all the others");
+  assert.deepEqual(texts.filter((text) => text.startsWith("  ")).length, 5);
+  assert.equal(ui.debugState().timeline.context, 5);
+  assert.equal(ui.debugState().timeline.held, 10);
+  // The row at the cursor and the rows that pass the filter are not context.
+  assert.equal(texts.filter((text) => !text.startsWith("  ")).length, 5);
+  const button = document.querySelector('[data-key="context:2"]');
+  assert.equal(button.dataset.command, "core.debug.timeline.context");
+  await ui.filterDebugTimeline({ level: "warn" });
+  assert.equal(ui.debugState().timeline.context, 0, "a new filter shows its own rows only");
+  assert.equal(rowsText().length, 5);
+  await assert.rejects(ui.contextDebugRow(99), /timeline row 99 is not one of the 5 rows/);
+  ui.listDebugFiles();
+  await assert.rejects(ui.contextDebugRow(0), /the debug timeline is not shown/);
+});
+
+test("a row that a context query brought in and that following reads again stops being context", async (t) => {
+  const query = served(SMALL);
+  const { ui, changed } = await openView(t, { query });
+  await ui.showDebugTimeline();
+  query.log.rows.push(row(4, 40));
+  await ui.contextDebugRow(2);
+  assert.equal(ui.debugState().timeline.context, 1, "the row that came after the tail is context");
+  await changed("logs/host-a.jsonl");
+  assert.equal(ui.debugState().timeline.context, 0);
+  assert.equal(rowsText().length, 4);
+  assert.equal(rowsText().filter((text) => text.startsWith("  ")).length, 0);
+});
+
+test("the saved lines of selected rows are the lines of the events, also for a row that is only context", async (t) => {
+  const saved = [];
+  const query = served(TEN);
+  const { ui } = await openView(t, { query, saveText: async (arg) => { saved.push(arg); return { saved: "x" }; } });
+  await ui.showDebugTimeline();
+  await ui.filterDebugTimeline({ level: "warn" });
+  await ui.contextDebugRow(2);
+  const contextIndex = rowsText().findIndex((text) => text.startsWith("  "));
+  ui.selectDebugRow(contextIndex, true);
+  await ui.saveDebugRows();
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].text.startsWith(" "), false, "the saved line has no indent");
+  assert.equal(saved[0].text.split("\n").filter(Boolean).length, 1);
 });

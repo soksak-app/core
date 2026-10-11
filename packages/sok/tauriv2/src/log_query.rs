@@ -19,12 +19,15 @@ use crate::log_index::{
 
 const DEFAULT_LIMIT: usize = 500;
 const MAX_LIMIT: i64 = 5000;
+/// The most rows before and the most rows after the row of an around query, and their default.
+const MAX_AROUND: i64 = 500;
+const DEFAULT_AROUND: usize = 5;
 /// The bound of the line text of the rows of one page; the first row is always taken.
 const PAGE_BYTES: usize = 8388608;
 const CHANNELS: [&str; 3] = ["other", "debug", "all"];
 const ORDERS: [&str; 2] = ["asc", "desc"];
 /// The parameters of a query in the order that they are checked.
-const MEMBERS: [&str; 17] = [
+const MEMBERS: [&str; 20] = [
     "channel",
     "level",
     "class",
@@ -42,6 +45,9 @@ const MEMBERS: [&str; 17] = [
     "order",
     "after",
     "since",
+    "around",
+    "earlier",
+    "later",
 ];
 
 /// The key of a row: the position that a page continues after.
@@ -81,6 +87,12 @@ pub struct LogQuery {
     pub limit: usize,
     pub after: Option<LogCursor>,
     pub since: Option<BTreeMap<String, i64>>,
+    /// The key of the row whose neighbours the query returns, with `earlier` rows before it and `later` rows after it.
+    pub around: Option<LogCursor>,
+    pub earlier: usize,
+    pub later: usize,
+    /// The bound of the line text of the rows of the page; zero is `PAGE_BYTES`.
+    page_bytes: usize,
 }
 
 fn query_error(message: impl AsRef<str>) -> String {
@@ -221,6 +233,46 @@ pub fn parse_log_query(params: &str) -> Result<LogQuery, String> {
         }
         query.since = Some(since);
     }
+    if let Some(value) = json_get(&object, "around") {
+        query.around = Some(cursor_of(value).ok_or_else(|| {
+            query_error(format!(
+                "around must be {{ts_us, role, boot, seq}}, found {}",
+                debug::stringify(Some(value))
+            ))
+        })?);
+    }
+    for (name, to) in [("earlier", &mut query.earlier), ("later", &mut query.later)] {
+        let value = json_get(&object, name);
+        if query.around.is_none() {
+            if value.is_some() {
+                return Err(query_error(format!("{name} needs around")));
+            }
+            continue;
+        }
+        *to = DEFAULT_AROUND;
+        if let Some(value) = value {
+            match integer_of(Some(value)) {
+                Some(n) if (0..=MAX_AROUND).contains(&n) => *to = n as usize,
+                _ => {
+                    return Err(query_error(format!(
+                        "{name} must be an integer from 0 to {MAX_AROUND}, found {}",
+                        debug::stringify(Some(value))
+                    )))
+                }
+            }
+        }
+    }
+    if query.around.is_some() {
+        for name in MEMBERS {
+            if json_get(&object, name).is_some()
+                && !["channel", "around", "earlier", "later"].contains(&name)
+            {
+                return Err(query_error(format!(
+                    "around takes only channel, earlier and later, not {name}"
+                )));
+            }
+        }
+    }
     if let (Some(from), Some(to)) = (query.from_us, query.to_us) {
         if from > to {
             return Err(query_error(format!(
@@ -274,6 +326,9 @@ pub struct LogRow {
     pub file: String,
     pub offset: i64,
     pub event: Box<RawValue>,
+    /// Set by an around query: true for a neighbour, false for the row at the cursor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<bool>,
 }
 
 /// How much of the files a query looked at.
@@ -567,6 +622,18 @@ struct Entry {
 pub fn query_logs(
     config_dir: &Path,
     query: &LogQuery,
+    indexed: Option<&mut dyn FnMut(&IndexUpdate)>,
+) -> Result<LogPage, String> {
+    match &query.around {
+        Some(cursor) => query_around(config_dir, query, cursor, indexed),
+        None => query_page(config_dir, query, indexed),
+    }
+}
+
+/// Answers a query that is not an around query.
+fn query_page(
+    config_dir: &Path,
+    query: &LogQuery,
     mut indexed: Option<&mut dyn FnMut(&IndexUpdate)>,
 ) -> Result<LogPage, String> {
     let sources = discover_logs(config_dir, &query.channel)?;
@@ -689,6 +756,7 @@ pub fn query_logs(
                 file: source.name.clone(),
                 offset: line_offset,
                 event,
+                context: None,
             };
             best.insert(
                 at,
@@ -701,12 +769,17 @@ pub fn query_logs(
             best.truncate(query.limit + 1);
         }
     }
+    let budget = if query.page_bytes > 0 {
+        query.page_bytes
+    } else {
+        PAGE_BYTES
+    };
     let total = best.len();
     let mut used = 0;
     let mut taken = 0;
     let mut last_key = None;
     for entry in best {
-        if taken >= query.limit || (taken > 0 && used + entry.size > PAGE_BYTES) {
+        if taken >= query.limit || (taken > 0 && used + entry.size > budget) {
             break;
         }
         used += entry.size;
@@ -718,6 +791,105 @@ pub fn query_logs(
         page.next = last_key;
     }
     Ok(page)
+}
+
+/// The key of a row.
+fn row_key(row: &LogRow) -> Result<LogCursor, String> {
+    #[derive(Deserialize)]
+    struct Key {
+        ts_us: i64,
+        seq: i64,
+    }
+    let key: Key =
+        serde_json::from_str(row.event.get()).map_err(|error| format!("{}: {error}", row.file))?;
+    Ok(LogCursor {
+        ts_us: key.ts_us,
+        role: row.role.clone(),
+        boot: row.boot.clone(),
+        seq: key.seq,
+    })
+}
+
+/// Answers an around query: the row at the cursor and the rows before and after it in the key order of the channel, without a filter,
+/// oldest first. The line text of the rows is bounded like a page: the row at the cursor is taken first, the rows before it may use half
+/// of the bytes that are left, and the rows after it use the rest; the first row of each part is always taken. `logs`, `segments` and
+/// `rebuilt` of the answer are those of the first read, `read` and `lines` are the sums of the reads.
+fn query_around(
+    config_dir: &Path,
+    query: &LogQuery,
+    cursor: &LogCursor,
+    mut indexed: Option<&mut dyn FnMut(&IndexUpdate)>,
+) -> Result<LogPage, String> {
+    let mut forward = |update: &IndexUpdate| {
+        if let Some(callback) = indexed.as_mut() {
+            callback(update);
+        }
+    };
+    let mut read = |order: &str, after: &LogCursor, limit: usize, page_bytes: usize| {
+        let part = LogQuery {
+            channel: query.channel.clone(),
+            level: "trace".into(),
+            order: order.into(),
+            limit,
+            after: Some(after.clone()),
+            page_bytes,
+            ..LogQuery::default()
+        };
+        query_page(config_dir, &part, Some(&mut forward))
+    };
+    let size = |rows: &[LogRow]| rows.iter().map(|row| row.event.get().len()).sum::<usize>();
+    // The row at the cursor is the first row after the key just before it. No row has the least seq, so the cursor with it has no row.
+    let mut previous = cursor.clone();
+    if previous.seq > i64::MIN {
+        previous.seq -= 1;
+    }
+    let first = read("asc", &previous, 1, PAGE_BYTES)?;
+    let mut answer = LogPage {
+        rows: vec![],
+        next: None,
+        tail: first.tail.clone(),
+        scanned: LogScanned {
+            logs: first.scanned.logs,
+            segments: first.scanned.segments,
+            read: first.scanned.read,
+            lines: first.scanned.lines,
+            rebuilt: first.scanned.rebuilt,
+        },
+    };
+    let mut middle = vec![];
+    if let [row] = first.rows.as_slice() {
+        if row_key(row)? == *cursor {
+            middle = first.rows;
+            middle[0].context = Some(false);
+        }
+    }
+    let mut used = size(&middle);
+    let mut earlier = vec![];
+    if query.earlier > 0 {
+        let mut page = read("desc", cursor, query.earlier, (PAGE_BYTES - used) / 2)?;
+        for row in &mut page.rows {
+            row.context = Some(true);
+        }
+        earlier = page.rows;
+        earlier.reverse();
+        answer.tail = page.tail;
+        answer.scanned.read += page.scanned.read;
+        answer.scanned.lines += page.scanned.lines;
+    }
+    used += size(&earlier);
+    let mut later = vec![];
+    if query.later > 0 {
+        let mut page = read("asc", cursor, query.later, PAGE_BYTES - used)?;
+        for row in &mut page.rows {
+            row.context = Some(true);
+        }
+        later = page.rows;
+        answer.tail = page.tail;
+        answer.scanned.read += page.scanned.read;
+        answer.scanned.lines += page.scanned.lines;
+    }
+    answer.rows = earlier.into_iter().chain(middle).chain(later).collect();
+    Ok(answer)
 }
 
 /// Finds the range of time of a run: from the earliest host.test.start to the latest host.test.end whose fields.run is the identifier, or
@@ -774,6 +946,16 @@ fn resolve_run(
         return Ok((low, i64::MAX));
     }
     Ok((low, last_end))
+}
+
+/// The text line of a row: the line of its event, and the line of a row that an around query marks as context is indented by two spaces.
+pub fn log_row_line(row: &LogRow) -> Result<String, String> {
+    let line = log_line(row.event.get())?;
+    Ok(if row.context == Some(true) {
+        format!("  {line}")
+    } else {
+        line
+    })
 }
 
 /// The text line of an event line of a file: the form that the debug view shows and `sok debug query` prints.

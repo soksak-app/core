@@ -6,9 +6,14 @@ package sok
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
 
 // Command is one run of the tool: it takes the arguments and the streams and returns the exit status. Run is the command
@@ -20,6 +25,43 @@ const eventFlushDeadline = 2 * time.Second
 
 // callTextBytes is the bound of the arguments and of the error text of a command event (docs/spec/logging.md#bounds).
 const callTextBytes = 1024
+
+// The layer and the role of the tool in the event contract, and the bounds of its writer (docs/spec/logging.md#bounds). A run of
+// the tool emits at most a handful of events (log.open, sok.command, sok.panic), so the file is not rotated.
+const (
+	eventLayer         = "sok"
+	eventRole          = "sok"
+	eventQueueEvents   = 1024
+	eventQueueBytes    = 1 << 20
+	eventBatchInterval = 100 * time.Millisecond
+)
+
+// monotonicNanos reads the monotonic clock of the records (docs/spec/logging.md#event). A clock that cannot be read is a
+// defect of the platform: it is reported on the standard error (once, because every later event repeats it) and the event
+// stores 0, which the audit of the contract refuses.
+func monotonicNanos() uint64 {
+	system, err := platform.Current()
+	if err == nil {
+		var nanos uint64
+		if nanos, err = system.MonotonicNanos(); err == nil {
+			return nanos
+		}
+	}
+	clockFailure.Do(func() { fmt.Fprintf(os.Stderr, "event writer: the monotonic clock cannot be read: %v\n", err) })
+	return 0
+}
+
+var clockFailure sync.Once
+
+// StartToolEventLog starts the writer of the tool in logs/sok-<boot>.jsonl of the configuration directory config; the boot
+// identifier is the start time in seconds and the process identifier.
+func StartToolEventLog(config string) (*EventLog, error) {
+	return StartEventLog(EventLogOptions{
+		Directory: filepath.Join(config, "logs"), Role: eventRole, Boot: fmt.Sprintf("%d-%d", time.Now().Unix(), os.Getpid()),
+		Layer: eventLayer, Clock: monotonicNanos, Spawn: Go,
+		QueueEvents: eventQueueEvents, QueueBytes: eventQueueBytes, BatchInterval: eventBatchInterval,
+	})
+}
 
 // targetConfigDir is the configuration directory that the arguments target: the value of --config-dir before any `--`, or
 // the default directory of this application.
@@ -54,6 +96,11 @@ func (f *firstLine) Write(data []byte) (int, error) {
 	return f.stream.Write(data)
 }
 
+// runLog is the event file of the run that Logged started; a command stores its own events in it. It is nil in a run without an
+// event file (Logged could not start it and reported that), where the failure that an event describes is also the error of the
+// command.
+var runLog atomic.Pointer[EventLog]
+
 // Logged runs command and records it: it starts the event file of the targeted configuration directory, runs the command,
 // stores a panic of the command with its stack as the exit status PanicStatus, stores the command with its result, and
 // flushes the file. An event file that cannot be started is reported on the standard error and the command runs without it.
@@ -62,7 +109,7 @@ func Logged(args []string, stdout, stderr io.Writer, options Options, command Co
 	config, err := targetConfigDir(args, options)
 	var log *EventLog
 	if err == nil {
-		log, err = StartEventLog(config)
+		log, err = StartToolEventLog(config)
 	}
 	if err != nil {
 		// When the report cannot be written to the standard error, there is no place to report it, so it is reported with
@@ -72,18 +119,20 @@ func Logged(args []string, stdout, stderr io.Writer, options Options, command Co
 		}
 		return command(args, stdout, stderr, options)
 	}
+	runLog.Store(log)
+	defer runLog.Store(nil)
 	captured := &firstLine{stream: stderr}
 	var recorded sync.Once
 	// finish stores the command with its result once, whichever entrance ends the run.
 	finish := func(status int, errorText string) {
 		recorded.Do(func() {
-			text, cut := cutText(strings.Join(args, " "), callTextBytes)
+			text, cut := CutText(strings.Join(args, " "), callTextBytes)
 			fields := map[string]any{"name": commandWord(args), "args": text, "micros": time.Since(started).Microseconds(), "ok": status == 0, "status": status}
 			level := LevelDebug
 			if status != 0 {
 				level = LevelWarn
 				var errorCut bool
-				fields["error"], errorCut = cutText(errorText, callTextBytes)
+				fields["error"], errorCut = CutText(errorText, callTextBytes)
 				cut = cut || errorCut
 			}
 			if cut {

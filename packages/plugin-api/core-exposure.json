@@ -51,6 +51,7 @@
     "core.debug.timeline.follow",
     "core.debug.timeline.older",
     "core.debug.timeline.select",
+    "core.debug.timeline.context",
     "core.debug.timeline.filter",
     "core.projects.browse",
     "core.projects.flush",

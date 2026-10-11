@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use serde_json::{json, Value};
-use soksak_host_tauriv2::event_log::{EventLog, Level, Options};
+use soksak_host_tauriv2::event_log::{self, EventLog, Level, Options};
 
 fn line(seq: u64, at: i64, event: &str, padding: &str) -> String {
     json!({"ts_us": at, "mono_ns": 1, "seq": seq, "level": "info", "class": "lifecycle", "layer": "host", "event": event, "fields": {"padding": padding}}).to_string()
@@ -136,7 +136,7 @@ fn the_oldest_runs_are_removed_when_the_files_pass_the_bound_and_each_removal_is
     }
     // The bound leaves room for the newest earlier run and the files of the writer, not for the two older runs.
     let bound = newer + 1000;
-    let log = EventLog::start(options(&logs, bound)).unwrap();
+    let log = event_log::start(options(&logs, bound)).unwrap();
     let pruned = pruned_events(&log);
     assert_eq!(pruned.len(), 1, "{pruned:?}");
     let fields = &pruned[0]["fields"];
@@ -198,7 +198,7 @@ fn a_run_with_a_keep_file_and_the_run_of_the_writer_are_never_removed() {
     fs::write(logs.join("host-1791500001-1.keep"), "").unwrap();
     // The bound is smaller than the pinned run: the run that is not pinned goes, the pinned run stays, and the event says that the bound
     // is not met.
-    let log = EventLog::start(options(&logs, 100)).unwrap();
+    let log = event_log::start(options(&logs, 100)).unwrap();
     let pruned = pruned_events(&log);
     assert_eq!(pruned.len(), 1, "{pruned:?}");
     assert_eq!(pruned[0]["fields"]["runs"], json!(["host-1791500002-2"]));
@@ -224,7 +224,7 @@ fn files_under_the_bound_are_not_removed_and_store_no_event() {
         2000,
         ago(1),
     );
-    let log = EventLog::start(options(&logs, 1 << 20)).unwrap();
+    let log = event_log::start(options(&logs, 1 << 20)).unwrap();
     assert_eq!(pruned_events(&log), Vec::<Value>::new());
     assert!(logs.join("host-1791500001-1.jsonl").exists());
 }
@@ -238,7 +238,7 @@ fn a_rotation_runs_the_retention_again() {
     let mut opts = options(&logs, 600_000);
     opts.rotate_bytes = 1500;
     opts.queue_events = 200;
-    let log = EventLog::start(opts).unwrap();
+    let log = event_log::start(opts).unwrap();
     // An earlier run appears after the start; the first rotation finds the files past the bound and removes it.
     run(
         &logs,
@@ -264,7 +264,7 @@ fn a_rotation_runs_the_retention_again() {
 #[test]
 fn an_event_log_without_a_retention_bound_is_refused() {
     let directory = tempfile::tempdir().unwrap();
-    match EventLog::start(options(directory.path(), 0)) {
+    match event_log::start(options(directory.path(), 0)) {
         Err(error) => assert!(error.contains("retention_bytes"), "{error}"),
         Ok(_) => panic!("a log without a retention bound started"),
     }

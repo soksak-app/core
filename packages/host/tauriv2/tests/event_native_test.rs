@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
-use soksak_host_tauriv2::event_log::{Channel, EventLog, Options};
+use soksak_host_tauriv2::event_log::{self, Channel, EventLog, Options};
 
 /// A record of the class call as the native library drains it; the names of the tests that use it are not in the catalog.
 fn native_record(ts: u64, level: u8, name: &str, fields: &str) -> Vec<u8> {
@@ -74,7 +74,7 @@ fn read(path: &Path) -> Vec<Value> {
 fn start(directory: &Path, ring: &Arc<Mutex<FakeRing>>, interval: Duration) -> EventLog {
     let pull_ring = Arc::clone(ring);
     let loss_ring = Arc::clone(ring);
-    EventLog::start(Options {
+    event_log::start(Options {
         directory: directory.to_path_buf(),
         role: "host".into(),
         boot: "b1".into(),

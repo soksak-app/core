@@ -410,6 +410,9 @@ func runDebug(a arguments, stdout, stderr io.Writer, options Options) error {
 	if err != nil {
 		return err
 	}
+	if view == "replay" {
+		return runReplay(a, stdout, options)
+	}
 	if view != "query" {
 		return usage("unknown command: debug %s", view)
 	}
@@ -442,6 +445,18 @@ func runDebug(a arguments, stdout, stderr io.Writer, options Options) error {
 	if value, given := a.values["after"]; given {
 		params["after"] = afterFlag(value)
 	}
+	if value, given := a.values["around"]; given {
+		params["around"] = afterFlag(value)
+	}
+	for flag, name := range map[string]string{"earlier": "earlier", "later": "later"} {
+		if value, given := a.values[flag]; given {
+			if n, err := strconv.ParseInt(value, 10, 64); err == nil {
+				params[name] = n
+			} else {
+				params[name] = value
+			}
+		}
+	}
 	text, err := json.Marshal(params)
 	if err != nil {
 		return err
@@ -460,7 +475,7 @@ func runDebug(a arguments, stdout, stderr io.Writer, options Options) error {
 	}
 	var out strings.Builder
 	for _, row := range page.Rows {
-		line, err := LogLine(row.Event)
+		line, err := LogRowLine(row)
 		if err != nil {
 			return err
 		}

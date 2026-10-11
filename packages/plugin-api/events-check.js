@@ -30,7 +30,8 @@ const MARKER_REACH = 5;
  * call (`fields` is absent when the call has none); `class` is the position of the argument that gives the class, for an entrance
  * whose producer chooses it (the native library); `fixed` is the level of an entrance that has no level argument; `only`
  * limits an entrance to the files it is local to. `name` is the event of an entrance that stores one event and gives no name argument
- * (`event` is then the position of its first argument).
+ * (`event` is then the position of its first argument). `levelGroup` is the group of the pattern that holds the level of an entrance
+ * that names it in the call, and `relative` marks an entrance whose event name lacks the prefix `plugin.<plugin>.`.
  */
 const ENTRANCES = {
   go: [
@@ -54,6 +55,10 @@ const ENTRANCES = {
   ],
   js: [
     { re: /(?:\bemitEvent|\bbatcher(?:\?)?\.emit|\bbatcher(?:\?)?\.emitAndWait|\.emitAndWait)\s*\(/g, level: 0, event: 1, fields: 2 },
+    // The entrance of a plugin (docs/spec/plugins.md#logging): the level is the member (`runtime.log.info(`) or a computed key
+    // (`runtime.log[level](`), and the event name has no `plugin.<plugin>.` prefix, which the runtime adds.
+    { re: /\bruntime\.log\.(error|warn|info|debug|trace)\s*\(/g, levelGroup: 1, relative: true, event: 0, fields: 1 },
+    { re: /\bruntime\.log\[[^\]]+\]\s*\(/g, relative: true, event: 0, fields: 1 },
   ],
   m: [
     { re: /\bsp_event\s*\(/g, class: 0, level: 1, event: 2, fields: 3 },
@@ -79,7 +84,8 @@ const FIELD_OBJECT = {
   go: /^map\[string\](?:any|string|interface\{\})\s*\{/,
   rs: /^&?(?:to_raw_value\(&)?(?:serde_json::)?json!\s*\(\s*\{/,
   m: /^@\{/,
-  js: /^\{/,
+  // A builder `() => ({...})` holds the fields of the event as the object it returns.
+  js: /^(?:\(\s*\)\s*=>\s*\(\s*)?\{/,
 };
 const FIELD_KEY = {
   go: /^"([^"]+)"\s*:/,
@@ -241,6 +247,10 @@ function declaredKey(catalog, name) {
   const families = Object.keys(catalog.events).filter((key) => key.includes('<'));
   const same = families.find((key) => normal(key) === normal(name));
   if (same !== undefined) return same;
+  if (name.startsWith('plugin.*.')) {
+    const rest = name.slice('plugin.*.'.length).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return Object.keys(catalog.events).find((key) => new RegExp(`^plugin\\.[^.]+\\.${rest}$`).test(key));
+  }
   if (name.includes('*') || name.includes('<')) return undefined;
   return families.find((key) => {
     const pattern = key.split(/<[a-z_]+>/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[a-z0-9_.]+');
@@ -265,6 +275,9 @@ function classOf(source, range) {
   const found = CLASS_TOKEN.exec(source.code.slice(...range));
   return found ? found[1].toLowerCase() : null;
 }
+
+/** The name of a site of a plugin entrance with the plugin left open (`plugin.*.<event>`); the catalog gives the plugin. */
+const relativeName = (entrance, name) => (entrance.relative && name !== null ? `plugin.*.${name}` : name);
 
 /** The levels that an expression names literally, or null when it names none. */
 function levelsOf(source, range) {
@@ -331,8 +344,8 @@ export function sitesOf(path, text) {
         line: source.lineAt(args[entrance.event][0]),
         call: source.lineAt(match.index),
         // default: an entrance without a fixed name reads the name from the literal argument of the call.
-        name: entrance.name ?? literalName(source, args[entrance.event]),
-        levels: entrance.fixed ? [entrance.fixed] : levelsOf(source, args[entrance.level]),
+        name: entrance.name ?? relativeName(entrance, literalName(source, args[entrance.event])),
+        levels: entrance.fixed ? [entrance.fixed] : entrance.levelGroup ? [match[entrance.levelGroup]] : levelsOf(source, args[entrance.level]),
         class: entrance.class === undefined ? null : classOf(source, args[entrance.class]),
         fields: fieldsOf(source, args[entrance.fields]),
       });
@@ -626,19 +639,32 @@ export function censusFindings(sources, config, rules = censusRules()) {
   return findings.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line));
 }
 
+/** The census declaration of the repository at `root` in `configFile`; a repository without one declares nothing. */
+function censusConfig(root, configFile) {
+  return configFile === undefined ? parseCensusConfig('(no census declaration)', '{}') : parseCensusConfig(configFile, readFileSync(join(root, configFile), 'utf8'));
+}
+
+/** The tracked sources of the repository that its census declaration does not exclude; an excluded file (a vendored bundle) is not read. */
+function declaredSources(root, config) {
+  return new Map([...trackedSources(root)].filter(([path]) => !(config.exclude && config.exclude.test(path))));
+}
+
 /** The result of the census of the repository at `root`: the findings, the pending rules, the marker errors and the number of sources. */
 export function census(root, configFile) {
-  const config = configFile === undefined ? parseCensusConfig('(no census declaration)', '{}') : parseCensusConfig(configFile, readFileSync(join(root, configFile), 'utf8'));
-  const sources = new Map([...trackedSources(root)].filter(([path]) => !(config.exclude && config.exclude.test(path))));
+  const config = censusConfig(root, configFile);
+  const sources = declaredSources(root, config);
   const findings = censusFindings(sources, config);
   const markers = [...sources].flatMap(([path, text]) => markerErrors(path, text));
   return { findings, pending: config.pending, markers, sources: sources.size };
 }
 
-/** The findings of the emit sites of the repository at `root` against the catalog at `catalogPath`, and the emit site counts. */
-export function catalogReport(root, catalogPath) {
+/**
+ * The findings of the emit sites of the repository at `root` against the catalog at `catalogPath`, and the emit site counts.
+ * The sources are those that the census declaration `configFile` does not exclude.
+ */
+export function catalogReport(root, catalogPath, configFile) {
   const catalog = JSON.parse(readFileSync(join(root, catalogPath), 'utf8'));
-  const sources = trackedSources(root);
+  const sources = declaredSources(root, censusConfig(root, configFile));
   const findings = [...catalogFindings(catalog, catalogPath), ...emitFindings(catalog, sources, catalogPath)];
   const sites = Object.entries(siteCounts(sources)).map(([language, { literal, built }]) => `${language} ${literal} literal ${built} built`).join(', ');
   return { findings, declared: Object.keys(catalog.events).length, sites };
@@ -672,7 +698,7 @@ function main(argv) {
   process.stdout.write(`${failed === 0 ? 'Census passed' : `Census failed: ${failed} findings`}: ${sources} sources, ${Object.keys(pending).length} rules pending\n`);
   let code = failed === 0 ? 0 : 1;
   if (options.catalog !== undefined) {
-    const report = catalogReport(root, options.catalog);
+    const report = catalogReport(root, options.catalog, options.census);
     for (const finding of report.findings) process.stderr.write(`${finding}\n`);
     process.stdout.write(report.findings.length === 0 ? `Event catalog checks passed: ${report.declared} declared events, emit sites: ${report.sites}\n` : `Event catalog checks failed: ${report.findings.length} findings, emit sites: ${report.sites}\n`);
     if (report.findings.length > 0) code = 1;

@@ -67,6 +67,7 @@ const EXACT = new Map([
   ["page.window.operation", "call"],
   ["sok.command", "call"],
   ["sok.panic", "lifecycle"],
+  ["sok.replay.divergence", "frame"],
 ]);
 
 const FAMILIES = [

@@ -9,7 +9,7 @@ use std::path::Path;
 
 use log_support::*;
 use serde_json::{json, Value};
-use soksak_sok::log_query::{log_line, parse_log_query, query_logs, LogPage};
+use soksak_sok::log_query::{log_row_line, parse_log_query, query_logs, LogPage};
 
 fn run_query(config: &Path, params: &str) -> LogPage {
     let query = parse_log_query(params).unwrap_or_else(|error| panic!("{params}: {error}"));
@@ -50,8 +50,30 @@ fn query_answers_the_golden_pages() {
             "{name}: the indexes that were built for files that had none"
         );
         let lines = case["lines"].as_array().expect("lines");
+        // A query with around marks every row: the neighbours as context, the row at the cursor as not.
+        let around = case["params"].get("around").is_some();
+        let context: Vec<&str> = case
+            .get("context")
+            .and_then(Value::as_array)
+            .map(|list| list.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        let ids = row_ids(&page);
         for (index, row) in page.rows.iter().enumerate() {
-            let line = log_line(row.event.get()).expect("line");
+            match (around, row.context) {
+                (false, Some(_)) => panic!(
+                    "{name}: row {} is marked as context in a query without around",
+                    ids[index]
+                ),
+                (true, None) => panic!("{name}: row {} has no context mark", ids[index]),
+                (true, Some(mark)) => assert_eq!(
+                    mark,
+                    context.contains(&ids[index].as_str()),
+                    "{name}: context of row {}",
+                    ids[index]
+                ),
+                (false, None) => {}
+            }
+            let line = log_row_line(row).expect("line");
             assert_eq!(
                 &line,
                 lines[index].as_str().expect("line"),
@@ -59,6 +81,85 @@ fn query_answers_the_golden_pages() {
             );
         }
     }
+}
+
+// contract: log.query.answers-the-rows-around-a-row
+#[test]
+fn query_around_refuses_what_it_does_not_take_and_bounds_the_bytes() {
+    let cursor = r#"{"ts_us":1,"role":"host","boot":"b1","seq":2}"#;
+    let cases = [
+        (
+            format!(r#"{{"around": {cursor}, "level": "info"}}"#),
+            "log query around takes only channel, earlier and later, not level",
+        ),
+        (
+            format!(r#"{{"around": {cursor}, "limit": 5}}"#),
+            "log query around takes only channel, earlier and later, not limit",
+        ),
+        (
+            format!(r#"{{"around": {cursor}, "after": {cursor}}}"#),
+            "log query around takes only channel, earlier and later, not after",
+        ),
+        (
+            r#"{"earlier": 3}"#.to_string(),
+            "log query earlier needs around",
+        ),
+        (
+            r#"{"later": 3}"#.to_string(),
+            "log query later needs around",
+        ),
+        (
+            r#"{"around": {"ts_us": 1}}"#.to_string(),
+            r#"log query around must be {ts_us, role, boot, seq}, found {"ts_us":1}"#,
+        ),
+        (
+            format!(r#"{{"around": {cursor}, "earlier": -1}}"#),
+            "log query earlier must be an integer from 0 to 500, found -1",
+        ),
+        (
+            format!(r#"{{"around": {cursor}, "later": 501}}"#),
+            "log query later must be an integer from 0 to 500, found 501",
+        ),
+        (
+            format!(r#"{{"around": {cursor}, "later": "2"}}"#),
+            r#"log query later must be an integer from 0 to 500, found "2""#,
+        ),
+    ];
+    for (params, want) in &cases {
+        match parse_log_query(params) {
+            Err(error) => assert_eq!(&error, want, "{params}"),
+            Ok(query) => panic!("{params}: accepted as {query:?}, want {want}"),
+        }
+    }
+    let defaults = parse_log_query(&format!(r#"{{"around": {cursor}}}"#)).expect("defaults");
+    assert_eq!((defaults.earlier, defaults.later), (5, 5));
+
+    // Eleven lines of about one million bytes: the line text of the answer stays within 8,388,608 bytes. The row at the cursor is
+    // taken first, the earlier rows may use half of the rest and the later rows use what is left.
+    let heavy = temp_dir("query-around-heavy");
+    let mut text = event_line_small(1) + "\n";
+    for seq in 2..=12 {
+        text.push_str(&format!(
+            "{{\"ts_us\":{},\"mono_ns\":{seq},\"seq\":{seq},\"level\":\"debug\",\"layer\":\"host\",\"event\":\"host.x.y\",\"fields\":{{\"text\":\"{}\"}}}}\n",
+            1000 + seq,
+            "x".repeat(1_000_000)
+        ));
+    }
+    std::fs::write(heavy.join("logs").join("host-h.jsonl"), text).expect("write");
+    let page = run_query(
+        &heavy,
+        r#"{"around":{"ts_us":1007,"role":"host","boot":"h","seq":7},"earlier":5,"later":5}"#,
+    );
+    let total: usize = page.rows.iter().map(|row| row.event.get().len()).sum();
+    assert!(
+        seqs_of(&page) == vec![4, 5, 6, 7, 8, 9, 10, 11] && total <= 8_388_608,
+        "the rows around the row of 1 MB are {:?} with {total} bytes, want 4 to 11 within 8388608",
+        seqs_of(&page)
+    );
+    assert!(
+        page.next.is_none(),
+        "an answer around a row has no next page"
+    );
 }
 
 fn sorted_big(events: &[BigEvent]) -> Vec<BigEvent> {

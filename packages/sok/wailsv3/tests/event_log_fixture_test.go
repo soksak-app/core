@@ -52,7 +52,7 @@ func fixtureLines(t *testing.T, name string) []string {
 func writeEvents(t *testing.T, emit func(*sok.EventLog)) []string {
 	t.Helper()
 	config := t.TempDir()
-	log, err := sok.StartEventLog(config)
+	log, err := sok.StartToolEventLog(config)
 	if err != nil {
 		t.Fatal(err)
 	}

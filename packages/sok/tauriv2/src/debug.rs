@@ -8,7 +8,7 @@ use std::io::Write;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 
 use crate::log_index::{CLASSES, LAYERS, LEVELS};
-use crate::log_query::{format_log_cursor, log_line, parse_log_query, query_logs};
+use crate::log_query::{format_log_cursor, log_row_line, parse_log_query, query_logs};
 use crate::{config_dir_of, Arguments, Error, Options};
 
 /// A JSON value whose object members keep the order of the text, which the text line of a row keeps.
@@ -477,6 +477,9 @@ pub(crate) fn run_debug(
     options: &Options,
 ) -> Result<(), Error> {
     let view = a.positional(1, "debug view")?;
+    if view == "replay" {
+        return crate::replay::run_replay(a, stdout, options);
+    }
     if view != "query" {
         return Err(Error::Usage(format!("unknown command: debug {view}")));
     }
@@ -520,13 +523,24 @@ pub(crate) fn run_debug(
     if let Some(value) = a.values.get("after") {
         params.insert("after".to_string(), after_flag(value));
     }
+    if let Some(value) = a.values.get("around") {
+        params.insert("around".to_string(), after_flag(value));
+    }
+    for flag in ["earlier", "later"] {
+        if let Some(value) = a.values.get(flag) {
+            match value.parse::<i64>() {
+                Ok(n) => params.insert(flag.to_string(), serde_json::json!(n)),
+                Err(_) => params.insert(flag.to_string(), serde_json::Value::String(value.clone())),
+            };
+        }
+    }
     let query =
         parse_log_query(&serde_json::Value::Object(params).to_string()).map_err(Error::Usage)?;
     let config_dir = config_dir_of(&a.values, options)?;
     let page = query_logs(&config_dir, &query, None)?;
     let mut out = String::new();
     for row in &page.rows {
-        out.push_str(&log_line(row.event.get())?);
+        out.push_str(&log_row_line(row)?);
         out.push('\n');
     }
     stdout

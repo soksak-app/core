@@ -27,7 +27,7 @@ func linesOfFile(t *testing.T, path string) []string {
 // contract: cli.log.splits-files-by-level
 func TestTheToolStoresDebugAndTraceEventsInTheDebugFile(t *testing.T) {
 	config := t.TempDir()
-	log, err := sok.StartEventLog(config)
+	log, err := sok.StartToolEventLog(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestTheToolStoresDebugAndTraceEventsInTheDebugFile(t *testing.T) {
 // contract: cli.log.splits-files-by-level
 func TestARunOfTheToolWithoutADebugEventLeavesNoDebugFile(t *testing.T) {
 	config := t.TempDir()
-	log, err := sok.StartEventLog(config)
+	log, err := sok.StartToolEventLog(config)
 	if err != nil {
 		t.Fatal(err)
 	}

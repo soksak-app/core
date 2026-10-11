@@ -186,6 +186,43 @@ func TestLogIndexFollowsAppendedLinesAndIsRebuiltWhenStale(t *testing.T) {
 	}
 }
 
+// contract: log.index.counts-the-lines-that-announce-a-change
+func TestLogIndexCountsTheLinesThatAnnounceAChange(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "host-a.jsonl")
+	read := func(seq int, event, name string) string {
+		return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"host","event":%q,"fields":{"name":%q}}`+"\n", 1000+seq, seq, seq, event, name)
+	}
+	other := func(seq int) string { return eventLineOf(seq) + "\n" }
+	first := eventLineOf(1) + "\n" + read(2, "host.binding.call", "logQuery") + read(3, "host.endpoint.call", "log.query") + other(4)
+	if err := os.WriteFile(path, []byte(first), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	update, err := sok.UpdateLogIndex(path)
+	if err != nil || update.Lines != 4 || update.Announcing != 2 || update.Size != int64(len(first)) {
+		t.Fatalf("first update %+v err %v: the records of the two calls that read the log do not announce a change, log.open and the other event do", update, err)
+	}
+	// A call with the same name in another event, and another call in the same event, announce a change.
+	second := read(5, "host.binding.call", "logQuery") + read(6, "host.binding.call", "debugFiles") + read(7, "page.call", "logQuery")
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString(second); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	update, err = sok.UpdateLogIndex(path)
+	if err != nil || update.Announcing != 2 || update.Size != int64(len(first)+len(second)) {
+		t.Fatalf("second update %+v err %v", update, err)
+	}
+	// An update of a current index announces nothing.
+	if update, err = sok.UpdateLogIndex(path); err != nil || update.Changed || update.Announcing != 0 || update.Size != int64(len(first)+len(second)) {
+		t.Fatalf("current update %+v err %v", update, err)
+	}
+}
+
 func writeFile(t *testing.T, path, text string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {

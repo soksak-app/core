@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{json, Value};
-use soksak_host_tauriv2::event_log::{EventLog, Level, Options};
+use soksak_host_tauriv2::event_log::{self, EventLog, Level, Options};
 use soksak_host_tauriv2::event_relay::log_command;
 use soksak_host_tauriv2::log_policy::{start_log_policy, Class, LogPolicy};
 
@@ -42,7 +42,7 @@ fn options(directory: &Path, policy_path: Option<std::path::PathBuf>) -> Options
 
 fn start_with_policy(policy: &str) -> (tempfile::TempDir, EventLog) {
     let directory = tempfile::tempdir().unwrap();
-    let log = EventLog::start(options(directory.path(), None)).unwrap();
+    let log = event_log::start(options(directory.path(), None)).unwrap();
     log.set_policy(
         LogPolicy::parse("policy", policy.as_bytes()).unwrap(),
         "file",
@@ -239,7 +239,7 @@ fn the_policy_file_is_watched_and_every_change_is_applied_once() {
     let config = tempfile::tempdir().unwrap();
     let policy_path = config.path().join("log-policy.json");
     let log = Arc::new(
-        EventLog::start(options(
+        event_log::start(options(
             &config.path().join("logs"),
             Some(policy_path.clone()),
         ))
@@ -289,7 +289,7 @@ fn the_policy_file_is_watched_and_every_change_is_applied_once() {
 fn the_page_sets_the_policy_through_the_log_call_and_the_host_writes_the_file() {
     let config = tempfile::tempdir().unwrap();
     let policy_path = config.path().join("log-policy.json");
-    let log = EventLog::start(options(
+    let log = event_log::start(options(
         &config.path().join("logs"),
         Some(policy_path.clone()),
     ))
@@ -334,7 +334,7 @@ fn the_page_sets_the_policy_through_the_log_call_and_the_host_writes_the_file() 
         assert!(!policy_path.exists(), "{name} wrote the file");
     }
     let bare_directory = tempfile::tempdir().unwrap();
-    let bare = EventLog::start(options(bare_directory.path(), None)).unwrap();
+    let bare = event_log::start(options(bare_directory.path(), None)).unwrap();
     let error = log_command(&bare, request).expect_err("a writer without a policy file");
     assert!(error.contains("policy file"), "{error}");
 }

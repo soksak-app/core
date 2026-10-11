@@ -65,7 +65,7 @@ impl Drop for Dir {
 fn write_events(label: &str, emit: impl FnOnce(&EventLog)) -> Vec<String> {
     let dir = Dir(std::env::temp_dir().join(format!("sok-fixture{}-{label}", std::process::id())));
     std::fs::create_dir_all(&dir.0).unwrap();
-    let log = EventLog::start(&dir.0).unwrap();
+    let log = soksak_sok::start_tool_event_log(&dir.0).unwrap();
     emit(&log);
     log.flush(Duration::from_secs(5)).unwrap();
     log.close();

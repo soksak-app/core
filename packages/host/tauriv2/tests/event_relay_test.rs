@@ -6,7 +6,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use serde_json::{json, Value};
-use soksak_host_tauriv2::event_log::{EventLog, Options};
+use soksak_host_tauriv2::event_log::{self, EventLog, Options};
 use soksak_host_tauriv2::event_relay::log_command;
 
 fn read(path: &Path) -> Vec<Value> {
@@ -18,7 +18,7 @@ fn read(path: &Path) -> Vec<Value> {
 }
 
 fn start(directory: &Path) -> EventLog {
-    EventLog::start(Options {
+    event_log::start(Options {
         directory: directory.to_path_buf(),
         role: "host".into(),
         boot: "b1".into(),

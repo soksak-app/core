@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 use soksak_host_tauriv2::application_log::{log_error, log_info, log_record};
-use soksak_host_tauriv2::event_log::{EventLog, Options};
+use soksak_host_tauriv2::event_log::{self, EventLog, Options};
 use soksak_host_tauriv2::event_record::{
     flush_records, record_input_relay, use_host_event_log, START_BUFFER_RECORDS,
 };
@@ -44,7 +44,7 @@ fn read(path: &Path) -> Vec<Value> {
 
 fn start(directory: &Path, queue_events: usize) -> Arc<EventLog> {
     Arc::new(
-        EventLog::start(Options {
+        event_log::start(Options {
             directory: directory.to_path_buf(),
             role: "host".into(),
             boot: "b1".into(),
@@ -199,7 +199,7 @@ fn flush_records_stores_the_records_written_so_far_without_waiting_for_the_batch
     assert_eq!(flush_records(Duration::from_secs(1)), Ok(()));
     let directory = tempfile::tempdir().unwrap();
     let log = Arc::new(
-        EventLog::start(Options {
+        event_log::start(Options {
             directory: directory.path().to_path_buf(),
             role: "host".into(),
             boot: "b1".into(),

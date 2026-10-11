@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math"
 	"os/exec"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -57,8 +56,10 @@ type Host struct {
 	sidecars   *Sidecars
 	plugins    *Plugins
 	// buttons is the value of host.buttons. It installs the watch after the application started and before endpoint.json is written.
-	buttons   *Buttons
-	configDir string
+	buttons *Buttons
+	// logNotices publishes the value of host.log and the host event debug-log-changed. It starts with the event log.
+	logNotices *LogNotices
+	configDir  string
 	// events is the event writer of the host; Run starts it after the application log.
 	events *EventLog
 	// endpoint is the local endpoint and relay is the exposure requests sent to the page.
@@ -148,19 +149,19 @@ func (h *Host) WindowNew() {
 	h.newWindow(fmt.Sprintf("project-window-%d", atomic.AddUint64(&h.nextWindow, 1)), "/")
 }
 
-// announceLogWrite tells every window the host event `debug-log-changed` with the path of the event file under the
-// configuration folder and its size.
-func (h *Host) announceLogWrite(path string, size int64) {
+// announceLogNotice tells every window the host event `debug-log-changed` and the endpoint watchers of the host status `host.log` the
+// notice of a change of the event log.
+func (h *Host) announceLogNotice(notice LogNotice) {
 	h.mu.Lock()
 	windows := make([]*Surfaces, 0, len(h.windows))
 	for _, s := range h.windows {
 		windows = append(windows, s)
 	}
 	h.mu.Unlock()
-	notice := map[string]any{"path": "logs/" + filepath.Base(path), "size": size}
 	for _, s := range windows {
 		s.Emit("debug-log-changed", notice)
 	}
+	h.endpoint.NotifyWatchers("host.log", notice)
 }
 
 func (h *Host) notifyWorkspace() {

@@ -33,7 +33,10 @@ NSDictionary *decodedRecord(const uint8_t *body, uint32_t length) {
         fprintf(stderr, "records: %s is not a record of the ring: %s\n", name.UTF8String, error.localizedDescription.UTF8String);
         exit(1);
     }
-    return @{@"ts_us": @(micros), @"mono_ns": @(mono), @"level": @(level), @"class": @(class), @"name": name, @"cids": cids, @"fields": fields};
+    NSDictionary *record = @{@"ts_us": @(micros), @"mono_ns": @(mono), @"level": @(level), @"class": @(class), @"name": name, @"cids": cids, @"fields": fields};
+    [name release];
+    [cidText release];
+    return record;
 }
 
 /// Calls block with each record that the ring of the process holds, after the ring was emptied and `produce` ran.

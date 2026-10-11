@@ -8,7 +8,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use serde_json::{json, Value};
-use soksak_host_tauriv2::event_log::{EventLog, Level, Options, RelayedEvent};
+use soksak_host_tauriv2::event_log::{self, Level, Options, RelayedEvent};
 use soksak_host_tauriv2::platform;
 
 /// The events of a log file, parsed.
@@ -56,7 +56,7 @@ fn options(directory: &Path) -> Options {
 #[test]
 fn the_first_line_is_log_open_and_seq_is_consecutive() {
     let directory = tempfile::tempdir().unwrap();
-    let log = EventLog::start(options(directory.path())).unwrap();
+    let log = event_log::start(options(directory.path())).unwrap();
     for index in 0..10 {
         assert!(log.emit(Level::Info, "host.test.event", &json!({"index": index})));
     }
@@ -83,7 +83,7 @@ fn a_full_queue_returns_false_and_the_writer_records_the_range_as_dropped() {
     opts.queue_events = 4;
     // The writer waits a long time between batches, so the queue stays full while the producer pushes.
     opts.batch_interval = Duration::from_secs(30);
-    let log = EventLog::start(opts).unwrap();
+    let log = event_log::start(opts).unwrap();
     let mut accepted = 0;
     let mut refused = 0;
     for index in 0..50 {
@@ -119,7 +119,7 @@ fn an_error_is_written_without_waiting_for_the_batch_interval() {
     let directory = tempfile::tempdir().unwrap();
     let mut opts = options(directory.path());
     opts.batch_interval = Duration::from_secs(30);
-    let log = EventLog::start(opts).unwrap();
+    let log = event_log::start(opts).unwrap();
     assert!(log.emit(
         Level::Error,
         "host.test.failure",
@@ -150,7 +150,7 @@ fn an_error_is_written_without_waiting_for_the_batch_interval() {
 fn the_folder_is_0700_and_the_file_is_0600() {
     use std::os::unix::fs::PermissionsExt;
     let directory = tempfile::tempdir().unwrap();
-    let log = EventLog::start(options(directory.path())).unwrap();
+    let log = event_log::start(options(directory.path())).unwrap();
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
@@ -162,7 +162,7 @@ fn the_folder_is_0700_and_the_file_is_0600() {
 #[test]
 fn the_file_passes_the_audit_of_the_contract_package() {
     let directory = tempfile::tempdir().unwrap();
-    let log = EventLog::start(options(directory.path())).unwrap();
+    let log = event_log::start(options(directory.path())).unwrap();
     for _ in 0..20 {
         log.emit(Level::Info, "host.app.event", &json!({"kind": "started"}));
     }
@@ -211,7 +211,7 @@ fn flush_writes_every_accepted_event_before_it_returns() {
     let directory = tempfile::tempdir().unwrap();
     let mut opts = options(directory.path());
     opts.batch_interval = Duration::from_secs(30);
-    let log = EventLog::start(opts).unwrap();
+    let log = event_log::start(opts).unwrap();
     for index in 0..40 {
         assert!(log.emit(Level::Info, "host.test.event", &json!({"index": index})));
     }
@@ -228,7 +228,7 @@ fn flush_writes_every_accepted_event_before_it_returns() {
 #[test]
 fn a_relayed_event_keeps_its_layer_and_time_and_gets_the_seq_of_the_writer() {
     let directory = tempfile::tempdir().unwrap();
-    let log = EventLog::start(options(directory.path())).unwrap();
+    let log = event_log::start(options(directory.path())).unwrap();
     assert_eq!(
         log.emit_relayed(relayed(
             "page",
@@ -297,7 +297,7 @@ fn every_line_carries_the_wall_clock_and_the_monotonic_clock_of_its_call() {
         .unwrap()
         .as_micros() as u64;
     let before = system.monotonic_ns().unwrap();
-    let log = EventLog::start(options(directory.path())).unwrap();
+    let log = event_log::start(options(directory.path())).unwrap();
     for index in 0..20 {
         assert!(log.emit(Level::Info, "host.test.event", &json!({"index": index})));
     }
@@ -335,7 +335,7 @@ fn every_line_carries_the_wall_clock_and_the_monotonic_clock_of_its_call() {
 #[test]
 fn an_event_with_cids_is_stored_with_them_and_an_invalid_identifier_is_refused() {
     let directory = tempfile::tempdir().unwrap();
-    let log = EventLog::start(options(directory.path())).unwrap();
+    let log = event_log::start(options(directory.path())).unwrap();
     let cids = vec!["b1.1".to_string(), "b1.2".to_string()];
     assert!(log.emit_cids(Level::Info, "host.test.input", &cids, &json!({"a": 1})));
     assert!(log.emit(Level::Info, "host.test.plain", &json!({})));
@@ -368,7 +368,7 @@ fn the_log_rotates_at_the_bound_and_keeps_every_generation() {
     opts.rotate_bytes = 4000;
     // The queue holds every event, so no refusal makes a gap of seq that log.dropped would explain.
     opts.queue_events = 1000;
-    let log = EventLog::start(opts).unwrap();
+    let log = event_log::start(opts).unwrap();
     for index in 0..300 {
         assert!(
             log.emit(
@@ -440,7 +440,7 @@ fn a_log_without_a_rotation_bound_is_refused() {
     let directory = tempfile::tempdir().unwrap();
     let mut opts = options(directory.path());
     opts.rotate_bytes = 0;
-    match EventLog::start(opts) {
+    match event_log::start(opts) {
         Err(error) => assert!(error.contains("rotate_bytes"), "{error}"),
         Ok(_) => panic!("a log without a rotation bound started"),
     }
@@ -450,7 +450,7 @@ fn a_log_without_a_rotation_bound_is_refused() {
 #[test]
 fn the_writer_announces_each_write_to_its_observer() {
     let directory = tempfile::tempdir().unwrap();
-    let log = EventLog::start(options(directory.path())).unwrap();
+    let log = event_log::start(options(directory.path())).unwrap();
     let (sender, receiver) = std::sync::mpsc::channel();
     log.set_on_write(Box::new(move |path, size| {
         let _ = sender.send((path.to_path_buf(), size));

@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 // bindingService is the name that Wails derives from the Go package path and the type name of the bound service.
@@ -73,7 +75,7 @@ func (b *Bindings) Call(ctx context.Context, method string, args []json.RawMessa
 	started := time.Now()
 	returned := false
 	defer func() { recordBindingCall(snakeName(method), args, started, err, returned, cids) }()
-	if err := checkCids(cids); err != nil {
+	if err := sok.CheckCids(cids); err != nil {
 		// The identifiers are refused, so the event of the refusal carries none.
 		cids = nil
 		returned = true
@@ -145,7 +147,7 @@ func boundedArguments(args []json.RawMessage) (string, bool) {
 		room := CallTextBytes - text.Len()
 		if len(arg) > room {
 			// silent: the length of arg is over room, so the cut is known and the event says truncated.
-			part, _ := cutText(arg, room)
+			part, _ := sok.CutText(arg, room)
 			text.WriteString(part)
 			return text.String(), true
 		}
@@ -192,7 +194,7 @@ func recordBindingCall(name string, args []json.RawMessage, started time.Time, e
 	if err != nil {
 		failure = err
 	}
-	message, cut := cutText(resultError(failure), CallTextBytes)
+	message, cut := sok.CutText(resultError(failure), CallTextBytes)
 	emitBindingCall(LevelWarn, cids, map[string]any{
 		"name": name, "args": text, "micros": micros, "ok": false, "truncated": truncated || cut, "error": message,
 	})

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,6 +21,9 @@ import (
 const (
 	queryDefaultLimit = 500
 	queryMaxLimit     = 5000
+	// queryMaxAround bounds the rows before and the rows after the row of an around query, and queryDefaultAround is their default.
+	queryMaxAround     = 500
+	queryDefaultAround = 5
 	// queryPageBytes bounds the line text of the rows of one page; the first row is always taken.
 	queryPageBytes = 8388608
 )
@@ -30,7 +34,7 @@ var (
 	// logFileName is the name of an event file: role, boot, the debug marker and the generation.
 	logFileName = regexp.MustCompile(`^([a-z][a-z0-9]*)-(.+?)(\.debug)?\.jsonl(?:\.([1-9][0-9]*))?$`)
 	// queryMembers are the parameters of a query in the order that they are checked.
-	queryMembers = []string{"channel", "level", "class", "layer", "event", "event_prefix", "surface", "session", "cid", "run", "text", "from_us", "to_us", "limit", "order", "after", "since"}
+	queryMembers = []string{"channel", "level", "class", "layer", "event", "event_prefix", "surface", "session", "cid", "run", "text", "from_us", "to_us", "limit", "order", "after", "since", "around", "earlier", "later"}
 )
 
 // LogCursor is the key of a row: the position that a page continues after.
@@ -62,6 +66,11 @@ type LogQuery struct {
 	Limit                                                                                     int
 	After                                                                                     *LogCursor
 	Since                                                                                     map[string]int64
+	// Around is the key of the row whose neighbours the query returns, with Earlier rows before it and Later rows after it.
+	Around         *LogCursor
+	Earlier, Later int
+	// pageBytes bounds the line text of the rows of the page; zero is queryPageBytes.
+	pageBytes int
 }
 
 func queryError(format string, args ...any) error {
@@ -185,9 +194,32 @@ func ParseLogQuery(params []byte) (LogQuery, error) {
 			return nil
 		},
 	}
+	steps = append(steps,
+		func() error {
+			value, present := member("around")
+			if !present {
+				return nil
+			}
+			cursor, ok := cursorOf(value)
+			if !ok {
+				return queryError("around must be {ts_us, role, boot, seq}, found %s", stringify(value, true))
+			}
+			query.Around = &cursor
+			return nil
+		},
+		func() error { return around("earlier", &query.Earlier, object, &query) },
+		func() error { return around("later", &query.Later, object, &query) },
+	)
 	for _, step := range steps {
 		if err := step(); err != nil {
 			return LogQuery{}, err
+		}
+	}
+	if query.Around != nil {
+		for _, name := range queryMembers {
+			if _, present := member(name); present && !contains([]string{"channel", "around", "earlier", "later"}, name) {
+				return LogQuery{}, queryError("around takes only channel, earlier and later, not %s", name)
+			}
 		}
 	}
 	if query.FromUs != nil && query.ToUs != nil && *query.FromUs > *query.ToUs {
@@ -200,6 +232,28 @@ func ParseLogQuery(params []byte) (LogQuery, error) {
 		return LogQuery{}, queryError("event_prefix %s must not end with a dot", jsString(query.EventPrefix))
 	}
 	return query, nil
+}
+
+// around reads the member earlier or later of an around query: an integer from 0 to queryMaxAround, five when it is not given. The
+// member is an error without around.
+func around(name string, to *int, object eventObject, query *LogQuery) error {
+	value, present := object.get(name)
+	if query.Around == nil {
+		if present {
+			return queryError("%s needs around", name)
+		}
+		return nil
+	}
+	*to = queryDefaultAround
+	if !present {
+		return nil
+	}
+	n, integer := isInteger(value)
+	if !integer || n < 0 || n > queryMaxAround {
+		return queryError("%s must be an integer from 0 to %d, found %s", name, queryMaxAround, stringify(value, true))
+	}
+	*to = int(n)
+	return nil
 }
 
 // cursorOf reads a cursor: an object of exactly ts_us, role, boot and seq.
@@ -232,6 +286,8 @@ type LogRow struct {
 	File   string          `json:"file"`
 	Offset int64           `json:"offset"`
 	Event  json.RawMessage `json:"event"`
+	// Context is set by an around query: true for a neighbour, false for the row at the cursor.
+	Context *bool `json:"context,omitempty"`
 }
 
 // LogScanned says how much of the files a query looked at.
@@ -455,7 +511,15 @@ type queriedLog struct {
 
 // QueryLogs answers a query over the event files of the configuration directory. indexed, when it is not nil, is called for each
 // index that the query had to update.
-func QueryLogs(configDir string, query LogQuery, indexed func(IndexUpdate)) (result LogPage, err error) {
+func QueryLogs(configDir string, query LogQuery, indexed func(IndexUpdate)) (LogPage, error) {
+	if query.Around != nil {
+		return queryAround(configDir, query, indexed)
+	}
+	return queryPage(configDir, query, indexed)
+}
+
+// queryPage answers a query that is not an around query.
+func queryPage(configDir string, query LogQuery, indexed func(IndexUpdate)) (result LogPage, err error) {
 	sources, err := discoverLogs(configDir, query.Channel)
 	if err != nil {
 		return LogPage{}, err
@@ -586,9 +650,13 @@ func QueryLogs(configDir string, query LogQuery, indexed func(IndexUpdate)) (res
 			}
 		}
 	}
+	budget := queryPageBytes
+	if query.pageBytes > 0 {
+		budget = query.pageBytes
+	}
 	taken, used := 0, 0
 	for taken < len(best) && taken < query.Limit {
-		if taken > 0 && used+best[taken].size > queryPageBytes {
+		if taken > 0 && used+best[taken].size > budget {
 			break
 		}
 		used += best[taken].size
@@ -600,6 +668,88 @@ func QueryLogs(configDir string, query LogQuery, indexed func(IndexUpdate)) (res
 		page.Next = &key
 	}
 	return page, nil
+}
+
+// rowKey is the key of a row.
+func rowKey(row LogRow) (LogCursor, error) {
+	var parsed struct {
+		TsUs int64 `json:"ts_us"`
+		Seq  int64 `json:"seq"`
+	}
+	if err := json.Unmarshal(row.Event, &parsed); err != nil {
+		return LogCursor{}, fmt.Errorf("%s: %w", row.File, err)
+	}
+	return LogCursor{parsed.TsUs, row.Role, row.Boot, parsed.Seq}, nil
+}
+
+// queryAround answers an around query: the row at the cursor and the rows before and after it in the key order of the channel,
+// without a filter, oldest first. The line text of the rows is bounded like a page: the row at the cursor is taken first, the rows
+// before it may use half of the bytes that are left, and the rows after it use the rest; the first row of each part is always taken.
+// Logs, Segments and Rebuilt of the answer are those of the first read, Read and Lines are the sums of the three reads.
+func queryAround(configDir string, query LogQuery, indexed func(IndexUpdate)) (LogPage, error) {
+	cursor := *query.Around
+	read := func(order string, after *LogCursor, limit, bytes int) (LogPage, error) {
+		return queryPage(configDir, LogQuery{Channel: query.Channel, Level: "trace", Order: order, Limit: limit, After: after, pageBytes: bytes}, indexed)
+	}
+	size := func(rows []LogRow) int {
+		total := 0
+		for _, row := range rows {
+			total += len(row.Event)
+		}
+		return total
+	}
+	mark := func(rows []LogRow, context bool) []LogRow {
+		for i := range rows {
+			rows[i].Context = &context
+		}
+		return rows
+	}
+	// The row at the cursor is the first row after the key just before it. No row has the least seq, so the cursor with it has no row.
+	previous := cursor
+	if previous.Seq > math.MinInt64 {
+		previous.Seq--
+	}
+	first, err := read("asc", &previous, 1, queryPageBytes)
+	if err != nil {
+		return LogPage{}, err
+	}
+	answer := LogPage{Tail: first.Tail, Scanned: first.Scanned}
+	var middle []LogRow
+	if len(first.Rows) == 1 {
+		key, err := rowKey(first.Rows[0])
+		if err != nil {
+			return LogPage{}, err
+		}
+		if key == cursor {
+			middle = mark(first.Rows, false)
+		}
+	}
+	used := size(middle)
+	var earlier, later []LogRow
+	if query.Earlier > 0 {
+		page, err := read("desc", &cursor, query.Earlier, (queryPageBytes-used)/2)
+		if err != nil {
+			return LogPage{}, err
+		}
+		earlier = mark(page.Rows, true)
+		slices.Reverse(earlier)
+		answer.Tail = page.Tail
+		answer.Scanned.Read += page.Scanned.Read
+		answer.Scanned.Lines += page.Scanned.Lines
+	}
+	used += size(earlier)
+	if query.Later > 0 {
+		page, err := read("asc", &cursor, query.Later, queryPageBytes-used)
+		if err != nil {
+			return LogPage{}, err
+		}
+		later = mark(page.Rows, true)
+		answer.Tail = page.Tail
+		answer.Scanned.Read += page.Scanned.Read
+		answer.Scanned.Lines += page.Scanned.Lines
+	}
+	answer.Rows = append(append(append([]LogRow{}, earlier...), middle...), later...)
+	return answer, nil
 }
 
 // resolveRun finds the range of time of a run: from the earliest host.test.start to the latest host.test.end whose fields.run is
@@ -652,6 +802,19 @@ func resolveRun(logs []queriedLog, run string, scanned *LogScanned) (int64, int6
 		return low, math.MaxInt64, nil
 	}
 	return low, lastEnd, nil
+}
+
+// LogRowLine is the text line of a row: the line of its event, and the line of a row that an around query marks as context is indented by
+// two spaces.
+func LogRowLine(row LogRow) (string, error) {
+	line, err := LogLine(row.Event)
+	if err != nil {
+		return "", err
+	}
+	if row.Context != nil && *row.Context {
+		line = "  " + line
+	}
+	return line, nil
 }
 
 // LogLine is the text line of an event line of a file: the form that the debug view shows and `sok debug query` prints.

@@ -13,7 +13,7 @@ use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
 use soksak_host_tauriv2::binding_record::BindingCall;
 use soksak_host_tauriv2::endpoint::{self, raw, Endpoint, Failure, Service};
-use soksak_host_tauriv2::event_log::EventLog;
+use soksak_host_tauriv2::event_log::{self, EventLog};
 use soksak_host_tauriv2::event_record::use_host_event_log;
 use soksak_host_tauriv2::log_policy::LogPolicy;
 use tauri::ipc::InvokeBody;
@@ -148,7 +148,7 @@ fn a_closed_gate_costs_far_less_than_an_open_one_and_stays_under_a_limit() {
     use soksak_host_tauriv2::event_log::{Level as L, Options};
     use soksak_host_tauriv2::log_policy::Class;
     let directory = tempfile::tempdir().unwrap();
-    let log = EventLog::start(Options {
+    let log = event_log::start(Options {
         directory: directory.path().to_path_buf(),
         role: "host".into(),
         boot: "b1".into(),

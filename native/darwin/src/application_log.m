@@ -56,6 +56,7 @@ static void storeRecord(uint8_t level, const char *name, const char *where, cons
     NSString *fields = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
     // events: forwarded
     sp_event(SP_CLASS_LIFECYCLE, level, name, fields.UTF8String);
+    [fields release];
 }
 
 void sp_log_error(const char *where, const char *text) { storeRecord(SP_EVENT_ERROR, "native.record.error", where, text); }

@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use soksak_host_tauriv2::event_log::EventLog;
+use soksak_host_tauriv2::event_log;
 use soksak_host_tauriv2::platform;
 
 // contract: log.native.platform-pulls-the-ring
@@ -51,7 +51,7 @@ fn the_platform_takes_the_policy_of_the_native_library_and_refuses_a_level_outsi
 #[test]
 fn the_host_writer_starts_with_the_pull_of_the_platform() {
     let directory = tempfile::tempdir().unwrap();
-    let log = EventLog::start_host(directory.path()).unwrap();
+    let log = event_log::start_host(directory.path()).unwrap();
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let text = std::fs::read_to_string(path).unwrap();

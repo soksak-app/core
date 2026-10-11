@@ -5,14 +5,14 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 use soksak_sok::event_classes::{class_of, Class};
-use soksak_sok::event_log::{EventLog, Level};
+use soksak_sok::event_log::Level;
 
 // contract: cli.log.stores-class
 #[test]
 fn every_line_of_the_tool_stores_the_class_of_its_catalog_entry() {
     let config = std::env::temp_dir().join(format!("sok-class{}", std::process::id()));
     std::fs::create_dir_all(&config).unwrap();
-    let log = EventLog::start(&config).unwrap();
+    let log = soksak_sok::start_tool_event_log(&config).unwrap();
     log.emit(Level::Warn, "sok.command", &json!({"name": "x"}));
     log.emit(
         Level::Error,

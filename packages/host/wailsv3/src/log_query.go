@@ -14,9 +14,11 @@ import (
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
-// reportIndexUpdate stores the event `host.log.index_rebuilt` for an index that was built from the whole file. An incremental
-// update stores no event: the event would be a line that the next update indexes (docs/spec/logging.md#index).
+// reportIndexUpdate announces the lines of an update of an index that announce a change of the log (docs/spec/debug.md#following) and
+// stores the event `host.log.index_rebuilt` for an index that was built from the whole file. An incremental update stores no event:
+// the event would be a line that the next update indexes (docs/spec/logging.md#index).
 func reportIndexUpdate(update sok.IndexUpdate) {
+	announceIndexUpdate(update)
 	if !update.Rebuilt {
 		return
 	}

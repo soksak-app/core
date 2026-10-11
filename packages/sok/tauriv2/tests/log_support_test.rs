@@ -61,7 +61,7 @@ pub fn read_cases() -> Vec<Value> {
         std::fs::read_to_string(Path::new(QUERY_FIXTURES).join("cases.json")).expect("cases.json");
     let cases: Vec<Value> = serde_json::from_str(&text).expect("cases are JSON");
     assert!(
-        cases.len() >= 25,
+        cases.len() >= 31,
         "the golden file holds {} cases",
         cases.len()
     );

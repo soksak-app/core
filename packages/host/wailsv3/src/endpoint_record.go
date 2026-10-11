@@ -5,6 +5,8 @@ package host
 
 import (
 	"time"
+
+	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 // recordEndpointCall stores the event of one request: the method name, the arguments cut to CallTextBytes before they are
@@ -23,7 +25,7 @@ func recordEndpointCall(req request, started time.Time, err error) {
 	// A request without params has the arguments `null`, as one whose params are null.
 	args, truncated := "null", false
 	if len(req.Params) > 0 {
-		args, truncated = cutText(req.Params, CallTextBytes)
+		args, truncated = sok.CutText(req.Params, CallTextBytes)
 	}
 	if err == nil {
 		EmitHost(LevelDebug, "host.endpoint.call", map[string]any{
@@ -32,7 +34,7 @@ func recordEndpointCall(req request, started time.Time, err error) {
 		return
 	}
 	// The text is the code and the message that the client receives.
-	text, cut := cutText(resultError(err), CallTextBytes)
+	text, cut := sok.CutText(resultError(err), CallTextBytes)
 	EmitHost(LevelWarn, "host.endpoint.call", map[string]any{
 		"name": methodOf(req), "args": args, "micros": micros, "ok": false, "truncated": truncated || cut, "error": text,
 	})

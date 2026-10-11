@@ -14,6 +14,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 // relayedEvent is one validated event of a page batch.
@@ -137,7 +139,7 @@ func relayedEventOf(item any) (relayedEvent, error) {
 			}
 			cids = append(cids, cid)
 		}
-		if checkCids(cids) != nil {
+		if sok.CheckCids(cids) != nil {
 			return relayedEvent{}, errBadCids
 		}
 	}

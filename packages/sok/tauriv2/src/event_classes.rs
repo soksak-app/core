@@ -121,6 +121,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "page.window.operation" => Some(Class::Call),
         "sok.command" => Some(Class::Call),
         "sok.panic" => Some(Class::Lifecycle),
+        "sok.replay.divergence" => Some(Class::Frame),
         _ => None,
     };
     if exact.is_some() {

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde_json::{json, Value};
-use soksak_host_tauriv2::event_log::{EventLog, Level, Options};
+use soksak_host_tauriv2::event_log::{self, EventLog, Level, Options};
 
 fn read(path: &Path) -> Vec<Value> {
     fs::read_to_string(path)
@@ -55,7 +55,7 @@ fn levels_of(events: &[Value]) -> String {
 #[test]
 fn debug_and_trace_events_go_to_the_debug_file_and_the_others_to_the_main_file() {
     let directory = tempfile::tempdir().unwrap();
-    let log = EventLog::start(options(directory.path())).unwrap();
+    let log = event_log::start(options(directory.path())).unwrap();
     for (index, level) in [
         Level::Error,
         Level::Debug,
@@ -98,7 +98,7 @@ fn each_file_rotates_on_its_own_and_rotation_never_removes_a_generation() {
     opts.rotate_bytes = 700;
     opts.queue_events = 500;
     opts.queue_bytes = 1 << 20;
-    let log = EventLog::start(opts).unwrap();
+    let log = event_log::start(opts).unwrap();
     for index in 0..120 {
         assert!(
             log.emit(
@@ -153,7 +153,7 @@ fn a_loss_names_the_channel_of_the_refused_events() {
     let mut opts = options(directory.path());
     opts.queue_events = 4;
     opts.batch_interval = Duration::from_secs(30);
-    let log = EventLog::start(opts).unwrap();
+    let log = event_log::start(opts).unwrap();
     let mut refused: BTreeMap<&str, u64> = BTreeMap::new();
     for index in 0..40 {
         let (level, channel) = if index % 3 == 0 {

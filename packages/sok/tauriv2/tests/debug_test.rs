@@ -141,6 +141,10 @@ fn query_refuses_an_invalid_flag_value_as_a_usage_error() {
         (vec!["--order", "up"], "log query order \"up\" is not one of asc, desc"),
         (vec!["--after", "nonsense"], "log query after must be {ts_us, role, boot, seq}, found \"nonsense\""),
         (vec!["--context", "1"], "unknown option --context"),
+        (vec!["--around", "nonsense"], "log query around must be {ts_us, role, boot, seq}, found \"nonsense\""),
+        (vec!["--earlier", "2"], "log query earlier needs around"),
+        (vec!["--around", "1/host/b1/2", "--later", "501"], "log query later must be an integer from 0 to 500, found 501"),
+        (vec!["--around", "1/host/b1/2", "--level", "info"], "log query around takes only channel, earlier and later, not level"),
     ];
     for (args, want) in cases {
         let (stdout, stderr, code) = run_query_command(&config, &args);

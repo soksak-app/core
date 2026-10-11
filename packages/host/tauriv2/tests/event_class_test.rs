@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 use soksak_host_tauriv2::bounds::Fields;
-use soksak_host_tauriv2::event_log::{EventLog, Level, Options, RelayedEvent};
+use soksak_host_tauriv2::event_log::{self, Level, Options, RelayedEvent};
 
 fn read(path: &Path) -> Vec<Value> {
     fs::read_to_string(path)
@@ -49,7 +49,7 @@ fn relayed(layer: &str, event: &str, fields: &str) -> RelayedEvent {
 #[test]
 fn every_line_stores_the_class_of_its_catalog_entry() {
     let directory = tempfile::tempdir().unwrap();
-    let log = EventLog::start(options(directory.path())).unwrap();
+    let log = event_log::start(options(directory.path())).unwrap();
     assert!(log.emit(Level::Info, "host.app.event", &json!({"kind": "started"})));
     assert!(log.emit_cids(
         Level::Info,
@@ -96,7 +96,7 @@ fn every_line_stores_the_class_of_its_catalog_entry() {
 #[test]
 fn an_event_the_catalog_does_not_declare_is_marked_undeclared_and_has_no_class() {
     let directory = tempfile::tempdir().unwrap();
-    let log = EventLog::start(options(directory.path())).unwrap();
+    let log = event_log::start(options(directory.path())).unwrap();
     assert!(log.emit(Level::Info, "host.test.event", &json!({"index": 1})));
     assert!(log
         .emit_relayed(relayed("plugin", "plugin.editor.opened", "{}"))
@@ -124,7 +124,7 @@ fn the_events_of_the_writer_itself_store_their_class() {
     opts.rotate_bytes = 600;
     opts.queue_events = 4;
     opts.batch_interval = Duration::from_secs(30);
-    let log = EventLog::start(opts).unwrap();
+    let log = event_log::start(opts).unwrap();
     for _ in 0..40 {
         log.emit(Level::Info, "host.app.event", &json!({"kind": "started"}));
     }

@@ -14,6 +14,7 @@ mod debug;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
 pub mod endpoint;
+pub mod event_bounds;
 pub mod event_classes;
 pub mod event_log;
 pub mod fetch;
@@ -21,6 +22,7 @@ mod files;
 pub mod identity;
 pub mod install;
 pub mod log_index;
+pub mod log_policy;
 pub mod log_query;
 mod logged;
 mod path;
@@ -29,9 +31,10 @@ pub mod platform;
 pub mod plugins;
 mod registry;
 mod release;
+mod replay;
 pub mod routine;
 pub mod version;
-pub use logged::{logged, run_logged, Command};
+pub use logged::{logged, run_logged, start_tool_event_log, Command};
 pub use release::current_platform;
 pub use routine::PANIC_STATUS;
 
@@ -51,6 +54,8 @@ commands:
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
                             prints one page of the events of the event files that pass the filter
+  debug replay SESSION [--until SEQUENCE]
+                            replays the session with the replay executable of its sidecar and compares every stored screen hash
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
   app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
@@ -128,6 +133,10 @@ const OPTIONS: &[&str] = &[
     "order",
     "limit",
     "after",
+    "around",
+    "earlier",
+    "later",
+    "until",
 ];
 
 struct Arguments {

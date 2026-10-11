@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 mod records;
 
 use soksak_host_tauriv2::application_log::start_standard_error;
-use soksak_host_tauriv2::event_log::{EventLog, Options};
+use soksak_host_tauriv2::event_log::{self, Options};
 use soksak_host_tauriv2::event_record::use_host_event_log;
 
 const CHILD: &str = "SOKSAK_PANIC_HOOK_CHILD";
@@ -31,7 +31,7 @@ fn the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_t
         // The pull runs on the writer thread, so a pull that waits stalls the writer until the test releases it.
         let release = Arc::new(AtomicBool::new(false));
         let stalled = Arc::clone(&release);
-        let log = EventLog::start(Options {
+        let log = event_log::start(Options {
             directory: config.join("logs"),
             role: "host".into(),
             boot: "b1".into(),

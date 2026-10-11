@@ -129,16 +129,18 @@ func Run(assets fs.FS, options Options) error {
 		return fmt.Errorf("log policy: %w", err)
 	}
 	defer stopPolicy()
-	// The debug view follows the event file of the host: every window learns that the writer wrote (docs/spec/debug.md#following).
-	observeWrites, stopNotices := CoalesceLogNotices(host.announceLogWrite)
-	defer stopNotices()
-	// The index of each event file follows the writer too (docs/spec/logging.md#index).
+	// The debug view follows the event files: every window and every watcher of host.log learns that a line announced a change
+	// (docs/spec/debug.md#following). The index covers the lines before the notice, so the notice follows the indexer and the queries
+	// that update an index, and not the writer.
+	notices := NewLogNotices(LogNoticeInterval, host.announceLogNotice)
+	defer notices.Stop()
+	host.logNotices = notices
+	UseLogNotices(notices)
+	defer UseLogNotices(nil)
+	// The index of each event file follows the writer (docs/spec/logging.md#index).
 	indexWrites, stopIndexer := StartLogIndexer(NewIndexReporter())
 	defer stopIndexer()
-	eventLog.SetOnWrite(func(path string, size int64) {
-		indexWrites(path, size)
-		observeWrites(path, size)
-	})
+	eventLog.SetOnWrite(indexWrites)
 	if err := StartStandardError(configDirectory, identifier); err != nil {
 		return err
 	}

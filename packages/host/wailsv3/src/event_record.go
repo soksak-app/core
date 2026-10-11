@@ -57,7 +57,7 @@ var records struct {
 	buffer      []bufferedRecord
 	bufferBytes int
 	// lost counts the records that the full buffer refused, for each channel of the writer.
-	lost [channelCount]struct{ count, bytes uint64 }
+	lost [sok.ChannelCount]struct{ count, bytes uint64 }
 }
 
 // UseHostEventLog makes log the writer of the records of the host and hands it the records of the start buffer in their
@@ -69,7 +69,7 @@ func UseHostEventLog(log *EventLog) {
 	records.log = log
 	activeLog.Store(log)
 	buffered, lost := records.buffer, records.lost
-	records.buffer, records.bufferBytes, records.lost = nil, 0, [channelCount]struct{ count, bytes uint64 }{}
+	records.buffer, records.bufferBytes, records.lost = nil, 0, [sok.ChannelCount]struct{ count, bytes uint64 }{}
 	if log == nil {
 		return
 	}
@@ -79,7 +79,7 @@ func UseHostEventLog(log *EventLog) {
 			fmt.Fprintf(os.Stderr, "event writer: a buffered record cannot be stored: %v\n", err)
 		}
 	}
-	for channel := Channel(0); channel < channelCount; channel++ {
+	for channel := sok.Channel(0); channel < sok.ChannelCount; channel++ {
 		log.CountLoss(channel, lost[channel].count, lost[channel].bytes)
 	}
 }
@@ -104,8 +104,8 @@ func emitRecord(e Entry) {
 	default:
 		body = fmt.Sprint(e.Text)
 	}
-	where, cutWhere := cutText(e.Where, RecordPlaceBytes)
-	body, cutBody := cutText(body, RecordTextBytes)
+	where, cutWhere := sok.CutText(e.Where, RecordPlaceBytes)
+	body, cutBody := sok.CutText(body, RecordTextBytes)
 	record := map[string]any{"where": where, "text": body}
 	if cutWhere || cutBody {
 		record["truncated"] = true
@@ -133,8 +133,8 @@ func storeEvent(level Level, layer, name, place string, cids []string, fields js
 	if records.log == nil {
 		size := len(fields) + len(name)
 		if len(records.buffer) >= StartBufferRecords || records.bufferBytes+size > StartBufferBytes {
-			records.lost[ChannelOf(level)].count++
-			records.lost[ChannelOf(level)].bytes += uint64(size)
+			records.lost[sok.ChannelOf(level)].count++
+			records.lost[sok.ChannelOf(level)].bytes += uint64(size)
 			return
 		}
 		records.buffer = append(records.buffer, bufferedRecord{tsMicros: now, monoNs: mono, cids: cids, layer: layer, level: level, event: name, fields: fields, produced: produced})
@@ -169,7 +169,7 @@ func emitTrace(layer string, fields map[string]any) error {
 			rest[key] = value
 		}
 	}
-	text, produced, err := boundedMarshal(rest, EventFieldsLimitBytes)
+	text, produced, err := sok.BoundedMarshal(rest, EventFieldsLimitBytes)
 	if err != nil {
 		return fmt.Errorf("the fields of %s cannot be serialized: %w", event, err)
 	}
@@ -190,7 +190,7 @@ func EmitHost(level Level, event string, fields map[string]any) {
 	if class, declared := sok.EventClassOf(event); declared && !GateEvent(class, level) {
 		return
 	}
-	text, produced, err := boundedMarshal(fields, EventFieldsLimitBytes)
+	text, produced, err := sok.BoundedMarshal(fields, EventFieldsLimitBytes)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return
@@ -210,11 +210,11 @@ func EmitHostCids(level Level, event string, cids []string, fields map[string]an
 	if class, declared := sok.EventClassOf(event); declared && !GateEvent(class, level) {
 		return
 	}
-	if err := checkCids(cids); err != nil {
+	if err := sok.CheckCids(cids); err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the cids of %s are refused: %v\n", event, err)
 		return
 	}
-	text, produced, err := boundedMarshal(fields, EventFieldsLimitBytes)
+	text, produced, err := sok.BoundedMarshal(fields, EventFieldsLimitBytes)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return
@@ -245,7 +245,7 @@ func RecordInputRelay(surface, name, event string) error {
 	if len(cids) == 0 {
 		return nil
 	}
-	if err := checkCids(cids); err != nil {
+	if err := sok.CheckCids(cids); err != nil {
 		return fmt.Errorf("the cids of the region event of %s: %w", surface, err)
 	}
 	var kind string
@@ -276,7 +276,7 @@ func EmitHostPlaced(level Level, event string, fields map[string]any, deadline t
 	if !strings.HasPrefix(event, "host.") {
 		return "", 0, fmt.Errorf("the event %q does not start with host.", event)
 	}
-	text, produced, err := boundedMarshal(fields, EventFieldsLimitBytes)
+	text, produced, err := sok.BoundedMarshal(fields, EventFieldsLimitBytes)
 	if err != nil {
 		return "", 0, fmt.Errorf("the fields of %s cannot be serialized: %w", event, err)
 	}
@@ -286,7 +286,7 @@ func EmitHostPlaced(level Level, event string, fields map[string]any, deadline t
 	if log == nil {
 		return "", 0, fmt.Errorf("the event log of the host is not attached")
 	}
-	seq, err := log.emitPlaced(level, event, text, produced, deadline)
+	seq, err := log.EmitPlacedBounded(level, event, text, produced, deadline)
 	if err != nil {
 		return "", 0, err
 	}

@@ -7,13 +7,13 @@ use std::path::Path;
 use std::time::Duration;
 
 use serde_json::{json, Value};
-use soksak_host_tauriv2::event_log::{EventLog, Level, Options};
+use soksak_host_tauriv2::event_log::{self, Level, Options};
 use soksak_sok::log_query::{parse_log_query, query_logs};
 
 /// Writes events of every level and of three classes through the writer into a configuration folder whose small bound rotates both
 /// files; returns the number of the events of each level.
 fn write_mixed_events(config: &Path) -> BTreeMap<&'static str, usize> {
-    let log = EventLog::start(Options {
+    let log = event_log::start(Options {
         directory: config.join("logs"),
         role: "host".into(),
         boot: "b1".into(),

@@ -14,12 +14,8 @@ export const PAGE_ROWS = 500;
  */
 export const HOLD_LIMIT = 2000;
 
-/**
- * The time in milliseconds that a following update waits after the previous update that added rows. The notices of a file that
- * grows at every moment have no upper rate, and each update asks for a page, merges and draws the rows again, so the page would
- * never be idle; no row is lost, because the next query starts at the `tail` of the earlier answer.
- */
-export const FOLLOW_INTERVAL_MS = 500;
+/** The rows before and the rows after a row that the context of the row brings in (docs/spec/debug.md#timeline). */
+export const CONTEXT_ROWS = 5;
 
 /** The channels of the query: the files that are not debug files, the debug files, and both. */
 export const CHANNELS = ["other", "debug", "all"];
@@ -31,8 +27,8 @@ export const LAYERS = ["native", "host", "page", "plugin", "sidecar", "sok"];
 /** The text of a value in an error message. */
 const found = (value) => JSON.stringify(value);
 
-/** The event files of the logs folder in the debug file list: `logs/<role>-<boot>[.debug].jsonl`, also a generation `.1` to `.5`. */
-const EVENT_FILE = /^logs\/[a-z][a-z0-9]*-[^/]+?(?:\.debug)?\.jsonl(?:\.[1-5])?$/;
+/** The event files of the logs folder in the debug file list: `logs/<role>-<boot>[.debug].jsonl`, also a generation `.<n>` of any positive number without a leading zero. */
+const EVENT_FILE = /^logs\/[a-z][a-z0-9]*-[^/]+?(?:\.debug)?\.jsonl(?:\.[1-9][0-9]*)?$/;
 
 /** Whether the path is an event file of the logs folder. */
 export function isEventFile(path) {

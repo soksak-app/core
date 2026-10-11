@@ -48,7 +48,7 @@ fn debug_path_of(log: &EventLog) -> PathBuf {
 #[test]
 fn the_tool_stores_debug_and_trace_events_in_the_debug_file() {
     let config = Config::new("split");
-    let log = EventLog::start(&config.0).unwrap();
+    let log = soksak_sok::start_tool_event_log(&config.0).unwrap();
     for level in [
         Level::Debug,
         Level::Warn,
@@ -87,7 +87,7 @@ fn the_tool_stores_debug_and_trace_events_in_the_debug_file() {
 #[test]
 fn a_run_of_the_tool_without_a_debug_event_leaves_no_debug_file() {
     let config = Config::new("nodebug");
-    let log = EventLog::start(&config.0).unwrap();
+    let log = soksak_sok::start_tool_event_log(&config.0).unwrap();
     log.emit(Level::Info, "sok.command", &json!({"name": "x"}));
     log.flush(Duration::from_secs(5)).unwrap();
     log.close();
@@ -107,7 +107,7 @@ impl serde::Serialize for Unserializable {
 #[test]
 fn a_loss_of_the_tool_names_the_channel_of_the_refused_events() {
     let config = Config::new("loss");
-    let log = EventLog::start(&config.0).unwrap();
+    let log = soksak_sok::start_tool_event_log(&config.0).unwrap();
     log.emit(Level::Debug, "sok.command", &json!({"name": "first"}));
     assert!(!log.emit(Level::Debug, "sok.command", &Unserializable));
     assert!(!log.emit(Level::Info, "sok.command", &Unserializable));

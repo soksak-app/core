@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use serde_json::value::RawValue;
 use serde_json::Value;
-use soksak_host_tauriv2::event_log::{EventLog, Options};
+use soksak_host_tauriv2::event_log::{self, EventLog, Options};
 use soksak_host_tauriv2::event_record::{emit_host, use_host_event_log};
 use soksak_host_tauriv2::exposure::Relay;
 use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
@@ -49,7 +49,7 @@ fn raw(text: &str) -> Box<RawValue> {
 fn roomy_writer(config: &Path) -> Arc<EventLog> {
     use_host_event_log(None);
     let log = Arc::new(
-        EventLog::start(Options {
+        event_log::start(Options {
             directory: config.join("logs"),
             role: "host".into(),
             boot: "b1".into(),

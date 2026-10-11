@@ -535,7 +535,7 @@ pub(crate) fn update(window: &Window, request: UpdateRequest) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::Overlay;
-    use crate::event_log::EventLog;
+    use crate::event_log;
     use crate::event_record::use_host_event_log;
     use std::sync::Arc;
     use std::time::Duration;
@@ -544,7 +544,7 @@ mod tests {
     #[test]
     fn a_poisoned_modal_record_is_reported_when_it_is_read() {
         let config = tempfile::tempdir().unwrap();
-        let writer = Arc::new(EventLog::start_host(config.path()).unwrap());
+        let writer = Arc::new(event_log::start_host(config.path()).unwrap());
         use_host_event_log(Some(Arc::clone(&writer)));
         let overlay = Overlay::default();
         std::thread::scope(|scope| {

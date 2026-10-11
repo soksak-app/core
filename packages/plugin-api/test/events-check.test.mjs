@@ -291,3 +291,56 @@ test('the record calls of the native library are emit sites of the declared reco
   const records = { ...catalog, events: { 'native.record.<level>': { layer: 'host', class: 'lifecycle', level: ['error', 'info'], fields: { where: 'string', text: 'string' } } } };
   assert.deepEqual(checker.emitFindings(records, new Map([['a.m', 'void f(void) {\n    sp_log_error("w", "t");\n    sp_log_info("w", "t");\n}\n']]), CATALOG), []);
 });
+
+test('the census exclude removes a vendored file before the catalog check parses it', () => {
+  const command = fileURLToPath(new URL('../events-check.js', import.meta.url));
+  const repository = mkdtempSync(join(tmpdir(), 'census-'));
+  const run = (...args) => spawnSync(process.execPath, [command, ...args], { cwd: repository, encoding: 'utf8' });
+  const git = (...args) => assert.equal(spawnSync('git', args, { cwd: repository }).status, 0);
+  git('init', '-q');
+  mkdirSync(join(repository, 'docs'));
+  mkdirSync(join(repository, 'ui', 'vendor'), { recursive: true });
+  writeFileSync(join(repository, 'docs', 'events.json'), JSON.stringify({ schema: 1, layers: ['plugin'], events: {} }));
+  // The vendored file holds a string that does not end, which the lexer of the check rejects.
+  writeFileSync(join(repository, 'ui', 'vendor', 'bundle.js'), 'export const a = "never ends;\n');
+  writeFileSync(join(repository, 'census.json'), JSON.stringify({ exclude: '^ui/vendor/' }));
+  git('add', 'docs/events.json', 'ui/vendor/bundle.js', 'census.json');
+  let result = run('--catalog', 'docs/events.json');
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /^ui\/vendor\/bundle\.js:1: a string that starts here does not end$/m);
+  result = run('--census', 'census.json', '--catalog', 'docs/events.json');
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^Event catalog checks passed: 0 declared events/m);
+  assert.deepEqual(checker.catalogReport(repository, 'docs/events.json', 'census.json').findings, []);
+});
+
+// A plugin stores its events through `context.runtime.log` (docs/spec/plugins.md#logging): the call names the event without the
+// prefix `plugin.<plugin>.`, so the check resolves it against the one plugin id of the catalog.
+test('runtime.log entrances of plugin events are resolved by the plugin prefix', () => {
+  const plugin = {
+    schema: 2,
+    layers: ['plugin'],
+    events: { 'plugin.fixture.input.key': { layer: 'plugin', class: 'input', level: 'debug', fields: { key: 'string', 'shift?': 'boolean' } } },
+  };
+  const check = (text) => checker.emitFindings(plugin, new Map([['ui/a.js', text]]), 'events.json');
+  assert.deepEqual(check('export function f(runtime, key) {\n  runtime.log.debug("input.key", { key });\n}\n'), []);
+  assert.deepEqual(check('export function f(context, key) {\n  context.runtime.log.debug("input.key", () => ({ key, shift: true }));\n}\n'), []);
+  assert.deepEqual(check('export function f(runtime, level, key) {\n  runtime.log[level]("input.key", { key });\n}\n'), []);
+  assert.deepEqual(check('export function f(runtime, key) {\n  runtime.log.info("input.key", { key, extra: 1 });\n  runtime.log.debug("input.other", {});\n}\n'), [
+    'ui/a.js:2: plugin.*.input.key is emitted at the level info and the catalog declares debug',
+    'ui/a.js:2: plugin.*.input.key has the field extra, which the catalog does not declare',
+    'ui/a.js:3: plugin.*.input.other is emitted and events.json does not declare it',
+  ]);
+  assert.deepEqual(check('export function f(runtime, key) {\n  runtime.log.debug("input.key", () => ({ key, extra: 1 }));\n}\n'), [
+    'ui/a.js:2: plugin.*.input.key has the field extra, which the catalog does not declare',
+  ]);
+  // The event name that a site builds needs the marker, as at every other site, and the gate query is no site.
+  assert.deepEqual(check('export function f(runtime, name) {\n  if (runtime.log.enabled("debug")) runtime.log.debug(name, {});\n}\n'), [
+    'ui/a.js:2: the name of this emit is not a literal; write a comment `events: <declared names>` above it, or `events: forwarded` when it passes the name of its caller',
+    'events.json: plugin.fixture.input.key is declared and no source emits it',
+  ]);
+  // A call in a function accepts the rules of the census like any other entrance.
+  const rules = checker.censusRules();
+  const config = checker.parseCensusConfig('census.json', '{}', rules);
+  assert.deepEqual(checker.censusFindings(new Map([['ui/a.js', 'export function f(runtime) {\n  try { g(); } catch (error) { runtime.log.error("input.key", {}); }\n}\n']]), config, rules), []);
+});

@@ -12,9 +12,11 @@ use soksak_sok::log_query::{parse_log_query, query_logs, LogPage};
 
 use crate::event_log::Level;
 
-/// Stores the event `host.log.index_rebuilt` for an index that was built from the whole file. An incremental update stores no event:
-/// the event would be a line that the next update indexes (docs/spec/logging.md#index).
+/// Announces the lines of an update of an index that announce a change of the log (docs/spec/debug.md#following) and stores the event
+/// `host.log.index_rebuilt` for an index that was built from the whole file. An incremental update stores no event: the event would be
+/// a line that the next update indexes (docs/spec/logging.md#index).
 pub fn report_index_update(update: &IndexUpdate) {
+    crate::debug_follow::announce_index_update(update);
     if !update.rebuilt {
         return;
     }

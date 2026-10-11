@@ -27,7 +27,7 @@ import {
 import {
   closeSettings, editSet, moveSettings, onSettingsDrawn, openSettings, settingsModalState, searchPlugins, showPlugin, showScope, showSection,
 } from "./settings-ui.js";
-import { closeDebug, compareDebugState, debugState, filterDebugTimeline, followDebugTimeline, listDebugFiles, olderDebugTimeline, onDebugDrawn, openDebug, saveDebugFile, saveDebugFiles, saveDebugRows, selectDebugRow, showDebugState, showDebugTimeline, viewDebugFile } from "./debug-ui.js";
+import { closeDebug, compareDebugState, contextDebugRow, debugState, filterDebugTimeline, followDebugTimeline, listDebugFiles, olderDebugTimeline, onDebugDrawn, openDebug, saveDebugFile, saveDebugFiles, saveDebugRows, selectDebugRow, showDebugState, showDebugTimeline, viewDebugFile } from "./debug-ui.js";
 import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
@@ -383,6 +383,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.debug.timeline.follow", ({ on }) => followDebugTimeline(on));
   registry.command("core.debug.timeline.older", () => olderDebugTimeline());
   registry.command("core.debug.timeline.select", ({ row, selected }) => { selectDebugRow(row, selected); });
+  registry.command("core.debug.timeline.context", ({ row }) => contextDebugRow(row));
   registry.command("core.debug.timeline.save", () => saveDebugRows());
   // The project list shows the projects page of the library.
   registry.command("core.projects.browse", async () => {
