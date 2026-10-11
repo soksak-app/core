@@ -1,7 +1,7 @@
 // Checks that a cleanup failure of a window check is reported together with the failure of the check body.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -70,7 +70,7 @@ test("probe body passes", async (t) => {
   const session = {
     app: { name: "probe", configDir: ${JSON.stringify(dir)} },
     cleanups: [],
-    eventStart: { "host-1-1.jsonl": ${started} },
+    eventStart: { "host-1-1.jsonl": { offset: ${started}, inode: ${JSON.stringify(String(statSync(join(dir, "logs", "host-1-1.jsonl"), { bigint: true }).ino))} } },
     expectedErrors: ${expected},
     markTest: async () => null,
   };

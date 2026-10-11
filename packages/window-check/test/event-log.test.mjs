@@ -2,7 +2,7 @@
 // application (docs/spec/logging.md#files).
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -78,16 +78,37 @@ test("readEventErrors names a file that is shorter than the bytes already read, 
   const dir = configDir(t);
   assert.throws(() => readEventErrors(dir, {}), /logs holds no host event log/);
   writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open"));
-  assert.throws(() => readEventErrors(dir, { "host-1-10.jsonl": 100000 }), /host-1-10\.jsonl is shorter than the 100000 bytes already read/);
+  const inode = String(statSync(join(dir, "logs", "host-1-10.jsonl"), { bigint: true }).ino);
+  assert.throws(() => readEventErrors(dir, { "host-1-10.jsonl": { offset: 100000, inode } }), /host-1-10\.jsonl is shorter than the 100000 bytes already read/);
+});
+
+test("a file that the writer rotated is read on from its generation and the new file from its start", (t) => {
+  const dir = configDir(t);
+  const file = join(dir, "logs", "host-1-10.debug.jsonl");
+  writeFileSync(file, line(1, "info", "log.open") + line(2, "debug", "host.test.before"));
+  const first = readEvents(dir, {});
+  appendFileSync(file, line(3, "debug", "host.test.last"));
+  // The writer moves the full file to the next generation (logging.md#files) and starts a new file, shorter than the offset.
+  renameSync(file, `${file}.1`);
+  writeFileSync(file, line(4, "info", "log.open") + line(5, "info", "log.rotated") + line(6, "debug", "host.test.after"));
+  const second = readEvents(dir, first.offsets);
+  assert.deepEqual(second.events.map((event) => event.event), ["host.test.last", "log.open", "log.rotated", "host.test.after"]);
+  assert.deepEqual(second.offsets["host-1-10.debug.jsonl"], { offset: statSync(file).size, inode: String(statSync(file, { bigint: true }).ino) });
+  // A rotated file whose generation is gone is an error that names the file.
+  rmSync(`${file}.1`);
+  assert.throws(() => readEvents(dir, first.offsets), /host-1-10\.debug\.jsonl was rotated, and no generation holds the \d+ bytes already read/);
 });
 
 test("the offsets of the event logs are kept beside the configuration folder", (t) => {
   const dir = configDir(t);
   assert.deepEqual(readEventOffsets(dir), {});
-  writeEventOffsets(dir, { "host-1-10.jsonl": 42 });
-  assert.deepEqual(readEventOffsets(dir), { "host-1-10.jsonl": 42 });
+  writeEventOffsets(dir, { "host-1-10.jsonl": { offset: 42, inode: "7" } });
+  assert.deepEqual(readEventOffsets(dir), { "host-1-10.jsonl": { offset: 42, inode: "7" } });
   writeFileSync(`${dir}.event-offsets`, "[1]");
-  assert.throws(() => readEventOffsets(dir), /expected an object of byte offsets/);
+  assert.throws(() => readEventOffsets(dir), /expected an object of positions \{offset, inode\}/);
+  // A position of another form is refused with the file and what it found.
+  writeFileSync(`${dir}.event-offsets`, `${JSON.stringify({ "host-1-10.jsonl": 42 })}\n`);
+  assert.throws(() => readEventOffsets(dir), /expected an object of positions \{offset, inode\}, found \{"host-1-10\.jsonl":42\}/);
   rmSync(`${dir}.event-offsets`);
 });
 
@@ -186,10 +207,10 @@ test("currentEventOffsets is the end of the complete lines of every host event l
   const dir = configDir(t);
   const first = join(dir, "logs", "host-1-10.jsonl");
   writeFileSync(first, line(1, "info", "log.open") + line(2, "info", "host.record.info", { where: "a", text: "b" }) + '{"ts_us":1,"seq":3');
-  writeEventOffsets(dir, { "host-1-10.jsonl": 5 });
+  writeEventOffsets(dir, { "host-1-10.jsonl": { offset: 5, inode: "7" } });
   const now = currentEventOffsets(dir);
   assert.deepEqual(Object.keys(now), ["host-1-10.jsonl"]);
-  assert.equal(now["host-1-10.jsonl"], Buffer.byteLength(line(1, "info", "log.open") + line(2, "info", "host.record.info", { where: "a", text: "b" })));
+  assert.equal(now["host-1-10.jsonl"].offset, Buffer.byteLength(line(1, "info", "log.open") + line(2, "info", "host.record.info", { where: "a", text: "b" })));
   assert.deepEqual(readEventLines(dir, now).lines, [], "nothing is after the end");
   appendFileSync(first, ',"level":"info","layer":"host","event":"host.record.info","fields":{"where":"c","text":"d"}}\n');
   assert.deepEqual(readEventLines(dir, now).lines, ["info host c: d"], "the unfinished line is read once it is complete");

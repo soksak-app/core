@@ -13,14 +13,21 @@ const HOST_LOG = /^(host|vt|files|shell)-\d+-\d+(\.debug)?\.jsonl$/;
  */
 export const eventOffsetFile = (configDir) => `${configDir}.event-offsets`;
 
-/** File name to last read position. Without a record it is empty, so every file is read from the start. */
+/** The identity of a file: its inode as decimal text, read as a bigint so that no digit is lost. */
+const inodeOf = (path) => String(statSync(path, { bigint: true }).ino);
+
+/**
+ * File name to last read position `{offset, inode}`: the byte offset and the inode of the file that held it, so a read finds
+ * the file again after the writer rotated it. Without a record it is empty, so every file is read from the start.
+ */
 export function readEventOffsets(configDir) {
   const file = eventOffsetFile(configDir);
   if (!existsSync(file)) return {};
   const value = JSON.parse(readFileSync(file, "utf8"));
-  if (value === null || typeof value !== "object" || Array.isArray(value) ||
-      !Object.values(value).every((offset) => Number.isInteger(offset) && offset >= 0)) {
-    throw new Error(`${file}: expected an object of byte offsets, found ${JSON.stringify(value)}`);
+  const position = (item) => item !== null && typeof item === "object" && Number.isInteger(item.offset) && item.offset >= 0 &&
+    typeof item.inode === "string" && /^\d+$/.test(item.inode) && Object.keys(item).length === 2;
+  if (value === null || typeof value !== "object" || Array.isArray(value) || !Object.values(value).every(position)) {
+    throw new Error(`${file}: expected an object of positions {offset, inode}, found ${JSON.stringify(value)}`);
   }
   return value;
 }
@@ -61,11 +68,26 @@ export function readEvents(configDir, offsets) {
   const processes = new Map();
   for (const name of names) {
     const path = join(logs, name);
-    const offset = offsets[name] ?? 0;
+    const inode = inodeOf(path);
+    const position = offsets[name];
+    let offset = position?.offset ?? 0;
+    // A file of another inode than the one read before was rotated: the writer moved the file that was read to a generation
+    // `<name>.<n>` (docs/spec/logging.md#files) and started a new file, so the rest of that generation is read, and the new
+    // file from its start.
+    let rotated = "";
+    if (position !== undefined && position.inode !== inode) {
+      const generation = readdirSync(logs).find((entry) => entry.startsWith(`${name}.`) && /^\d+$/.test(entry.slice(name.length + 1)) &&
+        inodeOf(join(logs, entry)) === position.inode);
+      if (generation === undefined) throw new Error(`${path} was rotated, and no generation holds the ${offset} bytes already read`);
+      const before = readFileSync(join(logs, generation));
+      if (before.length < offset) throw new Error(`${join(logs, generation)} is shorter than the ${offset} bytes already read`);
+      rotated = before.subarray(offset).toString("utf8");
+      offset = 0;
+    }
     const size = statSync(path).size;
     if (size < offset) throw new Error(`${path} is shorter than the ${offset} bytes already read`);
     const data = readFileSync(path);
-    const text = data.subarray(offset).toString("utf8");
+    const text = rotated + data.subarray(offset).toString("utf8");
     const complete = text.lastIndexOf("\n") + 1;
     const lines = complete === 0 ? [] : text.slice(0, complete - 1).split("\n");
     // The line number counts from the start of the file, so the error names the line a person opens.
@@ -84,7 +106,8 @@ export function readEvents(configDir, offsets) {
       if (!processes.has(owner)) processes.set(owner, []);
       processes.get(owner).push(event);
     }
-    next[name] = offset + Buffer.byteLength(text.slice(0, complete));
+    // The generation ends at the end of a line, so the position in the new file excludes its bytes.
+    next[name] = { offset: offset + Buffer.byteLength(text.slice(0, complete)) - Buffer.byteLength(rotated), inode };
   }
   for (const list of processes.values()) events.push(...list.toSorted((a, b) => a.seq - b.seq));
   return { events, offsets: next };
@@ -202,7 +225,7 @@ export function currentEventOffsets(configDir) {
   const offsets = {};
   for (const name of readdirSync(logs).filter((entry) => HOST_LOG.test(entry)).sort()) {
     const data = readFileSync(join(logs, name));
-    offsets[name] = data.lastIndexOf(0x0a) + 1;
+    offsets[name] = { offset: data.lastIndexOf(0x0a) + 1, inode: inodeOf(join(logs, name)) };
   }
   return offsets;
 }
