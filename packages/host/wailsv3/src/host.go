@@ -123,6 +123,12 @@ func Run(assets fs.FS, options Options) error {
 	}
 	host.events = eventLog
 	UseHostEventLog(eventLog)
+	// The policy of the event log is the file log-policy.json, which the host and every process watch (docs/spec/logging.md#classes-and-policy).
+	stopPolicy, err := StartLogPolicy(eventLog, nil)
+	if err != nil {
+		return fmt.Errorf("log policy: %w", err)
+	}
+	defer stopPolicy()
 	// The debug view follows the event files: every window and every watcher of host.log learns that a line announced a change
 	// (docs/spec/debug.md#following). The index covers the lines before the notice, so the notice follows the indexer and the queries
 	// that update an index, and not the writer.

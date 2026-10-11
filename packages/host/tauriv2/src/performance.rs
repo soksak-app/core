@@ -22,6 +22,13 @@ pub fn observe(layer: &str, fields: impl FnOnce() -> Value) {
     if !enabled() {
         return;
     }
+    // The observation is of the class call at the level debug: a policy that does not store it builds no fields.
+    if !crate::log_policy::gate_event(
+        crate::log_policy::Class::Call,
+        crate::event_log::Level::Debug,
+    ) {
+        return;
+    }
     if let Err(error) = crate::event_record::emit_trace(layer, fields()) {
         crate::application_log::log_error("performance trace", error);
     }

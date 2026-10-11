@@ -12,16 +12,22 @@ import (
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 )
 
-// nativeRecord is a record as the native library drains it: a 4-byte length, then the wall clock (8 bytes), the monotonic
-// clock (8 bytes), the level (1 byte), the length of the name (1 byte), the length of the cids (2 bytes), the name, the cids
-// (a list separated by commas) and the fields, in the byte order of the host.
+// nativeRecord is a record of the class call as the native library drains it; the names of the tests that use it are not in the catalog.
 func nativeRecord(ts, mono uint64, level byte, cids, name, fields string) []byte {
-	body := make([]byte, 20, 20+len(name)+len(cids)+len(fields))
+	return nativeRecordOfClass(ts, mono, level, 2, cids, name, fields)
+}
+
+// nativeRecordOfClass is a record as the native library drains it: a 4-byte length, then the wall clock (8 bytes), the monotonic
+// clock (8 bytes), the level (1 byte), the class (1 byte), the length of the name (1 byte), the length of the cids (2 bytes), the
+// name, the cids (a list separated by commas) and the fields, in the byte order of the host.
+func nativeRecordOfClass(ts, mono uint64, level, class byte, cids, name, fields string) []byte {
+	body := make([]byte, 21, 21+len(name)+len(cids)+len(fields))
 	binary.NativeEndian.PutUint64(body, ts)
 	binary.NativeEndian.PutUint64(body[8:], mono)
 	body[16] = level
-	body[17] = byte(len(name))
-	binary.NativeEndian.PutUint16(body[18:], uint16(len(cids)))
+	body[17] = class
+	body[18] = byte(len(name))
+	binary.NativeEndian.PutUint16(body[19:], uint16(len(cids)))
 	body = append(body, name...)
 	body = append(body, cids...)
 	body = append(body, fields...)
@@ -36,6 +42,8 @@ type fakeRing struct {
 	bytes       []byte
 	lossEvents  uint64
 	lossBytes   uint64
+	debugEvents uint64
+	debugBytes  uint64
 	drainCalled int
 }
 
@@ -48,9 +56,15 @@ func (r *fakeRing) pull(buffer []byte) (int, error) {
 	return n, nil
 }
 
-func (r *fakeRing) loss() (uint64, uint64) {
+// loss returns the loss of a channel once: lossEvents and lossBytes are the channel other, debugEvents and debugBytes the channel debug.
+func (r *fakeRing) loss(channel host.Channel) (uint64, uint64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if channel == host.ChannelDebug {
+		events, bytes := r.debugEvents, r.debugBytes
+		r.debugEvents, r.debugBytes = 0, 0
+		return events, bytes
+	}
 	events, bytes := r.lossEvents, r.lossBytes
 	r.lossEvents, r.lossBytes = 0, 0
 	return events, bytes
@@ -120,12 +134,16 @@ func TestARefusedNativeRecordAndTheLossOfTheRingAreCountedAsDropped(t *testing.T
 	noClock := nativeRecord(1_791_000_000_000_008, 0, 2, "", "native.test.clock", `{}`)
 	truncated := append([]byte{}, nativeRecord(1_791_000_000_000_005, 5_000_000_005, 2, "", "native.test.cut", `{"a":1}`)...)
 	binary.NativeEndian.PutUint32(truncated, 500)
-	ring := &fakeRing{bytes: append(append(append(append(append(append(append(good, forged...), badFields...), badLevel...), badCid...), emptyCid...), noClock...), truncated...), lossEvents: 3, lossBytes: 120}
+	badClass := nativeRecordOfClass(1_791_000_000_000_009, 5_000_000_009, 2, 9, "", "native.test.class", `{}`)
+	// A declared event whose record gives another class than the catalog is a defect of the producer and is refused.
+	wrongClass := nativeRecordOfClass(1_791_000_000_000_010, 5_000_000_010, 2, 0, "", "native.input.source_changed", `{}`)
+	ring := &fakeRing{bytes: append(append(append(append(append(append(append(append(append(good, forged...), badFields...), badLevel...), badCid...), emptyCid...), noClock...), badClass...), wrongClass...), truncated...),
+		lossEvents: 3, lossBytes: 120, debugEvents: 2, debugBytes: 40}
 	log := startWithRing(t, ring)
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
-	stored, reasons := 0, map[string]float64{}
+	stored, reasons, channels := 0, map[string]float64{}, map[string]float64{}
 	for _, event := range readEventLog(t, log.Path()) {
 		switch event["event"] {
 		case "native.test.ok":
@@ -133,10 +151,32 @@ func TestARefusedNativeRecordAndTheLossOfTheRingAreCountedAsDropped(t *testing.T
 		case "log.dropped":
 			fields := event["fields"].(map[string]any)
 			reasons[fields["reason"].(string)] += fields["count"].(float64)
+			channels[fields["reason"].(string)+"/"+fields["channel"].(string)] += fields["count"].(float64)
 		}
 	}
-	if stored != 1 || reasons["the native ring was full"] != 3 || reasons["a native record was refused"] != 7 {
+	if stored != 1 || reasons["the native ring was full"] != 5 || reasons["a native record was refused"] != 9 {
 		t.Fatalf("stored %d, dropped %v", stored, reasons)
+	}
+	// The loss of the ring names the channel of the refused events; a record that cannot be decoded has no level and is counted in other.
+	if channels["the native ring was full/other"] != 3 || channels["the native ring was full/debug"] != 2 || channels["a native record was refused/other"] != 9 {
+		t.Fatalf("dropped by channel %v", channels)
+	}
+}
+
+// contract: log.native.stores-the-class-of-a-pulled-record
+func TestAPulledNativeRecordOfADeclaredEventStoresTheCatalogClassAndAnUndeclaredOneStoresNone(t *testing.T) {
+	ring := &fakeRing{bytes: append(nativeRecordOfClass(1_791_000_000_000_001, 5_000_000_001, 2, 1, "", "native.input.source_changed", `{}`),
+		nativeRecordOfClass(1_791_000_000_000_002, 5_000_000_002, 2, 1, "", "native.test.surprise", `{}`)...)}
+	log := startWithRing(t, ring)
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	if len(events) != 3 || events[1]["class"] != "input" || events[1]["undeclared"] != nil {
+		t.Fatalf("the declared record: %v", events)
+	}
+	if events[2]["undeclared"] != true || events[2]["class"] != nil {
+		t.Fatalf("the undeclared record: %v", events[2])
 	}
 }
 

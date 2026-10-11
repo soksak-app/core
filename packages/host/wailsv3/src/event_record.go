@@ -56,8 +56,8 @@ var records struct {
 	log         *EventLog
 	buffer      []bufferedRecord
 	bufferBytes int
-	lostCount   uint64
-	lostBytes   uint64
+	// lost counts the records that the full buffer refused, for each channel of the writer.
+	lost [sok.ChannelCount]struct{ count, bytes uint64 }
 }
 
 // UseHostEventLog makes log the writer of the records of the host and hands it the records of the start buffer in their
@@ -67,8 +67,9 @@ func UseHostEventLog(log *EventLog) {
 	records.Lock()
 	defer records.Unlock()
 	records.log = log
-	buffered, lost, lostBytes := records.buffer, records.lostCount, records.lostBytes
-	records.buffer, records.bufferBytes, records.lostCount, records.lostBytes = nil, 0, 0, 0
+	activeLog.Store(log)
+	buffered, lost := records.buffer, records.lost
+	records.buffer, records.bufferBytes, records.lost = nil, 0, [sok.ChannelCount]struct{ count, bytes uint64 }{}
 	if log == nil {
 		return
 	}
@@ -78,7 +79,9 @@ func UseHostEventLog(log *EventLog) {
 			fmt.Fprintf(os.Stderr, "event writer: a buffered record cannot be stored: %v\n", err)
 		}
 	}
-	log.CountLoss(lost, lostBytes)
+	for channel := sok.Channel(0); channel < sok.ChannelCount; channel++ {
+		log.CountLoss(channel, lost[channel].count, lost[channel].bytes)
+	}
 }
 
 // emitRecord stores an entry as the event `<layer>.record.<level>`. The place and the text are cut to RecordPlaceBytes and
@@ -130,8 +133,8 @@ func storeEvent(level Level, layer, name, place string, cids []string, fields js
 	if records.log == nil {
 		size := len(fields) + len(name)
 		if len(records.buffer) >= StartBufferRecords || records.bufferBytes+size > StartBufferBytes {
-			records.lostCount++
-			records.lostBytes += uint64(size)
+			records.lost[sok.ChannelOf(level)].count++
+			records.lost[sok.ChannelOf(level)].bytes += uint64(size)
 			return
 		}
 		records.buffer = append(records.buffer, bufferedRecord{tsMicros: now, monoNs: mono, cids: cids, layer: layer, level: level, event: name, fields: fields, produced: produced})
@@ -183,6 +186,10 @@ func EmitHost(level Level, event string, fields map[string]any) {
 		fmt.Fprintf(os.Stderr, "event writer: the event %q does not start with host.\n", event)
 		return
 	}
+	// A closed gate serializes nothing; an event the catalog does not declare has no class and no gate.
+	if class, declared := sok.EventClassOf(event); declared && !GateEvent(class, level) {
+		return
+	}
 	text, produced, err := sok.BoundedMarshal(fields, EventFieldsLimitBytes)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
@@ -198,6 +205,9 @@ func EmitHost(level Level, event string, fields map[string]any) {
 func EmitHostCids(level Level, event string, cids []string, fields map[string]any) {
 	if !strings.HasPrefix(event, "host.") {
 		fmt.Fprintf(os.Stderr, "event writer: the event %q does not start with host.\n", event)
+		return
+	}
+	if class, declared := sok.EventClassOf(event); declared && !GateEvent(class, level) {
 		return
 	}
 	if err := sok.CheckCids(cids); err != nil {

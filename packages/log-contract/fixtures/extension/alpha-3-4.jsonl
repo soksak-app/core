@@ -1,6 +1,6 @@
-{"ts_us":1791500000001000,"mono_ns":9000001000,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":2,"pid":4300,"role":"alpha","boot":"b2"}}
-{"ts_us":1791500000002000,"mono_ns":9000002000,"seq":2,"level":"info","layer":"sidecar","event":"sidecar.alpha.start","fields":{"pid":4300}}
-{"ts_us":1791500000003000,"mono_ns":9000003000,"seq":3,"level":"info","layer":"sidecar","event":"sidecar.alpha.write","cids":["b1.1"],"fields":{"hex":"0d"}}
-{"ts_us":1791500000004000,"mono_ns":9000004000,"seq":4,"level":"info","layer":"sidecar","event":"log.rotated","fields":{"bytes":100,"kept":1,"removed":null}}
-{"ts_us":1791500000005000,"mono_ns":9000005000,"seq":5,"level":"info","layer":"sidecar","event":"log.dropped","fields":{"from_seq":6,"to_seq":7,"count":2,"bytes":40,"reason":"disk full"}}
-{"ts_us":1791500000008000,"mono_ns":9000008000,"seq":8,"level":"info","layer":"sidecar","event":"sidecar.alpha.start","fields":{"pid":4300}}
+{"ts_us":1791500000001000,"mono_ns":9000001000,"seq":1,"level":"info","class":"lifecycle","layer":"sidecar","event":"log.open","fields":{"schema":2,"pid":4300,"role":"alpha","boot":"b2"}}
+{"ts_us":1791500000002000,"mono_ns":9000002000,"seq":2,"level":"info","class":"lifecycle","layer":"sidecar","event":"sidecar.alpha.start","fields":{"pid":4300}}
+{"ts_us":1791500000003000,"mono_ns":9000003000,"seq":3,"level":"info","class":"io","layer":"sidecar","event":"sidecar.alpha.write","cids":["b1.1"],"fields":{"hex":"0d"}}
+{"ts_us":1791500000004000,"mono_ns":9000004000,"seq":4,"level":"info","class":"lifecycle","layer":"sidecar","event":"log.rotated","fields":{"bytes":100,"kept":1,"removed":null}}
+{"ts_us":1791500000005000,"mono_ns":9000005000,"seq":5,"level":"info","class":"lifecycle","layer":"sidecar","event":"log.dropped","fields":{"from_seq":6,"to_seq":7,"count":2,"bytes":40,"reason":"disk full"}}
+{"ts_us":1791500000008000,"mono_ns":9000008000,"seq":8,"level":"info","class":"lifecycle","layer":"sidecar","event":"sidecar.alpha.start","fields":{"pid":4300}}

@@ -1,3 +1,3 @@
-{"ts_us":1791500000001000,"mono_ns":9000001000,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":2,"pid":4242,"role":"host","boot":"b1"}}
-{"ts_us":1791500000002000,"mono_ns":9000002000,"seq":2,"level":"info","layer":"native","event":"native.input.key_down","cids":["b1.1"],"fields":{"keyCode":36}}
-{"ts_us":1791500000003000,"mono_ns":9000003000,"seq":3,"level":"info","layer":"host","event":"host.sidecar.request","cids":["b1.1"],"fields":{"name":"alpha","surface":"s1","bytes":12}}
+{"ts_us":1791500000001000,"mono_ns":9000001000,"seq":1,"level":"info","class":"lifecycle","layer":"host","event":"log.open","fields":{"schema":2,"pid":4242,"role":"host","boot":"b1"}}
+{"ts_us":1791500000002000,"mono_ns":9000002000,"seq":2,"level":"info","class":"input","layer":"native","event":"native.input.key_down","cids":["b1.1"],"fields":{"keyCode":36}}
+{"ts_us":1791500000003000,"mono_ns":9000003000,"seq":3,"level":"info","class":"io","layer":"host","event":"host.sidecar.request","cids":["b1.1"],"fields":{"name":"alpha","surface":"s1","bytes":12}}

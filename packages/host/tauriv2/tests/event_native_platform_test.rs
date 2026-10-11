@@ -12,7 +12,9 @@ fn the_platform_pulls_an_empty_native_ring_as_zero_bytes_and_no_loss() {
     let system = platform::current().unwrap();
     let mut buffer = vec![0u8; 4096];
     assert_eq!(system.pull_native_events(&mut buffer), Ok(0));
-    assert_eq!(system.take_native_event_loss(), Ok((0, 0)));
+    for channel in 0..2 {
+        assert_eq!(system.take_native_event_loss(channel), Ok((0, 0)));
+    }
     assert!(system.pull_native_events(&mut []).is_err());
 }
 
@@ -28,6 +30,21 @@ fn the_platform_reads_a_monotonic_clock_and_takes_the_boot_identifier() {
     for bad in ["", "a,b", "a\"b", "a.b", &"x".repeat(65)] {
         assert!(system.set_event_boot(bad).is_err(), "{bad:?} was accepted");
     }
+}
+
+// contract: log.native.platform-takes-the-policy
+#[test]
+fn the_platform_takes_the_policy_of_the_native_library_and_refuses_a_level_outside_the_enumeration()
+{
+    let system = platform::current().unwrap();
+    assert!(system.set_native_event_policy([4, 3, 2, -1, 0]).is_ok());
+    for bad in [[4, 4, 4, 4, 5], [-2, 4, 4, 4, 4]] {
+        assert!(
+            system.set_native_event_policy(bad).is_err(),
+            "{bad:?} was accepted"
+        );
+    }
+    system.set_native_event_policy([4, 4, 4, 4, 4]).unwrap();
 }
 
 // contract: log.native.host-writer-starts-with-the-platform-pull

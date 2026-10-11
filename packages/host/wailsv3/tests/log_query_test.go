@@ -196,7 +196,6 @@ func TestTheIndexCoversEachBatchTheWriterWrote(t *testing.T) {
 	logs := filepath.Join(config, "logs")
 	options := eventLogOptions(logs)
 	options.RotateBytes = 6 << 10
-	options.Generations = 3
 	log, err := host.StartEventLog(options)
 	if err != nil {
 		t.Fatal(err)

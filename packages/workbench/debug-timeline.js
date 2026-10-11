@@ -27,8 +27,8 @@ export const LAYERS = ["native", "host", "page", "plugin", "sidecar", "sok"];
 /** The text of a value in an error message. */
 const found = (value) => JSON.stringify(value);
 
-/** The event files of the logs folder in the debug file list: `logs/<role>-<boot>[.debug].jsonl`, also a generation `.1` to `.5`. */
-const EVENT_FILE = /^logs\/[a-z][a-z0-9]*-[^/]+?(?:\.debug)?\.jsonl(?:\.[1-5])?$/;
+/** The event files of the logs folder in the debug file list: `logs/<role>-<boot>[.debug].jsonl`, also a generation `.<n>` of any positive number without a leading zero. */
+const EVENT_FILE = /^logs\/[a-z][a-z0-9]*-[^/]+?(?:\.debug)?\.jsonl(?:\.[1-9][0-9]*)?$/;
 
 /** Whether the path is an event file of the logs folder. */
 export function isEventFile(path) {

@@ -1,17 +1,19 @@
 //! The event writer of the host (docs/spec/logging.md#writers).
 //!
-//! The queue, the bounds, `seq`, the batch, the loss record, the flush, the rotation and the line are the writer of the tool
-//! crate (`soksak_sok::event_log`), which the tool starts with its own layer and role. The host adds the layer, the clock
-//! and the entrance of its threads, the pull of the native ring, and the start in the `logs` folder of the configuration
-//! folder.
+//! The queue, the bounds, `seq`, the batch, the loss record, the flush, the rotation, the files split by level, the class of the
+//! line and the gate of the policy are the writer of the tool crate (`soksak_sok::event_log`), which the tool starts with its own
+//! layer and role. The host adds the layer, the clock and the entrance of its threads, the pull of the native ring with the
+//! decoding of its records, the retention of the files of the runs, the policy file, and the start in the `logs` folder of the
+//! configuration folder.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use serde_json::value::RawValue;
+use serde_json::value::{to_raw_value, RawValue};
+use soksak_sok::event_classes::{class_of, Class};
 use soksak_sok::event_log::{Options as WriterOptions, PullSink};
 
-pub use soksak_sok::event_log::{valid_cid, EventLog, Level, RelayedEvent, SCHEMA};
+pub use soksak_sok::event_log::{valid_cid, Channel, EventLog, Level, RelayedEvent, SCHEMA};
 
 use crate::bounds::Fields;
 
@@ -29,27 +31,32 @@ pub struct Options {
     pub queue_bytes: usize,
     /// How long the writer waits for more events before it writes a batch.
     pub batch_interval: Duration,
-    /// The size at which the writer starts a new file; the file that was full becomes generation 1.
+    /// The size at which the writer starts a new file. Each of the two files of the writer (the main file and the debug file)
+    /// rotates on its own: the file that was full becomes the next generation (`.1` is the first), and rotation removes no
+    /// generation.
     pub rotate_bytes: u64,
-    /// The number of earlier files that are kept (`.1` is the newest); the oldest one is removed.
-    pub generations: usize,
     /// Moves whole records of the native ring into the buffer and returns the number of bytes written; `None` when the
-    /// process has no native ring. `pull_loss` returns the events and bytes that the ring refused since the last call.
+    /// process has no native ring. `pull_loss` returns the events and bytes that the ring refused in a channel since the last
+    /// call.
     pub pull: Option<Pull>,
     pub pull_loss: Option<PullLoss>,
+    /// The policy file that the writer follows (`<config-dir>/log-policy.json`); `None` for a writer that has none.
+    pub policy_path: Option<PathBuf>,
+    /// The bound of the files of the runs in the folder (docs/spec/logging.md#retention): the writer removes the oldest runs when it
+    /// starts and after each rotation while the files pass it.
+    pub retention_bytes: u64,
 }
 
 /// The pull of the native ring, called on the writer thread.
 pub type Pull = Box<dyn Fn(&mut [u8]) -> Result<usize, String> + Send>;
-/// The loss of the native ring since the last call, as events and bytes.
-pub type PullLoss = Box<dyn Fn() -> (u64, u64) + Send>;
+/// The loss of the native ring in a channel since the last call, as events and bytes.
+pub type PullLoss = Box<dyn Fn(Channel) -> (u64, u64) + Send>;
 
 /// The bounds of the writer of a host: events and bytes of serialized fields waiting for the batch interval.
 const HOST_QUEUE_EVENTS: usize = 8192;
 const HOST_QUEUE_BYTES: usize = 16 << 20;
 const HOST_BATCH_INTERVAL: Duration = Duration::from_millis(100);
 const HOST_ROTATE_BYTES: u64 = 100 << 20;
-const HOST_GENERATIONS: usize = 5;
 
 /// The identifier of this run, shared by the files of the run: the start time in seconds and the process identifier.
 fn process_boot() -> &'static str {
@@ -99,12 +106,15 @@ pub fn start_host(config: &Path) -> Result<EventLog, String> {
         queue_bytes: HOST_QUEUE_BYTES,
         batch_interval: HOST_BATCH_INTERVAL,
         rotate_bytes: HOST_ROTATE_BYTES,
-        generations: HOST_GENERATIONS,
         pull: Some(Box::new(|buffer| {
             crate::platform::current()?.pull_native_events(buffer)
         })),
-        pull_loss: Some(Box::new(|| {
-            match crate::platform::current().and_then(|system| system.take_native_event_loss()) {
+        policy_path: Some(config.join("log-policy.json")),
+        retention_bytes: crate::log_retention::HOST_RETENTION_BYTES,
+        pull_loss: Some(Box::new(|channel| {
+            match crate::platform::current()
+                .and_then(|system| system.take_native_event_loss(channel.index() as u8))
+            {
                 Ok(loss) => loss,
                 Err(error) => {
                     eprintln!("event writer: the loss of the native ring cannot be read: {error}");
@@ -115,17 +125,22 @@ pub fn start_host(config: &Path) -> Result<EventLog, String> {
     })
 }
 
-/// Starts the writer of the layer `host`. A writer of the host always rotates.
+/// Starts the writer of the layer `host`. A writer of the host always rotates and always applies the retention.
 pub fn start(options: Options) -> Result<EventLog, String> {
     if options.rotate_bytes == 0 {
         return Err("event writer: rotate_bytes must be positive".into());
     }
-    if options.generations == 0 {
-        return Err("event writer: generations must be positive".into());
+    if options.retention_bytes == 0 {
+        return Err("event writer: retention_bytes must be positive".into());
     }
     let pull = options
         .pull
         .map(|pull| native_puller(pull, options.pull_loss));
+    let prune = retention(
+        options.directory.clone(),
+        format!("{}-{}", options.role, options.boot),
+        options.retention_bytes,
+    );
     EventLog::start(WriterOptions {
         directory: options.directory,
         role: options.role,
@@ -142,8 +157,36 @@ pub fn start(options: Options) -> Result<EventLog, String> {
         queue_bytes: options.queue_bytes,
         batch_interval: options.batch_interval,
         rotate_bytes: options.rotate_bytes,
-        generations: options.generations,
         pull,
+        policy_path: options.policy_path,
+        prune: Some(prune),
+    })
+}
+
+/// The retention hook of the writer: it removes the oldest runs while the files of the runs pass `bytes` (the run named `run`
+/// is never removed) and returns the event `log.pruned` for a pass that removed a file or left the files over the bound.
+fn retention(directory: PathBuf, run: String, bytes: u64) -> soksak_sok::event_log::Prune {
+    Box::new(move || {
+        // The pass counts what is on disk; the batch that waits for the interval is not in it, which is at most one batch.
+        let (result, failures) = match crate::log_retention::prune_runs(&directory, &run, bytes) {
+            Ok(result) => (result, Vec::new()),
+            Err((result, failures)) => (result, failures),
+        };
+        for failure in &failures {
+            eprintln!("event writer: retention: {failure}");
+        }
+        if result.files == 0 && result.remaining <= bytes {
+            return None;
+        }
+        let level = if result.remaining > bytes {
+            Level::Warn
+        } else {
+            Level::Info
+        };
+        Some((
+            level,
+            to_raw_value(&result.fields(bytes)).expect("a json value serializes"),
+        ))
     })
 }
 
@@ -185,10 +228,18 @@ fn native_puller(pull: Pull, pull_loss: Option<PullLoss>) -> soksak_sok::event_l
                 }
             }
         }
-        sink.lost(refused, refused_bytes, "a native record was refused");
+        // A record that cannot be decoded has no level, so its loss is counted in the channel `Other`.
+        sink.lost(
+            refused,
+            refused_bytes,
+            "a native record was refused",
+            Channel::Other,
+        );
         if let Some(pull_loss) = pull_loss.as_ref() {
-            let (events, bytes) = pull_loss();
-            sink.lost(events, bytes, "the native ring was full");
+            for channel in Channel::ALL {
+                let (events, bytes) = pull_loss(channel);
+                sink.lost(events, bytes, "the native ring was full", channel);
+            }
         }
     })
 }
@@ -198,15 +249,17 @@ fn native_puller(pull: Pull, pull_loss: Option<PullLoss>) -> soksak_sok::event_l
 const NATIVE_PULL_BYTES: usize = 256 << 10;
 const NATIVE_PULL_PASSES: usize = 64;
 
-/// The bytes of a native record before the name: the wall clock (8), the monotonic clock (8), the level (1), the length of
-/// the name (1) and the length of the cids (2).
-const NATIVE_HEADER_BYTES: usize = 20;
+/// The bytes of a native record before the name: the wall clock (8), the monotonic clock (8), the level (1), the class (1), the
+/// length of the name (1) and the length of the cids (2).
+const NATIVE_HEADER_BYTES: usize = 21;
 
 /// Decodes the record at the start of `buffer`: a 4-byte length, then the time in microseconds (8 bytes), the monotonic
-/// clock in nanoseconds (8), the level (1 byte), the length of the name (1 byte), the length of the cids (2), the name, the
-/// cids as a list separated by commas and the fields as JSON text, in the byte order of the host.
+/// clock in nanoseconds (8), the level (1 byte), the class (1 byte), the length of the name (1 byte), the length of the cids
+/// (2), the name, the cids as a list separated by commas and the fields as JSON text, in the byte order of the host.
 /// Returns the number of bytes the record takes with the event or the reason it is refused. When the length itself is wrong
-/// the number of bytes is 0, so the caller abandons the rest of the buffer.
+/// the number of bytes is 0, so the caller abandons the rest of the buffer. The class that the library gave is checked against
+/// the catalog: a record of a declared event with another class is refused, so a producer that disagrees with the catalog is
+/// counted and reported.
 fn native_event_of(buffer: &[u8]) -> Result<(usize, RelayedEvent), (usize, String)> {
     if buffer.len() < 4 {
         return Err((
@@ -237,8 +290,12 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, RelayedEvent), (usize, Strin
         4 => Level::Trace,
         other => return Err((total, format!("the level {other} is not defined"))),
     };
-    let name_length = body[17] as usize;
-    let cids_length = u16::from_ne_bytes(body[18..20].try_into().expect("two bytes")) as usize;
+    let given = match Class::ALL.get(body[17] as usize) {
+        Some(class) => *class,
+        None => return Err((total, format!("the class {} is not defined", body[17]))),
+    };
+    let name_length = body[18] as usize;
+    let cids_length = u16::from_ne_bytes(body[19..21].try_into().expect("two bytes")) as usize;
     if NATIVE_HEADER_BYTES + name_length + cids_length > body.len() {
         return Err((
             total,
@@ -273,6 +330,18 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, RelayedEvent), (usize, Strin
     let mono_ns = u64::from_ne_bytes(body[8..16].try_into().expect("eight bytes"));
     if mono_ns == 0 {
         return Err((total, format!("the mono_ns of {name} is 0")));
+    }
+    if let Some(declared) = class_of(&name) {
+        if declared != given {
+            return Err((
+                total,
+                format!(
+                    "the record of {name} has the class {}, and the catalog declares {}",
+                    given.as_str(),
+                    declared.as_str()
+                ),
+            ));
+        }
     }
     let fields = &body[NATIVE_HEADER_BYTES + name_length + cids_length..];
     let fields = std::str::from_utf8(fields)

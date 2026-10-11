@@ -27,8 +27,8 @@ struct sp_event_ring {
     // producers.
     _Atomic uint64_t head;
     _Atomic uint64_t tail;
-    _Atomic uint64_t lostEvents;
-    _Atomic uint64_t lostBytes;
+    _Atomic uint64_t lostEvents[SP_EVENT_CHANNELS];
+    _Atomic uint64_t lostBytes[SP_EVENT_CHANNELS];
 };
 
 static size_t align(size_t value) { return (value + alignment - 1) & ~(size_t)(alignment - 1); }
@@ -54,16 +54,20 @@ void sp_event_ring_destroy(sp_event_ring *ring) {
     free(ring);
 }
 
-static void countLoss(sp_event_ring *ring, size_t length) {
-    atomic_fetch_add_explicit(&ring->lostEvents, 1, memory_order_relaxed);
-    atomic_fetch_add_explicit(&ring->lostBytes, length, memory_order_relaxed);
+static void countLoss(sp_event_ring *ring, uint8_t channel, size_t length) {
+    atomic_fetch_add_explicit(&ring->lostEvents[channel], 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&ring->lostBytes[channel], length, memory_order_relaxed);
 }
 
-bool sp_event_ring_push(sp_event_ring *ring, const void *bytes, size_t length) {
+bool sp_event_ring_push(sp_event_ring *ring, uint8_t channel, const void *bytes, size_t length) {
+    if (channel >= SP_EVENT_CHANNELS) {
+        countLoss(ring, SP_EVENT_CHANNEL_OTHER, length);
+        return false;
+    }
     size_t record = align(headerBytes + length);
     // A record is limited by the 32-bit length field and by half of the buffer, so that padding and event fit together.
     if (record > ring->capacity / 2 || record > UINT32_MAX) {
-        countLoss(ring, length);
+        countLoss(ring, channel, length);
         return false;
     }
     uint64_t tail = atomic_load_explicit(&ring->tail, memory_order_relaxed);
@@ -74,7 +78,7 @@ bool sp_event_ring_push(sp_event_ring *ring, const void *bytes, size_t length) {
         size_t padding = record > toEnd ? toEnd : 0;
         size_t needed = record + padding;
         if (ring->capacity - (size_t)(tail - head) < needed) {
-            countLoss(ring, length);
+            countLoss(ring, channel, length);
             return false;
         }
         if (!atomic_compare_exchange_weak_explicit(&ring->tail, &tail, tail + needed, memory_order_relaxed, memory_order_relaxed)) {
@@ -120,10 +124,11 @@ size_t sp_event_ring_drain(sp_event_ring *ring, uint8_t *buffer, size_t capacity
     return written;
 }
 
-sp_event_ring_loss sp_event_ring_take_loss(sp_event_ring *ring) {
-    sp_event_ring_loss loss;
-    loss.events = atomic_exchange_explicit(&ring->lostEvents, 0, memory_order_relaxed);
-    loss.bytes = atomic_exchange_explicit(&ring->lostBytes, 0, memory_order_relaxed);
+sp_event_ring_loss sp_event_ring_take_loss(sp_event_ring *ring, uint8_t channel) {
+    sp_event_ring_loss loss = {0, 0};
+    if (channel >= SP_EVENT_CHANNELS) return loss;
+    loss.events = atomic_exchange_explicit(&ring->lostEvents[channel], 0, memory_order_relaxed);
+    loss.bytes = atomic_exchange_explicit(&ring->lostBytes[channel], 0, memory_order_relaxed);
     return loss;
 }
 
@@ -155,22 +160,61 @@ static bool validCids(const char *cids, size_t *length) {
     return true;
 }
 
-bool sp_event_cids(uint8_t level, const char *name, const char *cids, const char *fields_json) {
+// The channel that stores the level: debug and trace go to the debug file, every other level (an invalid one included) to the main file.
+static uint8_t channelOfLevel(uint8_t level) {
+    return level == SP_EVENT_DEBUG || level == SP_EVENT_TRACE ? SP_EVENT_CHANNEL_DEBUG : SP_EVENT_CHANNEL_OTHER;
+}
+
+// The policy of the process (docs/spec/logging.md#classes-and-policy): for each class the least severe level that is stored, kept as
+// that level minus SP_EVENT_TRACE, so memory that was never set (all zero) stores every level, and -(SP_EVENT_TRACE + 1) stores none.
+static _Atomic int8_t policyOffset[SP_CLASS_COUNT];
+// The events that a closed gate refused, for each class and level, since the drain last reported them.
+static _Atomic uint64_t gatedCount[SP_CLASS_COUNT][SP_EVENT_TRACE + 1];
+
+bool sp_event_set_policy(const int8_t *levels) {
+    if (!levels) return false;
+    for (int index = 0; index < SP_CLASS_COUNT; index++) {
+        if (levels[index] < -1 || levels[index] > SP_EVENT_TRACE) return false;
+    }
+    for (int index = 0; index < SP_CLASS_COUNT; index++) {
+        atomic_store_explicit(&policyOffset[index], (int8_t)(levels[index] - SP_EVENT_TRACE), memory_order_relaxed);
+    }
+    return true;
+}
+
+bool sp_event_enabled(uint8_t eventClass, uint8_t level) {
+    // A class or a level outside the enumeration is refused with a count by sp_event_cids, not by the policy.
+    if (eventClass >= SP_CLASS_COUNT || level > SP_EVENT_TRACE) return true;
+    return (int)level - SP_EVENT_TRACE <= atomic_load_explicit(&policyOffset[eventClass], memory_order_relaxed);
+}
+
+bool sp_event_gate(uint8_t eventClass, uint8_t level) {
+    if (sp_event_enabled(eventClass, level)) return true;
+    atomic_fetch_add_explicit(&gatedCount[eventClass][level], 1, memory_order_relaxed);
+    return false;
+}
+
+// Stores an event. gated is false for the events that the library reports about itself, which pass every gate.
+static bool pushEvent(uint8_t eventClass, uint8_t level, const char *name, const char *cids, const char *fields_json, bool gated) {
     sp_event_ring *ring = processRing();
     if (!ring) return false;
+    uint8_t channel = channelOfLevel(level);
     size_t nameLength = name ? strlen(name) : 0;
     size_t cidsLength = 0;
-    if (nameLength == 0 || nameLength > 255 || level > SP_EVENT_TRACE || !fields_json || !cids || !validCids(cids, &cidsLength)) {
-        countLoss(ring, nameLength);
+    if (nameLength == 0 || nameLength > 255 || level > SP_EVENT_TRACE || eventClass >= SP_CLASS_COUNT || !fields_json || !cids ||
+        !validCids(cids, &cidsLength)) {
+        countLoss(ring, channel, nameLength);
         return false;
     }
+    // A closed gate stores nothing and counts the event.
+    if (gated && !sp_event_gate(eventClass, level)) return false;
     size_t fieldsLength = strlen(fields_json);
     size_t length = SP_EVENT_HEADER_BYTES + nameLength + cidsLength + fieldsLength;
     // The record is built in place of a heap allocation for the usual event and in one allocation for a large one.
     uint8_t stack[512];
     uint8_t *record = length <= sizeof stack ? stack : malloc(length);
     if (!record) {
-        countLoss(ring, length);
+        countLoss(ring, channel, length);
         return false;
     }
     struct timespec now;
@@ -181,19 +225,25 @@ bool sp_event_cids(uint8_t level, const char *name, const char *cids, const char
     memcpy(record, &micros, sizeof micros);
     memcpy(record + 8, &mono, sizeof mono);
     record[16] = level;
-    record[17] = (uint8_t)nameLength;
-    memcpy(record + 18, &cidsField, sizeof cidsField);
+    record[17] = eventClass;
+    record[18] = (uint8_t)nameLength;
+    memcpy(record + 19, &cidsField, sizeof cidsField);
     memcpy(record + SP_EVENT_HEADER_BYTES, name, nameLength);
     memcpy(record + SP_EVENT_HEADER_BYTES + nameLength, cids, cidsLength);
     memcpy(record + SP_EVENT_HEADER_BYTES + nameLength + cidsLength, fields_json, fieldsLength);
-    bool stored = sp_event_ring_push(ring, record, length);
+    bool stored = sp_event_ring_push(ring, channel, record, length);
     if (record != stack) free(record);
     return stored;
 }
 
-bool sp_event(uint8_t level, const char *name, const char *fields_json) {
+bool sp_event_cids(uint8_t eventClass, uint8_t level, const char *name, const char *cids, const char *fields_json) {
     // events: forwarded
-    return sp_event_cids(level, name, "", fields_json);
+    return pushEvent(eventClass, level, name, cids, fields_json, true);
+}
+
+bool sp_event(uint8_t eventClass, uint8_t level, const char *name, const char *fields_json) {
+    // events: forwarded
+    return sp_event_cids(eventClass, level, name, "", fields_json);
 }
 
 // The boot identifier of the run: a string that is never changed or freed once published, so a reader on another thread
@@ -226,13 +276,30 @@ bool sp_cid_new(char *buffer, size_t capacity) {
     return true;
 }
 
-size_t sp_event_drain(uint8_t *buffer, size_t capacity) {
-    sp_event_ring *ring = processRing();
-    return ring ? sp_event_ring_drain(ring, buffer, capacity) : 0;
+// Stores the count of each closed gate as the event `native.log.gated`, so the number of the events that were not built is exact.
+static void reportGated(void) {
+    static const char *const classNames[SP_CLASS_COUNT] = {"lifecycle", "input", "call", "io", "frame"};
+    static const char *const levelNames[SP_EVENT_TRACE + 1] = {"error", "warn", "info", "debug", "trace"};
+    for (int eventClass = 0; eventClass < SP_CLASS_COUNT; eventClass++) {
+        for (int level = 0; level <= SP_EVENT_TRACE; level++) {
+            uint64_t count = atomic_exchange_explicit(&gatedCount[eventClass][level], 0, memory_order_relaxed);
+            if (count == 0) continue;
+            char fields[96];
+            snprintf(fields, sizeof fields, "{\"class\":\"%s\",\"level\":\"%s\",\"count\":%llu}", classNames[eventClass], levelNames[level], (unsigned long long)count);
+            pushEvent(SP_CLASS_LIFECYCLE, SP_EVENT_INFO, "native.log.gated", "", fields, false);
+        }
+    }
 }
 
-sp_event_ring_loss sp_event_take_loss(void) {
+size_t sp_event_drain(uint8_t *buffer, size_t capacity) {
+    sp_event_ring *ring = processRing();
+    if (!ring) return 0;
+    reportGated();
+    return sp_event_ring_drain(ring, buffer, capacity);
+}
+
+sp_event_ring_loss sp_event_take_loss(uint8_t channel) {
     sp_event_ring *ring = processRing();
     sp_event_ring_loss none = {0, 0};
-    return ring ? sp_event_ring_take_loss(ring) : none;
+    return ring ? sp_event_ring_take_loss(ring, channel) : none;
 }

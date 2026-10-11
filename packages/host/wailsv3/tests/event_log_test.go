@@ -5,9 +5,11 @@ package host_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -19,12 +21,25 @@ import (
 func eventLogOptions(directory string) host.EventLogOptions {
 	return host.EventLogOptions{
 		Directory: directory, Role: "host", Boot: "b1", QueueEvents: 64, QueueBytes: 64 * 1024,
-		BatchInterval: 20 * time.Millisecond, RotateBytes: 1 << 30, Generations: 5,
+		BatchInterval: 20 * time.Millisecond, RotateBytes: 1 << 30, RetentionBytes: 1 << 40,
 	}
 }
 
-// readEventLog returns the events of a log file, parsed.
+// readEventLog returns the events of a process: the lines of the main file at path and, when it exists, of the debug file beside
+// it, in the order of seq (the writer assigns seq across both files).
 func readEventLog(t *testing.T, path string) []map[string]any {
+	t.Helper()
+	events := readEventFile(t, path)
+	debug := strings.TrimSuffix(path, ".jsonl") + ".debug.jsonl"
+	if _, err := os.Stat(debug); err == nil {
+		events = append(events, readEventFile(t, debug)...)
+		sort.SliceStable(events, func(i, j int) bool { return events[i]["seq"].(float64) < events[j]["seq"].(float64) })
+	}
+	return events
+}
+
+// readEventFile returns the events of one log file, parsed.
+func readEventFile(t *testing.T, path string) []map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -86,7 +101,6 @@ func TestEveryLineCarriesTheWallClockAndTheMonotonicClockOfTheCall(t *testing.T)
 	options := eventLogOptions(t.TempDir())
 	// A small file rotates, so log.open and log.rotated are written by the writer after its start.
 	options.RotateBytes = 4000
-	options.Generations = 3
 	options.QueueEvents = 1000
 	wallStart := time.Now().UnixMicro()
 	monoStart, err := system.MonotonicNanos()
@@ -111,7 +125,7 @@ func TestEveryLineCarriesTheWallClockAndTheMonotonicClockOfTheCall(t *testing.T)
 		t.Fatal(err)
 	}
 	var all []map[string]any
-	for _, name := range []string{log.Path() + ".3", log.Path() + ".2", log.Path() + ".1", log.Path()} {
+	for _, name := range []string{log.Path() + ".1", log.Path() + ".2", log.Path() + ".3", log.Path()} {
 		if _, err := os.Stat(name); err == nil {
 			all = append(all, readEventLog(t, name)...)
 		}
@@ -275,7 +289,7 @@ func TestTheEventLogPassesTheAuditOfTheContractPackage(t *testing.T) {
 		t.Fatal(err)
 	}
 	for index := 0; index < 20; index++ {
-		log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index})
+		log.Emit(host.LevelInfo, "host.app.event", map[string]any{"kind": "started"})
 	}
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
@@ -284,7 +298,7 @@ func TestTheEventLogPassesTheAuditOfTheContractPackage(t *testing.T) {
 	text := `{"schema":2,"events":{
 	  "log.open":{"layer":"host","class":"lifecycle","level":"info","fields":{"schema":"number","pid":"number","role":"string","boot":"string"}},
 	  "log.dropped":{"layer":"host","class":"lifecycle","level":"warn","fields":{"from_seq":"number","to_seq":"number","count":"number"}},
-	  "host.test.event":{"layer":"host","class":"lifecycle","level":"info","fields":{"index":"number"}}}}`
+	  "host.app.event":{"layer":"host","class":"lifecycle","level":"info","fields":{"kind":"string"}}}}`
 	if err := os.WriteFile(catalog, []byte(text), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -386,10 +400,9 @@ func TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter(t *testing.T)
 }
 
 // contract: log.writer.rotates-at-the-bound-and-keeps-generations
-func TestTheEventLogRotatesAtTheBoundAndKeepsTheNewestGenerations(t *testing.T) {
+func TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration(t *testing.T) {
 	options := eventLogOptions(t.TempDir())
 	options.RotateBytes = 4000
-	options.Generations = 2
 	// The queue holds every event, so no refusal makes a gap of seq that log.dropped would explain.
 	options.QueueEvents = 1000
 	log, err := host.StartEventLog(options)
@@ -404,23 +417,30 @@ func TestTheEventLogRotatesAtTheBoundAndKeepsTheNewestGenerations(t *testing.T) 
 	if err := log.Flush(10 * time.Second); err != nil {
 		t.Fatal(err)
 	}
-	names := []string{log.Path(), log.Path() + ".1", log.Path() + ".2"}
-	for _, name := range names {
+	// The generations are numbered in the order of the rotations and none is removed.
+	names := []string{log.Path()}
+	for n := 1; ; n++ {
+		name := fmt.Sprintf("%s.%d", log.Path(), n)
 		if _, err := os.Stat(name); err != nil {
-			t.Fatalf("generation %s: %v", name, err)
+			break
 		}
+		names = append(names, name)
 	}
-	if _, err := os.Stat(log.Path() + ".3"); err == nil {
-		t.Fatal("a third generation was kept")
+	if len(names) < 8 {
+		t.Fatalf("the file rotated into %d generations, want more than the 5 that an earlier writer kept", len(names)-1)
 	}
 	current := readEventLog(t, log.Path())
 	if current[0]["event"] != "log.open" || current[1]["event"] != "log.rotated" {
 		t.Fatalf("a rotated file starts with %v and %v", current[0]["event"], current[1]["event"])
 	}
 	rotated := current[1]["fields"].(map[string]any)
-	// A file is closed when the next line would pass the bound, so it is full to within one line of 150 bytes.
-	if rotated["kept"] != float64(2) || rotated["bytes"].(float64) > 4000 || rotated["bytes"].(float64) < 4000-150 {
-		t.Fatalf("log.rotated fields %v", rotated)
+	// A file is closed when the next line would pass the bound, so it is full to within one line of 150 bytes. The file at the path
+	// follows the last generation.
+	if rotated["generation"] != float64(len(names)-1) || rotated["bytes"].(float64) > 4000 || rotated["bytes"].(float64) < 4000-150 {
+		t.Fatalf("log.rotated fields %v with %d generations", rotated, len(names)-1)
+	}
+	if _, has := rotated["kept"]; has {
+		t.Fatalf("log.rotated has the field kept: %v", rotated)
 	}
 	// Every generation is a file of the contract: it opens with log.open, and its seq is consecutive.
 	for _, name := range names {
@@ -437,8 +457,13 @@ func TestTheEventLogRotatesAtTheBoundAndKeepsTheNewestGenerations(t *testing.T) 
 			}
 		}
 	}
-	if current[0]["seq"].(float64) <= readEventLog(t, log.Path()+".1")[0]["seq"].(float64) {
+	if current[0]["seq"].(float64) <= readEventFile(t, log.Path()+".1")[0]["seq"].(float64) {
 		t.Fatal("seq does not continue across the rotation")
+	}
+	for position := 2; position < len(names); position++ {
+		if readEventLog(t, names[position])[0]["seq"].(float64) <= readEventLog(t, names[position-1])[0]["seq"].(float64) {
+			t.Fatalf("generation %d does not follow generation %d in seq", position, position-1)
+		}
 	}
 }
 
@@ -447,11 +472,6 @@ func TestAnEventLogWithoutARotationBoundIsRefused(t *testing.T) {
 	options := eventLogOptions(t.TempDir())
 	options.RotateBytes = 0
 	if _, err := host.StartEventLog(options); err == nil || !strings.Contains(err.Error(), "RotateBytes") {
-		t.Fatalf("error %v", err)
-	}
-	options = eventLogOptions(t.TempDir())
-	options.Generations = 0
-	if _, err := host.StartEventLog(options); err == nil || !strings.Contains(err.Error(), "Generations") {
 		t.Fatalf("error %v", err)
 	}
 }

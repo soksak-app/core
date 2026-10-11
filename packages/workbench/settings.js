@@ -31,6 +31,8 @@ import { effectiveSettings } from "./settings-scope.js";
 import { chooseLink, resolveSidebar } from "./sidebar-sets.js";
 import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
 import { setTraceEnabled } from "./performance.js";
+import { setLogPolicy } from "./log-policy.js";
+import { logPolicyOf } from "./log-gate.js";
 import { beginOperation } from "./operations.js";
 
 /* The selectable fonts. A theme designates one of them as its default, and the settings change it.
@@ -152,6 +154,11 @@ export const defaults = {
      0.0.x it is on by default, so a defect is recorded when it appears (AGENTS.md, docs/spec/settings.md). */
   "diagnostics.performance": true,
 
+  /* The policy of the event log (docs/spec/logging.md#classes-and-policy): the least severe level that is stored for the classes that the
+     object names, one of off, error, warn, info, debug and trace; a class it does not name stores every level. While the release
+     version is 0.0.x the default stores everything. */
+  "diagnostics.log": {},
+
   /* The position of the project tabs. top = the chrome row, left = the vertical list on the left. */
   projectTabs: "top",
   /* Whether the left and right regions are shown. links decides what they show. */
@@ -267,6 +274,18 @@ function validateValue(key, value) {
   }
   if (SWITCHES.includes(key) && typeof value !== "boolean") {
     throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not a boolean`);
+  }
+  if (key === "diagnostics.log") {
+    try {
+      logPolicyOf(value);
+    } catch (error) {
+      throw new Error(`Invalid setting ${key}: ${error.message}`, { cause: error });
+    }
+    for (const [name, level] of Object.entries(value)) {
+      if (!["off", "error", "warn", "info", "debug", "trace"].includes(level)) {
+        throw new Error(`Invalid setting ${key}: the level ${JSON.stringify(level)} of the class ${name} is not one of off, error, warn, info, debug, trace`);
+      }
+    }
   }
   const range = RANGES[key];
   if (range && (!Number.isInteger(value) || value < range[0] || value > range[1])) {
@@ -414,6 +433,7 @@ async function refresh() {
     apply();
   }
   await setTraceEnabled(settings["diagnostics.performance"]);
+  await setLogPolicy(settings["diagnostics.log"]);
 }
 
 function apply() {
@@ -530,8 +550,10 @@ export function set(patch, scope = projectId ? "project" : "common", actor) {
   changes++;
   revision++;
   apply();
-  const propagation = Object.hasOwn(patch, "diagnostics.performance")
-    ? setTraceEnabled(settings["diagnostics.performance"]) : Promise.resolve();
+  const propagation = Promise.all([
+    Object.hasOwn(patch, "diagnostics.performance") ? setTraceEnabled(settings["diagnostics.performance"]) : undefined,
+    Object.hasOwn(patch, "diagnostics.log") ? setLogPolicy(settings["diagnostics.log"]) : undefined,
+  ]);
   const saved = Promise.all([writing, propagation]).then(() => store.settings(id, patch, cids));
   writing = saved.finally(async () => {
     changes--;

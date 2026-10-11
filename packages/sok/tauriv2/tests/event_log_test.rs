@@ -50,7 +50,8 @@ fn logged(config: &Path, command: Command2, args: &[&str]) -> (i32, String) {
     (code, String::from_utf8(stderr).unwrap())
 }
 
-/// Reads the one event file that a run left in the logs folder of config.
+/// Reads the events that a run left in the logs folder of config: the main file and, when the run stored a debug event, the debug
+/// file, in the order of `seq`.
 fn events_of(config: &Path) -> Vec<Value> {
     let files: Vec<PathBuf> = match std::fs::read_dir(config.join("logs")) {
         Ok(entries) => entries
@@ -62,20 +63,27 @@ fn events_of(config: &Path) -> Vec<Value> {
             .collect(),
         Err(_) => Vec::new(),
     };
-    assert_eq!(
-        files.len(),
-        1,
-        "logs/ of {} holds {} event files of the tool, want 1: {files:?}",
-        config.display(),
-        files.len()
+    let debug = |path: &PathBuf| path.to_string_lossy().ends_with(".debug.jsonl");
+    assert!(
+        files.iter().filter(|path| !debug(path)).count() == 1 && files.len() <= 2,
+        "logs/ of {} holds the event files {files:?} of the tool, want one main file and at most one debug file",
+        config.display()
     );
-    std::fs::read_to_string(&files[0])
-        .unwrap()
-        .lines()
-        .map(|line| {
-            serde_json::from_str(line).unwrap_or_else(|_| panic!("{line:?} is not an event"))
+    let mut events: Vec<Value> = files
+        .iter()
+        .flat_map(|file| {
+            std::fs::read_to_string(file)
+                .unwrap()
+                .lines()
+                .map(|line| {
+                    serde_json::from_str(line)
+                        .unwrap_or_else(|_| panic!("{line:?} is not an event"))
+                })
+                .collect::<Vec<Value>>()
         })
-        .collect()
+        .collect();
+    events.sort_by_key(|event| event["seq"].as_u64().unwrap());
+    events
 }
 
 fn named<'a>(events: &'a [Value], name: &str) -> Vec<&'a Value> {

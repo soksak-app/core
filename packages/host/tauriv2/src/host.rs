@@ -43,7 +43,9 @@ pub mod exposure;
 pub mod images;
 pub mod installed;
 pub mod link;
+pub mod log_policy;
 pub mod log_query;
+pub mod log_retention;
 pub mod menu;
 mod modals;
 pub mod notifications;
@@ -86,6 +88,9 @@ pub(crate) struct LogNoticeState(pub(crate) std::sync::Arc<debug_follow::LogNoti
 
 /// The stop of the thread that brings the index of the event files up to date after the writer wrote.
 struct LogIndexStop(std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>);
+
+/// The watch of the policy file of the event log, which ends with the application.
+struct LogPolicyStop(std::sync::Mutex<Option<log_policy::LogPolicyWatch>>);
 
 /// The application arguments that were read at startup (docs/spec/hosts.md#application-arguments).
 static ARGUMENTS: std::sync::OnceLock<command_line::Arguments> = std::sync::OnceLock::new();
@@ -206,6 +211,14 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // exists.
                 let events = std::sync::Arc::new(event_log::start_host(&directory)?);
                 event_record::use_host_event_log(Some(std::sync::Arc::clone(&events)));
+                // The policy of the event log is the file log-policy.json, which the host and every process watch
+                // (docs/spec/logging.md#classes-and-policy).
+                let policy_watch = log_policy::start_log_policy(&events, None)
+                    .map_err(|error| format!("log policy: {error}"))?;
+                tauri::Manager::manage(
+                    app,
+                    LogPolicyStop(std::sync::Mutex::new(Some(policy_watch))),
+                );
                 // The debug view follows the event files: every window and every watcher of host.log learns that a line announced
                 // a change (docs/spec/debug.md#following). The index covers the lines before the notice, so the notice follows
                 // the indexer and the queries that update an index, and not the writer.
@@ -422,6 +435,14 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 }
                 debug_follow::use_log_notices(None);
                 app.state::<LogNoticeState>().0.stop();
+                // Dropping the watch stops it and waits until its thread ended.
+                drop(
+                    app.state::<LogPolicyStop>()
+                        .0
+                        .lock()
+                        .expect("the stop of the policy watch")
+                        .take(),
+                );
                 if let Err(error) = app
                     .state::<std::sync::Arc<event_log::EventLog>>()
                     .flush(std::time::Duration::from_secs(2))

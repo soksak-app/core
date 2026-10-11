@@ -455,6 +455,17 @@ pub fn pull_native_events(_buffer: &mut [u8]) -> Result<usize, String> {
     missing("native event pull")
 }
 
+pub fn set_native_event_policy(_levels: [i8; 5]) -> Result<(), String> {
+    missing("native event policy")
+}
+
+pub fn watch_file(
+    _path: &std::path::Path,
+    _changed: std::sync::Arc<dyn Fn() + Send + Sync>,
+) -> Result<Box<dyn FnOnce() + Send>, String> {
+    missing("file watch")
+}
+
 pub fn monotonic_ns() -> Result<u64, String> {
     missing("monotonic clock")
 }
@@ -463,7 +474,7 @@ pub fn set_event_boot(_boot: &str) -> Result<(), String> {
     missing("native event boot identifier")
 }
 
-pub fn take_native_event_loss() -> Result<(u64, u64), String> {
+pub fn take_native_event_loss(_channel: u8) -> Result<(u64, u64), String> {
     missing("native event loss")
 }
 

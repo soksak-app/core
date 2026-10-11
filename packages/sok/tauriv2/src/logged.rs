@@ -63,8 +63,9 @@ pub fn start_tool_event_log(config: &Path) -> Result<EventLog, String> {
         queue_bytes: EVENT_QUEUE_BYTES,
         batch_interval: EVENT_BATCH_INTERVAL,
         rotate_bytes: 0,
-        generations: 0,
         pull: None,
+        policy_path: None,
+        prune: None,
     })
 }
 

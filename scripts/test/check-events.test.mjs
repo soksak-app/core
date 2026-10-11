@@ -19,7 +19,7 @@ const catalog = {
 test('the logs of a configuration folder are audited against the catalog and the findings name the file and the line', () => {
   const root = mkdtempSync(join(tmpdir(), 'events-'));
   mkdirSync(join(root, 'logs'));
-  const line = (seq, event, fields, layer = 'host') => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: 'info', layer, event, fields });
+  const line = (seq, event, fields, layer = 'host') => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: 'info', class: 'lifecycle', layer, event, fields });
   writeFileSync(join(root, 'logs', 'host-1-2.jsonl'), [
     line(1, 'log.open', { schema: 2, pid: 2, role: 'host', boot: '1-2' }),
     line(2, 'host.window.event', { window: 'main', kind: 'focus' }),
@@ -37,17 +37,18 @@ test('the logs of a configuration folder are audited against the catalog and the
 test('the audit of a configuration folder reads the files of every layer, generation and the debug file, and reports an error event', () => {
   const root = mkdtempSync(join(tmpdir(), 'events-'));
   mkdirSync(join(root, 'logs'));
-  const line = (seq, event, fields, extra = {}) => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: 'info', layer: 'host', event, fields, ...extra });
+  const line = (seq, event, fields, extra = {}) => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: 'info', class: 'lifecycle', layer: 'host', event, fields, ...extra });
   const open = (seq, role) => line(seq, 'log.open', { schema: 2, pid: 2, role, boot: '1-2' });
   const write = (name, lines) => writeFileSync(join(root, 'logs', name), `${lines.join('\n')}\n`);
+  // The generations are numbered in the order of the rotations without an upper bound: the debug file has the generation 10.
   write('host-1-2.jsonl.1', [open(1, 'host'), line(2, 'host.window.event', { window: 'main', kind: 'focus' })]);
-  write('host-1-2.jsonl', [open(3, 'host'), line(5, 'host.window.event', { window: 'main', kind: 'focus' })]);
-  write('host-1-2.debug.jsonl', [open(4, 'host'), line(6, 'page.record.error', { where: 'w', text: 't' }, { layer: 'page', level: 'error' })]);
+  write('host-1-2.jsonl', [open(3, 'host'), line(5, 'page.record.error', { where: 'w', text: 't' }, { layer: 'page', level: 'error' })]);
+  write('host-1-2.debug.jsonl.10', [open(4, 'host'), line(6, 'host.window.event', { window: 'main', kind: 'focus' }, { level: 'debug' })]);
   write('vt-3-4.jsonl', [open(1, 'vt'), line(2, 'host.surprise', {}, { layer: 'sidecar' })]);
   write('notes.txt', ['not an event file']);
   const logs = join(root, 'logs');
   assert.deepEqual(auditLogDirectories({ ...catalog, layers: [...catalog.layers, 'sidecar'] }, [root]), [
-    `${join(logs, 'host-1-2.debug.jsonl')}:2: undeclared error w: t`,
+    `${join(logs, 'host-1-2.jsonl')}:2: undeclared error w: t`,
     `${join(logs, 'vt-3-4.jsonl')}:2: event host.surprise is not declared`,
   ]);
 });

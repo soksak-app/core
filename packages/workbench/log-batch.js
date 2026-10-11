@@ -1,6 +1,8 @@
 // The page side of the event writer (docs/spec/logging.md#writers). An event is queued without waiting; the events of
 // one turn travel to the host in one call, and one call is in flight at a time so the host receives them in order.
 import { boundedJson, byteLength, cutBytes } from "./bounded-json.js";
+import { classOf } from "./event-classes.js";
+import { logGate } from "./log-gate.js";
 
 const LEVELS = new Set(["error", "warn", "info", "debug", "trace"]);
 const DEFAULT_MAX_EVENTS = 4096;
@@ -40,11 +42,13 @@ function boundFields(fields) {
  * that round trip as the moment of the answer. Every event then has the wall clock `ts_us` and the monotonic clock `mono_ns` of
  * the host at its own reading, so the layers of one input compare (docs/spec/logging.md#limits).
  */
-export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES, now = () => performance.now() }) {
+export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES, now = () => performance.now(), gate = logGate }) {
   let queue = [];
   let queueBytes = 0;
   // The refused events by the bound that refused them: {count, bytes} for each reason.
   let lost = new Map();
+  // The events that a closed gate refused, by class and level: {class, level, count}; the next batch reports them.
+  let gated = new Map();
   // The functions that end the waits of the events that the next batch carries.
   let waiters = [];
   let scheduled = false;
@@ -71,7 +75,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
 
   const send = async () => {
     scheduled = false;
-    if (sending || (queue.length === 0 && lost.size === 0)) return;
+    if (sending || (queue.length === 0 && lost.size === 0 && gated.size === 0)) return;
     const events = queue;
     const mine = waiters;
     queue = [];
@@ -83,6 +87,11 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
         events.unshift({ at: now(), level: "warn", event: "page.log.dropped", fields: { count, bytes, reason } });
       }
       lost = new Map();
+      // The events that the gate refused are reported with the exact count for each class and level; the report passes every gate.
+      for (const entry of [...gated.values()].reverse()) {
+        events.unshift({ at: now(), level: "info", event: "page.log.gated", fields: { class: entry.class, level: entry.level, count: entry.count } });
+      }
+      gated = new Map();
     }
     sending = (async () => {
       try {
@@ -101,7 +110,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     await sending;
     sending = null;
     for (const end of mine) end();
-    if (queue.length > 0 || lost.size > 0) await send();
+    if (queue.length > 0 || lost.size > 0 || gated.size > 0) await send();
   };
 
   const schedule = () => {
@@ -129,9 +138,23 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     return false;
   };
 
+  // The question of a producer before it builds the fields of an event: whether an event of the class and the level is stored. A closed
+  // gate counts the event, which the producer then does not build.
+  const open = (klass, level) => {
+    if (gate.enabled(klass, level)) return true;
+    // default: the first refusal of a class and a level starts its count at zero.
+    const held = gated.get(`${klass}/${level}`) ?? { class: klass, level, count: 0 };
+    gated.set(`${klass}/${level}`, { ...held, count: held.count + 1 });
+    schedule();
+    return false;
+  };
+
+  // `fields` is the object of the event or a function that builds it; the function runs only for an event that the gate stores.
   const emit = (level, event, fields = {}, cids = undefined) => {
     if (!LEVELS.has(level)) throw new TypeError(`event level ${JSON.stringify(level)} is not one of ${[...LEVELS].join(", ")}`);
-    const { stored, bytes } = boundFields(fields);
+    const klass = classOf(event);
+    if (klass !== undefined && !open(klass, level)) return false;
+    const { stored, bytes } = boundFields(typeof fields === "function" ? fields() : fields);
     const charge = bytes + event.length + EVENT_OVERHEAD_BYTES;
     if (queue.length >= maxEvents) return refuse("the page queue was full", charge);
     if (queueBytes + charge > maxBytes) return refuse(`the page queue reached ${maxBytes} bytes`, charge);
@@ -157,5 +180,5 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     while (sending) await sending;
   };
 
-  return { emit, emitAndWait, flush };
+  return { emit, emitAndWait, flush, gate: open };
 }

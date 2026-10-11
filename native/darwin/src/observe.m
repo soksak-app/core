@@ -46,7 +46,7 @@ static void fail(const char *source, const char *kind, NSString *reason) {
     NSData *json = [NSJSONSerialization dataWithJSONObject:fields options:0 error:NULL];
     NSCAssert(json != nil, @"the failure of a registration is serializable");
     NSString *text = [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] autorelease];
-    sp_event(SP_EVENT_ERROR, "native.observe.failed", text.UTF8String);
+    sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_ERROR, "native.observe.failed", text.UTF8String);
 }
 
 // The record of `source`, created by its first registration, or NULL after the event `native.observe.failed`. A source that a
@@ -105,27 +105,30 @@ static source_record *recordRegistration(const char *source, sp_observe_mode mod
     NSData *json = [NSJSONSerialization dataWithJSONObject:fields options:0 error:NULL];
     NSCAssert(json != nil, @"the registration is serializable");
     NSString *text = [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] autorelease];
-    sp_event(SP_EVENT_INFO, "native.observe.registered", text.UTF8String);
+    sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_INFO, "native.observe.registered", text.UTF8String);
     return record;
 }
 
 // Stores the summary of a counted source: the count since the earlier summary, the total and the microseconds between them.
 static void summarize(source_record *record, uint64_t now, uint64_t before) {
+    // A closed gate keeps the count in pending, so the first summary after the gate opens holds the deliveries since the earlier one.
+    if (!sp_event_gate(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;
     unsigned long long count = atomic_exchange_explicit(&record->pending, 0, memory_order_relaxed);
     if (count == 0) return;
     char fields[192];
     snprintf(fields, sizeof fields, "{\"source\":\"%s\",\"count\":%llu,\"total\":%llu,\"micros\":%llu}", record->name, count,
         (unsigned long long)atomic_load_explicit(&record->total, memory_order_relaxed), before == 0 ? 0ull : (unsigned long long)((now - before) / 1000u));
-    sp_event(SP_EVENT_DEBUG, "native.observe.counted", fields);
+    sp_event(SP_CLASS_FRAME, SP_EVENT_DEBUG, "native.observe.counted", fields);
 }
 
 static void deliver(source_record *record) {
     unsigned long long total = atomic_fetch_add_explicit(&record->total, 1, memory_order_relaxed) + 1;
     if (record->mode == SP_OBSERVE_STORED) return;
     if (record->mode == SP_OBSERVE_RECORD) {
+        if (!sp_event_gate(SP_CLASS_INPUT, SP_EVENT_DEBUG)) return;
         char fields[128];
         snprintf(fields, sizeof fields, "{\"source\":\"%s\",\"count\":%llu}", record->name, total);
-        sp_event(SP_EVENT_DEBUG, "native.observe.delivered", fields);
+        sp_event(SP_CLASS_INPUT, SP_EVENT_DEBUG, "native.observe.delivered", fields);
         return;
     }
     atomic_fetch_add_explicit(&record->pending, 1, memory_order_relaxed);

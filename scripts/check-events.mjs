@@ -29,7 +29,7 @@ export function eventFiles(directory) {
   } catch (error) {
     throw new Error(`${logs}: ${error.message}`, { cause: error });
   }
-  const files = names.filter((name) => /^(host|vt|files|shell|sok)-\d+-\d+(\.debug)?\.jsonl(\.\d)?$/.test(name)).sort().map((name) => join(logs, name));
+  const files = names.filter((name) => /^(host|vt|files|shell|sok)-\d+-\d+(\.debug)?\.jsonl(\.[1-9]\d*)?$/.test(name)).sort().map((name) => join(logs, name));
   if (files.length === 0) throw new Error(`${logs}: no host event file`);
   return files.filter((path) => statSync(path).isFile());
 }

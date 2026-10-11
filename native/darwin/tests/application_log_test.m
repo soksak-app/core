@@ -60,14 +60,14 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"%llu", ts]) && ok;
 
     // A text that cannot fit the ring is refused and counted, and the call returns.
-    (void)sp_event_take_loss();
+    (void)sp_event_take_loss(SP_EVENT_CHANNEL_OTHER);
     size_t huge = 3u << 20;
     char *big = malloc(huge + 1);
     memset(big, 'x', huge);
     big[huge] = 0;
     sp_log_info("huge", big);
     free(big);
-    sp_event_ring_loss loss = sp_event_take_loss();
+    sp_event_ring_loss loss = sp_event_take_loss(SP_EVENT_CHANNEL_OTHER);
     ok = check("a record larger than half of the ring is refused and counted", loss.events == 1,
         [NSString stringWithFormat:@"%llu events", loss.events]) && ok;
     return ok ? 0 : 1;

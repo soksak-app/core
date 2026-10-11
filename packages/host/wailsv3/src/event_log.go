@@ -2,9 +2,10 @@ package host
 
 // The event writer of the host (docs/spec/logging.md#writers).
 //
-// The queue, the bounds, seq, the batch, the loss record, the flush, the rotation and the line are the writer of the tool
-// packages (sok.EventLog), which the tool starts with its own layer and role. The host adds the layer, the clock and the
-// entrance of its goroutines, the pull of the native ring, and the start in the logs folder of the configuration directory.
+// The queue, the bounds, seq, the two files, the policy gate, the batch, the loss record, the flush, the rotation and the line are
+// the writer of the tool packages (sok.EventLog), which the tool starts with its own layer and role. The host adds the layer, the
+// clock and the entrance of its goroutines, the pull of the native ring, the retention of the runs in the logs folder, and the
+// start in the logs folder of the configuration directory.
 
 import (
 	"encoding/binary"
@@ -73,33 +74,63 @@ type EventLogOptions struct {
 	QueueBytes int
 	// BatchInterval is how long the writer waits for more events before it writes a batch.
 	BatchInterval time.Duration
-	// RotateBytes is the size at which the writer starts a new file; the file that was full becomes generation 1.
+	// PolicyPath is the policy file that the writer follows (`<config-dir>/log-policy.json`); it is empty for a writer that has none.
+	PolicyPath string
+	// RetentionBytes is the bound of the files of the runs in the folder (docs/spec/logging.md#retention): the writer removes the oldest
+	// runs when it starts and after each rotation while the files pass it.
+	RetentionBytes int64
+	// RotateBytes is the size at which the writer starts a new file. Each of the two files of the writer (the main file and the
+	// debug file) rotates on its own: the file that was full becomes the next generation (`.1` is the first), and rotation
+	// removes no generation.
 	RotateBytes int64
-	// Generations is the number of earlier files that are kept (`.1` is the newest); the oldest one is removed.
-	Generations int
 	// Pull moves whole records of the native ring into buffer and returns the number of bytes written; nil when the
-	// process has no native ring. PullLoss returns the events and bytes that the ring refused since the last call.
+	// process has no native ring. PullLoss returns the events and bytes that the ring refused in a channel since the last call.
 	Pull     func(buffer []byte) (int, error)
-	PullLoss func() (events, bytes uint64)
+	PullLoss func(channel Channel) (events, bytes uint64)
 }
 
+// Channel is the set of the files of a process that holds a set of levels.
+type Channel = sok.Channel
+
+// The channels of the writer.
+const (
+	ChannelOther = sok.ChannelOther
+	ChannelDebug = sok.ChannelDebug
+)
+
 // StartEventLog creates the folder (mode 0700) and the file (mode 0600), writes log.open and starts the writer of the layer
-// host. A writer of the host always rotates.
+// host. A writer of the host always rotates and always applies the retention.
 func StartEventLog(options EventLogOptions) (*EventLog, error) {
 	if options.RotateBytes <= 0 {
 		return nil, fmt.Errorf("event writer: RotateBytes must be positive, not %d", options.RotateBytes)
 	}
-	if options.Generations <= 0 {
-		return nil, fmt.Errorf("event writer: Generations must be positive, not %d", options.Generations)
+	if options.RetentionBytes <= 0 {
+		return nil, fmt.Errorf("event writer: RetentionBytes must be positive, not %d", options.RetentionBytes)
 	}
-	var pull func(accept func(sok.RelayedEvent), lost func(events, bytes uint64, reason string))
+	runName := options.Role + "-" + options.Boot
+	var pull func(accept func(sok.RelayedEvent), lost func(events, bytes uint64, reason string, channel Channel))
 	if options.Pull != nil {
 		pull = nativePuller(options.Pull, options.PullLoss)
 	}
 	return sok.StartEventLog(sok.EventLogOptions{
 		Directory: options.Directory, Role: options.Role, Boot: options.Boot, Layer: "host", Clock: monotonicNanos, Spawn: routine.Go,
 		QueueEvents: options.QueueEvents, QueueBytes: options.QueueBytes, BatchInterval: options.BatchInterval,
-		RotateBytes: options.RotateBytes, Generations: options.Generations, Pull: pull,
+		RotateBytes: options.RotateBytes, PolicyPath: options.PolicyPath, Pull: pull,
+		Prune: func() (Level, json.RawMessage, bool) {
+			// The pass counts what is on disk; the batch that waits for the interval is not in it, which is at most one batch.
+			result, err := pruneRuns(options.Directory, runName, options.RetentionBytes)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "event writer: retention: %v\n", err)
+			}
+			if result.files == 0 && result.remaining <= options.RetentionBytes {
+				return LevelInfo, nil, false
+			}
+			level := LevelInfo
+			if result.remaining > options.RetentionBytes {
+				level = LevelWarn
+			}
+			return level, result.fields(options.RetentionBytes), true
+		},
 	})
 }
 
@@ -109,7 +140,6 @@ const (
 	hostQueueBytes    = 16 << 20
 	hostBatchInterval = 100 * time.Millisecond
 	hostRotateBytes   = 100 << 20
-	hostGenerations   = 5
 )
 
 var (
@@ -148,8 +178,8 @@ func StartHostEventLog(config string) (*EventLog, error) {
 	}
 	return StartEventLog(EventLogOptions{
 		Pull: system.PullNativeEvents,
-		PullLoss: func() (uint64, uint64) {
-			events, bytes, err := system.TakeNativeEventLoss()
+		PullLoss: func(channel Channel) (uint64, uint64) {
+			events, bytes, err := system.TakeNativeEventLoss(uint8(channel))
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "event writer: the loss of the native ring cannot be read: %v\n", err)
 			}
@@ -157,15 +187,15 @@ func StartHostEventLog(config string) (*EventLog, error) {
 		},
 		Directory: filepath.Join(config, "logs"), Role: "host", Boot: processBoot(),
 		QueueEvents: hostQueueEvents, QueueBytes: hostQueueBytes, BatchInterval: hostBatchInterval,
-		RotateBytes: hostRotateBytes, Generations: hostGenerations,
+		RotateBytes: hostRotateBytes, PolicyPath: filepath.Join(config, "log-policy.json"), RetentionBytes: hostRetentionBytes,
 	})
 }
 
 // nativePuller is the Pull of the writer for a native ring: it moves the records of the ring into a buffer, decodes each into
 // an event, and reports a refused record and the loss of the ring.
-func nativePuller(pull func(buffer []byte) (int, error), pullLoss func() (uint64, uint64)) func(accept func(sok.RelayedEvent), lost func(events, bytes uint64, reason string)) {
+func nativePuller(pull func(buffer []byte) (int, error), pullLoss func(Channel) (uint64, uint64)) func(accept func(sok.RelayedEvent), lost func(events, bytes uint64, reason string, channel Channel)) {
 	var pulled []byte
-	return func(accept func(sok.RelayedEvent), lost func(events, bytes uint64, reason string)) {
+	return func(accept func(sok.RelayedEvent), lost func(events, bytes uint64, reason string, channel Channel)) {
 		if pulled == nil {
 			pulled = make([]byte, nativePullBytes)
 		}
@@ -195,10 +225,13 @@ func nativePuller(pull func(buffer []byte) (int, error), pullLoss func() (uint64
 				offset += length
 			}
 		}
-		lost(refused, refusedBytes, "a native record was refused")
+		// A record that cannot be decoded has no level, so its loss is counted in the channel other.
+		lost(refused, refusedBytes, "a native record was refused", ChannelOther)
 		if pullLoss != nil {
-			events, bytes := pullLoss()
-			lost(events, bytes, "the native ring was full")
+			for channel := ChannelOther; channel < sok.ChannelCount; channel++ {
+				events, bytes := pullLoss(channel)
+				lost(events, bytes, "the native ring was full", channel)
+			}
 		}
 	}
 }
@@ -214,13 +247,14 @@ const (
 var nativeLevels = []Level{LevelError, LevelWarn, LevelInfo, LevelDebug, LevelTrace}
 
 // nativeHeaderBytes is the size of the fixed part of a native record (native/darwin/src/event_ring.h).
-const nativeHeaderBytes = 20
+const nativeHeaderBytes = 21
 
 // nativeEventOf decodes the record at the start of buffer: a 4-byte length, then the wall clock in microseconds (8 bytes),
-// the monotonic clock in nanoseconds (8), the level (1 byte), the length of the name (1 byte), the length of the cids (2
-// bytes), the name, the cids as a list separated by commas and the fields as JSON text, in the byte order of the host.
+// the monotonic clock in nanoseconds (8), the level (1 byte), the class (1 byte), the length of the name (1 byte), the length of
+// the cids (2 bytes), the name, the cids as a list separated by commas and the fields as JSON text, in the byte order of the host.
 // It returns the number of bytes the record takes. When the length itself is wrong it returns 0, so the caller
-// abandons the rest of the buffer.
+// abandons the rest of the buffer. The class that the library gave is checked against the catalog: a record of a declared
+// event with another class is refused, so a producer that disagrees with the catalog is counted and reported.
 func nativeEventOf(buffer []byte) (int, sok.RelayedEvent, error) {
 	if len(buffer) < 4 {
 		return 0, sok.RelayedEvent{}, fmt.Errorf("%d bytes are left, which is less than a length", len(buffer))
@@ -232,10 +266,14 @@ func nativeEventOf(buffer []byte) (int, sok.RelayedEvent, error) {
 	total := 4 + length
 	body := buffer[4:total]
 	level := int(body[16])
-	nameLength := int(body[17])
-	cidsLength := int(binary.NativeEndian.Uint16(body[18:]))
+	class := int(body[17])
+	nameLength := int(body[18])
+	cidsLength := int(binary.NativeEndian.Uint16(body[19:]))
 	if level >= len(nativeLevels) {
 		return total, sok.RelayedEvent{}, fmt.Errorf("the level %d is not defined", level)
+	}
+	if class >= len(sok.Classes) {
+		return total, sok.RelayedEvent{}, fmt.Errorf("the class %d is not defined", class)
 	}
 	if nativeHeaderBytes+nameLength+cidsLength > len(body) {
 		return total, sok.RelayedEvent{}, fmt.Errorf("the name of %d bytes and the cids of %d bytes do not fit the record", nameLength, cidsLength)
@@ -254,6 +292,9 @@ func nativeEventOf(buffer []byte) (int, sok.RelayedEvent, error) {
 		if err := sok.CheckCids(cids); err != nil {
 			return total, sok.RelayedEvent{}, fmt.Errorf("the cids of %s: %w", name, err)
 		}
+	}
+	if declared, known := sok.EventClassOf(name); known && declared != sok.Classes[class] {
+		return total, sok.RelayedEvent{}, fmt.Errorf("the record of %s has the class %s, and the catalog declares %s", name, sok.Classes[class], declared)
 	}
 	fields := body[nativeHeaderBytes+nameLength+cidsLength:]
 	if !json.Valid(fields) || len(fields) == 0 || fields[0] != '{' {

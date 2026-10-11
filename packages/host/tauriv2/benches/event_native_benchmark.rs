@@ -29,7 +29,7 @@ fn main() {
         pulls.push(start.elapsed().as_nanos() as u64);
         let start = Instant::now();
         system
-            .take_native_event_loss()
+            .take_native_event_loss(0)
             .expect("loss of the native ring");
         losses.push(start.elapsed().as_nanos() as u64);
     }

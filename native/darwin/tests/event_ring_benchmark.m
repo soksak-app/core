@@ -58,14 +58,41 @@ int main(int argc, char **argv) { @autoreleasepool {
     size_t length = strlen(event);
     for (int i = 0; i < count; i++) {
         uint64_t start = nowNs();
-        sp_event_ring_push(ring, event, length);
+        sp_event_ring_push(ring, SP_EVENT_CHANNEL_OTHER, event, length);
         samples[i] = nowNs() - start;
     }
     report("sp_event_ring_push (copy)", samples, count);
-    sp_event_ring_loss loss = sp_event_ring_take_loss(ring);
+    sp_event_ring_loss loss = sp_event_ring_take_loss(ring, SP_EVENT_CHANNEL_OTHER);
     fprintf(stdout, "lost events during the push run: %llu\n", loss.events);
     stop = 1;
     pthread_join(consumer, NULL);
     sp_event_ring_destroy(ring);
+
+    // The gate of the policy: the question of a producer that builds nothing for a class and a level the policy does not store, and the
+    // call of sp_event with the gate closed and open (the open call copies the event into the ring of the process).
+    const int8_t closedCalls[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_INFO, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    const int8_t openCalls[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    sp_event_set_policy(closedCalls);
+    for (int i = 0; i < count; i++) {
+        uint64_t start = nowNs();
+        (void)sp_event_gate(SP_CLASS_CALL, SP_EVENT_DEBUG);
+        samples[i] = nowNs() - start;
+    }
+    report("sp_event_gate (closed)", samples, count);
+    for (int i = 0; i < count; i++) {
+        uint64_t start = nowNs();
+        (void)sp_event(SP_CLASS_CALL, SP_EVENT_DEBUG, "native.input.query", "{\"call\":\"markedRange\"}");
+        samples[i] = nowNs() - start;
+    }
+    report("sp_event (gate closed)", samples, count);
+    sp_event_set_policy(openCalls);
+    uint8_t pulled[1 << 16];
+    for (int i = 0; i < count; i++) {
+        uint64_t start = nowNs();
+        (void)sp_event(SP_CLASS_CALL, SP_EVENT_DEBUG, "native.input.query", "{\"call\":\"markedRange\"}");
+        samples[i] = nowNs() - start;
+        if (i % 512 == 511) while (sp_event_drain(pulled, sizeof pulled) > 0) {}
+    }
+    report("sp_event (gate open)", samples, count);
     return 0;
 }}

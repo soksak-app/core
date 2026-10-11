@@ -12,12 +12,28 @@ use soksak_host_tauriv2::event_log::{self, Level, Options, RelayedEvent};
 use soksak_host_tauriv2::platform;
 
 /// The events of a log file, parsed.
-fn read(path: &Path) -> Vec<Value> {
+fn read_file(path: &Path) -> Vec<Value> {
     fs::read_to_string(path)
         .unwrap()
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())
         .collect()
+}
+
+/// The events of a process: the lines of the main file at `path` and, when it exists, of the debug file beside it, in the order of
+/// `seq` (the writer assigns `seq` across both files).
+fn read(path: &Path) -> Vec<Value> {
+    let mut events = read_file(path);
+    let main = path.to_string_lossy();
+    let debug = std::path::PathBuf::from(format!(
+        "{}.debug.jsonl",
+        main.strip_suffix(".jsonl").unwrap_or(&main)
+    ));
+    if debug.exists() {
+        events.extend(read_file(&debug));
+        events.sort_by_key(|event| event["seq"].as_u64().unwrap());
+    }
+    events
 }
 
 fn options(directory: &Path) -> Options {
@@ -29,9 +45,10 @@ fn options(directory: &Path) -> Options {
         queue_bytes: 64 * 1024,
         batch_interval: Duration::from_millis(20),
         rotate_bytes: 1 << 30,
-        generations: 5,
         pull: None,
         pull_loss: None,
+        policy_path: None,
+        retention_bytes: 1 << 40,
     }
 }
 
@@ -146,8 +163,8 @@ fn the_folder_is_0700_and_the_file_is_0600() {
 fn the_file_passes_the_audit_of_the_contract_package() {
     let directory = tempfile::tempdir().unwrap();
     let log = event_log::start(options(directory.path())).unwrap();
-    for index in 0..20 {
-        log.emit(Level::Info, "host.test.event", &json!({"index": index}));
+    for _ in 0..20 {
+        log.emit(Level::Info, "host.app.event", &json!({"kind": "started"}));
     }
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
@@ -159,7 +176,7 @@ fn the_file_passes_the_audit_of_the_contract_package() {
                 "fields": {"schema": "number", "pid": "number", "role": "string", "boot": "string"}},
             "log.dropped": {"layer": "host", "class": "lifecycle", "level": "warn",
                 "fields": {"from_seq": "number", "to_seq": "number", "count": "number"}},
-            "host.test.event": {"layer": "host", "class": "lifecycle", "level": "info", "fields": {"index": "number"}}
+            "host.app.event": {"layer": "host", "class": "lifecycle", "level": "info", "fields": {"kind": "string"}}
         }
     }).to_string()).unwrap();
     // The checker is the package of the contract; the test reads its result as JSON.
@@ -345,11 +362,10 @@ fn an_event_with_cids_is_stored_with_them_and_an_invalid_identifier_is_refused()
 
 // contract: log.writer.rotates-at-the-bound-and-keeps-generations
 #[test]
-fn the_log_rotates_at_the_bound_and_keeps_the_newest_generations() {
+fn the_log_rotates_at_the_bound_and_keeps_every_generation() {
     let directory = tempfile::tempdir().unwrap();
     let mut opts = options(directory.path());
     opts.rotate_bytes = 4000;
-    opts.generations = 2;
     // The queue holds every event, so no refusal makes a gap of seq that log.dropped would explain.
     opts.queue_events = 1000;
     let log = event_log::start(opts).unwrap();
@@ -370,15 +386,21 @@ fn the_log_rotates_at_the_bound_and_keeps_the_newest_generations() {
         name.push(format!(".{n}"));
         std::path::PathBuf::from(name)
     };
-    let files = [path.clone(), generation(1), generation(2)];
-    for file in &files {
-        assert!(file.exists(), "generation {file:?}");
+    // The generations are numbered in the order of the rotations and none is removed.
+    let mut files = vec![path.clone()];
+    while generation(files.len()).exists() {
+        files.push(generation(files.len()));
     }
-    assert!(!generation(3).exists(), "a third generation was kept");
+    assert!(
+        files.len() > 8,
+        "the file rotated into {} generations, want more than the 5 that an earlier writer kept",
+        files.len() - 1
+    );
     let current = read(&path);
     assert_eq!(current[0]["event"], "log.open");
     assert_eq!(current[1]["event"], "log.rotated");
-    assert_eq!(current[1]["fields"]["kept"], 2);
+    assert_eq!(current[1]["fields"]["generation"], files.len() - 1);
+    assert!(current[1]["fields"].get("kept").is_none());
     // A file is closed when the next line would pass the bound, so it is full to within one line of 150 bytes.
     let full = current[1]["fields"]["bytes"].as_u64().unwrap();
     assert!(
@@ -402,6 +424,14 @@ fn the_log_rotates_at_the_bound_and_keeps_the_newest_generations() {
         current[0]["seq"].as_u64().unwrap() > read(&generation(1))[0]["seq"].as_u64().unwrap(),
         "seq does not continue across the rotation"
     );
+    for position in 2..files.len() {
+        assert!(
+            read(&files[position])[0]["seq"].as_u64().unwrap()
+                > read(&files[position - 1])[0]["seq"].as_u64().unwrap(),
+            "generation {position} does not follow generation {}",
+            position - 1
+        );
+    }
 }
 
 // contract: log.writer.refuses-an-unbounded-file
@@ -413,12 +443,6 @@ fn a_log_without_a_rotation_bound_is_refused() {
     match event_log::start(opts) {
         Err(error) => assert!(error.contains("rotate_bytes"), "{error}"),
         Ok(_) => panic!("a log without a rotation bound started"),
-    }
-    let mut opts = options(directory.path());
-    opts.generations = 0;
-    match event_log::start(opts) {
-        Err(error) => assert!(error.contains("generations"), "{error}"),
-        Ok(_) => panic!("a log without a generation count started"),
     }
 }
 

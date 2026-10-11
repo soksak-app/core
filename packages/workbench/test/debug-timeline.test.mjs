@@ -50,8 +50,8 @@ test("rows are ordered by the key of the query: time, then role, then boot, then
 });
 
 test("the event files are the files of the logs folder that the query reads", () => {
-  for (const path of ["logs/host-1-2.jsonl", "logs/host-1-2.jsonl.3", "logs/host-1-2.debug.jsonl", "logs/host-1-2.debug.jsonl.5", "logs/vt-v1.jsonl", "logs/sok-s1.jsonl"]) assert.ok(isEventFile(path), path);
-  for (const path of ["logs/host-1-2.jsonl.6", "logs/host-1-2.jsonl.idx", "logs/host-1-2.stderr", "logs/state-20261009T010203Z.json", "logs/captures/host-x.jsonl", "plugins/host-a.jsonl", "logs/application.log"]) assert.equal(isEventFile(path), false, path);
+  for (const path of ["logs/host-1-2.jsonl", "logs/host-1-2.jsonl.3", "logs/host-1-2.debug.jsonl", "logs/host-1-2.debug.jsonl.5", "logs/host-1-2.jsonl.6", "logs/host-1-2.debug.jsonl.12", "logs/vt-v1.jsonl", "logs/sok-s1.jsonl"]) assert.ok(isEventFile(path), path);
+  for (const path of ["logs/host-1-2.jsonl.0", "logs/host-1-2.jsonl.01", "logs/host-1-2.jsonl.idx", "logs/host-1-2.stderr", "logs/state-20261009T010203Z.json", "logs/captures/host-x.jsonl", "plugins/host-a.jsonl", "logs/application.log"]) assert.equal(isEventFile(path), false, path);
 });
 
 test("the request of the query leaves the open members out and turns the UTC times into microseconds", () => {

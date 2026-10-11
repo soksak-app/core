@@ -2,7 +2,7 @@
   "schema": 2,
   "events": {
     "log.open": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "schema": "number", "pid": "number", "role": "string", "boot": "string" } },
-    "log.dropped": { "layer": "host", "class": "lifecycle", "level": "warn", "fields": { "from_seq": "number", "to_seq": "number", "count": "number" } },
+    "log.dropped": { "layer": "host", "class": "lifecycle", "level": "warn", "fields": { "from_seq": "number", "to_seq": "number", "count": "number", "channel": "string" } },
     "native.input.key_down": { "layer": "native", "class": "input", "level": "info", "cids": "required", "fields": { "keyCode": "number", "characters": "string" } },
     "native.input.source_changed": { "layer": "native", "class": "input", "level": "info", "fields": {} },
     "page.terminal.send": { "layer": "page", "class": "input", "level": "info", "fields": { "operation": "string" } },

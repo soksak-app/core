@@ -1,2 +1,2 @@
-{"ts_us":1791500002000000,"mono_ns":11000000000,"seq":1,"level":"info","layer":"sok","event":"log.open","fields":{"schema":2,"pid":4444,"role":"sok","boot":"s1"}}
-{"ts_us":1791500002000100,"mono_ns":11000100000,"seq":2,"level":"debug","layer":"sok","event":"sok.command","fields":{"name":"status","args":"","micros":1200,"ok":true,"status":0}}
+{"ts_us":1791500002000000,"mono_ns":11000000000,"seq":1,"level":"info","class":"lifecycle","layer":"sok","event":"log.open","fields":{"schema":2,"pid":4444,"role":"sok","boot":"s1"}}
+{"ts_us":1791500002000100,"mono_ns":11000100000,"seq":2,"level":"debug","class":"call","layer":"sok","event":"sok.command","fields":{"name":"status","args":"","micros":1200,"ok":true,"status":0}}

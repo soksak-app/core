@@ -141,6 +141,34 @@ test("every host call is the event page.call with its name, arguments, duration 
   for (const { fields } of seen) assert.ok(Number.isInteger(fields.micros) && fields.micros >= 0);
 });
 
+test("a host call that the policy does not store is not built into an event, and the page reports the count as page.log.gated", async () => {
+  const { settlingCalls } = await import("../host-calls.js");
+  const { logGate } = await import("../log-gate.js");
+  const policy = { lifecycle: "trace", input: "trace", call: "warn", io: "trace", frame: "trace" };
+  logGate.set(policy);
+  try {
+    calls.length = 0;
+    const wrapped = settlingCalls((name) => (name === "bad" ? Promise.reject(new Error("refused")) : Promise.resolve()));
+    // The arguments of a call are serialized for the event only for a call that the gate stores: a getter shows how often they were
+    // read. The check of the wrapper that refuses a number JSON cannot carry reads them once for each call.
+    let read = 0;
+    const watched = { get a() { read += 1; return 1; } };
+    await wrapped.call("good", watched);
+    await wrapped.call("good", watched);
+    await assert.rejects(wrapped.call("bad", { b: 2 }), /refused/);
+    await settled();
+    const seen = events().filter(({ event }) => event === "page.call" || event === "page.log.gated");
+    // The reports of the count leave with the batches; their sum is the exact number of the calls that the gate refused.
+    const gatedCount = seen.filter(({ event }) => event === "page.log.gated").reduce((sum, { fields }) => sum + fields.count, 0);
+    assert.equal(gatedCount, 2);
+    assert.ok(seen.filter(({ event }) => event === "page.log.gated").every(({ level, fields }) => level === "info" && fields.class === "call" && fields.level === "debug"));
+    assert.deepEqual(seen.filter(({ event }) => event === "page.call").map(({ level, fields }) => [level, fields.name]), [["warn", "bad"]]);
+    assert.equal(read, 2, "the arguments of a call that the gate does not store were serialized for the event");
+  } finally {
+    logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
+  }
+});
+
 test("the start of a page is the event page.start with the origin of the document clock and its address", async () => {
   const { recordPageStart } = await import("../page-log.js");
   calls.length = 0;

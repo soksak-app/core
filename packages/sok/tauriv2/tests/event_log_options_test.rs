@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 use soksak_sok::event_bounds::Fields;
-use soksak_sok::event_log::{EventLog, Level, Options, PullSink, RelayedEvent};
+use soksak_sok::event_log::{Channel, EventLog, Level, Options, PullSink, RelayedEvent};
 
 struct Dir(PathBuf);
 
@@ -44,8 +44,9 @@ fn options(directory: &Path, boot: &str) -> Options {
         queue_bytes: 1 << 20,
         batch_interval: Duration::from_millis(10),
         rotate_bytes: 0,
-        generations: 0,
         pull: None,
+        policy_path: None,
+        prune: None,
     }
 }
 
@@ -55,20 +56,6 @@ fn stored_lines(path: &Path) -> Vec<Value> {
         .lines()
         .map(|line| serde_json::from_str(line).unwrap_or_else(|error| panic!("{line:?}: {error}")))
         .collect()
-}
-
-#[test]
-fn a_writer_is_refused_when_only_one_of_the_rotation_options_is_set() {
-    for (bytes, generations) in [(100u64, 0usize), (0, 2)] {
-        let directory = Dir::new("refused");
-        let mut refused = options(&directory.0, "refused");
-        refused.rotate_bytes = bytes;
-        refused.generations = generations;
-        assert!(
-            EventLog::start(refused).is_err(),
-            "rotate_bytes {bytes} with generations {generations} was accepted"
-        );
-    }
 }
 
 #[test]
@@ -99,7 +86,6 @@ fn a_writer_rotates_at_its_bound_and_the_new_file_starts_with_log_open_and_log_r
     let directory = Dir::new("rotating");
     let mut rotating = options(&directory.0, "rotating");
     rotating.rotate_bytes = 600;
-    rotating.generations = 2;
     let log = EventLog::start(rotating).unwrap();
     for _ in 0..20 {
         log.emit(
@@ -140,7 +126,7 @@ fn a_writer_stores_the_events_and_the_loss_of_its_pull_source() {
                 serde_json::value::RawValue::from_string(r#"{"a":1}"#.into()).unwrap(),
             ),
         });
-        sink.lost(3, 30, "the source was full");
+        sink.lost(3, 30, "the source was full", Channel::Other);
     }));
     let log = EventLog::start(pulling).unwrap();
     log.flush(Duration::from_secs(5)).unwrap();

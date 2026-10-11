@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::json;
 
 use crate::bounds::{cut_text, Fields, RECORD_PLACE_BYTES, RECORD_TEXT_BYTES};
-use crate::event_log::{monotonic_ns, valid_cid, EventLog, Level, RelayedEvent};
+use crate::event_log::{monotonic_ns, valid_cid, Channel, EventLog, Level, RelayedEvent};
 
 /// The number of records that the start buffer holds; a record beyond it is refused and counted.
 pub const START_BUFFER_RECORDS: usize = 1024;
@@ -29,8 +29,8 @@ struct Records {
     log: Option<Arc<EventLog>>,
     buffer: Vec<Buffered>,
     buffer_bytes: usize,
-    lost_events: u64,
-    lost_bytes: u64,
+    /// The records that the full buffer refused, as events and bytes for each channel of the writer.
+    lost: [(u64, u64); 2],
 }
 
 /// The writer of the records and the start buffer under one lock, so a record written while the writer is attached keeps its
@@ -39,9 +39,15 @@ static RECORDS: Mutex<Records> = Mutex::new(Records {
     log: None,
     buffer: Vec::new(),
     buffer_bytes: 0,
-    lost_events: 0,
-    lost_bytes: 0,
+    lost: [(0, 0); 2],
 });
+
+fn channel_index(channel: Channel) -> usize {
+    match channel {
+        Channel::Other => 0,
+        Channel::Debug => 1,
+    }
+}
 
 /// Locks the records.
 fn records() -> std::sync::MutexGuard<'static, Records> {
@@ -62,12 +68,10 @@ fn now_us() -> u64 {
 /// clears the buffer.
 pub fn use_host_event_log(log: Option<Arc<EventLog>>) {
     let mut records = records();
+    crate::log_policy::use_gate(log.as_deref());
     let buffered = std::mem::take(&mut records.buffer);
     records.buffer_bytes = 0;
-    let (lost_events, lost_bytes) = (
-        std::mem::take(&mut records.lost_events),
-        std::mem::take(&mut records.lost_bytes),
-    );
+    let lost = std::mem::take(&mut records.lost);
     if let Some(log) = log.as_ref() {
         for record in buffered {
             if let Err(error) = log.emit_relayed(RelayedEvent {
@@ -82,7 +86,10 @@ pub fn use_host_event_log(log: Option<Arc<EventLog>>) {
                 eprintln!("event writer: a buffered record cannot be stored: {error}");
             }
         }
-        log.count_loss(lost_events, lost_bytes);
+        for channel in Channel::ALL {
+            let (events, bytes) = lost[channel_index(channel)];
+            log.count_loss(channel, events, bytes);
+        }
     }
     records.log = log;
 }
@@ -149,8 +156,9 @@ fn store_event(
     if records.buffer.len() >= START_BUFFER_RECORDS
         || records.buffer_bytes + size > START_BUFFER_BYTES
     {
-        records.lost_events += 1;
-        records.lost_bytes += size as u64;
+        let lost = &mut records.lost[channel_index(Channel::of(level))];
+        lost.0 += 1;
+        lost.1 += size as u64;
         return;
     }
     records.buffer_bytes += size;
@@ -207,6 +215,12 @@ pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
         eprintln!("event writer: the event {event:?} does not start with host.");
         return;
     }
+    // A closed gate serializes nothing; an event the catalog does not declare has no class and no gate.
+    if let Some(class) = soksak_sok::event_classes::class_of(event) {
+        if !crate::log_policy::gate_event(class, level) {
+            return;
+        }
+    }
     match Fields::of(&fields) {
         // events: forwarded
         Ok(text) => store_event(level, "host", event, event, Vec::new(), text),
@@ -226,6 +240,11 @@ pub fn emit_host_cids(level: Level, event: &str, cids: &[String], fields: serde_
     if let Some(bad) = cids.iter().find(|cid| !valid_cid(cid)) {
         eprintln!("event writer: {event} has the correlation identifier {bad:?}, which is empty or holds a quote, a backslash or a control character");
         return;
+    }
+    if let Some(class) = soksak_sok::event_classes::class_of(event) {
+        if !crate::log_policy::gate_event(class, level) {
+            return;
+        }
     }
     match Fields::of(&fields) {
         // events: forwarded

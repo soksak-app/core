@@ -31,6 +31,10 @@ func PerformanceObserve(layer string, fields func() map[string]any) {
 	if !performanceOn.Load() {
 		return
 	}
+	// The observation is of the class call at the level debug: a policy that does not store it builds no fields.
+	if !GateEvent(ClassCall, LevelDebug) {
+		return
+	}
 	if err := emitTrace(layer, fields()); err != nil {
 		LogError("performance trace", err)
 	}

@@ -27,7 +27,8 @@ const MARKER_REACH = 5;
 
 /**
  * The entrances that store an event, by language. `level`, `event` and `fields` are the positions of the arguments of the
- * call (`fields` is absent when the call has none); `fixed` is the level of an entrance that has no level argument; `only`
+ * call (`fields` is absent when the call has none); `class` is the position of the argument that gives the class, for an entrance
+ * whose producer chooses it (the native library); `fixed` is the level of an entrance that has no level argument; `only`
  * limits an entrance to the files it is local to. `name` is the event of an entrance that stores one event and gives no name argument
  * (`event` is then the position of its first argument). `levelGroup` is the group of the pattern that holds the level of an entrance
  * that names it in the call, and `relative` marks an entrance whose event name lacks the prefix `plugin.<plugin>.`.
@@ -37,6 +38,10 @@ const ENTRANCES = {
     { re: /\bEmitHost(?:Placed)?\s*\(/g, level: 0, event: 1, fields: 2 },
     { re: /\bEmitHostCids\s*\(/g, level: 0, event: 1, fields: 3 },
     { re: /\bstoreEvent\s*\(/g, level: 0, event: 2, fields: 5 },
+    // The events that the writer itself stores (log.open, log.rotated, log.dropped, ...).
+    { re: /\bwriterEvent\s*\(/g, level: 0, event: 1, fields: 2 },
+    // The events that the writer reports about itself from another goroutine (log.policy).
+    { re: /\benqueueWriterEvent\s*\(/g, level: 0, event: 1, fields: 2 },
     // The writer of the command line tool emits through its own EventLog (docs/spec/cli.md#event-log).
     { re: /\bEmit\s*\(/g, level: 0, event: 1, fields: 2, only: /^packages\/sok\// },
   ],
@@ -44,6 +49,8 @@ const ENTRANCES = {
     { re: /\bemit_host(?:_placed)?\s*\(/g, level: 0, event: 1, fields: 2 },
     { re: /\bemit_host_cids\s*\(/g, level: 0, event: 1, fields: 3 },
     { re: /\bstore_event\s*\(/g, level: 0, event: 2, fields: 5 },
+    { re: /\bPending::writer_event\s*\(/g, level: 0, event: 1, fields: 2 },
+    { re: /\benqueue_writer_event\s*\(/g, level: 0, event: 1, fields: 2 },
     { re: /\bemit\s*\(/g, level: 0, event: 1, fields: 2, only: /^packages\/sok\// },
   ],
   js: [
@@ -54,12 +61,14 @@ const ENTRANCES = {
     { re: /\bruntime\.log\[[^\]]+\]\s*\(/g, relative: true, event: 0, fields: 1 },
   ],
   m: [
-    { re: /\bsp_event\s*\(/g, level: 0, event: 1, fields: 2 },
-    { re: /\bsp_event_cids\s*\(/g, level: 0, event: 1, fields: 3 },
+    { re: /\bsp_event\s*\(/g, class: 0, level: 1, event: 2, fields: 3 },
+    { re: /\bsp_event_cids\s*\(/g, class: 0, level: 1, event: 2, fields: 4 },
+    // The internal entrance of the ring, which stores the events that the library reports about itself without asking the gate.
+    { re: /\bpushEvent\s*\(/g, class: 0, level: 1, event: 2, fields: 4 },
     { re: /\bstoreRecord\s*\(/g, level: 0, event: 1 },
     { re: /\bsp_log_error\s*\(/g, fixed: 'error', name: 'native.record.error', event: 0 },
     { re: /\bsp_log_info\s*\(/g, fixed: 'info', name: 'native.record.info', event: 0 },
-    { re: /\bemit\s*\(/g, fixed: 'info', event: 0, fields: 1, only: /(^|\/)activity_observers\.m$/ },
+    { re: /\bemit\s*\(/g, class: 0, fixed: 'info', event: 1, fields: 2, only: /(^|\/)activity_observers\.m$/ },
   ],
 };
 // The text before the name of a call on its line when the call is the definition of the function.
@@ -69,6 +78,7 @@ const DEFINITION_PREFIX = {
   js: /\bfunction\s+$/,
   m: /^\s*(static\s+)?(void|bool|BOOL)\s+$/,
 };
+const CLASS_TOKEN = /\bSP_CLASS_(LIFECYCLE|INPUT|CALL|IO|FRAME)\b/;
 const LEVEL_TOKEN = /\bLevel(Error|Warn|Info|Debug|Trace)\b|\bLevel::(Error|Warn|Info|Debug|Trace)\b|\bSP_EVENT_(ERROR|WARN|INFO|DEBUG|TRACE)\b|["'`](error|warn|info|debug|trace)["'`]/g;
 const FIELD_OBJECT = {
   go: /^map\[string\](?:any|string|interface\{\})\s*\{/,
@@ -259,6 +269,13 @@ function literalName(source, [from, to]) {
   return template ? template[1].replace(/\$\{[^}]*\}/g, '*') : null;
 }
 
+/** The class that an expression names literally (`SP_CLASS_<NAME>`), or null when it names none. */
+function classOf(source, range) {
+  if (range === undefined) return null;
+  const found = CLASS_TOKEN.exec(source.code.slice(...range));
+  return found ? found[1].toLowerCase() : null;
+}
+
 /** The name of a site of a plugin entrance with the plugin left open (`plugin.*.<event>`); the catalog gives the plugin. */
 const relativeName = (entrance, name) => (entrance.relative && name !== null ? `plugin.*.${name}` : name);
 
@@ -329,6 +346,7 @@ export function sitesOf(path, text) {
         // default: an entrance without a fixed name reads the name from the literal argument of the call.
         name: entrance.name ?? relativeName(entrance, literalName(source, args[entrance.event])),
         levels: entrance.fixed ? [entrance.fixed] : entrance.levelGroup ? [match[entrance.levelGroup]] : levelsOf(source, args[entrance.level]),
+        class: entrance.class === undefined ? null : classOf(source, args[entrance.class]),
         fields: fieldsOf(source, args[entrance.fields]),
       });
     }
@@ -352,6 +370,7 @@ export function sitesOf(path, text) {
       call: source.lineAt(match.index),
       name,
       levels: levelsOf(source, entries.get('level')),
+      class: null,
       fields: fieldsOf(source, entries.get('fields')),
     });
   }
@@ -422,6 +441,9 @@ export function emitFindings(catalog, sources, catalogPath) {
       const declaredLevels = [entry.level].flat();
       if (site.levels !== null && site.levels.some((level) => !declaredLevels.includes(level))) {
         report(site.line, `${site.name} is emitted at the level ${site.levels.join(', ')} and the catalog declares ${declaredLevels.join(', ')}`);
+      }
+      if (site.class !== null && site.class !== entry.class) {
+        report(site.line, `${site.name} is emitted with the class ${site.class} and the catalog declares ${entry.class}`);
       }
       if (site.fields !== null) {
         const declared = Object.keys(entry.fields).map((field) => field.replace(/\?$/, ''));

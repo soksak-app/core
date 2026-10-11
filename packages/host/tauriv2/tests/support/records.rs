@@ -18,13 +18,27 @@ pub fn start_writer(config: &Path) -> Arc<EventLog> {
     log
 }
 
-/// The events of an event log file.
+/// The events of a process of the host: the lines of the main file at `path` and, when it exists, of the debug file beside it, in
+/// the order of `seq` (the writer assigns `seq` across both files).
 pub fn read_events(path: &Path) -> Vec<Value> {
-    std::fs::read_to_string(path)
-        .unwrap()
-        .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
-        .collect()
+    let parse = |path: &Path| -> Vec<Value> {
+        std::fs::read_to_string(path)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect()
+    };
+    let mut events = parse(path);
+    let main = path.to_string_lossy();
+    let debug = PathBuf::from(format!(
+        "{}.debug.jsonl",
+        main.strip_suffix(".jsonl").unwrap_or(&main)
+    ));
+    if debug.exists() {
+        events.extend(parse(&debug));
+        events.sort_by_key(|event| event["seq"].as_u64().unwrap());
+    }
+    events
 }
 
 /// Waits until the sampler of the performance trace has stored its first sample of the host, so that the sampler thread
@@ -55,7 +69,11 @@ pub fn event_log_path(config: &Path) -> PathBuf {
         .filter(|path| {
             path.file_name()
                 .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("host-") && name.ends_with(".jsonl"))
+                .is_some_and(|name| {
+                    name.starts_with("host-")
+                        && name.ends_with(".jsonl")
+                        && !name.ends_with(".debug.jsonl")
+                })
         })
         .collect();
     assert_eq!(paths.len(), 1, "event logs {paths:?}");

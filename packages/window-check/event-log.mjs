@@ -3,8 +3,9 @@
 import { existsSync, readdirSync, readFileSync, statSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-// The event files of the processes of the application (docs/spec/logging.md#files): the host and every sidecar service.
-const HOST_LOG = /^(host|vt|files|shell)-\d+-\d+\.jsonl$/;
+// The event files of the processes of the application (docs/spec/logging.md#files): the host and every sidecar service, each with its
+// main file (error, warn and info) and its debug file (debug and trace).
+const HOST_LOG = /^(host|vt|files|shell)-\d+-\d+(\.debug)?\.jsonl$/;
 
 /**
  * The file that records the last read position of each file. It is placed next to the configuration folder, so there is
@@ -46,9 +47,9 @@ export function eventLine(event) {
 }
 
 /**
- * The events written after offsets in every host event log, and the new positions. A last fragment whose line is not
- * finished is not read and is read next time. When a line is not an event, a file is shorter than the read position, or
- * no event log exists, the error contains the file name.
+ * The events written after offsets in every host event log, and the new positions. The events of one process are in the order
+ * of seq across its main file and its debug file. A last fragment whose line is not finished is not read and is read next time.
+ * When a line is not an event, a file is shorter than the read position, or no event log exists, the error contains the file name.
  */
 export function readEvents(configDir, offsets) {
   const logs = join(configDir, "logs");
@@ -56,6 +57,8 @@ export function readEvents(configDir, offsets) {
   if (names.length === 0) throw new Error(`${logs} holds no host event log; the application writes it there (docs/spec/logging.md#files)`);
   const events = [];
   const next = {};
+  // The events of the files of one process, which the writer numbers across both files.
+  const processes = new Map();
   for (const name of names) {
     const path = join(logs, name);
     const offset = offsets[name] ?? 0;
@@ -76,10 +79,14 @@ export function readEvents(configDir, offsets) {
         throw new Error(`${path}:${lineNumber}: the line is not valid JSON: ${error.message}`);
       }
       if (typeof event?.level !== "string") throw new Error(`${path}:${lineNumber}: the event has no level`);
-      events.push(event);
+      if (!Number.isInteger(event.seq)) throw new Error(`${path}:${lineNumber}: the event has no integer seq`);
+      const owner = name.replace(/(\.debug)?\.jsonl$/, "");
+      if (!processes.has(owner)) processes.set(owner, []);
+      processes.get(owner).push(event);
     }
     next[name] = offset + Buffer.byteLength(text.slice(0, complete));
   }
+  for (const list of processes.values()) events.push(...list.toSorted((a, b) => a.seq - b.seq));
   return { events, offsets: next };
 }
 

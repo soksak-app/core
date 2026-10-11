@@ -40,17 +40,12 @@ func storedLines(t *testing.T, path string) []map[string]any {
 	return lines
 }
 
-func TestAWriterIsRefusedWhenOnlyOneOfTheRotationOptionsIsSet(t *testing.T) {
-	for _, set := range []struct {
-		bytes       int64
-		generations int
-	}{{bytes: 100}, {generations: 2}, {bytes: -1, generations: -1}} {
-		options := optionsIn(t.TempDir(), "refused")
-		options.RotateBytes, options.Generations = set.bytes, set.generations
-		if log, err := sok.StartEventLog(options); err == nil {
-			log.Close()
-			t.Errorf("RotateBytes %d with Generations %d was accepted", set.bytes, set.generations)
-		}
+func TestAWriterIsRefusedANegativeRotationBound(t *testing.T) {
+	options := optionsIn(t.TempDir(), "refused")
+	options.RotateBytes = -1
+	if log, err := sok.StartEventLog(options); err == nil {
+		log.Close()
+		t.Error("a negative RotateBytes was accepted")
 	}
 }
 
@@ -85,7 +80,7 @@ func TestAWriterWithoutRotationStoresTheLayerTheClockAndTheCidsOfItsOptions(t *t
 
 func TestAWriterRotatesAtItsBoundAndTheNewFileStartsWithLogOpenAndLogRotated(t *testing.T) {
 	options := optionsIn(t.TempDir(), "rotating")
-	options.RotateBytes, options.Generations = 600, 2
+	options.RotateBytes = 600
 	log, err := sok.StartEventLog(options)
 	if err != nil {
 		t.Fatal(err)
@@ -109,13 +104,13 @@ func TestAWriterRotatesAtItsBoundAndTheNewFileStartsWithLogOpenAndLogRotated(t *
 func TestAWriterStoresTheEventsAndTheLossOfItsPullSource(t *testing.T) {
 	options := optionsIn(t.TempDir(), "pulling")
 	delivered := false
-	options.Pull = func(accept func(sok.RelayedEvent), lost func(events, bytes uint64, reason string)) {
+	options.Pull = func(accept func(sok.RelayedEvent), lost func(events, bytes uint64, reason string, channel sok.Channel)) {
 		if delivered {
 			return
 		}
 		delivered = true
 		accept(sok.RelayedEvent{TsMicros: 7, MonoNs: 9, Layer: "native", Level: sok.LevelWarn, Event: "native.probe.event", Fields: json.RawMessage(`{"a":1}`)})
-		lost(3, 30, "the source was full")
+		lost(3, 30, "the source was full", sok.ChannelOther)
 	}
 	log, err := sok.StartEventLog(options)
 	if err != nil {

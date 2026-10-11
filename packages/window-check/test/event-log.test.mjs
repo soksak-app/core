@@ -31,6 +31,21 @@ test("readEventErrors returns the events of level error and ignores the other le
   ]);
 });
 
+test("the events of the debug file of a process are read with its main file in the order of seq", (t) => {
+  const dir = configDir(t);
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"),
+    line(1, "info", "log.open") + line(2, "warn", "host.test.warned") + line(4, "error", "host.test.failed"));
+  writeFileSync(join(dir, "logs", "host-1-10.debug.jsonl"),
+    line(3, "info", "log.open") + line(5, "debug", "host.trace.mark", { event: "mark" }));
+  writeFileSync(join(dir, "logs", "vt-1-20.jsonl"), line(1, "info", "log.open", {}, "sidecar"));
+  const { events, offsets } = readEvents(dir, {});
+  assert.deepEqual(events.map((event) => `${event.layer}:${event.seq}`), ["host:1", "host:2", "host:3", "host:4", "host:5", "sidecar:1"]);
+  assert.deepEqual(Object.keys(offsets).sort(), ["host-1-10.debug.jsonl", "host-1-10.jsonl", "vt-1-20.jsonl"]);
+  assert.deepEqual(Object.keys(currentEventOffsets(dir)).sort(), ["host-1-10.debug.jsonl", "host-1-10.jsonl", "vt-1-20.jsonl"]);
+  appendFileSync(join(dir, "logs", "host-1-10.debug.jsonl"), line(6, "debug", "host.trace.next", { event: "next" }));
+  assert.deepEqual(readEventLines(dir, offsets).lines, ["debug host host.trace.next: {\"event\":\"next\"}"]);
+});
+
 test("readEventErrors reads from the offsets of each file and leaves an unfinished line for the next read", (t) => {
   const dir = configDir(t);
   const file = join(dir, "logs", "host-1-10.jsonl");

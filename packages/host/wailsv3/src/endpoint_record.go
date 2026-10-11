@@ -14,6 +14,14 @@ import (
 // `warn`.
 func recordEndpointCall(req request, started time.Time, err error) {
 	micros := time.Since(started).Microseconds()
+	// The gate is asked before the arguments are cut and the fields are built: a request that the policy does not store costs one branch.
+	level := LevelWarn
+	if err == nil {
+		level = LevelDebug
+	}
+	if !GateEvent(ClassCall, level) {
+		return
+	}
 	// A request without params has the arguments `null`, as one whose params are null.
 	args, truncated := "null", false
 	if len(req.Params) > 0 {

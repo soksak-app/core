@@ -46,8 +46,8 @@ func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 		request map[string]any
 		message string
 	}{
-		"no action":      {map[string]any{"events": []any{}}, "action must be batch or clock"},
-		"another action": {map[string]any{"action": "line", "events": []any{}}, "action must be batch or clock, not \"line\""},
+		"no action":      {map[string]any{"events": []any{}}, "action must be batch, clock or policy"},
+		"another action": {map[string]any{"action": "line", "events": []any{}}, "action must be batch, clock or policy, not \"line\""},
 		"no events":      {map[string]any{"action": "batch"}, "events must be an array"},
 		"a layer other than page": {map[string]any{"action": "batch", "events": []any{relayEvent("page.test.ok", 1), relayEvent("host.test.forged", 2)}},
 			"events[1]: the event \"host.test.forged\" does not start with page. or plugin."},
