@@ -86,7 +86,7 @@ fn a_failed_binding_call_is_a_warning_with_its_error_text() {
     assert_eq!(calls[0]["level"], "warn", "event {}", calls[0]);
     assert_eq!(fields["name"], "fail");
     assert_eq!(fields["ok"], false);
-    assert_eq!(fields["error"], "the request is refused");
+    assert_eq!(fields["error"], "-32603: the request is refused");
 }
 
 // contract: binding.record.arguments-are-cut-before-copying
@@ -121,5 +121,5 @@ fn a_binding_call_that_does_not_finish_is_a_warning() {
     assert_eq!(calls[0]["level"], "warn", "event {}", calls[0]);
     assert_eq!(fields["name"], "explode");
     assert_eq!(fields["ok"], false);
-    assert_eq!(fields["error"], "the call ended without a result");
+    assert_eq!(fields["error"], "-32603: the call ended without a result");
 }

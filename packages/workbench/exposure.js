@@ -171,9 +171,10 @@ export function createRegistry({ call = null, report = null } = {}) {
       emitEvent("debug", "page.command", { name, micros: micros(), ok: true });
       return result;
     } catch (error) {
+      // The code is the one that the endpoint answers for the failure (replyPayload of the plugin API).
       emitEvent("warn", "page.command", { name, micros: micros(), ok: false,
         // default: a thrown value that is not an Error is recorded as its own text.
-        error: String(error?.message ?? error) });
+        error: `${error instanceof ExposureError ? error.code : EXPOSURE_ERRORS.failed}: ${String(error?.message ?? error)}` });
       throw error;
     }
   }

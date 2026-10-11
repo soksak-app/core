@@ -108,7 +108,7 @@ func TestAFailedBindingCallIsAWarningWithItsErrorText(t *testing.T) {
 		t.Fatalf("%d events host.binding.call, want 1: %v", len(calls), calls)
 	}
 	fields := calls[0]["fields"].(map[string]any)
-	if calls[0]["level"] != "warn" || fields["name"] != "fail" || fields["ok"] != false || fields["error"] != err.Error() {
+	if calls[0]["level"] != "warn" || fields["name"] != "fail" || fields["ok"] != false || fields["error"] != "-32603: "+err.Error() {
 		t.Fatalf("event %v, error %v", calls[0], err)
 	}
 }
@@ -126,7 +126,7 @@ func TestARefusedBindingCallIsAWarningWithItsErrorText(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("%d events host.binding.call, want 2: %v", len(calls), calls)
 	}
-	for i, want := range []struct{ name, text string }{{"missing", unknown.Error()}, {"fail", counted.Error()}} {
+	for i, want := range []struct{ name, text string }{{"missing", "-32603: " + unknown.Error()}, {"fail", "-32603: " + counted.Error()}} {
 		fields := calls[i]["fields"].(map[string]any)
 		if calls[i]["level"] != "warn" || fields["name"] != want.name || fields["ok"] != false || fields["error"] != want.text {
 			t.Fatalf("event %d is %v, want name %s and error %q", i, calls[i], want.name, want.text)
@@ -174,7 +174,7 @@ func TestABindingCallThatDoesNotReturnIsAWarning(t *testing.T) {
 		t.Fatalf("%d events host.binding.call, want 1: %v", len(calls), calls)
 	}
 	fields := calls[0]["fields"].(map[string]any)
-	if calls[0]["level"] != "warn" || fields["name"] != "explode" || fields["ok"] != false || fields["error"] != "the call ended without a result" {
+	if calls[0]["level"] != "warn" || fields["name"] != "explode" || fields["ok"] != false || fields["error"] != "-32603: the call ended without a result" {
 		t.Fatalf("event %v", calls[0])
 	}
 }
@@ -191,7 +191,7 @@ func TestACallOfANativeDocumentIsAnEvent(t *testing.T) {
 		t.Fatalf("%d events host.binding.call, want 1: %v", len(calls), calls)
 	}
 	fields := calls[0]["fields"].(map[string]any)
-	if calls[0]["level"] != "warn" || fields["name"] != "theme" || fields["args"] != "[1]" || fields["ok"] != false || fields["error"] != err.Error() {
+	if calls[0]["level"] != "warn" || fields["name"] != "theme" || fields["args"] != "[1]" || fields["ok"] != false || fields["error"] != "-32603: "+err.Error() {
 		t.Fatalf("event %v, error %v", calls[0], err)
 	}
 }

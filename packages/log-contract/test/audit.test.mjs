@@ -220,3 +220,39 @@ test("the chains of the files of one configuration folder join, so a hop in a si
     { file: "host-1-2.jsonl", line: 2, message: "chain key of b1.1 lacks sidecar.vt.pty_write" },
   ]);
 });
+
+test("an entrance of calls that the catalog declares with a result has ok, micros and an error of the form <code>: <text> only when ok is false", () => {
+  const withResult = {
+    ...catalog,
+    events: {
+      ...catalog.events,
+      "host.binding.call": {
+        layer: "host", class: "call", level: ["debug", "warn"], result: true,
+        fields: { name: "string", ok: "boolean", micros: "number", "error?": "string" },
+      },
+    },
+  };
+  const call = (seq, fields) => line(seq, "host.binding.call", { name: "windowNew", micros: 12, ...fields });
+  assert.deepEqual(auditLog("host-b1.jsonl", [
+    open,
+    call(2, { ok: true }),
+    call(3, { ok: false, error: "-32603: the request is refused" }),
+    call(4, { ok: false, error: "-32602: bad: params" }),
+  ].join("\n"), withResult), []);
+  const findings = auditLog("host-b1.jsonl", [
+    open,
+    call(2, { ok: true, error: "-32603: x" }),
+    call(3, { ok: false }),
+    call(4, { ok: false, error: "the request is refused" }),
+    call(5, { ok: false, error: ": no code" }),
+    call(6, { ok: true, micros: -1 }),
+    call(7, { ok: true, micros: 1.5 }),
+  ].join("\n"), withResult);
+  assert.deepEqual(findings.map((f) => f.line), [2, 3, 4, 5, 6, 7]);
+  assert.match(findings[0].message, /ok is true, so error must be absent/);
+  assert.match(findings[1].message, /ok is false, so error is required/);
+  assert.match(findings[2].message, /error must be <code>: <text>/);
+  assert.match(findings[3].message, /error must be <code>: <text>/);
+  assert.match(findings[4].message, /micros must be a non-negative integer/);
+  assert.match(findings[5].message, /micros must be a non-negative integer/);
+});

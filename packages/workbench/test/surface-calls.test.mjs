@@ -35,7 +35,7 @@ test("a rejected call and a call that throws before sending are warn events, and
   await assert.rejects(calls.call("throws"), (error) => error === failure);
   await calls.record("info", "page.record.info", {});
   assert.deepEqual(events().slice(0, 2).map((event) => [event.level, event.fields.name, event.fields.ok, event.fields.error]), [
-    ["warn", "rejects", false, "refused by the host"],
-    ["warn", "throws", false, "refused by the host"],
+    ["warn", "rejects", false, "-32603: refused by the host"],
+    ["warn", "throws", false, "-32603: refused by the host"],
   ]);
 });

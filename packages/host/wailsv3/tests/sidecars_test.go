@@ -1171,6 +1171,107 @@ func TestSidecarRequestWithCorrelationIdentifiersIsRecordedAsAnEvent(t *testing.
 	}
 }
 
+// sidecarReplies flushes the writer and returns the events `host.sidecar.reply` that it stored.
+func sidecarReplies(t *testing.T, log *host.EventLog, config string) []map[string]any {
+	t.Helper()
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var replies []map[string]any
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		if event["event"] == "host.sidecar.reply" {
+			replies = append(replies, event)
+		}
+	}
+	return replies
+}
+
+const replyScript = `#!/bin/sh
+read a
+printf '%s\n' '{"surface":"s1","cids":["b1.7","b1.8"],"body":{"id":1,"error":"unsupported operation"}}'
+read b
+printf '%s\n' '{"surface":"s1","cids":["b1.9"],"body":{"id":2,"ok":true}}'
+read c
+printf '%s\n' '{"surface":"s1","body":{"id":3,"error":{"reason":"no request"}}}'
+printf '%s\n' '{"surface":"s1","body":{"event":"state"}}'
+cat >/dev/null
+`
+
+// contract: sidecars.protocol.reply-with-cids-is-recorded
+func TestAReplyOfASidecarIsRecordedWithTheIdentifiersOfItsRequest(t *testing.T) {
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	sidecars, _ := scriptSidecars(t, replyScript)
+	owner := newFakeOwner("/projects/a")
+	body := json.RawMessage(`{"operation":"input"}`)
+	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
+		t.Fatal(err)
+	}
+	owner.next(t)
+	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.9"}); err != nil {
+		t.Fatal(err)
+	}
+	owner.next(t)
+	if err := sidecars.Send(owner, echoSidecar, "s1", body); err != nil {
+		t.Fatal(err)
+	}
+	owner.next(t)
+	owner.next(t)
+	replies := sidecarReplies(t, log, config)
+	if len(replies) != 3 {
+		t.Fatalf("%d events host.sidecar.reply, want 3 (an error with identifiers, an answer with identifiers, an error without): %v", len(replies), replies)
+	}
+	want := []struct {
+		level, error string
+		ok           bool
+		cids         []any
+		micros       bool
+	}{
+		{"warn", "-32603: unsupported operation", false, []any{"b1.7", "b1.8"}, true},
+		{"info", "", true, []any{"b1.9"}, true},
+		{"warn", `-32603: {"reason":"no request"}`, false, nil, false},
+	}
+	for i, w := range want {
+		fields := replies[i]["fields"].(map[string]any)
+		cids, _ := replies[i]["cids"].([]any)
+		_, hasMicros := fields["micros"]
+		errorText, _ := fields["error"].(string)
+		if replies[i]["level"] != w.level || fields["name"] != echoSidecar || fields["surface"] != "s1" || fields["ok"] != w.ok ||
+			errorText != w.error || fmt.Sprint(cids) != fmt.Sprint(w.cids) || hasMicros != w.micros {
+			t.Fatalf("reply %d is %v, want level %s ok %v error %q cids %v micros %v", i, replies[i], w.level, w.ok, w.error, w.cids, w.micros)
+		}
+		if hasMicros && fields["micros"].(float64) < 0 {
+			t.Fatalf("reply %d has micros %v", i, fields["micros"])
+		}
+	}
+}
+
+// contract: sidecars.protocol.failure-fails-the-pending-requests
+func TestTheFailureOfASidecarIsTheFailedReplyOfItsPendingRequests(t *testing.T) {
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	sidecars, _ := scriptSidecars(t, "#!/bin/sh\nread first\nread second\nexit 3\n")
+	owner := newFakeOwner("/projects/a")
+	body := json.RawMessage(`{"operation":"input"}`)
+	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.7"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.8"}); err != nil {
+		t.Fatal(err)
+	}
+	failure := owner.failure(t)
+	replies := sidecarReplies(t, log, config)
+	if len(replies) != 1 {
+		t.Fatalf("%d events host.sidecar.reply, want 1: %v", len(replies), replies)
+	}
+	fields := replies[0]["fields"].(map[string]any)
+	cids, _ := replies[0]["cids"].([]any)
+	if replies[0]["level"] != "warn" || fields["ok"] != false || fields["error"] != "-32603: "+failure.Reason || fields["surface"] != "s1" ||
+		fields["bytes"] != float64(0) || fmt.Sprint(cids) != "[b1.7 b1.8]" {
+		t.Fatalf("reply %v, failure %+v", replies[0], failure)
+	}
+}
+
 // contract: sidecars.lifetime.start-and-exit-events
 func TestSidecarLifetimeIsRecordedAsEvents(t *testing.T) {
 	config := t.TempDir()

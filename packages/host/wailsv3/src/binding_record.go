@@ -8,6 +8,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -149,6 +150,16 @@ func boundedArguments(args []json.RawMessage) (string, bool) {
 	return text.String(), false
 }
 
+// resultError is the text of the field `error` of the events of the entrances of calls (docs/spec/logging.md#result-form): the
+// code and the text that the caller receives, `<code>: <text>`. A failure that has no code of its own has the internal code.
+func resultError(err error) string {
+	var coded *RPCError
+	if errors.As(err, &coded) {
+		return fmt.Sprintf("%d: %s", coded.Code, coded.Message)
+	}
+	return fmt.Sprintf("%d: %v", codeInternal, err)
+}
+
 // recordBindingCall stores the event `host.binding.call` of one call: the name, the arguments cut before they are
 // copied, the result and the microseconds since started. A call that failed or ended without a result is at the level
 // `warn`, and its error text is the text that the caller receives, cut the same way.
@@ -161,11 +172,11 @@ func recordBindingCall(name string, args []json.RawMessage, started time.Time, e
 		})
 		return
 	}
-	message := "the call ended without a result"
+	failure := errors.New("the call ended without a result")
 	if err != nil {
-		message = err.Error()
+		failure = err
 	}
-	message, cut := cutText(message, CallTextBytes)
+	message, cut := cutText(resultError(failure), CallTextBytes)
 	EmitHost(LevelWarn, "host.binding.call", map[string]any{
 		"name": name, "args": text, "micros": micros, "ok": false, "truncated": truncated || cut, "error": message,
 	})

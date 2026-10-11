@@ -4,8 +4,6 @@ package host
 // the event `host.endpoint.call`, whether or not the performance trace is on.
 
 import (
-	"errors"
-	"fmt"
 	"time"
 )
 
@@ -26,11 +24,7 @@ func recordEndpointCall(req request, started time.Time, err error) {
 		return
 	}
 	// The text is the code and the message that the client receives.
-	var coded *RPCError
-	if !errors.As(err, &coded) {
-		coded = rpcError(codeInternal, "%v", err)
-	}
-	text, cut := cutText(fmt.Sprintf("%d: %s", coded.Code, coded.Message), CallTextBytes)
+	text, cut := cutText(resultError(err), CallTextBytes)
 	EmitHost(LevelWarn, "host.endpoint.call", map[string]any{
 		"name": methodOf(req), "args": args, "micros": micros, "ok": false, "truncated": truncated || cut, "error": text,
 	})

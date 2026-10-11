@@ -98,6 +98,16 @@ function lineFindings(entry, catalog) {
       if (!optional) report(`field ${name} is required by ${event.event}`);
     } else if (!type.split("|").includes(typeOf(value))) report(`field ${name} must be a ${type}, found ${typeOf(value)}`);
   }
+  // An entrance of calls that the catalog declares with `result: true` states its result in one form (docs/spec/logging.md#result-form):
+  // `ok`, `micros` when present a non-negative integer, and `error` only for a failure, as `<code>: <text>`.
+  if (declared.result === true) {
+    // default: a line without fields is reported by the structure check, and the result check then has no values to compare.
+    const { ok, micros, error } = event.fields ?? {};
+    if (micros !== undefined && !(Number.isInteger(micros) && micros >= 0)) report("micros must be a non-negative integer");
+    if (ok === true && error !== undefined) report("ok is true, so error must be absent");
+    if (ok === false && error === undefined) report("ok is false, so error is required");
+    if (typeof error === "string" && !/^-?\d+: ./s.test(error)) report(`error must be <code>: <text>, found ${JSON.stringify(error)}`);
+  }
   return findings;
 }
 

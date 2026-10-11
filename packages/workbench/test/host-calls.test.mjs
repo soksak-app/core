@@ -113,3 +113,27 @@ test("the event of a sidecar send carries the correlation identifiers of the req
   // A value that is not a list is passed on as it is, so the batcher reports it instead of the event losing it silently.
   assert.equal(callEvent({ name: "sidecarSend", args: [{ cids: "b1.7" }], micros: 1, ok: true }).cids, "b1.7");
 });
+
+test("a refused call states its error as <code>: <text>, with the code of the error or the internal code", () => {
+  const refused = callEvent({ name: "bad", args: [], micros: 1, ok: false, error: "refused" });
+  assert.equal(refused.fields.error, "-32603: refused");
+  assert.equal(refused.level, "warn");
+  assert.equal(callEvent({ name: "bad", args: [], micros: 1, ok: false, error: "gone", code: 1003 }).fields.error, "1003: gone");
+  assert.equal(callEvent({ name: "good", args: [], micros: 1, ok: true }).fields.error, undefined);
+});
+
+test("the observer of the calls receives the code of a failure that has one", async () => {
+  const seen = [];
+  observeHostCalls((call) => seen.push(call));
+  const calls = settlingCalls(async (name) => {
+    if (name === "coded") throw Object.assign(new Error("closed"), { code: 1003 });
+    throw new Error("plain");
+  });
+  await assert.rejects(calls.call("coded"), /closed/);
+  await assert.rejects(calls.call("plain"), /plain/);
+  observeHostCalls(null);
+  assert.deepEqual(seen.map(({ name, ok, error, code }) => ({ name, ok, error, code })), [
+    { name: "coded", ok: false, error: "closed", code: 1003 },
+    { name: "plain", ok: false, error: "plain", code: undefined },
+  ]);
+});

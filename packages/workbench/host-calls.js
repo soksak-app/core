@@ -23,9 +23,20 @@ export function observeHostCalls(next) {
   observer = next;
 }
 
-const observed = (name, args, started, ok, error) => {
-  if (observer) observer({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, error });
+const observed = (name, args, started, ok, error, code) => {
+  if (observer) observer({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, error, code });
 };
+
+/** The code of an error that a host call states when the failure has none of its own: the internal code of the entrance (docs/spec/logging.md#result-form). */
+export const INTERNAL_CODE = -32603;
+
+/** The text of a failure of a call and its code, or undefined when the failure has none of its own. */
+export function failureOf(error) {
+  return {
+    error: error instanceof Error ? error.message : String(error),
+    code: Number.isInteger(error?.code) ? error.code : undefined,
+  };
+}
 
 // The longest text of the arguments of a call in an event, in bytes; a longer text is cut while it is serialized and the event
 // says `truncated` (docs/spec/logging.md#bounds).
@@ -59,9 +70,10 @@ function callCids(name, args) {
  * refused call. The main page and the documents of the surfaces make the event here so that both record a call alike. `cids`
  * are the correlation identifiers that the call continues, or undefined.
  */
-export function callEvent({ name, args, micros, ok, error }) {
+export function callEvent({ name, args, micros, ok, error, code }) {
   const fields = { name, ...callArguments(args), micros, ok };
-  if (!ok) fields.error = error;
+  // default: a failure without a code of its own has the internal code of the entrance (docs/spec/logging.md#result-form).
+  if (!ok) fields.error = `${code ?? INTERNAL_CODE}: ${error}`;
   return { level: ok ? "debug" : "warn", event: "page.call", fields, cids: callCids(name, args) };
 }
 
@@ -92,8 +104,8 @@ export function settlingCalls(call) {
       }
       pending += 1;
       const result = Promise.resolve().then(() => call(name, ...args));
-      result.then(() => { observed(name, args, started, true, undefined); answered(); },
-        (error) => { observed(name, args, started, false, error instanceof Error ? error.message : String(error)); answered(); });
+      result.then(() => { observed(name, args, started, true, undefined, undefined); answered(); },
+        (error) => { const failure = failureOf(error); observed(name, args, started, false, failure.error, failure.code); answered(); });
       return result;
     },
     settle() {

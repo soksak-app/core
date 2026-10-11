@@ -47,7 +47,7 @@ test("a command request is the event page.command with its name, duration and ou
   const events = calls.filter(([name]) => name === "log").flatMap(([, payload]) => payload.events ?? []).filter(({ event }) => event === "page.command");
   // An event is stored when its command ends, so the order is the order of the ends.
   assert.deepEqual(events.map(({ level, fields }) => [level, fields.name, fields.ok, fields.error]).sort((a, b) => a[1].localeCompare(b[1])), [
-    ["warn", "core.fixture.broken", false, "broken on purpose"],
+    ["warn", "core.fixture.broken", false, "-32000: broken on purpose"],
     ["debug", "core.fixture.fine", true, undefined],
   ]);
   for (const { fields } of events) assert.ok(Number.isInteger(fields.micros) && fields.micros >= 0);

@@ -22,6 +22,7 @@ use wait_timeout::ChildExt;
 use crate::application_log::log_error;
 use crate::buffer_bounds::{record_buffer_drop, PendingLines};
 use crate::platform::{current, PersistentStream};
+use crate::sidecar_reply::{error_of_body, RequestLedger};
 use crate::windows::{emit_window, window_data};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -109,6 +110,9 @@ struct Request<'a> {
 struct Event {
     surface: String,
     body: Box<RawValue>,
+    /// The correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#protocol).
+    #[serde(default)]
+    cids: Vec<String>,
 }
 
 /// It first checks whether the line holds closed. When closed is present, the line is the answer to closed
@@ -522,6 +526,9 @@ static RETAIN_REQUESTS: std::sync::atomic::AtomicU64 = std::sync::atomic::Atomic
 /// message to this size.
 const MESSAGE_LIMIT: usize = 64 << 20;
 
+/// The code of the error of a reply that states a failure without a code of its own (docs/spec/logging.md#result-form).
+const INTERNAL_CODE: i64 = -32603;
+
 /// The write or read thread to start after the registration.
 type Thread = Box<dyn FnOnce() + Send>;
 
@@ -596,6 +603,8 @@ struct State<O> {
     /// For each stopping standard-I/O sidecar, the record that the read thread writes until the end of the output
     /// (docs/spec/sidecars.md#messages).
     stopping: HashMap<String, Stopping>,
+    /// The requests with correlation identifiers that wait for a reply (sidecar_reply.rs).
+    requests: RequestLedger,
 }
 
 /// The record of a stopping standard-I/O sidecar. The read thread reads the output to its end even after stop emptied
@@ -715,6 +724,7 @@ impl<O: Owner> Sidecars<O> {
                     unannounced_loss: std::collections::HashSet::new(),
                     replacing: HashMap::new(),
                     stopping: HashMap::new(),
+                    requests: RequestLedger::default(),
                 })),
                 started: Condvar::new(),
                 ready_timeout: READY_TIMEOUT,
@@ -932,6 +942,11 @@ impl<O: Owner> Sidecars<O> {
             .outbox
             .try_send(Outgoing::Line(line))
             .map_err(|_| format!("sidecar {name} is not keeping up"));
+        if delivered.is_ok() && !cids.is_empty() {
+            state
+                .requests
+                .add(name, surface, cids, crate::event_log::monotonic_ns());
+        }
         let changed = state.closing_changed.clone();
         drop(state);
         // The request is recorded once it is queued for the sidecar, so a request that was refused is not recorded.
@@ -2118,6 +2133,7 @@ impl<O: Owner> Core<O> {
                         Ok(event) => event,
                         Err(error) => return Some(format!("invalid message: {error}")),
                     };
+                    record_reply(&state, &sidecar, &event);
                     let owner = state
                         .lock()
                         .ok()
@@ -2154,6 +2170,9 @@ impl<O: Owner> Core<O> {
             let mut changed = None;
             if let Ok(mut state) = state.lock() {
                 stopping = state.stopped;
+                if stopping {
+                    state.requests.forget(&sidecar);
+                }
                 let is_current = state
                     .running
                     .get(&sidecar)
@@ -2224,6 +2243,7 @@ impl<O: Owner> Core<O> {
                 // connect again at once, and the next send connects again through the creation path
                 // (docs/spec/terminal-runtime.md#service-transport).
                 log_error(&format!("sidecar {sidecar}"), format!("failed: {reason}"));
+                fail_requests(&state, &sidecar, &reason);
                 for (surface, owner) in owned {
                     owner.deliver_failure(Failure {
                         sidecar: sidecar.clone(),
@@ -2237,6 +2257,7 @@ impl<O: Owner> Core<O> {
             // alive it attaches again, and if it died the cleanup of the stale endpoint in start_persistent spawns it
             // again (V5-106).
             if was_current {
+                fail_requests(&state, &sidecar, "connection lost");
                 revive_persistent(&reader_core, &sidecar);
             }
         }));
@@ -2529,6 +2550,7 @@ fn relay<O: Owner>(
             Ok(event) => event,
             Err(error) => return Some(format!("invalid message: {error}")),
         };
+        record_reply(state, sidecar, &event);
         // The state lock must never be poisoned. A panic of another thread is fatal.
         let (owner, addressed) = {
             let state = state.lock().expect("sidecar state");
@@ -2621,6 +2643,7 @@ fn fail<O: Owner>(
         if state.stopped || current != Some(pid) {
             // It is stopping. The violation is written to the log and no failure event is sent. stop decides the report
             // of the end.
+            state.requests.forget(sidecar);
             if let Some(violation) = violation {
                 if let Some(stopping) = state.stopping.get_mut(sidecar) {
                     stopping.violated = true;
@@ -2681,12 +2704,80 @@ fn fail<O: Owner>(
         reason = format!("{reason}; {failure}");
     }
     log_error(&format!("sidecar {sidecar}"), format!("failed: {reason}"));
+    fail_requests(state, sidecar, &reason);
     for (surface, owner) in owned {
         owner.deliver_failure(Failure {
             sidecar: sidecar.to_string(),
             surface,
             reason: reason.clone(),
         });
+    }
+}
+
+/// Stores `host.sidecar.reply` for a message of the sidecar when it names the correlation identifiers of requests or its body
+/// states an error (sidecar_reply.rs).
+fn record_reply<O>(state: &Arc<Mutex<State<O>>>, sidecar: &str, event: &Event) {
+    let failure = error_of_body(event.body.get());
+    if event.cids.is_empty() && failure.is_none() {
+        return;
+    }
+    let mut cids: &[String] = &event.cids;
+    if let Some(bad) = cids.iter().find(|cid| !crate::event_log::valid_cid(cid)) {
+        log_error(
+            &format!("sidecar {sidecar}"),
+            format!(
+                "the cids of a reply of surface {} are refused: {bad:?} is empty or holds a quote, a backslash or a control character",
+                event.surface
+            ),
+        );
+        cids = &[];
+    }
+    let elapsed = state
+        .lock()
+        .expect("sidecar state")
+        .requests
+        .take(cids, crate::event_log::monotonic_ns());
+    let mut fields = serde_json::json!({
+        "name": sidecar, "surface": event.surface, "bytes": event.body.get().len(), "ok": failure.is_none(),
+    });
+    if let Some(elapsed) = elapsed {
+        fields["micros"] = (elapsed / 1000).into();
+    }
+    let mut level = crate::event_log::Level::Info;
+    if let Some(failure) = failure {
+        level = crate::event_log::Level::Warn;
+        let (text, _) = crate::bounds::cut_text(
+            &format!("{INTERNAL_CODE}: {failure}"),
+            crate::bounds::CALL_TEXT_BYTES,
+        );
+        fields["error"] = text.into();
+    }
+    if cids.is_empty() {
+        crate::event_record::emit_host(level, "host.sidecar.reply", fields);
+    } else {
+        crate::event_record::emit_host_cids(level, "host.sidecar.reply", cids, fields);
+    }
+}
+
+/// Stores `host.sidecar.reply` as a failure for each surface of the sidecar that has requests waiting, with their identifiers and
+/// the reason that the failure of the sidecar gives the page.
+fn fail_requests<O>(state: &Arc<Mutex<State<O>>>, sidecar: &str, reason: &str) {
+    let surfaces = state
+        .lock()
+        .expect("sidecar state")
+        .requests
+        .failed(sidecar);
+    let (text, _) = crate::bounds::cut_text(
+        &format!("{INTERNAL_CODE}: {reason}"),
+        crate::bounds::CALL_TEXT_BYTES,
+    );
+    for (surface, cids) in surfaces {
+        crate::event_record::emit_host_cids(
+            crate::event_log::Level::Warn,
+            "host.sidecar.reply",
+            &cids,
+            serde_json::json!({"name": sidecar, "surface": surface, "bytes": 0, "ok": false, "error": text}),
+        );
     }
 }
 

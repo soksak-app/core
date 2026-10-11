@@ -3,10 +3,8 @@
 // Every call is the event `page.call`, and the events of one turn travel to the host in one call `log`, like the events of
 // the main page (log-batch.js). The records of the document (`page.report`) are queued behind the same batcher so that the
 // events of one document reach the host in the order they happened.
-import { callEvent } from "./host-calls.js";
+import { callEvent, failureOf } from "./host-calls.js";
 import { createEventBatcher } from "./log-batch.js";
-
-const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 
 /**
  * `send(name, ...args)` sends one host call by its name and arguments and returns its answer; `log(request)` sends the request
@@ -18,8 +16,8 @@ export function surfaceCalls({ send, log }) {
   return {
     call(name, ...args) {
       const started = performance.now();
-      const ended = (ok, error) => {
-        const { level, event, fields, cids } = callEvent({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, error });
+      const ended = (ok, failure) => {
+        const { level, event, fields, cids } = callEvent({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, ...failure });
         // events: page.call
         batcher.emit(level, event, fields, cids);
       };
@@ -27,14 +25,14 @@ export function surfaceCalls({ send, log }) {
       try {
         result = Promise.resolve(send(name, ...args));
       } catch (error) {
-        ended(false, messageOf(error));
+        ended(false, failureOf(error));
         return Promise.reject(error);
       }
       return result.then((answer) => {
-        ended(true, undefined);
+        ended(true, {});
         return answer;
       }, (error) => {
-        ended(false, messageOf(error));
+        ended(false, failureOf(error));
         throw error;
       });
     },

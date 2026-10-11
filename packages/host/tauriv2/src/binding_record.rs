@@ -13,6 +13,9 @@ use crate::bounds::{bounded_json, cut_text, CALL_TEXT_BYTES};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
 
+/// The code of the error of a call that fails without a code of its own.
+const INTERNAL_CODE: i64 = -32603;
+
 /// One command being handled: its name, the arguments of the call cut to the bound, and the time it started. A call that is
 /// dropped before [`BindingCall::finish`] ended without a result: the framework rejected an argument, or the command
 /// panicked.
@@ -84,7 +87,8 @@ impl BindingCall {
                 json!({"name": self.name, "args": args, "micros": micros, "ok": true, "truncated": truncated}),
             ),
             Some(error) => {
-                let (error, cut) = cut_text(&error, CALL_TEXT_BYTES);
+                // A command fails with text only, so its code is the internal code of the entrance (docs/spec/logging.md#result-form).
+                let (error, cut) = cut_text(&format!("{INTERNAL_CODE}: {error}"), CALL_TEXT_BYTES);
                 emit_host(
                     Level::Warn,
                     "host.binding.call",

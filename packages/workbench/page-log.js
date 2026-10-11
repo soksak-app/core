@@ -69,9 +69,9 @@ const UNRECORDED_CALLS = new Set(["log", "performance", "debugReadRange", "overl
 // Every host call of the page is the event `page.call` at the level `debug`, and a refused call is at the level `warn`
 // (docs/spec/logging.md#automatic-entrances). The callers report their own failures; the event does not fail a window check.
 if (batcher) {
-  observeHostCalls(({ name, args, micros, ok, error }) => {
+  observeHostCalls(({ name, args, micros, ok, error, code }) => {
     if (UNRECORDED_CALLS.has(name)) return;
-    const { level, event, fields, cids } = callEvent({ name, args, micros, ok, error });
+    const { level, event, fields, cids } = callEvent({ name, args, micros, ok, error, code });
     // events: page.call
     batcher.emit(level, event, fields, cids);
   });

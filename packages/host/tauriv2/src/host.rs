@@ -59,6 +59,7 @@ pub mod recording;
 #[path = "routine/routine.rs"]
 pub mod routine;
 mod shapes;
+mod sidecar_reply;
 pub mod sidecars;
 #[cfg(feature = "diagnostics")]
 pub mod stall_dump;

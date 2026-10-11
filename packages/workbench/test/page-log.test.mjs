@@ -135,7 +135,7 @@ test("every host call is the event page.call with its name, arguments, duration 
   const seen = events().filter(({ event }) => event === "page.call");
   assert.deepEqual(seen.map(({ level, fields }) => [level, fields.name, fields.args, fields.ok, fields.error, fields.truncated]), [
     ["debug", "good", '[{"a":1}]', true, undefined, false],
-    ["warn", "bad", "[]", false, "refused", false],
+    ["warn", "bad", "[]", false, "-32603: refused", false],
     ["debug", "big", JSON.stringify([{ text: "x".repeat(5000) }]).slice(0, 1024), true, undefined, true],
   ]);
   for (const { fields } of seen) assert.ok(Number.isInteger(fields.micros) && fields.micros >= 0);

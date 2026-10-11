@@ -146,6 +146,16 @@ event를 내는 각 저장소는 `events.json`에 event를 선언한다(이 저�
 
 task의 종료처럼 어떤 입구도 덮지 못하는 원천은 소스 lint가 선언이나 사유 주석이 없는 event를 나열한다. lint는 증명이 아니다. 범위는 실행 중에 판단한다: window check가 선언된 명령과 native 입력으로 선언된 원천을 하나씩 구동하고 그 선언된 event를 요구한다.
 
+### 결과 형식
+
+호출의 입구는 결과를 한 형식으로 밝힌다. catalog가 `"result": true`로 표시하고 audit가 검사한다(`page.call`, `page.command`, `host.endpoint.call`, `host.binding.call`, `host.sidecar.reply`).
+
+- `ok`는 boolean이다. `micros`는 음이 아닌 정수다. 호출을 받은 때(endpoint 요청, page의 호출, command, sidecar의 메시지)부터 결과까지의 시간을 event를 저장하는 layer의 단조 시계로 잰다. sidecar의 reply는 host가 queue에 넣은 요청부터 잰다.
+- `error`는 `ok`가 `false`일 때만 있으며 `<code>: <text>`다. 입구의 호출자가 받는 code와 text이고 1,024 byte로 자른다. 자기 code가 없는 실패는 그 입구의 내부 code를 가진다. endpoint 요청, host 호출, sidecar의 reply는 `-32603`이고 command는 `-32000`이다(등록된 함수의 예외에 endpoint가 답하는 code). code가 있는 실패는 그 code를 유지한다(`RPCError`, `ExposureError`).
+- 성공한 호출은 level `debug`(sidecar의 reply는 `info`), 실패한 호출은 `warn`이다.
+
+sidecar는 요청의 correlation identifier를 reply 줄의 `cids` member에 `surface`, `body`와 나란히 쓰고, 실패한 요청은 body의 `error` member로 밝힌다. terminal sidecar는 프로토콜의 실패 88개를 `cids` 없이 body의 `error`로 답한다. 그 저장소가 요청 줄의 `cids`를 이 reply 줄에 써야 `host.sidecar.reply`가 요청을 가리킨다.
+
 ### 시험 표시
 
 window check는 시험 대상 애플리케이션의 event log에 시험마다 표시를 남기므로, 시험은 로그의 위치 범위다. 진단 method `diagnostics.test.mark`([endpoint](endpoint.ko.md))는 시험이 시작할 때 event `host.test.start`(`name`, `run`)를, 끝날 때 `host.test.end`(`name`, `run`, `pass`, `fail`, `skip` 중 하나인 `result`)를 저장한다. 둘 다 layer `host`, class `lifecycle`, level `info`이며, flush한 뒤 event 파일의 `boot`와 표시 줄의 `seq`인 `{boot, seq}`로 답한다. 위치는 `(boot, seq)`다. 한 애플리케이션이 여러 실행을 처리하므로 실행 식별자는 `log.open`이 아니라 이 event에 실린다. window-check 라이브러리는 검사가 session을 열 때 시작을, 검사의 정리와 오류 점검 뒤에 끝을 표시하며, 본문이나 정리가 실패했으면 `fail`이다. 표시마다 `{run, app, config, name, kind, boot, seq, ts_us}`(`config`는 애플리케이션의 설정 폴더)를 실행 폴더(`SOKSAK_RUN_FOLDER`)의 `marks.jsonl`에 덧붙이고, `expectError`를 부르면 실행 중인 시험에 대해 `{run, app, config, name, kind: "expect_error", pattern, flags, ts_us}`를, `expectEvent(name)`를 부르면 `{run, app, config, name, kind: "expect_event", event, ts_us}`를 덧붙인다. `SOKSAK_RUN_ID`가 있을 때만 표시하며, 이 값은 시험 실행기가 정한다([examples](../operations/examples.ko.md#창-검사)).

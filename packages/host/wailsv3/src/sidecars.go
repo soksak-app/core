@@ -77,6 +77,8 @@ type sidecarOutput struct {
 	Body    json.RawMessage `json:"body"`
 	Closed  *bool           `json:"closed"`
 	Error   *string         `json:"error"`
+	// Cids are the correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#protocol).
+	Cids []string `json:"cids"`
 }
 
 // ClosingSurface is a surface for which the host sent closed and the sidecar has not replied yet (host.sidecars).
@@ -131,6 +133,8 @@ type SidecarOwner interface {
 // Sidecars manages the sidecar processes of one application and the windows that own surfaces.
 type Sidecars struct {
 	mu sync.Mutex
+	// requests remembers the requests with correlation identifiers that wait for a reply (sidecar_reply.go).
+	requests requestLedger
 	// declarations protects declared, persistent and basenames. An installation adds declarations while the application runs and a start reads
 	// the executable outside c.mu, so it is separate from c.mu.
 	declarations sync.RWMutex
@@ -401,6 +405,7 @@ func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body j
 	select {
 	case process.outbox <- line:
 		if len(cids) > 0 {
+			c.requests.add(name, surface, cids, monotonicNanos())
 			EmitHostCids(LevelInfo, "host.sidecar.request", cids, map[string]any{"name": name, "surface": surface, "bytes": len(body)})
 		}
 		return nil
@@ -1440,6 +1445,7 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 	}
 	if !failed {
 		// It is stopping. A violation is written to the log and no failure event is sent. Stop decides the report of the exit.
+		c.requests.forget(process.name)
 		if violation != "" {
 			LogError("sidecar "+process.name, "failed: "+violation)
 		}
@@ -1467,6 +1473,7 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 	PerformanceProcessRemove(process.cmd.Process.Pid)
 	close(process.exited)
 	LogError("sidecar "+process.name, "failed: "+reason)
+	c.failRequests(process.name, reason)
 	for _, item := range owned {
 		item.owner.Emit("sidecar-failure", SidecarFailure{Sidecar: process.name, Surface: item.surface, Reason: reason})
 	}
@@ -1515,6 +1522,7 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 			return "invalid message: body is missing"
 		}
 		event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
+		c.recordReply(process.name, event.Surface, output.Cids, event.Body)
 		c.mu.Lock()
 		owner := c.owners[event.Surface]
 		addressed := process.surfaces[event.Surface]
@@ -1583,10 +1591,14 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	EmitHost(LevelInfo, "host.sidecar.disconnect", map[string]any{"name": process.name, "pid": process.servicePID,
 		"stopping": stopping, "violation": violation})
 	PerformanceProcessRemove(process.servicePID)
+	if stopping {
+		c.requests.forget(process.name)
+	}
 	if violation != "" {
 		// The service violated the protocol. The same message would end the next connection too, so it is not connected again immediately, and the next send
 		// connects again through the creation path (docs/spec/terminal-runtime.md#service-transport).
 		LogError("sidecar "+process.name, "failed: "+violation)
+		c.failRequests(process.name, violation)
 		for _, item := range owned {
 			item.owner.Emit("sidecar-failure", SidecarFailure{Sidecar: process.name, Surface: item.surface, Reason: violation})
 		}
@@ -1595,6 +1607,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	// The connection was lost. It connects again immediately without waiting for the next send; if the service is alive, it
 	// attaches again, and if it died, the stale endpoint cleanup of processPersistent respawns it (V5-106).
 	if wasCurrent {
+		c.failRequests(process.name, "connection lost")
 		c.revivePersistent(process.name)
 	}
 }
@@ -1677,6 +1690,7 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 			return "invalid message: body is missing"
 		}
 		event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
+		c.recordReply(process.name, event.Surface, output.Cids, event.Body)
 		c.mu.Lock()
 		owner := c.owners[event.Surface]
 		c.mu.Unlock()

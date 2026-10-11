@@ -1690,3 +1690,149 @@ fn a_request_carries_the_correlation_identifiers() {
          {\"surface\":\"s1\",\"root\":\"/projects/a\",\"body\":{\"operation\":\"input\"}}\n"
     );
 }
+
+/// A script that answers three requests: an error with identifiers, an answer with identifiers, and an error without, and then
+/// sends a message that is no reply.
+const REPLY_SCRIPT: &str = r#"#!/bin/sh
+read a
+printf '%s\n' '{"surface":"s1","cids":["b1.7","b1.8"],"body":{"id":1,"error":"unsupported operation"}}'
+read b
+printf '%s\n' '{"surface":"s1","cids":["b1.9"],"body":{"id":2,"ok":true}}'
+read c
+printf '%s\n' '{"surface":"s1","body":{"id":3,"error":{"reason":"no request"}}}'
+printf '%s\n' '{"surface":"s1","body":{"event":"state"}}'
+cat >/dev/null
+"#;
+
+/// Runs the scenario `name` of this file in a child process that nothing else writes in, with the configuration folder in the
+/// variable `variable`, and returns the output of the child and the events `host.sidecar.reply` that it stored.
+fn replies_of_child(name: &str, variable: &str) -> (String, Vec<serde_json::Value>) {
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", name, "--nocapture"])
+        .env(variable, config.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let replies = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| event["event"] == "host.sidecar.reply")
+        .collect();
+    (
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        replies,
+    )
+}
+
+// contract: sidecars.protocol.reply-with-cids-is-recorded
+#[test]
+fn a_reply_of_a_sidecar_is_recorded_with_the_identifiers_of_its_request() {
+    // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
+    if let Some(config) = std::env::var_os("SOKSAK_REPLY_CHILD") {
+        let (mut sidecars, _directory) = script_sidecars(REPLY_SCRIPT);
+        sidecars.0.stop_timeout = STALL;
+        let writer = records::start_writer(Path::new(&config));
+        let (window, events) = owner("a", "/projects/a");
+        let body = raw(r#"{"operation":"input"}"#);
+        sidecars
+            .send_with_cids(
+                &window,
+                ECHO,
+                "s1",
+                &body,
+                &["b1.7".to_string(), "b1.8".to_string()],
+            )
+            .unwrap();
+        events.recv_timeout(STALL).unwrap();
+        sidecars
+            .send_with_cids(&window, ECHO, "s1", &body, &["b1.9".to_string()])
+            .unwrap();
+        events.recv_timeout(STALL).unwrap();
+        sidecars.send(&window, ECHO, "s1", &body).unwrap();
+        events.recv_timeout(STALL).unwrap();
+        events.recv_timeout(STALL).unwrap();
+        sidecars.stop();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let (_, replies) = replies_of_child(
+        "a_reply_of_a_sidecar_is_recorded_with_the_identifiers_of_its_request",
+        "SOKSAK_REPLY_CHILD",
+    );
+    assert_eq!(replies.len(), 3, "{replies:?}");
+    let want = [
+        (
+            "warn",
+            false,
+            Some("-32603: unsupported operation"),
+            Some(serde_json::json!(["b1.7", "b1.8"])),
+            true,
+        ),
+        ("info", true, None, Some(serde_json::json!(["b1.9"])), true),
+        (
+            "warn",
+            false,
+            Some("-32603: {\"reason\":\"no request\"}"),
+            None,
+            false,
+        ),
+    ];
+    for (reply, (level, ok, error, cids, micros)) in replies.iter().zip(want) {
+        let fields = &reply["fields"];
+        assert_eq!(reply["level"], level, "{reply}");
+        assert_eq!(fields["name"], ECHO, "{reply}");
+        assert_eq!(fields["surface"], "s1", "{reply}");
+        assert_eq!(fields["ok"], ok, "{reply}");
+        assert_eq!(
+            fields.get("error").and_then(|e| e.as_str()),
+            error,
+            "{reply}"
+        );
+        assert_eq!(reply.get("cids").cloned(), cids, "{reply}");
+        assert_eq!(fields.get("micros").is_some(), micros, "{reply}");
+    }
+}
+
+// contract: sidecars.protocol.failure-fails-the-pending-requests
+#[test]
+fn the_failure_of_a_sidecar_is_the_failed_reply_of_its_pending_requests() {
+    if let Some(config) = std::env::var_os("SOKSAK_REPLY_FAILURE_CHILD") {
+        let (mut sidecars, _directory) =
+            script_sidecars("#!/bin/sh\nread first\nread second\nexit 3\n");
+        sidecars.0.stop_timeout = STALL;
+        let writer = records::start_writer(Path::new(&config));
+        let (window, _events, failures) = failing_owner("a", "/projects/a");
+        let body = raw(r#"{"operation":"input"}"#);
+        sidecars
+            .send_with_cids(&window, ECHO, "s1", &body, &["b1.7".to_string()])
+            .unwrap();
+        sidecars
+            .send_with_cids(&window, ECHO, "s1", &body, &["b1.8".to_string()])
+            .unwrap();
+        let failure = failures.recv_timeout(STALL).unwrap();
+        sidecars.stop();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        // The parent reads the reason from the output of the child.
+        println!("reason: {}", failure.reason);
+        return;
+    }
+    let (stdout, replies) = replies_of_child(
+        "the_failure_of_a_sidecar_is_the_failed_reply_of_its_pending_requests",
+        "SOKSAK_REPLY_FAILURE_CHILD",
+    );
+    let reason = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("reason: "))
+        .expect("the child printed the reason of the failure");
+    assert_eq!(replies.len(), 1, "{replies:?}");
+    assert_eq!(replies[0]["level"], "warn");
+    assert_eq!(replies[0]["cids"], serde_json::json!(["b1.7", "b1.8"]));
+    assert_eq!(
+        replies[0]["fields"],
+        serde_json::json!({"name": ECHO, "surface": "s1", "bytes": 0, "ok": false, "error": format!("-32603: {reason}")})
+    );
+}
