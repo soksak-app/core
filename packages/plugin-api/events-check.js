@@ -309,12 +309,13 @@ function enclosingBrace(source, at) {
  * The sites of one source where an event is stored, as `{at, line, call, name, levels, fields}` (`at` is the offset of the call) (`name` is null when the site
  * builds it), and the markers of the source.
  */
-export function sitesOf(path, text) {
+export function sitesOf(path, text, emitters = {}) {
   const language = LANGUAGES[path.slice(path.lastIndexOf('.') + 1)];
   const source = { path, language, ...lex(path, text, language) };
   const { code, inString } = source;
   const sites = [];
-  for (const entrance of ENTRANCES[language]) {
+  // default: a repository that declares no emitters for the language has only the entrances of this package.
+  for (const entrance of [...ENTRANCES[language], ...(emitters[language] ?? [])]) {
     if (entrance.only && !entrance.only.test(path)) continue;
     for (const match of code.matchAll(entrance.re)) {
       if (inString[match.index]) continue;
@@ -379,12 +380,12 @@ export function catalogFindings(catalog, catalogPath) {
 }
 
 /** The number of emit sites by language, as `{literal, built}`: sites that give their name, and sites that build it. */
-export function siteCounts(sources) {
+export function siteCounts(sources, emitters = {}) {
   const counts = {};
   for (const [path, text] of sources) {
     const language = LANGUAGES[path.slice(path.lastIndexOf('.') + 1)];
     if (!counts[language]) counts[language] = { literal: 0, built: 0 };
-    for (const site of sitesOf(path, text).sites) counts[language][site.name === null ? 'built' : 'literal'] += 1;
+    for (const site of sitesOf(path, text, emitters).sites) counts[language][site.name === null ? 'built' : 'literal'] += 1;
   }
   return counts;
 }
@@ -395,11 +396,11 @@ export function siteCounts(sources) {
  * declaration. A site gives its name literally (a string, or a template of a page), or a comment `events: <declared names>`
  * above it names what it builds, or `events: forwarded` states that it passes on the name of its caller.
  */
-export function emitFindings(catalog, sources, catalogPath) {
+export function emitFindings(catalog, sources, catalogPath, config = { emitters: {} }) {
   const findings = [];
   const emitted = new Set();
   for (const [path, text] of sources) {
-    const { sites, markers } = sitesOf(path, text);
+    const { sites, markers } = sitesOf(path, text, config.emitters);
     const found = [];
     const report = (line, message) => found.push({ line, message: `${path}:${line}: ${message}` });
     const claimed = new Set();
@@ -547,6 +548,50 @@ export function censusRules() {
   return JSON.parse(readFileSync(new URL('./census-rules.json', import.meta.url), 'utf8')).rules;
 }
 
+const EMITTER_KEYS = ['call', 'level', 'fixed', 'event', 'fields', 'name', 'only'];
+
+/**
+ * The emit sites that a repository declares for the writer methods of its own language (`emitters`: language to a list of
+ * `{call, level | fixed, event, fields?, name?, only?}`), as the entrances of `ENTRANCES`. `call` is the name of the method or
+ * function; `level`, `event` and `fields` are the positions of its arguments, `fixed` is the level of a call without a level
+ * argument, `name` is the event that such a call stores, and `only` is a pattern of the paths the call is local to.
+ */
+function parseEmitters(file, emitters) {
+  const fail = (message) => { throw new Error(`${file}: ${message}`); };
+  if (emitters === null || typeof emitters !== 'object' || Array.isArray(emitters)) fail('emitters is not an object of languages');
+  const parsed = {};
+  for (const [language, list] of Object.entries(emitters)) {
+    if (!Object.values(LANGUAGES).includes(language)) fail(`emitters names the language ${language}, which is not one of ${[...new Set(Object.values(LANGUAGES))].join(', ')}`);
+    if (!Array.isArray(list)) fail(`emitters.${language} is not a list`);
+    parsed[language] = list.map((emitter, index) => {
+      const at = `emitters.${language}[${index}]`;
+      for (const key of Object.keys(emitter)) if (!EMITTER_KEYS.includes(key)) fail(`${at}: has the key ${key}, which is not one of ${EMITTER_KEYS.join(', ')}`);
+      if (typeof emitter.call !== 'string' || !/^[A-Za-z_]\w*$/.test(emitter.call)) fail(`${at}: call ${JSON.stringify(emitter.call)} is not an identifier`);
+      if (list.slice(0, index).some((earlier) => earlier.call === emitter.call)) fail(`${at}: call ${emitter.call} is declared twice`);
+      if (emitter.level === undefined && emitter.fixed === undefined) fail(`${at}: needs level (the position of the level argument) or fixed (the level of the call)`);
+      if (emitter.level !== undefined && emitter.fixed !== undefined) fail(`${at}: has level and fixed; a call names its level in one of them`);
+      const position = (key) => {
+        if (!Number.isInteger(emitter[key]) || emitter[key] < 0) fail(`${at}: ${key} must be a non-negative integer, found ${JSON.stringify(emitter[key])}`);
+      };
+      if (emitter.level !== undefined) position('level');
+      position('event');
+      if (emitter.fields !== undefined) position('fields');
+      if (emitter.fixed !== undefined && !LEVELS.includes(emitter.fixed)) fail(`${at}: fixed ${JSON.stringify(emitter.fixed)} is not a level`);
+      if (emitter.name !== undefined && typeof emitter.name !== 'string') fail(`${at}: name is not a string`);
+      let only;
+      if (emitter.only !== undefined) {
+        try {
+          only = new RegExp(emitter.only);
+        } catch {
+          fail(`${at}: only is not a pattern: ${JSON.stringify(emitter.only)}`);
+        }
+      }
+      return { re: new RegExp(`\\b${emitter.call}\\s*\\(`, 'g'), level: emitter.level, fixed: emitter.fixed, event: emitter.event, fields: emitter.fields, name: emitter.name, only };
+    });
+  }
+  return parsed;
+}
+
 /**
  * Reads the census declaration of a repository (`file`, its text `text`): `exclude` (a pattern of the paths that the census
  * leaves out), `entrances` (rule id to the patterns of the entrance files that may hold the rule's source) and `pending` (rule
@@ -561,7 +606,7 @@ export function parseCensusConfig(file, text, rules = censusRules()) {
     throw new Error(`${file}: ${error.message}`, { cause: error });
   }
   const known = rules.map((rule) => rule.id);
-  const allowed = ['exclude', 'entrances', 'pending'];
+  const allowed = ['exclude', 'entrances', 'pending', 'emitters'];
   for (const key of Object.keys(config)) if (!allowed.includes(key)) fail(`has the key ${key}, which is not one of ${allowed.join(', ')}`);
   // default: a declaration without entrances declares none.
   const entrances = config.entrances ?? {};
@@ -572,6 +617,7 @@ export function parseCensusConfig(file, text, rules = censusRules()) {
     if (!Array.isArray(patterns) || patterns.some((pattern) => typeof pattern !== 'string')) fail(`gives the rule ${id} entrances that are not a list of patterns`);
   }
   return {
+    emitters: parseEmitters(file, config.emitters ?? {}), // default: a declaration without emitters declares none.
     exclude: config.exclude === undefined ? null : new RegExp(config.exclude),
     entrances: Object.fromEntries(Object.entries(entrances).map(([id, patterns]) => [id, patterns.map((pattern) => new RegExp(pattern))])),
     pending,
@@ -607,7 +653,7 @@ export function censusFindings(sources, config, rules = censusRules()) {
         }
         const last = source.lineAt(match.index + match[0].length - 1);
         if (reasonFor(lines, line - 1) !== null || lines.slice(line, last).some((text) => REASON.test(text))) continue;
-        if (sites === null) sites = sitesOf(path, text).sites;
+        if (sites === null) sites = sitesOf(path, text, config.emitters).sites;
         const [start, end] = functionRange(source, match.index);
         if (sites.some((site) => site.at >= start && site.at <= end)) continue;
         finding(`${rule.id} has neither an event nor a stated reason`);
@@ -642,9 +688,10 @@ export function census(root, configFile) {
  */
 export function catalogReport(root, catalogPath, configFile) {
   const catalog = JSON.parse(readFileSync(join(root, catalogPath), 'utf8'));
-  const sources = declaredSources(root, censusConfig(root, configFile));
-  const findings = [...catalogFindings(catalog, catalogPath), ...emitFindings(catalog, sources, catalogPath)];
-  const sites = Object.entries(siteCounts(sources)).map(([language, { literal, built }]) => `${language} ${literal} literal ${built} built`).join(', ');
+  const config = censusConfig(root, configFile);
+  const sources = declaredSources(root, config);
+  const findings = [...catalogFindings(catalog, catalogPath), ...emitFindings(catalog, sources, catalogPath, config)];
+  const sites = Object.entries(siteCounts(sources, config.emitters)).map(([language, { literal, built }]) => `${language} ${literal} literal ${built} built`).join(', ');
   return { findings, declared: Object.keys(catalog.events).length, sites };
 }
 

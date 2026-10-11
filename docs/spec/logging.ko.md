@@ -287,6 +287,18 @@ window check는 시험 대상 애플리케이션의 event log에 시험마다 �
 
 저장소의 선언 파일(`--census`)은 `exclude`(census와 catalog 검사가 뺄 경로의 pattern. 제외된 파일(vendored bundle 등)은 읽거나 파싱하지 않는다), `entrances`(규칙 id와 입구 파일의 pattern), `pending`(규칙 id와 입구를 만들어 규칙을 켜는 checklist 항목)을 가진다. 대기 중인 규칙은 강제하지 않으며, 명령은 그 항목과 대기하는 발견의 수를 출력하므로(`--list`는 각 발견을 출력한다) 꺼진 규칙은 침묵하지 않는다. 어떤 규칙에도 없는 규칙 id, 모르는 key, checklist id가 아닌 pending 값은 오류다. `--catalog`는 소스의 emit 지점도 그 경로의 catalog와 양방향으로 대조한다([Catalog](#catalog)). `make census-check`는 `scripts/census.json`으로 이 저장소에서 명령을 실행하고, `pnpm test`는 `scripts/test/census.test.mjs`에서 실행하며, `scripts/check-fallbacks.mjs`는 같은 marker를 쓰고 다른 형식을 거부한다.
 
+선언 파일은 `emitters`도 가진다. 저장소 자기 코드의 writer 메서드의 emit 지점이며, 이 package에 저장소 이름 표 없이도 catalog 검사가 그 지점을 찾는다. `emitters`는 언어(`go`, `rs`, `m`, `js`)를 emitter 목록에 대응시키고, emitter는 `{call, level | fixed, event, fields?, name?, only?}`이다. `call`은 메서드나 함수의 이름이다(검사는 `call(`을 찾고 정의 `fn call(`은 건너뛴다). `level`, `event`, `fields`는 level, event 이름, field 객체가 있는 인자의 0부터 센 위치이고(호출에 field가 없으면 `fields`는 쓰지 않는다), `fixed`는 level 인자가 없는 호출의 level이며(`level`과 `fixed`는 함께 쓸 수 없고 하나는 있어야 한다), `name`은 그런 호출이 저장하는 event이고(`event`는 그 첫 인자의 위치이다), `only`는 emitter가 지역인 경로의 pattern이다. 예를 들어 `emit(level, event, fields)`, `emit_for(level, event, subject, fields)`, `record_error(place, text)`를 가진 Rust writer는 다음과 같이 선언한다.
+
+```json
+{ "emitters": { "rs": [
+  { "call": "emit", "level": 0, "event": 1, "fields": 2 },
+  { "call": "emit_for", "level": 0, "event": 1, "fields": 3 },
+  { "call": "record_error", "fixed": "error", "name": "sidecar.<name>.record.error", "event": 0 }
+] } }
+```
+
+emitter는 catalog 검사에서 하나의 지점이고(이름, level, 리터럴 field를 다른 지점처럼 검사하며, 호출이 이름을 만들면 `events:` marker가 필요하다) census에서 그 함수의 event이다. 목록에 없는 언어, 이 key 밖의 key를 가진 emitter, 식별자가 아니거나 두 번 선언된 `call`, 음이 아닌 정수가 아닌 위치, pattern이 아닌 `only`는 파일, 언어, 목록의 위치를 담은 오류다.
+
 입력은 독립 수신자와 비교한다: 기록된 `pty_write` 바이트는 shell 대역이 파일에 쓴 바이트와 같다.
 
 ## 개인정보

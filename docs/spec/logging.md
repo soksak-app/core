@@ -286,6 +286,18 @@ A source of occurrences is a place where a record could be lost without a trace:
 
 The declaration file of a repository (`--census`) holds `exclude` (a pattern of the paths that the census and the catalog check leave out; an excluded file, such as a vendored bundle, is not read or parsed), `entrances` (rule id to the patterns of the entrance files) and `pending` (rule id to the checklist item that creates the entrance and enables the rule). A pending rule is not enforced, and the command prints it with its item and the count of findings that wait for it (`--list` prints each finding), so a disabled rule is never silent. A rule id that no rule has, an unknown key or a pending value that is no checklist id is an error. `--catalog` also checks the emit sites of the sources against the catalog at that path in both directions ([Catalog](#catalog)). `make census-check` runs the command in this repository, with `scripts/census.json`, and `pnpm test` runs it in `scripts/test/census.test.mjs`; `scripts/check-fallbacks.mjs` uses the same marker and rejects the other forms.
 
+The declaration file also holds `emitters`, the emit sites of the writer methods of the repository's own code, so the catalog check finds them without a table of repository names in this package. `emitters` maps a language (`go`, `rs`, `m`, `js`) to a list of emitters, each `{call, level | fixed, event, fields?, name?, only?}`: `call` is the name of the method or function (the check matches `call(` and skips the definition `fn call(`), `level`, `event` and `fields` are the zero-based positions of the arguments that hold the level, the event name and the fields object (`fields` is absent when the call has no fields), `fixed` is the level of a call that has no level argument (`level` and `fixed` are exclusive and one is required), `name` is the event that such a call stores (`event` is then the position of its first argument), and `only` is a pattern of the paths that the emitter is local to. For example, a Rust writer with `emit(level, event, fields)`, `emit_for(level, event, subject, fields)` and `record_error(place, text)` declares:
+
+```json
+{ "emitters": { "rs": [
+  { "call": "emit", "level": 0, "event": 1, "fields": 2 },
+  { "call": "emit_for", "level": 0, "event": 1, "fields": 3 },
+  { "call": "record_error", "fixed": "error", "name": "sidecar.<name>.record.error", "event": 0 }
+] } }
+```
+
+An emitter is a site for the catalog check (name, level and literal fields are checked as at every site, and a name that the call builds needs the `events:` marker) and an event of its function for the census. A language that is not listed, an emitter with a key other than these, a `call` that is not an identifier or is declared twice, a position that is not a non-negative integer and an `only` that is not a pattern are errors that name the file, the language and the position in the list.
+
 An input is checked against an independent receiver: the logged `pty_write` bytes equal the bytes that a stand-in for the shell wrote to a file.
 
 ## Privacy
