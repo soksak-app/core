@@ -28,6 +28,8 @@ Debug executables are `target/debug/soksak-wailsv3.app` and `target/debug/soksak
 
 `make hosts-check` also vets the Wails host source for Windows (`windows-build-check`).
 
+Rust builds grow `target/` quickly (a debug build with the tests is tens of gigabytes). Run Cargo with `CARGO_INCREMENTAL=0`. Work that happens in a second checkout or worktree builds Rust in the `target/` folder of the main checkout, not in a folder of its own, because a folder of its own rebuilds every dependency; the crate of the host that the second checkout changed is then removed with `cargo clean -p soksak-host-tauriv2` after the last test and before the main checkout builds again, because the main checkout links the crate that the other checkout built when it does not (`cargo clean -p` only while no other `cargo` process runs). Remove build output that is not needed again (`target/debug/deps` files not used for a day, `native/darwin/build` of a worktree) after the verification, and keep the disk free space above the size of one full debug build. `target/test-runs/` keeps the runs of the test runner (see Test runner) until `node scripts/test-runs.mjs prune` removes the runs without a failure.
+
 ## Test parity
 
 Run the structural inventory gate with `make parity-check`. It discovers Git-visible JS/TS, Rust, Go, Objective-C, native headers, HTML/CSS, shell scripts, contract declarations, and build manifests without fixed language roots. Generated library output and Tauri schemas have explicit exclusions; source/output equality remains a separate build check. Unclaimed implementation or test files, empty patterns, and duplicate ownership fail. Shared tests do not permit duplicate implementation ownership.
