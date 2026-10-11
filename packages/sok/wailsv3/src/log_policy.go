@@ -113,7 +113,7 @@ func ParseLogPolicy(file string, data []byte) (LogPolicy, error) {
 			return LogPolicy{}, fmt.Errorf("%s: the class %s is missing", file, class)
 		}
 		var value string
-		if err := json.Unmarshal(raw, &value); err != nil {
+		if err := json.Unmarshal(raw, &value); err != nil || string(raw) == "null" {
 			return LogPolicy{}, fmt.Errorf("%s: the level of the class %s must be text, found %s", file, class, string(raw))
 		}
 		at := slices.Index(policyNames, value)
