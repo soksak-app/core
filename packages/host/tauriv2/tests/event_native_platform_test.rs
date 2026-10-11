@@ -34,7 +34,8 @@ fn the_platform_reads_a_monotonic_clock_and_takes_the_boot_identifier() {
 
 // contract: log.native.platform-takes-the-policy
 #[test]
-fn the_platform_takes_the_policy_of_the_native_library_and_refuses_a_level_outside_the_enumeration() {
+fn the_platform_takes_the_policy_of_the_native_library_and_refuses_a_level_outside_the_enumeration()
+{
     let system = platform::current().unwrap();
     assert!(system.set_native_event_policy([4, 3, 2, -1, 0]).is_ok());
     for bad in [[4, 4, 4, 4, 5], [-2, 4, 4, 4, 4]] {

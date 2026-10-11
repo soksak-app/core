@@ -44,8 +44,8 @@ pub mod images;
 pub mod installed;
 pub mod link;
 pub mod log_policy;
-pub mod log_retention;
 pub mod log_query;
+pub mod log_retention;
 pub mod menu;
 mod modals;
 pub mod notifications;
@@ -214,7 +214,10 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // (docs/spec/logging.md#classes-and-policy).
                 let policy_watch = log_policy::start_log_policy(&events, None)
                     .map_err(|error| format!("log policy: {error}"))?;
-                tauri::Manager::manage(app, LogPolicyStop(std::sync::Mutex::new(Some(policy_watch))));
+                tauri::Manager::manage(
+                    app,
+                    LogPolicyStop(std::sync::Mutex::new(Some(policy_watch))),
+                );
                 // The debug view follows the event file of the host: every window learns that the writer wrote.
                 let notices_app = app.clone();
                 let (observe, stop) = debug_follow::coalesce_log_notices(move |path, size| {

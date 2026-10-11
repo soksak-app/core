@@ -301,7 +301,15 @@ impl EventLog {
                 (queued_events.clone(), queued_bytes.clone(), loss.clone());
             let paths = [path.clone(), debug_path];
             crate::routine::spawn_named("event-log-writer", move || {
-                write_loop(receiver, file, paths, open, queued_events, queued_bytes, loss)
+                write_loop(
+                    receiver,
+                    file,
+                    paths,
+                    open,
+                    queued_events,
+                    queued_bytes,
+                    loss,
+                )
             })
         };
         Ok(EventLog {

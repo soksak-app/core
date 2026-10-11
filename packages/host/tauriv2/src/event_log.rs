@@ -1297,7 +1297,9 @@ fn write_loop(
         }
         // The events that the gate refused are reported with the exact count for each class and level.
         for (class, level, count) in gate.take_counts() {
-            match to_raw_value(&json!({"class": class.as_str(), "level": level.name(), "count": count})) {
+            match to_raw_value(
+                &json!({"class": class.as_str(), "level": level.name(), "count": count}),
+            ) {
                 Ok(fields) => out.push(&Pending::writer_event(Level::Info, "log.gated", fields)),
                 Err(error) => eprintln!("event writer: log.gated cannot be written: {error}"),
             }

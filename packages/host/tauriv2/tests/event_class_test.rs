@@ -63,7 +63,11 @@ fn every_line_stores_the_class_of_its_catalog_entry() {
         &json!({"name": "n", "surface": "s", "bytes": 1, "ok": true})
     ));
     assert!(log
-        .emit_relayed(relayed("page", "page.start", r#"{"time_origin":1,"url":"u"}"#))
+        .emit_relayed(relayed(
+            "page",
+            "page.start",
+            r#"{"time_origin":1,"url":"u"}"#
+        ))
         .unwrap());
     assert!(log
         .emit_relayed(relayed("page", "page.console.info", r#"{"text":"x"}"#))
@@ -101,7 +105,9 @@ fn an_event_the_catalog_does_not_declare_is_marked_undeclared_and_has_no_class()
     let events = read(log.path());
     let marked: Vec<&Value> = events
         .iter()
-        .filter(|event| event["event"] == "host.test.event" || event["event"] == "plugin.editor.opened")
+        .filter(|event| {
+            event["event"] == "host.test.event" || event["event"] == "plugin.editor.opened"
+        })
         .collect();
     assert_eq!(marked.len(), 2);
     for event in marked {

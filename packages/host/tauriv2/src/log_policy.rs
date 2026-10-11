@@ -345,13 +345,16 @@ impl Drop for LogPolicyWatch {
     }
 }
 
+/// The function that `start_log_policy` calls after each load with `default`, `file` or `error`.
+pub type PolicyApplied = Box<dyn Fn(&str) + Send + Sync>;
+
 /// Applies the policy file of the writer and watches the file: a creation, a write, a replacement or a removal puts the policy of the
 /// file (or the default policy, when there is no file) in force. The watch is a file system event of the platform, and no timer reads
 /// the file. A file that breaks the format is reported as an error record of the place `log policy` and the policy in force stays.
 /// `applied`, when it is given, is called after each load with `default`, `file` or `error`.
 pub fn start_log_policy(
     log: &Arc<EventLog>,
-    applied: Option<Box<dyn Fn(&str) + Send + Sync>>,
+    applied: Option<PolicyApplied>,
 ) -> Result<LogPolicyWatch, String> {
     let path = log
         .policy_path()

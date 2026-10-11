@@ -70,7 +70,11 @@ impl Call {
     /// `warn`, and its error text is the code and the message that the client receives.
     pub(crate) fn record<T>(self, outcome: &Result<T, Failure>) {
         // The gate is asked before the fields are built: a request that the policy does not store costs one branch.
-        let level = if outcome.is_ok() { Level::Debug } else { Level::Warn };
+        let level = if outcome.is_ok() {
+            Level::Debug
+        } else {
+            Level::Warn
+        };
         if !crate::log_policy::gate_event(Class::Call, level) {
             return;
         }

@@ -109,7 +109,11 @@ impl BindingCall {
     fn emit(&self, arguments: &[&(String, String, bool)], error: Option<String>) {
         // The gate is asked before the arguments are joined and the fields are built: a call that the policy does not store costs one
         // branch.
-        let level = if error.is_none() { Level::Debug } else { Level::Warn };
+        let level = if error.is_none() {
+            Level::Debug
+        } else {
+            Level::Warn
+        };
         if !crate::log_policy::gate_event(Class::Call, level) {
             return;
         }
