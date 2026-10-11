@@ -8,15 +8,18 @@ import { within } from "@soksak/window-check/app.mjs";
 
 const CATALOG = fileURLToPath(new URL("../docs/spec/events.json", import.meta.url));
 /** The chains that the check performs. */
-const PERFORMED = ["plugin", "project", "settings", "update", "window"];
+export const PERFORMED = ["plugin", "project", "settings", "update", "window"];
+/** The chains that another check performs, by the file of that check. */
+const PERFORMED_ELSEWHERE = { input: "e2e/input-records.test.mjs" };
 /** The upper bound of the wait for the events of one chain; the wait ends at the notice that shows them. */
 const CHAIN_LIMIT = 30_000;
 
 /** The declared chains of the catalog: the name of each chain and its events, the first event first. */
 export function declaredChains(path = CATALOG) {
   const { chains } = JSON.parse(readFileSync(path, "utf8"));
-  assert.deepEqual(Object.keys(chains).toSorted(), PERFORMED,
-    `the catalog declares the chains ${Object.keys(chains).join(", ")}, and this check performs ${PERFORMED.slice(0, -1).join(", ")} and ${PERFORMED.at(-1)}`);
+  const performed = [...Object.entries(PERFORMED_ELSEWHERE).map(([name, file]) => `${name} (${file})`), ...PERFORMED];
+  assert.deepEqual(Object.keys(chains).toSorted(), [...Object.keys(PERFORMED_ELSEWHERE), ...PERFORMED].toSorted(),
+    `the catalog declares the chains ${Object.keys(chains).join(", ")}, and the checks perform ${performed.slice(0, -1).join(", ")} and ${performed.at(-1)}`);
   return chains;
 }
 

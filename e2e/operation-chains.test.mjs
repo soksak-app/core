@@ -18,7 +18,7 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { chainOf, declaredChains, tailOf } from "./chains.mjs";
+import { chainOf, declaredChains, PERFORMED, tailOf } from "./chains.mjs";
 import { fresh } from "./fixture.mjs";
 
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
@@ -31,7 +31,7 @@ for (const app of Object.values(APPS)) {
     const chains = declaredChains();
     await fresh(s);
     await keepCommonSettings(s);
-    for (const name of Object.keys(chains)) s.expectEvent(chains[name][0]);
+    for (const name of PERFORMED) s.expectEvent(chains[name][0]);
     const before = await s.get("core.plugins");
 
     // A plugin without a sidecar that is installed and loaded, so its removal does not end a service that the fixture uses.
