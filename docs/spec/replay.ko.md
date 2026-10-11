@@ -2,7 +2,7 @@
 
 [English](replay.md)
 
-화면을 만드는 sidecar는 session의 입력을 완전하게 저장하고 만든 화면마다 hash를 저장하며, page는 그린 화면마다 hash를 저장한다. 재생(replay)은 저장된 입력에서 session의 화면을 다시 만들어 저장된 모든 hash를 재생한 hash와 비교한다. frame 내용은 저장하지 않으므로([logging](logging.ko.md#catalog), [관측 감사](../plans/observability-audit.ko.md)의 결정), 재생이 화면을 재현하기 전까지 저장된 hash는 아무것도 검증하지 않는다. 이 문서는 기록, 화면 hash, 재생 실행 파일, 명령을 정의한다. event 자체는 sidecar와 plugin의 카탈로그가 선언하며([logging](logging.ko.md#catalog)), 이 저장소는 둘 다 이름으로 부르지 않는다.
+화면을 만드는 sidecar는 session의 입력을 완전하게 저장하고 만든 화면마다 hash를 저장하며, page는 받은 화면마다 hash를 저장한다. 재생(replay)은 저장된 입력에서 session의 화면을 다시 만들어 저장된 모든 hash를 재생한 hash와 비교한다. frame 내용은 저장하지 않으므로([logging](logging.ko.md#catalog), [관측 감사](../plans/observability-audit.ko.md)의 결정), 재생이 화면을 재현하기 전까지 저장된 hash는 아무것도 검증하지 않는다. 이 문서는 기록, 화면 hash, 재생 실행 파일, 명령을 정의한다. event 자체는 sidecar와 plugin의 카탈로그가 선언하며([logging](logging.ko.md#catalog)), 이 저장소는 둘 다 이름으로 부르지 않는다.
 
 ## 기록
 
@@ -19,7 +19,7 @@
 
 선택, viewport 스크롤, theme은 [보기 상태](#보기-상태)에서 정의한다. `hex`는 발생한 바이트 전체의 소문자 16진 글이다. 입력 event는 text 같은 파생 사본을 갖지 않는다. `sequence`는 session마다 1부터 세는 정수이며 종류에 관계없이 재생 입력마다 1씩 늘므로 session의 순번에는 빈틈이 없고, 재생은 `sequence` 순서로 입력을 적용한다. 쓰기를 일으키는 키 입력은 `cids`도 가진다([logging](logging.ko.md#event)).
 
-*frame 기록*은 class가 `frame`인 event로서 `session`, `fields.sequence`, `fields.rows`, `fields.cols`, `fields.hash`를 가진다. `sequence`는 화면이 포함하는 마지막 재생 입력의 순번이고, `hash`는 그 입력 뒤 화면의 [화면 hash](#화면-hash)다. sidecar는 만든 화면마다 층 `sidecar`의 frame 기록 하나를 쓴다. page는 그린 화면마다 층 `page`의 frame 기록 하나를 쓰며, sidecar에서 받은 화면의 `sequence`, `rows`, `cols`와 그린 격자의 hash를 담는다. hash는 page가 그린 것에서 계산하며 화면을 실어 온 메시지에서 옮기지 않는다. page는 sidecar가 만든 화면만 그리므로 page의 frame 기록마다 `session`과 `sequence`가 같은 sidecar의 frame 기록이 있다.
+*frame 기록*은 class가 `frame`인 event로서 `session`, `fields.sequence`, `fields.rows`, `fields.cols`, `fields.hash`를 가진다. `sequence`는 화면이 포함하는 마지막 재생 입력의 순번이고, `hash`는 그 입력 뒤 화면의 [화면 hash](#화면-hash)다. sidecar는 만든 화면마다 층 `sidecar`의 frame 기록 하나를 쓴다. page는 받아서 그린 화면 메시지마다 층 `page`의 frame 기록 하나를 쓰며, sidecar에서 받은 화면의 `sequence`, `rows`, `cols`와 받은 격자의 hash를 담는다. hash는 메시지의 칸에서([보기 상태](#보기-상태), page) 계산하며 메시지가 싣는 hash에서 옮기지 않는다. page는 sidecar가 만든 화면만 그리므로 page의 frame 기록마다 `session`과 `sequence`가 같은 sidecar의 frame 기록이 있다.
 
 ## 화면 hash
 
@@ -71,7 +71,7 @@ sidecar가 만드는 화면은 그려지는 그대로의 화면이다. viewport�
 - **theme.** `colors`는 sidecar가 theme을 거쳐 정하는 색의 완전한 집합으로, 소문자 `#rrggbb` 값의 객체이며 최소한 `foreground`, `background`, `selection`을 가지고, 커서 색과 palette의 각 항목(`ansi0`~`ansi255`)은 더 있는 member이며 sidecar는 색을 정하는 데 쓰는 모든 항목을 적으므로 사용자 정의 palette도 재생된다. theme의 이름이 아니라 완전한 집합인 것은 사람이 정의한 theme에는 재생이 찾을 수 있는 이름이 없기 때문이다. 모든 session의 첫 입력, 곧 `sequence` 1은 theme이며, theme이 바뀔 때마다 또 하나가 온다. theme 입력은 theme만 바꾼다. 프로그램이 자기 출력 sequence로 정한 색은 엔진에 남아 엔진이 주는 우선순위를 따른다. 엔진이 행 끝에서 줄이는 빈 칸은 theme에 달려 있고 hash는 채워진 격자를 덮으므로, theme은 줄이기를 통해서도 hash에 들어간다.
 - **순서.** sidecar는 입력을 받은 순서가 아니라 엔진에 적용한 순서로, 모든 종류에 하나의 lock 아래에서 `sequence`를 정한다.
 - **커서.** hash의 커서는 viewport의 커서다. `visible`은 프로그램이 정한 표시 여부이고 커서 행이 viewport 밖이면 `false`다(그때 `row`는 `0`이고 `col`은 커서의 열). 깜박임 단계, focus, 입력기의 preedit는 hash에 들어가지 않는다.
-- **page.** sidecar가 page에 보내는 화면 메시지는 hash가 덮는 칸(grapheme, 너비, 정해진 색, 속성)과 커서를 담고, 선택의 강조는 이미 칸에 들어 있다. page는 이를 그대로 그리고 그린 칸을 hash하므로 강조, offset, 색에서 page의 결함은 층 `page`의 어긋남이다.
+- **page.** sidecar가 page에 보내는 화면 메시지([터미널 런타임](terminal-runtime.ko.md#화면-메시지))는 hash가 덮는 칸(grapheme, 너비, 정해진 색, 속성), 커서, frame 기록의 `sequence`를 담고, 선택의 강조는 이미 칸에 들어 있다. page hash는 page가 *받은* 격자의 hash다. page는 메시지에서 `screenFromMessage`와 `screenHash`로 계산해 메시지의 `sequence`와 함께 저장한다. 따라서 같은 `sequence`의 sidecar hash와 다르면 host와 page 사이의 중계에서 손실이나 변경(중간에 바뀌거나 빠진 칸, 색, 속성, 커서, 크기, 또는 page가 거부한 메시지)을 찾은 것이다. 래스터 자체는 비교가 덮는 범위 밖이다. 픽셀은 sidecar가 그리므로 래스터의 결함(잘못된 글리프, 올바른 칸의 잘못된 위치)은 두 hash를 같게 두며 탐지되지 않는다.
 - **엔진.** 스크롤백 한도와 첫 theme 입력 전의 기본 theme은 sidecar의 재생 실행 파일에 속하며, 그것은 session을 만든 엔진이기도 하다. 재생은 session을 저장한 sidecar 버전에 대해 정의된다. 다른 버전의 session은 어긋날 수 있고 그 어긋남은 그렇게 보고된다.
 - **class.** 이 입력들은 완전하게 저장하는 class `input`으로 저장한다. class `io`와 `input`을 저장하지 않는 정책은 순번에 빈틈을 남기고, 재생은 처음 빠진 `sequence`에서 session을 거부하며, session의 입력을 덮는 `log.dropped`도 버린 개수를 담은 오류로 거부한다. [logging](logging.ko.md#class와-정책)에서 class `frame`인 휠과 포인터 이동은 sidecar가 적용하기 전 page의 event이고, 적용된 변경에 대해 sidecar가 저장하는 입력은 class `input`이다. 재생 실행 파일은 모르는 종류의 `sequence`를 가진 session의 event를 거부하며 무시하지 않는다. 재생 명령은 실행 파일을 시작하기 전에 session의 입력에 `replaySessionProblem`을 실행한다.
 
@@ -81,7 +81,7 @@ sidecar가 만드는 화면은 그려지는 그대로의 화면이다. viewport�
 
 선택, viewport, theme이 hash에 들어가는 방법으로 세 후보를 검토했다. 정의된 event를 가진 재생 입력(채택), hash에서 제외, frame 기록의 상태 field다.
 
-- *제외.* hash가 강조 없고 theme과 무관한 색을 가진 가장 아래의 화면을 덮는다. 반론: 아무도 보지 않는 화면을 검증하고 강조, 스크롤백, 색에서 page의 결함이 어긋남을 만들 수 없다. 엔진이 만드는 칸의 색은 이미 theme을 거쳐 정해져 있고 빈 칸을 줄이는 일도 theme에 달려 있어, 새로운 미해결 색 경로 없이는 theme과 무관한 형태가 없다. 가장 아래의 둘째 화면은 보기가 스크롤된 동안 모든 frame의 일을 두 배로 한다. page는 스크롤된 화면을 받아 칸에 들어 있는 offset이나 강조를 뺄 수 없으므로 그린 것을 hash할 수 없다. 닫는 조건(스크롤과 선택이 있는 session의 재생이 그려진 hash와 같다)은 구성상 참이 된다. 후보 안의 어떤 해법도 이 반론에 답하지 못하므로 거부한다.
+- *제외.* hash가 강조 없고 theme과 무관한 색을 가진 가장 아래의 화면을 덮는다. 반론: 아무도 보지 않는 화면을 검증하고 page로 가는 중계에서 강조, 스크롤백, 색의 손실이나 변경이 어긋남을 만들 수 없다. 엔진이 만드는 칸의 색은 이미 theme을 거쳐 정해져 있고 빈 칸을 줄이는 일도 theme에 달려 있어, 새로운 미해결 색 경로 없이는 theme과 무관한 형태가 없다. 가장 아래의 둘째 화면은 보기가 스크롤된 동안 모든 frame의 일을 두 배로 한다. page는 스크롤된 화면을 받아 칸에 들어 있는 offset이나 강조를 뺄 수 없으므로 가장 아래의 화면을 hash할 수 없다. 닫는 조건(스크롤과 선택이 있는 session의 재생이 그려진 hash와 같다)은 구성상 참이 된다. 후보 안의 어떤 해법도 이 반론에 답하지 못하므로 거부한다.
 - *frame 기록의 상태.* 재생이 검증하는 frame 기록에서 offset, 선택, theme을 가져와 설정한다. 반론: 바로 이 상태들에서 검사가 순환한다(틀린 offset이나 지워지지 않은 선택은 기록되고 그대로 재생된다). frame 기록마다 palette를 포함한 완전한 theme은 집계하는 class `frame`의 frame 속도에서 2킬로바이트가 넘고, theme의 식별은 사람이 정의한 theme을 재생하지 못한다. 엔진에는 절대 offset이나 선택 범위의 setter가 없어 재생이 제품이 실행하지 않는 경로를 필요로 한다. 선택 범위는 모든 선택 종류에 대해 정해지지 않는다. 그 답(원인의 순간에 입력으로 둔 상태)이 채택한 후보이므로 거부한다.
 - *입력(채택).* 반론과 답은 모두 위의 규칙에 있다. 엔진이 시작하는 theme과 스크롤백 한도(첫 입력은 theme이고, 한도는 재생 실행 파일에 속하며 재생은 sidecar 버전에 대해 정의된다), 픽셀 척도에 달린 선택의 기하(입력은 정해진 칸 경계와 viewport 행을 적용 순서로 저장한다), 키에서 가장 새 출력으로 스크롤하는 것처럼 입력에 대한 sidecar의 반응(호출한 순간의 viewport 입력이므로 재생에 키 규칙이 필요 없다), 출력과의 순서(적용 순서의 하나의 `sequence`), 휠과 포인터의 속도(class `input`, 완전하게, 적용된 휠 event나 포인터 이동마다 입력 하나 또는 그 유효한 합의 입력 하나), viewport, 깜박임, focus에 달린 커서(위의 커서 규칙), `input`을 끌 수 있는 class 정책(재생이 처음 빠진 `sequence`에서 session을 거부하며 이는 빈틈 규칙이다), page가 다시 만들 수 없는 화면(화면 메시지가 hash되는 칸을 담는다), 모르는 event를 무시하던 재생 실행 파일(거부한다). 검토는 반론이 남지 않을 때까지 반복했다.
 
