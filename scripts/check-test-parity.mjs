@@ -1856,6 +1856,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F160.5.2",
+    implementation: [
+      { file: "packages/host/tauriv2/src/binding_record.rs", symbol: "pub fn finish" },
+      { file: "packages/host/wailsv3/src/binding_record.go", symbol: "func (b *Bindings) Call" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/binding_record_test.rs", id: "a_binding_call_is_an_event_while_the_trace_is_off" },
+      { file: "packages/host/wailsv3/tests/binding_record_test.go", id: "TestABindingCallIsAnEventWhileTheTraceIsOff" },
+    ],
+    expected: "Every host call of a page is stored by the host as the event host.binding.call with its name, bounded arguments, result and microseconds.",
+    levels: ["unit"],
+  },
+  {
     id: "F160.11",
     implementation: [
       { file: "scripts/test-runner.mjs", symbol: "export async function runTests" },

@@ -6,7 +6,7 @@ The two application hosts (`tauriv2`, `wailsv3`) implement the same product. Par
 
 ## Propositions
 
-1. **Public bindings are the same set.** The page-facing command surface each host registers — Rust `generate_handler!` names and exported `Host` methods in Go, compared in snake case — is one set. A command that exists on one host and not the other fails the check.
+1. **Public bindings are the same set.** The page-facing command surface each host registers — the names of the Rust commands that the `bindings!` block defines and registers and exported `Host` methods in Go, compared in snake case — is one set. A command that exists on one host and not the other fails the check.
 2. **Endpoint methods are the same set.** The local [endpoint](endpoint.md) method names each build declares — base methods, subscription methods, and the diagnostics-only additions — are one set for both hosts in the same build flavor.
 3. **The application menu is the declared contract.** Both hosts' menu bars contain the same items in the same order with the same shortcuts, per the menu contract table in [host contract](host-contract.md). The check runs against running hosts and enumerates the real menu bars; an item present on one host and missing on the other fails.
 4. **A single-host exemption must still be true.** Every `<host> only: <reason>` row in the host contract's case table cites a difference that observation must still confirm. When the cited difference no longer holds, the exemption is stale and the check fails until the case becomes `both`.

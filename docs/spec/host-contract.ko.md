@@ -112,6 +112,14 @@ fn invalid_json_closes_connection() {
 | `endpoint.record.call-is-an-event` | endpoint client의 모든 요청(구독 변경도)은 성능 trace가 꺼져 있을 때도 layer `host`, level `debug`이고 `name`, `args`(받은 그대로의 params, 없으면 `null`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.endpoint.call`이다. | both |
 | `endpoint.record.failure-names-the-error` | 실패한 요청은 level `warn`이고 `ok: false`와 client가 받는 코드와 메시지인 `error` `<code>: <message>`를 가진 event `host.endpoint.call`이다. | both |
 | `endpoint.record.arguments-are-cut-before-copying` | `args`는 문자 경계에서 자른 최대 1024바이트이고, params가 더 길면 event에 `truncated: true`가 있다. | both |
+| `binding.record.call-is-an-event` | page의 모든 host 호출은 layer `host`, level `debug`이고 `name`(호출의 snake case 이름), `args`(호출 순서대로의 인자를 담은 JSON 배열, 없으면 `[]`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.binding.call`이며, 성능 trace가 꺼져 있을 때도 그렇다. | both |
+| `binding.record.failure-names-the-error` | 실패한 host 호출은 level `warn`이고 `ok: false`와 page가 받는 글인 `error`를 가진 event `host.binding.call`이다. | both |
+| `binding.record.arguments-are-cut-before-copying` | `args`는 최대 1024바이트이고 문자 경계에서 자르며, 인자가 더 길었으면 event에 `truncated: true`가 있다. | both |
+| `binding.record.unfinished-call-names-the-error` | 결과 없이 끝난 host 호출은 level `warn`이고 `ok: false`와 `error` `the call ended without a result`를 가진 event `host.binding.call`이다. | both |
+| `binding.record.refusal-names-the-error` | host의 어떤 메서드도 가리키지 않는 호출이나 메서드가 받는 것과 다른 수의 인자를 넘기는 호출은 오류로 거절되고, 그 오류를 가진 level `warn`의 event `host.binding.call`로 저장된다. | wailsv3 only: Wails는 host의 모든 메서드를 이름으로 찾는 바인딩 메서드 `Bindings.Call` 하나로 닿게 하지만, Tauri는 모르는 command와 거절된 인자를 host가 실행되기 전에 거절한다 |
+| `binding.record.native-call-is-an-event` | native web view 문서의 호출은 같은 필드를 가진 event `host.binding.call`로 저장된다. | wailsv3 only: Wails page runtime은 surface page 호출을 native bridge로 보내지만, Tauri surface page는 main page의 command를 부른다 |
+| `binding.record.every-host-method-is-callable` | host의 내보낸 모든 메서드는 입구를 통해 이름으로 닿고, 지원하지 않는 서명의 메서드는 그 메서드의 이름을 말하는 오류로 host 시작을 멈춘다. | wailsv3 only: Tauri는 `bindings!` 매크로가 정의한 command를 등록하므로 매크로 밖의 command는 등록에 들어가지 않는다 |
+| `binding.record.unsupported-method-fails-at-start` | 매개변수가 선택적 context와 `json.RawMessage` 값이 아니거나 결과가 선택적 값과 선택적 오류가 아닌 내보낸 메서드는 입구의 생성을 그 메서드의 이름을 말하는 오류로 실패시킨다. | wailsv3 only: Tauri는 command를 reflection으로 읽지 않는다 |
 | `diagnostics.test-mark.needs-the-event-log` | event log가 연결되지 않은 동안의 표시는 `the event log of the host is not attached`로 실패한다. | both |
 | `documents.request.accepts-own-surface` | 호출자 자신의 표면에 대한 문서 요청을 받아들이고 표면과 이름 키를 반환한다. | both |
 | `documents.request.rejects-foreign-or-missing-caller` | 호출자 표면이 없거나 다른 표면에서 온 문서 요청은 "not surface"로 실패한다. | both |

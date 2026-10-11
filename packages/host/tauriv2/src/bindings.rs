@@ -6,6 +6,7 @@
 use serde_json::value::RawValue;
 
 use crate::arguments::Argument;
+use crate::binding_record::BindingCall;
 use tauri::ipc::Invoke;
 use tauri::{AppHandle, Manager, Webview, Window};
 
@@ -25,84 +26,54 @@ use crate::theme::{self, Theme};
 use crate::windows::{self, Geometry, OpenProject};
 use crate::workspace;
 
-/// Returns the handler that registers every command.
-pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
-    tauri::generate_handler![
-        project_folder,
-        project_open,
-        project_release,
-        project_remove_ask,
-        project_remove_answer,
-        window_state,
-        performance,
-        log,
-        window_ready,
-        window_close,
-        window_close_kept,
-        app_update_state,
-        app_update_stage,
-        app_update_apply,
-        window_new,
-        workspace,
-        folder_choose,
-        project_create,
-        sync_surfaces,
-        present_surfaces,
-        wait_presented,
-        overlay_show,
-        overlay_place,
-        set_shape,
-        clear_shape,
-        overlay_content,
-        overlay_update,
-        overlay_ready,
-        overlay_hide,
-        overlay_pick,
-        window_controls,
-        sidecar_send,
-        sidecars_retain,
-        sidecars_replace,
-        sidecars_outdated,
-        theme,
-        set_theme,
-        set_menu_language,
-        exposure_reply,
-        exposure_changed,
-        exposure_forward,
-        exposure_register,
-        document_attach,
-        composition_declare,
-        document_load,
-        document_post,
-        document_zoom,
-        document_go,
-        document_detach,
-        image_attach,
-        composition_place,
-        image_focus,
-        image_caret,
-        image_text,
-        image_detach,
-        clipboard_read,
-        clipboard_write_text,
-        clipboard_persist_png,
-        link_open,
-        notify,
-        notification_remove,
-        notification_state,
-        plugins_state,
-        plugins_run,
-        plugins_use_registry,
-        debug_files,
-        debug_record,
-        debug_save,
-        debug_save_text,
-        debug_save_all,
-        debug_read,
-        debug_read_range
-    ]
+/// Defines the commands that the page calls and generates their registration. Every command takes a [`BindingCall`] as its
+/// first argument and finishes it with its result, so each call is the event `host.binding.call`
+/// (docs/spec/logging.md#entrances). The registration `handler` lists the commands defined here and no other, so a command
+/// is registered only through this macro. A command returns a `Result`, and its arguments are the parameters that the page
+/// sends by name.
+macro_rules! bindings {
+    (@commands [$($registered:ident,)*]) => {
+        /// Returns the handler that registers every command.
+        pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
+            tauri::generate_handler![$($registered),*]
+        }
+    };
+    (@commands [$($registered:ident,)*]
+        $(#[$meta:meta])* async fn $name:ident($($param:ident: $ty:ty),* $(,)?) -> $ret:ty $body:block
+        $($rest:tt)*
+    ) => {
+        $(#[$meta])*
+        async fn $name(call: BindingCall, $($param: $ty),*) -> $ret {
+            async fn run($($param: $ty),*) -> $ret $body
+            let result = run($($param),*).await;
+            call.finish(&[$(stringify!($param)),*], &result);
+            result
+        }
+        bindings!(@commands [$($registered,)* $name,] $($rest)*);
+    };
+    (@commands [$($registered:ident,)*]
+        $(#[$meta:meta])* fn $name:ident($($param:ident: $ty:ty),* $(,)?) -> $ret:ty $body:block
+        $($rest:tt)*
+    ) => {
+        $(#[$meta])*
+        fn $name(call: BindingCall, $($param: $ty),*) -> $ret {
+            fn run($($param: $ty),*) -> $ret $body
+            let result = run($($param),*);
+            call.finish(&[$(stringify!($param)),*], &result);
+            result
+        }
+        bindings!(@commands [$($registered,)* $name,] $($rest)*);
+    };
+    (@commands [$($registered:ident,)*] $item:item $($rest:tt)*) => {
+        $item
+        bindings!(@commands [$($registered,)*] $($rest)*);
+    };
+    ($($all:tt)*) => {
+        bindings!(@commands [] $($all)*);
+    };
 }
 
+bindings! {
 /// Resolves the path as a project directory and returns the canonical path and the identifier.
 #[tauri::command(async)]
 fn project_folder(app: AppHandle, root: Argument<String>) -> Result<Folder, String> {
@@ -379,8 +350,8 @@ struct RetainRequest {
 
 /// The outdated persistent services (docs/spec/installation.md).
 #[tauri::command(async)]
-fn sidecars_outdated(window: Window) -> Vec<crate::sidecars::OutdatedSidecar> {
-    window.state::<WindowSidecars>().outdated()
+fn sidecars_outdated(window: Window) -> Result<Vec<crate::sidecars::OutdatedSidecar>, String> {
+    Ok(window.state::<WindowSidecars>().outdated())
 }
 
 #[derive(serde::Deserialize)]
@@ -783,4 +754,5 @@ fn clipboard_persist_png(
 ) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
     Ok(serde_json::json!({ "path": clipboard::persist_png(&app, request.data)? }))
+}
 }

@@ -3,8 +3,9 @@
 // The main page uses the Wails runtime, and additional webviews use the native bridge of the app.
 // They share the asset server of the webview configuration, so documents load from the same scheme.
 //
-// Calls a bound method by "package, type, name". Wails uses the import path of the host package
-// and the type name, github.com/soksak-app/core/packages/host/wailsv3/src.Host.
+// Calls a method of the host through the one bound method `Call` of the service Bindings, which records every call. Wails
+// derives the name of the service from the import path of the host package and the type name,
+// github.com/soksak-app/core/packages/host/wailsv3/src.Bindings.
 //
 // The runtime is an ES module at /wails/runtime.js, so it is
 // loaded with import, not with a script tag. The import is asynchronous, so the two interfaces below call after it completes.
@@ -15,7 +16,7 @@ import { surfaceCalls } from "@soksak/workbench/surface-calls.js";
 import { createClipboardBridge } from "@soksak/plugin-api";
 import { createLifecycleListener } from "./listener-lifecycle.js";
 
-const SERVICE = "github.com/soksak-app/core/packages/host/wailsv3/src.Host";
+const SERVICE = "github.com/soksak-app/core/packages/host/wailsv3/src.Bindings";
 
 /* The runtime module. An import is evaluated only once. */
 const runtime = () => import("/wails/runtime.js");
@@ -24,7 +25,7 @@ const runtime = () => import("/wails/runtime.js");
 const call = (method, ...args) =>
   window.__soksakNative?.call
     ? Promise.resolve(window.__soksakNative.call(method, args))
-    : runtime().then((r) => r.Call.ByName(`${SERVICE}.${method}`, ...args));
+    : runtime().then((r) => r.Call.ByName(`${SERVICE}.Call`, method, args));
 
 /** Event reception. The payload is carried in the `data` field. */
 const listen = createLifecycleListener((event, fn) =>
