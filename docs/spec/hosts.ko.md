@@ -211,7 +211,7 @@ apps/wailsv3/                  apps/tauriv2/
 
 `apps/wailsv3/go.mod`는 호스트 모듈을 요구한다. `apps/tauriv2/Cargo.toml`은 경로로 지정한 `soksak-host-tauriv2`와 `tauri`에 의존한다. `apps/tauriv2/build.rs`는 `tauri_build::build()`만 호출한다.
 
-Wails 바인딩 서비스 이름은 `github.com/soksak-app/core/packages/host/wailsv3/src.Host`다. Wails가 Go 패키지 경로와 타입 이름으로 이 이름을 만들고, `apps/wailsv3/runtime/index.js`가 이를 사용한다.
+Wails 바인딩 서비스 이름은 `github.com/soksak-app/core/packages/host/wailsv3/src.Bindings`다. Wails가 Go 패키지 경로와 타입 이름으로 이 이름을 만들고, `apps/wailsv3/runtime/index.js`가 이를 사용한다. 이 서비스의 바인딩 메서드는 `Call(method, args)` 하나이며, host의 내보낸 메서드 `method`를 이름으로 찾아 실행한다(`binding_record.go`). 그래서 main page의 모든 호출은 event `host.binding.call`을 저장하는 한 곳을 지나고, 선택적 context 뒤에 `json.RawMessage`가 아닌 매개변수를 가지거나 선택적 값과 선택적 오류가 아닌 결과를 가진 host 메서드는 그 메서드의 이름을 말하는 오류로 host 시작을 멈춘다. Tauri host는 모든 command를 `bindings!` 매크로(`bindings.rs`) 안에서 정의한다. 매크로는 각 command에 첫 인자로 `BindingCall`을 주고, command의 결과로 그것을 끝내며, 등록을 생성하므로 등록된 command가 곧 기록되는 command다. Tauri는 command의 invoke 결과를 프레임워크의 resolver에만 넘기고 host가 그것을 감쌀 수 없으므로, 매크로는 resolver가 아니라 command 함수를 감싼다.
 
 ## Command line 트리
 

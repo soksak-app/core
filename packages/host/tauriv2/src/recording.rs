@@ -186,9 +186,12 @@ impl Recording {
 
     /// The folder of the recording in progress.
     pub fn running(&self) -> Option<PathBuf> {
-        self.state
-            .lock()
-            .ok()
-            .and_then(|state| state.directory.clone())
+        match self.state.lock() {
+            Ok(state) => state.directory.clone(),
+            Err(error) => {
+                crate::application_log::log_error("recording", error);
+                None
+            }
+        }
     }
 }

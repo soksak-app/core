@@ -1585,13 +1585,26 @@ fn the_sampler_names_a_running_sidecar_until_it_ends() {
         "the child check failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let sampled = records::read_events(&records::event_log_path(config.path()))
-        .into_iter()
-        .filter(|event| event["event"] == "host.sampler.memory" && event["fields"]["name"] == ECHO)
-        .count();
-    assert_eq!(
-        sampled, 1,
-        "a sidecar is named by the sample while it runs and not after it ended"
+    // The periodic sampler of the trace runs besides the two samples of the child, so under load a third sample can fall
+    // while the sidecar runs. The order of the records states the contract: a sample names the sidecar while it runs, and
+    // no sample names it after its exit record.
+    let events = records::read_events(&records::event_log_path(config.path()));
+    let exit = events
+        .iter()
+        .position(|event| event["event"] == "host.sidecar.exit" && event["fields"]["name"] == ECHO)
+        .expect("the sidecar has an exit record");
+    let named: Vec<usize> = events
+        .iter()
+        .enumerate()
+        .filter(|(_, event)| {
+            event["event"] == "host.sampler.memory" && event["fields"]["name"] == ECHO
+        })
+        .map(|(index, _)| index)
+        .collect();
+    assert!(!named.is_empty(), "no sample names the running sidecar");
+    assert!(
+        named.iter().all(|index| *index < exit),
+        "a sample names the sidecar after it ended: samples at {named:?}, exit at {exit}"
     );
 }
 

@@ -112,6 +112,14 @@ fn invalid_json_closes_connection() {
 | `endpoint.record.call-is-an-event` | endpoint client의 모든 요청(구독 변경도)은 성능 trace가 꺼져 있을 때도 layer `host`, level `debug`이고 `name`, `args`(받은 그대로의 params, 없으면 `null`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.endpoint.call`이다. | both |
 | `endpoint.record.failure-names-the-error` | 실패한 요청은 level `warn`이고 `ok: false`와 client가 받는 코드와 메시지인 `error` `<code>: <message>`를 가진 event `host.endpoint.call`이다. | both |
 | `endpoint.record.arguments-are-cut-before-copying` | `args`는 문자 경계에서 자른 최대 1024바이트이고, params가 더 길면 event에 `truncated: true`가 있다. | both |
+| `binding.record.call-is-an-event` | page의 모든 host 호출은 layer `host`, level `debug`이고 `name`(호출의 snake case 이름), `args`(호출 순서대로의 인자를 담은 JSON 배열, 없으면 `[]`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.binding.call`이며, 성능 trace가 꺼져 있을 때도 그렇다. | both |
+| `binding.record.failure-names-the-error` | 실패한 host 호출은 level `warn`이고 `ok: false`와 page가 받는 글인 `error`를 가진 event `host.binding.call`이다. | both |
+| `binding.record.arguments-are-cut-before-copying` | `args`는 최대 1024바이트이고 문자 경계에서 자르며, 인자가 더 길었으면 event에 `truncated: true`가 있다. | both |
+| `binding.record.unfinished-call-names-the-error` | 결과 없이 끝난 host 호출은 level `warn`이고 `ok: false`와 `error` `the call ended without a result`를 가진 event `host.binding.call`이다. | both |
+| `binding.record.refusal-names-the-error` | host의 어떤 메서드도 가리키지 않는 호출이나 메서드가 받는 것과 다른 수의 인자를 넘기는 호출은 오류로 거절되고, 그 오류를 가진 level `warn`의 event `host.binding.call`로 저장된다. | wailsv3 only: Wails는 host의 모든 메서드를 이름으로 찾는 바인딩 메서드 `Bindings.Call` 하나로 닿게 하지만, Tauri는 모르는 command와 거절된 인자를 host가 실행되기 전에 거절한다 |
+| `binding.record.native-call-is-an-event` | native web view 문서의 호출은 같은 필드를 가진 event `host.binding.call`로 저장된다. | wailsv3 only: Wails page runtime은 surface page 호출을 native bridge로 보내지만, Tauri surface page는 main page의 command를 부른다 |
+| `binding.record.every-host-method-is-callable` | host의 내보낸 모든 메서드는 입구를 통해 이름으로 닿고, 지원하지 않는 서명의 메서드는 그 메서드의 이름을 말하는 오류로 host 시작을 멈춘다. | wailsv3 only: Tauri는 `bindings!` 매크로가 정의한 command를 등록하므로 매크로 밖의 command는 등록에 들어가지 않는다 |
+| `binding.record.unsupported-method-fails-at-start` | 매개변수가 선택적 context와 `json.RawMessage` 값이 아니거나 결과가 선택적 값과 선택적 오류가 아닌 내보낸 메서드는 입구의 생성을 그 메서드의 이름을 말하는 오류로 실패시킨다. | wailsv3 only: Tauri는 command를 reflection으로 읽지 않는다 |
 | `diagnostics.test-mark.needs-the-event-log` | event log가 연결되지 않은 동안의 표시는 `the event log of the host is not attached`로 실패한다. | both |
 | `documents.request.accepts-own-surface` | 호출자 자신의 표면에 대한 문서 요청을 받아들이고 표면과 이름 키를 반환한다. | both |
 | `documents.request.rejects-foreign-or-missing-caller` | 호출자 표면이 없거나 다른 표면에서 온 문서 요청은 "not surface"로 실패한다. | both |
@@ -348,7 +356,7 @@ fn invalid_json_closes_connection() {
 | `buffers.sidecar-replies.bounded-by-bytes` | sidecar의 보류 응답은 최대 4,194,304바이트이며, 이를 넘게 되는 응답은 `...reached 4194304 bytes...`로 거절되고 `reason`이 `the buffer holds 4194304 bytes`인 `host.buffer.dropped`를 저장한다. | both |
 | `buffers.sidecar-closes.bounded-and-forgotten` | sidecar의 보류 close는 최대 1,024개와 4,194,304바이트이며, 이를 넘는 close는 보내지 않고 `host.buffer.dropped`(`buffer` `sidecar <name> pending closes`)를 저장하며, 그 표면은 답을 기다리는 표면 목록에 없다. | both |
 | `buffers.relay-expired.bounded-and-counted` | relay는 만료된 요청을 최대 256개 기억하며, 가장 오래된 것을 잊을 때 `host.buffer.dropped`(`buffer` `relay expired requests`, `count` 1, `bytes` 0, `reason` `the buffer holds 256 requests`)를 저장하고, 그 요청의 늦은 응답에는 `exposure reply <id> has no matching request`로 답한다. | both |
-| `log.writer.event-over-size-bound-is-cut` | fields 글이 1,048,576바이트를 넘는 event는 최대 4,096바이트의 `fields` `{"head": ...}`와 자르기 전 크기인 `truncated`로 저장하고, 상한 아래의 event에는 `truncated`가 없으며 `seq`는 연속이다. | both |
+| `log.writer.event-over-size-bound-is-cut` | writer가 받을 때 fields 글이 1,048,576바이트를 넘는 event는 최대 4,096바이트의 `fields` `{"head": ...}`와 자르기 전 크기인 `truncated`로 저장하고, 상한 아래의 event에는 `truncated`가 없으며 `seq`는 연속이다. | both |
 | `sidecars.close.buffered-close-is-recorded` | 사이드카의 큐가 가득 차서 기다리는 closed 알림은 `info host sidecar <name>: close <surface>: outbox full, buffered`를 쓴다. | both |
 | `sidecars.close.failed-answer-is-logged` | `error`가 있는 닫기 응답은 host 로그에 오류 줄 "error host sidecar <name>: close <surface>: <error>"를 쓰고 닫는 중 항목을 끝낸다. | both |
 | `sidecars.declaration.replaces-changed-folder` | 폴더가 바뀐 사이드카를 선언하면 실행 중인 표준 입출력 프로세스를 실패 없이 멈추고, 다음 send가 새 폴더의 실행 파일을 시작한다. | both |
@@ -401,6 +409,9 @@ fn invalid_json_closes_connection() {
 | `webkit-children.record.owner-only` | 갱신이 쓰는 WebKit 자식 기록은 mode 0600이다. | both |
 | `webkit-children.record.concurrent-refreshes` | 동시에 실행된 기록 쓰기는 모두 성공하고 임시 파일을 남기지 않는다. | both |
 | `webkit-children.ps.reports-a-failed-query` | 실행할 수 없거나 존재하지 않는 프로세스의 상태 1이 아닌 상태로 끝난 `ps` 질의는 질의와 `ps`의 메시지를 담은 장소 `webkit children`의 `error` 기록이다. 존재하지 않는 프로세스를 묻는 질의는 오류가 아니다. | both |
+| `webkit-children.ps.reports-an-unreadable-line` | WebKit 프로세스의 `ps` 목록에서 프로세스 번호로 시작하지 않는 줄은 그 줄을 인용하는 장소 `webkit children`의 `error` 기록이고, 공백이 앞서는 프로세스 번호의 줄은 읽는다. | both |
+| `recording.state.poisoned-lock-is-reported` | 상태를 쥔 다른 thread가 panic한 뒤 진행 중인 녹화의 폴더를 읽으면 장소 `recording`의 `error` 기록이고 폴더는 없다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
+| `modal.state.poisoned-lock-is-reported` | 모달 기록을 쥔 다른 thread가 panic한 뒤 열린 모달이나 그 mode를 읽으면 장소 `modal state`의 `error` 기록이고 모달은 없다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
 | `surface-activation.owner.resolves-registered-view` | 등록된 네이티브 뷰는 그 표면 id로 해석된다. | both |
 | `surface-activation.owner.ignores-unknown-view` | 등록되지 않은 네이티브 뷰는 표면으로 해석되지 않는다. | both |
 | `surface-activation.owner.ignores-empty-owner` | 빈 표면 id로 등록된 뷰는 표면으로 해석되지 않는다. | both |
@@ -571,6 +582,11 @@ fn invalid_json_closes_connection() {
 | `log.record.error-and-info-are-events` | level이 `error`나 `info`인 host 기록과 page가 보고한 기록은 호출한 시각과 줄바꿈을 포함한 원문 그대로의 `text`를 가진 event `<layer>.record.<level>`로 event log에 저장된다. | both |
 | `log.record.start-buffer-holds-records-until-the-writer-exists` | host의 writer가 생기기 전에 쓴 기록은 시작 buffer에서 기다리고, writer는 그 기록을 쓴 시각 그대로 순서대로 받는다. | both |
 | `log.record.start-buffer-counts-its-loss` | 시작 buffer는 1024개를 담고 그 너머의 기록은 거부하며, writer는 거부한 기록을 그 수와 함께 `log.dropped`로 기록한다. | both |
+| `bounds.producer.fields-are-cut-while-serialized` | host event의 fields는 1,048,576바이트까지만 직렬화한다. 상한을 넘는 값은 `fields` `{"head": <첫 4,096바이트>}`와 상한을 막 넘은 `truncated`(직렬화가 멈출 때까지 쓴 바이트 수)로 저장하고, 상한에 들어가는 fields는 그 JSON으로 저장한다. | both |
+| `bounds.producer.record-text-is-cut` | host record의 `text`는 최대 8,192바이트, `where`는 최대 1,024바이트이며 각각 문자 경계에서 자르고, 둘 중 하나라도 잘렸으면 fields에 `truncated: true`가 있다. | both |
+| `bounds.start-buffer.holds-at-most-four-mebibytes` | record의 시작 buffer는 record 1,024개 외에 최대 4,194,304바이트를 담고, writer는 거절한 record와 그 바이트를 `log.dropped`로 센다. | both |
+| `bounds.endpoint.topic-changes-hold-at-most-256` | topic 하나의 구독 변경 256개가 page를 기다리면 다음 변경은 적용하지 않고, 오류 코드 `-32000`과 topic과 256을 말하는 메시지로 답하며, buffer `endpoint topic changes`와 이유 `the buffer holds 256 messages`를 가진 `host.buffer.dropped`로 저장한다. | both |
+| `bounds.endpoint.output-queue-holds-at-most-sixteen-mebibytes` | 연결의 출력 큐가 16,777,216바이트를 넘게 담게 하는 frame은 거절하고, buffer `endpoint output queue`와 이유 `the buffer holds 16777216 bytes`를 가진 `host.buffer.dropped`로 저장하며, 연결을 닫는다. | wailsv3 only: Wails host는 연결의 frame을 writer goroutine이 비우는 큐로 보내지만, Tauri host는 연결을 쥔 채 각 frame을 소켓에 쓴다 |
 | `log.record.flush-stores-the-records-written-so-far` | 기록 flush는 지금까지 쓴 기록이 event log에 들어갈 때까지 기다리고, 붙은 writer가 없으면 곧바로 돌아온다. | both |
 | `log.batch.stores-page-events-in-order` | `log` 중계는 `batch` 요청의 event를 page가 준 `ts_us`와 writer의 `seq`로, 순서대로, 계층 `page`에 저장한다. | both |
 | `log.batch.rejects-an-invalid-batch-without-writing` | `log` 중계는 `batch`나 `clock`이 아닌 action, 배열이 아닌 `events`, `page.`와 `plugin.` 어느 쪽으로도 시작하지 않는 event 이름, 계약에 없는 level, 양의 정수가 아닌 `ts_us`나 `mono_ns`, 따옴표·역슬래시·제어 문자 없는 비어 있지 않은 문자열의 배열이 아닌 `cids`, 객체가 아닌 `fields`에 대해 배치 전체를 거부하고 그 배치는 아무것도 쓰지 않으며, 오류는 `events[<index>]`를 가리킨다. | both |

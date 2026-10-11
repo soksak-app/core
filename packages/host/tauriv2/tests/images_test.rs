@@ -421,8 +421,12 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
         output.status,
         String::from_utf8_lossy(&output.stdout)
     );
-    // The wait ended with its own failure, so the event log holds log.open and the run record and nothing else.
-    let events = records::read_events(&records::event_log_path(config.path()));
+    // The wait ended with its own failure, so the event log holds log.open and the run record and nothing else but the registrations of the native observers.
+    // The registrations of the native observers are the events `native.observe.registered`; they are not part of the wait.
+    let events: Vec<_> = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| event["event"] != "native.observe.registered")
+        .collect();
     assert!(
         events.len() == 2 && events[1]["fields"]["where"] == "run",
         "a presentation timeout wrote events: {events:?}"

@@ -4,6 +4,7 @@
 use serde_json::value::to_raw_value;
 use serde_json::Value;
 
+use crate::bounds::Fields;
 use crate::event_log::{monotonic_ns, valid_cid, EventLog, Level, RelayedEvent};
 
 /// One validated event of a page batch.
@@ -167,7 +168,7 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
             level: event.level,
             event: event.event,
             cids: event.cids,
-            fields: event.fields,
+            fields: Fields::whole(event.fields),
         })
         .map_err(|error| format!("events[{index}]: {error}"))?;
         if let Some(record) = event.record {

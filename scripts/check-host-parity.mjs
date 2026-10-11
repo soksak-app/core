@@ -21,12 +21,12 @@ export function runtimeCalls(runtime, tableDeclaration, file) {
   return new Set([...body.matchAll(/([a-z][a-zA-Z0-9]*):\s*"/g)].map((match) => snake(match[1])));
 }
 
-/** The set of command names of Rust generate_handler!. */
+/** The set of command names that the Rust `bindings!` block defines; the same macro generates the registration. */
 export function rustHandlers(bindings) {
-  const start = bindings.indexOf('generate_handler![');
-  if (start < 0) throw new Error('bindings.rs has no generate_handler!');
-  return new Set(bindings.slice(start, bindings.indexOf(']', start))
-    .split(/[\s,]+/).filter((name) => /^[a-z][a-z0-9_]*$/.test(name)));
+  const start = bindings.indexOf('\nbindings! {');
+  if (start < 0) throw new Error('bindings.rs has no bindings! block');
+  return new Set([...bindings.slice(start).matchAll(/#\[tauri::command[^\]]*\]\s*(?:async\s+)?fn ([a-z][a-z0-9_]*)\(/g)]
+    .map((match) => match[1]));
 }
 
 /** The set of exported method names of the bound Host struct over all Go host packages. */

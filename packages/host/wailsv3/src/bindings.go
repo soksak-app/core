@@ -10,6 +10,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -434,7 +435,16 @@ func InvokeNative(s *Surfaces, viewID uint64, method string, args []json.RawMess
 
 // invokeNative runs the method that the document of the native web view viewID called. The interface of an additional document
 // is separate from the Wails bindings.
-func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
+func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (result any, err error) {
+	started := time.Now()
+	returned := false
+	defer func() { recordBindingCall(snakeName(call.Method), call.Args, started, err, returned) }()
+	result, err = runNative(s, viewID, call)
+	returned = true
+	return result, err
+}
+
+func runNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 	var id, key, value string
 	var instance uint64
 	switch call.Method {

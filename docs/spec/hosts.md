@@ -210,7 +210,7 @@ apps/wailsv3/                  apps/tauriv2/
 
 `apps/wailsv3/go.mod` requires the host module. `apps/tauriv2/Cargo.toml` depends on `soksak-host-tauriv2` by path and on `tauri`. `apps/tauriv2/build.rs` calls only `tauri_build::build()`.
 
-The Wails binding service name is `github.com/soksak-app/core/packages/host/wailsv3/src.Host`. Wails derives it from the Go package path and type name, and `apps/wailsv3/runtime/index.js` uses it.
+The Wails binding service name is `github.com/soksak-app/core/packages/host/wailsv3/src.Bindings`. Wails derives it from the Go package path and type name, and `apps/wailsv3/runtime/index.js` uses it. The service has one bound method, `Call(method, args)`, which looks up the exported method `method` of the host by name and runs it (`binding_record.go`), so every call of the main page passes through one place that stores the event `host.binding.call`; a method of the host with a parameter other than `json.RawMessage` after the optional context, or with a result other than an optional value and an optional error, stops the start of the host with an error that names the method. The Tauri host defines every command inside the `bindings!` macro (`bindings.rs`), which gives each command a `BindingCall` as its first argument, finishes it with the result of the command and generates the registration, so the commands that are registered are the commands that are recorded. Tauri passes the invoke result of a command only to the resolver of the framework, which a host cannot wrap, so the macro wraps the function of the command and not the resolver.
 
 ## Command line tree
 

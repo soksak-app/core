@@ -19,7 +19,5 @@
       "^packages/sok/"
     ]
   },
-  "pending": {
-    "rs.ok-discard": "F160.27"
-  }
+  "pending": {}
 }

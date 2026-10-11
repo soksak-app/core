@@ -218,7 +218,15 @@ func TestTheRelayRemembersAtMost256ExpiredRequestsAndCountsTheOnesItForgets(t *t
 // contract: log.writer.event-over-size-bound-is-cut
 func TestAnEventOverTheSizeBoundIsStoredCutWithItsOriginalSize(t *testing.T) {
 	log := useRoomyEventLog(t)
-	host.EmitHost(host.LevelInfo, "host.test.oversize", map[string]any{"text": strings.Repeat("é", 3<<20)})
+	// The text reaches the writer whole, as the fields of a relayed event do; a producer that serializes a value stops at the
+	// bound before it (bounds.producer.fields-are-cut-while-serialized).
+	oversize, err := json.Marshal(map[string]any{"text": strings.Repeat("é", 3<<20)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.EmitRelayed(host.RelayedEvent{TsMicros: time.Now().UnixMicro(), MonoNs: 1, Layer: "host", Level: host.LevelInfo, Event: "host.test.oversize", Fields: oversize}); err != nil {
+		t.Fatal(err)
+	}
 	host.EmitHost(host.LevelInfo, "host.test.small", map[string]any{"text": "kept"})
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)

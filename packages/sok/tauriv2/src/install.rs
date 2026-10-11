@@ -278,6 +278,7 @@ pub fn file_path(url: &str) -> Result<String, String> {
         }
         let byte = rest
             .get(i + 1..i + 3)
+            // default: an escape that is not hexadecimal becomes the error "url has an invalid escape" below.
             .and_then(|hex| u8::from_str_radix(hex, 16).ok())
             .filter(|_| bytes[i + 1].is_ascii_hexdigit() && bytes[i + 2].is_ascii_hexdigit())
             .ok_or("url has an invalid escape")?;

@@ -5,7 +5,7 @@ import { auditHostParity, auditMenuTables, goMenuTables, rustMenuTables, snake, 
 // The base sources of the injection checks. Changing only one name in the real sources proves that each failure is produced mechanically.
 const sources = () => ({
   tauriv2Runtime: 'const COMMAND = {\n  windowNew: "window_new",\n  overlayShow: "overlay_show",\n};',
-  tauriv2Bindings: 'generate_handler![\n  window_new,\n  overlay_show,\n]',
+  tauriv2Bindings: 'macro_rules! bindings {}\nbindings! {\n#[tauri::command]\nfn window_new() {}\n#[tauri::command(async)]\nasync fn overlay_show() {}\n}',
   wailsv3Runtime: 'const METHOD = {\n  windowNew: "WindowNew",\n  overlayShow: "OverlayShow",\n}',
   wailsv3HostSources: { "host.go": "func (h *Host) WindowNew(ctx context.Context) error { return nil }\nfunc (h *Host) OverlayShow(ctx context.Context) error { return nil }" },
   tauriv2EndpointSource: 'const METHODS: &[&str] = &[\n  "windows.list",\n];\nconst DIAGNOSTICS: &[&str] = &[\n  "diagnostics.fixture",\n];',
@@ -44,13 +44,13 @@ test("equal surfaces pass with no failure", () => {
 test("a call name that exists on one host only fails", () => {
   const changed = sources();
   changed.tauriv2Runtime = changed.tauriv2Runtime.replace('windowNew: "window_new",', 'windowNew: "window_new",\n  linkOpen: "link_open",');
-  changed.tauriv2Bindings = changed.tauriv2Bindings.replace('window_new,', 'window_new,\n  link_open,');
+  changed.tauriv2Bindings = changed.tauriv2Bindings.replace('fn window_new() {}', 'fn window_new() {}\n#[tauri::command]\nfn link_open() {}');
   assert.deepEqual(auditHostParity(changed), ["tauriv2 host.call(link_open) does not exist on wailsv3"]);
 });
 
 test("a call name without its host implementation fails", () => {
   for (const [label, changed] of [
-    ["tauriv2", () => { const next = sources(); next.tauriv2Bindings = next.tauriv2Bindings.replace("  overlay_show,", ""); return next; }],
+    ["tauriv2", () => { const next = sources(); next.tauriv2Bindings = next.tauriv2Bindings.replace("#[tauri::command(async)]\nasync fn overlay_show() {}", ""); return next; }],
     ["wailsv3", () => { const next = sources(); next.wailsv3HostSources["host.go"] = next.wailsv3HostSources["host.go"].replace("func (h *Host) OverlayShow(ctx context.Context) error { return nil }", "func (h *Host) Removed(ctx context.Context) error { return nil }"); return next; }],
   ]) {
     const failures = auditHostParity(changed());

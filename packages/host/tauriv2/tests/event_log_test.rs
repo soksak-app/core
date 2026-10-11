@@ -264,7 +264,9 @@ fn relayed(layer: &str, event: &str, level: Level, fields: Value) -> RelayedEven
         level,
         event: event.to_string(),
         cids: vec!["b1.7".into(), "b1.8".into()],
-        fields: serde_json::value::to_raw_value(&fields).unwrap(),
+        fields: soksak_host_tauriv2::bounds::Fields::whole(
+            serde_json::value::to_raw_value(&fields).unwrap(),
+        ),
     }
 }
 

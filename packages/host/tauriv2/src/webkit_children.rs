@@ -76,12 +76,32 @@ fn webkit_processes() -> Vec<(u32, String)> {
             return Vec::new();
         }
     };
+    let (found, unreadable) = parse_webkit_processes(&output);
+    for line in unreadable {
+        crate::application_log::log_error(
+            "webkit children",
+            format!("ps line {line:?} begins with no process number"),
+        );
+    }
+    found
+}
+
+/// The (pid, kind) of the WebKit XPC processes in the output of `ps -axo pid=,command=`, and the lines that begin with no
+/// process number.
+pub fn parse_webkit_processes(output: &str) -> (Vec<(u32, String)>, Vec<String>) {
     let mut found = Vec::new();
-    for line in output.lines() {
+    let mut unreadable = Vec::new();
+    // ps pads the process number with leading spaces.
+    for line in output.lines().map(str::trim) {
+        if line.is_empty() {
+            continue;
+        }
         let Some((pid, command)) = line.split_once(char::is_whitespace) else {
+            unreadable.push(line.to_string());
             continue;
         };
-        let Some(pid) = pid.trim().parse::<u32>().ok() else {
+        let Ok(pid) = pid.parse::<u32>() else {
+            unreadable.push(line.to_string());
             continue;
         };
         let Some(kind) = ["WebContent", "GPU", "Networking"]
@@ -92,7 +112,7 @@ fn webkit_processes() -> Vec<(u32, String)> {
         };
         found.push((pid, kind.to_string()));
     }
-    found
+    (found, unreadable)
 }
 
 /// Whether the process pid is alive. It asks ps (no signal is used). When ps fails, it records the failure and answers

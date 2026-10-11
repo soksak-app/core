@@ -440,6 +440,7 @@ fn bound(name: &str, value: &str) -> Result<Option<i64>, String> {
     let digits = |from: usize, to: usize| -> Option<i64> {
         let part = value.get(from..to)?;
         if part.bytes().all(|b| b.is_ascii_digit()) {
+            // default: a non-numeric part gives None, which the caller reports as the invalid time error.
             part.parse().ok()
         } else {
             None

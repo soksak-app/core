@@ -144,12 +144,16 @@ func Run(assets fs.FS, options Options) error {
 	}
 	host.sidecars = sidecars
 	sidecars.ClosingChanged = host.sidecarsChanged
+	bindings, err := NewBindings(host)
+	if err != nil {
+		return fmt.Errorf("host calls: %w", err)
+	}
 	app := application.New(application.Options{
 		Name: "soksak", Description: "soksak layout running in Wails v3",
 		Assets: application.AssetOptions{Handler: application.BundledAssetFileServer(assets), Middleware: func(next http.Handler) http.Handler {
 			return MissingAssets(StartAssets(host.startPage)(InstalledAssets(configDirectory)(next)), reportMissingAsset)
 		}},
-		Services:   []application.Service{application.NewService(host)},
+		Services:   []application.Service{application.NewService(bindings)},
 		ShouldQuit: host.shouldQuit,
 		// The default signal handler of Wails does not receive SIGHUP and only holds the signals after the first one, so
 		// it does not end the process with the default action. The handler that Run registered
