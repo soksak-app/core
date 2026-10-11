@@ -277,6 +277,11 @@ func TestLogIndexRefusesADamagedIndexAndABrokenLine(t *testing.T) {
 		{"first line", `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"host.x"}` + "\n", `logs/host-f.jsonl: the first line is not log.open: "host.x"`},
 		{"schema", `{"ts_us":1,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":1}}` + "\n", "logs/host-f.jsonl: schema 1 is not 2"},
 		{"layer", linesOf(1, 1) + `{"ts_us":1,"mono_ns":1,"seq":2,"level":"info","layer":"x","event":"a"}` + "\n", `logs/host-f.jsonl:2: layer "x" is not one of native, host, page, plugin, sidecar, sok`},
+		{"null surface", linesOf(1, 1) + `{"ts_us":1,"mono_ns":1,"seq":2,"level":"info","layer":"host","event":"a","surface":null}` + "\n", "logs/host-f.jsonl:2: surface must be a string, found null"},
+		{"null cids", linesOf(1, 1) + `{"ts_us":1,"mono_ns":1,"seq":2,"level":"info","layer":"host","event":"a","cids":null}` + "\n", "logs/host-f.jsonl:2: cids must be an array of strings, found null"},
+		{"null class", linesOf(1, 1) + `{"ts_us":1,"mono_ns":1,"seq":2,"level":"info","layer":"host","event":"a","class":null}` + "\n", "logs/host-f.jsonl:2: class null is not one of lifecycle, input, call, io, frame"},
+		{"null fields", linesOf(1, 1) + `{"ts_us":1,"mono_ns":1,"seq":2,"level":"info","layer":"host","event":"a","fields":null}` + "\n", "logs/host-f.jsonl:2: fields must be an object, found null"},
+		{"numeric window", linesOf(1, 1) + `{"ts_us":1,"mono_ns":1,"seq":2,"level":"info","layer":"host","event":"a","window":4}` + "\n", "logs/host-f.jsonl:2: window must be a string, found 4"},
 		{"class", linesOf(1, 1) + `{"ts_us":1,"mono_ns":1,"seq":2,"level":"info","layer":"host","event":"a","class":"loud"}` + "\n", `logs/host-f.jsonl:2: class "loud" is not one of lifecycle, input, call, io, frame`},
 	}
 	for _, c := range first {

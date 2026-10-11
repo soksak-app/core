@@ -349,17 +349,18 @@ type scannedLine struct {
 }
 
 // lineShape is the typed view of a line: a member of another type fails the decoding, and the line is then read again by the
-// reader whose error names the file and the line.
+// reader whose error names the file and the line. The members that may be missing are raw, so a null is not taken for a missing one.
 type lineShape struct {
 	TsUs    json.Number     `json:"ts_us"`
 	Seq     json.Number     `json:"seq"`
 	Level   string          `json:"level"`
 	Layer   string          `json:"layer"`
 	Event   *string         `json:"event"`
-	Class   *string         `json:"class"`
-	Surface *string         `json:"surface"`
-	Session *string         `json:"session"`
-	Cids    []string        `json:"cids"`
+	Class   json.RawMessage `json:"class"`
+	Window  json.RawMessage `json:"window"`
+	Surface json.RawMessage `json:"surface"`
+	Session json.RawMessage `json:"session"`
+	Cids    json.RawMessage `json:"cids"`
 	Fields  json.RawMessage `json:"fields"`
 }
 
@@ -388,6 +389,18 @@ func stringMember(raw json.RawMessage) (string, bool) {
 		return "", false
 	}
 	return text, true
+}
+
+// optionalString is the string of a member that may be missing: it is an error when the member is there and is not a string.
+func optionalString(name string, raw json.RawMessage) (string, error) {
+	if len(raw) == 0 {
+		return "", nil
+	}
+	text, ok := stringMember(raw)
+	if !ok {
+		return "", fmt.Errorf("%s is not a string", name)
+	}
+	return text, nil
 }
 
 // scanLine reads one line. A line that the typed read does not accept is read again by the reader of the event structure, whose
@@ -419,42 +432,55 @@ func scanFast(raw []byte) (*scannedLine, error) {
 	if shape.Event == nil {
 		return nil, errors.New("event is missing")
 	}
-	line := &scannedLine{tsUs: tsUs, seq: seq, event: *shape.Event, cids: shape.Cids, class: -1}
+	line := &scannedLine{tsUs: tsUs, seq: seq, event: *shape.Event, class: -1}
 	if line.level = indexOfName(indexLevels, shape.Level); line.level < 0 {
 		return nil, errors.New("level is not defined")
 	}
 	if line.layer = indexOfName(indexLayers, shape.Layer); line.layer < 0 {
 		return nil, errors.New("layer is not defined")
 	}
-	if shape.Class != nil {
-		if line.class = indexOfName(indexClasses, *shape.Class); line.class < 0 {
+	if len(shape.Class) > 0 {
+		class, err := optionalString("class", shape.Class)
+		if err != nil {
+			return nil, err
+		}
+		if line.class = indexOfName(indexClasses, class); line.class < 0 {
 			return nil, errors.New("class is not defined")
 		}
 	}
-	if shape.Surface != nil {
-		line.surface = *shape.Surface
+	if _, err := optionalString("window", shape.Window); err != nil {
+		return nil, err
 	}
-	if shape.Session != nil {
-		line.session = *shape.Session
+	if line.surface, err = optionalString("surface", shape.Surface); err != nil {
+		return nil, err
+	}
+	if line.session, err = optionalString("session", shape.Session); err != nil {
+		return nil, err
+	}
+	if len(shape.Cids) > 0 {
+		if shape.Cids[0] != '[' {
+			return nil, errors.New("cids is not an array")
+		}
+		if err := json.Unmarshal(shape.Cids, &line.cids); err != nil {
+			return nil, err
+		}
 	}
 	if len(shape.Fields) > 0 {
 		if shape.Fields[0] != '{' {
 			return nil, errors.New("fields is not an object")
 		}
-		if bytes.Contains(shape.Fields, []byte(`"surface"`)) || bytes.Contains(shape.Fields, []byte(`"session"`)) || bytes.Contains(shape.Fields, []byte(`"run"`)) {
-			var fields fieldsShape
-			if err := json.Unmarshal(shape.Fields, &fields); err != nil {
-				return nil, err
-			}
-			if text, ok := stringMember(fields.Surface); ok && line.surface == "" {
-				line.surface = text
-			}
-			if text, ok := stringMember(fields.Session); ok && line.session == "" {
-				line.session = text
-			}
-			if text, ok := stringMember(fields.Run); ok {
-				line.run = text
-			}
+		var fields fieldsShape
+		if err := json.Unmarshal(shape.Fields, &fields); err != nil {
+			return nil, err
+		}
+		if text, ok := stringMember(fields.Surface); ok && line.surface == "" {
+			line.surface = text
+		}
+		if text, ok := stringMember(fields.Session); ok && line.session == "" {
+			line.session = text
+		}
+		if text, ok := stringMember(fields.Run); ok {
+			line.run = text
 		}
 	}
 	return line, nil
