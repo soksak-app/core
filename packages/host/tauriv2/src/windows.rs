@@ -547,13 +547,11 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             // While the application quits, the web process of the window is killed: AppKit keeps XPC services alive
             // longer than their client, so the WebContent process would outlive the application
             // (docs/spec/hosts.md#process-lifecycle).
+            // The termination takes the handle of the main webview and runs outside `with_webview`
+            // (docs/spec/hosts.md#process-lifecycle).
             if host.state::<Windows>().quit.active() {
-                if let Some(view) = root_view(&host) {
-                    if let Err(error) = crate::exposure::with_view(&view, |native| {
-                        platform::current()?.kill_web_content_process(native)
-                    }) {
-                        log_error("web content kill", error);
-                    }
+                if let Err(error) = platform.kill_web_content_process(main) {
+                    log_error("web content kill", error);
                 }
             }
         }

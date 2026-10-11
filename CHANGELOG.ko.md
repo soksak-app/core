@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.12: Tauri host가 종료할 때 창의 WebContent process를 main webview의 handle로 `with_webview` 밖에서 끝낸다. 이전에는 event를 보내던 thread와 deadlock이 났다.
 - F160.28.3: page의 첫 batch가 clock anchor의 왕복을 `page.log.clock`으로 적는다. 이는 그 event를 host의 event 사이에 두는 한도다.
 - F160.8.3: page의 sidecar port가 send의 상관 식별자를 host 호출 `sidecarSend`에 넘기므로, key의 요청이 key의 식별자를 갖는다.
 - F160.34.7: `sidecar.json`의 `replay.inputs`가 재생 입력 종류마다 event를 적고, 두 도구의 `sok debug replay`가 재생 실행 파일을 시작하기 전에 각 segment의 입력을 session 규칙으로 검사한다.

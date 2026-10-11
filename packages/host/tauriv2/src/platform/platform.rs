@@ -347,9 +347,12 @@ pub trait Platform: Send + Sync {
     fn set_surface_overlays(&self, surface: Handle, overlays: &[DOMOverlay]) -> Result<(), String>;
     /// Sets the opacity of the webview.
     fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String>;
-    /// Terminates the current WebContent process. It is called so that the termination of the application leaves no
-    /// WebKit child process.
-    fn kill_web_content_process(&self, view: &PlatformWebview) -> Result<(), String>;
+    /// Terminates the current WebContent process of the webview `view` (the handle that `view_id` returns). It is called so
+    /// that the termination of the application leaves no WebKit child process. It takes the handle and not the webview of the
+    /// runtime: WebKit reports the end of the process synchronously, and the handler of the runtime takes the lock of its
+    /// webviews, so a termination inside `with_webview`, which holds the lock of the webview, can wait for a thread that holds
+    /// the lock of the webviews and waits for the lock of the webview.
+    fn kill_web_content_process(&self, view: Handle) -> Result<(), String>;
     /// Makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
     /// uses it.
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String>;

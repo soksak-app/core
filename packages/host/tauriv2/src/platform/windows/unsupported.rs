@@ -150,7 +150,7 @@ pub fn set_alpha(_view: &PlatformWebview, _alpha: f64) -> Result<(), String> {
     missing("webview alpha")
 }
 
-pub fn kill_web_content_process(_view: &PlatformWebview) -> Result<(), String> {
+pub fn kill_web_content_process(_view: Handle) -> Result<(), String> {
     missing("WebContent process termination")
 }
 

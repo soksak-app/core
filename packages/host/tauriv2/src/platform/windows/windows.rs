@@ -133,7 +133,7 @@ impl Platform for Windows {
     fn set_alpha(&self, view: &PlatformWebview, alpha: f64) -> Result<(), String> {
         unsupported::set_alpha(view, alpha)
     }
-    fn kill_web_content_process(&self, view: &PlatformWebview) -> Result<(), String> {
+    fn kill_web_content_process(&self, view: Handle) -> Result<(), String> {
         unsupported::kill_web_content_process(view)
     }
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {

@@ -79,8 +79,8 @@ pub fn set_main_appearance(view: &PlatformWebview, dark: bool) -> Result<(), Str
     Ok(())
 }
 
-pub fn kill_content_process(view: &PlatformWebview) -> Result<(), String> {
-    if unsafe { sp_webview_kill_content_process(view.inner()) } {
+pub fn kill_content_process(view: Handle) -> Result<(), String> {
+    if unsafe { sp_webview_kill_content_process(view as *mut c_void) } {
         Ok(())
     } else {
         Err("the WebContent process cannot be terminated".into())
