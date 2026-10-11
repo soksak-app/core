@@ -3,7 +3,7 @@
 // holds consecutive `seq`, which the writer counts across both files (docs/spec/logging.md#files).
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
@@ -37,10 +37,15 @@ for (const app of Object.values(APPS)) {
     const debug = lines(debugPath);
     assert.equal(statSync(debugPath).mode & 0o777, 0o600, `${debugPath} is not private to its owner`);
     assert.equal(debug[0]?.event, "log.open", `${debugPath} does not open with log.open`);
+    // A file that passed its bound was moved to a generation `<name>.<n>` (docs/spec/logging.md#files), which holds the earlier
+    // lines of the same seq.
+    const generations = (file) => readdirSync(logs).filter((name) => name.startsWith(`${basename(file)}.`) && /^\d+$/.test(name.slice(basename(file).length + 1)))
+      .flatMap((name) => lines(join(logs, name)));
     // The files are read one after the other while the writer appends to both, so only the seq up to the last seq of each file
     // is complete in both reads.
     const last = Math.min(events.at(-1).seq, debug.at(-1).seq);
-    const numbered = [...events, ...debug].filter((event) => event.seq <= last).sort((left, right) => left.seq - right.seq);
+    const numbered = [...generations(path), ...events, ...generations(debugPath), ...debug].filter((event) => event.seq <= last)
+      .sort((left, right) => left.seq - right.seq);
     numbered.forEach((event, index) => assert.equal(event.seq, index + 1,
       `the event files of process ${pid} skip from seq ${numbered[index - 1]?.seq} to ${event.seq}`));
   });
