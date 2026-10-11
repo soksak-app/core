@@ -1875,6 +1875,22 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F160.34",
+    implementation: [
+      { file: "packages/plugin-api/events-check.js", symbol: "export function parseCensusConfig" },
+      { file: "packages/sok/wailsv3/src/replay_inputs.go", symbol: "func ReplaySessionProblem" },
+      { file: "packages/sok/tauriv2/src/replay_inputs.rs", symbol: "pub fn replay_session_problem" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/replay_inputs_test.go", id: "TestTheReplayInputRulesReproduceTheGoldenCases" },
+      { file: "packages/sok/tauriv2/tests/replay_inputs_test.rs", id: "the_replay_input_rules_reproduce_the_golden_cases" },
+      { file: "packages/sok/wailsv3/tests/log_policy_test.go", id: "TestThePolicyReaderRefusesEveryInvalidGoldenCaseWithItsText" },
+      { file: "packages/sok/tauriv2/tests/log_policy_test.rs", id: "the_policy_reader_refuses_every_invalid_golden_case_with_its_text" },
+    ],
+    expected: "The catalog check finds the emit sites of a Rust sidecar through its declared emitters, the readers of the policy file reproduce its golden cases, and the replay checks the view-state inputs of a session with the rules of a session before it applies them.",
+    levels: ["unit"],
+  },
+  {
     id: "F160.35",
     implementation: [
       { file: "packages/plugin-api/screen-hash.js", symbol: "export function screenFromMessage" },
