@@ -80,8 +80,9 @@ pub mod workspace;
 use application_log::log_error;
 use sidecars::WindowSidecars;
 
-/// The stop of the thread that announces the writes of the event log to the windows.
-struct LogNoticeStop(std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>);
+/// The publisher of the notices of changes of the event log (docs/spec/debug.md#following). It is the value of the host status
+/// `host.log`, and the application stops its thread at exit.
+pub(crate) struct LogNoticeState(pub(crate) std::sync::Arc<debug_follow::LogNotices>);
 
 /// The stop of the thread that brings the index of the event files up to date after the writer wrote.
 struct LogIndexStop(std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>);
@@ -205,23 +206,26 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // exists.
                 let events = std::sync::Arc::new(event_log::EventLog::start_host(&directory)?);
                 event_record::use_host_event_log(Some(std::sync::Arc::clone(&events)));
-                // The debug view follows the event file of the host: every window learns that the writer wrote.
+                // The debug view follows the event files: every window and every watcher of host.log learns that a line announced
+                // a change (docs/spec/debug.md#following). The index covers the lines before the notice, so the notice follows
+                // the indexer and the queries that update an index, and not the writer.
                 let notices_app = app.clone();
-                let (observe, stop) = debug_follow::coalesce_log_notices(move |path, size| {
-                    windows::notify_log_written(&notices_app, path, size)
-                });
-                // The index of each event file follows the writer too (docs/spec/logging.md#index).
+                let notices = std::sync::Arc::new(debug_follow::LogNotices::start(
+                    debug_follow::LOG_NOTICE_INTERVAL,
+                    move |notice| windows::notify_log_notice(&notices_app, &notice),
+                ));
+                debug_follow::use_log_notices(Some(std::sync::Arc::clone(&notices)));
+                // The index of each event file follows the writer (docs/spec/logging.md#index).
                 let (index_writes, stop_indexer) =
                     log_query::start_log_indexer(log_query::index_reporter());
                 events.set_on_write(Box::new(move |path: &std::path::Path, size: u64| {
                     index_writes(path, size);
-                    observe(path, size);
                 }));
                 tauri::Manager::manage(
                     app,
                     LogIndexStop(std::sync::Mutex::new(Some(stop_indexer))),
                 );
-                tauri::Manager::manage(app, LogNoticeStop(std::sync::Mutex::new(Some(stop))));
+                tauri::Manager::manage(app, LogNoticeState(notices));
                 tauri::Manager::manage(app, events);
                 application_log::start_standard_error(
                     &directory,
@@ -416,15 +420,8 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 {
                     stop();
                 }
-                if let Some(stop) = app
-                    .state::<LogNoticeStop>()
-                    .0
-                    .lock()
-                    .expect("the stop of the log notices")
-                    .take()
-                {
-                    stop();
-                }
+                debug_follow::use_log_notices(None);
+                app.state::<LogNoticeState>().0.stop();
                 if let Err(error) = app
                     .state::<std::sync::Arc<event_log::EventLog>>()
                     .flush(std::time::Duration::from_secs(2))

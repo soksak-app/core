@@ -1,7 +1,6 @@
 //! Project windows, the window registry, ready/close/exit, window state and window buttons.
 
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
@@ -276,22 +275,15 @@ pub(crate) fn notify_workspace(app: &AppHandle) {
     }
 }
 
-/// Sends the host event `debug-log-changed` to every window with the path of the event file under the configuration folder and
-/// its size (docs/spec/debug.md#following).
-pub(crate) fn notify_log_written(app: &AppHandle, path: &Path, size: u64) {
-    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-        log_error(
-            "debug-log-changed",
-            format!("{} has no file name", path.display()),
-        );
-        return;
-    };
-    let notice = serde_json::json!({"path": format!("logs/{name}"), "size": size});
+/// Sends the host event `debug-log-changed` to every window and the value of the host status `host.log` to its watchers: the notice
+/// of a change of the event log (docs/spec/debug.md#following).
+pub(crate) fn notify_log_notice(app: &AppHandle, notice: &crate::debug_follow::LogNotice) {
     for window in app.windows().values() {
         if let Err(error) = emit_window(window, "debug-log-changed", notice.clone()) {
             log_error("debug-log-changed", error);
         }
     }
+    crate::exposure::log_notice_changed(app, notice);
 }
 
 /// Whether the application is quitting, which ends the WebContent process of each window on purpose.

@@ -205,6 +205,7 @@ fn host_entries_are_appended_as_registered() {
             "core.layout",
             "host.buttons",
             "host.dock",
+            "host.log",
             "host.menu",
             "host.screens",
             "host.sidecars",

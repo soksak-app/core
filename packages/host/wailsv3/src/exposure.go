@@ -98,6 +98,13 @@ var hostStatus = map[string]hostEntry{
 		Description: "The mouse buttons that AppKit reports as pressed: {mask}, the NSEvent.pressedMouseButtons mask (bit 0 left, bit 1 right). It changes with a press or release of a person's button in any application; input.pointer refuses a press or release with 1007 while it is not 0.",
 		Schema:      map[string]any{"type": "object", "properties": map[string]any{"mask": map[string]any{"type": "integer"}}},
 	},
+	"host.log": {
+		Description: "The latest notice of a change of the event log: {path, size, notices, coalesced}. path is the event file under the configuration folder (logs/<name>) and size its size in bytes; notices counts the notices published since the start, at most one per 250 ms, and coalesced counts the announcements that were folded into a later notice. A line announces a change except the record of a call that only reads the log. The page follows the same notice with the host event debug-log-changed; a client queries log.query with since after a notice.",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{
+			"path": map[string]any{"type": "string"}, "size": map[string]any{"type": "integer"},
+			"notices": map[string]any{"type": "integer"}, "coalesced": map[string]any{"type": "integer"},
+		}},
+	},
 	"host.screens": {
 		Description: "The displays in screen coordinates with their backing scale and the area not covered by the menu bar and Dock.",
 		Schema: map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
@@ -724,6 +731,11 @@ func (b hostBackend) HostStatus(window, name string) (any, error) {
 		return b.sidecarsState(), nil
 	case "host.buttons":
 		return b.h.buttons.Value(), nil
+	case "host.log":
+		if b.h.logNotices == nil {
+			return nil, fmt.Errorf("the log notices are not started")
+		}
+		return b.h.logNotices.Value(), nil
 	}
 	return s.windowState()
 }

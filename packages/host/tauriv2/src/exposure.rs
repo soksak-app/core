@@ -59,6 +59,12 @@ fn host_declarations() -> Value {
             "description": "The titles of the application's Dock menu items in order.",
             "schema": {"type": "array", "items": {"type": "string"}},
         }, {
+            "name": "host.log",
+            "description": "The latest notice of a change of the event log: {path, size, notices, coalesced}. path is the event file under the configuration folder (logs/<name>) and size its size in bytes; notices counts the notices published since the start, at most one per 250 ms, and coalesced counts the announcements that were folded into a later notice. A line announces a change except the record of a call that only reads the log. The page follows the same notice with the host event debug-log-changed; a client queries log.query with since after a notice.",
+            "schema": {"type": "object", "properties": {
+                "path": {"type": "string"}, "size": {"type": "integer"},
+                "notices": {"type": "integer"}, "coalesced": {"type": "integer"}}},
+        }, {
             "name": "host.menu",
             "description": "The active menu language and the application menu: each submenu's title and its items' titles and key equivalents, without separators.",
             "schema": {"type": "object", "properties": {
@@ -948,6 +954,24 @@ pub(crate) fn windows_changed(app: &AppHandle) {
     });
 }
 
+/// Sends the value of host.log to the connections that watch it. A write of the endpoint can wait for a connection, so the publisher of
+/// the notices, which runs on its own thread, is the caller.
+pub(crate) fn log_notice_changed(app: &AppHandle, notice: &crate::debug_follow::LogNotice) {
+    let Some(notifier) = app
+        .state::<Exposure>()
+        .endpoint
+        .get()
+        .map(Endpoint::notifier)
+    else {
+        log_error("host.log change", "the endpoint is not started");
+        return;
+    };
+    match raw(&json!(notice)) {
+        Ok(text) => notifier.notify_watchers("host.log", &text),
+        Err(error) => log_error("host.log change", error.message),
+    }
+}
+
 /// Installs the watch of host.buttons. A changed value is sent to the watching connections by one thread in the order
 /// received. A write of the endpoint can wait for a connection, so it is not sent from the main thread. It is called
 /// before endpoint.json is written on the main thread (docs/spec/exposure.md#host-entries).
@@ -1674,6 +1698,11 @@ impl Host {
                 .try_state::<crate::buttons::Buttons>()
                 .map(|buttons| buttons.value())
                 .ok_or_else(|| internal("the mouse buttons are not watched")),
+            ("status.get", "host.log") => self
+                .0
+                .try_state::<crate::LogNoticeState>()
+                .map(|state| json!(state.0.value()))
+                .ok_or_else(|| internal("the log notices are not started")),
             ("status.get", "host.dock") => {
                 let platform = platform::current().map_err(internal)?;
                 on_main(window, move || platform.dock_items()).map_err(internal)
@@ -1689,7 +1718,7 @@ impl Host {
             (
                 "status.watch" | "status.unwatch",
                 "host.window" | "host.windows" | "host.screens" | "host.dock" | "host.menu"
-                | "host.sidecars" | "host.buttons",
+                | "host.sidecars" | "host.buttons" | "host.log",
             ) => Ok(Value::Null),
             ("command.run", _) => {
                 let arguments = match params.get("params") {
