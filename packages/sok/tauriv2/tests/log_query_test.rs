@@ -9,7 +9,7 @@ use std::path::Path;
 
 use log_support::*;
 use serde_json::{json, Value};
-use soksak_sok::log_query::{log_line, log_row_line, parse_log_query, query_logs, LogPage};
+use soksak_sok::log_query::{log_row_line, parse_log_query, query_logs, LogPage};
 
 fn run_query(config: &Path, params: &str) -> LogPage {
     let query = parse_log_query(params).unwrap_or_else(|error| panic!("{params}: {error}"));
