@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: events-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory app-update-check
+.PHONY: events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -50,6 +50,11 @@ boundaries:
 # `node scripts/check-events.mjs --logs <configuration folder>...` (docs/operations/examples.md).
 events-check:
 	@node scripts/check-events.mjs
+
+# Applies the census rules of packages/plugin-api/census-rules.json to the sources (docs/spec/logging.md#census): a source of occurrences has an event
+# in its function or a reason marker, and a rule that waits for an entrance item is printed with its count. `--list` also prints each pending finding.
+census-check:
+	@node packages/plugin-api/events-check.js --census scripts/census.json
 
 # Checks that every error record whose place is written in the sources of the hosts and the native library has a row in the failure table of docs/spec/diagnostics.md.
 failures-check:

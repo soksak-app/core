@@ -113,6 +113,18 @@
         "correlation id"
       ],
       "allowed": []
+    },
+    {
+      "term": "census",
+      "definition": "The rules by language that list each source of occurrences (an empty catch, a discarded result, a goroutine, a registered observer, an error return) and require an event in its function or a reason marker.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "reason marker",
+      "definition": "The one comment form (default|silent): <reason> that states why a source of occurrences stores no event.",
+      "rejected": [],
+      "allowed": []
     }
   ]
 }

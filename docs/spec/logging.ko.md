@@ -120,6 +120,14 @@ window check는 시험 대상 애플리케이션의 event log에 시험마다 �
 
 `soksak-log-check`(패키지 `@soksak/log-contract`, `packages/log-contract`)는 로그를 schema와 catalog로 검증한다: 줄 구조, 선언된 event, 연속된 `seq`와 `log.dropped`로 설명되는 틈, 입력 종류마다 선언된 사슬, 시험이 선언한 것 외의 `error` 없음. 단위 시험과 window check는 자기 로그를 남기고, gate는 남은 모든 로그를 검증하며, 실패한 실행의 로그는 분류하기 전까지 보관한다.
 
+### Census
+
+발생 원천은 기록 없이 사라질 수 있는 자리다: 빈 catch, 버려진 결과, goroutine, 등록된 observer, delegate, 오류 반환. census는 언어별 규칙으로 그런 원천을 모두 찾고, 같은 함수에 저장된 event나 reason marker 중 하나를 요구한다. marker의 형식은 하나, `(default|silent): <reason>`이다(`default:`는 기본값이 계약의 일부인 까닭을, `silent:`는 아무것도 기록하지 않는 까닭을 적는다). 원천의 줄, 일치한 범위 안, 또는 바로 위에 이어진 주석 줄에 적고, 까닭은 10자 이상이다. 단어의 다른 형식(`Default:`, `Silent:`, `fallback:`, 다른 구분자, 다른 언어)으로 시작하는 주석은 파일과 줄을 이름으로 말하는 오류다. 기준선은 없다: 둘 다 없는 원천은 `<file>:<line>: <rule> has neither an event nor a stated reason`으로 실패한다.
+
+`soksak-events [--census <file>] [--catalog <file>] [--list] [repository]`(패키지 `@soksak/plugin-api`, `packages/plugin-api/events-check.js`)는 `packages/plugin-api/census-rules.json`의 규칙을 적용하며 모든 저장소가 호출한다. 규칙은 `id`, `language`, 주석을 뺀 코드에서 일치시키는 `pattern`, `event-or-reason` 또는 `entrance`인 `requires`(원천은 저장소의 입구 파일에서만 허용되고, 다른 곳에서는 event도 marker도 받아들이지 않는다), 설명을 가진다. 규칙은 `js.empty-catch`, `js.swallowing-catch`, `go.go-statement`, `go.recover`, `rs.ok-discard`, `rs.unwrap-or`, `rs.dropped-send`, `m.registration`(observer, monitor, KVO, event tap, run loop source, dispatch source, timer 등록), `m.delegate`, `m.error-return`(`return NO;`)이다. 원천의 event는 catalog 입구의 emit 지점(`sitesOf`)이고, 함수는 Go와 Rust에서는 가장 안쪽의 이름 있는 함수, JavaScript에서는 가장 안쪽의 함수 형태 block, Objective-C에서는 가장 바깥 block이다. 반환 경로 규칙은 근사이고 등록 규칙은 정확하다.
+
+저장소의 선언 파일(`--census`)은 `exclude`(census가 뺄 경로의 pattern), `entrances`(규칙 id와 입구 파일의 pattern), `pending`(규칙 id와 입구를 만들어 규칙을 켜는 checklist 항목)을 가진다. 대기 중인 규칙은 강제하지 않으며, 명령은 그 항목과 대기하는 발견의 수를 출력하므로(`--list`는 각 발견을 출력한다) 꺼진 규칙은 침묵하지 않는다. 어떤 규칙에도 없는 규칙 id, 모르는 key, checklist id가 아닌 pending 값은 오류다. `--catalog`는 소스의 emit 지점도 그 경로의 catalog와 양방향으로 대조한다([Catalog](#catalog)). `make census-check`는 `scripts/census.json`으로 이 저장소에서 명령을 실행하고, `pnpm test`는 `scripts/test/census.test.mjs`에서 실행하며, `scripts/check-fallbacks.mjs`는 같은 marker를 쓰고 다른 형식을 거부한다.
+
 입력은 독립 수신자와 비교한다: 기록된 `pty_write` 바이트는 shell 대역이 파일에 쓴 바이트와 같다.
 
 ## 개인정보

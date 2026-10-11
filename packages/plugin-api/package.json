@@ -9,7 +9,8 @@
     "./page": "./page.js",
     "./exposure-check": "./exposure-check.js",
     "./package.json": "./package.json",
-    "./records-check": "./records-check.js"
+    "./records-check": "./records-check.js",
+    "./events-check": "./events-check.js"
   },
   "files": [
     "index.js",
@@ -28,6 +29,8 @@
     "engines-check.js",
     "core-exposure.json",
     "records-check.js",
+    "events-check.js",
+    "census-rules.json",
     "commits-check.js",
     "terms.json"
   ],
@@ -35,6 +38,7 @@
     "soksak-exposure": "./exposure-check.js",
     "soksak-engines": "./engines-check.js",
     "soksak-records": "./records-check.js",
+    "soksak-events": "./events-check.js",
     "soksak-commits": "./commits-check.js"
   },
   "scripts": {

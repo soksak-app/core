@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // Finds substitute values and swallowed errors in product code. AGENTS.md forbids substitute values, coercion, ignored results, and unreported errors.
-// A place where a default is part of the contract states its reason on that line or in the comment line right above it, starting with `default:`
-// (the check also accepts the Korean form of that marker). A place found without a reason fails.
+// A place where a default is part of the contract states its reason on that line or in the comment line right above it, in the one marker
+// form `(default|silent): <reason>` (packages/plugin-api/events-check.js). A place found without a reason fails, and so does a comment that
+// opens with a marker word in another form.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { markerErrors, reasonFor } from "../packages/plugin-api/events-check.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -48,8 +50,6 @@ const language = (file) => {
   return null;
 };
 
-/** The reason of a default written on this line or in the comment lines that continue right above it. */
-const REASON = /(기본값|default): \S.{9,}/;
 const COMMENT = /^\s*(\/\/|\*|\/\*)/;
 const OR_OPERATOR = /\|\|(?![=])/g;
 
@@ -79,16 +79,6 @@ function hasOrDefault(line) {
     if (literalFallback || namedFallback || (valuePosition && !booleanName && !booleanCalls)) return true;
   }
   return false;
-}
-
-function reasonFor(lines, index) {
-  const current = lines[index].match(REASON);
-  if (current) return current[0].trim();
-  for (let above = index - 1; above >= 0 && COMMENT.test(lines[above]); above--) {
-    const match = lines[above].match(REASON);
-    if (match) return match[0].trim();
-  }
-  return null;
 }
 
 /** Returns every default and discarded error found in product code, with its documented reason. */
@@ -141,16 +131,22 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     .split("\n").filter(Boolean);
   const all = listFallbacks(files, (file) => readFileSync(join(ROOT, file), "utf8"));
   const unresolved = all.filter((item) => item.reason === null);
+  const forms = files.flatMap((file) => (language(file) && PRODUCT.test(file) && !EXCLUDED.test(file) ? markerErrors(file, readFileSync(join(ROOT, file), "utf8")) : []));
   if (listOnly) {
     for (const item of all) {
       const reason = item.reason === null ? "UNJUSTIFIED" : `reason=${item.reason}`;
       console.log(`${item.file}:${item.line}: ${item.pattern} [${reason}] ${item.code}`);
     }
   }
+  if (forms.length) {
+    console.error(forms.join("\n"));
+    console.error(`${forms.length} reason markers are not in the one form (default|silent): <reason>.`);
+    process.exit(1);
+  }
   if (unresolved.length) {
     if (!listOnly) console.error(unresolved.map((item) => `${item.file}:${item.line}: ${item.pattern} without a stated reason: ${item.code}`).join("\n"));
     console.error(`${unresolved.length} defaults or discarded errors have no stated reason. Replace each with an explicit error, ` +
-      "or state on its line or in the comment above it why the default is part of the contract (기본값: … / default: …).");
+      "or state on its line or in the comment above it why the default is part of the contract (default: … / silent: …).");
     process.exit(1);
   }
   console.log(`Fallback checks passed: ${all.length} occurrences listed; ${all.length - unresolved.length} have a stated contract reason.`);

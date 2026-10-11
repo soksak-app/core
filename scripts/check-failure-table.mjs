@@ -8,7 +8,7 @@
 // constant (the path of a file, a label that a caller computed) has no literal text and is not read.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { trackedSources } from './check-events.mjs';
+import { repositorySources } from "./check-events.mjs";
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TABLES = ['docs/spec/diagnostics.md', 'docs/spec/diagnostics.ko.md'];
@@ -38,7 +38,7 @@ export function failureSites(sources) {
 }
 
 /** The error records at literal places in the tracked sources of this repository. */
-export const trackedFailureSites = () => failureSites(trackedSources());
+export const trackedFailureSites = () => failureSites(repositorySources());
 
 /** The failure table of a diagnostics document: the text between its table header and the section that follows it. */
 export function failureTable(markdown) {

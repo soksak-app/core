@@ -106,7 +106,7 @@ export function begin(snapshot) {
       checkSpace(requested, requested.activeSpaceId);
       opened = requested;
     } catch {
-      // For a layout that the plane cannot open, the activation of initialise reports the error and the window stays at the library.
+      // silent: for a layout that the plane cannot open, the activation of initialise reports the error and the window stays at the library.
     }
   }
   // default: when no project was opened, the settings have no project either.
