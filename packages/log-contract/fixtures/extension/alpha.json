@@ -1,0 +1,68 @@
+{
+  "schema": 2,
+  "layers": [
+    "sidecar"
+  ],
+  "sidecar": "alpha",
+  "events": {
+    "log.open": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "schema": "number",
+        "pid": "number",
+        "role": "string",
+        "boot": "string"
+      }
+    },
+    "log.dropped": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "from_seq": "number",
+        "to_seq": "number",
+        "count": "number",
+        "bytes": "number",
+        "reason": "string"
+      }
+    },
+    "log.rotated": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "bytes": "number",
+        "kept": "number",
+        "removed": "string|null"
+      }
+    },
+    "sidecar.alpha.start": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "pid": "number"
+      }
+    },
+    "sidecar.alpha.write": {
+      "layer": "sidecar",
+      "class": "io",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "hex": "string"
+      }
+    }
+  },
+  "extends": [
+    {
+      "chain": "input",
+      "after": "host.sidecar.request",
+      "events": [
+        "sidecar.alpha.write"
+      ]
+    }
+  ]
+}

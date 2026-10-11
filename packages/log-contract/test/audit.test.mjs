@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { auditLog, auditLogs, parseLog } from "../index.js";
+import { auditLog, auditLogs, composeCatalogs, parseLog } from "../index.js";
 
 const catalog = {
   schema: 2,
@@ -279,4 +279,65 @@ test("the chain of an operation of the page is complete when its call and the ho
     { file: "host-b1.debug.jsonl", text: [line(3, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }), start(4, "p1.1"), call(5, "p1.1"), start(6, "p1.2"), call(7, "p1.2")].join("\n") },
   ], operations);
   assert.deepEqual(findings.map(({ message }) => message), ["chain plugin of p1.2 lacks host.binding.call"]);
+});
+
+// The chain extension of a sidecar catalog and the lifecycle events of the layer sidecar (docs/spec/logging.md#sidecar-catalogs).
+const extensionFixture = async (name) => {
+  const { readFileSync } = await import("node:fs");
+  return readFileSync(new URL(`../fixtures/extension/${name}`, import.meta.url), "utf8");
+};
+const extensionCatalog = async () => composeCatalogs(JSON.parse(await extensionFixture("base.json")), JSON.parse(await extensionFixture("alpha.json")));
+const extensionLogs = async (...names) => Promise.all(names.map(async (file) => ({ file, text: await extensionFixture(file) })));
+
+test("a chain extension of a sidecar catalog is complete when its events follow the request that names the sidecar, in any file", async () => {
+  const catalog = await extensionCatalog();
+  assert.deepEqual(auditLogs(await extensionLogs("host-1-2.jsonl", "alpha-3-4.jsonl"), catalog), []);
+});
+
+test("a chain extension reports the sidecar event that a request naming the sidecar lacks, with the file and line of the request", async () => {
+  const catalog = await extensionCatalog();
+  assert.deepEqual(auditLogs(await extensionLogs("host-1-2.jsonl", "alpha-idle-3-4.jsonl"), catalog), [
+    { file: "host-1-2.jsonl", line: 3, message: "chain input of b1.1 lacks sidecar.alpha.write after host.sidecar.request of alpha" },
+  ]);
+});
+
+test("a chain extension does not flag the cids of a request that names another sidecar", async () => {
+  const catalog = await extensionCatalog();
+  assert.deepEqual(auditLogs(await extensionLogs("host-other-1-2.jsonl", "alpha-idle-3-4.jsonl"), catalog), []);
+});
+
+test("an extension that names an unknown chain, an event outside the chain or an undeclared event is an error, not a finding", async () => {
+  const base = JSON.parse(await extensionFixture("base.json"));
+  const alpha = JSON.parse(await extensionFixture("alpha.json"));
+  const withExtension = (extension) => composeCatalogs(base, { ...alpha, extends: [extension] });
+  const good = alpha.extends[0];
+  assert.throws(() => withExtension({ ...good, chain: "output" }), /sidecar alpha: the extension names the chain output, which the catalog does not declare/);
+  assert.throws(() => withExtension({ ...good, after: "page.call" }), /sidecar alpha: the extension follows page\.call, which is not an event of the chain input/);
+  assert.throws(() => withExtension({ ...good, after: "native.input.key_down" }), /sidecar alpha: the extension follows native\.input\.key_down, which has no field name/);
+  assert.throws(() => withExtension({ ...good, events: ["sidecar.alpha.read"] }), /sidecar alpha: the extension names sidecar\.alpha\.read, which the catalog does not declare/);
+  assert.throws(() => withExtension({ ...good, events: [] }), /sidecar alpha: the extension of the chain input lists no events/);
+});
+
+test("the lifecycle events of the layer sidecar that a sidecar catalog declares pass, and a field the catalog requires is a finding", async () => {
+  const catalog = await extensionCatalog();
+  assert.deepEqual(auditLogs(await extensionLogs("alpha-3-4.jsonl"), catalog), []);
+  const text = (await extensionFixture("alpha-3-4.jsonl")).replace(',"reason":"disk full"', "");
+  assert.deepEqual(auditLogs([{ file: "alpha-3-4.jsonl", text }], catalog), [
+    { file: "alpha-3-4.jsonl", line: 5, message: "field reason is required by log.dropped" },
+  ]);
+  const undeclared = (await extensionFixture("alpha-3-4.jsonl")).replaceAll("sidecar.alpha.start", "sidecar.alpha.begin");
+  assert.deepEqual(auditLogs([{ file: "alpha-3-4.jsonl", text: undeclared }], catalog).map(({ message }) => message), [
+    "event sidecar.alpha.begin is not declared", "event sidecar.alpha.begin is not declared",
+  ]);
+});
+
+test("a sidecar catalog is refused when it names no sidecar, owns another layer, declares a foreign event or contradicts a shared lifecycle event", async () => {
+  const base = JSON.parse(await extensionFixture("base.json"));
+  const alpha = JSON.parse(await extensionFixture("alpha.json"));
+  const compose = (change) => composeCatalogs(base, { ...alpha, ...change });
+  assert.throws(() => compose({ sidecar: undefined }), /sidecar catalog: the member sidecar must name the sidecar/);
+  assert.throws(() => compose({ layers: ["sidecar", "host"] }), /sidecar alpha: layers must be \["sidecar"\]/);
+  assert.throws(() => compose({ events: { ...alpha.events, "sidecar.beta.write": alpha.events["sidecar.alpha.write"] } }), /sidecar alpha: event sidecar\.beta\.write does not start with sidecar\.alpha\./);
+  assert.throws(() => compose({ events: { ...alpha.events, "host.sidecar.request": { ...alpha.events["sidecar.alpha.write"], layer: "host" } } }), /sidecar alpha: event host\.sidecar\.request has the layer host, not sidecar/);
+  assert.throws(() => compose({ events: { ...alpha.events, "log.rotated": { ...alpha.events["log.rotated"], fields: { bytes: "number" } } } }), /sidecar alpha: event log\.rotated differs from the declaration of the base catalog/);
 });

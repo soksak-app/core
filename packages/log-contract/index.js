@@ -155,6 +155,85 @@ function chainFindings(entries, catalog) {
   return findings;
 }
 
+/** The form of a declaration that two catalogs must share for an event they both declare: everything but the layer and the description. */
+function sharedForm(declared) {
+  const { layer, description, ...rest } = declared;
+  return JSON.stringify(rest, (key, value) => (value !== null && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : 1))) : value));
+}
+
+/** Throws an error for an extension that the catalog cannot verify; `extension.sidecar` is the name that the error reports. */
+function checkExtension(catalog, extension) {
+  const where = `sidecar ${extension.sidecar}`;
+  const hops = catalog.chains?.[extension.chain];
+  if (hops === undefined) throw new Error(`${where}: the extension names the chain ${extension.chain}, which the catalog does not declare`);
+  if (!hops.includes(extension.after)) throw new Error(`${where}: the extension follows ${extension.after}, which is not an event of the chain ${extension.chain}`);
+  if (declaration(catalog, extension.after)?.fields?.name !== "string") throw new Error(`${where}: the extension follows ${extension.after}, which has no field name`);
+  if (!Array.isArray(extension.events) || extension.events.length === 0) throw new Error(`${where}: the extension of the chain ${extension.chain} lists no events`);
+  for (const name of extension.events) {
+    if (declaration(catalog, name) === undefined) throw new Error(`${where}: the extension names ${name}, which the catalog does not declare`);
+  }
+}
+
+/**
+ * Composes the catalog of this repository with the catalogs of sidecars (docs/spec/logging.md#sidecar-catalogs). A sidecar
+ * catalog names its sidecar (`sidecar`), owns the layer `sidecar` only, declares `sidecar.<name>.*` events and the `log.*`
+ * lifecycle events with the layer `sidecar`, and may extend a chain of the base. A `log.*` event that both declare must have the
+ * same class, level, fields and `cids`. The result is the catalog that `auditLogs` takes: the union of the events, and the
+ * extensions of all sidecars as `extends` entries `{sidecar, chain, after, events}`.
+ */
+export function composeCatalogs(base, ...sidecars) {
+  const events = { ...base.events };
+  // default: a catalog without extensions has none to carry over.
+  const extensions = [...(base.extends ?? [])];
+  for (const catalog of sidecars) {
+    if (typeof catalog.sidecar !== "string" || catalog.sidecar === "") throw new Error("sidecar catalog: the member sidecar must name the sidecar");
+    const where = `sidecar ${catalog.sidecar}`;
+    if (JSON.stringify(catalog.layers) !== '["sidecar"]') throw new Error(`${where}: layers must be ["sidecar"], found ${JSON.stringify(catalog.layers)}`);
+    for (const [name, declared] of Object.entries(catalog.events)) {
+      if (declared.layer !== "sidecar") throw new Error(`${where}: event ${name} has the layer ${declared.layer}, not sidecar`);
+      if (name.startsWith("log.")) {
+        if (events[name] !== undefined && sharedForm(events[name]) !== sharedForm(declared)) throw new Error(`${where}: event ${name} differs from the declaration of the base catalog`);
+        if (events[name] === undefined) events[name] = declared;
+      } else if (!name.startsWith(`sidecar.${catalog.sidecar}.`)) {
+        throw new Error(`${where}: event ${name} does not start with sidecar.${catalog.sidecar}.`);
+      } else if (events[name] !== undefined) {
+        throw new Error(`${where}: event ${name} is declared twice`);
+      } else events[name] = declared;
+    }
+    // default: a sidecar catalog without `extends` extends no chain.
+    for (const extension of catalog.extends ?? []) extensions.push({ sidecar: catalog.sidecar, ...extension });
+  }
+  const composed = { ...base, events, extends: extensions };
+  for (const extension of extensions) checkExtension(composed, extension);
+  return composed;
+}
+
+/** The findings of the chain extensions: a request that names the sidecar of an extension must be followed by the events it lists, for its cids. */
+function extensionFindings(entries, catalog) {
+  const findings = [];
+  const seen = new Map();
+  for (const { event } of entries) {
+    // default: an event outside the chains has no correlation identifier.
+    for (const cid of event.cids ?? []) seen.set(cid, (seen.get(cid) ?? new Set()).add(event.event));
+  }
+  // default: a catalog without `extends` has no extension to check.
+  for (const extension of catalog.extends ?? []) {
+    checkExtension(catalog, extension);
+    const reported = new Set();
+    for (const { line, file, event } of entries) {
+      if (event.event !== extension.after || event.fields?.name !== extension.sidecar) continue;
+      // default: a request without cids is reported by the structure check of the required cids.
+      for (const cid of event.cids ?? []) {
+        const missing = extension.events.find((name) => !seen.get(cid).has(name));
+        if (missing === undefined || reported.has(cid)) continue;
+        reported.add(cid);
+        findings.push({ line, file, message: `chain ${extension.chain} of ${cid} lacks ${missing} after ${extension.after} of ${extension.sidecar}` });
+      }
+    }
+  }
+  return findings;
+}
+
 /**
  * Audits the text of one log file against a catalog and returns the findings `{line, message}`: undeclared events,
  * missing or mistyped fields, gaps of seq that no `log.dropped` explains, and declared chains that stop early.
@@ -165,6 +244,7 @@ export function auditLog(file, text, catalog) {
     ...entries.flatMap((entry) => lineFindings(entry, catalog)),
     ...seqFindings(entries),
     ...chainFindings(entries, catalog),
+    ...extensionFindings(entries, catalog),
   ].sort((a, b) => a.line - b.line);
 }
 
@@ -230,7 +310,7 @@ export function auditParsed(parsed, catalog, declaredError = () => false) {
     });
   }
   const all = parsed.flatMap(({ entries }) => entries);
-  for (const { line, message, file } of chainFindings(all, catalog)) findings.push({ file, line, message });
+  for (const { line, message, file } of [...chainFindings(all, catalog), ...extensionFindings(all, catalog)]) findings.push({ file, line, message });
   const order = new Map(parsed.map(({ file }, index) => [file, index]));
   // default: findings of the same file, or of a file without an order, are ordered by their line.
   return findings.sort((a, b) => order.get(a.file) - order.get(b.file) || a.line - b.line);

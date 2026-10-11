@@ -1,0 +1,71 @@
+{
+  "schema": 2,
+  "layers": [
+    "native",
+    "host",
+    "page",
+    "sidecar",
+    "sok"
+  ],
+  "events": {
+    "log.open": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "schema": "number",
+        "pid": "number",
+        "role": "string",
+        "boot": "string"
+      }
+    },
+    "log.dropped": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "from_seq": "number",
+        "to_seq": "number",
+        "count": "number",
+        "bytes": "number",
+        "reason": "string"
+      }
+    },
+    "log.rotated": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "bytes": "number",
+        "kept": "number",
+        "removed": "string|null"
+      }
+    },
+    "native.input.key_down": {
+      "layer": "native",
+      "class": "input",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "keyCode": "number"
+      }
+    },
+    "host.sidecar.request": {
+      "layer": "host",
+      "class": "io",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "name": "string",
+        "surface": "string",
+        "bytes": "number"
+      }
+    }
+  },
+  "chains": {
+    "input": [
+      "native.input.key_down",
+      "host.sidecar.request"
+    ]
+  }
+}

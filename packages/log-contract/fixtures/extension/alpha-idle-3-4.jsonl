@@ -1,0 +1,2 @@
+{"ts_us":1791500000001000,"mono_ns":9000001000,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":2,"pid":4300,"role":"alpha","boot":"b2"}}
+{"ts_us":1791500000002000,"mono_ns":9000002000,"seq":2,"level":"info","layer":"sidecar","event":"sidecar.alpha.start","fields":{"pid":4300}}
