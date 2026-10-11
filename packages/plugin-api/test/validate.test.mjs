@@ -439,16 +439,38 @@ test("a sidecar manifest and a plugin manifest name the file of their event cata
 });
 
 test("a sidecar manifest declares its replay executable with the role of its event files", () => {
-  const sidecar = { executable: "build/worker", protocol: 1, replay: { role: "worker", executable: "build/replay" } };
+  const inputs = {
+    output: "sidecar.worker.read", write: "sidecar.worker.write", resize: "sidecar.worker.resize",
+    selection: "sidecar.worker.selection", viewport: "sidecar.worker.viewport", theme: "sidecar.worker.theme",
+  };
+  const replay = { role: "worker", executable: "build/replay", inputs };
+  const sidecar = { executable: "build/worker", protocol: 1, replay };
   assert.equal(validateSidecar(sidecar), sidecar);
   const cases = [
     [{ ...sidecar, replay: "build/replay" }, /sidecar\.json: replay must be an object/],
-    [{ ...sidecar, replay: { role: "worker" } }, /sidecar\.json replay: executable must be a path inside the package/],
-    [{ ...sidecar, replay: { role: "worker", executable: "../replay" } }, /sidecar\.json replay: executable must be a path inside the package/],
-    [{ ...sidecar, replay: { role: "worker", executable: "/bin/replay" } }, /sidecar\.json replay: executable must be a path inside the package/],
-    [{ ...sidecar, replay: { executable: "build/replay" } }, /sidecar\.json replay: role must be a lowercase word/],
-    [{ ...sidecar, replay: { role: "Worker-1", executable: "build/replay" } }, /sidecar\.json replay: role must be a lowercase word/],
-    [{ ...sidecar, replay: { role: "worker", executable: "build/replay", extra: 1 } }, /sidecar\.json replay: unknown field extra/],
+    [{ ...sidecar, replay: { role: "worker", inputs } }, /sidecar\.json replay: executable must be a path inside the package/],
+    [{ ...sidecar, replay: { ...replay, executable: "../replay" } }, /sidecar\.json replay: executable must be a path inside the package/],
+    [{ ...sidecar, replay: { ...replay, executable: "/bin/replay" } }, /sidecar\.json replay: executable must be a path inside the package/],
+    [{ ...sidecar, replay: { executable: "build/replay", inputs } }, /sidecar\.json replay: role must be a lowercase word/],
+    [{ ...sidecar, replay: { ...replay, role: "Worker-1" } }, /sidecar\.json replay: role must be a lowercase word/],
+    [{ ...sidecar, replay: { ...replay, extra: 1 } }, /sidecar\.json replay: unknown field extra/],
   ];
   for (const [value, message] of cases) assert.throws(() => validateSidecar(value), message);
+});
+
+test("the replay of a sidecar manifest names the event of each kind of replay input", () => {
+  const inputs = {
+    output: "sidecar.worker.read", write: "sidecar.worker.write", resize: "sidecar.worker.resize",
+    selection: "sidecar.worker.selection", viewport: "sidecar.worker.viewport", theme: "sidecar.worker.theme",
+  };
+  const sidecar = (replayInputs) => ({ executable: "build/worker", protocol: 1, replay: { role: "worker", executable: "build/replay", inputs: replayInputs } });
+  const { theme, ...withoutTheme } = inputs;
+  const cases = [
+    [undefined, /sidecar\.json replay: inputs must be an object that names the event of each kind/],
+    [withoutTheme, /sidecar\.json replay inputs: theme must be the name of an event of the layer sidecar, found undefined/],
+    [{ ...inputs, theme: "page.theme" }, /sidecar\.json replay inputs: theme must be the name of an event of the layer sidecar, found "page\.theme"/],
+    [{ ...inputs, pointer: "sidecar.worker.pointer" }, /sidecar\.json replay inputs: unknown field pointer/],
+  ];
+  for (const [value, message] of cases) assert.throws(() => validateSidecar(sidecar(value)), message);
+  assert.equal(theme, "sidecar.worker.theme");
 });

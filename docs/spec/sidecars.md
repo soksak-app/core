@@ -16,7 +16,7 @@ A sidecar is a program in its own repository with a `package.json` and a `sideca
 | `protocol` | Message format version. The current version is `1` |
 | `helpers` | Optional array of helper programs. Each item has `name` (the `name` of the helper's `package.json`) and `executable` (the path inside the helper's folder) |
 | `events` | Optional path inside the package of the file with the event catalog of the sidecar ([logging](logging.md#catalog)); the release packs the file |
-| `replay` | Optional `{role, executable}` of a sidecar that produces screens: `role` is the role of its event files (a lowercase word) and `executable` is the path inside the sidecar of its replay executable ([replay](replay.md#replay-executable)) |
+| `replay` | Optional `{role, executable, inputs}` of a sidecar that produces screens: `role` is the role of its event files (a lowercase word), `executable` is the path inside the sidecar of its replay executable ([replay](replay.md#replay-executable)), and `inputs` maps each kind of replay input (`output`, `write`, `resize`, `selection`, `viewport`, `theme`) to the name of the event that stores it, a name of the layer `sidecar` that starts with `sidecar.` ([replay](replay.md#records)) |
 
 A plugin declares the sidecars its page uses, each with a version range, as the `dependencies` of its `plugin.json` ([plugins](plugins.md#pluginjson)). Installation extracts each sidecar's release into the configuration directory.
 

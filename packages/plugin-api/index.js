@@ -40,6 +40,9 @@ export const SURFACE_CORE = "core.surface.";
 /** Returns a path inside the package as a path relative to the document root. */
 export const modulePath = (name, path) => `modules/${name}/${path}`;
 
+/** The kinds of the replay inputs, which `replay.inputs` of a sidecar.json maps to event names (docs/spec/replay.md#records). */
+const REPLAY_KINDS = ["output", "write", "resize", "selection", "viewport", "theme"];
+
 /** The imports of the import map that every page declares. A page has an import map equal to this value. */
 export const PAGE_IMPORTS = Object.freeze({
   "soksak": `/${modulePath("soksak", "dist/index.js")}`,
@@ -591,13 +594,22 @@ export function validateSidecar(sidecar) {
   if (sidecar.replay !== undefined) {
     const { replay } = sidecar;
     if (!isObject(replay)) throw new Error("sidecar.json: replay must be an object");
-    only("sidecar.json replay", replay, ["role", "executable"]);
+    only("sidecar.json replay", replay, ["role", "executable", "inputs"]);
     if (typeof replay.role !== "string" || !/^[a-z][a-z0-9]*$/.test(replay.role)) {
       throw new Error("sidecar.json replay: role must be a lowercase word");
     }
     const path = replay.executable;
     if (!isText(path) || path.startsWith("/") || path.split("/").includes("..")) {
       throw new Error("sidecar.json replay: executable must be a path inside the package");
+    }
+    // The kind of a replay input is the sidecar's choice of event name (docs/spec/replay.md#records), so the sidecar names it.
+    if (!isObject(replay.inputs)) throw new Error("sidecar.json replay: inputs must be an object that names the event of each kind");
+    only("sidecar.json replay inputs", replay.inputs, REPLAY_KINDS);
+    for (const kind of REPLAY_KINDS) {
+      const name = replay.inputs[kind];
+      if (!isText(name) || !/^sidecar\.[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(name)) {
+        throw new Error(`sidecar.json replay inputs: ${kind} must be the name of an event of the layer sidecar, found ${JSON.stringify(name)}`);
+      }
     }
   }
   if (sidecar.helpers !== undefined) {

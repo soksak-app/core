@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.34.7: `sidecar.json`의 `replay.inputs`가 재생 입력 종류마다 event를 적고, 두 도구의 `sok debug replay`가 재생 실행 파일을 시작하기 전에 각 segment의 입력을 session 규칙으로 검사한다.
 - F160.25.6: `e2e/terminal-replay.test.mjs`가 출력, scroll, selection, theme 변경, resize, 입력이 있는 session을 모든 hash가 같게 재생하고, 바뀐 저장 출력을 계층 `sidecar`의 불일치로 보고한다.
 - F160.34.6: 두 도구의 policy 파일 reader가 `packages/log-contract/fixtures/policy/cases.json`의 모든 golden case를 실행하고, Go reader는 null level을 text여야 하는 level로 밝힌다.
 - F160.35.4: `e2e/terminal-replay.test.mjs`가 각 애플리케이션의 terminal session을 그 bundle의 `sok debug replay`로 재생하여 모든 sidecar와 page hash가 같은지, 중간에 바뀐 screen message(terminal plugin의 `terminal.screen.alter`)가 계층 `plugin`의 불일치인지 확인한다.

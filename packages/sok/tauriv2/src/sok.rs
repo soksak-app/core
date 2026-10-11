@@ -33,6 +33,7 @@ pub mod plugins;
 mod registry;
 mod release;
 pub mod replay;
+pub mod replay_inputs;
 pub mod routine;
 pub mod version;
 pub use logged::{logged, run_logged, start_tool_event_log, Command};

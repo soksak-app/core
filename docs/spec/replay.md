@@ -106,6 +106,8 @@ The tool starts the executable in the folder of the sidecar without arguments, o
 
 `sok debug replay <session> [--until <sequence>] [--config-dir <directory>]` ([command line](cli.md#commands)) reads the events of the session from the event files of the configuration directory through the [query](logging.md#query), finds the installed sidecar whose `replay.role` is the role of the sidecar events of the session, runs its replay executable for each [segment](#segments), and compares, segment by segment in their order and inside a segment in the order of `sequence`, the sidecar record before the page record of the same sequence:
 
+Before it starts the executable of a segment, the tool checks the replay inputs of the segment, the events that `replay.inputs` of the sidecar names, with the rules of `replaySessionProblem` (each input in its form, the sequences from 1 without a gap, a theme first, a selection start or update inside the grid of the last resize, a selection update or end after a start) and refuses a segment that breaks one, without a divergence, with `sok: replay session <session>: segment <boot>: <problem>` in the text of `replaySessionProblem`; `--until` bounds the inputs it checks. The cases of `packages/log-contract/fixtures/replay/inputs.json` fix the texts for both tools.
+
 1. each sidecar frame record with the replayed hash of its sequence: a difference is a divergence of the layer `sidecar`;
 2. each page frame record with the replayed hash of its sequence: a difference, or a page frame record without a sidecar frame record at its sequence, is a divergence of the layer `plugin`.
 

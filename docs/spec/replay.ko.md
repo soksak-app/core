@@ -106,6 +106,8 @@ sidecar가 만드는 화면은 그려지는 그대로의 화면이다. viewport�
 
 `sok debug replay <session> [--until <sequence>] [--config-dir <directory>]`([명령줄](cli.ko.md#명령))는 설정 폴더의 event 파일에서 [질의](logging.ko.md#질의)로 session의 event를 읽고, session의 sidecar event의 role을 `replay.role`로 선언한 설치된 sidecar를 찾아 그 재생 실행 파일을 [segment](#segment)마다 실행한 뒤, segment 순서대로, segment 안에서는 `sequence` 순서로, 같은 순번에서는 sidecar 기록을 page 기록보다 먼저 비교한다.
 
+executable로 segment를 시작하기 전에, 도구는 sidecar의 `replay.inputs`가 적는 event인 그 segment의 재생 입력을 `replaySessionProblem`의 규칙(각 입력의 형식, 1부터 빈칸 없는 순번, 처음은 theme, 마지막 resize의 격자 안의 selection start나 update, start 뒤의 selection update나 end)으로 검사하고, 규칙을 어긴 segment를 불일치 없이 `replaySessionProblem`의 문구를 담은 `sok: replay session <session>: segment <boot>: <problem>`으로 거부한다. `--until`은 검사하는 입력을 제한한다. `packages/log-contract/fixtures/replay/inputs.json`의 case가 두 도구의 문구를 고정한다.
+
 1. sidecar의 frame 기록마다 그 순번의 재생 hash와 비교한다. 다르면 층 `sidecar`의 불일치다.
 2. page의 frame 기록마다 그 순번의 재생 hash와 비교한다. 다르거나 그 순번에 sidecar의 frame 기록이 없으면 층 `plugin`의 불일치다.
 

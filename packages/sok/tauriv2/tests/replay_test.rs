@@ -16,7 +16,7 @@ const FAKE_REPLAY: &str = r#"#!/bin/sh
 total=0
 while IFS= read -r line; do
   case "$line" in
-    *'"event":"fake.input"'*)
+    *'"event":"sidecar.fake.input"'*)
       hex=${line#*'"hex":"'}; hex=${hex%%'"'*}
       total=$((total + ${#hex} / 2)) ;;
     *'"class":"frame"'*)
@@ -33,6 +33,9 @@ fn log_open(ts: i64, layer: &str, role: &str) -> String {
 }
 
 /// The hash that the fake script prints for a count of bytes.
+/// The events of the fake sidecar of each kind of replay input.
+const REPLAY_INPUTS: &str = r#"{"output":"sidecar.fake.input","write":"sidecar.fake.write","resize":"sidecar.fake.resize","selection":"sidecar.fake.selection","viewport":"sidecar.fake.viewport","theme":"sidecar.fake.theme"}"#;
+
 fn digits(n: usize) -> String {
     format!("{n:064}")
 }
@@ -45,7 +48,7 @@ struct Events {
 
 fn input(ts: i64, seq: i64, sequence: i64, session: &str, hex: &str) -> String {
     format!(
-        r#"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"sidecar","class":"io","event":"fake.input","session":"{session}","fields":{{"sequence":{sequence},"hex":"{hex}"}}}}"#
+        r#"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"sidecar","class":"io","event":"sidecar.fake.input","session":"{session}","fields":{{"sequence":{sequence},"hex":"{hex}"}}}}"#
     )
 }
 
@@ -55,25 +58,33 @@ fn frame(layer: &str, ts: i64, seq: i64, sequence: i64, session: &str, hash: &st
     let (name, segment) = if layer == "plugin" {
         ("plugin.fake.frame", r#""segment":"b1","#)
     } else {
-        ("fake.frame", "")
+        ("sidecar.fake.frame", "")
     };
     format!(
         r#"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"{layer}","class":"frame","event":"{name}","session":"{session}","fields":{{"sequence":{sequence},{segment}"rows":2,"cols":3,"hash":"{hash}"}}}}"#
     )
 }
 
-/// The inputs "hi" (2 bytes) and "\r\n" (2 bytes) with a frame record after each, written consistently.
+/// The first replay input of a segment (docs/spec/replay.md#view-state).
+fn theme(ts: i64, seq: i64, session: &str) -> String {
+    format!(
+        r##"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"sidecar","class":"input","event":"sidecar.fake.theme","session":"{session}","fields":{{"sequence":1,"colors":{{"foreground":"#c0c0c0","background":"#101010","selection":"#404080"}}}}}}"##
+    )
+}
+
+/// A theme and the inputs "hi" (2 bytes) and "\r\n" (2 bytes) with a frame record after each, written consistently.
 fn standard_events() -> Events {
     Events {
         sidecar: vec![
-            input(1010, 2, 1, "s1", "6869"),
-            frame("sidecar", 1020, 3, 1, "s1", &digits(2)),
-            input(1030, 4, 2, "s1", "0d0a"),
-            frame("sidecar", 1040, 5, 2, "s1", &digits(4)),
+            theme(1005, 1, "s1"),
+            input(1010, 2, 2, "s1", "6869"),
+            frame("sidecar", 1020, 3, 2, "s1", &digits(2)),
+            input(1030, 4, 3, "s1", "0d0a"),
+            frame("sidecar", 1040, 5, 3, "s1", &digits(4)),
         ],
         page: vec![
-            frame("plugin", 1025, 2, 1, "s1", &digits(2)),
-            frame("plugin", 1045, 3, 2, "s1", &digits(4)),
+            frame("plugin", 1025, 2, 2, "s1", &digits(2)),
+            frame("plugin", 1045, 3, 3, "s1", &digits(4)),
         ],
     }
 }
@@ -115,7 +126,7 @@ fn replay_config(name: &str, events: &Events, script: &str, role: &str) -> PathB
     write_file(
         &config.join(folder).join("sidecar.json"),
         &format!(
-            r#"{{"executable":"worker","protocol":1,"replay":{{"role":"{role}","executable":"replay.sh"}}}}"#
+            r#"{{"executable":"worker","protocol":1,"replay":{{"role":"{role}","executable":"replay.sh","inputs":{REPLAY_INPUTS}}}}}"#
         ),
         0o644,
     );
@@ -171,9 +182,9 @@ fn replay_reports_equal_when_every_stored_hash_is_the_replayed_one() {
 #[test]
 fn replay_stops_at_the_sequence_of_until() {
     let mut events = standard_events();
-    events.sidecar[2] = input(1030, 4, 2, "s1", "0d0a0a");
+    events.sidecar[3] = input(1030, 4, 3, "s1", "0d0a0a");
     let config = replay_config("replay-until", &events, FAKE_REPLAY, "fake");
-    let (stdout, stderr, code) = run_replay(&config, &["s1", "--until", "1"]);
+    let (stdout, stderr, code) = run_replay(&config, &["s1", "--until", "2"]);
     assert!(
         code == 0
             && stdout
@@ -181,9 +192,9 @@ fn replay_stops_at_the_sequence_of_until() {
             && stderr.is_empty(),
         "code {code} stdout {stdout:?} stderr {stderr:?}"
     );
-    let (_, stderr, code) = run_replay(&config, &["s1", "--until", "2"]);
+    let (_, stderr, code) = run_replay(&config, &["s1", "--until", "3"]);
     let want = format!(
-        "sok: replay divergence: session s1 segment b1 sequence 2 layer sidecar expected {} found {}\n",
+        "sok: replay divergence: session s1 segment b1 sequence 3 layer sidecar expected {} found {}\n",
         digits(5),
         digits(4)
     );
@@ -229,33 +240,33 @@ fn replay_reports_the_first_divergence_with_its_layer() {
     let cases: Vec<(&str, Change, &str, i64, String, String)> = vec![
         (
             "an input of the sidecar was altered",
-            |e| e.sidecar[0] = input(1010, 2, 1, "s1", "686921"),
+            |e| e.sidecar[1] = input(1010, 2, 2, "s1", "686921"),
             "sidecar",
-            1,
+            2,
             digits(3),
             digits(2),
         ),
         (
             "the hash of a frame of the sidecar was altered",
-            |e| e.sidecar[3] = frame("sidecar", 1040, 5, 2, "s1", &digits(9)),
+            |e| e.sidecar[4] = frame("sidecar", 1040, 5, 3, "s1", &digits(9)),
             "sidecar",
-            2,
+            3,
             digits(4),
             digits(9),
         ),
         (
             "the hash of a drawn frame was altered",
-            |e| e.page[1] = frame("plugin", 1045, 3, 2, "s1", &digits(8)),
+            |e| e.page[1] = frame("plugin", 1045, 3, 3, "s1", &digits(8)),
             "plugin",
-            2,
+            3,
             digits(4),
             digits(8),
         ),
         (
             "a page frame has no frame of the sidecar",
-            |e| e.page.push(frame("plugin", 1050, 4, 3, "s1", &digits(4))),
+            |e| e.page.push(frame("plugin", 1050, 4, 4, "s1", &digits(4))),
             "plugin",
-            3,
+            4,
             "none".to_string(),
             digits(4),
         ),
@@ -320,19 +331,19 @@ fn refused(
 #[test]
 fn replay_refuses_what_it_cannot_compare() {
     let mut no_frame = standard_events();
-    no_frame.sidecar.truncate(1);
+    no_frame.sidecar.truncate(2);
     no_frame.page.clear();
     let mut bad_stored = standard_events();
-    bad_stored.sidecar[1] = frame("sidecar", 1020, 3, 1, "s1", "ABC");
+    bad_stored.sidecar[2] = frame("sidecar", 1020, 3, 2, "s1", "ABC");
     let cases = vec![
         refused("no session", standard_events(), FAKE_REPLAY, "fake", vec![], "sok: session is required\n"),
         refused("unknown session", standard_events(), FAKE_REPLAY, "fake", vec!["s9"], "sok: replay session s9: the event files hold no event of the layer sidecar for it\n"),
         refused("no sidecar declares the role", standard_events(), FAKE_REPLAY, "other", vec!["s1"], "sok: replay session s1: no installed sidecar declares the replay role fake\n"),
         refused("no frame record", no_frame, FAKE_REPLAY, "fake", vec!["s1"], "sok: replay session s1: no frame record to compare\n"),
-        refused("a stored hash is not a hash", bad_stored, FAKE_REPLAY, "fake", vec!["s1"], "sok: replay session s1: sequence 1 layer sidecar: the stored hash is not 64 lowercase hexadecimal characters: \"ABC\"\n"),
+        refused("a stored hash is not a hash", bad_stored, FAKE_REPLAY, "fake", vec!["s1"], "sok: replay session s1: sequence 2 layer sidecar: the stored hash is not 64 lowercase hexadecimal characters: \"ABC\"\n"),
         refused("the executable fails", standard_events(), "#!/bin/sh\necho engine broke >&2\nexit 3\n", "fake", vec!["s1"], "sok: replay session s1: replay.sh exited with status 3: engine broke\n"),
         refused("the executable prints a line that is not a hash", standard_events(), "#!/bin/sh\necho nope\n", "fake", vec!["s1"], "sok: replay session s1: replay output line 1 is not {\"sequence\": <integer>, \"hash\": <64 lowercase hexadecimal characters>}: nope\n"),
-        refused("the executable prints no hash for a frame record", standard_events(), "#!/bin/sh\ncat >/dev/null\n", "fake", vec!["s1"], "sok: replay session s1: the replay executable reported no hash for the frame record at sequence 1\n"),
+        refused("the executable prints no hash for a frame record", standard_events(), "#!/bin/sh\ncat >/dev/null\n", "fake", vec!["s1"], "sok: replay session s1: the replay executable reported no hash for the frame record at sequence 2\n"),
     ];
     for (index, case) in cases.into_iter().enumerate() {
         let config = replay_config(
@@ -355,7 +366,7 @@ fn replay_refuses_what_it_cannot_compare() {
         &config.join("logs/other-b1.jsonl"),
         &event_file(
             log_open(1002, "sidecar", "other"),
-            &[input(1050, 2, 3, "s1", "00")],
+            &[input(1050, 2, 4, "s1", "00")],
         ),
         0o600,
     );
@@ -379,17 +390,18 @@ fn segment_events(session: &str) -> Events {
     };
     Events {
         sidecar: vec![
-            input(2010, 2, 1, session, "00ff10"),
-            frame("sidecar", 2020, 3, 1, session, &digits(3)),
-            input(2030, 4, 2, session, "aa"),
-            frame("sidecar", 2040, 5, 2, session, &digits(4)),
-            input(2050, 6, 3, session, "bb"),
-            frame("sidecar", 2060, 7, 3, session, &digits(5)),
+            theme(2005, 1, session),
+            input(2010, 2, 2, session, "00ff10"),
+            frame("sidecar", 2020, 3, 2, session, &digits(3)),
+            input(2030, 4, 3, session, "aa"),
+            frame("sidecar", 2040, 5, 3, session, &digits(4)),
+            input(2050, 6, 4, session, "bb"),
+            frame("sidecar", 2060, 7, 4, session, &digits(5)),
         ],
         page: vec![
-            page_frame(2025, 4, 1, &digits(3)),
-            page_frame(2045, 5, 2, &digits(4)),
-            page_frame(2065, 6, 3, &digits(5)),
+            page_frame(2025, 4, 2, &digits(3)),
+            page_frame(2045, 5, 3, &digits(4)),
+            page_frame(2065, 6, 4, &digits(5)),
         ],
     }
 }
@@ -433,11 +445,11 @@ fn replay_compares_each_segment_of_a_session_whose_sequence_restarts() {
     );
     // A divergence in the second segment names the segment, which the sequence alone does not.
     let altered = segmented_config("replay-segments-altered", |_, second| {
-        second.sidecar[3] = frame("sidecar", 2040, 5, 2, "s1", &digits(9));
+        second.sidecar[4] = frame("sidecar", 2040, 5, 3, "s1", &digits(9));
     });
     let (stdout, stderr, code) = run_replay_with(soksak_sok::run_logged, &altered, &["s1"]);
     let want = format!(
-        "sok: replay divergence: session s1 segment b2 sequence 2 layer sidecar expected {} found {}\n",
+        "sok: replay divergence: session s1 segment b2 sequence 3 layer sidecar expected {} found {}\n",
         digits(4),
         digits(9)
     );
@@ -446,14 +458,14 @@ fn replay_compares_each_segment_of_a_session_whose_sequence_restarts() {
         "code {code} stdout {stdout:?} stderr {stderr:?}, want {want:?}"
     );
     let fields = format!(
-        r#""fields":{{"expected":"{}","found":"{}","layer":"sidecar","segment":"b2","sequence":2,"session":"s1"}}"#,
+        r#""fields":{{"expected":"{}","found":"{}","layer":"sidecar","segment":"b2","sequence":3,"session":"s1"}}"#,
         digits(4),
         digits(9)
     );
     let line = divergence(&altered);
     assert!(line.contains(&fields), "event {line}, want {fields}");
     // --until applies to the sequence of each segment.
-    let (stdout, stderr, code) = run_replay(&config, &["s1", "--until", "1"]);
+    let (stdout, stderr, code) = run_replay(&config, &["s1", "--until", "2"]);
     assert!(
         code == 0
             && stdout
@@ -468,10 +480,10 @@ fn replay_compares_each_segment_of_a_session_whose_sequence_restarts() {
 fn replay_holds_the_event_lines_of_one_segment_at_a_time() {
     let config = segmented_config("replay-holds", |_, _| {});
     let result = soksak_sok::replay::replay_logs(&config, "s1", None).expect("the replay");
-    // The segments hold 4 and 6 event lines; the session holds 10.
+    // The segments hold 5 and 7 event lines; the session holds 12.
     assert_eq!(
         (result.segments, result.held_lines),
-        (2, 6),
+        (2, 7),
         "segments and held lines"
     );
 }
@@ -484,21 +496,21 @@ fn replay_refuses_a_page_frame_that_names_no_segment_of_the_session() {
         (
             "a page frame without a segment",
             |first, _| first.page[0] = first.page[0].replacen(r#""segment":"b1","#, "", 1),
-            "sok: replay session s1: the page frame record at sequence 1 has no fields.segment\n",
+            "sok: replay session s1: the page frame record at sequence 2 has no fields.segment\n",
         ),
         (
             "a page frame of a segment the session does not have",
             |first, _| first.page[0] = first.page[0].replacen(r#""segment":"b1""#, r#""segment":"b9""#, 1),
-            "sok: replay session s1: the page frame record at sequence 1 names the segment b9, which the session does not have\n",
+            "sok: replay session s1: the page frame record at sequence 2 names the segment b9, which the session does not have\n",
         ),
         (
             "a page frame whose segment is not text",
             |first, _| first.page[0] = first.page[0].replacen(r#""segment":"b1""#, r#""segment":7"#, 1),
-            "sok: replay session s1: the page frame record at sequence 1 has a fields.segment that is not text\n",
+            "sok: replay session s1: the page frame record at sequence 2 has a fields.segment that is not text\n",
         ),
         (
             "the events of two runs of the sidecar alternate in time",
-            |first, _| first.sidecar.push(input(3000, 6, 3, "s1", "00")),
+            |first, _| first.sidecar.push(input(3000, 6, 4, "s1", "00")),
             "sok: replay session s1: the sidecar events of the segments b1 and b2 are interleaved\n",
         ),
     ];
@@ -516,9 +528,46 @@ fn replay_refuses_a_page_frame_that_names_no_segment_of_the_session() {
     let config = replay_config("replay-segment-errors-single", &events, FAKE_REPLAY, "fake");
     let (_, stderr, code) = run_replay(&config, &["s1"]);
     let want =
-        "sok: replay session s1: the page frame record at sequence 1 has no fields.segment\n";
+        "sok: replay session s1: the page frame record at sequence 2 has no fields.segment\n";
     assert!(
         code == 1 && stderr == want,
         "one segment: code {code} stderr {stderr:?}, want {want:?}"
+    );
+}
+
+// contract: cli.debug.replay-session-rules
+#[test]
+fn replay_refuses_a_segment_whose_inputs_break_the_rules_of_a_session() {
+    let mut events = standard_events();
+    events.sidecar.remove(0);
+    let config = replay_config("replay-session-rules", &events, FAKE_REPLAY, "fake");
+    let (_, stderr, code) = run_replay(&config, &["s1"]);
+    let want =
+        "sok: replay session s1: segment b1: input 1 has sequence 2 and the sequence after 0 is 1\n";
+    assert!(
+        code == 1 && stderr == want,
+        "no theme: code {code} stderr {stderr:?}, want {want:?}"
+    );
+    // A sidecar that does not name the events of its replay inputs cannot be checked.
+    let config = replay_config(
+        "replay-session-no-inputs",
+        &standard_events(),
+        FAKE_REPLAY,
+        "fake",
+    );
+    let file = config.join("sidecars/probe-worker/1.0.0/darwin-arm64/sidecar.json");
+    write_file(
+        &file,
+        r#"{"executable":"worker","protocol":1,"replay":{"role":"fake","executable":"replay.sh"}}"#,
+        0o644,
+    );
+    let (_, stderr, code) = run_replay(&config, &["s1"]);
+    let want = format!(
+        "{}: replay.inputs must name the event of the layer sidecar of each kind of replay input; output is \"\"",
+        file.display()
+    );
+    assert!(
+        code == 1 && stderr.contains(&want),
+        "no inputs: code {code} stderr {stderr:?}"
     );
 }

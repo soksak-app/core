@@ -16,7 +16,7 @@
 | `protocol` | 메시지 형식 버전. 현재 버전은 `1` |
 | `helpers` | 선택 필드. 헬퍼 프로그램 목록. 각 항목은 `name`(헬퍼 `package.json`의 `name`)과 `executable`(헬퍼 폴더 안의 경로)을 가진다 |
 | `events` | 선택 필드. sidecar의 event catalog 파일의 패키지 안 경로([logging](logging.ko.md#catalog)). 릴리스는 그 파일을 담는다 |
-| `replay` | 화면을 만드는 sidecar의 선택 필드 `{role, executable}`. `role`은 event 파일의 role(소문자 낱말)이고 `executable`은 sidecar 안의 재생 실행 파일 경로다([replay](replay.ko.md#재생-실행-파일)) |
+| `replay` | 화면을 만드는 sidecar의 선택 필드 `{role, executable, inputs}`. `role`은 event 파일의 role(소문자 낱말), `executable`은 sidecar 안의 재생 실행 파일 경로([replay](replay.ko.md#재생-실행-파일)), `inputs`는 재생 입력의 종류(`output`, `write`, `resize`, `selection`, `viewport`, `theme`)마다 그것을 저장하는 event 이름이며, 이름은 `sidecar.`로 시작하는 계층 `sidecar`의 이름이다([replay](replay.ko.md#기록)) |
 
 플러그인은 페이지가 사용하는 사이드카를 version 범위와 함께 `plugin.json`의 `dependencies`로 선언한다([플러그인](plugins.ko.md#pluginjson)). 설치는 각 사이드카의 release를 설정 디렉터리에 푼다.
 

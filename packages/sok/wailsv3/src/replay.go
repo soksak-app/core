@@ -190,7 +190,7 @@ func ReplayLogs(configDir, session string, until *int64) (ReplayResult, error) {
 			return result, replayError(session, "the page frame record at sequence %d names the segment %s, which the session does not have", frame.sequence, frame.segment)
 		}
 	}
-	folder, executable, err := replayExecutable(configDir, session, role)
+	folder, executable, kinds, err := replayExecutable(configDir, session, role)
 	if err != nil {
 		return result, err
 	}
@@ -200,7 +200,7 @@ func ReplayLogs(configDir, session string, until *int64) (ReplayResult, error) {
 	// finish replays and compares the segments up to and including the segment index that has the lines held now.
 	finish := func(through int) error {
 		for ; next <= through; next++ {
-			if err := compareReplaySegment(session, segments[next], frames, folder, executable, lines, &result); err != nil {
+			if err := compareReplaySegment(session, segments[next], frames, folder, executable, kinds, lines, &result); err != nil {
 				return err
 			}
 			lines = nil
@@ -231,7 +231,24 @@ func ReplayLogs(configDir, session string, until *int64) (ReplayResult, error) {
 // compareReplaySegment runs the replay executable on the lines of the segment and compares the frame records of the segment in
 // the order of sequence, a record of the sidecar before a record of the page. A segment with no frame record of the sidecar
 // runs nothing: its page frame records have none to equal.
-func compareReplaySegment(session, segment string, all []replayFrame, folder, executable string, lines [][]byte, result *ReplayResult) error {
+func compareReplaySegment(session, segment string, all []replayFrame, folder, executable string, kinds map[string]string, lines [][]byte, result *ReplayResult) error {
+	// The replay inputs of the segment follow the rules of a session before the executable applies them (docs/spec/replay.md#command).
+	var inputs []ReplayInput
+	for _, line := range lines {
+		var event struct {
+			Event  string          `json:"event"`
+			Fields json.RawMessage `json:"fields"`
+		}
+		if err := json.Unmarshal(line, &event); err != nil {
+			return replayError(session, "segment %s: %v", segment, err)
+		}
+		if kind, input := kinds[event.Event]; input {
+			inputs = append(inputs, ReplayInput{Kind: kind, Fields: event.Fields})
+		}
+	}
+	if problem := ReplaySessionProblem(inputs); problem != "" {
+		return replayError(session, "segment %s: %s", segment, problem)
+	}
 	var frames []replayFrame
 	for _, frame := range all {
 		if frame.segment == segment {
@@ -281,48 +298,59 @@ func compareReplaySegment(session, segment string, all []replayFrame, folder, ex
 	return nil
 }
 
-// replayExecutable finds the installed sidecar that declares the replay role and returns its folder and the declared path of
-// its replay executable.
-func replayExecutable(configDir, session, role string) (string, string, error) {
+// replayExecutable finds the installed sidecar that declares the replay role and returns its folder, the declared path of its
+// replay executable and the kind of each replay input by the name of its event (replay.inputs).
+func replayExecutable(configDir, session, role string) (string, string, map[string]string, error) {
 	installed, err := ReadInstalled(configDir)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
 	var declaring []string
 	var folder, executable string
+	var kinds map[string]string
 	for _, name := range slices.Sorted(maps.Keys(installed.Sidecars)) {
 		dir := filepath.Join(configDir, installed.Sidecars[name].Path)
 		file := filepath.Join(dir, "sidecar.json")
 		data, err := os.ReadFile(file)
 		if err != nil {
-			return "", "", fileError(file, err)
+			return "", "", nil, fileError(file, err)
 		}
 		var declaration struct {
 			Replay *struct {
-				Role       string `json:"role"`
-				Executable string `json:"executable"`
+				Role       string            `json:"role"`
+				Executable string            `json:"executable"`
+				Inputs     map[string]string `json:"inputs"`
 			} `json:"replay"`
 		}
 		if err := json.Unmarshal(data, &declaration); err != nil {
-			return "", "", fmt.Errorf("%s: %w", file, err)
+			return "", "", nil, fmt.Errorf("%s: %w", file, err)
 		}
 		if declaration.Replay == nil || declaration.Replay.Role != role {
 			continue
 		}
 		path := declaration.Replay.Executable
 		if !replayRole.MatchString(role) || path == "" || strings.HasPrefix(path, "/") || slices.Contains(strings.Split(path, "/"), "..") {
-			return "", "", fmt.Errorf("%s: replay must have a lowercase word role and an executable path inside the package", file)
+			return "", "", nil, fmt.Errorf("%s: replay must have a lowercase word role and an executable path inside the package", file)
+		}
+		// The kind of a replay input is the sidecar's choice of event name, which replay.inputs declares (docs/spec/sidecars.md).
+		kinds = map[string]string{}
+		for _, kind := range ReplayInputKinds {
+			event := declaration.Replay.Inputs[kind]
+			if !strings.HasPrefix(event, "sidecar.") {
+				return "", "", nil, fmt.Errorf("%s: replay.inputs must name the event of the layer sidecar of each kind of replay input; %s is %q", file, kind, event)
+			}
+			kinds[event] = kind
 		}
 		declaring = append(declaring, name)
 		folder, executable = dir, path
 	}
 	switch len(declaring) {
 	case 0:
-		return "", "", replayError(session, "no installed sidecar declares the replay role %s", role)
+		return "", "", nil, replayError(session, "no installed sidecar declares the replay role %s", role)
 	case 1:
-		return folder, executable, nil
+		return folder, executable, kinds, nil
 	}
-	return "", "", replayError(session, "the sidecars %s declare the replay role %s", strings.Join(declaring, ", "), role)
+	return "", "", nil, replayError(session, "the sidecars %s declare the replay role %s", strings.Join(declaring, ", "), role)
 }
 
 // runReplayExecutable runs the replay executable in the folder of its sidecar with the lines on its standard input and reads

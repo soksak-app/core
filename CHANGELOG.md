@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F160.34.7: `replay.inputs` of `sidecar.json` names the event of each kind of replay input, and `sok debug replay` of both tools checks the inputs of each segment with the rules of a session before it starts the replay executable.
 - F160.25.6: `e2e/terminal-replay.test.mjs` replays a session with output, a scroll, a selection, a theme change, a resize and input with every hash equal, and reports a changed stored output as a divergence of the layer `sidecar`.
 - F160.34.6: the readers of the policy file of both tools run every golden case of `packages/log-contract/fixtures/policy/cases.json`, and the Go reader names a null level as a level that must be text.
 - F160.35.4: `e2e/terminal-replay.test.mjs` replays a terminal session of each application with `sok debug replay` of its bundle and checks that every sidecar and page hash is equal, and that a screen message changed on the way (`terminal.screen.alter` of the terminal plugin) is a divergence of the layer `plugin`.

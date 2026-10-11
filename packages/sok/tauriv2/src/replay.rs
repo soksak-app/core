@@ -2,6 +2,7 @@
 //! installed sidecar declares, and every stored hash of the sidecar and of the page is compared with the replayed one. The Go
 //! implementation (packages/sok/wailsv3/src/replay.go) gives the same output and the same error text.
 
+use crate::replay_inputs::{replay_session_problem, ReplayInput, REPLAY_INPUT_KINDS};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
@@ -283,7 +284,7 @@ pub fn replay_logs(
             ));
         }
     }
-    let (folder, executable) = replay_executable(config_dir, session, &role)?;
+    let tool = replay_executable(config_dir, session, &role)?;
     let mut result = ReplayResult {
         segments: segments.len(),
         ..ReplayResult::default()
@@ -299,15 +300,7 @@ pub fn replay_logs(
             return Ok(());
         };
         while next <= through {
-            compare_replay_segment(
-                session,
-                &segments[next],
-                &frames,
-                &folder,
-                &executable,
-                lines,
-                result,
-            )?;
+            compare_replay_segment(session, &segments[next], &frames, &tool, lines, result)?;
             lines.clear();
             next += 1;
         }
@@ -347,11 +340,38 @@ fn compare_replay_segment(
     session: &str,
     segment: &str,
     all: &[Frame],
-    folder: &Path,
-    executable: &str,
+    tool: &ReplayTool,
     lines: &[String],
     result: &mut ReplayResult,
 ) -> Result<(), ReplayFailure> {
+    // The replay inputs of the segment follow the rules of a session before the executable applies them
+    // (docs/spec/replay.md#command).
+    let mut inputs = vec![];
+    for line in lines {
+        let event: Value = serde_json::from_str(line)
+            .map_err(|error| replay_error(session, format!("segment {segment}: {error}")))?;
+        let Some(kind) = event
+            .get("event")
+            .and_then(Value::as_str)
+            .and_then(|name| tool.kinds.get(name))
+        else {
+            continue;
+        };
+        inputs.push(ReplayInput {
+            kind: kind.clone(),
+            fields: event
+                .get("fields")
+                .map(Value::to_string)
+                // default: an event without fields has none, which the form check refuses with the member it lacks.
+                .unwrap_or_default(),
+        });
+    }
+    if let Some(problem) = replay_session_problem(&inputs) {
+        return Err(replay_error(
+            session,
+            format!("segment {segment}: {problem}"),
+        ));
+    }
     let mut frames: Vec<&Frame> = all
         .iter()
         .filter(|frame| frame.segment == segment)
@@ -363,7 +383,7 @@ fn compare_replay_segment(
             input.push_str(line);
             input.push('\n');
         }
-        run_replay_executable(session, folder, executable, input)?
+        run_replay_executable(session, &tool.folder, &tool.executable, input)?
     } else {
         BTreeMap::new()
     };
@@ -409,15 +429,27 @@ fn compare_replay_segment(
     Ok(())
 }
 
-/// Finds the installed sidecar that declares the replay role and returns its folder and the declared path of its replay executable.
+/// The replay executable of the installed sidecar that declares the role: its folder, the declared path of the executable,
+/// and the kind of each replay input by the name of its event (`replay.inputs`).
+struct ReplayTool {
+    folder: std::path::PathBuf,
+    executable: String,
+    kinds: BTreeMap<String, String>,
+}
+
+/// Finds the installed sidecar that declares the replay role and returns its replay executable and the kinds of its inputs.
 fn replay_executable(
     config_dir: &Path,
     session: &str,
     role: &str,
-) -> Result<(std::path::PathBuf, String), ReplayFailure> {
+) -> Result<ReplayTool, ReplayFailure> {
     let installed = read_installed(config_dir)?;
     let mut declaring: Vec<&String> = vec![];
-    let mut found = (std::path::PathBuf::new(), String::new());
+    let mut found = ReplayTool {
+        folder: std::path::PathBuf::new(),
+        executable: String::new(),
+        kinds: BTreeMap::new(),
+    };
     for (name, sidecar) in &installed.sidecars {
         let folder = config_dir.join(&sidecar.path);
         let file = folder.join("sidecar.json");
@@ -443,8 +475,29 @@ fn replay_executable(
                 file.display()
             )));
         };
+        // The kind of a replay input is the sidecar's choice of event name, which replay.inputs declares (docs/spec/sidecars.md).
+        let mut kinds = BTreeMap::new();
+        for kind in REPLAY_INPUT_KINDS {
+            let event = replay
+                .get("inputs")
+                .and_then(|inputs| inputs.get(kind))
+                .and_then(Value::as_str);
+            let Some(event) = event.filter(|event| event.starts_with("sidecar.")) else {
+                return Err(ReplayFailure::Failed(format!(
+                    "{}: replay.inputs must name the event of the layer sidecar of each kind of replay input; {kind} is {:?}",
+                    file.display(),
+                    // default: an absent member is shown as the empty text, as the Go tool shows it.
+                    event.unwrap_or("")
+                )));
+            };
+            kinds.insert(event.to_string(), kind.to_string());
+        }
         declaring.push(name);
-        found = (folder, path.to_string());
+        found = ReplayTool {
+            folder,
+            executable: path.to_string(),
+            kinds,
+        };
     }
     match declaring.len() {
         0 => Err(replay_error(
