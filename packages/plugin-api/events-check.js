@@ -29,7 +29,8 @@ const MARKER_REACH = 5;
  * The entrances that store an event, by language. `level`, `event` and `fields` are the positions of the arguments of the
  * call (`fields` is absent when the call has none); `fixed` is the level of an entrance that has no level argument; `only`
  * limits an entrance to the files it is local to. `name` is the event of an entrance that stores one event and gives no name argument
- * (`event` is then the position of its first argument).
+ * (`event` is then the position of its first argument). `levelGroup` is the group of the pattern that holds the level of an entrance
+ * that names it in the call, and `relative` marks an entrance whose event name lacks the prefix `plugin.<plugin>.`.
  */
 const ENTRANCES = {
   go: [
@@ -47,6 +48,10 @@ const ENTRANCES = {
   ],
   js: [
     { re: /(?:\bemitEvent|\bbatcher(?:\?)?\.emit|\bbatcher(?:\?)?\.emitAndWait|\.emitAndWait)\s*\(/g, level: 0, event: 1, fields: 2 },
+    // The entrance of a plugin (docs/spec/plugins.md#logging): the level is the member (`runtime.log.info(`) or a computed key
+    // (`runtime.log[level](`), and the event name has no `plugin.<plugin>.` prefix, which the runtime adds.
+    { re: /\bruntime\.log\.(error|warn|info|debug|trace)\s*\(/g, levelGroup: 1, relative: true, event: 0, fields: 1 },
+    { re: /\bruntime\.log\[[^\]]+\]\s*\(/g, relative: true, event: 0, fields: 1 },
   ],
   m: [
     { re: /\bsp_event\s*\(/g, level: 0, event: 1, fields: 2 },
@@ -69,7 +74,8 @@ const FIELD_OBJECT = {
   go: /^map\[string\](?:any|string|interface\{\})\s*\{/,
   rs: /^&?(?:to_raw_value\(&)?(?:serde_json::)?json!\s*\(\s*\{/,
   m: /^@\{/,
-  js: /^\{/,
+  // A builder `() => ({...})` holds the fields of the event as the object it returns.
+  js: /^(?:\(\s*\)\s*=>\s*\(\s*)?\{/,
 };
 const FIELD_KEY = {
   go: /^"([^"]+)"\s*:/,
@@ -231,6 +237,10 @@ function declaredKey(catalog, name) {
   const families = Object.keys(catalog.events).filter((key) => key.includes('<'));
   const same = families.find((key) => normal(key) === normal(name));
   if (same !== undefined) return same;
+  if (name.startsWith('plugin.*.')) {
+    const rest = name.slice('plugin.*.'.length).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return Object.keys(catalog.events).find((key) => new RegExp(`^plugin\\.[^.]+\\.${rest}$`).test(key));
+  }
   if (name.includes('*') || name.includes('<')) return undefined;
   return families.find((key) => {
     const pattern = key.split(/<[a-z_]+>/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[a-z0-9_.]+');
@@ -248,6 +258,9 @@ function literalName(source, [from, to]) {
   const template = source.language === 'js' ? /^`([^`]*)`$/.exec(expression) : null;
   return template ? template[1].replace(/\$\{[^}]*\}/g, '*') : null;
 }
+
+/** The name of a site of a plugin entrance with the plugin left open (`plugin.*.<event>`); the catalog gives the plugin. */
+const relativeName = (entrance, name) => (entrance.relative && name !== null ? `plugin.*.${name}` : name);
 
 /** The levels that an expression names literally, or null when it names none. */
 function levelsOf(source, range) {
@@ -314,8 +327,8 @@ export function sitesOf(path, text) {
         line: source.lineAt(args[entrance.event][0]),
         call: source.lineAt(match.index),
         // default: an entrance without a fixed name reads the name from the literal argument of the call.
-        name: entrance.name ?? literalName(source, args[entrance.event]),
-        levels: entrance.fixed ? [entrance.fixed] : levelsOf(source, args[entrance.level]),
+        name: entrance.name ?? relativeName(entrance, literalName(source, args[entrance.event])),
+        levels: entrance.fixed ? [entrance.fixed] : entrance.levelGroup ? [match[entrance.levelGroup]] : levelsOf(source, args[entrance.level]),
         fields: fieldsOf(source, args[entrance.fields]),
       });
     }

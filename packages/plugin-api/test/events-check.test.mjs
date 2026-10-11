@@ -295,3 +295,34 @@ test('the census exclude removes a vendored file before the catalog check parses
   assert.match(result.stdout, /^Event catalog checks passed: 0 declared events/m);
   assert.deepEqual(checker.catalogReport(repository, 'docs/events.json', 'census.json').findings, []);
 });
+
+// A plugin stores its events through `context.runtime.log` (docs/spec/plugins.md#logging): the call names the event without the
+// prefix `plugin.<plugin>.`, so the check resolves it against the one plugin id of the catalog.
+test('runtime.log entrances of plugin events are resolved by the plugin prefix', () => {
+  const plugin = {
+    schema: 2,
+    layers: ['plugin'],
+    events: { 'plugin.fixture.input.key': { layer: 'plugin', class: 'input', level: 'debug', fields: { key: 'string', 'shift?': 'boolean' } } },
+  };
+  const check = (text) => checker.emitFindings(plugin, new Map([['ui/a.js', text]]), 'events.json');
+  assert.deepEqual(check('export function f(runtime, key) {\n  runtime.log.debug("input.key", { key });\n}\n'), []);
+  assert.deepEqual(check('export function f(context, key) {\n  context.runtime.log.debug("input.key", () => ({ key, shift: true }));\n}\n'), []);
+  assert.deepEqual(check('export function f(runtime, level, key) {\n  runtime.log[level]("input.key", { key });\n}\n'), []);
+  assert.deepEqual(check('export function f(runtime, key) {\n  runtime.log.info("input.key", { key, extra: 1 });\n  runtime.log.debug("input.other", {});\n}\n'), [
+    'ui/a.js:2: plugin.*.input.key is emitted at the level info and the catalog declares debug',
+    'ui/a.js:2: plugin.*.input.key has the field extra, which the catalog does not declare',
+    'ui/a.js:3: plugin.*.input.other is emitted and events.json does not declare it',
+  ]);
+  assert.deepEqual(check('export function f(runtime, key) {\n  runtime.log.debug("input.key", () => ({ key, extra: 1 }));\n}\n'), [
+    'ui/a.js:2: plugin.*.input.key has the field extra, which the catalog does not declare',
+  ]);
+  // The event name that a site builds needs the marker, as at every other site, and the gate query is no site.
+  assert.deepEqual(check('export function f(runtime, name) {\n  if (runtime.log.enabled("debug")) runtime.log.debug(name, {});\n}\n'), [
+    'ui/a.js:2: the name of this emit is not a literal; write a comment `events: <declared names>` above it, or `events: forwarded` when it passes the name of its caller',
+    'events.json: plugin.fixture.input.key is declared and no source emits it',
+  ]);
+  // A call in a function accepts the rules of the census like any other entrance.
+  const rules = checker.censusRules();
+  const config = checker.parseCensusConfig('census.json', '{}', rules);
+  assert.deepEqual(checker.censusFindings(new Map([['ui/a.js', 'export function f(runtime) {\n  try { g(); } catch (error) { runtime.log.error("input.key", {}); }\n}\n']]), config, rules), []);
+});

@@ -179,6 +179,9 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 ## Logging
 
 `context.runtime.log.<level>(event, fields)`는 plugin의 event를 [event log](logging.ko.md)에 저장한다. level은 `error`, `warn`, `info`, `debug`, `trace`이고, `event`는 점으로 구분한 소문자 단어의 이름(`input.key`)이며, `fields`는 `surface`를 이름으로 갖지 않는 객체다. 저장되는 event는 `plugin.<plugin>.<event>`이고 field와 표면의 id를 가진다. 기다리지 않고 큐에 넣어 host에 배치로 중계하며, host가 없는 page에서는 아무것도 저장하지 않는다. plugin은 받은 것과 판단한 것을 본 값 그대로 기록하므로, 한 번 나타난 결함을 파일만으로 찾을 수 있다. plugin의 event catalog는 plugin의 manifest에 선언한다. page가 콘솔에 쓰는 것은 field `text`를 가진 event `page.console.<method>`로 저장하며, level은 `console.error`와 `console.warn`이 `warn`, `console.info`와 `console.log`가 `info`, `console.debug`가 `debug`다. 콘솔은 기록 입구를 쓰지 않는 코드의 출력이므로 로그에 남되 window 검사를 실패시키지 않는다. plugin은 오류를 `context.runtime.log.error`로 보고한다.
+
+plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와 `runtime.log[level]`를 plugin event의 입구로 인식하므로([입구](logging.md#catalog)) plugin은 runtime을 직접 호출하며, `runtime.log`로 전달만 하는 자체 emitter module(`ui/events.js`)은 선택 사항이다.
+
 ## 아이콘
 
 표면 컨텍스트와 섹션 컨텍스트에는 `icon(name)`이 있으며, 코어 아이콘 `name`을 24 단위 `viewBox`, 획 경로만, `aria-hidden`을 가진 SVG 마크업으로 반환한다. 없는 이름은 예외를 던진다. 코어는 아이콘을 `packages/workbench/icons.js`에 두고, 플러그인은 워크벤치를 가져올 수 없으므로 플러그인 페이지는 자체 그림 대신 컨텍스트로 아이콘을 그린다. 마크업에는 스타일이 없고, 페이지가 자기 Shadow Root에서 크기, 색, 획을 정한다. 이름은 `star`, `projects`, `panel-left`, `panel-right`, `sun`, `moon`, `settings`, `close`와 Lucide 아이콘 `chevron-left`, `chevron-right`, `rotate-cw`다.
