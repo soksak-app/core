@@ -32,6 +32,18 @@ impl Platform for Windows {
         Err("file close is not implemented on windows".into())
     }
 
+    fn lock_file(&self, _file: &std::fs::File) -> Result<(), String> {
+        Err("file locks are not implemented on windows".into())
+    }
+
+    fn unlock_file(&self, _file: &std::fs::File) -> Result<(), String> {
+        Err("file locks are not implemented on windows".into())
+    }
+
+    fn same_file(&self, _file: &std::fs::File, _path: &std::path::Path) -> Result<bool, String> {
+        Err("file identity is not implemented on windows".into())
+    }
+
     fn paths_dir(&self) -> Result<PathBuf, String> {
         Err("path entries are not implemented on windows".into())
     }
