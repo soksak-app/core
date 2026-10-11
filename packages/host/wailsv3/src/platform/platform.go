@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 // Rect is a region in CSS pixels relative to the page viewport.
@@ -652,7 +654,7 @@ func (d *Dispatcher) Commit(identifier uint64) {
 	order.received++
 	count := order.received
 	d.mu.Unlock()
-	go func() {
+	routine.Go("dispatcher-commit", func() {
 		d.wait(order, count-1)
 		handler(identifier)
 		d.mu.Lock()
@@ -663,7 +665,7 @@ func (d *Dispatcher) Commit(identifier uint64) {
 			delete(d.views, identifier)
 		}
 		d.mu.Unlock()
-	}()
+	})
 }
 
 // Message passes a message received on the UI thread to handler. It is called after the handling of the commit of the same web view received before it finished.
@@ -680,7 +682,7 @@ func (d *Dispatcher) Message(identifier uint64, body string) {
 		count = order.received
 	}
 	d.mu.Unlock()
-	go func() {
+	routine.Go("dispatcher-message", func() {
 		if order != nil {
 			if d.Held != nil {
 				d.Held(identifier)
@@ -688,5 +690,5 @@ func (d *Dispatcher) Message(identifier uint64, body string) {
 			d.wait(order, count)
 		}
 		handler(identifier, body)
-	}()
+	})
 }

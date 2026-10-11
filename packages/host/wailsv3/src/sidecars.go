@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 // SidecarMessage is the event value that passes a message sent by a sidecar to the page.
@@ -596,13 +597,14 @@ func (c *Sidecars) replaceIdle() {
 		if item.Sessions != 0 || busy {
 			continue
 		}
-		go func(name string) {
+		name := item.Sidecar
+		routine.Go("sidecar-replace", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), c.StopTimeout)
 			defer cancel()
 			if err := c.Replace(ctx, name); err != nil {
 				LogError("replace", err)
 			}
-		}(item.Sidecar)
+		})
 	}
 }
 
@@ -746,7 +748,8 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, detach bool) {
 	var wg sync.WaitGroup
 	for _, process := range processes {
 		wg.Add(1)
-		go func(p *sidecar) {
+		p := process
+		routine.Go("sidecar-close", func() {
 			defer wg.Done()
 			if p.persistent && detach {
 				p.ownerMutex.Lock()
@@ -784,7 +787,7 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, detach bool) {
 			case p.waitErr != nil:
 				LogError("sidecar "+p.name, "exited while stopping: "+exitStatus(p.cmd, p.waitErr))
 			}
-		}(process)
+		})
 	}
 	wg.Wait()
 }
@@ -1045,8 +1048,8 @@ func (c *Sidecars) launch(name string) (*sidecar, error) {
 		surfaces:       make(map[string]bool),
 	}
 	process.begin = func() {
-		go c.write(process)        // write goroutine: reads from the outbox channel and writes to stdin.
-		go c.read(process, stdout) // read goroutine: reads from stdout and passes events.
+		routine.Go("sidecar-write", func() { c.write(process) })       // write goroutine: reads from the outbox channel and writes to stdin.
+		routine.Go("sidecar-read", func() { c.read(process, stdout) }) // read goroutine: reads from stdout and passes events.
 	}
 	return process, nil
 }
@@ -1069,10 +1072,10 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (
 		err  error
 	}
 	read := make(chan result, 1)
-	go func() {
+	routine.Go("sidecar-read-line", func() {
 		line, err := bufio.NewReader(stdout).ReadBytes('\n')
 		read <- result{line, err}
-	}()
+	})
 	timer := time.NewTimer(limit)
 	defer timer.Stop()
 	select {
@@ -1254,8 +1257,8 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		closeWaiters: make(map[string]chan error), surfaces: make(map[string]bool),
 	}
 	process.begin = func() {
-		go c.writePersistent(process)
-		go c.readPersistent(process, reader)
+		routine.Go("sidecar-write-persistent", func() { c.writePersistent(process) })
+		routine.Go("sidecar-read-persistent", func() { c.readPersistent(process, reader) })
 	}
 	return process, nil
 }

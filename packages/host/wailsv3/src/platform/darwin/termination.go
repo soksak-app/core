@@ -17,6 +17,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 // terminationSignals are the signals that request the end of the process.
@@ -25,12 +27,12 @@ var terminationSignals = []os.Signal{syscall.SIGTERM, syscall.SIGINT, syscall.SI
 func (implementation) OnTermination(quit func()) error {
 	received := make(chan os.Signal, 1)
 	signal.Notify(received, terminationSignals...)
-	go func() {
+	routine.Go("termination-signal", func() {
 		<-received
 		// The next signal ends the process with the default action. This allows ending even when the save during termination hangs.
 		signal.Reset(terminationSignals...)
 		quit()
-	}()
+	})
 	return nil
 }
 
@@ -38,7 +40,7 @@ func (implementation) OnTermination(quit func()) error {
 var quitRequest func()
 
 //export goQuitRequest
-func goQuitRequest() { go quitRequest() }
+func goQuitRequest() { routine.Go("quit-request", quitRequest) }
 
 func (implementation) OnQuitRequest(quit func()) error {
 	quitRequest = quit

@@ -8,6 +8,8 @@ import (
 	"unicode"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 // NotificationRequest is the system notification of one tab (docs/spec/plugins.md#tab-reports). Only Surface is used for removal.
@@ -53,7 +55,7 @@ func notificationIdentifier(window, surface string) string {
 func (h *Host) startNotifications() error {
 	var err error
 	application.InvokeSync(func() {
-		err = system.StartNotifications(func(event string) { go HandleNotificationEvent(h, event) })
+		err = system.StartNotifications(func(event string) { routine.Go("notification-event", func() { HandleNotificationEvent(h, event) }) })
 	})
 	if err != nil {
 		return fmt.Errorf("system notifications: %w", err)

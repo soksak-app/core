@@ -60,7 +60,7 @@
 | 창의 WebContent process가 끝난다 | `error host page process: <window>: terminated` |
 | native 호출이 실패한다 | `sp_log_error`의 `error native <where>: <text>` |
 | Tauri host의 fatal signal이나 잡히지 않은 예외 | `error native fatal: <signal name>` 또는 `error native fatal: uncaught exception <name>: <reason>` 기록 하나, 그 뒤 process가 끝난다. Wails host의 fatal signal은 Go runtime이 보고를 표준 오류에 쓴다 |
-| Rust host가 panic한다 | panic hook의 `error host panic: <file>:<line>: <message>`. Wails host의 panic은 Go runtime이 stack을 표준 오류에 쓴다 |
+| host의 goroutine이나 스레드가 panic한다 | goroutine이나 스레드의 `name`, `text`, `stack`을 담은 event `host.panic`을 프로세스가 상태 2(Go) 또는 101(Rust)로 끝나기 전에 저장한다. Go runtime이나 기본 panic hook도 메시지를 표준 오류에 쓴다 |
 | host가 실행되는 동안 표준 입출력 sidecar process가 끝난다 | `error host sidecar <name>: failed: output closed: <exit status>` |
 | webview에서 합성 pointer 입력이 끝나지 않는다 | `error native webview input: receipt of <type> did not arrive within <seconds> seconds`, `send of <type> was refused`, `_setIgnoresMouseMoveEvents: is unavailable`, `_doAfterProcessingAllPendingMouseEvents: is unavailable`, `receipt message ignored: <reason>`; `info native webview input: wait for <type> ended by the end of the registration`, `receipt of <type> arrived without a wait` |
 | 사이드카 메시지의 표면을 소유한 창이 없거나, closed 알림이 사이드카의 가득 찬 큐를 기다린다 | `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`, `info host sidecar <name>: close <surface>: outbox full, buffered` |

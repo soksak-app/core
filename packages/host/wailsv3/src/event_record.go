@@ -11,7 +11,26 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
+
+// panicFlushDeadline is how long the entrance of the goroutines waits for the event of a panic to reach the file before the
+// process ends.
+const panicFlushDeadline = 2 * time.Second
+
+func init() {
+	routine.Record = recordPanic
+}
+
+// recordPanic stores the panic of a goroutine as the event `host.panic` and waits until it is in the event log. A flush that
+// fails is reported on the standard error, which holds the stack as well.
+func recordPanic(name, text, stack string) {
+	EmitHost(LevelError, "host.panic", map[string]any{"name": name, "text": text, "stack": stack})
+	if err := FlushRecords(panicFlushDeadline); err != nil {
+		fmt.Fprintf(os.Stderr, "event writer: the record of the panic of %s is not stored: %v\n", name, err)
+	}
+}
 
 // StartBufferRecords is the number of records that the start buffer holds; a record beyond it is refused and counted.
 const StartBufferRecords = 1024

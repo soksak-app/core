@@ -23,6 +23,7 @@ import (
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -264,7 +265,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 	// The tick starts after the request is sent so that the first tick arrives after the page received the drag request.
 	reply := h.relay.Request(relayTarget{owner: s}, time.Duration(ticks)*frameStep+pageTimeout, func(id uint64) error {
 		s.window.EmitEvent("exposure-request", map[string]any{"id": id, "method": "diagnostics.drag", "params": plan})
-		go func() {
+		routine.Go("diagnostics-ticks", func() {
 			tick := time.NewTicker(frameStep)
 			defer tick.Stop()
 			for left := ticks; left > 0; left-- {
@@ -280,7 +281,7 @@ func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, 
 					return
 				}
 			}
-		}()
+		})
 		return nil
 	})
 	close(stop)

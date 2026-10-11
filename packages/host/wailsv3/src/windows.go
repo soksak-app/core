@@ -15,6 +15,8 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 // windowTitle is the title of a window that has no open project, and titleSuffix is the end of the title of a project window.
@@ -30,7 +32,7 @@ func (s *Surfaces) setTitle(title string) {
 	s.mu.Unlock()
 	s.window.SetTitle(title)
 	if s.host != nil {
-		go s.host.windowsChanged()
+		routine.Go("windows-changed", s.host.windowsChanged)
 	}
 }
 
@@ -198,11 +200,11 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	h.mu.Unlock()
 	s.first.Do(func() { s.Emit("page-ready") })
 	s.replayRegistrations()
-	go h.windowsChanged()
+	routine.Go("windows-changed", h.windowsChanged)
 	for _, ready := range readied {
 		close(ready)
 	}
-	go s.rewatch()
+	routine.Go("window-rewatch", s.rewatch)
 	return nil
 }
 
@@ -289,7 +291,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	h.mu.Lock()
 	h.windows[win.ID()] = s
 	h.mu.Unlock()
-	go h.windowsChanged()
+	routine.Go("windows-changed", h.windowsChanged)
 	// The native view is placed over the DOM, so the page handles a dropped file based on the DOM element at that point.
 	var dropOnce sync.Once
 	place := func(*application.WindowEvent) {
@@ -348,7 +350,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	// state change of macOS as WindowShow (visible) and WindowHide (completely covered).
 	changed := func(*application.WindowEvent) {
 		s.windowChanged()
-		go h.windowsChanged()
+		routine.Go("windows-changed", h.windowsChanged)
 	}
 	for event, kind := range map[events.WindowEventType]string{
 		events.Common.WindowDidResize: "resize", events.Common.WindowDidMove: "move", events.Common.WindowFocus: "focus",
@@ -406,9 +408,9 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		s.close()
 		h.relay.Abandon(func(t relayTarget) bool { return t.owner == s })
 		h.notifyWorkspace()
-		go h.windowsChanged()
+		routine.Go("windows-changed", h.windowsChanged)
 		if quit {
-			go application.Get().Quit()
+			routine.Go("quit", application.Get().Quit)
 		}
 	})
 	return s
@@ -608,5 +610,5 @@ func (s *Surfaces) close() {
 			shape.destroy()
 		}
 	})
-	go s.sidecars.CloseOwner(s)
+	routine.Go("sidecars-close-owner", func() { s.sidecars.CloseOwner(s) })
 }
