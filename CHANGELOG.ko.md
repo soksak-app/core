@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.31: host와 명령줄 도구가 언어마다 하나의 event writer를 시작하며, writer는 도구 패키지(`packages/sok/wailsv3/src/event_log.go`, `packages/sok/tauriv2/src/event_log.rs`)에 event 필드의 상한(`event_bounds.go`, `event_bounds.rs`)과 함께 있다. 층, 역할, 시계, thread 진입점, rotate, writer에 호출할 수 없는 source를 위한 pull은 옵션이다. 도구는 `StartToolEventLog`와 `start_tool_event_log`로 시작하고, host 파일은 층, 시계, native ring pull, logs 폴더에서의 시작만 남긴다. 도구의 두 번째 구현은 제거했다. 이미 있는 파일은 도구처럼 host도 거부하고, `EmitCids`는 계약 밖 level을 거부하며, Go host의 `Close`는 거부된 정지 요청을 보고한다. `event_log_options_test.go`, `event_log_options_test.rs`와 도구와 host의 기존 writer 시험으로 검증했다.
 - F160.26: `docs/operations/examples.md`가 입력 유휴 시간의 검토한 event source(listen-only event tap, HID manager, 전역 monitor, IO registry·전원 관리 알림, `CGEventSourceSecondsSinceLastEventType`)와, 사람이 없는 실행이 줄 수 없는 권한 없이는 각각 `--when-idle` 관문에 쓸 수 없는 이유를 적는다. 관문은 5초마다 `HIDIdleTime`을 읽는 방식을 `whenIdle`의 이유와 함께 유지한다. source는 interface 계약으로 검토했고 실행하지 않았다.
 - F160.19.1: window의 첫 응답자는 정수 identity가 바뀔 때만 저장하므로, 바뀌지 않은 update는 observer 없는 알림보다 더 할당하지 않는다. 수동으로 참조를 세는 소스에서 `emit()`(`activity_observers.m`)과 `storeRecord()`(`application_log.m`)가 할당한 문자열을 release하고, 시험 record 해독기도 문자열을 release한다. process의 할당을 malloc logger로 세는 `activity_observers_allocation_test`로 검증했다. 10분 측정은 실행하지 않았다(F160.19.2).
 - F160.9.2: window check `e2e/operation-chains.test.mjs`가 두 애플리케이션에서 plugin, project, window, settings, update 작업을 수행하고, `log.query`와 `host.log`의 알림으로 찾은 각 사슬에 `docs/spec/events.json`이 선언한 모든 event를 요구한다. 탐색 `e2e/chains.mjs`는 `e2e/test/chains.test.mjs`로 시험한다. 검사는 실행하지 않았다.

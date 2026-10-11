@@ -1301,8 +1301,8 @@ const FEATURE_LINKS = [
   {
     id: "F150.2.5",
     implementation: [
-      { file: "packages/host/wailsv3/src/event_log.go", symbol: "func (l *EventLog) rotate" },
-      { file: "packages/host/tauriv2/src/event_log.rs", symbol: "fn rotate" },
+      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func (l *EventLog) rotate" },
+      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "fn rotate" },
     ],
     tests: [
       { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogRotatesAtTheBoundAndKeepsTheNewestGenerations" },
@@ -1352,8 +1352,8 @@ const FEATURE_LINKS = [
   {
     id: "F150.2.4.2",
     implementation: [
-      { file: "packages/host/wailsv3/src/event_log.go", symbol: "func (l *EventLog) EmitRelayed" },
-      { file: "packages/host/tauriv2/src/event_log.rs", symbol: "pub fn emit_relayed" },
+      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func (l *EventLog) EmitRelayed" },
+      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "pub fn emit_relayed" },
     ],
     tests: [
       { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter" },
@@ -1377,7 +1377,7 @@ const FEATURE_LINKS = [
   {
     id: "F150.2.2",
     implementation: [
-      { file: "packages/host/tauriv2/src/event_log.rs", symbol: "pub fn emit" },
+      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "pub fn emit" },
     ],
     tests: [
       { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "a_full_queue_returns_false_and_the_writer_records_the_range_as_dropped" },
@@ -1389,7 +1389,7 @@ const FEATURE_LINKS = [
   {
     id: "F150.2.3",
     implementation: [
-      { file: "packages/host/wailsv3/src/event_log.go", symbol: "func (l *EventLog) Emit" },
+      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func (l *EventLog) Emit" },
     ],
     tests: [
       { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestAFullEventQueueReturnsFalseAndTheWriterRecordsTheRangeAsDropped" },
@@ -1887,6 +1887,26 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F160.26",
+    implementation: [{ file: "scripts/node-tests.mjs", symbol: "export function whenIdle" }],
+    tests: [{ file: "scripts/test/node-tests.test.mjs", id: "the idle gate waits until the person gave no input for the given seconds" }],
+    expected: "The wait of --when-idle reads the idle time of the input at an interval; the examined event sources and the reason each cannot serve are in docs/operations/examples.md.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.31",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "func StartEventLog" },
+      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "pub fn start" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/event_log_options_test.go", id: "TestAWriterRotatesAtItsBoundAndTheNewFileStartsWithLogOpenAndLogRotated" },
+      { file: "packages/sok/tauriv2/tests/event_log_options_test.rs", id: "a_writer_rotates_at_its_bound_and_the_new_file_starts_with_log_open_and_log_rotated" },
+    ],
+    expected: "The hosts and the tool start one event writer per language, which lives in the tool packages and takes the layer, the clock, the thread entrance, the rotation and a pull as options.",
+    levels: ["unit"],
+  },
+  {
     id: "F160.27",
     implementation: [
       { file: "packages/host/tauriv2/src/recording.rs", symbol: "pub fn running" },
@@ -1917,8 +1937,8 @@ const FEATURE_LINKS = [
   {
     id: "F160.6.4",
     implementation: [
-      { file: "packages/host/tauriv2/src/bounds.rs", symbol: "pub fn bounded_serialize" },
-      { file: "packages/host/wailsv3/src/bounds.go", symbol: "func boundedMarshal" },
+      { file: "packages/sok/tauriv2/src/event_bounds.rs", symbol: "pub fn bounded_serialize" },
+      { file: "packages/sok/wailsv3/src/event_bounds.go", symbol: "func BoundedMarshal" },
       { file: "packages/workbench/log-batch.js", symbol: "export function createEventBatcher" },
     ],
     tests: [

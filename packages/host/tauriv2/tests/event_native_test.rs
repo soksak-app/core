@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
-use soksak_host_tauriv2::event_log::{EventLog, Options};
+use soksak_host_tauriv2::event_log::{self, EventLog, Options};
 
 /// A record as the native library drains it: a 4-byte length, then the wall clock (8 bytes), the monotonic clock (8), the
 /// level (1 byte), the length of the name (1 byte), the length of the cids (2), the name, the cids as a list separated by
@@ -58,7 +58,7 @@ fn read(path: &Path) -> Vec<Value> {
 fn start(directory: &Path, ring: &Arc<Mutex<FakeRing>>, interval: Duration) -> EventLog {
     let pull_ring = Arc::clone(ring);
     let loss_ring = Arc::clone(ring);
-    EventLog::start(Options {
+    event_log::start(Options {
         directory: directory.to_path_buf(),
         role: "host".into(),
         boot: "b1".into(),
