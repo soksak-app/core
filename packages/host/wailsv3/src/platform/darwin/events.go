@@ -9,6 +9,7 @@ package darwin
 #include <stdlib.h>
 #include "event_ring.h"
 #include "activity_observers.h"
+#include "observe.h"
 */
 import "C"
 
@@ -46,6 +47,11 @@ func (implementation) SetEventBoot(boot string) error {
 	if !bool(C.sp_event_set_boot(cboot)) {
 		return fmt.Errorf("set event boot: the native library refused %q (letters, digits, '-' and '_', at most 64 bytes)", boot)
 	}
+	return nil
+}
+
+func (implementation) FlushNativeObservers() error {
+	C.sp_observe_flush()
 	return nil
 }
 

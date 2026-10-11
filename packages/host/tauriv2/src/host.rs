@@ -443,10 +443,11 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                         .expect("the stop of the policy watch")
                         .take(),
                 );
-                if let Err(error) = app
-                    .state::<std::sync::Arc<event_log::EventLog>>()
-                    .flush(std::time::Duration::from_secs(2))
-                {
+                if let Err(error) = event_log::flush_event_log(
+                    &app.state::<std::sync::Arc<event_log::EventLog>>(),
+                    || platform::current()?.flush_native_observers(),
+                    std::time::Duration::from_secs(2),
+                ) {
                     log_error("event log flush", error);
                 }
                 // The save and cleanup are finished, so the termination request of the operating system that was

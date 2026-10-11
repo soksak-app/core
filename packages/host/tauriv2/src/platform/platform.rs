@@ -674,6 +674,9 @@ pub trait Platform: Send + Sync {
     /// Installs the observers that record the activity of the application and of its windows as events of the native ring
     /// (docs/spec/logging.md#automatic-entrances). A second call installs nothing more.
     fn observe_activity(&self) -> Result<(), String>;
+    /// Stores the summary of every counted source of the native observers that has deliveries after its last summary, so the tail of
+    /// a source is in the native ring before the last pull (docs/spec/logging.md#automatic-entrances).
+    fn flush_native_observers(&self) -> Result<(), String>;
     /// Replaces the standard error of the process with file. A child process that starts afterwards also inherits that
     /// descriptor (docs/spec/hosts.md#application-log).
     fn replace_standard_error(&self, file: &std::fs::File) -> Result<(), String>;

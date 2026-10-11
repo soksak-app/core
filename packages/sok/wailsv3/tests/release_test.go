@@ -214,6 +214,36 @@ func TestSidecarReleaseWritesTheAssetAndKeepsSHA256SUMSSorted(t *testing.T) {
 	}
 }
 
+// contract: cli.release.requires-the-replay-executable
+func TestSidecarReleaseRefusesAReplayExecutableThatThePackageDoesNotShip(t *testing.T) {
+	out := t.TempDir()
+	missing := sidecarTree(t, "0.1.0")
+	writeTree(t, missing, map[string]string{
+		"sidecar.json":  `{"executable": "build/worker", "protocol": 1, "replay": {"role": "screen", "executable": "build/replay"}}`,
+		"build/replay*": "binary replay",
+	})
+	code, _, stderr := run("sidecar", "release", missing, out, "--platform", "darwin-arm64")
+	if code != 1 || stderr != "sok: package.json files: build/replay, the replay executable of sidecar.json, is not listed\n" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(out, "scope-sidecar-worker-0.1.0-darwin-arm64.tar.gz")); !os.IsNotExist(err) {
+		t.Fatalf("a refused release left its release: %v", err)
+	}
+	writeTree(t, missing, map[string]string{
+		"package.json": `{"name": "@scope/sidecar-worker", "version": "0.1.0", "files": ["sidecar.json", "build/worker", "build/replay"]}`,
+	})
+	if code, _, stderr = run("sidecar", "release", missing, out, "--platform", "darwin-arm64"); code != 0 {
+		t.Fatalf("a release that ships its replay executable failed with code %d: %q", code, stderr)
+	}
+	writeTree(t, missing, map[string]string{
+		"sidecar.json": `{"executable": "build/worker", "protocol": 1, "replay": {"role": "screen"}}`,
+	})
+	code, _, stderr = run("sidecar", "release", missing, out, "--platform", "darwin-arm64")
+	if code != 1 || stderr != "sok: sidecar.json: replay.executable is required\n" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+}
+
 // contract: cli.pack.diagnostics-only-with-flag
 func TestPluginPackAddsDiagnosticDeclarationsOnlyWithTheFlag(t *testing.T) {
 	dir := pluginTree(t)

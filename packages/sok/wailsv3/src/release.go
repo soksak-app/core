@@ -346,6 +346,19 @@ func runRelease(dir, out, platform string, stdout io.Writer) error {
 			return fmt.Errorf("package.json files: %s is not listed", required)
 		}
 	}
+	if replay, declared := sidecar["replay"]; declared {
+		replayObject, err := object("sidecar.json replay", replay)
+		if err != nil {
+			return err
+		}
+		replayExecutable, ok := text(replayObject["executable"])
+		if !ok {
+			return fmt.Errorf("sidecar.json: replay.executable is required")
+		}
+		if !slices.Contains(listed, replayExecutable) {
+			return fmt.Errorf("package.json files: %s, the replay executable of sidecar.json, is not listed", replayExecutable)
+		}
+	}
 	name, version := pkg["name"].(string), pkg["version"].(string)
 	file, err := SidecarReleaseName(name, version, platform)
 	if err != nil {

@@ -188,14 +188,15 @@ bool sp_observe_notification_selector(const char *source, sp_observe_mode mode, 
     return true;
 }
 
-bool sp_observe_key_path(const char *source, sp_observe_mode mode, id target, id observer, NSString *keyPath, NSKeyValueObservingOptions options) {
+bool sp_observe_key_path(const char *source, sp_observe_mode mode, id target, id observer, NSString *keyPath, NSKeyValueObservingOptions options,
+    void *context) {
     if (!target || !observer || keyPath.length == 0) {
         fail(source, "key_path", @"the target, the observer or the key path is missing");
         return false;
     }
     NSString *description = [NSString stringWithFormat:@"%@.%@", NSStringFromClass([target class]), keyPath];
     if (!recordRegistration(source, mode, "key_path", description)) return false;
-    [target addObserver:observer forKeyPath:keyPath options:options context:NULL];
+    [target addObserver:observer forKeyPath:keyPath options:options context:context];
     return true;
 }
 

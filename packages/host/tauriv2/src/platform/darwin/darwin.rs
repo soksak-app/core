@@ -601,6 +601,9 @@ impl Platform for Darwin {
     fn set_event_boot(&self, boot: &str) -> Result<(), String> {
         events::set_boot(boot)
     }
+    fn flush_native_observers(&self) -> Result<(), String> {
+        events::flush_native_observers()
+    }
     fn observe_activity(&self) -> Result<(), String> {
         events::observe_activity()
     }

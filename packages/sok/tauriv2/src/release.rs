@@ -393,6 +393,22 @@ fn run_release(dir: &str, out: &str, platform: &str, stdout: &mut dyn Write) -> 
             return Err(format!("package.json files: {required} is not listed"));
         }
     }
+    if let Some(replay) = declaration.get("replay") {
+        if !replay.is_object() {
+            return Err("sidecar.json replay: expected an object".into());
+        }
+        let Some(replay_executable) = replay["executable"]
+            .as_str()
+            .filter(|path| !path.is_empty())
+        else {
+            return Err("sidecar.json: replay.executable is required".into());
+        };
+        if !listed.iter().any(|path| path == replay_executable) {
+            return Err(format!(
+                "package.json files: {replay_executable}, the replay executable of sidecar.json, is not listed"
+            ));
+        }
+    }
     let file = install::sidecar_release_name(name, version, platform)?;
     let entries = collect(dir, &listed)?;
     let output = output_path(out, &file)?;

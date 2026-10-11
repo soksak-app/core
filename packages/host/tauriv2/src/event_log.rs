@@ -125,6 +125,23 @@ pub fn start_host(config: &Path) -> Result<EventLog, String> {
     })
 }
 
+/// Ends the event log of a process that is shutting down: `flush_observers` stores the tail of the counted sources of the native
+/// observers in the native ring, and the flush writes it with everything that is queued. A failed flush of the observers does not
+/// skip the flush of the writer; the result names the failure of each.
+pub fn flush_event_log(
+    log: &EventLog,
+    flush_observers: impl FnOnce() -> Result<(), String>,
+    deadline: Duration,
+) -> Result<(), String> {
+    let observers = flush_observers().map_err(|error| format!("flush native observers: {error}"));
+    let writer = log.flush(deadline);
+    match (observers, writer) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
+        (Err(observers), Err(writer)) => Err(format!("{observers}; {writer}")),
+    }
+}
+
 /// Starts the writer of the layer `host`. A writer of the host always rotates and always applies the retention.
 pub fn start(options: Options) -> Result<EventLog, String> {
     if options.rotate_bytes == 0 {

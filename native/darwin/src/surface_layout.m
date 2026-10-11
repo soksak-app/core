@@ -288,7 +288,7 @@ void surfaceLayoutInjectSettledFailure(void) {
         [self commitAfterPresentation];
         return;
     }
-    sp_observe_key_path("surface_layout.loading", SP_OBSERVE_RECORD, _webview, self, @"loading", 0);
+    sp_observe_key_path("surface_layout.loading", SP_OBSERVE_RECORD, _webview, self, @"loading", 0, NULL);
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {

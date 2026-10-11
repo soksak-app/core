@@ -447,6 +447,10 @@ pub fn install_fatal_handlers() -> Result<(), String> {
     Err("install fatal handlers: not implemented on windows".to_string())
 }
 
+pub fn flush_native_observers() -> Result<(), String> {
+    missing("native observer flush")
+}
+
 pub fn observe_activity() -> Result<(), String> {
     missing("activity observers")
 }

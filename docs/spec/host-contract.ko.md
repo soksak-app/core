@@ -538,6 +538,7 @@ fn invalid_json_closes_connection() {
 | `cli.pack.diagnostics-only-with-flag` | `sok plugin pack`은 `diagnostics.json`과 그 module을 빼고, `--diagnostics`는 둘을 더하며, `files`가 둘 중 하나를 나열하면 pack이 실패하고, `plugin pack` 밖의 `--diagnostics`는 종료 상태 2다. | both |
 | `cli.pack.rejects-unlisted-modules` | `plugin.json`의 surface module, 방향과 상관없는 section module, state module이 `files`가 나열한 경로 밖에 있으면 `sok plugin pack`은 종료 상태 1로 실패하고 그 module을 밝힌다. | both |
 | `cli.release.writes-release-and-sums` | `sok sidecar release`는 `<file name>-<version>-<platform>.tar.gz`를 쓰고 release마다 `SHA256SUMS` 한 줄을 이름 순서로 유지하며, 같은 이름은 바꾼다. 알 수 없는 `--platform`은 종료 상태 2, 나열하지 않은 실행 파일은 1, 형식이 틀린 `SHA256SUMS`는 release를 쓰지 않고 1이다. | both |
+| `cli.release.requires-the-replay-executable` | `sidecar.json`이 `replay`를 선언한 package에서 `replay.executable`이 없거나 `files`가 나열하지 않으면 `sok sidecar release`는 release를 쓰지 않고 그 파일 이름을 담은 오류로 1로 끝나며, 나열한 package는 release된다. | both |
 | `cli.registry.writes-checked-index` | `sok registry build`는 registry 파일을 읽고 모든 release hash와 plugin release의 `package.json`, `plugin.json`을 검사한 뒤, 선언한 필드 순서와 두 칸 들여쓰기로 `index.json`을 쓰고 `index`, `packs`, `plugins`, `sidecars`를 출력한다. 두 구현은 같은 텍스트를 쓴다. | both |
 | `cli.registry.rejects-without-writing` | 형식이 틀린 hash, hash가 다른 release, 항목과 다른 `package.json`, 항목과 다른 파일 이름, 없는 `revoked.json`, 알 수 없는 plugin을 지정한 pack은 종료 상태 1이며 `index.json`을 남기지 않는다. | both |
 | `cli.registry.checks-plugin-dependencies` | `sok registry build`는 나열된 plugin을 지정하는 `plugin.json`의 dependency를 받아들이고 version의 `sidecars`에는 sidecar dependency만 쓴다. 나열된 plugin도 나열된 sidecar도 지정하지 않는 dependency와 나열된 어느 version도 채우지 않는 plugin dependency는 그 문구와 함께 종료 상태 1이며 `index.json`을 남기지 않는다. | both |
@@ -635,6 +636,9 @@ fn invalid_json_closes_connection() {
 | `log.native.platform-pulls-the-ring` | 플랫폼은 빈 native ring을 0바이트와 손실 없음으로 pull하고, 빈 buffer로의 pull은 거부한다. | both |
 | `log.native.platform-reads-the-clock-and-takes-the-boot` | 플랫폼은 양수이고 줄어들지 않으며 시간과 함께 늘어나는 monotonic clock(나노초)을 읽고, 실행의 boot 식별자를 native 계층의 상관 식별자용으로 받는다. 빈 식별자와 영문자, 숫자, `-`, `_` 외의 문자가 있는 식별자는 거부한다. | both |
 | `log.native.host-writer-starts-with-the-platform-pull` | host의 writer는 플랫폼의 pull과 함께 시작하고 `log.open`을 먼저 쓴다. | both |
+| `log.native.platform-flushes-the-observers` | 플랫폼은 마지막 요약 뒤에 전달이 있는 native observer의 모든 counted source의 요약을 저장하고 오류 없이 응답한다. | both |
+| `log.native.shutdown-flushes-the-observers-before-the-writer` | host의 종료는 native observer를 먼저 flush하고 event writer를 나중에 flush하므로, observer flush가 저장한 event는 종료 flush가 반환될 때 파일에 있다. | both |
+| `log.native.shutdown-reports-a-failed-observer-flush` | native observer의 flush가 실패해도 writer의 flush는 건너뛰지 않고, 결과는 observer flush와 그 원인을 이름으로 밝힌다. | both |
 | `log.writer.stores-class` | writer의 모든 줄은 catalog가 그 event 이름에 선언한 class인 `class`를 담으며, writer 자신의 event의 줄도 그렇다. | both |
 | `log.writer.marks-undeclared` | catalog가 이름을 선언하지 않은 event는 `class` 없이 `undeclared` `true`로 저장하며 버리지 않는다. | both |
 | `log.writer.splits-files-by-level` | level `error`, `warn`, `info`는 `<role>-<boot>.jsonl`에, `debug`와 `trace`는 `<role>-<boot>.debug.jsonl`에 간다. 후자는 첫 해당 event가 `log.open`을 첫 줄로 하여 만들며, `seq`는 두 파일에 걸쳐 이어지고 두 파일을 합치면 모든 `seq`가 한 번씩 있다. | both |

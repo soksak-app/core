@@ -10,6 +10,7 @@ package host
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -189,6 +190,17 @@ func StartHostEventLog(config string) (*EventLog, error) {
 		QueueEvents: hostQueueEvents, QueueBytes: hostQueueBytes, BatchInterval: hostBatchInterval,
 		RotateBytes: hostRotateBytes, PolicyPath: filepath.Join(config, "log-policy.json"), RetentionBytes: hostRetentionBytes,
 	})
+}
+
+// FlushEventLog ends the event log of a process that is shutting down: flushObservers stores the tail of the counted sources
+// of the native observers in the native ring, and the flush writes it with everything that is queued. A failed flush of the
+// observers does not skip the flush of the writer; the result names the failure of each.
+func FlushEventLog(log *EventLog, flushObservers func() error, deadline time.Duration) error {
+	observers := flushObservers()
+	if observers != nil {
+		observers = fmt.Errorf("flush native observers: %w", observers)
+	}
+	return errors.Join(observers, log.Flush(deadline))
 }
 
 // nativePuller is the Pull of the writer for a native ring: it moves the records of the ring into a buffer, decodes each into

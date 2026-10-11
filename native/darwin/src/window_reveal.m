@@ -30,7 +30,7 @@
 - (void)start {
     _observing = YES;
     // Initial also reports a load that already ended at registration.
-    sp_observe_key_path("window_reveal.loading", SP_OBSERVE_RECORD, _webview, self, @"loading", NSKeyValueObservingOptionInitial);
+    sp_observe_key_path("window_reveal.loading", SP_OBSERVE_RECORD, _webview, self, @"loading", NSKeyValueObservingOptionInitial, NULL);
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {

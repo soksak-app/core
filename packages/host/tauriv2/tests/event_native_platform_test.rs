@@ -65,3 +65,66 @@ fn the_host_writer_starts_with_the_pull_of_the_platform() {
         "{lines:?}"
     );
 }
+
+// contract: log.native.shutdown-flushes-the-observers-before-the-writer
+#[test]
+fn the_shutdown_flushes_the_native_observers_before_the_writer_flush() {
+    let directory = tempfile::tempdir().unwrap();
+    let log = event_log::start_host(directory.path()).unwrap();
+    let mut flushed = false;
+    let result = event_log::flush_event_log(
+        &log,
+        || {
+            flushed = true;
+            // The flush of the observers stores the tail of a counted source; the writer flush that follows writes it.
+            log.emit(
+                event_log::Level::Info,
+                "host.test.observer_tail",
+                &serde_json::json!({"count": 3}),
+            );
+            Ok(())
+        },
+        Duration::from_secs(5),
+    );
+    assert_eq!(result, Ok(()));
+    assert!(flushed);
+    let text = std::fs::read_to_string(log.path()).unwrap();
+    assert!(
+        text.contains("\"event\":\"host.test.observer_tail\""),
+        "{text}"
+    );
+}
+
+// contract: log.native.shutdown-reports-a-failed-observer-flush
+#[test]
+fn the_shutdown_reports_a_failed_observer_flush_and_still_flushes_the_writer() {
+    let directory = tempfile::tempdir().unwrap();
+    let log = event_log::start_host(directory.path()).unwrap();
+    log.emit(
+        event_log::Level::Info,
+        "host.test.before_failure",
+        &serde_json::json!({}),
+    );
+    let error = event_log::flush_event_log(
+        &log,
+        || Err("refused by the platform".to_string()),
+        Duration::from_secs(5),
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("native observers") && error.contains("refused by the platform"),
+        "{error}"
+    );
+    let text = std::fs::read_to_string(log.path()).unwrap();
+    assert!(
+        text.contains("\"event\":\"host.test.before_failure\""),
+        "{text}"
+    );
+}
+
+// contract: log.native.platform-flushes-the-observers
+#[test]
+fn the_platform_flushes_the_native_observers_without_an_error() {
+    let system = platform::current().unwrap();
+    assert_eq!(system.flush_native_observers(), Ok(()));
+}
