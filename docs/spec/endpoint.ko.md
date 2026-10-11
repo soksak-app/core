@@ -77,6 +77,10 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 
 host는 선언된 메서드를 부른 client의 모든 요청을 성능 trace가 켜져 있는지와 상관없이 event `host.endpoint.call`로 저장한다. 메서드, 받은 그대로의 params(1024바이트로 자름), 결과, 마이크로초를 담는다([logging](logging.ko.md#입구)). 연결을 닫게 하는 frame(한도를 넘은 frame, 잘못된 JSON, JSON-RPC 2.0 요청이 아닌 값, 선언되지 않은 메서드)은 메서드의 요청이 아니므로 host는 닫는 이유를 `endpoint` 자리의 record로 저장한다.
 
+## Log query
+
+<a id="log-query"></a>메서드 `log.query`는 모든 빌드에 있고 `window`를 받지 않는다. host의 설정 디렉터리의 event 파일을 색인으로 읽는다([logging](logging.ko.md#질의)). 매개변수는 질의 매개변수 객체(`channel`, `level`, `class`, `layer`, `event`, `event_prefix`, `surface`, `session`, `cid`, `run`, `text`, `from_us`, `to_us`, `order`, `limit`, `after`, `since`. `{}`는 channel `other`의 처음 500행을 묻는다)이고 결과는 page `{rows, next, tail, scanned}`다. 질의가 거절하는 매개변수는 invalid-params 오류(-32602)와 질의의 문구(`log query level "x" is not one of error, warn, info, debug, trace`)이고, event 구조를 어기는 파일이나 손상된 색인은 `<file>:<line>: <reason>` 문구나 색인을 밝히는 문구의 오류 -32000이다. host는 위의 한도 안의 frame으로 행 최대 5,000개와 줄 8,388,608바이트의 page 하나를 답한다. debug 화면의 page는 host 호출 `logQuery`([debug](debug.ko.md#타임라인))로 같은 질의다.
+
 ## 진단 빌드
 
 다음 메서드는 진단 빌드(Go 빌드 태그 `diagnostics`, cargo feature `diagnostics`)에만 있다. 다른 빌드는 이 메서드를 선언되지 않은 메서드로 거부한다. `make wailsv3-build`와 `make tauriv2-build`는 진단 빌드를 만들고, 배포 대상은 진단 빌드를 만들지 않는다.

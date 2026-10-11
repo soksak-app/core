@@ -77,6 +77,10 @@ Registered WebView pointer receipt completion requires pending mouse processing 
 
 The host stores every request of a client that names a declared method as the event `host.endpoint.call`, whether or not the performance trace is on: the method, the params as received (cut to 1024 bytes), the result and the microseconds ([logging](logging.md#entrances)). A frame that closes the connection (a frame over the limit, malformed JSON, a value that is not a JSON-RPC 2.0 request, an undeclared method) is not a request of a method; the host stores the reason of the closing as a record of the place `endpoint`.
 
+## Log query
+
+<a id="log-query"></a>The method `log.query` exists in every build and takes no `window`: it reads the event files of the configuration directory of the host through their indexes ([logging](logging.md#query)). Its params are the object of the query parameters (`channel`, `level`, `class`, `layer`, `event`, `event_prefix`, `surface`, `session`, `cid`, `run`, `text`, `from_us`, `to_us`, `order`, `limit`, `after`, `since`; `{}` is a query of the first 500 rows of the channel `other`) and its result is the page `{rows, next, tail, scanned}`. A parameter that the query refuses is the invalid-params error (-32602) with the text of the query (`log query level "x" is not one of error, warn, info, debug, trace`), a file that breaks the event structure or an index that is damaged is the error -32000 with the text `<file>:<line>: <reason>` or the text that names the index, and the host answers one page of at most 5,000 rows and 8,388,608 bytes of lines in a frame under the limit above. The page of the debug view is the same query as the host call `logQuery` ([debug](debug.md#timeline)).
+
 ## Diagnostic builds
 
 The following methods exist only in diagnostic builds (Go build tag `diagnostics`, cargo feature `diagnostics`). Other builds reject them as undeclared methods. `make wailsv3-build` and `make tauriv2-build` produce diagnostic builds; the release targets do not.

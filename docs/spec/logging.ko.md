@@ -113,6 +113,87 @@ event가 아닌 raw 파일이 둘 있다. `logs/<role>-<boot>.stderr`는 프로�
 
 상태 파일 `logs/state-<time>.json`과 capture는 event가 아니며 [debug](debug.ko.md)가 쓴다.
 
+각 event 파일 옆에는 파일에서 파생한 색인 `<name>.idx`가 있으며 event 파일이 아니다([색인](#색인)).
+
+## 색인
+
+event 파일이 기준이다. 각 event 파일 `logs/<name>`(`<role>-<boot>.jsonl`, `<role>-<boot>.debug.jsonl`과 그 세대 `.1`부터 `.5`) 옆의 색인 `logs/<name>.idx`는 파일의 어느 부분이 질의에 맞는 event를 가질 수 있는지 알려 준다. 그래서 질의는 그 부분만 읽고 파일 전체를 읽지 않는다([질의](#질의)). 색인은 파생물이다. 지워도 잃는 것이 없으며 파일에서 다시 만든다.
+
+**segment.** 파일의 줄은 첫 줄부터 세어 연속한 4,096줄씩 segment로 묶고, 마지막 segment는 마지막 가득 찬 segment 뒤의 줄을 담는다. 줄은 줄바꿈으로 끝나야 완전하며, 마지막 줄바꿈 뒤의 바이트는 색인하지 않는다. 색인은 segment마다 다음을 보관한다.
+
+| 항목 | 값 |
+| --- | --- |
+| `offset`, `length` | 첫 줄의 바이트 offset과 바이트 크기 |
+| `first_seq`, `last_seq`, `events` | 첫 줄과 마지막 줄의 `seq`, 줄 수 |
+| `min_ts_us`, `max_ts_us` | 줄의 `ts_us` 중 가장 작은 값과 가장 큰 값(layer의 시계는 batch 간격만큼 어긋나므로 `ts_us`는 `seq`와 함께 커지지 않는다) |
+| level, layer, class | 나타나는 값마다 비트 하나: `error`, `warn`, `info`, `debug`, `trace`, `native`, `host`, `page`, `plugin`, `sidecar`, `sok`, `lifecycle`, `input`, `call`, `io`, `frame`(줄의 `class` 항목이며 F160.7 전에는 어떤 writer도 쓰지 않으므로 그때까지 class 비트는 서지 않는다) |
+| Bloom filter | 다음 표의 다섯 개 |
+
+segment의 Bloom filter는 다음과 같다.
+
+| filter | 줄마다 넣는 항목 | 바이트 | hash 수 |
+| --- | --- | --- | --- |
+| event | event 이름과 점 앞에서 끝나는 이름의 각 앞부분(`native.input.key_down`은 `native`, `native.input`, `native.input.key_down`을 넣는다) | 1,024 | 4 |
+| surface | 줄의 `surface`와 `fields`의 문자열 항목 `surface` | 512 | 4 |
+| session | 줄의 `session`과 `fields`의 문자열 항목 `session` | 512 | 4 |
+| run | `fields`의 문자열 항목 `run` | 256 | 4 |
+| cids | `cids`의 각 값 | 16,384 | 5 |
+
+Bloom filter는 `8 × 바이트` 비트를 가진다. 항목의 hash는 UTF-8 바이트에 대한 FNV-1a 64(offset basis `0xcbf29ce484222325`, prime `0x100000001b3`)이며, `a`는 그 hash, `b`는 그 hash를 왼쪽으로 32비트 회전하고 비트 0을 세운 값이다. 항목의 비트 `i`(`i`는 0부터 hash 수 - 1)는 `(a + i × b) mod 2^64`에 마스크 `8 × 바이트 - 1`을 적용한 값이다. filter에는 false negative가 없다. filter가 받아들인 segment는 읽고 그 줄을 하나씩 검사하므로 false positive는 읽기 비용일 뿐 잘못된 행이 아니다. 한 segment에 서로 다른 식별자가 12,000개(줄마다 셋) 있을 때 `cids` filter가 식별자가 없는 segment를 받아들일 확률은 1% 미만이고, 다른 filter도 보통의 개수(이름 400, surface 100, session 100)에서 1% 미만이다.
+
+**파일.** 모든 정수는 little-endian이다. 파일은 20,480바이트의 상태 block 둘과, 가득 찬 segment의 기록을 순서대로 이은 것이며 기록 하나는 18,760바이트다. 기록은 항목 64바이트, 표의 순서대로 다섯 filter, 검사합(앞 바이트의 FNV-1a 64)이다. 항목은 `offset`(u64), `length`(u64), `first_seq`(u64), `last_seq`(u64), `events`(u32), 0인 4바이트, `min_ts_us`(i64), `max_ts_us`(i64), level, layer, class의 비트(각각 1바이트), 0인 5바이트다. 상태 block은 차례로 magic `SKIX`, 버전 1(u32), segment의 줄 수 4,096(u32), 첫 줄의 바이트 길이(u32), block의 세대(u64), 줄바꿈을 포함한 첫 줄의 FNV-1a 64 hash, `indexed_bytes`(u64, 마지막으로 색인한 줄의 끝), 파일을 색인할 때 읽은 `source_size`(u64)와 `source_mtime_ns`(i64), `first_seq`, `last_seq`, 색인한 줄 수(각각 u64), 가득 찬 segment 수(u32), 마지막 부분 segment의 기록이 뒤따르는지(u32), 그 기록, 0 채움, 마지막 8바이트의 block 검사합(앞 바이트의 FNV-1a 64)을 담는다. 갱신은 새로 가득 찬 기록을 먼저 쓰고, 유효한 block이 차지하지 않은 block(짝수 세대는 block 0)에 세대가 하나 큰 block을 쓴다. 그래서 갱신 도중 끝난 프로세스에는 유효한 이전 block이 남고, 유효한 block의 가득 찬 segment 뒤에 있는 기록은 무시하며 다음 갱신이 덮어쓴다.
+
+**최신 여부.** `source_size`와 `source_mtime_ns`가 파일의 크기와 수정 시각과 같으면 색인은 최신이다. 파일이 더 크고 첫 줄의 hash가 기록과 같으며 크기가 `indexed_bytes` 이상이면 색인이 파일보다 오래된 것이므로, 갱신은 `indexed_bytes` 뒤의 줄을 부분 segment부터 색인한다. 그 밖의 차이(더 작은 파일, 다른 첫 줄, 같은 크기에서 다른 수정 시각)는 색인한 파일이 아니라는 뜻이므로 갱신은 파일 전체를 다시 색인한다. 없는 색인은 만든다. 다음은 파일과 발견한 내용을 밝히는 명시적 오류다: 다른 버전의 색인, 검사합이 맞지 않는 block이나 기록, block과 기록보다 짧은 파일, schema 2의 `log.open`이 아닌 첫 줄, event 구조를 어기는 줄(`<file>:<line>: <reason>`). 다른 버전의 색인을 읽는 코드는 없고, 실패한 갱신은 색인의 이전 상태를 그대로 두며, 손상된 색인은 오류가 이름을 밝힌 뒤 사람이 지운다.
+
+**색인을 쓰는 쪽.** 색인은 timer가 아니라 파일의 event로 파일을 따라간다. host의 writer가 batch를 쓴 뒤([writer](#writer)) 쓰기 알림이 깨우는 host의 goroutine이나 thread가 덧붙은 줄을 색인하고, 색인하는 동안 오는 알림은 갱신 한 번으로 합쳐진다. 질의도 읽을 각 파일의 색인을 쓰기 전에 최신으로 맞추므로, host가 쓰지 않은 색인(sidecar의 파일, host가 실행 중이 아닌 설정 디렉터리)은 `sok debug query`와 host의 질의가 만들고 갱신한다. 한 색인의 갱신은 색인 파일의 advisory lock(`flock`)으로 프로세스 사이에서 서로 배타적이며, 갱신은 lock을 잡은 뒤 연 파일이 아직 그 경로의 파일인지 확인하므로 회전이 두 파일을 섞을 수 없다. 색인이 이미 최신이면 갱신은 아무것도 바꾸지 않으므로 멱등이다. host는 파일 전체로 만든 색인마다 level `info`의 event `host.log.index_rebuilt`(`file`, `reason`, `lines`, `bytes`, `micros`)를 저장하고, 갱신의 다른 실패는 문구마다 한 번 application log에 장소 `log index`의 `error` 기록으로 보인다. 증분 갱신은 event를 저장하지 않는다. 그 event가 다음 갱신이 색인할 줄이 되기 때문이다.
+
+**회전.** writer가 파일을 회전할 때 그 파일의 색인 lock을 잡고 색인을 최신으로 맞춘 뒤 세대 이름을 바꾸고 색인 파일도 함께 바꾼다(`<name>.idx`는 `<name>.1.idx`, `<name>.1.idx`는 `<name>.2.idx`가 되고 지워진 세대의 색인은 지운다). 닫힌 세대의 색인은 완전하며 다시 만들지 않는다.
+
+**golden fixture.** `packages/log-contract/fixtures/query`는 event 파일, 두 구현이 각 파일에서 만들어야 하는 색인의 SHA-256(원본의 수정 시각을 1,000,000,000초로 정한 상태), 질의와 기대하는 page를 담는다. Go와 Rust 구현의 test는 파일에서 색인을 만들어 SHA-256을 비교하고 질의를 실행한다.
+
+## 질의
+
+언어마다 질의 구현이 하나씩 있고(Go는 module `sok`, Rust는 crate `soksak-sok-tauriv2`) `<config-dir>/logs/`의 event 파일을 색인으로 읽어 page 하나를 답한다. 두 구현은 같은 파일과 같은 매개변수에 같은 page, 같은 cursor, 같은 오류 문구를 주며 golden fixture가 이를 확인한다.
+
+**파일.** 질의의 event 파일은 `logs/`에서 이름이 `<role>-<boot>.jsonl`, `<role>-<boot>.jsonl.<n>`(`n`은 1부터 5), `<role>-<boot>.debug.jsonl`, `<role>-<boot>.debug.jsonl.<n>`인 파일이다. `role`은 소문자 단어이고 `boot`은 이름의 나머지다. `.stderr`, `.crash`, `.idx` 파일, 상태 파일, capture는 event 파일이 아니다. *프로세스*는 role과 boot의 쌍(`host-1791500000-4242`)이고, 한 프로세스의 파일(파일, 그 세대, 그 debug 파일)은 하나의 `seq` 공간을 공유한다([event](#event)). *channel*은 파일의 집합이다: `other`는 debug 파일이 아닌 파일, `debug`는 debug 파일, `all`은 둘 다다. F160.7이 끝나면 writer가 `error`, `warn`, `info`를 파일에, `debug`를 debug 파일에 저장한다. 그때까지는 모든 level을 파일에 저장하며 질의는 있는 파일을 읽는다.
+
+**매개변수.** endpoint 메서드 `log.query`와 host 호출 `logQuery`의 매개변수는 객체 하나이고, 표에 없는 항목은 거절한다. 주지 않은 항목은 제한하지 않는다.
+
+| 항목 | 뜻 |
+| --- | --- |
+| `channel` | `other`(기본), `debug`, `all` |
+| `level` | 보이는 가장 낮은 심각도(`error`, `warn`, `info`, `debug`, `trace`, 기본 `trace`). 그 level이거나 더 심각한 줄이 통과한다 |
+| `class` | class 하나: `lifecycle`, `input`, `call`, `io`, `frame` |
+| `layer` | layer 하나: `native`, `host`, `page`, `plugin`, `sidecar`, `sok` |
+| `event` | 정확한 event 이름 |
+| `event_prefix` | 점 앞에서 끝나는 event 이름이나 그 앞부분: `native.input`은 `native.input`과 `native.input.`으로 시작하는 모든 이름을 통과시킨다. 점으로 끝나는 앞부분은 거절한다. `event`와 `event_prefix`를 함께 주지 않는다 |
+| `surface`, `session` | 식별자 전체: 줄의 항목, 줄에 없으면 `fields`의 같은 이름의 문자열 항목(host writer는 그곳에 저장한다) |
+| `cid` | 줄의 `cids`가 담은 상관 식별자 하나 |
+| `run` | run 식별자: channel의 파일에서 `fields.run`이 그 식별자인 가장 이른 `host.test.start`부터 가장 늦은 `host.test.end`까지의 시간 범위(start에 end가 없으면 파일 끝까지). [감사](#검사)가 다른 프로세스의 event를 놓는 것처럼 모든 파일에 `ts_us`로 적용하며, `from_us`, `to_us`와는 교집합이다. `host.test.start`가 없는 run은 오류 `log query run "<run>" has no host.test.start in the channel`이다 |
+| `text` | 파일에 적힌 JSON 글인 줄이 그 글을 포함한다. ASCII 글자는 대소문자를 구분하지 않는다 |
+| `from_us`, `to_us` | `ts_us`의 양 끝 포함 경계, 음이 아닌 정수. `from_us`는 `to_us`보다 늦지 않다 |
+| `order` | `asc`(기본, 오래된 것 먼저) 또는 `desc`(새 것 먼저) |
+| `limit` | page의 행 수, 1부터 5,000까지의 정수(기본 500) |
+| `after` | 앞 page의 마지막 행의 cursor `{ts_us, role, boot, seq}`: page는 순서에서 그 뒤의 행(`desc`는 앞의 행)을 담는다 |
+| `since` | 프로세스 이름(`<role>-<boot>`)에서 `seq`로 가는 객체: 그 프로세스에서 `seq`가 그 값 이하인 행은 뺀다. 이름을 주지 않은 프로세스의 행은 제한하지 않는다 |
+
+거절한 매개변수의 오류 문구는 `log query <항목> <이유>`이다: `log query has no parameter <name>`, `log query channel "<value>" is not one of other, debug, all`, `log query level "<value>" is not one of error, warn, info, debug, trace`, `log query class "<value>" is not one of lifecycle, input, call, io, frame`, `log query layer "<value>" is not one of native, host, page, plugin, sidecar, sok`, `log query <member> must be a non-empty string, found <value>`, `log query <member> must be a non-negative integer, found <value>`, `log query from_us is later than to_us: <from_us> <to_us>`, `log query limit must be an integer from 1 to 5000, found <value>`, `log query order "<value>" is not one of asc, desc`, `log query after must be {ts_us, role, boot, seq}, found <value>`, `log query since must map process names to integers, found <value>`, `log query takes event or event_prefix, not both`, `log query event_prefix "<value>" must not end with a dot`. 값은 JSON으로 보인다.
+
+**순서와 cursor.** 행은 `ts_us`, `role`, `boot`, `seq` 순으로 정렬하며 이것이 행의 key다. channel은 이 key로 합쳐지므로 debug 파일과 한 프로세스의 파일은 시각과 `seq`로 섞인다. 행의 cursor는 그 key다. page는 순서에서 cursor 뒤의 `limit`개 행을 담고, 파일이 끝나거나 행의 줄 글이 8,388,608바이트를 넘게 되면 더 적게 담는다(첫 행은 항상 담는다). `next`는 뒤따르는 행이 있으면 page의 마지막 행의 cursor이고 없으면 `null`이다.
+
+**답.** `{rows, next, tail, scanned}`:
+
+- `rows`는 객체 `{role, boot, file, offset, event}`의 목록이다: 프로세스, 줄을 가진 파일(설정 디렉터리 기준 `logs/...`), 줄의 바이트 offset, 파일에 적힌 event 객체인 줄.
+- `next`는 `after`로 넘길 cursor 또는 `null`이다.
+- `tail`은 질의가 읽은 시점에 각 프로세스의 색인이 덮는 가장 큰 `seq`다. 파일을 따라가는 client는 이를 `since`로 시작한다([debug](debug.ko.md#타임라인)).
+- `scanned`는 `{files, segments, read, lines, rebuilt}`다: channel의 파일 수, 그 segment 수, 줄을 읽은 segment 수, 해석한 줄 수, 질의 중에 파일 전체로 만든 색인 수.
+
+**평가.** 질의는 각 파일의 색인을 최신으로 맞춘 뒤 행을 가질 수 있는 segment만 남긴다: 시간 범위가 경계와 cursor에 겹치고, level(그 level과 더 심각한 level), layer, class의 비트가 값을 담으며, event 이름이나 앞부분, surface, session, cid의 filter가 받아들이는 segment다. 남긴 segment를 `min_ts_us` 순(`desc`는 `max_ts_us` 내림차순)으로 읽고, segment의 줄을 하나씩 완전히 검사하며, 지금까지 찾은 key가 가장 작은(`desc`는 가장 큰) 행 `limit + 1`개를 유지한다. 다음 segment가 유지한 행보다 앞서는 행을 가질 수 없으면 멈춘다. 그래서 page의 비용은 파일 크기가 아니라 행을 가질 수 있는 segment의 수에 달려 있다. `text`만 있는 질의는 channel의 모든 segment를 읽는다. event 구조를 어기는 줄은 오류 `<file>:<line>: <reason>`이다.
+
+**사용하는 쪽.** debug 화면은 `logQuery`를 호출하고([debug](debug.ko.md#타임라인)), `sok debug query`는 application에 연결하지 않고 도구 프로세스에서 같은 구현을 실행하며([command line](cli.ko.md#명령)), endpoint client는 `log.query`를 호출한다([endpoint](endpoint.ko.md#log-query)). host는 자기 언어의 구현으로 `log.query`와 `logQuery`에 답한다. host 밖의 script는 파일을 읽어도 된다: `scripts/audit-run.mjs`와 `scripts/check-events.mjs`는 모든 파일의 모든 줄(구조, 연속한 `seq`, chain)을 판정하므로 검색이 아니라 모든 줄을 한 번 지나는 일이고 색인으로 줄어들지 않는다. 줄의 일부(시험의 범위, `cids`의 chain)를 찾는 script는 `sok debug query`를 쓴다.
+
+**측정.** event 1,000,000개 로그의 시간은 [features](../features.ko.md)(F160.24)에 있으며, 각 구현의 benchmark `log_query_benchmark`는 그 로그를 만들어 색인을 만드는 시간과 질의 종류별 시간을 출력한다.
+
 ## catalog
 
 event를 내는 각 저장소는 `events.json`에 event를 선언한다(이 저장소는 [events.json](events.json)이며 계층 `native`, `host`, `page`를 소유한다. `page.record.<level>`처럼 자리 표시자를 가진 이름은 계열을 선언한다. `level`은 level 하나 또는 level 목록이고, 이름이 `?`로 끝나는 field는 선택이며, `string|null` 같은 타입은 각 부분을 받아들이고, 계층 `sidecar`는 host가 저장하는 sidecar 표준 오류의 줄인 `sidecar.record.<level>`만 담는다. `make events-check`는 소스의 emit 지점을 읽어 선언되지 않은 채 emit된 이름, emit 지점이 없는 선언된 event, 선언이 허용하지 않는 literal 지점의 level이나 field를 실패로 보고한다. 지점은 이름을 literal로 주고(page의 template은 계열이다), 이름을 만드는 지점 위의 주석 `events: <names>`는 그것이 만드는 선언된 이름을 적으며, `events: forwarded`는 그 지점이 호출자의 이름을 넘긴다고 밝힌다. `node scripts/check-events.mjs --logs <config-dir>…`는 창 검사가 남긴 모든 층의 event 파일을 감사한다. [검사](#검사) 참고): event마다 이름, 층, class, level, 필수 field와 그 타입, 가릴 인자, 인자의 크기 상한, 설명. 저장소는 다른 모든 검사에서 자기 소스를 검사하듯 자기 소스를 자기 catalog로 검사한다. 이 저장소는 catalog의 schema와 `native`·`host`·`sok` 층, page의 event를 소유한다. plugin이나 sidecar는 manifest(`events`, `executable`처럼 패키지 안의 경로)에 자기 catalog 파일을 적고, 릴리스는 그 파일을 담으며, viewer가 설치된 manifest의 catalog를 읽는다. 이 저장소는 그것을 이름으로 부르지 않는다.
@@ -123,7 +204,7 @@ event를 내는 각 저장소는 `events.json`에 event를 선언한다(이 저�
 
 다음 입구는 호출 지점이 기록을 쓰지 않아도 기록한다.
 
-- 메인 page의 host 호출: 두 runtime이 `host.call` 둘레에 두는 감싸개(`settlingCalls`)가 필드 `name`, `args`(인자의 JSON, 직렬화하는 동안 1024바이트에서 자르며 `truncated: true`), `micros`, `ok`, 거절된 호출이면 `error`를 가진 event `page.call`을 낸다. level은 `debug`이고 거절된 호출은 `warn`이다. 호출 `log`와 `performance`는 기록하지 않는다. 기록된 `log` 호출이 자기 자신을 기록하기 때문이다. `debugReadRange`도 기록하지 않는다. debug 화면은 기록기가 알린 event에 답해 읽기 때문이다. `overlayUpdate`와 `overlayPlace`도 기록하지 않는다. 네이티브 모달을 그리고 놓는 호출로 집계로 저장하는 class `frame`이고, event 파일을 따라가는 화면은 늘어난 행마다 다시 그리므로 기록하면 스스로 먹이가 되기 때문이다;
+- 메인 page의 host 호출: 두 runtime이 `host.call` 둘레에 두는 감싸개(`settlingCalls`)가 필드 `name`, `args`(인자의 JSON, 직렬화하는 동안 1024바이트에서 자르며 `truncated: true`), `micros`, `ok`, 거절된 호출이면 `error`를 가진 event `page.call`을 낸다. level은 `debug`이고 거절된 호출은 `warn`이다. 호출 `log`와 `performance`는 기록하지 않는다. 기록된 `log` 호출이 자기 자신을 기록하기 때문이다. `logQuery`도 기록하지 않는다. debug 화면은 기록기가 알린 event에 답해 묻기 때문이다. `overlayUpdate`와 `overlayPlace`도 기록하지 않는다. 네이티브 모달을 그리고 놓는 호출로 집계로 저장하는 class `frame`이고, event 파일을 따라가는 화면은 늘어난 행마다 다시 그리므로 기록하면 스스로 먹이가 되기 때문이다;
 - 표면 문서의 host 호출: 각 application의 runtime `page` 객체는 모든 호출을 `surfaceCalls`(`packages/workbench/surface-calls.js`)로 보내고, 이것이 두 runtime에서 같은 이름과 같은 인자로 같은 event `page.call`을 낸다(인자는 Wails runtime이 넘기는 호출의 인자다). event는 문서의 batcher를 거치므로 한 turn의 호출은 호출 `log` 한 번으로 host에 가고, 문서의 `report`도 같은 batcher 뒤에 쌓여 문서의 기록과 호출이 순서를 지킨다. 호출 `log`는 기록하지 않는다. 중계가 실패하면 문서의 console에 쓴다. 문서에는 달리 알릴 곳이 없기 때문이다;
 - 창 event: host가 창에 등록하는 모든 event는 `window`와 `kind`를 가진 event `host.window.event`다. host는 자기 framework가 알리는 kind를 낸다(Wails는 `show`, `hide`, `focus`, `lost_focus`, `web_process_ended`, `navigation_committed`를, Tauri는 `occlusion_changed`를 알린다). 그래서 host가 저장하는 kind는 [host 계약](host-contract.ko.md)의 목록의 부분집합이다;
 - 애플리케이션 event: host가 애플리케이션에 등록하는 모든 event는 `kind`를 가진 event `host.app.event`다. host는 자기 framework가 알리는 kind를 저장한다(Wails는 `started`, `activated`, `deactivated`, `exit_requested`, `exit`를, Tauri는 `started`, `exit_requested`, `exit`를 알린다);
