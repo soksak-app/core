@@ -835,13 +835,13 @@ func ReadLogIndex(path string) (LogIndexInfo, error) {
 	return info, nil
 }
 
-// RotateLogIndexes runs rotate, which renames the generations of the event file at path (the file becomes generation 1, the
-// generations move up and the one beyond `generations` is removed), and moves the index files with them. It first brings the
-// index of the file up to date while it holds the lock of that index, so the index of the closed generation is complete. The
-// rotation of the event file does not wait for the index: when the index cannot be locked or brought up to date, rotate still runs
-// and the index files still move, and the error says that the index of the closed file is not complete. A rotate that fails leaves the
-// index files where they are.
-func RotateLogIndexes(path string, generations int, rotate func() error) (err error) {
+// RotateLogIndexes runs rotate, which renames the event file at path to generation `generation` and starts a new file, and moves the
+// index file with it (`<path>.idx` becomes `<path>.<generation>.idx`); no other generation and no other index file is touched. It first
+// brings the index of the file up to date while it holds the lock of that index, so the index of the closed generation is complete.
+// The rotation of the event file does not wait for the index: when the index cannot be locked or brought up to date, rotate still runs
+// and the index file still moves, and the error says that the index of the closed file is not complete. A rotate that fails leaves the
+// index file where it is.
+func RotateLogIndexes(path string, generation int, rotate func() error) (err error) {
 	source, idx, err := lockedIndex(path)
 	if err != nil {
 		if rotateErr := rotate(); rotateErr != nil {
@@ -864,16 +864,8 @@ func RotateLogIndexes(path string, generations int, rotate func() error) (err er
 	if err := rotate(); err != nil {
 		return err
 	}
-	generation := func(n int) string { return fmt.Sprintf("%s.%d.idx", path, n) }
-	if err := os.Remove(generation(generations)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fileError(generation(generations), err)
-	}
-	for n := generations - 1; n >= 1; n-- {
-		if err := os.Rename(generation(n), generation(n+1)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return fileError(generation(n), err)
-		}
-	}
-	if err := os.Rename(path+".idx", generation(1)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	// default: a file whose index was never built has no index file to move, and a query builds the index of the closed file.
+	if err := os.Rename(path+".idx", fmt.Sprintf("%s.%d.idx", path, generation)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fileError(path+".idx", err)
 	}
 	if refreshErr != nil {

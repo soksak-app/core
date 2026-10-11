@@ -18,6 +18,8 @@ use serde::Serialize;
 use serde_json::json;
 use serde_json::value::{to_raw_value, RawValue};
 
+use crate::event_classes::{class_of, Class};
+
 /// The schema number of the lines that this writer writes. Schema 2 adds `mono_ns` to every line.
 pub const SCHEMA: u64 = 2;
 
@@ -65,11 +67,30 @@ struct Pending {
     mono_ns: u64,
     level: Level,
     event: String,
+    /// The class that the catalog declares for the event; `None` for a name the catalog does not declare, which the line marks
+    /// `undeclared`.
+    class: Option<Class>,
     /// The fields as JSON text, serialized once by the producer.
     fields: Box<RawValue>,
     bytes: usize,
     /// The size in bytes of the fields text before it was cut to its head, or `None` for an event that was not cut.
     truncated: Option<usize>,
+}
+
+impl Pending {
+    /// An event that the writer itself creates (`log.open`, `log.dropped`), with both clocks read now.
+    fn writer_event(level: Level, event: &str, fields: Box<RawValue>) -> Pending {
+        Pending {
+            ts_us: now_us(),
+            mono_ns: monotonic_ns(),
+            level,
+            event: event.into(),
+            class: class_of(event),
+            fields,
+            bytes: 0,
+            truncated: None,
+        }
+    }
 }
 
 /// What the queue carries: an event, or a request of the owner.
@@ -81,10 +102,44 @@ enum Message {
     Stop,
 }
 
-/// The loss that the queue counted since the writer last recorded it.
+/// The file of the writer that stores a level: the main file holds error, warn and info (the channel `other`), and the debug file
+/// holds debug and trace (the channel `debug`) (docs/spec/logging.md#files).
+#[derive(Clone, Copy)]
+enum Channel {
+    Other,
+    Debug,
+}
+
+impl Channel {
+    const ALL: [Channel; 2] = [Channel::Other, Channel::Debug];
+
+    fn of(level: Level) -> Channel {
+        match level {
+            Level::Debug | Level::Trace => Channel::Debug,
+            Level::Error | Level::Warn | Level::Info => Channel::Other,
+        }
+    }
+
+    /// The name of the channel in `log.dropped`.
+    fn name(self) -> &'static str {
+        match self {
+            Channel::Other => "other",
+            Channel::Debug => "debug",
+        }
+    }
+
+    fn index(self) -> usize {
+        match self {
+            Channel::Other => 0,
+            Channel::Debug => 1,
+        }
+    }
+}
+
+/// The loss that the queue counted since the writer last recorded it, for each channel.
 struct Loss {
-    events: AtomicU64,
-    bytes: AtomicU64,
+    events: [AtomicU64; 2],
+    bytes: [AtomicU64; 2],
 }
 
 /// The writer of one run of the tool.
@@ -169,9 +224,15 @@ struct Record<'a> {
     mono_ns: u64,
     seq: u64,
     level: &'a str,
+    /// The class of the catalog entry of the event; absent for an event the catalog does not declare.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    class: Option<&'static str>,
     layer: &'a str,
     event: &'a str,
     fields: &'a RawValue,
+    /// True for an event whose name the catalog does not declare; such a line has no class.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    undeclared: bool,
     /// The size in bytes of the fields before they were cut; absent for an event that was not cut.
     #[serde(skip_serializing_if = "Option::is_none")]
     truncated: Option<usize>,
@@ -183,9 +244,11 @@ fn line(seq: u64, pending: &Pending) -> Result<String, serde_json::Error> {
         mono_ns: pending.mono_ns,
         seq,
         level: pending.level.name(),
+        class: pending.class.map(Class::as_str),
         layer: LAYER,
         event: &pending.event,
         fields: &pending.fields,
+        undeclared: pending.class.is_none(),
         truncated: pending.truncated,
     })?;
     text.push('\n');
@@ -221,26 +284,24 @@ impl EventLog {
         let queued_events = Arc::new(AtomicUsize::new(0));
         let queued_bytes = Arc::new(AtomicUsize::new(0));
         let loss = Arc::new(Loss {
-            events: AtomicU64::new(0),
-            bytes: AtomicU64::new(0),
+            events: [AtomicU64::new(0), AtomicU64::new(0)],
+            bytes: [AtomicU64::new(0), AtomicU64::new(0)],
         });
-        let open = Pending {
-            ts_us: now_us(),
-            mono_ns: monotonic_ns(),
-            level: Level::Info,
-            event: "log.open".into(),
-            fields: to_raw_value(
+        let debug_path = directory.join(format!("{ROLE}-{boot}.debug.jsonl"));
+        let open = Pending::writer_event(
+            Level::Info,
+            "log.open",
+            to_raw_value(
                 &json!({"schema": SCHEMA, "pid": std::process::id(), "role": ROLE, "boot": boot}),
             )
             .map_err(|error| error.to_string())?,
-            bytes: 0,
-            truncated: None,
-        };
+        );
         let writer = {
             let (queued_events, queued_bytes, loss) =
                 (queued_events.clone(), queued_bytes.clone(), loss.clone());
+            let paths = [path.clone(), debug_path];
             crate::routine::spawn_named("event-log-writer", move || {
-                write_loop(receiver, file, open, queued_events, queued_bytes, loss)
+                write_loop(receiver, file, paths, open, queued_events, queued_bytes, loss)
             })
         };
         Ok(EventLog {
@@ -254,7 +315,8 @@ impl EventLog {
         })
     }
 
-    /// The file of this run.
+    /// The main file of this run (error, warn and info); the debug file (debug and trace) lies beside it and exists once its first
+    /// event was written.
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -268,14 +330,14 @@ impl EventLog {
     /// serialized once, and only after the queue is known to have room for another event.
     pub fn emit<T: Serialize>(&self, level: Level, event: &str, fields: &T) -> bool {
         if self.queued_events.load(Ordering::SeqCst) >= QUEUE_EVENTS {
-            self.count_loss(event.len());
+            self.count_loss(Channel::of(level), event.len());
             return false;
         }
         let fields = match to_raw_value(fields) {
             Ok(fields) => fields,
             Err(error) => {
                 // A value that cannot be serialized is a defect of the caller; it is counted in place of the event.
-                self.count_loss(event.len());
+                self.count_loss(Channel::of(level), event.len());
                 eprintln!("event writer: the fields of {event} cannot be serialized: {error}");
                 return false;
             }
@@ -283,7 +345,7 @@ impl EventLog {
         let (fields, truncated) = cap_fields(fields);
         let bytes = fields.get().len() + event.len();
         if self.queued_bytes.load(Ordering::SeqCst) + bytes > QUEUE_BYTES {
-            self.count_loss(bytes);
+            self.count_loss(Channel::of(level), bytes);
             return false;
         }
         let pending = Pending {
@@ -291,6 +353,7 @@ impl EventLog {
             mono_ns: monotonic_ns(),
             level,
             event: event.to_string(),
+            class: class_of(event),
             fields,
             bytes,
             truncated,
@@ -302,15 +365,15 @@ impl EventLog {
             Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => {
                 self.queued_bytes.fetch_sub(bytes, Ordering::SeqCst);
                 self.queued_events.fetch_sub(1, Ordering::SeqCst);
-                self.count_loss(bytes);
+                self.count_loss(Channel::of(level), bytes);
                 false
             }
         }
     }
 
-    fn count_loss(&self, bytes: usize) {
-        self.loss.events.fetch_add(1, Ordering::SeqCst);
-        self.loss.bytes.fetch_add(bytes as u64, Ordering::SeqCst);
+    fn count_loss(&self, channel: Channel, bytes: usize) {
+        self.loss.events[channel.index()].fetch_add(1, Ordering::SeqCst);
+        self.loss.bytes[channel.index()].fetch_add(bytes as u64, Ordering::SeqCst);
     }
 
     /// Writes everything that is queued and waits until it is on disk, at most `deadline`.
@@ -346,58 +409,101 @@ impl EventLog {
     }
 }
 
-/// The state of the writer thread: the file, the batch waiting to be written and the next `seq`.
-struct Output {
-    file: File,
+/// One file of the writer. The debug file is created when its first line is written, so a run without a debug event leaves no empty
+/// file.
+struct OutputFile {
+    path: PathBuf,
+    file: Option<File>,
     batch: String,
+}
+
+/// The state of the writer thread: the two files, their batches and the next `seq`, which runs across both files.
+struct Output {
+    files: [OutputFile; 2],
+    /// The fields of `log.open`, which the first line of every file holds.
+    open_fields: String,
     seq: u64,
 }
 
 impl Output {
     fn push(&mut self, pending: &Pending) {
+        let index = Channel::of(pending.level).index();
+        if self.files[index].file.is_none() {
+            // The standard library opens the file close-on-exec, so a child process does not inherit it.
+            match OpenOptions::new()
+                .create_new(true)
+                .append(true)
+                .mode(0o600)
+                .open(&self.files[index].path)
+            {
+                Ok(file) => {
+                    self.files[index].file = Some(file);
+                    let open = Pending::writer_event(
+                        Level::Info,
+                        "log.open",
+                        RawValue::from_string(self.open_fields.clone())
+                            .expect("the fields of log.open are JSON"),
+                    );
+                    self.append(index, &open);
+                }
+                Err(error) => {
+                    // The event is not written; its seq stays taken, so the audit shows the gap next to this report.
+                    self.seq += 1;
+                    eprintln!(
+                        "event writer: {} cannot be written: {}: {error}",
+                        pending.event,
+                        self.files[index].path.display()
+                    );
+                    return;
+                }
+            }
+        }
+        self.append(index, pending);
+    }
+
+    fn append(&mut self, index: usize, pending: &Pending) {
         self.seq += 1;
         match line(self.seq, pending) {
             // The line is not written; the seq stays taken, so the audit shows the gap next to this report.
             Err(error) => eprintln!("event writer: {} cannot be written: {error}", pending.event),
-            Ok(text) => self.batch.push_str(&text),
+            Ok(text) => self.files[index].batch.push_str(&text),
         }
     }
 
-    /// Stores one `log.dropped` after the range of `seq` that the refused events would have had.
+    /// Stores one `log.dropped` for each channel after the range of `seq` that its refused events would have had.
     fn record_loss(&mut self, loss: &Loss) {
-        let events = loss.events.swap(0, Ordering::SeqCst);
-        let bytes = loss.bytes.swap(0, Ordering::SeqCst);
-        if events == 0 {
-            return;
-        }
-        // The refused events had no seq. Their numbers are skipped, and log.dropped is stored after the range that it
-        // names (docs/spec/logging.md#event).
-        let from = self.seq + 1;
-        self.seq += events;
-        let fields = json!({"from_seq": from, "to_seq": self.seq, "count": events, "bytes": bytes, "reason": "the queue was full"});
-        match to_raw_value(&fields) {
-            Ok(fields) => self.push(&Pending {
-                ts_us: now_us(),
-                mono_ns: monotonic_ns(),
-                level: Level::Warn,
-                event: "log.dropped".into(),
-                fields,
-                bytes: 0,
-                truncated: None,
-            }),
-            Err(error) => eprintln!("event writer: log.dropped cannot be written: {error}"),
+        for channel in Channel::ALL {
+            let events = loss.events[channel.index()].swap(0, Ordering::SeqCst);
+            let bytes = loss.bytes[channel.index()].swap(0, Ordering::SeqCst);
+            if events == 0 {
+                continue;
+            }
+            // The refused events had no seq. Their numbers are skipped, and log.dropped is stored after the range that it
+            // names (docs/spec/logging.md#event).
+            let from = self.seq + 1;
+            self.seq += events;
+            let fields = json!({"from_seq": from, "to_seq": self.seq, "count": events, "bytes": bytes, "reason": "the queue was full", "channel": channel.name()});
+            match to_raw_value(&fields) {
+                Ok(fields) => self.push(&Pending::writer_event(Level::Warn, "log.dropped", fields)),
+                Err(error) => eprintln!("event writer: log.dropped cannot be written: {error}"),
+            }
         }
     }
 
     fn flush(&mut self) {
-        if self.batch.is_empty() {
-            return;
+        for file in &mut self.files {
+            if file.batch.is_empty() {
+                continue;
+            }
+            let Some(handle) = file.file.as_mut() else {
+                continue;
+            };
+            // A failed write is reported on the standard error; the writer keeps running for the next batch.
+            if let Err(error) = handle.write_all(file.batch.as_bytes()) {
+                eprintln!("event writer: {error}");
+            }
+            file.batch.clear();
         }
-        // A failed write is reported on the standard error; the writer keeps running for the next batch.
-        if let Err(error) = self.file.write_all(self.batch.as_bytes()) {
-            eprintln!("event writer: {error}");
-        }
-        self.batch.clear();
     }
 
     fn write(&mut self, loss: &Loss) {
@@ -408,18 +514,32 @@ impl Output {
 
 fn write_loop(
     receiver: Receiver<Message>,
-    file: File,
+    main: File,
+    paths: [PathBuf; 2],
     open: Pending,
     queued_events: Arc<AtomicUsize>,
     queued_bytes: Arc<AtomicUsize>,
     loss: Arc<Loss>,
 ) {
+    let [main_path, debug_path] = paths;
     let mut output = Output {
-        file,
-        batch: String::new(),
+        files: [
+            OutputFile {
+                path: main_path,
+                file: Some(main),
+                batch: String::new(),
+            },
+            OutputFile {
+                path: debug_path,
+                file: None,
+                batch: String::new(),
+            },
+        ],
+        open_fields: open.fields.get().to_string(),
         seq: 0,
     };
     output.push(&open);
+
     let take = |output: &mut Output, pending: Pending| {
         queued_bytes.fetch_sub(pending.bytes, Ordering::SeqCst);
         queued_events.fetch_sub(1, Ordering::SeqCst);

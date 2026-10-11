@@ -28,7 +28,7 @@ var (
 	queryChannels = []string{"other", "debug", "all"}
 	queryOrders   = []string{"asc", "desc"}
 	// logFileName is the name of an event file: role, boot, the debug marker and the generation.
-	logFileName = regexp.MustCompile(`^([a-z][a-z0-9]*)-(.+?)(\.debug)?\.jsonl(?:\.([1-5]))?$`)
+	logFileName = regexp.MustCompile(`^([a-z][a-z0-9]*)-(.+?)(\.debug)?\.jsonl(?:\.([1-9][0-9]*))?$`)
 	// queryMembers are the parameters of a query in the order that they are checked.
 	queryMembers = []string{"channel", "level", "class", "layer", "event", "event_prefix", "surface", "session", "cid", "run", "text", "from_us", "to_us", "limit", "order", "after", "since"}
 )

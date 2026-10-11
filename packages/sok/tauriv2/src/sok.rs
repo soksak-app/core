@@ -14,6 +14,7 @@ mod debug;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
 pub mod endpoint;
+pub mod event_classes;
 pub mod event_log;
 pub mod fetch;
 mod files;

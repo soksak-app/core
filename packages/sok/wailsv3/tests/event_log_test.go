@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -22,33 +23,46 @@ type loggedEvent struct {
 	MonoNs   uint64         `json:"mono_ns"`
 	Seq      uint64         `json:"seq"`
 	Level    string         `json:"level"`
+	Class    string         `json:"class"`
 	Layer    string         `json:"layer"`
 	Event    string         `json:"event"`
 	Fields   map[string]any `json:"fields"`
+	// Undeclared is set on a line whose event the catalog does not declare.
+	Undeclared bool `json:"undeclared"`
 }
 
-// eventsOf reads the one event file that a run left in the logs folder of config.
+// eventsOf reads the events that a run left in the logs folder of config: the main file and, when the run stored a debug event, the
+// debug file, in the order of seq.
 func eventsOf(t *testing.T, config string) []loggedEvent {
 	t.Helper()
 	files, err := filepath.Glob(filepath.Join(config, "logs", "sok-*.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 1 {
-		t.Fatalf("logs/ of %s holds %d event files of the tool, want 1: %v", config, len(files), files)
+	var main []string
+	for _, file := range files {
+		if !strings.HasSuffix(file, ".debug.jsonl") {
+			main = append(main, file)
+		}
 	}
-	text, err := os.ReadFile(files[0])
-	if err != nil {
-		t.Fatal(err)
+	if len(main) != 1 || len(files) > 2 {
+		t.Fatalf("logs/ of %s holds the event files %v of the tool, want one main file and at most one debug file", config, files)
 	}
 	var events []loggedEvent
-	for _, line := range strings.Split(strings.TrimSuffix(string(text), "\n"), "\n") {
-		var event loggedEvent
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			t.Fatalf("%s: %q is not an event: %v", files[0], line, err)
+	for _, file := range files {
+		text, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
 		}
-		events = append(events, event)
+		for _, line := range strings.Split(strings.TrimSuffix(string(text), "\n"), "\n") {
+			var event loggedEvent
+			if err := json.Unmarshal([]byte(line), &event); err != nil {
+				t.Fatalf("%s: %q is not an event: %v", file, line, err)
+			}
+			events = append(events, event)
+		}
 	}
+	sort.SliceStable(events, func(i, j int) bool { return events[i].Seq < events[j].Seq })
 	return events
 }
 

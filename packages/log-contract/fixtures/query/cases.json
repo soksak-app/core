@@ -37,7 +37,7 @@
       "2026-10-08T22:53:20.100000Z info native native.input.key_down window=w1 surface=tab-x cids=b1.1 keyCode=36 characters=\"\\r\"",
       "2026-10-08T22:53:20.200000Z debug page page.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
       "2026-10-08T22:53:21.000000Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
-      "2026-10-08T22:53:21.000001Z info host log.rotated bytes=1024 kept=5 removed=null",
+      "2026-10-08T22:53:21.000001Z info host log.rotated bytes=1024 generation=1",
       "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"vt\" boot=\"v1\"",
       "2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
@@ -126,7 +126,7 @@
       "2026-10-08T22:53:20.100000Z info native native.input.key_down window=w1 surface=tab-x cids=b1.1 keyCode=36 characters=\"\\r\"",
       "2026-10-08T22:53:20.200000Z debug page page.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
       "2026-10-08T22:53:21.000000Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
-      "2026-10-08T22:53:21.000001Z info host log.rotated bytes=1024 kept=5 removed=null",
+      "2026-10-08T22:53:21.000001Z info host log.rotated bytes=1024 generation=1",
       "2026-10-08T22:53:21.000002Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
       "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"vt\" boot=\"v1\"",
       "2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
@@ -483,13 +483,90 @@
     ]
   },
   {
-    "name": "class without a line",
+    "name": "class io",
     "params": {
       "class": "io"
     },
     "args": [
       "--class",
       "io"
+    ],
+    "rows": [
+      "host-b1:8",
+      "vt-v1:2",
+      "vt-v1:3"
+    ],
+    "next": null,
+    "tail": {
+      "host-b1": 9,
+      "vt-v1": 4,
+      "sok-s1": 2
+    },
+    "lines": [
+      "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
+      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2"
+    ]
+  },
+  {
+    "name": "class call",
+    "params": {
+      "class": "call"
+    },
+    "args": [
+      "--class",
+      "call"
+    ],
+    "rows": [
+      "host-b1:3",
+      "sok-s1:2"
+    ],
+    "next": null,
+    "tail": {
+      "host-b1": 9,
+      "vt-v1": 4,
+      "sok-s1": 2
+    },
+    "lines": [
+      "2026-10-08T22:53:20.200000Z debug page page.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
+      "2026-10-08T22:53:22.000100Z debug sok sok.command name=\"status\" args=\"\" micros=1200 ok=true status=0"
+    ]
+  },
+  {
+    "name": "class across channels",
+    "params": {
+      "channel": "all",
+      "class": "input"
+    },
+    "args": [
+      "--channel",
+      "all",
+      "--class",
+      "input"
+    ],
+    "rows": [
+      "host-b1:2",
+      "host-b1:22"
+    ],
+    "next": null,
+    "tail": {
+      "host-b1": 22,
+      "vt-v1": 4,
+      "sok-s1": 2
+    },
+    "lines": [
+      "2026-10-08T22:53:20.100000Z info native native.input.key_down window=w1 surface=tab-x cids=b1.1 keyCode=36 characters=\"\\r\"",
+      "2026-10-08T22:53:21.210000Z debug native native.input.query call=\"markedRange\""
+    ]
+  },
+  {
+    "name": "class without a line",
+    "params": {
+      "class": "frame"
+    },
+    "args": [
+      "--class",
+      "frame"
     ],
     "rows": [],
     "next": null,
@@ -716,7 +793,7 @@
     },
     "lines": [
       "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"vt\" boot=\"v1\"",
-      "2026-10-08T22:53:21.000001Z info host log.rotated bytes=1024 kept=5 removed=null"
+      "2026-10-08T22:53:21.000001Z info host log.rotated bytes=1024 generation=1"
     ]
   },
   {

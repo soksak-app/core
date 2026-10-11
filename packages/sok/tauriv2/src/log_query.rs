@@ -309,13 +309,15 @@ impl LogSource {
     }
 }
 
-/// Reads the name of an event file: `<role>-<boot>[.debug].jsonl[.<n>]`, with the generation `n` from 1 to 5. Returns the role, the boot
-/// and whether it is a debug file.
+/// Reads the name of an event file: `<role>-<boot>[.debug].jsonl[.<n>]`, with the generation `n` a positive number without a leading zero.
+/// Returns the role, the boot and whether it is a debug file.
 fn parse_log_name(name: &str) -> Option<(String, String, bool)> {
     let mut stem = name;
     if let Some(at) = stem.rfind('.') {
         let generation = &stem[at + 1..];
-        if matches!(generation, "1" | "2" | "3" | "4" | "5") && stem[..at].ends_with(".jsonl") {
+        let positive = generation.bytes().all(|c| c.is_ascii_digit())
+            && generation.bytes().next().is_some_and(|c| c != b'0');
+        if positive && stem[..at].ends_with(".jsonl") {
             stem = &stem[..at];
         }
     }

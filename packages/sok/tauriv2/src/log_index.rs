@@ -1155,14 +1155,14 @@ pub fn read_log_index(path: &Path) -> Result<LogIndexInfo, String> {
     })
 }
 
-/// Runs `rotate`, which renames the generations of the event file at `path` (the file becomes generation 1, the generations move up and
-/// the one beyond `generations` is removed), and moves the index files with them. It first brings the index of the file up to date while it
-/// holds the lock of that index, so the index of the closed generation is complete. The rotation of the event file does not wait for the
-/// index: when the index cannot be locked or brought up to date, `rotate` still runs and the index files still move, and the error says that
-/// the index of the closed file is not complete. A `rotate` that fails leaves the index files where they are.
+/// Runs `rotate`, which renames the event file at `path` to generation `generation` and starts a new file, and moves the index file with it
+/// (`<path>.idx` becomes `<path>.<generation>.idx`); no other generation and no other index file is touched. It first brings the index of
+/// the file up to date while it holds the lock of that index, so the index of the closed generation is complete. The rotation of the event
+/// file does not wait for the index: when the index cannot be locked or brought up to date, `rotate` still runs and the index file still
+/// moves, and the error says that the index of the closed file is not complete. A `rotate` that fails leaves the index file where it is.
 pub fn rotate_log_indexes(
     path: &Path,
-    generations: u32,
+    generation: u32,
     rotate: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
     let (source, idx, system) = match locked_index(path) {
@@ -1176,31 +1176,14 @@ pub fn rotate_log_indexes(
     let refreshed = refresh_locked(path, source, &idx).map(drop);
     let result = (|| {
         rotate()?;
-        let generation = |n: u32| -> std::path::PathBuf {
-            let mut name = path.as_os_str().to_os_string();
-            name.push(format!(".{n}.idx"));
-            name.into()
-        };
-        let tolerate = |result: std::io::Result<()>, path: &Path| match result {
-            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-                Err(file_error(path.display(), &error))
-            }
-            _ => Ok(()),
-        };
-        tolerate(
-            std::fs::remove_file(generation(generations)),
-            &generation(generations),
-        )?;
-        for n in (1..generations).rev() {
-            tolerate(
-                std::fs::rename(generation(n), generation(n + 1)),
-                &generation(n),
-            )?;
+        let mut closed = path.as_os_str().to_os_string();
+        closed.push(format!(".{generation}.idx"));
+        match std::fs::rename(index_path(path), std::path::PathBuf::from(closed)) {
+            // default: a file whose index was never built has no index file to move, and a query builds the index of the closed file.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(file_error(index_path(path).display(), &error)),
+            Ok(()) => Ok(()),
         }
-        tolerate(
-            std::fs::rename(index_path(path), generation(1)),
-            &index_path(path),
-        )
     })();
     let closed = close_index(system.as_ref(), idx, path);
     result?;

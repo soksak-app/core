@@ -306,23 +306,19 @@ fn index_refuses_a_damaged_index_and_a_broken_line() {
         }
     }
 }
-
 // contract: log.index.moves-with-the-generations-of-a-rotation
 #[test]
 fn index_moves_with_the_generations_of_a_rotation() {
     let dir = temp_dir("index-rotate");
     let path = dir.join("logs").join("host-r.jsonl");
     let generation = |n: u32| dir.join("logs").join(format!("host-r.jsonl.{n}"));
-    // The rotation of the writer for two generations: the oldest is removed, the others move up, the file becomes generation 1.
-    let rotate_files = || -> Result<(), String> {
-        let tolerate = |result: std::io::Result<()>| match result {
-            Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.to_string()),
-            _ => Ok(()),
-        };
-        tolerate(std::fs::remove_file(generation(2)))?;
-        tolerate(std::fs::rename(generation(1), generation(2)))?;
-        std::fs::rename(&path, generation(1)).map_err(|error| error.to_string())?;
-        std::fs::write(&path, lines_of(1, 3)).map_err(|error| error.to_string())
+    // The rotation of the writer: the file becomes generation `n` and a new file starts. No generation is removed or renamed.
+    let rotate_to = |n: u32| {
+        let (path, target) = (path.clone(), generation(n));
+        move || -> Result<(), String> {
+            std::fs::rename(&path, &target).map_err(|error| error.to_string())?;
+            std::fs::write(&path, lines_of(1, 3)).map_err(|error| error.to_string())
+        }
     };
     std::fs::write(&path, lines_of(1, 7)).expect("write");
     update_log_index(&path).expect("update");
@@ -333,7 +329,7 @@ fn index_moves_with_the_generations_of_a_rotation() {
         .expect("append");
     write!(file, "{}", lines_of(8, 12)).expect("write");
     drop(file);
-    rotate_log_indexes(&path, 2, rotate_files).expect("rotate");
+    rotate_log_indexes(&path, 1, rotate_to(1)).expect("rotate");
     let info =
         read_log_index(&generation(1)).expect("the closed generation answers from its index");
     assert_eq!((info.events, info.last_seq), (12, 12), "{info:?}");
@@ -345,18 +341,18 @@ fn index_moves_with_the_generations_of_a_rotation() {
         !update_log_index(&generation(1)).expect("update").changed,
         "the closed generation is current without a build"
     );
-    // A second rotation moves the first generation to the second and removes the second that was there.
+    // A second rotation closes generation 2 and leaves generation 1 and its index where they are.
     update_log_index(&path).expect("update");
-    rotate_log_indexes(&path, 2, rotate_files).expect("rotate again");
+    rotate_log_indexes(&path, 2, rotate_to(2)).expect("rotate again");
     assert_eq!(
-        read_log_index(&generation(2)).expect("generation 2").events,
+        read_log_index(&generation(1)).expect("generation 1").events,
         12
     );
     assert_eq!(
-        read_log_index(&generation(1)).expect("generation 1").events,
+        read_log_index(&generation(2)).expect("generation 2").events,
         3
     );
-    // An index that cannot be brought up to date does not stop the rotation of the file: the files and the index files move, and the
+    // An index that cannot be brought up to date does not stop the rotation of the file: the file and its index file move, and the
     // error says that the index of the closed file is not complete.
     update_log_index(&path).expect("update");
     let mut broken = std::fs::OpenOptions::new()
@@ -366,7 +362,7 @@ fn index_moves_with_the_generations_of_a_rotation() {
     broken.write_all(b"not json\n").expect("write");
     drop(broken);
     let error =
-        rotate_log_indexes(&path, 2, rotate_files).expect_err("a rotation with a broken line");
+        rotate_log_indexes(&path, 3, rotate_to(3)).expect_err("a rotation with a broken line");
     assert!(
         error.contains(
             "the index of the closed file is not complete: logs/host-r.jsonl:4: not JSON: not json"
@@ -374,21 +370,21 @@ fn index_moves_with_the_generations_of_a_rotation() {
         "{error}"
     );
     assert_eq!(
-        read_log_index(&generation(1))
+        read_log_index(&generation(3))
             .expect("the index of the closed file moved with it")
             .events,
         3
     );
     assert_eq!(
         read_log_index(&generation(2))
-            .expect("the index of the earlier generation moved up")
+            .expect("the index of the earlier generation stayed")
             .events,
         3
     );
     // A rotation that fails leaves the index files where they are.
     std::fs::write(&path, lines_of(1, 3)).expect("write");
     update_log_index(&path).expect("update");
-    let error = rotate_log_indexes(&path, 2, || Err("rename refused".to_string()))
+    let error = rotate_log_indexes(&path, 4, || Err("rename refused".to_string()))
         .expect_err("failing rotation");
     assert_eq!(error, "rename refused");
     assert!(

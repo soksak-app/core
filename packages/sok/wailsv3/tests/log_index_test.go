@@ -306,18 +306,14 @@ func TestLogIndexMovesWithTheGenerationsOfARotation(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "host-r.jsonl")
 	generation := func(n int) string { return fmt.Sprintf("%s.%d", path, n) }
-	// rotateFiles is the rotation of the writer for two generations: the oldest is removed, the others move up, the file becomes generation 1.
-	rotateFiles := func() error {
-		if err := os.Remove(generation(2)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+	// rotateTo is the rotation of the writer: the file becomes generation n and a new file starts. No generation is removed or renamed.
+	rotateTo := func(n int) func() error {
+		return func() error {
+			if err := os.Rename(path, generation(n)); err != nil {
+				return err
+			}
+			return os.WriteFile(path, []byte(linesOf(1, 3)), 0o644)
 		}
-		if err := os.Rename(generation(1), generation(2)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		if err := os.Rename(path, generation(1)); err != nil {
-			return err
-		}
-		return os.WriteFile(path, []byte(linesOf(1, 3)), 0o644)
 	}
 	writeFile(t, path, linesOf(1, 7))
 	if _, err := sok.UpdateLogIndex(path); err != nil {
@@ -334,7 +330,7 @@ func TestLogIndexMovesWithTheGenerationsOfARotation(t *testing.T) {
 	if err := file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := sok.RotateLogIndexes(path, 2, rotateFiles); err != nil {
+	if err := sok.RotateLogIndexes(path, 1, rotateTo(1)); err != nil {
 		t.Fatal(err)
 	}
 	info, err := sok.ReadLogIndex(generation(1))
@@ -347,20 +343,20 @@ func TestLogIndexMovesWithTheGenerationsOfARotation(t *testing.T) {
 	if update, err := sok.UpdateLogIndex(generation(1)); err != nil || update.Changed {
 		t.Errorf("the closed generation is current without a build: %+v err %v", update, err)
 	}
-	// A second rotation moves the first generation to the second and removes the second that was there.
+	// A second rotation closes generation 2 and leaves generation 1 and its index where they are.
 	if _, err := sok.UpdateLogIndex(path); err != nil {
 		t.Fatal(err)
 	}
-	if err := sok.RotateLogIndexes(path, 2, rotateFiles); err != nil {
+	if err := sok.RotateLogIndexes(path, 2, rotateTo(2)); err != nil {
 		t.Fatal(err)
 	}
-	if info, err := sok.ReadLogIndex(generation(2)); err != nil || info.Events != 12 {
-		t.Errorf("generation 2 %+v err %v", info, err)
-	}
-	if info, err := sok.ReadLogIndex(generation(1)); err != nil || info.Events != 3 {
+	if info, err := sok.ReadLogIndex(generation(1)); err != nil || info.Events != 12 {
 		t.Errorf("generation 1 %+v err %v", info, err)
 	}
-	// An index that cannot be brought up to date does not stop the rotation of the file: the files and the index files move, and the
+	if info, err := sok.ReadLogIndex(generation(2)); err != nil || info.Events != 3 {
+		t.Errorf("generation 2 %+v err %v", info, err)
+	}
+	// An index that cannot be brought up to date does not stop the rotation of the file: the file and its index file move, and the
 	// error says that the index of the closed file is not complete.
 	if _, err := sok.UpdateLogIndex(path); err != nil {
 		t.Fatal(err)
@@ -375,15 +371,15 @@ func TestLogIndexMovesWithTheGenerationsOfARotation(t *testing.T) {
 	if err := broken.Close(); err != nil {
 		t.Fatal(err)
 	}
-	err = sok.RotateLogIndexes(path, 2, rotateFiles)
+	err = sok.RotateLogIndexes(path, 3, rotateTo(3))
 	if err == nil || !strings.Contains(err.Error(), "the index of the closed file is not complete: logs/host-r.jsonl:4: not JSON: not json") {
 		t.Fatalf("a rotation with a broken line: %v", err)
 	}
-	if info, err := sok.ReadLogIndex(generation(1)); err != nil || info.Events != 3 {
+	if info, err := sok.ReadLogIndex(generation(3)); err != nil || info.Events != 3 {
 		t.Errorf("the index of the closed file moved with it: %+v err %v", info, err)
 	}
 	if info, err := sok.ReadLogIndex(generation(2)); err != nil || info.Events != 3 {
-		t.Errorf("the index of the earlier generation moved up: %+v err %v", info, err)
+		t.Errorf("the index of the earlier generation stayed: %+v err %v", info, err)
 	}
 	// A rotation that fails leaves the index files where they are.
 	if err := os.WriteFile(path, []byte(linesOf(1, 3)), 0o644); err != nil {
@@ -393,7 +389,7 @@ func TestLogIndexMovesWithTheGenerationsOfARotation(t *testing.T) {
 		t.Fatal(err)
 	}
 	failure := errors.New("rename refused")
-	if err := sok.RotateLogIndexes(path, 2, func() error { return failure }); !errors.Is(err, failure) {
+	if err := sok.RotateLogIndexes(path, 4, func() error { return failure }); !errors.Is(err, failure) {
 		t.Fatalf("rotation error %v", err)
 	}
 	if _, err := os.Stat(path + ".idx"); err != nil {

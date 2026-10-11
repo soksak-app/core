@@ -73,6 +73,9 @@ type pendingEvent struct {
 	monoNs   uint64
 	level    Level
 	event    string
+	// class is the class that the catalog declares for the event; it is empty, and undeclared is set, for a name the catalog does not declare.
+	class      Class
+	undeclared bool
 	// fields is the fields as JSON text, serialized once by the producer.
 	fields json.RawMessage
 	bytes  int
@@ -96,12 +99,15 @@ type EventLog struct {
 	messages     chan eventMessage
 	queuedEvents atomic.Int64
 	queuedBytes  atomic.Int64
-	lostEvents   atomic.Uint64
-	lostBytes    atomic.Uint64
-	path         string
-	boot         string
-	done         chan struct{}
-	closeOnce    sync.Once
+	// lost counts what the queue refused, for each channel.
+	lost      [channelCount]struct{ events, bytes atomic.Uint64 }
+	path      string
+	debugPath string
+	// openFields are the fields of log.open, which the first line of every file holds.
+	openFields json.RawMessage
+	boot       string
+	done       chan struct{}
+	closeOnce  sync.Once
 }
 
 // processBoot is the identifier of this run: the start time in seconds and the process identifier.
@@ -132,17 +138,20 @@ func StartEventLog(config string) (*EventLog, error) {
 		return nil, err
 	}
 	log := &EventLog{
-		messages: make(chan eventMessage, eventQueueEvents+reservedForRequests),
-		path:     path,
-		boot:     boot,
-		done:     make(chan struct{}),
+		messages:   make(chan eventMessage, eventQueueEvents+reservedForRequests),
+		path:       path,
+		debugPath:  filepath.Join(directory, fmt.Sprintf("%s-%s.debug.jsonl", eventRole, boot)),
+		openFields: fields,
+		boot:       boot,
+		done:       make(chan struct{}),
 	}
-	open := &pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), level: LevelInfo, event: "log.open", fields: fields}
+	open := writerEvent(LevelInfo, "log.open", fields)
 	Go("event-log-writer", func() { log.write(file, open) })
 	return log, nil
 }
 
-// Path is the file of this run.
+// Path is the main file of this run (error, warn and info); the debug file (debug and trace) lies beside it and exists once its
+// first event was written.
 func (l *EventLog) Path() string { return l.path }
 
 // Boot is the identifier of the run that this writer belongs to.
@@ -155,28 +164,29 @@ func (l *EventLog) Emit(level Level, event string, fields any) bool {
 	case LevelError, LevelWarn, LevelInfo, LevelDebug, LevelTrace:
 	default:
 		// A level outside the contract is a defect of the caller; the event is counted as lost and the defect is reported.
-		l.countLoss(len(event))
+		l.countLoss(channelOf(level), len(event))
 		fmt.Fprintf(os.Stderr, "event writer: %s has the level %q, which the contract does not define\n", event, string(level))
 		return false
 	}
 	if l.queuedEvents.Load() >= eventQueueEvents {
-		l.countLoss(len(event))
+		l.countLoss(channelOf(level), len(event))
 		return false
 	}
 	text, err := json.Marshal(fields)
 	if err != nil {
 		// A value that cannot be serialized is a defect of the caller; it is counted in place of the event.
-		l.countLoss(len(event))
+		l.countLoss(channelOf(level), len(event))
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return false
 	}
 	text, truncated := capFields(text)
 	bytes := len(text) + len(event)
 	if l.queuedBytes.Load()+int64(bytes) > eventQueueBytes {
-		l.countLoss(bytes)
+		l.countLoss(channelOf(level), bytes)
 		return false
 	}
 	pending := &pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), level: level, event: event, fields: text, bytes: bytes, truncated: truncated}
+	pending.classify()
 	l.queuedBytes.Add(int64(bytes))
 	l.queuedEvents.Add(1)
 	select {
@@ -185,7 +195,7 @@ func (l *EventLog) Emit(level Level, event string, fields any) bool {
 	default:
 		l.queuedBytes.Add(-int64(bytes))
 		l.queuedEvents.Add(-1)
-		l.countLoss(bytes)
+		l.countLoss(channelOf(level), bytes)
 		return false
 	}
 }
@@ -220,9 +230,9 @@ func capFields(text json.RawMessage) (json.RawMessage, int) {
 	return cut, len(text)
 }
 
-func (l *EventLog) countLoss(bytes int) {
-	l.lostEvents.Add(1)
-	l.lostBytes.Add(uint64(bytes))
+func (l *EventLog) countLoss(c channel, bytes int) {
+	l.lost[c].events.Add(1)
+	l.lost[c].bytes.Add(uint64(bytes))
 }
 
 // Flush writes everything that is queued and waits until it is on disk, at most deadline.
@@ -256,6 +266,24 @@ func (l *EventLog) Close() {
 	})
 }
 
+// classify gives the event the class that the catalog declares for its name. A name that the catalog does not declare is stored
+// without a class and marked undeclared (docs/spec/logging.md#event).
+func (e *pendingEvent) classify() {
+	e.class, e.undeclared = "", false
+	if class, declared := EventClassOf(e.event); declared {
+		e.class = class
+	} else {
+		e.undeclared = true
+	}
+}
+
+// writerEvent is an event that the writer itself creates (log.open, log.dropped), with both clocks read now.
+func writerEvent(level Level, event string, fields json.RawMessage) *pendingEvent {
+	e := &pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), level: level, event: event, fields: fields}
+	e.classify()
+	return e
+}
+
 // eventRecord is the line of one event with the seq that the writer gives it. The fields are already JSON text, so the
 // line is assembled without parsing them again.
 type eventRecord struct {
@@ -263,41 +291,84 @@ type eventRecord struct {
 	MonoNs   uint64          `json:"mono_ns"`
 	Seq      uint64          `json:"seq"`
 	Level    Level           `json:"level"`
+	Class    Class           `json:"class,omitempty"`
 	Layer    string          `json:"layer"`
 	Event    string          `json:"event"`
 	Fields   json.RawMessage `json:"fields"`
+	// Undeclared is true for an event whose name the catalog does not declare; such a line has no class.
+	Undeclared bool `json:"undeclared,omitempty"`
 	// Truncated is the size in bytes of the fields before they were cut; it is absent for an event that was not cut.
 	Truncated int `json:"truncated,omitempty"`
 }
 
 func serializeEvent(seq uint64, e *pendingEvent) ([]byte, error) {
-	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, MonoNs: e.monoNs, Seq: seq, Level: e.level, Layer: eventLayer, Event: e.event, Fields: e.fields, Truncated: e.truncated})
+	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, MonoNs: e.monoNs, Seq: seq, Level: e.level, Class: e.class, Layer: eventLayer, Event: e.event, Fields: e.fields, Undeclared: e.undeclared, Truncated: e.truncated})
 	if err != nil {
 		return nil, err
 	}
 	return append(line, '\n'), nil
 }
 
-func (l *EventLog) write(file *os.File, open *pendingEvent) {
+// channel is the file of the writer that stores a level: the main file holds error, warn and info, and the debug file holds debug
+// and trace (docs/spec/logging.md#files).
+type channel int
+
+const (
+	channelMain channel = iota
+	channelDebug
+	channelCount
+)
+
+// name is the name of the channel in log.dropped: `other` for the main file and `debug` for the debug file.
+func (c channel) name() string {
+	if c == channelDebug {
+		return "debug"
+	}
+	return "other"
+}
+
+func channelOf(level Level) channel {
+	if level == LevelDebug || level == LevelTrace {
+		return channelDebug
+	}
+	return channelMain
+}
+
+// outputFile is one file of the writer. The debug file is created when its first line is written, so a run without a debug event
+// leaves no empty file.
+type outputFile struct {
+	path  string
+	file  *os.File
+	batch []byte
+}
+
+func (l *EventLog) write(main *os.File, open *pendingEvent) {
 	defer close(l.done)
+	files := [channelCount]*outputFile{channelMain: {path: l.path, file: main}, channelDebug: {path: l.debugPath}}
 	defer func() {
-		if err := file.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "event writer: %v\n", err)
+		for _, f := range files {
+			if f.file == nil {
+				continue
+			}
+			if err := f.file.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "event writer: %v\n", err)
+			}
 		}
 	}()
 	var seq uint64
-	var batch []byte
 	flush := func() {
-		if len(batch) == 0 {
-			return
+		for _, f := range files {
+			if len(f.batch) == 0 {
+				continue
+			}
+			// A failed write is reported on the standard error; the writer keeps running for the next batch.
+			if _, err := f.file.Write(f.batch); err != nil {
+				fmt.Fprintf(os.Stderr, "event writer: %v\n", err)
+			}
+			f.batch = f.batch[:0]
 		}
-		// A failed write is reported on the standard error; the writer keeps running for the next batch.
-		if _, err := file.Write(batch); err != nil {
-			fmt.Fprintf(os.Stderr, "event writer: %v\n", err)
-		}
-		batch = batch[:0]
 	}
-	push := func(e *pendingEvent) {
+	appendLine := func(f *outputFile, e *pendingEvent) {
 		seq++
 		line, err := serializeEvent(seq, e)
 		if err != nil {
@@ -305,23 +376,40 @@ func (l *EventLog) write(file *os.File, open *pendingEvent) {
 			fmt.Fprintf(os.Stderr, "event writer: %s cannot be written: %v\n", e.event, err)
 			return
 		}
-		batch = append(batch, line...)
+		f.batch = append(f.batch, line...)
+	}
+	push := func(e *pendingEvent) {
+		f := files[channelOf(e.level)]
+		if f.file == nil {
+			file, err := os.OpenFile(f.path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+			if err != nil {
+				// The event is not written; its seq stays taken, so the audit shows the gap next to this report.
+				seq++
+				fmt.Fprintf(os.Stderr, "event writer: %s cannot be written: %v\n", e.event, err)
+				return
+			}
+			f.file = file
+			appendLine(f, writerEvent(LevelInfo, "log.open", l.openFields))
+		}
+		appendLine(f, e)
 	}
 	push(open)
-	// recordLoss stores one log.dropped after the range of seq that the refused events would have had.
+	// recordLoss stores one log.dropped for each channel after the range of seq that the refused events would have had.
 	recordLoss := func() {
-		events := l.lostEvents.Swap(0)
-		bytes := l.lostBytes.Swap(0)
-		if events == 0 {
-			return
+		for c := channel(0); c < channelCount; c++ {
+			events := l.lost[c].events.Swap(0)
+			bytes := l.lost[c].bytes.Swap(0)
+			if events == 0 {
+				continue
+			}
+			// The refused events had no seq. Their numbers are skipped, and log.dropped is stored after the range that it
+			// names (docs/spec/logging.md#event).
+			from := seq + 1
+			seq += events
+			// The fields are numbers and fixed texts, so they are written as text without a serializer that can fail.
+			fields := json.RawMessage(fmt.Sprintf(`{"from_seq":%d,"to_seq":%d,"count":%d,"bytes":%d,"reason":%q,"channel":%q}`, from, seq, events, bytes, "the queue was full", c.name()))
+			push(writerEvent(LevelWarn, "log.dropped", fields))
 		}
-		// The refused events had no seq. Their numbers are skipped, and log.dropped is stored after the range that it
-		// names (docs/spec/logging.md#event).
-		from := seq + 1
-		seq += events
-		// The fields are numbers and a fixed text, so they are written as text without a serializer that can fail.
-		fields := json.RawMessage(fmt.Sprintf(`{"from_seq":%d,"to_seq":%d,"count":%d,"bytes":%d,"reason":%q}`, from, seq, events, bytes, "the queue was full"))
-		push(&pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), level: LevelWarn, event: "log.dropped", fields: fields})
 	}
 	take := func(e *pendingEvent) {
 		l.queuedBytes.Add(-int64(e.bytes))
