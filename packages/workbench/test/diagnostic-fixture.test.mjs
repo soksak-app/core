@@ -19,9 +19,9 @@ function modules(calls) {
 
 test("the fixture of a window check changes the common settings as the actor diagnostics.fixture", async () => {
   const calls = [];
-  const result = await prepareFixture({ root: "/tmp/project", settings: { "terminal.shell": "/bin/sh" } }, modules(calls));
+  const result = await prepareFixture({ root: "/tmp/project", settings: { "fixture.value": "/bin/sh" } }, modules(calls));
   assert.deepEqual(result, { root: "/tmp/project" });
-  assert.deepEqual(calls[0], ["set", "common", "diagnostics.fixture", { mode: "dark", "terminal.shell": "/bin/sh" }]);
+  assert.deepEqual(calls[0], ["set", "common", "diagnostics.fixture", { mode: "dark", "fixture.value": "/bin/sh" }]);
   assert.deepEqual(calls[1], ["open", "/tmp/project"]);
 });
 
