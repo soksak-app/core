@@ -44,6 +44,24 @@
 
 화면의 JSON 형식(`@soksak/plugin-api/screen-hash`, golden vector)에서 화면은 `{rows, cols, cursor: {row, col, visible}, cells}`, 칸은 `{grapheme, width, fg, bg, attributes}`, 색은 `null`(기본), 0~255 정수(색인), 소문자 `"#rrggbb"`(트루컬러), `attributes`는 0~255 정수다. hash 함수는 이 형식을 벗어난 값을 member 이름이 있는 오류로 거부한다. golden vector는 `packages/log-contract/fixtures/replay/screen-hash.json`이며, 화면마다 16진 정규 바이트열과 hash, 함수가 거부하는 화면과 그 오류 글을 담는다. 어느 언어의 hash 구현이든 이를 재현해야 한다.
 
+## 골든 벡터
+
+`packages/log-contract/fixtures/replay/screen-hash.json`이 화면 hash의 벡터를 가진다. 벡터마다 화면, 정규 바이트열의 16진 글, hash가 있다.
+
+| 벡터 | 고정하는 것 |
+| --- | --- |
+| `empty one cell` | 가장 작은 화면. 빈 칸 하나, 보이는 커서, 기본색 |
+| `ascii with hidden cursor` | 너비 1의 grapheme과 숨은 커서 |
+| `wide character and its continuation` | 넓은 문자(너비 2)와 그 이어지는 칸(너비 0, 빈 grapheme) |
+| `colors and attributes` | 색인 색과 트루컬러, 모든 속성 flag |
+| `scrolled viewport with the cursor outside it` | 스크롤된 viewport. 커서는 숨고 행은 `0`이며 열은 유지된다([보기 상태](#보기-상태)) |
+| `selected cells with the highlight colors` | 전경과 배경이 강조색인 선택된 칸 |
+| `the same text under another theme` | 선택된 화면과 같은 grapheme이 다른 색을 가져 다른 hash가 되는 화면 |
+
+같은 파일이 hash 함수가 거부하는 화면을 오류 text와 함께 나열한다. `cell count differs from rows times cols`, `cursor row outside the grid`, `width outside 0, 1, 2`, `indexed color outside 0 to 255`, `true color in upper case`, `attributes outside one byte`, `grapheme with a lone surrogate`다.
+
+`packages/log-contract/fixtures/replay/inputs.json`이 재생 입력의 사례를 가진다. `replayInputProblem`이 받아들이는 입력, text와 함께 거부하는 입력, `replaySessionProblem`이 판정하는 session이다. session은 `a session with a scroll and a selection`, `a session that does not start with a theme`, `a session with a gap in the sequence`, `a selection update before a selection start`, `a selection start before any resize`, `a selection start below the grid`, `a selection update after the grid shrank`, `a selection update after the gesture ended`, `a theme change in the middle of a session`, `viewport moves stored as the effective change`다.
+
 ## 보기 상태
 
 sidecar가 만드는 화면은 그려지는 그대로의 화면이다. viewport의 칸이며, 선택된 칸은 강조색이고 모든 색은 theme을 거쳐 정해진다. 이 화면의 세 상태는 출력 바이트나 크기 변경에서 오지 않는다. *선택*, *viewport*(스크롤백의 offset), *theme*이다. 셋 중 하나가 바뀔 때마다 그 변경은 자기 재생 입력이므로 위의 hash 정의는 바뀌지 않고, 재생은 입력을 적용해 그려진 칸에 이른다.

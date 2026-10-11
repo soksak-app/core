@@ -44,6 +44,24 @@ Each cell is: the byte length of the grapheme in 4 bytes, the UTF-8 bytes of the
 
 In the JSON form of a screen (`@soksak/plugin-api/screen-hash`, the golden vectors) a screen is `{rows, cols, cursor: {row, col, visible}, cells}`, a cell is `{grapheme, width, fg, bg, attributes}`, a color is `null` (default), an integer from 0 to 255 (indexed) or `"#rrggbb"` in lowercase (true color), and `attributes` is an integer from 0 to 255. The hash function rejects a value outside these forms with an error that names the member. The golden vectors are `packages/log-contract/fixtures/replay/screen-hash.json`: for each screen the canonical bytes in hexadecimal and the hash, and the screens that the function refuses with their error text. Every implementation of the hash, in any language, reproduces them.
 
+## Golden vectors
+
+`packages/log-contract/fixtures/replay/screen-hash.json` holds the vectors of the screen hash. Each vector gives the screen, its canonical bytes in hexadecimal and its hash:
+
+| Vector | What it fixes |
+| --- | --- |
+| `empty one cell` | the smallest screen: one blank cell, a visible cursor, default colors |
+| `ascii with hidden cursor` | graphemes of width 1 and a hidden cursor |
+| `wide character and its continuation` | a wide character (width 2) followed by its continuation cell (width 0, empty grapheme) |
+| `colors and attributes` | indexed and true colors, every attribute flag |
+| `scrolled viewport with the cursor outside it` | a scrolled viewport: the cursor is hidden, its row is `0` and its column is kept ([View state](#view-state)) |
+| `selected cells with the highlight colors` | selected cells with the highlight colors in their foreground and background |
+| `the same text under another theme` | the same graphemes as the selected screen under other colors, which gives another hash |
+
+The same file lists the screens that the hash function refuses, each with its error text: `cell count differs from rows times cols`, `cursor row outside the grid`, `width outside 0, 1, 2`, `indexed color outside 0 to 255`, `true color in upper case`, `attributes outside one byte` and `grapheme with a lone surrogate`.
+
+`packages/log-contract/fixtures/replay/inputs.json` holds the cases of the replay inputs: the inputs that `replayInputProblem` accepts, the inputs it refuses with their text, and the sessions that `replaySessionProblem` judges: `a session with a scroll and a selection`, `a session that does not start with a theme`, `a session with a gap in the sequence`, `a selection update before a selection start`, `a selection start before any resize`, `a selection start below the grid`, `a selection update after the grid shrank`, `a selection update after the gesture ended`, `a theme change in the middle of a session` and `viewport moves stored as the effective change`.
+
 ## View state
 
 A screen that a sidecar produces is the screen as it is drawn: the cells of the viewport, with the selected cells in their highlight colors and every color resolved through the theme. Three states of that screen do not come from the output bytes or the resizes: the *selection*, the *viewport* (the offset into the scrollback) and the *theme*. Each change of one of them is a replay input of its own, so the hash definition above does not change and a replay reaches the drawn cells by applying the inputs.
