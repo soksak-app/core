@@ -1,0 +1,11 @@
+{
+  "exclude": "^(e2e|packages/window-check)/",
+  "entrances": {},
+  "pending": {
+    "go.go-statement": "F160.4",
+    "m.registration": "F160.3",
+    "m.delegate": "F160.3",
+    "m.error-return": "F160.3",
+    "rs.ok-discard": "F160.27"
+  }
+}

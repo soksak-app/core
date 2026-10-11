@@ -29,8 +29,8 @@ func ParseTestMark(params json.RawMessage) (TestMark, error) {
 		return value, ok && value != ""
 	}
 	var mark TestMark
-	kind, _ := fields["kind"].(string)
-	if kind != "start" && kind != "end" {
+	kind, isString := fields["kind"].(string)
+	if !isString || (kind != "start" && kind != "end") {
 		return TestMark{}, rpcError(codeInvalidParams, "kind must be start or end")
 	}
 	mark.Kind = kind
@@ -48,8 +48,8 @@ func ParseTestMark(params json.RawMessage) (TestMark, error) {
 		}
 		return mark, nil
 	}
-	result, _ := fields["result"].(string)
-	if result != "pass" && result != "fail" && result != "skip" {
+	result, isString := fields["result"].(string)
+	if !isString || (result != "pass" && result != "fail" && result != "skip") {
 		return TestMark{}, rpcError(codeInvalidParams, "result must be pass, fail or skip")
 	}
 	mark.Result = result

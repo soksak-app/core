@@ -156,7 +156,9 @@ export function processOf(file) {
 
 /** The text of an `error` event for a finding. */
 function errorText(event) {
+  // default: a line may carry no fields, which the structure check reports on its own; the text then names the event.
   const { where, text } = event.fields ?? {};
+  // default: the same absent fields give the empty record in the text of an event that has no where and text.
   return typeof where === "string" && typeof text === "string" ? `${where}: ${text}` : `${event.event}: ${JSON.stringify(event.fields ?? {})}`;
 }
 
@@ -191,6 +193,7 @@ export function auditParsed(parsed, catalog, declaredError = () => false) {
     });
   }
   const processes = new Map();
+  // default: the first file of a process has no entries collected yet.
   for (const { process, entries } of parsed) processes.set(process, [...(processes.get(process) ?? []), ...entries]);
   for (const entries of processes.values()) {
     const ordered = [...entries].sort((a, b) => a.event.seq - b.event.seq);
@@ -207,5 +210,6 @@ export function auditParsed(parsed, catalog, declaredError = () => false) {
   const all = parsed.flatMap(({ entries }) => entries);
   for (const { line, message, file } of chainFindings(all, catalog)) findings.push({ file, line, message });
   const order = new Map(parsed.map(({ file }, index) => [file, index]));
+  // default: findings of the same file, or of a file without an order, are ordered by their line.
   return findings.sort((a, b) => order.get(a.file) - order.get(b.file) || a.line - b.line);
 }

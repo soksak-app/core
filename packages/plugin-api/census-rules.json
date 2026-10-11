@@ -1,0 +1,74 @@
+{
+  "rules": [
+    {
+      "id": "js.empty-catch",
+      "language": "js",
+      "pattern": "\\bcatch\\s*(?:\\([^)]*\\))?\\s*\\{\\s*\\}",
+      "requires": "event-or-reason",
+      "description": "A catch clause with an empty body drops the error."
+    },
+    {
+      "id": "js.swallowing-catch",
+      "language": "js",
+      "pattern": "\\.catch\\(\\s*(?:\\(\\s*[^)]*\\s*\\)|[\\w$]+)\\s*=>\\s*(?:\\{\\s*\\}|null\\b|undefined\\b|false\\b|\\[\\])",
+      "requires": "event-or-reason",
+      "description": "A promise rejection handler that returns nothing drops the error."
+    },
+    {
+      "id": "go.go-statement",
+      "language": "go",
+      "pattern": "(?<![\\w.])go\\s+(?:func\\b|[A-Za-z_][\\w.]*\\s*\\()",
+      "requires": "entrance",
+      "description": "A goroutine starts only through the entrance function, which recovers a panic and records it."
+    },
+    {
+      "id": "go.recover",
+      "language": "go",
+      "pattern": "\\brecover\\(\\)",
+      "requires": "entrance",
+      "description": "A panic is recovered only in the entrance function, which records it with its stack."
+    },
+    {
+      "id": "rs.ok-discard",
+      "language": "rs",
+      "pattern": "\\.ok\\(\\)",
+      "requires": "event-or-reason",
+      "description": "Result::ok drops the error."
+    },
+    {
+      "id": "rs.unwrap-or",
+      "language": "rs",
+      "pattern": "\\.unwrap_or(?:_default|_else)?\\(",
+      "requires": "event-or-reason",
+      "description": "unwrap_or* replaces the error or the absence with a value."
+    },
+    {
+      "id": "rs.dropped-send",
+      "language": "rs",
+      "pattern": "\\blet\\s+_\\s*=\\s*[^;]*\\.(?:send|try_send|send_timeout|blocking_send|send_blocking)\\(",
+      "requires": "event-or-reason",
+      "description": "The result of a channel send is dropped, so a closed or full channel loses the message silently."
+    },
+    {
+      "id": "m.registration",
+      "language": "m",
+      "pattern": "\\b(?:addObserver(?:ForName)?:|addGlobalMonitorForEventsMatchingMask:|addLocalMonitorForEventsMatchingMask:|scheduledTimerWithTimeInterval:|timerWithTimeInterval:|CFRunLoopAddObserver|CFRunLoopAddTimer|CFRunLoopAddSource|CFNotificationCenterAddObserver|dispatch_source_create|CGEventTapCreate|AXObserverCreate|IOServiceAddMatchingNotification)",
+      "requires": "entrance",
+      "description": "An observer, monitor, KVO, event tap or timer is registered only through the entrance function, which records the registration and each delivery."
+    },
+    {
+      "id": "m.delegate",
+      "language": "m",
+      "pattern": "(?:\\bsetDelegate:|\\.delegate\\s*=(?!=))",
+      "requires": "entrance",
+      "description": "A delegate is set only through the entrance function, which records each delivery."
+    },
+    {
+      "id": "m.error-return",
+      "language": "m",
+      "pattern": "\\breturn\\s+NO\\s*;",
+      "requires": "event-or-reason",
+      "description": "An error return states its reason as an event."
+    }
+  ]
+}

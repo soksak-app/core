@@ -385,7 +385,7 @@ lines.on("close", async () => {
     try {
       (await connection).close();
     } catch {
-      // When the connection could not be created, there is nothing to close.
+      // silent: when the connection could not be created, there is nothing to close.
     }
   }
   process.exit(0);

@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { markerErrors } from "../../packages/plugin-api/events-check.js";
 import { findFallbacks, listFallbacks } from "../check-fallbacks.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -38,9 +39,9 @@ test("defaults and discarded errors without a stated reason are found in product
 test("a reason on the line or in the comment block above accepts a default", () => {
   assert.deepEqual(scan({
     "packages/a/a.js": [
-      "// 기본값: 알림을 받는 쪽이 없으면 부르지 않는다.",
+      "// silent: a missing listener means nobody asked for the notification.",
       "notify?.();",
-      "const size = options.size ?? 13; // 기본값: 명세의 글자 크기 기본값은 13이다.",
+      "const size = options.size ?? 13; // default: the specification fixes the font size at 13.",
       "// default: an absent width means the declared minimum.",
       "// (continued comment)",
       "const w = card.width ?? min;",
@@ -101,8 +102,18 @@ test("ordinary boolean OR conditions are not value fallbacks", () => {
 });
 
 test("a short or missing reason does not accept a default", () => {
-  const found = scan({ "packages/a/a.js": "// 기본값: 그냥\nconst x = y ?? 0;\n// 다른 설명\nconst z = y ?? 1;\n" });
+  const found = scan({ "packages/a/a.js": "// default: 그냥\nconst x = y ?? 0;\n// 다른 설명\nconst z = y ?? 1;\n" });
   assert.deepEqual(found.map((item) => item.line), [2, 4]);
+});
+
+test("a reason marker of another form than `(default|silent): <reason>` is an error that names the file and line", () => {
+  const forms = ["// 기본값: 명세의 글자 크기는 13이다.", "// Default: the specification fixes the size.", "// DEFAULT: the specification fixes the size.", "// Silent: nobody listens to this.", "// default - the specification fixes the size.", "/* fallback: the specification fixes the size. */", "// default:the specification fixes the size."];
+  for (const form of forms) {
+    const errors = markerErrors("packages/a/a.js", `const a = 1;\n${form}\nconst x = y ?? 0;\n`);
+    assert.equal(errors.length, 1, form);
+    assert.match(errors[0], /^packages\/a\/a\.js:2: reason marker /, form);
+  }
+  assert.deepEqual(markerErrors("packages/a/a.js", "// default: the specification fixes the size.\n// silent: nobody listens to this.\nconst x = 1; // default: fixed by the contract.\n"), []);
 });
 
 test("variable defaults and multiline empty catches are audited", () => {
@@ -132,7 +143,7 @@ test("the repository states a reason for every default and discarded error in pr
 test("the command lists repository candidates with locations and contract reasons", () => {
   const output = spawnSync(process.execPath, [join(ROOT, "scripts/check-fallbacks.mjs"), "--list"], { encoding: "utf8" });
   assert.equal(output.status, 0, output.stderr);
-  assert.match(output.stdout, /packages\/host\/tauriv2\/src\/exposure\.rs:\d+: defaulting unwrap \[reason=(?:기본값|default):/);
+  assert.match(output.stdout, /packages\/host\/tauriv2\/src\/exposure\.rs:\d+: defaulting unwrap \[reason=default:/);
   assert.match(output.stdout, /Fallback checks passed: \d+ occurrences listed; \d+ have a stated contract reason\./);
 
   const invalid = spawnSync(process.execPath, [join(ROOT, "scripts/check-fallbacks.mjs"), "--unknown"], { encoding: "utf8" });
