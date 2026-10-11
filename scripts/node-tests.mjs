@@ -8,6 +8,7 @@ import { existsSync, globSync, readdirSync, readFileSync, statSync } from 'node:
 import { cpus } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { auditRunWithCatalog } from './audit-run.mjs';
 import { runTests } from './test-runner.mjs';
 
 /** The seconds since the last keyboard or pointer input of the person, or null when the system does not report it. */
@@ -121,6 +122,25 @@ function workspacePackages(root) {
   return listed.map((item) => relative(root, item.path) || '.').sort((a, b) => (a === '.' ? -1 : b === '.' ? 1 : a.localeCompare(b)));
 }
 
+/**
+ * The audit of the logs that follows a run of window checks (`--script verify`) or of the activation tier
+ * (`--script verify:activation`): `audit(run folder)` returns the findings `<file>:<line>: <message>`, which are written, and the
+ * status is 1 when there is one or when the audit cannot run (for example, the run left no marks). Other scripts leave no logs.
+ */
+export function auditAfterRun(scriptName, run, write, audit = auditRunWithCatalog) {
+  if (scriptName !== 'verify' && !scriptName.startsWith('verify:')) return 0;
+  let findings;
+  try {
+    findings = audit(run.folder);
+  } catch (error) {
+    write(`AUDIT FAIL ${error.message}`);
+    return 1;
+  }
+  for (const finding of findings) write(`AUDIT ${finding}`);
+  write(findings.length === 0 ? `AUDIT PASS the logs of run ${run.id}` : `AUDIT FAIL ${findings.length} findings in the logs of run ${run.id}`);
+  return findings.length === 0 ? 0 : 1;
+}
+
 async function main(argv) {
   const option = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
   const only = option('--only', '');
@@ -142,7 +162,10 @@ async function main(argv) {
   const idle = option('--when-idle', null);
   const beforeEach = idle === null ? undefined : whenIdle(Number(idle), { write });
   const { results } = await runTests({ tests, concurrency, defaultTimeoutMs: limitMs, write, beforeEach, run });
-  return [...results.values()].every((result) => result.status === 'pass') ? 0 : 1;
+  const passed = [...results.values()].every((result) => result.status === 'pass');
+  // The logs are audited also when a test failed, because a failed run is classified by its logs.
+  const audited = auditAfterRun(scriptName, run, write);
+  return passed && audited === 0 ? 0 : 1;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

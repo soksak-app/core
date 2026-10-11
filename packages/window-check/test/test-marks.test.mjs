@@ -40,7 +40,7 @@ test("markTest sends the mark with the run identifier and appends its position t
   const folder = mkdtempSync(join(tmpdir(), "soksak-marks-"));
   t.after(() => rmSync(folder, { recursive: true }));
   const client = fakeClient([{ boot: "1-2", seq: 7 }, { boot: "1-2", seq: 9 }]);
-  const session = new Session({ name: "fixture" }, client);
+  const session = new Session({ name: "fixture", configDir: "/config/a" }, client);
   await withRun("run-1", folder, async () => {
     assert.deepEqual(await session.markTest("start", "check a"), { boot: "1-2", seq: 7 });
     await session.markTest("end", "check a", "fail");
@@ -51,17 +51,36 @@ test("markTest sends the mark with the run identifier and appends its position t
   ]);
   const lines = marks(folder);
   assert.deepEqual(lines.map(({ ts_us, ...rest }) => rest), [
-    { run: "run-1", app: "fixture", name: "check a", kind: "start", boot: "1-2", seq: 7 },
-    { run: "run-1", app: "fixture", name: "check a", kind: "end", boot: "1-2", seq: 9 },
+    { run: "run-1", app: "fixture", config: "/config/a", name: "check a", kind: "start", boot: "1-2", seq: 7 },
+    { run: "run-1", app: "fixture", config: "/config/a", name: "check a", kind: "end", boot: "1-2", seq: 9 },
   ]);
   assert.ok(lines.every((line) => Number.isInteger(line.ts_us) && line.ts_us > 1e15), JSON.stringify(lines));
+});
+
+test("expectError appends its declaration to marks.jsonl while a run is kept, and only then", async (t) => {
+  const folder = mkdtempSync(join(tmpdir(), "soksak-marks-"));
+  t.after(() => rmSync(folder, { recursive: true }));
+  const session = new Session({ name: "fixture", configDir: "/config/a" }, fakeClient([{ boot: "1-2", seq: 7 }]));
+  await withRun("run-1", folder, async () => {
+    await session.markTest("start", "check a");
+    session.expectError(/cannot open: .*/i);
+    session.on("second").expectError(/second window/);
+  });
+  assert.deepEqual(marks(folder).slice(1).map(({ ts_us, ...rest }) => rest), [
+    { run: "run-1", app: "fixture", config: "/config/a", name: "check a", kind: "expect_error", pattern: "cannot open: .*", flags: "i" },
+    { run: "run-1", app: "fixture", config: "/config/a", name: "check a", kind: "expect_error", pattern: "second window", flags: "" },
+  ]);
+  assert.equal(session.expectedErrors.length, 2);
+  const other = new Session({ name: "fixture", configDir: "/config/a" }, fakeClient([]));
+  other.expectError(/x/);
+  assert.equal(other.expectedErrors.length, 1);
 });
 
 test("markTest does nothing without a run identifier", async (t) => {
   const folder = mkdtempSync(join(tmpdir(), "soksak-marks-"));
   t.after(() => rmSync(folder, { recursive: true }));
   const client = fakeClient([]);
-  const session = new Session({ name: "fixture" }, client);
+  const session = new Session({ name: "fixture", configDir: "/config/a" }, client);
   await withRun(undefined, folder, async () => {
     assert.equal(await session.markTest("start", "check a"), null);
   });

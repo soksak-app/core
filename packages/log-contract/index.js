@@ -117,17 +117,17 @@ function chainFindings(entries, catalog) {
   // default: a catalog that declares no chain has no chain to check.
   for (const [name, hops] of Object.entries(catalog.chains ?? {})) {
     const seen = new Map();
-    for (const { line, event } of entries) {
+    for (const { line, file, event } of entries) {
       // default: an event that does not belong to the input has no correlation identifier.
       for (const cid of event.cids ?? []) {
-        if (!seen.has(cid)) seen.set(cid, { line, events: new Set() });
+        if (!seen.has(cid)) seen.set(cid, { line, file, events: new Set() });
         seen.get(cid).events.add(event.event);
       }
     }
-    for (const [cid, { line, events }] of seen) {
+    for (const [cid, { line, file, events }] of seen) {
       if (!events.has(hops[0])) continue;
       const missing = hops.find((hop) => !events.has(hop));
-      if (missing !== undefined) findings.push({ line, message: `chain ${name} of ${cid} lacks ${missing}` });
+      if (missing !== undefined) findings.push({ line, file, message: `chain ${name} of ${cid} lacks ${missing}` });
     }
   }
   return findings;
@@ -144,4 +144,68 @@ export function auditLog(file, text, catalog) {
     ...seqFindings(entries),
     ...chainFindings(entries, catalog),
   ].sort((a, b) => a.line - b.line);
+}
+
+/** The process a file belongs to and its position in the order of the generations: `host-1-2.jsonl.1` and `host-1-2.debug.jsonl` belong to `host-1-2`. */
+export function processOf(file) {
+  const base = file.split("/").pop();
+  const match = /^(.+?)(?:\.debug)?\.jsonl(?:\.\d+)?$/.exec(base);
+  if (match === null) throw new Error(`${file}: not an event file name (<role>-<boot>[.debug].jsonl[.<generation>])`);
+  return match[1];
+}
+
+/** The text of an `error` event for a finding. */
+function errorText(event) {
+  const { where, text } = event.fields ?? {};
+  return typeof where === "string" && typeof text === "string" ? `${where}: ${text}` : `${event.event}: ${JSON.stringify(event.fields ?? {})}`;
+}
+
+/**
+ * Audits the event files of one configuration folder together and returns the findings `{file, line, message}`. `logs` is
+ * `[{file, text}]` for every layer and generation. Each line is checked against the catalog. The `seq` of one process is
+ * consecutive across its rotated generations and its debug file (gaps that `log.dropped` names are explained), the declared
+ * chains join the events of all files because a chain crosses processes, and an `error` event is a finding unless
+ * `declaredError(file, {line, event})` is true.
+ */
+export function auditLogs(logs, catalog, declaredError = () => false) {
+  const parsed = logs.map(({ file, text }) => ({ file, process: processOf(file), entries: parseLog(file, text).map((entry) => ({ ...entry, file })) }));
+  return auditParsed(parsed, catalog, declaredError);
+}
+
+/** The audit of `auditLogs` for files that are already read: `[{file, process, entries}]` with `file` on each entry. */
+export function auditParsed(parsed, catalog, declaredError = () => false) {
+  const findings = [];
+  const located = (file, list) => list.forEach(({ line, message }) => findings.push({ file, line, message }));
+  for (const { file, entries } of parsed) {
+    located(file, entries.flatMap((entry) => lineFindings(entry, catalog)));
+    for (const entry of entries) {
+      if (entry.event.level === "error" && !declaredError(file, entry)) {
+        findings.push({ file, line: entry.line, message: `undeclared error ${errorText(entry.event)}` });
+      }
+    }
+    // seq increases within one file; the merge below checks the continuity of the process.
+    entries.forEach((entry, index) => {
+      if (index > 0 && entry.event.seq <= entries[index - 1].event.seq) {
+        findings.push({ file, line: entry.line, message: `seq ${entry.event.seq} follows seq ${entries[index - 1].event.seq}` });
+      }
+    });
+  }
+  const processes = new Map();
+  for (const { process, entries } of parsed) processes.set(process, [...(processes.get(process) ?? []), ...entries]);
+  for (const entries of processes.values()) {
+    const ordered = [...entries].sort((a, b) => a.event.seq - b.event.seq);
+    const ranges = explainedRanges(ordered);
+    ordered.forEach((entry, index) => {
+      const previous = ordered[index - 1];
+      if (previous === undefined || entry.event.seq === previous.event.seq + 1) return;
+      // A file whose seq runs backwards is already reported above.
+      if (previous.file === entry.file && entry.event.seq < previous.event.seq) return;
+      const covered = ranges.some(([from, to]) => from === previous.event.seq + 1 && to === entry.event.seq - 1);
+      if (!covered) findings.push({ file: entry.file, line: entry.line, message: `seq ${entry.event.seq} follows seq ${previous.event.seq}` });
+    });
+  }
+  const all = parsed.flatMap(({ entries }) => entries);
+  for (const { line, message, file } of chainFindings(all, catalog)) findings.push({ file, line, message });
+  const order = new Map(parsed.map(({ file }, index) => [file, index]));
+  return findings.sort((a, b) => order.get(a.file) - order.get(b.file) || a.line - b.line);
 }

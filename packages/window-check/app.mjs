@@ -323,6 +323,7 @@ export class Session {
    */
   expectError(pattern) {
     this.expectedErrors.push(pattern);
+    this.appendMark({ kind: "expect_error", pattern: pattern.source, flags: pattern.flags });
   }
 
   /**
@@ -339,6 +340,7 @@ export class Session {
     const other = new Session(this.app, this.client);
     other.cleanups = this.cleanups;
     other.expectedErrors = this.expectedErrors;
+    other.testName = this.testName;
     other.presses = this.presses;
     other.started = this.started;
     other.window = window;
@@ -479,9 +481,26 @@ export class Session {
     const folder = process.env.SOKSAK_RUN_FOLDER;
     if (!folder) throw new Error("SOKSAK_RUN_ID is set but SOKSAK_RUN_FOLDER is not; the runner sets both");
     const position = await this.request("diagnostics.test.mark", result === undefined ? { kind, name, run } : { kind, name, run, result });
-    const ts_us = Math.round((performance.timeOrigin + performance.now()) * 1000);
-    appendFileSync(join(folder, "marks.jsonl"), `${JSON.stringify({ run, app: this.app.name, name, kind, boot: position.boot, seq: position.seq, ts_us })}\n`);
+    if (kind === "start") this.testName = name;
+    this.appendMark({ kind, name, boot: position.boot, seq: position.seq });
     return position;
+  }
+
+  /**
+   * Appends a record of the test under the run to marks.jsonl: `{run, app, config, name, ...record, ts_us}`, where `config`
+   * is the configuration folder of the application, so the audit of a run finds the logs of the applications it used from
+   * the marks. A declaration (`expect_error`) belongs to the test that started in this session. Nothing is
+   * written without SOKSAK_RUN_ID (see markTest).
+   */
+  appendMark(record) {
+    const run = process.env.SOKSAK_RUN_ID;
+    if (!run) return;
+    const folder = process.env.SOKSAK_RUN_FOLDER;
+    if (!folder) throw new Error("SOKSAK_RUN_ID is set but SOKSAK_RUN_FOLDER is not; the runner sets both");
+    const name = record.name ?? this.testName;
+    if (name === undefined) throw new Error(`${this.app.name}: the ${record.kind} declaration comes before the start mark of the test`);
+    const ts_us = Math.round((performance.timeOrigin + performance.now()) * 1000);
+    appendFileSync(join(folder, "marks.jsonl"), `${JSON.stringify({ run, app: this.app.name, config: this.app.configDir, name, ...record, ts_us })}\n`);
   }
 
   /** Waits until the records the application wrote so far are in its event log. */

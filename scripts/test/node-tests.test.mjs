@@ -110,3 +110,25 @@ test("a run is named by its start time and process id and keeps its folder under
   assert.equal(run.id, `20261011T040506-${process.pid}`);
   assert.equal(run.folder, `/repo/target/test-runs/${run.id}`);
 });
+
+test("the audit of the logs runs after a run of window checks and of the activation tier, and after no other script", async () => {
+  const { auditAfterRun } = await import("../node-tests.mjs");
+  const run = { id: "r1", folder: "/repo/target/test-runs/r1" };
+  const ran = [];
+  const lines = [];
+  const audit = (folder) => { ran.push(folder); return ["/c/logs/host-1-2.jsonl:3: undeclared error place: boom"]; };
+  assert.equal(auditAfterRun("test", run, (line) => lines.push(line), audit), 0);
+  assert.deepEqual(ran, []);
+  for (const script of ["verify", "verify:activation"]) {
+    assert.equal(auditAfterRun(script, run, (line) => lines.push(line), audit), 1);
+  }
+  assert.deepEqual(ran, [run.folder, run.folder]);
+  assert.deepEqual(lines.slice(0, 2), [
+    "AUDIT /c/logs/host-1-2.jsonl:3: undeclared error place: boom",
+    "AUDIT FAIL 1 findings in the logs of run r1",
+  ]);
+  assert.equal(auditAfterRun("verify", run, (line) => lines.push(line), () => []), 0);
+  assert.equal(lines.at(-1), "AUDIT PASS the logs of run r1");
+  assert.equal(auditAfterRun("verify", run, (line) => lines.push(line), () => { throw new Error("marks.jsonl: the run left no test marks"); }), 1);
+  assert.equal(lines.at(-1), "AUDIT FAIL marks.jsonl: the run left no test marks");
+});

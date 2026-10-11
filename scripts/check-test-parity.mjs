@@ -47,6 +47,7 @@ lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-test
 lane("test runs", "js-ts", ["scripts/test-runs.mjs"], ["scripts/test/test-runs.test.mjs"]),
 lane("native tests", "js-ts", ["scripts/native-tests.mjs"], ["scripts/test/native-tests.test.mjs"]),
 lane("event catalog", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
+ lane("run log audit", "js-ts", ["scripts/audit-run.mjs"], ["scripts/test/audit-run.test.mjs"]),
 lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/test/check-failure-table.test.mjs"]),
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs"]),
 lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
@@ -1411,6 +1412,20 @@ const FEATURE_LINKS = [
       { file: "packages/log-contract/test/audit.test.mjs", id: "a declared chain with a missing hop is a finding for its correlation identifier" },
     ],
     expected: "The audit of a log accepts a log that follows the event contract and reports undeclared events, missing fields, unexplained gaps of seq and incomplete chains.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.14",
+    implementation: [
+      { file: "scripts/audit-run.mjs", symbol: "export function auditRun" },
+      { file: "packages/log-contract/index.js", symbol: "export function auditLogs" },
+    ],
+    tests: [
+      { file: "scripts/test/audit-run.test.mjs", id: "an error in the range that the test did not declare is a finding with the file and the line" },
+      { file: "scripts/test/audit-run.test.mjs", id: "the logs of every layer under the configuration folders of the marks are audited, and a sidecar error is placed by time" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "seq continues across the rotated generations of one process, and a missing generation is a finding" },
+    ],
+    expected: "The audit of a run reads the configuration folders from the test marks, audits the event files of every layer and generation, and reports an undeclared error, a gap of seq and an incomplete chain as file, line and message.",
     levels: ["unit"],
   },
   {

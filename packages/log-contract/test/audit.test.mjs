@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { auditLog, parseLog } from "../index.js";
+import { auditLog, auditLogs, parseLog } from "../index.js";
 
 const catalog = {
   schema: 1,
@@ -124,5 +124,58 @@ test("an optional field is checked only when present, and a type with | accepts 
   assert.deepEqual(auditLog("host-b1.jsonl", text, optional), [
     { line: 5, message: "field removed must be a string|null, found number" },
     { line: 6, message: "field note must be a string, found number" },
+  ]);
+});
+
+const lines = (...items) => `${items.join("\n")}\n`;
+const generation = (first, last, boot = "b1") => lines(
+  line(first, "log.open", { schema: 1, pid: 7, role: "host", boot }),
+  ...Array.from({ length: last - first }, (_, index) => line(first + 1 + index, "native.input.key_down", { keyCode: 1 })),
+);
+
+test("seq continues across the rotated generations of one process, and a missing generation is a finding", () => {
+  const whole = [{ file: "host-1-2.jsonl.1", text: generation(1, 3) }, { file: "host-1-2.jsonl", text: generation(4, 6) }];
+  assert.deepEqual(auditLogs(whole, catalog), []);
+  const lost = [{ file: "host-1-2.jsonl.2", text: generation(1, 3) }, { file: "host-1-2.jsonl", text: generation(7, 9) }];
+  assert.deepEqual(auditLogs(lost, catalog), [{ file: "host-1-2.jsonl", line: 1, message: "seq 7 follows seq 3" }]);
+});
+
+test("seq continues across the main file and the debug file of one process", () => {
+  const main = lines(open, line(2, "native.input.key_down", { keyCode: 1 }), line(4, "native.input.key_down", { keyCode: 3 }));
+  const debug = lines(line(3, "log.open", { schema: 1, pid: 7, role: "host", boot: "b1" }), line(5, "native.input.key_down", { keyCode: 4 }));
+  assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: main }, { file: "host-1-2.debug.jsonl", text: debug }], catalog), []);
+  const short = lines(line(3, "log.open", { schema: 1, pid: 7, role: "host", boot: "b1" }), line(6, "native.input.key_down", { keyCode: 4 }));
+  assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: main }, { file: "host-1-2.debug.jsonl", text: short }], catalog), [
+    { file: "host-1-2.debug.jsonl", line: 2, message: "seq 6 follows seq 4" },
+  ]);
+});
+
+test("the files of different processes have separate seq, and a file name outside the pattern is an error", () => {
+  const host = { file: "host-1-2.jsonl", text: generation(1, 3) };
+  const sidecar = { file: "vt-3-4.jsonl", text: generation(1, 2, "b2") };
+  assert.deepEqual(auditLogs([host, sidecar], catalog), []);
+  assert.throws(() => auditLogs([{ file: "other.log", text: generation(1, 2) }], catalog), /other\.log: not an event file name/);
+});
+
+test("an error event is a finding with its file and line unless the caller declares it", () => {
+  const errorLine = (seq) => line(seq, "native.input.key_down", { keyCode: 1 }, { level: "error" });
+  const text = lines(open, errorLine(2), errorLine(3));
+  const logs = [{ file: "host-1-2.jsonl", text }];
+  assert.deepEqual(auditLogs(logs, catalog), [
+    { file: "host-1-2.jsonl", line: 2, message: "undeclared error native.input.key_down: {\"keyCode\":1}" },
+    { file: "host-1-2.jsonl", line: 3, message: "undeclared error native.input.key_down: {\"keyCode\":1}" },
+  ]);
+  assert.deepEqual(auditLogs(logs, catalog, (file, entry) => entry.line === 2).map((f) => f.line), [3]);
+});
+
+test("the chains of the files of one configuration folder join, so a hop in a sidecar file completes a chain of the host file", () => {
+  const host = lines(open,
+    line(2, "native.input.key_down", { keyCode: 36 }, { cids: ["b1.1"] }),
+    line(3, "page.terminal.send", {}, { cids: ["b1.1"], layer: "page" }));
+  const sidecar = lines(line(1, "log.open", { schema: 1, pid: 8, role: "vt", boot: "b2" }),
+    line(2, "sidecar.vt.pty_write", { hex: "0d" }, { cids: ["b1.1"], layer: "sidecar" }));
+  assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: host }, { file: "vt-3-4.jsonl", text: sidecar }], catalog), []);
+  assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: host }], catalog), [
+    { file: "host-1-2.jsonl", line: 2, message: "chain key of b1.1 lacks sidecar.vt.pty_write" },
   ]);
 });

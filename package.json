@@ -12,6 +12,7 @@
     "test": "node scripts/node-tests.mjs",
     "test:scripts": "node --test scripts/test/*.test.mjs",
     "verify:windows": "node scripts/node-tests.mjs --script verify --concurrency 1 --timeout 600",
+    "verify:activation": "node scripts/node-tests.mjs --script verify:activation --concurrency 1 --timeout 600",
     "fuzz": "pnpm -F soksak fuzz",
     "mutate": "pnpm -F soksak mutate",
     "breaks": "pnpm -F soksak breaks",

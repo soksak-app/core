@@ -118,7 +118,7 @@ test('the logs of a configuration folder are audited against the catalog and the
     line(3, 'host.window.event', { window: 'main' }),
     line(4, 'host.surprise', {}),
   ].join('\n') + '\n');
-  assert.deepEqual(auditLogDirectories(catalog, [root]), [
+  assert.deepEqual(auditLogDirectories({ ...catalog, layers: [...catalog.layers, 'sidecar'] }, [root]), [
     `${join(root, 'logs', 'host-1-2.jsonl')}:3: field kind is required by host.window.event`,
     `${join(root, 'logs', 'host-1-2.jsonl')}:4: event host.surprise is not declared`,
   ]);
@@ -135,5 +135,23 @@ test('the placed variants of the host emit functions are emit sites, and a built
   assert.deepEqual(checker.emitFindings(catalog, sources).filter((finding) => !finding.includes('is declared and no source emits it')), [
     'a.go:6: host.surprise.go is emitted and docs/spec/events.json does not declare it',
     'b.rs:4: host.surprise.rs is emitted and docs/spec/events.json does not declare it',
+  ]);
+});
+
+test('the audit of a configuration folder reads the files of every layer, generation and the debug file, and reports an error event', () => {
+  const root = mkdtempSync(join(tmpdir(), 'events-'));
+  mkdirSync(join(root, 'logs'));
+  const line = (seq, event, fields, extra = {}) => JSON.stringify({ ts_us: 1000 + seq, seq, level: 'info', layer: 'host', event, fields, ...extra });
+  const open = (seq, role) => line(seq, 'log.open', { schema: 1, pid: 2, role, boot: '1-2' });
+  const write = (name, lines) => writeFileSync(join(root, 'logs', name), `${lines.join('\n')}\n`);
+  write('host-1-2.jsonl.1', [open(1, 'host'), line(2, 'host.window.event', { window: 'main', kind: 'focus' })]);
+  write('host-1-2.jsonl', [open(3, 'host'), line(5, 'host.window.event', { window: 'main', kind: 'focus' })]);
+  write('host-1-2.debug.jsonl', [open(4, 'host'), line(6, 'page.record.error', { where: 'w', text: 't' }, { layer: 'page', level: 'error' })]);
+  write('vt-3-4.jsonl', [open(1, 'vt'), line(2, 'host.surprise', {}, { layer: 'sidecar' })]);
+  write('notes.txt', ['not an event file']);
+  const logs = join(root, 'logs');
+  assert.deepEqual(auditLogDirectories({ ...catalog, layers: [...catalog.layers, 'sidecar'] }, [root]), [
+    `${join(logs, 'host-1-2.debug.jsonl')}:2: undeclared error w: t`,
+    `${join(logs, 'vt-3-4.jsonl')}:2: event host.surprise is not declared`,
   ]);
 });

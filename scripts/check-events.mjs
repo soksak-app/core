@@ -1,14 +1,17 @@
 // Checks the event catalog of this repository (docs/spec/logging.md#catalog, docs/spec/events.json):
 //   node scripts/check-events.mjs                  every emit site of the sources names a declared event with its level and
 //                                                  fields, and every declared event has an emit site;
-//   node scripts/check-events.mjs --logs DIR...    the host event files under DIR/logs (the configuration folders that the
-//                                                  window checks used) hold only declared events with their required fields.
-// The first form runs in `make events-check`. The second form is the log audit that follows the window checks.
+//   node scripts/check-events.mjs --logs DIR...    the event files of every layer under DIR/logs (the configuration folders
+//                                                  that the window checks used) hold only declared events with their required
+//                                                  fields, consecutive seq across generations and the debug file, complete
+//                                                  chains and no error event.
+// The first form runs in `make events-check`. The second form audits configuration folders without the judgment of tests;
+// `node scripts/audit-run.mjs <run folder>` audits a run and judges each test by the log.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { auditLog } from '../packages/log-contract/index.js';
+import { auditLogs } from '../packages/log-contract/index.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const CATALOG = 'docs/spec/events.json';
@@ -427,8 +430,8 @@ export function emitFindings(catalog, sources) {
   return findings;
 }
 
-/** The host event files of a configuration folder. */
-function eventFiles(directory) {
+/** The event files of every layer (`host`, `vt`, `files`, `shell`), generation and debug file of a configuration folder, in name order. */
+export function eventFiles(directory) {
   const logs = join(directory, 'logs');
   let names;
   try {
@@ -436,20 +439,17 @@ function eventFiles(directory) {
   } catch (error) {
     throw new Error(`${logs}: ${error.message}`, { cause: error });
   }
-  const files = names.filter((name) => /^host-\d+-\d+\.jsonl(\.\d)?$/.test(name)).map((name) => join(logs, name));
+  const files = names.filter((name) => /^(host|vt|files|shell)-\d+-\d+(\.debug)?\.jsonl(\.\d)?$/.test(name)).sort().map((name) => join(logs, name));
   if (files.length === 0) throw new Error(`${logs}: no host event file`);
   return files.filter((path) => statSync(path).isFile());
 }
 
-/** The findings `<file>:<line>: <message>` of the host event files of the configuration folders. */
+/** The findings `<file>:<line>: <message>` of the event files of the configuration folders; an `error` event is a finding. */
 export function auditLogDirectories(catalog, directories) {
-  const findings = [];
-  for (const directory of directories) {
-    for (const file of eventFiles(directory)) {
-      for (const { line, message } of auditLog(file, readFileSync(file, 'utf8'), catalog)) findings.push(`${file}:${line}: ${message}`);
-    }
-  }
-  return findings;
+  return directories.flatMap((directory) => {
+    const logs = eventFiles(directory).map((file) => ({ file, text: readFileSync(file, 'utf8') }));
+    return auditLogs(logs, catalog).map(({ file, line, message }) => `${file}:${line}: ${message}`);
+  });
 }
 
 function main(argv) {
