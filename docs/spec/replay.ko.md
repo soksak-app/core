@@ -19,7 +19,7 @@
 
 선택, viewport 스크롤, theme은 [보기 상태](#보기-상태)에서 정의한다. `hex`는 발생한 바이트 전체의 소문자 16진 글이다. 입력 event는 text 같은 파생 사본을 갖지 않는다. `sequence`는 session마다 1부터 세는 정수이며 종류에 관계없이 재생 입력마다 1씩 늘므로 session의 순번에는 빈틈이 없고, 재생은 `sequence` 순서로 입력을 적용한다. 쓰기를 일으키는 키 입력은 `cids`도 가진다([logging](logging.ko.md#event)).
 
-*frame 기록*은 class가 `frame`인 event로서 `session`, `fields.sequence`, `fields.rows`, `fields.cols`, `fields.hash`를 가진다. `sequence`는 화면이 포함하는 마지막 재생 입력의 순번이고, `hash`는 그 입력 뒤 화면의 [화면 hash](#화면-hash)다. sidecar는 만든 화면마다 층 `sidecar`의 frame 기록 하나를 쓴다. page는 받아서 그린 화면 메시지마다 층 `page`의 frame 기록 하나를 쓰며, sidecar에서 받은 화면의 `sequence`, `rows`, `cols`와 받은 격자의 hash를 담는다. hash는 메시지의 칸에서([보기 상태](#보기-상태), page) 계산하며 메시지가 싣는 hash에서 옮기지 않는다. page는 sidecar가 만든 화면만 그리므로 page의 frame 기록마다 `session`과 `sequence`가 같은 sidecar의 frame 기록이 있다.
+*frame 기록*은 class가 `frame`인 event로서 `session`, `fields.sequence`, `fields.rows`, `fields.cols`, `fields.hash`를 가진다. `sequence`는 화면이 포함하는 마지막 재생 입력의 순번이고, `hash`는 그 입력 뒤 화면의 [화면 hash](#화면-hash)다. sidecar는 만든 화면마다 층 `sidecar`의 frame 기록 하나를 쓴다. page는 받아서 그린 화면 메시지마다 frame 기록 하나를 쓴다. page의 plugin이 `runtime.log`로 쓰므로([plugin logging](plugins.ko.md#logging)) 층은 `plugin`이고, 화면을 그리지 않는 core의 page는 쓰지 않는다. 기록은 sidecar에서 받은 화면의 `sequence`, `rows`, `cols`와 받은 격자의 hash를 담는다. hash는 메시지의 칸에서([보기 상태](#보기-상태), page) 계산하며 메시지가 싣는 hash에서 옮기지 않는다. page는 sidecar가 만든 화면만 그리므로 page의 frame 기록마다 `session`과 `sequence`가 같은 sidecar의 frame 기록이 있다.
 
 ## Segment
 
@@ -107,6 +107,6 @@ sidecar가 만드는 화면은 그려지는 그대로의 화면이다. viewport�
 `sok debug replay <session> [--until <sequence>] [--config-dir <directory>]`([명령줄](cli.ko.md#명령))는 설정 폴더의 event 파일에서 [질의](logging.ko.md#질의)로 session의 event를 읽고, session의 sidecar event의 role을 `replay.role`로 선언한 설치된 sidecar를 찾아 그 재생 실행 파일을 [segment](#segment)마다 실행한 뒤, segment 순서대로, segment 안에서는 `sequence` 순서로, 같은 순번에서는 sidecar 기록을 page 기록보다 먼저 비교한다.
 
 1. sidecar의 frame 기록마다 그 순번의 재생 hash와 비교한다. 다르면 층 `sidecar`의 불일치다.
-2. page의 frame 기록마다 그 순번의 재생 hash와 비교한다. 다르거나 그 순번에 sidecar의 frame 기록이 없으면 층 `page`의 불일치다.
+2. page의 frame 기록마다 그 순번의 재생 hash와 비교한다. 다르거나 그 순번에 sidecar의 frame 기록이 없으면 층 `plugin`의 불일치다.
 
 첫 불일치에서 비교를 끝낸다. 도구는 `session`, `segment`(segment의 `boot`), `sequence`, `layer`, `expected`(재생 hash, sidecar의 frame 기록이 없는 page frame이면 `none`), `found`(저장된 hash)를 가진 event `sok.replay.divergence`(수준 `error`)를 저장하고, 표준 오류에 `sok: replay divergence: session <session> segment <boot> sequence <n> layer <layer> expected <expected> found <found>`를 쓰며 종료 상태 1로 끝난다. 모든 hash가 같으면 표준 출력에 `replay session <session>: <n> sidecar frames and <m> page frames equal in <k> segments`를 쓰고 상태 0으로 끝난다. 층 `sidecar` event가 없는 session, frame 기록이 없는 session, 둘 이상의 role의 sidecar event를 가진 session, 그 role을 선언한 설치된 sidecar가 없는 경우는 session과 role을 이름으로 가진 오류다. `fields.segment`가 문자열이 아니거나 session에 없는 `boot`를 가리키는 page frame 기록, segment가 여럿인 session에서 `fields.segment`가 없는 page frame 기록, 시각상 번갈아 나오는 두 segment의 sidecar event, 1 이상의 정수 `fields.sequence`와 문자열 `fields.hash`가 없는 frame 기록, 소문자 16진 64자가 아닌 저장된 hash, 실패하거나 `{"sequence", "hash"}`가 아닌 줄을 출력하는 실행 파일, 실행 파일이 hash를 출력하지 않은 sidecar의 frame 기록은 불일치가 아니라 오류다. 도구는 한 번에 한 segment의 event 줄을 메모리에 보관한다([메모리](#segment)). 두 도구는 같은 출력과 같은 오류 글을 낸다.

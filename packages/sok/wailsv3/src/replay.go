@@ -33,7 +33,7 @@ type ReplayDivergence struct {
 	// Segment is the boot of the run of the sidecar that produced the screen (docs/spec/replay.md#segments).
 	Segment  string
 	Sequence int64
-	// Layer is the layer of the stored hash: sidecar or page.
+	// Layer is the layer of the stored hash: sidecar, or plugin for the page frame record that the plugin of the page writes.
 	Layer string
 	// Expected is the replayed hash, or none for a page frame that has no frame of the sidecar.
 	Expected string
@@ -77,7 +77,7 @@ func replayError(session, format string, args ...any) error {
 }
 
 // scanReplaySession calls visit for each row of the session in the order of the query, with the sequence of the event (0 when
-// it has none). A row of a layer other than sidecar and page is not visited, and neither is a row with a sequence above until.
+// it has none). A row of a layer other than sidecar and plugin (the page frame records) is not visited, and neither is a row with a sequence above until.
 func scanReplaySession(configDir, session string, until *int64, visit func(row LogRow, event replayEvent, sequence int64) error) error {
 	params, err := json.Marshal(map[string]any{"channel": "all", "session": session, "order": "asc", "limit": queryMaxLimit})
 	if err != nil {
@@ -107,7 +107,7 @@ func scanReplaySession(configDir, session string, until *int64, visit func(row L
 			if sequence != 0 && until != nil && sequence > *until {
 				continue
 			}
-			if event.Layer != "sidecar" && event.Layer != "page" {
+			if event.Layer != "sidecar" && event.Layer != "plugin" {
 				continue
 			}
 			if err := visit(row, event, sequence); err != nil {
@@ -180,7 +180,7 @@ func ReplayLogs(configDir, session string, until *int64) (ReplayResult, error) {
 	}
 	// A page frame names the segment of the screen message it received.
 	for _, frame := range frames {
-		if frame.layer != "page" {
+		if frame.layer != "plugin" {
 			continue
 		}
 		switch {
@@ -271,10 +271,10 @@ func compareReplaySegment(session, segment string, all []replayFrame, folder, ex
 			continue
 		}
 		if !stored[frame.sequence] {
-			return ReplayDivergence{Session: session, Segment: segment, Sequence: frame.sequence, Layer: "page", Expected: "none", Found: frame.hash}
+			return ReplayDivergence{Session: session, Segment: segment, Sequence: frame.sequence, Layer: "plugin", Expected: "none", Found: frame.hash}
 		}
 		if hash != frame.hash {
-			return ReplayDivergence{Session: session, Segment: segment, Sequence: frame.sequence, Layer: "page", Expected: hash, Found: frame.hash}
+			return ReplayDivergence{Session: session, Segment: segment, Sequence: frame.sequence, Layer: "plugin", Expected: hash, Found: frame.hash}
 		}
 		result.PageFrames++
 	}

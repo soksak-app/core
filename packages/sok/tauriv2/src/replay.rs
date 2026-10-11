@@ -117,7 +117,7 @@ type ReplayVisit<'a> =
     dyn FnMut(&LogRow, &Value, &'static str, Option<i64>) -> Result<(), ReplayFailure> + 'a;
 
 /// Calls `visit` for each row of the session in the order of the query, with the event, its layer and its sequence (`None` when it has
-/// none). A row of a layer other than sidecar and page is not visited, and neither is a row with a sequence above `until`.
+/// none). A row of a layer other than sidecar and plugin (the page frame records) is not visited, and neither is a row with a sequence above `until`.
 fn scan_replay_session(
     config_dir: &Path,
     session: &str,
@@ -150,7 +150,7 @@ fn scan_replay_session(
             }
             let layer: &'static str = match layer {
                 "sidecar" => "sidecar",
-                "page" => "page",
+                "plugin" => "plugin",
                 _ => continue,
             };
             visit(row, &event, layer, sequence)?;
@@ -264,7 +264,7 @@ pub fn replay_logs(
         return Err(replay_error(session, "no frame record to compare"));
     }
     // A page frame names the segment of the screen message it received.
-    for frame in frames.iter().filter(|frame| frame.layer == "page") {
+    for frame in frames.iter().filter(|frame| frame.layer == "plugin") {
         if frame.segment.is_empty() {
             return Err(replay_error(
                 session,
@@ -402,7 +402,7 @@ fn compare_replay_segment(
             _ => "none".to_string(),
         };
         if expected != frame.hash {
-            return Err(divergence("page", expected));
+            return Err(divergence("plugin", expected));
         }
         result.page_frames += 1;
     }

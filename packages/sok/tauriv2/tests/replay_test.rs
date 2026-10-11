@@ -49,15 +49,16 @@ fn input(ts: i64, seq: i64, sequence: i64, session: &str, hex: &str) -> String {
     )
 }
 
-/// A frame record; a record of the page names the segment b1 of the screen that it received.
+/// A frame record; the page frame record is the event of the plugin of the page (layer plugin), which names the segment b1 of the
+/// screen that it received.
 fn frame(layer: &str, ts: i64, seq: i64, sequence: i64, session: &str, hash: &str) -> String {
-    let segment = if layer == "page" {
-        r#""segment":"b1","#
+    let (name, segment) = if layer == "plugin" {
+        ("plugin.fake.frame", r#""segment":"b1","#)
     } else {
-        ""
+        ("fake.frame", "")
     };
     format!(
-        r#"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"{layer}","class":"frame","event":"fake.frame","session":"{session}","fields":{{"sequence":{sequence},{segment}"rows":2,"cols":3,"hash":"{hash}"}}}}"#
+        r#"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"{layer}","class":"frame","event":"{name}","session":"{session}","fields":{{"sequence":{sequence},{segment}"rows":2,"cols":3,"hash":"{hash}"}}}}"#
     )
 }
 
@@ -71,8 +72,8 @@ fn standard_events() -> Events {
             frame("sidecar", 1040, 5, 2, "s1", &digits(4)),
         ],
         page: vec![
-            frame("page", 1025, 2, 1, "s1", &digits(2)),
-            frame("page", 1045, 3, 2, "s1", &digits(4)),
+            frame("plugin", 1025, 2, 1, "s1", &digits(2)),
+            frame("plugin", 1045, 3, 2, "s1", &digits(4)),
         ],
     }
 }
@@ -244,16 +245,16 @@ fn replay_reports_the_first_divergence_with_its_layer() {
         ),
         (
             "the hash of a drawn frame was altered",
-            |e| e.page[1] = frame("page", 1045, 3, 2, "s1", &digits(8)),
-            "page",
+            |e| e.page[1] = frame("plugin", 1045, 3, 2, "s1", &digits(8)),
+            "plugin",
             2,
             digits(4),
             digits(8),
         ),
         (
             "a page frame has no frame of the sidecar",
-            |e| e.page.push(frame("page", 1050, 4, 3, "s1", &digits(4))),
-            "page",
+            |e| e.page.push(frame("plugin", 1050, 4, 3, "s1", &digits(4))),
+            "plugin",
             3,
             "none".to_string(),
             digits(4),
@@ -370,7 +371,7 @@ fn replay_refuses_what_it_cannot_compare() {
 /// record of the sidecar and of the page; the page frames name the segment they received.
 fn segment_events(session: &str) -> Events {
     let page_frame = |ts: i64, seq: i64, sequence: i64, hash: &str| {
-        frame("page", ts, seq, sequence, session, hash).replacen(
+        frame("plugin", ts, seq, sequence, session, hash).replacen(
             r#""segment":"b1""#,
             r#""segment":"b2""#,
             1,

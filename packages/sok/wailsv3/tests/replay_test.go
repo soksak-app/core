@@ -47,13 +47,14 @@ func input(ts, seq, sequence int, session, hex string) string {
 	return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"sidecar","class":"io","event":"fake.input","session":"%s","fields":{"sequence":%d,"hex":"%s"}}`, ts, ts, seq, session, sequence, hex)
 }
 
-// frame is a frame record; a record of the page names the segment b1 of the screen that it received.
+// frame is a frame record; the page frame record is the event of the plugin of the page (layer plugin), which names the segment
+// b1 of the screen that it received.
 func frame(layer string, ts, seq, sequence int, session, hash string) string {
-	segment := ""
-	if layer == "page" {
-		segment = `"segment":"b1",`
+	name, segment := "fake.frame", ""
+	if layer == "plugin" {
+		name, segment = "plugin.fake.frame", `"segment":"b1",`
 	}
-	return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"%s","class":"frame","event":"fake.frame","session":"%s","fields":{"sequence":%d,%s"rows":2,"cols":3,"hash":"%s"}}`, ts, ts, seq, layer, session, sequence, segment, hash)
+	return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"%s","class":"frame","event":"%s","session":"%s","fields":{"sequence":%d,%s"rows":2,"cols":3,"hash":"%s"}}`, ts, ts, seq, layer, name, session, sequence, segment, hash)
 }
 
 // standardEvents are the inputs "hi" (2 bytes) and "\r\n" (2 bytes) with a frame record after each, written consistently.
@@ -66,8 +67,8 @@ func standardEvents() replayEvents {
 			frame("sidecar", 1040, 5, 2, "s1", digits(4)),
 		},
 		page: []string{
-			frame("page", 1025, 2, 1, "s1", digits(2)),
-			frame("page", 1045, 3, 2, "s1", digits(4)),
+			frame("plugin", 1025, 2, 1, "s1", digits(2)),
+			frame("plugin", 1045, 3, 2, "s1", digits(4)),
 		},
 	}
 }
@@ -172,8 +173,8 @@ func TestReplayReportsTheFirstDivergenceWithItsLayer(t *testing.T) {
 	}{
 		{"an input of the sidecar was altered", func(e *replayEvents) { e.sidecar[0] = input(1010, 2, 1, "s1", "686921") }, "sidecar", 1, digits(3), digits(2)},
 		{"the hash of a frame of the sidecar was altered", func(e *replayEvents) { e.sidecar[3] = frame("sidecar", 1040, 5, 2, "s1", digits(9)) }, "sidecar", 2, digits(4), digits(9)},
-		{"the hash of a drawn frame was altered", func(e *replayEvents) { e.page[1] = frame("page", 1045, 3, 2, "s1", digits(8)) }, "page", 2, digits(4), digits(8)},
-		{"a page frame has no frame of the sidecar", func(e *replayEvents) { e.page = append(e.page, frame("page", 1050, 4, 3, "s1", digits(4))) }, "page", 3, "none", digits(4)},
+		{"the hash of a drawn frame was altered", func(e *replayEvents) { e.page[1] = frame("plugin", 1045, 3, 2, "s1", digits(8)) }, "plugin", 2, digits(4), digits(8)},
+		{"a page frame has no frame of the sidecar", func(e *replayEvents) { e.page = append(e.page, frame("plugin", 1050, 4, 3, "s1", digits(4))) }, "plugin", 3, "none", digits(4)},
 	}
 	for _, c := range cases {
 		events := standardEvents()
@@ -234,7 +235,7 @@ func TestReplayRefusesWhatItCannotCompare(t *testing.T) {
 // followed by a frame record of the sidecar and of the page; the page frames name the segment they received.
 func segmentEvents(session string) replayEvents {
 	pageFrame := func(ts, seq, sequence int, hash string) string {
-		return strings.Replace(frame("page", ts, seq, sequence, session, hash), `"segment":"b1"`, `"segment":"b2"`, 1)
+		return strings.Replace(frame("plugin", ts, seq, sequence, session, hash), `"segment":"b1"`, `"segment":"b2"`, 1)
 	}
 	return replayEvents{
 		sidecar: []string{

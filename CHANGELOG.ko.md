@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.35.6: 두 도구의 `sok debug replay`는 page의 plugin이 `runtime.log`로 쓰는 계층 `plugin`의 page frame 기록을 비교하고 불일치에 그 계층을 밝힌다. frame 기록이 없는 계층 `page`를 읽었으므로 재생은 page frame을 하나도 비교하지 않았다.
 - F160.35.5: [화면 메시지](docs/spec/terminal-runtime.ko.md#화면-메시지)가 화면을 그린 sidecar 실행의 event 파일의 `boot`인 `segment`를 담는다. `screenFromMessage`는 비어 있지 않은 `segment`가 없는 메시지를 거부하고(fixture 메시지 `segment missing`), page는 이를 frame 기록의 `segment`로 저장하며, 두 도구의 `sok debug replay`는 segment가 하나인 session에서도 `fields.segment`가 없는 page frame 기록을 거부한다(계약 사례 `cli.debug.replay-segment-errors`).
 - F160.35.3: [화면 메시지](docs/spec/terminal-runtime.ko.md#화면-메시지)가 page는 있는 cursor 멤버를 각각 검사하고(`shape`는 `Block` 또는 `block`, `blinking`과 `focused`는 boolean) 없는 멤버는 이전 값을 유지하며 `terminal.screen.read`의 응답은 칸의 행이라고 정한다.
 - F160.35.1: [terminal runtime](docs/spec/terminal-runtime.ko.md#화면-메시지)가 sidecar에서 page로 가는 `screen` 메시지(해당 frame 기록의 `sequence`, `rows`, `cols`, `cursor`, 셀마다 `grapheme`, `width`, 해석된 `fg`와 `bg`, `attributes`)를 정의하고, [replay](docs/spec/replay.ko.md#보기-상태)가 page hash를 page가 받은 grid의 hash로 적어, sidecar hash와의 차이는 host와 page 사이 중계의 손실이나 변경을 찾고 raster의 결함은 비교 밖에 있음을 밝힌다. `@soksak/plugin-api/screen-hash`의 `screenFromMessage`가 메시지를 검증해 `screenHash`가 받는 화면을 돌려주며, `packages/log-contract/fixtures/replay/screen-message.json`이 화면 벡터마다 hash가 같은 메시지와 거부되는 메시지를 담는다. Red: `screenFromMessage`가 export되지 않았고 명세가 fixture를 이름으로 부르지 않았다. macOS에서 `node --test packages/log-contract/test/*.test.mjs packages/plugin-api/test/*.test.mjs`로 시험했다. sidecar와 plugin은 F160.35.2, F160.35.3에서 메시지를 채택한다.
