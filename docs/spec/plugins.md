@@ -243,7 +243,7 @@ Every file imported by published files must be listed in the `files` array of it
 
 The debug staging targets `frontend-wailsv3` and `frontend-tauriv2` add `--diagnostics`; release builds contain no page diagnostic code, and plugin diagnostic code reaches only configurations that install [diagnostic releases](cli.md#releases-and-the-registry). `make release-check` fails when a staged release frontend contains `/transcript.js` or a page diagnostic module.
 
-Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/runtime`, and `@soksak/workbench/`.
+Every page declares one import map equal to `PAGE_IMPORTS`: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/page`, `@soksak/plugin-api/screen-hash` (the [screen hash](replay.md#screen-hash) of a screen message), `@soksak/runtime`, `@soksak/shared/` and `@soksak/workbench/`.
 
 ## Runtime module
 
