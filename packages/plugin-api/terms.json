@@ -136,6 +136,16 @@
       "allowed": []
     },
     {
+      "term": "replay segment",
+      "definition": "The events of the layer sidecar that one run (boot) of a sidecar produced for one session; its sequence restarts at 1, and a replay compares each segment on its own (docs/spec/replay.md#segments).",
+      "rejected": [
+        "replay part",
+        "session part",
+        "replay chunk"
+      ],
+      "allowed": []
+    },
+    {
       "term": "screen hash",
       "definition": "The SHA-256 of the canonical bytes of a terminal screen that docs/spec/replay.md defines; a sidecar and a page store it per frame record.",
       "rejected": [
