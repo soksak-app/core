@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { auditLogDirectories } from '../check-events.mjs';
+import { auditLogDirectories, catalogOf, installedSidecarCatalogs } from '../check-events.mjs';
 
 const catalog = {
   schema: 2,
@@ -65,4 +65,60 @@ test('the catalog declares the chain of each operation of the page and the first
   assert.deepEqual(real.events['page.project.operation'].fields, { action: 'string', project: 'string' });
   assert.deepEqual(real.events['page.window.operation'].fields, { action: 'string' });
   assert.deepEqual(real.events['page.update.operation'].fields, { action: 'string', version: 'string' });
+});
+
+const alphaCatalog = JSON.parse(readFileSync(new URL('../../packages/log-contract/fixtures/extension/alpha.json', import.meta.url), 'utf8'));
+const SIDECAR_PATH = 'sidecars/alpha/1.0.0/platform';
+
+/** A configuration folder that has installed the sidecar `alpha`, whose `sidecar.json` names the catalog `events.json`. */
+function installed(t, { sidecar = { executable: 'bin/alpha', protocol: 1, events: 'events.json' }, catalog = alphaCatalog, format = 2 } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'events-'));
+  t.after(() => rmSync(root, { recursive: true }));
+  mkdirSync(join(root, 'plugins'));
+  mkdirSync(join(root, SIDECAR_PATH), { recursive: true });
+  writeFileSync(join(root, 'plugins', 'installed.json'), JSON.stringify({ format, plugins: {}, sidecars: { alpha: { version: '1.0.0', path: SIDECAR_PATH } } }));
+  writeFileSync(join(root, SIDECAR_PATH, 'sidecar.json'), JSON.stringify(sidecar));
+  if (catalog !== null) writeFileSync(join(root, SIDECAR_PATH, 'events.json'), JSON.stringify(catalog));
+  mkdirSync(join(root, 'logs'));
+  return root;
+}
+
+test('the catalogs of the installed sidecars are read from the folders that installed.json records, through the member events of sidecar.json', (t) => {
+  const root = installed(t);
+  assert.deepEqual(installedSidecarCatalogs(root), [alphaCatalog]);
+  const none = mkdtempSync(join(tmpdir(), 'events-'));
+  t.after(() => rmSync(none, { recursive: true }));
+  assert.deepEqual(installedSidecarCatalogs(none), []);
+  const bare = installed(t, { sidecar: { executable: 'bin/alpha', protocol: 1 }, catalog: null });
+  assert.deepEqual(installedSidecarCatalogs(bare), []);
+});
+
+test('an installed sidecar whose record or catalog cannot be read is an error that names the file', (t) => {
+  assert.throws(() => installedSidecarCatalogs(installed(t, { format: 1 })), /plugins\/installed\.json: format must be 2/);
+  assert.throws(() => installedSidecarCatalogs(installed(t, { catalog: null })), /platform\/events\.json: the event catalog of the sidecar alpha: ENOENT/);
+  assert.throws(() => catalogOf(catalog, installed(t, { catalog: { ...alphaCatalog, sidecar: undefined } })), /the member sidecar must name the sidecar/);
+});
+
+test('the events of an installed sidecar are audited against its catalog, and a chain extension finds a request that the sidecar did not follow', (t) => {
+  const root = installed(t);
+  const base = { schema: 2, layers: ['host', 'sidecar'], chains: { input: ['host.sidecar.request'] },
+    events: {
+      'log.open': alphaCatalog.events['log.open'],
+      'host.sidecar.request': { layer: 'host', class: 'io', level: 'info', cids: 'required', fields: { name: 'string' } },
+    } };
+  const line = (seq, event, fields, layer, extra = {}) => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: 'info', layer, event, fields, ...extra });
+  writeFileSync(join(root, 'logs', 'host-1-2.jsonl'), [
+    line(1, 'log.open', { schema: 2, pid: 2, role: 'host', boot: '1-2' }, 'sidecar'),
+    line(2, 'host.sidecar.request', { name: 'alpha' }, 'host', { cids: ['1-2.1'] }),
+  ].join('\n') + '\n');
+  writeFileSync(join(root, 'logs', 'alpha-3-4.jsonl'), [
+    line(1, 'log.open', { schema: 2, pid: 3, role: 'alpha', boot: '3-4' }, 'sidecar'),
+    line(2, 'sidecar.alpha.start', { pid: 3 }, 'sidecar'),
+    line(3, 'sidecar.alpha.surprise', {}, 'sidecar'),
+  ].join('\n') + '\n');
+  const logs = join(root, 'logs');
+  assert.deepEqual(auditLogDirectories(base, [root]), [
+    `${join(logs, 'alpha-3-4.jsonl')}:3: event sidecar.alpha.surprise is not declared`,
+    `${join(logs, 'host-1-2.jsonl')}:2: chain input of 1-2.1 lacks sidecar.alpha.write after host.sidecar.request of alpha`,
+  ]);
 });
