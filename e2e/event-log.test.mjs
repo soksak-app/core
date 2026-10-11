@@ -1,5 +1,6 @@
 // A running application has started the event writer of its host (docs/spec/logging.md#files): the file
-// `logs/host-<boot>.jsonl` of the process opens with `log.open`, is private to its owner, and holds consecutive `seq`.
+// `logs/host-<boot>.jsonl` of the process opens with `log.open`, is private to its owner, and with the debug file of the process
+// holds consecutive `seq`, which the writer counts across both files (docs/spec/logging.md#files).
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -20,7 +21,9 @@ for (const app of Object.values(APPS)) {
     assert.equal(names.length, 1, `logs/ holds ${names.length} event logs of process ${pid}: ${names.join(", ")}`);
     const path = join(logs, names[0]);
     assert.equal(statSync(path).mode & 0o777, 0o600, `${path} is not private to its owner`);
-    const events = readFileSync(path, "utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
+    // The writer appends while the check reads, so a last line without its end is not read.
+    const lines = (file) => readFileSync(file, "utf8").split("\n").slice(0, -1).map((line) => JSON.parse(line));
+    const events = lines(path);
     assert.equal(events[0].event, "log.open");
     assert.equal(events[0].fields.pid, pid);
     assert.equal(events[0].fields.role, "host");
@@ -28,7 +31,18 @@ for (const app of Object.values(APPS)) {
     assert.ok(events.some((event) => event.event === "host.app.event" && event.fields.kind === "started"), `${path} holds no application event started`);
     // The observers store a window event or an input source event while the first window opens; a start without either means the host did not install them.
     assert.ok(events.some((event) => event.event.startsWith("native.window.") || event.event === "native.input.source_changed"), `${path} holds no event of the activity observers`);
-    events.forEach((event, index) => assert.equal(event.seq, index + 1, `${path} line ${index + 1} has seq ${event.seq}`));
+    // The debug file of the process holds the events of the levels debug and trace; one seq counts across both files, the log.open
+    // of each file included.
+    const debugPath = path.replace(/\.jsonl$/, ".debug.jsonl");
+    const debug = lines(debugPath);
+    assert.equal(statSync(debugPath).mode & 0o777, 0o600, `${debugPath} is not private to its owner`);
+    assert.equal(debug[0]?.event, "log.open", `${debugPath} does not open with log.open`);
+    // The files are read one after the other while the writer appends to both, so only the seq up to the last seq of each file
+    // is complete in both reads.
+    const last = Math.min(events.at(-1).seq, debug.at(-1).seq);
+    const numbered = [...events, ...debug].filter((event) => event.seq <= last).sort((left, right) => left.seq - right.seq);
+    numbered.forEach((event, index) => assert.equal(event.seq, index + 1,
+      `the event files of process ${pid} skip from seq ${numbered[index - 1]?.seq} to ${event.seq}`));
   });
 }
 
