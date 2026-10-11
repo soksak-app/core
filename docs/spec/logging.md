@@ -112,6 +112,10 @@ These entrances record without a call site writing the record:
 
 Sources that no entrance covers, such as notification observers, delegates, key-value observers, timers and the end of a task, are listed by a lint of the sources for events without a declaration or a reason comment. The lint is not proof. Coverage is judged at run time: a window check drives each declared source through declared commands and native input and requires its declared events.
 
+### Test marks
+
+A window check marks each test in the event log of the application under test, so a test is a range of positions in the log. The diagnostic method `diagnostics.test.mark` ([endpoint](endpoint.md)) stores the event `host.test.start` (`name`, `run`) when the test starts and `host.test.end` (`name`, `run`, `result` of `pass`, `fail` or `skip`) when it ends, both of the layer `host`, the class `lifecycle` and the level `info`, and replies after a flush with `{boot, seq}`: the `boot` of the event file and the `seq` of the marker line. A position is `(boot, seq)`. The run identifier travels in these events and not in `log.open`, because one application serves many runs. The window-check library marks the start when a check opens its session and the end after the cleanups and the error audit of the check, with `fail` when the body or a cleanup failed, and appends `{run, app, name, kind, boot, seq, ts_us}` to `marks.jsonl` in the run folder (`SOKSAK_RUN_FOLDER`) for each mark. It marks only while `SOKSAK_RUN_ID` is set, which the test runner sets ([examples](../operations/examples.md#window-checks)).
+
 ## Checking
 
 `soksak-log-check` (the package `@soksak/log-contract`, `packages/log-contract`) validates logs against the schema and the catalog: the line structure, declared events, consecutive `seq` with gaps explained by `log.dropped`, the declared chains of each input kind, and no `error` besides those a test declares. The unit tests and window checks leave their logs; the gate validates every log that remains, and logs of a failed run are kept until they are classified.

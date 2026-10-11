@@ -112,6 +112,10 @@ catalog는 입력 종류마다 남겨야 하는 사슬도 선언한다. 첫 층�
 
 알림 observer, delegate, key-value observer, 타이머, task의 종료처럼 어떤 입구도 덮지 못하는 원천은 소스 lint가 선언이나 사유 주석이 없는 event를 나열한다. lint는 증명이 아니다. 범위는 실행 중에 판단한다: window check가 선언된 명령과 native 입력으로 선언된 원천을 하나씩 구동하고 그 선언된 event를 요구한다.
 
+### 시험 표시
+
+window check는 시험 대상 애플리케이션의 event log에 시험마다 표시를 남기므로, 시험은 로그의 위치 범위다. 진단 method `diagnostics.test.mark`([endpoint](endpoint.ko.md))는 시험이 시작할 때 event `host.test.start`(`name`, `run`)를, 끝날 때 `host.test.end`(`name`, `run`, `pass`, `fail`, `skip` 중 하나인 `result`)를 저장한다. 둘 다 layer `host`, class `lifecycle`, level `info`이며, flush한 뒤 event 파일의 `boot`와 표시 줄의 `seq`인 `{boot, seq}`로 답한다. 위치는 `(boot, seq)`다. 한 애플리케이션이 여러 실행을 처리하므로 실행 식별자는 `log.open`이 아니라 이 event에 실린다. window-check 라이브러리는 검사가 session을 열 때 시작을, 검사의 정리와 오류 점검 뒤에 끝을 표시하며, 본문이나 정리가 실패했으면 `fail`이다. 표시마다 `{run, app, name, kind, boot, seq, ts_us}`를 실행 폴더(`SOKSAK_RUN_FOLDER`)의 `marks.jsonl`에 덧붙인다. `SOKSAK_RUN_ID`가 있을 때만 표시하며, 이 값은 시험 실행기가 정한다([examples](../operations/examples.ko.md#창-검사)).
+
 ## 검사
 
 `soksak-log-check`(패키지 `@soksak/log-contract`, `packages/log-contract`)는 로그를 schema와 catalog로 검증한다: 줄 구조, 선언된 event, 연속된 `seq`와 `log.dropped`로 설명되는 틈, 입력 종류마다 선언된 사슬, 시험이 선언한 것 외의 `error` 없음. 단위 시험과 window check는 자기 로그를 남기고, gate는 남은 모든 로그를 검증하며, 실패한 실행의 로그는 분류하기 전까지 보관한다.

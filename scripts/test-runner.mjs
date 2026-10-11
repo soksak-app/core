@@ -74,8 +74,8 @@ function runOne(item, limitMs, env, outputPath) {
  * receives one line per event: `RUN`, `PASS`, `FAIL`, `TIME`, a `RUNNING` line every `heartbeatMs` that names the tests in
  * flight with their running time, the `SLOWEST` tests, and the `TOTAL`. Resolves with `{results, slowest}`; a result is
  * `{status, elapsedMs, output}` with the status `pass`, `fail` or `timeout`. `beforeEach(item)`, when given, is awaited before each test
- * starts; the line `WAIT <name>` names the test that waits for it. `run` (`{id, folder}`), when given, passes the identifier to each
- * test as `SOKSAK_RUN_ID`, stores the output of every test in the folder, and keeps `manifest.json` there with each test, its status,
+ * starts; the line `WAIT <name>` names the test that waits for it. `run` (`{id, folder}`), when given, passes the identifier and the folder to each
+ * test as `SOKSAK_RUN_ID` and the folder as `SOKSAK_RUN_FOLDER`, stores the output of every test in the folder, and keeps `manifest.json` there with each test, its status,
  * its start and its end in microseconds; the manifest is rewritten when a test starts and when it ends.
  */
 export async function runTests(options) {
@@ -118,7 +118,7 @@ export async function runTests(options) {
         writeFileSync(join(run.folder, output), '');
         saveManifest();
       }
-      const result = await runOne(item, limit, run ? { SOKSAK_RUN_ID: run.id } : {}, entry && join(run.folder, entry.output));
+      const result = await runOne(item, limit, run ? { SOKSAK_RUN_ID: run.id, SOKSAK_RUN_FOLDER: run.folder } : {}, entry && join(run.folder, entry.output));
       running.delete(item.name);
       if (entry) {
         Object.assign(entry, { status: result.status, ended_us: nowUs(), elapsed_ms: Math.round(result.elapsedMs), detail: result.detail });

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.12: 두 host의 진단 메서드 `diagnostics.test.mark`가 event `host.test.start`와 `host.test.end`(`name`, `run`, `result`)를 저장하고 flush 뒤 그 줄의 위치 `{boot, seq}`로 답한다. window-check 라이브러리는 `SOKSAK_RUN_ID`가 있을 때 검사마다 시작과 끝(`pass` 또는 `fail`)을 표시하고 위치를 `SOKSAK_RUN_FOLDER`의 `marks.jsonl`에 덧붙이며, 시험 실행기는 이 폴더를 실행 id 옆에 정한다. 두 host, window-check 라이브러리, 실행기의 소유 시험으로 검증했고, 창 검사 실행 로그의 표지는 아직 관찰하지 않았다.
 - F160.11, F160.13: 시험 실행기가 실행마다 id(`SOKSAK_RUN_ID`)를 주고, 모든 시험의 출력을 도착하는 대로 `target/test-runs/<run>/`에 저장하며, 각 시험의 상태, 시작, 끝이 담긴 `manifest.json`을 유지한다. `node scripts/test-runs.mjs prune`은 실패가 없거나 모든 실패가 분류된 실행만 제거한다.
 - F161.3: 창 검사 `e2e/card-sidebar-space.test.mjs`가 정리에서 terminal card의 sidebar를 `inherit`로 되돌려 제거된 set의 선택이 layout에 남지 않으며, 두 앱에서 통과한다.
 - F161.2: 창 검사 `e2e/browser.test.mjs`와 `e2e/hosts.test.mjs`가 호스트가 기록하는 형태(`info page page: host <call> …`)로 transcript 줄을 맞추며, 두 앱에서 통과한다.

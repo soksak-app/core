@@ -70,6 +70,8 @@ type pendingEvent struct {
 	// fields is the fields as JSON text, serialized once by the producer.
 	fields json.RawMessage
 	bytes  int
+	// placed, when set, receives the seq of the line once the writer gave it one, and is closed when the line cannot be written.
+	placed chan uint64
 }
 
 // eventMessage is what the queue carries: an event, or a request of the owner. Two slots of the queue are reserved for
@@ -93,6 +95,7 @@ type EventLog struct {
 	lostEvents   atomic.Uint64
 	lostBytes    atomic.Uint64
 	path         string
+	boot         string
 	rotateBytes  int64
 	generations  int
 	openFields   json.RawMessage
@@ -140,6 +143,7 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 		queueEvents: int64(options.QueueEvents),
 		queueBytes:  int64(options.QueueBytes),
 		path:        path,
+		boot:        options.Boot,
 		rotateBytes: options.RotateBytes,
 		generations: options.Generations,
 		openFields:  fields,
@@ -214,7 +218,29 @@ func (l *EventLog) CountLoss(events, bytes uint64) {
 	l.lostBytes.Add(bytes)
 }
 
-// Path is the file that this writer writes.
+// Boot is the identifier of the run that this writer belongs to; with a seq it names a line of the log.
+func (l *EventLog) Boot() string { return l.boot }
+
+// EmitPlaced queues an event of the layer host, waits until it is on disk, at most deadline, and returns its seq. The queue
+// refusing the event is an error, so a caller that stores the position never stores a position of a line that does not exist.
+func (l *EventLog) EmitPlaced(level Level, event string, fields json.RawMessage, deadline time.Duration) (uint64, error) {
+	if !json.Valid(fields) {
+		return 0, fmt.Errorf("the fields of %s are not JSON", event)
+	}
+	placed := make(chan uint64, 1)
+	if !l.enqueuePlaced(time.Now().UnixMicro(), "host", level, event, fields, placed) {
+		return 0, fmt.Errorf("the event writer refused %s because its queue was full", event)
+	}
+	if err := l.Flush(deadline); err != nil {
+		return 0, err
+	}
+	seq, ok := <-placed
+	if !ok {
+		return 0, fmt.Errorf("the event writer could not write %s", event)
+	}
+	return seq, nil
+}
+
 func (l *EventLog) Path() string { return l.path }
 
 // Emit queues an event. It returns false, and counts the loss, when the queue has no room. It never waits. The fields
@@ -267,12 +293,16 @@ func (l *EventLog) EmitRelayed(tsMicros int64, layer string, level Level, event 
 }
 
 func (l *EventLog) enqueue(tsMicros int64, layer string, level Level, event string, text json.RawMessage) bool {
+	return l.enqueuePlaced(tsMicros, layer, level, event, text, nil)
+}
+
+func (l *EventLog) enqueuePlaced(tsMicros int64, layer string, level Level, event string, text json.RawMessage, placed chan uint64) bool {
 	bytes := len(text) + len(event)
 	if l.queuedBytes.Load()+int64(bytes) > l.queueBytes {
 		l.countLoss(bytes)
 		return false
 	}
-	pending := &pendingEvent{tsMicros: tsMicros, layer: layer, level: level, event: event, fields: text, bytes: bytes}
+	pending := &pendingEvent{tsMicros: tsMicros, layer: layer, level: level, event: event, fields: text, bytes: bytes, placed: placed}
 	l.queuedBytes.Add(int64(bytes))
 	l.queuedEvents.Add(1)
 	select {
@@ -396,6 +426,13 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 	appendLine := func(e *pendingEvent) {
 		seq++
 		line, err := eventLine(seq, e)
+		if e.placed != nil {
+			if err != nil {
+				close(e.placed)
+			} else {
+				e.placed <- seq
+			}
+		}
 		if err != nil {
 			// The line is not written; the seq stays taken, so the audit shows the gap next to this report.
 			fmt.Fprintf(os.Stderr, "event writer: %s cannot be written: %v\n", e.event, err)
