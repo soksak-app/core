@@ -73,10 +73,13 @@ test("expectError and expectEvent append their declaration to marks.jsonl while 
     { run: "run-1", app: "fixture", config: "/config/a", name: "check a", kind: "expect_event", event: "host.update.start" },
   ]);
   assert.equal(session.expectedErrors.length, 1);
-  const other = new Session({ name: "fixture", configDir: "/config/a" }, fakeClient([]));
-  other.expectError(/x/);
-  assert.equal(other.expectedErrors.length, 1);
-  assert.throws(() => other.expectEvent(""), /event name/);
+  // Without a run identifier the declaration is kept in the session only; the runner of this file may set one in the environment.
+  await withRun(undefined, undefined, async () => {
+    const other = new Session({ name: "fixture", configDir: "/config/a" }, fakeClient([]));
+    other.expectError(/x/);
+    assert.equal(other.expectedErrors.length, 1);
+    assert.throws(() => other.expectEvent(""), /event name/);
+  });
 });
 
 test("markTest does nothing without a run identifier", async (t) => {

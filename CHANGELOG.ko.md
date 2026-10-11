@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.16: `marks.jsonl`의 선언 시험이 실행기가 시험 프로세스의 환경에 넣는 실행 식별자에 더는 의존하지 않는다. 실행 밖의 session은 선언을 session에만 둔다.
 - F160.34.4: [replay](docs/spec/replay.ko.md#골든-벡터)가 화면 hash의 골든 벡터, 거부하는 화면, 재생 입력의 session을 이름으로 적고, `packages/log-contract/test/replay-vectors-named.test.mjs`가 문서와 번역이 각각을 적었는지 요구한다.
 - F160.34.3: [replay](docs/spec/replay.ko.md#보기-상태)가 선택, viewport 스크롤, theme을 재생 입력으로 정의하고, field 규칙, 순서, viewport의 커서, class를 적고, 적대 검증의 반론과 함께 결정을 기록한다(hash에서 제외와 frame 기록의 상태 field는 거부했다). hash 정의와 표지는 바뀌지 않으며 viewport 밖의 커서는 열을 유지한다. `@soksak/log-contract`가 `replayInputProblem`, `replaySessionProblem`, `REPLAY_INPUT_KINDS`를 골든 사례, 벡터 셋과 함께 내보낸다. `packages/log-contract` 시험으로 검증했으며, 재생 실행 파일은 F160.34.7에서 따른다.
 - F160.34.2: [logging](docs/spec/logging.ko.md#정책-파일)이 `log-policy.json`의 정확한 schema(member `schema`와 `classes`, class의 여섯 값, 기본값, sidecar를 위한 로그 폴더 옆의 위치, 거부와 그 text, 파일 시스템 event 감시, event `log.policy`)를 적고, `packages/log-contract/fixtures/policy`가 골든 사례를 갖고, `@soksak/log-contract`가 sidecar 시험을 위해 `parsePolicy`, `policyAllows`, `policyIsBeingWritten`과 fixture를 내보낸다. `packages/log-contract/test/policy.test.mjs`로 검증했으며, Go package `sok`와 Rust crate `soksak_sok`의 reader는 F160.34.6에서 사례를 실행한다.
