@@ -187,22 +187,19 @@ test("untilEventLines sees a file that another process creates", async (t) => {
   assert.deepEqual(lines, ["info host w: new file"]);
 });
 
-test("traceRows turns the events of the trace of the page, the host, the sampler and the plugins into rows with the layer, the event, the time and the fields", () => {
+test("traceRows turns the events of the trace of the page, the host and the sampler into rows with the layer, the event, the time and the fields", () => {
   const events = [
     { ts_us: 1791000000123456, level: "debug", layer: "page", event: "page.trace.surface.registration", fields: { phase: "registered", name: "core.x" } },
     { ts_us: 1791000000200000, level: "info", layer: "host", event: "host.record.info", fields: { where: "w", text: "t" } },
     { ts_us: 1791000000300000, level: "debug", layer: "page", event: "page.trace.action", fields: { kind: "resize" } },
     { ts_us: 1791000000400000, level: "debug", layer: "host", event: "host.trace.sidecar.send", fields: { surface: "tab-1" } },
     { ts_us: 1791000000500000, level: "debug", layer: "host", event: "host.sampler.memory", fields: { rss_host_kb: 42 } },
-    { ts_us: 1791000000600000, level: "trace", layer: "plugin", event: "plugin.terminal.send.result", fields: { ok: true, surface: "tab-1" } },
   ];
   assert.deepEqual(traceRows(events), [
     { layer: "page", event: "surface.registration", ts: "2026-10-03T04:00:00.123Z", phase: "registered", name: "core.x" },
     { layer: "page", event: "action", ts: "2026-10-03T04:00:00.300Z", kind: "resize" },
     { layer: "host", event: "sidecar.send", ts: "2026-10-03T04:00:00.400Z", surface: "tab-1" },
     { layer: "sampler", event: "memory", ts: "2026-10-03T04:00:00.500Z", rss_host_kb: 42 },
-    // A plugin event `plugin.<plugin>.<event>` (logging.md#catalog) is a row of the layer plugin named by its event.
-    { layer: "plugin", event: "send.result", ts: "2026-10-03T04:00:00.600Z", ok: true, surface: "tab-1" },
   ]);
 });
 

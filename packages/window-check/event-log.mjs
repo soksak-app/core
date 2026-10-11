@@ -205,9 +205,7 @@ const TRACE_PREFIXES = [["page.trace.", "page"], ["host.trace.", "host"], ["host
 export function traceRows(events) {
   const rows = [];
   for (const event of events) {
-    // A plugin event `plugin.<plugin>.<event>` (docs/spec/logging.md#catalog) is a row of the layer plugin.
-    const plugin = /^plugin\.[a-z0-9-]+\./.exec(event.event);
-    const match = plugin ? [plugin[0], "plugin"] : TRACE_PREFIXES.find(([prefix]) => event.event.startsWith(prefix));
+    const match = TRACE_PREFIXES.find(([prefix]) => event.event.startsWith(prefix));
     if (!match) continue;
     // The surface, the session and the correlation identifiers of an event are members of the line and not of its fields.
     const context = {};
