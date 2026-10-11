@@ -103,15 +103,18 @@ function resolvedColor(name, color) {
 
 /**
  * The screen that `screenHash` takes, from a `screen` message of a sidecar (docs/spec/terminal-runtime.md#screen-message).
- * The message carries `sequence` and every member of the screen, with each cell's `fg` and `bg` resolved; the members that the
+ * The message carries `sequence`, `segment` and every member of the screen, with each cell's `fg` and `bg` resolved; the members that the
  * hash does not cover (`link`, the cursor shape and focus) are left out. A message that lacks a member throws an error that names
- * the member; the ranges of the values are checked by the screen hash. The page stores `message.sequence` with the hash.
+ * the member; the ranges of the values are checked by the screen hash. The page stores `message.sequence` and `message.segment` with the hash.
  */
 export function screenFromMessage(message) {
   if (!isObject(message)) messageRefuse(`message must be an object, found ${shown(message)}`);
   if (message.event !== "screen") messageRefuse(`event must be "screen", found ${shown(message.event)}`);
   if (!Number.isInteger(message.sequence) || message.sequence < 1) {
     messageRefuse(`sequence must be an integer from 1, found ${shown(message.sequence)}`);
+  }
+  if (typeof message.segment !== "string" || message.segment === "") {
+    messageRefuse(`segment must be a non-empty string, found ${shown(message.segment)}`);
   }
   if (!isObject(message.cursor)) messageRefuse(`cursor must be an object, found ${shown(message.cursor)}`);
   if (!Array.isArray(message.cells)) messageRefuse(`cells must be an array, found ${shown(message.cells)}`);

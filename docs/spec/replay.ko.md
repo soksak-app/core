@@ -25,7 +25,7 @@
 
 Session은 식별자가 유지되는 동안 이어지고, 그 session을 담당하는 sidecar는 다시 시작할 수 있다(process의 새 실행, 새 `boot`). `sequence`는 한 실행이 적용한 입력을 세므로 새 실행에서 1부터 다시 시작하며, 첫 입력은 theme다([보기 상태](#보기-상태)). *replay segment*(이하 segment)는 한 실행이 session에 대해 만든 층 `sidecar` event의 집합이며, 식별자는 그 실행의 event 파일(`logs/<role>-<boot>.jsonl`)의 `boot`다. [기록](#기록)의 session 규칙(theme가 먼저, 틈 없는 순번)은 각 segment 안에서 성립하고, segment는 첫 event의 시각 순서로 번호가 붙는다.
 
-- sidecar의 frame 기록은 자기 event 파일의 segment에 속한다. page의 frame 기록은 `fields.segment`를 가지며, 이는 page가 sidecar에서 받은 화면의 segment의 `boot`다(화면 message가 순번과 함께 싣는다). `segment`가 없는 page frame 기록은 segment가 하나인 session에서만 받아들이며, segment가 여럿인 session에서는 오류다. 순번만으로는 page가 어느 화면을 그렸는지 알 수 없기 때문이다.
+- sidecar의 frame 기록은 자기 event 파일의 segment에 속한다. page의 frame 기록은 `fields.segment`를 가지며, 이는 page가 sidecar에서 받은 화면의 segment의 `boot`다([화면 message](terminal-runtime.ko.md#화면-메시지)가 순번과 함께 `segment`로 싣는다). `segment`가 없는 page frame 기록은 오류다. 순번만으로는 page가 어느 화면을 그렸는지 알 수 없기 때문이다.
 - 재생은 segment마다 재생 실행 파일 process를 하나 시작하므로, 각 segment는 빈 화면에 자기 순번으로 적용되고, 그 segment의 저장된 hash만 그 segment의 재생 hash와 비교한다. sidecar의 frame 기록이 없는 segment는 아무것도 실행하지 않으며, 그 segment의 page frame 기록이 있으면 sidecar frame 기록이 없는 page frame으로서 불일치다.
 - 시각상 번갈아 나오는 두 segment의 event(두 번째 실행의 event 뒤에 첫 번째 실행의 event)는 재시작이 아니므로 재생이 거부한다.
 - *메모리.* 재생은 session의 frame 기록(각각 순번, 64자 hash, 층, segment)과 한 번에 한 segment의 event 줄을 보관한다. 파일을 두 번 읽는다. 첫 scan은 frame 기록과 segment를 모으고, 둘째 scan은 재생 중인 segment의 줄을 모아 비교한 뒤 버린다. 한 번에 보관하는 줄의 최댓값은 가장 큰 segment의 event 수이며 `ReplayResult`가 `held_lines`로 보고한다. session의 줄을 한꺼번에 보관하지 않는다.

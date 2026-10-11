@@ -30,7 +30,7 @@ for (const document of ["../../../docs/spec/terminal-runtime.md", "../../../docs
     const text = readFileSync(new URL(document, import.meta.url), "utf8");
     assert.ok(text.includes("`packages/log-contract/fixtures/replay/screen-message.json`"), "the fixture of the messages is not named");
     for (const { name } of messages.rejected) assert.ok(text.includes(`\`${name}\``), `the rejected message "${name}" is not named`);
-    for (const member of ["sequence", "rows", "cols", "cursor", "cells", "grapheme", "width", "fg", "bg", "attributes", "screenFromMessage"]) {
+    for (const member of ["sequence", "segment", "rows", "cols", "cursor", "cells", "grapheme", "width", "fg", "bg", "attributes", "screenFromMessage"]) {
       assert.ok(text.includes(`\`${member}\``), `the member "${member}" is not named`);
     }
   });

@@ -104,6 +104,7 @@ Host는 service 연결을 한 줄씩 읽고 각 줄에 stdio transport의 [메�
 | --- | --- |
 | `event` | `"screen"` |
 | `sequence` | 1 이상의 정수: 사이드카가 이 화면에 저장하는 frame 기록의 `sequence`([replay](replay.ko.md#기록)), 곧 화면이 포함하는 마지막 재생 입력의 순번 |
+| `segment` | 비어 있지 않은 문자열: 화면을 그린 사이드카 실행의 event 파일의 `boot`이며, `sequence`가 속한 [segment](replay.ko.md#segment)다 |
 | `rows`, `cols` | 양의 정수: 격자의 크기 |
 | `cursor` | hash가 덮는 `{visible, row, col}`([replay](replay.ko.md#보기-상태), 커서): `visible`은 `true` 또는 `false`, `row`는 0부터 `rows`−1(커서가 viewport 밖이면 `0`), `col`은 0부터 `cols`−1. 런타임의 커서 멤버(`shape`, `blinking`, `blinkVisible`, `focused`)는 hash가 덮지 않는 추가 멤버이고, page는 있는 멤버를 각각 검사하며(`shape`는 `Block`, `Underline`, `Beam`, `HollowBlock`, `Hidden` 또는 소문자로 쓴 같은 단어, `blinking`과 `focused`는 boolean) 없는 멤버는 이전 값을 유지한다 |
 | `cells` | 행 우선 순서의 `rows` × `cols`개 칸 |
@@ -112,7 +113,7 @@ Host는 service 연결을 한 줄씩 읽고 각 줄에 stdio transport의 [메�
 
 화면을 만드는 모든 사이드카가 같은 규칙을 따른다. 사이드카가 페이지에 화면을 싣는 메시지는 화면 hash의 멤버와 자신의 frame 기록의 `sequence`를 담으므로 페이지의 frame 기록과 사이드카의 frame 기록을 비교할 수 있다. 멤버와 frame 기록은 사이드카가 쓰며, 페이지는 메시지에 없는 멤버를 만들어 내지 않는다.
 
-`@soksak/plugin-api/screen-hash`의 `screenFromMessage(message)`는 이 형식의 메시지를 검증하고 `screenHash`가 받는 화면을 돌려준다. `sequence`, `cursor`, `cells`가 없는 메시지와 정해진 `fg`, `bg`, `attributes`가 없는 칸에는 멤버 이름이 든 오류를 던지고, 값의 범위는 hash가 거부한다. 페이지는 `message.sequence`, 크기, 그 화면의 hash로 page frame 기록을 저장한다. `packages/log-contract/fixtures/replay/screen-message.json`은 화면 hash의 각 vector마다 같은 hash를 가진 메시지와, 함수가 거부하는 메시지와 그 오류 문구를 담는다. 거부되는 메시지는 `sequence missing`, `sequence zero`, `event is not screen`, `foreground missing`, `background missing`, `attributes missing`, `cursor missing`, `cells missing`, `color outside the forms`다. 사이드카는 이 hash를 재현하는 메시지를 쓰고, 페이지는 `screenFromMessage`와 `screenHash`로 재현한다.
+`@soksak/plugin-api/screen-hash`의 `screenFromMessage(message)`는 이 형식의 메시지를 검증하고 `screenHash`가 받는 화면을 돌려준다. `sequence`, `segment`, `cursor`, `cells`가 없는 메시지와 정해진 `fg`, `bg`, `attributes`가 없는 칸에는 멤버 이름이 든 오류를 던지고, 값의 범위는 hash가 거부한다. 페이지는 `message.sequence`, `segment`로서의 `message.segment`, 크기, 그 화면의 hash로 page frame 기록을 저장한다. `packages/log-contract/fixtures/replay/screen-message.json`은 화면 hash의 각 vector마다 같은 hash를 가진 메시지와, 함수가 거부하는 메시지와 그 오류 문구를 담는다. 거부되는 메시지는 `sequence missing`, `sequence zero`, `segment missing`, `event is not screen`, `foreground missing`, `background missing`, `attributes missing`, `cursor missing`, `cells missing`, `color outside the forms`다. 사이드카는 이 hash를 재현하는 메시지를 쓰고, 페이지는 `screenFromMessage`와 `screenHash`로 재현한다.
 
 ## 세션 오류
 

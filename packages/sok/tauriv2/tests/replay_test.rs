@@ -49,9 +49,15 @@ fn input(ts: i64, seq: i64, sequence: i64, session: &str, hex: &str) -> String {
     )
 }
 
+/// A frame record; a record of the page names the segment b1 of the screen that it received.
 fn frame(layer: &str, ts: i64, seq: i64, sequence: i64, session: &str, hash: &str) -> String {
+    let segment = if layer == "page" {
+        r#""segment":"b1","#
+    } else {
+        ""
+    };
     format!(
-        r#"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"{layer}","class":"frame","event":"fake.frame","session":"{session}","fields":{{"sequence":{sequence},"rows":2,"cols":3,"hash":"{hash}"}}}}"#
+        r#"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"{layer}","class":"frame","event":"fake.frame","session":"{session}","fields":{{"sequence":{sequence},{segment}"rows":2,"cols":3,"hash":"{hash}"}}}}"#
     )
 }
 
@@ -365,8 +371,8 @@ fn replay_refuses_what_it_cannot_compare() {
 fn segment_events(session: &str) -> Events {
     let page_frame = |ts: i64, seq: i64, sequence: i64, hash: &str| {
         frame("page", ts, seq, sequence, session, hash).replacen(
-            r#""rows":2"#,
-            r#""segment":"b2","rows":2"#,
+            r#""segment":"b1""#,
+            r#""segment":"b2""#,
             1,
         )
     };
@@ -391,9 +397,6 @@ fn segment_events(session: &str) -> Events {
 fn segmented_config(name: &str, change: impl Fn(&mut Events, &mut Events)) -> PathBuf {
     let mut first = standard_events();
     let mut second = segment_events("s1");
-    for line in first.page.iter_mut() {
-        *line = line.replacen(r#""rows":2"#, r#""segment":"b1","rows":2"#, 1);
-    }
     change(&mut first, &mut second);
     let mut page = first.page.clone();
     page.extend(second.page.clone());
@@ -478,9 +481,9 @@ fn replay_refuses_a_page_frame_that_names_no_segment_of_the_session() {
     type Change = fn(&mut Events, &mut Events);
     let cases: Vec<(&str, Change, &str)> = vec![
         (
-            "a page frame without a segment in a session with two",
-            |first, _| first.page[0] = frame("page", 1025, 2, 1, "s1", &digits(2)),
-            "sok: replay session s1: the page frame record at sequence 1 has no fields.segment, and the session has 2 segments\n",
+            "a page frame without a segment",
+            |first, _| first.page[0] = first.page[0].replacen(r#""segment":"b1","#, "", 1),
+            "sok: replay session s1: the page frame record at sequence 1 has no fields.segment\n",
         ),
         (
             "a page frame of a segment the session does not have",
@@ -506,4 +509,15 @@ fn replay_refuses_a_page_frame_that_names_no_segment_of_the_session() {
             "{name}: code {code} stderr {stderr:?}, want {want:?}"
         );
     }
+    // The screen message carries the segment, so a page frame without it is refused in a session with one segment too.
+    let mut events = standard_events();
+    events.page[0] = events.page[0].replacen(r#""segment":"b1","#, "", 1);
+    let config = replay_config("replay-segment-errors-single", &events, FAKE_REPLAY, "fake");
+    let (_, stderr, code) = run_replay(&config, &["s1"]);
+    let want =
+        "sok: replay session s1: the page frame record at sequence 1 has no fields.segment\n";
+    assert!(
+        code == 1 && stderr == want,
+        "one segment: code {code} stderr {stderr:?}, want {want:?}"
+    );
 }

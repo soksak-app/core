@@ -263,20 +263,16 @@ pub fn replay_logs(
     if !frames.iter().any(|frame| frame.layer == "sidecar") {
         return Err(replay_error(session, "no frame record to compare"));
     }
-    // A page frame names the segment it received; a session with one segment needs no name.
-    for frame in frames.iter_mut().filter(|frame| frame.layer == "page") {
+    // A page frame names the segment of the screen message it received.
+    for frame in frames.iter().filter(|frame| frame.layer == "page") {
         if frame.segment.is_empty() {
-            if segments.len() != 1 {
-                return Err(replay_error(
-                    session,
-                    format!(
-                        "the page frame record at sequence {} has no fields.segment, and the session has {} segments",
-                        frame.sequence,
-                        segments.len()
-                    ),
-                ));
-            }
-            frame.segment = segments[0].clone();
+            return Err(replay_error(
+                session,
+                format!(
+                    "the page frame record at sequence {} has no fields.segment",
+                    frame.sequence
+                ),
+            ));
         } else if !segments.contains(&frame.segment) {
             return Err(replay_error(
                 session,

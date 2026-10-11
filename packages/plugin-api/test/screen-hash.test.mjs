@@ -33,6 +33,7 @@ test("a size that is not a positive integer is refused", () => {
 const message = () => ({
   event: "screen",
   sequence: 4,
+  segment: "b1",
   rows: 1,
   cols: 2,
   cursor: { row: 0, col: 1, visible: true, shape: "block", focused: true },
@@ -54,6 +55,12 @@ test("a screen message without a sequence is refused with the member named", () 
   const without = message();
   delete without.sequence;
   assert.throws(() => screenFromMessage(without), { message: "screen message: sequence must be an integer from 1, found undefined" });
+});
+
+test("a screen message without a segment is refused with the member named", () => {
+  const without = message();
+  delete without.segment;
+  assert.throws(() => screenFromMessage(without), { message: "screen message: segment must be a non-empty string, found undefined" });
 });
 
 test("a screen message with a cell that has no resolved foreground is refused with the cell named", () => {

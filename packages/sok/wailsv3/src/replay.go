@@ -178,16 +178,14 @@ func ReplayLogs(configDir, session string, until *int64) (ReplayResult, error) {
 	if !slices.ContainsFunc(frames, func(f replayFrame) bool { return f.layer == "sidecar" }) {
 		return result, replayError(session, "no frame record to compare")
 	}
-	// A page frame names the segment it received; a session with one segment needs no name.
-	for index, frame := range frames {
+	// A page frame names the segment of the screen message it received.
+	for _, frame := range frames {
 		if frame.layer != "page" {
 			continue
 		}
 		switch {
-		case frame.segment == "" && len(segments) == 1:
-			frames[index].segment = segments[0]
 		case frame.segment == "":
-			return result, replayError(session, "the page frame record at sequence %d has no fields.segment, and the session has %d segments", frame.sequence, len(segments))
+			return result, replayError(session, "the page frame record at sequence %d has no fields.segment", frame.sequence)
 		case !slices.Contains(segments, frame.segment):
 			return result, replayError(session, "the page frame record at sequence %d names the segment %s, which the session does not have", frame.sequence, frame.segment)
 		}

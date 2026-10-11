@@ -47,8 +47,13 @@ func input(ts, seq, sequence int, session, hex string) string {
 	return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"sidecar","class":"io","event":"fake.input","session":"%s","fields":{"sequence":%d,"hex":"%s"}}`, ts, ts, seq, session, sequence, hex)
 }
 
+// frame is a frame record; a record of the page names the segment b1 of the screen that it received.
 func frame(layer string, ts, seq, sequence int, session, hash string) string {
-	return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"%s","class":"frame","event":"fake.frame","session":"%s","fields":{"sequence":%d,"rows":2,"cols":3,"hash":"%s"}}`, ts, ts, seq, layer, session, sequence, hash)
+	segment := ""
+	if layer == "page" {
+		segment = `"segment":"b1",`
+	}
+	return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"%s","class":"frame","event":"fake.frame","session":"%s","fields":{"sequence":%d,%s"rows":2,"cols":3,"hash":"%s"}}`, ts, ts, seq, layer, session, sequence, segment, hash)
 }
 
 // standardEvents are the inputs "hi" (2 bytes) and "\r\n" (2 bytes) with a frame record after each, written consistently.
@@ -229,7 +234,7 @@ func TestReplayRefusesWhatItCannotCompare(t *testing.T) {
 // followed by a frame record of the sidecar and of the page; the page frames name the segment they received.
 func segmentEvents(session string) replayEvents {
 	pageFrame := func(ts, seq, sequence int, hash string) string {
-		return strings.Replace(frame("page", ts, seq, sequence, session, hash), `"rows":2`, `"segment":"b2","rows":2`, 1)
+		return strings.Replace(frame("page", ts, seq, sequence, session, hash), `"segment":"b1"`, `"segment":"b2"`, 1)
 	}
 	return replayEvents{
 		sidecar: []string{
@@ -248,9 +253,6 @@ func segmentEvents(session string) replayEvents {
 func segmentedConfig(t *testing.T, change func(first, second *replayEvents)) string {
 	t.Helper()
 	first, second := standardEvents(), segmentEvents("s1")
-	for index, line := range first.page {
-		first.page[index] = strings.Replace(line, `"rows":2`, `"segment":"b1","rows":2`, 1)
-	}
 	if change != nil {
 		change(&first, &second)
 	}
@@ -307,9 +309,9 @@ func TestReplayRefusesAPageFrameThatNamesNoSegmentOfTheSession(t *testing.T) {
 		change func(first, second *replayEvents)
 		want   string
 	}{
-		{"a page frame without a segment in a session with two", func(first, _ *replayEvents) {
-			first.page[0] = frame("page", 1025, 2, 1, "s1", digits(2))
-		}, "sok: replay session s1: the page frame record at sequence 1 has no fields.segment, and the session has 2 segments\n"},
+		{"a page frame without a segment", func(first, _ *replayEvents) {
+			first.page[0] = strings.Replace(first.page[0], `"segment":"b1",`, "", 1)
+		}, "sok: replay session s1: the page frame record at sequence 1 has no fields.segment\n"},
 		{"a page frame of a segment the session does not have", func(first, _ *replayEvents) {
 			first.page[0] = strings.Replace(first.page[0], `"segment":"b1"`, `"segment":"b9"`, 1)
 		}, "sok: replay session s1: the page frame record at sequence 1 names the segment b9, which the session does not have\n"},
@@ -322,6 +324,13 @@ func TestReplayRefusesAPageFrameThatNamesNoSegmentOfTheSession(t *testing.T) {
 		if _, stderr, code := runReplay(t, config, "s1"); code != 1 || stderr != c.want {
 			t.Errorf("%s: code %d stderr %q, want %q", c.name, code, stderr, c.want)
 		}
+	}
+	// The screen message carries the segment, so a page frame without it is refused in a session with one segment too.
+	events := standardEvents()
+	events.page[0] = strings.Replace(events.page[0], `"segment":"b1",`, "", 1)
+	single := "sok: replay session s1: the page frame record at sequence 1 has no fields.segment\n"
+	if _, stderr, code := runReplay(t, replayConfig(t, events, fakeReplay, "fake"), "s1"); code != 1 || stderr != single {
+		t.Errorf("one segment: code %d stderr %q, want %q", code, stderr, single)
 	}
 	// The events of two runs of the sidecar that alternate in time are not segments.
 	config := segmentedConfig(t, func(first, _ *replayEvents) {
