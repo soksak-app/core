@@ -35,6 +35,34 @@ test('the performance trace flag is a declared boolean defaulting to true', asyn
   }
 });
 
+test('the log policy is a declared object of levels for the classes, applied when the settings load and when it changes', async (t) => {
+  const applied = [];
+  t.mock.module('../log-policy.js', { exports: { setLogPolicy: async (policy) => { applied.push(policy); } } });
+  const realDocument = globalThis.document;
+  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const memory = { common: {}, projects: [] };
+  const { connectSettings, set: change, value } = await import('../settings.js?test=log-policy');
+  try {
+    await connectSettings({
+      snapshot: async () => structuredClone(memory),
+      settings: async (id, values) => { memory.common = { ...memory.common, ...values }; },
+      onChange: () => () => {},
+    });
+    // While the version is 0.0.x the policy stores everything: a class that the setting does not name stores every level.
+    assert.deepEqual(value('diagnostics.log'), {});
+    assert.deepEqual(applied, [{}]);
+    await change({ 'diagnostics.log': { call: 'info' } }, 'common', 'test');
+    assert.deepEqual(memory.common['diagnostics.log'], { call: 'info' });
+    assert.deepEqual(applied.at(-1), { call: 'info' });
+    for (const bad of [{ audio: 'off' }, { call: 'loud' }, 'off', null, []]) {
+      assert.throws(() => change({ 'diagnostics.log': bad }, 'common', 'test'), /Invalid setting diagnostics.log/);
+    }
+    assert.deepEqual(value('diagnostics.log'), { call: 'info' });
+  } finally {
+    globalThis.document = realDocument;
+  }
+});
+
 test('a settings file change propagates the effective performance switch', async (t) => {
   const calls = [];
   t.mock.module('../performance.js', { exports: {

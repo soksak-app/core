@@ -17,6 +17,8 @@ export function surfaceCalls({ send, log }) {
     call(name, ...args) {
       const started = performance.now();
       const ended = (ok, failure) => {
+        // The gate is asked before the arguments are serialized: a call that the policy does not store costs one branch and is counted.
+        if (!batcher.gate("call", ok ? "debug" : "warn")) return;
         const { level, event, fields, cids } = callEvent({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, ...failure });
         // events: page.call
         batcher.emit(level, event, fields, cids);

@@ -80,6 +80,8 @@ const UNRECORDED_CALLS = new Set(["log", "performance", "logQuery", "overlayUpda
 if (batcher) {
   observeHostCalls(({ name, args, micros, ok, error, code, cids: operation }) => {
     if (UNRECORDED_CALLS.has(name)) return;
+    // The gate is asked before the arguments are serialized: a call that the policy does not store costs one branch and is counted.
+    if (!batcher.gate("call", ok ? "debug" : "warn")) return;
     const { level, event, fields, cids } = callEvent({ name, args, micros, ok, error, code, cids: operation });
     // events: page.call
     batcher.emit(level, event, fields, cids);

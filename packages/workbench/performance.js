@@ -45,9 +45,11 @@ export function createTracer(call, report = reportRelayError, log = null) {
   };
   const trace = (event, fields = {}) => {
     if (!enabled || !batcher) return;
-    const memory = globalThis.performance?.memory;
-    const payload = memory ? { ...fields, jsHeapMB: Math.round(memory.usedJSHeapSize / 1048576) } : fields;
-    batcher.emit("debug", `page.trace.${event}`, payload);
+    // The payload is built only for an event that the gate stores.
+    batcher.emit("debug", `page.trace.${event}`, () => {
+      const memory = globalThis.performance?.memory;
+      return memory ? { ...fields, jsHeapMB: Math.round(memory.usedJSHeapSize / 1048576) } : fields;
+    });
   };
   const timed = async (name, answer) => {
     if (!enabled) return answer();
