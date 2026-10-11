@@ -532,6 +532,14 @@ fn invalid_json_closes_connection() {
 | `cli.debug.timeline-golden-lines` | `sok debug timeline`이 모든 filter 사례에서 golden 파일 `packages/log-contract/fixtures/timeline`의 글 줄을, debug 화면과 같은 줄로 출력한다. | both |
 | `cli.debug.timeline-errors` | `sok debug timeline`은 event 파일이 event 구조를 어기면 파일과 줄 번호를 담은 오류로, event 파일이 없으면 폴더를 담은 오류로 실패하고, 줄바꿈으로 끝나지 않은 줄은 읽지 않는다. | both |
 | `cli.debug.timeline-filter-values` | `sok debug timeline`은 잘못된 filter 값을 flag 값을 담은 사용법 오류로, debug 화면과 같은 문구로 거부한다. | both |
+| `cli.log.records-each-command-with-its-result` | `sok`을 실행할 때마다 대상 설정 디렉터리에 `logs/sok-<boot>.jsonl`을 쓴다. `seq` 1의 `log.open`, 이어서 명령 단어, 공백으로 이은 인자, 마이크로초, `ok`, `status`, 상태가 0이 아니면 표준 오류의 첫 줄인 `error`를 담은 `sok.command`가 level `debug` 또는 `warn`으로 저장되며, 모든 줄이 층 `sok`, `ts_us`, `mono_ns`를 가진다. | both |
+| `cli.log.records-a-panic-with-its-stack` | 명령의 panic은 `sok.panic`(thread `main`, 글, panic한 함수를 가리키는 stack)과 상태 4의 `sok.command`를 저장하고, `sok: panic: <text>`를 표준 오류의 맨 앞에 쓰며, 호출자에게 닿지 않고 상태 4를 돌려준다. | both |
+| `cli.log.records-a-panic-of-a-routine-and-ends-the-process` | 도구가 시작한 goroutine이나 thread의 panic은 routine의 이름과 stack을 담은 `sok.panic`을 저장하고 프로세스를 상태 4로 끝낸다. | both |
+| `cli.log.lines-follow-the-golden-fixtures` | 도구의 `log.open` 줄은 `packages/log-contract/fixtures/key.jsonl`의 `log.open` 줄과 같은 key, key 순서, field 집합(schema 2, `role` `sok`)을 가지며, event 줄은 golden event 줄의 key 순서와 `ts_us`, `mono_ns`, `seq` 2를 가진다. | both |
+| `cli.log.escapes-and-truncates-like-the-contract` | 따옴표, 역슬래시, 줄바꿈, tab, U+2028, ASCII가 아닌 글을 담은 field가 줄을 거쳐 그대로 돌아오고, fields 글이 1,048,576바이트를 넘는 event는 원래 크기를 담은 `truncated`와 4,096바이트의 `fields` `{"head": ...}`로 저장된다. | both |
+| `cli.log.records-a-refused-event-as-log-dropped` | writer가 거절한 event는 세어져 golden field(`from_seq`, `to_seq`, `count`)를 가진 level `warn`의 `log.dropped`로 저장되고, 저장된 `seq`와 그것이 가리키는 범위가 1부터 n까지를 한 번씩 덮으며 `log.dropped`는 그 범위 뒤에 온다. | both |
+| `cli.log.run-stores-only-the-declared-events` | 한 번의 실행은 `log.open`, `sok.command`, `sok.panic`, `log.dropped`만 저장한다. 이것이 rotation 없는 writer의 근거다. | both |
+| `cli.log.reports-a-folder-that-cannot-be-written` | `logs/`나 event 파일을 만들 수 없으면 도구는 `sok: event log: <path>: <reason>`을 표준 오류에 쓰고 명령을 자기 종료 상태로 실행한다. | both |
 | `install.version.ranges-and-order` | 범위 `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c`는 선언한 경계를 가지고, `*`는 상한이 없는 `>=0.0.0`이다. Version은 숫자로 비교한다. 다른 형식, 앞자리 0, 빈 범위, 4294967295를 넘는 자리는 `invalid version`으로 거부한다. | both |
 | `install.package-json.fields-and-manifest` | Plugin `package.json`에는 `name`, `version`, `engines.soksak`, plugin 안의 `plugin.json`을 나열한 `files`가 있어야 한다. `soksak`은 거부하고, `plugin.json`의 `dependencies`는 각각 올바른 범위다. 실패마다 필드를 밝힌다. | both |
 | `install.registry.entries` | Registry plugin, sidecar, pack, revoked 항목은 알 수 없는 필드, 절대 `file:` URL이 아니거나 query, fragment, 잘못된 escape를 가진 URL, 소문자 16진수 64자리가 아닌 `sha256`, 중복 version, 알 수 없는 플랫폼, 1이 아닌 `protocol`, 200 code point를 넘는 설명, 빈 pack, 이유 없는 revoked 항목을 거부한다. | both |

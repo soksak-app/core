@@ -68,6 +68,10 @@ impl Platform for Windows {
         Err("application bundles are not implemented on windows".into())
     }
 
+    fn monotonic_nanos(&self) -> Result<u64, String> {
+        Err("the monotonic clock is not implemented on windows".into())
+    }
+
     fn key(&self) -> Result<String, String> {
         Err("platform key is not implemented on windows".into())
     }

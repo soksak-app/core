@@ -16,7 +16,7 @@ fn main() {
         paths_dir: paths.as_deref().map_err(Clone::clone),
         core_version: soksak_sok::version::CORE_VERSION,
     };
-    let code = soksak_sok::run(
+    let code = soksak_sok::run_logged(
         &args,
         &mut std::io::stdout(),
         &mut std::io::stderr(),

@@ -407,12 +407,12 @@ func watch(client *Client, params map[string]any, stdout io.Writer) error {
 	// The goroutine that receives the interrupt signal sends the result of closing the connection. When the close fails,
 	// watch ends with that error.
 	closed := make(chan error, 1)
-	go func() {
+	Go("interrupt", func() {
 		if _, ok := <-signals; ok {
 			close(stopped)
 			closed <- client.Close()
 		}
-	}()
+	})
 	matches := func(raw json.RawMessage) (json.RawMessage, bool, error) {
 		var changed struct {
 			Window  string          `json:"window"`

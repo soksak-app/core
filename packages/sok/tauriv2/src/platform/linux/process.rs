@@ -52,6 +52,22 @@ impl Platform for Linux {
         }
     }
 
+    /// Reads `CLOCK_MONOTONIC`.
+    fn monotonic_nanos(&self) -> Result<u64, String> {
+        let mut now = libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        };
+        // SAFETY: clock_gettime writes only the timespec that is passed.
+        if unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) } != 0 {
+            return Err(format!(
+                "the monotonic clock cannot be read: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        Ok(now.tv_sec as u64 * 1_000_000_000 + now.tv_nsec as u64)
+    }
+
     /// The shell on Linux has no folder that adds a PATH entry for each file.
     fn paths_dir(&self) -> Result<PathBuf, String> {
         Err("path entries are not implemented on linux".into())

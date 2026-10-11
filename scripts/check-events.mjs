@@ -20,7 +20,7 @@ const CATALOG = 'docs/spec/events.json';
 /** The text of the tracked sources of this repository that can emit events, by path. */
 export const repositorySources = () => trackedSources(ROOT);
 
-/** The event files of every layer (`host`, `vt`, `files`, `shell`), generation and debug file of a configuration folder, in name order. */
+/** The event files of every layer (`host`, `vt`, `files`, `shell`, `sok`), generation and debug file of a configuration folder, in name order. */
 export function eventFiles(directory) {
   const logs = join(directory, 'logs');
   let names;
@@ -29,7 +29,7 @@ export function eventFiles(directory) {
   } catch (error) {
     throw new Error(`${logs}: ${error.message}`, { cause: error });
   }
-  const files = names.filter((name) => /^(host|vt|files|shell)-\d+-\d+(\.debug)?\.jsonl(\.\d)?$/.test(name)).sort().map((name) => join(logs, name));
+  const files = names.filter((name) => /^(host|vt|files|shell|sok)-\d+-\d+(\.debug)?\.jsonl(\.\d)?$/.test(name)).sort().map((name) => join(logs, name));
   if (files.length === 0) throw new Error(`${logs}: no host event file`);
   return files.filter((path) => statSync(path).isFile());
 }

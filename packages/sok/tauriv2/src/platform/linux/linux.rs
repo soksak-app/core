@@ -53,7 +53,7 @@ impl Linux {
             signal_hook::consts::SIGTERM,
         ])
         .map_err(|error| format!("cannot watch signals: {error}"))?;
-        std::thread::spawn(move || {
+        crate::routine::spawn_named("interrupt", move || {
             if signals.forever().next().is_some() {
                 interrupted();
             }

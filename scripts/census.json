@@ -3,7 +3,7 @@
   "entrances": {
     "go.go-statement": [
       "^packages/host/wailsv3/src/routine/routine\\.go$",
-      "^packages/sok/"
+      "^packages/sok/wailsv3/src/routine\\.go$"
     ],
     "m.registration": [
       "^native/darwin/src/observe\\.m$"
@@ -12,11 +12,12 @@
       "^native/darwin/src/observe\\.m$"
     ],
     "go.recover": [
-      "^packages/host/wailsv3/src/routine/routine\\.go$"
+      "^packages/host/wailsv3/src/routine/routine\\.go$",
+      "^packages/sok/wailsv3/src/routine\\.go$"
     ],
     "rs.thread-spawn": [
       "^packages/host/tauriv2/src/routine/routine\\.rs$",
-      "^packages/sok/"
+      "^packages/sok/tauriv2/src/routine\\.rs$"
     ]
   },
   "pending": {}

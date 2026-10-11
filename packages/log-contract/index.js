@@ -6,7 +6,7 @@
 export const SCHEMA = 2;
 
 const LEVELS = new Set(["error", "warn", "info", "debug", "trace"]);
-const LAYERS = new Set(["native", "host", "page", "plugin", "sidecar"]);
+const LAYERS = new Set(["native", "host", "page", "plugin", "sidecar", "sok"]);
 const CLASSES = new Set(["lifecycle", "input", "call", "io", "frame"]);
 
 /**

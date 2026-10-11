@@ -3,6 +3,12 @@ use std::path::PathBuf;
 use super::super::{Connection, Platform};
 use super::Darwin;
 
+extern "C" {
+    /// The public libSystem function that reads a system clock in nanoseconds; it returns 0 and sets `errno` when the clock cannot be read. The `libc`
+    /// crate does not declare it.
+    fn clock_gettime_nsec_np(clock_id: libc::clockid_t) -> u64;
+}
+
 impl Platform for Darwin {
     /// Checks with signal 0 whether the process exists. A process of another user (EPERM) is running too.
     fn process_running(&self, pid: i32) -> Result<(), String> {
@@ -49,6 +55,18 @@ impl Platform for Darwin {
         } else {
             let error = std::io::Error::last_os_error();
             Err(crate::files::file_error(path.display(), &error))
+        }
+    }
+
+    /// Reads `CLOCK_UPTIME_RAW`, which is `mach_absolute_time` in nanoseconds: the clock of `sp_mono_ns`.
+    fn monotonic_nanos(&self) -> Result<u64, String> {
+        // SAFETY: clock_gettime_nsec_np only reads a system clock and touches no memory of the caller.
+        match unsafe { clock_gettime_nsec_np(libc::CLOCK_UPTIME_RAW) } {
+            0 => Err(format!(
+                "the monotonic clock cannot be read: {}",
+                std::io::Error::last_os_error()
+            )),
+            nanos => Ok(nanos),
         }
     }
 

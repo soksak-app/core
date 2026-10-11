@@ -1,0 +1,133 @@
+name: window-checks
+# build-machine: skip smoke reason=the job runs on the self-hosted desktop runner that docs/operations/examples.md#continuous-integration declares
+# Runs the window checks of both applications and the audit of their logs. The checks need a signed-in desktop, so the job runs
+# on a self-hosted runner with the labels in docs/operations/examples.md#continuous-integration and not on a hosted runner.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One run at a time: the checks share the display and the focus of the runner.
+concurrency:
+  group: window-checks
+  cancel-in-progress: false
+
+jobs:
+  window-checks:
+    runs-on: [self-hosted, macOS, soksak-desktop]
+    timeout-minutes: 180
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+      # The harness reads the configuration folders and the certificate authority of the registry from this folder.
+      - name: Place the check configurations
+        run: echo "SOKSAK_CONFIG_ROOT=$RUNNER_TEMP" >> "$GITHUB_ENV"
+      # The workspace registry packs the sibling plugin repositories and builds the sidecars (docs/spec/plugins.md#repositories).
+      - uses: actions/checkout@v4
+        with:
+          path: core
+      - uses: actions/checkout@v4
+        with:
+          repository: soksak-app/plugin-browser
+          path: plugins/browser
+      - uses: actions/checkout@v4
+        with:
+          repository: soksak-app/plugin-editor
+          path: plugins/editor
+      - uses: actions/checkout@v4
+        with:
+          repository: soksak-app/plugin-files
+          path: plugins/files
+      - uses: actions/checkout@v4
+        with:
+          repository: soksak-app/plugin-hwp
+          path: plugins/hwp
+      - uses: actions/checkout@v4
+        with:
+          repository: soksak-app/plugin-terminal
+          path: plugins/terminal
+      - uses: actions/checkout@v4
+        with:
+          repository: soksak-app/sidecar-files
+          path: sidecars/files
+      - uses: actions/checkout@v4
+        with:
+          repository: soksak-app/sidecar-vt
+          path: sidecars/vt
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: core/.node-version
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: core/package.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/packages/host/wailsv3/go.mod
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build both applications
+        working-directory: core
+        run: make prepare wailsv3-build tauriv2-build
+      - name: Prepare the check configurations
+        working-directory: core
+        run: |
+          make e2e-registry-tls
+          make install-plugins CONFIG="$SOKSAK_CONFIG_ROOT/soksak-check-wailsv3"
+          make install-plugins CONFIG="$SOKSAK_CONFIG_ROOT/soksak-check-tauriv2"
+      # The harness does not start applications (docs/operations/examples.md#window-checks), so this step starts them. The
+      # applications write endpoint.json when they serve; no event reports it to the shell, so the step waits for the file
+      # for at most 60 seconds and fails with the name of the application that did not serve.
+      - name: Start both applications
+        working-directory: core
+        run: |
+          for app in wailsv3 tauriv2; do
+            config="$SOKSAK_CONFIG_ROOT/soksak-check-$app"
+            nohup "target/debug/soksak-$app.app/Contents/MacOS/soksak-$app" --config-dir "$config" \
+              --registry-ca "$SOKSAK_CONFIG_ROOT/soksak-check-registry-tls/ca.pem" > "$RUNNER_TEMP/$app.out" 2>&1 &
+            echo "$!" > "$RUNNER_TEMP/$app.pid"
+          done
+          for app in wailsv3 tauriv2; do
+            waited=0
+            until [ -f "$SOKSAK_CONFIG_ROOT/soksak-check-$app/endpoint.json" ]; do
+              if [ "$waited" -ge 60 ]; then echo "$app wrote no endpoint.json in 60 seconds" >&2; exit 1; fi
+              sleep 1
+              waited=$((waited + 1))
+            done
+          done
+      # The checks measure applications that are not frontmost, and the harness restores the application that was frontmost
+      # before the run, so Finder is the baseline.
+      - name: Make Finder frontmost
+        run: osascript -e 'tell application "Finder" to activate'
+      - name: Window checks
+        id: checks
+        working-directory: core
+        run: pnpm verify:windows --when-idle 45
+      - name: Locate the run folder
+        id: run
+        if: always()
+        working-directory: core
+        run: |
+          folder="$(ls -td target/test-runs/*/ | head -n 1)"
+          echo "folder=${folder%/}" >> "$GITHUB_OUTPUT"
+      - name: Audit of the logs
+        if: always() && steps.run.outputs.folder != ''
+        working-directory: core
+        run: node scripts/audit-run.mjs "${{ steps.run.outputs.folder }}"
+      - name: Stop both applications
+        if: always()
+        run: |
+          for app in wailsv3 tauriv2; do
+            if [ -f "$RUNNER_TEMP/$app.pid" ]; then kill "$(cat "$RUNNER_TEMP/$app.pid")" || echo "$app had ended before the stop" >&2; fi
+          done
+      - name: Keep the run folder
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: window-checks-run
+          # The run folder holds the output of each test and the marks; the event files of the applications are in the
+          # configuration folders and are kept until every failure is classified.
+          path: |
+            core/${{ steps.run.outputs.folder }}
+            ${{ runner.temp }}/soksak-check-wailsv3/logs
+            ${{ runner.temp }}/soksak-check-tauriv2/logs
+          if-no-files-found: error

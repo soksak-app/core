@@ -15,6 +15,8 @@ const languages = {
   declaration: new Set([".json"]),
   // The build declaration is a Makefile, which has no extension.
   build: new Set(["Makefile"]),
+  // A workflow declaration of the continuous integration is a YAML file.
+  workflow: new Set([".yml"]),
 };
 
 const lane = (capability, language, implementation, tests, options = {}) => ({
@@ -30,6 +32,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
   lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/language-repeat.test.mjs", "scripts/test/node-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs"], { testLanguage: "js-ts" }),
+  lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs"], { testLanguage: "js-ts" }),
   lane("native library pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs"], { testLanguage: "js-ts" }),
   lane("workspace audit scripts", "js-ts", [
     "scripts/check-boundaries.mjs",
@@ -1443,6 +1446,49 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/test-marks.test.mjs", id: "expectError and expectEvent append their declaration to marks.jsonl while a run is kept, and only then" },
     ],
     expected: "The audit of a run writes the verdict of each test by the range of its log, and a test that omits a declared event fails with the missing name.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.29.1",
+    implementation: [
+      { file: ".github/workflows/window-checks.yml", symbol: "node scripts/audit-run.mjs" },
+      { file: ".github/workflows/window-checks.yml", symbol: "pnpm verify:windows --when-idle 45" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "every runner label of a workflow is hosted or declared in examples.md" },
+      { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow runs on the declared self-hosted labels" },
+      { file: "scripts/test/workflows.test.mjs", id: "the window-check workflow names the window checks, the audit step and the artifact of a failed job" },
+    ],
+    expected: "The window-check workflow runs on the labels that the operations document declares, runs the window checks, audits the run folder also after a failed check, and keeps the run folder of a failed job.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.30",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/logged.go", symbol: "func Logged" },
+      { file: "packages/sok/wailsv3/src/routine.go", symbol: "func Go" },
+      { file: "packages/sok/tauriv2/src/logged.rs", symbol: "pub fn logged" },
+      { file: "packages/sok/tauriv2/src/routine.rs", symbol: "pub fn spawn_named" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestEachCommandIsRecordedWithItsResult" },
+      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestAPanicOfACommandIsRecordedWithItsStack" },
+      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestAPanicOfARoutineIsRecordedAndEndsTheProcess" },
+      { file: "packages/sok/wailsv3/tests/event_log_test.go", id: "TestAFolderThatCannotBeWrittenIsReportedAndTheCommandRuns" },
+      { file: "packages/sok/tauriv2/tests/event_log_test.rs", id: "each_command_is_recorded_with_its_result" },
+      { file: "packages/sok/tauriv2/tests/event_log_test.rs", id: "a_panic_of_a_command_is_recorded_with_its_stack" },
+      { file: "packages/sok/tauriv2/tests/event_log_test.rs", id: "a_panic_of_a_routine_is_recorded_and_ends_the_process" },
+      { file: "packages/sok/tauriv2/tests/event_log_test.rs", id: "a_folder_that_cannot_be_written_is_reported_and_the_command_runs" },
+      { file: "packages/sok/wailsv3/tests/event_log_fixture_test.go", id: "TestLinesFollowTheGoldenFixtures" },
+      { file: "packages/sok/wailsv3/tests/event_log_fixture_test.go", id: "TestFieldsAreEscapedAndAnOversizeEventIsCut" },
+      { file: "packages/sok/wailsv3/tests/event_log_fixture_test.go", id: "TestARefusedEventIsCountedAndExplainedByLogDropped" },
+      { file: "packages/sok/wailsv3/tests/event_log_fixture_test.go", id: "TestARunStoresOnlyTheEventsThatTheSpecificationNames" },
+      { file: "packages/sok/tauriv2/tests/event_log_fixture_test.rs", id: "lines_follow_the_golden_fixtures" },
+      { file: "packages/sok/tauriv2/tests/event_log_fixture_test.rs", id: "fields_are_escaped_and_an_oversize_event_is_cut" },
+      { file: "packages/sok/tauriv2/tests/event_log_fixture_test.rs", id: "a_refused_event_is_counted_and_explained_by_log_dropped" },
+      { file: "packages/sok/tauriv2/tests/event_log_fixture_test.rs", id: "a_run_stores_only_the_events_that_the_specification_names" },
+    ],
+    expected: "Each run of the command line tool stores the command with its result in its own event file of the targeted configuration directory, and a panic of the command or of a goroutine or thread is stored with its stack and ends the tool with the status 4, in both languages.",
     levels: ["unit"],
   },
   {

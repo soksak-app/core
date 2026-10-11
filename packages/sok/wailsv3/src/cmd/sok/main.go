@@ -21,5 +21,5 @@ func main() {
 	paths, pathsErr := system.PathsDir()
 	// The identifier names the default configuration directory and the path entry (docs/spec/projects.md#persistence).
 	identifier := sok.Identity()
-	os.Exit(sok.Run(os.Args[1:], os.Stdout, os.Stderr, sok.Options{Identifier: identifier, PathsDir: paths, PathsError: pathsErr, CoreVersion: sok.CoreVersion}))
+	os.Exit(sok.Main(os.Args[1:], os.Stdout, os.Stderr, sok.Options{Identifier: identifier, PathsDir: paths, PathsError: pathsErr, CoreVersion: sok.CoreVersion}))
 }
