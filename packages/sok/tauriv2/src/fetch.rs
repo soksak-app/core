@@ -154,6 +154,7 @@ impl Fetcher {
                 if let Some(target) = response
                     .headers()
                     .get("location")
+                    // default: a location that is not text counts as absent, and the status check below reports the redirect as an HTTP error.
                     .and_then(|value| value.to_str().ok())
                 {
                     let Some(target) = resolve(&current, target) else {

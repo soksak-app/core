@@ -193,6 +193,7 @@ impl Arguments {
         let value = text
             .trim()
             .parse::<f64>()
+            // default: text that is not a finite number becomes the usage error below.
             .ok()
             .filter(|value| value.is_finite() && !text.trim().is_empty());
         let value = value.ok_or_else(|| usage!("--{name} must be a number"))?;
@@ -438,6 +439,7 @@ fn select_window(a: &Arguments, client: &mut Client) -> Result<String, Error> {
             let Some(open) = entry["project"].as_str() else {
                 continue;
             };
+            // default: a window whose project path cannot be resolved cannot be the target; no match returns the error that lists the windows.
             if std::fs::canonicalize(open).ok().as_deref() == Some(target.as_path()) {
                 if let Some(name) = entry["window"].as_str() {
                     return Ok(name.to_string());

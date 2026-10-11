@@ -256,6 +256,7 @@ pub(crate) fn run_app(
     let pid: i32 = parsed
         .required("wait")?
         .parse()
+        // default: a pid that is not a number becomes the usage error below.
         .ok()
         .filter(|pid| *pid > 0)
         .ok_or_else(|| crate::Error::Usage("--wait must be the pid of a process".into()))?;

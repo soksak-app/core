@@ -399,6 +399,9 @@ fn invalid_json_closes_connection() {
 | `webkit-children.record.owner-only` | 갱신이 쓰는 WebKit 자식 기록은 mode 0600이다. | both |
 | `webkit-children.record.concurrent-refreshes` | 동시에 실행된 기록 쓰기는 모두 성공하고 임시 파일을 남기지 않는다. | both |
 | `webkit-children.ps.reports-a-failed-query` | 실행할 수 없거나 존재하지 않는 프로세스의 상태 1이 아닌 상태로 끝난 `ps` 질의는 질의와 `ps`의 메시지를 담은 장소 `webkit children`의 `error` 기록이다. 존재하지 않는 프로세스를 묻는 질의는 오류가 아니다. | both |
+| `webkit-children.ps.reports-an-unreadable-line` | WebKit 프로세스의 `ps` 목록에서 프로세스 번호로 시작하지 않는 줄은 그 줄을 인용하는 장소 `webkit children`의 `error` 기록이고, 공백이 앞서는 프로세스 번호의 줄은 읽는다. | both |
+| `recording.state.poisoned-lock-is-reported` | 상태를 쥔 다른 thread가 panic한 뒤 진행 중인 녹화의 폴더를 읽으면 장소 `recording`의 `error` 기록이고 폴더는 없다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
+| `modal.state.poisoned-lock-is-reported` | 모달 기록을 쥔 다른 thread가 panic한 뒤 열린 모달이나 그 mode를 읽으면 장소 `modal state`의 `error` 기록이고 모달은 없다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
 | `surface-activation.owner.resolves-registered-view` | 등록된 네이티브 뷰는 그 표면 id로 해석된다. | both |
 | `surface-activation.owner.ignores-unknown-view` | 등록되지 않은 네이티브 뷰는 표면으로 해석되지 않는다. | both |
 | `surface-activation.owner.ignores-empty-owner` | 빈 표면 id로 등록된 뷰는 표면으로 해석되지 않는다. | both |

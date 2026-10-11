@@ -475,6 +475,7 @@ impl ProcessLock {
                     let pid = contents
                         .trim()
                         .parse::<u32>()
+                        // default: a lock file without a process number becomes the error "invalid process lock" below.
                         .ok()
                         .filter(|pid| *pid > 0)
                         .ok_or_else(|| format!("{}: invalid process lock", path.display()))?;
@@ -838,6 +839,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
                 break;
             }
         };
+        // default: a frame that is not JSON-RPC becomes the close reason below, which carries the frame text.
         let Some(request) = serde_json::from_slice(&body).ok().and_then(parse) else {
             reason = format!(
                 "frame is not a JSON-RPC 2.0 request: {}",

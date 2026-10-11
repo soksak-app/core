@@ -777,8 +777,10 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
     }
     let fields = &body[10 + name_length..];
     let fields = std::str::from_utf8(fields)
+        // default: text that is not UTF-8 or not a JSON object becomes the error below, which names the event and the record.
         .ok()
         .filter(|text| text.starts_with('{'))
+        // default: invalid fields become the error below, which names the event.
         .and_then(|text| RawValue::from_string(text.to_string()).ok())
         .ok_or_else(|| (total, format!("the fields of {name} are not a JSON object")))?;
     Ok((

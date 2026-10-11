@@ -4,7 +4,7 @@
 mod records;
 
 use soksak_host_tauriv2::webkit_children::{
-    reap_decision, reap_recorded, refresh, snapshot_baseline, write_record,
+    parse_webkit_processes, reap_decision, reap_recorded, refresh, snapshot_baseline, write_record,
 };
 
 // contract: webkit-children.reap.requires-alive-webkit-same-start
@@ -159,4 +159,16 @@ fn a_failed_ps_query_is_reported_and_a_missing_process_is_not() {
             "the error record {text:?} names neither the query nor the message of ps"
         );
     }
+}
+
+// contract: webkit-children.ps.reports-an-unreadable-line
+#[test]
+fn a_ps_line_without_a_process_number_is_returned_as_unreadable() {
+    let output = "  41 /x/com.apple.WebKit.WebContent\nnot-a-number /x/com.apple.WebKit.GPU\n  42 /x/com.apple.WebKit.GPU\n";
+    let (found, unreadable) = parse_webkit_processes(output);
+    assert_eq!(
+        found,
+        [(41, "WebContent".to_string()), (42, "GPU".to_string())]
+    );
+    assert_eq!(unreadable, ["not-a-number /x/com.apple.WebKit.GPU"]);
 }

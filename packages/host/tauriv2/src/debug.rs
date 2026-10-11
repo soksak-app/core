@@ -166,6 +166,7 @@ pub fn read(config: &Path, relative: &str) -> Result<ReadResult, String> {
         }
     }
     let text = std::str::from_utf8(&data[begin..])
+        // default: bytes that are not UTF-8 text become the error "is not text" below, which names the file.
         .ok()
         .filter(|text| !text.contains('\0'))
         .ok_or_else(|| format!("debug: {relative} is not text"))?;
@@ -226,6 +227,7 @@ pub fn read_range(config: &Path, relative: &str, offset: i64) -> Result<RangeRes
         .rposition(|byte| *byte == b'\n')
         .map_or(0, |index| index + 1);
     let text = std::str::from_utf8(&data[..end])
+        // default: bytes that are not UTF-8 text become the error "is not text" below, which names the file.
         .ok()
         .filter(|text| !text.contains('\0'))
         .ok_or_else(|| format!("debug: {relative} is not text"))?;

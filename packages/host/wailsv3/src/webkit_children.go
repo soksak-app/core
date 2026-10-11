@@ -75,14 +75,26 @@ func webkitProcesses() map[int]string {
 		psFailed(err)
 		return map[int]string{}
 	}
+	found, unreadable := ParseWebKitProcesses(out)
+	for _, line := range unreadable {
+		LogError("webkit children", fmt.Sprintf("ps line %q begins with no process number", line))
+	}
+	return found
+}
+
+// ParseWebKitProcesses returns the pids and kinds of the WebKit XPC processes in the output of `ps -axo pid=,command=`, and
+// the lines that begin with no process number. ps pads the process number with leading spaces.
+func ParseWebKitProcesses(out string) (map[int]string, []string) {
 	found := map[int]string{}
+	var unreadable []string
 	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(line)
-		if len(fields) < 2 {
+		if len(fields) == 0 {
 			continue
 		}
 		pid, err := strconv.Atoi(fields[0])
-		if err != nil {
+		if err != nil || len(fields) < 2 {
+			unreadable = append(unreadable, strings.TrimSpace(line))
 			continue
 		}
 		command := strings.Join(fields[1:], " ")
@@ -92,7 +104,7 @@ func webkitProcesses() map[int]string {
 			}
 		}
 	}
-	return found
+	return found, unreadable
 }
 
 // processExists asks with ps whether the process pid is alive (no signal is used). When ps fails, it records the failure and answers that the process does not exist.

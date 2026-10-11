@@ -155,6 +155,7 @@ fn remove_ended(directory: &Path, name: &str) -> Result<(), String> {
                 .strip_prefix('-')?
                 .strip_suffix(".sock")?
                 .parse::<i32>()
+                // default: a file name without a process number is no socket of this name, so the sweep leaves it.
                 .ok()
         }) else {
             continue;

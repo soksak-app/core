@@ -399,6 +399,9 @@ Items:
 | `webkit-children.record.owner-only` | The record of the WebKit children that a refresh writes has mode 0600. | both |
 | `webkit-children.record.concurrent-refreshes` | Record writes that run at the same time all succeed and leave no temporary file. | both |
 | `webkit-children.ps.reports-a-failed-query` | A `ps` query that cannot run or that ends with a status other than the status 1 of a process that does not exist is an `error` record of the place `webkit children` that names the query and the message of `ps`; a query for a process that does not exist is not an error. | both |
+| `webkit-children.ps.reports-an-unreadable-line` | A line of the `ps` listing of the WebKit processes that begins with no process number is an `error` record of the place `webkit children` that quotes the line; a line whose process number is preceded by spaces is read. | both |
+| `recording.state.poisoned-lock-is-reported` | Reading the folder of the recording in progress after another thread panicked while it held the state is an `error` record of the place `recording` and no folder. | tauriv2 only: Rust marks a mutex poisoned when its holder panics, while a Go mutex has no such state |
+| `modal.state.poisoned-lock-is-reported` | Reading the open modal or its mode after another thread panicked while it held the modal record is an `error` record of the place `modal state` and no modal. | tauriv2 only: Rust marks a mutex poisoned when its holder panics, while a Go mutex has no such state |
 | `surface-activation.owner.resolves-registered-view` | A registered native view resolves to its surface id. | both |
 | `surface-activation.owner.ignores-unknown-view` | An unregistered native view resolves to no surface. | both |
 | `surface-activation.owner.ignores-empty-owner` | A view registered with an empty surface id resolves to no surface. | both |

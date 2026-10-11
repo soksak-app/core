@@ -127,3 +127,15 @@ func TestConcurrentWebKitRecordWritesAllSucceed(t *testing.T) {
 		t.Errorf("a temporary record file was left behind: %v", err)
 	}
 }
+
+// contract: webkit-children.ps.reports-an-unreadable-line
+func TestAPsLineWithoutAProcessNumberIsReturnedAsUnreadable(t *testing.T) {
+	out := "  41 /x/com.apple.WebKit.WebContent\nnot-a-number /x/com.apple.WebKit.GPU\n  42 /x/com.apple.WebKit.GPU\n"
+	found, unreadable := host.ParseWebKitProcesses(out)
+	if len(found) != 2 || found[41] != "WebContent" || found[42] != "GPU" {
+		t.Fatalf("found %v, want 41 WebContent and 42 GPU", found)
+	}
+	if len(unreadable) != 1 || unreadable[0] != "not-a-number /x/com.apple.WebKit.GPU" {
+		t.Fatalf("unreadable %q, want the one line without a process number", unreadable)
+	}
+}

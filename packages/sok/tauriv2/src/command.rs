@@ -133,6 +133,7 @@ fn convert(name: &str, text: &str, declared: &Value) -> Result<Value, Error> {
             "null" => {}
             "string" => return Ok(Value::String(text.into())),
             "number" => {
+                // default: text that is not a finite number tries the next declared type; the error after the loop names every type.
                 if let Some(value) = text.parse::<f64>().ok().filter(|value| value.is_finite()) {
                     return Ok(crate::number_value(value));
                 }

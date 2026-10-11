@@ -5,6 +5,10 @@
 use std::cell::RefCell;
 use std::path::Path;
 
+#[path = "support/records.rs"]
+mod records;
+
+use soksak_host_tauriv2::event_record::use_host_event_log;
 use soksak_host_tauriv2::recording::{stop_payload, Capture, Recording, Target};
 
 /// A recording device that records calls and fails at the specified stage.
@@ -246,4 +250,47 @@ fn the_stop_payload_preserves_layout_stages() {
         payload["layouts"],
         serde_json::json!([{"ticket":7,"begun":10.0,"requested":15.0,"presented":20.0,"committed":30.0}])
     );
+}
+
+/// A recording device that panics while the state of the recording is locked.
+struct Panicking;
+
+impl Capture for Panicking {
+    fn open(&self, _target: Target) -> Result<(), String> {
+        Ok(())
+    }
+    fn start(&self, _directory: &Path) -> Result<(), String> {
+        panic!("capture start panicked")
+    }
+    fn wait(&self) -> Result<bool, String> {
+        Ok(true)
+    }
+    fn stop(&self) -> Result<i32, String> {
+        Ok(0)
+    }
+}
+
+// contract: recording.state.poisoned-lock-is-reported
+#[test]
+fn a_poisoned_recording_state_is_reported_when_it_is_read() {
+    let config = tempfile::tempdir().unwrap();
+    let writer = records::start_writer(config.path());
+    let folder = config.path().join("frames");
+    let recording = Recording::new();
+    let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = recording.start(&Panicking, WINDOW, &folder, &make);
+    }));
+    assert!(panicked.is_err());
+    assert_eq!(recording.running(), None);
+    writer.flush(std::time::Duration::from_secs(5)).unwrap();
+    use_host_event_log(None);
+    let errors: Vec<String> = records::read_events(&records::event_log_path(config.path()))
+        .into_iter()
+        .filter(|event| {
+            event["event"] == "host.record.error" && event["fields"]["where"] == "recording"
+        })
+        .map(|event| event["fields"]["text"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(errors.len(), 1, "errors {errors:?}");
+    assert!(errors[0].contains("poisoned"), "error {:?}", errors[0]);
 }

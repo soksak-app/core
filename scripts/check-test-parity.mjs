@@ -1841,6 +1841,21 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F160.27",
+    implementation: [
+      { file: "packages/host/tauriv2/src/recording.rs", symbol: "pub fn running" },
+      { file: "packages/host/tauriv2/src/webkit_children.rs", symbol: "pub fn parse_webkit_processes" },
+      { file: "packages/host/wailsv3/src/webkit_children.go", symbol: "func ParseWebKitProcesses" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "a_poisoned_recording_state_is_reported_when_it_is_read" },
+      { file: "packages/host/tauriv2/tests/webkit_children_test.rs", id: "a_ps_line_without_a_process_number_is_returned_as_unreadable" },
+      { file: "packages/host/wailsv3/tests/webkit_children_test.go", id: "TestAPsLineWithoutAProcessNumberIsReturnedAsUnreadable" },
+    ],
+    expected: "A discarded Rust result is either reported as a record or carries a stated reason: a poisoned lock and a line of ps without a process number are records.",
+    levels: ["unit"],
+  },
+  {
     id: "F160.11",
     implementation: [
       { file: "scripts/test-runner.mjs", symbol: "export async function runTests" },
