@@ -73,6 +73,10 @@ The host creates the endpoint before it shows windows. If the host cannot create
 
 Registered WebView pointer receipt completion requires pending mouse processing to drain before sending and after receipt. Registration rejects an unavailable drain API. Capability loss before sending rejects delivery without sending the event; loss after receipt must fail completion and report the unavailable API. A wait that ends by timeout or unregistration before the pre-send drain finishes completes once and cancels that drain, so the event is not sent afterwards. Native non-WebView targets and deliberately unregistered WebViews retain their declared delivery-only contract.
 
+## Recording
+
+The host stores every request of a client that names a declared method as the event `host.endpoint.call`, whether or not the performance trace is on: the method, the params as received (cut to 1024 bytes), the result and the microseconds ([logging](logging.md#entrances)). A frame that closes the connection (a frame over the limit, malformed JSON, a value that is not a JSON-RPC 2.0 request, an undeclared method) is not a request of a method; the host stores the reason of the closing as a record of the place `endpoint`.
+
 ## Diagnostic builds
 
 The following methods exist only in diagnostic builds (Go build tag `diagnostics`, cargo feature `diagnostics`). Other builds reject them as undeclared methods. `make wailsv3-build` and `make tauriv2-build` produce diagnostic builds; the release targets do not.

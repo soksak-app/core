@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { observeHostCalls, settlingCalls } from "../host-calls.js";
+import { callEvent, observeHostCalls, settlingCalls } from "../host-calls.js";
 
 test("settling waits for the calls already sent and sends no later call", async () => {
   const sent = [];
@@ -67,4 +67,35 @@ test("an observer sees every call with its arguments, its duration and its outco
     { name: "nan", args: [{ x: NaN }], ok: false, error: "host call nan: x is NaN, which JSON sends as null" },
   ]);
   for (const { micros } of seen) assert.ok(Number.isInteger(micros) && micros >= 0, `duration ${micros}`);
+});
+
+// An array whose reads are counted, to show how much of a value the event reads before it cuts.
+function countedArray(length) {
+  const reads = { count: 0 };
+  const array = new Proxy(new Array(length).fill(1), {
+    get(target, key, receiver) {
+      if (typeof key === "string" && /^\d+$/.test(key)) reads.count += 1;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return { array, reads };
+}
+
+test("the arguments of a call are cut while they are serialized, not after the whole value is", () => {
+  const { array, reads } = countedArray(1_000_000);
+  const { fields } = callEvent({ name: "big", args: [array], micros: 1, ok: true });
+  assert.equal(fields.truncated, true);
+  assert.ok(Buffer.byteLength(fields.args) <= 1024, `${Buffer.byteLength(fields.args)} bytes`);
+  assert.ok(fields.args.startsWith("[[1,1,1,"), fields.args.slice(0, 20));
+  assert.ok(reads.count < 1024, `${reads.count} elements were read`);
+});
+
+test("the arguments of a call are cut at 1024 bytes on a character boundary", () => {
+  const { fields } = callEvent({ name: "text", args: ["é".repeat(2000)], micros: 1, ok: true });
+  assert.equal(fields.truncated, true);
+  assert.ok(Buffer.byteLength(fields.args) <= 1024 && Buffer.byteLength(fields.args) >= 1022, `${Buffer.byteLength(fields.args)} bytes`);
+  assert.equal(fields.args.includes("\ufffd"), false);
+  const exact = callEvent({ name: "text", args: ["a".repeat(1020)], micros: 1, ok: true }).fields;
+  assert.equal(Buffer.byteLength(exact.args), 1024);
+  assert.equal(exact.truncated, false);
 });

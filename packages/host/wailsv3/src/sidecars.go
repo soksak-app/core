@@ -98,10 +98,10 @@ type sidecar struct {
 	outbox        chan []byte
 	exited        chan struct{}
 	muClosed      sync.Mutex
-	pendingCloses [][]byte // The pending closed messages, in the order of sending
+	pendingCloses pendingLines // The pending closed messages, in the order of sending
 	// pendingReplies buffers the immutable image acks when the channel is full.
 	// Each item is kept so that a reply with a different sequence does not overwrite another.
-	pendingReplies [][]byte
+	pendingReplies pendingLines
 	closeWaiters   map[string]chan error
 	// ownerMutex serializes the close of the owner of a persistent service, and transportClosed is true once it closed the
 	// transport, so the close of a replacement and the close of a stop run once between them.
@@ -443,8 +443,12 @@ func (c *Sidecars) SendResponse(name, surface, image string, body json.RawMessag
 		// The channel is full, so the immutable replies are kept in order.
 		responseKey := surface + ":" + image + ":" + string(body)
 		process.muClosed.Lock()
-		process.pendingReplies = append(process.pendingReplies, line)
+		limit := process.pendingReplies.add(line)
 		process.muClosed.Unlock()
+		if limit != "" {
+			recordBufferDrop("sidecar "+name+" pending replies", len(line), limit)
+			return fmt.Errorf("sidecar %s: the pending replies reached %s, so a reply of surface %s is dropped", name, limit, surface)
+		}
 		LogInfo("sidecar "+name, fmt.Sprintf("response queue full, buffering %s", responseKey))
 		return nil
 	}
@@ -487,8 +491,17 @@ func (c *Sidecars) closeSurface(surface string) bool {
 		default:
 			// The channel is full, so the closed messages are kept in the order of sending.
 			process.muClosed.Lock()
-			process.pendingCloses = append(process.pendingCloses, line)
+			limit := process.pendingCloses.add(line)
 			process.muClosed.Unlock()
+			if limit != "" {
+				// The close is not sent, so no reply to it comes: the surface is not waited for. The sidecar keeps its session
+				// until it ends.
+				recordBufferDrop("sidecar "+process.name+" pending closes", len(line), limit)
+				if c.closing[process.name][surface]--; c.closing[process.name][surface] == 0 {
+					delete(c.closing[process.name], surface)
+				}
+				continue
+			}
 			LogInfo("sidecar "+process.name, fmt.Sprintf("close %s: outbox full, buffered", surface))
 		}
 	}
@@ -1040,12 +1053,10 @@ func (c *Sidecars) launch(name string) (*sidecar, error) {
 	PerformanceProcessAdd("sidecar", name, cmd.Process.Pid)
 	process := &sidecar{
 		name: name, cmd: cmd, stdin: stdin,
-		outbox:         make(chan []byte, 256),
-		exited:         make(chan struct{}),
-		pendingCloses:  make([][]byte, 0),
-		pendingReplies: make([][]byte, 0),
-		closeWaiters:   make(map[string]chan error),
-		surfaces:       make(map[string]bool),
+		outbox:       make(chan []byte, 256),
+		exited:       make(chan struct{}),
+		closeWaiters: make(map[string]chan error),
+		surfaces:     make(map[string]bool),
 	}
 	process.begin = func() {
 		routine.Go("sidecar-write", func() { c.write(process) })       // write goroutine: reads from the outbox channel and writes to stdin.
@@ -1253,7 +1264,6 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 	process := &sidecar{
 		name: name, cmd: cmd, conn: conn, persistent: true, version: response.Version, servicePID: endpoint.PID,
 		outbox: make(chan []byte, 256), exited: make(chan struct{}),
-		pendingCloses: make([][]byte, 0), pendingReplies: make([][]byte, 0),
 		closeWaiters: make(map[string]chan error), surfaces: make(map[string]bool),
 	}
 	process.begin = func() {
@@ -1348,8 +1358,7 @@ func (c *Sidecars) writePersistentLine(process *sidecar, line []byte) bool {
 
 func (c *Sidecars) writePersistentPending(process *sidecar) bool {
 	process.muClosed.Lock()
-	replies, closes := process.pendingReplies, process.pendingCloses
-	process.pendingReplies, process.pendingCloses = nil, nil
+	replies, closes := process.pendingReplies.take(), process.pendingCloses.take()
 	process.muClosed.Unlock()
 	for _, line := range replies {
 		if !c.writePersistentLine(process, line) {
@@ -1375,8 +1384,7 @@ func (c *Sidecars) writeLine(process *sidecar, line []byte) bool {
 // writePending takes the held messages at once and writes the returns first and the closes last.
 func (c *Sidecars) writePending(process *sidecar) bool {
 	process.muClosed.Lock()
-	replies, closes := process.pendingReplies, process.pendingCloses
-	process.pendingReplies, process.pendingCloses = nil, nil
+	replies, closes := process.pendingReplies.take(), process.pendingCloses.take()
 	process.muClosed.Unlock()
 	for _, line := range replies {
 		if !c.writeLine(process, line) {

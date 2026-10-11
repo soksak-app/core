@@ -71,6 +71,8 @@ type pendingEvent struct {
 	// fields is the fields as JSON text, serialized once by the producer.
 	fields json.RawMessage
 	bytes  int
+	// truncated is the size in bytes of the fields text before it was cut to its head, and 0 for an event that was not cut.
+	truncated int
 	// placed, when set, receives the seq of the line once the writer gave it one, and is closed when the line cannot be written.
 	placed chan uint64
 }
@@ -298,12 +300,13 @@ func (l *EventLog) enqueue(tsMicros int64, layer string, level Level, event stri
 }
 
 func (l *EventLog) enqueuePlaced(tsMicros int64, layer string, level Level, event string, text json.RawMessage, placed chan uint64) bool {
+	text, truncated := capFields(text)
 	bytes := len(text) + len(event)
 	if l.queuedBytes.Load()+int64(bytes) > l.queueBytes {
 		l.countLoss(bytes)
 		return false
 	}
-	pending := &pendingEvent{tsMicros: tsMicros, layer: layer, level: level, event: event, fields: text, bytes: bytes, placed: placed}
+	pending := &pendingEvent{tsMicros: tsMicros, layer: layer, level: level, event: event, fields: text, bytes: bytes, truncated: truncated, placed: placed}
 	l.queuedBytes.Add(int64(bytes))
 	l.queuedEvents.Add(1)
 	select {
@@ -315,6 +318,23 @@ func (l *EventLog) enqueuePlaced(tsMicros int64, layer string, level Level, even
 		l.countLoss(bytes)
 		return false
 	}
+}
+
+// capFields returns the fields text of an event as the writer stores it. Fields over EventFieldsLimitBytes are replaced by
+// `{"head": <the first EventHeadBytes bytes of the text>}`, and the second result is the size of the text before the cut;
+// it is 0 for fields under the bound (docs/spec/logging.md#bounds).
+func capFields(text json.RawMessage) (json.RawMessage, int) {
+	if len(text) <= EventFieldsLimitBytes {
+		return text, 0
+	}
+	head, _ := cutText(text, EventHeadBytes)
+	cut, err := json.Marshal(map[string]string{"head": head})
+	if err != nil {
+		// A string serializes without failure, so this is a defect of the serializer; the event keeps its size and no head.
+		fmt.Fprintf(os.Stderr, "event writer: the head of an event over the size bound cannot be serialized: %v\n", err)
+		return json.RawMessage(`{}`), len(text)
+	}
+	return cut, len(text)
 }
 
 func (l *EventLog) countLoss(bytes int) {
@@ -361,10 +381,12 @@ type eventRecord struct {
 	Layer    string          `json:"layer"`
 	Event    string          `json:"event"`
 	Fields   json.RawMessage `json:"fields"`
+	// Truncated is the size in bytes of the fields before they were cut; it is absent for an event that was not cut.
+	Truncated int `json:"truncated,omitempty"`
 }
 
 func eventLine(seq uint64, e *pendingEvent) ([]byte, error) {
-	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, Seq: seq, Level: e.level, Layer: e.layer, Event: e.event, Fields: e.fields})
+	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, Seq: seq, Level: e.level, Layer: e.layer, Event: e.event, Fields: e.fields, Truncated: e.truncated})
 	if err != nil {
 		return nil, err
 	}

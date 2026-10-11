@@ -3,6 +3,7 @@
 // without waiting and relays the records of one turn to the host in one batch through the call `log`. A page without the
 // application host (the browser example) writes to its console.
 import { host } from "@soksak/runtime";
+import { boundedJson, byteLength, cutBytes } from "./bounded-json.js";
 import { callEvent, observeHostCalls } from "./host-calls.js";
 import { createEventBatcher } from "./log-batch.js";
 import { recordOf } from "./report-record.js";
@@ -73,20 +74,35 @@ if (batcher) {
 // `reportRecord`, and for a plugin `context.runtime.log.error`.
 const CONSOLE_LEVELS = { error: "warn", warn: "warn", info: "info", log: "info", debug: "debug" };
 
-/** The text of the arguments of a console call: the arguments as the page wrote them, separated by a space. */
+// The longest text of a console call in an event, in bytes; a longer text is cut while it is built and the event says `truncated`
+// (docs/spec/logging.md#bounds).
+const CONSOLE_TEXT_LIMIT = 8192;
+
+/** The text of the arguments of a console call, separated by a space, and whether it was cut at the bound. */
 function consoleText(args) {
-  return args.map((arg) => {
-    if (typeof arg === "string") return arg;
-    if (arg instanceof Error) return String(arg);
-    try {
-      const text = JSON.stringify(arg);
-      // default: JSON has no text for undefined and for a function; the value is written as String shows it.
-      return text === undefined ? String(arg) : text;
-    } catch {
-      // default: a value that JSON cannot serialize (a cycle, a BigInt) is written as String shows it.
-      return String(arg);
+  const parts = [];
+  let length = 0;
+  for (const arg of args) {
+    const room = CONSOLE_TEXT_LIMIT - length;
+    let part;
+    let cut = false;
+    if (typeof arg === "string") ({ text: part, truncated: cut } = cutBytes(arg, room));
+    else if (arg instanceof Error) ({ text: part, truncated: cut } = cutBytes(String(arg), room));
+    else {
+      try {
+        ({ text: part, truncated: cut } = boundedJson(arg, room));
+        // default: JSON has no text for undefined and for a function; the value is written as String shows it.
+        if (part === undefined) ({ text: part, truncated: cut } = cutBytes(String(arg), room));
+      } catch {
+        // default: a value that JSON cannot serialize (a cycle, a BigInt) is written as String shows it.
+        ({ text: part, truncated: cut } = cutBytes(String(arg), room));
+      }
     }
-  }).join(" ");
+    parts.push(part);
+    length += byteLength(part) + 1;
+    if (cut || length >= CONSOLE_TEXT_LIMIT) return { text: parts.join(" "), truncated: cut || args.length > parts.length };
+  }
+  return { text: parts.join(" "), truncated: false };
 }
 
 const captured = new WeakSet();
@@ -105,7 +121,8 @@ export function captureConsole(target = console) {
     if (target === console && method === "info") rawInfo = original;
     target[method] = (...args) => {
       original(...args);
-      emitEvent(level, `page.console.${method}`, { text: consoleText(args) });
+      const { text, truncated } = consoleText(args);
+      emitEvent(level, `page.console.${method}`, truncated ? { text, truncated } : { text });
     };
   }
 }

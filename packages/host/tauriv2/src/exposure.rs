@@ -18,6 +18,7 @@ use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Window};
 
 use crate::application_log::log_error;
+use crate::buffer_bounds::record_buffer_drop;
 use crate::endpoint::{
     missing_window, Endpoint, Failure, Service, BUTTON_HELD, HANDLER_FAILED, INVALID_PARAMS,
     MISSING_DOCUMENT, NOT_ACTIVE, NO_INPUT, PRESS_OPEN, TIMED_OUT, UNKNOWN_NAME,
@@ -415,7 +416,13 @@ impl Relay {
                     .lock()
                     .map_err(|e| Failure::new(-32603, e.to_string()))?;
                 if expired.len() == EXPIRED_LIMIT {
+                    // The oldest entry is forgotten: a late reply to it has no matching request. The loss is counted.
                     expired.pop_front();
+                    record_buffer_drop(
+                        "relay expired requests",
+                        0,
+                        &format!("{EXPIRED_LIMIT} requests"),
+                    );
                 }
                 expired.push_back((id, target.to_string(), sent, timeout));
                 Err(Failure::new(

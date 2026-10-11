@@ -556,12 +556,18 @@ func (e *Endpoint) subscription(name string) (subscriptionMethod, bool) {
 // changeInOrder puts one subscription change request at the end of the queue of its topic. It is called from the read loop, so
 // changes of the same topic and messages to the page run in the order received, and the reply is sent after the page replied.
 func (e *Endpoint) changeInOrder(c *endpointConn, req request, parse subscriptionMethod) {
+	started := time.Now()
 	t, on, err := parse(e, req.Params)
 	if err != nil {
+		recordEndpointCall(req, started, err)
 		routine.Go("endpoint-reply", func() { e.reply(c, req, nil, err) })
 		return
 	}
-	e.enqueue(t, func() { e.reply(c, req, nil, e.change(c, t, on)) })
+	e.enqueue(t, func() {
+		err := e.change(c, t, on)
+		recordEndpointCall(req, started, err)
+		e.reply(c, req, nil, err)
+	})
 }
 
 // change changes the topic subscription of connection c and, for the first subscription or the last release, notifies the page. When the page
@@ -643,20 +649,10 @@ func (e *Endpoint) notifyPage(t topic, on bool) error {
 }
 
 func (e *Endpoint) run(c *endpointConn, req request, method endpointMethod) {
-	// The time and result of every endpoint method are recorded in the performance trace (V5-104).
-	// A rejection is also recorded as it is; a mismatched value is carried in the error string.
+	// The name, the arguments, the result and the time of every endpoint method are the event host.endpoint.call.
 	started := time.Now()
 	result, err := method(e, c, req.Params)
-	PerformanceObserve("host", func() map[string]any {
-		fields := map[string]any{
-			"event": "endpoint", "name": methodOf(req), "us": time.Since(started).Microseconds(),
-			"ok": err == nil,
-		}
-		if err != nil {
-			fields["error"] = err.Error()
-		}
-		return fields
-	})
+	recordEndpointCall(req, started, err)
 	// A timeout is an error that the requester receives, but only this record keeps which method and what the request waited for.
 	var coded *RPCError
 	if errors.As(err, &coded) && coded.Code == codeTimeout {

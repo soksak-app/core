@@ -109,6 +109,9 @@ fn invalid_json_closes_connection() {
 | `diagnostics.process-exit.pid-validates` | `diagnostics.process.exit`는 `pid`를 1부터 2147483647 사이의 정수로만 받고, 없거나 다른 값은 `pid must be a positive integer`로 거부한다. | both |
 | `diagnostics.test-mark.params-validate` | `diagnostics.test.mark`는 `kind` `start` 또는 `end`, 빈 문자열이 아닌 `name`과 `run`, `end`에는 `pass`, `fail`, `skip` 중 하나인 `result`(`start`에는 거부)만 받고, 그 밖의 값은 invalid-params 오류 `kind must be start or end`, `name must be a non-empty string`, `run must be a non-empty string`, `result must be pass, fail or skip`, `result is only for an end mark`로 거부한다. | both |
 | `diagnostics.test-mark.event-carries-position` | 시작 표시는 event `host.test.start`(`name`, `run`), 끝 표시는 `host.test.end`(`name`, `run`, `result`)이며 layer `host`, level `info`다. 답은 flush 뒤에 읽은 event 파일의 `boot`와 그 줄의 `seq`다. | both |
+| `endpoint.record.call-is-an-event` | endpoint client의 모든 요청(구독 변경도)은 성능 trace가 꺼져 있을 때도 layer `host`, level `debug`이고 `name`, `args`(받은 그대로의 params, 없으면 `null`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.endpoint.call`이다. | both |
+| `endpoint.record.failure-names-the-error` | 실패한 요청은 level `warn`이고 `ok: false`와 client가 받는 코드와 메시지인 `error` `<code>: <message>`를 가진 event `host.endpoint.call`이다. | both |
+| `endpoint.record.arguments-are-cut-before-copying` | `args`는 문자 경계에서 자른 최대 1024바이트이고, params가 더 길면 event에 `truncated: true`가 있다. | both |
 | `diagnostics.test-mark.needs-the-event-log` | event log가 연결되지 않은 동안의 표시는 `the event log of the host is not attached`로 실패한다. | both |
 | `documents.request.accepts-own-surface` | 호출자 자신의 표면에 대한 문서 요청을 받아들이고 표면과 이름 키를 반환한다. | both |
 | `documents.request.rejects-foreign-or-missing-caller` | 호출자 표면이 없거나 다른 표면에서 온 문서 요청은 "not surface"로 실패한다. | both |
@@ -339,6 +342,11 @@ fn invalid_json_closes_connection() {
 | `sidecars.send.slow-sidecar-does-not-block-others` | 한 사이드카 대기열이 가득 찬 동안 다른 사이드카로의 보내기는 50ms 안에 반환된다. | both |
 | `sidecars.send.start-does-not-block-other-sidecars` | 영속 service가 hello 응답을 늦추는 동안 실행 중인 다른 사이드카로의 보내기는 50ms 안에 반환된다. | both |
 | `sidecars.close.answer-ends-closing` | `closed`를 보낸 뒤 `host.sidecars`는 사이드카가 답할 때까지 그 표면을 나열하고, 답하면 목록이 빈다. | both |
+| `buffers.sidecar-replies.bounded-by-messages` | sidecar의 보류 응답은 최대 1,024개이며, 다음 응답은 `sidecar <name>: the pending replies reached 1024 messages, so a reply of surface <surface> is dropped`로 거절되고 `host.buffer.dropped`(`buffer` `sidecar <name> pending replies`, `count` 1, `bytes`, `reason` `the buffer holds 1024 messages`)를 저장한다. | both |
+| `buffers.sidecar-replies.bounded-by-bytes` | sidecar의 보류 응답은 최대 4,194,304바이트이며, 이를 넘게 되는 응답은 `...reached 4194304 bytes...`로 거절되고 `reason`이 `the buffer holds 4194304 bytes`인 `host.buffer.dropped`를 저장한다. | both |
+| `buffers.sidecar-closes.bounded-and-forgotten` | sidecar의 보류 close는 최대 1,024개와 4,194,304바이트이며, 이를 넘는 close는 보내지 않고 `host.buffer.dropped`(`buffer` `sidecar <name> pending closes`)를 저장하며, 그 표면은 답을 기다리는 표면 목록에 없다. | both |
+| `buffers.relay-expired.bounded-and-counted` | relay는 만료된 요청을 최대 256개 기억하며, 가장 오래된 것을 잊을 때 `host.buffer.dropped`(`buffer` `relay expired requests`, `count` 1, `bytes` 0, `reason` `the buffer holds 256 requests`)를 저장하고, 그 요청의 늦은 응답에는 `exposure reply <id> has no matching request`로 답한다. | both |
+| `log.writer.event-over-size-bound-is-cut` | fields 글이 1,048,576바이트를 넘는 event는 최대 4,096바이트의 `fields` `{"head": ...}`와 자르기 전 크기인 `truncated`로 저장하고, 상한 아래의 event에는 `truncated`가 없으며 `seq`는 연속이다. | both |
 | `sidecars.close.buffered-close-is-recorded` | 사이드카의 큐가 가득 차서 기다리는 closed 알림은 `info host sidecar <name>: close <surface>: outbox full, buffered`를 쓴다. | both |
 | `sidecars.close.failed-answer-is-logged` | `error`가 있는 닫기 응답은 host 로그에 오류 줄 "error host sidecar <name>: close <surface>: <error>"를 쓰고 닫는 중 항목을 끝낸다. | both |
 | `sidecars.declaration.replaces-changed-folder` | 폴더가 바뀐 사이드카를 선언하면 실행 중인 표준 입출력 프로세스를 실패 없이 멈추고, 다음 send가 새 폴더의 실행 파일을 시작한다. | both |

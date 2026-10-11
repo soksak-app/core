@@ -18,6 +18,8 @@ use serde::Serialize;
 use serde_json::json;
 use serde_json::value::{to_raw_value, RawValue};
 
+use crate::bounds::{cut_text, EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES};
+
 /// The schema number of the lines that this writer writes.
 pub const SCHEMA: u64 = 1;
 
@@ -81,6 +83,8 @@ struct Pending {
     /// The fields as JSON text, serialized once by the producer.
     fields: Box<RawValue>,
     bytes: usize,
+    /// The size in bytes of the fields text before it was cut to its head, or `None` for an event that was not cut.
+    truncated: Option<usize>,
     /// When set, receives the `seq` of the line once the writer gave it one.
     placed: Option<SyncSender<u64>>,
 }
@@ -244,6 +248,7 @@ impl EventLog {
             }))
             .map_err(|e| format!("log.open: {e}"))?,
             bytes: 0,
+            truncated: None,
             placed: None,
         };
         let writer = {
@@ -397,6 +402,7 @@ impl EventLog {
         fields: Box<RawValue>,
         placed: Option<SyncSender<u64>>,
     ) -> bool {
+        let (fields, truncated) = cap_fields(fields);
         let bytes = fields.get().len() + event.len();
         if self.queued_bytes.load(Ordering::Relaxed) + bytes > self.queue_bytes {
             self.count_loss(1, bytes as u64);
@@ -409,6 +415,7 @@ impl EventLog {
             event: event.to_string(),
             fields,
             bytes,
+            truncated,
             placed,
         };
         self.queued_bytes.fetch_add(bytes, Ordering::Relaxed);
@@ -458,17 +465,47 @@ impl Drop for EventLog {
     }
 }
 
+/// Returns the fields text of an event as the writer stores it. Fields over `EVENT_FIELDS_LIMIT_BYTES` are replaced by
+/// `{"head": <the first EVENT_HEAD_BYTES bytes of the text>}`, and the second result is the size of the text before the
+/// cut; it is `None` for fields under the bound (docs/spec/logging.md#bounds).
+fn cap_fields(fields: Box<RawValue>) -> (Box<RawValue>, Option<usize>) {
+    let original = fields.get().len();
+    if original <= EVENT_FIELDS_LIMIT_BYTES {
+        return (fields, None);
+    }
+    let (head, _) = cut_text(fields.get(), EVENT_HEAD_BYTES);
+    match to_raw_value(&json!({ "head": head })) {
+        Ok(cut) => (cut, Some(original)),
+        Err(error) => {
+            // A string serializes without failure, so this is a defect of the serializer; the event keeps its size and no head.
+            eprintln!(
+                "event writer: the head of an event over the size bound cannot be serialized: {error}"
+            );
+            (
+                RawValue::from_string("{}".to_string()).expect("{} is JSON"),
+                Some(original),
+            )
+        }
+    }
+}
+
 /// The line of one event, with the `seq` that the writer gives it.
 fn line(seq: u64, pending: &Pending) -> String {
-    // The fields are already JSON text, so the line is assembled without parsing them again.
+    // The fields are already JSON text, so the line is assembled without parsing them again. The size before a cut follows
+    // the fields.
+    let truncated = match pending.truncated {
+        Some(size) => format!(",\"truncated\":{size}"),
+        None => String::new(),
+    };
     format!(
-        "{{\"ts_us\":{},\"seq\":{},\"level\":\"{}\",\"layer\":\"{}\",\"event\":{},\"fields\":{}}}",
+        "{{\"ts_us\":{},\"seq\":{},\"level\":\"{}\",\"layer\":\"{}\",\"event\":{},\"fields\":{}{}}}",
         pending.ts_us,
         seq,
         pending.level.name(),
         pending.layer,
         serde_json::to_string(&pending.event).expect("a string serializes"),
-        pending.fields.get()
+        pending.fields.get(),
+        truncated
     )
 }
 
@@ -545,6 +582,7 @@ impl Output {
                     fields: RawValue::from_string(self.open_fields.clone())
                         .expect("the fields of log.open are JSON"),
                     bytes: 0,
+                    truncated: None,
                     placed: None,
                 };
                 self.append(&open);
@@ -560,6 +598,7 @@ impl Output {
                     }))
                     .expect("a json value serializes"),
                     bytes: 0,
+                    truncated: None,
                     placed: None,
                 };
                 self.append(&rotated);
@@ -590,6 +629,7 @@ impl Output {
             }))
             .expect("a json value serializes"),
             bytes: 0,
+            truncated: None,
             placed: None,
         };
         self.push(&pending);
@@ -750,6 +790,7 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
             event: name,
             fields,
             bytes: 0,
+            truncated: None,
             placed: None,
         },
     ))

@@ -1,6 +1,7 @@
 // The progress of the host calls that the page sent. It makes every call sent before the page reloads itself receive a reply
 // (docs/spec/native-host.md#page-reload). The runtimes of both applications wrap their own calls with it.
 // A call that holds a number JSON cannot carry (NaN, Infinity) is rejected without being sent (docs/spec/native-host.md#host-calls).
+import { boundedJson } from "./bounded-json.js";
 
 /** The path and value of the first non-finite number in arg. It is null when there is none. */
 function nonFinite(value, path) {
@@ -26,19 +27,19 @@ const observed = (name, args, started, ok, error) => {
   if (observer) observer({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, error });
 };
 
-// The longest text of the arguments of a call in an event; a longer text is cut and the event says `truncated`.
+// The longest text of the arguments of a call in an event, in bytes; a longer text is cut while it is serialized and the event
+// says `truncated` (docs/spec/logging.md#bounds).
 const CALL_ARGS_LIMIT = 1024;
 
 /** The text of the arguments of a host call and whether it was cut. */
 function callArguments(args) {
-  let text;
   try {
-    text = JSON.stringify(args);
+    const { text, truncated } = boundedJson(args, CALL_ARGS_LIMIT);
+    return { args: text, truncated };
   } catch (error) {
     // default: arguments that JSON cannot serialize are recorded with the reason, as the call itself fails on them.
-    text = `unserializable: ${error.message}`;
+    return { args: `unserializable: ${error.message}`, truncated: false };
   }
-  return text.length > CALL_ARGS_LIMIT ? { args: text.slice(0, CALL_ARGS_LIMIT), truncated: true } : { args: text, truncated: false };
 }
 
 /**

@@ -20,6 +20,7 @@ use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
 
 use crate::application_log::{log_error, log_info};
+use crate::endpoint_record::Call;
 use crate::platform::{self, Listener};
 
 pub use crate::platform::Connection;
@@ -241,6 +242,7 @@ impl Topic {
 struct Answer {
     writer: Arc<Mutex<Box<dyn Connection>>>,
     id: Option<Value>,
+    call: Call,
 }
 
 /// A success response. result is written as the received text.
@@ -253,6 +255,8 @@ struct Success<'a> {
 
 impl Answer {
     fn send(self, outcome: Result<Box<RawValue>, Failure>) {
+        // The event is stored before the reply is written, so a client that has its reply finds the event after a flush.
+        self.call.record(&outcome);
         let Some(id) = self.id else { return };
         let written = match self.writer.lock() {
             Ok(mut writer) => match outcome {
@@ -848,6 +852,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         let answer = Answer {
             writer: writer.clone(),
             id: request.id,
+            call: Call::begin(&request.method, &body),
         };
         if SUBSCRIPTIONS.contains(&request.method.as_str()) {
             match subscription(&shared, &request.method, request.params) {
