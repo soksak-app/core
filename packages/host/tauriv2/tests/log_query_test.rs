@@ -97,6 +97,57 @@ fn with_endpoint<T>(config: &Path, body: impl FnOnce(&mut Box<dyn Connection>) -
     result
 }
 
+// contract: log.endpoint.query-answers-the-rows-around-a-row
+#[test]
+fn the_endpoint_method_log_query_answers_the_rows_around_a_row() {
+    let config = tempfile::tempdir().unwrap();
+    write_event_file(config.path(), "host-b1.jsonl", &event_lines(9));
+    with_endpoint(config.path(), |connection| {
+        let around = json!({"ts_us": 1005, "role": "host", "boot": "b1", "seq": 5});
+        let reply = request(
+            connection,
+            1,
+            "log.query",
+            json!({"around": around, "earlier": 2, "later": 1}),
+        );
+        assert!(reply.get("error").is_none(), "log.query failed: {reply}");
+        let marks: Vec<(i64, Option<bool>)> = reply["result"]["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| {
+                (
+                    row["event"]["seq"].as_i64().unwrap(),
+                    row["context"].as_bool(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            marks,
+            vec![
+                (3, Some(true)),
+                (4, Some(true)),
+                (5, Some(false)),
+                (6, Some(true))
+            ],
+            "{reply}"
+        );
+        assert!(reply["result"]["next"].is_null(), "{reply}");
+        let refused = request(
+            connection,
+            2,
+            "log.query",
+            json!({"around": around, "level": "info"}),
+        );
+        assert_eq!(refused["error"]["code"], -32602, "{refused}");
+        assert_eq!(
+            refused["error"]["message"],
+            "log query around takes only channel, earlier and later, not level",
+            "{refused}"
+        );
+    });
+}
+
 // contract: log.endpoint.query-answers-one-page
 #[test]
 fn the_endpoint_method_log_query_answers_one_page() {

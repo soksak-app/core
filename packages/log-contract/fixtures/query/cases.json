@@ -777,5 +777,245 @@
       "2026-10-08T22:53:22.000000Z info sok log.open schema=2 pid=4444 role=\"sok\" boot=\"s1\"",
       "2026-10-08T22:53:22.000100Z debug sok sok.command name=\"status\" args=\"\" micros=1200 ok=true status=0"
     ]
+  },
+  {
+    "name": "around a row",
+    "params": {
+      "around": {
+        "ts_us": 1791500001170000,
+        "role": "vt",
+        "boot": "v1",
+        "seq": 3
+      },
+      "earlier": 2,
+      "later": 2
+    },
+    "args": [
+      "--around",
+      "1791500001170000/vt/v1/3",
+      "--earlier",
+      "2",
+      "--later",
+      "2"
+    ],
+    "rows": [
+      "host-b1:8",
+      "vt-v1:2",
+      "vt-v1:3",
+      "vt-v1:4",
+      "host-b1:7"
+    ],
+    "context": [
+      "host-b1:8",
+      "vt-v1:2",
+      "vt-v1:4",
+      "host-b1:7"
+    ],
+    "next": null,
+    "tail": {
+      "host-b1": 9,
+      "vt-v1": 4,
+      "sok-s1": 2
+    },
+    "lines": [
+      "  2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
+      "  2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2",
+      "  2026-10-08T22:53:21.180000Z error sidecar sidecar.vt.failed surface=tab-z session=s3 reason=\"closed\"",
+      "  2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\""
+    ]
+  },
+  {
+    "name": "around a row of the debug file in all channels",
+    "params": {
+      "channel": "all",
+      "around": {
+        "ts_us": 1791500001110000,
+        "role": "host",
+        "boot": "b1",
+        "seq": 21
+      },
+      "earlier": 1,
+      "later": 1
+    },
+    "args": [
+      "--channel",
+      "all",
+      "--around",
+      "1791500001110000/host/b1/21",
+      "--earlier",
+      "1",
+      "--later",
+      "1"
+    ],
+    "rows": [
+      "host-b1:6",
+      "host-b1:21",
+      "host-b1:8"
+    ],
+    "context": [
+      "host-b1:6",
+      "host-b1:8"
+    ],
+    "next": null,
+    "tail": {
+      "host-b1": 22,
+      "vt-v1": 4,
+      "sok-s1": 2
+    },
+    "lines": [
+      "  2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
+      "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
+      "  2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3"
+    ]
+  },
+  {
+    "name": "around the first row",
+    "params": {
+      "around": {
+        "ts_us": 1791500000000000,
+        "role": "host",
+        "boot": "b1",
+        "seq": 1
+      },
+      "earlier": 3,
+      "later": 1
+    },
+    "args": [
+      "--around",
+      "1791500000000000/host/b1/1",
+      "--earlier",
+      "3",
+      "--later",
+      "1"
+    ],
+    "rows": [
+      "host-b1:1",
+      "host-b1:2"
+    ],
+    "context": [
+      "host-b1:2"
+    ],
+    "next": null,
+    "tail": {
+      "host-b1": 9,
+      "vt-v1": 4,
+      "sok-s1": 2
+    },
+    "lines": [
+      "2026-10-08T22:53:20.000000Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
+      "  2026-10-08T22:53:20.100000Z info native native.input.key_down window=w1 surface=tab-x cids=b1.1 keyCode=36 characters=\"\\r\""
+    ]
+  },
+  {
+    "name": "around the last row",
+    "params": {
+      "around": {
+        "ts_us": 1791500002000100,
+        "role": "sok",
+        "boot": "s1",
+        "seq": 2
+      },
+      "earlier": 1,
+      "later": 5
+    },
+    "args": [
+      "--around",
+      "1791500002000100/sok/s1/2",
+      "--earlier",
+      "1",
+      "--later",
+      "5"
+    ],
+    "rows": [
+      "sok-s1:1",
+      "sok-s1:2"
+    ],
+    "context": [
+      "sok-s1:1"
+    ],
+    "next": null,
+    "tail": {
+      "host-b1": 9,
+      "vt-v1": 4,
+      "sok-s1": 2
+    },
+    "lines": [
+      "  2026-10-08T22:53:22.000000Z info sok log.open schema=2 pid=4444 role=\"sok\" boot=\"s1\"",
+      "2026-10-08T22:53:22.000100Z debug sok sok.command name=\"status\" args=\"\" micros=1200 ok=true status=0"
+    ]
+  },
+  {
+    "name": "around a key that no row has",
+    "params": {
+      "around": {
+        "ts_us": 1791500001150001,
+        "role": "host",
+        "boot": "b1",
+        "seq": 99
+      },
+      "earlier": 1,
+      "later": 1
+    },
+    "args": [
+      "--around",
+      "1791500001150001/host/b1/99",
+      "--earlier",
+      "1",
+      "--later",
+      "1"
+    ],
+    "rows": [
+      "host-b1:8",
+      "vt-v1:2"
+    ],
+    "context": [
+      "host-b1:8",
+      "vt-v1:2"
+    ],
+    "next": null,
+    "tail": {
+      "host-b1": 9,
+      "vt-v1": 4,
+      "sok-s1": 2
+    },
+    "lines": [
+      "  2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
+      "  2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\""
+    ]
+  },
+  {
+    "name": "around a row with no neighbours asked",
+    "params": {
+      "around": {
+        "ts_us": 1791500001170000,
+        "role": "vt",
+        "boot": "v1",
+        "seq": 3
+      },
+      "earlier": 0,
+      "later": 0
+    },
+    "args": [
+      "--around",
+      "1791500001170000/vt/v1/3",
+      "--earlier",
+      "0",
+      "--later",
+      "0"
+    ],
+    "rows": [
+      "vt-v1:3"
+    ],
+    "context": [],
+    "next": null,
+    "tail": {
+      "host-b1": 9,
+      "vt-v1": 4,
+      "sok-s1": 2
+    },
+    "lines": [
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2"
+    ]
   }
 ]

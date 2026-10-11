@@ -20,7 +20,7 @@
 | `sok dom rect\|click\|input\|dispatch <name> [window] [--surface <id>] [--index <n>] [--value <text>] [--event <json>]` | 선언된 DOM 항목에 동작한다 |
 | `sok input pointer [window] --x <x> --y <y> --phase move\|down\|drag\|up\|scroll [--button left\|right] [--delta-x <n>] [--delta-y <n>] [--activate]` | Native pointer 입력을 보낸다 |
 | `sok input key [window] --key <key> --phase down\|up [--text <text>] [--modifiers shift,control,option,command]` | Native key 입력을 보낸다 |
-| `sok debug query [--channel <channel>] [--level <level>] [--class <class>] [--layer <layer>] [--event <name>] [--event-prefix <prefix>] [--surface <id>] [--session <id>] [--cid <id>] [--run <id>] [--text <text>] [--from <time>] [--to <time>] [--order asc\|desc] [--limit <n>] [--after <cursor>]` | 설정 폴더의 event 파일에서 filter를 통과한 event의 page 하나를 파일의 색인으로 찾아 한 행에 한 줄의 글로 출력한다([logging](logging.ko.md#질의), [debug](debug.ko.md#타임라인)). 실행 중인 애플리케이션이 필요 없다 |
+| `sok debug query [--channel <channel>] [--level <level>] [--class <class>] [--layer <layer>] [--event <name>] [--event-prefix <prefix>] [--surface <id>] [--session <id>] [--cid <id>] [--run <id>] [--text <text>] [--from <time>] [--to <time>] [--order asc\|desc] [--limit <n>] [--after <cursor>] [--around <cursor> [--earlier <n>] [--later <n>]]` | 설정 폴더의 event 파일에서 filter를 통과한 event의 page 하나를 파일의 색인으로 찾아 한 행에 한 줄의 글로 출력한다([logging](logging.ko.md#질의), [debug](debug.ko.md#타임라인)). 실행 중인 애플리케이션이 필요 없다 |
 | `sok capture [window]` | 진단 build: 창에 focus를 주지 않고 정지 이미지를 쓴다 |
 | `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` | 프로세스 `<pid>`가 끝난 뒤 애플리케이션 번들 `<target>`을 `<bundle>`로 바꾸고 시작한다([애플리케이션 업데이트](installation.ko.md#애플리케이션-업데이트)) |
 | `sok path install\|remove` | 이 애플리케이션의 경로 항목을 쓰거나 지운다. `install`은 파일과 그 안의 폴더를 출력한다 |

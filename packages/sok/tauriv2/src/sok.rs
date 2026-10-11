@@ -127,6 +127,9 @@ const OPTIONS: &[&str] = &[
     "order",
     "limit",
     "after",
+    "around",
+    "earlier",
+    "later",
 ];
 
 struct Arguments {

@@ -41,6 +41,46 @@ func writeEventFile(t *testing.T, config, name, text string) string {
 	return path
 }
 
+// contract: log.endpoint.query-answers-the-rows-around-a-row
+func TestTheEndpointMethodLogQueryAnswersTheRowsAroundARow(t *testing.T) {
+	_, address, config := serve(t, newFakeBackend())
+	writeEventFile(t, config, "host-b1.jsonl", eventLines(9))
+	conn := dial(t, address)
+	around := map[string]any{"ts_us": 1005, "role": "host", "boot": "b1", "seq": 5}
+	reply := call(t, conn, 1, "log.query", map[string]any{"around": around, "earlier": 2, "later": 1})
+	if reply.Error != nil {
+		t.Fatalf("log.query failed: %+v", reply.Error)
+	}
+	var page struct {
+		Rows []struct {
+			Context *bool
+			Event   struct{ Seq int64 }
+		}
+		Next *struct{ Seq int64 }
+	}
+	if err := json.Unmarshal(reply.Result, &page); err != nil {
+		t.Fatal(err)
+	}
+	type mark struct {
+		seq     int64
+		context bool
+	}
+	var got []mark
+	for _, row := range page.Rows {
+		if row.Context == nil {
+			t.Fatalf("a row without a context mark: %s", reply.Result)
+		}
+		got = append(got, mark{row.Event.Seq, *row.Context})
+	}
+	if !reflect.DeepEqual(got, []mark{{3, true}, {4, true}, {5, false}, {6, true}}) || page.Next != nil {
+		t.Fatalf("rows %+v next %+v in %s", got, page.Next, reply.Result)
+	}
+	refused := call(t, conn, 2, "log.query", map[string]any{"around": around, "level": "info"})
+	if refused.Error == nil || refused.Error.Code != -32602 || refused.Error.Message != "log query around takes only channel, earlier and later, not level" {
+		t.Fatalf("a refused member: %+v", refused.Error)
+	}
+}
+
 // contract: log.endpoint.query-answers-one-page
 func TestTheEndpointMethodLogQueryAnswersOnePage(t *testing.T) {
 	_, address, config := serve(t, newFakeBackend())

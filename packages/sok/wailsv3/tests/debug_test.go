@@ -123,6 +123,10 @@ func TestQueryRefusesAnInvalidFlagValueAsAUsageError(t *testing.T) {
 		{[]string{"--order", "up"}, `log query order "up" is not one of asc, desc`},
 		{[]string{"--after", "nonsense"}, `log query after must be {ts_us, role, boot, seq}, found "nonsense"`},
 		{[]string{"--context", "1"}, `unknown option --context`},
+		{[]string{"--around", "nonsense"}, `log query around must be {ts_us, role, boot, seq}, found "nonsense"`},
+		{[]string{"--earlier", "2"}, `log query earlier needs around`},
+		{[]string{"--around", "1/host/b1/2", "--later", "501"}, `log query later must be an integer from 0 to 500, found 501`},
+		{[]string{"--around", "1/host/b1/2", "--level", "info"}, `log query around takes only channel, earlier and later, not level`},
 	}
 	for _, c := range cases {
 		if stdout, stderr, code := runQueryCommand(t, config, c.args...); code != 2 || stdout != "" || !strings.Contains(stderr, c.want) {

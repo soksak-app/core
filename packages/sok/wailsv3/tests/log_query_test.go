@@ -69,12 +69,83 @@ func TestLogQueryAnswersTheGoldenPages(t *testing.T) {
 		if page.Scanned.Rebuilt != page.Scanned.Logs {
 			t.Errorf("%s: %d indexes were built for %d files that had none", c.Name, page.Scanned.Rebuilt, page.Scanned.Logs)
 		}
+		// A query with around marks every row: the neighbours as context, the row at the cursor as not.
+		around := strings.Contains(string(c.Params), `"around"`)
 		for i, row := range page.Rows {
-			line, err := sok.LogLine(row.Event)
+			id, _ := idOf(row.Role, row.Boot, row.Event)
+			switch {
+			case !around && row.Context != nil:
+				t.Errorf("%s: row %s is marked as context in a query without around", c.Name, id)
+			case around && row.Context == nil:
+				t.Errorf("%s: row %s has no context mark", c.Name, id)
+			case around && *row.Context != contains(c.Context, id):
+				t.Errorf("%s: row %s has context %v, want %v", c.Name, id, *row.Context, contains(c.Context, id))
+			}
+			line, err := sok.LogRowLine(row)
 			if err != nil || line != c.Lines[i] {
 				t.Errorf("%s: line %d is %q (%v), want %q", c.Name, i, line, err, c.Lines[i])
 			}
 		}
+	}
+}
+
+func contains(list []string, item string) bool {
+	for _, entry := range list {
+		if entry == item {
+			return true
+		}
+	}
+	return false
+}
+
+// contract: log.query.answers-the-rows-around-a-row
+func TestLogQueryAroundRefusesWhatItDoesNotTakeAndBoundsTheBytes(t *testing.T) {
+	const cursor = `{"ts_us":1,"role":"host","boot":"b1","seq":2}`
+	cases := []struct{ params, want string }{
+		{`{"around": ` + cursor + `, "level": "info"}`, `log query around takes only channel, earlier and later, not level`},
+		{`{"around": ` + cursor + `, "limit": 5}`, `log query around takes only channel, earlier and later, not limit`},
+		{`{"around": ` + cursor + `, "after": ` + cursor + `}`, `log query around takes only channel, earlier and later, not after`},
+		{`{"earlier": 3}`, `log query earlier needs around`},
+		{`{"later": 3}`, `log query later needs around`},
+		{`{"around": {"ts_us": 1}}`, `log query around must be {ts_us, role, boot, seq}, found {"ts_us":1}`},
+		{`{"around": ` + cursor + `, "earlier": -1}`, `log query earlier must be an integer from 0 to 500, found -1`},
+		{`{"around": ` + cursor + `, "later": 501}`, `log query later must be an integer from 0 to 500, found 501`},
+		{`{"around": ` + cursor + `, "later": "2"}`, `log query later must be an integer from 0 to 500, found "2"`},
+	}
+	for _, c := range cases {
+		if _, err := sok.ParseLogQuery([]byte(c.params)); err == nil || err.Error() != c.want {
+			t.Errorf("%s: error %v, want %q", c.params, err, c.want)
+		}
+	}
+	if query, err := sok.ParseLogQuery([]byte(`{"around": ` + cursor + `}`)); err != nil || query.Earlier != 5 || query.Later != 5 {
+		t.Errorf("the defaults of around are %+v (%v)", query, err)
+	}
+
+	// Eleven lines of about one million bytes: the line text of the answer stays within 8,388,608 bytes. The row at the cursor is
+	// taken first, the earlier rows may use half of the rest and the later rows use what is left.
+	config := t.TempDir()
+	var b strings.Builder
+	b.WriteString(`{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":2,"pid":1,"role":"host","boot":"b1"}}` + "\n")
+	big := strings.Repeat("x", 1_000_000)
+	for seq := 2; seq <= 12; seq++ {
+		fmt.Fprintf(&b, `{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"host","event":"host.x.y","fields":{"text":%q}}`+"\n", 1000+seq, seq, seq, big)
+	}
+	if err := os.MkdirAll(filepath.Join(config, "logs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(config, "logs", "host-b1.jsonl"), b.String())
+	page := runQuery(t, config, `{"around":{"ts_us":1007,"role":"host","boot":"b1","seq":7},"earlier":5,"later":5}`)
+	var seqs []int64
+	total := 0
+	for _, row := range page.Rows {
+		total += len(row.Event)
+	}
+	seqs = seqsOf(t, page)
+	if !reflect.DeepEqual(seqs, []int64{4, 5, 6, 7, 8, 9, 10, 11}) || total > 8388608 {
+		t.Errorf("the rows around the row of 1 MB are %v with %d bytes, want 4 to 11 within 8388608", seqs, total)
+	}
+	if page.Next != nil {
+		t.Errorf("an answer around a row has no next page, found %+v", page.Next)
 	}
 }
 

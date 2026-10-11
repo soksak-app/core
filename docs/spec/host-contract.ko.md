@@ -495,6 +495,7 @@ fn invalid_json_closes_connection() {
 | `log.query.follows-the-tail-with-since` | 앞선 답의 `tail`을 `since`로 준 질의는 그 뒤에 덧붙은 행을 돌려주며 앞선 답이 담은 행보다 `ts_us`가 이른 행도 돌려주고, 프로세스의 `seq` 이하의 행은 뺀다. | both |
 | `log.query.resolves-a-run-to-the-range-of-its-marks` | `run`은 질의를 channel의 모든 파일에서 그 run의 가장 이른 `host.test.start`부터 가장 늦은 `host.test.end`까지의 시간 범위로 한정하고, start가 없는 run은 오류 `log query run "<run>" has no host.test.start in the channel`이다. | both |
 | `log.query.refuses-invalid-parameters` | 선언하지 않은 항목과 매개변수의 잘못된 값은 명세의 오류 문구로 거절하고, event 구조를 어기는 줄이 있는 파일을 읽는 질의는 파일과 줄을 밝히며 실패한다. | both |
+| `log.query.answers-the-rows-around-a-row` | `around`가 있는 질의는 key 앞의 `earlier`개 행과 뒤의 `later`개 행을 key에 있는 행과 함께 channel의 파일에서 filter 없이 key 순서로 돌려주고, 각 행에 `context`(이웃은 true, key의 행은 false)를 표시하며 `next`는 null이다. 행이 없는 key는 이웃만 돌려준다. `packages/log-contract/fixtures/query/cases.json`의 golden `around` 사례와 그 글 줄(context 행은 공백 둘로 들여 쓴다)은 두 구현에서 같다. `channel`, `earlier`, `later` 외의 항목, `around` 없는 `earlier`나 `later`, 잘못된 cursor, 0에서 500을 벗어난 개수는 명세의 오류 문구로 거절하며, 답의 줄 글은 8,388,608바이트 이하다. | both |
 | `log.query.reads-only-the-segments-that-can-hold-a-row` | segment가 여럿인 로그에서 `cid`, `event`, `surface`, 시간 범위로 묻는 질의는 색인이 받아들이는 segment만 읽고(`scanned.read`), `text`가 있는 질의는 모든 segment를 읽는다. | both |
 | `log.query.answers-a-million-events-within-the-limit` | event 1,000,000개의 로그가 첫 page, `cid`, event 이름, surface, 시간 범위, level, `text`로 묻는 page를 test가 밝힌 한도 안에서 답하고 색인 생성도 한도 안에 끝나며, test는 시간을 출력한다. | both |
 | `log.index.matches-the-golden-digest` | 구현이 각 golden event 파일에서 만든 색인의 SHA-256이 golden 값과 같고, 최신 색인의 갱신은 아무것도 바꾸지 않는다. | both |
@@ -505,6 +506,7 @@ fn invalid_json_closes_connection() {
 | `log.writer.indexes-each-batch-it-wrote` | host의 writer가 batch를 쓴 뒤 질의 없이도 그 파일의 색인이 batch의 줄을 덮고, writer의 회전은 닫힌 세대의 색인을 완전하게 남긴다. | both |
 | `log.writer.stores-an-event-for-each-index-built-from-the-file` | 파일 전체로 만든 색인은 파일, 이유, 줄 수, 바이트, 마이크로초를 가진 event `host.log.index_rebuilt`이고, 증분 갱신은 event를 저장하지 않으며, 실패한 갱신은 문구마다 한 번 장소 `log index`의 `error` 기록으로 보인다. | both |
 | `log.endpoint.query-answers-one-page` | diagnostics가 없는 빌드의 endpoint 메서드 `log.query`가 질의의 page로 답하고, 매개변수를 invalid-params 오류와 질의의 문구로 거절하며, `window`를 받지 않는다. | both |
+| `log.endpoint.query-answers-the-rows-around-a-row` | endpoint 메서드 `log.query`는 `around`가 있으면 `context` 표시를 가진 그 행 둘레의 행과 null인 `next`를 답하고, 다른 filter 항목은 코드 `-32602`와 질의의 오류 문구로 거절한다. | both |
 | `debug.log-query.answers-the-query-of-the-endpoint` | host 호출 `logQuery`가 같은 요청에 endpoint 메서드 `log.query`와 같은 page로 답하고, 오류는 질의의 오류 문구다. | both |
 | `debug.follow.coalesces-writes-into-a-notice` | event log의 변경 알림은 창을 기다리지 않고 돌아오며, 알림은 250 ms 이상 간격으로 발행되고(시험은 더 짧은 간격으로 확인한다), 그동안 온 알림은 마지막 경로와 크기를 가진 알림 하나가 된다. `notices`는 발행한 알림 수이고 `notices + coalesced`는 알림 전체 수이며, `host.log`의 값은 가장 최근 알림이고 첫 알림 전에는 0 값이다. | both |
 | `debug.follow.announces-only-changes-that-are-not-log-reads` | `announcing`이 0인 색인 갱신은 알림을 발행하지 않고, `announcing`이 0보다 큰 갱신은 그 갱신의 파일과 크기를 담은 알림을 발행한다. | both |

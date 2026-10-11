@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F160.24.9.1: Go와 Rust 구현에서 event 파일 질의가 한 행 둘레의 행을 돌려준다(`around`과 `earlier`, `later`, 각각 500까지, 줄 글은 page처럼 제한, 각 행에 `context` 표시). `sok debug query --around <cursor> --earlier <n> --later <n>`이 context 행을 공백 둘로 들여 출력하고, endpoint 메서드 `log.query`와 host 호출 `logQuery`가 답한다. `packages/log-contract/fixtures/query/cases.json`에 golden 사례 여섯을 더했다. 두 `sok` 구현의 golden, 거절, 바이트 한도 시험과 두 host의 endpoint 시험으로 검증했다.
+- F160.24.9.2: debug 타임라인의 각 행에 앞의 5개 행과 뒤의 5개 행을 담은 행에 들이는 단추(`core.debug.timeline.context`)가 있다. 담고 있지 않던 행은 공백 둘로 들여 쓰며 `core.debug` 상태의 `context`로 센다. `debug-timeline-ui.test.mjs`로 검증했다.
 - F160.24.11.3: debug 화면은 host의 알림마다 `tail`부터 질의로 바로 답하고 자기 간격이 없다(`FOLLOW_INTERVAL_MS` 제거). host가 알림의 비율을 제한하고 화면 자신의 질의 기록은 변경을 알리지 않으므로 따라가기는 맴돌지 않고 끝난다. `debug-timeline-ui.test.mjs`로 검증했다.
 - F160.24.11.2: 두 host가 색인이 줄을 덮은 뒤 색인기와 색인을 갱신하는 모든 질의에서 event log의 변경 알림을 250 ms에 한 번까지, 합쳐진 알림을 세어(`coalesced`) endpoint의 host 상태 `host.log`(`{path, size, notices, coalesced}`)와 host event `debug-log-changed`로 발행한다. writer는 더 이상 알림을 먹이지 않는다. Go와 Rust의 `debug.follow.*` 사례로 검증했다.
 - F160.24.11.1: Go와 Rust 구현에서 event 파일 색인의 갱신이 `announcing`, 곧 앞선 갱신 뒤에 색인한 줄에서 log만 읽는 호출의 기록(`logQuery`의 `host.binding.call`, `log.query`의 `host.endpoint.call`)을 뺀 수와, 덮는 파일의 크기 `size`를 보고한다. 색인 바이트는 그대로다. `TestLogIndexCountsTheLinesThatAnnounceAChange`와 `index_counts_the_lines_that_announce_a_change`로 검증했다.

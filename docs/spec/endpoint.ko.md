@@ -79,7 +79,7 @@ host는 선언된 메서드를 부른 client의 모든 요청을 성능 trace가
 
 ## Log query
 
-<a id="log-query"></a>메서드 `log.query`는 모든 빌드에 있고 `window`를 받지 않는다. host의 설정 디렉터리의 event 파일을 색인으로 읽는다([logging](logging.ko.md#질의)). 매개변수는 질의 매개변수 객체(`channel`, `level`, `class`, `layer`, `event`, `event_prefix`, `surface`, `session`, `cid`, `run`, `text`, `from_us`, `to_us`, `order`, `limit`, `after`, `since`. `{}`는 channel `other`의 처음 500행을 묻는다)이고 결과는 page `{rows, next, tail, scanned}`다. 질의가 거절하는 매개변수는 invalid-params 오류(-32602)와 질의의 문구(`log query level "x" is not one of error, warn, info, debug, trace`)이고, event 구조를 어기는 파일이나 손상된 색인은 `<file>:<line>: <reason>` 문구나 색인을 밝히는 문구의 오류 -32000이다. host는 위의 한도 안의 frame으로 행 최대 5,000개와 줄 8,388,608바이트의 page 하나를 답한다. debug 화면의 page는 host 호출 `logQuery`([debug](debug.ko.md#타임라인))로 같은 질의다.
+<a id="log-query"></a>메서드 `log.query`는 모든 빌드에 있고 `window`를 받지 않는다. host의 설정 디렉터리의 event 파일을 색인으로 읽는다([logging](logging.ko.md#질의)). 매개변수는 질의 매개변수 객체(`channel`, `level`, `class`, `layer`, `event`, `event_prefix`, `surface`, `session`, `cid`, `run`, `text`, `from_us`, `to_us`, `order`, `limit`, `after`, `since`, `around`, `earlier`, `later`. `{}`는 channel `other`의 처음 500행을 묻는다)이고 결과는 page `{rows, next, tail, scanned}`다(`around`가 있으면 한 행 둘레의 행이고 각 행에 `context`가 있다. [logging](logging.ko.md#질의)). 질의가 거절하는 매개변수는 invalid-params 오류(-32602)와 질의의 문구(`log query level "x" is not one of error, warn, info, debug, trace`)이고, event 구조를 어기는 파일이나 손상된 색인은 `<file>:<line>: <reason>` 문구나 색인을 밝히는 문구의 오류 -32000이다. host는 위의 한도 안의 frame으로 행 최대 5,000개와 줄 8,388,608바이트의 page 하나를 답한다. debug 화면의 page는 host 호출 `logQuery`([debug](debug.ko.md#타임라인))로 같은 질의다.
 
 ## 진단 빌드
 

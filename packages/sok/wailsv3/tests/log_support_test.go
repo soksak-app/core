@@ -58,6 +58,7 @@ type queryCase struct {
 	Params  json.RawMessage  `json:"params"`
 	Args    []string         `json:"args"`
 	Rows    []string         `json:"rows"`
+	Context []string         `json:"context"`
 	Next    *cursorJSON      `json:"next"`
 	Tail    map[string]int64 `json:"tail"`
 	Scanned *scannedJSON     `json:"scanned"`
@@ -89,7 +90,7 @@ func readCases(t *testing.T) []queryCase {
 	if err := json.Unmarshal(data, &cases); err != nil {
 		t.Fatal(err)
 	}
-	if len(cases) < 25 {
+	if len(cases) < 31 {
 		t.Fatalf("the golden file holds %d cases", len(cases))
 	}
 	return cases

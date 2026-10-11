@@ -67,7 +67,7 @@ var options = map[string]bool{
 	"config-dir": true, "window": true, "project": true, "surface": true, "index": true, "value": true, "event": true,
 	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "delta-x": true, "delta-y": true, "key": true, "text": true, "modifiers": true,
 	"level": true, "layer": true, "session": true, "cid": true, "from": true, "to": true,
-	"channel": true, "class": true, "event-prefix": true, "run": true, "order": true, "limit": true, "after": true,
+	"channel": true, "class": true, "event-prefix": true, "run": true, "order": true, "limit": true, "after": true, "around": true, "earlier": true, "later": true,
 }
 
 type arguments struct {
