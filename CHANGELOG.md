@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F160.28.3: the first batch of a page states the round trip of its clock anchor as `page.log.clock`, the bound within which its events are ordered among those of the host.
 - F160.8.3: the sidecar ports of the page pass the correlation identifiers of a send to the host call `sidecarSend`, so the request of a key carries the identifier of the key.
 - F160.34.7: `replay.inputs` of `sidecar.json` names the event of each kind of replay input, and `sok debug replay` of both tools checks the inputs of each segment with the rules of a session before it starts the replay executable.
 - F160.25.6: `e2e/terminal-replay.test.mjs` replays a session with output, a scroll, a selection, a theme change, a resize and input with every hash equal, and reports a changed stored output as a divergence of the layer `sidecar`.

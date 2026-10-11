@@ -57,6 +57,7 @@ const EXACT = new Map([
   ["native.window.resign_main", "lifecycle"],
   ["page.call", "call"],
   ["page.command", "call"],
+  ["page.log.clock", "lifecycle"],
   ["page.log.dropped", "lifecycle"],
   ["page.log.gated", "lifecycle"],
   ["page.plugin.operation", "call"],

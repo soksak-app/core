@@ -96,6 +96,12 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     sending = (async () => {
       try {
         const base = await anchored();
+        // The first batch states the round trip of the anchor: a time of the page differs from the clock of the host by at most
+        // half of it, which a reader needs to order the events of the page among those of the host.
+        if (!base.stated) {
+          base.stated = true;
+          events.unshift({ at: base.at, level: "info", event: "page.log.clock", fields: { trip_us: Math.round(base.trip * 1000) } });
+        }
         const stamped = events.map(({ at, cids, ...rest }) => ({
           ts_us: Math.round(base.ts_us + (at - base.at) * 1000),
           mono_ns: Math.round(base.mono_ns + (at - base.at) * 1e6),

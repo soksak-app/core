@@ -4,11 +4,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createTracer } from "../performance.js";
+import { withoutClock } from "./support/records.mjs";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 // The request for the clocks of the host is answered here; the batches are what the tests assert.
-const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 }) : inner(request));
+const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 }) : inner(withoutClock(request)));
 
 /** A tracer whose switch calls and batch calls are recorded in the order they happen. */
 function recorded(overrides = {}) {
@@ -81,7 +82,8 @@ test("a failed relay is reported with its event count and a failed switch reject
   await tracer.setEnabled(true);
   assert.equal(await tracer.timed("core.ok", async () => 42), 42);
   await assert.rejects(tracer.setEnabled(false), /switch failed/);
-  assert.deepEqual(errors, ["page event batch of 1 events failed: relay failed"]);
+  // The first batch also holds the statement of the anchor (page.log.clock).
+  assert.deepEqual(errors, ["page event batch of 2 events failed: relay failed"]);
 });
 
 test("timed reports the duration and passes the result and failure through", async () => {

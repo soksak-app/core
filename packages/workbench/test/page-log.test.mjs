@@ -3,7 +3,7 @@
 // and relayed to the host in a batch through the call `log`.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { settled } from "./support/records.mjs";
+import { settled, withoutClock } from "./support/records.mjs";
 
 const calls = [];
 let failing = null;
@@ -14,7 +14,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
     if (failing) throw failing;
     // The request for the clocks of the host is answered here; the batches are what the tests assert.
     if (name === "log" && payload.action === "clock") return { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
-    calls.push({ name, payload });
+    calls.push({ name, payload: withoutClock(payload) });
   },
 } } });
 const { reportRecord } = await import("../page-log.js");

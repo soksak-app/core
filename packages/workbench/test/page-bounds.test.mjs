@@ -2,7 +2,7 @@
 // fields of an event of a plugin and the bytes of the queue are cut or refused by the page, before the host receives them.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { clockAnswer, settled } from "./support/records.mjs";
+import { clockAnswer, settled, withoutClock } from "./support/records.mjs";
 
 const calls = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
@@ -10,7 +10,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
   page: (path) => path,
   call: async (name, payload) => {
     if (clockAnswer(name, payload)) return clockAnswer(name, payload);
-    calls.push({ name, payload });
+    calls.push({ name, payload: withoutClock(payload) });
   },
 } } });
 const { reportRecord, emitEvent } = await import("../page-log.js");

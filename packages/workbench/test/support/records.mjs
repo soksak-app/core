@@ -15,6 +15,10 @@ export const hostClock = { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 
 /** The answer of a fake host to the clock request, or undefined when the call is another one. */
 export const clockAnswer = (name, request) => (name === "log" && request?.action === "clock" ? hostClock : undefined);
 
+/** A batch request without the statement of the anchor (page.log.clock), which leads the first batch of a page and has its own test in log-batch.test.mjs. */
+export const withoutClock = (request) => (request?.action === "batch"
+  ? { ...request, events: request.events.filter((event) => event.event !== "page.log.clock") } : request);
+
 /** The record as the line `<level> page <where>: <text>`. */
 export const shownRecord = (record) => `${record.level} page ${record.where}: ${record.text}`;
 

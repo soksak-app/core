@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { createPluginRuntime } from "@soksak/plugin-api";
-import { clockAnswer, settled } from "./support/records.mjs";
+import { clockAnswer, settled, withoutClock } from "./support/records.mjs";
 
 const calls = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
@@ -12,7 +12,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
   call: async (name, payload) => {
     const clock = clockAnswer(name, payload);
     if (clock) return clock;
-    calls.push({ name, payload });
+    calls.push({ name, payload: withoutClock(payload) });
   },
 } } });
 const { pluginRecords } = await import("../plugin-records.js");

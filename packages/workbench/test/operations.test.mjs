@@ -3,13 +3,13 @@
 // the operation out, so the call (`page.call`) and the host (`host.binding.call`) are joined to the operation by it.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { clockAnswer, settled } from "./support/records.mjs";
+import { clockAnswer, settled, withoutClock } from "./support/records.mjs";
 
 const calls = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
   on: () => {},
   page: (path) => path,
-  call: async (name, payload) => { calls.push([name, payload]); return clockAnswer(name, payload); },
+  call: async (name, payload) => { calls.push([name, withoutClock(payload)]); return clockAnswer(name, payload); },
 } } });
 const { beginOperation } = await import("../operations.js");
 await import("../page-log.js");

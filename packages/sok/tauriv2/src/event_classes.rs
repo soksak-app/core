@@ -111,6 +111,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "native.window.resign_main" => Some(Class::Lifecycle),
         "page.call" => Some(Class::Call),
         "page.command" => Some(Class::Call),
+        "page.log.clock" => Some(Class::Lifecycle),
         "page.log.dropped" => Some(Class::Lifecycle),
         "page.log.gated" => Some(Class::Lifecycle),
         "page.plugin.operation" => Some(Class::Call),

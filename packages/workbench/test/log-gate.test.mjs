@@ -5,10 +5,11 @@ import test from "node:test";
 
 import { createLogGate, logPolicyOf } from "../log-gate.js";
 import { createEventBatcher } from "../log-batch.js";
+import { withoutClock } from "./support/records.mjs";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 const hostClock = { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
-const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve(hostClock) : inner(request));
+const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve(hostClock) : inner(withoutClock(request)));
 
 const everything = { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" };
 

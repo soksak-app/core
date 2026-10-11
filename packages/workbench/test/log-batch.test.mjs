@@ -2,12 +2,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createEventBatcher } from "../log-batch.js";
+import { withoutClock } from "./support/records.mjs";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 // The clocks of the host as the request `{action: "clock"}` answers them, and a call that answers them and passes the batches on.
 const hostClock = { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
-const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve(hostClock) : inner(request));
+// The batches that it passes on leave out the statement of the anchor (page.log.clock), which its own test checks.
+const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve(hostClock) : inner(withoutClock(request)));
 
 test("events emitted in one turn are relayed in one call, in order", async () => {
   const calls = [];
@@ -68,13 +70,44 @@ test("the clocks of the host are requested five times before the first batch, th
   await settle();
   // The second sample has the round trip 2 from 8 to 10, so its answer (20_000 and 20_000_000) is the moment 9, and the event
   // was read at 0.
-  assert.deepEqual([batches[0].events[0].ts_us, batches[0].events[0].mono_ns], [1_791_000_000_000_000 + 20_000 - 9_000, 5_000_000_000 + 20_000_000 - 9_000_000]);
+  // The first event of the first batch is the statement of the anchor (page.log.clock); the event follows it.
+  assert.deepEqual([batches[0].events[1].ts_us, batches[0].events[1].mono_ns], [1_791_000_000_000_000 + 20_000 - 9_000, 5_000_000_000 + 20_000_000 - 9_000_000]);
   batcher.emit("info", "page.test.b", {});
   await settle();
   assert.equal(requests.length, 5, "five requests, once for the page");
   assert.deepEqual(requests[0], { action: "clock" });
   // The second event was read at 30, 21 after the anchor.
   assert.deepEqual([batches[1].events[0].ts_us, batches[1].events[0].mono_ns], [1_791_000_000_000_000 + 20_000 + 21_000, 5_000_000_000 + 20_000_000 + 21_000_000]);
+});
+
+test("the first batch states the round trip of the anchor as page.log.clock, once for the page", async () => {
+  let reading = 0;
+  const trips = [8, 2, 6, 4, 10];
+  let sample = 0;
+  const batches = [];
+  const batcher = createEventBatcher({
+    call: async (request) => {
+      if (request.action === "clock") {
+        reading += trips[sample];
+        sample += 1;
+        return { ts_us: 1_791_000_000_000_000 + sample * 10_000, mono_ns: 5_000_000_000 + sample * 10_000_000 };
+      }
+      batches.push(request);
+      return undefined;
+    },
+    report: assert.ifError,
+    now: () => reading,
+  });
+  batcher.emit("info", "page.test.a", {});
+  await settle();
+  batcher.emit("info", "page.test.b", {});
+  await settle();
+  // The shortest round trip is 2 ms, so a time of the page differs from the clock of the host by at most 1 ms
+  // (docs/spec/logging.md#writers).
+  assert.deepEqual(batches.map((batch) => batch.events.map((event) => [event.event, event.fields])), [
+    [["page.log.clock", { trip_us: 2000 }], ["page.test.a", {}]],
+    [["page.test.b", {}]],
+  ]);
 });
 
 test("a clock answer that is not two positive integers is reported with the number of events, and the next batch asks again", async () => {
@@ -179,7 +212,8 @@ test("a failed call is reported with the number of events and does not block the
   await settle();
   batcher.emit("info", "page.test.kept", {});
   await batcher.flush();
-  assert.deepEqual(reports, ["page event batch of 2 events failed: host closed"]);
+  // The first batch also holds the statement of the anchor (page.log.clock).
+  assert.deepEqual(reports, ["page event batch of 3 events failed: host closed"]);
   assert.equal(calls.length, 2);
 });
 
@@ -220,7 +254,8 @@ test("emitAndWait ends for an event that the full queue refused and for a batch 
   const refused = batcher.emitAndWait("info", "page.test.refused", {});
   await Promise.all([kept, refused]);
   // The refused event is counted in page.log.dropped, which travels in the batch of the kept event.
-  assert.deepEqual(reports, ["page event batch of 2 events failed: host closed"]);
+  // The first batch also holds the statement of the anchor (page.log.clock).
+  assert.deepEqual(reports, ["page event batch of 3 events failed: host closed"]);
   await batcher.emitAndWait("info", "page.test.after", {});
   assert.equal(attempt, 2, "the next event was relayed after the failure");
 });

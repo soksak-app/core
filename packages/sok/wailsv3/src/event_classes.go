@@ -70,6 +70,7 @@ var eventClasses = map[string]Class{
 	"native.window.resign_main":     ClassLifecycle,
 	"page.call":                     ClassCall,
 	"page.command":                  ClassCall,
+	"page.log.clock":                ClassLifecycle,
 	"page.log.dropped":              ClassLifecycle,
 	"page.log.gated":                ClassLifecycle,
 	"page.plugin.operation":         ClassCall,
