@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	// pendingRequestLimit bounds the requests that wait for a reply. The oldest request is forgotten when the bound is reached; the
-	// request is still stored as `host.sidecar.request`, and only the microseconds of its reply, which the two events derive, are lost.
+	// pendingRequestLimit bounds the requests that wait for a reply. The oldest request is forgotten when the bound is reached and the
+	// loss is counted as `host.buffer.dropped`; the request is still stored as `host.sidecar.request`, and only the microseconds of its
+	// reply, which the two events derive, are lost.
 	pendingRequestLimit = 4096
 	// failedRequestCids bounds the identifiers that the failed reply of one surface lists: the newest requests.
 	failedRequestCids = 64
@@ -33,8 +34,9 @@ type requestLedger struct {
 	order   []string
 }
 
-// add remembers the requests of cids, queued for the surface of the sidecar at the monotonic time mono.
-func (l *requestLedger) add(sidecar, surface string, cids []string, mono uint64) {
+// add remembers the requests of cids, queued for the surface of the sidecar at the monotonic time mono, and returns how many
+// remembered requests it forgot to stay within the bound; the caller counts them (`host.buffer.dropped`).
+func (l *requestLedger) add(sidecar, surface string, cids []string, mono uint64) (forgotten int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.pending == nil {
@@ -44,15 +46,29 @@ func (l *requestLedger) add(sidecar, surface string, cids []string, mono uint64)
 		if _, known := l.pending[cid]; known {
 			continue
 		}
+		// An answered request leaves its identifier in the order until the order is compacted, so the order is cut back to the
+		// identifiers that still wait whenever it holds twice the bound.
+		if len(l.order) >= 2*pendingRequestLimit {
+			live := l.order[:0]
+			for _, queued := range l.order {
+				if _, waiting := l.pending[queued]; waiting {
+					live = append(live, queued)
+				}
+			}
+			l.order = live
+		}
 		for len(l.pending) >= pendingRequestLimit && len(l.order) > 0 {
 			oldest := l.order[0]
 			l.order = l.order[1:]
-			// silent: the oldest request is forgotten at the bound; its request event stays and only the derived microseconds of its reply are lost.
-			delete(l.pending, oldest)
+			if _, waiting := l.pending[oldest]; waiting {
+				delete(l.pending, oldest)
+				forgotten++
+			}
 		}
 		l.pending[cid] = pendingRequest{sidecar: sidecar, surface: surface, mono: mono}
 		l.order = append(l.order, cid)
 	}
+	return forgotten
 }
 
 // take removes the requests of cids and returns the nanoseconds since the first of them that was remembered, or false when none was.

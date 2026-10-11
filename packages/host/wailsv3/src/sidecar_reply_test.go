@@ -1,0 +1,44 @@
+package host
+
+import (
+	"fmt"
+	"testing"
+)
+
+func cidsOf(prefix string, from, to int) []string {
+	cids := make([]string, 0, to-from)
+	for n := from; n < to; n++ {
+		cids = append(cids, fmt.Sprintf("%s.%d", prefix, n))
+	}
+	return cids
+}
+
+// A request that was answered leaves the ledger, and its place in the order of the requests too: the order holds at most twice the
+// bound of the pending requests however many requests were answered.
+func TestAnsweredRequestsDoNotGrowTheOrderOfTheLedger(t *testing.T) {
+	var ledger requestLedger
+	for n := 0; n < 5*pendingRequestLimit; n++ {
+		cid := fmt.Sprintf("p.%d", n)
+		ledger.add("terminal", "tab-1", []string{cid}, uint64(n+1))
+		if _, found := ledger.take([]string{cid}, uint64(n+2)); !found {
+			t.Fatalf("the request %s was not remembered", cid)
+		}
+	}
+	if got := len(ledger.order); got > 2*pendingRequestLimit {
+		t.Fatalf("the order of the ledger holds %d identifiers after all requests were answered, want at most %d", got, 2*pendingRequestLimit)
+	}
+}
+
+// A request that is forgotten at the bound is counted, so the loss of its microseconds is not silent.
+func TestForgettingARequestAtTheBoundIsCounted(t *testing.T) {
+	var ledger requestLedger
+	if got := ledger.add("terminal", "tab-1", cidsOf("p", 0, pendingRequestLimit), 1); got != 0 {
+		t.Fatalf("%d requests were forgotten below the bound", got)
+	}
+	if got := ledger.add("terminal", "tab-1", cidsOf("q", 0, 5), 2); got != 5 {
+		t.Fatalf("%d requests were counted as forgotten, want 5", got)
+	}
+	if _, found := ledger.take([]string{"p.0"}, 3); found {
+		t.Fatal("the oldest request is still remembered")
+	}
+}

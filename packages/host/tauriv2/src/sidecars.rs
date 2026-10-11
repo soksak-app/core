@@ -943,9 +943,16 @@ impl<O: Owner> Sidecars<O> {
             .try_send(Outgoing::Line(line))
             .map_err(|_| format!("sidecar {name} is not keeping up"));
         if delivered.is_ok() && !cids.is_empty() {
-            state
+            for _ in 0..state
                 .requests
-                .add(name, surface, cids, crate::event_log::monotonic_ns());
+                .add(name, surface, cids, crate::event_log::monotonic_ns())
+            {
+                crate::buffer_bounds::record_buffer_drop(
+                    "sidecar reply ledger",
+                    0,
+                    &format!("{} requests", crate::sidecar_reply::PENDING_REQUEST_LIMIT),
+                );
+            }
         }
         let changed = state.closing_changed.clone();
         drop(state);

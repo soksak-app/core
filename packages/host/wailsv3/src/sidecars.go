@@ -405,7 +405,9 @@ func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body j
 	select {
 	case process.outbox <- line:
 		if len(cids) > 0 {
-			c.requests.add(name, surface, cids, monotonicNanos())
+			for range c.requests.add(name, surface, cids, monotonicNanos()) {
+				recordBufferDrop("sidecar reply ledger", 0, fmt.Sprintf("%d requests", pendingRequestLimit))
+			}
 			EmitHostCids(LevelInfo, "host.sidecar.request", cids, map[string]any{"name": name, "surface": surface, "bytes": len(body)})
 		}
 		return nil

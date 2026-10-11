@@ -8,7 +8,8 @@ use std::collections::{HashMap, VecDeque};
 use serde::Deserialize;
 use serde_json::value::RawValue;
 
-/// Bounds the requests that wait for a reply. The oldest request is forgotten when the bound is reached; the request is still
+/// Bounds the requests that wait for a reply. The oldest request is forgotten when the bound is reached and the loss is counted
+/// as `host.buffer.dropped`; the request is still
 /// stored as `host.sidecar.request`, and only the microseconds of its reply, which the two events derive, are lost.
 pub const PENDING_REQUEST_LIMIT: usize = 4096;
 
@@ -29,18 +30,27 @@ pub struct RequestLedger {
 }
 
 impl RequestLedger {
-    /// Remembers the requests of `cids`, queued for the surface of the sidecar at the monotonic time `mono`.
-    pub fn add(&mut self, sidecar: &str, surface: &str, cids: &[String], mono: u64) {
+    /// Remembers the requests of `cids`, queued for the surface of the sidecar at the monotonic time `mono`, and returns how
+    /// many remembered requests it forgot to stay within the bound; the caller counts them (`host.buffer.dropped`).
+    pub fn add(&mut self, sidecar: &str, surface: &str, cids: &[String], mono: u64) -> usize {
+        let mut forgotten = 0;
         for cid in cids {
             if self.pending.contains_key(cid) {
                 continue;
+            }
+            // An answered request leaves its identifier in the order until the order is compacted, so the order is cut back
+            // to the identifiers that still wait whenever it holds twice the bound.
+            if self.order.len() >= 2 * PENDING_REQUEST_LIMIT {
+                let pending = &self.pending;
+                self.order.retain(|queued| pending.contains_key(queued));
             }
             while self.pending.len() >= PENDING_REQUEST_LIMIT {
                 let Some(oldest) = self.order.pop_front() else {
                     break;
                 };
-                // silent: the oldest request is forgotten at the bound; its request event stays and only the derived microseconds of its reply are lost.
-                self.pending.remove(&oldest);
+                if self.pending.remove(&oldest).is_some() {
+                    forgotten += 1;
+                }
             }
             self.pending.insert(
                 cid.clone(),
@@ -52,6 +62,13 @@ impl RequestLedger {
             );
             self.order.push_back(cid.clone());
         }
+        forgotten
+    }
+
+    /// The identifiers in the order of the requests, answered ones that are not compacted yet included.
+    #[cfg(test)]
+    pub fn order_len(&self) -> usize {
+        self.order.len()
     }
 
     /// Removes the requests of `cids` and returns the nanoseconds since the first of them that was remembered.
@@ -119,5 +136,43 @@ pub fn error_of_body(body: &str) -> Option<String> {
         Ok(text) => Some(text),
         // default: an error that is not a string is stated by its JSON text.
         Err(_) => Some(raw.get().to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cids(prefix: &str, from: usize, to: usize) -> Vec<String> {
+        (from..to).map(|n| format!("{prefix}.{n}")).collect()
+    }
+
+    /// A request that was answered leaves the ledger and its place in the order of the requests: the order holds at most
+    /// twice the bound of the pending requests however many requests were answered.
+    #[test]
+    fn answered_requests_do_not_grow_the_order_of_the_ledger() {
+        let mut ledger = RequestLedger::default();
+        for n in 0..5 * PENDING_REQUEST_LIMIT {
+            let cid = vec![format!("p.{n}")];
+            ledger.add("terminal", "tab-1", &cid, n as u64 + 1);
+            assert!(ledger.take(&cid, n as u64 + 2).is_some());
+        }
+        assert!(
+            ledger.order_len() <= 2 * PENDING_REQUEST_LIMIT,
+            "the order of the ledger holds {} identifiers after all requests were answered",
+            ledger.order_len()
+        );
+    }
+
+    /// A request that is forgotten at the bound is counted, so the loss of its microseconds is not silent.
+    #[test]
+    fn forgetting_a_request_at_the_bound_is_counted() {
+        let mut ledger = RequestLedger::default();
+        assert_eq!(
+            ledger.add("terminal", "tab-1", &cids("p", 0, PENDING_REQUEST_LIMIT), 1),
+            0
+        );
+        assert_eq!(ledger.add("terminal", "tab-1", &cids("q", 0, 5), 2), 5);
+        assert!(ledger.take(&["p.0".to_string()], 3).is_none());
     }
 }
