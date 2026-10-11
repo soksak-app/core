@@ -71,6 +71,7 @@ func emitRecord(e Entry) {
 		fmt.Fprintf(os.Stderr, "event writer: the record %q of %s cannot be serialized: %v\n", e.Where, e.Layer, err)
 		return
 	}
+	// events: host.record.<level>, sidecar.record.<level>
 	storeEvent(level, e.Layer, e.Layer+".record."+e.Level, e.Where, fields)
 }
 
@@ -121,6 +122,7 @@ func emitTrace(layer string, fields map[string]any) error {
 	if err != nil {
 		return fmt.Errorf("the fields of %s cannot be serialized: %w", event, err)
 	}
+	// events: host.trace.<event>, host.sampler.<event>
 	storeEvent(LevelDebug, "host", "host."+kind+"."+event, event, text)
 	return nil
 }
@@ -138,6 +140,7 @@ func EmitHost(level Level, event string, fields map[string]any) {
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return
 	}
+	// events: forwarded
 	storeEvent(level, "host", event, event, text)
 }
 

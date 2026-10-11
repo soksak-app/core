@@ -17,6 +17,8 @@ func TestAnApplicationEventIsRecordedAsAnEvent(t *testing.T) {
 	}
 	// A kind outside the contract is reported on the standard error and stores nothing.
 	host.RecordAppEvent("teleport")
+	// No framework of the hosts reports a reopen, so the kind is outside the contract too.
+	host.RecordAppEvent("reopened")
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}

@@ -38,6 +38,7 @@ export function reportRecord(level, line) {
 
 /** Queues an event of a plugin or of the page with its level, name and fields; nothing happens in a page without a host. */
 export function emitEvent(level, event, fields) {
+  // events: forwarded
   batcher?.emit(level, event, fields);
 }
 
@@ -61,6 +62,7 @@ if (batcher) {
   observeHostCalls(({ name, args, micros, ok, error }) => {
     if (UNRECORDED_CALLS.has(name)) return;
     const { level, event, fields } = callEvent({ name, args, micros, ok, error });
+    // events: page.call
     batcher.emit(level, event, fields);
   });
 }

@@ -9,7 +9,7 @@ import (
 
 // appEventKinds lists the kinds of an application event. A host stores the kinds its framework reports.
 var appEventKinds = map[string]bool{
-	"started": true, "activated": true, "deactivated": true, "reopened": true, "exit_requested": true, "exit": true,
+	"started": true, "activated": true, "deactivated": true, "exit_requested": true, "exit": true,
 }
 
 // RecordAppEvent stores an application event of the kind. A kind outside appEventKinds is reported on the standard error and

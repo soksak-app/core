@@ -22,6 +22,8 @@ fn an_application_event_is_recorded_as_an_event() {
         }
         // A kind outside the contract is reported on the standard error and stores nothing.
         record_app_event("teleport");
+        // No framework of the hosts reports a reopen, so the kind is outside the contract too.
+        record_app_event("reopened");
         writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }

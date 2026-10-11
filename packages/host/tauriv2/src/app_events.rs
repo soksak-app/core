@@ -4,11 +4,10 @@
 use crate::event_log::Level;
 
 /// The kinds of an application event. A host stores the kinds its framework reports.
-const KINDS: [&str; 6] = [
+const KINDS: [&str; 5] = [
     "started",
     "activated",
     "deactivated",
-    "reopened",
     "exit_requested",
     "exit",
 ];
