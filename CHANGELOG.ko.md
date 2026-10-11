@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.7: Go host 시험이 시작한 event writer를 폴더를 지우기 전에 끝내므로 지워진 폴더에 쓰는 writer가 없고, host 시험 패키지가 150초 이상 대신 48초에 돈다. panic hook 시험의 한도는 1500 ms로, 멈춘 writer를 기다리는 hook의 2초 대기보다 작고 부하에서 잰 606 ms보다 크다.
 - F160.16: `marks.jsonl`의 선언 시험이 실행기가 시험 프로세스의 환경에 넣는 실행 식별자에 더는 의존하지 않는다. 실행 밖의 session은 선언을 session에만 둔다.
 - F160.34.4: [replay](docs/spec/replay.ko.md#골든-벡터)가 화면 hash의 골든 벡터, 거부하는 화면, 재생 입력의 session을 이름으로 적고, `packages/log-contract/test/replay-vectors-named.test.mjs`가 문서와 번역이 각각을 적었는지 요구한다.
 - F160.34.3: [replay](docs/spec/replay.ko.md#보기-상태)가 선택, viewport 스크롤, theme을 재생 입력으로 정의하고, field 규칙, 순서, viewport의 커서, class를 적고, 적대 검증의 반론과 함께 결정을 기록한다(hash에서 제외와 frame 기록의 상태 field는 거부했다). hash 정의와 표지는 바뀌지 않으며 viewport 밖의 커서는 열을 유지한다. `@soksak/log-contract`가 `replayInputProblem`, `replaySessionProblem`, `REPLAY_INPUT_KINDS`를 골든 사례, 벡터 셋과 함께 내보낸다. `packages/log-contract` 시험으로 검증했으며, 재생 실행 파일은 F160.34.7에서 따른다.

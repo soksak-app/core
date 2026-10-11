@@ -17,7 +17,9 @@ const CHILD: &str = "SOKSAK_PANIC_HOOK_CHILD";
 
 /// The longest the panicking thread may spend in the hook while the writer is stalled; waiting for the writer takes the
 /// whole flush deadline of 2 s.
-const HOOK_BOUND: Duration = Duration::from_millis(500);
+// The hook that waited for the stalled writer held the thread for its bounded wait of two seconds (docs/spec/hosts.md); the bound is
+// below that wait and above the time that building a backtrace takes on a loaded machine (606 ms was measured under a load average of 30).
+const HOOK_BOUND: Duration = Duration::from_millis(1500);
 
 // contract: log.panic.does-not-wait-for-the-writer
 #[test]

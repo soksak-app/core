@@ -23,7 +23,8 @@ func useEventLog(t *testing.T) *host.EventLog {
 		t.Fatal(err)
 	}
 	host.UseHostEventLog(log)
-	t.Cleanup(func() { host.UseHostEventLog(nil) })
+	// The writer ends before the folder of the test is removed; a writer that outlives the test writes into a removed folder.
+	t.Cleanup(func() { host.UseHostEventLog(nil); log.Close() })
 	return log
 }
 
