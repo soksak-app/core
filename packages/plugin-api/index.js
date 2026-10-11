@@ -576,7 +576,7 @@ function validateEventsPath(where, events) {
 
 export function validateSidecar(sidecar) {
   if (!isObject(sidecar)) throw new Error("sidecar.json: expected an object");
-  only("sidecar.json", sidecar, ["executable", "protocol", "helpers", "transport", "events"]);
+  only("sidecar.json", sidecar, ["executable", "protocol", "helpers", "transport", "events", "replay"]);
   validateEventsPath("sidecar.json", sidecar.events);
   const { executable } = sidecar;
   if (!isText(executable) || executable.startsWith("/") || executable.split("/").includes("..")) {
@@ -585,6 +585,18 @@ export function validateSidecar(sidecar) {
   if (sidecar.protocol !== 1) throw new Error("sidecar.json: protocol must be 1");
   if (sidecar.transport !== undefined && sidecar.transport !== "persistent") {
     throw new Error("sidecar.json: transport must be persistent");
+  }
+  if (sidecar.replay !== undefined) {
+    const { replay } = sidecar;
+    if (!isObject(replay)) throw new Error("sidecar.json: replay must be an object");
+    only("sidecar.json replay", replay, ["role", "executable"]);
+    if (typeof replay.role !== "string" || !/^[a-z][a-z0-9]*$/.test(replay.role)) {
+      throw new Error("sidecar.json replay: role must be a lowercase word");
+    }
+    const path = replay.executable;
+    if (!isText(path) || path.startsWith("/") || path.split("/").includes("..")) {
+      throw new Error("sidecar.json replay: executable must be a path inside the package");
+    }
   }
   if (sidecar.helpers !== undefined) {
     if (!Array.isArray(sidecar.helpers)) throw new Error("sidecar.json: helpers must be an array");

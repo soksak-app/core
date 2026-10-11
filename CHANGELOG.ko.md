@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.25.2: 화면을 만드는 sidecar의 `sidecar.json`이 `replay`(event 파일의 role인 `role`과 패키지 안 재생 실행 파일 경로인 `executable`)를 선언하며 `validateSidecar`가 검사한다. Red: `packages/plugin-api/test/validate.test.mjs`가 `sidecar.json: unknown field replay`로 실패했다. Green: 그 파일 28개 중 28개.
 - F160.25.1: [replay](docs/spec/replay.ko.md)가 터미널 session 재생의 기록(`sequence`와 발생마다 완전한 `hex`를 가진 재생 입력, `sequence`, `rows`, `cols`, `hash`를 가진 층 `sidecar`와 `page`의 `frame` 기록), 화면 hash(정규 바이트열의 SHA-256: grapheme, 너비, 색, 속성을 가진 칸과 커서), 재생 실행 파일, 명령을 정의한다. `@soksak/plugin-api/screen-hash`가 `screenBytes`와 `screenHash`를 계산하고, `packages/log-contract/fixtures/replay/screen-hash.json`이 독립 구현으로 계산한 golden vector 4개와 오류 글이 있는 거부 화면 7개를 담는다. Red: `packages/plugin-api/test/screen-hash.test.mjs`가 `Cannot find module .../packages/plugin-api/screen-hash.js`로 실패했다. Green: 그 시험 4개 중 4개, `packages/log-contract/test/screen-hash.test.mjs` 12개 중 12개.
 - F160.24: 설정 폴더의 event 파일을 channel, level, class, layer, event, 표면, session, `cids`, run, 글, 시간으로 묻는 하나의 질의(`log.query`, `sok debug query`)가 각 파일 옆의 Bloom filter가 있는 segment 색인으로 답하고, debug 화면이 이 질의로 쪽을 넘긴다. 1,000,000건(169 MB) 로그의 색인은 3~5초에 만들어지고 첫 쪽은 12~38 ms에 나온다. 쪽의 `scanned`에서 로그 파일 수의 이름은 `logs`다.
 - F160.10.3: sidecar의 reply를 기다리는 요청의 ledger가 순서를 기다리는 요청만 남도록 줄여 응답한 요청이 순서를 한도 없이 키우지 않으며, 한도 4,096에서 잊는 요청마다 `host.buffer.dropped`를 저장한다.

@@ -435,3 +435,18 @@ test("a sidecar manifest and a plugin manifest name the file of their event cata
   }
   assert.equal(validateManifest({ ...card, events: "events.json" }).events, "events.json");
 });
+
+test("a sidecar manifest declares its replay executable with the role of its event files", () => {
+  const sidecar = { executable: "build/worker", protocol: 1, replay: { role: "worker", executable: "build/replay" } };
+  assert.equal(validateSidecar(sidecar), sidecar);
+  const cases = [
+    [{ ...sidecar, replay: "build/replay" }, /sidecar\.json: replay must be an object/],
+    [{ ...sidecar, replay: { role: "worker" } }, /sidecar\.json replay: executable must be a path inside the package/],
+    [{ ...sidecar, replay: { role: "worker", executable: "../replay" } }, /sidecar\.json replay: executable must be a path inside the package/],
+    [{ ...sidecar, replay: { role: "worker", executable: "/bin/replay" } }, /sidecar\.json replay: executable must be a path inside the package/],
+    [{ ...sidecar, replay: { executable: "build/replay" } }, /sidecar\.json replay: role must be a lowercase word/],
+    [{ ...sidecar, replay: { role: "Worker-1", executable: "build/replay" } }, /sidecar\.json replay: role must be a lowercase word/],
+    [{ ...sidecar, replay: { role: "worker", executable: "build/replay", extra: 1 } }, /sidecar\.json replay: unknown field extra/],
+  ];
+  for (const [value, message] of cases) assert.throws(() => validateSidecar(value), message);
+});
