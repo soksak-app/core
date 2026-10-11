@@ -375,7 +375,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the debug timeline shows the rows of the host event file and applies its filter`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the debug timeline shows a page of the events of the event files and applies its filter`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -389,15 +389,19 @@ for (const app of Object.values(APPS)) {
     await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
     await s.until("core.debug", (debug) => debug.open && debug.entries.length > 0, "the debug view did not list the files");
     await s.run("core.debug.timeline");
-    const shown = await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.total > 0,
-      "the timeline did not show any row of the host event file");
-    assert.ok(shown.timeline.sources.some((path) => /^logs\/host-\d+-\d+\.jsonl$/.test(path)), `no host event file in ${JSON.stringify(shown.timeline.sources)}`);
-    assert.equal(shown.timeline.shown, shown.timeline.total, "a timeline without a filter hides rows");
+    const shown = await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.held > 0,
+      "the timeline did not show any row of the event files");
+    assert.equal(shown.timeline.channel, "other");
+    assert.ok(shown.timeline.held <= 2000, `the view holds ${shown.timeline.held} rows`);
     assert.equal(shown.error, null);
     await s.run("core.debug.timeline.filter", { layer: "host", text: "host.app.event" });
     const filtered = await s.until("core.debug", (debug) => debug.timeline.layer === "host" && debug.timeline.text === "host.app.event",
       "the filter was not applied");
-    assert.ok(filtered.timeline.shown > 0 && filtered.timeline.shown < filtered.timeline.total, `the filter shows ${filtered.timeline.shown} of ${filtered.timeline.total} rows`);
+    assert.ok(filtered.timeline.held > 0 && filtered.timeline.held <= shown.timeline.held, `the filter shows ${filtered.timeline.held} of ${shown.timeline.held} rows`);
+    await s.run("core.debug.timeline.filter", { layer: "all", text: "", event: "no.such.event" });
+    const none = await s.until("core.debug", (debug) => debug.timeline.event === "no.such.event", "the event filter was not applied");
+    assert.equal(none.timeline.held, 0, "the query found a row of an event that does not exist");
+    assert.equal(none.error, null);
   });
 }
 
@@ -416,7 +420,7 @@ for (const app of Object.values(APPS)) {
     await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
     await s.until("core.debug", (debug) => debug.open && debug.entries.length > 0, "the debug view did not list the files");
     await s.run("core.debug.timeline");
-    const shown = await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.total > 1, "the timeline did not show rows");
+    const shown = await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.held > 1, "the timeline did not show rows");
     assert.equal(shown.timeline.selected, 0);
     assert.match(shown.timeline.warning, /입력한 글자/);
     // The save panel needs a person, so the check does not run core.debug.timeline.save.
@@ -427,13 +431,13 @@ for (const app of Object.values(APPS)) {
     assert.equal(two.error, null);
     await s.run("core.debug.timeline.select", { row: 0, selected: false });
     await s.until("core.debug", (debug) => debug.timeline.selected === 1, "the unselected row was not reported");
-    await assert.rejects(s.run("core.debug.timeline.select", { row: shown.timeline.total + 1_000_000, selected: true }), /is not one of the/);
+    await assert.rejects(s.run("core.debug.timeline.select", { row: shown.timeline.held + 1_000_000, selected: true }), /is not one of the/);
     s.expectError(/^error page .*timeline row \d+ is not one of the \d+ rows/);
   });
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the debug timeline follows the host event file, stops, and catches up when it resumes`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the debug timeline follows the event files, stops, and catches up when it resumes`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -447,29 +451,29 @@ for (const app of Object.values(APPS)) {
     await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
     await s.until("core.debug", (debug) => debug.open && debug.entries.length > 0, "the debug view did not list the files");
     await s.run("core.debug.timeline");
-    const shown = await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.total > 0, "the timeline did not show any row");
+    const shown = await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.held > 0, "the timeline did not show any row");
     assert.equal(shown.timeline.following, true, "a new timeline does not follow");
     assert.equal(shown.timeline.appended, 0);
     // A run command stores the event page.command, which the host writes and announces with debug-log-changed.
-    await s.run("core.debug.timeline.filter", { context: "0" });
-    const grown = await s.until("core.debug", (debug) => debug.timeline.total > shown.timeline.total, "the timeline did not append the rows of a command");
+    await s.run("core.debug.timeline.select", { row: 0, selected: false });
+    const grown = await s.until("core.debug", (debug) => debug.timeline.held > shown.timeline.held, "the timeline did not append the rows of a command");
     assert.ok(grown.timeline.appended > 0, "the appended rows are not counted");
     assert.equal(grown.error, null);
     await s.run("core.debug.timeline.follow", { on: false });
     const stopped = await s.until("core.debug", (debug) => debug.timeline.following === false, "the timeline did not stop following");
-    await s.run("core.debug.timeline.filter", { context: "0" });
-    await s.run("core.debug.timeline.filter", { context: "0" });
+    await s.run("core.debug.timeline.select", { row: 0, selected: false });
+    await s.run("core.debug.timeline.select", { row: 0, selected: false });
     const held = await s.get("core.debug");
-    assert.equal(held.timeline.total, stopped.timeline.total, "a stopped timeline appended rows");
+    assert.equal(held.timeline.held, stopped.timeline.held, "a stopped timeline appended rows");
     await s.run("core.debug.timeline.follow", { on: true });
-    const resumed = await s.until("core.debug", (debug) => debug.timeline.following === true && debug.timeline.total > stopped.timeline.total,
+    const resumed = await s.until("core.debug", (debug) => debug.timeline.following === true && debug.timeline.held > stopped.timeline.held,
       "the timeline did not catch up with the rows written while it was stopped");
     assert.equal(resumed.error, null);
   });
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the debug view filters the timeline by event name with context and shows a state file as a tree`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the debug view filters the timeline by event name and shows a state file as a tree`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
@@ -484,13 +488,13 @@ for (const app of Object.values(APPS)) {
     const opened = await s.until("core.debug", (debug) => debug.open && debug.recorded !== null && debug.entries.length > 0,
       "the debug view did not record the state and list the files");
     await s.run("core.debug.timeline");
-    await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.total > 0, "the timeline did not show any row");
-    await s.run("core.debug.timeline.filter", { event: "host.app.event", context: "0" });
-    const plain = await s.until("core.debug", (debug) => debug.timeline.event === "host.app.event" && debug.timeline.context === "0", "the event filter was not applied");
-    await s.run("core.debug.timeline.filter", { context: "2" });
-    const wide = await s.until("core.debug", (debug) => debug.timeline.context === "2", "the context was not applied");
-    assert.ok(plain.timeline.shown > 0, "the event filter shows no row");
-    assert.ok(wide.timeline.lines > plain.timeline.lines, `context rows do not add lines: ${plain.timeline.lines} then ${wide.timeline.lines}`);
+    await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.held > 0, "the timeline did not show any row");
+    await s.run("core.debug.timeline.filter", { event: "host.app.event" });
+    const exact = await s.until("core.debug", (debug) => debug.timeline.event === "host.app.event", "the event filter was not applied");
+    await s.run("core.debug.timeline.filter", { event: "", event_prefix: "host.app" });
+    const prefix = await s.until("core.debug", (debug) => debug.timeline.event_prefix === "host.app", "the prefix filter was not applied");
+    assert.ok(exact.timeline.held > 0, "the event filter shows no row");
+    assert.ok(prefix.timeline.held >= exact.timeline.held, `the prefix shows ${prefix.timeline.held} rows, fewer than the exact name`);
     await s.run("core.debug.list");
     await s.run("core.debug.state", { path: opened.recorded });
     const state = await s.until("core.debug", (debug) => debug.state !== null && debug.state.lines > 0, "the state file was not shown as a tree");

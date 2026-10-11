@@ -10,7 +10,7 @@ import { commandOf, delegate, mark, run } from "./commands.js";
 import { registry } from "./exposure.js";
 import { hideError, showError } from "./shown-errors.js";
 import { newestFirst } from "./debug-order.js";
-import { CLEAR_FILTER, DRAW_LIMIT, FOLLOW_INTERVAL_MS, contextRows, eventLine, filterRows, hostEventFiles, LAYERS, LEVELS, mergeRows, parseAppended, parseEvents, ROW_LIMIT } from "./debug-timeline.js";
+import { CHANNELS, CLEAR_FILTER, FOLLOW_INTERVAL_MS, HOLD_LIMIT, PAGE_ROWS, compareRows, eventLine, isEventFile, keyOf, LAYERS, LEVELS, mergeRows, queryOf, rowId } from "./debug-timeline.js";
 import { compareStates, parseState, stateFiles, stateLines } from "./debug-state.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 
@@ -38,10 +38,11 @@ let entries = [];
 /** The file that the view shows, {path, size, truncated}, or null while the list is shown. */
 let viewing = null;
 /**
- * The timeline of the host event files {files, limited, rows, positions, selected, shown, lines, filter, following, appended, cursors},
- * or null while the list or a file is shown. `cursors` maps each file to {next, line, size}: the byte offset after the last whole line
- * read, the number of lines read and the size at the last read. A new timeline has a new `cursors` map, which identifies the timeline
- * to a read that finishes after the timeline was replaced.
+ * The timeline of the event files {filter, rows, ids, older, tail, following, appended, omitted, selected, token}, or null while the list
+ * or a file is shown. `rows` are the rows of the pages that the host answered, in key order, and `ids` holds their identities; `older`
+ * says that a row before the first one may exist; `tail` is the greatest `seq` of each process when the newest page was read;
+ * `omitted` counts the oldest rows that following left out; `selected` maps the identity of each selected row to the row. `token`
+ * identifies the timeline to a read that finishes after the timeline was replaced.
  */
 let timeline = null;
 /** The state file that the view shows {path, state, lines, with, differences}, or null while another content is shown. */
@@ -67,7 +68,10 @@ const SELECTION_WARNING = "저장한 파일에는 입력한 글자가 들어 있
 /** The timeline part of the status core.debug. */
 function timelineState() {
   if (timeline === null) return null;
-  return { sources: timeline.files, limited: timeline.limited, following: timeline.following, appended: timeline.appended, total: timeline.rows.length, shown: timeline.shown.length, lines: timeline.lines.length, drawn: Math.min(timeline.lines.length, DRAW_LIMIT), omitted: Math.max(0, timeline.lines.length - DRAW_LIMIT), selected: timeline.selected.size, warning: SELECTION_WARNING, ...timeline.filter };
+  return {
+    following: timeline.following, appended: timeline.appended, held: timeline.rows.length, older: timeline.older, omitted: timeline.omitted,
+    selected: timeline.selected.size, warning: SELECTION_WARNING, ...timeline.filter,
+  };
 }
 
 /** The state part of the status core.debug. */
@@ -164,18 +168,16 @@ function drawTimeline() {
       field.setAttribute("value", value);
     }
   }
-  timelineView.querySelector(".dbg-card__cut").hidden = timeline.limited.length === 0;
   const follow = timelineView.querySelector('[data-key="timeline-follow"]');
   mark(follow, "core.debug.timeline.follow", { on: !timeline.following });
   follow.textContent = timeline.following ? "따라가기 멈춤" : "따라가기 다시 시작";
+  timelineView.querySelector('[data-key="timeline-older"]').hidden = !timeline.older;
   timelineRows.textContent = "";
-  const omitted = Math.max(0, timeline.lines.length - DRAW_LIMIT);
   const omittedLabel = timelineView.querySelector('[data-expose="core.debug.timeline.omitted"]');
-  omittedLabel.hidden = omitted === 0;
-  omittedLabel.textContent = `앞쪽 ${omitted}행은 그리지 않음`;
-  for (const { row, match } of timeline.lines.slice(omitted)) {
-    const index = timeline.positions.get(row);
-    const selected = timeline.selected.has(row);
+  omittedLabel.hidden = timeline.omitted === 0;
+  omittedLabel.textContent = `앞쪽 ${timeline.omitted}행은 보관하지 않음`;
+  timeline.rows.forEach((row, index) => {
+    const selected = timeline.selected.has(rowId(row));
     const pick = document.createElement("div");
     pick.className = "dbg-card__pick";
     pick.dataset.selected = String(selected);
@@ -183,12 +185,11 @@ function drawTimeline() {
     choose.setAttribute("aria-label", selected ? "행 선택 해제" : "행 선택");
     const el = document.createElement("div");
     el.className = "dbg-card__line";
-    if (!match) el.dataset.context = "true";
     el.dataset.expose = "core.debug.timeline.row";
-    el.textContent = eventLine(row);
+    el.textContent = eventLine(row.event);
     pick.append(choose, el);
     timelineRows.appendChild(pick);
-  }
+  });
 }
 
 /** Draws the tree of the shown state file, the choice of the file to compare with, and the differences. */
@@ -308,7 +309,7 @@ function makeCard() {
         '<div class="dbg-card__rows" data-expose="core.debug.state.tree"></div>' +
       '</div>' +
       '<div class="dbg-card__timeline" hidden>' +
-        '<div class="dbg-card__bar"><span class="dbg-card__cut" hidden>행 한도에서 읽기를 멈춤</span><span class="dbg-card__cut" data-expose="core.debug.timeline.omitted" hidden></span></div>' +
+        '<div class="dbg-card__bar"><span class="dbg-card__cut" data-expose="core.debug.timeline.omitted" hidden></span></div>' +
         '<div class="dbg-card__filters"></div>' +
         '<div class="dbg-card__save"><span class="dbg-card__warning" data-expose="core.debug.timeline.warning"></span></div>' +
         '<div class="dbg-card__rows" data-expose="core.debug.timeline.rows"></div>' +
@@ -324,22 +325,26 @@ function makeCard() {
   el.querySelector(".dbg-card__warning").textContent = SELECTION_WARNING;
   el.querySelector(".dbg-card__timeline .dbg-card__bar").prepend(
     button("timeline-list", "core.debug.timeline.list", "목록", "core.debug.list", {}),
-    button("timeline-follow", "core.debug.timeline.follow", "따라가기 멈춤", "core.debug.timeline.follow", { on: false }));
+    button("timeline-follow", "core.debug.timeline.follow", "따라가기 멈춤", "core.debug.timeline.follow", { on: false }),
+    button("timeline-older", "core.debug.timeline.older", "이전 행", "core.debug.timeline.older", {}));
   const text = document.createElement("input");
   text.type = "text";
   text.className = "set-text";
   text.placeholder = "찾을 글자";
   el.querySelector(".dbg-card__filters").append(
+    filterSelect("channel", "core.debug.timeline.channel", "channel", CHANNELS),
     filterSelect("level", "core.debug.timeline.level", "가장 낮은 level", LEVELS),
     filterSelect("layer", "core.debug.timeline.layer", "layer", ["all", ...LAYERS]),
     filterControl(text, "text", "core.debug.timeline.text", "찾을 글자"),
+    filterField("class", "core.debug.timeline.class", "class"),
     filterField("event", "core.debug.timeline.event", "event 이름"),
+    filterField("event_prefix", "core.debug.timeline.event-prefix", "event 이름의 앞부분"),
     filterField("surface", "core.debug.timeline.surface", "surface"),
     filterField("session", "core.debug.timeline.session", "session"),
     filterField("cid", "core.debug.timeline.cid", "correlation identifier"),
+    filterField("run", "core.debug.timeline.run", "run 식별자"),
     filterField("from", "core.debug.timeline.from", "시작 시각 (UTC)"),
-    filterField("to", "core.debug.timeline.to", "끝 시각 (UTC)"),
-    filterSelect("context", "core.debug.timeline.context", "앞뒤 줄 수", ["0", "1", "2", "3", "5", "10"]));
+    filterField("to", "core.debug.timeline.to", "끝 시각 (UTC)"));
   // Without a host this document's card receives input; a control runs the command that it points to.
   delegate(el);
   return el;
@@ -485,128 +490,120 @@ export function listDebugFiles() {
   draw();
 }
 
-/**
- * Reads the whole lines of one event file from the cursor in ranges (`debugReadRange`) up to the end of the file, or until the
- * rows read reach `room`; each call reads at least one range. Answers the rows, the cursor after them and whether the read
- * stopped at the limit before the end of the file. A line that is not written to its end stays unread: the read ends when a range
- * adds no line. The cursor is not changed, so a read that fails leaves the file as it was.
- */
-async function readLines(path, cursor, room) {
-  const rows = [];
-  let { next, line, size } = cursor;
-  for (;;) {
-    const read = await debug.readRange({ path, offset: next });
-    if (read.path !== path) throw new Error(`${path}: the range read answered ${read.path}`);
-    const parsed = line === 0 ? parseEvents(path, read.text) : parseAppended(path, read.text, line + 1);
-    rows.push(...parsed);
-    line += parsed.length;
-    const progress = read.next > next;
-    next = read.next;
-    size = read.size;
-    if (!progress || next >= size) return { rows, cursor: { next, line, size }, limited: false };
-    if (rows.length >= room) return { rows, cursor: { next, line, size }, limited: true };
-  }
-}
-
-/** The timeline with `rows` (in time order) and the positions, the rows that pass its filter and the lines recomputed. */
-function withRows(base, rows) {
-  return { ...base, rows, positions: new Map(rows.map((row, index) => [row, index])), shown: filterRows(rows, base.filter), lines: contextRows(rows, base.filter) };
-}
-
-/** Shows the rows of the event files of the host in `logs/` in time order, read in ranges from the start of each file. */
-export async function showDebugTimeline() {
-  if (!card) throw new Error("the debug view is not open");
-  failure = null;
-  try {
-    const files = hostEventFiles(entries);
-    if (files.length === 0) throw new Error("logs/ has no host event file");
-    const cursors = new Map();
-    const limited = [];
-    const loaded = [];
-    let total = 0;
-    for (const path of files) {
-      const read = await readLines(path, { next: 0, line: 0, size: 0 }, ROW_LIMIT - total);
-      cursors.set(path, read.cursor);
-      if (read.limited) limited.push(path);
-      loaded.push(read.rows);
-      total += read.rows.length;
-    }
-    const filter = { ...CLEAR_FILTER };
-    timeline = withRows({ files, limited, selected: new Set(), filter, following: true, appended: 0, cursors }, mergeRows(loaded));
-    viewing = null;
-    stateShown = null;
-    text.textContent = "";
-    image.removeAttribute("src");
-  } catch (reason) {
-    timeline = null;
-    fail("timeline", reason);
-    throw reason;
-  } finally {
-    draw();
-  }
-}
-
-/* The reads that follow the files, one after another: a notice that arrives during a read waits, so a line is read once. */
+/* The reads and changes of the timeline, one after another: a notice that arrives during a read waits, so a row is read once. */
 let reading = Promise.resolve();
 /* The end of the last update that added rows (performance.now()), which spaces the next update. */
 let lastGrowth = -Infinity;
 
+/** Runs `task` after the earlier tasks of the timeline; the task's own result or failure is the answer. */
+function exclusive(task) {
+  const run = reading.then(task);
+  // The next task starts when this one ended, whatever its outcome; the outcome itself is the answer that the caller receives.
+  reading = Promise.allSettled([run]);
+  return run;
+}
+
+/** Asks the host for a page of the query. */
+async function pageOf(request) {
+  const page = await debug.query(request);
+  if (page === null || typeof page !== "object" || !Array.isArray(page.rows) || typeof page.tail !== "object") {
+    throw new Error(`the host answered a page without rows and a tail: ${JSON.stringify(page)}`);
+  }
+  return page;
+}
+
+/** A timeline of the newest page of a query (in descending order) with the selection and the following that it keeps. */
+function freshTimeline(filter, page, selected, following) {
+  const rows = page.rows.toReversed();
+  return { filter, rows, ids: new Set(rows.map(rowId)), older: page.next !== null, tail: page.tail, following, appended: 0, omitted: 0, selected, token: {} };
+}
+
+/** Shows the newest rows of the event files of the logs folder, one page of the query of the host. */
+export function showDebugTimeline() {
+  if (!card) throw new Error("the debug view is not open");
+  failure = null;
+  return exclusive(async () => {
+    try {
+      const filter = { ...CLEAR_FILTER };
+      const page = await pageOf({ ...queryOf(filter), order: "desc", limit: PAGE_ROWS });
+      timeline = freshTimeline(filter, page, new Map(), true);
+      viewing = null;
+      stateShown = null;
+      text.textContent = "";
+      image.removeAttribute("src");
+    } catch (reason) {
+      timeline = null;
+      fail("timeline", reason);
+      throw reason;
+    } finally {
+      draw();
+    }
+  });
+}
+
 /**
- * Reads the lines that grew in `paths` and merges them into the shown timeline in time order. The rows keep their identity, so the
- * selection stays on the same rows; the filter stays. A read that fails stops following and shows the error; the answer is that
- * error, or null. A read that finishes after the timeline was replaced or stopped is discarded and leaves the cursors, so the next
- * read starts there.
+ * Adds the rows that the pages bring to the held rows in key order, once each. When the held rows would pass HOLD_LIMIT, the oldest
+ * rows leave the view and are counted in `omitted`. Returns the timeline with the rows and the number of rows that were new.
  */
-function followGrowth(paths) {
-  const run = reading.then(async () => {
+function withPage(current, rows) {
+  const fresh = rows.filter((row) => !current.ids.has(rowId(row)));
+  let merged = mergeRows(current.rows, fresh);
+  const shed = Math.max(0, merged.length - HOLD_LIMIT);
+  merged = merged.slice(shed);
+  return { timeline: { ...current, rows: merged, ids: new Set(merged.map(rowId)), omitted: current.omitted + shed, older: current.older || shed > 0 }, fresh: fresh.length };
+}
+
+/**
+ * Asks for the rows that the files gained after the `tail` of the shown timeline and adds them in key order. The rows keep their
+ * identity, so the selection stays; the filter stays. A read that fails stops following and shows the error; the answer is that
+ * error, or null. A read that finishes after the timeline was replaced or stopped is discarded and leaves the tail, so the next read
+ * starts there.
+ */
+function followGrowth() {
+  return exclusive(async () => {
     const current = timeline;
     if (card === null || current === null || !current.following) return null;
     try {
       // The timer spaces the updates of a file that grows at every moment (FOLLOW_INTERVAL_MS); a notice that arrives later waits less.
       const wait = lastGrowth + FOLLOW_INTERVAL_MS - performance.now();
       if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-      const reads = [];
-      let total = current.rows.length;
-      for (const path of paths) {
-        const read = await readLines(path, current.cursors.get(path), ROW_LIMIT - total);
-        reads.push({ path, read });
-        total += read.rows.length;
+      const request = { ...queryOf(current.filter), order: "asc", limit: PAGE_ROWS, since: current.tail };
+      let next = { ...current };
+      let tail = null;
+      let appended = 0;
+      for (let after; ;) {
+        const page = await pageOf(after === undefined ? request : { ...request, after });
+        // The tail of the first page is the tail of the whole read: a row that the later pages hold and that arrived after it is read again.
+        tail ??= page.tail;
+        const added = withPage(next, page.rows);
+        next = added.timeline;
+        appended += added.fresh;
+        if (page.next === null) break;
+        after = page.next;
       }
-      if (timeline === null || timeline.cursors !== current.cursors || !timeline.following) return null;
-      const added = reads.flatMap(({ path, read }) => {
-        current.cursors.set(path, read.cursor);
-        return read.rows;
-      });
-      const limited = new Set(timeline.limited);
-      for (const { path, read } of reads) {
-        if (read.limited) limited.add(path);
-        else limited.delete(path);
-      }
-      const stopped = timeline.files.filter((path) => limited.has(path));
-      const limitChanged = stopped.join() !== timeline.limited.join();
-      if (added.length > 0) timeline = withRows({ ...timeline, appended: timeline.appended + added.length }, mergeRows([timeline.rows, added]));
-      timeline = { ...timeline, limited: stopped };
+      if (timeline === null || timeline.token !== current.token || !timeline.following) return null;
+      timeline = { ...timeline, rows: next.rows, ids: next.ids, omitted: next.omitted, older: next.older, tail, appended: timeline.appended + appended };
       // A notice that adds nothing draws nothing: the host calls of a draw are recorded events, and each of them is written.
-      if (added.length > 0 || limitChanged) draw();
-      if (added.length > 0) lastGrowth = performance.now();
+      if (appended > 0) {
+        draw();
+        lastGrowth = performance.now();
+      }
       return null;
     } catch (reason) {
-      if (timeline !== null && timeline.cursors === current.cursors) timeline = { ...timeline, following: false };
+      if (timeline !== null && timeline.token === current.token) timeline = { ...timeline, following: false };
       fail("follow", reason);
       draw();
       return reason;
     }
   });
-  reading = run;
-  return run;
 }
 
-/* The host event `debug-log-changed {path, size}` (docs/spec/debug.md#following): reads what grew while the timeline follows. */
+/* The host event `debug-log-changed {path, size}` (docs/spec/debug.md#following): asks for what grew while the timeline follows. */
 if (debug) {
   debug.onChanged(({ path }) => {
-    if (timeline === null || !timeline.following || !timeline.cursors.has(path)) return;
+    if (timeline === null || !timeline.following || !isEventFile(path)) return;
     // A failed read is shown by the error display and stops following; the notice has no caller to throw to.
-    return followGrowth([path]);
+    return followGrowth();
   });
 }
 
@@ -619,9 +616,33 @@ export async function followDebugTimeline(on) {
   timeline = { ...timeline, following: on };
   draw();
   if (on) {
-    const failed = await followGrowth(timeline.files);
+    const failed = await followGrowth();
     if (failed !== null) throw failed;
   }
+}
+
+/** Asks for the page of rows before the oldest held row and puts it in front of them. */
+export function olderDebugTimeline() {
+  if (!card) throw new Error("the debug view is not open");
+  if (timeline === null) throw new Error("the debug timeline is not shown");
+  failure = null;
+  return exclusive(async () => {
+    const current = timeline;
+    if (current === null || !current.older || current.rows.length === 0) return;
+    try {
+      if (current.rows.length >= HOLD_LIMIT) throw new Error(`the timeline holds ${HOLD_LIMIT} rows; narrow the filter or the time`);
+      const limit = Math.min(PAGE_ROWS, HOLD_LIMIT - current.rows.length);
+      const page = await pageOf({ ...queryOf(current.filter), order: "desc", limit, after: keyOf(current.rows[0]) });
+      if (timeline === null || timeline.token !== current.token) return;
+      const added = withPage(timeline, page.rows);
+      timeline = { ...added.timeline, older: page.next !== null || added.timeline.omitted > timeline.omitted };
+    } catch (reason) {
+      fail("older", reason);
+      throw reason;
+    } finally {
+      draw();
+    }
+  });
 }
 
 /** Reads and parses one listed state file. */
@@ -672,27 +693,37 @@ export async function compareDebugState(path) {
   }
 }
 
-/** Sets the filter members of the shown timeline; the members that are not given keep their value. */
+/** Sets the filter members of the shown timeline and asks for its newest page again; the members that are not given keep their value. */
 export function filterDebugTimeline(change) {
   if (!card) throw new Error("the debug view is not open");
   if (timeline === null) throw new Error("the debug timeline is not shown");
   const unknown = Object.keys(change).filter((name) => !Object.hasOwn(CLEAR_FILTER, name));
   if (unknown.length > 0) throw new Error(`timeline filter has no member ${unknown.join(", ")}`);
-  if (Object.keys(change).length === 0) throw new Error(`timeline filter needs ${Object.keys(CLEAR_FILTER).slice(0, -1).join(", ")} or context`);
-  const filter = { ...timeline.filter, ...change };
-  timeline = { ...timeline, filter, shown: filterRows(timeline.rows, filter), lines: contextRows(timeline.rows, filter) };
-  draw();
+  if (Object.keys(change).length === 0) throw new Error(`timeline filter needs ${Object.keys(CLEAR_FILTER).join(", ")}`);
+  failure = null;
+  return exclusive(async () => {
+    try {
+      const filter = { ...timeline.filter, ...change };
+      const page = await pageOf({ ...queryOf(filter), order: "desc", limit: PAGE_ROWS });
+      timeline = freshTimeline(filter, page, timeline.selected, timeline.following);
+    } catch (reason) {
+      fail("filter", reason);
+      throw reason;
+    } finally {
+      draw();
+    }
+  });
 }
 
-/** Selects or unselects the row at `row` (its position among all rows of the timeline, from 0); the same call again changes nothing. */
+/** Selects or unselects the row at `row` (its position among the held rows, from 0); the same call again changes nothing. */
 export function selectDebugRow(row, selected) {
   if (!card) throw new Error("the debug view is not open");
   if (timeline === null) throw new Error("the debug timeline is not shown");
   if (typeof selected !== "boolean") throw new Error(`timeline selected must be a boolean, found ${JSON.stringify(selected)}`);
   if (!Number.isInteger(row) || row < 0 || row >= timeline.rows.length) throw new Error(`timeline row ${JSON.stringify(row)} is not one of the ${timeline.rows.length} rows`);
   const chosen = timeline.rows[row];
-  if (selected) timeline.selected.add(chosen);
-  else timeline.selected.delete(chosen);
+  if (selected) timeline.selected.set(rowId(chosen), chosen);
+  else timeline.selected.delete(rowId(chosen));
   draw();
 }
 
@@ -727,7 +758,7 @@ export async function saveDebugRows() {
   const stamp = new Date().toISOString().replace(/[-:]|\.\d+/g, "");
   const name = `soksak-timeline-${stamp}.txt`;
   return saving("save-rows", name, () => {
-    const lines = timeline.rows.filter((row) => timeline.selected.has(row)).map(eventLine);
+    const lines = [...timeline.selected.values()].toSorted(compareRows).map((row) => eventLine(row.event));
     if (lines.length === 0) throw new Error("no timeline row is selected");
     return debug.saveText({ name, text: `${lines.join("\n")}\n` });
   });
