@@ -1689,7 +1689,7 @@ const FEATURE_LINKS = [
   {
     id: "F145.2",
     implementation: [
-      { file: "native/darwin/src/image_region.m", symbol: "input report dropped" },
+      { file: "native/darwin/src/image_region.m", symbol: "native.input.report" },
     ],
     tests: [
       { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: a noop: command is recorded as dropped" },

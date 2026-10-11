@@ -45,6 +45,8 @@ writer가 회전하는 파일은 경계를 넘게 될 줄 앞에서 끝난다. �
 
 native 입력 콜백 하나(키 event, 붙여넣기, drop, 포인터 보고)는 그것을 처음 본 층에서 식별자 `<boot>.<n>` 하나를 받는다. 그 콜백이 일으키는 콜백(`setMarkedText`, `insertText`, `commitThrough`)은 일으킨 콜백의 식별자를 쓴다. 식별자는 native 보고, host 중계, page event와 함께 가고, plugin이 전송에 실어 넘기며, host가 sidecar로 가는 요청 envelope에 넣으므로 요청의 본문은 plugin의 것으로 남는다. 입력 여럿을 합치는 전송은 그 식별자를 모두 나르고, sidecar는 그 요청이 일으키는 event, 곧 `pty_write`까지 이를 적는다. envelope field를 모르는 sidecar는 이를 무시한다.
 
+native 라이브러리는 image region의 키가 도착할 때 그 키의 식별자를 부여한다: `native.input.key_down`(키 코드, modifier 유무에 따른 문자, modifier flag, 반복 flag, 키의 시각, 입력 문서의 상태). 그 키가 일으키는 입력기 콜백과 page로의 보고마다 같은 식별자를 쓴다(`native.input.callback`, `native.input.report`). 키가 일으키지 않은 입력기 콜백(포인터로 고른 후보, 입력 소스 변경)은 그 자체로 하나의 입력이며 자기 식별자를 받는다. page로 보내는 보고는 식별자를 JSON의 member `cids`로 나른다. host는 그런 보고의 중계를 같은 식별자와 함께 `host.input.relay`(`surface`, `name`, `type`)로 기록하고 보고는 그대로 넘긴다. page는 호출 `sidecarSend`를 요청의 `cids`와 함께 `page.call`로 기록하고, host는 큐에 넣은 요청을 요청 줄이 나르는 식별자와 함께 `host.sidecar.request`(`name`, `surface`, `bytes`)로 기록한다. [Catalog](#catalog)의 사슬 `input`이 이 event를 잇기 때문에 감사는 sidecar에 닿기 전에 멈춘 키를 찾고, 한 키가 두 층 사이에서 지연된 시간은 두 event의 `mono_ns` 차이이다. 각 sidecar 저장소는 요청의 식별자를 터미널에 쓰기까지의 자기 event에 적고 자기 catalog에서 사슬을 확장한다.
+
 ## class와 정책
 
 event는 class 하나에 속하며 catalog가 이를 선언한다. class가 저장 방식을 정한다.
@@ -108,7 +110,7 @@ event가 아닌 raw 파일이 둘 있다. `logs/<role>-<boot>.stderr`는 프로�
 
 event를 내는 각 저장소는 `events.json`에 event를 선언한다(이 저장소는 [events.json](events.json)이며 계층 `native`, `host`, `page`를 소유한다. `page.record.<level>`처럼 자리 표시자를 가진 이름은 계열을 선언한다. `level`은 level 하나 또는 level 목록이고, 이름이 `?`로 끝나는 field는 선택이며, `string|null` 같은 타입은 각 부분을 받아들이고, 계층 `sidecar`는 host가 저장하는 sidecar 표준 오류의 줄인 `sidecar.record.<level>`만 담는다. `make events-check`는 소스의 emit 지점을 읽어 선언되지 않은 채 emit된 이름, emit 지점이 없는 선언된 event, 선언이 허용하지 않는 literal 지점의 level이나 field를 실패로 보고한다. 지점은 이름을 literal로 주고(page의 template은 계열이다), 이름을 만드는 지점 위의 주석 `events: <names>`는 그것이 만드는 선언된 이름을 적으며, `events: forwarded`는 그 지점이 호출자의 이름을 넘긴다고 밝힌다. `node scripts/check-events.mjs --logs <config-dir>…`는 창 검사가 남긴 모든 층의 event 파일을 감사한다. [검사](#검사) 참고): event마다 이름, 층, class, level, 필수 field와 그 타입, 가릴 인자, 인자의 크기 상한, 설명. 저장소는 다른 모든 검사에서 자기 소스를 검사하듯 자기 소스를 자기 catalog로 검사한다. 이 저장소는 catalog의 schema와 `native`·`host` 층, page의 event를 소유한다. plugin이나 sidecar는 manifest(`events`, `executable`처럼 패키지 안의 경로)에 자기 catalog 파일을 적고, 릴리스는 그 파일을 담으며, viewer가 설치된 manifest의 catalog를 읽는다. 이 저장소는 그것을 이름으로 부르지 않는다.
 
-catalog는 입력 종류마다 남겨야 하는 사슬도 선언한다. 첫 층에서 마지막 층까지 event의 순서 있는 목록이다(예: `native.input.key_down`, host 중계, `page.terminal.send`, `sidecar.vt.pty_write`). 로그 감사는 입력의 선언된 사슬이 모두 완결되어 있기를 요구한다.
+입력 사슬의 한 단계인 event는 `"cids": "required"`로 선언하고, 감사는 비어 있지 않은 문자열 `cids`가 없는 그 event의 줄을 거부한다(입력 사슬의 guard). catalog는 입력 종류마다 남겨야 하는 사슬도(`chains`) 선언한다. 첫 층에서 마지막 층까지 event의 순서 있는 목록이다. 이 catalog는 `input`을 선언한다: `native.input.key_down`, `host.input.relay`, `page.call`(식별자를 나르는 호출 `sidecarSend`), `host.sidecar.request`. 요청이 일으키는 sidecar의 event(예: `sidecar.vt.pty_write`)는 sidecar 저장소의 catalog가 선언하며 그 저장소가 사슬을 거기서 확장한다. 로그 감사는 입력의 선언된 사슬이 모두 완결되어 있기를 요구한다. 사슬의 첫 event에 나타나는 각 식별자는 모든 계층의 파일을 통틀어 그 사슬의 뒤 event마다 나타나야 한다.
 
 ### 입구
 

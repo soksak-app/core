@@ -3,6 +3,7 @@
 #import <IOSurface/IOSurface.h>
 #import <objc/runtime.h>
 #include <unistd.h>
+#import "event_ring.h"
 #import "image_region.h"
 #import "support/records.h"
 #import "webview_geometry.h"
@@ -44,6 +45,21 @@ static void testEvent(void *context, const char *json) {
     }
     if (!collectedEvents) collectedEvents = [NSMutableArray new];
     [collectedEvents addObject:[NSString stringWithUTF8String:json]];
+}
+
+// The reports as dictionaries without their `cids` member; a report that has no single correlation identifier is NSNull.
+static NSArray *reportsWithoutCids(NSArray<NSString *> *reports) {
+    NSMutableArray *plain = [NSMutableArray array];
+    for (NSString *report in reports) {
+        NSMutableDictionary *parsed = [[NSJSONSerialization JSONObjectWithData:[report dataUsingEncoding:NSUTF8StringEncoding] options:NSJSONReadingMutableContainers error:NULL] mutableCopy];
+        if (!parsed || [parsed[@"cids"] count] != 1) {
+            [plain addObject:NSNull.null];
+            continue;
+        }
+        [parsed removeObjectForKey:@"cids"];
+        [plain addObject:parsed];
+    }
+    return plain;
 }
 
 // List of the committed strings of insert events after from.
@@ -113,6 +129,8 @@ int main(int argc, char **argv) { @autoreleasepool {
     // Used only by make test-activation.
     BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
     if (activation) sp_test_declare_activation();
+    // The correlation identifiers of the inputs are <boot>.<n>; the host gives the boot identifier of its run.
+    check(sp_event_set_boot("native-test"), @"the boot identifier of the run is accepted");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -448,29 +466,51 @@ int main(int argc, char **argv) { @autoreleasepool {
             && regionView.textStorage.length == 0,
             [NSString stringWithFormat:@"TEST 8: inserted text is committed exactly once by the focus change (got %@)", collectedEvents]);
 
-        // Every callback of the input method and every report to the page is a record of the standard error with its
-        // arguments, the typed text and the state of the input document before and after (docs/spec/diagnostics.md).
+        // Every callback of the input method and every report to the page is the event `native.input.callback` or
+        // `native.input.report` with its arguments, the typed text, the state of the input document before and after, and the
+        // correlation identifier of the input (docs/spec/logging.md#correlation-identifier).
         sp_region_focus(region8);
         {
-            NSString *records = capturedRecords(^{
+            NSUInteger beforeCapture = [collectedEvents count];
+            NSArray<NSDictionary *> *captured = capturedEvents(^{
                 [(id<NSTextInputClient>)regionView setMarkedText:@"한" selectedRange:NSMakeRange(1, 0)
                     replacementRange:NSMakeRange(NSNotFound, 0)];
                 [(id<NSTextInputClient>)regionView insertText:@"한글" replacementRange:NSMakeRange(0, 1)];
                 // Leaving the focus commits what the document holds.
                 [window makeFirstResponder:nil];
             });
+            NSString *records = captured.description;
             NSMutableArray *calls = [NSMutableArray array];
             NSMutableArray *reports = [NSMutableArray array];
-            for (NSString *line in [records componentsSeparatedByString:@"\n"]) {
-                NSRange at = [line rangeOfString:@" info native input method: "];
-                if (at.location != NSNotFound) {
-                    NSData *json = [[line substringFromIndex:NSMaxRange(at)] dataUsingEncoding:NSUTF8StringEncoding];
-                    id parsed = [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
-                    if ([parsed isKindOfClass:NSDictionary.class]) [calls addObject:parsed];
-                }
-                at = [line rangeOfString:@" info native input report: "];
-                if (at.location != NSNotFound) [reports addObject:[line substringFromIndex:NSMaxRange(at)]];
+            for (NSDictionary *event in captured) {
+                if ([event[@"name"] isEqual:@"native.input.callback"]) [calls addObject:event[@"fields"]];
+                if ([event[@"name"] isEqual:@"native.input.report"]) [reports addObject:event[@"fields"][@"report"]];
             }
+            // The callbacks that one callback causes take its identifier, and the identifier travels in the report to the page.
+            NSDictionary *markedEvent = nil, *insertedEvent = nil, *composeReport = nil;
+            for (NSDictionary *event in captured) {
+                NSDictionary *fields = event[@"fields"];
+                if ([event[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"setMarkedText"]) markedEvent = event;
+                if ([event[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"insertText"]) insertedEvent = event;
+                if ([event[@"name"] isEqual:@"native.input.report"] && [fields[@"report"] containsString:@"\"type\":\"compose\""] && !composeReport) composeReport = event;
+            }
+            BOOL everyEventHasOneCid = captured.count > 0;
+            for (NSDictionary *event in captured) {
+                if (![event[@"name"] hasPrefix:@"native.input.c"] && ![event[@"name"] isEqual:@"native.input.report"]) continue;
+                if ([event[@"cids"] count] != 1) everyEventHasOneCid = NO;
+            }
+            check(everyEventHasOneCid, [NSString stringWithFormat:@"TEST 8: every callback and every report of the input method has one correlation identifier (got %@)", records]);
+            check(markedEvent && composeReport && [markedEvent[@"cids"] isEqualToArray:composeReport[@"cids"]],
+                [NSString stringWithFormat:@"TEST 8: a callback and the report it causes share one correlation identifier (got %@)", records]);
+            check(markedEvent && insertedEvent && ![markedEvent[@"cids"] isEqualToArray:insertedEvent[@"cids"]],
+                @"TEST 8: two callbacks of the input method are two inputs with two identifiers");
+            NSString *composePage = nil;
+            for (NSUInteger i = beforeCapture; i < collectedEvents.count; i++) {
+                if ([collectedEvents[i] containsString:@"\"type\":\"compose\""]) { composePage = collectedEvents[i]; break; }
+            }
+            NSDictionary *pageEvent = composePage ? [NSJSONSerialization JSONObjectWithData:[composePage dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL] : nil;
+            check(composeReport && [pageEvent[@"cids"] isEqualToArray:composeReport[@"cids"]],
+                [NSString stringWithFormat:@"TEST 8: the report to the page carries the correlation identifier (got %@)", composePage]);
             // A callback records the processing that it causes (the preedit, the commit) before its own record.
             NSDictionary * (^named)(NSString *) = ^NSDictionary *(NSString *name) {
                 for (NSDictionary *call in calls) if ([call[@"call"] isEqual:name]) return call;
@@ -590,22 +630,30 @@ int main(int argc, char **argv) { @autoreleasepool {
         // An input that the region drops is recorded with its reason: a command that does nothing, an insert that is not
         // text, and a report to a region that is closed.
         {
-            NSString *records = capturedRecords(^{
+            NSArray<NSDictionary *> *dropEvents = capturedEvents(^{
                 [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(noop:)];
                 [(id<NSTextInputClient>)regionView insertText:@42 replacementRange:NSMakeRange(NSNotFound, 0)];
             });
-            check([records containsString:@"\"call\":\"doCommandBySelector\""] && [records containsString:@"\"dropped\":\"noop\""],
-                [NSString stringWithFormat:@"TEST 8: a noop: command is recorded as dropped (got %@)", records]);
-            check([records containsString:@"\"call\":\"insertText\""] && [records containsString:@"\"dropped\":\"not text\""],
-                [NSString stringWithFormat:@"TEST 8: an insert that is not text is recorded as dropped (got %@)", records]);
+            NSString *records = dropEvents.description;
+            BOOL noopDropped = NO, notTextDropped = NO;
+            for (NSDictionary *event in dropEvents) {
+                NSDictionary *fields = event[@"fields"];
+                if ([event[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"doCommandBySelector"] && [fields[@"dropped"] isEqual:@"noop"]) noopDropped = YES;
+                if ([event[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"insertText"] && [fields[@"dropped"] isEqual:@"not text"]) notTextDropped = YES;
+            }
+            check(noopDropped, [NSString stringWithFormat:@"TEST 8: a noop: command is recorded as dropped (got %@)", records]);
+            check(notTextDropped, [NSString stringWithFormat:@"TEST 8: an insert that is not text is recorded as dropped (got %@)", records]);
             [regionView retain];
             sp_region_close(region8);
-            NSString *closed = capturedRecords(^{
+            NSArray<NSDictionary *> *closedEvents = capturedEvents(^{
                 [(id<NSTextInputClient>)regionView insertText:@"x" replacementRange:NSMakeRange(NSNotFound, 0)];
             });
             [regionView release];
-            check([closed containsString:@" info native input report dropped: "],
-                [NSString stringWithFormat:@"TEST 8: a report to a closed region is recorded as dropped (got %@)", closed]);
+            BOOL reportDropped = NO;
+            for (NSDictionary *event in closedEvents) {
+                if ([event[@"name"] isEqual:@"native.input.report"] && [event[@"fields"][@"dropped"] isEqual:@YES]) reportDropped = YES;
+            }
+            check(reportDropped, [NSString stringWithFormat:@"TEST 8: a report to a closed region is recorded as dropped (got %@)", closedEvents]);
             region8 = NULL;
         }
 
@@ -737,6 +785,29 @@ int main(int argc, char **argv) { @autoreleasepool {
             check(hasKeyEnter,
                 [NSString stringWithFormat:@"TEST 11: event has key:Enter (got: %@)", eventStr]);
         }
+
+        // The first layer that sees the key assigns the correlation identifier: the key event, the report and the event that
+        // the page receives carry the same one.
+        NSUInteger beforeKey = [collectedEvents count];
+        NSArray<NSDictionary *> *keyEvents = capturedEvents(^{ [regionView keyDown:returnEvent]; });
+        NSDictionary *keyDown = nil, *keyReport = nil;
+        for (NSDictionary *event in keyEvents) {
+            if ([event[@"name"] isEqual:@"native.input.key_down"]) keyDown = event;
+            if ([event[@"name"] isEqual:@"native.input.report"] && [event[@"fields"][@"report"] containsString:@"\"key\":\"Enter\""]) keyReport = event;
+        }
+        NSDictionary *pageKey = collectedEvents.count > beforeKey
+            ? [NSJSONSerialization JSONObjectWithData:[collectedEvents[beforeKey] dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL] : nil;
+        check(keyDown && [keyDown[@"cids"] count] == 1 && [keyDown[@"level"] intValue] == SP_EVENT_INFO
+                && [keyDown[@"fields"][@"keyCode"] isEqual:@36] && [keyDown[@"fields"][@"characters"] isEqual:@"\r"]
+                && [keyDown[@"fields"][@"before"][@"document"] isEqual:@""],
+            [NSString stringWithFormat:@"TEST 11: a key is the event native.input.key_down with its code, characters and one identifier (got %@)", keyEvents]);
+        check(keyDown && keyReport && [keyReport[@"cids"] isEqualToArray:keyDown[@"cids"]] && [pageKey[@"cids"] isEqualToArray:keyDown[@"cids"]]
+                && [keyDown[@"cids"][0] hasPrefix:@"native-test."],
+            [NSString stringWithFormat:@"TEST 11: the key event, its report and the event of the page carry the identifier <boot>.<n> (got %@ and %@)", keyEvents, pageKey]);
+        NSArray<NSDictionary *> *again = capturedEvents(^{ [regionView keyDown:returnEvent]; });
+        NSDictionary *secondKey = nil;
+        for (NSDictionary *event in again) if ([event[@"name"] isEqual:@"native.input.key_down"]) secondKey = event;
+        check(secondKey && ![secondKey[@"cids"] isEqualToArray:keyDown[@"cids"]], @"TEST 11: the next key is another input with another identifier");
 
         sp_region_close(region11);
     }
@@ -1267,7 +1338,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         [NSApp sendAction:@selector(paste:) to:regionView from:nil];
         [NSApp sendAction:@selector(pasteAsPlainText:) to:regionView from:nil];
         NSArray *reported = [collectedEvents subarrayWithRange:NSMakeRange(before, collectedEvents.count - before)];
-        check([reported isEqualToArray:@[@"{\"type\":\"action\",\"name\":\"paste\"}", @"{\"type\":\"action\",\"name\":\"paste\"}"]]
+        check([reportsWithoutCids(reported) isEqualToArray:@[@{@"type": @"action", @"name": @"paste"}, @{@"type": @"action", @"name": @"paste"}]]
             && regionView.textStorage.length == 0,
             [NSString stringWithFormat:@"edit actions: paste reports one paste action and leaves the input document empty (got %@)", reported]);
         // Copy goes to the page command that copies the terminal selection and does not write the input method document to the pasteboard.
@@ -1275,7 +1346,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSUInteger beforeCopy = collectedEvents.count;
         [NSApp sendAction:@selector(copy:) to:regionView from:nil];
         NSArray *copied = [collectedEvents subarrayWithRange:NSMakeRange(beforeCopy, collectedEvents.count - beforeCopy)];
-        check([copied isEqualToArray:@[@"{\"type\":\"action\",\"name\":\"copy\"}"]]
+        check([reportsWithoutCids(copied) isEqualToArray:@[@{@"type": @"action", @"name": @"copy"}]]
             && NSPasteboard.generalPasteboard.changeCount == changes,
             [NSString stringWithFormat:@"edit actions: copy reports one copy action and leaves the pasteboard unchanged (got %@)", copied]);
         NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:@"" action:@selector(copy:) keyEquivalent:@""] autorelease];

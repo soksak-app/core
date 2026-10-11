@@ -934,6 +934,15 @@ impl<O: Owner> Sidecars<O> {
             .map_err(|_| format!("sidecar {name} is not keeping up"));
         let changed = state.closing_changed.clone();
         drop(state);
+        // The request is recorded once it is queued for the sidecar, so a request that was refused is not recorded.
+        if delivered.is_ok() && !cids.is_empty() {
+            crate::event_record::emit_host_cids(
+                crate::event_log::Level::Info,
+                "host.sidecar.request",
+                cids,
+                serde_json::json!({"name": name, "surface": surface, "bytes": body.get().len()}),
+            );
+        }
         if restarted {
             notify_connection(&self.core, name, Ok(()));
         }

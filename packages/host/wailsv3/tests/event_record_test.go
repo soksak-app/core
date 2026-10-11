@@ -5,12 +5,13 @@ package host_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
-)
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+)
 
 // useEventLog starts a writer, makes it the writer of the records of the host, and detaches it when the test ends.
 func useEventLog(t *testing.T) *host.EventLog {
@@ -56,23 +57,23 @@ func TestAnErrorAnObservationAndAPageRecordAreEventsWithWhereAndText(t *testing.
 // contract: log.record.start-buffer-holds-records-until-the-writer-exists
 func TestRecordsWrittenBeforeTheWriterExistsAreStoredInOrderWithTheirOwnTime(t *testing.T) {
 	host.UseHostEventLog(nil)
-	before := time.Now().UnixMicro()
 	system, err := platform.Current()
 	if err != nil {
 		t.Fatal(err)
 	}
-	host.LogError("early", "first")
+	before := time.Now().UnixMicro()
 	monoBefore, err := system.MonotonicNanos()
 	if err != nil {
 		t.Fatal(err)
 	}
+	host.LogError("early", "first")
 	host.LogInfo("early", "second")
 	after := time.Now().UnixMicro()
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
 	monoAfter, err := system.MonotonicNanos()
 	if err != nil {
 		t.Fatal(err)
 	}
+	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,10 +90,10 @@ func TestRecordsWrittenBeforeTheWriterExistsAreStoredInOrderWithTheirOwnTime(t *
 		if ts := int64(event["ts_us"].(float64)); ts < before || ts > after {
 			t.Fatalf("ts_us %d is outside [%d, %d]: the record took the time of the attach", ts, before, after)
 		}
-	}
 		if mono := uint64(event["mono_ns"].(float64)); mono < monoBefore || mono > monoAfter {
 			t.Fatalf("mono_ns %d is outside [%d, %d]: the record took the clock of the attach", mono, monoBefore, monoAfter)
 		}
+	}
 }
 
 // contract: log.record.start-buffer-counts-its-loss
@@ -204,4 +205,40 @@ func TestAHostObservationOfTheTraceIsAnEvent(t *testing.T) {
 	find("host.record.error", func(event map[string]any) bool {
 		return event["fields"].(map[string]any)["where"] == "performance trace"
 	})
+}
+
+// contract: log.input.region-event-with-cids-is-recorded
+func TestARegionEventWithCorrelationIdentifiersIsRecordedAsAnInputRelay(t *testing.T) {
+	log := useEventLog(t)
+	if err := host.RecordInputRelay("tab-1", "view", `{"type":"key","key":"Enter","cids":["b1.3","b1.4"]}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := host.RecordInputRelay("tab-1", "view", `{"type":"focus","focused":true}`); err != nil {
+		t.Fatalf("an event without identifiers: %v", err)
+	}
+	for event, message := range map[string]string{
+		`{"type":"key","cids":"b1.3"}`:   "cids",
+		`{"type":"key","cids":["a\"b"]}`: "cids",
+		`{"cids":["b1.3"]}`:              "type",
+		`{"type":7,"cids":["b1.3"]}`:     "type",
+		`not json`:                       "region event",
+	} {
+		if err := host.RecordInputRelay("tab-1", "view", event); err == nil || !strings.Contains(err.Error(), message) {
+			t.Fatalf("%s: error %v, want it to name %q", event, err, message)
+		}
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	if len(events) != 2 {
+		t.Fatalf("events %v", events)
+	}
+	relay := events[1]
+	cids, ok := relay["cids"].([]any)
+	fields := relay["fields"].(map[string]any)
+	if relay["event"] != "host.input.relay" || relay["layer"] != "host" || relay["level"] != "info" || !ok || len(cids) != 2 || cids[0] != "b1.3" || cids[1] != "b1.4" ||
+		fields["surface"] != "tab-1" || fields["name"] != "view" || fields["type"] != "key" {
+		t.Fatalf("the relay record: %v", relay)
+	}
 }

@@ -164,7 +164,61 @@ func EmitHost(level Level, event string, fields map[string]any) {
 		return
 	}
 	// events: forwarded
-	storeEvent(level, "host", event, event, text)
+	storeEvent(level, "host", event, event, nil, text)
+}
+
+// EmitHostCids stores an event of the layer `host` like EmitHost, with the correlation identifiers of the inputs it belongs to
+// (docs/spec/logging.md#correlation-identifier). An identifier that a line cannot carry is reported on the standard error
+// and nothing is stored.
+func EmitHostCids(level Level, event string, cids []string, fields map[string]any) {
+	if !strings.HasPrefix(event, "host.") {
+		fmt.Fprintf(os.Stderr, "event writer: the event %q does not start with host.\n", event)
+		return
+	}
+	if err := checkCids(cids); err != nil {
+		fmt.Fprintf(os.Stderr, "event writer: the cids of %s are refused: %v\n", event, err)
+		return
+	}
+	text, err := json.Marshal(fields)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
+		return
+	}
+	// events: forwarded
+	storeEvent(level, "host", event, event, cids, text)
+}
+
+// RecordInputRelay stores the event `host.input.relay` for a picture region event that carries correlation identifiers, with
+// the surface and the name of the region and the `type` of the event. A region event without identifiers stores nothing. An
+// event that is not a JSON object, whose `cids` are not a list of identifiers or whose `type` is not a string is an error
+// and stores nothing.
+func RecordInputRelay(surface, name, event string) error {
+	var body struct {
+		Type json.RawMessage `json:"type"`
+		Cids json.RawMessage `json:"cids"`
+	}
+	if err := json.Unmarshal([]byte(event), &body); err != nil {
+		return fmt.Errorf("the region event of %s is not a JSON object: %w", surface, err)
+	}
+	if body.Cids == nil {
+		return nil
+	}
+	var cids []string
+	if err := json.Unmarshal(body.Cids, &cids); err != nil {
+		return fmt.Errorf("the cids of the region event of %s are not an array of strings: %w", surface, err)
+	}
+	if len(cids) == 0 {
+		return nil
+	}
+	if err := checkCids(cids); err != nil {
+		return fmt.Errorf("the cids of the region event of %s: %w", surface, err)
+	}
+	var kind string
+	if err := json.Unmarshal(body.Type, &kind); err != nil {
+		return fmt.Errorf("the type of the region event of %s must be a string: %w", surface, err)
+	}
+	EmitHostCids(LevelInfo, "host.input.relay", cids, map[string]any{"surface": surface, "name": name, "type": kind})
+	return nil
 }
 
 // FlushRecords waits until the records written so far are in the event log, at most deadline. The paths that end the process

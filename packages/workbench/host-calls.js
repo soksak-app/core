@@ -43,13 +43,26 @@ function callArguments(args) {
 }
 
 /**
+ * The correlation identifiers that a call continues (docs/spec/logging.md#correlation-identifier). Only the send of a request
+ * to a sidecar carries them: the main page passes one object `{sidecar, surface, body, cids}`, and the runtime of a surface
+ * passes `(sidecar, surface, body, cids)`. A call without a non-empty list has none; a value that is not a list is returned as
+ * it is, so the batcher of the events reports it.
+ */
+function callCids(name, args) {
+  if (name !== "sidecarSend") return undefined;
+  const cids = args.length === 1 && args[0] !== null && typeof args[0] === "object" ? args[0].cids : args[3];
+  return Array.isArray(cids) && cids.length === 0 ? undefined : cids;
+}
+
+/**
  * The event `page.call` of a host call (docs/spec/logging.md#automatic-entrances): the level is `debug`, and `warn` for a
- * refused call. The main page and the documents of the surfaces make the event here so that both record a call alike.
+ * refused call. The main page and the documents of the surfaces make the event here so that both record a call alike. `cids`
+ * are the correlation identifiers that the call continues, or undefined.
  */
 export function callEvent({ name, args, micros, ok, error }) {
   const fields = { name, ...callArguments(args), micros, ok };
   if (!ok) fields.error = error;
-  return { level: ok ? "debug" : "warn", event: "page.call", fields };
+  return { level: ok ? "debug" : "warn", event: "page.call", fields, cids: callCids(name, args) };
 }
 
 /**

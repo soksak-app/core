@@ -51,6 +51,7 @@
 @property NSUInteger committedLength;       // The length from the document start already committed by insert.
 @property(copy) NSString *unhandledKey;     // The report of a special key given to the input method first. Reported if the input method does not handle it.
 @property NSUInteger reports;               // The number of reports sent. Used to check whether the input context answered a key.
+@property(copy) NSString *activeCid;        // The correlation identifier of the input being processed; nil outside one.
 - (void)applyInsets;
 - (void)applyInsetsInTransaction;
 - (void)applyInsetsNow;
@@ -61,6 +62,14 @@
 - (NSString *)inputState;
 - (void)performInsertText:(id)string text:(NSString *)text range:(NSRange)range;
 - (void)logInput:(NSString *)call fields:(NSString *)fields before:(NSString *)before;
+- (BOOL)enterInput;
+- (void)leaveInput:(BOOL)opened;
+- (NSString *)currentCid;
+- (void)emitInput:(const char *)name fields:(NSString *)fields;
+- (void)handleKeyDown:(NSEvent *)event;
+- (void)handleCommand:(SEL)selector;
+- (void)handleInsertText:(id)string replacementRange:(NSRange)range;
+- (void)handleSetMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange;
 - (void)surfaceScaleChanged;
 - (void)observeSurface:(NSView *)surface;
 @end
@@ -406,15 +415,54 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     if (self.placed) [self applyInsets];
 }
 
-- (void)report:(const char *)json {
-    // Every report to the page is recorded as it is sent, and a report that is dropped is recorded as dropped.
-    if (self.closed || !self.event) {
-        sp_log_info("input report dropped", json);
-        return;
+// The correlation identifier of the input that the region is processing, or the next identifier when no input is open.
+// Without an identifier (the boot identifier of the run is not set) it is nil, and the record that follows has none, which
+// the audit of the logs refuses.
+- (NSString *)currentCid {
+    if (self.activeCid) return self.activeCid;
+    char buffer[96];
+    if (!sp_cid_new(buffer, sizeof buffer)) {
+        sp_log_error("input method", "no correlation identifier can be assigned: the boot identifier of the run is not set");
+        return nil;
     }
-    sp_log_info("input report", json);
+    return @(buffer);
+}
+
+// Opens one input for the callbacks that follow: they and the reports they cause take one identifier. It returns YES when
+// this call opened the input, and the caller closes it with leaveInput. A call inside an open input joins that input.
+- (BOOL)enterInput {
+    BOOL opens = self.activeCid == nil;
+    if (opens) self.activeCid = [self currentCid];
+    return opens && self.activeCid != nil;
+}
+
+- (void)leaveInput:(BOOL)opened {
+    if (opened) self.activeCid = nil;
+}
+
+// Stores one event of the input class with the correlation identifier of the input being processed.
+- (void)emitInput:(const char *)name fields:(NSString *)fields {
+    NSString *cid = [self currentCid];
+    // events: native.input.key_down, native.input.callback
+    sp_event_cids(SP_EVENT_INFO, name, cid.UTF8String ?: "", fields.UTF8String);
+}
+
+// Records a report to the page as the event `native.input.report`, and sends it with the correlation identifier of the input
+// as the member `cids`. A report that is dropped is recorded as dropped.
+- (void)report:(const char *)json {
+    NSString *cid = [self currentCid];
+    NSData *recorded = [NSJSONSerialization dataWithJSONObject:@{ @"report": @(json), @"dropped": @(self.closed || !self.event) } options:0 error:NULL];
+    NSString *fields = [[[NSString alloc] initWithData:recorded encoding:NSUTF8StringEncoding] autorelease];
+    sp_event_cids(SP_EVENT_INFO, "native.input.report", cid.UTF8String ?: "", fields.UTF8String);
+    if (self.closed || !self.event) return;
     self.reports++;
-    self.event(self.context, json);
+    // The report is a JSON object that ends with its closing brace; the identifier is added as its last member.
+    NSString *text = @(json);
+    NSRange end = [text rangeOfString:@"}" options:NSBackwardsSearch];
+    if (cid && end.location != NSNotFound) {
+        text = [NSString stringWithFormat:@"%@,\"cids\":[\"%@\"]}", [text substringToIndex:end.location], cid];
+    }
+    self.event(self.context, text.UTF8String);
 }
 
 - (void)reject:(NSString *)reason {
@@ -479,14 +527,23 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     return result;
 }
 
+// A key is one input: the layer that first sees it assigns its correlation identifier, and every callback of the input method
+// and every report that the key causes carries it (docs/spec/logging.md#correlation-identifier).
 - (void)keyDown:(NSEvent *)event {
-    // The record holds the whole event: the key code, the characters with and without the modifiers, the modifier flags,
-    // the repeat flag and the time of the event.
-    [self logInput:@"keyDown" fields:[NSString stringWithFormat:
-        @"\"keyCode\":%hu,\"characters\":\"%@\",\"charactersIgnoringModifiers\":\"%@\",\"modifierFlags\":%lu,\"isARepeat\":%@,\"timestamp\":%.6f",
+    BOOL opened = [self enterInput];
+    [self handleKeyDown:event];
+    [self leaveInput:opened];
+}
+
+- (void)handleKeyDown:(NSEvent *)event {
+    // The event holds the whole key: the key code, the characters with and without the modifiers, the modifier flags,
+    // the repeat flag and the time of the key, and the state of the input document.
+    NSString *state = [self inputState];
+    [self emitInput:"native.input.key_down" fields:[NSString stringWithFormat:
+        @"{\"keyCode\":%hu,\"characters\":\"%@\",\"charactersIgnoringModifiers\":\"%@\",\"modifierFlags\":%lu,\"isARepeat\":%@,\"timestamp\":%.6f,\"before\":%@,\"after\":%@}",
         event.keyCode, [self jsonEscapedString:event.characters ?: @""],
         [self jsonEscapedString:event.charactersIgnoringModifiers ?: @""], (unsigned long)event.modifierFlags,
-        event.isARepeat ? @"true" : @"false", event.timestamp] before:nil];
+        event.isARepeat ? @"true" : @"false", event.timestamp, state, state]];
     // A Command combination is not reported but handed to the menu.
     if (event.modifierFlags & NSEventModifierFlagCommand) {
         [super keyDown:event];
@@ -655,6 +712,12 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)doCommandBySelector:(SEL)selector {
+    BOOL opened = [self enterInput];
+    [self handleCommand:selector];
+    [self leaveInput:opened];
+}
+
+- (void)handleCommand:(SEL)selector {
     // A noop: command that no unhandled key accompanies is dropped below, and the record says so.
     BOOL dropped = !self.unhandledKey && selector == @selector(noop:);
     [self logInput:@"doCommandBySelector" fields:[NSString stringWithFormat:@"\"selector\":\"%@\",\"unhandledKey\":\"%@\"%@",
@@ -692,6 +755,12 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 // revises it and it is committed at once.
 // The document is cleared when the composition of the input method ends.
 - (void)insertText:(id)string replacementRange:(NSRange)range {
+    BOOL opened = [self enterInput];
+    [self handleInsertText:string replacementRange:range];
+    [self leaveInput:opened];
+}
+
+- (void)handleInsertText:(id)string replacementRange:(NSRange)range {
     NSString *text = [string isKindOfClass:NSAttributedString.class]
         ? [(NSAttributedString *)string string]
         : ([string isKindOfClass:NSString.class] ? (NSString *)string : nil);
@@ -741,6 +810,12 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
+    BOOL opened = [self enterInput];
+    [self handleSetMarkedText:string selectedRange:selectedRange replacementRange:replacementRange];
+    [self leaveInput:opened];
+}
+
+- (void)handleSetMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
     BOOL attributed = [string isKindOfClass:NSAttributedString.class];
     NSString *text = attributed ? [(NSAttributedString *)string string]
         : ([string isKindOfClass:NSString.class] ? (NSString *)string : nil);
@@ -759,9 +834,11 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)unmarkText {
+    BOOL opened = [self enterInput];
     NSString *before = [self inputState];
     [super unmarkText];
     [self logInput:@"unmarkText" fields:@"" before:before];
+    [self leaveInput:opened];
 }
 
 // Checks whether the selected input source is an input method. A keyboard layout does not rewrite the strings it
@@ -852,7 +929,11 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 - (void)inputSourceChanged:(NSNotification *)notification {
     sp_observe_delivered("image_region.input_source");
     // The change itself is the event `native.input.source_changed` of the activity observers; this region only reacts to it.
-    if (notification.object == self.inputContext) [self commitPending];
+    if (notification.object == self.inputContext) {
+        BOOL opened = [self enterInput];
+        [self commitPending];
+        [self leaveInput:opened];
+    }
 }
 
 // One query of the input method as the event `native.input.query` at the level debug: the name of the query, its arguments
@@ -953,7 +1034,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSString *after = [self inputState];
     NSString *json = [NSString stringWithFormat:@"{\"call\":\"%@\",%@\"before\":%@,\"after\":%@}",
         call, fields.length ? [fields stringByAppendingString:@","] : @"", before ?: after, after];
-    sp_log_info("input method", json.UTF8String);
+    [self emitInput:"native.input.callback" fields:json];
 }
 
 - (NSAccessibilityRole)accessibilityRole {

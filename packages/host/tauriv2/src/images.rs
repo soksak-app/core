@@ -787,6 +787,7 @@ fn create(
             let result = (|| {
                 let event: serde_json::Value = serde_json::from_str(&json)
                     .map_err(|error| format!("{event_surface}/{event_name}: {error}"))?;
+                crate::event_record::record_input_relay(&event_surface, &event_name, &json);
                 // Every event of a native region is recorded with its whole body before it is relayed
                 // (docs/spec/diagnostics.md). It writes nothing while the performance trace is off.
                 crate::performance::observe("host", || {

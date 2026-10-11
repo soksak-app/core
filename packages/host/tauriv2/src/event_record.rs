@@ -201,6 +201,70 @@ pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
     }
 }
 
+/// Stores an event of the layer `host` with the correlation identifiers of the inputs it belongs to, like `emit_host`. An
+/// identifier that is not valid is reported on the standard error and nothing is stored.
+pub fn emit_host_cids(level: Level, event: &str, cids: &[String], fields: serde_json::Value) {
+    if !event.starts_with("host.") {
+        eprintln!("event writer: the event {event:?} does not start with host.");
+        return;
+    }
+    if let Some(bad) = cids.iter().find(|cid| !valid_cid(cid)) {
+        eprintln!("event writer: {event} has the correlation identifier {bad:?}, which is empty or holds a quote, a backslash or a control character");
+        return;
+    }
+    match to_raw_value(&fields) {
+        // events: forwarded
+        Ok(text) => store_event(level, "host", event, event, cids.to_vec(), text),
+        Err(error) => {
+            eprintln!("event writer: the fields of {event} cannot be serialized: {error}")
+        }
+    }
+}
+
+/// Records that a picture region event carrying correlation identifiers is relayed to the page: the event
+/// `host.input.relay` with the `surface` and the `name` of the region and the `type` of the event, and the identifiers of
+/// the event. `event_json` is the JSON text of the region event. An event without `cids` is not an input and stores
+/// nothing; an event whose `cids` or `type` cannot be used is reported as a record of the host and stores no event.
+pub fn record_input_relay(surface: &str, name: &str, event_json: &str) {
+    let parsed: serde_json::Value = match serde_json::from_str(event_json) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            crate::application_log::log_error(
+                "input relay",
+                format!("{surface}/{name}: the region event is not JSON: {error}"),
+            );
+            return;
+        }
+    };
+    let Some(cids) = parsed.get("cids") else {
+        return;
+    };
+    let cids: Option<Vec<String>> = cids.as_array().and_then(|items| {
+        items
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .filter(|cid| valid_cid(cid))
+                    .map(str::to_string)
+            })
+            .collect()
+    });
+    let kind = parsed.get("type").and_then(serde_json::Value::as_str);
+    let (Some(cids), Some(kind)) = (cids.filter(|cids| !cids.is_empty()), kind) else {
+        crate::application_log::log_error(
+            "input relay",
+            format!("{surface}/{name}: the region event has cids that are not a list of identifiers or no type: {event_json}"),
+        );
+        return;
+    };
+    emit_host_cids(
+        Level::Info,
+        "host.input.relay",
+        &cids,
+        json!({"surface": surface, "name": name, "type": kind}),
+    );
+}
+
 /// Stores an event of the layer `host` like `emit_host`, waits until it is in the event log, and returns the boot
 /// identifier of the log and the `seq` of the line, which together name the line. Without an attached writer the event has
 /// no position, so it is an error.
