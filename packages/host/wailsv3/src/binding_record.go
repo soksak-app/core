@@ -173,6 +173,14 @@ func resultError(err error) string {
 // `warn`, and its error text is the text that the caller receives, cut the same way.
 func recordBindingCall(name string, args []json.RawMessage, started time.Time, err error, returned bool, cids []string) {
 	micros := time.Since(started).Microseconds()
+	// The gate is asked before the arguments are cut and the fields are built: a call that the policy does not store costs one branch.
+	level := LevelWarn
+	if returned && err == nil {
+		level = LevelDebug
+	}
+	if !GateEvent(ClassCall, level) {
+		return
+	}
 	text, truncated := boundedArguments(args)
 	if returned && err == nil {
 		emitBindingCall(LevelDebug, cids, map[string]any{

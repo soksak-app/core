@@ -37,7 +37,7 @@ func BenchmarkNativePull(b *testing.B) {
 		}
 		pulls = append(pulls, time.Since(start).Nanoseconds())
 		start = time.Now()
-		if _, _, err := system.TakeNativeEventLoss(); err != nil {
+		if _, _, err := system.TakeNativeEventLoss(0); err != nil {
 			b.Fatal(err)
 		}
 		losses = append(losses, time.Since(start).Nanoseconds())

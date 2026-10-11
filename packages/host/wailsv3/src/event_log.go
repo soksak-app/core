@@ -8,7 +8,6 @@ package host
 import (
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -86,14 +85,46 @@ type EventLogOptions struct {
 	QueueBytes int
 	// BatchInterval is how long the writer waits for more events before it writes a batch.
 	BatchInterval time.Duration
-	// RotateBytes is the size at which the writer starts a new file; the file that was full becomes generation 1.
+	// PolicyPath is the policy file that the writer follows (`<config-dir>/log-policy.json`); it is empty for a writer that has none.
+	PolicyPath string
+	// RetentionBytes is the bound of the files of the runs in the folder (docs/spec/logging.md#retention): the writer removes the oldest
+	// runs when it starts and after each rotation while the files pass it.
+	RetentionBytes int64
+	// RotateBytes is the size at which the writer starts a new file. Each of the two files of the writer (the main file and the
+	// debug file) rotates on its own: the file that was full becomes the next generation (`.1` is the first), and rotation
+	// removes no generation.
 	RotateBytes int64
-	// Generations is the number of earlier files that are kept (`.1` is the newest); the oldest one is removed.
-	Generations int
 	// Pull moves whole records of the native ring into buffer and returns the number of bytes written; nil when the
-	// process has no native ring. PullLoss returns the events and bytes that the ring refused since the last call.
+	// process has no native ring. PullLoss returns the events and bytes that the ring refused in a channel since the last call.
 	Pull     func(buffer []byte) (int, error)
-	PullLoss func() (events, bytes uint64)
+	PullLoss func(channel Channel) (events, bytes uint64)
+}
+
+// Channel is the set of the files of a process that holds a set of levels (docs/spec/logging.md#files): the channel other holds
+// error, warn and info in the main file, and the channel debug holds debug and trace in the debug file.
+type Channel int
+
+// The channels of the writer.
+const (
+	ChannelOther Channel = iota
+	ChannelDebug
+	channelCount
+)
+
+// String is the name of the channel in log.dropped and in the query.
+func (c Channel) String() string {
+	if c == ChannelDebug {
+		return "debug"
+	}
+	return "other"
+}
+
+// ChannelOf returns the channel that stores the level.
+func ChannelOf(level Level) Channel {
+	if level == LevelDebug || level == LevelTrace {
+		return ChannelDebug
+	}
+	return ChannelOther
 }
 
 // pendingEvent is one event waiting for the writer. seq is assigned when the writer serializes it.
@@ -106,6 +137,9 @@ type pendingEvent struct {
 	layer string
 	level Level
 	event string
+	// class is the class that the catalog declares for the event; it is empty, and undeclared is set, for a name the catalog does not declare.
+	class      sok.Class
+	undeclared bool
 	// fields is the fields as JSON text, serialized once by the producer.
 	fields json.RawMessage
 	bytes  int
@@ -133,18 +167,24 @@ type EventLog struct {
 	queuedBytes  atomic.Int64
 	queueEvents  int64
 	queueBytes   int64
-	lostEvents   atomic.Uint64
-	lostBytes    atomic.Uint64
-	path         string
-	boot         string
-	rotateBytes  int64
-	generations  int
-	openFields   json.RawMessage
-	pull         func(buffer []byte) (int, error)
-	pullLoss     func() (uint64, uint64)
-	done         chan struct{}
-	closeOnce    sync.Once
-	onWrite      atomic.Pointer[func(path string, size int64)]
+	// lost counts what the queue and the producers refused, for each channel.
+	lost [channelCount]struct{ events, bytes atomic.Uint64 }
+	// gate is the policy in force and the count of the events that it refused.
+	gate        *eventGate
+	policyPath  string
+	directory   string
+	runName     string
+	retention   int64
+	path        string
+	debugPath   string
+	boot        string
+	rotateBytes int64
+	openFields  json.RawMessage
+	pull        func(buffer []byte) (int, error)
+	pullLoss    func(Channel) (uint64, uint64)
+	done        chan struct{}
+	closeOnce   sync.Once
+	onWrite     atomic.Pointer[func(path string, size int64)]
 }
 
 // SetOnWrite sets the observer that the writer calls after it wrote a batch, with the path of the file and its size. It is
@@ -158,9 +198,10 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 	if options.RotateBytes <= 0 {
 		return nil, fmt.Errorf("event writer: RotateBytes must be positive, not %d", options.RotateBytes)
 	}
-	if options.Generations <= 0 {
-		return nil, fmt.Errorf("event writer: Generations must be positive, not %d", options.Generations)
+	if options.RetentionBytes <= 0 {
+		return nil, fmt.Errorf("event writer: RetentionBytes must be positive, not %d", options.RetentionBytes)
 	}
+
 	if err := os.MkdirAll(options.Directory, 0o700); err != nil {
 		return nil, err
 	}
@@ -169,7 +210,8 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 		return nil, err
 	}
 	path := filepath.Join(options.Directory, fmt.Sprintf("%s-%s.jsonl", options.Role, options.Boot))
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY|syscall.O_CLOEXEC, 0o600)
+	debugPath := filepath.Join(options.Directory, fmt.Sprintf("%s-%s.debug.jsonl", options.Role, options.Boot))
+	file, err := openLogFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -183,16 +225,21 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 		messages:    make(chan eventMessage, options.QueueEvents+reservedForRequests),
 		queueEvents: int64(options.QueueEvents),
 		queueBytes:  int64(options.QueueBytes),
+		gate:        newEventGate(),
+		policyPath:  options.PolicyPath,
+		directory:   options.Directory,
+		runName:     options.Role + "-" + options.Boot,
+		retention:   options.RetentionBytes,
 		path:        path,
+		debugPath:   debugPath,
 		boot:        options.Boot,
 		rotateBytes: options.RotateBytes,
-		generations: options.Generations,
 		openFields:  fields,
 		pull:        options.Pull,
 		pullLoss:    options.PullLoss,
 		done:        make(chan struct{}),
 	}
-	open := &pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), layer: "host", level: LevelInfo, event: "log.open", fields: fields}
+	open := writerEvent(LevelInfo, "log.open", fields)
 	routine.Go("event-log-writer", func() { log.write(file, options.BatchInterval, open) })
 	return log, nil
 }
@@ -203,7 +250,6 @@ const (
 	hostQueueBytes    = 16 << 20
 	hostBatchInterval = 100 * time.Millisecond
 	hostRotateBytes   = 100 << 20
-	hostGenerations   = 5
 )
 
 var (
@@ -242,8 +288,8 @@ func StartHostEventLog(config string) (*EventLog, error) {
 	}
 	return StartEventLog(EventLogOptions{
 		Pull: system.PullNativeEvents,
-		PullLoss: func() (uint64, uint64) {
-			events, bytes, err := system.TakeNativeEventLoss()
+		PullLoss: func(channel Channel) (uint64, uint64) {
+			events, bytes, err := system.TakeNativeEventLoss(uint8(channel))
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "event writer: the loss of the native ring cannot be read: %v\n", err)
 			}
@@ -251,15 +297,15 @@ func StartHostEventLog(config string) (*EventLog, error) {
 		},
 		Directory: filepath.Join(config, "logs"), Role: "host", Boot: processBoot(),
 		QueueEvents: hostQueueEvents, QueueBytes: hostQueueBytes, BatchInterval: hostBatchInterval,
-		RotateBytes: hostRotateBytes, Generations: hostGenerations,
+		RotateBytes: hostRotateBytes, PolicyPath: filepath.Join(config, "log-policy.json"), RetentionBytes: hostRetentionBytes,
 	})
 }
 
-// CountLoss adds events and bytes that a producer of this process refused before they reached the writer; the writer
-// records them as a log.dropped.
-func (l *EventLog) CountLoss(events, bytes uint64) {
-	l.lostEvents.Add(events)
-	l.lostBytes.Add(bytes)
+// CountLoss adds events and bytes of a channel that a producer of this process refused before they reached the writer; the
+// writer records them as a log.dropped that names the channel.
+func (l *EventLog) CountLoss(channel Channel, events, bytes uint64) {
+	l.lost[channel].events.Add(events)
+	l.lost[channel].bytes.Add(bytes)
 }
 
 // Boot is the identifier of the run that this writer belongs to; with a seq it names a line of the log.
@@ -279,7 +325,7 @@ func (l *EventLog) EmitPlaced(level Level, event string, fields json.RawMessage,
 func (l *EventLog) emitPlaced(level Level, event string, fields []byte, produced int, deadline time.Duration) (uint64, error) {
 	placed := make(chan uint64, 1)
 	if !l.enqueuePlaced(time.Now().UnixMicro(), monotonicNanos(), "host", level, event, nil, fields, produced, placed) {
-		return 0, fmt.Errorf("the event writer refused %s because its queue was full", event)
+		return 0, fmt.Errorf("the event writer refused %s because its queue was full or the policy does not store it", event)
 	}
 	if err := l.Flush(deadline); err != nil {
 		return 0, err
@@ -291,7 +337,12 @@ func (l *EventLog) emitPlaced(level Level, event string, fields []byte, produced
 	return seq, nil
 }
 
+// Path is the main file of the writer (error, warn and info); DebugPath is the debug file (debug and trace), which exists once
+// the first event of the channel debug was written.
 func (l *EventLog) Path() string { return l.path }
+
+// DebugPath is the debug file of the writer.
+func (l *EventLog) DebugPath() string { return l.debugPath }
 
 // Emit queues an event. It returns false, and counts the loss, when the queue has no room. It never waits. The fields
 // are serialized once, and only after the queue is known to have room for another event.
@@ -300,18 +351,22 @@ func (l *EventLog) Emit(level Level, event string, fields any) bool {
 	case LevelError, LevelWarn, LevelInfo, LevelDebug, LevelTrace:
 	default:
 		// A level outside the contract is a defect of the caller; the event is counted as lost and the defect is reported.
-		l.countLoss(len(event))
+		l.countLoss(ChannelOf(level), len(event))
 		fmt.Fprintf(os.Stderr, "event writer: %s has the level %q, which the contract does not define\n", event, string(level))
 		return false
 	}
+	// A closed gate builds nothing: the fields are not serialized for an event that the policy does not store.
+	if class, declared := sok.EventClassOf(event); declared && !l.Gate(class, level) {
+		return false
+	}
 	if l.queuedEvents.Load() >= l.queueEvents {
-		l.countLoss(len(event))
+		l.countLoss(ChannelOf(level), len(event))
 		return false
 	}
 	text, produced, err := boundedMarshal(fields, EventFieldsLimitBytes)
 	if err != nil {
 		// A value that cannot be serialized is a defect of the caller; it is counted in place of the event.
-		l.countLoss(len(event))
+		l.countLoss(ChannelOf(level), len(event))
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return false
 	}
@@ -323,17 +378,20 @@ func (l *EventLog) Emit(level Level, event string, fields any) bool {
 // the event is refused.
 func (l *EventLog) EmitCids(level Level, event string, cids []string, fields any) bool {
 	if err := checkCids(cids); err != nil {
-		l.countLoss(len(event))
+		l.countLoss(ChannelOf(level), len(event))
 		fmt.Fprintf(os.Stderr, "event writer: the cids of %s are refused: %v\n", event, err)
 		return false
 	}
+	if class, declared := sok.EventClassOf(event); declared && !l.Gate(class, level) {
+		return false
+	}
 	if l.queuedEvents.Load() >= l.queueEvents {
-		l.countLoss(len(event))
+		l.countLoss(ChannelOf(level), len(event))
 		return false
 	}
 	text, produced, err := boundedMarshal(fields, EventFieldsLimitBytes)
 	if err != nil {
-		l.countLoss(len(event))
+		l.countLoss(ChannelOf(level), len(event))
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return false
 	}
@@ -377,8 +435,11 @@ func (l *EventLog) EmitRelayed(e RelayedEvent) (bool, error) {
 	if err := checkCids(e.Cids); err != nil {
 		return false, fmt.Errorf("the cids of %s: %w", e.Event, err)
 	}
+	if class, declared := sok.EventClassOf(e.Event); declared && !l.Gate(class, e.Level) {
+		return false, nil
+	}
 	if l.queuedEvents.Load() >= l.queueEvents {
-		l.countLoss(len(e.Event))
+		l.countLoss(ChannelOf(e.Level), len(e.Event))
 		return false, nil
 	}
 	return l.enqueue(e.TsMicros, e.MonoNs, e.Layer, e.Level, e.Event, e.Cids, e.Fields, e.Produced), nil
@@ -403,21 +464,44 @@ func (l *EventLog) enqueuePlaced(tsMicros int64, monoNs uint64, layer string, le
 		bytes += len(cid)
 	}
 	if l.queuedBytes.Load()+int64(bytes) > l.queueBytes {
-		l.countLoss(bytes)
+		l.countLoss(ChannelOf(level), bytes)
 		return false
 	}
 	pending := &pendingEvent{tsMicros: tsMicros, monoNs: monoNs, cids: cids, layer: layer, level: level, event: event, fields: text, bytes: bytes, truncated: truncated, placed: placed}
-	l.queuedBytes.Add(int64(bytes))
+	pending.classify()
+	// A closed gate stores nothing and counts the event; an event that the catalog does not declare has no class and no gate.
+	if pending.class != "" && !l.Gate(pending.class, level) {
+		return false
+	}
+	return l.queue(pending)
+}
+
+// queue hands a counted event to the writer; a full queue refuses it and counts the loss.
+func (l *EventLog) queue(pending *pendingEvent) bool {
+	l.queuedBytes.Add(int64(pending.bytes))
 	l.queuedEvents.Add(1)
 	select {
 	case l.messages <- eventMessage{event: pending}:
 		return true
 	default:
-		l.queuedBytes.Add(-int64(bytes))
+		l.queuedBytes.Add(-int64(pending.bytes))
 		l.queuedEvents.Add(-1)
-		l.countLoss(bytes)
+		l.countLoss(ChannelOf(pending.level), pending.bytes)
 		return false
 	}
+}
+
+// enqueueWriterEvent queues an event that the writer reports about itself (log.policy, log.pruned) from another goroutine. These events
+// pass every gate: a policy that turns a class off must still be able to say that it did.
+func (l *EventLog) enqueueWriterEvent(level Level, name string, fields json.RawMessage) bool {
+	// events: forwarded
+	pending := writerEvent(level, name, fields)
+	pending.bytes = len(fields) + len(name)
+	if l.queuedBytes.Load()+int64(pending.bytes) > l.queueBytes {
+		l.countLoss(ChannelOf(level), pending.bytes)
+		return false
+	}
+	return l.queue(pending)
 }
 
 // capFields returns the fields text of an event as the writer stores it. Fields over EventFieldsLimitBytes are replaced by
@@ -444,9 +528,9 @@ func headFields(text []byte, size int) (json.RawMessage, int) {
 	return cut, size
 }
 
-func (l *EventLog) countLoss(bytes int) {
-	l.lostEvents.Add(1)
-	l.lostBytes.Add(uint64(bytes))
+func (l *EventLog) countLoss(channel Channel, bytes int) {
+	l.lost[channel].events.Add(1)
+	l.lost[channel].bytes.Add(uint64(bytes))
 }
 
 // Flush writes everything that is queued and waits until it is on disk, at most deadline.
@@ -479,6 +563,24 @@ func (l *EventLog) Close() {
 	})
 }
 
+// classify gives the event the class that the catalog declares for its name. A name that the catalog does not declare is stored
+// without a class and marked undeclared (docs/spec/logging.md#event).
+func (e *pendingEvent) classify() {
+	e.class, e.undeclared = "", false
+	if class, declared := sok.EventClassOf(e.event); declared {
+		e.class = class
+	} else {
+		e.undeclared = true
+	}
+}
+
+// writerEvent is an event that the writer itself creates (log.open, log.rotated, log.dropped), with both clocks read now.
+func writerEvent(level Level, event string, fields json.RawMessage) *pendingEvent {
+	e := &pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), layer: "host", level: level, event: event, fields: fields}
+	e.classify()
+	return e
+}
+
 // eventRecord is the line of one event with the seq that the writer gives it. The fields are already JSON text, so the
 // line is assembled without parsing them again.
 type eventRecord struct {
@@ -486,93 +588,124 @@ type eventRecord struct {
 	MonoNs   uint64          `json:"mono_ns"`
 	Seq      uint64          `json:"seq"`
 	Level    Level           `json:"level"`
+	Class    sok.Class       `json:"class,omitempty"`
 	Layer    string          `json:"layer"`
 	Event    string          `json:"event"`
 	Cids     []string        `json:"cids,omitempty"`
 	Fields   json.RawMessage `json:"fields"`
+	// Undeclared is true for an event whose name the catalog does not declare; such a line has no class.
+	Undeclared bool `json:"undeclared,omitempty"`
 	// Truncated is the size in bytes of the fields before they were cut; it is absent for an event that was not cut.
 	Truncated int `json:"truncated,omitempty"`
 }
 
 func eventLine(seq uint64, e *pendingEvent) ([]byte, error) {
-	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, MonoNs: e.monoNs, Seq: seq, Level: e.level, Layer: e.layer, Event: e.event, Cids: e.cids, Fields: e.fields, Truncated: e.truncated})
+	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, MonoNs: e.monoNs, Seq: seq, Level: e.level, Class: e.class, Layer: e.layer, Event: e.event, Cids: e.cids, Fields: e.fields, Undeclared: e.undeclared, Truncated: e.truncated})
 	if err != nil {
 		return nil, err
 	}
 	return append(line, '\n'), nil
 }
 
-// rotate moves the full file to generation 1 and the older generations one step up, removes the generation beyond the
-// kept ones, and opens a new file. It returns the new file and the name of the removed generation (empty when none was
-// removed). The index files move with the generations (docs/spec/logging.md#index). When a step fails, the failure is reported and
-// the writer keeps the file it has.
-func (l *EventLog) rotate(file *os.File) (*os.File, string) {
+// logFile is one file of the writer: the main file of the channel other or the debug file of the channel debug. Only the
+// goroutine of the writer uses it.
+type logFile struct {
+	channel Channel
+	path    string
+	// file is nil until the first line of the channel is written: the debug file is created when the first debug or trace
+	// event arrives, so a run that stores no such event leaves no empty file.
+	file *os.File
+	// size is the number of bytes of the current file, written or waiting in the batch.
+	size int64
+	// generation is the number of the last generation that rotation closed; 0 before the first rotation.
+	generation int
+	batch      []byte
+}
+
+func openLogFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY|syscall.O_CLOEXEC, 0o600)
+}
+
+// rotate closes the full file of f as the next generation (`<path>.<n>`, with n counted from 1 in the order of the rotations),
+// opens a new file at the path, and moves the index file with the closed generation (docs/spec/logging.md#index). No generation
+// is removed or renamed. It returns the number of the generation and true; when a step fails the failure is reported, the files
+// are as they were, and the writer keeps the file it has.
+func (l *EventLog) rotate(f *logFile) (int, bool) {
+	n := f.generation + 1
 	var next *os.File
-	removed := ""
-	err := sok.RotateLogIndexes(l.path, l.generations, func() error {
+	err := sok.RotateLogIndexes(f.path, n, func() error {
 		var err error
-		next, removed, err = l.rotateFiles(file)
+		next, err = l.rotateFiles(f, n)
 		return err
 	})
 	if next == nil {
 		fmt.Fprintf(os.Stderr, "event writer: %v\n", err)
-		return file, ""
+		return 0, false
 	}
 	if err != nil {
 		// The files rotated; only the index of the closed file is not complete, and a query builds it again.
 		fmt.Fprintf(os.Stderr, "event writer: the index of the rotated file is not complete: %v\n", err)
 	}
-	return next, removed
+	return n, true
 }
 
-// rotateFiles renames the generations and opens the new file; it returns the new file and the name of the removed generation.
-func (l *EventLog) rotateFiles(file *os.File) (*os.File, string, error) {
-	generation := func(n int) string { return fmt.Sprintf("%s.%d", l.path, n) }
-	removed := ""
-	if err := os.Remove(generation(l.generations)); err == nil {
-		removed = filepath.Base(generation(l.generations))
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, "", fmt.Errorf("rotation could not remove %s: %v", generation(l.generations), err)
+// rotateFiles renames the full file to generation n and opens the new file; it closes the full file and stores the new one in f.
+// When the new file cannot be opened the rename is undone, so the writer keeps writing the file at its path.
+func (l *EventLog) rotateFiles(f *logFile, n int) (*os.File, error) {
+	generation := fmt.Sprintf("%s.%d", f.path, n)
+	if err := os.Rename(f.path, generation); err != nil {
+		return nil, fmt.Errorf("rotation could not move %s: %v", f.path, err)
 	}
-	for n := l.generations - 1; n >= 1; n-- {
-		if err := os.Rename(generation(n), generation(n+1)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, "", fmt.Errorf("rotation could not move %s: %v", generation(n), err)
-		}
-	}
-	if err := os.Rename(l.path, generation(1)); err != nil {
-		return nil, "", fmt.Errorf("rotation could not move %s: %v", l.path, err)
-	}
-	// The new file is opened before the old one is closed, so a failure leaves the writer with a file to write.
-	next, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY|syscall.O_CLOEXEC, 0o600)
+	next, err := openLogFile(f.path)
 	if err != nil {
-		return nil, "", fmt.Errorf("rotation could not open %s: %v", l.path, err)
+		if undo := os.Rename(generation, f.path); undo != nil {
+			fmt.Fprintf(os.Stderr, "event writer: rotation could not undo the move of %s: %v\n", f.path, undo)
+		}
+		return nil, fmt.Errorf("rotation could not open %s: %v", f.path, err)
 	}
-	if err := file.Close(); err != nil {
+	if err := f.file.Close(); err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: rotation could not close the full file: %v\n", err)
 	}
-	return next, removed, nil
+	f.file = next
+	return next, nil
 }
 
-func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEvent) {
+func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEvent) {
 	defer close(l.done)
-	defer func() { file.Close() }()
+	files := [channelCount]*logFile{
+		ChannelOther: {channel: ChannelOther, path: l.path, file: main},
+		ChannelDebug: {channel: ChannelDebug, path: l.debugPath},
+	}
+	defer func() {
+		for _, f := range files {
+			if f.file != nil {
+				f.file.Close()
+			}
+		}
+	}()
 	var seq uint64
-	var batch []byte
-	// size is the number of bytes of the current file, written or waiting in the batch.
-	var size int64
-	flush := func() {
-		if len(batch) == 0 {
+	// prune runs the retention (log_retention.go) and stores the event log.pruned; rotatedFile says that the push that is running
+	// rotated a file.
+	var prune func()
+	rotatedFile := false
+	flushFile := func(f *logFile) {
+		if len(f.batch) == 0 {
 			return
 		}
 		// A failed write is reported on the standard error; the writer keeps running for the next batch.
-		if _, err := file.Write(batch); err != nil {
+		if _, err := f.file.Write(f.batch); err != nil {
 			fmt.Fprintf(os.Stderr, "event writer: %v\n", err)
 		} else if observer := l.onWrite.Load(); observer != nil {
-			(*observer)(file.Name(), size)
+			(*observer)(f.file.Name(), f.size)
 		}
-		batch = batch[:0]
+		f.batch = f.batch[:0]
 	}
-	appendLine := func(e *pendingEvent) {
+	flush := func() {
+		for _, f := range files {
+			flushFile(f)
+		}
+	}
+	appendLine := func(f *logFile, e *pendingEvent) {
 		seq++
 		line, err := eventLine(seq, e)
 		if e.placed != nil {
@@ -587,42 +720,67 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 			fmt.Fprintf(os.Stderr, "event writer: %s cannot be written: %v\n", e.event, err)
 			return
 		}
-		batch = append(batch, line...)
-		size += int64(len(line))
+		f.batch = append(f.batch, line...)
+		f.size += int64(len(line))
 	}
 	push := func(e *pendingEvent) {
-		// The line is serialized with the next seq. A file that this line would take past the bound is closed first;
-		// the new file opens with log.open and the record of the rotation, so every file of the contract starts with
-		// log.open and seq continues.
-		line, err := eventLine(seq+1, e)
-		if err == nil && size > 0 && size+int64(len(line)) > l.rotateBytes {
-			flush()
-			full := size
-			next, removed := l.rotate(file)
-			if next != file {
-				file = next
-				size = 0
-				appendLine(&pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), layer: "host", level: LevelInfo, event: "log.open", fields: l.openFields})
-				name := "null"
-				if removed != "" {
-					quoted, err := json.Marshal(removed)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "event writer: the removed name cannot be written: %v\n", err)
-					} else {
-						name = string(quoted)
-					}
+		f := files[ChannelOf(e.level)]
+		if f.file == nil {
+			file, err := openLogFile(f.path)
+			if err != nil {
+				// The event is not written; its seq stays taken, so the audit shows the gap next to this report.
+				seq++
+				if e.placed != nil {
+					close(e.placed)
 				}
-				appendLine(&pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), layer: "host", level: LevelInfo, event: "log.rotated",
-					fields: json.RawMessage(fmt.Sprintf(`{"bytes":%d,"kept":%d,"removed":%s}`, full, l.generations, name))})
+				fmt.Fprintf(os.Stderr, "event writer: %s cannot be written: %v\n", e.event, err)
+				return
 			}
-			appendLine(e)
+			f.file = file
+			appendLine(f, writerEvent(LevelInfo, "log.open", l.openFields))
+		}
+		// The line is serialized with the next seq. A file that this line would take past the bound is closed first; the new
+		// file opens with log.open and the record of the rotation, so every file of the contract starts with log.open and seq
+		// continues.
+		line, err := eventLine(seq+1, e)
+		if err == nil && f.size > 0 && f.size+int64(len(line)) > l.rotateBytes {
+			flushFile(f)
+			full := f.size
+			if n, rotated := l.rotate(f); rotated {
+				f.generation = n
+				f.size = 0
+				appendLine(f, writerEvent(LevelInfo, "log.open", l.openFields))
+				appendLine(f, writerEvent(LevelInfo, "log.rotated", json.RawMessage(fmt.Sprintf(`{"bytes":%d,"generation":%d}`, full, n))))
+				rotatedFile = true
+			}
+		}
+		appendLine(f, e)
+		// A rotation closes a file of the run, so the files may have passed the bound: the retention runs after the line that caused it.
+		if rotatedFile {
+			rotatedFile = false
+			prune()
+		}
+	}
+	prune = func() {
+		// The pass counts what is on disk; the batch that waits for the interval is not in it, which is at most one batch.
+		result, err := pruneRuns(l.directory, l.runName, l.retention)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "event writer: retention: %v\n", err)
+		}
+		if result.files == 0 && result.remaining <= l.retention {
 			return
 		}
-		appendLine(e)
+		level := LevelInfo
+		if result.remaining > l.retention {
+			level = LevelWarn
+		}
+		push(writerEvent(level, "log.pruned", result.fields(l.retention)))
 	}
 	push(open)
-	// dropped stores one log.dropped after the range of seq that the refused events would have had.
-	dropped := func(events, bytes uint64, reason string) {
+	prune()
+	// dropped stores one log.dropped after the range of seq that the refused events would have had; channel is the channel of the
+	// refused events.
+	dropped := func(events, bytes uint64, reason string, channel Channel) {
 		if events == 0 {
 			return
 		}
@@ -630,10 +788,10 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 		// names (docs/spec/logging.md#event).
 		from := seq + 1
 		seq += events
-		// The fields are numbers and a fixed text, so they are written as text without a serializer that can fail.
-		fields := json.RawMessage(fmt.Sprintf(`{"from_seq":%d,"to_seq":%d,"count":%d,"bytes":%d,"reason":%q}`,
-			from, seq, events, bytes, reason))
-		push(&pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: monotonicNanos(), layer: "host", level: LevelWarn, event: "log.dropped", fields: fields})
+		// The fields are numbers and fixed texts, so they are written as text without a serializer that can fail.
+		fields := json.RawMessage(fmt.Sprintf(`{"from_seq":%d,"to_seq":%d,"count":%d,"bytes":%d,"reason":%q,"channel":%q}`,
+			from, seq, events, bytes, reason, channel.String()))
+		push(writerEvent(LevelWarn, "log.dropped", fields))
 	}
 	// pullNative takes the records of the native ring. No event source reaches the writer from there: a native thread
 	// must not call into Go, so the writer pulls at its batch interval and when it flushes.
@@ -671,15 +829,28 @@ func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEve
 				offset += length
 			}
 		}
-		dropped(refused, refusedBytes, "a native record was refused")
+		// A record that cannot be decoded has no level, so its loss is counted in the channel other.
+		dropped(refused, refusedBytes, "a native record was refused", ChannelOther)
 		if l.pullLoss != nil {
-			events, bytes := l.pullLoss()
-			dropped(events, bytes, "the native ring was full")
+			for channel := Channel(0); channel < channelCount; channel++ {
+				events, bytes := l.pullLoss(channel)
+				dropped(events, bytes, "the native ring was full", channel)
+			}
 		}
 	}
 	recordLoss := func() {
-		events := l.lostEvents.Swap(0)
-		dropped(events, l.lostBytes.Swap(0), "the queue was full")
+		for channel := Channel(0); channel < channelCount; channel++ {
+			events := l.lost[channel].events.Swap(0)
+			dropped(events, l.lost[channel].bytes.Swap(0), "the queue was full", channel)
+		}
+		// The events that the gate refused are reported with the exact count for each class and level.
+		for c, class := range sok.Classes {
+			for i, level := range levelNames {
+				if count := l.gate.gated[c][i].Swap(0); count > 0 {
+					push(writerEvent(LevelInfo, "log.gated", json.RawMessage(fmt.Sprintf(`{"class":%q,"level":%q,"count":%d}`, class, level, count))))
+				}
+			}
+		}
 	}
 	write := flush
 	take := func(e *pendingEvent) {
@@ -756,13 +927,14 @@ const (
 var nativeLevels = []Level{LevelError, LevelWarn, LevelInfo, LevelDebug, LevelTrace}
 
 // nativeHeaderBytes is the size of the fixed part of a native record (native/darwin/src/event_ring.h).
-const nativeHeaderBytes = 20
+const nativeHeaderBytes = 21
 
 // nativeEventOf decodes the record at the start of buffer: a 4-byte length, then the wall clock in microseconds (8 bytes),
-// the monotonic clock in nanoseconds (8), the level (1 byte), the length of the name (1 byte), the length of the cids (2
-// bytes), the name, the cids as a list separated by commas and the fields as JSON text, in the byte order of the host.
-// It returns the number of bytes the record takes. When the length itself is wrong it returns 0, so the caller
-// abandons the rest of the buffer.
+// the monotonic clock in nanoseconds (8), the level (1 byte), the class (1 byte), the length of the name (1 byte), the length of
+// the cids (2 bytes), the name, the cids as a list separated by commas and the fields as JSON text, in the byte order of the
+// host. It returns the number of bytes the record takes. When the length itself is wrong it returns 0, so the caller
+// abandons the rest of the buffer. The class that the library gave is checked against the catalog: a record of a declared
+// event with another class is refused, so a producer that disagrees with the catalog is counted and reported.
 func nativeEventOf(buffer []byte) (int, *pendingEvent, error) {
 	if len(buffer) < 4 {
 		return 0, nil, fmt.Errorf("%d bytes are left, which is less than a length", len(buffer))
@@ -774,10 +946,14 @@ func nativeEventOf(buffer []byte) (int, *pendingEvent, error) {
 	total := 4 + length
 	body := buffer[4:total]
 	level := int(body[16])
-	nameLength := int(body[17])
-	cidsLength := int(binary.NativeEndian.Uint16(body[18:]))
+	class := int(body[17])
+	nameLength := int(body[18])
+	cidsLength := int(binary.NativeEndian.Uint16(body[19:]))
 	if level >= len(nativeLevels) {
 		return total, nil, fmt.Errorf("the level %d is not defined", level)
+	}
+	if class >= len(sok.Classes) {
+		return total, nil, fmt.Errorf("the class %d is not defined", class)
 	}
 	if nativeHeaderBytes+nameLength+cidsLength > len(body) {
 		return total, nil, fmt.Errorf("the name of %d bytes and the cids of %d bytes do not fit the record", nameLength, cidsLength)
@@ -801,6 +977,11 @@ func nativeEventOf(buffer []byte) (int, *pendingEvent, error) {
 	if !json.Valid(fields) || len(fields) == 0 || fields[0] != '{' {
 		return total, nil, fmt.Errorf("the fields of %s are not a JSON object", name)
 	}
-	return total, &pendingEvent{tsMicros: int64(binary.NativeEndian.Uint64(body)), monoNs: mono, cids: cids, layer: "native", level: nativeLevels[level],
-		event: name, fields: append(json.RawMessage(nil), fields...)}, nil
+	event := &pendingEvent{tsMicros: int64(binary.NativeEndian.Uint64(body)), monoNs: mono, cids: cids, layer: "native", level: nativeLevels[level],
+		event: name, fields: append(json.RawMessage(nil), fields...)}
+	event.classify()
+	if !event.undeclared && event.class != sok.Classes[class] {
+		return total, nil, fmt.Errorf("the record of %s has the class %s, and the catalog declares %s", name, sok.Classes[class], event.class)
+	}
+	return total, event, nil
 }

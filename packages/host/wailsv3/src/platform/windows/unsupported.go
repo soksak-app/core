@@ -130,8 +130,16 @@ func (implementation) PullNativeEvents([]byte) (int, error) {
 	return 0, unsupported("native event pull")
 }
 
-func (implementation) TakeNativeEventLoss() (uint64, uint64, error) {
+func (implementation) TakeNativeEventLoss(uint8) (uint64, uint64, error) {
 	return 0, 0, unsupported("native event loss")
+}
+
+func (implementation) SetNativeEventPolicy([5]int8) error {
+	return unsupported("native event policy")
+}
+
+func (implementation) WatchFile(string, func()) (func(), error) {
+	return nil, unsupported("file watch")
 }
 
 func (implementation) MonotonicNanos() (uint64, error) {

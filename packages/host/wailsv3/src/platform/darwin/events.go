@@ -24,9 +24,16 @@ func (implementation) PullNativeEvents(buffer []byte) (int, error) {
 	return int(C.sp_event_drain((*C.uint8_t)(unsafe.Pointer(&buffer[0])), C.size_t(len(buffer)))), nil
 }
 
-func (implementation) TakeNativeEventLoss() (uint64, uint64, error) {
-	loss := C.sp_event_take_loss()
+func (implementation) TakeNativeEventLoss(channel uint8) (uint64, uint64, error) {
+	loss := C.sp_event_take_loss(C.uint8_t(channel))
 	return uint64(loss.events), uint64(loss.bytes), nil
+}
+
+func (implementation) SetNativeEventPolicy(levels [5]int8) error {
+	if !bool(C.sp_event_set_policy((*C.int8_t)(unsafe.Pointer(&levels[0])))) {
+		return fmt.Errorf("set native event policy: the native library refused %v (a level is -1 to 4)", levels)
+	}
+	return nil
 }
 
 func (implementation) MonotonicNanos() (uint64, error) {

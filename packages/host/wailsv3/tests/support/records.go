@@ -5,8 +5,10 @@ package support
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -26,8 +28,23 @@ func StartWriter(t *testing.T, config string) *host.EventLog {
 	return log
 }
 
-// ReadEvents returns the events of an event log file.
+// ReadEvents returns the events of a process of the host: the lines of the main file at path and, when it exists, of the debug file
+// beside it, in the order of seq (the writer assigns seq across both files).
 func ReadEvents(t *testing.T, path string) []map[string]any {
+	t.Helper()
+	events := readFile(t, path)
+	debug := strings.TrimSuffix(path, ".jsonl") + ".debug.jsonl"
+	if _, err := os.Stat(debug); err == nil {
+		events = append(events, readFile(t, debug)...)
+		sort.SliceStable(events, func(i, j int) bool { return events[i]["seq"].(float64) < events[j]["seq"].(float64) })
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	return events
+}
+
+// readFile returns the events of one event log file.
+func readFile(t *testing.T, path string) []map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -47,10 +64,16 @@ func ReadEvents(t *testing.T, path string) []map[string]any {
 	return events
 }
 
-// EventLogPath is the only host event log under the logs folder of a configuration folder.
+// EventLogPath is the only main event log (error, warn and info) of the host under the logs folder of a configuration folder.
 func EventLogPath(t *testing.T, config string) string {
 	t.Helper()
-	paths, err := filepath.Glob(filepath.Join(config, "logs", "host-*.jsonl"))
+	all, err := filepath.Glob(filepath.Join(config, "logs", "host-*.jsonl"))
+	var paths []string
+	for _, path := range all {
+		if !strings.HasSuffix(path, ".debug.jsonl") {
+			paths = append(paths, path)
+		}
+	}
 	if err != nil || len(paths) != 1 {
 		t.Fatalf("event logs %v, %v", paths, err)
 	}

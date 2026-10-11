@@ -48,13 +48,16 @@ type LogReply struct {
 func LogCommand(log *EventLog, request map[string]any) (LogReply, error) {
 	action, ok := request["action"].(string)
 	if !ok {
-		return LogReply{}, fmt.Errorf("action must be batch or clock")
+		return LogReply{}, fmt.Errorf("action must be batch, clock or policy")
 	}
 	if action == "clock" {
 		return LogReply{Clock: &ClockReading{TsMicros: time.Now().UnixMicro(), MonoNs: monotonicNanos()}}, nil
 	}
+	if action == "policy" {
+		return LogReply{}, setLogPolicy(log, request)
+	}
 	if action != "batch" {
-		return LogReply{}, fmt.Errorf("action must be batch or clock, not %q", action)
+		return LogReply{}, fmt.Errorf("action must be batch, clock or policy, not %q", action)
 	}
 	lines, err := logBatch(log, request)
 	return LogReply{Lines: lines}, err

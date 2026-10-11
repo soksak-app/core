@@ -20,12 +20,31 @@ func TestThePlatformPullsAnEmptyNativeRingAsZeroBytesAndNoLoss(t *testing.T) {
 	if err != nil || n != 0 {
 		t.Fatalf("pull of an empty ring: %d bytes, %v", n, err)
 	}
-	events, bytes, err := system.TakeNativeEventLoss()
-	if err != nil || events != 0 || bytes != 0 {
-		t.Fatalf("loss of an empty ring: %d events, %d bytes, %v", events, bytes, err)
+	for channel := uint8(0); channel < 2; channel++ {
+		events, bytes, err := system.TakeNativeEventLoss(channel)
+		if err != nil || events != 0 || bytes != 0 {
+			t.Fatalf("loss of an empty ring in the channel %d: %d events, %d bytes, %v", channel, events, bytes, err)
+		}
 	}
 	if _, err := system.PullNativeEvents(nil); err == nil {
 		t.Fatal("a pull into an empty buffer was accepted")
+	}
+}
+
+// contract: log.native.platform-takes-the-policy
+func TestThePlatformTakesThePolicyOfTheNativeLibraryAndRefusesALevelOutsideTheEnumeration(t *testing.T) {
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = system.SetNativeEventPolicy([5]int8{4, 4, 4, 4, 4}) })
+	if err := system.SetNativeEventPolicy([5]int8{4, 3, 2, -1, 0}); err != nil {
+		t.Fatalf("a policy of levels and -1 was refused: %v", err)
+	}
+	for _, bad := range [][5]int8{{4, 4, 4, 4, 5}, {-2, 4, 4, 4, 4}} {
+		if err := system.SetNativeEventPolicy(bad); err == nil {
+			t.Fatalf("the policy %v was accepted", bad)
+		}
 	}
 }
 
