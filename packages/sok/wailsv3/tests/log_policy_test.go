@@ -46,6 +46,7 @@ func readPolicyCases(t *testing.T) policyCases {
 	return cases
 }
 
+// contract: cli.log.policy-accepts-the-golden-cases
 func TestThePolicyReaderAcceptsEveryValidGoldenCase(t *testing.T) {
 	cases := readPolicyCases(t)
 	for _, c := range cases.Valid {
@@ -72,6 +73,7 @@ func TestThePolicyReaderAcceptsEveryValidGoldenCase(t *testing.T) {
 	}
 }
 
+// contract: cli.log.policy-refuses-the-golden-cases
 func TestThePolicyReaderRefusesEveryInvalidGoldenCaseWithItsText(t *testing.T) {
 	cases := readPolicyCases(t)
 	for _, c := range cases.Invalid {

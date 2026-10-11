@@ -44,6 +44,7 @@ fn pairs(value: &Value) -> Vec<(Class, Level)> {
         .unwrap_or_default()
 }
 
+// contract: cli.log.policy-accepts-the-golden-cases
 #[test]
 fn the_policy_reader_accepts_every_valid_golden_case() {
     let cases = cases();
@@ -73,6 +74,7 @@ fn the_policy_reader_accepts_every_valid_golden_case() {
     }
 }
 
+// contract: cli.log.policy-refuses-the-golden-cases
 #[test]
 fn the_policy_reader_refuses_every_invalid_golden_case_with_its_text() {
     let cases = cases();

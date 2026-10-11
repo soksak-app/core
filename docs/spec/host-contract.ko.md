@@ -590,6 +590,8 @@ fn invalid_json_closes_connection() {
 | `cli.log.records-a-refused-event-as-log-dropped` | writer가 거절한 event는 세어져 golden field(`from_seq`, `to_seq`, `count`)를 가진 level `warn`의 `log.dropped`로 저장되고, 저장된 `seq`와 그것이 가리키는 범위가 1부터 n까지를 한 번씩 덮으며 `log.dropped`는 그 범위 뒤에 온다. | both |
 | `cli.log.run-stores-only-the-declared-events` | 한 번의 실행은 `log.open`, `sok.command`, `sok.panic`, `log.dropped`만 저장한다. 이것이 rotation 없는 writer의 근거이며 main 파일과 debug 파일 모두 그렇다. | both |
 | `cli.log.stores-class` | 도구는 host writer처럼 `class`와 `undeclared`를 저장한다. | both |
+| `cli.log.policy-accepts-the-golden-cases` | 도구의 policy 파일 reader는 `packages/log-contract/fixtures/policy/cases.json`의 모든 valid case를 그 class와 gate대로 받는다. | both |
+| `cli.log.policy-refuses-the-golden-cases` | 도구의 policy 파일 reader는 `packages/log-contract/fixtures/policy/cases.json`의 모든 invalid case를 그 case의 오류 문구로 거부한다. | both |
 | `cli.log.splits-files-by-level` | 도구는 `error`, `warn`, `info`를 `logs/sok-<boot>.jsonl`에, `debug`와 `trace`를 `logs/sok-<boot>.debug.jsonl`에 쓰며, 후자는 첫 해당 event와 함께 만들고 `log.open`으로 시작한다. | both |
 | `cli.log.reports-a-folder-that-cannot-be-written` | `logs/`나 event 파일을 만들 수 없으면 도구는 `sok: event log: <path>: <reason>`을 표준 오류에 쓰고 명령을 자기 종료 상태로 실행한다. | both |
 | `install.version.ranges-and-order` | 범위 `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c`는 선언한 경계를 가지고, `*`는 상한이 없는 `>=0.0.0`이다. Version은 숫자로 비교한다. 다른 형식, 앞자리 0, 빈 범위, 4294967295를 넘는 자리는 `invalid version`으로 거부한다. | both |
