@@ -80,14 +80,6 @@ func (linux) LockFile(file *os.File) error {
 	return nil
 }
 
-// UnlockFile releases the lock of LockFile.
-func (linux) UnlockFile(file *os.File) error {
-	if err := unix.Flock(int(file.Fd()), unix.LOCK_UN); err != nil {
-		return fmt.Errorf("%s cannot be unlocked: %w", file.Name(), err)
-	}
-	return nil
-}
-
 // PathsDir is an error. The shell on Linux has no folder that adds a PATH entry for each file.
 func (linux) PathsDir() (string, error) {
 	return "", errors.New("path entries are not implemented on linux")

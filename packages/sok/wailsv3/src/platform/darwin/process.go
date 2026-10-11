@@ -124,14 +124,6 @@ func (darwin) LockFile(file *os.File) error {
 	return nil
 }
 
-// UnlockFile releases the lock of LockFile.
-func (darwin) UnlockFile(file *os.File) error {
-	if err := unix.Flock(int(file.Fd()), unix.LOCK_UN); err != nil {
-		return fmt.Errorf("%s cannot be unlocked: %w", file.Name(), err)
-	}
-	return nil
-}
-
 // BundleVersion reads CFBundleShortVersionString of the Info.plist of the bundle.
 func (darwin) BundleVersion(bundle string) (string, error) {
 	output, err := exec.Command("plutil", "-extract", "CFBundleShortVersionString", "raw", "-o", "-", filepath.Join(bundle, "Contents", "Info.plist")).Output()

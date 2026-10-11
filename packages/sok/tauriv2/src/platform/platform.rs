@@ -49,10 +49,8 @@ pub trait Platform {
     /// the clock of the native library, so events of different processes compare.
     fn monotonic_nanos(&self) -> Result<u64, String>;
     /// Takes an exclusive advisory lock on the open file and waits until it holds it, so the processes that update one index exclude
-    /// each other (docs/spec/logging.md#index). Closing the file releases the lock too.
+    /// each other (docs/spec/logging.md#index). Closing the file releases the lock.
     fn lock_file(&self, file: &std::fs::File) -> Result<(), String>;
-    /// Releases the lock of `lock_file`.
-    fn unlock_file(&self, file: &std::fs::File) -> Result<(), String>;
     /// Whether the open file is the file at the path (the same device and the same index).
     fn same_file(&self, file: &std::fs::File, path: &std::path::Path) -> Result<bool, String>;
     /// Starts a new instance of the application bundle with the arguments.

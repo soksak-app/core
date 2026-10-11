@@ -360,7 +360,35 @@ func TestLogIndexMovesWithTheGenerationsOfARotation(t *testing.T) {
 	if info, err := sok.ReadLogIndex(generation(1)); err != nil || info.Events != 3 {
 		t.Errorf("generation 1 %+v err %v", info, err)
 	}
+	// An index that cannot be brought up to date does not stop the rotation of the file: the files and the index files move, and the
+	// error says that the index of the closed file is not complete.
+	if _, err := sok.UpdateLogIndex(path); err != nil {
+		t.Fatal(err)
+	}
+	broken, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := broken.WriteString("not json\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := broken.Close(); err != nil {
+		t.Fatal(err)
+	}
+	err = sok.RotateLogIndexes(path, 2, rotateFiles)
+	if err == nil || !strings.Contains(err.Error(), "the index of the closed file is not complete: logs/host-r.jsonl:4: not JSON: not json") {
+		t.Fatalf("a rotation with a broken line: %v", err)
+	}
+	if info, err := sok.ReadLogIndex(generation(1)); err != nil || info.Events != 3 {
+		t.Errorf("the index of the closed file moved with it: %+v err %v", info, err)
+	}
+	if info, err := sok.ReadLogIndex(generation(2)); err != nil || info.Events != 3 {
+		t.Errorf("the index of the earlier generation moved up: %+v err %v", info, err)
+	}
 	// A rotation that fails leaves the index files where they are.
+	if err := os.WriteFile(path, []byte(linesOf(1, 3)), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := sok.UpdateLogIndex(path); err != nil {
 		t.Fatal(err)
 	}

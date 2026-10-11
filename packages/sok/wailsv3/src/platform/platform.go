@@ -33,9 +33,8 @@ type Platform interface {
 	// (docs/spec/logging.md#event). It is the clock of the native library, so events of different processes compare.
 	MonotonicNanos() (uint64, error)
 	// LockFile takes an exclusive advisory lock on the open file and waits until it holds it, so the processes that update one
-	// index exclude each other (docs/spec/logging.md#index). UnlockFile releases it; closing the file releases it too.
+	// index exclude each other (docs/spec/logging.md#index). Closing the file releases the lock.
 	LockFile(file *os.File) error
-	UnlockFile(file *os.File) error
 }
 
 var current Platform

@@ -72,19 +72,6 @@ impl Platform for Darwin {
         }
     }
 
-    fn unlock_file(&self, file: &std::fs::File) -> Result<(), String> {
-        use std::os::unix::io::AsRawFd;
-        // SAFETY: flock only reads the descriptor of the open file.
-        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_UN) } == 0 {
-            Ok(())
-        } else {
-            Err(format!(
-                "the file cannot be unlocked: {}",
-                std::io::Error::last_os_error()
-            ))
-        }
-    }
-
     fn same_file(&self, file: &std::fs::File, path: &std::path::Path) -> Result<bool, String> {
         use std::os::unix::fs::MetadataExt;
         let opened = file

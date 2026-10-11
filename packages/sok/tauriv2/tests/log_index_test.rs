@@ -355,7 +355,37 @@ fn index_moves_with_the_generations_of_a_rotation() {
         read_log_index(&generation(1)).expect("generation 1").events,
         3
     );
+    // An index that cannot be brought up to date does not stop the rotation of the file: the files and the index files move, and the
+    // error says that the index of the closed file is not complete.
+    update_log_index(&path).expect("update");
+    let mut broken = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .expect("append");
+    broken.write_all(b"not json\n").expect("write");
+    drop(broken);
+    let error =
+        rotate_log_indexes(&path, 2, rotate_files).expect_err("a rotation with a broken line");
+    assert!(
+        error.contains(
+            "the index of the closed file is not complete: logs/host-r.jsonl:4: not JSON: not json"
+        ),
+        "{error}"
+    );
+    assert_eq!(
+        read_log_index(&generation(1))
+            .expect("the index of the closed file moved with it")
+            .events,
+        3
+    );
+    assert_eq!(
+        read_log_index(&generation(2))
+            .expect("the index of the earlier generation moved up")
+            .events,
+        3
+    );
     // A rotation that fails leaves the index files where they are.
+    std::fs::write(&path, lines_of(1, 3)).expect("write");
     update_log_index(&path).expect("update");
     let error = rotate_log_indexes(&path, 2, || Err("rename refused".to_string()))
         .expect_err("failing rotation");

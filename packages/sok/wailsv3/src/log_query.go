@@ -455,7 +455,7 @@ type queriedLog struct {
 
 // QueryLogs answers a query over the event files of the configuration directory. indexed, when it is not nil, is called for each
 // index that the query had to update.
-func QueryLogs(configDir string, query LogQuery, indexed func(IndexUpdate)) (LogPage, error) {
+func QueryLogs(configDir string, query LogQuery, indexed func(IndexUpdate)) (result LogPage, err error) {
 	sources, err := discoverLogs(configDir, query.Channel)
 	if err != nil {
 		return LogPage{}, err
@@ -464,8 +464,9 @@ func QueryLogs(configDir string, query LogQuery, indexed func(IndexUpdate)) (Log
 	var logs []queriedLog
 	defer func() {
 		for _, l := range logs {
-			// default: the sources are read-only, so a failed close loses nothing that a query wrote.
-			_ = l.opened.close()
+			if closeErr := l.opened.close(); closeErr != nil && err == nil {
+				result, err = LogPage{}, fileError(l.source.name, closeErr)
+			}
 		}
 	}()
 	for _, source := range sources {

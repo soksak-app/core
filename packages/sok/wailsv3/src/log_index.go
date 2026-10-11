@@ -515,48 +515,49 @@ type openedLog struct {
 func (o *openedLog) close() error { return o.source.Close() }
 
 // lockedIndex opens the event file and its index, locks the index, and checks that both are still the files at their paths, so a
-// rotation cannot mix two files. The caller releases the lock with unlockIndex.
-func lockedIndex(path string) (source, idx *os.File, system platform.Platform, err error) {
-	system, err = platform.Current()
+// rotation cannot mix two files. The caller releases the lock by closing the index with closeIndex.
+func lockedIndex(path string) (source, idx *os.File, err error) {
+	system, err := platform.Current()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	for attempt := 0; attempt < 8; attempt++ {
 		source, err = os.Open(path)
 		if err != nil {
-			return nil, nil, nil, fileError(path, err)
+			return nil, nil, fileError(path, err)
 		}
 		idx, err = os.OpenFile(path+".idx", os.O_RDWR|os.O_CREATE|syscall.O_CLOEXEC, 0o600)
 		if err != nil {
 			source.Close()
-			return nil, nil, nil, fileError(path+".idx", err)
+			return nil, nil, fileError(path+".idx", err)
 		}
 		if err = system.LockFile(idx); err != nil {
 			source.Close()
 			idx.Close()
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 		sameSource, errSource := stillAt(source, path)
 		sameIndex, errIndex := stillAt(idx, path+".idx")
 		if errSource != nil || errIndex != nil {
 			source.Close()
-			unlockIndex(system, idx)
-			return nil, nil, nil, errors.Join(errSource, errIndex)
+			idx.Close()
+			return nil, nil, errors.Join(errSource, errIndex)
 		}
 		if sameSource && sameIndex {
-			return source, idx, system, nil
+			return source, idx, nil
 		}
 		source.Close()
-		unlockIndex(system, idx)
+		idx.Close()
 	}
-	return nil, nil, nil, fmt.Errorf("%s: the file was renamed 8 times while it was opened", path)
+	return nil, nil, fmt.Errorf("%s: the file was renamed 8 times while it was opened", path)
 }
 
-// unlockIndex releases the lock of the index and closes it.
-func unlockIndex(system platform.Platform, idx *os.File) {
-	// default: closing the file releases the lock too, so a failed unlock leaves nothing held after the close below.
-	_ = system.UnlockFile(idx)
-	idx.Close()
+// closeIndex closes the index, which releases its lock, and reports the result of the close.
+func closeIndex(idx *os.File, path string) error {
+	if err := idx.Close(); err != nil {
+		return fileError(path+".idx", err)
+	}
+	return nil
 }
 
 // stillAt reports whether the open file is the file at the path.
@@ -590,12 +591,14 @@ func UpdateLogIndex(path string) (IndexUpdate, error) {
 
 // openLog brings the index of the event file up to date and returns the file with the index content.
 func openLog(path string) (*openedLog, error) {
-	source, idx, system, err := lockedIndex(path)
+	source, idx, err := lockedIndex(path)
 	if err != nil {
 		return nil, err
 	}
 	opened, err := refreshLocked(path, source, idx)
-	unlockIndex(system, idx)
+	if closeErr := closeIndex(idx, path); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		source.Close()
 		return nil, err
@@ -834,21 +837,28 @@ func ReadLogIndex(path string) (LogIndexInfo, error) {
 
 // RotateLogIndexes runs rotate, which renames the generations of the event file at path (the file becomes generation 1, the
 // generations move up and the one beyond `generations` is removed), and moves the index files with them. It first brings the
-// index of the file up to date while it holds the lock of that index, so the index of the closed generation is complete. A
-// rotate that fails leaves the index files where they are.
-func RotateLogIndexes(path string, generations int, rotate func() error) error {
-	source, idx, system, err := lockedIndex(path)
+// index of the file up to date while it holds the lock of that index, so the index of the closed generation is complete. The
+// rotation of the event file does not wait for the index: when the index cannot be locked or brought up to date, rotate still runs
+// and the index files still move, and the error says that the index of the closed file is not complete. A rotate that fails leaves the
+// index files where they are.
+func RotateLogIndexes(path string, generations int, rotate func() error) (err error) {
+	source, idx, err := lockedIndex(path)
 	if err != nil {
-		return err
+		if rotateErr := rotate(); rotateErr != nil {
+			return rotateErr
+		}
+		return fmt.Errorf("the index files did not move: %w", err)
 	}
 	// The lock is held through the renames: the other updaters wait for it and then find the files at their new paths.
-	defer unlockIndex(system, idx)
-	opened, err := refreshLocked(path, source, idx)
-	if err != nil {
+	defer func() {
+		if closeErr := closeIndex(idx, path); err == nil {
+			err = closeErr
+		}
+	}()
+	opened, refreshErr := refreshLocked(path, source, idx)
+	if refreshErr != nil {
 		source.Close()
-		return err
-	}
-	if err := opened.close(); err != nil {
+	} else if err := opened.close(); err != nil {
 		return fileError(path, err)
 	}
 	if err := rotate(); err != nil {
@@ -865,6 +875,9 @@ func RotateLogIndexes(path string, generations int, rotate func() error) error {
 	}
 	if err := os.Rename(path+".idx", generation(1)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fileError(path+".idx", err)
+	}
+	if refreshErr != nil {
+		return fmt.Errorf("the index of the closed file is not complete: %w", refreshErr)
 	}
 	return nil
 }

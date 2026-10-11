@@ -36,10 +36,6 @@ impl Platform for Windows {
         Err("file locks are not implemented on windows".into())
     }
 
-    fn unlock_file(&self, _file: &std::fs::File) -> Result<(), String> {
-        Err("file locks are not implemented on windows".into())
-    }
-
     fn same_file(&self, _file: &std::fs::File, _path: &std::path::Path) -> Result<bool, String> {
         Err("file identity is not implemented on windows".into())
     }

@@ -892,7 +892,7 @@ fn open_index(path: &Path) -> std::io::Result<File> {
 }
 
 /// Opens the event file and its index, locks the index, and checks that both are still the files at their paths, so a rotation cannot mix
-/// two files. The caller releases the lock with `unlock_index`.
+/// two files. The caller releases the lock by closing the index with `close_index`.
 fn locked_index(path: &Path) -> Result<(File, File, Box<dyn Platform>), String> {
     let system = platform::current()?;
     let idx_path = index_path(path);
@@ -904,9 +904,9 @@ fn locked_index(path: &Path) -> Result<(File, File, Box<dyn Platform>), String> 
         let same_index = system.same_file(&idx, &idx_path);
         match (same_source, same_index) {
             (Ok(true), Ok(true)) => return Ok((source, idx, system)),
-            (Ok(_), Ok(_)) => unlock_index(system.as_ref(), idx),
+            (Ok(_), Ok(_)) => drop(idx),
             (source_result, index_result) => {
-                unlock_index(system.as_ref(), idx);
+                drop(idx);
                 return Err([source_result.err(), index_result.err()]
                     .into_iter()
                     .flatten()
@@ -921,11 +921,9 @@ fn locked_index(path: &Path) -> Result<(File, File, Box<dyn Platform>), String> 
     ))
 }
 
-/// Releases the lock of the index and closes it.
-fn unlock_index(system: &dyn Platform, idx: File) {
-    // default: closing the file releases the lock too, so a failed unlock leaves nothing held after the close below.
-    let _ = system.unlock_file(&idx);
-    drop(idx);
+/// Closes the index, which releases its lock, and reports the result of the close.
+fn close_index(system: &dyn Platform, idx: File, path: &Path) -> Result<(), String> {
+    system.close_file(idx, &index_path(path))
 }
 
 /// Brings the index of the event file at `path` up to date, building it when it does not exist, and says what it did.
@@ -937,8 +935,10 @@ pub fn update_log_index(path: &Path) -> Result<IndexUpdate, String> {
 pub(crate) fn open_log(path: &Path) -> Result<OpenedLog, String> {
     let (source, idx, system) = locked_index(path)?;
     let opened = refresh_locked(path, source, &idx);
-    unlock_index(system.as_ref(), idx);
-    opened
+    let closed = close_index(system.as_ref(), idx, path);
+    let opened = opened?;
+    closed?;
+    Ok(opened)
 }
 
 /// Brings the index up to date while the caller holds its lock.
@@ -1164,17 +1164,24 @@ pub fn read_log_index(path: &Path) -> Result<LogIndexInfo, String> {
 
 /// Runs `rotate`, which renames the generations of the event file at `path` (the file becomes generation 1, the generations move up and
 /// the one beyond `generations` is removed), and moves the index files with them. It first brings the index of the file up to date while it
-/// holds the lock of that index, so the index of the closed generation is complete. A `rotate` that fails leaves the index files where
-/// they are.
+/// holds the lock of that index, so the index of the closed generation is complete. The rotation of the event file does not wait for the
+/// index: when the index cannot be locked or brought up to date, `rotate` still runs and the index files still move, and the error says that
+/// the index of the closed file is not complete. A `rotate` that fails leaves the index files where they are.
 pub fn rotate_log_indexes(
     path: &Path,
     generations: u32,
     rotate: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
-    let (source, idx, system) = locked_index(path)?;
+    let (source, idx, system) = match locked_index(path) {
+        Ok(locked) => locked,
+        Err(error) => {
+            rotate()?;
+            return Err(format!("the index files did not move: {error}"));
+        }
+    };
     // The lock is held through the renames: the other updaters wait for it and then find the files at their new paths.
+    let refreshed = refresh_locked(path, source, &idx).map(drop);
     let result = (|| {
-        refresh_locked(path, source, &idx)?;
         rotate()?;
         let generation = |n: u32| -> std::path::PathBuf {
             let mut name = path.as_os_str().to_os_string();
@@ -1202,6 +1209,8 @@ pub fn rotate_log_indexes(
             &index_path(path),
         )
     })();
-    unlock_index(system.as_ref(), idx);
-    result
+    let closed = close_index(system.as_ref(), idx, path);
+    result?;
+    closed?;
+    refreshed.map_err(|error| format!("the index of the closed file is not complete: {error}"))
 }
