@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.34.6: 두 도구의 policy 파일 reader가 `packages/log-contract/fixtures/policy/cases.json`의 모든 golden case를 실행하고, Go reader는 null level을 text여야 하는 level로 밝힌다.
 - F160.35.4: `e2e/terminal-replay.test.mjs`가 각 애플리케이션의 terminal session을 그 bundle의 `sok debug replay`로 재생하여 모든 sidecar와 page hash가 같은지, 중간에 바뀐 screen message(terminal plugin의 `terminal.screen.alter`)가 계층 `plugin`의 불일치인지 확인한다.
 - F160.36: host의 writer가 plugin event에 그 plugin의 catalog가 선언한 class를 준다. 두 host는 시작할 때와 plugin이 바뀔 때마다 활성화된 설치 plugin의 catalog를 읽고, 쓸 수 없는 catalog를 `error host plugin catalog`로 기록한다([plugin catalog](docs/spec/logging.ko.md#plugin-catalog)). 이전에는 모든 plugin event가 class 없이 `undeclared`로 저장되었다.
 - F160.35.7: page의 import map이 `@soksak/plugin-api/screen-hash`를 연결하므로 화면 메시지를 hash하는 plugin page가 읽힌다. 이것이 없어 두 애플리케이션에서 terminal surface가 mount되지 않았다.
