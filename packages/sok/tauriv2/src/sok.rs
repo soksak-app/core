@@ -14,18 +14,23 @@ mod debug;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
 pub mod endpoint;
+pub mod event_log;
 pub mod fetch;
 mod files;
 pub mod identity;
 pub mod install;
+mod logged;
 mod path;
 #[path = "platform/platform.rs"]
 pub mod platform;
 pub mod plugins;
 mod registry;
 mod release;
+pub mod routine;
 pub mod version;
+pub use logged::{logged, run_logged, Command};
 pub use release::current_platform;
+pub use routine::PANIC_STATUS;
 
 use endpoint::{Client, Failure};
 

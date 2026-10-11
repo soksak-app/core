@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
 
@@ -58,6 +60,15 @@ func (linux) CopyBundle(string, string) error {
 // OpenApplication is an error: an application bundle is a macOS file.
 func (linux) OpenApplication(string, []string) error {
 	return errors.New("application bundles are not implemented on linux")
+}
+
+// MonotonicNanos reads CLOCK_MONOTONIC.
+func (linux) MonotonicNanos() (uint64, error) {
+	var now unix.Timespec
+	if err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &now); err != nil {
+		return 0, fmt.Errorf("the monotonic clock cannot be read: %w", err)
+	}
+	return uint64(now.Sec)*1_000_000_000 + uint64(now.Nsec), nil
 }
 
 // PathsDir is an error. The shell on Linux has no folder that adds a PATH entry for each file.

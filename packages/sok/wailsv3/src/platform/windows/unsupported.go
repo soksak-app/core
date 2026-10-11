@@ -41,6 +41,10 @@ func (windows) OpenApplication(string, []string) error {
 	return errors.New("application bundles are not implemented on windows")
 }
 
+func (windows) MonotonicNanos() (uint64, error) {
+	return 0, errors.New("the monotonic clock is not implemented on windows")
+}
+
 func (windows) PathsDir() (string, error) {
 	return "", errors.New("path entries are not implemented on windows")
 }

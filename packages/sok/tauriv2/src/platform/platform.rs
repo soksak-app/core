@@ -45,6 +45,9 @@ pub trait Platform {
         source: &std::path::Path,
         destination: &std::path::Path,
     ) -> Result<(), String>;
+    /// The system-wide monotonic clock in nanoseconds that the events carry as `mono_ns` (docs/spec/logging.md#event). It is
+    /// the clock of the native library, so events of different processes compare.
+    fn monotonic_nanos(&self) -> Result<u64, String>;
     /// Starts a new instance of the application bundle with the arguments.
     fn open_application(
         &self,

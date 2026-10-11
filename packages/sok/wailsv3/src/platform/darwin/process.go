@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
 
@@ -102,6 +104,15 @@ func (darwin) OpenApplication(bundle string, arguments []string) error {
 		return fmt.Errorf("open: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
+}
+
+// MonotonicNanos reads CLOCK_UPTIME_RAW, which is mach_absolute_time in nanoseconds: the clock of sp_mono_ns.
+func (darwin) MonotonicNanos() (uint64, error) {
+	var now unix.Timespec
+	if err := unix.ClockGettime(unix.CLOCK_UPTIME_RAW, &now); err != nil {
+		return 0, fmt.Errorf("the monotonic clock cannot be read: %w", err)
+	}
+	return uint64(now.Sec)*1_000_000_000 + uint64(now.Nsec), nil
 }
 
 // BundleVersion reads CFBundleShortVersionString of the Info.plist of the bundle.

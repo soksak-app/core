@@ -36,11 +36,14 @@ const ENTRANCES = {
     { re: /\bEmitHost(?:Placed)?\s*\(/g, level: 0, event: 1, fields: 2 },
     { re: /\bEmitHostCids\s*\(/g, level: 0, event: 1, fields: 3 },
     { re: /\bstoreEvent\s*\(/g, level: 0, event: 2, fields: 5 },
+    // The writer of the command line tool emits through its own EventLog (docs/spec/cli.md#event-log).
+    { re: /\bEmit\s*\(/g, level: 0, event: 1, fields: 2, only: /^packages\/sok\// },
   ],
   rs: [
     { re: /\bemit_host(?:_placed)?\s*\(/g, level: 0, event: 1, fields: 2 },
     { re: /\bemit_host_cids\s*\(/g, level: 0, event: 1, fields: 3 },
     { re: /\bstore_event\s*\(/g, level: 0, event: 2, fields: 5 },
+    { re: /\bemit\s*\(/g, level: 0, event: 1, fields: 2, only: /^packages\/sok\// },
   ],
   js: [
     { re: /(?:\bemitEvent|\bbatcher(?:\?)?\.emit|\bbatcher(?:\?)?\.emitAndWait|\.emitAndWait)\s*\(/g, level: 0, event: 1, fields: 2 },
@@ -64,7 +67,7 @@ const DEFINITION_PREFIX = {
 const LEVEL_TOKEN = /\bLevel(Error|Warn|Info|Debug|Trace)\b|\bLevel::(Error|Warn|Info|Debug|Trace)\b|\bSP_EVENT_(ERROR|WARN|INFO|DEBUG|TRACE)\b|["'`](error|warn|info|debug|trace)["'`]/g;
 const FIELD_OBJECT = {
   go: /^map\[string\](?:any|string|interface\{\})\s*\{/,
-  rs: /^(?:to_raw_value\(&)?(?:serde_json::)?json!\s*\(\s*\{/,
+  rs: /^&?(?:to_raw_value\(&)?(?:serde_json::)?json!\s*\(\s*\{/,
   m: /^@\{/,
   js: /^\{/,
 };
