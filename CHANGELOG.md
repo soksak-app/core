@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F160.24.12: the indexer of the event files reports nothing for a file that rotation or retention removed after the notice of a write, and makes a failed update of a file that is there once more before it reports; the expected number of tests of the appearance check of the native library is 6.
 - F160.7: the Go host tests end the event writer that they start before their folder is removed, so no writer writes into a removed folder and the test package of the host runs in 48 s instead of 150 s or more; the bound of the panic hook test is 1500 ms, below the two-second wait of a hook that waits for a stalled writer and above the 606 ms measured under load.
 - F160.16: the test of the declarations in `marks.jsonl` no longer depends on the run identifier that the runner puts in the environment of a test process; a session outside a run keeps its declarations in the session.
 - F160.34.4: [replay](docs/spec/replay.md#golden-vectors) names the golden vectors of the screen hash, the screens it refuses and the sessions of the replay inputs, and `packages/log-contract/test/replay-vectors-named.test.mjs` requires that the document and its translation name each of them.

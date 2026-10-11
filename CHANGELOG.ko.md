@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.24.12: event 파일의 indexer가 쓰기 알림 뒤에 rotation이나 보존이 지운 파일에 대해서는 아무것도 보고하지 않고, 있는 파일의 실패한 갱신은 보고하기 전에 한 번 더 한다. native library의 appearance 검사가 기대하는 시험 수는 6이다.
 - F160.7: Go host 시험이 시작한 event writer를 폴더를 지우기 전에 끝내므로 지워진 폴더에 쓰는 writer가 없고, host 시험 패키지가 150초 이상 대신 48초에 돈다. panic hook 시험의 한도는 1500 ms로, 멈춘 writer를 기다리는 hook의 2초 대기보다 작고 부하에서 잰 606 ms보다 크다.
 - F160.16: `marks.jsonl`의 선언 시험이 실행기가 시험 프로세스의 환경에 넣는 실행 식별자에 더는 의존하지 않는다. 실행 밖의 session은 선언을 session에만 둔다.
 - F160.34.4: [replay](docs/spec/replay.ko.md#골든-벡터)가 화면 hash의 골든 벡터, 거부하는 화면, 재생 입력의 session을 이름으로 적고, `packages/log-contract/test/replay-vectors-named.test.mjs`가 문서와 번역이 각각을 적었는지 요구한다.
