@@ -12,6 +12,7 @@
     "overlay.html",
     "background.js",
     "bounded-json.js",
+    "diagnostic-fixture.js",
     "app.css",
     "library.css",
     "card.js",

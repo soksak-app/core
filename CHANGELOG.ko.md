@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.9.3: 창 검사가 시작하는 fixture가 공통 설정을 행위자 `diagnostics.fixture`로 바꾸므로, 창 검사가 행위자 없는 설정 변경 때문에 `fresh`에서 실패하지 않는다. fixture는 `diagnostic-fixture.js`에 있고 시험이 있다.
 - F160.31: 공유 writer 옵션, reply ledger 순서, routine panic의 시험이 계약 사례(`cli.log.writer-options.*`, `buffers.sidecar-replies.*`)를 선언하고, 도구의 panic 시험이 별도 시험 함수 대신 자기 자신을 child로 시작하므로 `make host-contract-check`가 사례 592개로 통과한다.
 - F160.24.12: event 파일의 indexer가 쓰기 알림 뒤에 rotation이나 보존이 지운 파일에 대해서는 아무것도 보고하지 않고, 있는 파일의 실패한 갱신은 보고하기 전에 한 번 더 한다. native library의 appearance 검사가 기대하는 시험 수는 6이다.
 - F160.7: Go host 시험이 시작한 event writer를 폴더를 지우기 전에 끝내므로 지워진 폴더에 쓰는 writer가 없고, host 시험 패키지가 150초 이상 대신 48초에 돈다. panic hook 시험의 한도는 1500 ms로, 멈춘 writer를 기다리는 hook의 2초 대기보다 작고 부하에서 잰 606 ms보다 크다.

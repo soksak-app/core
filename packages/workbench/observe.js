@@ -19,21 +19,13 @@ import { currentGrid, surfaceInput } from "./plane.js";
 // Writes the observations that the ResizeObserver loop deferred to the application log (G1.4-115). It is replaced before the plane and the regions create observers.
 watchResizeLoop(globalThis, log);
 
-registry.method("diagnostics.fixture", async ({ root, settings: overrides }) => {
-  if (typeof root !== "string" || !root) throw new Error("diagnostics.fixture requires root");
-  if (overrides !== undefined && (typeof overrides !== "object" || overrides === null || Array.isArray(overrides))) {
-    throw new Error("diagnostics.fixture settings must be an object");
-  }
-  const projects = await import("./projects.js");
-  const settings = await import("./settings.js");
-  const plane = await import("./plane.js");
-  await projects.flush();
-  for (const project of [...projects.all()]) await projects.close(project.id);
-  // The common settings given by the check are applied together with the defaults in one step. A surface that opens starts with those values, and the change notification is sent once.
-  await settings.set({ ...structuredClone(settings.defaults), ...overrides }, "common");
-  await projects.open({ root, color: "#ffb36b", layout: plane.fresh() });
-  await projects.flush();
-  return { root };
+registry.method("diagnostics.fixture", async (params) => {
+  const { prepareFixture } = await import("./diagnostic-fixture.js");
+  return prepareFixture(params, {
+    projects: await import("./projects.js"),
+    settings: await import("./settings.js"),
+    plane: await import("./plane.js"),
+  });
 });
 
 // Call recorder. The recorder is in this package, so both applications write the same format and order.
