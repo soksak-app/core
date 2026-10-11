@@ -315,3 +315,57 @@ export function auditParsed(parsed, catalog, declaredError = () => false) {
   // default: findings of the same file, or of a file without an order, are ordered by their line.
   return findings.sort((a, b) => order.get(a.file) - order.get(b.file) || a.line - b.line);
 }
+
+/** The schema number of the policy file `log-policy.json` (docs/spec/logging.md#policy-file). */
+export const POLICY_SCHEMA = 1;
+/** The classes that the policy file names, in the order of the contract. */
+export const POLICY_CLASSES = ["lifecycle", "input", "call", "io", "frame"];
+/** The values of a class in the policy file, from the one that stores nothing to the one that stores every level. */
+export const POLICY_VALUES = ["off", "error", "warn", "info", "debug", "trace"];
+const POLICY_LEVELS = POLICY_VALUES.slice(1);
+
+/**
+ * Reads the text of a policy file into `{schema, classes}`. Every member, class and value is checked, and an error names `file`
+ * and what it found; a policy that leaves a class out is refused, because no value stands in for it. The messages are those of
+ * the host and the command line tool, except the text after `not JSON: `, which is the message of the parser of the language.
+ */
+export function parsePolicy(file, text) {
+  let members;
+  try {
+    members = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${file}: not JSON: ${error.message}`, { cause: error });
+  }
+  const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  if (!isObject(members)) throw new Error(`${file}: not JSON: the text is not an object`);
+  for (const name of Object.keys(members).sort()) {
+    if (name !== "schema" && name !== "classes") throw new Error(`${file}: the member ${name} is not one of schema, classes`);
+  }
+  if (!Number.isInteger(members.schema)) {
+    throw new Error(`${file}: schema must be the number ${POLICY_SCHEMA}, found ${members.schema === undefined ? "" : JSON.stringify(members.schema)}`);
+  }
+  if (members.schema !== POLICY_SCHEMA) throw new Error(`${file}: schema ${members.schema} is not ${POLICY_SCHEMA}`);
+  if (!isObject(members.classes)) throw new Error(`${file}: classes must be an object that names every class`);
+  for (const name of Object.keys(members.classes).sort()) {
+    if (!POLICY_CLASSES.includes(name)) throw new Error(`${file}: the class ${name} is not one of ${POLICY_CLASSES.join(", ")}`);
+  }
+  const classes = {};
+  for (const name of POLICY_CLASSES) {
+    const value = members.classes[name];
+    if (value === undefined) throw new Error(`${file}: the class ${name} is missing`);
+    if (typeof value !== "string") throw new Error(`${file}: the level of the class ${name} must be text, found ${JSON.stringify(value)}`);
+    if (!POLICY_VALUES.includes(value)) throw new Error(`${file}: the level ${JSON.stringify(value)} of the class ${name} is not one of ${POLICY_VALUES.join(", ")}`);
+    classes[name] = value;
+  }
+  return { schema: POLICY_SCHEMA, classes };
+}
+
+/** Whether a policy from `parsePolicy` stores an event of the class at the level: the level is not more verbose than the value of the class. */
+export function policyAllows(policy, kind, level) {
+  if (!POLICY_CLASSES.includes(kind)) throw new Error(`the class ${kind} is not one of ${POLICY_CLASSES.join(", ")}`);
+  if (!POLICY_LEVELS.includes(level)) throw new Error(`the level ${level} is not one of ${POLICY_LEVELS.join(", ")}`);
+  return POLICY_VALUES.indexOf(policy.classes[kind]) >= POLICY_VALUES.indexOf(level);
+}
+
+/** Whether the text of a policy file is one that a writer truncated and is writing: a reader waits for the next notification and reports nothing. */
+export const policyIsBeingWritten = (text) => text.trim() === "";

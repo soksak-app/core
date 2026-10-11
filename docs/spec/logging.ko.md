@@ -59,9 +59,26 @@ event는 class 하나에 속하며 catalog가 이를 선언한다. class가 저�
 | `io` | sidecar 메시지, PTY 읽기와 쓰기 | 중간~높음 | 완전하게 저장. 유일한 상한은 파일의 회전이며 일어날 때 기록한다. |
 | `frame` | 그림 frame, 화면, 포인터 이동, wheel, layout | 높음 | 집계: 선언한 간격마다 횟수, 극값, 마지막 값, 총 마이크로초를 담은 요약 event 하나. category를 켜 두는 동안은 모든 event를 저장한다. |
 
-설정 `diagnostics.log`가 상세히 저장할 category를 고른다. host는 적용 중인 정책을 `<config-dir>/log-policy.json`에 쓴다. 모든 프로세스가 파일 시스템 event로 이 파일을 감시하고 바뀌면 다시 읽는다. 정책을 나르는 프로토콜 연산은 없다. 정책을 읽지 못한 프로세스는 `lifecycle`, `input`, `call`, `io`를 저장한다.
+설정 `diagnostics.log`가 상세히 저장할 category를 고른다. host는 적용 중인 정책을 `<config-dir>/log-policy.json`에 쓴다. [정책 파일](#정책-파일)이 그 schema와 프로세스가 바뀐 것을 아는 방법을 정한다. 정책을 나르는 프로토콜 연산은 없다.
 
 화면의 셀 같은 큰 값은 event에 쓰지 않고 크기와 hash를 쓴다. 값은 `frame` category를 켜 두는 동안 저장한다. 터미널 화면의 내용은 저장하지 않는다. 입력과 화면마다의 hash를 저장하며, [재생](replay.ko.md)이 내용을 파생한다.
+
+### 정책 파일
+
+정책 파일은 설정 디렉터리의 `log-policy.json`(`<config-dir>/log-policy.json`)이다. host가 설정 `diagnostics.log`에서 만들어, 같은 폴더의 새 파일로 쓴 뒤 mode `0600`으로 경로 위에 rename하므로 reader가 정책의 반쪽을 보는 일이 없다. 파일은 정확히 다음 member를 가진 JSON 객체이다.
+
+| Member | 형 | 값 |
+| --- | --- | --- |
+| `schema` | 정수 | `1`. 다른 수는 거부한다. |
+| `classes` | 객체 | [class와 정책](#class와-정책)의 class마다 member 하나, 곧 정확히 `lifecycle`, `input`, `call`, `io`, `frame`이며 값은 모두 문자열이다. class를 빼거나 더할 수 없다. |
+
+class의 값은 그 class에서 저장하는 가장 덜 심각한 level이다. `off`(그 class의 event를 저장하지 않음), `error`, `warn`, `info`, `debug`, `trace`(모든 level)이다. 값은 아무것도 저장하지 않는 것에서 모두 저장하는 것의 순서로 놓이며, event는 level이 class의 값보다 더 verbose하지 않을 때 저장된다. 파일 안에 기본값을 가진 member는 없다. member를 뺀 파일은 거부한다. 파일이 없는 동안 적용되는 기본 정책은 모든 class가 `trace`이며, host가 그 정책으로 쓰는 파일은 `{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}`이다.
+
+reader는 다음 순서로 파일을 거부하고, 파일 이름과 찾은 것을 담은 오류를 낸다. JSON 객체가 아닌 text(`<file>: not JSON: <parser의 message>`), `schema`와 `classes` 밖의 member(`<file>: the member <name> is not one of schema, classes`, 이름 순서로 첫 번째), 정수가 아닌 `schema`(`<file>: schema must be the number 1, found <value>`)나 다른 수(`<file>: schema <n> is not 1`), 객체가 아닌 `classes`(`<file>: classes must be an object that names every class`), 계약 밖의 class(`<file>: the class <name> is not one of lifecycle, input, call, io, frame`), 빠진 class(`<file>: the class <name> is missing`, 위 순서로 첫 번째), 문자열이 아닌 값(`<file>: the level of the class <name> must be text, found <value>`), 여섯 값 밖의 문자열(`<file>: the level "<value>" of the class <name> is not one of off, error, warn, info, debug, trace`). 모든 host, 명령줄 도구, 모든 sidecar가 `not JSON:` 뒤의 text를 빼고 같은 파일을 같은 text로 거부한다.
+
+**바뀐 것을 아는 방법.** 프로세스는 시작할 때 파일을 적용하고 운영체제의 파일 시스템 event로 감시하므로 파일을 읽는 timer가 없다. 생성, 쓰기, 교체, rename은 파일의 정책을 적용하고, 삭제는 기본 정책을 적용한다. 정책을 그대로 두는 알림은 아무것도 바꾸지 않는다. 비었거나 공백만 있는 파일은 writer가 잘라 내고 쓰는 중인 파일이므로 reader는 다음 알림을 기다리고 아무것도 보고하지 않는다. 위 규칙을 어기는 파일은 장소 `log policy`의 error record로 저장되고 적용 중인 정책은 그대로 남는다. writer가 처음 적용하는 정책과 그 뒤의 모든 변경은 event `log.policy`(`source`는 `default` 또는 `file`, `classes`는 모든 class의 값)로 저장되고, 같은 정책이 다시 오면 아무것도 저장하지 않는다. host가 `--log-dir <config-dir>/logs`로 시작한 sidecar([sidecars](sidecars.ko.md#선언과-시작))는 그 로그 폴더의 부모 폴더에 있는 `log-policy.json`을 자기 프로세스에서 읽는다.
+
+**검사.** `@soksak/log-contract`의 `parsePolicy(file, text)`, `policyAllows(policy, class, level)`, `policyIsBeingWritten(text)`가 이 규칙을 구현하고, `packages/log-contract/fixtures/policy`가 골든 사례를 갖는다. `cases.json`은 받아들이는 text와 그 class, 정책이 저장하는 class와 level의 쌍과 저장하지 않는 쌍, 거부하는 text와 그 오류, reader가 기다리는 text를 나열하며, `log-policy.json`은 기본 정책의 파일이다. sidecar 시험은 사례(`@soksak/log-contract/fixtures/policy/cases.json`)를 읽고 자기 reader가 같은 결과를 내는지, `not JSON:` 뒤에는 어떤 text든 내는지 요구한다.
 
 ## writer
 

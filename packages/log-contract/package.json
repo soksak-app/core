@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     ".": "./index.js",
+    "./fixtures/*": "./fixtures/*",
     "./package.json": "./package.json"
   },
   "files": [
