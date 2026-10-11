@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.2: 창 검사 `e2e/browser.test.mjs`와 `e2e/hosts.test.mjs`가 호스트가 기록하는 형태(`info page page: host <call> …`)로 transcript 줄을 맞추며, 두 앱에서 통과한다.
 - F161.1: 창 검사 `e2e/sidecar-recovery.test.mjs`가 호스트가 기록하는 죽인 terminal service의 재시작을 선언하며, 두 앱에서 5.0초에 통과한다.
 - F160: 체크리스트가 기록의 감사 결과(core, sidecar와 plugin의 원천, 시험 결과와 로그의 매핑) 전부인 F160.1~F160.23과, 창 검사 전체 실행의 실패에 대한 F161을 등록한다.
 - F154.4.3: `pnpm verify:windows --when-idle <seconds>`가 사람이 그 시간 동안 입력하지 않은 뒤에야 창 검사 파일을 시작해, 검사가 사람의 focus를 가져가지 않고 사람의 입력에 실패하지도 않는다. 실행기는 기다리는 시험을 `WAIT`로 이름 붙인다.

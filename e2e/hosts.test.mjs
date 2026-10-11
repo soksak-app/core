@@ -10,7 +10,7 @@ import { textDifference } from "@soksak/window-check/text-difference.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -120, dy: 0, ms: 48, times: 2 };
 
-const LINE = /^host (\w+) (\{.*\}|\[.*\]|null) -> (.*)$/;
+const LINE = /^info page page: host (\w+) (\{.*\}|\[.*\]|null) -> (.*)$/;
 
 /** Arranges the transcript lines into a list of requests and replies per call name. The id that differs per window is replaced by the order name. */
 function transcript(lines) {
@@ -52,7 +52,7 @@ const settledFrames = (lines) => {
 };
 
 /** The line that says the page displayed the settled layout. */
-const settled = (lines) => lines.some((line) => /^host presentSurfaces .*"settled":true.* ->/.test(line));
+const settled = (lines) => lines.some((line) => /^info page page: host presentSurfaces .*"settled":true.* ->/.test(line));
 
 /** Records the content size and the layout input when the host results are compared. */
 async function layoutState(s) {
@@ -107,8 +107,8 @@ test("both hosts answer the same page the same way", async (t) => {
     try {
       await dragLog.until((lines) => {
         const actualFrames = settledFrames(lines);
-        const lastSync = lines.findLastIndex((line) => /^host syncSurfaces .*"settled":true/.test(line));
-        const lastPresent = lines.findLastIndex((line) => /^host presentSurfaces .*"settled":true.* ->/.test(line));
+        const lastSync = lines.findLastIndex((line) => /^info page page: host syncSurfaces .*"settled":true/.test(line));
+        const lastPresent = lines.findLastIndex((line) => /^info page page: host presentSurfaces .*"settled":true.* ->/.test(line));
         return actualFrames?.length === expectedFrames.length && actualFrames.every((frame, index) =>
           ["x", "y", "width", "height"].every((key) => Math.abs(frame[key] - expectedFrames[index][key]) < 0.5)) &&
           lastPresent > lastSync;
@@ -128,7 +128,7 @@ test("both hosts answer the same page the same way", async (t) => {
     const { controls } = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
     assert.ok(controls.some((c) => c.key === "nav:sidebars"), "settings must have a sidebars section");
     await s.run("core.settings-modal.nav", { section: "sidebars" });
-    await log.until((lines) => lines.some((line) => line.startsWith("host overlayPlace")), "settings were not placed");
+    await log.until((lines) => lines.some((line) => line.startsWith("info page page: host overlayPlace")), "settings were not placed");
     logs[name] = await log.stop();
     await s.run("core.settings.close");
   }

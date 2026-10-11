@@ -436,9 +436,10 @@ for (const app of Object.values(APPS)) {
       await s.presented();
     }
     const lines = await log.stop();
-    const requests = lines.map((line) => /^host syncSurfaces (\{.*\}) ->/.exec(line)).filter(Boolean)
+    const requests = lines.map((line) => /^info page page: host syncSurfaces (\{.*\}) ->/.exec(line)).filter(Boolean)
       .map((found) => JSON.parse(found[1]));
-    assert.ok(requests.length >= 3, `the terminal sidebar changes made ${requests.length} placement requests`);
+    assert.ok(requests.length >= 3,
+      `the terminal sidebar changes made ${requests.length} placement requests among ${lines.length} transcript lines:\n${lines.slice(0, 10).map((line) => line.slice(0, 200)).join("\n")}`);
     const hiding = requests.filter((request) => request.surfaces.some((item) => item.id === surface && item.visible === false));
     assert.equal(hiding.length, 0, `a placement request hid the shown browser surface: ${JSON.stringify(hiding[0])}`);
   });
