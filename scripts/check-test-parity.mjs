@@ -1860,6 +1860,20 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F144",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "[self logInput:@\"insertText\" fields:fields before:before];" }],
+    tests: [{ file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" }],
+    expected: "Each layer of the input path records what it received, decided and sent with the typed text and every field, so a defect of the input is located from the files alone.",
+    levels: ["application"],
+  },
+  {
+    id: "F145",
+    implementation: [{ file: "packages/host/wailsv3/src/endpoint.go", symbol: "func (c *endpointConn) close(reason string)" }],
+    tests: [{ file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" }],
+    expected: "The gaps of the records that the audit of 2026-10-09 listed are closed by their children, each with its own tests.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F160.25",
     implementation: [
       { file: "packages/sok/wailsv3/src/replay.go", symbol: "func ReplayLogs" },
