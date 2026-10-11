@@ -234,6 +234,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 events.set_on_write(Box::new(move |path: &std::path::Path, size: u64| {
                     index_writes(path, size);
                 }));
+                installed::apply_plugin_event_classes(&events, &directory);
                 tauri::Manager::manage(
                     app,
                     LogIndexStop(std::sync::Mutex::new(Some(stop_indexer))),
@@ -343,6 +344,10 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 app.manage(plugins::Plugins::new(
                     directory.clone(),
                     Box::new(move || {
+                        installed::apply_plugin_event_classes(
+                            &applying.state::<std::sync::Arc<event_log::EventLog>>(),
+                            &installed,
+                        );
                         let declarations = installed::installed_sidecars(&installed)
                             .map_err(|error| format!("installed plugins: {error}"))?;
                         applying.state::<WindowSidecars>().declare(&declarations)

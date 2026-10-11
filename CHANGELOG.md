@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F160.36: the writer of the host gives a plugin event the class that the catalog of its plugin declares; both hosts read the catalogs of the enabled installed plugins at start and after each plugin change and record a catalog they cannot use as `error host plugin catalog` ([plugin catalogs](docs/spec/logging.md#plugin-catalogs)). Every plugin event was stored `undeclared` without a class before.
 - F160.35.7: the import map of the pages maps `@soksak/plugin-api/screen-hash`, so a plugin page that hashes a screen message loads; without it the terminal surface failed to mount in both applications.
 - F160.35.6: `sok debug replay` of both tools compares the page frame records in the layer `plugin`, where the plugin of the page writes them through `runtime.log`, and names that layer in a divergence; it read the layer `page`, which holds no frame record, so a replay compared no page frame.
 - F160.35.5: the [screen message](docs/spec/terminal-runtime.md#screen-message) carries `segment`, the `boot` of the event file of the sidecar run that drew the screen; `screenFromMessage` refuses a message without a non-empty `segment` (fixture message `segment missing`), the page stores it as `segment` of its frame record, and `sok debug replay` of both tools refuses a page frame record without `fields.segment` in a session with one segment too (contract case `cli.debug.replay-segment-errors`).

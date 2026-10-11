@@ -28,6 +28,7 @@ mod logged;
 mod path;
 #[path = "platform/platform.rs"]
 pub mod platform;
+pub mod plugin_catalog;
 pub mod plugins;
 mod registry;
 mod release;

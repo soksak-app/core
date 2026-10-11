@@ -8,13 +8,14 @@
 //! writer a `Pull`.
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver, RecvTimeoutError, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -229,6 +230,8 @@ pub struct EventLog {
     layer: &'static str,
     clock: fn() -> u64,
     writer: Mutex<Option<JoinHandle<()>>>,
+    /// The classes that the catalogs of the installed plugins declare (docs/spec/logging.md#plugin-catalogs).
+    plugin_classes: RwLock<HashMap<String, Class>>,
 }
 
 /// The layers of the event contract that another layer of a process relays (docs/spec/logging.md#event).
@@ -373,6 +376,30 @@ impl EventLog {
             layer: options.layer,
             clock: options.clock,
             writer: Mutex::new(Some(writer)),
+            plugin_classes: RwLock::new(HashMap::new()),
+        })
+    }
+
+    /// Replaces the classes of the plugin events, which the host reads from the catalogs of the enabled installed plugins
+    /// when it starts and after each change of the installed plugins.
+    pub fn set_plugin_classes(&self, classes: HashMap<String, Class>) {
+        *self
+            .plugin_classes
+            .write()
+            // default: the map holds only whole values, so a panic of another thread leaves no partial state.
+            .unwrap_or_else(PoisonError::into_inner) = classes;
+    }
+
+    /// The class that the catalog declares for `event`: the core catalog, or the catalog of the installed plugin of a plugin
+    /// event; `None` for a name that no catalog declares.
+    fn class(&self, event: &str) -> Option<Class> {
+        class_of(event).or_else(|| {
+            self.plugin_classes
+                .read()
+                // default: the map holds only whole values, so a panic of another thread leaves no partial state.
+                .unwrap_or_else(PoisonError::into_inner)
+                .get(event)
+                .copied()
         })
     }
 
@@ -455,7 +482,7 @@ impl EventLog {
             return false;
         }
         // A closed gate serializes nothing; an event the catalog does not declare has no class and no gate.
-        if let Some(class) = class_of(event) {
+        if let Some(class) = self.class(event) {
             if !self.gate(class, level) {
                 return false;
             }
@@ -517,7 +544,7 @@ impl EventLog {
                 "the event {event:?} does not start with its layer {layer:?}"
             ));
         }
-        if let Some(class) = class_of(event) {
+        if let Some(class) = self.class(event) {
             if !self.gate(class, level) {
                 return Ok(false);
             }
@@ -561,7 +588,7 @@ impl EventLog {
             return false;
         }
         // A closed gate stores nothing and counts the event.
-        let class = class_of(event);
+        let class = self.class(event);
         if let Some(class) = class {
             if !self.gate(class, level) {
                 return false;

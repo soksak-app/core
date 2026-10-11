@@ -325,3 +325,14 @@ func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 	}
 	return declarations, nil
 }
+
+// ApplyPluginEventClasses gives the writer the classes that the catalogs of the enabled installed plugins declare, and records
+// each catalog that it cannot use as an error of the place plugin catalog (docs/spec/logging.md#plugin-catalogs). The host
+// applies it when it starts and after each change of the installed plugins.
+func ApplyPluginEventClasses(log *EventLog, configDir string) {
+	classes, errs := sok.PluginEventClasses(configDir)
+	log.SetPluginClasses(classes)
+	for _, err := range errs {
+		LogError("plugin catalog", err)
+	}
+}

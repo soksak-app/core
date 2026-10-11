@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.36: host의 writer가 plugin event에 그 plugin의 catalog가 선언한 class를 준다. 두 host는 시작할 때와 plugin이 바뀔 때마다 활성화된 설치 plugin의 catalog를 읽고, 쓸 수 없는 catalog를 `error host plugin catalog`로 기록한다([plugin catalog](docs/spec/logging.ko.md#plugin-catalog)). 이전에는 모든 plugin event가 class 없이 `undeclared`로 저장되었다.
 - F160.35.7: page의 import map이 `@soksak/plugin-api/screen-hash`를 연결하므로 화면 메시지를 hash하는 plugin page가 읽힌다. 이것이 없어 두 애플리케이션에서 terminal surface가 mount되지 않았다.
 - F160.35.6: 두 도구의 `sok debug replay`는 page의 plugin이 `runtime.log`로 쓰는 계층 `plugin`의 page frame 기록을 비교하고 불일치에 그 계층을 밝힌다. frame 기록이 없는 계층 `page`를 읽었으므로 재생은 page frame을 하나도 비교하지 않았다.
 - F160.35.5: [화면 메시지](docs/spec/terminal-runtime.ko.md#화면-메시지)가 화면을 그린 sidecar 실행의 event 파일의 `boot`인 `segment`를 담는다. `screenFromMessage`는 비어 있지 않은 `segment`가 없는 메시지를 거부하고(fixture 메시지 `segment missing`), page는 이를 frame 기록의 `segment`로 저장하며, 두 도구의 `sok debug replay`는 segment가 하나인 session에서도 `fields.segment`가 없는 page frame 기록을 거부한다(계약 사례 `cli.debug.replay-segment-errors`).

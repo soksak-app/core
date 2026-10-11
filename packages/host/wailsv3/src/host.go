@@ -141,6 +141,7 @@ func Run(assets fs.FS, options Options) error {
 	indexWrites, stopIndexer := StartLogIndexer(NewIndexReporter())
 	defer stopIndexer()
 	eventLog.SetOnWrite(indexWrites)
+	ApplyPluginEventClasses(eventLog, configDirectory)
 	if err := StartStandardError(configDirectory, identifier); err != nil {
 		return err
 	}

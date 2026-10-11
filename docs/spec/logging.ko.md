@@ -261,6 +261,10 @@ sidecar catalog는 `extends`, 곧 `{chain, after, events}`의 목록으로 base�
 
 감사는 감사하는 설정 폴더에서 설치된 sidecar의 catalog를 찾는다. `plugins/installed.json`이 설치된 각 sidecar의 폴더를 기록하고([installation](installation.ko.md)), 그 폴더의 `sidecar.json`이 member `events`에 catalog 파일을 쓰며([sidecars](sidecars.ko.md#선언과-시작)), member가 없는 sidecar는 catalog가 없으므로 그 event는 선언되지 않은 것이다. `plugins/installed.json`이 없는 설정 폴더는 설치된 sidecar가 없다. 형식이 다른 `plugins/installed.json`, 유효하지 않은 `sidecar.json`, 없거나 JSON이 아닌 catalog 파일, `composeCatalogs`가 거부하는 catalog는 파일 이름을 담은 오류로 감사를 멈춘다. `scripts/audit-run.mjs`와 `scripts/check-events.mjs --logs`는 설정 폴더마다 catalog를 합치는데, 폴더마다 설치한 sidecar가 다르기 때문이다.
 
+### Plugin catalog
+
+plugin은 자기 `plugin.json`의 member `events`가 적는 catalog에 event를 선언하며([plugin.json](plugins.ko.md#pluginjson)), 각 event의 이름은 전체 이름 `plugin.<plugin>.<event>`다. 이 catalog에서 생성한 class 표는 plugin event를 선언하지 않으므로 host의 writer는 plugin catalog의 class도 가진다. host는 시작할 때와 설치된 plugin이 바뀔 때마다([변경 적용](installation.ko.md#변경-적용)) 활성화된 설치 plugin의 catalog를 읽고, plugin event에 그 plugin의 catalog가 선언한 class를 주므로, event는 그 class의 gate를 지나고 그 줄은 class를 담는다. 어느 catalog도 선언하지 않은 이름은 `undeclared`로 남는다. 없거나 JSON이 아니거나 `plugin.<plugin>.` 밖의 이름이나 다섯 class가 아닌 class를 선언해서 host가 쓸 수 없는 catalog는 장소 `plugin catalog`의 오류 기록이며 text에 파일을 담고(`<file>: the event catalog of plugin <plugin> is not JSON`, `<file>: the event catalog of plugin <plugin> does not exist`, `<file>: the event <name> is not an event of plugin <plugin> (plugin.<plugin>.<event>)`, `<file>: the event <name> has the class <class>, which is not lifecycle, input, call, io or frame`), 다른 plugin은 class를 유지한다. 도구는 `PluginEventClasses`(Go)와 `plugin_event_classes`(Rust)로 이를 읽는다.
+
 ### 입구
 
 다음 입구는 호출 지점이 기록을 쓰지 않아도 기록한다.

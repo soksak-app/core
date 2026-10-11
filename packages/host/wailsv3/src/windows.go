@@ -110,6 +110,7 @@ func newHost(directory string) (*Host, error) {
 	// apply applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page that
 	// reloads uses the installed executables (docs/spec/installation.md#applying-a-change).
 	apply := func() error {
+		ApplyPluginEventClasses(h.events, directory)
 		declarations, err := InstalledSidecars(directory)
 		if err != nil {
 			return fmt.Errorf("installed plugins: %w", err)

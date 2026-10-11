@@ -373,3 +373,14 @@ impl<R: tauri::Runtime> tauri::Assets<R> for InstalledAssets<R> {
         self.frontend.csp_hashes(html_path)
     }
 }
+
+/// Gives the writer the classes that the catalogs of the enabled installed plugins declare, and records each catalog that it
+/// cannot use as an error of the place plugin catalog (docs/spec/logging.md#plugin-catalogs). The host applies it when it starts
+/// and after each change of the installed plugins.
+pub fn apply_plugin_event_classes(log: &crate::event_log::EventLog, config_dir: &Path) {
+    let (classes, errors) = soksak_sok::plugin_catalog::plugin_event_classes(config_dir);
+    log.set_plugin_classes(classes);
+    for error in errors {
+        log_error("plugin catalog", error);
+    }
+}

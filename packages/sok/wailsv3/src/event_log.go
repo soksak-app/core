@@ -173,6 +173,14 @@ type EventLog struct {
 	done        chan struct{}
 	closeOnce   sync.Once
 	onWrite     atomic.Pointer[func(path string, size int64)]
+	// pluginClasses holds the classes that the catalogs of the installed plugins declare (docs/spec/logging.md#plugin-catalogs).
+	pluginClasses atomic.Pointer[map[string]Class]
+}
+
+// SetPluginClasses replaces the classes of the plugin events, which the host reads from the catalogs of the enabled installed
+// plugins when it starts and after each change of the installed plugins.
+func (l *EventLog) SetPluginClasses(classes map[string]Class) {
+	l.pluginClasses.Store(&classes)
 }
 
 // SetOnWrite sets the observer that the writer calls after it wrote a batch, with the path of the file and its size. It is
@@ -392,7 +400,7 @@ func (l *EventLog) enqueuePlaced(tsMicros int64, monoNs uint64, layer string, le
 		return false
 	}
 	pending := &pendingEvent{tsMicros: tsMicros, monoNs: monoNs, cids: cids, layer: layer, level: level, event: event, fields: text, bytes: bytes, truncated: truncated, placed: placed}
-	pending.classify()
+	l.classify(pending)
 	// A closed gate stores nothing and counts the event; an event that the catalog does not declare has no class and no gate.
 	if pending.class != "" && !l.Gate(pending.class, level) {
 		return false
@@ -488,12 +496,15 @@ func (l *EventLog) Close() {
 	})
 }
 
-// classify gives the event the class that the catalog declares for its name. A name that the catalog does not declare is stored
-// without a class and marked undeclared (docs/spec/logging.md#event).
-func (e *pendingEvent) classify() {
+// classify gives the event the class that the catalog declares for its name: the core catalog, or the catalog of the installed
+// plugin of a plugin event. A name that no catalog declares is stored without a class and marked undeclared
+// (docs/spec/logging.md#event).
+func (l *EventLog) classify(e *pendingEvent) {
 	e.class, e.undeclared = "", false
 	if class, declared := EventClassOf(e.event); declared {
 		e.class = class
+	} else if classes := l.pluginClasses.Load(); classes != nil && (*classes)[e.event] != "" {
+		e.class = (*classes)[e.event]
 	} else {
 		e.undeclared = true
 	}
@@ -502,7 +513,7 @@ func (e *pendingEvent) classify() {
 // writerEvent is an event that the writer itself creates (log.open, log.rotated, log.dropped), with both clocks read now.
 func (l *EventLog) writerEvent(level Level, event string, fields json.RawMessage) *pendingEvent {
 	e := &pendingEvent{tsMicros: time.Now().UnixMicro(), monoNs: l.clock(), layer: l.layer, level: level, event: event, fields: fields}
-	e.classify()
+	l.classify(e)
 	return e
 }
 
@@ -716,7 +727,7 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 		}
 		l.pull(func(e RelayedEvent) {
 			pending := &pendingEvent{tsMicros: e.TsMicros, monoNs: e.MonoNs, cids: e.Cids, layer: e.Layer, level: e.Level, event: e.Event, fields: e.Fields}
-			pending.classify()
+			l.classify(pending)
 			push(pending)
 		}, dropped)
 	}
