@@ -351,6 +351,72 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
     );
 }
 
+// contract: cli.release.requires-the-replay-executable
+#[test]
+fn sidecar_release_refuses_a_replay_executable_that_the_package_does_not_ship() {
+    let out = Dir::new();
+    let tree = sidecar_tree("0.1.0");
+    write_tree(
+        &tree.0,
+        &[
+            (
+                "sidecar.json",
+                r#"{"executable": "build/worker", "protocol": 1, "replay": {"role": "screen", "executable": "build/replay"}}"#,
+            ),
+            ("build/replay*", "binary replay"),
+        ],
+    );
+    let release = |tree: &Dir| {
+        run(&[
+            "sidecar",
+            "release",
+            text(&tree.0),
+            text(&out.0),
+            "--platform",
+            "darwin-arm64",
+        ])
+    };
+    let (code, _, stderr) = release(&tree);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: package.json files: build/replay, the replay executable of sidecar.json, is not listed\n"
+        )
+    );
+    assert!(
+        !out.0
+            .join("scope-sidecar-worker-0.1.0-darwin-arm64.tar.gz")
+            .exists(),
+        "a refused release left its release"
+    );
+    write_tree(
+        &tree.0,
+        &[(
+            "package.json",
+            r#"{"name": "@scope/sidecar-worker", "version": "0.1.0", "files": ["sidecar.json", "build/worker", "build/replay"]}"#,
+        )],
+    );
+    let (code, _, stderr) = release(&tree);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (0, ""),
+        "a release that ships its replay executable failed"
+    );
+    write_tree(
+        &tree.0,
+        &[(
+            "sidecar.json",
+            r#"{"executable": "build/worker", "protocol": 1, "replay": {"role": "screen"}}"#,
+        )],
+    );
+    let (code, _, stderr) = release(&tree);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (1, "sok: sidecar.json: replay.executable is required\n")
+    );
+}
+
 // contract: cli.pack.diagnostics-only-with-flag
 #[test]
 fn plugin_pack_adds_diagnostic_declarations_only_with_the_flag() {

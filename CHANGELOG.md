@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F160.25.7: `sok sidecar release` of both tools refuses a package whose `sidecar.json` declares a `replay.executable` that `files` does not list, with an error that names the file, and a `replay` without an executable (contract case `cli.release.requires-the-replay-executable`)
 - F160.3.2.1: both hosts flush the native observers before the last flush of the writer at shutdown, so the tail of a counted source is written (`FlushNativeObservers`, `flush_native_observers`; contract cases `log.native.platform-flushes-the-observers`, `log.native.shutdown-*`), and a document view no longer stores `native.observe.failed` for a notification that AppKit registered on the view: `sp_observe_key_path` takes a context and the view passes the notifications of other contexts to its superclass
 - F160.9.3: the fixture that a window check starts from changes the common settings as the actor `diagnostics.fixture`, so the window checks no longer fail in `fresh` with a settings change without an actor; the fixture lives in `diagnostic-fixture.js` and has a test.
 - F160.31: the tests of the shared writer options, of the order of the reply ledger and of the panic of a routine declare their contract cases (`cli.log.writer-options.*`, `buffers.sidecar-replies.*`), and the panic test of the tool starts itself as its child instead of a second test function, so `make host-contract-check` passes with 592 cases.

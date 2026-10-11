@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.25.7: 두 도구의 `sok sidecar release`는 `sidecar.json`이 선언한 `replay.executable`을 `files`가 나열하지 않으면 그 파일 이름을 담은 오류로, 실행 파일 없는 `replay`도 거부한다(계약 사례 `cli.release.requires-the-replay-executable`)
 - F160.3.2.1: 두 host가 종료할 때 writer의 마지막 flush 전에 native observer를 flush하므로 counted source의 마지막 전달분이 기록되고(`FlushNativeObservers`, `flush_native_observers`, 계약 사례 `log.native.platform-flushes-the-observers`, `log.native.shutdown-*`), 문서 view는 AppKit이 view에 등록한 알림 때문에 `native.observe.failed`를 저장하지 않는다. `sp_observe_key_path`가 context를 받고 view는 다른 context의 알림을 상위 class에 넘긴다
 - F160.9.3: 창 검사가 시작하는 fixture가 공통 설정을 행위자 `diagnostics.fixture`로 바꾸므로, 창 검사가 행위자 없는 설정 변경 때문에 `fresh`에서 실패하지 않는다. fixture는 `diagnostic-fixture.js`에 있고 시험이 있다.
 - F160.31: 공유 writer 옵션, reply ledger 순서, routine panic의 시험이 계약 사례(`cli.log.writer-options.*`, `buffers.sidecar-replies.*`)를 선언하고, 도구의 panic 시험이 별도 시험 함수 대신 자기 자신을 child로 시작하므로 `make host-contract-check`가 사례 592개로 통과한다.
