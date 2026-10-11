@@ -34,13 +34,15 @@ A change redraws the window and keeps the scroll position of the shown content; 
 | 사이드바 크기 | the width settings of [layout values](#layout-values) |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
-| 진단 | 성능 트레이스 `diagnostics.performance` |
+| 진단 | 성능 트레이스 `diagnostics.performance`, 로그 수준 `diagnostics.log` |
 
 Window choices select content for one fixed left sidebar and one fixed right sidebar. The focused active plugin overrides the general side choice without adding a column. Visibility switches affect the fixed side. Card sidebars remain inside their cards; the obsolete `cardSidebar` positioning setting is rejected. No plugin setting appears in 일반.
 
 ### 진단
 
 `diagnostics.performance` is the permanent performance trace ([performance trace](performance-trace.md)). It is a boolean, set through the settings file rather than a settings-window control; it defaults to true while the release version is 0.0.x, so a defect is recorded when it appears, and to false in a later version series. While it is false no layer performs any performance logging work — no event is built and none is stored. Setting it true makes the layers store the events of the trace in the event files under `logs/`, and setting it back false stops the storing at the next event boundary; the event files and their rotation belong to the [event contract](logging.md#files), not to the setting.
+
+`diagnostics.log` is the [policy](logging.md#policy) of the event log: an object that names the least severe level (`off`, `error`, `warn`, `info`, `debug` or `trace`) that is stored for some of the classes `lifecycle`, `input`, `call`, `io` and `frame`. A class that it does not name stores every level, and it defaults to `{}`, which stores every level of every class. It is set through the settings file; a class outside the five and a value outside the six levels are refused with an error that names the setting. The page sends the policy to the host, which writes `<config-dir>/log-policy.json`, and every process applies the file when it changes.
 
 
 ### 플러그인
@@ -97,7 +99,7 @@ The window draws every setting with one control of a fixed set, chosen by the fo
 | A string or an address (a plugin `string` or `address`) | One-line text field | `core.settings.change {key, value, scope}` |
 | A set reference (a link of [sidebar choices](#sidebar-choices)) | Select box of 사용 안 함 and every set | `core.settings.link {place, plugin, set, scope}` |
 
-The set editor uses the same controls: 이름 is a text field, 배치 a select box and each section row a select box. Buttons run actions (전역값 사용, 편집, 삭제, 새 세트, ▲ ▼ − +, 목록, 플러그인 관리) and are not setting controls; the scope tabs select the shown scope and are not a setting. A setting without a control in this table, such as `textSize`, `sets` and `diagnostics.performance`, is changed by its own command or the settings file.
+The set editor uses the same controls: 이름 is a text field, 배치 a select box and each section row a select box. Buttons run actions (전역값 사용, 편집, 삭제, 새 세트, ▲ ▼ − +, 목록, 플러그인 관리) and are not setting controls; the scope tabs select the shown scope and are not a setting. A setting without a control in this table, such as `textSize`, `sets`, `diagnostics.performance` and `diagnostics.log`, is changed by its own command or the settings file.
 
 The workbench defines this control set instead of rendering the window with the form library at `~/Projects/polyspec/crudui`. That library compiles a form template, binds a record that the application submits as a whole, and keeps row identity, an undo history, `name`-based controls and its own event binding (`connectForm`). The settings window applies each change at once through a declared command, every control names its command through the shared binder and carries a dom name ([exposure](exposure.md)), and the host draws a copy of the card in which no listener runs ([native modals](native-modals.md)). The library's markup and binding meet none of these rules without a layer that rewrites its output, while the plugin setting declarations need only the forms of the table above, so adding the dependency is not justified.
 
@@ -116,6 +118,7 @@ Each core setting accepts one form. Reading the settings files and every change 
 | `textSize` | A [text size step](text-size.md) |
 | `projectTabs` | `top` or `left` |
 | `left`, `right`, `dim`, `diagnostics.performance` | A boolean |
+| `diagnostics.log` | An object of the classes and their levels |
 | `focusInd` | `border` or `corner` |
 | `fullRule` | `under`, `over` or `none` |
 | `language` | `auto` or a language of the application menu (`ko`, `en`) |

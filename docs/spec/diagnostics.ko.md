@@ -15,7 +15,9 @@
 | `host-<boot>.stderr` | host 프로세스의 raw 표준 오류: 런타임의 crash 출력과 native 라이브러리의 fatal 줄 | 글 | 실행이 열 때 100 MB이면 `host-<boot>.stderr.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
 | `crash-found.txt` | 시작할 때마다 host | 글: host가 `host.crash.found`로 알린 시스템 crash report의 경로, 한 줄에 하나([로깅](logging.ko.md)) | 시작할 때마다 lookup이 아직 보는 report만 남기도록 다시 쓴다. 최대 64줄 |
 | `stall-<pid>-<ms>.txt`, `stall-<pid>-<ms>-page-<pid>.txt` | host가 응답하지 않을 때 창 검사 harness가 `sample`로 쓴다. host는 경로를 `host.stall.dump`로 저장한다 | 글 | 없음. 정지마다 파일 하나 |
-| `host-<boot>.jsonl` | host 프로세스: 자신의 기록, page의 기록(실패와 관측은 `page.record.<level>` event이며 host 호출 `log`의 배치로 중계한다), native 라이브러리의 event | [로깅 계약](logging.ko.md)의 event | 100 MB에서 `host-<boot>.jsonl.1`로 회전하고 이전 세대 다섯 개를 남긴다 |
+| `host-<boot>.jsonl` | host 프로세스: 자신의 기록, page의 기록(실패와 관측은 `page.record.<level>` event이며 host 호출 `log`의 배치로 중계한다), native 라이브러리의 event 중 level `error`, `warn`, `info` | [로깅 계약](logging.ko.md)의 event | 100 MB에서 회전한다. 닫은 파일은 세대 `host-<boot>.jsonl.<n>`(`.1`이 가장 오래됨)이 되고 지우는 세대는 없다. [보존](logging.ko.md#보존)이 폴더를 6 GiB로 묶는다 |
+| `host-<boot>.debug.jsonl` | 같은 프로세스: level `debug`와 `trace`의 event. 첫 event에서 만든다 | [로깅 계약](logging.ko.md)의 event | main 파일처럼 회전하며 `host-<boot>.debug.jsonl.<n>`이 된다 |
+| `log-policy.json` | host. 설정 `diagnostics.log`에서 쓴다 | JSON 문서 하나, event 로그의 [정책](logging.ko.md#정책)이며 모든 프로세스가 감시한다 | 설정이 바뀔 때 다시 쓴다 |
 | `<executable-name>.log` | 상주 service. host가 service의 standard error로 연다 | service가 쓰는 같은 형식의 글 기록 | host가 service를 시작할 때 100 MB이면 `<name>.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
 | `state-<time>.json` | debug view가 열릴 때 두 host | JSON 문서 하나 | 없음. 열 때마다 파일 하나 |
 | `captures/…` | 진단 빌드의 두 host | PNG와 frame 파일 | 요청한 쪽이 지운다 |
@@ -63,6 +65,7 @@
 | Wails host에서 surface나 modal의 WebContent process가 끝난다 | `error native surface webview: web content process terminated: <address>`. Tauri host는 surface와 modal을 포함한 모든 web view의 종료를 `error host page process: <label>: terminated`로 쓴다 |
 | 창의 WebContent process가 끝난다 | `error host page process: <window>: terminated` |
 | writer가 쓴 뒤 event 파일의 색인을 최신으로 맞출 수 없다(event 구조를 어기는 줄, 손상된 색인, 열 수 없는 파일) | `error host log index: <reason>`, 파일마다 이유가 다를 때마다 한 번([logging](logging.ko.md#색인)) |
+| 파일 `log-policy.json`이 [정책](logging.ko.md#정책)의 형식을 어기거나(JSON이 아닌 글, 모르는 항목, 빠졌거나 계약 밖인 class, 여섯 밖의 level) 정책을 감시하거나 적용할 수 없다 | `error host log policy: <file>: <발견한 것>`, 파일이 바뀔 때마다 한 번. 적용 중인 정책은 그대로 남는다 |
 | native 호출이 실패한다 | `sp_log_error`의 `error native <where>: <text>` |
 | Tauri host의 fatal signal이나 잡히지 않은 예외 | `error native fatal: <signal name>` 또는 `error native fatal: uncaught exception <name>: <reason>` 기록 하나, 그 뒤 process가 끝난다. Wails host의 fatal signal은 Go runtime이 보고를 표준 오류에 쓴다 |
 | host의 goroutine이나 스레드가 panic한다 | goroutine이나 스레드의 `name`, `text`, `stack`을 담은 event `host.panic`을 프로세스가 상태 2(Go) 또는 101(Rust)로 끝나기 전에 저장한다. Go runtime이나 기본 panic hook도 메시지를 표준 오류에 쓴다 |

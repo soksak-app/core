@@ -7,8 +7,8 @@
 ## 원칙
 
 1. **하나의 event 계약.** 모든 층의 모든 기록은 아래 구조의 event 하나다. 둘째 형식은 없다. 사람이 읽는 글은 viewer가 event로 만들며 저장하지 않는다.
-2. **생산자는 막히지 않는다.** UI 스레드, 입력 경로, frame 경로는 기록을 위해 디스크 접근, IPC, 락 대기, 한 runtime의 스레드에서 다른 runtime으로의 호출을 하지 않는다. 비활성 event는 분기 하나, 활성 event는 bounded 큐로의 복사 하나의 비용이다.
-3. **손실은 세고 밝힌다.** 어떤 큐, rate limit, 회전, 절단도 조용히 버리지 않는다. 손실은 `log.dropped` event로 기록하고 모든 상한은 이 문서에 적는다.
+2. **생산자는 막히지 않는다.** UI 스레드, 입력 경로, frame 경로는 기록을 위해 디스크 접근, IPC, 락 대기, 한 runtime의 스레드에서 다른 runtime으로의 호출을 하지 않는다. 정책이 저장하지 않는 event는 분기 하나의 비용이고 아무것도 만들지 않으며, 저장하는 event는 bounded 큐로의 복사 하나의 비용이다.
+3. **손실은 세고 밝힌다.** 어떤 큐, 정책, 보존, rate limit, 절단도 조용히 버리지 않는다. 손실은 `log.dropped`, `log.gated`, `log.pruned` event로 기록하고 모든 상한은 이 문서에 적는다.
 4. **입력 경로는 완전하다.** `input` class의 event와 `io` class의 PTY 쓰기·읽기는 층이 본 모든 값과 모든 바이트를 담는다. 크기의 유일한 상한은 event의 크기 상한([상한](#상한))이며, 이는 입력의 크기보다 훨씬 크다. 큐는 자신의 바이트 상한보다 큰 event를 거절하므로, writer는 그보다 큰 event를 잘라 `truncated`를 붙여 저장한다.
 5. **event는 선언한다.** 모든 event는 그것을 내는 저장소의 catalog에 항목이 있다. 개발과 지속적 통합은 선언하지 않은 event를 거부한다. 실행 중에는 선언하지 않은 event도 `undeclared` 표시를 붙여 쓰고 센다. 이름 오류가 증거를 버리지 않게 하기 위해서다.
 6. **같은 종류의 event는 한 입구로 들어온다.** page→host 호출, 창·애플리케이션 이벤트, registry 명령, sidecar 수명, 오류 표시는 각각 기록하는 입구가 하나다. 호출 지점이 이를 위해 자기 기록을 쓰지 않는다.
@@ -19,7 +19,7 @@
 event는 한 줄의 JSON 객체 하나다.
 
 ```json
-{"ts_us":1791500000000000,"mono_ns":123456789012,"seq":812,"level":"info","layer":"native",
+{"ts_us":1791500000000000,"mono_ns":123456789012,"seq":812,"level":"info","class":"input","layer":"native",
  "event":"native.input.key_down","window":"w1","surface":"tab-x","session":"s7","cids":["b3.1042"],
  "fields":{"keyCode":36,"characters":"\r"}}
 ```
@@ -29,7 +29,9 @@ event는 한 줄의 JSON 객체 하나다.
 | `ts_us` | 발생 시점의 epoch 기준 마이크로초 wall clock. 층 사이의 순서를 가린다. 모든 줄이 가진다. |
 | `mono_ns` | 발생 시점의 시스템 전체 monotonic 시계(나노초). macOS는 `clock_gettime_nsec_np(CLOCK_UPTIME_RAW)`이며 `mach_absolute_time`을 나노초로 바꾼 값과 같고 Linux는 `CLOCK_MONOTONIC`이다. 한 부팅 안의 프로세스 사이에서 비교할 수 있고, 되감기지 않으며, 기계가 잠든 동안에는 늘지 않는다. 모든 줄이 가지며 감사는 이 field가 없는 줄을 거부한다. page는 host의 시계에서 이 값을 유도한다([writer](#writer)). |
 | `seq` | 프로세스의 writer가 직렬화할 때 붙이는 정수. 한 프로세스의 저장된 event는 연속된 `seq`를 가지며, 틈은 빠진 `seq`의 범위를 이름으로 밝히며 그 범위 다음에 자신이 저장되는 `log.dropped` event가 설명한다. |
-| `level` | `error`, `warn`, `info`, `debug`, `trace`. |
+| `level` | `error`, `warn`, `info`, `debug`, `trace`. level은 뜻으로 정의한다: `error`는 실패, `warn`은 손실이나 성능 저하, `info`는 결정이나 객체 수명의 변화, `debug`와 `trace`는 경계 넘기나 입력이다. `error`, `warn`, `info`는 main 파일에, `debug`와 `trace`는 debug 파일에 저장한다([파일](#파일)). |
+| `class` | event의 class([class와 정책](#class와-정책)): `lifecycle`, `input`, `call`, `io`, `frame`. catalog가 그 event 이름에 선언한 class다. class를 고르는 생산자(native 라이브러리)는 catalog의 class를 주고, host의 writer는 class가 다른 record를 거부한다. 이름을 catalog가 선언하지 않은 event에는 `class`가 없다. |
+| `undeclared` | `true`이며, 이름을 catalog가 선언하지 않은 event에만 있다. writer는 그런 event를 `class` 없이 저장하고 이 표시로 센다. 이름 오류가 증거를 버리게 해서는 안 되기 때문이다([원칙](#원칙)). |
 | `layer` | `native`, `host`, `page`, `plugin`, `sidecar`, `sok`. |
 | `event` | catalog가 선언한 `<layer>.<subsystem>.<event>`. writer 자신의 event는 `log.<event>`(`log.open`, `log.dropped`)라 부르며 `layer`는 그것을 쓰는 프로세스의 층이다. |
 | `window`, `surface`, `session` | event가 어떤 대상에 관한 것이면 그 대상의 식별자. |
@@ -37,9 +39,9 @@ event는 한 줄의 JSON 객체 하나다.
 | `fields` | catalog가 선언한 event의 값. |
 | `truncated` | event의 fields 글이 event 크기 상한을 넘었을 때만 있다. 자르기 전 그 글의 바이트 크기다. 이런 event의 `fields`는 글의 첫 바이트인 `head`만 담는다([상한](#상한)). |
 
-모든 파일의 첫 줄은 `log.open`이다. schema 번호(`schema`), `pid`, 프로세스의 역할(`role`), 실행의 식별자(`boot`), writer의 버전, 적용 중인 정책을 담는다. schema 번호는 2이며 schema 2는 모든 줄에 `mono_ns`를 더한다. 다른 schema 번호를 만난 reader는, schema 1 파일도, 파일 이름과 그 번호를 담은 오류로 그 파일을 거부하며 어떤 reader도 이전 schema를 위한 코드를 두지 않는다.
+모든 파일의 첫 줄은 `log.open`이며 main 파일과 debug 파일 모두 그렇다. schema 번호(`schema`), `pid`, 프로세스의 역할(`role`), 실행의 식별자(`boot`)를 담는다. schema 번호는 2이며 schema 2는 모든 줄에 `mono_ns`와 `class`를 더한다. 다른 schema 번호를 만난 reader는, schema 1 파일도, 파일 이름과 그 번호를 담은 오류로 그 파일을 거부하며 어떤 reader도 이전 schema를 위한 코드를 두지 않는다. 감사는 선언된 event인데 `class`가 없는 줄을 보고한다.
 
-writer가 회전하는 파일은 경계를 넘게 될 줄 앞에서 끝난다. 새 파일은 `log.open`으로 시작하고 이어서 `log.rotated` `{bytes, kept, removed}`가 온다. `bytes`는 닫은 파일의 크기, `kept`는 보관하는 세대 수, `removed`는 이 회전이 지운 세대의 파일 이름이며 지운 것이 없으면 `null`이다. `seq`는 회전을 건너 이어지므로 독자는 세대를 첫 `seq`로 정렬한다.
+writer가 회전하는 파일은 경계를 넘게 될 줄 앞에서 끝난다. 닫은 파일은 다음 번호의 세대 `<name>.<generation>`이 되며, 번호는 회전 순서대로 1부터 센다(`.1`이 가장 오래됨). 새 파일은 `log.open`으로 시작하고 이어서 `log.rotated` `{bytes, generation}`이 온다. `bytes`는 닫은 파일의 크기, `generation`은 그 번호다. 회전은 세대를 지우지 않는다. `seq`는 회전을 건너 이어지므로 독자는 세대를 첫 `seq`로 정렬한다.
 
 ### 상관 식별자
 
@@ -49,34 +51,43 @@ native 라이브러리는 image region의 키가 도착할 때 그 키의 식별
 
 ## class와 정책
 
-event는 class 하나에 속하며 catalog가 이를 선언한다. class가 저장 방식을 정한다.
+event는 class 하나에 속하며 catalog가 이를 선언한다. class가 저장 방식을 정하고, 아래 정책이 class마다 어느 level을 저장할지 정한다.
 
 | class | 예 | 발생률 | 저장 |
 | --- | --- | --- | --- |
-| `lifecycle` | 창, 애플리케이션, sidecar, 세션의 수명. 설정, 프로젝트, plugin, 업데이트의 변경 | 낮음 | 항상 저장 |
-| `input` | 키, 입력기 콜백, 붙여넣기, 클릭 | 사람 속도 | 항상 완전하게 저장: 입력한 글, 범위, flag, 앞뒤 상태 |
+| `lifecycle` | 창, 애플리케이션, sidecar, 세션의 수명. 설정, 프로젝트, plugin, 업데이트의 변경 | 낮음 | 저장 |
+| `input` | 키, 입력기 콜백, 붙여넣기, 클릭 | 사람 속도 | 완전하게 저장: 입력한 글, 범위, flag, 앞뒤 상태 |
 | `call` | page→host 호출, registry 명령, endpoint 메서드: 이름, 인자, 결과, 마이크로초 | 중간 | 저장. catalog가 선언한 크기 상한을 넘는 인자는 상한까지 저장하고 `truncated`로 표시한다. catalog가 가림으로 표시한 인자(token, 문서 본문)는 크기와 hash로 저장한다. |
 | `io` | sidecar 메시지, PTY 읽기와 쓰기 | 중간~높음 | 완전하게 저장. 유일한 상한은 파일의 회전이며 일어날 때 기록한다. |
-| `frame` | 그림 frame, 화면, 포인터 이동, wheel, layout | 높음 | 집계: 선언한 간격마다 횟수, 극값, 마지막 값, 총 마이크로초를 담은 요약 event 하나. category를 켜 두는 동안은 모든 event를 저장한다. |
+| `frame` | 그림 frame, 화면, 포인터 이동, wheel, layout | 높음 | 집계: 선언한 간격마다 횟수, 극값, 마지막 값, 총 마이크로초를 담은 요약 event 하나. 생산자가 발생마다 저장하는 event는 정책이 그 class를 그 level로 저장하는 동안 저장한다. |
 
-설정 `diagnostics.log`가 상세히 저장할 category를 고른다. host는 적용 중인 정책을 `<config-dir>/log-policy.json`에 쓴다. 모든 프로세스가 파일 시스템 event로 이 파일을 감시하고 바뀌면 다시 읽는다. 정책을 나르는 프로토콜 연산은 없다. 정책을 읽지 못한 프로세스는 `lifecycle`, `input`, `call`, `io`를 저장한다.
+화면의 셀 같은 큰 값은 event에 쓰지 않고 크기와 hash를 쓴다. 값은 정책이 class `frame`을 level `trace`로 저장하는 동안 저장한다.
 
-화면의 셀 같은 큰 값은 event에 쓰지 않고 크기와 hash를 쓴다. 값은 `frame` category를 켜 두는 동안 저장한다.
+### 정책
+
+정책은 class마다 저장할 가장 덜 심각한 level을 말한다: `off`(그 class의 event 없음), `error`, `warn`, `info`, `debug`, `trace`(모든 level). 기본 정책은 모든 class의 모든 level을 저장한다. release version이 0.0.x인 동안 모든 release가 진단 빌드이므로, 한 컴퓨터에서 한 번 나타난 결함이 나타날 때 기록된다. 더 좁은 정책은 애플리케이션을 실행하는 사람의 결정이다.
+
+- **설정.** 설정 `diagnostics.log`([설정](settings.ko.md#진단))는 일부 class의 level을 이름 붙이는 객체(`{"call": "info"}`)이며, 이름이 없는 class는 모든 level을 저장한다. class 밖의 이름과 level 밖의 값은 설정 이름을 담은 오류로 거부한다. page는 설정의 정책을 batcher의 gate에 넣고, 다섯 class를 모두 담은 정책을 호출 `log`의 action `policy`(`{action: "policy", classes}`)로 host에 보낸다. host는 아래 파일의 규칙으로 검사한 뒤 파일을 쓰며, 규칙을 어긴 요청은 오류이고 아무것도 쓰지 않는다.
+- **파일.** host는 정책을 `<config-dir>/log-policy.json`(mode `0600`)에 새 파일을 경로 위로 rename하는 방식으로 쓴다: `{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}`. 파일은 모든 class를 한 번씩 여섯 값 중 하나로 이름 붙인다. reader는 파일 이름과 발견한 것을 담은 오류로 파일을 거부한다: JSON이 아닌 글, `schema`와 `classes` 외의 항목, 1이 아닌 schema, 객체가 아닌 `classes`, 계약 밖의 class, 빠진 class, 글이 아닌 값, 여섯 값 밖의 값.
+- **감시.** 모든 프로세스는 파일을 적용하고 운영체제의 파일 시스템 event로 감시하므로, 파일을 읽는 타이머도 정책을 나르는 프로토콜 연산도 없다. 생성, 쓰기, 교체, rename은 파일의 정책을 적용하고, 삭제는 기본 정책을 적용한다. 파일을 그대로 두는 알림은 아무것도 바꾸지 않는다. 빈 파일은 writer가 잘라 내고 쓰는 중인 파일이므로 다음 알림을 기다린다. 규칙을 어긴 파일은 장소 `log policy`의 오류 기록이며 적용 중인 정책은 그대로 남는다. host는 파일을 자기 writer에 적용하고 native 라이브러리에 준다(`sp_event_set_policy`). 라이브러리는 host 프로세스의 일부이기 때문이다. page는 자기 설정의 정책을 가진다(surface의 문서에는 설정이 없으므로 그 event는 host의 gate를 지난다). sidecar는 자기 프로세스에서 파일을 감시한다.
+- **Gate.** 생산자는 event의 field를 만들기 전에 `enabled(class, level)`을 묻는다. 답이 아니오일 때 만들기를 건너뛰는 생산자는 세는 형태(`Gate`, `gate`, `sp_event_gate`)를 묻고, 모든 층의 writer도 자기에게 닿은 event에 대해 이를 묻는다. 그래서 정책이 저장하지 않는 event는 큐에 들어가거나 쓰이지 않는다. 인자를 직렬화하는 host의 생산자(`host.binding.call`, `host.endpoint.call`, trace), page(`page.call`, trace, surface의 문서), native 라이브러리(`native.input.query`, 센 관찰과 전달한 관찰)는 만들기 전에 묻는다. 이름을 catalog가 선언하지 않은 event에는 class도 gate도 없다.
+- **세기.** gate가 거부한 모든 event는 class와 level별로 세고, 그 수는 모든 gate를 지나는 class `lifecycle`, level `info`의 event로 나간다: `log.gated`(host), `page.log.gated`(page), `native.log.gated`(native 라이브러리, writer가 ring을 비울 때 보고)이며 `class`, `level`, `count`(이전 보고 이후의 정확한 수)를 담는다. writer는 배치 간격마다와 flush할 때 보고한다.
+- **변경.** writer가 처음 적용하는 정책과 이후의 모든 변경은 event `log.policy`(`source`는 `default` 또는 `file`, 그리고 `classes`)이며, 같은 정책이 다시 오면 아무것도 저장하지 않는다. writer가 자기에 대해 보고하는 event(`log.open`, `log.rotated`, `log.dropped`, `log.policy`, `log.gated`, `log.pruned`)는 모든 gate를 지나므로 class `lifecycle`을 끈 정책도 끈 사실을 말한다.
 
 ## writer
 
 writer는 프로세스에서 event를 파일의 줄로 바꾸는 부분이다.
 
-- 생산자는 먼저 정책을 확인한다(분기 하나). 그 뒤 event를 소유하는 메시지로 만들어 개수와 바이트로 제한한 큐에 막힘 없이 넣는다. 큐가 가득 차면 손실 카운터를 올린다. 만들기 비싼 field는 closure로 넘기거나 `enabled(name)`으로 감싼다.
-- 프로세스마다 writer 스레드 하나가 `seq`를 붙이고, JSON으로 직렬화하고, 배치(100 ms마다, 64 KB가 쌓일 때, 또는 `error` 뒤 즉시)로 쓰고, 파일을 회전한다. `error`는 writer를 깨우고 돌아오며 생산자는 디스크를 기다리지 않는다.
-- writer는 손실 카운터를 `log.dropped` event `{from_seq, to_seq, count, bytes, reason}`로 바꾼다. 쓰기가 실패하면(디스크 가득 참, 입출력 오류) writer는 손실을 세고 상태로 보이며, 쓰기가 다시 되면 `log.dropped`를 기록한다. heartbeat가 끝난 writer 스레드를 감지하면 프로세스는 fatal 오류를 보고하고 끝난다.
+- 생산자는 먼저 gate `enabled(class, level)`을 묻는다([정책](#정책), 분기 하나). 그 뒤 event를 소유하는 메시지로 만들어 개수와 바이트로 제한한 큐에 막힘 없이 넣는다. 큐가 가득 차면 그 event의 channel의 손실 카운터를 올린다. 만들기 비싼 field는 closure나 builder 함수로 넘기거나 생산자가 만들기 전에 gate에 묻는다. 닫힌 gate는 field를 만들지 않는다.
+- 프로세스마다 writer 스레드 하나가 `seq`를 붙이고, JSON으로 직렬화하고, 배치(100 ms마다, 64 KB가 쌓일 때, 또는 `error` 뒤 즉시)로 쓰고, 파일들을 회전한다. `seq`는 프로세스의 main 파일과 debug 파일에 걸쳐 이어진다. `error`는 writer를 깨우고 돌아오며 생산자는 디스크를 기다리지 않는다. writer는 channel `debug`의 첫 event를 쓸 때 `log.open`을 첫 줄로 하여 debug 파일을 만든다. 그런 event가 없는 실행에는 debug 파일이 없다.
+- writer는 손실 카운터를 `log.dropped` event `{from_seq, to_seq, count, bytes, reason, channel}`로 바꾸며, event를 잃은 channel마다 하나씩이다. `channel`은 `other`(level `error`, `warn`, `info`) 또는 `debug`(level `debug`, `trace`)이고, 해독할 수 없는 record에는 level이 없으므로 그 손실은 `other`로 센다. `log.dropped`는 자신이 가리키는 `seq` 범위 다음에 main 파일에 저장한다. 쓰기가 실패하면(디스크 가득 참, 입출력 오류) writer는 손실을 세고 상태로 보이며, 쓰기가 다시 되면 `log.dropped`를 기록한다. heartbeat가 끝난 writer 스레드를 감지하면 프로세스는 fatal 오류를 보고하고 끝난다.
 - 모든 종료 경로는 프로세스가 끝나기 전에 deadline을 두고 큐를 flush한다: Go host의 shutdown, Rust host의 exit, `panic = abort`, `os.Exit`.
 - host의 writer는 같은 프로세스의 다른 계층의 event(page 배치, native ring)를 그 event가 가진 시계(`ts_us`, `mono_ns`), 상관 식별자, 계층 그대로 받는다. 이런 event의 이름은 계층으로 시작해야 하고, 계약에 없는 계층, JSON이 아닌 field, 0인 `mono_ns`, 비어 있거나 따옴표·역슬래시·제어 문자를 담은 식별자는 오류로 거부하며, `seq`는 여전히 writer가 부여한다. host의 생산자는 호출 시점에 두 시계를 읽고(monotonic 시계는 `sp_mono_ns`를 읽는 플랫폼 연산 `MonotonicNanos`로 읽으므로 host와 native 라이브러리가 한 시계를 쓴다), writer가 스스로 만드는 event(`log.open`, `log.rotated`, `log.dropped`)는 만들 때 읽는다. 입력 event를 내는 생산자는 식별자를 함께 준다(`EmitHostCids`, `emit_host_cids`).
-- native 라이브러리에는 writer가 없다. C의 bounded lock-free ring을 소유하며, `sp_event`와 `sp_event_cids`가 어느 스레드에서든 event를 ring에 복사하고 host의 writer 스레드가 `sp_event_drain` 호출로 ring을 비운다. 어떤 생산자 스레드도 Go나 Rust를 부르지 않는다. host writer가 생기기 전에 쓴 event는 ring에서 기다린다. `sp_event_cids(level, name, cids, fields_json)`은 마이크로초 단위 wall clock, 나노초 단위 monotonic 시계(`sp_mono_ns`), level, 이름(1~255바이트, 계층 `native`), 상관 식별자(쉼표로 구분한 목록이며 없으면 빈 문자열), JSON 텍스트인 field를 저장하고 `sp_event`는 식별자 없는 호출이다. 없거나 비었거나 더 긴 이름, 열거에 없는 level, 없는 field, 없는 목록, 따옴표·역슬래시·제어 문자를 가진 목록은 거부하고 센다. drain은 `ts_us`(8바이트), `mono_ns`(8), level(1바이트), 이름 길이(1바이트), cids 길이(2바이트), 이름, cids, field로 된 record를 각각 4바이트 길이 뒤에 돌려준다. ring은 4 MiB이며 가득 차면 event를 거부하고 세고, host writer가 그 수를 이유 `the native ring was full`의 `log.dropped`로 기록한다. writer는 플랫폼 연산 `PullNativeEvents`로 배치 간격마다와 flush할 때 ring을 pull하며, pull 한 번에 256 KiB씩 최대 64번 읽는다. ring에서 writer로 오는 event source는 없다. native 스레드가 Go나 Rust를 부르면 안 되므로 pull은 polling이다. writer는 pull한 record를 library가 준 시계와 식별자 그대로 계층 `native`로 저장한다. 이름이 `native.`로 시작하지 않거나, level이 정의되지 않았거나, field가 JSON 객체가 아니거나, `mono_ns`가 0이거나, 식별자가 비었거나 따옴표·역슬래시·제어 문자를 담았거나, 길이가 buffer에 맞지 않는 record는 거부하고 표준 오류에 거부를 보고하며 이유 `a native record was refused`의 `log.dropped`로 센다. ring을 pull하지 못하는 플랫폼은 host의 시작에 실패한다. host는 writer를 시작하기 전에 실행의 boot 식별자를 라이브러리에 준다(`sp_event_set_boot`, 플랫폼 연산 `SetEventBoot`). 그래서 라이브러리가 부여하는 식별자(`sp_cid_new`, `<boot>.<n>`)는 그 실행의 파일에 속한다.
-- page는 `context.log.<level>(event, fields)`로 기록한다. event는 배열에 모였다가 host로 가는 배치 호출 하나로 나간다. 100 ms 타이머, 크기 상한에 닿을 때, `pagehide`와 `visibilitychange`에서 나가며 생산자는 응답을 기다리지 않는다. `console.*`, 전역 `error` event, `unhandledrejection` event도 같은 입구로 들어간다. 배치 호출은 요청 `{action: "batch", events}`를 가진 host 호출 `log`이며, host는 배치 전체를 검증한 뒤에야 event를 저장하고, 모든 event를 page가 준 `ts_us`, `mono_ns`, `cids`로 계층 `page`나 `plugin`에 저장하며, 이름이 `page.`나 `plugin.`으로 시작하지 않는 event, 계약에 없는 level, 양의 정수가 아닌 `ts_us`나 `mono_ns`, 따옴표·역슬래시·제어 문자 없는 비어 있지 않은 문자열의 배열이 아닌 `cids`, 객체가 아닌 `fields`는 `events[<index>]`를 가리키는 오류로 거부한다. page에는 마이크로초 시계가 없다. `Date.now()`는 밀리초 해상도이므로 page는 event마다 `performance.now()` 읽기값을 저장하고 배치가 나갈 때 변환한다. 첫 배치 전에 요청 `{action: "clock"}`을 다섯 번 보내고, host는 호출 시점에 읽은 `{ts_us, mono_ns}`로 답하며 event는 저장하지 않는다. page는 `performance.now()`로 잰 왕복이 가장 짧았던 답을 고르고 그 왕복의 한가운데를 답의 시점으로 삼는다. 그러면 event의 `ts_us`와 `mono_ns`는 읽은 시점의 host 값이 되며, 해상도는 `performance.now()`의 것이고 오차는 가장 짧은 왕복의 절반 이하이다. 입력을 이어받는 호출의 page event(`sidecarSend`의 `page.call`)는 요청의 식별자를 `cids`에 담는다.
+- native 라이브러리에는 writer가 없다. C의 bounded lock-free ring을 소유하며, `sp_event`와 `sp_event_cids`가 어느 스레드에서든 event를 ring에 복사하고 host의 writer 스레드가 `sp_event_drain` 호출로 ring을 비운다. 어떤 생산자 스레드도 Go나 Rust를 부르지 않는다. host writer가 생기기 전에 쓴 event는 ring에서 기다린다. `sp_event_cids(class, level, name, cids, fields_json)`은 마이크로초 단위 wall clock, 나노초 단위 monotonic 시계(`sp_mono_ns`), level, class(생산자가 catalog에서 가져오는 `SP_CLASS_*`의 번호), 이름(1~255바이트, 계층 `native`), 상관 식별자(쉼표로 구분한 목록이며 없으면 빈 문자열), JSON 텍스트인 field를 저장하고 `sp_event`는 식별자 없는 호출이다. 없거나 비었거나 더 긴 이름, 열거에 없는 level이나 class, 없는 field, 없는 목록, 따옴표·역슬래시·제어 문자를 가진 목록은 거부하고 센다. 정책의 닫힌 gate도 event를 거부하고 세지만 손실이 아니라 gate된 event로 센다: `sp_event_set_policy(levels)`가 라이브러리에 정책을 주고(class마다 level 하나 또는 -1), `sp_event_enabled(class, level)`은 세지 않고 답하며, `sp_event_gate(class, level)`은 답하고 센다. 생산자는 field를 만들기 전에 후자를 묻는다(drain은 수를 `native.log.gated`로 저장한다). drain은 `ts_us`(8바이트), `mono_ns`(8), level(1바이트), class(1), 이름 길이(1바이트), cids 길이(2바이트), 이름, cids, field로 된 record를 각각 4바이트 길이 뒤에 돌려준다. ring은 4 MiB이며 가득 차면 event를 거부하고 그 level의 channel(error, warn, info는 `SP_EVENT_CHANNEL_OTHER`, debug와 trace는 `SP_EVENT_CHANNEL_DEBUG`)로 세고, host writer가 각 수를 이유 `the native ring was full`과 channel을 담은 `log.dropped`로 기록한다. writer는 플랫폼 연산 `PullNativeEvents`로 배치 간격마다와 flush할 때 ring을 pull하며, pull 한 번에 256 KiB씩 최대 64번 읽는다. ring에서 writer로 오는 event source는 없다. native 스레드가 Go나 Rust를 부르면 안 되므로 pull은 polling이다. writer는 pull한 record를 library가 준 시계와 식별자 그대로 계층 `native`로 저장한다. 이름이 `native.`로 시작하지 않거나, level이나 class가 정의되지 않았거나, class가 catalog가 그 이름에 선언한 class와 다르거나, field가 JSON 객체가 아니거나, `mono_ns`가 0이거나, 식별자가 비었거나 따옴표·역슬래시·제어 문자를 담았거나, 길이가 buffer에 맞지 않는 record는 거부하고 표준 오류에 거부를 보고하며 이유 `a native record was refused`의 `log.dropped`로 센다. ring을 pull하지 못하는 플랫폼은 host의 시작에 실패한다. host는 writer를 시작하기 전에 실행의 boot 식별자를 라이브러리에 준다(`sp_event_set_boot`, 플랫폼 연산 `SetEventBoot`). 그래서 라이브러리가 부여하는 식별자(`sp_cid_new`, `<boot>.<n>`)는 그 실행의 파일에 속한다.
+- page는 `context.log.<level>(event, fields)`로 기록한다. event는 배열에 모였다가 host로 가는 배치 호출 하나로 나간다. 100 ms 타이머, 크기 상한에 닿을 때, `pagehide`와 `visibilitychange`에서 나가며 생산자는 응답을 기다리지 않는다. event의 class는 catalog에서 생성한 표(`packages/workbench/event-classes.js`, `scripts/generate-event-classes.mjs`가 씀)에서 그 이름의 class다. field는 그것을 만드는 함수일 수 있으며 gate가 저장하는 event에서만 실행된다. 닫힌 gate는 event를 세고 다음 배치에서 `page.log.gated`로 보고한다. 배치 호출은 action `policy`([정책](#정책))도 나른다. `console.*`, 전역 `error` event, `unhandledrejection` event도 같은 입구로 들어간다. 배치 호출은 요청 `{action: "batch", events}`를 가진 host 호출 `log`이며, host는 배치 전체를 검증한 뒤에야 event를 저장하고, 모든 event를 page가 준 `ts_us`, `mono_ns`, `cids`로 계층 `page`나 `plugin`에 저장하며, 이름이 `page.`나 `plugin.`으로 시작하지 않는 event, 계약에 없는 level, 양의 정수가 아닌 `ts_us`나 `mono_ns`, 따옴표·역슬래시·제어 문자 없는 비어 있지 않은 문자열의 배열이 아닌 `cids`, 객체가 아닌 `fields`는 `events[<index>]`를 가리키는 오류로 거부한다. page에는 마이크로초 시계가 없다. `Date.now()`는 밀리초 해상도이므로 page는 event마다 `performance.now()` 읽기값을 저장하고 배치가 나갈 때 변환한다. 첫 배치 전에 요청 `{action: "clock"}`을 다섯 번 보내고, host는 호출 시점에 읽은 `{ts_us, mono_ns}`로 답하며 event는 저장하지 않는다. page는 `performance.now()`로 잰 왕복이 가장 짧았던 답을 고르고 그 왕복의 한가운데를 답의 시점으로 삼는다. 그러면 event의 `ts_us`와 `mono_ns`는 읽은 시점의 host 값이 되며, 해상도는 `performance.now()`의 것이고 오차는 가장 짧은 왕복의 절반 이하이다. 입력을 이어받는 호출의 page event(`sidecarSend`의 `page.call`)는 요청의 식별자를 `cids`에 담는다.
 - fatal 신호 처리기는 프로세스가 시작할 때 열어 둔 파일 descriptor에 async-signal-safe 호출만으로 짧은 줄을 쓴다. Go의 runtime fatal 오류는 가로챌 수 없으므로 그 출력은 프로세스의 crash 파일로 가고, host의 모든 goroutine을 시작하는 진입점 `routine.Go`가 panic을 recover하고 `error` event `host.panic`을 저장한 뒤 프로세스를 끝낸다. Rust host는 같은 event를 panic hook에서 저장하며 panic한 스레드에서 writer를 기다리지 않고, 별도 스레드가 flush한 뒤 프로세스를 끝낸다([hosts](hosts.md#process-lifecycle)).
 
-- 명령줄 도구 `sok`은 두 패키지(`event_log.go`, `event_log.rs`) 각각에 자기 writer를 가지며 층과 역할은 `sok`이다. [상한](#상한)의 큐, `seq`를 부여하고 100 ms마다 그리고 `error` 뒤에는 즉시 batch를 쓰며 거절한 event를 `log.dropped`로 기록하는 writer goroutine 또는 thread 하나, 도구가 끝나기 전 2초 기한의 flush로 이루어진다. 단조 시계는 플랫폼 인터페이스의 동작 `MonotonicNanos`(`monotonic_nanos`)로 읽으며, macOS에서는 `CLOCK_UPTIME_RAW`(`sp_mono_ns`의 시계), Linux에서는 `CLOCK_MONOTONIC`이다. 한 번의 실행은 많아야 `log.open`, `sok.command`, `sok.panic`, `log.dropped`를 저장하므로 writer는 파일을 rotate하지 않는다. 별도 구현인 이유는 host writer가 host 모듈과 crate의 일부로 host 플랫폼 인터페이스와 routine 입구에 묶여 있고 host가 도구 모듈과 crate에 의존하므로, 도구가 host writer를 import하면 순환이 되기 때문이다. 계약은 `packages/log-contract/fixtures`의 golden 파일에 대한 도구의 시험([host 계약](host-contract.ko.md)의 사례 `cli.log.*`)으로 지키며, 도구의 writer에는 native ring pull, 다른 층의 중계, `cids`가 없다. goroutine과 thread는 panic을 recover하고 `sok.panic`을 저장한 뒤 프로세스를 끝내는 진입점 `Go`(`spawn_named`)로 시작한다([명령줄](cli.ko.md#event-log)).
+- 명령줄 도구 `sok`은 두 패키지(`event_log.go`, `event_log.rs`) 각각에 자기 writer를 가지며 층과 역할은 `sok`이다. [상한](#상한)의 큐, `seq`를 부여하고 100 ms마다 그리고 `error` 뒤에는 즉시 batch를 쓰며 거절한 event를 `log.dropped`(channel 포함)로 기록하는 writer goroutine 또는 thread 하나, 도구가 끝나기 전 2초 기한의 flush로 이루어진다. host의 writer처럼 `class`와 `undeclared`를 쓰며, level `error`, `warn`, `info`는 `logs/sok-<boot>.jsonl`에, `debug`와 `trace`는 그 level의 첫 event로 만드는 `logs/sok-<boot>.debug.jsonl`에 쓴다. 도구의 한 번의 실행은 정책을 감시하기에 너무 짧아 정책을 적용하지 않고 모든 event를 저장한다. 단조 시계는 플랫폼 인터페이스의 동작 `MonotonicNanos`(`monotonic_nanos`)로 읽으며, macOS에서는 `CLOCK_UPTIME_RAW`(`sp_mono_ns`의 시계), Linux에서는 `CLOCK_MONOTONIC`이다. 한 번의 실행은 많아야 `log.open`, `sok.command`, `sok.panic`, `log.dropped`를 저장하므로 writer는 파일을 rotate하지 않는다. 별도 구현인 이유는 host writer가 host 모듈과 crate의 일부로 host 플랫폼 인터페이스와 routine 입구에 묶여 있고 host가 도구 모듈과 crate에 의존하므로, 도구가 host writer를 import하면 순환이 되기 때문이다. 계약은 `packages/log-contract/fixtures`의 golden 파일에 대한 도구의 시험([host 계약](host-contract.ko.md)의 사례 `cli.log.*`)으로 지키며, 도구의 writer에는 native ring pull, 다른 층의 중계, `cids`, 정책 gate, 보존이 없다. goroutine과 thread는 panic을 recover하고 `sok.panic`을 저장한 뒤 프로세스를 끝내는 진입점 `Go`(`spawn_named`)로 시작한다([명령줄](cli.ko.md#event-log)).
 
 event를 쓰는 각 저장소는 자기 작은 writer 구현을 가지며 `packages/log-contract/fixtures`의 golden lines와 golden catalog로 시험한다. 저장소 사이에 runtime 코드를 공유하지 않으며 sidecar는 실행 중에 core 릴리스에 의존하지 않는다.
 
@@ -105,7 +116,14 @@ event가 싣는 모든 buffer와 값에는 상한이 있고, 생산자는 값을
 
 ## 파일
 
-프로세스 실행 하나가 설정 폴더 아래 `logs/<role>-<boot>.jsonl`을 쓴다. host 프로세스는 native 라이브러리, page, plugin의 event도 담는다. 각 writer는 자기 파일만 100 MB에서 회전하고 이전 세대 5개(`.1`에서 `.5`)를 남기며 다른 프로세스의 파일은 회전하지 않는다. 회전이 일으키는 유일한 손실은 가장 오래된 세대이며 writer가 회전을 기록한다.
+프로세스 실행 하나가 설정 폴더의 `logs/` 아래 파일 둘, main 파일과 debug 파일을 쓴다:
+
+| 파일 | level | 질의의 channel |
+| --- | --- | --- |
+| `logs/<role>-<boot>.jsonl` | `error`, `warn`, `info` | `other` |
+| `logs/<role>-<boot>.debug.jsonl` | `debug`, `trace` | `debug` |
+
+사람은 실행 event의 약 5%를 담은 main 파일을 먼저 읽고, main 파일이 실패를 설명하지 못할 때 debug 파일을 연다. 그래서 debug 파일도 main 파일만큼 완전하다: 표본 추출이 없고, 어느 파일의 손실이든 channel을 밝힌 `log.dropped`가 센다. `seq`는 writer가 두 파일에 걸쳐 부여하므로 두 파일을 합치면 실행의 모든 `seq`가 한 번씩 있다. host 프로세스는 native 라이브러리, page, plugin의 event도 담는다. 각 파일은 따로 100 MB에서 회전하며 다른 프로세스의 파일은 회전하지 않는다. 닫은 파일은 세대 `<file>.<n>`이 되고 번호는 회전 순서대로 1부터 센다. 회전은 아무것도 지우지 않는다. 압축한 파일은 그 자리에서 검색할 수 없으므로 세대는 압축하지 않으며, 아래 보존이나 사람만 세대를 지운다.
 
 event가 아닌 raw 파일이 둘 있다. `logs/<role>-<boot>.stderr`는 프로세스의 표준 오류(운영체제와 framework의 출력)를, `logs/<role>-<boot>.crash`는 runtime fatal 오류의 crash 출력을 담는다. viewer는 이를 event 파일과 함께 나열한다.
 
@@ -115,9 +133,20 @@ event가 아닌 raw 파일이 둘 있다. `logs/<role>-<boot>.stderr`는 프로�
 
 각 event 파일 옆에는 파일에서 파생한 색인 `<name>.idx`가 있으며 event 파일이 아니다([색인](#색인)).
 
+## 보존
+
+`logs/`에 있는 실행들의 파일은 6 GiB 상한 안에 머문다. *실행*은 이름이 `<role>-<boot>.`로 시작하는 파일 중 event 파일, 세대, debug 파일, 색인, 표준 오류, crash 출력, 고정 표시인 것이다. 폴더의 다른 파일(`application.log`, 상태 파일, capture, `crash-found.txt`)은 어느 실행에도 속하지 않으며 그대로 둔다. host의 writer는 시작할 때와 회전할 때마다 상한을 적용한다:
+
+- 실행들의 파일이 상한을 넘으면 writer는 실행을 통째로, 가장 새로운 파일이 가장 오래된 실행부터 지우며, 파일이 상한 안에 들거나 지울 실행이 없을 때까지 계속한다.
+- writer 자신의 실행과 고정 표시가 있는 실행은 지우지 않는다. 고정 표시는 실행 옆의 파일 `logs/<role>-<boot>.keep`이며, 아직 어떤 기록도 분류하지 못한 실패가 있는 실행에 사람이 만든다.
+- 파일을 지우거나 상한을 넘은 채로 두는 각 회차는 main 파일의 event `log.pruned` 하나다: 지운 `files`와 `bytes`, 지운 실행의 이름 `runs`, 그 event 파일의 `ts_us` 범위 `from_us`와 `to_us`, 남은 파일의 크기 `remaining`, `bound`. level은 `info`이고, writer 자신의 실행과 고정된 실행만 남아 `remaining`이 여전히 `bound`를 넘으면 `warn`이다. 아무것도 지우지 않고 파일이 상한 안에 있는 회차는 event를 저장하지 않는다.
+- 읽거나 지울 수 없는 파일은 경로와 함께 표준 오류에 보고하고 회차는 다음 파일로 계속한다.
+
+상한은 같은 디스크에 있으므로 실행의 색인 파일과 표준 오류도 센다. 양의 상한 없이 시작한 writer는 옵션 이름을 담은 오류로 시작에 실패한다.
+
 ## 색인
 
-event 파일이 기준이다. 각 event 파일 `logs/<name>`(`<role>-<boot>.jsonl`, `<role>-<boot>.debug.jsonl`과 그 세대 `.1`부터 `.5`) 옆의 색인 `logs/<name>.idx`는 파일의 어느 부분이 질의에 맞는 event를 가질 수 있는지 알려 준다. 그래서 질의는 그 부분만 읽고 파일 전체를 읽지 않는다([질의](#질의)). 색인은 파생물이다. 지워도 잃는 것이 없으며 파일에서 다시 만든다.
+event 파일이 기준이다. 각 event 파일 `logs/<name>`(`<role>-<boot>.jsonl`, `<role>-<boot>.debug.jsonl`과 그 세대 `.<n>`) 옆의 색인 `logs/<name>.idx`는 파일의 어느 부분이 질의에 맞는 event를 가질 수 있는지 알려 준다. 그래서 질의는 그 부분만 읽고 파일 전체를 읽지 않는다([질의](#질의)). 색인은 파생물이다. 지워도 잃는 것이 없으며 파일에서 다시 만든다.
 
 **segment.** 파일의 줄은 첫 줄부터 세어 연속한 4,096줄씩 segment로 묶고, 마지막 segment는 마지막 가득 찬 segment 뒤의 줄을 담는다. 줄은 줄바꿈으로 끝나야 완전하며, 마지막 줄바꿈 뒤의 바이트는 색인하지 않는다. 색인은 segment마다 다음을 보관한다.
 
@@ -126,7 +155,7 @@ event 파일이 기준이다. 각 event 파일 `logs/<name>`(`<role>-<boot>.json
 | `offset`, `length` | 첫 줄의 바이트 offset과 바이트 크기 |
 | `first_seq`, `last_seq`, `events` | 첫 줄과 마지막 줄의 `seq`, 줄 수 |
 | `min_ts_us`, `max_ts_us` | 줄의 `ts_us` 중 가장 작은 값과 가장 큰 값(layer의 시계는 batch 간격만큼 어긋나므로 `ts_us`는 `seq`와 함께 커지지 않는다) |
-| level, layer, class | 나타나는 값마다 비트 하나: `error`, `warn`, `info`, `debug`, `trace`, `native`, `host`, `page`, `plugin`, `sidecar`, `sok`, `lifecycle`, `input`, `call`, `io`, `frame`(줄의 `class` 항목이며 F160.7 전에는 어떤 writer도 쓰지 않으므로 그때까지 class 비트는 서지 않는다) |
+| level, layer, class | 나타나는 값마다 비트 하나: `error`, `warn`, `info`, `debug`, `trace`, `native`, `host`, `page`, `plugin`, `sidecar`, `sok`, `lifecycle`, `input`, `call`, `io`, `frame`(줄의 `class` 항목이며 그 항목이 없는 줄은 class 비트를 세우지 않는다) |
 | Bloom filter | 다음 표의 다섯 개 |
 
 segment의 Bloom filter는 다음과 같다.
@@ -147,7 +176,7 @@ Bloom filter는 `8 × 바이트` 비트를 가진다. 항목의 hash는 UTF-8 �
 
 **색인을 쓰는 쪽.** 색인은 timer가 아니라 파일의 event로 파일을 따라간다. host의 writer가 batch를 쓴 뒤([writer](#writer)) 쓰기 알림이 깨우는 host의 goroutine이나 thread가 덧붙은 줄을 색인하고, 색인하는 동안 오는 알림은 갱신 한 번으로 합쳐진다. 질의도 읽을 각 파일의 색인을 쓰기 전에 최신으로 맞추므로, host가 쓰지 않은 색인(sidecar의 파일, host가 실행 중이 아닌 설정 디렉터리)은 `sok debug query`와 host의 질의가 만들고 갱신한다. 한 색인의 갱신은 색인 파일의 advisory lock(`flock`)으로 프로세스 사이에서 서로 배타적이며, 갱신은 lock을 잡은 뒤 연 파일이 아직 그 경로의 파일인지 확인하므로 회전이 두 파일을 섞을 수 없다. 색인이 이미 최신이면 갱신은 아무것도 바꾸지 않으므로 멱등이다. host는 파일 전체로 만든 색인마다 level `info`의 event `host.log.index_rebuilt`(`file`, `reason`, `lines`, `bytes`, `micros`)를 저장하고, 갱신의 다른 실패는 문구마다 한 번 application log에 장소 `log index`의 `error` 기록으로 보인다. 증분 갱신은 event를 저장하지 않는다. 그 event가 다음 갱신이 색인할 줄이 되기 때문이다.
 
-**회전.** writer가 파일을 회전할 때 그 파일의 색인 lock을 잡고 색인을 최신으로 맞춘 뒤 세대 이름을 바꾸고 색인 파일도 함께 바꾼다(`<name>.idx`는 `<name>.1.idx`, `<name>.1.idx`는 `<name>.2.idx`가 되고 지워진 세대의 색인은 지운다). 닫힌 세대의 색인은 완전하며 다시 만들지 않는다.
+**회전.** writer가 파일을 회전할 때 그 파일의 색인 lock을 잡고 색인을 최신으로 맞춘 뒤 파일을 자기 세대 이름으로 바꾸고 색인 파일도 함께 바꾼다(`<name>.idx`는 `<name>.<n>.idx`가 되며 다른 색인 파일은 옮기지 않는다). 닫힌 세대의 색인은 완전하며 다시 만들지 않는다.
 
 **golden fixture.** `packages/log-contract/fixtures/query`는 event 파일, 두 구현이 각 파일에서 만들어야 하는 색인의 SHA-256(원본의 수정 시각을 1,000,000,000초로 정한 상태), 질의와 기대하는 page를 담는다. Go와 Rust 구현의 test는 파일에서 색인을 만들어 SHA-256을 비교하고 질의를 실행한다.
 
@@ -155,7 +184,7 @@ Bloom filter는 `8 × 바이트` 비트를 가진다. 항목의 hash는 UTF-8 �
 
 언어마다 질의 구현이 하나씩 있고(Go는 module `sok`, Rust는 crate `soksak-sok-tauriv2`) `<config-dir>/logs/`의 event 파일을 색인으로 읽어 page 하나를 답한다. 두 구현은 같은 파일과 같은 매개변수에 같은 page, 같은 cursor, 같은 오류 문구를 주며 golden fixture가 이를 확인한다.
 
-**파일.** 질의의 event 파일은 `logs/`에서 이름이 `<role>-<boot>.jsonl`, `<role>-<boot>.jsonl.<n>`(`n`은 1부터 5), `<role>-<boot>.debug.jsonl`, `<role>-<boot>.debug.jsonl.<n>`인 파일이다. `role`은 소문자 단어이고 `boot`은 이름의 나머지다. `.stderr`, `.crash`, `.idx` 파일, 상태 파일, capture는 event 파일이 아니다. *프로세스*는 role과 boot의 쌍(`host-1791500000-4242`)이고, 한 프로세스의 파일(파일, 그 세대, 그 debug 파일)은 하나의 `seq` 공간을 공유한다([event](#event)). *channel*은 파일의 집합이다: `other`는 debug 파일이 아닌 파일, `debug`는 debug 파일, `all`은 둘 다다. F160.7이 끝나면 writer가 `error`, `warn`, `info`를 파일에, `debug`를 debug 파일에 저장한다. 그때까지는 모든 level을 파일에 저장하며 질의는 있는 파일을 읽는다.
+**파일.** 질의의 event 파일은 `logs/`에서 이름이 `<role>-<boot>.jsonl`, `<role>-<boot>.jsonl.<n>`(`n`은 앞에 0이 없는 양수), `<role>-<boot>.debug.jsonl`, `<role>-<boot>.debug.jsonl.<n>`인 파일이다. `role`은 소문자 단어이고 `boot`은 이름의 나머지다. `.stderr`, `.crash`, `.idx` 파일, 상태 파일, capture는 event 파일이 아니다. *프로세스*는 role과 boot의 쌍(`host-1791500000-4242`)이고, 한 프로세스의 파일(파일, 그 세대, 그 debug 파일)은 하나의 `seq` 공간을 공유한다([event](#event)). *channel*은 파일의 집합이다: `other`는 debug 파일이 아닌 파일, `debug`는 debug 파일, `all`은 둘 다다. writer는 `error`, `warn`, `info`를 파일에, `debug`와 `trace`를 debug 파일에 저장한다([파일](#파일)). channel `debug`의 event를 저장하지 않은 실행에는 debug 파일이 없으며 질의는 있는 파일을 읽는다.
 
 **매개변수.** endpoint 메서드 `log.query`와 host 호출 `logQuery`의 매개변수는 객체 하나이고, 표에 없는 항목은 거절한다. 주지 않은 항목은 제한하지 않는다.
 
@@ -196,7 +225,7 @@ Bloom filter는 `8 × 바이트` 비트를 가진다. 항목의 hash는 UTF-8 �
 
 ## catalog
 
-event를 내는 각 저장소는 `events.json`에 event를 선언한다(이 저장소는 [events.json](events.json)이며 계층 `native`, `host`, `page`를 소유한다. `page.record.<level>`처럼 자리 표시자를 가진 이름은 계열을 선언한다. `level`은 level 하나 또는 level 목록이고, 이름이 `?`로 끝나는 field는 선택이며, `string|null` 같은 타입은 각 부분을 받아들이고, 계층 `sidecar`는 host가 저장하는 sidecar 표준 오류의 줄인 `sidecar.record.<level>`만 담는다. `make events-check`는 소스의 emit 지점을 읽어 선언되지 않은 채 emit된 이름, emit 지점이 없는 선언된 event, 선언이 허용하지 않는 literal 지점의 level이나 field를 실패로 보고한다. 지점은 이름을 literal로 주고(page의 template은 계열이다), 이름을 만드는 지점 위의 주석 `events: <names>`는 그것이 만드는 선언된 이름을 적으며, `events: forwarded`는 그 지점이 호출자의 이름을 넘긴다고 밝힌다. `node scripts/check-events.mjs --logs <config-dir>…`는 창 검사가 남긴 모든 층의 event 파일을 감사한다. [검사](#검사) 참고): event마다 이름, 층, class, level, 필수 field와 그 타입, 가릴 인자, 인자의 크기 상한, 설명. 저장소는 다른 모든 검사에서 자기 소스를 검사하듯 자기 소스를 자기 catalog로 검사한다. 이 저장소는 catalog의 schema와 `native`·`host`·`sok` 층, page의 event를 소유한다. plugin이나 sidecar는 manifest(`events`, `executable`처럼 패키지 안의 경로)에 자기 catalog 파일을 적고, 릴리스는 그 파일을 담으며, viewer가 설치된 manifest의 catalog를 읽는다. 이 저장소는 그것을 이름으로 부르지 않는다.
+event를 내는 각 저장소는 `events.json`에 event를 선언한다(이 저장소는 [events.json](events.json)이며 계층 `native`, `host`, `page`를 소유한다. `page.record.<level>`처럼 자리 표시자를 가진 이름은 계열을 선언한다. `level`은 level 하나 또는 level 목록이고, 이름이 `?`로 끝나는 field는 선택이며, `string|null` 같은 타입은 각 부분을 받아들이고, 계층 `sidecar`는 host가 저장하는 sidecar 표준 오류의 줄인 `sidecar.record.<level>`만 담는다. `make events-check`는 소스의 emit 지점을 읽어 선언되지 않은 채 emit된 이름, emit 지점이 없는 선언된 event, 선언이 허용하지 않는 literal 지점의 level이나 field를 실패로 보고한다. 지점은 이름을 literal로 주고(page의 template은 계열이다), 이름을 만드는 지점 위의 주석 `events: <names>`는 그것이 만드는 선언된 이름을 적으며, `events: forwarded`는 그 지점이 호출자의 이름을 넘긴다고 밝힌다. `node scripts/check-events.mjs --logs <config-dir>…`는 창 검사가 남긴 모든 층의 event 파일을 감사한다. [검사](#검사) 참고): event마다 이름, 층, class, level, 필수 field와 그 타입, 가릴 인자, 인자의 크기 상한, 설명. 저장소는 다른 모든 검사에서 자기 소스를 검사하듯 자기 소스를 자기 catalog로 검사한다. 이 저장소는 catalog의 schema와 `native`·`host`·`sok` 층, page의 event를 소유한다. writer 자신의 event는 `log.open`, `log.rotated`, `log.dropped`, `log.policy`, `log.gated`, `log.pruned`이다. 선언된 모든 이름의 class는 catalog에서 그것이 필요한 언어마다 표로 쓴다(`scripts/generate-event-classes.mjs`가 `packages/sok/wailsv3/src/event_classes.go`, `packages/sok/tauriv2/src/event_classes.rs`, `packages/workbench/event-classes.js`를 쓴다). 표가 catalog와 다르면 `make events-check`가 실패하며, catalog 검사는 native emit 지점의 class 인자도 읽어 catalog와 다른 것을 거부한다. plugin이나 sidecar는 manifest(`events`, `executable`처럼 패키지 안의 경로)에 자기 catalog 파일을 적고, 릴리스는 그 파일을 담으며, viewer가 설치된 manifest의 catalog를 읽는다. 이 저장소는 그것을 이름으로 부르지 않는다.
 
 입력 사슬의 한 단계인 event는 `"cids": "required"`로 선언하고, 감사는 비어 있지 않은 문자열 `cids`가 없는 그 event의 줄을 거부한다(입력 사슬의 guard). catalog는 입력 종류마다 남겨야 하는 사슬도(`chains`) 선언한다. 첫 층에서 마지막 층까지 event의 순서 있는 목록이다. 이 catalog는 `input`을 선언한다: `native.input.key_down`, `host.input.relay`, `page.call`(식별자를 나르는 호출 `sidecarSend`), `host.sidecar.request`. 요청이 일으키는 sidecar의 event(예: `sidecar.vt.pty_write`)는 sidecar 저장소의 catalog가 선언하며 그 저장소가 사슬을 거기서 확장한다. catalog는 [page 작업](#작업-사슬)의 사슬(`plugin`, `project`, `window`, `settings`, `update`)도 선언한다. 로그 감사는 선언된 사슬이 모두 완결되어 있기를 요구한다. 사슬의 첫 event에 나타나는 각 식별자는 모든 계층의 파일을 통틀어 그 사슬의 뒤 event마다 나타나야 한다.
 
@@ -261,7 +290,7 @@ window check는 시험 대상 애플리케이션의 event log에 시험마다 �
 
 ## 검사
 
-`soksak-log-check`(패키지 `@soksak/log-contract`, `packages/log-contract`)는 로그를 schema와 catalog로 검증한다: 줄 구조, 선언된 event, 연속된 `seq`와 `log.dropped`로 설명되는 틈, 입력 종류마다 선언된 사슬, 시험이 선언한 것 외의 `error` 없음. 단위 시험과 window check는 자기 로그를 남기고, gate는 남은 모든 로그를 검증하며, 실패한 실행의 로그는 분류하기 전까지 보관한다.
+`soksak-log-check`(패키지 `@soksak/log-contract`, `packages/log-contract`)는 로그를 schema와 catalog로 검증한다: 줄 구조, 선언된 event마다의 class(선언된 event인데 `class`가 없거나 다른 class이면 발견 사항이고, `undeclared`가 표시된 선언된 event도 그렇다), 파일마다의 level(main 파일은 `error`, `warn`, `info`, debug 파일은 `debug`, `trace`이며 `log.open`과 `log.rotated`가 모든 파일을 시작한다), 선언된 event, 연속된 `seq`와 `log.dropped`로 설명되는 틈, 입력 종류마다 선언된 사슬, 시험이 선언한 것 외의 `error` 없음. 단위 시험과 window check는 자기 로그를 남기고, gate는 남은 모든 로그를 검증하며, 실패한 실행의 로그는 분류하기 전까지 보관한다.
 
 실행의 감사 `node scripts/audit-run.mjs <실행 폴더>`는 `pnpm verify:windows`와 활성화 등급의 끝(`scripts/node-tests.mjs`의 `--script verify` 또는 `--script verify:<등급>`)에서 시험이 실패했을 때도 실행된다. 실행 폴더의 `marks.jsonl`을 읽고, 표시의 `config`에서 설정 폴더를 얻어, 그 안의 모든 층의 모든 event 파일(`host-`, `vt-`, `files-`, `shell-`, `sok-` 파일과 그 세대 `.1`부터 `.5`, debug 파일)을 catalog로 감사한다: 줄 구조, 선언 없는 event(catalog가 layer `sidecar`를 나열하므로 이 층도 감사한다), 한 process의 세대와 debug 파일을 건넌 연속된 `seq`, 폴더의 파일을 합쳐 본 선언된 사슬, 모든 `error` event. 시험의 범위는 애플리케이션 로그에서 `host.test.start`와 `host.test.end` 표시 사이의 줄이며 `(boot, seq)`로 정하고, 다른 process의 event는 `ts_us`로 범위에 놓는다. 범위에 `error`가 든 모든 시험이 그 text와 맞는 pattern(`expect_error`)을 선언했으면 `error`는 선언된 것이고, 그 밖의 `error`는(어떤 시험의 범위에도 없는 것 포함) finding이며, 끝 표시 없는 시작 표시도 finding이다. `expectEvent`로 event(`expect_event`)를 선언한 시험의 범위에 그 이름의 event가 없으면 끝 표시에서 빠진 event 이름을 밝히는 finding이다. 감사는 실행 폴더에 `judgment.json`을 쓰며, 시험과 애플리케이션마다 한 행 `{name, app, result, boot, from, to, errors, expected, missing}`이다. `from`과 `to`는 시작·끝 표시의 `{seq, file, line}`이고(끝 표시가 없으면 `to`는 null), `errors`는 범위의 `error` event를 `{file, line, text, declared}`로, `expected`는 선언한 event마다 범위에서 찾은 수를, `missing`은 하나도 없는 선언을 나열하며, 끝 표시가 있고 `missing`이 비고 모든 error가 선언된 경우에만 `result`가 `pass`다. finding은 표준 오류의 한 줄 `<file>:<line>: <message>`이고, finding이 있거나 실행에 `marks.jsonl`이 없으면 종료 상태는 1이다. `node scripts/check-events.mjs --logs <config-dir>…`는 표시 없이 설정 폴더를 감사하며 모든 `error` event를 보고한다. workflow `ci.yml`은 창 검사를 실행하지 않으므로 결함 fixture를 쓰는 감사 시험(`pnpm test`)을 실행한다. 실제 실행의 감사는 로그인한 데스크톱이 있는 self-hosted runner에서 `pnpm verify:windows`와 이 감사를 실행하고 실패한 job의 실행 폴더를 남기는 workflow `window-checks.yml`([지속적 통합](../operations/examples.ko.md#지속적-통합))과 개발 컴퓨터의 창 검사 실행에 속한다.
 
@@ -282,7 +311,7 @@ window check는 시험 대상 애플리케이션의 event log에 시험마다 �
 ## 한계
 
 - wall clock은 되감기고 잠든 기계와 깨어난 기계 사이에서 어긋날 수 있다. `mono_ns`가 한 부팅 안의 프로세스 사이 event를 정렬하고 `cids`가 한 입력의 층을 정렬한다. page는 두 시계를 host에서 한 번 유도하므로, page가 시작한 뒤 wall clock이 되감기면 page의 `ts_us`는 host의 wall clock과 어긋나고, 해상도는 WebKit이 거칠게 만든 `performance.now()`의 것이며, page 값의 오차는 시계 요청의 가장 짧은 왕복의 절반 이하이다.
-- 신호 처리기는 async-signal-safe 함수만 호출할 수 있어서 시작할 때 준비한 짧은 줄을 쓴다. crash 때 마지막 배치 간격(최대 100 ms)의 `info` event를 잃을 수 있다. `error`는 writer에 바로 넘기지만 writer가 돌기 전에 프로세스가 죽으면 잃는다.
+- 신호 처리기는 async-signal-safe 함수만 호출할 수 있어서 시작할 때 준비한 짧은 줄을 쓴다. `kill -9`이나 crash 뒤 파일에는 모든 level에 걸쳐 마지막 배치 간격(100 ms)의 event가 많아야 빠진다. `error`는 writer에 바로 넘기지만 writer가 돌기 전에 프로세스가 죽으면 잃는다.
 - page는 파일을 쓸 수 없어 배치 호출로 host를 거쳐 기록한다. page 프로세스가 끝날 때 아직 보내지 않은 배치는 잃는다(flush 간격까지).
-- PTY 출력이 폭주해 파일을 채우면 회전이 가장 오래된 세대를 밀어낸다. writer가 각 회전을 기록한다.
+- 보존은 실행들의 파일이 6 GiB를 넘으면 가장 오래된 실행을 지우므로, PTY 출력이 폭주하면 디스크를 상한까지 채운 뒤 가장 오래된 실행을 교체한다. writer는 각 회전과 파일을 지우는 보존 회차를 기록한다.
 - 입력기는 활성 애플리케이션의 key window에서만 답하므로, 조합한 입력의 검사에는 애플리케이션이 활성인 실행이 필요하다.

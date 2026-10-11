@@ -34,13 +34,15 @@
 | 사이드바 크기 | [배치 값](#배치-값)의 폭 설정 |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
-| 진단 | 성능 트레이스 `diagnostics.performance` |
+| 진단 | 성능 트레이스 `diagnostics.performance`, 로그 수준 `diagnostics.log` |
 
 창 선택은 고정 왼쪽 사이드바 하나와 고정 오른쪽 사이드바 하나의 내용을 선택한다. 포커스 활성 플러그인은 추가 열 없이 일반 변 선택을 오버라이드한다. 표시 스위치는 고정 변에 적용한다. 카드 사이드바는 카드 내부에 있으며 기존 `cardSidebar` 위치 설정은 거부한다. 일반에는 플러그인 설정이 없다.
 
 ### 진단
 
 `diagnostics.performance` 는 영구 성능 트레이스([성능 트레이스](performance-trace.md))의 스위치다. 불리언이고 설정 창의 조작이 아니라 설정 파일로 지정한다. release version이 0.0.x인 동안 기본값은 true이고(그래서 결함이 나타날 때 기록된다), 이후 version 계열에서는 false다. false 인 동안 어떤 계층도 성능 기록 일을 하지 않는다 — event를 만들지도 저장하지도 않는다. true 로 바꾸면 계층이 trace의 event를 `logs/` 아래 event 파일에 저장하고, 다시 false 로 돌리면 다음 이벤트 경계에서 저장이 멈춘다; event 파일과 회전은 설정이 아니라 [event 계약](logging.ko.md#파일)의 소유물이다.
+
+`diagnostics.log` 는 event 로그의 [정책](logging.ko.md#정책)이다. `lifecycle`, `input`, `call`, `io`, `frame` 중 일부 class에 대해 저장할 가장 낮은 심각도 수준(`off`, `error`, `warn`, `info`, `debug`, `trace`)을 이름 붙이는 객체이며, 이름이 없는 class는 모든 수준을 저장한다. 기본값은 `{}` 로 모든 class의 모든 수준을 저장한다. 설정 파일로 지정하고, 다섯 class 밖의 이름과 여섯 수준 밖의 값은 설정 이름을 담은 오류로 거부된다. 페이지가 정책을 호스트에 보내면 호스트가 `<config-dir>/log-policy.json` 을 쓰고, 모든 프로세스는 파일이 바뀔 때 적용한다.
 
 
 ### 플러그인
@@ -97,7 +99,7 @@
 | 문자열 또는 주소 (plugin `string` 또는 `address`) | 한 줄 글자 입력 | `core.settings.change {key, value, scope}` |
 | 세트 참조 ([사이드바 선택](#사이드바-선택)의 연결) | 사용 안 함과 모든 세트의 선택 상자 | `core.settings.link {place, plugin, set, scope}` |
 
-세트 편집도 같은 컨트롤을 쓴다. 이름은 글자 입력, 배치는 선택 상자, 섹션 행은 각각 선택 상자다. 버튼(전역값 사용, 편집, 삭제, 새 세트, ▲ ▼ − +, 목록, 플러그인 관리)은 동작을 실행하며 설정 컨트롤이 아니다. 범위 탭은 보이는 범위를 고르며 설정이 아니다. `textSize`, `sets`, `diagnostics.performance`처럼 이 표에 컨트롤이 없는 설정은 자기 명령이나 설정 파일로 바꾼다.
+세트 편집도 같은 컨트롤을 쓴다. 이름은 글자 입력, 배치는 선택 상자, 섹션 행은 각각 선택 상자다. 버튼(전역값 사용, 편집, 삭제, 새 세트, ▲ ▼ − +, 목록, 플러그인 관리)은 동작을 실행하며 설정 컨트롤이 아니다. 범위 탭은 보이는 범위를 고르며 설정이 아니다. `textSize`, `sets`, `diagnostics.performance`, `diagnostics.log`처럼 이 표에 컨트롤이 없는 설정은 자기 명령이나 설정 파일로 바꾼다.
 
 워크벤치는 `~/Projects/polyspec/crudui`의 폼 라이브러리로 창을 그리지 않고 이 컨트롤 묶음을 직접 정한다. 그 라이브러리는 폼 template을 compile하고, 애플리케이션이 한 번에 제출하는 record를 bind하며, 행 identity, undo history, `name` 기반 컨트롤과 자기 event binding(`connectForm`)을 가진다. 설정 창은 바뀐 값을 선언된 명령으로 바로 적용하고, 모든 컨트롤은 공유 binder로 자기 명령을 가리키며 dom 이름을 가지고([exposure](exposure.ko.md)), host는 listener가 동작하지 않는 카드 사본을 그린다([네이티브 모달](native-modals.ko.md)). 그 라이브러리의 markup과 binding은 출력을 다시 쓰는 층 없이는 이 규칙을 하나도 만족하지 않고, plugin 설정 선언에는 위 표의 형식만 필요하므로 의존성을 더할 이유가 없다.
 
@@ -116,6 +118,7 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `textSize` | [글자 크기 단계](text-size.ko.md) 하나 |
 | `projectTabs` | `top` 또는 `left` |
 | `left`, `right`, `dim`, `diagnostics.performance` | boolean |
+| `diagnostics.log` | class와 수준의 객체 |
 | `focusInd` | `border` 또는 `corner` |
 | `fullRule` | `under`, `over`, `none` 중 하나 |
 | `language` | `auto` 또는 애플리케이션 메뉴의 언어(`ko`, `en`) |
