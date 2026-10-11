@@ -1860,6 +1860,39 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F160.35",
+    implementation: [
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export function screenFromMessage" },
+      { file: "packages/sok/wailsv3/src/replay.go", symbol: "func ReplayLogs" },
+    ],
+    tests: [
+      { file: "packages/log-contract/test/screen-message.test.mjs", id: "is refused with the error of the fixture" },
+      { file: "packages/plugin-api/test/screen-hash.test.mjs", id: "a screen message without a segment is refused with the member named" },
+      { file: "packages/sok/wailsv3/tests/replay_test.go", id: "TestReplayRefusesAPageFrameThatNamesNoSegmentOfTheSession" },
+      { file: "packages/sok/tauriv2/tests/replay_test.rs", id: "replay_refuses_a_page_frame_that_names_no_segment_of_the_session" },
+      { file: "e2e/terminal-replay.test.mjs", id: "a terminal session replays with the sidecar and page hashes equal" },
+      { file: "e2e/terminal-replay.test.mjs", id: "a screen message changed on the way is a divergence of the layer plugin" },
+    ],
+    expected: "The screen message carries the members of the screen hash and its segment, the page hashes the grid it received into a frame record of the layer plugin, and the replay of a terminal session finds every sidecar and page hash equal and reports a message changed on the way as a divergence of the layer plugin.",
+    levels: ["unit", "application"],
+  },
+  {
+    id: "F160.36",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/plugin_catalog.go", symbol: "func PluginEventClasses" },
+      { file: "packages/sok/tauriv2/src/plugin_catalog.rs", symbol: "pub fn plugin_event_classes" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/plugin_catalog_test.go", id: "TestAPluginEventHasTheClassThatTheCatalogOfItsPluginDeclares" },
+      { file: "packages/sok/tauriv2/tests/plugin_catalog_test.rs", id: "a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares" },
+      { file: "packages/host/wailsv3/tests/plugin_catalog_test.go", id: "TestTheHostClassifiesPluginEventsByTheInstalledCatalogsAndRecordsACatalogItCannotUse" },
+      { file: "packages/host/tauriv2/tests/plugin_catalog_test.rs", id: "the_host_classifies_plugin_events_by_the_installed_catalogs_and_records_a_catalog_it_cannot_use" },
+      { file: "e2e/terminal-replay.test.mjs", id: "a terminal session replays with the sidecar and page hashes equal" },
+    ],
+    expected: "The writer of each host stores a plugin event with the class that the catalog of its enabled installed plugin declares, and records a catalog it cannot use as an error that names the file.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F157",
     implementation: [
       { file: "packages/workbench/debug-timeline.js", symbol: "export const HOLD_LIMIT" },
