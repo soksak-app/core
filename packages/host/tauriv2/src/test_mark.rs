@@ -30,10 +30,10 @@ pub fn parse_test_mark(params: &Map<String, Value>) -> Result<TestMark, Failure>
             .map(str::to_string)
             .ok_or_else(|| Failure::params(message))
     };
-    let kind = params.get("kind").and_then(Value::as_str).unwrap_or("");
-    if kind != "start" && kind != "end" {
-        return Err(Failure::params("kind must be start or end"));
-    }
+    let kind = match params.get("kind").and_then(Value::as_str) {
+        Some(kind @ ("start" | "end")) => kind,
+        _ => return Err(Failure::params("kind must be start or end")),
+    };
     let name = text("name", "name must be a non-empty string")?;
     let run = text("run", "run must be a non-empty string")?;
     let result = if kind == "start" {
