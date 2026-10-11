@@ -5,6 +5,7 @@
 #include <stdatomic.h>
 #include <time.h>
 #import "event_ring.h"
+#import "support/records.h"
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
@@ -125,32 +126,64 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"%d producers deliver every event once and in order (%d of %d)", producers, total, producers * perProducer]);
 
 
-    // The ring of the process: sp_event stores the time, the level, the name and the fields, and sp_event_drain returns
-    // them in order as records of ts_us (8 bytes), level (1), name length (1), the name and the fields.
+    // The ring of the process: sp_event stores the wall clock, the monotonic clock, the level, the name, the correlation
+    // identifiers and the fields, and sp_event_drain returns them in order as records of ts_us (8 bytes), mono_ns (8), level
+    // (1), name length (1), cids length (2), the name, the cids and the fields.
     struct timespec wall;
     clock_gettime(CLOCK_REALTIME, &wall);
     uint64_t before = (uint64_t)wall.tv_sec * 1000000u + (uint64_t)wall.tv_nsec / 1000u;
+    uint64_t monoBefore = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
     check(sp_event(SP_EVENT_WARN, "native.test.first", "{\"index\":1}") && sp_event(SP_EVENT_ERROR, "native.test.second", "{}"),
         @"sp_event accepts an event");
     clock_gettime(CLOCK_REALTIME, &wall);
     uint64_t after = (uint64_t)wall.tv_sec * 1000000u + (uint64_t)wall.tv_nsec / 1000u;
+    uint64_t monoAfter = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
     uint8_t pulled[1024];
     size_t used = sp_event_drain(pulled, sizeof pulled);
     uint32_t firstLength;
     memcpy(&firstLength, pulled, sizeof firstLength);
-    uint64_t ts;
-    memcpy(&ts, pulled + 4, sizeof ts);
-    uint8_t level = pulled[4 + 8];
-    uint8_t nameLength = pulled[4 + 9];
-    NSString *name = [[NSString alloc] initWithBytes:pulled + 4 + 10 length:nameLength encoding:NSUTF8StringEncoding];
-    NSString *fields = [[NSString alloc] initWithBytes:pulled + 4 + 10 + nameLength length:firstLength - 10 - nameLength encoding:NSUTF8StringEncoding];
-    check(used > 0 && ts >= before && ts <= after && level == SP_EVENT_WARN && [name isEqualToString:@"native.test.first"] &&
-            [fields isEqualToString:@"{\"index\":1}"],
-        [NSString stringWithFormat:@"a pulled record holds the time, the level, the name and the fields (%@ %@)", name, fields]);
+    NSDictionary *first = decodedRecord(pulled + 4, firstLength);
+    uint64_t ts = [first[@"ts_us"] unsignedLongLongValue];
+    uint64_t mono = [first[@"mono_ns"] unsignedLongLongValue];
+    check(used > 0 && ts >= before && ts <= after && [first[@"level"] intValue] == SP_EVENT_WARN &&
+            [first[@"name"] isEqualToString:@"native.test.first"] && [first[@"fields"] isEqualToDictionary:@{@"index": @1}] &&
+            [first[@"cids"] count] == 0,
+        [NSString stringWithFormat:@"a pulled record holds the time, the level, the name and the fields (%@)", first]);
+    check(mono >= monoBefore && mono <= monoAfter && mono > 0,
+        [NSString stringWithFormat:@"a pulled record holds the monotonic clock of the call (%llu in [%llu, %llu])", mono, monoBefore, monoAfter]);
+    check(sp_mono_ns() >= monoAfter && sp_mono_ns() - monoAfter < 10u * 1000000000u,
+        @"sp_mono_ns reads the clock of the records (CLOCK_UPTIME_RAW)");
     uint32_t secondLength;
     memcpy(&secondLength, pulled + 4 + firstLength, sizeof secondLength);
-    check(used == 4 + firstLength + 4 + secondLength && pulled[4 + firstLength + 4 + 8] == SP_EVENT_ERROR,
+    check(used == 4 + firstLength + 4 + secondLength && [decodedRecord(pulled + 4 + firstLength + 4, secondLength)[@"level"] intValue] == SP_EVENT_ERROR,
         @"the second record follows the first in order");
+
+    // A correlation identifier is assigned by the layer that first sees an input: <boot>.<n>, with n counting from 1.
+    char cid[64];
+    check(!sp_cid_new(cid, sizeof cid), @"an identifier cannot be assigned before the host gave the boot identifier");
+    check(sp_event_set_boot("b3-7") && !sp_event_set_boot("") && !sp_event_set_boot("a,b") && !sp_event_set_boot("a\"b"),
+        @"a boot identifier is accepted once it is made of letters, digits, '-' and '_'; an empty one or one with ',' or '\"' is refused");
+    char second[64];
+    check(sp_cid_new(cid, sizeof cid) && sp_cid_new(second, sizeof second) && strcmp(cid, "b3-7.1") == 0 && strcmp(second, "b3-7.2") == 0,
+        [NSString stringWithFormat:@"identifiers count from 1 under the boot identifier (%s, %s)", cid, second]);
+    char tiny[4];
+    check(!sp_cid_new(tiny, sizeof tiny), @"an identifier that does not fit the buffer is refused");
+    (void)sp_event_drain(pulled, sizeof pulled);
+    check(sp_event_cids(SP_EVENT_INFO, "native.test.input", "b3-7.1,b3-7.2", "{\"k\":1}") && sp_event_cids(SP_EVENT_INFO, "native.test.none", "", "{}"),
+        @"sp_event_cids accepts a list of identifiers and an empty list");
+    used = sp_event_drain(pulled, sizeof pulled);
+    uint32_t inputLength;
+    memcpy(&inputLength, pulled, sizeof inputLength);
+    NSDictionary *input = decodedRecord(pulled + 4, inputLength);
+    uint32_t noneLength;
+    memcpy(&noneLength, pulled + 4 + inputLength, sizeof noneLength);
+    NSDictionary *none = decodedRecord(pulled + 4 + inputLength + 4, noneLength);
+    check(used > 0 && [input[@"cids"] isEqualToArray:(@[@"b3-7.1", @"b3-7.2"])] && [input[@"fields"] isEqualToDictionary:@{@"k": @1}] &&
+            [none[@"cids"] count] == 0 && [none[@"name"] isEqualToString:@"native.test.none"],
+        [NSString stringWithFormat:@"a record carries its correlation identifiers (%@ %@)", input, none]);
+    check(!sp_event_cids(SP_EVENT_INFO, "native.test.bad", "a\"b", "{}") && !sp_event_cids(SP_EVENT_INFO, "native.test.bad", NULL, "{}"),
+        @"a list of identifiers with a quote, or none at all, is refused");
+    (void)sp_event_take_loss();
     check(sp_event_drain(pulled, sizeof pulled) == 0, @"a drained process ring is empty");
 
     // A name that is missing, empty, longer than 255 bytes or not under a layer, an unknown level and fields that are

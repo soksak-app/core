@@ -37,6 +37,8 @@ const StartBufferRecords = 1024
 
 type bufferedRecord struct {
 	tsMicros int64
+	monoNs   uint64
+	cids     []string
 	layer    string
 	level    Level
 	event    string
@@ -70,19 +72,12 @@ func UseHostEventLog(log *EventLog) {
 		return
 	}
 	for _, record := range buffered {
-		if _, err := relayRecord(log, record.tsMicros, record.layer, record.level, record.event, record.fields, record.produced); err != nil {
+		if _, err := log.EmitRelayed(RelayedEvent{TsMicros: record.tsMicros, MonoNs: record.monoNs, Layer: record.layer, Level: record.level,
+			Event: record.event, Cids: record.cids, Fields: record.fields, Produced: record.produced}); err != nil {
 			fmt.Fprintf(os.Stderr, "event writer: a buffered record cannot be stored: %v\n", err)
 		}
 	}
 	log.CountLoss(lost, lostBytes)
-}
-
-// relayRecord hands one record to the writer: fields that are JSON as they are, and fields that the producer cut as a head.
-func relayRecord(log *EventLog, tsMicros int64, layer string, level Level, event string, fields json.RawMessage, produced int) (bool, error) {
-	if produced > 0 {
-		return log.emitRelayedCut(tsMicros, layer, level, event, fields, produced)
-	}
-	return log.EmitRelayed(tsMicros, layer, level, event, fields)
 }
 
 // emitRecord stores an entry as the event `<layer>.record.<level>`. The place and the text are cut to RecordPlaceBytes and
@@ -117,7 +112,7 @@ func emitRecord(e Entry) {
 		return
 	}
 	// events: host.record.<level>, sidecar.record.<level>
-	storeEvent(level, e.Layer, e.Layer+".record."+e.Level, e.Where, fields, 0)
+	storeEvent(level, e.Layer, e.Layer+".record."+e.Level, e.Where, nil, fields, 0)
 }
 
 // storeEvent hands an event to the writer of the host, or to the start buffer while no writer exists. place names the record
@@ -126,8 +121,9 @@ func emitRecord(e Entry) {
 // produced is 0 for fields that are JSON, and for fields that the producer cut at the bound the number of bytes it had
 // written when it stopped. The start buffer holds at most StartBufferRecords records and StartBufferBytes bytes; a record
 // beyond either is refused and counted in the writer.
-func storeEvent(level Level, layer, name, place string, fields json.RawMessage, produced int) {
+func storeEvent(level Level, layer, name, place string, cids []string, fields json.RawMessage, produced int) {
 	now := time.Now().UnixMicro()
+	mono := monotonicNanos()
 	records.Lock()
 	defer records.Unlock()
 	if records.log == nil {
@@ -137,11 +133,11 @@ func storeEvent(level Level, layer, name, place string, fields json.RawMessage, 
 			records.lostBytes += uint64(size)
 			return
 		}
-		records.buffer = append(records.buffer, bufferedRecord{tsMicros: now, layer: layer, level: level, event: name, fields: fields, produced: produced})
+		records.buffer = append(records.buffer, bufferedRecord{tsMicros: now, monoNs: mono, cids: cids, layer: layer, level: level, event: name, fields: fields, produced: produced})
 		records.bufferBytes += size
 		return
 	}
-	if _, err := relayRecord(records.log, now, layer, level, name, fields, produced); err != nil {
+	if _, err := records.log.EmitRelayed(RelayedEvent{TsMicros: now, MonoNs: mono, Layer: layer, Level: level, Event: name, Cids: cids, Fields: fields, Produced: produced}); err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the record %q of %s cannot be stored: %v\n", place, layer, err)
 	}
 }
@@ -174,7 +170,7 @@ func emitTrace(layer string, fields map[string]any) error {
 		return fmt.Errorf("the fields of %s cannot be serialized: %w", event, err)
 	}
 	// events: host.trace.<event>, host.sampler.<event>
-	storeEvent(LevelDebug, "host", "host."+kind+"."+event, event, text, produced)
+	storeEvent(LevelDebug, "host", "host."+kind+"."+event, event, nil, text, produced)
 	return nil
 }
 
@@ -192,7 +188,61 @@ func EmitHost(level Level, event string, fields map[string]any) {
 		return
 	}
 	// events: forwarded
-	storeEvent(level, "host", event, event, text, produced)
+	storeEvent(level, "host", event, event, nil, text, produced)
+}
+
+// EmitHostCids stores an event of the layer `host` like EmitHost, with the correlation identifiers of the inputs it belongs to
+// (docs/spec/logging.md#correlation-identifier). An identifier that a line cannot carry is reported on the standard error
+// and nothing is stored.
+func EmitHostCids(level Level, event string, cids []string, fields map[string]any) {
+	if !strings.HasPrefix(event, "host.") {
+		fmt.Fprintf(os.Stderr, "event writer: the event %q does not start with host.\n", event)
+		return
+	}
+	if err := checkCids(cids); err != nil {
+		fmt.Fprintf(os.Stderr, "event writer: the cids of %s are refused: %v\n", event, err)
+		return
+	}
+	text, produced, err := boundedMarshal(fields, EventFieldsLimitBytes)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
+		return
+	}
+	// events: forwarded
+	storeEvent(level, "host", event, event, cids, text, produced)
+}
+
+// RecordInputRelay stores the event `host.input.relay` for a picture region event that carries correlation identifiers, with
+// the surface and the name of the region and the `type` of the event. A region event without identifiers stores nothing. An
+// event that is not a JSON object, whose `cids` are not a list of identifiers or whose `type` is not a string is an error
+// and stores nothing.
+func RecordInputRelay(surface, name, event string) error {
+	var body struct {
+		Type json.RawMessage `json:"type"`
+		Cids json.RawMessage `json:"cids"`
+	}
+	if err := json.Unmarshal([]byte(event), &body); err != nil {
+		return fmt.Errorf("the region event of %s is not a JSON object: %w", surface, err)
+	}
+	if body.Cids == nil {
+		return nil
+	}
+	var cids []string
+	if err := json.Unmarshal(body.Cids, &cids); err != nil {
+		return fmt.Errorf("the cids of the region event of %s are not an array of strings: %w", surface, err)
+	}
+	if len(cids) == 0 {
+		return nil
+	}
+	if err := checkCids(cids); err != nil {
+		return fmt.Errorf("the cids of the region event of %s: %w", surface, err)
+	}
+	var kind string
+	if err := json.Unmarshal(body.Type, &kind); err != nil {
+		return fmt.Errorf("the type of the region event of %s must be a string: %w", surface, err)
+	}
+	EmitHostCids(LevelInfo, "host.input.relay", cids, map[string]any{"surface": surface, "name": name, "type": kind})
+	return nil
 }
 
 // FlushRecords waits until the records written so far are in the event log, at most deadline. The paths that end the process

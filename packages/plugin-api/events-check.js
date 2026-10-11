@@ -34,17 +34,20 @@ const MARKER_REACH = 5;
 const ENTRANCES = {
   go: [
     { re: /\bEmitHost(?:Placed)?\s*\(/g, level: 0, event: 1, fields: 2 },
-    { re: /\bstoreEvent\s*\(/g, level: 0, event: 2, fields: 4 },
+    { re: /\bEmitHostCids\s*\(/g, level: 0, event: 1, fields: 3 },
+    { re: /\bstoreEvent\s*\(/g, level: 0, event: 2, fields: 5 },
   ],
   rs: [
     { re: /\bemit_host(?:_placed)?\s*\(/g, level: 0, event: 1, fields: 2 },
-    { re: /\bstore_event\s*\(/g, level: 0, event: 2, fields: 4 },
+    { re: /\bemit_host_cids\s*\(/g, level: 0, event: 1, fields: 3 },
+    { re: /\bstore_event\s*\(/g, level: 0, event: 2, fields: 5 },
   ],
   js: [
     { re: /(?:\bemitEvent|\bbatcher(?:\?)?\.emit|\bbatcher(?:\?)?\.emitAndWait|\.emitAndWait)\s*\(/g, level: 0, event: 1, fields: 2 },
   ],
   m: [
     { re: /\bsp_event\s*\(/g, level: 0, event: 1, fields: 2 },
+    { re: /\bsp_event_cids\s*\(/g, level: 0, event: 1, fields: 3 },
     { re: /\bstoreRecord\s*\(/g, level: 0, event: 1 },
     { re: /\bsp_log_error\s*\(/g, fixed: 'error', name: 'native.record.error', event: 0 },
     { re: /\bsp_log_info\s*\(/g, fixed: 'info', name: 'native.record.info', event: 0 },
@@ -307,7 +310,7 @@ export function sitesOf(path, text) {
         at: match.index,
         line: source.lineAt(args[entrance.event][0]),
         call: source.lineAt(match.index),
-        // default: an entrance with a fixed event name has no name argument, so the name is read from the literal of the call.
+        // default: an entrance without a fixed name reads the name from the literal argument of the call.
         name: entrance.name ?? literalName(source, args[entrance.event]),
         levels: entrance.fixed ? [entrance.fixed] : levelsOf(source, args[entrance.level]),
         fields: fieldsOf(source, args[entrance.fields]),

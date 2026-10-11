@@ -11,8 +11,10 @@ mock.module("@soksak/runtime", { namedExports: { host: {
   on: () => {},
   page: (path) => path,
   call: async (name, payload) => {
-    calls.push({ name, payload });
     if (failing) throw failing;
+    // The request for the clocks of the host is answered here; the batches are what the tests assert.
+    if (name === "log" && payload.action === "clock") return { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
+    calls.push({ name, payload });
   },
 } } });
 const { reportRecord } = await import("../page-log.js");

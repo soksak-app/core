@@ -64,10 +64,10 @@ func TestTimelineRefusesWhatBreaksTheContract(t *testing.T) {
 	if err := os.MkdirAll(logs, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	open := `{"ts_us":1,"seq":0,"level":"info","layer":"host","event":"log.open","fields":{"schema":1}}` + "\n"
+	open := `{"ts_us":1,"seq":0,"level":"info","layer":"host","event":"log.open","fields":{"schema":2}}` + "\n"
 	cases := []struct{ name, text, want string }{
 		{"first line", `{"ts_us":1,"seq":0,"level":"info","layer":"host","event":"host.x"}` + "\n", `logs/host-b1.jsonl: the first line is not log.open: "host.x"`},
-		{"schema", `{"ts_us":1,"seq":0,"level":"info","layer":"host","event":"log.open","fields":{"schema":2}}` + "\n", "logs/host-b1.jsonl: schema 2 is not 1"},
+		{"schema", `{"ts_us":1,"seq":0,"level":"info","layer":"host","event":"log.open","fields":{"schema":1}}` + "\n", "logs/host-b1.jsonl: schema 1 is not 2"},
 		{"not json", open + "not json\n", "logs/host-b1.jsonl:2: not JSON: not json"},
 		{"not object", open + "[1]\n", "logs/host-b1.jsonl:2: not an event object: [1]"},
 		{"seq", open + `{"ts_us":1,"seq":"x","level":"info","layer":"host","event":"a"}` + "\n", `logs/host-b1.jsonl:2: seq must be an integer, found "x"`},
@@ -123,7 +123,7 @@ func TestTimelineReadsAFileWithoutALineAsNoRows(t *testing.T) {
 	if err := os.MkdirAll(logs, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	open := `{"ts_us":1,"seq":0,"level":"info","layer":"host","event":"log.open","fields":{"schema":1}}` + "\n"
+	open := `{"ts_us":1,"seq":0,"level":"info","layer":"host","event":"log.open","fields":{"schema":2}}` + "\n"
 	for name, text := range map[string]string{"host-a.jsonl": "", "host-b.jsonl": open} {
 		if err := os.WriteFile(filepath.Join(logs, name), []byte(text), 0o644); err != nil {
 			t.Fatal(err)

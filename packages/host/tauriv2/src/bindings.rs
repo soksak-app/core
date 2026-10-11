@@ -138,16 +138,16 @@ fn performance(
 fn log(
     window: Window,
     request: Argument<serde_json::Map<String, serde_json::Value>>,
-) -> Result<(), String> {
+) -> Result<Option<crate::event_relay::ClockReading>, String> {
     let Argument(request) = request;
-    let lines = crate::event_relay::log_command(
+    let reply = crate::event_relay::log_command(
         &window.state::<std::sync::Arc<crate::event_log::EventLog>>(),
         serde_json::Value::Object(request),
     )?;
-    for line in lines {
+    for line in reply.lines {
         exposure::log(&window, &line);
     }
-    Ok(())
+    Ok(reply.clock)
 }
 
 /// Returns the position and size of a window.

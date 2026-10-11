@@ -4,11 +4,14 @@
 use serde_json::value::to_raw_value;
 use serde_json::Value;
 
-use crate::event_log::{EventLog, Level};
+use crate::bounds::Fields;
+use crate::event_log::{monotonic_ns, valid_cid, EventLog, Level, RelayedEvent};
 
 /// One validated event of a page batch.
 struct Relayed {
     ts_us: u64,
+    mono_ns: u64,
+    cids: Vec<String>,
     level: Level,
     event: String,
     fields: Box<serde_json::value::RawValue>,
@@ -38,6 +41,26 @@ fn relayed_of(item: &Value) -> Result<Relayed, String> {
         .and_then(Value::as_u64)
         .filter(|ts| *ts > 0)
         .ok_or_else(|| "ts_us must be a positive integer".to_string())?;
+    let mono_ns = object
+        .get("mono_ns")
+        .and_then(Value::as_u64)
+        .filter(|mono| *mono > 0)
+        .ok_or_else(|| "mono_ns must be a positive integer".to_string())?;
+    let cids = match object.get("cids") {
+        None => Vec::new(),
+        Some(value) => value
+            .as_array()
+            .and_then(|items| {
+                items
+                    .iter()
+                    .map(|item| item.as_str().filter(|cid| valid_cid(cid)).map(str::to_string))
+                    .collect::<Option<Vec<String>>>()
+            })
+            .ok_or_else(|| {
+                "cids must be an array of non-empty strings without a quote, a backslash or a control character"
+                    .to_string()
+            })?,
+    };
     let level_name = object
         .get("level")
         .and_then(Value::as_str)
@@ -76,6 +99,8 @@ fn relayed_of(item: &Value) -> Result<Relayed, String> {
     };
     Ok(Relayed {
         ts_us,
+        mono_ns,
+        cids,
         level,
         event: event.to_string(),
         fields: to_raw_value(fields)
@@ -85,13 +110,43 @@ fn relayed_of(item: &Value) -> Result<Relayed, String> {
     })
 }
 
-/// Validates a batch request of the page, queues its events into the writer of the host, and returns the lines
+/// The clocks of the host at one moment: the wall clock in microseconds and the monotonic clock in nanoseconds. The page
+/// takes them to place its own clock on those of the host.
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+pub struct ClockReading {
+    pub ts_us: u64,
+    pub mono_ns: u64,
+}
+
+/// What the `log` call answers: the transcript lines of the page records of a batch, or the clocks of a clock request.
+#[derive(Debug)]
+pub struct LogReply {
+    pub lines: Vec<String>,
+    pub clock: Option<ClockReading>,
+}
+
+/// Validates a request of the page. A `batch` queues its events into the writer of the host and answers the lines
 /// `<level> page <where>: <text>` of the records of the page in it, which the host shows in the transcript of the window.
-pub fn log_command(log: &EventLog, request: Value) -> Result<Vec<String>, String> {
+/// A `clock` answers the clocks of the host and stores no event.
+pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
     match request.get("action").and_then(Value::as_str) {
-        None => return Err("action must be batch".into()),
+        None => return Err("action must be batch or clock".into()),
         Some("batch") => {}
-        Some(other) => return Err(format!("action must be batch, not {other:?}")),
+        Some("clock") => {
+            // Both clocks are read together, so the page can take them as one moment.
+            let ts_us = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|error| format!("the clock is before the Unix epoch: {error}"))?
+                .as_micros() as u64;
+            return Ok(LogReply {
+                lines: Vec::new(),
+                clock: Some(ClockReading {
+                    ts_us,
+                    mono_ns: monotonic_ns(),
+                }),
+            });
+        }
+        Some(other) => return Err(format!("action must be batch or clock, not {other:?}")),
     }
     let items = request
         .get("events")
@@ -106,17 +161,19 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<Vec<String>, String
     for (index, event) in events.into_iter().enumerate() {
         // The batch was validated as a whole, so a refusal here is a defect of the validation; nothing is written after
         // it.
-        log.emit_relayed(
-            event.ts_us,
-            event.layer,
-            event.level,
-            &event.event,
-            event.fields,
-        )
+        log.emit_relayed(RelayedEvent {
+            ts_us: event.ts_us,
+            mono_ns: event.mono_ns,
+            layer: event.layer.to_string(),
+            level: event.level,
+            event: event.event,
+            cids: event.cids,
+            fields: Fields::whole(event.fields),
+        })
         .map_err(|error| format!("events[{index}]: {error}"))?;
         if let Some(record) = event.record {
             lines.push(record.line());
         }
     }
-    Ok(lines)
+    Ok(LogReply { lines, clock: None })
 }

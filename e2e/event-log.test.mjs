@@ -24,7 +24,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(events[0].event, "log.open");
     assert.equal(events[0].fields.pid, pid);
     assert.equal(events[0].fields.role, "host");
-    assert.equal(events[0].fields.schema, 1);
+    assert.equal(events[0].fields.schema, 2);
     assert.ok(events.some((event) => event.event === "host.app.event" && event.fields.kind === "started"), `${path} holds no application event started`);
     // The observers store a window event or an input source event while the first window opens; a start without either means the host did not install them.
     assert.ok(events.some((event) => event.event.startsWith("native.window.") || event.event === "native.input.source_changed"), `${path} holds no event of the activity observers`);

@@ -2,7 +2,7 @@
 // `logs/host-<boot>.jsonl` (docs/spec/logging.md) become rows sorted by time, are filtered, and are rendered as text lines.
 
 /** The schema number of the event files that the timeline reads. */
-const SCHEMA = 1;
+const SCHEMA = 2;
 
 /**
  * The number of rows at which the timeline stops reading the files. A file is read at least one range and the read ends

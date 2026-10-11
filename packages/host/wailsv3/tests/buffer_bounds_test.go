@@ -224,7 +224,7 @@ func TestAnEventOverTheSizeBoundIsStoredCutWithItsOriginalSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := log.EmitRelayed(time.Now().UnixMicro(), "host", host.LevelInfo, "host.test.oversize", oversize); err != nil {
+	if _, err := log.EmitRelayed(host.RelayedEvent{TsMicros: time.Now().UnixMicro(), MonoNs: 1, Layer: "host", Level: host.LevelInfo, Event: "host.test.oversize", Fields: oversize}); err != nil {
 		t.Fatal(err)
 	}
 	host.EmitHost(host.LevelInfo, "host.test.small", map[string]any{"text": "kept"})

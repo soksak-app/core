@@ -29,6 +29,31 @@ func TestThePlatformPullsAnEmptyNativeRingAsZeroBytesAndNoLoss(t *testing.T) {
 	}
 }
 
+// contract: log.native.platform-reads-the-clock-and-takes-the-boot
+func TestThePlatformReadsAMonotonicClockAndTakesTheBootIdentifier(t *testing.T) {
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := system.MonotonicNanos()
+	if err != nil || first == 0 {
+		t.Fatalf("the clock reads %d, %v", first, err)
+	}
+	time.Sleep(2 * time.Millisecond)
+	second, err := system.MonotonicNanos()
+	if err != nil || second <= first || second-first > uint64(10*time.Second) {
+		t.Fatalf("the clock moved from %d to %d, %v", first, second, err)
+	}
+	if err := system.SetEventBoot("1791-4242"); err != nil {
+		t.Fatalf("a boot identifier of digits and '-' was refused: %v", err)
+	}
+	for _, bad := range []string{"", "a,b", `a"b`, "a.b", "a b"} {
+		if err := system.SetEventBoot(bad); err == nil {
+			t.Fatalf("the boot identifier %q was accepted", bad)
+		}
+	}
+}
+
 // contract: log.native.host-writer-starts-with-the-platform-pull
 func TestTheHostWriterStartsWithThePullOfThePlatform(t *testing.T) {
 	log, err := host.StartHostEventLog(t.TempDir())
@@ -39,7 +64,13 @@ func TestTheHostWriterStartsWithThePullOfThePlatform(t *testing.T) {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 1 || events[0]["event"] != "log.open" {
+	if len(events) == 0 || events[0]["event"] != "log.open" {
 		t.Fatalf("events %v", events)
+	}
+	// The activity observers that the writer installs store native events after log.open and nothing else follows.
+	for _, event := range events[1:] {
+		if event["layer"] != "native" {
+			t.Fatalf("events %v", events)
+		}
 	}
 }

@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const eventSchema = 1
+const eventSchema = 2
 
 var (
 	eventLevels   = []string{"error", "warn", "info", "debug", "trace"}

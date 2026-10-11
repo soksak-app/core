@@ -2,7 +2,7 @@
 // (docs/spec/sidecars.md#page-interface).
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { recordsOf, settled, shownRecord } from "./support/records.mjs";
+import { clockAnswer, recordsOf, settled, shownRecord } from "./support/records.mjs";
 
 const calls = [];
 let failFirst = true;
@@ -11,6 +11,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
   page: (path) => path,
   call: async (name, payload) => {
     calls.push([name, payload]);
+    if (clockAnswer(name, payload)) return clockAnswer(name, payload);
     if (name === "sidecarSend" && failFirst) {
       failFirst = false;
       throw new Error("gone");

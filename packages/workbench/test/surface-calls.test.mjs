@@ -6,7 +6,10 @@ import { surfaceCalls } from "../surface-calls.js";
 
 function setup(send) {
   const requests = [];
-  const calls = surfaceCalls({ send, log: async (request) => { requests.push(request); } });
+  const calls = surfaceCalls({ send, log: async (request) => {
+    if (request.action === "clock") return { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
+    requests.push(request);
+  } });
   return { calls, requests, events: () => requests.flatMap((request) => request.events) };
 }
 

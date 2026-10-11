@@ -26,8 +26,8 @@ event는 한 줄의 JSON 객체 하나다.
 
 | field | 뜻 |
 | --- | --- |
-| `ts_us` | epoch 기준 마이크로초 wall clock. 층 사이의 순서를 가린다. |
-| `mono_ns` | 시스템 전체의 monotonic 시계(나노초; macOS는 `mach_absolute_time`, Linux는 `CLOCK_MONOTONIC`). 한 부팅 안의 프로세스 사이에서 비교할 수 있고 되감기지 않는다. page는 이 값이 없어 field를 생략한다. |
+| `ts_us` | 발생 시점의 epoch 기준 마이크로초 wall clock. 층 사이의 순서를 가린다. 모든 줄이 가진다. |
+| `mono_ns` | 발생 시점의 시스템 전체 monotonic 시계(나노초). macOS는 `clock_gettime_nsec_np(CLOCK_UPTIME_RAW)`이며 `mach_absolute_time`을 나노초로 바꾼 값과 같고 Linux는 `CLOCK_MONOTONIC`이다. 한 부팅 안의 프로세스 사이에서 비교할 수 있고, 되감기지 않으며, 기계가 잠든 동안에는 늘지 않는다. 모든 줄이 가지며 감사는 이 field가 없는 줄을 거부한다. page는 host의 시계에서 이 값을 유도한다([writer](#writer)). |
 | `seq` | 프로세스의 writer가 직렬화할 때 붙이는 정수. 한 프로세스의 저장된 event는 연속된 `seq`를 가지며, 틈은 빠진 `seq`의 범위를 이름으로 밝히며 그 범위 다음에 자신이 저장되는 `log.dropped` event가 설명한다. |
 | `level` | `error`, `warn`, `info`, `debug`, `trace`. |
 | `layer` | `native`, `host`, `page`, `plugin`, `sidecar`. |
@@ -37,13 +37,15 @@ event는 한 줄의 JSON 객체 하나다.
 | `fields` | catalog가 선언한 event의 값. |
 | `truncated` | event의 fields 글이 event 크기 상한을 넘었을 때만 있다. 자르기 전 그 글의 바이트 크기다. 이런 event의 `fields`는 글의 첫 바이트인 `head`만 담는다([상한](#상한)). |
 
-모든 파일의 첫 줄은 `log.open`이다. schema 번호(`schema`), `pid`, 프로세스의 역할(`role`), 실행의 식별자(`boot`), writer의 버전, 적용 중인 정책을 담는다. 모르는 schema 번호를 만난 reader는 파일 이름과 그 번호를 담은 오류로 그 파일을 거부한다.
+모든 파일의 첫 줄은 `log.open`이다. schema 번호(`schema`), `pid`, 프로세스의 역할(`role`), 실행의 식별자(`boot`), writer의 버전, 적용 중인 정책을 담는다. schema 번호는 2이며 schema 2는 모든 줄에 `mono_ns`를 더한다. 다른 schema 번호를 만난 reader는, schema 1 파일도, 파일 이름과 그 번호를 담은 오류로 그 파일을 거부하며 어떤 reader도 이전 schema를 위한 코드를 두지 않는다.
 
 writer가 회전하는 파일은 경계를 넘게 될 줄 앞에서 끝난다. 새 파일은 `log.open`으로 시작하고 이어서 `log.rotated` `{bytes, kept, removed}`가 온다. `bytes`는 닫은 파일의 크기, `kept`는 보관하는 세대 수, `removed`는 이 회전이 지운 세대의 파일 이름이며 지운 것이 없으면 `null`이다. `seq`는 회전을 건너 이어지므로 독자는 세대를 첫 `seq`로 정렬한다.
 
 ### 상관 식별자
 
 native 입력 콜백 하나(키 event, 붙여넣기, drop, 포인터 보고)는 그것을 처음 본 층에서 식별자 `<boot>.<n>` 하나를 받는다. 그 콜백이 일으키는 콜백(`setMarkedText`, `insertText`, `commitThrough`)은 일으킨 콜백의 식별자를 쓴다. 식별자는 native 보고, host 중계, page event와 함께 가고, plugin이 전송에 실어 넘기며, host가 sidecar로 가는 요청 envelope에 넣으므로 요청의 본문은 plugin의 것으로 남는다. 입력 여럿을 합치는 전송은 그 식별자를 모두 나르고, sidecar는 그 요청이 일으키는 event, 곧 `pty_write`까지 이를 적는다. envelope field를 모르는 sidecar는 이를 무시한다.
+
+native 라이브러리는 image region의 키가 도착할 때 그 키의 식별자를 부여한다: `native.input.key_down`(키 코드, modifier 유무에 따른 문자, modifier flag, 반복 flag, 키의 시각, 입력 문서의 상태). 그 키가 일으키는 입력기 콜백과 page로의 보고마다 같은 식별자를 쓴다(`native.input.callback`, `native.input.report`). 키가 일으키지 않은 입력기 콜백(포인터로 고른 후보, 입력 소스 변경)은 그 자체로 하나의 입력이며 자기 식별자를 받는다. page로 보내는 보고는 식별자를 JSON의 member `cids`로 나른다. host는 그런 보고의 중계를 같은 식별자와 함께 `host.input.relay`(`surface`, `name`, `type`)로 기록하고 보고는 그대로 넘긴다. page는 호출 `sidecarSend`를 요청의 `cids`와 함께 `page.call`로 기록하고, host는 큐에 넣은 요청을 요청 줄이 나르는 식별자와 함께 `host.sidecar.request`(`name`, `surface`, `bytes`)로 기록한다. [Catalog](#catalog)의 사슬 `input`이 이 event를 잇기 때문에 감사는 sidecar에 닿기 전에 멈춘 키를 찾고, 한 키가 두 층 사이에서 지연된 시간은 두 event의 `mono_ns` 차이이다. 각 sidecar 저장소는 요청의 식별자를 터미널에 쓰기까지의 자기 event에 적고 자기 catalog에서 사슬을 확장한다.
 
 ## class와 정책
 
@@ -69,9 +71,9 @@ writer는 프로세스에서 event를 파일의 줄로 바꾸는 부분이다.
 - 프로세스마다 writer 스레드 하나가 `seq`를 붙이고, JSON으로 직렬화하고, 배치(100 ms마다, 64 KB가 쌓일 때, 또는 `error` 뒤 즉시)로 쓰고, 파일을 회전한다. `error`는 writer를 깨우고 돌아오며 생산자는 디스크를 기다리지 않는다.
 - writer는 손실 카운터를 `log.dropped` event `{from_seq, to_seq, count, bytes, reason}`로 바꾼다. 쓰기가 실패하면(디스크 가득 참, 입출력 오류) writer는 손실을 세고 상태로 보이며, 쓰기가 다시 되면 `log.dropped`를 기록한다. heartbeat가 끝난 writer 스레드를 감지하면 프로세스는 fatal 오류를 보고하고 끝난다.
 - 모든 종료 경로는 프로세스가 끝나기 전에 deadline을 두고 큐를 flush한다: Go host의 shutdown, Rust host의 exit, `panic = abort`, `os.Exit`.
-- host의 writer는 같은 프로세스의 다른 계층의 event(page 배치, native ring)를 그 event가 가진 시각과 계층 그대로 받는다. 이런 event의 이름은 계층으로 시작해야 하고, 계약에 없는 계층과 JSON이 아닌 field는 오류로 거부하며, `seq`는 여전히 writer가 부여한다.
-- native 라이브러리에는 writer가 없다. C의 bounded lock-free ring을 소유하며, `sp_event`가 어느 스레드에서든 event를 ring에 복사하고 host의 writer 스레드가 `sp_event_drain` 호출로 ring을 비운다. 어떤 생산자 스레드도 Go나 Rust를 부르지 않는다. host writer가 생기기 전에 쓴 event는 ring에서 기다린다. `sp_event(level, name, fields_json)`은 마이크로초 단위 wall clock, level, 이름(1~255바이트, 계층 `native`), JSON 텍스트인 field를 저장하며, 없거나 비었거나 더 긴 이름, 열거에 없는 level, 없는 field는 거부하고 센다. drain은 `ts_us`(8바이트), level(1바이트), 이름 길이(1바이트), 이름, field로 된 record를 각각 4바이트 길이 뒤에 돌려준다. ring은 4 MiB이며 가득 차면 event를 거부하고 세고, host writer가 그 수를 이유 `the native ring was full`의 `log.dropped`로 기록한다. writer는 플랫폼 연산 `PullNativeEvents`로 배치 간격마다와 flush할 때 ring을 pull하며, pull 한 번에 256 KiB씩 최대 64번 읽는다. ring에서 writer로 오는 event source는 없다. native 스레드가 Go나 Rust를 부르면 안 되므로 pull은 polling이다. writer는 pull한 record를 library가 준 시각 그대로 계층 `native`로 저장한다. 이름이 `native.`로 시작하지 않거나, level이 정의되지 않았거나, field가 JSON 객체가 아니거나, 길이가 buffer에 맞지 않는 record는 거부하고 표준 오류에 거부를 보고하며 이유 `a native record was refused`의 `log.dropped`로 센다. ring을 pull하지 못하는 플랫폼은 host의 시작에 실패한다.
-- page는 `context.log.<level>(event, fields)`로 기록한다. event는 배열에 모였다가 host로 가는 배치 호출 하나로 나간다. 100 ms 타이머, 크기 상한에 닿을 때, `pagehide`와 `visibilitychange`에서 나가며 생산자는 응답을 기다리지 않는다. `console.*`, 전역 `error` event, `unhandledrejection` event도 같은 입구로 들어간다. 배치 호출은 요청 `{action: "batch", events}`를 가진 host 호출 `log`이며, host는 배치 전체를 검증한 뒤에야 event를 저장하고, 모든 event를 page가 준 `ts_us`로 계층 `page`에 저장하며, 이름이 `page.`로 시작하지 않는 event, 계약에 없는 level, 양의 정수가 아닌 `ts_us`, 객체가 아닌 `fields`는 `events[<index>]`를 가리키는 오류로 거부한다.
+- host의 writer는 같은 프로세스의 다른 계층의 event(page 배치, native ring)를 그 event가 가진 시계(`ts_us`, `mono_ns`), 상관 식별자, 계층 그대로 받는다. 이런 event의 이름은 계층으로 시작해야 하고, 계약에 없는 계층, JSON이 아닌 field, 0인 `mono_ns`, 비어 있거나 따옴표·역슬래시·제어 문자를 담은 식별자는 오류로 거부하며, `seq`는 여전히 writer가 부여한다. host의 생산자는 호출 시점에 두 시계를 읽고(monotonic 시계는 `sp_mono_ns`를 읽는 플랫폼 연산 `MonotonicNanos`로 읽으므로 host와 native 라이브러리가 한 시계를 쓴다), writer가 스스로 만드는 event(`log.open`, `log.rotated`, `log.dropped`)는 만들 때 읽는다. 입력 event를 내는 생산자는 식별자를 함께 준다(`EmitHostCids`, `emit_host_cids`).
+- native 라이브러리에는 writer가 없다. C의 bounded lock-free ring을 소유하며, `sp_event`와 `sp_event_cids`가 어느 스레드에서든 event를 ring에 복사하고 host의 writer 스레드가 `sp_event_drain` 호출로 ring을 비운다. 어떤 생산자 스레드도 Go나 Rust를 부르지 않는다. host writer가 생기기 전에 쓴 event는 ring에서 기다린다. `sp_event_cids(level, name, cids, fields_json)`은 마이크로초 단위 wall clock, 나노초 단위 monotonic 시계(`sp_mono_ns`), level, 이름(1~255바이트, 계층 `native`), 상관 식별자(쉼표로 구분한 목록이며 없으면 빈 문자열), JSON 텍스트인 field를 저장하고 `sp_event`는 식별자 없는 호출이다. 없거나 비었거나 더 긴 이름, 열거에 없는 level, 없는 field, 없는 목록, 따옴표·역슬래시·제어 문자를 가진 목록은 거부하고 센다. drain은 `ts_us`(8바이트), `mono_ns`(8), level(1바이트), 이름 길이(1바이트), cids 길이(2바이트), 이름, cids, field로 된 record를 각각 4바이트 길이 뒤에 돌려준다. ring은 4 MiB이며 가득 차면 event를 거부하고 세고, host writer가 그 수를 이유 `the native ring was full`의 `log.dropped`로 기록한다. writer는 플랫폼 연산 `PullNativeEvents`로 배치 간격마다와 flush할 때 ring을 pull하며, pull 한 번에 256 KiB씩 최대 64번 읽는다. ring에서 writer로 오는 event source는 없다. native 스레드가 Go나 Rust를 부르면 안 되므로 pull은 polling이다. writer는 pull한 record를 library가 준 시계와 식별자 그대로 계층 `native`로 저장한다. 이름이 `native.`로 시작하지 않거나, level이 정의되지 않았거나, field가 JSON 객체가 아니거나, `mono_ns`가 0이거나, 식별자가 비었거나 따옴표·역슬래시·제어 문자를 담았거나, 길이가 buffer에 맞지 않는 record는 거부하고 표준 오류에 거부를 보고하며 이유 `a native record was refused`의 `log.dropped`로 센다. ring을 pull하지 못하는 플랫폼은 host의 시작에 실패한다. host는 writer를 시작하기 전에 실행의 boot 식별자를 라이브러리에 준다(`sp_event_set_boot`, 플랫폼 연산 `SetEventBoot`). 그래서 라이브러리가 부여하는 식별자(`sp_cid_new`, `<boot>.<n>`)는 그 실행의 파일에 속한다.
+- page는 `context.log.<level>(event, fields)`로 기록한다. event는 배열에 모였다가 host로 가는 배치 호출 하나로 나간다. 100 ms 타이머, 크기 상한에 닿을 때, `pagehide`와 `visibilitychange`에서 나가며 생산자는 응답을 기다리지 않는다. `console.*`, 전역 `error` event, `unhandledrejection` event도 같은 입구로 들어간다. 배치 호출은 요청 `{action: "batch", events}`를 가진 host 호출 `log`이며, host는 배치 전체를 검증한 뒤에야 event를 저장하고, 모든 event를 page가 준 `ts_us`, `mono_ns`, `cids`로 계층 `page`나 `plugin`에 저장하며, 이름이 `page.`나 `plugin.`으로 시작하지 않는 event, 계약에 없는 level, 양의 정수가 아닌 `ts_us`나 `mono_ns`, 따옴표·역슬래시·제어 문자 없는 비어 있지 않은 문자열의 배열이 아닌 `cids`, 객체가 아닌 `fields`는 `events[<index>]`를 가리키는 오류로 거부한다. page에는 마이크로초 시계가 없다. `Date.now()`는 밀리초 해상도이므로 page는 event마다 `performance.now()` 읽기값을 저장하고 배치가 나갈 때 변환한다. 첫 배치 전에 요청 `{action: "clock"}`을 다섯 번 보내고, host는 호출 시점에 읽은 `{ts_us, mono_ns}`로 답하며 event는 저장하지 않는다. page는 `performance.now()`로 잰 왕복이 가장 짧았던 답을 고르고 그 왕복의 한가운데를 답의 시점으로 삼는다. 그러면 event의 `ts_us`와 `mono_ns`는 읽은 시점의 host 값이 되며, 해상도는 `performance.now()`의 것이고 오차는 가장 짧은 왕복의 절반 이하이다. 입력을 이어받는 호출의 page event(`sidecarSend`의 `page.call`)는 요청의 식별자를 `cids`에 담는다.
 - fatal 신호 처리기는 프로세스가 시작할 때 열어 둔 파일 descriptor에 async-signal-safe 호출만으로 짧은 줄을 쓴다. Go의 runtime fatal 오류는 가로챌 수 없으므로 그 출력은 프로세스의 crash 파일로 가고, host의 모든 goroutine을 시작하는 진입점 `routine.Go`가 panic을 recover하고 `error` event `host.panic`을 저장한 뒤 프로세스를 끝낸다. Rust host는 같은 event를 panic hook에서 저장하며 panic한 스레드에서 writer를 기다리지 않고, 별도 스레드가 flush한 뒤 프로세스를 끝낸다([hosts](hosts.md#process-lifecycle)).
 
 event를 쓰는 각 저장소는 자기 작은 writer 구현을 가지며 `packages/log-contract/fixtures`의 golden lines와 golden catalog로 시험한다. 저장소 사이에 runtime 코드를 공유하지 않으며 sidecar는 실행 중에 core 릴리스에 의존하지 않는다.
@@ -112,7 +114,7 @@ event가 아닌 raw 파일이 둘 있다. `logs/<role>-<boot>.stderr`는 프로�
 
 event를 내는 각 저장소는 `events.json`에 event를 선언한다(이 저장소는 [events.json](events.json)이며 계층 `native`, `host`, `page`를 소유한다. `page.record.<level>`처럼 자리 표시자를 가진 이름은 계열을 선언한다. `level`은 level 하나 또는 level 목록이고, 이름이 `?`로 끝나는 field는 선택이며, `string|null` 같은 타입은 각 부분을 받아들이고, 계층 `sidecar`는 host가 저장하는 sidecar 표준 오류의 줄인 `sidecar.record.<level>`만 담는다. `make events-check`는 소스의 emit 지점을 읽어 선언되지 않은 채 emit된 이름, emit 지점이 없는 선언된 event, 선언이 허용하지 않는 literal 지점의 level이나 field를 실패로 보고한다. 지점은 이름을 literal로 주고(page의 template은 계열이다), 이름을 만드는 지점 위의 주석 `events: <names>`는 그것이 만드는 선언된 이름을 적으며, `events: forwarded`는 그 지점이 호출자의 이름을 넘긴다고 밝힌다. `node scripts/check-events.mjs --logs <config-dir>…`는 창 검사가 남긴 모든 층의 event 파일을 감사한다. [검사](#검사) 참고): event마다 이름, 층, class, level, 필수 field와 그 타입, 가릴 인자, 인자의 크기 상한, 설명. 저장소는 다른 모든 검사에서 자기 소스를 검사하듯 자기 소스를 자기 catalog로 검사한다. 이 저장소는 catalog의 schema와 `native`·`host` 층, page의 event를 소유한다. plugin이나 sidecar는 manifest(`events`, `executable`처럼 패키지 안의 경로)에 자기 catalog 파일을 적고, 릴리스는 그 파일을 담으며, viewer가 설치된 manifest의 catalog를 읽는다. 이 저장소는 그것을 이름으로 부르지 않는다.
 
-catalog는 입력 종류마다 남겨야 하는 사슬도 선언한다. 첫 층에서 마지막 층까지 event의 순서 있는 목록이다(예: `native.input.key_down`, host 중계, `page.terminal.send`, `sidecar.vt.pty_write`). 로그 감사는 입력의 선언된 사슬이 모두 완결되어 있기를 요구한다.
+입력 사슬의 한 단계인 event는 `"cids": "required"`로 선언하고, 감사는 비어 있지 않은 문자열 `cids`가 없는 그 event의 줄을 거부한다(입력 사슬의 guard). catalog는 입력 종류마다 남겨야 하는 사슬도(`chains`) 선언한다. 첫 층에서 마지막 층까지 event의 순서 있는 목록이다. 이 catalog는 `input`을 선언한다: `native.input.key_down`, `host.input.relay`, `page.call`(식별자를 나르는 호출 `sidecarSend`), `host.sidecar.request`. 요청이 일으키는 sidecar의 event(예: `sidecar.vt.pty_write`)는 sidecar 저장소의 catalog가 선언하며 그 저장소가 사슬을 거기서 확장한다. 로그 감사는 입력의 선언된 사슬이 모두 완결되어 있기를 요구한다. 사슬의 첫 event에 나타나는 각 식별자는 모든 계층의 파일을 통틀어 그 사슬의 뒤 event마다 나타나야 한다.
 
 ### 입구
 
@@ -165,7 +167,7 @@ window check는 시험 대상 애플리케이션의 event log에 시험마다 �
 
 ## 한계
 
-- wall clock은 되감기고 잠든 기계와 깨어난 기계 사이에서 어긋날 수 있다. `mono_ns`가 한 부팅 안의 프로세스 사이 event를 정렬하고 `cids`가 한 입력의 층을 정렬한다. page는 wall clock만 가진다.
+- wall clock은 되감기고 잠든 기계와 깨어난 기계 사이에서 어긋날 수 있다. `mono_ns`가 한 부팅 안의 프로세스 사이 event를 정렬하고 `cids`가 한 입력의 층을 정렬한다. page는 두 시계를 host에서 한 번 유도하므로, page가 시작한 뒤 wall clock이 되감기면 page의 `ts_us`는 host의 wall clock과 어긋나고, 해상도는 WebKit이 거칠게 만든 `performance.now()`의 것이며, page 값의 오차는 시계 요청의 가장 짧은 왕복의 절반 이하이다.
 - 신호 처리기는 async-signal-safe 함수만 호출할 수 있어서 시작할 때 준비한 짧은 줄을 쓴다. crash 때 마지막 배치 간격(최대 100 ms)의 `info` event를 잃을 수 있다. `error`는 writer에 바로 넘기지만 writer가 돌기 전에 프로세스가 죽으면 잃는다.
 - page는 파일을 쓸 수 없어 배치 호출로 host를 거쳐 기록한다. page 프로세스가 끝날 때 아직 보내지 않은 배치는 잃는다(flush 간격까지).
 - PTY 출력이 폭주해 파일을 채우면 회전이 가장 오래된 세대를 밀어낸다. writer가 각 회전을 기록한다.

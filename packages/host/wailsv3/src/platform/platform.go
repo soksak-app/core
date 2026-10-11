@@ -475,6 +475,14 @@ type Platform interface {
 	// TakeNativeEventLoss returns the events and bytes that the native ring refused since the last call.
 	TakeNativeEventLoss() (events, bytes uint64, err error)
 
+	// MonotonicNanos reads the monotonic clock of the records in nanoseconds (`mono_ns` of docs/spec/logging.md#event): the
+	// clock that the native library stamps its events with, so the layers of one process compare.
+	MonotonicNanos() (uint64, error)
+
+	// SetEventBoot gives the native library the boot identifier of the run, which its correlation identifiers carry
+	// (`<boot>.<n>`). It is an error for an empty identifier and for one with a character other than letters, digits, '-' and '_'.
+	SetEventBoot(boot string) error
+
 	// ObserveActivity installs the observers that record the activity of the application and of its windows as events of
 	// the native ring (docs/spec/logging.md#automatic-entrances). A second call installs nothing more.
 	ObserveActivity() error

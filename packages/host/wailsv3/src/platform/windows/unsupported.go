@@ -131,6 +131,14 @@ func (implementation) TakeNativeEventLoss() (uint64, uint64, error) {
 	return 0, 0, unsupported("native event loss")
 }
 
+func (implementation) MonotonicNanos() (uint64, error) {
+	return 0, unsupported("monotonic clock")
+}
+
+func (implementation) SetEventBoot(string) error {
+	return unsupported("event boot identifier")
+}
+
 func (implementation) ObserveActivity() error {
 	return unsupported("activity observers")
 }

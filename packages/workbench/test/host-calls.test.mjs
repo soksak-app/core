@@ -99,3 +99,17 @@ test("the arguments of a call are cut at 1024 bytes on a character boundary", ()
   assert.equal(Buffer.byteLength(exact.args), 1024);
   assert.equal(exact.truncated, false);
 });
+
+test("the event of a sidecar send carries the correlation identifiers of the request, in the shape of either runtime", () => {
+  const body = { operation: "input" };
+  const object = callEvent({ name: "sidecarSend", args: [{ sidecar: "x", surface: "s1", body, cids: ["b1.7", "b1.8"] }], micros: 1, ok: true });
+  assert.deepEqual(object.cids, ["b1.7", "b1.8"]);
+  const positional = callEvent({ name: "sidecarSend", args: ["x", "s1", body, ["b1.9"]], micros: 1, ok: true });
+  assert.deepEqual(positional.cids, ["b1.9"]);
+  for (const args of [[{ sidecar: "x", surface: "s1", body, cids: [] }], ["x", "s1", body, []], ["x", "s1", body], [{ sidecar: "x" }]]) {
+    assert.equal(callEvent({ name: "sidecarSend", args, micros: 1, ok: true }).cids, undefined, JSON.stringify(args));
+  }
+  assert.equal(callEvent({ name: "windowState", args: [{ cids: ["b1.7"] }], micros: 1, ok: true }).cids, undefined, "only a sidecar send continues inputs");
+  // A value that is not a list is passed on as it is, so the batcher reports it instead of the event losing it silently.
+  assert.equal(callEvent({ name: "sidecarSend", args: [{ cids: "b1.7" }], micros: 1, ok: true }).cids, "b1.7");
+});

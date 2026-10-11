@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
+import { clockAnswer } from "./support/records.mjs";
 
 test("the preparation carries the title bar height and the presented chrome is the committed one", async () => {
   const dom = new JSDOM('<div id="plane"></div>');
@@ -14,7 +15,7 @@ test("the preparation carries the title bar height and the presented chrome is t
     page: (path) => path,
     call: async (name, request) => {
       calls.push({ name, request });
-      if (name === "log") return;
+      if (name === "log") return clockAnswer(name, request);
       if (name === "syncSurfaces") {
         prepared++;
         return {

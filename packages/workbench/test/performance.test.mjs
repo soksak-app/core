@@ -7,13 +7,16 @@ import { createTracer } from "../performance.js";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
+// The request for the clocks of the host is answered here; the batches are what the tests assert.
+const answering = (inner) => (request) => (request.action === "clock" ? Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 }) : inner(request));
+
 /** A tracer whose switch calls and batch calls are recorded in the order they happen. */
 function recorded(overrides = {}) {
   const calls = [];
   const tracer = createTracer(
     overrides.switch ?? (async (request) => { calls.push(["switch", request.action]); }),
     overrides.report ?? assert.ifError,
-    overrides.log ?? (async (request) => { calls.push(["log", request.events]); }),
+    answering(overrides.log ?? (async (request) => { calls.push(["log", request.events]); })),
   );
   return { calls, tracer };
 }
@@ -54,7 +57,7 @@ test("disabling stops new events at once and waits for the events that were acce
   const tracer = createTracer(
     async (request) => { calls.push(request.action); },
     assert.ifError,
-    (request) => { calls.push("log"); return new Promise((resolve) => { release = resolve; }); },
+    answering((request) => { calls.push("log"); return new Promise((resolve) => { release = resolve; }); }),
   );
   await tracer.setEnabled(true);
   tracer.trace("focus", {});

@@ -22,7 +22,7 @@ const line = (seq, level, event, fields = {}, layer = "host") =>
 test("readEventErrors returns the events of level error and ignores the other levels", (t) => {
   const dir = configDir(t);
   writeFileSync(join(dir, "logs", "host-1-10.jsonl"),
-    line(1, "info", "log.open", { schema: 1 }) + line(2, "warn", "host.test.warned") +
+    line(1, "info", "log.open", { schema: 2 }) + line(2, "warn", "host.test.warned") +
     line(3, "error", "host.test.failed", { where: "sidecar", text: "closed" }) + line(4, "error", "page.test.failed", {}, "page"));
   const { errors } = readEventErrors(dir, {});
   assert.deepEqual(errors, [
@@ -182,11 +182,11 @@ test("currentEventOffsets is the end of the complete lines of every host event l
 
 test("the event file of a sidecar is read with the files of the host, and its events become rows with the surface, the session and the cids", (t) => {
   const dir = configDir(t);
-  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open", { schema: 1 }) + line(2, "error", "host.test.failed", { where: "w", text: "t" }));
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open", { schema: 2 }) + line(2, "error", "host.test.failed", { where: "w", text: "t" }));
   const sidecar = (seq, event, fields, extra = {}) =>
     `${JSON.stringify({ ts_us: 1791000000000000 + seq, seq, level: "info", layer: "sidecar", event, fields, ...extra })}\n`;
   writeFileSync(join(dir, "logs", "vt-1-11.jsonl"),
-    sidecar(1, "log.open", { schema: 1, pid: 11, role: "vt", boot: "1-11" }) +
+    sidecar(1, "log.open", { schema: 2, pid: 11, role: "vt", boot: "1-11" }) +
     sidecar(2, "sidecar.vt.pty_write", { bytes: 1, hex: "0d", text: "\r", ok: true }, { session: "s-1", cids: ["b1.7"] }) +
     sidecar(3, "sidecar.vt.request", { operation: "input", body: { surface: "tab-1" } }, { surface: "tab-1" }));
   const { events, errors } = readEventErrors(dir, {});

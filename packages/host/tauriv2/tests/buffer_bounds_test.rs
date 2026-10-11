@@ -323,16 +323,18 @@ fn an_event_over_the_size_bound_is_stored_cut_with_its_original_size() {
     let oversize =
         RawValue::from_string(serde_json::json!({"text": "é".repeat(3 << 20)}).to_string())
             .unwrap();
-    log.emit_relayed(
-        std::time::SystemTime::now()
+    log.emit_relayed(soksak_host_tauriv2::event_log::RelayedEvent {
+        ts_us: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_micros() as u64,
-        "host",
-        soksak_host_tauriv2::event_log::Level::Info,
-        "host.test.oversize",
-        oversize,
-    )
+        mono_ns: 1,
+        layer: "host".into(),
+        level: soksak_host_tauriv2::event_log::Level::Info,
+        event: "host.test.oversize".into(),
+        cids: Vec::new(),
+        fields: soksak_host_tauriv2::bounds::Fields::whole(oversize),
+    })
     .unwrap();
     emit_host(
         soksak_host_tauriv2::event_log::Level::Info,

@@ -6,7 +6,12 @@ import test from "node:test";
 async function surface(native) {
   const calls = [];
   globalThis.window = { __soksakNative: {
-    call: (method, args) => { calls.push([method, args]); return native(method, args); },
+    call: (method, args) => {
+      // The request for the clocks of the host is answered here; the batches are what the tests assert.
+      if (method === "Log" && args[0].action === "clock") return Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 });
+      calls.push([method, args]);
+      return native(method, args);
+    },
     on: () => Promise.resolve(() => {}),
   } };
   globalThis.location = { search: "?id=s1" };
@@ -36,6 +41,7 @@ test("the calls of one turn are the events page.call in one Log batch, with the 
       assert.equal(event.fields.truncated, false);
       assert.ok(Number.isInteger(event.fields.micros) && event.fields.micros >= 0);
       assert.ok(Number.isInteger(event.ts_us) && event.ts_us > 1.7e15);
+      assert.ok(Number.isInteger(event.mono_ns) && event.mono_ns > 0);
     }
     assert.equal(calls.filter(([method]) => method !== "Log").length, 3, "the calls themselves are not delayed or repeated");
   } finally {

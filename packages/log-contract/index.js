@@ -3,7 +3,7 @@
 // breaks the contract is a finding with its line.
 
 /** The schema number that this checker reads. */
-export const SCHEMA = 1;
+export const SCHEMA = 2;
 
 const LEVELS = new Set(["error", "warn", "info", "debug", "trace"]);
 const LAYERS = new Set(["native", "host", "page", "plugin", "sidecar"]);
@@ -69,6 +69,7 @@ function lineFindings(entry, catalog) {
   const report = (message) => findings.push({ line, message });
   if (!Number.isInteger(event.seq)) report("seq must be an integer");
   if (!Number.isInteger(event.ts_us)) report("ts_us must be an integer");
+  if (!Number.isInteger(event.mono_ns) || event.mono_ns <= 0) report("mono_ns must be a positive integer");
   if (!LEVELS.has(event.level)) report(`level ${event.level} is not one of ${[...LEVELS].join(", ")}`);
   if (!LAYERS.has(event.layer)) report(`layer ${event.layer} is not one of ${[...LAYERS].join(", ")}`);
   const declared = declaration(catalog, event.event);
@@ -77,6 +78,10 @@ function lineFindings(entry, catalog) {
     return findings;
   }
   if (!CLASSES.has(declared.class)) report(`the catalog gives ${event.event} the class ${declared.class}`);
+  // An event that the catalog declares with `cids: "required"` is one input of a chain: without an identifier it cannot be joined.
+  if (declared.cids === "required" && !(Array.isArray(event.cids) && event.cids.length > 0 && event.cids.every((cid) => typeof cid === "string"))) {
+    report(`event ${event.event} requires cids`);
+  }
   // The writer stores an event over its size bound cut: `truncated` is the size of the fields before the cut, and the fields
   // hold only the head of their text, so the declared fields are not asked for (docs/spec/logging.md#bounds).
   if (event.truncated !== undefined) {

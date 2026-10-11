@@ -8,7 +8,8 @@ use std::process::Command;
 use std::time::Duration;
 
 use serde_json::{json, Value};
-use soksak_host_tauriv2::event_log::{EventLog, Level, Options};
+use soksak_host_tauriv2::event_log::{EventLog, Level, Options, RelayedEvent};
+use soksak_host_tauriv2::platform;
 
 /// The events of a log file, parsed.
 fn read(path: &Path) -> Vec<Value> {
@@ -46,7 +47,7 @@ fn the_first_line_is_log_open_and_seq_is_consecutive() {
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
     assert_eq!(events[0]["event"], "log.open");
-    assert_eq!(events[0]["fields"]["schema"], 1);
+    assert_eq!(events[0]["fields"]["schema"], 2);
     assert_eq!(events[0]["fields"]["role"], "host");
     assert_eq!(events[0]["fields"]["boot"], "b1");
     let seqs: Vec<u64> = events.iter().map(|e| e["seq"].as_u64().unwrap()).collect();
@@ -152,7 +153,7 @@ fn the_file_passes_the_audit_of_the_contract_package() {
     log.flush(Duration::from_secs(5)).unwrap();
     let catalog = directory.path().join("catalog.json");
     fs::write(&catalog, json!({
-        "schema": 1,
+        "schema": 2,
         "events": {
             "log.open": {"layer": "host", "class": "lifecycle", "level": "info",
                 "fields": {"schema": "number", "pid": "number", "role": "string", "boot": "string"}},
@@ -211,36 +212,135 @@ fn flush_writes_every_accepted_event_before_it_returns() {
 fn a_relayed_event_keeps_its_layer_and_time_and_gets_the_seq_of_the_writer() {
     let directory = tempfile::tempdir().unwrap();
     let log = EventLog::start(options(directory.path())).unwrap();
-    let fields = serde_json::value::to_raw_value(&json!({"index": 7})).unwrap();
     assert_eq!(
-        log.emit_relayed(
-            1_791_000_000_000_123,
+        log.emit_relayed(relayed(
             "page",
-            Level::Warn,
             "page.test.event",
-            fields
-        ),
+            Level::Warn,
+            json!({"index": 7})
+        )),
         Ok(true)
     );
-    let bad_layer = serde_json::value::to_raw_value(&json!({})).unwrap();
     let error = log
-        .emit_relayed(1, "page", Level::Info, "host.test.event", bad_layer)
+        .emit_relayed(relayed("page", "host.test.event", Level::Info, json!({})))
         .unwrap_err();
     assert!(error.contains("does not start with its layer"), "{error}");
-    let unknown = serde_json::value::to_raw_value(&json!({})).unwrap();
     let error = log
-        .emit_relayed(1, "unknown", Level::Info, "unknown.test.event", unknown)
+        .emit_relayed(relayed(
+            "unknown",
+            "unknown.test.event",
+            Level::Info,
+            json!({}),
+        ))
         .unwrap_err();
     assert!(error.contains("is not one of"), "{error}");
+    let mut no_clock = relayed("page", "page.test.event", Level::Info, json!({}));
+    no_clock.mono_ns = 0;
+    let error = log.emit_relayed(no_clock).unwrap_err();
+    assert!(error.contains("mono_ns"), "{error}");
+    let mut bad_cid = relayed("page", "page.test.event", Level::Info, json!({}));
+    bad_cid.cids = vec!["b1.\"1".into()];
+    let error = log.emit_relayed(bad_cid).unwrap_err();
+    assert!(error.contains("cid"), "{error}");
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
     assert_eq!(events.len(), 2, "{events:?}");
     assert_eq!(events[1]["layer"], "page");
     assert_eq!(events[1]["ts_us"], 1_791_000_000_000_123u64);
+    assert_eq!(events[1]["mono_ns"], 5_000_000_123u64);
+    assert_eq!(events[1]["cids"], json!(["b1.7", "b1.8"]));
     assert_eq!(events[1]["seq"], 2);
     assert_eq!(events[1]["level"], "warn");
     assert_eq!(events[1]["fields"]["index"], 7);
+}
+
+/// A relayed event of the layer with the time, the monotonic clock and the identifiers that the tests expect.
+fn relayed(layer: &str, event: &str, level: Level, fields: Value) -> RelayedEvent {
+    RelayedEvent {
+        ts_us: 1_791_000_000_000_123,
+        mono_ns: 5_000_000_123,
+        layer: layer.to_string(),
+        level,
+        event: event.to_string(),
+        cids: vec!["b1.7".into(), "b1.8".into()],
+        fields: soksak_host_tauriv2::bounds::Fields::whole(
+            serde_json::value::to_raw_value(&fields).unwrap(),
+        ),
+    }
+}
+
+// contract: log.writer.stores-both-clocks
+#[test]
+fn every_line_carries_the_wall_clock_and_the_monotonic_clock_of_its_call() {
+    let system = platform::current().unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let before_wall = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_micros() as u64;
+    let before = system.monotonic_ns().unwrap();
+    let log = EventLog::start(options(directory.path())).unwrap();
+    for index in 0..20 {
+        assert!(log.emit(Level::Info, "host.test.event", &json!({"index": index})));
+    }
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    let after = system.monotonic_ns().unwrap();
+    let after_wall = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_micros() as u64;
+    let events = read(&path);
+    assert_eq!(events.len(), 21);
+    let mut previous = 0;
+    for event in &events {
+        let mono = event["mono_ns"].as_u64().unwrap();
+        assert!(
+            mono >= before && mono <= after,
+            "mono_ns {mono} is outside [{before}, {after}]: {event}"
+        );
+        assert!(mono >= previous, "mono_ns went back: {event}");
+        previous = mono;
+        let wall = event["ts_us"].as_u64().unwrap();
+        assert!((before_wall..=after_wall).contains(&wall), "{event}");
+    }
+    // A wall clock rounded to a millisecond would end every value in 000.
+    assert!(
+        events
+            .iter()
+            .any(|event| event["ts_us"].as_u64().unwrap() % 1000 != 0),
+        "every ts_us is a whole millisecond"
+    );
+}
+
+// contract: log.writer.stores-cids
+#[test]
+fn an_event_with_cids_is_stored_with_them_and_an_invalid_identifier_is_refused() {
+    let directory = tempfile::tempdir().unwrap();
+    let log = EventLog::start(options(directory.path())).unwrap();
+    let cids = vec!["b1.1".to_string(), "b1.2".to_string()];
+    assert!(log.emit_cids(Level::Info, "host.test.input", &cids, &json!({"a": 1})));
+    assert!(log.emit(Level::Info, "host.test.plain", &json!({})));
+    for bad in ["", "b1.\"1", "b1.\\1", "b1.\n1"] {
+        let cids = vec![bad.to_string()];
+        assert!(
+            !log.emit_cids(Level::Info, "host.test.bad", &cids, &json!({})),
+            "{bad:?} was accepted"
+        );
+    }
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    let events = read(&path);
+    assert_eq!(events[1]["cids"], json!(["b1.1", "b1.2"]));
+    assert!(events[2].get("cids").is_none(), "{}", events[2]);
+    assert!(events.iter().all(|event| event["event"] != "host.test.bad"));
+    let dropped: u64 = events
+        .iter()
+        .filter(|event| event["event"] == "log.dropped")
+        .map(|event| event["fields"]["count"].as_u64().unwrap())
+        .sum();
+    assert_eq!(dropped, 4, "{events:?}");
 }
 
 // contract: log.writer.rotates-at-the-bound-and-keeps-generations

@@ -441,6 +441,9 @@ func (s *Surfaces) imageChanged(key ImageKey, event string) {
 	PerformanceObserve("host", func() map[string]any {
 		return map[string]any{"event": "region", "surface": key.Surface, "name": key.Name, "body": json.RawMessage(event)}
 	})
+	if err := RecordInputRelay(key.Surface, key.Name, event); err != nil {
+		LogError("input relay", err)
+	}
 	payload := map[string]any{"surface": key.Surface, "name": key.Name, "event": json.RawMessage(event)}
 	s.emitToSurface(key.Surface, "image-event", payload)
 	s.windowChanged()

@@ -3,6 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createEventBatcher } from "../log-batch.js";
+import { hostClock } from "./support/records.mjs";
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -10,7 +11,7 @@ test("a queue over its byte bound refuses events and the next batch starts with 
   const calls = [];
   let acknowledge;
   const batcher = createEventBatcher({
-    call: (request) => { calls.push(request); return new Promise((resolve) => { acknowledge = resolve; }); },
+    call: (request) => { if (request.action === "clock") return Promise.resolve(hostClock); calls.push(request); return new Promise((resolve) => { acknowledge = resolve; }); },
     report: assert.ifError,
     maxBytes: 1000,
   });

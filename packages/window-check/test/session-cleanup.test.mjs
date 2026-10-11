@@ -52,7 +52,7 @@ function writeEventLog(dir, lines) {
   return Buffer.byteLength(before);
 }
 
-const OPEN = event(1, "info", "log.open", { schema: 1 });
+const OPEN = event(1, "info", "log.open", { schema: 2 });
 const PREVIOUS = event(2, "error", "page.record.error", { where: "rejected", text: "an error of the previous check" }, "page");
 const RESIZE = event(4, "error", "page.record.error", { where: "page", text: "ResizeObserver loop completed with undelivered notifications. @ wails://localhost/:0" }, "page");
 

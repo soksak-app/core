@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "layers": ["native", "host", "page", "sidecar"],
   "events": {
     "log.open": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "schema": "number", "pid": "number", "role": "string", "boot": "string" }, "description": "The first line of every event file." },
@@ -20,6 +20,8 @@
     "host.endpoint.call": { "layer": "host", "class": "call", "level": ["debug", "warn"], "fields": { "name": "string", "args": "string", "micros": "number", "ok": "boolean", "truncated": "boolean", "error?": "string" }, "description": "A method that a client of the endpoint called; `args` is the params as received (`null` when absent) cut to 1024 bytes, `error` is the code and the message that the client received." },
     "host.binding.call": { "layer": "host", "class": "call", "level": ["debug", "warn"], "fields": { "name": "string", "args": "string", "micros": "number", "ok": "boolean", "truncated": "boolean", "error?": "string" }, "description": "A host call that the main page or a document of a surface sent; `name` is the snake case name of the call, `args` is the JSON array of the arguments in call order cut to 1024 bytes, `error` is the text that the page received or `the call ended without a result`." },
     "page.command": { "layer": "page", "class": "call", "level": ["debug", "warn"], "fields": { "name": "string", "micros": "number", "ok": "boolean", "error?": "string" }, "description": "A command request that the page answered; `error` names a failed command." },
+    "host.input.relay": { "layer": "host", "class": "input", "level": "info", "cids": "required", "fields": { "surface": "string", "name": "string", "type": "string" }, "description": "The host relayed a picture region event that carries correlation identifiers to the page; `name` is the region and `type` the type of the event." },
+    "host.sidecar.request": { "layer": "host", "class": "io", "level": "info", "cids": "required", "fields": { "name": "string", "surface": "string", "bytes": "number" }, "description": "The host queued a page request that continues inputs for a sidecar; the request line carries the same identifiers, and `bytes` is the size of the body." },
     "host.window.event": { "layer": "host", "class": "lifecycle", "level": ["debug", "info"], "fields": { "window": "string", "kind": "string" }, "description": "A window event that the host registered." },
     "host.app.event": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "kind": "string" }, "description": "An application event that the host registered." },
     "host.sidecar.start": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "name": "string", "pid": "number" }, "description": "A sidecar process of standard input and output started." },
@@ -45,6 +47,9 @@
     "native.window.deminiaturized": { "layer": "native", "class": "lifecycle", "level": "info", "fields": { "window": "number", "first_responder": "string" }, "description": "A window was deminiaturized." },
     "native.window.occlusion": { "layer": "native", "class": "lifecycle", "level": "info", "fields": { "window": "number", "visible": "boolean" }, "description": "The occlusion state of a window changed." },
     "native.window.first_responder": { "layer": "native", "class": "input", "level": "info", "fields": { "window": "number", "from": "string", "to": "string" }, "description": "The first responder of a window changed, seen at its next update." },
+    "native.input.key_down": { "layer": "native", "class": "input", "level": "info", "cids": "required", "fields": { "keyCode": "number", "characters": "string", "charactersIgnoringModifiers": "string", "modifierFlags": "number", "isARepeat": "boolean", "timestamp": "number", "before": "object", "after": "object" }, "description": "A key reached an image region. The native layer assigns the correlation identifier of the input here; `before` and `after` hold the state of the input document." },
+    "native.input.callback": { "layer": "native", "class": "input", "level": "info", "cids": "required", "fields": { "call": "string", "before": "object", "after": "object" }, "description": "A callback of the input method or a step of the region that it causes (`setMarkedText`, `insertText`, `unmarkText`, `doCommandBySelector`, `commitThrough`, `reportPreedit`, `commitPending`, `clearDocument`, `becomeFirstResponder`, `resignFirstResponder`), with its arguments next to `call` and the state of the input document before and after. It takes the identifier of the input that caused it." },
+    "native.input.report": { "layer": "native", "class": "input", "level": "info", "cids": "required", "fields": { "report": "string", "dropped": "boolean" }, "description": "A report of a region to the page, as the JSON text that was sent; `dropped` is true when the region was closed and the report was not sent. The sent report carries the identifier as its member `cids`." },
     "native.input.source_changed": { "layer": "native", "class": "input", "level": "info", "fields": {}, "description": "The selected keyboard input source changed." },
     "native.input.query": { "layer": "native", "class": "input", "level": "debug", "fields": { "call": "string", "focus": "boolean" }, "description": "A query of the input method that an image region answered; `answer` holds the answer." },
     "native.observe.registered": { "layer": "native", "class": "lifecycle", "level": "info", "fields": { "source": "string", "kind": "string", "target": "string", "mode": "string", "registrations": "number" }, "description": "An observer, monitor, key-value observer, run loop observer, dispatch source, Apple event handler or delegate was registered through the native entrance; `registrations` counts the registrations of the source." },
@@ -52,5 +57,8 @@
     "native.observe.delivered": { "layer": "native", "class": "input", "level": "debug", "fields": { "source": "string", "count": "number" }, "description": "One delivery of a registration of the mode `record`; `count` is the exact number of deliveries of the source so far." },
     "native.observe.counted": { "layer": "native", "class": "frame", "level": "debug", "fields": { "source": "string", "count": "number", "total": "number", "micros": "number" }, "description": "The deliveries of a registration of the mode `count` since the earlier summary (at most one per second), their total and the microseconds between the summaries." },
     "native.process.exit_timeout": { "layer": "native", "class": "lifecycle", "level": "warn", "fields": { "pid": "number", "seconds": "number" }, "description": "A process did not end within the time that the caller waited for it." }
+  },
+  "chains": {
+    "input": ["native.input.key_down", "host.input.relay", "page.call", "host.sidecar.request"]
   }
 }
