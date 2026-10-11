@@ -13,7 +13,7 @@ use std::time::Duration;
 use serde_json::value::RawValue;
 use serde_json::{json, Map, Value};
 use soksak_host_tauriv2::endpoint::{self, raw, Connection, Endpoint, Failure, Service};
-use soksak_host_tauriv2::event_log::{EventLog, Level, Options};
+use soksak_host_tauriv2::event_log::{self, EventLog, Level, Options};
 use soksak_host_tauriv2::event_record::use_host_event_log;
 use soksak_host_tauriv2::log_query::{
     index_reporter, query_event_logs, start_log_indexer, QueryError,
@@ -280,7 +280,7 @@ fn lines(path: &Path) -> i64 {
 #[test]
 fn the_index_covers_each_batch_the_writer_wrote() {
     let config = tempfile::tempdir().unwrap();
-    let log = EventLog::start(writer_options(&config.path().join("logs"))).unwrap();
+    let log = event_log::start(writer_options(&config.path().join("logs"))).unwrap();
     let (results, updates) = channel();
     let (observe, stop) = start_log_indexer(move |_path, result| {
         let _ = results.send(result);

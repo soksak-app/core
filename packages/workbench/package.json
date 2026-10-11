@@ -24,6 +24,7 @@
     "commands.js",
     "compositor.js",
     "surface-modules.js",
+    "plugin-records.js",
     "system-notifications.js",
     "shown-errors.js",
     "debug-ui.js",

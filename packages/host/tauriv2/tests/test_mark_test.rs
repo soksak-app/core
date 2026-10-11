@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{json, Value};
-use soksak_host_tauriv2::event_log::{EventLog, Options};
+use soksak_host_tauriv2::event_log::{self, Options};
 use soksak_host_tauriv2::event_record::use_host_event_log;
 use soksak_host_tauriv2::test_mark::{emit_test_mark, parse_test_mark, TestMark};
 
@@ -87,7 +87,7 @@ fn a_test_mark_is_an_event_and_the_reply_names_its_position() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let directory = tempfile::tempdir().unwrap();
     let log = Arc::new(
-        EventLog::start(Options {
+        event_log::start(Options {
             directory: directory.path().to_path_buf(),
             role: "host".into(),
             boot: "b1".into(),

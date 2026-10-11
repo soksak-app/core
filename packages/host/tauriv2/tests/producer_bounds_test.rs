@@ -15,7 +15,7 @@ use serde_json::{json, Map, Value};
 use soksak_host_tauriv2::application_log::{log_error, log_info};
 use soksak_host_tauriv2::bounds::{EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES};
 use soksak_host_tauriv2::endpoint::{self, raw, Connection, Endpoint, Failure, Service};
-use soksak_host_tauriv2::event_log::{EventLog, Level, Options};
+use soksak_host_tauriv2::event_log::{self, Level, Options};
 use soksak_host_tauriv2::event_record::{
     emit_host, use_host_event_log, START_BUFFER_BYTES, START_BUFFER_RECORDS,
 };
@@ -110,7 +110,7 @@ fn the_start_buffer_holds_at_most_four_mebibytes_and_the_writer_counts_the_rest(
     }
     let config = tempfile::tempdir().unwrap();
     let log = Arc::new(
-        EventLog::start(Options {
+        event_log::start(Options {
             directory: config.path().to_path_buf(),
             role: "host".into(),
             boot: "b1".into(),

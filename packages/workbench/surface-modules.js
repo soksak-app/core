@@ -9,8 +9,7 @@ import { onTextSize, surfaceTextSize } from "./text-size.js";
 import { forgetTab, reportDirectory, reportError, reportFooter, reportModified, reportNotice, reportTitle, tabOrigin } from "./tab-reports.js";
 import { icon } from "./icons.js";
 import { active } from "./projects.js";
-import { emitEvent } from "./page-log.js";
-import { trace } from "./performance.js";
+import { pluginRecords } from "./plugin-records.js";
 const mounted = new Map();
 /* Placeholder of a surface that is not mounted in a document without a host: one element for each surface id. */
 const placeholders = new Map();
@@ -234,10 +233,8 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         } },
         settings: { read: () => pluginSettings(surface.pluginId), on: (listener) =>
           onSettingsChange(() => listener(pluginSettings(surface.pluginId))) },
-        // The page trace writes the event while the performance trace is on (docs/spec/plugins.md#tracing).
-        trace: (event, fields) => { trace(event, fields); },
-        // events: forwarded
-        log: (level, event, fields) => { emitEvent(level, event, fields); },
+        // The event log and the performance trace of the page, with their gates (docs/spec/plugins.md#tracing, #logging).
+        ...pluginRecords,
       },
     });
     const state = context.status.subscribe(onState);

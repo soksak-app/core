@@ -204,7 +204,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // The event log and the stderr file are opened after the endpoint holds the process lock, so no other run writes
                 // the same files (docs/spec/hosts.md#application-log). The run record waits in the start buffer until the writer
                 // exists.
-                let events = std::sync::Arc::new(event_log::EventLog::start_host(&directory)?);
+                let events = std::sync::Arc::new(event_log::start_host(&directory)?);
                 event_record::use_host_event_log(Some(std::sync::Arc::clone(&events)));
                 // The debug view follows the event files: every window and every watcher of host.log learns that a line announced
                 // a change (docs/spec/debug.md#following). The index covers the lines before the notice, so the notice follows

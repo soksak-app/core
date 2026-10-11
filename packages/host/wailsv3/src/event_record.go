@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
+	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 // panicFlushDeadline is how long the entrance of the goroutines waits for the event of a panic to reach the file before the
@@ -100,8 +101,8 @@ func emitRecord(e Entry) {
 	default:
 		body = fmt.Sprint(e.Text)
 	}
-	where, cutWhere := cutText(e.Where, RecordPlaceBytes)
-	body, cutBody := cutText(body, RecordTextBytes)
+	where, cutWhere := sok.CutText(e.Where, RecordPlaceBytes)
+	body, cutBody := sok.CutText(body, RecordTextBytes)
 	record := map[string]any{"where": where, "text": body}
 	if cutWhere || cutBody {
 		record["truncated"] = true
@@ -165,7 +166,7 @@ func emitTrace(layer string, fields map[string]any) error {
 			rest[key] = value
 		}
 	}
-	text, produced, err := boundedMarshal(rest, EventFieldsLimitBytes)
+	text, produced, err := sok.BoundedMarshal(rest, EventFieldsLimitBytes)
 	if err != nil {
 		return fmt.Errorf("the fields of %s cannot be serialized: %w", event, err)
 	}
@@ -182,7 +183,7 @@ func EmitHost(level Level, event string, fields map[string]any) {
 		fmt.Fprintf(os.Stderr, "event writer: the event %q does not start with host.\n", event)
 		return
 	}
-	text, produced, err := boundedMarshal(fields, EventFieldsLimitBytes)
+	text, produced, err := sok.BoundedMarshal(fields, EventFieldsLimitBytes)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return
@@ -199,11 +200,11 @@ func EmitHostCids(level Level, event string, cids []string, fields map[string]an
 		fmt.Fprintf(os.Stderr, "event writer: the event %q does not start with host.\n", event)
 		return
 	}
-	if err := checkCids(cids); err != nil {
+	if err := sok.CheckCids(cids); err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the cids of %s are refused: %v\n", event, err)
 		return
 	}
-	text, produced, err := boundedMarshal(fields, EventFieldsLimitBytes)
+	text, produced, err := sok.BoundedMarshal(fields, EventFieldsLimitBytes)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return
@@ -234,7 +235,7 @@ func RecordInputRelay(surface, name, event string) error {
 	if len(cids) == 0 {
 		return nil
 	}
-	if err := checkCids(cids); err != nil {
+	if err := sok.CheckCids(cids); err != nil {
 		return fmt.Errorf("the cids of the region event of %s: %w", surface, err)
 	}
 	var kind string
@@ -265,7 +266,7 @@ func EmitHostPlaced(level Level, event string, fields map[string]any, deadline t
 	if !strings.HasPrefix(event, "host.") {
 		return "", 0, fmt.Errorf("the event %q does not start with host.", event)
 	}
-	text, produced, err := boundedMarshal(fields, EventFieldsLimitBytes)
+	text, produced, err := sok.BoundedMarshal(fields, EventFieldsLimitBytes)
 	if err != nil {
 		return "", 0, fmt.Errorf("the fields of %s cannot be serialized: %w", event, err)
 	}
@@ -275,7 +276,7 @@ func EmitHostPlaced(level Level, event string, fields map[string]any, deadline t
 	if log == nil {
 		return "", 0, fmt.Errorf("the event log of the host is not attached")
 	}
-	seq, err := log.emitPlaced(level, event, text, produced, deadline)
+	seq, err := log.EmitPlacedBounded(level, event, text, produced, deadline)
 	if err != nil {
 		return "", 0, err
 	}

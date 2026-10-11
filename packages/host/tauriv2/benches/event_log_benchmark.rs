@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use soksak_host_tauriv2::event_log::{EventLog, Level, Options};
+use soksak_host_tauriv2::event_log::{self, Level, Options};
 
 fn summary(name: &str, mut samples: Vec<u64>) {
     samples.sort_unstable();
@@ -21,7 +21,7 @@ fn summary(name: &str, mut samples: Vec<u64>) {
 fn main() {
     let directory = tempfile::tempdir().unwrap();
     let log = Arc::new(
-        EventLog::start(Options {
+        event_log::start(Options {
             directory: directory.path().to_path_buf(),
             role: "bench".into(),
             boot: "b1".into(),

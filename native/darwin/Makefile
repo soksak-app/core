@@ -107,6 +107,7 @@ $(BUILD)/capture_resize_test: src/capture.m
 # runs only the entries that contain the text.
 NATIVE_TESTS = observe_test \
   activity_observers_test \
+  activity_observers_allocation_test \
   application_log_test \
   application_log_fatal_test \
   event_ring_test \

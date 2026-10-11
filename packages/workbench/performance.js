@@ -63,7 +63,9 @@ export function createTracer(call, report = reportRelayError, log = null) {
       throw error;
     }
   };
-  return { setEnabled, trace, timed };
+  // Whether the trace is on and has a writer: a caller that builds the fields of an event asks first.
+  const isEnabled = () => enabled && batcher !== null;
+  return { setEnabled, trace, timed, isEnabled };
 }
 
 const tracer = createTracer(
@@ -74,3 +76,4 @@ const tracer = createTracer(
 export const setTraceEnabled = tracer.setEnabled;
 export const trace = tracer.trace;
 export const timed = tracer.timed;
+export const traceEnabled = tracer.isEnabled;
