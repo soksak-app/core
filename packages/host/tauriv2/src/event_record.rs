@@ -99,6 +99,7 @@ pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
             return;
         }
     };
+    // events: host.record.<level>, sidecar.record.<level>
     store_event(parsed, layer, &name, place, fields);
 }
 
@@ -149,6 +150,7 @@ pub fn emit_trace(layer: &str, fields: serde_json::Value) -> Result<(), String> 
     };
     let text = to_raw_value(&fields)
         .map_err(|error| format!("the fields of {event} cannot be serialized: {error}"))?;
+    // events: host.trace.<event>, host.sampler.<event>
     store_event(
         Level::Debug,
         "host",
@@ -168,6 +170,7 @@ pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
         return;
     }
     match to_raw_value(&fields) {
+        // events: forwarded
         Ok(text) => store_event(level, "host", event, event, text),
         Err(error) => {
             eprintln!("event writer: the fields of {event} cannot be serialized: {error}")

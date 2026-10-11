@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.1: `make events-check`가 Go, Rust, JavaScript, Objective-C 소스의 emit 지점을 읽어 `docs/spec/events.json`에 선언되지 않은 채 emit된 이름, emit 지점이 없는 선언된 event, 선언이 허용하지 않는 literal 지점의 level이나 field를 실패시키며, 지점이 만드는 이름은 주석 `events: <names>` 또는 `events: forwarded`로 적는다. catalog는 `page.log.dropped`와 `sidecar.record.<level>`을 선언하고 `log.rotated.removed`의 타입을 `string|null`로 하며 지점이 쓰는 level과 선택 field를 적고, 로그 감사는 선택 field와 `|` 타입을 받아들인다. `host.app.event`의 kind `reopened`는 두 host에서 제거했고, image region의 콜백 `inputSourceChanged`는 `native.input.source_changed`가 기록하는 변화를 더 이상 기록하지 않는다.
 - F161.3: 창 검사 `e2e/card-sidebar-space.test.mjs`가 정리에서 terminal card의 sidebar를 `inherit`로 되돌려 제거된 set의 선택이 layout에 남지 않으며, 두 앱에서 통과한다.
 - F161.2: 창 검사 `e2e/browser.test.mjs`와 `e2e/hosts.test.mjs`가 호스트가 기록하는 형태(`info page page: host <call> …`)로 transcript 줄을 맞추며, 두 앱에서 통과한다.
 - F161.1: 창 검사 `e2e/sidecar-recovery.test.mjs`가 호스트가 기록하는 죽인 terminal service의 재시작을 선언하며, 두 앱에서 5.0초에 통과한다.

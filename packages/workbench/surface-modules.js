@@ -236,6 +236,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
           onSettingsChange(() => listener(pluginSettings(surface.pluginId))) },
         // The page trace writes the event while the performance trace is on (docs/spec/plugins.md#tracing).
         trace: (event, fields) => { trace(event, fields); },
+        // events: forwarded
         log: (level, event, fields) => { emitEvent(level, event, fields); },
       },
     });

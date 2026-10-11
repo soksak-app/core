@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F160.1: `make events-check` reads the emit sites of the Go, Rust, JavaScript and Objective-C sources and fails on an emitted name that `docs/spec/events.json` does not declare, on a declared event without an emit site, and on a level or a field of a literal site that the declaration does not allow; a name that a site builds is listed by a comment `events: <names>` or `events: forwarded`. The catalog declares `page.log.dropped` and `sidecar.record.<level>`, gives `log.rotated.removed` the type `string|null`, lists the levels and optional fields that the sites use, and the audit of the logs accepts optional fields and types with `|`. The kind `reopened` of `host.app.event` is removed from both hosts, and the callback `inputSourceChanged` of an image region no longer records the change that `native.input.source_changed` records.
 - F161.3: the window check `e2e/card-sidebar-space.test.mjs` sets the sidebars of the terminal card back to `inherit` in its cleanup, so no choice of a removed set remains in the layout, and it passes on both applications.
 - F161.2: the window checks `e2e/browser.test.mjs` and `e2e/hosts.test.mjs` match the transcript lines in the form the host records (`info page page: host <call> …`), and they pass on both applications.
 - F161.1: the window check `e2e/sidecar-recovery.test.mjs` declares the restart of the killed terminal service that the host logs, and it passes on both applications in 5.0 s.

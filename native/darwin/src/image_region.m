@@ -845,8 +845,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)inputSourceChanged:(NSNotification *)notification {
-    [self logInput:@"inputSourceChanged" fields:[NSString stringWithFormat:@"\"ownContext\":%@",
-        notification.object == self.inputContext ? @"true" : @"false"] before:nil];
+    // The change itself is the event `native.input.source_changed` of the activity observers; this region only reacts to it.
     if (notification.object == self.inputContext) [self commitPending];
 }
 

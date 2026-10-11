@@ -11,6 +11,7 @@ static void emit(NSString *name, NSDictionary *fields) {
         return;
     }
     NSString *text = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+    // events: forwarded
     sp_event(SP_EVENT_INFO, name.UTF8String, text.UTF8String);
 }
 
@@ -47,6 +48,7 @@ void sp_observe_activity(void) {
             NSApplicationDidHideNotification: @"native.app.hidden",
             NSApplicationDidUnhideNotification: @"native.app.unhidden",
         };
+        // events: native.app.activated, native.app.deactivated, native.app.hidden, native.app.unhidden
         for (NSNotificationName notification in application) {
             NSString *name = application[notification];
             [center addObserverForName:notification object:nil queue:nil usingBlock:^(NSNotification *note) { emit(name, @{}); }];
@@ -59,6 +61,7 @@ void sp_observe_activity(void) {
             NSWindowDidMiniaturizeNotification: @"native.window.miniaturized",
             NSWindowDidDeminiaturizeNotification: @"native.window.deminiaturized",
         };
+        // events: native.window.key, native.window.resign_key, native.window.main, native.window.resign_main, native.window.miniaturized, native.window.deminiaturized
         for (NSNotificationName notification in windows) {
             NSString *name = windows[notification];
             [center addObserverForName:notification object:nil queue:nil usingBlock:^(NSNotification *note) { emit(name, windowFields(note)); }];

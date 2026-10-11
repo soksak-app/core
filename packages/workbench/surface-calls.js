@@ -20,6 +20,7 @@ export function surfaceCalls({ send, log }) {
       const started = performance.now();
       const ended = (ok, error) => {
         const { level, event, fields } = callEvent({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, error });
+        // events: page.call
         batcher.emit(level, event, fields);
       };
       let result;
@@ -38,6 +39,7 @@ export function surfaceCalls({ send, log }) {
       });
     },
     /** Queues an event of the document; the promise ends when the batch that carries it was relayed. */
+    // events: forwarded
     record: (level, event, fields) => batcher.emitAndWait(level, event, fields),
   };
 }

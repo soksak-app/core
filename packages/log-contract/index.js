@@ -77,10 +77,14 @@ function lineFindings(entry, catalog) {
     return findings;
   }
   if (!CLASSES.has(declared.class)) report(`the catalog gives ${event.event} the class ${declared.class}`);
-  for (const [name, type] of Object.entries(declared.fields)) {
+  // A field name that ends with `?` is optional, and a type such as `string|null` accepts each of its parts.
+  for (const [declaredName, type] of Object.entries(declared.fields)) {
+    const optional = declaredName.endsWith("?");
+    const name = optional ? declaredName.slice(0, -1) : declaredName;
     const value = event.fields?.[name];
-    if (value === undefined) report(`field ${name} is required by ${event.event}`);
-    else if (typeOf(value) !== type) report(`field ${name} must be a ${type}, found ${typeOf(value)}`);
+    if (value === undefined) {
+      if (!optional) report(`field ${name} is required by ${event.event}`);
+    } else if (!type.split("|").includes(typeOf(value))) report(`field ${name} must be a ${type}, found ${typeOf(value)}`);
   }
   return findings;
 }

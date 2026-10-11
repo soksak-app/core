@@ -54,6 +54,7 @@ static void storeRecord(uint8_t level, const char *name, const char *where, cons
         abort();
     }
     NSString *fields = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+    // events: forwarded
     sp_event(level, name, fields.UTF8String);
 }
 

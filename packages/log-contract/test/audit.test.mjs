@@ -104,3 +104,25 @@ test("a family name with a placeholder declares every event of the family, and a
     { line: 7, message: "event page.unknown.thing is not declared" },
   ]);
 });
+
+test("an optional field is checked only when present, and a type with | accepts each of its parts", () => {
+  const optional = {
+    schema: 1,
+    events: {
+      "log.open": catalog.events["log.open"],
+      "log.rotated": { layer: "host", class: "lifecycle", level: "info", fields: { bytes: "number", "removed?": "string|null", "note?": "string" } },
+    },
+  };
+  const text = [
+    open,
+    line(2, "log.rotated", { bytes: 1, removed: null }),
+    line(3, "log.rotated", { bytes: 1, removed: "host-1.jsonl.5" }),
+    line(4, "log.rotated", { bytes: 1 }),
+    line(5, "log.rotated", { bytes: 1, removed: 7 }),
+    line(6, "log.rotated", { bytes: 1, note: 3 }),
+  ].join("\n");
+  assert.deepEqual(auditLog("host-b1.jsonl", text, optional), [
+    { line: 5, message: "field removed must be a string|null, found number" },
+    { line: 6, message: "field note must be a string, found number" },
+  ]);
+});
