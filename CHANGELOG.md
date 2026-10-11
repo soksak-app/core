@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F160.25.6: `e2e/terminal-replay.test.mjs` replays a session with output, a scroll, a selection, a theme change, a resize and input with every hash equal, and reports a changed stored output as a divergence of the layer `sidecar`.
 - F160.34.6: the readers of the policy file of both tools run every golden case of `packages/log-contract/fixtures/policy/cases.json`, and the Go reader names a null level as a level that must be text.
 - F160.35.4: `e2e/terminal-replay.test.mjs` replays a terminal session of each application with `sok debug replay` of its bundle and checks that every sidecar and page hash is equal, and that a screen message changed on the way (`terminal.screen.alter` of the terminal plugin) is a divergence of the layer `plugin`.
 - F160.36: the writer of the host gives a plugin event the class that the catalog of its plugin declares; both hosts read the catalogs of the enabled installed plugins at start and after each plugin change and record a catalog they cannot use as `error host plugin catalog` ([plugin catalogs](docs/spec/logging.md#plugin-catalogs)). Every plugin event was stored `undeclared` without a class before.

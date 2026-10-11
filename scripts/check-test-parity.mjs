@@ -1860,6 +1860,21 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F160.25",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/replay.go", symbol: "func ReplayLogs" },
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export async function screenHash" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/replay_test.go", id: "TestReplayComparesEachSegmentOfASessionWhoseSequenceRestarts" },
+      { file: "packages/sok/tauriv2/tests/replay_test.rs", id: "replay_compares_each_segment_of_a_session_whose_sequence_restarts" },
+      { file: "e2e/terminal-replay.test.mjs", id: "a session with output, a resize, a scroll, a selection, a theme and input replays with every hash equal" },
+      { file: "e2e/terminal-replay.test.mjs", id: "a stored input that was changed is a divergence of the layer sidecar" },
+    ],
+    expected: "A terminal session replays from its stored inputs with every sidecar and page hash equal, and a changed stored input or drawn screen is a divergence of the layer that stored it.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F160.35",
     implementation: [
       { file: "packages/plugin-api/screen-hash.js", symbol: "export function screenFromMessage" },
