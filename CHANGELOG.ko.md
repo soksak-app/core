@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.3: 창 검사 `e2e/card-sidebar-space.test.mjs`가 정리에서 terminal card의 sidebar를 `inherit`로 되돌려 제거된 set의 선택이 layout에 남지 않으며, 두 앱에서 통과한다.
 - F161.2: 창 검사 `e2e/browser.test.mjs`와 `e2e/hosts.test.mjs`가 호스트가 기록하는 형태(`info page page: host <call> …`)로 transcript 줄을 맞추며, 두 앱에서 통과한다.
 - F161.1: 창 검사 `e2e/sidecar-recovery.test.mjs`가 호스트가 기록하는 죽인 terminal service의 재시작을 선언하며, 두 앱에서 5.0초에 통과한다.
 - F160: 체크리스트가 기록의 감사 결과(core, sidecar와 plugin의 원천, 시험 결과와 로그의 매핑) 전부인 F160.1~F160.23과, 창 검사 전체 실행의 실패에 대한 F161을 등록한다.

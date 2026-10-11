@@ -100,6 +100,10 @@ for (const app of Object.values(APPS))
           { set: side === "right" ? "space-tabs" : "space-list", size: 120, collapsed: false },
         ]),
       );
+      // The card keeps its sidebar choices in the layout, so the check gives them back; a choice of a set that the next preparation removes fails the presentation.
+      s.cleanup(async () => {
+        for (const side of sides) await s.run("core.card.sidebar.set", { card: card.id, side, set: "inherit" });
+      });
       // The face operated last for each axis. When both faces do not fit together, that face opens.
       const last = {};
       for (const side of sides) {

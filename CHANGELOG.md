@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.3: the window check `e2e/card-sidebar-space.test.mjs` sets the sidebars of the terminal card back to `inherit` in its cleanup, so no choice of a removed set remains in the layout, and it passes on both applications.
 - F161.2: the window checks `e2e/browser.test.mjs` and `e2e/hosts.test.mjs` match the transcript lines in the form the host records (`info page page: host <call> …`), and they pass on both applications.
 - F161.1: the window check `e2e/sidecar-recovery.test.mjs` declares the restart of the killed terminal service that the host logs, and it passes on both applications in 5.0 s.
 - F160: the checklist registers every result of the audit of the records (the sources of core, of the sidecars and plugins, and the mapping of test results to the logs), F160.1 to F160.23, and F161 for the failures of the full run of the window checks.
