@@ -9,6 +9,13 @@ import { eventLine, currentEventOffsets, readEvents, traceRows, untilEventLine }
 import { fresh } from "./fixture.mjs";
 import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
 
+// The text of the bytes that a pty_read line of the terminal sidecar holds as hex; the event stores no text copy of the bytes
+// (docs/spec/replay.md#records). The line is `<level> <layer> <event>: <fields>`.
+function readText(line) {
+  const { hex } = JSON.parse(line.slice(line.indexOf(": ") + 2));
+  return Buffer.from(hex, "hex").toString("latin1");
+}
+
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a typed key leaves a record in every layer of the input path`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
@@ -41,7 +48,7 @@ for (const app of Object.values(APPS)) {
     // and the flush waits until they are in the event log.
     await s.flushLog();
     // The sidecar writes its own event file in batches, so the check waits until the read of the prompt after Enter is in it.
-    await untilEventLine(s.app.configDir, eventOffsets, (text) => text.includes("sidecar.vt.pty_read") && text.includes("sh-"), 10000);
+    await untilEventLine(s.app.configDir, eventOffsets, (text) => text.includes("sidecar.vt.pty_read") && readText(text).includes("sh-"), 10000);
     const events = readEvents(s.app.configDir, eventOffsets).events;
     const log = events.map((event) => ({ text: eventLine(event), ts: new Date(event.ts_us / 1000).toISOString() }));
     // The trace of the page and of the host is in the event log.
@@ -68,8 +75,8 @@ for (const app of Object.values(APPS)) {
       hostSidecarSend: traced((r) => r.layer === "host" && r.event === "sidecar.send" && forEnter(r) && r.body?.keys?.[0]?.key === "Enter"),
       vtRequest: traced((r) => r.layer === "vt-core" && r.event === "request" && r.operation === "input" && forEnter(r)
         && r.body?.body?.keys?.[0]?.key === "Enter"),
-      ptyWrite: traced((r) => r.layer === "vt-core" && r.event === "pty_write" && r.hex === "0d" && r.text === "\r"),
-      ptyRead: traced((r) => r.layer === "vt-core" && r.event === "pty_read" && r.text.includes("sh-")),
+      ptyWrite: traced((r) => r.layer === "vt-core" && r.event === "pty_write" && r.hex === "0d"),
+      ptyRead: traced((r) => r.layer === "vt-core" && r.event === "pty_read" && Buffer.from(r.hex, "hex").toString("latin1").includes("sh-")),
     };
     const missing = Object.entries(found).filter(([, record]) => !record).map(([name]) => name);
     assert.deepEqual(missing, [], `${app.name}: the typed Enter left no record in: ${missing.join(", ")}`);
