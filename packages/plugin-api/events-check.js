@@ -307,6 +307,7 @@ export function sitesOf(path, text) {
         at: match.index,
         line: source.lineAt(args[entrance.event][0]),
         call: source.lineAt(match.index),
+        // default: an entrance with a fixed event name has no name argument, so the name is read from the literal of the call.
         name: entrance.name ?? literalName(source, args[entrance.event]),
         levels: entrance.fixed ? [entrance.fixed] : levelsOf(source, args[entrance.level]),
         fields: fieldsOf(source, args[entrance.fields]),

@@ -60,6 +60,7 @@ pub fn start_panic_ender() {
 /// the writer. `location` is `<file>:<line>` of the panic.
 pub fn record_panic(location: &str, message: &str) {
     let thread = std::thread::current();
+    // default: a thread that was started without a name is recorded as "<unnamed>" in the panic event.
     let name = thread.name().unwrap_or("<unnamed>");
     let stack = std::backtrace::Backtrace::force_capture().to_string();
     emit_host(
@@ -69,6 +70,7 @@ pub fn record_panic(location: &str, message: &str) {
     );
     match ENDER.get() {
         Some(wake) => {
+            // default: a lock that a panicking thread poisoned still holds the sender, and the record of that panic must wake the thread that ends the process.
             let wake = wake.lock().unwrap_or_else(PoisonError::into_inner);
             if let Err(error) = wake.send(()) {
                 eprintln!("event writer: the thread that ends the process is gone: {error}");

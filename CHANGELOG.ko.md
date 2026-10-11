@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.2: `scripts/check-fallbacks.mjs`가 사유 없이 나열한 `routine.rs`와 `events-check.js`의 기본값 세 곳이 `default:` 사유를 갖는다.
 - F160.6.4: 남은 buffer에 상한을 두고 모든 자름과 거절을 저장한다. page는 event의 fields를 직렬화하는 동안 65,536바이트에서 자르고, record의 text와 place를 8,192와 1,024바이트에서 자르며, 큐를 event 4,096개 외에 4,194,304바이트로 제한한다(`page.log.dropped`에 `bytes`가 생긴다). host는 event의 fields를 1,048,576바이트까지만 직렬화하고 멈출 때까지 쓴 바이트 수를 `truncated`에 적으며, record의 text와 place를 자르고 시작 buffer를 4,194,304바이트로 제한한다. 두 host는 page를 기다리는 topic 하나의 구독 변경을 256개로 제한하고 거절한 변경에 오류 `-32000`으로 답하며, Wails host는 endpoint 연결의 출력 큐를 frame 256개와 16,777,216바이트로 제한한다. 거절은 모두 `host.buffer.dropped`다.
 - F160.5.2: 두 host는 page의 모든 host 호출을 성능 trace 없이 event `host.binding.call`(`name`, `args`, `micros`, `ok`, `truncated`, `error?`)로 저장한다. Wails page는 새 서비스 `Bindings`의 바인딩 메서드 `Bindings.Call` 하나를 메서드 이름과 인자 배열로 부르고, 이것이 `Host`의 내보낸 메서드를 이름으로 실행하며(`apps/wailsv3/runtime/index.js`와 host 명세의 서비스 이름이 `Host`에서 `Bindings`로 바뀐다), native web view 문서의 호출은 `invokeNative`에서 기록한다. Tauri host는 모든 command를 매크로 `bindings!` 안에서 정의하며 매크로가 각 command를 기록하고 등록을 생성하고, `sidecars_outdated`는 다른 command처럼 `Result`를 돌려준다. parity 검사는 `bindings!` 블록의 command를 읽는다.
 - F160.27: census 규칙 `rs.ok-discard`는 발견 0으로 강제된다. 버려지던 결과 14곳은 `default:` 사유를 적고, overlay 상태와 recording 상태는 poisoned lock을 없는 값 대신 `host.record.error`로 보고하며, 두 host는 WebKit 프로세스의 `ps` 목록에서 프로세스 번호로 시작하지 않는 줄을 보고한다(Tauri host는 `ps`가 공백으로 채운 프로세스 번호의 줄도 읽는다. 이전에는 건너뛰었다).
