@@ -21,6 +21,7 @@ import (
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
+	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 // EventLogSchema is the schema number of the lines that this writer writes. Schema 2 adds `mono_ns` to every line.
@@ -503,36 +504,53 @@ func eventLine(seq uint64, e *pendingEvent) ([]byte, error) {
 
 // rotate moves the full file to generation 1 and the older generations one step up, removes the generation beyond the
 // kept ones, and opens a new file. It returns the new file and the name of the removed generation (empty when none was
-// removed). When a step fails, the failure is reported and the writer keeps the file it has.
+// removed). The index files move with the generations (docs/spec/logging.md#index). When a step fails, the failure is reported and
+// the writer keeps the file it has.
 func (l *EventLog) rotate(file *os.File) (*os.File, string) {
+	var next *os.File
+	removed := ""
+	err := sok.RotateLogIndexes(l.path, l.generations, func() error {
+		var err error
+		next, removed, err = l.rotateFiles(file)
+		return err
+	})
+	if next == nil {
+		fmt.Fprintf(os.Stderr, "event writer: %v\n", err)
+		return file, ""
+	}
+	if err != nil {
+		// The files rotated; only the index of the closed file is not complete, and a query builds it again.
+		fmt.Fprintf(os.Stderr, "event writer: the index of the rotated file is not complete: %v\n", err)
+	}
+	return next, removed
+}
+
+// rotateFiles renames the generations and opens the new file; it returns the new file and the name of the removed generation.
+func (l *EventLog) rotateFiles(file *os.File) (*os.File, string, error) {
 	generation := func(n int) string { return fmt.Sprintf("%s.%d", l.path, n) }
 	removed := ""
 	if err := os.Remove(generation(l.generations)); err == nil {
 		removed = filepath.Base(generation(l.generations))
 	} else if !errors.Is(err, os.ErrNotExist) {
-		fmt.Fprintf(os.Stderr, "event writer: rotation could not remove %s: %v\n", generation(l.generations), err)
-		return file, ""
+		return nil, "", fmt.Errorf("rotation could not remove %s: %v", generation(l.generations), err)
 	}
 	for n := l.generations - 1; n >= 1; n-- {
 		if err := os.Rename(generation(n), generation(n+1)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			fmt.Fprintf(os.Stderr, "event writer: rotation could not move %s: %v\n", generation(n), err)
-			return file, ""
+			return nil, "", fmt.Errorf("rotation could not move %s: %v", generation(n), err)
 		}
 	}
 	if err := os.Rename(l.path, generation(1)); err != nil {
-		fmt.Fprintf(os.Stderr, "event writer: rotation could not move %s: %v\n", l.path, err)
-		return file, ""
+		return nil, "", fmt.Errorf("rotation could not move %s: %v", l.path, err)
 	}
 	// The new file is opened before the old one is closed, so a failure leaves the writer with a file to write.
 	next, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY|syscall.O_CLOEXEC, 0o600)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "event writer: rotation could not open %s: %v\n", l.path, err)
-		return file, ""
+		return nil, "", fmt.Errorf("rotation could not open %s: %v", l.path, err)
 	}
 	if err := file.Close(); err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: rotation could not close the full file: %v\n", err)
 	}
-	return next, removed
+	return next, removed, nil
 }
 
 func (l *EventLog) write(file *os.File, interval time.Duration, open *pendingEvent) {

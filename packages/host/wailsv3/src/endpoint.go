@@ -736,6 +736,7 @@ func (e *Endpoint) method(name string) (endpointMethod, bool) {
 
 var endpointMethods = map[string]endpointMethod{
 	"windows.list":  func(e *Endpoint, _ *endpointConn, _ json.RawMessage) (any, error) { return e.backend.Windows(), nil },
+	"log.query":     logQuery,
 	"exposure.list": exposureList,
 	"status.get":    statusGet,
 	"command.run":   commandRun,

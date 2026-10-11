@@ -54,6 +54,7 @@ pub const HANDLER_FAILED: i64 = -32000;
 /// The methods that every build declares.
 const METHODS: &[&str] = &[
     "windows.list",
+    "log.query",
     "exposure.list",
     "status.get",
     "status.watch",
@@ -319,6 +320,8 @@ struct Shared {
     /// Whether the endpoint stopped and started to close the connections. It distinguishes the reason for closing a
     /// connection.
     stopping: AtomicBool,
+    /// The configuration folder, whose event files the method `log.query` reads.
+    config: PathBuf,
 }
 
 /// Sends a notification to the connections. After the endpoint stops there is no connection to send to.
@@ -546,6 +549,7 @@ impl Endpoint {
             next: AtomicU64::new(1),
             orders: AtomicU64::new(1),
             stopping: AtomicBool::new(false),
+            config: directory.to_path_buf(),
         });
         let mut endpoint = Endpoint {
             shared,
@@ -1076,6 +1080,9 @@ fn drain(shared: &Shared, topic: Topic) {
 fn run(shared: &Shared, method: &str, params: Option<Value>) -> Result<Box<RawValue>, Failure> {
     if method == "windows.list" {
         return shared.service.windows().and_then(|list| raw(&list));
+    }
+    if method == "log.query" {
+        return crate::log_query::answer(&shared.config, params);
     }
     let (window, params) = target(shared, method, params)?;
     shared.service.call(&window, method, params)

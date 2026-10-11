@@ -58,6 +58,7 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 | the main page throws or rejects after its first screen | `error page <where>: <text>` of the page's error display |
 | the WebContent process of a surface or a modal ends in the Wails host | `error native surface webview: web content process terminated: <address>`; the Tauri host writes the end of every web view, including a surface and a modal, as `error host page process: <label>: terminated` |
 | the WebContent process of a window ends | `error host page process: <window>: terminated` |
+| the index of an event file cannot be brought up to date after the writer wrote (a line that breaks the event structure, a damaged index, a file that cannot be opened) | `error host log index: <reason>`, once for each distinct reason of a file ([logging](logging.md#index)) |
 | a native call fails | `error native <where>: <text>` from `sp_log_error` |
 | a fatal signal or an uncaught exception of the Tauri host | one `error native fatal: <signal name>` or `error native fatal: uncaught exception <name>: <reason>` record, then the process ends; the Go runtime writes the report of a fatal signal of the Wails host to the standard error |
 | a goroutine or a thread of the host panics | the event `host.panic` with the `name` of the goroutine or thread, the `text` and the `stack`, stored before the process ends with status 2 (Go) or 101 (Rust); the Go runtime or the default panic hook also writes the message to the standard error |
