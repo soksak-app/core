@@ -39,7 +39,7 @@
       "language": "objective-c",
       "command": "./native/darwin/build/appearance_test",
       "args": [],
-      "expectedTests": 5,
+      "expectedTests": 6,
       "implementationFiles": ["native/darwin/src/appearance.m"],
       "testFiles": ["native/darwin/tests/appearance_test.m"],
       "dependencyFiles": ["native/darwin/Makefile"],

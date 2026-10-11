@@ -86,7 +86,15 @@ pub fn start_log_indexer(mut after: impl FnMut(&Path, IndexResult) + Send + 'sta
             std::mem::take(&mut pending.paths)
         };
         for path in paths {
-            let result = update_log_index(&path);
+            let mut result = update_log_index(&path);
+            if result.is_err() {
+                if !path.exists() {
+                    // silent: the writer moved the file to a generation (`log.rotated`) or retention removed it (`log.pruned`) after the notice, and the next write to the file of the same name notifies again.
+                    continue;
+                }
+                // The file may have come back between the update and the check, so the update is made once more and its result is reported.
+                result = update_log_index(&path);
+            }
             after(&path, result);
         }
     });

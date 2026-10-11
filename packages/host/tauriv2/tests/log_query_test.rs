@@ -403,3 +403,37 @@ fn an_index_built_from_the_file_is_an_event_and_an_append_is_not() {
     assert_eq!(texts, vec!["first", "second", "first"]);
     use_host_event_log(None);
 }
+
+// contract: log.writer.indexes-each-batch-it-wrote
+#[test]
+fn a_file_that_rotation_or_retention_removed_is_not_a_failure_of_the_index() {
+    let logs = tempfile::tempdir().unwrap();
+    let real = logs.path().join("host-b1.jsonl");
+    let mut text = String::from(
+        "{\"ts_us\":1000,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2,\"pid\":1,\"role\":\"host\",\"boot\":\"b1\"}}\n",
+    );
+    for seq in 2..=3 {
+        text.push_str(&format!(
+            "{{\"ts_us\":{},\"mono_ns\":{seq},\"seq\":{seq},\"level\":\"debug\",\"layer\":\"host\",\"event\":\"host.x.y\",\"fields\":{{\"n\":{seq}}}}}\n",
+            1000 + seq
+        ));
+    }
+    std::fs::write(&real, text).unwrap();
+    let (results, updates) = channel();
+    let (observe, stop) = start_log_indexer(move |path, result| {
+        let _ = results.send((path.to_path_buf(), result.map(|_| ())));
+    });
+    // The paths of one wake are indexed in name order: the removed file comes first, as it does when the writer rotated the file away
+    // between the notice and the update.
+    observe(&logs.path().join("aaa-gone-b1.jsonl"), 0);
+    observe(&real, 0);
+    let (path, result) = updates
+        .recv_timeout(Duration::from_secs(10))
+        .expect("no update of the index was reported");
+    assert_eq!(
+        (path.file_name().unwrap().to_str().unwrap(), result.as_ref().map_err(|e| e.as_str())),
+        ("host-b1.jsonl", Ok(&())),
+        "the first result must be the update of the file that exists, and the removed file is no failure"
+    );
+    stop();
+}

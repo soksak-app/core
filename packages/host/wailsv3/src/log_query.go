@@ -7,6 +7,8 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
+	"os"
 	"sort"
 	"sync"
 
@@ -71,6 +73,14 @@ func StartLogIndexer(after func(path string, update sok.IndexUpdate, err error))
 			sort.Strings(paths)
 			for _, path := range paths {
 				update, err := sok.UpdateLogIndex(path)
+				if err != nil {
+					if _, gone := os.Stat(path); errors.Is(gone, os.ErrNotExist) {
+						// silent: the writer moved the file to a generation (`log.rotated`) or retention removed it (`log.pruned`) after the notice, and the next write to the file of the same name notifies again.
+						continue
+					}
+					// The file may have come back between the update and the check, so the update is made once more and its result is reported.
+					update, err = sok.UpdateLogIndex(path)
+				}
 				after(path, update, err)
 			}
 		}

@@ -316,3 +316,33 @@ func TestAnIndexBuiltFromTheFileIsAnEventAndAnAppendIsNot(t *testing.T) {
 		t.Fatalf("the records of the place log index are %v", texts)
 	}
 }
+
+// contract: log.writer.indexes-each-batch-it-wrote
+func TestAFileThatRotationOrRetentionRemovedIsNotAFailureOfTheIndex(t *testing.T) {
+	logs := t.TempDir()
+	real := filepath.Join(logs, "host-b1.jsonl")
+	if err := os.WriteFile(real, []byte(eventLines(3)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	results := make(chan string, 8)
+	observe, stop := host.StartLogIndexer(func(path string, _ sok.IndexUpdate, err error) {
+		if err != nil {
+			results <- "error " + filepath.Base(path) + ": " + err.Error()
+			return
+		}
+		results <- "ok " + filepath.Base(path)
+	})
+	t.Cleanup(stop)
+	// The paths of one wake are indexed in name order: the removed file comes first, as it does when the writer rotated the file
+	// away between the notice and the update.
+	observe(filepath.Join(logs, "aaa-gone-b1.jsonl"), 0)
+	observe(real, 0)
+	select {
+	case got := <-results:
+		if got != "ok host-b1.jsonl" {
+			t.Fatalf("the first result is %q, want the update of the file that exists and no failure for the file that was removed", got)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no update of the index was reported")
+	}
+}

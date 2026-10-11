@@ -166,6 +166,8 @@ The bound counts the index files and the standard error of a run, because they a
 
 The event file is canonical. Beside each event file `logs/<name>` (`<role>-<boot>.jsonl`, `<role>-<boot>.debug.jsonl` and their generations `.<n>`) the index `logs/<name>.idx` says which parts of the file can hold an event of a query, so a query reads those parts and never a whole file ([Query](#query)). The index is derived: removing it loses nothing, because it is built again from the file.
 
+**A file that is gone.** The indexer updates the index of a path after the notice of a write. When the update fails and the file is no longer at the path, the writer moved it to a generation (`log.rotated`) or retention removed it (`log.pruned`), each stored as its own event, and the next write to a file of the same name notifies again, so the indexer reports nothing for the path. When the file is there, the update is made once more and its result is reported, an error included.
+
 **Segments.** The lines of a file are grouped in segments of 4,096 consecutive lines counted from the first line; the last segment holds the lines after the last full one. A line is complete when a line feed ends it, and bytes after the last line feed are not indexed. The index keeps for each segment:
 
 | member | value |
