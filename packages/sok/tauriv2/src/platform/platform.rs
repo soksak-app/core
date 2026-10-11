@@ -48,6 +48,13 @@ pub trait Platform {
     /// The system-wide monotonic clock in nanoseconds that the events carry as `mono_ns` (docs/spec/logging.md#event). It is
     /// the clock of the native library, so events of different processes compare.
     fn monotonic_nanos(&self) -> Result<u64, String>;
+    /// Opens the index file at the path for reading and writing, and creates it with the mode of a private file when it does not exist.
+    fn open_index(&self, path: &std::path::Path) -> Result<std::fs::File, String>;
+    /// Takes an exclusive advisory lock on the open file and waits until it holds it, so the processes that update one index exclude
+    /// each other (docs/spec/logging.md#index). Closing the file releases the lock.
+    fn lock_file(&self, file: &std::fs::File) -> Result<(), String>;
+    /// Whether the open file is the file at the path (the same device and the same index).
+    fn same_file(&self, file: &std::fs::File, path: &std::path::Path) -> Result<bool, String>;
     /// Starts a new instance of the application bundle with the arguments.
     fn open_application(
         &self,

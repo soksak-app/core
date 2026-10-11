@@ -1,0 +1,6 @@
+{"ts_us":1791500001000000,"mono_ns":10000000000,"seq":4,"level":"info","layer":"host","event":"log.open","fields":{"schema":2,"pid":4242,"role":"host","boot":"b1"}}
+{"ts_us":1791500001000001,"mono_ns":10000001000,"seq":5,"level":"info","layer":"host","event":"log.rotated","fields":{"bytes":1024,"kept":5,"removed":null}}
+{"ts_us":1791500001100000,"mono_ns":10100000000,"seq":6,"level":"info","layer":"host","event":"host.test.start","fields":{"name":"first","run":"r1"}}
+{"ts_us":1791500001200000,"mono_ns":10200000000,"seq":7,"level":"warn","layer":"page","event":"page.console.error","fields":{"text":"boom"}}
+{"ts_us":1791500001150000,"mono_ns":10150000000,"seq":8,"level":"info","layer":"host","event":"host.sidecar.request","cids":["b1.3"],"fields":{"name":"terminal","surface":"tab-y","bytes":3}}
+{"ts_us":1791500001300000,"mono_ns":10300000000,"seq":9,"level":"info","layer":"host","event":"host.test.end","fields":{"name":"first","run":"r1","result":"pass"}}

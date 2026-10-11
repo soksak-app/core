@@ -1,18 +1,15 @@
 package sok
 
-// `sok debug timeline` (docs/spec/debug.md#timeline-command): the rows, the order, the filter and the text lines of the timeline of
-// the debug view (packages/workbench/debug-timeline.js), read from the host event files of the configuration directory.
+// `sok debug query` (docs/spec/debug.md#timeline-command): one page of the events of the event files of the configuration directory,
+// printed as the text lines of the timeline of the debug view (packages/workbench/debug-timeline.js). The reader of an event line,
+// its text line and the JSON helpers that keep the output of the two implementations equal are here.
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math"
-	"os"
-	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -20,13 +17,7 @@ import (
 
 const eventSchema = 2
 
-var (
-	eventLevels   = []string{"error", "warn", "info", "debug", "trace"}
-	eventLayers   = []string{"native", "host", "page", "plugin", "sidecar"}
-	hostEventFile = regexp.MustCompile(`^host-[^/]+\.jsonl$`)
-	utcTime       = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?Z$`)
-	contextDigits = regexp.MustCompile(`^[0-9]{1,4}$`)
-)
+var utcTime = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?Z$`)
 
 // eventMember is one eventMember of a JSON object in the order of the text, which the text line of a row keeps.
 type eventMember struct {
@@ -222,6 +213,7 @@ type eventRow struct {
 	seq     int64
 	level   string
 	layer   string
+	class   *string
 	name    string
 	window  *string
 	surface *string
@@ -279,15 +271,22 @@ func rowOf(file string, number int, raw string) (eventRow, error) {
 		}
 	}
 	level, present := event.get("level")
-	if text, ok := level.(string); !ok || !contains(eventLevels, text) {
-		return fail("level %s is not one of %s", stringify(level, present), strings.Join(eventLevels, ", "))
+	if text, ok := level.(string); !ok || !contains(indexLevels, text) {
+		return fail("level %s is not one of %s", stringify(level, present), strings.Join(indexLevels, ", "))
 	}
 	row.level = level.(string)
 	layer, present := event.get("layer")
-	if text, ok := layer.(string); !ok || !contains(eventLayers, text) {
-		return fail("layer %s is not one of %s", stringify(layer, present), strings.Join(eventLayers, ", "))
+	if text, ok := layer.(string); !ok || !contains(indexLayers, text) {
+		return fail("layer %s is not one of %s", stringify(layer, present), strings.Join(indexLayers, ", "))
 	}
 	row.layer = layer.(string)
+	if class, present := event.get("class"); present {
+		text, ok := class.(string)
+		if !ok || !contains(indexClasses, text) {
+			return fail("class %s is not one of %s", stringify(class, true), strings.Join(indexClasses, ", "))
+		}
+		row.class = &text
+	}
 	name, present := event.get("event")
 	text, ok := name.(string)
 	if !ok {
@@ -332,46 +331,6 @@ func rowOf(file string, number int, raw string) (eventRow, error) {
 	return row, nil
 }
 
-// parseEvents reads the whole lines of one event file. The first line must be `log.open` with the schema number that this reader knows.
-func parseEvents(file string, data []byte) ([]eventRow, error) {
-	// Only whole lines are read: bytes after the last line feed are a line that is not written to its end.
-	if end := bytes.LastIndexByte(data, '\n'); end >= 0 {
-		data = data[:end+1]
-	} else {
-		data = nil
-	}
-	var rows []eventRow
-	for index, raw := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
-		if len(data) == 0 {
-			break
-		}
-		row, err := rowOf(file, index+1, raw)
-		if err != nil {
-			return nil, err
-		}
-		rows = append(rows, row)
-	}
-	if len(rows) == 0 {
-		// A file without a line is what a process that ended before its first write leaves: it has no row.
-		return nil, nil
-	}
-	if rows[0].name != "log.open" {
-		return nil, fmt.Errorf("%s: the first line is not log.open: %s", file, jsString(rows[0].name))
-	}
-	schema, present := rows[0].fields.get("schema")
-	if n, integer := isInteger(schema); !present || !integer || n != eventSchema {
-		text := "undefined"
-		if present {
-			text = stringify(schema, true)
-			if number, ok := schema.(json.Number); ok {
-				text = number.String()
-			}
-		}
-		return nil, fmt.Errorf("%s: schema %s is not %d", file, text, eventSchema)
-	}
-	return rows, nil
-}
-
 // timeText is the time of a row as UTC text with microseconds.
 func timeText(tsUs int64) string {
 	return time.UnixMicro(tsUs).UTC().Format("2006-01-02T15:04:05.000000Z")
@@ -404,202 +363,114 @@ func eventLine(row eventRow) string {
 	return strings.Join(parts, " ")
 }
 
-// timelineFilter is the filter of the timeline; an empty text leaves a eventMember open.
-type timelineFilter struct {
-	level, layer, text, event, surface, session, cid, from, to, context string
-}
-
-// bound is the microseconds of a time bound, or false for the empty text that leaves the bound open.
-func bound(name, value string) (int64, bool, error) {
-	if value == "" {
-		return 0, false, nil
-	}
-	invalid := fmt.Errorf("timeline %s %s is not a UTC time like 2026-10-08T22:53:20.123456Z or empty", name, jsString(value))
+// timeBound is the microseconds of a UTC time given to --from and --to.
+func timeBound(name, value string) (int64, error) {
+	invalid := fmt.Errorf("log query %s %s is not a UTC time like 2026-10-08T22:53:20.123456Z", name, jsString(value))
 	match := utcTime.FindStringSubmatch(value)
 	if match == nil {
-		return 0, false, invalid
+		return 0, invalid
 	}
 	var number [6]int
 	for i := range number {
 		n, err := strconv.Atoi(match[i+1])
 		if err != nil {
-			return 0, false, invalid
+			return 0, invalid
 		}
 		number[i] = n
 	}
 	date := time.Date(number[0], time.Month(number[1]), number[2], number[3], number[4], number[5], 0, time.UTC)
 	// A date that the calendar does not have (for example February 30) moves to another day in time.Date.
 	if date.Year() != number[0] || int(date.Month()) != number[1] || date.Day() != number[2] || number[3] > 23 || number[4] > 59 || number[5] > 59 {
-		return 0, false, invalid
+		return 0, invalid
 	}
 	fraction, err := strconv.Atoi(match[7] + strings.Repeat("0", 6-len(match[7])))
 	if err != nil {
-		return 0, false, invalid
+		return 0, invalid
 	}
-	return date.Unix()*1000000 + int64(fraction), true, nil
+	return date.Unix()*1000000 + int64(fraction), nil
 }
 
-func contextCount(value string) (int, error) {
-	if !contextDigits.MatchString(value) {
-		return 0, fmt.Errorf("timeline context must be decimal digits, found %s", jsString(value))
-	}
-	count, err := strconv.Atoi(value)
-	if err != nil {
-		return 0, fmt.Errorf("timeline context must be decimal digits, found %s", jsString(value))
-	}
-	return count, nil
-}
-
-// filterRows returns the positions of the rows that pass the filter.
-func filterRows(rows []eventRow, f timelineFilter) ([]bool, error) {
-	if !contains(eventLevels, f.level) {
-		return nil, fmt.Errorf("timeline level %s is not one of %s", jsString(f.level), strings.Join(eventLevels, ", "))
-	}
-	if f.layer != "all" && !contains(eventLayers, f.layer) {
-		return nil, fmt.Errorf("timeline layer %s is not one of all, %s", jsString(f.layer), strings.Join(eventLayers, ", "))
-	}
-	if _, err := contextCount(f.context); err != nil {
-		return nil, err
-	}
-	first, hasFirst, err := bound("from", f.from)
-	if err != nil {
-		return nil, err
-	}
-	last, hasLast, err := bound("to", f.to)
-	if err != nil {
-		return nil, err
-	}
-	if hasFirst && hasLast && first > last {
-		return nil, fmt.Errorf("timeline from is later than to: %s %s", jsString(f.from), jsString(f.to))
-	}
-	least := indexOf(eventLevels, f.level)
-	needle := strings.ToLower(f.text)
-	name := strings.ToLower(f.event)
-	pass := make([]bool, len(rows))
-	for i, row := range rows {
-		pass[i] = indexOf(eventLevels, row.level) <= least &&
-			(f.layer == "all" || row.layer == f.layer) &&
-			(name == "" || strings.Contains(strings.ToLower(row.name), name)) &&
-			(f.surface == "" || (row.surface != nil && *row.surface == f.surface)) &&
-			(f.session == "" || (row.session != nil && *row.session == f.session)) &&
-			(f.cid == "" || contains(row.cids, f.cid)) &&
-			(!hasFirst || row.tsUs >= first) &&
-			(!hasLast || row.tsUs <= last) &&
-			(needle == "" || strings.Contains(strings.ToLower(eventLine(row)), needle))
-	}
-	return pass, nil
-}
-
-func indexOf(list []string, value string) int {
-	for i, item := range list {
-		if item == value {
-			return i
+// afterFlag reads the value of --after: `<ts_us>/<role>/<boot>/<seq>`. A text of another form is given on as it is, so the query
+// refuses it with its own words.
+func afterFlag(value string) any {
+	parts := strings.Split(value, "/")
+	if len(parts) == 4 {
+		ts, tsErr := strconv.ParseInt(parts[0], 10, 64)
+		seq, seqErr := strconv.ParseInt(parts[3], 10, 64)
+		if tsErr == nil && seqErr == nil {
+			return map[string]any{"ts_us": ts, "role": parts[1], "boot": parts[2], "seq": seq}
 		}
 	}
-	return -1
+	return value
 }
 
-// timelineLines is the text lines that the timeline shows: the rows that pass the filter with the context rows around them, once,
-// in the order of the rows; a context row is indented by two spaces.
-func timelineLines(rows []eventRow, f timelineFilter) ([]string, error) {
-	pass, err := filterRows(rows, f)
-	if err != nil {
-		return nil, err
-	}
-	count, err := contextCount(f.context)
-	if err != nil {
-		return nil, err
-	}
-	var lines []string
-	until := -1
-	show := func(row eventRow, match bool) {
-		prefix := ""
-		if !match && count > 0 {
-			prefix = "  "
-		}
-		lines = append(lines, prefix+eventLine(row))
-	}
-	for index, row := range rows {
-		if pass[index] {
-			for before := max(until+1, index-count); before < index; before++ {
-				show(rows[before], false)
-			}
-			show(row, true)
-			until = index + count
-		} else if index <= until {
-			show(row, false)
-		}
-	}
-	return lines, nil
-}
-
-// runDebug runs `sok debug <view>`.
-func runDebug(a arguments, stdout io.Writer, options Options) error {
+// runDebug runs `sok debug query`.
+func runDebug(a arguments, stdout, stderr io.Writer, options Options) error {
 	view, err := a.positional(1, "debug view")
 	if err != nil {
 		return err
 	}
-	if view != "timeline" {
+	if view != "query" {
 		return usage("unknown command: debug %s", view)
 	}
 	if len(a.positionals) > 2 {
 		return usage("unexpected argument %s", a.positionals[2])
 	}
-	filter := timelineFilter{level: "trace", layer: "all", context: "0"}
-	for name, to := range map[string]*string{"level": &filter.level, "layer": &filter.layer, "text": &filter.text, "event": &filter.event,
-		"surface": &filter.surface, "session": &filter.session, "cid": &filter.cid, "from": &filter.from, "to": &filter.to, "context": &filter.context} {
-		if value, given := a.values[name]; given {
-			*to = value
+	params := map[string]any{}
+	for flag, name := range map[string]string{"channel": "channel", "level": "level", "class": "class", "layer": "layer", "event": "event",
+		"event-prefix": "event_prefix", "surface": "surface", "session": "session", "cid": "cid", "run": "run", "text": "text", "order": "order"} {
+		if value, given := a.values[flag]; given {
+			params[name] = value
 		}
+	}
+	if value, given := a.values["limit"]; given {
+		if n, err := strconv.ParseInt(value, 10, 64); err == nil {
+			params["limit"] = n
+		} else {
+			params["limit"] = value
+		}
+	}
+	for flag, name := range map[string]string{"from": "from_us", "to": "to_us"} {
+		if value, given := a.values[flag]; given {
+			bound, err := timeBound(flag, value)
+			if err != nil {
+				return usage("%s", err.Error())
+			}
+			params[name] = bound
+		}
+	}
+	if value, given := a.values["after"]; given {
+		params["after"] = afterFlag(value)
+	}
+	text, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	query, err := ParseLogQuery(text)
+	if err != nil {
+		return usage("%s", err.Error())
 	}
 	configDir, err := configDirOf(a.values, options)
 	if err != nil {
 		return err
 	}
-	logs := filepath.Join(configDir, "logs")
-	entries, err := os.ReadDir(logs)
+	page, err := QueryLogs(configDir, query, nil)
 	if err != nil {
-		return fileError(logs, err)
+		return err
 	}
-	var names []string
-	for _, entry := range entries {
-		if !entry.IsDir() && hostEventFile.MatchString(entry.Name()) {
-			names = append(names, entry.Name())
-		}
-	}
-	if len(names) == 0 {
-		return fmt.Errorf("no event file logs/host-<boot>.jsonl in %s", logs)
-	}
-	sort.Strings(names)
-	var rows []eventRow
-	for _, name := range names {
-		data, err := os.ReadFile(filepath.Join(logs, name))
-		if err != nil {
-			return fileError(filepath.Join(logs, name), err)
-		}
-		parsed, err := parseEvents("logs/"+name, data)
+	var out strings.Builder
+	for _, row := range page.Rows {
+		line, err := LogLine(row.Event)
 		if err != nil {
 			return err
 		}
-		rows = append(rows, parsed...)
-	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		if rows[i].tsUs != rows[j].tsUs {
-			return rows[i].tsUs < rows[j].tsUs
-		}
-		if rows[i].seq != rows[j].seq {
-			return rows[i].seq < rows[j].seq
-		}
-		return rows[i].file < rows[j].file
-	})
-	lines, err := timelineLines(rows, filter)
-	if err != nil {
-		return usage("%s", err.Error())
-	}
-	var out strings.Builder
-	for _, line := range lines {
 		out.WriteString(line + "\n")
 	}
-	_, err = io.WriteString(stdout, out.String())
+	if _, err := io.WriteString(stdout, out.String()); err != nil {
+		return err
+	}
+	if page.Next != nil {
+		_, err = fmt.Fprintf(stderr, "more: --after %s\n", FormatLogCursor(*page.Next))
+	}
 	return err
 }

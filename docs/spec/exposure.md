@@ -94,7 +94,7 @@ Several surface pages can register the same name. A request for such a name can 
 
 ## Windows
 
-An application has one or more windows, and each window has its own main page and registry. Every method except `windows.list` takes `window`, the identifier that `windows.list` returns. A request for a window that no longer exists returns error 1003 `window "<name>" does not exist`. This includes a window that closes after the host accepted the request: the host reads the native window in the main-thread step that passes it to native code, and a window that closed before that step fails the request with 1003 without reaching native code. A `host.window` change of such a window notifies nothing; the window's removal from `host.windows` reports the close.
+An application has one or more windows, and each window has its own main page and registry. Every method except `windows.list` and `log.query` takes `window`, the identifier that `windows.list` returns. A request for a window that no longer exists returns error 1003 `window "<name>" does not exist`. This includes a window that closes after the host accepted the request: the host reads the native window in the main-thread step that passes it to native code, and a window that closed before that step fails the request with 1003 without reaching native code. A `host.window` change of such a window notifies nothing; the window's removal from `host.windows` reports the close.
 
 ## Host entries
 
@@ -130,6 +130,7 @@ Clients call these JSON-RPC 2.0 methods.
 | Method | Params | Result |
 | --- | --- | --- |
 | `windows.list` | none | `[{window, title, project, key, ready}]`. `project` is the root directory of the project last opened in the window, or `null` when the window holds no open project; releasing the last project of a window also returns its title to the library title. `ready` is true after the main page of the window reports ready and false while it loads; requests for a window whose page is loading fail with 1003 |
+| `log.query` | the query parameters, no `window` | `{rows, next, tail, scanned}`: one page of the events of the event files of the configuration directory ([endpoint](endpoint.md#log-query), [logging](logging.md#query)) |
 | `exposure.list` | `{window}` | `{status, commands, dom}`: the declared entries of core, the host, and loaded plugins in the declaration format, each with `registered` |
 | `status.get` | `{window, name, surface?}` | Current value |
 | `status.watch` | `{window, name, surface?}` | `null`; the host then sends `status.changed` notifications `{window, name, surface?, value}` on each change until `status.unwatch` or until the connection closes. Watches with different `surface` values are separate |

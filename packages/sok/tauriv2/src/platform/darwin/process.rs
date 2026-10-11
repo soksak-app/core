@@ -58,6 +58,45 @@ impl Platform for Darwin {
         }
     }
 
+    /// Creates the index file with the mode 0600 when it does not exist.
+    fn open_index(&self, path: &std::path::Path) -> Result<std::fs::File, String> {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(path)
+            .map_err(|error| crate::files::file_error(path.display(), &error))
+    }
+
+    /// Takes `flock(LOCK_EX)` on the file, which excludes the other open files of the same file in every process.
+    fn lock_file(&self, file: &std::fs::File) -> Result<(), String> {
+        use std::os::unix::io::AsRawFd;
+        // SAFETY: flock only reads the descriptor of the open file.
+        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } == 0 {
+            Ok(())
+        } else {
+            Err(format!(
+                "the file cannot be locked: {}",
+                std::io::Error::last_os_error()
+            ))
+        }
+    }
+
+    fn same_file(&self, file: &std::fs::File, path: &std::path::Path) -> Result<bool, String> {
+        use std::os::unix::fs::MetadataExt;
+        let opened = file
+            .metadata()
+            .map_err(|error| crate::files::file_error(path.display(), &error))?;
+        match std::fs::metadata(path) {
+            Ok(named) => Ok(opened.dev() == named.dev() && opened.ino() == named.ino()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(crate::files::file_error(path.display(), &error)),
+        }
+    }
+
     /// Reads `CLOCK_UPTIME_RAW`, which is `mach_absolute_time` in nanoseconds: the clock of `sp_mono_ns`.
     fn monotonic_nanos(&self) -> Result<u64, String> {
         // SAFETY: clock_gettime_nsec_np only reads a system clock and touches no memory of the caller.

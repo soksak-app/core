@@ -797,6 +797,25 @@ impl Output {
     /// file it has), otherwise the name of the removed generation, if there was one.
     fn rotate(&mut self) -> Option<Option<String>> {
         let path = self.path.clone();
+        let generations = self.generations as u32;
+        let mut outcome = None;
+        let moved = soksak_sok::log_index::rotate_log_indexes(&path, generations, || {
+            outcome = self.rotate_files();
+            outcome
+                .as_ref()
+                .map(drop)
+                .ok_or_else(|| "the files were not rotated".to_string())
+        });
+        if let (Some(_), Err(error)) = (&outcome, moved) {
+            // The files rotated; only the index of the closed file is not complete, and a query builds it again.
+            eprintln!("event writer: the index of the rotated file is not complete: {error}");
+        }
+        outcome
+    }
+
+    /// Renames the generations and opens the new file, as `rotate` describes; the failure of a step is reported here.
+    fn rotate_files(&mut self) -> Option<Option<String>> {
+        let path = self.path.clone();
         let generation = |n: usize| {
             let mut name = path.clone().into_os_string();
             name.push(format!(".{n}"));

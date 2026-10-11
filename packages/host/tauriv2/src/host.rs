@@ -43,6 +43,7 @@ pub mod exposure;
 pub mod images;
 pub mod installed;
 pub mod link;
+pub mod log_query;
 pub mod menu;
 mod modals;
 pub mod notifications;
@@ -81,6 +82,9 @@ use sidecars::WindowSidecars;
 
 /// The stop of the thread that announces the writes of the event log to the windows.
 struct LogNoticeStop(std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>);
+
+/// The stop of the thread that brings the index of the event files up to date after the writer wrote.
+struct LogIndexStop(std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>);
 
 /// The application arguments that were read at startup (docs/spec/hosts.md#application-arguments).
 static ARGUMENTS: std::sync::OnceLock<command_line::Arguments> = std::sync::OnceLock::new();
@@ -206,7 +210,17 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 let (observe, stop) = debug_follow::coalesce_log_notices(move |path, size| {
                     windows::notify_log_written(&notices_app, path, size)
                 });
-                events.set_on_write(observe);
+                // The index of each event file follows the writer too (docs/spec/logging.md#index).
+                let (index_writes, stop_indexer) =
+                    log_query::start_log_indexer(log_query::index_reporter());
+                events.set_on_write(Box::new(move |path: &std::path::Path, size: u64| {
+                    index_writes(path, size);
+                    observe(path, size);
+                }));
+                tauri::Manager::manage(
+                    app,
+                    LogIndexStop(std::sync::Mutex::new(Some(stop_indexer))),
+                );
                 tauri::Manager::manage(app, LogNoticeStop(std::sync::Mutex::new(Some(stop))));
                 tauri::Manager::manage(app, events);
                 application_log::start_standard_error(
@@ -393,6 +407,15 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     app.state::<WindowSidecars>().stop();
                 }
                 exposure::stop(app);
+                if let Some(stop) = app
+                    .state::<LogIndexStop>()
+                    .0
+                    .lock()
+                    .expect("the stop of the log index")
+                    .take()
+                {
+                    stop();
+                }
                 if let Some(stop) = app
                     .state::<LogNoticeStop>()
                     .0

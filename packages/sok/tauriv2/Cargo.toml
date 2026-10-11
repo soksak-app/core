@@ -22,6 +22,7 @@ path = "src/main.rs"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 flate2 = "1"
+memchr = "2"
 sha2 = "0.10"
 tar = "0.4"
 # https 위치를 읽는다(docs/spec/installation.md#fetching). 운영체제가 신뢰하는 인증 기관을 쓰므로 platform-verifier 를

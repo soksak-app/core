@@ -5,6 +5,7 @@ package darwin
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -113,6 +114,14 @@ func (darwin) MonotonicNanos() (uint64, error) {
 		return 0, fmt.Errorf("the monotonic clock cannot be read: %w", err)
 	}
 	return uint64(now.Sec)*1_000_000_000 + uint64(now.Nsec), nil
+}
+
+// LockFile takes flock(LOCK_EX) on the file, which excludes the other open files of the same file in every process.
+func (darwin) LockFile(file *os.File) error {
+	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX); err != nil {
+		return fmt.Errorf("%s cannot be locked: %w", file.Name(), err)
+	}
+	return nil
 }
 
 // BundleVersion reads CFBundleShortVersionString of the Info.plist of the bundle.

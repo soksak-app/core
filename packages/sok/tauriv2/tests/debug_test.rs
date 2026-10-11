@@ -1,14 +1,15 @@
-//! `sok debug timeline` (docs/spec/debug.md#timeline-command) prints the same lines as the debug view for the golden files of
-//! packages/log-contract/fixtures/timeline, and rejects a file or a value that breaks the contract with an error that names it.
+//! `sok debug query` (docs/spec/debug.md#timeline-command) prints the same lines as the debug view for the golden files of
+//! packages/log-contract/fixtures/query, and rejects a file or a value that breaks the contract with an error that names it.
+
+#[path = "log_support_test.rs"]
+mod log_support;
 
 use std::path::Path;
 
-use serde_json::Value;
+use log_support::*;
 
-const FIXTURES: &str = "../../log-contract/fixtures/timeline";
-
-fn run_timeline(config_dir: &Path, args: &[&str]) -> (String, String, i32) {
-    let mut all: Vec<String> = ["debug", "timeline", "--config-dir"]
+fn run_query_command(config_dir: &Path, args: &[&str]) -> (String, String, i32) {
+    let mut all: Vec<String> = ["debug", "query", "--config-dir"]
         .iter()
         .map(|arg| arg.to_string())
         .collect();
@@ -28,127 +29,124 @@ fn run_timeline(config_dir: &Path, args: &[&str]) -> (String, String, i32) {
     )
 }
 
-fn temp_dir(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("sok-debug-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(dir.join("logs")).expect("create the logs folder");
-    dir
-}
-
-// contract: cli.debug.timeline-golden-lines
+// contract: cli.debug.query-golden-lines
 #[test]
-fn timeline_prints_the_golden_lines_of_every_filter() {
-    let text = std::fs::read_to_string(Path::new(FIXTURES).join("cases.json")).expect("cases.json");
-    let cases: Vec<Value> = serde_json::from_str(&text).expect("cases are JSON");
-    assert!(
-        cases.len() >= 7,
-        "the golden file holds {} cases",
-        cases.len()
-    );
-    for case in cases {
-        let args: Vec<&str> = case["args"]
-            .as_array()
-            .expect("args")
-            .iter()
-            .map(|arg| arg.as_str().expect("arg"))
-            .collect();
+fn query_prints_the_golden_lines_of_every_case() {
+    for case in read_cases() {
+        let Some(args) = case["args"].as_array() else {
+            continue;
+        };
+        let args: Vec<&str> = args.iter().map(|arg| arg.as_str().expect("arg")).collect();
+        let (stdout, stderr, code) = run_query_command(&fixture_config("cli-golden"), &args);
         let want: String = case["lines"]
             .as_array()
             .expect("lines")
             .iter()
             .map(|line| format!("{}\n", line.as_str().expect("line")))
             .collect();
-        let (stdout, stderr, code) = run_timeline(Path::new(FIXTURES), &args);
         assert!(
             code == 0 && stdout == want,
             "{}: code {code} stderr {stderr:?}\n got {stdout:?}\nwant {want:?}",
             case["name"]
         );
+        let want_more = match case["next"].as_object() {
+            Some(next) => format!(
+                "more: --after {}/{}/{}/{}\n",
+                next["ts_us"],
+                next["role"].as_str().expect("role"),
+                next["boot"].as_str().expect("boot"),
+                next["seq"]
+            ),
+            None => String::new(),
+        };
+        assert_eq!(stderr, want_more, "{}: stderr", case["name"]);
     }
 }
 
-// contract: cli.debug.timeline-errors
+// contract: cli.debug.query-errors
 #[test]
-fn timeline_refuses_what_breaks_the_contract() {
-    let empty = temp_dir("empty");
-    let (_, stderr, code) = run_timeline(&empty, &[]);
-    let want = format!(
-        "no event file logs/host-<boot>.jsonl in {}",
-        empty.join("logs").display()
-    );
+fn query_refuses_what_breaks_the_contract() {
+    let empty = std::env::temp_dir().join(format!("sok-debug-no-logs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&empty);
+    std::fs::create_dir_all(&empty).expect("create");
+    let (_, stderr, code) = run_query_command(&empty, &[]);
     assert!(
-        code == 1 && stderr.contains(&want),
-        "no file: code {code} stderr {stderr:?}"
+        code == 1 && stderr.contains("logs: no such file or directory"),
+        "no logs folder: code {code} stderr {stderr:?}"
     );
 
-    let broken = temp_dir("broken");
-    let open = "{\"ts_us\":1,\"seq\":0,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n";
+    let broken = temp_dir("cli-broken");
+    let logs = broken.join("logs");
+    let open = "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n";
     let line = |extra: &str| format!("{open}{extra}\n");
     let cases: Vec<(&str, String, &str)> = vec![
-        ("first line", "{\"ts_us\":1,\"seq\":0,\"level\":\"info\",\"layer\":\"host\",\"event\":\"host.x\"}\n".into(), "logs/host-b1.jsonl: the first line is not log.open: \"host.x\""),
-        ("schema", "{\"ts_us\":1,\"seq\":0,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":1}}\n".into(), "logs/host-b1.jsonl: schema 1 is not 2"),
+        ("first line", "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"host.x\"}\n".into(), "logs/host-b1.jsonl: the first line is not log.open: \"host.x\""),
+        ("schema", "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":1}}\n".into(), "logs/host-b1.jsonl: schema 1 is not 2"),
         ("not json", line("not json"), "logs/host-b1.jsonl:2: not JSON: not json"),
         ("not object", line("[1]"), "logs/host-b1.jsonl:2: not an event object: [1]"),
         ("seq", line("{\"ts_us\":1,\"seq\":\"x\",\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\"}"), "logs/host-b1.jsonl:2: seq must be an integer, found \"x\""),
         ("level", line("{\"ts_us\":1,\"seq\":1,\"level\":\"loud\",\"layer\":\"host\",\"event\":\"a\"}"), "logs/host-b1.jsonl:2: level \"loud\" is not one of error, warn, info, debug, trace"),
-        ("layer", line("{\"ts_us\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"x\",\"event\":\"a\"}"), "logs/host-b1.jsonl:2: layer \"x\" is not one of native, host, page, plugin, sidecar"),
+        ("layer", line("{\"ts_us\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"x\",\"event\":\"a\"}"), "logs/host-b1.jsonl:2: layer \"x\" is not one of native, host, page, plugin, sidecar, sok"),
         ("event", line("{\"ts_us\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":3}"), "logs/host-b1.jsonl:2: event must be a string, found 3"),
         ("fields", line("{\"ts_us\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\",\"fields\":[1]}"), "logs/host-b1.jsonl:2: fields must be an object, found [1]"),
         ("cids", line("{\"ts_us\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\",\"cids\":[1]}"), "logs/host-b1.jsonl:2: cids must be an array of strings, found [1]"),
         ("surface", line("{\"ts_us\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\",\"surface\":7}"), "logs/host-b1.jsonl:2: surface must be a string, found 7"),
     ];
     for (name, text, want) in cases {
-        std::fs::write(broken.join("logs/host-b1.jsonl"), text).expect("write the file");
-        let (_, stderr, code) = run_timeline(&broken, &[]);
+        let _ = std::fs::remove_file(logs.join("host-b1.jsonl.idx"));
+        std::fs::write(logs.join("host-b1.jsonl"), text).expect("write the file");
+        let (_, stderr, code) = run_query_command(&broken, &[]);
         assert!(
             code == 1 && stderr.contains(want),
             "{name}: code {code} stderr {stderr:?} want {want:?}"
         );
     }
-    // A line that is not ended by a line feed is not read yet, as in the view.
+    // A line that is not ended by a line feed is not read yet.
+    let _ = std::fs::remove_file(logs.join("host-b1.jsonl.idx"));
     std::fs::write(
-        broken.join("logs/host-b1.jsonl"),
+        logs.join("host-b1.jsonl"),
         format!("{open}{{\"ts_us\":2,\"seq\":1,\"lev"),
     )
     .expect("write the file");
-    let (stdout, stderr, code) = run_timeline(&broken, &[]);
+    let (stdout, stderr, code) = run_query_command(&broken, &[]);
     assert!(
         code == 0 && stdout.matches('\n').count() == 1,
         "unfinished line: code {code} stdout {stdout:?} stderr {stderr:?}"
     );
+    // A file without a line has no row and does not hide the other files.
+    std::fs::write(logs.join("host-a.jsonl"), "").expect("write the empty file");
+    let (stdout, stderr, code) = run_query_command(&broken, &[]);
+    assert!(
+        code == 0 && stdout.matches('\n').count() == 1,
+        "empty file: code {code} stdout {stdout:?} stderr {stderr:?}"
+    );
 }
 
-// contract: cli.debug.timeline-filter-values
+// contract: cli.debug.query-flag-values
 #[test]
-fn timeline_refuses_an_invalid_filter_value_as_a_usage_error() {
+fn query_refuses_an_invalid_flag_value_as_a_usage_error() {
+    let config = fixture_config("cli-flags");
     let cases: Vec<(Vec<&str>, &str)> = vec![
-        (vec!["--level", "loud"], "timeline level \"loud\" is not one of error, warn, info, debug, trace"),
-        (vec!["--layer", "x"], "timeline layer \"x\" is not one of all, native, host, page, plugin, sidecar"),
-        (vec!["--from", "yesterday"], "timeline from \"yesterday\" is not a UTC time like 2026-10-08T22:53:20.123456Z or empty"),
-        (vec!["--from", "2026-02-30T00:00:00Z"], "timeline from \"2026-02-30T00:00:00Z\" is not a UTC time like 2026-10-08T22:53:20.123456Z or empty"),
-        (vec!["--from", "2026-10-08T00:00:02Z", "--to", "2026-10-08T00:00:01Z"], "timeline from is later than to: \"2026-10-08T00:00:02Z\" \"2026-10-08T00:00:01Z\""),
-        (vec!["--context", "x"], "timeline context must be decimal digits, found \"x\""),
-        (vec!["--context", "12345"], "timeline context must be decimal digits, found \"12345\""),
+        (vec!["--channel", "x"], "log query channel \"x\" is not one of other, debug, all"),
+        (vec!["--level", "loud"], "log query level \"loud\" is not one of error, warn, info, debug, trace"),
+        (vec!["--class", "x"], "log query class \"x\" is not one of lifecycle, input, call, io, frame"),
+        (vec!["--layer", "x"], "log query layer \"x\" is not one of native, host, page, plugin, sidecar, sok"),
+        (vec!["--event", ""], "log query event must be a non-empty string, found \"\""),
+        (vec!["--event", "a", "--event-prefix", "b"], "log query takes event or event_prefix, not both"),
+        (vec!["--from", "yesterday"], "log query from \"yesterday\" is not a UTC time like 2026-10-08T22:53:20.123456Z"),
+        (vec!["--to", "2026-02-30T00:00:00Z"], "log query to \"2026-02-30T00:00:00Z\" is not a UTC time like 2026-10-08T22:53:20.123456Z"),
+        (vec!["--from", "2026-10-08T00:00:02Z", "--to", "2026-10-08T00:00:01Z"], "log query from_us is later than to_us: 1791417602000000 1791417601000000"),
+        (vec!["--limit", "x"], "log query limit must be an integer from 1 to 5000, found \"x\""),
+        (vec!["--limit", "0"], "log query limit must be an integer from 1 to 5000, found 0"),
+        (vec!["--order", "up"], "log query order \"up\" is not one of asc, desc"),
+        (vec!["--after", "nonsense"], "log query after must be {ts_us, role, boot, seq}, found \"nonsense\""),
+        (vec!["--context", "1"], "unknown option --context"),
     ];
     for (args, want) in cases {
-        let (stdout, stderr, code) = run_timeline(Path::new(FIXTURES), &args);
+        let (stdout, stderr, code) = run_query_command(&config, &args);
         assert!(
             code == 2 && stdout.is_empty() && stderr.contains(want),
             "{args:?}: code {code} stdout {stdout:?} stderr {stderr:?} want {want:?}"
         );
     }
-}
-
-// contract: cli.debug.timeline-errors
-#[test]
-fn timeline_reads_a_file_without_a_line_as_no_rows() {
-    let dir = temp_dir("without-a-line");
-    let open = "{\"ts_us\":1,\"seq\":0,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n";
-    std::fs::write(dir.join("logs/host-a.jsonl"), "").expect("write the empty file");
-    std::fs::write(dir.join("logs/host-b.jsonl"), open).expect("write the file");
-    let (stdout, stderr, code) = run_timeline(&dir, &[]);
-    assert!(
-        code == 0 && stdout.matches('\n').count() == 1,
-        "code {code} stdout {stdout:?} stderr {stderr:?}: the empty file must have no row and the other file one"
-    );
 }

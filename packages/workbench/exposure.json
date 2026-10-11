@@ -1959,7 +1959,7 @@
       },
       {
         "name": "core.debug.timeline",
-        "description": "Shows the rows of the host event files of the logs folder in time order in the open debug view; a file that is not events, or a folder without a host event file, is an error.",
+        "description": "Shows the newest page of the events of the event files of the logs folder in the open debug view, asked from the host through the query; a file that breaks the event structure is an error.",
         "params": {
           "type": "object",
           "properties": {}
@@ -1971,7 +1971,7 @@
       },
       {
         "name": "core.debug.timeline.follow",
-        "description": "Stops or resumes following the host event files in the shown debug timeline: with on true the timeline first reads the lines that grew while it was stopped and then appends the lines that later change notices report, with on false it appends nothing; the same call again changes nothing, and an appended line that is not an event is an error that stops following.",
+        "description": "Stops or resumes following the event files in the shown debug timeline: with on true the timeline first asks for the rows that were written while it was stopped and then adds the rows that later change notices report, with on false it adds nothing; the same call again changes nothing, and a query that fails stops following.",
         "params": {
           "type": "object",
           "properties": {
@@ -1986,8 +1986,20 @@
         "timeout": 60000
       },
       {
+        "name": "core.debug.timeline.older",
+        "description": "Asks for the page of events before the oldest row that the shown debug timeline holds and puts it in front of the rows; it changes nothing when no older row exists, and it is an error when the timeline already holds 2000 rows.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
+      },
+      {
         "name": "core.debug.timeline.select",
-        "description": "Selects or unselects one row of the shown debug timeline: row is its position among all rows of the timeline from 0, in time order at the time of the call, whatever the filter shows, and selected is true or false; the same call again changes nothing. A selection stays on its row when appended rows change the positions.",
+        "description": "Selects or unselects one row of the shown debug timeline: row is its position among the rows that the view holds from 0, in key order at the time of the call, and selected is true or false; the same call again changes nothing. A selection stays on its row when other rows come in front or leave.",
         "params": {
           "type": "object",
           "properties": {
@@ -2005,20 +2017,29 @@
       },
       {
         "name": "core.debug.timeline.filter",
-        "description": "Sets the filter of the shown debug timeline: level is the least severe level shown, layer is a layer or all, and text is a case-insensitive part of the text line of a row, event is a case-insensitive part of the event name, surface and session are whole identifiers, cid is one correlation identifier of a row, from and to are inclusive UTC times like 2026-10-08T22:53:20.123456Z, and context is the number of rows shown before and after each passing row as decimal digits; an empty text leaves event, surface, session, cid, from or to open. A member that is not given keeps its value; at least one member is required.",
+        "description": "Sets the filter of the shown debug timeline and asks for its newest page again: channel is other, debug or all, level is the least severe level shown, class is a class, layer is a layer or all, text is a case-insensitive part of the line, event is the exact event name, event_prefix is an event name or the first part of one that ends before a dot, surface and session are whole identifiers, cid is one correlation identifier, run is a run identifier, and from and to are inclusive UTC times like 2026-10-08T22:53:20.123456Z; an empty text leaves class, text, event, event_prefix, surface, session, cid, run, from or to open. A member that is not given keeps its value; at least one member is required.",
         "params": {
           "type": "object",
           "properties": {
+            "channel": {
+              "enum": ["other", "debug", "all"]
+            },
             "level": {
               "enum": ["error", "warn", "info", "debug", "trace"]
             },
+            "class": {
+              "type": "string"
+            },
             "layer": {
-              "enum": ["all", "native", "host", "page", "plugin", "sidecar"]
+              "enum": ["all", "native", "host", "page", "plugin", "sidecar", "sok"]
             },
             "text": {
               "type": "string"
             },
             "event": {
+              "type": "string"
+            },
+            "event_prefix": {
               "type": "string"
             },
             "surface": {
@@ -2030,13 +2051,13 @@
             "cid": {
               "type": "string"
             },
+            "run": {
+              "type": "string"
+            },
             "from": {
               "type": "string"
             },
             "to": {
-              "type": "string"
-            },
-            "context": {
               "type": "string"
             }
           }
@@ -3919,15 +3940,23 @@
       },
       {
         "name": "core.debug.timeline",
-        "description": "The button that shows the timeline of the host event files."
+        "description": "The button that shows the timeline of the event files."
       },
       {
         "name": "core.debug.timeline.list",
         "description": "The button of the timeline that shows the list of files again."
       },
       {
+        "name": "core.debug.timeline.channel",
+        "description": "The selection box of the channel of the event files that the timeline shows."
+      },
+      {
         "name": "core.debug.timeline.follow",
-        "description": "The button of the timeline that stops following the growing host event files, or resumes it."
+        "description": "The button of the timeline that stops following the growing event files, or resumes it."
+      },
+      {
+        "name": "core.debug.timeline.older",
+        "description": "The button of the timeline that puts the page of events before the oldest held row in front of the rows; hidden when no older row exists."
       },
       {
         "name": "core.debug.timeline.level",
@@ -3938,12 +3967,20 @@
         "description": "The selection box of the layer that the timeline shows."
       },
       {
+        "name": "core.debug.timeline.class",
+        "description": "The text field of the class that the timeline requires."
+      },
+      {
         "name": "core.debug.timeline.text",
-        "description": "The text field of the part of a row that the timeline requires."
+        "description": "The text field of the part of a line that the timeline requires."
       },
       {
         "name": "core.debug.timeline.event",
-        "description": "The text field of the part of the event name that the timeline requires."
+        "description": "The text field of the exact event name that the timeline requires."
+      },
+      {
+        "name": "core.debug.timeline.event-prefix",
+        "description": "The text field of the event name, or the first part of one that ends before a dot, that the timeline requires."
       },
       {
         "name": "core.debug.timeline.surface",
@@ -3958,16 +3995,16 @@
         "description": "The text field of the correlation identifier that a row of the timeline requires."
       },
       {
+        "name": "core.debug.timeline.run",
+        "description": "The text field of the run identifier whose range of time the timeline shows."
+      },
+      {
         "name": "core.debug.timeline.from",
         "description": "The text field of the first UTC time that the timeline shows."
       },
       {
         "name": "core.debug.timeline.to",
         "description": "The text field of the last UTC time that the timeline shows."
-      },
-      {
-        "name": "core.debug.timeline.context",
-        "description": "The selection box of the number of rows shown before and after each row that passes the filter."
       },
       {
         "name": "core.debug.timeline.select",
@@ -3980,7 +4017,7 @@
       },
       {
         "name": "core.debug.timeline.omitted",
-        "description": "The note that states how many of the oldest lines of the timeline the view leaves out of the draw; hidden when it draws every line."
+        "description": "The note that states how many of the oldest rows the view left out when following filled it; hidden when it left none out."
       },
       {
         "name": "core.debug.timeline.warning",
@@ -3992,7 +4029,7 @@
       },
       {
         "name": "core.debug.timeline.row",
-        "description": "The rows of the timeline in time order, each the text line of one event; a row shown only as context has data-context.",
+        "description": "The rows of the timeline in key order, each the text line of one event.",
         "many": true
       },
       {

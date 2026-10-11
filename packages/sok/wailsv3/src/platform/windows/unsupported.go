@@ -4,6 +4,7 @@ package windows
 
 import (
 	"errors"
+	"os"
 	"time"
 
 	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
@@ -43,6 +44,10 @@ func (windows) OpenApplication(string, []string) error {
 
 func (windows) MonotonicNanos() (uint64, error) {
 	return 0, errors.New("the monotonic clock is not implemented on windows")
+}
+
+func (windows) LockFile(*os.File) error {
+	return errors.New("file locks are not implemented on windows")
 }
 
 func (windows) PathsDir() (string, error) {

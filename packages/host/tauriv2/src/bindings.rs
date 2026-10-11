@@ -661,14 +661,14 @@ fn debug_save(
     crate::debug::save(&window, request)
 }
 
-/// Reads the whole lines of one text file of the logs folder from an offset.
+/// Answers one page of the query over the event files of the logs folder (docs/spec/debug.md#timeline).
 #[tauri::command(async)]
-fn debug_read_range(
+fn log_query(
     window: Window,
-    request: Argument<crate::debug::RangeRequest>,
-) -> Result<crate::debug::RangeResult, String> {
+    request: Argument<serde_json::Map<String, serde_json::Value>>,
+) -> Result<soksak_sok::log_query::LogPage, String> {
     let Argument(request) = request;
-    crate::debug::read_range_file(&window, request)
+    crate::debug::log_query(window.app_handle(), request)
 }
 
 /// Saves text that the page built through the save panel.

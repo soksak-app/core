@@ -6,6 +6,17 @@ members = ["apps/tauriv2", "packages/host/tauriv2", "packages/sok/tauriv2"]
 [profile.dev]
 incremental = true
 
+# The index and the query read every line of an event file ([logging](docs/spec/logging.md#query)); the test of 1,000,000 events measures
+# the optimization level that ships, because an unoptimized parser is more than twenty times slower.
+[profile.dev.package.soksak-sok-tauriv2]
+opt-level = 3
+
+[profile.dev.package.serde_json]
+opt-level = 3
+
+[profile.dev.package.memchr]
+opt-level = 3
+
 # Wails release 빌드의 `-s -w` 처럼 release 실행 파일의 기호 테이블을 벗긴다. 진단 코드 검사는
 # 기호가 아니어도 남는 문자열로 한다(scripts/check-release.mjs).
 [profile.release]

@@ -19,6 +19,8 @@ pub mod fetch;
 mod files;
 pub mod identity;
 pub mod install;
+pub mod log_index;
+pub mod log_query;
 mod logged;
 mod path;
 #[path = "platform/platform.rs"]
@@ -46,8 +48,8 @@ commands:
   dom rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
   input pointer [window] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--activate]
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
-  debug timeline [--level L] [--layer L] [--text T] [--event E] [--surface S] [--session S] [--cid C] [--from T] [--to T] [--context N]
-                            prints the rows of the host event files that pass the filter
+  debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
+                            prints one page of the events of the event files that pass the filter
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
   app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
@@ -118,7 +120,13 @@ const OPTIONS: &[&str] = &[
     "cid",
     "from",
     "to",
-    "context",
+    "channel",
+    "class",
+    "event-prefix",
+    "run",
+    "order",
+    "limit",
+    "after",
 ];
 
 struct Arguments {
@@ -670,7 +678,7 @@ pub fn run(
     stderr: &mut dyn Write,
     options: &Options,
 ) -> i32 {
-    let result = execute(args, stdout, options);
+    let result = execute(args, stdout, stderr, options);
     // When the error cannot be written to standard error, there is nowhere to report it, so the code reports it with exit status 3 (docs/spec/cli.md).
     let (written, status) = match result {
         Ok(()) => return 0,
@@ -709,7 +717,12 @@ pub(crate) fn parse_arguments(args: &[String]) -> Result<Arguments, Error> {
     parse(args)
 }
 
-fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result<(), Error> {
+fn execute(
+    args: &[String],
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    options: &Options,
+) -> Result<(), Error> {
     // The arguments after -- are those of the application that starts again, so the command parses its own.
     if args.first().map(String::as_str) == Some("app") {
         return appupdate::run_app(&args[1..], stdout);
@@ -742,7 +755,7 @@ fn execute(args: &[String], stdout: &mut dyn Write, options: &Options) -> Result
         return release::run_files(&a.positionals, &a.values, stdout, a.flag("diagnostics"));
     }
     if a.positionals.first().map(String::as_str) == Some("debug") {
-        return debug::run_debug(&a, stdout, options);
+        return debug::run_debug(&a, stdout, stderr, options);
     }
     if a.positionals.first().map(String::as_str) == Some("path") {
         let action = a.positional(1, "path action")?;

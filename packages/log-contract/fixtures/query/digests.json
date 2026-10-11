@@ -1,0 +1,13 @@
+{
+  "logs": {
+    "host-b1.jsonl.1": "4c4040a4c1b89005ae23259e5008b4f577294122c8c5631e0be0b92acbf78b9c",
+    "host-b1.jsonl": "1cbc41fa53f684ed887869424a353d6dda1999a571718ca18119a2500e3ebce2",
+    "host-b1.debug.jsonl": "a6a6048f7b3b7f65081a56d80ecdb996097624b2c8610adcdb0ab98f2f7da4c9",
+    "vt-v1.jsonl": "13f1065e7dc5879a4a47a3d116c5fed6cdcc1749bf077c3bcee064d1d5264764",
+    "sok-s1.jsonl": "9cba2025da34e908187fdfcf2de90a207b18d48a16f282b4e63305483153e3b5"
+  },
+  "big": {
+    "source": "7416f94ba6f267c773d3f225cc13a659d1e3ad560b9c67190b4726b1daa15b43",
+    "index": "54cbb021053aba42bf984d13932c8ce4f84ba105d4a60774bb946b3c95a2f3ca"
+  }
+}

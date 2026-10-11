@@ -19,7 +19,7 @@ func TestAnsweredRequestsDoNotGrowTheOrderOfTheLedger(t *testing.T) {
 	var ledger requestLedger
 	for n := 0; n < 5*pendingRequestLimit; n++ {
 		cid := fmt.Sprintf("p.%d", n)
-		ledger.add("terminal", "tab-1", []string{cid}, uint64(n+1))
+		ledger.add("sidecar-a", "tab-1", []string{cid}, uint64(n+1))
 		if _, found := ledger.take([]string{cid}, uint64(n+2)); !found {
 			t.Fatalf("the request %s was not remembered", cid)
 		}
@@ -32,10 +32,10 @@ func TestAnsweredRequestsDoNotGrowTheOrderOfTheLedger(t *testing.T) {
 // A request that is forgotten at the bound is counted, so the loss of its microseconds is not silent.
 func TestForgettingARequestAtTheBoundIsCounted(t *testing.T) {
 	var ledger requestLedger
-	if got := ledger.add("terminal", "tab-1", cidsOf("p", 0, pendingRequestLimit), 1); got != 0 {
+	if got := ledger.add("sidecar-a", "tab-1", cidsOf("p", 0, pendingRequestLimit), 1); got != 0 {
 		t.Fatalf("%d requests were forgotten below the bound", got)
 	}
-	if got := ledger.add("terminal", "tab-1", cidsOf("q", 0, 5), 2); got != 5 {
+	if got := ledger.add("sidecar-a", "tab-1", cidsOf("q", 0, 5), 2); got != 5 {
 		t.Fatalf("%d requests were counted as forgotten, want 5", got)
 	}
 	if _, found := ledger.take([]string{"p.0"}, 3); found {

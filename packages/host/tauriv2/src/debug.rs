@@ -180,65 +180,6 @@ pub fn read(config: &Path, relative: &str) -> Result<ReadResult, String> {
     })
 }
 
-/// The answer of debugReadRange: the whole lines that follow the offset (up to [`READ_LIMIT`] bytes), the offset after them,
-/// and the size of the file when it was read.
-#[derive(Debug, Serialize)]
-pub struct RangeResult {
-    pub path: String,
-    pub size: i64,
-    pub next: i64,
-    pub text: String,
-}
-
-/// The argument of the debugReadRange call.
-#[derive(Debug, Deserialize)]
-pub struct RangeRequest {
-    pub path: String,
-    pub offset: i64,
-}
-
-/// Returns the whole lines of the text file `relative` under `<config-dir>/logs/` from `offset`, at most [`READ_LIMIT`] bytes,
-/// so a reader that keeps `next` continues a file over the limit and follows a file that grows. A line that is not written to
-/// its end is not returned; it is read when its end is written. An offset outside the file, an offset inside a character and
-/// a file that is not text are errors that name the file.
-pub fn read_range(config: &Path, relative: &str, offset: i64) -> Result<RangeResult, String> {
-    use std::io::{Read, Seek, SeekFrom};
-    let full = log_file(config, relative)?;
-    let failed = |error: std::io::Error| format!("debug: {relative}: {error}");
-    let mut file = File::open(&full).map_err(failed)?;
-    let size = file.metadata().map_err(failed)?.len() as i64;
-    if offset < 0 || offset > size {
-        return Err(format!(
-            "debug: offset {offset} is not in {relative} (0 to {size})"
-        ));
-    }
-    file.seek(SeekFrom::Start(offset as u64)).map_err(failed)?;
-    let mut data = Vec::new();
-    file.take((size - offset).min(READ_LIMIT as i64) as u64)
-        .read_to_end(&mut data)
-        .map_err(failed)?;
-    if data.first().is_some_and(|byte| (byte & 0xC0) == 0x80) {
-        return Err(format!(
-            "debug: offset {offset} is not at the start of a character of {relative}"
-        ));
-    }
-    let end = data
-        .iter()
-        .rposition(|byte| *byte == b'\n')
-        .map_or(0, |index| index + 1);
-    let text = std::str::from_utf8(&data[..end])
-        // default: bytes that are not UTF-8 text become the error "is not text" below, which names the file.
-        .ok()
-        .filter(|text| !text.contains('\0'))
-        .ok_or_else(|| format!("debug: {relative} is not text"))?;
-    Ok(RangeResult {
-        path: relative.to_string(),
-        size,
-        next: offset + end as i64,
-        text: text.to_string(),
-    })
-}
-
 /// Writes every file under `<config-dir>/logs/` into a gzip-compressed tar file at destination, with the paths of
 /// [`list`].
 pub fn write_logs_tar(config: &Path, destination: &Path) -> Result<(), String> {
@@ -505,12 +446,13 @@ pub(crate) fn save_text(window: &Window, request: TextRequest) -> Result<Saved, 
     })
 }
 
-/// The page's debugReadRange call: the whole lines of one text file of the logs folder from an offset.
-pub(crate) fn read_range_file(
-    window: &Window,
-    request: RangeRequest,
-) -> Result<RangeResult, String> {
-    read_range(&config(window.app_handle()), &request.path, request.offset)
+/// The page's logQuery call: the query of the endpoint method `log.query` (docs/spec/debug.md#timeline).
+pub(crate) fn log_query(
+    app: &AppHandle,
+    request: serde_json::Map<String, Value>,
+) -> Result<soksak_sok::log_query::LogPage, String> {
+    crate::log_query::query_event_logs(&config(app), &Value::Object(request).to_string())
+        .map_err(|error| error.to_string())
 }
 
 /// The page's debugRead call: the end of one text file of the logs folder.

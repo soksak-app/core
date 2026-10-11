@@ -3243,6 +3243,7 @@ version = "0.0.10"
 dependencies = [
  "flate2",
  "libc",
+ "memchr",
  "rcgen",
  "rustls",
  "serde",
