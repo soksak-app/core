@@ -1096,6 +1096,9 @@
                 "omitted": {
                   "type": "number"
                 },
+                "context": {
+                  "type": "number"
+                },
                 "level": {
                   "enum": ["error", "warn", "info", "debug", "trace"]
                 },
@@ -2014,6 +2017,22 @@
         "result": {
           "type": "null"
         }
+      },
+      {
+        "name": "core.debug.timeline.context",
+        "description": "Brings the rows around one row of the shown debug timeline into the held rows: row is its position among the rows that the view holds from 0, in key order at the time of the call; the 5 rows before it and the 5 rows after it in the channel of the filter are asked for whatever the other members of the filter are, and the rows that were not held are shown as context, indented by two spaces. A new filter shows its own rows only.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "row": {
+              "type": "integer"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        },
+        "timeout": 60000
       },
       {
         "name": "core.debug.timeline.filter",
@@ -4009,6 +4028,11 @@
       {
         "name": "core.debug.timeline.select",
         "description": "The buttons that select or unselect the rows of the timeline, one before each row; a selected row's container has data-selected true.",
+        "many": true
+      },
+      {
+        "name": "core.debug.timeline.context",
+        "description": "The buttons that bring the rows around a row of the timeline into the held rows, one before each row.",
         "many": true
       },
       {

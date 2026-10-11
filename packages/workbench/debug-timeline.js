@@ -14,6 +14,9 @@ export const PAGE_ROWS = 500;
  */
 export const HOLD_LIMIT = 2000;
 
+/** The rows before and the rows after a row that the context of the row brings in (docs/spec/debug.md#timeline). */
+export const CONTEXT_ROWS = 5;
+
 /** The channels of the query: the files that are not debug files, the debug files, and both. */
 export const CHANNELS = ["other", "debug", "all"];
 /** The levels from the most to the least severe; a level filter shows its level and the more severe ones. */

@@ -10,7 +10,7 @@ import { commandOf, delegate, mark, run } from "./commands.js";
 import { registry } from "./exposure.js";
 import { hideError, showError } from "./shown-errors.js";
 import { newestFirst } from "./debug-order.js";
-import { CHANNELS, CLEAR_FILTER, HOLD_LIMIT, PAGE_ROWS, compareRows, eventLine, isEventFile, keyOf, LAYERS, LEVELS, mergeRows, queryOf, rowId } from "./debug-timeline.js";
+import { CHANNELS, CLEAR_FILTER, CONTEXT_ROWS, HOLD_LIMIT, PAGE_ROWS, compareRows, eventLine, isEventFile, keyOf, LAYERS, LEVELS, mergeRows, queryOf, rowId } from "./debug-timeline.js";
 import { compareStates, parseState, stateFiles, stateLines } from "./debug-state.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 
@@ -70,7 +70,7 @@ function timelineState() {
   if (timeline === null) return null;
   return {
     following: timeline.following, appended: timeline.appended, held: timeline.rows.length, older: timeline.older, omitted: timeline.omitted,
-    selected: timeline.selected.size, warning: SELECTION_WARNING, ...timeline.filter,
+    context: timeline.context.size, selected: timeline.selected.size, warning: SELECTION_WARNING, ...timeline.filter,
   };
 }
 
@@ -183,11 +183,16 @@ function drawTimeline() {
     pick.dataset.selected = String(selected);
     const choose = button(`select:${index}`, "core.debug.timeline.select", selected ? "●" : "○", "core.debug.timeline.select", { row: index, selected: !selected });
     choose.setAttribute("aria-label", selected ? "행 선택 해제" : "행 선택");
+    const around = button(`context:${index}`, "core.debug.timeline.context", "주변", "core.debug.timeline.context", { row: index });
+    around.setAttribute("aria-label", "행 주변 보기");
     const el = document.createElement("div");
     el.className = "dbg-card__line";
     el.dataset.expose = "core.debug.timeline.row";
-    el.textContent = eventLine(row.event);
-    pick.append(choose, el);
+    // A row that is only context is indented by two spaces, as `sok debug query` prints it.
+    const isContext = timeline.context.has(rowId(row));
+    el.dataset.context = String(isContext);
+    el.textContent = (isContext ? "  " : "") + eventLine(row.event);
+    pick.append(choose, around, el);
     timelineRows.appendChild(pick);
   });
 }
@@ -513,7 +518,7 @@ async function pageOf(request) {
 /** A timeline of the newest page of a query (in descending order) with the selection and the following that it keeps. */
 function freshTimeline(filter, page, selected, following) {
   const rows = page.rows.toReversed();
-  return { filter, rows, ids: new Set(rows.map(rowId)), older: page.next !== null, tail: page.tail, following, appended: 0, omitted: 0, selected, token: {} };
+  return { filter, rows, ids: new Set(rows.map(rowId)), context: new Set(), older: page.next !== null, tail: page.tail, following, appended: 0, omitted: 0, selected, token: {} };
 }
 
 /** Shows the newest rows of the event files of the logs folder, one page of the query of the host. */
@@ -541,14 +546,20 @@ export function showDebugTimeline() {
 
 /**
  * Adds the rows that the pages bring to the held rows in key order, once each. When the held rows would pass HOLD_LIMIT, the oldest
- * rows leave the view and are counted in `omitted`. Returns the timeline with the rows and the number of rows that were new.
+ * rows leave the view and are counted in `omitted`. The rows of the context of a row (`asContext`) that were not held are held as
+ * context; a row that a page of the filter brings and that was held as context is a row of the filter from then on. Returns the
+ * timeline with the rows and the number of rows that were new.
  */
-function withPage(current, rows) {
+function withPage(current, rows, asContext = false) {
   const fresh = rows.filter((row) => !current.ids.has(rowId(row)));
   let merged = mergeRows(current.rows, fresh);
   const shed = Math.max(0, merged.length - HOLD_LIMIT);
   merged = merged.slice(shed);
-  return { timeline: { ...current, rows: merged, ids: new Set(merged.map(rowId)), omitted: current.omitted + shed, older: current.older || shed > 0 }, fresh: fresh.length };
+  const ids = new Set(merged.map(rowId));
+  const brought = new Set(rows.map(rowId));
+  const context = new Set([...current.context].filter((id) => ids.has(id) && (asContext || !brought.has(id))));
+  if (asContext) for (const row of fresh) if (ids.has(rowId(row))) context.add(rowId(row));
+  return { timeline: { ...current, rows: merged, ids, context, omitted: current.omitted + shed, older: current.older || shed > 0 }, fresh: fresh.length };
 }
 
 /**
@@ -578,9 +589,10 @@ function followGrowth() {
         after = page.next;
       }
       if (timeline === null || timeline.token !== current.token || !timeline.following) return null;
-      timeline = { ...timeline, rows: next.rows, ids: next.ids, omitted: next.omitted, older: next.older, tail, appended: timeline.appended + appended };
-      // A notice that adds nothing draws nothing: the host calls of a draw are recorded events, and each of them is written.
-      if (appended > 0) draw();
+      const unmarked = next.context.size !== timeline.context.size;
+      timeline = { ...timeline, rows: next.rows, ids: next.ids, context: next.context, omitted: next.omitted, older: next.older, tail, appended: timeline.appended + appended };
+      // A notice that adds nothing and ends no context draws nothing: the host calls of a draw are recorded events, and each of them is written.
+      if (appended > 0 || unmarked) draw();
       return null;
     } catch (reason) {
       if (timeline !== null && timeline.token === current.token) timeline = { ...timeline, following: false };
@@ -718,6 +730,33 @@ export function selectDebugRow(row, selected) {
   if (selected) timeline.selected.set(rowId(chosen), chosen);
   else timeline.selected.delete(rowId(chosen));
   draw();
+}
+
+/**
+ * Brings the rows around the row at `row` (its position among the held rows, from 0) into the held rows: the `CONTEXT_ROWS` rows
+ * before it and the `CONTEXT_ROWS` rows after it in the channel of the filter, whatever the other members of the filter are. The rows
+ * that were not held are shown as context. A new filter or a new timeline shows its own rows only.
+ */
+export async function contextDebugRow(row) {
+  if (!card) throw new Error("the debug view is not open");
+  if (timeline === null) throw new Error("the debug timeline is not shown");
+  if (!Number.isInteger(row) || row < 0 || row >= timeline.rows.length) throw new Error(`timeline row ${JSON.stringify(row)} is not one of the ${timeline.rows.length} rows`);
+  failure = null;
+  const chosen = timeline.rows[row];
+  return exclusive(async () => {
+    const current = timeline;
+    if (current === null) return;
+    try {
+      const page = await pageOf({ channel: current.filter.channel, around: keyOf(chosen), earlier: CONTEXT_ROWS, later: CONTEXT_ROWS });
+      if (timeline === null || timeline.token !== current.token) return;
+      timeline = withPage(timeline, page.rows, true).timeline;
+    } catch (reason) {
+      fail("context", reason);
+      throw reason;
+    } finally {
+      draw();
+    }
+  });
 }
 
 /** Runs one save operation of the open view and answers the host's {saved}. */

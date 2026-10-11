@@ -33,9 +33,10 @@ test("a row is one text line with the time in microseconds, the identifiers and 
 test("the text line of each golden page is the line that the implementations of sok print", () => {
   const rows = goldenRows();
   const cases = JSON.parse(readFileSync(new URL("cases.json", FIXTURES), "utf8"));
-  assert.ok(cases.length >= 25);
-  for (const { name, rows: ids, lines } of cases) {
-    assert.deepEqual(ids.map((id) => eventLine(rows.get(id).event)), lines, name);
+  assert.ok(cases.length >= 31);
+  for (const { name, rows: ids, lines, context = [] } of cases) {
+    // The line of a row that an around query marks as context is indented by two spaces.
+    assert.deepEqual(ids.map((id) => (context.includes(id) ? "  " : "") + eventLine(rows.get(id).event)), lines, name);
   }
 });
 
