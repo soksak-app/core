@@ -256,3 +256,27 @@ test("an entrance of calls that the catalog declares with a result has ok, micro
   assert.match(findings[4].message, /micros must be a non-negative integer/);
   assert.match(findings[5].message, /micros must be a non-negative integer/);
 });
+
+test("the chain of an operation of the page is complete when its call and the host record carry its identifiers, in any file", () => {
+  const operations = {
+    ...catalog,
+    events: {
+      ...catalog.events,
+      "page.plugin.operation": { layer: "page", class: "call", level: "info", cids: "required", fields: { action: "string", plugin: "string" } },
+      "page.call": { layer: "page", class: "call", level: ["debug", "warn"], fields: { name: "string" } },
+      "host.binding.call": { layer: "host", class: "call", level: ["debug", "warn"], fields: { name: "string" } },
+    },
+    chains: { plugin: ["page.plugin.operation", "page.call", "host.binding.call"] },
+  };
+  const start = (seq, cid) => line(seq, "page.plugin.operation", { action: "install", plugin: "term" }, { cids: [cid], layer: "page" });
+  const call = (seq, cid) => line(seq, "page.call", { name: "pluginsRun" }, { cids: [cid], layer: "page", level: "debug" });
+  const binding = (seq, cid) => line(seq, "host.binding.call", { name: "plugins_run" }, { cids: [cid], level: "debug" });
+  const complete = [open, start(2, "p1.1"), call(3, "p1.1"), binding(4, "p1.1")].join("\n");
+  assert.deepEqual(auditLog("host-b1.jsonl", complete, operations), []);
+  // The host record is missing for the second operation, and the first one in the other file completes by the host file.
+  const findings = auditLogs([
+    { file: "host-b1.jsonl", text: [open, binding(2, "p1.1")].join("\n") },
+    { file: "host-b1.debug.jsonl", text: [line(3, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }), start(4, "p1.1"), call(5, "p1.1"), start(6, "p1.2"), call(7, "p1.2")].join("\n") },
+  ], operations);
+  assert.deepEqual(findings.map(({ message }) => message), ["chain plugin of p1.2 lacks host.binding.call"]);
+});

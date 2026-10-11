@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -50,4 +50,19 @@ test('the audit of a configuration folder reads the files of every layer, genera
     `${join(logs, 'host-1-2.debug.jsonl')}:2: undeclared error w: t`,
     `${join(logs, 'vt-3-4.jsonl')}:2: event host.surprise is not declared`,
   ]);
+});
+
+test('the catalog declares the chain of each operation of the page and the first event of each requires identifiers', () => {
+  const real = JSON.parse(readFileSync(new URL('../../docs/spec/events.json', import.meta.url), 'utf8'));
+  const first = { plugin: 'page.plugin.operation', project: 'page.project.operation', window: 'page.window.operation', settings: 'page.settings.change', update: 'page.update.operation' };
+  for (const [chain, event] of Object.entries(first)) {
+    assert.deepEqual(real.chains[chain], [event, 'page.call', 'host.binding.call'], chain);
+    assert.equal(real.events[event].cids, 'required', event);
+    assert.equal(real.events[event].layer, 'page', event);
+  }
+  assert.deepEqual(real.events['page.settings.change'].fields, { scope: 'string', actor: 'string', keys: 'string' });
+  assert.deepEqual(real.events['page.plugin.operation'].fields, { action: 'string', plugin: 'string' });
+  assert.deepEqual(real.events['page.project.operation'].fields, { action: 'string', project: 'string' });
+  assert.deepEqual(real.events['page.window.operation'].fields, { action: 'string' });
+  assert.deepEqual(real.events['page.update.operation'].fields, { action: 'string', version: 'string' });
 });

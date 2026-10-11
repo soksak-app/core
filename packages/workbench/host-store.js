@@ -12,12 +12,12 @@ export class HostWorkspaceStore {
   patch(id, patch) { return this.host.call("workspace", { kind: "patch", id, patch }); }
   remove(id) { return this.host.call("workspace", { kind: "remove", id }); }
   move(id, delta) { return this.host.call("workspace", { kind: "move", id, delta }); }
-  settings(id, values) {
+  settings(id, values, cids) {
     const patch = {}, remove = [];
     for (const [key, value] of Object.entries(values)) {
       if (value === undefined) remove.push(key);
       else patch[key] = value;
     }
-    return this.host.call("workspace", { kind: "settings", id, patch, remove });
+    return this.host.call("workspace", { kind: "settings", id, patch, remove }, { cids });
   }
 }

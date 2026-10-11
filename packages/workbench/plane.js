@@ -1968,10 +1968,10 @@ export function cardTextSizes() {
  * Moves the text size of the current scope in direction. 1 is larger, -1 is smaller, and 0 is the default.
  * The frame scale is a common setting, and the card scale is stored in the layout data of the card.
  */
-export async function changeTextSize(direction) {
+export async function changeTextSize(direction, actor) {
   const scope = currentTextScope();
   if (scope.kind === "frame") {
-    await setSetting({ textSize: nextTextSize(value("textSize"), direction) }, "common");
+    await setSetting({ textSize: nextTextSize(value("textSize"), direction) }, "common", actor);
     return;
   }
   const card = grid?.card(scope.card);

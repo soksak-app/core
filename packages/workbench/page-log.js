@@ -6,6 +6,7 @@ import { host } from "@soksak/runtime";
 import { boundedJson, byteLength, cutBytes } from "./bounded-json.js";
 import { callEvent, observeHostCalls } from "./host-calls.js";
 import { createEventBatcher } from "./log-batch.js";
+import { installOperationSink } from "./operations.js";
 import { recordOf } from "./report-record.js";
 
 // The console as the page had it before the capture: a failure to relay cannot be reported through the relay, and what it
@@ -46,6 +47,14 @@ export function reportRecord(level, line) {
   return batcher.emitAndWait(level, `page.record.${level}`, fields);
 }
 
+// The first event of an operation of the page (docs/spec/logging.md#operation-chains) is stored with the identifiers of the operation.
+if (batcher) {
+  installOperationSink((event, fields, cids) => {
+    // events: page.plugin.operation, page.project.operation, page.window.operation, page.settings.change, page.update.operation
+    batcher.emit("info", event, fields, cids);
+  });
+}
+
 /** Queues an event of a plugin or of the page with its level, name and fields; nothing happens in a page without a host. */
 export function emitEvent(level, event, fields) {
   // events: forwarded
@@ -69,9 +78,9 @@ const UNRECORDED_CALLS = new Set(["log", "performance", "debugReadRange", "overl
 // Every host call of the page is the event `page.call` at the level `debug`, and a refused call is at the level `warn`
 // (docs/spec/logging.md#automatic-entrances). The callers report their own failures; the event does not fail a window check.
 if (batcher) {
-  observeHostCalls(({ name, args, micros, ok, error, code }) => {
+  observeHostCalls(({ name, args, micros, ok, error, code, cids: operation }) => {
     if (UNRECORDED_CALLS.has(name)) return;
-    const { level, event, fields, cids } = callEvent({ name, args, micros, ok, error, code });
+    const { level, event, fields, cids } = callEvent({ name, args, micros, ok, error, code, cids: operation });
     // events: page.call
     batcher.emit(level, event, fields, cids);
   });

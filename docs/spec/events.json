@@ -22,6 +22,11 @@
     "host.endpoint.call": { "layer": "host", "class": "call", "level": ["debug", "warn"], "result": true, "fields": { "name": "string", "args": "string", "micros": "number", "ok": "boolean", "truncated": "boolean", "error?": "string" }, "description": "A method that a client of the endpoint called; `args` is the params as received (`null` when absent) cut to 1024 bytes, `error` is the code and the message that the client received." },
     "host.binding.call": { "layer": "host", "class": "call", "level": ["debug", "warn"], "result": true, "fields": { "name": "string", "args": "string", "micros": "number", "ok": "boolean", "truncated": "boolean", "error?": "string" }, "description": "A host call that the main page or a document of a surface sent; `name` is the snake case name of the call, `args` is the JSON array of the arguments in call order cut to 1024 bytes, `error` is the text that the page received or `the call ended without a result`." },
     "page.command": { "layer": "page", "class": "call", "level": ["debug", "warn"], "result": true, "fields": { "name": "string", "micros": "number", "ok": "boolean", "error?": "string" }, "description": "A command request that the page answered; `error` names a failed command." },
+    "page.plugin.operation": { "layer": "page", "class": "call", "level": "info", "cids": "required", "fields": { "action": "string", "plugin": "string" }, "description": "The page started an install, update, remove, enable or disable of a plugin; its host call carries the same cids." },
+    "page.project.operation": { "layer": "page", "class": "call", "level": "info", "cids": "required", "fields": { "action": "string", "project": "string" }, "description": "The page started the open or the removal of a project; its host calls carry the same cids." },
+    "page.window.operation": { "layer": "page", "class": "call", "level": "info", "cids": "required", "fields": { "action": "string" }, "description": "The page started a new window, the close of its window, or the report that the window stays open; its host call carries the same cids." },
+    "page.settings.change": { "layer": "page", "class": "call", "level": "info", "cids": "required", "fields": { "scope": "string", "actor": "string", "keys": "string" }, "description": "A change of the settings by the command or the surface named in actor; keys lists the changed keys and never their values; the write to the host carries the same cids." },
+    "page.update.operation": { "layer": "page", "class": "call", "level": "info", "cids": "required", "fields": { "action": "string", "version": "string" }, "description": "The page started the application update to the version; its stage and apply calls carry the same cids." },
     "host.input.relay": { "layer": "host", "class": "input", "level": "info", "cids": "required", "fields": { "surface": "string", "name": "string", "type": "string" }, "description": "The host relayed a picture region event that carries correlation identifiers to the page; `name` is the region and `type` the type of the event." },
     "host.sidecar.request": { "layer": "host", "class": "io", "level": "info", "cids": "required", "fields": { "name": "string", "surface": "string", "bytes": "number" }, "description": "The host queued a page request that continues inputs for a sidecar; the request line carries the same identifiers, and `bytes` is the size of the body." },
     "host.sidecar.reply": { "layer": "host", "class": "io", "level": ["info", "warn"], "result": true, "fields": { "name": "string", "surface": "string", "bytes": "number", "ok": "boolean", "micros?": "number", "error?": "string" }, "description": "A message of a sidecar that names the correlation identifiers of a request or states an error, or the failure of a sidecar that ends the requests it did not answer." },
@@ -64,6 +69,11 @@
     "native.process.exit_timeout": { "layer": "native", "class": "lifecycle", "level": "warn", "fields": { "pid": "number", "seconds": "number" }, "description": "A process did not end within the time that the caller waited for it." }
   },
   "chains": {
-    "input": ["native.input.key_down", "host.input.relay", "page.call", "host.sidecar.request"]
+    "input": ["native.input.key_down", "host.input.relay", "page.call", "host.sidecar.request"],
+    "plugin": ["page.plugin.operation", "page.call", "host.binding.call"],
+    "project": ["page.project.operation", "page.call", "host.binding.call"],
+    "window": ["page.window.operation", "page.call", "host.binding.call"],
+    "settings": ["page.settings.change", "page.call", "host.binding.call"],
+    "update": ["page.update.operation", "page.call", "host.binding.call"]
   }
 }

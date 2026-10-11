@@ -150,13 +150,15 @@ export const host = (() => {
   const listen = createLifecycleListener((event, fn) => window.__TAURI__.event.listen(event, fn,
     { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
   // Calls of the main page. Counts them so that every call sent before the page reloads itself receives a reply (docs/spec/native-host.md#page-reload).
-  const mainCalls = settlingCalls((name, arg) => {
+  const mainCalls = settlingCalls((name, arg, options) => {
     const command = COMMAND[name];
     if (!command) return Promise.reject(new Error(`unknown host call: ${name}`));
-    return invoke(command, ARG[name](arg));
+    // The correlation identifiers of the operation travel beside the arguments of the command (docs/spec/logging.md#operation-chains).
+    return invoke(command, options.cids ? { ...ARG[name](arg), cids: options.cids } : ARG[name](arg));
   });
   return {
-    call: (name, arg) => mainCalls.call(name, arg),
+    // options.cids are the correlation identifiers of the operation that the call carries out (operations.js).
+    call: (name, arg, options) => (options?.cids ? mainCalls.callContinuing(options.cids, name, arg) : mainCalls.call(name, arg)),
     // Reloads this page after every sent call has received a reply. Calls after that are not sent.
     reload: () => mainCalls.settle().then(() => location.reload()),
     // A Tauri event carries its value in the `payload` field.

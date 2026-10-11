@@ -89,6 +89,51 @@ fn a_failed_binding_call_is_a_warning_with_its_error_text() {
     assert_eq!(fields["error"], "-32603: the request is refused");
 }
 
+// contract: binding.record.operation-identifiers-are-stored
+#[test]
+fn a_binding_call_that_carries_an_operation_stores_its_identifiers() {
+    let calls = calls_of(|| {
+        BindingCall::begin(
+            "echo",
+            &payload(json!({"value": 1, "cids": ["p1.4", "p1.5"]})),
+        )
+        .finish(&["value"], &Ok::<(), String>(()));
+        BindingCall::begin("fail", &payload(json!({"value": 1, "cids": ["p1.6"]})))
+            .finish(&["value"], &Err::<(), String>("refused".into()));
+        BindingCall::begin("echo", &payload(json!({"value": 1})))
+            .finish(&["value"], &Ok::<(), String>(()));
+        // The identifiers are not an argument of the command.
+        BindingCall::begin("echo", &payload(json!({"value": 1, "cids": ["p1.7"]})))
+            .finish(&["value"], &Ok::<(), String>(()));
+    });
+    assert_eq!(calls.len(), 4, "events {calls:?}");
+    assert_eq!(calls[0]["cids"], json!(["p1.4", "p1.5"]));
+    assert_eq!(calls[1]["cids"], json!(["p1.6"]));
+    assert!(calls[2].get("cids").is_none(), "event {}", calls[2]);
+    assert_eq!(calls[3]["fields"]["args"], "[1]");
+}
+
+// contract: binding.record.invalid-identifiers-are-refused
+#[test]
+fn a_binding_call_with_an_invalid_identifier_is_refused_and_not_run() {
+    let mut refusal = None;
+    let calls = calls_of(|| {
+        let call = BindingCall::begin(
+            "echo",
+            &payload(json!({"value": 1, "cids": ["p1.4", "a\"b"]})),
+        );
+        refusal = call.refusal().map(str::to_string);
+        call.refuse(refusal.clone().unwrap());
+    });
+    let refusal = refusal.expect("the call was not refused");
+    assert!(refusal.contains("\"a\\\"b\""), "{refusal}");
+    assert_eq!(calls.len(), 1, "events {calls:?}");
+    assert!(calls[0].get("cids").is_none(), "event {}", calls[0]);
+    assert_eq!(calls[0]["level"], "warn");
+    assert_eq!(calls[0]["fields"]["ok"], false);
+    assert_eq!(calls[0]["fields"]["error"], format!("-32603: {refusal}"));
+}
+
 // contract: binding.record.arguments-are-cut-before-copying
 #[test]
 fn the_arguments_of_a_binding_event_are_cut_at_the_bound() {

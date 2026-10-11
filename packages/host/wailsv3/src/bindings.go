@@ -438,7 +438,7 @@ func InvokeNative(s *Surfaces, viewID uint64, method string, args []json.RawMess
 func invokeNative(s *Surfaces, viewID uint64, call nativeCall) (result any, err error) {
 	started := time.Now()
 	returned := false
-	defer func() { recordBindingCall(snakeName(call.Method), call.Args, started, err, returned) }()
+	defer func() { recordBindingCall(snakeName(call.Method), call.Args, started, err, returned, nil) }()
 	result, err = runNative(s, viewID, call)
 	returned = true
 	return result, err

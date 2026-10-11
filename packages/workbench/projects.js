@@ -1,5 +1,6 @@
 // The project list is stored in the shared store; the active project and the window ownership are stored in the running window.
 import { issueId } from "./ids.js";
+import { beginOperation } from "./operations.js";
 import { beginSettings, selectProject, value, flushSettings } from "./settings.js";
 import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
@@ -73,7 +74,7 @@ export function browse() {
     changed();
   });
 }
-export const newWindow = () => windows.newWindow();
+export const newWindow = () => windows.newWindow(beginOperation("page.window.operation", { action: "new" }));
 export const pin = (id, pinned) => store.patch(id, { pinned });
 export function onSwitch(callbacks) { listener = callbacks; }
 export function onChange(fn) { changed = fn; }
@@ -293,7 +294,7 @@ async function activateInTurn(id) {
     // default: a project whose window was never closed has no stored window position (null).
     id, root: project.root, title: project.title, geometry: project.geometry ?? null,
     separate: value("projectOpening") === "windows", current: active() && !owned.has(id) ? activeProjectId : null,
-  });
+  }, beginOperation("page.project.operation", { action: "open", project: id }));
   await store.patch(id, { lastOpened: Date.now() });
   if (!result.local) { if (active()) await showProject(activeProjectId); return; }
   await showProject(id);
@@ -317,12 +318,18 @@ export async function open({ root, color, layout }) {
  * (docs/spec/plugins.md#tab-reports). Resolves false when a kept tab keeps the project.
  */
 export async function close(id) {
+  // The operation starts with the first host call that carries it out, so a removal that a kept tab refuses leaves no operation.
+  let cids = null;
+  const operation = () => {
+    if (cids === null) cids = beginOperation("page.project.operation", { action: "remove", project: id });
+    return cids;
+  };
   // The window that shows the project asks here; another window shows it, the host asks that window.
-  const asked = id === activeProjectId && !browsing ? await listener.settleTabs() : await windows.askRemoveProject(id);
+  const asked = id === activeProjectId && !browsing ? await listener.settleTabs() : await windows.askRemoveProject(id, operation());
   if (!asked) return false;
   // The cleanup below keeps the tabs of the stored layouts. If the plane of the active project has tabs that are not stored yet, they are stored first so that their surfaces remain too.
   await keep();
-  await windows.releaseProject(id);
+  await windows.releaseProject(id, operation());
   owned.delete(id);
   await store.remove(id);
   // Ending the removed project is done by the same readProjects as in other windows. If the change notification of the store read before this refresh, the reread of that notification opens the next project. That activation passes through the same transition order, so the activate below finishes after it.
@@ -405,9 +412,9 @@ export async function flush() {
 async function closeWindow() {
   // A modified tab that the person keeps keeps the window open (docs/spec/plugins.md#tab-reports).
   if (!(await listener.settleTabs())) {
-    await windows.closeKept();
+    await windows.closeKept(beginOperation("page.window.operation", { action: "close_kept" }));
     return;
   }
   await flush();
-  await windows.close();
+  await windows.close(beginOperation("page.window.operation", { action: "close" }));
 }

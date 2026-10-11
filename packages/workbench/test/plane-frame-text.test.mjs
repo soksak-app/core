@@ -67,7 +67,7 @@ test("a frame factor change prepares the row of the next draw and writes the fac
     const before = drawnFactor();
 
     // What index.html does on a settings change: it measures the plane size again and draws.
-    await settings.set({ textSize: 1.5 }, "common");
+    await settings.set({ textSize: 1.5 }, "common", "test");
     plane.setGap(settings.halfGap());
     plane.settle();
     assert.ok(held, "the factor change did not reach the layout receiver");
@@ -85,7 +85,7 @@ test("a frame factor change prepares the row of the next draw and writes the fac
 
     // Lowering the scale shrinks the row. The reply of the window does not set the row.
     held = null;
-    await settings.set({ textSize: 1 }, "common");
+    await settings.set({ textSize: 1 }, "common", "test");
     plane.setGap(settings.halfGap());
     plane.settle();
     assert.equal(held.titlebar, 40);

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -61,14 +62,14 @@ func TestABindingCallIsAnEventWhileTheTraceIsOff(t *testing.T) {
 		t.Fatal("the performance trace is on")
 	}
 	bindings := newBindings(t)
-	result, err := bindings.Call(context.Background(), "Echo", []json.RawMessage{json.RawMessage(`{"a":1}`)})
+	result, err := bindings.Call(context.Background(), "Echo", []json.RawMessage{json.RawMessage(`{"a":1}`)}, nil)
 	if err != nil || result == nil {
 		t.Fatalf("Echo returned %v, %v", result, err)
 	}
-	if _, err := bindings.Call(context.Background(), "ClipboardPersistPNG", []json.RawMessage{json.RawMessage(`"x"`)}); err != nil {
+	if _, err := bindings.Call(context.Background(), "ClipboardPersistPNG", []json.RawMessage{json.RawMessage(`"x"`)}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := bindings.Call(context.Background(), "Stop", nil); err != nil {
+	if _, err := bindings.Call(context.Background(), "Stop", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	calls := bindingCalls(t, log)
@@ -99,7 +100,7 @@ func TestABindingCallIsAnEventWhileTheTraceIsOff(t *testing.T) {
 func TestAFailedBindingCallIsAWarningWithItsErrorText(t *testing.T) {
 	log := useEventLog(t)
 	bindings := newBindings(t)
-	_, err := bindings.Call(context.Background(), "Fail", []json.RawMessage{json.RawMessage(`null`)})
+	_, err := bindings.Call(context.Background(), "Fail", []json.RawMessage{json.RawMessage(`null`)}, nil)
 	if err == nil {
 		t.Fatal("Fail succeeded")
 	}
@@ -117,8 +118,8 @@ func TestAFailedBindingCallIsAWarningWithItsErrorText(t *testing.T) {
 func TestARefusedBindingCallIsAWarningWithItsErrorText(t *testing.T) {
 	log := useEventLog(t)
 	bindings := newBindings(t)
-	_, unknown := bindings.Call(context.Background(), "Missing", nil)
-	_, counted := bindings.Call(context.Background(), "Fail", nil)
+	_, unknown := bindings.Call(context.Background(), "Missing", nil, nil)
+	_, counted := bindings.Call(context.Background(), "Fail", nil, nil)
 	if unknown == nil || counted == nil {
 		t.Fatalf("refusals %v and %v", unknown, counted)
 	}
@@ -143,7 +144,7 @@ func TestTheArgumentsOfABindingEventAreCutAtTheBound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := bindings.Call(context.Background(), "Pair", []json.RawMessage{big, big}); err != nil {
+	if _, err := bindings.Call(context.Background(), "Pair", []json.RawMessage{big, big}, nil); err != nil {
 		t.Fatal(err)
 	}
 	calls := bindingCalls(t, log)
@@ -167,7 +168,7 @@ func TestABindingCallThatDoesNotReturnIsAWarning(t *testing.T) {
 				t.Error("the panic of the method did not reach the caller")
 			}
 		}()
-		bindings.Call(context.Background(), "Explode", []json.RawMessage{json.RawMessage(`1`)})
+		bindings.Call(context.Background(), "Explode", []json.RawMessage{json.RawMessage(`1`)}, nil)
 	}()
 	calls := bindingCalls(t, log)
 	if len(calls) != 1 {
@@ -205,7 +206,7 @@ func TestEveryMethodOfTheHostIsCallableThroughTheEntrance(t *testing.T) {
 	}
 	// A method of the host that the entrance reaches answers an argument it cannot decode with an error, not with a missing
 	// method.
-	_, err = bindings.Call(context.Background(), "SetShape", []json.RawMessage{json.RawMessage(`true`)})
+	_, err = bindings.Call(context.Background(), "SetShape", []json.RawMessage{json.RawMessage(`true`)}, nil)
 	if err == nil || strings.HasPrefix(err.Error(), "unknown host call") {
 		t.Fatalf("SetShape returned %v, want an argument error", err)
 	}
@@ -219,5 +220,48 @@ func (unsupportedTarget) Odd(count int) error { return nil }
 func TestAMethodTheEntranceCannotCallFailsAtStart(t *testing.T) {
 	if _, err := host.NewBindings(unsupportedTarget{}); err == nil || !strings.Contains(err.Error(), "Odd") {
 		t.Fatalf("NewBindings returned %v, want an error that names the method Odd", err)
+	}
+}
+
+// contract: binding.record.operation-identifiers-are-stored
+func TestABindingCallThatCarriesAnOperationStoresItsIdentifiers(t *testing.T) {
+	log := useEventLog(t)
+	bindings := newBindings(t)
+	if _, err := bindings.Call(context.Background(), "Echo", []json.RawMessage{json.RawMessage(`1`)}, []string{"p1.4", "p1.5"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bindings.Call(context.Background(), "Fail", []json.RawMessage{json.RawMessage(`1`)}, []string{"p1.6"}); err == nil {
+		t.Fatal("Fail succeeded")
+	}
+	if _, err := bindings.Call(context.Background(), "Echo", []json.RawMessage{json.RawMessage(`1`)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	calls := bindingCalls(t, log)
+	if len(calls) != 3 {
+		t.Fatalf("%d events host.binding.call, want 3: %v", len(calls), calls)
+	}
+	for i, want := range []string{"[p1.4 p1.5]", "[p1.6]", "[]"} {
+		cids, _ := calls[i]["cids"].([]any)
+		if fmt.Sprint(cids) != want {
+			t.Fatalf("event %d has cids %v, want %s: %v", i, cids, want, calls[i])
+		}
+	}
+}
+
+// contract: binding.record.invalid-identifiers-are-refused
+func TestABindingCallWithAnInvalidIdentifierIsRefusedAndNotRun(t *testing.T) {
+	log := useEventLog(t)
+	bindings := newBindings(t)
+	_, err := bindings.Call(context.Background(), "Echo", []json.RawMessage{json.RawMessage(`1`)}, []string{"p1.4", "a\"b"})
+	if err == nil || !strings.Contains(err.Error(), `"a\"b"`) {
+		t.Fatalf("error %v, want one that names the identifier", err)
+	}
+	calls := bindingCalls(t, log)
+	if len(calls) != 1 {
+		t.Fatalf("%d events host.binding.call, want 1: %v", len(calls), calls)
+	}
+	fields := calls[0]["fields"].(map[string]any)
+	if _, has := calls[0]["cids"]; has || calls[0]["level"] != "warn" || fields["ok"] != false || fields["error"] != "-32603: "+err.Error() {
+		t.Fatalf("event %v, error %v", calls[0], err)
 	}
 }

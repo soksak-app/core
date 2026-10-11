@@ -109,3 +109,27 @@ test("the log command carries the page batch to the host", async () => {
     delete globalThis.location;
   }
 });
+
+test("a call of the main page that carries out an operation sends its identifiers beside the arguments of the command", async () => {
+  const calls = [];
+  globalThis.window = { __TAURI__: {
+    core: { invoke: async (command, args) => { calls.push([command, args]); return null; } },
+    event: { listen: async () => () => {} },
+    webview: { getCurrentWebview: () => ({ label: "main" }) },
+  } };
+  globalThis.location = { search: "" };
+  try {
+    const { host } = await import("../runtime/index.js?test=main-cids");
+    await host.call("windowNew", undefined, { cids: ["p1.1"] });
+    await host.call("pluginsRun", { action: "install", plugin: "term" }, { cids: ["p1.2"] });
+    await host.call("windowReady");
+    assert.deepEqual(calls, [
+      ["window_new", { cids: ["p1.1"] }],
+      ["plugins_run", { request: { action: "install", plugin: "term" }, cids: ["p1.2"] }],
+      ["window_ready", {}],
+    ]);
+  } finally {
+    delete globalThis.window;
+    delete globalThis.location;
+  }
+});

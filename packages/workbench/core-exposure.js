@@ -220,14 +220,14 @@ function focusElement(name, index = 0) {
 }
 
 /** Changes one setting to the input value. A control gives a string, so it is converted to the type of the current value. */
-function changeSetting(key, input, scope) {
+function changeSetting(key, input, scope, actor) {
   if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
   // default: scope is an optional parameter, and when it is omitted the global scope is used (core.settings.change in exposure.json).
   const now = scopedValue(key, scope ?? "common");
   const next = typeof now === "boolean" ? input === true || input === "true"
     : typeof now === "number" ? Number(input) : String(input);
   if (typeof now === "number" && !Number.isFinite(next)) throw new Error(`${key} requires a number`);
-  return set({ [key]: next }, scope);
+  return set({ [key]: next }, scope, actor);
 }
 
 function need(project, id) {
@@ -322,18 +322,18 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
 
   registry.command("core.settings.set", async ({ patch, scope }) => {
     try {
-      await set(patch, scope);
+      await set(patch, scope, "core.settings.set");
     } catch (error) {
       throw new ExposureError(EXPOSURE_ERRORS.invalidParams, error.message);
     }
   });
-  registry.command("core.settings.reset", async ({ key }) => { await reset(key); });
+  registry.command("core.settings.reset", async ({ key }) => { await reset(key, "core.settings.reset"); });
   registry.command("core.settings.change", async ({ key, value: input, scope }) => {
-    await changeSetting(key, input, scope);
+    await changeSetting(key, input, scope, "core.settings.change");
   });
   registry.command("core.settings.theme", async ({ name, mode, scope }) => {
     // default: when mode is omitted, the current mode is used, and when scope is omitted, the global scope is used (core.settings.theme in exposure.json).
-    await applyTheme(name, mode ?? scopedValue("mode", scope ?? "common"), scope);
+    await applyTheme(name, mode ?? scopedValue("mode", scope ?? "common"), scope, "core.settings.theme");
   });
   // A refusal of a sidebar selection or a set change is an invalid request argument (docs/spec/settings.md).
   const invalid = (run) => async (params) => {
@@ -347,25 +347,25 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
     if (choice !== "off" && choice !== "inherit" && !scopedValue("sets", scope).some((s) => s.id === choice)) {
       throw new Error(`unknown set ${choice}`);
     }
-    await link(place, plugin, choice, scope);
+    await link(place, plugin, choice, scope, "core.settings.link");
   }));
   registry.command("core.settings.sets.create", async ({ scope = "common" }) => {
     const sets = createSet(scopedValue("sets", scope));
     const { id } = sets.at(-1);
-    await set({ sets }, scope);
+    await set({ sets }, scope, "core.settings.sets.create");
     if (settingsModalState().open) editSet(id);
     return { id };
   });
   registry.command("core.settings.sets.update", invalid(async ({ id, title, layout, scope = "common" }) => {
     const change = Object.fromEntries(Object.entries({ title, layout }).filter(([, v]) => v !== undefined));
-    await set({ sets: updateSet(scopedValue("sets", scope), id, change) }, scope);
+    await set({ sets: updateSet(scopedValue("sets", scope), id, change) }, scope, "core.settings.sets.update");
   }));
   registry.command("core.settings.sets.row", invalid(async ({ id, action, index, section: sectionId, scope = "common" }) => {
     const registered = pluginUnits().flatMap((u) => u.sections);
-    await set({ sets: changeRow(scopedValue("sets", scope), id, { action, index, section: sectionId }, registered) }, scope);
+    await set({ sets: changeRow(scopedValue("sets", scope), id, { action, index, section: sectionId }, registered) }, scope, "core.settings.sets.row");
   }));
   registry.command("core.settings.sets.delete", async ({ id, scope = "common" }) => {
-    await set(deleteSet(scopedValue("sets", scope), scopedValue("links", scope), id), scope);
+    await set(deleteSet(scopedValue("sets", scope), scopedValue("links", scope), id), scope, "core.settings.sets.delete");
   });
   registry.command("core.settings.open", () => { closeDebug(); openSettings(); });
   registry.command("core.settings.close", () => { closeSettings(); });
@@ -470,9 +470,9 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.card.sidebar.size", ({ card, side, size }) => { resizeSidebar(card, side, size); });
   registry.command("core.sidebar.section.select", ({ sidebar, section }) => { selectSection(sidebar, section); });
   registry.command("core.sidebar.section.fold", ({ sidebar, section }) => { foldSection(sidebar, section); });
-  registry.command("core.text.larger", async () => { await changeTextSize(1); });
-  registry.command("core.text.smaller", async () => { await changeTextSize(-1); });
-  registry.command("core.text.reset", async () => { await changeTextSize(0); });
+  registry.command("core.text.larger", async () => { await changeTextSize(1, "core.text.larger"); });
+  registry.command("core.text.smaller", async () => { await changeTextSize(-1, "core.text.smaller"); });
+  registry.command("core.text.reset", async () => { await changeTextSize(0, "core.text.reset"); });
   registry.command("core.card.fullscreen", ({ card }) => { toggleCardFullscreen(card); });
   registry.command("core.card.menu", ({ card, menu }) => { openCardMenu(card, menu); });
   registry.command("core.card.tab-list", ({ card }) => { openCardTabs(card); });

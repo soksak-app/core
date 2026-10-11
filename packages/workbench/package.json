@@ -65,6 +65,7 @@
     "settings.js",
     "sidebar-sets.js",
     "plugin-apply.js",
+    "operations.js",
     "plugin-operations.js",
     "plugin-search.js",
     "settings-scope.js",

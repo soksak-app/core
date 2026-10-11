@@ -23,8 +23,8 @@ export function observeHostCalls(next) {
   observer = next;
 }
 
-const observed = (name, args, started, ok, error, code) => {
-  if (observer) observer({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, error, code });
+const observed = (name, args, started, ok, error, code, cids) => {
+  if (observer) observer({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, error, code, cids });
 };
 
 /** The code of an error that a host call states when the failure has none of its own: the internal code of the entrance (docs/spec/logging.md#result-form). */
@@ -70,15 +70,16 @@ function callCids(name, args) {
  * refused call. The main page and the documents of the surfaces make the event here so that both record a call alike. `cids`
  * are the correlation identifiers that the call continues, or undefined.
  */
-export function callEvent({ name, args, micros, ok, error, code }) {
+export function callEvent({ name, args, micros, ok, error, code, cids }) {
   const fields = { name, ...callArguments(args), micros, ok };
   // default: a failure without a code of its own has the internal code of the entrance (docs/spec/logging.md#result-form).
   if (!ok) fields.error = `${code ?? INTERNAL_CODE}: ${error}`;
-  return { level: ok ? "debug" : "warn", event: "page.call", fields, cids: callCids(name, args) };
+  // default: a call that carries out no operation has the identifiers that its arguments carry, if any (a sidecar send).
+  return { level: ok ? "debug" : "warn", event: "page.call", fields, cids: cids ?? callCids(name, args) };
 }
 
 /**
- * Wraps call and counts the calls in progress. settle() finishes when every call sent until then has received a reply, and calls after that are
+ * Wraps call, a transport `(name, arg, {cids})`, and counts the calls in progress. settle() finishes when every call sent until then has received a reply, and calls after that are
  * not sent. A call that is not sent ends together with the document, like a call stopped by a reload, so it returns a promise that never settles.
  */
 export function settlingCalls(call) {
@@ -89,25 +90,30 @@ export function settlingCalls(call) {
     pending -= 1;
     if (pending === 0 && resolve) resolve();
   };
-  return {
-    call(name, ...args) {
-      if (settled) return new Promise(() => {});
-      const started = performance.now();
-      for (const arg of args) {
-        const found = nonFinite(arg, "");
-        if (found) {
-          const where = found.path ? found.path : "the argument";
-          const error = new TypeError(`host call ${name}: ${where} is ${found.value}, which JSON sends as null`);
-          observed(name, args, started, false, error.message);
-          return Promise.reject(error);
-        }
+  /** Sends one call; `cids` are the identifiers of the operation that the call carries out, or undefined. */
+  function run(cids, name, args) {
+    if (settled) return new Promise(() => {});
+    const started = performance.now();
+    for (const arg of args) {
+      const found = nonFinite(arg, "");
+      if (found) {
+        const where = found.path ? found.path : "the argument";
+        const error = new TypeError(`host call ${name}: ${where} is ${found.value}, which JSON sends as null`);
+        observed(name, args, started, false, error.message, undefined, cids);
+        return Promise.reject(error);
       }
-      pending += 1;
-      const result = Promise.resolve().then(() => call(name, ...args));
-      result.then(() => { observed(name, args, started, true, undefined, undefined); answered(); },
-        (error) => { const failure = failureOf(error); observed(name, args, started, false, failure.error, failure.code); answered(); });
-      return result;
-    },
+    }
+    pending += 1;
+    // The transport takes the one argument of the call and the options of the call.
+    const result = Promise.resolve().then(() => call(name, args[0], { cids }));
+    result.then(() => { observed(name, args, started, true, undefined, undefined, cids); answered(); },
+      (error) => { const failure = failureOf(error); observed(name, args, started, false, failure.error, failure.code, cids); answered(); });
+    return result;
+  }
+  return {
+    call: (name, ...args) => run(undefined, name, args),
+    /** Sends a call that carries out the operation whose identifiers are `cids` (operations.js). */
+    callContinuing: (cids, name, ...args) => run(cids, name, args),
     settle() {
       if (!settled) {
         settled = new Promise((done) => { resolve = done; });

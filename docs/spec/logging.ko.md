@@ -117,7 +117,7 @@ event가 아닌 raw 파일이 둘 있다. `logs/<role>-<boot>.stderr`는 프로�
 
 event를 내는 각 저장소는 `events.json`에 event를 선언한다(이 저장소는 [events.json](events.json)이며 계층 `native`, `host`, `page`를 소유한다. `page.record.<level>`처럼 자리 표시자를 가진 이름은 계열을 선언한다. `level`은 level 하나 또는 level 목록이고, 이름이 `?`로 끝나는 field는 선택이며, `string|null` 같은 타입은 각 부분을 받아들이고, 계층 `sidecar`는 host가 저장하는 sidecar 표준 오류의 줄인 `sidecar.record.<level>`만 담는다. `make events-check`는 소스의 emit 지점을 읽어 선언되지 않은 채 emit된 이름, emit 지점이 없는 선언된 event, 선언이 허용하지 않는 literal 지점의 level이나 field를 실패로 보고한다. 지점은 이름을 literal로 주고(page의 template은 계열이다), 이름을 만드는 지점 위의 주석 `events: <names>`는 그것이 만드는 선언된 이름을 적으며, `events: forwarded`는 그 지점이 호출자의 이름을 넘긴다고 밝힌다. `node scripts/check-events.mjs --logs <config-dir>…`는 창 검사가 남긴 모든 층의 event 파일을 감사한다. [검사](#검사) 참고): event마다 이름, 층, class, level, 필수 field와 그 타입, 가릴 인자, 인자의 크기 상한, 설명. 저장소는 다른 모든 검사에서 자기 소스를 검사하듯 자기 소스를 자기 catalog로 검사한다. 이 저장소는 catalog의 schema와 `native`·`host`·`sok` 층, page의 event를 소유한다. plugin이나 sidecar는 manifest(`events`, `executable`처럼 패키지 안의 경로)에 자기 catalog 파일을 적고, 릴리스는 그 파일을 담으며, viewer가 설치된 manifest의 catalog를 읽는다. 이 저장소는 그것을 이름으로 부르지 않는다.
 
-입력 사슬의 한 단계인 event는 `"cids": "required"`로 선언하고, 감사는 비어 있지 않은 문자열 `cids`가 없는 그 event의 줄을 거부한다(입력 사슬의 guard). catalog는 입력 종류마다 남겨야 하는 사슬도(`chains`) 선언한다. 첫 층에서 마지막 층까지 event의 순서 있는 목록이다. 이 catalog는 `input`을 선언한다: `native.input.key_down`, `host.input.relay`, `page.call`(식별자를 나르는 호출 `sidecarSend`), `host.sidecar.request`. 요청이 일으키는 sidecar의 event(예: `sidecar.vt.pty_write`)는 sidecar 저장소의 catalog가 선언하며 그 저장소가 사슬을 거기서 확장한다. 로그 감사는 입력의 선언된 사슬이 모두 완결되어 있기를 요구한다. 사슬의 첫 event에 나타나는 각 식별자는 모든 계층의 파일을 통틀어 그 사슬의 뒤 event마다 나타나야 한다.
+입력 사슬의 한 단계인 event는 `"cids": "required"`로 선언하고, 감사는 비어 있지 않은 문자열 `cids`가 없는 그 event의 줄을 거부한다(입력 사슬의 guard). catalog는 입력 종류마다 남겨야 하는 사슬도(`chains`) 선언한다. 첫 층에서 마지막 층까지 event의 순서 있는 목록이다. 이 catalog는 `input`을 선언한다: `native.input.key_down`, `host.input.relay`, `page.call`(식별자를 나르는 호출 `sidecarSend`), `host.sidecar.request`. 요청이 일으키는 sidecar의 event(예: `sidecar.vt.pty_write`)는 sidecar 저장소의 catalog가 선언하며 그 저장소가 사슬을 거기서 확장한다. catalog는 [page 작업](#작업-사슬)의 사슬(`plugin`, `project`, `window`, `settings`, `update`)도 선언한다. 로그 감사는 선언된 사슬이 모두 완결되어 있기를 요구한다. 사슬의 첫 event에 나타나는 각 식별자는 모든 계층의 파일을 통틀어 그 사슬의 뒤 event마다 나타나야 한다.
 
 ### 입구
 
@@ -145,6 +145,22 @@ event를 내는 각 저장소는 `events.json`에 event를 선언한다(이 저�
 - 사람이 보는 오류의 표시. 이것이 `error` event를 낸다.
 
 task의 종료처럼 어떤 입구도 덮지 못하는 원천은 소스 lint가 선언이나 사유 주석이 없는 event를 나열한다. lint는 증명이 아니다. 범위는 실행 중에 판단한다: window check가 선언된 명령과 native 입력으로 선언된 원천을 하나씩 구동하고 그 선언된 event를 요구한다.
+
+### 작업 사슬
+
+page가 애플리케이션을 바꾸는 작업은 상관 식별자 `p<page의 time origin>.<n>`으로 묶인 event 사슬이다. page는 작업이 시작될 때 식별자를 부여하고(`beginOperation`, `packages/workbench/operations.js`), 사슬의 첫 event를 그 식별자와 함께 저장하며, 작업을 수행하는 host 호출에 `host.call(name, arg, {cids})`로 식별자를 함께 넘긴다. Wails page는 목록을 바인딩 메서드 `Bindings.Call`의 네 번째 인자(`method`, `args`, `cids`)로 보내고, Tauri page는 command의 인자 옆 key `cids`로 보낸다. page는 호출을 식별자와 함께 `page.call`로, host는 같은 식별자와 함께 `host.binding.call`로 기록하며, 호출이 성공했는지는 묻지 않는다. 줄이 담을 수 있는 식별자의 목록이 아닌 목록(빈 식별자, 따옴표, 역슬래시, 제어 문자가 든 식별자)은 그 식별자를 밝힌 오류로 거절한다. 메서드는 실행되지 않고, 실패한 `host.binding.call`은 식별자를 담지 않는다.
+
+| 사슬 | 첫 event(필드) | 작업을 수행하는 host 호출 |
+| --- | --- | --- |
+| `plugin` | `page.plugin.operation`(`action`은 `install`, `update`, `remove`, `enable`, `disable`, `plugin`) | `pluginsRun` |
+| `project` | `page.project.operation`(`action`은 `open` 또는 `remove`, `project`) | `projectOpen`, 제거는 `projectRemoveAsk`와 `projectRelease` |
+| `window` | `page.window.operation`(`action`은 `new`, `close`, `close_kept`) | `windowNew`, `windowClose`, `windowCloseKept` |
+| `settings` | `page.settings.change`(`scope`, `actor`, `keys`) | kind가 `settings`인 `workspace` |
+| `update` | `page.update.operation`(`action`은 `update`, `version`) | `appUpdateStage`와 `appUpdateApply` |
+
+사슬은 첫 event, `page.call`, `host.binding.call`이며, 감사는 첫 event의 식별자마다 나머지 둘에 나타나면 사슬이 완전하다고 본다. 첫 event는 작업이 시작될 때, 그리고 host 호출이 따를 때만 저장한다. 남은 탭이 거절한 제거와 잘못된 값으로 거절된 설정 변경은 작업을 시작하지 않는다. 설정 변경의 `actor`는 바꾼 주체이며 선언된 command(`core.settings.set`, `core.settings.theme`, `core.text.larger`)다. 변경의 모든 경로가 actor를 넘기고, `set`은 actor 없는 변경을 거절한다. `keys`는 바뀐 key를 쉼표로 이은 것이며 값은 담지 않는다(값의 기록은 설정 파일이다). 프로젝트 창을 닫는 것은 `window` 사슬이고, 프로젝트가 registry에서 빠지는 것은 `project` 사슬이다.
+
+page 없이 host가 시작하는 작업(Dock 메뉴가 여는 창, 프로젝트 제거에 대한 창의 응답, 애플리케이션 종료)은 사슬이 아니다. host가 자기 event(`host.window.event`, `host.project.removal_allowed`, `host.app.event`)를 저장한다. `sok`으로 설치한 plugin은 그 도구의 파일에 `sok.command`를 남긴다.
 
 ### 결과 형식
 

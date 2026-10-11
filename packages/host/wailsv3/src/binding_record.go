@@ -65,12 +65,20 @@ func NewBindings(target any) (*Bindings, error) {
 }
 
 // Call runs the method `method` of the target with args and returns its value, and stores the event `host.binding.call`
-// for the call. A call that names no method, or passes another number of arguments than the method takes, is an error. A
-// method that panics is stored as a call that ended without a result, and the panic goes on to the caller.
-func (b *Bindings) Call(ctx context.Context, method string, args []json.RawMessage) (result any, err error) {
+// for the call with the correlation identifiers cids of the operation that the call carries out
+// (docs/spec/logging.md#operation-chains). A call that names no method, or passes another number of arguments than the method
+// takes, or carries an identifier that a line cannot hold, is an error. A method that panics is stored as a call that ended
+// without a result, and the panic goes on to the caller.
+func (b *Bindings) Call(ctx context.Context, method string, args []json.RawMessage, cids []string) (result any, err error) {
 	started := time.Now()
 	returned := false
-	defer func() { recordBindingCall(snakeName(method), args, started, err, returned) }()
+	defer func() { recordBindingCall(snakeName(method), args, started, err, returned, cids) }()
+	if err := checkCids(cids); err != nil {
+		// The identifiers are refused, so the event of the refusal carries none.
+		cids = nil
+		returned = true
+		return nil, fmt.Errorf("cids of the call %s: %w", method, err)
+	}
 	result, err = b.run(ctx, method, args)
 	returned = true
 	return result, err
@@ -163,11 +171,11 @@ func resultError(err error) string {
 // recordBindingCall stores the event `host.binding.call` of one call: the name, the arguments cut before they are
 // copied, the result and the microseconds since started. A call that failed or ended without a result is at the level
 // `warn`, and its error text is the text that the caller receives, cut the same way.
-func recordBindingCall(name string, args []json.RawMessage, started time.Time, err error, returned bool) {
+func recordBindingCall(name string, args []json.RawMessage, started time.Time, err error, returned bool, cids []string) {
 	micros := time.Since(started).Microseconds()
 	text, truncated := boundedArguments(args)
 	if returned && err == nil {
-		EmitHost(LevelDebug, "host.binding.call", map[string]any{
+		emitBindingCall(LevelDebug, cids, map[string]any{
 			"name": name, "args": text, "micros": micros, "ok": true, "truncated": truncated,
 		})
 		return
@@ -177,7 +185,17 @@ func recordBindingCall(name string, args []json.RawMessage, started time.Time, e
 		failure = err
 	}
 	message, cut := cutText(resultError(failure), CallTextBytes)
-	EmitHost(LevelWarn, "host.binding.call", map[string]any{
+	emitBindingCall(LevelWarn, cids, map[string]any{
 		"name": name, "args": text, "micros": micros, "ok": false, "truncated": truncated || cut, "error": message,
 	})
+}
+
+// emitBindingCall stores the event `host.binding.call` with the identifiers of the operation that the call carries out, when it
+// has any.
+func emitBindingCall(level Level, cids []string, fields map[string]any) {
+	if len(cids) == 0 {
+		EmitHost(level, "host.binding.call", fields)
+		return
+	}
+	EmitHostCids(level, "host.binding.call", cids, fields)
 }

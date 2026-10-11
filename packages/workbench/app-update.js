@@ -1,4 +1,5 @@
 // The application update state and operation of the window (docs/spec/installation.md#application-update).
+import { beginOperation } from "./operations.js";
 import { compareVersions, satisfies } from "./version-range.js";
 
 /**
@@ -63,11 +64,12 @@ export function createAppUpdate({ host, plugins = () => null, changed }) {
     const { version } = state.available;
     operation = { state: "staging", version, error: null };
     changed();
+    const cids = beginOperation("page.update.operation", { action: "update", version });
     try {
-      const { bundle } = await host.call("appUpdateStage", { version });
+      const { bundle } = await host.call("appUpdateStage", { version }, { cids });
       operation = { state: "applying", version, error: null };
       changed();
-      await host.call("appUpdateApply", { bundle });
+      await host.call("appUpdateApply", { bundle }, { cids });
     } catch (error) {
       operation = { state: "failed", version, error: error.message };
       changed();

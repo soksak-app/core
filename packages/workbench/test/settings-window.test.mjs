@@ -47,11 +47,11 @@ test("the layout values are settings with the former constants as defaults", () 
 });
 
 test("a layout value outside its range or order is rejected before anything changes", () => {
-  assert.throws(() => set({ sidebarMinWidth: 8 }, "common"), /sidebarMinWidth/);
-  assert.throws(() => set({ railWidth: 190 }, "common"), /Unknown setting: railWidth/);
-  assert.throws(() => set({ sidebarMinWidth: 200 }, "common"), /sidebarMinWidth .*sidebarWidth .*sidebarMaxWidth/);
-  assert.throws(() => set({ sidebarWidth: 500 }, "common"), /sidebarMinWidth .*sidebarWidth .*sidebarMaxWidth/);
-  assert.throws(() => set({ sidebarWidth: 1.5 }, "common"), /sidebarWidth/);
+  assert.throws(() => set({ sidebarMinWidth: 8 }, "common", "test"), /sidebarMinWidth/);
+  assert.throws(() => set({ railWidth: 190 }, "common", "test"), /Unknown setting: railWidth/);
+  assert.throws(() => set({ sidebarMinWidth: 200 }, "common", "test"), /sidebarMinWidth .*sidebarWidth .*sidebarMaxWidth/);
+  assert.throws(() => set({ sidebarWidth: 500 }, "common", "test"), /sidebarMinWidth .*sidebarWidth .*sidebarMaxWidth/);
+  assert.throws(() => set({ sidebarWidth: 1.5 }, "common", "test"), /sidebarWidth/);
 });
 
 test("the menu language follows the setting, the supported system tag, or the default", async () => {
@@ -76,12 +76,12 @@ test("the menu language follows the setting, the supported system tag, or the de
     // auto looks up the primary tag of the system language in the table. Regardless of the system language of the test context,
     // a tag in the table is kept as it is, and a tag not in the table falls back to the default language.
     assert.ok(["ko", "en"].includes(menuLanguage()), `auto resolves to a declared language: ${menuLanguage()}`);
-    await change({ language: "ko" }, "common");
+    await change({ language: "ko" }, "common", "test");
     assert.equal(menuLanguage(), "ko");
-    await change({ language: "en" }, "common");
+    await change({ language: "en" }, "common", "test");
     assert.equal(menuLanguage(), "en");
-    assert.throws(() => change({ language: "ja" }, "common"), /Invalid setting language/);
-    await change({ language: "auto" }, "common");
+    assert.throws(() => change({ language: "ja" }, "common", "test"), /Invalid setting language/);
+    await change({ language: "auto" }, "common", "test");
     assert.equal(memory.common.language, "auto");
   } finally {
     globalThis.document = realDocument;
@@ -153,14 +153,14 @@ test("a stored set or link that breaks the sidebars rules is rejected before any
     { id: "gamma", sections: [{ id: "gamma.one", name: "감마", module: "ui/one.js" }] }]);
   setSidebarDefaults({ sets: [{ id: "set-1", title: "묶음", sections: ["alpha.one"], layout: "list" }], links: [] });
   const stored = (change) => { const value = structuredClone(defaults.sets); change(value); return value; };
-  assert.throws(() => set({ sets: stored((v) => { v[0].sections = ["alpha.gone"]; }) }, "common"),
+  assert.throws(() => set({ sets: stored((v) => { v[0].sections = ["alpha.gone"]; }) }, "common", "test"),
     /settings: set set-1 names unknown section alpha.gone/);
-  assert.throws(() => set({ sets: stored((v) => { v[0].layout = "grid"; }) }, "common"), /layout must be list or tabs/);
-  assert.throws(() => set({ sets: stored((v) => { v[0].title = ""; }) }, "common"), /title must be 1 to 40/);
-  assert.throws(() => set({ links: [{ place: "left", plugin: null, set: "set-9" }] }, "common"), /known set/);
+  assert.throws(() => set({ sets: stored((v) => { v[0].layout = "grid"; }) }, "common", "test"), /layout must be list or tabs/);
+  assert.throws(() => set({ sets: stored((v) => { v[0].title = ""; }) }, "common", "test"), /title must be 1 to 40/);
+  assert.throws(() => set({ links: [{ place: "left", plugin: null, set: "set-9" }] }, "common", "test"), /known set/);
   // Rename (V5-116-1): the old rail place is rejected as an unknown place.
-  assert.throws(() => set({ links: [{ place: "rail", plugin: "alpha", set: "set-1" }] }, "common"), /requires a place/);
-  assert.throws(() => set({ links: [{ place: "card-left", plugin: "gamma", set: "set-1" }] }, "common"), /plugin gamma without a surface/);
+  assert.throws(() => set({ links: [{ place: "rail", plugin: "alpha", set: "set-1" }] }, "common", "test"), /requires a place/);
+  assert.throws(() => set({ links: [{ place: "card-left", plugin: "gamma", set: "set-1" }] }, "common", "test"), /plugin gamma without a surface/);
 });
 
 test("window and card choices are independent without inherited focus selection", () => {
@@ -180,5 +180,5 @@ test("window and card choices are independent without inherited focus selection"
 
 test("the obsolete sidebar positioning setting is absent and rejected",()=>{
   assert.equal(Object.hasOwn(defaults,"cardSidebar"),false);
-  assert.throws(()=>set({cardSidebar:"inset"},"common"),/Unknown setting: cardSidebar/);
+  assert.throws(()=>set({cardSidebar:"inset"}, "common", "test"),/Unknown setting: cardSidebar/);
 });

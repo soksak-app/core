@@ -21,11 +21,12 @@ const SERVICE = "github.com/soksak-app/core/packages/host/wailsv3/src.Bindings";
 /* The runtime module. An import is evaluated only once. */
 const runtime = () => import("/wails/runtime.js");
 
-/** A call of a bound method. */
-const call = (method, ...args) =>
+/** A call of a bound method with its arguments and the correlation identifiers of the operation it carries out (docs/spec/logging.md#operation-chains). */
+const call = (method, args, cids) =>
   window.__soksakNative?.call
     ? Promise.resolve(window.__soksakNative.call(method, args))
-    : runtime().then((r) => r.Call.ByName(`${SERVICE}.Call`, method, args));
+    // default: a call that carries out no operation has an empty list of identifiers.
+    : runtime().then((r) => r.Call.ByName(`${SERVICE}.Call`, method, args, cids ?? []));
 
 /** Event reception. The payload is carried in the `data` field. */
 const listen = createLifecycleListener((event, fn) =>
@@ -104,19 +105,20 @@ const METHOD = {
 };
 
 /* Calls of the main page. Counts them so that every call sent before the page reloads itself receives a reply (docs/spec/native-host.md#page-reload). */
-const mainCalls = settlingCalls((name, arg) => {
+const mainCalls = settlingCalls((name, arg, options) => {
   const method = METHOD[name];
   if (!method) return Promise.reject(new Error(`unknown host call: ${name}`));
   // A call without arguments sends no arguments. Sending one undefined makes the binding
   // reject the call because the argument count does not match.
-  if (name === "sidecarSend") return call(method, arg.sidecar, arg.surface, arg.body, arg.cids);
-  if (name === "imageCaret") return call(method, { surface: arg.surface, name: arg.name }, arg.x, arg.y, arg.width, arg.height);
-  if (name === "imageText") return call(method, { surface: arg.surface, name: arg.name }, arg.text);
-  return arg === undefined ? call(method) : call(method, arg);
+  if (name === "sidecarSend") return call(method, [arg.sidecar, arg.surface, arg.body, arg.cids], options.cids);
+  if (name === "imageCaret") return call(method, [{ surface: arg.surface, name: arg.name }, arg.x, arg.y, arg.width, arg.height], options.cids);
+  if (name === "imageText") return call(method, [{ surface: arg.surface, name: arg.name }, arg.text], options.cids);
+  return call(method, arg === undefined ? [] : [arg], options.cids);
 });
 
 export const host = {
-  call: (name, arg) => mainCalls.call(name, arg),
+  // options.cids are the correlation identifiers of the operation that the call carries out (operations.js).
+  call: (name, arg, options) => (options?.cids ? mainCalls.callContinuing(options.cids, name, arg) : mainCalls.call(name, arg)),
   // Reloads this page after every sent call has received a reply. Calls after that are not sent.
   reload: () => mainCalls.settle().then(() => location.reload()),
   on: listen,

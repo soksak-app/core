@@ -31,6 +31,7 @@ import { effectiveSettings } from "./settings-scope.js";
 import { chooseLink, resolveSidebar } from "./sidebar-sets.js";
 import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
 import { setTraceEnabled } from "./performance.js";
+import { beginOperation } from "./operations.js";
 
 /* The selectable fonts. A theme designates one of them as its default, and the settings change it.
    A name that is not installed falls through to the next name of the list. */
@@ -433,7 +434,7 @@ export const scopedValue = (key, scope) => scope === "common"
   ? (common[key] ?? defaults[key]) : settings[key];
 export const overridden = (key) => Object.hasOwn(overrides, key);
 export const flushSettings = () => writing;
-export const reset = (key) => set({ [key]: undefined }, "project");
+export const reset = (key, actor) => set({ [key]: undefined }, "project", actor);
 
 /** Returns the theme by name. Throws when the name is not in the list. */
 function themeOf(name) {
@@ -483,7 +484,7 @@ const pageTheme = () => ({ scheme: settings.mode, tokens: themeTokens() });
  * Sets the values on the root. The style sheet is not replaced, so the values the user specified with a color input
  * are kept.
  */
-export function applyTheme(name, next, scope) {
+export function applyTheme(name, next, scope, actor) {
   if (!MODES.includes(next)) throw new Error(`unknown mode: ${next}`);
   const theme = themeOf(name);
   // Choosing a theme also sets the four shape values.
@@ -491,7 +492,7 @@ export function applyTheme(name, next, scope) {
     theme: theme.name, mode: next,
     gap: parseFloat(theme.shape.gap), radius: parseFloat(theme.shape.r),
     font: theme.shape.font, size: parseFloat(theme.shape.size),
-  }, scope);
+  }, scope, actor);
 }
 
 /** Returns one setting value. */
@@ -500,9 +501,12 @@ export const value = (key) => settings[key];
 /**
  * Changes part of the settings, applies the values and then notifies the change.
  *
- * This function is the only path of change. With a function per value, some function would omit the application.
+ * This function is the only path of change. With a function per value, some function would omit the application. `actor` names
+ * what changes the settings: the command, or the surface of a gesture. The change is the operation `page.settings.change`
+ * (docs/spec/logging.md#operation-chains), and its identifiers go with the write to the host.
  */
-export function set(patch, scope = projectId ? "project" : "common") {
+export function set(patch, scope = projectId ? "project" : "common", actor) {
+  if (typeof actor !== "string" || actor === "") throw new Error("set requires the actor that changes the settings");
   const id = scope === "project" ? projectId : null;
   if (scope === "project" && !id) throw new Error("No project is selected");
   if (id && Object.hasOwn(patch, "projectOpening")) throw new Error("Project opening mode is common-only");
@@ -518,6 +522,7 @@ export function set(patch, scope = projectId ? "project" : "common") {
     else patched[key] = val;
   }
   checkValues(id ? effectiveSettings(defaults, applied(common), applied(patched)) : effectiveSettings(defaults, applied(patched), applied(overrides)));
+  const cids = beginOperation("page.settings.change", { scope: id ? "project" : "common", actor, keys: Object.keys(patch).join(",") });
   for (const [key, val] of Object.entries(patch)) {
     if (val === undefined) delete target[key];
     else target[key] = val;
@@ -527,7 +532,7 @@ export function set(patch, scope = projectId ? "project" : "common") {
   apply();
   const propagation = Object.hasOwn(patch, "diagnostics.performance")
     ? setTraceEnabled(settings["diagnostics.performance"]) : Promise.resolve();
-  const saved = Promise.all([writing, propagation]).then(() => store.settings(id, patch));
+  const saved = Promise.all([writing, propagation]).then(() => store.settings(id, patch, cids));
   writing = saved.finally(async () => {
     changes--;
     if (changes) return;
@@ -599,8 +604,8 @@ export const sets = () => settings.sets;
 /**
  * Changes one sidebar choice. choice is a set id, off or inherit (the sidebar choice in docs/spec/settings.md).
  */
-export function link(place, plugin, choice, scope) {
-  return set({ links: chooseLink(scopedValue("links", scope), place, plugin, choice) }, scope);
+export function link(place, plugin, choice, scope, actor) {
+  return set({ links: chooseLink(scopedValue("links", scope), place, plugin, choice) }, scope, actor);
 }
 
 /** Returns the set to show at the position. For left and right, the choice of a plugin takes precedence over the general choice. Returns null when there is none. */

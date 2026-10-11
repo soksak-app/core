@@ -15,21 +15,24 @@ let requestRemoval = null;
 /* Whether another window shows the project; the host answers a removal request for it with allowed. */
 let elsewhere = false;
 let hostAllows = true;
+/* The identifiers that each host call received, and the first events of the operations. */
+const hostCids = [];
+const started = [];
 mock.module("@soksak/runtime", {
   namedExports: {
     windows: {
       folder: async (root) => ({ root, identity: PROJECT.identity }),
-      openProject: async () => ({ local: true }),
-      releaseProject: async () => {},
+      openProject: async (request, cids) => { hostCids.push(["openProject", cids]); return { local: true }; },
+      newWindow: async (cids) => { hostCids.push(["newWindow", cids]); },
       state: async () => { events.push("geometry"); return null; },
-      close: async () => { events.push("close"); },
-      releaseProject: async () => { events.push("release"); },
-      closeKept: async () => { events.push("kept"); },
+      close: async (cids) => { events.push("close"); hostCids.push(["close", cids]); },
+      releaseProject: async (id, cids) => { events.push("release"); hostCids.push(["releaseProject", cids]); },
+      closeKept: async (cids) => { events.push("kept"); hostCids.push(["closeKept", cids]); },
       ready: async () => {},
       onActivate: async () => {},
       onCloseRequest: async (fn) => { requestClose = fn; },
       onRemoveProjectRequest: async (fn) => { requestRemoval = fn; },
-      askRemoveProject: async (id) => { events.push(`host asked ${id}`); return hostAllows; },
+      askRemoveProject: async (id, cids) => { events.push(`host asked ${id}`); hostCids.push(["askRemoveProject", cids]); return hostAllows; },
       answerRemoveProject: async (id, allowed) => { events.push(`answered ${id} ${allowed}`); },
     },
   },
@@ -52,6 +55,8 @@ globalThis.location = new URL("http://soksak.test/index.html");
 globalThis.history = { replaceState: () => {} };
 
 const projects = await import("../projects.js");
+const { installOperationSink } = await import("../operations.js");
+installOperationSink((event, fields, cids) => started.push([event, fields, cids]));
 
 /* Whether the person keeps a modified tab; the question is recorded in events. */
 let kept = false;
@@ -128,4 +133,36 @@ test("a removal request for the project shown here asks about modified tabs and 
   events.length = 0;
   await requestRemoval(PROJECT.id);
   assert.deepEqual(events, [`answered ${PROJECT.id} true`]);
+});
+
+test("opening a project, removing it, opening a window and closing it are operations whose identifiers go with their host calls", async () => {
+  await projects.initialise(store);
+  hostCids.length = 0;
+  started.length = 0;
+  kept = false;
+  hostAllows = true;
+  await projects.activate(PROJECT.id);
+  await projects.newWindow();
+  await projects.close(PROJECT.id);
+  await projects.initialise(store);
+  await projects.activate(PROJECT.id);
+  await requestClose();
+  kept = true;
+  await requestClose();
+  const operation = (event, action) => started.filter(([name, fields]) => name === event && fields.action === action).map(([, , cids]) => cids);
+  const [opened] = operation("page.project.operation", "open");
+  const [removed] = operation("page.project.operation", "remove");
+  const [newWindow] = operation("page.window.operation", "new");
+  const [closed] = operation("page.window.operation", "close");
+  const [closedKept] = operation("page.window.operation", "close_kept");
+  for (const cids of [opened, removed, newWindow, closed, closedKept]) assert.match(cids?.[0] ?? "", /^p\d+\.\d+$/);
+  assert.equal(new Set([opened, removed, newWindow, closed, closedKept].map((cids) => cids[0])).size, 5, "an operation took the identifier of another");
+  const cidsOf = (name) => hostCids.filter(([called]) => called === name).map(([, cids]) => cids);
+  assert.deepEqual(cidsOf("openProject")[0], opened);
+  assert.deepEqual(cidsOf("newWindow"), [newWindow]);
+  assert.deepEqual(cidsOf("releaseProject")[0], removed);
+  assert.deepEqual(cidsOf("close").at(-1), closed);
+  assert.deepEqual(cidsOf("closeKept"), [closedKept]);
+  assert.deepEqual(started.find(([event, fields]) => event === "page.project.operation" && fields.action === "open")[1], { action: "open", project: PROJECT.id });
+  assert.deepEqual(started.find(([event, fields]) => event === "page.project.operation" && fields.action === "remove")[1], { action: "remove", project: PROJECT.id });
 });

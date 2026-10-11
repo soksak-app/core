@@ -25,10 +25,10 @@ test('the performance trace flag is a declared boolean defaulting to true', asyn
     });
     // While the version is 0.0.x the trace is on by default, so a defect is recorded when it appears (AGENTS.md).
     assert.equal(value('diagnostics.performance'), true);
-    await change({ 'diagnostics.performance': false }, 'common');
+    await change({ 'diagnostics.performance': false }, 'common', 'test');
     assert.equal(memory.common['diagnostics.performance'], false);
     assert.equal(value('diagnostics.performance'), false);
-    assert.throws(() => change({ 'diagnostics.performance': 'yes' }, 'common'),
+    assert.throws(() => change({ 'diagnostics.performance': 'yes' }, 'common', 'test'),
       /Invalid setting diagnostics.performance/);
   } finally {
     globalThis.document = realDocument;
@@ -106,10 +106,10 @@ test('stored settings of a plugin that is not loaded are kept and not applied', 
     });
     assert.equal(value('gap'), 8);
     assert.equal(value('absent.option'), undefined, 'a setting of a plugin that is not loaded was applied');
-    await change({ gap: 9 }, 'common');
+    await change({ gap: 9 }, 'common', 'test');
     assert.deepEqual(memory.common, { gap: 9, 'absent.option': 3 });
     assert.deepEqual(memory.projects[0].settings, { 'absent.option': 4 });
-    assert.throws(() => change({ 'absent.option': 5 }, 'common'), /Unknown setting: absent.option/);
+    assert.throws(() => change({ 'absent.option': 5 }, 'common', 'test'), /Unknown setting: absent.option/);
   } finally {
     globalThis.document = previous;
   }
@@ -152,7 +152,7 @@ test('stored and changed core setting values must have their declared form', asy
       snapshot: async () => ({ common: {}, projects: [] }), settings: async () => {}, onChange: () => () => {},
     });
     for (const [key, value] of invalid) {
-      assert.throws(() => change({ [key]: value }, 'common'), new RegExp(`Invalid setting ${key}`),
+      assert.throws(() => change({ [key]: value }, 'common', 'test'), new RegExp(`Invalid setting ${key}`),
         `changing ${key} to ${JSON.stringify(value)} was accepted`);
     }
     beginSettings({ common: { gap: 0, radius: 24, size: 10, font: 'mono-jet', theme: 'slate', mode: 'light',
@@ -200,8 +200,38 @@ test('the frame text factor is common-only', async () => {
     assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: { textSize: 1.5 } }] }, 'prj-a'),
       /project settings: textSize is common-only/);
     beginSettings({ common: { textSize: 1.5 }, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
-    assert.throws(() => change({ textSize: 2 }, 'project'), /Text size is common-only/);
+    assert.throws(() => change({ textSize: 2 }, 'project', 'test'), /Text size is common-only/);
   } finally {
+    globalThis.document = realDocument;
+  }
+});
+
+test('a change of the settings names its actor and its keys, and its identifiers go with the write', async () => {
+  const realDocument = globalThis.document;
+  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const { installOperationSink } = await import('../operations.js');
+  const started = [];
+  installOperationSink((event, fields, cids) => started.push([event, fields, cids]));
+  const memory = { common: {}, projects: [] };
+  const writes = [];
+  const { connectSettings, set: change, reset } = await import('../settings.js?test=actor');
+  try {
+    await connectSettings({
+      snapshot: async () => structuredClone(memory),
+      settings: async (id, values, cids) => { writes.push([id, values, cids]); memory.common = { ...memory.common, ...values }; },
+      onChange: () => () => {},
+    });
+    await change({ gap: 9, radius: 3 }, 'common', 'core.settings.set');
+    assert.deepEqual(started.map(([event, fields]) => [event, fields]), [
+      ['page.settings.change', { scope: 'common', actor: 'core.settings.set', keys: 'gap,radius' }],
+    ]);
+    assert.deepEqual(writes.map(([id, values, cids]) => [id, values, cids]), [[null, { gap: 9, radius: 3 }, started[0][2]]]);
+    assert.throws(() => change({ gap: 10 }, 'common'), /set requires the actor that changes the settings/);
+    assert.throws(() => change({ gap: 10 }, 'common', ''), /set requires the actor that changes the settings/);
+    assert.equal(started.length, 1, 'a refused change started an operation');
+    assert.throws(() => reset('gap'), /set requires the actor|No project is selected/);
+  } finally {
+    installOperationSink(null);
     globalThis.document = realDocument;
   }
 });

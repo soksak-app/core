@@ -44,7 +44,7 @@ const PAIRS = [
     left: "apps/wailsv3",
     right: "apps/tauriv2",
     only: {
-      left: { "go.mod": "A4", "go.sum": "A4" },
+      left: { "go.mod": "A4", "go.sum": "A4", "test/support/wails-runtime-loader.mjs": "A5" },
       right: {
         "Cargo.toml": "A4", "Cargo.lock": "A4",
         "build": "A2",

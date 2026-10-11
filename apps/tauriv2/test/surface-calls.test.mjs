@@ -59,7 +59,7 @@ test("a refused call is at the level warn with the error, and the caller still g
     assert.equal(event.level, "warn");
     assert.equal(event.fields.name, "imageFocus");
     assert.equal(event.fields.ok, false);
-    assert.equal(event.fields.error, "no such region");
+    assert.equal(event.fields.error, "-32603: no such region");
   } finally {
     cleanup();
   }

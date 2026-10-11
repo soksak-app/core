@@ -10,8 +10,8 @@ use serde_json::json;
 use tauri::ipc::{CommandArg, CommandItem, InvokeBody, InvokeError};
 
 use crate::bounds::{bounded_json, cut_text, CALL_TEXT_BYTES};
-use crate::event_log::Level;
-use crate::event_record::emit_host;
+use crate::event_log::{valid_cid, Level};
+use crate::event_record::{emit_host, emit_host_cids};
 
 /// The code of the error of a call that fails without a code of its own.
 const INTERNAL_CODE: i64 = -32603;
@@ -23,6 +23,11 @@ pub struct BindingCall {
     name: String,
     /// The text of each argument by its key, each cut to the bound while it is serialized.
     arguments: Vec<(String, String, bool)>,
+    /// The correlation identifiers of the operation that the call carries out (the key `cids` of the payload, which is not an
+    /// argument of the command; docs/spec/logging.md#operation-chains).
+    cids: Vec<String>,
+    /// Why the call is refused: an identifier that is not a list of identifiers a line can hold.
+    refusal: Option<String>,
     started: Instant,
     finished: bool,
 }
@@ -31,9 +36,28 @@ impl BindingCall {
     /// Starts the record of the command `name` called with `payload`. Each argument is serialized only up to the bound.
     pub fn begin(name: &str, payload: &InvokeBody) -> BindingCall {
         let started = Instant::now();
+        let mut cids = Vec::new();
+        let mut refusal = None;
+        if let InvokeBody::Json(serde_json::Value::Object(map)) = payload {
+            if let Some(found) = map.get("cids") {
+                match found.as_array().map(|list| {
+                    list.iter()
+                        .map(|cid| cid.as_str().filter(|cid| valid_cid(cid)).map(str::to_string))
+                        .collect::<Option<Vec<String>>>()
+                }) {
+                    Some(Some(list)) => cids = list,
+                    _ => {
+                        refusal = Some(format!(
+                            "cids of the call {name}: {found} is not a list of identifiers that are not empty and hold no quote, backslash or control character"
+                        ))
+                    }
+                }
+            }
+        }
         let arguments = match payload {
             InvokeBody::Json(serde_json::Value::Object(map)) => map
                 .iter()
+                .filter(|(key, _)| key.as_str() != "cids")
                 .map(|(key, value)| {
                     let (text, truncated) = bounded_json(value, CALL_TEXT_BYTES);
                     (key.clone(), text, truncated)
@@ -44,9 +68,23 @@ impl BindingCall {
         BindingCall {
             name: name.to_string(),
             arguments,
+            cids,
+            refusal,
             started,
             finished: false,
         }
+    }
+
+    /// Why the call must be refused, or `None` when its identifiers are valid.
+    pub fn refusal(&self) -> Option<&str> {
+        self.refusal.as_deref()
+    }
+
+    /// Ends the call as refused: the event states the reason as the error and carries no identifiers.
+    pub fn refuse(mut self, reason: String) {
+        self.finished = true;
+        self.cids = Vec::new();
+        self.emit(&[], Some(reason));
     }
 
     /// Stores the event with the result and the microseconds since the call began. `names` are the parameters of the command
@@ -80,21 +118,24 @@ impl BindingCall {
             args = cut_text(&args, CALL_TEXT_BYTES).0;
             truncated = true;
         }
-        match error {
-            None => emit_host(
+        let (level, fields) = match error {
+            None => (
                 Level::Debug,
-                "host.binding.call",
                 json!({"name": self.name, "args": args, "micros": micros, "ok": true, "truncated": truncated}),
             ),
             Some(error) => {
                 // A command fails with text only, so its code is the internal code of the entrance (docs/spec/logging.md#result-form).
                 let (error, cut) = cut_text(&format!("{INTERNAL_CODE}: {error}"), CALL_TEXT_BYTES);
-                emit_host(
+                (
                     Level::Warn,
-                    "host.binding.call",
                     json!({"name": self.name, "args": args, "micros": micros, "ok": false, "truncated": truncated || cut, "error": error}),
-                );
+                )
             }
+        };
+        if self.cids.is_empty() {
+            emit_host(level, "host.binding.call", fields);
+        } else {
+            emit_host_cids(level, "host.binding.call", &self.cids, fields);
         }
     }
 }
@@ -113,6 +154,13 @@ impl Drop for BindingCall {
 
 impl<'a, R: tauri::Runtime> CommandArg<'a, R> for BindingCall {
     fn from_command(command: CommandItem<'a, R>) -> Result<Self, InvokeError> {
-        Ok(BindingCall::begin(command.name, command.message.payload()))
+        let call = BindingCall::begin(command.name, command.message.payload());
+        match call.refusal().map(str::to_string) {
+            Some(reason) => {
+                call.refuse(reason.clone());
+                Err(InvokeError::from(reason))
+            }
+            None => Ok(call),
+        }
     }
 }

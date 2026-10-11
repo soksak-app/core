@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { register } from "node:module";
 import test from "node:test";
 
 test("surface readiness invokes the registered native presentation method", async () => {
@@ -72,6 +73,34 @@ test("the log command carries the page batch to the host", async () => {
     await host.call("log", { action: "batch", events: [] });
     assert.deepEqual(calls, [["Log", [{ action: "batch", events: [] }]]]);
   } finally {
+    delete globalThis.window;
+    delete globalThis.location;
+  }
+});
+
+test("a call of the main page that carries out an operation sends its identifiers beside its arguments", async () => {
+  const calls = [];
+  register("./support/wails-runtime-loader.mjs", import.meta.url);
+  globalThis.__wailsRuntime = {
+    Call: { ByName: async (name, method, args, cids) => { calls.push([name, method, args, cids]); return null; } },
+    Window: { Name: async () => "main" },
+    Events: { On: () => () => {} },
+  };
+  globalThis.window = {};
+  globalThis.location = { search: "" };
+  try {
+    const { host } = await import("../runtime/index.js?test=main-cids");
+    await host.call("windowNew", undefined, { cids: ["p1.1"] });
+    await host.call("pluginsRun", { action: "install", plugin: "term" }, { cids: ["p1.2"] });
+    await host.call("windowReady");
+    const service = "github.com/soksak-app/core/packages/host/wailsv3/src.Bindings.Call";
+    assert.deepEqual(calls, [
+      [service, "WindowNew", [], ["p1.1"]],
+      [service, "PluginsRun", [{ action: "install", plugin: "term" }], ["p1.2"]],
+      [service, "WindowReady", [], []],
+    ]);
+  } finally {
+    delete globalThis.__wailsRuntime;
     delete globalThis.window;
     delete globalThis.location;
   }

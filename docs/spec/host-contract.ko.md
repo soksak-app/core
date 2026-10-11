@@ -124,6 +124,8 @@ fn invalid_json_closes_connection() {
 | `endpoint.record.arguments-are-cut-before-copying` | `args`는 문자 경계에서 자른 최대 1024바이트이고, params가 더 길면 event에 `truncated: true`가 있다. | both |
 | `binding.record.call-is-an-event` | page의 모든 host 호출은 layer `host`, level `debug`이고 `name`(호출의 snake case 이름), `args`(호출 순서대로의 인자를 담은 JSON 배열, 없으면 `[]`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.binding.call`이며, 성능 trace가 꺼져 있을 때도 그렇다. | both |
 | `binding.record.failure-names-the-error` | 실패한 host 호출은 level `warn`이고 `ok: false`와 `error` `<code>: <text>`(page가 받는 글에 내부 code `-32603`을 붙인 것이다. host 메서드는 글만 가진 오류로 실패하기 때문이다)를 가진 event `host.binding.call`이다. | both |
+| `binding.record.operation-identifiers-are-stored` | `cids`를 나르는 host 호출(`Bindings.Call`의 네 번째 인자, Tauri command의 payload key `cids`)은 그 `cids`를 가진 event `host.binding.call`이며 실패해도 그렇다. `cids`가 없는 호출은 없는 event를 저장하고, 식별자는 호출의 인자가 아니다. | both |
+| `binding.record.invalid-identifiers-are-refused` | 빈 식별자이거나 따옴표, 역슬래시, 제어 문자가 든 식별자를 `cids`에 담은 호출은 그 식별자를 밝힌 오류로 거절된다. 메서드는 실행되지 않고, event는 `cids` 없이 `error`가 `-32603: <그 글>`인 실패한 `host.binding.call`이다. | both |
 | `binding.record.arguments-are-cut-before-copying` | `args`는 최대 1024바이트이고 문자 경계에서 자르며, 인자가 더 길었으면 event에 `truncated: true`가 있다. | both |
 | `binding.record.unfinished-call-names-the-error` | 결과 없이 끝난 host 호출은 level `warn`이고 `ok: false`와 `error` `-32603: the call ended without a result`를 가진 event `host.binding.call`이다. | both |
 | `binding.record.refusal-names-the-error` | host의 어떤 메서드도 가리키지 않는 호출이나 메서드가 받는 것과 다른 수의 인자를 넘기는 호출은 오류로 거절되고, 그 오류를 `-32603: <text>`로 가진 level `warn`의 event `host.binding.call`로 저장된다. | wailsv3 only: Wails는 host의 모든 메서드를 이름으로 찾는 바인딩 메서드 `Bindings.Call` 하나로 닿게 하지만, Tauri는 모르는 command와 거절된 인자를 host가 실행되기 전에 거절한다 |
