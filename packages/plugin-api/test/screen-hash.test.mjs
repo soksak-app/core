@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { screenBytes, screenHash } from "../screen-hash.js";
+import { screenBytes, screenFromMessage, screenHash } from "../screen-hash.js";
 
 const cell = (grapheme = "", width = 1, fg = null, bg = null, attributes = 0) => ({ grapheme, width, fg, bg, attributes });
 const screen = (cells, cursor = { row: 0, col: 0, visible: true }, rows = 1, cols = cells.length) => ({ rows, cols, cursor, cells });
@@ -27,4 +27,41 @@ test("a screen that is not an object is refused", () => {
 
 test("a size that is not a positive integer is refused", () => {
   assert.throws(() => screenBytes({ ...screen([cell()]), rows: 0 }), { message: "screen hash: rows must be a positive integer, found 0" });
+});
+
+// The screen message of a sidecar (docs/spec/terminal-runtime.md#screen-message).
+const message = () => ({
+  event: "screen",
+  sequence: 4,
+  rows: 1,
+  cols: 2,
+  cursor: { row: 0, col: 1, visible: true, shape: "block", focused: true },
+  cells: [{ grapheme: "a", width: 1, fg: 3, bg: null, attributes: 1, link: "https://example.test/" }, { grapheme: "", width: 1, fg: null, bg: "#000000", attributes: 0 }],
+});
+
+test("a screen message gives the screen that the hash takes, without the members that the hash does not cover", async () => {
+  const screen = screenFromMessage(message());
+  assert.deepEqual(screen, {
+    rows: 1,
+    cols: 2,
+    cursor: { row: 0, col: 1, visible: true },
+    cells: [{ grapheme: "a", width: 1, fg: 3, bg: null, attributes: 1 }, { grapheme: "", width: 1, fg: null, bg: "#000000", attributes: 0 }],
+  });
+  assert.match(await screenHash(screen), /^[0-9a-f]{64}$/);
+});
+
+test("a screen message without a sequence is refused with the member named", () => {
+  const without = message();
+  delete without.sequence;
+  assert.throws(() => screenFromMessage(without), { message: "screen message: sequence must be an integer from 1, found undefined" });
+});
+
+test("a screen message with a cell that has no resolved foreground is refused with the cell named", () => {
+  const without = message();
+  delete without.cells[0].fg;
+  assert.throws(() => screenFromMessage(without), { message: 'screen message: cells[0].fg must be a resolved color (null, an integer from 0 to 255 or "#rrggbb"), found undefined' });
+});
+
+test("a message that is not an object is refused", () => {
+  assert.throws(() => screenFromMessage(null), { message: "screen message: message must be an object, found null" });
 });

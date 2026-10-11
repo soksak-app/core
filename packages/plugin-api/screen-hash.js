@@ -91,3 +91,41 @@ export async function screenHash(screen) {
   const digest = await globalThis.crypto.subtle.digest("SHA-256", screenBytes(screen));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
+
+function messageRefuse(reason) {
+  throw new Error(`screen message: ${reason}`);
+}
+
+function resolvedColor(name, color) {
+  if (color === null || Number.isInteger(color) || typeof color === "string") return color;
+  return messageRefuse(`${name} must be a resolved color (null, an integer from 0 to 255 or "#rrggbb"), found ${shown(color)}`);
+}
+
+/**
+ * The screen that `screenHash` takes, from a `screen` message of a sidecar (docs/spec/terminal-runtime.md#screen-message).
+ * The message carries `sequence` and every member of the screen, with each cell's `fg` and `bg` resolved; the members that the
+ * hash does not cover (`link`, the cursor shape and focus) are left out. A message that lacks a member throws an error that names
+ * the member; the ranges of the values are checked by the screen hash. The page stores `message.sequence` with the hash.
+ */
+export function screenFromMessage(message) {
+  if (!isObject(message)) messageRefuse(`message must be an object, found ${shown(message)}`);
+  if (message.event !== "screen") messageRefuse(`event must be "screen", found ${shown(message.event)}`);
+  if (!Number.isInteger(message.sequence) || message.sequence < 1) {
+    messageRefuse(`sequence must be an integer from 1, found ${shown(message.sequence)}`);
+  }
+  if (!isObject(message.cursor)) messageRefuse(`cursor must be an object, found ${shown(message.cursor)}`);
+  if (!Array.isArray(message.cells)) messageRefuse(`cells must be an array, found ${shown(message.cells)}`);
+  const cells = message.cells.map((cell, index) => {
+    const at = `cells[${index}]`;
+    if (!isObject(cell)) messageRefuse(`${at} must be an object, found ${shown(cell)}`);
+    const fg = resolvedColor(`${at}.fg`, cell.fg);
+    const bg = resolvedColor(`${at}.bg`, cell.bg);
+    if (!Number.isInteger(cell.attributes)) messageRefuse(`${at}.attributes must be an integer from 0 to 255, found ${shown(cell.attributes)}`);
+    return { grapheme: cell.grapheme, width: cell.width, fg, bg, attributes: cell.attributes };
+  });
+  const { rows, cols } = message;
+  const { row, col, visible } = message.cursor;
+  const screen = { rows, cols, cursor: { row, col, visible }, cells };
+  screenBytes(screen);
+  return screen;
+}
