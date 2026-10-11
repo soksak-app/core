@@ -19,8 +19,8 @@ export function idleSeconds() {
 }
 
 /**
- * A gate that opens when the person has been idle for `seconds`. The system reports no event for the end of an input, so the gate
- * reads the idle time every `intervalMs` (docs/operations/examples.md#test-runner).
+ * A gate that opens when the person has been idle for `seconds`. No examined event source serves without a permission that an unattended run cannot grant, so the
+ * gate reads the idle time every `intervalMs` (docs/operations/examples.md#test-runner).
  */
 export function whenIdle(seconds, { idle = idleSeconds, intervalMs = 5000, write = () => {} } = {}) {
   return async (item) => {

@@ -38,6 +38,16 @@ Rust 빌드는 `target/`을 빠르게 키운다(시험이 포함된 debug 빌드
 
 `pnpm test`는 `scripts/node-tests.mjs`를 실행한다. 이 스크립트는 모든 workspace 패키지의 `test` script(루트는 `test:scripts`)를 읽고, `node --test` 앞의 명령(`pnpm build` 등)을 하나씩 실행한 뒤, 시험 파일마다 자기 프로세스로 test runner에 실행한다. 파일마다 `RUN`, `PASS`, `FAIL`, `TIME`을 경과 시간과 함께, 일정 간격으로 실행 중인 파일, 가장 느린 파일, 합계를 쓰고, 파일마다 한도는 120초이며, `--only <글>`은 경로에 그 글이 든 파일만 실행한다. `pnpm verify:windows`는 창 검사를 같은 방식으로, 애플리케이션을 공유하므로 파일을 하나씩, 파일마다 600초 한도로 실행한다. `--when-idle <seconds>`는 사람이 그 시간 동안 키보드나 포인터 입력을 하지 않은 뒤에야 파일을 시작한다(줄 `WAIT <file>`이 기다림을 이름 붙이며 기다림은 한도에 들지 않는다). 창을 열고 frontmost 애플리케이션을 되돌리는 검사는 사람의 focus를 가져가고, 사람의 입력이 그 검사의 합성 입력을 거부시키기 때문이다: `pnpm verify:windows --when-idle 60`. 실행마다 id(모든 시험의 `SOKSAK_RUN_ID`, 폴더는 `SOKSAK_RUN_FOLDER`)와 폴더 `target/test-runs/<run>/`가 있고, 폴더에는 도착하는 대로 저장한 모든 시험의 출력과 각 시험의 상태, 시작, 끝(마이크로초)을 담은 `manifest.json`이 있다. `node scripts/test-runs.mjs prune`은 실패가 없는 실행과 `classified.json`(`{name, record}` 배열)이 이름으로 가리키는 실패만 있는 실행을 제거하고 나머지 실행은 남긴다. 패키지 하나만 돌릴 때는 패키지의 script를 그대로 쓴다. 감사·체크리스트·명령 감독 자체 검사는 `scripts/test`의 파일이다. Rust 터미널 패키지 두 개는 실제 Cargo 검사를 호출한다. 패키지 명령 검사는 Cargo를 실패 fixture로 교체해 호출·실패 전달을 검증하며 엔진 동작 검사로 세지 않는다.
 
+`--when-idle`의 기다림은 `IOHIDSystem`의 `HIDIdleTime`으로 입력의 유휴 시간을 5초마다 읽는다. 검토한 event source 어느 것도 이 관문에 쓸 수 없기 때문이다. 각 source는 입력 자체를 알리므로 관문이 이를 유휴 시간으로 바꿔야 하고, 사람이 없는 실행이 줄 수 없는 권한이나 초 단위 숫자가 아닌 상태가 필요하다.
+
+- session의 listen-only `CGEventTap`(`kCGSessionEventTap`)은 process의 Input Monitoring 권한이 필요하다(`CGPreflightListenEventAccess`, `CGRequestListenEventAccess`). macOS는 tap을 실행하는 process에 대해 사람에게 한 번 묻는데, node script가 시작한 helper라면 그것을 시작한 터미널이나 runner이며, 허가는 시스템 설정에서 한다. 권한이 없는 검사 실행은 event를 받지 못하고, 요청은 사람을 기다리는 대화상자를 열므로, 이를 기다리는 관문은 스스로 통과도 실패도 못 한다.
+- 키보드와 포인터 장치에 연 `IOHIDManager`도 같은 Input Monitoring 권한이 필요하고(`IOHIDCheckAccess`, `kIOHIDRequestTypeListenEvent`의 `IOHIDRequestAccess`) 장치별 report를 알리므로 허가에 같은 의존이 있다.
+- `NSEvent` 전역 monitor(`addGlobalMonitorForEventsMatchingMask:`)는 마우스 event를 권한 없이 알리지만 키 event는 process가 Accessibility로 신뢰될 때만 알린다(`AXIsProcessTrusted`). 또 실행 중인 application과 run loop가 필요하므로 node script에는 native helper 실행 파일이 필요하고, 포인터만 보는 관문은 사람이 입력하는 동안 검사를 시작한다.
+- `IOHIDSystem`의 `IOServiceAddInterestNotification`과 display·session 알림(화면 잠금, display sleep)은 입력을 알리지 않는다. 전원 관리는 사용자 활동을 자체 단계로 알리며(`IOPMLibPrivate.h`, 비공개 interface) 이는 전원 관리의 유휴 정책을 따르고 초 단위 숫자가 아니므로 `--when-idle <seconds>`를 표현할 수 없다.
+- `CGEventSourceSecondsSinceLastEventType`은 `HIDIdleTime`과 같은 값을 권한 없이, `ioreg`를 시작하지 않고 읽지만 event가 아니라 읽기다.
+
+그러므로 관문은 권한이 필요 없는 유휴 시간 읽기를 유지하고, 5초 간격이 사람의 입력이 끝난 뒤 파일이 시작되기까지의 지연을 한정한다. event source를 쓰는 관문은 검사를 실행하는 process에 권한이 허가되어야 하며, runner에 그 허가가 있을 때 추가한다.
+
 시간을 제한한 명령 실행:
 
 ```sh

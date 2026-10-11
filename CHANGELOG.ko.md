@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.26: `docs/operations/examples.md`가 입력 유휴 시간의 검토한 event source(listen-only event tap, HID manager, 전역 monitor, IO registry·전원 관리 알림, `CGEventSourceSecondsSinceLastEventType`)와, 사람이 없는 실행이 줄 수 없는 권한 없이는 각각 `--when-idle` 관문에 쓸 수 없는 이유를 적는다. 관문은 5초마다 `HIDIdleTime`을 읽는 방식을 `whenIdle`의 이유와 함께 유지한다. source는 interface 계약으로 검토했고 실행하지 않았다.
 - F160.19.1: window의 첫 응답자는 정수 identity가 바뀔 때만 저장하므로, 바뀌지 않은 update는 observer 없는 알림보다 더 할당하지 않는다. 수동으로 참조를 세는 소스에서 `emit()`(`activity_observers.m`)과 `storeRecord()`(`application_log.m`)가 할당한 문자열을 release하고, 시험 record 해독기도 문자열을 release한다. process의 할당을 malloc logger로 세는 `activity_observers_allocation_test`로 검증했다. 10분 측정은 실행하지 않았다(F160.19.2).
 - F160.9.2: window check `e2e/operation-chains.test.mjs`가 두 애플리케이션에서 plugin, project, window, settings, update 작업을 수행하고, `log.query`와 `host.log`의 알림으로 찾은 각 사슬에 `docs/spec/events.json`이 선언한 모든 event를 요구한다. 탐색 `e2e/chains.mjs`는 `e2e/test/chains.test.mjs`로 시험한다. 검사는 실행하지 않았다.
 - F160.24.9.1: Go와 Rust 구현에서 event 파일 질의가 한 행 둘레의 행을 돌려준다(`around`과 `earlier`, `later`, 각각 500까지, 줄 글은 page처럼 제한, 각 행에 `context` 표시). `sok debug query --around <cursor> --earlier <n> --later <n>`이 context 행을 공백 둘로 들여 출력하고, endpoint 메서드 `log.query`와 host 호출 `logQuery`가 답한다. `packages/log-contract/fixtures/query/cases.json`에 golden 사례 여섯을 더했다. 두 `sok` 구현의 golden, 거절, 바이트 한도 시험과 두 host의 endpoint 시험으로 검증했다.
