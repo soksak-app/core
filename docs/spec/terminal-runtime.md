@@ -98,14 +98,14 @@ The page also sends every left-button press, movement while pressed, and release
 
 ### Screen message
 
-The `screen` event from the sidecar to the page carries the complete drawn screen, so the page computes the [screen hash](replay.md#screen-hash) from the message alone. The page draws no cells; the sidecar draws the raster, and the cells of the message are the screen that the raster shows.
+The `screen` event from the sidecar to the page carries the complete drawn screen, so the page computes the [screen hash](replay.md#screen-hash) from the message alone. The page draws no cells; the sidecar draws the raster, and the cells of the message are the screen that the raster shows. The reply of `terminal.screen.read` is the rows of those cells.
 
 | Member | Form |
 | --- | --- |
 | `event` | `"screen"` |
 | `sequence` | An integer from 1: the `sequence` of the frame record that the sidecar stores for this screen ([replay](replay.md#records)), the sequence of the last replay input that the screen includes |
 | `rows`, `cols` | Positive integers: the size of the grid |
-| `cursor` | `{visible, row, col}` as the hash covers it ([replay](replay.md#view-state), Cursor): `visible` is `true` or `false`, `row` is from 0 to `rows` minus 1 (`0` when the cursor is outside the viewport) and `col` is from 0 to `cols` minus 1. The cursor members of the runtime (`shape`, `blinking`, `blinkVisible`, `focused`) are further members that the hash does not cover |
+| `cursor` | `{visible, row, col}` as the hash covers it ([replay](replay.md#view-state), Cursor): `visible` is `true` or `false`, `row` is from 0 to `rows` minus 1 (`0` when the cursor is outside the viewport) and `col` is from 0 to `cols` minus 1. The cursor members of the runtime (`shape`, `blinking`, `blinkVisible`, `focused`) are further members that the hash does not cover: a page checks each one that is present (`shape` is `Block`, `Underline`, `Beam`, `HollowBlock` or `Hidden`, or the same word in lowercase; `blinking` and `focused` are booleans) and keeps the previous value of one that is absent |
 | `cells` | `rows` × `cols` cells in row-major order |
 
 Each cell has `grapheme` (the text of the cell: the empty string for a blank cell and for the continuation cell of a wide character, otherwise one grapheme cluster), `width` (`1`; `2` for the first cell of a wide character; `0` for its continuation cell), `fg` and `bg` (the color after the theme, the inverse attribute and the selection highlight are resolved: `null` for the default color, an integer from 0 to 255 for an indexed color, or `"#rrggbb"` in lowercase for a true color) and `attributes` (the integer from 0 to 255 whose flags the screen hash defines: bold `01`, dim `02`, italic `04`, underline `08`, blink `10`, inverse `20`, hidden `40`, strikethrough `80`). A cell may carry `link`, which the hash does not cover. Every member listed above is required: the message has no absent color and no default for a missing member, and the sidecar states `null` for the default color.

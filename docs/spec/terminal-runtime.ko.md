@@ -98,14 +98,14 @@ Host는 service 연결을 한 줄씩 읽고 각 줄에 stdio transport의 [메�
 
 ### 화면 메시지
 
-사이드카가 페이지에 보내는 `screen` 이벤트는 그려진 화면 전체를 담으므로 페이지는 메시지만으로 [화면 hash](replay.ko.md#화면-hash)를 계산한다. 페이지는 칸을 그리지 않는다. 래스터는 사이드카가 그리며, 메시지의 칸은 래스터가 보여 주는 화면이다.
+사이드카가 페이지에 보내는 `screen` 이벤트는 그려진 화면 전체를 담으므로 페이지는 메시지만으로 [화면 hash](replay.ko.md#화면-hash)를 계산한다. 페이지는 칸을 그리지 않는다. 래스터는 사이드카가 그리며, 메시지의 칸은 래스터가 보여 주는 화면이다. `terminal.screen.read`의 응답은 그 칸의 행이다.
 
 | 멤버 | 형식 |
 | --- | --- |
 | `event` | `"screen"` |
 | `sequence` | 1 이상의 정수: 사이드카가 이 화면에 저장하는 frame 기록의 `sequence`([replay](replay.ko.md#기록)), 곧 화면이 포함하는 마지막 재생 입력의 순번 |
 | `rows`, `cols` | 양의 정수: 격자의 크기 |
-| `cursor` | hash가 덮는 `{visible, row, col}`([replay](replay.ko.md#보기-상태), 커서): `visible`은 `true` 또는 `false`, `row`는 0부터 `rows`−1(커서가 viewport 밖이면 `0`), `col`은 0부터 `cols`−1. 런타임의 커서 멤버(`shape`, `blinking`, `blinkVisible`, `focused`)는 hash가 덮지 않는 추가 멤버다 |
+| `cursor` | hash가 덮는 `{visible, row, col}`([replay](replay.ko.md#보기-상태), 커서): `visible`은 `true` 또는 `false`, `row`는 0부터 `rows`−1(커서가 viewport 밖이면 `0`), `col`은 0부터 `cols`−1. 런타임의 커서 멤버(`shape`, `blinking`, `blinkVisible`, `focused`)는 hash가 덮지 않는 추가 멤버이고, page는 있는 멤버를 각각 검사하며(`shape`는 `Block`, `Underline`, `Beam`, `HollowBlock`, `Hidden` 또는 소문자로 쓴 같은 단어, `blinking`과 `focused`는 boolean) 없는 멤버는 이전 값을 유지한다 |
 | `cells` | 행 우선 순서의 `rows` × `cols`개 칸 |
 
 각 칸은 `grapheme`(칸의 텍스트: 빈 칸과 넓은 문자의 이어지는 칸은 빈 문자열, 그 밖에는 grapheme cluster 하나), `width`(`1`, 넓은 문자의 첫 칸은 `2`, 이어지는 칸은 `0`), `fg`와 `bg`(테마, 반전 속성, 선택 강조를 적용해 정해진 색: 기본색은 `null`, 인덱스 색은 0에서 255까지의 정수, 트루컬러는 소문자 `"#rrggbb"`), `attributes`(화면 hash가 정한 플래그의 0에서 255까지의 정수: bold `01`, dim `02`, italic `04`, underline `08`, blink `10`, inverse `20`, hidden `40`, strikethrough `80`)를 가진다. 칸은 hash가 덮지 않는 `link`를 가질 수 있다. 위의 모든 멤버는 필수다. 메시지에는 생략된 색도 빠진 멤버의 기본값도 없으며, 사이드카는 기본색을 `null`로 적는다.
