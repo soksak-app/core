@@ -1860,6 +1860,16 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "R5",
+    implementation: [{ file: "packages/plugin-api/records-check.js", symbol: "export function termViolations" }],
+    tests: [
+      { file: "packages/plugin-api/test/records-check.test.mjs", id: "a rejected synonym is reported with the term to use, also in identifiers" },
+      { file: "packages/plugin-api/test/records-check.test.mjs", id: "a rejected synonym joined inside an identifier is reported" },
+    ],
+    expected: "Each concept has one term in the code, the specifications and the records of every repository, and the record check reports a rejected synonym with the term to use.",
+    levels: ["unit"],
+  },
+  {
     id: "F144",
     implementation: [{ file: "native/darwin/src/image_region.m", symbol: "[self logInput:@\"insertText\" fields:fields before:before];" }],
     tests: [{ file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" }],
