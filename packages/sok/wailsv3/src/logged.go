@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -54,6 +55,11 @@ func (f *firstLine) Write(data []byte) (int, error) {
 	return f.stream.Write(data)
 }
 
+// runLog is the event file of the run that Logged started; a command stores its own events in it. It is nil in a run without an
+// event file (Logged could not start it and reported that), where the failure that an event describes is also the error of the
+// command.
+var runLog atomic.Pointer[EventLog]
+
 // Logged runs command and records it: it starts the event file of the targeted configuration directory, runs the command,
 // stores a panic of the command with its stack as the exit status PanicStatus, stores the command with its result, and
 // flushes the file. An event file that cannot be started is reported on the standard error and the command runs without it.
@@ -72,6 +78,8 @@ func Logged(args []string, stdout, stderr io.Writer, options Options, command Co
 		}
 		return command(args, stdout, stderr, options)
 	}
+	runLog.Store(log)
+	defer runLog.Store(nil)
 	captured := &firstLine{stream: stderr}
 	var recorded sync.Once
 	// finish stores the command with its result once, whichever entrance ends the run.

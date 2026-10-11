@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 
 use crate::event_log::{cut_text, EventLog, Level};
+use crate::replay::set_run_log;
 use crate::routine::{guard, set_recorder, Panic, PANIC_STATUS};
 use crate::{command, config_dir_of, Error, Options};
 
@@ -71,7 +72,7 @@ impl Write for FirstLine<'_> {
 
 /// The command of one run, stored once whichever entrance ends the run.
 struct Record {
-    log: EventLog,
+    log: Arc<EventLog>,
     args: Vec<String>,
     started: Instant,
     recorded: Mutex<bool>,
@@ -129,7 +130,9 @@ pub fn logged(
     command: Command,
 ) -> i32 {
     let started = Instant::now();
-    let log = target_config_dir(args, options).and_then(|config| EventLog::start(&config));
+    let log = target_config_dir(args, options)
+        .and_then(|config| EventLog::start(&config))
+        .map(Arc::new);
     let log = match log {
         Ok(log) => log,
         Err(error) => {
@@ -140,6 +143,7 @@ pub fn logged(
             return command(args, stdout, stderr, options);
         }
     };
+    set_run_log(Some(log.clone()));
     let record = Arc::new(Record {
         log,
         args: args.to_vec(),
@@ -180,6 +184,7 @@ pub fn logged(
             status = 3;
         }
     }
+    set_run_log(None);
     record.log.close();
     status
 }

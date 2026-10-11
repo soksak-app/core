@@ -45,7 +45,7 @@
 
 화면을 만드는 sidecar는 `sidecar.json`에 `replay`를 선언한다([sidecars](sidecars.ko.md#선언과-시작)). 형식은 `{"role": <role>, "executable": <sidecar 안의 경로>}`다. `role`은 sidecar의 event 파일(`logs/<role>-<boot>.jsonl`)의 role이며, 그 파일의 `log.open`이 밝힌다. 실행 파일은 sidecar의 재생 엔진이다. 터미널 엔진은 거기에 있으므로 명령줄 도구는 어느 것도 이름으로 부르지 않는다.
 
-도구는 sidecar 폴더에서 실행 파일을 인자 없이 시작하고, 표준 입력에 role의 파일에 있는 session의 층 `sidecar` event를 파일 순서대로, 바꾸지 않고, 줄바꿈으로 끝나게, `--until`이 준 `sequence`까지 쓴다. 실행 파일은 재생 입력을 `sequence` 순서로 빈 화면에 적용하고, 읽은 frame 기록마다 그 순번의 화면 hash를 담은 한 줄 `{"sequence": <n>, "hash": <hash>}`을 표준 출력에 쓴다. 입력이 끝나면 종료 상태 0으로 끝난다. 다른 종료 상태, 그 객체가 아닌 줄, 소문자 16진 64자가 아닌 hash, 줄을 받지 못한 frame 기록은 재생의 실패이며 실행 파일의 오류 글과 함께 보고한다.
+도구는 sidecar 폴더에서 실행 파일을 인자 없이 시작하고, 표준 입력에 role의 파일에 있는 session의 층 `sidecar` event를 [질의](logging.ko.md#질의)의 순서(시각, process, `seq`)대로, 바꾸지 않고, 각각 줄바꿈으로 끝나게, `--until`이 준 `sequence`까지 쓴다. 실행 파일은 재생 입력을 `sequence` 순서로 빈 화면에 적용하고, 읽은 frame 기록마다 그 순번의 화면 hash를 담은 한 줄 `{"sequence": <n>, "hash": <hash>}`을 표준 출력에 쓴다. 입력이 끝나면 종료 상태 0으로 끝난다. 다른 종료 상태, 그 객체가 아닌 줄, 소문자 16진 64자가 아닌 hash, 줄을 받지 못한 frame 기록은 재생의 실패이며 실행 파일의 오류 글과 함께 보고한다.
 
 ## 명령
 
@@ -54,4 +54,4 @@
 1. sidecar의 frame 기록마다 그 순번의 재생 hash와 비교한다. 다르면 층 `sidecar`의 불일치다.
 2. page의 frame 기록마다 그 순번의 재생 hash와 비교한다. 다르거나 그 순번에 sidecar의 frame 기록이 없으면 층 `page`의 불일치다.
 
-첫 불일치에서 비교를 끝낸다. 도구는 `session`, `sequence`, `layer`, `expected`(재생 hash, sidecar의 frame 기록이 없는 page frame이면 `none`), `found`(저장된 hash)를 가진 event `sok.replay.divergence`(수준 `error`)를 저장하고, 표준 오류에 `replay divergence: session <session> sequence <n> layer <layer> expected <expected> found <found>`를 쓰며 종료 상태 1로 끝난다. 모든 hash가 같으면 표준 출력에 `replay session <session>: <n> sidecar frames and <m> page frames equal`을 쓰고 상태 0으로 끝난다. 층 `sidecar` event가 없는 session, frame 기록이 없는 session, 둘 이상의 role의 sidecar event를 가진 session, 그 role을 선언한 설치된 sidecar가 없는 경우는 session과 role을 이름으로 가진 오류다. 두 도구는 같은 출력과 같은 오류 글을 낸다.
+첫 불일치에서 비교를 끝낸다. 도구는 `session`, `sequence`, `layer`, `expected`(재생 hash, sidecar의 frame 기록이 없는 page frame이면 `none`), `found`(저장된 hash)를 가진 event `sok.replay.divergence`(수준 `error`)를 저장하고, 표준 오류에 `sok: replay divergence: session <session> sequence <n> layer <layer> expected <expected> found <found>`를 쓰며 종료 상태 1로 끝난다. 모든 hash가 같으면 표준 출력에 `replay session <session>: <n> sidecar frames and <m> page frames equal`을 쓰고 상태 0으로 끝난다. 층 `sidecar` event가 없는 session, frame 기록이 없는 session, 둘 이상의 role의 sidecar event를 가진 session, 그 role을 선언한 설치된 sidecar가 없는 경우는 session과 role을 이름으로 가진 오류다. 1 이상의 정수 `fields.sequence`와 문자열 `fields.hash`가 없는 frame 기록, 소문자 16진 64자가 아닌 저장된 hash, 실패하거나 `{"sequence", "hash"}`가 아닌 줄을 출력하는 실행 파일, 실행 파일이 hash를 출력하지 않은 sidecar의 frame 기록은 불일치가 아니라 오류다. 도구는 session의 event를 메모리에 보관한다. 두 도구는 같은 출력과 같은 오류 글을 낸다.

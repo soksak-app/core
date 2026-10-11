@@ -477,6 +477,9 @@ pub(crate) fn run_debug(
     options: &Options,
 ) -> Result<(), Error> {
     let view = a.positional(1, "debug view")?;
+    if view == "replay" {
+        return crate::replay::run_replay(a, stdout, options);
+    }
     if view != "query" {
         return Err(Error::Usage(format!("unknown command: debug {view}")));
     }

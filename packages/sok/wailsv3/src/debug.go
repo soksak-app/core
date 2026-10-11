@@ -410,6 +410,9 @@ func runDebug(a arguments, stdout, stderr io.Writer, options Options) error {
 	if err != nil {
 		return err
 	}
+	if view == "replay" {
+		return runReplay(a, stdout, options)
+	}
 	if view != "query" {
 		return usage("unknown command: debug %s", view)
 	}
