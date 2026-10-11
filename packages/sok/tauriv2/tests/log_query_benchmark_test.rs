@@ -3,6 +3,7 @@
 //! each kind and the first page, with the limit that each time must keep. It prints each time, so a run records the numbers that
 //! docs/features.md (F160.24.7) states. The diagnostics configurations skip it by the feature: the numbers do not depend on them.
 
+#[path = "log_support_test.rs"]
 mod log_support;
 
 use std::io::Write;

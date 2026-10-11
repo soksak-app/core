@@ -172,15 +172,15 @@ pub fn parse_log_query(params: &str) -> Result<LogQuery, String> {
     if let Some(value) = choice("level", &LEVELS)? {
         query.level = value;
     }
-    query.class = choice("class", &CLASSES)?.unwrap_or_default();
-    query.layer = choice("layer", &LAYERS)?.unwrap_or_default();
-    query.event = text("event")?.unwrap_or_default();
-    query.event_prefix = text("event_prefix")?.unwrap_or_default();
-    query.surface = text("surface")?.unwrap_or_default();
-    query.session = text("session")?.unwrap_or_default();
-    query.cid = text("cid")?.unwrap_or_default();
-    query.run = text("run")?.unwrap_or_default();
-    query.text = text("text")?.unwrap_or_default();
+    query.class = choice("class", &CLASSES)?.unwrap_or_default(); // default: a member that is not given leaves the query open.
+    query.layer = choice("layer", &LAYERS)?.unwrap_or_default(); // default: a member that is not given leaves the query open.
+    query.event = text("event")?.unwrap_or_default(); // default: a member that is not given leaves the query open.
+    query.event_prefix = text("event_prefix")?.unwrap_or_default(); // default: a member that is not given leaves the query open.
+    query.surface = text("surface")?.unwrap_or_default(); // default: a member that is not given leaves the query open.
+    query.session = text("session")?.unwrap_or_default(); // default: a member that is not given leaves the query open.
+    query.cid = text("cid")?.unwrap_or_default(); // default: a member that is not given leaves the query open.
+    query.run = text("run")?.unwrap_or_default(); // default: a member that is not given leaves the query open.
+    query.text = text("text")?.unwrap_or_default(); // default: a member that is not given leaves the query open.
     query.from_us = bound("from_us")?;
     query.to_us = bound("to_us")?;
     if let Some(value) = json_get(&object, "limit") {
@@ -458,8 +458,8 @@ impl<'a> QueryPlan<'a> {
             level_mask: ((1u16 << (level + 1)) - 1) as u8,
             layer_bit: bit_of(&LAYERS, &query.layer),
             class_bit: bit_of(&CLASSES, &query.class),
-            low: query.from_us.unwrap_or(i64::MIN),
-            high: query.to_us.unwrap_or(i64::MAX),
+            low: query.from_us.unwrap_or(i64::MIN), // default: a query without a lower bound leaves the time open.
+            high: query.to_us.unwrap_or(i64::MAX), // default: a query without an upper bound leaves the time open.
             needle: query.text.to_ascii_lowercase().into_bytes(),
             literals,
         }
@@ -742,6 +742,7 @@ fn resolve_run(
                 .map_err(|error| file_error(&source.name, &error))?;
             scanned.read += 1;
             let first_line = number * SEGMENT_EVENTS as usize + 1;
+            // default: a segment that does not end with a line feed is read as it is.
             let body = data.strip_suffix(b"\n").unwrap_or(&data);
             for (line_number, raw) in (first_line..).zip(body.split(|byte| *byte == b'\n')) {
                 let line = scan_line(&source.name, line_number, raw)?;

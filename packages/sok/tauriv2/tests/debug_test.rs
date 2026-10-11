@@ -1,6 +1,7 @@
 //! `sok debug query` (docs/spec/debug.md#timeline-command) prints the same lines as the debug view for the golden files of
 //! packages/log-contract/fixtures/query, and rejects a file or a value that breaks the contract with an error that names it.
 
+#[path = "log_support_test.rs"]
 mod log_support;
 
 use std::path::Path;

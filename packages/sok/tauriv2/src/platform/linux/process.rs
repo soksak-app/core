@@ -52,6 +52,19 @@ impl Platform for Linux {
         }
     }
 
+    /// Creates the index file with the mode 0600 when it does not exist.
+    fn open_index(&self, path: &std::path::Path) -> Result<std::fs::File, String> {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(path)
+            .map_err(|error| crate::files::file_error(path.display(), &error))
+    }
+
     /// Takes `flock(LOCK_EX)` on the file, which excludes the other open files of the same file in every process.
     fn lock_file(&self, file: &std::fs::File) -> Result<(), String> {
         use std::os::unix::io::AsRawFd;

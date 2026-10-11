@@ -574,6 +574,7 @@ function followGrowth() {
       for (let after; ;) {
         const page = await pageOf(after === undefined ? request : { ...request, after });
         // The tail of the first page is the tail of the whole read: a row that the later pages hold and that arrived after it is read again.
+        // default: the first page of a read sets the tail of the whole read; later pages keep it.
         tail ??= page.tail;
         const added = withPage(next, page.rows);
         next = added.timeline;

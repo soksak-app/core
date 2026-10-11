@@ -1,6 +1,7 @@
 //! The index beside an event file (docs/spec/logging.md#index): its bytes for the golden files, its follow of appended lines, its rebuild
 //! of a file that is not the one it indexed, its refusal of damage, and its move with the generations of a rotation.
 
+#[path = "log_support_test.rs"]
 mod log_support;
 
 use std::io::Write;

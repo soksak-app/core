@@ -453,6 +453,7 @@ impl<'de> Visitor<'de> for LooseVisitor {
         Ok(Loose::Int(value))
     }
     fn visit_u64<E>(self, value: u64) -> Result<Loose<'de>, E> {
+        // default: a number above the range of i64 is not an integer for the scan, so the reader of the event structure judges the line.
         Ok(i64::try_from(value).map(Loose::Int).unwrap_or(Loose::Other))
     }
     fn visit_f64<E>(self, _: f64) -> Result<Loose<'de>, E> {
@@ -839,6 +840,7 @@ pub(crate) fn display_name(path: &Path) -> String {
         "logs/{}",
         path.file_name()
             .map(|name| name.to_string_lossy().to_string())
+            // default: a path without a file name has an empty display name.
             .unwrap_or_default()
     )
 }
@@ -880,17 +882,6 @@ fn read_all(file: &File) -> std::io::Result<Vec<u8>> {
     read_range(file, 0, size)
 }
 
-fn open_index(path: &Path) -> std::io::Result<File> {
-    let mut options = std::fs::OpenOptions::new();
-    options.read(true).write(true).create(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options.open(path)
-}
-
 /// Opens the event file and its index, locks the index, and checks that both are still the files at their paths, so a rotation cannot mix
 /// two files. The caller releases the lock by closing the index with `close_index`.
 fn locked_index(path: &Path) -> Result<(File, File, Box<dyn Platform>), String> {
@@ -898,7 +889,7 @@ fn locked_index(path: &Path) -> Result<(File, File, Box<dyn Platform>), String> 
     let idx_path = index_path(path);
     for _ in 0..8 {
         let source = File::open(path).map_err(|error| file_error(path.display(), &error))?;
-        let idx = open_index(&idx_path).map_err(|error| file_error(idx_path.display(), &error))?;
+        let idx = system.open_index(&idx_path)?;
         system.lock_file(&idx)?;
         let same_source = system.same_file(&source, path);
         let same_index = system.same_file(&idx, &idx_path);
@@ -984,6 +975,7 @@ fn refresh_locked(path: &Path, source: File, idx: &File) -> Result<OpenedLog, St
     } else if state.head_len > 0 {
         let matches = read_range(&source, 0, state.head_len as usize)
             .map(|head| fnv1a(&head) == state.head_hash)
+            // default: a head that cannot be read is not the head that was indexed, so the index is built again.
             .unwrap_or(false);
         if !matches {
             rebuild = "the first line changed".into();
@@ -1156,6 +1148,7 @@ pub fn read_log_index(path: &Path) -> Result<LogIndexInfo, String> {
             .tail
             .as_ref()
             .map(|tail| tail.events as i64)
+            // default: an index without a partial segment has no events in a tail.
             .unwrap_or(0),
         first_seq: index.state.first_seq as i64,
         last_seq: index.state.last_seq as i64,

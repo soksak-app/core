@@ -1,6 +1,7 @@
 //! The query over the event files (docs/spec/logging.md#query): the golden pages, the cursor, the tail, the run, the refusals and the
 //! segments that a query reads. The generated log is checked against a reference that filters every event of the log.
 
+#[path = "log_support_test.rs"]
 mod log_support;
 
 use std::io::Write;
