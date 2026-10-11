@@ -49,11 +49,16 @@ for (const app of Object.values(APPS)) {
     // Each layer must hold the key with its own fields; `find` names the record that the layer lacks.
     const nativeLine = (pattern) => log.find((line) => pattern.test(line.text));
     const traced = (match) => trace.find(match);
+    // An event of the input chain: the typed event with its time, so the hops compare with the other records.
+    const typed = (match) => {
+      const event = events.find(match);
+      return event && { ts: new Date(event.ts_us / 1000).toISOString(), event };
+    };
     const forEnter = (record) => record.surface === terminal.surface;
     const found = {
       injected: nativeLine(/^info native input inject: \{"kind":"key","key":"Enter".*"down":true.*"result":"delivered".*"responder":"SPImageRegion"/),
-      nativeKeyDown: nativeLine(/^info native input method: \{"call":"keyDown","keyCode":36,/),
-      nativeReport: nativeLine(/^info native input report: \{"type":"key","key":"Enter"/),
+      nativeKeyDown: typed((e) => e.event === "native.input.key_down" && e.fields.keyCode === 36),
+      nativeReport: typed((e) => e.event === "native.input.report" && e.fields.report.startsWith('{"type":"key","key":"Enter"')),
       hostRegion: traced((r) => r.layer === "host" && r.event === "region" && forEnter(r) && r.body?.key === "Enter"),
       pageRegion: traced((r) => r.layer === "page" && r.event === "region" && forEnter(r) && r.key === "Enter"),
       pageIme: traced((r) => r.layer === "page" && r.event === "ime" && forEnter(r) && r.key === "Enter"),
@@ -68,6 +73,28 @@ for (const app of Object.values(APPS)) {
     };
     const missing = Object.entries(found).filter(([, record]) => !record).map(([name]) => name);
     assert.deepEqual(missing, [], `${app.name}: the typed Enter left no record in: ${missing.join(", ")}`);
+    // The identifier that the native layer assigned to the key is carried by every hop of the chain of the input
+    // (docs/spec/logging.md#correlation-identifier): the report, the relay of the host, the call of the page that sends the
+    // request, and the request of the host to the sidecar.
+    const [cid] = found.nativeKeyDown.event.cids ?? [];
+    assert.ok(cid, `${app.name}: native.input.key_down has no cids`);
+    const hops = {
+      nativeReport: found.nativeReport.event,
+      hostRelay: events.find((e) => e.event === "host.input.relay" && e.cids?.includes(cid)),
+      pageCall: events.find((e) => e.event === "page.call" && e.fields.name === "sidecarSend" && e.cids?.includes(cid)),
+      hostRequest: events.find((e) => e.event === "host.sidecar.request" && e.cids?.includes(cid)),
+    };
+    const unlinked = Object.entries(hops).filter(([, hop]) => !hop?.cids?.includes(cid)).map(([name]) => name);
+    assert.deepEqual(unlinked, [], `${app.name}: the hops ${unlinked.join(", ")} do not carry ${cid}`);
+    // The delay between the layers is measured on the monotonic clock, which the layers of one boot share.
+    const clock = [["native.input.key_down", found.nativeKeyDown.event], ["native.input.report", hops.nativeReport], ["host.input.relay", hops.hostRelay],
+      ["page.call", hops.pageCall], ["host.sidecar.request", hops.hostRequest]];
+    for (let index = 1; index < clock.length; index++) {
+      const [, earlier] = clock[index - 1];
+      const [name, later] = clock[index];
+      assert.ok(Number.isInteger(later.mono_ns) && later.mono_ns >= earlier.mono_ns, `${app.name}: ${name} (mono_ns ${later.mono_ns}) is before ${clock[index - 1][0]} (mono_ns ${earlier.mono_ns})`);
+      t.diagnostic(`${app.name}: ${clock[index - 1][0]} -> ${name}: ${(later.mono_ns - earlier.mono_ns) / 1000} us`);
+    }
     // The layers record the key in the order in which it travels.
     const at = (record) => record.ts;
     // The injection record is written after the delivery, so it is not part of the order of the hops that the delivery causes.

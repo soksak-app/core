@@ -9,7 +9,7 @@ use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use crate::files::file_error;
 use crate::{config_dir_of, Arguments, Error, Options};
 
-const EVENT_SCHEMA: f64 = 1.0;
+const EVENT_SCHEMA: f64 = 2.0;
 const LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
 const LAYERS: [&str; 5] = ["native", "host", "page", "plugin", "sidecar"];
 
@@ -332,7 +332,7 @@ fn parse_events(file: &str, text: &str) -> Result<Vec<Row>, String> {
             Some(Json::Number(v)) => js_number(*v),
             other => stringify(other),
         };
-        return Err(format!("{file}: schema {shown} is not 1"));
+        return Err(format!("{file}: schema {shown} is not 2"));
     }
     Ok(rows)
 }

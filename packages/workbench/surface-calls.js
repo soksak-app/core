@@ -19,9 +19,9 @@ export function surfaceCalls({ send, log }) {
     call(name, ...args) {
       const started = performance.now();
       const ended = (ok, error) => {
-        const { level, event, fields } = callEvent({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, error });
+        const { level, event, fields, cids } = callEvent({ name, args, micros: Math.round((performance.now() - started) * 1000), ok, error });
         // events: page.call
-        batcher.emit(level, event, fields);
+        batcher.emit(level, event, fields, cids);
       };
       let result;
       try {

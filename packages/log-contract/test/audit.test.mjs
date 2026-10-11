@@ -5,11 +5,12 @@ import test from "node:test";
 import { auditLog, auditLogs, parseLog } from "../index.js";
 
 const catalog = {
-  schema: 1,
+  schema: 2,
   events: {
     "log.open": { layer: "host", class: "lifecycle", level: "info", fields: { schema: "number", pid: "number", role: "string", boot: "string" } },
     "log.dropped": { layer: "host", class: "lifecycle", level: "warn", fields: { from_seq: "number", to_seq: "number", count: "number" } },
     "native.input.key_down": { layer: "native", class: "input", level: "info", fields: { keyCode: "number" } },
+    "native.input.text": { layer: "native", class: "input", level: "info", cids: "required", fields: { keyCode: "number" } },
     "page.terminal.send": { layer: "page", class: "input", level: "info", fields: {} },
     "sidecar.vt.pty_write": { layer: "sidecar", class: "io", level: "info", fields: { hex: "string" } },
   },
@@ -17,9 +18,9 @@ const catalog = {
 };
 
 const line = (seq, event, fields = {}, extra = {}) => JSON.stringify({
-  ts_us: 1000 + seq, seq, level: "info", layer: "host", event, fields, ...extra,
+  ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: "info", layer: "host", event, fields, ...extra,
 });
-const open = line(1, "log.open", { schema: 1, pid: 7, role: "host", boot: "b1" });
+const open = line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" });
 
 test("a log with declared events, consecutive seq and a complete chain passes", () => {
   const text = [
@@ -84,8 +85,31 @@ test("a declared chain with a missing hop is a finding for its correlation ident
 test("a file whose first line is not log.open, or whose schema is unknown, is rejected with the file name and the value", () => {
   assert.throws(() => parseLog("a.jsonl", line(1, "native.input.key_down", { keyCode: 1 })), /a\.jsonl: the first line is not log\.open/);
   const other = line(1, "log.open", { schema: 9, pid: 1, role: "host", boot: "b" });
-  assert.throws(() => parseLog("b.jsonl", other), /b\.jsonl: schema 9 is not 1/);
+  assert.throws(() => parseLog("b.jsonl", other), /b\.jsonl: schema 9 is not 2/);
   assert.throws(() => parseLog("c.jsonl", `${open}\n{not json`), /c\.jsonl:2: not JSON/);
+  // A file of the earlier schema is rejected: it has no mono_ns and the reader keeps no code for it.
+  const earlier = line(1, "log.open", { schema: 1, pid: 1, role: "host", boot: "b" });
+  assert.throws(() => parseLog("d.jsonl", earlier), /d\.jsonl: schema 1 is not 2/);
+});
+
+test("a line without mono_ns, or with a mono_ns that is not a positive integer, is a finding", () => {
+  const withMono = (seq, mono) => JSON.stringify({ ts_us: 1000 + seq, ...(mono === undefined ? {} : { mono_ns: mono }), seq, level: "info", layer: "host", event: "log.dropped", fields: { from_seq: 1, to_seq: 1, count: 1 } });
+  const findings = auditLog("host-b1.jsonl", [open, withMono(2), withMono(3, "1"), withMono(4, 1.5), withMono(5, 0), withMono(6, 7)].join("\n"), catalog);
+  assert.deepEqual(findings.map((f) => f.line), [2, 3, 4, 5]);
+  for (const finding of findings) assert.match(finding.message, /mono_ns must be a positive integer/);
+});
+
+test("an event that the catalog declares with cids required is a finding without cids, with an empty list, or with a value that is not a string", () => {
+  const text = [
+    open,
+    line(2, "native.input.text", { keyCode: 1 }),
+    line(3, "native.input.text", { keyCode: 1 }, { cids: [] }),
+    line(4, "native.input.text", { keyCode: 1 }, { cids: [7] }),
+    line(5, "native.input.text", { keyCode: 1 }, { cids: ["b1.1"] }),
+  ].join("\n");
+  const findings = auditLog("host-b1.jsonl", text, catalog);
+  assert.deepEqual(findings.filter((f) => /requires cids/.test(f.message)).map((f) => f.line), [2, 3, 4]);
+  assert.match(findings.find((f) => f.line === 2).message, /event native\.input\.text requires cids/);
 });
 
 test("the golden lines and the golden catalog pass the audit", async () => {
@@ -99,7 +123,7 @@ test("the golden lines and the golden catalog pass the audit", async () => {
 
 test("a family name with a placeholder declares every event of the family, and a layer outside the catalog is left to its own catalog", () => {
   const family = {
-    schema: 1,
+    schema: 2,
     layers: ["host", "page"],
     events: {
       "log.open": catalog.events["log.open"],
@@ -124,7 +148,7 @@ test("a family name with a placeholder declares every event of the family, and a
 
 test("an optional field is checked only when present, and a type with | accepts each of its parts", () => {
   const optional = {
-    schema: 1,
+    schema: 2,
     events: {
       "log.open": catalog.events["log.open"],
       "log.rotated": { layer: "host", class: "lifecycle", level: "info", fields: { bytes: "number", "removed?": "string|null", "note?": "string" } },
@@ -146,7 +170,7 @@ test("an optional field is checked only when present, and a type with | accepts 
 
 const lines = (...items) => `${items.join("\n")}\n`;
 const generation = (first, last, boot = "b1") => lines(
-  line(first, "log.open", { schema: 1, pid: 7, role: "host", boot }),
+  line(first, "log.open", { schema: 2, pid: 7, role: "host", boot }),
   ...Array.from({ length: last - first }, (_, index) => line(first + 1 + index, "native.input.key_down", { keyCode: 1 })),
 );
 
@@ -159,9 +183,9 @@ test("seq continues across the rotated generations of one process, and a missing
 
 test("seq continues across the main file and the debug file of one process", () => {
   const main = lines(open, line(2, "native.input.key_down", { keyCode: 1 }), line(4, "native.input.key_down", { keyCode: 3 }));
-  const debug = lines(line(3, "log.open", { schema: 1, pid: 7, role: "host", boot: "b1" }), line(5, "native.input.key_down", { keyCode: 4 }));
+  const debug = lines(line(3, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }), line(5, "native.input.key_down", { keyCode: 4 }));
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: main }, { file: "host-1-2.debug.jsonl", text: debug }], catalog), []);
-  const short = lines(line(3, "log.open", { schema: 1, pid: 7, role: "host", boot: "b1" }), line(6, "native.input.key_down", { keyCode: 4 }));
+  const short = lines(line(3, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }), line(6, "native.input.key_down", { keyCode: 4 }));
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: main }, { file: "host-1-2.debug.jsonl", text: short }], catalog), [
     { file: "host-1-2.debug.jsonl", line: 2, message: "seq 6 follows seq 4" },
   ]);
@@ -189,7 +213,7 @@ test("the chains of the files of one configuration folder join, so a hop in a si
   const host = lines(open,
     line(2, "native.input.key_down", { keyCode: 36 }, { cids: ["b1.1"] }),
     line(3, "page.terminal.send", {}, { cids: ["b1.1"], layer: "page" }));
-  const sidecar = lines(line(1, "log.open", { schema: 1, pid: 8, role: "vt", boot: "b2" }),
+  const sidecar = lines(line(1, "log.open", { schema: 2, pid: 8, role: "vt", boot: "b2" }),
     line(2, "sidecar.vt.pty_write", { hex: "0d" }, { cids: ["b1.1"], layer: "sidecar" }));
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: host }, { file: "vt-3-4.jsonl", text: sidecar }], catalog), []);
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: host }], catalog), [

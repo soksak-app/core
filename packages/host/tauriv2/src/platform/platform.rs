@@ -654,6 +654,11 @@ pub trait Platform: Send + Sync {
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String>;
     /// Returns the events and bytes that the native ring refused since the last call.
     fn take_native_event_loss(&self) -> Result<(u64, u64), String>;
+    /// Reads the monotonic clock of the records in nanoseconds (the clock of `mono_ns`, docs/spec/logging.md#event).
+    fn monotonic_ns(&self) -> Result<u64, String>;
+    /// Gives the native layer the boot identifier of the run, which its correlation identifiers `<boot>.<n>` start with.
+    /// The native layer refuses an empty identifier and one with a character other than letters, digits, `-` and `_`.
+    fn set_event_boot(&self, boot: &str) -> Result<(), String>;
     /// Installs the observers that record the activity of the application and of its windows as events of the native ring
     /// (docs/spec/logging.md#automatic-entrances). A second call installs nothing more.
     fn observe_activity(&self) -> Result<(), String>;

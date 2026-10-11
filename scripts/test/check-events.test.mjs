@@ -7,7 +7,7 @@ import test from 'node:test';
 import { auditLogDirectories } from '../check-events.mjs';
 
 const catalog = {
-  schema: 1,
+  schema: 2,
   layers: ['host', 'page'],
   events: {
     'log.open': { layer: 'host', class: 'lifecycle', level: 'info', fields: { schema: 'number', pid: 'number', role: 'string', boot: 'string' } },
@@ -19,9 +19,9 @@ const catalog = {
 test('the logs of a configuration folder are audited against the catalog and the findings name the file and the line', () => {
   const root = mkdtempSync(join(tmpdir(), 'events-'));
   mkdirSync(join(root, 'logs'));
-  const line = (seq, event, fields, layer = 'host') => JSON.stringify({ ts_us: 1000 + seq, seq, level: 'info', layer, event, fields });
+  const line = (seq, event, fields, layer = 'host') => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: 'info', layer, event, fields });
   writeFileSync(join(root, 'logs', 'host-1-2.jsonl'), [
-    line(1, 'log.open', { schema: 1, pid: 2, role: 'host', boot: '1-2' }),
+    line(1, 'log.open', { schema: 2, pid: 2, role: 'host', boot: '1-2' }),
     line(2, 'host.window.event', { window: 'main', kind: 'focus' }),
     line(3, 'host.window.event', { window: 'main' }),
     line(4, 'host.surprise', {}),
@@ -37,8 +37,8 @@ test('the logs of a configuration folder are audited against the catalog and the
 test('the audit of a configuration folder reads the files of every layer, generation and the debug file, and reports an error event', () => {
   const root = mkdtempSync(join(tmpdir(), 'events-'));
   mkdirSync(join(root, 'logs'));
-  const line = (seq, event, fields, extra = {}) => JSON.stringify({ ts_us: 1000 + seq, seq, level: 'info', layer: 'host', event, fields, ...extra });
-  const open = (seq, role) => line(seq, 'log.open', { schema: 1, pid: 2, role, boot: '1-2' });
+  const line = (seq, event, fields, extra = {}) => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: 'info', layer: 'host', event, fields, ...extra });
+  const open = (seq, role) => line(seq, 'log.open', { schema: 2, pid: 2, role, boot: '1-2' });
   const write = (name, lines) => writeFileSync(join(root, 'logs', name), `${lines.join('\n')}\n`);
   write('host-1-2.jsonl.1', [open(1, 'host'), line(2, 'host.window.event', { window: 'main', kind: 'focus' })]);
   write('host-1-2.jsonl', [open(3, 'host'), line(5, 'host.window.event', { window: 'main', kind: 'focus' })]);

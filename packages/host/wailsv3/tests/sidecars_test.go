@@ -1134,6 +1134,43 @@ func TestTheRelayRecordsEveryMessageWithItsWholeBody(t *testing.T) {
 	}
 }
 
+// contract: sidecars.protocol.request-with-cids-is-recorded
+func TestSidecarRequestWithCorrelationIdentifiersIsRecordedAsAnEvent(t *testing.T) {
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	sidecars, _ := echoSidecars(t)
+	owner := newFakeOwner("/projects/a")
+	body := json.RawMessage(`{"operation":"input"}`)
+	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sidecars.Send(owner, echoSidecar, "s1", body); err != nil {
+		t.Fatal(err)
+	}
+	owner.next(t)
+	owner.next(t)
+	sidecars.Stop()
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var requests []map[string]any
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		if event["event"] == "host.sidecar.request" {
+			requests = append(requests, event)
+		}
+	}
+	if len(requests) != 1 {
+		t.Fatalf("a request with identifiers and one without stored %d requests, want 1: %v", len(requests), requests)
+	}
+	request := requests[0]
+	cids, ok := request["cids"].([]any)
+	fields := request["fields"].(map[string]any)
+	if request["level"] != "info" || !ok || len(cids) != 2 || cids[0] != "b1.7" || cids[1] != "b1.8" ||
+		fields["name"] != echoSidecar || fields["surface"] != "s1" || fields["bytes"] != float64(len(body)) {
+		t.Fatalf("the request record: %v", request)
+	}
+}
+
 // contract: sidecars.lifetime.start-and-exit-events
 func TestSidecarLifetimeIsRecordedAsEvents(t *testing.T) {
 	config := t.TempDir()

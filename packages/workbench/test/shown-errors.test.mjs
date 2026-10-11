@@ -1,13 +1,13 @@
 // Checks that an error shown on screen is written to the application log at that moment.
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { recordsOf, settled, shownRecord } from "./support/records.mjs";
+import { clockAnswer, recordsOf, settled, shownRecord } from "./support/records.mjs";
 
 const lines = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
   on: () => {},
   page: (path) => path,
-  call: async (name, payload) => { for (const record of recordsOf(name, payload)) lines.push(shownRecord(record)); },
+  call: async (name, payload) => { if (clockAnswer(name, payload)) return clockAnswer(name, payload); for (const record of recordsOf(name, payload)) lines.push(shownRecord(record)); },
 } } });
 const { JSDOM } = await import("jsdom");
 const { document } = new JSDOM("<p></p>").window;

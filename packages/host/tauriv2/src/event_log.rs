@@ -21,7 +21,7 @@ use serde_json::value::{to_raw_value, RawValue};
 use crate::bounds::{cut_text, EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES};
 
 /// The schema number of the lines that this writer writes.
-pub const SCHEMA: u64 = 1;
+pub const SCHEMA: u64 = 2;
 
 /// The level of an event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -77,6 +77,10 @@ pub type PullLoss = Box<dyn Fn() -> (u64, u64) + Send>;
 /// One event waiting for the writer. `seq` is assigned when the writer serializes it.
 struct Pending {
     ts_us: u64,
+    /// The monotonic clock in nanoseconds (docs/spec/logging.md#event).
+    mono_ns: u64,
+    /// The correlation identifiers of the inputs the event belongs to; none for most events.
+    cids: Vec<String>,
     layer: Cow<'static, str>,
     level: Level,
     event: String,
@@ -153,6 +157,40 @@ pub fn standard_error_path(config: &Path) -> PathBuf {
 /// The layers of the event contract (docs/spec/logging.md#event).
 const LAYERS: [&str; 5] = ["native", "host", "page", "plugin", "sidecar"];
 
+/// The monotonic clock of the records in nanoseconds, read from the platform so the host, the native layer and the page
+/// share one clock. A platform that cannot read it is reported on the standard error and the clock is 0, which the audit
+/// of the logs refuses.
+pub fn monotonic_ns() -> u64 {
+    match crate::platform::current().and_then(|system| system.monotonic_ns()) {
+        Ok(nanoseconds) => nanoseconds,
+        Err(error) => {
+            eprintln!("event writer: the monotonic clock cannot be read: {error}");
+            0
+        }
+    }
+}
+
+/// Whether `cid` can be stored as a correlation identifier: it is not empty and holds no quote, no backslash and no
+/// control character, so it is written as the text of a JSON string without escaping.
+pub fn valid_cid(cid: &str) -> bool {
+    !cid.is_empty()
+        && cid
+            .chars()
+            .all(|c| c != '"' && c != '\\' && !c.is_control())
+}
+
+/// An event that another layer of this process produced, with the time, the monotonic clock, the layer and the
+/// correlation identifiers it carries.
+pub struct RelayedEvent {
+    pub ts_us: u64,
+    pub mono_ns: u64,
+    pub layer: String,
+    pub level: Level,
+    pub event: String,
+    pub cids: Vec<String>,
+    pub fields: Box<RawValue>,
+}
+
 fn now_us() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -173,6 +211,7 @@ impl EventLog {
         let system = crate::platform::current()?;
         // A platform that cannot pull the native ring fails here, at the start, instead of running without native events.
         system.pull_native_events(&mut [0u8; 1])?;
+        system.set_event_boot(process_boot())?;
         system.observe_activity()?;
         EventLog::start(Options {
             directory: config.join("logs"),
@@ -237,6 +276,8 @@ impl EventLog {
         });
         let open = Pending {
             ts_us: now_us(),
+            mono_ns: monotonic_ns(),
+            cids: Vec::new(),
             layer: Cow::Borrowed("host"),
             level: Level::Info,
             event: "log.open".into(),
@@ -323,6 +364,8 @@ impl EventLog {
         let (placed, receiver) = sync_channel(1);
         if !self.enqueue(
             now_us(),
+            monotonic_ns(),
+            Vec::new(),
             Cow::Borrowed("host"),
             level,
             event,
@@ -355,20 +398,79 @@ impl EventLog {
                 return false;
             }
         };
-        self.enqueue(now_us(), Cow::Borrowed("host"), level, event, fields, None)
+        self.enqueue(
+            now_us(),
+            monotonic_ns(),
+            Vec::new(),
+            Cow::Borrowed("host"),
+            level,
+            event,
+            fields,
+            None,
+        )
+    }
+
+    /// Queues an event like `emit` with the correlation identifiers of the inputs it belongs to. An identifier that is
+    /// not valid is a defect of the caller: it is reported on the standard error, the event is counted as lost and the
+    /// result is false.
+    pub fn emit_cids<T: Serialize>(
+        &self,
+        level: Level,
+        event: &str,
+        cids: &[String],
+        fields: &T,
+    ) -> bool {
+        if let Some(bad) = cids.iter().find(|cid| !valid_cid(cid)) {
+            self.count_loss(1, event.len() as u64);
+            eprintln!("event writer: {event} has the correlation identifier {bad:?}, which is empty or holds a quote, a backslash or a control character");
+            return false;
+        }
+        if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
+            self.count_loss(1, event.len() as u64);
+            return false;
+        }
+        let fields = match to_raw_value(fields) {
+            Ok(fields) => fields,
+            Err(error) => {
+                self.count_loss(1, event.len() as u64);
+                eprintln!("event writer: the fields of {event} cannot be serialized: {error}");
+                return false;
+            }
+        };
+        self.enqueue(
+            now_us(),
+            monotonic_ns(),
+            cids.to_vec(),
+            Cow::Borrowed("host"),
+            level,
+            event,
+            fields,
+            None,
+        )
     }
 
     /// Queues an event that another layer of this process produced, with the time and the layer it carries. The event
     /// name must start with the layer, so the name and the layer cannot disagree. Returns an error for a layer outside
     /// the contract or a name that does not start with it, and false, with the loss counted, when the queue has no room.
-    pub fn emit_relayed(
-        &self,
-        ts_us: u64,
-        layer: &str,
-        level: Level,
-        event: &str,
-        fields: Box<RawValue>,
-    ) -> Result<bool, String> {
+    pub fn emit_relayed(&self, relayed: RelayedEvent) -> Result<bool, String> {
+        let RelayedEvent {
+            ts_us,
+            mono_ns,
+            layer,
+            level,
+            event,
+            cids,
+            fields,
+        } = relayed;
+        let (layer, event) = (layer.as_str(), event.as_str());
+        if mono_ns == 0 {
+            return Err(format!("the mono_ns of {event} must be positive"));
+        }
+        if let Some(bad) = cids.iter().find(|cid| !valid_cid(cid)) {
+            return Err(format!(
+                "the cid {bad:?} of {event} is empty or holds a quote, a backslash or a control character"
+            ));
+        }
         if !LAYERS.contains(&layer) {
             return Err(format!(
                 "the layer {layer:?} of {event} is not one of {LAYERS:?}"
@@ -385,6 +487,8 @@ impl EventLog {
         }
         Ok(self.enqueue(
             ts_us,
+            mono_ns,
+            cids,
             Cow::Owned(layer.to_string()),
             level,
             event,
@@ -393,9 +497,12 @@ impl EventLog {
         ))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn enqueue(
         &self,
         ts_us: u64,
+        mono_ns: u64,
+        cids: Vec<String>,
         layer: Cow<'static, str>,
         level: Level,
         event: &str,
@@ -410,6 +517,8 @@ impl EventLog {
         }
         let pending = Pending {
             ts_us,
+            mono_ns,
+            cids,
             layer,
             level,
             event: event.to_string(),
@@ -497,13 +606,21 @@ fn line(seq: u64, pending: &Pending) -> String {
         Some(size) => format!(",\"truncated\":{size}"),
         None => String::new(),
     };
+    // The identifiers hold no quote, backslash or control character, so they are written without escaping.
+    let cids = if pending.cids.is_empty() {
+        String::new()
+    } else {
+        format!(",\"cids\":[\"{}\"]", pending.cids.join("\",\""))
+    };
     format!(
-        "{{\"ts_us\":{},\"seq\":{},\"level\":\"{}\",\"layer\":\"{}\",\"event\":{},\"fields\":{}{}}}",
+        "{{\"ts_us\":{},\"mono_ns\":{},\"seq\":{},\"level\":\"{}\",\"layer\":\"{}\",\"event\":{}{},\"fields\":{}{}}}",
         pending.ts_us,
+        pending.mono_ns,
         seq,
         pending.level.name(),
         pending.layer,
         serde_json::to_string(&pending.event).expect("a string serializes"),
+        cids,
         pending.fields.get(),
         truncated
     )
@@ -576,6 +693,8 @@ impl Output {
                 self.size = 0;
                 let open = Pending {
                     ts_us: now_us(),
+                    mono_ns: monotonic_ns(),
+                    cids: Vec::new(),
                     layer: Cow::Borrowed("host"),
                     level: Level::Info,
                     event: "log.open".into(),
@@ -588,6 +707,8 @@ impl Output {
                 self.append(&open);
                 let rotated = Pending {
                     ts_us: now_us(),
+                    mono_ns: monotonic_ns(),
+                    cids: Vec::new(),
                     layer: Cow::Borrowed("host"),
                     level: Level::Info,
                     event: "log.rotated".into(),
@@ -618,6 +739,8 @@ impl Output {
         let pending = Pending {
             layer: Cow::Borrowed("host"),
             ts_us: now_us(),
+            mono_ns: monotonic_ns(),
+            cids: Vec::new(),
             level: Level::Warn,
             event: "log.dropped".into(),
             fields: to_raw_value(&json!({
@@ -727,8 +850,13 @@ impl Output {
 const NATIVE_PULL_BYTES: usize = 256 << 10;
 const NATIVE_PULL_PASSES: usize = 64;
 
-/// Decodes the record at the start of `buffer`: a 4-byte length, then the time in microseconds (8 bytes), the level
-/// (1 byte), the length of the name (1 byte), the name and the fields as JSON text, in the byte order of the host.
+/// The bytes of a native record before the name: the wall clock (8), the monotonic clock (8), the level (1), the length of
+/// the name (1) and the length of the cids (2).
+const NATIVE_HEADER_BYTES: usize = 20;
+
+/// Decodes the record at the start of `buffer`: a 4-byte length, then the time in microseconds (8 bytes), the monotonic
+/// clock in nanoseconds (8), the level (1 byte), the length of the name (1 byte), the length of the cids (2), the name, the
+/// cids as a list separated by commas and the fields as JSON text, in the byte order of the host.
 /// Returns the number of bytes the record takes with the event or the reason it is refused. When the length itself is wrong
 /// the number of bytes is 0, so the caller abandons the rest of the buffer.
 fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
@@ -742,7 +870,7 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
         ));
     }
     let length = u32::from_ne_bytes(buffer[..4].try_into().expect("four bytes")) as usize;
-    if length < 10 || 4 + length > buffer.len() {
+    if length < NATIVE_HEADER_BYTES || 4 + length > buffer.len() {
         return Err((
             0,
             format!(
@@ -753,7 +881,7 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
     }
     let total = 4 + length;
     let body = &buffer[4..total];
-    let level = match body[8] {
+    let level = match body[16] {
         0 => Level::Error,
         1 => Level::Warn,
         2 => Level::Info,
@@ -761,21 +889,44 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
         4 => Level::Trace,
         other => return Err((total, format!("the level {other} is not defined"))),
     };
-    let name_length = body[9] as usize;
-    if 10 + name_length > body.len() {
+    let name_length = body[17] as usize;
+    let cids_length = u16::from_ne_bytes(body[18..20].try_into().expect("two bytes")) as usize;
+    if NATIVE_HEADER_BYTES + name_length + cids_length > body.len() {
         return Err((
             total,
-            format!("the name of {name_length} bytes does not fit the record"),
+            format!(
+                "the name of {name_length} bytes and the cids of {cids_length} bytes do not fit the record"
+            ),
         ));
     }
-    let name = String::from_utf8_lossy(&body[10..10 + name_length]).into_owned();
+    let name =
+        String::from_utf8_lossy(&body[NATIVE_HEADER_BYTES..NATIVE_HEADER_BYTES + name_length])
+            .into_owned();
     if !name.starts_with("native.") {
         return Err((
             total,
             format!("the event {name:?} does not start with its layer \"native\""),
         ));
     }
-    let fields = &body[10 + name_length..];
+    let cids_text = String::from_utf8_lossy(
+        &body[NATIVE_HEADER_BYTES + name_length..NATIVE_HEADER_BYTES + name_length + cids_length],
+    );
+    let cids: Vec<String> = if cids_text.is_empty() {
+        Vec::new()
+    } else {
+        cids_text.split(',').map(str::to_string).collect()
+    };
+    if let Some(bad) = cids.iter().find(|cid| !valid_cid(cid)) {
+        return Err((
+            total,
+            format!("the cid {bad:?} of {name} is empty or holds a quote, a backslash or a control character"),
+        ));
+    }
+    let mono_ns = u64::from_ne_bytes(body[8..16].try_into().expect("eight bytes"));
+    if mono_ns == 0 {
+        return Err((total, format!("the mono_ns of {name} is 0")));
+    }
+    let fields = &body[NATIVE_HEADER_BYTES + name_length + cids_length..];
     let fields = std::str::from_utf8(fields)
         .ok()
         .filter(|text| text.starts_with('{'))
@@ -785,6 +936,8 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
         total,
         Pending {
             ts_us: u64::from_ne_bytes(body[..8].try_into().expect("eight bytes")),
+            mono_ns,
+            cids,
             layer: Cow::Borrowed("native"),
             level,
             event: name,

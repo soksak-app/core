@@ -7,7 +7,7 @@ import { JSDOM } from "jsdom";
 import { ROW_LIMIT } from "../debug-timeline.js";
 
 const line = (event) => JSON.stringify(event);
-const open = (boot) => line({ ts_us: 1, seq: 0, level: "info", layer: "host", event: "log.open", fields: { schema: 1, boot } });
+const open = (boot) => line({ ts_us: 1, seq: 0, level: "info", layer: "host", event: "log.open", fields: { schema: 2, boot } });
 const HOST = [
   open("a"),
   line({ ts_us: 30, seq: 2, level: "warn", layer: "page", event: "page.call.slow", fields: { name: "windows.list" } }),

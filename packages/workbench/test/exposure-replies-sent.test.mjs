@@ -2,14 +2,14 @@
 // reloads its own window still answers (docs/spec/installation.md#applying-a-change).
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { settled } from "./support/records.mjs";
+import { clockAnswer, settled } from "./support/records.mjs";
 
 const handlers = new Map();
 const calls = [];
 mock.module("@soksak/runtime", { namedExports: { host: {
   on: async (name, fn) => { handlers.set(name, fn); },
   page: (path) => path,
-  call: async (name, payload) => { calls.push([name, payload]); },
+  call: async (name, payload) => { calls.push([name, payload]); return clockAnswer(name, payload); },
 } } });
 const { connectExposure, registry, whenRepliesSent } = await import("../exposure.js");
 
@@ -44,7 +44,7 @@ test("a command request is the event page.command with its name, duration and ou
   handlers.get("exposure-request")({ id: 22, method: "command.run", params: { name: "core.fixture.broken", params: {} } });
   await whenRepliesSent();
   await settled();
-  const events = calls.filter(([name]) => name === "log").flatMap(([, payload]) => payload.events).filter(({ event }) => event === "page.command");
+  const events = calls.filter(([name]) => name === "log").flatMap(([, payload]) => payload.events ?? []).filter(({ event }) => event === "page.command");
   // An event is stored when its command ends, so the order is the order of the ends.
   assert.deepEqual(events.map(({ level, fields }) => [level, fields.name, fields.ok, fields.error]).sort((a, b) => a[1].localeCompare(b[1])), [
     ["warn", "core.fixture.broken", false, "broken on purpose"],

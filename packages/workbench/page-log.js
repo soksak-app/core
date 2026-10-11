@@ -62,9 +62,9 @@ const UNRECORDED_CALLS = new Set(["log", "performance", "debugReadRange", "overl
 if (batcher) {
   observeHostCalls(({ name, args, micros, ok, error }) => {
     if (UNRECORDED_CALLS.has(name)) return;
-    const { level, event, fields } = callEvent({ name, args, micros, ok, error });
+    const { level, event, fields, cids } = callEvent({ name, args, micros, ok, error });
     // events: page.call
-    batcher.emit(level, event, fields);
+    batcher.emit(level, event, fields, cids);
   });
 }
 

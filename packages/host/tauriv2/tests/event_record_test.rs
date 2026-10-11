@@ -10,8 +10,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde_json::{json, Value};
 use soksak_host_tauriv2::application_log::{log_error, log_info, log_record};
 use soksak_host_tauriv2::event_log::{EventLog, Options};
-use soksak_host_tauriv2::event_record::{flush_records, use_host_event_log, START_BUFFER_RECORDS};
+use soksak_host_tauriv2::event_record::{
+    flush_records, record_input_relay, use_host_event_log, START_BUFFER_RECORDS,
+};
 use soksak_host_tauriv2::performance;
+use soksak_host_tauriv2::platform;
 
 /// The records of the host are process-wide, so the tests of this file run one at a time.
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -104,9 +107,11 @@ fn records_written_before_the_writer_exists_are_stored_in_order_with_their_own_t
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     use_host_event_log(None);
     let before = micros();
+    let mono_before = platform::current().unwrap().monotonic_ns().unwrap();
     log_error("early", "first");
     log_info("early", "second");
     let after = micros();
+    let mono_after = platform::current().unwrap().monotonic_ns().unwrap();
     let directory = tempfile::tempdir().unwrap();
     let log = start(directory.path(), 64);
     use_host_event_log(Some(Arc::clone(&log)));
@@ -122,6 +127,11 @@ fn records_written_before_the_writer_exists_are_stored_in_order_with_their_own_t
         assert!(
             (before..=after).contains(&ts),
             "ts_us {ts} is outside [{before}, {after}]: the record took the time of the attach"
+        );
+        let mono = event["mono_ns"].as_u64().unwrap();
+        assert!(
+            (mono_before..=mono_after).contains(&mono),
+            "mono_ns {mono} is outside [{mono_before}, {mono_after}]: the record took the clock of the attach"
         );
     }
 }
@@ -243,4 +253,46 @@ fn a_host_observation_of_the_trace_is_an_event() {
         refused["event"], "host.record.error",
         "an observation without a name was not reported: {refused}"
     );
+}
+
+// contract: log.input.region-event-with-cids-is-recorded
+#[test]
+fn a_region_event_with_cids_is_recorded_as_the_relay_of_an_input() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    use_host_event_log(None);
+    let directory = tempfile::tempdir().unwrap();
+    let log = start(directory.path(), 64);
+    use_host_event_log(Some(Arc::clone(&log)));
+    record_input_relay(
+        "tab-1",
+        "view",
+        r#"{"type":"key","key":"Enter","cids":["b1.4","b1.5"]}"#,
+    );
+    record_input_relay("tab-1", "view", r#"{"type":"focus","focused":true}"#);
+    record_input_relay("tab-1", "view", r#"{"type":"key","cids":"b1.6"}"#);
+    record_input_relay("tab-1", "view", r#"{"cids":["b1.7"]}"#);
+    record_input_relay("tab-1", "view", r#"{"type":"key","cids":["b1.\"8"]}"#);
+    record_input_relay("tab-1", "view", "{broken");
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    use_host_event_log(None);
+    let events = read(&path);
+    let relays: Vec<&Value> = events
+        .iter()
+        .filter(|event| event["event"] == "host.input.relay")
+        .collect();
+    assert_eq!(relays.len(), 1, "{events:?}");
+    assert_eq!(relays[0]["level"], "info");
+    assert_eq!(relays[0]["layer"], "host");
+    assert_eq!(relays[0]["cids"], json!(["b1.4", "b1.5"]));
+    assert_eq!(
+        relays[0]["fields"],
+        json!({"surface": "tab-1", "name": "view", "type": "key"})
+    );
+    // An event with identifiers that cannot be recorded is reported, and nothing is recorded in its place.
+    let errors = events
+        .iter()
+        .filter(|event| event["event"] == "host.record.error")
+        .count();
+    assert_eq!(errors, 4, "{events:?}");
 }

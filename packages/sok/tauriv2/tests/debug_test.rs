@@ -82,11 +82,11 @@ fn timeline_refuses_what_breaks_the_contract() {
     );
 
     let broken = temp_dir("broken");
-    let open = "{\"ts_us\":1,\"seq\":0,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":1}}\n";
+    let open = "{\"ts_us\":1,\"seq\":0,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n";
     let line = |extra: &str| format!("{open}{extra}\n");
     let cases: Vec<(&str, String, &str)> = vec![
         ("first line", "{\"ts_us\":1,\"seq\":0,\"level\":\"info\",\"layer\":\"host\",\"event\":\"host.x\"}\n".into(), "logs/host-b1.jsonl: the first line is not log.open: \"host.x\""),
-        ("schema", "{\"ts_us\":1,\"seq\":0,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n".into(), "logs/host-b1.jsonl: schema 2 is not 1"),
+        ("schema", "{\"ts_us\":1,\"seq\":0,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":1}}\n".into(), "logs/host-b1.jsonl: schema 1 is not 2"),
         ("not json", line("not json"), "logs/host-b1.jsonl:2: not JSON: not json"),
         ("not object", line("[1]"), "logs/host-b1.jsonl:2: not an event object: [1]"),
         ("seq", line("{\"ts_us\":1,\"seq\":\"x\",\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\"}"), "logs/host-b1.jsonl:2: seq must be an integer, found \"x\""),
@@ -143,7 +143,7 @@ fn timeline_refuses_an_invalid_filter_value_as_a_usage_error() {
 #[test]
 fn timeline_reads_a_file_without_a_line_as_no_rows() {
     let dir = temp_dir("without-a-line");
-    let open = "{\"ts_us\":1,\"seq\":0,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":1}}\n";
+    let open = "{\"ts_us\":1,\"seq\":0,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n";
     std::fs::write(dir.join("logs/host-a.jsonl"), "").expect("write the empty file");
     std::fs::write(dir.join("logs/host-b.jsonl"), open).expect("write the file");
     let (stdout, stderr, code) = run_timeline(&dir, &[]);

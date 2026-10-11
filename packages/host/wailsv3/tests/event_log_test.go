@@ -13,6 +13,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 func eventLogOptions(directory string) host.EventLogOptions {
@@ -63,7 +64,7 @@ func TestTheFirstLineOfAnEventLogIsLogOpenAndSeqIsConsecutive(t *testing.T) {
 		t.Fatalf("first event %v", events[0])
 	}
 	fields := events[0]["fields"].(map[string]any)
-	if fields["schema"] != float64(1) || fields["role"] != "host" || fields["boot"] != "b1" {
+	if fields["schema"] != float64(2) || fields["role"] != "host" || fields["boot"] != "b1" {
 		t.Fatalf("log.open fields %v", fields)
 	}
 	for position, event := range events {
@@ -73,6 +74,107 @@ func TestTheFirstLineOfAnEventLogIsLogOpenAndSeqIsConsecutive(t *testing.T) {
 	}
 	if len(events) != 11 || events[5]["fields"].(map[string]any)["index"] != float64(4) {
 		t.Fatalf("events %v", events)
+	}
+}
+
+// contract: log.writer.stores-both-clocks
+func TestEveryLineCarriesTheWallClockAndTheMonotonicClockOfTheCall(t *testing.T) {
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	options := eventLogOptions(t.TempDir())
+	// A small file rotates, so log.open and log.rotated are written by the writer after its start.
+	options.RotateBytes = 4000
+	options.Generations = 3
+	options.QueueEvents = 1000
+	wallStart := time.Now().UnixMicro()
+	monoStart, err := system.MonotonicNanos()
+	if err != nil {
+		t.Fatal(err)
+	}
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index < 60; index++ {
+		if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index, "padding": "xxxxxxxxxxxxxxxxxxxx"}) {
+			t.Fatalf("event %d was refused", index)
+		}
+	}
+	if err := log.Flush(10 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	wallEnd := time.Now().UnixMicro()
+	monoEnd, err := system.MonotonicNanos()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var all []map[string]any
+	for _, name := range []string{log.Path() + ".3", log.Path() + ".2", log.Path() + ".1", log.Path()} {
+		if _, err := os.Stat(name); err == nil {
+			all = append(all, readEventLog(t, name)...)
+		}
+	}
+	rotated, previous := 0, float64(0)
+	for _, event := range all {
+		ts, _ := event["ts_us"].(float64)
+		mono, ok := event["mono_ns"].(float64)
+		if !ok || mono <= 0 {
+			t.Fatalf("the line has no positive mono_ns: %v", event)
+		}
+		if int64(ts) < wallStart || int64(ts) > wallEnd || uint64(mono) < monoStart || uint64(mono) > monoEnd {
+			t.Fatalf("the line %v is outside the clocks of the test: ts_us [%d, %d], mono_ns [%d, %d]", event, wallStart, wallEnd, monoStart, monoEnd)
+		}
+		switch event["event"] {
+		case "log.rotated":
+			rotated++
+		case "host.test.event":
+			if mono < previous {
+				t.Fatalf("mono_ns %v of %v is smaller than the %v of the event before it", mono, event, previous)
+			}
+			previous = mono
+		}
+	}
+	if rotated == 0 {
+		t.Fatal("the file did not rotate, so log.open and log.rotated of the writer were not checked")
+	}
+}
+
+// contract: log.writer.stores-cids
+func TestAnEventWithCorrelationIdentifiersStoresThemAndAnInvalidIdentifierIsRefused(t *testing.T) {
+	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !log.EmitCids(host.LevelInfo, "host.test.input", []string{"b1.1", "b1.2"}, map[string]any{"index": 1}) {
+		t.Fatal("an event with identifiers was refused")
+	}
+	if !log.Emit(host.LevelInfo, "host.test.plain", map[string]any{"index": 2}) {
+		t.Fatal("an event without identifiers was refused")
+	}
+	for _, bad := range [][]string{{""}, {`a"b`}, {`a\b`}, {"a\nb"}} {
+		if log.EmitCids(host.LevelInfo, "host.test.bad", bad, map[string]any{}) {
+			t.Fatalf("the identifiers %q were accepted", bad)
+		}
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	if len(events) != 4 {
+		t.Fatalf("events %v", events)
+	}
+	cids, ok := events[1]["cids"].([]any)
+	if !ok || len(cids) != 2 || cids[0] != "b1.1" || cids[1] != "b1.2" {
+		t.Fatalf("the cids of the first event: %v", events[1])
+	}
+	if _, present := events[2]["cids"]; present {
+		t.Fatalf("an event without identifiers has cids: %v", events[2])
+	}
+	dropped := events[3]
+	if dropped["event"] != "log.dropped" || dropped["fields"].(map[string]any)["count"] != float64(4) {
+		t.Fatalf("the four refused events were not counted: %v", dropped)
 	}
 }
 
@@ -179,7 +281,7 @@ func TestTheEventLogPassesTheAuditOfTheContractPackage(t *testing.T) {
 		t.Fatal(err)
 	}
 	catalog := filepath.Join(directory, "catalog.json")
-	text := `{"schema":1,"events":{
+	text := `{"schema":2,"events":{
 	  "log.open":{"layer":"host","class":"lifecycle","level":"info","fields":{"schema":"number","pid":"number","role":"string","boot":"string"}},
 	  "log.dropped":{"layer":"host","class":"lifecycle","level":"warn","fields":{"from_seq":"number","to_seq":"number","count":"number"}},
 	  "host.test.event":{"layer":"host","class":"lifecycle","level":"info","fields":{"index":"number"}}}}`
@@ -240,18 +342,34 @@ func TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	accepted, err := log.EmitRelayed(1_791_000_000_000_123, "page", host.LevelWarn, "page.test.event", json.RawMessage(`{"index":7}`))
+	relayed := func(layer, event string, fields string) host.RelayedEvent {
+		return host.RelayedEvent{TsMicros: 1, MonoNs: 1, Layer: layer, Level: host.LevelInfo, Event: event, Fields: json.RawMessage(fields)}
+	}
+	accepted, err := log.EmitRelayed(host.RelayedEvent{TsMicros: 1_791_000_000_000_123, MonoNs: 5_000_000_123, Layer: "page", Level: host.LevelWarn,
+		Event: "page.test.event", Cids: []string{"b1.9"}, Fields: json.RawMessage(`{"index":7}`)})
 	if err != nil || !accepted {
 		t.Fatalf("accepted %v, error %v", accepted, err)
 	}
-	if _, err := log.EmitRelayed(1, "page", host.LevelInfo, "host.test.event", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "does not start with its layer") {
+	if _, err := log.EmitRelayed(relayed("page", "host.test.event", `{}`)); err == nil || !strings.Contains(err.Error(), "does not start with its layer") {
 		t.Fatalf("a name outside its layer: %v", err)
 	}
-	if _, err := log.EmitRelayed(1, "unknown", host.LevelInfo, "unknown.test.event", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "is not one of") {
+	if _, err := log.EmitRelayed(relayed("unknown", "unknown.test.event", `{}`)); err == nil || !strings.Contains(err.Error(), "is not one of") {
 		t.Fatalf("a layer outside the contract: %v", err)
 	}
-	if _, err := log.EmitRelayed(1, "page", host.LevelInfo, "page.test.event", json.RawMessage(`{broken`)); err == nil || !strings.Contains(err.Error(), "fields") {
+	if _, err := log.EmitRelayed(relayed("page", "page.test.event", `{broken`)); err == nil || !strings.Contains(err.Error(), "fields") {
 		t.Fatalf("fields that are not JSON: %v", err)
+	}
+	noClock := relayed("page", "page.test.event", `{}`)
+	noClock.MonoNs = 0
+	if _, err := log.EmitRelayed(noClock); err == nil || !strings.Contains(err.Error(), "mono_ns") {
+		t.Fatalf("a monotonic clock of 0: %v", err)
+	}
+	for _, bad := range []string{"", `a"b`, `a\b`, "a\nb"} {
+		invalid := relayed("page", "page.test.event", `{}`)
+		invalid.Cids = []string{"b1.1", bad}
+		if _, err := log.EmitRelayed(invalid); err == nil || !strings.Contains(err.Error(), "cid") {
+			t.Fatalf("the identifier %q: %v", bad, err)
+		}
 	}
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
@@ -260,10 +378,10 @@ func TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter(t *testing.T)
 	if len(events) != 2 {
 		t.Fatalf("events %v", events)
 	}
-	relayed := events[1]
-	if relayed["layer"] != "page" || relayed["ts_us"] != float64(1_791_000_000_000_123) || relayed["seq"] != float64(2) ||
-		relayed["level"] != "warn" || relayed["fields"].(map[string]any)["index"] != float64(7) {
-		t.Fatalf("relayed event %v", relayed)
+	stored := events[1]
+	if stored["layer"] != "page" || stored["ts_us"] != float64(1_791_000_000_000_123) || stored["mono_ns"] != float64(5_000_000_123) || stored["seq"] != float64(2) ||
+		stored["level"] != "warn" || stored["fields"].(map[string]any)["index"] != float64(7) || len(stored["cids"].([]any)) != 1 || stored["cids"].([]any)[0] != "b1.9" {
+		t.Fatalf("relayed event %v", stored)
 	}
 }
 

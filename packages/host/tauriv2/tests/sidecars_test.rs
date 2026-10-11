@@ -1595,6 +1595,60 @@ fn the_sampler_names_a_running_sidecar_until_it_ends() {
     );
 }
 
+// contract: sidecars.protocol.request-with-cids-is-recorded
+#[test]
+fn a_request_with_cids_is_recorded_as_an_event() {
+    // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
+    if let Some(config) = std::env::var_os("SOKSAK_REQUEST_CHILD") {
+        let (mut sidecars, _directory) = script_sidecars("#!/bin/sh\ncat >/dev/null\n");
+        sidecars.0.stop_timeout = STALL;
+        let writer = records::start_writer(Path::new(&config));
+        let (window, _events) = owner("a", "/projects/a");
+        sidecars
+            .send_with_cids(
+                &window,
+                ECHO,
+                "s1",
+                &raw(r#"{"operation":"input"}"#),
+                &["b1.7".to_string(), "b1.8".to_string()],
+            )
+            .unwrap();
+        sidecars
+            .send(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
+            .unwrap();
+        sidecars.stop();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "a_request_with_cids_is_recorded_as_an_event",
+            "--nocapture",
+        ])
+        .env("SOKSAK_REQUEST_CHILD", config.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let requests: Vec<serde_json::Value> =
+        records::read_events(&records::event_log_path(config.path()))
+            .into_iter()
+            .filter(|event| event["event"] == "host.sidecar.request")
+            .collect();
+    assert_eq!(requests.len(), 1, "{requests:?}");
+    assert_eq!(requests[0]["level"], "info");
+    assert_eq!(requests[0]["cids"], serde_json::json!(["b1.7", "b1.8"]));
+    assert_eq!(
+        requests[0]["fields"],
+        serde_json::json!({"name": ECHO, "surface": "s1", "bytes": 21})
+    );
+}
+
 // contract: sidecars.protocol.request-line-carries-cids
 #[test]
 fn a_request_carries_the_correlation_identifiers() {

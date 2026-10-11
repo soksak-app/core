@@ -8,13 +8,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::json;
 use serde_json::value::{to_raw_value, RawValue};
 
-use crate::event_log::{EventLog, Level};
+use crate::event_log::{monotonic_ns, valid_cid, EventLog, Level, RelayedEvent};
 
 /// The number of records that the start buffer holds; a record beyond it is refused and counted.
 pub const START_BUFFER_RECORDS: usize = 1024;
 
 struct Buffered {
     ts_us: u64,
+    mono_ns: u64,
+    cids: Vec<String>,
     layer: String,
     level: Level,
     event: String,
@@ -64,13 +66,15 @@ pub fn use_host_event_log(log: Option<Arc<EventLog>>) {
     );
     if let Some(log) = log.as_ref() {
         for record in buffered {
-            if let Err(error) = log.emit_relayed(
-                record.ts_us,
-                &record.layer,
-                record.level,
-                &record.event,
-                record.fields,
-            ) {
+            if let Err(error) = log.emit_relayed(RelayedEvent {
+                ts_us: record.ts_us,
+                mono_ns: record.mono_ns,
+                layer: record.layer,
+                level: record.level,
+                event: record.event,
+                cids: record.cids,
+                fields: record.fields,
+            }) {
                 eprintln!("event writer: a buffered record cannot be stored: {error}");
             }
         }
@@ -100,16 +104,32 @@ pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
         }
     };
     // events: host.record.<level>, sidecar.record.<level>
-    store_event(parsed, layer, &name, place, fields);
+    store_event(parsed, layer, &name, place, Vec::new(), fields);
 }
 
 /// Hands an event to the writer of the host, or to the start buffer while no writer exists. `place` names the record in the
 /// reports of a refusal.
-fn store_event(level: Level, layer: &str, name: &str, place: &str, fields: Box<RawValue>) {
+fn store_event(
+    level: Level,
+    layer: &str,
+    name: &str,
+    place: &str,
+    cids: Vec<String>,
+    fields: Box<RawValue>,
+) {
     let now = now_us();
+    let mono_ns = monotonic_ns();
     let mut records = records();
     if let Some(log) = records.log.clone() {
-        if let Err(error) = log.emit_relayed(now, layer, level, name, fields) {
+        if let Err(error) = log.emit_relayed(RelayedEvent {
+            ts_us: now,
+            mono_ns,
+            layer: layer.to_string(),
+            level,
+            event: name.to_string(),
+            cids,
+            fields,
+        }) {
             eprintln!("event writer: the record {place:?} of {layer} cannot be stored: {error}");
         }
         return;
@@ -121,6 +141,8 @@ fn store_event(level: Level, layer: &str, name: &str, place: &str, fields: Box<R
     }
     records.buffer.push(Buffered {
         ts_us: now,
+        mono_ns,
+        cids,
         layer: layer.to_string(),
         level,
         event: name.to_string(),
@@ -156,6 +178,7 @@ pub fn emit_trace(layer: &str, fields: serde_json::Value) -> Result<(), String> 
         "host",
         &format!("host.{kind}.{event}"),
         &event,
+        Vec::new(),
         text,
     );
     Ok(())
@@ -171,11 +194,75 @@ pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
     }
     match to_raw_value(&fields) {
         // events: forwarded
-        Ok(text) => store_event(level, "host", event, event, text),
+        Ok(text) => store_event(level, "host", event, event, Vec::new(), text),
         Err(error) => {
             eprintln!("event writer: the fields of {event} cannot be serialized: {error}")
         }
     }
+}
+
+/// Stores an event of the layer `host` with the correlation identifiers of the inputs it belongs to, like `emit_host`. An
+/// identifier that is not valid is reported on the standard error and nothing is stored.
+pub fn emit_host_cids(level: Level, event: &str, cids: &[String], fields: serde_json::Value) {
+    if !event.starts_with("host.") {
+        eprintln!("event writer: the event {event:?} does not start with host.");
+        return;
+    }
+    if let Some(bad) = cids.iter().find(|cid| !valid_cid(cid)) {
+        eprintln!("event writer: {event} has the correlation identifier {bad:?}, which is empty or holds a quote, a backslash or a control character");
+        return;
+    }
+    match to_raw_value(&fields) {
+        // events: forwarded
+        Ok(text) => store_event(level, "host", event, event, cids.to_vec(), text),
+        Err(error) => {
+            eprintln!("event writer: the fields of {event} cannot be serialized: {error}")
+        }
+    }
+}
+
+/// Records that a picture region event carrying correlation identifiers is relayed to the page: the event
+/// `host.input.relay` with the `surface` and the `name` of the region and the `type` of the event, and the identifiers of
+/// the event. `event_json` is the JSON text of the region event. An event without `cids` is not an input and stores
+/// nothing; an event whose `cids` or `type` cannot be used is reported as a record of the host and stores no event.
+pub fn record_input_relay(surface: &str, name: &str, event_json: &str) {
+    let parsed: serde_json::Value = match serde_json::from_str(event_json) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            crate::application_log::log_error(
+                "input relay",
+                format!("{surface}/{name}: the region event is not JSON: {error}"),
+            );
+            return;
+        }
+    };
+    let Some(cids) = parsed.get("cids") else {
+        return;
+    };
+    let cids: Option<Vec<String>> = cids.as_array().and_then(|items| {
+        items
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .filter(|cid| valid_cid(cid))
+                    .map(str::to_string)
+            })
+            .collect()
+    });
+    let kind = parsed.get("type").and_then(serde_json::Value::as_str);
+    let (Some(cids), Some(kind)) = (cids.filter(|cids| !cids.is_empty()), kind) else {
+        crate::application_log::log_error(
+            "input relay",
+            format!("{surface}/{name}: the region event has cids that are not a list of identifiers or no type: {event_json}"),
+        );
+        return;
+    };
+    emit_host_cids(
+        Level::Info,
+        "host.input.relay",
+        &cids,
+        json!({"surface": surface, "name": name, "type": kind}),
+    );
 }
 
 /// Stores an event of the layer `host` like `emit_host`, waits until it is in the event log, and returns the boot

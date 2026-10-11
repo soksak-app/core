@@ -252,7 +252,14 @@ func TestLogInfoWritesAnInfoEventToTheEventLog(t *testing.T) {
 // readHostEventLog returns the events of the only host event log under the logs folder of a configuration folder.
 func readHostEventLog(t *testing.T, config string) []map[string]any {
 	t.Helper()
-	return support.ReadEvents(t, support.EventLogPath(t, config))
+	// The activity observers that the writer installs store native events of their own; these checks concern the host.
+	var events []map[string]any
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		if event["layer"] != "native" {
+			events = append(events, event)
+		}
+	}
+	return events
 }
 
 // A line of the diagnostic transcript of a window, and an error that the transcript carries, also reach the application log.

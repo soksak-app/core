@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
-import { recordsOf, settled, shownRecord } from "./support/records.mjs";
+import { clockAnswer, recordsOf, settled, shownRecord } from "./support/records.mjs";
 
 test("native preparation cannot present before DOM drawing and presents each ticket once", async () => {
   const dom = new JSDOM('<div id="plane"></div>');
@@ -13,7 +13,7 @@ test("native preparation cannot present before DOM drawing and presents each tic
     page: (path) => path,
     call: async (name, request) => {
       calls.push({ name, request });
-      if (name === "log") return;
+      if (name === "log") return clockAnswer(name, request);
       if (name === fail) { fail = null; throw new Error(`injected ${name} failure`); }
       if (name === "syncSurfaces") return {
         ticket: calls.length,

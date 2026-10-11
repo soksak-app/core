@@ -400,6 +400,9 @@ func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body j
 	// Sends to the channel without blocking. When the channel is full, it returns the "is not keeping up" error.
 	select {
 	case process.outbox <- line:
+		if len(cids) > 0 {
+			EmitHostCids(LevelInfo, "host.sidecar.request", cids, map[string]any{"name": name, "surface": surface, "bytes": len(body)})
+		}
 		return nil
 	default:
 		return fmt.Errorf("sidecar %s is not keeping up", name)
