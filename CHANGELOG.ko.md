@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.24.11.1: Go와 Rust 구현에서 event 파일 색인의 갱신이 `announcing`, 곧 앞선 갱신 뒤에 색인한 줄에서 log만 읽는 호출의 기록(`logQuery`의 `host.binding.call`, `log.query`의 `host.endpoint.call`)을 뺀 수와, 덮는 파일의 크기 `size`를 보고한다. 색인 바이트는 그대로다. `TestLogIndexCountsTheLinesThatAnnounceAChange`와 `index_counts_the_lines_that_announce_a_change`로 검증했다.
 - F160.24: 설정 폴더의 event 파일을 channel, level, class, layer, event, 표면, session, `cids`, run, 글, 시간으로 묻는 하나의 질의(`log.query`, `sok debug query`)가 각 파일 옆의 Bloom filter가 있는 segment 색인으로 답하고, debug 화면이 이 질의로 쪽을 넘긴다. 1,000,000건(169 MB) 로그의 색인은 3~5초에 만들어지고 첫 쪽은 12~38 ms에 나온다. 쪽의 `scanned`에서 로그 파일 수의 이름은 `logs`다.
 - F160.10.3: sidecar의 reply를 기다리는 요청의 ledger가 순서를 기다리는 요청만 남도록 줄여 응답한 요청이 순서를 한도 없이 키우지 않으며, 한도 4,096에서 잊는 요청마다 `host.buffer.dropped`를 저장한다.
 - F160.9: 애플리케이션을 바꾸는 page의 작업은 상관 식별자로 묶인 사슬이다. page는 plugin의 설치, 갱신, 제거, 켜기, 끄기, 프로젝트의 열기나 제거, 창의 열기나 닫기, 설정 변경(`actor`와 `keys` 포함), 애플리케이션 업데이트가 시작될 때 `p<time origin>.<n>`을 부여하고, 사슬의 첫 event(`page.plugin.operation`, `page.project.operation`, `page.window.operation`, `page.settings.change`, `page.update.operation`)를 저장하며, host 호출에 식별자를 함께 넘긴다(`host.call(name, arg, {cids})`. `Bindings.Call`의 네 번째 인자, Tauri command의 key `cids`). 그래서 `page.call`과 `host.binding.call`이 식별자를 담는다. catalog가 다섯 사슬을 선언하고 `auditLogs`가 검증하며, 두 host는 줄이 담을 수 없는 식별자를 거절한다. 설정의 `set`은 actor 없는 변경을 거절한다. page, 두 runtime, 두 host, 감사, catalog의 owning 시험으로 검증했으며, 각 작업을 수행하는 창 검사는 F160.9.2다.

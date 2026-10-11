@@ -499,6 +499,7 @@ fn invalid_json_closes_connection() {
 | `log.query.answers-a-million-events-within-the-limit` | event 1,000,000개의 로그가 첫 page, `cid`, event 이름, surface, 시간 범위, level, `text`로 묻는 page를 test가 밝힌 한도 안에서 답하고 색인 생성도 한도 안에 끝나며, test는 시간을 출력한다. | both |
 | `log.index.matches-the-golden-digest` | 구현이 각 golden event 파일에서 만든 색인의 SHA-256이 golden 값과 같고, 최신 색인의 갱신은 아무것도 바꾸지 않는다. | both |
 | `log.index.follows-appended-lines-and-is-rebuilt-when-stale` | 색인을 만든 뒤 덧붙은 줄은 부분 segment부터 색인하고, 마지막 줄바꿈 뒤의 바이트는 줄바꿈이 쓰인 뒤 색인하며, 더 작은 파일, 다른 첫 줄, 같은 크기에서 다른 수정 시각은 색인을 처음부터 다시 만든다. | both |
+| `log.index.counts-the-lines-that-announce-a-change` | 색인 갱신은 `announcing`, 곧 앞선 갱신 뒤에 색인한 줄에서 log만 읽는 호출의 기록(`logQuery`의 `host.binding.call`과 `log.query`의 `host.endpoint.call`)을 뺀 수와, 덮는 파일의 크기 `size`를 보고한다. 갱신이 다시 읽는 부분 segment는 두 번 세지 않고, 최신 색인의 갱신은 아무것도 알리지 않는다. | both |
 | `log.index.refuses-a-damaged-index-and-a-broken-line` | 다른 버전의 색인, 검사합이 맞지 않는 block이나 기록, block보다 짧은 파일은 색인을 밝히는 오류이고, event 구조를 어기는 줄과 schema 2의 `log.open`이 아닌 첫 줄은 파일과 줄을 밝히는 오류이며 색인은 이전 상태를 유지한다. | both |
 | `log.index.moves-with-the-generations-of-a-rotation` | 회전은 가득 찬 파일의 색인을 최신으로 맞추고 색인 파일을 세대와 함께 바꾸어, 닫힌 세대가 만들기 없이 색인으로 답하게 하고 지워진 세대의 색인을 지운다. | both |
 | `log.writer.indexes-each-batch-it-wrote` | host의 writer가 batch를 쓴 뒤 질의 없이도 그 파일의 색인이 batch의 줄을 덮고, writer의 회전은 닫힌 세대의 색인을 완전하게 남긴다. | both |

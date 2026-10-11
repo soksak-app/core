@@ -424,6 +424,9 @@ pub(crate) struct ScannedLine {
     pub session: String,
     pub cids: Vec<String>,
     pub run: String,
+    /// True for the record of a call that only reads the log: `host.binding.call` of `logQuery` and `host.endpoint.call` of
+    /// `log.query`. Such a line does not announce a change of the log (docs/spec/logging.md#index).
+    pub reads_log: bool,
 }
 
 /// A member of a line whose type the scan checks. `Other` is any value that is not a string and not an integer that fits i64.
@@ -548,6 +551,7 @@ enum FieldsMember {
         surface: String,
         session: String,
         run: String,
+        name: String,
     },
     Invalid,
 }
@@ -560,12 +564,14 @@ impl<'de> Visitor<'de> for FieldsVisitor {
         formatter.write_str("a JSON value")
     }
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<FieldsMember, A::Error> {
-        let (mut surface, mut session, mut run) = (String::new(), String::new(), String::new());
+        let (mut surface, mut session, mut run, mut name) =
+            (String::new(), String::new(), String::new(), String::new());
         while let Some(key) = map.next_key::<Key>()? {
             let slot = match key {
                 Key::Surface => Some(&mut surface),
                 Key::Session => Some(&mut session),
                 Key::Run => Some(&mut run),
+                Key::Name => Some(&mut name),
                 _ => None,
             };
             match slot {
@@ -584,6 +590,7 @@ impl<'de> Visitor<'de> for FieldsVisitor {
             surface,
             session,
             run,
+            name,
         })
     }
     fn visit_borrowed_str<E>(self, _: &'de str) -> Result<FieldsMember, E> {
@@ -633,6 +640,7 @@ enum Key {
     Cids,
     Fields,
     Run,
+    Name,
     Other,
 }
 
@@ -657,6 +665,7 @@ impl<'de> Visitor<'de> for KeyVisitor {
             "cids" => Key::Cids,
             "fields" => Key::Fields,
             "run" => Key::Run,
+            "name" => Key::Name,
             _ => Key::Other,
         })
     }
@@ -710,7 +719,7 @@ impl<'de> Deserialize<'de> for LineMembers<'de> {
                         Key::Session => line.session = Some(map.next_value()?),
                         Key::Cids => line.cids = Some(map.next_value()?),
                         Key::Fields => line.fields = Some(map.next_value()?),
-                        Key::Run | Key::Other => {
+                        Key::Run | Key::Name | Key::Other => {
                             map.next_value::<IgnoredAny>()?;
                         }
                     }
@@ -773,12 +782,14 @@ fn scan_fast(raw: &[u8]) -> Result<ScannedLine, String> {
         Some(Cids::Invalid) => return Err("cids is not an array of strings".into()),
     };
     let mut run = String::new();
+    let mut call = String::new();
     match members.fields {
         None => {}
         Some(FieldsMember::Object {
             surface: from_fields,
             session: from_session,
             run: from_run,
+            name: from_name,
         }) => {
             if surface.is_empty() {
                 surface = from_fields;
@@ -787,9 +798,12 @@ fn scan_fast(raw: &[u8]) -> Result<ScannedLine, String> {
                 session = from_session;
             }
             run = from_run;
+            call = from_name;
         }
         Some(FieldsMember::Invalid) => return Err("fields is not an object".into()),
     }
+    let reads_log = (event == "host.binding.call" && call == "logQuery")
+        || (event == "host.endpoint.call" && call == "log.query");
     Ok(ScannedLine {
         ts_us,
         seq,
@@ -801,6 +815,7 @@ fn scan_fast(raw: &[u8]) -> Result<ScannedLine, String> {
         session,
         cids,
         run,
+        reads_log,
     })
 }
 
@@ -832,6 +847,10 @@ pub struct IndexUpdate {
     pub lines: i64,
     pub bytes: i64,
     pub micros: i64,
+    /// The number of the lines of this update that announce a change of the log: every line except the record of a call that only reads
+    /// the log. `size` is the size of the event file that the index covers or has read.
+    pub announcing: i64,
+    pub size: i64,
 }
 
 /// The name that errors give an event file: `logs/<name>`.
@@ -956,6 +975,7 @@ fn refresh_locked(path: &Path, source: File, idx: &File) -> Result<OpenedLog, St
         .as_nanos() as i64;
     let mut update = IndexUpdate {
         file: name.clone(),
+        size: size as i64,
         ..IndexUpdate::default()
     };
     let mut state = current.state.clone();
@@ -990,12 +1010,13 @@ fn refresh_locked(path: &Path, source: File, idx: &File) -> Result<OpenedLog, St
             .map_err(|error| file_error(&idx_display, &error))?;
         state = IndexState::default();
     }
-    let (read, lines) = index_from(&name, &state, &source, idx, size, mtime, rebuilt)?;
+    let (read, lines, announcing) = index_from(&name, &state, &source, idx, size, mtime, rebuilt)?;
     update.changed = true;
     update.rebuilt = rebuilt;
     update.reason = rebuild;
     update.bytes = read;
     update.lines = lines;
+    update.announcing = announcing;
     update.micros = started.elapsed().as_micros() as i64;
     let data = read_all(idx).map_err(|error| file_error(&idx_display, &error))?;
     let index = parse_index(&idx_display, data)?;
@@ -1007,7 +1028,7 @@ fn refresh_locked(path: &Path, source: File, idx: &File) -> Result<OpenedLog, St
 }
 
 /// Indexes the lines of the source after the indexed part (from the start when `rebuild` is set), writes the new full records and then the
-/// new state block. It returns the bytes it read and the lines it indexed.
+/// new state block. It returns the bytes it read, the lines it indexed and the lines that announce a change.
 fn index_from(
     name: &str,
     state: &IndexState,
@@ -1016,7 +1037,7 @@ fn index_from(
     size: u64,
     mtime: i64,
     rebuild: bool,
-) -> Result<(i64, i64), String> {
+) -> Result<(i64, i64, i64), String> {
     let idx_display = format!("{name}.idx");
     let (mut start, mut events, state) = if rebuild {
         (0, 0, IndexState::default())
@@ -1033,6 +1054,9 @@ fn index_from(
         }
     }
     let first_event = events;
+    // A line before this offset was indexed by an earlier update (the update reads the partial segment again), so it announced its change then.
+    let announced_before = state.indexed_bytes;
+    let mut announcing = 0i64;
     let mut next = state.clone();
     next.tail = None;
     let mut acc = Segment::new(start);
@@ -1078,6 +1102,9 @@ fn index_from(
                 next.first_seq = line.seq as u64;
             }
             acc.add(&line, line_size);
+            if !line.reads_log && line_start >= announced_before {
+                announcing += 1;
+            }
             next.last_seq = line.seq as u64;
             events += 1;
             number += 1;
@@ -1114,7 +1141,7 @@ fn index_from(
         (next.generation % 2) * BLOCK_BYTES as u64,
     )
     .map_err(|error| file_error(&idx_display, &error))?;
-    Ok((read, (events - first_event) as i64))
+    Ok((read, (events - first_event) as i64, announcing))
 }
 
 /// What the state block of an index says.

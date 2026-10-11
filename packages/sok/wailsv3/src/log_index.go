@@ -346,6 +346,9 @@ type scannedLine struct {
 	surface, session string
 	cids             []string
 	run              string
+	// readsLog is true for the record of a call that only reads the log: `host.binding.call` of `logQuery` and `host.endpoint.call`
+	// of `log.query`. Such a line does not announce a change of the log (docs/spec/logging.md#index).
+	readsLog bool
 }
 
 // lineShape is the typed view of a line: a member of another type fails the decoding, and the line is then read again by the
@@ -368,6 +371,7 @@ type fieldsShape struct {
 	Surface json.RawMessage `json:"surface"`
 	Session json.RawMessage `json:"session"`
 	Run     json.RawMessage `json:"run"`
+	Name    json.RawMessage `json:"name"`
 }
 
 func indexOfName(list []string, name string) int {
@@ -482,6 +486,9 @@ func scanFast(raw []byte) (*scannedLine, error) {
 		if text, ok := stringMember(fields.Run); ok {
 			line.run = text
 		}
+		if name, ok := stringMember(fields.Name); ok {
+			line.readsLog = (line.event == "host.binding.call" && name == "logQuery") || (line.event == "host.endpoint.call" && name == "log.query")
+		}
 	}
 	return line, nil
 }
@@ -498,6 +505,9 @@ type IndexUpdate struct {
 	// Lines and Bytes are the lines indexed by this update and the bytes of the file that were read.
 	Lines, Bytes int64
 	Micros       int64
+	// Announcing is the number of the lines of this update that announce a change of the log: every line except the record of a call
+	// that only reads the log. Size is the size of the event file that the index covers or has read.
+	Announcing, Size int64
 }
 
 // logDisplayName is the name that errors give an event file: `logs/<name>`.
@@ -615,6 +625,7 @@ func refreshLocked(path string, source, idx *os.File) (*openedLog, error) {
 	if err != nil {
 		return nil, fileError(path, err)
 	}
+	opened.update.Size = info.Size()
 	data, err := readAll(idx)
 	if err != nil {
 		return nil, fileError(path+".idx", err)
@@ -652,12 +663,12 @@ func refreshLocked(path string, source, idx *os.File) (*openedLog, error) {
 		}
 		state = indexState{}
 	}
-	read, lines, err := indexFrom(name, state, source, idx, size, mtime, rebuild != "")
+	read, lines, announcing, err := indexFrom(name, state, source, idx, size, mtime, rebuild != "")
 	if err != nil {
 		return nil, err
 	}
 	opened.update.Changed, opened.update.Rebuilt, opened.update.Reason = true, rebuild != "", rebuild
-	opened.update.Bytes, opened.update.Lines = read, lines
+	opened.update.Bytes, opened.update.Lines, opened.update.Announcing = read, lines, announcing
 	opened.update.Micros = time.Since(started).Microseconds()
 	if data, err = readAll(idx); err != nil {
 		return nil, fileError(path+".idx", err)
@@ -685,7 +696,7 @@ func readAll(file *os.File) ([]byte, error) {
 
 // indexFrom indexes the lines of the source after the indexed part (from the start when rebuild is set), writes the new full
 // records and then the new state block. It returns the bytes it read and the lines it indexed.
-func indexFrom(name string, state indexState, source, idx *os.File, size uint64, mtime int64, rebuild bool) (int64, int64, error) {
+func indexFrom(name string, state indexState, source, idx *os.File, size uint64, mtime int64, rebuild bool) (int64, int64, int64, error) {
 	start := state.indexedBytes
 	events := uint64(state.fullSegments) * indexSegmentEvents
 	if rebuild {
@@ -694,6 +705,8 @@ func indexFrom(name string, state indexState, source, idx *os.File, size uint64,
 		start = state.tail.offset
 	}
 	firstEvent := events
+	// A line before this offset was indexed by an earlier update (the update reads the partial segment again), so it announced its change then.
+	announcedBefore := state.indexedBytes
 	next := state
 	next.tail = nil
 	acc := newSegment(start)
@@ -702,7 +715,7 @@ func indexFrom(name string, state indexState, source, idx *os.File, size uint64,
 	buffer := make([]byte, indexChunkBytes)
 	lineStart := start
 	number := int(events) + 1
-	var read int64
+	var read, announcing int64
 	finish := func(done *segment) error {
 		offset := int64(2*indexBlockBytes) + int64(next.fullSegments)*indexRecordBytes
 		if _, err := idx.WriteAt(done.encode(), offset); err != nil {
@@ -715,7 +728,7 @@ func indexFrom(name string, state indexState, source, idx *os.File, size uint64,
 		want := min(uint64(len(buffer)), size-position)
 		n, err := source.ReadAt(buffer[:want], int64(position))
 		if n == 0 && err != nil {
-			return read, 0, fileError(name, err)
+			return read, 0, 0, fileError(name, err)
 		}
 		read += int64(n)
 		position += uint64(n)
@@ -734,31 +747,34 @@ func indexFrom(name string, state indexState, source, idx *os.File, size uint64,
 			lineSize := uint64(len(lineBytes)) + 1
 			line, err := scanLine(name, number, lineBytes)
 			if err != nil {
-				return read, 0, err
+				return read, 0, 0, err
 			}
 			if events == 0 {
 				if line.event != "log.open" {
-					return read, 0, fmt.Errorf("%s: the first line is not log.open: %s", name, jsString(line.event))
+					return read, 0, 0, fmt.Errorf("%s: the first line is not log.open: %s", name, jsString(line.event))
 				}
 				schema, err := schemaOf(name, lineBytes)
 				if err != nil {
-					return read, 0, err
+					return read, 0, 0, err
 				}
 				if schema != eventSchema {
-					return read, 0, fmt.Errorf("%s: schema %d is not %d", name, schema, eventSchema)
+					return read, 0, 0, fmt.Errorf("%s: schema %d is not %d", name, schema, eventSchema)
 				}
 				next.headLen = uint32(lineSize)
 				next.headHash = fnv1a(append(append([]byte(nil), lineBytes...), '\n'))
 				next.firstSeq = uint64(line.seq)
 			}
 			acc.add(line, lineSize)
+			if !line.readsLog && lineStart >= announcedBefore {
+				announcing++
+			}
 			next.lastSeq = uint64(line.seq)
 			events++
 			number++
 			lineStart += lineSize
 			if acc.events == indexSegmentEvents {
 				if err := finish(acc); err != nil {
-					return read, 0, err
+					return read, 0, 0, err
 				}
 				acc = newSegment(lineStart)
 			}
@@ -766,7 +782,7 @@ func indexFrom(name string, state indexState, source, idx *os.File, size uint64,
 		if len(chunk) > 0 {
 			carry = append(carry, chunk...)
 			if len(carry) > indexLineLimit {
-				return read, 0, fmt.Errorf("%s:%d: the line is over %d bytes", name, number, indexLineLimit)
+				return read, 0, 0, fmt.Errorf("%s:%d: the line is over %d bytes", name, number, indexLineLimit)
 			}
 		}
 	}
@@ -778,9 +794,9 @@ func indexFrom(name string, state indexState, source, idx *os.File, size uint64,
 	next.sourceSize, next.sourceMtimeNs = size, mtime
 	next.generation = state.generation + 1
 	if _, err := idx.WriteAt(next.encode(), int64(next.generation%2)*indexBlockBytes); err != nil {
-		return read, 0, fileError(name+".idx", err)
+		return read, 0, 0, fileError(name+".idx", err)
 	}
-	return read, int64(events - firstEvent), nil
+	return read, int64(events - firstEvent), announcing, nil
 }
 
 // schemaOf reads the schema number of a log.open line.
