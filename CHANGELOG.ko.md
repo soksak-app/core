@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.11, F160.13: 시험 실행기가 실행마다 id(`SOKSAK_RUN_ID`)를 주고, 모든 시험의 출력을 도착하는 대로 `target/test-runs/<run>/`에 저장하며, 각 시험의 상태, 시작, 끝이 담긴 `manifest.json`을 유지한다. `node scripts/test-runs.mjs prune`은 실패가 없거나 모든 실패가 분류된 실행만 제거한다.
 - F161.3: 창 검사 `e2e/card-sidebar-space.test.mjs`가 정리에서 terminal card의 sidebar를 `inherit`로 되돌려 제거된 set의 선택이 layout에 남지 않으며, 두 앱에서 통과한다.
 - F161.2: 창 검사 `e2e/browser.test.mjs`와 `e2e/hosts.test.mjs`가 호스트가 기록하는 형태(`info page page: host <call> …`)로 transcript 줄을 맞추며, 두 앱에서 통과한다.
 - F161.1: 창 검사 `e2e/sidecar-recovery.test.mjs`가 호스트가 기록하는 죽인 terminal service의 재시작을 선언하며, 두 앱에서 5.0초에 통과한다.

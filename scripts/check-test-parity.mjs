@@ -44,6 +44,7 @@ lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/tes
 lane("test runner", "js-ts", ["scripts/test-runner.mjs"], ["scripts/test/test-runner.test.mjs"]),
 lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
 lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
+lane("test runs", "js-ts", ["scripts/test-runs.mjs"], ["scripts/test/test-runs.test.mjs"]),
 lane("native tests", "js-ts", ["scripts/native-tests.mjs"], ["scripts/test/native-tests.test.mjs"]),
 lane("event catalog", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
 lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/test/check-failure-table.test.mjs"]),
@@ -1806,6 +1807,33 @@ const FEATURE_LINKS = [
     ],
     expected: "A failure of a startup step of the Tauri host writes its message and ends the process with the status 1 instead of aborting it.",
     levels: ["unit", "application"],
+  },
+  {
+    id: "F160.11",
+    implementation: [
+      { file: "scripts/test-runner.mjs", symbol: "export async function runTests" },
+    ],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a run with a folder gives each test its identifier, stores the output of every test and writes a manifest" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a manifest names a test that is still running, so a run that stops leaves the test it stopped in" },
+    ],
+    expected: "A run gives each test its identifier and keeps a manifest with the status, start and end of each test, naming the test a stopped run was in.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.13",
+    implementation: [
+      { file: "scripts/test-runs.mjs", symbol: "export function pruneRuns" },
+      { file: "scripts/node-tests.mjs", symbol: "export function newRun" },
+    ],
+    tests: [
+      { file: "scripts/test/test-runs.test.mjs", id: "a run that passed is removed, and a run with an unclassified failure or a stop is kept and named" },
+      { file: "scripts/test/test-runs.test.mjs", id: "a run whose failures are all named by a classification record is removed, and a partial record keeps it" },
+      { file: "scripts/test/test-runs.test.mjs", id: "a malformed manifest or classification is an error that names the file" },
+      { file: "scripts/test/node-tests.test.mjs", id: "a run is named by its start time and process id and keeps its folder under target/test-runs" },
+    ],
+    expected: "The output of every test and the evidence of a failed run stay until a classification names each failure.",
+    levels: ["unit"],
   },
   {
     id: "F154.4.3",

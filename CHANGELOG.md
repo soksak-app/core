@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F160.11, F160.13: the test runner gives each run an identifier (`SOKSAK_RUN_ID`), stores the output of every test in `target/test-runs/<run>/` as it arrives and keeps `manifest.json` with the status, start and end of each test; `node scripts/test-runs.mjs prune` removes only the runs without a failure or with every failure classified.
 - F161.3: the window check `e2e/card-sidebar-space.test.mjs` sets the sidebars of the terminal card back to `inherit` in its cleanup, so no choice of a removed set remains in the layout, and it passes on both applications.
 - F161.2: the window checks `e2e/browser.test.mjs` and `e2e/hosts.test.mjs` match the transcript lines in the form the host records (`info page page: host <call> …`), and they pass on both applications.
 - F161.1: the window check `e2e/sidecar-recovery.test.mjs` declares the restart of the killed terminal service that the host logs, and it passes on both applications in 5.0 s.

@@ -89,3 +89,48 @@ test("a test starts only after the gate of the runner opened, and the wait is no
   assert.equal(results.get("gated").status, "pass");
   assert.ok(lines.some((line) => line.startsWith("RUN  gated")));
 });
+
+test("a run with a folder gives each test its identifier, stores the output of every test and writes a manifest", async () => {
+  const { mkdtempSync, readFileSync, readdirSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const folder = mkdtempSync(join(tmpdir(), "run-"));
+  const { results } = await run([
+    node("a/passes.test.mjs", "console.log('seen ' + process.env.SOKSAK_RUN_ID)"),
+    node("a/fails.test.mjs", "console.error('the detail'); process.exit(3)"),
+  ], { concurrency: 1, defaultTimeoutMs: 5000, run: { id: "20261011T000000-1", folder } });
+  assert.equal(results.get("a/passes.test.mjs").status, "pass");
+  const manifest = JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8"));
+  assert.equal(manifest.schema, 1);
+  assert.equal(manifest.run, "20261011T000000-1");
+  assert.ok(Number.isInteger(manifest.finished_us) && manifest.finished_us >= manifest.started_us, JSON.stringify(manifest));
+  assert.deepEqual(manifest.tests.map((item) => [item.name, item.status]), [["a/passes.test.mjs", "pass"], ["a/fails.test.mjs", "fail"]]);
+  for (const item of manifest.tests) {
+    assert.ok(item.ended_us >= item.started_us && item.started_us >= manifest.started_us, JSON.stringify(item));
+    assert.ok(readdirSync(folder).includes(item.output), `${item.output} is not stored`);
+  }
+  assert.match(readFileSync(join(folder, manifest.tests[0].output), "utf8"), /^seen 20261011T000000-1\n$/);
+  assert.match(readFileSync(join(folder, manifest.tests[1].output), "utf8"), /^the detail\n$/);
+});
+
+test("a manifest names a test that is still running, so a run that stops leaves the test it stopped in", async () => {
+  const { mkdtempSync, readFileSync, existsSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const folder = mkdtempSync(join(tmpdir(), "run-"));
+  const lines = [];
+  const pending = runTests({
+    tests: [node("slow", sleeping(60000), { timeoutMs: 1500 })], concurrency: 1, defaultTimeoutMs: 5000,
+    write: (line) => lines.push(line), heartbeatMs: 50, run: { id: "r-1", folder },
+  });
+  const deadline = performance.now() + 3000;
+  while (!existsSync(join(folder, "manifest.json"))) {
+    assert.ok(performance.now() < deadline, "the run wrote no manifest while its test was running");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  const during = JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8"));
+  assert.deepEqual(during.tests.map((item) => [item.name, item.status]), [["slow", "running"]]);
+  assert.equal(during.finished_us, null);
+  await pending;
+  assert.equal(JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8")).tests[0].status, "timeout");
+});

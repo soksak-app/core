@@ -103,3 +103,10 @@ test("the idle gate waits until the person gave no input for the given seconds",
   assert.match(lines[0], /^WAIT e2e\/x\.test\.mjs: the person was active 2s ago, waiting for 30s without input$/);
   await assert.rejects(whenIdle(30, { idle: () => null })({ name: "x" }), /the system does not report the idle time of the input/);
 });
+
+test("a run is named by its start time and process id and keeps its folder under target/test-runs", async () => {
+  const { newRun } = await import("../node-tests.mjs");
+  const run = newRun("/repo", new Date("2026-10-11T04:05:06Z"));
+  assert.equal(run.id, `20261011T040506-${process.pid}`);
+  assert.equal(run.folder, `/repo/target/test-runs/${run.id}`);
+});

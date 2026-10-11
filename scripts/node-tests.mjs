@@ -34,6 +34,12 @@ export function whenIdle(seconds, { idle = idleSeconds, intervalMs = 5000, write
 }
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+/** The identifier and the folder of a run: the start time to the second and the process id, under `target/test-runs`. */
+export function newRun(root, now = new Date()) {
+  const id = `${now.toISOString().replace(/[-:]/g, '').slice(0, 15)}-${process.pid}`;
+  return { id, folder: join(root, 'target', 'test-runs', id) };
+}
 /** The limit of one test file. */
 const TEST_TIMEOUT_MS = 120_000;
 const SOURCE = /\.(?:[cm]?js)$/;
@@ -131,10 +137,11 @@ async function main(argv) {
     if ([...built.results.values()].some((result) => result.status !== 'pass')) return 1;
   }
   const concurrency = Number(option('--concurrency', Math.max(2, cpus().length - 2)));
-  write(`RUN  ${tests.length} test files with ${concurrency} at once, each limited to ${limitMs / 1000}s`);
+  const run = newRun(ROOT);
+  write(`RUN  ${tests.length} test files with ${concurrency} at once, each limited to ${limitMs / 1000}s; run ${run.id} keeps its output and manifest in ${run.folder}`);
   const idle = option('--when-idle', null);
   const beforeEach = idle === null ? undefined : whenIdle(Number(idle), { write });
-  const { results } = await runTests({ tests, concurrency, defaultTimeoutMs: limitMs, write, beforeEach });
+  const { results } = await runTests({ tests, concurrency, defaultTimeoutMs: limitMs, write, beforeEach, run });
   return [...results.values()].every((result) => result.status === 'pass') ? 0 : 1;
 }
 
