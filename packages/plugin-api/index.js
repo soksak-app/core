@@ -14,6 +14,7 @@ import { createBinder } from "./binder.js";
 export { INTERACTIVE, commandOf, createBinder, valueOf } from "./binder.js";
 export { DOCUMENT_ACTIONS, DOCUMENT_NAME, observeRegionInsets, regionInsets } from "./document-region.js";
 export { IMAGE_NAME } from "./image-region.js";
+export { createPluginRuntime, LOG_LEVELS } from "./plugin-runtime.js";
 export { createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "./surface.js";
 export { createSurfaceCompositionController } from "./surface-composition.js";
 export { orderedSidecar } from "./sidecar-port.js";

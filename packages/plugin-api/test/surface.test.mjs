@@ -156,6 +156,26 @@ test("surface context logs an event of the plugin at each level with the surface
   hostless.runtime.log.error("input", {});
 });
 
+// A plugin joins a chain of the event log with `cids`, which the page writer requires in the form of the host (a non-empty string
+// without a quote, a backslash or a control character) (docs/spec/plugins.md#logging).
+test("a plugin event carries the cids of its chain to the page writer", () => {
+  const events = [];
+  const context = createSurfaceContext({ closing: CLOSING, root: { appendChild() {} }, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
+    exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
+    log: (...args) => events.push(args),
+  } });
+  context.runtime.log.info("input.key", { key: "a" }, { cids: ["p1.1", "p1.2"] });
+  context.runtime.log.info("input.key", { key: "b" });
+  context.runtime.log.info("input.key", { key: "c" }, { cids: [] });
+  assert.deepEqual(events.map(([, , , cids]) => cids), [["p1.1", "p1.2"], undefined, undefined]);
+  for (const bad of [[""], ['a"b'], ["a\\b"], ["a\nb"], ["a\u007fb"], [7], "p1.1", null]) {
+    assert.throws(() => context.runtime.log.info("input.key", {}, { cids: bad }), /log cids must be an array of non-empty strings/, JSON.stringify(bad));
+  }
+  assert.throws(() => context.runtime.log.info("input.key", {}, { chain: ["p1.1"] }), /log options may only hold cids/);
+  assert.throws(() => context.runtime.log.info("input.key", {}, null), /log options may only hold cids/);
+  assert.equal(events.length, 3, "a refused call stores nothing");
+});
+
 test("a surface context requires the closing signal and exposes it", () => {
   const root = { appendChild() {} };
   const runtime = { exposure: { command() {} }, emit() {}, sidecar() {} };

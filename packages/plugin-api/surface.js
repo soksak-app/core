@@ -1,4 +1,5 @@
 // The DOM surface module contract. The workbench owns the host element and the lifecycle.
+import { createPluginRuntime } from "./plugin-runtime.js";
 
 const callable = (value, name) => {
   if (typeof value !== "function") throw new TypeError(`surface module must export ${name}()`);
@@ -27,6 +28,7 @@ export function createSurfaceContext({
   if (typeof icon !== "function") throw new TypeError("surface context requires icon(name)");
   if (!(closing instanceof AbortSignal)) throw new TypeError("surface context requires the closing signal");
   if (typeof diagnostics !== "function") throw new TypeError("surface context requires diagnostics()");
+  const recording = createPluginRuntime({ pluginId, surfaceId, hooks: runtime });
   const listeners = new Set();
   const eventListeners = new Map();
   const state = { phase: "loading", error: null };
@@ -74,27 +76,10 @@ export function createSurfaceContext({
       settings: runtime.settings,
       // The actual text size scale of this surface. read() returns the current scale, and on(fn) calls fn(scale) when the scale changes.
       textSize: runtime.textSize,
-      // Writes an event of this surface to the performance trace with the plugin and surface ids
-      // (docs/spec/plugins.md#tracing). The trace writes nothing while it is off.
-      trace: (event, fields = {}) => {
-        if (typeof event !== "string" || event === "") throw new TypeError("trace requires an event name");
-        if (fields === null || typeof fields !== "object" || Array.isArray(fields)) {
-          throw new TypeError("trace requires fields as an object");
-        }
-        // default: a page without a host (the browser application, a test) has no trace, as a trace that is off.
-        runtime.trace?.(event, { ...fields, plugin: pluginId, surface: surfaceId });
-      },
-      // Stores an event of this plugin in the event log (docs/spec/plugins.md#logging): the name is `plugin.<plugin>.<event>`, the
-      // fields carry the surface, and a level has one function. A page without a host has no event log, as a log that is off.
-      log: Object.freeze(Object.fromEntries(["error", "warn", "info", "debug", "trace"].map((level) => [level, (event, fields = {}) => {
-        if (typeof event !== "string" || !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/.test(event)) {
-          throw new TypeError("log requires an event name of lowercase words separated by dots");
-        }
-        if (fields === null || typeof fields !== "object" || Array.isArray(fields)) throw new TypeError("log requires fields as an object");
-        if ("surface" in fields) throw new TypeError("log fields must not name the surface; the context adds it");
-        // default: a page without a host (the browser application, a test) has no event log, as a log that is off.
-        runtime.log?.(level, `plugin.${pluginId}.${event}`, { ...fields, surface: surfaceId });
-      }]))),
+      // Writes an event of this surface to the performance trace and to the event log (docs/spec/plugins.md#tracing,
+      // docs/spec/plugins.md#logging); the calls and their gates are those of every plugin context.
+      trace: recording.trace,
+      log: recording.log,
     }),
     exposure: Object.freeze(runtime.exposure),
     events: Object.freeze({

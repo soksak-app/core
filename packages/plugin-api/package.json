@@ -22,6 +22,7 @@
     "sidecar-port.js",
     "surface-composition.js",
     "surface.js",
+    "plugin-runtime.js",
     "clipboard.js",
     "links.js",
     "list.js",

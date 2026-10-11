@@ -1161,7 +1161,7 @@ const FEATURE_LINKS = [
   {
     id: "F150.4.2",
     implementation: [
-      { file: "packages/plugin-api/surface.js", symbol: "log: Object.freeze" },
+      { file: "packages/plugin-api/plugin-runtime.js", symbol: "export function createPluginRuntime" },
       { file: "packages/workbench/page-log.js", symbol: "export function captureConsole" },
     ],
     tests: [
@@ -1939,6 +1939,41 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-runner.test.mjs", id: "a manifest names a test that is still running, so a run that stops leaves the test it stopped in" },
     ],
     expected: "A run gives each test its identifier and keeps a manifest with the status, start and end of each test, naming the test a stopped run was in.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.32.1",
+    implementation: [
+      { file: "packages/plugin-api/plugin-runtime.js", symbol: "export function createPluginRuntime" },
+      { file: "packages/workbench/plugin-records.js", symbol: "export const pluginRecords" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin event carries the cids of its chain to the page writer" },
+      { file: "packages/workbench/test/plugin-records.test.mjs", id: "an event of a plugin leaves with its cids" },
+    ],
+    expected: "A plugin event carries valid cids to the page writer, and an invalid cids argument throws before anything is stored.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.32.3",
+    implementation: [
+      { file: "packages/plugin-api/events-check.js", symbol: "export function catalogReport" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/events-check.test.mjs", id: "the census exclude removes a vendored file before the catalog check parses it" },
+    ],
+    expected: "The catalog check does not read a file that the census exclude names.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.32.5",
+    implementation: [
+      { file: "packages/plugin-api/events-check.js", symbol: "const relativeName" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/events-check.test.mjs", id: "runtime.log entrances of plugin events are resolved by the plugin prefix" },
+    ],
+    expected: "The catalog check treats runtime.log.<level>( and runtime.log[level]( as entrances of plugin events.",
     levels: ["unit"],
   },
   {

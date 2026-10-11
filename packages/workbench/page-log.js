@@ -55,10 +55,13 @@ if (batcher) {
   });
 }
 
-/** Queues an event of a plugin or of the page with its level, name and fields; nothing happens in a page without a host. */
-export function emitEvent(level, event, fields) {
+/**
+ * Queues an event of a plugin or of the page with its level, name, fields and the correlation identifiers `cids` of its chain
+ * (docs/spec/logging.md#operation-chains); nothing happens in a page without a host.
+ */
+export function emitEvent(level, event, fields, cids = undefined) {
   // events: forwarded
-  batcher?.emit(level, event, fields);
+  batcher?.emit(level, event, fields, cids);
 }
 
 /**
