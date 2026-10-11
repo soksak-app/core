@@ -18,7 +18,9 @@ export function terminalProcessSnapshot(configDir) {
   assert.equal(endpoint.protocol, 1, "terminal service protocol does not match");
   assert.ok(Number.isInteger(endpoint.pid) && endpoint.pid > 0, "terminal service PID is missing");
   const rows = processRows(execFileSync("ps", ["-axo", "pid=,ppid=,stat=,command="], { encoding: "utf8" }));
-  const services = rows.filter((row) => row.command.endsWith(`--service-dir ${serviceDir}`));
+  // The host passes the service folder and the log folder (docs/spec/sidecars.md#declaration-and-startup), so the argument
+  // is matched as one argument of the command, wherever it stands.
+  const services = rows.filter((row) => ` ${row.command} `.includes(` --service-dir ${serviceDir} `));
   assert.equal(services.length, 1, "the configuration must own exactly one terminal service");
   assert.equal(services[0].pid, endpoint.pid, "published service PID differs from the running process");
   assert.equal(services[0].state.includes("Z"), false, "terminal service is a zombie");
