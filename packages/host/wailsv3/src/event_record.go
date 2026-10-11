@@ -156,3 +156,27 @@ func FlushRecords(deadline time.Duration) error {
 	}
 	return log.Flush(deadline)
 }
+
+// EmitHostPlaced stores an event of the layer `host` like EmitHost, waits until it is in the event log, and returns the boot
+// identifier of the log and the seq of the line, which together name the line. Without an attached writer the event has no
+// position, so it is an error.
+func EmitHostPlaced(level Level, event string, fields map[string]any, deadline time.Duration) (string, uint64, error) {
+	if !strings.HasPrefix(event, "host.") {
+		return "", 0, fmt.Errorf("the event %q does not start with host.", event)
+	}
+	text, err := json.Marshal(fields)
+	if err != nil {
+		return "", 0, fmt.Errorf("the fields of %s cannot be serialized: %w", event, err)
+	}
+	records.Lock()
+	log := records.log
+	records.Unlock()
+	if log == nil {
+		return "", 0, fmt.Errorf("the event log of the host is not attached")
+	}
+	seq, err := log.EmitPlaced(level, event, text, deadline)
+	if err != nil {
+		return "", 0, err
+	}
+	return log.Boot(), seq, nil
+}

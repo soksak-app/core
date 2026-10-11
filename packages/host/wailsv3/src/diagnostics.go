@@ -49,6 +49,7 @@ func init() {
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
 	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
 	diagnosticMethods["diagnostics.log.flush"] = diagnosticLogFlush
+	diagnosticMethods["diagnostics.test.mark"] = diagnosticTestMark
 	diagnosticMethods["diagnostics.capture.still"] = diagnosticCaptureStill
 	debugCaptures = debugCaptureWindows
 	diagnosticMethods["diagnostics.notifications"] = diagnosticNotifications
@@ -513,6 +514,22 @@ func diagnosticLogFlush(e *Endpoint, _ *endpointConn, params json.RawMessage) (a
 		return nil, err
 	}
 	return nil, FlushRecords(10 * time.Second)
+}
+
+// diagnosticTestMark stores the start or the end of a test as an event and replies with the position of its line.
+func diagnosticTestMark(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	if _, err := e.window(params); err != nil {
+		return nil, err
+	}
+	mark, err := ParseTestMark(params)
+	if err != nil {
+		return nil, err
+	}
+	boot, seq, err := EmitTestMark(mark, 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"boot": boot, "seq": seq}, nil
 }
 
 func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {

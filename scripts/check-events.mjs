@@ -31,11 +31,11 @@ const MARKER_REACH = 5;
  */
 const ENTRANCES = {
   go: [
-    { re: /\bEmitHost\s*\(/g, level: 0, event: 1, fields: 2 },
+    { re: /\bEmitHost(?:Placed)?\s*\(/g, level: 0, event: 1, fields: 2 },
     { re: /\bstoreEvent\s*\(/g, level: 0, event: 2, fields: 4 },
   ],
   rs: [
-    { re: /\bemit_host\s*\(/g, level: 0, event: 1, fields: 2 },
+    { re: /\bemit_host(?:_placed)?\s*\(/g, level: 0, event: 1, fields: 2 },
     { re: /\bstore_event\s*\(/g, level: 0, event: 2, fields: 4 },
   ],
   js: [

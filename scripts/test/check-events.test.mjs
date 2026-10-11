@@ -126,3 +126,14 @@ test('the logs of a configuration folder are audited against the catalog and the
   mkdirSync(join(root, 'empty', 'logs'), { recursive: true });
   assert.throws(() => auditLogDirectories(catalog, [join(root, 'empty')]), /empty\/logs: no host event file/);
 });
+
+test('the placed variants of the host emit functions are emit sites, and a built name takes its declared names from the marker above', () => {
+  const sources = new Map([
+    ['a.go', 'package host\n\nfunc f(event string) {\n\t// events: host.window.event\n\tEmitHostPlaced(LevelInfo, event, nil, 0)\n\tEmitHostPlaced(LevelInfo, "host.surprise.go", nil, 0)\n}\n'],
+    ['b.rs', 'fn f(event: &str) {\n    // events: host.never.emitted\n    emit_host_placed(Level::Info, event, fields, deadline);\n    emit_host_placed(Level::Info, "host.surprise.rs", fields, deadline);\n}\n'],
+  ]);
+  assert.deepEqual(checker.emitFindings(catalog, sources).filter((finding) => !finding.includes('is declared and no source emits it')), [
+    'a.go:6: host.surprise.go is emitted and docs/spec/events.json does not declare it',
+    'b.rs:4: host.surprise.rs is emitted and docs/spec/events.json does not declare it',
+  ]);
+});

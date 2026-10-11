@@ -81,6 +81,8 @@ struct Pending {
     /// The fields as JSON text, serialized once by the producer.
     fields: Box<RawValue>,
     bytes: usize,
+    /// When set, receives the `seq` of the line once the writer gave it one.
+    placed: Option<SyncSender<u64>>,
 }
 
 /// What the queue carries: an event, or a request of the owner. Two slots of the queue are reserved for requests, so a
@@ -114,6 +116,7 @@ pub struct EventLog {
     queue_bytes: usize,
     loss: Arc<Loss>,
     path: PathBuf,
+    boot: String,
     writer: Mutex<Option<JoinHandle<()>>>,
 }
 
@@ -241,6 +244,7 @@ impl EventLog {
             }))
             .map_err(|e| format!("log.open: {e}"))?,
             bytes: 0,
+            placed: None,
         };
         let writer = {
             let queued_bytes = Arc::clone(&queued_bytes);
@@ -286,6 +290,7 @@ impl EventLog {
             queue_bytes: options.queue_bytes,
             loss,
             path,
+            boot: options.boot,
             writer: Mutex::new(Some(writer)),
         })
     }
@@ -293,6 +298,40 @@ impl EventLog {
     /// The file this writer writes.
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// The identifier of the run that this writer belongs to; with a `seq` it names a line of the log.
+    pub fn boot(&self) -> &str {
+        &self.boot
+    }
+
+    /// Queues an event of the layer `host`, waits until it is on disk, at most `deadline`, and returns its `seq`. The queue
+    /// refusing the event is an error, so a caller that stores the position never stores one of a line that does not
+    /// exist.
+    pub fn emit_placed(
+        &self,
+        level: Level,
+        event: &str,
+        fields: Box<RawValue>,
+        deadline: Duration,
+    ) -> Result<u64, String> {
+        let (placed, receiver) = sync_channel(1);
+        if !self.enqueue(
+            now_us(),
+            Cow::Borrowed("host"),
+            level,
+            event,
+            fields,
+            Some(placed),
+        ) {
+            return Err(format!(
+                "the event writer refused {event} because its queue was full"
+            ));
+        }
+        self.flush(deadline)?;
+        receiver
+            .try_recv()
+            .map_err(|_| format!("the event writer could not write {event}"))
     }
 
     /// Queues an event. Returns false, and counts the loss, when the queue has no room. It never waits. The fields are
@@ -311,7 +350,7 @@ impl EventLog {
                 return false;
             }
         };
-        self.enqueue(now_us(), Cow::Borrowed("host"), level, event, fields)
+        self.enqueue(now_us(), Cow::Borrowed("host"), level, event, fields, None)
     }
 
     /// Queues an event that another layer of this process produced, with the time and the layer it carries. The event
@@ -339,7 +378,14 @@ impl EventLog {
             self.count_loss(1, event.len() as u64);
             return Ok(false);
         }
-        Ok(self.enqueue(ts_us, Cow::Owned(layer.to_string()), level, event, fields))
+        Ok(self.enqueue(
+            ts_us,
+            Cow::Owned(layer.to_string()),
+            level,
+            event,
+            fields,
+            None,
+        ))
     }
 
     fn enqueue(
@@ -349,6 +395,7 @@ impl EventLog {
         level: Level,
         event: &str,
         fields: Box<RawValue>,
+        placed: Option<SyncSender<u64>>,
     ) -> bool {
         let bytes = fields.get().len() + event.len();
         if self.queued_bytes.load(Ordering::Relaxed) + bytes > self.queue_bytes {
@@ -362,6 +409,7 @@ impl EventLog {
             event: event.to_string(),
             fields,
             bytes,
+            placed,
         };
         self.queued_bytes.fetch_add(bytes, Ordering::Relaxed);
         self.queued_events.fetch_add(1, Ordering::Relaxed);
@@ -464,6 +512,16 @@ impl Output {
     /// Adds the line of an event with the next `seq`.
     fn append(&mut self, pending: &Pending) {
         self.seq += 1;
+        if let Some(placed) = &pending.placed {
+            // The channel holds one value and a placed event is appended once, so the send does not wait; a refusal is
+            // reported, and the caller then fails to read the position.
+            if let Err(error) = placed.try_send(self.seq) {
+                eprintln!(
+                    "event writer: the position {} cannot be reported: {error}",
+                    self.seq
+                );
+            }
+        }
         let text = format!("{}\n", line(self.seq, pending));
         self.size += text.len() as u64;
         self.batch.push_str(&text);
@@ -487,6 +545,7 @@ impl Output {
                     fields: RawValue::from_string(self.open_fields.clone())
                         .expect("the fields of log.open are JSON"),
                     bytes: 0,
+                    placed: None,
                 };
                 self.append(&open);
                 let rotated = Pending {
@@ -501,6 +560,7 @@ impl Output {
                     }))
                     .expect("a json value serializes"),
                     bytes: 0,
+                    placed: None,
                 };
                 self.append(&rotated);
             }
@@ -530,6 +590,7 @@ impl Output {
             }))
             .expect("a json value serializes"),
             bytes: 0,
+            placed: None,
         };
         self.push(&pending);
     }
@@ -689,6 +750,7 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
             event: name,
             fields,
             bytes: 0,
+            placed: None,
         },
     ))
 }

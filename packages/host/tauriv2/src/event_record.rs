@@ -178,6 +178,28 @@ pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
     }
 }
 
+/// Stores an event of the layer `host` like `emit_host`, waits until it is in the event log, and returns the boot
+/// identifier of the log and the `seq` of the line, which together name the line. Without an attached writer the event has
+/// no position, so it is an error.
+pub fn emit_host_placed(
+    level: Level,
+    event: &str,
+    fields: serde_json::Value,
+    deadline: std::time::Duration,
+) -> Result<(String, u64), String> {
+    if !event.starts_with("host.") {
+        return Err(format!("the event {event:?} does not start with host."));
+    }
+    let fields = to_raw_value(&fields)
+        .map_err(|error| format!("the fields of {event} cannot be serialized: {error}"))?;
+    let log = records().log.clone();
+    let Some(log) = log else {
+        return Err("the event log of the host is not attached".to_string());
+    };
+    let seq = log.emit_placed(level, event, fields, deadline)?;
+    Ok((log.boot().to_string(), seq))
+}
+
 /// Waits until the records written so far are in the event log, at most `deadline`. The paths that end the process (a panic
 /// hook, a fatal handler) call it, so the record of the failure is stored before the process ends. Without an attached
 /// writer there is nothing to wait for: the records wait in the start buffer, and the standard error holds the failure.

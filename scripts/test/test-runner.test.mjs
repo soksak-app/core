@@ -96,10 +96,11 @@ test("a run with a folder gives each test its identifier, stores the output of e
   const { join } = await import("node:path");
   const folder = mkdtempSync(join(tmpdir(), "run-"));
   const { results } = await run([
-    node("a/passes.test.mjs", "console.log('seen ' + process.env.SOKSAK_RUN_ID)"),
+    node("a/passes.test.mjs", "console.log('seen ' + process.env.SOKSAK_RUN_ID + ' in ' + process.env.SOKSAK_RUN_FOLDER)"),
     node("a/fails.test.mjs", "console.error('the detail'); process.exit(3)"),
   ], { concurrency: 1, defaultTimeoutMs: 5000, run: { id: "20261011T000000-1", folder } });
   assert.equal(results.get("a/passes.test.mjs").status, "pass");
+  assert.match(results.get("a/passes.test.mjs").output, new RegExp(`seen 20261011T000000-1 in ${folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   const manifest = JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8"));
   assert.equal(manifest.schema, 1);
   assert.equal(manifest.run, "20261011T000000-1");
@@ -109,7 +110,7 @@ test("a run with a folder gives each test its identifier, stores the output of e
     assert.ok(item.ended_us >= item.started_us && item.started_us >= manifest.started_us, JSON.stringify(item));
     assert.ok(readdirSync(folder).includes(item.output), `${item.output} is not stored`);
   }
-  assert.match(readFileSync(join(folder, manifest.tests[0].output), "utf8"), /^seen 20261011T000000-1\n$/);
+  assert.equal(readFileSync(join(folder, manifest.tests[0].output), "utf8"), `seen 20261011T000000-1 in ${folder}\n`);
   assert.match(readFileSync(join(folder, manifest.tests[1].output), "utf8"), /^the detail\n$/);
 });
 

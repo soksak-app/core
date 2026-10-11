@@ -107,6 +107,9 @@ fn invalid_json_closes_connection() {
 | `diagnostics.native-objects.payload-names-counts` | `diagnostics.native.objects` 응답은 라이브러리의 살아 있는 객체 수를 `windowCompositions`, `surfaceHosts`, `inputRegistrations` 정수로만 담는다. | both |
 | `diagnostics.native-objects.equal-validates` | `diagnostics.native.objects`는 `equal`을 정확히 `windowCompositions`, `surfaceHosts`, `inputRegistrations`를 음이 아닌 정수로 담은 객체로만 받고, 다른 값은 `equal must be an object of windowCompositions, surfaceHosts and inputRegistrations, each a non-negative integer`로 거부한다. `equal`에 이르지 않은 수는 `window object counts did not reach <equal> within 10s; they are <counts>`로 실패하며, 각 수는 `windowCompositions N, surfaceHosts N, inputRegistrations N`으로 쓴다. | both |
 | `diagnostics.process-exit.pid-validates` | `diagnostics.process.exit`는 `pid`를 1부터 2147483647 사이의 정수로만 받고, 없거나 다른 값은 `pid must be a positive integer`로 거부한다. | both |
+| `diagnostics.test-mark.params-validate` | `diagnostics.test.mark`는 `kind` `start` 또는 `end`, 빈 문자열이 아닌 `name`과 `run`, `end`에는 `pass`, `fail`, `skip` 중 하나인 `result`(`start`에는 거부)만 받고, 그 밖의 값은 invalid-params 오류 `kind must be start or end`, `name must be a non-empty string`, `run must be a non-empty string`, `result must be pass, fail or skip`, `result is only for an end mark`로 거부한다. | both |
+| `diagnostics.test-mark.event-carries-position` | 시작 표시는 event `host.test.start`(`name`, `run`), 끝 표시는 `host.test.end`(`name`, `run`, `result`)이며 layer `host`, level `info`다. 답은 flush 뒤에 읽은 event 파일의 `boot`와 그 줄의 `seq`다. | both |
+| `diagnostics.test-mark.needs-the-event-log` | event log가 연결되지 않은 동안의 표시는 `the event log of the host is not attached`로 실패한다. | both |
 | `documents.request.accepts-own-surface` | 호출자 자신의 표면에 대한 문서 요청을 받아들이고 표면과 이름 키를 반환한다. | both |
 | `documents.request.rejects-foreign-or-missing-caller` | 호출자 표면이 없거나 다른 표면에서 온 문서 요청은 "not surface"로 실패한다. | both |
 | `documents.request.rejects-invalid-names` | 빈 이름, 대문자, 하이픈으로 시작, 슬래시 포함, 65자 문서 이름을 거부한다. | both |

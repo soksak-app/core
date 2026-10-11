@@ -126,6 +126,12 @@ pub(crate) fn call(
         "diagnostics.log.flush" => crate::event_record::flush_records(TIMEOUT)
             .map(|()| Value::Null)
             .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error)),
+        "diagnostics.test.mark" => {
+            let mark = crate::test_mark::parse_test_mark(&params)?;
+            crate::test_mark::emit_test_mark(&mark, TIMEOUT)
+                .map(|(boot, seq)| json!({"boot": boot, "seq": seq}))
+                .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error))
+        }
         "diagnostics.capture.still" => capture_still(window),
         "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.page.collect" => page_collect(window),

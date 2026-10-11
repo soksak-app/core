@@ -21,6 +21,7 @@ test("probe body fails", async (t) => {
     app: { name: "probe" },
     cleanups: [async () => { throw new Error("probe press stayed open"); }, async () => {}],
     expectedErrors: [],
+    markTest: async () => null,
   };
   t.after(() => finishSession(t, session, () => {}));
   throw new Error("probe body failed");
@@ -71,6 +72,7 @@ test("probe body passes", async (t) => {
     cleanups: [],
     eventStart: { "host-1-1.jsonl": ${started} },
     expectedErrors: ${expected},
+    markTest: async () => null,
   };
   t.after(() => finishSession(t, session, () => {}));
 });
@@ -119,7 +121,7 @@ import { join } from "node:path";
 import { finishSession, recordingFolders } from ${JSON.stringify(app)};
 test("probe body passes", async (t) => {
   const configDir = ${JSON.stringify(dir)};
-  const session = { app: { name: "probe", configDir }, cleanups: [], eventStart: {}, expectedErrors: [],
+  const session = { app: { name: "probe", configDir }, cleanups: [], eventStart: {}, expectedErrors: [], markTest: async () => null,
     recordingsBefore: recordingFolders(configDir) };
   mkdirSync(join(configDir, "logs", "captures", "left"));
   writeFileSync(join(configDir, "logs", "captures", "left", "frame-0001.bgra"), "x");

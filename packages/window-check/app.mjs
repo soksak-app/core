@@ -3,7 +3,7 @@
 // The checks do not launch the application. The application must already run with `--config-dir
 // <tmpdir>/soksak-check-<app>`, and the harness connects through the endpoint.json of that folder. The specification is
 // in docs/spec/endpoint.md and docs/spec/exposure.md.
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -213,6 +213,7 @@ export async function open(t, app) {
   assertEndpointUsesCurrentBuild(endpoint, realpathSync(app.binary), statSync(app.binary).mtimeMs);
   session.eventStart = readEventOffsets(app.configDir);
   session.recordingsBefore = recordingFolders(app.configDir);
+  await session.markTest("start", t.name);
   return session;
 }
 
@@ -252,6 +253,14 @@ export async function finishSession(t, session, close) {
         throw new Error(`${session.app.name}: the application logged ${undeclared.length} error${undeclared.length === 1 ? "" : "s"} ` +
           `that the check did not declare:\n${undeclared.join("\n")}`);
       }
+    } catch (error) {
+      failures.push(error);
+      t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+    }
+    // The end of the test is marked after the cleanups and the error audit, so the range of the test in the log holds the
+    // records they cause. The result is fail when the body, a cleanup or the audit failed.
+    try {
+      await session.markTest("end", t.name, t.passed && failures.length === 0 ? "pass" : "fail");
     } catch (error) {
       failures.push(error);
       t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
@@ -455,6 +464,24 @@ export class Session {
         return this.request("diagnostics.capture.stop", options);
       },
     };
+  }
+
+  /**
+   * Marks the start or the end of the test `name` in the event log of the application (`diagnostics.test.mark`) and appends
+   * `{run, app, name, kind, boot, seq, ts_us}` to marks.jsonl in SOKSAK_RUN_FOLDER, so a test is a range of positions
+   * `(boot, seq)`. `result` (`pass`, `fail` or `skip`) belongs to the end mark. Returns the position `{boot, seq}`.
+   * The single condition: without SOKSAK_RUN_ID the check does not run under a test runner that keeps a run, so nothing is
+   * marked and null is returned.
+   */
+  async markTest(kind, name, result) {
+    const run = process.env.SOKSAK_RUN_ID;
+    if (!run) return null;
+    const folder = process.env.SOKSAK_RUN_FOLDER;
+    if (!folder) throw new Error("SOKSAK_RUN_ID is set but SOKSAK_RUN_FOLDER is not; the runner sets both");
+    const position = await this.request("diagnostics.test.mark", result === undefined ? { kind, name, run } : { kind, name, run, result });
+    const ts_us = Math.round((performance.timeOrigin + performance.now()) * 1000);
+    appendFileSync(join(folder, "marks.jsonl"), `${JSON.stringify({ run, app: this.app.name, name, kind, boot: position.boot, seq: position.seq, ts_us })}\n`);
+    return position;
   }
 
   /** Waits until the records the application wrote so far are in its event log. */
