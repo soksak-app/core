@@ -333,3 +333,126 @@ export function auditParsed(parsed, catalog, declaredError = () => false) {
   // default: findings of the same file, or of a file without an order, are ordered by their line.
   return findings.sort((a, b) => order.get(a.file) - order.get(b.file) || a.line - b.line);
 }
+
+/** The schema number of the policy file `log-policy.json` (docs/spec/logging.md#policy-file). */
+export const POLICY_SCHEMA = 1;
+/** The classes that the policy file names, in the order of the contract. */
+export const POLICY_CLASSES = ["lifecycle", "input", "call", "io", "frame"];
+/** The values of a class in the policy file, from the one that stores nothing to the one that stores every level. */
+export const POLICY_VALUES = ["off", "error", "warn", "info", "debug", "trace"];
+const POLICY_LEVELS = POLICY_VALUES.slice(1);
+
+/**
+ * Reads the text of a policy file into `{schema, classes}`. Every member, class and value is checked, and an error names `file`
+ * and what it found; a policy that leaves a class out is refused, because no value stands in for it. The messages are those of
+ * the host and the command line tool, except the text after `not JSON: `, which is the message of the parser of the language.
+ */
+export function parsePolicy(file, text) {
+  let members;
+  try {
+    members = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${file}: not JSON: ${error.message}`, { cause: error });
+  }
+  const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  if (!isObject(members)) throw new Error(`${file}: not JSON: the text is not an object`);
+  for (const name of Object.keys(members).sort()) {
+    if (name !== "schema" && name !== "classes") throw new Error(`${file}: the member ${name} is not one of schema, classes`);
+  }
+  if (!Number.isInteger(members.schema)) {
+    throw new Error(`${file}: schema must be the number ${POLICY_SCHEMA}, found ${members.schema === undefined ? "" : JSON.stringify(members.schema)}`);
+  }
+  if (members.schema !== POLICY_SCHEMA) throw new Error(`${file}: schema ${members.schema} is not ${POLICY_SCHEMA}`);
+  if (!isObject(members.classes)) throw new Error(`${file}: classes must be an object that names every class`);
+  for (const name of Object.keys(members.classes).sort()) {
+    if (!POLICY_CLASSES.includes(name)) throw new Error(`${file}: the class ${name} is not one of ${POLICY_CLASSES.join(", ")}`);
+  }
+  const classes = {};
+  for (const name of POLICY_CLASSES) {
+    const value = members.classes[name];
+    if (value === undefined) throw new Error(`${file}: the class ${name} is missing`);
+    if (typeof value !== "string") throw new Error(`${file}: the level of the class ${name} must be text, found ${JSON.stringify(value)}`);
+    if (!POLICY_VALUES.includes(value)) throw new Error(`${file}: the level ${JSON.stringify(value)} of the class ${name} is not one of ${POLICY_VALUES.join(", ")}`);
+    classes[name] = value;
+  }
+  return { schema: POLICY_SCHEMA, classes };
+}
+
+/** Whether a policy from `parsePolicy` stores an event of the class at the level: the level is not more verbose than the value of the class. */
+export function policyAllows(policy, kind, level) {
+  if (!POLICY_CLASSES.includes(kind)) throw new Error(`the class ${kind} is not one of ${POLICY_CLASSES.join(", ")}`);
+  if (!POLICY_LEVELS.includes(level)) throw new Error(`the level ${level} is not one of ${POLICY_LEVELS.join(", ")}`);
+  return POLICY_VALUES.indexOf(policy.classes[kind]) >= POLICY_VALUES.indexOf(level);
+}
+
+/** The kinds of replay input (docs/spec/replay.md#records). */
+export const REPLAY_INPUT_KINDS = ["output", "write", "resize", "selection", "viewport", "theme"];
+const SELECTION_ACTIONS = ["start", "update", "end", "clear"];
+const THEME_REQUIRED = ["foreground", "background", "selection"];
+
+const shown = (value) => (value === undefined ? "undefined" : JSON.stringify(value));
+
+/**
+ * The problem of the fields of one replay input of `kind`, as text, or null when the fields are in the form of the contract.
+ * The kind of an event is the sidecar's choice of name; the fields are the contract's.
+ */
+export function replayInputProblem(kind, fields) {
+  if (!REPLAY_INPUT_KINDS.includes(kind)) return `replay input ${kind} is not one of ${REPLAY_INPUT_KINDS.join(", ")}`;
+  const integerFrom = (name, min) => (Number.isInteger(fields[name]) && fields[name] >= min ? null : `${kind}: ${name} must be an integer from ${min}, found ${shown(fields[name])}`);
+  const sequence = integerFrom("sequence", 1);
+  if (sequence !== null) return sequence;
+  if (kind === "output" || kind === "write") {
+    return typeof fields.hex === "string" && /^(?:[0-9a-f]{2})+$/.test(fields.hex) ? null : `${kind}: hex must be lowercase hexadecimal text of whole bytes, found ${shown(fields.hex)}`;
+  }
+  if (kind === "resize") return integerFrom("rows", 1) || integerFrom("cols", 1);
+  if (kind === "selection") {
+    if (!SELECTION_ACTIONS.includes(fields.action)) return `selection: action must be start, update, end or clear, found ${shown(fields.action)}`;
+    if (fields.action === "start" || fields.action === "update") return integerFrom("edge", 0) || integerFrom("row", 0);
+    return fields.edge === undefined && fields.row === undefined ? null : `selection: ${fields.action} takes no edge and no row`;
+  }
+  if (kind === "viewport") {
+    if (fields.lines !== undefined && fields.newest !== undefined) return "viewport: lines and newest are exclusive";
+    if (fields.lines === undefined && fields.newest === undefined) return "viewport: lines (a non-zero integer) or newest (true) is required";
+    if (fields.newest !== undefined) return fields.newest === true ? null : `viewport: newest must be true, found ${shown(fields.newest)}`;
+    return Number.isInteger(fields.lines) && fields.lines !== 0 ? null : `viewport: lines must be a non-zero integer, found ${shown(fields.lines)}`;
+  }
+  const colors = fields.colors;
+  if (colors === null || typeof colors !== "object" || Array.isArray(colors)) return `theme: colors must be an object of colors, found ${shown(colors)}`;
+  for (const name of THEME_REQUIRED) if (colors[name] === undefined) return `theme: colors.${name} is required`;
+  for (const [name, color] of Object.entries(colors)) {
+    if (typeof color !== "string" || !/^#[0-9a-f]{6}$/.test(color)) return `theme: colors.${name} must be "#rrggbb" in lowercase, found ${shown(color)}`;
+  }
+  return null;
+}
+
+/**
+ * The problem of the replay inputs of one session, `[{kind, fields}]` in the order they were applied, as text, or null: each
+ * input is in form, the sequences run from 1 without a gap, the first input is a theme, and a selection start or update lies inside the grid of the
+ * last resize, and a selection update or end follows a selection start.
+ */
+export function replaySessionProblem(inputs) {
+  let previous = 0;
+  let selecting = false;
+  let size = null;
+  for (const [index, { kind, fields }] of inputs.entries()) {
+    const at = index + 1;
+    const problem = replayInputProblem(kind, fields);
+    if (problem !== null) return `input ${at}: ${problem}`;
+    if (fields.sequence !== previous + 1) return `input ${at} has sequence ${fields.sequence} and the sequence after ${previous} is ${previous + 1}`;
+    previous = fields.sequence;
+    if (index === 0 && kind !== "theme") return `input 1 is a ${kind} and the first input of a session is a theme`;
+    if (kind === "resize") size = fields;
+    if (kind === "selection") {
+      if (fields.action === "start" || fields.action === "update") {
+        if (size === null) return `input ${at} is a selection ${fields.action} before any resize`;
+        if (fields.row >= size.rows || fields.edge > size.cols) return `input ${at} is a selection ${fields.action} at edge ${fields.edge} row ${fields.row} outside the grid of ${size.rows} rows and ${size.cols} columns`;
+      }
+      if ((fields.action === "update" || fields.action === "end") && !selecting) return `input ${at} is a selection ${fields.action} and no selection has started`;
+      selecting = fields.action === "start" || fields.action === "update";
+    }
+  }
+  return null;
+}
+
+/** Whether the text of a policy file is one that a writer truncated and is writing: a reader waits for the next notification and reports nothing. */
+export const policyIsBeingWritten = (text) => text.trim() === "";

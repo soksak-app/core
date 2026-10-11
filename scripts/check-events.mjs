@@ -11,7 +11,8 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { auditLogs } from '../packages/log-contract/index.js';
+import { auditLogs, composeCatalogs } from '../packages/log-contract/index.js';
+import { validateSidecar } from '../packages/plugin-api/index.js';
 import { catalogReport, trackedSources } from '../packages/plugin-api/events-check.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -20,7 +21,41 @@ const CATALOG = 'docs/spec/events.json';
 /** The text of the tracked sources of this repository that can emit events, by path. */
 export const repositorySources = () => trackedSources(ROOT);
 
-/** The event files of every layer (`host`, `vt`, `files`, `shell`, `sok`), generation and debug file of a configuration folder, in name order. */
+/**
+ * The event catalogs of the sidecars that `plugins/installed.json` of a configuration folder records: each recorded folder
+ * holds a `sidecar.json`, whose member `events` names the catalog file (docs/spec/sidecars.md). A sidecar without the member
+ * declares no catalog. A file that is missing, not JSON or of another format is an error that names the file.
+ */
+export function installedSidecarCatalogs(directory) {
+  const file = join(directory, 'plugins', 'installed.json');
+  let installed;
+  try {
+    installed = JSON.parse(readFileSync(file, 'utf8'));
+  } catch (error) {
+    // default: a configuration folder without installed.json has installed no sidecar.
+    if (error.code === 'ENOENT') return [];
+    throw new Error(`${file}: ${error.message}`, { cause: error });
+  }
+  if (installed?.format !== 2) throw new Error(`${file}: plugins/installed.json: format must be 2, found ${JSON.stringify(installed?.format)}`);
+  const catalogs = [];
+  for (const [name, { path }] of Object.entries(installed.sidecars ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
+    const manifest = join(directory, path, 'sidecar.json');
+    const sidecar = validateSidecar(JSON.parse(readFileSync(manifest, 'utf8')));
+    if (sidecar.events === undefined) continue;
+    const catalog = join(directory, path, sidecar.events);
+    try {
+      catalogs.push(JSON.parse(readFileSync(catalog, 'utf8')));
+    } catch (error) {
+      throw new Error(`${catalog}: the event catalog of the sidecar ${name}: ${error.message}`, { cause: error });
+    }
+  }
+  return catalogs;
+}
+
+/** The catalog of this repository joined with the catalogs of the sidecars installed in a configuration folder. */
+export const catalogOf = (base, directory) => composeCatalogs(base, ...installedSidecarCatalogs(directory));
+
+/** The event files of every layer (`<role>-<pid>-<time>`: the host, `sok` and each sidecar), generation and debug file of a configuration folder, in name order. */
 export function eventFiles(directory) {
   const logs = join(directory, 'logs');
   let names;
@@ -29,7 +64,7 @@ export function eventFiles(directory) {
   } catch (error) {
     throw new Error(`${logs}: ${error.message}`, { cause: error });
   }
-  const files = names.filter((name) => /^(host|vt|files|shell|sok)-\d+-\d+(\.debug)?\.jsonl(\.[1-9]\d*)?$/.test(name)).sort().map((name) => join(logs, name));
+  const files = names.filter((name) => /^[a-z][a-z0-9]*-\d+-\d+(\.debug)?\.jsonl(\.[1-9]\d*)?$/.test(name)).sort().map((name) => join(logs, name));
   if (files.length === 0) throw new Error(`${logs}: no host event file`);
   return files.filter((path) => statSync(path).isFile());
 }
@@ -38,7 +73,7 @@ export function eventFiles(directory) {
 export function auditLogDirectories(catalog, directories) {
   return directories.flatMap((directory) => {
     const logs = eventFiles(directory).map((file) => ({ file, text: readFileSync(file, 'utf8') }));
-    return auditLogs(logs, catalog).map(({ file, line, message }) => `${file}:${line}: ${message}`);
+    return auditLogs(logs, catalogOf(catalog, directory)).map(({ file, line, message }) => `${file}:${line}: ${message}`);
   });
 }
 

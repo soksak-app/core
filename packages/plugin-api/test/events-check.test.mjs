@@ -344,3 +344,111 @@ test('runtime.log entrances of plugin events are resolved by the plugin prefix',
   const config = checker.parseCensusConfig('census.json', '{}', rules);
   assert.deepEqual(checker.censusFindings(new Map([['ui/a.js', 'export function f(runtime) {\n  try { g(); } catch (error) { runtime.log.error("input.key", {}); }\n}\n']]), config, rules), []);
 });
+
+// A Rust sidecar writes events through methods of its own writer. The declaration file of the repository (`emitters`, by language)
+// names each method with the positions of its arguments, so the check finds the sites without naming a repository.
+const EMITTERS = {
+  emitters: {
+    rs: [
+      { call: 'emit', level: 0, event: 1, fields: 2 },
+      { call: 'emit_for', level: 0, event: 1, fields: 3 },
+      { call: 'record_error', fixed: 'error', name: 'sidecar.alpha.record.error', event: 0 },
+      { call: 'record_info', fixed: 'info', name: 'sidecar.alpha.record.info', event: 0, only: '^src/' },
+    ],
+  },
+};
+const sidecar = {
+  schema: 2,
+  layers: ['sidecar'],
+  sidecar: 'alpha',
+  events: {
+    'sidecar.alpha.write': { layer: 'sidecar', class: 'io', level: 'debug', fields: { sequence: 'number', hex: 'string' } },
+    'sidecar.alpha.start': { layer: 'sidecar', class: 'lifecycle', level: 'info', fields: { pid: 'number' } },
+    'sidecar.alpha.record.<level>': { layer: 'sidecar', class: 'lifecycle', level: ['error', 'info'], fields: { where: 'string', text: 'string' } },
+  },
+};
+const RUST = [
+  'impl Writer {',
+  '    pub fn emit<T: Serialize>(&self, level: Level, event: &str, fields: &T) -> bool {',
+  '        self.emit_for(level, event, Subject::NONE, fields)',
+  '    }',
+  '    pub fn record_error(&self, place: &str, text: impl Display) {',
+  '        self.emit(Level::Error, "sidecar.alpha.record.error", &json!({"where": place, "text": text.to_string()}));',
+  '    }',
+  '}',
+  'fn run(log: &Writer) {',
+  '    log.emit(Level::Info, "sidecar.alpha.start", &json!({"pid": 1}));',
+  '    log.emit_for(',
+  '        Level::Debug,',
+  '        "sidecar.alpha.write",',
+  '        Subject::session("s", &[]),',
+  '        &json!({"sequence": 1, "hex": "00"}),',
+  '    );',
+  '    log.record_info("font", "installed");',
+  '}',
+  '',
+].join('\n');
+
+test('the emitters of a repository declaration make the writer methods of a Rust sidecar emit sites, with their argument positions', () => {
+  const config = checker.parseCensusConfig('census.json', JSON.stringify(EMITTERS));
+  const sources = new Map([['src/a.rs', RUST]]);
+  assert.deepEqual(checker.emitFindings(sidecar, sources, 'events.json', config), [
+    'src/a.rs:3: the name of this emit is not a literal; write a comment `events: <declared names>` above it, or `events: forwarded` when it passes the name of its caller',
+  ]);
+  assert.deepEqual(checker.siteCounts(sources, config.emitters), { rs: { literal: 4, built: 1 } });
+  const wrong = new Map([['src/a.rs', RUST.replace('"sidecar.alpha.write"', '"sidecar.alpha.surprise"')]]);
+  assert.deepEqual(checker.emitFindings(sidecar, wrong, 'events.json', config).filter((finding) => !finding.includes('not a literal')), [
+    'src/a.rs:13: sidecar.alpha.surprise is emitted and events.json does not declare it',
+    'events.json: sidecar.alpha.write is declared and no source emits it',
+  ]);
+  const levels = new Map([['src/a.rs', RUST.replace('Level::Debug', 'Level::Warn').replace('"hex": "00"', '"hex": "00", "extra": 1')]]);
+  assert.deepEqual(checker.emitFindings(sidecar, levels, 'events.json', config).filter((finding) => !finding.includes('not a literal')), [
+    'src/a.rs:13: sidecar.alpha.write is emitted at the level warn and the catalog declares debug',
+    'src/a.rs:13: sidecar.alpha.write has the field extra, which the catalog does not declare',
+  ]);
+  // An emitter with `only` is a site in the files it names and nowhere else.
+  assert.deepEqual(checker.siteCounts(new Map([['lib/a.rs', RUST]]), config.emitters), { rs: { literal: 3, built: 1 } });
+});
+
+test('an emitter is an event of its function for the census, and a repository without emitters finds no site of these methods', () => {
+  const config = checker.parseCensusConfig('census.json', JSON.stringify(EMITTERS));
+  const source = 'fn f(log: &Writer) {\n    let _ = g().ok();\n    log.record_error("g", "failed");\n}\nfn h() {\n    let _ = g().ok();\n}\n';
+  assert.deepEqual(checker.censusFindings(new Map([['a.rs', source]]), config).map(({ file, line, rule }) => `${file}:${line} ${rule}`), ['a.rs:6 rs.ok-discard']);
+  const bare = checker.parseCensusConfig('census.json', '{}');
+  assert.deepEqual(checker.censusFindings(new Map([['a.rs', source]]), bare).map(({ line }) => line), [2, 6]);
+  assert.deepEqual(checker.siteCounts(new Map([['src/a.rs', RUST]]), bare.emitters), { rs: { literal: 0, built: 0 } });
+});
+
+test('a declaration of emitters outside the form is an error naming the file, the language and the emitter', () => {
+  const parse = (emitters) => () => checker.parseCensusConfig('census.json', JSON.stringify({ emitters }));
+  assert.throws(parse({ cobol: [] }), /^Error: census\.json: emitters names the language cobol, which is not one of go, rs, m, js/);
+  assert.throws(parse({ rs: {} }), /census\.json: emitters\.rs is not a list/);
+  assert.throws(parse({ rs: [{ call: 'emit-for', level: 0, event: 1 }] }), /census\.json: emitters\.rs\[0\]: call "emit-for" is not an identifier/);
+  assert.throws(parse({ rs: [{ call: 'emit', level: 0, event: 1, shape: 1 }] }), /census\.json: emitters\.rs\[0\]: has the key shape, which is not one of/);
+  assert.throws(parse({ rs: [{ call: 'emit', event: 1 }] }), /census\.json: emitters\.rs\[0\]: needs level \(the position of the level argument\) or fixed/);
+  assert.throws(parse({ rs: [{ call: 'emit', level: 0, fixed: 'info', event: 1 }] }), /census\.json: emitters\.rs\[0\]: has level and fixed/);
+  assert.throws(parse({ rs: [{ call: 'emit', level: 0 }] }), /census\.json: emitters\.rs\[0\]: event must be a non-negative integer/);
+  assert.throws(parse({ rs: [{ call: 'emit', level: -1, event: 1 }] }), /census\.json: emitters\.rs\[0\]: level must be a non-negative integer/);
+  assert.throws(parse({ rs: [{ call: 'emit', fixed: 'loud', event: 0 }] }), /census\.json: emitters\.rs\[0\]: fixed "loud" is not a level/);
+  assert.throws(parse({ rs: [{ call: 'emit', level: 0, event: 1 }, { call: 'emit', level: 0, event: 1 }] }), /census\.json: emitters\.rs\[1\]: call emit is declared twice/);
+  assert.throws(parse({ rs: [{ call: 'emit', level: 0, event: 1, only: '(' }] }), /census\.json: emitters\.rs\[0\]: only is not a pattern/);
+});
+
+test('soksak-events --catalog finds the emit sites of a Rust sidecar through the emitters of its census declaration', () => {
+  const command = fileURLToPath(new URL('../events-check.js', import.meta.url));
+  const repository = mkdtempSync(join(tmpdir(), 'census-'));
+  const run = (...args) => spawnSync(process.execPath, [command, ...args], { cwd: repository, encoding: 'utf8' });
+  const git = (...args) => assert.equal(spawnSync('git', args, { cwd: repository }).status, 0);
+  git('init', '-q');
+  mkdirSync(join(repository, 'src'));
+  writeFileSync(join(repository, 'events.json'), JSON.stringify(sidecar));
+  writeFileSync(join(repository, 'src', 'a.rs'), RUST.replace('self.emit_for(level, event, Subject::NONE, fields)', '// events: forwarded\n        self.emit_for(level, event, Subject::NONE, fields)'));
+  writeFileSync(join(repository, 'census.json'), JSON.stringify(EMITTERS));
+  git('add', 'events.json', 'src/a.rs', 'census.json');
+  let result = run('--catalog', 'events.json');
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /emit sites: rs 0 literal 0 built/);
+  result = run('--census', 'census.json', '--catalog', 'events.json');
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^Event catalog checks passed: 3 declared events, emit sites: rs 4 literal 1 built/m);
+});

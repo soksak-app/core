@@ -12,7 +12,7 @@ import { basename, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { auditParsed, parseLog, processOf } from '../packages/log-contract/index.js';
 import { eventLine } from '../packages/window-check/event-log.mjs';
-import { eventFiles } from './check-events.mjs';
+import { catalogOf, eventFiles } from './check-events.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const KINDS = ['start', 'end', 'expect_error', 'expect_event'];
@@ -128,7 +128,7 @@ export function auditRun(catalog, folder) {
         if (flags.length > 0 && flags.every(Boolean)) declared.add(`${file}\0${entry.line}`);
       }
     }
-    for (const { file, line, message } of auditParsed(parsed, catalog, (file, entry) => declared.has(`${file}\0${entry.line}`))) {
+    for (const { file, line, message } of auditParsed(parsed, catalogOf(catalog, config), (file, entry) => declared.has(`${file}\0${entry.line}`))) {
       findings.push(`${file}:${line}: ${message}`);
     }
   }

@@ -9,7 +9,9 @@ import { auditRun } from '../audit-run.mjs';
 const catalog = {
   schema: 2,
   layers: ['host', 'sidecar'],
+  chains: { input: ['host.sidecar.request'] },
   events: {
+    'host.sidecar.request': { layer: 'host', class: 'io', level: 'info', cids: 'required', fields: { name: 'string' } },
     'log.open': { layer: 'host', class: 'lifecycle', level: 'info', fields: { schema: 'number', pid: 'number', role: 'string', boot: 'string' } },
     'host.test.start': { layer: 'host', class: 'lifecycle', level: 'info', fields: { name: 'string', run: 'string' } },
     'host.test.end': { layer: 'host', class: 'lifecycle', level: 'info', fields: { name: 'string', run: 'string', result: 'string' } },
@@ -131,4 +133,22 @@ test('a run without marks.jsonl, a malformed mark, or a declaration without a st
   assert.throws(() => auditRun(catalog, bad.folder), /marks\.jsonl:2: kind sideways is not start, end, expect_error or expect_event/);
   const orphan = fixture(t, { files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT)] }, marks: (mark) => [mark({ kind: 'expect_event', event: 'host.update.start' })] });
   assert.throws(() => auditRun(catalog, orphan.folder), /marks\.jsonl:1: expect_event of t1 has no open start mark/);
+});
+
+test('the events of a sidecar installed in a configuration folder of the run are audited against its catalog', (t) => {
+  const alpha = JSON.parse(readFileSync(new URL('../../packages/log-contract/fixtures/extension/alpha.json', import.meta.url), 'utf8'));
+  const { folder, config } = fixture(t, {
+    files: {
+      [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), end(3, 't1')],
+      'alpha-3-4.jsonl': [open('alpha', '3-4'), event(2, 'sidecar.alpha.start', { pid: 3 }, { layer: 'sidecar' }), event(3, 'sidecar.alpha.surprise', {}, { layer: 'sidecar' })],
+    },
+    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 }), mark({ kind: 'end', boot: BOOT, seq: 3 })],
+  });
+  const path = 'sidecars/alpha/1.0.0/platform';
+  mkdirSync(join(config, 'plugins'));
+  mkdirSync(join(config, path), { recursive: true });
+  writeFileSync(join(config, 'plugins', 'installed.json'), JSON.stringify({ format: 2, plugins: {}, sidecars: { alpha: { version: '1.0.0', path } } }));
+  writeFileSync(join(config, path, 'sidecar.json'), JSON.stringify({ executable: 'bin/alpha', protocol: 1, events: 'events.json' }));
+  writeFileSync(join(config, path, 'events.json'), JSON.stringify(alpha));
+  assert.deepEqual(auditRun(catalog, folder), [`${join(config, 'logs', 'alpha-3-4.jsonl')}:3: event sidecar.alpha.surprise is not declared`]);
 });

@@ -61,6 +61,8 @@ event는 class 하나에 속하며 catalog가 이를 선언한다. class가 저�
 | `io` | sidecar 메시지, PTY 읽기와 쓰기 | 중간~높음 | 완전하게 저장. 유일한 상한은 파일의 회전이며 일어날 때 기록한다. |
 | `frame` | 그림 frame, 화면, 포인터 이동, wheel, layout | 높음 | 집계: 선언한 간격마다 횟수, 극값, 마지막 값, 총 마이크로초를 담은 요약 event 하나. 생산자가 발생마다 저장하는 event는 정책이 그 class를 그 level로 저장하는 동안 저장한다. |
 
+설정 `diagnostics.log`가 상세히 저장할 category를 고른다. host는 적용 중인 정책을 `<config-dir>/log-policy.json`에 쓴다. [정책 파일](#정책-파일)이 그 schema와 프로세스가 바뀐 것을 아는 방법을 정한다. 정책을 나르는 프로토콜 연산은 없다.
+
 화면의 셀 같은 큰 값은 event에 쓰지 않고 크기와 hash를 쓴다. 값은 정책이 class `frame`을 level `trace`로 저장하는 동안 저장한다. 터미널 화면의 내용은 저장하지 않는다. 입력과 화면마다의 hash를 저장하며, [재생](replay.ko.md)이 내용을 파생한다.
 
 ### 정책
@@ -68,11 +70,27 @@ event는 class 하나에 속하며 catalog가 이를 선언한다. class가 저�
 정책은 class마다 저장할 가장 덜 심각한 level을 말한다: `off`(그 class의 event 없음), `error`, `warn`, `info`, `debug`, `trace`(모든 level). 기본 정책은 모든 class의 모든 level을 저장한다. release version이 0.0.x인 동안 모든 release가 진단 빌드이므로, 한 컴퓨터에서 한 번 나타난 결함이 나타날 때 기록된다. 더 좁은 정책은 애플리케이션을 실행하는 사람의 결정이다.
 
 - **설정.** 설정 `diagnostics.log`([설정](settings.ko.md#진단))는 일부 class의 level을 이름 붙이는 객체(`{"call": "info"}`)이며, 이름이 없는 class는 모든 level을 저장한다. class 밖의 이름과 level 밖의 값은 설정 이름을 담은 오류로 거부한다. page는 설정의 정책을 batcher의 gate에 넣고, 다섯 class를 모두 담은 정책을 호출 `log`의 action `policy`(`{action: "policy", classes}`)로 host에 보낸다. host는 아래 파일의 규칙으로 검사한 뒤 파일을 쓰며, 규칙을 어긴 요청은 오류이고 아무것도 쓰지 않는다.
-- **파일.** host는 정책을 `<config-dir>/log-policy.json`(mode `0600`)에 새 파일을 경로 위로 rename하는 방식으로 쓴다: `{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}`. 파일은 모든 class를 한 번씩 여섯 값 중 하나로 이름 붙인다. reader는 파일 이름과 발견한 것을 담은 오류로 파일을 거부한다: JSON이 아닌 글, `schema`와 `classes` 외의 항목, 1이 아닌 schema, 객체가 아닌 `classes`, 계약 밖의 class, 빠진 class, 글이 아닌 값, 여섯 값 밖의 값.
-- **감시.** 모든 프로세스는 파일을 적용하고 운영체제의 파일 시스템 event로 감시하므로, 파일을 읽는 타이머도 정책을 나르는 프로토콜 연산도 없다. 생성, 쓰기, 교체, rename은 파일의 정책을 적용하고, 삭제는 기본 정책을 적용한다. 파일을 그대로 두는 알림은 아무것도 바꾸지 않는다. 빈 파일은 writer가 잘라 내고 쓰는 중인 파일이므로 다음 알림을 기다린다. 규칙을 어긴 파일은 장소 `log policy`의 오류 기록이며 적용 중인 정책은 그대로 남는다. host는 파일을 자기 writer에 적용하고 native 라이브러리에 준다(`sp_event_set_policy`). 라이브러리는 host 프로세스의 일부이기 때문이다. page는 자기 설정의 정책을 가진다(surface의 문서에는 설정이 없으므로 그 event는 host의 gate를 지난다). sidecar는 자기 프로세스에서 파일을 감시한다.
+- **파일과 감시.** 파일의 schema, 쓰는 방법, 읽는 쪽의 거부, 프로세스가 변경을 아는 방법은 [정책 파일](#정책-파일)에 한 번만 적는다.
 - **Gate.** 생산자는 event의 field를 만들기 전에 `enabled(class, level)`을 묻는다. 답이 아니오일 때 만들기를 건너뛰는 생산자는 세는 형태(`Gate`, `gate`, `sp_event_gate`)를 묻고, 모든 층의 writer도 자기에게 닿은 event에 대해 이를 묻는다. 그래서 정책이 저장하지 않는 event는 큐에 들어가거나 쓰이지 않는다. 인자를 직렬화하는 host의 생산자(`host.binding.call`, `host.endpoint.call`, trace), page(`page.call`, trace, surface의 문서), native 라이브러리(`native.input.query`, 센 관찰과 전달한 관찰)는 만들기 전에 묻는다. 이름을 catalog가 선언하지 않은 event에는 class도 gate도 없다.
 - **세기.** gate가 거부한 모든 event는 class와 level별로 세고, 그 수는 모든 gate를 지나는 class `lifecycle`, level `info`의 event로 나간다: `log.gated`(host), `page.log.gated`(page), `native.log.gated`(native 라이브러리, writer가 ring을 비울 때 보고)이며 `class`, `level`, `count`(이전 보고 이후의 정확한 수)를 담는다. writer는 배치 간격마다와 flush할 때 보고한다.
 - **변경.** writer가 처음 적용하는 정책과 이후의 모든 변경은 event `log.policy`(`source`는 `default` 또는 `file`, 그리고 `classes`)이며, 같은 정책이 다시 오면 아무것도 저장하지 않는다. writer가 자기에 대해 보고하는 event(`log.open`, `log.rotated`, `log.dropped`, `log.policy`, `log.gated`, `log.pruned`)는 모든 gate를 지나므로 class `lifecycle`을 끈 정책도 끈 사실을 말한다.
+
+### 정책 파일
+
+정책 파일은 설정 디렉터리의 `log-policy.json`(`<config-dir>/log-policy.json`)이다. host가 설정 `diagnostics.log`에서 만들어, 같은 폴더의 새 파일로 쓴 뒤 mode `0600`으로 경로 위에 rename하므로 reader가 정책의 반쪽을 보는 일이 없다. 파일은 정확히 다음 member를 가진 JSON 객체이다.
+
+| Member | 형 | 값 |
+| --- | --- | --- |
+| `schema` | 정수 | `1`. 다른 수는 거부한다. |
+| `classes` | 객체 | [class와 정책](#class와-정책)의 class마다 member 하나, 곧 정확히 `lifecycle`, `input`, `call`, `io`, `frame`이며 값은 모두 문자열이다. class를 빼거나 더할 수 없다. |
+
+class의 값은 그 class에서 저장하는 가장 덜 심각한 level이다. `off`(그 class의 event를 저장하지 않음), `error`, `warn`, `info`, `debug`, `trace`(모든 level)이다. 값은 아무것도 저장하지 않는 것에서 모두 저장하는 것의 순서로 놓이며, event는 level이 class의 값보다 더 verbose하지 않을 때 저장된다. 파일 안에 기본값을 가진 member는 없다. member를 뺀 파일은 거부한다. 파일이 없는 동안 적용되는 기본 정책은 모든 class가 `trace`이며, host가 그 정책으로 쓰는 파일은 `{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}`이다.
+
+reader는 다음 순서로 파일을 거부하고, 파일 이름과 찾은 것을 담은 오류를 낸다. JSON 객체가 아닌 text(`<file>: not JSON: <parser의 message>`), `schema`와 `classes` 밖의 member(`<file>: the member <name> is not one of schema, classes`, 이름 순서로 첫 번째), 정수가 아닌 `schema`(`<file>: schema must be the number 1, found <value>`)나 다른 수(`<file>: schema <n> is not 1`), 객체가 아닌 `classes`(`<file>: classes must be an object that names every class`), 계약 밖의 class(`<file>: the class <name> is not one of lifecycle, input, call, io, frame`), 빠진 class(`<file>: the class <name> is missing`, 위 순서로 첫 번째), 문자열이 아닌 값(`<file>: the level of the class <name> must be text, found <value>`), 여섯 값 밖의 문자열(`<file>: the level "<value>" of the class <name> is not one of off, error, warn, info, debug, trace`). 모든 host, 명령줄 도구, 모든 sidecar가 `not JSON:` 뒤의 text를 빼고 같은 파일을 같은 text로 거부한다.
+
+**바뀐 것을 아는 방법.** 프로세스는 시작할 때 파일을 적용하고 운영체제의 파일 시스템 event로 감시하므로 파일을 읽는 timer가 없다. 생성, 쓰기, 교체, rename은 파일의 정책을 적용하고, 삭제는 기본 정책을 적용한다. 정책을 그대로 두는 알림은 아무것도 바꾸지 않는다. 비었거나 공백만 있는 파일은 writer가 잘라 내고 쓰는 중인 파일이므로 reader는 다음 알림을 기다리고 아무것도 보고하지 않는다. 위 규칙을 어기는 파일은 장소 `log policy`의 error record로 저장되고 적용 중인 정책은 그대로 남는다. writer가 처음 적용하는 정책과 그 뒤의 모든 변경은 event `log.policy`(`source`는 `default` 또는 `file`, `classes`는 모든 class의 값)로 저장되고, 같은 정책이 다시 오면 아무것도 저장하지 않는다. host가 `--log-dir <config-dir>/logs`로 시작한 sidecar([sidecars](sidecars.ko.md#선언과-시작))는 그 로그 폴더의 부모 폴더에 있는 `log-policy.json`을 자기 프로세스에서 읽는다.
+
+**검사.** `@soksak/log-contract`의 `parsePolicy(file, text)`, `policyAllows(policy, class, level)`, `policyIsBeingWritten(text)`가 이 규칙을 구현하고, `packages/log-contract/fixtures/policy`가 골든 사례를 갖는다. `cases.json`은 받아들이는 text와 그 class, 정책이 저장하는 class와 level의 쌍과 저장하지 않는 쌍, 거부하는 text와 그 오류, reader가 기다리는 text를 나열하며, `log-policy.json`은 기본 정책의 파일이다. sidecar 시험은 사례(`@soksak/log-contract/fixtures/policy/cases.json`)를 읽고 자기 reader가 같은 결과를 내는지, `not JSON:` 뒤에는 어떤 text든 내는지 요구한다.
 
 ## writer
 
@@ -241,6 +259,8 @@ sidecar catalog(sidecar 저장소의 `events.json`)는 member `sidecar`에 자�
 
 sidecar catalog는 `extends`, 곧 `{chain, after, events}`의 목록으로 base의 사슬을 확장한다. `chain`은 base의 사슬, `after`는 그 사슬의 event 중 문자열 field `name`을 가진 것, `events`는 그 뒤를 잇는 sidecar의 선언된 event이다. 확장은 `name`이 catalog의 `sidecar`인 `after` event의 상관 식별자에만 적용하므로, 다른 sidecar로 가는 키는 이 event를 요구받지 않는다. 그런 식별자마다 `events`의 모든 event가 폴더의 어느 파일에든 그 식별자와 함께 나타나야 하며, 빠진 event는 `after` event의 파일과 줄에서 `chain <chain> of <cid> lacks <event> after <after> of <sidecar>` 발견이 된다. catalog에 선언되지 않은 사슬, 사슬 밖이거나 field `name`이 없는 `after`, 빈 event 목록, 선언되지 않은 event를 쓰는 확장은 발견이 아니라 catalog의 오류이다.
 
+감사는 감사하는 설정 폴더에서 설치된 sidecar의 catalog를 찾는다. `plugins/installed.json`이 설치된 각 sidecar의 폴더를 기록하고([installation](installation.ko.md)), 그 폴더의 `sidecar.json`이 member `events`에 catalog 파일을 쓰며([sidecars](sidecars.ko.md#선언과-시작)), member가 없는 sidecar는 catalog가 없으므로 그 event는 선언되지 않은 것이다. `plugins/installed.json`이 없는 설정 폴더는 설치된 sidecar가 없다. 형식이 다른 `plugins/installed.json`, 유효하지 않은 `sidecar.json`, 없거나 JSON이 아닌 catalog 파일, `composeCatalogs`가 거부하는 catalog는 파일 이름을 담은 오류로 감사를 멈춘다. `scripts/audit-run.mjs`와 `scripts/check-events.mjs --logs`는 설정 폴더마다 catalog를 합치는데, 폴더마다 설치한 sidecar가 다르기 때문이다.
+
 ### 입구
 
 다음 입구는 호출 지점이 기록을 쓰지 않아도 기록한다.
@@ -304,7 +324,7 @@ window check는 시험 대상 애플리케이션의 event log에 시험마다 �
 
 `soksak-log-check`(패키지 `@soksak/log-contract`, `packages/log-contract`)는 로그를 schema와 catalog로 검증한다: 줄 구조, 선언된 event마다의 class(선언된 event인데 `class`가 없거나 다른 class이면 발견 사항이고, `undeclared`가 표시된 선언된 event도 그렇다), 파일마다의 level(main 파일은 `error`, `warn`, `info`, debug 파일은 `debug`, `trace`이며 `log.open`과 `log.rotated`가 모든 파일을 시작한다), 선언된 event, 연속된 `seq`와 `log.dropped`로 설명되는 틈, 입력 종류마다 선언된 사슬, 시험이 선언한 것 외의 `error` 없음. 단위 시험과 window check는 자기 로그를 남기고, gate는 남은 모든 로그를 검증하며, 실패한 실행의 로그는 분류하기 전까지 보관한다.
 
-실행의 감사 `node scripts/audit-run.mjs <실행 폴더>`는 `pnpm verify:windows`와 활성화 등급의 끝(`scripts/node-tests.mjs`의 `--script verify` 또는 `--script verify:<등급>`)에서 시험이 실패했을 때도 실행된다. 실행 폴더의 `marks.jsonl`을 읽고, 표시의 `config`에서 설정 폴더를 얻어, 그 안의 모든 층의 모든 event 파일(`host-`, `vt-`, `files-`, `shell-`, `sok-` 파일과 그 세대 `.1`부터 `.5`, debug 파일)을 catalog로 감사한다: 줄 구조, 선언 없는 event(catalog가 layer `sidecar`를 나열하므로 이 층도 감사한다), 한 process의 세대와 debug 파일을 건넌 연속된 `seq`, 폴더의 파일을 합쳐 본 선언된 사슬, 모든 `error` event. 시험의 범위는 애플리케이션 로그에서 `host.test.start`와 `host.test.end` 표시 사이의 줄이며 `(boot, seq)`로 정하고, 다른 process의 event는 `ts_us`로 범위에 놓는다. 범위에 `error`가 든 모든 시험이 그 text와 맞는 pattern(`expect_error`)을 선언했으면 `error`는 선언된 것이고, 그 밖의 `error`는(어떤 시험의 범위에도 없는 것 포함) finding이며, 끝 표시 없는 시작 표시도 finding이다. `expectEvent`로 event(`expect_event`)를 선언한 시험의 범위에 그 이름의 event가 없으면 끝 표시에서 빠진 event 이름을 밝히는 finding이다. 감사는 실행 폴더에 `judgment.json`을 쓰며, 시험과 애플리케이션마다 한 행 `{name, app, result, boot, from, to, errors, expected, missing}`이다. `from`과 `to`는 시작·끝 표시의 `{seq, file, line}`이고(끝 표시가 없으면 `to`는 null), `errors`는 범위의 `error` event를 `{file, line, text, declared}`로, `expected`는 선언한 event마다 범위에서 찾은 수를, `missing`은 하나도 없는 선언을 나열하며, 끝 표시가 있고 `missing`이 비고 모든 error가 선언된 경우에만 `result`가 `pass`다. finding은 표준 오류의 한 줄 `<file>:<line>: <message>`이고, finding이 있거나 실행에 `marks.jsonl`이 없으면 종료 상태는 1이다. `node scripts/check-events.mjs --logs <config-dir>…`는 표시 없이 설정 폴더를 감사하며 모든 `error` event를 보고한다. workflow `ci.yml`은 창 검사를 실행하지 않으므로 결함 fixture를 쓰는 감사 시험(`pnpm test`)을 실행한다. 실제 실행의 감사는 로그인한 데스크톱이 있는 self-hosted runner에서 `pnpm verify:windows`와 이 감사를 실행하고 실패한 job의 실행 폴더를 남기는 workflow `window-checks.yml`([지속적 통합](../operations/examples.ko.md#지속적-통합))과 개발 컴퓨터의 창 검사 실행에 속한다.
+실행의 감사 `node scripts/audit-run.mjs <실행 폴더>`는 `pnpm verify:windows`와 활성화 등급의 끝(`scripts/node-tests.mjs`의 `--script verify` 또는 `--script verify:<등급>`)에서 시험이 실패했을 때도 실행된다. 실행 폴더의 `marks.jsonl`을 읽고, 표시의 `config`에서 설정 폴더를 얻어, 그 안의 모든 층의 모든 event 파일(host, `sok`, 각 sidecar의 `<role>-<pid>-<time>.jsonl` 파일과 그 세대 `.1`부터 `.5`, debug 파일)을, 이 저장소의 catalog에 그 폴더에 설치된 sidecar의 catalog를 합친 것(`composeCatalogs`, [sidecar catalog](#sidecar-catalog))으로 감사한다: 줄 구조, 선언 없는 event(catalog가 layer `sidecar`를 나열하므로 이 층도 감사한다), 한 process의 세대와 debug 파일을 건넌 연속된 `seq`, 폴더의 파일을 합쳐 본 선언된 사슬, 모든 `error` event. 시험의 범위는 애플리케이션 로그에서 `host.test.start`와 `host.test.end` 표시 사이의 줄이며 `(boot, seq)`로 정하고, 다른 process의 event는 `ts_us`로 범위에 놓는다. 범위에 `error`가 든 모든 시험이 그 text와 맞는 pattern(`expect_error`)을 선언했으면 `error`는 선언된 것이고, 그 밖의 `error`는(어떤 시험의 범위에도 없는 것 포함) finding이며, 끝 표시 없는 시작 표시도 finding이다. `expectEvent`로 event(`expect_event`)를 선언한 시험의 범위에 그 이름의 event가 없으면 끝 표시에서 빠진 event 이름을 밝히는 finding이다. 감사는 실행 폴더에 `judgment.json`을 쓰며, 시험과 애플리케이션마다 한 행 `{name, app, result, boot, from, to, errors, expected, missing}`이다. `from`과 `to`는 시작·끝 표시의 `{seq, file, line}`이고(끝 표시가 없으면 `to`는 null), `errors`는 범위의 `error` event를 `{file, line, text, declared}`로, `expected`는 선언한 event마다 범위에서 찾은 수를, `missing`은 하나도 없는 선언을 나열하며, 끝 표시가 있고 `missing`이 비고 모든 error가 선언된 경우에만 `result`가 `pass`다. finding은 표준 오류의 한 줄 `<file>:<line>: <message>`이고, finding이 있거나 실행에 `marks.jsonl`이 없으면 종료 상태는 1이다. `node scripts/check-events.mjs --logs <config-dir>…`는 표시 없이 설정 폴더를 감사하며 모든 `error` event를 보고한다. workflow `ci.yml`은 창 검사를 실행하지 않으므로 결함 fixture를 쓰는 감사 시험(`pnpm test`)을 실행한다. 실제 실행의 감사는 로그인한 데스크톱이 있는 self-hosted runner에서 `pnpm verify:windows`와 이 감사를 실행하고 실패한 job의 실행 폴더를 남기는 workflow `window-checks.yml`([지속적 통합](../operations/examples.ko.md#지속적-통합))과 개발 컴퓨터의 창 검사 실행에 속한다.
 
 ### Census
 
@@ -313,6 +333,18 @@ window check는 시험 대상 애플리케이션의 event log에 시험마다 �
 `soksak-events [--census <file>] [--catalog <file>] [--list] [repository]`(패키지 `@soksak/plugin-api`, `packages/plugin-api/events-check.js`)는 `packages/plugin-api/census-rules.json`의 규칙을 적용하며 모든 저장소가 호출한다. 규칙은 `id`, `language`, 주석을 뺀 코드에서 일치시키는 `pattern`, `event-or-reason` 또는 `entrance`인 `requires`(원천은 저장소의 입구 파일에서만 허용되고, 다른 곳에서는 event도 marker도 받아들이지 않는다), 설명을 가진다. 규칙은 `js.empty-catch`, `js.swallowing-catch`, `go.go-statement`, `go.recover`, `rs.ok-discard`, `rs.unwrap-or`, `rs.dropped-send`, `m.registration`(observer, monitor, KVO, event tap, run loop source, dispatch source, timer 등록), `m.delegate`, `m.error-return`(`return NO;`)이다. 원천의 event는 catalog 입구의 emit 지점(`sitesOf`)이고, 함수는 Go와 Rust에서는 가장 안쪽의 이름 있는 함수, JavaScript에서는 가장 안쪽의 함수 형태 block, Objective-C에서는 가장 바깥 block이다. 반환 경로 규칙은 근사이고 등록 규칙은 정확하다.
 
 저장소의 선언 파일(`--census`)은 `exclude`(census와 catalog 검사가 뺄 경로의 pattern. 제외된 파일(vendored bundle 등)은 읽거나 파싱하지 않는다), `entrances`(규칙 id와 입구 파일의 pattern), `pending`(규칙 id와 입구를 만들어 규칙을 켜는 checklist 항목)을 가진다. 대기 중인 규칙은 강제하지 않으며, 명령은 그 항목과 대기하는 발견의 수를 출력하므로(`--list`는 각 발견을 출력한다) 꺼진 규칙은 침묵하지 않는다. 어떤 규칙에도 없는 규칙 id, 모르는 key, checklist id가 아닌 pending 값은 오류다. `--catalog`는 소스의 emit 지점도 그 경로의 catalog와 양방향으로 대조한다([Catalog](#catalog)). `make census-check`는 `scripts/census.json`으로 이 저장소에서 명령을 실행하고, `pnpm test`는 `scripts/test/census.test.mjs`에서 실행하며, `scripts/check-fallbacks.mjs`는 같은 marker를 쓰고 다른 형식을 거부한다.
+
+선언 파일은 `emitters`도 가진다. 저장소 자기 코드의 writer 메서드의 emit 지점이며, 이 package에 저장소 이름 표 없이도 catalog 검사가 그 지점을 찾는다. `emitters`는 언어(`go`, `rs`, `m`, `js`)를 emitter 목록에 대응시키고, emitter는 `{call, level | fixed, event, fields?, name?, only?}`이다. `call`은 메서드나 함수의 이름이다(검사는 `call(`을 찾고 정의 `fn call(`은 건너뛴다). `level`, `event`, `fields`는 level, event 이름, field 객체가 있는 인자의 0부터 센 위치이고(호출에 field가 없으면 `fields`는 쓰지 않는다), `fixed`는 level 인자가 없는 호출의 level이며(`level`과 `fixed`는 함께 쓸 수 없고 하나는 있어야 한다), `name`은 그런 호출이 저장하는 event이고(`event`는 그 첫 인자의 위치이다), `only`는 emitter가 지역인 경로의 pattern이다. 예를 들어 `emit(level, event, fields)`, `emit_for(level, event, subject, fields)`, `record_error(place, text)`를 가진 Rust writer는 다음과 같이 선언한다.
+
+```json
+{ "emitters": { "rs": [
+  { "call": "emit", "level": 0, "event": 1, "fields": 2 },
+  { "call": "emit_for", "level": 0, "event": 1, "fields": 3 },
+  { "call": "record_error", "fixed": "error", "name": "sidecar.<name>.record.error", "event": 0 }
+] } }
+```
+
+emitter는 catalog 검사에서 하나의 지점이고(이름, level, 리터럴 field를 다른 지점처럼 검사하며, 호출이 이름을 만들면 `events:` marker가 필요하다) census에서 그 함수의 event이다. 목록에 없는 언어, 이 key 밖의 key를 가진 emitter, 식별자가 아니거나 두 번 선언된 `call`, 음이 아닌 정수가 아닌 위치, pattern이 아닌 `only`는 파일, 언어, 목록의 위치를 담은 오류다.
 
 입력은 독립 수신자와 비교한다: 기록된 `pty_write` 바이트는 shell 대역이 파일에 쓴 바이트와 같다.
 
