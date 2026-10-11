@@ -9,6 +9,15 @@ const LEVELS = new Set(["error", "warn", "info", "debug", "trace"]);
 const LAYERS = new Set(["native", "host", "page", "plugin", "sidecar", "sok"]);
 const CLASSES = new Set(["lifecycle", "input", "call", "io", "frame"]);
 
+/** The levels that the file of each channel holds (docs/spec/logging.md#files). `log.open` and `log.rotated` start every file at the level info. */
+const CHANNEL_LEVELS = { other: new Set(["error", "warn", "info"]), debug: new Set(["debug", "trace"]) };
+const IN_EVERY_FILE = new Set(["log.open", "log.rotated"]);
+
+/** The channel of an event file: `debug` for `<role>-<boot>.debug.jsonl` and its generations, `other` for every other file. */
+export function channelOf(file) {
+  return /\.debug\.jsonl(?:\.\d+)?$/.test(file.split("/").pop()) ? "debug" : "other";
+}
+
 /**
  * Reads the text of a log file into `{line, event}` entries. The first line must be `log.open` with the schema number
  * of this checker. A line that is not a JSON object is an error.
@@ -60,8 +69,8 @@ function declaration(catalog, name) {
   return undefined;
 }
 
-/** The findings of the structure of one event line. */
-function lineFindings(entry, catalog) {
+/** The findings of the structure of one event line in a file of `channel`. */
+function lineFindings(entry, catalog, channel = "other") {
   const { line, event } = entry;
   const findings = [];
   // A catalog names the layers it owns; the events of another layer belong to the catalog of another repository.
@@ -72,12 +81,21 @@ function lineFindings(entry, catalog) {
   if (!Number.isInteger(event.mono_ns) || event.mono_ns <= 0) report("mono_ns must be a positive integer");
   if (!LEVELS.has(event.level)) report(`level ${event.level} is not one of ${[...LEVELS].join(", ")}`);
   if (!LAYERS.has(event.layer)) report(`layer ${event.layer} is not one of ${[...LAYERS].join(", ")}`);
+  // A file holds the levels of its channel: the main file error, warn and info, the debug file debug and trace.
+  if (LEVELS.has(event.level) && !IN_EVERY_FILE.has(event.event) && !CHANNEL_LEVELS[channel].has(event.level)) {
+    report(`the level ${event.level} belongs to the ${channel === "debug" ? "main" : "debug"} file, and this is a file of the channel ${channel}`);
+  }
   const declared = declaration(catalog, event.event);
   if (declared === undefined) {
     if (event.undeclared !== true) report(`event ${event.event} is not declared`);
+    else if (event.class !== undefined) report(`event ${event.event} is undeclared, so it has no class, found ${event.class}`);
     return findings;
   }
   if (!CLASSES.has(declared.class)) report(`the catalog gives ${event.event} the class ${declared.class}`);
+  // The line stores the class of its catalog entry, and an event the catalog declares is not marked undeclared.
+  if (event.class === undefined) report(`event ${event.event} has no class, the catalog declares ${declared.class}`);
+  else if (event.class !== declared.class) report(`event ${event.event} has the class ${event.class}, the catalog declares ${declared.class}`);
+  if (event.undeclared === true) report(`event ${event.event} is marked undeclared but the catalog declares it`);
   // An event that the catalog declares with `cids: "required"` is one input of a chain: without an identifier it cannot be joined.
   if (declared.cids === "required" && !(Array.isArray(event.cids) && event.cids.length > 0 && event.cids.every((cid) => typeof cid === "string"))) {
     report(`event ${event.event} requires cids`);
@@ -162,7 +180,7 @@ function chainFindings(entries, catalog) {
 export function auditLog(file, text, catalog) {
   const entries = parseLog(file, text);
   return [
-    ...entries.flatMap((entry) => lineFindings(entry, catalog)),
+    ...entries.flatMap((entry) => lineFindings(entry, catalog, channelOf(file))),
     ...seqFindings(entries),
     ...chainFindings(entries, catalog),
   ].sort((a, b) => a.line - b.line);
@@ -201,7 +219,7 @@ export function auditParsed(parsed, catalog, declaredError = () => false) {
   const findings = [];
   const located = (file, list) => list.forEach(({ line, message }) => findings.push({ file, line, message }));
   for (const { file, entries } of parsed) {
-    located(file, entries.flatMap((entry) => lineFindings(entry, catalog)));
+    located(file, entries.flatMap((entry) => lineFindings(entry, catalog, channelOf(file))));
     for (const entry of entries) {
       if (entry.event.level === "error" && !declaredError(file, entry)) {
         findings.push({ file, line: entry.line, message: `undeclared error ${errorText(entry.event)}` });

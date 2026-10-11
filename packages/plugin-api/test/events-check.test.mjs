@@ -28,13 +28,31 @@ test('an emit with a literal name that the catalog does not declare is a finding
     ['a.go', 'package host\n\nfunc f() {\n\tEmitHost(LevelInfo, "host.surprise.go", nil)\n}\n'],
     ['b.rs', 'fn f() {\n    crate::event_record::emit_host(\n        Level::Info,\n        "host.surprise.rs",\n        serde_json::json!({}),\n    );\n}\n'],
     ['c.js', 'export function f() {\n  emitEvent("info", "page.surprise.js", {});\n}\n'],
-    ['d.m', 'void f(void) {\n    sp_event(SP_EVENT_INFO, "native.surprise.m", "{}");\n}\n'],
+    ['d.m', 'void f(void) {\n    sp_event(SP_CLASS_CALL, SP_EVENT_INFO, "native.surprise.m", "{}");\n}\n'],
   ]);
   assert.deepEqual(sitesOnly(checker.emitFindings(catalog, sources, CATALOG)), [
     'a.go:4: host.surprise.go is emitted and docs/spec/events.json does not declare it',
     'b.rs:4: host.surprise.rs is emitted and docs/spec/events.json does not declare it',
     'c.js:2: page.surprise.js is emitted and docs/spec/events.json does not declare it',
     'd.m:2: native.surprise.m is emitted and docs/spec/events.json does not declare it',
+  ]);
+});
+
+test('the entrances of the writers that store their own events and the class of a native emit are checked', () => {
+  const sources = new Map([
+    ['a.go', 'func f() {\n\tappendLine(f, writerEvent(LevelInfo, "log.open", fields))\n}\n'],
+    ['b.rs', 'fn f() {\n    let open = Pending::writer_event(\n        Level::Info,\n        "host.window.event",\n        to_raw_value(&json!({"window": w, "kind": k})).unwrap(),\n    );\n}\n'],
+    ['c.m', 'void f(void) {\n    sp_event(SP_CLASS_CALL, SP_EVENT_INFO, "host.window.event", "{}");\n    sp_event_cids(SP_CLASS_INPUT, SP_EVENT_INFO, "host.window.event", cid, "{}");\n    sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_INFO, "host.window.event", "{}");\n}\n'],
+  ]);
+  assert.deepEqual(sitesOnly(checker.emitFindings(catalog, sources, CATALOG)), [
+    'c.m:2: host.window.event is emitted with the class call and the catalog declares lifecycle',
+    'c.m:3: host.window.event is emitted with the class input and the catalog declares lifecycle',
+  ]);
+  const wrongFields = new Map([['a.rs', 'fn f() {\n    Pending::writer_event(Level::Info, "log.open", to_raw_value(&json!({"schema": 3})).unwrap());\n}\n']]);
+  assert.deepEqual(sitesOnly(checker.emitFindings(catalog, wrongFields, CATALOG)), [
+    'a.rs:2: log.open lacks the field pid that the catalog requires',
+    'a.rs:2: log.open lacks the field role that the catalog requires',
+    'a.rs:2: log.open lacks the field boot that the catalog requires',
   ]);
 });
 
@@ -172,13 +190,13 @@ test('an event in the function of a source accepts it, and an event in another f
     'a.rs': 'fn f() {\n    let n = text.parse::<u32>().ok();\n    emit_host(Level::Warn, "host.window.event", json!({}));\n}\n',
     'b.go': 'package a\n\nfunc f() {\n\tif err != nil {\n\t\tEmitHost(LevelWarn, "host.window.event", nil)\n\t}\n}\n',
     'c.js': 'export const f = () => {\n  try { g(); } catch (error) {\n    emitEvent("warn", "page.record.warn", {});\n  }\n};\n',
-    'd.m': '- (BOOL)f {\n    dispatch_async(q, ^{\n        sp_event(SP_EVENT_WARN, "native.x", "{}");\n    });\n    return NO;\n}\n',
+    'd.m': '- (BOOL)f {\n    dispatch_async(q, ^{\n        sp_event(SP_CLASS_CALL, SP_EVENT_WARN, "native.x", "{}");\n    });\n    return NO;\n}\n',
   }), []);
   assert.deepEqual(census({
     'a.rs': 'fn f() {\n    emit_host(Level::Warn, "host.window.event", json!({}));\n}\n\nfn g() {\n    let n = text.parse::<u32>().ok();\n}\n',
     'b.go': 'package a\n\nfunc f() {\n\tEmitHost(LevelWarn, "host.window.event", nil)\n}\n\nfunc (r *R) g() {\n\tgo r.run()\n}\n',
     'c.js': 'export const f = () => { emitEvent("warn", "page.record.warn", {}); };\nexport const g = () => {\n  try { h(); } catch (error) {}\n};\n',
-    'd.m': '- (BOOL)f {\n    sp_event(SP_EVENT_WARN, "native.x", "{}");\n    return YES;\n}\n- (BOOL)g {\n    return NO;\n}\n',
+    'd.m': '- (BOOL)f {\n    sp_event(SP_CLASS_CALL, SP_EVENT_WARN, "native.x", "{}");\n    return YES;\n}\n- (BOOL)g {\n    return NO;\n}\n',
   }), ['a.rs:6 rs.ok-discard', 'b.go:8 go.go-statement', 'c.js:3 js.empty-catch', 'd.m:6 m.error-return']);
 });
 

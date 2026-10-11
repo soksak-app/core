@@ -17,8 +17,9 @@ const catalog = {
   chains: { key: ["native.input.key_down", "page.terminal.send", "sidecar.vt.pty_write"] },
 };
 
+// The class of a line is the class that the catalog declares for its event; a test passes `class: undefined` to omit it.
 const line = (seq, event, fields = {}, extra = {}) => JSON.stringify({
-  ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: "info", layer: "host", event, fields, ...extra,
+  ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: "info", class: catalog.events[event]?.class, layer: "host", event, fields, ...extra,
 });
 const open = line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" });
 
@@ -30,6 +31,49 @@ test("a log with declared events, consecutive seq and a complete chain passes", 
     line(4, "sidecar.vt.pty_write", { hex: "0d" }, { cids: ["b1.1"], layer: "sidecar" }),
   ].join("\n");
   assert.deepEqual(auditLog("host-b1.jsonl", text, catalog), []);
+});
+
+test("a declared event whose line has no class or another class, and a declared event marked undeclared, are findings", () => {
+  const findings = auditLog("host-b1.jsonl", [
+    open,
+    line(2, "native.input.key_down", { keyCode: 1 }, { class: undefined }),
+    line(3, "native.input.key_down", { keyCode: 1 }, { class: "io" }),
+    line(4, "native.input.key_down", { keyCode: 1 }, { undeclared: true }),
+    line(5, "native.input.key_down", { keyCode: 1 }),
+  ].join("\n"), catalog);
+  assert.deepEqual(findings, [
+    { line: 2, message: "event native.input.key_down has no class, the catalog declares input" },
+    { line: 3, message: "event native.input.key_down has the class io, the catalog declares input" },
+    { line: 4, message: "event native.input.key_down is marked undeclared but the catalog declares it" },
+  ]);
+});
+
+test("an undeclared event is accepted only when the line says undeclared and has no class", () => {
+  const findings = auditLog("host-b1.jsonl", [
+    open,
+    line(2, "host.test.event", {}, { undeclared: true }),
+    line(3, "host.test.event", {}, { undeclared: true, class: "call" }),
+    line(4, "host.test.event", {}),
+  ].join("\n"), catalog);
+  assert.deepEqual(findings, [
+    { line: 3, message: "event host.test.event is undeclared, so it has no class, found call" },
+    { line: 4, message: "event host.test.event is not declared" },
+  ]);
+});
+
+test("the main file holds error, warn and info, and the debug file holds debug and trace", () => {
+  const debugLine = (seq, level) => line(seq, "native.input.key_down", { keyCode: 1 }, { level });
+  const debugOpen = line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" });
+  assert.deepEqual(auditLog("host-b1.jsonl", [open, debugLine(2, "warn"), debugLine(3, "error")].join("\n"), catalog), []);
+  assert.deepEqual(auditLog("host-b1.debug.jsonl.2", [debugOpen, debugLine(2, "debug"), debugLine(3, "trace")].join("\n"), catalog), []);
+  assert.deepEqual(auditLog("host-b1.jsonl.1", [open, debugLine(2, "debug"), debugLine(3, "trace")].join("\n"), catalog), [
+    { line: 2, message: "the level debug belongs to the debug file, and this is a file of the channel other" },
+    { line: 3, message: "the level trace belongs to the debug file, and this is a file of the channel other" },
+  ]);
+  // log.open and log.rotated start every file at the level info, so they are in the file of either channel.
+  assert.deepEqual(auditLog("host-b1.debug.jsonl", [debugOpen, debugLine(2, "info")].join("\n"), catalog), [
+    { line: 2, message: "the level info belongs to the main file, and this is a file of the channel debug" },
+  ]);
 });
 
 test("an undeclared event, a missing field and a field of the wrong type are reported with the line", () => {
@@ -93,7 +137,7 @@ test("a file whose first line is not log.open, or whose schema is unknown, is re
 });
 
 test("a line without mono_ns, or with a mono_ns that is not a positive integer, is a finding", () => {
-  const withMono = (seq, mono) => JSON.stringify({ ts_us: 1000 + seq, ...(mono === undefined ? {} : { mono_ns: mono }), seq, level: "info", layer: "host", event: "log.dropped", fields: { from_seq: 1, to_seq: 1, count: 1 } });
+  const withMono = (seq, mono) => JSON.stringify({ ts_us: 1000 + seq, ...(mono === undefined ? {} : { mono_ns: mono }), seq, level: "info", class: "lifecycle", layer: "host", event: "log.dropped", fields: { from_seq: 1, to_seq: 1, count: 1 } });
   const findings = auditLog("host-b1.jsonl", [open, withMono(2), withMono(3, "1"), withMono(4, 1.5), withMono(5, 0), withMono(6, 7)].join("\n"), catalog);
   assert.deepEqual(findings.map((f) => f.line), [2, 3, 4, 5]);
   for (const finding of findings) assert.match(finding.message, /mono_ns must be a positive integer/);
@@ -133,11 +177,11 @@ test("a family name with a placeholder declares every event of the family, and a
   };
   const text = [
     open,
-    line(2, "page.record.error", { where: "w", text: "t" }, { layer: "page" }),
-    line(3, "page.trace.command", { name: "x" }, { layer: "page" }),
-    line(4, "page.trace.sidecar.send", {}, { layer: "page" }),
+    line(2, "page.record.error", { where: "w", text: "t" }, { layer: "page", class: "lifecycle" }),
+    line(3, "page.trace.command", { name: "x" }, { layer: "page", class: "call" }),
+    line(4, "page.trace.sidecar.send", {}, { layer: "page", class: "call" }),
     line(5, "plugin.terminal.send", { n: 1 }, { layer: "plugin" }),
-    line(6, "page.record.error", { where: "w" }, { layer: "page" }),
+    line(6, "page.record.error", { where: "w" }, { layer: "page", class: "lifecycle" }),
     line(7, "page.unknown.thing", {}, { layer: "page" }),
   ].join("\n");
   assert.deepEqual(auditLog("host-b1.jsonl", text, family), [
@@ -156,11 +200,11 @@ test("an optional field is checked only when present, and a type with | accepts 
   };
   const text = [
     open,
-    line(2, "log.rotated", { bytes: 1, removed: null }),
-    line(3, "log.rotated", { bytes: 1, removed: "host-1.jsonl.5" }),
-    line(4, "log.rotated", { bytes: 1 }),
-    line(5, "log.rotated", { bytes: 1, removed: 7 }),
-    line(6, "log.rotated", { bytes: 1, note: 3 }),
+    line(2, "log.rotated", { bytes: 1, removed: null }, { class: "lifecycle" }),
+    line(3, "log.rotated", { bytes: 1, removed: "host-1.jsonl.5" }, { class: "lifecycle" }),
+    line(4, "log.rotated", { bytes: 1 }, { class: "lifecycle" }),
+    line(5, "log.rotated", { bytes: 1, removed: 7 }, { class: "lifecycle" }),
+    line(6, "log.rotated", { bytes: 1, note: 3 }, { class: "lifecycle" }),
   ].join("\n");
   assert.deepEqual(auditLog("host-b1.jsonl", text, optional), [
     { line: 5, message: "field removed must be a string|null, found number" },
@@ -183,9 +227,9 @@ test("seq continues across the rotated generations of one process, and a missing
 
 test("seq continues across the main file and the debug file of one process", () => {
   const main = lines(open, line(2, "native.input.key_down", { keyCode: 1 }), line(4, "native.input.key_down", { keyCode: 3 }));
-  const debug = lines(line(3, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }), line(5, "native.input.key_down", { keyCode: 4 }));
+  const debug = lines(line(3, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }), line(5, "native.input.key_down", { keyCode: 4 }, { level: "debug" }));
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: main }, { file: "host-1-2.debug.jsonl", text: debug }], catalog), []);
-  const short = lines(line(3, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }), line(6, "native.input.key_down", { keyCode: 4 }));
+  const short = lines(line(3, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }), line(6, "native.input.key_down", { keyCode: 4 }, { level: "debug" }));
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: main }, { file: "host-1-2.debug.jsonl", text: short }], catalog), [
     { file: "host-1-2.debug.jsonl", line: 2, message: "seq 6 follows seq 4" },
   ]);
@@ -232,7 +276,7 @@ test("an entrance of calls that the catalog declares with a result has ok, micro
       },
     },
   };
-  const call = (seq, fields) => line(seq, "host.binding.call", { name: "windowNew", micros: 12, ...fields });
+  const call = (seq, fields) => line(seq, "host.binding.call", { name: "windowNew", micros: 12, ...fields }, { class: "call" });
   assert.deepEqual(auditLog("host-b1.jsonl", [
     open,
     call(2, { ok: true }),
@@ -268,15 +312,20 @@ test("the chain of an operation of the page is complete when its call and the ho
     },
     chains: { plugin: ["page.plugin.operation", "page.call", "host.binding.call"] },
   };
-  const start = (seq, cid) => line(seq, "page.plugin.operation", { action: "install", plugin: "term" }, { cids: [cid], layer: "page" });
-  const call = (seq, cid) => line(seq, "page.call", { name: "pluginsRun" }, { cids: [cid], layer: "page", level: "debug" });
-  const binding = (seq, cid) => line(seq, "host.binding.call", { name: "plugins_run" }, { cids: [cid], level: "debug" });
-  const complete = [open, start(2, "p1.1"), call(3, "p1.1"), binding(4, "p1.1")].join("\n");
-  assert.deepEqual(auditLog("host-b1.jsonl", complete, operations), []);
-  // The host record is missing for the second operation, and the first one in the other file completes by the host file.
+  const start = (seq, cid) => line(seq, "page.plugin.operation", { action: "install", plugin: "term" }, { cids: [cid], layer: "page", class: "call" });
+  const call = (seq, cid) => line(seq, "page.call", { name: "pluginsRun" }, { cids: [cid], layer: "page", level: "debug", class: "call" });
+  const binding = (seq, cid) => line(seq, "host.binding.call", { name: "plugins_run" }, { cids: [cid], level: "debug", class: "call" });
+  const debugOpen = (seq) => line(seq, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" });
+  // The start of an operation is stored at the level info (the main file); its calls are stored at the level debug (the debug file).
+  const complete = [
+    { file: "host-b1.jsonl", text: [open, start(2, "p1.1")].join("\n") },
+    { file: "host-b1.debug.jsonl", text: [debugOpen(3), call(4, "p1.1"), binding(5, "p1.1")].join("\n") },
+  ];
+  assert.deepEqual(auditLogs(complete, operations), []);
+  // The host record is missing for the second operation, which the audit finds across the two files.
   const findings = auditLogs([
-    { file: "host-b1.jsonl", text: [open, binding(2, "p1.1")].join("\n") },
-    { file: "host-b1.debug.jsonl", text: [line(3, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" }), start(4, "p1.1"), call(5, "p1.1"), start(6, "p1.2"), call(7, "p1.2")].join("\n") },
+    { file: "host-b1.jsonl", text: [open, start(2, "p1.1"), start(3, "p1.2")].join("\n") },
+    { file: "host-b1.debug.jsonl", text: [debugOpen(4), call(5, "p1.1"), call(6, "p1.2"), binding(7, "p1.1")].join("\n") },
   ], operations);
   assert.deepEqual(findings.map(({ message }) => message), ["chain plugin of p1.2 lacks host.binding.call"]);
 });
