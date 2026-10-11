@@ -55,3 +55,23 @@ export function sampleStall({ host, pages, directory, time = Date.now(), sample 
   }
   return records;
 }
+
+/**
+ * Stores the path of the dump of the host, the first of `records`, as the event `host.stall.dump` of the host
+ * (`diagnostics.stall.dump`) and returns the text that names the position of the event in its log, or the reason why the host did not
+ * store it. A host that stalls may answer late or never, so the request is bounded by `ms`.
+ *
+ * request(method, params)  sends a request of the endpoint. window is the window the request names.
+ */
+export async function announceStall(request, window, records, ms = 5000) {
+  let timer;
+  const limit = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`no answer within ${ms} ms`)), ms); });
+  try {
+    const position = await Promise.race([request("diagnostics.stall.dump", { window, path: records[0] }), limit]);
+    return `host.stall.dump at ${position.boot}:${position.seq}`;
+  } catch (error) {
+    return `host.stall.dump not stored: ${error.message}`;
+  } finally {
+    clearTimeout(timer);
+  }
+}

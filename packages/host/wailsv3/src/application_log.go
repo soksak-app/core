@@ -3,6 +3,7 @@ package host
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +18,12 @@ const (
 	logRotateBytes = 100 * 1024 * 1024
 	logGenerations = 5
 )
+
+// FrameworkLogLevel is the level of the logger of the Wails framework. The asset server of the framework writes the line
+// `[AssetFileServerFS] Handling request` at the level info for every file that a page requests, which filled the standard error
+// with 2.0 MB of lines that carry no failure and hid the crash output of the runtime. The events `host.binding.call` and the
+// page records state the requests that matter; the framework keeps its warnings and errors.
+const FrameworkLogLevel = slog.LevelWarn
 
 // rotateGenerations moves path to the previous generation path.1, shifts each previous generation back by one, and deletes the last generation.
 func rotateGenerations(path string) error {

@@ -109,6 +109,16 @@ fn invalid_json_closes_connection() {
 | `diagnostics.process-exit.pid-validates` | `diagnostics.process.exit`는 `pid`를 1부터 2147483647 사이의 정수로만 받고, 없거나 다른 값은 `pid must be a positive integer`로 거부한다. | both |
 | `diagnostics.test-mark.params-validate` | `diagnostics.test.mark`는 `kind` `start` 또는 `end`, 빈 문자열이 아닌 `name`과 `run`, `end`에는 `pass`, `fail`, `skip` 중 하나인 `result`(`start`에는 거부)만 받고, 그 밖의 값은 invalid-params 오류 `kind must be start or end`, `name must be a non-empty string`, `run must be a non-empty string`, `result must be pass, fail or skip`, `result is only for an end mark`로 거부한다. | both |
 | `diagnostics.test-mark.event-carries-position` | 시작 표시는 event `host.test.start`(`name`, `run`), 끝 표시는 `host.test.end`(`name`, `run`, `result`)이며 layer `host`, level `info`다. 답은 flush 뒤에 읽은 event 파일의 `boot`와 그 줄의 `seq`다. | both |
+| `diagnostics.stall-dump.params-validate` | `diagnostics.stall.dump`는 존재하는 파일의 절대 경로만 받고, 그 밖의 값은 invalid-params 오류 `path must be a non-empty string`, `path must be absolute`, `path does not name a file: <path>`로 거부한다. | both |
+| `diagnostics.stall-dump.event-carries-path` | 정지 dump는 layer `host`, level `warn`의 event `host.stall.dump`(`path`)이며, 답은 event 파일의 `boot`와 그 줄의 `seq`다. | both |
+| `diagnostics.crash.report-is-announced-once` | crash report 폴더에 있는 애플리케이션의 crash report는 level `warn`의 event `host.crash.found`(`path`, `pid`, header의 `time`)이다. 두 번째 lookup은 아무것도 알리지 않고, 나중에 생긴 report는 다음 lookup만 알린다. | both |
+| `diagnostics.crash.report-belongs-to-the-application` | 파일 이름이 다른 이름으로 시작하거나, header가 다른 애플리케이션(애플리케이션 이름으로 시작하는 이름 포함)을 가리키거나, 확장자가 `.ips`가 아닌 report는 알리지 않는다. | both |
+| `diagnostics.crash.lookup-is-bounded` | lookup 한 번은 파일 이름 기준으로 애플리케이션의 최신 report 64개만 알리고 그보다 오래된 것은 알리지 않는다. | both |
+| `diagnostics.crash.unreadable-report-is-an-error` | header나 body를 읽을 수 없거나 body에 `pid`가 없는 report는 파일과 원인을 밝힌 오류이며, ledger에 올라 다시 보고하지 않고 event를 만들지 않는다. | both |
+| `diagnostics.crash.missing-folder-has-no-reports` | 없는 crash report 폴더는 report가 없는 것이다. 오류도 event도 없다. | both |
+| `diagnostics.crash.folder-that-cannot-be-read-is-an-error` | 나열할 수 없는 crash report 경로는 그 경로를 밝힌 오류다. | both |
+| `diagnostics.crash.folder-is-named-by-the-platform` | platform은 crash report 폴더를 `Library/Logs/DiagnosticReports`로 끝나는 절대 경로로 알린다. | both |
+| `diagnostics.stderr.leaves-out-asset-request-lines` | host가 프레임워크 logger에 준 level에서 logger는 asset server의 `Handling request` 줄을 쓰지 않고 warning과 error는 남긴다. | wailsv3 only: Tauri host는 그런 줄을 쓰지 않는다 |
 | `endpoint.record.call-is-an-event` | endpoint client의 모든 요청(구독 변경도)은 성능 trace가 꺼져 있을 때도 layer `host`, level `debug`이고 `name`, `args`(받은 그대로의 params, 없으면 `null`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.endpoint.call`이다. | both |
 | `endpoint.record.failure-names-the-error` | 실패한 요청은 level `warn`이고 `ok: false`와 client가 받는 코드와 메시지인 `error` `<code>: <message>`를 가진 event `host.endpoint.call`이다. | both |
 | `endpoint.record.arguments-are-cut-before-copying` | `args`는 문자 경계에서 자른 최대 1024바이트이고, params가 더 길면 event에 `truncated: true`가 있다. | both |

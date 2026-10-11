@@ -106,6 +106,7 @@ The shell sidecar repository uses the same Go mechanism in its `src/platform/` (
 | Window motion | Shortening the window resize animation before any window exists |
 | Standard error | Replacing the process's standard error with an open file — see [Application log](#application-log); not implemented on Windows |
 | Dock | Dock menu installation |
+| Crash reports | The folder in which the operating system writes the crash reports of the current user ([logging](logging.md#entrances)); not implemented on Windows |
 | Identity | Directory identity |
 | Private files | Files and directories that only the current user can access: creating the missing directories of a path (mode 0700 on macOS), opening a file for appending and creating a missing one (mode 0600), creating a new file that must not exist (mode 0600), replacing the contents of a file and creating a missing one (mode 0600), restricting a persistent service directory, and in the diagnostics build a checked private directory. Shared host code creates such a file or directory only through these operations and sets no permission mode itself; an existing file or directory keeps its mode. Not implemented on Windows |
 | Endpoint | [Local endpoint](endpoint.md) transport: Unix socket on macOS; not implemented on Windows |
@@ -151,6 +152,7 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 | H6 | `src/menu.go`, `tests/menu_test.go` | none | The Wails default application menu zooms and reloads the whole main webview from its View menu, so the Wails host defines its application menu; the Tauri host uses Tauri's default menu, whose View menu has only full screen |
 | H7 | none | `tests/panic_hook_test.rs`, `tests/fatal_signal_test.rs` | The Go runtime writes the report of a fatal signal to the standard error, which is the application log; a fatal signal needs the handlers of the native library to write its error line. A Rust panic runs the hook of `application_log.rs` on the panicking thread, so the hook test checks that it does not wait for the writer; a goroutine panic is recovered by `routine.Go` and has no hook |
 | H8 | `tests/event_log_benchmark_test.go`, `tests/event_native_benchmark_test.go` | `benches/event_log_benchmark.rs`, `benches/event_native_benchmark.rs` | A measurement is a `Benchmark` function of a Go test file and a `harness = false` target of `cargo bench` in Rust; both print numbers and assert nothing, and `make benchmark-go` and `make benchmark-rust` run them. |
+| H9 | `tests/framework_log_test.go` | none | The level of the logger of the framework (`FrameworkLogLevel`) exists only in the Wails host: the Wails asset server writes a line at the level `info` for every requested file, and the Tauri host writes no such line to the standard error |
 | A1 | content differs | content differs | `runtime/index.js` uses each framework's call mechanism |
 | A2 | none | `build.rs` | Tauri requires `tauri_build::build()` |
 | A3 | none | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri configuration |

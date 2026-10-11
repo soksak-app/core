@@ -66,6 +66,9 @@ pub fn clipboard_write_png(_bytes: &[u8]) -> Result<(), String> {
 pub fn open_link(_url: &str) -> Result<(), String> {
     missing("link open")
 }
+pub fn diagnostic_reports_directory() -> Result<std::path::PathBuf, String> {
+    missing("crash reports")
+}
 pub fn watch_buttons(_changed: Box<dyn Fn(u64) + Send + Sync>) -> Result<(), String> {
     missing("mouse button state")
 }

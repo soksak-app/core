@@ -22,6 +22,7 @@ const PAIRS = [
         "src/diagnostics_test": "H5",
         "src/menu": "H6", "tests/menu_test": "H6",
         "tests/event_log_benchmark_test": "H8", "tests/event_native_benchmark_test": "H8",
+        "tests/framework_log_test": "H9",
       },
       right: {
         "Cargo.toml": "A4", "Cargo.lock": "A4",

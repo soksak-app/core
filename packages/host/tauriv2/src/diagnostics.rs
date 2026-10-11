@@ -132,6 +132,12 @@ pub(crate) fn call(
                 .map(|(boot, seq)| json!({"boot": boot, "seq": seq}))
                 .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error))
         }
+        "diagnostics.stall.dump" => {
+            let path = crate::stall_dump::parse_stall_dump(&params)?;
+            crate::stall_dump::emit_stall_dump(&path, TIMEOUT)
+                .map(|(boot, seq)| json!({"boot": boot, "seq": seq}))
+                .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error))
+        }
         "diagnostics.capture.still" => capture_still(window),
         "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.page.collect" => page_collect(window),

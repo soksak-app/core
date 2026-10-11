@@ -277,6 +277,9 @@ type Platform interface {
 	ClipboardWritePNG(bytes []byte) error
 	// OpenLink opens a URL with the default application of the user for its scheme. Call it on the UI thread.
 	OpenLink(url string) error
+	// DiagnosticReportsDirectory is the folder in which the operating system writes the crash reports of the current user, as the
+	// system names it.
+	DiagnosticReportsDirectory() (string, error)
 	// StartNotifications starts using the notification center of the operating system and passes its event JSON to receive on the UI thread
 	// ({"type":"state",...} and {"type":"activated","identifier":...}). Call it on the UI thread.
 	StartNotifications(receive func(event string)) error

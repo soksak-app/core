@@ -139,6 +139,7 @@ NATIVE_TESTS = observe_test \
   input_source_test \
   clipboard_test \
   link_test \
+  diagnostic_reports_test \
   capture_test \
   capture_checker_test \
   capture_file_checker_test \

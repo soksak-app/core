@@ -13,12 +13,16 @@ Every diagnostic file of an application is under `<config-dir>/logs/`. A person 
 | File | Writer | Form | Bound |
 |---|---|---|---|
 | `host-<boot>.stderr` | the raw standard error of the host process: the crash output of the runtime and the fatal lines of the native library | text | renamed to `host-<boot>.stderr.1` at 100 MB, when a run opens it, and the five earlier generations are kept |
+| `crash-found.txt` | the host, at each start | text: the path of each crash report of the system that the host announced as `host.crash.found`, one in each line ([logging](logging.md#entrances)) | rewritten at each start to the reports that the lookup still sees, at most 64 lines |
+| `stall-<pid>-<ms>.txt`, `stall-<pid>-<ms>-page-<pid>.txt` | the window-check harness, with `sample`, when a request of a host does not answer; the host stores the path as `host.stall.dump` | text | none; one file for each stall |
 | `host-<boot>.jsonl` | the host process: its own records, the records of the page (a failure and an observation as `page.record.<level>` events, relayed in a batch of the host call `log`), and the events of the native library | events of the [logging contract](logging.md) | rotated at 100 MB to `host-<boot>.jsonl.1`, and the five earlier generations are kept |
 | `<executable-name>.log` | a persistent service, opened by the host as the standard error of the service | text records of the same form, written by the service | renamed to `<name>.1` at 100 MB, when the host starts the service, and the five earlier generations are kept |
 | `state-<time>.json` | both hosts, when the debug view opens | one JSON document | none; one file for each opening |
 | `captures/…` | both hosts, in a diagnostic build | PNG and frame files | the requester removes them |
 
-`<time>` is the UTC time `YYYYMMDDTHHMMSSZ`. A stall sample is written by the window-check harness and not by the application.
+`<time>` is the UTC time `YYYYMMDDTHHMMSSZ`. A stall sample is written by the window-check harness and not by the application, because a host that does not answer cannot sample itself; the harness then sends `diagnostics.stall.dump` so that the host stores the path of the file as an event.
+
+The standard error holds only what no writer of the contract writes. The Wails framework writes the line `[AssetFileServerFS] Handling request` at the level `info` for every file that a page requests, which filled the file with 2.0 MB of lines that state no failure. The Wails host therefore gives the logger of the framework the level `warn` (`FrameworkLogLevel`): the request lines are left out and the warnings and errors of the framework stay. The requests that matter are stated by `host.binding.call`, `page.call` and the `error` records of the host. The Tauri host writes no such line to the standard error, so it sets no level.
 
 ## Forms
 
@@ -93,6 +97,7 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 | a sidecar cannot be stopped, replaced, retained for a window or told that a surface closed, or the native view bridge of the Wails host fails | `error host sidecar stop`, `error host replace`, `error host sidecar retain`, `error host sidecar close <surface>`, `error host native message` and `error host native reply`, each followed by `: <reason>` |
 | the record of the WebKit child processes cannot be read or written, or an orphaned child cannot be ended | `error host webkit children record: <reason>` and `error host webkit children: kill <pid>: <reason>`; a line of `ps` with no process number is `error host webkit children: ps line "<line>" begins with no process number`, and the lock of the recording state poisoned is `error host recording: <reason>` |
 | the notification center reports a failure, an event cannot be read, a notice has an unknown type, names no window and surface, or names a window that is closed | `error host notification: <reason>` |
+| a crash report of an earlier run cannot be read, or the folder of the crash reports cannot be listed or named | `error host crash reports: <reason>`, and `error native diagnostic reports: the system names no Library folder for the user`; the reason names the file or the folder, and an unreadable report is reported once ([logging](logging.md#entrances)) |
 | a picture region event carries `cids` that are not a list of identifiers, or no `type`, and the host cannot record its relay | `error host input relay: <reason>` |
 | a startup step of the host fails | `error host startup: <reason>`, and the process ends with the status 1 |
 

@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
-import { pageProcesses, sampleStall } from "./stall-sample.mjs";
+import { announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { readEventErrors, readEventOffsets, writeEventOffsets } from "./event-log.mjs";
 import { pasteboardDifference, readPasteboard, writePasteboard } from "./pasteboard.mjs";
 
@@ -361,9 +361,14 @@ export class Session {
     this.step(`${method} ${params.name ?? ""}`.trimEnd());
     // When the host does not answer, the check records at that moment the threads of this host and of its page process
     // in the logs of the configuration folder (F69).
-    const sample = async () => sampleStall({
-      host: this.client.endpoint.pid, pages: pageProcesses(this.app.configDir), directory: join(this.app.configDir, "logs"),
-    }).join(", ");
+    const sample = async () => {
+      const records = sampleStall({
+        host: this.client.endpoint.pid, pages: pageProcesses(this.app.configDir), directory: join(this.app.configDir, "logs"),
+      });
+      // The host stores the path of its dump as an event so that the dump is found from the log (docs/spec/logging.md#entrances).
+      const stored = await announceStall((name, params) => this.client.request(name, params), this.window, records);
+      return `${records.join(", ")}; ${stored}`;
+    };
     // The error keeps the name of the failed request. The code stays unchanged.
     const answer = this.client.request(method, { window: this.window, ...params }).catch(async (error) => {
       if (error instanceof EndpointError) {

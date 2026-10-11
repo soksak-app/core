@@ -51,6 +51,7 @@ func init() {
 	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
 	diagnosticMethods["diagnostics.log.flush"] = diagnosticLogFlush
 	diagnosticMethods["diagnostics.test.mark"] = diagnosticTestMark
+	diagnosticMethods["diagnostics.stall.dump"] = diagnosticStallDump
 	diagnosticMethods["diagnostics.capture.still"] = diagnosticCaptureStill
 	debugCaptures = debugCaptureWindows
 	diagnosticMethods["diagnostics.notifications"] = diagnosticNotifications
@@ -527,6 +528,22 @@ func diagnosticTestMark(e *Endpoint, _ *endpointConn, params json.RawMessage) (a
 		return nil, err
 	}
 	boot, seq, err := EmitTestMark(mark, 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"boot": boot, "seq": seq}, nil
+}
+
+// diagnosticStallDump stores the path of a stall dump that the window check wrote as an event and replies with the position of its line.
+func diagnosticStallDump(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	if _, err := e.window(params); err != nil {
+		return nil, err
+	}
+	path, err := ParseStallDump(params)
+	if err != nil {
+		return nil, err
+	}
+	boot, seq, err := EmitStallDump(path, 10*time.Second)
 	if err != nil {
 		return nil, err
 	}

@@ -679,6 +679,8 @@ pub trait Platform: Send + Sync {
     fn clipboard_write_png(&self, bytes: &[u8]) -> Result<(), String>;
     /// Opens a URL in the default application of the user for its scheme. Call it on the main thread.
     fn open_link(&self, url: &str) -> Result<(), String>;
+    /// The folder in which the operating system writes the crash reports of the current user, as the system names it.
+    fn diagnostic_reports_directory(&self) -> Result<std::path::PathBuf, String>;
     /// Installs the watch of the mask of the pressed mouse buttons that the operating system reports. At the
     /// installation it reports the current mask, and afterwards at every press or release of a mouse button delivered
     /// to any application it reports the mask of that attempt through changed on the main thread. The same mask is also

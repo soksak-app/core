@@ -107,6 +107,7 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 | 창 동작 | 창을 만들기 전에 창 크기 변경 애니메이션 길이 줄이기 |
 | 표준 오류 | 프로세스의 표준 오류를 열린 파일로 바꾸기 — [애플리케이션 로그](#애플리케이션-로그) 참고. Windows는 미구현 |
 | Dock | Dock 메뉴 설치 |
+| Crash report | 운영체제가 현재 사용자의 crash report를 쓰는 폴더([로깅](logging.ko.md)). Windows에서는 구현하지 않음 |
 | 식별 | 디렉터리 식별 |
 | 비공개 파일 | 현재 사용자만 접근할 수 있는 파일과 디렉터리: 경로에서 없는 디렉터리 만들기(macOS에서 mode 0700), 파일을 덧붙이기로 열고 없으면 만들기(mode 0600), 있으면 안 되는 새 파일 만들기(mode 0600), 파일 내용을 바꾸고 없으면 만들기(mode 0600), 영구 service 디렉터리 제한, 진단 build에서 확인을 거치는 비공개 디렉터리. 공용 host 코드는 이런 파일과 디렉터리를 이 연산으로만 만들고 권한 mode를 직접 정하지 않는다. 이미 있는 파일과 디렉터리는 mode를 유지한다. Windows에서는 구현하지 않는다 |
 | 엔드포인트 | [로컬 엔드포인트](endpoint.ko.md) 전송: macOS는 Unix 소켓, Windows는 미구현 |
@@ -152,6 +153,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | H6 | `src/menu.go`, `tests/menu_test.go` | 없음 | Wails 기본 애플리케이션 메뉴는 View 메뉴에서 메인 웹뷰 전체를 확대하고 다시 읽으므로 Wails 호스트가 애플리케이션 메뉴를 정한다. Tauri 호스트는 View 메뉴에 전체 화면만 있는 Tauri 기본 메뉴를 쓴다 |
 | H7 | 없음 | `tests/panic_hook_test.rs`, `tests/fatal_signal_test.rs` | Go runtime은 fatal signal의 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다. fatal signal은 native 라이브러리의 handler가 있어야 오류 줄을 쓴다. Rust panic은 panic한 스레드에서 `application_log.rs`의 hook이 실행되므로 hook 시험이 hook이 writer를 기다리지 않는지 확인한다. goroutine의 panic은 `routine.Go`가 recover하며 hook이 없다 |
 | H8 | `tests/event_log_benchmark_test.go`, `tests/event_native_benchmark_test.go` | `benches/event_log_benchmark.rs`, `benches/event_native_benchmark.rs` | 측정은 Go에서 test 파일의 `Benchmark` 함수이고 Rust에서 `cargo bench`의 `harness = false` target이다. 둘 다 숫자를 출력하고 단언하지 않으며 `make benchmark-go`와 `make benchmark-rust`가 실행한다. |
+| H9 | `tests/framework_log_test.go` | 없음 | 프레임워크 logger의 level(`FrameworkLogLevel`)은 Wails host에만 있다. Wails asset server는 요청한 파일마다 level `info`로 한 줄을 쓰고, Tauri host는 표준 오류에 그런 줄을 쓰지 않는다 |
 | A1 | 내용만 다름 | 내용만 다름 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다 |
 | A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
 | A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri 설정 |

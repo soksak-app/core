@@ -85,6 +85,9 @@ func (implementation) ClipboardRead(string) (platform.ClipboardValue, error) {
 func (implementation) ClipboardWriteText(string) error { return unsupported("clipboard text write") }
 func (implementation) ClipboardWritePNG([]byte) error  { return unsupported("clipboard PNG write") }
 func (implementation) OpenLink(string) error           { return unsupported("link open") }
+func (implementation) DiagnosticReportsDirectory() (string, error) {
+	return "", unsupported("crash reports")
+}
 func (implementation) StartNotifications(func(string)) error {
 	return unsupported("system notifications")
 }

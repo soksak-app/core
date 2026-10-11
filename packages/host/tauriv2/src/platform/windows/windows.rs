@@ -498,6 +498,9 @@ impl Platform for Windows {
     fn open_link(&self, url: &str) -> Result<(), String> {
         unsupported::open_link(url)
     }
+    fn diagnostic_reports_directory(&self) -> Result<std::path::PathBuf, String> {
+        unsupported::diagnostic_reports_directory()
+    }
     fn watch_buttons(&self, changed: Box<dyn Fn(u64) + Send + Sync>) -> Result<(), String> {
         unsupported::watch_buttons(changed)
     }

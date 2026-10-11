@@ -27,6 +27,8 @@ use super::{
 mod capture;
 #[path = "clipboard.rs"]
 mod clipboard;
+#[path = "diagnostic_reports.rs"]
+mod diagnostic_reports;
 #[path = "dock.rs"]
 mod dock;
 #[path = "document.rs"]
@@ -634,6 +636,9 @@ impl Platform for Darwin {
     }
     fn open_link(&self, url: &str) -> Result<(), String> {
         link::open(url)
+    }
+    fn diagnostic_reports_directory(&self) -> Result<std::path::PathBuf, String> {
+        diagnostic_reports::directory()
     }
     fn watch_buttons(&self, changed: Box<dyn Fn(u64) + Send + Sync>) -> Result<(), String> {
         mouse_buttons::watch(changed)

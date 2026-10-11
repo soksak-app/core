@@ -13,12 +13,16 @@
 | 파일 | 쓰는 쪽 | 형태 | 한계 |
 |---|---|---|---|
 | `host-<boot>.stderr` | host 프로세스의 raw 표준 오류: 런타임의 crash 출력과 native 라이브러리의 fatal 줄 | 글 | 실행이 열 때 100 MB이면 `host-<boot>.stderr.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
+| `crash-found.txt` | 시작할 때마다 host | 글: host가 `host.crash.found`로 알린 시스템 crash report의 경로, 한 줄에 하나([로깅](logging.ko.md)) | 시작할 때마다 lookup이 아직 보는 report만 남기도록 다시 쓴다. 최대 64줄 |
+| `stall-<pid>-<ms>.txt`, `stall-<pid>-<ms>-page-<pid>.txt` | host가 응답하지 않을 때 창 검사 harness가 `sample`로 쓴다. host는 경로를 `host.stall.dump`로 저장한다 | 글 | 없음. 정지마다 파일 하나 |
 | `host-<boot>.jsonl` | host 프로세스: 자신의 기록, page의 기록(실패와 관측은 `page.record.<level>` event이며 host 호출 `log`의 배치로 중계한다), native 라이브러리의 event | [로깅 계약](logging.ko.md)의 event | 100 MB에서 `host-<boot>.jsonl.1`로 회전하고 이전 세대 다섯 개를 남긴다 |
 | `<executable-name>.log` | 상주 service. host가 service의 standard error로 연다 | service가 쓰는 같은 형식의 글 기록 | host가 service를 시작할 때 100 MB이면 `<name>.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
 | `state-<time>.json` | debug view가 열릴 때 두 host | JSON 문서 하나 | 없음. 열 때마다 파일 하나 |
 | `captures/…` | 진단 빌드의 두 host | PNG와 frame 파일 | 요청한 쪽이 지운다 |
 
-`<time>`은 UTC 시각 `YYYYMMDDTHHMMSSZ`다. 응답 정지 sample은 애플리케이션이 아니라 창 검사 harness가 쓴다.
+`<time>`은 UTC 시각 `YYYYMMDDTHHMMSSZ`다. 응답 정지 sample은 애플리케이션이 아니라 창 검사 harness가 쓴다. 응답하지 않는 host는 자신을 sample할 수 없기 때문이며, harness는 이어서 `diagnostics.stall.dump`를 보내 host가 파일 경로를 event로 저장하게 한다.
+
+표준 오류에는 계약의 어떤 writer도 쓰지 않는 것만 남는다. Wails 프레임워크는 page가 파일을 요청할 때마다 `[AssetFileServerFS] Handling request` 줄을 level `info`로 쓰며, 이 줄이 실패를 뜻하지 않는 2.0 MB를 파일에 채웠다. 그래서 Wails host는 프레임워크 logger의 level을 `warn`(`FrameworkLogLevel`)으로 정한다. 요청 줄은 빠지고 프레임워크의 warning과 error는 남는다. 의미 있는 요청은 `host.binding.call`, `page.call`, host의 `error` 기록이 밝힌다. Tauri host는 표준 오류에 그런 줄을 쓰지 않으므로 level을 정하지 않는다.
 
 ## 형태
 
@@ -93,6 +97,7 @@
 | 사이드카를 멈추거나 교체하거나 창을 위해 유지할 수 없거나, 표면이 닫혔음을 알릴 수 없거나, Wails host의 native view 다리가 실패한다 | `error host sidecar stop`, `error host replace`, `error host sidecar retain`, `error host sidecar close <surface>`, `error host native message`, `error host native reply`. 각각 뒤에 `: <reason>`이 붙는다 |
 | WebKit 자식 process 기록을 읽거나 쓸 수 없거나, 고아가 된 자식을 끝낼 수 없다 | `error host webkit children record: <reason>`, `error host webkit children: kill <pid>: <reason>`. 프로세스 번호가 없는 `ps` 줄은 `error host webkit children: ps line "<line>" begins with no process number`, recording 상태의 lock이 poisoned이면 `error host recording: <reason>`이다 |
 | 알림 센터가 실패를 알리거나, 이벤트를 읽지 못하거나, 알림의 종류를 모르거나, 창과 표면이 없거나, 닫힌 창을 가리킨다 | `error host notification: <reason>` |
+| 이전 실행의 crash report를 읽을 수 없거나, crash report 폴더를 나열하거나 알아낼 수 없다 | `error host crash reports: <reason>`, `error native diagnostic reports: the system names no Library folder for the user`. 이유는 파일이나 폴더를 밝히며, 읽을 수 없는 report는 한 번만 보고한다([로깅](logging.ko.md)) |
 | picture region event의 `cids`가 식별자 목록이 아니거나 `type`이 없어 host가 그 중계를 기록하지 못한다 | `error host input relay: <reason>` |
 | 호스트의 시작 단계가 실패한다 | `error host startup: <reason>`, 그리고 프로세스가 상태 1로 끝난다 |
 

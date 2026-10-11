@@ -130,6 +130,10 @@ func Run(assets fs.FS, options Options) error {
 	if err := StartStandardError(configDirectory, identifier); err != nil {
 		return err
 	}
+	// The crash reports of the earlier runs are announced once, after the writer exists (docs/spec/logging.md#automatic-entrances).
+	if err := AnnounceCrashReportsAtStart(configDirectory); err != nil {
+		LogError("crash reports", err)
+	}
 	// Both hosts write the host lines in the same form without a prefix. The first line of a run carries the time.
 	log.SetFlags(0)
 	// The install state is read after the process lock is taken and the application log is open. A read error is kept in the application log
@@ -154,6 +158,7 @@ func Run(assets fs.FS, options Options) error {
 			return MissingAssets(StartAssets(host.startPage)(InstalledAssets(configDirectory)(next)), reportMissingAsset)
 		}},
 		Services:   []application.Service{application.NewService(bindings)},
+		LogLevel:   FrameworkLogLevel,
 		ShouldQuit: host.shouldQuit,
 		// The default signal handler of Wails does not receive SIGHUP and only holds the signals after the first one, so
 		// it does not end the process with the default action. The handler that Run registered

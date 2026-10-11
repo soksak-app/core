@@ -28,6 +28,7 @@ pub mod buttons;
 pub mod clipboard;
 pub mod command_line;
 mod composition;
+pub mod crash_report;
 pub mod debug;
 pub mod debug_follow;
 #[cfg(feature = "diagnostics")]
@@ -59,6 +60,8 @@ pub mod recording;
 pub mod routine;
 mod shapes;
 pub mod sidecars;
+#[cfg(feature = "diagnostics")]
+pub mod stall_dump;
 pub mod start;
 pub mod surfaces;
 #[cfg(feature = "diagnostics")]
@@ -209,6 +212,11 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     &directory,
                     soksak_sok::identity::identity(),
                 )?;
+                // The crash reports of the earlier runs are announced once, after the writer exists
+                // (docs/spec/logging.md#automatic-entrances).
+                if let Err(error) = crash_report::announce_crash_reports_at_start(&directory) {
+                    application_log::log_error("crash reports", error);
+                }
                 Ok(())
             })())
         })

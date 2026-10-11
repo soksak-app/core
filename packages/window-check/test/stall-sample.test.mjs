@@ -82,3 +82,24 @@ test("a page process that already ended does not cost the records of the host an
     "/x/logs/stall-10-7-page-13.txt",
   ]);
 });
+
+test("the path of the dump of the host is stored as an event and its position is named", async () => {
+  const { announceStall } = await import("../stall-sample.mjs");
+  const calls = [];
+  const text = await announceStall(async (method, params) => { calls.push([method, params]); return { boot: "b1", seq: 9 }; }, "main",
+    ["/x/logs/stall-10-7.txt", "page 12 not sampled: gone", "/x/logs/stall-10-7-page-13.txt"]);
+  assert.deepEqual(calls, [["diagnostics.stall.dump", { window: "main", path: "/x/logs/stall-10-7.txt" }]]);
+  assert.equal(text, "host.stall.dump at b1:9");
+});
+
+test("a host that refuses the dump event is named in the message instead of hiding it", async () => {
+  const { announceStall } = await import("../stall-sample.mjs");
+  const text = await announceStall(async () => { throw new Error("path does not name a file: /x"); }, "main", ["/x/logs/stall-10-7.txt"]);
+  assert.equal(text, "host.stall.dump not stored: path does not name a file: /x");
+});
+
+test("a host that does not answer the dump event within the bound is named in the message", async () => {
+  const { announceStall } = await import("../stall-sample.mjs");
+  const text = await announceStall(() => new Promise(() => {}), "main", ["/x/logs/stall-10-7.txt"], 10);
+  assert.equal(text, "host.stall.dump not stored: no answer within 10 ms");
+});
