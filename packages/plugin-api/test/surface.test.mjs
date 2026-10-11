@@ -120,7 +120,7 @@ test("surface context traces an event with the plugin and the surface", () => {
   const lines = [];
   const context = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
     exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
-    trace: (event, fields) => lines.push([event, fields]),
+    trace: (event, fields) => lines.push([event, fields]), traceEnabled: () => true,
   } });
   context.runtime.trace("fixture.input", { key: "a" });
   assert.deepEqual(lines, [["fixture.input", { key: "a", plugin: "fixture", surface: "tab-1" }]]);
@@ -135,7 +135,7 @@ test("surface context logs an event of the plugin at each level with the surface
   const events = [];
   const context = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
     exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
-    log: (level, event, fields) => events.push([level, event, fields]),
+    log: (level, event, fields) => events.push([level, event, fields]), logEnabled: () => true,
   } });
   for (const level of ["error", "warn", "info", "debug", "trace"]) context.runtime.log[level]("input.key", { key: "a" });
   context.runtime.log.info("started");
@@ -157,13 +157,23 @@ test("surface context logs an event of the plugin at each level with the surface
 });
 
 // A plugin joins a chain of the event log with `cids`, which the page writer requires in the form of the host (a non-empty string
-// without a quote, a backslash or a control character) (docs/spec/plugins.md#logging).
-test("a plugin event carries the cids of its chain to the page writer", () => {
+// without a quote, a backslash or a control character), and builds the fields of an event only while its level is stored
+// (docs/spec/plugins.md#logging).
+function loggingContext(extra = {}) {
   const events = [];
+  const traces = [];
+  const gate = { log: new Set(["error", "warn", "info", "debug", "trace"]), trace: true };
   const context = createSurfaceContext({ closing: CLOSING, root: { appendChild() {} }, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
     exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
-    log: (...args) => events.push(args),
+    log: (...args) => events.push(args), logEnabled: (level) => gate.log.has(level),
+    trace: (event, fields) => traces.push([event, fields]), traceEnabled: () => gate.trace,
+    ...extra,
   } });
+  return { context, events, traces, gate };
+}
+
+test("a plugin event carries the cids of its chain to the page writer", () => {
+  const { context, events } = loggingContext();
   context.runtime.log.info("input.key", { key: "a" }, { cids: ["p1.1", "p1.2"] });
   context.runtime.log.info("input.key", { key: "b" });
   context.runtime.log.info("input.key", { key: "c" }, { cids: [] });
@@ -174,6 +184,55 @@ test("a plugin event carries the cids of its chain to the page writer", () => {
   assert.throws(() => context.runtime.log.info("input.key", {}, { chain: ["p1.1"] }), /log options may only hold cids/);
   assert.throws(() => context.runtime.log.info("input.key", {}, null), /log options may only hold cids/);
   assert.equal(events.length, 3, "a refused call stores nothing");
+});
+
+test("a plugin asks whether a level is stored and builds the fields of an event only then", () => {
+  const { context, events, gate } = loggingContext();
+  assert.equal(context.runtime.log.enabled("debug"), true);
+  gate.log.delete("debug");
+  assert.equal(context.runtime.log.enabled("debug"), false);
+  assert.throws(() => context.runtime.log.enabled("verbose"), /log level must be one of/);
+  let built = 0;
+  const fields = () => { built += 1; return { key: "a" }; };
+  context.runtime.log.debug("input.key", fields);
+  assert.equal(built, 0, "a closed level builds nothing");
+  assert.equal(events.length, 0);
+  context.runtime.log.info("input.key", fields, { cids: ["p1.1"] });
+  assert.equal(built, 1);
+  assert.deepEqual(events, [["info", "plugin.fixture.input.key", { key: "a", surface: "tab-1" }, ["p1.1"]]]);
+  assert.throws(() => context.runtime.log.info("input.key", () => null), /log requires fields as an object/);
+  assert.throws(() => context.runtime.log.info("input.key", () => ({ surface: "x" })), /log fields must not name the surface/);
+  assert.throws(() => context.runtime.log.info("Bad", () => { built += 1; return {}; }), /log requires an event name/);
+  assert.equal(built, 1, "an invalid name is refused before the builder runs");
+  const hostless = createSurfaceContext({ closing: CLOSING, root: { appendChild() {} }, surfaceId: "tab-2", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
+    exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
+  } });
+  assert.equal(hostless.runtime.log.enabled("error"), false);
+  hostless.runtime.log.error("input", fields);
+  assert.equal(built, 1, "a page without a host builds nothing");
+});
+
+test("a plugin trace builds its fields only while the trace is on", () => {
+  const { context, traces, gate } = loggingContext();
+  let built = 0;
+  const fields = () => { built += 1; return { key: "a" }; };
+  gate.trace = false;
+  assert.equal(context.runtime.trace.enabled(), false);
+  context.runtime.trace("fixture.input", fields);
+  assert.equal(built, 0, "a trace that is off builds nothing");
+  gate.trace = true;
+  assert.equal(context.runtime.trace.enabled(), true);
+  context.runtime.trace("fixture.input", fields);
+  assert.deepEqual(traces, [["fixture.input", { key: "a", plugin: "fixture", surface: "tab-1" }]]);
+  assert.throws(() => context.runtime.trace("fixture.input", () => null), /trace requires fields as an object/);
+});
+
+test("a runtime that stores events or traces without the query of its gate is refused", () => {
+  const base = { exposure: { command() {} }, sidecar() {}, emit() {}, native: {} };
+  const make = (runtime) => () => createSurfaceContext({ closing: CLOSING, root: { appendChild() {} }, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: { ...base, ...runtime } });
+  assert.throws(make({ log() {} }), /runtime\.log requires runtime\.logEnabled/);
+  assert.throws(make({ trace() {} }), /runtime\.trace requires runtime\.traceEnabled/);
+  assert.throws(make({ logEnabled() {} }), /runtime\.logEnabled requires runtime\.log/);
 });
 
 test("a surface context requires the closing signal and exposes it", () => {

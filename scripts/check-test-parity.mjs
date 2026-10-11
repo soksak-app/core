@@ -1949,9 +1949,23 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin event carries the cids of its chain to the page writer" },
-      { file: "packages/workbench/test/plugin-records.test.mjs", id: "an event of a plugin leaves with its cids" },
+      { file: "packages/workbench/test/plugin-records.test.mjs", id: "an event of a plugin leaves with its cids and its builder runs while the level is stored" },
     ],
     expected: "A plugin event carries valid cids to the page writer, and an invalid cids argument throws before anything is stored.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.32.2",
+    implementation: [
+      { file: "packages/plugin-api/plugin-runtime.js", symbol: "trace.enabled" },
+      { file: "packages/workbench/page-log.js", symbol: "export function eventEnabled" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin asks whether a level is stored and builds the fields of an event only then" },
+      { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin trace builds its fields only while the trace is on" },
+      { file: "packages/workbench/test/plugin-records.test.mjs", id: "the trace of a plugin builds no object while the trace is off" },
+    ],
+    expected: "The fields of a plugin event and of a plugin trace event are built only while the level is stored or the trace is on.",
     levels: ["unit"],
   },
   {
