@@ -33,6 +33,8 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     exposure.go    exposure request relay             exposure.rs
     endpoint.go    JSON-RPC server                    endpoint.rs
     termination.go termination requests             termination.rs
+    routine/       entrance of goroutines and threads  routine/
+      routine.go   Go(name, fn)                        routine.rs (spawn_named)
     diagnostics.go diagnostic methods (build tag)     diagnostics.rs
     recording.go   diagnostic recording state (build tag) recording.rs
     bridge.js      call channel for additional webviews   difference H3
@@ -147,7 +149,7 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 | H4 | `src/platform/darwin/webview.m` | none | Wails has no child-webview API, so the host creates the webview in Objective-C; Tauri uses `add_child` |
 | H5 | `src/diagnostics_test.go` | none | The diagnostic-only Go unit test is colocated with the implementation to test the unexported capture payload helper without widening the host API; Rust diagnostic coverage is in the host's integration tests |
 | H6 | `src/menu.go`, `tests/menu_test.go` | none | The Wails default application menu zooms and reloads the whole main webview from its View menu, so the Wails host defines its application menu; the Tauri host uses Tauri's default menu, whose View menu has only full screen |
-| H7 | none | `tests/panic_hook_test.rs`, `tests/fatal_signal_test.rs` | The Go runtime writes the stack of a panic and the report of a fatal signal to the standard error, which is the application log; a Rust panic needs the hook of `application_log.rs`, and a fatal signal needs the handlers of the native library, to write their error lines |
+| H7 | none | `tests/panic_hook_test.rs`, `tests/fatal_signal_test.rs` | The Go runtime writes the report of a fatal signal to the standard error, which is the application log; a fatal signal needs the handlers of the native library to write its error line. A Rust panic runs the hook of `application_log.rs` on the panicking thread, so the hook test checks that it does not wait for the writer; a goroutine panic is recovered by `routine.Go` and has no hook |
 | H8 | `tests/event_log_benchmark_test.go`, `tests/event_native_benchmark_test.go` | `benches/event_log_benchmark.rs`, `benches/event_native_benchmark.rs` | A measurement is a `Benchmark` function of a Go test file and a `harness = false` target of `cargo bench` in Rust; both print numbers and assert nothing, and `make benchmark-go` and `make benchmark-rust` run them. |
 | A1 | content differs | content differs | `runtime/index.js` uses each framework's call mechanism |
 | A2 | none | `build.rs` | Tauri requires `tauri_build::build()` |
@@ -158,6 +160,8 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 | C3 | `src/dev.go` | none | Go selects the `.dev` identifier by an `init` in a file that only the `dev` build tag compiles; Rust selects it with `cfg!(feature = "dev")` inside `src/identity.rs`, so it has no file of its own |
 
 ## Process lifecycle
+
+A goroutine or a thread of a host starts only through its entrance: `routine.Go(name, fn)` in Go (`src/routine/routine.go`) and `spawn_named(name, body)` in Rust (`src/routine/routine.rs`). Go recovers a panic of `fn`, writes the message and the stack to the standard error, stores the event `host.panic` ([events](events.json)) with the `name`, the `text` of the panic value and the `stack`, waits up to 2 s until the event is in the event log, and ends the process with status 2. The Rust panic hook stores the same event with the name of the panicking thread (`<unnamed>` for a thread without one; the `text` is prefixed with `<file>:<line>: `, because a Rust panic value carries no location) and wakes a thread of its own, which waits up to 2 s until the event is in the event log and ends the process with status 101. The hook never waits for the writer, so a panic of the thread of the interface does not hold that thread while the writer is stalled; the hook builds the backtrace on the panicking thread. The policy is the same in both hosts: a state that a panic left behind is not trusted, so a panic ends the process after its record and no mode continues after a panic. A panic on the thread of the interface whose process aborts before the writer wrote the queued event leaves the message on the standard error only. Only a thread whose start returns an error to its caller (the event writer, the performance sampler, the debug follower and the termination watcher of the Rust host) uses `std::thread::Builder` directly; its panic is recorded by the hook like the others.
 
 A failure of a startup step ends the process with its message on the standard error and the status 1, in both hosts. The Tauri host does not return a failure of its setup steps to the event loop, because the launch callback of the event loop cannot unwind: the failure would abort the process and the system would show its crash dialog without the message.
 

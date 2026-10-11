@@ -22,6 +22,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 // pageTimeout is the time to wait for a reply of a document.
@@ -821,7 +822,7 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 		}
 		return s.hit(*p.X, *p.Y)
 	case "host.quit":
-		go application.Get().Quit()
+		routine.Go("quit", application.Get().Quit)
 	default:
 		return nil, rpcError(codeUnknownName, "unknown command %s", name)
 	}
@@ -1465,7 +1466,7 @@ func (s *Surfaces) windowChanged() {
 	if s.host == nil || s.host.endpoint == nil || !s.host.endpoint.Watching(s.name, "host.window") {
 		return
 	}
-	go func() {
+	routine.Go("window-status", func() {
 		state, err := s.windowState()
 		var coded *RPCError
 		if errors.As(err, &coded) && coded.Code == codeNoWindow {
@@ -1477,7 +1478,7 @@ func (s *Surfaces) windowChanged() {
 			return
 		}
 		s.host.endpoint.StatusChanged(s.name, "host.window", "", state)
-	}()
+	})
 }
 
 // rewatch requests the watches and diagnostic subscriptions of this window again from the reloaded main page.

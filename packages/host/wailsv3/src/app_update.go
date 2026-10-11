@@ -16,6 +16,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
@@ -167,7 +168,7 @@ func (h *Host) AppUpdateApply(ctx context.Context, requestJSON json.RawMessage) 
 	h.mu.Lock()
 	h.update = command
 	h.mu.Unlock()
-	go application.Get().Quit()
+	routine.Go("quit", application.Get().Quit)
 	return nil
 }
 

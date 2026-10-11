@@ -158,9 +158,11 @@ pub fn start_standard_error(config: &Path, identifier: &str) -> Result<(), Strin
     Ok(())
 }
 
-/// Writes each panic of the host as `error host panic: <file>:<line>: <message>` before the previous hook prints its message
-/// (docs/spec/diagnostics.md). The standard error is the stderr file once [`start_standard_error`] ran.
+/// Stores each panic of the host as the event `host.panic` before the previous hook prints its message, and starts the
+/// thread that ends the process once the event is stored (`routine::record_panic`). The hook never waits for the writer. The
+/// standard error is the stderr file once [`start_standard_error`] ran.
 pub fn install_panic_hook() {
+    crate::routine::start_panic_ender();
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let message = match info.payload().downcast_ref::<&str>() {
@@ -174,10 +176,7 @@ pub fn install_panic_hook() {
             Some(location) => format!("{}:{}", location.file(), location.line()),
             None => "an unknown location".to_string(),
         };
-        log_error("panic", format!("{location}: {message}"));
-        if let Err(error) = crate::event_record::flush_records(std::time::Duration::from_secs(2)) {
-            eprintln!("event writer: the record of the panic is not stored: {error}");
-        }
+        crate::routine::record_panic(&location, &message);
         previous(info);
     }));
 }

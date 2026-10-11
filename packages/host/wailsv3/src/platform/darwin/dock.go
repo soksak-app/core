@@ -17,13 +17,15 @@ import (
 	"errors"
 	"fmt"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 // dockNewWindow is the function that the new window item of the Dock menu calls.
 var dockNewWindow func()
 
 //export goDockNewWindow
-func goDockNewWindow() { go dockNewWindow() }
+func goDockNewWindow() { routine.Go("dock-new-window", dockNewWindow) }
 
 func (implementation) InstallDock(newWindow func()) error {
 	dockNewWindow = newWindow

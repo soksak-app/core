@@ -859,7 +859,7 @@ pub(crate) fn rewatch(window: &Window) {
         return;
     };
     let window = window.clone();
-    std::thread::spawn(move || {
+    crate::routine::spawn_named("window-watches", move || {
         let host = Host(window.app_handle().clone());
         for watch in notifier.watches(window.label()) {
             if watch.name.starts_with("host.") {
@@ -904,7 +904,7 @@ pub(crate) fn window_closed(window: &Window) {
 /// host.windows. The window list locks the window registry, so it is read on a separate thread.
 pub(crate) fn windows_changed(app: &AppHandle) {
     let app = app.clone();
-    std::thread::spawn(move || {
+    crate::routine::spawn_named("windows-changed", move || {
         let Some(notifier) = app
             .state::<Exposure>()
             .endpoint
@@ -947,7 +947,7 @@ pub(crate) fn windows_changed(app: &AppHandle) {
 pub(crate) fn watch_buttons(app: &AppHandle) -> Result<(), String> {
     let (send, receive) = mpsc::channel::<Value>();
     let notifying = app.clone();
-    std::thread::spawn(move || {
+    crate::routine::spawn_named("button-watch", move || {
         for value in receive {
             let Some(notifier) = notifying
                 .state::<Exposure>()
@@ -1008,7 +1008,7 @@ fn sidecars_status(app: &AppHandle) -> Value {
 /// registry, so it is read on a separate thread.
 pub(crate) fn sidecars_changed(app: &AppHandle) {
     let app = app.clone();
-    std::thread::spawn(move || {
+    crate::routine::spawn_named("sidecars-changed", move || {
         windows::notify_sidecars(&app);
         let Some(notifier) = app
             .state::<Exposure>()
@@ -1060,7 +1060,7 @@ pub(crate) fn window_changed(window: &Window) {
         return;
     }
     let window = window.clone();
-    std::thread::spawn(move || {
+    crate::routine::spawn_named("window-status", move || {
         let value = match window_status(&window) {
             Ok(value) => value,
             // A window that closed before its state was read has no state to report. window_closed reports the close of

@@ -497,7 +497,7 @@ fn tick(
     clock: Option<&'static dyn platform::Platform>,
     sent: std::sync::Arc<std::sync::Mutex<Vec<f64>>>,
 ) {
-    std::thread::spawn(move || {
+    crate::routine::spawn_named("diagnostics-ticks", move || {
         let began = Instant::now();
         for step in 1..=steps {
             let due = FRAME * step as u32;

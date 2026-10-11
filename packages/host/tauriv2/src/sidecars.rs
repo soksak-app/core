@@ -15,7 +15,6 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{sync_channel, RecvError, SyncSender, TryRecvError, TrySendError};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
-use std::thread;
 use std::time::Duration;
 
 use wait_timeout::ChildExt;
@@ -1145,7 +1144,7 @@ impl<O: Owner> Sidecars<O> {
             }
             let core = Arc::clone(&self.core);
             let stop_timeout = self.stop_timeout;
-            thread::spawn(move || {
+            crate::routine::spawn_named("sidecar-replace", move || {
                 let sidecars = Sidecars { core, stop_timeout };
                 if let Err(error) = sidecars.replace(&item.sidecar) {
                     log_error("replace", error);
@@ -1377,7 +1376,7 @@ impl<O: Owner> Sidecars<O> {
         let mut handles = Vec::new();
         for (name, process) in processes {
             let state = Arc::clone(&self.core.state);
-            let handle = thread::spawn(move || {
+            let handle = crate::routine::spawn_named("sidecar-close", move || {
                 if process.child.is_none() {
                     if let Some(persistent) = process.persistent {
                         if detach {
@@ -1426,7 +1425,7 @@ impl<O: Owner> Sidecars<O> {
                         // block stop().
                         let tx = process.outbox.clone();
                         let close_name = name.clone();
-                        thread::spawn(move || {
+                        crate::routine::spawn_named("sidecar-close-send", move || {
                             if let Err(e) = tx.send(close) {
                                 log_error(
                                     &format!("sidecar {close_name}"),
@@ -1536,7 +1535,7 @@ fn service_endpoint_line(
 ) -> Result<String, String> {
     let (sender, receiver) = sync_channel(1);
     let reader_name = name.to_string();
-    thread::spawn(move || {
+    crate::routine::spawn_named("sidecar-read-line", move || {
         let mut line = String::new();
         let read = BufReader::new(stdout).read_line(&mut line).map(|_| line);
         // The receiving side ends when the limit passes, and that timeout is reported as the error of the start.
@@ -1599,7 +1598,7 @@ impl<O: Owner> Core<O> {
         // stopping is also registered and stop cleans it up.
         state.running.insert(name.to_string(), process);
         for thread in threads {
-            thread::spawn(thread);
+            crate::routine::spawn_named("sidecar-transport", thread);
         }
         if state.stopped {
             return Err("sidecars are stopped".into());
@@ -1627,7 +1626,9 @@ impl<O: Owner> Core<O> {
         // The host reads the standard error line by line and writes each line as a record (docs/spec/sidecars.md#log).
         if let Some(stderr) = child.stderr.take() {
             let place = name.to_string();
-            thread::spawn(move || write_stderr_records(stderr, &place));
+            crate::routine::spawn_named("sidecar-stderr", move || {
+                write_stderr_records(stderr, &place)
+            });
         }
         crate::event_record::emit_host(
             crate::event_log::Level::Info,

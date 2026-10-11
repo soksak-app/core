@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 var (
@@ -90,7 +92,7 @@ func performanceSamplerStart() {
 	}
 	stop, done := make(chan struct{}), make(chan struct{})
 	samplerStop, samplerDone = stop, done
-	go func() {
+	routine.Go("performance-sampler", func() {
 		defer close(done)
 		for {
 			PerformanceSample()
@@ -100,7 +102,7 @@ func performanceSamplerStart() {
 			case <-time.After(5 * time.Second):
 			}
 		}
-	}()
+	})
 }
 
 func performanceSamplerEnd() {

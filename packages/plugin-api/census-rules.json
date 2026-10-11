@@ -29,6 +29,13 @@
       "description": "A panic is recovered only in the entrance function, which records it with its stack."
     },
     {
+      "id": "rs.thread-spawn",
+      "language": "rs",
+      "pattern": "\\b(?:std::)?thread::spawn\\s*\\(",
+      "requires": "entrance",
+      "description": "A thread starts only through the entrance function, which records a panic of the thread."
+    },
+    {
       "id": "rs.ok-discard",
       "language": "rs",
       "pattern": "\\.ok\\(\\)",

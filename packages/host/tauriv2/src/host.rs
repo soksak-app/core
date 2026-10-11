@@ -51,6 +51,8 @@ pub mod projects;
 pub mod quit;
 #[cfg(feature = "diagnostics")]
 pub mod recording;
+#[path = "routine/routine.rs"]
+pub mod routine;
 mod shapes;
 pub mod sidecars;
 pub mod start;

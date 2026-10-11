@@ -1,8 +1,19 @@
 {
   "exclude": "^(e2e|packages/window-check)/",
-  "entrances": {},
+  "entrances": {
+    "go.go-statement": [
+      "^packages/host/wailsv3/src/routine/routine\\.go$",
+      "^packages/sok/"
+    ],
+    "go.recover": [
+      "^packages/host/wailsv3/src/routine/routine\\.go$"
+    ],
+    "rs.thread-spawn": [
+      "^packages/host/tauriv2/src/routine/routine\\.rs$",
+      "^packages/sok/"
+    ]
+  },
   "pending": {
-    "go.go-statement": "F160.4",
     "m.registration": "F160.3",
     "m.delegate": "F160.3",
     "m.error-return": "F160.3",

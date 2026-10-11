@@ -21,6 +21,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 // platformRect is the region that the operating system implementation uses. It has the same fields as Rect, so they are converted to each other.
@@ -676,7 +677,7 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	// A settled frame checks the DOM document and the image raster. A continuous frame commits after the native preparation so that the next
 	// display cycle is not serialized behind a document or raster callback. The frame check handles
 	// this transition.
-	go func() {
+	routine.Go("layout-prepare", func() {
 		var waiting error
 		if req.Settled || req.WaitForPresentation {
 			domReady := make(chan struct{})
@@ -744,7 +745,7 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 		}); err != nil {
 			done <- result{err: err}
 		}
-	}()
+	})
 	outcome := <-done
 	if outcome.err != nil {
 		return nil, outcome.err

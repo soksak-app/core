@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 // The maximum length of a frame body.
@@ -284,7 +285,7 @@ func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir str
 	e.mu.Lock()
 	e.listener, e.processLock, e.file, e.owner = listener, lock, file, info
 	e.mu.Unlock()
-	go e.accept(listener)
+	routine.Go("endpoint-accept", func() { e.accept(listener) })
 	return nil
 }
 
@@ -359,8 +360,8 @@ func (e *Endpoint) accept(listener net.Listener) {
 		e.mu.Lock()
 		e.conns[c] = true
 		e.mu.Unlock()
-		go c.write()
-		go e.read(c)
+		routine.Go("endpoint-write", c.write)
+		routine.Go("endpoint-read", func() { e.read(c) })
 	}
 }
 
@@ -539,7 +540,7 @@ func (e *Endpoint) read(c *endpointConn) {
 			reason = fmt.Sprintf("method %q is not declared", *req.Method)
 			return
 		}
-		go e.run(c, req, method)
+		routine.Go("endpoint-run", func() { e.run(c, req, method) })
 	}
 }
 
@@ -557,7 +558,7 @@ func (e *Endpoint) subscription(name string) (subscriptionMethod, bool) {
 func (e *Endpoint) changeInOrder(c *endpointConn, req request, parse subscriptionMethod) {
 	t, on, err := parse(e, req.Params)
 	if err != nil {
-		go e.reply(c, req, nil, err)
+		routine.Go("endpoint-reply", func() { e.reply(c, req, nil, err) })
 		return
 	}
 	e.enqueue(t, func() { e.reply(c, req, nil, e.change(c, t, on)) })
@@ -583,7 +584,7 @@ func (e *Endpoint) enqueue(t topic, job func()) {
 	pending, running := e.queues[t]
 	e.queues[t] = append(pending, job)
 	if !running {
-		go e.drain(t)
+		routine.Go("endpoint-drain", func() { e.drain(t) })
 	}
 }
 

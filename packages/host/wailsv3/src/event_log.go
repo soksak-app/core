@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 // EventLogSchema is the schema number of the lines that this writer writes.
@@ -152,7 +153,7 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 		done:        make(chan struct{}),
 	}
 	open := &pendingEvent{tsMicros: time.Now().UnixMicro(), layer: "host", level: LevelInfo, event: "log.open", fields: fields}
-	go log.write(file, options.BatchInterval, open)
+	routine.Go("event-log-writer", func() { log.write(file, options.BatchInterval, open) })
 	return log, nil
 }
 

@@ -10,6 +10,8 @@ import (
 	"strconv"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 // StartDocumentPath is the path from which the main page imports the start document.
@@ -76,7 +78,7 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 		return nil, ErrNoStartWindow
 	}
 	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
-	go h.windowsChanged()
+	routine.Go("windows-changed", h.windowsChanged)
 	application.InvokeSync(s.reloadSurfaceDocuments)
 	s.discardOverlay()
 	snapshot, err := h.runWorkspace(WorkspaceRequest{Kind: "snapshot"})

@@ -558,11 +558,13 @@ impl Endpoint {
         let listener = endpoint.listener.clone();
         let shared = endpoint.shared.clone();
         let stopped = endpoint.stopped.clone();
-        std::thread::spawn(move || loop {
+        crate::routine::spawn_named("endpoint-accept", move || loop {
             match listener.accept() {
                 Ok(connection) => {
                     let shared = shared.clone();
-                    std::thread::spawn(move || serve(shared, connection));
+                    crate::routine::spawn_named("endpoint-serve", move || {
+                        serve(shared, connection)
+                    });
                 }
                 Err(error) => {
                     if !stopped.load(Ordering::Relaxed) {
@@ -855,7 +857,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
             continue;
         }
         let shared = shared.clone();
-        std::thread::spawn(move || {
+        crate::routine::spawn_named("endpoint-run", move || {
             let outcome = run(&shared, &request.method, request.params);
             // A timeout is an error that the requesting side receives, but only this record keeps which method and what
             // it waited for.
@@ -964,7 +966,7 @@ fn change(shared: &Arc<Shared>, peer: u64, topic: Topic, on: bool, answer: Optio
     };
     if start {
         let shared = shared.clone();
-        std::thread::spawn(move || drain(&shared, topic));
+        crate::routine::spawn_named("endpoint-drain", move || drain(&shared, topic));
     }
 }
 

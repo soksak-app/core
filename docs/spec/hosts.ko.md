@@ -33,6 +33,8 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     exposure.go    노출 요청 전달                     exposure.rs
     endpoint.go    JSON-RPC 서버                      endpoint.rs
     termination.go 종료 요청                          termination.rs
+    routine/       goroutine과 스레드의 진입점          routine/
+      routine.go   Go(name, fn)                        routine.rs (spawn_named)
     diagnostics.go 진단 메서드(빌드 태그)             diagnostics.rs
     recording.go   진단 녹화 상태(빌드 태그)          recording.rs
     bridge.js      추가 웹뷰 호출 통로                차이 H3
@@ -148,7 +150,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | H4 | `src/platform/darwin/webview.m` | 없음 | Wails에 자식 웹뷰 API가 없어 호스트가 Objective-C로 웹뷰를 생성하며, Tauri는 `add_child`를 사용한다 |
 | H5 | `src/diagnostics_test.go` | 없음 | 진단 전용 Go 단위 검사는 호스트 API를 넓히지 않고 비공개 capture payload helper를 검사하기 위해 구현 옆에 둔다. Rust 진단 범위는 호스트 통합 테스트에 있다 |
 | H6 | `src/menu.go`, `tests/menu_test.go` | 없음 | Wails 기본 애플리케이션 메뉴는 View 메뉴에서 메인 웹뷰 전체를 확대하고 다시 읽으므로 Wails 호스트가 애플리케이션 메뉴를 정한다. Tauri 호스트는 View 메뉴에 전체 화면만 있는 Tauri 기본 메뉴를 쓴다 |
-| H7 | 없음 | `tests/panic_hook_test.rs`, `tests/fatal_signal_test.rs` | Go runtime은 panic의 stack과 fatal signal의 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다. Rust panic은 `application_log.rs`의 hook이, fatal signal은 native 라이브러리의 handler가 있어야 오류 줄을 쓴다 |
+| H7 | 없음 | `tests/panic_hook_test.rs`, `tests/fatal_signal_test.rs` | Go runtime은 fatal signal의 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다. fatal signal은 native 라이브러리의 handler가 있어야 오류 줄을 쓴다. Rust panic은 panic한 스레드에서 `application_log.rs`의 hook이 실행되므로 hook 시험이 hook이 writer를 기다리지 않는지 확인한다. goroutine의 panic은 `routine.Go`가 recover하며 hook이 없다 |
 | H8 | `tests/event_log_benchmark_test.go`, `tests/event_native_benchmark_test.go` | `benches/event_log_benchmark.rs`, `benches/event_native_benchmark.rs` | 측정은 Go에서 test 파일의 `Benchmark` 함수이고 Rust에서 `cargo bench`의 `harness = false` target이다. 둘 다 숫자를 출력하고 단언하지 않으며 `make benchmark-go`와 `make benchmark-rust`가 실행한다. |
 | A1 | 내용만 다름 | 내용만 다름 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다 |
 | A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
@@ -159,6 +161,8 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | C3 | `src/dev.go` | 없음 | Go는 `dev` build 태그만 컴파일하는 파일의 `init`으로 `.dev` 식별자를 고르고, Rust는 `src/identity.rs` 안의 `cfg!(feature = "dev")`로 고르므로 따로 파일이 없다 |
 
 ## 프로세스 생명주기
+
+host의 goroutine과 스레드는 진입점으로만 시작한다. Go는 `routine.Go(name, fn)`(`src/routine/routine.go`), Rust는 `spawn_named(name, body)`(`src/routine/routine.rs`)이다. Go는 `fn`의 panic을 recover하고 메시지와 stack을 표준 오류에 쓰고, `name`, panic 값의 `text`, `stack`을 담은 event `host.panic`([events](events.json))을 저장하고, event가 event log에 들어갈 때까지 최대 2초 기다린 뒤 상태 2로 프로세스를 끝낸다. Rust panic hook은 panic한 스레드의 이름(이름이 없는 스레드는 `<unnamed>`)으로 같은 event를 저장하고(Rust panic 값에는 위치가 없으므로 `text`는 `<file>:<line>: `로 시작한다), 자기 스레드를 깨운다. 그 스레드가 event가 event log에 들어갈 때까지 최대 2초 기다린 뒤 상태 101로 프로세스를 끝낸다. hook은 writer를 기다리지 않으므로 인터페이스 스레드의 panic이 writer가 멈춘 동안 그 스레드를 붙잡지 않는다. backtrace는 panic한 스레드에서 만든다. 정책은 두 host가 같다. panic이 남긴 상태는 믿지 않으므로 panic은 기록 뒤에 프로세스를 끝내고, panic 뒤에 계속하는 모드는 없다. 인터페이스 스레드의 panic으로 프로세스가 abort하는 시점이 writer가 큐의 event를 쓰기 전이면 메시지는 표준 오류에만 남는다. 시작 실패를 호출자에게 오류로 돌려주는 스레드(Rust host의 event writer, 성능 sampler, debug follower, termination watcher)만 `std::thread::Builder`를 직접 쓰며, 그 panic도 hook이 다른 스레드와 같이 기록한다.
 
 시작 단계의 실패는 두 호스트 모두 그 메시지를 표준 오류에 쓰고 상태 1로 프로세스를 끝낸다. Tauri 호스트는 setup 단계의 실패를 event loop에 돌려주지 않는다. event loop의 시작 callback은 unwind할 수 없어서 실패가 프로세스를 abort시키고, 시스템이 메시지 없이 충돌 대화상자를 보이기 때문이다.
 
