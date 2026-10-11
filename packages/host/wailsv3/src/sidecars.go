@@ -1042,7 +1042,12 @@ func (c *Sidecars) launch(name string) (*sidecar, error) {
 	if persistent {
 		return c.processPersistent(name)
 	}
-	cmd := exec.Command(program)
+	// A host with a configuration directory has the folder `logs`, where a sidecar writes its event file (docs/spec/sidecars.md#log).
+	arguments := []string{}
+	if c.configDir != "" {
+		arguments = append(arguments, "--log-dir", filepath.Join(c.configDir, "logs"))
+	}
+	cmd := exec.Command(program, arguments...)
 	// The host reads the standard error line by line and writes each line as a record (docs/spec/sidecars.md#log).
 	cmd.Stderr = &recordWriter{layer: "sidecar", where: name}
 	stdin, err := cmd.StdinPipe()

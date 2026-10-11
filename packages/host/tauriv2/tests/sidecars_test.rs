@@ -264,6 +264,37 @@ fn a_missing_executable_fails() {
     assert!(error.contains(&format!("sidecar {ECHO}")), "{error}");
 }
 
+// contract: sidecars.start.passes-log-directory
+#[test]
+fn a_sidecar_receives_the_log_directory() {
+    let directory = tempfile::tempdir().unwrap();
+    let record = directory.path().join("argv");
+    let program = directory.path().join("echo");
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nread request\nprintf '%s\\n' '{{\"surface\":\"s1\",\"body\":\"ok\"}}'\nexec cat\n",
+            record.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut sidecars = create(
+        &files(r#"{"executable":"echo","protocol":1}"#),
+        directory.path(),
+    )
+    .unwrap();
+    sidecars.stop_timeout = STALL;
+    let (window, events) = owner("a", "/projects/a");
+    sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap();
+    events.recv_timeout(STALL).unwrap();
+    let config = directory.path().canonicalize().unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&record).unwrap(),
+        format!("--log-dir\n{}\n", config.join("logs").display())
+    );
+}
+
 // contract: sidecars.declaration.adds-sidecars-installed-after-start
 #[test]
 fn declaring_adds_sidecars_installed_after_the_start() {

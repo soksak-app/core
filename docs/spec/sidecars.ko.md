@@ -72,6 +72,8 @@
 
 사이드카는 표준 오류의 한 줄을 글 기록 `<time> <level> <layer> <where>: <text>`([진단](diagnostics.ko.md#형태))로 쓰며 layer는 `sidecar`, `<where>`는 자기 이름이다. 호스트가 표준 입출력으로 시작한 사이드카는 아무 글이나 써도 되고, 호스트가 표준 오류의 각 줄을 읽어 level `info`의 기록으로 쓴다. 영속 서비스는 호스트로 파이프를 열지 않으므로 형식을 스스로 쓰며, 파일 `logs/<실행 파일 이름>.log`에는 그 형식의 기록만 있다.
 
+호스트는 표준 입출력 sidecar든 지속 서비스(`--service-dir`도 받는다)든 모든 sidecar를 인자 `--log-dir <config-dir>/logs`(event 파일의 폴더)와 함께 시작한다. [event 계약](logging.ko.md#파일)을 따르는 sidecar는 그 폴더에 event 파일 `<role>-<boot>.jsonl`을 쓰고, 인자 없이 시작된 sidecar는 event 파일을 쓰지 않는다. 설정 디렉터리 없이 만든 호스트에는 그 폴더가 없으므로 인자를 넘기지 않는다.
+
 ## 페이지 인터페이스
 
 `page.sidecar(name)`은 사이드카 이름을 받아 `send(surface, body)`, `on(surface, fn)`, `onFailure(surface, fn)`을 반환한다. `on`은 그 사이드카와 표면의 `sidecar-message` 이벤트마다 `fn(body)`를, `onFailure`는 그 사이드카와 표면의 `sidecar-failure` 이벤트마다 `fn(reason)`을 호출한다. 둘 다 구독 등록 후 완료되는 promise를 반환한다. 페이지는 첫 요청 전에 구독한다. 한 사이드카의 전송은 호출한 순서대로 host에 닿고, 실패한 전송은 호출자를 reject하되 이후 전송을 막지 않으며, 표면 문서는 `page.report({level, where, text})`로, 메인 페이지는 host 호출 `report`로 `error page sidecar <name>: send failed: <reason>`을 애플리케이션 로그에 쓴다. 표면의 문서는 `page.report({level, where, text})`로 layer page의 기록을 쓴다(메인 페이지의 host 호출 `report`도 같은 일을 한다).

@@ -1704,7 +1704,13 @@ impl<O: Owner> Core<O> {
             return Self::start_persistent(core, name, &program);
         }
         let mut threads: Vec<Thread> = Vec::new();
-        let mut child = Command::new(&program)
+        let mut command = Command::new(&program);
+        // The host has the folder `logs` of its configuration directory, where a sidecar writes its event file
+        // (docs/spec/sidecars.md#log).
+        command
+            .arg("--log-dir")
+            .arg(core.config_directory.join("logs"));
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

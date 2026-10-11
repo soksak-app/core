@@ -342,6 +342,28 @@ func TestMissingSidecarExecutableFails(t *testing.T) {
 	}
 }
 
+// contract: sidecars.start.passes-log-directory
+func TestSidecarReceivesTheLogDirectory(t *testing.T) {
+	sidecars, directory := scriptSidecars(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > DIR/argv\nread request\nprintf '%s\\n' '{\"surface\":\"s1\",\"body\":\"ok\"}'\nexec cat\n")
+	owner := newFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	owner.next(t)
+	config, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(directory, "argv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "--log-dir\n" + filepath.Join(config, "logs") + "\n"
+	if string(data) != want {
+		t.Fatalf("arguments of the sidecar = %q, want %q", data, want)
+	}
+}
+
 // contract: sidecars.declaration.adds-sidecars-installed-after-start
 func TestDeclaringAddsSidecarsInstalledAfterTheStart(t *testing.T) {
 	directory := t.TempDir()

@@ -354,6 +354,7 @@ Items:
 | `sidecars.send.rejects-after-stop` | Sending after the sidecars stop fails with "stopped". | both |
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | Without declared sidecars, construction succeeds and every send fails with "not declared by any plugin". | both |
 | `sidecars.start.fails-on-missing-executable` | A declared executable missing on disk makes the first send fail with the sidecar name. | both |
+| `sidecars.start.passes-log-directory` | A sidecar of standard input and output starts with the arguments `--log-dir <config-dir>/logs` and no other argument. | both |
 | `sidecars.declaration.fails-on-missing-sidecar-json` | An installed sidecar folder without sidecar.json makes the installed sidecar lookup fail with its path. | both |
 | `sidecars.declaration.adds-sidecars-installed-after-start` | Declaring the installed sidecars after construction adds the undeclared ones, so a send to such a sidecar starts it. | both |
 | `sidecars.declaration.rejects-executable-escaping-package` | An executable path outside the sidecar makes construction fail. | both |
