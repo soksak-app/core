@@ -58,6 +58,7 @@ fn stored_lines(path: &Path) -> Vec<Value> {
         .collect()
 }
 
+// contract: cli.log.writer-options.stores-the-layer-the-clock-and-the-cids
 #[test]
 fn a_writer_without_rotation_stores_the_layer_the_clock_and_the_cids_of_its_options() {
     let directory = Dir::new("plain");
@@ -81,6 +82,7 @@ fn a_writer_without_rotation_stores_the_layer_the_clock_and_the_cids_of_its_opti
     assert_eq!(lines[1]["cids"], json!(["c1", "c2"]));
 }
 
+// contract: cli.log.writer-options.rotates-at-its-bound
 #[test]
 fn a_writer_rotates_at_its_bound_and_the_new_file_starts_with_log_open_and_log_rotated() {
     let directory = Dir::new("rotating");
@@ -105,6 +107,7 @@ fn a_writer_rotates_at_its_bound_and_the_new_file_starts_with_log_open_and_log_r
     assert_eq!(lines[1]["event"], "log.rotated");
 }
 
+// contract: cli.log.writer-options.stores-the-events-and-the-loss-of-its-pull-source
 #[test]
 fn a_writer_stores_the_events_and_the_loss_of_its_pull_source() {
     let directory = Dir::new("pulling");

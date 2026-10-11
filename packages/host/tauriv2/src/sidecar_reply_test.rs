@@ -6,6 +6,7 @@ fn cids(prefix: &str, from: usize, to: usize) -> Vec<String> {
 
 /// A request that was answered leaves the ledger and its place in the order of the requests: the order holds at most
 /// twice the bound of the pending requests however many requests were answered.
+// contract: buffers.sidecar-replies.order-is-bounded
 #[test]
 fn answered_requests_do_not_grow_the_order_of_the_ledger() {
     let mut ledger = RequestLedger::default();
@@ -22,6 +23,7 @@ fn answered_requests_do_not_grow_the_order_of_the_ledger() {
 }
 
 /// A request that is forgotten at the bound is counted, so the loss of its microseconds is not silent.
+// contract: buffers.sidecar-replies.forgotten-request-is-counted
 #[test]
 fn forgetting_a_request_at_the_bound_is_counted() {
     let mut ledger = RequestLedger::default();

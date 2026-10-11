@@ -154,8 +154,19 @@ func TestAPanicOfACommandIsRecordedWithItsStack(t *testing.T) {
 
 // contract: cli.log.records-a-panic-of-a-routine-and-ends-the-process
 func TestAPanicOfARoutineIsRecordedAndEndsTheProcess(t *testing.T) {
+	// The test starts itself as the child that panics, so the panic of the routine ends a process of its own.
+	if config := os.Getenv("SOK_ROUTINE_PANIC_CONFIG"); config != "" {
+		waits := func([]string, io.Writer, io.Writer, sok.Options) int {
+			done := make(chan struct{})
+			sok.Go("worker", func() { panic("the routine broke") })
+			<-done
+			return 0
+		}
+		loggedRun(config, waits, "windows")
+		return
+	}
 	config := t.TempDir()
-	child := exec.Command(os.Args[0], "-test.run=^TestRoutinePanicChild$")
+	child := exec.Command(os.Args[0], "-test.run=^TestAPanicOfARoutineIsRecordedAndEndsTheProcess$")
 	child.Env = append(os.Environ(), "SOK_ROUTINE_PANIC_CONFIG="+config)
 	var stderr bytes.Buffer
 	child.Stderr = &stderr
@@ -168,25 +179,9 @@ func TestAPanicOfARoutineIsRecordedAndEndsTheProcess(t *testing.T) {
 	if len(found) != 1 || found[0].Fields["name"] != "worker" || found[0].Fields["text"] != "the routine broke" {
 		t.Fatalf("sok.panic events = %+v; stderr %q", found, stderr.String())
 	}
-	if stack, _ := found[0].Fields["stack"].(string); !strings.Contains(stack, "TestRoutinePanicChild") {
+	if stack, _ := found[0].Fields["stack"].(string); !strings.Contains(stack, "TestAPanicOfARoutineIsRecordedAndEndsTheProcess") {
 		t.Fatalf("the stack does not name the function that panicked: %q", stack)
 	}
-}
-
-// TestRoutinePanicChild is the process that TestAPanicOfARoutineIsRecordedAndEndsTheProcess starts; it does nothing in a
-// regular run.
-func TestRoutinePanicChild(t *testing.T) {
-	config := os.Getenv("SOK_ROUTINE_PANIC_CONFIG")
-	if config == "" {
-		t.Skip("started by TestAPanicOfARoutineIsRecordedAndEndsTheProcess")
-	}
-	waits := func([]string, io.Writer, io.Writer, sok.Options) int {
-		done := make(chan struct{})
-		sok.Go("worker", func() { panic("the routine broke") })
-		<-done
-		return 0
-	}
-	loggedRun(config, waits, "windows")
 }
 
 // contract: cli.log.reports-a-folder-that-cannot-be-written

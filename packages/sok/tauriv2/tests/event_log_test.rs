@@ -186,9 +186,24 @@ fn a_panic_of_a_command_is_recorded_with_its_stack() {
 // contract: cli.log.records-a-panic-of-a-routine-and-ends-the-process
 #[test]
 fn a_panic_of_a_routine_is_recorded_and_ends_the_process() {
+    // The test starts itself as the child that panics, so the panic of the routine ends a process of its own.
+    if let Some(config) = std::env::var_os("SOK_ROUTINE_PANIC_CONFIG") {
+        let waits = |_: &[String], _: &mut dyn Write, _: &mut dyn Write, _: &Options| -> i32 {
+            let worker = soksak_sok::routine::spawn_named("worker", || panic!("the routine broke"));
+            // The routine ends the process; a join that returns means it did not.
+            worker.join().unwrap();
+            0
+        };
+        logged(Path::new(&config), &waits, &["windows"]);
+        return;
+    }
     let config = Dir::new();
     let output = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "routine_panic_child", "--nocapture"])
+        .args([
+            "--exact",
+            "a_panic_of_a_routine_is_recorded_and_ends_the_process",
+            "--nocapture",
+        ])
         .env("SOK_ROUTINE_PANIC_CONFIG", &config.0)
         .output()
         .unwrap();
@@ -209,24 +224,9 @@ fn a_panic_of_a_routine_is_recorded_and_ends_the_process() {
     );
     let stack = found[0]["fields"]["stack"].as_str().unwrap_or("");
     assert!(
-        stack.contains("routine_panic_child"),
+        stack.contains("a_panic_of_a_routine_is_recorded_and_ends_the_process"),
         "the stack does not name the function that panicked: {stack:?}"
     );
-}
-
-/// The process that `a_panic_of_a_routine_is_recorded_and_ends_the_process` starts; it does nothing in a regular run.
-#[test]
-fn routine_panic_child() {
-    let Some(config) = std::env::var_os("SOK_ROUTINE_PANIC_CONFIG") else {
-        return;
-    };
-    let waits = |_: &[String], _: &mut dyn Write, _: &mut dyn Write, _: &Options| -> i32 {
-        let worker = soksak_sok::routine::spawn_named("worker", || panic!("the routine broke"));
-        // The routine ends the process; a join that returns means it did not.
-        worker.join().unwrap();
-        0
-    };
-    logged(Path::new(&config), &waits, &["windows"]);
 }
 
 // contract: cli.log.reports-a-folder-that-cannot-be-written

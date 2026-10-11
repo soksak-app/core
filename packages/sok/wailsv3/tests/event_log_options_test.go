@@ -40,6 +40,7 @@ func storedLines(t *testing.T, path string) []map[string]any {
 	return lines
 }
 
+// contract: cli.log.writer-options.refuses-a-negative-rotation-bound
 func TestAWriterIsRefusedANegativeRotationBound(t *testing.T) {
 	options := optionsIn(t.TempDir(), "refused")
 	options.RotateBytes = -1
@@ -49,6 +50,7 @@ func TestAWriterIsRefusedANegativeRotationBound(t *testing.T) {
 	}
 }
 
+// contract: cli.log.writer-options.stores-the-layer-the-clock-and-the-cids
 func TestAWriterWithoutRotationStoresTheLayerTheClockAndTheCidsOfItsOptions(t *testing.T) {
 	log, err := sok.StartEventLog(optionsIn(t.TempDir(), "plain"))
 	if err != nil {
@@ -78,6 +80,7 @@ func TestAWriterWithoutRotationStoresTheLayerTheClockAndTheCidsOfItsOptions(t *t
 	}
 }
 
+// contract: cli.log.writer-options.rotates-at-its-bound
 func TestAWriterRotatesAtItsBoundAndTheNewFileStartsWithLogOpenAndLogRotated(t *testing.T) {
 	options := optionsIn(t.TempDir(), "rotating")
 	options.RotateBytes = 600
@@ -101,6 +104,7 @@ func TestAWriterRotatesAtItsBoundAndTheNewFileStartsWithLogOpenAndLogRotated(t *
 	}
 }
 
+// contract: cli.log.writer-options.stores-the-events-and-the-loss-of-its-pull-source
 func TestAWriterStoresTheEventsAndTheLossOfItsPullSource(t *testing.T) {
 	options := optionsIn(t.TempDir(), "pulling")
 	delivered := false

@@ -575,6 +575,12 @@ fn invalid_json_closes_connection() {
 | `cli.log.records-each-command-with-its-result` | `sok`을 실행할 때마다 대상 설정 디렉터리에 `logs/sok-<boot>.jsonl`을 쓴다. `seq` 1의 `log.open`, 이어서 명령 단어, 공백으로 이은 인자, 마이크로초, `ok`, `status`, 상태가 0이 아니면 표준 오류의 첫 줄인 `error`를 담은 `sok.command`가 level `debug` 또는 `warn`으로 저장되며, 모든 줄이 층 `sok`, `ts_us`, `mono_ns`를 가진다. | both |
 | `cli.log.records-a-panic-with-its-stack` | 명령의 panic은 `sok.panic`(thread `main`, 글, panic한 함수를 가리키는 stack)과 상태 4의 `sok.command`를 저장하고, `sok: panic: <text>`를 표준 오류의 맨 앞에 쓰며, 호출자에게 닿지 않고 상태 4를 돌려준다. | both |
 | `cli.log.records-a-panic-of-a-routine-and-ends-the-process` | 도구가 시작한 goroutine이나 thread의 panic은 routine의 이름과 stack을 담은 `sok.panic`을 저장하고 프로세스를 상태 4로 끝낸다. | both |
+| `cli.log.writer-options.refuses-a-negative-rotation-bound` | rotation 한도가 0 미만인 writer는 한도를 이름으로 가진 오류로 거부된다. | wailsv3 only: Rust writer의 rotation 한도는 부호 없는 수여서 음수일 수 없다 |
+| `cli.log.writer-options.stores-the-layer-the-clock-and-the-cids` | rotation이 없는 writer는 옵션이 주는 layer, 시계, correlation identifier를 저장하고 rotation하지 않는다. | both |
+| `cli.log.writer-options.rotates-at-its-bound` | rotation 한도가 있는 writer는 한도에서 새 파일을 쓰고, 새 파일은 `log.open`과 `log.rotated`로 시작한다. | both |
+| `cli.log.writer-options.stores-the-events-and-the-loss-of-its-pull-source` | writer는 pull source가 돌려주는 event와 source가 보고한 손실을 저장한다. | both |
+| `buffers.sidecar-replies.order-is-bounded` | sidecar reply를 기다리는 요청의 순서는 응답한 요청이 몇 개든 대기 요청 한도의 두 배를 넘지 않는다. | both |
+| `buffers.sidecar-replies.forgotten-request-is-counted` | 대기 요청의 한도에서 잊는 요청은 세며, 잊는 것은 가장 오래된 요청이다. | both |
 | `cli.log.lines-follow-the-golden-fixtures` | 도구의 `log.open` 줄은 `packages/log-contract/fixtures/key.jsonl`의 `log.open` 줄과 같은 key, key 순서, field 집합(schema 2, `role` `sok`)을 가지며, event 줄은 golden event 줄의 key 순서와 `ts_us`, `mono_ns`, `seq` 2를 가진다. | both |
 | `cli.log.escapes-and-truncates-like-the-contract` | 따옴표, 역슬래시, 줄바꿈, tab, U+2028, ASCII가 아닌 글을 담은 field가 줄을 거쳐 그대로 돌아오고, fields 글이 1,048,576바이트를 넘는 event는 원래 크기를 담은 `truncated`와 4,096바이트의 `fields` `{"head": ...}`로 저장된다. | both |
 | `cli.log.records-a-refused-event-as-log-dropped` | writer가 거절한 event는 세어져 golden field(`from_seq`, `to_seq`, `count`)를 가진 level `warn`의 `log.dropped`로 저장되고, 저장된 `seq`와 그것이 가리키는 범위가 1부터 n까지를 한 번씩 덮으며 `log.dropped`는 그 범위 뒤에 온다. | both |

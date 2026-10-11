@@ -15,6 +15,7 @@ func cidsOf(prefix string, from, to int) []string {
 
 // A request that was answered leaves the ledger, and its place in the order of the requests too: the order holds at most twice the
 // bound of the pending requests however many requests were answered.
+// contract: buffers.sidecar-replies.order-is-bounded
 func TestAnsweredRequestsDoNotGrowTheOrderOfTheLedger(t *testing.T) {
 	var ledger requestLedger
 	for n := 0; n < 5*pendingRequestLimit; n++ {
@@ -30,6 +31,7 @@ func TestAnsweredRequestsDoNotGrowTheOrderOfTheLedger(t *testing.T) {
 }
 
 // A request that is forgotten at the bound is counted, so the loss of its microseconds is not silent.
+// contract: buffers.sidecar-replies.forgotten-request-is-counted
 func TestForgettingARequestAtTheBoundIsCounted(t *testing.T) {
 	var ledger requestLedger
 	if got := ledger.add("sidecar-a", "tab-1", cidsOf("p", 0, pendingRequestLimit), 1); got != 0 {
