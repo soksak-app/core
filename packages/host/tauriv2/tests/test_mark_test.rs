@@ -95,9 +95,10 @@ fn a_test_mark_is_an_event_and_the_reply_names_its_position() {
             queue_bytes: 64 << 10,
             batch_interval: Duration::from_millis(20),
             rotate_bytes: 1 << 30,
-            generations: 5,
             pull: None,
             pull_loss: None,
+            policy_path: None,
+            retention_bytes: 1 << 40,
         })
         .unwrap(),
     );

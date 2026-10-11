@@ -130,8 +130,15 @@ pub struct LogReply {
 /// A `clock` answers the clocks of the host and stores no event.
 pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
     match request.get("action").and_then(Value::as_str) {
-        None => return Err("action must be batch or clock".into()),
+        None => return Err("action must be batch, clock or policy".into()),
         Some("batch") => {}
+        Some("policy") => {
+            crate::log_policy::set_log_policy(log, &request)?;
+            return Ok(LogReply {
+                lines: Vec::new(),
+                clock: None,
+            });
+        }
         Some("clock") => {
             // Both clocks are read together, so the page can take them as one moment.
             let ts_us = std::time::SystemTime::now()
@@ -146,7 +153,11 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
                 }),
             });
         }
-        Some(other) => return Err(format!("action must be batch or clock, not {other:?}")),
+        Some(other) => {
+            return Err(format!(
+                "action must be batch, clock or policy, not {other:?}"
+            ))
+        }
     }
     let items = request
         .get("events")

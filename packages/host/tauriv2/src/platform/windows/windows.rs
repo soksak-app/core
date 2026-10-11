@@ -443,14 +443,24 @@ impl Platform for Windows {
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String> {
         unsupported::pull_native_events(buffer)
     }
+    fn set_native_event_policy(&self, levels: [i8; 5]) -> Result<(), String> {
+        unsupported::set_native_event_policy(levels)
+    }
+    fn watch_file(
+        &self,
+        path: &std::path::Path,
+        changed: std::sync::Arc<dyn Fn() + Send + Sync>,
+    ) -> Result<Box<dyn FnOnce() + Send>, String> {
+        unsupported::watch_file(path, changed)
+    }
     fn monotonic_ns(&self) -> Result<u64, String> {
         unsupported::monotonic_ns()
     }
     fn set_event_boot(&self, boot: &str) -> Result<(), String> {
         unsupported::set_event_boot(boot)
     }
-    fn take_native_event_loss(&self) -> Result<(u64, u64), String> {
-        unsupported::take_native_event_loss()
+    fn take_native_event_loss(&self, channel: u8) -> Result<(u64, u64), String> {
+        unsupported::take_native_event_loss(channel)
     }
     fn observe_activity(&self) -> Result<(), String> {
         unsupported::observe_activity()

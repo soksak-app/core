@@ -26,9 +26,10 @@ fn start(directory: &Path) -> EventLog {
         queue_bytes: 64 * 1024,
         batch_interval: Duration::from_millis(20),
         rotate_bytes: 1 << 30,
-        generations: 5,
         pull: None,
         pull_loss: None,
+        policy_path: None,
+        retention_bytes: 1 << 40,
     })
     .unwrap()
 }
@@ -68,12 +69,12 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
         (
             "no action",
             json!({"events": []}),
-            "action must be batch or clock",
+            "action must be batch, clock or policy",
         ),
         (
             "another action",
             json!({"action": "line", "events": []}),
-            "action must be batch or clock, not \"line\"",
+            "action must be batch, clock or policy, not \"line\"",
         ),
         (
             "no clock",

@@ -18,6 +18,8 @@ use serde::Serialize;
 use serde_json::json;
 use serde_json::value::{to_raw_value, RawValue};
 
+use soksak_sok::event_classes::{class_of, Class};
+
 use crate::bounds::{cut_text, Fields, EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES};
 
 /// The schema number of the lines that this writer writes.
@@ -59,20 +61,62 @@ pub struct Options {
     pub queue_bytes: usize,
     /// How long the writer waits for more events before it writes a batch.
     pub batch_interval: Duration,
-    /// The size at which the writer starts a new file; the file that was full becomes generation 1.
+    /// The size at which the writer starts a new file. Each of the two files of the writer (the main file and the debug file)
+    /// rotates on its own: the file that was full becomes the next generation (`.1` is the first), and rotation removes no
+    /// generation.
     pub rotate_bytes: u64,
-    /// The number of earlier files that are kept (`.1` is the newest); the oldest one is removed.
-    pub generations: usize,
     /// Moves whole records of the native ring into the buffer and returns the number of bytes written; `None` when the
-    /// process has no native ring. `pull_loss` returns the events and bytes that the ring refused since the last call.
+    /// process has no native ring. `pull_loss` returns the events and bytes that the ring refused in a channel since the last
+    /// call.
     pub pull: Option<Pull>,
     pub pull_loss: Option<PullLoss>,
+    /// The policy file that the writer follows (`<config-dir>/log-policy.json`); `None` for a writer that has none.
+    pub policy_path: Option<PathBuf>,
+    /// The bound of the files of the runs in the folder (docs/spec/logging.md#retention): the writer removes the oldest runs when it
+    /// starts and after each rotation while the files pass it.
+    pub retention_bytes: u64,
+}
+
+/// The set of the files of a process that holds a set of levels (docs/spec/logging.md#files): `Other` holds error, warn and info
+/// in the main file, and `Debug` holds debug and trace in the debug file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Channel {
+    Other,
+    Debug,
+}
+
+impl Channel {
+    /// The channels in the order of their files.
+    pub const ALL: [Channel; 2] = [Channel::Other, Channel::Debug];
+
+    /// The channel that stores the level.
+    pub fn of(level: Level) -> Channel {
+        match level {
+            Level::Debug | Level::Trace => Channel::Debug,
+            Level::Error | Level::Warn | Level::Info => Channel::Other,
+        }
+    }
+
+    /// The name of the channel in `log.dropped` and in the query.
+    pub fn name(self) -> &'static str {
+        match self {
+            Channel::Other => "other",
+            Channel::Debug => "debug",
+        }
+    }
+
+    fn index(self) -> usize {
+        match self {
+            Channel::Other => 0,
+            Channel::Debug => 1,
+        }
+    }
 }
 
 /// The pull of the native ring, called on the writer thread.
 pub type Pull = Box<dyn Fn(&mut [u8]) -> Result<usize, String> + Send>;
-/// The loss of the native ring since the last call, as events and bytes.
-pub type PullLoss = Box<dyn Fn() -> (u64, u64) + Send>;
+/// The loss of the native ring in a channel since the last call, as events and bytes.
+pub type PullLoss = Box<dyn Fn(Channel) -> (u64, u64) + Send>;
 
 /// One event waiting for the writer. `seq` is assigned when the writer serializes it.
 struct Pending {
@@ -84,6 +128,9 @@ struct Pending {
     layer: Cow<'static, str>,
     level: Level,
     event: String,
+    /// The class that the catalog declares for the event; `None` for a name the catalog does not declare, which the line marks
+    /// `undeclared`.
+    class: Option<Class>,
     /// The fields as JSON text, serialized once by the producer.
     fields: Box<RawValue>,
     bytes: usize,
@@ -91,6 +138,25 @@ struct Pending {
     truncated: Option<usize>,
     /// When set, receives the `seq` of the line once the writer gave it one.
     placed: Option<SyncSender<u64>>,
+}
+
+impl Pending {
+    /// An event that the writer itself creates (`log.open`, `log.rotated`, `log.dropped`), with both clocks read now.
+    fn writer_event(level: Level, event: &str, fields: Box<RawValue>) -> Pending {
+        Pending {
+            ts_us: now_us(),
+            mono_ns: monotonic_ns(),
+            cids: Vec::new(),
+            layer: Cow::Borrowed("host"),
+            level,
+            event: event.into(),
+            class: class_of(event),
+            fields,
+            bytes: 0,
+            truncated: None,
+            placed: None,
+        }
+    }
 }
 
 /// What the queue carries: an event, or a request of the owner. Two slots of the queue are reserved for requests, so a
@@ -106,10 +172,10 @@ enum Message {
 /// The slots of the queue that only requests use.
 const RESERVED_FOR_REQUESTS: usize = 2;
 
-/// The loss that the queue counted since the writer last recorded it.
+/// The loss that the queue counted since the writer last recorded it, for each channel.
 struct Loss {
-    events: AtomicU64,
-    bytes: AtomicU64,
+    events: [AtomicU64; 2],
+    bytes: [AtomicU64; 2],
 }
 
 /// The observer that the writer calls after it wrote a batch, with the path of the file and its size.
@@ -124,6 +190,10 @@ pub struct EventLog {
     queue_bytes: usize,
     loss: Arc<Loss>,
     path: PathBuf,
+    debug_path: PathBuf,
+    /// The policy in force and the count of the events that it refused.
+    gate: Arc<crate::log_policy::Gate>,
+    policy_path: Option<PathBuf>,
     boot: String,
     writer: Mutex<Option<JoinHandle<()>>>,
 }
@@ -133,7 +203,6 @@ const HOST_QUEUE_EVENTS: usize = 8192;
 const HOST_QUEUE_BYTES: usize = 16 << 20;
 const HOST_BATCH_INTERVAL: Duration = Duration::from_millis(100);
 const HOST_ROTATE_BYTES: u64 = 100 << 20;
-const HOST_GENERATIONS: usize = 5;
 
 /// The identifier of this run, shared by the files of the run: the start time in seconds and the process identifier.
 fn process_boot() -> &'static str {
@@ -222,12 +291,14 @@ impl EventLog {
             queue_bytes: HOST_QUEUE_BYTES,
             batch_interval: HOST_BATCH_INTERVAL,
             rotate_bytes: HOST_ROTATE_BYTES,
-            generations: HOST_GENERATIONS,
             pull: Some(Box::new(|buffer| {
                 crate::platform::current()?.pull_native_events(buffer)
             })),
-            pull_loss: Some(Box::new(|| {
-                match crate::platform::current().and_then(|system| system.take_native_event_loss())
+            policy_path: Some(config.join("log-policy.json")),
+            retention_bytes: crate::log_retention::HOST_RETENTION_BYTES,
+            pull_loss: Some(Box::new(|channel| {
+                match crate::platform::current()
+                    .and_then(|system| system.take_native_event_loss(channel.index() as u8))
                 {
                     Ok(loss) => loss,
                     Err(error) => {
@@ -246,9 +317,10 @@ impl EventLog {
         if options.rotate_bytes == 0 {
             return Err("event writer: rotate_bytes must be positive".into());
         }
-        if options.generations == 0 {
-            return Err("event writer: generations must be positive".into());
+        if options.retention_bytes == 0 {
+            return Err("event writer: retention_bytes must be positive".into());
         }
+
         std::fs::DirBuilder::new()
             .recursive(true)
             .mode(0o700)
@@ -260,50 +332,45 @@ impl EventLog {
         let path = options
             .directory
             .join(format!("{}-{}.jsonl", options.role, options.boot));
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .mode(0o600)
-            .custom_flags(libc::O_CLOEXEC)
-            .open(&path)
-            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let debug_path = options
+            .directory
+            .join(format!("{}-{}.debug.jsonl", options.role, options.boot));
+        let file = open_log_file(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let on_write: Arc<Mutex<Option<WriteObserver>>> = Arc::new(Mutex::new(None));
         let (sender, receiver) = sync_channel(options.queue_events + RESERVED_FOR_REQUESTS);
         let queued_events = Arc::new(AtomicUsize::new(0));
         let queued_bytes = Arc::new(AtomicUsize::new(0));
         let loss = Arc::new(Loss {
-            events: AtomicU64::new(0),
-            bytes: AtomicU64::new(0),
+            events: [AtomicU64::new(0), AtomicU64::new(0)],
+            bytes: [AtomicU64::new(0), AtomicU64::new(0)],
         });
-        let open = Pending {
-            ts_us: now_us(),
-            mono_ns: monotonic_ns(),
-            cids: Vec::new(),
-            layer: Cow::Borrowed("host"),
-            level: Level::Info,
-            event: "log.open".into(),
-            fields: to_raw_value(&json!({
+        let open = Pending::writer_event(
+            Level::Info,
+            "log.open",
+            to_raw_value(&json!({
                 "schema": SCHEMA,
                 "pid": std::process::id(),
                 "role": options.role,
                 "boot": options.boot,
             }))
             .map_err(|e| format!("log.open: {e}"))?,
-            bytes: 0,
-            truncated: None,
-            placed: None,
-        };
+        );
+        let gate = Arc::new(crate::log_policy::Gate::new());
         let writer = {
             let queued_bytes = Arc::clone(&queued_bytes);
             let queued_events = Arc::clone(&queued_events);
             let loss = Arc::clone(&loss);
             let interval = options.batch_interval;
             let path_for_writer = path.clone();
+            let debug_path_for_writer = debug_path.clone();
             let observer = Arc::clone(&on_write);
             let rotate_bytes = options.rotate_bytes;
-            let generations = options.generations;
+            let retention_directory = options.directory.clone();
+            let retention_run = format!("{}-{}", options.role, options.boot);
+            let retention_bytes = options.retention_bytes;
             let pull = options.pull;
             let pull_loss = options.pull_loss;
+            let gate = Arc::clone(&gate);
             std::thread::Builder::new()
                 .name("event-log-writer".into())
                 .spawn(move || {
@@ -311,8 +378,13 @@ impl EventLog {
                         Output::new(
                             file,
                             path_for_writer,
+                            debug_path_for_writer,
                             rotate_bytes,
-                            generations,
+                            Retention {
+                                directory: retention_directory,
+                                run: retention_run,
+                                bytes: retention_bytes,
+                            },
                             &open,
                             observer,
                         ),
@@ -324,6 +396,7 @@ impl EventLog {
                         open,
                         pull,
                         pull_loss,
+                        gate,
                     )
                 })
                 .map_err(|e| format!("event writer thread: {e}"))?
@@ -337,14 +410,22 @@ impl EventLog {
             queue_bytes: options.queue_bytes,
             loss,
             path,
+            debug_path,
+            gate,
+            policy_path: options.policy_path,
             boot: options.boot,
             writer: Mutex::new(Some(writer)),
         })
     }
 
-    /// The file this writer writes.
+    /// The main file of this writer (error, warn and info).
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// The debug file of this writer (debug and trace); it exists once the first event of the channel `Debug` was written.
+    pub fn debug_path(&self) -> &Path {
+        &self.debug_path
     }
 
     /// The identifier of the run that this writer belongs to; with a `seq` it names a line of the log.
@@ -397,15 +478,21 @@ impl EventLog {
     /// Queues an event. Returns false, and counts the loss, when the queue has no room. It never waits. The fields are
     /// serialized once, and only after the queue is known to have room for another event.
     pub fn emit<T: Serialize>(&self, level: Level, event: &str, fields: &T) -> bool {
+        // A closed gate serializes nothing; an event the catalog does not declare has no class and no gate.
+        if let Some(class) = class_of(event) {
+            if !self.gate(class, level) {
+                return false;
+            }
+        }
         if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
-            self.count_loss(1, event.len() as u64);
+            self.count_loss(Channel::of(level), 1, event.len() as u64);
             return false;
         }
         let fields = match Fields::of(fields) {
             Ok(fields) => fields,
             Err(error) => {
                 // A value that cannot be serialized is a defect of the caller: it is recorded in place of the event.
-                self.count_loss(1, event.len() as u64);
+                self.count_loss(Channel::of(level), 1, event.len() as u64);
                 eprintln!("event writer: the fields of {event} cannot be serialized: {error}");
                 return false;
             }
@@ -433,18 +520,23 @@ impl EventLog {
         fields: &T,
     ) -> bool {
         if let Some(bad) = cids.iter().find(|cid| !valid_cid(cid)) {
-            self.count_loss(1, event.len() as u64);
+            self.count_loss(Channel::of(level), 1, event.len() as u64);
             eprintln!("event writer: {event} has the correlation identifier {bad:?}, which is empty or holds a quote, a backslash or a control character");
             return false;
         }
+        if let Some(class) = class_of(event) {
+            if !self.gate(class, level) {
+                return false;
+            }
+        }
         if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
-            self.count_loss(1, event.len() as u64);
+            self.count_loss(Channel::of(level), 1, event.len() as u64);
             return false;
         }
         let fields = match Fields::of(fields) {
             Ok(fields) => fields,
             Err(error) => {
-                self.count_loss(1, event.len() as u64);
+                self.count_loss(Channel::of(level), 1, event.len() as u64);
                 eprintln!("event writer: the fields of {event} cannot be serialized: {error}");
                 return false;
             }
@@ -493,8 +585,13 @@ impl EventLog {
                 "the event {event:?} does not start with its layer {layer:?}"
             ));
         }
+        if let Some(class) = class_of(event) {
+            if !self.gate(class, level) {
+                return Ok(false);
+            }
+        }
         if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
-            self.count_loss(1, event.len() as u64);
+            self.count_loss(Channel::of(level), 1, event.len() as u64);
             return Ok(false);
         }
         Ok(self.enqueue(
@@ -528,8 +625,14 @@ impl EventLog {
         };
         let bytes = fields.get().len() + event.len();
         if self.queued_bytes.load(Ordering::Relaxed) + bytes > self.queue_bytes {
-            self.count_loss(1, bytes as u64);
+            self.count_loss(Channel::of(level), 1, bytes as u64);
             return false;
+        }
+        // A closed gate stores nothing and counts the event.
+        if let Some(class) = class_of(event) {
+            if !self.gate(class, level) {
+                return false;
+            }
         }
         let pending = Pending {
             ts_us,
@@ -538,11 +641,18 @@ impl EventLog {
             layer,
             level,
             event: event.to_string(),
+            class: class_of(event),
             fields,
             bytes,
             truncated,
             placed,
         };
+        self.queue(pending)
+    }
+
+    /// Hands a counted event to the writer; a full queue refuses it and counts the loss.
+    fn queue(&self, pending: Pending) -> bool {
+        let (bytes, channel) = (pending.bytes, Channel::of(pending.level));
         self.queued_bytes.fetch_add(bytes, Ordering::Relaxed);
         self.queued_events.fetch_add(1, Ordering::Relaxed);
         match self.sender.try_send(Message::Event(pending)) {
@@ -550,17 +660,45 @@ impl EventLog {
             Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {
                 self.queued_bytes.fetch_sub(bytes, Ordering::Relaxed);
                 self.queued_events.fetch_sub(1, Ordering::Relaxed);
-                self.count_loss(1, bytes as u64);
+                self.count_loss(channel, 1, bytes as u64);
                 false
             }
         }
     }
 
+    /// Queues an event that the writer reports about itself (`log.policy`) from another thread. These events pass every gate: a
+    /// policy that turns a class off must still be able to say that it did.
+    pub(crate) fn enqueue_writer_event(
+        &self,
+        level: Level,
+        name: &str,
+        fields: Box<RawValue>,
+    ) -> bool {
+        // events: forwarded
+        let mut pending = Pending::writer_event(level, name, fields);
+        pending.bytes = pending.fields.get().len() + name.len();
+        if self.queued_bytes.load(Ordering::Relaxed) + pending.bytes > self.queue_bytes {
+            self.count_loss(Channel::of(level), 1, pending.bytes as u64);
+            return false;
+        }
+        self.queue(pending)
+    }
+
+    /// The gate of this writer, shared with the producers of the host.
+    pub(crate) fn gate_handle(&self) -> Arc<crate::log_policy::Gate> {
+        Arc::clone(&self.gate)
+    }
+
+    /// The policy file that this writer follows, if it has one.
+    pub fn policy_path(&self) -> Option<&Path> {
+        self.policy_path.as_deref()
+    }
+
     /// Adds events and bytes that a producer of this process refused before they reached the writer; the writer records
     /// them as a `log.dropped`.
-    pub fn count_loss(&self, events: u64, bytes: u64) {
-        self.loss.events.fetch_add(events, Ordering::Relaxed);
-        self.loss.bytes.fetch_add(bytes, Ordering::Relaxed);
+    pub fn count_loss(&self, channel: Channel, events: u64, bytes: u64) {
+        self.loss.events[channel.index()].fetch_add(events, Ordering::Relaxed);
+        self.loss.bytes[channel.index()].fetch_add(bytes, Ordering::Relaxed);
     }
 
     /// Writes everything that is queued and waits until it is on disk, at most `deadline`.
@@ -628,59 +766,110 @@ fn line(seq: u64, pending: &Pending) -> String {
     } else {
         format!(",\"cids\":[\"{}\"]", pending.cids.join("\",\""))
     };
+    // A line has the class of its catalog entry; an event the catalog does not declare has none and says `undeclared`.
+    let class = match pending.class {
+        Some(class) => format!(",\"class\":\"{}\"", class.as_str()),
+        None => String::new(),
+    };
+    let undeclared = if pending.class.is_none() {
+        ",\"undeclared\":true"
+    } else {
+        ""
+    };
     format!(
-        "{{\"ts_us\":{},\"mono_ns\":{},\"seq\":{},\"level\":\"{}\",\"layer\":\"{}\",\"event\":{}{},\"fields\":{}{}}}",
+        "{{\"ts_us\":{},\"mono_ns\":{},\"seq\":{},\"level\":\"{}\"{},\"layer\":\"{}\",\"event\":{}{},\"fields\":{}{}{}}}",
         pending.ts_us,
         pending.mono_ns,
         seq,
         pending.level.name(),
+        class,
         pending.layer,
         serde_json::to_string(&pending.event).expect("a string serializes"),
         cids,
         pending.fields.get(),
+        undeclared,
         truncated
     )
 }
 
-/// The file of the writer with its batch, its size and the sequence number of the last line.
-struct Output {
-    file: File,
+/// One file of the writer: the main file of the channel `Other` or the debug file of the channel `Debug`.
+struct LogFile {
     path: PathBuf,
-    rotate_bytes: u64,
-    generations: usize,
-    /// The fields of `log.open`, written again at the start of every file.
-    open_fields: String,
-    batch: String,
+    /// `None` until the first line of the channel is written: the debug file is created when the first debug or trace event
+    /// arrives, so a run that stores no such event leaves no empty file.
+    file: Option<File>,
     /// The bytes of the current file, written or waiting in the batch.
     size: u64,
+    /// The number of the last generation that rotation closed; 0 before the first rotation.
+    generation: u32,
+    batch: String,
+}
+
+impl LogFile {
+    fn new(path: PathBuf, file: Option<File>) -> LogFile {
+        LogFile {
+            path,
+            file,
+            size: 0,
+            generation: 0,
+            batch: String::new(),
+        }
+    }
+}
+
+fn open_log_file(path: &Path) -> std::io::Result<File> {
+    OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o600)
+        .custom_flags(libc::O_CLOEXEC)
+        .open(path)
+}
+
+/// The bound of the files of the runs and what the writer needs to apply it.
+struct Retention {
+    directory: PathBuf,
+    /// The run of the writer (`<role>-<boot>`), which is never removed.
+    run: String,
+    bytes: u64,
+}
+
+/// The two files of the writer with the sequence number of the last line, which runs across both.
+struct Output {
+    retention: Retention,
+    files: [LogFile; 2],
+    rotate_bytes: u64,
+    /// The fields of `log.open`, written again at the start of every file.
+    open_fields: String,
     seq: u64,
     on_write: Arc<Mutex<Option<WriteObserver>>>,
 }
 
 impl Output {
     fn new(
-        file: File,
-        path: PathBuf,
+        main: File,
+        main_path: PathBuf,
+        debug_path: PathBuf,
         rotate_bytes: u64,
-        generations: usize,
+        retention: Retention,
         open: &Pending,
         on_write: Arc<Mutex<Option<WriteObserver>>>,
     ) -> Output {
         Output {
-            file,
-            path,
+            retention,
+            files: [
+                LogFile::new(main_path, Some(main)),
+                LogFile::new(debug_path, None),
+            ],
             rotate_bytes,
-            generations,
             open_fields: open.fields.get().to_string(),
-            batch: String::new(),
-            size: 0,
             seq: 0,
             on_write,
         }
     }
 
-    /// Adds the line of an event with the next `seq`.
-    fn append(&mut self, pending: &Pending) {
+    /// Adds the line of an event with the next `seq` to the batch of a file.
+    fn append(&mut self, channel: Channel, pending: &Pending) {
         self.seq += 1;
         if let Some(placed) = &pending.placed {
             // The channel holds one value and a placed event is appended once, so the send does not wait; a refusal is
@@ -693,93 +882,137 @@ impl Output {
             }
         }
         let text = format!("{}\n", line(self.seq, pending));
-        self.size += text.len() as u64;
-        self.batch.push_str(&text);
+        let file = &mut self.files[channel.index()];
+        file.size += text.len() as u64;
+        file.batch.push_str(&text);
     }
 
-    /// Adds an event. A file that the line would take past the bound is closed first; the new file opens with
-    /// `log.open` and the record of the rotation, so every file of the contract starts with `log.open` and `seq`
+    /// Adds an event to the file of its channel. A file that the line would take past the bound is closed first; the new file
+    /// opens with `log.open` and the record of the rotation, so every file of the contract starts with `log.open` and `seq`
     /// continues.
     fn push(&mut self, pending: &Pending) {
-        let next = line(self.seq + 1, pending).len() as u64 + 1;
-        if self.size > 0 && self.size + next > self.rotate_bytes {
-            self.flush();
-            let full = self.size;
-            if let Some(removed) = self.rotate() {
-                self.size = 0;
-                let open = Pending {
-                    ts_us: now_us(),
-                    mono_ns: monotonic_ns(),
-                    cids: Vec::new(),
-                    layer: Cow::Borrowed("host"),
-                    level: Level::Info,
-                    event: "log.open".into(),
-                    fields: RawValue::from_string(self.open_fields.clone())
-                        .expect("the fields of log.open are JSON"),
-                    bytes: 0,
-                    truncated: None,
-                    placed: None,
-                };
-                self.append(&open);
-                let rotated = Pending {
-                    ts_us: now_us(),
-                    mono_ns: monotonic_ns(),
-                    cids: Vec::new(),
-                    layer: Cow::Borrowed("host"),
-                    level: Level::Info,
-                    event: "log.rotated".into(),
-                    fields: to_raw_value(&json!({
-                        "bytes": full,
-                        "kept": self.generations,
-                        "removed": removed,
-                    }))
-                    .expect("a json value serializes"),
-                    bytes: 0,
-                    truncated: None,
-                    placed: None,
-                };
-                self.append(&rotated);
+        let channel = Channel::of(pending.level);
+        if self.files[channel.index()].file.is_none() {
+            match open_log_file(&self.files[channel.index()].path) {
+                Ok(file) => {
+                    self.files[channel.index()].file = Some(file);
+                    let open = Pending::writer_event(
+                        Level::Info,
+                        "log.open",
+                        RawValue::from_string(self.open_fields.clone())
+                            .expect("the fields of log.open are JSON"),
+                    );
+                    self.append(channel, &open);
+                }
+                Err(error) => {
+                    // The event is not written; its seq stays taken, so the audit shows the gap next to this report.
+                    self.seq += 1;
+                    eprintln!(
+                        "event writer: {} cannot be written: {}: {error}",
+                        pending.event,
+                        self.files[channel.index()].path.display()
+                    );
+                    return;
+                }
             }
         }
-        self.append(pending);
+        let next = line(self.seq + 1, pending).len() as u64 + 1;
+        let (size, bound) = (self.files[channel.index()].size, self.rotate_bytes);
+        let mut rotated_file = false;
+        if size > 0 && size + next > bound {
+            self.flush_file(channel);
+            if let Some(generation) = self.rotate(channel) {
+                rotated_file = true;
+                self.files[channel.index()].size = 0;
+                let open = Pending::writer_event(
+                    Level::Info,
+                    "log.open",
+                    RawValue::from_string(self.open_fields.clone())
+                        .expect("the fields of log.open are JSON"),
+                );
+                self.append(channel, &open);
+                let rotated = Pending::writer_event(
+                    Level::Info,
+                    "log.rotated",
+                    to_raw_value(&json!({"bytes": size, "generation": generation}))
+                        .expect("a json value serializes"),
+                );
+                self.append(channel, &rotated);
+            }
+        }
+        self.append(channel, pending);
+        // A rotation closes a file of the run, so the files may have passed the bound: the retention runs after the line that caused it.
+        if rotated_file {
+            self.prune();
+        }
     }
 
-    /// Stores one `log.dropped` after the range of `seq` that the refused events would have had. The refused events had no
-    /// `seq`; their numbers are skipped (docs/spec/logging.md#event).
-    fn dropped(&mut self, events: u64, bytes: u64, reason: &str) {
+    /// Removes the oldest runs while the files of the runs pass the bound and stores the event `log.pruned` for a pass that removed
+    /// a file or left the files over the bound (docs/spec/logging.md#retention).
+    fn prune(&mut self) {
+        // The pass counts what is on disk; the batch that waits for the interval is not in it, which is at most one batch.
+        let bound = self.retention.bytes;
+        let (result, failures) = match crate::log_retention::prune_runs(
+            &self.retention.directory,
+            &self.retention.run,
+            bound,
+        ) {
+            Ok(result) => (result, Vec::new()),
+            Err((result, failures)) => (result, failures),
+        };
+        for failure in &failures {
+            eprintln!("event writer: retention: {failure}");
+        }
+        if result.files == 0 && result.remaining <= bound {
+            return;
+        }
+        let level = if result.remaining > bound {
+            Level::Warn
+        } else {
+            Level::Info
+        };
+        let pending = Pending::writer_event(
+            level,
+            "log.pruned",
+            to_raw_value(&result.fields(bound)).expect("a json value serializes"),
+        );
+        self.push(&pending);
+    }
+
+    /// Stores one `log.dropped` after the range of `seq` that the refused events would have had; `channel` is the channel of the
+    /// refused events. The refused events had no `seq`; their numbers are skipped (docs/spec/logging.md#event).
+    fn dropped(&mut self, events: u64, bytes: u64, reason: &str, channel: Channel) {
         if events == 0 {
             return;
         }
         let from = self.seq + 1;
         self.seq += events;
-        let pending = Pending {
-            layer: Cow::Borrowed("host"),
-            ts_us: now_us(),
-            mono_ns: monotonic_ns(),
-            cids: Vec::new(),
-            level: Level::Warn,
-            event: "log.dropped".into(),
-            fields: to_raw_value(&json!({
+        let pending = Pending::writer_event(
+            Level::Warn,
+            "log.dropped",
+            to_raw_value(&json!({
                 "from_seq": from,
                 "to_seq": self.seq,
                 "count": events,
                 "bytes": bytes,
                 "reason": reason,
+                "channel": channel.name(),
             }))
             .expect("a json value serializes"),
-            bytes: 0,
-            truncated: None,
-            placed: None,
-        };
+        );
         self.push(&pending);
     }
 
-    /// Writes the batch. A failed write is reported on the standard error; the writer keeps running for the next batch.
-    fn flush(&mut self) {
-        if self.batch.is_empty() {
+    /// Writes the batch of a file. A failed write is reported on the standard error; the writer keeps running for the next batch.
+    fn flush_file(&mut self, channel: Channel) {
+        let file = &mut self.files[channel.index()];
+        if file.batch.is_empty() {
             return;
         }
-        if let Err(error) = self.file.write_all(self.batch.as_bytes()) {
+        let Some(handle) = file.file.as_mut() else {
+            return;
+        };
+        if let Err(error) = handle.write_all(file.batch.as_bytes()) {
             eprintln!("event writer: {error}");
         } else if let Some(observer) = self
             .on_write
@@ -787,96 +1020,77 @@ impl Output {
             .expect("the observer of the writes")
             .as_ref()
         {
-            observer(&self.path, self.size);
+            observer(&file.path, file.size);
         }
-        self.batch.clear();
+        file.batch.clear();
     }
 
-    /// Moves the full file to generation 1 and the older generations one step up, removes the generation beyond the kept
-    /// ones, and opens a new file. Returns None when a step failed (the failure is reported and the writer keeps the
-    /// file it has), otherwise the name of the removed generation, if there was one.
-    fn rotate(&mut self) -> Option<Option<String>> {
-        let path = self.path.clone();
-        let generations = self.generations as u32;
-        let mut outcome = None;
-        let moved = soksak_sok::log_index::rotate_log_indexes(&path, generations, || {
-            outcome = self.rotate_files();
-            outcome
+    /// Writes the batches of both files.
+    fn flush(&mut self) {
+        for channel in Channel::ALL {
+            self.flush_file(channel);
+        }
+    }
+
+    /// Closes the full file of a channel as the next generation (`<path>.<n>`, with n counted from 1 in the order of the
+    /// rotations), opens a new file at the path, and moves the index file with the closed generation. No generation is removed or
+    /// renamed. Returns the number of the generation, or `None` when a step failed (the failure is reported, the files are as
+    /// they were, and the writer keeps the file it has).
+    fn rotate(&mut self, channel: Channel) -> Option<u32> {
+        let path = self.files[channel.index()].path.clone();
+        let generation = self.files[channel.index()].generation + 1;
+        let mut opened = None;
+        let moved = soksak_sok::log_index::rotate_log_indexes(&path, generation, || {
+            opened = Self::rotate_files(&path, generation);
+            opened
                 .as_ref()
                 .map(drop)
                 .ok_or_else(|| "the files were not rotated".to_string())
         });
-        if let (Some(_), Err(error)) = (&outcome, moved) {
+        let next = opened?;
+        if let Err(error) = moved {
             // The files rotated; only the index of the closed file is not complete, and a query builds it again.
             eprintln!("event writer: the index of the rotated file is not complete: {error}");
         }
-        outcome
-    }
-
-    /// Renames the generations and opens the new file, as `rotate` describes; the failure of a step is reported here.
-    fn rotate_files(&mut self) -> Option<Option<String>> {
-        let path = self.path.clone();
-        let generation = |n: usize| {
-            let mut name = path.clone().into_os_string();
-            name.push(format!(".{n}"));
-            PathBuf::from(name)
-        };
-        let oldest = generation(self.generations);
-        let removed = match std::fs::remove_file(&oldest) {
-            Ok(()) => oldest
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned()),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => {
-                eprintln!(
-                    "event writer: rotation could not remove {}: {error}",
-                    oldest.display()
-                );
-                return None;
-            }
-        };
-        for n in (1..self.generations).rev() {
-            match std::fs::rename(generation(n), generation(n + 1)) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    eprintln!(
-                        "event writer: rotation could not move {}: {error}",
-                        generation(n).display()
-                    );
-                    return None;
-                }
+        let file = &mut self.files[channel.index()];
+        file.generation = generation;
+        if let Some(full) = file.file.replace(next) {
+            if let Err(error) = full.sync_all() {
+                eprintln!("event writer: rotation could not sync the full file: {error}");
             }
         }
-        if let Err(error) = std::fs::rename(&path, generation(1)) {
+        Some(generation)
+    }
+
+    /// Renames the full file to generation `generation` and opens the new file; the failure of a step is reported here. When the new
+    /// file cannot be opened the rename is undone, so the writer keeps writing the file at its path.
+    fn rotate_files(path: &Path, generation: u32) -> Option<File> {
+        let mut closed = path.as_os_str().to_os_string();
+        closed.push(format!(".{generation}"));
+        let closed = PathBuf::from(closed);
+        if let Err(error) = std::fs::rename(path, &closed) {
             eprintln!(
                 "event writer: rotation could not move {}: {error}",
                 path.display()
             );
             return None;
         }
-        // The new file is opened before the old one is released, so a failure leaves the writer with a file to write.
-        let next = match OpenOptions::new()
-            .create(true)
-            .append(true)
-            .mode(0o600)
-            .custom_flags(libc::O_CLOEXEC)
-            .open(&path)
-        {
-            Ok(file) => file,
+        match open_log_file(path) {
+            Ok(file) => Some(file),
             Err(error) => {
                 eprintln!(
                     "event writer: rotation could not open {}: {error}",
                     path.display()
                 );
-                return None;
+                if let Err(undo) = std::fs::rename(&closed, path) {
+                    eprintln!(
+                        "event writer: rotation could not undo the move of {}: {undo}",
+                        path.display()
+                    );
+                }
+                None
             }
-        };
-        let full = std::mem::replace(&mut self.file, next);
-        if let Err(error) = full.sync_all() {
-            eprintln!("event writer: rotation could not sync the full file: {error}");
         }
-        Some(removed)
     }
 }
 
@@ -885,15 +1099,17 @@ impl Output {
 const NATIVE_PULL_BYTES: usize = 256 << 10;
 const NATIVE_PULL_PASSES: usize = 64;
 
-/// The bytes of a native record before the name: the wall clock (8), the monotonic clock (8), the level (1), the length of
-/// the name (1) and the length of the cids (2).
-const NATIVE_HEADER_BYTES: usize = 20;
+/// The bytes of a native record before the name: the wall clock (8), the monotonic clock (8), the level (1), the class (1), the
+/// length of the name (1) and the length of the cids (2).
+const NATIVE_HEADER_BYTES: usize = 21;
 
 /// Decodes the record at the start of `buffer`: a 4-byte length, then the time in microseconds (8 bytes), the monotonic
-/// clock in nanoseconds (8), the level (1 byte), the length of the name (1 byte), the length of the cids (2), the name, the
-/// cids as a list separated by commas and the fields as JSON text, in the byte order of the host.
+/// clock in nanoseconds (8), the level (1 byte), the class (1 byte), the length of the name (1 byte), the length of the cids
+/// (2), the name, the cids as a list separated by commas and the fields as JSON text, in the byte order of the host.
 /// Returns the number of bytes the record takes with the event or the reason it is refused. When the length itself is wrong
-/// the number of bytes is 0, so the caller abandons the rest of the buffer.
+/// the number of bytes is 0, so the caller abandons the rest of the buffer. The class that the library gave is checked against
+/// the catalog: a record of a declared event with another class is refused, so a producer that disagrees with the catalog is
+/// counted and reported.
 fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
     if buffer.len() < 4 {
         return Err((
@@ -924,8 +1140,12 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
         4 => Level::Trace,
         other => return Err((total, format!("the level {other} is not defined"))),
     };
-    let name_length = body[17] as usize;
-    let cids_length = u16::from_ne_bytes(body[18..20].try_into().expect("two bytes")) as usize;
+    let given = match Class::ALL.get(body[17] as usize) {
+        Some(class) => *class,
+        None => return Err((total, format!("the class {} is not defined", body[17]))),
+    };
+    let name_length = body[18] as usize;
+    let cids_length = u16::from_ne_bytes(body[19..21].try_into().expect("two bytes")) as usize;
     if NATIVE_HEADER_BYTES + name_length + cids_length > body.len() {
         return Err((
             total,
@@ -961,6 +1181,19 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
     if mono_ns == 0 {
         return Err((total, format!("the mono_ns of {name} is 0")));
     }
+    let class = class_of(&name);
+    if let Some(declared) = class {
+        if declared != given {
+            return Err((
+                total,
+                format!(
+                    "the record of {name} has the class {}, and the catalog declares {}",
+                    given.as_str(),
+                    declared.as_str()
+                ),
+            ));
+        }
+    }
     let fields = &body[NATIVE_HEADER_BYTES + name_length + cids_length..];
     let fields = std::str::from_utf8(fields)
         // default: text that is not UTF-8 or not a JSON object becomes the error below, which names the event and the record.
@@ -977,6 +1210,7 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, Pending), (usize, String)> {
             cids,
             layer: Cow::Borrowed("native"),
             level,
+            class,
             event: name,
             fields,
             bytes: 0,
@@ -997,8 +1231,10 @@ fn write_loop(
     open: Pending,
     pull: Option<Pull>,
     pull_loss: Option<PullLoss>,
+    gate: Arc<crate::log_policy::Gate>,
 ) {
     out.push(&open);
+    out.prune();
     // No event source reaches the writer from the native ring: a native thread must not call into this process's Rust
     // code, so the writer pulls at its batch interval and when it flushes.
     let mut pulled = Vec::new();
@@ -1039,16 +1275,33 @@ fn write_loop(
                 }
             }
         }
-        out.dropped(refused, refused_bytes, "a native record was refused");
+        // A record that cannot be decoded has no level, so its loss is counted in the channel `Other`.
+        out.dropped(
+            refused,
+            refused_bytes,
+            "a native record was refused",
+            Channel::Other,
+        );
         if let Some(pull_loss) = pull_loss.as_ref() {
-            let (events, bytes) = pull_loss();
-            out.dropped(events, bytes, "the native ring was full");
+            for channel in Channel::ALL {
+                let (events, bytes) = pull_loss(channel);
+                out.dropped(events, bytes, "the native ring was full", channel);
+            }
         }
     };
     let record_loss = |out: &mut Output| {
-        let events = loss.events.swap(0, Ordering::Relaxed);
-        let bytes = loss.bytes.swap(0, Ordering::Relaxed);
-        out.dropped(events, bytes, "the queue was full");
+        for channel in Channel::ALL {
+            let events = loss.events[channel.index()].swap(0, Ordering::Relaxed);
+            let bytes = loss.bytes[channel.index()].swap(0, Ordering::Relaxed);
+            out.dropped(events, bytes, "the queue was full", channel);
+        }
+        // The events that the gate refused are reported with the exact count for each class and level.
+        for (class, level, count) in gate.take_counts() {
+            match to_raw_value(&json!({"class": class.as_str(), "level": level.name(), "count": count})) {
+                Ok(fields) => out.push(&Pending::writer_event(Level::Info, "log.gated", fields)),
+                Err(error) => eprintln!("event writer: log.gated cannot be written: {error}"),
+            }
+        }
     };
     let take = |out: &mut Output, pending: &Pending| {
         queued_bytes.fetch_sub(pending.bytes, Ordering::Relaxed);

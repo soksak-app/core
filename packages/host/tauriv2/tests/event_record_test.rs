@@ -19,12 +19,27 @@ use soksak_host_tauriv2::platform;
 /// The records of the host are process-wide, so the tests of this file run one at a time.
 static SERIAL: Mutex<()> = Mutex::new(());
 
+/// The events of a process: the lines of the main file at `path` and, when it exists, of the debug file beside it, in the order of
+/// `seq` (the writer assigns `seq` across both files).
 fn read(path: &Path) -> Vec<Value> {
-    fs::read_to_string(path)
-        .unwrap()
-        .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
-        .collect()
+    let parse = |path: &Path| -> Vec<Value> {
+        fs::read_to_string(path)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect()
+    };
+    let mut events = parse(path);
+    let main = path.to_string_lossy();
+    let debug = std::path::PathBuf::from(format!(
+        "{}.debug.jsonl",
+        main.strip_suffix(".jsonl").unwrap_or(&main)
+    ));
+    if debug.exists() {
+        events.extend(parse(&debug));
+        events.sort_by_key(|event| event["seq"].as_u64().unwrap());
+    }
+    events
 }
 
 fn start(directory: &Path, queue_events: usize) -> Arc<EventLog> {
@@ -37,9 +52,10 @@ fn start(directory: &Path, queue_events: usize) -> Arc<EventLog> {
             queue_bytes: 64 << 20,
             batch_interval: Duration::from_millis(20),
             rotate_bytes: 1 << 30,
-            generations: 5,
             pull: None,
             pull_loss: None,
+            policy_path: None,
+            retention_bytes: 1 << 40,
         })
         .unwrap(),
     )
@@ -191,9 +207,10 @@ fn flush_records_stores_the_records_written_so_far_without_waiting_for_the_batch
             queue_bytes: 64 << 20,
             batch_interval: Duration::from_secs(30),
             rotate_bytes: 1 << 30,
-            generations: 5,
             pull: None,
             pull_loss: None,
+            policy_path: None,
+            retention_bytes: 1 << 40,
         })
         .unwrap(),
     );

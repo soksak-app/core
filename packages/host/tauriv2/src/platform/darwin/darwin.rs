@@ -51,6 +51,8 @@ mod link;
 
 #[path = "events.rs"]
 mod events;
+#[path = "file_watch.rs"]
+mod file_watch;
 #[path = "mouse_buttons.rs"]
 mod mouse_buttons;
 mod notifications;
@@ -580,8 +582,18 @@ impl Platform for Darwin {
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String> {
         events::pull(buffer)
     }
-    fn take_native_event_loss(&self) -> Result<(u64, u64), String> {
-        events::take_loss()
+    fn take_native_event_loss(&self, channel: u8) -> Result<(u64, u64), String> {
+        events::take_loss(channel)
+    }
+    fn set_native_event_policy(&self, levels: [i8; 5]) -> Result<(), String> {
+        events::set_policy(levels)
+    }
+    fn watch_file(
+        &self,
+        path: &std::path::Path,
+        changed: std::sync::Arc<dyn Fn() + Send + Sync>,
+    ) -> Result<Box<dyn FnOnce() + Send>, String> {
+        file_watch::watch_file(path, changed)
     }
     fn monotonic_ns(&self) -> Result<u64, String> {
         events::monotonic_ns()

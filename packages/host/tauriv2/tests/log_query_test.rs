@@ -215,9 +215,10 @@ fn writer_options(logs: &Path) -> Options {
         queue_bytes: 64 * 1024,
         batch_interval: Duration::from_millis(20),
         rotate_bytes: 6 << 10,
-        generations: 3,
         pull: None,
         pull_loss: None,
+        policy_path: None,
+        retention_bytes: 1 << 40,
     }
 }
 

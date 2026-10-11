@@ -652,8 +652,20 @@ pub trait Platform: Send + Sync {
     /// Moves whole records of the native event ring into `buffer` and returns the number of bytes written; 0 means the ring
     /// is empty (docs/spec/logging.md#writers).
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String>;
-    /// Returns the events and bytes that the native ring refused since the last call.
-    fn take_native_event_loss(&self) -> Result<(u64, u64), String>;
+    /// Returns the events and bytes that the native ring refused in a channel (0 for the main file, 1 for the debug file) since
+    /// the last call.
+    fn take_native_event_loss(&self, channel: u8) -> Result<(u64, u64), String>;
+    /// Gives the native library the policy of the event log (docs/spec/logging.md#classes-and-policy): for each class, in the order
+    /// lifecycle, input, call, io, frame, the number of the least severe level that is stored (0 error, 1 warn, 2 info, 3 debug, 4
+    /// trace) or -1 for none. A value outside -1 to 4 is an error.
+    fn set_native_event_policy(&self, levels: [i8; 5]) -> Result<(), String>;
+    /// Calls `changed` after the file at `path` was created, written, replaced, renamed or removed, on a thread of the watch,
+    /// through the file system events of the operating system. The result stops the watch and waits until it ended.
+    fn watch_file(
+        &self,
+        path: &std::path::Path,
+        changed: std::sync::Arc<dyn Fn() + Send + Sync>,
+    ) -> Result<Box<dyn FnOnce() + Send>, String>;
     /// Reads the monotonic clock of the records in nanoseconds (the clock of `mono_ns`, docs/spec/logging.md#event).
     fn monotonic_ns(&self) -> Result<u64, String>;
     /// Gives the native layer the boot identifier of the run, which its correlation identifiers `<boot>.<n>` start with.

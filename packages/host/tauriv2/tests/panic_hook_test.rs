@@ -39,7 +39,6 @@ fn the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_t
             queue_bytes: 64 * 1024,
             batch_interval: Duration::from_millis(20),
             rotate_bytes: 1 << 30,
-            generations: 5,
             pull: Some(Box::new(move |_| {
                 while !stalled.load(Ordering::SeqCst) {
                     std::thread::sleep(Duration::from_millis(5));
@@ -47,6 +46,8 @@ fn the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_t
                 Ok(0)
             })),
             pull_loss: None,
+            policy_path: None,
+            retention_bytes: 1 << 40,
         })
         .unwrap();
         use_host_event_log(Some(Arc::new(log)));

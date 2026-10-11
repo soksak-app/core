@@ -29,9 +29,10 @@ fn main() {
             queue_bytes: 64 << 20,
             batch_interval: Duration::from_millis(100),
             rotate_bytes: 100 << 20,
-            generations: 5,
             pull: None,
             pull_loss: None,
+            policy_path: None,
+            retention_bytes: 1 << 40,
         })
         .unwrap(),
     );

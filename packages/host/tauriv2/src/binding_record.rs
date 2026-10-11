@@ -12,6 +12,7 @@ use tauri::ipc::{CommandArg, CommandItem, InvokeBody, InvokeError};
 use crate::bounds::{bounded_json, cut_text, CALL_TEXT_BYTES};
 use crate::event_log::{valid_cid, Level};
 use crate::event_record::{emit_host, emit_host_cids};
+use crate::log_policy::Class;
 
 /// The code of the error of a call that fails without a code of its own.
 const INTERNAL_CODE: i64 = -32603;
@@ -54,8 +55,11 @@ impl BindingCall {
                 }
             }
         }
+        // The arguments are kept for the event of a success or of a failure; when the policy stores neither, they are not cut.
+        let stored = crate::log_policy::event_enabled(Class::Call, Level::Debug)
+            || crate::log_policy::event_enabled(Class::Call, Level::Warn);
         let arguments = match payload {
-            InvokeBody::Json(serde_json::Value::Object(map)) => map
+            InvokeBody::Json(serde_json::Value::Object(map)) if stored => map
                 .iter()
                 .filter(|(key, _)| key.as_str() != "cids")
                 .map(|(key, value)| {
@@ -103,6 +107,12 @@ impl BindingCall {
     }
 
     fn emit(&self, arguments: &[&(String, String, bool)], error: Option<String>) {
+        // The gate is asked before the arguments are joined and the fields are built: a call that the policy does not store costs one
+        // branch.
+        let level = if error.is_none() { Level::Debug } else { Level::Warn };
+        if !crate::log_policy::gate_event(Class::Call, level) {
+            return;
+        }
         let micros = self.started.elapsed().as_micros() as u64;
         let mut args = String::from("[");
         let mut truncated = false;

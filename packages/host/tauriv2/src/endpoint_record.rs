@@ -12,6 +12,7 @@ use crate::bounds::{cut_text, CALL_TEXT_BYTES};
 use crate::endpoint::Failure;
 use crate::event_log::Level;
 use crate::event_record::emit_host;
+use crate::log_policy::Class;
 
 /// The params of a request, as received.
 #[derive(Deserialize)]
@@ -33,6 +34,17 @@ impl Call {
     /// received, `null` when the request has none, cut to `CALL_TEXT_BYTES` before they are copied.
     pub(crate) fn begin(method: &str, body: &[u8]) -> Call {
         let started = Instant::now();
+        // The arguments are kept for the event of a success or of a failure; when the policy stores neither, they are not cut.
+        if !crate::log_policy::event_enabled(Class::Call, Level::Debug)
+            && !crate::log_policy::event_enabled(Class::Call, Level::Warn)
+        {
+            return Call {
+                method: method.to_string(),
+                args: String::new(),
+                truncated: false,
+                started,
+            };
+        }
         let (args, truncated) = match serde_json::from_slice::<Envelope>(body) {
             Ok(Envelope {
                 params: Some(params),
@@ -57,6 +69,11 @@ impl Call {
     /// Stores the event with the result and the microseconds since the request began. A failed request is at the level
     /// `warn`, and its error text is the code and the message that the client receives.
     pub(crate) fn record<T>(self, outcome: &Result<T, Failure>) {
+        // The gate is asked before the fields are built: a request that the policy does not store costs one branch.
+        let level = if outcome.is_ok() { Level::Debug } else { Level::Warn };
+        if !crate::log_policy::gate_event(Class::Call, level) {
+            return;
+        }
         let micros = self.started.elapsed().as_micros() as u64;
         match outcome {
             Ok(_) => emit_host(

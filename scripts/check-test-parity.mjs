@@ -50,6 +50,7 @@ lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-test
 lane("test runs", "js-ts", ["scripts/test-runs.mjs"], ["scripts/test/test-runs.test.mjs"]),
 lane("native tests", "js-ts", ["scripts/native-tests.mjs"], ["scripts/test/native-tests.test.mjs"]),
 lane("event log audit", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
+lane("event class tables", "js-ts", ["scripts/generate-event-classes.mjs"], ["scripts/test/event-classes.test.mjs"]),
 lane("run log audit", "js-ts", ["scripts/audit-run.mjs"], ["scripts/test/audit-run.test.mjs"]),
 lane("census", "declaration", ["scripts/census.json"], ["scripts/test/census.test.mjs"], { testLanguage: "js-ts" }),
 lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/test/check-failure-table.test.mjs"]),
@@ -1305,10 +1306,10 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/event_log.rs", symbol: "fn rotate" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogRotatesAtTheBoundAndKeepsTheNewestGenerations" },
-      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "the_log_rotates_at_the_bound_and_keeps_the_newest_generations" },
+      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration" },
+      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "the_log_rotates_at_the_bound_and_keeps_every_generation" },
     ],
-    expected: "A writer closes its file before the line that would pass the bound, keeps the newest generations, opens the new file with log.open and log.rotated, and continues seq.",
+    expected: "A writer closes its file before the line that would pass the bound, keeps every generation under its number, opens the new file with log.open and log.rotated, and continues seq.",
     levels: ["unit"],
   },
   {
