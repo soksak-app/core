@@ -177,7 +177,8 @@ function onSidecarFailure(name, surface, fn) {
 export function windowSidecar(name) {
   if (!bridge) return null;
   return {
-    send: (surface, body) => orderedSidecarPort(name).send(surface, body),
+    // cids are the correlation identifiers of the inputs that the request continues (docs/spec/sidecars.md#protocol).
+    send: (surface, body, cids) => orderedSidecarPort(name).send(surface, body, cids),
     on: (surface, listener) => Promise.resolve(bridge.on("sidecar-message", (event) => {
       if (event?.sidecar === name && event?.surface === surface) listener(event.body);
     })),
@@ -266,8 +267,8 @@ export function surfaceContextRuntime(surface, declarations = {}) {
       const sidecarName = declared[0];
       const ordered = orderedSidecarPort(sidecarName);
       return {
-        send: (id, body) => id === surfaceId
-          ? ordered.send(surfaceId, body)
+        send: (id, body, cids) => id === surfaceId
+          ? ordered.send(surfaceId, body, cids)
           : Promise.reject(new Error(`surface ${surfaceId} cannot send to sidecar surface ${id}`)),
         on: (id, fn) => on("sidecar-message", (event) => {
           if (event.sidecar === sidecarName && event.surface === id) fn(event.body);

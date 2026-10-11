@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.8.3: page의 sidecar port가 send의 상관 식별자를 host 호출 `sidecarSend`에 넘기므로, key의 요청이 key의 식별자를 갖는다.
 - F160.34.7: `sidecar.json`의 `replay.inputs`가 재생 입력 종류마다 event를 적고, 두 도구의 `sok debug replay`가 재생 실행 파일을 시작하기 전에 각 segment의 입력을 session 규칙으로 검사한다.
 - F160.25.6: `e2e/terminal-replay.test.mjs`가 출력, scroll, selection, theme 변경, resize, 입력이 있는 session을 모든 hash가 같게 재생하고, 바뀐 저장 출력을 계층 `sidecar`의 불일치로 보고한다.
 - F160.34.6: 두 도구의 policy 파일 reader가 `packages/log-contract/fixtures/policy/cases.json`의 모든 golden case를 실행하고, Go reader는 null level을 text여야 하는 level로 밝힌다.

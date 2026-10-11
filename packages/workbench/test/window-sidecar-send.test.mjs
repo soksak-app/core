@@ -30,3 +30,10 @@ test("a send after a failed send to the same sidecar is delivered and the failur
   const reports = calls.flatMap(([name, payload]) => recordsOf(name, payload));
   assert.deepEqual(reports, [{ level: "error", where: "sidecar @x/side", text: "send failed: gone" }]);
 });
+
+test("a window sidecar send passes the correlation identifiers of the input it continues to the host call", { timeout: 5000 }, async () => {
+  const sidecar = windowSidecar("@x/side");
+  await sidecar.send("tab-b", { n: 3 }, ["b1.9"]);
+  const [, payload] = calls.filter(([name]) => name === "sidecarSend").at(-1);
+  assert.deepEqual(payload, { sidecar: "@x/side", surface: "tab-b", body: { n: 3 }, cids: ["b1.9"] });
+});

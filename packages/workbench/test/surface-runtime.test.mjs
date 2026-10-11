@@ -74,6 +74,15 @@ test("surface sidecar access is resolved from the declared surface and takes no 
   assert.throws(() => runtime.sidecar("@fixture/sidecar"), /takes no argument; it uses the declared sidecar/);
 });
 
+test("a surface sidecar send passes the correlation identifiers of the input it continues to the host call", async () => {
+  const { surfaceContextRuntime } = await import("../host.js");
+  const port = surfaceContextRuntime({ surfaceId: "chained-surface", sidecars: ["@fixture/sidecar"] }).sidecar();
+  await port.send("chained-surface", { operation: "input" }, ["b1.7"]);
+  assert.deepEqual(calls.at(-1), ["sidecarSend", {
+    sidecar: "@fixture/sidecar", surface: "chained-surface", body: { operation: "input" }, cids: ["b1.7"],
+  }]);
+});
+
 test("surface sidecar access rejects an ambiguous declaration instead of selecting a fallback", async () => {
   const { surfaceContextRuntime } = await import("../host.js");
   const runtime = surfaceContextRuntime({ surfaceId: "ambiguous-sidecar-surface", sidecars: [] });
