@@ -273,3 +273,25 @@ test('the record calls of the native library are emit sites of the declared reco
   const records = { ...catalog, events: { 'native.record.<level>': { layer: 'host', class: 'lifecycle', level: ['error', 'info'], fields: { where: 'string', text: 'string' } } } };
   assert.deepEqual(checker.emitFindings(records, new Map([['a.m', 'void f(void) {\n    sp_log_error("w", "t");\n    sp_log_info("w", "t");\n}\n']]), CATALOG), []);
 });
+
+test('the census exclude removes a vendored file before the catalog check parses it', () => {
+  const command = fileURLToPath(new URL('../events-check.js', import.meta.url));
+  const repository = mkdtempSync(join(tmpdir(), 'census-'));
+  const run = (...args) => spawnSync(process.execPath, [command, ...args], { cwd: repository, encoding: 'utf8' });
+  const git = (...args) => assert.equal(spawnSync('git', args, { cwd: repository }).status, 0);
+  git('init', '-q');
+  mkdirSync(join(repository, 'docs'));
+  mkdirSync(join(repository, 'ui', 'vendor'), { recursive: true });
+  writeFileSync(join(repository, 'docs', 'events.json'), JSON.stringify({ schema: 1, layers: ['plugin'], events: {} }));
+  // The vendored file holds a string that does not end, which the lexer of the check rejects.
+  writeFileSync(join(repository, 'ui', 'vendor', 'bundle.js'), 'export const a = "never ends;\n');
+  writeFileSync(join(repository, 'census.json'), JSON.stringify({ exclude: '^ui/vendor/' }));
+  git('add', 'docs/events.json', 'ui/vendor/bundle.js', 'census.json');
+  let result = run('--catalog', 'docs/events.json');
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /^ui\/vendor\/bundle\.js:1: a string that starts here does not end$/m);
+  result = run('--census', 'census.json', '--catalog', 'docs/events.json');
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^Event catalog checks passed: 0 declared events/m);
+  assert.deepEqual(checker.catalogReport(repository, 'docs/events.json', 'census.json').findings, []);
+});

@@ -604,19 +604,32 @@ export function censusFindings(sources, config, rules = censusRules()) {
   return findings.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line));
 }
 
+/** The census declaration of the repository at `root` in `configFile`; a repository without one declares nothing. */
+function censusConfig(root, configFile) {
+  return configFile === undefined ? parseCensusConfig('(no census declaration)', '{}') : parseCensusConfig(configFile, readFileSync(join(root, configFile), 'utf8'));
+}
+
+/** The tracked sources of the repository that its census declaration does not exclude; an excluded file (a vendored bundle) is not read. */
+function declaredSources(root, config) {
+  return new Map([...trackedSources(root)].filter(([path]) => !(config.exclude && config.exclude.test(path))));
+}
+
 /** The result of the census of the repository at `root`: the findings, the pending rules, the marker errors and the number of sources. */
 export function census(root, configFile) {
-  const config = configFile === undefined ? parseCensusConfig('(no census declaration)', '{}') : parseCensusConfig(configFile, readFileSync(join(root, configFile), 'utf8'));
-  const sources = new Map([...trackedSources(root)].filter(([path]) => !(config.exclude && config.exclude.test(path))));
+  const config = censusConfig(root, configFile);
+  const sources = declaredSources(root, config);
   const findings = censusFindings(sources, config);
   const markers = [...sources].flatMap(([path, text]) => markerErrors(path, text));
   return { findings, pending: config.pending, markers, sources: sources.size };
 }
 
-/** The findings of the emit sites of the repository at `root` against the catalog at `catalogPath`, and the emit site counts. */
-export function catalogReport(root, catalogPath) {
+/**
+ * The findings of the emit sites of the repository at `root` against the catalog at `catalogPath`, and the emit site counts.
+ * The sources are those that the census declaration `configFile` does not exclude.
+ */
+export function catalogReport(root, catalogPath, configFile) {
   const catalog = JSON.parse(readFileSync(join(root, catalogPath), 'utf8'));
-  const sources = trackedSources(root);
+  const sources = declaredSources(root, censusConfig(root, configFile));
   const findings = [...catalogFindings(catalog, catalogPath), ...emitFindings(catalog, sources, catalogPath)];
   const sites = Object.entries(siteCounts(sources)).map(([language, { literal, built }]) => `${language} ${literal} literal ${built} built`).join(', ');
   return { findings, declared: Object.keys(catalog.events).length, sites };
@@ -650,7 +663,7 @@ function main(argv) {
   process.stdout.write(`${failed === 0 ? 'Census passed' : `Census failed: ${failed} findings`}: ${sources} sources, ${Object.keys(pending).length} rules pending\n`);
   let code = failed === 0 ? 0 : 1;
   if (options.catalog !== undefined) {
-    const report = catalogReport(root, options.catalog);
+    const report = catalogReport(root, options.catalog, options.census);
     for (const finding of report.findings) process.stderr.write(`${finding}\n`);
     process.stdout.write(report.findings.length === 0 ? `Event catalog checks passed: ${report.declared} declared events, emit sites: ${report.sites}\n` : `Event catalog checks failed: ${report.findings.length} findings, emit sites: ${report.sites}\n`);
     if (report.findings.length > 0) code = 1;
