@@ -4,7 +4,7 @@
 #import "event_ring.h"
 #import "observe.h"
 
-static void emit(NSString *name, NSDictionary *fields) {
+static void emit(uint8_t eventClass, NSString *name, NSDictionary *fields) {
     NSError *error = nil;
     NSData *json = [NSJSONSerialization dataWithJSONObject:fields options:0 error:&error];
     if (!json) {
@@ -13,7 +13,7 @@ static void emit(NSString *name, NSDictionary *fields) {
     }
     NSString *text = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
     // events: forwarded
-    sp_event(SP_EVENT_INFO, name.UTF8String, text.UTF8String);
+    sp_event(eventClass, SP_EVENT_INFO, name.UTF8String, text.UTF8String);
 }
 
 static NSDictionary *windowFields(NSNotification *note) {
@@ -36,7 +36,7 @@ static void recordResponder(NSWindow *window) {
     NSDictionary *before = objc_getAssociatedObject(window, lastResponderKey);
     objc_setAssociatedObject(window, lastResponderKey, @{@"class": name, @"identity": identity}, OBJC_ASSOCIATION_RETAIN);
     if (!before || [before[@"identity"] isEqual:identity]) return;
-    emit(@"native.window.first_responder", @{@"window": @(window.windowNumber), @"from": before[@"class"], @"to": name});
+    emit(SP_CLASS_INPUT, @"native.window.first_responder", @{@"window": @(window.windowNumber), @"from": before[@"class"], @"to": name});
 }
 
 void sp_observe_activity(void) {
@@ -51,7 +51,7 @@ void sp_observe_activity(void) {
         // events: native.app.activated, native.app.deactivated, native.app.hidden, native.app.unhidden
         for (NSNotificationName notification in application) {
             NSString *name = application[notification];
-            sp_observe_notification("activity.app", SP_OBSERVE_STORED, notification, nil, nil, ^(NSNotification *note) { emit(name, @{}); });
+            sp_observe_notification("activity.app", SP_OBSERVE_STORED, notification, nil, nil, ^(NSNotification *note) { emit(SP_CLASS_LIFECYCLE, name, @{}); });
         }
         NSDictionary<NSNotificationName, NSString *> *windows = @{
             NSWindowDidBecomeKeyNotification: @"native.window.key",
@@ -64,7 +64,7 @@ void sp_observe_activity(void) {
         // events: native.window.key, native.window.resign_key, native.window.main, native.window.resign_main, native.window.miniaturized, native.window.deminiaturized
         for (NSNotificationName notification in windows) {
             NSString *name = windows[notification];
-            sp_observe_notification("activity.window", SP_OBSERVE_STORED, notification, nil, nil, ^(NSNotification *note) { emit(name, windowFields(note)); });
+            sp_observe_notification("activity.window", SP_OBSERVE_STORED, notification, nil, nil, ^(NSNotification *note) { emit(SP_CLASS_LIFECYCLE, name, windowFields(note)); });
         }
         // A window updates at the rate of its frames, so the deliveries are counted and the change of the first responder is the event.
         sp_observe_notification("activity.update", SP_OBSERVE_COUNT, NSWindowDidUpdateNotification, nil, nil, ^(NSNotification *note) {
@@ -73,11 +73,11 @@ void sp_observe_activity(void) {
         sp_observe_notification("activity.occlusion", SP_OBSERVE_STORED, NSWindowDidChangeOcclusionStateNotification, nil, nil, ^(NSNotification *note) {
             NSWindow *window = note.object;
             if (![window isKindOfClass:NSWindow.class]) return;
-            emit(@"native.window.occlusion", @{@"window": @(window.windowNumber),
+            emit(SP_CLASS_LIFECYCLE, @"native.window.occlusion", @{@"window": @(window.windowNumber),
                 @"visible": [NSNumber numberWithBool:(window.occlusionState & NSWindowOcclusionStateVisible) != 0]});
         });
         sp_observe_notification("activity.input_source", SP_OBSERVE_STORED, NSTextInputContextKeyboardSelectionDidChangeNotification, nil, nil, ^(NSNotification *note) {
-            emit(@"native.input.source_changed", @{});
+            emit(SP_CLASS_INPUT, @"native.input.source_changed", @{});
         });
     });
 }

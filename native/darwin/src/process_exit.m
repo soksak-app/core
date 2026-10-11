@@ -36,7 +36,7 @@ void sp_process_when_exited(pid_t pid, double seconds, sp_process_exit_done done
         if (answered) return;
         char fields[96];
         snprintf(fields, sizeof fields, "{\"pid\":%d,\"seconds\":%g}", pid, seconds);
-        sp_event(SP_EVENT_WARN, "native.process.exit_timeout", fields);
+        sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_WARN, "native.process.exit_timeout", fields);
         answer(false);
     });
 }

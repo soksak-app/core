@@ -444,7 +444,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 - (void)emitInput:(const char *)name fields:(NSString *)fields {
     NSString *cid = [self currentCid];
     // events: native.input.key_down, native.input.callback
-    sp_event_cids(SP_EVENT_INFO, name, cid.UTF8String ?: "", fields.UTF8String);
+    sp_event_cids(SP_CLASS_INPUT, SP_EVENT_INFO, name, cid.UTF8String ?: "", fields.UTF8String);
 }
 
 // Records a report to the page as the event `native.input.report`, and sends it with the correlation identifier of the input
@@ -453,7 +453,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSString *cid = [self currentCid];
     NSData *recorded = [NSJSONSerialization dataWithJSONObject:@{ @"report": @(json), @"dropped": @(self.closed || !self.event) } options:0 error:NULL];
     NSString *fields = [[[NSString alloc] initWithData:recorded encoding:NSUTF8StringEncoding] autorelease];
-    sp_event_cids(SP_EVENT_INFO, "native.input.report", cid.UTF8String ?: "", fields.UTF8String);
+    sp_event_cids(SP_CLASS_INPUT, SP_EVENT_INFO, "native.input.report", cid.UTF8String ?: "", fields.UTF8String);
     if (self.closed || !self.event) return;
     self.reports++;
     // The report is a JSON object that ends with its closing brace; the identifier is added as its last member.
@@ -937,29 +937,32 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 // One query of the input method as the event `native.input.query` at the level debug: the name of the query, its arguments
-// and its answer (fields is `"name":value,…`). The queries arrive while a syllable is composed, so they are not records of
-// the state of the document.
-- (void)logQuery:(NSString *)call fields:(NSString *)fields {
+// and its answer (fields builds `"name":value,…`). The queries arrive while a syllable is composed, so they are not records of
+// the state of the document. The gate is asked first: the fields of an event that the policy does not store are not built, and the
+// gate counts the query.
+- (void)logQuery:(NSString *)call fields:(NSString * (^)(void))fields {
+    if (!sp_event_gate(SP_CLASS_INPUT, SP_EVENT_DEBUG)) return;
+    NSString *arguments = fields();
     NSString *json = [NSString stringWithFormat:@"{\"call\":\"%@\",%@\"focus\":%@}", call,
-        fields.length ? [fields stringByAppendingString:@","] : @"", self.hasFocus ? @"true" : @"false"];
-    sp_event(SP_EVENT_DEBUG, "native.input.query", json.UTF8String);
+        arguments.length ? [arguments stringByAppendingString:@","] : @"", self.hasFocus ? @"true" : @"false"];
+    sp_event(SP_CLASS_INPUT, SP_EVENT_DEBUG, "native.input.query", json.UTF8String);
 }
 
 - (NSRange)markedRange {
     NSRange range = [super markedRange];
-    [self logQuery:@"markedRange" fields:[NSString stringWithFormat:@"\"answer\":%@", [self jsonRange:range]]];
+    [self logQuery:@"markedRange" fields:^NSString * { return [NSString stringWithFormat:@"\"answer\":%@", [self jsonRange:range]]; }];
     return range;
 }
 
 - (NSRange)selectedRange {
     NSRange range = [super selectedRange];
-    [self logQuery:@"selectedRange" fields:[NSString stringWithFormat:@"\"answer\":%@", [self jsonRange:range]]];
+    [self logQuery:@"selectedRange" fields:^NSString * { return [NSString stringWithFormat:@"\"answer\":%@", [self jsonRange:range]]; }];
     return range;
 }
 
 - (BOOL)hasMarkedText {
     BOOL marked = [super hasMarkedText];
-    [self logQuery:@"hasMarkedText" fields:[NSString stringWithFormat:@"\"answer\":%@", marked ? @"true" : @"false"]];
+    [self logQuery:@"hasMarkedText" fields:^NSString * { return [NSString stringWithFormat:@"\"answer\":%@", marked ? @"true" : @"false"]; }];
     return marked;
 }
 
@@ -974,14 +977,15 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         NSRect converted = [self convertRect:caretRect toView:window.contentView];
         answer = [window convertRectToScreen:converted];
     }
-    [self logQuery:@"firstRectForCharacterRange" fields:[NSString stringWithFormat:
-        @"\"range\":%@,\"answer\":{\"x\":%.1f,\"y\":%.1f,\"width\":%.1f,\"height\":%.1f}", [self jsonRange:range],
-        answer.origin.x, answer.origin.y, answer.size.width, answer.size.height]];
+    [self logQuery:@"firstRectForCharacterRange" fields:^NSString * {
+        return [NSString stringWithFormat:@"\"range\":%@,\"answer\":{\"x\":%.1f,\"y\":%.1f,\"width\":%.1f,\"height\":%.1f}", [self jsonRange:range],
+            answer.origin.x, answer.origin.y, answer.size.width, answer.size.height];
+    }];
     return answer;
 }
 
 - (NSUInteger)characterIndexForPoint:(NSPoint)point {
-    [self logQuery:@"characterIndexForPoint" fields:[NSString stringWithFormat:@"\"x\":%.1f,\"y\":%.1f,\"answer\":null", point.x, point.y]];
+    [self logQuery:@"characterIndexForPoint" fields:^NSString * { return [NSString stringWithFormat:@"\"x\":%.1f,\"y\":%.1f,\"answer\":null", point.x, point.y]; }];
     return NSNotFound;
 }
 

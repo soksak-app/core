@@ -14,9 +14,10 @@ NSDictionary *decodedRecord(const uint8_t *body, uint32_t length) {
     memcpy(&micros, body, sizeof micros);
     memcpy(&mono, body + 8, sizeof mono);
     uint8_t level = body[16];
-    uint8_t nameLength = body[17];
+    uint8_t class = body[17];
+    uint8_t nameLength = body[18];
     uint16_t cidsLength;
-    memcpy(&cidsLength, body + 18, sizeof cidsLength);
+    memcpy(&cidsLength, body + 19, sizeof cidsLength);
     if (SP_EVENT_HEADER_BYTES + (size_t)nameLength + cidsLength > length) {
         fprintf(stderr, "records: the name of %u bytes and the cids of %u bytes do not fit a record of %u bytes\n", nameLength, cidsLength, length);
         exit(1);
@@ -28,11 +29,11 @@ NSDictionary *decodedRecord(const uint8_t *body, uint32_t length) {
     NSData *json = [NSData dataWithBytes:body + fieldsAt length:length - fieldsAt];
     NSError *error = nil;
     NSDictionary *fields = [NSJSONSerialization JSONObjectWithData:json options:0 error:&error];
-    if (level > 4 || ![fields isKindOfClass:NSDictionary.class]) {
+    if (level > 4 || class >= SP_CLASS_COUNT || ![fields isKindOfClass:NSDictionary.class]) {
         fprintf(stderr, "records: %s is not a record of the ring: %s\n", name.UTF8String, error.localizedDescription.UTF8String);
         exit(1);
     }
-    return @{@"ts_us": @(micros), @"mono_ns": @(mono), @"level": @(level), @"name": name, @"cids": cids, @"fields": fields};
+    return @{@"ts_us": @(micros), @"mono_ns": @(mono), @"level": @(level), @"class": @(class), @"name": name, @"cids": cids, @"fields": fields};
 }
 
 /// Calls block with each record that the ring of the process holds, after the ring was emptied and `produce` ran.
