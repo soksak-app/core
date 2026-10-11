@@ -11,6 +11,7 @@
     "index.html",
     "overlay.html",
     "background.js",
+    "bounded-json.js",
     "app.css",
     "library.css",
     "card.js",

@@ -22,6 +22,7 @@ pub mod arguments;
 pub mod assets;
 mod bindings;
 mod bounds;
+mod buffer_bounds;
 pub mod buttons;
 pub mod clipboard;
 pub mod command_line;

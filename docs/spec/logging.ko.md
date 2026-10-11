@@ -9,7 +9,7 @@
 1. **하나의 event 계약.** 모든 층의 모든 기록은 아래 구조의 event 하나다. 둘째 형식은 없다. 사람이 읽는 글은 viewer가 event로 만들며 저장하지 않는다.
 2. **생산자는 막히지 않는다.** UI 스레드, 입력 경로, frame 경로는 기록을 위해 디스크 접근, IPC, 락 대기, 한 runtime의 스레드에서 다른 runtime으로의 호출을 하지 않는다. 비활성 event는 분기 하나, 활성 event는 bounded 큐로의 복사 하나의 비용이다.
 3. **손실은 세고 밝힌다.** 어떤 큐, rate limit, 회전, 절단도 조용히 버리지 않는다. 손실은 `log.dropped` event로 기록하고 모든 상한은 이 문서에 적는다.
-4. **입력 경로는 완전하다.** `input` class의 event와 `io` class의 PTY 쓰기·읽기는 층이 본 모든 값과 모든 바이트를 담는다. writer는 그 크기를 제한하지 않는다.
+4. **입력 경로는 완전하다.** `input` class의 event와 `io` class의 PTY 쓰기·읽기는 층이 본 모든 값과 모든 바이트를 담는다. 크기의 유일한 상한은 event의 크기 상한([상한](#상한))이며, 이는 입력의 크기보다 훨씬 크다. 큐는 자신의 바이트 상한보다 큰 event를 거절하므로, writer는 그보다 큰 event를 잘라 `truncated`를 붙여 저장한다.
 5. **event는 선언한다.** 모든 event는 그것을 내는 저장소의 catalog에 항목이 있다. 개발과 지속적 통합은 선언하지 않은 event를 거부한다. 실행 중에는 선언하지 않은 event도 `undeclared` 표시를 붙여 쓰고 센다. 이름 오류가 증거를 버리지 않게 하기 위해서다.
 6. **같은 종류의 event는 한 입구로 들어온다.** page→host 호출, 창·애플리케이션 이벤트, registry 명령, sidecar 수명, 오류 표시는 각각 기록하는 입구가 하나다. 호출 지점이 이를 위해 자기 기록을 쓰지 않는다.
 7. **기록은 사실을 적는다.** event는 그때의 값과 함께 무슨 일이 있었는지를 적는다. 누가 요청했는지나 사람이 왜 했는지는 적지 않는다.
@@ -35,6 +35,7 @@ event는 한 줄의 JSON 객체 하나다.
 | `window`, `surface`, `session` | event가 어떤 대상에 관한 것이면 그 대상의 식별자. |
 | `cids` | event가 속한 입력의 상관 식별자 목록. 없으면 생략한다. |
 | `fields` | catalog가 선언한 event의 값. |
+| `truncated` | event의 fields 글이 event 크기 상한을 넘었을 때만 있다. 자르기 전 그 글의 바이트 크기다. 이런 event의 `fields`는 글의 첫 바이트인 `head`만 담는다([상한](#상한)). |
 
 모든 파일의 첫 줄은 `log.open`이다. schema 번호(`schema`), `pid`, 프로세스의 역할(`role`), 실행의 식별자(`boot`), writer의 버전, 적용 중인 정책을 담는다. 모르는 schema 번호를 만난 reader는 파일 이름과 그 번호를 담은 오류로 그 파일을 거부한다.
 
@@ -81,7 +82,17 @@ event가 싣는 모든 buffer와 값에는 상한이 있고, 생산자는 값을
 
 | 상한 | 값 | 도달하면 |
 | --- | --- | --- |
-| 호출 event(`page.call`, `host.endpoint.call`)의 `args`와 `error` | 1024바이트, 문자 경계에서 자름 | 상한까지 저장하고 event에 `truncated: true`가 붙는다 |
+| event의 fields | JSON 글 1,048,576바이트 | writer는 `fields`를 `{"head": <글의 첫 4,096바이트, 문자 경계에서 자름>}`로, `truncated`를 원래 크기로 정해 event를 저장한다. 큐에는 저장한 크기만큼 청구한다. native ring은 한 번의 pull인 262,144바이트를 넘게 싣지 않는다. |
+| 호출 event(`page.call`, `host.endpoint.call`)의 `args`와 `error` | 1,024바이트, 문자 경계에서 자름 | 상한까지 저장하고 event에 `truncated: true`가 붙는다. page는 `args`를 직렬화하는 동안 자르며 값 전체를 직렬화하지 않는다. |
+| `page.console.<method>`의 `text` | 8,192바이트, 문자 경계에서 자름 | 글은 인자를 직렬화하는 동안 상한까지만 만들고, event에 `truncated: true`가 붙는다. |
+| page writer의 큐 | event 4,096개 | page는 거절한 event를 세어 뒤따르는 event 앞에 `page.log.dropped`를 저장한다. |
+| host writer의 큐 | event 8,192개와 16 MiB | writer는 거절한 event를 세어 `log.dropped`로 저장한다. |
+| sidecar의 보류 응답(256줄의 쓰기 큐가 빈 뒤에 쓴다) | 메시지 1,024개와 4,194,304바이트 | 응답은 오류 `sidecar <name>: the pending replies reached <bound>, so a reply of surface <surface> is dropped`로 거절되고 `host.buffer.dropped`를 저장한다. |
+| sidecar의 보류 close | 메시지 1,024개와 4,194,304바이트 | close는 보내지 않고, 표면은 답을 기다리는 목록에 올리지 않으며, `host.buffer.dropped`를 저장하고, sidecar는 끝날 때까지 그 표면의 session을 가진다. |
+| relay의 만료된 요청(늦은 응답) | 요청 256개 | 가장 오래된 요청을 잊으므로 그 요청의 늦은 응답은 `exposure reply <id> has no matching request`로 답하고 `host.buffer.dropped`를 저장한다. |
+| host record의 시작 buffer | record 1,024개 | 거절한 record는 writer가 생기면 세어서 `log.dropped`로 저장한다. |
+
+모든 `host.buffer.dropped` event는 `count`가 1이고 거절한 메시지의 크기를 담으므로, 거절이 쏟아지면 event도 쏟아진다. 이는 writer의 큐가 상한으로 막고 다시 센다.
 
 ## 파일
 
@@ -103,11 +114,12 @@ catalog는 입력 종류마다 남겨야 하는 사슬도 선언한다. 첫 층�
 
 다음 입구는 호출 지점이 기록을 쓰지 않아도 기록한다.
 
-- 메인 page의 host 호출: 두 runtime이 `host.call` 둘레에 두는 감싸개(`settlingCalls`)가 필드 `name`, `args`(인자의 JSON, 1024자에서 자르며 `truncated: true`), `micros`, `ok`, 거절된 호출이면 `error`를 가진 event `page.call`을 낸다. level은 `debug`이고 거절된 호출은 `warn`이다. 호출 `log`와 `performance`는 기록하지 않는다. 기록된 `log` 호출이 자기 자신을 기록하기 때문이다. `debugReadRange`도 기록하지 않는다. debug 화면은 기록기가 알린 event에 답해 읽기 때문이다. `overlayUpdate`와 `overlayPlace`도 기록하지 않는다. 네이티브 모달을 그리고 놓는 호출로 집계로 저장하는 class `frame`이고, event 파일을 따라가는 화면은 늘어난 행마다 다시 그리므로 기록하면 스스로 먹이가 되기 때문이다;
+- 메인 page의 host 호출: 두 runtime이 `host.call` 둘레에 두는 감싸개(`settlingCalls`)가 필드 `name`, `args`(인자의 JSON, 직렬화하는 동안 1024바이트에서 자르며 `truncated: true`), `micros`, `ok`, 거절된 호출이면 `error`를 가진 event `page.call`을 낸다. level은 `debug`이고 거절된 호출은 `warn`이다. 호출 `log`와 `performance`는 기록하지 않는다. 기록된 `log` 호출이 자기 자신을 기록하기 때문이다. `debugReadRange`도 기록하지 않는다. debug 화면은 기록기가 알린 event에 답해 읽기 때문이다. `overlayUpdate`와 `overlayPlace`도 기록하지 않는다. 네이티브 모달을 그리고 놓는 호출로 집계로 저장하는 class `frame`이고, event 파일을 따라가는 화면은 늘어난 행마다 다시 그리므로 기록하면 스스로 먹이가 되기 때문이다;
 - 표면 문서의 host 호출: 각 application의 runtime `page` 객체는 모든 호출을 `surfaceCalls`(`packages/workbench/surface-calls.js`)로 보내고, 이것이 두 runtime에서 같은 이름과 같은 인자로 같은 event `page.call`을 낸다(인자는 Wails runtime이 넘기는 호출의 인자다). event는 문서의 batcher를 거치므로 한 turn의 호출은 호출 `log` 한 번으로 host에 가고, 문서의 `report`도 같은 batcher 뒤에 쌓여 문서의 기록과 호출이 순서를 지킨다. 호출 `log`는 기록하지 않는다. 중계가 실패하면 문서의 console에 쓴다. 문서에는 달리 알릴 곳이 없기 때문이다;
 - 창 event: host가 창에 등록하는 모든 event는 `window`와 `kind`를 가진 event `host.window.event`다. host는 자기 framework가 알리는 kind를 낸다(Wails는 `show`, `hide`, `focus`, `lost_focus`, `web_process_ended`, `navigation_committed`를, Tauri는 `occlusion_changed`를 알린다). 그래서 host가 저장하는 kind는 [host 계약](host-contract.ko.md)의 목록의 부분집합이다;
 - 애플리케이션 event: host가 애플리케이션에 등록하는 모든 event는 `kind`를 가진 event `host.app.event`다. host는 자기 framework가 알리는 kind를 저장한다(Wails는 `started`, `activated`, `deactivated`, `exit_requested`, `exit`를, Tauri는 `started`, `exit_requested`, `exit`를 알린다);
 - endpoint 메서드: [endpoint](endpoint.md) client의 모든 요청은 필드 `name`(메서드), `args`(받은 그대로의 params, 요청에 없으면 `null`이며, 복사하기 전에 문자 경계에서 1024바이트로 자르고 잘렸으면 `truncated: true`), `micros`(요청을 받은 때부터 결과까지), `ok`, 실패한 요청이면 `error`(client가 받는 코드와 메시지 `<code>: <message>`이며 같은 방식으로 자른다)를 가진 event `host.endpoint.call`이다. level은 `debug`이고 실패한 요청은 `warn`이며, 성능 trace가 켜져 있는지와 상관없다. 구독 변경(`status.watch`, `status.unwatch`)은 답을 쓸 때 기록하고, event는 답을 쓰기 전에 저장한다;
+- 한도가 있는 buffer: host의 buffer가 가득 차면 가장 새 메시지를 거절하고, 호출자가 있으면 오류를 돌려주며, level `warn`의 event `host.buffer.dropped`(`buffer`, `count`, `bytes`, `reason`)를 저장한다. 한도는 [상한](#상한)에 있다;
 - registry 명령: page는 요청 `command.run`에 모두 함수 하나로 답하며, 그 함수가 필드 `name`, `micros`, `ok`, 실패한 명령이면 `error`를 가진 event `page.command`를 낸다(level은 `debug`, 실패한 명령은 `warn`). 성능 trace가 켜져 있든 꺼져 있든 같다;
 - native 활동: native 라이브러리는 애플리케이션(`native.app.activated`, `native.app.deactivated`, `native.app.hidden`, `native.app.unhidden`), 창(창 번호와 first responder의 class를 가진 `native.window.key`, `native.window.resign_key`, `native.window.main`, `native.window.resign_main`, `native.window.miniaturized`, `native.window.deminiaturized`, 그리고 `visible`을 가진 `native.window.occlusion`), 입력 소스(`native.input.source_changed`)의 알림과 창의 first responder 변경마다(창 번호와 class `from`, `to`를 가진 `native.window.first_responder`. 창이 다음에 갱신될 때 이전 갱신의 first responder와 비교해 기록한다. AppKit은 text field의 창과 field editor를 거치므로 포커스 이동 하나가 event 여럿일 수 있다) level `info`로 기록한다. 그림 영역이 답하는 입력기 질의마다 level `debug`의 `native.input.query`가 `call`(`markedRange`, `selectedRange`, `hasMarkedText`, `firstRectForCharacterRange`, `characterIndexForPoint`), 인자, `answer`, 영역의 `focus`와 함께 있다. host는 writer를 시작할 때 observer를 설치한다;
 - sidecar 수명: 표준 입출력 sidecar 프로세스는 host가 시작할 때 event `host.sidecar.start`(`name`, `pid`), 끝났을 때 `host.sidecar.exit`(`name`, `pid`, `status`, `stopping`)이고, 영구 service 연결은 `host.sidecar.connect`(`name`, `pid`, `spawned`)와 `host.sidecar.disconnect`(`name`, `pid`, `stopping`, `violation`)이며 모두 level은 `info`다;

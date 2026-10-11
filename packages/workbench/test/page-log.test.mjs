@@ -148,3 +148,27 @@ test("the start of a page is the event page.start with the origin of the documen
     ["info", "page.start", { time_origin: 1791500000000.5, url: "app://workbench/index.html?window=w1" }],
   ]);
 });
+
+test("the text of a console call is cut at 8192 bytes while it is serialized, and the event says truncated", async () => {
+  calls.length = 0;
+  const target = { error() {}, warn() {}, info() {}, log() {}, debug() {} };
+  captureConsole(target);
+  const reads = { count: 0 };
+  const array = new Proxy(new Array(1_000_000).fill(1), {
+    get(source, key, receiver) {
+      if (typeof key === "string" && /^\d+$/.test(key)) reads.count += 1;
+      return Reflect.get(source, key, receiver);
+    },
+  });
+  target.log("é".repeat(10000));
+  target.info(array);
+  target.debug("short");
+  await settled();
+  const [text, structure, short] = events().map((event) => event.fields);
+  assert.equal(text.truncated, true);
+  assert.ok(Buffer.byteLength(text.text) <= 8192 && Buffer.byteLength(text.text) >= 8190, `${Buffer.byteLength(text.text)} bytes`);
+  assert.equal(structure.truncated, true);
+  assert.ok(Buffer.byteLength(structure.text) <= 8192, `${Buffer.byteLength(structure.text)} bytes`);
+  assert.ok(reads.count < 8192, `${reads.count} elements were read`);
+  assert.deepEqual(short, { text: "short" });
+});

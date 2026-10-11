@@ -77,6 +77,13 @@ function lineFindings(entry, catalog) {
     return findings;
   }
   if (!CLASSES.has(declared.class)) report(`the catalog gives ${event.event} the class ${declared.class}`);
+  // The writer stores an event over its size bound cut: `truncated` is the size of the fields before the cut, and the fields
+  // hold only the head of their text, so the declared fields are not asked for (docs/spec/logging.md#bounds).
+  if (event.truncated !== undefined) {
+    if (!Number.isInteger(event.truncated) || event.truncated <= 0) report("truncated must be a positive integer");
+    else if (typeof event.fields?.head !== "string") report("the fields of a truncated event must hold the string head");
+    return findings;
+  }
   // A field name that ends with `?` is optional, and a type such as `string|null` accepts each of its parts.
   for (const [declaredName, type] of Object.entries(declared.fields)) {
     const optional = declaredName.endsWith("?");

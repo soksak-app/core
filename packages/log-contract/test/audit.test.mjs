@@ -45,6 +45,23 @@ test("an undeclared event, a missing field and a field of the wrong type are rep
   assert.match(findings[2].message, /field keyCode must be a number/);
 });
 
+test("an event that the writer stored cut holds its head and the size before the cut, and the audit does not ask for the declared fields", () => {
+  const cut = (seq, extra, fields = { head: '{"keyCode":' }) => line(seq, "native.input.key_down", fields, extra);
+  assert.deepEqual(auditLog("host-b1.jsonl", [open, cut(2, { truncated: 2097152 })].join("\n"), catalog), []);
+  const findings = auditLog("host-b1.jsonl", [
+    open,
+    cut(2, { truncated: 0 }),
+    cut(3, { truncated: "big" }),
+    cut(4, { truncated: 2097152 }, {}),
+    cut(5, { truncated: 2097152 }, { head: 7 }),
+  ].join("\n"), catalog);
+  assert.deepEqual(findings.map((f) => f.line), [2, 3, 4, 5]);
+  assert.match(findings[0].message, /truncated must be a positive integer/);
+  assert.match(findings[1].message, /truncated must be a positive integer/);
+  assert.match(findings[2].message, /fields of a truncated event must hold the string head/);
+  assert.match(findings[3].message, /fields of a truncated event must hold the string head/);
+});
+
 test("a gap of seq is a finding unless log.dropped names the range", () => {
   const gap = [open, line(2, "native.input.key_down", { keyCode: 1 }), line(5, "native.input.key_down", { keyCode: 2 })].join("\n");
   assert.match(auditLog("f.jsonl", gap, catalog)[0].message, /seq 5 follows seq 2/);

@@ -271,7 +271,9 @@ func (r *Relay[T]) Request(target T, timeout time.Duration, send func(id uint64)
 		default:
 		}
 		if len(r.expired) == relayExpiredLimit {
+			// The oldest entry is forgotten: a late reply to it has no matching request. The loss is counted.
 			r.expired = r.expired[1:]
+			recordBufferDrop("relay expired requests", 0, fmt.Sprintf("%d requests", relayExpiredLimit))
 		}
 		r.expired = append(r.expired, relayExpired[T]{id: id, target: target, sent: sent, timeout: timeout})
 		r.mu.Unlock()

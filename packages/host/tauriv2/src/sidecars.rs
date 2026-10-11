@@ -20,6 +20,7 @@ use std::time::Duration;
 use wait_timeout::ChildExt;
 
 use crate::application_log::log_error;
+use crate::buffer_bounds::{record_buffer_drop, PendingLines};
 use crate::platform::{current, PersistentStream};
 use crate::windows::{emit_window, window_data};
 use serde::{Deserialize, Serialize};
@@ -346,6 +347,13 @@ fn log_dropped_message(sidecar: &str, surface: &str, body: &str) {
     );
 }
 
+/// The error of a reply that the bound of the pending replies refused.
+fn refused_reply(sidecar: &str, limit: &str, surface: &str) -> String {
+    format!(
+        "sidecar {sidecar}: the pending replies reached {limit}, so a reply of surface {surface} is dropped"
+    )
+}
+
 /// The response sender of the read thread. It sends responses to the outbox channel of the sidecar.
 /// When the channel is full, the response is buffered in State.pending_replies.
 struct ReadThreadResponseSender<O: Owner> {
@@ -373,11 +381,20 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
                 // When the channel is full, immutable responses are kept in the order of sending.
                 let mut state = self.state.lock().expect("sidecar state");
                 let key = format!("{}:{}:{}", surface, image, body.get());
-                state
+                let size = line.len();
+                if let Err(limit) = state
                     .pending_replies
                     .entry(self.sidecar_name.clone())
                     .or_default()
-                    .push(line);
+                    .add(line)
+                {
+                    record_buffer_drop(
+                        &format!("sidecar {} pending replies", self.sidecar_name),
+                        size,
+                        &limit,
+                    );
+                    return Err(refused_reply(&self.sidecar_name, &limit, surface));
+                }
                 crate::application_log::log_info(
                     &format!("sidecar {}", self.sidecar_name),
                     format!("response queue full, buffering {key}"),
@@ -442,10 +459,18 @@ fn write_pending_socket<O>(
     let (replies, closes) = {
         let mut state = state.lock().expect("sidecar state");
         (
-            // default: a sidecar without held items has no returns and closes to write.
-            state.pending_replies.remove(name).unwrap_or_default(),
-            // default: a sidecar without held items has no returns and closes to write.
-            state.pending_closes.remove(name).unwrap_or_default(),
+            state
+                .pending_replies
+                .remove(name)
+                .map(|mut held| held.take())
+                // default: a sidecar without held items has no returns and closes to write.
+                .unwrap_or_default(),
+            state
+                .pending_closes
+                .remove(name)
+                .map(|mut held| held.take())
+                // default: a sidecar without held items has no returns and closes to write.
+                .unwrap_or_default(),
         )
     };
     replies
@@ -468,10 +493,18 @@ fn write_pending<O: Owner>(state: &Mutex<State<O>>, name: &str, stdin: &mut Chil
     let (replies, closes) = {
         let mut state = state.lock().expect("sidecar state");
         (
-            // default: a sidecar without held items has no returns and closes to write.
-            state.pending_replies.remove(name).unwrap_or_default(),
-            // default: a sidecar without held items has no returns and closes to write.
-            state.pending_closes.remove(name).unwrap_or_default(),
+            state
+                .pending_replies
+                .remove(name)
+                .map(|mut held| held.take())
+                // default: a sidecar without held items has no returns and closes to write.
+                .unwrap_or_default(),
+            state
+                .pending_closes
+                .remove(name)
+                .map(|mut held| held.take())
+                // default: a sidecar without held items has no returns and closes to write.
+                .unwrap_or_default(),
         )
     };
     replies
@@ -552,8 +585,8 @@ struct State<O> {
     stopped: bool,
     // pending_replies: buffers the immutable image responses of each sidecar in the order of sending.
     // pending_closes: buffers the close messages of the surfaces of each sidecar (surface → close message).
-    pending_replies: HashMap<String, Vec<Vec<u8>>>,
-    pending_closes: HashMap<String, Vec<Vec<u8>>>,
+    pending_replies: HashMap<String, PendingLines>,
+    pending_closes: HashMap<String, PendingLines>,
     // Persistent sidecars whose connection was lost and whose owning surfaces were not notified yet (V5-106). The start
     // that announces the loss consumes this record. The first start has no notification.
     unannounced_loss: std::collections::HashSet<String>,
@@ -986,11 +1019,29 @@ impl<O: Owner> Sidecars<O> {
             for (name, result) in processes {
                 if let Err(error) = result {
                     if matches!(error, TrySendError::Full(_)) {
-                        state
+                        if let Err(limit) = state
                             .pending_closes
                             .entry(name.clone())
                             .or_default()
-                            .push(line.clone());
+                            .add(line.clone())
+                        {
+                            // The close is not sent, so no reply to it comes: the surface is not waited for. The sidecar
+                            // keeps its session until it ends.
+                            record_buffer_drop(
+                                &format!("sidecar {name} pending closes"),
+                                line.len(),
+                                &limit,
+                            );
+                            if let Some(waiting) = state.closing.get_mut(&name) {
+                                if let Some(count) = waiting.get_mut(&surface) {
+                                    *count -= 1;
+                                    if *count == 0 {
+                                        waiting.remove(&surface);
+                                    }
+                                }
+                            }
+                            continue;
+                        }
                         crate::application_log::log_info(
                             &format!("sidecar {name}"),
                             format!("close {surface}: outbox full, buffered"),
@@ -1309,11 +1360,16 @@ impl<O: Owner> Sidecars<O> {
             Err(TrySendError::Full(_)) => {
                 // The channel is full, so immutable responses are kept in the order of sending.
                 let key = format!("{}:{}:{}", surface, image, body.get());
-                state
+                let size = line.len();
+                if let Err(limit) = state
                     .pending_replies
                     .entry(name.to_string())
                     .or_default()
-                    .push(line);
+                    .add(line)
+                {
+                    record_buffer_drop(&format!("sidecar {name} pending replies"), size, &limit);
+                    return Err(refused_reply(name, &limit, surface));
+                }
                 crate::application_log::log_info(
                     &format!("sidecar {name}"),
                     format!("response queue full, buffering {key}"),
