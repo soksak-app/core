@@ -327,6 +327,15 @@ export class Session {
   }
 
   /**
+   * Declares that the test causes the event `event` (the full name of the catalog) in the logs of the application. The
+   * judgment of the test by the log fails with the missing name when the range of the test holds no such event.
+   */
+  expectEvent(event) {
+    if (typeof event !== "string" || event === "") throw new Error(`expectEvent needs an event name, found ${JSON.stringify(event)}`);
+    this.appendMark({ kind: "expect_event", event });
+  }
+
+  /**
    * Closes this window with the ordinary close action. When the document of the closing window disappears before it
    * answers the request, the code is 1003, which also means the window is closed.
    */
@@ -489,7 +498,7 @@ export class Session {
   /**
    * Appends a record of the test under the run to marks.jsonl: `{run, app, config, name, ...record, ts_us}`, where `config`
    * is the configuration folder of the application, so the audit of a run finds the logs of the applications it used from
-   * the marks. A declaration (`expect_error`) belongs to the test that started in this session. Nothing is
+   * the marks. A declaration (`expect_error`, `expect_event`) belongs to the test that started in this session. Nothing is
    * written without SOKSAK_RUN_ID (see markTest).
    */
   appendMark(record) {

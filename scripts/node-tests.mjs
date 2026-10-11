@@ -137,7 +137,7 @@ export function auditAfterRun(scriptName, run, write, audit = auditRunWithCatalo
     return 1;
   }
   for (const finding of findings) write(`AUDIT ${finding}`);
-  write(findings.length === 0 ? `AUDIT PASS the logs of run ${run.id}` : `AUDIT FAIL ${findings.length} findings in the logs of run ${run.id}`);
+  write(findings.length === 0 ? `AUDIT PASS the logs of run ${run.id}` : `AUDIT FAIL ${findings.length} findings in the logs of run ${run.id}; the judgment of each test is ${run.folder}/judgment.json`);
   return findings.length === 0 ? 0 : 1;
 }
 

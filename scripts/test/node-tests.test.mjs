@@ -125,7 +125,7 @@ test("the audit of the logs runs after a run of window checks and of the activat
   assert.deepEqual(ran, [run.folder, run.folder]);
   assert.deepEqual(lines.slice(0, 2), [
     "AUDIT /c/logs/host-1-2.jsonl:3: undeclared error place: boom",
-    "AUDIT FAIL 1 findings in the logs of run r1",
+    "AUDIT FAIL 1 findings in the logs of run r1; the judgment of each test is /repo/target/test-runs/r1/judgment.json",
   ]);
   assert.equal(auditAfterRun("verify", run, (line) => lines.push(line), () => []), 0);
   assert.equal(lines.at(-1), "AUDIT PASS the logs of run r1");

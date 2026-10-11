@@ -52,7 +52,7 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 ## 창 검사
 
-`SOKSAK_RUN_ID`와 `SOKSAK_RUN_FOLDER`를 정하는 시험 실행기 아래에서 각 검사는 애플리케이션의 event log에 시작과 끝을 표시하고(`diagnostics.test.mark`, [시험 표시](../spec/logging.ko.md#시험-표시)) 표시마다 위치 `(boot, seq)`를 실행 폴더의 `marks.jsonl`에 덧붙인다. `SOKSAK_RUN_ID`가 없으면 검사는 아무것도 표시하지 않는다. `pnpm verify:windows`와 `pnpm verify:activation`(실행기를 거치는 활성화 등급이며, `pnpm -F @soksak/e2e verify:activation`은 같은 파일을 실행 없이, 감사 없이 실행한다)은 표시가 가리키는 설정 폴더의 모든 event 파일에 대한 실행 로그 감사(`node scripts/audit-run.mjs <실행 폴더>`, [검사](../spec/logging.ko.md#검사))로 끝나며, finding이 있으면 실행이 실패한다.
+`SOKSAK_RUN_ID`와 `SOKSAK_RUN_FOLDER`를 정하는 시험 실행기 아래에서 각 검사는 애플리케이션의 event log에 시작과 끝을 표시하고(`diagnostics.test.mark`, [시험 표시](../spec/logging.ko.md#시험-표시)) 표시마다 위치 `(boot, seq)`를 실행 폴더의 `marks.jsonl`에 덧붙인다. `SOKSAK_RUN_ID`가 없으면 검사는 아무것도 표시하지 않는다. `pnpm verify:windows`와 `pnpm verify:activation`(실행기를 거치는 활성화 등급이며, `pnpm -F @soksak/e2e verify:activation`은 같은 파일을 실행 없이, 감사 없이 실행한다)은 표시가 가리키는 설정 폴더의 모든 event 파일에 대한 실행 로그 감사(`node scripts/audit-run.mjs <실행 폴더>`, [검사](../spec/logging.ko.md#검사))로 끝나며, finding이 있으면 실행이 실패한다. 감사는 실행 폴더에 시험마다 로그 범위로 낸 판정 `judgment.json`도 쓴다.
 고정 사이드바 창 검사는 준비 중 실패한 경우를 포함해 연결 종료 전에 임시 카드 사이드바 명시 선택을 복원한다. 카드의 명시적 `off`는 플러그인 기본값보다 우선한다. 선언된 `core.card.sidebar.set` 명령에 `set: "inherit"`를 보내면 크기와 접힘 선택을 보존하며 명시 선택을 해제한다. 기존 일반 창의 프로젝트·설정을 교체하지 않고 관측하려면 `SOKSAK_APP=tauriv2 SOKSAK_CONFIG_DIR=<config-dir> pnpm -F @soksak/e2e verify:terminal-sidebar-current`를 실행한다. 활성 터미널 카드와 저장된 터미널 `card-right` 할당이 필요하며 일반·전체화면·복귀 표시를 녹화하고 기존 탭과 설정을 보존한다. 이 검사는 fixture를 만들거나 비활성 선택을 복구하지 않는다.
 
 하네스가 읽는 설정 디렉터리(Node.js의 `os.tmpdir()`, macOS에서는 `$TMPDIR`)에 workspace 플러그인을 설치한 뒤, 각각 다른 터미널에서 그 디렉터리로 앱을 한 번씩 실행한다.

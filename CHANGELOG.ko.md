@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.16: 실행 감사가 시험마다 로그로 판정한다. 실행 폴더에 시험과 애플리케이션마다 한 행(줄 범위, 범위의 `error` event와 그 선언, 찾은 기대 event와 빠진 event)을 가진 `judgment.json`을 쓰고, 새 `expectEvent`로 event를 선언한 시험의 범위에 그 event가 없으면 `marks.jsonl`의 끝 표시에서 빠진 이름과 함께 실패한다. window-check 라이브러리는 `expectEvent`에 대해 `expect_event`를 덧붙인다. 소유 시험으로 검증했고, 기대 event를 선언하는 창 검사는 아직 없으며 애플리케이션 로그에서의 범위는 아직 관찰하지 않았다.
 - F160.14: `node scripts/audit-run.mjs <run folder>`는 `marks.jsonl`이 가리키는 설정 폴더의 모든 층(`host-`, `vt-`, `files-`, `shell-`, 그 세대와 debug 파일)의 event 파일을 감사하고, `pnpm verify:windows`와 새 `pnpm verify:activation`이 시험이 실패했을 때도 끝에서 이를 실행한다. 세대와 debug 파일을 건넌 `seq` 틈, 폴더의 파일을 합친 사슬, 선언 없는 event, 시험의 `expectError`가 선언하지 않은 모든 `error` event를 `<file>:<line>: <message>`와 종료 상태 1로 보고한다. window-check 라이브러리는 표시마다 `config`를 기록하고 `expectError`에 대해 `expect_error`를 덧붙인다. `node scripts/check-events.mjs --logs`도 모든 층의 파일을 감사한다. 소유 시험으로 검증했고, 애플리케이션에서 창 검사를 실행한 관찰은 아직 없으며, 지속적 통합은 창 검사를 실행하지 않으므로 감사의 시험을 실행한다.
 - F160.12: 두 host의 진단 메서드 `diagnostics.test.mark`가 event `host.test.start`와 `host.test.end`(`name`, `run`, `result`)를 저장하고 flush 뒤 그 줄의 위치 `{boot, seq}`로 답한다. window-check 라이브러리는 `SOKSAK_RUN_ID`가 있을 때 검사마다 시작과 끝(`pass` 또는 `fail`)을 표시하고 위치를 `SOKSAK_RUN_FOLDER`의 `marks.jsonl`에 덧붙이며, 시험 실행기는 이 폴더를 실행 id 옆에 정한다. 두 host, window-check 라이브러리, 실행기의 소유 시험으로 검증했고, 창 검사 실행 로그의 표지는 아직 관찰하지 않았다.
 - F160.11, F160.13: 시험 실행기가 실행마다 id(`SOKSAK_RUN_ID`)를 주고, 모든 시험의 출력을 도착하는 대로 `target/test-runs/<run>/`에 저장하며, 각 시험의 상태, 시작, 끝이 담긴 `manifest.json`을 유지한다. `node scripts/test-runs.mjs prune`은 실패가 없거나 모든 실패가 분류된 실행만 제거한다.

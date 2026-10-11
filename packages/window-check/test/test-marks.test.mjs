@@ -57,23 +57,26 @@ test("markTest sends the mark with the run identifier and appends its position t
   assert.ok(lines.every((line) => Number.isInteger(line.ts_us) && line.ts_us > 1e15), JSON.stringify(lines));
 });
 
-test("expectError appends its declaration to marks.jsonl while a run is kept, and only then", async (t) => {
+test("expectError and expectEvent append their declaration to marks.jsonl while a run is kept, and only then", async (t) => {
   const folder = mkdtempSync(join(tmpdir(), "soksak-marks-"));
   t.after(() => rmSync(folder, { recursive: true }));
   const session = new Session({ name: "fixture", configDir: "/config/a" }, fakeClient([{ boot: "1-2", seq: 7 }]));
   await withRun("run-1", folder, async () => {
     await session.markTest("start", "check a");
     session.expectError(/cannot open: .*/i);
-    session.on("second").expectError(/second window/);
+    session.expectEvent("host.window.event");
+    session.on("second").expectEvent("host.update.start");
   });
   assert.deepEqual(marks(folder).slice(1).map(({ ts_us, ...rest }) => rest), [
     { run: "run-1", app: "fixture", config: "/config/a", name: "check a", kind: "expect_error", pattern: "cannot open: .*", flags: "i" },
-    { run: "run-1", app: "fixture", config: "/config/a", name: "check a", kind: "expect_error", pattern: "second window", flags: "" },
+    { run: "run-1", app: "fixture", config: "/config/a", name: "check a", kind: "expect_event", event: "host.window.event" },
+    { run: "run-1", app: "fixture", config: "/config/a", name: "check a", kind: "expect_event", event: "host.update.start" },
   ]);
-  assert.equal(session.expectedErrors.length, 2);
+  assert.equal(session.expectedErrors.length, 1);
   const other = new Session({ name: "fixture", configDir: "/config/a" }, fakeClient([]));
   other.expectError(/x/);
   assert.equal(other.expectedErrors.length, 1);
+  assert.throws(() => other.expectEvent(""), /event name/);
 });
 
 test("markTest does nothing without a run identifier", async (t) => {

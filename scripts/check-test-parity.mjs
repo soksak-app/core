@@ -1429,6 +1429,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F160.16",
+    implementation: [
+      { file: "scripts/audit-run.mjs", symbol: "export function auditRun" },
+      { file: "packages/window-check/app.mjs", symbol: "  expectEvent(event)" },
+    ],
+    tests: [
+      { file: "scripts/test/audit-run.test.mjs", id: "a test that omits an expected event fails with the missing name at its end mark" },
+      { file: "packages/window-check/test/test-marks.test.mjs", id: "expectError and expectEvent append their declaration to marks.jsonl while a run is kept, and only then" },
+    ],
+    expected: "The audit of a run writes the verdict of each test by the range of its log, and a test that omits a declared event fails with the missing name.",
+    levels: ["unit"],
+  },
+  {
     id: "F149.1",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "static void logPointer" },
