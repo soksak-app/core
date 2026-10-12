@@ -43,6 +43,9 @@ mock.module("../host.js", {
 mock.module("../plugin-states.js", {
   namedExports: { configureStates: () => {}, showStates: async () => {} },
 });
+mock.module("../page-log.js", {
+  namedExports: { flushEvents: async () => { events.push("logflush"); } },
+});
 mock.module("../settings.js", {
   namedExports: {
     beginSettings: () => {}, selectProject: async () => {}, value: () => "tabs",
@@ -165,4 +168,15 @@ test("opening a project, removing it, opening a window and closing it are operat
   assert.deepEqual(cidsOf("closeKept"), [closedKept]);
   assert.deepEqual(started.find(([event, fields]) => event === "page.project.operation" && fields.action === "open")[1], { action: "open", project: PROJECT.id });
   assert.deepEqual(started.find(([event, fields]) => event === "page.project.operation" && fields.action === "remove")[1], { action: "remove", project: PROJECT.id });
+});
+
+test("the page flushes its event queue before the host call that closes the window", async () => {
+  await projects.initialise(store);
+  await projects.activate(PROJECT.id);
+  events.length = 0;
+  kept = false;
+  await requestClose();
+  // The window ends with the call, so the events of the operation of the close must reach the writer before it (F161.13).
+  assert.equal(events.at(-2), "logflush", `the event queue was not flushed before the close: ${events}`);
+  assert.equal(events.at(-1), "close");
 });

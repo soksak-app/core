@@ -304,7 +304,7 @@ page가 애플리케이션을 바꾸는 작업은 상관 식별자 `p<page의 ti
 | `settings` | `page.settings.change`(`scope`, `actor`, `keys`) | kind가 `settings`인 `workspace` |
 | `update` | `page.update.operation`(`action`은 `update`, `version`) | `appUpdateStage`와 `appUpdateApply` |
 
-사슬은 첫 event, `page.call`, `host.binding.call`이며, 감사는 첫 event의 식별자마다 나머지 둘에 나타나면 사슬이 완전하다고 본다. 첫 event는 작업이 시작될 때, 그리고 host 호출이 따를 때만 저장한다. 남은 탭이 거절한 제거와 잘못된 값으로 거절된 설정 변경은 작업을 시작하지 않는다. 설정 변경의 `actor`는 바꾼 주체이며 선언된 command(`core.settings.set`, `core.settings.theme`, `core.text.larger`)다. 변경의 모든 경로가 actor를 넘기고, `set`은 actor 없는 변경을 거절한다. `keys`는 바뀐 key를 쉼표로 이은 것이며 값은 담지 않는다(값의 기록은 설정 파일이다). 프로젝트 창을 닫는 것은 `window` 사슬이고, 프로젝트가 registry에서 빠지는 것은 `project` 사슬이다.
+사슬은 첫 event, `page.call`, `host.binding.call`이며, 감사는 첫 event의 식별자마다 나머지 둘에 나타나면 사슬이 완전하다고 본다. 자기 창을 닫는 것은 page를 끝내므로, page는 창을 닫는 host 호출 앞에서 자기 event 대기열을 비우고, 닫기 사슬의 첫 event가 page가 끝나기 전에 host의 writer에 도달한다. 첫 event는 작업이 시작될 때, 그리고 host 호출이 따를 때만 저장한다. 남은 탭이 거절한 제거와 잘못된 값으로 거절된 설정 변경은 작업을 시작하지 않는다. 설정 변경의 `actor`는 바꾼 주체이며 선언된 command(`core.settings.set`, `core.settings.theme`, `core.text.larger`)다. 변경의 모든 경로가 actor를 넘기고, `set`은 actor 없는 변경을 거절한다. `keys`는 바뀐 key를 쉼표로 이은 것이며 값은 담지 않는다(값의 기록은 설정 파일이다). 프로젝트 창을 닫는 것은 `window` 사슬이고, 프로젝트가 registry에서 빠지는 것은 `project` 사슬이다.
 
 page 없이 host가 시작하는 작업(Dock 메뉴가 여는 창, 프로젝트 제거에 대한 창의 응답, 애플리케이션 종료)은 사슬이 아니다. host가 자기 event(`host.window.event`, `host.project.removal_allowed`, `host.app.event`)를 저장한다. `sok`으로 설치한 plugin은 그 도구의 파일에 `sok.command`를 남긴다.
 

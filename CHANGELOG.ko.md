@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F161.13: page가 창을 닫는 host 호출 앞에서 자기 event 대기열을 비워, 닫기 사슬의 첫 event가 page가 끝나기 전에 host의 writer에 도달한다.
+- F161.20: `e2e/fixture.mjs`의 `pluginChangeApplied`가 plugin 변경이 다시 띄우는 page를 기다리고, chain과 registry check의 plugin 연산과 cleanup이 이를 기다린다.
+- F161.21: settings check가 고정된 목록 대신 자기 configuration의 활성화된 설치 plugin을 나열한다.
+- F161.19: 입력 기록 check가 terminal의 plugin event를 `plugin` 층 row로 읽고 page와 host의 clock 사이 순서에 page clock anchor의 bound를 허용한다.
 - F161.12: Tauri host가 종료할 때 창의 WebContent process를 main webview의 handle로 `with_webview` 밖에서 끝낸다. 이전에는 event를 보내던 thread와 deadlock이 났다.
 - F160.28.3: page의 첫 batch가 clock anchor의 왕복을 `page.log.clock`으로 적는다. 이는 그 event를 host의 event 사이에 두는 한도다.
 - F160.8.3: page의 sidecar port가 send의 상관 식별자를 host 호출 `sidecarSend`에 넘기므로, key의 요청이 key의 식별자를 갖는다.

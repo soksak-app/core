@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- F161.13: the page drains its event queue before the host call that closes its window, so the first event of the chain of the close reaches the writer of the host before the page can end.
+- F161.20: `pluginChangeApplied` of `e2e/fixture.mjs` waits for the page that a plugin change reloads, and the plugin operations of the chain and registry checks and their cleanups wait for it.
+- F161.21: the settings check lists the enabled installed plugins of its configuration instead of a fixed list.
+- F161.19: the input records check reads the plugin events of the terminal as rows of the layer `plugin` and allows the bound of the page clock anchor in orders across the clocks of the page and of the host.
 - F161.12: the Tauri host terminates the WebContent process of a window by the handle of its main webview outside `with_webview` when it quits, which deadlocked with a thread that emitted an event.
 - F160.28.3: the first batch of a page states the round trip of its clock anchor as `page.log.clock`, the bound within which its events are ordered among those of the host.
 - F160.8.3: the sidecar ports of the page pass the correlation identifiers of a send to the host call `sidecarSend`, so the request of a key carries the identifier of the key.

@@ -66,6 +66,15 @@ export function emitEvent(level, event, fields, cids = undefined) {
 }
 
 /**
+ * Ends the sends that the queued events of the page still wait for. The close of the window of the page calls this before the
+ * host call that ends it, so the first event of the operation of the close reaches the writer of the host before the page can
+ * end (docs/spec/logging.md#operation-chains).
+ */
+export function flushEvents() {
+  return batcher ? batcher.flush() : Promise.resolve();
+}
+
+/**
  * Whether an event of the level is stored: every level is stored in a page with a host and none in a page without one. The policy
  * that selects levels by the class of the event arrives with the log policy of the writers (docs/spec/logging.md#classes).
  */

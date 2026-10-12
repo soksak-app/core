@@ -2,6 +2,7 @@
 import { issueId } from "./ids.js";
 import { beginOperation } from "./operations.js";
 import { beginSettings, selectProject, value, flushSettings } from "./settings.js";
+import { flushEvents } from "./page-log.js";
 import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
 import { configureStates, showStates } from "./plugin-states.js";
@@ -416,5 +417,7 @@ async function closeWindow() {
     return;
   }
   await flush();
+  // The call ends the page, so its event queue must reach the writer of the host before it (F161.13).
+  await flushEvents();
   await windows.close(beginOperation("page.window.operation", { action: "close" }));
 }
