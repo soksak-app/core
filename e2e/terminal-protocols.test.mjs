@@ -252,7 +252,9 @@ for (const app of Object.values(APPS)) {
     assert.ok(isColor(plain, selection),
       `a selected cell without highlight colors was drawn on rgb(${plain}) instead of the theme selection background ${selection}`);
 
-    // 52: the default policy rejects it, and when allowed it stores the text and answers a query.
+    // 52: the default policy rejects it, and when allowed it stores the text and answers a query. The terminal reports the refused
+    // store as its error, which this check causes on purpose.
+    s.expectError(/program clipboard store denied by policy/);
     const before = pasteboardText();
     await effect(s, surface, `\\033]52;c;${Buffer.from("OSC52-DENIED").toString("base64")}\\007`);
     await s.until("terminal.session", (value) => /clipboard/i.test(value.error ?? ""), "a denied OSC 52 store was not reported", { surface });

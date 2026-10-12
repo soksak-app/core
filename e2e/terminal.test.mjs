@@ -1617,7 +1617,9 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(readFileSync(saved), PNG, "the saved image differs from the clipboard PNG");
     assert.equal((await s.get("terminal.session", surface)).error, undefined);
 
-    // Clipboard bytes that do not parse as a PNG become an explicit error on read and are not stored.
+    // Clipboard bytes that do not parse as a PNG become an explicit error on read and are not stored. The refused read is the
+    // error of the one display path, which this check causes on purpose.
+    s.expectError(/error native clipboard: PNG decode failed/);
     execFileSync("osascript", ["-e", "set the clipboard to «data PNGf706E67»"]);
     await assert.rejects(() => s.run("terminal.paste", {}, surface), /PNG decode failed/);
   });
@@ -1677,6 +1679,8 @@ for (const app of Object.values(APPS)) {
     // The trace capacity is 256. Control-U erases only the input line of the shell.
     for (let i = 0; i < 257; i++) await s.run("terminal.input", { bytes: "\u0015" }, surface);
     const overflow = "IME diagnostic trace capacity exceeded";
+    // The overflow is the error of the one display path, which this check causes on purpose.
+    s.expectError(/plugin\.terminal\.error: \{"message":"IME diagnostic trace capacity exceeded"/);
     await s.until("terminal.session", (state) => state.error === overflow,
       "the trace overflow did not reach terminal.session", { surface });
     await s.run("core.settings.theme", { name: "midnight", mode: other, scope: "common" });
