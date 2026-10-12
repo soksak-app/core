@@ -99,7 +99,9 @@ for (const app of Object.values(APPS)) {
     await section(s, "plugins");
     const list = await s.until("core.settings-modal", (modal) => modal.plugin === null && modal.listed.length > 0,
       "the plugin list did not show");
-    assert.deepEqual(list.listed, ["browser", "files", "terminal"]);
+    // The list holds the enabled installed plugins of the configuration, in the order of their ids.
+    const { plugins: installed } = JSON.parse(readFileSync(join(s.app.configDir, "plugins", "installed.json"), "utf8"));
+    assert.deepEqual(list.listed, Object.keys(installed).filter((id) => installed[id].enabled).sort());
     assert.equal(list.query, "");
     const rows = list.controls.filter((c) => c.name === "core.settings-modal.plugin");
     assert.deepEqual(rows.map((c) => c.key), list.listed.map((id) => `plugin:${id}`));
