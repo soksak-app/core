@@ -13,7 +13,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: an hwp file opens from the tree, draws its pages and takes the keyboard focus on a press`, { timeout: 180000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
-    await fresh(s);
+    await fresh(s, { performanceTrace: true });
     const { surface } = await openHwp(s);
     // A press on the page in the region gives the editor the keyboard focus and places its caret.
     const region = await studio(s, surface);
