@@ -451,7 +451,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 // as the member `cids`. A report that is dropped is recorded as dropped.
 - (void)report:(const char *)json {
     NSString *cid = [self currentCid];
-    NSData *recorded = [NSJSONSerialization dataWithJSONObject:@{ @"report": @(json), @"dropped": @(self.closed || !self.event) } options:0 error:NULL];
+    // The disjunction of C is an int, and @(int) writes a number; the catalog declares the member as a boolean.
+    NSData *recorded = [NSJSONSerialization dataWithJSONObject:@{ @"report": @(json), @"dropped": @((BOOL)(self.closed || !self.event)) } options:0 error:NULL];
     NSString *fields = [[[NSString alloc] initWithData:recorded encoding:NSUTF8StringEncoding] autorelease];
     sp_event_cids(SP_CLASS_INPUT, SP_EVENT_INFO, "native.input.report", cid.UTF8String ?: "", fields.UTF8String);
     if (self.closed || !self.event) return;

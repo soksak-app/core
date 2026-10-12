@@ -9,6 +9,7 @@
 - F161.26: the close of a window starts its operation before the page drains its event queue and passes the identifiers to the host call, and the chain `window` asks `page.window.operation` and `host.binding.call`, because the closing call ends the page before it can record the call and the host refuses a batch of a window that is gone.
 - F161.18: the divider drag check matches the record form of the transcript lines (`info page page: host ...`), which the one display path gives them, and runs with the trace on so a surface that presents nothing leaves its frame records.
 - F161.31: `readEvents` of the window-check harness merges the events of every process with a concatenation, so a day of checks reads any number of new events; the spread of one call overflowed the stack.
+- F161.33: the report of an input region records its dropped member as a boolean, as the catalog declares it; the disjunction of C is an int, which serialized a number.
 - F161.13: the page drains its event queue before the host call that closes its window, so the first event of the chain of the close reaches the writer of the host before the page can end.
 - F161.20: `pluginChangeApplied` of `e2e/fixture.mjs` waits for the page that a plugin change reloads, and the plugin operations of the chain and registry checks and their cleanups wait for it.
 - F161.21: the settings check lists the enabled installed plugins of its configuration instead of a fixed list.

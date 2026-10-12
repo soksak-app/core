@@ -500,6 +500,13 @@ int main(int argc, char **argv) { @autoreleasepool {
                 if ([event[@"cids"] count] != 1) everyEventHasOneCid = NO;
             }
             check(everyEventHasOneCid, [NSString stringWithFormat:@"TEST 8: every callback and every report of the input method has one correlation identifier (got %@)", records]);
+            // The catalog declares the member dropped of a report as a boolean, so the record holds a JSON boolean (#F161.33).
+            BOOL everyDroppedIsBoolean = YES;
+            for (NSDictionary *event in captured) {
+                if (![event[@"name"] isEqual:@"native.input.report"]) continue;
+                if (CFGetTypeID((CFTypeRef)event[@"fields"][@"dropped"]) != CFBooleanGetTypeID()) everyDroppedIsBoolean = NO;
+            }
+            check(everyDroppedIsBoolean, [NSString stringWithFormat:@"TEST 8: the dropped member of every report is a boolean (got %@)", records]);
             check(markedEvent && composeReport && [markedEvent[@"cids"] isEqualToArray:composeReport[@"cids"]],
                 [NSString stringWithFormat:@"TEST 8: a callback and the report it causes share one correlation identifier (got %@)", records]);
             check(markedEvent && insertedEvent && ![markedEvent[@"cids"] isEqualToArray:insertedEvent[@"cids"]],
