@@ -817,7 +817,9 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: three terminals survive repeated divider drags and project returns`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
-    await fresh(s);
+    // The trace stays on: the check judges the presentation of every surface, and its records name the frame that a
+    // surface did not present (docs/spec/performance-trace.md, F161.18).
+    await fresh(s, { performanceTrace: true });
     const grid = await s.get("core.grid");
     const tab = grid.cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
     assert.ok(tab, "the fixture has no terminal tab");
@@ -850,11 +852,13 @@ for (const app of Object.values(APPS)) {
         axis: "x", line: cards[0].c1, dx: 500, dy: 0, ms: 96, times: roundTripsPerSet,
       }, { capture: true });
       const traceLines = await trace.stop();
+      // The transcript lines are records of the one display path, so they carry its form: `info page page: host ...`.
+      const presented = (line) => line.startsWith("info page page: host presentSurfaces ");
       const terminalPresentations = traceLines.filter((line) =>
-        line.startsWith("host presentSurfaces ") && line.includes('"waitForPresentation":true'));
+        presented(line) && line.includes('"waitForPresentation":true'));
       assert.ok(terminalPresentations.length > 0,
         `set ${set}: terminal capture had no DOM presentation barrier; ` +
-        `presentations=${traceLines.filter((line) => line.startsWith("host presentSurfaces ")).length}`);
+        `presentations=${traceLines.filter(presented).length}`);
       t.diagnostic(`${app.name}: set ${set + 1} terminal presentation barriers ${terminalPresentations.length}`);
       const edgeWidths = [];
       const times = [];
