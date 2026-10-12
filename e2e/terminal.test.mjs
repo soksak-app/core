@@ -478,17 +478,35 @@ for (const app of Object.values(APPS)) {
       // The prompt and the input must continue once on the row right after the output row, and the cursor must be at the end of the input.
       const consistent = async (width, label, prompt) => {
         let measured = "";
-        // When the shell redraws, the input appears once on the screen. Before the redraw the engine has erased the prompt row, so there is none.
+        // When the shell redraws, the input appears once on the screen. Before the redraw the engine has erased the prompt row, so
+        // there is none. The screen must be of the new width: the message of the width before the change also shows the input
+        // once, and a cursor position read from it belongs to the old layout.
         try {
           await s.until("terminal.screen", (lines) => {
             const rows = rowsOf(lines, width);
             const count = rows.join("").split("START-").length - 1;
             measured = `START- ${count} times in ${JSON.stringify(rows.join("").trimEnd())}`;
-            return count === 1 && rows.join("").includes(input);
+            return count === 1 && rows.join("").includes(input) && rows.every((row) => row.length === width);
           }, `${label}: the screen did not show the input once`, { surface: opened.surface });
         } catch (error) {
           const { vendor } = await s.get("terminal.session", opened.surface);
           throw new Error(`${label}: the input is not shown once: ${measured}; last shell mark ${JSON.stringify(vendor?.shell)}`);
+        }
+        // The shell erases its line and draws it again in separate writes, so the cursor stands at the end of the input only
+        // when the drawing finished; the rows are read after the cursor, never between the erasing and the drawing.
+        const drawn = rowsOf(await s.get("terminal.screen", opened.surface), width);
+        const end = drawn.join("").indexOf(input) + input.length;
+        try {
+          await s.until("terminal.cursor",
+            (value) => value.row === Math.floor(end / width) && value.col === end % width,
+            `${label}: the cursor is not after the input end at row ${Math.floor(end / width)} col ${end % width}`,
+            { surface: opened.surface });
+        } catch (error) {
+          const { scrollback, cols: liveCols } = await s.get("terminal.session", opened.surface);
+          const rows = rowsOf(await s.get("terminal.screen", opened.surface), width);
+          error.message += `; the session holds cols ${liveCols} with scrollback ${JSON.stringify(scrollback)} ` +
+            `and rows ${JSON.stringify(rows.map((row) => row.trimEnd()))}`;
+          throw error;
         }
         const earlier = await history(width);
         const current = rowsOf(await s.get("terminal.screen", opened.surface), width);
@@ -498,13 +516,6 @@ for (const app of Object.values(APPS)) {
         const starts = line && (prompt === undefined ? line.text.indexOf(input) > 0 : line.text.startsWith(prompt + input));
         assert.ok(count === 1 && starts, `${label}: the prompt line does not follow ${above} once: START- ${count} times in ` +
           `${JSON.stringify(all.map((row) => row.trimEnd()))} (${earlier.length} history rows)`);
-        // The cursor is on the screen directly after the end of the input.
-        const end = current.join("").indexOf(input) + input.length;
-        await s.until("terminal.cursor",
-          (value) => value.row === Math.floor(end / width) && value.col === end % width,
-          `${label}: the cursor is not after the input end at row ${Math.floor(end / width)} col ${end % width} ` +
-            `in ${JSON.stringify(current.map((row) => row.trimEnd()))}`,
-          { surface: opened.surface });
         return line.text.slice(0, line.text.indexOf(input));
       };
       const prompt = await consistent(cols, "before the resize");

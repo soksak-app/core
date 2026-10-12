@@ -5,6 +5,7 @@
 ## 미배포
 
 - F161.14: page의 첫 batch가 clock anchor의 왕복 옆에 page 시계의 해상도를 `page.log.clock`(`resolution_us`)으로 적는다. `performance.now()`의 읽기값이 계단으로 진행하므로 page의 시간은 왕복의 절반에 그 계단을 더한 값만큼 host 시계와 달라진다.
+- F161.23: resize의 감싸진 줄 check가 새 폭의 화면만 판정하고 cursor가 자리 잡은 뒤에 줄을 읽는다. 이전 폭의 screen message도 입력을 한 번 보이기 때문이다.
 - F161.13: page가 창을 닫는 host 호출 앞에서 자기 event 대기열을 비워, 닫기 사슬의 첫 event가 page가 끝나기 전에 host의 writer에 도달한다.
 - F161.20: `e2e/fixture.mjs`의 `pluginChangeApplied`가 plugin 변경이 다시 띄우는 page를 기다리고, chain과 registry check의 plugin 연산과 cleanup이 이를 기다린다.
 - F161.21: settings check가 고정된 목록 대신 자기 configuration의 활성화된 설치 plugin을 나열한다.
