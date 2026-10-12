@@ -261,8 +261,8 @@ function checkSidebars(values) {
 let common = {};
 let overrides = {};
 let projectId = null;
-/* Whether the settings connected once: only a later change reports the switch through the change path. */
-let started = false;
+/* Whether a refresh reported the stored switch at the start of the page; only a later change takes the change path. */
+let reported = false;
 let store;
 let writing = Promise.resolve();
 let changes = 0;
@@ -415,12 +415,7 @@ export function beginSettings(snapshot, id) {
 export async function connectSettings(storage) {
   store = storage;
   store.onChange(() => { if (!changes) return refresh().catch((e) => dispatchEvent(new ErrorEvent("error", { message: e.message }))); });
-  // The start reports the stored switch unchanged: the switch of the host can be on from a page that ended while the
-  // stored setting says off, and only this report turns a stale switch off (docs/spec/performance-trace.md#the-switch).
-  started = false;
   await refresh();
-  started = true;
-  await reportTraceAtStart(settings["diagnostics.performance"]);
 }
 
 async function refresh() {
@@ -439,7 +434,15 @@ async function refresh() {
     overrides = nextOverrides;
     apply();
   }
-  if (started) await setTraceEnabled(settings["diagnostics.performance"]);
+  // The first refresh that applied the snapshot reports the stored switch unchanged: the switch of the host can be on
+  // from a page that ended while the stored setting says off, and only this report turns a stale switch off
+  // (docs/spec/performance-trace.md#the-switch). A refresh that bailed on an in-flight change reports nothing, so the
+  // first report always carries the stored value and never the defaults.
+  if (reported) await setTraceEnabled(settings["diagnostics.performance"]);
+  else {
+    reported = true;
+    await reportTraceAtStart(settings["diagnostics.performance"]);
+  }
   await setLogPolicy(settings["diagnostics.log"]);
 }
 
