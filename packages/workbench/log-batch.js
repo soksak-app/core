@@ -18,6 +18,12 @@ const EVENT_OVERHEAD_BYTES = 64;
 // The number of clock requests that anchor the clock of the page to the clocks of the host.
 const ANCHOR_SAMPLES = 5;
 
+// The most readings that the measurement of the resolution of the clock of the page takes. The readings of
+// `performance.now()` advance in steps of the clock of the engine, and the first step that a bounded run of readings
+// observes is the resolution, so a time of the page differs from the clock of the host by half the shortest round trip
+// plus that step (docs/spec/logging.md#writers).
+const STEP_READINGS = 100_000;
+
 // A correlation identifier is not empty and holds no quote, no backslash and no control character, as the host requires.
 const CID = /^[^"\\\u0000-\u001f\u007f]+$/;
 
@@ -55,6 +61,17 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
   let sending = null;
   let anchor = null;
 
+  // The resolution of the clock of the page in microseconds: the first step that a bounded run of readings observes,
+  // and 1 when no reading of the run advanced (a floor, never zero, so the stated bound stays a bound).
+  const resolutionOfClock = () => {
+    const started = now();
+    for (let reading = 0; reading < STEP_READINGS; reading += 1) {
+      const stepped = now();
+      if (stepped !== started) return Math.max(1, Math.round((stepped - started) * 1000));
+    }
+    return 1;
+  };
+
   const anchored = async () => {
     if (anchor) return anchor;
     let best = null;
@@ -69,7 +86,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
         best = { trip: ended - started, at: (started + ended) / 2, ts_us: answer.ts_us, mono_ns: answer.mono_ns };
       }
     }
-    anchor = best;
+    anchor = { ...best, resolution_us: resolutionOfClock() };
     return anchor;
   };
 
@@ -100,7 +117,8 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
         // half of it, which a reader needs to order the events of the page among those of the host.
         if (!base.stated) {
           base.stated = true;
-          events.unshift({ at: base.at, level: "info", event: "page.log.clock", fields: { trip_us: Math.round(base.trip * 1000) } });
+          events.unshift({ at: base.at, level: "info", event: "page.log.clock",
+            fields: { trip_us: Math.round(base.trip * 1000), resolution_us: base.resolution_us } });
         }
         const stamped = events.map(({ at, cids, ...rest }) => ({
           ts_us: Math.round(base.ts_us + (at - base.at) * 1000),

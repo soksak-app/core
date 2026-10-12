@@ -102,12 +102,34 @@ test("the first batch states the round trip of the anchor as page.log.clock, onc
   await settle();
   batcher.emit("info", "page.test.b", {});
   await settle();
-  // The shortest round trip is 2 ms, so a time of the page differs from the clock of the host by at most 1 ms
-  // (docs/spec/logging.md#writers).
+  // The shortest round trip is 2 ms, so a time of the page differs from the clock of the host by at most 1 ms plus the
+  // resolution of the clock of the page (docs/spec/logging.md#writers). The clock of this test never advances, so the
+  // measured resolution falls to its floor.
   assert.deepEqual(batches.map((batch) => batch.events.map((event) => [event.event, event.fields])), [
-    [["page.log.clock", { trip_us: 2000 }], ["page.test.a", {}]],
+    [["page.log.clock", { trip_us: 2000, resolution_us: 1 }], ["page.test.a", {}]],
     [["page.test.b", {}]],
   ]);
+});
+
+test("the first batch states the resolution that the steps of the clock of the page show", async () => {
+  let reading = 0;
+  let calls = 0;
+  // The clock advances one millisecond at every third reading: the first step that the anchor observes is one millisecond.
+  const step = () => { calls += 1; if (calls % 3 === 0) reading += 1; return reading; };
+  const batches = [];
+  const batcher = createEventBatcher({
+    call: async (request) => {
+      if (request.action === "clock") return { ts_us: 1_791_000_000_000_000, mono_ns: 5_000_000_000 };
+      batches.push(request);
+      return undefined;
+    },
+    report: assert.ifError,
+    now: step,
+  });
+  batcher.emit("info", "page.test.a", {});
+  await settle();
+  assert.equal(batches[0].events[0].event, "page.log.clock");
+  assert.equal(batches[0].events[0].fields.resolution_us, 1000, "the clock that advances in milliseconds states a resolution of one millisecond");
 });
 
 test("a clock answer that is not two positive integers is reported with the number of events, and the next batch asks again", async () => {

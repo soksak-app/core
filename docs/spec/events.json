@@ -1,87 +1,879 @@
 {
   "schema": 2,
-  "layers": ["native", "host", "page", "sidecar", "sok"],
+  "layers": [
+    "native",
+    "host",
+    "page",
+    "sidecar",
+    "sok"
+  ],
   "events": {
-    "log.open": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "schema": "number", "pid": "number", "role": "string", "boot": "string" }, "description": "The first line of every event file." },
-    "log.dropped": { "layer": "host", "class": "lifecycle", "level": "warn", "fields": { "from_seq": "number", "to_seq": "number", "count": "number", "bytes": "number", "reason": "string", "channel": "string" }, "description": "A range of seq that the writer refused; it explains the gap. channel is other for the events of the levels error, warn and info and debug for the events of the levels debug and trace; it is stored in the main file." },
-    "log.policy": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "source": "string", "classes": "object" }, "description": "The policy of the event log that is now in force: source is default when no policy file exists and file when the policy file holds it; classes holds the least severe level that is stored for each class. The first policy of a writer and every change of it are stored; the same policy again is not." },
-    "log.pruned": { "layer": "host", "class": "lifecycle", "level": ["info", "warn"], "fields": { "logs": "number", "bytes": "number", "runs": "array", "from_us": "number", "to_us": "number", "remaining": "number", "bound": "number" }, "description": "The retention removed the files of the oldest runs because the files of the runs passed the bound: files and bytes are what it removed, runs are the names of the runs (`<role>-<boot>`), from_us and to_us are the range of the time of their events, remaining is the size of the files that are left and bound is the bound. The level is warn when remaining is still over bound because only the run of the writer and pinned runs are left." },
-    "log.gated": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "class": "string", "level": "string", "count": "number" }, "description": "The number of events of the class and the level that the gate of the host refused since the earlier report, so no event is lost without a count." },
-    "log.rotated": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "bytes": "number", "generation": "number" }, "description": "A file was closed as the generation with this number and a new file started; no generation is removed." },
-    "host.record.<level>": { "layer": "host", "class": "lifecycle", "level": ["error", "info"], "fields": { "where": "string", "text": "string", "truncated?": "boolean" }, "description": "A record of the host." },
-    "native.record.<level>": { "layer": "native", "class": "lifecycle", "level": ["error", "info"], "fields": { "where": "string", "text": "string" }, "description": "A record of the native library." },
-    "page.record.<level>": { "layer": "page", "class": "lifecycle", "level": ["error", "info"], "fields": { "where": "string", "text": "string", "truncated?": "boolean" }, "description": "A record of the page, including the errors that a person sees." },
-    "sidecar.record.<level>": { "layer": "sidecar", "class": "lifecycle", "level": "info", "fields": { "where": "string", "text": "string", "truncated?": "boolean" }, "description": "A line that a sidecar wrote to its standard error, stored by the host with the name of the sidecar as the place." },
-    "sok.command": { "layer": "sok", "class": "call", "level": ["debug", "warn"], "fields": { "name": "string", "args": "string", "micros": "number", "ok": "boolean", "status": "number", "error?": "string", "truncated?": "boolean" }, "description": "One run of the command line tool: the command word, the arguments and the error text cut to 1024 bytes (`truncated` is true when either was cut), the microseconds, the exit status, and the first line of its standard error for a status other than 0." },
-    "sok.replay.divergence": { "layer": "sok", "class": "frame", "level": "error", "fields": { "session": "string", "segment": "string", "sequence": "number", "layer": "string", "expected": "string", "found": "string" }, "description": "The first stored screen hash of a session that differs from the replayed hash: the segment (the boot of the run of the sidecar), the sequence, the layer of the stored hash (`sidecar` or `page`), the replayed hash (`none` for a page frame without a sidecar frame) and the stored hash." },
-    "sok.panic": { "layer": "sok", "class": "lifecycle", "level": "error", "fields": { "name": "string", "text": "string", "stack": "string" }, "description": "A panic of the command line tool: the goroutine or thread that panicked (`main` for the command), the panic text and the stack at the panic." },
-    "page.console.<method>": { "layer": "page", "class": "lifecycle", "level": ["debug", "info", "warn"], "fields": { "text": "string", "truncated?": "boolean" }, "description": "What the page writes to its console; the text is cut to 8192 bytes while it is built and `truncated` is true when it was cut." },
-    "page.trace.<event>": { "layer": "page", "class": "call", "level": "debug", "fields": {}, "description": "The performance trace of the page, while it is on." },
-    "host.trace.<event>": { "layer": "host", "class": "call", "level": "debug", "fields": {}, "description": "The performance trace of the host, while it is on." },
-    "host.sampler.<event>": { "layer": "host", "class": "call", "level": "debug", "fields": {}, "description": "The sampler of the host, while the trace is on." },
-    "host.buffer.dropped": { "layer": "host", "class": "lifecycle", "level": "warn", "fields": { "buffer": "string", "count": "number", "bytes": "number", "reason": "string" }, "description": "A bounded buffer of the host refused a message because it was full; `buffer` names it, `count` is the number of messages (1 for each refusal), `bytes` their size and `reason` the bound that was reached. Not a queue of events, whose loss is `log.dropped`." },
-    "page.log.dropped": { "layer": "page", "class": "lifecycle", "level": "warn", "fields": { "count": "number", "bytes": "number", "reason": "string" }, "description": "The page queue was full or reached its byte bound and refused events; the page stores the count and the bytes in front of the events that follow." },
-    "page.log.clock": { "layer": "page", "class": "lifecycle", "level": "info", "fields": { "trip_us": "number" }, "description": "The round trip in microseconds of the clock request that anchors the clock of the page to the clocks of the host; a time of the page differs from the clock of the host by at most half of it. The first batch of a page holds it." },
-    "page.log.gated": { "layer": "page", "class": "lifecycle", "level": "info", "fields": { "class": "string", "level": "string", "count": "number" }, "description": "The number of events of the class and the level that the gate of the page refused since the earlier report." },
-    "page.start": { "layer": "page", "class": "lifecycle", "level": "info", "fields": { "time_origin": "number", "url": "string" }, "description": "A document of the main page started; a reload starts a new document with a new clock." },
-    "page.call": { "layer": "page", "class": "call", "level": ["debug", "warn"], "result": true, "fields": { "name": "string", "args": "string", "micros": "number", "ok": "boolean", "truncated": "boolean", "error?": "string" }, "description": "A host call of a page; `error` names a refused call." },
-    "host.endpoint.call": { "layer": "host", "class": "call", "level": ["debug", "warn"], "result": true, "fields": { "name": "string", "args": "string", "micros": "number", "ok": "boolean", "truncated": "boolean", "error?": "string" }, "description": "A method that a client of the endpoint called; `args` is the params as received (`null` when absent) cut to 1024 bytes, `error` is the code and the message that the client received." },
-    "host.binding.call": { "layer": "host", "class": "call", "level": ["debug", "warn"], "result": true, "fields": { "name": "string", "args": "string", "micros": "number", "ok": "boolean", "truncated": "boolean", "error?": "string" }, "description": "A host call that the main page or a document of a surface sent; `name` is the snake case name of the call, `args` is the JSON array of the arguments in call order cut to 1024 bytes, `error` is the text that the page received or `the call ended without a result`." },
-    "page.command": { "layer": "page", "class": "call", "level": ["debug", "warn"], "result": true, "fields": { "name": "string", "micros": "number", "ok": "boolean", "error?": "string" }, "description": "A command request that the page answered; `error` names a failed command." },
-    "page.plugin.operation": { "layer": "page", "class": "call", "level": "info", "cids": "required", "fields": { "action": "string", "plugin": "string" }, "description": "The page started an install, update, remove, enable or disable of a plugin; its host call carries the same cids." },
-    "page.project.operation": { "layer": "page", "class": "call", "level": "info", "cids": "required", "fields": { "action": "string", "project": "string" }, "description": "The page started the open or the removal of a project; its host calls carry the same cids." },
-    "page.window.operation": { "layer": "page", "class": "call", "level": "info", "cids": "required", "fields": { "action": "string" }, "description": "The page started a new window, the close of its window, or the report that the window stays open; its host call carries the same cids." },
-    "page.settings.change": { "layer": "page", "class": "call", "level": "info", "cids": "required", "fields": { "scope": "string", "actor": "string", "keys": "string" }, "description": "A change of the settings by the command or the surface named in actor; keys lists the changed keys and never their values; the write to the host carries the same cids." },
-    "page.update.operation": { "layer": "page", "class": "call", "level": "info", "cids": "required", "fields": { "action": "string", "version": "string" }, "description": "The page started the application update to the version; its stage and apply calls carry the same cids." },
-    "host.input.relay": { "layer": "host", "class": "input", "level": "info", "cids": "required", "fields": { "surface": "string", "name": "string", "type": "string" }, "description": "The host relayed a picture region event that carries correlation identifiers to the page; `name` is the region and `type` the type of the event." },
-    "host.sidecar.request": { "layer": "host", "class": "io", "level": "info", "cids": "required", "fields": { "name": "string", "surface": "string", "bytes": "number" }, "description": "The host queued a page request that continues inputs for a sidecar; the request line carries the same identifiers, and `bytes` is the size of the body." },
-    "host.sidecar.reply": { "layer": "host", "class": "io", "level": ["info", "warn"], "result": true, "fields": { "name": "string", "surface": "string", "bytes": "number", "ok": "boolean", "micros?": "number", "error?": "string" }, "description": "A message of a sidecar that names the correlation identifiers of a request or states an error, or the failure of a sidecar that ends the requests it did not answer." },
-    "host.window.event": { "layer": "host", "class": "lifecycle", "level": ["debug", "info"], "fields": { "window": "string", "kind": "string" }, "description": "A window event that the host registered." },
-    "host.app.event": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "kind": "string" }, "description": "An application event that the host registered." },
-    "host.sidecar.start": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "name": "string", "pid": "number" }, "description": "A sidecar process of standard input and output started." },
-    "host.sidecar.exit": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "name": "string", "pid": "number", "status": "string", "stopping": "boolean" }, "description": "A sidecar process ended." },
-    "host.sidecar.connect": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "name": "string", "pid": "number", "spawned": "boolean" }, "description": "The host connected to a persistent service." },
-    "host.sidecar.disconnect": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "name": "string", "pid": "number", "stopping": "boolean", "violation": "string" }, "description": "The connection to a persistent service ended." },
-    "host.project.removal_allowed": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "window": "string", "project": "string" }, "description": "A window ended while it was asked whether a project may be removed, so the removal is allowed." },
-    "host.workspace.settings": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "scope": "string", "set": "string", "removed": "string" }, "description": "A settings file changed; scope is common or the project id, set and removed are the sorted keys joined by commas." },
-    "host.notification.event": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "type": "string", "authorization": "string", "window": "string", "surface": "string" }, "description": "The notification center reported a state or a notice that was posted or activated." },
-    "host.test.start": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "name": "string", "run": "string" }, "description": "A window check marked the start of a test; run is the identifier of the test run." },
-    "host.test.end": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "name": "string", "run": "string", "result": "string" }, "description": "A window check marked the end of a test; result is pass, fail or skip." },
-    "host.panic": { "layer": "host", "class": "lifecycle", "level": "error", "fields": { "name": "string", "text": "string", "stack": "string" }, "description": "A goroutine or a thread of the host panicked; name is the name that the entrance gave it, text is the panic value (the Rust host prefixes `<file>:<line>: `), and the process ends after the event is stored." },
-    "host.stall.dump": { "layer": "host", "class": "lifecycle", "level": "warn", "fields": { "path": "string" }, "description": "A host that did not answer has its threads sampled into the file at path." },
-    "host.crash.found": { "layer": "host", "class": "lifecycle", "level": "warn", "fields": { "path": "string", "pid": "number", "time": "string" }, "description": "The system wrote a crash report of an earlier run of the application; the start of the host announces it once." },
-    "host.log.index_rebuilt": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "file": "string", "reason": "string", "lines": "number", "bytes": "number", "micros": "number" }, "description": "The index of an event file was built from the whole file, because it did not exist or was not the index of that file." },
-    "host.update.start": { "layer": "host", "class": "lifecycle", "level": "info", "fields": { "pid": "number", "command": "string" }, "description": "The host started the detached command that replaces the application bundle." },
-    "native.app.activated": { "layer": "native", "class": "lifecycle", "level": "info", "fields": {}, "description": "The application became active." },
-    "native.app.deactivated": { "layer": "native", "class": "lifecycle", "level": "info", "fields": {}, "description": "The application resigned active." },
-    "native.app.hidden": { "layer": "native", "class": "lifecycle", "level": "info", "fields": {}, "description": "The application was hidden." },
-    "native.app.unhidden": { "layer": "native", "class": "lifecycle", "level": "info", "fields": {}, "description": "The application was shown again." },
-    "native.window.key": { "layer": "native", "class": "lifecycle", "level": "info", "fields": { "window": "number", "first_responder": "string" }, "description": "A window became the key window." },
-    "native.window.resign_key": { "layer": "native", "class": "lifecycle", "level": "info", "fields": { "window": "number", "first_responder": "string" }, "description": "A window resigned key." },
-    "native.window.main": { "layer": "native", "class": "lifecycle", "level": "info", "fields": { "window": "number", "first_responder": "string" }, "description": "A window became the main window." },
-    "native.window.resign_main": { "layer": "native", "class": "lifecycle", "level": "info", "fields": { "window": "number", "first_responder": "string" }, "description": "A window resigned main." },
-    "native.window.miniaturized": { "layer": "native", "class": "lifecycle", "level": "info", "fields": { "window": "number", "first_responder": "string" }, "description": "A window was miniaturized." },
-    "native.window.deminiaturized": { "layer": "native", "class": "lifecycle", "level": "info", "fields": { "window": "number", "first_responder": "string" }, "description": "A window was deminiaturized." },
-    "native.window.occlusion": { "layer": "native", "class": "lifecycle", "level": "info", "fields": { "window": "number", "visible": "boolean" }, "description": "The occlusion state of a window changed." },
-    "native.window.first_responder": { "layer": "native", "class": "input", "level": "info", "fields": { "window": "number", "from": "string", "to": "string" }, "description": "The first responder of a window changed, seen at its next update." },
-    "native.input.key_down": { "layer": "native", "class": "input", "level": "info", "cids": "required", "fields": { "keyCode": "number", "characters": "string", "charactersIgnoringModifiers": "string", "modifierFlags": "number", "isARepeat": "boolean", "timestamp": "number", "before": "object", "after": "object" }, "description": "A key reached an image region. The native layer assigns the correlation identifier of the input here; `before` and `after` hold the state of the input document." },
-    "native.input.callback": { "layer": "native", "class": "input", "level": "info", "cids": "required", "fields": { "call": "string", "before": "object", "after": "object" }, "description": "A callback of the input method or a step of the region that it causes (`setMarkedText`, `insertText`, `unmarkText`, `doCommandBySelector`, `commitThrough`, `reportPreedit`, `commitPending`, `clearDocument`, `becomeFirstResponder`, `resignFirstResponder`), with its arguments next to `call` and the state of the input document before and after. It takes the identifier of the input that caused it." },
-    "native.input.report": { "layer": "native", "class": "input", "level": "info", "cids": "required", "fields": { "report": "string", "dropped": "boolean" }, "description": "A report of a region to the page, as the JSON text that was sent; `dropped` is true when the region was closed and the report was not sent. The sent report carries the identifier as its member `cids`." },
-    "native.input.source_changed": { "layer": "native", "class": "input", "level": "info", "fields": {}, "description": "The selected keyboard input source changed." },
-    "native.input.query": { "layer": "native", "class": "input", "level": "debug", "fields": { "call": "string", "focus": "boolean" }, "description": "A query of the input method that an image region answered; `answer` holds the answer." },
-    "native.observe.registered": { "layer": "native", "class": "lifecycle", "level": "info", "fields": { "source": "string", "kind": "string", "target": "string", "mode": "string", "registrations": "number" }, "description": "An observer, monitor, key-value observer, run loop observer, dispatch source, Apple event handler or delegate was registered through the native entrance; `registrations` counts the registrations of the source." },
-    "native.observe.failed": { "layer": "native", "class": "lifecycle", "level": "error", "fields": { "source": "string", "kind": "string", "reason": "string" }, "description": "The native entrance refused a registration or a delivery that names no registered source." },
-    "native.observe.delivered": { "layer": "native", "class": "input", "level": "debug", "fields": { "source": "string", "count": "number" }, "description": "One delivery of a registration of the mode `record`; `count` is the exact number of deliveries of the source so far." },
-    "native.observe.counted": { "layer": "native", "class": "frame", "level": "debug", "fields": { "source": "string", "count": "number", "total": "number", "micros": "number" }, "description": "The deliveries of a registration of the mode `count` since the earlier summary (at most one per second), their total and the microseconds between the summaries." },
-    "native.log.gated": { "layer": "native", "class": "lifecycle", "level": "info", "fields": { "class": "string", "level": "string", "count": "number" }, "description": "The number of events of the class and the level that the gate of the native library refused since the earlier report." },
-    "native.process.exit_timeout": { "layer": "native", "class": "lifecycle", "level": "warn", "fields": { "pid": "number", "seconds": "number" }, "description": "A process did not end within the time that the caller waited for it." }
+    "log.open": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "schema": "number",
+        "pid": "number",
+        "role": "string",
+        "boot": "string"
+      },
+      "description": "The first line of every event file."
+    },
+    "log.dropped": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "from_seq": "number",
+        "to_seq": "number",
+        "count": "number",
+        "bytes": "number",
+        "reason": "string",
+        "channel": "string"
+      },
+      "description": "A range of seq that the writer refused; it explains the gap. channel is other for the events of the levels error, warn and info and debug for the events of the levels debug and trace; it is stored in the main file."
+    },
+    "log.policy": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "source": "string",
+        "classes": "object"
+      },
+      "description": "The policy of the event log that is now in force: source is default when no policy file exists and file when the policy file holds it; classes holds the least severe level that is stored for each class. The first policy of a writer and every change of it are stored; the same policy again is not."
+    },
+    "log.pruned": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": [
+        "info",
+        "warn"
+      ],
+      "fields": {
+        "logs": "number",
+        "bytes": "number",
+        "runs": "array",
+        "from_us": "number",
+        "to_us": "number",
+        "remaining": "number",
+        "bound": "number"
+      },
+      "description": "The retention removed the files of the oldest runs because the files of the runs passed the bound: files and bytes are what it removed, runs are the names of the runs (`<role>-<boot>`), from_us and to_us are the range of the time of their events, remaining is the size of the files that are left and bound is the bound. The level is warn when remaining is still over bound because only the run of the writer and pinned runs are left."
+    },
+    "log.gated": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "class": "string",
+        "level": "string",
+        "count": "number"
+      },
+      "description": "The number of events of the class and the level that the gate of the host refused since the earlier report, so no event is lost without a count."
+    },
+    "log.rotated": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "bytes": "number",
+        "generation": "number"
+      },
+      "description": "A file was closed as the generation with this number and a new file started; no generation is removed."
+    },
+    "host.record.<level>": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": [
+        "error",
+        "info"
+      ],
+      "fields": {
+        "where": "string",
+        "text": "string",
+        "truncated?": "boolean"
+      },
+      "description": "A record of the host."
+    },
+    "native.record.<level>": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": [
+        "error",
+        "info"
+      ],
+      "fields": {
+        "where": "string",
+        "text": "string"
+      },
+      "description": "A record of the native library."
+    },
+    "page.record.<level>": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": [
+        "error",
+        "info"
+      ],
+      "fields": {
+        "where": "string",
+        "text": "string",
+        "truncated?": "boolean"
+      },
+      "description": "A record of the page, including the errors that a person sees."
+    },
+    "sidecar.record.<level>": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "where": "string",
+        "text": "string",
+        "truncated?": "boolean"
+      },
+      "description": "A line that a sidecar wrote to its standard error, stored by the host with the name of the sidecar as the place."
+    },
+    "sok.command": {
+      "layer": "sok",
+      "class": "call",
+      "level": [
+        "debug",
+        "warn"
+      ],
+      "fields": {
+        "name": "string",
+        "args": "string",
+        "micros": "number",
+        "ok": "boolean",
+        "status": "number",
+        "error?": "string",
+        "truncated?": "boolean"
+      },
+      "description": "One run of the command line tool: the command word, the arguments and the error text cut to 1024 bytes (`truncated` is true when either was cut), the microseconds, the exit status, and the first line of its standard error for a status other than 0."
+    },
+    "sok.replay.divergence": {
+      "layer": "sok",
+      "class": "frame",
+      "level": "error",
+      "fields": {
+        "session": "string",
+        "segment": "string",
+        "sequence": "number",
+        "layer": "string",
+        "expected": "string",
+        "found": "string"
+      },
+      "description": "The first stored screen hash of a session that differs from the replayed hash: the segment (the boot of the run of the sidecar), the sequence, the layer of the stored hash (`sidecar` or `page`), the replayed hash (`none` for a page frame without a sidecar frame) and the stored hash."
+    },
+    "sok.panic": {
+      "layer": "sok",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "name": "string",
+        "text": "string",
+        "stack": "string"
+      },
+      "description": "A panic of the command line tool: the goroutine or thread that panicked (`main` for the command), the panic text and the stack at the panic."
+    },
+    "page.console.<method>": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": [
+        "debug",
+        "info",
+        "warn"
+      ],
+      "fields": {
+        "text": "string",
+        "truncated?": "boolean"
+      },
+      "description": "What the page writes to its console; the text is cut to 8192 bytes while it is built and `truncated` is true when it was cut."
+    },
+    "page.trace.<event>": {
+      "layer": "page",
+      "class": "call",
+      "level": "debug",
+      "fields": {},
+      "description": "The performance trace of the page, while it is on."
+    },
+    "host.trace.<event>": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {},
+      "description": "The performance trace of the host, while it is on."
+    },
+    "host.sampler.<event>": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {},
+      "description": "The sampler of the host, while the trace is on."
+    },
+    "host.buffer.dropped": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "buffer": "string",
+        "count": "number",
+        "bytes": "number",
+        "reason": "string"
+      },
+      "description": "A bounded buffer of the host refused a message because it was full; `buffer` names it, `count` is the number of messages (1 for each refusal), `bytes` their size and `reason` the bound that was reached. Not a queue of events, whose loss is `log.dropped`."
+    },
+    "page.log.dropped": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "count": "number",
+        "bytes": "number",
+        "reason": "string"
+      },
+      "description": "The page queue was full or reached its byte bound and refused events; the page stores the count and the bytes in front of the events that follow."
+    },
+    "page.log.clock": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "trip_us": "number",
+        "resolution_us": "number"
+      },
+      "description": "The round trip in microseconds of the clock request that anchors the clock of the page to the clocks of the host and the resolution in microseconds of the clock of the page; a time of the page differs from the clock of the host by at most half of the round trip plus the resolution. The first batch of a page holds them."
+    },
+    "page.log.gated": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "class": "string",
+        "level": "string",
+        "count": "number"
+      },
+      "description": "The number of events of the class and the level that the gate of the page refused since the earlier report."
+    },
+    "page.start": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "time_origin": "number",
+        "url": "string"
+      },
+      "description": "A document of the main page started; a reload starts a new document with a new clock."
+    },
+    "page.call": {
+      "layer": "page",
+      "class": "call",
+      "level": [
+        "debug",
+        "warn"
+      ],
+      "result": true,
+      "fields": {
+        "name": "string",
+        "args": "string",
+        "micros": "number",
+        "ok": "boolean",
+        "truncated": "boolean",
+        "error?": "string"
+      },
+      "description": "A host call of a page; `error` names a refused call."
+    },
+    "host.endpoint.call": {
+      "layer": "host",
+      "class": "call",
+      "level": [
+        "debug",
+        "warn"
+      ],
+      "result": true,
+      "fields": {
+        "name": "string",
+        "args": "string",
+        "micros": "number",
+        "ok": "boolean",
+        "truncated": "boolean",
+        "error?": "string"
+      },
+      "description": "A method that a client of the endpoint called; `args` is the params as received (`null` when absent) cut to 1024 bytes, `error` is the code and the message that the client received."
+    },
+    "host.binding.call": {
+      "layer": "host",
+      "class": "call",
+      "level": [
+        "debug",
+        "warn"
+      ],
+      "result": true,
+      "fields": {
+        "name": "string",
+        "args": "string",
+        "micros": "number",
+        "ok": "boolean",
+        "truncated": "boolean",
+        "error?": "string"
+      },
+      "description": "A host call that the main page or a document of a surface sent; `name` is the snake case name of the call, `args` is the JSON array of the arguments in call order cut to 1024 bytes, `error` is the text that the page received or `the call ended without a result`."
+    },
+    "page.command": {
+      "layer": "page",
+      "class": "call",
+      "level": [
+        "debug",
+        "warn"
+      ],
+      "result": true,
+      "fields": {
+        "name": "string",
+        "micros": "number",
+        "ok": "boolean",
+        "error?": "string"
+      },
+      "description": "A command request that the page answered; `error` names a failed command."
+    },
+    "page.plugin.operation": {
+      "layer": "page",
+      "class": "call",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "action": "string",
+        "plugin": "string"
+      },
+      "description": "The page started an install, update, remove, enable or disable of a plugin; its host call carries the same cids."
+    },
+    "page.project.operation": {
+      "layer": "page",
+      "class": "call",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "action": "string",
+        "project": "string"
+      },
+      "description": "The page started the open or the removal of a project; its host calls carry the same cids."
+    },
+    "page.window.operation": {
+      "layer": "page",
+      "class": "call",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "action": "string"
+      },
+      "description": "The page started a new window, the close of its window, or the report that the window stays open; its host call carries the same cids."
+    },
+    "page.settings.change": {
+      "layer": "page",
+      "class": "call",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "scope": "string",
+        "actor": "string",
+        "keys": "string"
+      },
+      "description": "A change of the settings by the command or the surface named in actor; keys lists the changed keys and never their values; the write to the host carries the same cids."
+    },
+    "page.update.operation": {
+      "layer": "page",
+      "class": "call",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "action": "string",
+        "version": "string"
+      },
+      "description": "The page started the application update to the version; its stage and apply calls carry the same cids."
+    },
+    "host.input.relay": {
+      "layer": "host",
+      "class": "input",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "surface": "string",
+        "name": "string",
+        "type": "string"
+      },
+      "description": "The host relayed a picture region event that carries correlation identifiers to the page; `name` is the region and `type` the type of the event."
+    },
+    "host.sidecar.request": {
+      "layer": "host",
+      "class": "io",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "name": "string",
+        "surface": "string",
+        "bytes": "number"
+      },
+      "description": "The host queued a page request that continues inputs for a sidecar; the request line carries the same identifiers, and `bytes` is the size of the body."
+    },
+    "host.sidecar.reply": {
+      "layer": "host",
+      "class": "io",
+      "level": [
+        "info",
+        "warn"
+      ],
+      "result": true,
+      "fields": {
+        "name": "string",
+        "surface": "string",
+        "bytes": "number",
+        "ok": "boolean",
+        "micros?": "number",
+        "error?": "string"
+      },
+      "description": "A message of a sidecar that names the correlation identifiers of a request or states an error, or the failure of a sidecar that ends the requests it did not answer."
+    },
+    "host.window.event": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": [
+        "debug",
+        "info"
+      ],
+      "fields": {
+        "window": "string",
+        "kind": "string"
+      },
+      "description": "A window event that the host registered."
+    },
+    "host.app.event": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "kind": "string"
+      },
+      "description": "An application event that the host registered."
+    },
+    "host.sidecar.start": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "name": "string",
+        "pid": "number"
+      },
+      "description": "A sidecar process of standard input and output started."
+    },
+    "host.sidecar.exit": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "name": "string",
+        "pid": "number",
+        "status": "string",
+        "stopping": "boolean"
+      },
+      "description": "A sidecar process ended."
+    },
+    "host.sidecar.connect": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "name": "string",
+        "pid": "number",
+        "spawned": "boolean"
+      },
+      "description": "The host connected to a persistent service."
+    },
+    "host.sidecar.disconnect": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "name": "string",
+        "pid": "number",
+        "stopping": "boolean",
+        "violation": "string"
+      },
+      "description": "The connection to a persistent service ended."
+    },
+    "host.project.removal_allowed": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "window": "string",
+        "project": "string"
+      },
+      "description": "A window ended while it was asked whether a project may be removed, so the removal is allowed."
+    },
+    "host.workspace.settings": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "scope": "string",
+        "set": "string",
+        "removed": "string"
+      },
+      "description": "A settings file changed; scope is common or the project id, set and removed are the sorted keys joined by commas."
+    },
+    "host.notification.event": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "type": "string",
+        "authorization": "string",
+        "window": "string",
+        "surface": "string"
+      },
+      "description": "The notification center reported a state or a notice that was posted or activated."
+    },
+    "host.test.start": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "name": "string",
+        "run": "string"
+      },
+      "description": "A window check marked the start of a test; run is the identifier of the test run."
+    },
+    "host.test.end": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "name": "string",
+        "run": "string",
+        "result": "string"
+      },
+      "description": "A window check marked the end of a test; result is pass, fail or skip."
+    },
+    "host.panic": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "name": "string",
+        "text": "string",
+        "stack": "string"
+      },
+      "description": "A goroutine or a thread of the host panicked; name is the name that the entrance gave it, text is the panic value (the Rust host prefixes `<file>:<line>: `), and the process ends after the event is stored."
+    },
+    "host.stall.dump": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "path": "string"
+      },
+      "description": "A host that did not answer has its threads sampled into the file at path."
+    },
+    "host.crash.found": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "path": "string",
+        "pid": "number",
+        "time": "string"
+      },
+      "description": "The system wrote a crash report of an earlier run of the application; the start of the host announces it once."
+    },
+    "host.log.index_rebuilt": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "file": "string",
+        "reason": "string",
+        "lines": "number",
+        "bytes": "number",
+        "micros": "number"
+      },
+      "description": "The index of an event file was built from the whole file, because it did not exist or was not the index of that file."
+    },
+    "host.update.start": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "pid": "number",
+        "command": "string"
+      },
+      "description": "The host started the detached command that replaces the application bundle."
+    },
+    "native.app.activated": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {},
+      "description": "The application became active."
+    },
+    "native.app.deactivated": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {},
+      "description": "The application resigned active."
+    },
+    "native.app.hidden": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {},
+      "description": "The application was hidden."
+    },
+    "native.app.unhidden": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {},
+      "description": "The application was shown again."
+    },
+    "native.window.key": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "window": "number",
+        "first_responder": "string"
+      },
+      "description": "A window became the key window."
+    },
+    "native.window.resign_key": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "window": "number",
+        "first_responder": "string"
+      },
+      "description": "A window resigned key."
+    },
+    "native.window.main": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "window": "number",
+        "first_responder": "string"
+      },
+      "description": "A window became the main window."
+    },
+    "native.window.resign_main": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "window": "number",
+        "first_responder": "string"
+      },
+      "description": "A window resigned main."
+    },
+    "native.window.miniaturized": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "window": "number",
+        "first_responder": "string"
+      },
+      "description": "A window was miniaturized."
+    },
+    "native.window.deminiaturized": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "window": "number",
+        "first_responder": "string"
+      },
+      "description": "A window was deminiaturized."
+    },
+    "native.window.occlusion": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "window": "number",
+        "visible": "boolean"
+      },
+      "description": "The occlusion state of a window changed."
+    },
+    "native.window.first_responder": {
+      "layer": "native",
+      "class": "input",
+      "level": "info",
+      "fields": {
+        "window": "number",
+        "from": "string",
+        "to": "string"
+      },
+      "description": "The first responder of a window changed, seen at its next update."
+    },
+    "native.input.key_down": {
+      "layer": "native",
+      "class": "input",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "keyCode": "number",
+        "characters": "string",
+        "charactersIgnoringModifiers": "string",
+        "modifierFlags": "number",
+        "isARepeat": "boolean",
+        "timestamp": "number",
+        "before": "object",
+        "after": "object"
+      },
+      "description": "A key reached an image region. The native layer assigns the correlation identifier of the input here; `before` and `after` hold the state of the input document."
+    },
+    "native.input.callback": {
+      "layer": "native",
+      "class": "input",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "call": "string",
+        "before": "object",
+        "after": "object"
+      },
+      "description": "A callback of the input method or a step of the region that it causes (`setMarkedText`, `insertText`, `unmarkText`, `doCommandBySelector`, `commitThrough`, `reportPreedit`, `commitPending`, `clearDocument`, `becomeFirstResponder`, `resignFirstResponder`), with its arguments next to `call` and the state of the input document before and after. It takes the identifier of the input that caused it."
+    },
+    "native.input.report": {
+      "layer": "native",
+      "class": "input",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "report": "string",
+        "dropped": "boolean"
+      },
+      "description": "A report of a region to the page, as the JSON text that was sent; `dropped` is true when the region was closed and the report was not sent. The sent report carries the identifier as its member `cids`."
+    },
+    "native.input.source_changed": {
+      "layer": "native",
+      "class": "input",
+      "level": "info",
+      "fields": {},
+      "description": "The selected keyboard input source changed."
+    },
+    "native.input.query": {
+      "layer": "native",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "call": "string",
+        "focus": "boolean"
+      },
+      "description": "A query of the input method that an image region answered; `answer` holds the answer."
+    },
+    "native.observe.registered": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "source": "string",
+        "kind": "string",
+        "target": "string",
+        "mode": "string",
+        "registrations": "number"
+      },
+      "description": "An observer, monitor, key-value observer, run loop observer, dispatch source, Apple event handler or delegate was registered through the native entrance; `registrations` counts the registrations of the source."
+    },
+    "native.observe.failed": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "source": "string",
+        "kind": "string",
+        "reason": "string"
+      },
+      "description": "The native entrance refused a registration or a delivery that names no registered source."
+    },
+    "native.observe.delivered": {
+      "layer": "native",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "source": "string",
+        "count": "number"
+      },
+      "description": "One delivery of a registration of the mode `record`; `count` is the exact number of deliveries of the source so far."
+    },
+    "native.observe.counted": {
+      "layer": "native",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "source": "string",
+        "count": "number",
+        "total": "number",
+        "micros": "number"
+      },
+      "description": "The deliveries of a registration of the mode `count` since the earlier summary (at most one per second), their total and the microseconds between the summaries."
+    },
+    "native.log.gated": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "class": "string",
+        "level": "string",
+        "count": "number"
+      },
+      "description": "The number of events of the class and the level that the gate of the native library refused since the earlier report."
+    },
+    "native.process.exit_timeout": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "pid": "number",
+        "seconds": "number"
+      },
+      "description": "A process did not end within the time that the caller waited for it."
+    }
   },
   "chains": {
-    "input": ["native.input.key_down", "host.input.relay", "page.call", "host.sidecar.request"],
-    "plugin": ["page.plugin.operation", "page.call", "host.binding.call"],
-    "project": ["page.project.operation", "page.call", "host.binding.call"],
-    "window": ["page.window.operation", "page.call", "host.binding.call"],
-    "settings": ["page.settings.change", "page.call", "host.binding.call"],
-    "update": ["page.update.operation", "page.call", "host.binding.call"]
+    "input": [
+      "native.input.key_down",
+      "host.input.relay",
+      "page.call",
+      "host.sidecar.request"
+    ],
+    "plugin": [
+      "page.plugin.operation",
+      "page.call",
+      "host.binding.call"
+    ],
+    "project": [
+      "page.project.operation",
+      "page.call",
+      "host.binding.call"
+    ],
+    "window": [
+      "page.window.operation",
+      "page.call",
+      "host.binding.call"
+    ],
+    "settings": [
+      "page.settings.change",
+      "page.call",
+      "host.binding.call"
+    ],
+    "update": [
+      "page.update.operation",
+      "page.call",
+      "host.binding.call"
+    ]
   }
 }

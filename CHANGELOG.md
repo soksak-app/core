@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.14: the first batch of a page states the resolution of its clock beside the round trip of its anchor as `page.log.clock` (`resolution_us`), because the readings of `performance.now()` advance in steps, so a time of the page differs from the clock of the host by half the round trip plus that step.
 - F161.13: the page drains its event queue before the host call that closes its window, so the first event of the chain of the close reaches the writer of the host before the page can end.
 - F161.20: `pluginChangeApplied` of `e2e/fixture.mjs` waits for the page that a plugin change reloads, and the plugin operations of the chain and registry checks and their cleanups wait for it.
 - F161.21: the settings check lists the enabled installed plugins of its configuration instead of a fixed list.

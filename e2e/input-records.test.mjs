@@ -109,7 +109,10 @@ for (const app of Object.values(APPS)) {
     const main = readdirSync(join(s.app.configDir, "logs")).find((name) => /^host-\d+-\d+\.jsonl$/.test(name) && name.endsWith(`-${pid}.jsonl`));
     const anchor = readFileSync(join(s.app.configDir, "logs", main), "utf8").split("\n").filter((line) => line.includes('"page.log.clock"')).at(-1);
     assert.ok(anchor, `${app.name}: ${main} holds no page.log.clock`);
-    const halfTripUs = JSON.parse(anchor).fields.trip_us / 2;
+    // The page states its clock resolution beside the round trip, because an order across the clocks of the page and of
+    // another process holds within half the round trip plus that resolution.
+    const { trip_us: tripUs, resolution_us: resolutionUs } = JSON.parse(anchor).fields;
+    const halfTripUs = tripUs / 2 + resolutionUs;
     const onPageClock = new Set(["page.call", "pageRegion", "pageSend"]);
     const bound = (left, right) => (onPageClock.has(left) !== onPageClock.has(right) ? halfTripUs : 0);
     // The delay between the layers is measured on the monotonic clock, which the layers of one boot share.
