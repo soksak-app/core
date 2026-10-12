@@ -49,10 +49,11 @@ export async function chainOf(s, chains, name, since, fields) {
   const [first, ...rest] = chains[name];
   let last = `no ${first} with ${JSON.stringify(fields)} was read`;
   const find = async () => {
+    // A project that opens in its own window makes the new page start its own open of the project, so more than one page can
+    // start the operation; the first in the order of the log is the operation of the page that the check drove.
     const starts = (await allRows(s, { channel: "all", event: first, since }))
       .filter((row) => Object.entries(fields).every(([key, value]) => row.event.fields?.[key] === value));
     if (starts.length === 0) return null;
-    assert.equal(starts.length, 1, `${name}: ${starts.length} events ${first} match ${JSON.stringify(fields)}`);
     const [cid] = starts[0].event.cids ?? [];
     assert.ok(cid, `${name}: ${first} has no cids: ${JSON.stringify(starts[0].event)}`);
     const events = (await allRows(s, { channel: "all", cid })).map((row) => row.event);

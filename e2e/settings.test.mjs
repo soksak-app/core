@@ -370,10 +370,13 @@ for (const app of Object.values(APPS)) {
       ...(existsSync(services) ? readdirSync(services, { withFileTypes: true })
         .filter((entry) => entry.isDirectory()).map((entry) => join(services, entry.name, "performance")) : [])]
       .filter((path) => existsSync(path)).map((path) => [path, statSync(path).mtimeMs]));
-    // The events of the trace of the page and of the host are in the event log.
+    // The events of the trace of the page and of the host are in the event log. The switch controls the layers below; a
+    // sidecar stores its events in its own file whether or not the trace is on (docs/spec/performance-trace.md), so its
+    // rows are not output of the switch.
+    const SWITCHED_LAYERS = ["page", "host", "sampler"];
     const traced = async (offsets) => {
       await s.flushLog();
-      return traceRows(readEvents(config, offsets).events);
+      return traceRows(readEvents(config, offsets).events).filter((row) => SWITCHED_LAYERS.includes(row.layer));
     };
     const change = (enabled) => s.run("core.settings.set", {
       scope: "common", patch: { "diagnostics.performance": enabled },
