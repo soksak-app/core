@@ -62,7 +62,7 @@ export function readEvents(configDir, offsets) {
   const logs = join(configDir, "logs");
   const names = readdirSync(logs).filter((name) => HOST_LOG.test(name)).sort();
   if (names.length === 0) throw new Error(`${logs} holds no host event log; the application writes it there (docs/spec/logging.md#files)`);
-  const events = [];
+  let events = [];
   const next = {};
   // The events of the files of one process, which the writer numbers across both files.
   const processes = new Map();
@@ -109,7 +109,8 @@ export function readEvents(configDir, offsets) {
     // The generation ends at the end of a line, so the position in the new file excludes its bytes.
     next[name] = { offset: offset + Buffer.byteLength(text.slice(0, complete)) - Buffer.byteLength(rotated), inode };
   }
-  for (const list of processes.values()) events.push(...list.toSorted((a, b) => a.seq - b.seq));
+  // A day of checks writes hundreds of thousands of events into one file, and the spread of a call would overflow the stack.
+  for (const list of processes.values()) events = events.concat(list.toSorted((a, b) => a.seq - b.seq));
   return { events, offsets: next };
 }
 

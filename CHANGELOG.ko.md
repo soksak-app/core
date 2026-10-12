@@ -8,6 +8,7 @@
 - F161.23: resize의 감싸진 줄 check가 새 폭의 화면만 판정하고 cursor가 자리 잡은 뒤에 줄을 읽는다. 이전 폭의 screen message도 입력을 한 번 보이기 때문이다.
 - F161.26: 창 닫기가 page의 event 대기열을 비우기 앞에서 연산을 시작해 식별자를 host 호출에 넘기고, chain `window`가 `page.window.operation`과 `host.binding.call`을 요구한다. 닫는 호출은 page가 호출을 기록하기 전에 page를 끝내고 host가 사라진 창의 batch를 거부하기 때문이다.
 - F161.18: divider drag check가 하나의 표시 경로가 주는 transcript 줄의 기록 형식(`info page page: host ...`)을 맞추고, 아무것도 표시하지 않는 표면이 frame 기록을 남기도록 trace를 켠 채 실행한다.
+- F161.31: window-check harness의 `readEvents`가 모든 process의 event를 concat으로 병합해 하루치 check의 어떤 수의 새 event도 읽는다. 한 호출의 spread가 stack을 넘겼다.
 - F161.13: page가 창을 닫는 host 호출 앞에서 자기 event 대기열을 비워, 닫기 사슬의 첫 event가 page가 끝나기 전에 host의 writer에 도달한다.
 - F161.20: `e2e/fixture.mjs`의 `pluginChangeApplied`가 plugin 변경이 다시 띄우는 page를 기다리고, chain과 registry check의 plugin 연산과 cleanup이 이를 기다린다.
 - F161.21: settings check가 고정된 목록 대신 자기 configuration의 활성화된 설치 plugin을 나열한다.
