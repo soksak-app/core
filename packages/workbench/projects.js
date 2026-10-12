@@ -417,7 +417,9 @@ async function closeWindow() {
     return;
   }
   await flush();
-  // The call ends the page, so its event queue must reach the writer of the host before it (F161.13).
+  // The operation starts before the drain: its first event must be in the queue that the drain hands to the writer of the
+  // host, because the call ends the page and the host refuses a batch of a window that is gone (F161.26).
+  const cids = beginOperation("page.window.operation", { action: "close" });
   await flushEvents();
-  await windows.close(beginOperation("page.window.operation", { action: "close" }));
+  await windows.close(cids);
 }

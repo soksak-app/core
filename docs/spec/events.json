@@ -862,7 +862,6 @@
     ],
     "window": [
       "page.window.operation",
-      "page.call",
       "host.binding.call"
     ],
     "settings": [

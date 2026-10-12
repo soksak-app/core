@@ -178,6 +178,34 @@ test("correlation identifiers travel with their event, and a list that the host 
   assert.match(reports[0], /the cids of page\.call are not an array of non-empty strings/);
 });
 
+test("flush ends only when the batch of every queued event left, also behind an in-flight batch", async () => {
+  const batches = [];
+  let gate = null;
+  const open = () => new Promise((resolve) => { gate = resolve; });
+  let held = open();
+  const batcher = createEventBatcher({
+    call: (request) => (request.action === "clock"
+      ? Promise.resolve({ ts_us: 1_791_000_000_000_000, mono_ns: 5_000_000_000 })
+      : held.then(() => { batches.push(request); })),
+    report: assert.ifError,
+  });
+  batcher.emit("info", "page.test.first", {});
+  await settle();
+  // The batch of the first event is in flight; the event of the close queues behind it.
+  batcher.emit("info", "page.test.close", {});
+  let flushed = false;
+  const flushing = batcher.flush().then(() => { flushed = true; });
+  await settle();
+  await settle();
+  assert.equal(flushed, false, "the flush ended while the closing event was still queued behind an in-flight batch");
+  gate();
+  await settle();
+  await settle();
+  assert.equal(batches.flatMap((batch) => batch.events.map((event) => event.event)).at(-1), "page.test.close",
+    "the flush ended while the closing event was still queued behind an in-flight batch");
+  assert.equal(flushed, true, "the flush did not end when every queued event had left");
+});
+
 test("events emitted while a call is in flight wait for it and keep their order", async () => {
   const calls = [];
   let acknowledge;
