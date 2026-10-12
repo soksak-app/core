@@ -18,8 +18,9 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { chainOf, declaredChains, PERFORMED, tailOf } from "./chains.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, pluginChangeApplied } from "./fixture.mjs";
 
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 const NEWER = "99.0.0";
@@ -38,15 +39,24 @@ for (const app of Object.values(APPS)) {
     const target = before.plugins.find((row) => row.installed && row.state === "loaded" && row.sidecars.length === 0);
     assert.ok(target, `${app.name}: no installed and loaded plugin without a sidecar in ${JSON.stringify(before.plugins.map((row) => [row.id, row.state, row.sidecars.length]))}`);
     s.cleanup(async () => {
+      // A failure can leave the page reloading after the last operation; the host answers that the page is ready again.
+      await s.windows(1, "the page was not ready for the cleanup");
       const now = (await s.get("core.plugins")).plugins.find((row) => row.id === target.id);
-      if (!now?.installed) await s.run("core.plugins.install", { plugin: target.id });
-      else if (!now.installed.enabled) await s.run("core.plugins.enable", { plugin: target.id });
+      const action = !now?.installed ? "install" : !now.installed.enabled ? "enable" : null;
+      if (action === null) return;
+      const offsets = currentEventOffsets(app.configDir);
+      await s.run(`core.plugins.${action}`, { plugin: target.id });
+      await pluginChangeApplied(s, offsets, `${action} ${target.id} in the cleanup`);
     });
     const operate = async (action) => {
       const since = await tailOf(s);
+      const offsets = currentEventOffsets(app.configDir);
       await s.run(`core.plugins.${action}`, { plugin: target.id });
-      await s.until("core.plugins", (value) => value.operation?.action === action && value.operation.plugin === target.id && value.operation.state === "done",
-        `the plugin ${target.id} was not ${action === "remove" ? "removed" : `${action}d`}`);
+      // Each of these operations changes installed.json, so the page reloads; the state is read from the new page.
+      await pluginChangeApplied(s, offsets, `${action} ${target.id}`);
+      const installed = (await s.get("core.plugins")).plugins.find((row) => row.id === target.id)?.installed;
+      const expected = { disable: installed?.enabled === false, enable: installed?.enabled === true, remove: !installed, install: Boolean(installed) };
+      assert.ok(expected[action], `the plugin ${target.id} was not ${action === "remove" ? "removed" : `${action}d`}: ${JSON.stringify(installed)}`);
       const { cid, events } = await chainOf(s, chains, "plugin", since, { action, plugin: target.id });
       t.diagnostic(`${app.name}: plugin ${action} ${cid}: ${events.map((event) => event.event).join(", ")}`);
     };

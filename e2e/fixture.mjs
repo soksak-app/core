@@ -3,7 +3,7 @@
 // F25.2 replaces the core checks with a fixture plugin).
 import { fileURLToPath } from "node:url";
 import { keepCommonSettings, prepareFixture, TRACE } from "@soksak/window-check/app.mjs";
-import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
+import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 
 /** The shell of the window-check terminal. It avoids a prompt that depends on the profile of the login shell. */
 const CHECK_SHELL = fileURLToPath(new URL("./check-shell", import.meta.url));
@@ -74,5 +74,15 @@ export async function terminalReady(s) {
       `terminal ${terminal.surface} did not apply its theme`, { surface: terminal.surface });
   }
   return terminals;
+}
+
+/**
+ * Waits until the page of the window has reloaded after a plugin operation that changed installed.json
+ * (docs/spec/installation.md#applying-a-change). `offsets` are the positions of the event files before the operation: the new
+ * document writes `page.start`, and `host.windows`, which the host answers while the page reloads, then reports the page ready.
+ */
+export async function pluginChangeApplied(s, offsets, action) {
+  await untilEventLine(s.app.configDir, offsets, (line) => line.includes("page.start"), 30000);
+  await s.windows(1, `the page was not ready again after ${action}`);
 }
 

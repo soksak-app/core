@@ -12,7 +12,8 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
+import { fresh, pluginChangeApplied } from "./fixture.mjs";
 
 const TLS = join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), "soksak-check-registry-tls");
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
@@ -66,9 +67,14 @@ for (const app of Object.values(APPS)) {
     // Restores the state so that the next check starts from the same registry and installation even if the check fails midway. The cleanup runs in the reverse order of the registration.
     s.cleanup(registry.close);
     s.cleanup(async () => {
+      // A failure can leave the page reloading after the last operation; the host answers that the page is ready again.
+      await s.windows(1, "the page was not ready for the cleanup");
       await s.run("core.plugins.registry", { index: before.registry });
       const now = await s.get("core.plugins");
-      if (!now.plugins.find((row) => row.id === "browser")?.installed) await s.run("core.plugins.install", { plugin: "browser" });
+      if (now.plugins.find((row) => row.id === "browser")?.installed) return;
+      const offsets = currentEventOffsets(s.app.configDir);
+      await s.run("core.plugins.install", { plugin: "browser" });
+      await pluginChangeApplied(s, offsets, "the installation of the cleanup");
     });
     const use = async (path) => {
       const index = `${registry.base}${path}`;
@@ -76,16 +82,23 @@ for (const app of Object.values(APPS)) {
       return s.until("core.plugins", (value) => value.registry === index && value.error === null, `the registry did not change to ${index}`);
     };
     const remove = async () => {
+      const offsets = currentEventOffsets(s.app.configDir);
       await s.run("core.plugins.remove", { plugin: "browser" });
-      await s.until("core.plugins", (value) => value.operation?.action === "remove" && value.operation.state === "done"
-        && !value.plugins.find((row) => row.id === "browser")?.installed, "browser was not removed");
+      await pluginChangeApplied(s, offsets, "the removal");
+      assert.ok(!(await s.get("core.plugins")).plugins.find((row) => row.id === "browser")?.installed, "browser was not removed");
+    };
+    const install = async (message) => {
+      const offsets = currentEventOffsets(s.app.configDir);
+      await s.run("core.plugins.install", { plugin: "browser" });
+      await pluginChangeApplied(s, offsets, "the installation");
+      const value = await s.get("core.plugins");
+      assert.ok(value.plugins.find((row) => row.id === "browser")?.installed, message);
+      return value;
     };
 
     await use("/good/index.json");
     await remove();
-    await s.run("core.plugins.install", { plugin: "browser" });
-    const installed = await s.until("core.plugins", (value) => value.operation?.action === "install" && value.operation.state === "done",
-      "browser was not installed from the https registry");
+    const installed = await install("browser was not installed from the https registry");
     assert.equal(installed.plugins.find((row) => row.id === "browser").installed.version, registry.version);
 
     await use("/bad-hash/index.json");
@@ -94,9 +107,7 @@ for (const app of Object.values(APPS)) {
     await use("/revoked/index.json");
     await assert.rejects(s.run("core.plugins.install", { plugin: "browser" }), /plugin browser has no version for core /);
     await use("/good/index.json");
-    await s.run("core.plugins.install", { plugin: "browser" });
-    await s.until("core.plugins", (value) => value.operation?.action === "install" && value.operation.state === "done"
-      && value.plugins.find((row) => row.id === "browser")?.installed, "browser was not installed again");
+    await install("browser was not installed again");
 
     // An unreachable registry names its address and the connection failure and does not change the current registry.
     const closed = `${registry.base}/good/index.json`;
