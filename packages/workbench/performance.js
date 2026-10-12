@@ -67,7 +67,22 @@ export function createTracer(call, report = reportRelayError, log = null) {
   };
   // Whether the trace is on and has a writer: a caller that builds the fields of an event asks first.
   const isEnabled = () => enabled && batcher !== null;
-  return { setEnabled, trace, timed, isEnabled };
+  // Reports the stored switch once at the start of the page, also when it is off: the switch of the host can be on from a
+  // page that ended while the stored setting says off, and only this report turns a stale switch off again. The host stores
+  // nothing when the switch does not change (docs/spec/performance-trace.md#the-switch).
+  const reportAtStart = (on) => {
+    if (!call) return Promise.resolve();
+    const mine = ++revision;
+    return enqueue(async () => {
+      try {
+        await call({ action: on ? "on" : "off" });
+        if (mine === revision) enabled = on;
+      } finally {
+        if (mine === revision) switching = false;
+      }
+    });
+  };
+  return { setEnabled, reportAtStart, trace, timed, isEnabled };
 }
 
 const tracer = createTracer(
@@ -76,6 +91,7 @@ const tracer = createTracer(
   bridge ? (request) => bridge.call("log", request) : null,
 );
 export const setTraceEnabled = tracer.setEnabled;
+export const reportTraceAtStart = tracer.reportAtStart;
 export const trace = tracer.trace;
 export const timed = tracer.timed;
 export const traceEnabled = tracer.isEnabled;

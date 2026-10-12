@@ -66,7 +66,8 @@ test('the log policy is a declared object of levels for the classes, applied whe
 test('a settings file change propagates the effective performance switch', async (t) => {
   const calls = [];
   t.mock.module('../performance.js', { exports: {
-    setTraceEnabled: async (enabled) => { calls.push(enabled); },
+    setTraceEnabled: async (enabled) => { calls.push(['change', enabled]); },
+    reportTraceAtStart: async (enabled) => { calls.push(['start', enabled]); },
     trace: () => {}, timed: async (_name, answer) => answer(),
   } });
   const previous = globalThis.document;
@@ -82,7 +83,7 @@ test('a settings file change propagates the effective performance switch', async
     // The trace starts on by default, and a settings file that turns it off propagates the change.
     memory.common['diagnostics.performance'] = false;
     await changed();
-    assert.deepEqual(calls, [true, false], 'file changes did not propagate the effective switch');
+    assert.deepEqual(calls, [['start', true], ['change', false]], 'file changes did not propagate the effective switch');
   } finally {
     globalThis.document = previous;
   }

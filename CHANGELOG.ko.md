@@ -10,6 +10,7 @@
 - F161.18: divider drag check가 하나의 표시 경로가 주는 transcript 줄의 기록 형식(`info page page: host ...`)을 맞추고, 아무것도 표시하지 않는 표면이 frame 기록을 남기도록 trace를 켠 채 실행한다.
 - F161.31: window-check harness의 `readEvents`가 모든 process의 event를 concat으로 병합해 하루치 check의 어떤 수의 새 event도 읽는다. 한 호출의 spread가 stack을 넘겼다.
 - F161.33: 입력 영역의 보고가 catalog가 선언한 대로 dropped member를 boolean으로 기록한다. C의 논리합은 int라 수로 직렬화되었다.
+- F161.36: page가 시작에서 저장된 performance 스위치를 양방향으로 host에 알려, 끝난 page가 켠 채로 남긴 스위치가 저장된 상태로 돌아간다. 계약은 저장된 true의 보고만 적었고 host는 설정이 꺼짐인 동안 trace row를 계속 기록했다.
 - F161.13: page가 창을 닫는 host 호출 앞에서 자기 event 대기열을 비워, 닫기 사슬의 첫 event가 page가 끝나기 전에 host의 writer에 도달한다.
 - F161.20: `e2e/fixture.mjs`의 `pluginChangeApplied`가 plugin 변경이 다시 띄우는 page를 기다리고, chain과 registry check의 plugin 연산과 cleanup이 이를 기다린다.
 - F161.21: settings check가 고정된 목록 대신 자기 configuration의 활성화된 설치 plugin을 나열한다.

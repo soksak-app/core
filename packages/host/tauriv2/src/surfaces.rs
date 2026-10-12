@@ -646,7 +646,11 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         with_native_owner(window, move |owner| {
             restore_titlebar(owner, change.previous)
         })
-        .map_err(|e| e.to_string())
+        .or_else(|failure| match failure {
+            // A window that closed before the restore step has no title bar to restore (#F161.35).
+            NativeFailure::Closed => Ok(()),
+            NativeFailure::Failed(error) => Err(error),
+        })
     };
     let steps = |change: &TitlebarChange| -> Result<PreparedSurfaces, String> {
         for s in &request.surfaces {

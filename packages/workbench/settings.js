@@ -30,7 +30,7 @@ import { checkSidebarReferences, isSettingAddress, validateSidebars } from "@sok
 import { effectiveSettings } from "./settings-scope.js";
 import { chooseLink, resolveSidebar } from "./sidebar-sets.js";
 import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
-import { setTraceEnabled } from "./performance.js";
+import { reportTraceAtStart, setTraceEnabled } from "./performance.js";
 import { setLogPolicy } from "./log-policy.js";
 import { logPolicyOf } from "./log-gate.js";
 import { beginOperation } from "./operations.js";
@@ -261,6 +261,8 @@ function checkSidebars(values) {
 let common = {};
 let overrides = {};
 let projectId = null;
+/* Whether the settings connected once: only a later change reports the switch through the change path. */
+let started = false;
 let store;
 let writing = Promise.resolve();
 let changes = 0;
@@ -413,7 +415,12 @@ export function beginSettings(snapshot, id) {
 export async function connectSettings(storage) {
   store = storage;
   store.onChange(() => { if (!changes) return refresh().catch((e) => dispatchEvent(new ErrorEvent("error", { message: e.message }))); });
+  // The start reports the stored switch unchanged: the switch of the host can be on from a page that ended while the
+  // stored setting says off, and only this report turns a stale switch off (docs/spec/performance-trace.md#the-switch).
+  started = false;
   await refresh();
+  started = true;
+  await reportTraceAtStart(settings["diagnostics.performance"]);
 }
 
 async function refresh() {
@@ -432,7 +439,7 @@ async function refresh() {
     overrides = nextOverrides;
     apply();
   }
-  await setTraceEnabled(settings["diagnostics.performance"]);
+  if (started) await setTraceEnabled(settings["diagnostics.performance"]);
   await setLogPolicy(settings["diagnostics.log"]);
 }
 

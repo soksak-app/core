@@ -21,7 +21,7 @@ trace의 모든 event는 [event 계약](logging.ko.md)의 event다. page는 `pag
 
 ## 스위치
 
-host 프로세스가 스위치를 가진다. 파일이 스위치를 갖지 않고 sidecar에 닿는 flag도 없다. page는 이미 읽은 설정에서 `diagnostics.performance`를 읽어 host 호출 `performance`로 host에 알린다. 설정이 true가 되면 `on`, false가 되면 `off`, 저장된 설정이 이미 true이면 시작할 때 한 번 `on`이다. 이 호출은 동작 `on`과 `off`만 받고 다른 동작은 오류로 거절하며, 스위치를 바꾸지 않는 요청은 아무것도 저장하지 않는다. trace를 켜면 `host.trace.on`을 저장하고 표본 추출을 시작한다. 표본 추출은 trace가 켜진 동안 5초마다 `host.sampler.memory`를 저장한다. 끄면 `host.trace.off`를 저장하고 표본 추출을 끝내며, 다시 켜면 새로 시작한다. 프로세스는 언제나 trace를 끈 채 시작한다. 수동 계측은 측정한 동작의 결과를 바꾸지 않고 실패를 보고한다.
+host 프로세스가 스위치를 가진다. 파일이 스위치를 갖지 않고 sidecar에 닿는 flag도 없다. page는 이미 읽은 설정에서 `diagnostics.performance`를 읽어 host 호출 `performance`로 host에 알린다. 설정이 true가 되면 `on`, false가 되면 `off`이며, 시작할 때는 저장된 값을 한 번 알려, 끝난 page가 켠 채로 남긴 host의 스위치가 저장된 상태로 돌아간다. 이 호출은 동작 `on`과 `off`만 받고 다른 동작은 오류로 거절하며, 스위치를 바꾸지 않는 요청은 아무것도 저장하지 않는다. trace를 켜면 `host.trace.on`을 저장하고 표본 추출을 시작한다. 표본 추출은 trace가 켜진 동안 5초마다 `host.sampler.memory`를 저장한다. 끄면 `host.trace.off`를 저장하고 표본 추출을 끝내며, 다시 켜면 새로 시작한다. 프로세스는 언제나 trace를 끈 채 시작한다. 수동 계측은 측정한 동작의 결과를 바꾸지 않고 실패를 보고한다.
 
 ## 읽기
 

@@ -22,6 +22,15 @@ function recorded(overrides = {}) {
   return { calls, tracer };
 }
 
+test("a start of the page reports the stored switch to the host even when it is off", async () => {
+  const { calls, tracer } = recorded();
+  // A page starts with the trace off (the local state), but the switch of the host can be on from a page that ended;
+  // the report at startup is what turns a stale switch off (#F161.36).
+  await tracer.reportAtStart(false);
+  assert.deepEqual(calls.filter(([kind]) => kind === "switch"), [["switch", "off"]],
+    "the start of the page reports the stored off to the host");
+});
+
 test("disabled page tracing does not format or relay a focus event", async (t) => {
   const calls = [];
   t.mock.module("@soksak/runtime", { exports: {
