@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -50,6 +50,11 @@ page-memory:
 	@case "$(CONFIG)" in '') echo "page-memory requires CONFIG=DIR" >&2; exit 2;; esac
 	@case "$(BUILD)" in ''|release|debug) ;; *) echo "page-memory requires BUILD=release|debug" >&2; exit 2;; esac
 	@node scripts/measure-page-memory.mjs --sok $(if $(filter debug,$(BUILD)),target/debug/soksak-$(APP).app,target/release/$(APP)/soksak.app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --idle-minutes $(or $(MINUTES),60) --reloads $(or $(RELOADS),20)
+
+# Prints the live malloc nodes and bytes of a running host process at start and after each minute (docs/operations/examples.md).
+host-allocations:
+	@case "$(PID)" in ''|*[!0-9]*) echo "host-allocations requires PID=<host process> [MINUTES=10]" >&2; exit 2;; esac
+	@node scripts/measure-host-allocations.mjs --pid $(PID) --minutes $(or $(MINUTES),10)
 
 # Checks that core, plugin, and sidecar sources do not name each other.
 boundaries:
