@@ -206,13 +206,15 @@ export async function open(t, app) {
     client.close();
     releaseSlot();
   }));
+  // The cleanup reads the errors after this position and the recordings beside these, so both are taken before a check of
+  // the endpoint can end the session.
+  session.eventStart = readEventOffsets(app.configDir);
+  session.recordingsBefore = recordingFolders(app.configDir);
   const { endpoint } = client;
   if (endpoint.application !== app.name) {
     throw new Error(`${app.configDir}/endpoint.json belongs to ${endpoint.application}, not ${app.name}`);
   }
   assertEndpointUsesCurrentBuild(endpoint, realpathSync(app.binary), statSync(app.binary).mtimeMs);
-  session.eventStart = readEventOffsets(app.configDir);
-  session.recordingsBefore = recordingFolders(app.configDir);
   await session.markTest("start", t.name);
   return session;
 }
