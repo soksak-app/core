@@ -240,15 +240,15 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .chrome__tabs{display:flex;align-items:center;gap:3px;flex:1 1 auto;min-width:0;
   overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .chrome__tabs::-webkit-scrollbar{display:none}
-/* Three levels by header width.
+/* ≡ stands at the start of every head and lists all tabs; a full-screen card shows the space app button in its place.
+   Three levels by header width.
      strip  shows all tabs. Scrolls horizontally when it overflows
-     one    shows ≡ and the one active tab
-     ham    shows only ≡
-   Tabs are not removed when the level goes down. ≡ always shows all tabs as a list. */
-.chrome__ham{display:none;place-items:center;width:20px;height:20px;padding:0;border:0;
+     one    shows the one active tab
+     ham    shows no tab
+   Tabs are not removed when the level goes down. */
+.chrome__ham{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;
   flex:0 0 auto;background:transparent;color:var(--muted);border-radius:var(--r-xs);
   cursor:pointer}
-.chrome[data-fit=one] .chrome__ham,.chrome[data-fit=ham] .chrome__ham{display:grid}
 .chrome__ham svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round}
 .chrome__ham:hover{background:var(--inset);color:var(--fg)}
 .chrome[data-fit=one] .chrome__tabs .tab:not([data-active=true]){display:none}

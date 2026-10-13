@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.28: 탭 목록 button(≡)이 모든 카드 머리의 시작에 있고, 머리는 탭이 접힐 때만 보이는 대신 모든 단계에서 그 너비를 남긴다.
 - F161.25: 카드의 탭은 최대 200 point 너비다. 더 긴 이름은 말줄임표로 자르고 탭의 tooltip이 이름 전체를 보인다.
 - F161.38: project 전환 test가 F161.13부터 `projects.js`가 import하는 page event queue를 mock하므로, 그 case가 다시 적재되고 실행된다.
 - F161.4.1: replay check의 alter case가 일부러 일으키는 자기 session의 event `sok.replay.divergence`를 선언하므로, 실행의 audit가 더는 그것을 선언되지 않은 오류로 세지 않는다.

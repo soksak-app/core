@@ -1187,14 +1187,14 @@ function fitChrome(chrome, strip) {
   const head = getComputedStyle(chrome);
   // default: the computed value normal of columnGap is not a number and is 0 in flex.
   const gap = parseFloat(head.columnGap) || 0;
-  // A fullscreen card shows the space app button at the start, so the head is fitted at a width reduced by the width of that button.
+  // The head starts with ≡, or with the space app button in a fullscreen card, so it is fitted at a width reduced by the width
+  // of that button.
   const apps = chrome.querySelector(".chrome__apps");
-  const lead = chrome.closest(".card")?.dataset.fullscreen === "true" && apps
-    ? parseFloat(getComputedStyle(apps).width) + gap : 0;
+  const lead = parseFloat(getComputedStyle(chrome.closest(".card")?.dataset.fullscreen === "true" && apps
+    ? apps : chrome.querySelector(".chrome__ham")).width) + gap;
   const inner = chrome.clientWidth
     - parseFloat(head.paddingLeft) - parseFloat(head.paddingRight) - lead;
-  // ≡ and ⋯ are not drawn in the strip stage, so the declared width is read and not the rect.
-  const ham = parseFloat(getComputedStyle(chrome.querySelector(".chrome__ham")).width);
+  // ⋯ is not drawn in the bar stage, so the declared width is read and not the rect.
   const more = parseFloat(getComputedStyle(chrome.querySelector(".chrome__more")).width);
   const tools = acts.getBoundingClientRect().width;
 
@@ -1211,8 +1211,8 @@ function fitChrome(chrome, strip) {
   const withMenu = inner - more - gap;
   const [fit, folded] =
     withTools >= Math.min(whole, activeW + PEEK) ? ["strip", "bar"]
-    : withTools >= ham + gap + activeW ? ["one", "bar"]
-    : withMenu >= ham + gap + Math.min(activeW, MIN_TAB) ? ["one", "menu"]
+    : withTools >= activeW ? ["one", "bar"]
+    : withMenu >= Math.min(activeW, MIN_TAB) ? ["one", "menu"]
     : ["ham", "menu"];
   chrome.dataset.fit = fit;
   chrome.dataset.tools = folded;

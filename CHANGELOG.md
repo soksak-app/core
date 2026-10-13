@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.28: the tab list button (≡) stands at the start of every card header, and the head reserves its width at every level instead of showing it only when the tabs fold.
 - F161.25: a tab of a card is at most 200 points wide; a longer name is cut with an ellipsis and the tooltip of the tab shows the whole name.
 - F161.38: the test of the project switch mocks the page event queue that `projects.js` imports since F161.13, so its cases load and run again.
 - F161.4.1: the alter case of the replay check declares the event `sok.replay.divergence` of its own session, which it causes on purpose, so the audit of a run no longer counts it as an undeclared error.

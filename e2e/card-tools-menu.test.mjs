@@ -36,3 +36,16 @@ for (const app of Object.values(APPS)) {
     await s.until("core.grid", (value) => !card(value, "terminal"), "the close item did not close the card");
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the tab list button of a card shows at every width of its head`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    const grid = await s.get("core.grid");
+    const index = grid.cards.filter((item) => item.pane !== null).findIndex((item) => item.id === "terminal");
+    assert.equal(card(grid, "terminal").acts?.fit, "strip", `the fixture card does not show all its tabs: ${JSON.stringify(card(grid, "terminal").acts)}`);
+    const button = await s.rect("core.card.tab-list", index);
+    assert.ok(button.width > 0 && button.height > 0, `the tab list button is not shown in a card that shows all its tabs: ${JSON.stringify(button)}`);
+  });
+}
