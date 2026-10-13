@@ -2055,6 +2055,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F176",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "- (void)failInput:(NSString *)reason" }],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "silent input method: the error with marked text" },
+      { file: "packages/log-contract/test/audit.test.mjs", id: "a chain ends at an error event that carries its correlation identifier" },
+    ],
+    expected: "A key that the input method does not answer is reported as an error that carries the identifier of the key, and its chain ends at that error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F175",
+    implementation: [{ file: "scripts/audit-run.mjs", symbol: "const judged = (file, line)" }],
+    tests: [{ file: "scripts/test/audit-run.test.mjs", id: "a chain finding of an earlier process before the first start mark belongs to no test of the run and is not judged" }],
+    expected: "A run audit judges only the findings on lines inside the span of the run.",
+    levels: ["unit"],
+  },
+  {
     id: "F174",
     implementation: [{ file: "packages/window-check/event-log.mjs", symbol: "export function sessionEventStart" }],
     tests: [{ file: "packages/window-check/test/event-log.test.mjs", id: "without stored offsets the session starts at the end of the files of ended processes and at the start of the running one" }],
