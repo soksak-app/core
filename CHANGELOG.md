@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F166.3.2: the workbench keeps its own reading of versions, because the page loads only ES modules and semver is published only as CommonJS; the module states why.
 - F166.3.1: the Go and Rust packages of `sok` read the versions through `github.com/Masterminds/semver/v3` and the crate `semver`, and refuse the forms that the specification does not list, including the forms that the libraries accept by default.
 - F114, F161.49: closed.
 - F160.12, F160.14, F160.16, F154.3, F154: closed by their unit Red and Green under the verification rule of the agent guidance; the runs that they waited for are not run.

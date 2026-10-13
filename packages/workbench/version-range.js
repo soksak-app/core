@@ -1,4 +1,5 @@
-// The versions and ranges of docs/spec/installation.md.
+// The versions and ranges of docs/spec/installation.md. No library is used: the page loads only ES modules through its import
+// map, without a bundling step, and the npm package semver is published only as CommonJS.
 
 const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 

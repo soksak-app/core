@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F166.3.2: page는 ES module만 load하고 semver는 CommonJS로만 배포되므로 workbench가 version을 읽는 자체 code를 유지하며, module이 그 이유를 적는다.
 - F166.3.1: Go와 Rust의 `sok` package가 version을 `github.com/Masterminds/semver/v3`와 crate `semver`로 읽고, library가 기본으로 받는 형태를 포함해 명세가 적지 않은 형태를 거부한다.
 - F114, F161.49: 닫았다.
 - F160.12, F160.14, F160.16, F154.3, F154: agent guidance의 검증 규칙에 따라 단위 Red와 Green으로 닫았다. 기다리던 실행은 돌리지 않는다.
