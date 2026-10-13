@@ -9,5 +9,6 @@
 // Returns NULL when the input source cannot be read.
 char *sp_input_source_current(void);
 
-// Selects the enabled input source with the same identifier. Returns false when there is none or it cannot be selected.
+// Selects the enabled input source with the same identifier, and makes the text input context of the key view, when there is
+// one, hold it before it returns. Returns false when there is none, it cannot be selected, or the context does not take it.
 bool sp_input_source_select(const char *identifier);
