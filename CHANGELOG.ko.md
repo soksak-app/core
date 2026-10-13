@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F166.7: host 배치가 Tauri host의 kqueue 감시를 차이 H10으로 허용한다.
 - F164.2: Tauri host의 stall sample이 Wails host의 짝인 `stall_sample.rs`이다.
 - F168: Rust package가 edition 2024로 build된다. 기본 configuration 폴더의 test는 더는 process의 환경을 바꾸지 않는다.
 - F162.4: 선언된 모든 workspace version이 0.0.12이다.

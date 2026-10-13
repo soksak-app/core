@@ -154,6 +154,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | H7 | 없음 | `tests/panic_hook_test.rs`, `tests/fatal_signal_test.rs` | Go runtime은 fatal signal의 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다. fatal signal은 native 라이브러리의 handler가 있어야 오류 줄을 쓴다. Rust panic은 panic한 스레드에서 `application_log.rs`의 hook이 실행되므로 hook 시험이 hook이 writer를 기다리지 않는지 확인한다. goroutine의 panic은 `routine.Go`가 recover하며 hook이 없다 |
 | H8 | `tests/event_log_benchmark_test.go`, `tests/event_native_benchmark_test.go` | `benches/event_log_benchmark.rs`, `benches/event_native_benchmark.rs` | 측정은 Go에서 test 파일의 `Benchmark` 함수이고 Rust에서 `cargo bench`의 `harness = false` target이다. 둘 다 숫자를 출력하고 단언하지 않으며 `make benchmark-go`와 `make benchmark-rust`가 실행한다. |
 | H9 | `tests/framework_log_test.go` | 없음 | 프레임워크 logger의 level(`FrameworkLogLevel`)은 Wails host에만 있다. Wails asset server는 요청한 파일마다 level `info`로 한 줄을 쓰고, Tauri host는 표준 오류에 그런 줄을 쓰지 않는다 |
+| H10 | 없음 | `src/platform/darwin/file_watch.rs` | Wails host는 library `fsnotify`로 정책 파일을 감시한다. 정책 파일 감시를 충족하는 Rust library가 없으므로(`notify` 8.2의 FSEvents watcher는 writer가 하위 폴더에 덧붙이는 동안 폴더의 event를 전달하지 않았고, kqueue watcher는 rename을 다음 kernel event까지 전달하지 않았으며, `kqueue` crate 1.2에는 막힌 대기를 끝낼 user event가 없다) Tauri host는 macOS에서 kqueue로 감시한다 |
 | A1 | 내용만 다름 | 내용만 다름 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다 |
 | A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
 | A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri 설정 |

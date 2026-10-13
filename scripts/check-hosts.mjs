@@ -29,6 +29,7 @@ const PAIRS = [
         "build": "H1",
         "tests/panic_hook_test": "H7", "tests/fatal_signal_test": "H7",
         "benches/event_log_benchmark": "H8", "benches/event_native_benchmark": "H8",
+        "src/platform/darwin/file_watch": "H10",
       },
     },
   },
