@@ -713,13 +713,13 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             // The trigger of the surface lifecycle (V5-104): a surface that disappeared from the list is destroyed at
             // this point.
             crate::performance::surface("destroyed", &id, None);
-            if let Ok(mut named) = views.0.lock() {
-                named.remove(&handle);
-            }
             documents::close_surface(window, &id);
             images::close_surface(window, &id);
             context.images.end_generation(&id);
-            if let Err(error) = exposure::on_main(window, move || platform.close_surface(handle)) {
+            let names = Arc::clone(&views.0);
+            if let Err(error) = exposure::on_main(window, move || {
+                close_named_surface(&names, handle, |handle| platform.close_surface(handle))
+            }) {
                 close_failures.push(format!("surface {id}: {error}"));
             }
             context
@@ -1023,6 +1023,19 @@ pub enum WindowNative {
     Document(Handle),
     Image(Handle),
     Surface(Handle),
+}
+
+/// Closes the native surface `handle` and then forgets its name in `named`, in one step of the main thread, so a
+/// reading of the native surfaces of the window in another step finds either the surface with its name or no surface.
+/// The name is forgotten also when the close fails, and the failure is returned.
+pub fn close_named_surface(
+    named: &Mutex<HashMap<Handle, String>>,
+    handle: Handle,
+    close: impl FnOnce(Handle) -> Result<(), String>,
+) -> Result<(), String> {
+    let closed = close(handle);
+    named.lock().map_err(|e| e.to_string())?.remove(&handle);
+    closed
 }
 
 /// Removes from `hosts` the surfaces that the list `alive` of the page no longer holds and returns them with their

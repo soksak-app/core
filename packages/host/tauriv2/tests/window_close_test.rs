@@ -8,7 +8,9 @@ use std::sync::{Arc, Mutex};
 use soksak_host_tauriv2::documents::Documents;
 use soksak_host_tauriv2::exposure::native_failure;
 use soksak_host_tauriv2::images::Images;
-use soksak_host_tauriv2::surfaces::{close_window_surfaces, take_removed_surfaces, WindowNative};
+use soksak_host_tauriv2::surfaces::{
+    close_named_surface, close_window_surfaces, take_removed_surfaces, WindowNative,
+};
 use soksak_host_tauriv2::windows::{use_owner, MainStep, NativeFailure};
 
 fn key(surface: &str, name: &str) -> (String, String) {
@@ -190,4 +192,27 @@ fn a_surface_that_the_sync_removes_is_not_closed_again_by_the_window_close() {
         HashMap::from([("tab-1".to_string(), 100)]),
         "the window close received a surface whose handle the sync closes"
     );
+}
+
+// contract: surfaces.sync.name-outlives-native-surface
+#[test]
+fn a_removed_surface_keeps_its_name_until_its_native_surface_is_closed() {
+    let named = Mutex::new(HashMap::from([(7usize, "tab-1".to_string())]));
+    let mut named_at_close = None;
+    close_named_surface(&named, 7, |handle| {
+        // A reading of the native surfaces of the window that sees the surface still finds its name.
+        named_at_close = Some(named.lock().unwrap().get(&handle).cloned());
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(named_at_close, Some(Some("tab-1".to_string())));
+    assert!(
+        named.lock().unwrap().is_empty(),
+        "the name outlived the native surface"
+    );
+    // A failed close still forgets the name of the surface, and the failure is returned.
+    let named = Mutex::new(HashMap::from([(8usize, "tab-2".to_string())]));
+    let failed = close_named_surface(&named, 8, |_| Err("close failed".to_string()));
+    assert_eq!(failed, Err("close failed".to_string()));
+    assert!(named.lock().unwrap().is_empty());
 }

@@ -457,6 +457,7 @@ fn invalid_json_closes_connection() {
 | `window-close.native-window.used-in-reading-step` | native 창을 쓰는 host 요청은 native 창을 native code에 넘기는 main thread 단계에서 읽으므로, 요청의 앞선 단계 뒤에 main thread가 처리한 닫기가 닫힌 창을 native code에 넘기지 않는다. 그 단계 전에 닫힌 창은 native code에 닿지 않고, 요청은 오류 1003 `window "<name>" does not exist`로 실패한다. | both |
 | `window-close.surfaces.reports-every-failure` | 네이티브 닫기 하나가 실패해도 나머지를 닫고, 창 닫기는 모든 실패를 표면 id 와 객체 종류와 함께 반환한다. | both |
 | `window-close.surfaces.closed-once` | surface sync 가 제거하는 surface 는 handle 을 닫기 전에 창의 surface registry 에서 빠지므로, 그 닫기보다 먼저 실행된 창 닫기는 그 handle 을 받지 않고 모든 surface handle 은 한 번만 닫힌다. 제거된 surface 하나의 닫기가 실패해도 나머지를 닫고, sync 는 모든 실패를 surface id 와 함께 반환한다. | tauriv2 only: Wails host 는 surface 를 view 객체로 닫고 그 객체가 main thread 에서 handle 을 비우므로 두 번째 닫기는 native code 에 닿지 않는다. Tauri host 는 surface 를 handle 로 닫고 그 handle 은 registry 항목만 가진다 |
+| `surfaces.sync.name-outlives-native-surface` | surface sync가 제거하는 surface는 native surface가 닫힐 때까지 이름을 유지한다. 닫기와 이름 제거가 main thread의 한 단계에서 실행되므로, 창의 native surface 읽기(`host.window`)는 이름이 있는 surface를 찾거나 surface를 찾지 않는다. 닫기가 실패해도 이름을 제거하고 실패를 반환한다. | tauriv2 only: Wails host는 main thread에서 view를 닫고 그 호출이 돌아온 뒤 이름을 제거하므로, 둘 사이의 창 읽기는 surface를 찾지 않고 이름은 알려진 상태다. Tauri host는 sync의 thread에서 main thread로 닫기를 보낸다 |
 | `window-overlay.rects.packs-four-values-per-rect` | 보이는 오버레이는 입력 순서대로 x, y, width, height 값으로 묶인다. | both |
 | `window-overlay.rects.filters-hidden` | 숨긴 오버레이는 묶은 목록에서 빠진다. | both |
 | `workspace.config-dir.creates-requested-path` | 없는 설정 디렉터리를 준비하면 만들고 정규 경로를 반환한다. | both |
