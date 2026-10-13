@@ -451,7 +451,27 @@ export function validateManifest(manifest) {
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
     if (!isObject(surface)) throw new Error(`${where}: surface must be an object`);
-    only(`${where} surface`, surface, ["module", "composition", "drop", "params", "opens", "save"]);
+    only(`${where} surface`, surface, ["module", "composition", "drop", "params", "opens", "save", "menu"]);
+    // The context menu of the surface (docs/spec/plugins.md#pluginjson).
+    if (surface.menu !== undefined) {
+      if (!Array.isArray(surface.menu) || surface.menu.length === 0 || surface.menu.length > 16) {
+        throw new Error(`${where}: surface menu must be an array of 1 to 16 items`);
+      }
+      const seen = new Set();
+      for (const item of surface.menu) {
+        if (!isObject(item)) throw new Error(`${where}: a surface menu item must be an object`);
+        only(`${where} surface menu item`, item, ["command", "title"]);
+        // default: exposes and its commands are optional; a plugin without declared commands has no menu command.
+        if (!isText(item.command) || !(manifest.exposes?.commands ?? []).some((command) => command.name === item.command)) {
+          throw new Error(`${where}: surface menu command ${item.command} must name a command declared in exposes`);
+        }
+        if (seen.has(item.command)) throw new Error(`${where}: surface menu command ${item.command} is repeated`);
+        seen.add(item.command);
+        if (typeof item.title !== "string" || item.title.length < 1 || item.title.length > 40) {
+          throw new Error(`${where}: surface menu title of ${item.command} must be 1 to 40 characters`);
+        }
+      }
+    }
     // The command that saves the surface's changes before a modified tab closes (docs/spec/plugins.md#tab-reports).
     if (surface.save !== undefined && (!isText(surface.save) ||
       // default: exposes and its commands are optional; a plugin without declared commands has no save command.

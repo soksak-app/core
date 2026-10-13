@@ -18,7 +18,7 @@ import * as projects from "./projects.js";
 import {
   activeTab, addTabTo, assignSidebar, openFile, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
-  focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, pickItem, pickerState, plane, railState, selectTab,
+  focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
 } from "./plane.js";
 import {
@@ -480,6 +480,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.card.tab-list", ({ card }) => { openCardTabs(card); });
   registry.command("core.card.tools", ({ card }) => { openCardTools(card); });
   registry.command("core.space.apps", ({ card }) => { openSpaceApps(card); });
+  registry.command("core.surface.menu", ({ surface, x, y }) => { openSurfaceMenu(surface, x, y); });
+  document.addEventListener("contextmenu", onSurfaceContextMenu);
   registry.command("core.card.add-tab", ({ card, plugin, params }) => ({ tab: addTabTo(card, plugin, params) }));
   registry.command("core.file.open", ({ path, card }) => {
     if (!projects.active()) throw new Error("this window shows no project");

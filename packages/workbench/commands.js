@@ -34,6 +34,8 @@ const binder = createBinder(runFrom, {
 
 /** Runs one command. A failure returns to the caller as a rejection. */
 export const run = (name, params = {}) => registry.run(name, params);
+/** Runs one command of the plugin of surface on that surface. */
+export const runOn = (name, params, surface) => registry.run(name, params, surface);
 export const { audit, bind, delegate, mark } = binder;
 
 /** Calls fn when a binding changes. */

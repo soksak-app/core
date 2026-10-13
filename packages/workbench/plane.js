@@ -23,7 +23,7 @@ import { standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { icon } from "./icons.js";
 import { issueId } from "./ids.js";
-import { bind, delegate, mark, run } from "./commands.js";
+import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
 import { disposeSurface, focusSurface, mountSurface, placePluginPlaceholder } from "./surface-modules.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
@@ -1633,6 +1633,32 @@ export function openCardTools(id) {
  * title shows the plane map, `card N` and the tree depth (docs/spec/example-model.md#card-fullscreen). The chosen tab moves
  * fullscreen to its card.
  */
+/**
+ * Opens the context menu that the plugin of a surface declares (docs/spec/plugins.md#pluginjson) in the selection layer at x
+ * and y of the window; the chosen item runs its command on that surface.
+ */
+export function openSurfaceMenu(surfaceId, x, y) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error(`the menu of surface ${surfaceId} needs x and y as numbers`);
+  const tab = tabsOf(cardOfTab(surfaceId)).find((t) => t.id === surfaceId);
+  const owner = plugin(tab.plugin);
+  if (owner.menu === null) throw new Error(`the plugin ${owner.id} of surface ${surfaceId} declares no menu`);
+  // The layer is placed below and to the right of the point, as from an anchor of no size there.
+  const anchor = { getBoundingClientRect: () => ({ left: x, right: x, top: y, bottom: y }), contains: () => false };
+  const items = owner.menu.map((item) => ({ key: item.command, name: item.title, mark: "", svg: "", active: false }));
+  openLayer(anchor, owner.name, items, (key) => runOn(key, {}, surfaceId), "left");
+}
+
+/** A right click on a surface whose plugin declares a menu opens that menu; elsewhere the page menu opens. */
+export function onSurfaceContextMenu(event) {
+  const host = event.target?.closest?.(".surface-module-host[data-surface]");
+  if (!host) return;
+  const card = grid?.cards.find((c) => tabsOf(c).some((t) => t.id === host.dataset.surface));
+  const tab = card && tabsOf(card).find((t) => t.id === host.dataset.surface);
+  if (!tab || !hasPlugin(tab.plugin) || plugin(tab.plugin).menu === null) return;
+  event.preventDefault();
+  return run("core.surface.menu", { surface: host.dataset.surface, x: event.clientX, y: event.clientY });
+}
+
 export function openSpaceApps(id) {
   paneCard(id);
   if (view.fullscreenCard !== id) throw new Error(`card ${id} is not fullscreen`);

@@ -110,6 +110,7 @@
     "core.card.tab-list",
     "core.card.tools",
     "core.space.apps",
+    "core.surface.menu",
     "core.file.open",
     "core.card.add-tab",
     "core.card.split",

@@ -153,6 +153,8 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     }
     const host = document.createElement("div");
     host.className = "surface-module-host";
+    // A right click and a command of an element find the surface that holds the element through this attribute.
+    host.dataset.surface = surface.surfaceId;
     // The text scale is set by .surface-module-host in app.css (docs/spec/text-size.md).
     host.style.cssText = "position:absolute;inset:0;overflow:hidden";
     slot.append(host);

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.29.1: a plugin declares the context menu of its surface in `surface.menu` of `plugin.json`, and a right click on such a surface runs `core.surface.menu`, which opens the items at the pointer and runs the chosen command on that surface; elsewhere the page menu stays.
 - F161.24: while a card is fullscreen, its add, split and close tools are disabled and their commands are refused with an error that names the fullscreen card, so the layout changes only after the arrangement is restored.
 - F161.28: the tab list button (≡) stands at the start of every card header, and the head reserves its width at every level instead of showing it only when the tabs fold.
 - F161.25: a tab of a card is at most 200 points wide; a longer name is cut with an ellipsis and the tooltip of the tab shows the whole name.

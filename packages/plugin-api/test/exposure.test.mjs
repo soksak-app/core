@@ -82,6 +82,25 @@ test("a surface drop names a command declared in the manifest's exposes", () => 
     /surface drop must name a command declared in exposes/);
 });
 
+test("a surface menu lists declared commands with titles", () => {
+  const menu = [{ command: "probe.send", title: "보내기" }];
+  const listing = { ...page, surface: { ...page.surface, menu }, exposes: exposes() };
+  assert.deepEqual(validateManifest(listing).surface.menu, menu);
+  const cases = [
+    [[], /surface menu must be an array of 1 to 16 items/],
+    [Array.from({ length: 17 }, () => menu[0]), /surface menu must be an array of 1 to 16 items/],
+    [["probe.send"], /a surface menu item must be an object/],
+    [[{ command: "probe.missing", title: "x" }], /surface menu command probe.missing must name a command declared in exposes/],
+    [[menu[0], menu[0]], /surface menu command probe.send is repeated/],
+    [[{ command: "probe.send", title: "" }], /surface menu title of probe.send must be 1 to 40 characters/],
+    [[{ command: "probe.send", title: "x".repeat(41) }], /surface menu title of probe.send must be 1 to 40 characters/],
+    [[{ command: "probe.send", title: "x", key: "s" }], /unknown field key/],
+  ];
+  for (const [items, message] of cases) {
+    assert.throws(() => validateManifest({ ...listing, surface: { ...page.surface, menu: items } }), message);
+  }
+});
+
 test("a schema subset checks type, properties, items, and enum", () => {
   const schema = { type: "object", properties: { n: { type: "integer" }, mode: { enum: ["a", "b"] } } };
   assert.equal(matchesSchema(schema, { n: 1, mode: "a", other: true }), true);

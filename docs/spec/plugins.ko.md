@@ -68,6 +68,8 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 
 `surface.opens`가 있으면 `{ "extensions": [...] }`이며, plugin이 여는 파일의 점 없는 소문자 파일 이름 확장자이거나 모든 파일을 뜻하는 `"*"`다. 문자열 property `path`를 가진 `surface.params`가 필요하다. `core.file.open {path, card}`는 창이 보이는 project의 root 기준 상대 경로 `path`의 파일을, 그 확장자를 선언한 plugin에서 열고 없으면 `"*"`를 선언한 plugin에서 연다. 이름에 확장자가 없는 파일은 `"*"`만 연다. space에 같은 `path`를 가진 그 plugin의 탭이 있으면 명령은 그 탭을 활성화하고, 없으면 `params` `{path}`를 가진 탭을 `card`에, `card`가 없으면 포커스된 카드에 더한다. 명령은 확장자나 `"*"`를 선언한 불러온 plugin이 없으면 `no plugin opens <path>`로, 결정하는 항목을 불러온 plugin 둘 이상이 선언하면 `<path> is opened by <plugin> and <plugin>`으로, 절대 경로나 `..` 구간이 있는 경로는 `path must be relative to the project root: <path>`로, project가 없는 창에서는 `this window shows no project`로 실패한다.
 
+`surface.menu`가 있으면 표면의 context menu다: 최대 16개 항목 `{ "command": "<exposes의 명령>", "title": "<글>" }`의 비지 않은 배열이며, 각 제목은 1~40자이고 명령은 서로 다르다. 표면에서 오른쪽 click은 `core.surface.menu {surface, x, y}`를 실행하고, 이는 plugin 이름을 제목으로 창의 그 위치에 선택 레이어로 항목을 연다. 고른 항목은 그 표면에서 매개변수 없이 자기 명령을 실행한다. menu를 선언하지 않은 plugin의 표면이나 표면 밖에서 오른쪽 click은 page의 menu를 연다.
+
 `surface.drop`이 있으면 파일이 표면에 놓였을 때 페이지가 그 표면에서 실행할 `exposes`의 명령을 가리키며, `{urls}`에 놓인 파일 URL을 담는다([네이티브 표면](native-surfaces.ko.md#네이티브-뷰-위의-입력)).
 
 `surface.composition`은 `{ "kind": "dom" }`이거나 `kind: "hybrid"`, 완전한 `regions`, 완전한 `overlays`를 가진 혼합 선언이다. 그림 영역은 `dependencies`에 이미 나열한 사이드카를 지정한다. manifest 선언은 호스트에 전달하는 권한 데이터다. 페이지 코드는 선언에 없는 영역, 공급자, 입력 소유자, 쌓임 항목을 추가할 수 없다.

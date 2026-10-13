@@ -83,6 +83,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
         opens: manifest.surface.opens?.extensions ?? null,
         // default: surface.save is optional; a plugin without it cannot save before a modified tab closes (null).
         save: manifest.surface.save ?? null,
+        // default: surface.menu is optional; a right click on a surface of a plugin without it opens the page menu (null).
+        menu: manifest.surface.menu ?? null,
         surface: surfaceOf(name, manifest.id, {
           ...manifest.surface,
           // default: exposes is an optional field of plugin.json; without it there is no declaration.

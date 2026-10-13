@@ -3087,6 +3087,27 @@
         }
       },
       {
+        "name": "core.surface.menu",
+        "description": "Opens the context menu that the plugin of a surface declares in surface.menu, in the selection layer at x and y of the window; picking an item runs its command on that surface. A surface whose plugin declares no menu is refused.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "surface": {
+              "type": "string"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.file.open",
         "description": "Opens the file at path, relative to the project root, in the loaded plugin whose surface.opens declares its extension, or else in the plugin that declares *: activates the tab of that plugin with the same path, or adds a tab with params {path} to card or to the focused card.",
         "params": {
