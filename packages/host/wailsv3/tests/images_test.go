@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -1274,5 +1275,34 @@ func TestPresentedFrameIdentityIsReported(t *testing.T) {
 	configureImage(t, images, key, 900, 600, 2.0)
 	if frame, ok := images.PresentedFrame(key); ok {
 		t.Fatalf("presented frame %+v survives a raster change", frame)
+	}
+}
+
+// contract: trace.image-frame-answer-is-recorded
+func TestFrameAnswerEventRecordsConsumedAndRefusedAnswers(t *testing.T) {
+	answers := []struct {
+		name     string
+		response map[string]interface{}
+	}{
+		{"consumed", host.AfterPresent(true, "", "view", 1, 1, 7)},
+		{"refused", host.AfterPresent(false, "notAttached", "view", 1, 1, 8)},
+	}
+	for _, answer := range answers {
+		event := host.FrameAnswerEvent("tab-1", "view", answer.response)
+		if got := event["event"]; got != "image.frame" {
+			t.Fatalf("%s answer: event %v, want image.frame", answer.name, got)
+		}
+		if got := event["surface"]; got != "tab-1" {
+			t.Fatalf("%s answer: surface %v, want tab-1", answer.name, got)
+		}
+		if got := event["name"]; got != "view" {
+			t.Fatalf("%s answer: name %v, want view", answer.name, got)
+		}
+		if got, ok := event["response"].(map[string]interface{}); !ok || !reflect.DeepEqual(got, answer.response) {
+			t.Fatalf("%s answer: response %v, want %v", answer.name, event["response"], answer.response)
+		}
+		if len(event) != 4 {
+			t.Fatalf("%s answer: event has %d fields, want event, surface, name and response", answer.name, len(event))
+		}
 	}
 }

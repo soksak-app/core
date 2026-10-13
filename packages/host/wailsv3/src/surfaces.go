@@ -277,6 +277,12 @@ func (s *Surfaces) SidecarReconnected(sidecar string) {
 	}
 }
 
+// FrameAnswerEvent returns the performance trace event of an answer to a frame of the surface: the image name and the
+// answer as the sidecar receives it, whether the frame was consumed or refused.
+func FrameAnswerEvent(surface, image string, response map[string]any) map[string]any {
+	return map[string]any{"event": "image.frame", "surface": surface, "name": image, "response": response}
+}
+
 // DecideImageEnvelope decides and handles the image envelope that a sidecar sent.
 func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.RawMessage) bool {
 	sidecars := s.sidecars
@@ -292,7 +298,7 @@ func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.Ra
 			// Every answer to a frame, consumed or refused with its reason, is an image.frame event of the performance
 			// trace, so a frame that the host does not present is visible in the timeline (docs/spec/performance-trace.md).
 			PerformanceObserve("host", func() map[string]any {
-				return map[string]any{"event": "image.frame", "surface": surface, "name": image, "response": response}
+				return FrameAnswerEvent(surface, image, response)
 			})
 			responseBytes, err := json.Marshal(response)
 			if err != nil {

@@ -1266,3 +1266,27 @@ fn presented_frame_identity_is_reported() {
         .unwrap();
     assert_eq!(images.presented_frame(&key), None);
 }
+
+// contract: trace.image-frame-answer-is-recorded
+#[test]
+fn frame_answer_event_records_consumed_and_refused_answers() {
+    let answers = [
+        ("consumed", after_present(Ok(()), "view", 1, 1, 7)),
+        (
+            "refused",
+            after_present(Err("notAttached"), "view", 1, 1, 8),
+        ),
+    ];
+    for (label, response) in answers {
+        let event = soksak_host_tauriv2::sidecars::frame_answer_event("tab-1", "view", &response);
+        assert_eq!(event["event"], "image.frame", "{label} answer: event");
+        assert_eq!(event["surface"], "tab-1", "{label} answer: surface");
+        assert_eq!(event["name"], "view", "{label} answer: name");
+        assert_eq!(event["response"], response, "{label} answer: response");
+        assert_eq!(
+            event.as_object().map(|fields| fields.len()),
+            Some(4),
+            "{label} answer: event fields are event, surface, name and response"
+        );
+    }
+}

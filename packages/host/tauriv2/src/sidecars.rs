@@ -2987,6 +2987,21 @@ fn try_handle_image_envelope<O: Owner>(
 /// the window as root.
 pub(crate) type WindowSidecars = Sidecars<Window>;
 
+/// Returns the performance trace event of an answer to a frame of the surface: the image name and the answer as the
+/// sidecar receives it, whether the frame was consumed or refused.
+pub fn frame_answer_event(
+    surface: &str,
+    image: &str,
+    response: &serde_json::Value,
+) -> serde_json::Value {
+    serde_json::json!({
+        "event": "image.frame",
+        "surface": surface,
+        "name": image,
+        "response": response,
+    })
+}
+
 impl Owner for Window {
     fn key(&self) -> String {
         self.label().to_string()
@@ -3045,12 +3060,7 @@ impl Owner for Window {
                 // performance trace, so a frame that the host does not present is visible in the timeline
                 // (docs/spec/performance-trace.md).
                 crate::performance::observe("host", || {
-                    serde_json::json!({
-                        "event": "image.frame",
-                        "surface": surface,
-                        "name": image,
-                        "response": response,
-                    })
+                    frame_answer_event(surface, image, &response)
                 });
                 let text = serde_json::to_string(&response).map_err(|e| e.to_string())?;
                 let body = RawValue::from_string(text).map_err(|e| e.to_string())?;
