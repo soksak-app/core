@@ -19,9 +19,11 @@ export function channelOf(file) {
 }
 
 /**
- * Reads the text of a log file into `{line, event}` entries. The first line must be `log.open` with the schema number
+ * Reads the text of a log file into `{line, event, bytes}` entries, where `bytes` is the size of the line with its line feed. The first line must be `log.open` with the schema number
  * of this checker. A line that is not a JSON object is an error.
  */
+const encoder = new TextEncoder();
+
 export function parseLog(file, text) {
   const entries = [];
   const lines = text.split("\n").filter((line, index, all) => line !== "" || index < all.length - 1);
@@ -36,7 +38,7 @@ export function parseLog(file, text) {
     if (event === null || typeof event !== "object" || Array.isArray(event)) {
       throw new Error(`${file}:${number}: not an event object: ${raw}`);
     }
-    entries.push({ line: number, event });
+    entries.push({ line: number, event, bytes: encoder.encode(raw).length + 1 });
   });
   const first = entries[0]?.event;
   if (first?.event !== "log.open") {

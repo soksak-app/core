@@ -84,6 +84,8 @@ export function auditRun(catalog, folder) {
   const { file: marksFile, marks } = readMarks(folder);
   const cases = casesOf(marksFile, marks);
   const findings = [];
+  if (catalog.budget === undefined) throw new Error('the catalog declares no budget of the volume of the logs (budget)');
+  const volume = [];
   const configs = [...new Set(marks.map((mark) => mark.config))];
   for (const config of configs) {
     const parsed = eventFiles(config).map((file) => ({ file, process: processOf(file), entries: parseLog(file, readFileSync(file, 'utf8')).map((entry) => ({ ...entry, file })) }));
@@ -143,6 +145,35 @@ export function auditRun(catalog, folder) {
     for (const { file, line, message } of auditParsed(parsed, catalogOf(catalog, config), (file, entry) => declared.has(`${file}\0${entry.line}`))) {
       if (judged(file, line)) findings.push(`${file}:${line}: ${message}`);
     }
+    // The volume of each class over the span: the events and bytes of every file of the folder, per minute, against the
+    // budget of the catalog (docs/spec/logging.md#volume-budget).
+    const inside = parsed.flatMap(({ entries }) => entries).filter(({ event }) => event.ts_us >= spanStart && event.ts_us <= spanEnd);
+    const last = spanEnd === Infinity ? Math.max(...inside.map(({ event }) => event.ts_us)) : spanEnd;
+    const minutes = (last - spanStart) / 60_000_000;
+    const classes = {};
+    for (const { event, bytes } of inside) {
+      // default: a line without a class is refused by the line check above and counted under `undeclared`.
+      const name = event.class ?? 'undeclared';
+      classes[name] ??= { events: 0, bytes: 0 };
+      classes[name].events += 1;
+      classes[name].bytes += bytes;
+    }
+    for (const [name, counted] of Object.entries(classes)) {
+      const limit = catalog.budget[name];
+      if (limit === undefined) {
+        findings.push(`${marksFile}:1: the class ${name} of ${config} has no budget in the catalog`);
+        continue;
+      }
+      counted.eventsPerMinute = minutes > 0 ? Math.round(counted.events / minutes) : 0;
+      counted.bytesPerMinute = minutes > 0 ? Math.round(counted.bytes / minutes) : 0;
+      if (counted.eventsPerMinute > limit.events) {
+        findings.push(`${marksFile}:1: the class ${name} of ${config} stored ${counted.eventsPerMinute} events per minute, above its budget of ${limit.events}`);
+      }
+      if (counted.bytesPerMinute > limit.bytes) {
+        findings.push(`${marksFile}:1: the class ${name} of ${config} stored ${counted.bytesPerMinute} bytes per minute, above its budget of ${limit.bytes}`);
+      }
+    }
+    volume.push({ config, minutes, classes });
   }
   const rows = cases.map((made) => {
     const missing = made.expected.filter((name) => !made.found.has(name));
@@ -165,7 +196,7 @@ export function auditRun(catalog, folder) {
     }
     return row;
   });
-  writeFileSync(join(folder, 'judgment.json'), `${JSON.stringify({ schema: 1, run: marks[0].run, tests: rows }, null, 2)}\n`);
+  writeFileSync(join(folder, 'judgment.json'), `${JSON.stringify({ schema: 1, run: marks[0].run, tests: rows, volume }, null, 2)}\n`);
   return findings;
 }
 

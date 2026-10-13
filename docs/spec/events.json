@@ -893,6 +893,13 @@
       "description": "The WebContent process of an app DOM webview ended. reason is the name of the WebKit termination reason (exceeded-memory, exceeded-cpu, requested-by-client, crash, exceeded-shared-process-crash-limit, or unknown-<n> for a value that WebKit defines later) and code is its number."
     }
   },
+  "budget": {
+    "lifecycle": { "events": 6000, "bytes": 1500000 },
+    "input": { "events": 7000, "bytes": 2700000 },
+    "call": { "events": 41000, "bytes": 27000000 },
+    "io": { "events": 4500, "bytes": 8000000 },
+    "frame": { "events": 2500, "bytes": 800000 }
+  },
   "chains": {
     "input": [
       "native.input.key_down",

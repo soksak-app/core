@@ -10,6 +10,7 @@ const catalog = {
   schema: 2,
   layers: ['host', 'sidecar'],
   chains: { input: ['host.sidecar.request'] },
+  budget: { lifecycle: { events: 1e12, bytes: 1e15 }, io: { events: 1e12, bytes: 1e15 } },
   events: {
     'host.sidecar.request': { layer: 'host', class: 'io', level: 'info', cids: 'required', fields: { name: 'string' } },
     'log.open': { layer: 'host', class: 'lifecycle', level: 'info', fields: { schema: 'number', pid: 'number', role: 'string', boot: 'string' } },
@@ -129,6 +130,33 @@ test('a chain finding of an earlier process before the first start mark belongs 
     marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 11 }), mark({ kind: 'end', boot: BOOT, seq: 13 })],
   });
   assert.deepEqual(auditRun(chained, folder), [`${join(config, 'logs', `host-${BOOT}.jsonl`)}:3: chain input of c-new lacks host.update.start`]);
+});
+
+test('a class that stores more events or bytes per minute than its budget is a finding, and the judgment holds the volume of each class', (t) => {
+  // Three lifecycle events in the span of 2 ms between the marks are 90000 events per minute.
+  const tight = { ...catalog, budget: { ...catalog.budget, lifecycle: { events: 1000, bytes: 100000000 } } };
+  const { folder, config } = fixture(t, {
+    files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), focus(3), end(4, 't1')] },
+    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 }), mark({ kind: 'end', boot: BOOT, seq: 4 })],
+  });
+  const findings = auditRun(tight, folder);
+  assert.equal(findings.length, 1);
+  assert.match(findings[0], /marks\.jsonl:1: the class lifecycle of .+ stored 90000 events per minute, above its budget of 1000/);
+  const volume = judgment(folder).volume;
+  assert.deepEqual(volume.map(({ config: folderOf, classes }) => [folderOf, Object.keys(classes)]), [[config, ['lifecycle']]]);
+  assert.equal(volume[0].classes.lifecycle.events, 3);
+  assert.equal(volume[0].minutes, 2 / 60000);
+});
+
+test('a catalog without a budget, or a class of a run that the budget does not name, is refused or a finding', (t) => {
+  const { folder } = fixture(t, {
+    files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), end(3, 't1')] },
+    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 }), mark({ kind: 'end', boot: BOOT, seq: 3 })],
+  });
+  const { budget, ...none } = catalog;
+  assert.throws(() => auditRun(none, folder), /the catalog declares no budget/);
+  const partial = { ...catalog, budget: { io: budget.io } };
+  assert.match(auditRun(partial, folder)[0], /the class lifecycle of .+ has no budget/);
 });
 
 test('the logs of every layer under the configuration folders of the marks are audited, and a sidecar error is placed by time', (t) => {

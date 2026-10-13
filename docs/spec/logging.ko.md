@@ -332,6 +332,20 @@ window check는 시험 대상 애플리케이션의 event log에 시험마다 �
 
 실행의 감사 `node scripts/audit-run.mjs <실행 폴더>`는 `pnpm verify:windows`와 활성화 등급의 끝(`scripts/node-tests.mjs`의 `--script verify` 또는 `--script verify:<등급>`)에서 시험이 실패했을 때도 실행된다. 실행 폴더의 `marks.jsonl`을 읽고, 표시의 `config`에서 설정 폴더를 얻어, 그 안의 모든 층의 모든 event 파일(host, `sok`, 각 sidecar의 `<role>-<pid>-<time>.jsonl` 파일과 그 세대 `.1`부터 `.5`, debug 파일)을, 이 저장소의 catalog에 그 폴더에 설치된 sidecar의 catalog를 합친 것(`composeCatalogs`, [sidecar catalog](#sidecar-catalog))으로 감사한다: 줄 구조, 선언 없는 event(catalog가 layer `sidecar`를 나열하므로 이 층도 감사한다), 한 process의 세대와 debug 파일을 건넌 연속된 `seq`, 폴더의 파일을 합쳐 본 선언된 사슬, 모든 `error` event. 시험의 범위는 애플리케이션 로그에서 `host.test.start`와 `host.test.end` 표시 사이의 줄이며 `(boot, seq)`로 정하고, 다른 process의 event는 `ts_us`로 범위에 놓는다. 범위에 `error`가 든 모든 시험이 그 text와 맞는 pattern(`expect_error`)을 선언했으면 `error`는 선언된 것이고, 실행의 첫 시작 표시부터 마지막 끝 표시까지의 그 밖의 `error`는(시험 사이의 것 포함) finding이며, 끝 표시 없는 시작 표시도 finding이다. 첫 시작 표시 앞이나 마지막 끝 표시 뒤의 줄에 놓인 finding(`error`, `seq`의 빈틈, 멈춘 사슬)은 실행이 판정하지 않는다. 설정 폴더는 이전 실행과 사람의 애플리케이션 사용의 로그도 담고, 하네스는 시험의 끝 표시를 cleanup과 그 오류 뒤에 쓰며, `scripts/check-events.mjs --logs`가 폴더의 모든 finding을 보고하기 때문이다. `expectEvent`로 event(`expect_event`)를 선언한 시험의 범위에 그 이름의 event가 없으면 끝 표시에서 빠진 event 이름을 밝히는 finding이다. 감사는 실행 폴더에 `judgment.json`을 쓰며, 시험과 애플리케이션마다 한 행 `{name, app, result, boot, from, to, errors, expected, missing}`이다. `from`과 `to`는 시작·끝 표시의 `{seq, file, line}`이고(끝 표시가 없으면 `to`는 null), `errors`는 범위의 `error` event를 `{file, line, text, declared}`로, `expected`는 선언한 event마다 범위에서 찾은 수를, `missing`은 하나도 없는 선언을 나열하며, 끝 표시가 있고 `missing`이 비고 모든 error가 선언된 경우에만 `result`가 `pass`다. finding은 표준 오류의 한 줄 `<file>:<line>: <message>`이고, finding이 있거나 실행에 `marks.jsonl`이 없으면 종료 상태는 1이다. `node scripts/check-events.mjs --logs <config-dir>…`는 표시 없이 설정 폴더를 감사하며 모든 `error` event를 보고한다. workflow `ci.yml`은 창 검사를 실행하지 않으므로 결함 fixture를 쓰는 감사 시험(`pnpm test`)을 실행한다. 실제 실행의 감사는 로그인한 데스크톱이 있는 self-hosted runner에서 `pnpm verify:windows`와 이 감사를 실행하고 실패한 job의 실행 폴더를 남기는 workflow `window-checks.yml`([지속적 통합](../operations/examples.ko.md#지속적-통합))과 개발 컴퓨터의 창 검사 실행에 속한다.
 
+### 분량 예산
+
+catalog는 로그 분량의 예산을 `budget`으로 선언한다: class마다 한 설정 폴더의 process들이 함께 저장해도 되는 분당 event 수와 byte 수(줄과 그 줄바꿈)이다. 실행의 감사(`scripts/audit-run.mjs`)는 실행의 첫 시작 표시부터 마지막 끝 표시까지 각 설정 폴더의 모든 파일의 모든 줄을 세어 그 구간의 분으로 나누고, 결과를 `judgment.json`의 `volume`(`{config, minutes, classes}`, class마다 `{events, bytes, eventsPerMinute, bytesPerMinute}`)에 쓰며, 예산을 넘은 class마다, 그리고 예산이 이름하지 않은 class마다 finding을 보고한다. `budget`이 없는 catalog는 거부한다. 예산은 2026-10-14에 `library`, `outside`, `registry`, `settings` 창 검사가 두 애플리케이션에서 측정한 가장 큰 비율의 1.5배이다:
+
+| class | 분당 event | 분당 byte | 측정한 최대 |
+|---|---|---|---|
+| `lifecycle` | 6,000 | 1,500,000 | event 3,714, byte 908,276 |
+| `input` | 7,000 | 2,700,000 | event 4,625, byte 1,748,006 |
+| `call` | 41,000 | 27,000,000 | event 27,082, byte 17,876,427 |
+| `io` | 4,500 | 8,000,000 | event 2,785, byte 5,342,640 |
+| `frame` | 2,500 | 800,000 | event 1,582, byte 514,234 |
+
+예산의 합은 분당 약 40 MB이므로 6 GiB의 보존 한도([보존](#보존))는 예산에서 창 검사 최소 2.7시간을, 측정한 분당 13~24 MB에서 4.5~8시간을 담는다. 사람의 사용은 훨씬 적게 저장하고, `.keep` 파일이 있는 run은 지우지 않으므로 실패의 로그는 분류될 때까지 남는다.
+
 ### Census
 
 발생 원천은 기록 없이 사라질 수 있는 자리다: 빈 catch, 버려진 결과, goroutine, 등록된 observer, delegate, 오류 반환. census는 언어별 규칙으로 그런 원천을 모두 찾고, 같은 함수에 저장된 event나 reason marker 중 하나를 요구한다. marker의 형식은 하나, `(default|silent): <reason>`이다(`default:`는 기본값이 계약의 일부인 까닭을, `silent:`는 아무것도 기록하지 않는 까닭을 적는다). 원천의 줄, 일치한 범위 안, 또는 바로 위에 이어진 주석 줄에 적고, 까닭은 10자 이상이다. 단어의 다른 형식(`Default:`, `Silent:`, `fallback:`, 다른 구분자, 다른 언어)으로 시작하는 주석은 파일과 줄을 이름으로 말하는 오류다. 기준선은 없다: 둘 다 없는 원천은 `<file>:<line>: <rule> has neither an event nor a stated reason`으로 실패한다.
