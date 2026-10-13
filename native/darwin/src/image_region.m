@@ -749,7 +749,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 // The input method remembers the document position of the syllable being composed, so while an input source that
 // composes is selected, the string the input method inserted
 // stays in the document even after it is committed. The input method no longer revises the part before the start of
-// the newly inserted string, so that part is
+// the newly inserted string, except that the Korean input method revises the one syllable before it, so that part is
 // committed by insert, and the rest is reported as the composition string. The Korean input method composes only
 // Hangul, so when the string it inserted
 // ends with a non-Hangul character (for example, a space or digit after a syllable), the input method no longer
@@ -802,7 +802,15 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     }
     NSUInteger end = self.selectedRange.location;
     NSUInteger start = end >= text.length ? end - text.length : 0;
-    if (start > self.committedLength) [self commitThrough:start];
+    // The Korean input method revises the syllable before its newest insert (a final consonant that a vowel follows moves to
+    // the next syllable), and it can append the new syllable before it replaces that one, so that syllable stays in the
+    // document until the next insert or the end of the composition commits it.
+    NSUInteger through = start;
+    if ([self selectedSourceComposesOnlyHangul] && through > self.committedLength
+        && isHangul([self.textStorage.string characterAtIndex:through - 1])) {
+        through -= 1;
+    }
+    if (through > self.committedLength) [self commitThrough:through];
     if ([self selectedSourceComposesOnlyHangul] && self.textStorage.length > self.committedLength) {
         unichar last = [self.textStorage.string characterAtIndex:self.textStorage.length - 1];
         if (!isHangul(last)) [self commitThrough:self.textStorage.length];

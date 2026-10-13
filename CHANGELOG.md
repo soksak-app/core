@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F143: with the Korean input method selected, the image region keeps the syllable before the newest insert revisable until the next insert or the end of the composition, because the input method can append the next syllable before it revises that one, which sent the unrevised syllable to the PTY.
 - F161.44: the procedure of the examples records 627 test files of the inventory.
 - F161.43: the test of the chain search requires the first matching start in the order of the log, as `chainOf` takes it since F161.15.
 - F161.42: the test of the catalog requires the chain `window` without `page.call`, as the specification states since F161.26.

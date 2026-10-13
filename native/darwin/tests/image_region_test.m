@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
+#import <objc/message.h>
 #import <objc/runtime.h>
 #include <unistd.h>
 #import "event_ring.h"
@@ -560,10 +561,14 @@ int main(int argc, char **argv) { @autoreleasepool {
             check(committedTexts(beforeEdit).count == 0 && [lastPreedit(beforeEdit) isEqual:@"한"],
                 [NSString stringWithFormat:@"TEST 8: replaced input-method text stays editable preedit (got %@)", collectedEvents]);
             inputMethod(@"ㄱ", NSMakeRange(NSNotFound, 0));
-            check([committedTexts(beforeEdit) isEqualToArray:@[@"한"]] && [lastPreedit(beforeEdit) isEqual:@"ㄱ"],
-                [NSString stringWithFormat:@"TEST 8: an appended insert commits the text before it (got %@)", collectedEvents]);
+            // The Korean input method revises the syllable before its newest insert, so with a source that composes only
+            // Hangul that syllable stays in the preedit (image_region_hangul_test.m); another composing source commits it.
+            BOOL hangulOnly = ((BOOL (*)(id, SEL))objc_msgSend)(regionView, NSSelectorFromString(@"selectedSourceComposesOnlyHangul"));
+            check(hangulOnly ? (committedTexts(beforeEdit).count == 0 && [lastPreedit(beforeEdit) isEqual:@"한ㄱ"])
+                : ([committedTexts(beforeEdit) isEqualToArray:@[@"한"]] && [lastPreedit(beforeEdit) isEqual:@"ㄱ"]),
+                [NSString stringWithFormat:@"TEST 8: an appended insert commits the text before it, except the syllable that a Hangul source revises (got %@)", collectedEvents]);
             [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(insertNewline:)];
-            check([committedTexts(beforeEdit) isEqualToArray:(@[@"한", @"ㄱ"])] && [lastPreedit(beforeEdit) isEqual:@""]
+            check([[committedTexts(beforeEdit) componentsJoinedByString:@""] isEqual:@"한ㄱ"] && [lastPreedit(beforeEdit) isEqual:@""]
                 && [[collectedEvents lastObject] rangeOfString:@"insertNewline:"].location != NSNotFound,
                 [NSString stringWithFormat:@"TEST 8: a command commits the remaining preedit before it is reported (got %@)", collectedEvents]);
 

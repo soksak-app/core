@@ -106,6 +106,7 @@ $(BUILD)/capture_resize_test: src/capture.m
 # through the test runner (scripts/native-tests.mjs), which writes the start, the end and the elapsed time of each; NATIVE_TEST_ONLY=<text>
 # runs only the entries that contain the text.
 NATIVE_TESTS = observe_test \
+  image_region_hangul_test \
   activity_observers_test \
   activity_observers_allocation_test \
   application_log_test \

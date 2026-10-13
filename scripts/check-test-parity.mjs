@@ -1759,6 +1759,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F143",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "selectedSourceComposesOnlyHangul] && through > self.committedLength" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_hangul_test.m", id: "the committed text is 하나 and the space, each once and in order" },
+      { file: "native/darwin/tests/image_region_hangul_test.m", id: "the syllable two before the newest insert is committed" },
+    ],
+    expected: "While a source that composes only Hangul is selected, the image region keeps the syllable before the newest insert revisable, so a revision of it after a later append commits each syllable once and in order.",
+    levels: ["unit"],
+  },
+  {
     id: "F146",
     implementation: [
       { file: "packages/workbench/debug-ui.js", symbol: "debug scroll position is not a number" },
