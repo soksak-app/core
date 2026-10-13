@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.42: the test of the catalog requires the chain `window` without `page.call`, as the specification states since F161.26.
 - F161.41: the tests of the applications assert the batches of a page without the statement of the clock anchor, which has its own test in the workbench.
 - F161.40: the handler of a right click calls `closest` on the target of the event directly, because a `contextmenu` event always targets an element.
 - F161.39: the generated class tables of Go, Rust and the page hold `host.sidecar.write_wait`, which F161.37.1 added to the catalog.

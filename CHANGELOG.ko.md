@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.42: catalog test가 F161.26부터 명세가 적는 대로 `page.call` 없는 chain `window`를 요구한다.
 - F161.41: 애플리케이션 test가 clock anchor 진술 없이 page의 batch를 확인한다. 그 진술은 workbench에 자기 test가 있다.
 - F161.40: 오른쪽 click의 handler가 event의 target에 `closest`를 바로 호출한다. `contextmenu` event는 늘 element를 target으로 하기 때문이다.
 - F161.39: Go, Rust, page의 생성 class 표가 F161.37.1이 catalog에 더한 `host.sidecar.write_wait`를 담는다.

@@ -57,7 +57,9 @@ test('the catalog declares the chain of each operation of the page and the first
   const real = JSON.parse(readFileSync(new URL('../../docs/spec/events.json', import.meta.url), 'utf8'));
   const first = { plugin: 'page.plugin.operation', project: 'page.project.operation', window: 'page.window.operation', settings: 'page.settings.change', update: 'page.update.operation' };
   for (const [chain, event] of Object.entries(first)) {
-    assert.deepEqual(real.chains[chain], [event, 'page.call', 'host.binding.call'], chain);
+    // The close of a window ends its page before the page records the completion of the call (docs/spec/logging.md#operation-chains).
+    const call = chain === 'window' ? [] : ['page.call'];
+    assert.deepEqual(real.chains[chain], [event, ...call, 'host.binding.call'], chain);
     assert.equal(real.events[event].cids, 'required', event);
     assert.equal(real.events[event].layer, 'page', event);
   }
