@@ -36,7 +36,12 @@ for (const app of Object.values(APPS)) {
     });
     await s.press("ArrowLeft", { modifiers: ["shift"] });
     await s.until("hwp.document", (value) => value.selection, "Shift-ArrowLeft selected nothing", { surface });
-    assert.equal((await s.run("hwp.request", { method: "getSelectionContext" }, surface)).selectedTextSha256, sha("x"));
+    // The editor answers the selection only as a hash, so a different selection states the page text and the whole context.
+    const selected = await s.run("hwp.request", { method: "getSelectionContext" }, surface);
+    if (selected.selectedTextSha256 !== sha("x")) {
+      assert.fail(`Shift-ArrowLeft after x selected text of SHA-256 ${selected.selectedTextSha256}, not x; selection context ` +
+        `${JSON.stringify(selected)}; page ${JSON.stringify(await lines(s, surface))}`);
+    }
     await s.press("ArrowRight");
     await s.until("hwp.document", (value) => !value.selection, "ArrowRight did not end the selection", { surface });
 
