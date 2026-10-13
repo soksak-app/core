@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 use soksak_sok::appupdate::{
-    core_update_candidate, replace_app, stage_app_update, AppUpdate, ReplaceOptions,
+    AppUpdate, ReplaceOptions, core_update_candidate, replace_app, stage_app_update,
 };
 use soksak_sok::install::{CoreRelease, Index, RegistryCore, Release, Revoked, RevokedCore};
 

@@ -58,38 +58,40 @@ impl LogNotices {
         let worker_shared = Arc::clone(&shared);
         let worker = std::thread::Builder::new()
             .name("debug-log-notices".into())
-            .spawn(move || loop {
-                let notice = {
+            .spawn(move || {
+                loop {
+                    let notice = {
+                        let (lock, wake) = &*worker_shared;
+                        let mut state = lock.lock().expect("the latest notice");
+                        while !state.pending && !state.stopped {
+                            state = wake.wait(state).expect("the latest notice");
+                        }
+                        if state.stopped {
+                            return;
+                        }
+                        state.pending = false;
+                        let notices = state.value.notices + 1;
+                        state.value = LogNotice {
+                            path: state.path.clone(),
+                            size: state.size,
+                            notices,
+                            coalesced: state.announced - notices,
+                        };
+                        state.value.clone()
+                    };
+                    emit(notice);
                     let (lock, wake) = &*worker_shared;
+                    let deadline = Instant::now() + interval;
                     let mut state = lock.lock().expect("the latest notice");
-                    while !state.pending && !state.stopped {
-                        state = wake.wait(state).expect("the latest notice");
+                    while !state.stopped {
+                        let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+                            break;
+                        };
+                        state = wake.wait_timeout(state, left).expect("the latest notice").0;
                     }
                     if state.stopped {
                         return;
                     }
-                    state.pending = false;
-                    let notices = state.value.notices + 1;
-                    state.value = LogNotice {
-                        path: state.path.clone(),
-                        size: state.size,
-                        notices,
-                        coalesced: state.announced - notices,
-                    };
-                    state.value.clone()
-                };
-                emit(notice);
-                let (lock, wake) = &*worker_shared;
-                let deadline = Instant::now() + interval;
-                let mut state = lock.lock().expect("the latest notice");
-                while !state.stopped {
-                    let Some(left) = deadline.checked_duration_since(Instant::now()) else {
-                        break;
-                    };
-                    state = wake.wait_timeout(state, left).expect("the latest notice").0;
-                }
-                if state.stopped {
-                    return;
                 }
             })
             .expect("the thread of the log notices");
@@ -132,10 +134,10 @@ impl LogNotices {
         let (lock, wake) = &*self.shared;
         lock.lock().expect("the latest notice").stopped = true;
         wake.notify_all();
-        if let Some(worker) = self.worker.lock().expect("the worker").take() {
-            if worker.join().is_err() {
-                eprintln!("debug log notices: the thread ended with a panic");
-            }
+        if let Some(worker) = self.worker.lock().expect("the worker").take()
+            && worker.join().is_err()
+        {
+            eprintln!("debug log notices: the thread ended with a panic");
         }
     }
 }

@@ -77,10 +77,10 @@ impl Plugins {
         let _running = match self.running.try_lock() {
             Ok(guard) => guard,
             Err(TryLockError::WouldBlock) => {
-                return Err("another plugin operation is running".to_string())
+                return Err("another plugin operation is running".to_string());
             }
             Err(TryLockError::Poisoned(error)) => {
-                return Err(format!("plugin operation state: {error}"))
+                return Err(format!("plugin operation state: {error}"));
             }
         };
         let url = plugins::use_registry(
@@ -105,10 +105,10 @@ impl Plugins {
             let _running = match self.running.try_lock() {
                 Ok(guard) => guard,
                 Err(TryLockError::WouldBlock) => {
-                    return Err("another plugin operation is running".to_string())
+                    return Err("another plugin operation is running".to_string());
                 }
                 Err(TryLockError::Poisoned(error)) => {
-                    return Err(format!("plugin operation state: {error}"))
+                    return Err(format!("plugin operation state: {error}"));
                 }
             };
             let result = plugins::run_plugin_action(

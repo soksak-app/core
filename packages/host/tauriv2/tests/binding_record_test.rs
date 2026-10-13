@@ -7,7 +7,7 @@ mod records;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_host_tauriv2::binding_record::BindingCall;
 use soksak_host_tauriv2::bounds::CALL_TEXT_BYTES;
 use soksak_host_tauriv2::event_record::use_host_event_log;

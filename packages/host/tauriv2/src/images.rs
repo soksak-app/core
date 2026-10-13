@@ -327,10 +327,10 @@ impl Images {
             .cloned()
             .collect();
         for key in keys {
-            if let Some(handle) = inner.detach(&key) {
-                if handle != 0 {
-                    removed.push(handle);
-                }
+            if let Some(handle) = inner.detach(&key)
+                && handle != 0
+            {
+                removed.push(handle);
             }
         }
         // The cleanup of document regions does not change the visibility state of the outer SurfaceHost. end_generation
@@ -345,7 +345,7 @@ impl Images {
         inner
             .handles
             .iter()
-            .filter(|(_, &handle)| handle != 0)
+            .filter(|&(_, &handle)| handle != 0)
             .map(|(key, &handle)| (handle, key.clone()))
             .collect()
     }
@@ -522,11 +522,12 @@ impl Images {
 
     pub fn retry_configure(&self, key: &Key, generation: u64, raster: u64) {
         let mut inner = self.lock();
-        if let Some(state) = inner.states.get_mut(key) {
-            if state.generation == generation && state.raster == raster {
-                state.configured = false;
-                state.presentation_error = None;
-            }
+        if let Some(state) = inner.states.get_mut(key)
+            && state.generation == generation
+            && state.raster == raster
+        {
+            state.configured = false;
+            state.presentation_error = None;
         }
     }
 
@@ -1347,16 +1348,16 @@ where
 
                     if let Some(reason) = reason.filter(|reason| *reason != "stale") {
                         images.mark_presentation_failed(&key, generation, raster, sequence, reason);
-                        if reason == "notFound" {
-                            if let Err(error) = recover(reason) {
-                                log_error(
-                                    "image recovery",
-                                    format!(
-                                        "surface={} name={} reason={} error={}",
-                                        key.0, name, reason, error
-                                    ),
-                                );
-                            }
+                        if reason == "notFound"
+                            && let Err(error) = recover(reason)
+                        {
+                            log_error(
+                                "image recovery",
+                                format!(
+                                    "surface={} name={} reason={} error={}",
+                                    key.0, name, reason, error
+                                ),
+                            );
                         }
                     }
 

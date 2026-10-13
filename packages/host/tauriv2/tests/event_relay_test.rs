@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_host_tauriv2::event_log::{self, EventLog, Options};
 use soksak_host_tauriv2::event_relay::log_command;
 
@@ -210,10 +210,12 @@ fn the_clock_request_answers_both_clocks_of_the_host_and_stores_no_event() {
         .unwrap();
     assert!(first.ts_us > 1_700_000_000_000_000 && first.mono_ns > 0);
     assert!(second.ts_us >= first.ts_us && second.mono_ns >= first.mono_ns);
-    assert!(log_command(&log, json!({"action": "clock"}))
-        .unwrap()
-        .lines
-        .is_empty());
+    assert!(
+        log_command(&log, json!({"action": "clock"}))
+            .unwrap()
+            .lines
+            .is_empty()
+    );
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     assert_eq!(read(&path).len(), 1, "a clock request stored an event");

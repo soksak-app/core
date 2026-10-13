@@ -12,9 +12,9 @@ use crate::debug::{self, Json};
 use crate::files::file_error;
 pub use crate::log_index::IndexUpdate;
 use crate::log_index::{
-    bloom_has, open_log, read_range, scan_line, OpenedLog, ScannedLine, Segment, BLOOM_CIDS,
-    BLOOM_EVENT, BLOOM_RUN, BLOOM_SESSION, BLOOM_SHAPES, BLOOM_SURFACE, CLASSES, LAYERS, LEVELS,
-    SEGMENT_EVENTS,
+    BLOOM_CIDS, BLOOM_EVENT, BLOOM_RUN, BLOOM_SESSION, BLOOM_SHAPES, BLOOM_SURFACE, CLASSES,
+    LAYERS, LEVELS, OpenedLog, SEGMENT_EVENTS, ScannedLine, Segment, bloom_has, open_log,
+    read_range, scan_line,
 };
 
 const DEFAULT_LIMIT: usize = 500;
@@ -202,7 +202,7 @@ pub fn parse_log_query(params: &str) -> Result<LogQuery, String> {
                 return Err(query_error(format!(
                     "limit must be an integer from 1 to {MAX_LIMIT}, found {}",
                     debug::stringify(Some(value))
-                )))
+                )));
             }
         }
     }
@@ -257,7 +257,7 @@ pub fn parse_log_query(params: &str) -> Result<LogQuery, String> {
                     return Err(query_error(format!(
                         "{name} must be an integer from 0 to {MAX_AROUND}, found {}",
                         debug::stringify(Some(value))
-                    )))
+                    )));
                 }
             }
         }
@@ -273,12 +273,12 @@ pub fn parse_log_query(params: &str) -> Result<LogQuery, String> {
             }
         }
     }
-    if let (Some(from), Some(to)) = (query.from_us, query.to_us) {
-        if from > to {
-            return Err(query_error(format!(
-                "from_us is later than to_us: {from} {to}"
-            )));
-        }
+    if let (Some(from), Some(to)) = (query.from_us, query.to_us)
+        && from > to
+    {
+        return Err(query_error(format!(
+            "from_us is later than to_us: {from} {to}"
+        )));
     }
     if !query.event.is_empty() && !query.event_prefix.is_empty() {
         return Err(query_error("takes event or event_prefix, not both"));
@@ -533,20 +533,19 @@ impl<'a> QueryPlan<'a> {
         {
             return false;
         }
-        if let Some(cursor) = &self.query.after {
-            if (ascending && s.max_ts < cursor.ts_us) || (!ascending && s.min_ts > cursor.ts_us) {
-                return false;
-            }
+        if let Some(cursor) = &self.query.after
+            && ((ascending && s.max_ts < cursor.ts_us) || (!ascending && s.min_ts > cursor.ts_us))
+        {
+            return false;
         }
         if let Some(limit) = self
             .query
             .since
             .as_ref()
             .and_then(|since| since.get(process))
+            && (s.last_seq as i64) <= *limit
         {
-            if (s.last_seq as i64) <= *limit {
-                return false;
-            }
+            return false;
         }
         let q = self.query;
         let has = |kind: usize, item: &str| bloom_has(s.filter(kind), BLOOM_SHAPES[kind].1, item);
@@ -569,10 +568,10 @@ impl<'a> QueryPlan<'a> {
     /// Whether a line is a row of the plan; the cursor and the bounds of the run are applied by the caller.
     fn matches(&self, line: &ScannedLine, process: &str) -> bool {
         let q = self.query;
-        if let Some(limit) = q.since.as_ref().and_then(|since| since.get(process)) {
-            if line.seq <= *limit {
-                return false;
-            }
+        if let Some(limit) = q.since.as_ref().and_then(|since| since.get(process))
+            && line.seq <= *limit
+        {
+            return false;
         }
         if line.ts_us < self.low
             || line.ts_us > self.high
@@ -646,10 +645,10 @@ fn query_page(
     let mut logs: Vec<(LogSource, OpenedLog)> = vec![];
     for source in sources {
         let opened = open_log(&source.path)?;
-        if opened.update.changed {
-            if let Some(callback) = indexed.as_mut() {
-                callback(&opened.update);
-            }
+        if opened.update.changed
+            && let Some(callback) = indexed.as_mut()
+        {
+            callback(&opened.update);
         }
         if opened.update.rebuilt {
             page.scanned.rebuilt += 1;
@@ -857,11 +856,11 @@ fn query_around(
         },
     };
     let mut middle = vec![];
-    if let [row] = first.rows.as_slice() {
-        if row_key(row)? == *cursor {
-            middle = first.rows;
-            middle[0].context = Some(false);
-        }
+    if let [row] = first.rows.as_slice()
+        && row_key(row)? == *cursor
+    {
+        middle = first.rows;
+        middle[0].context = Some(false);
     }
     let mut used = size(&middle);
     let mut earlier = vec![];

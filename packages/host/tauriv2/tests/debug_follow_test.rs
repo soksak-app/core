@@ -2,11 +2,11 @@
 //! and also for the lines that a query indexes (docs/spec/debug.md#following). The same cases run in the Go host.
 
 use std::path::Path;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use soksak_host_tauriv2::debug_follow::{use_log_notices, LogNotice, LogNotices};
+use soksak_host_tauriv2::debug_follow::{LogNotice, LogNotices, use_log_notices};
 use soksak_host_tauriv2::log_query::query_event_logs;
 use soksak_sok::log_index::IndexUpdate;
 

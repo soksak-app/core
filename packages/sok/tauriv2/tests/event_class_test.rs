@@ -3,8 +3,8 @@
 
 use std::time::Duration;
 
-use serde_json::{json, Value};
-use soksak_sok::event_classes::{class_of, Class};
+use serde_json::{Value, json};
+use soksak_sok::event_classes::{Class, class_of};
 use soksak_sok::event_log::Level;
 
 // contract: cli.log.stores-class

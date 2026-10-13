@@ -2,7 +2,7 @@
 //! installed sidecar declares, and every stored hash of the sidecar and of the page is compared with the replayed one. The Go
 //! implementation (packages/sok/wailsv3/src/replay.go) gives the same output and the same error text.
 
-use crate::replay_inputs::{replay_session_problem, ReplayInput, REPLAY_INPUT_KINDS};
+use crate::replay_inputs::{REPLAY_INPUT_KINDS, ReplayInput, replay_session_problem};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
@@ -10,15 +10,15 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::debug::{js_string, Json};
+use crate::debug::{Json, js_string};
 use crate::event_log::{EventLog, Level};
 use crate::files::{file_error, os_reason};
-use crate::log_query::{parse_log_query, query_logs, LogRow};
+use crate::log_query::{LogRow, parse_log_query, query_logs};
 use crate::plugins::read_installed;
 use crate::routine::spawn_named;
-use crate::{config_dir_of, Arguments, Error, Options};
+use crate::{Arguments, Error, Options, config_dir_of};
 
 thread_local! {
     /// The event file of the run that `logged` started in this thread; a command stores its own events in it. It is `None` in a
@@ -144,10 +144,10 @@ fn scan_replay_session(
                 ));
             };
             let sequence = integer_from_one(event["fields"].get("sequence"));
-            if let (Some(sequence), Some(until)) = (sequence, until) {
-                if sequence > until {
-                    continue;
-                }
+            if let (Some(sequence), Some(until)) = (sequence, until)
+                && sequence > until
+            {
+                continue;
             }
             let layer: &'static str = match layer {
                 "sidecar" => "sidecar",
@@ -233,8 +233,10 @@ pub fn replay_logs(
                     Some(_) => {
                         return Err(replay_error(
                             session,
-                            format!("the page frame record at sequence {sequence} has a fields.segment that is not text"),
-                        ))
+                            format!(
+                                "the page frame record at sequence {sequence} has a fields.segment that is not text"
+                            ),
+                        ));
                     }
                 }
             };
@@ -618,15 +620,13 @@ fn run_replay_executable(
             return Err(invalid());
         }
         let sequence = *sequence as i64;
-        if let Some(earlier) = hashes.get(&sequence) {
-            if earlier != hash {
-                return Err(replay_error(
-                    session,
-                    format!(
-                        "the replay executable reported two hashes for the sequence {sequence}"
-                    ),
-                ));
-            }
+        if let Some(earlier) = hashes.get(&sequence)
+            && earlier != hash
+        {
+            return Err(replay_error(
+                session,
+                format!("the replay executable reported two hashes for the sequence {sequence}"),
+            ));
         }
         hashes.insert(sequence, hash.clone());
     }
@@ -651,7 +651,7 @@ pub(crate) fn run_replay(
                 return Err(Error::Usage(format!(
                     "--until must be a non-negative integer, found {}",
                     js_string(value)
-                )))
+                )));
             }
         },
         None => None,

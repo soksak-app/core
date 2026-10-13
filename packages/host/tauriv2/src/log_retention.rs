@@ -7,7 +7,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// The bound of the files of the runs in logs/: 6 GiB.
 pub const HOST_RETENTION_BYTES: u64 = 6 << 30;

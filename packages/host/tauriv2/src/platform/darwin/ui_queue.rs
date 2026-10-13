@@ -1,7 +1,7 @@
 //! Main queue execution outside the framework event lock.
 
 pub fn enqueue(work: Box<dyn FnOnce() + Send>) {
-    extern "C" {
+    unsafe extern "C" {
         fn sp_ui_enqueue(callback: extern "C" fn(usize), context: usize);
     }
     extern "C" fn run(context: usize) {

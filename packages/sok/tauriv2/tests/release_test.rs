@@ -194,7 +194,10 @@ fn plugin_pack_rejects_links_and_a_manifest_mismatch_without_writing() {
     let (code, _, stderr) = run(&["plugin", "pack", text(&other.0), text(&out)]);
     assert_eq!(
         (code, stderr.as_str()),
-        (1, "sok: package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json\n")
+        (
+            1,
+            "sok: package.json soksak: the sidecars of a plugin and their ranges are the dependencies of plugin.json\n"
+        )
     );
     let other = plugin_tree();
     write_tree(

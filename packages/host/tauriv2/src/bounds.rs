@@ -5,7 +5,7 @@
 pub const CALL_TEXT_BYTES: usize = 1024;
 
 pub use soksak_sok::event_bounds::{
-    bounded_json, bounded_serialize, cut_text, Fields, EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES,
+    EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES, Fields, bounded_json, bounded_serialize, cut_text,
 };
 
 /// The bounds of each list of pending messages of a sidecar (replies and closes).

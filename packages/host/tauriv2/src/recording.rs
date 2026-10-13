@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// The response of the request that ended a recording. It holds the frame folder and the number of frames, whether the
 /// recording reached the limit, and the longest interval between frames.

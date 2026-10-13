@@ -4,18 +4,18 @@
 //! on the CALayer of the NSView so that the view is clipped. The content behind the modal is visible at the clipped
 //! corners. No transparency or private interface is used.
 
-use std::ffi::{c_char, c_void, CStr};
+use std::ffi::{CStr, c_char, c_void};
 
 use objc2::msg_send;
 use objc2::runtime::AnyObject;
 use tauri::webview::PlatformWebview;
 
-use super::super::{visible_window_overlay_rects, DOMOverlay, Handle, WindowOverlay};
+use super::super::{DOMOverlay, Handle, WindowOverlay, visible_window_overlay_rects};
 
 type FileDropEvent = extern "C" fn(*mut c_void, *const c_char);
 type FileDropRelease = extern "C" fn(*mut c_void);
 
-extern "C" {
+unsafe extern "C" {
     fn sp_window_file_drop(
         main_webview: *mut c_void,
         event: FileDropEvent,
@@ -49,7 +49,7 @@ pub fn place_surface(surface: Handle, x: f64, y: f64, w: f64, h: f64) {
 }
 
 pub fn surface_frame(surface: Handle) -> [f64; 4] {
-    extern "C" {
+    unsafe extern "C" {
         fn webviewGetFrame(view: *mut c_void, rect: *mut f64);
     }
     let mut rect = [0.0; 4];
@@ -58,14 +58,14 @@ pub fn surface_frame(surface: Handle) -> [f64; 4] {
 }
 
 pub fn set_surface_hidden_handle(surface: Handle, hidden: bool) {
-    extern "C" {
+    unsafe extern "C" {
         fn webviewSetSurfaceHidden(view: *mut c_void, hidden: bool);
     }
     unsafe { webviewSetSurfaceHidden(surface as *mut c_void, hidden) }
 }
 
 pub fn set_surface_alpha_handle(surface: Handle, alpha: f64) {
-    extern "C" {
+    unsafe extern "C" {
         fn webviewSetSurfaceAlpha(view: *mut c_void, alpha: f64);
     }
     unsafe { webviewSetSurfaceAlpha(surface as *mut c_void, alpha) }
@@ -155,7 +155,7 @@ pub fn corners(webview: &PlatformWebview, radius: f64) {
 
 /// Sets the opacity of the view. A surface that lost the focus can be drawn dimmed.
 pub fn alpha(webview: &PlatformWebview, alpha: f64) {
-    extern "C" {
+    unsafe extern "C" {
         fn webviewSetSurfaceAlpha(view: *mut c_void, alpha: f64);
     }
     unsafe { webviewSetSurfaceAlpha(webview.inner().cast(), alpha) }
@@ -163,7 +163,7 @@ pub fn alpha(webview: &PlatformWebview, alpha: f64) {
 
 /// Converts window coordinates into the parent coordinates of the native view and places it.
 pub fn place(webview: &PlatformWebview, x: f64, y: f64, w: f64, h: f64) {
-    extern "C" {
+    unsafe extern "C" {
         fn webviewSetFrame(view: *mut c_void, x: f64, y: f64, w: f64, h: f64);
     }
     unsafe { webviewSetFrame(webview.inner().cast(), x, y, w, h) }
@@ -171,28 +171,28 @@ pub fn place(webview: &PlatformWebview, x: f64, y: f64, w: f64, h: f64) {
 
 /// Registers a content webview in the common container with device pixel coordinates.
 pub fn attach_surface(webview: &PlatformWebview, main: Handle) {
-    extern "C" {
+    unsafe extern "C" {
         fn webviewAttachSurface(view: *mut c_void, main: *mut c_void);
     }
     unsafe { webviewAttachSurface(webview.inner().cast(), main as *mut c_void) }
 }
 
 pub fn detach_surface(webview: &PlatformWebview) {
-    extern "C" {
+    unsafe extern "C" {
         fn webviewDetachSurface(view: *mut c_void);
     }
     unsafe { webviewDetachSurface(webview.inner().cast()) }
 }
 
 pub fn hidden(webview: &PlatformWebview, hidden: bool) {
-    extern "C" {
+    unsafe extern "C" {
         fn webviewSetSurfaceHidden(view: *mut c_void, hidden: bool);
     }
     unsafe { webviewSetSurfaceHidden(webview.inner().cast(), hidden) }
 }
 
 pub fn overlays(surface: Handle, overlays: &[DOMOverlay]) {
-    extern "C" {
+    unsafe extern "C" {
         fn webviewSetSurfaceOverlays(view: *mut c_void, values: *const f64, count: usize);
     }
     let mut values = Vec::with_capacity(overlays.len() * 5);
@@ -210,7 +210,7 @@ pub fn overlays(surface: Handle, overlays: &[DOMOverlay]) {
 
 /// Returns the current position and size of the webview in page coordinates.
 pub fn frame(webview: &PlatformWebview) -> [f64; 4] {
-    extern "C" {
+    unsafe extern "C" {
         fn webviewGetFrame(view: *mut c_void, rect: *mut f64);
     }
     let mut rect = [0.0; 4];

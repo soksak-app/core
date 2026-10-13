@@ -1,7 +1,7 @@
 [package]
 name = "soksak-sok-tauriv2"
 version = "0.0.12"
-edition = "2021"
+edition = "2024"
 description = "Command line sok of the Tauri application"
 
 [features]

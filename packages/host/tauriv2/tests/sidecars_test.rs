@@ -2,7 +2,7 @@
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
 #[path = "support/records.rs"]
@@ -10,8 +10,8 @@ mod records;
 
 use serde_json::value::RawValue;
 use soksak_host_tauriv2::sidecars::{
-    read_message_line, ClosingSurface, Failure, Message, MessageLine, Owner, SidecarDeclaration,
-    Sidecars,
+    ClosingSurface, Failure, Message, MessageLine, Owner, SidecarDeclaration, Sidecars,
+    read_message_line,
 };
 
 /// The upper limit that ends a stalled check. Success is decided by the received event and the ended process and not by
@@ -240,15 +240,19 @@ fn closing_a_surface_keeps_other_sessions() {
 fn undeclared_and_stopped_sidecars_are_rejected() {
     let (sidecars, _directory) = echo_sidecars();
     let (window, _events) = owner("a", "/projects/a");
-    assert!(sidecars
-        .send(&window, "other", "s1", &raw("{}"))
-        .unwrap_err()
-        .contains("not declared"));
+    assert!(
+        sidecars
+            .send(&window, "other", "s1", &raw("{}"))
+            .unwrap_err()
+            .contains("not declared")
+    );
     sidecars.stop();
-    assert!(sidecars
-        .send(&window, ECHO, "s1", &raw("{}"))
-        .unwrap_err()
-        .contains("stopped"));
+    assert!(
+        sidecars
+            .send(&window, ECHO, "s1", &raw("{}"))
+            .unwrap_err()
+            .contains("stopped")
+    );
 }
 
 // contract: sidecars.start.fails-on-missing-executable
@@ -679,11 +683,11 @@ fn stop_reads_output_to_its_end() {
     let Some(stderr) = logged_by_child("stop_reads_output_to_its_end") else {
         records::capturing(|| {
             let (mut sidecars, directory) = script_sidecars(
-            "#!/bin/sh\nclosed=\nwhile read line; do case \"$line\" in *'\"closed\":true'*) closed=1;; *) echo \"$line\";; esac; done\n\
+                "#!/bin/sh\nclosed=\nwhile read line; do case \"$line\" in *'\"closed\":true'*) closed=1;; *) echo \"$line\";; esac; done\n\
              [ -n \"$closed\" ] || exit 4\necho '{\"surface\":\"s1\",\"closed\":true}' || exit 5\n\
              i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"body\":\"late\"}' || exit 5; i=$((i+1)); done\n\
              echo finished > DIR/finished\nexit 0\n",
-        );
+            );
             sidecars.0.stop_timeout = STALL;
             let (window, events) = owner("a", "/projects/test");
             sidecars
@@ -761,8 +765,8 @@ fn the_standard_error_of_a_sidecar_is_written_as_records() {
     else {
         records::capturing(|| {
             let (mut sidecars, _directory) = script_sidecars(
-            "#!/bin/sh\necho 'first line' >&2\nprintf 'no line feed' >&2\nwhile read line; do echo \"$line\"; done\n",
-        );
+                "#!/bin/sh\necho 'first line' >&2\nprintf 'no line feed' >&2\nwhile read line; do echo \"$line\"; done\n",
+            );
             sidecars.0.stop_timeout = STALL;
             let (window, events) = owner("a", "/projects/test");
             sidecars
@@ -952,8 +956,7 @@ fn stop_forced_kill() {
         records::capturing(stop_forced_kill_in_child);
         return;
     };
-    let want =
-        "error host sidecar @fixture/sidecar-stubborn: did not end within the stop timeout and was killed\n";
+    let want = "error host sidecar @fixture/sidecar-stubborn: did not end within the stop timeout and was killed\n";
     assert!(
         stderr.contains(want),
         "log {stderr:?} does not contain {want:?}"

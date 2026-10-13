@@ -9,7 +9,7 @@ use std::path::Path;
 mod records;
 
 use soksak_host_tauriv2::event_record::use_host_event_log;
-use soksak_host_tauriv2::recording::{stop_payload, Capture, Recording, Target};
+use soksak_host_tauriv2::recording::{Capture, Recording, Target, stop_payload};
 
 /// A recording device that records calls and fails at the specified stage.
 #[derive(Default)]

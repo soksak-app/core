@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::value::RawValue;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_host_tauriv2::exposure::{self, Relay};
-use soksak_host_tauriv2::windows::{list_entries, window_entry, ListStep};
+use soksak_host_tauriv2::windows::{ListStep, list_entries, window_entry};
 
 const WAIT: Duration = Duration::from_secs(5);
 
@@ -98,16 +98,20 @@ fn reply_from_another_document_is_ignored_and_request_times_out() {
     let replying = relay.clone();
     let failure = relay
         .request("main", Some(Duration::from_millis(50)), move |id| {
-            assert!(replying
-                .reply("surface-main-a", &text(json!({"id": id, "result": 1})))
-                .is_err());
+            assert!(
+                replying
+                    .reply("surface-main-a", &text(json!({"id": id, "result": 1})))
+                    .is_err()
+            );
             Ok(())
         })
         .unwrap_err();
     assert_eq!(failure.code, 1005);
-    assert!(relay
-        .reply("main", &text(json!({"id": 1, "result": 1})))
-        .is_err());
+    assert!(
+        relay
+            .reply("main", &text(json!({"id": 1, "result": 1})))
+            .is_err()
+    );
 }
 
 // contract: exposure.relay.late-reply-states-its-delay

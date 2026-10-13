@@ -12,8 +12,8 @@ use serde_json::json;
 use crate::event_bounds::cut_text;
 use crate::event_log::{EventLog, Level, Options as WriterOptions};
 use crate::replay::set_run_log;
-use crate::routine::{guard, set_recorder, Panic, PANIC_STATUS};
-use crate::{command, config_dir_of, Error, Options};
+use crate::routine::{PANIC_STATUS, Panic, guard, set_recorder};
+use crate::{Error, Options, command, config_dir_of};
 
 /// How long a run waits for the writer to put its last events on disk.
 const FLUSH_DEADLINE: Duration = Duration::from_secs(2);
@@ -227,10 +227,10 @@ pub fn logged(
         }
     };
     record.finish(status, &String::from_utf8_lossy(&captured.text));
-    if let Err(error) = record.log.flush(FLUSH_DEADLINE) {
-        if writeln!(captured.stream, "sok: event log: {error}").is_err() {
-            status = 3;
-        }
+    if let Err(error) = record.log.flush(FLUSH_DEADLINE)
+        && writeln!(captured.stream, "sok: event log: {error}").is_err()
+    {
+        status = 3;
     }
     set_run_log(None);
     record.log.close();

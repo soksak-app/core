@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 
 type Changed = extern "C" fn(context: *mut c_void, mask: u64);
 
-extern "C" {
+unsafe extern "C" {
     fn sp_mouse_buttons_watch(changed: Changed, context: *mut c_void) -> bool;
 }
 

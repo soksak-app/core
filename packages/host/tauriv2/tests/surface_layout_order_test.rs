@@ -122,7 +122,9 @@ fn the_titlebar_is_set_in_the_begun_layout_before_the_surfaces() {
     );
     assert_eq!(
         calls.take(),
-        vec!["overlays", "begin", "titlebar", "surfaces", "restore", "cancel"]
+        vec![
+            "overlays", "begin", "titlebar", "surfaces", "restore", "cancel"
+        ]
     );
     assert_eq!(
         layout(

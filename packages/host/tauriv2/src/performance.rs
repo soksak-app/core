@@ -1,10 +1,10 @@
 //! The switch and the sampler of the performance trace (docs/spec/performance-trace.md). The process holds the switch; an
 //! observation is an event of the event log while the switch is on. The page turns it on and off with the call `performance`.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 static ON: AtomicBool = AtomicBool::new(false);
@@ -116,14 +116,16 @@ fn start_sampler() {
     let (stop, stopped) = std::sync::mpsc::channel::<()>();
     let thread = std::thread::Builder::new()
         .name("performance-sampler".into())
-        .spawn(move || loop {
-            sample();
-            // A message or the end of the channel stops the thread; the timeout is the interval of the samples.
-            if !matches!(
-                stopped.recv_timeout(std::time::Duration::from_secs(5)),
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
-            ) {
-                return;
+        .spawn(move || {
+            loop {
+                sample();
+                // A message or the end of the channel stops the thread; the timeout is the interval of the samples.
+                if !matches!(
+                    stopped.recv_timeout(std::time::Duration::from_secs(5)),
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+                ) {
+                    return;
+                }
             }
         })
         .expect("the thread of the sampler");

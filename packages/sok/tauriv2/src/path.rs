@@ -44,7 +44,7 @@ pub(crate) fn run_path(
                     return Err(Error::Failed(format!(
                         "cannot remove {}; run sudo sok path remove",
                         crate::files::file_error(file.display(), &error)
-                    )))
+                    )));
                 }
             }
             writeln!(stdout, "null").map_err(|error| error.to_string())?;

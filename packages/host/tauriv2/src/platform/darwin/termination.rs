@@ -34,7 +34,7 @@ pub fn on_termination(quit: Box<dyn Fn() + Send>) -> Result<(), String> {
 
 /// Installs the termination request handler of the operating system (quit_request.h).
 pub fn on_quit_request(quit: Box<dyn Fn()>) -> Result<(), String> {
-    extern "C" {
+    unsafe extern "C" {
         fn sp_quit_request_install(request: &Block<dyn Fn()>) -> bool;
     }
     let request = RcBlock::new(quit);
@@ -47,7 +47,7 @@ pub fn on_quit_request(quit: Box<dyn Fn()>) -> Result<(), String> {
 
 /// Answers the termination request that was received with userCanceledErr (quit_request.h).
 pub fn cancel_quit_requests() {
-    extern "C" {
+    unsafe extern "C" {
         fn sp_quit_request_cancel();
     }
     unsafe { sp_quit_request_cancel() }
@@ -55,7 +55,7 @@ pub fn cancel_quit_requests() {
 
 /// Answers the termination request that was received without an error (quit_request.h).
 pub fn answer_quit_requests() {
-    extern "C" {
+    unsafe extern "C" {
         fn sp_quit_request_answer();
     }
     unsafe { sp_quit_request_answer() }

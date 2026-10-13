@@ -4,7 +4,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
@@ -173,7 +173,9 @@ fn registry_build_writes_the_index_after_checking_every_release() {
     let index_text = index.to_str().unwrap();
     assert_eq!(
         stdout,
-        format!("{{\n  \"core\": 0,\n  \"index\": \"{index_text}\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"sidecars\": 1\n}}\n")
+        format!(
+            "{{\n  \"core\": 0,\n  \"index\": \"{index_text}\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"sidecars\": 1\n}}\n"
+        )
     );
     let want = format!(
         r#"{{
@@ -382,10 +384,25 @@ fn registry_build_rejects_a_mismatch_without_writing_the_index() {
     type Change = fn(&Registry);
     let cases: [(Change, &str); 7] = [
         (
-            |r| replace_in(&r.dir.0.join("plugins/probe.json"), r#""sha256": ""#, r#""sha256": "0"#),
+            |r| {
+                replace_in(
+                    &r.dir.0.join("plugins/probe.json"),
+                    r#""sha256": ""#,
+                    r#""sha256": "0"#,
+                )
+            },
             "sha256 must be 64 lowercase hexadecimal digits",
         ),
-        (|r| replace_in(&r.dir.0.join("plugins/probe.json"), &r.plugin.1, &"0".repeat(64)), "plugin probe 0.2.0 package: "),
+        (
+            |r| {
+                replace_in(
+                    &r.dir.0.join("plugins/probe.json"),
+                    &r.plugin.1,
+                    &"0".repeat(64),
+                )
+            },
+            "plugin probe 0.2.0 package: ",
+        ),
         (
             |r| {
                 replace_in(
@@ -407,12 +424,27 @@ fn registry_build_rejects_a_mismatch_without_writing_the_index() {
             r#"plugin probe 0.2.0 package: plugin.json dependencies {"@scope/sidecar-worker":"^0.1.0"} differ from the entry {"@scope/sidecar-worker":"~0.1.0"}"#,
         ),
         (
-            |r| std::fs::rename(r.dir.0.join("packs/starter.json"), r.dir.0.join("packs/first.json")).unwrap(),
+            |r| {
+                std::fs::rename(
+                    r.dir.0.join("packs/starter.json"),
+                    r.dir.0.join("packs/first.json"),
+                )
+                .unwrap()
+            },
             "packs/first.json holds starter; its file name must be starter.json",
         ),
-        (|r| std::fs::remove_file(r.dir.0.join("revoked.json")).unwrap(), "revoked.json: "),
         (
-            |r| replace_in(&r.dir.0.join("packs/starter.json"), r#"["probe"]"#, r#"["probe", "missing"]"#),
+            |r| std::fs::remove_file(r.dir.0.join("revoked.json")).unwrap(),
+            "revoked.json: ",
+        ),
+        (
+            |r| {
+                replace_in(
+                    &r.dir.0.join("packs/starter.json"),
+                    r#"["probe"]"#,
+                    r#"["probe", "missing"]"#,
+                )
+            },
             "registry index: pack starter names unknown plugin missing",
         ),
     ];

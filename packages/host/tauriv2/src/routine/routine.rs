@@ -6,7 +6,7 @@
 //! the process with `PANIC_STATUS` once the event is stored: a state that a panic left behind is not trusted, so there is no
 //! mode that continues after a panic.
 
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{Sender, channel};
 use std::sync::{Mutex, OnceLock, PoisonError};
 use std::thread::JoinHandle;
 use std::time::Duration;

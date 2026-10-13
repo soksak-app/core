@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::install::{newer, Index, Release};
+use crate::install::{Index, Release, newer};
 
 /// The candidate of an application update: a core version that the registry index lists and its release.
 #[derive(Clone, Debug, Serialize)]

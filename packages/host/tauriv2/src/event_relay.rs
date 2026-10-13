@@ -1,11 +1,11 @@
 //! The `log` call of the page (docs/spec/logging.md#writers): the page relays a batch of events. The host validates the
 //! whole batch before it writes any event, then stores every event in the layer `page` with the time the page gave it.
 
-use serde_json::value::to_raw_value;
 use serde_json::Value;
+use serde_json::value::to_raw_value;
 
 use crate::bounds::Fields;
-use crate::event_log::{monotonic_ns, valid_cid, EventLog, Level, RelayedEvent};
+use crate::event_log::{EventLog, Level, RelayedEvent, monotonic_ns, valid_cid};
 
 /// One validated event of a page batch.
 struct Relayed {
@@ -156,7 +156,7 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
         Some(other) => {
             return Err(format!(
                 "action must be batch, clock or policy, not {other:?}"
-            ))
+            ));
         }
     }
     let items = request

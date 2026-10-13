@@ -61,12 +61,16 @@ fn the_wait_for_the_end_of_a_service_process() {
         .arg("30")
         .spawn()
         .expect("spawn sleep");
-    assert!(!platform
-        .wait_service_process_end(running.id(), Duration::from_millis(200))
-        .expect("wait for a process that keeps running"));
+    assert!(
+        !platform
+            .wait_service_process_end(running.id(), Duration::from_millis(200))
+            .expect("wait for a process that keeps running")
+    );
     running.kill().expect("kill sleep");
     running.wait().expect("reap sleep");
-    assert!(platform
-        .wait_service_process_end(pid, Duration::from_secs(1))
-        .expect("wait for a process that does not exist"));
+    assert!(
+        platform
+            .wait_service_process_end(pid, Duration::from_secs(1))
+            .expect("wait for a process that does not exist")
+    );
 }

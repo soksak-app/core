@@ -2,8 +2,8 @@
 //! (docs/spec/projects.md). A request resolves with the answer of that window, or with true when the window ends.
 
 use std::collections::HashMap;
-use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
+use std::sync::mpsc::{Receiver, Sender, channel};
 
 #[derive(Default)]
 pub struct Removals {

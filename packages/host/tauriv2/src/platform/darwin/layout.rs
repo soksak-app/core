@@ -1,6 +1,6 @@
 //! The surface placement transaction.
 
-use std::ffi::{c_char, c_void, CStr};
+use std::ffi::{CStr, c_char, c_void};
 
 use block2::{Block, RcBlock};
 use tauri::webview::PlatformWebview;
@@ -9,7 +9,7 @@ use super::super::Handle;
 
 /// Starts the surface placement transaction ticket of the window. Whether the start is allowed is passed to ready.
 pub fn begin(window: Handle, ticket: u64, ready: Box<dyn Fn(bool)>) {
-    extern "C" {
+    unsafe extern "C" {
         fn surfaceLayoutBegin(owner: *mut c_void, ticket: u64, ready: &Block<dyn Fn(i32)>);
     }
     let ready = RcBlock::new(move |allowed: i32| ready(allowed != 0));
@@ -18,7 +18,7 @@ pub fn begin(window: Handle, ticket: u64, ready: Box<dyn Fn(bool)>) {
 
 /// Settles the surface placement transaction ticket and returns whether it was settled.
 pub fn commit(window: Handle, ticket: u64) -> bool {
-    extern "C" {
+    unsafe extern "C" {
         fn surfaceLayoutCommit(owner: *mut c_void, ticket: u64) -> bool;
     }
     unsafe { surfaceLayoutCommit(window as *mut c_void, ticket) }
@@ -26,7 +26,7 @@ pub fn commit(window: Handle, ticket: u64) -> bool {
 
 /// Cancels the surface placement transaction in progress of the window.
 pub fn cancel(window: Handle) {
-    extern "C" {
+    unsafe extern "C" {
         fn surfaceLayoutCancel(owner: *mut c_void);
     }
     unsafe { surfaceLayoutCancel(window as *mut c_void) }
@@ -41,7 +41,7 @@ pub fn start_page(
     height: f64,
     ready: Box<dyn Fn(Result<(), String>)>,
 ) {
-    extern "C" {
+    unsafe extern "C" {
         fn surfaceLayoutStartPage(
             owner: *mut c_void,
             ticket: u64,
@@ -63,7 +63,7 @@ pub fn start_page(
 
 /// Checks the presentation readiness of the app document before the open placement is committed.
 pub fn after_presentation(view: &PlatformWebview, done: Box<dyn Fn()>) {
-    extern "C" {
+    unsafe extern "C" {
         fn surfaceLayoutAfterPresentation(view: *mut c_void, done: &Block<dyn Fn()>);
     }
     let done = RcBlock::new(done);
@@ -73,7 +73,7 @@ pub fn after_presentation(view: &PlatformWebview, done: Box<dyn Fn()>) {
 /// When the window has no open surface placement transaction, checks the render completion of the main document and the
 /// visible app document, and then calls done with the presentation time (ms) of that screen.
 pub fn after_settled(view: &PlatformWebview, done: Box<dyn Fn(Result<f64, String>)>) {
-    extern "C" {
+    unsafe extern "C" {
         fn surfaceLayoutAfterSettled(view: *mut c_void, done: &Block<dyn Fn(f64, *const c_char)>);
     }
     let done = RcBlock::new(move |displayed: f64, error: *const c_char| {
@@ -90,7 +90,7 @@ pub fn after_settled(view: &PlatformWebview, done: Box<dyn Fn(Result<f64, String
 }
 
 pub fn inject_settled_failure() {
-    extern "C" {
+    unsafe extern "C" {
         fn surfaceLayoutInjectSettledFailure();
     }
     unsafe { surfaceLayoutInjectSettledFailure() }

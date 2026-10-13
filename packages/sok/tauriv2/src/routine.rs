@@ -8,7 +8,7 @@
 //! leaves no event.
 
 use std::cell::{Cell, RefCell};
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Mutex, Once, PoisonError};
 use std::thread::JoinHandle;
 

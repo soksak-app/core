@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_sok::event_log::{EventLog, Level};
 
 /// Removes the configuration folder of a test when the test ends.

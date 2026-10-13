@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_sok::event_bounds::Fields;
 use soksak_sok::event_log::{Channel, EventLog, Level, Options, PullSink, RelayedEvent};
 

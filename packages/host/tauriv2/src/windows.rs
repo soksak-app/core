@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -549,10 +549,10 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             // (docs/spec/hosts.md#process-lifecycle).
             // The termination takes the handle of the main webview and runs outside `with_webview`
             // (docs/spec/hosts.md#process-lifecycle).
-            if host.state::<Windows>().quit.active() {
-                if let Err(error) = platform.kill_web_content_process(main) {
-                    log_error("web content kill", error);
-                }
+            if host.state::<Windows>().quit.active()
+                && let Err(error) = platform.kill_web_content_process(main)
+            {
+                log_error("web content kill", error);
             }
         }
         tauri::WindowEvent::Destroyed => {
@@ -594,10 +594,10 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                     );
                 })),
             );
-            if let Ok(mut monitor) = context.watching.0.lock() {
-                if let Some(monitor) = monitor.take() {
-                    log_failure("surface input", platform.unwatch_input(monitor));
-                }
+            if let Ok(mut monitor) = context.watching.0.lock()
+                && let Some(monitor) = monitor.take()
+            {
+                log_failure("surface input", platform.unwatch_input(monitor));
             }
             if let Ok(mut shapes) = context.shapes.0.lock() {
                 for (_, shape) in shapes.drain() {
@@ -625,10 +625,8 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             crate::exposure::window_changed(&host);
         }
         tauri::WindowEvent::Focused(focused) => {
-            if *focused {
-                if let Err(error) = emit_window(&host, "window-active", ()) {
-                    log_error("window-active", error);
-                }
+            if *focused && let Err(error) = emit_window(&host, "window-active", ()) {
+                log_error("window-active", error);
             }
             crate::exposure::window_changed(&host);
             crate::exposure::windows_changed(host.app_handle());

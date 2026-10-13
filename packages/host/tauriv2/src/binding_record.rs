@@ -9,8 +9,8 @@ use std::time::Instant;
 use serde_json::json;
 use tauri::ipc::{CommandArg, CommandItem, InvokeBody, InvokeError};
 
-use crate::bounds::{bounded_json, cut_text, CALL_TEXT_BYTES};
-use crate::event_log::{valid_cid, Level};
+use crate::bounds::{CALL_TEXT_BYTES, bounded_json, cut_text};
+use crate::event_log::{Level, valid_cid};
 use crate::event_record::{emit_host, emit_host_cids};
 use crate::log_policy::Class;
 
@@ -39,19 +39,23 @@ impl BindingCall {
         let started = Instant::now();
         let mut cids = Vec::new();
         let mut refusal = None;
-        if let InvokeBody::Json(serde_json::Value::Object(map)) = payload {
-            if let Some(found) = map.get("cids") {
-                match found.as_array().map(|list| {
-                    list.iter()
-                        .map(|cid| cid.as_str().filter(|cid| valid_cid(cid)).map(str::to_string))
-                        .collect::<Option<Vec<String>>>()
-                }) {
-                    Some(Some(list)) => cids = list,
-                    _ => {
-                        refusal = Some(format!(
-                            "cids of the call {name}: {found} is not a list of identifiers that are not empty and hold no quote, backslash or control character"
-                        ))
-                    }
+        if let InvokeBody::Json(serde_json::Value::Object(map)) = payload
+            && let Some(found) = map.get("cids")
+        {
+            match found.as_array().map(|list| {
+                list.iter()
+                    .map(|cid| {
+                        cid.as_str()
+                            .filter(|cid| valid_cid(cid))
+                            .map(str::to_string)
+                    })
+                    .collect::<Option<Vec<String>>>()
+            }) {
+                Some(Some(list)) => cids = list,
+                _ => {
+                    refusal = Some(format!(
+                        "cids of the call {name}: {found} is not a list of identifiers that are not empty and hold no quote, backslash or control character"
+                    ))
                 }
             }
         }

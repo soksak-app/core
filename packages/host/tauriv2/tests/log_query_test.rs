@@ -11,12 +11,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::value::RawValue;
-use serde_json::{json, Map, Value};
-use soksak_host_tauriv2::endpoint::{self, raw, Connection, Endpoint, Failure, Service};
+use serde_json::{Map, Value, json};
+use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Failure, Service, raw};
 use soksak_host_tauriv2::event_log::{self, EventLog, Level, Options};
 use soksak_host_tauriv2::event_record::use_host_event_log;
 use soksak_host_tauriv2::log_query::{
-    index_reporter, query_event_logs, start_log_indexer, QueryError,
+    QueryError, index_reporter, query_event_logs, start_log_indexer,
 };
 use soksak_sok::log_index::{read_log_index, update_log_index};
 
@@ -431,7 +431,10 @@ fn a_file_that_rotation_or_retention_removed_is_not_a_failure_of_the_index() {
         .recv_timeout(Duration::from_secs(10))
         .expect("no update of the index was reported");
     assert_eq!(
-        (path.file_name().unwrap().to_str().unwrap(), result.as_ref().map_err(|e| e.as_str())),
+        (
+            path.file_name().unwrap().to_str().unwrap(),
+            result.as_ref().map_err(|e| e.as_str())
+        ),
         ("host-b1.jsonl", Ok(&())),
         "the first result must be the update of the file that exists, and the removed file is no failure"
     );

@@ -15,8 +15,8 @@ use crate::images;
 use crate::platform::{self, Handle};
 use crate::sidecars::WindowSidecars;
 use crate::windows::{
-    cancel_window_layout, emit_window, restore_titlebar, titlebar_chrome, validate_titlebar_height,
-    window_data, with_native_owner, Chrome, NativeFailure, TitlebarChange,
+    Chrome, NativeFailure, TitlebarChange, cancel_window_layout, emit_window, restore_titlebar,
+    titlebar_chrome, validate_titlebar_height, window_data, with_native_owner,
 };
 
 /// The script that the surface webviews run before the document.
@@ -111,14 +111,14 @@ fn validate_composition(composition: &SurfaceComposition) -> Result<(), String> 
                 return Err(format!(
                     "document region {:?} must own native input",
                     region.name
-                ))
+                ));
             }
             "image" if region.input == "dom" && !region.sidecar.is_empty() => {}
             "image" => {
                 return Err(format!(
                     "image region {:?} requires DOM input and a sidecar",
                     region.name
-                ))
+                ));
             }
             _ => return Err(format!("unknown region kind {:?}", region.kind)),
         }
@@ -153,12 +153,12 @@ pub(crate) fn require_region(
             region.kind
         ));
     }
-    if let Some(sidecar) = sidecar {
-        if region.sidecar != sidecar {
-            return Err(format!(
-                "image {name:?} is not declared for sidecar {sidecar:?}"
-            ));
-        }
+    if let Some(sidecar) = sidecar
+        && region.sidecar != sidecar
+    {
+        return Err(format!(
+            "image {name:?} is not declared for sidecar {sidecar:?}"
+        ));
     }
     Ok(())
 }
@@ -579,11 +579,11 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     }
     // The page committed, so the window is on the screen and the surfaces exist. The work to run after the app is drawn
     // starts here.
-    if let Ok(mut first) = running.first.lock() {
-        if !*first {
-            *first = true;
-            emit_window(window, "page-ready", ()).map_err(|e| e.to_string())?;
-        }
+    if let Ok(mut first) = running.first.lock()
+        && !*first
+    {
+        *first = true;
+        emit_window(window, "page-ready", ()).map_err(|e| e.to_string())?;
     }
     watch_presses(window, views, watching)?;
     let scale_window = window.clone();

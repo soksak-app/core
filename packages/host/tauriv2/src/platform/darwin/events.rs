@@ -4,7 +4,7 @@ struct Loss {
     bytes: u64,
 }
 
-extern "C" {
+unsafe extern "C" {
     fn sp_event_drain(buffer: *mut u8, capacity: usize) -> usize;
     fn sp_event_take_loss(channel: u8) -> Loss;
     fn sp_event_set_policy(levels: *const i8) -> bool;

@@ -13,7 +13,7 @@ struct Counts {
     input_registrations: i64,
 }
 
-extern "C" {
+unsafe extern "C" {
     fn sp_window_objects_when(
         expected: *const Counts,
         seconds: f64,

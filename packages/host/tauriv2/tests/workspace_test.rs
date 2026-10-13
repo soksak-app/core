@@ -6,10 +6,10 @@ use std::path::Path;
 #[path = "support/records.rs"]
 mod records;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_host_tauriv2::platform;
 use soksak_host_tauriv2::projects::folder;
-use soksak_host_tauriv2::workspace::{prepare_config_directory, Workspace};
+use soksak_host_tauriv2::workspace::{Workspace, prepare_config_directory};
 
 fn apply(store: &Workspace, request: Value) -> Value {
     store
@@ -52,18 +52,22 @@ fn settings_use_common_and_project_files_and_reset_removes_override() {
         json!({"kind":"settings", "id":"prj-test", "remove":["gap"]}),
     );
     assert_eq!(read(&root.path().join(".soksak/settings.json")), json!({}));
-    assert!(store
-        .apply(
-            serde_json::from_value(
-                json!({"kind":"settings", "id":"prj-test", "patch":{"projectOpening":"tabs"}})
+    assert!(
+        store
+            .apply(
+                serde_json::from_value(
+                    json!({"kind":"settings", "id":"prj-test", "patch":{"projectOpening":"tabs"}})
+                )
+                .unwrap()
             )
-            .unwrap()
-        )
-        .is_err());
+            .is_err()
+    );
     fs::write(config.path().join("settings.json"), "{broken").unwrap();
-    assert!(store
-        .apply(serde_json::from_value(json!({"kind":"settings", "patch":{"gap":2}})).unwrap())
-        .is_err());
+    assert!(
+        store
+            .apply(serde_json::from_value(json!({"kind":"settings", "patch":{"gap":2}})).unwrap())
+            .is_err()
+    );
     assert_eq!(
         fs::read_to_string(config.path().join("settings.json")).unwrap(),
         "{broken"
@@ -192,12 +196,16 @@ fn a_project_patch_stores_plugin_data_and_rejects_unknown_fields() {
         snapshot["projects"][0]["plugins"],
         json!({"probe":{"marks":["a.txt"]}})
     );
-    assert!(store
-        .apply(
-            serde_json::from_value(json!({"kind":"patch", "id":"prj-test", "patch":{"other":1}}))
+    assert!(
+        store
+            .apply(
+                serde_json::from_value(
+                    json!({"kind":"patch", "id":"prj-test", "patch":{"other":1}})
+                )
                 .unwrap()
-        )
-        .is_err());
+            )
+            .is_err()
+    );
 }
 
 // contract: workspace.folder.messages

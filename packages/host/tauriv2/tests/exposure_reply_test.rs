@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::value::RawValue;
-use serde_json::{json, Value};
-use soksak_host_tauriv2::exposure::{reply_target, Relay};
+use serde_json::{Value, json};
+use soksak_host_tauriv2::exposure::{Relay, reply_target};
 
 const WAIT: Duration = Duration::from_secs(5);
 

@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_host_tauriv2::plugins::{Changed, Plugins, RegistryRequest, RunRequest};
 
 /// Runs the sok command and returns its JSON output.
@@ -169,7 +169,9 @@ fn plugins_run_changes_the_installation_like_the_command() {
     let actions: Vec<&str> = seen.iter().map(|change| change.action.as_str()).collect();
     assert_eq!(
         actions,
-        ["install", "update", "disable", "enable", "disable", "remove"]
+        [
+            "install", "update", "disable", "enable", "disable", "remove"
+        ]
     );
 }
 

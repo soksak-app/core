@@ -6,9 +6,9 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
 
-use serde_json::{json, Value};
-use soksak_sok::log_index::{update_log_index, IndexUpdate};
-use soksak_sok::log_query::{parse_log_query, query_logs, LogPage};
+use serde_json::{Value, json};
+use soksak_sok::log_index::{IndexUpdate, update_log_index};
+use soksak_sok::log_query::{LogPage, parse_log_query, query_logs};
 
 use crate::event_log::Level;
 
@@ -73,29 +73,31 @@ pub fn start_log_indexer(mut after: impl FnMut(&Path, IndexResult) + Send + 'sta
         Condvar::new(),
     ));
     let worker_shared = Arc::clone(&shared);
-    let worker = crate::routine::spawn_named("log-index", move || loop {
-        let paths = {
-            let (lock, wake) = &*worker_shared;
-            let mut pending = lock.lock().expect("the pending paths");
-            while pending.paths.is_empty() && !pending.stopped {
-                pending = wake.wait(pending).expect("the pending paths");
-            }
-            if pending.stopped {
-                return;
-            }
-            std::mem::take(&mut pending.paths)
-        };
-        for path in paths {
-            let mut result = update_log_index(&path);
-            if result.is_err() {
-                if !path.exists() {
-                    // silent: the writer moved the file to a generation (`log.rotated`) or retention removed it (`log.pruned`) after the notice, and the next write to the file of the same name notifies again.
-                    continue;
+    let worker = crate::routine::spawn_named("log-index", move || {
+        loop {
+            let paths = {
+                let (lock, wake) = &*worker_shared;
+                let mut pending = lock.lock().expect("the pending paths");
+                while pending.paths.is_empty() && !pending.stopped {
+                    pending = wake.wait(pending).expect("the pending paths");
                 }
-                // The file may have come back between the update and the check, so the update is made once more and its result is reported.
-                result = update_log_index(&path);
+                if pending.stopped {
+                    return;
+                }
+                std::mem::take(&mut pending.paths)
+            };
+            for path in paths {
+                let mut result = update_log_index(&path);
+                if result.is_err() {
+                    if !path.exists() {
+                        // silent: the writer moved the file to a generation (`log.rotated`) or retention removed it (`log.pruned`) after the notice, and the next write to the file of the same name notifies again.
+                        continue;
+                    }
+                    // The file may have come back between the update and the check, so the update is made once more and its result is reported.
+                    result = update_log_index(&path);
+                }
+                after(&path, result);
             }
-            after(&path, result);
         }
     });
     let observer_shared = Arc::clone(&shared);

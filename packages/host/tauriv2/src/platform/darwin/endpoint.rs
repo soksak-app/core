@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use super::super::{Connection, Listener};
 
-extern "C" {
+unsafe extern "C" {
     fn geteuid() -> u32;
     fn kill(pid: i32, signal: i32) -> i32;
     fn setsid() -> i32;
@@ -220,10 +220,10 @@ impl Listener for Socket {
     }
 
     fn remove(&self) {
-        if let Err(error) = fs::remove_file(&self.path) {
-            if error.kind() != std::io::ErrorKind::NotFound {
-                crate::application_log::log_error(&self.path.display().to_string(), error);
-            }
+        if let Err(error) = fs::remove_file(&self.path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            crate::application_log::log_error(&self.path.display().to_string(), error);
         }
     }
 }

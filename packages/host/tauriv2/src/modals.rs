@@ -2,8 +2,8 @@
 //!
 //! The [data-native-modal] element of the page is drawn by a child webview inside the main window.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 use tauri::webview::Color;
@@ -13,7 +13,7 @@ use crate::application_log::{log_error, log_failure};
 use crate::documents;
 use crate::exposure;
 use crate::platform;
-use crate::surfaces::{aligned, isolate_webview, PageFocus, Rect};
+use crate::surfaces::{PageFocus, Rect, aligned, isolate_webview};
 use crate::windows::{emit_window, root_view, window_data};
 
 /// The values that are needed to show a [data-native-modal] element in the main DOM.
@@ -459,10 +459,10 @@ pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
             if has_modal {
                 return;
             }
-            if let Some(main) = root_view(&host) {
-                if let Err(error) = main.set_focus() {
-                    log_error("modal focus restoration", error);
-                }
+            if let Some(main) = root_view(&host)
+                && let Err(error) = main.set_focus()
+            {
+                log_error("modal focus restoration", error);
             }
         }))
         .map_err(|e| e.to_string())?;

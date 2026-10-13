@@ -10,9 +10,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::value::RawValue;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use soksak_host_tauriv2::binding_record::BindingCall;
-use soksak_host_tauriv2::endpoint::{self, raw, Endpoint, Failure, Service};
+use soksak_host_tauriv2::endpoint::{self, Endpoint, Failure, Service, raw};
 use soksak_host_tauriv2::event_log::{self, EventLog};
 use soksak_host_tauriv2::event_record::use_host_event_log;
 use soksak_host_tauriv2::log_policy::LogPolicy;
@@ -176,7 +176,9 @@ fn a_closed_gate_costs_far_less_than_an_open_one_and_stays_under_a_limit() {
         assert!(!log.gate(Class::Call, L::Debug), "the gate is open");
     }
     let closed_each = started.elapsed() / ROUNDS;
-    println!("an enqueue with the gate open: {open_each:?}; the question of a closed gate: {closed_each:?} ({ROUNDS} rounds)");
+    println!(
+        "an enqueue with the gate open: {open_each:?}; the question of a closed gate: {closed_each:?} ({ROUNDS} rounds)"
+    );
     // The limits are generous: the closed gate is a branch and an atomic add, so it is at most a few nanoseconds on a quiet machine, and a
     // machine under load runs it up to 100 times slower (the numbers on a quiet machine are recorded under F160.17).
     assert!(

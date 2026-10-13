@@ -134,10 +134,11 @@ pub fn class_of(name: &str) -> Option<Class> {
         return exact;
     }
     for (prefix, class) in FAMILIES {
-        if let Some(tail) = name.strip_prefix(prefix) {
-            if !tail.is_empty() && tail.bytes().all(is_tail_byte) {
-                return Some(*class);
-            }
+        if let Some(tail) = name.strip_prefix(prefix)
+            && !tail.is_empty()
+            && tail.bytes().all(is_tail_byte)
+        {
+            return Some(*class);
         }
     }
     None

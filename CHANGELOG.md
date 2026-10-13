@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F168: the Rust packages build with edition 2024; the test of the default configuration folder no longer changes the environment of its process.
 - F162.4: every declared workspace version is 0.0.12.
 - F160.23: the record items of the sidecars and plugins that record nothing are in each repository's checklist, and the IDs per repository are listed in the F160.23 line; no repository needed a new item, because each already held the items of its missing records.
 - F166.3.2: the workbench keeps its own reading of versions, because the page loads only ES modules and semver is published only as CommonJS; the module states why.

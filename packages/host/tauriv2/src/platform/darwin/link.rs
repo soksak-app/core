@@ -1,6 +1,6 @@
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_void};
 
-extern "C" {
+unsafe extern "C" {
     fn sp_link_open(url: *const c_char) -> *mut c_char;
     fn free(pointer: *mut c_void);
 }

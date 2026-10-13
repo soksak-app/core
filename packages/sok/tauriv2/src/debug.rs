@@ -9,7 +9,7 @@ use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 
 use crate::log_index::{CLASSES, LAYERS, LEVELS};
 use crate::log_query::{format_log_cursor, log_row_line, parse_log_query, query_logs};
-use crate::{config_dir_of, Arguments, Error, Options};
+use crate::{Arguments, Error, Options, config_dir_of};
 
 /// A JSON value whose object members keep the order of the text, which the text line of a row keeps.
 pub(crate) enum Json {
@@ -103,11 +103,7 @@ fn js_number(value: f64) -> String {
         let sign = if n - 1 < 0 { '-' } else { '+' };
         format!("{out}e{sign}{}", (n - 1).abs())
     };
-    if value < 0.0 {
-        format!("-{out}")
-    } else {
-        out
-    }
+    if value < 0.0 { format!("-{out}") } else { out }
 }
 
 /// The text that JSON.stringify gives a string.
@@ -225,7 +221,7 @@ pub(crate) fn row_of(file: &str, number: usize, raw: &str) -> Result<Row, String
                 "{where_}: class {} is not one of {}",
                 stringify(other),
                 CLASSES.join(", ")
-            ))
+            ));
         }
     };
     let name = match get(&event, "event") {
@@ -234,7 +230,7 @@ pub(crate) fn row_of(file: &str, number: usize, raw: &str) -> Result<Row, String
             return Err(format!(
                 "{where_}: event must be a string, found {}",
                 stringify(other)
-            ))
+            ));
         }
     };
     let fields = match get(&event, "fields") {
@@ -247,7 +243,7 @@ pub(crate) fn row_of(file: &str, number: usize, raw: &str) -> Result<Row, String
             return Err(format!(
                 "{where_}: fields must be an object, found {}",
                 stringify(other)
-            ))
+            ));
         }
     };
     let identifier = |name: &str| -> Result<Option<String>, String> {
@@ -278,7 +274,7 @@ pub(crate) fn row_of(file: &str, number: usize, raw: &str) -> Result<Row, String
             return Err(format!(
                 "{where_}: cids must be an array of strings, found {}",
                 stringify(other)
-            ))
+            ));
         }
     };
     Ok(Row {
@@ -461,10 +457,10 @@ fn time_bound(name: &str, value: &str) -> Result<i64, String> {
 /// words.
 fn after_flag(value: &str) -> serde_json::Value {
     let parts: Vec<&str> = value.split('/').collect();
-    if let [ts, role, boot, seq] = parts[..] {
-        if let (Ok(ts), Ok(seq)) = (ts.parse::<i64>(), seq.parse::<i64>()) {
-            return serde_json::json!({"ts_us": ts, "role": role, "boot": boot, "seq": seq});
-        }
+    if let [ts, role, boot, seq] = parts[..]
+        && let (Ok(ts), Ok(seq)) = (ts.parse::<i64>(), seq.parse::<i64>())
+    {
+        return serde_json::json!({"ts_us": ts, "role": role, "boot": boot, "seq": seq});
     }
     serde_json::Value::String(value.to_string())
 }

@@ -1,13 +1,13 @@
 //! The external document webview inside a surface document. The implementation is document_view.m of native/darwin.
 
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_void};
 
 use super::super::{Handle, Insets};
 
 type Changed = extern "C" fn(*mut c_void, *const c_char);
 type Event = extern "C" fn(*mut c_void, *const c_char);
 
-extern "C" {
+unsafe extern "C" {
     fn sp_document_create(
         surface: *mut c_void,
         store: *const c_char,

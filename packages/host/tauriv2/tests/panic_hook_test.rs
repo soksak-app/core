@@ -2,8 +2,8 @@
 //! thread, which can be the thread of the interface (docs/spec/hosts.md#process-lifecycle).
 
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 #[path = "support/records.rs"]

@@ -7,7 +7,7 @@ use std::path::Path;
 
 use ::windows::Win32::Foundation::HANDLE;
 use ::windows::Win32::Storage::FileSystem::{
-    GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS,
+    BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS, GetFileInformationByHandle,
 };
 
 /// Identifies a directory by the volume serial number and the file index.

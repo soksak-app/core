@@ -3,8 +3,8 @@
 use serde_json::json;
 use soksak_host_tauriv2::application_log::start_standard_error;
 use soksak_host_tauriv2::images::{
-    after_present, decide, handle_envelope, handle_envelope_with_recovery, Configure, Decision,
-    Images, Key,
+    Configure, Decision, Images, Key, after_present, decide, handle_envelope,
+    handle_envelope_with_recovery,
 };
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -82,10 +82,12 @@ fn unattached_image_is_refused() {
     match decide(&body, "sidecar-a", "tab-1", &images) {
         Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
-            assert!(json["image"]["error"]
-                .as_str()
-                .unwrap()
-                .contains("notAttached"));
+            assert!(
+                json["image"]["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("notAttached")
+            );
             assert_eq!(json["image"]["name"], "view");
             assert_eq!(json["image"]["sequence"], 1);
         }
@@ -594,10 +596,12 @@ fn unsupported_image_is_refused() {
     match decide(&body_wrong_format, "sidecar-a", "tab-1", &images) {
         Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
-            assert!(json["image"]["error"]
-                .as_str()
-                .unwrap()
-                .contains("unsupported"));
+            assert!(
+                json["image"]["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("unsupported")
+            );
         }
         _ => panic!("expected Reply(unsupported) for wrong format"),
     }
@@ -625,10 +629,12 @@ fn unsupported_image_is_refused() {
     match decide(&body_wrong_nonce, "sidecar-a", "tab-1", &images) {
         Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
-            assert!(json["image"]["error"]
-                .as_str()
-                .unwrap()
-                .contains("unsupported"));
+            assert!(
+                json["image"]["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("unsupported")
+            );
         }
         _ => panic!("expected Reply(unsupported) for wrong nonce length"),
     }
@@ -656,10 +662,12 @@ fn unsupported_image_is_refused() {
     match decide(&body_wrong_kind, "sidecar-a", "tab-1", &images) {
         Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
-            assert!(json["image"]["error"]
-                .as_str()
-                .unwrap()
-                .contains("unsupported"));
+            assert!(
+                json["image"]["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("unsupported")
+            );
         }
         _ => panic!("expected Reply(unsupported) for wrong token kind"),
     }
@@ -920,10 +928,12 @@ fn invalidating_a_sidecar_resends_its_configure_and_leaves_other_sidecars() {
         .unwrap()
         .unwrap();
     // A reconfiguration of the same size is not sent, because the state is already configured.
-    assert!(images
-        .configure_raster(&terminal, 800, 600, 2.0, true)
-        .unwrap()
-        .is_none());
+    assert!(
+        images
+            .configure_raster(&terminal, 800, 600, 2.0, true)
+            .unwrap()
+            .is_none()
+    );
 
     // Only the configure state of the sidecar whose connection was lost is invalidated (V5-106).
     let invalidated = images.invalidate_sidecar("sidecar-a");
@@ -944,10 +954,12 @@ fn invalidating_a_sidecar_resends_its_configure_and_leaves_other_sidecars() {
     assert_eq!(resent.sidecar, "sidecar-a");
 
     // The region of the other sidecar was not invalidated, so a reconfiguration of the same size is still not sent.
-    assert!(images
-        .configure_raster(&browser, 800, 600, 2.0, true)
-        .unwrap()
-        .is_none());
+    assert!(
+        images
+            .configure_raster(&browser, 800, 600, 2.0, true)
+            .unwrap()
+            .is_none()
+    );
 }
 
 // contract: images.visibility.shown-surface-reconfigures-its-raster
@@ -993,7 +1005,9 @@ fn presentation_outcome_logs_a_replaced_frame_as_invalidated() {
         assert!(invalidated, "{detail}");
         assert_eq!(
             entry.line(),
-            format!("info host image present: frame invalidated before native presentation: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail}")
+            format!(
+                "info host image present: frame invalidated before native presentation: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail}"
+            )
         );
     }
 }
@@ -1020,7 +1034,9 @@ fn presentation_outcome_names_the_current_frame_of_a_failure() {
         assert!(!invalidated, "{detail}");
         assert_eq!(
             entry.line(),
-            format!("error host image present: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail} current generation=3 raster=2")
+            format!(
+                "error host image present: surface=s1 name=view generation=3 raster=2 sequence=1 token=9 reason={detail} current generation=3 raster=2"
+            )
         );
     }
 }

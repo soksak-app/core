@@ -1,4 +1,4 @@
-use soksak_host_tauriv2::platform::{visible_window_overlay_rects, WindowOverlay};
+use soksak_host_tauriv2::platform::{WindowOverlay, visible_window_overlay_rects};
 
 // contract: window-overlay.rects.packs-four-values-per-rect
 #[test]

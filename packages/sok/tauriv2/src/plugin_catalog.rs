@@ -55,13 +55,13 @@ fn catalog_classes(folder: &Path, id: &str) -> Result<HashMap<String, Class>, St
             return Err(format!(
                 "{}: the event catalog of plugin {id} does not exist",
                 path.display()
-            ))
+            ));
         }
         Err(_) => {
             return Err(format!(
                 "{}: the event catalog of plugin {id} cannot be read",
                 path.display()
-            ))
+            ));
         }
     };
     let catalog: Value = serde_json::from_str(&text).map_err(|_| {

@@ -12,8 +12,8 @@ mod ui_queue;
 use std::path::Path;
 
 use serde_json::Value;
-use tauri::webview::PlatformWebview;
 use tauri::Window;
+use tauri::webview::PlatformWebview;
 
 use std::time::Duration;
 

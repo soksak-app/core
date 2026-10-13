@@ -239,8 +239,8 @@ fn a_refused_native_record_and_the_loss_of_the_ring_are_counted_as_dropped() {
 
 // contract: log.native.stores-the-class-of-a-pulled-record
 #[test]
-fn a_pulled_native_record_of_a_declared_event_stores_the_catalog_class_and_an_undeclared_one_stores_none(
-) {
+fn a_pulled_native_record_of_a_declared_event_stores_the_catalog_class_and_an_undeclared_one_stores_none()
+ {
     let ring = Arc::new(Mutex::new(FakeRing {
         bytes: [
             native_record_of_class(

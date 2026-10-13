@@ -1,7 +1,7 @@
-use std::ffi::{c_char, c_void, CStr};
+use std::ffi::{CStr, c_char, c_void};
 use std::path::PathBuf;
 
-extern "C" {
+unsafe extern "C" {
     fn sp_diagnostic_reports_directory(failure: *mut *mut c_char) -> *mut c_char;
     fn free(pointer: *mut c_void);
 }

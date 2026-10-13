@@ -8,7 +8,7 @@ use serde_json::json;
 use serde_json::value::RawValue;
 
 use crate::application_log::log_error;
-use crate::bounds::{cut_text, CALL_TEXT_BYTES};
+use crate::bounds::{CALL_TEXT_BYTES, cut_text};
 use crate::endpoint::Failure;
 use crate::event_log::Level;
 use crate::event_record::emit_host;

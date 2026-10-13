@@ -2,7 +2,7 @@
 //! arguments with the same text.
 
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_host_tauriv2::arguments::decode;
 use soksak_host_tauriv2::surfaces::SyncRequest;
 use soksak_host_tauriv2::{documents, exposure, images, workspace};

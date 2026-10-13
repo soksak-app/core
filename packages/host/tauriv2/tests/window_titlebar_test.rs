@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use soksak_host_tauriv2::surfaces::{check_sync_request, SyncRequest};
+use soksak_host_tauriv2::surfaces::{SyncRequest, check_sync_request};
 use soksak_host_tauriv2::windows::validate_titlebar_height;
 
 /// A surface synchronization request in the form that the page sends. JSON cannot hold NaN and infinity.

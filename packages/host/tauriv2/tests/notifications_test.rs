@@ -2,7 +2,7 @@
 mod records;
 
 use soksak_host_tauriv2::notifications::{
-    record_event, validate_notification, NotificationRequest,
+    NotificationRequest, record_event, validate_notification,
 };
 
 fn request(surface: &str, title: &str, body: &str) -> NotificationRequest {

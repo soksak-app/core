@@ -6,7 +6,7 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// The response for a method and params. result is the original JSON, and the response is an error when code is not 0. after is a notification
 /// sent after the response, and when close_after is true the endpoint closes the connection after the response (and notifications).
@@ -488,10 +488,8 @@ fn watch_prints_the_value_and_each_change() {
 // contract: cli.config-dir.default-uses-application-identifier
 #[test]
 fn the_default_configuration_directory_is_the_applications() {
-    let home = tempfile_dir::Dir::new(&std::env::temp_dir());
-    // Only this test changes HOME. The other tests pass --config-dir, so they do not read HOME.
-    std::env::set_var("HOME", home.path());
-    std::env::remove_var("XDG_CONFIG_HOME");
+    // The test reads the configuration folder of the environment and changes no variable of the process, whose tests run
+    // in parallel threads; the identifier of the test has no endpoint in that folder.
     let base = soksak_sok::platform::current()
         .expect("platform")
         .config_dir()
@@ -581,15 +579,39 @@ fn declared_command_rejects_bad_flags_before_sending() {
     let fake = declared();
     let dir = fake.dir();
     let cases: [(&str, &[&str]); 9] = [
-        ("sok: --nope is not a parameter of fixture.do; its parameters are choice, count, flag, list, maybe, object, text, whole\n", &["fixture.do", "--nope", "1"]),
-        ("sok: --choice must be one of one, two\n", &["fixture.do", "--choice", "three"]),
-        ("sok: --whole must be integer\n", &["fixture.do", "--whole", "1.5"]),
-        ("sok: --count must be number\n", &["fixture.do", "--count", "x"]),
-        ("sok: --object must be object\n", &["fixture.do", "--object", "[1]"]),
-        ("sok: unexpected argument yes\n", &["fixture.do", "--flag", "yes"]),
+        (
+            "sok: --nope is not a parameter of fixture.do; its parameters are choice, count, flag, list, maybe, object, text, whole\n",
+            &["fixture.do", "--nope", "1"],
+        ),
+        (
+            "sok: --choice must be one of one, two\n",
+            &["fixture.do", "--choice", "three"],
+        ),
+        (
+            "sok: --whole must be integer\n",
+            &["fixture.do", "--whole", "1.5"],
+        ),
+        (
+            "sok: --count must be number\n",
+            &["fixture.do", "--count", "x"],
+        ),
+        (
+            "sok: --object must be object\n",
+            &["fixture.do", "--object", "[1]"],
+        ),
+        (
+            "sok: unexpected argument yes\n",
+            &["fixture.do", "--flag", "yes"],
+        ),
         ("sok: --text needs a value\n", &["fixture.do", "--text"]),
-        ("sok: --params gives the whole parameter object and cannot be combined with parameter flags\n", &["fixture.do", "--params", "{}", "--text", "x"]),
-        ("sok: fixture.gone is not a declared command of window main; sok commands lists them\n", &["fixture.gone"]),
+        (
+            "sok: --params gives the whole parameter object and cannot be combined with parameter flags\n",
+            &["fixture.do", "--params", "{}", "--text", "x"],
+        ),
+        (
+            "sok: fixture.gone is not a declared command of window main; sok commands lists them\n",
+            &["fixture.gone"],
+        ),
     ];
     for (want, args) in cases {
         let mut all = args.to_vec();

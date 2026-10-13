@@ -79,8 +79,8 @@ fn collect_raster_configurations(
     window: &Window,
     from: &'static str,
     selection: impl Fn(&crate::images::Images) -> Vec<(crate::images::Key, platform::Handle)>
-        + Send
-        + 'static,
+    + Send
+    + 'static,
 ) -> Result<Vec<(crate::images::Key, crate::images::Configure)>, String> {
     let data = window_data(window)?;
     exposure::on_main(window, move || {

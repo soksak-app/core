@@ -5,7 +5,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::endpoint::Failure;
 use crate::event_log::Level;

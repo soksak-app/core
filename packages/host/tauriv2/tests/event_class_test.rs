@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_host_tauriv2::bounds::Fields;
 use soksak_host_tauriv2::event_log::{self, Level, Options, RelayedEvent};
 
@@ -62,16 +62,18 @@ fn every_line_stores_the_class_of_its_catalog_entry() {
         "host.sidecar.reply",
         &json!({"name": "n", "surface": "s", "bytes": 1, "ok": true})
     ));
-    assert!(log
-        .emit_relayed(relayed(
+    assert!(
+        log.emit_relayed(relayed(
             "page",
             "page.start",
             r#"{"time_origin":1,"url":"u"}"#
         ))
-        .unwrap());
-    assert!(log
-        .emit_relayed(relayed("page", "page.console.info", r#"{"text":"x"}"#))
-        .unwrap());
+        .unwrap()
+    );
+    assert!(
+        log.emit_relayed(relayed("page", "page.console.info", r#"{"text":"x"}"#))
+            .unwrap()
+    );
     log.flush(Duration::from_secs(5)).unwrap();
     let want = [
         ("log.open", "lifecycle"),
@@ -98,9 +100,10 @@ fn an_event_the_catalog_does_not_declare_is_marked_undeclared_and_has_no_class()
     let directory = tempfile::tempdir().unwrap();
     let log = event_log::start(options(directory.path())).unwrap();
     assert!(log.emit(Level::Info, "host.test.event", &json!({"index": 1})));
-    assert!(log
-        .emit_relayed(relayed("plugin", "plugin.editor.opened", "{}"))
-        .unwrap());
+    assert!(
+        log.emit_relayed(relayed("plugin", "plugin.editor.opened", "{}"))
+            .unwrap()
+    );
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(log.path());
     let marked: Vec<&Value> = events

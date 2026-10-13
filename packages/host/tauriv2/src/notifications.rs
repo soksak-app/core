@@ -176,13 +176,13 @@ fn event(app: &AppHandle, raw: String) {
                     format!("the window {window:?} of a {kind} notification is closed"),
                 );
             };
-            if kind == "activated" {
-                if let Err(error) = owner.show().and_then(|()| owner.set_focus()) {
-                    return failed(
-                        app,
-                        format!("focus the window of an activated notification: {error}"),
-                    );
-                }
+            if kind == "activated"
+                && let Err(error) = owner.show().and_then(|()| owner.set_focus())
+            {
+                return failed(
+                    app,
+                    format!("focus the window of an activated notification: {error}"),
+                );
             }
             let name = format!("notification-{kind}");
             if let Err(error) =

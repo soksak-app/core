@@ -1,6 +1,6 @@
 //! Checks the rules of the application arguments (docs/spec/hosts.md#application-arguments).
 
-use soksak_host_tauriv2::command_line::{parse_arguments, Arguments};
+use soksak_host_tauriv2::command_line::{Arguments, parse_arguments};
 
 fn parse(args: &[&str]) -> Result<Arguments, String> {
     parse_arguments(args.iter().map(|arg| arg.to_string()))

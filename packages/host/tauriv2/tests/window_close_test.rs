@@ -9,10 +9,10 @@ use soksak_host_tauriv2::documents::Documents;
 use soksak_host_tauriv2::exposure::native_failure;
 use soksak_host_tauriv2::images::Images;
 use soksak_host_tauriv2::surfaces::{
-    close_named_surface, close_window_surfaces, create_named_surface, take_removed_surfaces,
-    WindowNative,
+    WindowNative, close_named_surface, close_window_surfaces, create_named_surface,
+    take_removed_surfaces,
 };
-use soksak_host_tauriv2::windows::{use_owner, MainStep, NativeFailure};
+use soksak_host_tauriv2::windows::{MainStep, NativeFailure, use_owner};
 
 fn key(surface: &str, name: &str) -> (String, String) {
     (surface.to_string(), name.to_string())

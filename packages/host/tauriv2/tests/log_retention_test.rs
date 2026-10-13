@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_host_tauriv2::event_log::{self, EventLog, Level, Options};
 
 fn line(seq: u64, at: i64, event: &str, padding: &str) -> String {

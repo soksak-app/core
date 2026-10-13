@@ -3,7 +3,7 @@
 
 use std::ffi::c_void;
 
-extern "C" {
+unsafe extern "C" {
     fn sp_process_when_exited(
         pid: i32,
         seconds: f64,

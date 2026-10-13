@@ -6,10 +6,10 @@ use std::fs;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_host_tauriv2::event_log::{self, Options};
 use soksak_host_tauriv2::event_record::use_host_event_log;
-use soksak_host_tauriv2::test_mark::{emit_test_mark, parse_test_mark, TestMark};
+use soksak_host_tauriv2::test_mark::{TestMark, emit_test_mark, parse_test_mark};
 
 /// The records of the host are process-wide, so the tests of this file run one at a time.
 static SERIAL: Mutex<()> = Mutex::new(());

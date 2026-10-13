@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use serde::de::{Deserializer, IgnoredAny, MapAccess, Visitor};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_sok::event_log::{EventLog, Level};
 
 /// The keys of a JSON object in the order they are written.

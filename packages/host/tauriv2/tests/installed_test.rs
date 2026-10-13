@@ -6,8 +6,8 @@ use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use soksak_host_tauriv2::installed::{self, InstalledAssets, Module};
-use tauri::utils::assets::{AssetKey, AssetsIter, CspHash};
 use tauri::Assets;
+use tauri::utils::assets::{AssetKey, AssetsIter, CspHash};
 
 /// Writes the content to the configuration folder for each path.
 fn write_installed(config: &Path, files: &[(&str, &str)]) {
@@ -247,9 +247,11 @@ fn installed_assets_serve_the_files_of_enabled_packages() {
     ] {
         assert_eq!(get(path), Some(format!("frontend {path}")), "{path}");
     }
-    assert!(get(installed::INSTALLED_PLUGINS_PATH)
-        .unwrap()
-        .starts_with(r#"{"plugins":[{"id":"alpha""#));
+    assert!(
+        get(installed::INSTALLED_PLUGINS_PATH)
+            .unwrap()
+            .starts_with(r#"{"plugins":[{"id":"alpha""#)
+    );
 }
 
 /// A configuration directory where the enabled plugin alpha declares the shared modules of the point language and the
@@ -363,9 +365,11 @@ fn installed_sidecars_resolve_the_installed_version_folders() {
         "{error}"
     );
     let empty = tempfile::tempdir().unwrap();
-    assert!(installed::installed_sidecars(empty.path())
-        .unwrap()
-        .is_empty());
+    assert!(
+        installed::installed_sidecars(empty.path())
+            .unwrap()
+            .is_empty()
+    );
 }
 
 // contract: installed.sidecars.leave-out-plugin-dependencies
@@ -404,7 +408,7 @@ fn plugin_folder_is_the_folder_of_the_enabled_installed_plugin() {
 // contract: document.message.forward
 #[test]
 fn document_message_is_sent_to_the_surface_or_its_reason_is_logged() {
-    use soksak_host_tauriv2::documents::{document_message, Message};
+    use soksak_host_tauriv2::documents::{Message, document_message};
     match document_message("tab-1", "page", r#"{"message":{"type":"reply","id":3}}"#) {
         Ok(Message::Forward(payload)) => assert_eq!(
             payload.to_string(),

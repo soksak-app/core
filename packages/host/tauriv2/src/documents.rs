@@ -187,7 +187,7 @@ impl Documents {
     pub fn names(&self) -> HashMap<Handle, Key> {
         self.lock()
             .iter()
-            .filter(|(_, &handle)| handle != 0)
+            .filter(|&(_, &handle)| handle != 0)
             .map(|(key, &handle)| (handle, key.clone()))
             .collect()
     }

@@ -392,10 +392,10 @@ fn parse_index(name: &str, data: Vec<u8>) -> Result<IndexFile, String> {
 impl IndexFile {
     /// The record of segment number `n`; the tail is the segment after the full ones.
     pub fn segment_at(&self, n: usize) -> Result<Segment, String> {
-        if n == self.state.full_segments as usize {
-            if let Some(tail) = &self.state.tail {
-                return Ok(tail.clone());
-            }
+        if n == self.state.full_segments as usize
+            && let Some(tail) = &self.state.tail
+        {
+            return Ok(tail.clone());
         }
         let start = 2 * BLOCK_BYTES + n * RECORD_BYTES;
         Segment::decode(&self.data[start..start + RECORD_BYTES]).ok_or_else(|| {
@@ -1048,10 +1048,8 @@ fn index_from(
             state.clone(),
         )
     };
-    if !rebuild {
-        if let Some(tail) = &state.tail {
-            start = tail.offset;
-        }
+    if !rebuild && let Some(tail) = &state.tail {
+        start = tail.offset;
     }
     let first_event = events;
     // A line before this offset was indexed by an earlier update (the update reads the partial segment again), so it announced its change then.

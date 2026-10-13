@@ -1,11 +1,11 @@
 //! The notification center calls of native/darwin.
 
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_void};
 use std::sync::OnceLock;
 
 type Event = extern "C" fn(context: *mut c_void, json: *const c_char);
 
-extern "C" {
+unsafe extern "C" {
     fn sp_notifications_start(event: Event, context: *mut c_void) -> *const c_char;
     fn sp_notifications_post(identifier: *const c_char, title: *const c_char, body: *const c_char);
     fn sp_notifications_remove(identifier: *const c_char);

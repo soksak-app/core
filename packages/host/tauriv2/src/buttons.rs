@@ -7,7 +7,7 @@
 
 use std::sync::Mutex;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::application_log::log_error;
 

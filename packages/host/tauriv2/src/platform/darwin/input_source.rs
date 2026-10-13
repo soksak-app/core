@@ -1,8 +1,8 @@
 //! The keyboard input source calls of native/darwin. They are included only in diagnostic builds.
 
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_void};
 
-extern "C" {
+unsafe extern "C" {
     fn sp_input_source_current() -> *mut c_char;
     fn sp_input_source_select(identifier: *const c_char) -> bool;
     fn free(pointer: *mut c_void);

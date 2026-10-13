@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::Value;
-use soksak_host_tauriv2::crash_report::{announce_crash_reports, CRASH_REPORT_LIMIT};
+use soksak_host_tauriv2::crash_report::{CRASH_REPORT_LIMIT, announce_crash_reports};
 use soksak_host_tauriv2::event_log::EventLog;
 use soksak_host_tauriv2::event_record::use_host_event_log;
 
@@ -138,10 +138,12 @@ fn the_lookup_of_crash_reports_reads_the_newest_reports_only() {
         announce_crash_reports(reports, ledger, "soksak").unwrap();
         let events = found(log);
         assert_eq!(events.len(), CRASH_REPORT_LIMIT);
-        assert!(events[0]["fields"]["path"]
-            .as_str()
-            .unwrap()
-            .ends_with("000006.ips"));
+        assert!(
+            events[0]["fields"]["path"]
+                .as_str()
+                .unwrap()
+                .ends_with("000006.ips")
+        );
     });
 }
 

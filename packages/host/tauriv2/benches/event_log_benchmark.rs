@@ -1,8 +1,8 @@
 //! The cost of `EventLog::emit` on the calling thread, alone and with several producers, against a writer that drains
 //! at its own pace. The numbers are measured, not asserted (docs/spec/logging.md#writers).
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use soksak_host_tauriv2::event_log::{self, Level, Options};

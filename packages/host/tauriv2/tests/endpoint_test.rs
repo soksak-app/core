@@ -11,8 +11,8 @@ use std::time::Duration;
 mod records;
 
 use serde_json::value::RawValue;
-use serde_json::{json, Map, Value};
-use soksak_host_tauriv2::endpoint::{self, raw, Connection, Endpoint, Failure, Service, Watch};
+use serde_json::{Map, Value, json};
+use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Failure, Service, Watch, raw};
 
 /// A service that records requests and has only the window w1.
 struct Fake {
@@ -496,10 +496,12 @@ fn watchers_belong_to_their_connection() {
         .filter(|(_, method, _)| method == "status.watch")
         .count();
     assert_eq!(page_watches, 1, "{:?}", fake.calls());
-    assert!(!fake
-        .calls()
-        .iter()
-        .any(|(_, method, _)| method == "status.unwatch"));
+    assert!(
+        !fake
+            .calls()
+            .iter()
+            .any(|(_, method, _)| method == "status.unwatch")
+    );
 
     // When the connection of the last watcher closes, the page is asked to unwatch.
     while seen.try_recv().is_ok() {}

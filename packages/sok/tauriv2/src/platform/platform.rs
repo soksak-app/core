@@ -34,7 +34,7 @@ pub trait Platform {
     fn close_file(&self, file: std::fs::File, path: &std::path::Path) -> Result<(), String>;
     /// Extracts the zip of an application bundle into the folder.
     fn extract_bundle(&self, zip: &std::path::Path, folder: &std::path::Path)
-        -> Result<(), String>;
+    -> Result<(), String>;
     /// The version that the application bundle at the path declares.
     fn bundle_version(&self, bundle: &std::path::Path) -> Result<String, String>;
     /// Waits until the process pid has ended and reports false when it still runs after the timeout.

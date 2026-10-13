@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_sok::event_classes::Class;
 use soksak_sok::event_log::Level;
 use soksak_sok::plugin_catalog::plugin_event_classes;
@@ -126,8 +126,8 @@ fn the_plugin_classes_are_the_catalogs_of_the_enabled_installed_plugins() {
 
 // contract: log.plugin-catalog.refuses-a-catalog
 #[test]
-fn a_catalog_that_cannot_be_used_is_an_error_that_names_its_file_and_the_other_plugins_keep_their_classes(
-) {
+fn a_catalog_that_cannot_be_used_is_an_error_that_names_its_file_and_the_other_plugins_keep_their_classes()
+ {
     let dir = temp("refused");
     write_plugin(
         &dir.0,
@@ -170,10 +170,22 @@ fn a_catalog_that_cannot_be_used_is_an_error_that_names_its_file_and_the_other_p
     assert_eq!(
         errors,
         vec![
-            format!("{}: the event catalog of plugin broken is not JSON", file("broken")),
-            format!("{}: the event plugin.classless.x has the class often, which is not lifecycle, input, call, io or frame", file("classless")),
-            format!("{}: the event catalog of plugin missing does not exist", file("missing")),
-            format!("{}: the event plugin.probe.frame is not an event of plugin outside (plugin.outside.<event>)", file("outside")),
+            format!(
+                "{}: the event catalog of plugin broken is not JSON",
+                file("broken")
+            ),
+            format!(
+                "{}: the event plugin.classless.x has the class often, which is not lifecycle, input, call, io or frame",
+                file("classless")
+            ),
+            format!(
+                "{}: the event catalog of plugin missing does not exist",
+                file("missing")
+            ),
+            format!(
+                "{}: the event plugin.probe.frame is not an event of plugin outside (plugin.outside.<event>)",
+                file("outside")
+            ),
         ]
     );
 }

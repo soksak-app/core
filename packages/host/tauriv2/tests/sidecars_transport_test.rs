@@ -2,7 +2,7 @@
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -2241,7 +2241,7 @@ fn persistent_connections_are_recorded_as_events() {
             .unwrap();
         events.recv_timeout(STALL).unwrap(); // the echo
         events.recv_timeout(STALL).unwrap(); // the notice of the reconnection
-                                             // The sampler names the service while it is connected and not after the connection ended.
+        // The sampler names the service while it is connected and not after the connection ended.
         soksak_host_tauriv2::performance::sample();
         sidecars.stop();
         soksak_host_tauriv2::performance::sample();

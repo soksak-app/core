@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use super::super::{Connection, Platform};
 use super::Darwin;
 
-extern "C" {
+unsafe extern "C" {
     /// The public libSystem function that reads a system clock in nanoseconds; it returns 0 and sets `errno` when the clock cannot be read. The `libc`
     /// crate does not declare it.
     fn clock_gettime_nsec_np(clock_id: libc::clockid_t) -> u64;

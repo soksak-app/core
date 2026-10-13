@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_host_tauriv2::event_log::{self, Level, Options, RelayedEvent};
 use soksak_host_tauriv2::platform;
 
@@ -70,9 +70,11 @@ fn the_first_line_is_log_open_and_seq_is_consecutive() {
     let seqs: Vec<u64> = events.iter().map(|e| e["seq"].as_u64().unwrap()).collect();
     assert_eq!(seqs, (1..=11).collect::<Vec<u64>>());
     assert_eq!(events[5]["fields"]["index"], 4);
-    assert!(events
-        .iter()
-        .all(|e| e["ts_us"].as_u64().unwrap() > 1_700_000_000_000_000));
+    assert!(
+        events
+            .iter()
+            .all(|e| e["ts_us"].as_u64().unwrap() > 1_700_000_000_000_000)
+    );
 }
 
 // contract: log.writer.never-blocks-and-counts-loss

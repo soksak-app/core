@@ -17,7 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::application_log::{log_error, log_info};
 use crate::bounds::ENDPOINT_TOPIC_CHANGES;
@@ -439,10 +439,10 @@ impl Notifier {
             Err(_) => return,
         };
         for writer in writers {
-            if let Ok(mut writer) = writer.lock() {
-                if let Err(error) = write_frame(&mut *writer, message) {
-                    log_error("endpoint notification", error);
-                }
+            if let Ok(mut writer) = writer.lock()
+                && let Err(error) = write_frame(&mut *writer, message)
+            {
+                log_error("endpoint notification", error);
             }
         }
     }
@@ -520,10 +520,10 @@ impl ProcessLock {
 
 impl Drop for ProcessLock {
     fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_file(&self.path) {
-            if error.kind() != ErrorKind::NotFound {
-                log_error(&self.path.display().to_string(), error);
-            }
+        if let Err(error) = std::fs::remove_file(&self.path)
+            && error.kind() != ErrorKind::NotFound
+        {
+            log_error(&self.path.display().to_string(), error);
         }
     }
 }
@@ -579,19 +579,21 @@ impl Endpoint {
         let listener = endpoint.listener.clone();
         let shared = endpoint.shared.clone();
         let stopped = endpoint.stopped.clone();
-        crate::routine::spawn_named("endpoint-accept", move || loop {
-            match listener.accept() {
-                Ok(connection) => {
-                    let shared = shared.clone();
-                    crate::routine::spawn_named("endpoint-serve", move || {
-                        serve(shared, connection)
-                    });
-                }
-                Err(error) => {
-                    if !stopped.load(Ordering::Relaxed) {
-                        log_error("endpoint accept", error);
+        crate::routine::spawn_named("endpoint-accept", move || {
+            loop {
+                match listener.accept() {
+                    Ok(connection) => {
+                        let shared = shared.clone();
+                        crate::routine::spawn_named("endpoint-serve", move || {
+                            serve(shared, connection)
+                        });
                     }
-                    return;
+                    Err(error) => {
+                        if !stopped.load(Ordering::Relaxed) {
+                            log_error("endpoint accept", error);
+                        }
+                        return;
+                    }
                 }
             }
         });
@@ -638,10 +640,10 @@ impl Endpoint {
                     format!("endpoint file is not valid JSON: {error}"),
                 ),
                 Ok(current) if current == self.record => {
-                    if let Err(error) = std::fs::remove_file(&self.file) {
-                        if error.kind() != ErrorKind::NotFound {
-                            log_error(&self.file.display().to_string(), error);
-                        }
+                    if let Err(error) = std::fs::remove_file(&self.file)
+                        && error.kind() != ErrorKind::NotFound
+                    {
+                        log_error(&self.file.display().to_string(), error);
                     }
                 }
                 Ok(_) => {}
@@ -650,10 +652,10 @@ impl Endpoint {
         self.shared.stopping.store(true, Ordering::Relaxed);
         if let Ok(peers) = self.shared.peers.lock() {
             for peer in peers.values() {
-                if let Ok(writer) = peer.writer.lock() {
-                    if let Err(error) = writer.close() {
-                        log_error("endpoint connection close", error);
-                    }
+                if let Ok(writer) = peer.writer.lock()
+                    && let Err(error) = writer.close()
+                {
+                    log_error("endpoint connection close", error);
                 }
             }
         }
@@ -716,7 +718,7 @@ fn read_body<R: Read + ?Sized>(reader: &mut R) -> Result<Option<Vec<u8>>, BodyEr
             Ok(0) => {
                 return Err(BodyError::Io(
                     "connection closed inside a length prefix".into(),
-                ))
+                ));
             }
             Ok(n) => filled += n,
             Err(e) if e.kind() == ErrorKind::Interrupted => {}
@@ -884,13 +886,13 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
             let outcome = run(&shared, &request.method, request.params);
             // A timeout is an error that the requesting side receives, but only this record keeps which method and what
             // it waited for.
-            if let Err(failure) = &outcome {
-                if failure.code == TIMED_OUT {
-                    log_error(
-                        "endpoint timeout",
-                        format!("{}: {}", request.method, failure.message),
-                    );
-                }
+            if let Err(failure) = &outcome
+                && failure.code == TIMED_OUT
+            {
+                log_error(
+                    "endpoint timeout",
+                    format!("{}: {}", request.method, failure.message),
+                );
             }
             answer.send(outcome)
         });
@@ -1050,12 +1052,11 @@ fn drain(shared: &Shared, topic: Topic) {
                 Ok(result) => (Ok(result), true),
                 Err(failure) => {
                     // If this connection did not change this target again after that, the start is reverted.
-                    if let Ok(mut peers) = shared.peers.lock() {
-                        if let Some(state) = peers.get_mut(&next.peer) {
-                            if state.changes.get(&topic) == Some(&next.order) {
-                                topic.set(state, false);
-                            }
-                        }
+                    if let Ok(mut peers) = shared.peers.lock()
+                        && let Some(state) = peers.get_mut(&next.peer)
+                        && state.changes.get(&topic) == Some(&next.order)
+                    {
+                        topic.set(state, false);
                     }
                     (Err(failure), false)
                 }
@@ -1066,10 +1067,10 @@ fn drain(shared: &Shared, topic: Topic) {
         } else {
             (raw(&Value::Null), page)
         };
-        if let Ok(mut lines) = shared.lines.lock() {
-            if let Some(line) = lines.get_mut(&topic) {
-                line.page = following;
-            }
+        if let Ok(mut lines) = shared.lines.lock()
+            && let Some(line) = lines.get_mut(&topic)
+        {
+            line.page = following;
         }
         if let Some(answer) = next.answer {
             answer.send(outcome);

@@ -2,8 +2,8 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use rcgen::{BasicConstraints, CertificateParams, CertifiedIssuer, IsCa, KeyPair};
@@ -148,10 +148,9 @@ fn redirects_are_followed_only_to_https() {
         if let Some(hops) = path
             .strip_prefix("/hop/")
             .and_then(|hops| hops.parse::<u32>().ok())
+            && hops > 0
         {
-            if hops > 0 {
-                return Reply::Redirect(format!("/hop/{}", hops - 1));
-            }
+            return Reply::Redirect(format!("/hop/{}", hops - 1));
         }
         if path == "/plain" {
             return Reply::Redirect("http://example.invalid/index.json".to_string());

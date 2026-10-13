@@ -4,7 +4,7 @@
 //! Pointer routing uses one private WebKit input API in native/darwin.
 
 use std::cell::Cell;
-use std::ffi::{c_char, c_void, CString};
+use std::ffi::{CString, c_char, c_void};
 
 use block2::RcBlock;
 use objc2::msg_send;
@@ -16,7 +16,7 @@ use std::time::Duration;
 use super::super::{ButtonHeld, Delivery, Frame, FrontmostApplication, Handle, Hit, Key, Pointer};
 use super::{NSPoint, NSRect};
 
-extern "C" {
+unsafe extern "C" {
     fn sp_input_pointer_then(
         window: *mut c_void,
         x: f64,
@@ -159,7 +159,9 @@ fn activation_result(result: i32, timeout: f64, frontmost: &str) -> Result<(), S
         SP_ACTIVATE_NOT_KEY => Err(format!(
             "the application is active but the window did not become key within {timeout}s; the frontmost application is {frontmost}"
         )),
-        SP_ACTIVATE_PENDING => Err(format!("the window's webviews did not apply the active state within {timeout}s")),
+        SP_ACTIVATE_PENDING => Err(format!(
+            "the window's webviews did not apply the active state within {timeout}s"
+        )),
         SP_ACTIVATE_LOST => Err(format!(
             "the window lost activation before its webviews applied it; the frontmost application is {frontmost}"
         )),
@@ -276,7 +278,7 @@ pub fn hit(window: Handle, x: f64, y: f64) -> Result<Hit, String> {
 
 /// Registers an application webview in the common native pointer routing and returns whether it was registered.
 pub fn register(view: &PlatformWebview) -> bool {
-    extern "C" {
+    unsafe extern "C" {
         fn webviewInputRegister(view: *const c_void) -> Bool;
     }
     unsafe { webviewInputRegister(view.inner().cast()).as_bool() }
@@ -285,7 +287,7 @@ pub fn register(view: &PlatformWebview) -> bool {
 /// Makes the page of a webview not move the keyboard focus of the window when it focuses an element, and returns
 /// whether it succeeded.
 pub fn ignore_page_focus(view: &PlatformWebview) -> bool {
-    extern "C" {
+    unsafe extern "C" {
         fn webviewIgnorePageFocus(view: *const c_void) -> Bool;
     }
     unsafe { webviewIgnorePageFocus(view.inner().cast()).as_bool() }
@@ -360,11 +362,7 @@ pub fn watch(
                 let first: *mut AnyObject = msg_send![window, firstResponder];
                 let class = AnyClass::get(c"NSView").expect("NSView");
                 let is_view: bool = msg_send![first, isKindOfClass: class];
-                if is_view {
-                    first
-                } else {
-                    std::ptr::null_mut()
-                }
+                if is_view { first } else { std::ptr::null_mut() }
             };
             let mut chain = Vec::new();
             while !view.is_null() {

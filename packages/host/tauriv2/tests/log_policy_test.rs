@@ -5,14 +5,14 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
-use std::sync::mpsc::channel;
 use std::sync::Arc;
+use std::sync::mpsc::channel;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use soksak_host_tauriv2::event_log::{self, EventLog, Level, Options};
 use soksak_host_tauriv2::event_relay::log_command;
-use soksak_host_tauriv2::log_policy::{start_log_policy, Class, LogPolicy};
+use soksak_host_tauriv2::log_policy::{Class, LogPolicy, start_log_policy};
 
 const EVERYTHING: &str = r#"{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}"#;
 
@@ -109,9 +109,11 @@ fn a_policy_file_names_every_class_with_a_level_and_nothing_else() {
         ),
         ("{broken", "config/log-policy.json: not JSON"),
     ] {
-        let error = LogPolicy::parse("config/log-policy.json", text.as_bytes())
-            .expect_err(text);
-        assert!(error.contains(message), "{text}: {error:?}, want {message:?}");
+        let error = LogPolicy::parse("config/log-policy.json", text.as_bytes()).expect_err(text);
+        assert!(
+            error.contains(message),
+            "{text}: {error:?}, want {message:?}"
+        );
     }
 }
 

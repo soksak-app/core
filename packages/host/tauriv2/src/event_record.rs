@@ -7,8 +7,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::json;
 
-use crate::bounds::{cut_text, Fields, RECORD_PLACE_BYTES, RECORD_TEXT_BYTES};
-use crate::event_log::{monotonic_ns, valid_cid, Channel, EventLog, Level, RelayedEvent};
+use crate::bounds::{Fields, RECORD_PLACE_BYTES, RECORD_TEXT_BYTES, cut_text};
+use crate::event_log::{Channel, EventLog, Level, RelayedEvent, monotonic_ns, valid_cid};
 
 /// The number of records that the start buffer holds; a record beyond it is refused and counted.
 pub const START_BUFFER_RECORDS: usize = 1024;
@@ -101,7 +101,9 @@ pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
         "error" => Level::Error,
         "info" => Level::Info,
         other => {
-            eprintln!("event writer: the record {place:?} of {layer} has the level {other:?}, which is not error or info");
+            eprintln!(
+                "event writer: the record {place:?} of {layer} has the level {other:?}, which is not error or info"
+            );
             return;
         }
     };
@@ -183,7 +185,7 @@ pub fn emit_trace(layer: &str, fields: serde_json::Value) -> Result<(), String> 
         other => {
             return Err(format!(
                 "the layer {other:?} of an observation is not host or sampler"
-            ))
+            ));
         }
     };
     let serde_json::Value::Object(mut fields) = fields else {
@@ -216,10 +218,10 @@ pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
         return;
     }
     // A closed gate serializes nothing; an event the catalog does not declare has no class and no gate.
-    if let Some(class) = soksak_sok::event_classes::class_of(event) {
-        if !crate::log_policy::gate_event(class, level) {
-            return;
-        }
+    if let Some(class) = soksak_sok::event_classes::class_of(event)
+        && !crate::log_policy::gate_event(class, level)
+    {
+        return;
     }
     match Fields::of(&fields) {
         // events: forwarded
@@ -238,13 +240,15 @@ pub fn emit_host_cids(level: Level, event: &str, cids: &[String], fields: serde_
         return;
     }
     if let Some(bad) = cids.iter().find(|cid| !valid_cid(cid)) {
-        eprintln!("event writer: {event} has the correlation identifier {bad:?}, which is empty or holds a quote, a backslash or a control character");
+        eprintln!(
+            "event writer: {event} has the correlation identifier {bad:?}, which is empty or holds a quote, a backslash or a control character"
+        );
         return;
     }
-    if let Some(class) = soksak_sok::event_classes::class_of(event) {
-        if !crate::log_policy::gate_event(class, level) {
-            return;
-        }
+    if let Some(class) = soksak_sok::event_classes::class_of(event)
+        && !crate::log_policy::gate_event(class, level)
+    {
+        return;
     }
     match Fields::of(&fields) {
         // events: forwarded
@@ -287,7 +291,9 @@ pub fn record_input_relay(surface: &str, name: &str, event_json: &str) {
     let (Some(cids), Some(kind)) = (cids.filter(|cids| !cids.is_empty()), kind) else {
         crate::application_log::log_error(
             "input relay",
-            format!("{surface}/{name}: the region event has cids that are not a list of identifiers or no type: {event_json}"),
+            format!(
+                "{surface}/{name}: the region event has cids that are not a list of identifiers or no type: {event_json}"
+            ),
         );
         return;
     };

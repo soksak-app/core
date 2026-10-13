@@ -14,18 +14,18 @@ use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::value::RawValue;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use tauri::{AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, Window};
 
 use crate::application_log::log_error;
 use crate::buffer_bounds::record_buffer_drop;
 use crate::endpoint::{
-    missing_window, Endpoint, Failure, Service, BUTTON_HELD, HANDLER_FAILED, INVALID_PARAMS,
-    MISSING_DOCUMENT, NOT_ACTIVE, NO_INPUT, PRESS_OPEN, TIMED_OUT, UNKNOWN_NAME,
+    BUTTON_HELD, Endpoint, Failure, HANDLER_FAILED, INVALID_PARAMS, MISSING_DOCUMENT, NO_INPUT,
+    NOT_ACTIVE, PRESS_OPEN, Service, TIMED_OUT, UNKNOWN_NAME, missing_window,
 };
 use crate::platform;
 use crate::surfaces::label_for;
-use crate::windows::{self, window_data, with_native_owner, NativeFailure};
+use crate::windows::{self, NativeFailure, window_data, with_native_owner};
 
 pub use crate::platform::{ButtonHeld, Delivery, FrontmostApplication, Key, Pointer};
 
@@ -271,7 +271,7 @@ pub fn pointer(params: &Map<String, Value>) -> Result<Pointer, Failure> {
         _ => {
             return Err(Failure::params(
                 "phase must be move, down, drag, up, or scroll",
-            ))
+            ));
         }
     };
     let button = match params.get("button") {
@@ -327,7 +327,7 @@ pub fn key(params: &Map<String, Value>) -> Result<Key, Failure> {
         Some(_) => {
             return Err(Failure::params(
                 "modifiers must be an array of shift, control, option, command",
-            ))
+            ));
         }
     }
     let down = match params.get("phase").and_then(Value::as_str) {
@@ -643,17 +643,17 @@ pub(crate) fn reply(webview: &Webview, request: String) -> Result<(), String> {
         .map_err(|error| format!("exposure reply is not JSON: {error}"))?;
     let routing: Value = serde_json::from_str(text.get()).map_err(|error| error.to_string())?;
     let target = reply_target(window.label(), &routing)?;
-    if let Some(surface) = routing.get("surface").and_then(Value::as_str) {
-        if !crate::surfaces::surface_attached(&window, surface)? {
-            // When a surface is removed, the requests of that surface have already ended with 1003. A late reply is
-            // discarded because no request is left to answer, and it is left as an observation (docs/spec/exposure.md).
-            let id = routing
-                .get("id")
-                .and_then(Value::as_u64)
-                .ok_or("exposure reply has no id")?;
-            crate::application_log::log_info("exposure", removed_surface_reply(id, surface));
-            return Ok(());
-        }
+    if let Some(surface) = routing.get("surface").and_then(Value::as_str)
+        && !crate::surfaces::surface_attached(&window, surface)?
+    {
+        // When a surface is removed, the requests of that surface have already ended with 1003. A late reply is
+        // discarded because no request is left to answer, and it is left as an observation (docs/spec/exposure.md).
+        let id = routing
+            .get("id")
+            .and_then(Value::as_u64)
+            .ok_or("exposure reply has no id")?;
+        crate::application_log::log_info("exposure", removed_surface_reply(id, surface));
+        return Ok(());
     }
     webview.state::<Exposure>().relay.reply(&target, &text)
 }
@@ -840,10 +840,10 @@ pub(crate) fn surface_closed(window: &Window, surface: &str) {
         .state::<Exposure>()
         .relay
         .abandon(&label_for(window, surface));
-    if let Ok(data) = window_data(window) {
-        if let Ok(mut registrations) = data.registrations.lock() {
-            registrations.retain(|(owner, _, _)| owner != surface);
-        }
+    if let Ok(data) = window_data(window)
+        && let Ok(mut registrations) = data.registrations.lock()
+    {
+        registrations.retain(|(owner, _, _)| owner != surface);
     }
     if let Err(error) = emit_to(
         window.app_handle(),

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F168: Rust package가 edition 2024로 build된다. 기본 configuration 폴더의 test는 더는 process의 환경을 바꾸지 않는다.
 - F162.4: 선언된 모든 workspace version이 0.0.12이다.
 - F160.23: 아무것도 기록하지 않던 sidecar와 plugin의 기록 항목은 저장소마다 자기 체크리스트에 있으며, 저장소별 ID는 F160.23 줄에 나열한다. 각 저장소가 누락된 기록의 항목을 이미 가지고 있어서 새 항목은 추가하지 않았다.
 - F166.3.2: page는 ES module만 load하고 semver는 CommonJS로만 배포되므로 workbench가 version을 읽는 자체 code를 유지하며, module이 그 이유를 적는다.

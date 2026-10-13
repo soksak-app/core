@@ -114,19 +114,25 @@ pub fn generate_each(n: usize, mut emit: impl FnMut(BigEvent)) {
                 event.level = "info".into();
                 event.layer = "host".into();
                 event.event = "log.open".into();
-                event.line = format!("{head}\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{{\"schema\":2,\"pid\":1,\"role\":\"host\",\"boot\":\"big\"}}}}");
+                event.line = format!(
+                    "{head}\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{{\"schema\":2,\"pid\":1,\"role\":\"host\",\"boot\":\"big\"}}}}"
+                );
             }
             2000 => {
                 event.level = "info".into();
                 event.layer = "host".into();
                 event.event = "host.test.start".into();
-                event.line = format!("{head}\"level\":\"info\",\"layer\":\"host\",\"event\":\"host.test.start\",\"fields\":{{\"name\":\"a\",\"run\":\"r-big\"}}}}");
+                event.line = format!(
+                    "{head}\"level\":\"info\",\"layer\":\"host\",\"event\":\"host.test.start\",\"fields\":{{\"name\":\"a\",\"run\":\"r-big\"}}}}"
+                );
             }
             6000 => {
                 event.level = "info".into();
                 event.layer = "host".into();
                 event.event = "host.test.end".into();
-                event.line = format!("{head}\"level\":\"info\",\"layer\":\"host\",\"event\":\"host.test.end\",\"fields\":{{\"name\":\"a\",\"run\":\"r-big\",\"result\":\"pass\"}}}}");
+                event.line = format!(
+                    "{head}\"level\":\"info\",\"layer\":\"host\",\"event\":\"host.test.end\",\"fields\":{{\"name\":\"a\",\"run\":\"r-big\",\"result\":\"pass\"}}}}"
+                );
             }
             _ => {
                 event.level = BIG_LEVELS[i % 5].into();

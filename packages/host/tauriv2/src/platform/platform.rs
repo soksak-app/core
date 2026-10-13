@@ -405,7 +405,7 @@ pub trait Platform: Send + Sync {
     fn go_document(&self, document: Handle, action: i32, offset: i32) -> Result<bool, String>;
     /// Sets the document region with the CSS pixel insets of the surface viewport. Call it on the main thread.
     fn place_document(&self, document: Handle, insets: Insets, visible: bool)
-        -> Result<(), String>;
+    -> Result<(), String>;
     /// Dims the document while a dialog is open. Call it on the main thread.
     fn set_document_background(&self, document: Handle, enabled: bool) -> Result<(), String>;
     /// Sets the appearance of the native document webview to the current host scheme.
@@ -484,7 +484,7 @@ pub trait Platform: Send + Sync {
     ) -> Result<(), String>;
     /// Checks the presentation readiness of the app document before the open placement is committed.
     fn after_presentation(&self, view: &PlatformWebview, done: Box<dyn Fn()>)
-        -> Result<(), String>;
+    -> Result<(), String>;
     /// When the window has no open surface placement transaction, calls done after the rendering of the main document
     /// and the shown document ended. The argument is the time (ms, mach absolute time) at which that screen is
     /// presented.
@@ -710,7 +710,7 @@ pub trait Platform: Send + Sync {
     /// Starts to use the notification center of the operating system and passes its event JSON to receive on the main
     /// thread ({"type":"state",...} and {"type":"activated","identifier":...}). Call it on the main thread.
     fn start_notifications(&self, receive: Box<dyn Fn(String) + Send + Sync>)
-        -> Result<(), String>;
+    -> Result<(), String>;
     /// Posts or replaces the notification of identifier. Call it on the main thread.
     fn post_notification(&self, identifier: &str, title: &str, body: &str) -> Result<(), String>;
     /// Clears the notification of identifier. Call it on the main thread.

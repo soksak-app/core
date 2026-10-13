@@ -13,8 +13,7 @@ use soksak_host_tauriv2::application_log::{log_error, open_log, start_standard_e
 /// The environment variable that tells the child process the configuration directory.
 const CHILD: &str = "SOKSAK_APPLICATION_LOG_CHILD";
 
-const NAME: &str =
-    "start_standard_error_writes_the_start_line_and_takes_the_standard_error_of_the_process_and_its_children";
+const NAME: &str = "start_standard_error_writes_the_start_line_and_takes_the_standard_error_of_the_process_and_its_children";
 
 // contract: log.open.rotates-at-100mb
 #[test]
@@ -49,11 +48,13 @@ fn open_log_moves_a_file_of_one_hundred_megabytes_to_the_earlier_generation() {
             .join(format!("application.log.{generation}"));
         assert_eq!(std::fs::read_to_string(moved).unwrap(), want);
     }
-    assert!(!directory
-        .path()
-        .join("logs")
-        .join("application.log.6")
-        .exists());
+    assert!(
+        !directory
+            .path()
+            .join("logs")
+            .join("application.log.6")
+            .exists()
+    );
     assert_eq!(
         std::fs::metadata(&earlier).unwrap().len(),
         full.len() as u64
@@ -87,8 +88,8 @@ fn open_log_appends_to_a_smaller_file_and_creates_a_private_file() {
 
 // contract: log.application.start-replaces-standard-error
 #[test]
-fn start_standard_error_writes_the_start_line_and_takes_the_standard_error_of_the_process_and_its_children(
-) {
+fn start_standard_error_writes_the_start_line_and_takes_the_standard_error_of_the_process_and_its_children()
+ {
     if let Some(config) = std::env::var_os(CHILD) {
         let writer = records::start_writer(std::path::Path::new(&config));
         if let Err(error) = start_standard_error(std::path::Path::new(&config), "com.soksak.test") {

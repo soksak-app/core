@@ -1,6 +1,6 @@
 //! Window settings, window buttons and window numbers.
 
-use std::ffi::{c_char, c_void, CStr};
+use std::ffi::{CStr, c_char, c_void};
 
 use block2::{Block, RcBlock};
 
@@ -31,7 +31,7 @@ pub fn handle(window: &Window) -> Result<Handle, String> {
 }
 
 pub fn set_main_webview(window: Handle, main: Handle) -> Result<(), String> {
-    extern "C" {
+    unsafe extern "C" {
         fn sp_window_set_main_webview(window: *mut c_void, main: *mut c_void) -> bool;
     }
     if unsafe { sp_window_set_main_webview(window as *mut c_void, main as *mut c_void) } {
@@ -42,7 +42,7 @@ pub fn set_main_webview(window: Handle, main: Handle) -> Result<(), String> {
 }
 
 pub fn reveal_after_load(window: Handle) -> Result<(), String> {
-    extern "C" {
+    unsafe extern "C" {
         fn sp_window_reveal_after_load(window: *mut c_void, error: *mut *mut c_char) -> bool;
         fn free(pointer: *mut c_void);
     }
@@ -61,7 +61,7 @@ pub fn reveal_after_load(window: Handle) -> Result<(), String> {
 pub fn controls(window: Handle) -> Frame {
     let mut rect = [0.0; 4];
     unsafe {
-        extern "C" {
+        unsafe extern "C" {
             fn windowControls(window: *mut c_void, out: *mut f64);
         }
         windowControls(window as *mut c_void, rect.as_mut_ptr());
@@ -71,7 +71,7 @@ pub fn controls(window: Handle) -> Frame {
 
 /// Changes the window to full screen or back, and calls done when the transition ends.
 pub fn fullscreen(window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), String> {
-    extern "C" {
+    unsafe extern "C" {
         fn sp_window_fullscreen(window: *mut c_void, on: bool, done: &Block<dyn Fn()>) -> bool;
     }
     let done = RcBlock::new(done);
@@ -84,7 +84,7 @@ pub fn fullscreen(window: Handle, on: bool, done: Box<dyn Fn()>) -> Result<(), S
 
 /// Calls changed whenever the occlusion state of the window changes (NSWindowDidChangeOcclusionStateNotification).
 pub fn observe_occlusion(window: Handle, changed: Box<dyn Fn()>) -> Result<(), String> {
-    extern "C" {
+    unsafe extern "C" {
         fn sp_window_observe_occlusion(window: *mut c_void, changed: &Block<dyn Fn()>) -> bool;
     }
     let changed = RcBlock::new(changed);
@@ -97,7 +97,7 @@ pub fn observe_occlusion(window: Handle, changed: Box<dyn Fn()>) -> Result<(), S
 
 /// Returns the title bar height of the window. It returns an error for a window that cannot have a title bar.
 pub fn titlebar_height(window: Handle) -> Result<f64, String> {
-    extern "C" {
+    unsafe extern "C" {
         fn windowTitlebarHeight(window: *mut c_void) -> f64;
     }
     // 0 is the height of a window without a title bar (full screen), and a negative value means a window that cannot
@@ -113,7 +113,7 @@ pub fn titlebar_height(window: Handle) -> Result<f64, String> {
 /// Creates the title bar of the window with height (pt). If it cannot be created, it returns the failure text of
 /// native.
 pub fn set_titlebar_height(window: Handle, height: f64) -> Result<(), String> {
-    extern "C" {
+    unsafe extern "C" {
         fn windowSetTitlebarHeight(
             window: *mut c_void,
             height: f64,
@@ -159,7 +159,7 @@ pub fn numbers(window: Handle) -> Vec<isize> {
 
 /// Reads and releases the JSON string that native/darwin returned.
 pub(super) fn facts_value(text: *mut c_char, what: &str) -> Result<Value, String> {
-    extern "C" {
+    unsafe extern "C" {
         fn sp_facts_free(text: *mut c_char);
     }
     if text.is_null() {
@@ -173,7 +173,7 @@ pub(super) fn facts_value(text: *mut c_char, what: &str) -> Result<Value, String
 
 /// The frame, the active state, the window buttons and the webviews of the window.
 pub fn facts(window: Handle) -> Result<Value, String> {
-    extern "C" {
+    unsafe extern "C" {
         fn sp_window_facts(window: *mut c_void) -> *mut c_char;
     }
     facts_value(
@@ -184,7 +184,7 @@ pub fn facts(window: Handle) -> Result<Value, String> {
 
 /// Moves the upper left of the window frame to screen coordinates.
 pub fn move_to(window: Handle, x: f64, y: f64) -> Result<(), String> {
-    extern "C" {
+    unsafe extern "C" {
         fn sp_window_move(window: *mut c_void, x: f64, y: f64) -> bool;
     }
     if unsafe { sp_window_move(window as *mut c_void, x, y) } {
@@ -196,7 +196,7 @@ pub fn move_to(window: Handle, x: f64, y: f64) -> Result<(), String> {
 
 /// The display list.
 pub fn screens() -> Result<Value, String> {
-    extern "C" {
+    unsafe extern "C" {
         fn sp_screens() -> *mut c_char;
     }
     facts_value(unsafe { sp_screens() }, "display list")
@@ -204,7 +204,7 @@ pub fn screens() -> Result<Value, String> {
 
 /// Makes the window zoom and the animated size change finish within one screen update.
 pub fn instant_resize() {
-    extern "C" {
+    unsafe extern "C" {
         fn windowResizeInstant();
     }
     unsafe { windowResizeInstant() }

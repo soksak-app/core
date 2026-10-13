@@ -8,9 +8,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use serde::de::DeserializeOwned;
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde::de::DeserializeOwned;
+use serde_json::{Map, Value, json};
 use tauri::{AppHandle, Manager};
 
 use crate::projects::project_folder;

@@ -5,9 +5,9 @@ use std::path::Path;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use soksak_host_tauriv2::buttons::Buttons;
-use soksak_host_tauriv2::endpoint::{self, raw, Connection, Endpoint, Failure, Service};
+use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Failure, Service, raw};
 
 /// A service that has only the window w1 and answers host.buttons with the value of buttons.
 struct Fake {

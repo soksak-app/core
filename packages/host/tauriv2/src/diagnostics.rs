@@ -15,14 +15,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use tauri::{Emitter, EventTarget, Manager, Window};
 
 use crate::application_log::log_error;
 use crate::endpoint::Failure;
-use crate::exposure::{self, on_main, Host, TIMEOUT};
+use crate::exposure::{self, Host, TIMEOUT, on_main};
 use crate::platform;
-use crate::recording::{layout_trace, Capture, Recording, Target};
+use crate::recording::{Capture, Recording, Target, layout_trace};
 use crate::workspace::Workspace;
 
 /// The interval of one drag step. The page calculates the number of steps with the same value.
@@ -216,7 +216,9 @@ fn native_objects(window: &Window, params: &Map<String, Value>) -> Result<Value,
         let expected = expected.expect("only expected counts can be unreached");
         return Err(Failure::new(
             crate::endpoint::TIMED_OUT,
-            format!("window object counts did not reach {expected} within {TIMEOUT:?}; they are {counts}"),
+            format!(
+                "window object counts did not reach {expected} within {TIMEOUT:?}; they are {counts}"
+            ),
         ));
     }
     Ok(counts.payload())
@@ -440,7 +442,7 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
                 return Err(internal(format!(
                     "{}; layout trace: {}",
                     error.message, trace.message
-                )))
+                )));
             }
         };
         // Waits until the last placement is committed and presented. Waiting for one next presentation could end at a

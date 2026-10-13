@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use crate::{compact, Request};
+use crate::{Request, compact};
 
 /// A capture request. It writes the screen of the window to an image file without bringing the window to the front.
 pub(crate) fn capture(window: String) -> Request {

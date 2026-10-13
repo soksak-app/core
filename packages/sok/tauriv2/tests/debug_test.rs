@@ -127,24 +127,77 @@ fn query_refuses_what_breaks_the_contract() {
 fn query_refuses_an_invalid_flag_value_as_a_usage_error() {
     let config = fixture_config("cli-flags");
     let cases: Vec<(Vec<&str>, &str)> = vec![
-        (vec!["--channel", "x"], "log query channel \"x\" is not one of other, debug, all"),
-        (vec!["--level", "loud"], "log query level \"loud\" is not one of error, warn, info, debug, trace"),
-        (vec!["--class", "x"], "log query class \"x\" is not one of lifecycle, input, call, io, frame"),
-        (vec!["--layer", "x"], "log query layer \"x\" is not one of native, host, page, plugin, sidecar, sok"),
-        (vec!["--event", ""], "log query event must be a non-empty string, found \"\""),
-        (vec!["--event", "a", "--event-prefix", "b"], "log query takes event or event_prefix, not both"),
-        (vec!["--from", "yesterday"], "log query from \"yesterday\" is not a UTC time like 2026-10-08T22:53:20.123456Z"),
-        (vec!["--to", "2026-02-30T00:00:00Z"], "log query to \"2026-02-30T00:00:00Z\" is not a UTC time like 2026-10-08T22:53:20.123456Z"),
-        (vec!["--from", "2026-10-08T00:00:02Z", "--to", "2026-10-08T00:00:01Z"], "log query from_us is later than to_us: 1791417602000000 1791417601000000"),
-        (vec!["--limit", "x"], "log query limit must be an integer from 1 to 5000, found \"x\""),
-        (vec!["--limit", "0"], "log query limit must be an integer from 1 to 5000, found 0"),
-        (vec!["--order", "up"], "log query order \"up\" is not one of asc, desc"),
-        (vec!["--after", "nonsense"], "log query after must be {ts_us, role, boot, seq}, found \"nonsense\""),
+        (
+            vec!["--channel", "x"],
+            "log query channel \"x\" is not one of other, debug, all",
+        ),
+        (
+            vec!["--level", "loud"],
+            "log query level \"loud\" is not one of error, warn, info, debug, trace",
+        ),
+        (
+            vec!["--class", "x"],
+            "log query class \"x\" is not one of lifecycle, input, call, io, frame",
+        ),
+        (
+            vec!["--layer", "x"],
+            "log query layer \"x\" is not one of native, host, page, plugin, sidecar, sok",
+        ),
+        (
+            vec!["--event", ""],
+            "log query event must be a non-empty string, found \"\"",
+        ),
+        (
+            vec!["--event", "a", "--event-prefix", "b"],
+            "log query takes event or event_prefix, not both",
+        ),
+        (
+            vec!["--from", "yesterday"],
+            "log query from \"yesterday\" is not a UTC time like 2026-10-08T22:53:20.123456Z",
+        ),
+        (
+            vec!["--to", "2026-02-30T00:00:00Z"],
+            "log query to \"2026-02-30T00:00:00Z\" is not a UTC time like 2026-10-08T22:53:20.123456Z",
+        ),
+        (
+            vec![
+                "--from",
+                "2026-10-08T00:00:02Z",
+                "--to",
+                "2026-10-08T00:00:01Z",
+            ],
+            "log query from_us is later than to_us: 1791417602000000 1791417601000000",
+        ),
+        (
+            vec!["--limit", "x"],
+            "log query limit must be an integer from 1 to 5000, found \"x\"",
+        ),
+        (
+            vec!["--limit", "0"],
+            "log query limit must be an integer from 1 to 5000, found 0",
+        ),
+        (
+            vec!["--order", "up"],
+            "log query order \"up\" is not one of asc, desc",
+        ),
+        (
+            vec!["--after", "nonsense"],
+            "log query after must be {ts_us, role, boot, seq}, found \"nonsense\"",
+        ),
         (vec!["--context", "1"], "unknown option --context"),
-        (vec!["--around", "nonsense"], "log query around must be {ts_us, role, boot, seq}, found \"nonsense\""),
+        (
+            vec!["--around", "nonsense"],
+            "log query around must be {ts_us, role, boot, seq}, found \"nonsense\"",
+        ),
         (vec!["--earlier", "2"], "log query earlier needs around"),
-        (vec!["--around", "1/host/b1/2", "--later", "501"], "log query later must be an integer from 0 to 500, found 501"),
-        (vec!["--around", "1/host/b1/2", "--level", "info"], "log query around takes only channel, earlier and later, not level"),
+        (
+            vec!["--around", "1/host/b1/2", "--later", "501"],
+            "log query later must be an integer from 0 to 500, found 501",
+        ),
+        (
+            vec!["--around", "1/host/b1/2", "--level", "info"],
+            "log query around takes only channel, earlier and later, not level",
+        ),
     ];
     for (args, want) in cases {
         let (stdout, stderr, code) = run_query_command(&config, &args);

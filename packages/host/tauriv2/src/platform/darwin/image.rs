@@ -1,12 +1,12 @@
 //! The image region of a surface. The implementation is image_region.m of native/darwin.
 
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_void};
 
 use super::super::{Handle, Raster};
 
 type ImageEvent = extern "C" fn(*mut c_void, *const c_char);
 
-extern "C" {
+unsafe extern "C" {
     fn sp_region_create(
         surface: *mut c_void,
         name: *const c_char,

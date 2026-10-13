@@ -1,7 +1,7 @@
 [package]
 name = "soksak-tauriv2"
 version = "0.0.12"
-edition = "2021"
+edition = "2024"
 description = "soksak layout running in Tauri v2"
 
 # diagnostics adds the diagnostic endpoint methods of the host; dev selects the .dev identifier of a debug build.

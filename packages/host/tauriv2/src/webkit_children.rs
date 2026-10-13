@@ -183,18 +183,16 @@ pub fn refresh(config: &Path) {
     };
     let target = record_path(config);
     // It does not write again when the content is the same.
-    if let Ok(previous) = std::fs::read(&target) {
-        if let Ok(previous_record) = serde_json::from_slice::<Record>(&previous) {
-            if previous_record
-                .children
-                .iter()
-                .map(|c| c.pid)
-                .collect::<Vec<_>>()
-                == record.children.iter().map(|c| c.pid).collect::<Vec<_>>()
-            {
-                return;
-            }
-        }
+    if let Ok(previous) = std::fs::read(&target)
+        && let Ok(previous_record) = serde_json::from_slice::<Record>(&previous)
+        && previous_record
+            .children
+            .iter()
+            .map(|c| c.pid)
+            .collect::<Vec<_>>()
+            == record.children.iter().map(|c| c.pid).collect::<Vec<_>>()
+    {
+        return;
     }
     match serde_json::to_vec_pretty(&record)
         .map_err(|e| e.to_string())

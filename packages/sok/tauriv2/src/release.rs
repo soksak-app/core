@@ -5,11 +5,11 @@ use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::install::{self, check_platform};
-use crate::{platform, Error};
+use crate::{Error, platform};
 
 /// One file in a release. path is relative to the folder and split by /.
 struct ReleaseEntry {
@@ -351,7 +351,7 @@ fn read_sums(path: &Path) -> Result<BTreeMap<String, String>, String> {
                     "{} line {} is not \"<sha256>  <release name>\"",
                     path.display(),
                     i + 1
-                ))
+                ));
             }
         }
     }

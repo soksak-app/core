@@ -6,7 +6,7 @@ use std::io::Write;
 
 use serde_json::{Map, Value};
 
-use crate::{connect_to, indent, no_notify, select_window, Arguments, Error, Options};
+use crate::{Arguments, Error, Options, connect_to, indent, no_notify, select_window};
 
 /// Common options that take a value and are used with a declared command.
 const COMMON_VALUES: &[&str] = &["config-dir", "window", "project", "surface", "params"];
@@ -144,22 +144,21 @@ fn convert(name: &str, text: &str, declared: &Value) -> Result<Value, Error> {
                 }
             }
             "boolean" if text == "true" || text == "false" => {
-                return Ok(Value::Bool(text == "true"))
+                return Ok(Value::Bool(text == "true"));
             }
             "boolean" => {}
             "object" | "array" => {
-                if let Ok(value) = serde_json::from_str::<Value>(text) {
-                    if (kind == "object" && value.is_object())
-                        || (kind == "array" && value.is_array())
-                    {
-                        return Ok(value);
-                    }
+                if let Ok(value) = serde_json::from_str::<Value>(text)
+                    && ((kind == "object" && value.is_object())
+                        || (kind == "array" && value.is_array()))
+                {
+                    return Ok(value);
                 }
             }
             other => {
                 return Err(Error::Failed(format!(
                     "parameter --{name} has the unknown type {other}"
-                )))
+                )));
             }
         }
         failures.push(kind);

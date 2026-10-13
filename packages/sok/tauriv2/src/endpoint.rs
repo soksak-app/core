@@ -5,7 +5,7 @@ use std::io::{ErrorKind, Read, Write};
 use std::path::Path;
 
 use serde_json::value::RawValue;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::platform;
 
@@ -49,7 +49,7 @@ pub fn read_endpoint(config_dir: &Path) -> Result<Endpoint, String> {
             return Err(format!(
                 "{} does not exist; the application is not running",
                 file.display()
-            ))
+            ));
         }
         Err(error) => return Err(crate::files::file_error(file.display(), &error)),
     };
@@ -241,10 +241,9 @@ impl Client {
             }
             if let (Some(method), Some(params)) =
                 (message.method.as_deref(), message.params.as_deref())
+                && let Err(error) = notify(method, params)
             {
-                if let Err(error) = notify(method, params) {
-                    return error;
-                }
+                return error;
             }
         }
     }

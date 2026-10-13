@@ -13,18 +13,18 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::mpsc::{sync_channel, RecvError, SyncSender, TryRecvError, TrySendError};
+use std::sync::mpsc::{RecvError, SyncSender, TryRecvError, TrySendError, sync_channel};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
 use std::time::{Duration, Instant};
 
 use wait_timeout::ChildExt;
 
 use crate::application_log::log_error;
-use crate::buffer_bounds::{record_buffer_drop, PendingLines};
+use crate::buffer_bounds::{PendingLines, record_buffer_drop};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
-use crate::platform::{current, PersistentStream};
-use crate::sidecar_reply::{error_of_body, RequestLedger};
+use crate::platform::{PersistentStream, current};
+use crate::sidecar_reply::{RequestLedger, error_of_body};
 use crate::windows::{emit_window, window_data};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -301,13 +301,13 @@ fn send_close_owner_and_shutdown(
             return Err(CloseFailure {
                 text: format!("close owner: {error}"),
                 send_close: true,
-            })
+            });
         }
         Err(error) => {
             return Err(CloseFailure {
                 text: format!("close owner wait: {error}"),
                 send_close: true,
-            })
+            });
         }
     }
     let shutdown_request = format!("{prefix}-shutdown");
@@ -382,7 +382,9 @@ pub fn read_message_line(
 fn log_unfinished_line(sidecar: &str, bytes: usize) {
     crate::application_log::log_info(
         &format!("sidecar {sidecar}"),
-        format!("the output ended in a line of {bytes} bytes without a line break, which is not a message"),
+        format!(
+            "the output ended in a line of {bytes} bytes without a line break, which is not a message"
+        ),
     );
 }
 
@@ -1049,10 +1051,10 @@ impl<O: Owner> Sidecars<O> {
         if self.core.declaration(name).is_none() {
             return Err(format!("sidecar {name} is not declared by any plugin"));
         }
-        if let Some(other) = state.owners.get(surface) {
-            if other.key() != owner.key() {
-                return Err(format!("surface {surface} belongs to another window"));
-            }
+        if let Some(other) = state.owners.get(surface)
+            && other.key() != owner.key()
+        {
+            return Err(format!("surface {surface} belongs to another window"));
         }
         let disconnected = state
             .running
@@ -1072,10 +1074,10 @@ impl<O: Owner> Sidecars<O> {
         let (mut state, started) = Core::ensure(&self.core, state, name)?;
         let restarted = started && state.unannounced_loss.remove(name);
         // The lock was released during the start, so the owner of the surface is checked again.
-        if let Some(other) = state.owners.get(surface) {
-            if other.key() != owner.key() {
-                return Err(format!("surface {surface} belongs to another window"));
-            }
+        if let Some(other) = state.owners.get(surface)
+            && other.key() != owner.key()
+        {
+            return Err(format!("surface {surface} belongs to another window"));
         }
         state.owners.insert(surface.to_string(), owner.clone());
         state
@@ -1217,12 +1219,12 @@ impl<O: Owner> Sidecars<O> {
                                 line.len(),
                                 &limit,
                             );
-                            if let Some(waiting) = state.closing.get_mut(&name) {
-                                if let Some(count) = waiting.get_mut(&surface) {
-                                    *count -= 1;
-                                    if *count == 0 {
-                                        waiting.remove(&surface);
-                                    }
+                            if let Some(waiting) = state.closing.get_mut(&name)
+                                && let Some(count) = waiting.get_mut(&surface)
+                            {
+                                *count -= 1;
+                                if *count == 0 {
+                                    waiting.remove(&surface);
                                 }
                             }
                             continue;
@@ -1340,13 +1342,11 @@ impl<O: Owner> Sidecars<O> {
             Err(failure) => failure.send_close,
         };
         let failure = closed.err();
-        if send_close {
-            if let Err(error) = outbox.send(Outgoing::Close) {
-                log_error(
-                    &format!("sidecar {name}"),
-                    format!("close persistent transport: {error}"),
-                );
-            }
+        if send_close && let Err(error) = outbox.send(Outgoing::Close) {
+            log_error(
+                &format!("sidecar {name}"),
+                format!("close persistent transport: {error}"),
+            );
         }
         match failure {
             None => Ok(()),
@@ -1473,7 +1473,7 @@ impl<O: Owner> Sidecars<O> {
                         Ok(_) => {}
                         Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
                         Err(error) => {
-                            return Err(format!("sidecar {name}: read endpoint: {error}"))
+                            return Err(format!("sidecar {name}: read endpoint: {error}"));
                         }
                     }
                     state = Core::ensure(&self.core, state, &name)?.0;
@@ -1660,13 +1660,11 @@ impl<O: Owner> Sidecars<O> {
                         if let Err(failure) = closed {
                             log_error(&format!("sidecar {name}"), failure.text);
                         }
-                        if send_close {
-                            if let Err(error) = process.outbox.send(Outgoing::Close) {
-                                log_error(
-                                    &format!("sidecar {name}"),
-                                    format!("close persistent transport: {error}"),
-                                );
-                            }
+                        if send_close && let Err(error) = process.outbox.send(Outgoing::Close) {
+                            log_error(
+                                &format!("sidecar {name}"),
+                                format!("close persistent transport: {error}"),
+                            );
                         }
                     }
                     return;
@@ -1913,33 +1911,35 @@ impl<O: Owner> Core<O> {
         let writing = Arc::new(AtomicUsize::new(0));
         let write_writing = Arc::clone(&writing);
 
-        threads.push(Box::new(move || loop {
+        threads.push(Box::new(move || {
             loop {
-                match rx.try_recv() {
+                loop {
+                    match rx.try_recv() {
+                        Ok(Outgoing::Line(line)) => {
+                            if !write_line(&mut stdin, &write_name, &line, &write_writing) {
+                                return;
+                            }
+                        }
+                        Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
+                            write_pending(&state_clone, &write_name, &mut stdin, &write_writing);
+                            return;
+                        }
+                        Err(TryRecvError::Empty) => break,
+                    }
+                }
+                if !write_pending(&state_clone, &write_name, &mut stdin, &write_writing) {
+                    return;
+                }
+                match rx.recv() {
                     Ok(Outgoing::Line(line)) => {
                         if !write_line(&mut stdin, &write_name, &line, &write_writing) {
                             return;
                         }
                     }
-                    Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
+                    Ok(Outgoing::Close) | Err(RecvError) => {
                         write_pending(&state_clone, &write_name, &mut stdin, &write_writing);
                         return;
                     }
-                    Err(TryRecvError::Empty) => break,
-                }
-            }
-            if !write_pending(&state_clone, &write_name, &mut stdin, &write_writing) {
-                return;
-            }
-            match rx.recv() {
-                Ok(Outgoing::Line(line)) => {
-                    if !write_line(&mut stdin, &write_name, &line, &write_writing) {
-                        return;
-                    }
-                }
-                Ok(Outgoing::Close) | Err(RecvError) => {
-                    write_pending(&state_clone, &write_name, &mut stdin, &write_writing);
-                    return;
                 }
             }
         }));
@@ -2241,7 +2241,7 @@ impl<O: Owner> Core<O> {
                             return None;
                         }
                         Ok(MessageLine::TooLong) => {
-                            return Some(format!("message exceeds {MESSAGE_LIMIT} bytes"))
+                            return Some(format!("message exceeds {MESSAGE_LIMIT} bytes"));
                         }
                         Err(error) => {
                             log_error(
@@ -2262,7 +2262,7 @@ impl<O: Owner> Core<O> {
                         None => None,
                         Some(serde_json::Value::String(operation)) => Some(operation.as_str()),
                         Some(_) => {
-                            return Some("invalid message: operation: not a string".to_string())
+                            return Some("invalid message: operation: not a string".to_string());
                         }
                     };
                     if let Some(operation @ ("retained" | "closed-owner" | "shutdown")) = operation
@@ -2293,12 +2293,10 @@ impl<O: Owner> Core<O> {
                             "closed-owner" => {
                                 if let Some(sender) =
                                     waiters.lock().expect("close waiters").remove(&request)
-                                {
-                                    if let Err(std::sync::mpsc::SendError(result)) =
+                                    && let Err(std::sync::mpsc::SendError(result)) =
                                         sender.send(reply.result)
-                                    {
-                                        late_reply(&sidecar, "close-owner", result);
-                                    }
+                                {
+                                    late_reply(&sidecar, "close-owner", result);
                                 }
                             }
                             _ => {
@@ -2306,12 +2304,10 @@ impl<O: Owner> Core<O> {
                                     .lock()
                                     .expect("shutdown waiters")
                                     .remove(&request)
-                                {
-                                    if let Err(std::sync::mpsc::SendError(result)) =
+                                    && let Err(std::sync::mpsc::SendError(result)) =
                                         sender.send(reply.result)
-                                    {
-                                        late_reply(&sidecar, "shutdown", result);
-                                    }
+                                {
+                                    late_reply(&sidecar, "shutdown", result);
                                 }
                             }
                         }
@@ -2379,19 +2375,19 @@ impl<O: Owner> Core<O> {
                         Arc::ptr_eq(&connection.connected, &reader_connected)
                     });
                 if is_current {
-                    if let Some(process) = state.running.remove(&sidecar) {
-                        if violation.is_some() {
-                            owned = process
-                                .surfaces
-                                .iter()
-                                .filter_map(|surface| {
-                                    state
-                                        .owners
-                                        .get(surface)
-                                        .map(|owner| (surface.clone(), owner.clone()))
-                                })
-                                .collect();
-                        }
+                    if let Some(process) = state.running.remove(&sidecar)
+                        && violation.is_some()
+                    {
+                        owned = process
+                            .surfaces
+                            .iter()
+                            .filter_map(|surface| {
+                                state
+                                    .owners
+                                    .get(surface)
+                                    .map(|owner| (surface.clone(), owner.clone()))
+                            })
+                            .collect();
                     }
                     state.unannounced_loss.insert(sidecar.clone());
                     changed = forget_closing(&mut state, &sidecar);
@@ -2527,31 +2523,30 @@ fn await_replaced_service<O: Owner>(core: &Arc<Core<O>>, name: &str) {
 fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
     await_replaced_service(core, name);
     let mut outcome = revive_attempt(core, name);
-    if let Err(reason) = &outcome {
-        if refused_connect(reason, name) {
-            let program = core.declaration(name).map(|(program, _)| program);
-            let endpoint = program
-                .as_deref()
-                .and_then(|program| program.file_name())
-                .and_then(|value| value.to_str())
-                .map(|basename| {
-                    core.config_directory
-                        .join("services")
-                        .join(basename)
-                        .join("endpoint.json")
-                });
-            if let Some(endpoint) = endpoint {
-                if let Err(error) = std::fs::remove_file(&endpoint) {
-                    if error.kind() != std::io::ErrorKind::NotFound {
-                        log_error(
-                            &format!("sidecar {name}"),
-                            format!("remove refused endpoint: {error}"),
-                        );
-                    }
-                }
-            }
-            outcome = revive_attempt(core, name);
+    if let Err(reason) = &outcome
+        && refused_connect(reason, name)
+    {
+        let program = core.declaration(name).map(|(program, _)| program);
+        let endpoint = program
+            .as_deref()
+            .and_then(|program| program.file_name())
+            .and_then(|value| value.to_str())
+            .map(|basename| {
+                core.config_directory
+                    .join("services")
+                    .join(basename)
+                    .join("endpoint.json")
+            });
+        if let Some(endpoint) = endpoint
+            && let Err(error) = std::fs::remove_file(&endpoint)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            log_error(
+                &format!("sidecar {name}"),
+                format!("remove refused endpoint: {error}"),
+            );
         }
+        outcome = revive_attempt(core, name);
     }
     let replaced = core
         .state
@@ -2676,7 +2671,7 @@ fn reply_of(
         _ => {
             return Err(format!(
                 "invalid message: {operation} request is not a non-empty string"
-            ))
+            ));
         }
     };
     let ok = match object.get("ok") {
@@ -2689,7 +2684,7 @@ fn reply_of(
         Some(_) => {
             return Err(format!(
                 "invalid message: {operation} error is not a string"
-            ))
+            ));
         }
     };
     let closed = if operation == "retained" && ok {
@@ -2732,7 +2727,7 @@ fn relay<O: Owner>(
                 return None;
             }
             Ok(MessageLine::TooLong) => {
-                return Some(format!("message exceeds {MESSAGE_LIMIT} bytes"))
+                return Some(format!("message exceeds {MESSAGE_LIMIT} bytes"));
             }
             Err(error) => return Some(format!("read: {error}")),
         }

@@ -334,9 +334,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 app.manage(menu::MenuLanguage(std::sync::Mutex::new(language)));
                 app.set_menu(menu)?;
                 let directory = config_directory(app.handle())?;
-                installed_directory.set(directory.clone()).map_err(|_| {
-                    "the configuration directory of installed plugins is already set"
-                })?;
+                installed_directory.set(directory.clone()).map_err(
+                    |_| "the configuration directory of installed plugins is already set",
+                )?;
                 app.manage(workspace::Workspace::new(directory.clone()));
                 // A stall of the main thread is recorded without a window check (docs/spec/logging.md, stalls). The
                 // watch runs until the process ends.
@@ -393,10 +393,10 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 if let Err(error) = windows::window_new_on_main(app.clone()) {
                     log_error("window new", error);
                 }
-            } else if menu::runs_page_command(id) {
-                if let Err(error) = run_menu_command(app, id) {
-                    log_error(&format!("menu command {id}"), error);
-                }
+            } else if menu::runs_page_command(id)
+                && let Err(error) = run_menu_command(app, id)
+            {
+                log_error(&format!("menu command {id}"), error);
             }
         })
         .invoke_handler(bindings::handler())

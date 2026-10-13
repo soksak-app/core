@@ -150,25 +150,24 @@ impl Fetcher {
                 .call()
                 .map_err(|error| self.failure(location, &error, &timed_out))?;
             let status = response.status().as_u16();
-            if (300..400).contains(&status) {
-                if let Some(target) = response
+            if (300..400).contains(&status)
+                && let Some(target) = response
                     .headers()
                     .get("location")
                     // default: a location that is not text counts as absent, and the status check below reports the redirect as an HTTP error.
                     .and_then(|value| value.to_str().ok())
-                {
-                    let Some(target) = resolve(&current, target) else {
-                        return Err(format!("{location}: redirect to {target} is not https"));
-                    };
-                    if !target.starts_with("https://") {
-                        return Err(format!("{location}: redirect to {target} is not https"));
-                    }
-                    if redirect == MAX_REDIRECTS {
-                        return Err(format!("{location}: more than {MAX_REDIRECTS} redirects"));
-                    }
-                    current = target;
-                    continue;
+            {
+                let Some(target) = resolve(&current, target) else {
+                    return Err(format!("{location}: redirect to {target} is not https"));
+                };
+                if !target.starts_with("https://") {
+                    return Err(format!("{location}: redirect to {target} is not https"));
                 }
+                if redirect == MAX_REDIRECTS {
+                    return Err(format!("{location}: more than {MAX_REDIRECTS} redirects"));
+                }
+                current = target;
+                continue;
             }
             if status != 200 {
                 return Err(format!("{location}: HTTP {status}"));

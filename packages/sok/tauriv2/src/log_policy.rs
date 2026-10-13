@@ -9,7 +9,7 @@
 use std::sync::atomic::{AtomicI32, AtomicU64, Ordering};
 use std::sync::{Mutex, PoisonError};
 
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 pub use crate::event_classes::Class;
 use crate::event_log::{EventLog, Level};

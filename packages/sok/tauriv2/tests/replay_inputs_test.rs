@@ -3,7 +3,7 @@
 //! `replaySessionProblem`.
 
 use serde_json::Value;
-use soksak_sok::replay_inputs::{replay_input_problem, replay_session_problem, ReplayInput};
+use soksak_sok::replay_inputs::{ReplayInput, replay_input_problem, replay_session_problem};
 
 fn cases() -> Value {
     let path = concat!(

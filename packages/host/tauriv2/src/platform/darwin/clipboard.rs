@@ -1,11 +1,11 @@
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_void};
 
 use base64::Engine;
 use serde_json::Value;
 
 use super::super::ClipboardValue;
 
-extern "C" {
+unsafe extern "C" {
     fn sp_clipboard_open(name: *const c_char) -> *mut c_void;
     fn sp_clipboard_close(clipboard: *mut c_void);
     fn sp_clipboard_read_text(clipboard: *mut c_void) -> *mut c_char;

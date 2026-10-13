@@ -6,17 +6,17 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::fetch::{check_location, Fetcher};
+use crate::fetch::{Fetcher, check_location};
 use crate::install::{
-    self, Index, InstalledPlugin, InstalledSidecar, InstalledState, Need, Release, SelectedSidecar,
-    Selection, INSTALLED, INSTALL_FORMAT,
+    self, INSTALL_FORMAT, INSTALLED, Index, InstalledPlugin, InstalledSidecar, InstalledState,
+    Need, Release, SelectedSidecar, Selection,
 };
 use crate::platform;
 use crate::registry::{read_release, release_files};
 use crate::release::{current_platform, print_json, replace_file};
-use crate::{config_dir_of, Error, Options};
+use crate::{Error, Options, config_dir_of};
 
 /// The file in the configuration folder that holds the address of the registry index that installation reads.
 pub const REGISTRY_FILE: &str = "plugins/registry.json";
@@ -210,7 +210,7 @@ pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(InstalledState::empty())
+            return Ok(InstalledState::empty());
         }
         Err(error) => return Err(crate::files::file_error(path.display(), &error)),
     };

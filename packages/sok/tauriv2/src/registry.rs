@@ -4,12 +4,12 @@ use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::path::Path;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
+use crate::Error;
 use crate::install::{self, Index, PluginVersion, RegistryPlugin, Release};
 use crate::release::{hex, print_json, read_json_file, replace_file};
-use crate::Error;
 
 type Validate = fn(&Value) -> Result<(), String>;
 type FileName = fn(&Value) -> Result<String, String>;

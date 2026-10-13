@@ -336,14 +336,70 @@ fn replay_refuses_what_it_cannot_compare() {
     let mut bad_stored = standard_events();
     bad_stored.sidecar[2] = frame("sidecar", 1020, 3, 2, "s1", "ABC");
     let cases = vec![
-        refused("no session", standard_events(), FAKE_REPLAY, "fake", vec![], "sok: session is required\n"),
-        refused("unknown session", standard_events(), FAKE_REPLAY, "fake", vec!["s9"], "sok: replay session s9: the event files hold no event of the layer sidecar for it\n"),
-        refused("no sidecar declares the role", standard_events(), FAKE_REPLAY, "other", vec!["s1"], "sok: replay session s1: no installed sidecar declares the replay role fake\n"),
-        refused("no frame record", no_frame, FAKE_REPLAY, "fake", vec!["s1"], "sok: replay session s1: no frame record to compare\n"),
-        refused("a stored hash is not a hash", bad_stored, FAKE_REPLAY, "fake", vec!["s1"], "sok: replay session s1: sequence 2 layer sidecar: the stored hash is not 64 lowercase hexadecimal characters: \"ABC\"\n"),
-        refused("the executable fails", standard_events(), "#!/bin/sh\necho engine broke >&2\nexit 3\n", "fake", vec!["s1"], "sok: replay session s1: replay.sh exited with status 3: engine broke\n"),
-        refused("the executable prints a line that is not a hash", standard_events(), "#!/bin/sh\necho nope\n", "fake", vec!["s1"], "sok: replay session s1: replay output line 1 is not {\"sequence\": <integer>, \"hash\": <64 lowercase hexadecimal characters>}: nope\n"),
-        refused("the executable prints no hash for a frame record", standard_events(), "#!/bin/sh\ncat >/dev/null\n", "fake", vec!["s1"], "sok: replay session s1: the replay executable reported no hash for the frame record at sequence 2\n"),
+        refused(
+            "no session",
+            standard_events(),
+            FAKE_REPLAY,
+            "fake",
+            vec![],
+            "sok: session is required\n",
+        ),
+        refused(
+            "unknown session",
+            standard_events(),
+            FAKE_REPLAY,
+            "fake",
+            vec!["s9"],
+            "sok: replay session s9: the event files hold no event of the layer sidecar for it\n",
+        ),
+        refused(
+            "no sidecar declares the role",
+            standard_events(),
+            FAKE_REPLAY,
+            "other",
+            vec!["s1"],
+            "sok: replay session s1: no installed sidecar declares the replay role fake\n",
+        ),
+        refused(
+            "no frame record",
+            no_frame,
+            FAKE_REPLAY,
+            "fake",
+            vec!["s1"],
+            "sok: replay session s1: no frame record to compare\n",
+        ),
+        refused(
+            "a stored hash is not a hash",
+            bad_stored,
+            FAKE_REPLAY,
+            "fake",
+            vec!["s1"],
+            "sok: replay session s1: sequence 2 layer sidecar: the stored hash is not 64 lowercase hexadecimal characters: \"ABC\"\n",
+        ),
+        refused(
+            "the executable fails",
+            standard_events(),
+            "#!/bin/sh\necho engine broke >&2\nexit 3\n",
+            "fake",
+            vec!["s1"],
+            "sok: replay session s1: replay.sh exited with status 3: engine broke\n",
+        ),
+        refused(
+            "the executable prints a line that is not a hash",
+            standard_events(),
+            "#!/bin/sh\necho nope\n",
+            "fake",
+            vec!["s1"],
+            "sok: replay session s1: replay output line 1 is not {\"sequence\": <integer>, \"hash\": <64 lowercase hexadecimal characters>}: nope\n",
+        ),
+        refused(
+            "the executable prints no hash for a frame record",
+            standard_events(),
+            "#!/bin/sh\ncat >/dev/null\n",
+            "fake",
+            vec!["s1"],
+            "sok: replay session s1: the replay executable reported no hash for the frame record at sequence 2\n",
+        ),
     ];
     for (index, case) in cases.into_iter().enumerate() {
         let config = replay_config(
@@ -500,12 +556,16 @@ fn replay_refuses_a_page_frame_that_names_no_segment_of_the_session() {
         ),
         (
             "a page frame of a segment the session does not have",
-            |first, _| first.page[0] = first.page[0].replacen(r#""segment":"b1""#, r#""segment":"b9""#, 1),
+            |first, _| {
+                first.page[0] = first.page[0].replacen(r#""segment":"b1""#, r#""segment":"b9""#, 1)
+            },
             "sok: replay session s1: the page frame record at sequence 2 names the segment b9, which the session does not have\n",
         ),
         (
             "a page frame whose segment is not text",
-            |first, _| first.page[0] = first.page[0].replacen(r#""segment":"b1""#, r#""segment":7"#, 1),
+            |first, _| {
+                first.page[0] = first.page[0].replacen(r#""segment":"b1""#, r#""segment":7"#, 1)
+            },
             "sok: replay session s1: the page frame record at sequence 2 has a fields.segment that is not text\n",
         ),
         (
@@ -542,8 +602,7 @@ fn replay_refuses_a_segment_whose_inputs_break_the_rules_of_a_session() {
     events.sidecar.remove(0);
     let config = replay_config("replay-session-rules", &events, FAKE_REPLAY, "fake");
     let (_, stderr, code) = run_replay(&config, &["s1"]);
-    let want =
-        "sok: replay session s1: segment b1: input 1 has sequence 2 and the sequence after 0 is 1\n";
+    let want = "sok: replay session s1: segment b1: input 1 has sequence 2 and the sequence after 0 is 1\n";
     assert!(
         code == 1 && stderr == want,
         "no theme: code {code} stderr {stderr:?}, want {want:?}"

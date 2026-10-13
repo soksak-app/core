@@ -4,7 +4,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use soksak_host_tauriv2::stall_watch::{start_stall_watch, StallWatchOptions};
+use soksak_host_tauriv2::stall_watch::{StallWatchOptions, start_stall_watch};
 
 type Recorded = Arc<Mutex<Vec<(String, serde_json::Value)>>>;
 

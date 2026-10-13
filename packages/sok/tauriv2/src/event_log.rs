@@ -14,17 +14,17 @@ use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::mpsc::{sync_channel, Receiver, RecvTimeoutError, SyncSender, TrySendError};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use serde_json::json;
-use serde_json::value::{to_raw_value, RawValue};
+use serde_json::value::{RawValue, to_raw_value};
 
-use crate::event_bounds::{cut_text, Fields, EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES};
-use crate::event_classes::{class_of, Class};
+use crate::event_bounds::{EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES, Fields, cut_text};
+use crate::event_classes::{Class, class_of};
 use crate::log_policy::Gate;
 
 /// The schema number of the lines that this writer writes. Schema 2 adds `mono_ns` to every line.
@@ -478,14 +478,16 @@ impl EventLog {
     ) -> bool {
         if let Some(bad) = cids.iter().find(|cid| !valid_cid(cid)) {
             self.count_loss(Channel::of(level), 1, event.len() as u64);
-            eprintln!("event writer: {event} has the correlation identifier {bad:?}, which is empty or holds a quote, a backslash or a control character");
+            eprintln!(
+                "event writer: {event} has the correlation identifier {bad:?}, which is empty or holds a quote, a backslash or a control character"
+            );
             return false;
         }
         // A closed gate serializes nothing; an event the catalog does not declare has no class and no gate.
-        if let Some(class) = self.class(event) {
-            if !self.gate(class, level) {
-                return false;
-            }
+        if let Some(class) = self.class(event)
+            && !self.gate(class, level)
+        {
+            return false;
         }
         if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
             self.count_loss(Channel::of(level), 1, event.len() as u64);
@@ -544,10 +546,10 @@ impl EventLog {
                 "the event {event:?} does not start with its layer {layer:?}"
             ));
         }
-        if let Some(class) = self.class(event) {
-            if !self.gate(class, level) {
-                return Ok(false);
-            }
+        if let Some(class) = self.class(event)
+            && !self.gate(class, level)
+        {
+            return Ok(false);
         }
         if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
             self.count_loss(Channel::of(level), 1, event.len() as u64);
@@ -589,10 +591,10 @@ impl EventLog {
         }
         // A closed gate stores nothing and counts the event.
         let class = self.class(event);
-        if let Some(class) = class {
-            if !self.gate(class, level) {
-                return false;
-            }
+        if let Some(class) = class
+            && !self.gate(class, level)
+        {
+            return false;
         }
         let pending = Pending {
             ts_us,
@@ -1006,10 +1008,10 @@ impl Output {
         }
         let file = &mut self.files[channel.index()];
         file.generation = generation;
-        if let Some(full) = file.file.replace(next) {
-            if let Err(error) = full.sync_all() {
-                eprintln!("event writer: rotation could not sync the full file: {error}");
-            }
+        if let Some(full) = file.file.replace(next)
+            && let Err(error) = full.sync_all()
+        {
+            eprintln!("event writer: rotation could not sync the full file: {error}");
         }
         Some(generation)
     }

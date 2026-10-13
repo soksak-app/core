@@ -8,8 +8,8 @@ use std::io::Write;
 use std::path::Path;
 
 use log_support::*;
-use serde_json::{json, Value};
-use soksak_sok::log_query::{log_row_line, parse_log_query, query_logs, LogPage};
+use serde_json::{Value, json};
+use soksak_sok::log_query::{LogPage, log_row_line, parse_log_query, query_logs};
 
 fn run_query(config: &Path, params: &str) -> LogPage {
     let query = parse_log_query(params).unwrap_or_else(|error| panic!("{params}: {error}"));
@@ -496,10 +496,10 @@ fn matches(event: &BigEvent, params: &Value) -> bool {
     };
     let text = |name: &str| params.get(name).and_then(Value::as_str);
     let number = |name: &str| params.get(name).and_then(Value::as_i64);
-    if let Some(level) = text("level") {
-        if rank(&event.level) > rank(level) {
-            return false;
-        }
+    if let Some(level) = text("level")
+        && rank(&event.level) > rank(level)
+    {
+        return false;
     }
     text("layer").is_none_or(|layer| event.layer == layer)
         && text("event").is_none_or(|name| event.event == name)
@@ -588,7 +588,10 @@ fn query_reads_only_the_segments_that_can_hold_a_row() {
     for (name, params, reads, rows) in cases {
         let page = run_query(&config, &params);
         assert!(
-            page.scanned.segments == 3 && page.scanned.read <= reads && (name != "text" || page.scanned.read == 3) && page.rows.len() == rows,
+            page.scanned.segments == 3
+                && page.scanned.read <= reads
+                && (name != "text" || page.scanned.read == 3)
+                && page.rows.len() == rows,
             "{name}: scanned {:?} with {} rows, want at most {reads} segments of 3 read and {rows} rows",
             page.scanned,
             page.rows.len()

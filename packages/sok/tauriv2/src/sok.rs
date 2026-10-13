@@ -36,7 +36,7 @@ pub mod replay;
 pub mod replay_inputs;
 pub mod routine;
 pub mod version;
-pub use logged::{logged, run_logged, start_tool_event_log, Command};
+pub use logged::{Command, logged, run_logged, start_tool_event_log};
 pub use release::current_platform;
 pub use routine::PANIC_STATUS;
 
@@ -371,10 +371,11 @@ fn plan(
             match kind.as_str() {
                 "pointer" => {
                     let phase = a.required("phase")?;
-                    if let Some(button) = a.values.get("button") {
-                        if button != "left" && button != "right" {
-                            return Err(usage!("--button must be left or right"));
-                        }
+                    if let Some(button) = a.values.get("button")
+                        && button != "left"
+                        && button != "right"
+                    {
+                        return Err(usage!("--button must be left or right"));
                     }
                     if a.flag("activate") && phase != "move" {
                         return Err(usage!("--activate applies to --phase move"));
@@ -465,10 +466,10 @@ fn select_window(a: &Arguments, client: &mut Client) -> Result<String, Error> {
                 continue;
             };
             // default: a window whose project path cannot be resolved cannot be the target; no match returns the error that lists the windows.
-            if std::fs::canonicalize(open).ok().as_deref() == Some(target.as_path()) {
-                if let Some(name) = entry["window"].as_str() {
-                    return Ok(name.to_string());
-                }
+            if std::fs::canonicalize(open).ok().as_deref() == Some(target.as_path())
+                && let Some(name) = entry["window"].as_str()
+            {
+                return Ok(name.to_string());
             }
         }
         return Err(Error::Failed(format!(

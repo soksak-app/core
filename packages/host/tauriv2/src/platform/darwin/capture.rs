@@ -1,8 +1,8 @@
 //! The window capture calls of native/darwin.
 
-use std::ffi::{c_char, c_int, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_int};
 
-extern "C" {
+unsafe extern "C" {
     fn sp_capture_open(window_number: isize, display: bool, error: *mut *mut c_char) -> bool;
     fn sp_capture_start(directory: *const c_char, error: *mut *mut c_char) -> bool;
     fn sp_capture_error() -> *const c_char;
@@ -12,7 +12,7 @@ extern "C" {
     fn sp_capture_longest_gap() -> f64;
     fn sp_capture_clock() -> f64;
     fn sp_capture_still(window_number: isize, path: *const c_char, error: *mut *mut c_char)
-        -> bool;
+    -> bool;
     fn sp_notifications_delivered(
         done: extern "C" fn(context: *mut std::ffi::c_void, json: *const c_char),
         context: *mut std::ffi::c_void,

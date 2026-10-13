@@ -1,6 +1,6 @@
 //! Checks the owning surface check of document region requests and the document region list of a window.
 
-use soksak_host_tauriv2::documents::{check, go_action, Documents, Key, Request};
+use soksak_host_tauriv2::documents::{Documents, Key, Request, check, go_action};
 
 fn request(surface: &str, document: &str) -> Request {
     serde_json::from_value(serde_json::json!({"surface": surface, "document": document})).unwrap()

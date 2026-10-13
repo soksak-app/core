@@ -9,11 +9,11 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use serde_json::value::{to_raw_value, RawValue};
-use soksak_sok::event_classes::{class_of, Class};
+use serde_json::value::{RawValue, to_raw_value};
+use soksak_sok::event_classes::{Class, class_of};
 use soksak_sok::event_log::{Options as WriterOptions, PullSink};
 
-pub use soksak_sok::event_log::{valid_cid, Channel, EventLog, Level, RelayedEvent, SCHEMA};
+pub use soksak_sok::event_log::{Channel, EventLog, Level, RelayedEvent, SCHEMA, valid_cid};
 
 use crate::bounds::Fields;
 
@@ -341,24 +341,26 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, RelayedEvent), (usize, Strin
     if let Some(bad) = cids.iter().find(|cid| !valid_cid(cid)) {
         return Err((
             total,
-            format!("the cid {bad:?} of {name} is empty or holds a quote, a backslash or a control character"),
+            format!(
+                "the cid {bad:?} of {name} is empty or holds a quote, a backslash or a control character"
+            ),
         ));
     }
     let mono_ns = u64::from_ne_bytes(body[8..16].try_into().expect("eight bytes"));
     if mono_ns == 0 {
         return Err((total, format!("the mono_ns of {name} is 0")));
     }
-    if let Some(declared) = class_of(&name) {
-        if declared != given {
-            return Err((
-                total,
-                format!(
-                    "the record of {name} has the class {}, and the catalog declares {}",
-                    given.as_str(),
-                    declared.as_str()
-                ),
-            ));
-        }
+    if let Some(declared) = class_of(&name)
+        && declared != given
+    {
+        return Err((
+            total,
+            format!(
+                "the record of {name} has the class {}, and the catalog declares {}",
+                given.as_str(),
+                declared.as_str()
+            ),
+        ));
     }
     let fields = &body[NATIVE_HEADER_BYTES + name_length + cids_length..];
     let fields = std::str::from_utf8(fields)

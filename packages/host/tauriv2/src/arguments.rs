@@ -29,10 +29,10 @@ impl<'a, R: tauri::Runtime, T: DeserializeOwned> tauri::ipc::CommandArg<'a, R> f
                     command.name,
                     kind(other)
                 )
-                .into())
+                .into());
             }
             tauri::ipc::InvokeBody::Raw(_) => {
-                return Err(format!("arguments of {} must be JSON", command.name).into())
+                return Err(format!("arguments of {} must be JSON", command.name).into());
             }
         };
         decode(command.key, value).map(Argument).map_err(Into::into)
