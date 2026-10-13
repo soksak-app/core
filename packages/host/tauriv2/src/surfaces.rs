@@ -677,17 +677,15 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             let handle = if let Some(handle) = existing {
                 handle
             } else {
-                let handle = create_logical_surface_handle(
-                    || exposure::on_main(window, move || platform.create_surface(main_handle)),
-                    &s.id,
-                )?;
+                let names = Arc::clone(&views.0);
+                let id = s.id.clone();
+                let handle = exposure::on_main(window, move || {
+                    create_named_surface(&names, &id, || platform.create_surface(main_handle))
+                })?;
                 surface_hosts
                     .lock()
                     .map_err(|e| e.to_string())?
                     .insert(s.id.clone(), handle);
-                if let Ok(mut map) = views.0.lock() {
-                    map.insert(handle, s.id.clone());
-                }
                 crate::performance::surface("created", &s.id, None);
                 handle
             };
@@ -1023,6 +1021,21 @@ pub enum WindowNative {
     Document(Handle),
     Image(Handle),
     Surface(Handle),
+}
+
+/// Creates the native surface of `id` and names it in `named` in one step of the main thread, so a reading of the native
+/// surfaces of the window in another step never finds the surface without its name. A failed creation names nothing.
+pub fn create_named_surface(
+    named: &Mutex<HashMap<Handle, String>>,
+    id: &str,
+    create: impl FnOnce() -> Result<Handle, String>,
+) -> Result<Handle, String> {
+    let handle = create_logical_surface_handle(create, id)?;
+    named
+        .lock()
+        .map_err(|e| e.to_string())?
+        .insert(handle, id.to_string());
+    Ok(handle)
 }
 
 /// Closes the native surface `handle` and then forgets its name in `named`, in one step of the main thread, so a

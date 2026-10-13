@@ -9,7 +9,8 @@ use soksak_host_tauriv2::documents::Documents;
 use soksak_host_tauriv2::exposure::native_failure;
 use soksak_host_tauriv2::images::Images;
 use soksak_host_tauriv2::surfaces::{
-    close_named_surface, close_window_surfaces, take_removed_surfaces, WindowNative,
+    close_named_surface, close_window_surfaces, create_named_surface, take_removed_surfaces,
+    WindowNative,
 };
 use soksak_host_tauriv2::windows::{use_owner, MainStep, NativeFailure};
 
@@ -215,4 +216,22 @@ fn a_removed_surface_keeps_its_name_until_its_native_surface_is_closed() {
     let failed = close_named_surface(&named, 8, |_| Err("close failed".to_string()));
     assert_eq!(failed, Err("close failed".to_string()));
     assert!(named.lock().unwrap().is_empty());
+}
+
+// contract: surfaces.sync.name-outlives-native-surface
+#[test]
+fn a_created_surface_has_its_name_when_its_native_surface_exists() {
+    let named = Mutex::new(HashMap::new());
+    let handle = create_named_surface(&named, "tab-3", || Ok(9)).unwrap();
+    assert_eq!(handle, 9);
+    assert_eq!(named.lock().unwrap().get(&9), Some(&"tab-3".to_string()));
+    // A failed creation names nothing and states the surface.
+    let failed = create_named_surface(&named, "tab-4", || Err("no window".to_string()));
+    assert_eq!(failed, Err("surface tab-4: create: no window".to_string()));
+    let nil = create_named_surface(&named, "tab-5", || Ok(0));
+    assert_eq!(
+        nil,
+        Err("surface tab-5: create returned a nil handle".to_string())
+    );
+    assert_eq!(named.lock().unwrap().len(), 1);
 }
