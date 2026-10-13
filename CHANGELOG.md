@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.55.5: the terminal pixel helpers of the window checks wait until the image region presents the frame that a screen read names, and the specification names the `frame` of the screen event and of `terminal.screen.read`.
 - F164.3: the stall watch of the Wails host starts through `routine.Go`.
 - F168.1: the class table generator writes the let chain of edition 2024.
 - F170: `make push-check` runs the commit, structure, format and clippy checks of CI, and the pre-push hook runs it.

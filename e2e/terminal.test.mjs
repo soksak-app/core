@@ -1536,14 +1536,14 @@ for (const app of Object.values(APPS)) {
     const released = metrics.selectionReleases;
     await s.pointer(viewX + 0.5 * metrics.cellWidth, top + 0.5 * metrics.cellHeight, "down", { button: "left" });
     // A selection covers a cell only when the pointer passes the horizontal middle of the cell (docs/spec/terminal-runtime.md). Dragging up to just before the middle of the fourth cell
-    // selects the first three cells of the last row, and passing the middle selects four cells. The sidecar handles drags in order, so the answer of a screen read comes
-    // after it reflects the selection. The selection is visible only by color, so it is measured in pixels.
+    // selects the first three cells of the last row, and passing the middle selects four cells. The sidecar handles drags in order, so a screen read after a drag
+    // names the frame that shows the selection, and cellBackgrounds reads the pixels after that frame is presented. The selection is visible only by color, so it is
+    // measured in pixels.
     const selection = await selectionBackground(s);
     const last = metrics.rows - 1;
     const below = top + metrics.rows * metrics.cellHeight + padding / 2;
     for (const [column, expected] of [[3.4, [true, true, true, false]], [3.6, [true, true, true, true]]]) {
       await s.pointer(viewX + column * metrics.cellWidth, below, "drag", { button: "left" });
-      await s.run("terminal.screen.read", {}, surface);
       const shown = await cellBackgrounds(s, surface, [0, 1, 2, 3].map((col) => ({ col, row: last })));
       assert.deepEqual(shown.map((sample) => isColor(sample, selection)), expected,
         `a drag into the bottom padding to column ${column} selected other cells of the last row: ${JSON.stringify(shown)} ` +

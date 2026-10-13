@@ -89,10 +89,29 @@ export async function setMeasuredBackground(session, surface) {
 }
 
 /**
- * Reads the background pixel of every cell in the displayed window frame. A screen cell of the page carries no color, so a state that is visible only by color, such as a selection,
+ * Reads the screen of the terminal and waits until its image region presents the frame that shows that screen: the
+ * `frame` of the screen read names it ({generation, raster, sequence}), and `host.window` reports the presented frame of
+ * each region. A pixel read after it shows the screen of the read, not an earlier frame. Returns the screen.
+ */
+export async function presentedScreen(session, surface) {
+  const screen = await session.run("terminal.screen.read", {}, surface);
+  const frame = screen?.frame;
+  assert.ok(frame && Number.isInteger(frame.generation) && Number.isInteger(frame.raster) && Number.isInteger(frame.sequence),
+    `the screen read of ${surface} names no frame: ${JSON.stringify(frame)}`);
+  await session.until("host.window", (host) => host.regions.some((region) => region.surface === surface &&
+    region.name === "view" && region.presented && region.presented.generation === frame.generation &&
+    region.presented.raster === frame.raster && region.presented.sequence >= frame.sequence),
+  `the image region of ${surface} did not present frame ${JSON.stringify(frame)}`);
+  return screen;
+}
+
+/**
+ * Reads the background pixel of every cell in the displayed window frame, after the image region presents the frame that
+ * shows the current screen (presentedScreen). A screen cell of the page carries no color, so a state that is visible only by color, such as a selection,
  * is measured by pixels. It reads near the upper left corner of the cell to avoid the glyph strokes. cells is a list of {col, row}.
  */
 export async function cellBackgrounds(session, surface, cells) {
+  await presentedScreen(session, surface);
   await session.request("diagnostics.capture.start", {});
   const { displayed } = await session.presented();
   const { frames: dir } = await session.request("diagnostics.capture.stop", { after: displayed });

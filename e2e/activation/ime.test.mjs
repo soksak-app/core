@@ -11,15 +11,16 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
-import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
+import { ensureTerminals, presentedScreen, readScreenUntil } from "../terminal-screen.mjs";
 
 const ABC = "com.apple.keylayout.ABC";
 const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
 
 // Measures the ratio of pixels that differ from the surface background in the cursor cell and the cell to its right. The capture does not bring the window to the front.
 async function cursorCellCoverage(s, surface, offset = 0) {
-  // The screen.read reply carries the current cursor into terminal.cursor.
-  await s.run("terminal.screen.read", {}, surface);
+  // The screen read carries the current cursor into terminal.cursor, and the pixels are read after the frame of that screen
+  // is presented.
+  await presentedScreen(s, surface);
   await s.request("diagnostics.capture.start", {});
   const displayed = await s.presented();
   const { frames: frameDir } = await s.request("diagnostics.capture.stop", { after: displayed.displayed });

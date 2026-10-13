@@ -98,7 +98,7 @@ The page also sends every left-button press, movement while pressed, and release
 
 ### Screen message
 
-The `screen` event from the sidecar to the page carries the complete drawn screen, so the page computes the [screen hash](replay.md#screen-hash) from the message alone. The page draws no cells; the sidecar draws the raster, and the cells of the message are the screen that the raster shows. The reply of `terminal.screen.read` is the rows of those cells.
+The `screen` event from the sidecar to the page carries the complete drawn screen, so the page computes the [screen hash](replay.md#screen-hash) from the message alone. The page draws no cells; the sidecar draws the raster, and the cells of the message are the screen that the raster shows. The reply of `terminal.screen.read` is `{rows, frame}`: the rows of those cells, and the `frame` of the event, which names the frame that shows them ([sidecars](sidecars.md)).
 
 | Member | Form |
 | --- | --- |

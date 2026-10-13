@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.55.5: window check의 terminal pixel helper가 image region이 screen read가 가리키는 frame을 표시할 때까지 기다리고, 명세가 screen event와 `terminal.screen.read`의 `frame`을 적는다.
 - F164.3: Wails host의 stall watch가 `routine.Go`로 시작한다.
 - F168.1: class table generator가 edition 2024의 let chain을 쓴다.
 - F170: `make push-check`가 CI의 commit, 구조, format, clippy 검사를 실행하고, pre-push hook이 그것을 실행한다.

@@ -98,7 +98,7 @@ Host는 service 연결을 한 줄씩 읽고 각 줄에 stdio transport의 [메�
 
 ### 화면 메시지
 
-사이드카가 페이지에 보내는 `screen` 이벤트는 그려진 화면 전체를 담으므로 페이지는 메시지만으로 [화면 hash](replay.ko.md#화면-hash)를 계산한다. 페이지는 칸을 그리지 않는다. 래스터는 사이드카가 그리며, 메시지의 칸은 래스터가 보여 주는 화면이다. `terminal.screen.read`의 응답은 그 칸의 행이다.
+사이드카가 페이지에 보내는 `screen` 이벤트는 그려진 화면 전체를 담으므로 페이지는 메시지만으로 [화면 hash](replay.ko.md#화면-hash)를 계산한다. 페이지는 칸을 그리지 않는다. 래스터는 사이드카가 그리며, 메시지의 칸은 래스터가 보여 주는 화면이다. `terminal.screen.read`의 응답은 `{rows, frame}`이다: 그 칸의 행과, 그 행을 보이는 frame을 가리키는 event의 `frame`([사이드카](sidecars.ko.md)).
 
 | 멤버 | 형식 |
 | --- | --- |
