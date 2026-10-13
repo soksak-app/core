@@ -109,6 +109,28 @@ func TestVersionRangesAcceptExactCaretTildeAndBoundedForms(t *testing.T) {
 	}
 }
 
+// contract: install.version.ranges-and-order
+func TestVersionsAndRangesRefuseTheFormsThatTheLibraryAccepts(t *testing.T) {
+	for _, good := range []string{"0.0.0", "4294967295.4294967295.4294967295"} {
+		if _, err := sok.ParseVersion(good); err != nil {
+			t.Fatalf("version %s: %v", good, err)
+		}
+	}
+	for _, bad := range []string{"1.2.3-beta", "1.2.3+build", "v1.2.3", "1.2", "1.2.3.4", "01.2.3", "1.02.3", "1.2.x", "1.2.3 ", "4294967296.0.0"} {
+		if _, err := sok.ParseVersion(bad); err == nil || !strings.Contains(err.Error(), "invalid version") {
+			t.Fatalf("version %q: %v", bad, err)
+		}
+	}
+	for _, bad := range []string{"1.x", "~>1.2", "1.2.3 - 2.3.4", ">1.2.3", "<2.0.0", "!=1.2.3", "=1.2.3", "1.2.3, 1.2.4", "^1.2.3 || ^2.0.0", "*.*.*", "x", "~1.2.3-beta", ">=4294967296.0.0", "^4294967296.0.0", ">=1.0.0<2.0.0"} {
+		if _, err := sok.ParseRange(bad); err == nil || !strings.Contains(err.Error(), "invalid version") {
+			t.Fatalf("range %q: %v", bad, err)
+		}
+	}
+	if sok.Satisfies("1.2.3-beta", "*") || sok.Satisfies("1.2.3", "1.x") {
+		t.Fatal("a refused version or range is satisfied")
+	}
+}
+
 // contract: install.package-json.fields-and-manifest
 func TestPackageJSONDeclaresVersionCoreRangeAndFilesAndTheManifestDeclaresSidecarRanges(t *testing.T) {
 	text := `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},

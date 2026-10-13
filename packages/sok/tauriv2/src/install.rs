@@ -5,6 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -29,22 +30,16 @@ pub const PLATFORMS: [&str; 6] = [
 
 const DESCRIPTION_MAX: usize = 200;
 
-/// A `x.y.z` version. Each part is in the u32 range, so computing the upper bound of a range does not overflow.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Version(pub [u64; 3]);
-
-impl std::fmt::Display for Version {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}.{}.{}", self.0[0], self.0[1], self.0[2])
-    }
-}
+/// The largest part of a version (docs/spec/installation.md: a version part is at most 4294967295).
+const MAX_PART: u64 = u32::MAX as u64;
 
 /// Writes a value as JSON text so that an error text shows the received value unchanged.
 fn quote(value: &Value) -> String {
     value.to_string()
 }
 
-/// Reads a version of three numbers joined by dots. It rejects a leading 0 and a number over u32.
+/// Reads an `x.y.z` version with the library. The library accepts forms beyond `x.y.z`, so a pre-release, build
+/// metadata, a `v` prefix, a leading zero, another number of parts and a part above 4294967295 are refused here.
 pub fn parse_version(text: &str) -> Result<Version, String> {
     let invalid = || {
         format!(
@@ -52,25 +47,22 @@ pub fn parse_version(text: &str) -> Result<Version, String> {
             quote(&Value::from(text))
         )
     };
-    let parts: Vec<&str> = text.split('.').collect();
-    if parts.len() != 3 {
+    let version = Version::parse(text).map_err(|_| invalid())?;
+    if !version.pre.is_empty()
+        || !version.build.is_empty()
+        || version.to_string() != text
+        || [version.major, version.minor, version.patch]
+            .iter()
+            .any(|part| *part > MAX_PART)
+    {
         return Err(invalid());
     }
-    let mut version = [0u64; 3];
-    for (i, part) in parts.iter().enumerate() {
-        if part.is_empty()
-            || !part.bytes().all(|b| b.is_ascii_digit())
-            || (part.len() > 1 && part.starts_with('0'))
-        {
-            return Err(invalid());
-        }
-        version[i] = u64::from(part.parse::<u32>().map_err(|_| invalid())?);
-    }
-    Ok(Version(version))
+    Ok(version)
 }
 
-/// An inclusive lower bound min and an exclusive upper bound below.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// An inclusive lower bound min and an exclusive upper bound below. The bounds are the forms of
+/// docs/spec/installation.md, and the versions are compared with the library.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Range {
     pub min: Version,
     /// The exclusive upper bound. None means there is no upper bound.
@@ -79,16 +71,17 @@ pub struct Range {
 
 impl Range {
     /// Whether the version is inside the range.
-    pub fn contains(&self, version: Version) -> bool {
-        version >= self.min && self.below.is_none_or(|below| version < below)
+    pub fn contains(&self, version: &Version) -> bool {
+        version >= &self.min && self.below.as_ref().is_none_or(|below| version < below)
     }
 }
 
 /// Reads the ranges `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z` and `>=x.y.z <a.b.c`. `*` is `>=0.0.0`, that is, every version.
+/// The forms are matched here before the versions of a form are read by parse_version.
 pub fn parse_range(text: &str) -> Result<Range, String> {
     if text == "*" {
         return Ok(Range {
-            min: Version([0, 0, 0]),
+            min: Version::new(0, 0, 0),
             below: None,
         });
     }
@@ -117,29 +110,29 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
     } else {
         ""
     };
-    let Version([major, minor, patch]) = parse_version(&text[operator.len()..]).map_err(|_| {
+    let min = parse_version(&text[operator.len()..]).map_err(|_| {
         format!(
             "invalid version range {}: expected *, x.y.z, ^x.y.z, ~x.y.z, >=x.y.z or >=x.y.z <a.b.c",
             quote(&Value::from(text))
         )
     })?;
-    let min = Version([major, minor, patch]);
+    let (major, minor, patch) = (min.major, min.minor, min.patch);
     let below = match operator {
-        "" => [major, minor, patch + 1],
-        "~" => [major, minor + 1, 0],
-        _ if major > 0 => [major + 1, 0, 0],
-        _ if minor > 0 => [0, minor + 1, 0],
-        _ => [0, 0, patch + 1],
+        "" => Version::new(major, minor, patch + 1),
+        "~" => Version::new(major, minor + 1, 0),
+        _ if major > 0 => Version::new(major + 1, 0, 0),
+        _ if minor > 0 => Version::new(0, minor + 1, 0),
+        _ => Version::new(0, 0, patch + 1),
     };
     Ok(Range {
         min,
-        below: Some(Version(below)),
+        below: Some(below),
     })
 }
 
 /// Whether the version is inside the range. Both must be values that were already checked.
 pub fn satisfies(version: &str, range: &str) -> bool {
-    matches!((parse_version(version), parse_range(range)), (Ok(v), Ok(r)) if r.contains(v))
+    matches!((parse_version(version), parse_range(range)), (Ok(v), Ok(r)) if r.contains(&v))
 }
 
 fn is_lower_word(text: &str) -> bool {

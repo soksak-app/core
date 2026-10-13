@@ -112,6 +112,49 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
     }
 }
 
+// contract: install.version.ranges-and-order
+#[test]
+fn versions_and_ranges_refuse_the_forms_that_the_library_accepts() {
+    for good in ["0.0.0", "4294967295.4294967295.4294967295"] {
+        install::parse_version(good).expect(good);
+    }
+    for bad in [
+        "1.2.3-beta",
+        "1.2.3+build",
+        "v1.2.3",
+        "1.2",
+        "1.2.3.4",
+        "01.2.3",
+        "1.02.3",
+        "1.2.x",
+        "1.2.3 ",
+        "4294967296.0.0",
+    ] {
+        rejects(install::parse_version(bad), "invalid version");
+    }
+    for bad in [
+        "1.x",
+        "~>1.2",
+        "1.2.3 - 2.3.4",
+        ">1.2.3",
+        "<2.0.0",
+        "!=1.2.3",
+        "=1.2.3",
+        "1.2.3, 1.2.4",
+        "^1.2.3 || ^2.0.0",
+        "*.*.*",
+        "x",
+        "~1.2.3-beta",
+        ">=4294967296.0.0",
+        "^4294967296.0.0",
+        ">=1.0.0<2.0.0",
+    ] {
+        rejects(install::parse_range(bad), "invalid version");
+    }
+    assert!(!install::satisfies("1.2.3-beta", "*"));
+    assert!(!install::satisfies("1.2.3", "1.x"));
+}
+
 // contract: install.package-json.fields-and-manifest
 #[test]
 fn package_json_declares_version_core_range_and_files_and_the_manifest_declares_sidecar_ranges() {

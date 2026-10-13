@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F166.3.1: Go와 Rust의 `sok` package가 version을 `github.com/Masterminds/semver/v3`와 crate `semver`로 읽고, library가 기본으로 받는 형태를 포함해 명세가 적지 않은 형태를 거부한다.
 - F114, F161.49: 닫았다.
 - F160.12, F160.14, F160.16, F154.3, F154: agent guidance의 검증 규칙에 따라 단위 Red와 Green으로 닫았다. 기다리던 실행은 돌리지 않는다.
 - F166: 애플리케이션 실행만 기다리던 17개 항목이 agent guidance의 검증 규칙에 따라 상위 항목의 단위 Red와 Green으로 완료되었고, 아래 항목이 모두 완료된 상위 항목 13개를 닫았다. 그 window check는 추적된 채 남고 실행하지 않았다.

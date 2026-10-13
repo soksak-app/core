@@ -3246,6 +3246,7 @@ dependencies = [
  "memchr",
  "rcgen",
  "rustls",
+ "semver",
  "serde",
  "serde_json",
  "sha2",

@@ -9,10 +9,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	semver "github.com/Masterminds/semver/v3"
 )
 
 // InstallFormat is the format number of the registry index.
@@ -30,23 +33,8 @@ var Platforms = []string{"darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64
 
 const descriptionMax = 200
 
-// Version is an `x.y.z` version.
-type Version [3]uint64
-
-func (v Version) String() string { return fmt.Sprintf("%d.%d.%d", v[0], v[1], v[2]) }
-
-// Compare returns a negative number when v is before o, 0 when they are equal and a positive number when v is after o.
-func (v Version) Compare(o Version) int {
-	for i := range 3 {
-		if v[i] != o[i] {
-			if v[i] < o[i] {
-				return -1
-			}
-			return 1
-		}
-	}
-	return 0
-}
+// maxPart is the largest part of a version (docs/spec/installation.md: a version part is at most 4294967295).
+const maxPart = math.MaxUint32
 
 // quote writes the value as JSON text. It shows a value taken from an error text unchanged.
 func quote(value any) string {
@@ -59,44 +47,35 @@ func quote(value any) string {
 	return strings.TrimSuffix(out.String(), "\n")
 }
 
-// ParseVersion reads a version of three numbers joined by dots. It rejects leading zeros and numbers above uint32, so
-// the computation of the upper bound of a range does not overflow.
-func ParseVersion(text string) (Version, error) {
-	var v Version
-	parts := strings.Split(text, ".")
-	if len(parts) != 3 {
-		return v, fmt.Errorf("invalid version %s: expected x.y.z", quote(text))
-	}
-	for i, part := range parts {
-		if part == "" || strings.Trim(part, "0123456789") != "" || (len(part) > 1 && part[0] == '0') {
-			return v, fmt.Errorf("invalid version %s: expected x.y.z", quote(text))
-		}
-		n, err := strconv.ParseUint(part, 10, 32)
-		if err != nil {
-			return v, fmt.Errorf("invalid version %s: expected x.y.z", quote(text))
-		}
-		v[i] = n
+// ParseVersion reads an `x.y.z` version with the library. The library reads the text; the specification forms that
+// it accepts beyond `x.y.z` are refused here: a pre-release, build metadata, a `v` prefix, a leading zero, another
+// number of parts and a part above 4294967295. A refused text reports the same error for each of them.
+func ParseVersion(text string) (*semver.Version, error) {
+	v, err := semver.StrictNewVersion(text)
+	if err != nil || v.Prerelease() != "" || v.Metadata() != "" || v.String() != text ||
+		v.Major() > maxPart || v.Minor() > maxPart || v.Patch() > maxPart {
+		return nil, fmt.Errorf("invalid version %s: expected x.y.z", quote(text))
 	}
 	return v, nil
 }
 
 // Range is the inclusive lower bound Min and the exclusive upper bound Below. When Below is nil, there is no upper
-// bound.
+// bound. The bounds are the forms of docs/spec/installation.md, and the versions are compared with the library.
 type Range struct {
-	Min   Version
-	Below *Version
+	Min   *semver.Version
+	Below *semver.Version
 }
 
 // Contains reports whether v is inside the range.
-func (r Range) Contains(v Version) bool {
-	return v.Compare(r.Min) >= 0 && (r.Below == nil || v.Compare(*r.Below) < 0)
+func (r Range) Contains(v *semver.Version) bool {
+	return v.Compare(r.Min) >= 0 && (r.Below == nil || v.Compare(r.Below) < 0)
 }
 
 // ParseRange reads the ranges `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z` and `>=x.y.z <a.b.c`. `*` is `>=0.0.0`, that
-// is, every version.
+// is, every version. The forms are matched here before the versions of a form are read by ParseVersion.
 func ParseRange(text string) (Range, error) {
 	if text == "*" {
-		return Range{Min: Version{}}, nil
+		return Range{Min: semver.New(0, 0, 0, "", "")}, nil
 	}
 	if rest, ok := strings.CutPrefix(text, ">="); ok {
 		low, high, found := strings.Cut(rest, " <")
@@ -112,7 +91,7 @@ func ParseRange(text string) (Range, error) {
 			if min.Compare(below) >= 0 {
 				return Range{}, fmt.Errorf("invalid version range %s: empty", text)
 			}
-			return Range{min, &below}, nil
+			return Range{min, below}, nil
 		}
 		// >=x.y.z has only a lower bound and no upper bound.
 		if !found && rest != "" && !strings.ContainsAny(rest, " ") {
@@ -129,20 +108,21 @@ func ParseRange(text string) (Range, error) {
 	if err != nil {
 		return Range{}, fmt.Errorf("invalid version range %s: expected *, x.y.z, ^x.y.z, ~x.y.z, >=x.y.z or >=x.y.z <a.b.c", quote(text))
 	}
-	var below Version
+	major, minor, patch := v.Major(), v.Minor(), v.Patch()
+	var below *semver.Version
 	switch {
 	case operator == "":
-		below = Version{v[0], v[1], v[2] + 1}
+		below = semver.New(major, minor, patch+1, "", "")
 	case operator == "~":
-		below = Version{v[0], v[1] + 1, 0}
-	case v[0] > 0:
-		below = Version{v[0] + 1, 0, 0}
-	case v[1] > 0:
-		below = Version{0, v[1] + 1, 0}
+		below = semver.New(major, minor+1, 0, "", "")
+	case major > 0:
+		below = semver.New(major+1, 0, 0, "", "")
+	case minor > 0:
+		below = semver.New(0, minor+1, 0, "", "")
 	default:
-		below = Version{0, 0, v[2] + 1}
+		below = semver.New(0, 0, patch+1, "", "")
 	}
-	return Range{v, &below}, nil
+	return Range{v, below}, nil
 }
 
 // Satisfies reports whether the version is inside the range. Both must be values that were already checked.
