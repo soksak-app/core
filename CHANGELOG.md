@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.29: the surface menu of a plugin is complete with the terminal menu released.
 - F162.4, F141, F123, F161.57.3: core 0.0.12, the hwp plugin 0.0.1 and the terminal correction are released, and the preedit cursor check passes on both applications.
 - F161.57.5: `diagnostics.input.source` answers a selection after the text input context of the key view reports the selected source.
 - F161.55.5, F161.55: the padding drag check passes on both applications with the frame wait; F161.57.3 is located in the drawn frame of the Tauri application.

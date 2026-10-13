@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.29: terminal menu가 release되어 plugin의 surface menu가 완료되었다.
 - F162.4, F141, F123, F161.57.3: core 0.0.12, hwp plugin 0.0.1, terminal 수정이 release되었고, preedit cursor check가 두 애플리케이션에서 통과한다.
 - F161.57.5: `diagnostics.input.source`가 key view의 text input context가 선택한 source를 알린 뒤에 선택에 답한다.
 - F161.55.5, F161.55: frame 대기로 padding drag check가 두 애플리케이션에서 통과한다. F161.57.3은 Tauri 애플리케이션의 그려진 frame에 원인이 있다.
