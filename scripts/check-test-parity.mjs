@@ -1771,6 +1771,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F161.45",
+    implementation: [
+      { file: "packages/workbench/settings-ui.js", symbol: "settings scroll position is not a number" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/settings-scroll.test.mjs", id: "a negative scroll position of the settings modal is kept as reported and a value that is not a number is refused" },
+    ],
+    expected: "The settings modal keeps a negative scroll position that the native modal reports and refuses a value that is not a number.",
+    levels: ["unit"],
+  },
+  {
     id: "F146",
     implementation: [
       { file: "packages/workbench/debug-ui.js", symbol: "debug scroll position is not a number" },

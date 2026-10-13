@@ -20,7 +20,7 @@ The left navigation lists three sections in this order. Every section shows the 
 
 `core.settings-modal.nav {section}` shows a section. The window keeps the section, the plugin search, the selected plugin, and the edited set while it is closed and reopened.
 
-A change redraws the window and keeps the scroll position of the shown content; showing another section, scope, plugin page or edited set starts at the top. The window reports the scroll position of the shown content as `scroll` (points from the top) in `core.settings-modal`.
+A change redraws the window and keeps the scroll position of the shown content; showing another section, scope, plugin page or edited set starts at the top. The window reports the scroll position of the shown content as `scroll` (points from the top) in `core.settings-modal`; the position is negative while the content is pulled past its start, and a reported value that is not a number is refused.
 
 ### 일반
 

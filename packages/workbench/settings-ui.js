@@ -716,9 +716,11 @@ function answer(key, val) {
     return run("core.settings-modal.move", { dx, dy });
   }
   // The native modal reports the scroll position of the visible content. The position is used only as state and is not a command.
+  // It is negative while the content is pulled past its start, so it is kept as reported; only a value that is not a finite
+  // number is refused.
   if (key === "scroll") {
-    const top = Number(val);
-    if (!Number.isFinite(top) || top < 0) throw new Error(`settings scroll position is invalid: ${val}`);
+    const top = typeof val === "string" && val.trim() === "" ? NaN : Number(val);
+    if (!Number.isFinite(top)) throw new Error(`settings scroll position is not a number: ${val}`);
     paneScroll = top;
     drawn();
     return;
