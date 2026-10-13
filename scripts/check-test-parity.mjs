@@ -1912,6 +1912,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F149",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "export function auditLog" }],
+    tests: [{ file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" }],
+    expected: "Typed English text and a composed Korean syllable pass through every layer of a running application and reach the PTY once.",
+    levels: ["application"],
+  },
+  {
+    id: "F150",
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "export function auditLog" }],
+    tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "a log with declared events, consecutive seq and a complete chain passes" }],
+    expected: "Every layer writes its records as events of one contract that the audit checks.",
+    levels: ["unit"],
+  },
+  {
     id: "F154",
     implementation: [{ file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" }],
     tests: [{ file: "scripts/test/node-tests.test.mjs", id: "each test file of a package is a test with the folder and the flags of its package" }],

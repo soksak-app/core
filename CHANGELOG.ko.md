@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F149.2, F150.8.3, F161.57.1: activation 실행이 두 애플리케이션에서 한글 음절과 terminal keyboard를 통과했다. F161.57.3과 F161.57.4가 그 실행의 새 실패 두 개를 적는다.
 - F169: `.node-version`이 Node 26.11.1을 선언한다.
 - F166.7: host 배치가 Tauri host의 kqueue 감시를 차이 H10으로 허용한다.
 - F164.2: Tauri host의 stall sample이 Wails host의 짝인 `stall_sample.rs`이다.

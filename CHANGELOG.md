@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F149.2, F150.8.3, F161.57.1: the activation run passed the Korean syllable and the terminal keyboard on both applications; F161.57.3 and F161.57.4 record the two new failures of that run.
 - F169: `.node-version` declares Node 26.11.1.
 - F166.7: the layout of the hosts allows the kqueue watch of the Tauri host as the difference H10.
 - F164.2: the stall sample of the Tauri host is `stall_sample.rs`, the counterpart of the Wails host.
