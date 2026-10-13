@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F114, F161.49: closed.
 - F160.12, F160.14, F160.16, F154.3, F154: closed by their unit Red and Green under the verification rule of the agent guidance; the runs that they waited for are not run.
 - F166: the 17 items that waited only for a run in the applications are complete by the unit Red and Green of their parent items under the verification rule of the agent guidance, and the 13 parent items whose items are all complete are closed; their window checks stay tracked and were not run.
 - F167: the term list names the image region and rejects picture region, and every record uses image region.

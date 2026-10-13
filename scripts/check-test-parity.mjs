@@ -1905,6 +1905,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F114",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "closed before it created its composition" }],
+    tests: [{ file: "packages/workbench/test/surface-dispose-pending.test.mjs", id: "a surface whose module has not finished mounting is disposed without waiting for the mount" }],
+    expected: "A plugin surface whose start does not answer is ended by the close of its tab, so the next check starts from a clean state.",
+    levels: ["unit"],
+  },
+  {
     id: "F154",
     implementation: [{ file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" }],
     tests: [{ file: "scripts/test/node-tests.test.mjs", id: "each test file of a package is a test with the folder and the flags of its package" }],
