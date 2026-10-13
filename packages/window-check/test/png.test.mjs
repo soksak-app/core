@@ -61,3 +61,31 @@ test("capture PNG rejects out-of-range and fractional coordinates", (t) => {
 test("capture PNG rejects incomplete decoded pixels instead of producing zero values", (t) => {
   assert.throws(() => fixture(t, Buffer.from([0, 255, 0, 0, 255])), /decoded bytes/);
 });
+test("capture PNG refuses interlaced, palette and 16-bit files that the decoder would read", (t) => {
+  // pngjs decodes these forms by default, so the refusal of this module is the only check that keeps them out.
+  for (const [depth, color, interlace] of [
+    [8, 6, 1],
+    [8, 3, 0],
+    [16, 6, 0],
+  ]) {
+    const directory = mkdtempSync(join(tmpdir(), "soksak-png-refusal-"));
+    t.after(() => rmSync(directory, { recursive: true }));
+    const header = Buffer.alloc(13);
+    header.writeUInt32BE(1);
+    header.writeUInt32BE(1, 4);
+    header[8] = depth;
+    header[9] = color;
+    header[12] = interlace;
+    const path = join(directory, "capture.png");
+    writeFileSync(
+      path,
+      Buffer.concat([
+        Buffer.from("89504e470d0a1a0a", "hex"),
+        chunk("IHDR", header),
+        chunk("IDAT", deflateSync(Buffer.from([0, 255, 0, 0, 255]))),
+        chunk("IEND", Buffer.alloc(0)),
+      ]),
+    );
+    assert.throws(() => readPng(path), new RegExp(`depth ${depth}, color type ${color}, interlace ${interlace} is not read`));
+  }
+});

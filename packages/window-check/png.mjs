@@ -1,5 +1,6 @@
 // Reads the PNG that a window capture (diagnostics.capture.still) left. It accepts only 8-bit RGB and RGBA files
-// without interlacing.
+// without interlacing. No PNG library is used: pngjs 7.0 reads a file whose image stream is shorter than its lines without
+// an error, while a short stream is refused here; node:zlib inflates the stream.
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 

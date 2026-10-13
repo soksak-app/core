@@ -13,7 +13,7 @@
 - F161.55.5: `host.window`가 각 image region의 표시된 frame의 generation, raster, sequence를 보고하며, 현재 raster의 frame이 표시되지 않은 동안 `presented`는 null이다.
 - F166.6: window check의 LZ4 decoder는 자체 code를 유지한다. lz4js 0.2.0이 잘린 입력과 잘못된 match reference를 오류 없이 받아들이기 때문이며, 그 이유는 decoder에 적는다.
 - F166.4: Tauri host가 clipboard PNG의 IHDR CRC를 자체 CRC-32 loop 대신 crc32fast 1.5.1로 계산한다. 잘못된 IHDR CRC의 거부는 바뀌지 않는다.
-- F166.5: window check의 `readPng`는 capture의 pixel을 pngjs 7.0.0으로 decode하고, pngjs가 기본값으로 읽는 형태(interlace, palette, 16-bit)의 거부를 유지한다.
+- F166.5: window check의 `readPng`가 자체 decoder를 유지하고 이유를 적는다: pngjs는 짧은 image stream을 오류 없이 읽는다.
 - F166.2: checklist가 유지되는 library가 제공하는 core의 기능(semantic version, PNG CRC-32, window check의 PNG와 LZ4 decoder)을 적고, 남는 자체 기능을 유지하는 이유를 적는다.
 - F166.1: Wails host가 fsnotify로 정책 파일을 감시한다. platform 계층의 kqueue code를 제거했고, Tauri host는 자체 code를 유지하는 이유를 적는다.
 - F164.1: Wails host의 stall sample이 macOS에서만 build되어, source가 Windows용으로 compile된다.

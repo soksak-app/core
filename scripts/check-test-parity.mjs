@@ -1960,6 +1960,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F166",
+    implementation: [{ file: "packages/host/wailsv3/src/log_policy.go", symbol: "func watchPolicyFile" }],
+    tests: [{ file: "packages/host/wailsv3/tests/log_policy_test.go", id: "TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce" }],
+    expected: "A function that a maintained library provides uses that library, and code of its own states which requirement the libraries do not meet.",
+    levels: ["unit"],
+  },
+  {
     id: "F167",
     implementation: [{ file: "packages/plugin-api/terms.json", symbol: '"term": "image region"' }],
     tests: [{ file: "packages/plugin-api/test/records-check.test.mjs", id: "a rejected synonym is reported with the term to use, also in identifiers" }],
