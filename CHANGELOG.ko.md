@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F166.2: checklist가 유지되는 library가 제공하는 core의 기능(semantic version, PNG CRC-32, window check의 PNG와 LZ4 decoder)을 적고, 남는 자체 기능을 유지하는 이유를 적는다.
 - F166.1: Wails host가 fsnotify로 정책 파일을 감시한다. platform 계층의 kqueue code를 제거했고, Tauri host는 자체 code를 유지하는 이유를 적는다.
 - F164.1: Wails host의 stall sample이 macOS에서만 build되어, source가 Windows용으로 compile된다.
 - F161.37: 다시 연 terminal surface의 첫 raster 답이 terminal sidecar S49의 대조로 그 surface에 닿는다(그 release 0.0.9까지 미배포).
