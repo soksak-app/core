@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.49: the recovery check of the terminal service declares the errors that its kill causes when it meets a frame or a write in flight.
 - F150.8.4: every declared workspace version is 0.0.11, the version that carries the event contract of F150 and F160, the replay of F160.35, the repairs of F161, F143 and the save place of F162.1.
 - F161.48: the Hangul test names its syllables by code point in its comments, the extension probes declare the release version, and F102 links its window check, so the repository checks pass again.
 - F161.47: a build of the host contract check may take 600 s, because a cold build of the Tauri host tests takes more than 300 s on the CI runner, and the CI workflow keeps the cargo and Go caches between runs.

@@ -42,6 +42,14 @@ test("a killed terminal sidecar recovers without an application restart", async 
     assert.ok(Number.isInteger(killed.pid) && killed.pid > 0, "the service endpoint has no pid");
     // The host logs the lost connection once when it restarts the service.
     session.expectError(/^error host sidecar @soksak\/sidecar-vt-alacritty: connection lost; restarted$/);
+    // A frame that the service sent before it died names an IOSurface that ended with the service, so its presentation fails
+    // with notFound in the host, the native region, the plugin and the status of the surface; a line that the host writes to
+    // the closed connection fails with a broken pipe. Both happen only when the kill meets a frame or a write in flight.
+    session.expectError(new RegExp(`^error host image present: surface=${surface} name=view .* reason=notFound`));
+    session.expectError(/^error native image region: notFound /);
+    session.expectError(new RegExp(`^error plugin plugin\\.terminal\\.error: .*"native image: notFound".*"surface":"${surface}"`));
+    session.expectError(new RegExp(`^error page surface status terminal ${surface}: .*native image: notFound$`));
+    session.expectError(/^error host sidecar @soksak\/sidecar-vt-alacritty: write: Broken pipe \(os error 32\)$/);
     process.kill(killed.pid, "SIGKILL");
 
     // Recovery: the surface attaches to the reopened session. A sessionId different from that of the dead session must arrive.
