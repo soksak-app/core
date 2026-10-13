@@ -13,6 +13,7 @@ const catalog = {
     "native.input.text": { layer: "native", class: "input", level: "info", cids: "required", fields: { keyCode: "number" } },
     "page.terminal.send": { layer: "page", class: "input", level: "info", fields: {} },
     "sidecar.vt.pty_write": { layer: "sidecar", class: "io", level: "info", fields: { hex: "string" } },
+    "native.record.error": { layer: "native", class: "lifecycle", level: "error", fields: { where: "string", text: "string" } },
   },
   chains: { key: ["native.input.key_down", "page.terminal.send", "sidecar.vt.pty_write"] },
 };
@@ -124,6 +125,18 @@ test("a declared chain with a missing hop is a finding for its correlation ident
   const findings = auditLog("host-b1.jsonl", text, catalog);
   assert.equal(findings.length, 1);
   assert.match(findings[0].message, /chain key of b1.1 lacks sidecar.vt.pty_write/);
+});
+
+test("a chain ends at an error event that carries its correlation identifier", () => {
+  // The key reached no later layer because it failed; the error with the identifier is the record of its end.
+  const text = [
+    open,
+    line(2, "native.input.key_down", { keyCode: 2 }, { cids: ["b1.1"] }),
+    line(3, "native.record.error", { where: "input method", text: "input method did not answer" }, { cids: ["b1.1"], layer: "native", level: "error" }),
+    line(4, "native.input.key_down", { keyCode: 3 }, { cids: ["b1.2"] }),
+  ].join("\n");
+  const findings = auditLogs([{ file: "host-b1.jsonl", text }], catalog, () => true);
+  assert.deepEqual(findings.map(({ line, message }) => [line, message]), [[4, "chain key of b1.2 lacks page.terminal.send"]]);
 });
 
 test("a file whose first line is not log.open, or whose schema is unknown, is rejected with the file name and the value", () => {

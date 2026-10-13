@@ -9,6 +9,35 @@
 #import "support/records.h"
 #import "webview_geometry.h"
 
+/// An input context that takes every key and answers nothing, as the input method does for a key outside the key window
+/// of the active application after the application was active once.
+@interface SilentInputContext : NSTextInputContext
+@end
+
+@implementation SilentInputContext
+- (BOOL)handleEvent:(NSEvent *)event {
+    return YES;
+}
+@end
+
+static NSTextInputContext *silentInputContext(id self, SEL _cmd) {
+    static NSTextInputContext *context;
+    if (!context) context = [[SilentInputContext alloc] initWithClient:self];
+    return context;
+}
+
+/// Gives one view the silent input context through a subclass of its own class.
+static void silenceInputMethod(NSView *view) {
+    NSString *name = [NSStringFromClass(view.class) stringByAppendingString:@"Silent"];
+    Class silent = NSClassFromString(name);
+    if (!silent) {
+        silent = objc_allocateClassPair(view.class, name.UTF8String, 0);
+        class_addMethod(silent, @selector(inputContext), (IMP)silentInputContext, "@@:");
+        objc_registerClassPair(silent);
+    }
+    object_setClass(view, silent);
+}
+
 static int failures = 0;
 static NSUInteger countedSurfaceObserverRegistrations = 0;
 static IMP originalAddObserverImplementation = NULL;
@@ -857,6 +886,39 @@ int main(int argc, char **argv) { @autoreleasepool {
             check(collectedEvents.count == 1 && [collectedEvents[0] rangeOfString:expected].location != NSNotFound,
                 [NSString stringWithFormat:@"keypad: keyCode %@ reports %@ (got %@)", item[1], item[2], collectedEvents]);
         }
+        sp_region_close(region);
+    }
+
+    // A key goes to the input method when it is a normal character or when the document holds marked text; when the
+    // input method does not answer (outside the key window of the active application), the key is reported as an error
+    // instead of being dropped without a report. The test gives the region an input context that answers nothing.
+    for (NSString *marked in @[@"", @"\u3139"]) {
+        void *region = sp_region_create(surface, "silent", testEvent, NULL);
+        sp_region_place(region, 10, 10, 10, 10, true);
+        sp_region_focus(region);
+        NSTextView *regionView = (NSTextView *)region;
+        if (marked.length > 0) {
+            [(id<NSTextInputClient>)regionView setMarkedText:marked selectedRange:NSMakeRange(1, 0)
+                replacementRange:NSMakeRange(NSNotFound, 0)];
+        }
+        silenceInputMethod(regionView);
+        NSEvent *event = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0
+            windowNumber:0 context:nil characters:@"\u3147" charactersIgnoringModifiers:@"\u3147" isARepeat:NO keyCode:2];
+        [collectedEvents removeAllObjects];
+        NSArray<NSDictionary *> *captured = capturedEvents(^{ [regionView keyDown:event]; });
+        BOOL reported = NO;
+        for (NSString *report in collectedEvents) {
+            if ([report containsString:@"input method did not answer native keyCode=2"]) reported = YES;
+        }
+        check(reported, [NSString stringWithFormat:@"silent input method: a key with marked text \"%@\" that the input method does not answer is reported as an error (got %@)", marked, collectedEvents]);
+        // The error carries the identifier of the key, so the chain of the key ends at the error.
+        NSArray *keyCids = nil, *errorCids = nil;
+        for (NSDictionary *record in captured) {
+            if ([record[@"name"] isEqual:@"native.input.key_down"]) keyCids = record[@"cids"];
+            if ([record[@"name"] isEqual:@"native.record.error"]) errorCids = record[@"cids"];
+        }
+        check(keyCids.count == 1 && [errorCids isEqual:keyCids],
+            [NSString stringWithFormat:@"silent input method: the error with marked text \"%@\" carries the identifier of the key (got %@)", marked, captured]);
         sp_region_close(region);
     }
 

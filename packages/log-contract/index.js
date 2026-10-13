@@ -160,12 +160,14 @@ function chainFindings(entries, catalog) {
     for (const { line, file, event } of entries) {
       // default: an event that does not belong to the input has no correlation identifier.
       for (const cid of event.cids ?? []) {
-        if (!seen.has(cid)) seen.set(cid, { line, file, events: new Set() });
+        if (!seen.has(cid)) seen.set(cid, { line, file, events: new Set(), failed: false });
         seen.get(cid).events.add(event.event);
+        if (event.level === "error") seen.get(cid).failed = true;
       }
     }
-    for (const [cid, { line, file, events }] of seen) {
-      if (!events.has(hops[0])) continue;
+    for (const [cid, { line, file, events, failed }] of seen) {
+      // An input that failed ends at the error that carries its identifier; the error is the record of its end.
+      if (!events.has(hops[0]) || failed) continue;
       const missing = hops.find((hop) => !events.has(hop));
       if (missing !== undefined) findings.push({ line, file, message: `chain ${name} of ${cid} lacks ${missing}` });
     }

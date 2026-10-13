@@ -67,6 +67,8 @@
 - (NSString *)currentCid;
 - (void)emitInput:(const char *)name fields:(NSString *)fields;
 - (void)handleKeyDown:(NSEvent *)event;
+- (void)passToInputMethod:(NSEvent *)event;
+- (void)failInput:(NSString *)reason where:(const char *)where text:(NSString *)text;
 - (void)handleCommand:(SEL)selector;
 - (void)handleInsertText:(id)string replacementRange:(NSRange)range;
 - (void)handleSetMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange;
@@ -466,12 +468,21 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     self.event(self.context, text.UTF8String);
 }
 
-- (void)reject:(NSString *)reason {
-    sp_log_error("image region", [NSString stringWithFormat:@"%@ (state %@)", reason, [self inputState]].UTF8String);
-    self.presentationError = reason;
+// Records a failure of the input as the event `native.record.error` with the correlation identifier of the input, so the
+// chain of the input ends at the error (docs/spec/logging.md#catalog), and reports the reason to the page as an error.
+- (void)failInput:(NSString *)reason where:(const char *)where text:(NSString *)text {
+    NSString *cid = [self currentCid];
+    NSData *recorded = [NSJSONSerialization dataWithJSONObject:@{ @"where": @(where), @"text": text } options:0 error:NULL];
+    NSString *fields = [[[NSString alloc] initWithData:recorded encoding:NSUTF8StringEncoding] autorelease];
+    // events: native.record.error
+    sp_event_cids(SP_CLASS_LIFECYCLE, SP_EVENT_ERROR, "native.record.error", cid.UTF8String ?: "", fields.UTF8String);
     NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"type": @"error", @"reason": reason } options:0 error:NULL];
-    NSString *json = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
-    [self report:json.UTF8String];
+    [self report:[[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String];
+}
+
+- (void)reject:(NSString *)reason {
+    self.presentationError = reason;
+    [self failInput:reason where:"image region" text:[NSString stringWithFormat:@"%@ (state %@)", reason, [self inputState]]];
 }
 
 - (BOOL)becomeFirstResponder {
@@ -553,7 +564,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 
     // NSTextView owns the lifecycle of the AppKit input method events and the composition state.
     if ([self hasMarkedText]) {
-        [super keyDown:event];
+        [self passToInputMethod:event];
         return;
     }
 
@@ -665,10 +676,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
                 NSString *reason = [NSString stringWithFormat:
                     @"unsupported Ctrl character: native keyCode=%hu, character=U+%04X",
                     event.keyCode, ch];
-                NSString *escapedReason = [reason stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"];
-                escapedReason = [escapedReason stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
-                NSString *errorJSON = [NSString stringWithFormat:@"{\"type\":\"error\",\"reason\":\"%@\"}", escapedReason];
-                [self report:errorJSON.UTF8String];
+                [self failInput:reason where:"image region" text:reason];
                 return;
             }
             unichar reportedCharacter = keyCharacter.length > 0 ? [keyCharacter characterAtIndex:0] : ch;
@@ -696,19 +704,20 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         return;
     }
 
-    // A normal character is passed to the input method. The input method answers only the key window of the active
-    // application. After the
-    // application has been activated once, the input context receives a key sent to another window but inserts no
-    // character, so no answer is reported as an error.
+    // A normal character is passed to the input method.
+    [self passToInputMethod:event];
+}
+
+// The input method answers only the key window of the active application. After the application has been activated once,
+// the input context receives a key sent to another window but inserts no character, so no answer is reported as an error.
+- (void)passToInputMethod:(NSEvent *)event {
     NSUInteger before = self.reports;
     [super keyDown:event];
     if (self.reports == before && !(NSApp.isActive && self.window.isKeyWindow)) {
         NSString *reason = [NSString stringWithFormat:
             @"input method did not answer native keyCode=%hu outside the key window of the active application",
             event.keyCode];
-        sp_log_error("input method", [NSString stringWithFormat:@"%@: state %@", reason, [self inputState]].UTF8String);
-        NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"type": @"error", @"reason": reason } options:0 error:NULL];
-        [self report:[[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String];
+        [self failInput:reason where:"input method" text:[NSString stringWithFormat:@"%@: state %@", reason, [self inputState]]];
     }
 }
 
@@ -785,10 +794,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         // discarded.
         NSString *reason = [NSString stringWithFormat:@"input method replaced committed text at %lu (committed %lu)",
             (unsigned long)range.location, (unsigned long)self.committedLength];
-        sp_log_error("input method", [NSString stringWithFormat:@"%@: text \"%@\" replacement %@ state %@", reason,
-            [self jsonEscapedString:text], [self jsonRange:range], [self inputState]].UTF8String);
-        NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"type": @"error", @"reason": reason } options:0 error:NULL];
-        [self report:[[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String];
+        [self failInput:reason where:"input method" text:[NSString stringWithFormat:@"%@: text \"%@\" replacement %@ state %@",
+            reason, [self jsonEscapedString:text], [self jsonRange:range], [self inputState]]];
     }
     [super insertText:string replacementRange:range];
     if (self.hasMarkedText) {
