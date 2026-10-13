@@ -43,7 +43,7 @@ type Options struct {
 // The application name and version that the endpoint announces.
 const (
 	applicationName    = "wailsv3"
-	applicationVersion = "0.0.10"
+	applicationVersion = "0.0.11"
 )
 
 // system is the operating system implementation that Run selected.
