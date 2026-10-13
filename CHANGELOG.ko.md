@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.53: verify V7b가 적용된 surface를 device pixel 안쪽으로 맞춘 선언 사각형과 비교하므로, point당 device pixel 하나인 화면이 반 point 때문에 verify 오류를 보이지 않는다.
 - F161.52: Tauri host가 제거된 surface의 이름을 native surface가 닫힐 때까지 유지하므로, 제거 중의 `host.window` 읽기가 더 이상 `unregistered native surface`로 실패하지 않는다.
 - F161.51: 예제 검증 문서가 새 검사 설정은 애플리케이션 시작 전에 `make install-plugins`로 workspace plugin을 받고, 하네스가 교체하는 것은 registry가 아니라 프로젝트 목록이라고 적는다.
 - F163: network가 없을 때처럼 registry를 읽지 못한 첫 실행은 starter pack 없이 창을 시작하고 이유를 밝히며, 다음 시작 때 pack을 설치한다.

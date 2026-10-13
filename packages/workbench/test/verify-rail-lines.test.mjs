@@ -12,6 +12,9 @@ async function railRow(t, painted) {
   globalThis.document = dom.window.document;
   globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
   t.after(() => dom.window.close());
+  // A page always has a device pixel ratio; verify fits the declared surfaces with it.
+  globalThis.devicePixelRatio = 1;
+  t.after(() => { delete globalThis.devicePixelRatio; });
   const plane = document.querySelector("#plane");
   // The window shrank, so the plane is already 400×300, and the lines are drawn on the earlier 700×300 plane.
   plane.getBoundingClientRect = () => rect(6, 6, 400, 300);

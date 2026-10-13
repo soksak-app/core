@@ -22,6 +22,19 @@ const maxDelta = (a, b) =>
     : Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.w - b.w), Math.abs(a.h - b.h));
 
 /**
+ * The rectangle r fitted inward to the device pixels of scale, as both hosts fit a declared surface: the left and top edges
+ * move to the next device pixel and the right and bottom edges to the previous one, and the size stays at least one
+ * device pixel.
+ */
+const fitted = (r, scale) => {
+  const step = 1 / scale;
+  const left = Math.ceil(r.x * scale) / scale;
+  const top = Math.ceil(r.y * scale) / scale;
+  return { x: left, y: top, w: Math.max(Math.floor((r.x + r.w) * scale) / scale - left, step),
+    h: Math.max(Math.floor((r.y + r.h) * scale) / scale - top, step) };
+};
+
+/**
  * Runs the verification once and returns the result.
  *
  * It does not draw on the screen. The value is read by a developer and arises on every render, so the caller
@@ -205,8 +218,12 @@ export function verify(controls = null) {
         `(seq ${guess.seq})${at}`);
   }
 
-  // V7b — compares the declared coordinates of the same request with the coordinates that the host applied.
+  // V7b — compares the declared coordinates of the same request with the coordinates that the host applied. The host fits
+  // the declared rectangle inward to the device pixels (docs/spec/native-surfaces.md), so the applied rectangle is compared
+  // with the declared one fitted the same way: a display of one device pixel per point cannot show half a point.
   // The alignment between frames on screen is checked separately by outside.test.mjs.
+  const scale = globalThis.devicePixelRatio;
+  if (!(scale > 0)) throw new Error(`verify: the device pixel ratio ${scale} is not a positive number`);
   const placed = seated();
   let land = 0, landed = 0, escaped = 0;
   // The surface that is off the most and its two places. A failure states the measured values with which the cause can be found (F36).
@@ -214,7 +231,7 @@ export function verify(controls = null) {
   // default: when no layout has been seated yet, there is no surface to measure.
   for (const s of placed?.surfaces ?? []) {
     if (!s.visible || s.declared.w < 1 || s.declared.h < 1) continue;
-    const delta = maxDelta(s.declared, s.applied);
+    const delta = maxDelta(fitted(s.declared, scale), s.applied);
     if (delta > land) landedAt = ` · ${s.id} declared ${frameText(s.declared)} applied ${frameText(s.applied)}`;
     land = Math.max(land, delta);
     escaped = Math.max(escaped, beyond(s.applied, s.declared));

@@ -7,6 +7,9 @@ test("containment checks visible surfaces while hidden surfaces retain their nat
   const dom = new JSDOM('<div class="chrome-bar"></div><div><div id="plane"><article class="card" data-card-id="one"><div class="chrome"></div><div class="status"></div><div data-native-surface data-native-surface-id="probe"></div></article></div></div>');
   globalThis.document = dom.window.document;
   globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
+  // A page always has a device pixel ratio; verify fits the declared surfaces with it.
+  globalThis.devicePixelRatio = 1;
+  t.after(() => { delete globalThis.devicePixelRatio; });
   const plane = document.querySelector('#plane');
   const grid = new Soksak(undefined,{width:100,height:100});
   const surface = {id:'probe',visible:false,dim:false,declared:{x:0,y:0,w:0,h:0},applied:{x:10,y:10,w:80,h:80}};
