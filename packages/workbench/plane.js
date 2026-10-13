@@ -1650,7 +1650,8 @@ export function openSurfaceMenu(surfaceId, x, y) {
 
 /** A right click on a surface whose plugin declares a menu opens that menu; elsewhere the page menu opens. */
 export function onSurfaceContextMenu(event) {
-  const host = event.target?.closest?.(".surface-module-host[data-surface]");
+  // The target of a contextmenu event is the element under the pointer; a surface in a shadow root retargets it to its host.
+  const host = event.target.closest(".surface-module-host[data-surface]");
   if (!host) return;
   const card = grid?.cards.find((c) => tabsOf(c).some((t) => t.id === host.dataset.surface));
   const tab = card && tabsOf(card).find((t) => t.id === host.dataset.surface);

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.40: 오른쪽 click의 handler가 event의 target에 `closest`를 바로 호출한다. `contextmenu` event는 늘 element를 target으로 하기 때문이다.
 - F161.39: Go, Rust, page의 생성 class 표가 F161.37.1이 catalog에 더한 `host.sidecar.write_wait`를 담는다.
 - F162.1: `core.file.place {name}`과 host call `filePlace`가 창의 save panel로 새 문서를 어디에 저장할지 묻고 고른 파일을 project root 기준 상대로 답한다. 두 host는 파일 이름이 아닌 name과 project 밖의 위치를 거부한다.
 - F161.27.1: window check가 같지 않은 terminal 카드를 다섯 번 균형 맞추고 모든 terminal이 새 크기의 raster를 보이기를 요구한다.
