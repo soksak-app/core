@@ -28,6 +28,18 @@ fn clipboard_png_payload_is_bounded() {
     assert!(validate_png_payload(&large).is_err());
 }
 
+// contract: clipboard.png.rejects-bad-header
+#[test]
+fn clipboard_png_header_crc_covers_only_the_type_and_data() {
+    // The PNG specification defines the chunk CRC over the chunk type and data, not the length field. A CRC over the
+    // length too is a valid CRC-32, so only the scope of the check refuses it.
+    let mut scope = PNG.to_vec();
+    let crc = crc32fast::hash(&PNG[8..29]);
+    scope[29..33].copy_from_slice(&crc.to_be_bytes());
+    let error = validate_png_payload(&scope).unwrap_err();
+    assert!(error.contains("IHDR CRC"), "{error}");
+}
+
 // contract: clipboard.png.rejects-bad-signature, clipboard.png.rejects-bad-header
 #[test]
 fn clipboard_png_payload_needs_the_signature_and_a_valid_header() {

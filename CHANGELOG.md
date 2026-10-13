@@ -11,6 +11,8 @@
 - F166: the 17 items that waited only for a run in the applications are complete by the unit Red and Green of their parent items under the verification rule of the agent guidance, and the 13 parent items whose items are all complete are closed; their window checks stay tracked and were not run.
 - F167: the term list names the image region and rejects picture region, and every record uses image region.
 - F161.55.5: `host.window` reports the generation, raster and sequence of the presented frame of each image region, and `presented` is null while no frame of the current raster is presented.
+- F166.4: the Tauri host computes the IHDR CRC of a clipboard PNG with crc32fast 1.5.1 instead of its own CRC-32 loop; the refusal of a bad IHDR CRC is unchanged.
+- F166.5: `readPng` of the window checks decodes the pixels of a capture with pngjs 7.0.0 and keeps its refusals of the forms that pngjs reads by default (interlace, palette, 16-bit).
 - F166.2: the checklist lists the functions of core that a maintained library provides (semantic versions, the PNG CRC-32, the PNG and LZ4 decoders of the window checks) and states why the remaining own functions stay.
 - F166.1: the Wails host watches the policy file through fsnotify; the kqueue code of its platform layer is removed, and the Tauri host states why it keeps its own.
 - F164.1: the stall sample of the Wails host builds only for macOS, so the sources compile for Windows.

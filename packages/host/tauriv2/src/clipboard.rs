@@ -40,7 +40,7 @@ fn validate_png_header(bytes: &[u8]) -> Result<(), &'static str> {
         return Err("the first chunk is not a 13-byte IHDR");
     }
     let expected = u32::from_be_bytes([chunk[21], chunk[22], chunk[23], chunk[24]]);
-    if crc32(&chunk[4..21]) != expected {
+    if crc32fast::hash(&chunk[4..21]) != expected {
         return Err("the IHDR CRC does not match");
     }
     let width = u32::from_be_bytes([chunk[8], chunk[9], chunk[10], chunk[11]]);
@@ -61,22 +61,6 @@ fn validate_png_header(bytes: &[u8]) -> Result<(), &'static str> {
         return Err("the compression, filter, or interlace method is not a PNG method");
     }
     Ok(())
-}
-
-// The CRC-32 that PNG uses (polynomial 0xEDB88320).
-fn crc32(bytes: &[u8]) -> u32 {
-    let mut crc = 0xFFFF_FFFFu32;
-    for byte in bytes {
-        crc ^= u32::from(*byte);
-        for _ in 0..8 {
-            crc = if crc & 1 != 0 {
-                (crc >> 1) ^ 0xEDB8_8320
-            } else {
-                crc >> 1
-            };
-        }
-    }
-    !crc
 }
 
 #[derive(Debug, Deserialize)]
