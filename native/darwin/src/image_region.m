@@ -474,7 +474,6 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSString *cid = [self currentCid];
     NSData *recorded = [NSJSONSerialization dataWithJSONObject:@{ @"where": @(where), @"text": text } options:0 error:NULL];
     NSString *fields = [[[NSString alloc] initWithData:recorded encoding:NSUTF8StringEncoding] autorelease];
-    // events: native.record.error
     sp_event_cids(SP_CLASS_LIFECYCLE, SP_EVENT_ERROR, "native.record.error", cid.UTF8String ?: "", fields.UTF8String);
     NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"type": @"error", @"reason": reason } options:0 error:NULL];
     [self report:[[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease].UTF8String];

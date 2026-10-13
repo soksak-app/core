@@ -6,6 +6,7 @@
 
 - F161.56, F161.59, F161.62: closed as not reproduced on the current builds, with the records that show a recurrence in place.
 - F161.27: closed as not reproduced after three repeat runs of the outside resize check on both applications.
+- F176.1: the events check passes again after the marker above the literal emit of an input failure is removed.
 - F176: a key over marked text that the input method does not answer is reported as an error, every input error carries the identifier of its key, and a chain ends at such an error.
 - F175: a run audit judges only the findings on lines inside the span of the run; F161.4 is classified.
 - F174: a window check without stored log offsets judges only the errors of the running process, not the history of earlier processes.
