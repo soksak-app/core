@@ -1898,6 +1898,13 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F167",
+    implementation: [{ file: "packages/plugin-api/terms.json", symbol: '"term": "image region"' }],
+    tests: [{ file: "packages/plugin-api/test/records-check.test.mjs", id: "a rejected synonym is reported with the term to use, also in identifiers" }],
+    expected: "The image region has one term, and a record that uses its rejected synonym is refused with the term to use.",
+    levels: ["unit"],
+  },
+  {
     id: "F165",
     implementation: [
       { file: "packages/host/wailsv3/src/images.go", symbol: "func imageReply" },

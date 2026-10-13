@@ -52,6 +52,14 @@
       "allowed": []
     },
     {
+      "term": "image region",
+      "definition": "A native region of a surface that shows the transfer images of a sidecar (docs/spec/native-surfaces.md).",
+      "rejected": [
+        "picture region"
+      ],
+      "allowed": []
+    },
+    {
       "term": "deep link",
       "definition": "An address soksak://<owner>/<command> that opens from outside the application.",
       "rejected": [],

@@ -19,7 +19,7 @@ function footprint(pid) {
 }
 
 /**
- * List of the web documents that the window holds. If a reload leaves the surface document, the document region and the picture region of the previous page, the list grows. The document id is
+ * List of the web documents that the window holds. If a reload leaves the surface document, the document region and the image region of the previous page, the list grows. The document id is
  * assigned anew at every reload, so only the number is compared.
  */
 function inventory(window) {

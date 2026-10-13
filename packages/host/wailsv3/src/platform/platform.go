@@ -364,9 +364,9 @@ type Platform interface {
 	// keyboard, IME and input events as a JSON string ({key, insert, compose, focus, size, error})
 	// on the main thread.
 	CreateImage(surface unsafe.Pointer, name string, event func(json string)) (unsafe.Pointer, error)
-	// PlaceImage sets the picture region with the CSS pixel margins of the surface viewport.
+	// PlaceImage sets the image region with the CSS pixel margins of the surface viewport.
 	PlaceImage(image unsafe.Pointer, left, top, right, bottom float64, visible bool)
-	// RasterImage returns the device pixel size of the applied picture region and the ratio of device pixels per CSS pixel.
+	// RasterImage returns the device pixel size of the applied image region and the ratio of device pixels per CSS pixel.
 	RasterImage(image unsafe.Pointer) (width, height int, scale float64, ok bool)
 	// SurfacePlacedImage returns whether the surface of the region has a native size. A region of a surface that is not laid out yet has no raster size.
 	SurfacePlacedImage(image unsafe.Pointer) bool
@@ -383,7 +383,7 @@ type Platform interface {
 	TextImage(image unsafe.Pointer, utf8 string)
 	// FactsImage returns all information of the region as JSON.
 	FactsImage(image unsafe.Pointer) (string, error)
-	// CloseImage removes the picture region. event is not called afterward.
+	// CloseImage removes the image region. event is not called afterward.
 	CloseImage(image unsafe.Pointer)
 
 	// BeginLayout starts a surface layout transaction. When the layout becomes possible, it calls ready on the UI thread.

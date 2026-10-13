@@ -402,7 +402,7 @@
         "name": "string",
         "type": "string"
       },
-      "description": "The host relayed a picture region event that carries correlation identifiers to the page; `name` is the region and `type` the type of the event."
+      "description": "The host relayed an image region event that carries correlation identifiers to the page; `name` is the region and `type` the type of the event."
     },
     "host.sidecar.request": {
       "layer": "host",

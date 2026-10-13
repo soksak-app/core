@@ -2,7 +2,7 @@
 
 package darwin
 
-// The surface picture region. The implementation is image_region.m of native/darwin.
+// The surface image region. The implementation is image_region.m of native/darwin.
 
 /*
 #include <stdbool.h>
@@ -28,7 +28,7 @@ import (
 	"unsafe"
 )
 
-// images are the event receiver handles of each picture region handle. They are read and changed only on the UI thread.
+// images are the event receiver handles of each image region handle. They are read and changed only on the UI thread.
 var images = map[unsafe.Pointer]cgo.Handle{}
 
 //export imageChanged

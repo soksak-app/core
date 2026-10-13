@@ -223,7 +223,7 @@ func EmitHostCids(level Level, event string, cids []string, fields map[string]an
 	storeEvent(level, "host", event, event, cids, text, produced)
 }
 
-// RecordInputRelay stores the event `host.input.relay` for a picture region event that carries correlation identifiers, with
+// RecordInputRelay stores the event `host.input.relay` for an image region event that carries correlation identifiers, with
 // the surface and the name of the region and the `type` of the event. A region event without identifiers stores nothing. An
 // event that is not a JSON object, whose `cids` are not a list of identifiers or whose `type` is not a string is an error
 // and stores nothing.

@@ -104,7 +104,7 @@
 | 알림 센터가 실패를 알리거나, 이벤트를 읽지 못하거나, 알림의 종류를 모르거나, 창과 표면이 없거나, 닫힌 창을 가리킨다 | `error host notification: <reason>` |
 | 이전 실행의 crash report를 읽을 수 없거나, crash report 폴더를 나열하거나 알아낼 수 없다 | `error host crash reports: <reason>`, `error native diagnostic reports: the system names no Library folder for the user`. 이유는 파일이나 폴더를 밝히며, 읽을 수 없는 report는 한 번만 보고한다([로깅](logging.ko.md)) |
 | 설치된 plugin의 catalog를 쓸 수 없다: 없거나 JSON이 아니거나 `plugin.<plugin>.` 밖의 이름이나 모르는 class를 선언한다 | `error host plugin catalog: <file>: <reason>`. 그 plugin의 event는 `undeclared`로 남고 다른 plugin은 class를 유지한다([로깅](logging.ko.md#plugin-catalog)) |
-| picture region event의 `cids`가 식별자 목록이 아니거나 `type`이 없어 host가 그 중계를 기록하지 못한다 | `error host input relay: <reason>` |
+| image region event의 `cids`가 식별자 목록이 아니거나 `type`이 없어 host가 그 중계를 기록하지 못한다 | `error host input relay: <reason>` |
 | 호스트의 시작 단계가 실패한다 | `error host startup: <reason>`, 그리고 프로세스가 상태 1로 끝난다 |
 
 호출자가 받아 오류 표시로 보이는 실패는 그 표시가 기록한다. endpoint 요청은 실패를 client에 답하고, `sok` 명령은 상태와 메시지를 표준 오류로 끝내며, plugin은 host가 문서의 `failure`로 알린 document region의 탐색 실패를 `tab.error`([plugins](plugins.md))로 보이고 그 표시가 `error page tab error <tab id>: <text>`를 쓴다.

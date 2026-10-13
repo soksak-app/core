@@ -66,7 +66,7 @@ func StartAssets(start func(window uint) ([]byte, error)) application.Middleware
 }
 
 // startPage starts the main page of a window and builds the start document of that window. Before it answers, it leaves the window in the not ready state,
-// ends the requests sent to the previous page, and cleans up the surface documents, the picture regions and the modals of the previous page.
+// ends the requests sent to the previous page, and cleans up the surface documents, the image regions and the modals of the previous page.
 func (h *Host) startPage(window uint) ([]byte, error) {
 	h.mu.Lock()
 	s := h.windows[window]

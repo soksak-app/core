@@ -2,10 +2,10 @@ package host
 
 // The display region for external pictures in a surface page, related to the picture envelope of docs/spec/sidecars.md.
 //
-// A surface page requests that a picture be shown in a native region. The host creates a picture region inside the surface web view,
-// lays it out with the margins that the page reported, and shows in the region the picture that a sidecar sent. The picture region is a subview of the
+// A surface page requests that a picture be shown in a native region. The host creates an image region inside the surface web view,
+// lays it out with the margins that the page reported, and shows in the region the picture that a sidecar sent. The image region is a subview of the
 // surface web view, so it moves and hides together with the surface.
-// It closes when the surface is removed or the surface page is read again. The picture region shows the picture
+// It closes when the surface is removed or the surface page is read again. The image region shows the picture
 // envelope (image envelope) that a sidecar sent, and the host verifies the authenticity of the sidecar.
 
 import (
@@ -22,12 +22,12 @@ import (
 	"unsafe"
 )
 
-// imageStore is the name of the persistent data store of a picture region.
+// imageStore is the name of the persistent data store of an image region.
 const imageStore = "soksak-images"
 
 var imageName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
-// ImageRequest is a picture region call of a surface page.
+// ImageRequest is an image region call of a surface page.
 type ImageRequest struct {
 	Surface string `json:"surface"`
 	Name    string `json:"name"`
@@ -61,7 +61,7 @@ func (s *Surfaces) checkImage(viewID uint64, req ImageRequest) (ImageKey, error)
 	return CheckImage(caller, req)
 }
 
-// ImageCallError returns the failure of the picture region call call (docs/spec/native-host.md#host-calls).
+// ImageCallError returns the failure of the image region call call (docs/spec/native-host.md#host-calls).
 func ImageCallError(call string, err error) error {
 	if err == nil {
 		return nil
@@ -69,13 +69,13 @@ func ImageCallError(call string, err error) error {
 	return fmt.Errorf("%s: %w", call, err)
 }
 
-// ImageOwner records the sidecar that registered a picture region and its owner.
+// ImageOwner records the sidecar that registered an image region and its owner.
 type ImageOwner struct {
 	SidecarName  string
 	SidecarOwner SidecarOwner
 }
 
-// Images are the picture regions of a window.
+// Images are the image regions of a window.
 type Images struct {
 	mu             sync.Mutex
 	handles        map[ImageKey]unsafe.Pointer
@@ -83,7 +83,7 @@ type Images struct {
 	states         map[ImageKey]*ImageRasterState
 	generations    map[string]uint64
 	surfaceVisible map[string]bool
-	// The generation and the raster that a detached picture region used last. A region attached again in the same generation counts from the next raster, because the sidecar
+	// The generation and the raster that a detached image region used last. A region attached again in the same generation counts from the next raster, because the sidecar
 	// ignores a configuration whose (generation, raster) did not increase as a past configuration. It is cleared when the generation of the surface changes.
 	detachedRasters map[ImageKey][2]uint64
 	nextGeneration  uint64
@@ -244,7 +244,7 @@ func (i *Images) detachLocked(key ImageKey) {
 	delete(i.states, key)
 }
 
-// Set writes the created picture region to the reserved name.
+// Set writes the created image region to the reserved name.
 func (i *Images) Set(key ImageKey, handle unsafe.Pointer) bool {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -255,7 +255,7 @@ func (i *Images) Set(key ImageKey, handle unsafe.Pointer) bool {
 	return true
 }
 
-// Get returns the created picture region.
+// Get returns the created image region.
 func (i *Images) Get(key ImageKey) (unsafe.Pointer, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -265,7 +265,7 @@ func (i *Images) Get(key ImageKey) (unsafe.Pointer, error) {
 	return nil, fmt.Errorf("image %q is not attached", key.Name)
 }
 
-// GetOwner returns the sidecar owner that registered the picture region.
+// GetOwner returns the sidecar owner that registered the image region.
 func (i *Images) GetOwner(key ImageKey) (*ImageOwner, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -275,7 +275,7 @@ func (i *Images) GetOwner(key ImageKey) (*ImageOwner, error) {
 	return nil, fmt.Errorf("image %q is not attached", key.Name)
 }
 
-// Remove removes the name and returns its picture region.
+// Remove removes the name and returns its image region.
 func (i *Images) Remove(key ImageKey) (unsafe.Pointer, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -288,7 +288,7 @@ func (i *Images) Remove(key ImageKey) (unsafe.Pointer, error) {
 	return handle, nil
 }
 
-// RemoveSurface removes all names of a surface and returns the created picture regions.
+// RemoveSurface removes all names of a surface and returns the created image regions.
 func (i *Images) RemoveSurface(surface string) []unsafe.Pointer {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -477,7 +477,7 @@ func (i *Images) MarkPresentationFailed(key ImageKey, generation, raster uint64,
 	i.changedLocked()
 }
 
-// currentPresentedLocked returns whether every visible valid picture region displayed the current raster.
+// currentPresentedLocked returns whether every visible valid image region displayed the current raster.
 func (i *Images) currentPresentedLocked() bool {
 	for key, state := range i.states {
 		surfaceVisible, known := i.surfaceVisible[key.Surface]
@@ -489,7 +489,7 @@ func (i *Images) currentPresentedLocked() bool {
 	return true
 }
 
-// PendingRasters lists, in the order of surface and name, the picture regions that the display barrier still waits for. When the barrier times out, the list is attached to the error to report
+// PendingRasters lists, in the order of surface and name, the image regions that the display barrier still waits for. When the barrier times out, the list is attached to the error to report
 // which regions were not displayed. It is "none" when no region is waited for.
 func (i *Images) PendingRasters() string {
 	i.mu.Lock()
@@ -518,14 +518,14 @@ func (i *Images) PendingRasters() string {
 	return strings.Join(pending, ", ")
 }
 
-// CurrentPresented returns whether every visible picture region displayed the current raster.
+// CurrentPresented returns whether every visible image region displayed the current raster.
 func (i *Images) CurrentPresented() bool {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return i.currentPresentedLocked()
 }
 
-// WaitCurrent waits until every visible picture region displays the current raster or the time limit ends.
+// WaitCurrent waits until every visible image region displays the current raster or the time limit ends.
 func (i *Images) WaitCurrent(timeout time.Duration) bool {
 	return i.WaitCurrentError(timeout) == nil
 }
@@ -596,7 +596,7 @@ func (i *Images) AuthorizeFrame(key ImageKey, sender string, generation, raster 
 	return ""
 }
 
-// Names are the keys of the created picture regions by address.
+// Names are the keys of the created image regions by address.
 func (i *Images) Names() map[uint64]ImageKey {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -609,7 +609,7 @@ func (i *Images) Names() map[uint64]ImageKey {
 	return names
 }
 
-// All are the created picture regions.
+// All are the created image regions.
 func (i *Images) All() []unsafe.Pointer {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -622,7 +622,7 @@ func (i *Images) All() []unsafe.Pointer {
 	return all
 }
 
-// CloseSurface closes all picture regions of a surface. Call it on the UI thread.
+// CloseSurface closes all image regions of a surface. Call it on the UI thread.
 func (i *Images) CloseSurface(surface string, close func(unsafe.Pointer)) {
 	handles := i.RemoveSurface(surface)
 	for _, handle := range handles {

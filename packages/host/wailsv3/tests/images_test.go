@@ -941,7 +941,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 	}
 }
 
-// attachImage connects the picture region of the sidecar sidecar-a to key.
+// attachImage connects the image region of the sidecar sidecar-a to key.
 func attachImage(t *testing.T, images *host.Images, key host.ImageKey) {
 	t.Helper()
 	var handle int
@@ -1125,7 +1125,7 @@ func TestPresentationOutcomeNamesTheCurrentFrameOfAFailure(t *testing.T) {
 	}
 }
 
-// When a picture region is detached from the same surface document and attached again, the generation stays the same, so the raster of the attached region must be larger than the raster the sidecar already
+// When an image region is detached from the same surface document and attached again, the generation stays the same, so the raster of the attached region must be larger than the raster the sidecar already
 // received. The sidecar ignores a configuration whose (generation, raster) did not increase as a past configuration.
 // contract: images.transfer.reattach-continues-raster
 func TestReattachingInTheSameGenerationContinuesTheRaster(t *testing.T) {
@@ -1180,7 +1180,7 @@ func TestNativeImageCallsDecodeTheirOwnArguments(t *testing.T) {
 	}
 }
 
-// The failure of a picture region call names the call (G1.4-112).
+// The failure of an image region call names the call (G1.4-112).
 // contract: images.calls.name-the-call
 func TestImageCallFailuresNameTheCall(t *testing.T) {
 	if err := host.ImageCallError("imageDetach", errors.New(`image "view" is not attached`)); err == nil ||

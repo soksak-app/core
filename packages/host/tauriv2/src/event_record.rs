@@ -255,7 +255,7 @@ pub fn emit_host_cids(level: Level, event: &str, cids: &[String], fields: serde_
     }
 }
 
-/// Records that a picture region event carrying correlation identifiers is relayed to the page: the event
+/// Records that an image region event carrying correlation identifiers is relayed to the page: the event
 /// `host.input.relay` with the `surface` and the `name` of the region and the `type` of the event, and the identifiers of
 /// the event. `event_json` is the JSON text of the region event. An event without `cids` is not an input and stores
 /// nothing; an event whose `cids` or `type` cannot be used is reported as a record of the host and stores no event.

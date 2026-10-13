@@ -403,7 +403,7 @@ func (s *Surfaces) closeSurfaceDocuments(surface string) {
 	}
 }
 
-// surfaceCommitted registers and cleans up the previous document and the picture regions when the surface page started to show a new document.
+// surfaceCommitted registers and cleans up the previous document and the image regions when the surface page started to show a new document.
 // The new document creates its own entries and document regions again.
 func (s *Surfaces) surfaceCommitted(viewID uint64) {
 	surface := s.surfaceOf(viewID)
@@ -435,7 +435,7 @@ func (s *Surfaces) emitToSurface(surface, name string, data any) {
 	s.window.EmitEvent(name, data)
 }
 
-// imageChanged sends the picture region event only to the owning surface and notifies the host.window watchers. It is called on the UI thread.
+// imageChanged sends the image region event only to the owning surface and notifies the host.window watchers. It is called on the UI thread.
 func (s *Surfaces) imageChanged(key ImageKey, event string) {
 	// Every event of a native region is recorded with its whole body before it is relayed (docs/spec/diagnostics.md).
 	PerformanceObserve("host", func() map[string]any {
@@ -449,7 +449,7 @@ func (s *Surfaces) imageChanged(key ImageKey, event string) {
 	s.windowChanged()
 }
 
-// attachImage creates a hidden picture region inside a surface. It is an error when the same name already exists.
+// attachImage creates a hidden image region inside a surface. It is an error when the same name already exists.
 func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
 	key, err := s.checkImage(viewID, req)
 	if err != nil {
@@ -479,7 +479,7 @@ func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
 		s.images.Remove(key)
 		return err
 	}
-	// When the surface was removed during creation, the created picture region is closed. Registration and closing run on the UI thread.
+	// When the surface was removed during creation, the created image region is closed. Registration and closing run on the UI thread.
 	var registered bool
 	application.InvokeSync(func() {
 		registered = s.images.Set(key, handle)
@@ -494,7 +494,7 @@ func (s *Surfaces) attachImage(viewID uint64, req ImageRequest) error {
 	return nil
 }
 
-// withImage runs run on the UI thread for an open picture region.
+// withImage runs run on the UI thread for an open image region.
 func (s *Surfaces) withImage(viewID uint64, req ImageRequest, run func(handle unsafe.Pointer) error) error {
 	key, err := s.checkImage(viewID, req)
 	if err != nil {
@@ -540,7 +540,7 @@ func (s *Surfaces) textImage(viewID uint64, req ImageRequest, text string) error
 	})
 }
 
-// closeSurfaceImages closes all picture regions of a surface. Call it on the UI thread.
+// closeSurfaceImages closes all image regions of a surface. Call it on the UI thread.
 func (s *Surfaces) closeSurfaceImages(surface string) {
 	s.images.CloseSurface(surface, func(handle unsafe.Pointer) {
 		system.CloseImage(handle)

@@ -1107,7 +1107,7 @@ type WindowControl struct {
 	Hidden bool `json:"hidden"`
 }
 
-// WindowRegion is one picture region of host.window.
+// WindowRegion is one image region of host.window.
 type WindowRegion struct {
 	Surface   string `json:"surface"`
 	Name      string `json:"name"`
@@ -1131,7 +1131,7 @@ type WindowRegion struct {
 
 // WindowResponder is the first responder of the window. Owner is the kind of web view that contains it, one of page, surface,
 // document, modal, webview, and native. webview is a web view that is not registered, and native is a view outside
-// the web views (for example a picture region). Surface is the surface that contains the first responder.
+// the web views (for example an image region). Surface is the surface that contains the first responder.
 type WindowResponder struct {
 	Class    string  `json:"class"`
 	Owner    string  `json:"owner"`

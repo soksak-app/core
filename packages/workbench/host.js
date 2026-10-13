@@ -1,7 +1,7 @@
 // Requests native surfaces and modal views from the application.
 //
 // Plugin modules mount into the application DOM. A page declares the frame of a logical surface, and the host places
-// the native document and picture regions on that surface.
+// the native document and image regions on that surface.
 // A modal document is shown in a separate native web view inside the main window.
 //
 // This file is not duplicated per application. The only difference between applications is the transport, which the

@@ -217,7 +217,7 @@ type Surfaces struct {
 	shapes    map[string]*nativeShape
 	// documents are the document regions that the surface pages attached.
 	documents *Documents
-	// images are the picture regions that the surface pages attached.
+	// images are the image regions that the surface pages attached.
 	images   *Images
 	sidecars *Sidecars
 	watch    sync.Once
@@ -694,7 +694,7 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 				timer.Stop()
 			}
 		}
-		// A continuous frame also waits, before the commit, for each visible picture region to display a raster of the prepared size.
+		// A continuous frame also waits, before the commit, for each visible image region to display a raster of the prepared size.
 		// Without waiting, a surface resize would show the previous raster while the region is enlarged
 		// (docs/spec/surface-composition.md).
 		if waiting == nil {
@@ -794,7 +794,7 @@ func (kind WindowNativeKind) String() string {
 	}
 }
 
-// CloseWindowSurfaces closes, for each logical surface of the closing window, its document regions and picture regions and then closes the surface. Surfaces are closed in id
+// CloseWindowSurfaces closes, for each logical surface of the closing window, its document regions and image regions and then closes the surface. Surfaces are closed in id
 // order.
 //
 // A logical surface holds a main web view and a document region has its own web content process, so a surface and a region that are not closed leave the web view and its web content process after the window

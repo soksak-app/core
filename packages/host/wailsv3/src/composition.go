@@ -73,7 +73,7 @@ func rasterFacts(handle unsafe.Pointer) string {
 	return facts
 }
 
-// observeRaster records the raster decision of a picture region in the performance trace. configured means the size to send to the sidecar was decided,
+// observeRaster records the raster decision of an image region in the performance trace. configured means the size to send to the sidecar was decided,
 // and deferred means the size could not be decided and was postponed because the surface is not laid out yet (docs/spec/performance-trace.md).
 func (s *Surfaces) observeRaster(key ImageKey, phase, from string, width, height int, scale float64) {
 	PerformanceObserve("host", func() map[string]any {

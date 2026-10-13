@@ -148,7 +148,7 @@ func TestDocumentEntryRequiresANonZeroOffset(t *testing.T) {
 
 // TestDispatcherHandlesACommitBeforeTheMessagesAfterIt verifies that a message received after a commit in the same web view is handled after the handling of that
 // commit ends. If the first layout request of a new document were handled before the commit, it would hit the revision of the previous document,
-// and the late commit would close the picture regions of the new document. The messages of another web view are not waited for.
+// and the late commit would close the image regions of the new document. The messages of another web view are not waited for.
 // contract: documents.commit.precedes-messages
 func TestDispatcherHandlesACommitBeforeTheMessagesAfterIt(t *testing.T) {
 	release := make(chan struct{})

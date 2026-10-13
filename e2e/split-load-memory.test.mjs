@@ -19,7 +19,7 @@ function memory(appName) {
 }
 
 /**
- * List of the web documents that the window holds. If a split and a reload leave documents, document regions and picture regions, the list grows. The memory of the page process
+ * List of the web documents that the window holds. If a split and a reload leave documents, document regions and image regions, the list grows. The memory of the page process
  * is not judged because WebKit keeps the previous reloaded document until memory pressure (docs/operations/private-native-apis.md).
  */
 function inventory(window) {
