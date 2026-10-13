@@ -53,9 +53,20 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: core/packages/host/wailsv3/go.mod
+          # The modules and the build cache of Go are kept between runs; the go.sum files of the checkout key them.
+          cache-dependency-path: core/**/go.sum
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      # The crates and the build output of cargo are kept between runs, so a run does not build every crate cold.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('core/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
       - name: Build
         run: make -C core build native-darwin
       - name: Commit messages

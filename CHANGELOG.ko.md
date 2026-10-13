@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.47: CI runner에서 Tauri host test의 cold build가 300 s를 넘으므로 host contract check의 build는 600 s까지 걸릴 수 있고, CI workflow는 cargo와 Go cache를 실행 사이에 보관한다.
 - F135: exposure 명세가 애플리케이션이 한 번 활성이었으면 document 영역도 터미널처럼 활성 애플리케이션의 키 창에서만 입력한 문자를 받는다고 적는다. 활성화를 막는 native test가 여전히 입력하는 이유다.
 - F160.6.5.1: 두 host가 sidecar의 writer가 쓰는 줄의 크기를 보고하고, buffer 한도의 fixture는 writer가 pipe에서 막힌 뒤에야 쓰기 queue를 채우므로, 그 case가 writer thread의 시작 시점에 좌우되지 않는다.
 - F102.1.6: window check가 자기 registry에서 contributor probe와 provider probe를 설치하고, 두 애플리케이션에서 기여한 항목이 연결되고 provider page가 그것을 쓰기를 요구한다.

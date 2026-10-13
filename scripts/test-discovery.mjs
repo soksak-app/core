@@ -10,8 +10,11 @@ import { runTests } from './test-runner.mjs';
 
 const execFileAsync = promisify(execFile);
 
-/** The limit of a build, which compiles a package and its dependencies. */
-export const BUILD_TIMEOUT_MS = 300_000;
+/**
+ * The limit of a build, which compiles a package and its dependencies. It stops a build that hangs; a cold build of the Tauri
+ * host with its tests takes more than 300 s on the macOS runner of CI, so the limit is the largest limit of a test command.
+ */
+export const BUILD_TIMEOUT_MS = 600_000;
 
 /**
  * The tests of the Go packages that match `patterns` (relative to `cwd`). `tags` is a build tag list and `ldflags` the link
