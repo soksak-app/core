@@ -83,6 +83,8 @@ for (const app of Object.values(APPS)) {
     await s.run("terminal.input", { bytes: "printf 'ALTERED-%s\\n' one two\r" }, surface);
     await readScreenUntil(s, surface, (lines) => lines.includes("ALTERED-two"), `${surface} did not show the printed lines`);
     const until = await storedSequence(app, offsets, sessionId);
+    // The replay stores the divergence that this check causes as an error event of the tool in the configuration folder.
+    s.expectError(new RegExp(`sok\\.replay\\.divergence: .*"layer":"plugin".*"session":"${sessionId}"`));
     const result = replay(app, sessionId, until);
     t.diagnostic(`${app.name}: replay ${JSON.stringify(result)}`);
     assert.equal(result.code, 1, `sok debug replay did not report the changed message: ${JSON.stringify(result)}`);

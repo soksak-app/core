@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.4.1: replay check의 alter case가 일부러 일으키는 자기 session의 event `sok.replay.divergence`를 선언하므로, 실행의 audit가 더는 그것을 선언되지 않은 오류로 세지 않는다.
 - F161.37.1: 두 host가 sidecar로 가는 줄이 쓰기 queue에서 1초 이상 기다렸거나 쓰기에 10 ms 이상 걸리면 `host.sidecar.write_wait`를 저장한다. log가 host가 늦게 쓴 줄과 깨어나지 않은 sidecar의 읽기를 구분하게 하기 위해서다.
 - F161.32: Wails host에서 `phase: starting`에 머문 hwp 파일의 studio를 영구 document store가 아니라, 편집기가 듣기 전에 첫 요청을 보낸 hwp plugin의 시작(hwp repository의 H13)으로 분류한다. core의 message contract는 바뀌지 않는다.
 - F161.34: activity observer의 할당 check가 notification을 보내는 thread의 할당을 센다. text view가 first responder가 된 뒤 system의 text input analytics가 자기 queue에서 한 번 할당하고, 그 block이 첫 측정 구간에 들어갔기 때문이다.
