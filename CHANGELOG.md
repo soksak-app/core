@@ -6,6 +6,7 @@
 
 - F161.56, F161.59, F161.62: closed as not reproduced on the current builds, with the records that show a recurrence in place.
 - F161.27: closed as not reproduced after three repeat runs of the outside resize check on both applications.
+- F160.21: the Go and Rust writer emits are measured again and recorded with the load.
 - F176.2: the test inventory links F175 and F176 to their tests.
 - F160.20: the run audit measures the volume of each log class and fails a class above its budget in the catalog.
 - F176.1: the events check passes again after the marker above the literal emit of an input failure is removed.
