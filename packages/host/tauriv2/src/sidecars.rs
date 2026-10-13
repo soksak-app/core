@@ -345,12 +345,54 @@ fn forget_closing<O>(state: &mut State<O>, sidecar: &str) -> Option<ClosingChang
     state.closing_changed.clone()
 }
 
-/// Records a sidecar message that is dropped because no window owns it, together with its body.
-fn log_dropped_message(sidecar: &str, surface: &str, body: &str) {
+/// Records a sidecar message that is dropped because no window owns it, together with its body. A dropped transfer
+/// image is answered `closed`, so the sidecar releases the frame and does not match a later answer of a reopened
+/// surface of the same id to it (docs/spec/native-surfaces.md#image-consumption).
+fn drop_message(sender: &dyn ResponseSender, sidecar: &str, surface: &str, body: &RawValue) {
     crate::application_log::log_info(
         &format!("sidecar {sidecar}"),
-        format!("message for surface {surface} dropped: no window owns the surface: {body}"),
+        format!(
+            "message for surface {surface} dropped: no window owns the surface: {}",
+            body.get()
+        ),
     );
+    let Some((name, answer)) = closed_image_answer(body) else {
+        return;
+    };
+    if let Err(error) = sender.send(surface, &name, &answer) {
+        crate::application_log::log_error(
+            &format!("sidecar {sidecar}"),
+            format!("closed image answer of surface {surface}: {error}"),
+        );
+    }
+}
+
+/// The answer `{image:{error:"closed",name,generation,raster,sequence}}` to a transfer image of a closed surface, with
+/// the image name, or `None` when the body is not a transfer image.
+pub fn closed_image_answer(body: &RawValue) -> Option<(String, Box<RawValue>)> {
+    #[derive(Deserialize)]
+    struct Image {
+        name: String,
+        generation: u64,
+        raster: u64,
+        sequence: u64,
+        token: serde_json::Value,
+    }
+    #[derive(Deserialize)]
+    struct Envelope {
+        image: Image,
+    }
+    // silent: a body that is not a transfer image is another message of the sidecar, which receives no closed answer.
+    let image = serde_json::from_str::<Envelope>(body.get()).ok()?.image;
+    if image.name.is_empty() || image.token.is_null() {
+        return None;
+    }
+    let answer = serde_json::json!({"image": {
+        "error": "closed", "name": image.name, "generation": image.generation,
+        "raster": image.raster, "sequence": image.sequence}});
+    // silent: a JSON value always serializes, so the error is never set.
+    let answer = RawValue::from_string(answer.to_string()).ok()?;
+    Some((image.name, answer))
 }
 
 /// The error of a reply that the bound of the pending replies refused.
@@ -2274,7 +2316,12 @@ impl<O: Owner> Core<O> {
                             body: event.body,
                         });
                     } else {
-                        log_dropped_message(&sidecar, &event.surface, event.body.get());
+                        let response_sender = ReadThreadResponseSender {
+                            sidecar_name: sidecar.clone(),
+                            tx: tx_clone.clone(),
+                            state: Arc::clone(&state),
+                        };
+                        drop_message(&response_sender, &sidecar, &event.surface, &event.body);
                     }
                 }
             })();
@@ -2685,14 +2732,14 @@ fn relay<O: Owner>(
         if !addressed {
             return Some(format!("unknown surface {}", event.surface));
         }
-        let Some(owner) = owner else {
-            log_dropped_message(sidecar, &event.surface, event.body.get());
-            continue;
-        };
         let response_sender = ReadThreadResponseSender {
             sidecar_name: sidecar.to_string(),
             tx: tx.clone(),
             state: Arc::clone(state),
+        };
+        let Some(owner) = owner else {
+            drop_message(&response_sender, sidecar, &event.surface, &event.body);
+            continue;
         };
         // Checks and handles whether it is an image envelope.
         if try_handle_image_envelope(

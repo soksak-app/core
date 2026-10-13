@@ -1653,8 +1653,8 @@ const FEATURE_LINKS = [
   {
     id: "F145.9",
     implementation: [
-      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func logDroppedMessage" },
-      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn log_dropped_message" },
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) dropMessage" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn drop_message" },
     ],
     tests: [
       { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail" },

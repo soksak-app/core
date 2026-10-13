@@ -1569,7 +1569,7 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 			c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body)
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		} else {
-			logDroppedMessage(process.name, event)
+			c.dropMessage(process.name, event)
 		}
 	}
 	if err := scanner.Err(); errors.Is(err, bufio.ErrTooLong) {
@@ -1730,7 +1730,7 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 			c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body)
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		} else {
-			logDroppedMessage(process.name, event)
+			c.dropMessage(process.name, event)
 		}
 	}
 	// net.ErrClosed means that this host closed the connection (cleanup after termination or failure). When the peer closes, it is EOF and there is no error.
@@ -1880,11 +1880,44 @@ func (c *Sidecars) notifyConnection(name string, failure error) {
 	}
 }
 
-// tryHandleImageEnvelope checks whether the event is an image envelope and handles it. It returns true for an envelope.
-// logDroppedMessage records, with its body, a sidecar message that is discarded because there is no owner window.
-func logDroppedMessage(sidecar string, event sidecarEvent) {
+// dropMessage records, with its body, a sidecar message that is discarded because there is no owner window, and answers a
+// transfer image among them with the error closed, because the supplier keeps a transfer image until the host answers it
+// (docs/spec/native-surfaces.md#image-regions).
+func (c *Sidecars) dropMessage(sidecar string, event sidecarEvent) {
 	LogInfo("sidecar "+sidecar, fmt.Sprintf("message for surface %s dropped: no window owns the surface: %s", event.Surface, event.Body))
+	name, answer, ok := ClosedImageAnswer(event.Body)
+	if !ok {
+		return
+	}
+	if err := c.SendResponse(sidecar, event.Surface, name, answer); err != nil {
+		LogError("sidecar "+sidecar, fmt.Sprintf("answer of the image of closed surface %s: %v", event.Surface, err))
+	}
 }
+
+// ClosedImageAnswer returns, for a transfer image envelope, its region name and the answer {image: {error: "closed", name,
+// generation, raster, sequence}}, and false for any other message.
+func ClosedImageAnswer(body json.RawMessage) (string, json.RawMessage, bool) {
+	var envelope struct {
+		Image *struct {
+			Name       string  `json:"name"`
+			Generation *uint64 `json:"generation"`
+			Raster     *uint64 `json:"raster"`
+			Sequence   *uint64 `json:"sequence"`
+			Token      any     `json:"token"`
+		} `json:"image"`
+	}
+	if json.Unmarshal(body, &envelope) != nil || envelope.Image == nil || envelope.Image.Token == nil || envelope.Image.Name == "" ||
+		envelope.Image.Generation == nil || envelope.Image.Raster == nil || envelope.Image.Sequence == nil {
+		return "", nil, false
+	}
+	image := envelope.Image
+	// silent: a map of a string and integers always marshals, so the error is never set.
+	answer, _ := json.Marshal(map[string]any{"image": map[string]any{
+		"error": "closed", "name": image.Name, "generation": *image.Generation, "raster": *image.Raster, "sequence": *image.Sequence}})
+	return image.Name, answer, true
+}
+
+// tryHandleImageEnvelope checks whether the event is an image envelope and handles it. It returns true for an envelope.
 
 func (c *Sidecars) tryHandleImageEnvelope(owner SidecarOwner, sidecarName, surface string, body json.RawMessage) bool {
 	// Checks whether the owner has the image envelope decision handler

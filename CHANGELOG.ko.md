@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.37.2: 두 호스트가 소유 창이 없는 표면의 전송 그림에 `closed`로 답하므로, terminal sidecar가 그 frame을 놓고 같은 id로 다시 열린 표면이 자기 frame의 답을 받는다.
 - F161.50: Tauri host 가 surface sync 가 제거하는 surface 를 handle 을 닫기 전에 surface registry 에서 빼므로, 창 닫기가 같은 handle 을 다시 닫아 애플리케이션을 종료시키지 않는다.
 - F161.49: terminal service의 복구 check가 kill이 전달 중인 frame이나 쓰기를 만날 때 일으키는 오류를 선언한다.
 - F150.8.4: 선언된 모든 workspace version이 0.0.11이다. F150과 F160의 event contract, F160.35의 replay, F161과 F143의 수리, F162.1의 저장 위치를 담는 version이다.

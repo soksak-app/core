@@ -350,6 +350,7 @@ Items:
 | `sidecars.protocol.surface-keeps-its-first-root` | After the owning window changes project, requests and the closed notice of an open surface carry the root of its first request. | both |
 | `sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail` | A stdio sidecar message for a surface that the host closed is discarded, while a message for a surface that the host never sent to that process fails the sidecar with `unknown surface <surface>` delivered to the surfaces that sent. | both |
 | `sidecars.protocol.dropped-message-is-recorded` | A message of a sidecar that is discarded because no window owns its surface writes `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`. | both |
+| `sidecars.image.closed-surface-is-answered` | A transfer image of a surface that no window owns is discarded and answered `{"surface":<surface>,"body":{"image":{"error":"closed","name","generation","raster","sequence"}}}` with the values of the image. | both |
 | `sidecars.send.rejects-undeclared-sidecar` | Sending to a sidecar that no plugin declares fails with "not declared". | both |
 | `sidecars.send.rejects-after-stop` | Sending after the sidecars stop fails with "stopped". | both |
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | Without declared sidecars, construction succeeds and every send fails with "not declared by any plugin". | both |

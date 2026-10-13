@@ -1867,3 +1867,33 @@ fn the_failure_of_a_sidecar_is_the_failed_reply_of_its_pending_requests() {
         serde_json::json!({"name": ECHO, "surface": "s1", "bytes": 0, "ok": false, "error": format!("-32603: {reason}")})
     );
 }
+
+// contract: sidecars.image.closed-surface-is-answered
+#[test]
+fn an_image_of_a_closed_surface_is_answered_closed() {
+    // The script sends a transfer image of the closed surface s2, reads the answer of the host and returns it as a message
+    // of s1.
+    let (sidecars, _directory) = script_sidecars(concat!(
+        "#!/bin/sh\nread open1\nread open2\nread closed2\n",
+        "printf '%s\\n' '{\"surface\":\"s2\",\"body\":{\"image\":{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{\"id\":7,\"kind\":\"iosurface-global\"},\"width\":10}}}'\n",
+        "read answer\nprintf '{\"surface\":\"s1\",\"body\":%s}\\n' \"$answer\"\nexec sleep 600\n",
+    ));
+    let (window, events, _failures) = failing_owner("a", "/projects/a");
+    for surface in ["s1", "s2"] {
+        sidecars
+            .send(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+    }
+    sidecars
+        .retain(&window, &|surface| surface != "s2")
+        .unwrap();
+    let event = events
+        .recv_timeout(STALL)
+        .expect("no answer of the image of the closed surface; the test stalled");
+    let answer: serde_json::Value = serde_json::from_str(event.body.get()).unwrap();
+    assert_eq!(event.surface, "s1");
+    assert_eq!(
+        answer,
+        serde_json::json!({"surface": "s2", "body": {"image": {"error": "closed", "name": "view", "generation": 3, "raster": 4, "sequence": 5}}})
+    );
+}

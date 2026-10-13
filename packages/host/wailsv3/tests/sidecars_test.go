@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -1426,5 +1427,31 @@ func TestSidecarRequestCarriesTheCorrelationIdentifiers(t *testing.T) {
 `
 	if string(requests) != want {
 		t.Fatalf("requests =\n%s\nwant\n%s", requests, want)
+	}
+}
+
+// contract: sidecars.image.closed-surface-is-answered
+func TestAnImageOfAClosedSurfaceIsAnsweredClosed(t *testing.T) {
+	captureLog(t)
+	// The script sends a transfer image of the closed surface s2, reads the answer of the host and returns it as a message of s1.
+	sidecars, _ := scriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nread open1\nread open2\nread closed2\n"+
+		"printf '%s\\n' '{\"surface\":\"s2\",\"body\":{\"image\":{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{\"id\":7,\"kind\":\"iosurface-global\"},\"width\":10}}}'\n"+
+		"read answer\nprintf '{\"surface\":\"s1\",\"body\":%s}\\n' \"$answer\"\nexec sleep 600\n")
+	owner := newFakeOwner("/projects/a")
+	for _, surface := range []string{"s1", "s2"} {
+		if err := sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sidecars.Close("s2")
+	event := owner.next(t)
+	var answer any
+	if err := json.Unmarshal(event.Body, &answer); err != nil {
+		t.Fatalf("the returned answer %s is not JSON: %v", event.Body, err)
+	}
+	want := map[string]any{"surface": "s2", "body": map[string]any{"image": map[string]any{
+		"error": "closed", "name": "view", "generation": float64(3), "raster": float64(4), "sequence": float64(5)}}}
+	if event.Surface != "s1" || !reflect.DeepEqual(answer, want) {
+		t.Fatalf("the host answered %s for the image of the closed surface; want %v", event.Body, want)
 	}
 }
