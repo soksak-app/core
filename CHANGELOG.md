@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F164.2: the stall sample of the Tauri host is `stall_sample.rs`, the counterpart of the Wails host.
 - F168: the Rust packages build with edition 2024; the test of the default configuration folder no longer changes the environment of its process.
 - F162.4: every declared workspace version is 0.0.12.
 - F160.23: the record items of the sidecars and plugins that record nothing are in each repository's checklist, and the IDs per repository are listed in the F160.23 line; no repository needed a new item, because each already held the items of its missing records.

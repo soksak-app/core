@@ -63,6 +63,8 @@ mod private_files;
 mod process_exit;
 #[path = "shapes.rs"]
 mod shapes;
+#[path = "stall_sample.rs"]
+mod stall_sample;
 #[path = "standard_error.rs"]
 mod standard_error;
 #[path = "system.rs"]
@@ -240,23 +242,7 @@ impl Platform for Darwin {
         webview::kill_content_process(view)
     }
     fn sample_threads(&self, path: &std::path::Path) -> Result<(), String> {
-        // The system tool `sample` writes the stacks of every thread of this process.
-        let output = std::process::Command::new("/usr/bin/sample")
-            .arg(std::process::id().to_string())
-            .arg("1")
-            .arg("-file")
-            .arg(path)
-            .output()
-            .map_err(|error| format!("start /usr/bin/sample: {error}"))?;
-        if output.status.success() {
-            Ok(())
-        } else {
-            Err(format!(
-                "/usr/bin/sample ended with {}: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr).trim()
-            ))
-        }
+        stall_sample::sample_threads(path)
     }
 
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {
