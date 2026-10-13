@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F162, F124: the blank document and the debug view items are complete under the verification rule; the save panel was not observed in the activation tier.
 - F161.29: the surface menu of a plugin is complete with the terminal menu released.
 - F162.4, F141, F123, F161.57.3: core 0.0.12, the hwp plugin 0.0.1 and the terminal correction are released, and the preedit cursor check passes on both applications.
 - F161.57.5: `diagnostics.input.source` answers a selection after the text input context of the key view reports the selected source.

@@ -1929,6 +1929,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F124",
+    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.debug.save"' }],
+    tests: [{ file: "packages/host/tauriv2/tests/debug_test.rs", id: "debug_copy_copies_a_file_of_the_logs_folder_only" }],
+    expected: "Every 0.0.x release is a diagnostic build, and the debug view lists and saves every diagnostic file.",
+    levels: ["unit"],
+  },
+  {
+    id: "F162",
+    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.file.place"' }],
+    tests: [
+      { file: "packages/host/wailsv3/tests/file_place_test.go", id: "TestAPlaceInsideTheProjectIsAnsweredRelativeToTheRoot" },
+      { file: "packages/host/tauriv2/tests/file_place_test.rs", id: "a_place_inside_the_project_is_answered_relative_to_the_root" },
+    ],
+    expected: "A blank document opens from the new-tab control and its first save asks for the file inside the project.",
+    levels: ["unit"],
+  },
+  {
     id: "F149",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "export function auditLog" }],
     tests: [{ file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" }],
