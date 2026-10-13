@@ -1,4 +1,5 @@
 #import <objc/runtime.h>
+#import "event_ring.h"
 #import "webview_navigation.h"
 #import "private/webkit.h"
 
@@ -27,7 +28,21 @@
 // delegate implements.
 static BOOL handled(SEL selector) {
     return selector == @selector(webView:decidePolicyForNavigationAction:decisionHandler:) ||
-        selector == @selector(webView:didCommitNavigation:);
+        selector == @selector(webView:didCommitNavigation:) ||
+        selector == @selector(_webView:webContentProcessDidTerminateWithReason:);
+}
+
+// The name of a reason of a WebContent process end (SPProcessTerminationReason), and `unknown-<n>` for a value that
+// WebKit defines after this code.
+static NSString *terminationReasonName(NSInteger reason) {
+    switch (reason) {
+        case SPProcessTerminationReasonExceededMemoryLimit: return @"exceeded-memory";
+        case SPProcessTerminationReasonExceededCPULimit: return @"exceeded-cpu";
+        case SPProcessTerminationReasonRequestedByClient: return @"requested-by-client";
+        case SPProcessTerminationReasonCrash: return @"crash";
+        case SPProcessTerminationReasonExceededSharedProcessCrashLimit: return @"exceeded-shared-process-crash-limit";
+        default: return [NSString stringWithFormat:@"unknown-%ld", (long)reason];
+    }
 }
 
 - (BOOL)respondsToSelector:(SEL)selector {
@@ -84,6 +99,16 @@ static BOOL sameDocument(NSURL *from, NSURL *to) {
     [webView _clearBackForwardCache];
     id current = self.target;
     if ([current respondsToSelector:_cmd]) [current webView:webView didCommitNavigation:navigation];
+}
+
+// WebKit calls this method instead of webViewWebContentProcessDidTerminate: when the delegate responds to it, so the
+// forwarder records the reason and passes the end on under the selector that the framework delegate implements.
+- (void)_webView:(WKWebView *)webView webContentProcessDidTerminateWithReason:(SPProcessTerminationReason)reason {
+    NSString *fields = [NSString stringWithFormat:@"{\"reason\":\"%@\",\"code\":%ld}", terminationReasonName(reason), (long)reason];
+    sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_WARN, "native.webview.process_ended", fields.UTF8String);
+    id<SPNavigationDelegatePrivate> current = self.target;
+    if ([current respondsToSelector:_cmd]) [current _webView:webView webContentProcessDidTerminateWithReason:reason];
+    else if ([current respondsToSelector:@selector(webViewWebContentProcessDidTerminate:)]) [current webViewWebContentProcessDidTerminate:webView];
 }
 
 @end

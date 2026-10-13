@@ -64,6 +64,7 @@ var eventClasses = map[string]Class{
 	"native.observe.failed":         ClassLifecycle,
 	"native.observe.registered":     ClassLifecycle,
 	"native.process.exit_timeout":   ClassLifecycle,
+	"native.webview.process_ended":  ClassLifecycle,
 	"native.window.deminiaturized":  ClassLifecycle,
 	"native.window.first_responder": ClassInput,
 	"native.window.key":             ClassLifecycle,

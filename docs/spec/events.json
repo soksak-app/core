@@ -881,6 +881,16 @@
         "seconds": "number"
       },
       "description": "A process did not end within the time that the caller waited for it."
+    },
+    "native.webview.process_ended": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "reason": "string",
+        "code": "number"
+      },
+      "description": "The WebContent process of an app DOM webview ended. reason is the name of the WebKit termination reason (exceeded-memory, exceeded-cpu, requested-by-client, crash, exceeded-shared-process-crash-limit, or unknown-<n> for a value that WebKit defines later) and code is its number."
     }
   },
   "chains": {

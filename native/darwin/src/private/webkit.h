@@ -36,6 +36,23 @@
 // WKNavigationDelegatePrivate.h: policy that makes a navigation proceed in a new WebContent process.
 static const WKNavigationActionPolicy SPNavigationActionPolicyAllowInNewProcess = (WKNavigationActionPolicy)(WKNavigationActionPolicyAllow + 3);
 
+// WKNavigationDelegatePrivate.h: the reason of a WebContent process end (_WKProcessTerminationReason). The values 0 to 3 are
+// declared in the WebKit headers of the framework; the value 4 is available from macOS 15.2.
+typedef NS_ENUM(NSInteger, SPProcessTerminationReason) {
+    SPProcessTerminationReasonExceededMemoryLimit = 0,
+    SPProcessTerminationReasonExceededCPULimit = 1,
+    SPProcessTerminationReasonRequestedByClient = 2,
+    SPProcessTerminationReasonCrash = 3,
+    SPProcessTerminationReasonExceededSharedProcessCrashLimit = 4,
+};
+
+// WKNavigationDelegatePrivate.h: WebKit calls this method instead of webViewWebContentProcessDidTerminate: when the delegate
+// responds to it.
+@protocol SPNavigationDelegatePrivate <WKNavigationDelegate>
+@optional
+- (void)_webView:(WKWebView *)webView webContentProcessDidTerminateWithReason:(SPProcessTerminationReason)reason;
+@end
+
 @interface WKWebView (SPPrivate)
 @property(nonatomic, readonly) pid_t _webProcessIdentifier;
 // WKWebViewPrivate.h: terminates the current WebContent process so that a reload starts a new process.

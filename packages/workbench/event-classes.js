@@ -51,6 +51,7 @@ const EXACT = new Map([
   ["native.observe.failed", "lifecycle"],
   ["native.observe.registered", "lifecycle"],
   ["native.process.exit_timeout", "lifecycle"],
+  ["native.webview.process_ended", "lifecycle"],
   ["native.window.deminiaturized", "lifecycle"],
   ["native.window.first_responder", "input"],
   ["native.window.key", "lifecycle"],
