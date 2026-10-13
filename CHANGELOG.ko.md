@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F135, F160.24: 닫았다. document region의 입력 test가 통과하고 log query의 모든 항목이 완료되었다.
 - F162, F124: 빈 문서와 debug view 항목이 검증 규칙에 따라 완료되었다. save panel은 activation 등급에서 관측하지 않았다.
 - F161.29: terminal menu가 release되어 plugin의 surface menu가 완료되었다.
 - F162.4, F141, F123, F161.57.3: core 0.0.12, hwp plugin 0.0.1, terminal 수정이 release되었고, preedit cursor check가 두 애플리케이션에서 통과한다.

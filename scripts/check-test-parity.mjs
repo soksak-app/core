@@ -1946,6 +1946,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F135",
+    implementation: [{ file: "native/darwin/src/document_view.h", symbol: "sp_document_load" }],
+    tests: [{ file: "native/darwin/tests/document_typing_test.m", id: "the region loads the page" }],
+    expected: "The difference between an inactive plain window and the hosts that take typed text in a document region is explained in the specification.",
+    levels: ["unit"],
+  },
+  {
+    id: "F160.24",
+    implementation: [{ file: "packages/sok/wailsv3/src/log_query.go", symbol: "func ParseLogQuery" }],
+    tests: [{ file: "packages/sok/wailsv3/tests/debug_test.go", id: "TestQueryPrintsTheGoldenLinesOfEveryCase" }],
+    expected: "One query that the host answers searches the logs.",
+    levels: ["unit"],
+  },
+  {
     id: "F149",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "export function auditLog" }],
     tests: [{ file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" }],
