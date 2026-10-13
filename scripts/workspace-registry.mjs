@@ -47,15 +47,21 @@ export function repositoryText(repository) {
   return url;
 }
 
-/** The registry entry of one plugin. pack is the output of `sok plugin pack`. */
-export function pluginEntry(manifest, pkg, pack) {
+/**
+ * The registry entry of one plugin. pack is the output of `sok plugin pack`, and sidecars is the set of the package names of
+ * the sidecars of the registry: the index lists only the dependencies on sidecars, and a dependency on a plugin stays in the
+ * plugin.json of the release (contract case `cli.registry.checks-plugin-dependencies` of docs/spec/host-contract.md).
+ */
+export function pluginEntry(manifest, pkg, pack, sidecars) {
   return {
     id: manifest.id, package: pkg.name, name: manifest.name, description: pkg.description, license: pkg.license,
     repository: repositoryText(pkg.repository),
     versions: [{
       version: pkg.version, release: { url: pathToFileURL(pack.release).href, sha256: pack.sha256 },
       // default: the plugin.json of a plugin that uses no sidecar has no dependencies.
-      engines: { soksak: pkg.engines?.soksak }, sidecars: manifest.dependencies ?? {},
+      engines: { soksak: pkg.engines?.soksak },
+      // default: the plugin.json of a plugin without dependencies has no dependencies.
+      sidecars: Object.fromEntries(Object.entries(manifest.dependencies ?? {}).filter(([name]) => sidecars.has(name))),
     }],
   };
 }
@@ -99,15 +105,17 @@ export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
   const releases = join(out, "releases");
   for (const name of ["plugins", "sidecars", "packs", "releases"]) rmSync(join(out, name), { recursive: true, force: true });
   const used = new Set();
+  const plugins = new Set(declaration.plugins.map((relative) => read(pathToFileURL(join(folder(relative), "package.json"))).name));
   for (const relative of declaration.plugins) {
     const dir = folder(relative);
     const manifest = read(pathToFileURL(join(dir, "plugin.json")));
     const pkg = read(pathToFileURL(join(dir, "package.json")));
     const pack = sok(binary, ["plugin", "pack", dir, releases, ...(diagnostics ? ["--diagnostics"] : [])]);
-    write(join(out, "plugins", `${manifest.id}.json`), pluginEntry(manifest, pkg, pack));
+    write(join(out, "plugins", `${manifest.id}.json`), pluginEntry(manifest, pkg, pack, new Set(declared.keys())));
     // default: the plugin.json of a plugin that uses no sidecar has no dependencies.
     for (const name of Object.keys(manifest.dependencies ?? {})) {
-      if (!declared.has(name)) throw new Error(`${DECLARATION}: plugin ${manifest.id} uses ${name}, which no declared sidecar folder holds`);
+      if (plugins.has(name)) continue;
+      if (!declared.has(name)) throw new Error(`${DECLARATION}: plugin ${manifest.id} uses ${name}, which no declared sidecar or plugin folder holds`);
       used.add(name);
     }
   }

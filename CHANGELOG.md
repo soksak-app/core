@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F102.1.8: the workspace registry writes only the sidecar dependencies of a plugin into its entry and accepts a dependency on a declared plugin.
 - F161.46: a window check takes its start position and the existing recordings before the checks of the endpoint, so a check that ends at a stale build reports only that error.
 - F161.45: the settings modal keeps a negative scroll position that the native modal reports during an overscroll, as the debug view does since F146, and refuses only a value that is not a number.
 - F143: with the Korean input method selected, the image region keeps the syllable before the newest insert revisable until the next insert or the end of the composition, because the input method can append the next syllable before it revises that one, which sent the unrevised syllable to the PTY.

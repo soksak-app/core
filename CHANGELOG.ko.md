@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F102.1.8: workspace registry가 plugin entry에 sidecar 의존만 쓰고 선언된 plugin에 대한 의존을 받는다.
 - F161.46: window check가 endpoint 검사보다 먼저 시작 위치와 기존 recording을 읽으므로, 오래된 build에서 끝난 check는 그 오류만 보고한다.
 - F161.45: 설정 modal이 F146부터의 debug view처럼 overscroll 동안 native modal이 보고하는 음수 스크롤 위치를 유지하고, 숫자가 아닌 값만 거부한다.
 - F143: 한국어 입력기가 선택된 동안 image region이 가장 최근 insert 앞의 음절을 다음 insert나 조합의 끝까지 고칠 수 있게 둔다. 입력기가 그 음절을 고치기 전에 다음 음절을 먼저 붙일 수 있어 고쳐지지 않은 음절이 PTY로 갔기 때문이다.

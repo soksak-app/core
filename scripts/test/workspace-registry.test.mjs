@@ -14,13 +14,17 @@ test("registry entries carry the declarations of package.json and the file URL a
     engines: { soksak: "^0.0.1" },
   };
   const manifest = { id: "probe", name: "검사", dependencies: { "@scope/sidecar-worker": "^0.0.1" } };
-  assert.deepEqual(pluginEntry(manifest, pkg, { release: "/releases/a b/probe-0.0.1.tgz", sha256: SHA }), {
+  assert.deepEqual(pluginEntry(manifest, pkg, { release: "/releases/a b/probe-0.0.1.tgz", sha256: SHA }, new Set(["@scope/sidecar-worker"])), {
     id: "probe", package: "@scope/plugin-probe", name: "검사", description: "Probe plugin.", license: "MIT",
     repository: "git+https://example.invalid/probe.git",
     versions: [{ version: "0.0.1", release: { url: "file:///releases/a%20b/probe-0.0.1.tgz", sha256: SHA },
       engines: { soksak: "^0.0.1" }, sidecars: { "@scope/sidecar-worker": "^0.0.1" } }],
   });
-  assert.deepEqual(pluginEntry({ id: "plain", name: "P" }, pkg, { release: "/r/p.tgz", sha256: SHA }).versions[0].sidecars, {});
+  assert.deepEqual(pluginEntry({ id: "plain", name: "P" }, pkg, { release: "/r/p.tgz", sha256: SHA }, new Set()).versions[0].sidecars, {});
+  // A dependency on a plugin is not a sidecar of the entry; the index lists only sidecar dependencies.
+  const contributor = { id: "contributor", name: "C", dependencies: { "@scope/plugin-provider": ">=1.0.0", "@scope/sidecar-worker": "^0.0.1" } };
+  assert.deepEqual(pluginEntry(contributor, pkg, { release: "/r/c.tgz", sha256: SHA }, new Set(["@scope/sidecar-worker"])).versions[0].sidecars,
+    { "@scope/sidecar-worker": "^0.0.1" });
   assert.deepEqual(sidecarEntry({ name: "@scope/sidecar-worker", version: "0.0.1", repository: "https://example.invalid/w" },
     { executable: "build/worker", protocol: 1 }, { platform: "darwin-arm64", release: "/r/w.tar.gz", sha256: SHA }), {
     name: "@scope/sidecar-worker", repository: "https://example.invalid/w",
