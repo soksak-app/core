@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- R3.5.3: plugin-editor, plugin-hwp, plugin-flowmark, plugin-shell, sidecar-shell이 `make test`에서 `soksak-records`를 실행하고, workflow가 있는 plugin 셋은 CI에서 `soksak-commits`를 실행한다.
 - R3.5.2: plugin-browser, plugin-files, plugin-terminal, sidecar-files, sidecar-vt, registry가 core release 0.0.11의 `@soksak/plugin-api`로 `make test`에서 `soksak-records`를, CI에서 `soksak-commits`를 실행한다.
 - F150.8.4: core 0.0.11을 release했다. release workflow가 tag `v0.0.11`의 Wails와 Tauri bundle을 게시했고 registry가 이를 나열한다.
 - F161.47: CI의 job `test`가 cache와 600 s build 한도로 두 push에서 통과했다.
