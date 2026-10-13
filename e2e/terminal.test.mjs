@@ -162,6 +162,34 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: PASS split-terminal presentation`);
   });
 
+  test(`${app.name}: balancing unequal cards presents every terminal at its new size`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => closeTerminalTabs(s));
+    const terminals = await ensureTerminals(s, 3);
+    for (const terminal of terminals) {
+      await s.until("terminal.session", (state) => Boolean(state.sessionId),
+        `${terminal.surface} did not open a sidecar session`, { surface: terminal.surface, timeout: 10000 });
+    }
+    const regionsOf = (host) => terminals.map((terminal) => host.regions.find((item) => item.surface === terminal.surface && item.name === "view"));
+    // The presented raster of a region has the size of its frame once the region shows the screen of its new size.
+    const current = (region) => region?.visible && region.presented
+      && Math.abs(region.presented.width - region.frame.width) <= 1 && Math.abs(region.presented.height - region.frame.height) <= 1;
+    for (let round = 1; round <= 5; round++) {
+      const layout = await s.get("core.layout");
+      const grid = await s.get("core.grid");
+      const own = layout.state.cards.find((item) => item.id === grid.cards.find((card) => card.tabs.some((tab) => tab.id === terminals[0].surface)).id);
+      // The first terminal card narrows by a third of its width, so the balance changes the size of every card of the row.
+      const width = grid.lines.x[own.c1] - grid.lines.x[own.c0];
+      await s.run("core.boundary.move", { axis: "x", line: own.c1, position: grid.lines.x[own.c1] - Math.round(width / 3) });
+      await s.presented();
+      await s.run("core.layout.balance", {});
+      await s.until("host.window", (host) => regionsOf(host).every(current),
+        `round ${round}: a terminal did not present a raster of its new size after the balance`, { timeout: 5000 });
+    }
+  });
+
   test(`${app.name}: four split terminals complete native presentation without a host crash`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
