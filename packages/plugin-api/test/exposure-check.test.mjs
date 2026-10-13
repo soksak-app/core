@@ -49,3 +49,13 @@ test("the core names hold statuses and commands", () => {
   const core = coreExposure();
   assert.ok(core.status.includes("core.grid") && core.commands.length > 0);
 });
+
+test("a surface module runs a command of core through runtime.command, and an unknown core command is reported", (t) => {
+  const root = repository(t, manifest, {
+    "ui/page.js": 'expose.status("probe.state", read);\nexpose.command("probe.open", open);\nel.dataset.expose = "probe.view";\n'
+      + 'await context.runtime.command("core.file.place", { name });\nawait context.runtime.command("core.nothing", {});\n',
+  });
+  assert.deepEqual(checkPluginRepository(root, { status: [], commands: ["core.file.place"] }), [
+    "ui/page.js:5: core.nothing is run through runtime.command but is not a command of core",
+  ]);
+});

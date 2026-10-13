@@ -74,7 +74,11 @@ export function auditExposure({ owner, where, exposes, sources, registrations = 
         const boundCore = sections.has(path) && coreCommand.has(name);
         if (!declared.command.has(name) && !boundCore) report(path, index, `${name} is bound to an element but is not a declared command`);
       }
-      for (const [, name] of line.matchAll(/\b(?:run|command)\(\s*["']([^"']+)["']/g)) {
+      // A surface module runs a command of core through runtime.command (docs/spec/plugins.md#surface-module-ownership).
+      for (const [, name] of line.matchAll(/\bruntime\.command\(\s*["']([^"']+)["']/g)) {
+        if (!coreCommand.has(name)) report(path, index, `${name} is run through runtime.command but is not a command of core`);
+      }
+      for (const [, name] of line.matchAll(/(?<!runtime\.)\b(?:run|command)\(\s*["']([^"']+)["']/g)) {
         if (!declared.command.has(name)) report(path, index, `${name} is run but is not a declared command`);
       }
       const domNames = [

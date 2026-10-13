@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F162.5: `soksak-exposure`가 surface module이 `runtime.command`로 실행하는 core 명령을 받아들이고, core가 선언하지 않은 이름을 보고한다.
 - F162.3: surface module이 `context.runtime.command(name, params)`로 core의 명령을 실행하므로, 문서 plugin이 `core.file.place`에 닿는다.
 - R3.5.3: plugin-editor, plugin-hwp, plugin-flowmark, plugin-shell, sidecar-shell이 `make test`에서 `soksak-records`를 실행하고, workflow가 있는 plugin 셋은 CI에서 `soksak-commits`를 실행한다.
 - R3.5.2: plugin-browser, plugin-files, plugin-terminal, sidecar-files, sidecar-vt, registry가 core release 0.0.11의 `@soksak/plugin-api`로 `make test`에서 `soksak-records`를, CI에서 `soksak-commits`를 실행한다.
