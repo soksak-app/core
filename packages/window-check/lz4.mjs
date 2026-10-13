@@ -1,4 +1,5 @@
 // Restores an LZ4 RAW block to the declared size and rejects truncated input and invalid references.
+// lz4js 0.2.0 is not used: its decompressBlock (lz4.js lines 204-258) accepts a truncated literal run, a zero or out-of-range match offset and a missing length extension without an error.
 export function decodeLz4(source, expected) {
   const data = Buffer.alloc(expected);
   let input = 0, output = 0, finished = false;
