@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.57.5: 전환 중에 입력한 key가 사라졌으므로 F161.57.4의 text input context 강제 선택을 되돌렸다.
 - F161.57.4: input source 선택이 답하기 전에 key view의 text input context가 그 source를 갖게 하여, 첫 key가 선택한 input method에 닿는다.
 - F161.55.5: window check의 terminal pixel helper가 image region이 screen read가 가리키는 frame을 표시할 때까지 기다리고, 명세가 screen event와 `terminal.screen.read`의 `frame`을 적는다.
 - F164.3: Wails host의 stall watch가 `routine.Go`로 시작한다.

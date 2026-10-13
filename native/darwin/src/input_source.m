@@ -1,6 +1,6 @@
 // Reads and changes the selected keyboard input source. Uses the public API of Text Input Sources (HIToolbox).
 #import <Carbon/Carbon.h>
-#import <Cocoa/Cocoa.h>
+#import <Foundation/Foundation.h>
 #import "input_source.h"
 #import "application_log.h"
 
@@ -34,20 +34,7 @@ bool sp_input_source_select(const char *identifier) {
     if (status != noErr) {
         sp_log_error("input source", [NSString stringWithFormat:@"selecting %@ failed: %@ (status %d)", wanted,
             sources.count > 0 ? @"the system refused it" : @"no input source has this identifier", (int)status].UTF8String);
-        [sources release];
-        return false;
     }
     [sources release];
-    // The text input context of the key view adopts a source that the system selected only later, so a key typed at once
-    // reaches the earlier source. The context of the key view takes the source here, and the selection answers after it holds it.
-    NSTextInputContext *context = NSTextInputContext.currentInputContext;
-    if (context) {
-        context.selectedKeyboardInputSource = wanted;
-        if (![context.selectedKeyboardInputSource isEqualToString:wanted]) {
-            sp_log_error("input source", [NSString stringWithFormat:@"the text input context of the key view holds %@ after %@ was selected",
-                context.selectedKeyboardInputSource, wanted].UTF8String);
-            return false;
-        }
-    }
-    return true;
+    return status == noErr;
 }
