@@ -23,6 +23,31 @@ The workbench page uses the interfaces exported by [host.js](../../packages/work
 
 An application document inside a webview has the address `sok://<owner>/<path>`. The owner `core` names a document of core, and a plugin id names a file of that plugin ([document regions](native-surfaces.md#document-regions)). The `soksak` scheme is for deep links that open from outside the application and is not an address of a document inside a webview.
 
+## Deep links
+
+A deep link is an address `soksak://<owner>/<command>?<params>` that opens from outside the application. The owner is `core` or a plugin id. The declared command name is `<owner>.<command>`, where `<command>` is the path after the owner, and it runs as a command of that owner ([exposure](exposure.md)). The path after the owner is one segment, and a `/` in it is refused. Each query parameter is one string parameter. Names and values are percent-decoded, `+` in a query is a space, and the parameters form an object of strings. A percent sign that is not followed by two hexadecimal digits is refused, and a parameter name that repeats is refused.
+
+The Wails host receives the URL through the framework event `ApplicationLaunchedWithUrl` of the macOS URL handler (`pkg/application/application_darwin.go`, `HandleOpenURL`). The Tauri host receives it through the official plugin `tauri-plugin-deep-link` (`on_open_url` and `get_current`), which reads the `soksak` scheme from the bundle `Info.plist` (`CFBundleURLTypes`). Both hosts run the parsed link as the command `command.run` of the window that the host chooses: the key window, and when no window is key, the first window of the `windows.list` order. A link that arrives when no window is open is refused.
+
+Each refusal writes one error record, `error host deep link: <url>: <reason>`, where `<url>` is the URL as received. The reasons are the same in both hosts:
+
+| Condition | Reason |
+| --- | --- |
+| The URL is longer than 8192 characters | `URL is longer than 8192 characters` |
+| The URL does not parse | `URL does not parse` |
+| The scheme is not `soksak` | `scheme "<scheme>" is not soksak` |
+| The owner is empty | `owner is missing` |
+| The command is empty | `command is missing` |
+| The command has more than one segment | `command has more than one segment` |
+| A percent sign is not followed by two hexadecimal digits | `invalid percent-encoding` |
+| A parameter name is empty | `parameter name is empty` |
+| A parameter name repeats | `parameter <name> is repeated` |
+| No window is open | `no window is open` |
+
+The Tauri host reads the launch URL through the plugin `get_current`; a failure of that read writes `error host deep link: launch URL: <reason>`. A link that opens the application before the first window is registered is refused with `no window is open`.
+
+A command that `command.run` refuses, including a name that no page or host declares, is refused with the error text that `command.run` returns, in the same record form. A link whose command runs successfully writes no record.
+
 ## Page start
 
 A window's main page starts from a start document `{ workspace, controls }` that the host builds for that window when the page requests it. `workspace` is the snapshot that the `workspace` call returns for `snapshot`, and `controls` is the window's `windowControls` answer: the native button rectangle and the title-bar row. The row is 0 while the window shows no title bar, as in full screen; a window without standard buttons or a content view cannot have a title bar, and `windowControls` fails for it. Answering the request starts the page: before the host sends the document, it marks the window not ready, ends the requests sent to the previous page, cancels the window's open layout, closes the previous page's surface documents and images, announces those surfaces closed, and discards the open modal; it then sets the window's title bar to the first-row height of the stored frame factor, inside a start transaction that commits with the new page's first presentation when the window shows a previous page, and reads `controls` after that ([title bar height](native-surfaces.md#title-bar-height)). The request precedes every call of the replacement page, because the page's module graph includes the document and its code runs only after the graph has loaded. Wails serves `/start.json` from its asset server for the window that the request names (`x-wails-window-id`). Tauri serves `sok://core/start.json` from a custom URI scheme handler for the requesting webview and allows the page origin with `Access-Control-Allow-Origin`. A request that names no window fails with an error and starts nothing; Tauri also rejects a webview that is not a window's main webview. The runtime file `runtime/start.js` exports the document as its default export; the browser runtime reads its stored workspace with a top-level await and exports `controls: null`.

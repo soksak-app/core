@@ -1091,7 +1091,7 @@ fn run(shared: &Shared, method: &str, params: Option<Value>) -> Result<Box<RawVa
 }
 
 /// Returns name of params.
-fn name(params: &Map<String, Value>) -> Result<String, Failure> {
+pub(crate) fn name(params: &Map<String, Value>) -> Result<String, Failure> {
     match params.get("name") {
         Some(Value::String(name)) if valid_name(name) => Ok(name.clone()),
         _ => Err(Failure::params(

@@ -1905,6 +1905,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F112",
+    implementation: [
+      { file: "packages/host/wailsv3/src/deep_link.go", symbol: "func ParseDeepLink" },
+      { file: "packages/host/tauriv2/src/deep_link.rs", symbol: "pub fn parse_deep_link" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/deep_link_test.go", id: "TestDeepLinkParseAcceptsCoreAndPluginOwners" },
+      { file: "packages/host/tauriv2/tests/deep_link_test.rs", id: "deep_link_parse_accepts_core_and_plugin_owners" },
+    ],
+    expected: "A deep link soksak://<owner>/<command>?<params> parses to the declared command of its owner in both hosts, and a refused link names its reason.",
+    levels: ["unit"],
+  },
+  {
     id: "F114",
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "closed before it created its composition" }],
     tests: [{ file: "packages/workbench/test/surface-dispose-pending.test.mjs", id: "a surface whose module has not finished mounting is disposed without waiting for the mount" }],

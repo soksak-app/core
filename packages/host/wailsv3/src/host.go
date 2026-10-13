@@ -25,6 +25,7 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 	_ "github.com/soksak-app/core/packages/host/wailsv3/src/platform/darwin"
 	_ "github.com/soksak-app/core/packages/host/wailsv3/src/platform/windows"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 	"github.com/soksak-app/core/packages/sok/wailsv3/src"
 	// The plugin work (plugins.go) uses the installer library of the command line, so its platform implementation is also registered.
 	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/darwin"
@@ -234,6 +235,11 @@ func Run(assets fs.FS, options Options) error {
 	})
 	app.Event.OnApplicationEvent(events.Mac.ApplicationDidResignActive, func(*application.ApplicationEvent) {
 		RecordAppEvent("deactivated")
+	})
+	// A deep link that opens the application arrives as the framework event of the URL (docs/spec/native-host.md#deep-links).
+	app.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(event *application.ApplicationEvent) {
+		value := event.Context().URL()
+		routine.Go("deep-link", func() { host.OpenDeepLink(value) })
 	})
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		RecordAppEvent("started")

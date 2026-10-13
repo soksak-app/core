@@ -14,6 +14,7 @@
 #![recursion_limit = "256"]
 
 use tauri::Manager;
+use tauri_plugin_deep_link::DeepLinkExt;
 
 pub mod app_events;
 pub mod app_update;
@@ -31,6 +32,7 @@ mod composition;
 pub mod crash_report;
 pub mod debug;
 pub mod debug_follow;
+pub mod deep_link;
 #[cfg(feature = "diagnostics")]
 mod diagnostics;
 pub mod documents;
@@ -258,6 +260,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         .build();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_deep_link::init())
         .manage(windows::Windows::default())
         .manage(exposure::Exposure::default())
         .plugin(endpoint)
@@ -317,6 +320,23 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             startup::exit_on_failure((|| -> Result<(), Box<dyn std::error::Error>> {
                 // When the notification center cannot be used, the application does not start (docs/spec/hosts.md).
                 notifications::start(app.handle())?;
+                // A deep link arrives through the plugin while the application runs, and a link that launched the application
+                // is read here (docs/spec/native-host.md#deep-links).
+                let deep = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    for url in event.urls() {
+                        deep_link::open(&deep, url.to_string());
+                    }
+                });
+                match app.deep_link().get_current() {
+                    Ok(Some(urls)) => {
+                        for url in urls {
+                            deep_link::open(app.handle(), url.to_string());
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(error) => log_error("deep link", format!("launch URL: {error}")),
+                }
                 // A termination request of the operating system runs the same termination as host.quit and answers after
                 // RunEvent::Exit has finished the save (docs/spec/hosts.md#process-lifecycle).
                 let quit = app.handle().clone();

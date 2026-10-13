@@ -95,6 +95,13 @@ fn invalid_json_closes_connection() {
 | `clipboard.read.requires-user-initiated` | 사용자의 명시적 붙여넣기가 아닌 클립보드 읽기를 거부한다. | both |
 | `clipboard.read.rejects-unknown-type` | 사용자가 시작했더라도 알 수 없는 형식의 클립보드 읽기를 거부한다. | both |
 | `clipboard.read.accepts-known-types` | 사용자가 시작한 텍스트와 파일 URL 읽기를 받아들인다. | both |
+| `deep-link.parse.accepts-core-and-plugin-owners` | `soksak://core/<command>`와 `soksak://<plugin>/<command>`는 owner, command 이름 `<owner>.<command>`, 쿼리의 매개변수로 해석된다. | both |
+| `deep-link.parse.decodes-percent-encoded-params` | 쿼리의 percent 인코딩된 이름과 값은 원래 텍스트로 디코딩되며, `+`는 공백으로 디코딩된다. | both |
+| `deep-link.parse.rejects-other-scheme` | scheme이 `soksak`이 아닌 URL은 `scheme "<scheme>" is not soksak`으로 거부한다. | both |
+| `deep-link.parse.rejects-missing-owner-or-command` | owner가 비었거나, command가 비었거나, command가 두 번째 조각을 가진 링크는 `owner is missing`, `command is missing`, `command has more than one segment`로 거부한다. | both |
+| `deep-link.parse.rejects-empty-param-name` | 이름이 빈 쿼리 매개변수(예: `?=x`)는 `parameter name is empty`로 거부한다. | both |
+| `deep-link.parse.rejects-bad-query` | 16진수 두 자리가 따르지 않는 percent 기호, 또는 되풀이된 매개변수 이름이 있는 쿼리는 `invalid percent-encoding` 또는 `parameter <name> is repeated`로 거부한다. | both |
+| `deep-link.parse.rejects-long-url` | 8192자보다 긴 URL은 `URL is longer than 8192 characters`로 거부한다. | both |
 | `links.open.accepts-web-and-mail-schemes` | 절대 `http`, `https`, `mailto` URL은 열기를 받아들인다. | both |
 | `links.open.rejects-other-schemes` | 다른 스킴의 URL, 해석되지 않는 URL, 8192자보다 긴 URL은 거부한다. | both |
 | `notifications.request.accepts-tab-notices` | 제어 문자 없이 1–256자인 표면과 제목, 1–1024자인 본문의 알림을 받아들이며, 제거에는 표면만 필요하다. | both |

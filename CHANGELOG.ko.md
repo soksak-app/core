@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F112: 두 host가 `soksak://<owner>/<command>?<params>`를 해석하고, key 창 또는 첫 창에서 선언된 command `<owner>.<command>`로 실행한다. 두 host의 parser 단위 test가 통과한다. 애플리케이션 밖에서 연 링크의 애플리케이션 수준 검사는 아직 실행하지 않았다.
 - F161.57.2: hwp activation check가 editor가 focus를 가진 뒤에 input source를 선택한다. F161.57.7이 간헐적인 preedit cursor 측정을 적는다.
 - F161.57.2: F161.57.5의 대기로 hwp check가 선택한 input source로 key를 입력한다.
 - F171: 부하에서 Wails main thread가 멈춘 원인이 AppKit의 동기 LaunchServices 호출에 있다. F161.27에 바깥 크기 변경 뒤 terminal의 추적 check가 생겼다.

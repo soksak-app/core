@@ -95,6 +95,13 @@ Items:
 | `clipboard.read.requires-user-initiated` | A clipboard read that is not an explicit user paste is rejected. | both |
 | `clipboard.read.rejects-unknown-type` | A user-initiated clipboard read of an unknown type is rejected. | both |
 | `clipboard.read.accepts-known-types` | User-initiated reads of text and file URLs are accepted. | both |
+| `deep-link.parse.accepts-core-and-plugin-owners` | `soksak://core/<command>` and `soksak://<plugin>/<command>` parse to the owner, the command name `<owner>.<command>` and the parameters of the query. | both |
+| `deep-link.parse.decodes-percent-encoded-params` | Percent-encoded names and values of the query decode to their text, and `+` decodes to a space. | both |
+| `deep-link.parse.rejects-other-scheme` | A URL whose scheme is not `soksak` is refused with `scheme "<scheme>" is not soksak`. | both |
+| `deep-link.parse.rejects-missing-owner-or-command` | A link with an empty owner, an empty command, or a command with a second segment is refused with `owner is missing`, `command is missing`, or `command has more than one segment`. | both |
+| `deep-link.parse.rejects-empty-param-name` | A query parameter with an empty name, such as `?=x`, is refused with `parameter name is empty`. | both |
+| `deep-link.parse.rejects-bad-query` | A query with a percent sign that is not followed by two hexadecimal digits, or a repeated parameter name, is refused with `invalid percent-encoding` or `parameter <name> is repeated`. | both |
+| `deep-link.parse.rejects-long-url` | A URL longer than 8192 characters is refused with `URL is longer than 8192 characters`. | both |
 | `links.open.accepts-web-and-mail-schemes` | Absolute `http`, `https`, and `mailto` URLs are accepted for opening. | both |
 | `links.open.rejects-other-schemes` | A URL with another scheme, a URL that does not parse, and a URL longer than 8192 characters are rejected. | both |
 | `notifications.request.accepts-tab-notices` | A notification with a surface and title of 1 to 256 characters and a body of 1 to 1024 characters without control characters is accepted, and a removal needs only the surface. | both |
