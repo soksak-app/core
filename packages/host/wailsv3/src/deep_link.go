@@ -65,6 +65,7 @@ func deepLinkParams(raw string) (map[string]string, error) {
 		if segment == "" {
 			continue
 		}
+		// default: a segment without `=` is a name with an empty value, as in the query of a form.
 		rawName, rawValue, _ := strings.Cut(segment, "=")
 		name, err := decodeComponent(rawName)
 		if err != nil {

@@ -2055,6 +2055,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F173",
+    implementation: [{ file: "Makefile", symbol: "census.test.mjs scripts/test/fallbacks.test.mjs" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs every check of the structure step and the format and clippy checks of ci" }],
+    expected: "A push runs the census and fallback tests of the sources, so a registration outside its entrance or an unexplained default does not reach main.",
+    levels: ["unit"],
+  },
+  {
     id: "F171",
     implementation: [{ file: "packages/host/wailsv3/src/stall_watch.go", symbol: "func StartStallWatch" }],
     tests: [{ file: "packages/host/wailsv3/tests/stall_watch_test.go", id: "TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd" }],

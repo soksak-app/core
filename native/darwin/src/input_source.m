@@ -3,6 +3,7 @@
 #import <Cocoa/Cocoa.h>
 #import "input_source.h"
 #import "application_log.h"
+#import "observe.h"
 
 char *sp_input_source_current(void) {
     NSCAssert(NSThread.isMainThread, @"input sources are read on the main thread");
@@ -59,12 +60,14 @@ void sp_input_source_await(const char *identifier, void (^adopted)(const char *e
         [NSNotificationCenter.defaultCenter removeObserver:observer];
         adopted(error);
     };
-    observer = [NSNotificationCenter.defaultCenter addObserverForName:NSTextInputContextKeyboardSelectionDidChangeNotification
-                                                               object:nil
-                                                                queue:NSOperationQueue.mainQueue
-                                                           usingBlock:^(NSNotification *note) {
+    observer = sp_observe_notification("input source await", SP_OBSERVE_RECORD, NSTextInputContextKeyboardSelectionDidChangeNotification,
+                                       nil, NSOperationQueue.mainQueue, ^(NSNotification *note) {
         if ([NSTextInputContext.currentInputContext.selectedKeyboardInputSource isEqualToString:wanted]) answer(NULL);
-    }];
+    });
+    if (!observer) {
+        answer("the selection of the keyboard input source cannot be observed");
+        return;
+    }
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
         NSString *held = NSTextInputContext.currentInputContext.selectedKeyboardInputSource ?: @"no source";
         answer([NSString stringWithFormat:@"the text input context of the key view holds %@, not %@, 2 s after the selection", held, wanted].UTF8String);

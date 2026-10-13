@@ -21,12 +21,13 @@ hooks:
 	@git config core.hooksPath .githooks
 
 # Runs before a push (the pre-push hook of `make hooks`): the commit messages that are not on the upstream branch, the checks of
-# the structure step of ci.yml, and its format and clippy checks. The host tests, the package tests and the window checks are left
+# the structure step of ci.yml, its format and clippy checks, and the census and fallback tests of the sources. The host tests, the package tests and the window checks are left
 # to CI.
 push-check:
 	@$(MAKE) --no-print-directory commits-check RANGE=@{upstream}..HEAD
 	@$(MAKE) --no-print-directory docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check
 	@$(MAKE) --no-print-directory rust-format-check go-format-check rust-clippy-check
+	@node --test scripts/test/census.test.mjs scripts/test/fallbacks.test.mjs
 
 # Builds release and checks that the staged frontend and the release executables hold no diagnostic code.
 release-check: wailsv3-build-release tauriv2-build-release registry-manifest-check

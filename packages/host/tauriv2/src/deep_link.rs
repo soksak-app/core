@@ -42,21 +42,26 @@ pub fn parse_deep_link(value: &str) -> Result<DeepLink, String> {
     if parsed.scheme() != SCHEME {
         return Err(format!("scheme {:?} is not soksak", parsed.scheme()));
     }
-    let owner = parsed.host_str().unwrap_or_default();
-    if owner.is_empty() {
+    let Some(owner) = parsed.host_str().filter(|owner| !owner.is_empty()) else {
         return Err("owner is missing".to_string());
-    }
-    let command = parsed.path().strip_prefix('/').unwrap_or(parsed.path());
-    if command.is_empty() {
+    };
+    let Some(command) = parsed
+        .path()
+        .strip_prefix('/')
+        .filter(|command| !command.is_empty())
+    else {
         return Err("command is missing".to_string());
-    }
+    };
     if command.contains('/') {
         return Err("command has more than one segment".to_string());
     }
     Ok(DeepLink {
         owner: owner.to_string(),
         command: command.to_string(),
-        params: parse_params(parsed.query().unwrap_or_default())?,
+        params: match parsed.query() {
+            Some(query) => parse_params(query)?,
+            None => BTreeMap::new(),
+        },
     })
 }
 
@@ -64,7 +69,11 @@ pub fn parse_deep_link(value: &str) -> Result<DeepLink, String> {
 fn parse_params(raw: &str) -> Result<BTreeMap<String, String>, String> {
     let mut params = BTreeMap::new();
     for segment in raw.split('&').filter(|segment| !segment.is_empty()) {
-        let (raw_name, raw_value) = segment.split_once('=').unwrap_or((segment, ""));
+        // A segment without `=` is a name with an empty value, as in the query of a form.
+        let (raw_name, raw_value) = match segment.split_once('=') {
+            Some(pair) => pair,
+            None => (segment, ""),
+        };
         let name = decode_component(raw_name)?;
         if name.is_empty() {
             return Err("parameter name is empty".to_string());
