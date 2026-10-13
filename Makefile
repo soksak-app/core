@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -19,6 +19,14 @@ commits-check:
 # Sets the git hook folder of this checkout to .githooks. The commit-msg hook checks the commit message form.
 hooks:
 	@git config core.hooksPath .githooks
+
+# Runs before a push (the pre-push hook of `make hooks`): the commit messages that are not on the upstream branch, the checks of
+# the structure step of ci.yml, and its format and clippy checks. The host tests, the package tests and the window checks are left
+# to CI.
+push-check:
+	@$(MAKE) --no-print-directory commits-check RANGE=@{upstream}..HEAD
+	@$(MAKE) --no-print-directory docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check
+	@$(MAKE) --no-print-directory rust-format-check go-format-check rust-clippy-check
 
 # Builds release and checks that the staged frontend and the release executables hold no diagnostic code.
 release-check: wailsv3-build-release tauriv2-build-release registry-manifest-check

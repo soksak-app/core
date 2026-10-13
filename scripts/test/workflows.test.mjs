@@ -68,3 +68,18 @@ test('the window-check workflow names the window checks, the audit step and the 
   assert.match(keep.text, /core\/\$\{\{ steps\.run\.outputs\.folder \}\}/, 'the artifact holds the run folder');
   assert.ok(index('Keep the run folder') > index('Audit of the logs'), 'the artifact is taken after the audit');
 });
+
+test('the push check runs every check of the structure step and the format and clippy checks of ci', () => {
+  const ci = read('.github/workflows/ci.yml');
+  const targets = (name) => {
+    const step = steps(ci).find((item) => item.name === name);
+    assert.ok(step, `ci.yml has no step ${name}`);
+    return /run:\s*make -C core (.+)$/m.exec(step.text)[1].trim().split(/\s+/);
+  };
+  const wanted = [...targets('Structure checks'), ...targets('Host tests').filter((target) => target !== 'host-contract-check')];
+  const recipe = /^push-check:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(read('Makefile'));
+  assert.ok(recipe, 'the Makefile has no push-check target');
+  const named = recipe[0];
+  assert.deepEqual(wanted.filter((target) => !named.includes(target)), [], `push-check does not run: ${wanted.join(' ')}`);
+  assert.match(read('.githooks/pre-push'), /make -C "\$\(git rev-parse --show-toplevel\)" push-check/);
+});

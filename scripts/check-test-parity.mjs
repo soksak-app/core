@@ -1981,6 +1981,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F170",
+    implementation: [{ file: "Makefile", symbol: "push-check:" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs every check of the structure step and the format and clippy checks of ci" }],
+    expected: "A push runs the commit, structure, format and clippy checks of CI before it leaves the checkout.",
+    levels: ["unit"],
+  },
+  {
     id: "F169",
     implementation: [{ file: ".node-version", symbol: "26.11.1" }],
     tests: [{ file: "scripts/test/check-build-environment.sh", id: "valid workspace toolchain reports its measured build environment" }],

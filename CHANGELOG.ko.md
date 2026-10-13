@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F170: `make push-check`가 CI의 commit, 구조, format, clippy 검사를 실행하고, pre-push hook이 그것을 실행한다.
 - F149.2, F150.8.3, F161.57.1: activation 실행이 두 애플리케이션에서 한글 음절과 terminal keyboard를 통과했다. F161.57.3과 F161.57.4가 그 실행의 새 실패 두 개를 적는다.
 - F169: `.node-version`이 Node 26.11.1을 선언한다.
 - F166.7: host 배치가 Tauri host의 kqueue 감시를 차이 H10으로 허용한다.

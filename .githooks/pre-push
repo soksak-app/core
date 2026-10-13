@@ -1,0 +1,3 @@
+#!/bin/sh
+# Runs the checks of CI that a push needs before the push leaves this checkout. `make hooks` sets this folder as the git hook folder.
+exec make -C "$(git rev-parse --show-toplevel)" push-check
