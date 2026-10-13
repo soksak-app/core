@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- R3.5.2: plugin-browser, plugin-files, plugin-terminal, sidecar-files, sidecar-vt and the registry run `soksak-records` in `make test` and `soksak-commits` in CI with `@soksak/plugin-api` of the core release 0.0.11.
 - F150.8.4: core 0.0.11 is released: the release workflow published the Wails and Tauri bundles of the tag `v0.0.11`, and the registry lists them.
 - F161.47: the job `test` of CI passed on two pushes with the cache and the build limit of 600 s.
 - F161.37.2: both hosts answer a transfer image of a surface that no window owns with `closed`, so the terminal sidecar releases the frame and a reopened surface of the same id receives the answer to its own frame.
