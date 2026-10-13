@@ -20,6 +20,7 @@ const EXACT = new Map([
   ["host.sidecar.reply", "io"],
   ["host.sidecar.request", "io"],
   ["host.sidecar.start", "lifecycle"],
+  ["host.sidecar.write_wait", "io"],
   ["host.stall.dump", "lifecycle"],
   ["host.test.end", "lifecycle"],
   ["host.test.start", "lifecycle"],

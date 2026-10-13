@@ -33,6 +33,7 @@ var eventClasses = map[string]Class{
 	"host.sidecar.reply":            ClassIo,
 	"host.sidecar.request":          ClassIo,
 	"host.sidecar.start":            ClassLifecycle,
+	"host.sidecar.write_wait":       ClassIo,
 	"host.stall.dump":               ClassLifecycle,
 	"host.test.end":                 ClassLifecycle,
 	"host.test.start":               ClassLifecycle,

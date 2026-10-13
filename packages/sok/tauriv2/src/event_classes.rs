@@ -74,6 +74,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.sidecar.reply" => Some(Class::Io),
         "host.sidecar.request" => Some(Class::Io),
         "host.sidecar.start" => Some(Class::Lifecycle),
+        "host.sidecar.write_wait" => Some(Class::Io),
         "host.stall.dump" => Some(Class::Lifecycle),
         "host.test.end" => Some(Class::Lifecycle),
         "host.test.start" => Some(Class::Lifecycle),
