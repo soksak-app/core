@@ -31,7 +31,7 @@ import { closeDebug, compareDebugState, contextDebugRow, debugState, filterDebug
 import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
-import { modalState, onFilesDropped, onModalState } from "./host.js";
+import { filePlace, modalState, onFilesDropped, onModalState } from "./host.js";
 import { plugin } from "./registry.js";
 import { systemNotifications } from "./system-notifications.js";
 import { windows } from "@soksak/runtime";
@@ -483,6 +483,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.surface.menu", ({ surface, x, y }) => { openSurfaceMenu(surface, x, y); });
   document.addEventListener("contextmenu", onSurfaceContextMenu);
   registry.command("core.card.add-tab", ({ card, plugin, params }) => ({ tab: addTabTo(card, plugin, params) }));
+  registry.command("core.file.place", ({ name }) => filePlace(name));
   registry.command("core.file.open", ({ path, card }) => {
     if (!projects.active()) throw new Error("this window shows no project");
     return openFile(checkOpenPath(path), card);

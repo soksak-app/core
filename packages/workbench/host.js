@@ -376,6 +376,11 @@ let lastPreparedSurfaces = [];
 
 /** Registers the workbench lifecycle listener for prepared native surfaces. */
 /** Receives the files dropped on the window {urls, x, y} (page coordinates). Without an application there are no dropped files. */
+/** Asks through the save panel of the window where to save a new document of its project (docs/spec/plugins.md#pluginjson). */
+export function filePlace(name) {
+  return tell("filePlace", { name });
+}
+
 export function onFilesDropped(listener) {
   if (native) bridge.on("files-dropped", listener);
 }

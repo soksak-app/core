@@ -492,6 +492,9 @@ fn invalid_json_closes_connection() {
 | `debug.save-all.writes-the-logs-folder-as-tar` | 모두 저장은 `logs/`의 파일을 그 경로로 담은 gzip 압축 tar 파일을 쓴다. | both |
 | `debug.save-text.writes-the-text-to-the-destination` | 글 저장은 요청의 글을 줄바꿈과 ASCII가 아닌 글자를 그대로 둔 채 목적지에 쓴다. | both |
 | `debug.save-text.refuses-a-name-that-is-not-a-file-name-and-text-that-is-empty-or-too-large` | 빈 이름, `.`, `..`, `/`나 `\`를 가진 이름은 `debug: name "<name>" is not a file name`으로, 빈 글은 `debug: text is empty`로, 16 MiB를 넘는 글은 `debug: text is <n> bytes, over the limit of 16777216`으로 요청을 거절한다. | both |
+| `files.place.answers-the-path-inside-the-project` | project root 안에서 고른 위치는 root나 위치가 symbolic link를 지나도 root 기준 상대 path를 부분 사이 `/`로 답한다. | both |
+| `files.place.refuses-a-place-outside-the-project` | project root 밖에서 고른 위치, root 자체, `..`나 symbolic link로 밖에 닿는 위치는 `file place: <path> is outside the project <root>`로 거부된다. | both |
+| `files.place.refuses-a-name-that-is-not-a-file-name` | 빈 글, `.`, `..`, `/`나 `\`를 담은 `name`은 panel이 보이기 전에 `file place: name <name> is not a file name`으로 거부된다. | both |
 | `log.query.answers-the-golden-pages` | `packages/log-contract/fixtures/query/cases.json`의 각 질의가 golden 행, `next`, `tail`, `scanned`를 돌려주고, 행의 글 줄이 golden 줄이다. | both |
 | `log.query.pages-through-the-cursor` | `next`를 `after`로 넘기며 page를 넘기면 질의의 모든 행을 key 순서로 `asc`와 `desc`에서 한 번씩 돌려주고 `next` `null`로 끝나며, page는 줄 글 8,388,608바이트를 넘기 전에 끝나고 항상 행 하나를 담는다. | both |
 | `log.query.follows-the-tail-with-since` | 앞선 답의 `tail`을 `since`로 준 질의는 그 뒤에 덧붙은 행을 돌려주며 앞선 답이 담은 행보다 `ts_us`가 이른 행도 돌려주고, 프로세스의 `seq` 이하의 행은 뺀다. | both |

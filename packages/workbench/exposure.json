@@ -3108,6 +3108,26 @@
         }
       },
       {
+        "name": "core.file.place",
+        "description": "Asks the person where to save a new document of the project of the window: the save panel opens in the project root with name as the file name, and the answer is the chosen file relative to the project root, or null when the person cancelled.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": ["string", "null"]
+            }
+          }
+        }
+      },
+      {
         "name": "core.file.open",
         "description": "Opens the file at path, relative to the project root, in the loaded plugin whose surface.opens declares its extension, or else in the plugin that declares *: activates the tab of that plugin with the same path, or adds a tab with params {path} to card or to the focused card.",
         "params": {

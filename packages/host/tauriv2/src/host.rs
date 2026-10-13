@@ -40,6 +40,7 @@ pub mod event_log;
 pub mod event_record;
 pub mod event_relay;
 pub mod exposure;
+pub mod file_place;
 pub mod images;
 pub mod installed;
 pub mod link;

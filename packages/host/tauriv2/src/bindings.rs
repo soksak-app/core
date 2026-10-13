@@ -681,6 +681,16 @@ fn debug_save_text(
     crate::debug::save_text(&window, request)
 }
 
+/// Asks through the save panel of the window where to save a new document of its project.
+#[tauri::command(async)]
+fn file_place(
+    window: Window,
+    request: Argument<crate::file_place::FilePlaceRequest>,
+) -> Result<crate::file_place::FilePlaced, String> {
+    let Argument(request) = request;
+    crate::file_place::place(&window, request)
+}
+
 /// Saves the logs folder as one gzip-compressed tar file through the save panel.
 #[tauri::command(async)]
 fn debug_save_all(window: Window) -> Result<crate::debug::Saved, String> {
