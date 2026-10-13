@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F162.4, F141, F123, F161.57.3: core 0.0.12, hwp plugin 0.0.1, terminal 수정이 release되었고, preedit cursor check가 두 애플리케이션에서 통과한다.
 - F161.57.5: `diagnostics.input.source`가 key view의 text input context가 선택한 source를 알린 뒤에 선택에 답한다.
 - F161.55.5, F161.55: frame 대기로 padding drag check가 두 애플리케이션에서 통과한다. F161.57.3은 Tauri 애플리케이션의 그려진 frame에 원인이 있다.
 - F161.57.5: 전환 중에 입력한 key가 사라졌으므로 F161.57.4의 text input context 강제 선택을 되돌렸다.

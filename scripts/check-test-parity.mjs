@@ -1912,6 +1912,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F123",
+    implementation: [{ file: "packages/host/wailsv3/src/surfaces.go", symbol: "func FrameAnswerEvent" }],
+    tests: [
+      { file: "packages/host/wailsv3/tests/images_test.go", id: "TestFrameAnswerEventRecordsConsumedAndRefusedAnswers" },
+      { file: "packages/host/tauriv2/tests/images_test.rs", id: "frame_answer_event_records_consumed_and_refused_answers" },
+    ],
+    expected: "Every answer to a frame is a trace event, so a terminal that holds typed text is located by the records; the terminal plugin sends its queued input when a session reattaches.",
+    levels: ["unit"],
+  },
+  {
+    id: "F141",
+    implementation: [{ file: "packages/sok/wailsv3/src/install.go", symbol: "func ValidateRegistryPlugin" }],
+    tests: [{ file: "scripts/test/registry-manifests.test.mjs", id: "each plugin version that the new core installs and whose manifest it rejects is reported" }],
+    expected: "The hwp plugin is listed in the registry with the files sidecar it requires.",
+    levels: ["unit"],
+  },
+  {
     id: "F149",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "export function auditLog" }],
     tests: [{ file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" }],
