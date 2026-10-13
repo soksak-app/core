@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F164: 두 host가 1 s 이상의 main thread 정지, thread들의 stack, 정지의 끝을 window check 없이 기록한다.
 - F161.61: 각 시험 파일이 표준 오류에 TAP 형식으로도 보고하므로, 한도에서 종료된 파일도 그 전에 실패한 시험의 오류를 갖는다.
 - F161.60: 실행의 감사가 첫 시작 표시부터 마지막 끝 표시까지의 오류를 판정하므로, 같은 설정 폴더의 이전 실행 오류가 더 이상 감사를 실패시키지 않는다.
 - F161.52.1: Tauri host가 새 surface의 native surface를 만드는 main thread 단계에서 이름을 붙이므로, 생성 중의 `host.window` 읽기가 더 이상 `unregistered native surface`로 실패하지 않는다.

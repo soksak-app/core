@@ -67,6 +67,7 @@ mod sidecar_reply;
 pub mod sidecars;
 #[cfg(feature = "diagnostics")]
 pub mod stall_dump;
+pub mod stall_watch;
 pub mod start;
 pub mod surfaces;
 #[cfg(feature = "diagnostics")]
@@ -337,6 +338,18 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     "the configuration directory of installed plugins is already set"
                 })?;
                 app.manage(workspace::Workspace::new(directory.clone()));
+                // A stall of the main thread is recorded without a window check (docs/spec/logging.md, stalls). The
+                // watch runs until the process ends.
+                let main = app.handle().clone();
+                let _runs_until_exit =
+                    stall_watch::start_stall_watch(stall_watch::StallWatchOptions {
+                        on_main: Box::new(move |task| {
+                            main.run_on_main_thread(task).map_err(|e| e.to_string())
+                        }),
+                        sample: Box::new(|path| platform::current()?.sample_threads(path)),
+                        folder: directory.join("logs"),
+                        emit_host: Box::new(event_record::emit_host),
+                    });
                 let handle = app.handle().clone();
                 // Applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page
                 // that reloads uses the installed executables (docs/spec/installation.md#applying-a-change).

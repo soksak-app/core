@@ -64,6 +64,7 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 | the main page throws or rejects after its first screen | `error page <where>: <text>` of the page's error display |
 | the WebContent process of a surface or a modal ends in the Wails host | `error native surface webview: web content process terminated: <address>`; the Tauri host writes the end of every web view, including a surface and a modal, as `error host page process: <label>: terminated` |
 | the WebContent process of a window ends | `error host page process: <window>: terminated` |
+| the Tauri host cannot send the heartbeat of the watch of its main thread to that thread | `error host stall watch: heartbeat: <reason>`, and the watch ends ([logging](logging.md), stalls) |
 | the index of an event file cannot be brought up to date after the writer wrote (a line that breaks the event structure, a damaged index, a file that cannot be opened) | `error host log index: <reason>`, once for each distinct reason of a file ([logging](logging.md#index)) |
 | the file `log-policy.json` breaks the format of the [policy](logging.md#policy) (text that is not JSON, an unknown member, a class that is missing or outside the contract, a level outside the six), or the policy cannot be watched or applied | `error host log policy: <file>: <what was found>`, once for each change of the file; the policy in force stays |
 | a native call fails | `error native <where>: <text>` from `sp_log_error` |

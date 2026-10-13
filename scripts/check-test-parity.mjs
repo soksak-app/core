@@ -1898,6 +1898,19 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F164",
+    implementation: [
+      { file: "packages/host/wailsv3/src/stall_watch.go", symbol: "func StartStallWatch" },
+      { file: "packages/host/tauriv2/src/stall_watch.rs", symbol: "pub fn start_stall_watch" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/stall_watch_test.go", id: "TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd" },
+      { file: "packages/host/tauriv2/tests/stall_watch_test.rs", id: "a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end" },
+    ],
+    expected: "A stall of the main thread of either host of 1 s or more is recorded with the stacks of the threads and its end, without a window check.",
+    levels: ["unit"],
+  },
+  {
     id: "F163",
     implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "first run: the starter pack ${pack} was not installed: ${error.message}" }],
     tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a first run that cannot read the registry starts the window without the pack and states why" }],

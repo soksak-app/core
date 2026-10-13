@@ -74,6 +74,9 @@ func (implementation) MainWebview(unsafe.Pointer) (unsafe.Pointer, error) {
 func (implementation) KillWebContentProcess(unsafe.Pointer) error {
 	return unsupported("WebContent process termination")
 }
+func (implementation) SampleThreads(string) error {
+	return unsupported("thread sampling")
+}
 
 func (implementation) CollectGarbage(unsafe.Pointer) error {
 	return unsupported("JavaScript garbage collection")

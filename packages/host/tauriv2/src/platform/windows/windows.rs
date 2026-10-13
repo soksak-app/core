@@ -136,6 +136,9 @@ impl Platform for Windows {
     fn kill_web_content_process(&self, view: Handle) -> Result<(), String> {
         unsupported::kill_web_content_process(view)
     }
+    fn sample_threads(&self, path: &std::path::Path) -> Result<(), String> {
+        unsupported::sample_threads(path)
+    }
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {
         unsupported::collect_garbage(view)
     }

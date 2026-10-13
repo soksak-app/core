@@ -353,6 +353,9 @@ pub trait Platform: Send + Sync {
     /// webviews, so a termination inside `with_webview`, which holds the lock of the webview, can wait for a thread that holds
     /// the lock of the webviews and waits for the lock of the webview.
     fn kill_web_content_process(&self, view: Handle) -> Result<(), String>;
+    /// Writes the stacks of the threads of this process, sampled for one second, into the file `path`. The watch of the
+    /// main thread calls it for a stall (docs/spec/logging.md, stalls).
+    fn sample_threads(&self, path: &std::path::Path) -> Result<(), String>;
     /// Makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
     /// uses it.
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String>;

@@ -578,6 +578,34 @@
       },
       "description": "A goroutine or a thread of the host panicked; name is the name that the entrance gave it, text is the panic value (the Rust host prefixes `<file>:<line>: `), and the process ends after the event is stored."
     },
+    "host.stall": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "late_ms": "number"
+      },
+      "description": "The heartbeat of the main thread of the host was late_ms milliseconds late, 1 s or more: the main thread ran nothing else in that time."
+    },
+    "host.stall.sampled": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "path": "string",
+        "error?": "string"
+      },
+      "description": "The file in the logs folder with the stacks of the threads of the host during a stall of its main thread; error states why the file was not written."
+    },
+    "host.stall.resumed": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "stalled_ms": "number"
+      },
+      "description": "The main thread of the host ran again after a stall of stalled_ms milliseconds."
+    },
     "host.stall.dump": {
       "layer": "host",
       "class": "lifecycle",

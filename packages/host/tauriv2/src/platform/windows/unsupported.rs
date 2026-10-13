@@ -154,6 +154,10 @@ pub fn kill_web_content_process(_view: Handle) -> Result<(), String> {
     missing("WebContent process termination")
 }
 
+pub fn sample_threads(_path: &std::path::Path) -> Result<(), String> {
+    missing("thread sampling")
+}
+
 pub fn collect_garbage(_view: &PlatformWebview) -> Result<(), String> {
     missing("JavaScript garbage collection")
 }

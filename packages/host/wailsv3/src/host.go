@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -275,7 +276,18 @@ func Run(assets fs.FS, options Options) error {
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		main.prepareNative()
 	})
+	// A stall of the main thread is recorded without a window check (docs/spec/logging.md, stalls). The heartbeat starts when the
+	// main loop runs, because before it the main thread runs the start and takes no heartbeat.
+	var stopStall atomic.Pointer[func()]
+	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		stop := StartStallWatch(StallWatchOptions{OnMain: application.InvokeAsync, Sample: system.SampleThreads,
+			Folder: filepath.Dir(eventLog.Path()), EmitHost: EmitHost})
+		stopStall.Store(&stop)
+	})
 	err = app.Run()
+	if stop := stopStall.Load(); stop != nil {
+		(*stop)()
+	}
 	select {
 	case failure := <-unpublished:
 		return errors.Join(err, failure)
