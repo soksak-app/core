@@ -10,7 +10,8 @@ mod records;
 
 use serde_json::value::RawValue;
 use soksak_host_tauriv2::sidecars::{
-    ClosingSurface, Failure, Message, Owner, SidecarDeclaration, Sidecars,
+    read_message_line, ClosingSurface, Failure, Message, MessageLine, Owner, SidecarDeclaration,
+    Sidecars,
 };
 
 /// The upper limit that ends a stalled check. Success is decided by the received event and the ended process and not by
@@ -1895,5 +1896,31 @@ fn an_image_of_a_closed_surface_is_answered_closed() {
     assert_eq!(
         answer,
         serde_json::json!({"surface": "s2", "body": {"image": {"error": "closed", "name": "view", "generation": 3, "raster": 4, "sequence": 5}}})
+    );
+}
+
+// contract: sidecars.read.unfinished-line-ends-the-connection
+#[test]
+fn an_unfinished_line_at_the_end_of_the_output_is_not_a_message() {
+    let mut reader =
+        std::io::Cursor::new(b"{\"surface\":\"s1\"}\n{\"surface\":\"s2\",\"body\":\"cut".to_vec());
+    let mut line = Vec::new();
+    assert_eq!(
+        read_message_line(&mut reader, 1024, &mut line).unwrap(),
+        MessageLine::Complete
+    );
+    assert_eq!(line, b"{\"surface\":\"s1\"}\n");
+    assert_eq!(
+        read_message_line(&mut reader, 1024, &mut line).unwrap(),
+        MessageLine::Unfinished(b"{\"surface\":\"s2\",\"body\":\"cut".len())
+    );
+    assert_eq!(
+        read_message_line(&mut reader, 1024, &mut line).unwrap(),
+        MessageLine::End
+    );
+    let mut long = std::io::Cursor::new(vec![b'x'; 2048]);
+    assert_eq!(
+        read_message_line(&mut long, 1024, &mut line).unwrap(),
+        MessageLine::TooLong
     );
 }

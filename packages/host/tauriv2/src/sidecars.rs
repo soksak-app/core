@@ -345,6 +345,47 @@ fn forget_closing<O>(state: &mut State<O>, sidecar: &str) -> Option<ClosingChang
     state.closing_changed.clone()
 }
 
+/// The result of one read of a line of a sidecar.
+#[derive(Debug, PartialEq, Eq)]
+pub enum MessageLine {
+    /// A line with its line feed, a message.
+    Complete,
+    /// The output ended before a byte of a line.
+    End,
+    /// The output ended in a line of this many bytes without a line feed: the process ended while it wrote the line, so
+    /// the line is not a message and the end of the output is the end of the connection (docs/spec/sidecars.md#messages).
+    Unfinished(usize),
+    /// The part of a line before its line feed exceeds the limit; nothing more is buffered.
+    TooLong,
+}
+
+/// Reads one line of a sidecar into `line`, at most `limit` bytes and a line feed.
+pub fn read_message_line(
+    reader: &mut impl BufRead,
+    limit: usize,
+    line: &mut Vec<u8>,
+) -> std::io::Result<MessageLine> {
+    line.clear();
+    let read = reader.take(limit as u64 + 1).read_until(b'\n', line)?;
+    Ok(if read == 0 {
+        MessageLine::End
+    } else if line.last() == Some(&b'\n') {
+        MessageLine::Complete
+    } else if read > limit {
+        MessageLine::TooLong
+    } else {
+        MessageLine::Unfinished(read)
+    })
+}
+
+/// Records the line that a sidecar did not finish before its output ended.
+fn log_unfinished_line(sidecar: &str, bytes: usize) {
+    crate::application_log::log_info(
+        &format!("sidecar {sidecar}"),
+        format!("the output ended in a line of {bytes} bytes without a line break, which is not a message"),
+    );
+}
+
 /// Records a sidecar message that is dropped because no window owns it, together with its body. A dropped transfer
 /// image is answered `closed`, so the sidecar releases the frame and does not match a later answer of a reopened
 /// surface of the same id to it (docs/spec/native-surfaces.md#image-consumption).
@@ -2192,14 +2233,16 @@ impl<O: Owner> Core<O> {
             let violation = (|| -> Option<String> {
                 let mut line = Vec::new();
                 loop {
-                    line.clear();
-                    // It reads only up to the limit and one line feed.
-                    let read = match reader
-                        .by_ref()
-                        .take(MESSAGE_LIMIT as u64 + 1)
-                        .read_until(b'\n', &mut line)
-                    {
-                        Ok(read) => read,
+                    match read_message_line(&mut reader, MESSAGE_LIMIT, &mut line) {
+                        Ok(MessageLine::Complete) => {}
+                        Ok(MessageLine::End) => return None,
+                        Ok(MessageLine::Unfinished(bytes)) => {
+                            log_unfinished_line(&sidecar, bytes);
+                            return None;
+                        }
+                        Ok(MessageLine::TooLong) => {
+                            return Some(format!("message exceeds {MESSAGE_LIMIT} bytes"))
+                        }
                         Err(error) => {
                             log_error(
                                 &format!("sidecar {sidecar}"),
@@ -2207,12 +2250,6 @@ impl<O: Owner> Core<O> {
                             );
                             return None;
                         }
-                    };
-                    if read == 0 {
-                        return None;
-                    }
-                    if line.last() != Some(&b'\n') && read > MESSAGE_LIMIT {
-                        return Some(format!("message exceeds {MESSAGE_LIMIT} bytes"));
                     }
                     let value: serde_json::Value = match serde_json::from_slice(&line) {
                         Ok(value) => value,
@@ -2687,21 +2724,17 @@ fn relay<O: Owner>(
 ) -> Option<String> {
     let mut line = Vec::new();
     loop {
-        line.clear();
-        // It reads only up to the limit and one line feed.
-        let read = match reader
-            .by_ref()
-            .take(MESSAGE_LIMIT as u64 + 1)
-            .read_until(b'\n', &mut line)
-        {
-            Ok(read) => read,
+        match read_message_line(reader, MESSAGE_LIMIT, &mut line) {
+            Ok(MessageLine::Complete) => {}
+            Ok(MessageLine::End) => return None,
+            Ok(MessageLine::Unfinished(bytes)) => {
+                log_unfinished_line(sidecar, bytes);
+                return None;
+            }
+            Ok(MessageLine::TooLong) => {
+                return Some(format!("message exceeds {MESSAGE_LIMIT} bytes"))
+            }
             Err(error) => return Some(format!("read: {error}")),
-        };
-        if read == 0 {
-            return None;
-        }
-        if line.last() != Some(&b'\n') && read > MESSAGE_LIMIT {
-            return Some(format!("message exceeds {MESSAGE_LIMIT} bytes"));
         }
         match close_answer(state, sidecar, &line) {
             Ok(true) => continue,

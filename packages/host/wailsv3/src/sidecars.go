@@ -1533,6 +1533,8 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 	scanner := bufio.NewScanner(stdout)
 	// The buffer holds the limit and one line break. A longer line is bufio.ErrTooLong.
 	scanner.Buffer(make([]byte, 0, 64*1024), sidecarMessageLimit+1)
+	unfinished := 0
+	scanner.Split(MessageLines(&unfinished))
 	for scanner.Scan() {
 		var output sidecarOutput
 		if err := json.Unmarshal(scanner.Bytes(), &output); err != nil {
@@ -1577,6 +1579,7 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 	} else if err != nil {
 		return fmt.Sprintf("read: %v", err)
 	}
+	logUnfinishedLine(process.name, unfinished)
 	return ""
 }
 
@@ -1648,6 +1651,8 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 	scanner := bufio.NewScanner(reader)
 	// The buffer holds the limit and one line break. A longer line is bufio.ErrTooLong.
 	scanner.Buffer(make([]byte, 0, 64*1024), sidecarMessageLimit+1)
+	unfinished := 0
+	scanner.Split(MessageLines(&unfinished))
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		var value map[string]json.RawMessage
@@ -1739,7 +1744,32 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 	} else if err != nil && !errors.Is(err, net.ErrClosed) {
 		LogError("sidecar "+process.name, fmt.Sprintf("persistent read: %v", err))
 	}
+	logUnfinishedLine(process.name, unfinished)
 	return ""
+}
+
+// MessageLines splits the output of a sidecar into its lines without the line break and a carriage return before it. The
+// output of a process that ended while it wrote a line ends with a line without a line break: that line is not a message,
+// so it is left out and its size is counted in unfinished, and the end of the output is the end of the connection
+// (docs/spec/sidecars.md#messages).
+func MessageLines(unfinished *int) bufio.SplitFunc {
+	return func(data []byte, atEOF bool) (int, []byte, error) {
+		if index := bytes.IndexByte(data, '\n'); index >= 0 {
+			return index + 1, bytes.TrimSuffix(data[:index], []byte{'\r'}), nil
+		}
+		if atEOF && len(data) > 0 {
+			*unfinished = len(data)
+			return len(data), nil, nil
+		}
+		return 0, nil, nil
+	}
+}
+
+// logUnfinishedLine records the line that a sidecar did not finish before its output ended.
+func logUnfinishedLine(sidecar string, unfinished int) {
+	if unfinished > 0 {
+		LogInfo("sidecar "+sidecar, fmt.Sprintf("the output ended in a line of %d bytes without a line break, which is not a message", unfinished))
+	}
 }
 
 // revivePersistent connects a lost persistent connection again and tells the owning surfaces the result (V5-106). When

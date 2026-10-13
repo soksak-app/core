@@ -1455,3 +1455,23 @@ func TestAnImageOfAClosedSurfaceIsAnsweredClosed(t *testing.T) {
 		t.Fatalf("the host answered %s for the image of the closed surface; want %v", event.Body, want)
 	}
 }
+
+// contract: sidecars.read.unfinished-line-ends-the-connection
+func TestAnUnfinishedLineAtTheEndOfTheOutputIsNotAMessage(t *testing.T) {
+	unfinished := 0
+	scanner := bufio.NewScanner(strings.NewReader("{\"surface\":\"s1\"}\r\n{\"surface\":\"s2\",\"body\":\"cut"))
+	scanner.Split(host.MessageLines(&unfinished))
+	var lines []string
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || lines[0] != `{"surface":"s1"}` {
+		t.Fatalf("lines %q, want only the complete line", lines)
+	}
+	if unfinished != len(`{"surface":"s2","body":"cut`) {
+		t.Fatalf("unfinished %d, want the bytes of the line that the process did not finish", unfinished)
+	}
+}

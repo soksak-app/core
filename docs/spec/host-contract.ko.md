@@ -351,6 +351,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail` | 호스트가 닫은 표면에 대한 stdio sidecar 메시지는 버리고, 호스트가 그 프로세스에 한 번도 보내지 않은 표면의 메시지는 보낸 표면에 `unknown surface <surface>`를 전달하며 sidecar를 실패시킨다. | both |
 | `sidecars.protocol.dropped-message-is-recorded` | 소유 창이 없어 버려지는 사이드카 메시지는 `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`를 쓴다. | both |
 | `sidecars.image.closed-surface-is-answered` | 소유 창이 없는 표면의 전송 그림은 버리고 그 그림의 값으로 `{"surface":<surface>,"body":{"image":{"error":"closed","name","generation","raster","sequence"}}}`를 답한다. | both |
+| `sidecars.read.unfinished-line-ends-the-connection` | process가 줄을 쓰다 끝나서 line feed 없는 줄로 끝나는 sidecar 출력은 연결을 끝낸다. 그 줄은 메시지가 아니고, host는 `info host sidecar <name>: the output ended in a line of <n> bytes without a line break, which is not a message`를 쓰며, sidecar의 어떤 surface도 `invalid message`로 실패하지 않는다. | both |
 | `sidecars.send.rejects-undeclared-sidecar` | 어떤 플러그인도 선언하지 않은 사이드카로 보내면 "not declared"로 실패한다. | both |
 | `sidecars.send.rejects-after-stop` | 사이드카가 멈춘 뒤 보내면 "stopped"로 실패한다. | both |
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | 선언된 사이드카가 없으면 생성은 성공하고 모든 보내기는 "not declared by any plugin"으로 실패한다. | both |

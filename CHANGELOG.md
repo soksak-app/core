@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.54: both hosts end the connection of a sidecar on a line that its process did not finish, instead of failing its surfaces with `invalid message`.
 - F161.53: verify V7b compares the applied surface with the declared rectangle fitted inward to the device pixels, so a display of one device pixel per point no longer shows a verify error for half a point.
 - F161.52: the Tauri host keeps the name of a removed surface until its native surface is closed, so a `host.window` reading during the removal no longer fails with `unregistered native surface`.
 - F161.51: the example verification states that a new check configuration gets the workspace plugins with `make install-plugins` before its application starts, and that the harness replaces the project list, not the registry.
