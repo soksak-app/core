@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.34: activity observer의 할당 check가 notification을 보내는 thread의 할당을 센다. text view가 first responder가 된 뒤 system의 text input analytics가 자기 queue에서 한 번 할당하고, 그 block이 첫 측정 구간에 들어갔기 때문이다.
 - F161.14: page의 첫 batch가 clock anchor의 왕복 옆에 page 시계의 해상도를 `page.log.clock`(`resolution_us`)으로 적는다. `performance.now()`의 읽기값이 계단으로 진행하므로 page의 시간은 왕복의 절반에 그 계단을 더한 값만큼 host 시계와 달라진다.
 - F161.23: resize의 감싸진 줄 check가 새 폭의 화면만 판정하고 cursor가 자리 잡은 뒤에 줄을 읽는다. 이전 폭의 screen message도 입력을 한 번 보이기 때문이다.
 - F161.26: 창 닫기가 page의 event 대기열을 비우기 앞에서 연산을 시작해 식별자를 host 호출에 넘기고, chain `window`가 `page.window.operation`과 `host.binding.call`을 요구한다. 닫는 호출은 page가 호출을 기록하기 전에 page를 끝내고 host가 사라진 창의 batch를 거부하기 때문이다.

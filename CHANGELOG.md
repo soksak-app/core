@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.34: the allocation check of the activity observers counts the allocations of the thread that posts the notifications, because the text input analytics of the system allocate once on a queue of their own after a text view becomes the first responder, and those blocks fell into the first measured run.
 - F161.14: the first batch of a page states the resolution of its clock beside the round trip of its anchor as `page.log.clock` (`resolution_us`), because the readings of `performance.now()` advance in steps, so a time of the page differs from the clock of the host by half the round trip plus that step.
 - F161.23: the wrapped-line checks of a resize judge the screen of the new width only and read the rows after the cursor settles, because the screen message of the previous width also shows the input once.
 - F161.26: the close of a window starts its operation before the page drains its event queue and passes the identifiers to the host call, and the chain `window` asks `page.window.operation` and `host.binding.call`, because the closing call ends the page before it can record the call and the host refuses a batch of a window that is gone.
