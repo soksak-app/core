@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.51: the example verification states that a new check configuration gets the workspace plugins with `make install-plugins` before its application starts, and that the harness replaces the project list, not the registry.
 - F163: a first run that cannot read the registry, such as one without a network, starts the window without the starter pack, states why, and installs the pack at the next start.
 - F160.31: the host writer and the tool writer are one implementation in the tool packages; the writer cases of the hosts stay in the host packages as the cases of the host contract.
 - F162.5: `soksak-exposure` accepts a command of core that a surface module runs through `runtime.command` and reports a name that core does not declare.
