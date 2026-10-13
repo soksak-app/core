@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.44: 예제 절차가 목록의 test 파일 627개를 기록한다.
 - F161.43: chain 검색 test가 F161.15부터 `chainOf`이 고르는 대로 log 순서의 첫 맞는 시작을 요구한다.
 - F161.42: catalog test가 F161.26부터 명세가 적는 대로 `page.call` 없는 chain `window`를 요구한다.
 - F161.41: 애플리케이션 test가 clock anchor 진술 없이 page의 batch를 확인한다. 그 진술은 workbench에 자기 test가 있다.
