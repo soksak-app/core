@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F150.8.4: core 0.0.11 is released: the release workflow published the Wails and Tauri bundles of the tag `v0.0.11`, and the registry lists them.
+- F161.47: the job `test` of CI passed on two pushes with the cache and the build limit of 600 s.
 - F161.37.2: both hosts answer a transfer image of a surface that no window owns with `closed`, so the terminal sidecar releases the frame and a reopened surface of the same id receives the answer to its own frame.
 - F161.50: the Tauri host removes a surface that a surface sync removes from the surface registry before it closes its handle, so a window close no longer closes the same handle a second time and crashes the application.
 - F161.49: the recovery check of the terminal service declares the errors that its kill causes when it meets a frame or a write in flight.

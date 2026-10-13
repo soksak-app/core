@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F150.8.4: core 0.0.11을 release했다. release workflow가 tag `v0.0.11`의 Wails와 Tauri bundle을 게시했고 registry가 이를 나열한다.
+- F161.47: CI의 job `test`가 cache와 600 s build 한도로 두 push에서 통과했다.
 - F161.37.2: 두 호스트가 소유 창이 없는 표면의 전송 그림에 `closed`로 답하므로, terminal sidecar가 그 frame을 놓고 같은 id로 다시 열린 표면이 자기 frame의 답을 받는다.
 - F161.50: Tauri host 가 surface sync 가 제거하는 surface 를 handle 을 닫기 전에 surface registry 에서 빼므로, 창 닫기가 같은 handle 을 다시 닫아 애플리케이션을 종료시키지 않는다.
 - F161.49: terminal service의 복구 check가 kill이 전달 중인 frame이나 쓰기를 만날 때 일으키는 오류를 선언한다.
