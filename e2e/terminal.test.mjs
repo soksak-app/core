@@ -1509,6 +1509,28 @@ for (const app of Object.values(APPS)) {
       `are drawn on the selection background ${selection}`);
   });
 
+  test(`${app.name}: a terminal draws its screen after the window is resized from outside`, async (t) => {
+    // A resize that the system makes, such as the tiling of a window, configures the terminal again; the frame of the new
+    // raster shows the screen with its cursor, without input.
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    s.cleanup(() => closeTerminalTabs(s));
+    await s.until("terminal.session", (state) => Boolean(state?.sessionId), "the terminal session did not open", { surface });
+    await setMeasuredBackground(s, surface);
+    const before = await s.get("host.window");
+    s.cleanup(() => s.run("host.window.resize", { width: before.frame.width, height: before.frame.height }));
+    await s.run("host.window.resize", { width: Math.round(before.frame.width * 0.6), height: Math.round(before.frame.height * 0.8) });
+    await s.presented();
+    const cursor = await s.get("terminal.cursor", surface);
+    const [shown] = await cellBackgrounds(s, surface, [{ col: cursor.col, row: cursor.row }]);
+    assert.ok(cursor.visible, `the cursor is hidden after the resize: ${JSON.stringify(cursor)}`);
+    assert.ok(!shown.every((value, index) => Math.abs(value - MEASURED_BACKGROUND[index]) <= 8),
+      `the cursor cell ${cursor.col},${cursor.row} shows only the background after the resize: ${JSON.stringify(shown)}`);
+  });
+
   test(`${app.name}: a native drag into the padding below the last row selects to the last row`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

@@ -2029,6 +2029,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F171",
+    implementation: [{ file: "packages/host/wailsv3/src/stall_watch.go", symbol: "func StartStallWatch" }],
+    tests: [{ file: "packages/host/wailsv3/tests/stall_watch_test.go", id: "TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd" }],
+    expected: "A stall of the main thread is recorded with its stacks, which show where AppKit waits.",
+    levels: ["unit"],
+  },
+  {
     id: "F170",
     implementation: [{ file: "Makefile", symbol: "push-check:" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs every check of the structure step and the format and clippy checks of ci" }],
