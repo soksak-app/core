@@ -1,14 +1,14 @@
 //! Checks the order and the failure report of closing the logical surfaces of a closing window and their document
 //! regions and image regions, and the use of the native address of a closing window.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use soksak_host_tauriv2::documents::Documents;
 use soksak_host_tauriv2::exposure::native_failure;
 use soksak_host_tauriv2::images::Images;
-use soksak_host_tauriv2::surfaces::{close_window_surfaces, WindowNative};
+use soksak_host_tauriv2::surfaces::{close_window_surfaces, take_removed_surfaces, WindowNative};
 use soksak_host_tauriv2::windows::{use_owner, MainStep, NativeFailure};
 
 fn key(surface: &str, name: &str) -> (String, String) {
@@ -170,5 +170,24 @@ fn a_close_after_the_handle_read_does_not_reach_native_code() {
     assert_eq!(
         (failure.code, failure.message.as_str()),
         (1003, r#"window "w2" does not exist"#)
+    );
+}
+
+// contract: window-close.surfaces.closed-once
+#[test]
+fn a_surface_that_the_sync_removes_is_not_closed_again_by_the_window_close() {
+    let hosts = Mutex::new(HashMap::from([
+        ("tab-1".to_string(), 100),
+        ("tab-2".to_string(), 200),
+    ]));
+    let alive = HashSet::from(["tab-1".to_string()]);
+    let removed = take_removed_surfaces(&hosts, &alive).unwrap();
+    assert_eq!(removed, vec![("tab-2".to_string(), 200)]);
+    // The window close that runs before the sync closes the removed handle takes the remaining surfaces.
+    let remaining = std::mem::take(&mut *hosts.lock().unwrap());
+    assert_eq!(
+        remaining,
+        HashMap::from([("tab-1".to_string(), 100)]),
+        "the window close received a surface whose handle the sync closes"
     );
 }

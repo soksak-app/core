@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.50: the Tauri host removes a surface that a surface sync removes from the surface registry before it closes its handle, so a window close no longer closes the same handle a second time and crashes the application.
 - F161.49: the recovery check of the terminal service declares the errors that its kill causes when it meets a frame or a write in flight.
 - F150.8.4: every declared workspace version is 0.0.11, the version that carries the event contract of F150 and F160, the replay of F160.35, the repairs of F161, F143 and the save place of F162.1.
 - F161.48: the Hangul test names its syllables by code point in its comments, the extension probes declare the release version, and F102 links its window check, so the repository checks pass again.

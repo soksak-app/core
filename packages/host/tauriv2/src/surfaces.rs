@@ -705,14 +705,10 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
 
         // Only the page writes the surface list, so a surface that is not in the list is a removed surface.
         let alive: HashSet<String> = request.surfaces.iter().map(|s| s.id.clone()).collect();
-        let removed: Vec<(String, Handle)> = surface_hosts
-            .lock()
-            .map_err(|e| e.to_string())?
-            .iter()
-            .filter(|(id, _)| !alive.contains(*id))
-            .map(|(id, handle)| (id.clone(), *handle))
-            .collect();
+        let removed = take_removed_surfaces(surface_hosts, &alive)?;
         let removed_ids: HashSet<String> = removed.iter().map(|(id, _)| id.clone()).collect();
+        // The removed handles are no longer in the registry, so a failed close does not stop the closes of the others.
+        let mut close_failures = Vec::new();
         for (id, handle) in removed {
             // The trigger of the surface lifecycle (V5-104): a surface that disappeared from the list is destroyed at
             // this point.
@@ -723,8 +719,9 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             documents::close_surface(window, &id);
             images::close_surface(window, &id);
             context.images.end_generation(&id);
-            exposure::on_main(window, move || platform.close_surface(handle))?;
-            surface_hosts.lock().map_err(|e| e.to_string())?.remove(&id);
+            if let Err(error) = exposure::on_main(window, move || platform.close_surface(handle)) {
+                close_failures.push(format!("surface {id}: {error}"));
+            }
             context
                 .compositions
                 .lock()
@@ -748,6 +745,9 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         window
             .state::<WindowSidecars>()
             .retain(window, &|id: &str| !removed_ids.contains(id))?;
+        if !close_failures.is_empty() {
+            return Err(format!("surface close: {}", close_failures.join("; ")));
+        }
 
         // Returns the actual position of each surface. The host fits the rectangles that the page declared to display
         // pixels, so the difference between the two values is reported to the page.
@@ -1023,6 +1023,27 @@ pub enum WindowNative {
     Document(Handle),
     Image(Handle),
     Surface(Handle),
+}
+
+/// Removes from `hosts` the surfaces that the list `alive` of the page no longer holds and returns them with their
+/// handles. The caller closes each returned handle; the removal under the lock makes the caller its only closer, so a
+/// window close that takes the remaining surfaces never closes the same handle again.
+pub fn take_removed_surfaces(
+    hosts: &Mutex<HashMap<String, Handle>>,
+    alive: &HashSet<String>,
+) -> Result<Vec<(String, Handle)>, String> {
+    let mut hosts = hosts.lock().map_err(|e| e.to_string())?;
+    let ids: Vec<String> = hosts
+        .keys()
+        .filter(|id| !alive.contains(*id))
+        .cloned()
+        .collect();
+    let mut removed: Vec<(String, Handle)> = ids
+        .into_iter()
+        .filter_map(|id| hosts.remove(&id).map(|handle| (id, handle)))
+        .collect();
+    removed.sort();
+    Ok(removed)
 }
 
 /// For each logical surface of a closing window, closes the document regions and the image regions and then closes the

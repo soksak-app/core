@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.50: Tauri host 가 surface sync 가 제거하는 surface 를 handle 을 닫기 전에 surface registry 에서 빼므로, 창 닫기가 같은 handle 을 다시 닫아 애플리케이션을 종료시키지 않는다.
 - F161.49: terminal service의 복구 check가 kill이 전달 중인 frame이나 쓰기를 만날 때 일으키는 오류를 선언한다.
 - F150.8.4: 선언된 모든 workspace version이 0.0.11이다. F150과 F160의 event contract, F160.35의 replay, F161과 F143의 수리, F162.1의 저장 위치를 담는 version이다.
 - F161.48: 한글 test가 주석에서 음절을 code point로 부르고, extension probe가 release version을 선언하며, F102가 window check를 link하므로 repository 검사가 다시 통과한다.
