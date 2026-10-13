@@ -41,6 +41,26 @@ func blockedSidecar(t *testing.T, root string, surfaces int) (*host.Sidecars, fu
 			t.Fatal(err)
 		}
 	}
+	// A line larger than the pipe of the sidecar (64 KiB at most on macOS) keeps the writer inside its write, so it takes no more
+	// lines from the queue; a surface line of a long root does the same. No event reports the start of a write, so the
+	// fixture waits on the state of the writer.
+	blocker := json.RawMessage(`{"data":"` + strings.Repeat("b", 2<<20) + `"}`)
+	if err := sidecars.Send(owner, echoSidecar, "s1", blocker); err != nil {
+		t.Fatal(err)
+	}
+	for wait := 0; ; wait++ {
+		writing, err := sidecars.Writing(echoSidecar)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if writing > 64<<10 {
+			break
+		}
+		if wait == 10000 {
+			t.Fatalf("the writer did not start the line of %d bytes within 10 s (writing %d)", len(blocker), writing)
+		}
+		time.Sleep(time.Millisecond)
+	}
 	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
 	full := false
 	for i := 0; i < 4000 && !full; i++ {

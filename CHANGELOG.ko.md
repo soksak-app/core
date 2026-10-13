@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.6.5.1: 두 host가 sidecar의 writer가 쓰는 줄의 크기를 보고하고, buffer 한도의 fixture는 writer가 pipe에서 막힌 뒤에야 쓰기 queue를 채우므로, 그 case가 writer thread의 시작 시점에 좌우되지 않는다.
 - F102.1.6: window check가 자기 registry에서 contributor probe와 provider probe를 설치하고, 두 애플리케이션에서 기여한 항목이 연결되고 provider page가 그것을 쓰기를 요구한다.
 - F102.1.8: workspace registry가 plugin entry에 sidecar 의존만 쓰고 선언된 plugin에 대한 의존을 받는다.
 - F161.46: window check가 endpoint 검사보다 먼저 시작 위치와 기존 recording을 읽으므로, 오래된 build에서 끝난 check는 그 오류만 보고한다.

@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{sync_channel, RecvError, SyncSender, TryRecvError, TrySendError};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
 use std::time::{Duration, Instant};
@@ -452,9 +452,17 @@ fn shut_down_writer(name: &str, writer: &mut dyn PersistentStream) {
     }
 }
 
-fn write_line(stdin: &mut ChildStdin, name: &str, line: &QueuedLine) -> bool {
+fn write_line(
+    stdin: &mut ChildStdin,
+    name: &str,
+    line: &QueuedLine,
+    writing: &AtomicUsize,
+) -> bool {
     let started = Instant::now();
-    if let Err(e) = stdin.write_all(&line.bytes) {
+    writing.store(line.bytes.len(), Ordering::Release);
+    let written = stdin.write_all(&line.bytes);
+    writing.store(0, Ordering::Release);
+    if let Err(e) = written {
         log_error(&format!("sidecar {name}"), format!("write: {e}"));
         return false;
     }
@@ -466,6 +474,7 @@ fn write_pending_socket<O>(
     state: &Mutex<State<O>>,
     name: &str,
     stream: &mut dyn PersistentStream,
+    writing: &AtomicUsize,
 ) -> bool {
     let (replies, closes) = {
         let mut state = state.lock().expect("sidecar state");
@@ -487,12 +496,20 @@ fn write_pending_socket<O>(
     replies
         .iter()
         .chain(closes.iter())
-        .all(|line| write_socket_line(stream, name, line))
+        .all(|line| write_socket_line(stream, name, line, writing))
 }
 
-fn write_socket_line(stream: &mut dyn PersistentStream, name: &str, line: &QueuedLine) -> bool {
+fn write_socket_line(
+    stream: &mut dyn PersistentStream,
+    name: &str,
+    line: &QueuedLine,
+    writing: &AtomicUsize,
+) -> bool {
     let started = Instant::now();
-    if let Err(error) = stream.write_all(&line.bytes).and_then(|_| stream.flush()) {
+    writing.store(line.bytes.len(), Ordering::Release);
+    let written = stream.write_all(&line.bytes).and_then(|_| stream.flush());
+    writing.store(0, Ordering::Release);
+    if let Err(error) = written {
         log_error(&format!("sidecar {name}"), format!("write: {error}"));
         return false;
     }
@@ -538,7 +555,12 @@ fn record_write_wait(name: &str, line: &QueuedLine, started: Instant, ended: Ins
 
 /// Takes out the held items at once and writes the returns first and the closes last. The held items arise after the
 /// queue is full, so they go out after the queue.
-fn write_pending<O: Owner>(state: &Mutex<State<O>>, name: &str, stdin: &mut ChildStdin) -> bool {
+fn write_pending<O: Owner>(
+    state: &Mutex<State<O>>,
+    name: &str,
+    stdin: &mut ChildStdin,
+    writing: &AtomicUsize,
+) -> bool {
     let (replies, closes) = {
         let mut state = state.lock().expect("sidecar state");
         (
@@ -559,7 +581,7 @@ fn write_pending<O: Owner>(state: &Mutex<State<O>>, name: &str, stdin: &mut Chil
     replies
         .iter()
         .chain(closes.iter())
-        .all(|line| write_line(stdin, name, line))
+        .all(|line| write_line(stdin, name, line, writing))
 }
 
 /// The time to wait for the service to answer retain. It includes the time it takes to close the sessions.
@@ -586,6 +608,8 @@ struct Started {
 struct Process {
     child: Option<Child>,
     outbox: SyncSender<Outgoing>, // channel with capacity 256
+    /// The size in bytes of the line that the writer is writing, and 0 between lines.
+    writing: Arc<AtomicUsize>,
     persistent: Option<PersistentConnection>,
     /// The surfaces that sent a request to this process. They are the surfaces to which a failure is reported.
     surfaces: HashSet<String>,
@@ -1403,6 +1427,17 @@ impl<O: Owner> Sidecars<O> {
         Ok(total)
     }
 
+    /// The size in bytes of the line that the writer of the running sidecar `name` is writing, and 0 between lines; a
+    /// sidecar that reads nothing keeps its writer inside one line once its input is full.
+    pub fn writing(&self, name: &str) -> Result<usize, String> {
+        let state = self.core.state.lock().expect("sidecar state");
+        let process = state
+            .running
+            .get(name)
+            .ok_or_else(|| format!("sidecar {name} is not running"))?;
+        Ok(process.writing.load(Ordering::Acquire))
+    }
+
     /// Passes a response (such as an image return) to the sidecar. It has the same role as ResponseSender. When the
     /// channel is full, the response is buffered for each surface:image and the write thread sends it.
     pub fn send_response(
@@ -1792,33 +1827,35 @@ impl<O: Owner> Core<O> {
         // it also writes all held items before it closes stdin.
         let write_name = name.to_string();
         let state_clone = Arc::clone(&core.state);
+        let writing = Arc::new(AtomicUsize::new(0));
+        let write_writing = Arc::clone(&writing);
 
         threads.push(Box::new(move || loop {
             loop {
                 match rx.try_recv() {
                     Ok(Outgoing::Line(line)) => {
-                        if !write_line(&mut stdin, &write_name, &line) {
+                        if !write_line(&mut stdin, &write_name, &line, &write_writing) {
                             return;
                         }
                     }
                     Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
-                        write_pending(&state_clone, &write_name, &mut stdin);
+                        write_pending(&state_clone, &write_name, &mut stdin, &write_writing);
                         return;
                     }
                     Err(TryRecvError::Empty) => break,
                 }
             }
-            if !write_pending(&state_clone, &write_name, &mut stdin) {
+            if !write_pending(&state_clone, &write_name, &mut stdin, &write_writing) {
                 return;
             }
             match rx.recv() {
                 Ok(Outgoing::Line(line)) => {
-                    if !write_line(&mut stdin, &write_name, &line) {
+                    if !write_line(&mut stdin, &write_name, &line, &write_writing) {
                         return;
                     }
                 }
                 Ok(Outgoing::Close) | Err(RecvError) => {
-                    write_pending(&state_clone, &write_name, &mut stdin);
+                    write_pending(&state_clone, &write_name, &mut stdin, &write_writing);
                     return;
                 }
             }
@@ -1843,6 +1880,7 @@ impl<O: Owner> Core<O> {
             process: Process {
                 child: Some(child),
                 outbox: tx,
+                writing,
                 persistent: None,
                 surfaces: HashSet::new(),
             },
@@ -2021,6 +2059,8 @@ impl<O: Owner> Core<O> {
         let connected = Arc::new(AtomicBool::new(true));
         let write_name = name.to_string();
         let write_state = Arc::clone(&core.state);
+        let writing = Arc::new(AtomicUsize::new(0));
+        let write_writing = Arc::clone(&writing);
         let writer = stream;
         let writer_connected = Arc::clone(&connected);
         threads.push(Box::new(move || {
@@ -2036,12 +2076,18 @@ impl<O: Owner> Core<O> {
                 loop {
                     match rx.try_recv() {
                         Ok(Outgoing::Line(line)) => {
-                            if !write_socket_line(&mut *writer, &write_name, &line) {
+                            if !write_socket_line(&mut *writer, &write_name, &line, &write_writing)
+                            {
                                 return;
                             }
                         }
                         Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
-                            if !write_pending_socket(&write_state, &write_name, &mut *writer) {
+                            if !write_pending_socket(
+                                &write_state,
+                                &write_name,
+                                &mut *writer,
+                                &write_writing,
+                            ) {
                                 log_error(
                                     &format!("sidecar {write_name}"),
                                     "the pending lines were not written before close",
@@ -2053,17 +2099,22 @@ impl<O: Owner> Core<O> {
                         Err(TryRecvError::Empty) => break,
                     }
                 }
-                if !write_pending_socket(&write_state, &write_name, &mut *writer) {
+                if !write_pending_socket(&write_state, &write_name, &mut *writer, &write_writing) {
                     return;
                 }
                 match rx.recv() {
                     Ok(Outgoing::Line(line)) => {
-                        if !write_socket_line(&mut *writer, &write_name, &line) {
+                        if !write_socket_line(&mut *writer, &write_name, &line, &write_writing) {
                             return;
                         }
                     }
                     Ok(Outgoing::Close) | Err(RecvError) => {
-                        if !write_pending_socket(&write_state, &write_name, &mut *writer) {
+                        if !write_pending_socket(
+                            &write_state,
+                            &write_name,
+                            &mut *writer,
+                            &write_writing,
+                        ) {
                             log_error(
                                 &format!("sidecar {write_name}"),
                                 "the pending lines were not written before disconnect",
@@ -2336,6 +2387,7 @@ impl<O: Owner> Core<O> {
             process: Process {
                 child: None,
                 outbox: tx,
+                writing,
                 surfaces: HashSet::new(),
                 persistent: Some(PersistentConnection {
                     version,

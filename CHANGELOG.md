@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F160.6.5.1: both hosts report the size of the line that the writer of a sidecar is writing, and the fixtures of the buffer bounds fill the write queue only after the writer blocks on the pipe, so their cases no longer depend on when the writer thread starts.
 - F102.1.6: a window check installs a contributor probe and its provider probe from a registry of its own and requires that the contributed item connects and that the provider page uses it on both applications.
 - F102.1.8: the workspace registry writes only the sidecar dependencies of a plugin into its entry and accepts a dependency on a declared plugin.
 - F161.46: a window check takes its start position and the existing recordings before the checks of the endpoint, so a check that ends at a stale build reports only that error.

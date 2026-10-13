@@ -96,8 +96,10 @@ type sidecar struct {
 	conn       net.Conn
 	persistent bool
 	// servicePID is the process of the service endpoint that a persistent connection reached.
-	servicePID    int
-	outbox        chan queuedLine
+	servicePID int
+	outbox     chan queuedLine
+	// writing is the size in bytes of the line that the writer is writing, and 0 between lines.
+	writing       atomic.Int64
 	exited        chan struct{}
 	muClosed      sync.Mutex
 	pendingCloses pendingLines // The pending closed messages, in the order of sending
@@ -414,6 +416,18 @@ func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body j
 	default:
 		return fmt.Errorf("sidecar %s is not keeping up", name)
 	}
+}
+
+// Writing returns the size in bytes of the line that the writer of the running sidecar name is writing, and 0 between lines; a
+// sidecar that reads nothing keeps its writer inside one line once its input is full.
+func (c *Sidecars) Writing(name string) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	process, ok := c.running[name]
+	if !ok {
+		return 0, fmt.Errorf("sidecar %s is not running", name)
+	}
+	return int(process.writing.Load()), nil
 }
 
 // SendResponse passes a reply (such as an image return) to the sidecar.
@@ -1365,6 +1379,8 @@ func (c *Sidecars) writePersistent(process *sidecar) {
 
 func (c *Sidecars) writePersistentLine(process *sidecar, line queuedLine) bool {
 	started := monotonicNanos()
+	process.writing.Store(int64(len(line.bytes)))
+	defer process.writing.Store(0)
 	if _, err := process.conn.Write(line.bytes); err != nil {
 		LogError("sidecar "+process.name, fmt.Sprintf("write: %v", err))
 		return false
@@ -1392,6 +1408,8 @@ func (c *Sidecars) writePersistentPending(process *sidecar) bool {
 
 func (c *Sidecars) writeLine(process *sidecar, line queuedLine) bool {
 	started := monotonicNanos()
+	process.writing.Store(int64(len(line.bytes)))
+	defer process.writing.Store(0)
 	if _, err := process.stdin.Write(line.bytes); err != nil {
 		LogError("sidecar "+process.name, fmt.Sprintf("write: %v", err))
 		return false
