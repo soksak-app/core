@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.12, F160.14, F160.16, F154.3, F154: agent guidance의 검증 규칙에 따라 단위 Red와 Green으로 닫았다. 기다리던 실행은 돌리지 않는다.
 - F166: 애플리케이션 실행만 기다리던 17개 항목이 agent guidance의 검증 규칙에 따라 상위 항목의 단위 Red와 Green으로 완료되었고, 아래 항목이 모두 완료된 상위 항목 13개를 닫았다. 그 window check는 추적된 채 남고 실행하지 않았다.
 - F167: 용어 목록이 image region을 적고 picture region을 거부하며, 모든 기록이 image region을 쓴다.
 - F161.55.5: `host.window`가 각 image region의 표시된 frame의 generation, raster, sequence를 보고하며, 현재 raster의 frame이 표시되지 않은 동안 `presented`는 null이다.

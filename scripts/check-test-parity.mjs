@@ -1905,6 +1905,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F154",
+    implementation: [{ file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" }],
+    tests: [{ file: "scripts/test/node-tests.test.mjs", id: "each test file of a package is a test with the folder and the flags of its package" }],
+    expected: "Every long test suite runs as separate tests that report what runs, how long it has run and its result.",
+    levels: ["unit"],
+  },
+  {
     id: "F158",
     implementation: [{ file: "packages/workbench/debug-timeline.js", symbol: "export const HOLD_LIMIT" }],
     tests: [{ file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "the view holds at most 2000 rows and refuses an older page beyond them with an error" }],
