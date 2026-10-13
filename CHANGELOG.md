@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.37: the first raster of a reopened terminal surface is answered to that surface, by the matching of S49 of the terminal sidecar (unreleased until its release 0.0.9).
 - F161.55.4: the pasteboard cleanup of a window check names a write of another process between its restore and its comparison by the change counts.
 - F166: the agent guidance requires a maintained library of the ecosystem for a function that it provides.
 - F165: the answer table of image envelopes in the sidecar specification shows the generation and the raster that every error answer carries.
