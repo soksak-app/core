@@ -37,10 +37,10 @@ test("each test file of a package is a test with the folder and the flags of its
   put(root, "c/package.json", JSON.stringify({ name: "c" }));
   const { tests, before } = discoverNodeTests({ root, packages: ["a", "b", "c"] });
   assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1), item.cwd]), [
-    ["a/test/nested/two.test.mjs", ["--test", "--experimental-test-module-mocks"], join(root, "a")],
-    ["a/test/one.test.mjs", ["--test", "--experimental-test-module-mocks"], join(root, "a")],
-    ["a/test/support/helper.mjs", ["--test", "--experimental-test-module-mocks"], join(root, "a")],
-    ["b/test/three.test.mjs", ["--test"], join(root, "b")],
+    ["a/test/nested/two.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--experimental-test-module-mocks"], join(root, "a")],
+    ["a/test/one.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--experimental-test-module-mocks"], join(root, "a")],
+    ["a/test/support/helper.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--experimental-test-module-mocks"], join(root, "a")],
+    ["b/test/three.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr"], join(root, "b")],
   ]);
   assert.deepEqual(before, [{ name: "b: pnpm build", command: "pnpm", args: ["build"], cwd: join(root, "b") }]);
 });
@@ -74,6 +74,26 @@ test("the discovered files run through the runner, each in the folder of its pac
   assert.ok(lines.some((line) => /^RUN  a\/test\/ok\.test\.mjs/.test(line)) && lines.some((line) => /^PASS a\/test\/ok\.test\.mjs [0-9.]+s/.test(line)));
 });
 
+test("the error of a failed test is kept when its file is killed at its limit before it ends", async () => {
+  const root = workspace();
+  put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
+  put(root, "a/test/slow.test.mjs", 'import test from "node:test"; import assert from "node:assert";\n'
+    + 'test("fails first", () => assert.equal("kept-actual", "kept-expected"));\n'
+    + 'test("never ends", () => new Promise(() => setInterval(() => {}, 1000)));\n');
+  const { tests } = discoverNodeTests({ root, packages: ["a"] });
+  const context = process.env.NODE_TEST_CONTEXT;
+  delete process.env.NODE_TEST_CONTEXT;
+  let results;
+  try {
+    ({ results } = await runTests({ tests, concurrency: 1, defaultTimeoutMs: 3000, write: () => {} }));
+  } finally {
+    if (context !== undefined) process.env.NODE_TEST_CONTEXT = context;
+  }
+  const [result] = [...results.values()];
+  assert.equal(result.status, "timeout");
+  assert.match(result.output, /kept-actual/, `the output of the killed file lacks the error of its failed test:\n${result.output}`);
+});
+
 test("the root names its own test files in test:scripts because its test script runs this runner", () => {
   const root = workspace();
   put(root, "package.json", JSON.stringify({ name: "root", scripts: { test: "node scripts/node-tests.mjs", "test:scripts": "node --test scripts/test/*.test.mjs" } }));
@@ -90,7 +110,7 @@ test("another script of the packages that have it is discovered, and quotes arou
   put(root, "other/package.json", JSON.stringify({ name: "other", scripts: { test: "node --test test/" } }));
   put(root, "other/test/x.test.mjs", "");
   const { tests } = discoverNodeTests({ root, packages: ["e2e", "other"], script: "verify" });
-  assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1)]), [["e2e/a.test.mjs", ["--test", "--test-concurrency=1", "--test-global-setup=./setup.mjs"]]]);
+  assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1)]), [["e2e/a.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", "--test-concurrency=1", "--test-global-setup=./setup.mjs"]]]);
 });
 
 test("the idle gate waits until the person gave no input for the given seconds", async () => {

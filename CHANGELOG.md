@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.61: each test file also reports in the TAP form on the standard error, so a file killed at its limit keeps the errors of the tests that failed before.
 - F161.60: the audit of a run judges the errors from its first start mark to its last end mark, so the errors of earlier runs in the same configuration folder no longer fail it.
 - F161.52.1: the Tauri host names a new surface in the same main-thread step that creates its native surface, so a `host.window` reading during a creation no longer fails with `unregistered native surface`.
 - F161.54: both hosts end the connection of a sidecar on a line that its process did not finish, instead of failing its surfaces with `invalid message`.

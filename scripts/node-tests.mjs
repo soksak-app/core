@@ -93,6 +93,9 @@ function filesOf(folder, path) {
  * The tests of the packages (folders relative to `root`, or `.` for the root): one test per file, with the folder of its package
  * and the flags of its script, and the commands to run before them.
  */
+/** The reporters of a test file: the spec form on the standard output and the TAP form on the standard error. */
+const REPORTERS = ['--test-reporter=spec', '--test-reporter-destination=stdout', '--test-reporter=tap', '--test-reporter-destination=stderr'];
+
 export function discoverNodeTests({ root, packages, script: scriptName = 'test' }) {
   const tests = [];
   const before = [];
@@ -110,7 +113,10 @@ export function discoverNodeTests({ root, packages, script: scriptName = 'test' 
     const files = [...new Set(script.paths.flatMap((path) => filesOf(directory, path)))].sort();
     if (files.length === 0) throw new Error(`${folder}: the test script names no test file in ${script.paths.join(' ')}`);
     for (const file of files) {
-      tests.push({ name: relative(root, file).split('\\').join('/'), command: process.execPath, args: ['--test', ...script.flags, file], cwd: directory });
+      // The spec reporter writes the errors of the failed tests at the end of the file, so a file that its limit kills
+      // keeps none; the TAP reporter on the standard error writes the error of each test when the test ends.
+      tests.push({ name: relative(root, file).split('\\').join('/'), command: process.execPath,
+        args: ['--test', ...REPORTERS, ...script.flags, file], cwd: directory });
     }
   }
   return { tests, before };
