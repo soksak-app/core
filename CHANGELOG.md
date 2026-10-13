@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F163: a first run that cannot read the registry, such as one without a network, starts the window without the starter pack, states why, and installs the pack at the next start.
 - F160.31: the host writer and the tool writer are one implementation in the tool packages; the writer cases of the hosts stay in the host packages as the cases of the host contract.
 - F162.5: `soksak-exposure` accepts a command of core that a surface module runs through `runtime.command` and reports a name that core does not declare.
 - F162.3: a surface module runs a command of core through `context.runtime.command(name, params)`, so a plugin of documents reaches `core.file.place`.

@@ -165,24 +165,31 @@ export function createPluginOperations({ host, loaded, changed }) {
    * On the first run, installs the plugins of the starter pack in the order of the pack and returns true (first run in
    * docs/spec/installation.md). The caller reloads the page so it loads the installed plugins. If there is no registry, it first sets the
    * default registry of the environment (defaultRegistry). If neither exists, it records this, notifies with show so a window without plugins
-   * states the reason, and returns false.
+   * states the reason, and returns false. The application starts without a network: a registry that cannot be set or read, a missing pack
+   * and a failed installation are recorded and shown the same way, and the next start, still a first run, installs the pack.
    */
   async function installStarter(pack, defaultRegistry, log, show) {
     if (!host || pack === null || !state?.firstRun) return false;
-    if (state.registry === null && defaultRegistry !== null) {
-      await useRegistry(defaultRegistry);
-      if (state === null) throw new Error(`first run: ${failure.message}`);
-    }
-    if (state.registry === null) {
-      log(`first run: no registry is set; the starter pack ${pack} was not installed`);
-      show(`플러그인 레지스트리가 없어 시작 플러그인 묶음 ${pack}을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요.`);
+    try {
+      if (state.registry === null && defaultRegistry !== null) {
+        await useRegistry(defaultRegistry);
+        if (state === null) throw new Error(failure.message);
+      }
+      if (state.registry === null) {
+        log(`first run: no registry is set; the starter pack ${pack} was not installed`);
+        show(`플러그인 레지스트리가 없어 시작 플러그인 묶음 ${pack}을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요.`);
+        return false;
+      }
+      if (typeof state.index?.error === "string") throw new Error(state.index.error);
+      const entry = state.index.packs.find((item) => item.name === pack);
+      if (!entry) throw new Error(`the registry has no pack ${pack}`);
+      for (const id of entry.plugins) await runAction("install", id);
+      return true;
+    } catch (error) {
+      log(`first run: the starter pack ${pack} was not installed: ${error.message}`);
+      show(`시작 플러그인 묶음 ${pack}을 설치하지 못했습니다 · ${error.message}. 연결된 뒤 다시 시작하면 다시 설치합니다.`);
       return false;
     }
-    if (typeof state.index?.error === "string") throw new Error(`first run: ${state.index.error}`);
-    const entry = state.index.packs.find((item) => item.name === pack);
-    if (!entry) throw new Error(`first run: the registry has no pack ${pack}`);
-    for (const id of entry.plugins) await runAction("install", id);
-    return true;
   }
 
   return { state: () => state, refresh, refreshOutdated, replace, run: runAction, updateAll, useRegistry, status, installStarter, failure: () => failure, hosted: Boolean(host) };

@@ -129,7 +129,7 @@ test("an unreadable registry index keeps the installed rows and an unreadable st
 });
 
 /** A host that imitates pluginsState and pluginsRun. When installed is empty, it is the first run, in which installed.json does not exist. */
-function starterHost({ registry = "file:///registry/index.json", index, firstRun = true }) {
+function starterHost({ registry = "file:///registry/index.json", index, firstRun = true, useRegistry = null }) {
   const calls = [];
   let first = firstRun;
   let current = registry;
@@ -138,7 +138,12 @@ function starterHost({ registry = "file:///registry/index.json", index, firstRun
     async call(method, params) {
       calls.push([method, params ?? null]);
       if (method === "pluginsRun") { first = false; return null; }
-      if (method === "pluginsUseRegistry") { current = params.index; return { index: current }; }
+      if (method === "pluginsUseRegistry") {
+        // A registry that cannot be fetched is not set.
+        if (useRegistry !== null) throw new Error(useRegistry);
+        current = params.index;
+        return { index: current };
+      }
       return { registry: current, index: current === null ? null : index, installed: { format: 2, plugins: {}, sidecars: {} }, firstRun: first };
     },
   };
@@ -176,12 +181,25 @@ test("the first run without a registry logs and a missing pack or unreadable ind
   assert.deepEqual(lines, ["first run: no registry is set; the starter pack starter was not installed"]);
   // A window without a plugin states the reason on the screen.
   assert.deepEqual(shown, ["플러그인 레지스트리가 없어 시작 플러그인 묶음 starter을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요."]);
-  const missing = createPluginOperations({ host: starterHost({ index: { plugins: [], packs: [] } }), loaded: () => [], changed: () => {} });
-  await missing.refresh();
-  await assert.rejects(missing.installStarter("starter", null, () => {}), /first run: the registry has no pack starter/);
-  const unread = createPluginOperations({ host: starterHost({ index: { error: "index.json: no such file or directory" } }), loaded: () => [], changed: () => {} });
-  await unread.refresh();
-  await assert.rejects(unread.installStarter("starter", null, () => {}), /first run: index.json: no such file or directory/);
+});
+
+test("a first run that cannot read the registry starts the window without the pack and states why", async () => {
+  const cases = [
+    [{ index: { plugins: [], packs: [] } }, null, "the registry has no pack starter"],
+    [{ index: { error: "index.json: no such file or directory" } }, null, "index.json: no such file or directory"],
+    // Without a network the default registry cannot be set.
+    [{ registry: null, index: null, useRegistry: "https://soksak-app.github.io/registry/index.json: cannot connect: offline" },
+      "https://soksak-app.github.io/registry/index.json", "https://soksak-app.github.io/registry/index.json: cannot connect: offline"],
+  ];
+  for (const [state, registry, error] of cases) {
+    const operations = createPluginOperations({ host: starterHost(state), loaded: () => [], changed: () => {} });
+    await operations.refresh();
+    const lines = [];
+    const shown = [];
+    assert.equal(await operations.installStarter("starter", registry, (line) => lines.push(line), (message) => shown.push(message)), false);
+    assert.deepEqual(lines, [`first run: the starter pack starter was not installed: ${error}`]);
+    assert.deepEqual(shown, [`시작 플러그인 묶음 starter을 설치하지 못했습니다 · ${error}. 연결된 뒤 다시 시작하면 다시 설치합니다.`]);
+  }
 });
 
 test("the first run sets the default registry of the environment before it installs the starter pack", async () => {

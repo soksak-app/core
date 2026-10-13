@@ -1898,6 +1898,13 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F163",
+    implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "first run: the starter pack ${pack} was not installed: ${error.message}" }],
+    tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a first run that cannot read the registry starts the window without the pack and states why" }],
+    expected: "A first run without a network, or with a registry that cannot be read, starts the window without the starter pack, states why, and installs the pack at the next start.",
+    levels: ["unit"],
+  },
+  {
     id: "R3",
     implementation: [
       { file: "packages/plugin-api/records-check.js", symbol: "export function recordViolations" },
