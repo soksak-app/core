@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F165: the answer table of image envelopes in the sidecar specification shows the generation and the raster that every error answer carries.
 - F164: both hosts record a stall of their main thread of 1 s or more, the stacks of their threads and the end of the stall, without a window check.
 - F161.61: each test file also reports in the TAP form on the standard error, so a file killed at its limit keeps the errors of the tests that failed before.
 - F161.60: the audit of a run judges the errors from its first start mark to its last end mark, so the errors of earlier runs in the same configuration folder no longer fail it.

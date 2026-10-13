@@ -112,10 +112,10 @@ The host validates the envelope and returns a response without an `op` field:
 | Condition | Response | Meaning |
 | --- | --- | --- |
 | Region not declared, generation ended, or sender not authorized | `{"image": {"error": "notAttached", "name": "...", "generation": ..., "raster": ..., "sequence": ...}}` | Region does not exist in the current declared composition, or belongs to a different generation or sidecar |
-| Format or token kind not supported, or nonce invalid | `{"image": {"error": "unsupported", "name": "...", "sequence": ...}}` | Format must be `bgra8` and token kind must be `iosurface-global`; nonce must be exactly 16 bytes when base64-decoded |
-| IOSurface not found or access denied | `{"image": {"error": "notFound", "name": "...", "sequence": ...}}` | IOSurface lookup failed or permission denied |
-| Declared size does not match the IOSurface's actual size | `{"image": {"error": "size", "name": "...", "sequence": ...}}` | Width and height in the envelope must match the actual IOSurface dimensions in pixels |
-| Image scale differs from the window's backing scale factor | `{"image": {"error": "scale", "name": "...", "sequence": ...}}` | The image must be drawn at the window's current backing scale factor |
+| Format or token kind not supported, or nonce invalid | `{"image": {"error": "unsupported", "name": "...", "generation": ..., "raster": ..., "sequence": ...}}` | Format must be `bgra8` and token kind must be `iosurface-global`; nonce must be exactly 16 bytes when base64-decoded |
+| IOSurface not found or access denied | `{"image": {"error": "notFound", "name": "...", "generation": ..., "raster": ..., "sequence": ...}}` | IOSurface lookup failed or permission denied |
+| Declared size does not match the IOSurface's actual size | `{"image": {"error": "size", "name": "...", "generation": ..., "raster": ..., "sequence": ...}}` | Width and height in the envelope must match the actual IOSurface dimensions in pixels |
+| Image scale differs from the window's backing scale factor | `{"image": {"error": "scale", "name": "...", "generation": ..., "raster": ..., "sequence": ...}}` | The image must be drawn at the window's current backing scale factor |
 | Generation, raster revision, sequence, or expected dimensions are stale | `{"image": {"error": "stale", "name": "...", "generation": ..., "raster": ..., "sequence": ...}}` | The frame cannot replace the current raster |
 | Success | `{"image": {"consumed": {"name": "...", "generation": ..., "raster": ..., "sequence": ...}}}` | The host copied the transfer pixels into immutable host-owned presentation storage |
 

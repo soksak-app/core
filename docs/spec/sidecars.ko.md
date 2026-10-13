@@ -112,10 +112,10 @@
 | 상황 | 응답 | 의미 |
 | --- | --- | --- |
 | 영역이 선언되지 않았거나 세대가 끝났거나 발신자가 권한이 없음 | `{"image": {"error": "notAttached", "name": "...", "generation": ..., "raster": ..., "sequence": ...}}` | 현재 선언 합성에 영역이 없거나 다른 세대·사이드카에 속함 |
-| 형식이나 토큰 종류가 지원되지 않거나 논스가 잘못됨 | `{"image": {"error": "unsupported", "name": "...", "sequence": ...}}` | 형식은 `bgra8`, 토큰 종류는 `iosurface-global`이어야 함. 논스는 base64 디코딩하면 정확히 16바이트여야 함 |
-| IOSurface를 찾지 못했거나 접근 거부됨 | `{"image": {"error": "notFound", "name": "...", "sequence": ...}}` | IOSurface 조회 실패 또는 권한 거부 |
-| 선언한 크기가 IOSurface의 실제 크기와 맞지 않음 | `{"image": {"error": "size", "name": "...", "sequence": ...}}` | 봉투의 가로와 세로가 IOSurface의 실제 픽셀 크기와 같아야 함 |
-| 그림 배율이 창의 백킹 배율과 다름 | `{"image": {"error": "scale", "name": "...", "sequence": ...}}` | 그림은 창의 현재 백킹 배율로 그려져야 함 |
+| 형식이나 토큰 종류가 지원되지 않거나 논스가 잘못됨 | `{"image": {"error": "unsupported", "name": "...", "generation": ..., "raster": ..., "sequence": ...}}` | 형식은 `bgra8`, 토큰 종류는 `iosurface-global`이어야 함. 논스는 base64 디코딩하면 정확히 16바이트여야 함 |
+| IOSurface를 찾지 못했거나 접근 거부됨 | `{"image": {"error": "notFound", "name": "...", "generation": ..., "raster": ..., "sequence": ...}}` | IOSurface 조회 실패 또는 권한 거부 |
+| 선언한 크기가 IOSurface의 실제 크기와 맞지 않음 | `{"image": {"error": "size", "name": "...", "generation": ..., "raster": ..., "sequence": ...}}` | 봉투의 가로와 세로가 IOSurface의 실제 픽셀 크기와 같아야 함 |
+| 그림 배율이 창의 백킹 배율과 다름 | `{"image": {"error": "scale", "name": "...", "generation": ..., "raster": ..., "sequence": ...}}` | 그림은 창의 현재 백킹 배율로 그려져야 함 |
 | 세대, 래스터 리비전, 시퀀스 또는 예상 크기가 오래됨 | `{"image": {"error": "stale", "name": "...", "generation": ..., "raster": ..., "sequence": ...}}` | 프레임이 현재 래스터를 교체할 수 없음 |
 | 성공 | `{"image": {"consumed": {"name": "...", "generation": ..., "raster": ..., "sequence": ...}}}` | 호스트가 전송 픽셀을 호스트 소유 불변 표시 저장소로 복사함 |
 
