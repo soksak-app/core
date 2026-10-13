@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F102.1.6: a window check installs a contributor probe and its provider probe from a registry of its own and requires that the contributed item connects and that the provider page uses it on both applications.
 - F102.1.8: the workspace registry writes only the sidecar dependencies of a plugin into its entry and accepts a dependency on a declared plugin.
 - F161.46: a window check takes its start position and the existing recordings before the checks of the endpoint, so a check that ends at a stale build reports only that error.
 - F161.45: the settings modal keeps a negative scroll position that the native modal reports during an overscroll, as the debug view does since F146, and refuses only a value that is not a number.

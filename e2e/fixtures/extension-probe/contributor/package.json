@@ -1,0 +1,11 @@
+{
+  "name": "@soksak-check/probe-contributor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Window check fixture: a plugin that contributes one item to the extension point items of the provider probe.",
+  "license": "MIT",
+  "repository": "git+https://github.com/soksak-app/core.git",
+  "engines": { "soksak": "*" },
+  "files": ["plugin.json", "ui"]
+}
