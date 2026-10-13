@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F160.18: the input latency with the trace on and off is recorded; F174 records the update fixture that the Tauri check application found.
 - F160.17: the numbers of the native, Go and Rust benchmarks are recorded with the load of their run.
 - F173: the input source wait registers through the observer entrance, the deep link parse states its cases, and `make push-check` runs the census and fallback tests.
 - F172: both hosts hold a deep link that arrives before the first window is ready and run it when the first window is ready, in arrival order; a link that arrives later runs at once. The queue tests of both hosts pass.

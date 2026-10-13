@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.18: trace on과 off의 입력 지연을 기록했다. F174가 Tauri check 애플리케이션이 찾은 update fixture를 적는다.
 - F160.17: native, Go, Rust benchmark 수치를 실행 시 부하와 함께 기록했다.
 - F173: input source 대기가 observer 입구로 등록하고, deep link parse가 경우를 밝히며, `make push-check`가 census와 fallback test를 돌린다.
 - F172: 두 host가 첫 창이 준비되기 전에 도착한 딥링크를 보관했다가 첫 창이 준비되면 도착한 순서대로 실행한다. 그 뒤에 도착한 링크는 바로 실행한다. 두 host의 queue test가 통과한다.
