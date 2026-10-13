@@ -94,16 +94,27 @@ test('a test that omits an expected event fails with the missing name at its end
   assert.deepEqual(row.missing, ['host.update.start']);
 });
 
-test('an error outside every test, and a start mark without an end mark, are findings', (t) => {
+test('an error between the tests of the run, and a start mark without an end mark, are findings', (t) => {
   const { folder, host } = fixture(t, {
-    files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), failure(2, 'before'), start(3, 't1'), focus(4)] },
-    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 3 })],
+    files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), end(3, 't1'), failure(4, 'between'), start(5, 't2'), focus(6)] },
+    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 }), mark({ kind: 'end', boot: BOOT, seq: 3 }),
+      mark({ kind: 'start', name: 't2', boot: BOOT, seq: 5 })],
   });
   assert.deepEqual(auditRun(catalog, folder), [
-    `${host}:2: undeclared error place: before`,
-    `${join(folder, 'marks.jsonl')}:1: test t1 of fixture has a start mark and no end mark`,
+    `${host}:4: undeclared error place: between`,
+    `${join(folder, 'marks.jsonl')}:3: test t2 of fixture has a start mark and no end mark`,
   ]);
-  assert.equal(judgment(folder).tests[0].result, 'fail');
+  assert.equal(judgment(folder).tests[1].result, 'fail');
+});
+
+test('an error before the first start mark or after the last end mark of the run belongs to no test of the run and is not judged', (t) => {
+  // A configuration folder holds the logs of earlier runs and of a person's use of the application.
+  const { folder } = fixture(t, {
+    files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), failure(2, 'an earlier run'), start(3, 't1'), end(4, 't1'), failure(5, 'a later use')] },
+    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 3 }), mark({ kind: 'end', boot: BOOT, seq: 4 })],
+  });
+  assert.deepEqual(auditRun(catalog, folder), []);
+  assert.equal(judgment(folder).tests[0].result, 'pass');
 });
 
 test('the logs of every layer under the configuration folders of the marks are audited, and a sidecar error is placed by time', (t) => {
@@ -111,6 +122,7 @@ test('the logs of every layer under the configuration folders of the marks are a
   const { folder, config } = fixture(t, {
     files: {
       [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), event(3, 'host.window.event', { window: 'w' }), end(4, 't1')],
+      // The error at 99 ms is after the last end mark of the run, so the run does not judge it.
       'vt-3-4.jsonl': [open('vt', '3-4'), sidecar(2, 'inside', 2500), sidecar(3, 'late', 99000)],
     },
     marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 }), mark({ kind: 'end', boot: BOOT, seq: 4 })],
@@ -119,7 +131,6 @@ test('the logs of every layer under the configuration folders of the marks are a
   assert.deepEqual(auditRun(catalog, folder), [
     `${join(config, 'logs', `host-${BOOT}.jsonl`)}:3: field kind is required by host.window.event`,
     `${vt}:2: undeclared error vt: inside`,
-    `${vt}:3: undeclared error vt: late`,
   ]);
   const [row] = judgment(folder).tests;
   assert.deepEqual(row.errors.map(({ line, declared }) => [line, declared]), [[2, false]]);

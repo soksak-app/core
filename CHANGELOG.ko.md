@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.60: 실행의 감사가 첫 시작 표시부터 마지막 끝 표시까지의 오류를 판정하므로, 같은 설정 폴더의 이전 실행 오류가 더 이상 감사를 실패시키지 않는다.
 - F161.52.1: Tauri host가 새 surface의 native surface를 만드는 main thread 단계에서 이름을 붙이므로, 생성 중의 `host.window` 읽기가 더 이상 `unregistered native surface`로 실패하지 않는다.
 - F161.54: 두 host가 process가 끝내지 못한 줄에서 sidecar 연결을 끝내고, 그 surface들을 `invalid message`로 실패시키지 않는다.
 - F161.53: verify V7b가 적용된 surface를 device pixel 안쪽으로 맞춘 선언 사각형과 비교하므로, point당 device pixel 하나인 화면이 반 point 때문에 verify 오류를 보이지 않는다.

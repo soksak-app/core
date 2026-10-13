@@ -128,7 +128,14 @@ export function auditRun(catalog, folder) {
         if (flags.length > 0 && flags.every(Boolean)) declared.add(`${file}\0${entry.line}`);
       }
     }
-    for (const { file, line, message } of auditParsed(parsed, catalogOf(catalog, config), (file, entry) => declared.has(`${file}\0${entry.line}`))) {
+    // The run spans from its first start mark to its last end mark. A configuration folder also holds the logs of earlier
+    // runs and of a person's use of the application, and an error outside the span belongs to no test of this run, so this
+    // run does not judge it; `check-events.mjs --logs` reports every error of a folder.
+    const spanStart = Math.min(...mine.map((made) => made.from.ts_us));
+    const spanEnd = mine.some((made) => made.to === null) ? Infinity : Math.max(...mine.map((made) => made.to.ts_us));
+    const judged = (entry) => entry.event.ts_us >= spanStart && entry.event.ts_us <= spanEnd;
+    for (const { file, line, message } of auditParsed(parsed, catalogOf(catalog, config),
+      (file, entry) => declared.has(`${file}\0${entry.line}`) || !judged(entry))) {
       findings.push(`${file}:${line}: ${message}`);
     }
   }
