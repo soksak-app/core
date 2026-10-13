@@ -2057,7 +2057,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F177",
-    implementation: [{ file: "packages/log-contract/index.js", symbol: "const stored = (file, seq, hop)" }],
+    implementation: [{ file: "packages/log-contract/index.js", symbol: "const stored = (file, from, to, hop)" }],
     tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "a chain does not ask for a hop whose class and level the policy in force of the process does not store" }],
     expected: "A log audit asks a chain only for the hops that the policy in force stores.",
     levels: ["unit"],

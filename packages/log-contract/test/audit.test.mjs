@@ -161,6 +161,55 @@ test("a chain does not ask for a hop whose class and level the policy in force o
   assert.deepEqual(findings.map(({ line, message }) => [line, message]), [[2, "chain key of b1.1 lacks page.terminal.send"]]);
 });
 
+test("a hop declared with several levels is not asked for when the policy in force does not store one of them", () => {
+  // A call is stored at debug when it succeeds and at warn when it is refused; a policy at info stores only the refusal.
+  const gated = {
+    ...catalog,
+    events: {
+      ...catalog.events,
+      "page.terminal.send": { layer: "page", class: "input", level: ["debug", "warn"], fields: {} },
+      "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: { source: "string", classes: "object" } },
+    },
+    chains: { key: ["native.input.key_down", "page.terminal.send"] },
+  };
+  const info = { lifecycle: "info", input: "info", call: "info", io: "info", frame: "info" };
+  const text = [
+    open,
+    line(2, "log.policy", { source: "file", classes: info }, { class: "lifecycle" }),
+    line(3, "native.input.key_down", { keyCode: 3 }, { cids: ["b1.2"] }),
+  ].join("\n");
+  assert.deepEqual(auditLogs([{ file: "host-b1.jsonl", text }], gated), []);
+  // A policy that comes into force while the chain runs, between its first and its last event, also leaves the hop out.
+  const during = [
+    open,
+    line(2, "native.input.key_down", { keyCode: 3 }, { cids: ["b1.3"] }),
+    line(3, "log.policy", { source: "file", classes: info }, { class: "lifecycle" }),
+    line(4, "native.input.text", { keyCode: 3 }, { cids: ["b1.3"] }),
+  ].join("\n");
+  assert.deepEqual(auditLogs([{ file: "host-b1.jsonl", text: during }], { ...gated, chains: { key: ["native.input.key_down", "page.terminal.send", "native.input.text"] } }), []);
+});
+
+test("the policy that a change of diagnostics.log brings is in force from the change, before the host records it", () => {
+  // The page puts the policy of the setting in its gate when the setting changes; the host records log.policy after it.
+  const gated = {
+    ...catalog,
+    events: {
+      ...catalog.events,
+      "page.settings.change": { layer: "page", class: "input", level: "info", fields: { actor: "string", keys: "string" } },
+      "page.terminal.send": { layer: "page", class: "input", level: "debug", fields: {} },
+      "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: { source: "string", classes: "object" } },
+    },
+    chains: { settings: ["page.settings.change", "page.terminal.send"] },
+  };
+  const info = { lifecycle: "info", input: "info", call: "info", io: "info", frame: "info" };
+  const text = [
+    open,
+    line(2, "page.settings.change", { actor: "core.settings.set", keys: "mode,diagnostics.log" }, { cids: ["p1.1"], layer: "page", class: "input" }),
+    line(3, "log.policy", { source: "file", classes: info }, { class: "lifecycle" }),
+  ].join("\n");
+  assert.deepEqual(auditLogs([{ file: "host-b1.jsonl", text }], gated), []);
+});
+
 test("a file whose first line is not log.open, or whose schema is unknown, is rejected with the file name and the value", () => {
   assert.throws(() => parseLog("a.jsonl", line(1, "native.input.key_down", { keyCode: 1 })), /a\.jsonl: the first line is not log\.open/);
   const other = line(1, "log.open", { schema: 9, pid: 1, role: "host", boot: "b" });

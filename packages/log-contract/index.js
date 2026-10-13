@@ -156,20 +156,34 @@ function seqFindings(entries) {
 /** The findings of the declared chains: each correlation identifier that starts a chain must reach its last event. */
 function chainFindings(entries, catalog) {
   const findings = [];
-  // The policies that each process applied, in the order of seq (`log.policy`); before the first one the default policy
-  // stores every level.
+  // The policies that each process applied, by time (`log.policy`); before the first one the default policy stores every
+  // level. A chain crosses processes, so the time and not the seq places a policy against it.
+  // The page puts the policy of the setting `diagnostics.log` in its gate when the setting changes, and the host records
+  // `log.policy` after it, so the policy that follows such a change is in force from the change.
   const policies = new Map();
-  for (const { file, event } of entries) {
-    if (event.event !== "log.policy") continue;
+  const changes = new Map();
+  for (const { file, event } of [...entries].sort((a, b) => a.event.ts_us - b.event.ts_us)) {
     const process = processOf(file);
-    policies.set(process, [...(policies.get(process) ?? []), { seq: event.seq, classes: event.fields.classes }]);
+    if (event.event === "page.settings.change" && String(event.fields?.keys).split(",").includes("diagnostics.log")) {
+      if (!changes.has(process)) changes.set(process, event.ts_us);
+      continue;
+    }
+    if (event.event !== "log.policy") continue;
+    policies.set(process, [...(policies.get(process) ?? []), { ts: changes.get(process) ?? event.ts_us, classes: event.fields.classes }]);
+    changes.delete(process);
   }
-  const stored = (file, seq, hop) => {
+  // Whether every policy in force in the process of the first event, from the first to the last event of the chain,
+  // stores the hop.
+  const stored = (file, from, to, hop) => {
     const declared = catalog.events[hop];
-    // default: a hop without one declared class and level is asked for under every policy.
-    if (declared === undefined || typeof declared.level !== "string" || !POLICY_CLASSES.includes(declared.class)) return true;
-    const applied = (policies.get(processOf(file)) ?? []).filter((policy) => policy.seq <= seq).at(-1);
-    return applied === undefined || policyAllows(applied, declared.class, declared.level);
+    // default: a hop that the catalog does not declare with a class of the policy is asked for under every policy.
+    if (declared === undefined || !POLICY_CLASSES.includes(declared.class)) return true;
+    const all = [...(policies.get(processOf(file)) ?? [])].sort((a, b) => a.ts - b.ts);
+    const first = all.filter((policy) => policy.ts <= from).at(-1);
+    const applied = [...(first === undefined ? [] : [first]), ...all.filter((policy) => policy.ts > from && policy.ts <= to)];
+    // A hop declared with several levels is stored only when the policy stores each of them.
+    const levels = Array.isArray(declared.level) ? declared.level : [declared.level];
+    return applied.every((policy) => levels.every((level) => policyAllows(policy, declared.class, level)));
   };
   // default: a catalog that declares no chain has no chain to check.
   for (const [name, hops] of Object.entries(catalog.chains ?? {})) {
@@ -177,16 +191,17 @@ function chainFindings(entries, catalog) {
     for (const { line, file, event } of entries) {
       // default: an event that does not belong to the input has no correlation identifier.
       for (const cid of event.cids ?? []) {
-        if (!seen.has(cid)) seen.set(cid, { line, file, seq: event.seq, events: new Set(), failed: false });
+        if (!seen.has(cid)) seen.set(cid, { line, file, from: event.ts_us, to: event.ts_us, events: new Set(), failed: false });
         seen.get(cid).events.add(event.event);
+        seen.get(cid).to = Math.max(seen.get(cid).to, event.ts_us);
         if (event.level === "error") seen.get(cid).failed = true;
       }
     }
-    for (const [cid, { line, file, seq, events, failed }] of seen) {
+    for (const [cid, { line, file, from, to, events, failed }] of seen) {
       // An input that failed ends at the error that carries its identifier; the error is the record of its end.
       if (!events.has(hops[0]) || failed) continue;
-      // A hop that the policy in force when the input started does not store is not asked for.
-      const missing = hops.find((hop) => !events.has(hop) && stored(file, seq, hop));
+      // A hop that a policy in force while the chain ran does not store is not asked for.
+      const missing = hops.find((hop) => !events.has(hop) && stored(file, from, to, hop));
       if (missing !== undefined) findings.push({ line, file, message: `chain ${name} of ${cid} lacks ${missing}` });
     }
   }
