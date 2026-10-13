@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.38: the test of the project switch mocks the page event queue that `projects.js` imports since F161.13, so its cases load and run again.
 - F161.4.1: the alter case of the replay check declares the event `sok.replay.divergence` of its own session, which it causes on purpose, so the audit of a run no longer counts it as an undeclared error.
 - F161.37.1: both hosts store `host.sidecar.write_wait` when a line for a sidecar waited a second or more in the write queue or its write took 10 ms or more, so the log tells a line that the host wrote late from a read of the sidecar that did not wake.
 - F161.32: the studio of an hwp file that stayed at `phase: starting` on the Wails host is classified as a start of the hwp plugin that posted its first request before the editor listened (H13 of the hwp repository), not as the persistent document store; the message contract of core is unchanged.

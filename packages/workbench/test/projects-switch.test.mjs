@@ -30,6 +30,10 @@ mock.module("@soksak/runtime", {
   },
 });
 // Records the calls that clean up sidecar sessions.
+// The page event queue drains before a window closes; the queue of this test holds no events.
+mock.module("../page-log.js", {
+  namedExports: { flushEvents: async () => {} },
+});
 const retained = [];
 mock.module("../host.js", {
   namedExports: {
