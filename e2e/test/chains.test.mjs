@@ -70,10 +70,12 @@ test("a chain that lacks an event waits for the next notice of the host and comp
   assert.equal((await found).cid, "p1.2");
 });
 
-test("two first events that match the fields are refused, and an event of another operation is not matched", async () => {
+test("of two first events that match the fields the first in the log is the operation, and an event of another operation is not matched", async () => {
+  // A second page can start its own operation with the same fields, as the page of a project window that opens does.
   const log = [row(1, "page.plugin.operation", ["p1.3"], { action: "install", plugin: "x" }), row(2, "page.plugin.operation", ["p1.4"], { action: "install", plugin: "x" }),
-    row(3, "page.plugin.operation", ["p1.5"], { action: "install", plugin: "y" })];
-  await assert.rejects(chainOf(fakeSession({ log }), CHAINS, "plugin", {}, { action: "install", plugin: "x" }), /plugin: 2 events page\.plugin\.operation match/);
+    row(3, "page.plugin.operation", ["p1.5"], { action: "install", plugin: "y" }), row(4, "page.call", ["p1.3"]), row(5, "host.binding.call", ["p1.3"])];
+  const { cid } = await chainOf(fakeSession({ log }), CHAINS, "plugin", {}, { action: "install", plugin: "x" });
+  assert.equal(cid, "p1.3");
 });
 
 test("a first event without cids is refused", async () => {
