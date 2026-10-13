@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.56, F161.59, F161.62: 현재 build에서 재현되지 않음으로 닫았고, 재발을 보이는 기록이 있다.
 - F161.27: 두 애플리케이션에서 바깥 크기 변경 check를 세 번 반복한 뒤 재현되지 않음으로 닫았다.
 - F174: 저장된 log offset이 없는 window check가 앞선 process의 기록이 아니라 실행 중인 process의 오류만 판정한다.
 - F160.18: trace on과 off의 입력 지연을 기록했다. F174가 Tauri check 애플리케이션이 찾은 update fixture를 적는다.
