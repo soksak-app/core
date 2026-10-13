@@ -22,10 +22,12 @@ for (const app of Object.values(APPS)) {
     await s.until("host.window", (state) => state.active && state.key, "the window did not become the active key window");
     // Activation and the change of the first responder can bring back the input source of the person, so the ABC source is
     // selected right before the keys.
-    await s.selectInputSource("com.apple.keylayout.ABC");
     await s.click(region.frame.x + region.frame.width / 2, region.frame.y + region.frame.height * 0.8);
     await s.until("host.window", (value) => value.documents.some((item) => item.surface === surface && item.focused),
       "a press in the editor did not give it the keyboard focus");
+    // The text input context of the focused view keeps its own input source, so the source is selected after the editor
+    // holds the focus; a source selected for an earlier view does not reach it.
+    await s.selectInputSource("com.apple.keylayout.ABC");
 
     // A native key types at the caret, Shift-ArrowLeft selects the typed letter and ArrowRight ends the selection.
     await s.press("x");
