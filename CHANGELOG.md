@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.32: the studio of an hwp file that stayed at `phase: starting` on the Wails host is classified as a start of the hwp plugin that posted its first request before the editor listened (H13 of the hwp repository), not as the persistent document store; the message contract of core is unchanged.
 - F161.34: the allocation check of the activity observers counts the allocations of the thread that posts the notifications, because the text input analytics of the system allocate once on a queue of their own after a text view becomes the first responder, and those blocks fell into the first measured run.
 - F161.14: the first batch of a page states the resolution of its clock beside the round trip of its anchor as `page.log.clock` (`resolution_us`), because the readings of `performance.now()` advance in steps, so a time of the page differs from the clock of the host by half the round trip plus that step.
 - F161.23: the wrapped-line checks of a resize judge the screen of the new width only and read the rows after the cursor settles, because the screen message of the previous width also shows the input once.
