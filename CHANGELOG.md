@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F166: the agent guidance requires a maintained library of the ecosystem for a function that it provides.
 - F165: the answer table of image envelopes in the sidecar specification shows the generation and the raster that every error answer carries.
 - F164: both hosts record a stall of their main thread of 1 s or more, the stacks of their threads and the end of the stall, without a window check.
 - F161.61: each test file also reports in the TAP form on the standard error, so a file killed at its limit keeps the errors of the tests that failed before.
