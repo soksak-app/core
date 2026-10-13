@@ -1898,6 +1898,19 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F165",
+    implementation: [
+      { file: "packages/host/wailsv3/src/images.go", symbol: "func imageReply" },
+      { file: "packages/host/tauriv2/src/images.rs", symbol: "fn image_reply" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/images_test.go", id: "TestFailedPresentIsReported" },
+      { file: "packages/host/tauriv2/tests/images_test.rs", id: "failed_present_is_reported" },
+    ],
+    expected: "Every error answer of an image envelope carries the name, generation, raster and sequence of its frame.",
+    levels: ["unit"],
+  },
+  {
     id: "F164",
     implementation: [
       { file: "packages/host/wailsv3/src/stall_watch.go", symbol: "func StartStallWatch" },
