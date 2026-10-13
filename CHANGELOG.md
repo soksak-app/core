@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.57.7: the preedit cursor checks wait until the service has drawn the preedit, which the terminal plugin exposes in `terminal.cursor`; the activation IME checks pass on both applications.
 - F112: both hosts parse `soksak://<owner>/<command>?<params>` and run it as the declared command `<owner>.<command>` of the key window, or the first window; the parser unit tests of both hosts pass. The application-level check of a link opened from outside the application is not yet run.
 - F161.57.2: the hwp activation check selects the input source after the editor holds the focus; F161.57.7 records the intermittent preedit cursor measurement.
 - F161.57.2: the hwp check types its keys with the selected input source, by the wait of F161.57.5.

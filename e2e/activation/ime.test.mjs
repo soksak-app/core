@@ -17,7 +17,13 @@ const ABC = "com.apple.keylayout.ABC";
 const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
 
 // Measures the ratio of pixels that differ from the surface background in the cursor cell and the cell to its right. The capture does not bring the window to the front.
-async function cursorCellCoverage(s, surface, offset = 0) {
+async function cursorCellCoverage(s, surface, offset = 0, preedit = null) {
+  // terminal.compose is the state of the page; the service draws the preedit when its compose arrives, and terminal.cursor
+  // carries the preedit that the service drew, so a measurement of a preedit first waits for it.
+  if (preedit !== null) {
+    await s.until("terminal.cursor", (cursor) => cursor?.preedit?.text === preedit,
+      `the service did not draw the preedit ${JSON.stringify(preedit)}`, { surface });
+  }
   // The screen read carries the current cursor into terminal.cursor, and the pixels are read after the frame of that screen
   // is presented.
   await presentedScreen(s, surface);
@@ -133,7 +139,7 @@ for (const app of Object.values(APPS)) {
           assert.equal(compose.selectedRange?.location, compose.text.length,
             "the input method did not select the end of the preedit");
           preeditWidth = compose.text.length * 2;
-          const measured = await cursorCellCoverage(s, surface, preeditWidth);
+          const measured = await cursorCellCoverage(s, surface, preeditWidth, compose.text);
           preeditCursor = measured.cursor;
           t.diagnostic(`${app.name}: preedit 글 cursor coverage ${JSON.stringify(measured)}`);
           assert.ok(measured.first > 0.9 && measured.second < 0.1,
@@ -254,7 +260,7 @@ for (const app of Object.values(APPS)) {
       value.selectedRange?.location === value.text.length,
     "Korean preedit did not reach its selected end", { surface });
     assert.match(compose.text, /^[가-힣]+$/, "the preedit contains input other than Hangul syllables");
-    const measured = await cursorCellCoverage(s, surface, compose.text.length * 2);
+    const measured = await cursorCellCoverage(s, surface, compose.text.length * 2, compose.text);
     t.diagnostic(`${app.name}: preedit ${compose.text} selected end coverage ${JSON.stringify(measured)}`);
     assert.ok(measured.first > 0.9 && measured.second < 0.1,
       `the cursor is not after the selected Korean preedit: ${JSON.stringify(measured)}`);
