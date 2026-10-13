@@ -12,7 +12,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
-import { ensureTerminals, readScreenUntil, textLines } from "../terminal-screen.mjs";
+import { echoed, ensureTerminals, readScreenUntil, textLines } from "../terminal-screen.mjs";
 
 const ABC = "com.apple.keylayout.ABC";
 
@@ -31,7 +31,8 @@ async function clickAndExecute(session, surface, marker) {
   await selectABC(session);
   for (const ch of `echo ${marker}`) await session.press(ch === " " ? "Space" : ch);
   await session.press("Enter");
-  await readScreenUntil(session, surface, (lines) => lines.includes(marker),
+  // The window of a later context can be narrow enough to wrap the command and its output.
+  await readScreenUntil(session, surface, (lines) => echoed(lines, marker),
     `${surface} did not execute its first post-context command`);
 }
 

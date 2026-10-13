@@ -12,6 +12,15 @@ export function textLines(screen) {
   }).join("").trimEnd());
 }
 
+/**
+ * Whether the rows show the command `echo <marker>` followed directly by its output `<marker>`. A terminal narrower than
+ * the command wraps it and its output over rows, so the rows are compared joined and without spaces: the marker holds no
+ * space, and the output still has to follow the command.
+ */
+export function echoed(lines, marker) {
+  return lines.join("").replace(/\s+/g, "").includes(`echo${marker}${marker}`);
+}
+
 export async function readScreenUntil(session, surface, predicate, message) {
   // Reads the current screen once and waits for the later output by notification. A resize is also reflected in this read.
   await session.run("terminal.screen.read", {}, surface);
