@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F135: the exposure specification states that a document region, like a terminal, takes typed characters only in the key window of the active application once the application has been active, which is why the native test that forbids activation still types into it.
 - F160.6.5.1: both hosts report the size of the line that the writer of a sidecar is writing, and the fixtures of the buffer bounds fill the write queue only after the writer blocks on the pipe, so their cases no longer depend on when the writer thread starts.
 - F102.1.6: a window check installs a contributor probe and its provider probe from a registry of its own and requires that the contributed item connects and that the provider page uses it on both applications.
 - F102.1.8: the workspace registry writes only the sidecar dependencies of a plugin into its entry and accepts a dependency on a declared plugin.
