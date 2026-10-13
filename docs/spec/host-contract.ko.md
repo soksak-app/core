@@ -102,6 +102,8 @@ fn invalid_json_closes_connection() {
 | `deep-link.parse.rejects-empty-param-name` | 이름이 빈 쿼리 매개변수(예: `?=x`)는 `parameter name is empty`로 거부한다. | both |
 | `deep-link.parse.rejects-bad-query` | 16진수 두 자리가 따르지 않는 percent 기호, 또는 되풀이된 매개변수 이름이 있는 쿼리는 `invalid percent-encoding` 또는 `parameter <name> is repeated`로 거부한다. | both |
 | `deep-link.parse.rejects-long-url` | 8192자보다 긴 URL은 `URL is longer than 8192 characters`로 거부한다. | both |
+| `deep-link.launch.kept-links-run-in-order-when-window-ready` | 첫 창이 준비되기 전에 도착한 링크는 준비되면 도착한 순서대로 실행하며, 그 전에는 어느 링크도 실행하지 않는다. | both |
+| `deep-link.launch.later-link-runs-at-once` | 첫 창이 준비된 뒤 도착한 링크는 바로 실행하며, 두 번째 준비 알림은 보관한 링크를 다시 실행하지 않는다. | both |
 | `links.open.accepts-web-and-mail-schemes` | 절대 `http`, `https`, `mailto` URL은 열기를 받아들인다. | both |
 | `links.open.rejects-other-schemes` | 다른 스킴의 URL, 해석되지 않는 URL, 8192자보다 긴 URL은 거부한다. | both |
 | `notifications.request.accepts-tab-notices` | 제어 문자 없이 1–256자인 표면과 제목, 1–1024자인 본문의 알림을 받아들이며, 제거에는 표면만 필요하다. | both |

@@ -1918,6 +1918,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F172",
+    implementation: [
+      { file: "packages/host/wailsv3/src/deep_link.go", symbol: "func (q *DeepLinkQueue) Ready" },
+      { file: "packages/host/tauriv2/src/deep_link.rs", symbol: "pub fn ready(&self" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/deep_link_test.go", id: "TestDeepLinkQueueRunsKeptLinksInOrderWhenWindowIsReady" },
+      { file: "packages/host/tauriv2/tests/deep_link_test.rs", id: "deep_link_queue_runs_kept_links_in_order_when_window_is_ready" },
+    ],
+    expected: "A deep link that arrives before the first window is ready runs in arrival order when the window becomes ready, and a link that arrives later runs at once.",
+    levels: ["unit"],
+  },
+  {
     id: "F114",
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "closed before it created its composition" }],
     tests: [{ file: "packages/workbench/test/surface-dispose-pending.test.mjs", id: "a surface whose module has not finished mounting is disposed without waiting for the mount" }],

@@ -1,6 +1,7 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-use soksak_host_tauriv2::deep_link::parse_deep_link;
+use soksak_host_tauriv2::deep_link::{DeepLinkQueue, parse_deep_link};
 
 fn params(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
     pairs
@@ -88,4 +89,32 @@ fn deep_link_parse_rejects_empty_param_name() {
         parse_deep_link("soksak://core/x?=x").unwrap_err(),
         "parameter name is empty"
     );
+}
+
+// contract: deep-link.launch.kept-links-run-in-order-when-window-ready
+#[test]
+fn deep_link_queue_runs_kept_links_in_order_when_window_is_ready() {
+    let queue = DeepLinkQueue::new();
+    let ran = RefCell::new(Vec::new());
+    let run = |value: &str| ran.borrow_mut().push(value.to_string());
+    queue.keep("soksak://core/a".to_string(), &run);
+    queue.keep("soksak://core/b".to_string(), &run);
+    assert!(
+        ran.borrow().is_empty(),
+        "kept links ran before the window was ready"
+    );
+    queue.ready(&run);
+    assert_eq!(*ran.borrow(), ["soksak://core/a", "soksak://core/b"]);
+}
+
+// contract: deep-link.launch.later-link-runs-at-once
+#[test]
+fn deep_link_queue_runs_later_link_at_once() {
+    let queue = DeepLinkQueue::new();
+    let ran = RefCell::new(Vec::new());
+    let run = |value: &str| ran.borrow_mut().push(value.to_string());
+    queue.ready(&run);
+    queue.keep("soksak://core/c".to_string(), &run);
+    queue.ready(&run);
+    assert_eq!(*ran.borrow(), ["soksak://core/c"]);
 }

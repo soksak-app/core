@@ -1,6 +1,7 @@
 //! Parses deep links and runs them as declared commands (docs/spec/native-host.md#deep-links).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
+use std::sync::Mutex;
 
 use serde_json::{Map, Value, json};
 use tauri::AppHandle;
@@ -111,14 +112,106 @@ fn hex_value(byte: u8) -> Option<u8> {
     }
 }
 
-/// Runs the deep link value on a routine. A refusal is written once as the error host deep link.
+/// Holds the deep links that arrive before the first window is ready and runs them in arrival order.
+/// A link that arrives after the first window is ready runs at once.
+pub struct DeepLinkQueue {
+    state: Mutex<QueueState>,
+}
+
+struct QueueState {
+    pending: VecDeque<String>,
+    draining: bool,
+    ready: bool,
+}
+
+impl DeepLinkQueue {
+    /// Creates a queue that holds every link until it is ready.
+    pub const fn new() -> Self {
+        Self {
+            state: Mutex::new(QueueState {
+                pending: VecDeque::new(),
+                draining: false,
+                ready: false,
+            }),
+        }
+    }
+
+    /// Runs the value with `run` at once when the first window is ready. Before that it holds the value.
+    pub fn keep(&self, value: String, run: &dyn Fn(&str)) {
+        let mut state = self
+            .state
+            .lock()
+            .expect("deep link queue state is not poisoned");
+        if state.ready {
+            drop(state);
+            run(&value);
+        } else {
+            state.pending.push_back(value);
+        }
+    }
+
+    /// Runs the held links in arrival order and marks the queue ready. A link that arrives while the held links run is
+    /// held too, so it runs after them. A call after the first one does nothing.
+    pub fn ready(&self, run: &dyn Fn(&str)) {
+        {
+            let mut state = self
+                .state
+                .lock()
+                .expect("deep link queue state is not poisoned");
+            if state.ready || state.draining {
+                return;
+            }
+            state.draining = true;
+        }
+        loop {
+            let next = {
+                let mut state = self
+                    .state
+                    .lock()
+                    .expect("deep link queue state is not poisoned");
+                match state.pending.pop_front() {
+                    Some(value) => value,
+                    None => {
+                        state.ready = true;
+                        state.draining = false;
+                        return;
+                    }
+                }
+            };
+            run(&next);
+        }
+    }
+}
+
+impl Default for DeepLinkQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// The deep links of the application: the links that arrive before its first window is ready are held here.
+static DEEP_LINKS: DeepLinkQueue = DeepLinkQueue::new();
+
+/// Runs the deep link value once the first window is ready, on a routine. A refusal is written once as the error host deep link.
 pub fn open(app: &AppHandle, value: String) {
     let app = app.clone();
     crate::routine::spawn_named("deep-link", move || {
-        if let Err(reason) = run(&app, &value) {
-            log_error("deep link", format!("{value}: {reason}"));
-        }
+        DEEP_LINKS.keep(value, &|link| run_logged(&app, link));
     });
+}
+
+/// Runs the links that arrived before the first window was ready. The host calls it when the first window is ready.
+pub fn ready(app: &AppHandle) {
+    let app = app.clone();
+    crate::routine::spawn_named("deep-link-ready", move || {
+        DEEP_LINKS.ready(&|link| run_logged(&app, link));
+    });
+}
+
+fn run_logged(app: &AppHandle, value: &str) {
+    if let Err(reason) = run(app, value) {
+        log_error("deep link", format!("{value}: {reason}"));
+    }
 }
 
 /// Runs the link as the declared command of the key window, or of the first window when none is key.

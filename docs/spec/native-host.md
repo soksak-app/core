@@ -27,7 +27,7 @@ An application document inside a webview has the address `sok://<owner>/<path>`.
 
 A deep link is an address `soksak://<owner>/<command>?<params>` that opens from outside the application. The owner is `core` or a plugin id. The declared command name is `<owner>.<command>`, where `<command>` is the path after the owner, and it runs as a command of that owner ([exposure](exposure.md)). The path after the owner is one segment, and a `/` in it is refused. Each query parameter is one string parameter. Names and values are percent-decoded, `+` in a query is a space, and the parameters form an object of strings. A percent sign that is not followed by two hexadecimal digits is refused, and a parameter name that repeats is refused.
 
-The Wails host receives the URL through the framework event `ApplicationLaunchedWithUrl` of the macOS URL handler (`pkg/application/application_darwin.go`, `HandleOpenURL`). The Tauri host receives it through the official plugin `tauri-plugin-deep-link` (`on_open_url` and `get_current`), which reads the `soksak` scheme from the bundle `Info.plist` (`CFBundleURLTypes`). Both hosts run the parsed link as the command `command.run` of the window that the host chooses: the key window, and when no window is key, the first window of the `windows.list` order. A link that arrives when no window is open is refused.
+The Wails host receives the URL through the framework event `ApplicationLaunchedWithUrl` of the macOS URL handler (`pkg/application/application_darwin.go`, `HandleOpenURL`). The Tauri host receives it through the official plugin `tauri-plugin-deep-link` (`on_open_url` and `get_current`), which reads the `soksak` scheme from the bundle `Info.plist` (`CFBundleURLTypes`). Both hosts run the parsed link as the command `command.run` of the window that the host chooses: the key window, and when no window is key, the first window of the `windows.list` order. A link that arrives before the first window is ready is held and runs when the first window is ready: the Wails host runs the held links in `Host.WindowReady`, and the Tauri host in `window_ready`, which is the first ready notification of a window. The held links run in arrival order, and a link that arrives after the first window is ready runs at once. A link that arrives after the first window was ready, when no window is open, is refused.
 
 Each refusal writes one error record, `error host deep link: <url>: <reason>`, where `<url>` is the URL as received. The reasons are the same in both hosts:
 
@@ -42,9 +42,9 @@ Each refusal writes one error record, `error host deep link: <url>: <reason>`, w
 | A percent sign is not followed by two hexadecimal digits | `invalid percent-encoding` |
 | A parameter name is empty | `parameter name is empty` |
 | A parameter name repeats | `parameter <name> is repeated` |
-| No window is open | `no window is open` |
+| No window is open after the first window was ready | `no window is open` |
 
-The Tauri host reads the launch URL through the plugin `get_current`; a failure of that read writes `error host deep link: launch URL: <reason>`. A link that opens the application before the first window is registered is refused with `no window is open`.
+The Tauri host reads the launch URL through the plugin `get_current`; a failure of that read writes `error host deep link: launch URL: <reason>`. A link that opens the application is held until the first window is ready, as in the Wails host.
 
 A command that `command.run` refuses, including a name that no page or host declares, is refused with the error text that `command.run` returns, in the same record form. A link whose command runs successfully writes no record.
 

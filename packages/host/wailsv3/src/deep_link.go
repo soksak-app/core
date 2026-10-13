@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -123,9 +124,57 @@ func unhex(c byte) byte {
 	}
 }
 
-// OpenDeepLink runs the deep link value as the declared command of the key window, or of the first window when none is key.
+// DeepLinkQueue holds the deep links that arrive before the first window is ready and runs them in arrival order.
+// The zero value holds no link and is not ready. A link that arrives after the first window is ready runs at once.
+type DeepLinkQueue struct {
+	mu       sync.Mutex
+	pending  []string
+	draining bool
+	ready    bool
+}
+
+// Keep runs the value with run at once when the first window is ready. Before that it holds the value.
+func (q *DeepLinkQueue) Keep(value string, run func(string)) {
+	q.mu.Lock()
+	if q.ready {
+		q.mu.Unlock()
+		run(value)
+		return
+	}
+	q.pending = append(q.pending, value)
+	q.mu.Unlock()
+}
+
+// Ready runs the held links in arrival order and marks the queue ready. A link that arrives while the held links run
+// is held too, so it runs after them. A call after the first one does nothing.
+func (q *DeepLinkQueue) Ready(run func(string)) {
+	q.mu.Lock()
+	if q.ready || q.draining {
+		q.mu.Unlock()
+		return
+	}
+	q.draining = true
+	for len(q.pending) > 0 {
+		value := q.pending[0]
+		q.pending = q.pending[1:]
+		q.mu.Unlock()
+		run(value)
+		q.mu.Lock()
+	}
+	q.ready = true
+	q.draining = false
+	q.mu.Unlock()
+}
+
+// openDeepLink runs the deep link value once the first window is ready (docs/spec/native-host.md#deep-links). It is not
+// exported: an exported method of Host is a call of the entrance, and this value is not a call argument.
+func (h *Host) openDeepLink(value string) {
+	h.deepLinks.Keep(value, h.runDeepLink)
+}
+
+// runDeepLink runs the deep link value as the declared command of the key window, or of the first window when none is key.
 // A refusal is written once as the error host deep link (docs/spec/native-host.md#deep-links).
-func (h *Host) OpenDeepLink(value string) {
+func (h *Host) runDeepLink(value string) {
 	link, err := ParseDeepLink(value)
 	if err != nil {
 		LogError("deep link", fmt.Sprintf("%s: %s", value, err))

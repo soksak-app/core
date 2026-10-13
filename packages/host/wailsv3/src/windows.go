@@ -67,6 +67,8 @@ type Host struct {
 	relay    *Relay[relayTarget]
 	// notifications is the permission state that the notification center announced last.
 	notifications NotificationState
+	// deepLinks holds the deep links that arrived before the first window was ready.
+	deepLinks DeepLinkQueue
 }
 
 // errNoWindow is returned when this application has no window. Every call here lays out or reads something of that window,
@@ -203,6 +205,7 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	s.first.Do(func() { s.Emit("page-ready") })
 	s.replayRegistrations()
 	routine.Go("windows-changed", h.windowsChanged)
+	routine.Go("deep-link-ready", func() { h.deepLinks.Ready(h.runDeepLink) })
 	for _, ready := range readied {
 		close(ready)
 	}

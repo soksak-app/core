@@ -862,6 +862,7 @@ pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
         }
     }
     crate::exposure::rewatch(window);
+    crate::deep_link::ready(window.app_handle());
     emit_window(window, "page-ready", ()).map_err(|e| e.to_string())
 }
 

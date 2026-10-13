@@ -27,7 +27,7 @@
 
 딥링크는 애플리케이션 밖에서 열리는 주소 `soksak://<owner>/<command>?<params>`다. owner는 `core` 또는 plugin id다. 선언된 command 이름은 `<owner>.<command>`이며, `<command>`는 owner 뒤의 경로이고, 그 owner의 command로 실행된다([exposure](exposure.ko.md)). owner 뒤의 경로는 한 조각이며, 그 안의 `/`는 거부한다. 쿼리의 각 매개변수는 문자열 매개변수 하나다. 이름과 값은 percent 디코딩하며, 쿼리의 `+`는 공백이다. 매개변수는 문자열 객체를 이룬다. `%` 뒤에 16진수 두 자리가 오지 않으면 거부하며, 같은 이름의 매개변수가 되풀이되면 거부한다.
 
-Wails host는 macOS URL 처리기의 프레임워크 이벤트 `ApplicationLaunchedWithUrl`(`pkg/application/application_darwin.go`, `HandleOpenURL`)로 URL을 받는다. Tauri host는 공식 plugin `tauri-plugin-deep-link`(`on_open_url`과 `get_current`)로 URL을 받으며, `soksak` scheme은 번들 `Info.plist`의 `CFBundleURLTypes`에서 등록한다. 두 host는 파싱한 링크를 host가 고른 창의 `command.run`으로 실행한다. 창은 key 창이며, key 창이 없으면 `windows.list` 순서의 첫 창이다. 열린 창이 없을 때 도착한 링크는 거부한다.
+Wails host는 macOS URL 처리기의 프레임워크 이벤트 `ApplicationLaunchedWithUrl`(`pkg/application/application_darwin.go`, `HandleOpenURL`)로 URL을 받는다. Tauri host는 공식 plugin `tauri-plugin-deep-link`(`on_open_url`과 `get_current`)로 URL을 받으며, `soksak` scheme은 번들 `Info.plist`의 `CFBundleURLTypes`에서 등록한다. 두 host는 파싱한 링크를 host가 고른 창의 `command.run`으로 실행한다. 창은 key 창이며, key 창이 없으면 `windows.list` 순서의 첫 창이다. 첫 창이 준비되기 전에 도착한 링크는 보관했다가 첫 창이 준비되면 실행한다. Wails host는 `Host.WindowReady`에서, Tauri host는 `window_ready`에서 보관한 링크를 실행하며, 이것이 창의 첫 준비 알림이다. 보관한 링크는 도착한 순서대로 실행하고, 첫 창이 준비된 뒤에 도착한 링크는 바로 실행한다. 첫 창이 준비된 뒤 열린 창이 없을 때 도착한 링크는 거부한다.
 
 거부할 때마다 오류 기록 `error host deep link: <url>: <reason>`을 한 번 쓴다. `<url>`은 받은 그대로의 URL이다. 두 host의 이유는 같다.
 
@@ -42,9 +42,9 @@ Wails host는 macOS URL 처리기의 프레임워크 이벤트 `ApplicationLaunc
 | `%` 뒤에 16진수 두 자리가 오지 않는다 | `invalid percent-encoding` |
 | 매개변수 이름이 비었다 | `parameter name is empty` |
 | 매개변수 이름이 되풀이된다 | `parameter <name> is repeated` |
-| 열린 창이 없다 | `no window is open` |
+| 첫 창이 준비된 뒤 열린 창이 없다 | `no window is open` |
 
-Tauri host는 plugin `get_current`로 실행 URL을 읽으며, 그 읽기가 실패하면 `error host deep link: launch URL: <reason>`을 쓴다. 첫 창이 등록되기 전에 애플리케이션을 연 링크는 `no window is open`으로 거부한다.
+Tauri host는 plugin `get_current`로 실행 URL을 읽으며, 그 읽기가 실패하면 `error host deep link: launch URL: <reason>`을 쓴다. 애플리케이션을 연 링크는 Wails host와 같이 첫 창이 준비될 때까지 보관한다.
 
 `command.run`이 거부한 command(페이지나 host가 선언하지 않은 이름을 포함한다)는 `command.run`이 반환한 오류 문구로 같은 형식의 기록을 남기며 거부한다. 성공한 링크는 기록을 남기지 않는다.
 

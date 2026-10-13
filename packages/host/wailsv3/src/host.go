@@ -239,7 +239,7 @@ func Run(assets fs.FS, options Options) error {
 	// A deep link that opens the application arrives as the framework event of the URL (docs/spec/native-host.md#deep-links).
 	app.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(event *application.ApplicationEvent) {
 		value := event.Context().URL()
-		routine.Go("deep-link", func() { host.OpenDeepLink(value) })
+		routine.Go("deep-link", func() { host.openDeepLink(value) })
 	})
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		RecordAppEvent("started")

@@ -99,3 +99,32 @@ func TestDeepLinkParseRejectsEmptyParamName(t *testing.T) {
 		t.Fatalf("error %v", err)
 	}
 }
+
+// contract: deep-link.launch.kept-links-run-in-order-when-window-ready
+func TestDeepLinkQueueRunsKeptLinksInOrderWhenWindowIsReady(t *testing.T) {
+	var ran []string
+	var queue host.DeepLinkQueue
+	run := func(value string) { ran = append(ran, value) }
+	queue.Keep("soksak://core/a", run)
+	queue.Keep("soksak://core/b", run)
+	if len(ran) != 0 {
+		t.Fatalf("kept links ran before the window was ready: %v", ran)
+	}
+	queue.Ready(run)
+	if want := []string{"soksak://core/a", "soksak://core/b"}; !reflect.DeepEqual(ran, want) {
+		t.Fatalf("ran %v, want %v", ran, want)
+	}
+}
+
+// contract: deep-link.launch.later-link-runs-at-once
+func TestDeepLinkQueueRunsLaterLinkAtOnce(t *testing.T) {
+	var ran []string
+	var queue host.DeepLinkQueue
+	run := func(value string) { ran = append(ran, value) }
+	queue.Ready(run)
+	queue.Keep("soksak://core/c", run)
+	queue.Ready(run)
+	if want := []string{"soksak://core/c"}; !reflect.DeepEqual(ran, want) {
+		t.Fatalf("ran %v, want %v", ran, want)
+	}
+}
