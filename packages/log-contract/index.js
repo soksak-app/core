@@ -156,21 +156,37 @@ function seqFindings(entries) {
 /** The findings of the declared chains: each correlation identifier that starts a chain must reach its last event. */
 function chainFindings(entries, catalog) {
   const findings = [];
+  // The policies that each process applied, in the order of seq (`log.policy`); before the first one the default policy
+  // stores every level.
+  const policies = new Map();
+  for (const { file, event } of entries) {
+    if (event.event !== "log.policy") continue;
+    const process = processOf(file);
+    policies.set(process, [...(policies.get(process) ?? []), { seq: event.seq, classes: event.fields.classes }]);
+  }
+  const stored = (file, seq, hop) => {
+    const declared = catalog.events[hop];
+    // default: a hop without one declared class and level is asked for under every policy.
+    if (declared === undefined || typeof declared.level !== "string" || !POLICY_CLASSES.includes(declared.class)) return true;
+    const applied = (policies.get(processOf(file)) ?? []).filter((policy) => policy.seq <= seq).at(-1);
+    return applied === undefined || policyAllows(applied, declared.class, declared.level);
+  };
   // default: a catalog that declares no chain has no chain to check.
   for (const [name, hops] of Object.entries(catalog.chains ?? {})) {
     const seen = new Map();
     for (const { line, file, event } of entries) {
       // default: an event that does not belong to the input has no correlation identifier.
       for (const cid of event.cids ?? []) {
-        if (!seen.has(cid)) seen.set(cid, { line, file, events: new Set(), failed: false });
+        if (!seen.has(cid)) seen.set(cid, { line, file, seq: event.seq, events: new Set(), failed: false });
         seen.get(cid).events.add(event.event);
         if (event.level === "error") seen.get(cid).failed = true;
       }
     }
-    for (const [cid, { line, file, events, failed }] of seen) {
+    for (const [cid, { line, file, seq, events, failed }] of seen) {
       // An input that failed ends at the error that carries its identifier; the error is the record of its end.
       if (!events.has(hops[0]) || failed) continue;
-      const missing = hops.find((hop) => !events.has(hop));
+      // A hop that the policy in force when the input started does not store is not asked for.
+      const missing = hops.find((hop) => !events.has(hop) && stored(file, seq, hop));
       if (missing !== undefined) findings.push({ line, file, message: `chain ${name} of ${cid} lacks ${missing}` });
     }
   }
@@ -261,7 +277,7 @@ function extensionFindings(entries, catalog) {
  * missing or mistyped fields, gaps of seq that no `log.dropped` explains, and declared chains that stop early.
  */
 export function auditLog(file, text, catalog) {
-  const entries = parseLog(file, text);
+  const entries = parseLog(file, text).map((entry) => ({ ...entry, file }));
   return [
     ...entries.flatMap((entry) => lineFindings(entry, catalog, channelOf(file))),
     ...seqFindings(entries),

@@ -139,6 +139,28 @@ test("a chain ends at an error event that carries its correlation identifier", (
   assert.deepEqual(findings.map(({ line, message }) => [line, message]), [[4, "chain key of b1.2 lacks page.terminal.send"]]);
 });
 
+test("a chain does not ask for a hop whose class and level the policy in force of the process does not store", () => {
+  // The person narrowed the policy, so the debug hop is not stored; a key before the change still needs it.
+  const gated = {
+    ...catalog,
+    events: {
+      ...catalog.events,
+      "page.terminal.send": { layer: "page", class: "input", level: "debug", fields: {} },
+      "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: { source: "string", classes: "object" } },
+    },
+    chains: { key: ["native.input.key_down", "page.terminal.send"] },
+  };
+  const info = { lifecycle: "info", input: "info", call: "info", io: "info", frame: "info" };
+  const text = [
+    open,
+    line(2, "native.input.key_down", { keyCode: 2 }, { cids: ["b1.1"] }),
+    line(3, "log.policy", { source: "file", classes: info }, { class: "lifecycle" }),
+    line(4, "native.input.key_down", { keyCode: 3 }, { cids: ["b1.2"] }),
+  ].join("\n");
+  const findings = auditLogs([{ file: "host-b1.jsonl", text }], gated);
+  assert.deepEqual(findings.map(({ line, message }) => [line, message]), [[2, "chain key of b1.1 lacks page.terminal.send"]]);
+});
+
 test("a file whose first line is not log.open, or whose schema is unknown, is rejected with the file name and the value", () => {
   assert.throws(() => parseLog("a.jsonl", line(1, "native.input.key_down", { keyCode: 1 })), /a\.jsonl: the first line is not log\.open/);
   const other = line(1, "log.open", { schema: 9, pid: 1, role: "host", boot: "b" });
