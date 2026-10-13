@@ -37,9 +37,12 @@ export function createCardTools(card) {
 export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, fullscreen }) {
   for (const button of toolbar.children) {
     const action = button.dataset.do;
-    button.disabled = action === "close" ? !canClose : action === "x" ? !canSplitX : action === "y" ? !canSplitY : false;
-    let title = button.disabled && action === "close"
-      ? "닫을 수 없다 — 어느 이웃도 이 위치를 빈틈없이 못 메운다" : button.dataset.title;
+    // A fullscreen card does not change the layout, so adding a tab, splitting and closing wait for the restore.
+    const layout = action === "add" || action === "x" || action === "y" || action === "close";
+    button.disabled = fullscreen && layout ? true
+      : action === "close" ? !canClose : action === "x" ? !canSplitX : action === "y" ? !canSplitY : false;
+    let title = fullscreen && layout ? "전체 화면에서는 배치를 바꾸지 않는다 — 먼저 카드 배치를 복원한다"
+      : button.disabled && action === "close" ? "닫을 수 없다 — 어느 이웃도 이 위치를 빈틈없이 못 메운다" : button.dataset.title;
     if (action === "fullscreen") {
       title = fullscreen ? "카드 배치 복원" : "카드 전체 화면";
       const pressed = String(fullscreen);

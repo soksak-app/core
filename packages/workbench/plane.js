@@ -1555,6 +1555,15 @@ const cardElement = (id) => plane.querySelector(`.card[data-card-id="${CSS.escap
 export const fullscreenCard = () => plane.querySelector('.card[data-fullscreen="true"]')?.dataset.cardId ?? null;
 export const presentedCardRect = (id) => view?.painted(id);
 
+/**
+ * Refuses a change of the layout from the card tools while a card is fullscreen (docs/spec/example-model.md#card-fullscreen):
+ * adding a tab, splitting and closing wait until the arrangement is restored.
+ */
+function layoutChangeable(id) {
+  const shown = fullscreenCard();
+  if (shown !== null) throw new Error(`card ${id}: the layout does not change while card ${shown} is fullscreen; restore the arrangement first`);
+}
+
 function restoreFullscreen() {
   if (view?.fullscreenCard !== null && view?.fullscreenCard !== undefined) view.fullscreen(null);
 }
@@ -1576,6 +1585,7 @@ export function focusCard(id) {
 /** Opens the add and split menu of a card. If the same menu is open, it closes it. */
 export function openCardMenu(id, menu) {
   paneCard(id);
+  layoutChangeable(id);
   const what = DO_OF[menu];
   if (!what) throw new Error(`unknown menu ${menu}`);
   const anchor = cardElement(id)?.querySelector(`.chrome__act[data-do="${what}"]`);
@@ -1687,12 +1697,14 @@ export function openCardTabs(id) {
 
 export function addTabTo(id, kind, params) {
   paneCard(id);
+  layoutChangeable(id);
   knownPlugin(kind);
   return addTab(id, kind, checkTabParams(kind, plugin(kind).params, params));
 }
 
 export function splitCard(id, side, kind) {
   paneCard(id);
+  layoutChangeable(id);
   knownPlugin(kind);
   if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
   const made = splitWith(id, side, kind);
@@ -1702,6 +1714,7 @@ export function splitCard(id, side, kind) {
 
 export function closeCard(id) {
   paneCard(id);
+  layoutChangeable(id);
   if (!grid.canClose(id)) throw new Error(`card ${id} cannot close`);
   const unsaved = tabsOf(grid.card(id)).find((t) => tabModified(t.id));
   if (unsaved) {

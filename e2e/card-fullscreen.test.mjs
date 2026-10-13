@@ -215,3 +215,25 @@ for (const app of Object.values(APPS)) {
     await s.until("core.grid", grid => grid.fullscreen === null, "fullscreen did not end");
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a fullscreen card disables the tools that change the layout and refuses their commands`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    await s.run("core.card.fullscreen", { card: "terminal" });
+    s.cleanup(async () => {
+      if ((await s.get("core.grid")).fullscreen !== null) await s.run("core.card.fullscreen", { card: "terminal" });
+    });
+    const grid = await s.until("core.grid", (value) => value.fullscreen === "terminal", "the card did not become fullscreen");
+    const acts = grid.cards.find((item) => item.id === "terminal").acts;
+    const enabled = Object.fromEntries(Object.entries(acts).filter(([, value]) => typeof value === "object").map(([key, value]) => [key, value.enabled]));
+    assert.deepEqual(enabled, { add: false, "split-x": false, "split-y": false, fullscreen: true, close: false },
+      `the tools of the fullscreen card: ${JSON.stringify(acts)}`);
+    const refusal = /card terminal: the layout does not change while card terminal is fullscreen; restore the arrangement first/;
+    await assert.rejects(s.run("core.card.split", { card: "terminal", side: "right", plugin: "browser" }), refusal);
+    await assert.rejects(s.run("core.card.add-tab", { card: "terminal", plugin: "browser" }), refusal);
+    await assert.rejects(s.run("core.card.close", { card: "terminal" }), refusal);
+    assert.equal((await s.get("core.grid")).fullscreen, "terminal", "a refused command left fullscreen");
+  });
+}

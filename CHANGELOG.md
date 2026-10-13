@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.24: while a card is fullscreen, its add, split and close tools are disabled and their commands are refused with an error that names the fullscreen card, so the layout changes only after the arrangement is restored.
 - F161.28: the tab list button (≡) stands at the start of every card header, and the head reserves its width at every level instead of showing it only when the tabs fold.
 - F161.25: a tab of a card is at most 200 points wide; a longer name is cut with an ellipsis and the tooltip of the tab shows the whole name.
 - F161.38: the test of the project switch mocks the page event queue that `projects.js` imports since F161.13, so its cases load and run again.
