@@ -1763,6 +1763,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F102",
+    implementation: [
+      { file: "packages/workbench/contributions.js", symbol: "export function contributionsOf" },
+    ],
+    tests: [
+      { file: "e2e/extension-points.test.mjs", id: "a contributed item connects to the extension point of its provider and the provider uses it" },
+    ],
+    expected: "A provider plugin declares an extension point, a contributor plugin installed with it contributes an item, and the provider page imports the item and uses it in a running application.",
+    levels: ["application"],
+  },
+  {
     id: "F143",
     implementation: [
       { file: "native/darwin/src/image_region.m", symbol: "selectedSourceComposesOnlyHangul] && through > self.committedLength" },

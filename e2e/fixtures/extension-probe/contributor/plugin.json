@@ -2,7 +2,7 @@
   "id": "probecontributor",
   "name": "Probe contributor",
   "description": "Window check fixture that contributes one item to the extension point items of the provider probe.",
-  "dependencies": { "@soksak-check/probe-provider": ">=1.0.0" },
+  "dependencies": { "@soksak-check/probe-provider": ">=0.0.10" },
   "contributes": {
     "probeprovider.items": [ { "range": ">=1.0.0", "module": "ui/item.js", "label": "probe item" } ]
   }

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.48: the Hangul test names its syllables by code point in its comments, the extension probes declare the release version, and F102 links its window check, so the repository checks pass again.
 - F161.47: a build of the host contract check may take 600 s, because a cold build of the Tauri host tests takes more than 300 s on the CI runner, and the CI workflow keeps the cargo and Go caches between runs.
 - F135: the exposure specification states that a document region, like a terminal, takes typed characters only in the key window of the active application once the application has been active, which is why the native test that forbids activation still types into it.
 - F160.6.5.1: both hosts report the size of the line that the writer of a sidecar is writing, and the fixtures of the buffer bounds fill the write queue only after the writer blocks on the pipe, so their cases no longer depend on when the writer thread starts.

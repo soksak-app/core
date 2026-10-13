@@ -69,7 +69,8 @@ int main(void) { @autoreleasepool {
     id<NSTextInputClient> client = (id<NSTextInputClient>)view;
     NSRange none = NSMakeRange(NSNotFound, 0);
 
-    // 한 and then ㅏ: the input method appends 나 and then replaces 한 by 하, as the logged replacement at the committed length
+    // A syllable with a final consonant and then a vowel: the input method appends the next syllable (U+B098) and then replaces
+    // the first (U+D55C) by its revision (U+D558), as the logged replacement at the committed length
     // less one shows; then Space ends the composition.
     [client insertText:@"한" replacementRange:none];
     [client insertText:@"나" replacementRange:none];
