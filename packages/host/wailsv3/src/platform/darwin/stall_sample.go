@@ -1,3 +1,5 @@
+//go:build darwin
+
 package darwin
 
 // The sample of a stall of the host on macOS: the system tool `sample` writes the stacks of every thread of this process.
