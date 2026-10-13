@@ -11,7 +11,7 @@ import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
 import { announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { readEventErrors, readEventOffsets, writeEventOffsets } from "./event-log.mjs";
-import { pasteboardDifference, readPasteboard, writePasteboard } from "./pasteboard.mjs";
+import { readPasteboard, restoreFailure, writePasteboard } from "./pasteboard.mjs";
 
 // The launch declares the application executables that are checked. SOKSAK_BINARY_WAILSV3 and SOKSAK_BINARY_TAURIV2
 // hold the executable path inside the bundle of each application (docs/operations/examples.md#window-checks). The
@@ -190,10 +190,10 @@ export async function open(t, app) {
     });
   }
   session.cleanup(() => {
-    writePasteboard(pasteboard.items);
-    const difference = pasteboardDifference(pasteboard.items, readPasteboard().items);
-    if (difference !== null) {
-      throw new Error(`${app.name}: the pasteboard after the check differs from before it: ${difference}`);
+    const written = writePasteboard(pasteboard.items);
+    const failure = restoreFailure(pasteboard.items, written, readPasteboard());
+    if (failure !== null) {
+      throw new Error(`${app.name}: the pasteboard after the check differs from before it: ${failure}`);
     }
   });
   // A press that the check left open is released after the cleanup of the check. Cleanups run in reverse order of

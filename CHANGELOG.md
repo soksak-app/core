@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.55.4: the pasteboard cleanup of a window check names a write of another process between its restore and its comparison by the change counts.
 - F166: the agent guidance requires a maintained library of the ecosystem for a function that it provides.
 - F165: the answer table of image envelopes in the sidecar specification shows the generation and the raster that every error answer carries.
 - F164: both hosts record a stall of their main thread of 1 s or more, the stacks of their threads and the end of the stall, without a window check.

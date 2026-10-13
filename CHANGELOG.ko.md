@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.55.4: window check의 pasteboard cleanup이 복원과 비교 사이에 다른 process가 쓴 것을 change count로 밝힌다.
 - F166: agent guidance가 library가 제공하는 기능에 생태계의 유지되는 library를 쓰도록 요구한다.
 - F165: sidecar 명세의 image envelope 답 표가 모든 오류 답이 담는 generation과 raster를 보인다.
 - F164: 두 host가 1 s 이상의 main thread 정지, thread들의 stack, 정지의 끝을 window check 없이 기록한다.

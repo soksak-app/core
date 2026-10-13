@@ -100,3 +100,16 @@ export function pasteboardDifference(before, after) {
   }
   return null;
 }
+
+/**
+ * Returns why the restore of the pasteboard after a window check failed, or null. saved is the item list before the
+ * check, written the change count that the restore returned, and after the reading of the comparison. A change count
+ * other than written means that another process wrote the pasteboard between the restore and the comparison, so the
+ * items do not show what the check left.
+ */
+export function restoreFailure(saved, written, after) {
+  if (after.changeCount !== written) {
+    return `another process wrote the pasteboard after the restore (change count ${written} after the restore, ${after.changeCount} at the comparison)`;
+  }
+  return pasteboardDifference(saved, after.items);
+}
