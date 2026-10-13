@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"time"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 const (
@@ -35,7 +37,7 @@ func StartStallWatch(options StallWatchOptions) func() {
 	start := time.Now()
 	var beat atomic.Int64
 	done := make(chan struct{})
-	go func() {
+	routine.Go("stall-watch", func() {
 		ticker := time.NewTicker(stallBeat)
 		defer ticker.Stop()
 		var stalledFrom int64 = -1
@@ -62,6 +64,6 @@ func StartStallWatch(options StallWatchOptions) func() {
 				stalledFrom = -1
 			}
 		}
-	}()
+	})
 	return func() { close(done) }
 }
