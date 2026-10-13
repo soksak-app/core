@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F162.4: every declared workspace version is 0.0.12.
 - F160.23: the record items of the sidecars and plugins that record nothing are in each repository's checklist, and the IDs per repository are listed in the F160.23 line; no repository needed a new item, because each already held the items of its missing records.
 - F166.3.2: the workbench keeps its own reading of versions, because the page loads only ES modules and semver is published only as CommonJS; the module states why.
 - F166.3.1: the Go and Rust packages of `sok` read the versions through `github.com/Masterminds/semver/v3` and the crate `semver`, and refuse the forms that the specification does not list, including the forms that the libraries accept by default.
