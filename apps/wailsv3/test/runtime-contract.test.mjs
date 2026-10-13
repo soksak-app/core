@@ -13,7 +13,8 @@ test("Wails page regions expose operations but only composition places geometry"
       call(method, args) {
         // The batches of events are kept apart: the calls of the page under test are asserted one by one.
         if (method === "Log" && args[0].action === "clock") return Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 });
-        if (method === "Log") logged.push([method, args]);
+        // The statement of the clock anchor (page.log.clock) leads the first batch of a page and has its own test in the workbench.
+        if (method === "Log") logged.push([method, [{ ...args[0], events: args[0].events.filter((event) => event.event !== "page.log.clock") }]]);
         else recorded.push([method, args]);
         return Promise.resolve(method === "WaitPresented" ? { displayed: 42 } : undefined);
       },

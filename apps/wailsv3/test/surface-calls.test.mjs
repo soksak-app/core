@@ -16,7 +16,9 @@ async function surface(native) {
   } };
   globalThis.location = { search: "?id=s1" };
   const { page } = await import(`../runtime/index.js?test=surface-calls-${Math.random()}`);
-  const batches = () => calls.filter(([method]) => method === "Log").map(([, [request]]) => request.events);
+  // The statement of the clock anchor (page.log.clock) leads the first batch of a page and has its own test in the workbench.
+  const batches = () => calls.filter(([method]) => method === "Log")
+    .map(([, [request]]) => request.events.filter((event) => event.event !== "page.log.clock"));
   return { page, calls, batches };
 }
 

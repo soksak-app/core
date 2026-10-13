@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.41: the tests of the applications assert the batches of a page without the statement of the clock anchor, which has its own test in the workbench.
 - F161.40: the handler of a right click calls `closest` on the target of the event directly, because a `contextmenu` event always targets an element.
 - F161.39: the generated class tables of Go, Rust and the page hold `host.sidecar.write_wait`, which F161.37.1 added to the catalog.
 - F162.1: `core.file.place {name}` and the host call `filePlace` ask through the save panel of the window where to save a new document and answer the chosen file relative to the project root; both hosts refuse a name that is not a file name and a place outside the project.

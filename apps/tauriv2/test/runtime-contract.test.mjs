@@ -15,7 +15,8 @@ test("Tauri page regions expose operations but only composition places geometry"
         invoke(command, args) {
           // The batches of events are kept apart: the calls of the page under test are asserted one by one.
           if (command === "log" && args.request.action === "clock") return Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 });
-          if (command === "log") logged.push([command, args]);
+          // The statement of the clock anchor (page.log.clock) leads the first batch of a page and has its own test in the workbench.
+          if (command === "log") logged.push([command, { ...args, request: { ...args.request, events: args.request.events.filter((event) => event.event !== "page.log.clock") } }]);
           else recorded.push([command, args]);
           return Promise.resolve(command === "wait_presented" ? { displayed: 42 } : undefined);
         },
