@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.57.2: F161.57.5의 대기로 hwp check가 선택한 input source로 key를 입력한다.
 - F171: 부하에서 Wails main thread가 멈춘 원인이 AppKit의 동기 LaunchServices 호출에 있다. F161.27에 바깥 크기 변경 뒤 terminal의 추적 check가 생겼다.
 - F135, F160.24: 닫았다. document region의 입력 test가 통과하고 log query의 모든 항목이 완료되었다.
 - F162, F124: 빈 문서와 debug view 항목이 검증 규칙에 따라 완료되었다. save panel은 activation 등급에서 관측하지 않았다.

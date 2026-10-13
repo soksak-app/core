@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.57.2: the hwp check types its keys with the selected input source, by the wait of F161.57.5.
 - F171: a stall of the Wails main thread under load is located in the synchronous LaunchServices call of AppKit; F161.27 gets a tracked check of the terminal after an outside resize.
 - F135, F160.24: closed; the typing test of the document region passes and the log query has every item complete.
 - F162, F124: the blank document and the debug view items are complete under the verification rule; the save panel was not observed in the activation tier.
