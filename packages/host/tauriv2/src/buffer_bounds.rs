@@ -6,12 +6,13 @@ use serde_json::json;
 use crate::bounds::{PENDING_BYTES, PENDING_MESSAGES};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
+use crate::sidecars::QueuedLine;
 
 /// A list of messages that wait for a full write queue. It holds at most `PENDING_MESSAGES` messages and `PENDING_BYTES`
 /// bytes.
 #[derive(Default)]
 pub(crate) struct PendingLines {
-    lines: Vec<Vec<u8>>,
+    lines: Vec<QueuedLine>,
     bytes: usize,
 }
 
@@ -26,12 +27,12 @@ impl PendingLines {
             return Err(format!("{PENDING_BYTES} bytes"));
         }
         self.bytes += line.len();
-        self.lines.push(line);
+        self.lines.push(QueuedLine::new(line));
         Ok(())
     }
 
     /// Returns the held messages in the order they were added and empties the list.
-    pub(crate) fn take(&mut self) -> Vec<Vec<u8>> {
+    pub(crate) fn take(&mut self) -> Vec<QueuedLine> {
         self.bytes = 0;
         std::mem::take(&mut self.lines)
     }

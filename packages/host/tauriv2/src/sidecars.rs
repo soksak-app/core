@@ -15,12 +15,14 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{sync_channel, RecvError, SyncSender, TryRecvError, TrySendError};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use wait_timeout::ChildExt;
 
 use crate::application_log::log_error;
 use crate::buffer_bounds::{record_buffer_drop, PendingLines};
+use crate::event_log::Level;
+use crate::event_record::emit_host;
 use crate::platform::{current, PersistentStream};
 use crate::sidecar_reply::{error_of_body, RequestLedger};
 use crate::windows::{emit_window, window_data};
@@ -53,7 +55,7 @@ pub struct Failure {
 /// The message kinds of the outbox channel of a sidecar.
 enum Outgoing {
     /// One line to send to the sidecar.
-    Line(Vec<u8>),
+    Line(QueuedLine),
     /// A signal to close the stdin of the sidecar.
     Close,
 }
@@ -287,7 +289,7 @@ fn send_close_owner_and_shutdown(
         .expect("close waiters")
         .insert(request, tx);
     outbox
-        .send(Outgoing::Line(bytes))
+        .send(Outgoing::Line(QueuedLine::new(bytes)))
         .map_err(|error| CloseFailure {
             text: format!("send close-owner: {error}"),
             send_close: false,
@@ -319,7 +321,7 @@ fn send_close_owner_and_shutdown(
         .expect("shutdown waiters")
         .insert(shutdown_request, shutdown_tx);
     outbox
-        .send(Outgoing::Line(shutdown_bytes))
+        .send(Outgoing::Line(QueuedLine::new(shutdown_bytes)))
         .map_err(|error| CloseFailure {
             text: format!("send shutdown: {error}"),
             send_close: true,
@@ -379,7 +381,10 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
             serde_json::to_vec(&response).map_err(|e| format!("response serialization: {e}"))?;
         line.push(b'\n');
 
-        match self.tx.try_send(Outgoing::Line(line.clone())) {
+        match self
+            .tx
+            .try_send(Outgoing::Line(QueuedLine::new(line.clone())))
+        {
             Ok(()) => Ok(()),
             Err(TrySendError::Full(_)) => {
                 // When the channel is full, immutable responses are kept in the order of sending.
@@ -447,11 +452,13 @@ fn shut_down_writer(name: &str, writer: &mut dyn PersistentStream) {
     }
 }
 
-fn write_line(stdin: &mut ChildStdin, name: &str, line: &[u8]) -> bool {
-    if let Err(e) = stdin.write_all(line) {
+fn write_line(stdin: &mut ChildStdin, name: &str, line: &QueuedLine) -> bool {
+    let started = Instant::now();
+    if let Err(e) = stdin.write_all(&line.bytes) {
         log_error(&format!("sidecar {name}"), format!("write: {e}"));
         return false;
     }
+    record_write_wait(name, line, started, Instant::now());
     true
 }
 
@@ -483,12 +490,50 @@ fn write_pending_socket<O>(
         .all(|line| write_socket_line(stream, name, line))
 }
 
-fn write_socket_line(stream: &mut dyn PersistentStream, name: &str, line: &[u8]) -> bool {
-    if let Err(error) = stream.write_all(line).and_then(|_| stream.flush()) {
+fn write_socket_line(stream: &mut dyn PersistentStream, name: &str, line: &QueuedLine) -> bool {
+    let started = Instant::now();
+    if let Err(error) = stream.write_all(&line.bytes).and_then(|_| stream.flush()) {
         log_error(&format!("sidecar {name}"), format!("write: {error}"));
         return false;
     }
+    record_write_wait(name, line, started, Instant::now());
     true
+}
+
+/// A line for a sidecar with the moment it was queued or held.
+pub(crate) struct QueuedLine {
+    pub(crate) bytes: Vec<u8>,
+    queued: Instant,
+}
+
+impl QueuedLine {
+    /// Stamps `bytes` with the moment it enters the write queue of a sidecar.
+    pub(crate) fn new(bytes: Vec<u8>) -> QueuedLine {
+        QueuedLine {
+            bytes,
+            queued: Instant::now(),
+        }
+    }
+}
+
+/// The waits of a line for a sidecar that the writer records (docs/spec/logging.md#entrances): a second in the queue or
+/// 10 ms in the write.
+const WRITE_QUEUED_LIMIT: Duration = Duration::from_secs(1);
+const WRITE_BLOCKED_LIMIT: Duration = Duration::from_millis(10);
+
+/// Stores the event `host.sidecar.write_wait` when `line` waited `WRITE_QUEUED_LIMIT` or more between its queueing and the
+/// start of its write, or when the write from `started` to `ended` took `WRITE_BLOCKED_LIMIT` or more.
+fn record_write_wait(name: &str, line: &QueuedLine, started: Instant, ended: Instant) {
+    let queued = started.duration_since(line.queued);
+    let written = ended.duration_since(started);
+    if queued < WRITE_QUEUED_LIMIT && written < WRITE_BLOCKED_LIMIT {
+        return;
+    }
+    emit_host(
+        Level::Info,
+        "host.sidecar.write_wait",
+        serde_json::json!({"name": name, "bytes": line.bytes.len(), "queued_us": queued.as_micros() as u64, "write_us": written.as_micros() as u64}),
+    );
 }
 
 /// Takes out the held items at once and writes the returns first and the closes last. The held items arise after the
@@ -940,7 +985,7 @@ impl<O: Owner> Sidecars<O> {
         // It sends to the channel without blocking. When the channel is full, it returns an "is not keeping up" error.
         let delivered = process
             .outbox
-            .try_send(Outgoing::Line(line))
+            .try_send(Outgoing::Line(QueuedLine::new(line)))
             .map_err(|_| format!("sidecar {name} is not keeping up"));
         if delivered.is_ok() && !cids.is_empty() {
             for _ in 0..state
@@ -1040,7 +1085,9 @@ impl<O: Owner> Sidecars<O> {
                 .running
                 .iter()
                 .map(|(name, process)| {
-                    let result = process.outbox.try_send(Outgoing::Line(line.clone()));
+                    let result = process
+                        .outbox
+                        .try_send(Outgoing::Line(QueuedLine::new(line.clone())));
                     (name.clone(), result)
                 })
                 .collect();
@@ -1343,7 +1390,7 @@ impl<O: Owner> Sidecars<O> {
                 line.push(b'\n');
                 process
                     .outbox
-                    .try_send(Outgoing::Line(line))
+                    .try_send(Outgoing::Line(QueuedLine::new(line)))
                     .map_err(|_| format!("sidecar {name} is not keeping up"))?;
             }
             total += answer
@@ -1386,7 +1433,10 @@ impl<O: Owner> Sidecars<O> {
             .ok_or_else(|| format!("sidecar {name} is not running"))?;
 
         // It sends to the channel without blocking. When the channel is full, it buffers.
-        match process.outbox.try_send(Outgoing::Line(line.clone())) {
+        match process
+            .outbox
+            .try_send(Outgoing::Line(QueuedLine::new(line.clone())))
+        {
             Ok(()) => Ok(()),
             Err(TrySendError::Full(_)) => {
                 // The channel is full, so immutable responses are kept in the order of sending.

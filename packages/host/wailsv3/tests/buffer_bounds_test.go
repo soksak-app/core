@@ -256,3 +256,70 @@ func TestAnEventOverTheSizeBoundIsStoredCutWithItsOriginalSize(t *testing.T) {
 		t.Fatalf("seq %v then %v", big["seq"], small["seq"])
 	}
 }
+
+// writeWaits flushes the writer and returns the fields of the events `host.sidecar.write_wait`.
+func writeWaits(t *testing.T, log *host.EventLog) []map[string]any {
+	t.Helper()
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var waits []map[string]any
+	for _, event := range readEventLog(t, log.Path()) {
+		if event["event"] == "host.sidecar.write_wait" {
+			if event["level"] != "info" || event["layer"] != "host" {
+				t.Fatalf("event %v is not an info of the layer host", event)
+			}
+			waits = append(waits, event["fields"].(map[string]any))
+		}
+	}
+	return waits
+}
+
+// contract: sidecars.write.wait-is-recorded
+func TestALineThatWaitsInTheWriteQueueOfASidecarIsRecorded(t *testing.T) {
+	log := useRoomyEventLog(t)
+	_, release := blockedSidecar(t, "/p", 1)
+	// The sidecar reads nothing, so the queued lines wait at least this long before the release lets the writer go on.
+	time.Sleep(1100 * time.Millisecond)
+	release()
+	waits := writeWaits(t, log)
+	queued, blocked := 0, 0
+	for _, wait := range waits {
+		if wait["name"] != echoSidecar || wait["bytes"].(float64) <= 0 {
+			t.Fatalf("write wait %v does not name %s with the bytes of the line", wait, echoSidecar)
+		}
+		if wait["queued_us"].(float64) >= 1e6 {
+			queued++
+		}
+		if wait["write_us"].(float64) >= 1e6 {
+			blocked++
+		}
+	}
+	if queued == 0 || blocked != 1 {
+		t.Fatalf("%d waits of a second in the queue and %d blocked writes, want some and 1: %v", queued, blocked, waits)
+	}
+}
+
+// contract: sidecars.write.wait-is-recorded
+func TestALineThatIsWrittenAtOnceStoresNoWriteWait(t *testing.T) {
+	log := useRoomyEventLog(t)
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\nexec cat > /dev/null\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","protocol":1}`), directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	owner := newFakeOwner("/p")
+	for i := 0; i < 10; i++ {
+		if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sidecars.Stop()
+	if waits := writeWaits(t, log); len(waits) != 0 {
+		t.Fatalf("lines written at once stored write waits: %v", waits)
+	}
+}

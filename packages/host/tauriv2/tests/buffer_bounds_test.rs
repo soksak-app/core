@@ -366,3 +366,79 @@ fn an_event_over_the_size_bound_is_stored_cut_with_its_original_size() {
     assert_eq!(small["seq"].as_u64(), big["seq"].as_u64().map(|n| n + 1));
     use_host_event_log(None);
 }
+
+/// The fields of the events `host.sidecar.write_wait` that the writer stored.
+fn write_waits(log: &EventLog, config: &Path) -> Vec<Value> {
+    log.flush(Duration::from_secs(5)).unwrap();
+    records::read_events(&records::event_log_path(config))
+        .into_iter()
+        .filter(|event| event["event"] == "host.sidecar.write_wait")
+        .map(|event| {
+            assert_eq!(event["level"], "info", "{event}");
+            assert_eq!(event["layer"], "host", "{event}");
+            event["fields"].clone()
+        })
+        .collect()
+}
+
+// contract: sidecars.write.wait-is-recorded
+#[test]
+fn a_line_that_waits_in_the_write_queue_of_a_sidecar_is_recorded() {
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
+    let config = tempfile::tempdir().unwrap();
+    let log = roomy_writer(config.path());
+    let (mut blocked, _owner) = Blocked::new("/p", 1);
+    // The sidecar reads nothing, so the queued lines wait at least this long before the release lets the writer go on.
+    std::thread::sleep(Duration::from_millis(1100));
+    blocked.release();
+    let waits = write_waits(&log, config.path());
+    let mut queued = 0;
+    let mut blocked_writes = 0;
+    for wait in &waits {
+        assert!(
+            wait["name"] == ECHO && wait["bytes"].as_u64().unwrap() > 0,
+            "write wait {wait} does not name {ECHO} with the bytes of the line"
+        );
+        if wait["queued_us"].as_u64().unwrap() >= 1_000_000 {
+            queued += 1;
+        }
+        if wait["write_us"].as_u64().unwrap() >= 1_000_000 {
+            blocked_writes += 1;
+        }
+    }
+    assert!(
+        queued > 0 && blocked_writes == 1,
+        "{queued} waits of a second in the queue and {blocked_writes} blocked writes, want some and 1: {waits:?}"
+    );
+    use_host_event_log(None);
+}
+
+// contract: sidecars.write.wait-is-recorded
+#[test]
+fn a_line_that_is_written_at_once_stores_no_write_wait() {
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
+    let config = tempfile::tempdir().unwrap();
+    let log = roomy_writer(config.path());
+    let directory = tempfile::tempdir().unwrap();
+    let program = directory.path().join("echo");
+    std::fs::write(&program, "#!/bin/sh\nexec cat > /dev/null\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let declarations = vec![SidecarDeclaration {
+        name: ECHO.to_string(),
+        folder: directory.path().to_path_buf(),
+        data: br#"{"executable":"echo","protocol":1}"#.to_vec(),
+        version: "0.0.1".to_string(),
+    }];
+    let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf()).unwrap();
+    let owner = FakeOwner { root: "/p".into() };
+    for _ in 0..10 {
+        sidecars.send(&owner, ECHO, "s1", &raw("{}")).unwrap();
+    }
+    sidecars.stop();
+    let waits = write_waits(&log, config.path());
+    assert!(
+        waits.is_empty(),
+        "lines written at once stored write waits: {waits:?}"
+    );
+    use_host_event_log(None);
+}

@@ -97,7 +97,7 @@ type sidecar struct {
 	persistent bool
 	// servicePID is the process of the service endpoint that a persistent connection reached.
 	servicePID    int
-	outbox        chan []byte
+	outbox        chan queuedLine
 	exited        chan struct{}
 	muClosed      sync.Mutex
 	pendingCloses pendingLines // The pending closed messages, in the order of sending
@@ -403,7 +403,7 @@ func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body j
 
 	// Sends to the channel without blocking. When the channel is full, it returns the "is not keeping up" error.
 	select {
-	case process.outbox <- line:
+	case process.outbox <- queue(line):
 		if len(cids) > 0 {
 			for range c.requests.add(name, surface, cids, monotonicNanos()) {
 				recordBufferDrop("sidecar reply ledger", 0, fmt.Sprintf("%d requests", pendingRequestLimit))
@@ -447,7 +447,7 @@ func (c *Sidecars) SendResponse(name, surface, image string, body json.RawMessag
 
 	// Sends to the channel without blocking. When the channel is full, it buffers.
 	select {
-	case process.outbox <- line:
+	case process.outbox <- queue(line):
 		return nil
 	default:
 		// The channel is full, so the immutable replies are kept in order.
@@ -497,7 +497,7 @@ func (c *Sidecars) closeSurface(surface string) bool {
 		c.closing[process.name][surface]++
 		// Sends to the channel without blocking. When the channel is full, it stores it in pendingCloses.
 		select {
-		case process.outbox <- line:
+		case process.outbox <- queue(line):
 		default:
 			// The channel is full, so the closed messages are kept in the order of sending.
 			process.muClosed.Lock()
@@ -902,7 +902,7 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 		}
 		process.closeWaiters[request] = waiter
 		select {
-		case process.outbox <- line:
+		case process.outbox <- queue(line):
 		default:
 			delete(process.closeWaiters, request)
 			c.mu.Unlock()
@@ -956,7 +956,7 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) 
 	}
 	line = append(line, '\n')
 	select {
-	case process.outbox <- line:
+	case process.outbox <- queue(line):
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -977,7 +977,7 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) 
 		}
 		shutdownLine = append(shutdownLine, '\n')
 		select {
-		case process.outbox <- shutdownLine:
+		case process.outbox <- queue(shutdownLine):
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -1068,7 +1068,7 @@ func (c *Sidecars) launch(name string) (*sidecar, error) {
 	PerformanceProcessAdd("sidecar", name, cmd.Process.Pid)
 	process := &sidecar{
 		name: name, cmd: cmd, stdin: stdin,
-		outbox:       make(chan []byte, 256),
+		outbox:       make(chan queuedLine, 256),
 		exited:       make(chan struct{}),
 		closeWaiters: make(map[string]chan error),
 		surfaces:     make(map[string]bool),
@@ -1278,7 +1278,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 	PerformanceProcessAdd("sidecar", name, endpoint.PID)
 	process := &sidecar{
 		name: name, cmd: cmd, conn: conn, persistent: true, version: response.Version, servicePID: endpoint.PID,
-		outbox: make(chan []byte, 256), exited: make(chan struct{}),
+		outbox: make(chan queuedLine, 256), exited: make(chan struct{}),
 		closeWaiters: make(map[string]chan error), surfaces: make(map[string]bool),
 	}
 	process.begin = func() {
@@ -1363,11 +1363,13 @@ func (c *Sidecars) writePersistent(process *sidecar) {
 	}
 }
 
-func (c *Sidecars) writePersistentLine(process *sidecar, line []byte) bool {
-	if _, err := process.conn.Write(line); err != nil {
+func (c *Sidecars) writePersistentLine(process *sidecar, line queuedLine) bool {
+	started := monotonicNanos()
+	if _, err := process.conn.Write(line.bytes); err != nil {
 		LogError("sidecar "+process.name, fmt.Sprintf("write: %v", err))
 		return false
 	}
+	recordWriteWait(process.name, line, started, monotonicNanos())
 	return true
 }
 
@@ -1388,11 +1390,13 @@ func (c *Sidecars) writePersistentPending(process *sidecar) bool {
 	return true
 }
 
-func (c *Sidecars) writeLine(process *sidecar, line []byte) bool {
-	if _, err := process.stdin.Write(line); err != nil {
+func (c *Sidecars) writeLine(process *sidecar, line queuedLine) bool {
+	started := monotonicNanos()
+	if _, err := process.stdin.Write(line.bytes); err != nil {
 		LogError("sidecar "+process.name, fmt.Sprintf("write: %v", err))
 		return false
 	}
+	recordWriteWait(process.name, line, started, monotonicNanos())
 	return true
 }
 
@@ -1930,5 +1934,35 @@ func (c *Sidecars) traceMessage(event, sidecar, surface string, body json.RawMes
 	}
 	PerformanceObserve("host", func() map[string]any {
 		return map[string]any{"event": event, "sidecar": sidecar, "surface": surface, "body": body}
+	})
+}
+
+// queuedLine is a line for a sidecar with the moment it was queued or held, on the monotonic clock in nanoseconds.
+type queuedLine struct {
+	bytes  []byte
+	queued uint64
+}
+
+// queue stamps line with the moment it enters the write queue of a sidecar.
+func queue(line []byte) queuedLine {
+	return queuedLine{bytes: line, queued: monotonicNanos()}
+}
+
+// The waits of a line for a sidecar that the writer records (docs/spec/logging.md#entrances): a second in the queue
+// or 10 ms in the write.
+const (
+	writeQueuedLimit  = uint64(time.Second)
+	writeBlockedLimit = uint64(10 * time.Millisecond)
+)
+
+// recordWriteWait stores the event `host.sidecar.write_wait` when line waited writeQueuedLimit or more between its queueing
+// and the start of its write, or when the write from started to ended took writeBlockedLimit or more.
+func recordWriteWait(name string, line queuedLine, started, ended uint64) {
+	queued, written := started-line.queued, ended-started
+	if queued < writeQueuedLimit && written < writeBlockedLimit {
+		return
+	}
+	EmitHost(LevelInfo, "host.sidecar.write_wait", map[string]any{
+		"name": name, "bytes": len(line.bytes), "queued_us": queued / 1000, "write_us": written / 1000,
 	})
 }

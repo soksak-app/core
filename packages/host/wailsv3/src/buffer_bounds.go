@@ -8,7 +8,7 @@ import "fmt"
 // pendingLines is a list of messages that wait for a full write queue. It holds at most PendingMessages messages and
 // PendingBytes bytes. The caller guards it.
 type pendingLines struct {
-	lines [][]byte
+	lines []queuedLine
 	bytes int
 }
 
@@ -21,13 +21,13 @@ func (p *pendingLines) add(line []byte) string {
 	case p.bytes+len(line) > PendingBytes:
 		return fmt.Sprintf("%d bytes", PendingBytes)
 	}
-	p.lines = append(p.lines, line)
+	p.lines = append(p.lines, queue(line))
 	p.bytes += len(line)
 	return ""
 }
 
 // take returns the held messages in the order they were added and empties the list.
-func (p *pendingLines) take() [][]byte {
+func (p *pendingLines) take() []queuedLine {
 	lines := p.lines
 	p.lines, p.bytes = nil, 0
 	return lines

@@ -367,6 +367,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.send.slow-sidecar-does-not-block-others` | 한 사이드카 대기열이 가득 찬 동안 다른 사이드카로의 보내기는 50ms 안에 반환된다. | both |
 | `sidecars.send.start-does-not-block-other-sidecars` | 영속 service가 hello 응답을 늦추는 동안 실행 중인 다른 사이드카로의 보내기는 50ms 안에 반환된다. | both |
 | `sidecars.close.answer-ends-closing` | `closed`를 보낸 뒤 `host.sidecars`는 사이드카가 답할 때까지 그 표면을 나열하고, 답하면 목록이 빈다. | both |
+| `sidecars.write.wait-is-recorded` | sidecar의 쓰기 queue에서 1초 이상 기다리거나 쓰기에 10 ms 이상 걸린 줄은 `host.sidecar.write_wait`(sidecar의 `name`, 줄의 `bytes`, `queued_us`, `write_us`)를 level `info`로 저장하고, 곧바로 쓴 줄은 아무것도 저장하지 않는다. | both |
 | `buffers.sidecar-replies.bounded-by-messages` | sidecar의 보류 응답은 최대 1,024개이며, 다음 응답은 `sidecar <name>: the pending replies reached 1024 messages, so a reply of surface <surface> is dropped`로 거절되고 `host.buffer.dropped`(`buffer` `sidecar <name> pending replies`, `count` 1, `bytes`, `reason` `the buffer holds 1024 messages`)를 저장한다. | both |
 | `buffers.sidecar-replies.bounded-by-bytes` | sidecar의 보류 응답은 최대 4,194,304바이트이며, 이를 넘게 되는 응답은 `...reached 4194304 bytes...`로 거절되고 `reason`이 `the buffer holds 4194304 bytes`인 `host.buffer.dropped`를 저장한다. | both |
 | `buffers.sidecar-closes.bounded-and-forgotten` | sidecar의 보류 close는 최대 1,024개와 4,194,304바이트이며, 이를 넘는 close는 보내지 않고 `host.buffer.dropped`(`buffer` `sidecar <name> pending closes`)를 저장하며, 그 표면은 답을 기다리는 표면 목록에 없다. | both |

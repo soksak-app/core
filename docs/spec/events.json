@@ -416,6 +416,18 @@
       },
       "description": "The host queued a page request that continues inputs for a sidecar; the request line carries the same identifiers, and `bytes` is the size of the body."
     },
+    "host.sidecar.write_wait": {
+      "layer": "host",
+      "class": "io",
+      "level": "info",
+      "fields": {
+        "name": "string",
+        "bytes": "number",
+        "queued_us": "number",
+        "write_us": "number"
+      },
+      "description": "A line for a sidecar waited a second or more in the write queue of the host, or its write took 10 ms or more."
+    },
     "host.sidecar.reply": {
       "layer": "host",
       "class": "io",
