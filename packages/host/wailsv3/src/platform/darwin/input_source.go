@@ -15,6 +15,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"runtime/cgo"
 	"strings"
 	"unsafe"
 )
@@ -40,4 +41,27 @@ func (implementation) SelectInputSource(identifier string) error {
 		return fmt.Errorf("input source %s is not enabled or could not be selected", identifier)
 	}
 	return nil
+}
+
+// AwaitInputSource calls adopted once the text input context of the key view holds identifier. Call it on the main thread.
+func (implementation) AwaitInputSource(identifier string, adopted func(error)) {
+	if strings.IndexByte(identifier, 0) >= 0 {
+		adopted(errors.New("input source identifier contains NUL"))
+		return
+	}
+	wanted := C.CString(identifier)
+	defer C.free(unsafe.Pointer(wanted))
+	awaitInputSource(wanted, cgo.NewHandle(adopted))
+}
+
+//export nativeInputSourceAdopted
+func nativeInputSourceAdopted(value C.uintptr_t, failure *C.char) {
+	handle := cgo.Handle(value)
+	adopted := handle.Value().(func(error))
+	handle.Delete()
+	if failure == nil {
+		adopted(nil)
+		return
+	}
+	adopted(errors.New(C.GoString(failure)))
 }

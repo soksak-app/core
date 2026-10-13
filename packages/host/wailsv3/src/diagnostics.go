@@ -569,16 +569,25 @@ func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	}
 	var current string
 	var err error
+	// The text input context of the key view takes a selected source later than the system; the reply waits until it holds it,
+	// so a key that the caller sends after the reply reaches the selected source.
+	adopted := make(chan error, 1)
 	application.InvokeSync(func() {
 		if p.Select != nil {
 			if err = sources.SelectInputSource(*p.Select); err != nil {
 				return
 			}
+			sources.AwaitInputSource(*p.Select, func(failure error) { adopted <- failure })
 		}
 		current, err = sources.InputSource()
 	})
 	if err != nil {
 		return nil, err
+	}
+	if p.Select != nil {
+		if err := <-adopted; err != nil {
+			return nil, err
+		}
 	}
 	return map[string]string{"current": current}, nil
 }

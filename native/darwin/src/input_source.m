@@ -1,6 +1,6 @@
 // Reads and changes the selected keyboard input source. Uses the public API of Text Input Sources (HIToolbox).
 #import <Carbon/Carbon.h>
-#import <Foundation/Foundation.h>
+#import <Cocoa/Cocoa.h>
 #import "input_source.h"
 #import "application_log.h"
 
@@ -37,4 +37,36 @@ bool sp_input_source_select(const char *identifier) {
     }
     [sources release];
     return status == noErr;
+}
+
+void sp_input_source_await(const char *identifier, void (^adopted)(const char *error)) {
+    NSCAssert(NSThread.isMainThread, @"input sources are awaited on the main thread");
+    NSString *wanted = identifier ? [NSString stringWithUTF8String:identifier] : nil;
+    if (!wanted) {
+        adopted("the identifier to await is missing or not valid UTF-8");
+        return;
+    }
+    NSTextInputContext *context = NSTextInputContext.currentInputContext;
+    if (!context || [context.selectedKeyboardInputSource isEqualToString:wanted]) {
+        adopted(NULL);
+        return;
+    }
+    __block BOOL answered = NO;
+    __block id observer = nil;
+    void (^answer)(const char *) = ^(const char *error) {
+        if (answered) return;
+        answered = YES;
+        [NSNotificationCenter.defaultCenter removeObserver:observer];
+        adopted(error);
+    };
+    observer = [NSNotificationCenter.defaultCenter addObserverForName:NSTextInputContextKeyboardSelectionDidChangeNotification
+                                                               object:nil
+                                                                queue:NSOperationQueue.mainQueue
+                                                           usingBlock:^(NSNotification *note) {
+        if ([NSTextInputContext.currentInputContext.selectedKeyboardInputSource isEqualToString:wanted]) answer(NULL);
+    }];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        NSString *held = NSTextInputContext.currentInputContext.selectedKeyboardInputSource ?: @"no source";
+        answer([NSString stringWithFormat:@"the text input context of the key view holds %@, not %@, 2 s after the selection", held, wanted].UTF8String);
+    });
 }

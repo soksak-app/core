@@ -630,6 +630,10 @@ pub trait Platform: Send + Sync {
     #[cfg(feature = "diagnostics")]
     /// Selects identifier among the enabled input sources. Call it on the main thread.
     fn select_input_source(&self, identifier: &str) -> Result<(), String>;
+    #[cfg(feature = "diagnostics")]
+    /// Calls adopted once the text input context of the key view holds identifier, with an error when it does not within
+    /// 2 seconds. Call it on the main thread; adopted runs on the main thread.
+    fn await_input_source(&self, identifier: &str, adopted: Box<dyn Fn(Result<(), String>)>);
 
     // Termination request
 

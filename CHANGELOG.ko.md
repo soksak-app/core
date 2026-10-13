@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.57.5: `diagnostics.input.source`가 key view의 text input context가 선택한 source를 알린 뒤에 선택에 답한다.
 - F161.55.5, F161.55: frame 대기로 padding drag check가 두 애플리케이션에서 통과한다. F161.57.3은 Tauri 애플리케이션의 그려진 frame에 원인이 있다.
 - F161.57.5: 전환 중에 입력한 key가 사라졌으므로 F161.57.4의 text input context 강제 선택을 되돌렸다.
 - F161.57.4: input source 선택이 답하기 전에 key view의 text input context가 그 source를 갖게 하여, 첫 key가 선택한 input method에 닿는다.

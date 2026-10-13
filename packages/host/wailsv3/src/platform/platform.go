@@ -92,6 +92,9 @@ type InputSources interface {
 	InputSource() (string, error)
 	// SelectInputSource selects identifier among the enabled input sources.
 	SelectInputSource(identifier string) error
+	// AwaitInputSource calls adopted once the text input context of the key view holds identifier, with an error when it does
+	// not within 2 seconds. Call it on the main thread; adopted runs on the main thread.
+	AwaitInputSource(identifier string, adopted func(error))
 }
 
 // WindowObjects is the number of live objects, among the objects that the common library attached to windows and web views, whose lifetime shows the release of the window and the web view.

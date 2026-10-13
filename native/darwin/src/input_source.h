@@ -11,3 +11,9 @@ char *sp_input_source_current(void);
 
 // Selects the enabled input source with the same identifier. Returns false when there is none or it cannot be selected.
 bool sp_input_source_select(const char *identifier);
+
+// Calls adopted on the main thread with NULL once the text input context of the key view holds the input source identifier,
+// at once when there is no such context or it already holds it, and with the reason after 2 seconds in which the context
+// did not report it. The text input context takes a source that the system selected only later, so a key typed before
+// adopted runs reaches the earlier source. Call it on the main thread.
+void sp_input_source_await(const char *identifier, void (^adopted)(const char *error));

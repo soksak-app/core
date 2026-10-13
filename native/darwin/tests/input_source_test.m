@@ -22,5 +22,13 @@ int main(void) { @autoreleasepool {
     __block bool missing = true;
     NSArray<NSDictionary *> *nothing = capturedEvents(^{ missing = sp_input_source_select(NULL); });
     check(!missing && nothing.count == 1 && [nothing[0][@"fields"][@"text"] isEqual:@"the identifier to select is missing"], @"a missing identifier is one error record");
+    // Without a key window there is no text input context to wait for, so the wait answers at once and once.
+    __block int calls = 0;
+    __block BOOL failed = YES;
+    sp_input_source_await("com.apple.keylayout.ABC", ^(const char *error) { calls++; failed = error != NULL; });
+    check(calls == 1 && !failed, [NSString stringWithFormat:@"a wait without a text input context answers at once without an error (%d calls)", calls]);
+    __block NSString *reason = nil;
+    sp_input_source_await(NULL, ^(const char *error) { reason = error ? @(error) : nil; });
+    check([reason isEqual:@"the identifier to await is missing or not valid UTF-8"], [NSString stringWithFormat:@"a wait without an identifier answers its reason: %@", reason]);
     return failures == 0 ? 0 : 1;
 } }

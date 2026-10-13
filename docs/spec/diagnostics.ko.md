@@ -65,6 +65,7 @@
 | Wails host에서 surface나 modal의 WebContent process가 끝난다 | `error native surface webview: web content process terminated: <address>`. Tauri host는 surface와 modal을 포함한 모든 web view의 종료를 `error host page process: <label>: terminated`로 쓴다 |
 | 창의 WebContent process가 끝난다 | `error host page process: <window>: terminated`. 앱 DOM webview가 등록되어 있으면 native 계층은 WebKit 종료 이유(`reason`과 `code`)를 담은 `native.webview.process_ended` 이벤트도 저장한다 |
 | Tauri host가 main thread 감시의 heartbeat를 그 thread에 보내지 못한다 | `error host stall watch: heartbeat: <reason>`, 그리고 감시가 끝난다([logging](logging.ko.md), 정지) |
+| `diagnostics.input.source`의 선택한 input source 대기가 응답이 끝난 뒤에 답한다(Tauri host) | `error host input source: the wait answered after its reply ended: <result>` |
 | writer가 쓴 뒤 event 파일의 색인을 최신으로 맞출 수 없다(event 구조를 어기는 줄, 손상된 색인, 열 수 없는 파일) | `error host log index: <reason>`, 파일마다 이유가 다를 때마다 한 번([logging](logging.ko.md#색인)) |
 | 파일 `log-policy.json`이 [정책](logging.ko.md#정책)의 형식을 어기거나(JSON이 아닌 글, 모르는 항목, 빠졌거나 계약 밖인 class, 여섯 밖의 level) 정책을 감시하거나 적용할 수 없다 | `error host log policy: <file>: <발견한 것>`, 파일이 바뀔 때마다 한 번. 적용 중인 정책은 그대로 남는다 |
 | native 호출이 실패한다 | `sp_log_error`의 `error native <where>: <text>` |
