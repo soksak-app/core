@@ -1967,6 +1967,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F169",
+    implementation: [{ file: ".node-version", symbol: "26.11.1" }],
+    tests: [{ file: "scripts/test/check-build-environment.sh", id: "valid workspace toolchain reports its measured build environment" }],
+    expected: "The build runs the Node version that .node-version declares, and another version stops the preflight.",
+    levels: ["unit"],
+  },
+  {
     id: "F168",
     implementation: [{ file: "packages/sok/tauriv2/Cargo.toml", symbol: 'edition = "2024"' }],
     tests: [{ file: "packages/sok/tauriv2/tests/sok_test.rs", id: "the_default_configuration_directory_is_the_applications" }],

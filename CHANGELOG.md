@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F169: `.node-version` declares Node 26.11.1.
 - F166.7: the layout of the hosts allows the kqueue watch of the Tauri host as the difference H10.
 - F164.2: the stall sample of the Tauri host is `stall_sample.rs`, the counterpart of the Wails host.
 - F168: the Rust packages build with edition 2024; the test of the default configuration folder no longer changes the environment of its process.
