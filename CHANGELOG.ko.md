@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F166.1: Wails host가 fsnotify로 정책 파일을 감시한다. platform 계층의 kqueue code를 제거했고, Tauri host는 자체 code를 유지하는 이유를 적는다.
+- F164.1: Wails host의 stall sample이 macOS에서만 build되어, source가 Windows용으로 compile된다.
 - F161.37: 다시 연 terminal surface의 첫 raster 답이 terminal sidecar S49의 대조로 그 surface에 닿는다(그 release 0.0.9까지 미배포).
 - F161.55.4: window check의 pasteboard cleanup이 복원과 비교 사이에 다른 process가 쓴 것을 change count로 밝힌다.
 - F166: agent guidance가 library가 제공하는 기능에 생태계의 유지되는 library를 쓰도록 요구한다.

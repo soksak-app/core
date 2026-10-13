@@ -1,5 +1,8 @@
 //! The watch of a file through the kqueue of the kernel (docs/spec/logging.md#classes-and-policy): the folder of the file is watched
 //! for the creation and the replacement of the entry, and the file for the writes in place, so no timer reads the file.
+//! No library meets this contract: the FSEvents watcher of notify 8.2 delivered no event of the folder while a writer appended to
+//! a file of its `logs` subfolder, its kqueue watcher left a rename undelivered until a later kernel event and watched a new
+//! subfolder recursively, and the kqueue crate 1.2 has no user event that ends a blocked wait (S54 of the terminal sidecar).
 
 use std::ffi::CString;
 use std::os::unix::ffi::OsStrExt;

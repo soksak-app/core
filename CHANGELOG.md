@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F166.1: the Wails host watches the policy file through fsnotify; the kqueue code of its platform layer is removed, and the Tauri host states why it keeps its own.
+- F164.1: the stall sample of the Wails host builds only for macOS, so the sources compile for Windows.
 - F161.37: the first raster of a reopened terminal surface is answered to that surface, by the matching of S49 of the terminal sidecar (unreleased until its release 0.0.9).
 - F161.55.4: the pasteboard cleanup of a window check names a write of another process between its restore and its comparison by the change counts.
 - F166: the agent guidance requires a maintained library of the ecosystem for a function that it provides.

@@ -487,10 +487,6 @@ type Platform interface {
 	// 2 info, 3 debug, 4 trace) or -1 for none. It is an error for a value outside -1 to 4.
 	SetNativeEventPolicy(levels [5]int8) error
 
-	// WatchFile calls changed after the file at path was created, written, replaced, renamed or removed, on a goroutine of the
-	// watch, through the file system events of the operating system. The result stops the watch and waits until it ended.
-	WatchFile(path string, changed func()) (stop func(), err error)
-
 	// MonotonicNanos reads the monotonic clock of the records in nanoseconds (`mono_ns` of docs/spec/logging.md#event): the
 	// clock that the native library stamps its events with, so the layers of one process compare.
 	MonotonicNanos() (uint64, error)

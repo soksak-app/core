@@ -15,6 +15,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/fsnotify/fsnotify"
+
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
@@ -156,10 +158,55 @@ func StartLogPolicy(log *EventLog, applied func(source string)) (stop func(), er
 		}
 	}
 	// The watch is installed before the first load, so a change between the two is not missed.
-	stopWatch, err := system.WatchFile(log.PolicyPath(), func() { routine.Go("log-policy-load", load) })
+	stopWatch, err := watchPolicyFile(log.PolicyPath(), func() { routine.Go("log-policy-load", load) })
 	if err != nil {
-		return nil, fmt.Errorf("watch %s: %w", log.PolicyPath(), err)
+		return nil, err
 	}
 	load()
 	return stopWatch, nil
+}
+
+// watchPolicyFile calls changed after the file at path was created, written, replaced, renamed or removed. fsnotify watches the
+// folder of the file and every file in it, so a write in place and an entry that a rename or a removal changes both notify. A
+// notification can follow another that already led to a read, so the reader of changed compares what it reads with what it holds.
+// An error of the watch is reported as an error record of the place `log policy`. The result stops the watch and waits until its
+// goroutine ended.
+func watchPolicyFile(path string, changed func()) (func(), error) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, fmt.Errorf("watch %s: %w", path, err)
+	}
+	if err := watcher.Add(filepath.Dir(path)); err != nil {
+		if closeErr := watcher.Close(); closeErr != nil {
+			LogError("log policy", fmt.Errorf("watch %s: close: %w", path, closeErr))
+		}
+		return nil, fmt.Errorf("watch %s: %w", path, err)
+	}
+	name := filepath.Base(path)
+	done := make(chan struct{})
+	routine.Go("log-policy-watch", func() {
+		defer close(done)
+		for {
+			select {
+			case event, open := <-watcher.Events:
+				if !open {
+					return
+				}
+				if filepath.Base(event.Name) == name {
+					changed()
+				}
+			case err, open := <-watcher.Errors:
+				if !open {
+					return
+				}
+				LogError("log policy", fmt.Errorf("watch %s: %w", path, err))
+			}
+		}
+	})
+	return func() {
+		if err := watcher.Close(); err != nil {
+			LogError("log policy", fmt.Errorf("watch %s: close: %w", path, err))
+		}
+		<-done
+	}, nil
 }

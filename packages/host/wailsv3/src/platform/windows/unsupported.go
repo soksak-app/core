@@ -141,10 +141,6 @@ func (implementation) SetNativeEventPolicy([5]int8) error {
 	return unsupported("native event policy")
 }
 
-func (implementation) WatchFile(string, func()) (func(), error) {
-	return nil, unsupported("file watch")
-}
-
 func (implementation) MonotonicNanos() (uint64, error) {
 	return 0, unsupported("monotonic clock")
 }
