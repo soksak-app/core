@@ -558,6 +558,22 @@ for (const app of Object.values(APPS)) {
     await s.until("core.grid", (grid) => label(grid) === null, "an empty program title did not remove the title");
   });
 
+  test(`${app.name}: a long tab title is cut at the width bound of a tab`, async (t) => {
+    const s = await open(t, app);
+    if (!s) return t.skip(`${app.binary} is not built`);
+    await fresh(s);
+    s.cleanup(() => closeTerminalTabs(s));
+    const [terminal] = await ensureTerminals(s, 1);
+    const title = "LONG-TITLE-".repeat(20);
+    const tabs = (grid) => grid.cards.flatMap((card) => card.tabs);
+    await s.run("terminal.input", { bytes: `printf '\\033]2;${title}\\007'\r` }, terminal.surface);
+    const grid = await s.until("core.grid", (value) => tabs(value).find((tab) => tab.id === terminal.surface)?.label === title,
+      "the tab did not show the long program title", { timeout: 10000 });
+    // The tabs of every card are in document order, which is the order of the cards and of their tabs in core.grid.
+    const rect = await s.rect("core.card.tab", tabs(grid).findIndex((tab) => tab.id === terminal.surface));
+    assert.ok(rect.width <= 200, `the tab with a title of ${title.length} characters is ${rect.width} points wide, more than 200`);
+  });
+
   test(`${app.name}: an OSC 9 notification from a terminal out of view becomes a tab notice until the tab is in view`, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);

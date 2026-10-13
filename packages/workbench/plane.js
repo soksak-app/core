@@ -317,6 +317,8 @@ function updateCard(el, card, rect) {
       b.innerHTML = '<span class="tab__name"></span>' +
         '<button class="tab__x" title="닫기" data-expose="core.card.tab-close">&#10005;</button>';
       b.querySelector(".tab__name").textContent = tabName(t);
+      // A name longer than the width bound of a tab is cut, so the tooltip shows the whole name.
+      b.title = tabName(t);
       // A press selects the tab and starts a drag. The result at the drop position is produced by core.tab.move.
       b.addEventListener("pointerdown", (e) => {
         if (e.target.closest(".tab__x")) return;
@@ -1415,8 +1417,9 @@ function drawNotices(chrome, tabs) {
       b.dataset.notice = "true";
       b.title = systemNotifications.tooltip(notice);
     } else if (b.dataset.notice) {
+      // Without a notice the tooltip shows the whole name of the tab again.
       delete b.dataset.notice;
-      b.removeAttribute("title");
+      b.title = b.querySelector(".tab__name").textContent;
     }
   }
   const ham = chrome.querySelector(".chrome__ham");

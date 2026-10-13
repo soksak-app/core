@@ -267,9 +267,11 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .chrome[data-tools=menu] .chrome__more{display:grid}
 .chrome[data-tools=menu] .chrome__acts{display:none}
 .chrome[data-fit=ham] .chrome__tabs{display:none}
+/* A tab is at most 200 points wide, so one long title leaves the width of the strip to the other tabs; the name is cut with
+   an ellipsis inside that bound, and the tab shows the whole name as its tooltip (docs/spec/example-model.md#card-tabs). */
 .tab{display:flex;align-items:center;gap:4px;padding:3px 7px;border-radius:var(--r-xs);
   font-size:var(--text-small);color:var(--muted);cursor:grab;user-select:none;white-space:nowrap;
-  flex:0 0 auto}
+  flex:0 0 auto;max-width:200px}
 .tab:hover{color:var(--fg)}
 .tab[data-active=true]{color:var(--fg);background:var(--chip-sel)}
 .tab[data-dragging=true]{opacity:.4}
