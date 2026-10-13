@@ -159,3 +159,29 @@ test("a surface announces its removal through context.closing before the module 
   assert.deepEqual(globalThis.closingSeen, [["mount", false], ["abort", true], ["dispose", true]]);
   dom.window.close();
 });
+
+test("a surface module runs a command of core through runtime.command and cannot run a command of a plugin", async () => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  const { registry } = await import("../exposure.js");
+  const { mountSurface, disposeSurface } = await import("../surface-modules.js");
+  registry.declare("core", {
+    status: [],
+    commands: [{ name: "core.fixture.echo", description: "Answers its parameters.", params: { type: "object" }, result: { type: "object" } }],
+    dom: [],
+  });
+  const received = [];
+  registry.command("core.fixture.echo", (params) => { received.push(params); return { echoed: params.value }; });
+  const moduleUrl = `data:text/javascript,${encodeURIComponent(`export async function mount(root, context) {
+    globalThis.commandReply = await context.runtime.command('core.fixture.echo', { value: 7 });
+    globalThis.commandRefusal = await context.runtime.command('fixture.ping', {}).then(() => null, (error) => error.message);
+    return { dispose() {} };
+  }`)}`;
+  await mountSurface(document.querySelector("#slot"),
+    { module: moduleUrl, surfaceId: "tab-core-command", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] });
+  assert.deepEqual(globalThis.commandReply, { echoed: 7 });
+  assert.deepEqual(received, [{ value: 7 }]);
+  assert.equal(globalThis.commandRefusal, "runtime.command: fixture.ping is not a command of core");
+  await disposeSurface("tab-core-command");
+  dom.window.close();
+});

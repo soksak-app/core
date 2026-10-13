@@ -235,6 +235,11 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         } },
         settings: { read: () => pluginSettings(surface.pluginId), on: (listener) =>
           onSettingsChange(() => listener(pluginSettings(surface.pluginId))) },
+        // A command that core declares, run for this surface (docs/spec/plugins.md#surface-module-ownership). A command of a
+        // plugin is refused: a plugin connects its own commands through its exposure.
+        command: (name, params) => (typeof name === "string" && name.startsWith("core.")
+          ? scoped.call(name, params)
+          : Promise.reject(new Error(`runtime.command: ${name} is not a command of core`))),
         // The event log and the performance trace of the page, with their gates (docs/spec/plugins.md#tracing, #logging).
         ...pluginRecords,
       },

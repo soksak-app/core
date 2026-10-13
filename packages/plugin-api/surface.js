@@ -68,6 +68,8 @@ export function createSurfaceContext({
     icon,
     runtime: Object.freeze({
       sidecar: callable(runtime.sidecar, "runtime.sidecar").bind(runtime),
+      // Runs a command that core declares for this surface and answers its result (docs/spec/plugins.md#surface-module-ownership).
+      command: callable(runtime.command, "runtime.command"),
       native: runtime.native,
       clipboard: runtime.clipboard,
       // Opening links (docs/spec/plugins.md#opening-links).

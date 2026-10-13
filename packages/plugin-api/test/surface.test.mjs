@@ -11,7 +11,7 @@ test("surface modules mount into the supplied root and dispose exactly once", as
   const phases = [];
   const context = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
     exposure: { command() {} },
-    sidecar() {}, emit() {}, native: {},
+    sidecar() {}, command() {}, emit() {}, native: {},
   } });
   context.status.subscribe(({ phase }) => phases.push(phase));
   let disposed = 0;
@@ -33,19 +33,20 @@ test("surface modules mount into the supplied root and dispose exactly once", as
 test("surface context exposes only scoped runtime capabilities", () => {
   const root = { appendChild() {} };
   const context = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
-    sidecar: () => "port", native: { composition: {} }, exposure: { command() {} }, emit() {},
+    sidecar: () => "port", command: () => "command", native: { composition: {} }, exposure: { command() {} }, emit() {},
     settings: { read: () => ({ "cursor.shape": "block" }), on: () => () => {} },
   } });
   assert.equal(context.runtime.sidecar(), "port");
   assert.deepEqual(context.runtime.native, { composition: {} });
   assert.equal(context.runtime.settings.read()["cursor.shape"], "block");
+  assert.equal(context.runtime.command(), "command");
   assert.equal("call" in context.runtime, false);
 });
 
 test("surface context carries the tab reports and the origin directory", () => {
   const root = { appendChild() {} };
   const reported = [];
-  const runtime = { exposure: { command() {} }, sidecar() {}, emit() {}, native: {} };
+  const runtime = { exposure: { command() {} }, sidecar() {}, command() {}, emit() {}, native: {} };
   const context = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", pluginId: "fixture", runtime, icon: ICON,
     tab: { title: (text) => reported.push(["title", text]), footer: (text) => reported.push(["footer", text]),
       directory: (path) => reported.push(["directory", path]), notify: (text) => reported.push(["notify", text]),
@@ -69,7 +70,7 @@ test("surface context carries the tab reports and the origin directory", () => {
 
 test("surface context offers the core icons and requires them", () => {
   const root = { appendChild() {} };
-  const runtime = { exposure: { command() {} }, sidecar() {}, emit() {}, native: {} };
+  const runtime = { exposure: { command() {} }, sidecar() {}, command() {}, emit() {}, native: {} };
   const context = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", runtime, tab: TAB, icon: ICON });
   assert.equal(context.icon("rotate-cw"), '<svg data-icon="rotate-cw"></svg>');
   assert.throws(() => createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-2", runtime, tab: TAB }),
@@ -78,7 +79,7 @@ test("surface context offers the core icons and requires them", () => {
 
 test("surface context carries the window's project root or null", () => {
   const root = { appendChild() {} };
-  const runtime = { exposure: { command() {} }, sidecar() {}, emit() {}, native: {} };
+  const runtime = { exposure: { command() {} }, sidecar() {}, command() {}, emit() {}, native: {} };
   const context = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", runtime, tab: TAB, icon: ICON, project: { root: "/work/app" } });
   assert.deepEqual(context.project, { root: "/work/app" });
   assert.equal(Object.isFrozen(context.project), true);
@@ -91,7 +92,7 @@ test("releasing the ready state of an unknown context is an error", () => {
 
 test("surface context gives the contributions of the plugin's declared extension points", () => {
   const root = { appendChild() {} };
-  const runtime = { sidecar: () => "port", exposure: { command() {} }, emit() {} };
+  const runtime = { sidecar: () => "port", command: () => "command", exposure: { command() {} }, emit() {} };
   const plain = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime });
   assert.throws(() => plain.contributions("language"), /extension point language is not declared by fixture/);
   const items = [{ plugin: "tidy", item: { name: "tidy" }, module: "/modules/tidy/ui/tidy.js" }];
@@ -103,7 +104,7 @@ test("surface context gives the contributions of the plugin's declared extension
 
 test("surface context gives a copy of the tab parameters, or null for a tab without them", () => {
   const root = { appendChild() {} };
-  const runtime = { sidecar: () => "port", exposure: { command() {} }, emit() {} };
+  const runtime = { sidecar: () => "port", command: () => "command", exposure: { command() {} }, emit() {} };
   const params = { path: "notes/todo.md" };
   const context = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", pluginId: "fixture", icon: ICON, runtime, tab: { ...TAB, params } });
   assert.deepEqual(context.tab.params, params);
@@ -119,7 +120,7 @@ test("surface context traces an event with the plugin and the surface", () => {
   const root = { appendChild() {} };
   const lines = [];
   const context = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
-    exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
+    exposure: { command() {} }, sidecar() {}, command() {}, emit() {}, native: {},
     trace: (event, fields) => lines.push([event, fields]), traceEnabled: () => true,
   } });
   context.runtime.trace("fixture.input", { key: "a" });
@@ -134,7 +135,7 @@ test("surface context logs an event of the plugin at each level with the surface
   const root = { appendChild() {} };
   const events = [];
   const context = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
-    exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
+    exposure: { command() {} }, sidecar() {}, command() {}, emit() {}, native: {},
     log: (level, event, fields) => events.push([level, event, fields]), logEnabled: () => true,
   } });
   for (const level of ["error", "warn", "info", "debug", "trace"]) context.runtime.log[level]("input.key", { key: "a" });
@@ -151,7 +152,7 @@ test("surface context logs an event of the plugin at each level with the surface
   assert.throws(() => context.runtime.log.info("input", null), /log requires fields as an object/);
   assert.throws(() => context.runtime.log.info("input", { surface: "other" }), /log fields must not name the surface/);
   const hostless = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-2", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
-    exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
+    exposure: { command() {} }, sidecar() {}, command() {}, emit() {}, native: {},
   } });
   hostless.runtime.log.error("input", {});
 });
@@ -164,7 +165,7 @@ function loggingContext(extra = {}) {
   const traces = [];
   const gate = { log: new Set(["error", "warn", "info", "debug", "trace"]), trace: true };
   const context = createSurfaceContext({ closing: CLOSING, root: { appendChild() {} }, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
-    exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
+    exposure: { command() {} }, sidecar() {}, command() {}, emit() {}, native: {},
     log: (...args) => events.push(args), logEnabled: (level) => gate.log.has(level),
     trace: (event, fields) => traces.push([event, fields]), traceEnabled: () => gate.trace,
     ...extra,
@@ -205,7 +206,7 @@ test("a plugin asks whether a level is stored and builds the fields of an event 
   assert.throws(() => context.runtime.log.info("Bad", () => { built += 1; return {}; }), /log requires an event name/);
   assert.equal(built, 1, "an invalid name is refused before the builder runs");
   const hostless = createSurfaceContext({ closing: CLOSING, root: { appendChild() {} }, surfaceId: "tab-2", pluginId: "fixture", tab: TAB, icon: ICON, runtime: {
-    exposure: { command() {} }, sidecar() {}, emit() {}, native: {},
+    exposure: { command() {} }, sidecar() {}, command() {}, emit() {}, native: {},
   } });
   assert.equal(hostless.runtime.log.enabled("error"), false);
   hostless.runtime.log.error("input", fields);
@@ -228,7 +229,7 @@ test("a plugin trace builds its fields only while the trace is on", () => {
 });
 
 test("a runtime that stores events or traces without the query of its gate is refused", () => {
-  const base = { exposure: { command() {} }, sidecar() {}, emit() {}, native: {} };
+  const base = { exposure: { command() {} }, sidecar() {}, command() {}, emit() {}, native: {} };
   const make = (runtime) => () => createSurfaceContext({ closing: CLOSING, root: { appendChild() {} }, surfaceId: "tab-1", pluginId: "fixture", tab: TAB, icon: ICON, runtime: { ...base, ...runtime } });
   assert.throws(make({ log() {} }), /runtime\.log requires runtime\.logEnabled/);
   assert.throws(make({ trace() {} }), /runtime\.trace requires runtime\.traceEnabled/);
@@ -237,7 +238,7 @@ test("a runtime that stores events or traces without the query of its gate is re
 
 test("a surface context requires the closing signal and exposes it", () => {
   const root = { appendChild() {} };
-  const runtime = { exposure: { command() {} }, emit() {}, sidecar() {} };
+  const runtime = { exposure: { command() {} }, emit() {}, sidecar() {}, command() {} };
   assert.throws(() => createSurfaceContext({ root, surfaceId: "tab-1", runtime, tab: TAB, icon: ICON }),
     /requires the closing signal/);
   assert.equal(createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", runtime, tab: TAB, icon: ICON }).closing, CLOSING);

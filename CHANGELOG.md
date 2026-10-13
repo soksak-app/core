@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F162.3: a surface module runs a command of core through `context.runtime.command(name, params)`, so a plugin of documents reaches `core.file.place`.
 - R3.5.3: plugin-editor, plugin-hwp, plugin-flowmark, plugin-shell and sidecar-shell run `soksak-records` in `make test`, and the three plugins with a workflow run `soksak-commits` in CI.
 - R3.5.2: plugin-browser, plugin-files, plugin-terminal, sidecar-files, sidecar-vt and the registry run `soksak-records` in `make test` and `soksak-commits` in CI with `@soksak/plugin-api` of the core release 0.0.11.
 - F150.8.4: core 0.0.11 is released: the release workflow published the Wails and Tauri bundles of the tag `v0.0.11`, and the registry lists them.
