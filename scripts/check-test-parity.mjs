@@ -1898,6 +1898,19 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "R3",
+    implementation: [
+      { file: "packages/plugin-api/records-check.js", symbol: "export function recordViolations" },
+      { file: "packages/plugin-api/records-check.js", symbol: "export function commitMessageErrors" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/records-check.test.mjs", id: "record checks report each statement that is not a fact about the repository" },
+      { file: "packages/plugin-api/test/records-check.test.mjs", id: "commit messages use the subject form with a checklist ID, a body and no footer" },
+    ],
+    expected: "The records of core and of every plugin, sidecar and registry repository state facts about their repository, and each commit message carries the checklist ID in its subject and no footer.",
+    levels: ["unit"],
+  },
+  {
     id: "R5",
     implementation: [{ file: "packages/plugin-api/records-check.js", symbol: "export function termViolations" }],
     tests: [
