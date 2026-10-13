@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.55.5: `host.window` reports the generation, raster and sequence of the presented frame of each image region, and `presented` is null while no frame of the current raster is presented.
 - F166.2: the checklist lists the functions of core that a maintained library provides (semantic versions, the PNG CRC-32, the PNG and LZ4 decoders of the window checks) and states why the remaining own functions stay.
 - F166.1: the Wails host watches the policy file through fsnotify; the kqueue code of its platform layer is removed, and the Tauri host states why it keeps its own.
 - F164.1: the stall sample of the Wails host builds only for macOS, so the sources compile for Windows.

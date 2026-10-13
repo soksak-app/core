@@ -117,6 +117,14 @@ struct RasterState {
 }
 
 /// The raster, its size and the sequence number to which a frame that a supplier sent belongs.
+/// The identity of the frame that an image region presents: the generation, the raster and the sequence of the frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PresentedFrame {
+    pub generation: u64,
+    pub raster: u64,
+    pub sequence: i32,
+}
+
 #[derive(Clone, Copy, Debug)]
 struct FrameIdentity {
     generation: u64,
@@ -721,6 +729,20 @@ impl Images {
     /// Returns whether all visible image regions presented the current raster.
     pub fn current_presented(&self) -> bool {
         Self::current_presented_locked(&self.lock())
+    }
+
+    /// Returns the frame that the image region presents, or None while no frame of the current raster is presented. A newer frame
+    /// that the host accepted and has not presented yet does not change it.
+    pub fn presented_frame(&self, key: &Key) -> Option<PresentedFrame> {
+        let inner = self.lock();
+        let state = inner.states.get(key)?;
+        (state.presented_sequence > 0 && state.presented_raster == state.raster).then_some(
+            PresentedFrame {
+                generation: state.generation,
+                raster: state.presented_raster,
+                sequence: state.presented_sequence,
+            },
+        )
     }
 
     /// Waits until all visible image regions present the current raster or the time limit ends.

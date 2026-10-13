@@ -1179,3 +1179,74 @@ fn image_frame_refusals_are_recorded() {
         assert!(log.contains(&want), "no {want:?} in {log}");
     }
 }
+
+// contract: exposure.window.region-reports-presented-frame
+#[test]
+fn presented_frame_identity_is_reported() {
+    let images = Images::default();
+    let key: Key = ("tab-1".to_string(), "view".to_string());
+    images.begin_generation(&key.0);
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    assert!(images.set(&key, 100));
+    assert_eq!(images.presented_frame(&key), None);
+
+    let raster = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    let response = Arc::new(Mutex::new(None));
+    let received = Arc::clone(&response);
+    assert!(handle_envelope(
+        &configured_envelope(&raster, 2),
+        "sidecar-a",
+        &key.0,
+        &images,
+        |_work| Ok(()),
+        move |_image, value| {
+            *received.lock().unwrap() = Some(value);
+            Ok(())
+        },
+    ));
+    assert!(images.wait_current(Duration::ZERO).is_ok());
+    let frame = images.presented_frame(&key).expect("a presented frame");
+    assert_eq!(frame.generation, raster.generation);
+    assert_eq!(frame.raster, raster.raster);
+    assert_eq!(frame.sequence, 2);
+
+    // While the main thread presents a newer frame that the host accepted, the presented frame is the earlier one; the
+    // newer one is presented when the presentation returns.
+    let pending = Arc::new(Mutex::new(None));
+    let seen = Arc::clone(&pending);
+    let during = images.clone();
+    let during_key = key.clone();
+    assert!(handle_envelope(
+        &configured_envelope(&raster, 3),
+        "sidecar-a",
+        &key.0,
+        &images,
+        move |_work| {
+            *seen.lock().unwrap() = Some(
+                during
+                    .presented_frame(&during_key)
+                    .map(|frame| frame.sequence),
+            );
+            Ok(())
+        },
+        |_image, _value| Ok(()),
+    ));
+    assert_eq!(
+        *pending.lock().unwrap(),
+        Some(Some(2)),
+        "the presented frame with a newer frame pending"
+    );
+    assert_eq!(
+        images.presented_frame(&key).map(|frame| frame.sequence),
+        Some(3)
+    );
+
+    images
+        .configure_raster(&key, 900, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    assert_eq!(images.presented_frame(&key), None);
+}

@@ -124,7 +124,8 @@ fn host_declarations() -> Value {
                     "surface": {"type": "string"}, "name": {"type": "string"}, "frame": rect,
                     "visible": {"type": "boolean"}, "focused": {"type": "boolean"},
                     "presented": {"type": ["object", "null"], "properties": {
-                        "sequence": {"type": "integer"}, "width": {"type": "integer"}, "height": {"type": "integer"}}},
+                        "sequence": {"type": "integer"}, "generation": {"type": "integer"}, "raster": {"type": "integer"},
+                        "width": {"type": "integer"}, "height": {"type": "integer"}, "scale": {"type": "number"}}},
                     "error": {"type": ["string", "null"]}}}},
                 "modal": {"type": "object", "properties": {
                     "id": {"type": "string"}, "mode": {"type": "string"},
@@ -1247,8 +1248,22 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         let documents = context.documents.names();
         let mut regions = Vec::new();
         for (handle, (surface, name)) in context.images.names() {
+            let presented = context
+                .images
+                .presented_frame(&(surface.clone(), name.clone()));
             let text = platform.image_facts(handle)?;
             let mut region: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+            // presented is the size of the presented image with the identity of the frame that the host marked presented;
+            // null while no frame of the current raster is presented.
+            region["presented"] = match (region["presented"].take(), presented) {
+                (Value::Object(mut size), Some(frame)) => {
+                    size.insert("generation".into(), json!(frame.generation));
+                    size.insert("raster".into(), json!(frame.raster));
+                    size.insert("sequence".into(), json!(frame.sequence));
+                    Value::Object(size)
+                }
+                _ => Value::Null,
+            };
             region["surface"] = Value::String(surface);
             region["name"] = Value::String(name);
             regions.push(region);

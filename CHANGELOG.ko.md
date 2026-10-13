@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F161.55.5: `host.window`가 각 image region의 표시된 frame의 generation, raster, sequence를 보고하며, 현재 raster의 frame이 표시되지 않은 동안 `presented`는 null이다.
 - F166.2: checklist가 유지되는 library가 제공하는 core의 기능(semantic version, PNG CRC-32, window check의 PNG와 LZ4 decoder)을 적고, 남는 자체 기능을 유지하는 이유를 적는다.
 - F166.1: Wails host가 fsnotify로 정책 파일을 감시한다. platform 계층의 kqueue code를 제거했고, Tauri host는 자체 code를 유지하는 이유를 적는다.
 - F164.1: Wails host의 stall sample이 macOS에서만 build되어, source가 Windows용으로 compile된다.

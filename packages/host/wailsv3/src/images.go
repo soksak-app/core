@@ -445,6 +445,25 @@ func (i *Images) MarkPresented(key ImageKey, generation, raster uint64, sequence
 	}
 }
 
+// PresentedFrame is the identity of the frame that an image region presents: the generation, the raster and the sequence of the frame.
+type PresentedFrame struct {
+	Generation uint64 `json:"generation"`
+	Raster     uint64 `json:"raster"`
+	Sequence   int    `json:"sequence"`
+}
+
+// PresentedFrame returns the frame that the image region presents. It returns false while no frame of the current raster is presented. A
+// newer frame that the host accepted and has not presented yet does not change it.
+func (i *Images) PresentedFrame(key ImageKey) (PresentedFrame, bool) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	if state == nil || state.PresentedSequence <= 0 || state.PresentedRaster != state.Raster {
+		return PresentedFrame{}, false
+	}
+	return PresentedFrame{Generation: state.Generation, Raster: state.PresentedRaster, Sequence: state.PresentedSequence}, true
+}
+
 // MarkPresentationFailed records the native presentation failure of the current raster.
 func (i *Images) MarkPresentationFailed(key ImageKey, generation, raster uint64, sequence int, reason string) {
 	i.mu.Lock()

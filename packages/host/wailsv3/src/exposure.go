@@ -80,8 +80,8 @@ var hostStatus = map[string]hostEntry{
 				"surface": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"},
 				"frame": rectSchema, "visible": map[string]any{"type": "boolean"}, "focused": map[string]any{"type": "boolean"},
 				"presented": map[string]any{"type": []any{"object", "null"}, "properties": map[string]any{
-					"sequence": map[string]any{"type": "integer"},
-					"width":    map[string]any{"type": "integer"}, "height": map[string]any{"type": "integer"},
+					"sequence": map[string]any{"type": "integer"}, "generation": map[string]any{"type": "integer"}, "raster": map[string]any{"type": "integer"},
+					"width": map[string]any{"type": "integer"}, "height": map[string]any{"type": "integer"}, "scale": map[string]any{"type": "number"},
 				}},
 				"error": map[string]any{"type": []any{"string", "null"}},
 			}}},
@@ -1115,9 +1115,12 @@ type WindowRegion struct {
 	Visible   bool   `json:"visible"`
 	Focused   bool   `json:"focused"`
 	Presented *struct {
-		Width  int     `json:"width"`
-		Height int     `json:"height"`
-		Scale  float64 `json:"scale"`
+		Width      int     `json:"width"`
+		Height     int     `json:"height"`
+		Scale      float64 `json:"scale"`
+		Generation uint64  `json:"generation"`
+		Raster     uint64  `json:"raster"`
+		Sequence   int     `json:"sequence"`
 	} `json:"presented"`
 	Layer struct {
 		Bounds        frame   `json:"bounds"`
@@ -1191,6 +1194,14 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 			region := WindowRegion{Surface: key.Surface, Name: key.Name}
 			if err := json.Unmarshal([]byte(text), &region); err != nil {
 				return "", fmt.Errorf("image %s/%s facts: %w", key.Surface, key.Name, err)
+			}
+			// presented is the size of the presented image with the identity of the frame that the host marked presented; null while no frame of the current raster is presented.
+			if presented, ok := s.images.PresentedFrame(key); ok && region.Presented != nil {
+				region.Presented.Generation = presented.Generation
+				region.Presented.Raster = presented.Raster
+				region.Presented.Sequence = presented.Sequence
+			} else {
+				region.Presented = nil
 			}
 			regions = append(regions, region)
 		}

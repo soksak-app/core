@@ -1239,3 +1239,40 @@ func TestImageFrameRefusalsAreRecorded(t *testing.T) {
 		}
 	}
 }
+
+// contract: exposure.window.region-reports-presented-frame
+func TestPresentedFrameIdentityIsReported(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-1", Name: "view"}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	var handle int
+
+	images.BeginGeneration(key.Surface)
+	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatalf("attach image: %v", err)
+	}
+	if frame, ok := images.PresentedFrame(key); ok {
+		t.Fatalf("an image without a presented frame reports %+v", frame)
+	}
+	raster := configureImage(t, images, key, 800, 600, 2.0)
+	if _, ok := host.Decide(configuredEnvelope(t, raster, 2), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+		t.Fatal("current frame was rejected")
+	}
+	images.MarkPresented(key, raster.Generation, raster.Raster, 2)
+	frame, ok := images.PresentedFrame(key)
+	if !ok || frame.Generation != raster.Generation || frame.Raster != raster.Raster || frame.Sequence != 2 {
+		t.Fatalf("presented frame is %+v (present %t), want generation %d, raster %d, sequence 2",
+			frame, ok, raster.Generation, raster.Raster)
+	}
+	// A newer frame that the host accepted and has not presented leaves the presented frame as it was.
+	if _, ok := host.Decide(configuredEnvelope(t, raster, 3), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+		t.Fatal("newer frame was rejected")
+	}
+	if frame, ok := images.PresentedFrame(key); !ok || frame.Sequence != 2 {
+		t.Fatalf("presented frame with a newer frame pending is %+v (present %t), want sequence 2", frame, ok)
+	}
+	configureImage(t, images, key, 900, 600, 2.0)
+	if frame, ok := images.PresentedFrame(key); ok {
+		t.Fatalf("presented frame %+v survives a raster change", frame)
+	}
+}
