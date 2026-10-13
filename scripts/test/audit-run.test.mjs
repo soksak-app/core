@@ -117,6 +117,20 @@ test('an error before the first start mark or after the last end mark of the run
   assert.equal(judgment(folder).tests[0].result, 'pass');
 });
 
+test('a chain finding of an earlier process before the first start mark belongs to no test of the run and is not judged', (t) => {
+  // An earlier process of the configuration folder left a chain that stops after its first event.
+  const chained = { ...catalog, chains: { input: ['host.sidecar.request', 'host.update.start'] } };
+  const request = (seq, cid) => event(seq, 'host.sidecar.request', { name: 'n' }, { class: 'io', cids: [cid] });
+  const { folder, config } = fixture(t, {
+    files: {
+      'host-0-1.jsonl': [open('host', '0-1'), request(2, 'c-old')],
+      [`host-${BOOT}.jsonl`]: [open('host', BOOT, 10), start(11, 't1'), request(12, 'c-new'), end(13, 't1')],
+    },
+    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 11 }), mark({ kind: 'end', boot: BOOT, seq: 13 })],
+  });
+  assert.deepEqual(auditRun(chained, folder), [`${join(config, 'logs', `host-${BOOT}.jsonl`)}:3: chain input of c-new lacks host.update.start`]);
+});
+
 test('the logs of every layer under the configuration folders of the marks are audited, and a sidecar error is placed by time', (t) => {
   const sidecar = (seq, text, offset) => JSON.stringify({ ts_us: US + offset, mono_ns: 7_000_000_000 + offset * 1000, seq, level: 'error', class: 'lifecycle', layer: 'sidecar', event: 'sidecar.record.error', fields: { where: 'vt', text } });
   const { folder, config } = fixture(t, {

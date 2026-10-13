@@ -129,14 +129,19 @@ export function auditRun(catalog, folder) {
       }
     }
     // The run spans from its first start mark to its last end mark. A configuration folder also holds the logs of earlier
-    // runs and of a person's use of the application, and an error outside the span belongs to no test of this run, so this
-    // run does not judge it; `check-events.mjs --logs` reports every error of a folder.
+    // runs and of a person's use of the application, and a finding on a line outside the span (an error, a seq gap or a
+    // chain that stops) belongs to no test of this run, so this run does not judge it; `check-events.mjs --logs` reports
+    // every finding of a folder.
     const spanStart = Math.min(...mine.map((made) => made.from.ts_us));
     const spanEnd = mine.some((made) => made.to === null) ? Infinity : Math.max(...mine.map((made) => made.to.ts_us));
-    const judged = (entry) => entry.event.ts_us >= spanStart && entry.event.ts_us <= spanEnd;
-    for (const { file, line, message } of auditParsed(parsed, catalogOf(catalog, config),
-      (file, entry) => declared.has(`${file}\0${entry.line}`) || !judged(entry))) {
-      findings.push(`${file}:${line}: ${message}`);
+    const times = new Map(parsed.flatMap(({ file, entries }) => entries.map((entry) => [`${file}\0${entry.line}`, entry.event.ts_us])));
+    const judged = (file, line) => {
+      const ts = times.get(`${file}\0${line}`);
+      if (ts === undefined) throw new Error(`${file}:${line}: the audit placed a finding on a line that holds no event`);
+      return ts >= spanStart && ts <= spanEnd;
+    };
+    for (const { file, line, message } of auditParsed(parsed, catalogOf(catalog, config), (file, entry) => declared.has(`${file}\0${entry.line}`))) {
+      if (judged(file, line)) findings.push(`${file}:${line}: ${message}`);
     }
   }
   const rows = cases.map((made) => {
