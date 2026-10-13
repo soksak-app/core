@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F174: 저장된 log offset이 없는 window check가 앞선 process의 기록이 아니라 실행 중인 process의 오류만 판정한다.
 - F160.18: trace on과 off의 입력 지연을 기록했다. F174가 Tauri check 애플리케이션이 찾은 update fixture를 적는다.
 - F160.17: native, Go, Rust benchmark 수치를 실행 시 부하와 함께 기록했다.
 - F173: input source 대기가 observer 입구로 등록하고, deep link parse가 경우를 밝히며, `make push-check`가 census와 fallback test를 돌린다.

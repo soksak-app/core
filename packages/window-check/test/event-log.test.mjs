@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { currentEventOffsets, eventLine, readEvents, traceRows, readEventErrors, readEventLines, readEventOffsets, untilEventLine, untilEventLines, writeEventOffsets } from "../event-log.mjs";
+import { currentEventOffsets, eventLine, sessionEventStart, readEvents, traceRows, readEventErrors, readEventLines, readEventOffsets, untilEventLine, untilEventLines, writeEventOffsets } from "../event-log.mjs";
 
 function configDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-event-log-"));
@@ -232,4 +232,21 @@ test("the event file of a sidecar is read with the files of the host, and its ev
     { layer: "vt-core", event: "pty_write", surface: undefined, session: "s-1", cids: ["b1.7"], hex: "0d" },
     { layer: "vt-core", event: "request", surface: "tab-1", session: undefined, cids: undefined, hex: undefined },
   ]);
+});
+
+test("without stored offsets the session starts at the end of the files of ended processes and at the start of the running one", (t) => {
+  const dir = configDir(t);
+  // An earlier process left an error; the running process 20 writes its own.
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "error", "host.test.earlier"));
+  writeFileSync(join(dir, "logs", "host-2-20.jsonl"), line(1, "error", "host.test.current"));
+  const { errors } = readEventErrors(dir, sessionEventStart(dir, 20));
+  assert.deepEqual(errors, ["error host host.test.current: {}"]);
+});
+
+test("stored offsets are the start of the session", (t) => {
+  const dir = configDir(t);
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "error", "host.test.read"));
+  writeEventOffsets(dir, readEventErrors(dir, {}).offsets);
+  appendFileSync(join(dir, "logs", "host-1-10.jsonl"), line(2, "error", "host.test.after"));
+  assert.deepEqual(readEventErrors(dir, sessionEventStart(dir, 10)).errors, ["error host host.test.after: {}"]);
 });

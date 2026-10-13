@@ -32,6 +32,17 @@ export function readEventOffsets(configDir) {
   return value;
 }
 
+/**
+ * The position from which a session judges the errors of the application with the process identifier pid: the offsets
+ * that the earlier session stored, or, when no session stored any in this configuration, the end of the files of the
+ * processes that ended and the start of the files of the running process, so the errors of earlier runs do not count.
+ */
+export function sessionEventStart(configDir, pid) {
+  if (existsSync(eventOffsetFile(configDir))) return readEventOffsets(configDir);
+  const running = new RegExp(`-${pid}(\\.debug)?\\.jsonl$`);
+  return Object.fromEntries(Object.entries(currentEventOffsets(configDir)).filter(([name]) => !running.test(name)));
+}
+
 export function writeEventOffsets(configDir, offsets) {
   writeFileSync(eventOffsetFile(configDir), `${JSON.stringify(offsets)}\n`);
 }

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F174: a window check without stored log offsets judges only the errors of the running process, not the history of earlier processes.
 - F160.18: the input latency with the trace on and off is recorded; F174 records the update fixture that the Tauri check application found.
 - F160.17: the numbers of the native, Go and Rust benchmarks are recorded with the load of their run.
 - F173: the input source wait registers through the observer entrance, the deep link parse states its cases, and `make push-check` runs the census and fallback tests.

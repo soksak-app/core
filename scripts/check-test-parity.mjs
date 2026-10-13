@@ -2055,6 +2055,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F174",
+    implementation: [{ file: "packages/window-check/event-log.mjs", symbol: "export function sessionEventStart" }],
+    tests: [{ file: "packages/window-check/test/event-log.test.mjs", id: "without stored offsets the session starts at the end of the files of ended processes and at the start of the running one" }],
+    expected: "A window check judges the errors of the running process from its session start, never the history of earlier processes.",
+    levels: ["unit"],
+  },
+  {
     id: "F173",
     implementation: [{ file: "Makefile", symbol: "census.test.mjs scripts/test/fallbacks.test.mjs" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs every check of the structure step and the format and clippy checks of ci" }],

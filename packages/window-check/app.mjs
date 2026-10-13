@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
 import { announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
-import { readEventErrors, readEventOffsets, writeEventOffsets } from "./event-log.mjs";
+import { readEventErrors, sessionEventStart, writeEventOffsets } from "./event-log.mjs";
 import { readPasteboard, restoreFailure, writePasteboard } from "./pasteboard.mjs";
 
 // The launch declares the application executables that are checked. SOKSAK_BINARY_WAILSV3 and SOKSAK_BINARY_TAURIV2
@@ -208,7 +208,7 @@ export async function open(t, app) {
   }));
   // The cleanup reads the errors after this position and the recordings beside these, so both are taken before a check of
   // the endpoint can end the session.
-  session.eventStart = readEventOffsets(app.configDir);
+  session.eventStart = sessionEventStart(app.configDir, client.endpoint.pid);
   session.recordingsBefore = recordingFolders(app.configDir);
   const { endpoint } = client;
   if (endpoint.application !== app.name) {
