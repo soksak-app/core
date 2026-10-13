@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F161.55.5, F161.55: the padding drag check passes on both applications with the frame wait; F161.57.3 is located in the drawn frame of the Tauri application.
 - F161.57.5: the forced selection of the text input context of F161.57.4 is reverted, because keys typed during the switch were lost.
 - F161.57.4: the selection of an input source makes the text input context of the key view hold it before it answers, so the first key reaches the selected input method.
 - F161.55.5: the terminal pixel helpers of the window checks wait until the image region presents the frame that a screen read names, and the specification names the `frame` of the screen event and of `terminal.screen.read`.
