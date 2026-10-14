@@ -336,17 +336,17 @@ The audit of a run, `node scripts/audit-run.mjs <run folder>`, runs at the end o
 
 ### Volume budget
 
-The catalog declares the budget of the volume of the logs as `budget`: for each class, the events and the bytes (the lines with their line feeds) per minute that the processes of one configuration folder may store together. The audit of a run (`scripts/audit-run.mjs`) counts every line of every file of each configuration folder from the first start mark to the last end mark of the run, divides by the minutes of that span, writes the result to `volume` of `judgment.json` (`{config, minutes, classes}`, each class `{events, bytes, eventsPerMinute, bytesPerMinute}`), and, when the span is a minute or more, reports a finding for each class above its budget; a rate over a shorter span is the rate of a burst and is recorded without a judgment. A class that the budget does not name is a finding in every run, and a catalog without `budget` is refused. The budget is 1.5 times the largest rate that the window checks of `library`, `outside`, `registry` and `settings` measured on both applications on 2026-10-14:
+The catalog declares the budget of the volume of the logs as `budget`: for each class, the events and the bytes (the lines with their line feeds) per minute that the processes of one configuration folder may store together. The audit of a run (`scripts/audit-run.mjs`) counts every line of every file of each configuration folder from the first start mark to the last end mark of the run, divides by the minutes of that span, writes the result to `volume` of `judgment.json` (`{config, minutes, classes}`, each class `{events, bytes, eventsPerMinute, bytesPerMinute}`), and, when the span is a minute or more, reports a finding for each class above its budget; a rate over a shorter span is the rate of a burst and is recorded without a judgment. A class that the budget does not name is a finding in every run, and a catalog without `budget` is refused. The budget is 1.5 times the largest rate of each class over the 23 runs of a minute or more of the window checks of 2026-10-14 on both applications:
 
 | class | events per minute | bytes per minute | largest measured |
 |---|---|---|---|
-| `lifecycle` | 6,000 | 1,500,000 | 3,714 events, 908,276 bytes |
-| `input` | 7,000 | 2,700,000 | 4,625 events, 1,748,006 bytes |
-| `call` | 41,000 | 27,000,000 | 27,082 events, 17,876,427 bytes |
-| `io` | 4,500 | 8,000,000 | 2,785 events, 5,342,640 bytes |
-| `frame` | 2,500 | 800,000 | 1,582 events, 514,234 bytes |
+| `lifecycle` | 7,700 | 2,000,000 | 5,092 events, 1,315,749 bytes |
+| `input` | 8,600 | 2,700,000 | 5,722 events, 1,785,045 bytes |
+| `call` | 33,500 | 18,200,000 | 22,192 events, 12,073,237 bytes |
+| `io` | 4,900 | 19,500,000 | 3,205 events, 12,936,232 bytes |
+| `frame` | 2,300 | 750,000 | 1,501 events, 496,215 bytes |
 
-The budget totals about 40 MB per minute, so the retention bound of 6 GiB ([retention](#retention)) holds at least 2.7 hours of window checks at the budget and 4.5 to 8 hours at the measured rates of 13 to 24 MB per minute; the use of a person stores far less, and a run with a `.keep` file is never removed, so the logs of a failure stay until it is classified.
+The budget totals about 43 MB per minute, so the retention bound of 6 GiB ([retention](#retention)) holds at least 2.5 hours of window checks at the budget; the use of a person stores far less, and a run with a `.keep` file is never removed, so the logs of a failure stay until it is classified.
 
 ### Census
 

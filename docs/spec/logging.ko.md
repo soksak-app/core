@@ -335,17 +335,17 @@ window check는 시험 대상 애플리케이션의 event log에 시험마다 �
 
 ### 분량 예산
 
-catalog는 로그 분량의 예산을 `budget`으로 선언한다: class마다 한 설정 폴더의 process들이 함께 저장해도 되는 분당 event 수와 byte 수(줄과 그 줄바꿈)이다. 실행의 감사(`scripts/audit-run.mjs`)는 실행의 첫 시작 표시부터 마지막 끝 표시까지 각 설정 폴더의 모든 파일의 모든 줄을 세어 그 구간의 분으로 나누고, 결과를 `judgment.json`의 `volume`(`{config, minutes, classes}`, class마다 `{events, bytes, eventsPerMinute, bytesPerMinute}`)에 쓰며, 구간이 1분 이상이면 예산을 넘은 class마다 finding을 보고한다. 더 짧은 구간의 비율은 몰림의 비율이므로 판정 없이 기록한다. 예산이 이름하지 않은 class는 모든 실행에서 finding이며, `budget`이 없는 catalog는 거부한다. 예산은 2026-10-14에 `library`, `outside`, `registry`, `settings` 창 검사가 두 애플리케이션에서 측정한 가장 큰 비율의 1.5배이다:
+catalog는 로그 분량의 예산을 `budget`으로 선언한다: class마다 한 설정 폴더의 process들이 함께 저장해도 되는 분당 event 수와 byte 수(줄과 그 줄바꿈)이다. 실행의 감사(`scripts/audit-run.mjs`)는 실행의 첫 시작 표시부터 마지막 끝 표시까지 각 설정 폴더의 모든 파일의 모든 줄을 세어 그 구간의 분으로 나누고, 결과를 `judgment.json`의 `volume`(`{config, minutes, classes}`, class마다 `{events, bytes, eventsPerMinute, bytesPerMinute}`)에 쓰며, 구간이 1분 이상이면 예산을 넘은 class마다 finding을 보고한다. 더 짧은 구간의 비율은 몰림의 비율이므로 판정 없이 기록한다. 예산이 이름하지 않은 class는 모든 실행에서 finding이며, `budget`이 없는 catalog는 거부한다. 예산은 2026-10-14에 두 애플리케이션에서 돈 창 검사의 1분 이상 실행 23개에서 class마다 가장 큰 비율의 1.5배이다:
 
 | class | 분당 event | 분당 byte | 측정한 최대 |
 |---|---|---|---|
-| `lifecycle` | 6,000 | 1,500,000 | event 3,714, byte 908,276 |
-| `input` | 7,000 | 2,700,000 | event 4,625, byte 1,748,006 |
-| `call` | 41,000 | 27,000,000 | event 27,082, byte 17,876,427 |
-| `io` | 4,500 | 8,000,000 | event 2,785, byte 5,342,640 |
-| `frame` | 2,500 | 800,000 | event 1,582, byte 514,234 |
+| `lifecycle` | 7,700 | 2,000,000 | event 5,092, byte 1,315,749 |
+| `input` | 8,600 | 2,700,000 | event 5,722, byte 1,785,045 |
+| `call` | 33,500 | 18,200,000 | event 22,192, byte 12,073,237 |
+| `io` | 4,900 | 19,500,000 | event 3,205, byte 12,936,232 |
+| `frame` | 2,300 | 750,000 | event 1,501, byte 496,215 |
 
-예산의 합은 분당 약 40 MB이므로 6 GiB의 보존 한도([보존](#보존))는 예산에서 창 검사 최소 2.7시간을, 측정한 분당 13~24 MB에서 4.5~8시간을 담는다. 사람의 사용은 훨씬 적게 저장하고, `.keep` 파일이 있는 run은 지우지 않으므로 실패의 로그는 분류될 때까지 남는다.
+예산의 합은 분당 약 43 MB이므로 6 GiB의 보존 한도([보존](#보존))는 예산에서 창 검사 최소 2.5시간을 담는다. 사람의 사용은 훨씬 적게 저장하고, `.keep` 파일이 있는 run은 지우지 않으므로 실패의 로그는 분류될 때까지 남는다.
 
 ### Census
 

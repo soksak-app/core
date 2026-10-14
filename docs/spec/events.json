@@ -920,11 +920,11 @@
     }
   },
   "budget": {
-    "lifecycle": { "events": 6000, "bytes": 1500000 },
-    "input": { "events": 7000, "bytes": 2700000 },
-    "call": { "events": 41000, "bytes": 27000000 },
-    "io": { "events": 4500, "bytes": 8000000 },
-    "frame": { "events": 2500, "bytes": 800000 }
+    "lifecycle": { "events": 7700, "bytes": 2000000 },
+    "input": { "events": 8600, "bytes": 2700000 },
+    "call": { "events": 33500, "bytes": 18200000 },
+    "io": { "events": 4900, "bytes": 19500000 },
+    "frame": { "events": 2300, "bytes": 750000 }
   },
   "chains": {
     "input": [
