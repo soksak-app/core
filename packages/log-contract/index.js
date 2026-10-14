@@ -164,11 +164,14 @@ function chainFindings(entries, catalog) {
   const changes = new Map();
   for (const { file, event } of [...entries].sort((a, b) => a.event.ts_us - b.event.ts_us)) {
     const process = processOf(file);
-    if (event.event === "page.settings.change" && String(event.fields?.keys).split(",").includes("diagnostics.log")) {
+    // The catalog declares `keys` a required string, and the line check refuses a line without it.
+    if (event.event === "page.settings.change" && event.fields.keys.split(",").includes("diagnostics.log")) {
       if (!changes.has(process)) changes.set(process, event.ts_us);
       continue;
     }
     if (event.event !== "log.policy") continue;
+    // default: the first policy of a process starts its list, and a policy without a change of the setting before it is in
+    // force from its own time.
     policies.set(process, [...(policies.get(process) ?? []), { ts: changes.get(process) ?? event.ts_us, classes: event.fields.classes }]);
     changes.delete(process);
   }
@@ -178,6 +181,7 @@ function chainFindings(entries, catalog) {
     const declared = catalog.events[hop];
     // default: a hop that the catalog does not declare with a class of the policy is asked for under every policy.
     if (declared === undefined || !POLICY_CLASSES.includes(declared.class)) return true;
+    // default: a process that recorded no policy applied only the default policy, which stores every level.
     const all = [...(policies.get(processOf(file)) ?? [])].sort((a, b) => a.ts - b.ts);
     const first = all.filter((policy) => policy.ts <= from).at(-1);
     const applied = [...(first === undefined ? [] : [first]), ...all.filter((policy) => policy.ts > from && policy.ts <= to)];
