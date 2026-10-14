@@ -84,6 +84,28 @@ thread_local! {
     static MIGRATION_LOG: RefCell<Option<Arc<EventLog>>> = const { RefCell::new(None) };
 }
 
+/// One step of a chain as the owning tests read it.
+pub struct StepForTest {
+    pub from: u64,
+    pub to: u64,
+}
+
+/// Exposes the parsed chains for the owning tests: the chain of each file as the steps the engine applies, so a test
+/// holds the engine to the definitions it embeds.
+pub fn migration_chains_for_test()
+-> Result<std::collections::BTreeMap<String, Vec<StepForTest>>, String> {
+    let mut out = std::collections::BTreeMap::new();
+    for definition in definitions()? {
+        out.entry(definition.file.clone())
+            .or_insert_with(Vec::new)
+            .push(StepForTest {
+                from: definition.from,
+                to: definition.to,
+            });
+    }
+    Ok(out)
+}
+
 /// Registers the event writer of this process for the records of the migration engine; `None` registers none.
 pub fn use_migration_log(log: Option<Arc<EventLog>>) {
     MIGRATION_LOG.with(|cell| *cell.borrow_mut() = log);

@@ -82,6 +82,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("host structure audit", "js-ts", ["scripts/check-hosts.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("release diagnostic audit", "js-ts", ["scripts/check-release.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-release-paths.test.mjs"], { sharedTests: true }),
+  lane("installed format mentions", "js-ts", ["scripts/test/format-mentions.test.mjs"], ["scripts/test/format-mentions.test.mjs"]),
   lane("page memory measurement", "js-ts", ["scripts/measure-page-memory.mjs"], ["scripts/test/measure-page-memory.test.mjs"]),
   lane("host allocation measurement", "js-ts", ["scripts/measure-host-allocations.mjs"], ["scripts/test/measure-host-allocations.test.mjs"]),
   lane("application update check", "js-ts", ["scripts/check-app-update.mjs"], ["scripts/test/check-app-update.test.mjs"]),
@@ -2071,6 +2072,13 @@ const FEATURE_LINKS = [
     tests: [{ file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" }],
     expected: "The input records check takes the clock anchor of the page that wrote page.call.",
     levels: ["application"],
+  },
+  {
+    id: "F189",
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "Migrate the stored data of the earlier release" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release workflow runs a release-built host once on the stored data of the earlier release" }],
+    expected: "A release runs a release-built host once on the stored data of the earlier release, and the chain, the format mentions and the step are checked mechanically.",
+    levels: ["unit"],
   },
   {
     id: "F188.2",

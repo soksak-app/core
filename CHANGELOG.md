@@ -9,6 +9,7 @@
 - F187: a contract comment is above its test again, and the loss tests no longer depend on the speed of the writer.
 - F182: the input records check takes the clock anchor of the page that wrote page.call.
 - F160.20.2: the log volume budget is set from the window check runs of a minute or more.
+- F189: the release runs a release-built host once on the stored data of the earlier release; the chain, the format mentions and the step are checked mechanically.
 - F188.2: the migration engine of both command lines applies the definition 2→3 of plugins/installed.json, and the shared reader entry migrates before it reads.
 - F186: the activation of the application records the application that was frontmost before it.
 - F183: every declared workspace version is 0.0.13, the release with the corrections since 0.0.12.

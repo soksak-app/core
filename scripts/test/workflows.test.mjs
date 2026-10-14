@@ -69,6 +69,19 @@ test('the window-check workflow names the window checks, the audit step and the 
   assert.ok(index('Keep the run folder') > index('Audit of the logs'), 'the artifact is taken after the audit');
 });
 
+test('the release workflow runs a release-built host once on the stored data of the earlier release', () => {
+  const text = read('.github/workflows/release.yml');
+  const list = steps(text);
+  const found = list.find((step) => step.name === 'Migrate the stored data of the earlier release');
+  assert.ok(found, 'the workflow has no step that migrates the stored data of the earlier release');
+  assert.match(found.text, /"format":2/, 'the step writes the released format-2 form');
+  assert.match(found.text, /soksak-tauriv2.*--config-dir/, 'the step runs the release-built host once');
+  assert.match(found.text, /log\.migrated/, 'the step requires the migration record');
+  assert.match(found.text, /"format": ?3/, 'the step requires the migrated file');
+  assert.ok(list.findIndex((step) => step.name === 'Migrate the stored data of the earlier release') < list.findIndex((step) => step.name === 'Package'),
+    'the migration runs before the bundles are packaged');
+});
+
 test('the push check runs every check of the structure step and the format and clippy checks of ci', () => {
   const ci = read('.github/workflows/ci.yml');
   const targets = (name) => {

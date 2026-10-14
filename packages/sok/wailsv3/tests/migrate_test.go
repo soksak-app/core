@@ -136,3 +136,24 @@ func TestMigrateInstalledRefusesAFormTheDefinitionsDoNotCover(t *testing.T) {
 		}
 	}
 }
+
+// contract: install.migration.chain-ends-at-the-current-format
+func TestTheDefinitionChainEndsAtTheCurrentFormat(t *testing.T) {
+	chains, err := sok.MigrationChainsForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain, ok := chains["plugins/installed.json"]
+	if !ok {
+		t.Fatal("the definitions hold no chain for plugins/installed.json")
+	}
+	last := chain[len(chain)-1]
+	if last.To != sok.InstalledFormat {
+		t.Fatalf("the chain ends at format %d, the reader requires %d", last.To, sok.InstalledFormat)
+	}
+	for index, step := range chain {
+		if index > 0 && step.From != chain[index-1].To {
+			t.Fatalf("step %d starts at %d, the earlier step ends at %d", index, step.From, chain[index-1].To)
+		}
+	}
+}

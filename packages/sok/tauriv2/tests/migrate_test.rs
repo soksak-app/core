@@ -128,3 +128,26 @@ fn migrate_installed_refuses_a_form_the_definitions_do_not_cover() {
         let _ = std::fs::remove_dir_all(config);
     }
 }
+
+// contract: install.migration.chain-ends-at-the-current-format
+#[test]
+fn the_definition_chain_ends_at_the_current_format() {
+    let chains = soksak_sok::migrate::migration_chains_for_test().unwrap();
+    let chain = chains
+        .get("plugins/installed.json")
+        .expect("the definitions hold no chain for plugins/installed.json");
+    let last = chain.last().unwrap();
+    assert_eq!(
+        last.to, INSTALLED_FORMAT,
+        "the chain ends at another format than the reader requires"
+    );
+    for (index, step) in chain.iter().enumerate() {
+        if index > 0 {
+            assert_eq!(
+                step.from,
+                chain[index - 1].to,
+                "a step does not start where the earlier one ends"
+            );
+        }
+    }
+}

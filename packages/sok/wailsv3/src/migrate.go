@@ -74,6 +74,30 @@ func migrationChains() (map[string]migrationChain, error) {
 	return chains, nil
 }
 
+// MigrationChainsForTest exposes the parsed chains for the owning tests: the chain of each file as the steps the engine
+// applies, so a test holds the engine to the definitions it embeds.
+func MigrationChainsForTest() (map[string][]migrationStepForTest, error) {
+	chains, err := migrationChains()
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]migrationStepForTest{}
+	for file, chain := range chains {
+		steps := make([]migrationStepForTest, 0, len(chain.steps))
+		for _, step := range chain.steps {
+			steps = append(steps, migrationStepForTest{From: step.From, To: step.To})
+		}
+		out[file] = steps
+	}
+	return out, nil
+}
+
+// migrationStepForTest is one step of a chain as the owning tests read it.
+type migrationStepForTest struct {
+	From int
+	To   int
+}
+
 // MigrateInstalled applies the migration definitions of plugins/installed.json at the entry of its shared reader: a
 // missing file is left missing, a file at the current format is left untouched, a form of the chain migrates step by
 // step through the one writer of this package, and a form outside the chain — below the floor, above the current
