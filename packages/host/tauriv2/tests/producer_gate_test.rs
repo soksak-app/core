@@ -213,3 +213,47 @@ fn a_closed_gate_builds_no_fields_at_the_producers_of_the_host() {
         "the fields of an observation were built although the policy does not store the class call at debug"
     );
 }
+
+// contract: log.policy.counts-each-second
+#[test]
+fn the_counts_of_a_closed_gate_are_reported_each_second_and_at_a_flush() {
+    use soksak_host_tauriv2::event_log::{Level as L, Options};
+    let directory = tempfile::tempdir().unwrap();
+    let log = event_log::start(Options {
+        directory: directory.path().to_path_buf(),
+        role: "host".into(),
+        boot: "b1".into(),
+        queue_events: 1 << 12,
+        queue_bytes: 1 << 22,
+        batch_interval: Duration::from_millis(20),
+        rotate_bytes: 1 << 30,
+        pull: None,
+        pull_loss: None,
+        policy_path: None,
+        retention_bytes: 1 << 40,
+    })
+    .unwrap();
+    narrow_calls(&log, "warn");
+    let fields = json!({"name": "echo", "args": "[]", "micros": 1, "ok": true, "truncated": false});
+    let started = std::time::Instant::now();
+    let mut emitted = 0u64;
+    // 400 ms of refused events cross 20 batch intervals and no second.
+    while started.elapsed() < Duration::from_millis(400) {
+        log.emit(L::Debug, "host.binding.call", &fields);
+        emitted += 1;
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let path = log.path().to_path_buf();
+    let before = records::read_events(&path);
+    let reports = before
+        .iter()
+        .filter(|event| event["event"] == "log.gated")
+        .count();
+    assert_eq!(
+        reports, 0,
+        "{reports} log.gated events within 400 ms; the counts are reported each second"
+    );
+    log.flush(Duration::from_secs(5)).unwrap();
+    let counts = gated_counts(&records::read_events(&path));
+    assert_eq!(counts.get("call/debug"), Some(&emitted), "{counts:?}");
+}

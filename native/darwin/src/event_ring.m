@@ -276,8 +276,20 @@ bool sp_cid_new(char *buffer, size_t capacity) {
     return true;
 }
 
-// Stores the count of each closed gate as the event `native.log.gated`, so the number of the events that were not built is exact.
+// The interval between two reports of the counts of the gate (docs/spec/logging.md#policy).
+static const uint64_t GATED_REPORT_NS = 1000000000ull;
+// The time of the earlier report; zero before the first report, which the first drain makes.
+static _Atomic uint64_t gatedReportedAt;
+
+// Stores the count of each closed gate as the event `native.log.gated`, so the number of the events that were not built is
+// exact. It reports at the first drain and then when a second has passed since the earlier report: the drain runs at each
+// batch interval of the writer, and a report each time stored more events than a narrow policy removed.
 static void reportGated(void) {
+    uint64_t now = sp_mono_ns();
+    uint64_t earlier = atomic_load_explicit(&gatedReportedAt, memory_order_relaxed);
+    if (earlier != 0 && now - earlier < GATED_REPORT_NS) return;
+    // Only a drain that reports a count is a report; the writer is the one caller of the drain.
+    BOOL reported = NO;
     static const char *const classNames[SP_CLASS_COUNT] = {"lifecycle", "input", "call", "io", "frame"};
     static const char *const levelNames[SP_EVENT_TRACE + 1] = {"error", "warn", "info", "debug", "trace"};
     for (int eventClass = 0; eventClass < SP_CLASS_COUNT; eventClass++) {
@@ -287,8 +299,10 @@ static void reportGated(void) {
             char fields[96];
             snprintf(fields, sizeof fields, "{\"class\":\"%s\",\"level\":\"%s\",\"count\":%llu}", classNames[eventClass], levelNames[level], (unsigned long long)count);
             pushEvent(SP_CLASS_LIFECYCLE, SP_EVENT_INFO, "native.log.gated", "", fields, false);
+            reported = YES;
         }
     }
+    if (reported) atomic_store_explicit(&gatedReportedAt, now, memory_order_relaxed);
 }
 
 size_t sp_event_drain(uint8_t *buffer, size_t capacity) {

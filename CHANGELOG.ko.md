@@ -6,6 +6,7 @@
 
 - F161.56, F161.59, F161.62: 현재 build에서 재현되지 않음으로 닫았고, 재발을 보이는 기록이 있다.
 - F161.27: 두 애플리케이션에서 바깥 크기 변경 check를 세 번 반복한 뒤 재현되지 않음으로 닫았다.
+- F179: 거부된 event의 수가 batch마다가 아니라 초마다와 flush 때 나간다(두 host, page, native 라이브러리).
 - F160.20.1: 실행 감사가 1분 이상의 실행에서만 분량 예산을 판정한다.
 - F160.7.6: 입력 지연 check가 모든 class의 gate를 info로 둔 상태와 event 파일마다의 분당 byte를 잰다.
 - F178: Tauri event writer가 Go writer처럼 event가 계속 들어오는 동안에도 간격마다 batch를 쓴다.

@@ -45,7 +45,7 @@ test("logPolicyOf completes the setting diagnostics.log with trace for the class
   assert.throws(() => logPolicyOf({ audio: "off" }), /the class audio is not one of lifecycle, input, call, io, frame/);
 });
 
-test("a closed gate builds no fields, relays nothing, and reports the exact count in the next batch as page.log.gated", async () => {
+test("a closed gate builds no fields, relays nothing, and reports the exact count as page.log.gated at a flush", async () => {
   const gate = createLogGate();
   gate.set({ ...everything, call: "info", io: "off" });
   const batches = [];
@@ -57,15 +57,14 @@ test("a closed gate builds no fields, relays nothing, and reports the exact coun
   assert.equal(batcher.gate("call", "debug"), false);
   assert.equal(batcher.gate("call", "info"), true);
   assert.equal(batcher.emit("info", "page.start", () => ({ time_origin: 1, url: "u" })), true);
-  await settle();
+  await batcher.flush();
   assert.equal(built, 1, "the fields of a closed gate were built");
   const events = batches.flatMap((request) => request.events);
   assert.deepEqual(events.map((event) => event.event), ["page.log.gated", "page.call", "page.start"]);
   assert.deepEqual(events[0].fields, { class: "call", level: "debug", count: 5 });
   assert.equal(events[0].level, "info");
   assert.equal(batcher.gate("call", "debug"), false);
-  await settle();
-  await settle();
+  await batcher.flush();
   const later = batches.flatMap((request) => request.events).filter((event) => event.event === "page.log.gated");
   assert.deepEqual(later.map((event) => event.fields), [{ class: "call", level: "debug", count: 5 }, { class: "call", level: "debug", count: 1 }]);
 });
@@ -77,6 +76,38 @@ test("an event that the catalog does not declare is not gated, and the report of
   const batcher = createEventBatcher({ call: answering(async (request) => { batches.push(request); }), report: assert.ifError, gate });
   assert.equal(batcher.emit("debug", "plugin.editor.opened", { file: "a" }), true);
   assert.equal(batcher.emit("debug", "page.call", { name: "x" }), false);
-  await settle();
+  await batcher.flush();
   assert.deepEqual(batches.flatMap((request) => request.events).map((event) => event.event), ["page.log.gated", "plugin.editor.opened"]);
+});
+
+test("the counts of a closed gate leave each second and at a flush, not with each batch", async () => {
+  const gate = createLogGate();
+  gate.set({ ...everything, call: "info" });
+  const batches = [];
+  let clock = 0;
+  const timers = [];
+  const batcher = createEventBatcher({
+    call: answering(async (request) => { batches.push(request); }), report: assert.ifError, gate,
+    now: () => clock, setTimer: (run, ms) => timers.push({ run, at: clock + ms }),
+  });
+  const gatedOf = () => batches.flatMap((request) => request.events).filter((event) => event.event === "page.log.gated").map((event) => event.fields);
+  // Ten batches within 900 ms each carry an event and follow refused events.
+  for (let round = 0; round < 10; round += 1) {
+    clock = round * 100;
+    batcher.emit("debug", "page.call", { name: "x" });
+    batcher.emit("debug", "page.call", { name: "x" });
+    batcher.emit("info", "page.start", { time_origin: 1, url: "u" });
+    await settle();
+  }
+  assert.deepEqual(gatedOf(), [], "the counts left with a batch within a second");
+  assert.equal(timers.length, 1, `one timer waits for the second, found ${timers.length}`);
+  assert.equal(timers[0].at, 1000);
+  clock = 1000;
+  timers[0].run();
+  await settle();
+  assert.deepEqual(gatedOf(), [{ class: "call", level: "debug", count: 20 }]);
+  clock = 1100;
+  batcher.emit("debug", "page.call", { name: "x" });
+  await batcher.flush();
+  assert.deepEqual(gatedOf(), [{ class: "call", level: "debug", count: 20 }, { class: "call", level: "debug", count: 1 }]);
 });

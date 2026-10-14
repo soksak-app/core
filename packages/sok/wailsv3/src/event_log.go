@@ -149,6 +149,9 @@ type eventMessage struct {
 // reservedForRequests is the number of slots of the queue that only requests use.
 const reservedForRequests = 2
 
+// gatedReportInterval is the interval between two reports of the counts of the gate (docs/spec/logging.md#policy).
+const gatedReportInterval = time.Second
+
 // EventLog is the writer of one process.
 type EventLog struct {
 	messages     chan eventMessage
@@ -736,7 +739,15 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 			events := l.lost[channel].events.Swap(0)
 			dropped(events, l.lost[channel].bytes.Swap(0), "the queue was full", channel)
 		}
-		// The events that the gate refused are reported with the exact count for each class and level.
+	}
+	// reportGated reports the events that the gate refused with the exact count for each class and level, each second and
+	// at a flush or a stop (force): a report at each batch interval stored more events than a narrow policy removed.
+	gatedAt := time.Now()
+	reportGated := func(force bool) {
+		if !force && time.Since(gatedAt) < gatedReportInterval {
+			return
+		}
+		gatedAt = time.Now()
 		for c, class := range Classes {
 			for i, level := range levelNames {
 				if count := l.gate.gated[c][i].Swap(0); count > 0 {
@@ -763,10 +774,12 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 					continue
 				}
 				recordLoss()
+				reportGated(true)
 				write()
 				return &message
 			default:
 				recordLoss()
+				reportGated(false)
 				write()
 				return nil
 			}
@@ -788,6 +801,7 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 			}
 			pull()
 			recordLoss()
+			reportGated(true)
 			write()
 			if message.flush != nil {
 				close(message.flush)

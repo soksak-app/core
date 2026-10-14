@@ -139,3 +139,36 @@ func TestAClosedGateBuildsNoFieldsAtTheProducersOfTheHost(t *testing.T) {
 		t.Fatalf("the fields of an observation were built %d times although the policy does not store the class call at debug", built)
 	}
 }
+
+// contract: log.policy.counts-each-second
+func TestTheCountsOfAClosedGateAreReportedEachSecondAndAtAFlush(t *testing.T) {
+	options := eventLogOptions(t.TempDir())
+	options.QueueEvents = 1 << 12
+	options.QueueBytes = 1 << 22
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	narrowCalls(t, log, "warn")
+	fields := map[string]any{"name": "echo", "args": "[]", "micros": 1, "ok": true, "truncated": false}
+	started := time.Now()
+	emitted := 0
+	// 400 ms of refused events cross 20 batch intervals and no second.
+	for time.Since(started) < 400*time.Millisecond {
+		log.Emit(host.LevelDebug, "host.binding.call", fields)
+		emitted++
+		time.Sleep(5 * time.Millisecond)
+	}
+	reports := 0
+	for _, event := range readEventLog(t, log.Path()) {
+		if event["event"] == "log.gated" {
+			reports++
+		}
+	}
+	if reports != 0 {
+		t.Fatalf("%d log.gated events within 400 ms; the counts are reported each second", reports)
+	}
+	if counts := gatedCounts(t, log); counts["call/debug"] != float64(emitted) {
+		t.Fatalf("counts %v after a flush, want call/debug %d", counts, emitted)
+	}
+}

@@ -2056,6 +2056,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F179",
+    implementation: [
+      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "const GATED_REPORT_INTERVAL" },
+      { file: "packages/sok/wailsv3/src/event_log.go", symbol: "const gatedReportInterval" },
+      { file: "packages/workbench/log-batch.js", symbol: "const GATED_REPORT_MS" },
+      { file: "native/darwin/src/event_ring.m", symbol: "static const uint64_t GATED_REPORT_NS" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/producer_gate_test.rs", id: "the_counts_of_a_closed_gate_are_reported_each_second_and_at_a_flush" },
+      { file: "packages/host/wailsv3/tests/producer_gate_test.go", id: "TestTheCountsOfAClosedGateAreReportedEachSecondAndAtAFlush" },
+      { file: "packages/workbench/test/log-gate.test.mjs", id: "the counts of a closed gate leave each second and at a flush, not with each batch" },
+      { file: "native/darwin/tests/event_ring_test.m", id: "a drain within a second of the earlier report reports no count" },
+    ],
+    expected: "The counts of refused events leave each second and at a flush in every writer.",
+    levels: ["unit"],
+  },
+  {
     id: "F178",
     implementation: [{ file: "packages/sok/tauriv2/src/event_log.rs", symbol: "let mut due = Instant::now() + interval;" }],
     tests: [

@@ -681,6 +681,7 @@ fn invalid_json_closes_connection() {
 | `log.policy.page-sets-the-file` | host 호출 `log`의 action `policy`는 class를 파일의 규칙으로 검사하고 `log-policy.json`(mode 0600)을 쓰며, 규칙을 어긴 요청은 오류이고 아무것도 쓰지 않는다. | both |
 | `log.policy.binding-call-is-gated` | 정책이 저장하지 않는 binding 호출은 event를 만들지 않고 `log.gated`로 세며, 실패한 호출은 정책이 그 class를 `warn`부터 저장하면 경고로 저장한다. | both |
 | `log.policy.endpoint-call-is-gated` | 정책이 저장하지 않는 endpoint 요청은 event를 만들지 않고 `log.gated`로 센다. | both |
+| `log.policy.counts-each-second` | writer는 닫힌 gate의 정확한 수(`log.gated`)를 이전 보고 뒤 1초가 지났을 때, flush할 때, 멈출 때 보고한다. 여러 batch 간격에 걸친 1초 미만의 거부된 event는 `log.gated`를 저장하지 않고, flush는 그 정확한 합을 저장한다. | both |
 | `log.policy.producer-builds-nothing-for-a-closed-gate` | 인자를 직렬화하는 host의 생산자는 class와 level의 gate가 닫혀 있으면 field를 만들지 않는다. | both |
 | `log.policy.closed-gate-costs-a-branch` | 닫힌 gate의 질문은 열린 gate의 enqueue보다 훨씬 싸고 넉넉한 한도 안에 머물며, 수치를 출력한다. | both |
 | `log.retention.removes-the-oldest-runs-over-the-bound` | `logs/`의 실행들의 파일이 상한을 넘으면 writer는 실행을 통째로, 가장 새로운 파일이 가장 오래된 실행부터 지우고, 파일을 지우는 각 회차는 `files`, `bytes`, `runs`, `from_us`, `to_us`, `remaining`, `bound`를 담은 `log.pruned` 하나다. | both |

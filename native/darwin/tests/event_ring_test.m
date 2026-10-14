@@ -261,10 +261,22 @@ int main(void) { @autoreleasepool {
     used = sp_event_drain(pulled, sizeof pulled);
     check(used == 0, @"a count is reported once");
 
+    // After a report the counts wait a second: a drain at each batch interval would store more events than a narrow policy
+    // removed (docs/spec/logging.md#policy).
+    for (int index = 0; index < 3; index++) (void)sp_event_gate(SP_CLASS_CALL, SP_EVENT_DEBUG);
+    used = sp_event_drain(pulled, sizeof pulled);
+    check(used == 0, [NSString stringWithFormat:@"a drain within a second of the earlier report reports no count (%zu bytes)", used]);
+    usleep(1100 * 1000);
+    used = sp_event_drain(pulled, sizeof pulled);
+    NSDictionary *later = used > 4 ? ({ uint32_t length; memcpy(&length, pulled, sizeof length); decodedRecord(pulled + 4, length); }) : nil;
+    check([later[@"name"] isEqualToString:@"native.log.gated"] && [later[@"fields"][@"count"] intValue] == 3,
+        [NSString stringWithFormat:@"a drain a second after the earlier report reports the exact count (%@)", later]);
+
     // The count passes a policy that turns the class lifecycle off: the gate says that it refused.
     const int8_t lifecycleOff[SP_CLASS_COUNT] = {-1, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
     check(sp_event_set_policy(lifecycleOff), @"a policy that turns the class lifecycle off is accepted");
     (void)sp_event_gate(SP_CLASS_LIFECYCLE, SP_EVENT_INFO);
+    usleep(1100 * 1000);
     used = sp_event_drain(pulled, sizeof pulled);
     NSDictionary *reported = used > 4 ? ({ uint32_t length; memcpy(&length, pulled, sizeof length); decodedRecord(pulled + 4, length); }) : nil;
     check([reported[@"name"] isEqualToString:@"native.log.gated"] && [reported[@"fields"][@"class"] isEqualToString:@"lifecycle"] && [reported[@"fields"][@"count"] intValue] == 1,

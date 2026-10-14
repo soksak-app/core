@@ -7,6 +7,8 @@ import { logGate } from "./log-gate.js";
 const LEVELS = new Set(["error", "warn", "info", "debug", "trace"]);
 const DEFAULT_MAX_EVENTS = 4096;
 const DEFAULT_MAX_BYTES = 4 * 1024 * 1024;
+// The interval in milliseconds between two reports of the counts of the gate (docs/spec/logging.md#policy).
+const GATED_REPORT_MS = 1000;
 
 // The fields of an event over this many bytes of JSON text are replaced by their head, which keeps the first HEAD_BYTES bytes of
 // the text, and the event says `truncated` (docs/spec/logging.md#bounds).
@@ -48,13 +50,19 @@ function boundFields(fields) {
  * that round trip as the moment of the answer. Every event then has the wall clock `ts_us` and the monotonic clock `mono_ns` of
  * the host at its own reading, so the layers of one input compare (docs/spec/logging.md#limits).
  */
-export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES, now = () => performance.now(), gate = logGate }) {
+export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES, now = () => performance.now(), gate = logGate, setTimer = (run, ms) => setTimeout(run, ms) }) {
   let queue = [];
   let queueBytes = 0;
   // The refused events by the bound that refused them: {count, bytes} for each reason.
   let lost = new Map();
   // The events that a closed gate refused, by class and level: {class, level, count}; the next batch reports them.
   let gated = new Map();
+  // The counts of the gate leave when a second has passed since the earlier report, and at a flush; a report with each batch
+  // stored more events than a narrow policy removed (docs/spec/logging.md#policy). No event marks the end of the second,
+  // so one timer waits for it while counts are held.
+  let gatedAt = now();
+  let gatedTimer = false;
+  const gatedDue = () => gated.size > 0 && now() - gatedAt >= GATED_REPORT_MS;
   // The functions that end the waits of the events that the next batch carries.
   let waiters = [];
   let scheduled = false;
@@ -90,9 +98,10 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     return anchor;
   };
 
-  const send = async () => {
+  const send = async (force = false) => {
     scheduled = false;
-    if (sending || (queue.length === 0 && lost.size === 0 && gated.size === 0)) return;
+    const reportGated = gated.size > 0 && (force || gatedDue());
+    if (sending || (queue.length === 0 && lost.size === 0 && !reportGated)) return;
     const events = queue;
     const mine = waiters;
     queue = [];
@@ -105,10 +114,13 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
       }
       lost = new Map();
       // The events that the gate refused are reported with the exact count for each class and level; the report passes every gate.
-      for (const entry of [...gated.values()].reverse()) {
-        events.unshift({ at: now(), level: "info", event: "page.log.gated", fields: { class: entry.class, level: entry.level, count: entry.count } });
+      if (reportGated) {
+        for (const entry of [...gated.values()].reverse()) {
+          events.unshift({ at: now(), level: "info", event: "page.log.gated", fields: { class: entry.class, level: entry.level, count: entry.count } });
+        }
+        gated = new Map();
+        gatedAt = now();
       }
-      gated = new Map();
     }
     sending = (async () => {
       try {
@@ -134,7 +146,16 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     await sending;
     sending = null;
     for (const end of mine) end();
-    if (queue.length > 0 || lost.size > 0 || gated.size > 0) await send();
+    if (queue.length > 0 || lost.size > 0 || gatedDue()) await send();
+  };
+
+  const awaitGated = () => {
+    if (gatedTimer || gated.size === 0) return;
+    gatedTimer = true;
+    setTimer(() => {
+      gatedTimer = false;
+      send().then(awaitGated, report);
+    }, Math.max(0, GATED_REPORT_MS - (now() - gatedAt)));
   };
 
   const schedule = () => {
@@ -169,7 +190,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     // default: the first refusal of a class and a level starts its count at zero.
     const held = gated.get(`${klass}/${level}`) ?? { class: klass, level, count: 0 };
     gated.set(`${klass}/${level}`, { ...held, count: held.count + 1 });
-    schedule();
+    awaitGated();
     return false;
   };
 
@@ -200,7 +221,8 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
   });
 
   const flush = async () => {
-    await send();
+    while (sending) await sending;
+    await send(true);
     while (sending) await sending;
   };
 

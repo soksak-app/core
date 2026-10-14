@@ -203,6 +203,9 @@ enum Message {
 /// The slots of the queue that only requests use.
 const RESERVED_FOR_REQUESTS: usize = 2;
 
+/// The interval between two reports of the counts of the gate (docs/spec/logging.md#policy).
+const GATED_REPORT_INTERVAL: Duration = Duration::from_secs(1);
+
 /// The loss that the queue counted since the writer last recorded it, for each channel.
 struct Loss {
     events: [AtomicU64; 2],
@@ -1098,7 +1101,15 @@ fn write_loop(
             let bytes = loss.bytes[channel.index()].swap(0, Ordering::Relaxed);
             out.dropped(events, bytes, "the queue was full", channel);
         }
-        // The events that the gate refused are reported with the exact count for each class and level.
+    };
+    // The events that the gate refused are reported with the exact count for each class and level, each second and at a
+    // flush or a stop (`force`): a report at each batch interval stored more events than a narrow policy removed.
+    let mut gated_at = Instant::now();
+    let mut report_gated = |out: &mut Output, force: bool| {
+        if !force && gated_at.elapsed() < GATED_REPORT_INTERVAL {
+            return;
+        }
+        gated_at = Instant::now();
         for (class, level, count) in gate.take_counts() {
             let fields = to_raw_value(
                 &json!({"class": class.as_str(), "level": level.name(), "count": count}),
@@ -1113,8 +1124,9 @@ fn write_loop(
         queued_events.fetch_sub(1, Ordering::Relaxed);
         out.push(pending);
     };
-    // Takes every event that is queued now, then the loss counted so far, and writes them.
-    let mut drain = |out: &mut Output| -> Option<Message> {
+    // Takes every event that is queued now, then the loss counted so far, and writes them; `force` also reports the counts
+    // of the gate.
+    let mut drain = |out: &mut Output, force: bool| -> Option<Message> {
         pull_source(out);
         let mut request = None;
         while let Ok(message) = receiver.try_recv() {
@@ -1127,6 +1139,7 @@ fn write_loop(
             }
         }
         record_loss(out);
+        report_gated(out, force);
         out.flush();
         request
     };
@@ -1145,13 +1158,13 @@ fn write_loop(
             Err(RecvTimeoutError::Timeout) => {
                 // The interval ended: write what has gathered, and handle a request that was queued behind it.
                 due = Instant::now() + interval;
-                match drain(&mut out) {
+                match drain(&mut out, false) {
                     Some(request) => request,
                     None => continue,
                 }
             }
             Err(RecvTimeoutError::Disconnected) => {
-                drain(&mut out);
+                drain(&mut out, true);
                 return;
             }
         };
@@ -1166,11 +1179,11 @@ fn write_loop(
                 // Events that keep arriving after the interval ended do not postpone its write.
                 if Instant::now() >= due {
                     due = Instant::now() + interval;
-                    queued = drain(&mut out);
+                    queued = drain(&mut out, false);
                 }
             }
             Message::Flush(done) => {
-                let following = drain(&mut out);
+                let following = drain(&mut out, true);
                 if done.send(()).is_err() {
                     eprintln!("event writer: the flush was answered after its deadline");
                 }
@@ -1179,7 +1192,7 @@ fn write_loop(
                 }
             }
             Message::Stop => {
-                drain(&mut out);
+                drain(&mut out, true);
                 return;
             }
         }

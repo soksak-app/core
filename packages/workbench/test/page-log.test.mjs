@@ -144,6 +144,7 @@ test("every host call is the event page.call with its name, arguments, duration 
 test("a host call that the policy does not store is not built into an event, and the page reports the count as page.log.gated", async () => {
   const { settlingCalls } = await import("../host-calls.js");
   const { logGate } = await import("../log-gate.js");
+  const { flushEvents } = await import("../page-log.js");
   const policy = { lifecycle: "trace", input: "trace", call: "warn", io: "trace", frame: "trace" };
   logGate.set(policy);
   try {
@@ -156,9 +157,10 @@ test("a host call that the policy does not store is not built into an event, and
     await wrapped.call("good", watched);
     await wrapped.call("good", watched);
     await assert.rejects(wrapped.call("bad", { b: 2 }), /refused/);
+    await flushEvents();
     await settled();
     const seen = events().filter(({ event }) => event === "page.call" || event === "page.log.gated");
-    // The reports of the count leave with the batches; their sum is the exact number of the calls that the gate refused.
+    // The report of the count leaves each second and at a flush; its sum is the exact number of the calls that the gate refused.
     const gatedCount = seen.filter(({ event }) => event === "page.log.gated").reduce((sum, { fields }) => sum + fields.count, 0);
     assert.equal(gatedCount, 2);
     assert.ok(seen.filter(({ event }) => event === "page.log.gated").every(({ level, fields }) => level === "info" && fields.class === "call" && fields.level === "debug"));
