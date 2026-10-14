@@ -2074,6 +2074,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F188",
+    implementation: [{ file: "packages/sok/wailsv3/src/migrate.go", symbol: "func MigrateInstalled" }],
+    tests: [{ file: "packages/sok/wailsv3/tests/migrate_test.go", id: "TestMigrateInstalledMigratesTheReleasedFormat2ToTheCurrentFormat" }],
+    expected: "Stored data migrates mechanically from definitions that the package ships, performed by core.",
+    levels: ["unit"],
+  },
+  {
     id: "F190",
     implementation: [
       { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func ownConfiguration" },
