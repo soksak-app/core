@@ -15,7 +15,7 @@ import (
 // (docs/spec/installation.md#stored-data-migration). The file is a tracked copy of packages/sok/migrations; make
 // migrations-sync refreshes it and make migrations-check refuses a difference.
 //
-//go:embed migrations/installed.json
+//go:embed migrations/installed.json migrations/settings.json
 var migrationFS embed.FS
 
 // migrationDefinition is one step of the chain of one stored file: the file it migrates, the format it comes from and
@@ -46,18 +46,28 @@ type migrationChain struct {
 // migrationChains parses the embedded definitions and refuses a set that is not a chain of one file: a definition that
 // names a second file, two definitions of one step, a gap, or a step that does not start where the earlier one ends.
 func migrationChains() (map[string]migrationChain, error) {
-	data, err := migrationFS.ReadFile("migrations/installed.json")
+	chains := map[string]migrationChain{}
+	for _, name := range []string{"migrations/installed.json", "migrations/settings.json"} {
+		if err := appendChain(chains, name); err != nil {
+			return nil, err
+		}
+	}
+	return chains, nil
+}
+
+// appendChain parses one definitions file of one stored file into the chains.
+func appendChain(chains map[string]migrationChain, name string) error {
+	data, err := migrationFS.ReadFile(name)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var definitions []migrationDefinition
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	// Numbers keep their text, so the target of setFormat stays the number the definition names.
 	decoder.UseNumber()
 	if err := decoder.Decode(&definitions); err != nil {
-		return nil, fmt.Errorf("the embedded migration definitions are not valid JSON: %w", err)
+		return fmt.Errorf("%s is not valid JSON: %w", name, err)
 	}
-	chains := map[string]migrationChain{}
 	for _, definition := range definitions {
 		chain, ok := chains[definition.File]
 		if !ok {
@@ -66,12 +76,12 @@ func migrationChains() (map[string]migrationChain, error) {
 		}
 		last := chain.steps[len(chain.steps)-1]
 		if definition.From != last.To {
-			return nil, fmt.Errorf("the embedded migration definitions: %s migrates from format %d, but the earlier step ends at %d", definition.File, definition.From, last.To)
+			return fmt.Errorf("%s: %s migrates from format %d, but the earlier step ends at %d", name, definition.File, definition.From, last.To)
 		}
 		chain.steps = append(chain.steps, definition)
 		chains[definition.File] = chain
 	}
-	return chains, nil
+	return nil
 }
 
 // MigrationChainsForTest exposes the parsed chains for the owning tests: the chain of each file as the steps the engine
@@ -104,7 +114,18 @@ type migrationStepForTest struct {
 // format, or not JSON — is refused with an error that names the file and the format it holds (docs/spec/installation.md).
 // It returns the format the applied step ended at, or 0 when it applied nothing.
 func MigrateInstalled(configDir string) (int, error) {
-	path := filepath.Join(configDir, Installed)
+	return migrate(configDir, Installed)
+}
+
+// MigrateSettings applies the migration definitions of settings.json at the entry of its shared reader, the host
+// workspace layer (docs/spec/installation.md#stored-data-migration). A file with no format member is the form 0.
+func MigrateSettings(configDir string) (int, error) {
+	return migrate(configDir, "settings.json")
+}
+
+// migrate applies the definitions of one stored file.
+func migrate(configDir, file string) (int, error) {
+	path := filepath.Join(configDir, file)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, nil
@@ -116,9 +137,9 @@ func MigrateInstalled(configDir string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	chain, ok := chains[Installed]
+	chain, ok := chains[file]
 	if !ok {
-		return 0, fmt.Errorf("the embedded migration definitions hold no chain for %s", Installed)
+		return 0, fmt.Errorf("the embedded migration definitions hold no chain for %s", file)
 	}
 	value, err := DecodeJSON(data)
 	if err != nil {
@@ -128,16 +149,20 @@ func MigrateInstalled(configDir string) (int, error) {
 	if !ok {
 		return 0, fmt.Errorf("%s: the file is not an object", path)
 	}
-	format, err := installedFormatOf(document)
-	if err != nil {
-		return 0, fmt.Errorf("%s: %w", path, err)
+	format := 0
+	if _, held := document["format"]; held {
+		var err error
+		if format, err = installedFormatOf(document); err != nil {
+			return 0, fmt.Errorf("%s: %w", path, err)
+		}
 	}
-	if format == InstalledFormat {
+	current := chain.current()
+	if format == current {
 		return 0, nil
 	}
 	step, ok := chain.stepFrom(format)
 	if !ok {
-		return 0, fmt.Errorf("%s: the file holds format %d; the definitions migrate formats %d to %d", path, format, chain.floor(), InstalledFormat)
+		return 0, fmt.Errorf("%s: the file holds format %d; the definitions migrate formats %d to %d", path, format, chain.floor(), current)
 	}
 	from := format
 	for _, operation := range step.Operations {
@@ -145,14 +170,24 @@ func MigrateInstalled(configDir string) (int, error) {
 			return 0, fmt.Errorf("%s: %w", path, err)
 		}
 	}
-	state, err := ValidateInstalled(jsonOf(document))
-	if err != nil {
-		return 0, fmt.Errorf("%s: the migration of format %d produced a file the reader refuses: %w", path, from, err)
+	if file == Installed {
+		state, err := ValidateInstalled(jsonOf(document))
+		if err != nil {
+			return 0, fmt.Errorf("%s: the migration of format %d produced a file the reader refuses: %w", path, from, err)
+		}
+		if err := writeInstalled(configDir, state); err != nil {
+			return 0, err
+		}
+	} else {
+		text, err := json.Marshal(document)
+		if err != nil {
+			return 0, fmt.Errorf("%s: the migrated file cannot be written: %w", path, err)
+		}
+		if err := replaceFile(path, text); err != nil {
+			return 0, err
+		}
 	}
-	if err := writeInstalled(configDir, state); err != nil {
-		return 0, err
-	}
-	recordMigration(Installed, from, step.To)
+	recordMigration(file, from, step.To)
 	return step.To, nil
 }
 
@@ -169,6 +204,11 @@ func (c migrationChain) stepFrom(format int) (migrationDefinition, bool) {
 // floor is the format the chain starts from.
 func (c migrationChain) floor() int {
 	return c.steps[0].From
+}
+
+// current is the format the chain ends at.
+func (c migrationChain) current() int {
+	return c.steps[len(c.steps)-1].To
 }
 
 // installedFormatOf reads the format member of the document.

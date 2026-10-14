@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use crate::event_log::{EventLog, Level};
 use crate::files::file_error;
-use crate::install::{INSTALLED, INSTALLED_FORMAT, InstalledState, validate_installed};
+use crate::install::{INSTALLED, InstalledState, SETTINGS, validate_installed};
 use crate::plugins::write_installed;
 
 /// One named operation of a definition, with the scope it applies to. The engine implements the operations the contract
@@ -41,26 +41,39 @@ struct Definition {
 /// that names another file, a step that does not start where the earlier one ends, or an operation or scope the engine
 /// does not implement.
 fn definitions() -> Result<Vec<Definition>, String> {
-    let text = include_str!("migrations/installed.json");
-    let definitions: Vec<Definition> = serde_json::from_str(text).map_err(|error| {
-        format!("the embedded migration definitions are not valid JSON: {error}")
-    })?;
-    let mut ends_at: Option<(String, u64)> = None;
+    let mut definitions = vec![];
+    for (name, text) in [
+        (
+            "migrations/installed.json",
+            include_str!("migrations/installed.json"),
+        ),
+        (
+            "migrations/settings.json",
+            include_str!("migrations/settings.json"),
+        ),
+    ] {
+        let mut parsed: Vec<Definition> = serde_json::from_str(text)
+            .map_err(|error| format!("{name} is not valid JSON: {error}"))?;
+        definitions.append(&mut parsed);
+    }
+    let mut ends_at: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
     for definition in &definitions {
-        if definition.file != INSTALLED {
+        if definition.file != INSTALLED && definition.file != SETTINGS {
             return Err(format!(
-                "the embedded migration definitions: {} is not {INSTALLED}",
+                "the embedded migration definitions: {} is neither {INSTALLED} nor {SETTINGS}",
                 definition.file
             ));
         }
-        match &ends_at {
-            Some((_, to)) if definition.from != *to => {
+        match ends_at.get(&definition.file) {
+            Some(to) if definition.from != *to => {
                 return Err(format!(
-                    "the embedded migration definitions: {INSTALLED} migrates from format {}, but the earlier step ends at {to}",
-                    definition.from
+                    "the embedded migration definitions: {} migrates from format {}, but the earlier step ends at {to}",
+                    definition.file, definition.from
                 ));
             }
-            _ => ends_at = Some((definition.file.clone(), definition.to)),
+            _ => {
+                ends_at.insert(definition.file.clone(), definition.to);
+            }
         }
         for operation in &definition.operations {
             let known = matches!(
@@ -124,7 +137,18 @@ fn process_log() -> Option<Arc<EventLog>> {
 /// is refused with an error that names the file and the format it holds. It returns the format the applied step ended
 /// at, or 0 when it applied nothing.
 pub fn migrate_installed(config_dir: &Path) -> Result<u64, String> {
-    let path = config_dir.join(INSTALLED);
+    migrate(config_dir, INSTALLED)
+}
+
+/// Applies the migration definitions of settings.json at the entry of its shared reader, the host workspace layer. A
+/// file with no format member is the form 0.
+pub fn migrate_settings(config_dir: &Path) -> Result<u64, String> {
+    migrate(config_dir, SETTINGS)
+}
+
+/// Applies the definitions of one stored file.
+fn migrate(config_dir: &Path, file: &str) -> Result<u64, String> {
+    let path = config_dir.join(file);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
@@ -132,44 +156,58 @@ pub fn migrate_installed(config_dir: &Path) -> Result<u64, String> {
     };
     let mut document: Value = serde_json::from_str(&text)
         .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))?;
-    let format = document
-        .get("format")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| format!("{}: the file holds no format", path.display()))?;
-    if format == INSTALLED_FORMAT {
+    // default: a file with no format member is the form 0, the form before the number existed.
+    let format = document.get("format").and_then(Value::as_u64).unwrap_or(0);
+    let definitions = definitions()?;
+    let chain: Vec<&Definition> = definitions
+        .iter()
+        .filter(|step| step.file == file)
+        .collect();
+    // default: a definition list that holds no step migrates nothing, so its floor is 0 and every form is refused.
+    let floor = chain.first().map(|step| step.from).unwrap_or(0);
+    // default: a chain that holds no step has no current form, so every form is refused below.
+    let current = chain.last().map(|step| step.to).unwrap_or(0);
+    if format == current {
         return Ok(0);
     }
-    let definitions = definitions()?;
-    // default: a definition list that holds no step migrates nothing, so its floor is 0 and every form is refused.
-    let floor = definitions.first().map(|step| step.from).unwrap_or(0);
-    let Some(step) = definitions.iter().find(|step| step.from == format) else {
+    let Some(step) = chain.iter().find(|step| step.from == format) else {
         return Err(format!(
-            "{}: the file holds format {format}; the definitions migrate formats {floor} to {INSTALLED_FORMAT}",
+            "{}: the file holds format {format}; the definitions migrate formats {floor} to {current}",
             path.display()
         ));
     };
     for operation in &step.operations {
         apply(&mut document, operation).map_err(|error| format!("{}: {error}", path.display()))?;
     }
-    let state: InstalledState = serde_json::from_value(document).map_err(|error| {
-        format!(
-            "{}: the migration of format {format} produced a file the reader refuses: {error}",
-            path.display()
-        )
-    })?;
-    let written = serde_json::to_value(&state).map_err(|error| error.to_string())?;
-    validate_installed(&written).map_err(|error| {
-        format!(
-            "{}: the migration of format {format} produced a file the reader refuses: {error}",
-            path.display()
-        )
-    })?;
-    write_installed(config_dir, &state)?;
+    if file == INSTALLED {
+        let state: InstalledState = serde_json::from_value(document).map_err(|error| {
+            format!(
+                "{}: the migration of format {format} produced a file the reader refuses: {error}",
+                path.display()
+            )
+        })?;
+        let written = serde_json::to_value(&state).map_err(|error| error.to_string())?;
+        validate_installed(&written).map_err(|error| {
+            format!(
+                "{}: the migration of format {format} produced a file the reader refuses: {error}",
+                path.display()
+            )
+        })?;
+        write_installed(config_dir, &state)?;
+    } else {
+        let text = serde_json::to_string_pretty(&document).map_err(|error| {
+            format!(
+                "{}: the migrated file cannot be written: {error}",
+                path.display()
+            )
+        })?;
+        crate::release::replace_file(&path, text.as_bytes())?;
+    }
     if let Some(log) = process_log() {
         log.emit(
             Level::Info,
             "log.migrated",
-            &serde_json::json!({"file": INSTALLED, "from": step.from, "to": step.to}),
+            &serde_json::json!({"file": file, "from": step.from, "to": step.to}),
         );
     }
     Ok(step.to)

@@ -137,8 +137,9 @@ func TestSettingsFilesAndInheritance(t *testing.T) {
 	if err := readJSON(t, filepath.Join(root, ".soksak", "settings.json"), &project); err != nil {
 		t.Fatal(err)
 	}
-	if len(project) != 0 {
-		t.Fatal("reset did not remove the override")
+	// The snapshot migrated the file, so the format carrier remains after the override is removed.
+	if len(project) != 1 || project["format"] != float64(1) {
+		t.Fatalf("reset did not remove the override: %v", project)
 	}
 	if _, err := store.Apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-test", Patch: host.Record{"projectOpening": "tabs"}}); err == nil {
 		t.Fatal("project opening policy accepted a folder override")

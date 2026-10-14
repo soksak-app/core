@@ -114,16 +114,27 @@ impl Workspace {
             .position(|p| p["id"].as_str() == req.id.as_deref());
         match req.kind.as_str() {
             "snapshot" => {
-                let common: Map<String, Value> = read(&self.directory.join("settings.json"))?;
+                // The entry of the shared reader of settings.json migrates it to the current format first
+                // (docs/spec/installation.md#stored-data-migration).
+                soksak_sok::migrate::migrate_settings(&self.directory)?;
+                let mut common: Map<String, Value> = read(&self.directory.join("settings.json"))?;
                 for project in &mut projects {
                     let path = Path::new(project["root"].as_str().ok_or("invalid project root")?)
                         .join(".soksak/settings.json");
-                    let settings: Map<String, Value> = read(&path)?;
+                    // The project settings file migrates at its first read like the common one.
+                    soksak_sok::migrate::migrate_settings(
+                        path.parent().ok_or("invalid project root")?,
+                    )?;
+                    let mut settings: Map<String, Value> = read(&path)?;
                     if let Some(key) = COMMON_ONLY.iter().find(|key| settings.contains_key(**key)) {
                         return Err(format!("{}: {key} is common-only", path.display()));
                     }
+                    // The format member is the carrier of the stored form, not a setting, so the snapshot does not show
+                    // it (docs/spec/installation.md#stored-data-migration).
+                    settings.remove("format");
                     project["settings"] = settings.into();
                 }
+                common.remove("format");
                 return Ok(json!({"projects": projects, "common": common}));
             }
             "add" => {

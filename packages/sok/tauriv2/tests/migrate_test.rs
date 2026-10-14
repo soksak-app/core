@@ -151,3 +151,19 @@ fn the_definition_chain_ends_at_the_current_format() {
         }
     }
 }
+
+// contract: install.migration.settings-migrates-the-form-without-a-number
+#[test]
+fn migrate_settings_adds_the_format_number_of_the_form_without_one() {
+    let config = temp_config("settings");
+    let path = config.join("settings.json");
+    std::fs::write(&path, r#"{"theme":"dark"}"#).unwrap();
+    assert_eq!(soksak_sok::migrate::migrate_settings(&config).unwrap(), 1);
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        text.contains("\"format\": 1") && text.contains("\"theme\": \"dark\""),
+        "{text}"
+    );
+    assert_eq!(soksak_sok::migrate::migrate_settings(&config).unwrap(), 0);
+    let _ = std::fs::remove_dir_all(&config);
+}

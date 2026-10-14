@@ -17,6 +17,7 @@ pub const INSTALLED_FORMAT: u64 = 3;
 
 /// The file in the configuration folder that holds the installation state.
 pub const INSTALLED: &str = "plugins/installed.json";
+pub const SETTINGS: &str = "settings.json";
 
 /// The platform keys (`<os>-<arch>`) of sidecar releases.
 pub const PLATFORMS: [&str; 6] = [

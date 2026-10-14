@@ -2074,6 +2074,19 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F188.4",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/migrate.go", symbol: "func MigrateSettings" },
+      { file: "packages/host/wailsv3/src/workspace.go", symbol: "sok.MigrateSettings(w.directory)" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/migrate_test.go", id: "TestMigrateSettingsAddsTheFormatNumberOfTheFormWithoutOne" },
+      { file: "packages/sok/tauriv2/tests/migrate_test.rs", id: "migrate_settings_adds_the_format_number_of_the_form_without_one" },
+    ],
+    expected: "settings.json carries its form in a format member migrated at the first read of the workspace layer.",
+    levels: ["unit"],
+  },
+  {
     id: "F189",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "Migrate the stored data of the earlier release" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release workflow runs a release-built host once on the stored data of the earlier release" }],

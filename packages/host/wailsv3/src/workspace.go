@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
 // Workspace reads and writes projects.json and settings.json of the configuration directory and the
@@ -143,6 +144,11 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 	switch req.Kind {
 	case "snapshot":
 		common := Record{}
+		// The entry of the shared reader of settings.json migrates it to the current format first
+		// (docs/spec/installation.md#stored-data-migration).
+		if _, err := sok.MigrateSettings(w.directory); err != nil {
+			return nil, err
+		}
 		if err := readJSON(filepath.Join(w.directory, "settings.json"), &common); err != nil {
 			return nil, err
 		}
@@ -153,6 +159,10 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 				return nil, fmt.Errorf("invalid project root")
 			}
 			path := filepath.Join(root, ".soksak", "settings.json")
+			// The project settings file migrates at its first read like the common one.
+			if _, err := sok.MigrateSettings(filepath.Dir(path)); err != nil {
+				return nil, err
+			}
 			if err := readJSON(path, &settings); err != nil {
 				return nil, err
 			}
@@ -161,8 +171,12 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 					return nil, fmt.Errorf("%s: %s is common-only", path, key)
 				}
 			}
+			delete(settings, "format")
 			p["settings"] = settings
 		}
+		// The format member is the carrier of the stored form, not a setting, so the snapshot does not show it
+		// (docs/spec/installation.md#stored-data-migration).
+		delete(common, "format")
 		return Record{"projects": projects, "common": common}, nil
 	case "add":
 		for _, p := range projects {

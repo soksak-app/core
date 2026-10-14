@@ -157,3 +157,25 @@ func TestTheDefinitionChainEndsAtTheCurrentFormat(t *testing.T) {
 		}
 	}
 }
+
+// contract: install.migration.settings-migrates-the-form-without-a-number
+func TestMigrateSettingsAddsTheFormatNumberOfTheFormWithoutOne(t *testing.T) {
+	config := t.TempDir()
+	path := filepath.Join(config, "settings.json")
+	if err := os.WriteFile(path, []byte(`{"theme":"dark"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if applied, err := sok.MigrateSettings(config); err != nil || applied != 1 {
+		t.Fatalf("migrated %d err %v", applied, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"format":1`) || !strings.Contains(string(data), `"theme":"dark"`) {
+		t.Fatalf("the migrated file %s", data)
+	}
+	if applied, err := sok.MigrateSettings(config); err != nil || applied != 0 {
+		t.Fatalf("second run %d err %v", applied, err)
+	}
+}
