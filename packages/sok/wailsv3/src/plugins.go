@@ -188,14 +188,10 @@ func ReadPluginsState(configDir string) (*PluginsState, error) {
 }
 
 // RunPluginAction runs the same operation as sok plugin <action> <id> and returns its output. action is one of install,
-// update, remove, enable and disable. The writing commands own the configuration directory for the duration of their
-// write, so a running host or a second command refuses instead of racing the same files (docs/spec/installation.md).
+// update, remove, enable and disable. The hosts call it inside their own ownership of the configuration directory, so
+// it takes no lock; the command line entry owns the directory for the duration of the write
+// (docs/spec/installation.md).
 func RunPluginAction(configDir, action, id, core, platform string) (any, error) {
-	release, err := ownConfiguration(configDir)
-	if err != nil {
-		return nil, err
-	}
-	defer release()
 	switch action {
 	case "install", "update":
 		return InstallPlugin(configDir, id, core, platform, action == "update")
@@ -799,11 +795,20 @@ func ChangePlugin(configDir, id, action string) (any, error) {
 	return state.Plugins[id], nil
 }
 
-// runPlugins runs registry use and plugin install, update, remove, enable, disable and list.
+// runPlugins runs registry use and plugin install, update, remove, enable, disable and list. The writing commands own
+// the configuration directory for the duration of their write, so a running host or a second command refuses instead
+// of racing the same files (docs/spec/installation.md).
 func runPlugins(a arguments, stdout io.Writer, options Options) error {
 	configDir, err := configDirOf(a.values, options)
 	if err != nil {
 		return err
+	}
+	if a.positionals[0] == "plugin" && a.positionals[1] != "list" {
+		release, err := ownConfiguration(configDir)
+		if err != nil {
+			return err
+		}
+		defer release()
 	}
 	command := a.positionals[0] + " " + a.positionals[1]
 	want := 3

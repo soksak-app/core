@@ -16,29 +16,23 @@ func TestAPluginCommandRefusesWhileAnotherProcessOwnsTheConfiguration(t *testing
 	if err := os.MkdirAll(filepath.Join(config, "plugins"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// A live process (this test) owns the configuration directory through its lock.
+	// A live process (this test) owns the configuration directory through its lock, as a running host does.
 	lock := filepath.Join(config, "process.lock")
 	if err := os.WriteFile(lock, []byte(fmt.Sprintf("%d", os.Getpid())), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := sok.RunPluginAction(config, "disable", "probe", "", "")
-	if err == nil {
-		t.Fatal("a write command ran while another process owned the configuration")
+	code, _, stderr := run("plugin", "disable", "probe", "--config-dir", config)
+	if code != 1 {
+		t.Fatalf("code %d stderr %q", code, stderr)
 	}
-	want := "configuration directory " + config + " is already owned by process " + fmt.Sprintf("%d", os.Getpid())
-	if err.Error() != want {
-		t.Fatalf("error %q, want %q", err.Error(), want)
+	want := "sok: configuration directory " + config + " is already owned by process " + fmt.Sprintf("%d", os.Getpid()) + "\n"
+	if stderr != want {
+		t.Fatalf("stderr %q, want %q", stderr, want)
 	}
-	// A read command still reads: the owner migrated the files, so a reader beside it reads as they are.
+	// The host calls RunPluginAction inside its own ownership of the configuration directory, so that entry takes no
+	// lock: beside a live owner it still runs (docs/spec/installation.md).
 	if err := os.Remove(lock); err != nil {
 		t.Fatal(err)
-	}
-	state, err := sok.ReadInstalled(config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if state.Format != sok.InstalledFormat {
-		t.Fatalf("format %d", state.Format)
 	}
 }
 
@@ -46,36 +40,62 @@ func TestAPluginCommandRefusesWhileAnotherProcessOwnsTheConfiguration(t *testing
 func TestAWritingCommandReleasesTheConfigurationWhenItEnds(t *testing.T) {
 	config := t.TempDir()
 	writeInstalledRaw(t, config, releasedFormat2)
-	// The disable action reads the name of the plugin from its recorded folder.
-	plugin := filepath.Join(config, "plugins", "probe", "0.0.4")
-	if err := os.MkdirAll(plugin, 0o755); err != nil {
-		t.Fatal(err)
+	for id, version := range map[string]string{"probe": "0.0.4", "probe2": "0.0.2"} {
+		plugin := filepath.Join(config, "plugins", id, version)
+		if err := os.MkdirAll(plugin, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		name := map[string]string{"probe": "@scope/plugin-probe", "probe2": "@scope/plugin-probe2"}[id]
+		if err := os.WriteFile(filepath.Join(plugin, "package.json"), []byte(`{"name":"`+name+`"}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if id == "probe2" {
+			if err := os.WriteFile(filepath.Join(plugin, "plugin.json"), []byte(`{"id":"probe2"}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
-	if err := os.WriteFile(filepath.Join(plugin, "package.json"), []byte(`{"name":"@scope/plugin-probe"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// The change walks every installed plugin folder.
-	second := filepath.Join(config, "plugins", "probe2", "0.0.2")
-	if err := os.MkdirAll(second, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(second, "package.json"), []byte(`{"name":"@scope/plugin-probe2"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(second, "plugin.json"), []byte(`{"id":"probe2"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := sok.RunPluginAction(config, "disable", "probe", "", ""); err != nil {
-		t.Fatal(err)
+	code, _, stderr := run("plugin", "disable", "probe", "--config-dir", config)
+	if code != 0 {
+		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 	if _, err := os.Stat(filepath.Join(config, "process.lock")); !os.IsNotExist(err) {
 		t.Fatalf("the lock stayed: %v", err)
 	}
 	// A second command runs at once: the first released the configuration when it ended.
-	if _, err := sok.RunPluginAction(config, "disable", "probe", "", ""); err != nil {
-		t.Fatal(err)
+	if code, _, stderr := run("plugin", "disable", "probe2", "--config-dir", config); code != 0 {
+		t.Fatalf("second code %d stderr %q", code, stderr)
 	}
 	if strings.Contains(readText(t, filepath.Join(config, "plugins", "installed.json")), "package") {
 		t.Fatal("the second command did not see the migrated file")
+	}
+}
+
+// The host calls RunPluginAction inside its own ownership, so that entry must take no lock: a host that holds
+// process.lock for its lifetime still runs its plugin operations.
+func TestRunPluginActionTakesNoLockBesideALiveOwner(t *testing.T) {
+	config := t.TempDir()
+	writeInstalledRaw(t, config, releasedFormat2)
+	for id, version := range map[string]string{"probe": "0.0.4", "probe2": "0.0.2"} {
+		plugin := filepath.Join(config, "plugins", id, version)
+		if err := os.MkdirAll(plugin, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		name := map[string]string{"probe": "@scope/plugin-probe", "probe2": "@scope/plugin-probe2"}[id]
+		if err := os.WriteFile(filepath.Join(plugin, "package.json"), []byte(`{"name":"`+name+`"}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if id == "probe2" {
+			if err := os.WriteFile(filepath.Join(plugin, "plugin.json"), []byte(`{"id":"probe2"}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	// The host's own lock is present, owned by this live process.
+	if err := os.WriteFile(filepath.Join(config, "process.lock"), []byte(fmt.Sprintf("%d", os.Getpid())), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sok.RunPluginAction(config, "disable", "probe", "", ""); err != nil {
+		t.Fatalf("the host entry refused beside its own lock: %v", err)
 	}
 }

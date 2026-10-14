@@ -188,10 +188,9 @@ pub fn run_plugin_action(
     core: &str,
     platform: &str,
 ) -> Result<PluginActionResult, String> {
-    // The command owns the configuration directory for the duration of its write, so a running host or a second
-    // command refuses instead of racing the same files (docs/spec/installation.md).
-    let release = crate::ownership::own_configuration(config_dir)?;
-    let result = (|| match action {
+    // The hosts call this inside their own ownership of the configuration directory, so it takes no lock; the command
+    // line entry owns the directory for the duration of the write (docs/spec/installation.md).
+    match action {
         "install" | "update" => Ok(PluginActionResult::Installed(install_plugin(
             config_dir,
             id,
@@ -203,9 +202,7 @@ pub fn run_plugin_action(
             config_dir, id, action,
         )?)),
         _ => Err(format!("unknown plugin action {action:?}")),
-    })();
-    release();
-    result
+    }
 }
 
 /// Reads plugins/installed.json. When the file does not exist, nothing is installed. A file that is not in the current format is
@@ -769,6 +766,11 @@ pub(crate) fn run_plugins(
     options: &Options,
 ) -> Result<(), Error> {
     let config_dir = config_dir_of(values, options)?;
+    // The writing commands own the configuration directory for the duration of their write, so a running host or a
+    // second command refuses instead of racing the same files (docs/spec/installation.md).
+    let ownership = (positionals[0] == "plugin" && positionals[1] != "list")
+        .then(|| crate::ownership::own_configuration(&config_dir))
+        .transpose()?;
     let command = format!("{} {}", positionals[0], positionals[1]);
     let want = if command == "plugin list" { 2 } else { 3 };
     if positionals.len() < want {
@@ -777,30 +779,36 @@ pub(crate) fn run_plugins(
     if let Some(extra) = positionals.get(want) {
         return Err(Error::Usage(format!("unexpected argument {extra}")));
     }
-    match command.as_str() {
-        "registry use" => {
-            let index = use_registry(&config_dir, &positionals[2], &Fetcher::default())?;
-            Ok(print_json(stdout, &json!({"index": index}))?)
+    let result = (|| {
+        match command.as_str() {
+            "registry use" => {
+                let index = use_registry(&config_dir, &positionals[2], &Fetcher::default())?;
+                Ok(print_json(stdout, &json!({"index": index}))?)
+            }
+            "plugin list" => Ok(print_json(stdout, &read_installed(&config_dir)?)?),
+            "plugin install" | "plugin update" | "plugin remove" | "plugin enable"
+            | "plugin disable" => {
+                let action = positionals[1].as_str();
+                // platform is needed only by install and update, which choose a version.
+                let platform = if action == "install" || action == "update" {
+                    current_platform()?
+                } else {
+                    String::new()
+                };
+                let result = run_plugin_action(
+                    &config_dir,
+                    action,
+                    &positionals[2],
+                    options.core_version,
+                    &platform,
+                )?;
+                Ok(print_json(stdout, &result)?)
+            }
+            _ => Err(Error::Usage(format!("unknown command: {command}"))),
         }
-        "plugin list" => Ok(print_json(stdout, &read_installed(&config_dir)?)?),
-        "plugin install" | "plugin update" | "plugin remove" | "plugin enable"
-        | "plugin disable" => {
-            let action = positionals[1].as_str();
-            // platform is needed only by install and update, which choose a version.
-            let platform = if action == "install" || action == "update" {
-                current_platform()?
-            } else {
-                String::new()
-            };
-            let result = run_plugin_action(
-                &config_dir,
-                action,
-                &positionals[2],
-                options.core_version,
-                &platform,
-            )?;
-            Ok(print_json(stdout, &result)?)
-        }
-        _ => Err(Error::Usage(format!("unknown command: {command}"))),
+    })();
+    if let Some(release) = ownership {
+        release();
     }
+    result
 }
