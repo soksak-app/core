@@ -9,6 +9,7 @@
 - F187: contract 주석이 다시 그 시험 위에 있고, 손실 시험이 writer의 속도에 기대지 않는다.
 - F182: input records 검사가 page.call을 쓴 page의 시계 anchor를 쓴다.
 - F160.20.2: 로그 분량 예산을 1분 이상의 창 검사 실행으로 정했다.
+- F191: 저장 데이터 마이그레이션을 담은 core 0.0.14가 릴리즈되었다. release workflow가 릴리즈로 빌드된 host에서 마이그레이션 단계를 실행하고 두 번들을 게시한다.
 - F190: 쓰기 sok plugin 명령이 쓰기 동안 설정 폴더를 소유하여 실행 중인 host 옆에서 거부되고 다른 명령과 경쟁하지 않는다.
 - F188.5: projects.json이 projects member 옆의 format member에 자기 형태를 실고, 첫 읽기에서 bare 배열에서 갱신된다.
 - F188.4: settings.json이 자기 형태를 format member에 실고 workspace 계층이 갱신하며 snapshot에서 감추고 쓸 때 보존한다.

@@ -9,6 +9,7 @@
 - F187: a contract comment is above its test again, and the loss tests no longer depend on the speed of the writer.
 - F182: the input records check takes the clock anchor of the page that wrote page.call.
 - F160.20.2: the log volume budget is set from the window check runs of a minute or more.
+- F191: core 0.0.14 is released with the stored data migration; the release workflow runs the migration step on a release-built host and publishes both bundles.
 - F190: a writing sok plugin command owns the configuration directory for its write, so it refuses beside a running host and cannot race another command.
 - F188.5: projects.json carries its form in a format member beside the projects member, migrated from the bare array at the first read.
 - F188.4: settings.json carries its form in a format member that the workspace layer migrates, hides from the snapshot and preserves on write.

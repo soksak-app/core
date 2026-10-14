@@ -2075,6 +2075,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F191",
+    implementation: [{ file: "scripts/release-step.sh", symbol: "release-step-ok" }],
+    tests: [{ file: "scripts/test/release-step.test.mjs", id: "the release step script writes the released form, runs the host once and requires the migration and its record" }],
+    expected: "A release runs the migration step script on a release-built host and publishes both bundles.",
+    levels: ["unit"],
+  },
+  {
     id: "F183",
     implementation: [{ file: "Makefile", symbol: "release-check: wailsv3-build-release tauriv2-build-release registry-manifest-check" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release workflow runs a release-built host once on the stored data of the earlier release" }],
