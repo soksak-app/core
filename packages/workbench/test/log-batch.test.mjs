@@ -309,3 +309,14 @@ test("emitAndWait ends for an event that the full queue refused and for a batch 
   await batcher.emitAndWait("info", "page.test.after", {});
   assert.equal(attempt, 2, "the next event was relayed after the failure");
 });
+
+test("every event of a batch names the page that wrote it by its time origin, the anchor of its clock included", async () => {
+  const calls = [];
+  // The batch is read whole, the anchor of the clock included.
+  const call = async (request) => (request.action === "clock" ? hostClock : calls.push(request));
+  const batcher = createEventBatcher({ call, report: assert.ifError, page: "1791948729050.5" });
+  batcher.emit("info", "page.start", { time_origin: 1791948729050.5, url: "u" });
+  await settle();
+  const events = calls.flatMap((request) => request.events);
+  assert.deepEqual(events.map((event) => [event.event, event.page]), [["page.log.clock", "1791948729050.5"], ["page.start", "1791948729050.5"]]);
+});

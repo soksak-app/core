@@ -376,6 +376,7 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, RelayedEvent), (usize, Strin
             ts_us: u64::from_ne_bytes(body[..8].try_into().expect("eight bytes")),
             mono_ns,
             layer: "native".into(),
+            page: None,
             level,
             event: name,
             cids,

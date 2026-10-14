@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
-use soksak_host_tauriv2::application_log::{log_error, log_info, log_record};
+use soksak_host_tauriv2::application_log::{log_error, log_info};
 use soksak_host_tauriv2::event_log::{self, EventLog, Options};
 use soksak_host_tauriv2::event_record::{
     START_BUFFER_RECORDS, flush_records, record_input_relay, use_host_event_log,
@@ -70,7 +70,7 @@ fn micros() -> u64 {
 
 // contract: log.record.error-and-info-are-events
 #[test]
-fn an_error_an_observation_and_a_page_record_are_events_with_where_and_text() {
+fn an_error_and_an_observation_are_events_with_where_and_text() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     use_host_event_log(None);
     let directory = tempfile::tempdir().unwrap();
@@ -78,7 +78,6 @@ fn an_error_an_observation_and_a_page_record_are_events_with_where_and_text() {
     use_host_event_log(Some(Arc::clone(&log)));
     log_error("surface input", "the window has no content view");
     log_info("webkit children", "pid 7: gone");
-    log_record("error", "page", "start", "first\nsecond");
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     use_host_event_log(None);
@@ -97,13 +96,6 @@ fn an_error_an_observation_and_a_page_record_are_events_with_where_and_text() {
             "host.record.info",
             "webkit children",
             "pid 7: gone",
-        ),
-        (
-            "error",
-            "page",
-            "page.record.error",
-            "start",
-            "first\nsecond",
         ),
     ];
     assert_eq!(events.len(), 1 + want.len(), "{events:?}");

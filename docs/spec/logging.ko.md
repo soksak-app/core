@@ -35,6 +35,7 @@ event는 한 줄의 JSON 객체 하나다.
 | `layer` | `native`, `host`, `page`, `plugin`, `sidecar`, `sok`. |
 | `event` | catalog가 선언한 `<layer>.<subsystem>.<event>`. writer 자신의 event는 `log.<event>`(`log.open`, `log.dropped`)라 부르며 `layer`는 그것을 쓰는 프로세스의 층이다. |
 | `window`, `surface`, `session` | event가 어떤 대상에 관한 것이면 그 대상의 식별자. |
+| `page` | event를 쓴 문서의 time origin을 글로 적은 것으로, 그 문서의 `page.start`가 `time_origin`에 적는 값이다. layer `page`와 `plugin`의 모든 event가 가지며(`page.log.clock` 포함) 다른 layer의 event는 갖지 않고, 감사는 이를 어긴 줄을 거부한다. 문서의 event를 그 문서의 시계 anchor와 그 문서의 다른 event에 잇는다. |
 | `cids` | event가 속한 입력의 상관 식별자 목록. 없으면 생략한다. |
 | `fields` | catalog가 선언한 event의 값. |
 | `truncated` | event의 fields 글이 event 크기 상한을 넘었을 때만 있다. 자르기 전 그 글의 바이트 크기다. 이런 event의 `fields`는 글의 첫 바이트인 `head`만 담는다([상한](#상한)). |

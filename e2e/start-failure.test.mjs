@@ -30,7 +30,7 @@ for (const app of Object.values(APPS)) {
     const pattern = /^error page page: installed plugin terminal \S+ \(@soksak\/plugin-terminal\): plugin\.json: unknown field sidecars/;
     s.expectError(pattern);
     // The reload of a page that cannot start ends with the timeout of its request, which the host records (docs/spec/diagnostics.md).
-    s.expectError(/^error host endpoint timeout: command\.run: the reloaded page did not report ready within 10s$/);
+    s.expectError(/^error host endpoint timeout: command\.run: the reloaded page did not report ready within 10s; running host calls: .+$/);
     // A page whose start stopped does not report readiness, so the reload command exceeds its deadline. The page records the error during the start,
     // so after that deadline the record is in the log.
     await assert.rejects(s.run("host.window.reload"), /did not|not ready|within/);

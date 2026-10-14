@@ -19,8 +19,10 @@ const catalog = {
 };
 
 // The class of a line is the class that the catalog declares for its event; a test passes `class: undefined` to omit it.
+// A line of the layer page or plugin names its page unless the test gives page itself, also to leave it out.
 const line = (seq, event, fields = {}, extra = {}) => JSON.stringify({
-  ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: "info", class: catalog.events[event]?.class, layer: "host", event, fields, ...extra,
+  ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: "info", class: catalog.events[event]?.class, layer: "host", event, fields,
+  ...(["page", "plugin"].includes(extra.layer) && !("page" in extra) ? { page: "1791948729050" } : {}), ...extra,
 });
 const open = line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" });
 
@@ -208,6 +210,21 @@ test("the policy that a change of diagnostics.log brings is in force from the ch
     line(3, "log.policy", { source: "file", classes: info }, { class: "lifecycle" }),
   ].join("\n");
   assert.deepEqual(auditLogs([{ file: "host-b1.jsonl", text }], gated), []);
+});
+
+test("an event of the layer page or plugin names the page that wrote it, and an event of another layer names none", () => {
+  const text = [
+    open,
+    line(2, "page.terminal.send", {}, { layer: "page", page: "1791948729050" }),
+    line(3, "page.terminal.send", {}, { layer: "page", page: undefined }),
+    line(4, "page.terminal.send", {}, { layer: "page", page: "" }),
+    line(5, "native.input.key_down", { keyCode: 2 }, { layer: "native", page: "1791948729050" }),
+  ].join("\n");
+  assert.deepEqual(auditLog("host-b1.jsonl", text, catalog).map(({ line, message }) => [line, message]), [
+    [3, "an event of the layer page names the page that wrote it in page"],
+    [4, "an event of the layer page names the page that wrote it in page"],
+    [5, "page names the writing page only on an event of the layer page or plugin, not native"],
+  ]);
 });
 
 test("a file whose first line is not log.open, or whose schema is unknown, is rejected with the file name and the value", () => {

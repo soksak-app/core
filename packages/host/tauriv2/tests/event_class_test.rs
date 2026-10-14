@@ -38,6 +38,8 @@ fn relayed(layer: &str, event: &str, fields: &str) -> RelayedEvent {
         ts_us: 1,
         mono_ns: 1,
         layer: layer.into(),
+        // An event of a document names its page; another layer names none.
+        page: matches!(layer, "page" | "plugin").then(|| "1791948729050".to_string()),
         level: Level::Info,
         event: event.into(),
         cids: Vec::new(),

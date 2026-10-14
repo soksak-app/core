@@ -31,6 +31,8 @@ pub struct BindingCall {
     refusal: Option<String>,
     started: Instant,
     finished: bool,
+    /// The identifier of the call in the running calls of its window, which a reload that times out names.
+    running: Option<u64>,
 }
 
 impl BindingCall {
@@ -78,6 +80,7 @@ impl BindingCall {
             arguments,
             cids,
             refusal,
+            running: None,
             started,
             finished: false,
         }
@@ -100,6 +103,9 @@ impl BindingCall {
     /// command is at the level `warn`, and its error text is the text that the page receives.
     pub fn finish<T, E: Display>(mut self, names: &[&str], result: &Result<T, E>) {
         self.finished = true;
+        if let Some(running) = self.running.take() {
+            crate::running_calls::RUNNING_CALLS.end(running);
+        }
         let ordered: Vec<&(String, String, bool)> = names
             .iter()
             .filter_map(|name| self.arguments.iter().find(|(key, _, _)| key == name))
@@ -160,6 +166,9 @@ impl BindingCall {
 
 impl Drop for BindingCall {
     fn drop(&mut self) {
+        if let Some(running) = self.running.take() {
+            crate::running_calls::RUNNING_CALLS.end(running);
+        }
         if self.finished {
             return;
         }
@@ -172,7 +181,13 @@ impl Drop for BindingCall {
 
 impl<'a, R: tauri::Runtime> CommandArg<'a, R> for BindingCall {
     fn from_command(command: CommandItem<'a, R>) -> Result<Self, InvokeError> {
-        let call = BindingCall::begin(command.name, command.message.payload());
+        let mut call = BindingCall::begin(command.name, command.message.payload());
+        // A reload of the page of the window waits for this call; a reload that times out names it.
+        call.running = Some(crate::running_calls::RUNNING_CALLS.begin(
+            command.message.webview().window().label(),
+            command.name,
+            call.started,
+        ));
         match call.refusal().map(str::to_string) {
             Some(reason) => {
                 call.refuse(reason.clone());

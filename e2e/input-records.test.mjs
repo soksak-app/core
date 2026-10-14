@@ -102,16 +102,17 @@ for (const app of Object.values(APPS)) {
     };
     const unlinked = Object.entries(hops).filter(([, hop]) => !hop?.cids?.includes(cid)).map(([name]) => name);
     assert.deepEqual(unlinked, [], `${app.name}: the hops ${unlinked.join(", ")} do not carry ${cid}`);
-    // The page takes its clocks from the host with an error of at most half the round trip of its anchor, which the page states as
-    // page.log.clock in the main event file of the host (docs/spec/logging.md#writers); an order between a record of the page and a
-    // record of another process holds within that bound.
+    // The page takes its clocks from the host with an error of at most half the round trip of its anchor plus its clock
+    // resolution, which each page states as page.log.clock (docs/spec/logging.md#writers). Every page event names the page
+    // that wrote it, so the anchor of page.call is the last page.log.clock of the same page before it.
     const { pid } = JSON.parse(readFileSync(join(s.app.configDir, "endpoint.json"), "utf8"));
     const main = readdirSync(join(s.app.configDir, "logs")).find((name) => /^host-\d+-\d+\.jsonl$/.test(name) && name.endsWith(`-${pid}.jsonl`));
-    const anchor = readFileSync(join(s.app.configDir, "logs", main), "utf8").split("\n").filter((line) => line.includes('"page.log.clock"')).at(-1);
-    assert.ok(anchor, `${app.name}: ${main} holds no page.log.clock`);
-    // The page states its clock resolution beside the round trip, because an order across the clocks of the page and of
-    // another process holds within half the round trip plus that resolution.
-    const { trip_us: tripUs, resolution_us: resolutionUs } = JSON.parse(anchor).fields;
+    assert.ok(hops.pageCall.page, `${app.name}: page.call names no page`);
+    const anchor = readFileSync(join(s.app.configDir, "logs", main), "utf8").split("\n")
+      .filter((line) => line.includes('"page.log.clock"')).map((line) => JSON.parse(line))
+      .filter((e) => e.page === hops.pageCall.page && e.mono_ns <= hops.pageCall.mono_ns).at(-1);
+    assert.ok(anchor, `${app.name}: ${main} holds no page.log.clock of the page ${hops.pageCall.page} before page.call`);
+    const { trip_us: tripUs, resolution_us: resolutionUs } = anchor.fields;
     const halfTripUs = tripUs / 2 + resolutionUs;
     const onPageClock = new Set(["page.call", "pageRegion", "pageSend"]);
     const bound = (left, right) => (onPageClock.has(left) !== onPageClock.has(right) ? halfTripUs : 0);

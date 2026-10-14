@@ -34,6 +34,7 @@ An event is one JSON object on one line:
 | `layer` | `native`, `host`, `page`, `plugin`, `sidecar` or `sok`. |
 | `event` | `<layer>.<subsystem>.<event>`, as the catalog declares it. The events of the writer itself are named `log.<event>` (`log.open`, `log.dropped`); their `layer` is the layer of the process that writes them. |
 | `window`, `surface`, `session` | The identifiers of the object the event concerns, when it concerns one. |
+| `page` | The time origin of the document that wrote the event, as text, the value that its `page.start` states in `time_origin`. Every event of the layers `page` and `plugin` has it, `page.log.clock` included, and no event of another layer has it; the audit refuses a line that breaks this. It joins an event of a document to the anchor of the clock of that document and to the other events of it. |
 | `cids` | The correlation identifiers of the inputs the event belongs to. It is omitted when there are none. |
 | `fields` | The values of the event, as the catalog declares them. |
 | `undeclared` | `true`, and present only on an event whose name the catalog does not declare. The writer stores such an event without a `class` and counts it by the marker, because a naming error must not drop evidence ([Principles](#principles)). |

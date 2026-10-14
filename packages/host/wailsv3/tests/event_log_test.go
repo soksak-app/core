@@ -359,7 +359,7 @@ func TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter(t *testing.T)
 	relayed := func(layer, event string, fields string) host.RelayedEvent {
 		return host.RelayedEvent{TsMicros: 1, MonoNs: 1, Layer: layer, Level: host.LevelInfo, Event: event, Fields: json.RawMessage(fields)}
 	}
-	accepted, err := log.EmitRelayed(host.RelayedEvent{TsMicros: 1_791_000_000_000_123, MonoNs: 5_000_000_123, Layer: "page", Level: host.LevelWarn,
+	accepted, err := log.EmitRelayed(host.RelayedEvent{TsMicros: 1_791_000_000_000_123, MonoNs: 5_000_000_123, Layer: "page", Page: "1791948729050", Level: host.LevelWarn,
 		Event: "page.test.event", Cids: []string{"b1.9"}, Fields: json.RawMessage(`{"index":7}`)})
 	if err != nil || !accepted {
 		t.Fatalf("accepted %v, error %v", accepted, err)

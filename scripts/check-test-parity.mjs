@@ -1255,8 +1255,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/event_record.rs", symbol: "pub fn emit_record" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/event_record_test.go", id: "TestAnErrorAnObservationAndAPageRecordAreEventsWithWhereAndText" },
-      { file: "packages/host/tauriv2/tests/event_record_test.rs", id: "an_error_an_observation_and_a_page_record_are_events_with_where_and_text" },
+      { file: "packages/host/wailsv3/tests/event_record_test.go", id: "TestAnErrorAndAnObservationAreEventsWithWhereAndText" },
+      { file: "packages/host/tauriv2/tests/event_record_test.rs", id: "an_error_and_an_observation_are_events_with_where_and_text" },
       { file: "e2e/host-records.test.mjs", id: "the event log holds the run record and the records the page reports" },
       { file: "e2e/page-process.test.mjs", id: "the end of the web content process is written to the event log" },
     ],
@@ -2053,6 +2053,29 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/host/wailsv3/src/log_policy.go", symbol: "func watchPolicyFile" }],
     tests: [{ file: "packages/host/wailsv3/tests/log_policy_test.go", id: "TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce" }],
     expected: "A function that a maintained library provides uses that library, and code of its own states which requirement the libraries do not meet.",
+    levels: ["unit"],
+  },
+  {
+    id: "F185",
+    implementation: [{ file: "packages/host/tauriv2/tests/event_native_platform_test.rs", symbol: "static SERIAL: Mutex<()>" }],
+    tests: [{ file: "packages/host/tauriv2/tests/event_native_platform_test.rs", id: "the_platform_pulls_an_empty_native_ring_as_zero_bytes_and_no_loss" }],
+    expected: "The native platform tests of the Tauri host run one at a time and read an emptied ring.",
+    levels: ["unit"],
+  },
+  {
+    id: "F184",
+    implementation: [
+      { file: "packages/workbench/log-batch.js", symbol: "page = String(performance.timeOrigin)" },
+      { file: "packages/host/wailsv3/src/running_calls.go", symbol: "func ReloadTimeoutText" },
+      { file: "packages/host/tauriv2/src/running_calls.rs", symbol: "pub fn reload_timeout_text" },
+    ],
+    tests: [
+      { file: "packages/log-contract/test/audit.test.mjs", id: "an event of the layer page or plugin names the page that wrote it, and an event of another layer names none" },
+      { file: "packages/workbench/test/log-batch.test.mjs", id: "every event of a batch names the page that wrote it by its time origin, the anchor of its clock included" },
+      { file: "packages/host/wailsv3/tests/running_calls_test.go", id: "TestAReloadThatTimesOutNamesTheHostCallsOfItsWindowThatStillRun" },
+      { file: "packages/host/tauriv2/tests/running_calls_test.rs", id: "a_reload_that_times_out_names_the_host_calls_of_its_window_that_still_run" },
+    ],
+    expected: "Every page and plugin event names the page that wrote it, and a reload that times out names the host calls it waited for.",
     levels: ["unit"],
   },
   {

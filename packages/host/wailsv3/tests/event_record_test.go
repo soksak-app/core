@@ -29,11 +29,10 @@ func useEventLog(t *testing.T) *host.EventLog {
 }
 
 // contract: log.record.error-and-info-are-events
-func TestAnErrorAnObservationAndAPageRecordAreEventsWithWhereAndText(t *testing.T) {
+func TestAnErrorAndAnObservationAreEventsWithWhereAndText(t *testing.T) {
 	log := useEventLog(t)
 	host.LogError("surface input", errors.New("the window has no content view"))
 	host.LogInfo("webkit children", "pid 7: gone")
-	host.Log(host.Entry{Level: "error", Layer: "page", Where: "start", Text: "first\nsecond"})
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +40,6 @@ func TestAnErrorAnObservationAndAPageRecordAreEventsWithWhereAndText(t *testing.
 	want := []struct{ level, layer, event, where, text string }{
 		{"error", "host", "host.record.error", "surface input", "the window has no content view"},
 		{"info", "host", "host.record.info", "webkit children", "pid 7: gone"},
-		{"error", "page", "page.record.error", "start", "first\nsecond"},
 	}
 	if len(events) != 1+len(want) {
 		t.Fatalf("events %v", events)

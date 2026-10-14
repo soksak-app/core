@@ -35,7 +35,7 @@ fn start(directory: &Path) -> EventLog {
 }
 
 fn event(name: &str, index: u64) -> Value {
-    json!({"ts_us": 1_791_000_000_000_000u64 + index, "mono_ns": 5_000_000_000u64 + index, "level": "info", "event": name, "fields": {"index": index}})
+    json!({"ts_us": 1_791_000_000_000_000u64 + index, "mono_ns": 5_000_000_000u64 + index, "level": "info", "event": name, "page": "1791948729050", "fields": {"index": index}})
 }
 
 // contract: log.batch.stores-page-events-in-order
@@ -55,13 +55,13 @@ fn a_relayed_batch_is_stored_in_order_in_the_layer_page() {
     assert_eq!(events[2]["ts_us"], 1_791_000_000_000_002u64);
 }
 
-// contract: log.batch.rejects-an-invalid-batch-without-writing
+// contract: log.batch.rejects-an-invalid-batch-without-writing, log.batch.requires-the-page
 #[test]
 fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
     let directory = tempfile::tempdir().unwrap();
     let log = start(directory.path());
     let bad = |field: &str, value: Value| {
-        let mut item = json!({"ts_us": 1, "mono_ns": 1, "level": "info", "event": "page.test.event", "fields": {}});
+        let mut item = json!({"ts_us": 1, "mono_ns": 1, "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": {}});
         item[field] = value;
         json!({"action": "batch", "events": [item]})
     };
@@ -75,6 +75,11 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
             "another action",
             json!({"action": "line", "events": []}),
             "action must be batch, clock or policy, not \"line\"",
+        ),
+        (
+            "an event that names no page",
+            bad("page", Value::Null),
+            "events[0]: page must name the document that wrote the event",
         ),
         (
             "no clock",
@@ -150,7 +155,7 @@ fn a_relayed_batch_returns_the_transcript_lines_of_its_page_records() {
     let directory = tempfile::tempdir().unwrap();
     let log = start(directory.path());
     let record = |level: &str, place: &str, text: &str, index: u64| {
-        json!({"ts_us": 1_791_000_000_000_000u64 + index, "mono_ns": 5_000_000_000u64 + index, "level": level, "event": format!("page.record.{level}"),
+        json!({"ts_us": 1_791_000_000_000_000u64 + index, "mono_ns": 5_000_000_000u64 + index, "level": level, "event": format!("page.record.{level}"), "page": "1791948729050",
                "fields": {"where": place, "text": text}})
     };
     let request = json!({"action": "batch", "events": [
@@ -167,7 +172,7 @@ fn a_relayed_batch_returns_the_transcript_lines_of_its_page_records() {
         ]
     );
     let bad = json!({"action": "batch", "events": [
-        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "page.record.info", "fields": {"where": 7}}
+        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "page.record.info", "page": "1791948729050", "fields": {"where": 7}}
     ]});
     let error = log_command(&log, bad).unwrap_err();
     assert!(

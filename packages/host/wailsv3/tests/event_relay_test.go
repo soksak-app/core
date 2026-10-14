@@ -13,7 +13,7 @@ import (
 )
 
 func relayEvent(event string, index int) map[string]any {
-	return map[string]any{"ts_us": float64(1_791_000_000_000_000 + index), "mono_ns": float64(5_000_000_000 + index), "level": "info", "event": event, "fields": map[string]any{"index": float64(index)}}
+	return map[string]any{"ts_us": float64(1_791_000_000_000_000 + index), "mono_ns": float64(5_000_000_000 + index), "level": "info", "event": event, "page": "1791948729050", "fields": map[string]any{"index": float64(index)}}
 }
 
 // contract: log.batch.stores-page-events-in-order
@@ -36,7 +36,7 @@ func TestARelayedBatchIsStoredInOrderInTheLayerPage(t *testing.T) {
 	}
 }
 
-// contract: log.batch.rejects-an-invalid-batch-without-writing
+// contract: log.batch.rejects-an-invalid-batch-without-writing, log.batch.requires-the-page
 func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
 	if err != nil {
@@ -49,25 +49,27 @@ func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 		"no action":      {map[string]any{"events": []any{}}, "action must be batch, clock or policy"},
 		"another action": {map[string]any{"action": "line", "events": []any{}}, "action must be batch, clock or policy, not \"line\""},
 		"no events":      {map[string]any{"action": "batch"}, "events must be an array"},
+		"an event that names no page": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "fields": map[string]any{}}}},
+			"events[0]: page must name the document that wrote the event"},
 		"a layer other than page": {map[string]any{"action": "batch", "events": []any{relayEvent("page.test.ok", 1), relayEvent("host.test.forged", 2)}},
 			"events[1]: the event \"host.test.forged\" does not start with page. or plugin."},
-		"a level outside the contract": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "loud", "event": "page.test.event", "fields": map[string]any{}}}},
+		"a level outside the contract": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "loud", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}}}},
 			"events[0]: level must be one of error, warn, info, debug, trace"},
-		"a time that is not a number": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": "now", "mono_ns": float64(1), "level": "info", "event": "page.test.event", "fields": map[string]any{}}}},
+		"a time that is not a number": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": "now", "mono_ns": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}}}},
 			"events[0]: ts_us must be a positive integer"},
-		"a monotonic clock of 0": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(0), "level": "info", "event": "page.test.event", "fields": map[string]any{}}}},
+		"a monotonic clock of 0": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(0), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}}}},
 			"events[0]: mono_ns must be a positive integer"},
-		"no monotonic clock": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "level": "info", "event": "page.test.event", "fields": map[string]any{}}}},
+		"no monotonic clock": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}}}},
 			"events[0]: mono_ns must be a positive integer"},
-		"cids that are not a list": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "fields": map[string]any{}, "cids": "b1.1"}}},
+		"cids that are not a list": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}, "cids": "b1.1"}}},
 			"events[0]: cids must be an array of non-empty strings without a quote, a backslash or a control character"},
-		"an empty identifier": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "fields": map[string]any{}, "cids": []any{""}}}},
+		"an empty identifier": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}, "cids": []any{""}}}},
 			"events[0]: cids must be an array of non-empty strings without a quote, a backslash or a control character"},
-		"an identifier with a quote": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "fields": map[string]any{}, "cids": []any{"b1.1", "a\"b"}}}},
+		"an identifier with a quote": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}, "cids": []any{"b1.1", "a\"b"}}}},
 			"events[0]: cids must be an array of non-empty strings without a quote, a backslash or a control character"},
-		"an identifier that is not a string": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "fields": map[string]any{}, "cids": []any{7}}}},
+		"an identifier that is not a string": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": map[string]any{}, "cids": []any{7}}}},
 			"events[0]: cids must be an array of non-empty strings without a quote, a backslash or a control character"},
-		"fields that are not an object": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "fields": "text"}}},
+		"fields that are not an object": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": "text"}}},
 			"events[0]: fields must be an object"},
 	}
 	for name, c := range cases {
@@ -92,7 +94,7 @@ func TestARelayedBatchReturnsTheTranscriptLinesOfItsPageRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	record := func(level, where, text string, index int) map[string]any {
-		return map[string]any{"ts_us": float64(1_791_000_000_000_000 + index), "mono_ns": float64(5_000_000_000 + index), "level": level, "event": "page.record." + level,
+		return map[string]any{"ts_us": float64(1_791_000_000_000_000 + index), "mono_ns": float64(5_000_000_000 + index), "level": level, "event": "page.record." + level, "page": "1791948729050",
 			"fields": map[string]any{"where": where, "text": text}}
 	}
 	request := map[string]any{"action": "batch", "events": []any{
@@ -110,7 +112,7 @@ func TestARelayedBatchReturnsTheTranscriptLinesOfItsPageRecords(t *testing.T) {
 		t.Fatalf("lines %q, want %q", lines, want)
 	}
 	// A record event whose fields are not the strings where and text is refused with the batch.
-	bad := map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.record.info", "fields": map[string]any{"where": 7}}}}
+	bad := map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.record.info", "page": "1791948729050", "fields": map[string]any{"where": 7}}}}
 	if _, err := host.LogCommand(log, bad); err == nil || !strings.Contains(err.Error(), "events[0]: fields where and text must be strings") {
 		t.Fatalf("error %v", err)
 	}

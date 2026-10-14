@@ -1456,7 +1456,10 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
         Ok(()) => Ok(Value::Null),
         Err(_) => Err(Failure::new(
             TIMED_OUT,
-            format!("the reloaded page did not report ready within {TIMEOUT:?}"),
+            crate::running_calls::reload_timeout_text(
+                TIMEOUT,
+                &crate::running_calls::RUNNING_CALLS.of(window.label(), std::time::Instant::now()),
+            ),
         )),
     }
 }

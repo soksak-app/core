@@ -25,11 +25,11 @@ func TestEveryLineStoresTheClassOfItsCatalogEntry(t *testing.T) {
 	if !log.Emit(host.LevelInfo, "host.sidecar.reply", map[string]any{"name": "n", "surface": "s", "bytes": 1, "ok": true}) {
 		t.Fatal("host.sidecar.reply was refused")
 	}
-	relayed := host.RelayedEvent{TsMicros: 1, MonoNs: 1, Layer: "page", Level: host.LevelInfo, Event: "page.start", Fields: []byte(`{"time_origin":1,"url":"u"}`)}
+	relayed := host.RelayedEvent{TsMicros: 1, MonoNs: 1, Layer: "page", Page: "1791948729050", Level: host.LevelInfo, Event: "page.start", Fields: []byte(`{"time_origin":1,"url":"u"}`)}
 	if accepted, err := log.EmitRelayed(relayed); err != nil || !accepted {
 		t.Fatalf("page.start: %v %v", accepted, err)
 	}
-	family := host.RelayedEvent{TsMicros: 1, MonoNs: 1, Layer: "page", Level: host.LevelInfo, Event: "page.console.info", Fields: []byte(`{"text":"x"}`)}
+	family := host.RelayedEvent{TsMicros: 1, MonoNs: 1, Layer: "page", Page: "1791948729050", Level: host.LevelInfo, Event: "page.console.info", Fields: []byte(`{"text":"x"}`)}
 	if accepted, err := log.EmitRelayed(family); err != nil || !accepted {
 		t.Fatalf("page.console.info: %v %v", accepted, err)
 	}
@@ -69,7 +69,7 @@ func TestAnEventTheCatalogDoesNotDeclareIsMarkedUndeclaredAndHasNoClass(t *testi
 	if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": 1}) {
 		t.Fatal("host.test.event was refused")
 	}
-	relayed := host.RelayedEvent{TsMicros: 1, MonoNs: 1, Layer: "plugin", Level: host.LevelInfo, Event: "plugin.editor.opened", Fields: []byte(`{}`)}
+	relayed := host.RelayedEvent{TsMicros: 1, MonoNs: 1, Layer: "plugin", Page: "1791948729050", Level: host.LevelInfo, Event: "plugin.editor.opened", Fields: []byte(`{}`)}
 	if accepted, err := log.EmitRelayed(relayed); err != nil || !accepted {
 		t.Fatalf("plugin.editor.opened: %v %v", accepted, err)
 	}

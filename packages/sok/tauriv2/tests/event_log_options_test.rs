@@ -122,6 +122,7 @@ fn a_writer_stores_the_events_and_the_loss_of_its_pull_source() {
             ts_us: 7,
             mono_ns: 9,
             layer: "native".into(),
+            page: None,
             level: Level::Warn,
             event: "native.probe.event".into(),
             cids: Vec::new(),

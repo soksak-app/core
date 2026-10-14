@@ -626,7 +626,7 @@ func (s *Surfaces) reloadPage() error {
 	case <-ready:
 		return nil
 	case <-time.After(pageTimeout):
-		return rpcError(codeTimeout, "the reloaded page did not report ready within %s", pageTimeout)
+		return rpcError(codeTimeout, "%s", ReloadTimeoutText(pageTimeout, runningCalls.Of(s.window.Name(), time.Now())))
 	}
 }
 

@@ -124,6 +124,8 @@ type pendingEvent struct {
 	// cids are the correlation identifiers of the inputs the event belongs to.
 	cids  []string
 	layer string
+	// page is the time origin of the document that wrote an event of the layer page or plugin, and empty for another layer.
+	page  string
 	level Level
 	event string
 	// class is the class that the catalog declares for the event; it is empty, and undeclared is set, for a name the catalog does not declare.
@@ -272,7 +274,7 @@ func (l *EventLog) EmitPlaced(level Level, event string, fields json.RawMessage,
 // producer stopped at the bound after it had written produced bytes.
 func (l *EventLog) EmitPlacedBounded(level Level, event string, fields []byte, produced int, deadline time.Duration) (uint64, error) {
 	placed := make(chan uint64, 1)
-	if !l.enqueuePlaced(time.Now().UnixMicro(), l.clock(), l.layer, level, event, nil, fields, produced, placed) {
+	if !l.enqueuePlaced(time.Now().UnixMicro(), l.clock(), l.layer, "", level, event, nil, fields, produced, placed) {
 		return 0, fmt.Errorf("the event writer refused %s because its queue was full or the policy does not store it", event)
 	}
 	if err := l.Flush(deadline); err != nil {
@@ -341,9 +343,11 @@ type RelayedEvent struct {
 	TsMicros int64
 	MonoNs   uint64
 	Layer    string
-	Level    Level
-	Event    string
-	Cids     []string
+	// Page is the time origin of the document that wrote the event; an event of the layer page or plugin requires it.
+	Page  string
+	Level Level
+	Event string
+	Cids  []string
 	// Fields is the JSON text of the fields. When Produced is not 0, the producer stopped its serialization at the bound after
 	// it had written Produced bytes, and Fields is the first bytes of the text (docs/spec/logging.md#bounds).
 	Fields   json.RawMessage
@@ -370,6 +374,9 @@ func (l *EventLog) EmitRelayed(e RelayedEvent) (bool, error) {
 	if err := CheckCids(e.Cids); err != nil {
 		return false, fmt.Errorf("the cids of %s: %w", e.Event, err)
 	}
+	if documentLayer := e.Layer == "page" || e.Layer == "plugin"; documentLayer != (e.Page != "") {
+		return false, fmt.Errorf("the event %s of the layer %s names the page %q; only an event of the layer page or plugin names one, and it must", e.Event, e.Layer, e.Page)
+	}
 	if class, declared := EventClassOf(e.Event); declared && !l.Gate(class, e.Level) {
 		return false, nil
 	}
@@ -377,17 +384,17 @@ func (l *EventLog) EmitRelayed(e RelayedEvent) (bool, error) {
 		l.countLoss(ChannelOf(e.Level), len(e.Event))
 		return false, nil
 	}
-	return l.enqueue(e.TsMicros, e.MonoNs, e.Layer, e.Level, e.Event, e.Cids, e.Fields, e.Produced), nil
+	return l.enqueuePlaced(e.TsMicros, e.MonoNs, e.Layer, e.Page, e.Level, e.Event, e.Cids, e.Fields, e.Produced, nil), nil
 }
 
 func (l *EventLog) enqueue(tsMicros int64, monoNs uint64, layer string, level Level, event string, cids []string, text json.RawMessage, produced int) bool {
-	return l.enqueuePlaced(tsMicros, monoNs, layer, level, event, cids, text, produced, nil)
+	return l.enqueuePlaced(tsMicros, monoNs, layer, "", level, event, cids, text, produced, nil)
 }
 
 // enqueuePlaced queues an event. produced is 0 for fields that are JSON, which the writer cuts when they are over the bound,
 // and for fields that the producer cut at the bound the number of bytes it had written when it stopped; text is then the first
 // bytes of the text.
-func (l *EventLog) enqueuePlaced(tsMicros int64, monoNs uint64, layer string, level Level, event string, cids []string, text json.RawMessage, produced int, placed chan uint64) bool {
+func (l *EventLog) enqueuePlaced(tsMicros int64, monoNs uint64, layer, page string, level Level, event string, cids []string, text json.RawMessage, produced int, placed chan uint64) bool {
 	var truncated int
 	if produced > 0 {
 		text, truncated = headFields(text, produced)
@@ -402,7 +409,7 @@ func (l *EventLog) enqueuePlaced(tsMicros int64, monoNs uint64, layer string, le
 		l.countLoss(ChannelOf(level), bytes)
 		return false
 	}
-	pending := &pendingEvent{tsMicros: tsMicros, monoNs: monoNs, cids: cids, layer: layer, level: level, event: event, fields: text, bytes: bytes, truncated: truncated, placed: placed}
+	pending := &pendingEvent{tsMicros: tsMicros, monoNs: monoNs, cids: cids, layer: layer, page: page, level: level, event: event, fields: text, bytes: bytes, truncated: truncated, placed: placed}
 	l.classify(pending)
 	// A closed gate stores nothing and counts the event; an event that the catalog does not declare has no class and no gate.
 	if pending.class != "" && !l.Gate(pending.class, level) {
@@ -529,6 +536,7 @@ type eventRecord struct {
 	Level    Level           `json:"level"`
 	Class    Class           `json:"class,omitempty"`
 	Layer    string          `json:"layer"`
+	Page     string          `json:"page,omitempty"`
 	Event    string          `json:"event"`
 	Cids     []string        `json:"cids,omitempty"`
 	Fields   json.RawMessage `json:"fields"`
@@ -539,7 +547,7 @@ type eventRecord struct {
 }
 
 func serializeEvent(seq uint64, e *pendingEvent) ([]byte, error) {
-	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, MonoNs: e.monoNs, Seq: seq, Level: e.level, Class: e.class, Layer: e.layer, Event: e.event, Cids: e.cids, Fields: e.fields, Undeclared: e.undeclared, Truncated: e.truncated})
+	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, MonoNs: e.monoNs, Seq: seq, Level: e.level, Class: e.class, Layer: e.layer, Page: e.page, Event: e.event, Cids: e.cids, Fields: e.fields, Undeclared: e.undeclared, Truncated: e.truncated})
 	if err != nil {
 		return nil, err
 	}

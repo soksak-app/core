@@ -64,6 +64,7 @@ pub mod quit;
 pub mod recording;
 #[path = "routine/routine.rs"]
 pub mod routine;
+pub mod running_calls;
 mod shapes;
 mod sidecar_reply;
 pub mod sidecars;

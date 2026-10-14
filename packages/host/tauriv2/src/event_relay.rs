@@ -19,6 +19,8 @@ struct Relayed {
     layer: &'static str,
     /// The record of the page that the event carries, when it is a `page.record.<level>` event.
     record: Option<crate::application_log::Entry>,
+    /// The time origin of the document that wrote the event (docs/spec/logging.md#event).
+    page: String,
 }
 
 fn level_of(name: &str) -> Option<Level> {
@@ -86,6 +88,11 @@ fn relayed_of(item: &Value) -> Result<Relayed, String> {
             "the event {event:?} does not start with page. or plugin."
         ));
     };
+    let page = object
+        .get("page")
+        .and_then(Value::as_str)
+        .filter(|page| !page.is_empty())
+        .ok_or_else(|| "page must name the document that wrote the event".to_string())?;
     let record = if event.starts_with("page.record.") {
         let text_of = |name: &str| fields.get(name).and_then(Value::as_str);
         let (Some(place), Some(text)) = (text_of("where"), text_of("text")) else {
@@ -107,6 +114,7 @@ fn relayed_of(item: &Value) -> Result<Relayed, String> {
             .map_err(|error| format!("fields cannot be serialized: {error}"))?,
         layer,
         record,
+        page: page.to_string(),
     })
 }
 
@@ -176,6 +184,7 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
             ts_us: event.ts_us,
             mono_ns: event.mono_ns,
             layer: event.layer.to_string(),
+            page: Some(event.page),
             level: event.level,
             event: event.event,
             cids: event.cids,

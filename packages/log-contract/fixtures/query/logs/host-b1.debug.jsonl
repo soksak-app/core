@@ -1,3 +1,3 @@
 {"ts_us":1791500001000002,"mono_ns":10000002000,"seq":20,"level":"info","class":"lifecycle","layer":"host","event":"log.open","fields":{"schema":2,"pid":4242,"role":"host","boot":"b1"}}
-{"ts_us":1791500001110000,"mono_ns":10110000000,"seq":21,"level":"debug","class":"call","layer":"page","event":"page.call","cids":["b1.3"],"fields":{"name":"sidecarSend","surface":"tab-y","ok":true}}
+{"ts_us":1791500001110000,"mono_ns":10110000000,"seq":21,"level":"debug","class":"call","layer":"page","page":"1791948729050","event":"page.call","cids":["b1.3"],"fields":{"name":"sidecarSend","surface":"tab-y","ok":true}}
 {"ts_us":1791500001210000,"mono_ns":10210000000,"seq":22,"level":"debug","class":"input","layer":"native","event":"native.input.query","fields":{"call":"markedRange"}}

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // bindingService is the name that Wails derives from the Go package path and the type name of the bound service.
@@ -75,6 +76,11 @@ func (b *Bindings) Call(ctx context.Context, method string, args []json.RawMessa
 	started := time.Now()
 	returned := false
 	defer func() { recordBindingCall(snakeName(method), args, started, err, returned, cids) }()
+	// A reload of the page of the window waits for this call; a reload that times out names it.
+	if win, ok := ctx.Value(application.WindowKey).(*application.WebviewWindow); ok {
+		running := runningCalls.Begin(win.Name(), snakeName(method), started)
+		defer runningCalls.End(running)
+	}
 	if err := sok.CheckCids(cids); err != nil {
 		// The identifiers are refused, so the event of the refusal carries none.
 		cids = nil

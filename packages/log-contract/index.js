@@ -24,6 +24,9 @@ export function channelOf(file) {
  */
 const encoder = new TextEncoder();
 
+/** The layers whose events are written by a document and name it in `page`. */
+const PAGE_LAYERS = new Set(["page", "plugin"]);
+
 export function parseLog(file, text) {
   const entries = [];
   const lines = text.split("\n").filter((line, index, all) => line !== "" || index < all.length - 1);
@@ -83,6 +86,13 @@ function lineFindings(entry, catalog, channel = "other") {
   if (!Number.isInteger(event.mono_ns) || event.mono_ns <= 0) report("mono_ns must be a positive integer");
   if (!LEVELS.has(event.level)) report(`level ${event.level} is not one of ${[...LEVELS].join(", ")}`);
   if (!LAYERS.has(event.layer)) report(`layer ${event.layer} is not one of ${[...LAYERS].join(", ")}`);
+  // An event of a document names the document that wrote it, its time origin as page.start states it, so the anchor of its
+  // clock (page.log.clock of the same page) is found from the line.
+  if (PAGE_LAYERS.has(event.layer)) {
+    if (typeof event.page !== "string" || event.page === "") report(`an event of the layer ${event.layer} names the page that wrote it in page`);
+  } else if (event.page !== undefined) {
+    report(`page names the writing page only on an event of the layer page or plugin, not ${event.layer}`);
+  }
   // A file holds the levels of its channel: the main file error, warn and info, the debug file debug and trace.
   if (LEVELS.has(event.level) && !IN_EVERY_FILE.has(event.event) && !CHANNEL_LEVELS[channel].has(event.level)) {
     report(`the level ${event.level} belongs to the ${channel === "debug" ? "main" : "debug"} file, and this is a file of the channel ${channel}`);

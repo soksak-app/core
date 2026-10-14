@@ -28,6 +28,8 @@ type relayedEvent struct {
 	fields   json.RawMessage
 	// layer is `page` or `plugin`, the prefix of the name of the event.
 	layer string
+	// page is the time origin of the document that wrote the event (docs/spec/logging.md#event).
+	page string
 	// record is the record of the page that the event carries, when it is a `page.record.<level>` event.
 	record *Entry
 }
@@ -79,7 +81,7 @@ func logBatch(log *EventLog, request map[string]any) ([]string, error) {
 		events = append(events, event)
 	}
 	for index, event := range events {
-		if _, err := log.EmitRelayed(RelayedEvent{TsMicros: event.tsMicros, MonoNs: event.monoNs, Layer: event.layer, Level: event.level,
+		if _, err := log.EmitRelayed(RelayedEvent{TsMicros: event.tsMicros, MonoNs: event.monoNs, Layer: event.layer, Page: event.page, Level: event.level,
 			Event: event.event, Cids: event.cids, Fields: event.fields}); err != nil {
 			// The batch was validated as a whole, so a refusal here is a defect of the validation; nothing is written
 			// after it.
@@ -152,6 +154,10 @@ func relayedEventOf(item any) (relayedEvent, error) {
 	default:
 		return relayedEvent{}, fmt.Errorf("the event %q does not start with page. or plugin.", name)
 	}
+	page, ok := object["page"].(string)
+	if !ok || page == "" {
+		return relayedEvent{}, fmt.Errorf("page must name the document that wrote the event")
+	}
 	var record *Entry
 	if strings.HasPrefix(name, "page.record.") {
 		where, okWhere := fields["where"].(string)
@@ -161,7 +167,7 @@ func relayedEventOf(item any) (relayedEvent, error) {
 		}
 		record = &Entry{Level: level, Layer: "page", Where: where, Text: body}
 	}
-	return relayedEvent{tsMicros: int64(ts), monoNs: uint64(mono), cids: cids, level: Level(level), event: name, fields: text, layer: layer, record: record}, nil
+	return relayedEvent{tsMicros: int64(ts), monoNs: uint64(mono), cids: cids, level: Level(level), event: name, fields: text, layer: layer, page: page, record: record}, nil
 }
 
 // Log relays a batch of page events to the event writer of the host and shows its page records in the transcript of the

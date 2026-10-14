@@ -280,6 +280,8 @@ fn relayed(layer: &str, event: &str, level: Level, fields: Value) -> RelayedEven
         ts_us: 1_791_000_000_000_123,
         mono_ns: 5_000_000_123,
         layer: layer.to_string(),
+        // An event of a document names its page; another layer names none.
+        page: matches!(layer, "page" | "plugin").then(|| "1791948729050".to_string()),
         level,
         event: event.to_string(),
         cids: vec!["b1.7".into(), "b1.8".into()],

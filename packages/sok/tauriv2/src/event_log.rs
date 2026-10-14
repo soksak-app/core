@@ -151,6 +151,8 @@ struct Pending {
     /// The correlation identifiers of the inputs the event belongs to; none for most events.
     cids: Vec<String>,
     layer: Cow<'static, str>,
+    /// The time origin of the document that wrote an event of the layer page or plugin; `None` for another layer.
+    page: Option<String>,
     level: Level,
     event: String,
     /// The class that the catalog declares for the event; `None` for a name the catalog does not declare, which the line marks
@@ -179,6 +181,7 @@ impl Pending {
             mono_ns: clock(),
             cids: Vec::new(),
             layer: Cow::Borrowed(layer),
+            page: None,
             level,
             event: event.into(),
             class: class_of(event),
@@ -255,6 +258,9 @@ pub struct RelayedEvent {
     pub ts_us: u64,
     pub mono_ns: u64,
     pub layer: String,
+    /// The time origin of the document that wrote the event; an event of the layer page or plugin requires it, and another
+    /// layer has none (docs/spec/logging.md#event).
+    pub page: Option<String>,
     pub level: Level,
     pub event: String,
     pub cids: Vec<String>,
@@ -448,6 +454,7 @@ impl EventLog {
             (self.clock)(),
             Vec::new(),
             Cow::Borrowed(self.layer),
+            None,
             level,
             event,
             fields,
@@ -510,6 +517,7 @@ impl EventLog {
             (self.clock)(),
             cids.to_vec(),
             Cow::Borrowed(self.layer),
+            None,
             level,
             event,
             fields,
@@ -525,6 +533,7 @@ impl EventLog {
             ts_us,
             mono_ns,
             layer,
+            page,
             level,
             event,
             cids,
@@ -549,6 +558,14 @@ impl EventLog {
                 "the event {event:?} does not start with its layer {layer:?}"
             ));
         }
+        let document_layer = layer == "page" || layer == "plugin";
+        if document_layer != page.as_deref().is_some_and(|page| !page.is_empty()) {
+            // default: an event without a page prints the empty text, as the Go writer prints it.
+            let named = page.as_deref().unwrap_or("");
+            return Err(format!(
+                "the event {event} of the layer {layer} names the page {named:?}; only an event of the layer page or plugin names one, and it must"
+            ));
+        }
         if let Some(class) = self.class(event)
             && !self.gate(class, level)
         {
@@ -563,6 +580,7 @@ impl EventLog {
             mono_ns,
             cids,
             Cow::Owned(layer.to_string()),
+            page,
             level,
             event,
             fields,
@@ -577,6 +595,7 @@ impl EventLog {
         mono_ns: u64,
         cids: Vec<String>,
         layer: Cow<'static, str>,
+        page: Option<String>,
         level: Level,
         event: &str,
         fields: Fields,
@@ -604,6 +623,7 @@ impl EventLog {
             mono_ns,
             cids,
             layer,
+            page,
             level,
             event: event.to_string(),
             class,
@@ -748,14 +768,23 @@ fn line(seq: u64, pending: &Pending) -> String {
     } else {
         ""
     };
+    // The document that wrote an event of the layer page or plugin follows the layer.
+    let page = match &pending.page {
+        Some(page) => format!(
+            ",\"page\":{}",
+            serde_json::to_string(page).expect("a string serializes")
+        ),
+        None => String::new(),
+    };
     format!(
-        "{{\"ts_us\":{},\"mono_ns\":{},\"seq\":{},\"level\":\"{}\"{},\"layer\":\"{}\",\"event\":{}{},\"fields\":{}{}{}}}",
+        "{{\"ts_us\":{},\"mono_ns\":{},\"seq\":{},\"level\":\"{}\"{},\"layer\":\"{}\"{},\"event\":{}{},\"fields\":{}{}{}}}",
         pending.ts_us,
         pending.mono_ns,
         seq,
         pending.level.name(),
         class,
         pending.layer,
+        page,
         serde_json::to_string(&pending.event).expect("a string serializes"),
         cids,
         pending.fields.get(),
@@ -1059,6 +1088,7 @@ impl PullSink for Output {
             mono_ns: event.mono_ns,
             cids: event.cids,
             layer: Cow::Owned(event.layer),
+            page: event.page,
             level: event.level,
             event: event.event,
             class,

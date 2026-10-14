@@ -349,6 +349,7 @@ fn an_event_over_the_size_bound_is_stored_cut_with_its_original_size() {
             .as_micros() as u64,
         mono_ns: 1,
         layer: "host".into(),
+        page: None,
         level: soksak_host_tauriv2::event_log::Level::Info,
         event: "host.test.oversize".into(),
         cids: Vec::new(),
