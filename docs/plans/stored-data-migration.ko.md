@@ -16,24 +16,25 @@
 
 1. **형식 변경은 형식 번호를 올리고 마이그레이션 정의를 싣는다.** 정의는 engine에 한 번 구현되는, 이름 붙고 매개변수화된 연산의 순서 목록이다(처음에는 `setFormat`, `removeField`, `renameField`). 연산이 없는 변경은 engine에 연산 하나를 추가하는 deliberate 변경이다. 정의는 정확히 한 file만 이름한다(적재 때 검증). 폴더를 옮기거나 file을 넘는 변경은 schema에서 거부되고, 다른 이름 붙은 경로를 taken다.
 2. **정의는 package와 함께 배포된다.** 코어의 정의는 이 저장소의 원본 하나(`packages/sok/migrations/*.json`)이고 두 `sok` build가 embed한다(`go:embed`, `include_str!`). plugin과 sidecar는 저장 file을 소유할 때 자기 release에 정의를 실고 manifest이 선언한다. 형식은 세 소유자가 같다. 정의는 자기 `engines.soksak` 범위가 요구하는 core의 연산만 쓰고, 모르는 연산은 정의·소유자·연산을 이름하며 거부된다. 공개된 plugin·section 식별자는 불변이다.
-3. **마이그레이션은 언제나 코어가 수행한다.** engine은 하나(`packages/sok`의 Go/Rust 쌍둥이, 쓰기 동작 하나: 원자적 교체 앞에 sync, 둘째 file은 남기지 않음)이고, 계약 file을 읽는 모든 입구의 첫 읽기에서 정의를 적용한다: host 시작(event log 시작 뒤, 첫 catalog 읽기 전), host의 plugin 조작, 계약 file을 읽는 `sok` 입구(`plugin install|update|remove|enable|disable`, `app update`, `registry use`). engine은 없는 file을 만들지 않고, 다른 process가 설정을 소유 중이면 돌지 않는다(기존 소유 오류가 그것을 이름한다). file 안의 plugin 소유 값은 `convertData` 계약을 유지하고, plugin의 정의는 오늘 이름할 file이 없다. sidecar의 정의는 자기 `services/<이름>/` 아래 경로만 이름하고 서비스가 멈춰 있을 때 적용된다.
-4. **engine은 멱등하고 범위가 정해져 있다.** 정의는 release 계열 안에 쌓인다. 사슬은 바닥(계열이 쓴 가장 오래된 형식)부터 현재까지 모든 형식을 갱신하고, 두 번 적용해도 같은 byte를 쓴다. 바닥보다 오래되거나 가장 새 대상보다 새 형식은 파일과 두 숫자를 이름하는 명시적 오류로 거부한다. reader는 계속 현재 형식만 받고, 이전 형식의 판독 code는 남지 않는다 — 정의와 engine이 그것을 대신한다.
+3. **마이그레이션은 언제나 코어가 수행한다.** engine은 하나(`packages/sok`의 Go/Rust 쌍둥이; 쓰기 동작은 engine이 들이는 통일이다 — Go `replaceFile`에 Rust 쌍둥이가 이미 있는 교체 앞의 sync가 더해지고, 기존 helper를 확장하며 둘째 writer는 없다. 평행 기록은 이 변경을 밝힌다)이고, **각 계약 file의 공유 reader 입구**(`ReadInstalled`/`read_installed`와 registry reader)에서 정의를 적용한다. 모든 process의 모든 reader — event log 시작 뒤의 host 시작, host의 plugin 변경 경로, 그 file을 읽는 모든 `sok` 입구(`plugin install|update|remove|enable|disable|list`, `debug replay`, `app update`, `registry use`) — 가 읽기 전에 갱신하므로 입구 나열이 낡을 수 없다. engine은 없는 file을 만들지 않고, 다른 process가 설정을 소유 중이면 돌지 않는다(기존 소유 오류가 그것을 이름한다; `sok` 명령의 소유 검사는 자체 등록 항목으로 들어온다). engine이 적용한 갱신은 적용한 process의 기록이다 — host 입구는 host event, `sok` 입구는 도구 process의 event — 그리고 거부 자체가 기록이다. file 안의 plugin 소유 값은 `convertData` 계약을 유지하고, plugin의 정의는 오늘 이름할 file이 없다. sidecar의 정의는 자기 `services/<이름>/` 아래 경로만 이름하고 서비스가 멈춰 있을 때 적용된다.
+4. **engine은 멱등하고 범위가 정해져 있다.** 정의는 release 계열 안에 쌓인다. 사슬은 바닥부터 현재까지 모든 형식을 갱신한다. 바닥은 현재 설정 폴더 계보의 가장 오래된 형식인 형식 2다(2026-10-04의 identity 변경이 그 계보를 만들었다). 형식 1은 이전 애플리케이션 identity의 것이고, 그 계보를 닫은 기록된 제거가 경계다: 그 계보의 설정은 파일과 형식을 이름하는 오류로 거부되며 1→2 정의는 실리지 않는다. 이 바닥은 소유된 결정으로, 여기에 적는다, 두 번 적용해도 같은 byte를 쓴다. 바닥보다 오래되거나 가장 새 대상보다 새 형식은 파일과 두 숫자를 이름하는 명시적 오류로 거부한다. reader는 계속 현재 형식만 받고, 이전 형식의 판독 code는 남지 않는다 — 정의와 engine이 그것을 대신한다.
 
 ## 첫 적용 (F188)
 
 - `plugins/installed.json`이 형식 3이 된다. 정의 `2→3`은 모든 항목에서 `package` member를 제거하고 형식 번호를 3으로 한다. 그 외에는 아무것도 바뀌지 않는다.
 - 두 `sok` package에 engine `MigrateInstalled`. 적용 지점은 교정된 anchor다: Wails `host.go`의 event log 시작과 `ApplyPluginEventClasses` 사이, Tauri `host.rs`의 event log 시작과 `apply_plugin_event_classes` 사이, 위의 `sok` 입구들.
-- `settings.json`과 `projects.json`은 형식 번호와 engine coverage를 하위 항목으로 등록해 받는다(F188.4, F188.5). 두 file 모두 이전 릴리즈에서 사람을 두 번 막았고 오늘 번호가 없다.
+- `settings.json`과 `projects.json`은 형식 번호와 engine coverage를 하위 항목으로 등록해 받는다(F188.4, F188.5). 두 file 모두 오늘 번호가 없고 reader가 이전 형태를 거부하며, 기록은 settings.json이 네 번, projects.json이 한 번(같은 설정들의 layout 거부) 사람을 막았음을 보인다.
 
 ## 검사 (F189)
 
 - 소유 test(두 언어): 릴리즈됐던 형식 2가 갱신되고 host가 시작하며 file이 형식 3이 되고, 두 번째 시작은 아무것도 쓰지 않고, 다시 읽기는 현재 형식을 읽는다. 없는 file은 없는 채로 남고, 가장 새 대상보다 새 형식과 불량 file은 파일과 숫자를 이름하며 거부된다.
 - 선언된 릴리즈 단계가 형식 2 상태에서 릴리즈로 빌드된 host를 한 번 실행해 갱신과 첫 host log 줄을 요구하고, 같은 fixture로 릴리즈 `sok`를 실행한다. workflows test가 그 단계를 검사한다.
-- spec과 test의 installed 형식 번호 언급이 `InstalledFormat`과 다르면 보고하는 기계적 check.
-- spec 교정이 같은 변경에 함께 간다: `installation.md`(file 없을 때 기본값), `host-contract.md`(형식 1 기본값 줄, 절대 `path` 줄, 바뀌는 installed case들), 두 언어의 지침 개정 — 두 차례 제거의 기록된 이유에 답함을 적는다: 정의는 배포에 실려 설치 순간에 한 번 적용되는 데이터이고, 적용 뒤에는 평범한 현재 형식 데이터이며, 이전 형식의 판독 code는 남지 않는다.
+- 기계적 check는 변경 시점에 writer의 저장 schema·reader의 엄격함·`InstalledFormat`을 함께 묶고, spec·시험·fixture의 installed 형식 번호 언급이 `InstalledFormat`과 다르면 보고한다. F189 fixture는 이전 릴리즈 형태를 이름하므로 이 check가 그 형태에 묶어 둔다.
+- 새 개념(마이그레이션 정의, 바닥, 연산 이름, file 분류, 폴더를 옮기거나 file을 넘는 변경의 이름 붙은 경로 — 교체 변경, 자기 release에 문서화되고 재설치로 수행된다)을 용어 목록에 등록한다.
+- spec 교정이 같은 변경에 함께 간다: `installation.md`(file 없을 때 기본값), `host-contract.md`(형식 1 기본값 줄, 절대 `path` 줄, 바뀌는 installed case들), 지워진 형식 1 변환을 아직 말하는 오래된 주석(`installed.go`, `installed.rs`), 두 언어의 지침 개정 — 두 차례 제거의 기록된 이유에 답함을 적는다: 정의는 배포에 실려 설치 순간에 한 번 적용되는 데이터이고, 적용 뒤에는 평범한 현재 형식 데이터이며, 이전 형식의 판독 code는 남지 않는다.
 
 ## 적대 검증
 
 세 검토자가 조사했다: (a) 정의 형식이 이 저장소의 실제 형식 변경을 담는지, (b) runtime 실패 경로, (c) 대안들과 `installed.json` 너머의 결함 class. 1회차는 통합 21개 이의를 냈고, 위 결정이 답을 흡수했다. 받아들인 교정: 정확한 적용 anchor(원래 적은 지점보다 앞에서 installed.json을 읽는다), host 전에 계약 file을 읽는 `sok` 입구, 정의는 한 file, 두 쌍둥이의 하나의 내구 쓰기, 없는 file을 만들지 않음, 가장 새 대상보다 새 형식의 명시적 거부, caret 변환 제외(문법이 오늘 `^`를 받는다), 정직한 연산 어휘, `settings.json`·`projects.json`을 등록하는 저장 file 목록, plugin data 계약으로 `convertData` 유지, 공개 식별자 불변, 오래된 spec 줄, 제거 기록에 대한 답.
 
-2회차(최대 5회차)는 새 검토자를 쓴다. 매 회차는 그 전 회차에 참여하지 않은 agent가 감사하여, 어느 검토자도 자기 이의를 스스로 확인하지 않게 한다. 새 검토자는 먼저 이 수정된 결정을 판정하는 기준을 밝히고, 기준은 감사 시작 전에 맞추며, 회차는 감사가 남는 이의를 남기지 않을 때 끝난다. 1회차에서 해결된 세 갈등을 새 검토자가 독립적으로 판정한다: 정의는 바닥을 둔 계열 내 축적(한 단계 가지치기에 반대), `settings.json`·`projects.json`은 하위 항목으로 합류(거부만 유지에 반대), `sok` 경로의 소유 규칙(살아 있는 process가 설정을 소유 중이면 거부; plugin 명령의 잠금 없는 읽기-수정-쓰기 경쟁은 별도 결함으로 등록).
+2회차(최대 5회차)는 새 검토자 둘을 썼고, 그 기준은 감사 시작 전에 소유자의 기준과 맞춰졌다. 결과: 검증자는 열 개 사실 주장을 두 언어 쌍둥이에서 code로 확인했다(교정 anchor와 함께, 그대로 기준으로 채택) — 경쟁 등록 누락(답: F190으로 등록)과 기록 공백 하나("두 번" 횟수; 문구가 기록된 횟수를 적는다)를 찾았다. 독립 감사자는 구조를 유지하고, 자체 기각 조건 어느 것도 발동하지 않으며, 세 갈등의 해결을 유지하고, 네 이의(입구 나열, 경쟁 등록과 `sok` 소유 검사, 형식 1 계보에 대한 바닥 문구, 변경으로서의 쓰기 통일)를 제기했고, 모두 위의 수정으로 답했다. 부속 내용(용어 등록, 이름 붙은 교체 경로, `sok` 입구 적용의 기록 형식, 형식 언급 check의 fixture 묶음)도 함께다. 두 검토자 모두 답해지면 더 이은 이의가 없다고 밝혔다. 매 회차는 그 전 회차에 참여하지 않은 agent가 감사하여, 어느 검토자도 자기 이의를 스스로 확인하지 않게 한다; 회차는 감사가 남는 이의를 남기지 않을 때 끝난다. 1회차에서 해결된 세 갈등을 새 검토자가 독립적으로 판정한다: 정의는 바닥을 둔 계열 내 축적(한 단계 가지치기에 반대), `settings.json`·`projects.json`은 하위 항목으로 합류(거부만 유지에 반대), `sok` 경로의 소유 규칙(살아 있는 process가 설정을 소유 중이면 거부; plugin 명령의 잠금 없는 읽기-수정-쓰기 경쟁은 별도 결함으로 등록).
