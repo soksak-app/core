@@ -42,7 +42,7 @@ test('the audit of a configuration folder reads the files of every layer, genera
   const write = (name, lines) => writeFileSync(join(root, 'logs', name), `${lines.join('\n')}\n`);
   // The generations are numbered in the order of the rotations without an upper bound: the debug file has the generation 10.
   write('host-1-2.jsonl.1', [open(1, 'host'), line(2, 'host.window.event', { window: 'main', kind: 'focus' })]);
-  write('host-1-2.jsonl', [open(3, 'host'), line(5, 'page.record.error', { where: 'w', text: 't' }, { layer: 'page', level: 'error' })]);
+  write('host-1-2.jsonl', [open(3, 'host'), line(5, 'page.record.error', { where: 'w', text: 't' }, { layer: 'page', page: '1791948729050', level: 'error' })]);
   write('host-1-2.debug.jsonl.10', [open(4, 'host'), line(6, 'host.window.event', { window: 'main', kind: 'focus' }, { level: 'debug' })]);
   write('vt-3-4.jsonl', [open(1, 'vt'), line(2, 'host.surprise', {}, { layer: 'sidecar' })]);
   write('notes.txt', ['not an event file']);
