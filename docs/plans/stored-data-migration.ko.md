@@ -30,7 +30,7 @@
 - 소유 test(두 언어): 릴리즈됐던 형식 2가 갱신되고 host가 시작하며 file이 형식 3이 되고, 두 번째 시작은 아무것도 쓰지 않고, 다시 읽기는 현재 형식을 읽는다. 없는 file은 없는 채로 남고, 가장 새 대상보다 새 형식과 불량 file은 파일과 숫자를 이름하며 거부된다.
 - 선언된 릴리즈 단계가 형식 2 상태에서 릴리즈로 빌드된 host를 한 번 실행해 갱신과 첫 host log 줄을 요구하고, 같은 fixture로 릴리즈 `sok`를 실행한다. workflows test가 그 단계를 검사한다.
 - 기계적 check는 변경 시점에 writer의 저장 schema·reader의 엄격함·`InstalledFormat`을 함께 묶고, spec·시험·fixture의 installed 형식 번호 언급이 `InstalledFormat`과 다르면 보고한다. F189 fixture는 이전 릴리즈 형태를 이름하므로 이 check가 그 형태에 묶어 둔다.
-- 새 개념(마이그레이션 정의, 바닥, 연산 이름, file 분류, 폴더를 옮기거나 file을 넘는 변경의 이름 붙은 경로 — 교체 변경, 자기 release에 문서화되고 재설치로 수행된다)을 용어 목록에 등록한다.
+- 새 개념(마이그레이션 정의, 바닥, 연산 이름, file class, 폴더를 옮기거나 file을 넘는 변경의 이름 붙은 경로 — replacement change, 자기 release에 문서화되고 재설치로 수행된다)을 용어 목록에 등록한다.
 - spec 교정이 같은 변경에 함께 간다: `installation.md`(file 없을 때 기본값), `host-contract.md`(형식 1 기본값 줄, 절대 `path` 줄, 바뀌는 installed case들), 지워진 형식 1 변환을 아직 말하는 오래된 주석(`installed.go`, `installed.rs`), 두 언어의 지침 개정 — 두 차례 제거의 기록된 이유에 답함을 적는다: 정의는 배포에 실려 설치 순간에 한 번 적용되는 데이터이고, 적용 뒤에는 평범한 현재 형식 데이터이며, 이전 형식의 판독 code는 남지 않는다.
 
 ## 적대 검증

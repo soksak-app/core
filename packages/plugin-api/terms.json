@@ -162,6 +162,39 @@
         "frame hash"
       ],
       "allowed": []
+    },
+    {
+      "term": "migration definition",
+      "definition": "The data a release ships for one stored file when its format number rises: from, to and an ordered list of named operations.",
+      "rejected": [
+        "migration script",
+        "마이그레이션 스크립트"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "floor",
+      "definition": "The oldest stored format a definition chain migrates; an older form is refused.",
+      "rejected": [
+        "바닥 형식"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "replacement change",
+      "definition": "A stored-format change that moves folders or crosses files: it has no definition, its release documents it and reinstalling carries it out.",
+      "rejected": [
+        "교체 변경"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "file class",
+      "definition": "The kind of a stored file of a configuration folder or a project root: numbered, transient, log, external or fetched.",
+      "rejected": [
+        "file 분류"
+      ],
+      "allowed": []
     }
   ]
 }

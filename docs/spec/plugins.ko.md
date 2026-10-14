@@ -56,6 +56,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `preview` | 아니오 | `{ "ink": "--<토큰>" }`: 라이브러리 미리보기에서 플러그인 카드의 색을 정하는 테마 토큰 이름. `surface`가 필요하다 |
 | `dependencies` | 아니오 | `{ "<package>": "<version range>" }`: plugin이 필요로 하는 sidecar와 plugin, 그리고 plugin이 함께 동작하는 그 version의 범위([version과 범위](installation.ko.md#version과-범위)). 의존은 표면 페이지나 상태 모듈이 쓰는 [사이드카](sidecars.ko.md)를 가리키며 그때 `surface`나 `state`가 필요하거나, plugin이 기여하는 [확장 지점](#확장-지점)을 가진 plugin을 가리키며 plugin을 설치하면 그것도 설치된다. registry index나 `installed.json`의 plugin이 그 이름을 가지면 의존은 plugin을 가리키고, 아니면 sidecar를 가리킨다. plugin이 다른 sidecar와 plugin에 요구하는 것의 유일한 선언이다 |
 | `events` | 아니오 | plugin의 event catalog 파일의 패키지 안 경로([logging](logging.ko.md#catalog)). 릴리스는 그 파일을 담는다 |
+| `migrations` | 아니요 | `{ "<저장 file>": "<경로>" }`: plugin이 소유하는 저장 file의 마이그레이션 정의. 각각은 package 안의 정의 file 경로이고 형식은 [저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)과 같다. 오늘 그런 file을 소유한 plugin은 없으므로 아무도 선언하지 않는다. 그것을 선언하는 release는 그 field를 아는 core release를 요구한다 |
 | `extends` | 아니오 | `{ "<point>": { "version": "x.y.z", "schema": <스키마>, "modules"?: { "<bare specifier>": "<경로>" } } }`: 다른 plugin이 기여하는 [확장 지점](#확장-지점). `surface`가 필요하다 |
 | `contributes` | 아니오 | `{ "<plugin id>.<point>": [ { "range": "<version range>", "module": "<경로>", ... } ] }`: plugin이 다른 plugin의 확장 지점에 기여하는 항목 |
 | `state` | 아니오 | `{ "module": "ui/state.js" }`: 표면 밖의 상태를 갖는 [플러그인 상태](#플러그인-상태) 모듈. `sections`가 필요하다 |
@@ -87,6 +88,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 창 연결은 등록된 플러그인을 요구하지만 표면은 요구하지 않고, 카드 연결은 표면을 요구한다. `left`나 `right` 연결은 일반 선택이며 `plugin: null`을 요구한다. 플러그인별 창 연결은 `window-left`나 `window-right`를 쓴다.
 
 ## 섹션
+section id와 plugin id는 한 번 공개되면 불변이다. tab·저장된 settings·저장된 project data가 그것들을 참조하고, 이름을 바꾸면 어떤 마이그레이션도 닿지 않는 저장 file이 깨진다([저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)).
 
 섹션의 `module`은 두 방향에 공통인 JavaScript 경로 하나 또는 `{horizontal, vertical}` 경로 객체다. 객체는 두 키를 모두 요구하며 그 외 키를 허용하지 않는다. 각 값은 plugin 내부의 상대 `.js` 경로이고 두 파일 모두 배포 목록에 있어야 한다. 한 방향을 다른 방향으로 대체하지 않는다. 카드 레이아웃은 상·하에 `horizontal`, 좌·우와 외부 창 사이드바에 `vertical`을 선택한다. 워크벤치는 선택한 구현의 `mount(root, context)`에 `context.orientation`을 전달하고 `core.sidebars`에 방향을 공개한다. 방향이 바뀌면 기존 구현을 해제하고 새 구현을 마운트하며 섹션 선택·접힘 상태는 유지한다. 가로 `list`는 섹션을 좌우로 배치하고 세로 `list`는 상하로 배치한다. 최종 공통 검사와 릴리스 적용은 미완료다.
 
@@ -115,6 +117,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 상태 모듈은 `package.json`의 `files`에 나열한 파일이며, 나열하지 않으면 `sok plugin pack`이 실패한다. 마운트나 해제의 실패는 페이지 오류로 보고한다.
 
 ## 프로젝트 데이터
+per-key 형식은 코어가 소유한 file 안의 값을 변환한다. 저장 file 자체의 형태는 정의로 갱신된다([저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)).
 
 `data`는 상태 모듈이 프로젝트마다 저장하는 키를 선언한다. `schema`는 공개 선언의 스키마 부분 집합(`type`, `enum`, `properties`, `items`)을 쓰고 `default`는 그 스키마에 맞아야 한다. 선택 항목 `format`은 양의 정수이며 없으면 1이다. 플러그인은 키의 저장 형태를 바꿀 때 이 값을 올린다. 워크벤치는 각 값을 `projects.json`에서 그 프로젝트의 `plugins.<플러그인 id>.<키>` 항목에 `{ "format": <format>, "value": <value> }`로 저장한다([저장](projects.ko.md#저장)). `data.get`은 저장된 값이나 기본값을 반환하고, 저장된 값이 스키마에 맞지 않으면 실패한다. `data.set`은 값이 맞지 않거나 선언하지 않은 키이면 쓰지 않고 실패하며, 선언한 format으로 저장하고, 저장소가 쓰기를 받아들인 뒤 끝난다.
 

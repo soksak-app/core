@@ -92,6 +92,31 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 설정 폴더 안에서 `<id>`의 plugin version `<version>`은 `plugins/<id>/<version>`에, sidecar version의 플랫폼 release는 `sidecars/<file name>/<version>/<platform>`에 푼다. `plugins/installed.json`은 `format` 2, `plugins`, `sidecars`를 가진다. `plugins`는 plugin id마다 `{ version, path, enabled, sidecars, previous? }`를 정한다. 각각 쓰는 version, 설치가 그 version을 푼 폴더 `plugins/<id>/<version>`, 불러올지 여부, 그 version의 sidecar 범위, 되돌리기가 복원할 version이다. Plugin의 이름은 기록된 `path`의 `package.json`의 `name`이며, host와 `sok`은 거기서 읽고 `installed.json`은 이름을 담지 않는다. `sidecars`는 설치된 plugin이 지정한 sidecar마다 `{ version, path }`를 정한다. 쓰는 version은 그 sidecar를 지정한 모든 설치된 plugin의 범위를 채우며, `path`는 설치가 그 플랫폼 release를 푼 폴더 `sidecars/<file name>/<version>/<platform>`이다. 어느 설치된 plugin도 지정하지 않은 sidecar는 나오지 않는다. 각 `path`는 설정 폴더에 대한 상대 경로이며 이 규칙이 정하는 폴더와 같아야 하므로 설정 폴더를 옮길 수 있다([projects](projects.ko.md#저장)). 설치는 release를 풀 때 각 `path`를 기록하고, host와 `sok`은 설정 폴더에 대해 푼 기록된 경로에서만 파일을 읽는다. `format`이 2가 아닌 파일은 `<file>: plugins/installed.json: format must be 2`로 실패하고, plugin이 `package` 필드를 담은 파일은 `<file>: plugins/installed.json <id>: unknown field package`로 실패하며, 파일은 바뀌지 않는다.
 
+## 저장 데이터 마이그레이션
+
+저장 file의 형태를 바꾸는 release는 그 file의 형식 번호를 올리고 마이그레이션 정의를 싣는다. 정의는 코드가 아니라 데이터다: `{ "file": "<경로>", "from": <n>, "to": <n+1>, "operations": [...] }`. 각 연산은 engine의 이름 붙은 연산 중 하나 — `setFormat`, `removeField`, `renameField` — 이고, 적용 범위(문서 전체 또는 map의 각 항목)를 가진다. 정의는 정확히 한 file만 이름한다. 두 file을 이름하거나 이 계약의 release가 소유하지 않은 file을 이름하는 정의는 적재에서 거부된다. 폴더를 옮기거나 file을 넘는 변경은 정의를 갖지 않는다: 그것은 replacement change이고, 자기 release가 문서화하며, 재설치가 수행한다.
+
+계약의 저장 file들과 소유자, 형식 번호를 실는 member, file class:
+
+| File | 소유자 | 번호 | file class |
+| --- | --- | --- | --- |
+| `plugins/installed.json` | 코어 | `format` | numbered |
+| `plugins/registry.json` | 코어 | `format` | numbered |
+| `log-policy.json` | 코어 | `schema` | numbered |
+| `settings.json`, `<project root>/.soksak/settings.json` | 코어 | 번호 없음. 번호를 주는 변경부터 이 계약을 따른다 | numbered |
+| `projects.json` | 코어 | 번호 없음. 위와 같다 | numbered |
+| `logs/<role>-<boot>.jsonl`과 그 색인 | 코어 | file마다(`log.open`, 색인 머리) | log |
+| `endpoint.json`, `process.lock`, `webkit-children.json`, `performance` | 코어 | 실행마다 다시 쓴다 | transient |
+| `plugins/<id>/<version>/`, `sidecars/<file name>/`, `updates/` | release 내용 | 경로의 version | external |
+| `services/<name>/` | sidecar | sidecar이 정한다 | external |
+| 가져온 registry index | registry | 그 `format` | fetched |
+
+마이그레이션은 언제나 코어가 수행한다. engine은 하나 — 두 command line의 설치 library(`packages/sok`, 원본 하나)에 있고 — 정의를 읽어 각 계약 file의 공유 reader 입구에서 적용한다. 그래서 모든 process의 모든 reader — 시작에서와 이후의 모든 읽기에서의 host, 그 file을 읽는 모든 `sok` 입구 — 가 현재 형태를 만나고 입구 나열이 낡지 않는다. 코어의 정의는 `packages/sok/migrations/`의 원본 하나이고 두 build가 embed한다. plugin이나 sidecar은 자기 release에 정의를 실고 manifest로 선언하며, 형식은 같다([plugin.json](plugins.ko.md#pluginjson)). 정의는 자기 manifest의 `engines.soksak`이 요구하는 core의 연산만 쓸 수 있고, 모르는 연산은 정의·소유자·연산과 함께 거부된다.
+
+engine은 멱등하고 범위가 정해져 있다. file의 형식 번호를 읽고 현재 번호까지 정의를 단계별로 적용한다. 이미 현재 번호인 file은 그대로 두고, 사슬을 두 번 적용해도 같은 byte를 쓴다. floor보다 오래되거나 현재 번호보다 새 형식은 파일과 두 숫자를 이름하는 오류로 거부되고, 판독 불가한 file도 그렇다. `plugins/installed.json`의 floor는 형식 2다. 형식 1은 이전 애플리케이션 identity의 설정 폴더 것이고 그 변환의 제거가 닫았다; 그런 file은 파일과 형식과 함께 거부된다. engine은 없는 file을 만들지 않는다 — 없는 file은 현재 형식의 빈 상태다 — 그리고 다른 process가 설정을 소유 중이면 쓰지 않는다. 살아 있는 소유자는 자기 첫 읽기에서 갱신했으므로, 다른 소유자를 만난 reader는 file을 그대로 읽는다. engine은 자기 package의 하나둘뿐인 writer로 쓰고 그 writer는 교체 앞에 sync한다. engine이 적용한 갱신은 적용한 process의 기록이다 — 그 process의 event writer로 쓴다 — 그리고 거부 자체가 기록이다.
+
+plugin은 설정 폴더에 저장 file을 소유하지 않는다. plugin이 남기는 값은 `projects.json`의 key로 살고 `convertData`가 그 per-key 형식을 변환한다([프로젝트 데이터](plugins.ko.md#프로젝트-데이터)). sidecar의 정의는 자기 `services/<name>/` 아래 경로만 이름하고 서비스가 멈춰 있을 때 적용된다. 공개된 plugin과 settings section의 식별자는 한 번 공개되면 불변이다. 이름을 바꾸면 engine이 닿을 수 없는 저장 file이 깨진다.
+
 ## 설치된 plugin 제공
 
 두 host는 설정 폴더에서 다음 경로를 제공하며, 요청마다 `plugins/installed.json`을 읽으므로 변경 뒤에 불러온 page는 그 변경을 본다.

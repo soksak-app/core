@@ -56,6 +56,7 @@ Core window checks install plugins from a registry fixture. `scripts/workspace-r
 | `preview` | no | `{ "ink": "--<token>" }`: the theme token name that colors the plugin's cards in library previews; requires `surface` |
 | `dependencies` | no | `{ "<package>": "<version range>" }`: the sidecars and plugins the plugin needs, each with the range of its versions that the plugin works with ([versions and ranges](installation.md#versions-and-ranges)). A dependency names either a [sidecar](sidecars.md) that the page surface or the state module uses, and then requires `surface` or `state`, or a plugin whose [extension points](#extension-points) the plugin contributes to, and installing the plugin installs it. A dependency names a plugin when a plugin of the registry index or of `installed.json` has that name, and a sidecar otherwise. It is the only declaration of the plugin's requirements of other sidecars and plugins |
 | `events` | no | Path inside the package of the file with the event catalog of the plugin ([logging](logging.md#catalog)); the release packs the file |
+| `migrations` | no | `{ "<stored file>": "<path>" }`: the migration definitions of a stored file the plugin owns, each the path inside the package of a definition of the form [stored data migration](installation.md#stored-data-migration); no plugin owns such a file today, so no plugin declares it. A release that declares it requires the core release that knows the field |
 | `extends` | no | `{ "<point>": { "version": "x.y.z", "schema": <schema>, "modules"?: { "<bare specifier>": "<path>" } } }`: the [extension points](#extension-points) that other plugins contribute to; requires `surface` |
 | `contributes` | no | `{ "<plugin id>.<point>": [ { "range": "<version range>", "module": "<path>", ... } ] }`: the items the plugin contributes to extension points of other plugins |
 | `state` | no | `{ "module": "ui/state.js" }`: the [plugin state](#plugin-state) module that holds state outside a surface; requires `sections` |
@@ -87,6 +88,7 @@ Core normalizes each local set ID to `<plugin>.<local>`, each card mapping to `{
 Window links require registered plugins but not surfaces; card links require surfaces. A `left` or `right` link is the general choice and requires `plugin: null`; a plugin-specific window link uses `window-left` or `window-right`.
 
 ## Sections
+A section id and a plugin id are immutable once a release publishes them: tabs, stored settings and stored project data reference them, and a rename breaks stored files that no migration reaches ([stored data migration](installation.md#stored-data-migration)).
 
 A section's `module` is either one JavaScript path used in both orientations or `{horizontal, vertical}` paths. The object requires both keys and rejects other keys. Each value is a relative `.js` path inside the plugin, and both files must be published. A missing orientation is not replaced by the other implementation. Card layout selects `horizontal` for top/bottom and `vertical` for left/right and external window sidebars. The workbench passes `context.orientation` to the selected implementation's `mount(root, context)` and exposes orientation in `core.sidebars`. An orientation change disposes the old implementation and mounts the new one while preserving section selection and folding. Horizontal `list` places sections left to right; vertical `list` places them top to bottom. Final shared suites and release application remain pending.
 
@@ -115,6 +117,7 @@ A plugin without a surface, or with state that no single tab owns, declares a `s
 The state module is a file listed in the `files` of `package.json`; `sok plugin pack` fails when it is not listed. A mount or dispose failure is reported as a page error.
 
 ## Project data
+The per-key format converts values inside a file the core owns; the form of a stored file itself migrates by a definition ([stored data migration](installation.md#stored-data-migration)).
 
 `data` declares keys that the state module stores for each project. `schema` uses the schema subset of exposure declarations (`type`, `enum`, `properties`, `items`), and `default` must match it. The optional `format` is a positive integer, 1 when omitted, that the plugin increases when it changes the stored form of the key. The workbench stores each value as `{ "format": <format>, "value": <value> }` in the project's `plugins.<plugin id>.<key>` entry of `projects.json` ([persistence](projects.md#persistence)). `data.get` returns the stored value or the default and fails when a stored value does not match the schema; `data.set` fails without writing when the value does not match or the key is not declared, stores the declared format, and resolves after the store accepted the write.
 
