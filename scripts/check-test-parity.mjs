@@ -2074,6 +2074,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F183",
+    implementation: [{ file: "Makefile", symbol: "release-check: wailsv3-build-release tauriv2-build-release registry-manifest-check" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release workflow runs a release-built host once on the stored data of the earlier release" }],
+    expected: "A release publishes both bundles from a tag whose CI passed and runs a release-built host once on the stored data of the earlier release.",
+    levels: ["unit"],
+  },
+  {
     id: "F188",
     implementation: [{ file: "packages/sok/wailsv3/src/migrate.go", symbol: "func MigrateInstalled" }],
     tests: [{ file: "packages/sok/wailsv3/tests/migrate_test.go", id: "TestMigrateInstalledMigratesTheReleasedFormat2ToTheCurrentFormat" }],
