@@ -334,7 +334,7 @@ window check는 시험 대상 애플리케이션의 event log에 시험마다 �
 
 ### 분량 예산
 
-catalog는 로그 분량의 예산을 `budget`으로 선언한다: class마다 한 설정 폴더의 process들이 함께 저장해도 되는 분당 event 수와 byte 수(줄과 그 줄바꿈)이다. 실행의 감사(`scripts/audit-run.mjs`)는 실행의 첫 시작 표시부터 마지막 끝 표시까지 각 설정 폴더의 모든 파일의 모든 줄을 세어 그 구간의 분으로 나누고, 결과를 `judgment.json`의 `volume`(`{config, minutes, classes}`, class마다 `{events, bytes, eventsPerMinute, bytesPerMinute}`)에 쓰며, 예산을 넘은 class마다, 그리고 예산이 이름하지 않은 class마다 finding을 보고한다. `budget`이 없는 catalog는 거부한다. 예산은 2026-10-14에 `library`, `outside`, `registry`, `settings` 창 검사가 두 애플리케이션에서 측정한 가장 큰 비율의 1.5배이다:
+catalog는 로그 분량의 예산을 `budget`으로 선언한다: class마다 한 설정 폴더의 process들이 함께 저장해도 되는 분당 event 수와 byte 수(줄과 그 줄바꿈)이다. 실행의 감사(`scripts/audit-run.mjs`)는 실행의 첫 시작 표시부터 마지막 끝 표시까지 각 설정 폴더의 모든 파일의 모든 줄을 세어 그 구간의 분으로 나누고, 결과를 `judgment.json`의 `volume`(`{config, minutes, classes}`, class마다 `{events, bytes, eventsPerMinute, bytesPerMinute}`)에 쓰며, 구간이 1분 이상이면 예산을 넘은 class마다 finding을 보고한다. 더 짧은 구간의 비율은 몰림의 비율이므로 판정 없이 기록한다. 예산이 이름하지 않은 class는 모든 실행에서 finding이며, `budget`이 없는 catalog는 거부한다. 예산은 2026-10-14에 `library`, `outside`, `registry`, `settings` 창 검사가 두 애플리케이션에서 측정한 가장 큰 비율의 1.5배이다:
 
 | class | 분당 event | 분당 byte | 측정한 최대 |
 |---|---|---|---|

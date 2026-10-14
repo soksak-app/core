@@ -166,6 +166,9 @@ export function auditRun(catalog, folder) {
       }
       counted.eventsPerMinute = minutes > 0 ? Math.round(counted.events / minutes) : 0;
       counted.bytesPerMinute = minutes > 0 ? Math.round(counted.bytes / minutes) : 0;
+      // A rate per minute needs a minute of events: over a shorter span it is the rate of a burst, so it is recorded and
+      // not judged.
+      if (minutes < 1) continue;
       if (counted.eventsPerMinute > limit.events) {
         findings.push(`${marksFile}:1: the class ${name} of ${config} stored ${counted.eventsPerMinute} events per minute, above its budget of ${limit.events}`);
       }

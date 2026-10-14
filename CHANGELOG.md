@@ -6,6 +6,7 @@
 
 - F161.56, F161.59, F161.62: closed as not reproduced on the current builds, with the records that show a recurrence in place.
 - F161.27: closed as not reproduced after three repeat runs of the outside resize check on both applications.
+- F160.20.1: the run audit judges the volume budget only over a run of a minute or more.
 - F160.7.6: the input latency check measures the gate of every class at info and the bytes per minute of each event file.
 - F178: the Tauri event writer writes its batch at each interval while events keep arriving, as the Go writer does.
 - F177.1: a gated chain hop is judged by every declared level and every policy in force during the chain.

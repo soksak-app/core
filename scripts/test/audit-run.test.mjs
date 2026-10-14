@@ -132,20 +132,32 @@ test('a chain finding of an earlier process before the first start mark belongs 
   assert.deepEqual(auditRun(chained, folder), [`${join(config, 'logs', `host-${BOOT}.jsonl`)}:3: chain input of c-new lacks host.update.start`]);
 });
 
-test('a class that stores more events or bytes per minute than its budget is a finding, and the judgment holds the volume of each class', (t) => {
-  // Three lifecycle events in the span of 2 ms between the marks are 90000 events per minute.
-  const tight = { ...catalog, budget: { ...catalog.budget, lifecycle: { events: 1000, bytes: 100000000 } } };
+test('a class that stores more events or bytes per minute than its budget over a run of a minute or more is a finding, and the judgment holds the volume of each class', (t) => {
+  // Three lifecycle events in the span of 90 s between the marks are 2 events per minute.
+  const tight = { ...catalog, budget: { ...catalog.budget, lifecycle: { events: 1, bytes: 100000000 } } };
+  const late = (seq, name) => event(seq, 'host.test.end', { name, run: 'run-1', result: 'pass' }, { ts_us: US + 2000 + 90_000_000 });
   const { folder, config } = fixture(t, {
-    files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), focus(3), end(4, 't1')] },
+    files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), focus(3), late(4, 't1')] },
     marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 }), mark({ kind: 'end', boot: BOOT, seq: 4 })],
   });
   const findings = auditRun(tight, folder);
   assert.equal(findings.length, 1);
-  assert.match(findings[0], /marks\.jsonl:1: the class lifecycle of .+ stored 90000 events per minute, above its budget of 1000/);
+  assert.match(findings[0], /marks\.jsonl:1: the class lifecycle of .+ stored 2 events per minute, above its budget of 1/);
   const volume = judgment(folder).volume;
   assert.deepEqual(volume.map(({ config: folderOf, classes }) => [folderOf, Object.keys(classes)]), [[config, ['lifecycle']]]);
   assert.equal(volume[0].classes.lifecycle.events, 3);
-  assert.equal(volume[0].minutes, 2 / 60000);
+  assert.equal(volume[0].minutes, 1.5);
+});
+
+test('a run shorter than a minute records the volume of each class without judging it against the budget', (t) => {
+  // Three lifecycle events in 2 ms are 90000 events per minute, a rate of a burst and not of a minute.
+  const tight = { ...catalog, budget: { ...catalog.budget, lifecycle: { events: 1000, bytes: 100000000 } } };
+  const { folder } = fixture(t, {
+    files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), focus(3), end(4, 't1')] },
+    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 }), mark({ kind: 'end', boot: BOOT, seq: 4 })],
+  });
+  assert.deepEqual(auditRun(tight, folder), []);
+  assert.equal(judgment(folder).volume[0].classes.lifecycle.eventsPerMinute, 90000);
 });
 
 test('a catalog without a budget, or a class of a run that the budget does not name, is refused or a finding', (t) => {
