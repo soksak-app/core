@@ -74,10 +74,12 @@ test('the release workflow runs a release-built host once on the stored data of 
   const list = steps(text);
   const found = list.find((step) => step.name === 'Migrate the stored data of the earlier release');
   assert.ok(found, 'the workflow has no step that migrates the stored data of the earlier release');
-  assert.match(found.text, /"format":2/, 'the step writes the released format-2 form');
-  assert.match(found.text, /soksak-tauriv2.*--config-dir/, 'the step runs the release-built host once');
-  assert.match(found.text, /log\.migrated/, 'the step requires the migration record');
-  assert.match(found.text, /"format": ?3/, 'the step requires the migrated file');
+  assert.match(found.text, /bash scripts\/release-step\.sh/, 'the step runs the release step script');
+  const step = read('scripts/release-step.sh');
+  assert.match(step, /"format":2/, 'the script writes the released format-2 form');
+  assert.match(step, /--config-dir/, 'the script runs the host once');
+  assert.match(step, /log\.migrated/, 'the script requires the migration record');
+  assert.match(step, /"format": ?3/, 'the script requires the migrated file');
   assert.ok(list.findIndex((step) => step.name === 'Migrate the stored data of the earlier release') < list.findIndex((step) => step.name === 'Package'),
     'the migration runs before the bundles are packaged');
 });

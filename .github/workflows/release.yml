@@ -27,23 +27,7 @@ jobs:
         run: make release-check
       # 릴리즈 빌드가 이전 릴리즈가 쓴 저장 데이터에서 시작하는지 확인한다(docs/spec/installation.md#stored-data-migration, F189).
       - name: Migrate the stored data of the earlier release
-        run: |
-          config="$(mktemp -d)"
-          mkdir -p "$config/plugins"
-          cat > "$config/plugins/installed.json" <<'JSON'
-          {"format":2,"plugins":{"probe":{"package":"@scope/plugin-probe","version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{}}},"sidecars":{}}
-          JSON
-          timeout 30 "target/release/tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2" --config-dir "$config" &
-          host=$!
-          for _ in $(seq 1 100); do
-            grep -q '"event":"log.open"' "$config"/logs/host-*.jsonl 2>/dev/null && break
-            sleep 0.3
-          done
-          kill $host 2>/dev/null || true
-          wait $host 2>/dev/null || true
-          grep -q '"format": *3\|"format":3' "$config/plugins/installed.json"
-          grep -q '"event":"log.migrated"' "$config"/logs/host-*.jsonl
-          rm -rf "$config"
+        run: bash scripts/release-step.sh "target/release/tauriv2/soksak.app/Contents/MacOS/soksak-tauriv2"
       # 서명하지 않은 번들이므로 설치 안내를 release 본문으로 쓴다(docs/operations/install.md).
       - name: Package
         run: |
