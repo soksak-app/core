@@ -2056,6 +2056,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F186",
+    implementation: [{ file: "native/darwin/src/observe.m", symbol: "id sp_observe_workspace_notification" }],
+    tests: [{ file: "native/darwin/tests/activity_observers_test.m", id: "the activation names the application that was frontmost before it" }],
+    expected: "The activation of the application records the application that was frontmost before it.",
+    levels: ["unit"],
+  },
+  {
     id: "F185",
     implementation: [{ file: "packages/host/tauriv2/tests/event_native_platform_test.rs", symbol: "static SERIAL: Mutex<()>" }],
     tests: [{ file: "packages/host/tauriv2/tests/event_native_platform_test.rs", id: "the_platform_pulls_an_empty_native_ring_as_zero_bytes_and_no_loss" }],

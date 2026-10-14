@@ -68,10 +68,26 @@ void sp_observe_activity(void) {
             NSApplicationDidHideNotification: @"native.app.hidden",
             NSApplicationDidUnhideNotification: @"native.app.unhidden",
         };
-        // events: native.app.activated, native.app.deactivated, native.app.hidden, native.app.unhidden
+        // The workspace posts the activation of every application; the last one of another application is the application that
+        // was frontmost when this one becomes active, which the event native.app.activated names.
+        static pid_t previousPid = 0;
+        static NSString *previousBundle = nil;
+        sp_observe_workspace_notification("activity.workspace", SP_OBSERVE_COUNT, NSWorkspaceDidActivateApplicationNotification, ^(NSNotification *note) {
+            NSRunningApplication *app = note.userInfo[NSWorkspaceApplicationKey];
+            if (![app isKindOfClass:NSRunningApplication.class] || app.processIdentifier == getpid()) return;
+            previousPid = app.processIdentifier;
+            [previousBundle release];
+            previousBundle = [app.bundleIdentifier ?: @"" copy];
+        });
         for (NSNotificationName notification in application) {
             NSString *name = application[notification];
-            sp_observe_notification("activity.app", SP_OBSERVE_STORED, notification, nil, nil, ^(NSNotification *note) { emit(SP_CLASS_LIFECYCLE, name, @{}); });
+            BOOL activation = [notification isEqualToString:NSApplicationDidBecomeActiveNotification];
+            sp_observe_notification("activity.app", SP_OBSERVE_STORED, notification, nil, nil, ^(NSNotification *note) {
+                // default: before any other application was activated, the activation names the pid 0 and the empty bundle.
+                NSDictionary *fields = activation ? @{@"previous_pid": @(previousPid), @"previous_bundle": previousBundle ?: @""} : @{};
+                // events: native.app.activated, native.app.deactivated, native.app.hidden, native.app.unhidden
+                emit(SP_CLASS_LIFECYCLE, name, fields);
+            });
         }
         NSDictionary<NSNotificationName, NSString *> *windows = @{
             NSWindowDidBecomeKeyNotification: @"native.window.key",

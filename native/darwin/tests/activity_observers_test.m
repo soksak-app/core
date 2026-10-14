@@ -45,6 +45,29 @@ int main(void) { @autoreleasepool {
     check([occlusion[@"visible"] isKindOfClass:NSNumber.class] && CFGetTypeID((__bridge CFTypeRef)occlusion[@"visible"]) == CFBooleanGetTypeID(),
         @"the occlusion event says whether the window is visible as a boolean");
 
+    // The activation of the application names the application that another activation made frontmost before it, from the
+    // notifications of the workspace, so the source of an activation is found from the records.
+    NSRunningApplication *previous = nil;
+    for (NSRunningApplication *app in NSWorkspace.sharedWorkspace.runningApplications) {
+        if (app.processIdentifier != getpid() && app.bundleIdentifier.length > 0) {
+            previous = app;
+            break;
+        }
+    }
+    check(previous != nil, @"another application with a bundle identifier runs");
+    NSArray<NSDictionary *> *activations = capturedEvents(^{
+        [NSWorkspace.sharedWorkspace.notificationCenter postNotificationName:NSWorkspaceDidActivateApplicationNotification
+            object:NSWorkspace.sharedWorkspace userInfo:@{NSWorkspaceApplicationKey: previous}];
+        [NSNotificationCenter.defaultCenter postNotificationName:NSApplicationDidBecomeActiveNotification object:NSApp];
+    });
+    NSDictionary *activated = nil;
+    for (NSDictionary *event in activations) {
+        if ([event[@"name"] isEqual:@"native.app.activated"]) activated = event[@"fields"];
+    }
+    check([activated[@"previous_pid"] intValue] == previous.processIdentifier && [activated[@"previous_bundle"] isEqual:previous.bundleIdentifier],
+        [NSString stringWithFormat:@"the activation names the application that was frontmost before it (%@, want %d %@)", activated,
+            previous.processIdentifier, previous.bundleIdentifier]);
+
     // The first responder of a window changes without a notification: each change is an event with the classes before and after.
     NSTextField *other = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 60, 100, 30)];
     [window.contentView addSubview:other];

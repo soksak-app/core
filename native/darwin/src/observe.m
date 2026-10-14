@@ -178,6 +178,19 @@ id sp_observe_notification(const char *source, sp_observe_mode mode, NSNotificat
     }];
 }
 
+id sp_observe_workspace_notification(const char *source, sp_observe_mode mode, NSNotificationName name, void (^handler)(NSNotification *)) {
+    if (!handler) {
+        fail(source, "workspace_notification", @"the handler is missing");
+        return nil;
+    }
+    source_record *record = recordRegistration(source, mode, "workspace_notification", name);
+    if (!record) return nil;
+    return [NSWorkspace.sharedWorkspace.notificationCenter addObserverForName:name object:nil queue:nil usingBlock:^(NSNotification *note) {
+        deliver(record);
+        handler(note);
+    }];
+}
+
 bool sp_observe_notification_selector(const char *source, sp_observe_mode mode, id observer, SEL selector, NSNotificationName name, id object) {
     if (!observer || !selector || ![observer respondsToSelector:selector]) {
         fail(source, "notification_selector", @"the observer or its selector is missing");

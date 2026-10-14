@@ -676,8 +676,11 @@
       "layer": "native",
       "class": "lifecycle",
       "level": "info",
-      "fields": {},
-      "description": "The application became active."
+      "fields": {
+        "previous_pid": "number",
+        "previous_bundle": "string"
+      },
+      "description": "The application became active: `previous_pid` and `previous_bundle` name the application that the workspace activated last before it, which was frontmost when this one became active, or 0 and the empty text before the workspace activated another application."
     },
     "native.app.deactivated": {
       "layer": "native",

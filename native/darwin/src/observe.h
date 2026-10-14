@@ -32,6 +32,10 @@ typedef enum { SP_OBSERVE_RECORD = 0, SP_OBSERVE_COUNT = 1, SP_OBSERVE_STORED = 
 id sp_observe_notification(const char *source, sp_observe_mode mode, NSNotificationName name, id object, NSOperationQueue *queue,
     void (^handler)(NSNotification *));
 
+// Registers a block for a notification of the workspace (NSWorkspace.sharedWorkspace.notificationCenter), which posts the
+// activations of every application. Returns the token of that center, or nil after the event `native.observe.failed`.
+id sp_observe_workspace_notification(const char *source, sp_observe_mode mode, NSNotificationName name, void (^handler)(NSNotification *));
+
 // Registers the selector of an observer for a notification. The selector calls sp_observe_delivered(source). Returns false after
 // the event `native.observe.failed` when the observer or the selector is missing.
 bool sp_observe_notification_selector(const char *source, sp_observe_mode mode, id observer, SEL selector, NSNotificationName name, id object);
