@@ -6,6 +6,7 @@
 
 - F161.56, F161.59, F161.62: closed as not reproduced on the current builds, with the records that show a recurrence in place.
 - F161.27: closed as not reproduced after three repeat runs of the outside resize check on both applications.
+- F185: the native platform tests of the Tauri host run one at a time and read an emptied ring.
 - F181: the debug view shows the progress of 모두 저장, the host writes the archive on its own thread, a second save while one writes is refused, and every dropped modal reply is recorded.
 - F180: every script reads its command line with parseArgs of node:util and refuses an unknown or repeated option.
 - F160.19.3: `make host-allocations` reads its options with parseArgs and refuses an unknown option.
