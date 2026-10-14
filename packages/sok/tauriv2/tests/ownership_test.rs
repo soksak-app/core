@@ -94,6 +94,7 @@ fn a_writing_command_releases_the_configuration_when_it_ends() {
     let _ = fs::remove_dir_all(&config);
 }
 
+// contract: cli.plugin.host-entry-takes-no-lock
 // The host calls run_plugin_action inside its own ownership of the configuration directory, so that entry takes no
 // lock: a host that holds process.lock for its lifetime still runs its plugin operations.
 #[test]

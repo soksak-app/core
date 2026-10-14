@@ -71,6 +71,7 @@ func TestAWritingCommandReleasesTheConfigurationWhenItEnds(t *testing.T) {
 	}
 }
 
+// contract: cli.plugin.host-entry-takes-no-lock
 // The host calls RunPluginAction inside its own ownership, so that entry must take no lock: a host that holds
 // process.lock for its lifetime still runs its plugin operations.
 func TestRunPluginActionTakesNoLockBesideALiveOwner(t *testing.T) {
