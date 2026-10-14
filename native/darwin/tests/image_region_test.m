@@ -20,23 +20,6 @@
 }
 @end
 
-static NSTextInputContext *silentInputContext(id self, SEL _cmd) {
-    static NSTextInputContext *context;
-    if (!context) context = [[SilentInputContext alloc] initWithClient:self];
-    return context;
-}
-
-/// Gives one view the silent input context through a subclass of its own class.
-static void silenceInputMethod(NSView *view) {
-    NSString *name = [NSStringFromClass(view.class) stringByAppendingString:@"Silent"];
-    Class silent = NSClassFromString(name);
-    if (!silent) {
-        silent = objc_allocateClassPair(view.class, name.UTF8String, 0);
-        class_addMethod(silent, @selector(inputContext), (IMP)silentInputContext, "@@:");
-        objc_registerClassPair(silent);
-    }
-    object_setClass(view, silent);
-}
 
 static int failures = 0;
 static NSUInteger countedSurfaceObserverRegistrations = 0;
@@ -897,11 +880,14 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_place(region, 10, 10, 10, 10, true);
         sp_region_focus(region);
         NSTextView *regionView = (NSTextView *)region;
+        SilentInputContext *silent = [[[SilentInputContext alloc] initWithClient:regionView] autorelease];
+        sp_region_set_input_context(region, silent);
         if (marked.length > 0) {
             [(id<NSTextInputClient>)regionView setMarkedText:marked selectedRange:NSMakeRange(1, 0)
                 replacementRange:NSMakeRange(NSNotFound, 0)];
         }
-        silenceInputMethod(regionView);
+        check(regionView.hasMarkedText == (marked.length > 0),
+            [NSString stringWithFormat:@"silent input method: the document holds the marked text \"%@\" when the key arrives", marked]);
         NSEvent *event = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0
             windowNumber:0 context:nil characters:@"\u3147" charactersIgnoringModifiers:@"\u3147" isARepeat:NO keyCode:2];
         [collectedEvents removeAllObjects];

@@ -36,6 +36,7 @@
 @property size_t presentedHeight;
 @property double presentedScale;
 @property(copy) NSString *presentationError;
+@property(retain) NSTextInputContext *givenInputContext;  // The context of sp_region_set_input_context, or nil.
 @property(assign) NSView *webSurface;  // The logical surface view. Not owned by this object.
 @property NSEdgeInsets insets;
 @property NSPoint caretPos;
@@ -253,7 +254,14 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [_imageLayer release];
     [_presentationError release];
     [_accessibilityText release];
+    [_givenInputContext release];
     [super dealloc];
+}
+
+// The keys of the region go to the context that sp_region_set_input_context gave, and otherwise to the context of AppKit.
+- (NSTextInputContext *)inputContext {
+    if (self.givenInputContext) return self.givenInputContext;
+    return [super inputContext];
 }
 
 - (BOOL)acceptsFirstResponder {
@@ -1270,6 +1278,11 @@ void sp_region_caret(void *handle, double x, double y, double w, double h) {
     view.caretPos = NSMakePoint(x, y);
     view.caretWidth = w;
     view.caretHeight = h;
+}
+
+void sp_region_set_input_context(void *handle, void *context) {
+    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
+    ((SPImageRegion *)handle).givenInputContext = (NSTextInputContext *)context;
 }
 
 void sp_region_text(void *handle, const char *utf8) {

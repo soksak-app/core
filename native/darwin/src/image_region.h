@@ -38,6 +38,11 @@ void sp_region_focus(void *region);
 // Stores the caret (input cursor) position. The input method uses the caret height to place its candidate window.
 void sp_region_caret(void *region, double x, double y, double w, double h);
 
+// Gives the region the input context (an NSTextInputContext) that its keys go to; NULL returns them to the context of
+// AppKit. The region retains the context. A test gives a context that answers nothing, which is how the input method
+// treats a key outside the key window of the active application, to reach the error report of that key.
+void sp_region_set_input_context(void *region, void *context);
+
 // Stores the string that is exposed as the accessibility value.
 void sp_region_text(void *region, const char *utf8);
 
