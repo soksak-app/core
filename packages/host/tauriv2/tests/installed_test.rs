@@ -21,7 +21,7 @@ fn write_installed(config: &Path, files: &[(&str, &str)]) {
 /// A configuration folder in which two enabled plugins, one disabled plugin and one sidecar are installed.
 fn installed_fixture() -> tempfile::TempDir {
     let config = tempfile::tempdir().unwrap();
-    let state = r#"{"format": 2, "plugins": {
+    let state = r#"{"format": 3, "plugins": {
         "term": {"version": "0.1.0", "path": "plugins/term/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
         "alpha": {"version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}},
         "off": {"version": "1.0.0", "path": "plugins/off/1.0.0", "enabled": false, "sidecars": {}}},
@@ -122,7 +122,7 @@ fn installed_plugins_document_refuses_a_package_field() {
         config.path(),
         &[(
             "plugins/installed.json",
-            r#"{"format": 2, "plugins": {"alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}}}, "sidecars": {}}"#,
+            r#"{"format": 3, "plugins": {"alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}}}, "sidecars": {}}"#,
         )],
     );
     let state = config.path().join("plugins/installed.json");
@@ -172,14 +172,14 @@ fn installed_plugins_document_reports_an_invalid_state() {
         config.path(),
         &[(
             "plugins/installed.json",
-            r#"{"format": 3, "plugins": {}, "sidecars": {}}"#,
+            r#"{"format": 9, "plugins": {}, "sidecars": {}}"#,
         )],
     );
     let file = config.path().join("plugins/installed.json");
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), false)),
         format!(
-            r#"{{"error":"{}: plugins/installed.json: format must be 2"}}"#,
+            r#"{{"error":"{}: the file holds format 9; the definitions migrate formats 2 to 3"}}"#,
             file.display()
         )
     );

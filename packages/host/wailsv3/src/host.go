@@ -125,6 +125,9 @@ func Run(assets fs.FS, options Options) error {
 	}
 	host.events = eventLog
 	UseHostEventLog(eventLog)
+	// The records of the migration engine go through the event writer of this process
+	// (docs/spec/installation.md#stored-data-migration).
+	sok.UseMigrationLog(eventLog)
 	// The policy of the event log is the file log-policy.json, which the host and every process watch (docs/spec/logging.md#classes-and-policy).
 	stopPolicy, err := StartLogPolicy(eventLog, nil)
 	if err != nil {

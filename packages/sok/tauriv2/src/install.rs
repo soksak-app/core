@@ -13,7 +13,7 @@ use serde_json::{Map, Value};
 pub const INSTALL_FORMAT: u64 = 1;
 
 /// The format number of the installation state file. Format 2 records the installation folder as a path relative to the configuration folder.
-pub const INSTALLED_FORMAT: u64 = 2;
+pub const INSTALLED_FORMAT: u64 = 3;
 
 /// The file in the configuration folder that holds the installation state.
 pub const INSTALLED: &str = "plugins/installed.json";

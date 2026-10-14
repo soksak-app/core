@@ -354,7 +354,7 @@ func TestReleasesAndInstallationPathsFollowTheDeclaredNames(t *testing.T) {
 
 // contract: install.installed.consistency
 func TestInstalledStateNamesOneVersionOfEachPluginAndSidecar(t *testing.T) {
-	text := `{"format": 2, "plugins": {
+	text := `{"format": 3, "plugins": {
 		"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "previous": "0.1.0", "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
 		"side": {"version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
 		"sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}}`
@@ -379,7 +379,7 @@ func TestInstalledStateNamesOneVersionOfEachPluginAndSidecar(t *testing.T) {
 		{func(v any) {
 			at(v, "sidecars").(map[string]any)["unused"] = map[string]any{"version": "1.0.0", "path": "sidecars/unused/1.0.0/darwin-arm64"}
 		}, "plugins/installed.json: sidecar unused is named by no installed plugin"},
-		{func(v any) { v.(map[string]any)["format"] = 1.0 }, "plugins/installed.json: format must be 2"},
+		{func(v any) { v.(map[string]any)["format"] = 1.0 }, "plugins/installed.json: format must be 3"},
 		{func(v any) { at(v, "plugins", "probe").(map[string]any)["path"] = "/config/plugins/probe/0.2.0" }, "plugins/installed.json probe: path must be plugins/probe/0.2.0"},
 		{func(v any) { at(v, "plugins", "probe").(map[string]any)["path"] = "plugins/probe/../side/1.0.0" }, "plugins/installed.json probe: path must be plugins/probe/0.2.0"},
 		{func(v any) {
@@ -411,7 +411,9 @@ func TestInstalledFileOfAnotherFormatIsRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, _, stderr := run("plugin", "list", "--config-dir", config)
-	want := "sok: " + file + ": plugins/installed.json: format must be 2\n"
+	// The form below the floor is refused by the migration engine and the file stays unchanged
+	// (docs/spec/installation.md#stored-data-migration).
+	want := "sok: " + file + ": the file holds format 1; the definitions migrate formats 2 to 3\n"
 	if code != 1 || stderr != want || readText(t, file) != former {
 		t.Fatalf("code %d stderr %q want %q", code, stderr, want)
 	}

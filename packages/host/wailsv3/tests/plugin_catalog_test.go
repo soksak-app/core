@@ -32,7 +32,7 @@ func TestTheHostClassifiesPluginEventsByTheInstalledCatalogsAndRecordsACatalogIt
 	config := t.TempDir()
 	writeCatalogPlugin(t, config, "probe", `{"events":{"plugin.probe.frame":{"class":"frame"}}}`)
 	broken := writeCatalogPlugin(t, config, "broken", `{"events":`)
-	installed := `{"format":2,"plugins":{` +
+	installed := `{"format":3,"plugins":{` +
 		`"probe":{"version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{}},` +
 		`"broken":{"version":"1.0.0","path":"plugins/broken/1.0.0","enabled":true,"sidecars":{}}},"sidecars":{}}`
 	if err := os.WriteFile(filepath.Join(config, "plugins", "installed.json"), []byte(installed), 0o644); err != nil {

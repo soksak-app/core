@@ -87,6 +87,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.workspace.settings" => Some(Class::Lifecycle),
         "log.dropped" => Some(Class::Lifecycle),
         "log.gated" => Some(Class::Lifecycle),
+        "log.migrated" => Some(Class::Lifecycle),
         "log.open" => Some(Class::Lifecycle),
         "log.policy" => Some(Class::Lifecycle),
         "log.pruned" => Some(Class::Lifecycle),

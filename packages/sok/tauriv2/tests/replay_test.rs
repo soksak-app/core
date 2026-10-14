@@ -119,7 +119,7 @@ fn replay_config(name: &str, events: &Events, script: &str, role: &str) -> PathB
     write_file(
         &config.join("plugins/installed.json"),
         &format!(
-            r#"{{"format":2,"plugins":{{"probe":{{"version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{{"@probe/worker":"^1.0.0"}}}}}},"sidecars":{{"@probe/worker":{{"version":"1.0.0","path":"{folder}"}}}}}}"#
+            r#"{{"format":3,"plugins":{{"probe":{{"version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{{"@probe/worker":"^1.0.0"}}}}}},"sidecars":{{"@probe/worker":{{"version":"1.0.0","path":"{folder}"}}}}}}"#
         ),
         0o644,
     );

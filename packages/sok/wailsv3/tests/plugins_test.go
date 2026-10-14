@@ -256,7 +256,7 @@ func TestPluginUpdateKeepsPreviousAndRemoveDeletesTheFolders(t *testing.T) {
 		t.Fatalf("version folders %v", names)
 	}
 	code, stdout, _ = run("plugin", "list", "--config-dir", config)
-	if code != 0 || !strings.Contains(stdout, `"probe": {`) || !strings.Contains(stdout, `"format": 2`) {
+	if code != 0 || !strings.Contains(stdout, `"probe": {`) || !strings.Contains(stdout, `"format": 3`) {
 		t.Fatalf("list %d %q", code, stdout)
 	}
 	code, stdout, _ = run("plugin", "enable", "probe", "--config-dir", config)
@@ -270,7 +270,7 @@ func TestPluginUpdateKeepsPreviousAndRemoveDeletesTheFolders(t *testing.T) {
 	if exists(filepath.Join(config, "plugins/probe")) || exists(filepath.Join(config, "sidecars/scope-sidecar-worker")) {
 		t.Fatal("remove left plugin or sidecar folders")
 	}
-	if text := readText(t, filepath.Join(config, "plugins/installed.json")); text != "{\n  \"format\": 2,\n  \"plugins\": {},\n  \"sidecars\": {}\n}\n" {
+	if text := readText(t, filepath.Join(config, "plugins/installed.json")); text != "{\n  \"format\": 3,\n  \"plugins\": {},\n  \"sidecars\": {}\n}\n" {
 		t.Fatalf("installed.json %q", text)
 	}
 	code, _, stderr = run("plugin", "remove", "probe", "--config-dir", config)
@@ -296,7 +296,7 @@ func stateJSON(t *testing.T, config string) string {
 // contract: cli.plugin.state-reads-registry-and-installed
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
-	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":2,"plugins":{},"sidecars":{}},"firstRun":true}` {
+	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true}` {
 		t.Fatalf("state without a registry = %s", text)
 	}
 	index := pluginVersions(t, "0.2.0")
@@ -703,7 +703,7 @@ func TestReadInstalledRefusesAPackageField(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(installed), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	text := `{"format": 2, "plugins": {"side": {"package": "plugin-side", "version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}}, "sidecars": {}}`
+	text := `{"format": 3, "plugins": {"side": {"package": "plugin-side", "version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}}, "sidecars": {}}`
 	if err := os.WriteFile(installed, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}

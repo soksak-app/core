@@ -55,7 +55,7 @@ func writePlugin(t *testing.T, config, id, catalog string) {
 
 func writeInstalled(t *testing.T, config, plugins string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(config, "plugins", "installed.json"), []byte(`{"format":2,"plugins":{`+plugins+`},"sidecars":{}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config, "plugins", "installed.json"), []byte(`{"format":3,"plugins":{`+plugins+`},"sidecars":{}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

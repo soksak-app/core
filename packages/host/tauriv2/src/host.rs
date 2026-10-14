@@ -216,6 +216,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // exists.
                 let events = std::sync::Arc::new(event_log::start_host(&directory)?);
                 event_record::use_host_event_log(Some(std::sync::Arc::clone(&events)));
+                // The records of the migration engine go through the event writer of this process
+                // (docs/spec/installation.md#stored-data-migration).
+                soksak_sok::migrate::use_migration_log(Some(std::sync::Arc::clone(&events)));
                 // The policy of the event log is the file log-policy.json, which the host and every process watch
                 // (docs/spec/logging.md#classes-and-policy).
                 let policy_watch = log_policy::start_log_policy(&events, None)

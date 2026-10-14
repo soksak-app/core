@@ -84,7 +84,7 @@ fn write_plugin(config: &Path, id: &str, catalog: &str) {
 fn write_installed(config: &Path, plugins: &str) {
     std::fs::write(
         config.join("plugins/installed.json"),
-        format!(r#"{{"format":2,"plugins":{{{plugins}}},"sidecars":{{}}}}"#),
+        format!(r#"{{"format":3,"plugins":{{{plugins}}},"sidecars":{{}}}}"#),
     )
     .unwrap();
 }

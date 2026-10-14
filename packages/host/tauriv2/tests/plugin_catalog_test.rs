@@ -54,7 +54,7 @@ fn the_host_classifies_plugin_events_by_the_installed_catalogs_and_records_a_cat
     let broken = write_plugin(&config, "broken", r#"{"events":"#);
     fs::write(
         config.join("plugins/installed.json"),
-        r#"{"format":2,"plugins":{"probe":{"version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{}},"broken":{"version":"1.0.0","path":"plugins/broken/1.0.0","enabled":true,"sidecars":{}}},"sidecars":{}}"#,
+        r#"{"format":3,"plugins":{"probe":{"version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{}},"broken":{"version":"1.0.0","path":"plugins/broken/1.0.0","enabled":true,"sidecars":{}}},"sidecars":{}}"#,
     )
     .unwrap();
     apply_plugin_event_classes(&log, &config);

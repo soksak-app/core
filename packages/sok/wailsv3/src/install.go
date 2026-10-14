@@ -26,7 +26,7 @@ const Installed = "plugins/installed.json"
 
 // InstalledFormat is the format number of the installation state file. Format 2 records the installation folder as a
 // path relative to the configuration directory.
-const InstalledFormat = 2
+const InstalledFormat = 3
 
 // Platforms are the platform keys (`<os>-<arch>`) of sidecar releases.
 var Platforms = []string{"darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64", "windows-arm64", "windows-x64"}

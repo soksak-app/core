@@ -46,6 +46,7 @@ var eventClasses = map[string]Class{
 	"host.workspace.settings":       ClassLifecycle,
 	"log.dropped":                   ClassLifecycle,
 	"log.gated":                     ClassLifecycle,
+	"log.migrated":                  ClassLifecycle,
 	"log.open":                      ClassLifecycle,
 	"log.policy":                    ClassLifecycle,
 	"log.pruned":                    ClassLifecycle,

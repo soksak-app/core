@@ -25,7 +25,7 @@ hooks:
 # to CI.
 push-check:
 	@$(MAKE) --no-print-directory commits-check RANGE=@{upstream}..HEAD
-	@$(MAKE) --no-print-directory docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check
+	@$(MAKE) --no-print-directory docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check migrations-check
 	@$(MAKE) --no-print-directory rust-format-check go-format-check rust-clippy-check
 	@node --test scripts/test/census.test.mjs scripts/test/fallbacks.test.mjs
 
@@ -55,6 +55,16 @@ page-memory:
 host-allocations:
 	@case "$(PID)" in ''|*[!0-9]*) echo "host-allocations requires PID=<host process> [MINUTES=10]" >&2; exit 2;; esac
 	@node scripts/measure-host-allocations.mjs --pid $(PID) --minutes $(or $(MINUTES),10)
+
+# Copies the migration definitions from their single source into both command line packages (the Go embed reads inside
+# its package); the copies are tracked, and migrations-check refuses a difference.
+migrations-sync:
+	@cp packages/sok/migrations/installed.json packages/sok/wailsv3/src/migrations/installed.json
+	@cp packages/sok/migrations/installed.json packages/sok/tauriv2/src/migrations/installed.json
+
+migrations-check:
+	@for p in packages/sok/wailsv3 packages/sok/tauriv2; do cmp -s packages/sok/migrations/installed.json $$p/src/migrations/installed.json || { echo "$$p/src/migrations/installed.json differs from packages/sok/migrations/installed.json; run make migrations-sync" >&2; exit 1; }; done
+	@echo "Migration definition checks passed"
 
 # Checks that core, plugin, and sidecar sources do not name each other.
 boundaries:

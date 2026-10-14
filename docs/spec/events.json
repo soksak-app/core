@@ -8,6 +8,17 @@
     "sok"
   ],
   "events": {
+    "log.migrated": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "file": "string",
+        "from": "number",
+        "to": "number"
+      },
+      "description": "The engine of the process applied a migration definition to the file, from its format number to this one (docs/spec/installation.md#stored-data-migration)."
+    },
     "log.open": {
       "layer": "host",
       "class": "lifecycle",

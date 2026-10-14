@@ -383,7 +383,7 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
     assert_eq!(names, ["0.3.0", "0.4.0"]);
     let (code, stdout, _) = run(&["plugin", "list", "--config-dir", config.text()]);
     assert!(
-        code == 0 && stdout.contains(r#""probe": {"#) && stdout.contains(r#""format": 2"#),
+        code == 0 && stdout.contains(r#""probe": {"#) && stdout.contains(r#""format": 3"#),
         "{stdout}"
     );
     let enabled = run_json(&["plugin", "enable", "probe", "--config-dir", config.text()]);
@@ -396,7 +396,7 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
     );
     assert_eq!(
         read_text(&config.0.join("plugins/installed.json")),
-        "{\n  \"format\": 2,\n  \"plugins\": {},\n  \"sidecars\": {}\n}\n"
+        "{\n  \"format\": 3,\n  \"plugins\": {},\n  \"sidecars\": {}\n}\n"
     );
     let (code, _, stderr) = run(&["plugin", "remove", "probe", "--config-dir", config.text()]);
     assert_eq!(
@@ -417,7 +417,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let config = Dir::new();
     assert_eq!(
         state_json(&config),
-        r#"{"registry":null,"index":null,"installed":{"format":2,"plugins":{},"sidecars":{}},"firstRun":true}"#
+        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true}"#
     );
     let registry = plugin_versions(&["0.2.0"]);
     run_json(&[
@@ -523,7 +523,7 @@ fn an_installed_file_of_another_format_is_rejected() {
         (
             1,
             format!(
-                "sok: {}: plugins/installed.json: format must be 2\n",
+                "sok: {}: the file holds format 1; the definitions migrate formats 2 to 3\n",
                 file.display()
             )
         )
@@ -947,7 +947,7 @@ fn read_installed_refuses_a_package_field() {
     std::fs::create_dir_all(installed.parent().unwrap()).expect("create plugins");
     std::fs::write(
         &installed,
-        r#"{"format": 2, "plugins": {"side": {"package": "plugin-side", "version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}}, "sidecars": {}}"#,
+        r#"{"format": 3, "plugins": {"side": {"package": "plugin-side", "version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}}, "sidecars": {}}"#,
     )
     .expect("write installed.json");
     let error = soksak_sok::plugins::read_installed(&config.0).expect_err("package field");

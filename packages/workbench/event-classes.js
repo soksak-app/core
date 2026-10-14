@@ -33,6 +33,7 @@ const EXACT = new Map([
   ["host.workspace.settings", "lifecycle"],
   ["log.dropped", "lifecycle"],
   ["log.gated", "lifecycle"],
+  ["log.migrated", "lifecycle"],
   ["log.open", "lifecycle"],
   ["log.policy", "lifecycle"],
   ["log.pruned", "lifecycle"],

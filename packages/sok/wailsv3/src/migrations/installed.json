@@ -1,0 +1,11 @@
+[
+  {
+    "file": "plugins/installed.json",
+    "from": 2,
+    "to": 3,
+    "operations": [
+      { "op": "removeField", "scope": "plugins", "field": "package" },
+      { "op": "setFormat", "scope": "document", "to": 3 }
+    ]
+  }
+]

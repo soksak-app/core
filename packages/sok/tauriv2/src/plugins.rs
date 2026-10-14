@@ -206,6 +206,9 @@ pub fn run_plugin_action(
 /// Reads plugins/installed.json. When the file does not exist, nothing is installed. A file that is not in the current format is
 /// an error (docs/spec/installation.md).
 pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
+    // The entry of the shared reader migrates the file to the current format first, so every reader in every process
+    // finds the current form (docs/spec/installation.md#stored-data-migration).
+    crate::migrate::migrate_installed(config_dir)?;
     let path = config_dir.join(INSTALLED);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -220,7 +223,7 @@ pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
 }
 
 /// Changes installed.json once.
-fn write_installed(config_dir: &Path, state: &InstalledState) -> Result<(), String> {
+pub(crate) fn write_installed(config_dir: &Path, state: &InstalledState) -> Result<(), String> {
     let mut out = vec![];
     print_json(&mut out, state)?;
     let path = config_dir.join(INSTALLED);

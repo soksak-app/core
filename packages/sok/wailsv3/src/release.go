@@ -430,6 +430,11 @@ func replaceFile(path string, data []byte) error {
 		return fileError(path, err)
 	}
 	_, err = temp.Write(data)
+	// The data is on disk before the rename replaces the destination, so a crash cannot leave a cut file; the twin of
+	// this package in the other language syncs the same way.
+	if err == nil {
+		err = temp.Sync()
+	}
 	if closeErr := temp.Close(); err == nil {
 		err = closeErr
 	}

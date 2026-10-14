@@ -32,6 +32,11 @@ pub(crate) fn set_run_log(log: Option<Arc<EventLog>>) {
     RUN_LOG.with(|slot| *slot.borrow_mut() = log);
 }
 
+/// The event file of the run of this thread, or none.
+pub(crate) fn current_run_log() -> Option<Arc<EventLog>> {
+    RUN_LOG.with(|slot| slot.borrow().clone())
+}
+
 /// The first stored hash that differs from the replayed one.
 #[derive(Debug)]
 pub struct ReplayDivergence {

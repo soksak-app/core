@@ -200,9 +200,13 @@ func RunPluginAction(configDir, action, id, core, platform string) (any, error) 
 	}
 }
 
-// ReadInstalled reads plugins/installed.json. When the file does not exist, nothing is installed. A file that is not in
-// the current format is an error (docs/spec/installation.md).
+// ReadInstalled reads plugins/installed.json. The entry of the shared reader migrates the file to the current format
+// first, so every reader in every process finds the current form (docs/spec/installation.md#stored-data-migration). When
+// the file does not exist, nothing is installed. A file that is not in the current format is an error.
 func ReadInstalled(configDir string) (*InstalledState, error) {
+	if _, err := MigrateInstalled(configDir); err != nil {
+		return nil, err
+	}
 	path := filepath.Join(configDir, Installed)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {

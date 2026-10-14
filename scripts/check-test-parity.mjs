@@ -2073,6 +2073,32 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F188.2",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/migrate.go", symbol: "func MigrateInstalled" },
+      { file: "packages/sok/tauriv2/src/migrate.rs", symbol: "pub fn migrate_installed" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/migrate_test.go", id: "TestMigrateInstalledMigratesTheReleasedFormat2ToTheCurrentFormat" },
+      { file: "packages/sok/tauriv2/tests/migrate_test.rs", id: "migrate_installed_migrates_the_released_format_2_to_the_current_format" },
+    ],
+    expected: "The engine of both command lines migrates the released format-2 form to the current format, idempotently, refusing forms outside the chain.",
+    levels: ["unit"],
+  },
+  {
+    id: "F188.3",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/plugins.go", symbol: "if _, err := MigrateInstalled(configDir); err != nil {" },
+      { file: "packages/sok/tauriv2/src/plugins.rs", symbol: "crate::migrate::migrate_installed(config_dir)?;" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/install_test.go", id: "TestInstalledFileOfAnotherFormatIsRejected" },
+      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "an_installed_file_of_another_format_is_rejected" },
+    ],
+    expected: "The shared reader entry of installed.json migrates before it reads, in every process.",
+    levels: ["unit"],
+  },
+  {
     id: "F186",
     implementation: [{ file: "native/darwin/src/observe.m", symbol: "id sp_observe_workspace_notification" }],
     tests: [{ file: "native/darwin/tests/activity_observers_test.m", id: "the activation names the application that was frontmost before it" }],

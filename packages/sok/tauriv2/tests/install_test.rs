@@ -517,7 +517,7 @@ fn releases_and_installation_paths_follow_the_declared_names() {
 // contract: install.installed.consistency
 #[test]
 fn installed_state_names_one_version_of_each_plugin_and_sidecar() {
-    let state = json!({"format": 2, "plugins": {
+    let state = json!({"format": 3, "plugins": {
         "probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true,
             "previous": "0.1.0", "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
         "side": {"version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
@@ -571,7 +571,7 @@ fn installed_state_names_one_version_of_each_plugin_and_sidecar() {
         ),
         (
             |v| v["format"] = json!(1),
-            "plugins/installed.json: format must be 2",
+            "plugins/installed.json: format must be 3",
         ),
         (
             |v| v["plugins"]["probe"]["path"] = json!("/config/plugins/probe/0.2.0"),
