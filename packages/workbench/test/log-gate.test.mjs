@@ -80,15 +80,14 @@ test("an event that the catalog does not declare is not gated, and the report of
   assert.deepEqual(batches.flatMap((request) => request.events).map((event) => event.event), ["page.log.gated", "plugin.editor.opened"]);
 });
 
-test("the counts of a closed gate leave each second and at a flush, not with each batch", async () => {
+test("the counts of a closed gate leave each second and at a flush, not with each batch", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const gate = createLogGate();
   gate.set({ ...everything, call: "info" });
   const batches = [];
   let clock = 0;
-  const timers = [];
   const batcher = createEventBatcher({
-    call: answering(async (request) => { batches.push(request); }), report: assert.ifError, gate,
-    now: () => clock, setTimer: (run, ms) => timers.push({ run, at: clock + ms }),
+    call: answering(async (request) => { batches.push(request); }), report: assert.ifError, gate, now: () => clock,
   });
   const gatedOf = () => batches.flatMap((request) => request.events).filter((event) => event.event === "page.log.gated").map((event) => event.fields);
   // Ten batches within 900 ms each carry an event and follow refused events.
@@ -100,10 +99,13 @@ test("the counts of a closed gate leave each second and at a flush, not with eac
     await settle();
   }
   assert.deepEqual(gatedOf(), [], "the counts left with a batch within a second");
-  assert.equal(timers.length, 1, `one timer waits for the second, found ${timers.length}`);
-  assert.equal(timers[0].at, 1000);
+  // The timer was armed at the first refusal, at the time 0, for the end of the second.
+  clock = 999;
+  t.mock.timers.tick(999);
+  await settle();
+  assert.deepEqual(gatedOf(), [], "the counts left before the second ended");
   clock = 1000;
-  timers[0].run();
+  t.mock.timers.tick(1);
   await settle();
   assert.deepEqual(gatedOf(), [{ class: "call", level: "debug", count: 20 }]);
   clock = 1100;

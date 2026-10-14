@@ -6,6 +6,7 @@
 
 - F161.56, F161.59, F161.62: closed as not reproduced on the current builds, with the records that show a recurrence in place.
 - F161.27: closed as not reproduced after three repeat runs of the outside resize check on both applications.
+- F179.1: the page batcher test uses the mock timers of node:test, and the batcher has no timer argument.
 - F176.3: the native test reaches an unanswered key through the declared function `sp_region_set_input_context`.
 - F177.2: the defaults of the policy timeline of the chain check state their reasons.
 - F179: the counts of refused events leave each second and at a flush instead of with each batch, in both hosts, the page and the native library.

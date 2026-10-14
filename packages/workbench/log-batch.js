@@ -50,7 +50,7 @@ function boundFields(fields) {
  * that round trip as the moment of the answer. Every event then has the wall clock `ts_us` and the monotonic clock `mono_ns` of
  * the host at its own reading, so the layers of one input compare (docs/spec/logging.md#limits).
  */
-export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES, now = () => performance.now(), gate = logGate, setTimer = (run, ms) => setTimeout(run, ms) }) {
+export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES, now = () => performance.now(), gate = logGate }) {
   let queue = [];
   let queueBytes = 0;
   // The refused events by the bound that refused them: {count, bytes} for each reason.
@@ -152,7 +152,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
   const awaitGated = () => {
     if (gatedTimer || gated.size === 0) return;
     gatedTimer = true;
-    setTimer(() => {
+    setTimeout(() => {
       gatedTimer = false;
       send().then(awaitGated, report);
     }, Math.max(0, GATED_REPORT_MS - (now() - gatedAt)));
