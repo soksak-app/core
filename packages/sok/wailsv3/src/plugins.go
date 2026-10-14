@@ -188,8 +188,14 @@ func ReadPluginsState(configDir string) (*PluginsState, error) {
 }
 
 // RunPluginAction runs the same operation as sok plugin <action> <id> and returns its output. action is one of install,
-// update, remove, enable and disable.
+// update, remove, enable and disable. The writing commands own the configuration directory for the duration of their
+// write, so a running host or a second command refuses instead of racing the same files (docs/spec/installation.md).
 func RunPluginAction(configDir, action, id, core, platform string) (any, error) {
+	release, err := ownConfiguration(configDir)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	switch action {
 	case "install", "update":
 		return InstallPlugin(configDir, id, core, platform, action == "update")

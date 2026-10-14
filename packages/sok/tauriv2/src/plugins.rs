@@ -188,7 +188,10 @@ pub fn run_plugin_action(
     core: &str,
     platform: &str,
 ) -> Result<PluginActionResult, String> {
-    match action {
+    // The command owns the configuration directory for the duration of its write, so a running host or a second
+    // command refuses instead of racing the same files (docs/spec/installation.md).
+    let release = crate::ownership::own_configuration(config_dir)?;
+    let result = (|| match action {
         "install" | "update" => Ok(PluginActionResult::Installed(install_plugin(
             config_dir,
             id,
@@ -200,7 +203,9 @@ pub fn run_plugin_action(
             config_dir, id, action,
         )?)),
         _ => Err(format!("unknown plugin action {action:?}")),
-    }
+    })();
+    release();
+    result
 }
 
 /// Reads plugins/installed.json. When the file does not exist, nothing is installed. A file that is not in the current format is

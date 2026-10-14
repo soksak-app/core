@@ -146,7 +146,7 @@ Host는 시작할 때 켜진 설치 plugin의 `plugin.json` `dependencies`가 �
 | `sidecarsReplace({ sidecar })` | [terminal runtime](terminal-runtime.ko.md#updates)이 정한 대로 sidecar의 오래된 상주 service를 교체하고, 다른 version의 service가 실행 중이지 않으면 그 sidecar를 밝히는 오류로 거부한다 |
 | `sidecars-changed` | `host.sidecars`가 바뀌면 모든 창에 값 없이 보낸다 |
 
-Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중일 때 `pluginsRun`을 호출하면 `another plugin operation is running`으로 거부한다. Host는 `sok` process가 만든 변경을 관찰하지 않는다. 다음 `pluginsState` 호출과 나중에 불러온 page가 그 변경을 읽는다. `pluginsRun` 작업의 변경은 [변경 적용](#변경-적용)대로 바로 적용된다. `sok` process가 만든 변경은 나중에 불러온 page에, sidecar에는 애플리케이션이 시작할 때 적용된다. Browser 애플리케이션은 host가 없으므로 plugin 작업이 없다.
+Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중일 때 `pluginsRun`을 호출하면 `another plugin operation is running`으로 거부한다. 쓰기 `sok` 명령은 쓰기 동안 `process.lock`으로 설정 폴더를 소유한다([저장 데이터 마이그레이션](#저장-데이터-마이그레이션)). 실행 중인 host 옆의 명령은 host의 소유 오류로 거부되고 두 명령은 경쟁할 수 없다. Host는 `sok` process가 만든 변경을 관측하지 않는다. 다음 `pluginsState` 호출과 나중에 불러온 page가 그 변경을 읽는다. `pluginsRun` 작업의 변경은 [변경 적용](#변경-적용)대로 바로 적용된다. `sok` process가 만든 변경은 나중에 불러온 page에, sidecar에는 애플리케이션이 시작할 때 적용된다. Browser 애플리케이션은 host가 없으므로 plugin 작업이 없다.
 
 ### 변경 적용
 

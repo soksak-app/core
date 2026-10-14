@@ -2074,6 +2074,19 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F190",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func ownConfiguration" },
+      { file: "packages/sok/tauriv2/src/ownership.rs", symbol: "pub(crate) fn own_configuration" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/ownership_test.go", id: "TestAPluginCommandRefusesWhileAnotherProcessOwnsTheConfiguration" },
+      { file: "packages/sok/tauriv2/tests/ownership_test.rs", id: "a_plugin_command_refuses_while_another_process_owns_the_configuration" },
+    ],
+    expected: "A writing sok plugin command owns the configuration directory for the duration of its write.",
+    levels: ["unit"],
+  },
+  {
     id: "F188.5",
     implementation: [
       { file: "packages/sok/wailsv3/src/migrate.go", symbol: "func MigrateProjects" },
