@@ -27,7 +27,7 @@ async function openView(t, files = FILES) {
         return { path, size: files[path].length, truncated: false, kind: "text", text: files[path] };
       },
       save: async () => {},
-      saveAll: async () => {},
+      saveAll: async () => {}, onSaveProgress: () => Promise.resolve(() => {}), onSaveDone: () => Promise.resolve(() => {}),
       onChanged: () => Promise.resolve(() => {}),
     },
     overlay: { show: () => {}, update: () => {}, place: () => {}, hide: () => {} },

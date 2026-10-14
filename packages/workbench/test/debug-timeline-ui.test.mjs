@@ -85,7 +85,7 @@ async function openView(t, { query, saveText = async () => ({ saved: null }) }) 
   const listeners = [];
   t.mock.module("../host.js", { namedExports: {
     native: false,
-    debug: { record: async () => ({ path: "logs/state.json" }), files: async () => [], read: async () => ({}), query, onChanged: (listener) => { listeners.push(listener); return Promise.resolve(() => {}); }, save: async () => {}, saveAll: async () => {}, saveText },
+    debug: { record: async () => ({ path: "logs/state.json" }), files: async () => [], read: async () => ({}), query, onChanged: (listener) => { listeners.push(listener); return Promise.resolve(() => {}); }, save: async () => {}, saveAll: async () => {}, onSaveProgress: () => Promise.resolve(() => {}), onSaveDone: () => Promise.resolve(() => {}), saveText },
     overlay: { show: () => {}, update: () => {}, place: () => {}, hide: () => {} },
   } });
   t.mock.module("../compositor.js", { namedExports: { standIn: () => {} } });

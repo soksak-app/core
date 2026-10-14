@@ -60,6 +60,8 @@ type Host struct {
 	// logNotices publishes the value of host.log and the host event debug-log-changed. It starts with the event log.
 	logNotices *LogNotices
 	configDir  string
+	// debugSaving is the destination of the save of the logs folder that is being written, or ""; h.mu guards it.
+	debugSaving string
 	// events is the event writer of the host; Run starts it after the application log.
 	events *EventLog
 	// endpoint is the local endpoint and relay is the exposure requests sent to the page.

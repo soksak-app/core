@@ -6,7 +6,7 @@
 //
 // This file is not duplicated per application. The only difference between applications is the transport, which the
 // runtime module (@soksak/runtime) handles.
-import { reportRecord } from "./page-log.js";
+import { emitEvent, reportRecord } from "./page-log.js";
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
 import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
@@ -411,6 +411,8 @@ export const debug = native ? {
   read: (request) => tell("debugRead", request),
   query: (request) => tell("logQuery", request),
   onChanged: (listener) => bridge.on("debug-log-changed", listener),
+  onSaveProgress: (listener) => bridge.on("debug-save-progress", listener),
+  onSaveDone: (listener) => bridge.on("debug-save-done", listener),
 } : null;
 
 export function onSurfacePrepared(listener) {
@@ -612,14 +614,22 @@ if (native) {
   // The reply carries the modal it belongs to. It is used to filter out the last reply of a closed modal so that it
   // does not reach the receiver of the next modal.
   bridge.on("overlay-pick", ({ id, key, value }) => {
-    if (id !== shown) return;
+    if (id !== shown) {
+      // default: a page that shows no modal records the empty text as the shown one.
+      emitEvent("info", "page.overlay.dropped", { id, shown: shown ?? "", key });
+      return;
+    }
     // The state report of a modal document is not a response. It is not forwarded to the receiver of the element.
     if (key === "document") {
       modalDocument = JSON.parse(value);
       modalChanged();
       return;
     }
-    if (pick) pick(key, value);
+    if (!pick) {
+      emitEvent("info", "page.overlay.dropped", { id, shown: "", key });
+      return;
+    }
+    pick(key, value);
   });
 }
 

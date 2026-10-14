@@ -6,6 +6,7 @@
 
 - F161.56, F161.59, F161.62: 현재 build에서 재현되지 않음으로 닫았고, 재발을 보이는 기록이 있다.
 - F161.27: 두 애플리케이션에서 바깥 크기 변경 check를 세 번 반복한 뒤 재현되지 않음으로 닫았다.
+- F181: debug 화면이 모두 저장의 진행을 보이고, host가 archive를 자기 thread에서 쓰며, 쓰는 중의 두 번째 저장을 거부하고, 버린 모달 응답을 모두 기록한다.
 - F180: 모든 script가 command line을 node:util의 parseArgs로 읽고 모르거나 반복된 option을 거부한다.
 - F160.19.3: `make host-allocations`가 option을 parseArgs로 읽고 모르는 option을 거부한다.
 - F179.1: page batcher 시험이 node:test의 mock timer를 쓰고, batcher에는 timer 인자가 없다.

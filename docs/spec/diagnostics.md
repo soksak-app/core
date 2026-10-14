@@ -108,6 +108,7 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 | an image region event carries `cids` that are not a list of identifiers, or no `type`, and the host cannot record its relay | `error host input relay: <reason>` |
 | a deep link is refused: its URL does not parse or breaks the [deep link](native-host.md#deep-links) form, no window is open, or the command it names fails | `error host deep link: <url>: <reason>`, once for each URL |
 | the Tauri host cannot read the launch URL of a deep link | `error host deep link: launch URL: <reason>` |
+| the Tauri host cannot deliver the progress or the end of a save of the logs folder to the window that asked | `error host debug save: debug-save-progress: <reason>` or `error host debug save: debug-save-done: <reason>` |
 | a startup step of the host fails | `error host startup: <reason>`, and the process ends with the status 1 |
 
 A failure that the caller of an operation receives, and that the caller shows through the error display, is recorded by that display: a request of the endpoint answers its failure to its client, a `sok` command ends with its status and its message on the standard error, and a plugin shows the failed navigation of its document region, which the host reports as the `failure` of the document, with `tab.error` ([plugins](plugins.md)), whose display writes `error page tab error <tab id>: <text>`.

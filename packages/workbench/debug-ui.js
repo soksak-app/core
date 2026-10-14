@@ -47,7 +47,7 @@ let viewing = null;
 let timeline = null;
 /** The state file that the view shows {path, state, lines, with, differences}, or null while another content is shown. */
 let stateShown = null;
-/** The running or last operation {action, path, state}, or null. */
+/** The running or last operation {action, path, state}, with {written, total} for a save of the logs folder, or null. */
 let operation = null;
 /** The error of the last failed step or operation, or null. */
 let failure = null;
@@ -148,6 +148,17 @@ function draw() {
   }
   if (failure === null) hideError(error, "debug");
   else showError(error, "debug", failure);
+  // A save of the logs folder shows its progress and keeps its button disabled while the host writes.
+  const writing = operation?.action === "save-all" && operation.state === "running" && operation.total !== undefined;
+  const progress = card.querySelector(".dbg-card__progress");
+  progress.hidden = !writing;
+  card.querySelector('[data-key="save-all"]').disabled = operation?.action === "save-all" && operation.state === "running";
+  if (writing) {
+    const bar = progress.querySelector("progress");
+    bar.max = Math.max(1, operation.total);
+    bar.value = operation.written;
+    progress.querySelector(".dbg-card__progress-text").textContent = `${megabytes(operation.written)} / ${megabytes(operation.total)} MB`;
+  }
   overlay.update(card);
   const rect = cardRect();
   if (native) overlay.place(card, rect);
@@ -300,6 +311,7 @@ function makeCard() {
     '<div class="dbg-card__pane">' +
       '<p class="set-caption">애플리케이션의 모든 진단 파일이다. 결함을 알릴 때 모두 저장한 파일을 함께 보낸다.</p>' +
       '<div class="set-actions"></div>' +
+      '<div class="dbg-card__progress" hidden><progress data-expose="core.debug.progress" value="0" max="1"></progress><span class="dbg-card__progress-text"></span></div>' +
       '<p class="dbg-card__error" hidden></p>' +
       '<div class="dbg-card__list"></div>' +
       '<div class="dbg-card__view" hidden>' +
@@ -603,6 +615,24 @@ function followGrowth() {
   });
 }
 
+/* The host events of a save of the logs folder (docs/spec/debug.md): the host writes one save at a time, so a page that was
+   reloaded while a save writes takes the save of the events as its operation. */
+if (debug) {
+  debug.onSaveProgress(({ saved, written, total }) => {
+    operation = { action: "save-all", path: saved, state: "running", written, total };
+    draw();
+  });
+  debug.onSaveDone(({ saved, error: reason }) => {
+    // default: a page that did not see the start of the save knows no total and shows the save as ended.
+    const total = operation?.path === saved ? operation.total ?? 0 : 0;
+    // default: a failed write keeps the bytes that the last progress reported.
+    const written = reason === null ? total : operation?.path === saved ? operation.written ?? 0 : 0;
+    operation = { action: "save-all", path: saved, state: reason === null ? "done" : "failed", written, total };
+    if (reason !== null) fail("save-all", reason);
+    draw();
+  });
+}
+
 /* The host event `debug-log-changed {path, size, notices, coalesced}` (docs/spec/debug.md#following): asks for what grew while the timeline follows. The host bounds the rate of the notices. */
 if (debug) {
   debug.onChanged(({ path }) => {
@@ -781,8 +811,40 @@ async function saving(action, path, save) {
 /** Saves one file of logs/ where the person chooses. */
 export const saveDebugFile = (path) => saving("save", path, () => debug.save({ path }));
 
-/** Saves logs/ as one gzip-compressed tar file where the person chooses. */
-export const saveDebugFiles = () => saving("save-all", null, () => debug.saveAll());
+/** The number of bytes in MB with one decimal. */
+const megabytes = (bytes) => (bytes / (1024 * 1024)).toFixed(1);
+
+/**
+ * Saves logs/ as one gzip-compressed tar file where the person chooses. The host answers {saved, total} when the place is
+ * chosen and writes on its own thread; the events debug-save-progress and debug-save-done end the operation.
+ */
+export async function saveDebugFiles() {
+  if (!card) throw new Error("the debug view is not open");
+  if (operation?.action === "save-all" && operation.state === "running") {
+    // default: before the person chose a place the save has no path, and the save panel is what runs.
+    const refused = new Error(`debug: a save of the logs folder is running: ${operation.path ?? "the save panel is open"}`);
+    fail("save-all", refused);
+    draw();
+    throw refused;
+  }
+  operation = { action: "save-all", path: null, state: "running" };
+  failure = null;
+  draw();
+  let started;
+  try {
+    started = await debug.saveAll();
+  } catch (reason) {
+    operation = { action: "save-all", path: null, state: "failed" };
+    fail("save-all", reason);
+    draw();
+    throw reason;
+  }
+  operation = started.saved === null
+    ? { action: "save-all", path: null, state: "done" }
+    : { action: "save-all", path: started.saved, state: "running", written: 0, total: started.total };
+  draw();
+  return started;
+}
 
 /** Saves the text lines of the selected timeline rows, in timeline order, where the person chooses; the person may cancel. */
 export async function saveDebugRows() {

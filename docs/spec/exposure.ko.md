@@ -88,6 +88,8 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 네이티브 모달 문서는 렌더, 배치, 테마 변경마다 모달 응답 경로로 키 `document`를 사용해 자기 상태를 메인 페이지에 보고한다. 메인 페이지는 이를 status `core.modal`로 공개한다. 열린 모달이 없으면 `null`이고, 있으면 `{id, mode, document}`다. `document`는 첫 보고 전에는 `null`이며 이후 `{mode, filter, htmlBackground, bodyBackground, scrimBackground, loaded, rect}`다: 렌더한 요소의 `data-native-modal`, 루트의 계산된 `filter`, 루트와 body의 계산된 배경색, 대화상자 scrim에 사용하는 `body::before`의 계산된 배경색, 문서가 첫 내용 요청의 응답을 처리했는지(적용한 변경보다 오래되어 버린 경우도 포함), CSS 픽셀 단위 요소 사각형.
 
+모달 문서의 응답은 그 모달이 열린 모달일 때만 메인 페이지에 닿는다. host는 모달 id와 instance가 열린 모달의 것이 아닌 응답을 버리고 `host.overlay.dropped` `{id, instance, key, open}`을 기록한다. 메인 페이지는 보이지 않는 모달이나 받는 곳이 없는 모달의 응답을 버리고 `page.overlay.dropped` `{id, shown, key}`를 기록한다. 닫히는 모달도 마지막 상태 보고를 보내므로 버림은 오류가 아니라 `info` event이며, 기록 없이 버리는 응답은 없다.
+
 ### 표면 선택
 
 여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. [플러그인 상태 모듈](plugins.ko.md#플러그인-상태)이 등록한 이름에 대한 `surface` 없는 요청은 애플리케이션 문서의 그 모듈이 답한다.

@@ -80,7 +80,7 @@ func TestDebugCopyCopiesAFileOfTheLogsFolderOnly(t *testing.T) {
 func TestDebugWriteLogsTarWritesTheLogsFolder(t *testing.T) {
 	config := debugConfig(t)
 	destination := filepath.Join(t.TempDir(), "debug.tar.gz")
-	if err := host.DebugWriteLogsTar(config, destination); err != nil {
+	if err := host.DebugWriteLogsTar(config, destination, func(int64, int64) {}); err != nil {
 		t.Fatal(err)
 	}
 	file, err := os.Open(destination)
@@ -107,6 +107,30 @@ func TestDebugWriteLogsTarWritesTheLogsFolder(t *testing.T) {
 	}
 	if want := "logs/application.log=started\n logs/captures/still-1/window.png=png"; strings.Join(names, " ") != want {
 		t.Fatalf("entries %q, want %q", strings.Join(names, " "), want)
+	}
+}
+
+// contract: debug.save-all.reports-progress
+func TestDebugWriteLogsTarReportsProgressEachMebibyteAndAtTheEnd(t *testing.T) {
+	config := debugConfig(t)
+	big := filepath.Join(config, "logs", "host-1-2.jsonl")
+	if err := os.WriteFile(big, []byte(strings.Repeat("x", 3*1024*1024+512*1024)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var reports [][2]int64
+	if err := host.DebugWriteLogsTar(config, filepath.Join(t.TempDir(), "debug.tar.gz"), func(written, total int64) {
+		reports = append(reports, [2]int64{written, total})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	total := int64(3*1024*1024+512*1024) + int64(len("started\n")) + int64(len("png"))
+	if len(reports) < 4 || reports[len(reports)-1] != [2]int64{total, total} {
+		t.Fatalf("reports %v, want at least one for each MiB and a last report of %d of %d", reports, total, total)
+	}
+	for i, report := range reports {
+		if report[1] != total || (i > 0 && report[0] < reports[i-1][0]+1024*1024 && i != len(reports)-1) {
+			t.Fatalf("report %d of %v is not a MiB after the one before it or names another total", i, reports)
+		}
 	}
 }
 

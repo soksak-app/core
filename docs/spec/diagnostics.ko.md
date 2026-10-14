@@ -108,6 +108,7 @@
 | image region event의 `cids`가 식별자 목록이 아니거나 `type`이 없어 host가 그 중계를 기록하지 못한다 | `error host input relay: <reason>` |
 | 딥링크가 거부된다: URL을 해석할 수 없거나 [딥링크](native-host.ko.md#딥링크) 형식에 맞지 않거나, 열린 창이 없거나, 가리키는 command가 실패한다 | `error host deep link: <url>: <reason>`, URL마다 한 번 |
 | Tauri host가 딥링크의 실행 URL을 읽지 못한다 | `error host deep link: launch URL: <reason>` |
+| Tauri host가 logs 폴더 저장의 진행이나 끝을 요청한 창에 전달할 수 없다 | `error host debug save: debug-save-progress: <reason>` 또는 `error host debug save: debug-save-done: <reason>` |
 | 호스트의 시작 단계가 실패한다 | `error host startup: <reason>`, 그리고 프로세스가 상태 1로 끝난다 |
 
 호출자가 받아 오류 표시로 보이는 실패는 그 표시가 기록한다. endpoint 요청은 실패를 client에 답하고, `sok` 명령은 상태와 메시지를 표준 오류로 끝내며, plugin은 host가 문서의 `failure`로 알린 document region의 탐색 실패를 `tab.error`([plugins](plugins.md))로 보이고 그 표시가 `error page tab error <tab id>: <text>`를 쓴다.

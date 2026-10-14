@@ -2056,6 +2056,24 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F181",
+    implementation: [
+      { file: "packages/host/tauriv2/src/debug.rs", symbol: "pub(crate) fn save_all(window: &Window) -> Result<SaveAllStarted, String>" },
+      { file: "packages/host/wailsv3/src/debug.go", symbol: "func (h *Host) DebugSaveAll(ctx context.Context) (DebugSaveAllStarted, error)" },
+      { file: "packages/workbench/debug-ui.js", symbol: "export async function saveDebugFiles()" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/debug_test.rs", id: "debug_write_logs_tar_reports_progress_each_mebibyte_and_at_the_end" },
+      { file: "packages/host/wailsv3/tests/debug_test.go", id: "TestDebugWriteLogsTarReportsProgressEachMebibyteAndAtTheEnd" },
+      { file: "packages/workbench/test/debug-save-ui.test.mjs", id: "a save while one writes is refused and shown, and a failure of the write is shown" },
+      { file: "packages/host/tauriv2/tests/modals_test.rs", id: "a_reply_of_a_modal_that_is_not_open_is_dropped_with_the_fields_of_its_record" },
+      { file: "packages/host/wailsv3/tests/modals_test.go", id: "TestAReplyOfAModalThatIsNotOpenIsDroppedWithTheFieldsOfItsRecord" },
+      { file: "packages/workbench/test/overlay-pick.test.mjs", id: "a reply of a modal that the page does not show is recorded as page.overlay.dropped" },
+    ],
+    expected: "A save of the logs folder shows its progress, refuses a second save while it writes, and every dropped modal reply is recorded.",
+    levels: ["unit"],
+  },
+  {
     id: "F180",
     implementation: [{ file: "scripts/node-tests.mjs", symbol: "const { values } = parseArgs({" }],
     tests: [

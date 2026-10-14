@@ -1011,7 +1011,7 @@
       },
       {
         "name": "core.debug",
-        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files whose reading stopped at the row limit, whether it follows the growing files and the number of rows appended since it was shown, the counts of all rows, rows that pass the filter and shown lines with the context rows, the number of selected rows and the warning that a saved file can hold typed text, and its filter or null, the shown state file with its path, the number of tree lines, the state file it is compared with or null and the number of differences, or null, the scroll position of the shown content in points, the running or last save operation, and the error of the last failed step or operation or null.",
+        "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files whose reading stopped at the row limit, whether it follows the growing files and the number of rows appended since it was shown, the counts of all rows, rows that pass the filter and shown lines with the context rows, the number of selected rows and the warning that a saved file can hold typed text, and its filter or null, the shown state file with its path, the number of tree lines, the state file it is compared with or null and the number of differences, or null, the scroll position of the shown content in points, the running or last save operation with, for a save of the logs folder, the bytes written and the bytes listed, and the error of the last failed step or operation or null.",
         "schema": {
           "type": "object",
           "properties": {
@@ -1177,7 +1177,9 @@
                     "done",
                     "failed"
                   ]
-                }
+                },
+                "written": { "type": "integer" },
+                "total": { "type": "integer" }
               }
             },
             "error": {
@@ -3957,6 +3959,10 @@
       {
         "name": "core.debug.text",
         "description": "The text of the shown file."
+      },
+      {
+        "name": "core.debug.progress",
+        "description": "The progress bar of a save of the logs folder: the bytes written of the bytes listed, shown while the host writes."
       },
       {
         "name": "core.debug.image",

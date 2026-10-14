@@ -369,6 +369,17 @@
       },
       "description": "The page started a new window, the close of its window, or the report that the window stays open; its host call carries the same cids."
     },
+    "page.overlay.dropped": {
+      "layer": "page",
+      "class": "input",
+      "level": "info",
+      "fields": {
+        "id": "string",
+        "shown": "string",
+        "key": "string"
+      },
+      "description": "The page dropped the reply of a modal that the host relayed: `id` names the modal of the reply, `key` its control, and `shown` the id of the modal that the page shows or the empty text when it shows none or has no receiver for it."
+    },
     "page.settings.change": {
       "layer": "page",
       "class": "call",
@@ -458,6 +469,18 @@
         "kind": "string"
       },
       "description": "A window event that the host registered."
+    },
+    "host.overlay.dropped": {
+      "layer": "host",
+      "class": "input",
+      "level": "info",
+      "fields": {
+        "id": "string",
+        "instance": "number",
+        "key": "string",
+        "open": "string"
+      },
+      "description": "The host dropped the reply of a modal document because that modal is not the open one: `id` and `instance` name the modal of the reply, `key` its control, and `open` the id of the open modal or the empty text when none is open. A closing modal still sends its last state report, so a drop is not an error."
     },
     "host.app.event": {
       "layer": "host",

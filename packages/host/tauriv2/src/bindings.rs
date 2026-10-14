@@ -693,7 +693,7 @@ fn file_place(
 
 /// Saves the logs folder as one gzip-compressed tar file through the save panel.
 #[tauri::command(async)]
-fn debug_save_all(window: Window) -> Result<crate::debug::Saved, String> {
+fn debug_save_all(window: Window) -> Result<crate::debug::SaveAllStarted, String> {
     crate::debug::save_all(&window)
 }
 

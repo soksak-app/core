@@ -481,17 +481,52 @@ pub(crate) fn pick(
     let context = window_data(window)?;
     let state = &context.overlay;
 
-    let current = state
+    let open = state
         .open
         .lock()
         .map_err(|e| e.to_string())?
         .as_ref()
-        .is_some_and(|m| m.id == id && m.instance == instance);
-    if current && root_view(window).is_some() {
-        emit_window(window, "overlay-pick", Picked { id, key, value })
-            .map_err(|e| e.to_string())?;
+        .map(|m| OpenModal {
+            id: m.id.clone(),
+            instance: m.instance,
+        });
+    if let Some(fields) = dropped_pick(open.as_ref(), &id, instance, &key) {
+        crate::event_record::emit_host(
+            soksak_sok::event_log::Level::Info,
+            "host.overlay.dropped",
+            fields,
+        );
+        return Ok(());
     }
+    if root_view(window).is_none() {
+        return Err(format!(
+            "overlay pick: the window {} has no page",
+            window.label()
+        ));
+    }
+    emit_window(window, "overlay-pick", Picked { id, key, value }).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Names the modal that a window shows: the id of its element and its instance.
+pub struct OpenModal {
+    pub id: String,
+    pub instance: u64,
+}
+
+/// Tells whether the reply of the modal `id` and `instance` is dropped because that modal is not the open one (a closing
+/// modal still sends its last state report), and returns the fields of its record `host.overlay.dropped`.
+pub fn dropped_pick(
+    open: Option<&OpenModal>,
+    id: &str,
+    instance: u64,
+    key: &str,
+) -> Option<serde_json::Value> {
+    if open.is_some_and(|modal| modal.id == id && modal.instance == instance) {
+        return None;
+    }
+    let shown = open.map_or("", |modal| modal.id.as_str());
+    Some(serde_json::json!({"id": id, "instance": instance, "key": key, "open": shown}))
 }
 
 /// Changes the content of an open modal without recreating the view. A modal with a control that changes the page state

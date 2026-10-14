@@ -50,7 +50,7 @@ pub mod log_policy;
 pub mod log_query;
 pub mod log_retention;
 pub mod menu;
-mod modals;
+pub mod modals;
 pub mod notifications;
 pub mod page_process;
 pub mod performance;

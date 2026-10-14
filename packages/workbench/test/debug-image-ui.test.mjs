@@ -18,7 +18,7 @@ async function openImage(t) {
       files: async () => [{ path: "logs/captures/still-1/window.png", size: 267300, modified: 1 }],
       read: async ({ path }) => ({ path, size: 267300, truncated: false, kind: "image", text: "", image: PIXEL }),
       save: async () => {},
-      saveAll: async () => {},
+      saveAll: async () => {}, onSaveProgress: () => Promise.resolve(() => {}), onSaveDone: () => Promise.resolve(() => {}),
       onChanged: () => Promise.resolve(() => {}),
     },
     overlay: { show: () => {}, update: () => {}, place: (_element, rect) => places.push(rect), hide: () => {} },

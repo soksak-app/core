@@ -182,8 +182,40 @@ pub fn read(config: &Path, relative: &str) -> Result<ReadResult, String> {
 
 /// Writes every file under `<config-dir>/logs/` into a gzip-compressed tar file at destination, with the paths of
 /// [`list`].
-pub fn write_logs_tar(config: &Path, destination: &Path) -> Result<(), String> {
+/// The number of listed bytes between two reports of the progress of a save (docs/spec/debug.md).
+const PROGRESS_STEP: u64 = 1 << 20;
+
+/// A reader that counts the listed bytes that pass into the tar and reports each step.
+struct Counted<'a, R> {
+    inner: R,
+    written: &'a mut u64,
+    reported: &'a mut u64,
+    total: u64,
+    report: &'a mut dyn FnMut(u64, u64),
+}
+
+impl<R: std::io::Read> std::io::Read for Counted<'_, R> {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buffer)?;
+        *self.written += n as u64;
+        if *self.written - *self.reported >= PROGRESS_STEP {
+            *self.reported = *self.written;
+            (self.report)(*self.written, self.total);
+        }
+        Ok(n)
+    }
+}
+
+/// Writes every file under `<config>/logs/` into a gzip-compressed tar file at `destination` and reports the listed bytes
+/// written each MiB and after the last file.
+pub fn write_logs_tar(
+    config: &Path,
+    destination: &Path,
+    report: &mut dyn FnMut(u64, u64),
+) -> Result<(), String> {
     let listed = list(config)?;
+    let total: u64 = listed.iter().map(|file| file.size).sum();
+    let (mut written, mut reported) = (0u64, 0u64);
     let out = File::create(destination)
         .map_err(|error| format!("debug: {}: {error}", destination.display()))?;
     let mut writer = tar::Builder::new(flate2::write::GzEncoder::new(
@@ -203,7 +235,13 @@ pub fn write_logs_tar(config: &Path, destination: &Path) -> Result<(), String> {
             .append_data(
                 &mut header,
                 &file.path,
-                std::io::Read::take(&mut source, file.size),
+                Counted {
+                    inner: std::io::Read::take(&mut source, file.size),
+                    written: &mut written,
+                    reported: &mut reported,
+                    total,
+                    report: &mut *report,
+                },
             )
             .map_err(|error| format!("debug: {}: {error}", file.path))?;
     }
@@ -216,6 +254,7 @@ pub fn write_logs_tar(config: &Path, destination: &Path) -> Result<(), String> {
     compressed
         .finish()
         .map_err(|error| format!("debug: {}: {error}", destination.display()))?;
+    report(written, total);
     Ok(())
 }
 
@@ -460,17 +499,106 @@ pub(crate) fn read_file(window: &Window, request: SaveRequest) -> Result<ReadRes
     read(&config(window.app_handle()), &request.path)
 }
 
-/// The page's debugSaveAll call: saves the logs folder as one gzip-compressed tar file.
-pub(crate) fn save_all(window: &Window) -> Result<Saved, String> {
+/// The answer of debugSaveAll: the chosen path, or `None` when the person cancelled, and the bytes of the listed files.
+#[derive(Debug, Serialize)]
+pub struct SaveAllStarted {
+    pub saved: Option<String>,
+    pub total: u64,
+}
+
+/// The body of the window event `debug-save-progress`.
+#[derive(Clone, Serialize)]
+struct SaveProgress {
+    saved: String,
+    written: u64,
+    total: u64,
+}
+
+/// The body of the window event `debug-save-done`; `error` is `None` or the text of the failure.
+#[derive(Clone, Serialize)]
+struct SaveDone {
+    saved: String,
+    error: Option<String>,
+}
+
+/// The destination of the save of the logs folder that is being written, or `None`.
+static SAVING: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+fn saving() -> std::sync::MutexGuard<'static, Option<String>> {
+    SAVING
+        .lock()
+        // default: a panic while the lock was held leaves the destination that it held, which is still the state to read.
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// The page's debugSaveAll call: after the save panel it answers at once and writes the logs folder as one gzip-compressed
+/// tar file on a thread of its own, so the page and a reload of it never wait for the write (docs/spec/debug.md).
+pub(crate) fn save_all(window: &Window) -> Result<SaveAllStarted, String> {
+    if let Some(running) = saving().as_ref() {
+        return Err(format!(
+            "debug: a save of the logs folder is running: {running}"
+        ));
+    }
     let name = format!(
         "soksak-tauriv2-debug-{}.tar.gz",
         debug_time(SystemTime::now())?
     );
     let Some(chosen) = save_to(window, &name)? else {
-        return Ok(Saved { saved: None });
+        return Ok(SaveAllStarted {
+            saved: None,
+            total: 0,
+        });
     };
-    write_logs_tar(&config(window.app_handle()), &chosen)?;
-    Ok(Saved {
-        saved: Some(chosen.to_string_lossy().into_owned()),
+    let directory = config(window.app_handle());
+    let total = list(&directory)?.iter().map(|file| file.size).sum();
+    let saved = chosen.to_string_lossy().into_owned();
+    {
+        let mut running = saving();
+        if let Some(other) = running.as_ref() {
+            return Err(format!(
+                "debug: a save of the logs folder is running: {other}"
+            ));
+        }
+        *running = Some(saved.clone());
+    }
+    let target = window.clone();
+    let name = saved.clone();
+    std::thread::Builder::new()
+        .name("debug-save-all".into())
+        .spawn(move || {
+            let result = write_logs_tar(&directory, &chosen, &mut |written, total| {
+                let progress = SaveProgress {
+                    saved: name.clone(),
+                    written,
+                    total,
+                };
+                if let Err(error) =
+                    crate::windows::emit_window(&target, "debug-save-progress", progress)
+                {
+                    crate::application_log::log_error(
+                        "debug save",
+                        format!("debug-save-progress: {error}"),
+                    );
+                }
+            });
+            *saving() = None;
+            let done = SaveDone {
+                saved: name,
+                error: result.err(),
+            };
+            if let Err(error) = crate::windows::emit_window(&target, "debug-save-done", done) {
+                crate::application_log::log_error(
+                    "debug save",
+                    format!("debug-save-done: {error}"),
+                );
+            }
+        })
+        .map_err(|error| {
+            *saving() = None;
+            format!("debug: the thread of the save: {error}")
+        })?;
+    Ok(SaveAllStarted {
+        saved: Some(saved),
+        total,
     })
 }

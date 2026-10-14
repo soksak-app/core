@@ -70,7 +70,7 @@ fn debug_write_logs_tar_writes_the_logs_folder() {
     let config = debug_config();
     let target = tempfile::tempdir().unwrap();
     let destination = target.path().join("debug.tar.gz");
-    debug::write_logs_tar(config.path(), &destination).unwrap();
+    debug::write_logs_tar(config.path(), &destination, &mut |_, _| {}).unwrap();
     let file = std::fs::File::open(&destination).unwrap();
     let mut reader = tar::Archive::new(flate2::read::GzDecoder::new(file));
     let mut entries = Vec::new();
@@ -90,6 +90,34 @@ fn debug_write_logs_tar_writes_the_logs_folder() {
 }
 
 // contract: debug.record.writes-the-state-file
+// contract: debug.save-all.reports-progress
+#[test]
+fn debug_write_logs_tar_reports_progress_each_mebibyte_and_at_the_end() {
+    let config = debug_config();
+    let big = 3 * 1024 * 1024 + 512 * 1024;
+    std::fs::write(config.path().join("logs/host-1-2.jsonl"), "x".repeat(big)).unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let destination = out.path().join("debug.tar.gz");
+    let mut reports: Vec<(u64, u64)> = Vec::new();
+    debug::write_logs_tar(config.path(), &destination, &mut |written, total| {
+        reports.push((written, total))
+    })
+    .unwrap();
+    let total = big as u64 + "started\n".len() as u64 + "png".len() as u64;
+    assert!(
+        reports.len() >= 4 && reports.last() == Some(&(total, total)),
+        "reports {reports:?}, want at least one for each MiB and a last report of {total} of {total}"
+    );
+    for (index, (written, reported_total)) in reports.iter().enumerate() {
+        let step =
+            index + 1 < reports.len() && index > 0 && *written < reports[index - 1].0 + 1024 * 1024;
+        assert!(
+            *reported_total == total && !step,
+            "report {index} of {reports:?} is not a MiB after the one before it or names another total"
+        );
+    }
+}
+
 #[test]
 fn debug_write_state_writes_the_state_file() {
     let config = debug_config();

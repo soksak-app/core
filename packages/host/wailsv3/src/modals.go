@@ -70,14 +70,38 @@ type modal struct {
 // OverlayPick publishes the key and value that the modal page changed. The main page decides the meaning.
 func (s *Surfaces) OverlayPick(id string, instance uint64, key string, value string) error {
 	s.mu.Lock()
-	current := s.modal != nil && s.modal.id == id && s.modal.instance == instance
-	s.mu.Unlock()
-	if current {
-		s.Emit("overlay-pick", map[string]string{
-			"id": id, "key": key, "value": value,
-		})
+	var open *OpenModal
+	if s.modal != nil {
+		open = &OpenModal{ID: s.modal.id, Instance: s.modal.instance}
 	}
+	s.mu.Unlock()
+	if fields, dropped := OverlayPickDropped(open, id, instance, key); dropped {
+		EmitHost(LevelInfo, "host.overlay.dropped", fields)
+		return nil
+	}
+	s.Emit("overlay-pick", map[string]string{
+		"id": id, "key": key, "value": value,
+	})
 	return nil
+}
+
+// OpenModal names the modal that a window shows: the id of its element and its instance.
+type OpenModal struct {
+	ID       string
+	Instance uint64
+}
+
+// OverlayPickDropped tells whether the reply of the modal id and instance is dropped because that modal is not the open
+// one (a closing modal still sends its last state report), and returns the fields of its record host.overlay.dropped.
+func OverlayPickDropped(open *OpenModal, id string, instance uint64, key string) (map[string]any, bool) {
+	if open != nil && open.ID == id && open.Instance == instance {
+		return nil, false
+	}
+	shown := ""
+	if open != nil {
+		shown = open.ID
+	}
+	return map[string]any{"id": id, "instance": instance, "key": key, "open": shown}, true
 }
 
 // OverlayShow renders one shown element in a hidden child web view. The web view is shown after its document

@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 	"io"
 	"io/fs"
 	"os"
@@ -184,12 +185,33 @@ func debugReadImage(file *os.File, relative string, size int64) (DebugReadResult
 	return DebugReadResult{Path: relative, Size: size, Kind: "image", Image: "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)}, nil
 }
 
+// debugProgressStep is the number of listed bytes between two reports of the progress of a save (docs/spec/debug.md).
+const debugProgressStep = 1 << 20
+
+// debugProgress counts the listed bytes that pass into the tar and reports each step and the end.
+type debugProgress struct {
+	written, total, reported int64
+	report                   func(written, total int64)
+}
+
+func (p *debugProgress) add(n int64) {
+	p.written += n
+	if p.written-p.reported >= debugProgressStep {
+		p.reported = p.written
+		p.report(p.written, p.total)
+	}
+}
+
 // DebugWriteLogsTar writes every file under <config-dir>/logs/ into a gzip-compressed tar file at destination, with
-// the paths of DebugFiles.
-func DebugWriteLogsTar(configDir, destination string) (err error) {
+// the paths of DebugFiles. It reports the listed bytes written each MiB and after the last file.
+func DebugWriteLogsTar(configDir, destination string, report func(written, total int64)) (err error) {
 	files, err := DebugFiles(configDir)
 	if err != nil {
 		return err
+	}
+	progress := &debugProgress{report: report}
+	for _, file := range files {
+		progress.total += file.Size
 	}
 	out, err := os.Create(destination)
 	if err != nil {
@@ -203,7 +225,7 @@ func DebugWriteLogsTar(configDir, destination string) (err error) {
 	compressed := gzip.NewWriter(out)
 	writer := tar.NewWriter(compressed)
 	for _, file := range files {
-		if err := debugTarFile(writer, configDir, file); err != nil {
+		if err := debugTarFile(writer, configDir, file, progress); err != nil {
 			return err
 		}
 	}
@@ -213,11 +235,12 @@ func DebugWriteLogsTar(configDir, destination string) (err error) {
 	if err := compressed.Close(); err != nil {
 		return fmt.Errorf("debug: %s: %w", destination, err)
 	}
+	report(progress.written, progress.total)
 	return nil
 }
 
 // debugTarFile writes one file of the logs folder into writer.
-func debugTarFile(writer *tar.Writer, configDir string, file DebugFile) error {
+func debugTarFile(writer *tar.Writer, configDir string, file DebugFile, progress *debugProgress) error {
 	in, err := os.Open(filepath.Join(configDir, filepath.FromSlash(file.Path)))
 	if err != nil {
 		return fmt.Errorf("debug: %s: %w", file.Path, err)
@@ -228,8 +251,13 @@ func debugTarFile(writer *tar.Writer, configDir string, file DebugFile) error {
 		return fmt.Errorf("debug: %s: %w", file.Path, err)
 	}
 	// A log that grows while the tar is written keeps the size of its header.
-	if _, err := io.CopyN(writer, in, file.Size); err != nil {
-		return fmt.Errorf("debug: %s: %w", file.Path, err)
+	for copied := int64(0); copied < file.Size; {
+		n, err := io.CopyN(writer, in, min(file.Size-copied, debugProgressStep))
+		copied += n
+		progress.add(n)
+		if err != nil {
+			return fmt.Errorf("debug: %s: %w", file.Path, err)
+		}
 	}
 	return nil
 }
@@ -461,14 +489,73 @@ func (h *Host) DebugSaveText(ctx context.Context, requestJSON json.RawMessage) (
 	return DebugSaved{Saved: chosen}, nil
 }
 
-// DebugSaveAll is the page's debugSaveAll call: it saves the logs folder as one gzip-compressed tar file.
-func (h *Host) DebugSaveAll(ctx context.Context) (DebugSaved, error) {
+// DebugSaveAllStarted is the answer of debugSaveAll: the chosen place, or nil when the person cancelled, and the bytes of
+// the listed files.
+type DebugSaveAllStarted struct {
+	Saved *string `json:"saved"`
+	Total int64   `json:"total"`
+}
+
+// DebugSaveProgress is the body of the window event debug-save-progress.
+type DebugSaveProgress struct {
+	Saved   string `json:"saved"`
+	Written int64  `json:"written"`
+	Total   int64  `json:"total"`
+}
+
+// DebugSaveDone is the body of the window event debug-save-done; Error is nil or the text of the failure.
+type DebugSaveDone struct {
+	Saved string  `json:"saved"`
+	Error *string `json:"error"`
+}
+
+// DebugSaveAll is the page's debugSaveAll call: after the save panel it answers at once and writes the logs folder as one
+// gzip-compressed tar file on a goroutine of its own, so the page and a reload of it never wait for the write
+// (docs/spec/debug.md).
+func (h *Host) DebugSaveAll(ctx context.Context) (DebugSaveAllStarted, error) {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return DebugSaveAllStarted{}, err
+	}
+	h.mu.Lock()
+	running := h.debugSaving
+	h.mu.Unlock()
+	if running != "" {
+		return DebugSaveAllStarted{}, fmt.Errorf("debug: a save of the logs folder is running: %s", running)
+	}
 	chosen, err := h.debugSaveTo(ctx, "soksak-wailsv3-debug-"+debugTime(time.Now())+".tar.gz")
 	if err != nil || chosen == nil {
-		return DebugSaved{}, err
+		return DebugSaveAllStarted{}, err
 	}
-	if err := DebugWriteLogsTar(h.configDir, *chosen); err != nil {
-		return DebugSaved{}, err
+	files, err := DebugFiles(h.configDir)
+	if err != nil {
+		return DebugSaveAllStarted{}, err
 	}
-	return DebugSaved{Saved: chosen}, nil
+	var total int64
+	for _, file := range files {
+		total += file.Size
+	}
+	h.mu.Lock()
+	if h.debugSaving != "" {
+		running := h.debugSaving
+		h.mu.Unlock()
+		return DebugSaveAllStarted{}, fmt.Errorf("debug: a save of the logs folder is running: %s", running)
+	}
+	h.debugSaving = *chosen
+	h.mu.Unlock()
+	routine.Go("debug-save-all", func() {
+		err := DebugWriteLogsTar(h.configDir, *chosen, func(written, total int64) {
+			s.Emit("debug-save-progress", DebugSaveProgress{Saved: *chosen, Written: written, Total: total})
+		})
+		h.mu.Lock()
+		h.debugSaving = ""
+		h.mu.Unlock()
+		done := DebugSaveDone{Saved: *chosen}
+		if err != nil {
+			text := err.Error()
+			done.Error = &text
+		}
+		s.Emit("debug-save-done", done)
+	})
+	return DebugSaveAllStarted{Saved: chosen, Total: total}, nil
 }
