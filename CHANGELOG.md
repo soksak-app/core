@@ -6,6 +6,7 @@
 
 - F161.56, F161.59, F161.62: closed as not reproduced on the current builds, with the records that show a recurrence in place.
 - F161.27: closed as not reproduced after three repeat runs of the outside resize check on both applications.
+- F178: the Tauri event writer writes its batch at each interval while events keep arriving, as the Go writer does.
 - F177.1: a gated chain hop is judged by every declared level and every policy in force during the chain.
 - F177: the log audit asks a chain only for the hops that the policy in force stores.
 - F160.19.2: `make host-allocations` measures the live allocations of a host process each minute; a run of 10 minutes on both hosts shows no growth.

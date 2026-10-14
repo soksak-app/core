@@ -2056,6 +2056,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F178",
+    implementation: [{ file: "packages/sok/tauriv2/src/event_log.rs", symbol: "let mut due = Instant::now() + interval;" }],
+    tests: [
+      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "a_steady_stream_of_events_is_written_at_each_batch_interval" },
+      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval" },
+    ],
+    expected: "The event writer of each host writes its batch at each interval while events keep arriving.",
+    levels: ["unit"],
+  },
+  {
     id: "F177",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "const stored = (file, from, to, hop)" }],
     tests: [{ file: "packages/log-contract/test/audit.test.mjs", id: "a chain does not ask for a hop whose class and level the policy in force of the process does not store" }],

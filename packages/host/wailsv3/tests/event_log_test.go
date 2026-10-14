@@ -505,3 +505,36 @@ func TestTheWriterAnnouncesEachWriteToItsObserver(t *testing.T) {
 	}
 	log.Close()
 }
+
+// contract: log.writer.writes-each-interval
+func TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval(t *testing.T) {
+	// Events arrive every 5 ms, faster than the batch interval of 50 ms, so a writer that waits for a quiet interval
+	// writes nothing while they arrive.
+	options := eventLogOptions(t.TempDir())
+	options.QueueEvents = 4096
+	options.QueueBytes = 1 << 22
+	options.BatchInterval = 50 * time.Millisecond
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	index := 0
+	for time.Since(started) < 400*time.Millisecond {
+		if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index}) {
+			t.Fatalf("event %d was refused", index)
+		}
+		index++
+		time.Sleep(5 * time.Millisecond)
+	}
+	data, err := os.ReadFile(log.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if written := strings.Count(string(data), "\n"); written <= 1 {
+		t.Fatalf("after 400 ms of events every 5 ms (%d emitted) the file holds %d line(s); the writer waits for a quiet interval", index, written)
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+}

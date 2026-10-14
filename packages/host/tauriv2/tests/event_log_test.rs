@@ -465,3 +465,31 @@ fn the_writer_announces_each_write_to_its_observer() {
     assert_eq!(path.file_name().unwrap(), "host-b1.jsonl");
     assert_eq!(size, std::fs::metadata(&path).unwrap().len());
 }
+
+// contract: log.writer.writes-each-interval
+#[test]
+fn a_steady_stream_of_events_is_written_at_each_batch_interval() {
+    // Events arrive every 5 ms, faster than the batch interval of 50 ms, so a writer that waits for a quiet interval
+    // writes nothing while they arrive.
+    let directory = tempfile::tempdir().unwrap();
+    let mut opts = options(directory.path());
+    opts.queue_events = 4096;
+    opts.queue_bytes = 1 << 22;
+    opts.batch_interval = Duration::from_millis(50);
+    let log = event_log::start(opts).unwrap();
+    let path = log.path().to_path_buf();
+    let started = std::time::Instant::now();
+    let mut index = 0;
+    while started.elapsed() < Duration::from_millis(400) {
+        assert!(log.emit(Level::Info, "host.test.event", &json!({"index": index})));
+        index += 1;
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    // Every event older than one interval and the margin of a loaded machine must be on disk while the stream runs.
+    let written = fs::read_to_string(&path).unwrap().lines().count();
+    assert!(
+        written > 1,
+        "after 400 ms of events every 5 ms ({index} emitted) the file holds {written} line(s); the writer waits for a quiet interval"
+    );
+    log.flush(Duration::from_secs(5)).unwrap();
+}

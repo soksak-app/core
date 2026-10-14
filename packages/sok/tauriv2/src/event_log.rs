@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::thread::JoinHandle;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use serde_json::json;
@@ -1130,11 +1130,21 @@ fn write_loop(
         out.flush();
         request
     };
+    // The batch is written when the interval since the last write ends, also while events keep arriving: a wait that
+    // restarted at each event would write nothing while events came faster than the interval.
+    let mut due = Instant::now() + interval;
+    // A flush or a stop that a write at the end of an interval found queued behind the events.
+    let mut queued: Option<Message> = None;
     loop {
-        let message = match receiver.recv_timeout(interval) {
+        let received = match queued.take() {
+            Some(message) => Ok(message),
+            None => receiver.recv_timeout(due.saturating_duration_since(Instant::now())),
+        };
+        let message = match received {
             Ok(message) => message,
             Err(RecvTimeoutError::Timeout) => {
                 // The interval ended: write what has gathered, and handle a request that was queued behind it.
+                due = Instant::now() + interval;
                 match drain(&mut out) {
                     Some(request) => request,
                     None => continue,
@@ -1152,6 +1162,11 @@ fn write_loop(
                 if urgent {
                     record_loss(&mut out);
                     out.flush();
+                }
+                // Events that keep arriving after the interval ended do not postpone its write.
+                if Instant::now() >= due {
+                    due = Instant::now() + interval;
+                    queued = drain(&mut out);
                 }
             }
             Message::Flush(done) => {
