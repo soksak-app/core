@@ -30,10 +30,10 @@ async function registrationTimeline(s, offsets) {
 }
 
 /** Puts the window in the start state of a check, waits until the terminal of the window check is ready with the check shell (check-shell), and returns that terminal. */
-export async function fresh(s, { performanceTrace = TRACE } = {}) {
+export async function fresh(s, { performanceTrace = TRACE, settings = {} } = {}) {
   const traceOffsets = currentEventOffsets(s.app.configDir);
   // The terminal of a window check starts with the check shell (check-shell), whatever the login shell of the user is.
-  await prepareFixture(s, { settings: { "terminal.shell": CHECK_SHELL }, performanceTrace });
+  await prepareFixture(s, { settings: { ...settings, "terminal.shell": CHECK_SHELL }, performanceTrace });
   let terminal;
   try {
     [terminal] = await terminalReady(s);
