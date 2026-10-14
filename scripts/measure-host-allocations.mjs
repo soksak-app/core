@@ -8,6 +8,7 @@
 import { execFileSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
+import { parseArgs } from "node:util";
 
 /** The live nodes and bytes of all zones in the output of `heap`; output without the totals line is an error that quotes its start. */
 export function heapTotals(text) {
@@ -27,15 +28,11 @@ export async function measure({ pid, minutes, totals, wait, log, now = Date.now 
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const args = process.argv.slice(2);
-  const value = (name) => {
-    const index = args.indexOf(name);
-    return index === -1 ? undefined : args[index + 1];
-  };
-  const pid = Number(value("--pid"));
-  const minutes = Number(value("--minutes") ?? 10);
-  if (!Number.isInteger(pid) || pid <= 0) throw new Error(`--pid must be a process id, got ${value("--pid")}`);
-  if (!Number.isInteger(minutes) || minutes <= 0) throw new Error(`--minutes must be a positive integer, got ${value("--minutes")}`);
+  const { values } = parseArgs({ options: { pid: { type: "string" }, minutes: { type: "string", default: "10" } }, strict: true });
+  const pid = Number(values.pid);
+  const minutes = Number(values.minutes);
+  if (!Number.isInteger(pid) || pid <= 0) throw new Error(`--pid must be a process id, got ${values.pid}`);
+  if (!Number.isInteger(minutes) || minutes <= 0) throw new Error(`--minutes must be a positive integer, got ${values.minutes}`);
   await measure({
     pid, minutes,
     totals: (id) => heapTotals(execFileSync("heap", [String(id)], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 })),

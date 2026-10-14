@@ -6,6 +6,7 @@
 
 - F161.56, F161.59, F161.62: 현재 build에서 재현되지 않음으로 닫았고, 재발을 보이는 기록이 있다.
 - F161.27: 두 애플리케이션에서 바깥 크기 변경 check를 세 번 반복한 뒤 재현되지 않음으로 닫았다.
+- F160.19.3: `make host-allocations`가 option을 parseArgs로 읽고 모르는 option을 거부한다.
 - F179.1: page batcher 시험이 node:test의 mock timer를 쓰고, batcher에는 timer 인자가 없다.
 - F176.3: native 시험이 선언된 함수 `sp_region_set_input_context`로 응답 없는 키에 닿는다.
 - F177.2: 사슬 검사의 policy 시간표 기본값이 이유를 적는다.
