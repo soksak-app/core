@@ -2056,6 +2056,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F182",
+    implementation: [{ file: "e2e/input-records.test.mjs", symbol: "e.page === hops.pageCall.page" }],
+    tests: [{ file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" }],
+    expected: "The input records check takes the clock anchor of the page that wrote page.call.",
+    levels: ["application"],
+  },
+  {
     id: "F186",
     implementation: [{ file: "native/darwin/src/observe.m", symbol: "id sp_observe_workspace_notification" }],
     tests: [{ file: "native/darwin/tests/activity_observers_test.m", id: "the activation names the application that was frontmost before it" }],
