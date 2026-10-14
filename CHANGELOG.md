@@ -6,6 +6,7 @@
 
 - F161.56, F161.59, F161.62: closed as not reproduced on the current builds, with the records that show a recurrence in place.
 - F161.27: closed as not reproduced after three repeat runs of the outside resize check on both applications.
+- F183: every declared workspace version is 0.0.13, the release with the corrections since 0.0.12.
 - F184: every page and plugin event names the page that wrote it, and a reload that times out names the host calls it waited for.
 - F185: the native platform tests of the Tauri host run one at a time and read an emptied ring.
 - F181: the debug view shows the progress of 모두 저장, the host writes the archive on its own thread, a second save while one writes is refused, and every dropped modal reply is recorded.
