@@ -2056,6 +2056,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F187",
+    implementation: [{ file: "packages/host/wailsv3/tests/event_channels_test.go", symbol: "func TestALossNamesTheChannelOfTheRefusedEvents" }],
+    tests: [
+      { file: "packages/host/wailsv3/tests/event_channels_test.go", id: "TestALossNamesTheChannelOfTheRefusedEvents" },
+      { file: "packages/host/tauriv2/tests/event_channels_test.rs", id: "a_loss_names_the_channel_of_the_refused_events" },
+    ],
+    expected: "The loss tests of both hosts add events until both channels are refused, and every contract comment is above its test.",
+    levels: ["unit"],
+  },
+  {
     id: "F182",
     implementation: [{ file: "e2e/input-records.test.mjs", symbol: "e.page === hops.pageCall.page" }],
     tests: [{ file: "e2e/input-records.test.mjs", id: "a typed key leaves a record in every layer of the input path" }],

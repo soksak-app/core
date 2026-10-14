@@ -89,7 +89,6 @@ fn debug_write_logs_tar_writes_the_logs_folder() {
     );
 }
 
-// contract: debug.record.writes-the-state-file
 // contract: debug.save-all.reports-progress
 #[test]
 fn debug_write_logs_tar_reports_progress_each_mebibyte_and_at_the_end() {
@@ -118,6 +117,7 @@ fn debug_write_logs_tar_reports_progress_each_mebibyte_and_at_the_end() {
     }
 }
 
+// contract: debug.record.writes-the-state-file
 #[test]
 fn debug_write_state_writes_the_state_file() {
     let config = debug_config();

@@ -142,7 +142,12 @@ func TestALossNamesTheChannelOfTheRefusedEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	refused := map[string]int{}
-	for index := 0; index < 40; index++ {
+	// The writer takes events from the queue while the producer adds them, so the producer adds events until the queue has
+	// refused events of both channels, not a fixed number that a fast writer can take in time.
+	for index := 0; refused["other"] == 0 || refused["debug"] == 0; index++ {
+		if index >= 1_000_000 {
+			t.Fatalf("the queue refused %v after %d events", refused, index)
+		}
 		level, channel := host.LevelInfo, "other"
 		if index%3 == 0 {
 			level, channel = host.LevelDebug, "debug"
@@ -150,9 +155,6 @@ func TestALossNamesTheChannelOfTheRefusedEvents(t *testing.T) {
 		if !log.Emit(level, "host.app.event", map[string]any{"kind": fmt.Sprint(index)}) {
 			refused[channel]++
 		}
-	}
-	if refused["other"] == 0 || refused["debug"] == 0 {
-		t.Fatalf("the queue refused %v, so a channel is not covered", refused)
 	}
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)

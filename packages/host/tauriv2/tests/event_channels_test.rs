@@ -155,8 +155,15 @@ fn a_loss_names_the_channel_of_the_refused_events() {
     opts.batch_interval = Duration::from_secs(30);
     let log = event_log::start(opts).unwrap();
     let mut refused: BTreeMap<&str, u64> = BTreeMap::new();
-    for index in 0..40 {
-        let (level, channel) = if index % 3 == 0 {
+    // The writer takes events from the queue while the producer adds them, so the producer adds events until the queue has
+    // refused events of both channels, not a fixed number that a fast writer can take in time.
+    let mut index = 0u64;
+    while !(refused.contains_key("other") && refused.contains_key("debug")) {
+        assert!(
+            index < 1_000_000,
+            "the queue refused {refused:?} after {index} events"
+        );
+        let (level, channel) = if index.is_multiple_of(3) {
             (Level::Debug, "debug")
         } else {
             (Level::Info, "other")
@@ -164,6 +171,7 @@ fn a_loss_names_the_channel_of_the_refused_events() {
         if !log.emit(level, "host.app.event", &json!({"kind": index.to_string()})) {
             *refused.entry(channel).or_default() += 1;
         }
+        index += 1;
     }
     assert!(
         refused.get("other").copied().unwrap_or(0) > 0
