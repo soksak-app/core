@@ -3,6 +3,7 @@
 // The test script of each package names the flags and the paths: `node --test [flags] <paths>`, optionally after commands such as
 // `pnpm build`. `--script <name>` reads another script of the packages that have it (`verify` runs the window checks, with
 // `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it.
+import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { existsSync, globSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { cpus } from 'node:os';
@@ -148,10 +149,24 @@ export function auditAfterRun(scriptName, run, write, audit = auditRunWithCatalo
 }
 
 async function main(argv) {
-  const option = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
-  const only = option('--only', '');
-  const scriptName = option('--script', 'test');
-  const limitMs = Number(option('--timeout', TEST_TIMEOUT_MS / 1000)) * 1000;
+  const { values } = parseArgs({
+    args: argv, strict: true,
+    options: {
+      only: { type: 'string', default: '' },
+      script: { type: 'string', default: 'test' },
+      timeout: { type: 'string', default: String(TEST_TIMEOUT_MS / 1000) },
+      concurrency: { type: 'string', default: String(Math.max(2, cpus().length - 2)) },
+      'when-idle': { type: 'string' },
+    },
+  });
+  const count = (name) => {
+    const number = Number(values[name]);
+    if (!Number.isFinite(number) || number <= 0) throw new Error(`--${name} must be a positive number, found ${JSON.stringify(values[name])}`);
+    return number;
+  };
+  const only = values.only;
+  const scriptName = values.script;
+  const limitMs = count('timeout') * 1000;
   const write = (line) => process.stdout.write(`${line}\n`);
   const { tests: all, before } = discoverNodeTests({ root: ROOT, packages: workspacePackages(ROOT), script: scriptName });
   const tests = all.filter((item) => item.name.includes(only));
@@ -162,11 +177,10 @@ async function main(argv) {
     const built = await runTests({ tests: prepare, concurrency: 1, defaultTimeoutMs: 300_000, write });
     if ([...built.results.values()].some((result) => result.status !== 'pass')) return 1;
   }
-  const concurrency = Number(option('--concurrency', Math.max(2, cpus().length - 2)));
+  const concurrency = count('concurrency');
   const run = newRun(ROOT);
   write(`RUN  ${tests.length} test files with ${concurrency} at once, each limited to ${limitMs / 1000}s; run ${run.id} keeps its output and manifest in ${run.folder}`);
-  const idle = option('--when-idle', null);
-  const beforeEach = idle === null ? undefined : whenIdle(Number(idle), { write });
+  const beforeEach = values['when-idle'] === undefined ? undefined : whenIdle(count('when-idle'), { write });
   const { results } = await runTests({ tests, concurrency, defaultTimeoutMs: limitMs, write, beforeEach, run });
   const passed = [...results.values()].every((result) => result.status === 'pass');
   // The logs are audited also when a test failed, because a failed run is classified by its logs.

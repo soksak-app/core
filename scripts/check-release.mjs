@@ -14,6 +14,7 @@
 // macOS (docs/spec/hosts.md#nativedarwin).
 //
 //   node scripts/check-release.mjs --macos-minimum VERSION --wailsv3-bundle PATH --tauriv2-bundle PATH
+import { parseArgs } from "node:util";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
@@ -138,22 +139,23 @@ function applicationSources(app, diagnostic) {
 
 // Runs the check only when executed directly as a CLI.
 if (import.meta.main) {
+  // parseArgs keeps the last value of a repeated option, so a repeated option is found from the tokens and refused.
+  const { values, tokens } = parseArgs({
+    strict: true, tokens: true,
+    options: Object.fromEntries([["macos-minimum", { type: "string" }], ...APPS.map((app) => [`${app}-bundle`, { type: "string" }])]),
+  });
+  const seen = new Set();
+  for (const token of tokens.filter((entry) => entry.kind === "option")) {
+    if (seen.has(token.name)) throw new Error(`duplicate release option: --${token.name}`);
+    seen.add(token.name);
+  }
+  const minimum = values["macos-minimum"];
+  if (minimum !== undefined && !/^\d+\.\d+(?:\.\d+)?$/.test(minimum)) throw new Error("--macos-minimum requires a macOS version such as 14.4");
   const bundles = new Map();
-  let minimum;
-  const args = process.argv.slice(2);
-  for (let index = 0; index < args.length; index += 2) {
-    const option = args[index];
-    if (option === "--macos-minimum") {
-      if (minimum !== undefined) throw new Error(`duplicate release option: ${option}`);
-      minimum = args[index + 1];
-      if (typeof minimum !== "string" || !/^\d+\.\d+(?:\.\d+)?$/.test(minimum)) throw new Error(`${option} requires a macOS version such as 14.4`);
-      continue;
-    }
-    const app = APPS.find((app) => option === `--${app}-bundle`);
-    if (!app) throw new Error(`unknown release option: ${option}`);
-    if (bundles.has(app)) throw new Error(`duplicate release option: ${option}`);
-    const path = args[index + 1];
-    if (!path || path.startsWith("--")) throw new Error(`${option} requires a bundle path`);
+  for (const app of APPS) {
+    const path = values[`${app}-bundle`];
+    if (path === undefined) continue;
+    if (path === "") throw new Error(`--${app}-bundle requires a bundle path`);
     bundles.set(app, resolve(path));
   }
   if (minimum === undefined || bundles.size !== APPS.length) {

@@ -6,8 +6,8 @@ test("the options name the host, the bundle and the registry index", () => {
   assert.deepEqual(parseOptions(["--host", "tauriv2", "--bundle", "b.app", "--registry", "i.json"]), { host: "tauriv2", bundle: "b.app", registry: "i.json" });
   assert.throws(() => parseOptions(["--host", "other", "--bundle", "b", "--registry", "i"]), /--host must be wailsv3 or tauriv2/);
   assert.throws(() => parseOptions(["--host", "wailsv3", "--bundle", "b"]), /--registry is required/);
-  assert.throws(() => parseOptions(["--host", "wailsv3", "--bundle", "--registry", "i"]), /--bundle requires a value/);
-  assert.throws(() => parseOptions(["--host", "wailsv3", "--bundle", "b", "--registry", "i", "--other", "x"]), /unknown option --other/);
+  assert.throws(() => parseOptions(["--host", "wailsv3", "--bundle", "--registry", "i"]), /argument is ambiguous|argument missing/);
+  assert.throws(() => parseOptions(["--host", "wailsv3", "--bundle", "b", "--registry", "i", "--other", "x"]), /Unknown option '--other'/);
 });
 
 test("the release key joins the platform, the architecture and the host", () => {

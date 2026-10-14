@@ -8,6 +8,7 @@
 // The first form runs in `make events-check`; its rules are in packages/plugin-api/events-check.js, which every repository
 // calls as `soksak-events`. The second form audits configuration folders without the judgment of tests;
 // `node scripts/audit-run.mjs <run folder>` audits a run and judges each test by the log.
+import { parseArgs } from 'node:util';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -78,10 +79,11 @@ export function auditLogDirectories(catalog, directories) {
 }
 
 function main(argv) {
-  const logsIndex = argv.indexOf('--logs');
-  if (logsIndex >= 0) {
+  const { values, positionals } = parseArgs({ args: argv, options: { logs: { type: 'boolean', default: false } }, allowPositionals: true, strict: true });
+  if (!values.logs && positionals.length > 0) throw new Error(`folders are given only with --logs: ${positionals.join(' ')}`);
+  if (values.logs) {
     const catalog = JSON.parse(readFileSync(join(ROOT, CATALOG), 'utf8'));
-    const directories = argv.slice(logsIndex + 1);
+    const directories = positionals;
     if (directories.length === 0) throw new Error('--logs needs the configuration folders to audit');
     const findings = auditLogDirectories(catalog, directories);
     for (const finding of findings) process.stderr.write(`${finding}\n`);

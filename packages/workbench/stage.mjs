@@ -23,6 +23,7 @@
 //   <output>/modules/<plugin>/       files of each enabled installed plugin
 //   <output>/shared/<id>.<point>/      the shared modules of extension points
 
+import { parseArgs } from "node:util";
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
@@ -33,19 +34,26 @@ import {
 } from "@soksak/plugin-api";
 
 const USAGE = "usage: soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>]";
-const args = process.argv.slice(2);
-const [out, ...rest] = args;
-let installedDirectory;
-let diagnostics = false;
-for (let i = 0; i < rest.length; i++) {
-  if (rest[i] === "--installed" && rest[i + 1] && installedDirectory === undefined) installedDirectory = rest[++i];
-  else if (rest[i] === "--diagnostics" && !diagnostics) diagnostics = true;
-  else { console.error(USAGE); process.exit(2); }
+let parsed;
+try {
+  parsed = parseArgs({
+    options: { diagnostics: { type: "boolean", default: false }, installed: { type: "string" } },
+    allowPositionals: true, strict: true, tokens: true,
+  });
+  // parseArgs keeps the last value of a repeated option, so a repeated option is found from the tokens and refused.
+  const names = parsed.tokens.filter((token) => token.kind === "option").map((token) => token.name);
+  const repeated = names.find((name, index) => names.indexOf(name) !== index);
+  if (repeated !== undefined) throw new Error(`--${repeated} is given more than once`);
+} catch (error) {
+  console.error(`${error.message}\n${USAGE}`);
+  process.exit(2);
 }
-if (!out || out.startsWith("--")) {
+if (parsed.positionals.length !== 1) {
   console.error(USAGE);
   process.exit(2);
 }
+const [out] = parsed.positionals;
+const { diagnostics, installed: installedDirectory } = parsed.values;
 
 const app = process.cwd();
 const target = resolve(app, out);

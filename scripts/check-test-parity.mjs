@@ -2056,6 +2056,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F180",
+    implementation: [{ file: "scripts/node-tests.mjs", symbol: "const { values } = parseArgs({" }],
+    tests: [
+      { file: "scripts/test/check-app-update.test.mjs", id: "Unknown option '--other'" },
+      { file: "scripts/test/check-release-paths.test.mjs", id: "Unknown option '--unknown'" },
+    ],
+    expected: "Every script reads its command line with parseArgs of node:util and refuses an unknown or repeated option.",
+    levels: ["unit"],
+  },
+  {
     id: "F179",
     implementation: [
       { file: "packages/sok/tauriv2/src/event_log.rs", symbol: "const GATED_REPORT_INTERVAL" },

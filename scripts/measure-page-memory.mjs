@@ -9,6 +9,7 @@
 //
 //   node scripts/measure-page-memory.mjs --sok PATH --config-dir DIR [--idle-minutes N] [--reloads N]
 import { execFileSync } from "node:child_process";
+import { parseArgs } from "node:util";
 import { setTimeout as sleep } from "node:timers/promises";
 
 /**
@@ -40,20 +41,17 @@ export function parseFootprint(text) {
 
 /** The command line options. */
 export function parseOptions(args) {
-  const options = { idleMinutes: 60, reloads: 20 };
-  for (let index = 0; index < args.length; index += 2) {
-    const [name, value] = [args[index], args[index + 1]];
-    if (value === undefined || value.startsWith("--")) throw new Error(`${name} requires a value`);
-    if (name === "--sok") options.sok = value;
-    else if (name === "--config-dir") options.configDir = value;
-    else if (name === "--idle-minutes" || name === "--reloads") {
-      const number = Number(value);
-      if (!Number.isInteger(number) || number < 0) throw new Error(`${name} must be a non-negative integer`);
-      options[name === "--reloads" ? "reloads" : "idleMinutes"] = number;
-    } else throw new Error(`unknown option: ${name}`);
-  }
-  if (!options.sok || !options.configDir) throw new Error("required options: --sok PATH --config-dir DIR");
-  return options;
+  const { values } = parseArgs({
+    args, strict: true,
+    options: { sok: { type: "string" }, "config-dir": { type: "string" }, "idle-minutes": { type: "string", default: "60" }, reloads: { type: "string", default: "20" } },
+  });
+  const count = (name) => {
+    const number = Number(values[name]);
+    if (!Number.isInteger(number) || number < 0) throw new Error(`--${name} must be a non-negative integer`);
+    return number;
+  };
+  if (!values.sok || !values["config-dir"]) throw new Error("required options: --sok PATH --config-dir DIR");
+  return { idleMinutes: count("idle-minutes"), reloads: count("reloads"), sok: values.sok, configDir: values["config-dir"] };
 }
 
 if (import.meta.main) {

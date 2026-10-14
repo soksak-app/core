@@ -3,6 +3,7 @@
 // The contract cases are defined by the "Contract cases" table of docs/spec/host-contract.md. The test function of each host declares the case it runs with the line
 // `// contract: <id>[, <id>]` right above it. The check actually runs the tests of both hosts in the default configuration and the diagnostics
 // configuration and judges from the results whether the declared tests ran and passed. It does not use file names or counts.
+import { parseArgs } from 'node:util';
 import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
@@ -186,18 +187,22 @@ const RUST_RUNS = [
 ];
 
 async function main(argv) {
-  const flagIndex = argv.indexOf('--go-ldflags');
-  if (flagIndex < 0 || !argv[flagIndex + 1]) throw new Error('usage: check-host-contract.mjs --go-ldflags <flags>');
+  // The Go link flags start with a dash, so they are given as --go-ldflags=<flags>.
+  const { values } = parseArgs({
+    args: argv, strict: true,
+    options: { 'go-ldflags': { type: 'string' }, run: { type: 'string' }, only: { type: 'string' } },
+  });
+  if (!values['go-ldflags']) throw new Error('usage: check-host-contract.mjs --go-ldflags=<flags> [--run <text>] [--only <text>]');
   const cases = parseContractCases(readFileSync(join(ROOT, SPEC), 'utf8'));
   const write = (line) => process.stdout.write(`${line}\n`);
   const concurrency = Math.max(2, cpus().length - 2);
   const buildDir = mkdtempSync(join(tmpdir(), 'host-contract-'));
   // Go builds run together; the Rust builds share one cargo lock, so they follow one another. Both languages build at once.
   // A scoped run builds only the runs whose id contains the text of --run.
-  const runIndex = argv.indexOf('--run');
-  const runText = runIndex < 0 ? '' : argv[runIndex + 1];
-  if (runIndex >= 0 && !runText) throw new Error('--run needs a text that the id of a run contains');
-  const goDiscovery = Promise.all(GO_RUNS(argv[flagIndex + 1]).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency })));
+  if (values.run === '') throw new Error('--run needs a text that the id of a run contains');
+  // default: without --run every run builds, because every id contains the empty text.
+  const runText = values.run ?? '';
+  const goDiscovery = Promise.all(GO_RUNS(values['go-ldflags']).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency })));
   const rustDiscovery = (async () => {
     const found = [];
     for (const run of RUST_RUNS.filter((entry) => entry.id.includes(runText))) found.push(await discoverRust({ ...run, cwd: ROOT, write }));
@@ -205,9 +210,9 @@ async function main(argv) {
   })();
   const [goFound, rustFound] = await Promise.all([goDiscovery, rustDiscovery]);
   const found = { wailsv3: goFound, tauriv2: rustFound };
-  const onlyIndex = argv.indexOf('--only');
-  const only = onlyIndex < 0 ? null : argv[onlyIndex + 1];
-  if (onlyIndex >= 0 && !only) throw new Error('--only needs a text that the name of a test contains');
+  // default: without --only every test runs.
+  const only = values.only ?? null;
+  if (only === '') throw new Error('--only needs a text that the name of a test contains');
   const items = [...goFound, ...rustFound].flatMap((entry) => entry.tests).filter((item) => only === null || item.name.includes(only));
   if (only !== null) {
     // A scoped run shows the tests it ran; the contract audit needs every test, so it belongs to the full run.

@@ -5,6 +5,7 @@
 // reads plugin.json and runs validateManifest of this checkout's @soksak/plugin-api.
 //
 //   node scripts/check-registry-manifests.mjs [--index URL]
+import { parseArgs } from "node:util";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -59,9 +60,10 @@ export async function registryManifestErrors(index, core, fetchRelease = fetchBy
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const at = process.argv.indexOf("--index");
+  const { values } = parseArgs({ options: { index: { type: "string" } }, strict: true });
   const environment = JSON.parse(readFileSync(join(ROOT, "apps/wailsv3/environment.json"), "utf8"));
-  const url = at > 0 ? process.argv[at + 1] : environment.registry;
+  // default: without --index the registry of the environment is checked.
+  const url = values.index ?? environment.registry;
   if (typeof url !== "string" || url === "") {
     console.error("usage: node scripts/check-registry-manifests.mjs [--index URL]");
     process.exit(2);

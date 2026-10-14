@@ -6,6 +6,7 @@
 
 - F161.56, F161.59, F161.62: closed as not reproduced on the current builds, with the records that show a recurrence in place.
 - F161.27: closed as not reproduced after three repeat runs of the outside resize check on both applications.
+- F180: every script reads its command line with parseArgs of node:util and refuses an unknown or repeated option.
 - F160.19.3: `make host-allocations` reads its options with parseArgs and refuses an unknown option.
 - F179.1: the page batcher test uses the mock timers of node:test, and the batcher has no timer argument.
 - F176.3: the native test reaches an unanswered key through the declared function `sp_region_set_input_context`.

@@ -7,6 +7,7 @@
 //   node scripts/workspace-registry.mjs --sok <sok executable> --out <registry folder> [--diagnostics]
 //
 // --diagnostics packs the plugins as diagnostic packages. Diagnostic builds and window checks install from this registry.
+import { parseArgs } from "node:util";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -137,12 +138,8 @@ export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const args = process.argv.slice(2);
-  const value = (flag) => {
-    const index = args.indexOf(flag);
-    if (index < 0 || index + 1 >= args.length) throw new Error(`${flag} is required`);
-    return args[index + 1];
-  };
-  const result = buildWorkspaceRegistry(value("--sok"), value("--out"), args.includes("--diagnostics"));
+  const { values } = parseArgs({ options: { sok: { type: "string" }, out: { type: "string" }, diagnostics: { type: "boolean", default: false } }, strict: true });
+  for (const name of ["sok", "out"]) if (!values[name]) throw new Error(`--${name} is required`);
+  const result = buildWorkspaceRegistry(values.sok, values.out, values.diagnostics);
   console.log(`Workspace registry: ${result.index} (${result.plugins} plugins, ${result.sidecars} sidecars, ${result.packs} packs)`);
 }

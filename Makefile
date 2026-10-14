@@ -390,7 +390,7 @@ native-test: native-darwin frontend-wailsv3 frontend-tauriv2
 	@$(MAKE) rust-clippy-check
 	@$(MAKE) go-format-check
 	@$(MAKE) -C native/darwin test
-	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags "$(GO_LINK)"
+	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags="$(GO_LINK)"
 
 # Checks that every Go file the repository tracks is in gofmt form. Reports every file of a different form and fails.
 go-format-check:
@@ -413,7 +413,7 @@ rust-format-check:
 # Runs the tests of the two hosts in the default configuration and the diagnostic configuration and checks from the results that the host contract cases
 # (docs/spec/host-contract.md) run at the same level.
 host-contract-check: native-darwin frontend-wailsv3 frontend-tauriv2
-	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags "$(GO_LINK)"
+	@$(GO_ENV) $(CARGO_ENV) node scripts/check-host-contract.mjs --go-ldflags="$(GO_LINK)"
 
 # Checks the windows of already running apps in sequence through the local endpoint. The harness does not start the apps.
 examples-verify: docs-check e2e-check exposure-check

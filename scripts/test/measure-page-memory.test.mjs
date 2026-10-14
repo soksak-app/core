@@ -37,6 +37,6 @@ test("footprint output and options are read strictly", () => {
   assert.deepEqual(parseOptions(["--sok", "/s", "--config-dir", "/c", "--idle-minutes", "0", "--reloads", "3"]),
     { idleMinutes: 0, reloads: 3, sok: "/s", configDir: "/c" });
   assert.throws(() => parseOptions(["--sok", "/s"]), /required options/);
-  assert.throws(() => parseOptions(["--sok", "/s", "--config-dir", "/c", "--reloads", "-1"]), /non-negative integer/);
-  assert.throws(() => parseOptions(["--other", "x"]), /unknown option/);
+  assert.throws(() => parseOptions(["--sok", "/s", "--config-dir", "/c", "--reloads=-1"]), /non-negative integer/);
+  assert.throws(() => parseOptions(["--other", "x"]), /Unknown option '--other'/);
 });

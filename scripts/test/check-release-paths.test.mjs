@@ -122,10 +122,10 @@ for (const [name, args, message] of [
   ["missing minimum", ["--wailsv3-bundle", "a", "--tauriv2-bundle", "b"], /required release options/],
   ["invalid minimum", ["--macos-minimum", "fourteen"], /requires a macOS version/],
   ["duplicate minimum", ["--macos-minimum", "14.4", "--macos-minimum", "14.4"], /duplicate release option/],
-  ["unknown option", ["--unknown"], /unknown release option/],
-  ["missing value", ["--wailsv3-bundle"], /requires a bundle path/],
+  ["unknown option", ["--unknown"], /Unknown option '--unknown'/],
+  ["missing value", ["--wailsv3-bundle"], /argument missing/],
   ["empty value", ["--wailsv3-bundle", ""], /requires a bundle path/],
-  ["option as value", ["--wailsv3-bundle", "--tauriv2-bundle"], /requires a bundle path/],
+  ["option as value", ["--wailsv3-bundle", "--tauriv2-bundle"], /argument is ambiguous/],
   ["duplicate option", ["--wailsv3-bundle", "a", "--wailsv3-bundle", "b"], /duplicate release option/],
 ]) {
   test(`release CLI rejects ${name}`, { timeout: 5000 }, () => {

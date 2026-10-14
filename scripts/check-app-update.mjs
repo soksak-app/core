@@ -8,6 +8,7 @@
 // `make app-update-check` runs it.
 //
 //   node scripts/check-app-update.mjs --host wailsv3|tauriv2 --bundle PATH --registry INDEX
+import { parseArgs } from "node:util";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, watch, writeFileSync } from "node:fs";
@@ -20,18 +21,10 @@ const WAIT_MS = 120_000;
 
 /** The command line options. */
 export function parseOptions(args) {
-  const options = {};
-  for (let index = 0; index < args.length; index += 2) {
-    const [name, value] = [args[index], args[index + 1]];
-    if (value === undefined || value.startsWith("--")) throw new Error(`${name} requires a value`);
-    if (name === "--host") options.host = value;
-    else if (name === "--bundle") options.bundle = value;
-    else if (name === "--registry") options.registry = value;
-    else throw new Error(`unknown option ${name}`);
-  }
-  if (options.host !== "wailsv3" && options.host !== "tauriv2") throw new Error("--host must be wailsv3 or tauriv2");
-  for (const name of ["bundle", "registry"]) if (!options[name]) throw new Error(`--${name} is required`);
-  return options;
+  const { values } = parseArgs({ args, options: { host: { type: "string" }, bundle: { type: "string" }, registry: { type: "string" } }, strict: true });
+  if (values.host !== "wailsv3" && values.host !== "tauriv2") throw new Error("--host must be wailsv3 or tauriv2");
+  for (const name of ["bundle", "registry"]) if (!values[name]) throw new Error(`--${name} is required`);
+  return { host: values.host, bundle: values.bundle, registry: values.registry };
 }
 
 /** The key of the core release of this machine and host. */
