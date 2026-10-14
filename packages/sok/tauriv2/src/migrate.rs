@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use crate::event_log::{EventLog, Level};
 use crate::files::file_error;
-use crate::install::{INSTALLED, InstalledState, SETTINGS, validate_installed};
+use crate::install::{INSTALLED, InstalledState, PROJECTS, SETTINGS, validate_installed};
 use crate::plugins::write_installed;
 
 /// One named operation of a definition, with the scope it applies to. The engine implements the operations the contract
@@ -20,6 +20,8 @@ use crate::plugins::write_installed;
 struct Operation {
     op: String,
     scope: String,
+    #[serde(default)]
+    member: String,
     #[serde(default)]
     field: String,
     #[serde(default)]
@@ -51,6 +53,10 @@ fn definitions() -> Result<Vec<Definition>, String> {
             "migrations/settings.json",
             include_str!("migrations/settings.json"),
         ),
+        (
+            "migrations/projects.json",
+            include_str!("migrations/projects.json"),
+        ),
     ] {
         let mut parsed: Vec<Definition> = serde_json::from_str(text)
             .map_err(|error| format!("{name} is not valid JSON: {error}"))?;
@@ -58,9 +64,12 @@ fn definitions() -> Result<Vec<Definition>, String> {
     }
     let mut ends_at: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
     for definition in &definitions {
-        if definition.file != INSTALLED && definition.file != SETTINGS {
+        if definition.file != INSTALLED
+            && definition.file != SETTINGS
+            && definition.file != PROJECTS
+        {
             return Err(format!(
-                "the embedded migration definitions: {} is neither {INSTALLED} nor {SETTINGS}",
+                "the embedded migration definitions: {} is neither {INSTALLED}, {SETTINGS} nor {PROJECTS}",
                 definition.file
             ));
         }
@@ -78,7 +87,10 @@ fn definitions() -> Result<Vec<Definition>, String> {
         for operation in &definition.operations {
             let known = matches!(
                 (operation.op.as_str(), operation.scope.as_str()),
-                ("removeField", "plugins") | ("renameField", "plugins") | ("setFormat", "document")
+                ("removeField", "plugins")
+                    | ("renameField", "plugins")
+                    | ("setFormat", "document")
+                    | ("wrapDocument", "document")
             );
             if !known {
                 return Err(format!(
@@ -119,6 +131,33 @@ pub fn migration_chains_for_test()
     Ok(out)
 }
 
+/// The current format number of projects.json, the end of its definition chain.
+pub fn projects_format() -> u64 {
+    format_of(PROJECTS)
+}
+
+/// The current format number of settings.json, the end of its definition chain.
+pub fn settings_format() -> u64 {
+    format_of(SETTINGS)
+}
+
+/// The current format of one file of the definitions. A file without a chain has no current form; its writer refuses
+/// to stamp a number, so the failure of the definitions is reported and 0 names no form.
+fn format_of(file: &str) -> u64 {
+    match definitions() {
+        Ok(definitions) => match definitions.iter().rev().find(|step| step.file == file) {
+            Some(step) => step.to,
+            // default: no chain for the file names no form, and the writer refuses to stamp one.
+            None => 0,
+        },
+        Err(error) => {
+            // The definitions are embedded and load once; a failure here is a defect of the build, named on the spot.
+            eprintln!("event writer: the migration definitions of {file}: {error}");
+            0
+        }
+    }
+}
+
 /// Registers the event writer of this process for the records of the migration engine; `None` registers none.
 pub fn use_migration_log(log: Option<Arc<EventLog>>) {
     MIGRATION_LOG.with(|cell| *cell.borrow_mut() = log);
@@ -146,6 +185,12 @@ pub fn migrate_settings(config_dir: &Path) -> Result<u64, String> {
     migrate(config_dir, SETTINGS)
 }
 
+/// Applies the migration definitions of projects.json at the entry of its shared reader, the host workspace layer. A
+/// file that is a bare array of projects is the form 0.
+pub fn migrate_projects(config_dir: &Path) -> Result<u64, String> {
+    migrate(config_dir, PROJECTS)
+}
+
 /// Applies the definitions of one stored file.
 fn migrate(config_dir: &Path, file: &str) -> Result<u64, String> {
     let path = config_dir.join(file);
@@ -154,8 +199,16 @@ fn migrate(config_dir: &Path, file: &str) -> Result<u64, String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
         Err(error) => return Err(file_error(path.display(), &error)),
     };
-    let mut document: Value = serde_json::from_str(&text)
+    let raw: Value = serde_json::from_str(&text)
         .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))?;
+    let mut bare = raw.as_array().cloned();
+    if !raw.is_object() && bare.is_none() {
+        return Err(format!(
+            "{}: the file is neither an object nor a list",
+            path.display()
+        ));
+    }
+    let mut document = raw;
     // default: a file with no format member is the form 0, the form before the number existed.
     let format = document.get("format").and_then(Value::as_u64).unwrap_or(0);
     let definitions = definitions()?;
@@ -177,6 +230,19 @@ fn migrate(config_dir: &Path, file: &str) -> Result<u64, String> {
         ));
     };
     for operation in &step.operations {
+        if operation.op == "wrapDocument" {
+            // The earlier form is the bare list; the operation names the member it becomes under the format member.
+            let Some(bare) = bare.take() else {
+                return Err(format!(
+                    "{}: the operation wrapDocument needs the bare list of the earlier form",
+                    path.display()
+                ));
+            };
+            let mut wrapped = serde_json::Map::new();
+            wrapped.insert(operation.member.clone(), Value::Array(bare));
+            document = Value::Object(wrapped);
+            continue;
+        }
         apply(&mut document, operation).map_err(|error| format!("{}: {error}", path.display()))?;
     }
     if file == INSTALLED {

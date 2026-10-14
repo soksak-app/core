@@ -65,6 +65,31 @@ type WorkspaceRequest struct {
 	Delta   *int     `json:"delta"`
 }
 
+// readProjects reads the projects of projects.json, which holds them under the `projects` member beside the format
+// member of the stored form (docs/spec/installation.md#stored-data-migration).
+func readProjects(path string) ([]Record, error) {
+	document := Record{}
+	if err := readJSON(path, &document); err != nil {
+		return nil, err
+	}
+	projects := []Record{}
+	if list, held := document["projects"].([]any); held {
+		for _, item := range list {
+			record, ok := item.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("%s: a project is not an object", path)
+			}
+			projects = append(projects, Record(record))
+		}
+	}
+	return projects, nil
+}
+
+// writeProjects writes the projects under the `projects` member with the format member of the current form.
+func writeProjects(path string, projects []Record) error {
+	return writeJSON(path, Record{"format": sok.ProjectsFormat(), "projects": projects})
+}
+
 func readJSON(path string, into any) error {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -122,8 +147,13 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	registry := filepath.Join(w.directory, "projects.json")
-	projects := []Record{}
-	if err := readJSON(registry, &projects); err != nil {
+	// The entry of the shared reader of projects.json migrates it to the current format first; the file holds the
+	// projects under the `projects` member beside the format member (docs/spec/installation.md#stored-data-migration).
+	if _, err := sok.MigrateProjects(w.directory); err != nil {
+		return nil, err
+	}
+	projects, err := readProjects(registry)
+	if err != nil {
 		return nil, err
 	}
 	for _, p := range projects {
@@ -186,7 +216,7 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 		}
 		delete(req.Project, "settings")
 		projects = append(projects, req.Project)
-		if err := writeJSON(registry, projects); err != nil {
+		if err := writeProjects(registry, projects); err != nil {
 			return nil, err
 		}
 		return req.Project, nil
@@ -266,7 +296,7 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 	default:
 		return nil, fmt.Errorf("unknown workspace operation: %s", req.Kind)
 	}
-	return true, writeJSON(registry, projects)
+	return true, writeProjects(registry, projects)
 }
 
 // Workspace performs the storage operations. add checks and stores the project folder, snapshot returns

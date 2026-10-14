@@ -15,7 +15,7 @@ import (
 // (docs/spec/installation.md#stored-data-migration). The file is a tracked copy of packages/sok/migrations; make
 // migrations-sync refreshes it and make migrations-check refuses a difference.
 //
-//go:embed migrations/installed.json migrations/settings.json
+//go:embed migrations/installed.json migrations/settings.json migrations/projects.json
 var migrationFS embed.FS
 
 // migrationDefinition is one step of the chain of one stored file: the file it migrates, the format it comes from and
@@ -29,10 +29,11 @@ type migrationDefinition struct {
 
 // migrationOperation is one named operation with the scope it applies to.
 type migrationOperation struct {
-	Op    string `json:"op"`
-	Scope string `json:"scope"`
-	Field string `json:"field"`
-	From  string `json:"from"`
+	Op     string `json:"op"`
+	Scope  string `json:"scope"`
+	Field  string `json:"field"`
+	Member string `json:"member"`
+	From   string `json:"from"`
 	// To is the target of the operation: the format number of setFormat, the field name of renameField.
 	To any `json:"to"`
 }
@@ -47,7 +48,7 @@ type migrationChain struct {
 // names a second file, two definitions of one step, a gap, or a step that does not start where the earlier one ends.
 func migrationChains() (map[string]migrationChain, error) {
 	chains := map[string]migrationChain{}
-	for _, name := range []string{"migrations/installed.json", "migrations/settings.json"} {
+	for _, name := range []string{"migrations/installed.json", "migrations/settings.json", "migrations/projects.json"} {
 		if err := appendChain(chains, name); err != nil {
 			return nil, err
 		}
@@ -82,6 +83,25 @@ func appendChain(chains map[string]migrationChain, name string) error {
 		chains[definition.File] = chain
 	}
 	return nil
+}
+
+// ProjectsFormat is the current format number of projects.json, the end of its definition chain.
+func ProjectsFormat() int {
+	return formatOf("projects.json")
+}
+
+// SettingsFormat is the current format number of settings.json, the end of its definition chain.
+func SettingsFormat() int {
+	return formatOf("settings.json")
+}
+
+// formatOf is the current format of one file of the definitions, or 0 without a chain.
+func formatOf(file string) int {
+	chains, err := migrationChains()
+	if err != nil {
+		return 0
+	}
+	return chains[file].current()
 }
 
 // MigrationChainsForTest exposes the parsed chains for the owning tests: the chain of each file as the steps the engine
@@ -123,6 +143,12 @@ func MigrateSettings(configDir string) (int, error) {
 	return migrate(configDir, "settings.json")
 }
 
+// MigrateProjects applies the migration definitions of projects.json at the entry of its shared reader, the host
+// workspace layer. A file that is a bare array of projects is the form 0.
+func MigrateProjects(configDir string) (int, error) {
+	return migrate(configDir, "projects.json")
+}
+
 // migrate applies the definitions of one stored file.
 func migrate(configDir, file string) (int, error) {
 	path := filepath.Join(configDir, file)
@@ -145,15 +171,25 @@ func migrate(configDir, file string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("%s is not valid JSON: %w", path, err)
 	}
-	document, ok := value.(map[string]any)
-	if !ok {
-		return 0, fmt.Errorf("%s: the file is not an object", path)
+	// A document that is a list is the form 0 of a file whose first definition wraps it (the bare array of
+	// projects.json); the wrap operation of that definition names the member it goes under.
+	bare, isList := value.([]any)
+	if _, isObject := value.(map[string]any); !isObject && !isList {
+		return 0, fmt.Errorf("%s: the file is neither an object nor a list", path)
+	}
+	var document map[string]any
+	if isList {
+		document = map[string]any{}
+	} else {
+		document = value.(map[string]any)
 	}
 	format := 0
-	if _, held := document["format"]; held {
-		var err error
-		if format, err = installedFormatOf(document); err != nil {
-			return 0, fmt.Errorf("%s: %w", path, err)
+	if !isList {
+		if _, held := document["format"]; held {
+			var err error
+			if format, err = installedFormatOf(document); err != nil {
+				return 0, fmt.Errorf("%s: %w", path, err)
+			}
 		}
 	}
 	current := chain.current()
@@ -166,6 +202,14 @@ func migrate(configDir, file string) (int, error) {
 	}
 	from := format
 	for _, operation := range step.Operations {
+		if operation.Op == "wrapDocument" {
+			// The earlier form is the bare list; the operation names the member it becomes under the format member.
+			if !isList {
+				return 0, fmt.Errorf("%s: the operation wrapDocument needs the bare list of the earlier form", path)
+			}
+			document = map[string]any{operation.Member: bare}
+			continue
+		}
 		if err := applyMigrationOperation(document, operation); err != nil {
 			return 0, fmt.Errorf("%s: %w", path, err)
 		}

@@ -54,6 +54,26 @@ pub struct Request {
     delta: Option<i64>,
 }
 
+/// Reads the projects of projects.json, which holds them under the `projects` member beside the format member of the
+/// stored form (docs/spec/installation.md#stored-data-migration).
+fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
+    #[derive(Default, Deserialize)]
+    struct Document {
+        #[serde(default)]
+        projects: Vec<Value>,
+    }
+    Ok(read::<Document>(path)?.projects)
+}
+
+/// Writes the projects under the `projects` member with the format member of the current form.
+fn write_projects(path: &Path, projects: &[Value]) -> Result<(), String> {
+    let document = serde_json::json!({
+        "format": soksak_sok::migrate::projects_format(),
+        "projects": projects,
+    });
+    write(path, &document)
+}
+
 fn read<T: DeserializeOwned + Default>(path: &Path) -> Result<T, String> {
     match fs::read(path) {
         Ok(data) => serde_json::from_slice(&data).map_err(|e| format!("{}: {e}", path.display())),
@@ -96,7 +116,9 @@ impl Workspace {
     pub fn apply(&self, req: Request) -> Result<Value, String> {
         let _writing = self.writing.lock().map_err(|e| e.to_string())?;
         let registry = self.directory.join("projects.json");
-        let mut projects: Vec<Value> = read(&registry)?;
+        // The entry of the shared reader of projects.json migrates it to the current format first.
+        soksak_sok::migrate::migrate_projects(&self.directory)?;
+        let mut projects: Vec<Value> = read_projects(&registry)?;
         for project in &projects {
             let id = project["id"].as_str().ok_or("invalid project id")?;
             if id.is_empty()
@@ -150,7 +172,7 @@ impl Workspace {
                     .ok_or("invalid project")?
                     .remove("settings");
                 projects.push(project.clone());
-                write(&registry, &projects)?;
+                write_projects(&registry, &projects)?;
                 return Ok(project);
             }
             "patch" => {
@@ -237,7 +259,7 @@ impl Workspace {
             }
             _ => return Err(format!("unknown workspace operation: {}", req.kind)),
         }
-        write(&registry, &projects)?;
+        write_projects(&registry, &projects)?;
         Ok(true.into())
     }
 }

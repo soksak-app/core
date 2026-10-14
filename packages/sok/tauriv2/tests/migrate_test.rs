@@ -167,3 +167,23 @@ fn migrate_settings_adds_the_format_number_of_the_form_without_one() {
     assert_eq!(soksak_sok::migrate::migrate_settings(&config).unwrap(), 0);
     let _ = std::fs::remove_dir_all(&config);
 }
+
+// contract: install.migration.projects-wraps-the-bare-list
+#[test]
+fn migrate_projects_wraps_the_bare_list_of_the_earlier_form() {
+    let config = temp_config("projects");
+    let path = config.join("projects.json");
+    std::fs::write(
+        &path,
+        r#"[{"id":"prj-1","root":"/tmp/a","identity":"1:2"}]"#,
+    )
+    .unwrap();
+    assert_eq!(soksak_sok::migrate::migrate_projects(&config).unwrap(), 1);
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        text.contains("\"format\": 1") && text.contains("\"id\": \"prj-1\""),
+        "{text}"
+    );
+    assert_eq!(soksak_sok::migrate::migrate_projects(&config).unwrap(), 0);
+    let _ = std::fs::remove_dir_all(&config);
+}

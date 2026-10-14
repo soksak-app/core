@@ -179,3 +179,25 @@ func TestMigrateSettingsAddsTheFormatNumberOfTheFormWithoutOne(t *testing.T) {
 		t.Fatalf("second run %d err %v", applied, err)
 	}
 }
+
+// contract: install.migration.projects-wraps-the-bare-list
+func TestMigrateProjectsWrapsTheBareListOfTheEarlierForm(t *testing.T) {
+	config := t.TempDir()
+	path := filepath.Join(config, "projects.json")
+	if err := os.WriteFile(path, []byte(`[{"id":"prj-1","root":"/tmp/a","identity":"1:2"}]`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if applied, err := sok.MigrateProjects(config); err != nil || applied != 1 {
+		t.Fatalf("migrated %d err %v", applied, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"format":1`) || !strings.Contains(string(data), `"id":"prj-1"`) {
+		t.Fatalf("the migrated file %s", data)
+	}
+	if applied, err := sok.MigrateProjects(config); err != nil || applied != 0 {
+		t.Fatalf("second run %d err %v", applied, err)
+	}
+}

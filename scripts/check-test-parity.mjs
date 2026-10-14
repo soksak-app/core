@@ -2074,6 +2074,19 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F188.5",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/migrate.go", symbol: "func MigrateProjects" },
+      { file: "packages/host/wailsv3/src/workspace.go", symbol: "func readProjects" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/migrate_test.go", id: "TestMigrateProjectsWrapsTheBareListOfTheEarlierForm" },
+      { file: "packages/sok/tauriv2/tests/migrate_test.rs", id: "migrate_projects_wraps_the_bare_list_of_the_earlier_form" },
+    ],
+    expected: "projects.json carries its form in a format member beside the projects member, migrated from the bare array at the first read.",
+    levels: ["unit"],
+  },
+  {
     id: "F188.4",
     implementation: [
       { file: "packages/sok/wailsv3/src/migrate.go", symbol: "func MigrateSettings" },

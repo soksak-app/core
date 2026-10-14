@@ -103,8 +103,8 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 | `plugins/installed.json` | 코어 | `format` | numbered |
 | `plugins/registry.json` | 코어 | `format` | numbered |
 | `log-policy.json` | 코어 | `schema` | numbered |
-| `settings.json`, `<project root>/.soksak/settings.json` | 코어 | 번호 없음. 번호를 주는 변경부터 이 계약을 따른다 | numbered |
-| `projects.json` | 코어 | 번호 없음. 위와 같다 | numbered |
+| `settings.json`, `<project root>/.soksak/settings.json` | 코어 | `format` | numbered |
+| `projects.json` | 코어 | `format` | numbered |
 | `logs/<role>-<boot>.jsonl`과 그 색인 | 코어 | file마다(`log.open`, 색인 머리) | log |
 | `endpoint.json`, `process.lock`, `webkit-children.json`, `performance` | 코어 | 실행마다 다시 쓴다 | transient |
 | `plugins/<id>/<version>/`, `sidecars/<file name>/`, `updates/` | release 내용 | 경로의 version | external |
