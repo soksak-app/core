@@ -673,6 +673,7 @@ fn invalid_json_closes_connection() {
 | `application.record.refuses-other-form` | 다른 형식의 기록은 파일과 찾은 것을 이름하며 거부된다. | both |
 | `application.record.removal-by-way` | 제거는 설치한 애플리케이션의 폴더와 항목을, 찾아서 연결한 애플리케이션의 항목만 지운다. | both |
 | `application.connector.connects-installed` | 연결 plugin 설치는 locate 항목이 찾은 애플리케이션을 설치하지 않고 기록하며, plugin 제거는 그 항목만 지운다. | both |
+| `application.connector.connects-after-failed-install` | 연결이 실패한 설치 뒤의 설치는, 실패한 설치가 plugin 폴더를 이미 풀어 다시 풀 것이 없어도 애플리케이션을 연결한다. | both |
 | `application.connector.refuses-other-platform` | 플랫폼 항목이 없는 연결 plugin은 `application <id> does not support <platform>`으로 실패하고 아무것도 바꾸지 않는다. | both |
 | `application.connector.steps-observed-and-stored` | 연결의 각 단계는 작업의 관찰자에 닿고, 명령줄은 그것을 `sok.application.step`으로 저장한다. | both |
 | `fetch.url.rejects-other-schemes` | `https:`도 절대 `file:` URL도 아닌 index나 release URL은 `the URL must be https: or an absolute file: URL`로 실패한다. | both |

@@ -392,11 +392,9 @@ func InstallPlugin(configDir, id, core, platform string, update bool, observe Ap
 		}
 	}
 	// A connector plugin connects its application before the installation is recorded, so a failure leaves
-	// installed.json unchanged (docs/spec/installation.md#applications).
+	// installed.json unchanged (docs/spec/installation.md#applications). Each installed or updated plugin connects,
+	// also when its folder was extracted by an earlier install that failed.
 	for _, changed := range plan.order {
-		if _, extracted := plan.releases[changed]; !extracted {
-			continue
-		}
 		application, declared, err := installedApplication(configDir, state.Plugins[changed].Path)
 		if err != nil {
 			return nil, err

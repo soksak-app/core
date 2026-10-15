@@ -126,3 +126,27 @@ func TestEachStepOfTheConnectionIsObservedAndStored(t *testing.T) {
 		t.Fatalf("stored steps %+v", stored)
 	}
 }
+
+// A failed connection leaves the extracted folder of the plugin; the next install connects the application although it
+// extracts nothing.
+// contract: application.connector.connects-after-failed-install
+func TestAnInstallAfterAFailedConnectionConnectsTheApplication(t *testing.T) {
+	platform := mustPlatform(t)
+	present := filepath.Join(t.TempDir(), "sketcher")
+	config := t.TempDir()
+	useRegistry(t, config, connectorRegistry(t, sketcher(platform, present)))
+	// The application is absent and its recipe cannot download, so the first install fails.
+	if code, _, _ := run("plugin", "install", "probe", "--config-dir", config); code == 0 {
+		t.Fatal("the install of an absent application with an unreachable recipe succeeded")
+	}
+	executable(t, present)
+	succeeds(t, "plugin", "install", "probe", "--config-dir", config)
+	applications, err := sok.ReadApplications(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := sok.ApplicationRecord{Version: "1.0.0", Path: present, How: "located", Method: "path"}
+	if applications.Applications["sketcher"] != want {
+		t.Fatalf("applications %+v", applications.Applications)
+	}
+}

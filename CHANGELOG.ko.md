@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.5.6.1-2: 두 설치기가 설치되거나 업데이트된 연결 plugin마다, 연결이 실패한 이전 설치가 폴더를 풀어 두었어도 애플리케이션을 연결한다. Red: 두 `sok` 패키지의 새 검사가 두 번째 설치 뒤 애플리케이션을 찾지 못했다. Green: 각 언어 연결 검사 4개 중 4개, plugin과 ownership 검사와 함께.
 - F194.3.1-2: window-check workflow가 embed kit을 checkout하고 시험 애플리케이션을 빌드해 `pnpm verify`의 appview 관문이 요구하는 `SOKSAK_EMBED_TEST_APP`을 정한다. Red: 새 workflow 검사가 `window-checks.yml`이 `SOKSAK_EMBED_TEST_APP`을 정하지 않는다고 보고했다. Green: workflow 검사 6개 중 6개.
 - F194.5.7.1: 두 host의 `pluginsState`가 `plugins/applications.json`의 기록인 `applications`를 보고하고, surface context에 `runtime.applications`(`read`, `on`)가 있으며 page는 그것을 `applications.js`를 거쳐 plugin 상태에서 정한다. Red: 두 `sok` 패키지와 두 host의 상태 검사에 `applications`가 없었고, plugin-api context 검사에 `runtime.applications`가 없었고, surface 검사가 그것을 읽지 못했다. Green: 그 검사들.
 - F194.5.6.3: plugin 작업 동안 두 host가 연결 plugin의 애플리케이션을 연결하는 단계마다 모든 창에 `plugins-progress`를 보낸다. page는 그것을 실행 중인 작업에 `core.plugins`의 `step`으로 기록하고, plugin 카드는 "<plugin> <action> 진행 중 · <application> <step>"을 보인다. Red: host 검사가 진행 수신자 없이 compile되지 않았고, 작업 검사에 `progress`가 없었고, 카드는 "db install 진행 중"만 보였다. Green: 두 host의 plugin 검사, 작업과 library 검사.

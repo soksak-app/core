@@ -247,3 +247,44 @@ fn each_step_of_the_connection_is_observed_and_stored() {
     assert_eq!(stored[0]["fields"]["method"], "path");
     assert_eq!(stored[1]["fields"]["step"], "record");
 }
+
+// A failed connection leaves the extracted folder of the plugin; the next install connects the application although it
+// extracts nothing.
+// contract: application.connector.connects-after-failed-install
+#[test]
+fn an_install_after_a_failed_connection_connects_the_application() {
+    let platform = soksak_sok::current_platform().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let present = elsewhere.path().join("sketcher");
+    let (registry, _releases) = connector_registry(&sketcher(&platform, &present));
+    let config = tempfile::tempdir().unwrap();
+    let config_text = config.path().to_str().unwrap();
+    run_json(&[
+        "registry",
+        "use",
+        registry.path().join("index.json").to_str().unwrap(),
+        "--config-dir",
+        config_text,
+    ]);
+    // The application is absent and its recipe cannot download, so the first install fails.
+    let (code, _, _) = run(&["plugin", "install", "probe", "--config-dir", config_text]);
+    assert_ne!(
+        code, 0,
+        "the install of an absent application with an unreachable recipe succeeded"
+    );
+    write(&present, "#!/bin/sh\n", 0o755);
+    run_json(&["plugin", "install", "probe", "--config-dir", config_text]);
+    let want = ApplicationRecord {
+        version: "1.0.0".into(),
+        path: present.display().to_string(),
+        how: "located".into(),
+        method: "path".into(),
+    };
+    assert_eq!(
+        read_applications(config.path())
+            .unwrap()
+            .applications
+            .get("sketcher"),
+        Some(&want)
+    );
+}

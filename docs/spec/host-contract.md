@@ -673,6 +673,7 @@ Items:
 | `application.record.refuses-other-form` | A record of another form is refused with the file and what it found. | both |
 | `application.record.removal-by-way` | Removing deletes the folder and entry of an installed application and only the entry of a located one. | both |
 | `application.connector.connects-installed` | Installing a connector plugin records an application that a locate entry finds without installing it, and removing the plugin removes only its entry. | both |
+| `application.connector.connects-after-failed-install` | An install after an install whose connection failed connects the application, although the folder of the plugin was extracted by the failed install and nothing is extracted again. | both |
 | `application.connector.refuses-other-platform` | A connector plugin without an entry for the platform fails with `application <id> does not support <platform>` and changes nothing. | both |
 | `application.connector.steps-observed-and-stored` | Each step of the connection reaches the observer of the operation, and the command line stores it as `sok.application.step`. | both |
 | `fetch.url.rejects-other-schemes` | An index or release URL that is neither `https:` nor an absolute `file:` URL fails with `the URL must be https: or an absolute file: URL`. | both |

@@ -400,13 +400,11 @@ pub fn install_plugin(
         )?;
     }
     // A connector plugin connects its application before the installation is recorded, so a failure leaves
-    // installed.json unchanged (docs/spec/installation.md#applications).
+    // installed.json unchanged (docs/spec/installation.md#applications). Each installed or updated plugin connects,
+    // also when its folder was extracted by an earlier install that failed.
     let search = std::env::var_os("PATH")
         .ok_or("the installer has no PATH to find the application of a connector plugin")?;
     for changed in &order {
-        if !releases.contains_key(changed) {
-            continue;
-        }
         if let Some(application) =
             crate::application::installed_application(config_dir, &state.plugins[changed].path)?
         {
