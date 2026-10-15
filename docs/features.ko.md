@@ -1060,7 +1060,8 @@
     - [~] F194.5.7 — P2: 설정 `program`이 아무것도 이름하지 않으면 `appview`가 연결 plugin에 대해 `applications.json`이 기록한 애플리케이션을 시작한다. page 시험.
       - [o] F194.5.7.1 — P2: surface가 연결된 애플리케이션을 읽는다: 두 host의 `pluginsState`가 `plugins/applications.json`의 `applications`를 보고하고, surface context에 `read`와 `on`을 가진 `runtime.applications`가 있다.
       - [ ] F194.5.7.2 — P2: `runtime.applications`를 가진 core 버전을 release하고, 연결된 애플리케이션을 시작하는 plugin-appview 항목을 기록한다. 이 수정은 그 plugin-appview release로 사용자에게 닿는다.
-    - [ ] F194.5.8 — P2: embed kit 시험 애플리케이션의 release를 레시피로 가진 시험용 연결 plugin과, 없으면 설치하고 있으면 연결하며 카드에서 시작해 관문을 실행하는 창 검사.
+    - [o] F194.5.8 — P2: embed kit 시험 애플리케이션의 release를 레시피로 가진 시험용 연결 plugin과, 없으면 설치하고 있으면 연결하며 카드에서 시작해 관문을 실행하는 창 검사.
+      - [ ] F194.5.8-1 — P2: 붙지 않은 region의 frame을 오류 대신 기록하는 A1.10과 함께 sidecar-app을 release한다. 이 수정은 그 release로만 사용자에게 닿는다.
     - [ ] F194.5.9 — P2: 예시 애플리케이션의 자기 배포가 embed 어댑터가 든 build를 주면, 그것의 연결 plugin.
     - [o] F194.5.10 — P2: 애플리케이션은 플랫폼의 애플리케이션 식별자로 식별하고, 애플리케이션의 배포물이나 플랫폼의 표준 패키지 관리자로 설치한다: `locate`에 `bundle` 곁에 `appid`(windows: 설치 package 또는 winget 식별자, linux: freedesktop 또는 Flatpak 애플리케이션 식별자)가 생기고, `package`는 플랫폼의 관리자(darwin `brew`, windows `winget`, linux `flatpak`)를 이름한다. windows와 linux는 구현될 때까지 `not implemented on <os>`를 돌려준다.
     - [o] F194.5.10-1 — P2: brew가 가지지 않은 package의 Rust 검사가 brew가 플랫폼의 관리자가 아닌 곳에서 건너뛴다. F194.5.10의 조건이 그 검사에 빠져 linux CI가 실패했다.
