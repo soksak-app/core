@@ -1031,6 +1031,7 @@
   - [~] F194.3 — P1: 측면 1의 관문. 기대: 실제 표면의 시험 애플리케이션으로, 60과 120 Hz의 frame 간격 p99가 두 frame 이하이고 빠진 frame이 없으며, pointer 이동부터 그 결과의 present까지의 지연이 부하 없는 기계에서 중앙값 25 ms 이하, p90 40 ms 이하이고 모든 단계의 기록으로 계산한다. 실패하면 결과를 기록하고 측면 1을 버린다.
     - [o] F194.3.1 — P1: 애플리케이션 plugin `appview`와 애플리케이션 sidecar를 `scripts/workspace-registry.json`에 선언해 `make install-plugins`가 그것들을 build, release해 검사 설정에 설치하게 한다. side 1을 버리면 이 선언을 지운다.
       - [o] F194.3.1-1 — P1: workflow `ci.yml`과 `window-checks.yml`이 `scripts/workspace-registry.json`이 선언한 모든 저장소를 checkout하고, 시험이 그것을 선언에 묶는다: F194.3.1의 선언이 CI가 checkout하지 않는 저장소를 이름해서, CI의 `make boundaries`가 `no such file or directory, open .../plugins/appview/package.json`으로 실패했다.
+    - [o] F194.3.1-2 — P1: window-check workflow가 embed kit의 시험 애플리케이션을 빌드하고 appview 관문이 요구하는 `SOKSAK_EMBED_TEST_APP`을 정한다. `pnpm verify`가 관문을 실행하므로 workflow의 모든 실행이 거기서 실패했다. 검사가 window check가 단언하는 변수마다 workflow가 정하는지 요구한다.
     - [o] F194.3.2 — P1: 관문 검사: embed kit의 시험 애플리케이션을 실행하는 `appview` 카드를 열고, 그 위로 native pointer 이동을 보내며, 모든 단계의 기록에서 frame 간격과 각 pointer 이동부터 그것을 보이는 frame의 present까지의 지연을 계산하고, 각 단계와 그 시간을 보고하는 tracked 창 검사.
       - [o] F194.3.2-1 — P1: 관문 검사는 활성화와 함께 움직이지 않고 드래그한다: `e2e-check`는 애플리케이션을 활성화하는 검사를 거부하고 hover 이동에는 key window가 필요하며, press, present마다의 drag 단계, release는 비활성 애플리케이션의 view에 닿는다.
     - [o] F194.3.3 — P1: build한 host에서 display의 속도로 관문 검사를 실행하고, 측정한 frame 간격과 지연을 시험한 구현과 플랫폼과 함께 기록한다.

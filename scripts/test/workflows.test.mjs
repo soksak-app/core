@@ -98,3 +98,14 @@ test('the push check runs every check of the structure step and the format and c
   assert.deepEqual(wanted.filter((target) => !named.includes(target)), [], `push-check does not run: ${wanted.join(' ')}`);
   assert.match(read('.githooks/pre-push'), /make -C "\$\(git rev-parse --show-toplevel\)" push-check/);
 });
+
+test('the window-check workflow sets every variable that a window check of the run requires', { timeout: 1000 }, () => {
+  const text = read('.github/workflows/window-checks.yml');
+  const required = new Set();
+  for (const file of readdirSync(join(ROOT, 'e2e')).filter((name) => name.endsWith('.test.mjs'))) {
+    const source = read(`e2e/${file}`);
+    for (const match of source.matchAll(/assert\.ok\(process\.env\.(\w+)|const \w+ = process\.env\.(\w+);\s*\n\s*assert\.ok\(\w+,/g)) required.add(match[1] ?? match[2]);
+  }
+  const missing = [...required].filter((name) => !new RegExp(`\\b${name}=`).test(text));
+  assert.deepEqual(missing, [], `window-checks.yml does not set ${missing.join(', ')}`);
+});
