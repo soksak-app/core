@@ -2,8 +2,8 @@
 // embed kit is packed into a registry of its own beside the workspace plugins. Installed while its locate entry finds the
 // application, the plugin connects that application and installs nothing; removed, installed again without it, the
 // release recipe downloads a release of the application over https and installs it into the configuration folder. Each
-// time an appview card with the setting program application:embed-test-app starts the connected application from its
-// path. The application is the executable that SOKSAK_EMBED_TEST_APP names; the check fails with that name when it is not
+// time a card of the connector plugin, whose surface imports the shared embed page of appview.surface, starts the
+// connected application from its path without a setting. The application is the executable that SOKSAK_EMBED_TEST_APP names; the check fails with that name when it is not
 // set. The check packs it as a tar.gz release and serves it over https with the certificate of the check registry that
 // `make e2e-registry-tls` creates, which the check applications trust through --registry-ca (docs/operations/examples.md).
 import assert from "node:assert/strict";
@@ -24,6 +24,7 @@ import { fresh, pluginChangeApplied } from "./fixture.mjs";
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 const APPLICATION = "embed-test-app";
 const PLUGIN = "kitconnector";
+const SIDECAR = "@soksak/sidecar-app";
 const TLS = join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), "soksak-check-registry-tls");
 
 /** Packs the executable as a tar.gz release and serves it over https; returns its address, its SHA-256 and the close. */
@@ -60,16 +61,37 @@ function connectorRegistry(sok, present, release) {
   for (const name of ["plugins", "sidecars", "packs", "revoked.json"]) cpSync(join(REGISTRY, name), join(folder, name), { recursive: true });
   const sidecars = new Set(readdirSync(join(folder, "sidecars")).map((file) => JSON.parse(readFileSync(join(folder, "sidecars", file), "utf8")).name));
   const appview = JSON.parse(readFileSync(join(folder, "plugins", "appview.json"), "utf8"));
+  const sidecarVersion = JSON.parse(readFileSync(join(folder, "sidecars", readdirSync(join(folder, "sidecars")).find((file) =>
+    JSON.parse(readFileSync(join(folder, "sidecars", file), "utf8")).name === SIDECAR)), "utf8")).versions.at(-1).version;
   const source = join(folder, "source");
   mkdirSync(source);
   const pkg = {
     name: `@soksak/plugin-${PLUGIN}`, version: "0.0.1", description: "The connector of the test application of the embed kit.",
     license: "MIT", repository: { type: "git", url: "git+https://example.invalid/kitconnector.git" },
-    engines: { soksak: ">=0.0.1 <1.0.0" }, files: ["plugin.json"],
+    engines: { soksak: ">=0.0.1 <1.0.0" }, files: ["plugin.json", "events.json", "ui/surface.js"],
   };
+  const id = PLUGIN;
   const manifest = {
-    id: PLUGIN, name: "시험 애플리케이션", description: "embed kit 시험 애플리케이션을 연결한다.",
-    dependencies: { [appview.package]: `^${appview.versions.at(-1).version}` },
+    id, name: "시험 애플리케이션", description: "embed kit 시험 애플리케이션을 카드에 띄운다.",
+    mark: "▣", icon: "<rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/>",
+    surface: {
+      module: "ui/surface.js",
+      composition: { kind: "hybrid", regions: [{ name: "view", kind: "image", sidecar: SIDECAR, input: "dom" }], overlays: [] },
+    },
+    events: "events.json",
+    settings: { arguments: { label: "실행 인자", description: "애플리케이션에 넘길 인자의 JSON 배열.", type: "string", default: "[]", maxLength: 4096 } },
+    dependencies: { [appview.package]: `^${appview.versions.at(-1).version}`, [SIDECAR]: `^${sidecarVersion}` },
+    contributes: { "appview.surface": [{ range: "^1.0.0", module: "ui/surface.js", application: APPLICATION }] },
+    exposes: {
+      status: [{ name: `${id}.state`, description: "The application of the surface.", schema: { type: "object", properties: {
+        program: { type: ["string", "null"] }, pid: { type: ["integer", "null"] }, toolkit: { type: ["string", "null"] }, cursor: { type: "string" },
+        title: { type: ["string", "null"] }, exit: { type: ["string", "null"] }, error: { type: ["string", "null"] } } } }],
+      commands: [
+        { name: `${id}.focus`, description: "Transfers keyboard ownership to the application.", params: { type: "object", properties: {} }, result: { type: "null" } },
+        { name: `${id}.input`, description: "Sends one input message of the embed protocol.", params: { type: "object", properties: { message: { type: "object" } } }, result: { type: "null" } },
+      ],
+      dom: [{ name: `${id}.view`, description: "The area that shows the application." }],
+    },
     application: {
       id: APPLICATION, name: "시험 애플리케이션", version: "0.0.2",
       platforms: {
@@ -81,6 +103,14 @@ function connectorRegistry(sok, present, release) {
       },
     },
   };
+  const events = { schema: 2, layers: ["plugin"], events: Object.fromEntries([
+    ["open", "lifecycle", "info", { program: "string" }], ["input", "input", "trace", { type: "string" }],
+    ["message", "io", "debug", { event: "string" }], ["error", "call", "warn", { error: "string" }],
+  ].map(([name, kind, level, fields]) => [`plugin.${id}.${name}`, { layer: "plugin", class: kind, level, fields, description: `The ${name} of the application.` }])) };
+  mkdirSync(join(source, "ui"));
+  writeFileSync(join(source, "ui", "surface.js"), `import { mount as mountApplication } from "@soksak/shared/appview.surface/surface.js";\n` +
+    `export function mount(root, context) { return mountApplication(root, context, { application: "${APPLICATION}" }); }\n`);
+  writeFileSync(join(source, "events.json"), JSON.stringify(events, null, 2));
   writeFileSync(join(source, "package.json"), JSON.stringify(pkg, null, 2));
   writeFileSync(join(source, "plugin.json"), JSON.stringify(manifest, null, 2));
   const pack = JSON.parse(execFileSync(sok, ["plugin", "pack", source, join(folder, "releases")], { encoding: "utf8" }));
@@ -104,16 +134,16 @@ async function remove(s) {
   await pluginChangeApplied(s, offsets, `remove ${PLUGIN}`);
 }
 
-/** Opens an appview card and returns the program of the application once it connected. */
+/** Opens a card of the connector plugin and returns the program of the application once it connected. */
 async function startedProgram(s) {
   const card = (await s.get("core.grid")).cards.find((item) => item.pane !== null).id;
-  const { tab } = await s.run("core.card.add-tab", { card, plugin: "appview" });
+  const { tab } = await s.run("core.card.add-tab", { card, plugin: PLUGIN });
   try {
-    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === tab && item.exposes.includes("status appview.state")),
-      "the appview card did not register appview.state");
-    const state = await s.until("appview.state", (value) => value.toolkit !== null || value.error !== null,
-      "the connected application did not start in the appview card", { surface: tab });
-    assert.equal(state.error, null, `the appview card reported ${state.error}`);
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === tab && item.exposes.includes(`status ${PLUGIN}.state`)),
+      `the card of ${PLUGIN} did not register ${PLUGIN}.state`);
+    const state = await s.until(`${PLUGIN}.state`, (value) => value.toolkit !== null || value.error !== null,
+      `the connected application did not start in the card of ${PLUGIN}`, { surface: tab });
+    assert.equal(state.error, null, `the card of ${PLUGIN} reported ${state.error}`);
     return state.program;
   } finally {
     await s.run("core.tab.close", { tab });
@@ -126,7 +156,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(executable, "SOKSAK_EMBED_TEST_APP is not set; it names the test application of the embed kit");
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s, { settings: { "appview.program": `application:${APPLICATION}`, "appview.arguments": "[]" } });
+    await fresh(s);
     await keepCommonSettings(s);
     const before = await s.get("core.plugins");
     const work = mkdtempSync(join(tmpdir(), "soksak-connector-"));

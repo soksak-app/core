@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The workspace registry (docs/spec/plugins.md#repositories). Packs the plugin repositories that scripts/workspace-registry.json declares as folders
-// relative to the core checkout, builds the sidecars those plugins use from the declared sidecar repositories and releases them
+// relative to the core checkout, builds every declared sidecar from its repository and releases them
 // for the current platform, then writes the registry files from the result and creates index.json with `sok registry build`
 // (docs/spec/cli.md). Builds and window checks install plugins from this registry. It uses no network.
 //
@@ -92,6 +92,22 @@ function write(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+/**
+ * The names of the sidecars that the registry releases: every declared sidecar, because a connector plugin outside the
+ * workspace uses a sidecar that no workspace plugin names. A dependency of a workspace plugin that is neither a declared
+ * sidecar nor a workspace plugin is an error.
+ */
+export function sidecarReleases(declared, manifests, plugins) {
+  for (const manifest of manifests) {
+    // default: the plugin.json of a plugin that uses no sidecar has no dependencies.
+    for (const name of Object.keys(manifest.dependencies ?? {})) {
+      if (plugins.has(name) || declared.includes(name)) continue;
+      throw new Error(`${DECLARATION}: plugin ${manifest.id} uses ${name}, which no declared sidecar or plugin folder holds`);
+    }
+  }
+  return [...declared];
+}
+
 /** Writes the registry folder anew and creates index.json. Earlier entries in the output folder are removed. */
 export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
   const declaration = checkDeclaration(read(new URL(DECLARATION, root)));
@@ -105,23 +121,18 @@ export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
   }
   const releases = join(out, "releases");
   for (const name of ["plugins", "sidecars", "packs", "releases"]) rmSync(join(out, name), { recursive: true, force: true });
-  const used = new Set();
   const plugins = new Set(declaration.plugins.map((relative) => read(pathToFileURL(join(folder(relative), "package.json"))).name));
+  const manifests = [];
   for (const relative of declaration.plugins) {
     const dir = folder(relative);
     const manifest = read(pathToFileURL(join(dir, "plugin.json")));
     const pkg = read(pathToFileURL(join(dir, "package.json")));
     const pack = sok(binary, ["plugin", "pack", dir, releases, ...(diagnostics ? ["--diagnostics"] : [])]);
     write(join(out, "plugins", `${manifest.id}.json`), pluginEntry(manifest, pkg, pack, new Set(declared.keys())));
-    // default: the plugin.json of a plugin that uses no sidecar has no dependencies.
-    for (const name of Object.keys(manifest.dependencies ?? {})) {
-      if (plugins.has(name)) continue;
-      if (!declared.has(name)) throw new Error(`${DECLARATION}: plugin ${manifest.id} uses ${name}, which no declared sidecar or plugin folder holds`);
-      used.add(name);
-    }
+    manifests.push(manifest);
   }
   const built = new Set();
-  for (const name of used) {
+  for (const name of sidecarReleases([...declared.keys()], manifests, plugins)) {
     const { repository, sidecar } = declared.get(name);
     if (!built.has(repository)) {
       buildSidecar(repository);

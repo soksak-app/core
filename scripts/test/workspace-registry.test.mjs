@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { readFileSync } from "node:fs";
 
-import { checkDeclaration, pluginEntry, repositoryText, sidecarEntry } from "../workspace-registry.mjs";
+import { checkDeclaration, pluginEntry, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
 
 const SHA = "a".repeat(64);
 
@@ -57,4 +57,12 @@ test("the workflows check out every repository that the workspace registry decla
     const missing = folders.filter((folder) => !paths.has(folder));
     assert.deepEqual(missing, [], `${workflow} checks out no repository into ${missing.join(", ")}`);
   }
+});
+
+test("the registry releases every declared sidecar, also one that no workspace plugin uses", { timeout: 1000 }, () => {
+  const declared = ["@scope/sidecar-used", "@scope/sidecar-for-connectors"];
+  const manifests = [{ id: "user", dependencies: { "@scope/sidecar-used": "^1.0.0", "@scope/plugin-other": "^1.0.0" } }, { id: "plain" }];
+  assert.deepEqual(sidecarReleases(declared, manifests, new Set(["@scope/plugin-other"])), declared);
+  assert.throws(() => sidecarReleases(declared, [{ id: "user", dependencies: { "@scope/sidecar-missing": "^1.0.0" } }], new Set()),
+    /plugin user uses @scope\/sidecar-missing, which no declared sidecar or plugin folder holds/);
 });

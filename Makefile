@@ -314,7 +314,7 @@ native-darwin:
 	@$(MAKE) -C native/darwin
 
 # The workspace registry. Packs the sibling plugin repositories that scripts/workspace-registry.json declares as diagnostic builds,
-# builds the sidecars those plugins use from the declared sidecar repositories and releases them for the current platform, and then
+# builds every declared sidecar from its repository and releases them for the current platform, and then
 # creates index.json in target/registry (docs/spec/plugins.md#repositories).
 # Diagnostic builds and window checks install from here.
 REGISTRY = target/registry
