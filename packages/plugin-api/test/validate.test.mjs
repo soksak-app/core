@@ -72,8 +72,8 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...side, sections: [{ ...side.sections[0], fill: "yes" }] }, /section side.list fill must be a boolean/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "../list.js" }] }, /section side.list module must be a JavaScript path inside the package/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.css" }] }, /section side.list module must be a JavaScript path inside the package/],
-    [{ id: "empty", name: "Empty", description: "빈 플러그인." }, /surface, sections or contributes/],
-    [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a state module or contributes/],
+    [{ id: "empty", name: "Empty", description: "빈 플러그인." }, /surface, sections, contributes or an application/],
+    [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a state module, contributes or an application/],
     [{ ...card, dependencies: { Worker: "^1.2.0" } }, /dependencies: Worker is not a sidecar or plugin name/],
     [{ ...card, dependencies: ["@scope/sidecar-worker"] }, /dependencies must map sidecars and plugins to version ranges/],
     [{ ...card, dependencies: { "@scope/sidecar-worker": "**" } }, /dependencies @scope\/sidecar-worker: invalid range \*\*/],
@@ -391,8 +391,8 @@ test("extension points and contributions are rejected for each invalid field", (
     [{ ...contributor, contributes: { "probe.language": [] } }, /contributes probe.language must be a non-empty array/],
     [{ ...contributor, contributes: { "probe.language": [{ ...item, range: "latest" }] } }, /contributes probe.language item 1 range latest is invalid/],
     [{ ...contributor, contributes: { "probe.language": [{ ...item, module: "/tidy.js" }] } }, /contributes probe.language item 1 module must be a JavaScript path inside the package/],
-    [{ id: "none", name: "None", description: "아무것도 없다." }, /a plugin requires a surface, sections or contributes/],
-    [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a state module or contributes/],
+    [{ id: "none", name: "None", description: "아무것도 없다." }, /a plugin requires a surface, sections, contributes or an application/],
+    [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a state module, contributes or an application/],
   ]) assert.throws(() => validateManifest(manifest), error, JSON.stringify(manifest).slice(0, 120));
 });
 

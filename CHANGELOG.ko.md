@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.5.1: plugin 명세가 연결 plugin의 `application` 필드를 가지며, 그런 plugin은 표면이 필요 없고 애플리케이션을 보이는 plugin에 의존할 수 있다. 설치 명세는 설치기가 기계를 조사해 설치된 애플리케이션을 연결하거나 레시피(`release`, `package`, `source`)를 실행하고, `plugins/applications.json`을 기록하며, 설치한 애플리케이션만 지우는 방식을 정한다. `validateManifest`가 그 필드를 검사한다. Red: `test/application.test.mjs`가 3개 중 3개 실패했다. Green: 3개 중 3개, 패키지 시험 211개 중 211개.
 - F192.2-1: 두 `sok` 패키지의 class 표를 `docs/spec/events.json`에서 다시 생성해 `page.background.session`을 가진다. Red: `scripts/test/event-classes.test.mjs`가 `packages/sok/wailsv3/src/event_classes.go differs from docs/spec/events.json`로 실패했다. Green: 3개 중 3개.
 - F194.3.1-1: `ci.yml`과 `window-checks.yml`이 애플리케이션 plugin과 애플리케이션 sidecar를 checkout하고, `scripts/test/workspace-registry.test.mjs`가 workspace registry가 선언한 모든 저장소의 checkout을 요구한다. 입력: 애플리케이션 표면 push의 CI가 `plugins/appview` checkout이 없어 `make boundaries`에서 실패했다. Red: 시험이 `ci.yml checks out no repository into plugins/appview, sidecars/app`로 실패했다. Green: 3개 중 3개.
 - 체크리스트 항목 `F192.1.1` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.1이다.

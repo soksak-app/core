@@ -92,6 +92,21 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 설정 폴더 안에서 `<id>`의 plugin version `<version>`은 `plugins/<id>/<version>`에, sidecar version의 플랫폼 release는 `sidecars/<file name>/<version>/<platform>`에 푼다. `plugins/installed.json`은 `format` 2, `plugins`, `sidecars`를 가진다. `plugins`는 plugin id마다 `{ version, path, enabled, sidecars, previous? }`를 정한다. 각각 쓰는 version, 설치가 그 version을 푼 폴더 `plugins/<id>/<version>`, 불러올지 여부, 그 version의 sidecar 범위, 되돌리기가 복원할 version이다. Plugin의 이름은 기록된 `path`의 `package.json`의 `name`이며, host와 `sok`은 거기서 읽고 `installed.json`은 이름을 담지 않는다. `sidecars`는 설치된 plugin이 지정한 sidecar마다 `{ version, path }`를 정한다. 쓰는 version은 그 sidecar를 지정한 모든 설치된 plugin의 범위를 채우며, `path`는 설치가 그 플랫폼 release를 푼 폴더 `sidecars/<file name>/<version>/<platform>`이다. 어느 설치된 plugin도 지정하지 않은 sidecar는 나오지 않는다. 각 `path`는 설정 폴더에 대한 상대 경로이며 이 규칙이 정하는 폴더와 같아야 하므로 설정 폴더를 옮길 수 있다([projects](projects.ko.md#저장)). 설치는 release를 풀 때 각 `path`를 기록하고, host와 `sok`은 설정 폴더에 대해 푼 기록된 경로에서만 파일을 읽는다. `format`이 2가 아닌 파일은 `<file>: plugins/installed.json: format must be 2`로 실패하고, plugin이 `package` 필드를 담은 파일은 `<file>: plugins/installed.json <id>: unknown field package`로 실패하며, 파일은 바뀌지 않는다.
 
+## 애플리케이션
+
+연결 plugin은 자기가 담지 않는 애플리케이션을 `application`에 선언한다([plugin.json](plugins.ko.md#pluginjson)). `id`는 소문자 식별자, `name`은 보이는 이름, `version`은 애플리케이션의 버전이다. `platforms`는 플랫폼(`darwin-arm64`, `darwin-x64`, `linux-x64`, `windows-x64`)을 항목에 대응시킨다:
+
+| 필드 | 뜻 |
+| --- | --- |
+| `locate` | 설치된 애플리케이션을 찾는 방법의 비어 있지 않은 목록으로, 차례로 시도한다: `{ "bundle": "<bundle identifier>" }`(LaunchServices, darwin), `{ "command": "<name>" }`(`PATH`에 있는 그 이름의 실행 파일), 또는 `{ "path": "<absolute path>" }`(실행 파일) |
+| `recipe` | 애플리케이션 자신의 배포로 설치하는 방법: `{ "kind": "release", "url": "<https address>", "sha256": "<hash>", "unpack": "zip" \| "tar.gz" \| "none" }`, `{ "kind": "package", "manager": "brew", "name": "<package>" }`, 또는 `{ "kind": "source", "repository": "<https address>", "ref": "<tag or commit>", "commands": [["<program>", "<argument>", …], …], "output": "<path inside the clone>" }` |
+| `program` | 애플리케이션을 시작하는, 설치된 폴더 안의 실행 파일 |
+| `arguments` | 시작할 때의 인자 목록(선택) |
+
+`application`이 있는 plugin을 설치하면, release를 푼 뒤 설치기는 자기가 실행되는 플랫폼의 항목을 고른다. 항목이 없는 플랫폼은 `application <id> does not support <platform>`으로 설치를 실패시키고 아무것도 바뀌지 않는다. 설치기는 `locate` 항목을 차례로 시도하고, 애플리케이션을 처음 찾은 항목이 그것을 연결한다: 설치기는 위치를 기록하고 아무것도 설치하지 않는다. 아무것도 찾지 못하면 설치기는 레시피를 설정 디렉터리의 `applications/<id>/<version>/`에 실행한다. 각 단계(내려받기, hash, 풀기, 각 명령)는 event이고, 실패한 단계는 그 단계와 출력을 이름하는 오류로 설치를 멈추며, 그 폴더를 지우고 `installed.json`을 바꾸지 않는다. `release`는 [받기](#받기)로 내려받아 SHA-256을 비교하고, `package`는 관리자를 실행해 실행 파일을 묻고, `source`는 저장소를 `ref`에서 clone해 clone 안에서 각 명령을 실행한다.
+
+`plugins/applications.json`은 `format` 1과 `applications`를 가지며, `applications`는 각 애플리케이션 id를 `{ version, path, how, method }`에 대응시킨다: 버전, 실행 파일의 절대 경로, `located`나 `installed`, 그것을 만든 `locate` 종류나 레시피 종류. 연결 plugin을 제거하면 `installed` 애플리케이션의 폴더와 항목을 지우고, `located` 애플리케이션은 항목만 지운다.
+
 ## 저장 데이터 마이그레이션
 
 저장 file의 형태를 바꾸는 release는 그 file의 형식 번호를 올리고 마이그레이션 정의를 싣는다. 정의는 코드가 아니라 데이터다: `{ "file": "<경로>", "from": <n>, "to": <n+1>, "operations": [...] }`. 각 연산은 engine의 이름 붙은 연산 중 하나 — `setFormat`, `removeField`, `renameField` — 이고, 적용 범위(문서 전체 또는 map의 각 항목)를 가진다. 정의는 정확히 한 file만 이름한다. 두 file을 이름하거나 이 계약의 release가 소유하지 않은 file을 이름하는 정의는 적재에서 거부된다. 폴더를 옮기거나 file을 넘는 변경은 정의를 갖지 않는다: 그것은 replacement change이고, 자기 release가 문서화하며, 재설치가 수행한다.
