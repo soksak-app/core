@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F192.1, F192.2: a background session opens only for a tab whose surface is not mounted and ends with its listener when the tab is shown or its surface mounts, so a terminal hidden behind another tab of its card no longer receives a second `open` without `image` that left its output undrawn; each decision is the event `page.background.session`.
+- F192.3.2: the gate check `e2e/appview-gate.test.mjs` opens an appview card that runs the test application, moves the native pointer 100 times, one move per presentation, and computes from the native, host, page and sidecar records the delay from each move to the answer of the host for the first frame that shows it and the gaps between accepted frames. Its first runs found P2.3 and A1.8.
 - F192.3.1: the workspace registry declares the application plugin `appview` and the application sidecar, so a check configuration installs them for the gate of side 1.
 - F192.2.6: the application plugin shows a program that is a web address in a document region and starts no sidecar.
 - F192.2.4, F192.2.5: the application plugin starts as a local repository, and its page shows the application of its setting in one image region supplied by the application sidecar and passes the input of the card to it.
