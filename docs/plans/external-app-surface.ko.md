@@ -19,6 +19,10 @@
 
 Slint, egui·wgpu, Qt, 웹 interface를 처음부터 고려한다. 측면 2는 Slint 어댑터를 구현하고, 측면 1의 설계 검토는 protocol이 나머지를 막지 않는지 확인한다.
 
+## 범위
+
+표면은 공유 버퍼에 그리는 애플리케이션을 보인다: toolkit이 애플리케이션이 고른 대상에 window를 그리게 허용하고(Slint platform, egui나 wgpu texture, Qt `QQuickRenderControl`), 어댑터를 더할 소스가 있는 애플리케이션이다. 웹 interface는 document region에 보인다. 운영체제가 window를 합성하고 렌더링 대상을 고를 수 없는 애플리케이션, 예컨대 네이티브 AppKit 애플리케이션은 지원하지 않는다: macOS에는 다른 프로세스의 window나 view를 window 안에 두는 공개 interface가 없고, 그 window를 캡처하고 입력을 주입하는 방식은 캡처의 지연을 더하고 popup을 잃어 관문을 만족하지 못한다.
+
 ## 있는 것
 
 - image region은 supplier sidecar가 host에 `{"image":{name, generation, raster, token:{kind:"iosurface-global", id, nonce}, width, height, scale, format:"bgra8", sequence}}`로 넘기는 frame을 보인다. host는 `image.consumed`로 답하고 `{"image":{"configure":{name, generation, raster, width, height, scale}}}`로 supplier에 크기를 알린다([native surfaces](../spec/native-surfaces.ko.md)).

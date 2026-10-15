@@ -19,6 +19,10 @@ The work is in two sides that can each be discarded:
 
 Slint, egui and wgpu, Qt, and web interfaces are considered from the start. Side 2 implements the Slint adapter; the design review of side 1 checks that the protocol does not exclude the others.
 
+## Scope
+
+The surface shows an application that draws into the shared buffer: one whose toolkit lets the window render into a target that the application chooses (a Slint platform, an egui or wgpu texture, a Qt `QQuickRenderControl`), with the source to add an adapter. A web interface is shown in a document region. An application whose window the operating system composes and whose rendering target cannot be chosen, such as a native AppKit application, is not supported: macOS has no public interface that places a window or a view of another process inside a window, and a capture of its window with injected input adds the delay of the capture and loses its popups, so it does not meet the gate.
+
 ## What exists
 
 - An image region shows a frame that its supplier sidecar hands to the host as `{"image":{name, generation, raster, token:{kind:"iosurface-global", id, nonce}, width, height, scale, format:"bgra8", sequence}}`; the host answers `image.consumed` and tells the supplier the size with `{"image":{"configure":{name, generation, raster, width, height, scale}}}` ([native surfaces](../spec/native-surfaces.md#image-regions)).
