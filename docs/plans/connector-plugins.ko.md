@@ -10,7 +10,9 @@
 
 각 애플리케이션은 연결 plugin으로 사람들에게 닿는다: 애플리케이션의 코드나 바이너리를 담지 않는 registry의 plugin이다. 그 plugin은 애플리케이션, 애플리케이션이 지원하는 플랫폼, 그리고 플랫폼마다 이미 설치된 애플리케이션을 찾는 방법과 애플리케이션 자신의 배포로 설치하는 레시피를 선언한다. soksak은 애플리케이션의 코드를 배포하지 않으므로, 애플리케이션의 라이선스는 그 자신의 배포가 지킨다.
 
-연결 plugin을 설치할 때 설치기가 기계를 조사한다: 이미 설치된 애플리케이션은 연결하고 그 위치를 기록하며 아무것도 설치하지 않는다. 그렇지 않으면 레시피가 설치한다. 연결 plugin은 애플리케이션을 보이는 plugin `appview`에 의존하므로, 그것을 설치하면 표면과 애플리케이션 sidecar가 함께 설치된다.
+연결 plugin을 설치할 때 설치기가 기계를 조사한다: 이미 설치된 애플리케이션은 연결하고 그 위치를 기록하며 아무것도 설치하지 않는다. 그렇지 않으면 레시피가 설치한다.
+
+연결 plugin은 자기 애플리케이션의 이름을 가지며 사람이 여는 plugin이다: 자기 surface가 애플리케이션을 보이므로, 그 plugin의 카드는 설정 없이 애플리케이션을 시작한다. 그 surface의 page는 모든 연결 plugin이 공유한다: plugin `appview`가 extension point `appview.surface`를 선언하고, 그 공유 module이 애플리케이션 id에 대한 embed page를 mount한다. 각 연결 plugin은 그 point에 기여하고, `dependencies`에 `appview`를 이름하며, 그 module을 `@soksak/shared/appview.surface/<specifier>`로 import하고, 자기 composition에 애플리케이션 sidecar의 image region을 선언한다. `appview`에는 자기 surface가 없다.
 
 ## 계약: plugin.json의 `application`
 
@@ -45,7 +47,7 @@ core는 plugin을 이름하지 않으므로 레시피는 manifest의 범용 필�
 
 ## 표면
 
-`appview` 카드는 설정 `program`이 무언가를 이름하면 그 프로그램을, 아니면 카드의 연결 plugin에 대해 `applications.json`이 기록한 애플리케이션을 그 인자와 함께 시작한다.
+연결 plugin의 카드는 그 plugin의 애플리케이션을 `runtime.applications`가 기록한 경로로 시작한다. 연결되지 않은 애플리케이션은 그것을 이름하는 오류다.
 
 ## 순서
 

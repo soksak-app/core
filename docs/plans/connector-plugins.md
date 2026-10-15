@@ -10,7 +10,9 @@ The application surface ([external application surface](external-app-surface.md)
 
 Each application reaches people through a connector plugin: a plugin of the registry that holds no code or binary of the application. It declares the application, the platforms that the application supports, and for each platform how to find an application that is installed already and a recipe that installs it through the distribution of the application itself. soksak distributes no code of the application, so the license of the application is kept by its own distribution.
 
-When the connector plugin is installed, the installer examines the machine: an application that is installed already is connected, its place recorded and nothing installed; otherwise the recipe installs it. The connector plugin depends on the plugin `appview`, which shows the application, so installing it installs the surface and the application sidecar.
+When the connector plugin is installed, the installer examines the machine: an application that is installed already is connected, its place recorded and nothing installed; otherwise the recipe installs it.
+
+The connector plugin carries the name of its application and is the plugin that a person opens: its own surface shows the application, so a card of that plugin starts the application without a setting. The page of that surface is shared by every connector plugin: the plugin `appview` declares the extension point `appview.surface`, whose shared module mounts the embed page for an application id, and each connector plugin contributes to that point, names `appview` in `dependencies`, imports the module as `@soksak/shared/appview.surface/<specifier>` and declares the image region of the application sidecar in its own composition. `appview` has no surface of its own.
 
 ## Contract: `application` of plugin.json
 
@@ -45,7 +47,7 @@ The recipe is a general field of the manifest, because core names no plugin:
 
 ## Surface
 
-The `appview` card starts the program of its setting `program` when it names one, and otherwise the application that `applications.json` records for the connector plugin of the card, with its arguments.
+A card of a connector plugin starts the application of that plugin from the path that `runtime.applications` records; an application that is not connected is an error that names it.
 
 ## Order
 
