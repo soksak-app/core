@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.8.3: core 0.0.16이 두 host build와 함께 게시되었고, registry가 appview 0.0.2를 철회했다.
 - F194.8.1-1: embed page의 compose message, 없는 기록, event 없는 message의 기본값이 이유를 밝힌다. Red: push 검사의 census 검사가 이유 없는 기본값 3개를 보고했다. Green: census 검사 13개 중 13개, page 검사 9개 중 9개.
 - F194.8.3: 선언된 모든 workspace 버전이 0.0.16이다. 이 release에서 embed page는 core의 `mountApplication`이고 plugin appview는 끼지 않는다.
 - F194.8.5-1, F194.8.6: 두 host가 어떤 plugin도 선언하지 않는 사이드카의 그림을 native 표시 전에 `stale`로 답하므로 page는 오류 이벤트를 받지 않고, Tauri host의 page 재시작은 선언된 사이드카만 다시 연결하므로(`reconnect_targets`) 그런 제거 뒤에도 page 시작이 실패하지 않는다. 창 검사가 카드가 애플리케이션을 보이는 동안 연결 plugin을 제거한다. Red: 두 host의 image 검사가 native 표시가 불린 것을 찾았고, reload 검사는 `reconnect_targets` 없이 build되지 않았다. 창 검사는 page의 오류 이벤트와 다시 시작하지 않는 Tauri page를 찾았다. Green: 두 host의 image와 sidecar 검사.
