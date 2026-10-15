@@ -5,6 +5,7 @@
 ## 미배포
 
 - F192.1, F192.2: background session은 surface가 mount되지 않은 tab에만 열리고, tab이 보이거나 surface가 mount되면 listener와 함께 끝난다. 그래서 같은 card의 다른 tab 뒤에 가려진 terminal이 출력을 그리지 않게 만들던 `image` 없는 두 번째 `open`을 더 받지 않는다. 각 결정은 event `page.background.session`이다.
+- F192.1.7: embed kit의 시험 애플리케이션이 매 frame 움직이는 막대와 pointer 표시를 그리고 각 입력과 present를 시각과 함께 기록한다.
 - F192.1.6: embed kit의 client가 애플리케이션을 sidecar의 socket에 잇고, configure와 입력을 받고 frame을 보낸다.
 - F192.1.5: embed kit이 darwin에서 host가 image region에 받는 형식인, 16-byte nonce를 가진 global IOSurface로 frame을 공유한다.
 - F192.1.4: embed kit의 버퍼 ring은 애플리케이션이 free 버퍼에만 그리게 하고, 뒤의 frame이 소비되면 버퍼를 free로 만든다.

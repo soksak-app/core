@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F192.1, F192.2: a background session opens only for a tab whose surface is not mounted and ends with its listener when the tab is shown or its surface mounts, so a terminal hidden behind another tab of its card no longer receives a second `open` without `image` that left its output undrawn; each decision is the event `page.background.session`.
+- F192.1.7: the test application of the embed kit draws a moving bar and a pointer mark every frame and records each input and present with its time.
 - F192.1.6: the client of the embed kit connects an application to the socket of its sidecar, takes configure and input, and sends frames.
 - F192.1.5: the embed kit shares frames on darwin through global IOSurfaces with a 16-byte nonce, the form that the host accepts for an image region.
 - F192.1.4: the buffer ring of the embed kit lets the application draw only into a free buffer and frees a buffer when a later frame is consumed.
