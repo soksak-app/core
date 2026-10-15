@@ -4,7 +4,7 @@
 
 ## Problem
 
-The application surface ([external application surface](external-app-surface.md)) shows an application that contains an embed adapter inside an `appview` card, but a person names the executable and its arguments in the settings of the card. An application has no entry of its own in the registry, so it is not installed or started from there.
+The application surface ([external application surface](external-app-surface.md)) shows an application that contains an embed adapter inside a card, but the application had no plugin of its own that names it. An application has no entry of its own in the registry, so it is not installed or started from there.
 
 ## Approach
 
@@ -12,7 +12,7 @@ Each application reaches people through a connector plugin: a plugin of the regi
 
 When the connector plugin is installed, the installer examines the machine: an application that is installed already is connected, its place recorded and nothing installed; otherwise the recipe installs it.
 
-The connector plugin carries the name of its application and is the plugin that a person opens: its own surface shows the application, so a card of that plugin starts the application without a setting. The page of that surface is shared by every connector plugin: the plugin `appview` declares the extension point `appview.surface`, whose shared module mounts the embed page for an application id, and each connector plugin contributes to that point, names `appview` in `dependencies`, imports the module as `@soksak/shared/appview.surface/<specifier>` and declares the image region of the application sidecar in its own composition. `appview` has no surface of its own.
+The connector plugin carries the name of its application and is the plugin that a person opens: its own surface shows the application, so a card of that plugin starts the application without a setting. The page of that surface is the embed page of core, `mountApplication` of `@soksak/plugin-api`: the surface module of each connector plugin calls it with the id of its application, and the plugin declares the image region of the application sidecar in its own composition and names that sidecar in `dependencies`. No other plugin takes part, so the registry lists only plugins named after their applications.
 
 ## Contract: `application` of plugin.json
 
@@ -59,6 +59,6 @@ Each step updates the specification first, then has a unit test that fails (Red)
 4. Recipes `package` and `source`.
 5. Record and removal in `applications.json`.
 6. The plugin operations of the application run the same steps and report their progress.
-7. `appview` starts the recorded application.
+7. The surface of a connector plugin starts the recorded application through the embed page of core.
 8. A test connector plugin whose recipe is a release of the test application of the embed kit, and a window check that installs it (installed when absent, connected when present), starts it in a card and runs the gate.
 9. The connector plugin of the example application, once its own distribution provides a build with the embed adapter.

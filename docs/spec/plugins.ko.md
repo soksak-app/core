@@ -57,7 +57,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `dependencies` | 아니오 | `{ "<package>": "<version range>" }`: plugin이 필요로 하는 sidecar와 plugin, 그리고 plugin이 함께 동작하는 그 version의 범위([version과 범위](installation.ko.md#version과-범위)). 의존은 표면 페이지나 상태 모듈이 쓰는 [사이드카](sidecars.ko.md)를 가리키며 그때 `surface`나 `state`가 필요하거나, plugin이 기여하는 [확장 지점](#확장-지점)을 가진 plugin이나, `application`이 있는 plugin이면 그 애플리케이션을 보이는 plugin을 가리키며 plugin을 설치하면 그것도 설치된다. registry index나 `installed.json`의 plugin이 그 이름을 가지면 의존은 plugin을 가리키고, 아니면 sidecar를 가리킨다. plugin이 다른 sidecar와 plugin에 요구하는 것의 유일한 선언이다 |
 | `events` | 아니오 | plugin의 event catalog 파일의 패키지 안 경로([logging](logging.ko.md#catalog)). 릴리스는 그 파일을 담는다 |
 | `migrations` | 아니요 | `{ "<저장 file>": "<경로>" }`: plugin이 소유하는 저장 file의 마이그레이션 정의. 각각은 package 안의 정의 file 경로이고 형식은 [저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)과 같다. 오늘 그런 file을 소유한 plugin은 없으므로 아무도 선언하지 않는다. 그것을 선언하는 release는 그 field를 아는 core release를 요구한다 |
-| `extends` | 아니오 | `{ "<point>": { "version": "x.y.z", "schema": <스키마>, "modules"?: { "<bare specifier>": "<경로>" } } }`: 다른 plugin이 기여하는 [확장 지점](#확장-지점). 모든 지점이 `modules`를 선언하지 않으면 `surface`가 필요하다 |
+| `extends` | 아니오 | `{ "<point>": { "version": "x.y.z", "schema": <스키마>, "modules"?: { "<bare specifier>": "<경로>" } } }`: 다른 plugin이 기여하는 [확장 지점](#확장-지점). `surface`가 필요하다 |
 | `contributes` | 아니오 | `{ "<plugin id>.<point>": [ { "range": "<version range>", "module": "<경로>", ... } ] }`: plugin이 다른 plugin의 확장 지점에 기여하는 항목 |
 | `state` | 아니오 | `{ "module": "ui/state.js" }`: 표면 밖의 상태를 갖는 [플러그인 상태](#플러그인-상태) 모듈. `sections`가 필요하다 |
 | `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: 상태 모듈이 프로젝트마다 저장하는 [프로젝트 데이터](#프로젝트-데이터). `state`가 필요하다 |
@@ -134,7 +134,6 @@ plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한
 - **연결.** page를 불러올 때 workbench는 설치되고 켜진 plugin의 기여를 해석한다. 항목은 제공자가 설치되고 켜져 있고 그 `range`가 지점의 `version`을 포함하면 `connected`, 제공자가 설치되지 않았거나 켜져 있지 않으면 `provider-missing`, 범위가 version을 포함하지 않으면 `version-mismatch`, 항목이 schema와 맞지 않거나 그 module을 불러오거나 확장하다 실패하면 `invalid`다. status `core.contributions`가 모든 항목을 `{plugin, point, state, reason}`으로 보고한다. `connected`가 아닌 상태는 애플리케이션의 오류가 아니며, `invalid`는 오류 표시로 보인다.
 - **설치.** `dependencies`에 제공자를 적은 기여자는 제공자와 함께 설치된다. 그 의존이 없는 기여자는 제공자가 설치되어 있을 때만 연결된다. 기여자나 제공자를 설치, 켜기, 끄기, 제거하면 다른 plugin 변경과 같이 그 뒤에 불러오는 page에 적용된다([설치](installation.ko.md)).
 - **제공자 interface.** 제공자 page의 surface context는 `contributions(point)`를 가지며, 그 지점의 연결된 항목을 `{plugin, item, module}`로 돌려준다. `module`은 import할 URL이다. 제공자는 각 module을 import하고 지점 interface가 정한 export를 호출한다. 실패한 export는 그 항목을 `invalid`로 만들고 다른 항목은 연결된 채로 둔다.
-- **공유 module 지점.** 인터페이스가 공유 module인 지점은 자기 항목을 어떤 page에도 주지 않는다: 각 기여자가 그 module을 자기 page에 불러오고, 그 항목은 module을 무엇에 쓰는지 밝힌다. 모든 지점이 `modules`를 선언한 제공자에게는 surface가 필요 없다. `modules`가 없는 지점은 항목을 제공자 page에 주므로 surface가 필요하다.
 - **권한.** 기여 module은 제공자 page 안에서 그 page의 권한으로 실행된다. 기여자를 설치하면 그 기여자는 제공자의 문서와 입력처럼 제공자 page가 받는 것을 받는다.
 
 ## 외부 라이브러리
@@ -181,7 +180,7 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 ## 연결된 애플리케이션
 
-surface context에는 `runtime.applications`가 있다. `read()`는 연결 plugin이 연결한 애플리케이션을 애플리케이션 id별로, 각각 `plugins/applications.json`의 `{version, path, how, method}`로 돌려주고([애플리케이션](installation.ko.md#애플리케이션)), `on(fn)`은 plugin 상태가 바뀔 때마다 `fn(applications)`을 부르며 등록을 끝내는 함수를 돌려준다. plugin 상태를 읽기 전과 host가 없는 창에서는 연결된 애플리케이션이 없고 `read()`는 빈 객체를 돌려준다. surface는 연결된 애플리케이션을 그 `path`로 시작한다.
+surface context에는 `runtime.applications`가 있다. `read()`는 연결 plugin이 연결한 애플리케이션을 애플리케이션 id별로, 각각 `plugins/applications.json`의 `{version, path, how, method}`로 돌려주고([애플리케이션](installation.ko.md#애플리케이션)), `on(fn)`은 plugin 상태가 바뀔 때마다 `fn(applications)`을 부르며 등록을 끝내는 함수를 돌려준다. plugin 상태를 읽기 전과 host가 없는 창에서는 연결된 애플리케이션이 없고 `read()`는 빈 객체를 돌려준다. surface는 연결된 애플리케이션을 그 `path`로 시작한다. `@soksak/plugin-api`는 embed page `mountApplication(root, context, { application })`을 내보내고, 연결 plugin의 surface module은 자기 애플리케이션의 id로 그것을 부른다. 그것은 애플리케이션을 plugin composition의 image region `view`에서 시작하고, view와 region의 입력을 애플리케이션에 보내며, plugin이 `exposes`에 선언하는 `<plugin>.state`, `<plugin>.focus`, `<plugin>.input`, `<plugin>.view`와 event catalog에 선언하는 event `plugin.<plugin>.open`, `input`, `message`, `error`를 등록한다. 연결되지 않은 애플리케이션과 문자열의 JSON 배열이 아닌 설정 `arguments`는 아무것도 시작하지 않는 오류다.
 
 ## 링크 열기
 

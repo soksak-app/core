@@ -1071,8 +1071,8 @@
     - [o] F194.7.2 — P1: F194.5.8 창 검사가 공유 page를 import하는 자기 surface를 가진 연결 plugin을 설치하고, 설정 없이 그 plugin의 카드를 연다.
     - [o] F194.7.3 — P1: core 0.0.15가 게시되면 `appview.surface`와 함께 plugin-appview를 release한다. 이것이 surface 대신 공유 page로 F194.5.7.2를 완료한다.
   - [~] F194.8 — P1: plugin `appview`는 없다: embed page는 각 연결 plugin이 자기 surface에 mount하는 core의 함수이므로, registry에는 애플리케이션 이름을 가진 plugin만 오른다. `appview`는 연결 plugin에 공유 코드만 주었고 registry에 쓸모없는 plugin으로 보였다(F194.7).
-    - [~] F194.8.1 — P1: `@soksak/plugin-api`가 embed page `mountApplication(root, context, { application })`을 내보낸다. 그것은 연결된 애플리케이션을 그 plugin composition의 image region `view`에서 그 plugin의 이름으로 시작한다. `extends`를 가진 plugin에 surface가 필요하다는 규칙이 돌아온다(F194.7.0을 없앤다).
-    - [ ] F194.8.2 — P1: workspace, workflow, 연결 창 검사가 plugin-appview를 이름하지 않는다. 검사의 연결 plugin은 core의 page를 mount하고 애플리케이션 sidecar에만 의존한다.
+    - [o] F194.8.1 — P1: `@soksak/plugin-api`가 embed page `mountApplication(root, context, { application })`을 내보낸다. 그것은 연결된 애플리케이션을 그 plugin composition의 image region `view`에서 그 plugin의 이름으로 시작한다. `extends`를 가진 plugin에 surface가 필요하다는 규칙이 돌아온다(F194.7.0을 없앤다).
+    - [o] F194.8.2 — P1: workspace, workflow, 연결 창 검사가 plugin-appview를 이름하지 않는다. 검사의 연결 plugin은 core의 page를 mount하고 애플리케이션 sidecar에만 의존한다.
     - [o] F194.8.4 — P1: 끝난 sidecar에 대한 버려진 transfer image의 `closed` 답은 오류가 아니라 기록된다: 연결 plugin을 제거하면 그 sidecar가 멈추고, 닫힌 surface의 frame에 대한 답이 실행 중인 sidecar를 찾지 못해 두 host가 연결 검사 3번 중 2번 오류로 기록했다.
     - [ ] F194.8.3 — P1: core 0.0.16을 release하고 registry에서 appview 0.0.2를 철회한다.
   - [o] F194.6 — P1: 연결 plugin과 함께 core 0.0.15를 release한다: `application` 필드와 레시피, 연결된 애플리케이션의 기록, `runtime.applications`, plugin 작업의 진행, 수정 F194.5.6.1-2와 F194.3.1-2.

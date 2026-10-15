@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.8.1, F194.8.2: `@soksak/plugin-api`가 embed page `mountApplication(root, context, { application })`을 내보내고, 각 연결 plugin이 자기 surface에 자기 이름으로 그것을 mount한다. `extends`를 가진 plugin에 surface가 필요하다는 규칙이 돌아온다. workspace와 workflow는 plugin-appview를 이름하지 않고, 창 검사는 core의 page를 mount하고 애플리케이션 sidecar에만 의존하는 연결 plugin을 설치한다(`e2e/connector-fixture.mjs`). 관문 검사는 `e2e/application-gate.test.mjs`이고, fixture의 cleanup은 plugin을 제거하기 전에 그 카드를 닫고 registry를 자기 단계에서 되돌린다. Red: export 검사가 그것 없이 실패했다. Green: plugin-api 검사 221개 중 221개, 두 host에서 연결 검사 3번 중 3번. 관문은 기계에 부하가 걸리기 전 두 host에서 median 16 ms로 통과했고, load average 25에서 30일 때의 drag median 26에서 29 ms는 부하로 분류한다.
 - F194.8.4: process가 실행 중이 아닌 sidecar로의 응답은 두 host에서 같은 문장의 끝난 오류(`ErrSidecarEnded`, `ResponseError::Ended`)이고, 그런 sidecar에 대한 버려진 transfer image의 `closed` 답은 오류 대신 `not sent`로 기록된다. Red: 두 host의 새 검사가 그 오류 종류 없이 build되지 않았고, 연결 검사가 3번 중 2번 오류를 기록했다. Green: 두 host의 sidecar 검사, Rust host의 buffer와 flush 검사와 함께.
 - F194.5.9: 레시피는 애플리케이션을 그 자신의 배포로만 설치하므로, 예시 애플리케이션이 자기 배포로 embed 어댑터를 가진 build를 줄 때까지 보류한다.
 - F194.6, F194.7.1, F194.7.3, F194.5.7.2, F194.5.8-1: core 0.0.15가 두 host build와 함께 게시되었다. plugin-appview 0.0.2(공유 embed page, `appview.surface`)와 sidecar-app 0.0.1(A1.10)이 게시되어 registry에 올랐고, registry의 publish와 ci workflow가 통과했다.

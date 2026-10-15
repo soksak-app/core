@@ -4,7 +4,7 @@
 
 ## 문제
 
-애플리케이션 표면([외부 애플리케이션 표면](external-app-surface.ko.md))은 embed 어댑터를 가진 애플리케이션을 `appview` 카드 안에 보이지만, 실행 파일과 인자는 사람이 카드 설정에 적는다. 애플리케이션은 registry에 자기 항목이 없어서 거기서 설치되거나 시작되지 않는다.
+애플리케이션 표면([외부 애플리케이션 표면](external-app-surface.ko.md))은 embed 어댑터를 가진 애플리케이션을 카드 안에 보이지만, 그 애플리케이션을 이름하는 자기 plugin이 없었다. 애플리케이션은 registry에 자기 항목이 없어서 거기서 설치되거나 시작되지 않는다.
 
 ## 방식
 
@@ -12,7 +12,7 @@
 
 연결 plugin을 설치할 때 설치기가 기계를 조사한다: 이미 설치된 애플리케이션은 연결하고 그 위치를 기록하며 아무것도 설치하지 않는다. 그렇지 않으면 레시피가 설치한다.
 
-연결 plugin은 자기 애플리케이션의 이름을 가지며 사람이 여는 plugin이다: 자기 surface가 애플리케이션을 보이므로, 그 plugin의 카드는 설정 없이 애플리케이션을 시작한다. 그 surface의 page는 모든 연결 plugin이 공유한다: plugin `appview`가 extension point `appview.surface`를 선언하고, 그 공유 module이 애플리케이션 id에 대한 embed page를 mount한다. 각 연결 plugin은 그 point에 기여하고, `dependencies`에 `appview`를 이름하며, 그 module을 `@soksak/shared/appview.surface/<specifier>`로 import하고, 자기 composition에 애플리케이션 sidecar의 image region을 선언한다. `appview`에는 자기 surface가 없다.
+연결 plugin은 자기 애플리케이션의 이름을 가지며 사람이 여는 plugin이다: 자기 surface가 애플리케이션을 보이므로, 그 plugin의 카드는 설정 없이 애플리케이션을 시작한다. 그 surface의 page는 core의 embed page인 `@soksak/plugin-api`의 `mountApplication`이다: 각 연결 plugin의 surface module이 자기 애플리케이션 id로 그것을 부르고, plugin은 자기 composition에 애플리케이션 sidecar의 image region을 선언하며 `dependencies`에 그 sidecar를 이름한다. 다른 plugin은 끼지 않으므로 registry에는 애플리케이션 이름을 가진 plugin만 오른다.
 
 ## 계약: plugin.json의 `application`
 
@@ -59,6 +59,6 @@ core는 plugin을 이름하지 않으므로 레시피는 manifest의 범용 필�
 4. 레시피 `package`와 `source`.
 5. `applications.json`의 기록과 제거.
 6. 애플리케이션의 plugin 작업이 같은 단계를 실행하고 진행을 보고한다.
-7. `appview`가 기록된 애플리케이션을 시작한다.
+7. 연결 plugin의 surface가 core의 embed page로 기록된 애플리케이션을 시작한다.
 8. embed kit 시험 애플리케이션의 release를 레시피로 가진 시험용 연결 plugin과, 그것을 설치하고(없으면 설치, 있으면 연결) 카드에서 시작해 관문을 실행하는 창 검사.
 9. 예시 애플리케이션의 자기 배포가 embed 어댑터가 든 build를 주면, 그것의 연결 plugin.

@@ -1,4 +1,5 @@
-// The gate of the external application surface (F194.3): an appview card runs the test application of the embed kit,
+// The gate of the external application surface (F194.3): the card of the connector plugin (connector-fixture.mjs) runs
+// the test application of the embed kit,
 // which draws a frame every display interval into shared buffers, and the check moves the native pointer across it. From
 // the records of every step it computes, per pointer move, the time from the native injection to the answer of the host
 // for the first frame that shows that input, and the gaps between the frames that the host accepted:
@@ -18,6 +19,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, eventLine, readEvents } from "@soksak/window-check/event-log.mjs";
+import { PLUGIN, connectApplication } from "./connector-fixture.mjs";
 import { fresh } from "./fixture.mjs";
 
 const SIDECAR = "@soksak/sidecar-app";
@@ -34,25 +36,27 @@ const DRAG_Y = Number(process.env.SOKSAK_EMBED_DRAG_Y ?? "0.5");
 const DRAG_X = Number(process.env.SOKSAK_EMBED_DRAG_X ?? "0.05");
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: an appview card answers a native pointer drag within the gate`, { timeout: 180000 }, async (t) => {
+  test(`${app.name}: the card of the connector plugin answers a native pointer drag within the gate`, { timeout: 180000 }, async (t) => {
     const program = process.env.SOKSAK_EMBED_TEST_APP;
     assert.ok(program, "SOKSAK_EMBED_TEST_APP is not set; it names the test application of the embed kit");
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s, { performanceTrace: true, settings: { "appview.program": program, "appview.arguments": ARGS } });
+    await fresh(s, { performanceTrace: true });
+    await connectApplication(s, program, { place: false });
+    await s.run("core.settings.set", { patch: { [`${PLUGIN}.arguments`]: ARGS } });
     const grid = await s.get("core.grid");
     const [card] = grid.cards.filter((item) => item.active).sort((a, b) => b.w * b.h - a.w * a.h);
-    await s.run("core.card.split", { card: card.id, side: "right", plugin: "appview" });
-    const owner = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.plugin === "appview"));
+    await s.run("core.card.split", { card: card.id, side: "right", plugin: PLUGIN });
+    const owner = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.plugin === PLUGIN));
     await s.run("core.card.fullscreen", { card: owner.id });
     const [surface] = await s.until("core.surfaces",
-      (surfaces) => surfaces.some((item) => item.visible && item.plugin === "appview" && item.exposes.includes("status appview.state")),
-      "no visible appview surface registered appview.state").then(() => s.surfaces("appview"));
-    await s.until("appview.state", (state) => state.toolkit !== null, "the application did not connect",
+      (surfaces) => surfaces.some((item) => item.visible && item.plugin === PLUGIN && item.exposes.includes(`status ${PLUGIN}.state`)),
+      `no visible surface of ${PLUGIN} registered ${PLUGIN}.state`).then(() => s.surfaces(PLUGIN));
+    await s.until(`${PLUGIN}.state`, (state) => state.toolkit !== null, "the application did not connect",
       { surface: surface.surface });
     const window = await s.until("host.window", (state) => state.regions.some((item) =>
       item.surface === surface.surface && item.name === "view" && item.frame?.width >= 600),
-    "the appview region of the full-screen card is not 600 points wide");
+    "the region of the full-screen card is not 600 points wide");
     const region = window.regions.find((item) => item.surface === surface.surface && item.name === "view");
     assert.ok(DRAG_Y > 0 && DRAG_Y < 1, `SOKSAK_EMBED_DRAG_Y is ${process.env.SOKSAK_EMBED_DRAG_Y}, not a share between 0 and 1`);
     assert.ok(DRAG_X > 0 && DRAG_X < 0.9, `SOKSAK_EMBED_DRAG_X is ${process.env.SOKSAK_EMBED_DRAG_X}, not a share between 0 and 0.9`);
@@ -120,8 +124,8 @@ for (const app of Object.values(APPS)) {
       application: round(summary(steps.map((step) => step.application)).median),
       gaps: Object.fromEntries(Object.entries(summary(gaps)).map(([key, value]) => [key, round(value)])),
     };
-    t.diagnostic(`${app.name} appview gate ${JSON.stringify(result)}`);
-    console.log(`${app.name} appview gate ${JSON.stringify(result)}`);
+    t.diagnostic(`${app.name} application gate ${JSON.stringify(result)}`);
+    console.log(`${app.name} application gate ${JSON.stringify(result)}`);
     assert.ok(steps.length >= MOVES / 2, `only ${steps.length} of ${MOVES} moves have a record of every step: ${JSON.stringify(result)}`);
     assert.deepEqual(refused, [], `the host refused frames: ${JSON.stringify(refused.slice(0, 4))}`);
     assert.deepEqual(skipped, [], `the host answered no frame before sequences ${skipped.slice(0, 8).join(", ")}`);
@@ -132,19 +136,21 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: an appview card follows a maximize and a restore of its window`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: the card of the connector plugin follows a maximize and a restore of its window`, { timeout: 120000 }, async (t) => {
     const program = process.env.SOKSAK_EMBED_TEST_APP;
-    assert.ok(program, "SOKSAK_EMBED_TEST_APP is not set; it names the application that the appview card runs");
+    assert.ok(program, "SOKSAK_EMBED_TEST_APP is not set; it names the application that the card of the connector plugin runs");
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s, { performanceTrace: true, settings: { "appview.program": program, "appview.arguments": ARGS } });
+    await fresh(s, { performanceTrace: true });
+    await connectApplication(s, program, { place: false });
+    await s.run("core.settings.set", { patch: { [`${PLUGIN}.arguments`]: ARGS } });
     const grid = await s.get("core.grid");
     const [card] = grid.cards.filter((item) => item.active).sort((a, b) => b.w * b.h - a.w * a.h);
-    await s.run("core.card.split", { card: card.id, side: "right", plugin: "appview" });
-    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.visible && item.plugin === "appview" &&
-      item.exposes.includes("status appview.state")), "no visible appview surface registered appview.state");
-    const [surface] = await s.surfaces("appview");
-    await s.until("appview.state", (state) => state.toolkit !== null, "the application did not connect", { surface: surface.surface });
+    await s.run("core.card.split", { card: card.id, side: "right", plugin: PLUGIN });
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.visible && item.plugin === PLUGIN &&
+      item.exposes.includes(`status ${PLUGIN}.state`)), `no visible surface of ${PLUGIN} registered ${PLUGIN}.state`);
+    const [surface] = await s.surfaces(PLUGIN);
+    await s.until(`${PLUGIN}.state`, (state) => state.toolkit !== null, "the application did not connect", { surface: surface.surface });
     // Each step waits until the window presents its new size with the region of the card; the time of each step is
     // recorded, and an error that the application logs during the steps fails the check.
     const steps = [];
@@ -154,16 +160,16 @@ for (const app of Object.values(APPS)) {
       await s.presented();
       steps.push({ on, ms: Number((performance.now() - started).toFixed(1)) });
     }
-    t.diagnostic(`${app.name} appview resize ${JSON.stringify(steps)}`);
-    console.log(`${app.name} appview resize ${JSON.stringify(steps)}`);
+    t.diagnostic(`${app.name} application resize ${JSON.stringify(steps)}`);
+    console.log(`${app.name} application resize ${JSON.stringify(steps)}`);
     for (const step of steps) assert.ok(step.ms < 2000, `a ${step.on ? "maximize" : "restore"} took ${step.ms} ms: ${JSON.stringify(steps)}`);
   });
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: an appview card plays at the rate of the display`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: the card of the connector plugin plays at the rate of the display`, { timeout: 120000 }, async (t) => {
     const program = process.env.SOKSAK_EMBED_TEST_APP;
-    assert.ok(program, "SOKSAK_EMBED_TEST_APP is not set; it names the application that the appview card runs");
+    assert.ok(program, "SOKSAK_EMBED_TEST_APP is not set; it names the application that the card of the connector plugin runs");
     // SOKSAK_EMBED_PLAY names the control that starts playback as shares of the region, `<x>,<y>`.
     const play = process.env.SOKSAK_EMBED_PLAY;
     if (play === undefined) return t.skip("SOKSAK_EMBED_PLAY names no control that starts playback");
@@ -171,19 +177,21 @@ for (const app of Object.values(APPS)) {
     assert.ok(shareX > 0 && shareX < 1 && shareY > 0 && shareY < 1, `SOKSAK_EMBED_PLAY is ${play}, not two shares between 0 and 1`);
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s, { performanceTrace: true, settings: { "appview.program": program, "appview.arguments": ARGS } });
+    await fresh(s, { performanceTrace: true });
+    await connectApplication(s, program, { place: false });
+    await s.run("core.settings.set", { patch: { [`${PLUGIN}.arguments`]: ARGS } });
     const grid = await s.get("core.grid");
     const [card] = grid.cards.filter((item) => item.active).sort((a, b) => b.w * b.h - a.w * a.h);
-    await s.run("core.card.split", { card: card.id, side: "right", plugin: "appview" });
-    const owner = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.plugin === "appview"));
+    await s.run("core.card.split", { card: card.id, side: "right", plugin: PLUGIN });
+    const owner = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.plugin === PLUGIN));
     await s.run("core.card.fullscreen", { card: owner.id });
-    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.visible && item.plugin === "appview" &&
-      item.exposes.includes("status appview.state")), "no visible appview surface registered appview.state");
-    const [surface] = await s.surfaces("appview");
-    await s.until("appview.state", (state) => state.toolkit !== null, "the application did not connect", { surface: surface.surface });
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.visible && item.plugin === PLUGIN &&
+      item.exposes.includes(`status ${PLUGIN}.state`)), `no visible surface of ${PLUGIN} registered ${PLUGIN}.state`);
+    const [surface] = await s.surfaces(PLUGIN);
+    await s.until(`${PLUGIN}.state`, (state) => state.toolkit !== null, "the application did not connect", { surface: surface.surface });
     const window = await s.until("host.window", (state) => state.regions.some((item) =>
       item.surface === surface.surface && item.name === "view" && item.frame?.width >= 600),
-    "the appview region of the full-screen card is not 600 points wide");
+    "the region of the full-screen card is not 600 points wide");
     const region = window.regions.find((item) => item.surface === surface.surface && item.name === "view");
     const x = Math.round(region.frame.x + region.frame.width * shareX);
     const y = Math.round(region.frame.y + region.frame.height * shareY);
@@ -207,8 +215,8 @@ for (const app of Object.values(APPS)) {
     const skipped = accepted.slice(1).filter((frame, index) => frame.sequence !== accepted[index].sequence + 1);
     const result = { frames: accepted.length, refused: refused.length, skipped: skipped.length,
       gaps: Object.fromEntries(Object.entries(summary(gaps)).map(([key, value]) => [key, round(value)])) };
-    t.diagnostic(`${app.name} appview playback ${JSON.stringify(result)}`);
-    console.log(`${app.name} appview playback ${JSON.stringify(result)}`);
+    t.diagnostic(`${app.name} application playback ${JSON.stringify(result)}`);
+    console.log(`${app.name} application playback ${JSON.stringify(result)}`);
     assert.ok(accepted.length >= 90, `only ${accepted.length} frames came during about three seconds of playback: ${JSON.stringify(result)}`);
     assert.deepEqual(refused, [], `the host refused frames: ${JSON.stringify(refused.slice(0, 4))}`);
     assert.deepEqual(skipped.map((frame) => frame.sequence), [], "the host answered no frame before these sequences");
