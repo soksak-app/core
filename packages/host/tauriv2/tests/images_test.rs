@@ -895,6 +895,7 @@ fn missing_native_surface_requests_a_fresh_raster_configuration() {
             *recovered_value.lock().unwrap() = next;
             Ok(())
         },
+        || true,
     ));
     let next = recovered
         .lock()
@@ -1289,4 +1290,40 @@ fn frame_answer_event_records_consumed_and_refused_answers() {
             "{label} answer: event fields are event, surface, name and response"
         );
     }
+}
+
+// A frame of a sidecar that no plugin declares, such as the frame in flight when a plugin is removed while its card is
+// open, belongs to a process that ended: its failure invalidates the frame without recovery, and an answer that cannot
+// reach the ended sidecar is recorded.
+// contract: images.present.frame-of-undeclared-sidecar-is-invalidated
+#[test]
+fn a_frame_of_a_sidecar_that_no_plugin_declares_is_invalidated() {
+    let images = Images::default();
+    let key: Key = ("tab-1".to_string(), "view".to_string());
+    images.reserve(&key, "owner", "sidecar-a").expect("reserve");
+    images.set(&key, 100);
+    let configured = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    let answers = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&answers);
+    assert!(handle_envelope_with_recovery(
+        &configured_envelope(&configured, 1),
+        "sidecar-a",
+        "tab-1",
+        &images,
+        |_work| Err("notFound".to_string()),
+        |_image, response| {
+            seen.lock().unwrap().push(response);
+            Err(soksak_host_tauriv2::sidecars::ResponseError::Ended(
+                "sidecar sidecar-a is not running".into(),
+            ))
+        },
+        |reason| panic!("recovery of {reason} was requested for a sidecar that no plugin declares"),
+        || false,
+    ));
+    let answers = answers.lock().unwrap();
+    assert_eq!(answers.len(), 1);
+    assert_eq!(answers[0]["image"]["error"], "stale");
 }

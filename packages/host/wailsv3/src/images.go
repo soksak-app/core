@@ -812,11 +812,22 @@ func logRefusedFrame(surface, sender string, images *Images, name string, genera
 		surface, name, sender, generation, raster, sequence, reason, images.FrameState(ImageKey{Surface: surface, Name: name}))})
 }
 
-// HandleEnvelope handles an image envelope. It takes as arguments the work to run on the main thread, the way to send the reply, and the recovery after a presentation failure.
 // recoverFrame is called, after the current frame failed for a native reason, with that reason
 // (notFound has no IOSurface to display, so it requests a new raster configuration). It returns true when it handled the envelope.
+// logAnswerError records the error of an answer to a frame: an answer that cannot reach a sidecar that ended needs no
+// receiver, because the frames of a sidecar end with its process, and any other failure is an error.
+func logAnswerError(where string, err error) {
+	switch {
+	case errors.Is(err, ErrSidecarEnded):
+		LogInfo(where, fmt.Sprintf("not sent: %v", err))
+	case err != nil:
+		LogError(where, err)
+	}
+}
+
+// HandleEnvelope handles an image envelope. It takes as arguments the work to run on the main thread, the way to send the reply, the recovery after a presentation failure and whether a plugin still declares the sending sidecar.
 func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, onMain func(func() error) error,
-	sendResponse func(string, map[string]interface{}) error, recoverFrame func(reason string) error) bool {
+	sendResponse func(string, map[string]interface{}) error, recoverFrame func(reason string) error, declared func() bool) bool {
 	decision := Decide(bodyBytes, sender, surface, images)
 
 	switch d := decision.(type) {
@@ -825,9 +836,7 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 
 	case *Reply:
 		logRefusedFrame(surface, sender, images, d.Name, d.Generation, d.Raster, d.Sequence, d.Reason)
-		if err := sendResponse(d.Name, d.JSON); err != nil {
-			LogError("image reply "+d.Name, err)
-		}
+		logAnswerError("image reply "+d.Name, sendResponse(d.Name, d.JSON))
 		return true
 
 	case *Present:
@@ -836,9 +845,7 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		if err != nil {
 			logRefusedFrame(surface, sender, images, d.Name, d.Generation, d.Raster, d.Sequence, "notAttached")
 			response := AfterPresent(false, "notAttached", d.Name, d.Generation, d.Raster, d.Sequence)
-			if err := sendResponse(d.Name, response); err != nil {
-				LogError("image notAttached "+d.Name, err)
-			}
+			logAnswerError("image notAttached "+d.Name, sendResponse(d.Name, response))
 			return true
 		}
 
@@ -858,7 +865,14 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 			return system.PresentImage(handle, d.ID, d.Nonce, float64(d.Width), float64(d.Height), d.Scale)
 		})
 
-		if err != nil {
+		if err != nil && !declared() {
+			// No plugin declares the sidecar any more: its process ended with its buffers, so the frame is invalidated
+			// and no recovery starts it again (docs/spec/native-surfaces.md#image-regions).
+			LogInfo("image present", fmt.Sprintf("frame of sidecar %s, which no plugin declares, invalidated: surface=%s name=%s sequence=%d reason=%v",
+				sender, surface, d.Name, d.Sequence, err))
+			response := AfterPresent(false, "stale", d.Name, d.Generation, d.Raster, d.Sequence)
+			logAnswerError("image response "+d.Name, sendResponse(d.Name, response))
+		} else if err != nil {
 			reason, invalidated, line := PresentationOutcome(surface, d.Name, d.Generation, d.Raster, d.Sequence, d.ID,
 				err.Error(), images.FrameState(key))
 			Log(line)
@@ -869,15 +883,11 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 				}
 			}
 			response := AfterPresent(false, reason, d.Name, d.Generation, d.Raster, d.Sequence)
-			if err := sendResponse(d.Name, response); err != nil {
-				LogError("image response "+d.Name, err)
-			}
+			logAnswerError("image response "+d.Name, sendResponse(d.Name, response))
 		} else {
 			images.MarkPresented(key, d.Generation, d.Raster, d.Sequence)
 			response := AfterPresent(true, "", d.Name, d.Generation, d.Raster, d.Sequence)
-			if err := sendResponse(d.Name, response); err != nil {
-				LogError("image response "+d.Name, err)
-			}
+			logAnswerError("image response "+d.Name, sendResponse(d.Name, response))
 		}
 		return true
 

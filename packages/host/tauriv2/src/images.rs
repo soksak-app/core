@@ -1235,7 +1235,7 @@ pub fn handle_envelope<OnMain, SendResponse>(
 ) -> bool
 where
     OnMain: Fn(Box<dyn Fn() -> Result<(), String> + Send>) -> Result<(), String>,
-    SendResponse: Fn(&str, serde_json::Value) -> Result<(), String>,
+    SendResponse: Fn(&str, serde_json::Value) -> Result<(), crate::sidecars::ResponseError>,
 {
     handle_envelope_with_recovery(
         body_str,
@@ -1245,13 +1245,17 @@ where
         on_main,
         send_response,
         |_| Ok(()),
+        || true,
     )
 }
 
 /// Handles the image envelope and, after a temporary native presentation failure, requests a new raster when needed.
 /// The recovery callback is deliberately separate from the response. The caller can therefore configure the sidecar
-/// again over its own transport without hiding the original error.
-pub fn handle_envelope_with_recovery<OnMain, SendResponse, Recover>(
+/// again over its own transport without hiding the original error. `declared` reports whether a plugin still declares
+/// the sending sidecar: the failure of a frame of a sidecar that no plugin declares is the end of its process, so the
+/// frame is invalidated without recovery (docs/spec/native-surfaces.md#image-regions).
+#[allow(clippy::too_many_arguments)]
+pub fn handle_envelope_with_recovery<OnMain, SendResponse, Recover, Declared>(
     body_str: &str,
     sender: &str,
     surface: &str,
@@ -1259,11 +1263,13 @@ pub fn handle_envelope_with_recovery<OnMain, SendResponse, Recover>(
     on_main: OnMain,
     send_response: SendResponse,
     recover: Recover,
+    declared: Declared,
 ) -> bool
 where
     OnMain: Fn(Box<dyn Fn() -> Result<(), String> + Send>) -> Result<(), String>,
-    SendResponse: Fn(&str, serde_json::Value) -> Result<(), String>,
+    SendResponse: Fn(&str, serde_json::Value) -> Result<(), crate::sidecars::ResponseError>,
     Recover: Fn(&str) -> Result<(), String>,
+    Declared: Fn() -> bool,
 {
     let decision = decide(body_str, sender, surface, images);
 
@@ -1280,9 +1286,7 @@ where
             log_refused_frame(
                 surface, sender, images, &name, generation, raster, sequence, &reason,
             );
-            if let Err(e) = send_response(&name, json) {
-                log_error(&format!("image reply {name}"), e);
-            }
+            log_answer_error(&format!("image reply {name}"), send_response(&name, json));
             true
         }
         Decision::Present {
@@ -1330,6 +1334,17 @@ where
                     }));
                     let reason = match presentation {
                         Ok(()) => None,
+                        Err(detail) if !declared() => {
+                            // No plugin declares the sidecar any more: its process ended with its buffers.
+                            crate::application_log::log_info(
+                                "image present",
+                                format!(
+                                    "frame of sidecar {sender}, which no plugin declares, invalidated: surface={} name={name} sequence={sequence} reason={detail}",
+                                    key.0
+                                ),
+                            );
+                            Some("stale")
+                        }
                         Err(detail) => {
                             let (reason, _, entry) = presentation_outcome(
                                 &key.0,
@@ -1370,9 +1385,10 @@ where
                             after_present(Err(reason), &name, generation, raster, sequence)
                         }
                     };
-                    if let Err(e) = send_response(&name, response) {
-                        log_error(&format!("image response {name}"), e);
-                    }
+                    log_answer_error(
+                        &format!("image response {name}"),
+                        send_response(&name, response),
+                    );
                 }
                 Err(_) => {
                     log_refused_frame(
@@ -1387,13 +1403,26 @@ where
                     );
                     let response =
                         after_present(Err("notAttached"), &name, generation, raster, sequence);
-                    if let Err(e) = send_response(&name, response) {
-                        log_error(&format!("image notAttached {name}"), e);
-                    }
+                    log_answer_error(
+                        &format!("image notAttached {name}"),
+                        send_response(&name, response),
+                    );
                 }
             }
             true
         }
+    }
+}
+
+/// Records the error of an answer to a frame: an answer that cannot reach a sidecar that ended needs no receiver,
+/// because the frames of a sidecar end with its process, and any other failure is an error.
+fn log_answer_error(place: &str, result: Result<(), crate::sidecars::ResponseError>) {
+    match result {
+        Ok(()) => {}
+        Err(crate::sidecars::ResponseError::Ended(error)) => {
+            crate::application_log::log_info(place, format!("not sent: {error}"))
+        }
+        Err(crate::sidecars::ResponseError::Failed(error)) => log_error(place, error),
     }
 }
 

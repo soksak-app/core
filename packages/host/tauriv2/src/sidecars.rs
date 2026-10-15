@@ -406,7 +406,7 @@ fn log_unfinished_line(sidecar: &str, bytes: usize) {
 
 /// Records a sidecar message that is dropped because no window owns it, together with its body. A dropped transfer
 /// image is answered `closed`, so the sidecar releases the frame and does not match a later answer of a reopened
-/// surface of the same id to it (docs/spec/native-surfaces.md#image-consumption).
+/// surface of the same id to it (docs/spec/native-surfaces.md#image-regions).
 fn drop_message(sender: &dyn ResponseSender, sidecar: &str, surface: &str, body: &RawValue) {
     crate::application_log::log_info(
         &format!("sidecar {sidecar}"),
@@ -1545,6 +1545,12 @@ impl<O: Owner> Sidecars<O> {
             .get(name)
             .ok_or_else(|| format!("sidecar {name} is not running"))?;
         Ok(process.writing.load(Ordering::Acquire))
+    }
+
+    /// Whether a plugin declares the sidecar `name`; a sidecar that no plugin declares any more ended with the removal of
+    /// its plugin.
+    pub fn declared(&self, name: &str) -> bool {
+        self.core.declaration(name).is_some()
     }
 
     /// Passes a response (such as an image return) to the sidecar. It has the same role as ResponseSender. When the
@@ -3089,11 +3095,11 @@ impl Owner for Window {
                 crate::performance::observe("host", || {
                     frame_answer_event(surface, image, &response)
                 });
-                let text = serde_json::to_string(&response).map_err(|e| e.to_string())?;
-                let body = RawValue::from_string(text).map_err(|e| e.to_string())?;
-                response_sender
-                    .send(surface, image, &body)
-                    .map_err(|error| error.to_string())
+                let text = serde_json::to_string(&response)
+                    .map_err(|e| ResponseError::Failed(e.to_string()))?;
+                let body = RawValue::from_string(text)
+                    .map_err(|e| ResponseError::Failed(e.to_string()))?;
+                response_sender.send(surface, image, &body)
             },
             |reason| {
                 if reason != "notFound" {
@@ -3101,6 +3107,7 @@ impl Owner for Window {
                 }
                 crate::composition::refresh_image_rasters(&window)
             },
+            || tauri::Manager::state::<WindowSidecars>(self).declared(sidecar_name),
         )
     }
 }

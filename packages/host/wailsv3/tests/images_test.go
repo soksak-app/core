@@ -3,6 +3,7 @@ package host_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -341,6 +342,7 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 			return nil
 		},
 		noRecovery(t),
+		func() bool { return true },
 	) {
 		t.Fatal("current frame was not handled")
 	}
@@ -505,6 +507,7 @@ func TestFrameThatBecomesStaleBeforeMainThreadPresentationIsRejected(t *testing.
 			return nil
 		},
 		noRecovery(t),
+		func() bool { return true },
 	)
 
 	if got := response["image"].(map[string]interface{})["error"]; got != "stale" {
@@ -894,6 +897,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 			}
 			return nil
 		},
+		func() bool { return true },
 	)
 
 	if !handled {
@@ -1002,6 +1006,7 @@ func TestFrameDetachedBeforeMainThreadPresentationIsReportedAsStale(t *testing.T
 			return nil
 		},
 		noRecovery(t),
+		func() bool { return true },
 	)
 	if image, _ := response["image"].(map[string]interface{}); image == nil || image["error"] != "stale" {
 		t.Fatalf("detached frame answered %v, want stale", response)
@@ -1026,6 +1031,7 @@ func TestMissingNativeSurfaceRequestsAFreshRasterConfiguration(t *testing.T) {
 			recovered = next
 			return err
 		},
+		func() bool { return true },
 	)
 	if recovered == nil || recovered.Raster != first.Raster {
 		t.Fatalf("recovery configuration %+v, want raster %d again", recovered, first.Raster)
@@ -1214,7 +1220,7 @@ func TestImageFrameRefusalsAreRecorded(t *testing.T) {
 	recoverFrame := func(string) error { return nil }
 
 	// A sidecar that does not own the region.
-	host.HandleEnvelope(configuredEnvelope(t, configured, 1), "sidecar-b", key.Surface, images, onMain, send, recoverFrame)
+	host.HandleEnvelope(configuredEnvelope(t, configured, 1), "sidecar-b", key.Surface, images, onMain, send, recoverFrame, func() bool { return true })
 	// A format that the host does not present.
 	var unsupported map[string]any
 	if err := json.Unmarshal(configuredEnvelope(t, configured, 2), &unsupported); err != nil {
@@ -1222,9 +1228,9 @@ func TestImageFrameRefusalsAreRecorded(t *testing.T) {
 	}
 	unsupported["image"].(map[string]any)["format"] = "rgba8"
 	body, _ := json.Marshal(unsupported)
-	host.HandleEnvelope(body, "sidecar-a", key.Surface, images, onMain, send, recoverFrame)
+	host.HandleEnvelope(body, "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true })
 	// An image field that is not an envelope is not handled as an image, and the record shows it.
-	if host.HandleEnvelope([]byte(`{"image":{"name":5}}`), "sidecar-a", key.Surface, images, onMain, send, recoverFrame) {
+	if host.HandleEnvelope([]byte(`{"image":{"name":5}}`), "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }) {
 		t.Fatal("a malformed envelope was handled as an image")
 	}
 
@@ -1304,5 +1310,36 @@ func TestFrameAnswerEventRecordsConsumedAndRefusedAnswers(t *testing.T) {
 		if len(event) != 4 {
 			t.Fatalf("%s answer: event has %d fields, want event, surface, name and response", answer.name, len(event))
 		}
+	}
+}
+
+// A frame of a sidecar that no plugin declares, such as the frame in flight when a plugin is removed while its card is
+// open, belongs to a process that ended: its failure invalidates the frame without recovery, and an answer that cannot
+// reach the ended sidecar is recorded.
+// contract: images.present.frame-of-undeclared-sidecar-is-invalidated
+func TestAFrameOfASidecarThatNoPluginDeclaresIsInvalidated(t *testing.T) {
+	written := captureLog(t)
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-1", Name: "view"}
+	attachImage(t, images, key)
+	first := configureImage(t, images, key, 800, 600, 2.0)
+	var answers []map[string]interface{}
+	host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
+		func(func() error) error { return errors.New("notFound") },
+		func(_ string, response map[string]interface{}) error {
+			answers = append(answers, response)
+			return fmt.Errorf("answer: %w", host.ErrSidecarEnded)
+		},
+		func(reason string) error {
+			t.Errorf("recovery of %q was requested for a sidecar that no plugin declares", reason)
+			return nil
+		},
+		func() bool { return false },
+	)
+	if len(answers) != 1 || answers[0]["image"].(map[string]interface{})["error"] != "stale" {
+		t.Fatalf("answers %+v, want one stale answer", answers)
+	}
+	if strings.Contains(written(), " error ") {
+		t.Fatalf("an ended sidecar produced an error line:\n%s", written())
 	}
 }

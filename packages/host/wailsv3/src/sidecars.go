@@ -1910,6 +1910,15 @@ func (c *Sidecars) notifyConnection(name string, failure error) {
 	}
 }
 
+// Declared reports whether a plugin declares the sidecar name; a sidecar that no plugin declares any more ended with the
+// removal of its plugin.
+func (c *Sidecars) Declared(name string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, _, ok := c.declaration(name)
+	return ok
+}
+
 // ErrSidecarEnded is the error of a message to a sidecar whose process is not running: the sidecar ended, or never
 // started, so nothing receives the message.
 var ErrSidecarEnded = errors.New("the sidecar is not running")

@@ -312,6 +312,7 @@ func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.Ra
 			}
 			return s.refreshImageRasters()
 		},
+		func() bool { return sidecars.Declared(sidecarName) },
 	)
 }
 
