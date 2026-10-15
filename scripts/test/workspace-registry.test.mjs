@@ -46,3 +46,15 @@ test("the workspace registry declaration names sibling folders and is checked be
     [{ extra: 1 }, /expected the keys packs, plugins and sidecars/],
   ]) assert.throws(() => checkDeclaration({ ...base, ...change }), message);
 });
+
+test("the workflows check out every repository that the workspace registry declaration names", { timeout: 1000 }, () => {
+  const declaration = JSON.parse(readFileSync(new URL("../workspace-registry.json", import.meta.url), "utf8"));
+  const folders = [...declaration.plugins, ...declaration.sidecars.map((sidecar) => sidecar.repository)]
+    .map((folder) => folder.replace(/^\.\.\//, ""));
+  for (const workflow of ["ci.yml", "window-checks.yml"]) {
+    const text = readFileSync(new URL(`../../.github/workflows/${workflow}`, import.meta.url), "utf8");
+    const paths = new Set([...text.matchAll(/^\s+path: (\S+)$/gm)].map((match) => match[1]));
+    const missing = folders.filter((folder) => !paths.has(folder));
+    assert.deepEqual(missing, [], `${workflow} checks out no repository into ${missing.join(", ")}`);
+  }
+});

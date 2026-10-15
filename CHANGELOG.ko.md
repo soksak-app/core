@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.3.1-1: `ci.yml`과 `window-checks.yml`이 애플리케이션 plugin과 애플리케이션 sidecar를 checkout하고, `scripts/test/workspace-registry.test.mjs`가 workspace registry가 선언한 모든 저장소의 checkout을 요구한다. 입력: 애플리케이션 표면 push의 CI가 `plugins/appview` checkout이 없어 `make boundaries`에서 실패했다. Red: 시험이 `ci.yml checks out no repository into plugins/appview, sidecars/app`로 실패했다. Green: 3개 중 3개.
 - 체크리스트 항목 `F192.1.1` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.1이다.
 - 체크리스트 항목 `F192.1.2` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.2이다.
 - 체크리스트 항목 `F192.1.3` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.3이다.
