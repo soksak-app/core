@@ -8,7 +8,8 @@
 //   sidecar `frame <sequence> input <n>`           the first frame that shows the input
 //   host.trace.image.frame `consumed`              the host accepted the frame of that sequence
 // The test application is the executable that SOKSAK_EMBED_TEST_APP names; the check fails with that name when it is not
-// set. Each move waits for host.window.presented, so the moves follow the display and the check has no timer.
+// set. The check presses, drags and releases; each step waits for host.window.presented, so the steps follow the
+// display and the check has no timer.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -28,7 +29,7 @@ const summary = (values) => {
 const round = (value) => Number(value.toFixed(2));
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: an appview card answers native pointer moves within the gate`, { timeout: 180000 }, async (t) => {
+  test(`${app.name}: an appview card answers a native pointer drag within the gate`, { timeout: 180000 }, async (t) => {
     const program = process.env.SOKSAK_EMBED_TEST_APP;
     assert.ok(program, "SOKSAK_EMBED_TEST_APP is not set; it names the test application of the embed kit");
     const s = await open(t, app);
@@ -48,11 +49,13 @@ for (const app of Object.values(APPS)) {
     const region = window.regions.find((item) => item.surface === surface.surface && item.name === "view");
     const y = region.frame.y + region.frame.height / 2;
     const offsets = currentEventOffsets(s.app.configDir);
+    // A hover move needs the key window, which only an activation gives, so the check drags: a press, a drag step per
+    // presentation and a release reach the view of an application that is not active.
     for (let move = 0; move < MOVES; move += 1) {
-      // The host injects pointer input only into an active window, so the first move activates the application.
-      await s.pointer(region.frame.x + 20 + move * STEP, y, "move", move === 0 ? { activate: true } : {});
+      await s.pointer(region.frame.x + 20 + move * STEP, y, move === 0 ? "down" : "drag");
       await s.presented();
     }
+    await s.pointer(region.frame.x + 20 + (MOVES - 1) * STEP, y, "up");
     // The writer stores events in batches, so the records of the last moves can be missing; the check counts only the moves
     // that have a record of every step and requires at least half of them.
     const { events } = readEvents(s.app.configDir, offsets);
@@ -65,9 +68,12 @@ for (const app of Object.values(APPS)) {
     for (const event of events) {
       if (event.event === "native.record.info" && event.fields?.where === "input inject") {
         const input = JSON.parse(event.fields.text);
-        if (input.kind === "pointer" && input.result === "delivered") injected.set(Math.round(input.x - region.frame.x), event.ts_us);
+        // The release repeats the position of the last drag step, so the first injection at a position is kept.
+        const local = Math.round(input.x - region.frame.x);
+        if (input.kind === "pointer" && input.result === "delivered" && !injected.has(local)) injected.set(local, event.ts_us);
       } else if (event.event === "host.trace.sidecar.send" && event.fields?.sidecar === SIDECAR && event.fields.body?.operation === "input" &&
         event.fields.body.message?.type === "pointer") {
+        if (event.fields.body.message.phase === "up") continue;
         sends.set(event.fields.body.message.input, { x: Math.round(event.fields.body.message.x), ts: event.ts_us });
       } else if (event.event === "host.trace.image.frame" && event.fields?.surface === surface.surface) {
         const image = event.fields.response?.image;

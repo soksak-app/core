@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F192.1, F192.2: a background session opens only for a tab whose surface is not mounted and ends with its listener when the tab is shown or its surface mounts, so a terminal hidden behind another tab of its card no longer receives a second `open` without `image` that left its output undrawn; each decision is the event `page.background.session`.
+- F192.3.2-1: the gate check presses, drags once per presentation and releases instead of a hover move with activation, which `e2e-check` refuses; the commit of F192.3.2 passed the check through a pipe that hid its failure. Three runs on wailsv3 under a load average of 13 to 14 passed: delay median 12.2 to 13.8 ms, p90 14.7 to 15.2 ms, frame gap p99 22.0 to 24.1 ms, no refused or skipped frame.
 - F192.3.2: the gate check `e2e/appview-gate.test.mjs` opens an appview card that runs the test application, moves the native pointer 100 times, one move per presentation, and computes from the native, host, page and sidecar records the delay from each move to the answer of the host for the first frame that shows it and the gaps between accepted frames. Its first runs found P2.3 and A1.8.
 - F192.3.1: the workspace registry declares the application plugin `appview` and the application sidecar, so a check configuration installs them for the gate of side 1.
 - F192.2.6: the application plugin shows a program that is a web address in a document region and starts no sidecar.
