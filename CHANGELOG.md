@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F192.1, F192.2: a background session opens only for a tab whose surface is not mounted and ends with its listener when the tab is shown or its surface mounts, so a terminal hidden behind another tab of its card no longer receives a second `open` without `image` that left its output undrawn; each decision is the event `page.background.session`.
+- F192.2.2, F192.2.3: the application sidecar starts and stops the application of a surface, relays configure, frames, host answers and page input, and reports an application that ends by itself as an error that names its exit.
 - F192.2.1: the application sidecar starts as a local repository at version 0.0.1 with the standard input and output transport, its checks, checklist and changelog.
 - F192.1.7: the test application of the embed kit draws a moving bar and a pointer mark every frame and records each input and present with its time.
 - F192.1.6: the client of the embed kit connects an application to the socket of its sidecar, takes configure and input, and sends frames.
