@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.5.7.1: 두 host의 `pluginsState`가 `plugins/applications.json`의 기록인 `applications`를 보고하고, surface context에 `runtime.applications`(`read`, `on`)가 있으며 page는 그것을 `applications.js`를 거쳐 plugin 상태에서 정한다. Red: 두 `sok` 패키지와 두 host의 상태 검사에 `applications`가 없었고, plugin-api context 검사에 `runtime.applications`가 없었고, surface 검사가 그것을 읽지 못했다. Green: 그 검사들.
 - F194.5.6.3: plugin 작업 동안 두 host가 연결 plugin의 애플리케이션을 연결하는 단계마다 모든 창에 `plugins-progress`를 보낸다. page는 그것을 실행 중인 작업에 `core.plugins`의 `step`으로 기록하고, plugin 카드는 "<plugin> <action> 진행 중 · <application> <step>"을 보인다. Red: host 검사가 진행 수신자 없이 compile되지 않았고, 작업 검사에 `progress`가 없었고, 카드는 "db install 진행 중"만 보였다. Green: 두 host의 plugin 검사, 작업과 library 검사.
 - F194.5.10-1: brew가 가지지 않은 package의 Rust 검사가 brew가 플랫폼의 관리자가 아니거나 검색 경로에 없으면 건너뛴다. Red: linux CI가 brew가 없다는 오류로 실패했다. Green: 로컬 레시피 검사 6개 중 6개. linux는 push의 CI가 확인한다.
 - F194.5.10: 애플리케이션은 플랫폼의 애플리케이션 식별자로 식별하고, 그 배포물이나 플랫폼의 표준 패키지 관리자로 설치한다: manifest는 `bundle`을 darwin에서만, 새 `appid`를 windows와 linux에서만, 플랫폼마다의 패키지 관리자(`brew`, `winget`, `flatpak`)를 받는다. 두 `sok` 구현은 새 platform 작업으로 `appid`를 시도하고 다른 플랫폼의 관리자를 거부하며, `appid`, `winget`, `flatpak`은 `not implemented on <os>`를 돌려준다. brew 검사는 brew가 플랫폼의 관리자가 아니거나 검색 경로에 없으면 건너뛴다. Red: manifest가 linux의 brew를 받았고, 두 `sok` 구현이 `appid`를 모르는 항목으로, 관리자를 "not brew"로 거부했다. Green: manifest 검사, 각 언어 연결 검사 5개와 6개.

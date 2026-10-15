@@ -3,11 +3,18 @@ import { host } from "@soksak/runtime";
 import { pluginUnits } from "./environment.js";
 import { createAppUpdate } from "./app-update.js";
 import { createPluginOperations } from "./plugin-operations.js";
+import { notifyConnectedApplications, setConnectedApplications } from "./applications.js";
 
 const listeners = new Set();
-const notify = () => { for (const fn of listeners) fn(); };
+const notify = () => {
+  for (const fn of listeners) fn();
+  notifyConnectedApplications();
+};
 
 export const pluginOperations = createPluginOperations({ host, loaded: pluginUnits, changed: notify });
+
+// default: before the plugin state is read and without a host there is no record, so no application is connected.
+setConnectedApplications(() => pluginOperations.state()?.applications ?? {});
 
 /** The application update of this window (app-update.js), which redraws the same listeners. */
 export const appUpdate = createAppUpdate({ host, plugins: () => pluginOperations.state(), changed: notify });

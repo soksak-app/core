@@ -100,7 +100,7 @@ func stateText(t *testing.T, plugins *host.Plugins) string {
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
 	plugins, _ := newPlugins(t, config)
-	if text := stateText(t, plugins); text != `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true}` {
+	if text := stateText(t, plugins); text != `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"applications":{}}` {
 		t.Fatalf("state without a registry %s", text)
 	}
 	index, _ := pluginRegistry(t)
@@ -317,5 +317,9 @@ func TestAPluginOperationReportsEachStepOfConnectingTheApplication(t *testing.T)
 	}
 	if got, _ := json.Marshal(progress); string(got) != func() string { data, _ := json.Marshal(want); return string(data) }() {
 		t.Fatalf("progress %s", got)
+	}
+	// The state that the page reads holds the connected application.
+	if text := stateText(t, plugins); !strings.Contains(text, `"applications":{"shell":{"version":"1.0.0","path":"`) || !strings.Contains(text, `"how":"located","method":"command"}}`) {
+		t.Fatalf("state %s", text)
 	}
 }

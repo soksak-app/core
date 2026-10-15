@@ -178,6 +178,10 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 `project`는 표면이 마운트될 때 표면의 창이 보이는 프로젝트의 정규 `root`를 담은 `{root}`이고([프로젝트](projects.ko.md#프로젝트-식별)), 프로젝트가 없는 창에서는 `null`이다. 작업 디렉터리에서 시작하는 표면은 `origin.directory`가 `null`이 아니면 그것을, 아니면 `project.root`를, 그것도 없으면 계정의 홈 디렉터리를 쓴다.
 
+## 연결된 애플리케이션
+
+surface context에는 `runtime.applications`가 있다. `read()`는 연결 plugin이 연결한 애플리케이션을 애플리케이션 id별로, 각각 `plugins/applications.json`의 `{version, path, how, method}`로 돌려주고([애플리케이션](installation.ko.md#애플리케이션)), `on(fn)`은 plugin 상태가 바뀔 때마다 `fn(applications)`을 부르며 등록을 끝내는 함수를 돌려준다. plugin 상태를 읽기 전과 host가 없는 창에서는 연결된 애플리케이션이 없고 `read()`는 빈 객체를 돌려준다. surface는 연결된 애플리케이션을 그 `path`로 시작한다.
+
 ## 링크 열기
 
 표면 컨텍스트에는 `runtime.links.open(url)`이 있으며, 호스트에 절대 `http`, `https`, `mailto` URL을 그 스킴의 사용자 기본 애플리케이션으로 열도록 요청한다. 호스트는 다른 스킴, 해석되지 않는 URL, 8192자보다 긴 URL을 거부하고, 반환한 promise는 그 이유로 거부된다. macOS 호스트는 `NSWorkspace`로 URL을 연다. Windows 플랫폼은 `not implemented on windows`를 반환한다.

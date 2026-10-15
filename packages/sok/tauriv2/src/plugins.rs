@@ -133,6 +133,9 @@ pub struct PluginsState {
     /// True when plugins/installed.json does not exist. The application installs the starter pack then.
     #[serde(rename = "firstRun")]
     pub first_run: bool,
+    /// Each application that a connector plugin connected (plugins/applications.json), which a surface starts
+    /// (docs/spec/installation.md#applications).
+    pub applications: std::collections::BTreeMap<String, crate::application::ApplicationRecord>,
 }
 
 /// Missing when there is no registry, Checked when the index was read and checked, and the error when it could not be read or checked.
@@ -163,11 +166,13 @@ pub fn read_plugins_state(config_dir: &Path) -> Result<PluginsState, String> {
             (Some(url), index)
         }
     };
+    let applications = crate::application::read_applications(config_dir)?.applications;
     Ok(PluginsState {
         registry,
         index,
         installed,
         first_run,
+        applications,
     })
 }
 

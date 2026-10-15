@@ -178,6 +178,10 @@ The `system` policy is a system notification. The host posts it through the oper
 
 `project` is `{root}` with the canonical `root` of the project that the surface's window shows when the surface mounts ([projects](projects.md#project-identity)), or `null` in a window without a project. A surface that starts in a working directory uses `origin.directory` when it is not `null`, otherwise `project.root`, otherwise the account's home directory.
 
+## Connected applications
+
+A surface context has `runtime.applications`: `read()` returns the applications that connector plugins connected, by application id, each `{version, path, how, method}` of `plugins/applications.json` ([applications](installation.md#applications)), and `on(fn)` calls `fn(applications)` after each change of the plugin state and returns the function that ends the registration. Before the plugin state is read, and in a window without a host, no application is connected and `read()` returns an empty object. A surface starts a connected application from its `path`.
+
 ## Opening links
 
 A surface context has `runtime.links.open(url)`, which asks the host to open an absolute `http`, `https`, or `mailto` URL with the user's default application for its scheme. The host rejects another scheme, a URL that does not parse, and a URL longer than 8192 characters, and the returned promise rejects with the reason. The macOS hosts open the URL through `NSWorkspace`; the Windows platform returns `not implemented on windows`.

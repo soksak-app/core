@@ -76,6 +76,9 @@ export function createSurfaceContext({
       links: runtime.links,
       theme: runtime.theme,
       settings: runtime.settings,
+      // The applications that connector plugins connected (docs/spec/plugins.md#connected-applications). read() returns them
+      // by id, and on(fn) calls fn(applications) after each change.
+      applications: runtime.applications,
       // The actual text size scale of this surface. read() returns the current scale, and on(fn) calls fn(scale) when the scale changes.
       textSize: runtime.textSize,
       // Writes an event of this surface to the performance trace and to the event log (docs/spec/plugins.md#tracing,

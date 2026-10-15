@@ -152,7 +152,7 @@ Host는 시작할 때 켜진 설치 plugin의 `plugin.json` `dependencies`가 �
 
 | Host 호출 또는 event | 의미 |
 | --- | --- |
-| `pluginsState()` | `{ registry, index, installed, firstRun }`을 돌려준다. `registry`는 `plugins/registry.json`의 `index` URL이고 없으면 `null`이다. `index`는 검사한 registry index이고, registry가 없으면 `null`, 읽거나 검사하지 못하면 `{ "error": "<message>" }`다. `installed`는 `plugins/installed.json`의 내용이고, 없으면 현재 형식의 빈 installed 문서다. `firstRun`은 `plugins/installed.json`이 없는 동안 `true`다. `installed.json`을 읽지 못하면 그 message로 호출을 거부한다 |
+| `pluginsState()` | `{ registry, index, installed, firstRun, applications }`을 돌려준다. `registry`는 `plugins/registry.json`의 `index` URL이고 없으면 `null`이다. `index`는 검사한 registry index이고, registry가 없으면 `null`, 읽거나 검사하지 못하면 `{ "error": "<message>" }`다. `installed`는 `plugins/installed.json`의 내용이고, 없으면 현재 형식의 빈 installed 문서다. `firstRun`은 `plugins/installed.json`이 없는 동안 `true`다. `applications`는 `plugins/applications.json`의 `applications` 객체이고([애플리케이션](#애플리케이션)) 파일이 없으면 비어 있다. `installed.json`이나 `applications.json`을 읽지 못하면 그 message로 호출을 거부한다 |
 | `pluginsRun({ action, plugin })` | Plugin id에 대해 `install`, `update`, `remove`, `enable`, `disable`을 애플리케이션의 core version과 platform으로 실행하고, 같은 `sok plugin` 명령의 출력을 돌려준다. 다른 `action`이나 비어 있지 않은 문자열이 아닌 plugin id는 아무것도 바꾸지 않고 호출을 거부한다. 실패한 작업은 같은 명령의 message로 호출을 거부하고, `installed.json`은 그 명령이 정한 대로 남는다 |
 | `pluginsUseRegistry({ index })` | `sok registry use <index>`처럼 registry index를 정하고 그 출력 `{ index }`를 돌려준다. 비어 있지 않은 문자열이 아닌 `index`는 `index must be a non-empty string`으로 거부한다 |
 | `plugins-changed` | `pluginsRun`이 `installed.json`을 바꾼 뒤 모든 창에 `{ action, plugin }`과 함께 보낸다 |

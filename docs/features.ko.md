@@ -1055,7 +1055,9 @@
       - [o] F194.5.6.1-1 — P2: 연결 검사가 CI에서 통과한다: 애플리케이션의 각 Go·Rust 짝 검사가 host 계약에 자기 계약 사례를 선언하고, package 검사는 brew가 없는 기계에서 `brew is not on the search path` 오류를 단언한다. F194.5.6.1 push의 CI가 검사마다 `declares no contract case`로 `make host-contract-check`에서, brew가 없는 linux에서 Go package 검사에서 실패했다.
       - [o] F194.5.6.2 — P2: 조사와 레시피의 각 단계가 event이고, 레시피를 실행하는 plugin 작업의 진행이 애플리케이션의 plugin 작업 상태에 닿는다.
       - [o] F194.5.6.3 — P2: 애플리케이션을 연결하는 plugin 작업의 진행이 page에 닿는다: host의 단계 event가 plugin 작업 상태를 채우고, plugin 화면이 레시피가 도는 동안 그것을 보인다.
-    - [ ] F194.5.7 — P2: 설정 `program`이 아무것도 이름하지 않으면 `appview`가 연결 plugin에 대해 `applications.json`이 기록한 애플리케이션을 시작한다. page 시험.
+    - [~] F194.5.7 — P2: 설정 `program`이 아무것도 이름하지 않으면 `appview`가 연결 plugin에 대해 `applications.json`이 기록한 애플리케이션을 시작한다. page 시험.
+      - [o] F194.5.7.1 — P2: surface가 연결된 애플리케이션을 읽는다: 두 host의 `pluginsState`가 `plugins/applications.json`의 `applications`를 보고하고, surface context에 `read`와 `on`을 가진 `runtime.applications`가 있다.
+      - [ ] F194.5.7.2 — P2: `runtime.applications`를 가진 core 버전을 release하고, 연결된 애플리케이션을 시작하는 plugin-appview 항목을 기록한다. 이 수정은 그 plugin-appview release로 사용자에게 닿는다.
     - [ ] F194.5.8 — P2: embed kit 시험 애플리케이션의 release를 레시피로 가진 시험용 연결 plugin과, 없으면 설치하고 있으면 연결하며 카드에서 시작해 관문을 실행하는 창 검사.
     - [ ] F194.5.9 — P2: 예시 애플리케이션의 자기 배포가 embed 어댑터가 든 build를 주면, 그것의 연결 plugin.
     - [o] F194.5.10 — P2: 애플리케이션은 플랫폼의 애플리케이션 식별자로 식별하고, 애플리케이션의 배포물이나 플랫폼의 표준 패키지 관리자로 설치한다: `locate`에 `bundle` 곁에 `appid`(windows: 설치 package 또는 winget 식별자, linux: freedesktop 또는 Flatpak 애플리케이션 식별자)가 생기고, `package`는 플랫폼의 관리자(darwin `brew`, windows `winget`, linux `flatpak`)를 이름한다. windows와 linux는 구현될 때까지 `not implemented on <os>`를 돌려준다.

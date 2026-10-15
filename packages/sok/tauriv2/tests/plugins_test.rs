@@ -417,7 +417,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let config = Dir::new();
     assert_eq!(
         state_json(&config),
-        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true}"#
+        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"applications":{}}"#
     );
     let registry = plugin_versions(&["0.2.0"]);
     run_json(&[

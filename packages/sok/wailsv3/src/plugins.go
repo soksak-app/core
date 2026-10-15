@@ -157,6 +157,9 @@ type PluginsState struct {
 	Installed *InstalledState `json:"installed"`
 	// FirstRun is true when plugins/installed.json does not exist. The application then installs the starter pack.
 	FirstRun bool `json:"firstRun"`
+	// Applications holds each application that a connector plugin connected (plugins/applications.json), which a surface
+	// starts (docs/spec/installation.md#applications).
+	Applications map[string]ApplicationRecord `json:"applications"`
 }
 
 // ReadPluginsState reads the registry address, the checked index and the installation state. When the index cannot be
@@ -171,7 +174,11 @@ func ReadPluginsState(configDir string) (*PluginsState, error) {
 	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 		return nil, fileError(path, statErr)
 	}
-	state := &PluginsState{Installed: installed, FirstRun: statErr != nil}
+	applications, err := ReadApplications(configDir)
+	if err != nil {
+		return nil, err
+	}
+	state := &PluginsState{Installed: installed, FirstRun: statErr != nil, Applications: applications.Applications}
 	url, exists, err := readRegistryURL(configDir)
 	switch {
 	case err != nil:

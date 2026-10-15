@@ -296,7 +296,7 @@ func stateJSON(t *testing.T, config string) string {
 // contract: cli.plugin.state-reads-registry-and-installed
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
-	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true}` {
+	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"applications":{}}` {
 		t.Fatalf("state without a registry = %s", text)
 	}
 	index := pluginVersions(t, "0.2.0")
