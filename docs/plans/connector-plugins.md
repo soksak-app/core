@@ -33,7 +33,7 @@ The recipe is a general field of the manifest, because core names no plugin:
 ```
 
 - `locate` lists the ways to find an installed application, tried in order: a bundle identifier through the metadata index of darwin, a name on `PATH`, or an absolute path that exists and is executable.
-- `recipe` is one of `release` (download a release of the application's repository, compare its SHA-256, unpack `zip`, `tar.gz` or nothing), `package` (install with a package manager, such as `brew`, and ask the manager where the executable is), or `source` (clone a repository at a ref, run the build commands of that repository, take the built executable).
+- `recipe` is one of `release` (download a release of the application's repository, compare its SHA-256, unpack `zip`, `tar.gz` or nothing), `package` (ask a package manager, such as `brew`, whether it has the package as the declared cask or formula, install it, and find it with the locate entries), or `source` (clone a repository at a ref into the folder of the application and run the build commands of that repository there).
 - `program` and `arguments` start the application.
 
 ## Installation

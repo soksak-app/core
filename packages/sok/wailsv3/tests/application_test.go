@@ -27,33 +27,33 @@ func executable(t *testing.T, path string) {
 
 func TestLocateFindsACommandOnThePath(t *testing.T) {
 	folder := t.TempDir()
-	executable(t, filepath.Join(folder, "fake-editor"))
-	located, found, err := sok.LocateApplication([]map[string]string{{"command": "fake-editor"}}, "editor", folder)
+	executable(t, filepath.Join(folder, "fake-sketcher"))
+	located, found, err := sok.LocateApplication([]map[string]string{{"command": "fake-sketcher"}}, "sketcher", folder)
 	if err != nil || !found {
 		t.Fatalf("found %v, err %v", found, err)
 	}
-	if located.Path != filepath.Join(folder, "fake-editor") || located.Method != "command" {
+	if located.Path != filepath.Join(folder, "fake-sketcher") || located.Method != "command" {
 		t.Fatalf("located %+v", located)
 	}
 }
 
 func TestLocateTriesEachWayInOrderAndTakesTheFirstThatFinds(t *testing.T) {
 	folder := t.TempDir()
-	present := filepath.Join(folder, "editor")
+	present := filepath.Join(folder, "sketcher")
 	executable(t, present)
-	ways := []map[string]string{{"command": "absent-editor"}, {"path": filepath.Join(folder, "missing")}, {"path": present}}
-	located, found, err := sok.LocateApplication(ways, "editor", t.TempDir())
+	ways := []map[string]string{{"command": "absent-sketcher"}, {"path": filepath.Join(folder, "missing")}, {"path": present}}
+	located, found, err := sok.LocateApplication(ways, "sketcher", t.TempDir())
 	if err != nil || !found || located.Path != present || located.Method != "path" {
 		t.Fatalf("located %+v, found %v, err %v", located, found, err)
 	}
 }
 
 func TestLocateDoesNotTakeAFileThatIsNotExecutable(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "editor")
+	path := filepath.Join(t.TempDir(), "sketcher")
 	if err := os.WriteFile(path, []byte("text"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, found, err := sok.LocateApplication([]map[string]string{{"path": path}, {"command": "absent-editor"}}, "editor", t.TempDir())
+	_, found, err := sok.LocateApplication([]map[string]string{{"path": path}, {"command": "absent-sketcher"}}, "sketcher", t.TempDir())
 	if err != nil || found {
 		t.Fatalf("found %v, err %v", found, err)
 	}

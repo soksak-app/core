@@ -234,3 +234,193 @@ fn link_stays_inside(name: &str, link: &Path) -> bool {
     }
     true
 }
+
+/// Asks the package manager, found on the search path, whether it has the package of a package recipe as a cask or as a
+/// formula, as the recipe declares, before anything is installed. brew answers through `brew info --json=v2`; a package that
+/// brew does not know, or knows as the other kind, is an error that names it.
+pub fn check_application_package(
+    manager: &str,
+    name: &str,
+    cask: bool,
+    search: &OsStr,
+) -> Result<(), String> {
+    let program = package_manager(manager, search)?;
+    let (kind, list) = if cask {
+        ("--cask", "casks")
+    } else {
+        ("--formula", "formulae")
+    };
+    let output = run_step(
+        &format!("application package {manager} info {kind} {name}"),
+        None,
+        search,
+        &[],
+        &program,
+        &["info", "--json=v2", kind, name],
+    )?;
+    let answer: Value = serde_json::from_str(&output).map_err(|error| {
+        format!("application package {manager} info {kind} {name}: the answer is not JSON: {error}")
+    })?;
+    let count = answer
+        .get(list)
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len);
+    if count != 1 {
+        return Err(format!(
+            "application package {manager} has {count} {list} named {name}"
+        ));
+    }
+    Ok(())
+}
+
+/// Installs the package of a package recipe with its manager, found on the search path, as a cask or as a formula. Where
+/// the application is afterwards is found by the locate entries of the application, not guessed from the manager.
+pub fn install_application_package(
+    manager: &str,
+    name: &str,
+    cask: bool,
+    search: &OsStr,
+) -> Result<(), String> {
+    let program = package_manager(manager, search)?;
+    let mut arguments = vec!["install"];
+    if cask {
+        arguments.push("--cask");
+    }
+    arguments.push(name);
+    run_step(
+        &format!("application package {manager} {}", arguments.join(" ")),
+        None,
+        search,
+        &[],
+        &program,
+        &arguments,
+    )
+    .map(|_| ())
+}
+
+/// The executable of the manager on the search path; brew is the one manager of the specification.
+fn package_manager(manager: &str, search: &OsStr) -> Result<PathBuf, String> {
+    if manager != "brew" {
+        return Err(format!(
+            "application package manager {manager:?} is not brew"
+        ));
+    }
+    which::which_in(manager, Some(search), "/")
+        .map_err(|_| format!("application package: {manager} is not on the search path"))
+}
+
+/// Clones the repository of a source recipe at the ref into the folder `target`, which does not exist yet, and runs each
+/// command in it with the search path and the `environment` pairs; the clone is the installed folder. A step that fails
+/// removes the folder and returns an error that names the step with its output.
+pub fn install_application_source(
+    repository: &str,
+    reference: &str,
+    commands: &[Vec<String>],
+    target: &Path,
+    search: &OsStr,
+    environment: &[(String, String)],
+) -> Result<(), String> {
+    if crate::fetch::check_location(repository).is_err() || !repository.starts_with("https://") {
+        return Err(format!(
+            "application source {repository}: the repository is not an https address"
+        ));
+    }
+    if std::fs::symlink_metadata(target).is_ok() {
+        return Err(format!("application source: {} exists", target.display()));
+    }
+    let parent = target
+        .parent()
+        .ok_or_else(|| format!("{} has no parent folder", target.display()))?;
+    std::fs::create_dir_all(parent)
+        .map_err(|error| crate::files::file_error(parent.display(), &error))?;
+    let git = which::which_in("git", Some(search), "/")
+        .map_err(|_| "application source: git is not on the search path".to_string())?;
+    let name = target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("{} has no name", target.display()))?;
+    let temp = target.with_file_name(format!(".{name}.{}", std::process::id()));
+    let clone = temp.to_string_lossy().to_string();
+    let result = run_step(
+        &format!("application source clone {repository}"),
+        None,
+        search,
+        environment,
+        &git,
+        &["clone", "--quiet", repository, &clone],
+    )
+    .and_then(|_| {
+        run_step(
+            &format!("application source checkout {reference}"),
+            Some(&temp),
+            search,
+            environment,
+            &git,
+            &["checkout", "--quiet", reference],
+        )
+    })
+    .and_then(|_| {
+        for command in commands {
+            let first = command
+                .first()
+                .ok_or("application source command is empty")?;
+            let program = which::which_in(first, Some(search), &temp).map_err(|_| {
+                    format!("application source command {}: {first} is not on the search path or in the clone", command.join(" "))
+                })?;
+            let arguments: Vec<&str> = command[1..].iter().map(String::as_str).collect();
+            run_step(
+                &format!("application source command {}", command.join(" ")),
+                Some(&temp),
+                search,
+                environment,
+                &program,
+                &arguments,
+            )?;
+        }
+        Ok(())
+    })
+    .and_then(|()| {
+        std::fs::rename(&temp, target)
+            .map_err(|error| crate::files::file_error(target.display(), &error))
+    });
+    result.map_err(|error| {
+        crate::files::with_cleanup(error, &temp, |path| std::fs::remove_dir_all(path))
+    })
+}
+
+/// Runs one program of a recipe in the folder with PATH set to the search path and the environment pairs, and returns its
+/// standard output; a failure names the step with the exit and the last kilobyte of the combined output.
+fn run_step(
+    step: &str,
+    folder: Option<&Path>,
+    search: &OsStr,
+    environment: &[(String, String)],
+    program: &Path,
+    arguments: &[&str],
+) -> Result<String, String> {
+    let mut command = std::process::Command::new(program);
+    command.args(arguments).env("PATH", search);
+    for (key, value) in environment {
+        command.env(key, value);
+    }
+    if let Some(folder) = folder {
+        command.current_dir(folder);
+    }
+    let output = command
+        .output()
+        .map_err(|error| format!("{step}: {error}"))?;
+    if !output.status.success() {
+        let mut combined = String::from_utf8_lossy(&output.stdout).to_string();
+        combined.push_str(&String::from_utf8_lossy(&output.stderr));
+        let tail: String = combined
+            .chars()
+            .rev()
+            .take(1024)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        return Err(format!("{step}: {}: {}", output.status, tail.trim()));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}

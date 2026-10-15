@@ -434,18 +434,18 @@ function checkApplication(where, application) {
       if (typeof recipe.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(recipe.sha256)) throw new Error(`${at}: release sha256 must be 64 lowercase hexadecimal digits`);
       if (!["zip", "tar.gz", "none"].includes(recipe.unpack)) throw new Error(`${at}: release unpack must be zip, tar.gz or none`);
     } else if (recipe.kind === "package") {
-      only(`${at} recipe`, recipe, ["kind", "manager", "name"]);
+      only(`${at} recipe`, recipe, ["kind", "manager", "name", "cask"]);
       if (recipe.manager !== "brew") throw new Error(`${at}: package manager must be brew`);
       if (!isText(recipe.name)) throw new Error(`${at}: package name must be text`);
+      if (typeof recipe.cask !== "boolean") throw new Error(`${at}: package cask must be true or false`);
     } else {
-      only(`${at} recipe`, recipe, ["kind", "repository", "ref", "commands", "output"]);
+      only(`${at} recipe`, recipe, ["kind", "repository", "ref", "commands"]);
       if (!HTTPS(recipe.repository)) throw new Error(`${at}: source repository must be an https address`);
       if (!isText(recipe.ref)) throw new Error(`${at}: source ref must be text`);
       if (!Array.isArray(recipe.commands) || recipe.commands.length === 0 ||
           !recipe.commands.every((command) => Array.isArray(command) && command.length > 0 && command.every(isText))) {
         throw new Error(`${at}: source commands must be a nonempty list of nonempty lists of text`);
       }
-      if (!INSIDE(recipe.output)) throw new Error(`${at}: source output must be a path inside the clone`);
     }
     if (!INSIDE(entry.program)) throw new Error(`${at}: program must be a path inside the installed folder`);
     if (entry.arguments !== undefined && !(Array.isArray(entry.arguments) && entry.arguments.every((item) => typeof item === "string"))) {

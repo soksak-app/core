@@ -46,23 +46,23 @@ fn gzip_tar() -> Vec<u8> {
     folder.set_mode(0o755);
     folder.set_size(0);
     builder
-        .append_data(&mut folder.clone(), "editor/", &[][..])
+        .append_data(&mut folder.clone(), "sketcher/", &[][..])
         .unwrap();
     builder
-        .append_data(&mut folder, "editor/bin/", &[][..])
+        .append_data(&mut folder, "sketcher/bin/", &[][..])
         .unwrap();
     let mut file = tar::Header::new_gnu();
     file.set_mode(0o755);
     file.set_size(10);
     builder
-        .append_data(&mut file, "editor/bin/editor", &b"#!/bin/sh\n"[..])
+        .append_data(&mut file, "sketcher/bin/sketcher", &b"#!/bin/sh\n"[..])
         .unwrap();
     let mut link = tar::Header::new_gnu();
     link.set_entry_type(tar::EntryType::Symlink);
     link.set_mode(0o777);
     link.set_size(0);
     builder
-        .append_link(&mut link, "editor/current", "bin")
+        .append_link(&mut link, "sketcher/current", "bin")
         .unwrap();
     builder.into_inner().unwrap().finish().unwrap()
 }
@@ -72,12 +72,12 @@ fn a_release_is_downloaded_compared_and_unpacked_into_the_folder_of_the_applicat
     let data = gzip_tar();
     let (url, fetcher) = release_server(data.clone());
     let root = tempfile::tempdir().unwrap();
-    let target = root.path().join("applications/editor/1.0.0");
+    let target = root.path().join("applications/sketcher/1.0.0");
     let recipe = recipe(
-        json!({"kind": "release", "url": format!("{url}/editor.tar.gz"), "sha256": sum(&data), "unpack": "tar.gz"}),
+        json!({"kind": "release", "url": format!("{url}/sketcher.tar.gz"), "sha256": sum(&data), "unpack": "tar.gz"}),
     );
     install_application_release(&fetcher, &recipe, &target).unwrap();
-    let executable = target.join("editor/bin/editor");
+    let executable = target.join("sketcher/bin/sketcher");
     assert!(
         std::os::unix::fs::PermissionsExt::mode(
             &std::fs::metadata(&executable).unwrap().permissions()
@@ -85,7 +85,7 @@ fn a_release_is_downloaded_compared_and_unpacked_into_the_folder_of_the_applicat
             != 0
     );
     assert_eq!(
-        std::fs::read_link(target.join("editor/current")).unwrap(),
+        std::fs::read_link(target.join("sketcher/current")).unwrap(),
         std::path::Path::new("bin")
     );
 }
@@ -95,10 +95,10 @@ fn a_release_of_another_hash_is_refused_and_leaves_no_folder() {
     let data = gzip_tar();
     let (url, fetcher) = release_server(data.clone());
     let root = tempfile::tempdir().unwrap();
-    let target = root.path().join("editor");
+    let target = root.path().join("sketcher");
     let zeros = "0".repeat(64);
     let recipe = recipe(
-        json!({"kind": "release", "url": format!("{url}/editor.tar.gz"), "sha256": zeros, "unpack": "tar.gz"}),
+        json!({"kind": "release", "url": format!("{url}/sketcher.tar.gz"), "sha256": zeros, "unpack": "tar.gz"}),
     );
     let error = install_application_release(&fetcher, &recipe, &target).unwrap_err();
     assert!(
@@ -129,10 +129,10 @@ fn a_link_that_leaves_the_folder_is_refused() {
     let (url, fetcher) = release_server(data.clone());
     let root = tempfile::tempdir().unwrap();
     let recipe = recipe(
-        json!({"kind": "release", "url": format!("{url}/editor.tar.gz"), "sha256": sum(&data), "unpack": "tar.gz"}),
+        json!({"kind": "release", "url": format!("{url}/sketcher.tar.gz"), "sha256": sum(&data), "unpack": "tar.gz"}),
     );
     let error =
-        install_application_release(&fetcher, &recipe, &root.path().join("editor")).unwrap_err();
+        install_application_release(&fetcher, &recipe, &root.path().join("sketcher")).unwrap_err();
     assert!(
         error.contains("release entry escape links outside the folder"),
         "{error}"
@@ -141,15 +141,15 @@ fn a_link_that_leaves_the_folder_is_refused() {
 
 #[test]
 fn a_release_without_unpack_is_one_executable() {
-    let data = b"#!/bin/sh\necho editor\n".to_vec();
+    let data = b"#!/bin/sh\necho sketcher\n".to_vec();
     let (url, fetcher) = release_server(data.clone());
     let root = tempfile::tempdir().unwrap();
-    let target = root.path().join("editor");
+    let target = root.path().join("sketcher");
     let recipe = recipe(
-        json!({"kind": "release", "url": format!("{url}/download/editor"), "sha256": sum(&data), "unpack": "none"}),
+        json!({"kind": "release", "url": format!("{url}/download/sketcher"), "sha256": sum(&data), "unpack": "none"}),
     );
     install_application_release(&fetcher, &recipe, &target).unwrap();
-    let metadata = std::fs::metadata(target.join("editor")).unwrap();
+    let metadata = std::fs::metadata(target.join("sketcher")).unwrap();
     assert!(std::os::unix::fs::PermissionsExt::mode(&metadata.permissions()) & 0o111 != 0);
 }
 
@@ -160,16 +160,16 @@ fn a_zip_release_is_extracted_by_the_platform() {
     {
         let mut builder = zip::ZipWriter::new(&mut buffer);
         let options = zip::write::SimpleFileOptions::default().unix_permissions(0o755);
-        builder.start_file("editor/editor", options).unwrap();
+        builder.start_file("sketcher/sketcher", options).unwrap();
         builder.write_all(b"#!/bin/sh\n").unwrap();
         builder.finish().unwrap();
     }
     let data = buffer.into_inner();
     let (url, fetcher) = release_server(data.clone());
     let root = tempfile::tempdir().unwrap();
-    let target = root.path().join("editor");
+    let target = root.path().join("sketcher");
     let recipe = recipe(
-        json!({"kind": "release", "url": format!("{url}/editor.zip"), "sha256": sum(&data), "unpack": "zip"}),
+        json!({"kind": "release", "url": format!("{url}/sketcher.zip"), "sha256": sum(&data), "unpack": "zip"}),
     );
     let result = install_application_release(&fetcher, &recipe, &target);
     let key = soksak_sok::platform::current().unwrap().key().unwrap();
@@ -178,6 +178,6 @@ fn a_zip_release_is_extracted_by_the_platform() {
         return;
     }
     result.unwrap();
-    let metadata = std::fs::metadata(target.join("editor/editor")).unwrap();
+    let metadata = std::fs::metadata(target.join("sketcher/sketcher")).unwrap();
     assert!(std::os::unix::fs::PermissionsExt::mode(&metadata.permissions()) & 0o111 != 0);
 }

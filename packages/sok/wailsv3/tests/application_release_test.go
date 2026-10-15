@@ -46,10 +46,10 @@ func gzipTar(t *testing.T) []byte {
 	zipped := gzip.NewWriter(&buffer)
 	builder := tar.NewWriter(zipped)
 	entries := []tar.Header{
-		{Name: "editor/", Typeflag: tar.TypeDir, Mode: 0o755},
-		{Name: "editor/bin/", Typeflag: tar.TypeDir, Mode: 0o755},
-		{Name: "editor/bin/editor", Typeflag: tar.TypeReg, Mode: 0o755, Size: 10},
-		{Name: "editor/current", Typeflag: tar.TypeSymlink, Linkname: "bin", Mode: 0o777},
+		{Name: "sketcher/", Typeflag: tar.TypeDir, Mode: 0o755},
+		{Name: "sketcher/bin/", Typeflag: tar.TypeDir, Mode: 0o755},
+		{Name: "sketcher/bin/sketcher", Typeflag: tar.TypeReg, Mode: 0o755, Size: 10},
+		{Name: "sketcher/current", Typeflag: tar.TypeSymlink, Linkname: "bin", Mode: 0o777},
 	}
 	for _, header := range entries {
 		header := header
@@ -72,16 +72,16 @@ func gzipTar(t *testing.T) []byte {
 func TestAReleaseIsDownloadedComparedAndUnpackedIntoTheFolderOfTheApplication(t *testing.T) {
 	data := gzipTar(t)
 	server, fetcher := releaseServer(t, data)
-	target := filepath.Join(t.TempDir(), "applications", "editor", "1.0.0")
-	recipe := map[string]string{"kind": "release", "url": server.URL + "/editor.tar.gz", "sha256": sum(data), "unpack": "tar.gz"}
+	target := filepath.Join(t.TempDir(), "applications", "sketcher", "1.0.0")
+	recipe := map[string]string{"kind": "release", "url": server.URL + "/sketcher.tar.gz", "sha256": sum(data), "unpack": "tar.gz"}
 	if err := sok.InstallApplicationRelease(fetcher, recipe, target); err != nil {
 		t.Fatal(err)
 	}
-	info, err := os.Stat(filepath.Join(target, "editor", "bin", "editor"))
+	info, err := os.Stat(filepath.Join(target, "sketcher", "bin", "sketcher"))
 	if err != nil || info.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("the executable of the release: %v %v", info, err)
 	}
-	if link, err := os.Readlink(filepath.Join(target, "editor", "current")); err != nil || link != "bin" {
+	if link, err := os.Readlink(filepath.Join(target, "sketcher", "current")); err != nil || link != "bin" {
 		t.Fatalf("the symbolic link of the release: %q %v", link, err)
 	}
 }
@@ -89,8 +89,8 @@ func TestAReleaseIsDownloadedComparedAndUnpackedIntoTheFolderOfTheApplication(t 
 func TestAReleaseOfAnotherHashIsRefusedAndLeavesNoFolder(t *testing.T) {
 	data := gzipTar(t)
 	server, fetcher := releaseServer(t, data)
-	target := filepath.Join(t.TempDir(), "editor")
-	recipe := map[string]string{"kind": "release", "url": server.URL + "/editor.tar.gz", "sha256": strings.Repeat("0", 64), "unpack": "tar.gz"}
+	target := filepath.Join(t.TempDir(), "sketcher")
+	recipe := map[string]string{"kind": "release", "url": server.URL + "/sketcher.tar.gz", "sha256": strings.Repeat("0", 64), "unpack": "tar.gz"}
 	err := sok.InstallApplicationRelease(fetcher, recipe, target)
 	if err == nil || !strings.Contains(err.Error(), "sha256 "+sum(data)+" is not "+strings.Repeat("0", 64)) {
 		t.Fatalf("err %v", err)
@@ -109,8 +109,8 @@ func TestALinkThatLeavesTheFolderIsRefused(t *testing.T) {
 	_ = zipped.Close()
 	data := buffer.Bytes()
 	server, fetcher := releaseServer(t, data)
-	target := filepath.Join(t.TempDir(), "editor")
-	recipe := map[string]string{"kind": "release", "url": server.URL + "/editor.tar.gz", "sha256": sum(data), "unpack": "tar.gz"}
+	target := filepath.Join(t.TempDir(), "sketcher")
+	recipe := map[string]string{"kind": "release", "url": server.URL + "/sketcher.tar.gz", "sha256": sum(data), "unpack": "tar.gz"}
 	err := sok.InstallApplicationRelease(fetcher, recipe, target)
 	if err == nil || !strings.Contains(err.Error(), "release entry escape links outside the folder") {
 		t.Fatalf("err %v", err)
@@ -118,14 +118,14 @@ func TestALinkThatLeavesTheFolderIsRefused(t *testing.T) {
 }
 
 func TestAReleaseWithoutUnpackIsOneExecutable(t *testing.T) {
-	data := []byte("#!/bin/sh\necho editor\n")
+	data := []byte("#!/bin/sh\necho sketcher\n")
 	server, fetcher := releaseServer(t, data)
-	target := filepath.Join(t.TempDir(), "editor")
-	recipe := map[string]string{"kind": "release", "url": server.URL + "/download/editor", "sha256": sum(data), "unpack": "none"}
+	target := filepath.Join(t.TempDir(), "sketcher")
+	recipe := map[string]string{"kind": "release", "url": server.URL + "/download/sketcher", "sha256": sum(data), "unpack": "none"}
 	if err := sok.InstallApplicationRelease(fetcher, recipe, target); err != nil {
 		t.Fatal(err)
 	}
-	info, err := os.Stat(filepath.Join(target, "editor"))
+	info, err := os.Stat(filepath.Join(target, "sketcher"))
 	if err != nil || info.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("the executable: %v %v", info, err)
 	}
@@ -135,7 +135,7 @@ func TestAReleaseWithoutUnpackIsOneExecutable(t *testing.T) {
 func TestAZipReleaseIsExtractedByThePlatform(t *testing.T) {
 	var buffer bytes.Buffer
 	builder := zip.NewWriter(&buffer)
-	header := &zip.FileHeader{Name: "editor/editor", Method: zip.Deflate}
+	header := &zip.FileHeader{Name: "sketcher/sketcher", Method: zip.Deflate}
 	header.SetMode(0o755)
 	writer, err := builder.CreateHeader(header)
 	if err != nil {
@@ -147,8 +147,8 @@ func TestAZipReleaseIsExtractedByThePlatform(t *testing.T) {
 	}
 	data := buffer.Bytes()
 	server, fetcher := releaseServer(t, data)
-	target := filepath.Join(t.TempDir(), "editor")
-	recipe := map[string]string{"kind": "release", "url": server.URL + "/editor.zip", "sha256": sum(data), "unpack": "zip"}
+	target := filepath.Join(t.TempDir(), "sketcher")
+	recipe := map[string]string{"kind": "release", "url": server.URL + "/sketcher.zip", "sha256": sum(data), "unpack": "zip"}
 	err = sok.InstallApplicationRelease(fetcher, recipe, target)
 	current, platformErr := platform.Current()
 	if platformErr != nil {
@@ -167,7 +167,7 @@ func TestAZipReleaseIsExtractedByThePlatform(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	info, err := os.Stat(filepath.Join(target, "editor", "editor"))
+	info, err := os.Stat(filepath.Join(target, "sketcher", "sketcher"))
 	if err != nil || info.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("the executable of the zip: %v %v", info, err)
 	}

@@ -6,10 +6,12 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -226,4 +228,132 @@ func unpackApplicationTar(data []byte, folder string) error {
 			return fmt.Errorf("release entry %s is neither a folder, a regular file nor a symbolic link", header.Name)
 		}
 	}
+}
+
+// CheckApplicationPackage asks the package manager, found on the search path, whether it has the package of a package
+// recipe as a cask or as a formula, as the recipe declares, before anything is installed. brew answers through
+// `brew info --json=v2`; a package that brew does not know, or knows as the other kind, is an error that names it.
+func CheckApplicationPackage(manager, name string, cask bool, search string) error {
+	program, err := packageManager(manager, search)
+	if err != nil {
+		return err
+	}
+	kind, list := "--formula", "formulae"
+	if cask {
+		kind, list = "--cask", "casks"
+	}
+	output, err := runStep("application package "+manager+" info "+kind+" "+name, "", search, nil, program, "info", "--json=v2", kind, name)
+	if err != nil {
+		return err
+	}
+	var answer map[string][]map[string]any
+	if err := json.Unmarshal([]byte(output), &answer); err != nil {
+		return fmt.Errorf("application package %s info %s %s: the answer is not JSON: %w", manager, kind, name, err)
+	}
+	if len(answer[list]) != 1 {
+		return fmt.Errorf("application package %s has %d %s named %s", manager, len(answer[list]), list, name)
+	}
+	return nil
+}
+
+// InstallApplicationPackage installs the package of a package recipe with its manager, found on the search path, as a
+// cask or as a formula. Where the application is afterwards is found by the locate entries of the application, not
+// guessed from the manager.
+func InstallApplicationPackage(manager, name string, cask bool, search string) error {
+	program, err := packageManager(manager, search)
+	if err != nil {
+		return err
+	}
+	arguments := []string{"install"}
+	if cask {
+		arguments = append(arguments, "--cask")
+	}
+	arguments = append(arguments, name)
+	_, err = runStep("application package "+manager+" "+strings.Join(arguments, " "), "", search, nil, program, arguments...)
+	return err
+}
+
+// packageManager is the executable of the manager on the search path; brew is the one manager of the specification.
+func packageManager(manager, search string) (string, error) {
+	if manager != "brew" {
+		return "", fmt.Errorf("application package manager %q is not brew", manager)
+	}
+	program, found := lookPath(manager, search)
+	if !found {
+		return "", fmt.Errorf("application package: %s is not on the search path", manager)
+	}
+	return program, nil
+}
+
+// InstallApplicationSource clones the repository of a source recipe at the ref into the folder target, which does not
+// exist yet, and runs each command in it with the search path and the environment entries ("KEY=value"); the clone is the
+// installed folder. A step that fails
+// removes the folder and returns an error that names the step with its output.
+func InstallApplicationSource(repository, ref string, commands [][]string, target, search string, environment []string) (err error) {
+	if err := CheckLocation(repository); err != nil || !strings.HasPrefix(repository, "https://") {
+		return fmt.Errorf("application source %s: the repository is not an https address", repository)
+	}
+	if _, err := os.Lstat(target); err == nil {
+		return fmt.Errorf("application source: %s exists", target)
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return fileError(filepath.Dir(target), err)
+	}
+	git, found := lookPath("git", search)
+	if !found {
+		return errors.New("application source: git is not on the search path")
+	}
+	temp, err := os.MkdirTemp(filepath.Dir(target), "."+filepath.Base(target)+".*")
+	if err != nil {
+		return fileError(filepath.Dir(target), err)
+	}
+	defer func() {
+		if err != nil {
+			err = withCleanup(err, temp, os.RemoveAll)
+		}
+	}()
+	if _, err := runStep("application source clone "+repository, "", search, environment, git, "clone", "--quiet", repository, temp); err != nil {
+		return err
+	}
+	if _, err := runStep("application source checkout "+ref, temp, search, environment, git, "checkout", "--quiet", ref); err != nil {
+		return err
+	}
+	for _, command := range commands {
+		program, ok := lookPath(command[0], search)
+		if !ok {
+			if inside := filepath.Join(temp, command[0]); executableFile(inside) {
+				program, ok = inside, true
+			}
+		}
+		if !ok {
+			return fmt.Errorf("application source command %s: %s is not on the search path or in the clone", strings.Join(command, " "), command[0])
+		}
+		if _, err := runStep("application source command "+strings.Join(command, " "), temp, search, environment, program, command[1:]...); err != nil {
+			return err
+		}
+	}
+	if err := os.Rename(temp, target); err != nil {
+		return fileError(target, err)
+	}
+	return nil
+}
+
+// runStep runs one program of a recipe in the folder with PATH set to the search path and the environment entries, and
+// returns its standard output;
+// a failure names the step with the exit and the last kilobyte of the combined output.
+func runStep(step, folder, search string, environment []string, program string, arguments ...string) (string, error) {
+	command := exec.Command(program, arguments...)
+	command.Dir = folder
+	command.Env = append(append(os.Environ(), "PATH="+search), environment...)
+	var stdout, combined bytes.Buffer
+	command.Stdout = io.MultiWriter(&stdout, &combined)
+	command.Stderr = &combined
+	if err := command.Run(); err != nil {
+		output := combined.String()
+		if len(output) > 1024 {
+			output = output[len(output)-1024:]
+		}
+		return "", fmt.Errorf("%s: %v: %s", step, err, strings.TrimSpace(output))
+	}
+	return stdout.String(), nil
 }

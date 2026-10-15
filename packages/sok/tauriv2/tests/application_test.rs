@@ -20,15 +20,15 @@ fn ways(value: serde_json::Value) -> Vec<serde_json::Map<String, serde_json::Val
 #[test]
 fn locate_finds_a_command_on_the_path() {
     let folder = tempfile::tempdir().unwrap();
-    executable(&folder.path().join("fake-editor"));
+    executable(&folder.path().join("fake-sketcher"));
     let located = locate(
-        &ways(json!([{"command": "fake-editor"}])),
-        "editor",
+        &ways(json!([{"command": "fake-sketcher"}])),
+        "sketcher",
         folder.path().as_os_str(),
     )
     .unwrap()
     .unwrap();
-    assert_eq!(located.path, folder.path().join("fake-editor"));
+    assert_eq!(located.path, folder.path().join("fake-sketcher"));
     assert_eq!(located.method, "command");
 }
 
@@ -36,12 +36,12 @@ fn locate_finds_a_command_on_the_path() {
 fn locate_tries_each_way_in_order_and_takes_the_first_that_finds() {
     let folder = tempfile::tempdir().unwrap();
     let empty = tempfile::tempdir().unwrap();
-    let present = folder.path().join("editor");
+    let present = folder.path().join("sketcher");
     executable(&present);
     let list = ways(
-        json!([{"command": "absent-editor"}, {"path": folder.path().join("missing")}, {"path": present}]),
+        json!([{"command": "absent-sketcher"}, {"path": folder.path().join("missing")}, {"path": present}]),
     );
-    let located = locate(&list, "editor", empty.path().as_os_str())
+    let located = locate(&list, "sketcher", empty.path().as_os_str())
         .unwrap()
         .unwrap();
     assert_eq!(located.path, present);
@@ -52,11 +52,11 @@ fn locate_tries_each_way_in_order_and_takes_the_first_that_finds() {
 fn locate_does_not_take_a_file_that_is_not_executable() {
     let folder = tempfile::tempdir().unwrap();
     let empty = tempfile::tempdir().unwrap();
-    let path = folder.path().join("editor");
+    let path = folder.path().join("sketcher");
     std::fs::write(&path, "text").unwrap();
-    let list = ways(json!([{"path": path}, {"command": "absent-editor"}]));
+    let list = ways(json!([{"path": path}, {"command": "absent-sketcher"}]));
     assert!(
-        locate(&list, "editor", empty.path().as_os_str())
+        locate(&list, "sketcher", empty.path().as_os_str())
             .unwrap()
             .is_none()
     );
