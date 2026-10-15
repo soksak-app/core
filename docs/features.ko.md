@@ -1050,7 +1050,9 @@
       - [o] F194.5.3-1 — P2: Go 검사가 검사의 TLS server를 믿는 Fetcher를 가진 `tests/tls_support_test.rs`의 짝 `tests/tls_support_test.go`를 가진다: `make hosts-check`가 Go 짝이 없는 Rust 파일을 거부했다.
     - [o] F194.5.4 — P2: 레시피 `package`와 `source`: 패키지 관리자가 설치하고 실행 파일을 이름하며, source 레시피는 ref에서 clone하고 저장소의 build 명령을 실행한다. 실패한 명령은 그 출력과 함께 실패한다. 쌍 시험.
     - [o] F194.5.5 — P2: 기록과 제거: `plugins/applications.json`(format 1)이 `{id, version, path, how, method}`를 가지고, 연결 plugin 제거는 설치한 애플리케이션만 지운다. 쌍 시험.
-    - [ ] F194.5.6 — P2: 애플리케이션의 plugin 작업이 조사와 레시피를 실행하고 각 단계를 plugin 작업의 상태로 보고한다. 두 host의 시험.
+    - [~] F194.5.6 — P2: 애플리케이션의 plugin 작업이 조사와 레시피를 실행하고 각 단계를 plugin 작업의 상태로 보고한다. 두 host의 시험.
+      - [o] F194.5.6.1 — P2: host의 plugin 작업이 부르는 두 `sok` 패키지의 설치기가, 설치가 푼 각 연결 plugin의 애플리케이션을 설치를 기록하기 전에 연결하고, plugin을 제거하면 그 애플리케이션을 제거한다. 연결 plugin을 설치하고 제거하는 쌍 시험.
+      - [ ] F194.5.6.2 — P2: 조사와 레시피의 각 단계가 event이고, 레시피를 실행하는 plugin 작업의 진행이 애플리케이션의 plugin 작업 상태에 닿는다.
     - [ ] F194.5.7 — P2: 설정 `program`이 아무것도 이름하지 않으면 `appview`가 연결 plugin에 대해 `applications.json`이 기록한 애플리케이션을 시작한다. page 시험.
     - [ ] F194.5.8 — P2: embed kit 시험 애플리케이션의 release를 레시피로 가진 시험용 연결 plugin과, 없으면 설치하고 있으면 연결하며 카드에서 시작해 관문을 실행하는 창 검사.
     - [ ] F194.5.9 — P2: 예시 애플리케이션의 자기 배포가 embed 어댑터가 든 build를 주면, 그것의 연결 plugin.

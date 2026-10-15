@@ -125,7 +125,10 @@ func InstallApplicationRelease(fetcher Fetcher, recipe map[string]string, target
 	case "tar.gz":
 		err = unpackApplicationTar(data, temp)
 	case "none":
-		name := path.Base(strings.SplitN(address, "?", 2)[0])
+		name, nameErr := fileOf(address)
+		if nameErr != nil {
+			return nameErr
+		}
 		err = os.WriteFile(filepath.Join(temp, name), data, 0o755)
 		if err == nil {
 			err = os.Chmod(filepath.Join(temp, name), 0o755)
@@ -482,4 +485,206 @@ func writeApplications(configDir string, state *ApplicationsState) error {
 		return fileError(filepath.Dir(path), err)
 	}
 	return replaceFile(path, out.Bytes())
+}
+
+// installedApplication reads the application that the plugin.json in the folder of an installed plugin declares; a
+// plugin without one has none.
+func installedApplication(configDir, folder string) (map[string]any, bool, error) {
+	file := filepath.Join(configDir, folder, "plugin.json")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return nil, false, fileError(file, err)
+	}
+	value, err := DecodeJSON(data)
+	if err != nil {
+		return nil, false, fmt.Errorf("%s is not valid JSON: %w", file, err)
+	}
+	manifest, err := object("plugin.json", value)
+	if err != nil {
+		return nil, false, fmt.Errorf("%s: %w", file, err)
+	}
+	if manifest["application"] == nil {
+		return nil, false, nil
+	}
+	application, err := object(file+" application", manifest["application"])
+	return application, err == nil, err
+}
+
+// ConnectApplication connects the application of a connector plugin on the platform: an application that a locate entry
+// finds is recorded as located, and otherwise the recipe installs it and the place it gives is recorded as installed
+// (docs/spec/installation.md#applications). search is PATH, for the locate entries and the programs of the recipes.
+func ConnectApplication(configDir, platform string, application map[string]any, search string) error {
+	id, err := field("application", application, "id")
+	if err != nil {
+		return err
+	}
+	version, err := field("application "+id, application, "version")
+	if err != nil {
+		return err
+	}
+	platforms, err := object("application "+id+" platforms", application["platforms"])
+	if err != nil {
+		return err
+	}
+	if platforms[platform] == nil {
+		return fmt.Errorf("application %s does not support %s", id, platform)
+	}
+	entry, err := object("application "+id+" "+platform, platforms[platform])
+	if err != nil {
+		return err
+	}
+	program, err := field("application "+id+" "+platform, entry, "program")
+	if err != nil {
+		return err
+	}
+	ways, err := locateWays(id, entry["locate"])
+	if err != nil {
+		return err
+	}
+	located, found, err := LocateApplication(ways, program, search)
+	if err != nil {
+		return fmt.Errorf("application %s: %w", id, err)
+	}
+	if found {
+		return RecordApplication(configDir, id, ApplicationRecord{Version: version, Path: located.Path, How: "located", Method: located.Method})
+	}
+	recipe, err := object("application "+id+" recipe", entry["recipe"])
+	if err != nil {
+		return err
+	}
+	kind, err := field("application "+id+" recipe", recipe, "kind")
+	if err != nil {
+		return err
+	}
+	target := filepath.Join(configDir, "applications", id, version)
+	switch kind {
+	case "release":
+		fields := map[string]string{}
+		for _, key := range []string{"kind", "url", "sha256", "unpack"} {
+			if fields[key], err = field("application "+id+" recipe", recipe, key); err != nil {
+				return err
+			}
+		}
+		if err := InstallApplicationRelease(DefaultFetcher, fields, target); err != nil {
+			return fmt.Errorf("application %s: %w", id, err)
+		}
+	case "source":
+		repository, err := field("application "+id+" recipe", recipe, "repository")
+		if err != nil {
+			return err
+		}
+		ref, err := field("application "+id+" recipe", recipe, "ref")
+		if err != nil {
+			return err
+		}
+		commands, err := commandList(id, recipe["commands"])
+		if err != nil {
+			return err
+		}
+		if err := InstallApplicationSource(repository, ref, commands, target, search, nil); err != nil {
+			return fmt.Errorf("application %s: %w", id, err)
+		}
+	case "package":
+		manager, err := field("application "+id+" recipe", recipe, "manager")
+		if err != nil {
+			return err
+		}
+		name, err := field("application "+id+" recipe", recipe, "name")
+		if err != nil {
+			return err
+		}
+		cask, ok := recipe["cask"].(bool)
+		if !ok {
+			return fmt.Errorf("application %s recipe cask must be true or false", id)
+		}
+		if err := CheckApplicationPackage(manager, name, cask, search); err != nil {
+			return fmt.Errorf("application %s: %w", id, err)
+		}
+		if err := InstallApplicationPackage(manager, name, cask, search); err != nil {
+			return fmt.Errorf("application %s: %w", id, err)
+		}
+		// The manager decides where the application goes, so the locate entries give its place.
+		located, found, err := LocateApplication(ways, program, search)
+		if err != nil {
+			return fmt.Errorf("application %s: %w", id, err)
+		}
+		if !found {
+			return fmt.Errorf("application %s: the package %s is installed, and no locate entry finds the application", id, name)
+		}
+		return RecordApplication(configDir, id, ApplicationRecord{Version: version, Path: located.Path, How: "installed", Method: "package"})
+	default:
+		return fmt.Errorf("application %s recipe kind %q is not release, package or source", id, kind)
+	}
+	executable := filepath.Join(target, filepath.FromSlash(program))
+	if !executableFile(executable) {
+		return withCleanup(fmt.Errorf("application %s: the recipe installed no executable %s", id, program), filepath.Join(configDir, "applications", id), os.RemoveAll)
+	}
+	return RecordApplication(configDir, id, ApplicationRecord{Version: version, Path: executable, How: "installed", Method: kind})
+}
+
+func locateWays(id string, value any) ([]map[string]string, error) {
+	list, err := array("application "+id+" locate", value)
+	if err != nil {
+		return nil, err
+	}
+	ways := make([]map[string]string, 0, len(list))
+	for index, item := range list {
+		way, err := object(fmt.Sprintf("application %s locate entry %d", id, index), item)
+		if err != nil {
+			return nil, err
+		}
+		fields := map[string]string{}
+		for key := range way {
+			if fields[key], err = field(fmt.Sprintf("application %s locate entry %d", id, index), way, key); err != nil {
+				return nil, err
+			}
+		}
+		ways = append(ways, fields)
+	}
+	return ways, nil
+}
+
+func commandList(id string, value any) ([][]string, error) {
+	list, err := array("application "+id+" commands", value)
+	if err != nil {
+		return nil, err
+	}
+	commands := make([][]string, 0, len(list))
+	for index, item := range list {
+		parts, err := array(fmt.Sprintf("application %s command %d", id, index), item)
+		if err != nil {
+			return nil, err
+		}
+		command := make([]string, 0, len(parts))
+		for _, part := range parts {
+			word, ok := text(part)
+			if !ok {
+				return nil, fmt.Errorf("application %s command %d holds a part that is not text", id, index)
+			}
+			command = append(command, word)
+		}
+		commands = append(commands, command)
+	}
+	return commands, nil
+}
+
+// field is the text of the key of a declaration; a missing or empty value is an error that names the key.
+func field(where string, declaration map[string]any, key string) (string, error) {
+	value, ok := text(declaration[key])
+	if !ok {
+		return "", fmt.Errorf("%s %s must be text, not %s", where, key, quote(declaration[key]))
+	}
+	return value, nil
+}
+
+// fileOf is the last segment of the path of an address, without its query; an address whose path ends without a segment
+// names no file and is an error.
+func fileOf(address string) (string, error) {
+	// silent: the query and whether the address has one do not name the file.
+	location, _, _ := strings.Cut(address, "?")
+	slash := strings.LastIndex(location, "/")
+	if slash < 0 || slash == len(location)-1 {
+		return "", fmt.Errorf("application release %s: the address names no file", address)
+	}
+	return location[slash+1:], nil
 }

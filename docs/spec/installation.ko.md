@@ -105,7 +105,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 `application`이 있는 plugin을 설치하면, release를 푼 뒤 설치기는 자기가 실행되는 플랫폼의 항목을 고른다. 항목이 없는 플랫폼은 `application <id> does not support <platform>`으로 설치를 실패시키고 아무것도 바뀌지 않는다. 설치기는 `locate` 항목을 차례로 시도하고, 애플리케이션을 처음 찾은 항목이 그것을 연결한다: 설치기는 위치를 기록하고 아무것도 설치하지 않는다. 아무것도 찾지 못하면 설치기는 레시피를 설정 디렉터리의 `applications/<id>/<version>/`에 실행한다. 각 단계(내려받기, hash, 풀기, 각 명령)는 event이고, 실패한 단계는 그 단계와 출력을 이름하는 오류로 설치를 멈추며, 그 폴더를 지우고 `installed.json`을 바꾸지 않는다. `release`는 [받기](#받기)로 내려받아 SHA-256을 비교하고, `package`는 먼저 관리자에게 `cask`가 선언한 cask나 formula로 그 package가 있는지 묻고(`brew info --json=v2`), 설치한 뒤(`brew install [--cask] <name>`), 애플리케이션이 어디로 가는지는 관리자가 정하므로 `locate` 항목을 다시 시도한다. 그래도 찾지 못한 애플리케이션은 설치를 실패시킨다. `source`는 저장소를 `ref`에서 애플리케이션의 폴더로 clone하고 그 안에서 각 명령을 실행한다. `release`와 `source`에서 `program`은 애플리케이션 폴더 안의 실행 파일을 이름한다.
 
-`plugins/applications.json`은 `format` 1과 `applications`를 가지며, `applications`는 각 애플리케이션 id를 `{ version, path, how, method }`에 대응시킨다: 버전, 실행 파일의 절대 경로, `located`나 `installed`, 그것을 만든 `locate` 종류나 레시피 종류. 연결 plugin을 제거하면 `installed` 애플리케이션의 폴더와 항목을 지우고, `located` 애플리케이션은 항목만 지운다.
+`plugins/applications.json`은 `format` 1과 `applications`를 가지며, `applications`는 각 애플리케이션 id를 `{ version, path, how, method }`에 대응시킨다: 버전, 실행 파일의 절대 경로, `located`나 `installed`, 그것을 만든 `locate` 종류나 레시피 종류. 연결 plugin을 제거하면 `release`나 `source` 레시피가 설치한 애플리케이션은 `applications/<id>/` 아래 폴더와 항목을 지우고, `located` 애플리케이션과 패키지 관리자가 맡는 `package` 레시피의 애플리케이션은 항목만 지운다.
 
 ## 저장 데이터 마이그레이션
 

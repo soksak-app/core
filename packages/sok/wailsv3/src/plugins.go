@@ -384,6 +384,26 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 			return nil, err
 		}
 	}
+	// A connector plugin connects its application before the installation is recorded, so a failure leaves
+	// installed.json unchanged (docs/spec/installation.md#applications).
+	for _, changed := range plan.order {
+		if _, extracted := plan.releases[changed]; !extracted {
+			continue
+		}
+		application, declared, err := installedApplication(configDir, state.Plugins[changed].Path)
+		if err != nil {
+			return nil, err
+		}
+		if declared {
+			search, found := os.LookupEnv("PATH")
+			if !found {
+				return nil, errors.New("the installer has no PATH to find the application of a connector plugin")
+			}
+			if err := ConnectApplication(configDir, platform, application, search); err != nil {
+				return nil, fmt.Errorf("plugin %s: %w", changed, err)
+			}
+		}
+	}
 	value, err := stateValue(state)
 	if err != nil {
 		return nil, err
@@ -777,6 +797,20 @@ func ChangePlugin(configDir, id, action string) (any, error) {
 	}
 	switch action {
 	case "remove":
+		// The application of a connector plugin leaves with it: an installed one with its folder, a located one by its entry.
+		application, declared, err := installedApplication(configDir, plugin.Path)
+		if err != nil {
+			return nil, err
+		}
+		if declared {
+			applicationID, err := field("application", application, "id")
+			if err != nil {
+				return nil, err
+			}
+			if err := RemoveApplication(configDir, applicationID); err != nil {
+				return nil, err
+			}
+		}
 		delete(state.Plugins, id)
 		dropUnnamedSidecars(state)
 	case "enable", "disable":

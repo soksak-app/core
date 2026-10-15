@@ -391,6 +391,21 @@ pub fn install_plugin(
             &config_dir.join(&installed.path),
         )?;
     }
+    // A connector plugin connects its application before the installation is recorded, so a failure leaves
+    // installed.json unchanged (docs/spec/installation.md#applications).
+    let search = std::env::var_os("PATH")
+        .ok_or("the installer has no PATH to find the application of a connector plugin")?;
+    for changed in &order {
+        if !releases.contains_key(changed) {
+            continue;
+        }
+        if let Some(application) =
+            crate::application::installed_application(config_dir, &state.plugins[changed].path)?
+        {
+            crate::application::connect_application(config_dir, platform, &application, &search)
+                .map_err(|error| format!("plugin {changed}: {error}"))?;
+        }
+    }
     install::validate_installed(&serde_json::to_value(&state).map_err(|error| error.to_string())?)?;
     write_installed(config_dir, &state)?;
     prune_folders(config_dir, &state)?;
@@ -745,6 +760,16 @@ pub fn change_plugin(
         }
     }
     if action == "remove" {
+        // The application of a connector plugin leaves with it: an installed one with its folder, a located one by its entry.
+        if let Some(application) =
+            crate::application::installed_application(config_dir, &plugin.path)?
+        {
+            let application_id = application
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or("the application of the plugin has no id")?;
+            crate::application::remove_application(config_dir, application_id)?;
+        }
         state.plugins.remove(id);
         drop_unnamed_sidecars(&mut state);
     } else if let Some(plugin) = state.plugins.get_mut(id) {
