@@ -348,6 +348,19 @@
       },
       "description": "A command request that the page answered; `error` names a failed command."
     },
+    "page.background.session": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "tab": "string",
+        "plugin": "string",
+        "sidecar": "string",
+        "action": "string",
+        "surface": "string"
+      },
+      "description": "A decision of the background session of a tab: open and reopen send the declared operation, skip sends nothing for a tab whose surface is mounted, stop ends the session of a tab that is shown or whose surface mounted. surface is mounted or absent."
+    },
     "page.plugin.operation": {
       "layer": "page",
       "class": "call",

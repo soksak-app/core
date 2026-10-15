@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F192.1, F192.2: a background session opens only for a tab whose surface is not mounted and ends with its listener when the tab is shown or its surface mounts, so a terminal hidden behind another tab of its card no longer receives a second `open` without `image` that left its output undrawn; each decision is the event `page.background.session`.
 - F161.56, F161.59, F161.62: closed as not reproduced on the current builds, with the records that show a recurrence in place.
 - F161.27: closed as not reproduced after three repeat runs of the outside resize check on both applications.
 - F187: a contract comment is above its test again, and the loss tests no longer depend on the speed of the writer.

@@ -61,7 +61,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `contributes` | 아니오 | `{ "<plugin id>.<point>": [ { "range": "<version range>", "module": "<경로>", ... } ] }`: plugin이 다른 plugin의 확장 지점에 기여하는 항목 |
 | `state` | 아니오 | `{ "module": "ui/state.js" }`: 표면 밖의 상태를 갖는 [플러그인 상태](#플러그인-상태) 모듈. `sections`가 필요하다 |
 | `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: 상태 모듈이 프로젝트마다 저장하는 [프로젝트 데이터](#프로젝트-데이터). `state`가 필요하다 |
-| `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" } }`: 활성화되지 않은 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣으며, `settings`는 `operation`이나 선언하지 않은 설정을 가리킬 수 없다. `surface`와 `dependencies`가 필요하다 |
+| `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣으며, `settings`는 `operation`이나 선언하지 않은 설정을 가리킬 수 없다. `surface`와 `dependencies`가 필요하다 |
 
 플러그인은 `surface`, `sections`, `contributes` 중 하나 이상이 필요하다. 표면이 있는 플러그인만 추가 메뉴에 표시되고 레일을 갖는다. 워크벤치는 `modules/<name>/<module>`(`<name>`은 플러그인 `package.json`의 `name`)을 import하고 `mount(root, context)`를 호출한다. 표면 식별자는 URL 쿼리가 아닌 명시적인 context 멤버다. 기존 `page` 선언은 거부하며 별도 구현 경로를 선택하지 않는다. 정의되지 않은 필드는 거부한다.
 
@@ -155,7 +155,7 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 탭 숨김이나 라이브러리 이동은 모듈을 폐기하거나 세션을 닫지 않고 DOM과 네이티브 영역을 숨긴다. 명시적 제거는 모듈을 폐기하고 바인딩, 이벤트 구독, 영역을 해제하며 해제 실패를 보고한다. 제거는 mount를 끝내지 않은 모듈을 기다리지 않는다. 그 모듈이 만든 영역을 해제하고 표면을 바로 없애며, 그 모듈의 이후 `composition.create`는 실패하고, mount가 끝나면 워크벤치가 돌려받은 모듈을 해제한다. 워크벤치는 모듈이 준비되고 배치가 표시된 뒤 표면에 포커스를 준다. 그 포커스가 기다리는 동안 표면의 제거가 시작되면 모듈의 `focus`를 부르지 않는다. 해제된 모듈의 뗀 영역은 포커스를 거부하기 때문이다. 워크벤치는 표면의 제거가 시작될 때 영역을 떼기 전에 `context.closing`(`AbortSignal`)을 abort하므로, 모듈은 그 신호에서 영역 사용(캐럿, 포커스, 배치)을 스스로 멈춘다. 뗀 영역에 대한 동작은 `image <name> is detached`로 거절된다. 워크벤치는 모듈의 `dispose`를 호출하기 전에 모듈이 만든 composition의 영역을 뗀다. 모듈은 `dispose`에서 사이드카 세션을 끝내고 공급자는 세션이 끝날 때 전송 그림을 놓으므로, 공급자가 그 전에 보낸 프레임은 아직 붙은 영역에서 `notFound`로 실패하지 않고 뗀 영역의 프레임으로 `stale` 답을 받는다([그림 영역](native-surfaces.ko.md#그림-영역)). 모든 동작은 공통 binder와 [노출](exposure.ko.md) 계약을 따른다. 메뉴와 설정은 같은 앱 WebView의 DOM 오버레이이며 네이티브 영역 위의 입력 소유권을 선언한다.
 
-`background` 선언은 두 번째 페이지나 숨은 WebView가 아니라 세션 수명을 명시하는 계약이다. 워크벤치는 선언된 `operation`을 선언된 사이드카에 사이드카 메시지 프로토콜로 보낸다. manifest에서는 읽기 쉬운 전체 필드명 `operation`을 사용한다. 워크벤치는 요청을 임의로 만들거나 누락된 동작을 대체하거나 오류를 숨기지 않는다. 탭이 보이게 되면 그 표면이 같은 동작과 이미지 영역을 보내 기존 세션에 다시 연결한다. 탭을 제거하면 background 세션도 제거한다.
+`background` 선언은 두 번째 페이지나 숨은 WebView가 아니라 세션 수명을 명시하는 계약이다. 워크벤치는 선언된 `operation`을 선언된 사이드카에 사이드카 메시지 프로토콜로 보낸다. manifest에서는 읽기 쉬운 전체 필드명 `operation`을 사용한다. 워크벤치는 요청을 임의로 만들거나 누락된 동작을 대체하거나 오류를 숨기지 않는다. 표면이 마운트된 탭은 그 표면을 통해 세션을 소유한다. 같은 카드의 다른 탭이 보이는 동안에도 탭의 표면은 마운트된 채 남으므로 그런 탭에는 background 세션이 없고, 탭이 보이거나 그 표면이 마운트되면 탭의 background 세션은 끝난다. 연결 listener도 함께 멈추므로, 사이드카가 다시 연결되어도 세션을 소유한 표면에 그 동작을 보내지 않는다. 탭이 보이게 되면 그 표면이 같은 동작과 이미지 영역을 보내 기존 세션에 다시 연결한다. 탭을 제거하면 listener의 구독이 끝나지 않았어도 background 세션을 제거한다. 각 결정은 event `page.background.session` `{tab, plugin, sidecar, action, surface}`다. `open`과 `reopen`은 동작을 보내고, `skip`은 표면이 마운트된 비활성 탭에 아무것도 보내지 않으며, `stop`은 세션을 끝낸다. `surface`는 `mounted` 또는 `absent`다.
 
 ## 탭 알림
 

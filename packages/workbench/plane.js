@@ -25,7 +25,8 @@ import { icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
-import { disposeSurface, focusSurface, mountSurface, placePluginPlaceholder } from "./surface-modules.js";
+import { disposeSurface, focusSurface, mountSurface, mountedSurface, placePluginPlaceholder } from "./surface-modules.js";
+import { emitEvent } from "./page-log.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
 import { clearVisibleNotices, onTabReports, recordOrigin, reportError, setVisibleTab, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
@@ -1071,6 +1072,21 @@ export function takeSurfaceFocus() {
 // So a hidden tab keeps its PTY without creating a WebView or an image region.
 const backgroundSessions = new Map();
 
+// The last decision recorded for each tab with a background declaration, so a settle that changes nothing records nothing.
+const backgroundDecisions = new Map();
+
+/**
+ * Records a decision of the background session of a tab (F192): `open` and `reopen` send the declared operation, `skip` sends
+ * nothing for a tab whose surface is mounted, `stop` ends the session of a tab whose surface mounted. `surface` is `mounted`
+ * or `absent`. A reopen is recorded each time, because each one sends.
+ */
+function recordBackground(tab, descriptor, action, surface) {
+  const decision = `${action}:${surface}`;
+  if (action !== "reopen" && backgroundDecisions.get(tab.id) === decision) return;
+  backgroundDecisions.set(tab.id, decision);
+  emitEvent("info", "page.background.session", { tab: tab.id, plugin: tab.plugin, sidecar: descriptor.sidecar, action, surface });
+}
+
 function syncBackgroundSessions() {
   if (!native || !grid) return;
   const tabs = new Map();
@@ -1080,10 +1096,27 @@ function syncBackgroundSessions() {
     const descriptor = hasPlugin(tab.plugin) ? plugin(tab.plugin).background : null;
     if (!descriptor || tabs.get(tab.id) !== tab) continue;
     const owner = grid.cards.find((card) => tabsOf(card).some((item) => item.id === tab.id));
-    if (owner?.data?.activeId === tab.id || backgroundSessions.has(tab.id)) continue;
+    const active = owner?.data?.activeId === tab.id;
+    const surface = mountedSurface(tab.id) ? "mounted" : "absent";
+    // A shown tab and a tab whose surface stays mounted while another tab of its card is shown own their session through the
+    // surface, which opened it with its image region. A background open for them would be a second owner of the same surface,
+    // and a reconnection would send it again, so the background session of such a tab ends and none opens (F192).
+    if (active || surface === "mounted") {
+      const session = backgroundSessions.get(tab.id);
+      if (session) {
+        stopBackground(session);
+        backgroundSessions.delete(tab.id);
+        recordBackground(tab, descriptor, "stop", surface);
+      } else if (!active) {
+        recordBackground(tab, descriptor, "skip", surface);
+      }
+      continue;
+    }
+    if (backgroundSessions.has(tab.id)) continue;
+    recordBackground(tab, descriptor, "open", surface);
     const port = windowSidecar(descriptor.sidecar);
     if (!port) throw new Error(`background sidecar unavailable: ${descriptor.sidecar}`);
-    const state = { stop: null };
+    const state = { stop: null, stopped: false };
     backgroundSessions.set(tab.id, state);
     // The manifest states the operation. The sidecar transport keeps the existing wire field `op`, and this location is the
     // only protocol conversion point.
@@ -1097,8 +1130,10 @@ function syncBackgroundSessions() {
     Promise.resolve(port.on(tab.id, (body) => {
       // When the connection of a persistent sidecar is made again, the background session is opened again — the respawned
       // service does not have that session (V5-106). A failure notification is left as a session error.
+      if (state.stopped) return;
       if (body?.event === "connection") {
         if (body.connected === true) {
+          recordBackground(tab, descriptor, "reopen", mountedSurface(tab.id) ? "mounted" : "absent");
           open().catch((error) => {
             report(`background session ${tab.id} reopen failed: ${error.message}`);
           });
@@ -1111,20 +1146,32 @@ function syncBackgroundSessions() {
         const reply = body.error ? body : body.body;
         report(`background session ${tab.id}: ${reply.error}${typeof reply.reason === "string" ? `: ${reply.reason}` : ""}`);
       }
-    })).then((stop) => { state.stop = stop; }, (error) => {
+    })).then((stop) => {
+      // A session that stopped before its subscription finished ends the subscription as soon as it exists.
+      if (state.stopped) stop();
+      else state.stop = stop;
+    }, (error) => {
       report(`background session ${tab.id} listener failed: ${error.message}`);
     });
     open().catch((error) => {
-      backgroundSessions.delete(tab.id);
+      if (backgroundSessions.get(tab.id) === state) backgroundSessions.delete(tab.id);
       report(`background session ${tab.id} open failed: ${error.message}`);
     });
   }
   for (const [tabId, state] of backgroundSessions) {
     if (tabs.has(tabId)) continue;
-    // default: the subscription finishes asynchronously, so if the tab disappears before that, there is no function to stop yet.
-    state.stop?.();
+    stopBackground(state);
     backgroundSessions.delete(tabId);
   }
+  for (const tabId of backgroundDecisions.keys()) if (!tabs.has(tabId)) backgroundDecisions.delete(tabId);
+}
+
+/** Ends a background session: its listener stops now, or when its subscription finishes if that has not happened yet. */
+function stopBackground(state) {
+  state.stopped = true;
+  // default: the subscription finishes asynchronously, so before that there is no function to stop yet; the subscription
+  // stops itself when it finishes, because the session is marked stopped.
+  state.stop?.();
 }
 
 /**

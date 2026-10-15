@@ -28,6 +28,7 @@ test("a frame factor change prepares the row of the next draw and writes the fac
   document.head.appendChild(style);
 
   t.mock.module("../surface-modules.js", { exports: {
+    mountedSurface: () => null,
     mountSurface: () => Promise.resolve(), disposeSurface: () => Promise.resolve(),
     focusSurface: () => true, placePluginPlaceholder: () => {},
   } });

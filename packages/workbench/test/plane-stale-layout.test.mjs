@@ -37,6 +37,7 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
   // The test does not load surface modules. It handles only the drawing of the plane. It records the surfaces that are mounted.
   const mounts = [];
   t.mock.module("../surface-modules.js", { exports: {
+    mountedSurface: () => null,
     mountSurface: (slot, surface) => { mounts.push(surface.surfaceId); return Promise.resolve(); },
     disposeSurface: () => Promise.resolve(), focusSurface: () => true, placePluginPlaceholder: () => {},
   } });
