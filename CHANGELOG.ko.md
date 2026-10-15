@@ -5,6 +5,7 @@
 ## 미배포
 
 - F192.1, F192.2: background session은 surface가 mount되지 않은 tab에만 열리고, tab이 보이거나 surface가 mount되면 listener와 함께 끝난다. 그래서 같은 card의 다른 tab 뒤에 가려진 terminal이 출력을 그리지 않게 만들던 `image` 없는 두 번째 `open`을 더 받지 않는다. 각 결정은 event `page.background.session`이다.
+- F192.3.1: workspace registry가 애플리케이션 plugin `appview`와 애플리케이션 sidecar를 선언하므로, 검사 설정이 side 1의 관문을 위해 그것들을 설치한다.
 - F192.2.6: 애플리케이션 plugin이 웹 주소인 프로그램을 document region에 보이고 sidecar를 시작하지 않는다.
 - F192.2.4, F192.2.5: 애플리케이션 plugin이 로컬 저장소로 시작하고, 그 page가 설정의 애플리케이션을 애플리케이션 sidecar가 공급하는 image region 하나에 보이며 카드의 입력을 그것에 넘긴다.
 - F192.2.2, F192.2.3: 애플리케이션 sidecar가 표면의 애플리케이션을 시작하고 멈추며, configure, frame, host 응답, page 입력을 중계하고, 스스로 끝난 애플리케이션을 그 종료를 이름하는 오류로 보고한다.
