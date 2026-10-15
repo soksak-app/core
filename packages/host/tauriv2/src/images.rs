@@ -1300,6 +1300,24 @@ where
             raster,
             sequence,
         } => {
+            if !declared() {
+                // No plugin declares the sidecar any more: the buffer of the frame ended with its process, and a native
+                // presentation would report the missing buffer to the page (docs/spec/native-surfaces.md#image-regions).
+                crate::application_log::log_info(
+                    "image present",
+                    format!(
+                        "frame of sidecar {sender}, which no plugin declares, invalidated: surface={surface} name={name} sequence={sequence}"
+                    ),
+                );
+                log_answer_error(
+                    &format!("image response {name}"),
+                    send_response(
+                        &name,
+                        after_present(Err("stale"), &name, generation, raster, sequence),
+                    ),
+                );
+                return true;
+            }
             let key = (surface.to_string(), name.clone());
             match images.get(&key) {
                 Ok(handle) => {

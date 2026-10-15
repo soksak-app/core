@@ -1324,8 +1324,9 @@ func TestAFrameOfASidecarThatNoPluginDeclaresIsInvalidated(t *testing.T) {
 	attachImage(t, images, key)
 	first := configureImage(t, images, key, 800, 600, 2.0)
 	var answers []map[string]interface{}
+	presented := false
 	host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
-		func(func() error) error { return errors.New("notFound") },
+		func(func() error) error { presented = true; return errors.New("notFound") },
 		func(_ string, response map[string]interface{}) error {
 			answers = append(answers, response)
 			return fmt.Errorf("answer: %w", host.ErrSidecarEnded)
@@ -1336,6 +1337,9 @@ func TestAFrameOfASidecarThatNoPluginDeclaresIsInvalidated(t *testing.T) {
 		},
 		func() bool { return false },
 	)
+	if presented {
+		t.Fatal("a frame of a sidecar that no plugin declares reached the native presentation")
+	}
 	if len(answers) != 1 || answers[0]["image"].(map[string]interface{})["error"] != "stale" {
 		t.Fatalf("answers %+v, want one stale answer", answers)
 	}

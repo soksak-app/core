@@ -1313,7 +1313,9 @@ fn a_frame_of_a_sidecar_that_no_plugin_declares_is_invalidated() {
         "sidecar-a",
         "tab-1",
         &images,
-        |_work| Err("notFound".to_string()),
+        |_work| -> Result<(), String> {
+            panic!("a frame of a sidecar that no plugin declares reached the native presentation")
+        },
         |_image, response| {
             seen.lock().unwrap().push(response);
             Err(soksak_host_tauriv2::sidecars::ResponseError::Ended(

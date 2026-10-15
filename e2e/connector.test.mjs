@@ -50,3 +50,22 @@ for (const app of Object.values(APPS)) {
     assert.equal(await startedProgram(s), installed, "the card did not start the application that the recipe installed");
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: removing a connector plugin while its card shows the application logs no error`, { timeout: 300000 }, async (t) => {
+    const executable = process.env.SOKSAK_EMBED_TEST_APP;
+    assert.ok(executable, "SOKSAK_EMBED_TEST_APP is not set; it names the test application of the embed kit");
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s);
+    await keepCommonSettings(s);
+    await connectApplication(s, executable);
+    const card = (await s.get("core.grid")).cards.find((item) => item.pane !== null).id;
+    const { tab } = await s.run("core.card.add-tab", { card, plugin: PLUGIN });
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === tab && item.exposes.includes(`status ${PLUGIN}.state`)),
+      `the card of ${PLUGIN} did not register ${PLUGIN}.state`);
+    await s.until(`${PLUGIN}.state`, (value) => value.toolkit !== null, "the connected application did not start", { surface: tab });
+    // The removal stops the application sidecar while the card shows frames; the check fails on any error it logs.
+    await remove(s);
+  });
+}

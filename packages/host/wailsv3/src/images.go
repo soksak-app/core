@@ -841,6 +841,14 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 
 	case *Present:
 		key := ImageKey{Surface: surface, Name: d.Name}
+		if !declared() {
+			// No plugin declares the sidecar any more: the buffer of the frame ended with its process, and a native
+			// presentation would report the missing buffer to the page (docs/spec/native-surfaces.md#image-regions).
+			LogInfo("image present", fmt.Sprintf("frame of sidecar %s, which no plugin declares, invalidated: surface=%s name=%s sequence=%d",
+				sender, surface, d.Name, d.Sequence))
+			logAnswerError("image response "+d.Name, sendResponse(d.Name, AfterPresent(false, "stale", d.Name, d.Generation, d.Raster, d.Sequence)))
+			return true
+		}
 		handle, err := images.Get(key)
 		if err != nil {
 			logRefusedFrame(surface, sender, images, d.Name, d.Generation, d.Raster, d.Sequence, "notAttached")

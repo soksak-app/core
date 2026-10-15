@@ -57,6 +57,21 @@ pub(crate) struct WindowData {
 
 /// A reload of the app DOM replaces all plugin documents but does not end the terminal sessions.
 ///
+/// The sidecars that a page reload reconnects for a surface: the sidecars of its image regions and the running persistent
+/// sidecars, sorted and once each, without a sidecar that no plugin declares, whose surface ended with the removal of its
+/// plugin and to which a send fails.
+pub fn reconnect_targets(
+    mut sidecars: Vec<String>,
+    running_persistent: &[String],
+    declared: impl Fn(&str) -> bool,
+) -> Vec<String> {
+    sidecars.extend(running_persistent.iter().cloned());
+    sidecars.retain(|name| declared(name));
+    sidecars.sort();
+    sidecars.dedup();
+    sidecars
+}
+
 /// Tauri calls this from the main-webview `PageLoadEvent::Started` callback. The cleanup here is deliberately
 /// synchronous: while the previous image handle waits for removal in the same AppKit run loop, the replacement page
 /// must not attach a new native image.
@@ -79,10 +94,11 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         .state::<WindowSidecars>()
         .running_persistent_names()?;
     for (surface, handle) in surfaces {
-        let mut sidecars = data.images.sidecars_for_surface(&surface);
-        sidecars.extend(running_persistent.iter().cloned());
-        sidecars.sort();
-        sidecars.dedup();
+        let sidecars = reconnect_targets(
+            data.images.sidecars_for_surface(&surface),
+            &running_persistent,
+            |name| window.state::<WindowSidecars>().declared(name),
+        );
         platform.set_surface_hidden_handle(handle, true)?;
         data.images.begin_generation(&surface);
         crate::exposure::surface_closed(&window, &surface);

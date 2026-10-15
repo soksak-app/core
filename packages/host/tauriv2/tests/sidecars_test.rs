@@ -1944,3 +1944,28 @@ fn a_response_to_a_sidecar_that_ended_is_the_ended_error() {
         other => panic!("{other:?}"),
     }
 }
+
+// The sidecars that a page reload reconnects for a surface skip a sidecar that no plugin declares: the plugin of that
+// sidecar was removed, so the surface ended with it, and a send to it fails and stopped the start of the page.
+// contract: surfaces.reload.reconnects-only-declared-sidecars
+#[test]
+fn a_page_reload_reconnects_only_the_declared_sidecars_of_a_surface() {
+    let declared = |name: &str| name != "@scope/sidecar-removed";
+    assert_eq!(
+        soksak_host_tauriv2::windows::reconnect_targets(
+            vec![
+                "@scope/sidecar-removed".to_string(),
+                "@scope/sidecar-image".to_string()
+            ],
+            &[
+                "@scope/sidecar-persistent".to_string(),
+                "@scope/sidecar-image".to_string()
+            ],
+            declared,
+        ),
+        vec![
+            "@scope/sidecar-image".to_string(),
+            "@scope/sidecar-persistent".to_string()
+        ]
+    );
+}
