@@ -4,26 +4,51 @@
 
 ## 미배포
 
+- 체크리스트 항목 `F192.1.1` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.1이다.
+- 체크리스트 항목 `F192.1.2` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.2이다.
+- 체크리스트 항목 `F192.1.3` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.3이다.
+- 체크리스트 항목 `F192.1.4` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.4이다.
+- 체크리스트 항목 `F192.1.5` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.5이다.
+- 체크리스트 항목 `F192.1.6` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.6이다.
+- 체크리스트 항목 `F192.1.7` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.7이다.
+- 체크리스트 항목 `F192.2.1` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.2.1이다.
+- 체크리스트 항목 `F192.2.2` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.2.2이다.
+- 체크리스트 항목 `F192.2.3` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.2.3이다.
+- 체크리스트 항목 `F192.2.4` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.2.4이다.
+- 체크리스트 항목 `F192.2.5` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.2.5이다.
+- 체크리스트 항목 `F192.2.6` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.2.6이다.
+- 체크리스트 항목 `F192.3.1` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.3.1이다.
+- 체크리스트 항목 `F192.3.2` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.3.2이다.
+- 체크리스트 항목 `F192.3.2-1` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.3.2-1이다.
+- 체크리스트 항목 `F192.3.3` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.3.3이다.
+- 체크리스트 항목 `F192.4` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.4이다.
+- 체크리스트 항목 `F192.4.1` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.4.1이다.
+- 체크리스트 항목 `F192.4.2` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.4.2이다.
+- 체크리스트 항목 `F192.4.3` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.4.3이다.
+- 체크리스트 항목 `F192.4.4` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.4.4이다.
+- 체크리스트 항목 `F192.4.5` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.4.5이다.
+- 체크리스트 항목 `F192.4.6` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.4.6이다.
+- 체크리스트 항목 `F192.4.7` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.4.7이다.
 - F192.1, F192.2: background session은 surface가 mount되지 않은 tab에만 열리고, tab이 보이거나 surface가 mount되면 listener와 함께 끝난다. 그래서 같은 card의 다른 tab 뒤에 가려진 terminal이 출력을 그리지 않게 만들던 `image` 없는 두 번째 `open`을 더 받지 않는다. 각 결정은 event `page.background.session`이다.
-- F192.4: side 2를 마쳤다: 예시 애플리케이션이 patch된 renderer와 어댑터 crate로 appview 카드에서 실행되고, 애플리케이션 변경은 window platform 선택부에 머물며, 타임라인 드래그와 재생 중에 관문을 만족했다. F192.3.4는 120 Hz display와 core image configure의 refresh rate를 기다린다.
-- F192.4.5: 창 검사 `appview-gate`가 전체 화면 appview 카드에서 `SOKSAK_EMBED_PLAY`가 이름하는 control을 누르고, 약 3초의 재생을 present 횟수로 세며, host가 받아들인 frame 사이 간격을 잰다. 시험 클립을 재생하는 예시 애플리케이션이 wailsv3(macOS arm64, debug build)에서 세 번 통과했다: frame 334~337개, 간격 중앙값 18.0~18.1 ms, p99 22.9~25.1 ms, 거부되거나 건너뛴 frame 없음. 실행 뒤 캡처에서 playhead가 7초까지 나아갔다.
-- F192.4.7: 관문 검사가 appview 카드를 전체 화면으로 보이고, `SOKSAK_EMBED_TEST_ARGS`의 인자를 넘기며, region의 비율 `SOKSAK_EMBED_DRAG_X`와 `SOKSAK_EMBED_DRAG_Y`에서 드래그한다. 시험 클립이 있는 프로젝트(`--project`)를 연 예시 애플리케이션에서 타임라인 눈금자를 따라가는 드래그가 playhead와 미리보기를 움직였고, wailsv3(macOS arm64, debug build)에서 관문을 세 번 통과했다: 지연 중앙값 17.8~22.2 ms, p90 29.0~30.1 ms, frame 간격 p99 25.5~27.4 ms, 이동 100번 중 97~100번 측정, 거부된 frame 없음. 시험 애플리케이션도 전체 화면으로 같은 검사를 통과했다: 지연 중앙값 10.8 ms, p90 12.7 ms.
-- F192.4.6: 창 검사 `appview-gate`가 예시 애플리케이션을 실행하는 appview 카드와 함께 창을 최대화하고 복귀한다. Red: sidecar의 A1.9와 어댑터의 E1.6 전에는 이전 크기의 frame마다 크기 오류를 기록했다. Green: 오류 없이 wailsv3에서 각 단계 93~335 ms에 present. 애플리케이션 시작 화면에서의 드래그 관문은 그 화면이 드래그로 바뀌지 않아 이동 100번 중 12번만 쟀다(F192.4.7).
-- F192.4.1–F192.4.4: 예시 애플리케이션을 로컬에 fork했다. patch된 Skia renderer가 소유자가 정한 texture에 그리고, 어댑터 crate가 공유 device에서 window를 embed ring의 IOSurface에 그리며 sidecar에서 입력을 받고, `SOKSAK_EMBED_SOCKET`이 있으면 window platform 선택부가 어댑터를 고른다. 편집 코드는 바뀌지 않았다. socket과 함께 시작한 애플리케이션은 7초 만에 hello를 말하고 1280×800 frame을 보냈다.
-- F192.3.3: side 1의 관문이 60 Hz에서 두 host 모두 각 세 번 통과했다. macOS(arm64)에서 이 branch의 debug build로, load average 13~15에서 측정했다. Wails: 지연 중앙값 12.2~13.8 ms, p90 14.7~15.2 ms, frame 간격 p99 22.0~24.1 ms. Tauri: 지연 중앙값 3.3~16.4 ms, p90 17.6~20.2 ms, frame 간격 p99 20.7~24.0 ms. 거부되거나 건너뛴 frame은 없었고, core는 바꾸지 않았으며, page는 native 주입 뒤 약 1 ms에 각 입력을 sidecar로 보냈다.
-- F192.3.2-1: 관문 검사는 `e2e-check`가 거부하는 활성화를 동반한 hover 이동 대신 press, present마다 한 번의 drag, release를 한다. F192.3.2의 commit은 실패를 가린 pipe를 거쳐 검사를 통과했다. load average 13~14에서 wailsv3로 세 번 통과했다: 지연 중앙값 12.2~13.8 ms, p90 14.7~15.2 ms, frame 간격 p99 22.0~24.1 ms, 거부되거나 건너뛴 frame 없음.
-- F192.3.2: 관문 검사 `e2e/appview-gate.test.mjs`가 시험 애플리케이션을 실행하는 appview 카드를 열고, present마다 한 번씩 native pointer를 100번 움직이며, native, host, page, sidecar 기록에서 각 이동부터 그것을 보이는 첫 frame에 대한 host 응답까지의 지연과 받아들여진 frame 사이 간격을 계산한다. 첫 실행들이 P2.3과 A1.8을 찾았다.
-- F192.3.1: workspace registry가 애플리케이션 plugin `appview`와 애플리케이션 sidecar를 선언하므로, 검사 설정이 side 1의 관문을 위해 그것들을 설치한다.
-- F192.2.6: 애플리케이션 plugin이 웹 주소인 프로그램을 document region에 보이고 sidecar를 시작하지 않는다.
-- F192.2.4, F192.2.5: 애플리케이션 plugin이 로컬 저장소로 시작하고, 그 page가 설정의 애플리케이션을 애플리케이션 sidecar가 공급하는 image region 하나에 보이며 카드의 입력을 그것에 넘긴다.
-- F192.2.2, F192.2.3: 애플리케이션 sidecar가 표면의 애플리케이션을 시작하고 멈추며, configure, frame, host 응답, page 입력을 중계하고, 스스로 끝난 애플리케이션을 그 종료를 이름하는 오류로 보고한다.
-- F192.2.1: 애플리케이션 sidecar가 standard input·output transport, 검사, 체크리스트, 체인지로그를 가진 버전 0.0.1 로컬 저장소로 시작한다.
-- F192.1.7: embed kit의 시험 애플리케이션이 매 frame 움직이는 막대와 pointer 표시를 그리고 각 입력과 present를 시각과 함께 기록한다.
-- F192.1.6: embed kit의 client가 애플리케이션을 sidecar의 socket에 잇고, configure와 입력을 받고 frame을 보낸다.
-- F192.1.5: embed kit이 darwin에서 host가 image region에 받는 형식인, 16-byte nonce를 가진 global IOSurface로 frame을 공유한다.
-- F192.1.4: embed kit의 버퍼 ring은 애플리케이션이 free 버퍼에만 그리게 하고, 뒤의 frame이 소비되면 버퍼를 free로 만든다.
-- F192.1.3: embed kit의 protocol 모듈이 모든 메시지를 한 줄로 읽고 쓰며, 문서를 어긴 줄을 그것을 이름하는 오류로 거부한다.
-- F192.1.1, F192.1.2: embed kit이 검사, 체크리스트, 체인지로그를 가진 로컬 저장소로 시작하고, 그 protocol 문서가 모든 메시지, framing, 시스템별 공유 버퍼 token을 정한다.
+- F194.4: side 2를 마쳤다: 예시 애플리케이션이 patch된 renderer와 어댑터 crate로 appview 카드에서 실행되고, 애플리케이션 변경은 window platform 선택부에 머물며, 타임라인 드래그와 재생 중에 관문을 만족했다. F194.3.4는 120 Hz display와 core image configure의 refresh rate를 기다린다.
+- F194.4.5: 창 검사 `appview-gate`가 전체 화면 appview 카드에서 `SOKSAK_EMBED_PLAY`가 이름하는 control을 누르고, 약 3초의 재생을 present 횟수로 세며, host가 받아들인 frame 사이 간격을 잰다. 시험 클립을 재생하는 예시 애플리케이션이 wailsv3(macOS arm64, debug build)에서 세 번 통과했다: frame 334~337개, 간격 중앙값 18.0~18.1 ms, p99 22.9~25.1 ms, 거부되거나 건너뛴 frame 없음. 실행 뒤 캡처에서 playhead가 7초까지 나아갔다.
+- F194.4.7: 관문 검사가 appview 카드를 전체 화면으로 보이고, `SOKSAK_EMBED_TEST_ARGS`의 인자를 넘기며, region의 비율 `SOKSAK_EMBED_DRAG_X`와 `SOKSAK_EMBED_DRAG_Y`에서 드래그한다. 시험 클립이 있는 프로젝트(`--project`)를 연 예시 애플리케이션에서 타임라인 눈금자를 따라가는 드래그가 playhead와 미리보기를 움직였고, wailsv3(macOS arm64, debug build)에서 관문을 세 번 통과했다: 지연 중앙값 17.8~22.2 ms, p90 29.0~30.1 ms, frame 간격 p99 25.5~27.4 ms, 이동 100번 중 97~100번 측정, 거부된 frame 없음. 시험 애플리케이션도 전체 화면으로 같은 검사를 통과했다: 지연 중앙값 10.8 ms, p90 12.7 ms.
+- F194.4.6: 창 검사 `appview-gate`가 예시 애플리케이션을 실행하는 appview 카드와 함께 창을 최대화하고 복귀한다. Red: sidecar의 A1.9와 어댑터의 E1.6 전에는 이전 크기의 frame마다 크기 오류를 기록했다. Green: 오류 없이 wailsv3에서 각 단계 93~335 ms에 present. 애플리케이션 시작 화면에서의 드래그 관문은 그 화면이 드래그로 바뀌지 않아 이동 100번 중 12번만 쟀다(F194.4.7).
+- F194.4.1–F194.4.4: 예시 애플리케이션을 로컬에 fork했다. patch된 Skia renderer가 소유자가 정한 texture에 그리고, 어댑터 crate가 공유 device에서 window를 embed ring의 IOSurface에 그리며 sidecar에서 입력을 받고, `SOKSAK_EMBED_SOCKET`이 있으면 window platform 선택부가 어댑터를 고른다. 편집 코드는 바뀌지 않았다. socket과 함께 시작한 애플리케이션은 7초 만에 hello를 말하고 1280×800 frame을 보냈다.
+- F194.3.3: side 1의 관문이 60 Hz에서 두 host 모두 각 세 번 통과했다. macOS(arm64)에서 이 branch의 debug build로, load average 13~15에서 측정했다. Wails: 지연 중앙값 12.2~13.8 ms, p90 14.7~15.2 ms, frame 간격 p99 22.0~24.1 ms. Tauri: 지연 중앙값 3.3~16.4 ms, p90 17.6~20.2 ms, frame 간격 p99 20.7~24.0 ms. 거부되거나 건너뛴 frame은 없었고, core는 바꾸지 않았으며, page는 native 주입 뒤 약 1 ms에 각 입력을 sidecar로 보냈다.
+- F194.3.2-1: 관문 검사는 `e2e-check`가 거부하는 활성화를 동반한 hover 이동 대신 press, present마다 한 번의 drag, release를 한다. F194.3.2의 commit은 실패를 가린 pipe를 거쳐 검사를 통과했다. load average 13~14에서 wailsv3로 세 번 통과했다: 지연 중앙값 12.2~13.8 ms, p90 14.7~15.2 ms, frame 간격 p99 22.0~24.1 ms, 거부되거나 건너뛴 frame 없음.
+- F194.3.2: 관문 검사 `e2e/appview-gate.test.mjs`가 시험 애플리케이션을 실행하는 appview 카드를 열고, present마다 한 번씩 native pointer를 100번 움직이며, native, host, page, sidecar 기록에서 각 이동부터 그것을 보이는 첫 frame에 대한 host 응답까지의 지연과 받아들여진 frame 사이 간격을 계산한다. 첫 실행들이 P2.3과 A1.8을 찾았다.
+- F194.3.1: workspace registry가 애플리케이션 plugin `appview`와 애플리케이션 sidecar를 선언하므로, 검사 설정이 side 1의 관문을 위해 그것들을 설치한다.
+- F194.2.6: 애플리케이션 plugin이 웹 주소인 프로그램을 document region에 보이고 sidecar를 시작하지 않는다.
+- F194.2.4, F194.2.5: 애플리케이션 plugin이 로컬 저장소로 시작하고, 그 page가 설정의 애플리케이션을 애플리케이션 sidecar가 공급하는 image region 하나에 보이며 카드의 입력을 그것에 넘긴다.
+- F194.2.2, F194.2.3: 애플리케이션 sidecar가 표면의 애플리케이션을 시작하고 멈추며, configure, frame, host 응답, page 입력을 중계하고, 스스로 끝난 애플리케이션을 그 종료를 이름하는 오류로 보고한다.
+- F194.2.1: 애플리케이션 sidecar가 standard input·output transport, 검사, 체크리스트, 체인지로그를 가진 버전 0.0.1 로컬 저장소로 시작한다.
+- F194.1.7: embed kit의 시험 애플리케이션이 매 frame 움직이는 막대와 pointer 표시를 그리고 각 입력과 present를 시각과 함께 기록한다.
+- F194.1.6: embed kit의 client가 애플리케이션을 sidecar의 socket에 잇고, configure와 입력을 받고 frame을 보낸다.
+- F194.1.5: embed kit이 darwin에서 host가 image region에 받는 형식인, 16-byte nonce를 가진 global IOSurface로 frame을 공유한다.
+- F194.1.4: embed kit의 버퍼 ring은 애플리케이션이 free 버퍼에만 그리게 하고, 뒤의 frame이 소비되면 버퍼를 free로 만든다.
+- F194.1.3: embed kit의 protocol 모듈이 모든 메시지를 한 줄로 읽고 쓰며, 문서를 어긴 줄을 그것을 이름하는 오류로 거부한다.
+- F194.1.1, F194.1.2: embed kit이 검사, 체크리스트, 체인지로그를 가진 로컬 저장소로 시작하고, 그 protocol 문서가 모든 메시지, framing, 시스템별 공유 버퍼 token을 정한다.
 - F161.56, F161.59, F161.62: 현재 build에서 재현되지 않음으로 닫았고, 재발을 보이는 기록이 있다.
 - F161.27: 두 애플리케이션에서 바깥 크기 변경 check를 세 번 반복한 뒤 재현되지 않음으로 닫았다.
 - F187: contract 주석이 다시 그 시험 위에 있고, 손실 시험이 writer의 속도에 기대지 않는다.

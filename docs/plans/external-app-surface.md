@@ -2,7 +2,7 @@
 
 [한국어](external-app-surface.ko.md)
 
-This proposal belongs to F192. It shows an application of another toolkit inside a surface without rewriting its interface as a plugin page.
+This proposal belongs to F194. It shows an application of another toolkit inside a surface without rewriting its interface as a plugin page.
 
 ## Problem
 
@@ -74,8 +74,8 @@ The new repositories (the embed kit, the application sidecar, the application pl
 
 ## Order
 
-1. F192 and its sub-items in the checklist, on the branch `feat/app-surface-F192`.
-2. The embed protocol, the client library and the test application (F192.1); then the sidecar and the plugin (F192.2); each unit tested Red and Green.
-3. The gate of side 1 (F192.3). It passes, or side 1 is discarded with its result recorded.
-4. Side 2 (F192.4) and its gate.
+1. F194 and its sub-items in the checklist, on the branch `feat/app-surface-F194`.
+2. The embed protocol, the client library and the test application (F194.1); then the sidecar and the plugin (F194.2); each unit tested Red and Green.
+3. The gate of side 1 (F194.3). It passes, or side 1 is discarded with its result recorded.
+4. Side 2 (F194.4) and its gate.
 5. Only a side that passed is merged.

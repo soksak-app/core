@@ -74,8 +74,8 @@ Slint, egui·wgpu, Qt, 웹 interface를 처음부터 고려한다. 측면 2는 S
 
 ## 순서
 
-1. branch `feat/app-surface-F192`에서 체크리스트에 F192와 하위 항목을 둔다.
-2. embed protocol, client library, 시험 애플리케이션(F192.1). 이어서 sidecar와 plugin(F192.2). 각 단위를 Red와 Green으로 시험한다.
-3. 측면 1의 관문(F192.3). 넘거나, 결과를 기록하고 측면 1을 버린다.
-4. 측면 2(F192.4)와 그 관문.
+1. branch `feat/app-surface-F194`에서 체크리스트에 F192와 하위 항목을 둔다.
+2. embed protocol, client library, 시험 애플리케이션(F194.1). 이어서 sidecar와 plugin(F194.2). 각 단위를 Red와 Green으로 시험한다.
+3. 측면 1의 관문(F194.3). 넘거나, 결과를 기록하고 측면 1을 버린다.
+4. 측면 2(F194.4)와 그 관문.
 5. 넘은 측면만 병합한다.

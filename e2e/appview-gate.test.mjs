@@ -1,4 +1,4 @@
-// The gate of the external application surface (F192.3): an appview card runs the test application of the embed kit,
+// The gate of the external application surface (F194.3): an appview card runs the test application of the embed kit,
 // which draws a frame every display interval into shared buffers, and the check moves the native pointer across it. From
 // the records of every step it computes, per pointer move, the time from the native injection to the answer of the host
 // for the first frame that shows that input, and the gaps between the frames that the host accepted:
