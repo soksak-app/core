@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.5.3: 두 `sok` 패키지가 애플리케이션의 release 레시피를 설치한다(`InstallApplicationRelease`, `install_application_release`): fetcher의 release 제한으로 읽는 https 주소, SHA-256 비교, 그리고 platform의 bundle 추출로 푸는 zip, 폴더 안에 머무는 폴더·파일·symbolic link를 가진 tar.gz, 또는 실행 파일 하나. 실패한 단계는 자기를 이름하고 폴더를 남기지 않는다. Rust platform에 `symlink`가 생기고, Rust 검사의 TLS server는 fetch와 release 검사를 위해 `tests/tls_support_test.rs`로 옮겼다. Red: 함수가 없어 시험이 build되지 않거나 compile되지 않았다. Green: 각 언어 5개 중 5개.
 - F194.5.2: 두 `sok` 패키지가 설치된 애플리케이션을 찾는다(`LocateApplication`, `application::locate`): 각 locate 항목을 차례로 시도한다 — darwin의 metadata 색인(`mdfind`)으로 찾는 bundle identifier(`program`은 bundle을 담은 폴더에서 본다), 설치기가 `PATH`에서 넘기는 검색 경로의 이름, 또는 실행 파일의 절대 경로 — 그리고 애플리케이션을 처음 찾은 항목이 실행 파일과 방법을 준다. linux와 windows는 bundle 항목을 `not implemented on <os>`로 거부한다. Red: 함수가 없어 Go 시험이 build되지 않았고 Rust 시험이 compile되지 않았다. Green: 각 언어 4개 중 4개.
 - F194.5.1: plugin 명세가 연결 plugin의 `application` 필드를 가지며, 그런 plugin은 표면이 필요 없고 애플리케이션을 보이는 plugin에 의존할 수 있다. 설치 명세는 설치기가 기계를 조사해 설치된 애플리케이션을 연결하거나 레시피(`release`, `package`, `source`)를 실행하고, `plugins/applications.json`을 기록하며, 설치한 애플리케이션만 지우는 방식을 정한다. `validateManifest`가 그 필드를 검사한다. Red: `test/application.test.mjs`가 3개 중 3개 실패했다. Green: 3개 중 3개, 패키지 시험 211개 중 211개.
 - F192.2-1: 두 `sok` 패키지의 class 표를 `docs/spec/events.json`에서 다시 생성해 `page.background.session`을 가진다. Red: `scripts/test/event-classes.test.mjs`가 `packages/sok/wailsv3/src/event_classes.go differs from docs/spec/events.json`로 실패했다. Green: 3개 중 3개.

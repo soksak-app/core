@@ -28,6 +28,8 @@ pub trait Platform {
     fn key(&self) -> Result<String, String>;
     /// The folder that holds path entries. It is an error when this operating system has no such folder (docs/spec/cli.md).
     fn paths_dir(&self) -> Result<PathBuf, String>;
+    /// Makes a symbolic link at `link` whose target is the text `target`, for the symbolic links of an application release.
+    fn symlink(&self, target: &std::path::Path, link: &std::path::Path) -> Result<(), String>;
     /// Sets the mode of an unpacked file to 0755 for an executable and to 0644 otherwise.
     fn set_executable(&self, path: &std::path::Path, executable: bool) -> Result<(), String>;
     /// Closes the file at path and returns the result. The drop of the standard library discards the result of closing.

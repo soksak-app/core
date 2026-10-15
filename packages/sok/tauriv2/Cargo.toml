@@ -39,6 +39,8 @@ signal-hook = "0.3"
 [dev-dependencies]
 # Temporary folders of the tests that own the files they write.
 tempfile = "3"
+# The zip of a release in the checks of the release recipe of an application.
+zip = { version = "2", default-features = false, features = ["deflate"] }
 # 검사 소유의 TLS server 의 인증서와 server 연결.
 rcgen = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }

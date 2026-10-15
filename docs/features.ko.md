@@ -1046,7 +1046,7 @@
   - [~] F194.5 — P2: 연결 plugin([계획](plans/connector-plugins.ko.md)): 애플리케이션의 코드를 담지 않고, 플랫폼, 설치되어 있을 때 찾는 방법, 애플리케이션의 배포로 설치하는 플랫폼별 레시피를 선언하는 애플리케이션별 plugin. plugin을 설치하면 설치된 애플리케이션을 연결하거나 레시피를 실행하고, `appview`가 그것을 시작한다.
     - [o] F194.5.1 — P2: 명세: plugin 명세의 `application` 필드, 설치 명세의 조사·설치·기록·제거 규칙과 `applications.json` 형식을 영문·한글로 둔다. `validateManifest`가 그 필드를 검사한다.
     - [o] F194.5.2 — P2: 조사: 두 `sok` 구현이 각 `locate` 항목(bundle identifier, `PATH`의 이름, 절대 경로)을 차례로 시도하고 같은 위치와 방법을 돌려준다. 쌍 시험.
-    - [ ] F194.5.3 — P2: 레시피 `release`: 설치기의 fetching으로 내려받기, SHA-256, `zip`과 `tar.gz` 풀기, 실패한 단계가 아무것도 바꾸지 않는 설치. 쌍 시험.
+    - [o] F194.5.3 — P2: 레시피 `release`: 설치기의 fetching으로 내려받기, SHA-256, `zip`과 `tar.gz` 풀기, 실패한 단계가 아무것도 바꾸지 않는 설치. 쌍 시험.
     - [ ] F194.5.4 — P2: 레시피 `package`와 `source`: 패키지 관리자가 설치하고 실행 파일을 이름하며, source 레시피는 ref에서 clone하고 저장소의 build 명령을 실행한다. 실패한 명령은 그 출력과 함께 실패한다. 쌍 시험.
     - [ ] F194.5.5 — P2: 기록과 제거: `plugins/applications.json`(format 1)이 `{id, version, path, how, method}`를 가지고, 연결 plugin 제거는 설치한 애플리케이션만 지운다. 쌍 시험.
     - [ ] F194.5.6 — P2: 애플리케이션의 plugin 작업이 조사와 레시피를 실행하고 각 단계를 plugin 작업의 상태로 보고한다. 두 host의 시험.

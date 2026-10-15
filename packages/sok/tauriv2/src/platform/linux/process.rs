@@ -34,6 +34,12 @@ impl Platform for Linux {
         metadata.permissions().mode() & 0o111 != 0
     }
 
+    /// Makes the symbolic link with `std::os::unix::fs::symlink`.
+    fn symlink(&self, target: &std::path::Path, link: &std::path::Path) -> Result<(), String> {
+        std::os::unix::fs::symlink(target, link)
+            .map_err(|error| crate::files::file_error(link.display(), &error))
+    }
+
     fn set_executable(&self, path: &std::path::Path, executable: bool) -> Result<(), String> {
         use std::os::unix::fs::PermissionsExt;
         let mode = if executable { 0o755 } else { 0o644 };

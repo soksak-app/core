@@ -24,6 +24,10 @@ impl Platform for Windows {
         false
     }
 
+    fn symlink(&self, _target: &std::path::Path, _link: &std::path::Path) -> Result<(), String> {
+        Err("symbolic links are not implemented on windows".into())
+    }
+
     fn set_executable(&self, _path: &std::path::Path, _executable: bool) -> Result<(), String> {
         Err("file modes is not implemented on windows".into())
     }
