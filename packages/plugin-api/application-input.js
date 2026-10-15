@@ -38,6 +38,7 @@ export function region(type, event) {
     return [{ ...key, down: true }, { ...key, down: false }];
   }
   if (type === "insert") return [{ type: "commit", text: event.text }];
+  // default: a compose event without text or caret ends the composition, which the protocol states as empty text at 0.
   if (type === "compose") return [{ type: "compose", text: event.text ?? "", caret: event.caret ?? 0 }];
   if (type === "focus") return [{ type: "focus", focused: event.focused }];
   throw new Error(`unknown region event ${type}`);

@@ -24,6 +24,7 @@ export async function mountApplication(root, context, { application }) {
     // reported below: the value is not JSON
   }
   // An application that is not connected is an error and starts nothing.
+  // default: an application without a record is not connected; null names that state and is reported below.
   const record = context.runtime.applications.read()[application] ?? null;
   const program = args === null || record === null ? null : record.path;
   // A shown image region holds the composition until its first frame, so only a running application shows it.
@@ -48,6 +49,7 @@ export async function mountApplication(root, context, { application }) {
     return sidecar.send(context.surfaceId, { operation: "input", message }).catch((error) => report(`input: ${error.message}`));
   };
   await sidecar.on(context.surfaceId, (body) => {
+    // default: a message of the sidecar without an event is its error message.
     context.runtime.log.debug("message", { event: body.event ?? "error" });
     if (body.error !== undefined) return report(body.error);
     if (body.event === "started") return changed({ pid: body.pid, exit: null });
