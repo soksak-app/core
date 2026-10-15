@@ -1034,7 +1034,7 @@
     - [o] F192.3.3 — P1: build한 host에서 display의 속도로 관문 검사를 실행하고, 측정한 frame 간격과 지연을 시험한 구현과 플랫폼과 함께 기록한다.
     - [ ] F192.3.4 — P2: 120 Hz에서 관문을 실행한다. 재시도 조건: 120 Hz display와, 시험 애플리케이션이 그 속도로 그리도록 embed protocol의 `configure`에 실린 display 속도. 측정한 기계의 display는 60 Hz다(`host.window.refreshRate` 60).
   - [~] F192.4 — P2: 측면 2, 예시 애플리케이션의 어댑터를 그 애플리케이션의 license 아래 자기 저장소에. 기대: 애플리케이션이 공유 버퍼에 그리고 embed 입력을 창 event로 바꾸는 Slint platform으로 embed 방식에서 돌고, 애플리케이션의 변경은 창 platform 선택에 머문다. 재생과 편집 중에 F192.3의 관문을 만족한다. 실패하거나 편집 code를 고쳐야 하면 그 저장소만 버린다.
-    - [~] F192.4.1 — P2: 예시 애플리케이션을 로컬 저장소로 fork하고, 어댑터 branch와 영문·한글 자체 체크리스트와 체인지로그를 둔다.
+    - [o] F192.4.1 — P2: 예시 애플리케이션을 로컬 저장소로 fork하고, 어댑터 branch와 영문·한글 자체 체크리스트와 체인지로그를 둔다.
     - [ ] F192.4.2 — P2: 애플리케이션의 patch된 Skia renderer에, 애플리케이션이 compositor와 공유하는 device에서 호출자가 frame마다 정하는 wgpu texture에 그리는 surface를 더한다.
     - [ ] F192.4.3 — P2: 어댑터 crate: window가 그 surface로 embed ring의 각 버퍼 IOSurface에서 만든 texture에 그리고, embed client로 각 frame을 보내며, embed configure와 입력을 window event로, Slint의 cursor를 embed cursor 메시지로 바꾸는 Slint platform. 단위 시험 Red와 Green.
     - [ ] F192.4.4 — P2: `SOKSAK_EMBED_SOCKET`이 있으면 애플리케이션의 window platform 선택부에서 어댑터 platform을 고르며, 편집 코드는 바꾸지 않는다.
