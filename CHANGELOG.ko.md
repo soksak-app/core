@@ -5,6 +5,7 @@
 ## 미배포
 
 - F192.1, F192.2: background session은 surface가 mount되지 않은 tab에만 열리고, tab이 보이거나 surface가 mount되면 listener와 함께 끝난다. 그래서 같은 card의 다른 tab 뒤에 가려진 terminal이 출력을 그리지 않게 만들던 `image` 없는 두 번째 `open`을 더 받지 않는다. 각 결정은 event `page.background.session`이다.
+- F192.4: side 2를 마쳤다: 예시 애플리케이션이 patch된 renderer와 어댑터 crate로 appview 카드에서 실행되고, 애플리케이션 변경은 window platform 선택부에 머물며, 타임라인 드래그와 재생 중에 관문을 만족했다. F192.3.4는 120 Hz display와 core image configure의 refresh rate를 기다린다.
 - F192.4.5: 창 검사 `appview-gate`가 전체 화면 appview 카드에서 `SOKSAK_EMBED_PLAY`가 이름하는 control을 누르고, 약 3초의 재생을 present 횟수로 세며, host가 받아들인 frame 사이 간격을 잰다. 시험 클립을 재생하는 예시 애플리케이션이 wailsv3(macOS arm64, debug build)에서 세 번 통과했다: frame 334~337개, 간격 중앙값 18.0~18.1 ms, p99 22.9~25.1 ms, 거부되거나 건너뛴 frame 없음. 실행 뒤 캡처에서 playhead가 7초까지 나아갔다.
 - F192.4.7: 관문 검사가 appview 카드를 전체 화면으로 보이고, `SOKSAK_EMBED_TEST_ARGS`의 인자를 넘기며, region의 비율 `SOKSAK_EMBED_DRAG_X`와 `SOKSAK_EMBED_DRAG_Y`에서 드래그한다. 시험 클립이 있는 프로젝트(`--project`)를 연 예시 애플리케이션에서 타임라인 눈금자를 따라가는 드래그가 playhead와 미리보기를 움직였고, wailsv3(macOS arm64, debug build)에서 관문을 세 번 통과했다: 지연 중앙값 17.8~22.2 ms, p90 29.0~30.1 ms, frame 간격 p99 25.5~27.4 ms, 이동 100번 중 97~100번 측정, 거부된 frame 없음. 시험 애플리케이션도 전체 화면으로 같은 검사를 통과했다: 지연 중앙값 10.8 ms, p90 12.7 ms.
 - F192.4.6: 창 검사 `appview-gate`가 예시 애플리케이션을 실행하는 appview 카드와 함께 창을 최대화하고 복귀한다. Red: sidecar의 A1.9와 어댑터의 E1.6 전에는 이전 크기의 frame마다 크기 오류를 기록했다. Green: 오류 없이 wailsv3에서 각 단계 93~335 ms에 present. 애플리케이션 시작 화면에서의 드래그 관문은 그 화면이 드래그로 바뀌지 않아 이동 100번 중 12번만 쟀다(F192.4.7).
