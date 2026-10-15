@@ -1017,8 +1017,8 @@
     - [o] F192.1.5 — P1: darwin 공유 버퍼: vt sidecar처럼 global 식별자와 16-byte nonce를 붙인 IOSurface를 `objc2-io-surface`로 만든다. 만들고, 잠그고, 쓰고, 읽는 단위 시험.
     - [o] F192.1.6 — P1: client: 환경의 socket에 접속하고, configure와 입력을 받고, frame, cursor, caret을 보낸다. 시험의 socket에 대한 단위 시험.
     - [o] F192.1.7 — P1: 시험 애플리케이션: 설정된 디스플레이의 주기로 매 frame ring에 움직이는 그림을 그리고 각 pointer 위치로 표시를 곧바로 옮기며, 관문을 위해 각 입력과 각 present의 시각을 기록한다.
-  - [ ] F192.2 — P1: 새 로컬 저장소에 애플리케이션 sidecar와 애플리케이션 plugin. 기대: sidecar는 애플리케이션을 시작·종료하고, embed socket을 열고, 각 frame token을 자기가 공급하는 image region에 넘기며, page가 보낸 입력을 전달한다. plugin은 image region 하나를 보이고, region 입력과 DOM pointer·scroll event를 터미널처럼 전달하며, cursor 모양을 정하고, 애플리케이션이 웹 주소이면 대신 document region에 웹 interface를 보인다.
-    - [ ] F192.2.1 — P1: 애플리케이션 sidecar의 로컬 저장소를 버전 0.0.1로 만들고(`transport: persistent`인 `sidecar.json`), 검사, README, 체크리스트를 둔다.
+  - [~] F192.2 — P1: 새 로컬 저장소에 애플리케이션 sidecar와 애플리케이션 plugin. 기대: sidecar는 애플리케이션을 시작·종료하고, embed socket을 열고, 각 frame token을 자기가 공급하는 image region에 넘기며, page가 보낸 입력을 전달한다. plugin은 image region 하나를 보이고, region 입력과 DOM pointer·scroll event를 터미널처럼 전달하며, cursor 모양을 정하고, 애플리케이션이 웹 주소이면 대신 document region에 웹 interface를 보인다.
+    - [o] F192.2.1 — P1: 애플리케이션 sidecar의 로컬 저장소를 버전 0.0.1로 만들고(애플리케이션은 표면이 있는 동안만 살므로 standard input·output transport를 쓰는 `sidecar.json`), 검사, README, 체크리스트를 둔다.
     - [ ] F192.2.2 — P1: sidecar는 embed socket을 환경에 넣어 애플리케이션을 시작하고, 표면이 닫히면 멈추며, 끝나거나 접속하지 않는 애플리케이션을 그것을 이름하는 오류로 보고한다.
     - [ ] F192.2.3 — P1: sidecar의 중계: host의 configure를 애플리케이션에, 애플리케이션의 각 frame을 자기가 공급하는 region의 image로 host에, page의 입력 요청을 애플리케이션에. 시험 애플리케이션으로 단위 시험.
     - [ ] F192.2.4 — P1: 애플리케이션 plugin의 로컬 저장소를 버전 0.0.1로 만들고 검사, README, 체크리스트를 둔다.
