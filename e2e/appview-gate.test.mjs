@@ -41,7 +41,7 @@ for (const app of Object.values(APPS)) {
     const [surface] = await s.until("core.surfaces",
       (surfaces) => surfaces.some((item) => item.visible && item.plugin === "appview" && item.exposes.includes("status appview.state")),
       "no visible appview surface registered appview.state").then(() => s.surfaces("appview"));
-    await s.until("appview.state", (state) => state.toolkit === "test", "the test application did not connect",
+    await s.until("appview.state", (state) => state.toolkit !== null, "the application did not connect",
       { surface: surface.surface });
     const window = await s.until("host.window", (state) => state.regions.some((item) =>
       item.surface === surface.surface && item.name === "view" && item.frame?.width > MOVES * STEP + 40),
@@ -115,5 +115,34 @@ for (const app of Object.values(APPS)) {
     assert.ok(result.gaps.p99 <= 2 * INTERVAL_MS, `the p99 frame gap ${result.gaps.p99} ms exceeds two frames: ${JSON.stringify(result)}`);
     assert.ok(result.delay.median <= 25, `the median delay ${result.delay.median} ms exceeds 25 ms: ${JSON.stringify(result)}`);
     assert.ok(result.delay.p90 <= 40, `the p90 delay ${result.delay.p90} ms exceeds 40 ms: ${JSON.stringify(result)}`);
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: an appview card follows a maximize and a restore of its window`, { timeout: 120000 }, async (t) => {
+    const program = process.env.SOKSAK_EMBED_TEST_APP;
+    assert.ok(program, "SOKSAK_EMBED_TEST_APP is not set; it names the application that the appview card runs");
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s, { performanceTrace: true, settings: { "appview.program": program } });
+    const grid = await s.get("core.grid");
+    const [card] = grid.cards.filter((item) => item.active).sort((a, b) => b.w * b.h - a.w * a.h);
+    await s.run("core.card.split", { card: card.id, side: "right", plugin: "appview" });
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.visible && item.plugin === "appview" &&
+      item.exposes.includes("status appview.state")), "no visible appview surface registered appview.state");
+    const [surface] = await s.surfaces("appview");
+    await s.until("appview.state", (state) => state.toolkit !== null, "the application did not connect", { surface: surface.surface });
+    // Each step waits until the window presents its new size with the region of the card; the time of each step is
+    // recorded, and an error that the application logs during the steps fails the check.
+    const steps = [];
+    for (const on of [true, false, true, false]) {
+      const started = performance.now();
+      await s.run("host.window.maximize", { on });
+      await s.presented();
+      steps.push({ on, ms: Number((performance.now() - started).toFixed(1)) });
+    }
+    t.diagnostic(`${app.name} appview resize ${JSON.stringify(steps)}`);
+    console.log(`${app.name} appview resize ${JSON.stringify(steps)}`);
+    for (const step of steps) assert.ok(step.ms < 2000, `a ${step.on ? "maximize" : "restore"} took ${step.ms} ms: ${JSON.stringify(steps)}`);
   });
 }

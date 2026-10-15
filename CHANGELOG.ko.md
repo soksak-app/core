@@ -5,6 +5,7 @@
 ## 미배포
 
 - F192.1, F192.2: background session은 surface가 mount되지 않은 tab에만 열리고, tab이 보이거나 surface가 mount되면 listener와 함께 끝난다. 그래서 같은 card의 다른 tab 뒤에 가려진 terminal이 출력을 그리지 않게 만들던 `image` 없는 두 번째 `open`을 더 받지 않는다. 각 결정은 event `page.background.session`이다.
+- F192.4.6: 창 검사 `appview-gate`가 예시 애플리케이션을 실행하는 appview 카드와 함께 창을 최대화하고 복귀한다. Red: sidecar의 A1.9와 어댑터의 E1.6 전에는 이전 크기의 frame마다 크기 오류를 기록했다. Green: 오류 없이 wailsv3에서 각 단계 93~335 ms에 present. 애플리케이션 시작 화면에서의 드래그 관문은 그 화면이 드래그로 바뀌지 않아 이동 100번 중 12번만 쟀다(F192.4.7).
 - F192.4.1–F192.4.4: 예시 애플리케이션을 로컬에 fork했다. patch된 Skia renderer가 소유자가 정한 texture에 그리고, 어댑터 crate가 공유 device에서 window를 embed ring의 IOSurface에 그리며 sidecar에서 입력을 받고, `SOKSAK_EMBED_SOCKET`이 있으면 window platform 선택부가 어댑터를 고른다. 편집 코드는 바뀌지 않았다. socket과 함께 시작한 애플리케이션은 7초 만에 hello를 말하고 1280×800 frame을 보냈다.
 - F192.3.3: side 1의 관문이 60 Hz에서 두 host 모두 각 세 번 통과했다. macOS(arm64)에서 이 branch의 debug build로, load average 13~15에서 측정했다. Wails: 지연 중앙값 12.2~13.8 ms, p90 14.7~15.2 ms, frame 간격 p99 22.0~24.1 ms. Tauri: 지연 중앙값 3.3~16.4 ms, p90 17.6~20.2 ms, frame 간격 p99 20.7~24.0 ms. 거부되거나 건너뛴 frame은 없었고, core는 바꾸지 않았으며, page는 native 주입 뒤 약 1 ms에 각 입력을 sidecar로 보냈다.
 - F192.3.2-1: 관문 검사는 `e2e-check`가 거부하는 활성화를 동반한 hover 이동 대신 press, present마다 한 번의 drag, release를 한다. F192.3.2의 commit은 실패를 가린 pipe를 거쳐 검사를 통과했다. load average 13~14에서 wailsv3로 세 번 통과했다: 지연 중앙값 12.2~13.8 ms, p90 14.7~15.2 ms, frame 간격 p99 22.0~24.1 ms, 거부되거나 건너뛴 frame 없음.
