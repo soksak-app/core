@@ -375,6 +375,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                         emit_host: Box::new(event_record::emit_host),
                     });
                 let handle = app.handle().clone();
+                let progressing = app.handle().clone();
                 // Applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page
                 // that reloads uses the installed executables (docs/spec/installation.md#applying-a-change).
                 let applying = app.handle().clone();
@@ -391,6 +392,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                         applying.state::<WindowSidecars>().declare(&declarations)
                     }),
                     Box::new(move |change| windows::notify_plugins(&handle, change)),
+                    Box::new(move |progress| {
+                        windows::notify_plugins_progress(&progressing, progress)
+                    }),
                 )?);
                 let declarations = installed::installed_sidecars(&directory)
                     .map_err(|error| format!("installed plugins: {error}"))?;

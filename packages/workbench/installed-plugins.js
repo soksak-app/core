@@ -39,6 +39,11 @@ export function followActivation() {
   if (host) host.on("window-active", () => { pluginOperations.refresh(); appUpdate.refresh(); });
 }
 
+/** On plugins-progress from the host, records the step on the running operation (docs/spec/installation.md#applications). */
+export function followPluginProgress() {
+  if (host) host.on("plugins-progress", (progress) => pluginOperations.progress(progress));
+}
+
 /** On sidecars-changed from the host, reads the outdated sidecars again (docs/spec/installation.md). */
 export function followSidecarChanges() {
   if (host) host.on("sidecars-changed", () => pluginOperations.refreshOutdated());

@@ -1054,7 +1054,7 @@
       - [o] F194.5.6.1 — P2: host의 plugin 작업이 부르는 두 `sok` 패키지의 설치기가, 설치가 푼 각 연결 plugin의 애플리케이션을 설치를 기록하기 전에 연결하고, plugin을 제거하면 그 애플리케이션을 제거한다. 연결 plugin을 설치하고 제거하는 쌍 시험.
       - [o] F194.5.6.1-1 — P2: 연결 검사가 CI에서 통과한다: 애플리케이션의 각 Go·Rust 짝 검사가 host 계약에 자기 계약 사례를 선언하고, package 검사는 brew가 없는 기계에서 `brew is not on the search path` 오류를 단언한다. F194.5.6.1 push의 CI가 검사마다 `declares no contract case`로 `make host-contract-check`에서, brew가 없는 linux에서 Go package 검사에서 실패했다.
       - [o] F194.5.6.2 — P2: 조사와 레시피의 각 단계가 event이고, 레시피를 실행하는 plugin 작업의 진행이 애플리케이션의 plugin 작업 상태에 닿는다.
-      - [ ] F194.5.6.3 — P2: 애플리케이션을 연결하는 plugin 작업의 진행이 page에 닿는다: host의 단계 event가 plugin 작업 상태를 채우고, plugin 화면이 레시피가 도는 동안 그것을 보인다.
+      - [o] F194.5.6.3 — P2: 애플리케이션을 연결하는 plugin 작업의 진행이 page에 닿는다: host의 단계 event가 plugin 작업 상태를 채우고, plugin 화면이 레시피가 도는 동안 그것을 보인다.
     - [ ] F194.5.7 — P2: 설정 `program`이 아무것도 이름하지 않으면 `appview`가 연결 plugin에 대해 `applications.json`이 기록한 애플리케이션을 시작한다. page 시험.
     - [ ] F194.5.8 — P2: embed kit 시험 애플리케이션의 release를 레시피로 가진 시험용 연결 plugin과, 없으면 설치하고 있으면 연결하며 카드에서 시작해 관문을 실행하는 창 검사.
     - [ ] F194.5.9 — P2: 예시 애플리케이션의 자기 배포가 embed 어댑터가 든 build를 주면, 그것의 연결 plugin.

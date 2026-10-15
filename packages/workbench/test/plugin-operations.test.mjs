@@ -106,10 +106,10 @@ test("an operation is recorded as running before the host call and its result af
   ]);
   assert.deepEqual(seen, [
     null,
-    { action: "install", plugin: "db", state: "running", error: null },
-    { action: "install", plugin: "db", state: "done", error: null },
-    { action: "remove", plugin: "db", state: "running", error: null },
-    { action: "remove", plugin: "db", state: "failed", error: "plugin db is not installed" },
+    { action: "install", plugin: "db", state: "running", error: null , step: null },
+    { action: "install", plugin: "db", state: "done", error: null , step: null },
+    { action: "remove", plugin: "db", state: "running", error: null , step: null },
+    { action: "remove", plugin: "db", state: "failed", error: "plugin db is not installed" , step: null },
   ]);
   assert.equal(operations.status().reload, true);
 });
@@ -281,4 +281,20 @@ test("update-all updates the plugins of updates one after the other and stops at
   assert.deepEqual(quiet.status().updates, []);
   await quiet.updateAll();
   assert.deepEqual(current.calls, [["pluginsState"]]);
+});
+
+test("a running operation shows each step of connecting the application that the host reports", async () => {
+  let release;
+  const host = fakeHost({ pluginsState: [state, state], pluginsRun: [new Promise((resolve) => { release = resolve; })] });
+  const operations = createPluginOperations({ host, loaded: () => loaded, changed: () => {} });
+  await operations.refresh();
+  const running = operations.run("install", "db");
+  operations.progress({ action: "install", plugin: "db", application: "shell", step: "locate", ok: true });
+  assert.deepEqual(operations.status().operation, { action: "install", plugin: "db", state: "running", error: null, step: { application: "shell", step: "locate", ok: true } });
+  // A step of another operation does not change the running one.
+  operations.progress({ action: "install", plugin: "term", application: "other", step: "recipe", ok: false });
+  assert.equal(operations.status().operation.step.application, "shell");
+  release({});
+  await running;
+  assert.deepEqual(operations.status().operation, { action: "install", plugin: "db", state: "done", error: null, step: null });
 });

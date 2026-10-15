@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
-use soksak_host_tauriv2::plugins::{Changed, Plugins, RegistryRequest, RunRequest};
+use soksak_host_tauriv2::plugins::{Changed, Plugins, Progress, RegistryRequest, RunRequest};
 
 /// Runs the sok command and returns its JSON output.
 fn sok_json(args: &[&str]) -> Value {
@@ -45,8 +45,13 @@ struct Registry {
 }
 
 fn plugin_registry() -> Registry {
+    registry_of("probe")
+}
+
+/// The release of tests/fixtures/plugin-<id>, a plugin 0.0.14 without a sidecar, and its registry.
+fn registry_of(id: &str) -> Registry {
     let (releases, registry) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/plugin-probe");
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("tests/fixtures/plugin-{id}"));
     let packed = sok_json(&[
         "plugin",
         "pack",
@@ -55,15 +60,15 @@ fn plugin_registry() -> Registry {
     ]);
     let release = packed["release"].as_str().unwrap().to_string();
     let entry = json!({
-        "id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
-        "license": "MIT", "repository": "https://example.invalid/probe",
+        "id": id, "package": format!("plugin-{id}"), "name": "Probe", "description": "검사용 plugin.",
+        "license": "MIT", "repository": format!("https://example.invalid/{id}"),
         "versions": [{"version": "0.0.14", "release": {"url": format!("file://{release}"), "sha256": packed["sha256"]},
             "engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}],
     });
     write_tree(
         registry.path(),
         &[
-            ("plugins/probe.json", &entry.to_string()),
+            (&format!("plugins/{id}.json"), &entry.to_string()),
             ("revoked.json", r#"{"plugins": [], "sidecars": []}"#),
         ],
     );
@@ -87,6 +92,7 @@ fn new_plugins(config: &Path) -> (Plugins, Arc<Mutex<Vec<Changed>>>) {
         config.to_path_buf(),
         Box::new(|| Ok(())),
         Box::new(move |change| sink.lock().unwrap().push(change)),
+        Box::new(|_| {}),
     )
     .expect("plugins");
     (plugins, seen)
@@ -200,6 +206,7 @@ fn plugins_run_applies_the_change_before_it_notifies() {
                 .unwrap()
                 .push(format!("changed {}", change.action))
         }),
+        Box::new(|_| {}),
     )
     .expect("plugins");
     plugins.run(request("install", json!("probe"))).unwrap();
@@ -297,4 +304,40 @@ fn plugins_use_registry_sets_the_registry_like_the_command() {
             Err("index must be a non-empty string".to_string())
         );
     }
+}
+
+// contract: plugins.run.reports-application-progress
+#[test]
+fn a_plugin_operation_reports_each_step_of_connecting_the_application() {
+    let config = tempfile::tempdir().unwrap();
+    let progress = Arc::new(Mutex::new(Vec::new()));
+    let sink = progress.clone();
+    let plugins = Plugins::new(
+        config.path().to_path_buf(),
+        Box::new(|| Ok(())),
+        Box::new(|_| {}),
+        Box::new(move |step: Progress| sink.lock().unwrap().push(step)),
+    )
+    .expect("plugins");
+    let registry = registry_of("connector");
+    plugins
+        .use_registry(RegistryRequest {
+            index: json!(registry.index),
+        })
+        .expect("registry");
+    plugins
+        .run(request("install", json!("connector")))
+        .expect("install");
+    let step = |name: &str| Progress {
+        action: "install".into(),
+        plugin: "connector".into(),
+        application: "shell".into(),
+        step: name.into(),
+        ok: true,
+        error: String::new(),
+    };
+    assert_eq!(
+        *progress.lock().unwrap(),
+        vec![step("locate"), step("record")]
+    );
 }

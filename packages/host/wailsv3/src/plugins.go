@@ -28,6 +28,17 @@ type PluginsChanged struct {
 	Plugin string `json:"plugin"`
 }
 
+// PluginsProgress is the value of the plugins-progress event: a step of connecting the application of a connector plugin
+// during a plugin operation (docs/spec/installation.md#applications).
+type PluginsProgress struct {
+	Action      string `json:"action"`
+	Plugin      string `json:"plugin"`
+	Application string `json:"application"`
+	Step        string `json:"step"`
+	OK          bool   `json:"ok"`
+	Error       string `json:"error,omitempty"`
+}
+
 // errPluginOperationRunning is the rejection when another plugin operation is running.
 var errPluginOperationRunning = errors.New("another plugin operation is running")
 
@@ -41,15 +52,16 @@ type Plugins struct {
 	running   sync.Mutex
 	apply     func() error
 	changed   func(PluginsChanged)
+	progress  func(PluginsProgress)
 }
 
 // NewPlugins creates a Plugins that works with the core version and the platform of this application.
-func NewPlugins(configDir string, apply func() error, changed func(PluginsChanged)) (*Plugins, error) {
+func NewPlugins(configDir string, apply func() error, changed func(PluginsChanged), progress func(PluginsProgress)) (*Plugins, error) {
 	platform, err := sok.CurrentPlatform()
 	if err != nil {
 		return nil, err
 	}
-	return &Plugins{configDir: configDir, core: sok.CoreVersion, platform: platform, apply: apply, changed: changed}, nil
+	return &Plugins{configDir: configDir, core: sok.CoreVersion, platform: platform, apply: apply, changed: changed, progress: progress}, nil
 }
 
 // State returns the registry address, the index that was checked, and the install state.
@@ -71,7 +83,10 @@ func (p *Plugins) Run(request PluginsRunRequest) (any, error) {
 	if !p.running.TryLock() {
 		return nil, errPluginOperationRunning
 	}
-	result, err := sok.RunPluginAction(p.configDir, request.Action, plugin, p.core, p.platform, emitApplicationStep)
+	result, err := sok.RunPluginAction(p.configDir, request.Action, plugin, p.core, p.platform, func(step sok.ApplicationStep) {
+		emitApplicationStep(step)
+		p.progress(PluginsProgress{Action: request.Action, Plugin: plugin, Application: step.Application, Step: step.Step, OK: step.OK, Error: step.Error})
+	})
 	if err != nil {
 		p.running.Unlock()
 		return nil, err
@@ -150,6 +165,19 @@ func (h *Host) notifyPlugins(change PluginsChanged) {
 	h.mu.Unlock()
 	for _, s := range windows {
 		s.Emit("plugins-changed", change)
+	}
+}
+
+// notifyPluginsProgress sends plugins-progress to all windows.
+func (h *Host) notifyPluginsProgress(progress PluginsProgress) {
+	h.mu.Lock()
+	windows := make([]*Surfaces, 0, len(h.windows))
+	for _, s := range h.windows {
+		windows = append(windows, s)
+	}
+	h.mu.Unlock()
+	for _, s := range windows {
+		s.Emit("plugins-progress", progress)
 	}
 }
 

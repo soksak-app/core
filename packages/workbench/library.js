@@ -242,7 +242,7 @@ export function createLibrary(root, rendered = () => {}) {
     const operation = status.operation;
     // A plugin operation that succeeds reloads the window, so a done operation shows no line.
     if (operation && operation.plugin === row.id && operation.state !== 'done') {
-      const line = element('p', 'library-plugin__operation', operation.state === 'running' ? `${row.id} ${operation.action} 진행 중` : '');
+      const line = element('p', 'library-plugin__operation', operation.state === 'running' ? `${row.id} ${operation.action} 진행 중${operation.step ? ` · ${operation.step.application} ${operation.step.step}${operation.step.ok ? '' : ' 실패'}` : ''}` : '');
       line.dataset.state = operation.state;
       card.append(line);
       if (operation.state === 'failed') showError(line, `library plugin ${row.id}`, operation.error);

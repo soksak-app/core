@@ -27,7 +27,7 @@ test("the plugin page of the library lists each plugin with its description, ver
     outdated: [{ sidecar: "@fixture/sidecar-service", running: "0.0.3", installed: "0.0.7", sessions: 2 }],
     // The plugins that the registry lists in a newer version.
     updates: [{ id: "term", installed: "0.1.0", latest: "0.2.0" }],
-    operation: { action: "install", plugin: "db", state: "running", error: null },
+    operation: { action: "install", plugin: "db", state: "running", error: null, step: { application: "shell", step: "recipe", ok: true } },
     plugins: [
       { id: "db", name: "DB", description: "데이터베이스 표면.", state: "available", installed: null, latest: "2.0.0",
         sidecars: [{ name: "@x/db", range: "^1.0.0", version: null }] },
@@ -92,7 +92,7 @@ test("the plugin page of the library lists each plugin with its description, ver
     assert.equal(text("db", "about"), "데이터베이스 표면.");
     assert.equal(text("db", "versions"), "최신 버전 2.0.0");
     assert.equal(text("db", "sidecars"), "사이드카 @x/db ^1.0.0");
-    assert.equal(text("db", "operation"), "db install 진행 중");
+    assert.equal(text("db", "operation"), "db install 진행 중 · shell recipe");
     assert.equal(text("term", "state"), "사용 중");
     assert.equal(text("term", "versions"), "설치된 버전 0.1.0 · 최신 버전 0.2.0");
     assert.equal(text("term", "sidecars"), "사이드카 @soksak/sidecar-vt 0.1.2");

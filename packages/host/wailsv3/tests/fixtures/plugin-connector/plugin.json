@@ -1,0 +1,52 @@
+{
+  "id": "connector",
+  "application": {
+    "id": "shell",
+    "name": "Shell",
+    "version": "1.0.0",
+    "platforms": {
+      "darwin-arm64": {
+        "locate": [
+          {
+            "command": "sh"
+          }
+        ],
+        "recipe": {
+          "kind": "release",
+          "url": "https://example.invalid/sh.tar.gz",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "unpack": "tar.gz"
+        },
+        "program": "sh"
+      },
+      "darwin-x64": {
+        "locate": [
+          {
+            "command": "sh"
+          }
+        ],
+        "recipe": {
+          "kind": "release",
+          "url": "https://example.invalid/sh.tar.gz",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "unpack": "tar.gz"
+        },
+        "program": "sh"
+      },
+      "linux-x64": {
+        "locate": [
+          {
+            "command": "sh"
+          }
+        ],
+        "recipe": {
+          "kind": "release",
+          "url": "https://example.invalid/sh.tar.gz",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "unpack": "tar.gz"
+        },
+        "program": "sh"
+      }
+    }
+  }
+}

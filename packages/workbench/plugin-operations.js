@@ -118,18 +118,28 @@ export function createPluginOperations({ host, loaded, changed }) {
   async function runAction(action, plugin) {
     if (!PLUGIN_ACTIONS.includes(action)) throw new Error(`unknown plugin action ${action}`);
     if (!host) throw new Error("plugin operations need a native host");
-    operation = { action, plugin, state: "running", error: null };
+    operation = { action, plugin, state: "running", error: null, step: null };
     changed();
     const cids = beginOperation("page.plugin.operation", { action, plugin });
     try {
       await host.call("pluginsRun", { action, plugin }, { cids });
-      operation = { action, plugin, state: "done", error: null };
+      operation = { action, plugin, state: "done", error: null, step: null };
     } catch (error) {
-      operation = { action, plugin, state: "failed", error: error.message };
+      operation = { action, plugin, state: "failed", error: error.message, step: null };
       throw error;
     } finally {
       await refresh();
     }
+  }
+
+  /**
+   * Records a step of connecting the application of a connector plugin that the host reports with plugins-progress
+   * (docs/spec/installation.md#applications) on the running operation of that plugin and action.
+   */
+  function progress({ action, plugin, application, step, ok }) {
+    if (operation?.state !== "running" || operation.action !== action || operation.plugin !== plugin) return;
+    operation = { ...operation, step: { application, step, ok } };
+    changed();
   }
 
   /** Updates the plugins of `updates` one after the other and stops at the first failure (docs/spec/installation.md). */
@@ -192,5 +202,5 @@ export function createPluginOperations({ host, loaded, changed }) {
     }
   }
 
-  return { state: () => state, refresh, refreshOutdated, replace, run: runAction, updateAll, useRegistry, status, installStarter, failure: () => failure, hosted: Boolean(host) };
+  return { state: () => state, refresh, refreshOutdated, replace, run: runAction, progress, updateAll, useRegistry, status, installStarter, failure: () => failure, hosted: Boolean(host) };
 }

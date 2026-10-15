@@ -34,12 +34,19 @@ func sokJSON(t *testing.T, args ...string) map[string]any {
 // returns the paths of index.json and the release. go test runs in the folder of the Go package, so the fixture is below it.
 func pluginRegistry(t *testing.T) (index, release string) {
 	t.Helper()
+	return registryOf(t, "probe")
+}
+
+// registryOf builds the release of fixtures/plugin-<id>, a plugin 0.0.14 without a sidecar, and its registry, and returns
+// the paths of index.json and the release.
+func registryOf(t *testing.T, id string) (index, release string) {
+	t.Helper()
 	releases, registry := t.TempDir(), t.TempDir()
-	packed := sokJSON(t, "plugin", "pack", "fixtures/plugin-probe", releases)
+	packed := sokJSON(t, "plugin", "pack", "fixtures/plugin-"+id, releases)
 	release = packed["release"].(string)
 	writeInstalled(t, registry, map[string]string{
-		"plugins/probe.json": `{"id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
-			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.0.14",
+		"plugins/" + id + ".json": `{"id": "` + id + `", "package": "plugin-` + id + `", "name": "Probe", "description": "검사용 plugin.",
+			"license": "MIT", "repository": "https://example.invalid/` + id + `", "versions": [{"version": "0.0.14",
 			"release": {"url": "file://` + release + `", "sha256": "` + packed["sha256"].(string) + `"},
 			"engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}]}`,
 		"revoked.json": `{"plugins": [], "sidecars": []}`,
@@ -69,7 +76,7 @@ func (c *changes) list() []host.PluginsChanged {
 func newPlugins(t *testing.T, config string) (*host.Plugins, *changes) {
 	t.Helper()
 	seen := &changes{}
-	plugins, err := host.NewPlugins(config, func() error { return nil }, seen.add)
+	plugins, err := host.NewPlugins(config, func() error { return nil }, seen.add, func(host.PluginsProgress) {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +199,7 @@ func TestPluginsRunAppliesTheChangeBeforeItNotifies(t *testing.T) {
 	plugins, err := host.NewPlugins(config, func() error {
 		steps = append(steps, "apply")
 		return nil
-	}, func(change host.PluginsChanged) { steps = append(steps, "changed "+change.Action) })
+	}, func(change host.PluginsChanged) { steps = append(steps, "changed "+change.Action) }, func(host.PluginsProgress) {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,5 +291,31 @@ func TestPluginsUseRegistrySetsTheRegistryLikeTheCommand(t *testing.T) {
 		if _, err := plugins.UseRegistry(host.PluginsRegistryRequest{Index: value}); err == nil || err.Error() != "index must be a non-empty string" {
 			t.Fatalf("index %v: %v", value, err)
 		}
+	}
+}
+
+// contract: plugins.run.reports-application-progress
+func TestAPluginOperationReportsEachStepOfConnectingTheApplication(t *testing.T) {
+	config := t.TempDir()
+	var progress []host.PluginsProgress
+	plugins, err := host.NewPlugins(config, func() error { return nil }, func(host.PluginsChanged) {}, func(step host.PluginsProgress) {
+		progress = append(progress, step)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	index, _ := registryOf(t, "connector")
+	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := plugins.Run(host.PluginsRunRequest{Action: "install", Plugin: "connector"}); err != nil {
+		t.Fatal(err)
+	}
+	want := []host.PluginsProgress{
+		{Action: "install", Plugin: "connector", Application: "shell", Step: "locate", OK: true},
+		{Action: "install", Plugin: "connector", Application: "shell", Step: "record", OK: true},
+	}
+	if got, _ := json.Marshal(progress); string(got) != func() string { data, _ := json.Marshal(want); return string(data) }() {
+		t.Fatalf("progress %s", got)
 	}
 }
