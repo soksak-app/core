@@ -27,6 +27,9 @@ fn a_package_that_brew_has_as_declared_is_accepted() {
 // contract: application.package.brew-lacks-package
 #[test]
 fn a_package_that_brew_does_not_have_is_refused_with_its_answer() {
+    if !brew_is_the_manager() {
+        return;
+    }
     let error =
         check_application_package("brew", "no-such-cask-soksak", true, &path()).unwrap_err();
     assert!(

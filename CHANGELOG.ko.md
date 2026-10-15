@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.5.10-1: brew가 가지지 않은 package의 Rust 검사가 brew가 플랫폼의 관리자가 아니거나 검색 경로에 없으면 건너뛴다. Red: linux CI가 brew가 없다는 오류로 실패했다. Green: 로컬 레시피 검사 6개 중 6개. linux는 push의 CI가 확인한다.
 - F194.5.10: 애플리케이션은 플랫폼의 애플리케이션 식별자로 식별하고, 그 배포물이나 플랫폼의 표준 패키지 관리자로 설치한다: manifest는 `bundle`을 darwin에서만, 새 `appid`를 windows와 linux에서만, 플랫폼마다의 패키지 관리자(`brew`, `winget`, `flatpak`)를 받는다. 두 `sok` 구현은 새 platform 작업으로 `appid`를 시도하고 다른 플랫폼의 관리자를 거부하며, `appid`, `winget`, `flatpak`은 `not implemented on <os>`를 돌려준다. brew 검사는 brew가 플랫폼의 관리자가 아니거나 검색 경로에 없으면 건너뛴다. Red: manifest가 linux의 brew를 받았고, 두 `sok` 구현이 `appid`를 모르는 항목으로, 관리자를 "not brew"로 거부했다. Green: manifest 검사, 각 언어 연결 검사 5개와 6개.
 - F194.5.6.1-1: 애플리케이션의 각 Go·Rust 짝 검사가 host 계약이 이제 나열하는 `application.*` 계약 사례 20개 중 하나를 선언하고, package 검사는 brew가 없는 기계에서 `brew is not on the search path`를 단언한다. Red: F194.5.6.1 push의 CI가 `make host-contract-check`(`declares no contract case`)와 linux의 Go package 검사에서 실패했다. Green: 두 언어에서 로컬로 통과하고, 다음 push의 CI가 확인한다.
 - F194.5.6.2: 애플리케이션 연결의 각 단계(`locate`, `recipe`, `record`)가 두 `sok` 패키지의 설치 함수가 받는 관찰자에 닿는다. 명령줄은 그것을 run의 event 파일에 `sok.application.step`으로, 두 host는 `host.application.step`으로 방법, 결과, microsecond와 함께 저장한다. Red: 관찰 검사가 관찰자 인자와 함께 build되지 않거나 compile되지 않았다. Green: 각 언어 연결 검사 3개 중 3개, plugin과 ownership 검사와 함께.
