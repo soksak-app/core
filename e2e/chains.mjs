@@ -24,7 +24,7 @@ export function declaredChains(path = CATALOG) {
 }
 
 /** All rows of a query, page by page. */
-async function allRows(s, query) {
+export async function allRows(s, query) {
   const rows = [];
   for (let after; ;) {
     const page = await s.client.request("log.query", after === undefined ? query : { ...query, after });
