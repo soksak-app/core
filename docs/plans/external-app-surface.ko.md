@@ -68,6 +68,10 @@ Slint, egui·wgpu, Qt, 웹 interface를 처음부터 고려한다. 측면 2는 S
 - 다른 어떤 저장소도 이 저장소의 code를 link하지 않고, 애플리케이션에는 embed protocol로만 닿는다. 애플리케이션의 이름과 mark는 쓰지 않는다.
 - 관문: 애플리케이션이 표면에서 project를 열고 재생하고 편집하며, 재생 중에 측면 1의 관문을 만족한다.
 
+## 연결 plugin
+
+애플리케이션은 연결 plugin으로 사람들에게 닿으며, [connector plugins](connector-plugins.ko.md)가 그것을 정한다.
+
 ## 저장소
 
 새 저장소(embed kit, 애플리케이션 sidecar, 애플리케이션 plugin, 어댑터)는 로컬 저장소로 버전 0.0.1에서 시작한다. 원격과 registry 항목은 관문을 넘은 뒤에 만들어, 버린 측면이 게시된 흔적을 남기지 않게 한다.

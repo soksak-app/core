@@ -68,6 +68,10 @@ The delay is computed from the records of every step (native input, host relay, 
 - No other repository links the code of this repository; the application is reached only through the embed protocol. The name and the mark of the application are not used.
 - Gate: the application opens a project, plays and edits on the surface, and meets the gate of side 1 while it plays.
 
+## Connector plugins
+
+An application reaches people through a connector plugin, which [connector plugins](connector-plugins.md) defines.
+
 ## Repositories
 
 The new repositories (the embed kit, the application sidecar, the application plugin and the adapter) start as local repositories, at version 0.0.1. Their remotes and registry entries are created after their gate passes, so a discarded side leaves nothing published.
