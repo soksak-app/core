@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.6: 선언된 모든 workspace 버전이 연결 plugin의 release인 0.0.15다.
 - F194.5.8: 창 검사 `e2e/connector.test.mjs`가 embed kit 시험 애플리케이션의 연결 plugin을 자기 registry에 묶고, 애플리케이션의 release를 검사 registry의 인증서로 https에서 제공한다. 애플리케이션이 있으면 설치가 그 자리의 것을 연결하고, 없으면 release 레시피가 설정 폴더에 설치하며, 매번 `application:embed-test-app`을 가진 appview 카드가 기록된 경로로 그것을 시작한다. 이 검사가 F194.5.6.1-2와 sidecar-app A1.10을 찾았다. Green(macOS 26, F194.5.6.1-2와 sidecar-app A1.10을 담은 debug build): 두 host에서 3번 중 3번.
 - F194.5.6.1-2: 두 설치기가 설치되거나 업데이트된 연결 plugin마다, 연결이 실패한 이전 설치가 폴더를 풀어 두었어도 애플리케이션을 연결한다. Red: 두 `sok` 패키지의 새 검사가 두 번째 설치 뒤 애플리케이션을 찾지 못했다. Green: 각 언어 연결 검사 4개 중 4개, plugin과 ownership 검사와 함께.
 - F194.3.1-2: window-check workflow가 embed kit을 checkout하고 시험 애플리케이션을 빌드해 `pnpm verify`의 appview 관문이 요구하는 `SOKSAK_EMBED_TEST_APP`을 정한다. Red: 새 workflow 검사가 `window-checks.yml`이 `SOKSAK_EMBED_TEST_APP`을 정하지 않는다고 보고했다. Green: workflow 검사 6개 중 6개.

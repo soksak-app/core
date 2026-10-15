@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F194.6: every declared workspace version is 0.0.15, the release of connector plugins.
 - F194.5.8: the window check `e2e/connector.test.mjs` packs a connector plugin of the test application of the embed kit into its own registry and serves the release of the application over https with the certificate of the check registry; with the application present the install connects it where it is, and without it the release recipe installs it into the configuration folder, and each time an appview card with `application:embed-test-app` starts it from the recorded path. It found F194.5.6.1-2 and sidecar-app A1.10. Green (macOS 26, debug builds with F194.5.6.1-2 and sidecar-app A1.10): 3 of 3 runs on both hosts.
 - F194.5.6.1-2: both installers connect the application of each installed or updated connector plugin, also when its folder was extracted by an earlier install whose connection failed. Red: the new check of both `sok` packages found no application after the second install. Green: 4 of 4 connector checks in each language with the plugin and ownership checks.
 - F194.3.1-2: the window-check workflow checks out the embed kit, builds its test application and sets `SOKSAK_EMBED_TEST_APP`, which the appview gate of `pnpm verify` requires. Red: the new workflow check reported that `window-checks.yml` does not set `SOKSAK_EMBED_TEST_APP`. Green: 6 of 6 workflow checks.

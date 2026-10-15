@@ -30,14 +30,14 @@ func sokJSON(t *testing.T, args ...string) map[string]any {
 	return value
 }
 
-// pluginRegistry builds the release of fixtures/plugin-probe (the plugin probe 0.0.14 without a sidecar) and its registry, and
+// pluginRegistry builds the release of fixtures/plugin-probe (the plugin probe 0.0.15 without a sidecar) and its registry, and
 // returns the paths of index.json and the release. go test runs in the folder of the Go package, so the fixture is below it.
 func pluginRegistry(t *testing.T) (index, release string) {
 	t.Helper()
 	return registryOf(t, "probe")
 }
 
-// registryOf builds the release of fixtures/plugin-<id>, a plugin 0.0.14 without a sidecar, and its registry, and returns
+// registryOf builds the release of fixtures/plugin-<id>, a plugin 0.0.15 without a sidecar, and its registry, and returns
 // the paths of index.json and the release.
 func registryOf(t *testing.T, id string) (index, release string) {
 	t.Helper()
@@ -46,7 +46,7 @@ func registryOf(t *testing.T, id string) (index, release string) {
 	release = packed["release"].(string)
 	writeInstalled(t, registry, map[string]string{
 		"plugins/" + id + ".json": `{"id": "` + id + `", "package": "plugin-` + id + `", "name": "Probe", "description": "검사용 plugin.",
-			"license": "MIT", "repository": "https://example.invalid/` + id + `", "versions": [{"version": "0.0.14",
+			"license": "MIT", "repository": "https://example.invalid/` + id + `", "versions": [{"version": "0.0.15",
 			"release": {"url": "file://` + release + `", "sha256": "` + packed["sha256"].(string) + `"},
 			"engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}]}`,
 		"revoked.json": `{"plugins": [], "sidecars": []}`,
@@ -123,7 +123,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	if state.Registry != "file://"+index || state.Index["plugins"].([]any)[0].(map[string]any)["id"] != "probe" {
 		t.Fatalf("state with a registry %+v", state)
 	}
-	if plugin := state.Installed.Plugins["probe"]; plugin.Version != "0.0.14" || !plugin.Enabled {
+	if plugin := state.Installed.Plugins["probe"]; plugin.Version != "0.0.15" || !plugin.Enabled {
 		t.Fatalf("installed %+v", state.Installed)
 	}
 	if err := os.Remove(index); err != nil {
@@ -156,7 +156,7 @@ func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"plugin":{"version":"0.0.14","path":"plugins/probe/0.0.14","enabled":true,"sidecars":{}},"sidecars":{}}`
+	want := `{"plugin":{"version":"0.0.15","path":"plugins/probe/0.0.15","enabled":true,"sidecars":{}},"sidecars":{}}`
 	if string(data) != want {
 		t.Fatalf("install result %s", data)
 	}
