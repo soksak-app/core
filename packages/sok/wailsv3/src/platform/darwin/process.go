@@ -132,3 +132,37 @@ func (darwin) BundleVersion(bundle string) (string, error) {
 	}
 	return strings.TrimSpace(string(output)), nil
 }
+
+// ApplicationOfBundle asks the metadata index (mdfind) for an application bundle whose CFBundleIdentifier is the
+// identifier and returns the first one under /Applications, /System/Applications or the user Applications folder before
+// any other.
+func (darwin) ApplicationOfBundle(identifier string) (string, bool, error) {
+	if strings.ContainsAny(identifier, "'\"\\") {
+		return "", false, fmt.Errorf("bundle identifier %q holds a quote or a backslash", identifier)
+	}
+	output, err := exec.Command("mdfind", "-0", fmt.Sprintf("kMDItemCFBundleIdentifier == '%s'", identifier)).Output()
+	if err != nil {
+		return "", false, fmt.Errorf("mdfind for %s: %w", identifier, err)
+	}
+	var found []string
+	for _, path := range strings.Split(string(output), "\x00") {
+		if strings.HasSuffix(path, ".app") {
+			found = append(found, path)
+		}
+	}
+	if len(found) == 0 {
+		return "", false, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false, fmt.Errorf("the home folder for the user Applications folder: %w", err)
+	}
+	for _, folder := range []string{"/Applications/", "/System/Applications/", filepath.Join(home, "Applications") + "/"} {
+		for _, path := range found {
+			if strings.HasPrefix(path, folder) {
+				return path, true, nil
+			}
+		}
+	}
+	return found[0], true, nil
+}

@@ -53,3 +53,7 @@ func (windows) LockFile(*os.File) error {
 func (windows) PathsDir() (string, error) {
 	return "", errors.New("path entries are not implemented on windows")
 }
+
+func (windows) ApplicationOfBundle(string) (string, bool, error) {
+	return "", false, errors.New("application bundles are not implemented on windows")
+}

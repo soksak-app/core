@@ -140,6 +140,14 @@ impl Platform for Linux {
         Err("application bundles are not implemented on linux".into())
     }
 
+    /// Linux has no application bundles with identifiers.
+    fn application_of_bundle(
+        &self,
+        _identifier: &str,
+    ) -> Result<Option<std::path::PathBuf>, String> {
+        Err("application bundles are not implemented on linux".into())
+    }
+
     fn bundle_version(&self, _bundle: &std::path::Path) -> Result<String, String> {
         Err("application bundles are not implemented on linux".into())
     }

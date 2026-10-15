@@ -50,6 +50,9 @@ pub trait Platform {
     fn monotonic_nanos(&self) -> Result<u64, String>;
     /// Opens the index file at the path for reading and writing, and creates it with the mode of a private file when it does not exist.
     fn open_index(&self, path: &std::path::Path) -> Result<std::fs::File, String>;
+    /// The path of the application bundle with the identifier, or `None` when none is found (docs/spec/installation.md#applications).
+    fn application_of_bundle(&self, identifier: &str)
+    -> Result<Option<std::path::PathBuf>, String>;
     /// Takes an exclusive advisory lock on the open file and waits until it holds it, so the processes that update one index exclude
     /// each other (docs/spec/logging.md#index). Closing the file releases the lock.
     fn lock_file(&self, file: &std::fs::File) -> Result<(), String>;

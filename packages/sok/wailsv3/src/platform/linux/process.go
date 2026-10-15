@@ -84,3 +84,8 @@ func (linux) LockFile(file *os.File) error {
 func (linux) PathsDir() (string, error) {
 	return "", errors.New("path entries are not implemented on linux")
 }
+
+// ApplicationOfBundle: linux has no application bundles with identifiers.
+func (linux) ApplicationOfBundle(string) (string, bool, error) {
+	return "", false, errors.New("application bundles are not implemented on linux")
+}

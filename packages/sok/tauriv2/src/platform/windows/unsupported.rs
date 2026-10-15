@@ -36,6 +36,13 @@ impl Platform for Windows {
         Err("index files are not implemented on windows".into())
     }
 
+    fn application_of_bundle(
+        &self,
+        _identifier: &str,
+    ) -> Result<Option<std::path::PathBuf>, String> {
+        Err("application bundles are not implemented on windows".into())
+    }
+
     fn lock_file(&self, _file: &std::fs::File) -> Result<(), String> {
         Err("file locks are not implemented on windows".into())
     }

@@ -21,6 +21,8 @@ path = "src/main.rs"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
+# The executable of a name on the search path, for the locate entry command of an application.
+which = "7"
 flate2 = "1"
 memchr = "2"
 sha2 = "0.10"
@@ -35,6 +37,8 @@ libc = "0.2"
 signal-hook = "0.3"
 
 [dev-dependencies]
+# Temporary folders of the tests that own the files they write.
+tempfile = "3"
 # 검사 소유의 TLS server 의 인증서와 server 연결.
 rcgen = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }

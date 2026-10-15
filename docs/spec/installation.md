@@ -98,7 +98,7 @@ A connector plugin declares in `application` an application that it does not con
 
 | Field | Meaning |
 | --- | --- |
-| `locate` | Nonempty list of ways to find the installed application, tried in order: `{ "bundle": "<bundle identifier>" }` (LaunchServices, darwin), `{ "command": "<name>" }` (an executable of that name on `PATH`), or `{ "path": "<absolute path>" }` (an executable file) |
+| `locate` | Nonempty list of ways to find the installed application, tried in order: `{ "bundle": "<bundle identifier>" }` (the metadata index, `mdfind`, on darwin; the executable is `program` from the folder that holds the bundle), `{ "command": "<name>" }` (an executable of that name on `PATH`), or `{ "path": "<absolute path>" }` (an executable file) |
 | `recipe` | How to install the application through its own distribution: `{ "kind": "release", "url": "<https address>", "sha256": "<hash>", "unpack": "zip" \| "tar.gz" \| "none" }`, `{ "kind": "package", "manager": "brew", "name": "<package>" }`, or `{ "kind": "source", "repository": "<https address>", "ref": "<tag or commit>", "commands": [["<program>", "<argument>", …], …], "output": "<path inside the clone>" }` |
 | `program` | The executable inside the installed folder that starts the application |
 | `arguments` | Optional list of the arguments that start it |

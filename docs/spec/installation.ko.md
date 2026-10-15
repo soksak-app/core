@@ -98,7 +98,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 | 필드 | 뜻 |
 | --- | --- |
-| `locate` | 설치된 애플리케이션을 찾는 방법의 비어 있지 않은 목록으로, 차례로 시도한다: `{ "bundle": "<bundle identifier>" }`(LaunchServices, darwin), `{ "command": "<name>" }`(`PATH`에 있는 그 이름의 실행 파일), 또는 `{ "path": "<absolute path>" }`(실행 파일) |
+| `locate` | 설치된 애플리케이션을 찾는 방법의 비어 있지 않은 목록으로, 차례로 시도한다: `{ "bundle": "<bundle identifier>" }`(darwin의 metadata 색인 `mdfind`. 실행 파일은 bundle을 담은 폴더에서 본 `program`), `{ "command": "<name>" }`(`PATH`에 있는 그 이름의 실행 파일), 또는 `{ "path": "<absolute path>" }`(실행 파일) |
 | `recipe` | 애플리케이션 자신의 배포로 설치하는 방법: `{ "kind": "release", "url": "<https address>", "sha256": "<hash>", "unpack": "zip" \| "tar.gz" \| "none" }`, `{ "kind": "package", "manager": "brew", "name": "<package>" }`, 또는 `{ "kind": "source", "repository": "<https address>", "ref": "<tag or commit>", "commands": [["<program>", "<argument>", …], …], "output": "<path inside the clone>" }` |
 | `program` | 애플리케이션을 시작하는, 설치된 폴더 안의 실행 파일 |
 | `arguments` | 시작할 때의 인자 목록(선택) |
