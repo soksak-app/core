@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F194.5.9: held until the example application provides a build with the embed adapter through its own distribution, because a recipe installs an application only through that distribution.
 - F194.6, F194.7.1, F194.7.3, F194.5.7.2, F194.5.8-1: core 0.0.15 is published with both host builds; plugin-appview 0.0.2 (shared embed page, `appview.surface`) and sidecar-app 0.0.1 (A1.10) are published and listed in the registry, whose publish and ci workflows passed.
 - F194.7.2: the connector window check builds a plugin named after its application with its own surface, which imports the shared embed page `@soksak/shared/appview.surface/surface.js`, contributes to `appview.surface` and declares the image region of the application sidecar, and opens the card of that plugin without a setting; the workspace registry releases every declared sidecar, because the application sidecar is used only by connector plugins outside the workspace. Red: the registry test found no release for a declared sidecar that no workspace plugin uses, and the check could not resolve the sidecar of the connector. Green: 4 of 4 registry tests; 3 of 3 runs of the check on both hosts (macOS 26, debug builds with F194.7.0).
 - F194.7.0: `validateManifest` accepts `extends` without `surface` when every point declares `modules`, and a plugin with only `extends`; the specification states the shared-module point. Red: the new check of a module-only provider was refused with `extends requires a surface`. Green: 213 of 213 plugin-api checks.

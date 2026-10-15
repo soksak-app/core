@@ -1062,7 +1062,7 @@
       - [o] F194.5.7.2 — P2: `runtime.applications`를 가진 core 버전을 release하고, 연결된 애플리케이션을 시작하는 plugin-appview 항목을 기록한다. 이 수정은 그 plugin-appview release로 사용자에게 닿는다.
     - [o] F194.5.8 — P2: embed kit 시험 애플리케이션의 release를 레시피로 가진 시험용 연결 plugin과, 없으면 설치하고 있으면 연결하며 카드에서 시작해 관문을 실행하는 창 검사.
       - [o] F194.5.8-1 — P2: 붙지 않은 region의 frame을 오류 대신 기록하는 A1.10과 함께 sidecar-app을 release한다. 이 수정은 그 release로만 사용자에게 닿는다.
-    - [ ] F194.5.9 — P2: 예시 애플리케이션의 자기 배포가 embed 어댑터가 든 build를 주면, 그것의 연결 plugin.
+    - [!] F194.5.9 — P2: 예시 애플리케이션의 자기 배포가 embed 어댑터가 든 build를 주면, 그것의 연결 plugin. 원인: 레시피는 애플리케이션을 그 자신의 배포로만 설치하는데, 예시 애플리케이션의 어떤 release에도 embed 어댑터가 없다. 어댑터 build는 게시되지 않은 로컬 fork에만 있다. 재시도 조건: 예시 애플리케이션의 release나 tag된 source가 embed 어댑터를 가진 build를 줄 때.
     - [o] F194.5.10 — P2: 애플리케이션은 플랫폼의 애플리케이션 식별자로 식별하고, 애플리케이션의 배포물이나 플랫폼의 표준 패키지 관리자로 설치한다: `locate`에 `bundle` 곁에 `appid`(windows: 설치 package 또는 winget 식별자, linux: freedesktop 또는 Flatpak 애플리케이션 식별자)가 생기고, `package`는 플랫폼의 관리자(darwin `brew`, windows `winget`, linux `flatpak`)를 이름한다. windows와 linux는 구현될 때까지 `not implemented on <os>`를 돌려준다.
     - [o] F194.5.10-1 — P2: brew가 가지지 않은 package의 Rust 검사가 brew가 플랫폼의 관리자가 아닌 곳에서 건너뛴다. F194.5.10의 조건이 그 검사에 빠져 linux CI가 실패했다.
   - [o] F194.7 — P1: 애플리케이션마다 plugin 하나가 사람이 여는 plugin이다: 연결 plugin은 자기 애플리케이션의 이름과 자기 surface를 가지고, `appview`는 자기 surface 대신 extension point `appview.surface`의 공유 module로 embed page를 준다([계획](plans/connector-plugins.ko.md)). 설정 `application:<id>`를 가진 `appview` 카드(F194.5.7)는 사람이 애플리케이션 대신 `appview`를 열게 했다.
