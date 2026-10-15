@@ -117,6 +117,7 @@ impl Plugins {
                 &plugin,
                 &self.core,
                 &self.platform,
+                &mut emit_application_step,
             )?;
             (result, (self.apply)())
         };
@@ -130,4 +131,20 @@ impl Plugins {
         applied.map_err(|error| format!("apply {action} {plugin}: {error}"))?;
         Ok(result)
     }
+}
+
+/// Stores each step of connecting the application of a connector plugin as `host.application.step`
+/// (docs/spec/installation.md#applications).
+fn emit_application_step(step: soksak_sok::application::ApplicationStep) {
+    let mut fields = serde_json::json!({"application": step.application, "step": step.step, "ok": step.ok, "micros": step.micros});
+    if !step.method.is_empty() {
+        fields["method"] = Value::from(step.method);
+    }
+    let level = if step.ok {
+        crate::event_log::Level::Info
+    } else {
+        fields["error"] = Value::from(step.error);
+        crate::event_log::Level::Warn
+    };
+    crate::event_record::emit_host(level, "host.application.step", fields);
 }

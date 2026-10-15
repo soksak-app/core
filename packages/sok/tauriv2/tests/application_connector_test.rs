@@ -88,6 +88,7 @@ fn sketcher(platform: &str, path: &Path) -> Value {
     }}})
 }
 
+// contract: application.connector.connects-installed
 #[test]
 fn installing_a_connector_connects_an_application_that_is_installed() {
     let platform = soksak_sok::current_platform().unwrap();
@@ -131,6 +132,7 @@ fn installing_a_connector_connects_an_application_that_is_installed() {
     );
 }
 
+// contract: application.connector.refuses-other-platform
 #[test]
 fn a_connector_for_another_platform_is_refused_and_changes_nothing() {
     let platform = soksak_sok::current_platform().unwrap();
@@ -157,4 +159,91 @@ fn a_connector_for_another_platform_is_refused_and_changes_nothing() {
     );
     assert!(!config.path().join("plugins/installed.json").exists());
     assert!(!config.path().join(APPLICATIONS).exists());
+}
+
+/// The events of the event files of the configuration, in their order.
+fn events_of(config: &Path) -> Vec<Value> {
+    let mut events = vec![];
+    let mut files: Vec<_> = std::fs::read_dir(config.join("logs"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "jsonl")
+        })
+        .collect();
+    files.sort();
+    for file in files {
+        for line in std::fs::read_to_string(&file).unwrap().lines() {
+            events.push(serde_json::from_str(line).unwrap());
+        }
+    }
+    events
+}
+
+// contract: application.connector.steps-observed-and-stored
+/// Each step of the connection reaches the observer of the operation, and the command line stores it in its event file.
+#[test]
+fn each_step_of_the_connection_is_observed_and_stored() {
+    let platform = soksak_sok::current_platform().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let present = elsewhere.path().join("sketcher");
+    write(&present, "#!/bin/sh\n", 0o755);
+    let (registry, _releases) = connector_registry(&sketcher(&platform, &present));
+    let index = registry.path().join("index.json");
+
+    let config = tempfile::tempdir().unwrap();
+    run_json(&[
+        "registry",
+        "use",
+        index.to_str().unwrap(),
+        "--config-dir",
+        config.path().to_str().unwrap(),
+    ]);
+    let mut steps = vec![];
+    soksak_sok::plugins::run_plugin_action(
+        config.path(),
+        "install",
+        "probe",
+        "0.0.2",
+        &platform,
+        &mut |step| steps.push(step),
+    )
+    .unwrap();
+    assert_eq!(steps.len(), 2, "{steps:?}");
+    assert!(
+        steps[0].step == "locate" && steps[0].ok && steps[0].method == "path",
+        "{steps:?}"
+    );
+    assert!(steps[1].step == "record" && steps[1].ok, "{steps:?}");
+
+    let logged = tempfile::tempdir().unwrap();
+    let logged_text = logged.path().to_str().unwrap().to_string();
+    run_json(&[
+        "registry",
+        "use",
+        index.to_str().unwrap(),
+        "--config-dir",
+        &logged_text,
+    ]);
+    let args: Vec<String> = ["plugin", "install", "probe", "--config-dir", &logged_text]
+        .iter()
+        .map(|arg| arg.to_string())
+        .collect();
+    let (mut stdout, mut stderr) = (vec![], vec![]);
+    let options = soksak_sok::Options {
+        identifier: "com.soksak.test",
+        paths_dir: Ok(Path::new("/nonexistent/paths.d")),
+        core_version: "0.0.2",
+    };
+    let code = soksak_sok::logged(&args, &mut stdout, &mut stderr, &options, &soksak_sok::run);
+    assert_eq!(code, 0, "{}", String::from_utf8_lossy(&stderr));
+    let stored: Vec<Value> = events_of(logged.path())
+        .into_iter()
+        .filter(|event| event["event"] == "sok.application.step")
+        .collect();
+    assert_eq!(stored.len(), 2, "{stored:?}");
+    assert_eq!(stored[0]["fields"]["step"], "locate");
+    assert_eq!(stored[0]["fields"]["method"], "path");
+    assert_eq!(stored[1]["fields"]["step"], "record");
 }

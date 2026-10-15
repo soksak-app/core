@@ -67,6 +67,7 @@ fn gzip_tar() -> Vec<u8> {
     builder.into_inner().unwrap().finish().unwrap()
 }
 
+// contract: application.release.downloads-compares-unpacks
 #[test]
 fn a_release_is_downloaded_compared_and_unpacked_into_the_folder_of_the_application() {
     let data = gzip_tar();
@@ -90,6 +91,7 @@ fn a_release_is_downloaded_compared_and_unpacked_into_the_folder_of_the_applicat
     );
 }
 
+// contract: application.release.refuses-other-hash
 #[test]
 fn a_release_of_another_hash_is_refused_and_leaves_no_folder() {
     let data = gzip_tar();
@@ -112,6 +114,7 @@ fn a_release_of_another_hash_is_refused_and_leaves_no_folder() {
     );
 }
 
+// contract: application.release.refuses-escaping-link
 #[test]
 fn a_link_that_leaves_the_folder_is_refused() {
     let mut builder = tar::Builder::new(flate2::write::GzEncoder::new(
@@ -139,6 +142,7 @@ fn a_link_that_leaves_the_folder_is_refused() {
     );
 }
 
+// contract: application.release.one-executable
 #[test]
 fn a_release_without_unpack_is_one_executable() {
     let data = b"#!/bin/sh\necho sketcher\n".to_vec();
@@ -153,6 +157,7 @@ fn a_release_without_unpack_is_one_executable() {
     assert!(std::os::unix::fs::PermissionsExt::mode(&metadata.permissions()) & 0o111 != 0);
 }
 
+// contract: application.release.zip-by-platform
 /// A zip is extracted by the bundle extraction of the platform, which darwin implements; another platform refuses it.
 #[test]
 fn a_zip_release_is_extracted_by_the_platform() {

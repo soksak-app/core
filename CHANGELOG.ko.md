@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F194.5.6.1-1: 애플리케이션의 각 Go·Rust 짝 검사가 host 계약이 이제 나열하는 `application.*` 계약 사례 20개 중 하나를 선언하고, package 검사는 brew가 없는 기계에서 `brew is not on the search path`를 단언한다. Red: F194.5.6.1 push의 CI가 `make host-contract-check`(`declares no contract case`)와 linux의 Go package 검사에서 실패했다. Green: 두 언어에서 로컬로 통과하고, 다음 push의 CI가 확인한다.
+- F194.5.6.2: 애플리케이션 연결의 각 단계(`locate`, `recipe`, `record`)가 두 `sok` 패키지의 설치 함수가 받는 관찰자에 닿는다. 명령줄은 그것을 run의 event 파일에 `sok.application.step`으로, 두 host는 `host.application.step`으로 방법, 결과, microsecond와 함께 저장한다. Red: 관찰 검사가 관찰자 인자와 함께 build되지 않거나 compile되지 않았다. Green: 각 언어 연결 검사 3개 중 3개, plugin과 ownership 검사와 함께.
 - F194.5.6.1: 두 `sok` 패키지의 설치기가 `installed.json`을 쓰기 전에, 설치가 푼 각 연결 plugin의 애플리케이션을 연결한다: 찾은 locate 항목이 있으면 located로 기록하고, 아니면 레시피가 설치해 그것이 준 실행 파일을 installed로 기록하며, 항목이 없는 플랫폼은 `application <id> does not support <platform>`으로 실패하고 아무것도 바꾸지 않고, plugin을 제거하면 그 애플리케이션을 제거한다. 연결이 읽는 선언의 모든 필드는 없을 때 이름과 함께 거부하고, PATH가 필요하며, unpack이 없는 release의 파일 이름은 주소의 마지막 segment이거나 오류다. Red: 연결 검사가 기록을 찾지 못했고 다른 플랫폼을 받아들였다. Green: 각 언어 2개 중 2개, plugin 시험(Rust 14개 중 14개, Go 전체)과 함께.
 - F194.5.3-1: Go 검사의 TLS server를 믿는 Fetcher를 `tests/fetch_test.go`에서 F194.5.3의 공유 Rust 모듈의 짝인 `tests/tls_support_test.go`로 옮긴다. Red: `make hosts-check`가 `packages/sok/tauriv2/tests/tls_support_test: no counterpart in packages/sok/wailsv3`로 실패했다. Green: 통과하고 Go 검사도 통과한다.
 - F194.5.5: 두 `sok` 패키지가 `plugins/applications.json`(format 1)을 관리한다: `ReadApplications`/`read_applications`가 그것을 읽고 다른 형식은 파일과 찾은 것을 이름해 거부하며, `RecordApplication`/`record_application`이 애플리케이션 하나를 한 번에 쓰고, `RemoveApplication`/`remove_application`이 설치한 애플리케이션은 폴더와 항목을, 찾아서 연결한 애플리케이션은 항목만 지운다. Red: 함수가 없어 기록 검사가 build되지 않거나 compile되지 않았다. Green: 각 언어 3개 중 3개.

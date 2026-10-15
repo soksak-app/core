@@ -187,6 +187,7 @@ pub fn run_plugin_action(
     id: &str,
     core: &str,
     platform: &str,
+    observe: &mut dyn FnMut(crate::application::ApplicationStep),
 ) -> Result<PluginActionResult, String> {
     // The hosts call this inside their own ownership of the configuration directory, so it takes no lock; the command
     // line entry owns the directory for the duration of the write (docs/spec/installation.md).
@@ -197,6 +198,7 @@ pub fn run_plugin_action(
             core,
             platform,
             action == "update",
+            observe,
         )?)),
         "remove" | "enable" | "disable" => Ok(PluginActionResult::Changed(change_plugin(
             config_dir, id, action,
@@ -336,6 +338,7 @@ pub fn install_plugin(
     core: &str,
     platform: &str,
     update: bool,
+    observe: &mut dyn FnMut(crate::application::ApplicationStep),
 ) -> Result<PluginResult, String> {
     let index = read_registry(config_dir)?;
     let state = read_installed(config_dir)?;
@@ -402,8 +405,14 @@ pub fn install_plugin(
         if let Some(application) =
             crate::application::installed_application(config_dir, &state.plugins[changed].path)?
         {
-            crate::application::connect_application(config_dir, platform, &application, &search)
-                .map_err(|error| format!("plugin {changed}: {error}"))?;
+            crate::application::connect_application(
+                config_dir,
+                platform,
+                &application,
+                &search,
+                observe,
+            )
+            .map_err(|error| format!("plugin {changed}: {error}"))?;
         }
     }
     install::validate_installed(&serde_json::to_value(&state).map_err(|error| error.to_string())?)?;
@@ -826,6 +835,7 @@ pub(crate) fn run_plugins(
                     &positionals[2],
                     options.core_version,
                     &platform,
+                    &mut crate::application::store_application_step,
                 )?;
                 Ok(print_json(stdout, &result)?)
             }

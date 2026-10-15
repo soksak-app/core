@@ -25,6 +25,7 @@ func executable(t *testing.T, path string) {
 	}
 }
 
+// contract: application.locate.command-on-search-path
 func TestLocateFindsACommandOnThePath(t *testing.T) {
 	folder := t.TempDir()
 	executable(t, filepath.Join(folder, "fake-sketcher"))
@@ -37,6 +38,7 @@ func TestLocateFindsACommandOnThePath(t *testing.T) {
 	}
 }
 
+// contract: application.locate.first-way-that-finds
 func TestLocateTriesEachWayInOrderAndTakesTheFirstThatFinds(t *testing.T) {
 	folder := t.TempDir()
 	present := filepath.Join(folder, "sketcher")
@@ -48,6 +50,7 @@ func TestLocateTriesEachWayInOrderAndTakesTheFirstThatFinds(t *testing.T) {
 	}
 }
 
+// contract: application.locate.skips-non-executable
 func TestLocateDoesNotTakeAFileThatIsNotExecutable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sketcher")
 	if err := os.WriteFile(path, []byte("text"), 0o644); err != nil {
@@ -60,6 +63,7 @@ func TestLocateDoesNotTakeAFileThatIsNotExecutable(t *testing.T) {
 }
 
 // A bundle identifier is found through the metadata index of darwin, and another platform refuses the entry.
+// contract: application.locate.bundle-by-identifier
 func TestLocateFindsABundleByItsIdentifier(t *testing.T) {
 	current, err := platform.Current()
 	if err != nil {

@@ -652,6 +652,26 @@ Items:
 | `fetch.https.reads-a-tls-response` | An `https:` index or release is read from a TLS server that the configured authorities trust, and an release whose `sha256` differs from its entry fails. | both |
 | `fetch.https.redirects-only-to-https` | A redirect to an `https:` URL is followed up to 5 times; a sixth redirect and a redirect to `http:` fail with their texts. | both |
 | `fetch.https.reports-status-size-and-timeout` | A response other than 200, a body larger than the limit and a request slower than the limit fail with `HTTP <status>`, `larger than <bytes> bytes` and `timed out after <seconds> s`. | both |
+| `application.locate.command-on-search-path` | A locate entry `command` finds an executable of that name in the search path that the installer passes from `PATH`. | both |
+| `application.locate.first-way-that-finds` | The locate entries are tried in order, and the first that finds an executable gives it with its kind. | both |
+| `application.locate.skips-non-executable` | A file without an execute bit is not an installed application. | both |
+| `application.locate.bundle-by-identifier` | A locate entry `bundle` finds the bundle of the identifier through the metadata index on darwin and takes `program` from its folder; another platform refuses it with `not implemented on <os>`. | both |
+| `application.release.downloads-compares-unpacks` | A release recipe downloads an https release, compares its SHA-256 and unpacks a tar.gz with its files and inner symbolic links into the folder of the application. | both |
+| `application.release.refuses-other-hash` | A release whose SHA-256 differs fails with `sha256 <got> is not <want>` and leaves no folder. | both |
+| `application.release.refuses-escaping-link` | A symbolic link of a release whose target leaves the folder fails with `release entry <name> links outside the folder`. | both |
+| `application.release.one-executable` | A release with `unpack` `none` is one executable named after the last segment of its address. | both |
+| `application.release.zip-by-platform` | A zip release is extracted by the bundle extraction of the platform on darwin; another platform refuses it with `not implemented on <os>`. | both |
+| `application.package.brew-has-declared-kind` | With brew on the search path, a package that brew has as the declared cask or formula is accepted; without it, the check fails with `brew is not on the search path`. | both |
+| `application.package.brew-lacks-package` | A package that brew does not have fails with the answer of brew. | both |
+| `application.package.other-kind-refused` | A cask declared as a formula is refused. | both |
+| `application.source.clones-and-builds` | A source recipe clones its https repository with git at its ref into the folder of the application and runs its build commands there. | both |
+| `application.source.failed-command-named` | A build command that fails names itself with its output and leaves no folder. | both |
+| `application.record.holds-place-and-way` | `plugins/applications.json` holds format 1 with the version, path, way and method of each application. | both |
+| `application.record.refuses-other-form` | A record of another form is refused with the file and what it found. | both |
+| `application.record.removal-by-way` | Removing deletes the folder and entry of an installed application and only the entry of a located one. | both |
+| `application.connector.connects-installed` | Installing a connector plugin records an application that a locate entry finds without installing it, and removing the plugin removes only its entry. | both |
+| `application.connector.refuses-other-platform` | A connector plugin without an entry for the platform fails with `application <id> does not support <platform>` and changes nothing. | both |
+| `application.connector.steps-observed-and-stored` | Each step of the connection reaches the observer of the operation, and the command line stores it as `sok.application.step`. | both |
 | `fetch.url.rejects-other-schemes` | An index or release URL that is neither `https:` nor an absolute `file:` URL fails with `the URL must be https: or an absolute file: URL`. | both |
 | `installed.modules.serve-installed-files` | `/modules/<package>/<path>` of an enabled installed plugin serves the file inside its recorded `path`; a missing file or a path with an empty, `.` or `..` segment is not found; a disabled plugin or another package is served by the application frontend. | both |
 | `installed.shared.serve-extension-point-modules` | `/shared/<plugin id>.<point>/<specifier>.js` serves the file that `extends.<point>.modules` of the `plugin.json` of the enabled installed plugin maps the specifier to, inside its recorded `path`; a path that does not end in `.js`, a point that the plugin does not declare, a specifier that the point does not map, a missing file, a path with an empty, `.` or `..` segment and a disabled or unknown plugin are not found, and a `plugin.json` that cannot be read fails with its path. | both |

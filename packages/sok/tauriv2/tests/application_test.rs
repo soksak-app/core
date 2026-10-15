@@ -17,6 +17,7 @@ fn ways(value: serde_json::Value) -> Vec<serde_json::Map<String, serde_json::Val
     serde_json::from_value(value).unwrap()
 }
 
+// contract: application.locate.command-on-search-path
 #[test]
 fn locate_finds_a_command_on_the_path() {
     let folder = tempfile::tempdir().unwrap();
@@ -32,6 +33,7 @@ fn locate_finds_a_command_on_the_path() {
     assert_eq!(located.method, "command");
 }
 
+// contract: application.locate.first-way-that-finds
 #[test]
 fn locate_tries_each_way_in_order_and_takes_the_first_that_finds() {
     let folder = tempfile::tempdir().unwrap();
@@ -48,6 +50,7 @@ fn locate_tries_each_way_in_order_and_takes_the_first_that_finds() {
     assert_eq!(located.method, "path");
 }
 
+// contract: application.locate.skips-non-executable
 #[test]
 fn locate_does_not_take_a_file_that_is_not_executable() {
     let folder = tempfile::tempdir().unwrap();
@@ -62,6 +65,7 @@ fn locate_does_not_take_a_file_that_is_not_executable() {
     );
 }
 
+// contract: application.locate.bundle-by-identifier
 /// A bundle identifier is found through the metadata index of darwin, and another platform refuses the entry.
 #[test]
 fn locate_finds_a_bundle_by_its_identifier() {

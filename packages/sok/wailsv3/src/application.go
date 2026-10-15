@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
 )
@@ -510,10 +511,50 @@ func installedApplication(configDir, folder string) (map[string]any, bool, error
 	return application, err == nil, err
 }
 
+// ApplicationStep is one step of connecting the application of a connector plugin: `locate`, `recipe` or `record`, with
+// the locate kind or recipe kind, the result and the microseconds (events sok.application.step and host.application.step).
+type ApplicationStep struct {
+	Application string
+	Step        string
+	OK          bool
+	Micros      int64
+	Method      string
+	Error       string
+}
+
+// ApplicationObserver receives each step of a connection; the command line and the hosts store it as an event.
+type ApplicationObserver func(ApplicationStep)
+
+// StoreApplicationStep is the observer of the command line: it stores each step as sok.application.step in the event file
+// of the run. The writer counts an event that its full queue refuses as lost (log.dropped).
+func StoreApplicationStep(step ApplicationStep) {
+	log := runLog.Load()
+	if log == nil {
+		return
+	}
+	level, fields := LevelInfo, map[string]any{"application": step.Application, "step": step.Step, "ok": step.OK, "micros": step.Micros}
+	if step.Method != "" {
+		fields["method"] = step.Method
+	}
+	if !step.OK {
+		level, fields["error"] = LevelWarn, step.Error
+	}
+	log.Emit(level, "sok.application.step", fields)
+}
+
+// observeStep reports the step that started at started with its result.
+func observeStep(observe ApplicationObserver, id, step, method string, started time.Time, err error) {
+	result := ApplicationStep{Application: id, Step: step, OK: err == nil, Micros: time.Since(started).Microseconds(), Method: method}
+	if err != nil {
+		result.Error = err.Error()
+	}
+	observe(result)
+}
+
 // ConnectApplication connects the application of a connector plugin on the platform: an application that a locate entry
 // finds is recorded as located, and otherwise the recipe installs it and the place it gives is recorded as installed
 // (docs/spec/installation.md#applications). search is PATH, for the locate entries and the programs of the recipes.
-func ConnectApplication(configDir, platform string, application map[string]any, search string) error {
+func ConnectApplication(configDir, platform string, application map[string]any, search string, observe ApplicationObserver) (err error) {
 	id, err := field("application", application, "id")
 	if err != nil {
 		return err
@@ -541,12 +582,14 @@ func ConnectApplication(configDir, platform string, application map[string]any, 
 	if err != nil {
 		return err
 	}
+	started := time.Now()
 	located, found, err := LocateApplication(ways, program, search)
+	observeStep(observe, id, "locate", located.Method, started, err)
 	if err != nil {
 		return fmt.Errorf("application %s: %w", id, err)
 	}
 	if found {
-		return RecordApplication(configDir, id, ApplicationRecord{Version: version, Path: located.Path, How: "located", Method: located.Method})
+		return recordStep(configDir, id, ApplicationRecord{Version: version, Path: located.Path, How: "located", Method: located.Method}, observe)
 	}
 	recipe, err := object("application "+id+" recipe", entry["recipe"])
 	if err != nil {
@@ -557,6 +600,13 @@ func ConnectApplication(configDir, platform string, application map[string]any, 
 		return err
 	}
 	target := filepath.Join(configDir, "applications", id, version)
+	recipeStarted := time.Now()
+	defer func() {
+		// The recipe step ends with the first error of the recipe or with the record that follows it.
+		if err != nil {
+			observeStep(observe, id, "recipe", kind, recipeStarted, err)
+		}
+	}()
 	switch kind {
 	case "release":
 		fields := map[string]string{}
@@ -611,7 +661,8 @@ func ConnectApplication(configDir, platform string, application map[string]any, 
 		if !found {
 			return fmt.Errorf("application %s: the package %s is installed, and no locate entry finds the application", id, name)
 		}
-		return RecordApplication(configDir, id, ApplicationRecord{Version: version, Path: located.Path, How: "installed", Method: "package"})
+		observeStep(observe, id, "recipe", kind, recipeStarted, nil)
+		return recordStep(configDir, id, ApplicationRecord{Version: version, Path: located.Path, How: "installed", Method: "package"}, observe)
 	default:
 		return fmt.Errorf("application %s recipe kind %q is not release, package or source", id, kind)
 	}
@@ -619,7 +670,16 @@ func ConnectApplication(configDir, platform string, application map[string]any, 
 	if !executableFile(executable) {
 		return withCleanup(fmt.Errorf("application %s: the recipe installed no executable %s", id, program), filepath.Join(configDir, "applications", id), os.RemoveAll)
 	}
-	return RecordApplication(configDir, id, ApplicationRecord{Version: version, Path: executable, How: "installed", Method: kind})
+	observeStep(observe, id, "recipe", kind, recipeStarted, nil)
+	return recordStep(configDir, id, ApplicationRecord{Version: version, Path: executable, How: "installed", Method: kind}, observe)
+}
+
+// recordStep records the application and reports the record step.
+func recordStep(configDir, id string, record ApplicationRecord, observe ApplicationObserver) error {
+	started := time.Now()
+	err := RecordApplication(configDir, id, record)
+	observeStep(observe, id, "record", record.Method, started, err)
+	return err
 }
 
 func locateWays(id string, value any) ([]map[string]string, error) {

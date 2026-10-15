@@ -622,6 +622,80 @@ fn object<'a>(at: &str, value: Option<&'a Value>) -> Result<&'a Map<String, Valu
         .ok_or_else(|| format!("{at} must be an object"))
 }
 
+/// One step of connecting the application of a connector plugin: `locate`, `recipe` or `record`, with the locate kind or
+/// recipe kind, the result and the microseconds (events `sok.application.step` and `host.application.step`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ApplicationStep {
+    /// The id of the application.
+    pub application: String,
+    /// `locate`, `recipe` or `record`.
+    pub step: String,
+    /// Whether the step succeeded.
+    pub ok: bool,
+    /// The microseconds of the step.
+    pub micros: u64,
+    /// The locate kind or the recipe kind, or empty when a locate step found nothing.
+    pub method: String,
+    /// The error of a step that failed.
+    pub error: String,
+}
+
+/// Reports the step that started at `started` with its result.
+fn observe_step(
+    observe: &mut dyn FnMut(ApplicationStep),
+    id: &str,
+    step: &str,
+    method: &str,
+    started: std::time::Instant,
+    result: &Result<(), String>,
+) {
+    observe(ApplicationStep {
+        application: id.into(),
+        step: step.into(),
+        ok: result.is_ok(),
+        micros: started.elapsed().as_micros() as u64,
+        method: method.into(),
+        // An ok step has no error text.
+        error: match result {
+            Ok(()) => String::new(),
+            Err(error) => error.clone(),
+        },
+    });
+}
+
+/// The observer of the command line: it stores each step as `sok.application.step` in the event file of the run. The writer
+/// counts an event that its full queue refuses as lost (`log.dropped`).
+pub fn store_application_step(step: ApplicationStep) {
+    let Some(log) = crate::replay::current_run_log() else {
+        return;
+    };
+    let mut fields = serde_json::json!({"application": step.application, "step": step.step, "ok": step.ok, "micros": step.micros});
+    if !step.method.is_empty() {
+        fields["method"] = Value::from(step.method);
+    }
+    let level = if step.ok {
+        crate::event_log::Level::Info
+    } else {
+        fields["error"] = Value::from(step.error);
+        crate::event_log::Level::Warn
+    };
+    log.emit(level, "sok.application.step", &fields);
+}
+
+/// Records the application and reports the record step.
+fn record_step(
+    config_dir: &Path,
+    id: &str,
+    record: ApplicationRecord,
+    observe: &mut dyn FnMut(ApplicationStep),
+) -> Result<(), String> {
+    let started = std::time::Instant::now();
+    let method = record.method.clone();
+    let result = record_application(config_dir, id, record);
+    observe_step(observe, id, "record", &method, started, &result);
+    result
+}
+
 /// Connects the application of a connector plugin on the platform: an application that a locate entry finds is recorded
 /// as located, and otherwise the recipe installs it and the place it gives is recorded as installed
 /// (docs/spec/installation.md#applications). `search` is PATH, for the locate entries and the programs of the recipes.
@@ -630,6 +704,7 @@ pub fn connect_application(
     platform: &str,
     application: &Map<String, Value>,
     search: &OsStr,
+    observe: &mut dyn FnMut(ApplicationStep),
 ) -> Result<(), String> {
     let id = field("application", application, "id")?;
     let version = field(&format!("application {id}"), application, "version")?;
@@ -652,20 +727,61 @@ pub fn connect_application(
             object(&format!("application {id} locate entry {index}"), Some(way)).cloned()
         })
         .collect::<Result<_, _>>()?;
-    if let Some(located) =
-        locate(&ways, program, search).map_err(|error| format!("application {id}: {error}"))?
-    {
+    let started = std::time::Instant::now();
+    let located =
+        locate(&ways, program, search).map_err(|error| format!("application {id}: {error}"));
+    // A locate step that found nothing, or that failed, has no method.
+    let method = match &located {
+        Ok(Some(found)) => found.method.clone(),
+        Ok(None) | Err(_) => String::new(),
+    };
+    observe_step(
+        observe,
+        id,
+        "locate",
+        &method,
+        started,
+        &located.as_ref().map(|_| ()).map_err(Clone::clone),
+    );
+    if let Some(located) = located? {
         let record = ApplicationRecord {
             version: version.into(),
             path: located.path.display().to_string(),
             how: "located".into(),
             method: located.method,
         };
-        return record_application(config_dir, id, record);
+        return record_step(config_dir, id, record, observe);
     }
     let recipe = object(&format!("application {id} recipe"), entry.get("recipe"))?;
+    let kind = field(&format!("application {id} recipe"), recipe, "kind")?;
+    let started = std::time::Instant::now();
+    let installed = run_recipe(
+        config_dir, id, version, program, &ways, recipe, kind, search,
+    );
+    observe_step(
+        observe,
+        id,
+        "recipe",
+        kind,
+        started,
+        &installed.as_ref().map(|_| ()).map_err(Clone::clone),
+    );
+    record_step(config_dir, id, installed?, observe)
+}
+
+/// Runs the recipe of an application that no locate entry found and returns the record of the installed application.
+#[allow(clippy::too_many_arguments)]
+fn run_recipe(
+    config_dir: &Path,
+    id: &str,
+    version: &str,
+    program: &str,
+    ways: &[Map<String, Value>],
+    recipe: &Map<String, Value>,
+    kind: &str,
+    search: &OsStr,
+) -> Result<ApplicationRecord, String> {
     let at = format!("application {id} recipe");
-    let kind = field(&at, recipe, "kind")?;
     let target = config_dir.join("applications").join(id).join(version);
     match kind {
         "release" => {
@@ -710,16 +826,15 @@ pub fn connect_application(
             install_application_package(manager, name, cask, search)
                 .map_err(|error| format!("application {id}: {error}"))?;
             // The manager decides where the application goes, so the locate entries give its place.
-            let located = locate(&ways, program, search)
+            let located = locate(ways, program, search)
                 .map_err(|error| format!("application {id}: {error}"))?
                 .ok_or_else(|| format!("application {id}: the package {name} is installed, and no locate entry finds the application"))?;
-            let record = ApplicationRecord {
+            return Ok(ApplicationRecord {
                 version: version.into(),
                 path: located.path.display().to_string(),
                 how: "installed".into(),
                 method: "package".into(),
-            };
-            return record_application(config_dir, id, record);
+            });
         }
         other => {
             return Err(format!(
@@ -736,13 +851,12 @@ pub fn connect_application(
             |path| std::fs::remove_dir_all(path),
         ));
     }
-    let record = ApplicationRecord {
+    Ok(ApplicationRecord {
         version: version.into(),
         path: executable.display().to_string(),
         how: "installed".into(),
         method: kind.into(),
-    };
-    record_application(config_dir, id, record)
+    })
 }
 
 /// The last segment of the path of an address, without its query; an address whose path ends without a segment names no

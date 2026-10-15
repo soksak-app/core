@@ -71,7 +71,7 @@ func (p *Plugins) Run(request PluginsRunRequest) (any, error) {
 	if !p.running.TryLock() {
 		return nil, errPluginOperationRunning
 	}
-	result, err := sok.RunPluginAction(p.configDir, request.Action, plugin, p.core, p.platform)
+	result, err := sok.RunPluginAction(p.configDir, request.Action, plugin, p.core, p.platform, emitApplicationStep)
 	if err != nil {
 		p.running.Unlock()
 		return nil, err
@@ -151,4 +151,17 @@ func (h *Host) notifyPlugins(change PluginsChanged) {
 	for _, s := range windows {
 		s.Emit("plugins-changed", change)
 	}
+}
+
+// emitApplicationStep stores each step of connecting the application of a connector plugin as host.application.step
+// (docs/spec/installation.md#applications).
+func emitApplicationStep(step sok.ApplicationStep) {
+	level, fields := LevelInfo, map[string]any{"application": step.Application, "step": step.Step, "ok": step.OK, "micros": step.Micros}
+	if step.Method != "" {
+		fields["method"] = step.Method
+	}
+	if !step.OK {
+		level, fields["error"] = LevelWarn, step.Error
+	}
+	EmitHost(level, "host.application.step", fields)
 }

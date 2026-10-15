@@ -14,12 +14,20 @@ fn path() -> OsString {
     std::env::var_os("PATH").expect("PATH")
 }
 
+// contract: application.package.brew-has-declared-kind
 #[test]
 fn a_package_that_brew_has_as_declared_is_accepted() {
+    if which::which("brew").is_err() {
+        // A machine without brew refuses the package recipe by name.
+        let error = check_application_package("brew", "jq", false, &path()).unwrap_err();
+        assert!(error.contains("brew is not on the search path"), "{error}");
+        return;
+    }
     check_application_package("brew", "jq", false, &path()).unwrap();
     check_application_package("brew", "iterm2", true, &path()).unwrap();
 }
 
+// contract: application.package.brew-lacks-package
 #[test]
 fn a_package_that_brew_does_not_have_is_refused_with_its_answer() {
     let error =
@@ -31,6 +39,7 @@ fn a_package_that_brew_does_not_have_is_refused_with_its_answer() {
     assert!(error.contains("No Cask with this name exists"), "{error}");
 }
 
+// contract: application.package.other-kind-refused
 #[test]
 fn a_package_of_the_other_kind_is_refused() {
     assert!(check_application_package("brew", "iterm2", false, &path()).is_err());
@@ -83,6 +92,7 @@ fn local_repository() -> (tempfile::TempDir, Vec<(String, String)>) {
     (repository, settings)
 }
 
+// contract: application.source.clones-and-builds
 #[test]
 fn a_source_is_cloned_at_its_ref_and_built_in_the_folder_of_the_application() {
     let (_repository, settings) = local_repository();
@@ -102,6 +112,7 @@ fn a_source_is_cloned_at_its_ref_and_built_in_the_folder_of_the_application() {
     assert!(std::os::unix::fs::PermissionsExt::mode(&metadata.permissions()) & 0o111 != 0);
 }
 
+// contract: application.source.failed-command-named
 #[test]
 fn a_failed_build_command_names_itself_with_its_output_and_leaves_no_folder() {
     let (_repository, settings) = local_repository();

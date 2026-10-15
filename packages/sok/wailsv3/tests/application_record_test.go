@@ -13,6 +13,7 @@ import (
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
+// contract: application.record.holds-place-and-way
 func TestTheRecordHoldsEachApplicationWithItsPlaceAndWay(t *testing.T) {
 	config := t.TempDir()
 	applications, err := sok.ReadApplications(config)
@@ -29,6 +30,7 @@ func TestTheRecordHoldsEachApplicationWithItsPlaceAndWay(t *testing.T) {
 	}
 }
 
+// contract: application.record.refuses-other-form
 func TestARecordOfAnotherFormIsRefusedWithTheFileAndWhatItFound(t *testing.T) {
 	config := t.TempDir()
 	path := filepath.Join(config, "plugins", "applications.json")
@@ -44,6 +46,7 @@ func TestARecordOfAnotherFormIsRefusedWithTheFileAndWhatItFound(t *testing.T) {
 	}
 }
 
+// contract: application.record.removal-by-way
 func TestRemovingDeletesTheFolderOfAnInstalledApplicationAndOnlyTheEntryOfALocatedOne(t *testing.T) {
 	config := t.TempDir()
 	folder := filepath.Join(config, "applications", "sketcher", "1.0.0")

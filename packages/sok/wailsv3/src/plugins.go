@@ -191,10 +191,10 @@ func ReadPluginsState(configDir string) (*PluginsState, error) {
 // update, remove, enable and disable. The hosts call it inside their own ownership of the configuration directory, so
 // it takes no lock; the command line entry owns the directory for the duration of the write
 // (docs/spec/installation.md).
-func RunPluginAction(configDir, action, id, core, platform string) (any, error) {
+func RunPluginAction(configDir, action, id, core, platform string, observe ApplicationObserver) (any, error) {
 	switch action {
 	case "install", "update":
-		return InstallPlugin(configDir, id, core, platform, action == "update")
+		return InstallPlugin(configDir, id, core, platform, action == "update", observe)
 	case "remove", "enable", "disable":
 		return ChangePlugin(configDir, id, action)
 	default:
@@ -342,7 +342,7 @@ func pluginResult(state *InstalledState, id string) map[string]any {
 // InstallPlugin installs the selected version of a plugin and its plugin dependencies. With update it accepts only an
 // installed plugin. It reads the plugin.json of every selected plugin version and completes the plan before it extracts
 // an release.
-func InstallPlugin(configDir, id, core, platform string, update bool) (map[string]any, error) {
+func InstallPlugin(configDir, id, core, platform string, update bool, observe ApplicationObserver) (map[string]any, error) {
 	index, err := readRegistry(configDir)
 	if err != nil {
 		return nil, err
@@ -399,7 +399,7 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 			if !found {
 				return nil, errors.New("the installer has no PATH to find the application of a connector plugin")
 			}
-			if err := ConnectApplication(configDir, platform, application, search); err != nil {
+			if err := ConnectApplication(configDir, platform, application, search, observe); err != nil {
 				return nil, fmt.Errorf("plugin %s: %w", changed, err)
 			}
 		}
@@ -877,7 +877,7 @@ func runPlugins(a arguments, stdout io.Writer, options Options) error {
 				return err
 			}
 		}
-		if result, err = RunPluginAction(configDir, a.positionals[1], a.positionals[2], options.CoreVersion, platform); err != nil {
+		if result, err = RunPluginAction(configDir, a.positionals[1], a.positionals[2], options.CoreVersion, platform, StoreApplicationStep); err != nil {
 			return err
 		}
 	default:

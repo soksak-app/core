@@ -69,6 +69,7 @@ func gzipTar(t *testing.T) []byte {
 	return buffer.Bytes()
 }
 
+// contract: application.release.downloads-compares-unpacks
 func TestAReleaseIsDownloadedComparedAndUnpackedIntoTheFolderOfTheApplication(t *testing.T) {
 	data := gzipTar(t)
 	server, fetcher := releaseServer(t, data)
@@ -86,6 +87,7 @@ func TestAReleaseIsDownloadedComparedAndUnpackedIntoTheFolderOfTheApplication(t 
 	}
 }
 
+// contract: application.release.refuses-other-hash
 func TestAReleaseOfAnotherHashIsRefusedAndLeavesNoFolder(t *testing.T) {
 	data := gzipTar(t)
 	server, fetcher := releaseServer(t, data)
@@ -100,6 +102,7 @@ func TestAReleaseOfAnotherHashIsRefusedAndLeavesNoFolder(t *testing.T) {
 	}
 }
 
+// contract: application.release.refuses-escaping-link
 func TestALinkThatLeavesTheFolderIsRefused(t *testing.T) {
 	var buffer bytes.Buffer
 	zipped := gzip.NewWriter(&buffer)
@@ -117,6 +120,7 @@ func TestALinkThatLeavesTheFolderIsRefused(t *testing.T) {
 	}
 }
 
+// contract: application.release.one-executable
 func TestAReleaseWithoutUnpackIsOneExecutable(t *testing.T) {
 	data := []byte("#!/bin/sh\necho sketcher\n")
 	server, fetcher := releaseServer(t, data)
@@ -132,6 +136,7 @@ func TestAReleaseWithoutUnpackIsOneExecutable(t *testing.T) {
 }
 
 // A zip is extracted by the bundle extraction of the platform, which darwin implements; another platform refuses it.
+// contract: application.release.zip-by-platform
 func TestAZipReleaseIsExtractedByThePlatform(t *testing.T) {
 	var buffer bytes.Buffer
 	builder := zip.NewWriter(&buffer)

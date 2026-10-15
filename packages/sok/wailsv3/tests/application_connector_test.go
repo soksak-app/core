@@ -51,6 +51,7 @@ func sketcher(platform, path string) map[string]any {
 	}}
 }
 
+// contract: application.connector.connects-installed
 func TestInstallingAConnectorConnectsAnApplicationThatIsInstalled(t *testing.T) {
 	platform := mustPlatform(t)
 	present := filepath.Join(t.TempDir(), "sketcher")
@@ -79,6 +80,7 @@ func TestInstallingAConnectorConnectsAnApplicationThatIsInstalled(t *testing.T) 
 	}
 }
 
+// contract: application.connector.refuses-other-platform
 func TestAConnectorForAnotherPlatformIsRefusedAndChangesNothing(t *testing.T) {
 	platform := mustPlatform(t)
 	other := "windows-x64"
@@ -93,5 +95,34 @@ func TestAConnectorForAnotherPlatformIsRefusedAndChangesNothing(t *testing.T) {
 	}
 	if exists(filepath.Join(config, "plugins/installed.json")) || exists(filepath.Join(config, sok.Applications)) {
 		t.Fatal("a refused connector changed the installation")
+	}
+}
+
+// Each step of the connection reaches the observer of the operation, and the command line stores it in its event file.
+// contract: application.connector.steps-observed-and-stored
+func TestEachStepOfTheConnectionIsObservedAndStored(t *testing.T) {
+	platform := mustPlatform(t)
+	present := filepath.Join(t.TempDir(), "sketcher")
+	executable(t, present)
+	registry := connectorRegistry(t, sketcher(platform, present))
+
+	config := t.TempDir()
+	useRegistry(t, config, registry)
+	var steps []sok.ApplicationStep
+	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", platform, func(step sok.ApplicationStep) { steps = append(steps, step) }); err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 2 || steps[0].Step != "locate" || !steps[0].OK || steps[0].Method != "path" || steps[1].Step != "record" || !steps[1].OK {
+		t.Fatalf("steps %+v", steps)
+	}
+
+	logged := t.TempDir()
+	useRegistry(t, logged, registry)
+	if code, _, stderr := loggedRun(logged, sok.Run, "plugin", "install", "probe"); code != 0 {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	stored := named(eventsOf(t, logged), "sok.application.step")
+	if len(stored) != 2 || stored[0].Fields["step"] != "locate" || stored[0].Fields["method"] != "path" || stored[1].Fields["step"] != "record" {
+		t.Fatalf("stored steps %+v", stored)
 	}
 }

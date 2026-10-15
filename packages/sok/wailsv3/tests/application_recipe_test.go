@@ -18,7 +18,16 @@ import (
 )
 
 // The package checks ask the brew of the machine through brew info, which reads its package index and installs nothing.
+// contract: application.package.brew-has-declared-kind
 func TestAPackageThatBrewHasAsDeclaredIsAccepted(t *testing.T) {
+	if _, err := exec.LookPath("brew"); err != nil {
+		// A machine without brew refuses the package recipe by name.
+		err := sok.CheckApplicationPackage("brew", "jq", false, os.Getenv("PATH"))
+		if err == nil || !strings.Contains(err.Error(), "brew is not on the search path") {
+			t.Fatalf("err %v", err)
+		}
+		return
+	}
 	if err := sok.CheckApplicationPackage("brew", "jq", false, os.Getenv("PATH")); err != nil {
 		t.Fatal(err)
 	}
@@ -27,14 +36,22 @@ func TestAPackageThatBrewHasAsDeclaredIsAccepted(t *testing.T) {
 	}
 }
 
+// contract: application.package.brew-lacks-package
 func TestAPackageThatBrewDoesNotHaveIsRefusedWithItsAnswer(t *testing.T) {
 	err := sok.CheckApplicationPackage("brew", "no-such-cask-soksak", true, os.Getenv("PATH"))
+	if _, lookErr := exec.LookPath("brew"); lookErr != nil {
+		if err == nil || !strings.Contains(err.Error(), "brew is not on the search path") {
+			t.Fatalf("err %v", err)
+		}
+		return
+	}
 	if err == nil || !strings.Contains(err.Error(), "application package brew info --cask no-such-cask-soksak") ||
 		!strings.Contains(err.Error(), "No Cask with this name exists") {
 		t.Fatalf("err %v", err)
 	}
 }
 
+// contract: application.package.other-kind-refused
 func TestAPackageOfTheOtherKindIsRefused(t *testing.T) {
 	if err := sok.CheckApplicationPackage("brew", "iterm2", false, os.Getenv("PATH")); err == nil {
 		t.Fatal("a cask declared as a formula was accepted")
@@ -64,6 +81,7 @@ func localRepository(t *testing.T) []string {
 	return []string{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=url." + repository + ".insteadOf", "GIT_CONFIG_VALUE_0=https://example.test/sketcher.git"}
 }
 
+// contract: application.source.clones-and-builds
 func TestASourceIsClonedAtItsRefAndBuiltInTheFolderOfTheApplication(t *testing.T) {
 	settings := localRepository(t)
 	target := filepath.Join(t.TempDir(), "applications", "sketcher", "1.0.0")
@@ -77,6 +95,7 @@ func TestASourceIsClonedAtItsRefAndBuiltInTheFolderOfTheApplication(t *testing.T
 	}
 }
 
+// contract: application.source.failed-command-named
 func TestAFailedBuildCommandNamesItselfWithItsOutputAndLeavesNoFolder(t *testing.T) {
 	settings := localRepository(t)
 	root := t.TempDir()

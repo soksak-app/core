@@ -24,6 +24,7 @@ fn record(version: &str, path: &Path, how: &str, method: &str) -> ApplicationRec
     }
 }
 
+// contract: application.record.holds-place-and-way
 #[test]
 fn the_record_holds_each_application_with_its_place_and_way() {
     let config = tempfile::tempdir().unwrap();
@@ -45,6 +46,7 @@ fn the_record_holds_each_application_with_its_place_and_way() {
     assert_eq!(state.applications.get("sketcher"), Some(&located));
 }
 
+// contract: application.record.refuses-other-form
 #[test]
 fn a_record_of_another_form_is_refused_with_the_file_and_what_it_found() {
     let config = tempfile::tempdir().unwrap();
@@ -58,6 +60,7 @@ fn a_record_of_another_form_is_refused_with_the_file_and_what_it_found() {
     );
 }
 
+// contract: application.record.removal-by-way
 #[test]
 fn removing_deletes_the_folder_of_an_installed_application_and_only_the_entry_of_a_located_one() {
     let config = tempfile::tempdir().unwrap();
