@@ -1,6 +1,6 @@
 {
   "name": "plugin-connector",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "engines": { "soksak": ">=0.0.1 <1.0.0" },
   "files": ["plugin.json"]
 }
