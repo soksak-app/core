@@ -424,3 +424,160 @@ fn run_step(
     }
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
+
+/// The place of the record of connected applications inside the configuration directory.
+pub const APPLICATIONS: &str = "plugins/applications.json";
+
+/// One connected application: its version, its executable, located or installed, and the locate kind or recipe kind that
+/// gave it (docs/spec/installation.md#applications).
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct ApplicationRecord {
+    /// The version of the application.
+    pub version: String,
+    /// The absolute path of the executable.
+    pub path: String,
+    /// `located` or `installed`.
+    pub how: String,
+    /// The locate kind or the recipe kind.
+    pub method: String,
+}
+
+/// plugins/applications.json.
+#[derive(Debug, serde::Serialize)]
+pub struct ApplicationsState {
+    /// The format, 1.
+    pub format: u32,
+    /// Each connected application by its id.
+    pub applications: std::collections::BTreeMap<String, ApplicationRecord>,
+}
+
+/// Reads plugins/applications.json; an absent file is an empty record, and another form is an error that names the file
+/// and what it found.
+pub fn read_applications(config_dir: &Path) -> Result<ApplicationsState, String> {
+    let path = config_dir.join(APPLICATIONS);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ApplicationsState {
+                format: 1,
+                applications: Default::default(),
+            });
+        }
+        Err(error) => return Err(crate::files::file_error(path.display(), &error)),
+    };
+    let value: Value = serde_json::from_str(&text)
+        .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))?;
+    validate_applications(&value).map_err(|error| format!("{}: {error}", path.display()))
+}
+
+fn validate_applications(value: &Value) -> Result<ApplicationsState, String> {
+    let root = value
+        .as_object()
+        .ok_or("applications.json must be an object")?;
+    if let Some(key) = root
+        .keys()
+        .find(|key| !["format", "applications"].contains(&key.as_str()))
+    {
+        return Err(format!("applications.json has the unknown field {key}"));
+    }
+    if root.get("format") != Some(&Value::from(1)) {
+        return Err(format!(
+            "format must be 1, not {}",
+            root.get("format")
+                .map_or("nothing".to_string(), Value::to_string)
+        ));
+    }
+    let entries = root
+        .get("applications")
+        .and_then(Value::as_object)
+        .ok_or("applications must be an object")?;
+    let mut state = ApplicationsState {
+        format: 1,
+        applications: Default::default(),
+    };
+    for (id, entry) in entries {
+        let entry = entry
+            .as_object()
+            .ok_or_else(|| format!("application {id} must be an object"))?;
+        if let Some(key) = entry
+            .keys()
+            .find(|key| !["version", "path", "how", "method"].contains(&key.as_str()))
+        {
+            return Err(format!("application {id} has the unknown field {key}"));
+        }
+        let text = |key: &str| {
+            entry
+                .get(key)
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+        };
+        let version =
+            text("version").ok_or_else(|| format!("application {id} version must be text"))?;
+        let path = text("path")
+            .filter(|path| Path::new(path).is_absolute())
+            .ok_or_else(|| format!("application {id} path must be an absolute path"))?;
+        let how = text("how")
+            .filter(|how| *how == "located" || *how == "installed")
+            .ok_or_else(|| {
+                format!(
+                    "application {id} how must be located or installed, not {}",
+                    entry
+                        .get("how")
+                        .map_or("nothing".to_string(), Value::to_string)
+                )
+            })?;
+        let method =
+            text("method").ok_or_else(|| format!("application {id} method must be text"))?;
+        state.applications.insert(
+            id.clone(),
+            ApplicationRecord {
+                version: version.into(),
+                path: path.into(),
+                how: how.into(),
+                method: method.into(),
+            },
+        );
+    }
+    Ok(state)
+}
+
+/// Writes the application into plugins/applications.json in one step.
+pub fn record_application(
+    config_dir: &Path,
+    id: &str,
+    record: ApplicationRecord,
+) -> Result<(), String> {
+    let mut state = read_applications(config_dir)?;
+    state.applications.insert(id.to_string(), record);
+    write_applications(config_dir, &state)
+}
+
+/// Deletes the folder of an installed application and its entry, and only the entry of a located one; an application
+/// without an entry is nothing to remove.
+pub fn remove_application(config_dir: &Path, id: &str) -> Result<(), String> {
+    let mut state = read_applications(config_dir)?;
+    let Some(record) = state.applications.remove(id) else {
+        return Ok(());
+    };
+    if record.how == "installed" {
+        let folder = config_dir.join("applications").join(id);
+        match std::fs::remove_dir_all(&folder) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(crate::files::file_error(folder.display(), &error)),
+        }
+    }
+    write_applications(config_dir, &state)
+}
+
+fn write_applications(config_dir: &Path, state: &ApplicationsState) -> Result<(), String> {
+    let mut out = vec![];
+    crate::release::print_json(&mut out, state)?;
+    let path = config_dir.join(APPLICATIONS);
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("{} has no parent folder", path.display()))?;
+    std::fs::create_dir_all(parent)
+        .map_err(|error| crate::files::file_error(parent.display(), &error))?;
+    crate::release::replace_file(&path, &out)
+}

@@ -1048,7 +1048,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
     - [o] F194.5.2 — P2: Examination: both `sok` implementations try each `locate` entry (bundle identifier, name on `PATH`, absolute path) in order and return the same place and method; twin tests.
     - [o] F194.5.3 — P2: Recipe `release`: download through the fetching of the installer, SHA-256, unpack of `zip` and `tar.gz`, and an installation that a failed step leaves unchanged; twin tests.
     - [o] F194.5.4 — P2: Recipes `package` and `source`: a package manager installs and names the executable, and a source recipe clones at a ref and runs the build commands of the repository; a failed command fails with its output; twin tests.
-    - [ ] F194.5.5 — P2: Record and removal: `plugins/applications.json` (format 1) holds `{id, version, path, how, method}`, and removing the connector plugin deletes only an installed application; twin tests.
+    - [o] F194.5.5 — P2: Record and removal: `plugins/applications.json` (format 1) holds `{id, version, path, how, method}`, and removing the connector plugin deletes only an installed application; twin tests.
     - [ ] F194.5.6 — P2: The plugin operations of the application run the examination and the recipe and report each step through the status of plugin operations; tests of both hosts.
     - [ ] F194.5.7 — P2: `appview` starts the application that `applications.json` records for its connector plugin when the setting `program` names none; tests of the page.
     - [ ] F194.5.8 — P2: A test connector plugin whose recipe is a release of the test application of the embed kit, and a window check that installs it when absent, connects it when present, starts it in a card and runs the gate.

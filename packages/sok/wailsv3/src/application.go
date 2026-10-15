@@ -357,3 +357,129 @@ func runStep(step, folder, search string, environment []string, program string, 
 	}
 	return stdout.String(), nil
 }
+
+// Applications is the place of the record of connected applications inside the configuration directory.
+const Applications = "plugins/applications.json"
+
+// ApplicationRecord is one connected application: its version, its executable, located or installed, and the locate kind
+// or recipe kind that gave it (docs/spec/installation.md#applications).
+type ApplicationRecord struct {
+	Version string `json:"version"`
+	Path    string `json:"path"`
+	How     string `json:"how"`
+	Method  string `json:"method"`
+}
+
+// ApplicationsState is plugins/applications.json.
+type ApplicationsState struct {
+	Format       int                          `json:"format"`
+	Applications map[string]ApplicationRecord `json:"applications"`
+}
+
+// ReadApplications reads plugins/applications.json; an absent file is an empty record, and another form is an error that
+// names the file and what it found.
+func ReadApplications(configDir string) (*ApplicationsState, error) {
+	path := filepath.Join(configDir, Applications)
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return &ApplicationsState{Format: 1, Applications: map[string]ApplicationRecord{}}, nil
+	}
+	if err != nil {
+		return nil, fileError(path, err)
+	}
+	value, err := DecodeJSON(data)
+	if err != nil {
+		return nil, fmt.Errorf("%s is not valid JSON: %w", path, err)
+	}
+	state, err := validateApplications(value)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return state, nil
+}
+
+func validateApplications(value any) (*ApplicationsState, error) {
+	root, err := object("applications.json", value)
+	if err != nil {
+		return nil, err
+	}
+	if err := only("applications.json", root, "format", "applications"); err != nil {
+		return nil, err
+	}
+	if !isOne(root["format"]) {
+		return nil, fmt.Errorf("format must be 1, not %s", quote(root["format"]))
+	}
+	entries, err := object("applications", root["applications"])
+	if err != nil {
+		return nil, err
+	}
+	state := &ApplicationsState{Format: 1, Applications: map[string]ApplicationRecord{}}
+	for _, id := range sortedKeys(entries) {
+		entry, err := object("application "+id, entries[id])
+		if err != nil {
+			return nil, err
+		}
+		if err := only("application "+id, entry, "version", "path", "how", "method"); err != nil {
+			return nil, err
+		}
+		record := ApplicationRecord{}
+		var ok bool
+		if record.Version, ok = text(entry["version"]); !ok {
+			return nil, fmt.Errorf("application %s version must be text", id)
+		}
+		if record.Path, ok = text(entry["path"]); !ok || !filepath.IsAbs(record.Path) {
+			return nil, fmt.Errorf("application %s path must be an absolute path", id)
+		}
+		if record.How, ok = text(entry["how"]); !ok || (record.How != "located" && record.How != "installed") {
+			return nil, fmt.Errorf("application %s how must be located or installed, not %s", id, quote(entry["how"]))
+		}
+		if record.Method, ok = text(entry["method"]); !ok {
+			return nil, fmt.Errorf("application %s method must be text", id)
+		}
+		state.Applications[id] = record
+	}
+	return state, nil
+}
+
+// RecordApplication writes the application into plugins/applications.json in one step.
+func RecordApplication(configDir, id string, record ApplicationRecord) error {
+	state, err := ReadApplications(configDir)
+	if err != nil {
+		return err
+	}
+	state.Applications[id] = record
+	return writeApplications(configDir, state)
+}
+
+// RemoveApplication deletes the folder of an installed application and its entry, and only the entry of a located one; an
+// application without an entry is nothing to remove.
+func RemoveApplication(configDir, id string) error {
+	state, err := ReadApplications(configDir)
+	if err != nil {
+		return err
+	}
+	record, found := state.Applications[id]
+	if !found {
+		return nil
+	}
+	if record.How == "installed" {
+		folder := filepath.Join(configDir, "applications", id)
+		if err := os.RemoveAll(folder); err != nil {
+			return fileError(folder, err)
+		}
+	}
+	delete(state.Applications, id)
+	return writeApplications(configDir, state)
+}
+
+func writeApplications(configDir string, state *ApplicationsState) error {
+	var out bytes.Buffer
+	if err := printJSON(&out, state); err != nil {
+		return err
+	}
+	path := filepath.Join(configDir, Applications)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fileError(filepath.Dir(path), err)
+	}
+	return replaceFile(path, out.Bytes())
+}
