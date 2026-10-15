@@ -166,3 +166,13 @@ func (darwin) ApplicationOfBundle(identifier string) (string, bool, error) {
 	}
 	return found[0], true, nil
 }
+
+// ApplicationOfIdentifier: the application identifiers of the platform are not implemented on darwin.
+func (darwin) ApplicationOfIdentifier(string) (string, bool, error) {
+	return "", false, errors.New("application identifiers are not implemented on darwin")
+}
+
+// PackageManager: brew is the standard package manager of darwin.
+func (darwin) PackageManager() (string, string) {
+	return "darwin", "brew"
+}

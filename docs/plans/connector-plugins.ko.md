@@ -32,8 +32,8 @@ core는 plugin을 이름하지 않으므로 레시피는 manifest의 범용 필�
 }
 ```
 
-- `locate`는 설치된 애플리케이션을 찾는 방법을 차례로 시도할 순서대로 나열한다: darwin의 metadata 색인으로 찾는 bundle identifier, `PATH`의 이름, 또는 존재하고 실행할 수 있는 절대 경로.
-- `recipe`는 `release`(애플리케이션 저장소의 release를 내려받아 SHA-256을 비교하고 `zip`, `tar.gz`를 풀거나 그대로 둔다), `package`(`brew` 같은 패키지 관리자에게 선언한 cask나 formula로 그 package가 있는지 묻고, 설치한 뒤 locate 항목으로 찾는다), `source`(저장소를 ref에서 애플리케이션의 폴더로 clone하고 거기서 그 저장소의 build 명령을 실행한다) 중 하나다.
+- `locate`는 설치된 애플리케이션을 찾는 방법을 차례로 시도할 순서대로 나열한다: darwin의 metadata 색인으로 찾는 bundle identifier, windows와 linux의 플랫폼 애플리케이션 식별자, `PATH`의 이름, 또는 존재하고 실행할 수 있는 절대 경로.
+- `recipe`는 `release`(애플리케이션 저장소의 release를 내려받아 SHA-256을 비교하고 `zip`, `tar.gz`를 풀거나 그대로 둔다), `package`(플랫폼의 표준 패키지 관리자 — `brew`, `winget`, `flatpak` — 에게 선언한 cask나 formula로 그 package가 있는지 묻고, 설치한 뒤 locate 항목으로 찾는다), `source`(저장소를 ref에서 애플리케이션의 폴더로 clone하고 거기서 그 저장소의 build 명령을 실행한다) 중 하나다.
 - `program`과 `arguments`가 애플리케이션을 시작한다.
 
 ## 설치

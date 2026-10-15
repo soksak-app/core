@@ -55,6 +55,14 @@ pub trait Platform {
     /// The path of the application bundle with the identifier, or `None` when none is found (docs/spec/installation.md#applications).
     fn application_of_bundle(&self, identifier: &str)
     -> Result<Option<std::path::PathBuf>, String>;
+    /// The executable of the installed application with the application identifier of the platform, or `None` when none is found
+    /// (docs/spec/installation.md#applications).
+    fn application_of_identifier(
+        &self,
+        identifier: &str,
+    ) -> Result<Option<std::path::PathBuf>, String>;
+    /// The name of the operating system and its standard package manager (docs/spec/installation.md#applications).
+    fn package_manager(&self) -> (&'static str, &'static str);
     /// Takes an exclusive advisory lock on the open file and waits until it holds it, so the processes that update one index exclude
     /// each other (docs/spec/logging.md#index). Closing the file releases the lock.
     fn lock_file(&self, file: &std::fs::File) -> Result<(), String>;

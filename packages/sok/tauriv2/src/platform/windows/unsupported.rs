@@ -98,4 +98,17 @@ impl Platform for Windows {
     fn key(&self) -> Result<String, String> {
         Err("platform key is not implemented on windows".into())
     }
+
+    /// The application identifiers of the platform are not implemented on windows.
+    fn application_of_identifier(
+        &self,
+        _identifier: &str,
+    ) -> Result<Option<std::path::PathBuf>, String> {
+        Err("application identifiers are not implemented on windows".into())
+    }
+
+    /// winget is the standard package manager of windows.
+    fn package_manager(&self) -> (&'static str, &'static str) {
+        ("windows", "winget")
+    }
 }

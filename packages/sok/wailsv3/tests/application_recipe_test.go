@@ -15,19 +15,16 @@ import (
 	"testing"
 
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
+	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
+	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/darwin"
+	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/linux"
+	_ "github.com/soksak-app/core/packages/sok/wailsv3/src/platform/windows"
 )
 
 // The package checks ask the brew of the machine through brew info, which reads its package index and installs nothing.
 // contract: application.package.brew-has-declared-kind
 func TestAPackageThatBrewHasAsDeclaredIsAccepted(t *testing.T) {
-	if _, err := exec.LookPath("brew"); err != nil {
-		// A machine without brew refuses the package recipe by name.
-		err := sok.CheckApplicationPackage("brew", "jq", false, os.Getenv("PATH"))
-		if err == nil || !strings.Contains(err.Error(), "brew is not on the search path") {
-			t.Fatalf("err %v", err)
-		}
-		return
-	}
+	skipWithoutBrew(t)
 	if err := sok.CheckApplicationPackage("brew", "jq", false, os.Getenv("PATH")); err != nil {
 		t.Fatal(err)
 	}
@@ -38,13 +35,8 @@ func TestAPackageThatBrewHasAsDeclaredIsAccepted(t *testing.T) {
 
 // contract: application.package.brew-lacks-package
 func TestAPackageThatBrewDoesNotHaveIsRefusedWithItsAnswer(t *testing.T) {
+	skipWithoutBrew(t)
 	err := sok.CheckApplicationPackage("brew", "no-such-cask-soksak", true, os.Getenv("PATH"))
-	if _, lookErr := exec.LookPath("brew"); lookErr != nil {
-		if err == nil || !strings.Contains(err.Error(), "brew is not on the search path") {
-			t.Fatalf("err %v", err)
-		}
-		return
-	}
 	if err == nil || !strings.Contains(err.Error(), "application package brew info --cask no-such-cask-soksak") ||
 		!strings.Contains(err.Error(), "No Cask with this name exists") {
 		t.Fatalf("err %v", err)
@@ -53,6 +45,7 @@ func TestAPackageThatBrewDoesNotHaveIsRefusedWithItsAnswer(t *testing.T) {
 
 // contract: application.package.other-kind-refused
 func TestAPackageOfTheOtherKindIsRefused(t *testing.T) {
+	skipWithoutBrew(t)
 	if err := sok.CheckApplicationPackage("brew", "iterm2", false, os.Getenv("PATH")); err == nil {
 		t.Fatal("a cask declared as a formula was accepted")
 	}
@@ -107,4 +100,46 @@ func TestAFailedBuildCommandNamesItselfWithItsOutputAndLeavesNoFolder(t *testing
 	if entries, _ := os.ReadDir(root); len(entries) != 0 {
 		t.Fatalf("the failed installation left %v", entries)
 	}
+}
+
+// contract: application.package.manager-of-platform
+func TestThePackageManagerIsTheOneOfThePlatform(t *testing.T) {
+	system, manager := currentPlatform(t).PackageManager()
+	other := "winget"
+	if manager == "winget" {
+		other = "flatpak"
+	}
+	err := sok.CheckApplicationPackage(other, "x", false, os.Getenv("PATH"))
+	want := "application package manager of " + system + " is " + manager + ", not " + other
+	if err == nil || err.Error() != want {
+		t.Fatalf("err %v, want %q", err, want)
+	}
+	if manager != "brew" {
+		err := sok.CheckApplicationPackage(manager, "x", false, os.Getenv("PATH"))
+		if want := "application package manager " + manager + " is not implemented on " + system; err == nil || err.Error() != want {
+			t.Fatalf("err %v, want %q", err, want)
+		}
+	}
+}
+
+// skipWithoutBrew skips a brew check where brew is not the package manager of the platform or is not on the search
+// path.
+func skipWithoutBrew(t *testing.T) {
+	t.Helper()
+	if system, manager := currentPlatform(t).PackageManager(); manager != "brew" {
+		t.Skip("brew is not the package manager of " + system)
+	}
+	if _, err := exec.LookPath("brew"); err != nil {
+		t.Skip("brew is not on the search path")
+	}
+}
+
+// currentPlatform is the platform of the test run.
+func currentPlatform(t *testing.T) platform.Platform {
+	t.Helper()
+	current, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return current
 }

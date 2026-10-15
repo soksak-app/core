@@ -652,6 +652,7 @@ Items:
 | `fetch.https.reads-a-tls-response` | An `https:` index or release is read from a TLS server that the configured authorities trust, and an release whose `sha256` differs from its entry fails. | both |
 | `fetch.https.redirects-only-to-https` | A redirect to an `https:` URL is followed up to 5 times; a sixth redirect and a redirect to `http:` fail with their texts. | both |
 | `fetch.https.reports-status-size-and-timeout` | A response other than 200, a body larger than the limit and a request slower than the limit fail with `HTTP <status>`, `larger than <bytes> bytes` and `timed out after <seconds> s`. | both |
+| `application.locate.appid-by-platform` | A locate entry `appid` asks the platform for the installed application of the identifier; every platform returns `locate entry <n>: application identifiers are not implemented on <os>` until it is implemented. | both |
 | `application.locate.command-on-search-path` | A locate entry `command` finds an executable of that name in the search path that the installer passes from `PATH`. | both |
 | `application.locate.first-way-that-finds` | The locate entries are tried in order, and the first that finds an executable gives it with its kind. | both |
 | `application.locate.skips-non-executable` | A file without an execute bit is not an installed application. | both |
@@ -661,6 +662,7 @@ Items:
 | `application.release.refuses-escaping-link` | A symbolic link of a release whose target leaves the folder fails with `release entry <name> links outside the folder`. | both |
 | `application.release.one-executable` | A release with `unpack` `none` is one executable named after the last segment of its address. | both |
 | `application.release.zip-by-platform` | A zip release is extracted by the bundle extraction of the platform on darwin; another platform refuses it with `not implemented on <os>`. | both |
+| `application.package.manager-of-platform` | A package recipe whose manager is not the manager of the platform fails with `application package manager of <os> is <manager>, not <name>`; `winget` and `flatpak` fail with `application package manager <name> is not implemented on <os>`. The brew checks run where brew is the manager of the platform and is on the search path, and skip elsewhere. | both |
 | `application.package.brew-has-declared-kind` | With brew on the search path, a package that brew has as the declared cask or formula is accepted; without it, the check fails with `brew is not on the search path`. | both |
 | `application.package.brew-lacks-package` | A package that brew does not have fails with the answer of brew. | both |
 | `application.package.other-kind-refused` | A cask declared as a formula is refused. | both |

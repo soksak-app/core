@@ -54,6 +54,18 @@ pub fn locate(
                     }));
                 }
             }
+        } else if let Some(identifier) = text("appid") {
+            let current =
+                platform::current().map_err(|error| format!("locate entry {index}: {error}"))?;
+            if let Some(path) = current
+                .application_of_identifier(identifier)
+                .map_err(|error| format!("locate entry {index}: {error}"))?
+            {
+                return Ok(Some(Located {
+                    path,
+                    method: "appid".into(),
+                }));
+            }
         } else if let Some(name) = text("command") {
             // which::which reads PATH of the process; the installer passes PATH and the tests pass their own folders.
             if let Ok(path) = which::which_in(name, Some(search), "/")
@@ -73,7 +85,7 @@ pub fn locate(
             }
         } else {
             return Err(format!(
-                "locate entry {index} is not one of bundle, command or path"
+                "locate entry {index} is not one of bundle, appid, command or path"
             ));
         }
     }
@@ -299,11 +311,19 @@ pub fn install_application_package(
     .map(|_| ())
 }
 
-/// The executable of the manager on the search path; brew is the one manager of the specification.
+/// The executable of the manager of the platform on the search path; brew is the one that is implemented.
 fn package_manager(manager: &str, search: &OsStr) -> Result<PathBuf, String> {
+    let (system, want) = platform::current()
+        .map_err(|error| format!("application package: {error}"))?
+        .package_manager();
+    if manager != want {
+        return Err(format!(
+            "application package manager of {system} is {want}, not {manager}"
+        ));
+    }
     if manager != "brew" {
         return Err(format!(
-            "application package manager {manager:?} is not brew"
+            "application package manager {manager} is not implemented on {system}"
         ));
     }
     which::which_in(manager, Some(search), "/")

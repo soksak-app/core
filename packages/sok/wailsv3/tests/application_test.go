@@ -87,3 +87,17 @@ func TestLocateFindsABundleByItsIdentifier(t *testing.T) {
 		t.Fatalf("located %+v", located)
 	}
 }
+
+// contract: application.locate.appid-by-platform
+func TestLocateByApplicationIdentifierIsNotImplementedYet(t *testing.T) {
+	_, _, err := sok.LocateApplication([]map[string]string{{"appid": "com.example.Sketcher"}}, "sketcher", "")
+	current, platformErr := platform.Current()
+	if platformErr != nil {
+		t.Fatal(platformErr)
+	}
+	system, _ := current.PackageManager()
+	want := "locate entry 0: application identifiers are not implemented on " + system
+	if err == nil || err.Error() != want {
+		t.Fatalf("err %v, want %q", err, want)
+	}
+}

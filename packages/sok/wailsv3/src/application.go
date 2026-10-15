@@ -51,6 +51,18 @@ func LocateApplication(ways []map[string]string, program, search string) (Locate
 					return Located{Path: path, Method: "bundle"}, true, nil
 				}
 			}
+		case way["appid"] != "":
+			current, err := platform.Current()
+			if err != nil {
+				return Located{}, false, fmt.Errorf("locate entry %d: %w", index, err)
+			}
+			path, found, err := current.ApplicationOfIdentifier(way["appid"])
+			if err != nil {
+				return Located{}, false, fmt.Errorf("locate entry %d: %w", index, err)
+			}
+			if found {
+				return Located{Path: path, Method: "appid"}, true, nil
+			}
 		case way["command"] != "":
 			if path, ok := lookPath(way["command"], search); ok {
 				return Located{Path: path, Method: "command"}, true, nil
@@ -60,7 +72,7 @@ func LocateApplication(ways []map[string]string, program, search string) (Locate
 				return Located{Path: way["path"], Method: "path"}, true, nil
 			}
 		default:
-			return Located{}, false, fmt.Errorf("locate entry %d is not one of bundle, command or path", index)
+			return Located{}, false, fmt.Errorf("locate entry %d is not one of bundle, appid, command or path", index)
 		}
 	}
 	return Located{}, false, nil
@@ -277,10 +289,19 @@ func InstallApplicationPackage(manager, name string, cask bool, search string) e
 	return err
 }
 
-// packageManager is the executable of the manager on the search path; brew is the one manager of the specification.
+// packageManager is the executable of the manager of the platform on the search path; brew is the one that is
+// implemented.
 func packageManager(manager, search string) (string, error) {
+	current, err := platform.Current()
+	if err != nil {
+		return "", fmt.Errorf("application package: %w", err)
+	}
+	system, want := current.PackageManager()
+	if manager != want {
+		return "", fmt.Errorf("application package manager of %s is %s, not %s", system, want, manager)
+	}
 	if manager != "brew" {
-		return "", fmt.Errorf("application package manager %q is not brew", manager)
+		return "", fmt.Errorf("application package manager %s is not implemented on %s", manager, system)
 	}
 	program, found := lookPath(manager, search)
 	if !found {

@@ -303,4 +303,17 @@ impl Platform for Darwin {
             other => Err(format!("darwin/{other} has no platform key")),
         }
     }
+
+    /// The application identifiers of the platform are not implemented on darwin.
+    fn application_of_identifier(
+        &self,
+        _identifier: &str,
+    ) -> Result<Option<std::path::PathBuf>, String> {
+        Err("application identifiers are not implemented on darwin".into())
+    }
+
+    /// brew is the standard package manager of darwin.
+    fn package_manager(&self) -> (&'static str, &'static str) {
+        ("darwin", "brew")
+    }
 }

@@ -652,6 +652,7 @@ fn invalid_json_closes_connection() {
 | `fetch.https.reads-a-tls-response` | 설정한 인증 기관이 신뢰하는 TLS server에서 `https:` index나 release를 읽고, `sha256`이 항목과 다른 release는 실패한다. | both |
 | `fetch.https.redirects-only-to-https` | `https:` URL로의 redirect는 5번까지 따라간다. 여섯 번째 redirect와 `http:`로의 redirect는 그 문장으로 실패한다. | both |
 | `fetch.https.reports-status-size-and-timeout` | 200이 아닌 응답, 한도보다 큰 본문, 한도보다 느린 요청은 `HTTP <status>`, `larger than <bytes> bytes`, `timed out after <seconds> s`로 실패한다. | both |
+| `application.locate.appid-by-platform` | locate 항목 `appid`는 플랫폼에 그 식별자의 설치된 애플리케이션을 묻는다. 모든 플랫폼은 구현될 때까지 `locate entry <n>: application identifiers are not implemented on <os>`를 돌려준다. | both |
 | `application.locate.command-on-search-path` | locate 항목 `command`는 설치기가 `PATH`에서 넘기는 검색 경로에서 그 이름의 실행 파일을 찾는다. | both |
 | `application.locate.first-way-that-finds` | locate 항목은 차례로 시도하고, 실행 파일을 처음 찾은 항목이 그것을 종류와 함께 준다. | both |
 | `application.locate.skips-non-executable` | 실행 bit가 없는 파일은 설치된 애플리케이션이 아니다. | both |
@@ -661,6 +662,7 @@ fn invalid_json_closes_connection() {
 | `application.release.refuses-escaping-link` | 대상이 폴더 밖으로 나가는 release의 symbolic link는 `release entry <name> links outside the folder`로 실패한다. | both |
 | `application.release.one-executable` | `unpack`이 `none`인 release는 주소의 마지막 segment 이름을 가진 실행 파일 하나다. | both |
 | `application.release.zip-by-platform` | zip release는 darwin에서 platform의 bundle 추출로 풀린다. 다른 플랫폼은 `not implemented on <os>`로 거부한다. | both |
+| `application.package.manager-of-platform` | 관리자가 플랫폼의 관리자가 아닌 package 레시피는 `application package manager of <os> is <manager>, not <name>`으로 실패한다. `winget`과 `flatpak`은 `application package manager <name> is not implemented on <os>`로 실패한다. brew 검사는 brew가 플랫폼의 관리자이고 검색 경로에 있는 곳에서 돌고, 다른 곳에서는 건너뛴다. | both |
 | `application.package.brew-has-declared-kind` | 검색 경로에 brew가 있으면 선언한 cask나 formula로 brew가 가진 package를 받아들이고, 없으면 `brew is not on the search path`로 실패한다. | both |
 | `application.package.brew-lacks-package` | brew가 가지지 않은 package는 brew의 응답과 함께 실패한다. | both |
 | `application.package.other-kind-refused` | formula로 선언한 cask는 거부된다. | both |

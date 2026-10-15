@@ -165,4 +165,17 @@ impl Platform for Linux {
             other => Err(format!("linux/{other} has no platform key")),
         }
     }
+
+    /// The application identifiers of the platform are not implemented on linux.
+    fn application_of_identifier(
+        &self,
+        _identifier: &str,
+    ) -> Result<Option<std::path::PathBuf>, String> {
+        Err("application identifiers are not implemented on linux".into())
+    }
+
+    /// flatpak is the standard package manager of linux.
+    fn package_manager(&self) -> (&'static str, &'static str) {
+        ("linux", "flatpak")
+    }
 }

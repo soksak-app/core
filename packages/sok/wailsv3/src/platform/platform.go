@@ -35,6 +35,12 @@ type Platform interface {
 	// ApplicationOfBundle returns the path of the application bundle with the identifier and whether it was found
 	// (docs/spec/installation.md#applications).
 	ApplicationOfBundle(identifier string) (string, bool, error)
+	// ApplicationOfIdentifier returns the executable of the installed application with the application identifier of
+	// the platform (docs/spec/installation.md#applications) and whether it was found.
+	ApplicationOfIdentifier(identifier string) (string, bool, error)
+	// PackageManager returns the name of the operating system and its standard package manager
+	// (docs/spec/installation.md#applications).
+	PackageManager() (system, manager string)
 	// LockFile takes an exclusive advisory lock on the open file and waits until it holds it, so the processes that update one
 	// index exclude each other (docs/spec/logging.md#index). Closing the file releases the lock.
 	LockFile(file *os.File) error

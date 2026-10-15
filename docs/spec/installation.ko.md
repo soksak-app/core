@@ -98,8 +98,8 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 | 필드 | 뜻 |
 | --- | --- |
-| `locate` | 설치된 애플리케이션을 찾는 방법의 비어 있지 않은 목록으로, 차례로 시도한다: `{ "bundle": "<bundle identifier>" }`(darwin의 metadata 색인 `mdfind`. 실행 파일은 bundle을 담은 폴더에서 본 `program`), `{ "command": "<name>" }`(`PATH`에 있는 그 이름의 실행 파일), 또는 `{ "path": "<absolute path>" }`(실행 파일) |
-| `recipe` | 애플리케이션 자신의 배포로 설치하는 방법: `{ "kind": "release", "url": "<https address>", "sha256": "<hash>", "unpack": "zip" \| "tar.gz" \| "none" }`, `{ "kind": "package", "manager": "brew", "name": "<package>", "cask": true | false }`, 또는 `{ "kind": "source", "repository": "<https address>", "ref": "<tag or commit>", "commands": [["<program>", "<argument>", …], …] }` |
+| `locate` | 설치된 애플리케이션을 찾는 방법의 비어 있지 않은 목록으로, 차례로 시도한다: `{ "bundle": "<bundle identifier>" }`(darwin만: metadata 색인 `mdfind`. 실행 파일은 bundle을 담은 폴더에서 본 `program`), `{ "appid": "<application identifier>" }`(windows와 linux만: windows에서는 설치 package의 식별자, linux에서는 freedesktop 또는 Flatpak 애플리케이션 식별자. 둘 다 구현될 때까지 `not implemented on <os>`를 돌려준다), `{ "command": "<name>" }`(`PATH`에 있는 그 이름의 실행 파일), 또는 `{ "path": "<absolute path>" }`(실행 파일) |
+| `recipe` | 애플리케이션 자신의 배포로 설치하는 방법: `{ "kind": "release", "url": "<https address>", "sha256": "<hash>", "unpack": "zip" \| "tar.gz" \| "none" }`, `{ "kind": "package", "manager": "<manager of the platform>", "name": "<package>", "cask": true | false }`(관리자는 운영체제의 표준 패키지 관리자다 — darwin은 `brew`이며 `cask`가 cask인지 formula인지 이름한다. windows는 `winget`, linux는 `flatpak`이며 `cask`가 없고, 구현될 때까지 `not implemented on <os>`를 돌려준다), 또는 `{ "kind": "source", "repository": "<https address>", "ref": "<tag or commit>", "commands": [["<program>", "<argument>", …], …] }` |
 | `program` | 애플리케이션을 시작하는, 설치된 폴더 안의 실행 파일 |
 | `arguments` | 시작할 때의 인자 목록(선택) |
 

@@ -86,3 +86,23 @@ fn locate_finds_a_bundle_by_its_identifier() {
     );
     assert_eq!(located.method, "bundle");
 }
+
+// contract: application.locate.appid-by-platform
+#[test]
+fn locate_by_application_identifier_is_not_implemented_yet() {
+    let ways: Vec<serde_json::Map<String, serde_json::Value>> =
+        vec![serde_json::from_str(r#"{"appid": "com.example.Sketcher"}"#).unwrap()];
+    let error =
+        soksak_sok::application::locate(&ways, "sketcher", std::ffi::OsStr::new("")).unwrap_err();
+    assert_eq!(
+        error,
+        format!(
+            "locate entry 0: application identifiers are not implemented on {}",
+            if std::env::consts::OS == "macos" {
+                "darwin"
+            } else {
+                std::env::consts::OS
+            }
+        )
+    );
+}

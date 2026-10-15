@@ -394,6 +394,8 @@ function checkContributes(where, id, contributes) {
  *     exposes   status, command and dom entries that the surface page registers. A page surface must exist
  */
 const APPLICATION_PLATFORMS = ["darwin-arm64", "darwin-x64", "linux-x64", "windows-x64"];
+// The standard package manager of each operating system (docs/spec/installation.md#applications).
+const PACKAGE_MANAGERS = { darwin: "brew", windows: "winget", linux: "flatpak" };
 const HTTPS = (value) => typeof value === "string" && /^https:\/\/[^\s]+$/.test(value);
 const INSIDE = (value) => typeof value === "string" && value !== "" && !value.startsWith("/") && !value.split("/").includes("..");
 
@@ -419,9 +421,12 @@ function checkApplication(where, application) {
     if (!Array.isArray(entry.locate) || entry.locate.length === 0) throw new Error(`${at}: locate must list at least one way to find the application`);
     entry.locate.forEach((way, index) => {
       const keys = isObject(way) ? Object.keys(way) : [];
-      if (keys.length !== 1 || !["bundle", "command", "path"].includes(keys[0]) || !isText(way[keys[0]])) {
-        throw new Error(`${at}: locate entry ${index} must be one of bundle, command or path with text`);
+      if (keys.length !== 1 || !["bundle", "appid", "command", "path"].includes(keys[0]) || !isText(way[keys[0]])) {
+        throw new Error(`${at}: locate entry ${index} must be one of bundle, appid, command or path with text`);
       }
+      const system = platform.split("-")[0];
+      if (keys[0] === "bundle" && system !== "darwin") throw new Error(`${at}: locate entry ${index} bundle names an application of darwin, not ${platform}`);
+      if (keys[0] === "appid" && system === "darwin") throw new Error(`${at}: locate entry ${index} appid names an application of windows or linux, not ${platform}`);
       if (keys[0] === "path" && !way.path.startsWith("/")) throw new Error(`${at}: locate entry ${index} path must be absolute`);
     });
     const recipe = entry.recipe;
@@ -435,9 +440,11 @@ function checkApplication(where, application) {
       if (!["zip", "tar.gz", "none"].includes(recipe.unpack)) throw new Error(`${at}: release unpack must be zip, tar.gz or none`);
     } else if (recipe.kind === "package") {
       only(`${at} recipe`, recipe, ["kind", "manager", "name", "cask"]);
-      if (recipe.manager !== "brew") throw new Error(`${at}: package manager must be brew`);
+      const manager = PACKAGE_MANAGERS[platform.split("-")[0]];
+      if (recipe.manager !== manager) throw new Error(`${at}: package manager of ${platform} must be ${manager}, not ${recipe.manager}`);
       if (!isText(recipe.name)) throw new Error(`${at}: package name must be text`);
-      if (typeof recipe.cask !== "boolean") throw new Error(`${at}: package cask must be true or false`);
+      if (manager === "brew" && typeof recipe.cask !== "boolean") throw new Error(`${at}: package cask must be true or false`);
+      if (manager !== "brew" && recipe.cask !== undefined) throw new Error(`${at}: package cask belongs to brew, not ${manager}`);
     } else {
       only(`${at} recipe`, recipe, ["kind", "repository", "ref", "commands"]);
       if (!HTTPS(recipe.repository)) throw new Error(`${at}: source repository must be an https address`);

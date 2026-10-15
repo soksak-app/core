@@ -89,3 +89,13 @@ func (linux) PathsDir() (string, error) {
 func (linux) ApplicationOfBundle(string) (string, bool, error) {
 	return "", false, errors.New("application bundles are not implemented on linux")
 }
+
+// ApplicationOfIdentifier: the application identifiers of the platform are not implemented on linux.
+func (linux) ApplicationOfIdentifier(string) (string, bool, error) {
+	return "", false, errors.New("application identifiers are not implemented on linux")
+}
+
+// PackageManager: flatpak is the standard package manager of linux.
+func (linux) PackageManager() (string, string) {
+	return "linux", "flatpak"
+}

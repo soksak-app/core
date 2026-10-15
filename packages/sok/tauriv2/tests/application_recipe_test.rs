@@ -17,10 +17,7 @@ fn path() -> OsString {
 // contract: application.package.brew-has-declared-kind
 #[test]
 fn a_package_that_brew_has_as_declared_is_accepted() {
-    if which::which("brew").is_err() {
-        // A machine without brew refuses the package recipe by name.
-        let error = check_application_package("brew", "jq", false, &path()).unwrap_err();
-        assert!(error.contains("brew is not on the search path"), "{error}");
+    if !brew_is_the_manager() {
         return;
     }
     check_application_package("brew", "jq", false, &path()).unwrap();
@@ -42,6 +39,9 @@ fn a_package_that_brew_does_not_have_is_refused_with_its_answer() {
 // contract: application.package.other-kind-refused
 #[test]
 fn a_package_of_the_other_kind_is_refused() {
+    if !brew_is_the_manager() {
+        return;
+    }
     assert!(check_application_package("brew", "iterm2", false, &path()).is_err());
 }
 
@@ -141,4 +141,42 @@ fn a_failed_build_command_names_itself_with_its_output_and_leaves_no_folder() {
         0,
         "the failed installation left a folder"
     );
+}
+
+// contract: application.package.manager-of-platform
+#[test]
+fn the_package_manager_is_the_one_of_the_platform() {
+    let (system, manager) = soksak_sok::platform::current().unwrap().package_manager();
+    let other = if manager == "winget" {
+        "flatpak"
+    } else {
+        "winget"
+    };
+    let error = check_application_package(other, "x", false, &path()).unwrap_err();
+    assert_eq!(
+        error,
+        format!("application package manager of {system} is {manager}, not {other}")
+    );
+    if manager != "brew" {
+        let error = check_application_package(manager, "x", false, &path()).unwrap_err();
+        assert_eq!(
+            error,
+            format!("application package manager {manager} is not implemented on {system}")
+        );
+    }
+}
+
+/// The brew checks run where brew is the package manager of the platform and is on the search path, and report a skip
+/// elsewhere.
+fn brew_is_the_manager() -> bool {
+    let (system, manager) = soksak_sok::platform::current().unwrap().package_manager();
+    if manager != "brew" {
+        println!("skipped: brew is not the package manager of {system}");
+        return false;
+    }
+    if which::which("brew").is_err() {
+        println!("skipped: brew is not on the search path");
+        return false;
+    }
+    true
 }
