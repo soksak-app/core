@@ -159,3 +159,59 @@ for (const app of Object.values(APPS)) {
     for (const step of steps) assert.ok(step.ms < 2000, `a ${step.on ? "maximize" : "restore"} took ${step.ms} ms: ${JSON.stringify(steps)}`);
   });
 }
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: an appview card plays at the rate of the display`, { timeout: 120000 }, async (t) => {
+    const program = process.env.SOKSAK_EMBED_TEST_APP;
+    assert.ok(program, "SOKSAK_EMBED_TEST_APP is not set; it names the application that the appview card runs");
+    // SOKSAK_EMBED_PLAY names the control that starts playback as shares of the region, `<x>,<y>`.
+    const play = process.env.SOKSAK_EMBED_PLAY;
+    if (play === undefined) return t.skip("SOKSAK_EMBED_PLAY names no control that starts playback");
+    const [shareX, shareY] = play.split(",").map(Number);
+    assert.ok(shareX > 0 && shareX < 1 && shareY > 0 && shareY < 1, `SOKSAK_EMBED_PLAY is ${play}, not two shares between 0 and 1`);
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    await fresh(s, { performanceTrace: true, settings: { "appview.program": program, "appview.arguments": ARGS } });
+    const grid = await s.get("core.grid");
+    const [card] = grid.cards.filter((item) => item.active).sort((a, b) => b.w * b.h - a.w * a.h);
+    await s.run("core.card.split", { card: card.id, side: "right", plugin: "appview" });
+    const owner = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.plugin === "appview"));
+    await s.run("core.card.fullscreen", { card: owner.id });
+    await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.visible && item.plugin === "appview" &&
+      item.exposes.includes("status appview.state")), "no visible appview surface registered appview.state");
+    const [surface] = await s.surfaces("appview");
+    await s.until("appview.state", (state) => state.toolkit !== null, "the application did not connect", { surface: surface.surface });
+    const window = await s.until("host.window", (state) => state.regions.some((item) =>
+      item.surface === surface.surface && item.name === "view" && item.frame?.width >= 600),
+    "the appview region of the full-screen card is not 600 points wide");
+    const region = window.regions.find((item) => item.surface === surface.surface && item.name === "view");
+    const x = Math.round(region.frame.x + region.frame.width * shareX);
+    const y = Math.round(region.frame.y + region.frame.height * shareY);
+    await s.pointer(x, y, "down");
+    await s.pointer(x, y, "up");
+    const offsets = currentEventOffsets(s.app.configDir);
+    // About three seconds of playback, counted in presentations of the window, so the check has no timer.
+    for (let frame = 0; frame < 180; frame += 1) await s.presented();
+    await s.pointer(x, y, "down");
+    await s.pointer(x, y, "up");
+    const { events } = readEvents(s.app.configDir, offsets);
+    const accepted = [];
+    const refused = [];
+    for (const event of events) {
+      if (event.event !== "host.trace.image.frame" || event.fields?.surface !== surface.surface) continue;
+      const image = event.fields.response?.image;
+      if (image?.consumed) accepted.push({ sequence: image.consumed.sequence, ts: event.ts_us });
+      else refused.push(image);
+    }
+    const gaps = accepted.slice(1).map((frame, index) => (frame.ts - accepted[index].ts) / 1000);
+    const skipped = accepted.slice(1).filter((frame, index) => frame.sequence !== accepted[index].sequence + 1);
+    const result = { frames: accepted.length, refused: refused.length, skipped: skipped.length,
+      gaps: Object.fromEntries(Object.entries(summary(gaps)).map(([key, value]) => [key, round(value)])) };
+    t.diagnostic(`${app.name} appview playback ${JSON.stringify(result)}`);
+    console.log(`${app.name} appview playback ${JSON.stringify(result)}`);
+    assert.ok(accepted.length >= 90, `only ${accepted.length} frames came during about three seconds of playback: ${JSON.stringify(result)}`);
+    assert.deepEqual(refused, [], `the host refused frames: ${JSON.stringify(refused.slice(0, 4))}`);
+    assert.deepEqual(skipped.map((frame) => frame.sequence), [], "the host answered no frame before these sequences");
+    assert.ok(result.gaps.p99 <= 2 * INTERVAL_MS, `the p99 frame gap ${result.gaps.p99} ms exceeds two frames: ${JSON.stringify(result)}`);
+  });
+}

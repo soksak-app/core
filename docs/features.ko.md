@@ -1038,7 +1038,7 @@
     - [o] F192.4.2 — P2: 애플리케이션의 patch된 Skia renderer에, 애플리케이션이 compositor와 공유하는 device에서 호출자가 frame마다 정하는 wgpu texture에 그리는 surface를 더한다.
     - [o] F192.4.3 — P2: 어댑터 crate: window가 그 surface로 embed ring의 각 버퍼 IOSurface에서 만든 texture에 그리고, embed client로 각 frame을 보내며, embed configure와 입력을 window event로, Slint의 cursor를 embed cursor 메시지로 바꾸는 Slint platform. 단위 시험 Red와 Green.
     - [o] F192.4.4 — P2: `SOKSAK_EMBED_SOCKET`이 있으면 애플리케이션의 window platform 선택부에서 어댑터 platform을 고르며, 편집 코드는 바꾸지 않는다.
-    - [ ] F192.4.5 — P2: 애플리케이션을 appview 카드에서 재생과 편집 중에 F192.3의 관문으로 측정하고 결과를 기록한다.
+    - [o] F192.4.5 — P2: 애플리케이션을 appview 카드에서 재생과 편집 중에 F192.3의 관문으로 측정하고 결과를 기록한다.
     - [o] F192.4.6 — P2: appview 카드가 창의 최대화와 복귀를 애플리케이션 오류 없이 따른다. 창 검사 `appview-gate`가 두 번 최대화하고 복귀하며 각 present까지의 시간을 기록한다.
     - [o] F192.4.7 — P2: 예시 애플리케이션의 관문은 그림을 바꾸는 동작을 잰다: 카드의 선언된 항목으로 연 미디어 파일이 있는 프로젝트와 그 타임라인을 따라가는 드래그. 시작 화면 위의 드래그는 아무것도 바꾸지 않아 이동 100번 중 12번만 frame을 냈다.
 - [o] F173 — P0: F161.57.5와 F112의 변경에서 source 규칙을 지키고, push 전에 검사한다. 입력: CI가 `scripts/test/census.test.mjs`를 `native/darwin/src/input_source.m:62: m.registration is outside its entrance files`로(F161.57.5의 대기가 notification observer를 직접 등록했다), `scripts/test/fallbacks.test.mjs`를 `packages/host/tauriv2/src/deep_link.rs`의 `rs.unwrap-or has neither an event nor a stated reason` 네 개와 `packages/host/wailsv3/src/deep_link.go`의 무시된 결과 하나(F112)로 실패했다. `make push-check`는 이 두 test를 돌리지 않았다. 완료: 대기가 `sp_observe_notification`으로 등록하고, Rust parse가 각 경우를 `let … else`와 `match`로 적고, Go parse가 기본값을 밝히며, `make push-check`가 census와 fallback test를 돌린다. Red: 그 실패를 로컬에서 재현했다. Green: 두 test, `input_source_test`, 두 host의 deep link test가 통과한다.
