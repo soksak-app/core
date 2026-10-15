@@ -7,8 +7,11 @@
 //   sidecar `input <n> <us>`                        the application received the input
 //   sidecar `frame <sequence> input <n>`           the first frame that shows the input
 //   host.trace.image.frame `consumed`              the host accepted the frame of that sequence
-// The test application is the executable that SOKSAK_EMBED_TEST_APP names; the check fails with that name when it is not
-// set. The check presses, drags and releases; each step waits for host.window.presented, so the steps follow the
+// The application is the executable that SOKSAK_EMBED_TEST_APP names; the check fails with that name when it is not set.
+// SOKSAK_EMBED_TEST_ARGS gives its arguments as a JSON array (default none), and SOKSAK_EMBED_DRAG_X and
+// SOKSAK_EMBED_DRAG_Y the start of the drag as shares of the region from its left and top (default 0.05 and 0.5), so a
+// drag runs over a part of the application that changes under it. The card is shown full screen, and the drag runs to
+// 0.95 of the width of the region. The check presses, drags and releases; each step waits for host.window.presented, so the steps follow the
 // display and the check has no timer.
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -19,7 +22,6 @@ import { fresh } from "./fixture.mjs";
 
 const SIDECAR = "@soksak/sidecar-app";
 const MOVES = 100;
-const STEP = 3;
 const INTERVAL_MS = 1000 / 60;
 const percentile = (sorted, share) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * share))];
 const summary = (values) => {
@@ -27,6 +29,9 @@ const summary = (values) => {
   return { count: sorted.length, median: percentile(sorted, 0.5), p90: percentile(sorted, 0.9), p99: percentile(sorted, 0.99), max: sorted.at(-1) };
 };
 const round = (value) => Number(value.toFixed(2));
+const ARGS = process.env.SOKSAK_EMBED_TEST_ARGS ?? "[]";
+const DRAG_Y = Number(process.env.SOKSAK_EMBED_DRAG_Y ?? "0.5");
+const DRAG_X = Number(process.env.SOKSAK_EMBED_DRAG_X ?? "0.05");
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an appview card answers a native pointer drag within the gate`, { timeout: 180000 }, async (t) => {
@@ -34,28 +39,36 @@ for (const app of Object.values(APPS)) {
     assert.ok(program, "SOKSAK_EMBED_TEST_APP is not set; it names the test application of the embed kit");
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s, { performanceTrace: true, settings: { "appview.program": program } });
+    await fresh(s, { performanceTrace: true, settings: { "appview.program": program, "appview.arguments": ARGS } });
     const grid = await s.get("core.grid");
     const [card] = grid.cards.filter((item) => item.active).sort((a, b) => b.w * b.h - a.w * a.h);
     await s.run("core.card.split", { card: card.id, side: "right", plugin: "appview" });
+    const owner = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.plugin === "appview"));
+    await s.run("core.card.fullscreen", { card: owner.id });
     const [surface] = await s.until("core.surfaces",
       (surfaces) => surfaces.some((item) => item.visible && item.plugin === "appview" && item.exposes.includes("status appview.state")),
       "no visible appview surface registered appview.state").then(() => s.surfaces("appview"));
     await s.until("appview.state", (state) => state.toolkit !== null, "the application did not connect",
       { surface: surface.surface });
     const window = await s.until("host.window", (state) => state.regions.some((item) =>
-      item.surface === surface.surface && item.name === "view" && item.frame?.width > MOVES * STEP + 40),
-    "the appview region has no frame wide enough for the moves");
+      item.surface === surface.surface && item.name === "view" && item.frame?.width >= 600),
+    "the appview region of the full-screen card is not 600 points wide");
     const region = window.regions.find((item) => item.surface === surface.surface && item.name === "view");
-    const y = region.frame.y + region.frame.height / 2;
+    assert.ok(DRAG_Y > 0 && DRAG_Y < 1, `SOKSAK_EMBED_DRAG_Y is ${process.env.SOKSAK_EMBED_DRAG_Y}, not a share between 0 and 1`);
+    assert.ok(DRAG_X > 0 && DRAG_X < 0.9, `SOKSAK_EMBED_DRAG_X is ${process.env.SOKSAK_EMBED_DRAG_X}, not a share between 0 and 0.9`);
+    // Whole points between the moves, so each move has its own position in the records.
+    const step = Math.floor((region.frame.width * (0.95 - DRAG_X)) / MOVES);
+    assert.ok(step >= 1, `the region is ${region.frame.width} points wide, too narrow for ${MOVES} moves`);
+    const startX = Math.round(region.frame.x + region.frame.width * DRAG_X);
+    const y = region.frame.y + region.frame.height * DRAG_Y;
     const offsets = currentEventOffsets(s.app.configDir);
     // A hover move needs the key window, which only an activation gives, so the check drags: a press, a drag step per
     // presentation and a release reach the view of an application that is not active.
     for (let move = 0; move < MOVES; move += 1) {
-      await s.pointer(region.frame.x + 20 + move * STEP, y, move === 0 ? "down" : "drag");
+      await s.pointer(startX + move * step, y, move === 0 ? "down" : "drag");
       await s.presented();
     }
-    await s.pointer(region.frame.x + 20 + (MOVES - 1) * STEP, y, "up");
+    await s.pointer(startX + (MOVES - 1) * step, y, "up");
     // The writer stores events in batches, so the records of the last moves can be missing; the check counts only the moves
     // that have a record of every step and requires at least half of them.
     const { events } = readEvents(s.app.configDir, offsets);
@@ -124,7 +137,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(program, "SOKSAK_EMBED_TEST_APP is not set; it names the application that the appview card runs");
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s, { performanceTrace: true, settings: { "appview.program": program } });
+    await fresh(s, { performanceTrace: true, settings: { "appview.program": program, "appview.arguments": ARGS } });
     const grid = await s.get("core.grid");
     const [card] = grid.cards.filter((item) => item.active).sort((a, b) => b.w * b.h - a.w * a.h);
     await s.run("core.card.split", { card: card.id, side: "right", plugin: "appview" });
