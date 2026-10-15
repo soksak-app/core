@@ -1017,13 +1017,13 @@
     - [o] F192.1.5 — P1: darwin 공유 버퍼: vt sidecar처럼 global 식별자와 16-byte nonce를 붙인 IOSurface를 `objc2-io-surface`로 만든다. 만들고, 잠그고, 쓰고, 읽는 단위 시험.
     - [o] F192.1.6 — P1: client: 환경의 socket에 접속하고, configure와 입력을 받고, frame, cursor, caret을 보낸다. 시험의 socket에 대한 단위 시험.
     - [o] F192.1.7 — P1: 시험 애플리케이션: 설정된 디스플레이의 주기로 매 frame ring에 움직이는 그림을 그리고 각 pointer 위치로 표시를 곧바로 옮기며, 관문을 위해 각 입력과 각 present의 시각을 기록한다.
-  - [~] F192.2 — P1: 새 로컬 저장소에 애플리케이션 sidecar와 애플리케이션 plugin. 기대: sidecar는 애플리케이션을 시작·종료하고, embed socket을 열고, 각 frame token을 자기가 공급하는 image region에 넘기며, page가 보낸 입력을 전달한다. plugin은 image region 하나를 보이고, region 입력과 DOM pointer·scroll event를 터미널처럼 전달하며, cursor 모양을 정하고, 애플리케이션이 웹 주소이면 대신 document region에 웹 interface를 보인다.
+  - [o] F192.2 — P1: 새 로컬 저장소에 애플리케이션 sidecar와 애플리케이션 plugin. 기대: sidecar는 애플리케이션을 시작·종료하고, embed socket을 열고, 각 frame token을 자기가 공급하는 image region에 넘기며, page가 보낸 입력을 전달한다. plugin은 image region 하나를 보이고, region 입력과 DOM pointer·scroll event를 터미널처럼 전달하며, cursor 모양을 정하고, 애플리케이션이 웹 주소이면 대신 document region에 웹 interface를 보인다.
     - [o] F192.2.1 — P1: 애플리케이션 sidecar의 로컬 저장소를 버전 0.0.1로 만들고(애플리케이션은 표면이 있는 동안만 살므로 standard input·output transport를 쓰는 `sidecar.json`), 검사, README, 체크리스트를 둔다.
     - [o] F192.2.2 — P1: sidecar는 embed socket을 환경에 넣어 애플리케이션을 시작하고, 표면이 닫히면 멈추며, 끝나거나 접속하지 않는 애플리케이션을 그것을 이름하는 오류로 보고한다.
     - [o] F192.2.3 — P1: sidecar의 중계: host의 configure를 애플리케이션에, 애플리케이션의 각 frame을 자기가 공급하는 region의 image로 host에, page의 입력 요청을 애플리케이션에. 시험 애플리케이션으로 단위 시험.
     - [o] F192.2.4 — P1: 애플리케이션 plugin의 로컬 저장소를 버전 0.0.1로 만들고 검사, README, 체크리스트를 둔다.
     - [o] F192.2.5 — P1: plugin page: supplier가 애플리케이션 sidecar인 image region 하나, region 입력과 DOM pointer·scroll·wheel event를 요청으로 전달, 애플리케이션의 메시지로 cursor 모양 설정, plugin 설정에서 애플리케이션 선택.
-    - [ ] F192.2.6 — P1: 웹 경로: 선택한 애플리케이션이 웹 주소이면 page가 그것을 document region에 보이고 sidecar를 시작하지 않는다.
+    - [o] F192.2.6 — P1: 웹 경로: 선택한 애플리케이션이 웹 주소이면 page가 그것을 document region에 보이고 sidecar를 시작하지 않는다.
   - [ ] F192.3 — P1: 측면 1의 관문. 기대: 실제 표면의 시험 애플리케이션으로, 60과 120 Hz의 frame 간격 p99가 두 frame 이하이고 빠진 frame이 없으며, pointer 이동부터 그 결과의 present까지의 지연이 부하 없는 기계에서 중앙값 25 ms 이하, p90 40 ms 이하이고 모든 단계의 기록으로 계산한다. 실패하면 결과를 기록하고 측면 1을 버린다.
   - [ ] F192.4 — P2: 측면 2, 예시 애플리케이션의 어댑터를 그 애플리케이션의 license 아래 자기 저장소에. 기대: 애플리케이션이 공유 버퍼에 그리고 embed 입력을 창 event로 바꾸는 Slint platform으로 embed 방식에서 돌고, 애플리케이션의 변경은 창 platform 선택에 머문다. 재생과 편집 중에 F192.3의 관문을 만족한다. 실패하거나 편집 code를 고쳐야 하면 그 저장소만 버린다.
 - [o] F173 — P0: F161.57.5와 F112의 변경에서 source 규칙을 지키고, push 전에 검사한다. 입력: CI가 `scripts/test/census.test.mjs`를 `native/darwin/src/input_source.m:62: m.registration is outside its entrance files`로(F161.57.5의 대기가 notification observer를 직접 등록했다), `scripts/test/fallbacks.test.mjs`를 `packages/host/tauriv2/src/deep_link.rs`의 `rs.unwrap-or has neither an event nor a stated reason` 네 개와 `packages/host/wailsv3/src/deep_link.go`의 무시된 결과 하나(F112)로 실패했다. `make push-check`는 이 두 test를 돌리지 않았다. 완료: 대기가 `sp_observe_notification`으로 등록하고, Rust parse가 각 경우를 `let … else`와 `match`로 적고, Go parse가 기본값을 밝히며, `make push-check`가 census와 fallback test를 돌린다. Red: 그 실패를 로컬에서 재현했다. Green: 두 test, `input_source_test`, 두 host의 deep link test가 통과한다.
