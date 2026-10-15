@@ -101,8 +101,9 @@ impl Drop for LogPolicyWatch {
     }
 }
 
-/// The function that `start_log_policy` calls after each load with `default`, `file` or `error`.
-pub type PolicyApplied = Box<dyn Fn(&str) + Send + Sync>;
+/// The function that `start_log_policy` calls after each load with `default`, `file` or `error` and the detail: the error
+/// text of a refused file, or the policy that is in force.
+pub type PolicyApplied = Box<dyn Fn(&str, &str) + Send + Sync>;
 
 /// Applies the policy file of the writer and watches the file: a creation, a write, a replacement or a removal puts the policy of the
 /// file (or the default policy, when there is no file) in force. The watch is a file system event of the platform, and no timer reads
@@ -151,7 +152,7 @@ pub fn start_log_policy(
             if *last == state {
                 return;
             }
-            *last = state;
+            *last = state.clone();
             if failure.is_empty() {
                 log.set_policy(policy, source);
                 if let Err(error) = crate::platform::current()
@@ -163,7 +164,8 @@ pub fn start_log_policy(
                 crate::application_log::log_error("log policy", failure);
             }
             if let Some(applied) = applied.as_ref() {
-                applied(source);
+                // The detail is the error text of a refused file, or the policy that is in force.
+                applied(source, &state[source.len() + 1..]);
             }
         })
     };

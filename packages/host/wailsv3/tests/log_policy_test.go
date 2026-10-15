@@ -184,25 +184,26 @@ func TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	applied := make(chan string, 16)
-	stop, err := host.StartLogPolicy(log, func(source string) { applied <- source })
+	applied := make(chan [2]string, 16)
+	stop, err := host.StartLogPolicy(log, func(source, detail string) { applied <- [2]string{source, detail} })
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(stop)
-	wait := func(want string) {
+	// The step names the change that the check made, so a failure states which change gave which source and detail.
+	wait := func(step, want string) {
 		t.Helper()
 		select {
 		case got := <-applied:
-			if got != want {
-				t.Fatalf("applied %q, want %q", got, want)
+			if got[0] != want {
+				t.Fatalf("%s: applied %q (%s), want %q", step, got[0], got[1], want)
 			}
 		case <-time.After(10 * time.Second):
-			t.Fatalf("the policy %q was not applied within 10 seconds", want)
+			t.Fatalf("%s: the policy %q was not applied within 10 seconds", step, want)
 		}
 	}
 	// The file does not exist: the policy that stores everything is in force, from the default.
-	wait("default")
+	wait("start without a file", "default")
 	if !log.Enabled(host.ClassCall, host.LevelTrace) {
 		t.Fatal("the default policy does not store everything")
 	}
@@ -215,7 +216,7 @@ func TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce(t *testing.T) {
 	if err := os.Rename(temporary, options.PolicyPath); err != nil {
 		t.Fatal(err)
 	}
-	wait("file")
+	wait("atomic replacement", "file")
 	if log.Enabled(host.ClassCall, host.LevelDebug) {
 		t.Fatal("the policy of the file is not in force")
 	}
@@ -223,7 +224,7 @@ func TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce(t *testing.T) {
 	if err := os.WriteFile(options.PolicyPath, []byte(everything), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	wait("file")
+	wait("write in place", "file")
 	if !log.Enabled(host.ClassCall, host.LevelDebug) {
 		t.Fatal("the written policy is not in force")
 	}
@@ -231,7 +232,7 @@ func TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce(t *testing.T) {
 	if err := os.WriteFile(options.PolicyPath, []byte(`{"schema":9}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	wait("error")
+	wait("refused file", "error")
 	if !log.Enabled(host.ClassCall, host.LevelDebug) {
 		t.Fatal("a broken file changed the policy")
 	}
@@ -239,7 +240,7 @@ func TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce(t *testing.T) {
 	if err := os.Remove(options.PolicyPath); err != nil {
 		t.Fatal(err)
 	}
-	wait("default")
+	wait("removal", "default")
 }
 
 // contract: log.policy.page-sets-the-file

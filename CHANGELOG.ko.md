@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F160.7-1: 반복 160번(그중 100번은 부하 아래)과 Tauri diagnostics host suite 전체 3번 뒤 재현되지 않음으로 닫는다. 두 host의 감시자가 source와 함께 오류 문장이나 policy를 보고하고, 두 검사가 각 대기의 단계를 이름하므로 재발하면 위치가 남는다.
 - F194.8.3: core 0.0.16이 두 host build와 함께 게시되었고, registry가 appview 0.0.2를 철회했다.
 - F194.8.1-1: embed page의 compose message, 없는 기록, event 없는 message의 기본값이 이유를 밝힌다. Red: push 검사의 census 검사가 이유 없는 기본값 3개를 보고했다. Green: census 검사 13개 중 13개, page 검사 9개 중 9개.
 - F194.8.3: 선언된 모든 workspace 버전이 0.0.16이다. 이 release에서 embed page는 core의 `mountApplication`이고 plugin appview는 끼지 않는다.

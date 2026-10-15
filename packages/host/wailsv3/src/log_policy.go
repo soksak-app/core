@@ -98,7 +98,7 @@ func WriteLogPolicy(path string, policy LogPolicy) error {
 // policy of the file (or the default policy, when there is no file) in force. The watch is a file system event of the platform, and no
 // timer reads the file. A file that breaks the format is reported as an error record of the place `log policy` and the policy in force stays.
 // applied, when it is not nil, is called after each load with `default`, `file` or `error`. The result stops the watch.
-func StartLogPolicy(log *EventLog, applied func(source string)) (stop func(), err error) {
+func StartLogPolicy(log *EventLog, applied func(source, detail string)) (stop func(), err error) {
 	if log.PolicyPath() == "" {
 		return nil, errors.New("the event writer has no policy file")
 	}
@@ -154,7 +154,8 @@ func StartLogPolicy(log *EventLog, applied func(source string)) (stop func(), er
 			}
 		}
 		if applied != nil {
-			applied(source)
+			// The detail is the error text of a refused file, or the policy that is in force.
+			applied(source, state[len(source)+1:])
 		}
 	}
 	// The watch is installed before the first load, so a change between the two is not missed.

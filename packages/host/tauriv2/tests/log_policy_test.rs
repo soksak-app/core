@@ -247,42 +247,49 @@ fn the_policy_file_is_watched_and_every_change_is_applied_once() {
         ))
         .unwrap(),
     );
-    let (sender, applied) = channel::<String>();
+    let (sender, applied) = channel::<(String, String)>();
     let sender = std::sync::Mutex::new(sender);
     let watch = start_log_policy(
         &log,
-        Some(Box::new(move |source: &str| {
-            sender.lock().unwrap().send(source.to_string()).unwrap();
+        Some(Box::new(move |source: &str, detail: &str| {
+            sender
+                .lock()
+                .unwrap()
+                .send((source.to_string(), detail.to_string()))
+                .unwrap();
         })),
     )
     .unwrap();
-    let wait = |want: &str| {
-        let got = applied
+    // The step names the change that the check made, so a failure states which change gave which source and detail.
+    let wait = |step: &str, want: &str| {
+        let (got, detail) = applied
             .recv_timeout(Duration::from_secs(10))
-            .unwrap_or_else(|_| panic!("the policy {want:?} was not applied within 10 seconds"));
-        assert_eq!(got, want);
+            .unwrap_or_else(|_| {
+                panic!("{step}: the policy {want:?} was not applied within 10 seconds")
+            });
+        assert_eq!(got, want, "{step}: applied {got:?} ({detail})");
     };
     // The file does not exist: the policy that stores everything is in force, from the default.
-    wait("default");
+    wait("start without a file", "default");
     assert!(log.enabled(Class::Call, Level::Trace));
     let narrow = r#"{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"info","io":"trace","frame":"trace"}}"#;
     // An atomic replacement (a new file renamed over the path) is applied.
     let temporary = config.path().join(".log-policy.tmp");
     fs::write(&temporary, narrow).unwrap();
     fs::rename(&temporary, &policy_path).unwrap();
-    wait("file");
+    wait("atomic replacement", "file");
     assert!(!log.enabled(Class::Call, Level::Debug));
     // A write in place is applied too.
     fs::write(&policy_path, EVERYTHING).unwrap();
-    wait("file");
+    wait("write in place", "file");
     assert!(log.enabled(Class::Call, Level::Debug));
     // A file that breaks the format is an error record that names the file, and the policy in force stays.
     fs::write(&policy_path, r#"{"schema":9}"#).unwrap();
-    wait("error");
+    wait("refused file", "error");
     assert!(log.enabled(Class::Call, Level::Debug));
     // The removal of the file returns to the default policy.
     fs::remove_file(&policy_path).unwrap();
-    wait("default");
+    wait("removal", "default");
     drop(watch);
 }
 
