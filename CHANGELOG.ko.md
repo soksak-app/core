@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.6, F194.7.1, F194.7.3, F194.5.7.2, F194.5.8-1: core 0.0.15가 두 host build와 함께 게시되었다. plugin-appview 0.0.2(공유 embed page, `appview.surface`)와 sidecar-app 0.0.1(A1.10)이 게시되어 registry에 올랐고, registry의 publish와 ci workflow가 통과했다.
 - F194.7.2: 연결 창 검사가 자기 애플리케이션 이름을 가진 plugin을 만든다. 그 plugin은 공유 embed page `@soksak/shared/appview.surface/surface.js`를 import하는 자기 surface를 가지고, `appview.surface`에 기여하며, 애플리케이션 sidecar의 image region을 선언한다. 검사는 설정 없이 그 plugin의 카드를 연다. 애플리케이션 sidecar는 workspace 밖의 연결 plugin만 쓰므로, workspace registry가 선언된 모든 sidecar를 release한다. Red: registry 시험이 어떤 workspace plugin도 쓰지 않는 선언된 sidecar의 release를 찾지 못했고, 검사가 연결 plugin의 sidecar를 찾지 못했다. Green: registry 시험 4개 중 4개, 두 host에서 검사 3번 중 3번(macOS 26, F194.7.0을 담은 debug build).
 - F194.7.0: `validateManifest`가 모든 지점이 `modules`를 선언하면 `surface` 없는 `extends`를, 그리고 `extends`만 가진 plugin을 받는다. 명세가 공유 module 지점을 밝힌다. Red: module만 주는 제공자의 새 검사가 `extends requires a surface`로 거부되었다. Green: plugin-api 검사 213개 중 213개.
 - F194.6: 선언된 모든 workspace 버전이 연결 plugin의 release인 0.0.15다.
