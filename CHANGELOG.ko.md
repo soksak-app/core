@@ -5,6 +5,7 @@
 ## 미배포
 
 - F192.1, F192.2: background session은 surface가 mount되지 않은 tab에만 열리고, tab이 보이거나 surface가 mount되면 listener와 함께 끝난다. 그래서 같은 card의 다른 tab 뒤에 가려진 terminal이 출력을 그리지 않게 만들던 `image` 없는 두 번째 `open`을 더 받지 않는다. 각 결정은 event `page.background.session`이다.
+- F192.3.3: side 1의 관문이 60 Hz에서 두 host 모두 각 세 번 통과했다. macOS(arm64)에서 이 branch의 debug build로, load average 13~15에서 측정했다. Wails: 지연 중앙값 12.2~13.8 ms, p90 14.7~15.2 ms, frame 간격 p99 22.0~24.1 ms. Tauri: 지연 중앙값 3.3~16.4 ms, p90 17.6~20.2 ms, frame 간격 p99 20.7~24.0 ms. 거부되거나 건너뛴 frame은 없었고, core는 바꾸지 않았으며, page는 native 주입 뒤 약 1 ms에 각 입력을 sidecar로 보냈다.
 - F192.3.2-1: 관문 검사는 `e2e-check`가 거부하는 활성화를 동반한 hover 이동 대신 press, present마다 한 번의 drag, release를 한다. F192.3.2의 commit은 실패를 가린 pipe를 거쳐 검사를 통과했다. load average 13~14에서 wailsv3로 세 번 통과했다: 지연 중앙값 12.2~13.8 ms, p90 14.7~15.2 ms, frame 간격 p99 22.0~24.1 ms, 거부되거나 건너뛴 frame 없음.
 - F192.3.2: 관문 검사 `e2e/appview-gate.test.mjs`가 시험 애플리케이션을 실행하는 appview 카드를 열고, present마다 한 번씩 native pointer를 100번 움직이며, native, host, page, sidecar 기록에서 각 이동부터 그것을 보이는 첫 frame에 대한 host 응답까지의 지연과 받아들여진 frame 사이 간격을 계산한다. 첫 실행들이 P2.3과 A1.8을 찾았다.
 - F192.3.1: workspace registry가 애플리케이션 plugin `appview`와 애플리케이션 sidecar를 선언하므로, 검사 설정이 side 1의 관문을 위해 그것들을 설치한다.
