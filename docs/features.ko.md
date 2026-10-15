@@ -1021,8 +1021,8 @@
     - [o] F192.2.1 — P1: 애플리케이션 sidecar의 로컬 저장소를 버전 0.0.1로 만들고(애플리케이션은 표면이 있는 동안만 살므로 standard input·output transport를 쓰는 `sidecar.json`), 검사, README, 체크리스트를 둔다.
     - [o] F192.2.2 — P1: sidecar는 embed socket을 환경에 넣어 애플리케이션을 시작하고, 표면이 닫히면 멈추며, 끝나거나 접속하지 않는 애플리케이션을 그것을 이름하는 오류로 보고한다.
     - [o] F192.2.3 — P1: sidecar의 중계: host의 configure를 애플리케이션에, 애플리케이션의 각 frame을 자기가 공급하는 region의 image로 host에, page의 입력 요청을 애플리케이션에. 시험 애플리케이션으로 단위 시험.
-    - [ ] F192.2.4 — P1: 애플리케이션 plugin의 로컬 저장소를 버전 0.0.1로 만들고 검사, README, 체크리스트를 둔다.
-    - [ ] F192.2.5 — P1: plugin page: supplier가 애플리케이션 sidecar인 image region 하나, region 입력과 DOM pointer·scroll·wheel event를 요청으로 전달, 애플리케이션의 메시지로 cursor 모양 설정, plugin 설정에서 애플리케이션 선택.
+    - [o] F192.2.4 — P1: 애플리케이션 plugin의 로컬 저장소를 버전 0.0.1로 만들고 검사, README, 체크리스트를 둔다.
+    - [o] F192.2.5 — P1: plugin page: supplier가 애플리케이션 sidecar인 image region 하나, region 입력과 DOM pointer·scroll·wheel event를 요청으로 전달, 애플리케이션의 메시지로 cursor 모양 설정, plugin 설정에서 애플리케이션 선택.
     - [ ] F192.2.6 — P1: 웹 경로: 선택한 애플리케이션이 웹 주소이면 page가 그것을 document region에 보이고 sidecar를 시작하지 않는다.
   - [ ] F192.3 — P1: 측면 1의 관문. 기대: 실제 표면의 시험 애플리케이션으로, 60과 120 Hz의 frame 간격 p99가 두 frame 이하이고 빠진 frame이 없으며, pointer 이동부터 그 결과의 present까지의 지연이 부하 없는 기계에서 중앙값 25 ms 이하, p90 40 ms 이하이고 모든 단계의 기록으로 계산한다. 실패하면 결과를 기록하고 측면 1을 버린다.
   - [ ] F192.4 — P2: 측면 2, 예시 애플리케이션의 어댑터를 그 애플리케이션의 license 아래 자기 저장소에. 기대: 애플리케이션이 공유 버퍼에 그리고 embed 입력을 창 event로 바꾸는 Slint platform으로 embed 방식에서 돌고, 애플리케이션의 변경은 창 platform 선택에 머문다. 재생과 편집 중에 F192.3의 관문을 만족한다. 실패하거나 편집 code를 고쳐야 하면 그 저장소만 버린다.

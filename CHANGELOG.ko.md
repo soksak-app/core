@@ -5,6 +5,7 @@
 ## 미배포
 
 - F192.1, F192.2: background session은 surface가 mount되지 않은 tab에만 열리고, tab이 보이거나 surface가 mount되면 listener와 함께 끝난다. 그래서 같은 card의 다른 tab 뒤에 가려진 terminal이 출력을 그리지 않게 만들던 `image` 없는 두 번째 `open`을 더 받지 않는다. 각 결정은 event `page.background.session`이다.
+- F192.2.4, F192.2.5: 애플리케이션 plugin이 로컬 저장소로 시작하고, 그 page가 설정의 애플리케이션을 애플리케이션 sidecar가 공급하는 image region 하나에 보이며 카드의 입력을 그것에 넘긴다.
 - F192.2.2, F192.2.3: 애플리케이션 sidecar가 표면의 애플리케이션을 시작하고 멈추며, configure, frame, host 응답, page 입력을 중계하고, 스스로 끝난 애플리케이션을 그 종료를 이름하는 오류로 보고한다.
 - F192.2.1: 애플리케이션 sidecar가 standard input·output transport, 검사, 체크리스트, 체인지로그를 가진 버전 0.0.1 로컬 저장소로 시작한다.
 - F192.1.7: embed kit의 시험 애플리케이션이 매 frame 움직이는 막대와 pointer 표시를 그리고 각 입력과 present를 시각과 함께 기록한다.
