@@ -75,6 +75,7 @@ var eventClasses = map[string]Class{
 	"native.window.occlusion":       ClassLifecycle,
 	"native.window.resign_key":      ClassLifecycle,
 	"native.window.resign_main":     ClassLifecycle,
+	"page.background.session":       ClassLifecycle,
 	"page.call":                     ClassCall,
 	"page.command":                  ClassCall,
 	"page.log.clock":                ClassLifecycle,

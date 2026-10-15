@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F192.2-1: the class tables of both `sok` packages are generated again from `docs/spec/events.json` and list `page.background.session`. Red: `scripts/test/event-classes.test.mjs` failed with `packages/sok/wailsv3/src/event_classes.go differs from docs/spec/events.json`. Green: 3 of 3.
 - F194.3.1-1: `ci.yml` and `window-checks.yml` check out the application plugin and the application sidecar, and `scripts/test/workspace-registry.test.mjs` requires a checkout of every repository that the workspace registry declares. Input: CI of the push of the application surface failed `make boundaries` because it had no checkout of `plugins/appview`. Red: the test failed with `ci.yml checks out no repository into plugins/appview, sidecars/app`. Green: 3 of 3.
 - Retired checklist entry `F192.1.1`: an entry of the external application surface was recorded under this identifier, which names the item of one owner of the sidecar session of a surface; the entry is F194.1.1, with its state.
 - Retired checklist entry `F192.1.2`: an entry of the external application surface was recorded under this identifier, which names the item of one owner of the sidecar session of a surface; the entry is F194.1.2, with its state.

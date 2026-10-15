@@ -116,6 +116,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "native.window.occlusion" => Some(Class::Lifecycle),
         "native.window.resign_key" => Some(Class::Lifecycle),
         "native.window.resign_main" => Some(Class::Lifecycle),
+        "page.background.session" => Some(Class::Lifecycle),
         "page.call" => Some(Class::Call),
         "page.command" => Some(Class::Call),
         "page.log.clock" => Some(Class::Lifecycle),
