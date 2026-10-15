@@ -72,7 +72,7 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...side, sections: [{ ...side.sections[0], fill: "yes" }] }, /section side.list fill must be a boolean/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "../list.js" }] }, /section side.list module must be a JavaScript path inside the package/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.css" }] }, /section side.list module must be a JavaScript path inside the package/],
-    [{ id: "empty", name: "Empty", description: "빈 플러그인." }, /surface, sections, contributes or an application/],
+    [{ id: "empty", name: "Empty", description: "빈 플러그인." }, /surface, sections, extends, contributes or an application/],
     [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a state module, contributes or an application/],
     [{ ...card, dependencies: { Worker: "^1.2.0" } }, /dependencies: Worker is not a sidecar or plugin name/],
     [{ ...card, dependencies: ["@scope/sidecar-worker"] }, /dependencies must map sidecars and plugins to version ranges/],
@@ -373,10 +373,19 @@ test("a provider declares extension points and a contributor may consist of cont
   assert.equal(validateManifest({ ...side, contributes: contributor.contributes }).contributes["probe.language"].length, 1);
 });
 
+test("a plugin whose every extension point shares modules provides them without a surface", () => {
+  const library = { id: "library", name: "Library", description: "공유 module을 준다.", extends: { page: { ...point, modules: { surface: "ui/page.js" } } } };
+  assert.equal(validateManifest(library).extends.page.modules.surface, "ui/page.js");
+  // A point without modules gives its items to the provider page, which needs a surface.
+  const { modules: _, ...itemsOnly } = point;
+  assert.throws(() => validateManifest({ ...library, extends: { ...library.extends, language: itemsOnly } }), /extends requires a surface unless every extension point declares modules/);
+});
+
 test("extension points and contributions are rejected for each invalid field", () => {
   const item = contributor.contributes["probe.language"][0];
+  const { modules: _, ...itemsOnly } = point;
   for (const [manifest, error] of [
-    [{ ...side, extends: { language: point } }, /extends requires a surface/],
+    [{ ...side, extends: { language: itemsOnly } }, /extends requires a surface unless every extension point declares modules/],
     [{ ...card, extends: [] }, /extends must be an object/],
     [{ ...card, extends: { Language: point } }, /invalid extension point Language/],
     [{ ...card, extends: { language: { ...point, version: "1.0" } } }, /extension point language version must be x.y.z/],
@@ -391,7 +400,7 @@ test("extension points and contributions are rejected for each invalid field", (
     [{ ...contributor, contributes: { "probe.language": [] } }, /contributes probe.language must be a non-empty array/],
     [{ ...contributor, contributes: { "probe.language": [{ ...item, range: "latest" }] } }, /contributes probe.language item 1 range latest is invalid/],
     [{ ...contributor, contributes: { "probe.language": [{ ...item, module: "/tidy.js" }] } }, /contributes probe.language item 1 module must be a JavaScript path inside the package/],
-    [{ id: "none", name: "None", description: "아무것도 없다." }, /a plugin requires a surface, sections, contributes or an application/],
+    [{ id: "none", name: "None", description: "아무것도 없다." }, /a plugin requires a surface, sections, extends, contributes or an application/],
     [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a state module, contributes or an application/],
   ]) assert.throws(() => validateManifest(manifest), error, JSON.stringify(manifest).slice(0, 120));
 });

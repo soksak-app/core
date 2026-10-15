@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F194.7.0: `validateManifest` accepts `extends` without `surface` when every point declares `modules`, and a plugin with only `extends`; the specification states the shared-module point. Red: the new check of a module-only provider was refused with `extends requires a surface`. Green: 213 of 213 plugin-api checks.
 - F194.6: every declared workspace version is 0.0.15, the release of connector plugins.
 - F194.5.8: the window check `e2e/connector.test.mjs` packs a connector plugin of the test application of the embed kit into its own registry and serves the release of the application over https with the certificate of the check registry; with the application present the install connects it where it is, and without it the release recipe installs it into the configuration folder, and each time an appview card with `application:embed-test-app` starts it from the recorded path. It found F194.5.6.1-2 and sidecar-app A1.10. Green (macOS 26, debug builds with F194.5.6.1-2 and sidecar-app A1.10): 3 of 3 runs on both hosts.
 - F194.5.6.1-2: both installers connect the application of each installed or updated connector plugin, also when its folder was extracted by an earlier install whose connection failed. Red: the new check of both `sok` packages found no application after the second install. Green: 4 of 4 connector checks in each language with the plugin and ownership checks.

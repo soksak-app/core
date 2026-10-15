@@ -1066,6 +1066,7 @@
     - [o] F194.5.10 — P2: 애플리케이션은 플랫폼의 애플리케이션 식별자로 식별하고, 애플리케이션의 배포물이나 플랫폼의 표준 패키지 관리자로 설치한다: `locate`에 `bundle` 곁에 `appid`(windows: 설치 package 또는 winget 식별자, linux: freedesktop 또는 Flatpak 애플리케이션 식별자)가 생기고, `package`는 플랫폼의 관리자(darwin `brew`, windows `winget`, linux `flatpak`)를 이름한다. windows와 linux는 구현될 때까지 `not implemented on <os>`를 돌려준다.
     - [o] F194.5.10-1 — P2: brew가 가지지 않은 package의 Rust 검사가 brew가 플랫폼의 관리자가 아닌 곳에서 건너뛴다. F194.5.10의 조건이 그 검사에 빠져 linux CI가 실패했다.
   - [ ] F194.7 — P1: 애플리케이션마다 plugin 하나가 사람이 여는 plugin이다: 연결 plugin은 자기 애플리케이션의 이름과 자기 surface를 가지고, `appview`는 자기 surface 대신 extension point `appview.surface`의 공유 module로 embed page를 준다([계획](plans/connector-plugins.ko.md)). 설정 `application:<id>`를 가진 `appview` 카드(F194.5.7)는 사람이 애플리케이션 대신 `appview`를 열게 했다.
+    - [o] F194.7.0 — P1: 모든 확장 지점이 `modules`를 선언한 plugin은 surface 없이 그것을 준다. 그런 지점의 항목은 어떤 page도 받지 않기 때문이다. modules가 없는 지점은 여전히 제공자 surface가 필요하다. 반대 검토가 `extends`만 가진 plugin이 내용 요구 규칙에 거부되는 것과 권한 문장이 제공자 page만 이름하는 것을 찾았고, 둘 다 이 변경에 들어 있다.
     - [ ] F194.7.1 — P1: plugin-appview가 애플리케이션 id에 대해 mount하는 공유 embed page와 함께 `appview.surface`를 선언하고 surface를 가지지 않는다. 그 저장소 항목 P5.
     - [ ] F194.7.2 — P1: F194.5.8 창 검사가 공유 page를 import하는 자기 surface를 가진 연결 plugin을 설치하고, 설정 없이 그 plugin의 카드를 연다.
     - [ ] F194.7.3 — P1: core 0.0.15가 게시되면 `appview.surface`와 함께 plugin-appview를 release한다. 이것이 surface 대신 공유 page로 F194.5.7.2를 완료한다.

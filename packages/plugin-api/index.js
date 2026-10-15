@@ -509,8 +509,12 @@ export function validateManifest(manifest) {
     checkDependencies(where, manifest.dependencies);
   }
   if (manifest.extends !== undefined) {
-    if (manifest.surface === undefined) throw new Error(`${where}: extends requires a surface`);
     checkExtends(where, manifest.extends);
+    // A point without modules gives its items to the provider page; a point whose interface is its shared modules is
+    // imported by the pages of its contributors and needs no provider page (docs/spec/plugins.md#extension-points).
+    if (manifest.surface === undefined && Object.values(manifest.extends).some((point) => point.modules === undefined)) {
+      throw new Error(`${where}: extends requires a surface unless every extension point declares modules`);
+    }
   }
   if (manifest.contributes !== undefined) checkContributes(where, id, manifest.contributes);
   if (manifest.background !== undefined) {
@@ -632,9 +636,9 @@ export function validateManifest(manifest) {
   }
   checkSettings(`${where}`, manifest.settings);
   if (manifest.application !== undefined) checkApplication(`${where} application`, manifest.application);
-  if (manifest.surface === undefined && manifest.sections === undefined && manifest.contributes === undefined &&
-      manifest.application === undefined) {
-    throw new Error(`${where}: a plugin requires a surface, sections, contributes or an application`);
+  if (manifest.surface === undefined && manifest.sections === undefined && manifest.extends === undefined &&
+      manifest.contributes === undefined && manifest.application === undefined) {
+    throw new Error(`${where}: a plugin requires a surface, sections, extends, contributes or an application`);
   }
   if (manifest.sidebars !== undefined) validatePluginSidebarDefaults(manifest);
   return manifest;
