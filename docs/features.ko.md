@@ -1012,7 +1012,7 @@
   - [~] F192.1 — P1: 새 로컬 저장소에 embed protocol, client library, 시험 애플리케이션. 기대: protocol 문서(양방향 메시지, 운영체제별 공유 버퍼 token: darwin `iosurface-global`, windows DXGI 공유 handle, linux dmabuf), 이중 또는 삼중 버퍼의 client library, 매 frame 움직이는 그림을 그리고 입력에 곧바로 답하는 시험 애플리케이션. protocol과 버퍼 회전의 단위 시험.
     - [o] F192.1.1 — P1: embed kit의 로컬 저장소를 버전 0.0.1로 만들고, build·시험·기록 검사, README, 영문·한글 자체 체크리스트를 둔다.
     - [o] F192.1.2 — P1: protocol 문서를 영문·한글로 쓴다: 시작(애플리케이션 환경의 socket 경로), sidecar가 보내는 각 메시지(크기와 배율의 configure, 키, input method 조합과 확정, pointer 이동과 버튼, scroll, focus, 종료), 애플리케이션이 보내는 메시지(공유 버퍼 token을 가진 frame, cursor 모양, caret, 상태), framing(줄마다 JSON object 하나), 운영체제별 token(darwin `iosurface-global`, windows DXGI 공유 handle, linux dmabuf).
-    - [ ] F192.1.3 — P1: protocol 모듈: 메시지를 type으로, 그 줄 단위 encode와 decode, 문서를 어긴 줄을 찾은 것을 이름하는 오류로 거부. 단위 시험 Red와 Green.
+    - [o] F192.1.3 — P1: protocol 모듈: 메시지를 type으로, 그 줄 단위 encode와 decode, 문서를 어긴 줄을 찾은 것을 이름하는 오류로 거부. 단위 시험 Red와 Green.
     - [ ] F192.1.4 — P1: 버퍼 ring: 공유 버퍼 두세 개가 각각 free, drawing, presented이며, 애플리케이션은 free 버퍼에만 그리고, 버퍼는 host가 그 뒤의 frame을 소비하면 다시 free가 된다. 운영체제가 필요 없는 버퍼로 단위 시험 Red와 Green.
     - [ ] F192.1.5 — P1: darwin 공유 버퍼: vt sidecar처럼 global 식별자와 16-byte nonce를 붙인 IOSurface를 `objc2-io-surface`로 만든다. 만들고, 잠그고, 쓰고, 읽는 단위 시험.
     - [ ] F192.1.6 — P1: client: 환경의 socket에 접속하고, configure와 입력을 받고, frame, cursor, caret을 보낸다. 시험의 socket에 대한 단위 시험.
