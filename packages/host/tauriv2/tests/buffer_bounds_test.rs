@@ -202,7 +202,7 @@ fn the_pending_replies_of_a_sidecar_hold_at_most_1024_messages() {
             .sidecars
             .send_response(ECHO, "s1", "a", &response("a", 0))
         {
-            refused.push(error);
+            refused.push(error.to_string());
         }
     }
     let want = format!(
@@ -243,7 +243,7 @@ fn the_pending_replies_of_a_sidecar_hold_at_most_four_mebibytes() {
             .sidecars
             .send_response(ECHO, "s1", "a", &response("a", 3 << 19))
         {
-            refused.push(error);
+            refused.push(error.to_string());
         }
     }
     assert!(

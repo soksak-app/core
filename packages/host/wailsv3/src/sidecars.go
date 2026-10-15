@@ -451,7 +451,7 @@ func (c *Sidecars) SendResponse(name, surface, image string, body json.RawMessag
 	}
 	process, ok := c.running[name]
 	if !ok {
-		return fmt.Errorf("sidecar %s is not running", name)
+		return sidecarEnded{name}
 	}
 	select {
 	case <-process.exited:
@@ -1910,6 +1910,17 @@ func (c *Sidecars) notifyConnection(name string, failure error) {
 	}
 }
 
+// ErrSidecarEnded is the error of a message to a sidecar whose process is not running: the sidecar ended, or never
+// started, so nothing receives the message.
+var ErrSidecarEnded = errors.New("the sidecar is not running")
+
+// sidecarEnded is the error of a message to the sidecar name that is not running.
+type sidecarEnded struct{ name string }
+
+func (e sidecarEnded) Error() string { return fmt.Sprintf("sidecar %s is not running", e.name) }
+
+func (e sidecarEnded) Is(target error) bool { return target == ErrSidecarEnded }
+
 // dropMessage records, with its body, a sidecar message that is discarded because there is no owner window, and answers a
 // transfer image among them with the error closed, because the supplier keeps a transfer image until the host answers it
 // (docs/spec/native-surfaces.md#image-regions).
@@ -1919,7 +1930,12 @@ func (c *Sidecars) dropMessage(sidecar string, event sidecarEvent) {
 	if !ok {
 		return
 	}
-	if err := c.SendResponse(sidecar, event.Surface, name, answer); err != nil {
+	err := c.SendResponse(sidecar, event.Surface, name, answer)
+	switch {
+	case errors.Is(err, ErrSidecarEnded):
+		// The frames of a sidecar end with its process, so an ended sidecar needs no answer.
+		LogInfo("sidecar "+sidecar, fmt.Sprintf("answer of the image of closed surface %s not sent: %v", event.Surface, err))
+	case err != nil:
 		LogError("sidecar "+sidecar, fmt.Sprintf("answer of the image of closed surface %s: %v", event.Surface, err))
 	}
 }

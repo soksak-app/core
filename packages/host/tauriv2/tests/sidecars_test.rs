@@ -1927,3 +1927,20 @@ fn an_unfinished_line_at_the_end_of_the_output_is_not_a_message() {
         MessageLine::TooLong
     );
 }
+
+// A response to a sidecar that has ended has no receiver: its frames ended with its process, so the dropped-message path
+// records the answer that it cannot send instead of an error.
+// contract: sidecars.protocol.answer-to-ended-sidecar-is-recorded
+#[test]
+fn a_response_to_a_sidecar_that_ended_is_the_ended_error() {
+    let (sidecars, _dir) = echo_sidecars();
+    let body =
+        serde_json::value::RawValue::from_string(r#"{"image":{"error":"closed"}}"#.to_string())
+            .unwrap();
+    match sidecars.send_response(ECHO, "s1", "view", &body) {
+        Err(soksak_host_tauriv2::sidecars::ResponseError::Ended(text)) => {
+            assert_eq!(text, format!("sidecar {ECHO} is not running"));
+        }
+        other => panic!("{other:?}"),
+    }
+}

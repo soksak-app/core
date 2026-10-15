@@ -63,7 +63,23 @@ enum Outgoing {
 /// The interface that sends responses to a sidecar.
 pub trait ResponseSender: Send {
     /// Sends the response JSON to the sidecar. The image name is used as the key.
-    fn send(&self, surface: &str, image: &str, body: &RawValue) -> Result<(), String>;
+    fn send(&self, surface: &str, image: &str, body: &RawValue) -> Result<(), ResponseError>;
+}
+
+/// The error of a response to a sidecar. `Ended` states that the process of the sidecar is not running, so nothing
+/// receives the response; `Failed` is any other failure. The text is the same in both hosts.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResponseError {
+    Ended(String),
+    Failed(String),
+}
+
+impl std::fmt::Display for ResponseError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResponseError::Ended(text) | ResponseError::Failed(text) => formatter.write_str(text),
+        }
+    }
 }
 
 /// The window that owns a surface. It provides the root of sidecar messages and receives events.
@@ -402,11 +418,17 @@ fn drop_message(sender: &dyn ResponseSender, sidecar: &str, surface: &str, body:
     let Some((name, answer)) = closed_image_answer(body) else {
         return;
     };
-    if let Err(error) = sender.send(surface, &name, &answer) {
-        crate::application_log::log_error(
+    match sender.send(surface, &name, &answer) {
+        Ok(()) => {}
+        // The frames of a sidecar end with its process, so an ended sidecar needs no answer.
+        Err(ResponseError::Ended(error)) => crate::application_log::log_info(
+            &format!("sidecar {sidecar}"),
+            format!("closed image answer of surface {surface} not sent: {error}"),
+        ),
+        Err(ResponseError::Failed(error)) => crate::application_log::log_error(
             &format!("sidecar {sidecar}"),
             format!("closed image answer of surface {surface}: {error}"),
-        );
+        ),
     }
 }
 
@@ -454,7 +476,7 @@ struct ReadThreadResponseSender<O: Owner> {
 }
 
 impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
-    fn send(&self, surface: &str, image: &str, body: &RawValue) -> Result<(), String> {
+    fn send(&self, surface: &str, image: &str, body: &RawValue) -> Result<(), ResponseError> {
         #[derive(Serialize)]
         struct Response<'a> {
             surface: &'a str,
@@ -462,8 +484,8 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
         }
 
         let response = Response { surface, body };
-        let mut line =
-            serde_json::to_vec(&response).map_err(|e| format!("response serialization: {e}"))?;
+        let mut line = serde_json::to_vec(&response)
+            .map_err(|e| ResponseError::Failed(format!("response serialization: {e}")))?;
         line.push(b'\n');
 
         match self
@@ -487,7 +509,11 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
                         size,
                         &limit,
                     );
-                    return Err(refused_reply(&self.sidecar_name, &limit, surface));
+                    return Err(ResponseError::Failed(refused_reply(
+                        &self.sidecar_name,
+                        &limit,
+                        surface,
+                    )));
                 }
                 crate::application_log::log_info(
                     &format!("sidecar {}", self.sidecar_name),
@@ -495,10 +521,10 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
                 );
                 Ok(())
             }
-            Err(TrySendError::Disconnected(_)) => Err(format!(
+            Err(TrySendError::Disconnected(_)) => Err(ResponseError::Ended(format!(
                 "sidecar {} response channel is disconnected",
                 self.sidecar_name
-            )),
+            ))),
         }
     }
 }
@@ -1529,7 +1555,7 @@ impl<O: Owner> Sidecars<O> {
         surface: &str,
         image: &str,
         body: &RawValue,
-    ) -> Result<(), String> {
+    ) -> Result<(), ResponseError> {
         #[derive(Serialize)]
         struct Response<'a> {
             surface: &'a str,
@@ -1537,18 +1563,19 @@ impl<O: Owner> Sidecars<O> {
         }
 
         let response = Response { surface, body };
-        let mut line = serde_json::to_vec(&response)
-            .map_err(|e| format!("sidecar {name}: response serialize: {e}"))?;
+        let mut line = serde_json::to_vec(&response).map_err(|e| {
+            ResponseError::Failed(format!("sidecar {name}: response serialize: {e}"))
+        })?;
         line.push(b'\n');
 
         let mut state = self.core.state.lock().expect("sidecar state");
         if state.stopped {
-            return Err("sidecars are stopped".into());
+            return Err(ResponseError::Failed("sidecars are stopped".into()));
         }
         let process = state
             .running
             .get(name)
-            .ok_or_else(|| format!("sidecar {name} is not running"))?;
+            .ok_or_else(|| ResponseError::Ended(format!("sidecar {name} is not running")))?;
 
         // It sends to the channel without blocking. When the channel is full, it buffers.
         match process
@@ -1567,7 +1594,7 @@ impl<O: Owner> Sidecars<O> {
                     .add(line)
                 {
                     record_buffer_drop(&format!("sidecar {name} pending replies"), size, &limit);
-                    return Err(refused_reply(name, &limit, surface));
+                    return Err(ResponseError::Failed(refused_reply(name, &limit, surface)));
                 }
                 crate::application_log::log_info(
                     &format!("sidecar {name}"),
@@ -1575,9 +1602,9 @@ impl<O: Owner> Sidecars<O> {
                 );
                 Ok(())
             }
-            Err(TrySendError::Disconnected(_)) => {
-                Err(format!("sidecar {name} response channel is disconnected"))
-            }
+            Err(TrySendError::Disconnected(_)) => Err(ResponseError::Ended(format!(
+                "sidecar {name} response channel is disconnected"
+            ))),
         }
     }
 
@@ -3064,7 +3091,9 @@ impl Owner for Window {
                 });
                 let text = serde_json::to_string(&response).map_err(|e| e.to_string())?;
                 let body = RawValue::from_string(text).map_err(|e| e.to_string())?;
-                response_sender.send(surface, image, &body)
+                response_sender
+                    .send(surface, image, &body)
+                    .map_err(|error| error.to_string())
             },
             |reason| {
                 if reason != "notFound" {

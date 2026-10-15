@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.8.4: process가 실행 중이 아닌 sidecar로의 응답은 두 host에서 같은 문장의 끝난 오류(`ErrSidecarEnded`, `ResponseError::Ended`)이고, 그런 sidecar에 대한 버려진 transfer image의 `closed` 답은 오류 대신 `not sent`로 기록된다. Red: 두 host의 새 검사가 그 오류 종류 없이 build되지 않았고, 연결 검사가 3번 중 2번 오류를 기록했다. Green: 두 host의 sidecar 검사, Rust host의 buffer와 flush 검사와 함께.
 - F194.5.9: 레시피는 애플리케이션을 그 자신의 배포로만 설치하므로, 예시 애플리케이션이 자기 배포로 embed 어댑터를 가진 build를 줄 때까지 보류한다.
 - F194.6, F194.7.1, F194.7.3, F194.5.7.2, F194.5.8-1: core 0.0.15가 두 host build와 함께 게시되었다. plugin-appview 0.0.2(공유 embed page, `appview.surface`)와 sidecar-app 0.0.1(A1.10)이 게시되어 registry에 올랐고, registry의 publish와 ci workflow가 통과했다.
 - F194.7.2: 연결 창 검사가 자기 애플리케이션 이름을 가진 plugin을 만든다. 그 plugin은 공유 embed page `@soksak/shared/appview.surface/surface.js`를 import하는 자기 surface를 가지고, `appview.surface`에 기여하며, 애플리케이션 sidecar의 image region을 선언한다. 검사는 설정 없이 그 plugin의 카드를 연다. 애플리케이션 sidecar는 workspace 밖의 연결 plugin만 쓰므로, workspace registry가 선언된 모든 sidecar를 release한다. Red: registry 시험이 어떤 workspace plugin도 쓰지 않는 선언된 sidecar의 release를 찾지 못했고, 검사가 연결 plugin의 sidecar를 찾지 못했다. Green: registry 시험 4개 중 4개, 두 host에서 검사 3번 중 3번(macOS 26, F194.7.0을 담은 debug build).

@@ -1475,3 +1475,14 @@ func TestAnUnfinishedLineAtTheEndOfTheOutputIsNotAMessage(t *testing.T) {
 		t.Fatalf("unfinished %d, want the bytes of the line that the process did not finish", unfinished)
 	}
 }
+
+// A response to a sidecar that has ended has no receiver: its frames ended with its process, so the dropped-message path
+// records the answer that it cannot send instead of an error.
+// contract: sidecars.protocol.answer-to-ended-sidecar-is-recorded
+func TestAResponseToASidecarThatEndedIsTheEndedError(t *testing.T) {
+	sidecars, _ := scriptSidecars(t, "#!/bin/sh\nexec sleep 600\n")
+	err := sidecars.SendResponse(echoSidecar, "s1", "view", json.RawMessage(`{"image":{"error":"closed"}}`))
+	if !errors.Is(err, host.ErrSidecarEnded) || err.Error() != "sidecar "+echoSidecar+" is not running" {
+		t.Fatalf("err %v", err)
+	}
+}
