@@ -24,6 +24,9 @@
 #                         rail overlay, a spinner, and no isolation), the median of three loads of each, and the difference of each
 #                         to the baseline in window buffers.
 #                         It prints numbers and asserts nothing
+#   make test-pressure    runs the memory pressure check of the document region and of a plain web view. It raises the memory pressure
+#                         of the system through memory_pressure, which needs the sudoers rule for /usr/bin/memory_pressure. It asserts
+#                         the response of the region and refuses to judge when the 1-minute load is above 20
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
 #   make repeat-suite COUNT=<n>
@@ -190,6 +193,9 @@ NATIVE_TEST_RUNNER := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../scripts
 
 test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS)
+
+test-pressure: $(BUILD)/document_pressure_test
+	@$(BUILD)/document_pressure_test
 
 test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_ime_test
 	@$(BUILD)/input_activate_test
