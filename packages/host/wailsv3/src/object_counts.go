@@ -5,7 +5,16 @@
 
 package host
 
-import "unsafe"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"runtime/metrics"
+	"runtime/pprof"
+	"time"
+	"unsafe"
+)
 
 // HostObjects are the objects that the host process keeps for one window. Regions are the image regions and Documents are the document regions
 // (docs/spec/native-surfaces.md#regions). SidecarSessions are the sessions of the sidecars that the surfaces of the window use. PendingReplies are
@@ -31,6 +40,59 @@ type PageObjects struct {
 // Payload returns the counts with the names of the reply.
 func (c PageObjects) Payload() map[string]int64 {
 	return map[string]int64{"elements": c.Elements, "documents": c.Documents}
+}
+
+// runtimeMetrics are the figures of the Go runtime that the reply field `runtime` of diagnostics.objects holds, by reply name. The Go runtime
+// keeps its heap, its goroutine stacks and its collector metadata in memory that the system reports as untagged VM_ALLOCATE, so these
+// figures divide that memory; the Rust host has no such runtime and leaves the field out (docs/spec/host-contract.md).
+var runtimeMetrics = []struct{ reply, metric string }{
+	{"heapObjectsBytes", "/memory/classes/heap/objects:bytes"},
+	{"heapUnusedBytes", "/memory/classes/heap/unused:bytes"},
+	{"heapFreeBytes", "/memory/classes/heap/free:bytes"},
+	{"heapReleasedBytes", "/memory/classes/heap/released:bytes"},
+	{"stacksBytes", "/memory/classes/heap/stacks:bytes"},
+	{"metadataOtherBytes", "/memory/classes/metadata/other:bytes"},
+	{"heapGoalBytes", "/gc/heap/goal:bytes"},
+	{"goroutines", "/sched/goroutines:goroutines"},
+}
+
+// RuntimeMemory reads the figures of runtimeMetrics. A metric that the runtime does not provide is an error that names it.
+func RuntimeMemory() (map[string]uint64, error) {
+	samples := make([]metrics.Sample, len(runtimeMetrics))
+	for i, m := range runtimeMetrics {
+		samples[i].Name = m.metric
+	}
+	metrics.Read(samples)
+	figures := make(map[string]uint64, len(samples))
+	for i, sample := range samples {
+		if sample.Value.Kind() != metrics.KindUint64 {
+			return nil, fmt.Errorf("the Go runtime does not provide the metric %s", sample.Name)
+		}
+		figures[runtimeMetrics[i].reply] = sample.Value.Uint64()
+	}
+	return figures, nil
+}
+
+// WriteHeapProfile collects garbage, so that the profile states the heap after the collection, and writes the heap profile of the process to
+// heap-<pid>-<ms>.pprof in folder. It returns the path of the file.
+func WriteHeapProfile(folder string) (string, error) {
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		return "", fmt.Errorf("heap profile folder: %w", err)
+	}
+	path := filepath.Join(folder, fmt.Sprintf("heap-%d-%d.pprof", os.Getpid(), time.Now().UnixMilli()))
+	file, err := os.Create(path)
+	if err != nil {
+		return "", fmt.Errorf("heap profile: %w", err)
+	}
+	runtime.GC()
+	if err := pprof.WriteHeapProfile(file); err != nil {
+		file.Close()
+		return "", fmt.Errorf("heap profile %s: %w", path, err)
+	}
+	if err := file.Close(); err != nil {
+		return "", fmt.Errorf("heap profile %s: %w", path, err)
+	}
+	return path, nil
 }
 
 // Count returns the number of names of the document regions of the window, including the names whose document is being created.

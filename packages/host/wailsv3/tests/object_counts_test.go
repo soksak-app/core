@@ -177,3 +177,42 @@ func TestPageObjectsPayloadNamesElementsAndDocuments(t *testing.T) {
 		t.Fatalf("payload = %#v, want %#v", got, want)
 	}
 }
+
+// contract: diagnostics.objects.runtime-memory
+func TestRuntimeMemoryReadsTheGoRuntimeFigures(t *testing.T) {
+	figures, err := host.RuntimeMemory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"heapObjectsBytes", "heapUnusedBytes", "heapFreeBytes", "heapReleasedBytes", "stacksBytes", "metadataOtherBytes", "heapGoalBytes", "goroutines"} {
+		if _, ok := figures[name]; !ok {
+			t.Fatalf("the runtime figures %v have no %s", figures, name)
+		}
+	}
+	if len(figures) != 8 {
+		t.Fatalf("the runtime figures %v have %d names, want 8", figures, len(figures))
+	}
+	if figures["heapObjectsBytes"] == 0 || figures["stacksBytes"] == 0 || figures["goroutines"] == 0 || figures["heapGoalBytes"] == 0 {
+		t.Fatalf("a running test process reports %v, want nonzero objects, stacks, goal and goroutines", figures)
+	}
+}
+
+// contract: diagnostics.heap-profile.writes-a-profile
+func TestWriteHeapProfileWritesAProfileInTheFolder(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "logs")
+	path, err := host.WriteHeapProfile(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(path) != folder || filepath.Ext(path) != ".pprof" {
+		t.Fatalf("the profile path is %s, want a .pprof file in %s", path, folder)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A heap profile is a gzip-compressed protocol buffer.
+	if len(data) < 2 || data[0] != 0x1f || data[1] != 0x8b {
+		t.Fatalf("the profile %s does not start with the gzip header: % x", path, data[:min(len(data), 4)])
+	}
+}

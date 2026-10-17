@@ -61,6 +61,7 @@ func init() {
 	diagnosticMethods["diagnostics.page.collect"] = diagnosticPageCollect
 	diagnosticMethods["diagnostics.native.objects"] = diagnosticNativeObjects
 	diagnosticMethods["diagnostics.objects"] = diagnosticObjects
+	diagnosticMethods["diagnostics.heap.profile"] = diagnosticHeapProfile
 	diagnosticMethods["diagnostics.process.exit"] = diagnosticProcessExit
 	diagnosticMethods["diagnostics.page.request"] = diagnosticPageMethod("diagnostics.page.request")
 	diagnosticMethods["diagnostics.surface.hold"] = diagnosticPageMethod("diagnostics.surface.hold")
@@ -879,7 +880,24 @@ func diagnosticObjects(e *Endpoint, _ *endpointConn, params json.RawMessage) (an
 		PendingReplies:   int64(s.sidecars.PendingCount(s) + h.relay.Pending(func(target relayTarget) bool { return target.owner == s })),
 		EventSubscribers: int64(e.SubscriberCount(s.name)),
 	}
-	return map[string]any{"host": objects.Payload(), "page": page.Payload(), "documents": list}, nil
+	figures, err := RuntimeMemory()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"host": objects.Payload(), "page": page.Payload(), "documents": list, "runtime": figures}, nil
+}
+
+// diagnosticHeapProfile writes the heap profile of the Go runtime to the diagnostic folder of the configuration directory and replies its path.
+func diagnosticHeapProfile(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	h, _, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	path, err := WriteHeapProfile(filepath.Join(h.workspace.directory, "logs"))
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"path": path}, nil
 }
 
 // diagnosticProcessExit replies when the process pid ends. A window check waits for the WebContent process of a closed window to end through

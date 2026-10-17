@@ -19,6 +19,7 @@ Every diagnostic file of an application is under `<config-dir>/logs/`. A person 
 | `host-<boot>.debug.jsonl` | the same process: the events of the levels `debug` and `trace`, created at the first such event | events of the [logging contract](logging.md) | rotated like the main file, to `host-<boot>.debug.jsonl.<n>` |
 | `log-policy.json` | the host, from the setting `diagnostics.log` | one JSON document, the [policy](logging.md#policy) of the event log, which every process watches | rewritten when the setting changes |
 | `<executable-name>.log` | a persistent service, opened by the host as the standard error of the service | text records of the same form, written by the service | renamed to `<name>.1` at 100 MB, when the host starts the service, and the five earlier generations are kept |
+| `heap-<pid>-<ms>.pprof` | the Wails host, in a diagnostic build, for `diagnostics.heap.profile` | heap profile of the Go runtime (`runtime/pprof`) | none; one file for each request |
 | `state-<time>.json` | both hosts, when the debug view opens | one JSON document | none; one file for each opening |
 | `captures/…` | both hosts, in a diagnostic build | PNG and frame files | the requester removes them |
 
