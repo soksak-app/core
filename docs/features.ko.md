@@ -1026,7 +1026,7 @@
   - [o] F197.4 — P1: native event ring이 첫 정책 전에 `error`만 저장한다. Red와 Green.
     - [~] F197.4-1 — P1: `error` 아래의 기록을 읽는 native 시험이 먼저 모든 수준을 저장하는 정책을 둔다: F197.4 뒤 기본 suite가 `observe_test`, `activity_observers_test`, `input_inject_test`, `webview_input_receipts_test`, `process_exit_test`, `quit_request_test`에서 실패했다.
   - [o] F197.5 — P1: files, shell, vt sidecar가 새 기본 정책을 적용한다. 각각 자기 저장소 체크리스트에서.
-  - [~] F197.6 — P1: 도구의 실행은 명령 하나로 끝나므로 `sok`이 시작할 때 `<config-dir>/log-policy.json`을 한 번 적용한다: 도구 writer에 정책 파일이 없어 기본 정책만 저장하고 어떤 검사도 그것을 넓힐 수 없다.
+  - [o] F197.6 — P1: 도구의 실행은 명령 하나로 끝나므로 `sok`이 시작할 때 `<config-dir>/log-policy.json`을 한 번 적용한다: 도구 writer에 정책 파일이 없어 기본 정책만 저장하고 어떤 검사도 그것을 넓힐 수 없다.
   - [ ] F197.7 — P1: F196과 F197의 성능 작업 뒤, F197.5를 담은 files, shell, vt sidecar의 release. 그때까지 sidecar 기본값은 미게시다.
 - [~] F196 — P1: 애플리케이션 메모리: 3일 사용 뒤 workbench page가 242 MB(Wails), 291 MB(Tauri), host가 각각 약 154 MB였고, 브라우저 탭의 문서 web view가 1.31 GB였는데, 애플리케이션의 어떤 기록도 그것을 가리키지 못한다.
   - [o] F196.1 — P1: 창 상태가 `host.window`의 `documents`에 각 문서 web view의 WebContent process를 보고하므로, 측정이 브라우저 탭의 메모리를 그 surface에 연결한다.
