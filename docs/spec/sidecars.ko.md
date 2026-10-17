@@ -13,7 +13,7 @@
 | 필드 | 의미 |
 | --- | --- |
 | `executable` | 빌드된 실행 파일의 sidecar 안 경로 |
-| `protocol` | host와 sidecar 사이 interface, 곧 시작 인자와 메시지의 버전. 현재 버전은 `2`이며, 둘 중 하나가 바뀌면 올린다 |
+| `protocol` | 메시지 형식 버전. 현재 버전은 `1` |
 | `helpers` | 선택 필드. 헬퍼 프로그램 목록. 각 항목은 `name`(헬퍼 `package.json`의 `name`)과 `executable`(헬퍼 폴더 안의 경로)을 가진다 |
 | `events` | 선택 필드. sidecar의 event catalog 파일의 패키지 안 경로([logging](logging.ko.md#catalog)). 릴리스는 그 파일을 담는다 |
 | `replay` | 화면을 만드는 sidecar의 선택 필드 `{role, executable, inputs}`. `role`은 event 파일의 role(소문자 낱말), `executable`은 sidecar 안의 재생 실행 파일 경로([replay](replay.ko.md#재생-실행-파일)), `inputs`는 재생 입력의 종류(`output`, `write`, `resize`, `selection`, `viewport`, `theme`)마다 그것을 저장하는 event 이름이며, 이름은 `sidecar.`로 시작하는 계층 `sidecar`의 이름이다([replay](replay.ko.md#기록)) |
@@ -26,7 +26,7 @@
 2. 각 플러그인 폴더의 `plugin.json`이 그 사이드카를 나열한다.
 3. 각 사이드카 폴더의 `sidecar.json`이 그 사이드카의 `executable` 경로와 `protocol`을 지정한다.
 
-호스트는 plugin 작업마다 사이드카를 다시 선언하며([변경 적용](installation.ko.md#변경-적용)), 폴더가 바뀐 사이드카를 교체한다. 호스트는 그 폴더 안의 `executable`을 실행한다. `installed.json`이나 `sidecar.json`이 없거나 틀렸거나, `executable`이 sidecar 안의 경로가 아니면 시작 시 실패한다. 페이지가 사이드카에 처음 요청을 보내면 사이드카를 시작한다. `protocol`이 `2`가 아닌 사이드카는 시작하지 않고, 그것에 대한 요청마다 `sidecar <name> <version>: protocol <found> is not 2`로 실패하므로, 애플리케이션은 시작되고 업데이트 목록이 그 사이드카를 요구하는 plugin을 보인다. 어떤 플러그인도 선언하지 않은 사이드카에 대한 요청은 `sidecar <name> is not declared by any plugin`으로 실패하고, 호스트가 사이드카를 종료한 뒤의 요청도 실패한다.
+호스트는 plugin 작업마다 사이드카를 다시 선언하며([변경 적용](installation.ko.md#변경-적용)), 폴더가 바뀐 사이드카를 교체한다. 호스트는 그 폴더 안의 `executable`을 실행한다. `installed.json`이나 `sidecar.json`이 없거나 틀렸거나, `executable`이 sidecar 안의 경로가 아니거나, `protocol`이 `1`이 아니면 시작 시 실패한다. 페이지가 사이드카에 처음 요청을 보내면 사이드카를 시작한다. 어떤 플러그인도 선언하지 않은 사이드카에 대한 요청은 `sidecar <name> is not declared by any plugin`으로 실패하고, 호스트가 사이드카를 종료한 뒤의 요청도 실패한다.
 
 사이드카가 남기는 자식 프로세스는 호스트의 파이프와 프로세스 그룹을 상속하지 않는다. 호스트가 사이드카의 표준 입력을 닫으면 사이드카는 2초 안에 끝나야 한다. 그렇지 않으면 호스트는 최대 5초까지 기다린 뒤 강제 종료 신호를 보내고 로그에 `sidecar <name>: did not end within the stop timeout and was killed`를 쓴다. 기다리는 동안 호스트는 사이드카의 표준 출력을 출력이 끝날 때까지 읽으므로, 끝나면서 하는 사이드카의 쓰기는 막히지도 실패하지도 않는다. 멈추는 동안 0이 아닌 종료 상태나 신호로 끝난 사이드카는 로그에 `sidecar <name>: exited while stopping: <exit>`로 쓴다. 호스트가 강제 종료한 프로세스와, [실패](#실패) 뒤 호스트가 출력을 더 읽지 않은 프로세스에는 이 줄을 쓰지 않는다. `<exit>`는 두 호스트에서 `exit status <code>`나 `signal <number>`다.
 

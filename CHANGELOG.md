@@ -4,7 +4,8 @@
 
 ## Unreleased
 
-- F193.5: every declared workspace version is 0.0.18, the release whose hosts start only sidecars of protocol 2.
+- F193.6: the sidecar protocol stays 1 in the 0.0 series: the specification, both hosts, `sok` and plugin-api return to protocol 1, reverting F193.1, F193.2 and F193.3.
+- F193.5: every declared workspace version is 0.0.18.
 - F193.3: both `sok` builds read the `protocol` of each sidecar version of the index as a positive integer and select only sidecar versions of protocol 2; the specification drops the rule of F193.1 that listed such plugins as incompatible for a core update, whose protocol the index does not carry. Red: the index of a sidecar version of protocol 2 failed with `protocol must be 1` in both builds. Green: `TestInstallationSelectsOnlySidecarVersionsOfProtocolTwo` and `installation_selects_only_sidecar_versions_of_protocol_two` pass with the sok tests of both builds.
 - F193.2: both hosts declare a sidecar of another protocol than 2 without failing their construction, never start it, and fail each send to it with `sidecar <name> <version>: protocol <found> is not 2`; the endpoint and the hello of a persistent service carry protocol 2, and `validateSidecar` of plugin-api requires protocol 2. Red: `TestSidecarOfAnotherProtocolIsNotStarted` failed with `send = <nil>`, `a_sidecar_of_another_protocol_is_not_started` failed at the construction, and the plugin-api check failed with `protocol must be 1`. Green: the same tests pass, with the sidecar tests of both hosts, the plugin-api validation tests and the parity check.
 - F193.1: the specification makes `protocol` of `sidecar.json` the version of the start arguments and messages of a sidecar, raises it to 2, refuses a sidecar of another protocol at its own start instead of at the start of the application, and selects and lists sidecars by protocol in installation and in the update list.

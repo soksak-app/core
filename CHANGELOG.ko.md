@@ -4,7 +4,8 @@
 
 ## 미배포
 
-- F193.5: 선언된 모든 workspace 버전이 0.0.18이며, 이 release의 host는 protocol 2의 sidecar만 시작한다.
+- F193.6: 0.0 단계에서 sidecar protocol은 1로 남는다: 명세, 두 host, `sok`, plugin-api가 protocol 1로 돌아가며, F193.1, F193.2, F193.3을 되돌린다.
+- F193.5: 선언된 모든 workspace 버전이 0.0.18이다.
 - F193.3: 두 `sok` build가 index의 각 sidecar 버전의 `protocol`을 양의 정수로 읽고 protocol 2의 sidecar 버전만 고른다. 명세는 index가 protocol을 담지 않는 core 업데이트에 대해 그런 plugin을 호환되지 않음으로 나열하던 F193.1의 규칙을 지운다. Red: protocol 2의 sidecar 버전을 가진 index가 두 build에서 `protocol must be 1`로 실패했다. Green: `TestInstallationSelectsOnlySidecarVersionsOfProtocolTwo`와 `installation_selects_only_sidecar_versions_of_protocol_two`가 두 build의 sok 시험과 함께 통과한다.
 - F193.2: 두 host가 2가 아닌 protocol의 sidecar를 생성 실패 없이 선언하고, 시작하지 않으며, 그것으로의 send마다 `sidecar <name> <version>: protocol <found> is not 2`로 실패한다. 지속 서비스의 endpoint와 hello는 protocol 2를 담고, plugin-api의 `validateSidecar`는 protocol 2를 요구한다. Red: `TestSidecarOfAnotherProtocolIsNotStarted`가 `send = <nil>`로, `a_sidecar_of_another_protocol_is_not_started`가 생성에서, plugin-api 검사가 `protocol must be 1`로 실패했다. Green: 같은 시험이 두 host의 sidecar 시험, plugin-api 검증 시험, parity 검사와 함께 통과한다.
 - F193.1: 명세가 `sidecar.json`의 `protocol`을 sidecar의 시작 인자와 메시지의 버전으로 정하고 2로 올리며, 다른 protocol의 sidecar를 애플리케이션 시작이 아니라 그 sidecar의 시작에서 거부하고, 설치와 업데이트 목록에서 protocol로 sidecar를 고르고 나열한다.
