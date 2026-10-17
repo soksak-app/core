@@ -18,11 +18,11 @@ const { logGate } = await import("../log-gate.js");
 
 const everything = { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" };
 
-test("the setting completes the classes it does not name with trace, puts the policy in the gate of the page and has the host write the file", async () => {
+test("the setting completes the classes it does not name with error, puts the policy in the gate of the page and has the host write the file", async () => {
   calls.length = 0;
   try {
     await setLogPolicy({ call: "info", io: "off" });
-    assert.deepEqual(calls, [{ name: "log", payload: { action: "policy", classes: { ...everything, call: "info", io: "off" } } }]);
+    assert.deepEqual(calls, [{ name: "log", payload: { action: "policy", classes: { lifecycle: "error", input: "error", call: "info", io: "off", frame: "error" } } }]);
     assert.equal(logGate.enabled("call", "debug"), false);
     assert.equal(logGate.enabled("call", "info"), true);
     assert.equal(logGate.enabled("io", "error"), false);

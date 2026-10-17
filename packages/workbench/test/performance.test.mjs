@@ -5,6 +5,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createTracer } from "../performance.js";
 import { withoutClock } from "./support/records.mjs";
+import { logGate } from "../log-gate.js";
+// The events below the level error are stored only in the debug state (docs/spec/settings.md, 진단 section), which these tests
+// examine, so the state of every class at trace is set here.
+logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 

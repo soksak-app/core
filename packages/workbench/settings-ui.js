@@ -24,7 +24,7 @@ import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 import { hasSection, section, sectionNames } from "./registry.js";
 import {
-  CHOICES, FONTS, LAYOUT_RANGES, MENU_LANGUAGES, SHAPE_RANGES, THEMES, scopedValue, settingProject, overridden,
+  CHOICES, FONTS, LAYOUT_RANGES, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, overridden,
   settingDefinitions,
 } from "./settings.js";
 
@@ -292,6 +292,20 @@ function drawGeneral() {
     row("언어", choose("language",
       [["auto", "자동"], ...MENU_LANGUAGES.map(({ id, label }) => [id, label])], value("language"))),
   ]));
+  if (scope === "common") body.append(group("진단", "디버그를 켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.", [
+    row("디버그", debugSwitch()),
+  ]));
+}
+
+/** The 디버그 switch. It is on when the performance trace is on and every class of the log policy is at trace, and it runs core.settings.debug with its new value. */
+function debugSwitch() {
+  const el = document.createElement("input");
+  el.type = "checkbox";
+  el.className = "set-switch";
+  el.dataset.expose = "core.settings-modal.debug";
+  mark(el, "core.settings.debug", {}, "on");
+  el.toggleAttribute("checked", debugOn());
+  return el;
 }
 
 /** Creates a button. It finds the response by key, exposes it by name, and points to a command. */

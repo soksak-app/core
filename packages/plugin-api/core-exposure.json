@@ -36,6 +36,7 @@
   "commands": [
     "core.settings.set",
     "core.settings.reset",
+    "core.settings.debug",
     "core.settings.open",
     "core.settings.close",
     "core.debug.open",

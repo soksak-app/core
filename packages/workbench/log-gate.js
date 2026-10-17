@@ -15,13 +15,13 @@ export function logPolicyOf(setting) {
   for (const name of Object.keys(setting)) {
     if (!CLASSES.includes(name)) throw new TypeError(`the class ${name} is not one of ${CLASSES.join(", ")}`);
   }
-  // default: a class that the setting does not name stores every level (docs/spec/logging.md#classes-and-policy).
-  return Object.fromEntries(CLASSES.map((name) => [name, setting[name] ?? "trace"]));
+  // default: a class that the setting does not name stores the level error (docs/spec/logging.md#classes-and-policy).
+  return Object.fromEntries(CLASSES.map((name) => [name, setting[name] ?? "error"]));
 }
 
-/** A gate that stores every level of every class until a policy is set. */
+/** A gate that stores only the errors of every class until a policy is set. */
 export function createLogGate() {
-  let max = Object.fromEntries(CLASSES.map((name) => [name, LEVELS.length - 1]));
+  let max = Object.fromEntries(CLASSES.map((name) => [name, 0]));
   return {
     /** Whether an event of the class and the level is stored. An event whose class the catalog does not give is not gated. */
     enabled(klass, level) {

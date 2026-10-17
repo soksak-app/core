@@ -12,7 +12,7 @@ test('project values override common values and opening mode remains common-only
   assert.equal(effectiveSettings(defaults,{},{}).projectOpening,'windows');
 });
 
-test('the performance trace flag is a declared boolean defaulting to true', async () => {
+test('the performance trace flag is a declared boolean defaulting to false', async () => {
   const realDocument = globalThis.document;
   globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
   const memory = { common: {}, projects: [] };
@@ -23,8 +23,8 @@ test('the performance trace flag is a declared boolean defaulting to true', asyn
       settings: async (id, values) => { memory.common = { ...memory.common, ...values }; },
       onChange: () => () => {},
     });
-    // While the version is 0.0.x the trace is on by default, so a defect is recorded when it appears (AGENTS.md).
-    assert.equal(value('diagnostics.performance'), true);
+    // The trace is off by default: no layer builds or stores a trace event until the 디버그 switch turns it on (docs/spec/settings.md#진단).
+    assert.equal(value('diagnostics.performance'), false);
     await change({ 'diagnostics.performance': false }, 'common', 'test');
     assert.equal(memory.common['diagnostics.performance'], false);
     assert.equal(value('diagnostics.performance'), false);
@@ -48,7 +48,7 @@ test('the log policy is a declared object of levels for the classes, applied whe
       settings: async (id, values) => { memory.common = { ...memory.common, ...values }; },
       onChange: () => () => {},
     });
-    // While the version is 0.0.x the policy stores everything: a class that the setting does not name stores every level.
+    // The policy stores only errors by default: a class that the setting does not name stores the level error.
     assert.deepEqual(value('diagnostics.log'), {});
     assert.deepEqual(applied, [{}]);
     await change({ 'diagnostics.log': { call: 'info' } }, 'common', 'test');
@@ -80,10 +80,10 @@ test('a settings file change propagates the effective performance switch', async
       snapshot: async () => structuredClone(memory), settings: async () => {},
       onChange: (listener) => { changed = listener; },
     });
-    // The trace starts on by default, and a settings file that turns it off propagates the change.
-    memory.common['diagnostics.performance'] = false;
+    // The trace starts off by default, and a settings file that turns it on propagates the change.
+    memory.common['diagnostics.performance'] = true;
     await changed();
-    assert.deepEqual(calls, [['start', true], ['change', false]], 'file changes did not propagate the effective switch');
+    assert.deepEqual(calls, [['start', false], ['change', true]], 'file changes did not propagate the effective switch');
   } finally {
     globalThis.document = previous;
   }
@@ -261,6 +261,36 @@ test('a change of the settings names its actor and its keys, and its identifiers
     assert.throws(() => reset('gap'), /set requires the actor|No project is selected/);
   } finally {
     installOperationSink(null);
+    globalThis.document = realDocument;
+  }
+});
+
+test('the 디버그 switch sets the trace and every class to trace, and off restores the defaults', async () => {
+  const realDocument = globalThis.document;
+  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const memory = { common: {}, projects: [] };
+  const { connectSettings, set: change, setDebug, debugOn, value } = await import('../settings.js?test=debug-switch');
+  try {
+    await connectSettings({
+      snapshot: async () => structuredClone(memory),
+      settings: async (id, values) => { memory.common = { ...memory.common, ...values }; },
+      onChange: () => () => {},
+    });
+    assert.equal(debugOn(), false);
+    await setDebug(true, 'core.settings.debug');
+    assert.equal(memory.common['diagnostics.performance'], true);
+    assert.deepEqual(memory.common['diagnostics.log'], { lifecycle: 'trace', input: 'trace', call: 'trace', io: 'trace', frame: 'trace' });
+    assert.equal(debugOn(), true);
+    await setDebug(false, 'core.settings.debug');
+    assert.equal(memory.common['diagnostics.performance'], false);
+    assert.deepEqual(memory.common['diagnostics.log'], {});
+    assert.equal(value('diagnostics.performance'), false);
+    assert.equal(debugOn(), false);
+    // A policy that names only some classes at trace is not the debug state, because the switch shows on only when every class is trace.
+    await setDebug(true, 'core.settings.debug');
+    await change({ 'diagnostics.performance': true, 'diagnostics.log': { call: 'trace' } }, 'common', 'test');
+    assert.equal(debugOn(), false);
+  } finally {
     globalThis.document = realDocument;
   }
 });

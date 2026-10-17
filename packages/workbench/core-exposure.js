@@ -22,7 +22,7 @@ import {
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
 } from "./plane.js";
 import {
-  applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, settingProject, THEMES, value,
+  applyTheme, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
 } from "./settings.js";
 import {
   closeSettings, editSet, moveSettings, onSettingsDrawn, openSettings, settingsModalState, searchPlugins, showPlugin, showScope, showSection,
@@ -328,6 +328,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
     }
   });
   registry.command("core.settings.reset", async ({ key }) => { await reset(key, "core.settings.reset"); });
+  registry.command("core.settings.debug", async ({ on }) => {
+    if (typeof on !== "boolean") throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "on must be a boolean");
+    await setDebug(on, "core.settings.debug");
+  });
   registry.command("core.settings.change", async ({ key, value: input, scope }) => {
     await changeSetting(key, input, scope, "core.settings.change");
   });

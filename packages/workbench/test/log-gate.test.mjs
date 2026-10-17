@@ -13,11 +13,15 @@ const answering = (inner) => (request) => (request.action === "clock" ? Promise.
 
 const everything = { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" };
 
-test("the gate stores everything until a policy is set, and a policy decides each class and level", () => {
+const onlyErrors = Object.fromEntries(Object.keys(everything).map((name) => [name, "error"]));
+
+test("the gate stores only errors until a policy is set, and a policy decides each class and level", () => {
   const gate = createLogGate();
   for (const klass of Object.keys(everything)) {
-    for (const level of ["error", "warn", "info", "debug", "trace"]) assert.equal(gate.enabled(klass, level), true, `${klass} ${level}`);
+    assert.equal(gate.enabled(klass, "error"), true, `${klass} error`);
+    for (const level of ["warn", "info", "debug", "trace"]) assert.equal(gate.enabled(klass, level), false, `${klass} ${level}`);
   }
+  assert.deepEqual(gate.classes(), onlyErrors);
   assert.equal(gate.set({ ...everything, input: "debug", call: "info", io: "off", frame: "error" }), true);
   assert.deepEqual(["input debug", "input trace", "call info", "call debug", "io error", "frame error", "frame warn", "lifecycle trace"]
     .map((text) => gate.enabled(...text.split(" "))), [true, false, true, false, false, true, false, true]);
@@ -39,9 +43,9 @@ test("a policy that leaves a class out, names a class that does not exist or has
   assert.equal(gate.enabled("call", "info"), false, "a refused policy changed the policy in force");
 });
 
-test("logPolicyOf completes the setting diagnostics.log with trace for the classes it does not name", () => {
-  assert.deepEqual(logPolicyOf({}), everything);
-  assert.deepEqual(logPolicyOf({ call: "info", io: "off" }), { ...everything, call: "info", io: "off" });
+test("logPolicyOf completes the setting diagnostics.log with error for the classes it does not name", () => {
+  assert.deepEqual(logPolicyOf({}), onlyErrors);
+  assert.deepEqual(logPolicyOf({ call: "info", io: "off" }), { ...onlyErrors, call: "info", io: "off" });
   assert.throws(() => logPolicyOf({ audio: "off" }), /the class audio is not one of lifecycle, input, call, io, frame/);
 });
 

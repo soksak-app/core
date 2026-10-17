@@ -1798,6 +1798,21 @@
         }
       },
       {
+        "name": "core.settings.debug",
+        "description": "Turns the 디버그 switch on or off. On sets diagnostics.performance to true and every class of diagnostics.log to trace; off sets diagnostics.performance to false and diagnostics.log to {}, which stores only the errors. Both are common settings.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "on": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.settings.open",
         "description": "Opens the settings modal.",
         "params": {
@@ -4143,6 +4158,10 @@
         "name": "core.settings-modal.set",
         "description": "The setting controls in document order (switches, select boxes, sliders and text fields, one control per setting form); core.settings-modal lists their keys.",
         "many": true
+      },
+      {
+        "name": "core.settings-modal.debug",
+        "description": "The 디버그 switch of the 진단 row: on when the performance trace is on and every class of the log policy is at trace."
       },
       {
         "name": "core.settings-modal.reset",

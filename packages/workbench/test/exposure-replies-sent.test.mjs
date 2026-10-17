@@ -12,6 +12,10 @@ mock.module("@soksak/runtime", { namedExports: { host: {
   call: async (name, payload) => { calls.push([name, payload]); return clockAnswer(name, payload); },
 } } });
 const { connectExposure, registry, whenRepliesSent } = await import("../exposure.js");
+const { logGate } = await import("../log-gate.js");
+// The events below the level error are stored only in the debug state (docs/spec/settings.md, 진단 section), which these tests
+// examine, so the state of every class at trace is set here.
+logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
 
 test("whenRepliesSent resolves after the reply of a running command request is sent", async () => {
   registry.declare("core", { status: [], dom: [], commands: [{
