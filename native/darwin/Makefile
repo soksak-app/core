@@ -142,6 +142,7 @@ NATIVE_TESTS = observe_test \
   webview_process_test \
   webview_process_end_test \
   document_view_test \
+  document_throttle_test \
   document_plugin_test \
   document_typing_test \
   document_press_test \
