@@ -1024,6 +1024,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [o] F197.2 — P1: The page: the log gate and the settings default to the new policy and to the trace off, and the switch 디버그 turns every level of every class and the trace on and off, with Red and Green.
   - [~] F197.3 — P1: Both hosts and both `sok` builds apply the new default policy without a policy file, with Red and Green.
   - [o] F197.4 — P1: The native event ring stores only `error` before the first policy, with Red and Green.
+    - [~] F197.4-1 — P1: The native tests that read records below `error` set the policy that stores every level first: after F197.4 the default suite failed in `observe_test`, `activity_observers_test`, `input_inject_test`, `webview_input_receipts_test`, `process_exit_test` and `quit_request_test`.
   - [o] F197.5 — P1: The files, shell and vt sidecars apply the new default policy, each in its own repository checklist.
   - [~] F197.6 — P1: `sok` applies `<config-dir>/log-policy.json` once at its start, because a run of the tool is one command and ends: the tool writer has no policy file, so it stores only the default policy and no check can widen it.
   - [ ] F197.7 — P1: The releases of the files, shell and vt sidecars that carry F197.5, after the performance work of F196 and F197; until then the sidecar default is unreleased.
@@ -1033,7 +1034,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [o] F196.2 — P1: A benchmark target loads a page that changes a large element tree without pause into a document region and reports the growth of the WebContent footprint per 1000 changes with the current script and with collection off.
   - [o] F196.3 — P1: The specification of the element and request streams of a document region and their subscription, separate from `document-state`. Done: `docs/spec/native-surfaces.md` (Document regions and Document streams) states the contract, and `document-state` no longer lists elements or requests in the specification; the terms `stream` and `snapshot` are in `packages/plugin-api/terms.json`. Implementation incomplete: both hosts, the document script, and plugin-api still send the lists in `document-state` and do not provide the streams until F196.4 and F196.5 are complete and released with F196.6.
   - [o] F196.4 — P1: The document script collects elements and requests only while a stream is subscribed; elements arrive as snapshots under acknowledgement, requests as new entries only, and a navigation sends `reset`: a document without a subscriber posted the whole element list for every change of its tree (51 reports for 50 changes).
-  - [ ] F196.5 — P1: Both hosts and plugin-api provide the stream subscription with its subscriber count, acknowledgement and removal when the subscribing page unloads or its process ends.
+  - [~] F196.5 — P1: Both hosts and plugin-api provide the stream subscription with its subscriber count, acknowledgement and removal when the subscribing page unloads or its process ends.
   - [ ] F196.6 — P1: The core release that ships the streams.
   - [ ] F196.7 — P1: The release of the browser plugin whose panels and statuses use the streams and declare the core release of F196.6.
   - [o] F196.8 — P1: A diagnostic command of both hosts returns the object counts of the host, the page and each document.

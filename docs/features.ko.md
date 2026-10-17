@@ -1024,6 +1024,7 @@
   - [o] F197.2 — P1: page: log gate와 설정이 새 정책과 꺼진 trace를 기본으로 하고, switch 디버그가 모든 class의 모든 수준과 trace를 켜고 끈다. Red와 Green.
   - [~] F197.3 — P1: 두 host와 두 `sok` build가 정책 파일 없이 새 기본 정책을 적용한다. Red와 Green.
   - [o] F197.4 — P1: native event ring이 첫 정책 전에 `error`만 저장한다. Red와 Green.
+    - [~] F197.4-1 — P1: `error` 아래의 기록을 읽는 native 시험이 먼저 모든 수준을 저장하는 정책을 둔다: F197.4 뒤 기본 suite가 `observe_test`, `activity_observers_test`, `input_inject_test`, `webview_input_receipts_test`, `process_exit_test`, `quit_request_test`에서 실패했다.
   - [o] F197.5 — P1: files, shell, vt sidecar가 새 기본 정책을 적용한다. 각각 자기 저장소 체크리스트에서.
   - [~] F197.6 — P1: 도구의 실행은 명령 하나로 끝나므로 `sok`이 시작할 때 `<config-dir>/log-policy.json`을 한 번 적용한다: 도구 writer에 정책 파일이 없어 기본 정책만 저장하고 어떤 검사도 그것을 넓힐 수 없다.
   - [ ] F197.7 — P1: F196과 F197의 성능 작업 뒤, F197.5를 담은 files, shell, vt sidecar의 release. 그때까지 sidecar 기본값은 미게시다.
@@ -1033,7 +1034,7 @@
   - [o] F196.2 — P1: benchmark 타깃이 큰 요소 트리를 쉬지 않고 바꾸는 page를 문서 영역에 열고, 현재 스크립트와 수집을 끈 때의 1000번 변경당 WebContent footprint 증가를 보고한다.
   - [o] F196.3 — P1: `document-state`와 분리된 문서 영역의 요소, 요청 스트림과 그 구독의 명세. 완료: `docs/spec/native-surfaces.ko.md`의 문서 영역과 문서 스트림 절이 계약을 밝히고, 명세에서 `document-state`는 요소와 요청 목록을 더 이상 담지 않으며, 용어 `stream`과 `snapshot`은 `packages/plugin-api/terms.json`에 있다. 구현 미완료: 두 host, 문서 스크립트, plugin-api는 F196.4와 F196.5가 끝나고 F196.6과 함께 배포될 때까지 목록을 `document-state`로 보내며 스트림을 제공하지 않는다.
   - [o] F196.4 — P1: 문서 스크립트가 스트림이 구독된 동안만 요소와 요청을 모은다. 요소는 확인 아래 스냅샷으로, 요청은 새 항목만 오고, 탐색은 `reset`을 보낸다: 구독자 없는 문서가 트리 변경마다 요소 목록 전체를 보냈다(50번 변경에 보고 51번).
-  - [ ] F196.5 — P1: 두 host와 plugin-api가 구독자 수, 확인, 구독한 page가 내려가거나 그 process가 끝날 때의 제거를 갖춘 스트림 구독을 제공한다.
+  - [~] F196.5 — P1: 두 host와 plugin-api가 구독자 수, 확인, 구독한 page가 내려가거나 그 process가 끝날 때의 제거를 갖춘 스트림 구독을 제공한다.
   - [ ] F196.6 — P1: 스트림을 싣는 core release.
   - [ ] F196.7 — P1: 패널과 status가 스트림을 쓰고 F196.6의 core release를 선언하는 browser plugin release.
   - [o] F196.8 — P1: 두 host의 진단 명령이 host, page, 각 문서의 객체 수를 돌려준다.
