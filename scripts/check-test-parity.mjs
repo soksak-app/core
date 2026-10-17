@@ -4641,11 +4641,15 @@ const NON_CAPABILITY_COMPLETIONS = new Set(["F13", "F25", "G1.4-2", "R2", "R4", 
 // those repositories, so they have no link here and each repository checks its own evidence.
 const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110"]);
 
+// Completed capabilities whose implementation a later item removed: F68 wrote the WebKit child record, which F196.22
+// removed with the start that ended the recorded processes.
+const REMOVED_COMPLETIONS = new Set(["F68"]);
+
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));
   const completed = [...checklistSource.matchAll(/^- \[o\] ([A-Z][A-Z0-9.-]*) —/gm)].map((match) => match[1]);
   return completed
-    .filter((id) => !NON_CAPABILITY_COMPLETIONS.has(id) && !MOVED_COMPLETIONS.has(id) && !linked.has(id))
+    .filter((id) => !NON_CAPABILITY_COMPLETIONS.has(id) && !MOVED_COMPLETIONS.has(id) && !REMOVED_COMPLETIONS.has(id) && !linked.has(id))
     .map((id) => `${id}: completed capability has no feature link`);
 }
 

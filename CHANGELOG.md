@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F196.22: a host start no longer ends WebKit processes. The record of WebKit children listed processes of other applications that started after the host, and the next start sent `kill -9` to them, which ended the page process of another host (F196.13-1) and the processes of the Tauri host during its checks (F196.10.2-4). launchd ends the services of an exited host within 0.2 s, so the record and the reap are removed in both hosts. Red: `the start ended process 58287 of another application`; Green: `startup.ends-no-process`.
 - F196.9.5: `document_pressure_test` prints the footprint categories, the malloc zones and whether the released array is still alive; the memory kept after pressure is live page objects that the engine has not collected, the same in a document region and a plain web view.
 - F196.21: the workspace registry resolves the declared plugin and sidecar folders from the main checkout, so `make install-plugins` works in a worktree. Red: a worktree resolved `.claude/worktrees/plugins/browser/`; Green.
 - F196.10.4: a page reload of the Tauri host reconnects a persistent sidecar only for the surfaces that sent to it, so the browser surface is no longer a session of the terminal service; `diagnostics.objects` lists the sessions and both hosts list the same ones. Red: `left: ["@scope/sidecar-persistent"], right: []`; Green.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.22: host 시작이 더 이상 WebKit process를 끝내지 않는다. WebKit child 기록이 host 뒤에 시작한 다른 애플리케이션의 process를 적었고, 다음 시작이 그 process에 `kill -9`를 보내 다른 host의 page process(F196.13-1)와 check 중의 Tauri host process(F196.10.2-4)를 끝냈다. launchd가 끝난 host의 service를 0.2초 안에 끝내므로 두 host에서 기록과 reap를 없앴다. Red: `the start ended process 58287 of another application`; Green: `startup.ends-no-process`.
 - F196.9.5: `document_pressure_test`가 footprint 항목, malloc zone, 놓은 배열이 아직 살아 있는지를 출력한다; pressure 뒤 남는 메모리는 엔진이 수집하지 않은 살아 있는 page 객체이고, document region과 plain web view에서 같다.
 - F196.21: workspace registry가 선언된 plugin과 sidecar 폴더를 main checkout에서 찾으므로 `make install-plugins`가 worktree에서 동작한다. Red: worktree가 `.claude/worktrees/plugins/browser/`를 찾았다; Green.
 - F196.10.4: Tauri host의 page reload가 persistent sidecar에 보낸 적이 있는 surface에만 reconnect하므로, browser surface가 더 이상 terminal service의 session이 아니다; `diagnostics.objects`가 session을 나열하고 두 host가 같은 session을 나열한다. Red: `left: ["@scope/sidecar-persistent"], right: []`; Green.
