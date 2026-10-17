@@ -144,6 +144,7 @@ NATIVE_TESTS = observe_test \
   document_view_test \
   document_throttle_test \
   document_processes_test \
+  document_caches_test \
   document_plugin_test \
   document_typing_test \
   document_press_test \
