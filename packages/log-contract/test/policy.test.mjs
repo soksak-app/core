@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { POLICY_CLASSES, POLICY_VALUES, parsePolicy, policyAllows, policyIsBeingWritten } from "../index.js";
+import { DEFAULT_POLICY, POLICY_CLASSES, POLICY_VALUES, parsePolicy, policyAllows, policyIsBeingWritten } from "../index.js";
 
 const cases = JSON.parse(readFileSync(new URL("../fixtures/policy/cases.json", import.meta.url), "utf8"));
 const FILE = "/config/log-policy.json";
@@ -47,9 +47,12 @@ test("the gate refuses a class or a level outside the contract", () => {
   assert.throws(() => policyAllows(policy, "call", "verbose"), { message: "the level verbose is not one of error, warn, info, debug, trace" });
 });
 
-test("the file that the host writes by default holds every level of every class", () => {
+test("the default policy stores only error in every class, and the default file holds it", () => {
+  assert.deepEqual(cases.default, Object.fromEntries(cases.classes.map((kind) => [kind, "error"])));
+  assert.deepEqual(DEFAULT_POLICY.classes, cases.default);
   const text = readFileSync(new URL("../fixtures/policy/log-policy.json", import.meta.url), "utf8");
   const policy = parsePolicy(FILE, text);
-  for (const kind of cases.classes) for (const level of cases.levels) assert.equal(policyAllows(policy, kind, level), true, `${kind} ${level}`);
+  assert.deepEqual(policy.classes, cases.default);
+  for (const kind of cases.classes) for (const level of cases.levels) assert.equal(policyAllows(policy, kind, level), level === "error", `${kind} ${level}`);
   assert.equal(JSON.stringify(policy), text);
 });

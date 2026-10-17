@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F197.1: the default policy stores only `error` in every class and `diagnostics.performance` defaults to false; the switch 디버그 of the settings window (`core.settings.debug {on}`) turns every level of every class and the trace on and off; `fixtures/policy/cases.json` holds the default as `default`, the default policy file holds it, `DEFAULT_POLICY` of `@soksak/log-contract` equals it, and the audit judges a process that recorded no policy by it. Red: the golden test failed on the earlier default file, and `a process that recorded no policy is judged by the default policy, which stores only error` found a chain finding. Green: the log-contract tests pass 136 of 136, and the golden readers of both `sok` builds pass.
 - F193.6: the sidecar protocol stays 1 in the 0.0 series: the specification, both hosts, `sok` and plugin-api return to protocol 1, reverting F193.1, F193.2 and F193.3.
 - F193.5: every declared workspace version is 0.0.18.
 - F193.3: both `sok` builds read the `protocol` of each sidecar version of the index as a positive integer and select only sidecar versions of protocol 2; the specification drops the rule of F193.1 that listed such plugins as incompatible for a core update, whose protocol the index does not carry. Red: the index of a sidecar version of protocol 2 failed with `protocol must be 1` in both builds. Green: `TestInstallationSelectsOnlySidecarVersionsOfProtocolTwo` and `installation_selects_only_sidecar_versions_of_protocol_two` pass with the sok tests of both builds.

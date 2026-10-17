@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F197.1: 기본 정책은 모든 class에서 `error`만 저장하고 `diagnostics.performance`는 기본 false다. 설정 창의 switch 디버그(`core.settings.debug {on}`)가 모든 class의 모든 수준과 trace를 켜고 끈다. `fixtures/policy/cases.json`이 기본을 `default`로 가지고, 기본 정책 파일이 그것을 가지며, `@soksak/log-contract`의 `DEFAULT_POLICY`가 그것과 같고, audit은 정책을 기록하지 않은 process를 그것으로 판단한다. Red: golden 시험이 이전 기본 파일에서 실패했고, `a process that recorded no policy is judged by the default policy, which stores only error`가 chain finding을 찾았다. Green: log-contract 시험 136개가 모두 통과하고, 두 `sok` build의 golden reader가 통과한다.
 - F193.6: 0.0 단계에서 sidecar protocol은 1로 남는다: 명세, 두 host, `sok`, plugin-api가 protocol 1로 돌아가며, F193.1, F193.2, F193.3을 되돌린다.
 - F193.5: 선언된 모든 workspace 버전이 0.0.18이다.
 - F193.3: 두 `sok` build가 index의 각 sidecar 버전의 `protocol`을 양의 정수로 읽고 protocol 2의 sidecar 버전만 고른다. 명세는 index가 protocol을 담지 않는 core 업데이트에 대해 그런 plugin을 호환되지 않음으로 나열하던 F193.1의 규칙을 지운다. Red: protocol 2의 sidecar 버전을 가진 index가 두 build에서 `protocol must be 1`로 실패했다. Green: `TestInstallationSelectsOnlySidecarVersionsOfProtocolTwo`와 `installation_selects_only_sidecar_versions_of_protocol_two`가 두 build의 sok 시험과 함께 통과한다.

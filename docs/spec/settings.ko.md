@@ -34,15 +34,17 @@
 | 사이드바 크기 | [배치 값](#배치-값)의 폭 설정 |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
-| 진단 | 성능 트레이스 `diagnostics.performance`, 로그 수준 `diagnostics.log` |
+| 진단 | 디버그 (`core.settings.debug {on}`을 실행하는 switch) |
 
 창 선택은 고정 왼쪽 사이드바 하나와 고정 오른쪽 사이드바 하나의 내용을 선택한다. 포커스 활성 플러그인은 추가 열 없이 일반 변 선택을 오버라이드한다. 표시 스위치는 고정 변에 적용한다. 카드 사이드바는 카드 내부에 있으며 기존 `cardSidebar` 위치 설정은 거부한다. 일반에는 플러그인 설정이 없다.
 
 ### 진단
 
-`diagnostics.performance` 는 영구 성능 트레이스([성능 트레이스](performance-trace.md))의 스위치다. 불리언이고 설정 창의 조작이 아니라 설정 파일로 지정한다. release version이 0.0.x인 동안 기본값은 true이고(그래서 결함이 나타날 때 기록된다), 이후 version 계열에서는 false다. false 인 동안 어떤 계층도 성능 기록 일을 하지 않는다 — event를 만들지도 저장하지도 않는다. true 로 바꾸면 계층이 trace의 event를 `logs/` 아래 event 파일에 저장하고, 다시 false 로 돌리면 다음 이벤트 경계에서 저장이 멈춘다; event 파일과 회전은 설정이 아니라 [event 계약](logging.ko.md#파일)의 소유물이다.
+`diagnostics.performance` 는 영구 성능 트레이스([성능 트레이스](performance-trace.md))의 스위치다. 불리언이고 기본값은 false이므로, release는 그 사람이 켜지 않는 한 trace를 기록하지 않는다. false 인 동안 어떤 계층도 성능 기록 일을 하지 않는다 — event를 만들지도 저장하지도 않는다. true 로 바꾸면 계층이 trace의 event를 `logs/` 아래 event 파일에 저장하고, 다시 false 로 돌리면 다음 이벤트 경계에서 저장이 멈춘다; event 파일과 회전은 설정이 아니라 [event 계약](logging.ko.md#파일)의 소유물이다.
 
-`diagnostics.log` 는 event 로그의 [정책](logging.ko.md#정책)이다. `lifecycle`, `input`, `call`, `io`, `frame` 중 일부 class에 대해 저장할 가장 낮은 심각도 수준(`off`, `error`, `warn`, `info`, `debug`, `trace`)을 이름 붙이는 객체이며, 이름이 없는 class는 모든 수준을 저장한다. 기본값은 `{}` 로 모든 class의 모든 수준을 저장한다. 설정 파일로 지정하고, 다섯 class 밖의 이름과 여섯 수준 밖의 값은 설정 이름을 담은 오류로 거부된다. 페이지가 정책을 호스트에 보내면 호스트가 `<config-dir>/log-policy.json` 을 쓰고, 모든 프로세스는 파일이 바뀔 때 적용한다.
+`diagnostics.log` 는 event 로그의 [정책](logging.ko.md#정책)이다. `lifecycle`, `input`, `call`, `io`, `frame` 중 일부 class에 대해 저장할 가장 낮은 심각도 수준(`off`, `error`, `warn`, `info`, `debug`, `trace`)을 이름 붙이는 객체이며, 이름이 없는 class는 `error`만 저장하는 기본 정책을 따른다. 기본값은 `{}` 로 모든 class에서 `error`만 저장하므로, 표시 경로가 보이는 모든 오류의 기록은 남는다. 설정 파일로 지정하고, 다섯 class 밖의 이름과 여섯 수준 밖의 값은 설정 이름을 담은 오류로 거부된다. 페이지가 정책을 호스트에 보내면 호스트가 `<config-dir>/log-policy.json` 을 쓰고, 모든 프로세스는 파일이 바뀔 때 적용한다.
+
+설정 창의 switch 디버그는 `core.settings.debug {on}`으로 둘을 함께 켜고 끈다: 켜면 `diagnostics.performance`를 true로, `diagnostics.log`를 모든 class에서 `trace`로 두고, 끄면 `diagnostics.performance`를 false로, `diagnostics.log`를 `{}`로 둔다. switch는 `diagnostics.performance`가 true이고 모든 class가 `trace`일 때 켜짐으로 보인다. 둘이 꺼진 동안 어떤 layer도 trace의 event나 `error` 아래의 event를 만들거나 저장하지 않는다.
 
 
 ### 플러그인

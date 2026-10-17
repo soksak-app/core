@@ -14,6 +14,7 @@ const catalog = {
     "page.terminal.send": { layer: "page", class: "input", level: "info", fields: {} },
     "sidecar.vt.pty_write": { layer: "sidecar", class: "io", level: "info", fields: { hex: "string" } },
     "native.record.error": { layer: "native", class: "lifecycle", level: "error", fields: { where: "string", text: "string" } },
+    "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: { source: "string", classes: "object" } },
   },
   chains: { key: ["native.input.key_down", "page.terminal.send", "sidecar.vt.pty_write"] },
 };
@@ -25,6 +26,9 @@ const line = (seq, event, fields = {}, extra = {}) => JSON.stringify({
   ...(["page", "plugin"].includes(extra.layer) && !("page" in extra) ? { page: "1791948729050" } : {}), ...extra,
 });
 const open = line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" });
+// The policy that stores every level, as the switch 디버그 sets it; without it the default policy, which stores only
+// error, is in force.
+const debugOn = (seq) => line(seq, "log.policy", { source: "file", classes: { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" } });
 
 test("a log with declared events, consecutive seq and a complete chain passes", () => {
   const text = [
@@ -121,8 +125,9 @@ test("a gap of seq is a finding unless log.dropped names the range", () => {
 test("a declared chain with a missing hop is a finding for its correlation identifier", () => {
   const text = [
     open,
-    line(2, "native.input.key_down", { keyCode: 36 }, { cids: ["b1.1"] }),
-    line(3, "page.terminal.send", {}, { cids: ["b1.1"], layer: "page" }),
+    debugOn(2),
+    line(3, "native.input.key_down", { keyCode: 36 }, { cids: ["b1.1"] }),
+    line(4, "page.terminal.send", {}, { cids: ["b1.1"], layer: "page" }),
   ].join("\n");
   const findings = auditLog("host-b1.jsonl", text, catalog);
   assert.equal(findings.length, 1);
@@ -133,12 +138,13 @@ test("a chain ends at an error event that carries its correlation identifier", (
   // The key reached no later layer because it failed; the error with the identifier is the record of its end.
   const text = [
     open,
-    line(2, "native.input.key_down", { keyCode: 2 }, { cids: ["b1.1"] }),
-    line(3, "native.record.error", { where: "input method", text: "input method did not answer" }, { cids: ["b1.1"], layer: "native", level: "error" }),
-    line(4, "native.input.key_down", { keyCode: 3 }, { cids: ["b1.2"] }),
+    debugOn(2),
+    line(3, "native.input.key_down", { keyCode: 2 }, { cids: ["b1.1"] }),
+    line(4, "native.record.error", { where: "input method", text: "input method did not answer" }, { cids: ["b1.1"], layer: "native", level: "error" }),
+    line(5, "native.input.key_down", { keyCode: 3 }, { cids: ["b1.2"] }),
   ].join("\n");
   const findings = auditLogs([{ file: "host-b1.jsonl", text }], catalog, () => true);
-  assert.deepEqual(findings.map(({ line, message }) => [line, message]), [[4, "chain key of b1.2 lacks page.terminal.send"]]);
+  assert.deepEqual(findings.map(({ line, message }) => [line, message]), [[5, "chain key of b1.2 lacks page.terminal.send"]]);
 });
 
 test("a chain does not ask for a hop whose class and level the policy in force of the process does not store", () => {
@@ -155,12 +161,23 @@ test("a chain does not ask for a hop whose class and level the policy in force o
   const info = { lifecycle: "info", input: "info", call: "info", io: "info", frame: "info" };
   const text = [
     open,
-    line(2, "native.input.key_down", { keyCode: 2 }, { cids: ["b1.1"] }),
-    line(3, "log.policy", { source: "file", classes: info }, { class: "lifecycle" }),
-    line(4, "native.input.key_down", { keyCode: 3 }, { cids: ["b1.2"] }),
+    debugOn(2),
+    line(3, "native.input.key_down", { keyCode: 2 }, { cids: ["b1.1"] }),
+    line(4, "log.policy", { source: "file", classes: info }, { class: "lifecycle" }),
+    line(5, "native.input.key_down", { keyCode: 3 }, { cids: ["b1.2"] }),
   ].join("\n");
   const findings = auditLogs([{ file: "host-b1.jsonl", text }], gated);
-  assert.deepEqual(findings.map(({ line, message }) => [line, message]), [[2, "chain key of b1.1 lacks page.terminal.send"]]);
+  assert.deepEqual(findings.map(({ line, message }) => [line, message]), [[3, "chain key of b1.1 lacks page.terminal.send"]]);
+});
+
+test("a process that recorded no policy is judged by the default policy, which stores only error", () => {
+  const gated = {
+    ...catalog,
+    events: { ...catalog.events, "page.terminal.send": { layer: "page", class: "input", level: "info", fields: {} } },
+    chains: { key: ["native.input.key_down", "page.terminal.send"] },
+  };
+  const text = [open, line(2, "native.input.key_down", { keyCode: 2 }, { cids: ["b1.1"] })].join("\n");
+  assert.deepEqual(auditLogs([{ file: "host-b1.jsonl", text }], gated), []);
 });
 
 test("a hop declared with several levels is not asked for when the policy in force does not store one of them", () => {
@@ -356,13 +373,14 @@ test("an error event is a finding with its file and line unless the caller decla
 
 test("the chains of the files of one configuration folder join, so a hop in a sidecar file completes a chain of the host file", () => {
   const host = lines(open,
-    line(2, "native.input.key_down", { keyCode: 36 }, { cids: ["b1.1"] }),
-    line(3, "page.terminal.send", {}, { cids: ["b1.1"], layer: "page" }));
+    debugOn(2),
+    line(3, "native.input.key_down", { keyCode: 36 }, { cids: ["b1.1"] }),
+    line(4, "page.terminal.send", {}, { cids: ["b1.1"], layer: "page" }));
   const sidecar = lines(line(1, "log.open", { schema: 2, pid: 8, role: "vt", boot: "b2" }),
     line(2, "sidecar.vt.pty_write", { hex: "0d" }, { cids: ["b1.1"], layer: "sidecar" }));
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: host }, { file: "vt-3-4.jsonl", text: sidecar }], catalog), []);
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: host }], catalog), [
-    { file: "host-1-2.jsonl", line: 2, message: "chain key of b1.1 lacks sidecar.vt.pty_write" },
+    { file: "host-1-2.jsonl", line: 3, message: "chain key of b1.1 lacks sidecar.vt.pty_write" },
   ]);
 });
 
@@ -419,14 +437,14 @@ test("the chain of an operation of the page is complete when its call and the ho
   const debugOpen = (seq) => line(seq, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" });
   // The start of an operation is stored at the level info (the main file); its calls are stored at the level debug (the debug file).
   const complete = [
-    { file: "host-b1.jsonl", text: [open, start(2, "p1.1")].join("\n") },
-    { file: "host-b1.debug.jsonl", text: [debugOpen(3), call(4, "p1.1"), binding(5, "p1.1")].join("\n") },
+    { file: "host-b1.jsonl", text: [open, debugOn(2), start(3, "p1.1")].join("\n") },
+    { file: "host-b1.debug.jsonl", text: [debugOpen(4), call(5, "p1.1"), binding(6, "p1.1")].join("\n") },
   ];
   assert.deepEqual(auditLogs(complete, operations), []);
   // The host record is missing for the second operation, which the audit finds across the two files.
   const findings = auditLogs([
-    { file: "host-b1.jsonl", text: [open, start(2, "p1.1"), start(3, "p1.2")].join("\n") },
-    { file: "host-b1.debug.jsonl", text: [debugOpen(4), call(5, "p1.1"), call(6, "p1.2"), binding(7, "p1.1")].join("\n") },
+    { file: "host-b1.jsonl", text: [open, debugOn(2), start(3, "p1.1"), start(4, "p1.2")].join("\n") },
+    { file: "host-b1.debug.jsonl", text: [debugOpen(5), call(6, "p1.1"), call(7, "p1.2"), binding(8, "p1.1")].join("\n") },
   ], operations);
   assert.deepEqual(findings.map(({ message }) => message), ["chain plugin of p1.2 lacks host.binding.call"]);
 });

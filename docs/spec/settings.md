@@ -34,15 +34,17 @@ A change redraws the window and keeps the scroll position of the shown content; 
 | 사이드바 크기 | the width settings of [layout values](#layout-values) |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
-| 진단 | 성능 트레이스 `diagnostics.performance`, 로그 수준 `diagnostics.log` |
+| 진단 | 디버그 (a switch that runs `core.settings.debug {on}`) |
 
 Window choices select content for one fixed left sidebar and one fixed right sidebar. The focused active plugin overrides the general side choice without adding a column. Visibility switches affect the fixed side. Card sidebars remain inside their cards; the obsolete `cardSidebar` positioning setting is rejected. No plugin setting appears in 일반.
 
 ### 진단
 
-`diagnostics.performance` is the permanent performance trace ([performance trace](performance-trace.md)). It is a boolean, set through the settings file rather than a settings-window control; it defaults to true while the release version is 0.0.x, so a defect is recorded when it appears, and to false in a later version series. While it is false no layer performs any performance logging work — no event is built and none is stored. Setting it true makes the layers store the events of the trace in the event files under `logs/`, and setting it back false stops the storing at the next event boundary; the event files and their rotation belong to the [event contract](logging.md#files), not to the setting.
+`diagnostics.performance` is the permanent performance trace ([performance trace](performance-trace.md)). It is a boolean that defaults to false, so a release records no trace unless its person turns it on. While it is false no layer performs any performance logging work — no event is built and none is stored. Setting it true makes the layers store the events of the trace in the event files under `logs/`, and setting it back false stops the storing at the next event boundary; the event files and their rotation belong to the [event contract](logging.md#files), not to the setting.
 
-`diagnostics.log` is the [policy](logging.md#policy) of the event log: an object that names the least severe level (`off`, `error`, `warn`, `info`, `debug` or `trace`) that is stored for some of the classes `lifecycle`, `input`, `call`, `io` and `frame`. A class that it does not name stores every level, and it defaults to `{}`, which stores every level of every class. It is set through the settings file; a class outside the five and a value outside the six levels are refused with an error that names the setting. The page sends the policy to the host, which writes `<config-dir>/log-policy.json`, and every process applies the file when it changes.
+`diagnostics.log` is the [policy](logging.md#policy) of the event log: an object that names the least severe level (`off`, `error`, `warn`, `info`, `debug` or `trace`) that is stored for some of the classes `lifecycle`, `input`, `call`, `io` and `frame`. A class that it does not name takes the default policy, which stores only `error`, and it defaults to `{}`, which stores only `error` in every class, so the record of every error that the display path shows remains. It is set through the settings file; a class outside the five and a value outside the six levels are refused with an error that names the setting. The page sends the policy to the host, which writes `<config-dir>/log-policy.json`, and every process applies the file when it changes.
+
+The switch 디버그 of the settings window turns both on and off together through `core.settings.debug {on}`: on sets `diagnostics.performance` to true and `diagnostics.log` to `trace` in every class, off sets `diagnostics.performance` to false and `diagnostics.log` to `{}`. The switch shows on when `diagnostics.performance` is true and every class is `trace`. While both are off no layer builds or stores an event of the trace or an event below `error`.
 
 
 ### 플러그인

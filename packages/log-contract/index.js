@@ -166,8 +166,8 @@ function seqFindings(entries) {
 /** The findings of the declared chains: each correlation identifier that starts a chain must reach its last event. */
 function chainFindings(entries, catalog) {
   const findings = [];
-  // The policies that each process applied, by time (`log.policy`); before the first one the default policy stores every
-  // level. A chain crosses processes, so the time and not the seq places a policy against it.
+  // The policies that each process applied, by time (`log.policy`); before the first one the default policy is in force.
+  // A chain crosses processes, so the time and not the seq places a policy against it.
   // The page puts the policy of the setting `diagnostics.log` in its gate when the setting changes, and the host records
   // `log.policy` after it, so the policy that follows such a change is in force from the change.
   const policies = new Map();
@@ -191,10 +191,11 @@ function chainFindings(entries, catalog) {
     const declared = catalog.events[hop];
     // default: a hop that the catalog does not declare with a class of the policy is asked for under every policy.
     if (declared === undefined || !POLICY_CLASSES.includes(declared.class)) return true;
-    // default: a process that recorded no policy applied only the default policy, which stores every level.
+    // default: a process that recorded no policy applied only the default policy.
     const all = [...(policies.get(processOf(file)) ?? [])].sort((a, b) => a.ts - b.ts);
     const first = all.filter((policy) => policy.ts <= from).at(-1);
-    const applied = [...(first === undefined ? [] : [first]), ...all.filter((policy) => policy.ts > from && policy.ts <= to)];
+    // The policy in force at the first event is the last one before it, or the default policy before the first one.
+    const applied = [first ?? DEFAULT_POLICY, ...all.filter((policy) => policy.ts > from && policy.ts <= to)];
     // A hop declared with several levels is stored only when the policy stores each of them.
     const levels = Array.isArray(declared.level) ? declared.level : [declared.level];
     return applied.every((policy) => levels.every((level) => policyAllows(policy, declared.class, level)));
@@ -387,6 +388,11 @@ export function auditParsed(parsed, catalog, declaredError = () => false) {
 export const POLICY_SCHEMA = 1;
 /** The classes that the policy file names, in the order of the contract. */
 export const POLICY_CLASSES = ["lifecycle", "input", "call", "io", "frame"];
+
+/** The default policy, which every writer and the native ring apply before the first policy and while no policy file
+ * exists: only `error` in every class (docs/spec/logging.md#policy). `fixtures/policy/cases.json` holds the same value as
+ * `default`, which the readers of the other languages check. */
+export const DEFAULT_POLICY = Object.freeze({ classes: Object.freeze(Object.fromEntries(POLICY_CLASSES.map((kind) => [kind, "error"]))) });
 /** The values of a class in the policy file, from the one that stores nothing to the one that stores every level. */
 export const POLICY_VALUES = ["off", "error", "warn", "info", "debug", "trace"];
 const POLICY_LEVELS = POLICY_VALUES.slice(1);
