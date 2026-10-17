@@ -10,7 +10,7 @@
 import { parseArgs } from "node:util";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = new URL("../", import.meta.url);
@@ -39,6 +39,24 @@ export function checkDeclaration(value) {
   }
   if (!Array.isArray(value.packs)) throw new Error(`${DECLARATION}: packs must be a list`);
   return value;
+}
+
+/**
+ * The folder of a declared repository. scripts/workspace-registry.json declares repositories as siblings of the main checkout
+ * (docs/spec/plugins.md#repositories). A worktree under <main>/.claude/worktrees/ has the same declarations, but its own
+ * folder is three levels deeper, so the declared folders resolve from the main checkout. The main checkout is the parent of
+ * the git common directory, which is <main>/.git for the main checkout and for every worktree of it.
+ * commonDir is the output of `git rev-parse --path-format=absolute --git-common-dir`.
+ */
+export function repositoryFolder(relative, commonDir) {
+  return resolve(dirname(commonDir), relative);
+}
+
+/** The git common directory of the checkout that holds root. Every worktree of a repository has the same common directory. */
+function gitCommonDir(root) {
+  return execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+    cwd: fileURLToPath(root), encoding: "utf8", stdio: ["ignore", "pipe", "inherit"],
+  }).trim();
 }
 
 /** The address of the package.json repository. It is a string or { url }. */
@@ -111,7 +129,8 @@ export function sidecarReleases(declared, manifests, plugins) {
 /** Writes the registry folder anew and creates index.json. Earlier entries in the output folder are removed. */
 export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
   const declaration = checkDeclaration(read(new URL(DECLARATION, root)));
-  const folder = (relative) => fileURLToPath(new URL(relative.endsWith("/") ? relative : `${relative}/`, root));
+  const commonDir = gitCommonDir(root);
+  const folder = (relative) => repositoryFolder(relative, commonDir);
   // A sidecar name → its declared repository and sidecar folder.
   const declared = new Map();
   for (const item of declaration.sidecars) {

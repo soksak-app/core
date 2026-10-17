@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { readFileSync } from "node:fs";
 
-import { checkDeclaration, pluginEntry, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
+import { checkDeclaration, pluginEntry, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases } from "../workspace-registry.mjs";
 
 const SHA = "a".repeat(64);
 
@@ -65,4 +65,10 @@ test("the registry releases every declared sidecar, also one that no workspace p
   assert.deepEqual(sidecarReleases(declared, manifests, new Set(["@scope/plugin-other"])), declared);
   assert.throws(() => sidecarReleases(declared, [{ id: "user", dependencies: { "@scope/sidecar-missing": "^1.0.0" } }], new Set()),
     /plugin user uses @scope\/sidecar-missing, which no declared sidecar or plugin folder holds/);
+});
+
+test("a declared repository folder resolves from the main checkout, also when the script runs in a worktree", { timeout: 1000 }, () => {
+  // The git common directory of a worktree under <main>/.claude/worktrees/ is <main>/.git, so the main checkout is its parent.
+  assert.equal(repositoryFolder("../plugins/browser", "/work/core/.git"), "/work/plugins/browser");
+  assert.equal(repositoryFolder("../sidecars/vt", "/work/core/.git"), "/work/sidecars/vt");
 });
