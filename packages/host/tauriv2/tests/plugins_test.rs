@@ -36,7 +36,7 @@ fn write_tree(dir: &Path, files: &[(&str, &str)]) {
     }
 }
 
-/// The release of tests/fixtures/plugin-probe (plugin probe 0.0.16 without a sidecar) and its registry. The folder is
+/// The release of tests/fixtures/plugin-probe (plugin probe 0.0.17 without a sidecar) and its registry. The folder is
 /// deleted when the value is dropped.
 struct Registry {
     index: String,
@@ -57,7 +57,7 @@ fn plugin_registry() -> Registry {
     let entry = json!({
         "id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
         "license": "MIT", "repository": "https://example.invalid/probe",
-        "versions": [{"version": "0.0.16", "release": {"url": format!("file://{release}"), "sha256": packed["sha256"]},
+        "versions": [{"version": "0.0.17", "release": {"url": format!("file://{release}"), "sha256": packed["sha256"]},
             "engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}],
     });
     write_tree(
@@ -123,13 +123,13 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let state: Value = serde_json::from_str(&state_text(&plugins)).unwrap();
     assert_eq!(state["registry"], format!("file://{}", registry.index));
     assert_eq!(state["index"]["plugins"][0]["id"], "probe");
-    assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.0.16");
+    assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.0.17");
     assert_eq!(state["installed"]["plugins"]["probe"]["enabled"], true);
     std::fs::remove_file(&registry.index).unwrap();
     let state: Value = serde_json::from_str(&state_text(&plugins)).unwrap();
     let error = state["index"]["error"].as_str().expect("index error");
     assert!(error.contains(&registry.index), "{error}");
-    assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.0.16");
+    assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.0.17");
     std::fs::write(config.path().join("plugins/installed.json"), "{").unwrap();
     let error = plugins.state().err().expect("invalid installed.json fails");
     assert!(
@@ -151,7 +151,7 @@ fn plugins_run_changes_the_installation_like_the_command() {
     .unwrap();
     let (plugins, seen) = new_plugins(config.path());
     let installed = plugins.run(request("install", json!("probe"))).unwrap();
-    let want = r#"{"plugin":{"version":"0.0.16","path":"plugins/probe/0.0.16","enabled":true,"sidecars":{}},"sidecars":{}}"#;
+    let want = r#"{"plugin":{"version":"0.0.17","path":"plugins/probe/0.0.17","enabled":true,"sidecars":{}},"sidecars":{}}"#;
     assert_eq!(serde_json::to_string(&installed).unwrap(), want);
     for action in ["update", "disable", "enable"] {
         plugins.run(request(action, json!("probe"))).unwrap();

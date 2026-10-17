@@ -1,6 +1,6 @@
 {
   "name": "@soksak-check/probe-provider",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "private": true,
   "type": "module",
   "description": "Window check fixture: a plugin that declares the extension point items and reports what its contributions answer.",

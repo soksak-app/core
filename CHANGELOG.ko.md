@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.10.5: 선언된 모든 workspace 버전이 외부 애플리케이션 표면이 없는 release인 0.0.17이다. registry가 sidecar-app 0.0.1을 철회하고, embed kit과 애플리케이션 sidecar 저장소를 보관한다.
 - F194.10.4: 명세가 연결 plugin, `applications.json`, `runtime.applications`, `plugins-progress`를 밝히지 않고, 외부 애플리케이션 표면과 연결 plugin의 계획을 없앤다. 끝난 sidecar의 frame에 대한 native surface 명세의 규칙은 남는다.
 - 체크리스트 항목 `F194.3.4` 폐기: 120 Hz 관문은 F194.10이 폐기하는 외부 애플리케이션 표면을 재었다.
 - 체크리스트 항목 `F194.5.9` 폐기: 예시 애플리케이션의 연결 plugin은 F194.10이 폐기하는 외부 애플리케이션 표면에 속했다.

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F194.10.5: every declared workspace version is 0.0.17, the release without the external application surface; the registry revokes sidecar-app 0.0.1 and the repositories of the embed kit and of the application sidecar are archived.
 - F194.10.4: the specification states no connector plugin, `applications.json`, `runtime.applications` or `plugins-progress`, and the plans of the external application surface and of connector plugins are removed; the rule of the native surface specification for frames of an ended sidecar stays.
 - Retired checklist entry `F194.3.4`: the gate at 120 Hz measured the external application surface, which F194.10 retires.
 - Retired checklist entry `F194.5.9`: the connector plugin of the example application belonged to the external application surface, which F194.10 retires.
