@@ -26,7 +26,8 @@
 #                         It prints numbers and asserts nothing
 #   make test-pressure    runs the memory pressure check of the document region and of a plain web view. It raises the memory pressure
 #                         of the system through memory_pressure, which needs the sudoers rule for /usr/bin/memory_pressure. It asserts
-#                         the response of the region and refuses to judge when the 1-minute load is above 20
+#                         the response of the region and refuses to judge when the 1-minute load is above 20. It prints the footprint
+#                         and vmmap malloc zone rows and the collection state of the released array before and after the pressure
 #   make benchmark-region-cost [URL=<address>] [LONG=<minutes>] [VARIANTS=<name,name>]
 #                         loads an address (default https://www.google.com/) in a 1200×760 window with a 1180×400 region in the
 #                         variants of tests/region_cost_benchmark.m (plain web views with one setting each, a document region with no

@@ -7,7 +7,10 @@
 // footprint of the blank page). The engine's own response is measured with the same scenario in a plain WKWebView, and the
 // region's drop must be at least 0.8 times the plain view's drop. The absolute drop is not asserted, because the engine drops
 // only about 6% of the freeable size in both paths. The check does not activate the application. It refuses to judge when the
-// 1-minute load is above 20. Its cleanup always runs `memory_pressure -S -l normal`.
+// 1-minute load is above 20. Its cleanup always runs `memory_pressure -S -l normal`. Before and after the pressure it prints
+// the rows of `footprint -p` and the malloc zone rows of `vmmap -summary` of the WebContent process, which attribute the kept
+// footprint by allocation kind, and whether the engine has collected the released array (a WeakRef of the page); these
+// rows are printed and not asserted.
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
@@ -141,6 +144,53 @@ static pid_t currentProcess(void) {
     return process;
 }
 
+// Prints whether the engine has collected the released array, read through a WeakRef that the page holds. The read does not
+// allocate and does not request a collection.
+static void printCollected(NSString *label) {
+    __block BOOL answered = NO;
+    __block NSString *result = nil;
+    [view evaluateJavaScript:@"window.collected()" completionHandler:^(id value, NSError *error) {
+        result = [[value description] retain];
+        answered = YES;
+    }];
+    if (!pumpUntil(10, ^BOOL { return answered; })) fail(label, @"the collected script did not answer within 10 seconds");
+    printf("  %s released array: %s\n", label.UTF8String, result.UTF8String);
+    [result release];
+}
+
+// Runs a tool with the arguments and returns its standard output, or fails the step when it does not end with status 0.
+static NSString *toolOutput(NSString *path, NSArray<NSString *> *arguments, NSString *step) {
+    NSTask *task = [[[NSTask alloc] init] autorelease];
+    NSPipe *pipe = [[[NSPipe alloc] init] autorelease];
+    task.executableURL = [NSURL fileURLWithPath:path];
+    task.arguments = arguments;
+    task.standardOutput = pipe;
+    task.standardError = [NSFileHandle fileHandleWithNullDevice];
+    NSError *error = nil;
+    if (![task launchAndReturnError:&error]) fail(step, [NSString stringWithFormat:@"%@ did not start: %@", path, error.localizedDescription]);
+    NSData *output = [pipe.fileHandleForReading readDataToEndOfFile];
+    [task waitUntilExit];
+    if (task.terminationStatus != 0) fail(step, [NSString stringWithFormat:@"%@ ended with status %d", path, task.terminationStatus]);
+    return [[[NSString alloc] initWithData:output encoding:NSUTF8StringEncoding] autorelease];
+}
+
+// Prints the category rows of `footprint -p` and the malloc zone rows of `vmmap -summary` of the WebContent process.
+static void printBreakdown(NSString *label) {
+    pid_t process = currentProcess();
+    NSString *pid = [NSString stringWithFormat:@"%d", process];
+    NSString *step = [label stringByAppendingString:@" breakdown"];
+    for (NSString *line in [toolOutput(@"/usr/bin/footprint", @[@"-p", pid], step) componentsSeparatedByString:@"\n"]) {
+        if ([line rangeOfString:@" B "].location != NSNotFound || [line containsString:@"TOTAL"]) {
+            printf("  %s footprint: %s\n", label.UTF8String, line.UTF8String);
+        }
+    }
+    BOOL zones = NO;
+    for (NSString *line in [toolOutput(@"/usr/bin/vmmap", @[@"-summary", pid], step) componentsSeparatedByString:@"\n"]) {
+        if ([line hasPrefix:@"MALLOC ZONE"]) zones = YES;
+        if (zones && line.length) printf("  %s vmmap: %s\n", label.UTF8String, line.UTF8String);
+    }
+}
+
 // Reads the footprint of the process once per second, after the run loop has handled events, until two readings one second
 // apart agree within 1% of the value. Fails with every reading when they do not agree within 30 seconds.
 static long settledFootprint(NSString *label) {
@@ -205,10 +255,14 @@ static Drop runScenario(NSString *name) {
     [releaseResult release];
     if (!pumpUntil(titleLimit, ^BOOL { return [view.title isEqual:@"Released"]; })) fail(name, @"the page did not report Released");
     long before = settledFootprint([name stringByAppendingString:@" before"]);
+    printBreakdown([name stringByAppendingString:@" before"]);
+    printCollected([name stringByAppendingString:@" before"]);
 
     if (!runPressure(@"warn")) fail([name stringByAppendingString:@" pressure warn"], @"memory_pressure -S -l warn did not end with status 0");
     if (!runPressure(@"critical")) fail([name stringByAppendingString:@" pressure critical"], @"memory_pressure -S -l critical did not end with status 0");
     long after = settledFootprint([name stringByAppendingString:@" after"]);
+    printBreakdown([name stringByAppendingString:@" after"]);
+    printCollected([name stringByAppendingString:@" after"]);
 
     long drop = before - after;
     printf("%s: before %ld bytes, after %ld bytes, drop %ld bytes (%.1f MB), freeable %ld bytes (%.1f MB)\n", name.UTF8String,
@@ -245,7 +299,9 @@ static void respond(nw_connection_t connection, NSString *request) {
             "var keep = [];"
             "for (var i = 0; i < %d; i++) keep.push({index: i, label: 'row ' + i});"
             "for (var j = 0; j < %d; j++) { var e = document.createElement('div'); e.textContent = 'item ' + j; document.body.appendChild(e); }"
-            "window.release = function () { keep = null; document.body.textContent = ''; document.title = 'Released'; return 'released'; };"
+            "var probe = new WeakRef(keep);"
+            "window.collected = function () { return probe.deref() === undefined ? 'collected' : 'alive'; };"
+            "window.release = function () { keep = null; e = null; document.body.textContent = ''; document.title = 'Released'; return 'released'; };"
             "document.title = 'Allocated';"
             "</script></body>", objectCount, elementCount];
     }
