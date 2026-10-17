@@ -872,11 +872,12 @@ func diagnosticObjects(e *Endpoint, _ *endpointConn, params json.RawMessage) (an
 			"elements": document.counts.Elements, "documents": document.counts.Documents,
 		})
 	}
+	sessions := s.sidecars.Sessions(s)
 	objects := HostObjects{
 		Surfaces:         int64(views),
 		Regions:          int64(s.images.Count()),
 		Documents:        int64(s.documents.Count()),
-		SidecarSessions:  int64(s.sidecars.SessionCount(s)),
+		SidecarSessions:  int64(len(sessions)),
 		PendingReplies:   int64(s.sidecars.PendingCount(s) + h.relay.Pending(func(target relayTarget) bool { return target.owner == s })),
 		EventSubscribers: int64(e.SubscriberCount(s.name)),
 	}
@@ -884,7 +885,7 @@ func diagnosticObjects(e *Endpoint, _ *endpointConn, params json.RawMessage) (an
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"host": objects.Payload(), "page": page.Payload(), "documents": list, "runtime": figures}, nil
+	return map[string]any{"host": objects.Payload(), "page": page.Payload(), "documents": list, "sessions": sessions, "runtime": figures}, nil
 }
 
 // diagnosticHeapProfile writes the heap profile of the Go runtime to the diagnostic folder of the configuration directory and replies its path.

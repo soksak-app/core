@@ -59,15 +59,24 @@ pub(crate) struct WindowData {
 
 /// A reload of the app DOM replaces all plugin documents but does not end the terminal sessions.
 ///
-/// The sidecars that a page reload reconnects for a surface: the sidecars of its image regions and the running persistent
-/// sidecars, sorted and once each, without a sidecar that no plugin declares, whose surface ended with the removal of its
-/// plugin and to which a send fails.
+/// The sidecars that a page reload reconnects for surface: the sidecars of its image regions and the running persistent
+/// sidecars to which surface has sent, each running persistent sidecar given with the surfaces that have sent to it,
+/// sorted and once each, without a sidecar that no plugin
+/// declares, whose surface ended with the removal of its plugin and to which a send fails.
 pub fn reconnect_targets(
+    surface: &str,
     mut sidecars: Vec<String>,
-    running_persistent: &[String],
+    running_persistent: &[(String, Vec<String>)],
     declared: impl Fn(&str) -> bool,
 ) -> Vec<String> {
-    sidecars.extend(running_persistent.iter().cloned());
+    // A send to a persistent sidecar from a surface that never sent to it would make that surface a sidecar session of
+    // the sidecar.
+    sidecars.extend(
+        running_persistent
+            .iter()
+            .filter(|(_, surfaces)| surfaces.iter().any(|sent| sent == surface))
+            .map(|(name, _)| name.clone()),
+    );
     sidecars.retain(|name| declared(name));
     sidecars.sort();
     sidecars.dedup();
@@ -92,11 +101,10 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         .collect();
     let reconnect = RawValue::from_string(r#"{"operation":"reconnect"}"#.to_string())
         .map_err(|error| error.to_string())?;
-    let running_persistent = window
-        .state::<WindowSidecars>()
-        .running_persistent_names()?;
+    let running_persistent = window.state::<WindowSidecars>().running_persistent()?;
     for (surface, handle) in surfaces {
         let sidecars = reconnect_targets(
+            &surface,
             data.images.sidecars_for_surface(&surface),
             &running_persistent,
             |name| window.state::<WindowSidecars>().declared(name),

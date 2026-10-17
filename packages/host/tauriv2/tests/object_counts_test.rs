@@ -12,7 +12,7 @@ use serde_json::value::RawValue;
 use soksak_host_tauriv2::documents::Documents;
 use soksak_host_tauriv2::exposure::Relay;
 use soksak_host_tauriv2::images::Images;
-use soksak_host_tauriv2::object_counts::{HostObjects, PageObjects};
+use soksak_host_tauriv2::object_counts::{HostObjects, PageObjects, SidecarSession};
 use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
 
 const ECHO: &str = "@fixture/sidecar-echo";
@@ -97,16 +97,22 @@ fn sidecar_session_and_pending_reply_counts_follow_the_owner() {
         key: "b".into(),
         root: directory.path().display().to_string(),
     };
-    assert_eq!(sidecars.session_count(&owner), 0);
+    assert_eq!(sidecars.sessions(&owner).len(), 0);
     sidecars
         .send_with_cids(&owner, ECHO, "s1", &raw("{}"), &["c1".to_string()])
         .unwrap();
-    assert_eq!(sidecars.session_count(&owner), 1);
-    assert_eq!(sidecars.session_count(&other), 0);
+    assert_eq!(
+        sidecars.sessions(&owner),
+        vec![SidecarSession {
+            sidecar: ECHO.to_string(),
+            surface: "s1".to_string()
+        }]
+    );
+    assert_eq!(sidecars.sessions(&other).len(), 0);
     assert_eq!(sidecars.pending_count(&owner), 1);
     assert_eq!(sidecars.pending_count(&other), 0);
     sidecars.stop();
-    assert_eq!(sidecars.session_count(&owner), 0);
+    assert_eq!(sidecars.sessions(&owner).len(), 0);
 }
 
 // contract: diagnostics.objects.counts-host-objects

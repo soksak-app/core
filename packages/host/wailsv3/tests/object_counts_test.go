@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -85,16 +86,16 @@ func TestSidecarSessionAndPendingReplyCountsFollowTheOwner(t *testing.T) {
 	t.Cleanup(sidecars.Stop)
 	owner := newFakeOwner(directory)
 	other := newFakeOwner(directory)
-	if got := sidecars.SessionCount(owner); got != 0 {
+	if got := len(sidecars.Sessions(owner)); got != 0 {
 		t.Fatalf("no session counts %d for the owner, want 0", got)
 	}
 	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", json.RawMessage(`{}`), []string{"c1"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := sidecars.SessionCount(owner); got != 1 {
-		t.Fatalf("one surface of the owner counts %d sessions, want 1", got)
+	if got := sidecars.Sessions(owner); len(got) != 1 || got[0] != (host.SidecarSession{Sidecar: echoSidecar, Surface: "s1"}) {
+		t.Fatalf("one surface of the owner lists the sessions %v, want [{%s s1}]", got, echoSidecar)
 	}
-	if got := sidecars.SessionCount(other); got != 0 {
+	if got := len(sidecars.Sessions(other)); got != 0 {
 		t.Fatalf("another owner counts %d sessions, want 0", got)
 	}
 	if got := sidecars.PendingCount(owner); got != 1 {
@@ -104,8 +105,35 @@ func TestSidecarSessionAndPendingReplyCountsFollowTheOwner(t *testing.T) {
 		t.Fatalf("another owner counts %d pending replies, want 0", got)
 	}
 	sidecars.Close("s1")
-	if got := sidecars.SessionCount(owner); got != 0 {
+	if got := len(sidecars.Sessions(owner)); got != 0 {
 		t.Fatalf("after the surface closed the owner counts %d sessions, want 0", got)
+	}
+}
+
+// A surface is a sidecar session only of the sidecars to which it sent: a surface of the same owner that sent nothing,
+// such as a browser surface beside a terminal surface, is no session. The Wails host sends nothing to a sidecar for a
+// surface on a page reload.
+// contract: diagnostics.objects.sidecar-sessions-agree
+func TestSidecarSessionsListOnlyTheSurfacesThatSent(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ncat > /dev/null\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","protocol":1}`), directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecars.StopTimeout = stall
+	t.Cleanup(sidecars.Stop)
+	owner := newFakeOwner(directory)
+	for _, surface := range []string{"terminal-b", "terminal-a"} {
+		if err := sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []host.SidecarSession{{Sidecar: echoSidecar, Surface: "terminal-a"}, {Sidecar: echoSidecar, Surface: "terminal-b"}}
+	if got := sidecars.Sessions(owner); !slices.Equal(got, want) {
+		t.Fatalf("the sessions are %v, want %v", got, want)
 	}
 }
 

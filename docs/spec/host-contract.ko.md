@@ -121,6 +121,7 @@ fn invalid_json_closes_connection() {
 | `diagnostics.stall-dump.params-validate` | `diagnostics.stall.dump`는 존재하는 파일의 절대 경로만 받고, 그 밖의 값은 invalid-params 오류 `path must be a non-empty string`, `path must be absolute`, `path does not name a file: <path>`로 거부한다. | both |
 | `diagnostics.stall-dump.event-carries-path` | 정지 dump는 layer `host`, level `warn`의 event `host.stall.dump`(`path`)이며, 답은 event 파일의 `boot`와 그 줄의 `seq`다. | both |
 | `diagnostics.objects.counts-host-objects` | `diagnostics.objects`는 host가 창을 위해 가진 surface, region, document, sidecar session, 대기 중인 응답, event 구독자의 수를 돌려주고, 각 수는 그 객체가 제거되면 다시 준다. | both |
+| `diagnostics.objects.sidecar-sessions-agree` | `diagnostics.objects`는 창의 sidecar session을 sidecar와 surface 순서의 `{sidecar, surface}`로 담은 `sessions`를 돌려주고, surface는 그것이 보낸 적이 있는 사이드카의 session일 뿐이다: page를 다시 불러와도 surface가 보낸 적이 없는 사이드카에는 그 surface를 위해 아무것도 보내지 않으므로, 두 host는 같은 project에 대해 같은 session을 나열한다. | both |
 | `diagnostics.objects.runtime-memory` | `diagnostics.objects`는 Go runtime의 수치 여덟 개를 가진 `runtime`을 돌려준다: heap 객체, 쓰이지 않는 heap, free heap, released heap, stack, 그 밖의 metadata의 byte 수, heap goal, goroutine 수다. | wailsv3 only: Tauri host에는 garbage collection runtime이 없다 |
 | `diagnostics.heap-profile.writes-a-profile` | `diagnostics.heap.profile`은 Go runtime의 heap profile(gzip으로 압축한 protocol buffer)을 진단 폴더의 `heap-<pid>-<ms>.pprof`에 쓰고 그 경로로 답한다. | wailsv3 only: Tauri host에는 garbage collection heap이 없다 |
 | `diagnostics.objects.counts-documents` | `diagnostics.objects`는 main page와 창의 각 document region의 요소 수와 문서 수를 돌려준다. | both |
@@ -358,7 +359,7 @@ fn invalid_json_closes_connection() {
 | `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없는 이미지 예약을 거부하고 아무것도 등록하지 않는다. | both |
 | `images.present.replaced-frame-is-logged-as-invalidated` | 더는 현재가 아닌 프레임(`stale`, `notAttached`, `staleRaster native=... frame=...`)은 `stale`로 답하고 표시 실패로 기록하지 않으며 `image frame invalidated before native presentation: ... reason=<detail>`을 남긴다. | both |
 | `images.present.frame-of-undeclared-sidecar-is-invalidated` | 어떤 plugin도 선언하지 않는 사이드카의 그림은 `stale`로 답하고 native 표시, 복구, 오류 없이 기록되며, 끝난 사이드카에 대한 답은 `not sent`로 기록된다. | both |
-| `surfaces.reload.reconnects-only-declared-sidecars` | page를 다시 불러오면 이전 page의 각 surface에 대해 plugin이 선언한 image region의 사이드카와 실행 중인 persistent 사이드카를 다시 연결하고, 어떤 plugin도 선언하지 않는 사이드카는 건너뛴다. 그 surface는 plugin 제거와 함께 끝났다. | tauriv2 only: Wails host는 page를 다시 불러올 때 reconnect를 보내지 않는다 |
+| `surfaces.reload.reconnects-only-declared-sidecars` | page를 다시 불러오면 이전 page의 각 surface에 대해 plugin이 선언한 image region의 사이드카와 그 surface가 보낸 적이 있는 실행 중인 persistent 사이드카를 다시 연결하고, 어떤 plugin도 선언하지 않는 사이드카는 건너뛴다. 그 surface는 plugin 제거와 함께 끝났다. | tauriv2 only: Wails host는 page를 다시 불러올 때 reconnect를 보내지 않는다 |
 | `images.present.failure-line-names-the-current-frame` | 다른 표시 실패는 그 사유(알 수 없는 상세는 `presentFailed`)로 답하고 오류 줄 `error host image present: ... reason=<detail> current <frame state>`를 남긴다. | both |
 | `recording.finish.keeps-folder-and-reports-frames` | 녹화를 마치면 폴더를 유지하고 프레임 수를 보고하며, 두 번째 마침은 실패한다. | both |
 | `recording.start.failed-open-removes-folder` | 캡처 열기에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | both |

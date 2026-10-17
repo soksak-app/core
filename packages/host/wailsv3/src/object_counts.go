@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"runtime/metrics"
 	"runtime/pprof"
+	"sort"
 	"time"
 	"unsafe"
 )
@@ -122,20 +123,32 @@ func (i *Images) Count() int {
 	return len(i.handles)
 }
 
-// SessionCount returns the number of sidecar sessions of the surfaces that owner owns. A surface that sent a request to a running sidecar
-// counts once for that sidecar.
-func (c *Sidecars) SessionCount(owner SidecarOwner) int {
+// SidecarSession is a sidecar session of diagnostics.objects: the sidecar and the surface that sent a request to it.
+type SidecarSession struct {
+	Sidecar string `json:"sidecar"`
+	Surface string `json:"surface"`
+}
+
+// Sessions returns the sidecar sessions of the surfaces that owner owns, ordered by sidecar and surface. A surface that sent a request to a
+// running sidecar is one session of that sidecar.
+func (c *Sidecars) Sessions(owner SidecarOwner) []SidecarSession {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	count := 0
-	for _, process := range c.running {
+	sessions := []SidecarSession{}
+	for name, process := range c.running {
 		for surface := range process.surfaces {
 			if c.owners[surface] == owner {
-				count++
+				sessions = append(sessions, SidecarSession{Sidecar: name, Surface: surface})
 			}
 		}
 	}
-	return count
+	sort.Slice(sessions, func(i, j int) bool {
+		if sessions[i].Sidecar != sessions[j].Sidecar {
+			return sessions[i].Sidecar < sessions[j].Sidecar
+		}
+		return sessions[i].Surface < sessions[j].Surface
+	})
+	return sessions
 }
 
 // PendingCount returns the number of sidecar requests with correlation identifiers that wait for a reply and whose surface owner owns.

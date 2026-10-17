@@ -260,15 +260,21 @@ fn objects(window: &Window) -> Result<Value, Failure> {
     let sidecars = window.state::<crate::sidecars::WindowSidecars>();
     let exposure = window.state::<Exposure>();
     let relay = &exposure.relay;
+    let sessions = sidecars.sessions(window);
     let host = HostObjects {
         surfaces,
         regions: data.images.count(),
         documents: data.documents.count(),
-        sidecar_sessions: sidecars.session_count(window),
+        sidecar_sessions: sessions.len(),
         pending_replies: sidecars.pending_count(window) + relay.pending_count(window.label()),
         event_subscribers: crate::exposure::subscribers(window),
     };
-    Ok(json!({"host": host.payload(), "page": page.payload(), "documents": listed}))
+    Ok(json!({
+        "host": host.payload(),
+        "page": page.payload(),
+        "documents": listed,
+        "sessions": sessions,
+    }))
 }
 
 /// Returns the number of live library objects that are attached to windows and webviews after the application handled

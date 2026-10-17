@@ -879,22 +879,28 @@ pub struct OutdatedSidecar {
 
 #[cfg(feature = "diagnostics")]
 impl<O: Owner> Sidecars<O> {
-    /// Returns the number of sidecar sessions of the surfaces that owner owns. A surface that sent a request to a running
-    /// sidecar counts once for that sidecar.
-    pub fn session_count(&self, owner: &O) -> usize {
+    /// Returns the sidecar sessions of the surfaces that owner owns, ordered by sidecar and surface. A surface that sent
+    /// a request to a running sidecar is one session of that sidecar.
+    pub fn sessions(&self, owner: &O) -> Vec<crate::object_counts::SidecarSession> {
         let key = owner.key();
         let state = self.core.state.lock().expect("sidecar state");
-        state
+        let mut sessions: Vec<crate::object_counts::SidecarSession> = state
             .running
-            .values()
-            .flat_map(|process| process.surfaces.iter())
-            .filter(|surface| {
+            .iter()
+            .flat_map(|(name, process)| process.surfaces.iter().map(move |surface| (name, surface)))
+            .filter(|(_, surface)| {
                 state
                     .owners
                     .get(surface.as_str())
                     .is_some_and(|current| current.key() == key)
             })
-            .count()
+            .map(|(name, surface)| crate::object_counts::SidecarSession {
+                sidecar: name.clone(),
+                surface: surface.clone(),
+            })
+            .collect();
+        sessions.sort();
+        sessions
     }
 
     /// Returns the number of sidecar requests with correlation identifiers that wait for a reply and whose surface owner
@@ -1193,13 +1199,13 @@ impl<O: Owner> Sidecars<O> {
         delivered
     }
 
-    /// Returns the persistent sidecar that is already running.
+    /// Returns each persistent sidecar that is already running, with the surfaces that have sent to it, sorted by name.
     ///
     /// Even when the page removed the image registration from the host first, the recovery after a reload must
     /// initialize the persistent surface work.
-    pub fn running_persistent_names(&self) -> Result<Vec<String>, String> {
+    pub fn running_persistent(&self) -> Result<Vec<(String, Vec<String>)>, String> {
         let state = self.core.state.lock().map_err(|e| e.to_string())?;
-        let mut names: Vec<_> = state
+        let mut running: Vec<_> = state
             .running
             .iter()
             .filter(|(name, process)| {
@@ -1212,10 +1218,10 @@ impl<O: Owner> Sidecars<O> {
                         .as_ref()
                         .is_some_and(|connection| connection.connected.load(Ordering::Acquire))
             })
-            .map(|(name, _)| name.clone())
+            .map(|(name, process)| (name.clone(), process.surfaces.iter().cloned().collect()))
             .collect();
-        names.sort();
-        Ok(names)
+        running.sort();
+        Ok(running)
     }
 
     /// Notifies all running sidecars of the surfaces of the window owner that are not in alive.

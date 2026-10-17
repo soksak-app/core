@@ -46,3 +46,10 @@ impl PageObjects {
         json!({"elements": self.elements, "documents": self.documents})
     }
 }
+
+/// A sidecar session of diagnostics.objects: the sidecar and the surface that sent a request to it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+pub struct SidecarSession {
+    pub sidecar: String,
+    pub surface: String,
+}
