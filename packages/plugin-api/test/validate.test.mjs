@@ -183,20 +183,20 @@ test("an environment does not list sidecars; plugins declare them", () => {
 });
 
 test("a sidecar manifest names an executable inside its package and a protocol version", () => {
-  const sidecar = { executable: "build/worker", protocol: 2 };
+  const sidecar = { executable: "build/worker", protocol: 1 };
   assert.equal(validateSidecar(sidecar), sidecar);
   const cases = [
     [{ ...sidecar, name: "worker" }, /unknown field name/],
     [{ ...sidecar, executable: "../worker" }, /executable must be a path inside the package/],
     [{ ...sidecar, executable: "/bin/sh" }, /executable must be a path inside the package/],
-    [{ ...sidecar, protocol: 1 }, /protocol must be 2/],
+    [{ ...sidecar, protocol: 2 }, /protocol must be 1/],
     [[], /expected an object/],
   ];
   for (const [value, message] of cases) assert.throws(() => validateSidecar(value), message);
 });
 
 test("a persistent sidecar declares its transport explicitly", () => {
-  const declaration = { executable: "build/worker", protocol: 2, transport: "persistent" };
+  const declaration = { executable: "build/worker", protocol: 1, transport: "persistent" };
   assert.equal(validateSidecar(declaration), declaration);
   for (const transport of [null, "tcp", "stdio", 1]) {
     assert.throws(() => validateSidecar({ ...declaration, transport }), /transport must be persistent/);
@@ -204,7 +204,7 @@ test("a persistent sidecar declares its transport explicitly", () => {
 });
 
 test("a sidecar manifest may include optional helpers with name and executable", () => {
-  const base = { executable: "build/worker", protocol: 2 };
+  const base = { executable: "build/worker", protocol: 1 };
   const withHelpers = {
     ...base,
     helpers: [
@@ -216,7 +216,7 @@ test("a sidecar manifest may include optional helpers with name and executable",
 });
 
 test("a sidecar helpers field is rejected for invalid cases", () => {
-  const base = { executable: "build/worker", protocol: 2 };
+  const base = { executable: "build/worker", protocol: 1 };
   const cases = [
     [{ ...base, helpers: [{ name: "@scope/helper", executable: "build/ptyd", extra: "field" }] }, /unknown field extra/],
     [{ ...base, helpers: [{ name: "lib-shared" }] }, /executable must be a path inside the helper folder/],
@@ -429,7 +429,7 @@ test("a surface names its save command among its declared commands", () => {
 });
 
 test("a sidecar manifest and a plugin manifest name the file of their event catalog inside the package", () => {
-  const sidecar = { executable: "build/worker", protocol: 2, events: "events.json" };
+  const sidecar = { executable: "build/worker", protocol: 1, events: "events.json" };
   assert.equal(validateSidecar(sidecar), sidecar);
   for (const events of ["../events.json", "/events.json", "", 7]) {
     assert.throws(() => validateSidecar({ ...sidecar, events }), /sidecar\.json: events must be a path inside the package/, `sidecar events ${events}`);
@@ -444,7 +444,7 @@ test("a sidecar manifest declares its replay executable with the role of its eve
     selection: "sidecar.worker.selection", viewport: "sidecar.worker.viewport", theme: "sidecar.worker.theme",
   };
   const replay = { role: "worker", executable: "build/replay", inputs };
-  const sidecar = { executable: "build/worker", protocol: 2, replay };
+  const sidecar = { executable: "build/worker", protocol: 1, replay };
   assert.equal(validateSidecar(sidecar), sidecar);
   const cases = [
     [{ ...sidecar, replay: "build/replay" }, /sidecar\.json: replay must be an object/],
@@ -463,7 +463,7 @@ test("the replay of a sidecar manifest names the event of each kind of replay in
     output: "sidecar.worker.read", write: "sidecar.worker.write", resize: "sidecar.worker.resize",
     selection: "sidecar.worker.selection", viewport: "sidecar.worker.viewport", theme: "sidecar.worker.theme",
   };
-  const sidecar = (replayInputs) => ({ executable: "build/worker", protocol: 2, replay: { role: "worker", executable: "build/replay", inputs: replayInputs } });
+  const sidecar = (replayInputs) => ({ executable: "build/worker", protocol: 1, replay: { role: "worker", executable: "build/replay", inputs: replayInputs } });
   const { theme, ...withoutTheme } = inputs;
   const cases = [
     [undefined, /sidecar\.json replay: inputs must be an object that names the event of each kind/],

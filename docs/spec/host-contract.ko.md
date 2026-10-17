@@ -375,7 +375,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.declaration.adds-sidecars-installed-after-start` | 생성 뒤에 설치 sidecar를 선언하면 선언되지 않은 것을 더하므로 그 sidecar로의 보내기가 그것을 시작한다. | both |
 | `sidecars.declaration.rejects-executable-escaping-package` | sidecar 밖의 실행 파일 경로는 생성을 실패시킨다. | both |
 | `sidecars.declaration.rejects-absolute-executable` | 절대 실행 파일 경로는 생성을 실패시킨다. | both |
-| `sidecars.start.rejects-other-protocol` | `sidecar.json`이 2가 아닌 protocol을 선언한 sidecar는 생성을 실패시키지 않고 선언되며, 시작하지 않고, 그것으로의 send마다 `sidecar <name> <version>: protocol <found> is not 2`로 실패한다. | both |
+| `sidecars.declaration.rejects-unsupported-protocol` | 지원하지 않는 프로토콜 버전은 생성을 실패시킨다. | both |
 | `sidecars.declaration.rejects-unknown-transport` | 알 수 없는 전송 방식은 "is not supported"로 생성을 실패시킨다. | both |
 | `sidecars.declaration.persistent-requires-config-directory` | 설정 디렉터리가 없는 지속 전송은 생성을 실패시킨다. | both |
 | `sidecars.persistent.accepts-non-canonical-config-directory` | 지속 전송은 정규화되지 않은 설정 디렉터리 경로를 받아들인다. | both |
@@ -407,7 +407,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.failure.invalid-message-terminates-and-notifies` | JSON이 아닌 줄이나 `body`가 없는 JSON 객체는 사이드카 프로세스를 끝내고 "invalid message"를 담은 `sidecar-failure`를 전달한다. | both |
 | `sidecars.failure.output-close-notifies-each-surface` | 호스트가 종료 중이 아닐 때 종료 상태 3으로 끝난 사이드카는 그 사이드카에 보낸 각 표면의 소유 창에 이유가 "output closed: exit status 3"인 `sidecar-failure`를 전달하고, 다음 전송은 새 프로세스를 시작한다. | both |
 | `sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service` | 두 호스트가 토큰으로 한 서비스 엔드포인트에 인증하고 각자의 이벤트를 받는다. | both |
-| `sidecars-transport.hello.declares-protocol-two` | hello 요청은 프로토콜 2를 선언한다. | both |
+| `sidecars-transport.hello.declares-protocol-one` | hello 요청은 프로토콜 1을 선언한다. | both |
 | `sidecars-transport.reconnect.after-connection-loss-preserves-owner` | 서비스가 연결을 끊으면 다음 보내기가 다시 연결하고 이벤트는 계속 소유자와 표면에 도착한다. | both |
 | `sidecars-transport.stop.close-owner-failure-returns-promptly` | close-owner 실패 응답은 중지를 1초 넘게 늦추지 않는다. | both |
 | `sidecars-transport.hello.reports-a-service-of-another-version` | hello 응답의 `version`이 `installed.json`의 기록과 다르거나 없는 persistent 서비스는 `host.sidecars` `outdated`에 실행 중인 version이나 `null`, 설치된 version, 열린 표면 수와 함께 나열된다. 설치된 version의 서비스는 나열되지 않는다. | both |

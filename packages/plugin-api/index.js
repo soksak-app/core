@@ -585,7 +585,7 @@ export function checkProjectData(plugin, data, key, value) {
  *
  *     executable  path of the built executable inside the sidecar. The native host looks for this file name
  *                             in the same directory as the application executable
- *     protocol    version of the start arguments and messages of the sidecar. Currently 2
+ *     protocol    message format version. Currently 1
  *   helpers     optional; the helper programs of the sidecar, each with the name of its package.json and its executable
  */
 /**
@@ -607,7 +607,7 @@ export function validateSidecar(sidecar) {
   if (!isText(executable) || executable.startsWith("/") || executable.split("/").includes("..")) {
     throw new Error("sidecar.json: executable must be a path inside the package");
   }
-  if (sidecar.protocol !== 2) throw new Error("sidecar.json: protocol must be 2");
+  if (sidecar.protocol !== 1) throw new Error("sidecar.json: protocol must be 1");
   if (sidecar.transport !== undefined && sidecar.transport !== "persistent") {
     throw new Error("sidecar.json: transport must be persistent");
   }

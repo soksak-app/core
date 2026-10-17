@@ -26,9 +26,9 @@ test("registry entries carry the declarations of package.json and the file URL a
   assert.deepEqual(pluginEntry(contributor, pkg, { release: "/r/c.tgz", sha256: SHA }, new Set(["@scope/sidecar-worker"])).versions[0].sidecars,
     { "@scope/sidecar-worker": "^0.0.1" });
   assert.deepEqual(sidecarEntry({ name: "@scope/sidecar-worker", version: "0.0.1", repository: "https://example.invalid/w" },
-    { executable: "build/worker", protocol: 2 }, { platform: "darwin-arm64", release: "/r/w.tar.gz", sha256: SHA }), {
+    { executable: "build/worker", protocol: 1 }, { platform: "darwin-arm64", release: "/r/w.tar.gz", sha256: SHA }), {
     name: "@scope/sidecar-worker", repository: "https://example.invalid/w",
-    versions: [{ version: "0.0.1", protocol: 2, releases: { "darwin-arm64": { url: "file:///r/w.tar.gz", sha256: SHA } } }],
+    versions: [{ version: "0.0.1", protocol: 1, releases: { "darwin-arm64": { url: "file:///r/w.tar.gz", sha256: SHA } } }],
   });
   assert.throws(() => repositoryText({ type: "git" }), /package.json repository has no url/);
 });

@@ -55,7 +55,7 @@ fn installed_fixture() -> tempfile::TempDir {
             ("plugins/off/1.0.0/plugin.json", r#"{"id": "off"}"#),
             (
                 "sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json",
-                r#"{"executable": "build/worker", "protocol": 2}"#,
+                r#"{"executable": "build/worker", "protocol": 1}"#,
             ),
         ],
     );
@@ -346,7 +346,7 @@ fn installed_sidecars_resolve_the_installed_version_folders() {
     assert_eq!(declarations[0].folder, folder);
     assert_eq!(
         text(declarations[0].data.clone()),
-        r#"{"executable": "build/worker", "protocol": 2}"#
+        r#"{"executable": "build/worker", "protocol": 1}"#
     );
     let missing = folder.join("sidecar.json");
     std::fs::remove_file(&missing).unwrap();

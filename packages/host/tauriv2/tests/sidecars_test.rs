@@ -114,7 +114,7 @@ fn echo_sidecars() -> (Sidecars<FakeOwner>, tempfile::TempDir) {
     std::fs::write(&program, format!("#!/bin/sh\ntee {}\n", record.display())).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let mut sidecars = create(
-        &files(r#"{"executable":"echo","protocol":2}"#),
+        &files(r#"{"executable":"echo","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
@@ -260,7 +260,7 @@ fn undeclared_and_stopped_sidecars_are_rejected() {
 fn a_missing_executable_fails() {
     let directory = tempfile::tempdir().unwrap();
     let sidecars = create(
-        &files(r#"{"executable":"echo","protocol":2}"#),
+        &files(r#"{"executable":"echo","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
@@ -285,7 +285,7 @@ fn a_sidecar_receives_the_log_directory() {
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let mut sidecars = create(
-        &files(r#"{"executable":"echo","protocol":2}"#),
+        &files(r#"{"executable":"echo","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
@@ -315,7 +315,7 @@ fn declaring_adds_sidecars_installed_after_the_start() {
     assert!(error.contains("is not declared by any plugin"), "{error}");
     sidecars
         .declare(&declare(
-            &files(r#"{"executable":"echo","protocol":2}"#),
+            &files(r#"{"executable":"echo","protocol":1}"#),
             directory.path(),
         ))
         .unwrap();
@@ -335,7 +335,7 @@ fn declaring_adds_sidecars_installed_after_the_start() {
 fn an_executable_outside_the_package_fails() {
     let directory = tempfile::tempdir().unwrap();
     let error = create(
-        &files(r#"{"executable":"../escape","protocol":2}"#),
+        &files(r#"{"executable":"../escape","protocol":1}"#),
         directory.path(),
     )
     .err()
@@ -351,7 +351,7 @@ fn an_executable_outside_the_package_fails() {
 fn an_absolute_executable_fails() {
     let directory = tempfile::tempdir().unwrap();
     let error = create(
-        &files(r#"{"executable":"/bin/sh","protocol":2}"#),
+        &files(r#"{"executable":"/bin/sh","protocol":1}"#),
         directory.path(),
     )
     .err()
@@ -366,7 +366,7 @@ fn an_absolute_executable_fails() {
 #[test]
 fn persistent_transport_requires_a_config_directory() {
     let directory = tempfile::tempdir().unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let error = Sidecars::<FakeOwner>::new(
         &declare(&fixture, directory.path()),
         std::path::PathBuf::new(),
@@ -376,34 +376,19 @@ fn persistent_transport_requires_a_config_directory() {
     assert!(error.contains("config directory"), "{error}");
 }
 
-// contract: sidecars.start.rejects-other-protocol
+// contract: sidecars.declaration.rejects-unsupported-protocol
 #[test]
-fn a_sidecar_of_another_protocol_is_not_started() {
+fn an_unsupported_protocol_fails() {
     let directory = tempfile::tempdir().unwrap();
-    let record = directory.path().join("started");
-    let program = directory.path().join("echo");
-    std::fs::write(
-        &program,
-        format!("#!/bin/sh\ntouch {}\nexec cat\n", record.display()),
-    )
-    .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut sidecars = create(
-        &files(r#"{"executable":"echo","protocol":1}"#),
+    let error = create(
+        &files(r#"{"executable":"echo","protocol":2}"#),
         directory.path(),
     )
-    .expect("a sidecar of another protocol does not make the construction fail");
-    sidecars.stop_timeout = STALL;
-    let (window, _events) = owner("a", "/");
-    for _ in 0..2 {
-        assert_eq!(
-            sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err(),
-            format!("sidecar {ECHO} 0.0.1: protocol 1 is not 2")
-        );
-    }
+    .err()
+    .unwrap();
     assert!(
-        !record.exists(),
-        "the sidecar of another protocol was started"
+        error.contains(&directory.path().join("sidecar.json").display().to_string()),
+        "{error}"
     );
 }
 
@@ -412,7 +397,7 @@ fn a_sidecar_of_another_protocol_is_not_started() {
 fn persistent_transport_rejects_unknown_transport() {
     let directory = tempfile::tempdir().unwrap();
     let error = create(
-        &files(r#"{"executable":"echo","protocol":2,"transport":"ptyd"}"#),
+        &files(r#"{"executable":"echo","protocol":1,"transport":"ptyd"}"#),
         directory.path(),
     )
     .err()
@@ -425,7 +410,7 @@ fn persistent_transport_rejects_unknown_transport() {
 fn persistent_transport_accepts_a_non_canonical_config_directory() {
     let executable_directory = tempfile::tempdir().unwrap();
     let config_directory = tempfile::tempdir().unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().join("."),
@@ -482,11 +467,11 @@ fn slow_sidecar_does_not_block_other_sends() {
     let files: Files = vec![
         (
             "@fixture/sidecar-slow",
-            r#"{"executable":"slow","protocol":2}"#.to_string(),
+            r#"{"executable":"slow","protocol":1}"#.to_string(),
         ),
         (
             "@fixture/sidecar-fast",
-            r#"{"executable":"fast","protocol":2}"#.to_string(),
+            r#"{"executable":"fast","protocol":1}"#.to_string(),
         ),
     ];
     let mut sidecars = create(&files, directory.path()).unwrap();
@@ -581,7 +566,7 @@ fn stop_graceful_shutdown() {
 
     let files: Files = vec![(
         "@fixture/sidecar-graceful",
-        r#"{"executable":"graceful","protocol":2}"#.to_string(),
+        r#"{"executable":"graceful","protocol":1}"#.to_string(),
     )];
 
     let mut sidecars = create(&files, directory.path()).unwrap();
@@ -659,7 +644,7 @@ fn stop_closes_unread_output_in_child() {
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let files: Files = vec![(
         "@fixture/sidecar-talkative",
-        r#"{"executable":"talkative","protocol":2}"#.to_string(),
+        r#"{"executable":"talkative","protocol":1}"#.to_string(),
     )];
     let mut sidecars = create(&files, directory.path()).unwrap();
     // stop() ends by force only after the deadline passes. If it returns before the deadline, the sidecar wrote all of
@@ -923,7 +908,7 @@ fn close_during_stop_sends_nothing() {
     let release = Release(release);
     let files: Files = vec![(
         "@fixture/sidecar-lingering",
-        r#"{"executable":"lingering","protocol":2}"#.to_string(),
+        r#"{"executable":"lingering","protocol":1}"#.to_string(),
     )];
     let mut sidecars = create(&files, directory.path()).unwrap();
     sidecars.stop_timeout = STALL;
@@ -993,7 +978,7 @@ fn stop_forced_kill_in_child() {
 
     let files: Files = vec![(
         "@fixture/sidecar-stubborn",
-        r#"{"executable":"stubborn","protocol":2}"#.to_string(),
+        r#"{"executable":"stubborn","protocol":1}"#.to_string(),
     )];
 
     let mut sidecars = create(&files, directory.path()).unwrap();
@@ -1075,7 +1060,7 @@ fn script_sidecars(script: &str) -> (Stopping, tempfile::TempDir) {
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let sidecars = create(
-        &files(r#"{"executable":"fake","protocol":2}"#),
+        &files(r#"{"executable":"fake","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
@@ -1286,7 +1271,7 @@ fn closing_sidecars(
     let program = directory.path().join("closing");
     std::fs::write(&program, script).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let files: Files = vec![(ECHO, r#"{"executable":"closing","protocol":2}"#.to_string())];
+    let files: Files = vec![(ECHO, r#"{"executable":"closing","protocol":1}"#.to_string())];
     let sidecars = std::sync::Arc::new(create(&files, directory.path()).unwrap());
     let (snapshot, snapshots) = channel();
     let observed = std::sync::Arc::downgrade(&sidecars);
@@ -1368,7 +1353,7 @@ fn declaration_replaces_a_sidecar_whose_folder_changed() {
         std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
         directory
     };
-    let files: Files = vec![(ECHO, r#"{"executable":"answer","protocol":2}"#.to_string())];
+    let files: Files = vec![(ECHO, r#"{"executable":"answer","protocol":1}"#.to_string())];
     let (first, second) = (folder("first"), folder("second"));
     let sidecars = create(&files, &first).unwrap();
     let (window, messages, failures) = failing_owner("a", "/projects/replace");
