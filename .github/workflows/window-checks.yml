@@ -55,15 +55,6 @@ jobs:
         with:
           repository: soksak-app/sidecar-vt
           path: sidecars/vt
-      - uses: actions/checkout@v4
-        with:
-          repository: soksak-app/sidecar-app
-          path: sidecars/app
-      # The application gate and the connector check start the test application of the embed kit.
-      - uses: actions/checkout@v4
-        with:
-          repository: soksak-app/kit-embed
-          path: kits/embed
       - uses: actions/setup-node@v4
         with:
           node-version-file: core/.node-version
@@ -77,10 +68,6 @@ jobs:
       - name: Build both applications
         working-directory: core
         run: make prepare wailsv3-build tauriv2-build
-      - name: Build the test application of the embed kit
-        run: |
-          cargo build --release --manifest-path kits/embed/Cargo.toml --bin embed-test-app
-          echo "SOKSAK_EMBED_TEST_APP=$GITHUB_WORKSPACE/kits/embed/target/release/embed-test-app" >> "$GITHUB_ENV"
       - name: Prepare the check configurations
         working-directory: core
         run: |

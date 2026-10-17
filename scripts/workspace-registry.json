@@ -2,8 +2,7 @@
   "plugins": ["../plugins/browser", "../plugins/editor", "../plugins/files", "../plugins/hwp", "../plugins/terminal"],
   "sidecars": [
     { "repository": "../sidecars/files", "folder": "." },
-    { "repository": "../sidecars/vt", "folder": "vt-alacritty" },
-    { "repository": "../sidecars/app", "folder": "." }
+    { "repository": "../sidecars/vt", "folder": "vt-alacritty" }
   ],
   "packs": [
     {
