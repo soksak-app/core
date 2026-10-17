@@ -7,6 +7,7 @@
 //
 //   node scripts/measure-object-counts.mjs --sok PATH --config-dir DIR [--repetitions N]
 import { spawn, execFile, execFileSync } from "node:child_process";
+import { connect } from "@soksak/client";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -186,10 +187,12 @@ if (import.meta.main) {
     }
   };
 
+  // core.grid is a status; its fixed cards are the sidebars, which hold no tab of a plugin card.
   const firstCard = async () => {
-    const { cards } = await run(["core.grid", "--window", window]);
-    if (!Array.isArray(cards) || cards.length === 0) throw new Error("core.grid reports no card");
-    return cards[0].id;
+    const grid = await run(["status", "core.grid", "--window", window]);
+    const card = Array.isArray(grid?.cards) ? grid.cards.find((entry) => !entry.fixed) : undefined;
+    if (!card) throw new Error(`core.grid reports no card that is not fixed: ${JSON.stringify(grid?.cards?.map((entry) => entry.id))}`);
+    return card.id;
   };
 
   const projectRoot = mkdtempSync(join(tmpdir(), "object-counts-project-"));
@@ -210,8 +213,15 @@ if (import.meta.main) {
       await run(["core.card.close", "--window", window, "--card", split.card]);
     },
     "plugins.apply": async () => {
+      const before = (await run(["status", "host.window", "--window", window])).pageProcess;
       const { reloaded } = await run(["core.plugins.apply", "--window", window]);
       if (reloaded !== true) throw new Error("core.plugins.apply kept a modified tab, so the page did not reload");
+      // The reply comes before the reload, and a reload opens the main page in a new page process (docs/spec/native-host.md), so the
+      // next operation waits until the window reports a page process other than the one before and its page ready.
+      await waitFor(() => {
+        const ready = runSync(["windows"]).some((entry) => entry.window === window && entry.ready);
+        return ready && runSync(["status", "host.window", "--window", window]).pageProcess !== before;
+      });
     },
     "project.window": async () => {
       const known = new Set(windows.map((entry) => entry.window));
@@ -225,9 +235,11 @@ if (import.meta.main) {
     },
   };
 
+  const client = await connect({ configDir });
   try {
     await measure({
-      objects: () => step("diagnostics.objects", () => run(["diagnostics.objects", "--window", window])),
+      // diagnostics.objects is a method of the local endpoint of a diagnostic build, not a declared command, so the client calls it.
+      objects: () => step("diagnostics.objects", () => client.request("diagnostics.objects", { window })),
       status: () => step("host.window", () => run(["status", "host.window", "--window", window])),
       footprint: (pid) => {
         const text = execFileSync("footprint", ["-p", String(pid), "-f", "bytes"], { encoding: "utf8" });
@@ -249,6 +261,7 @@ if (import.meta.main) {
       log: (entry) => console.log(JSON.stringify(entry)),
     });
   } finally {
+    client.close();
     for (const child of watches) child.kill();
     rmSync(projectRoot, { recursive: true, force: true });
   }

@@ -6,7 +6,11 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    dependencies:
+      '@soksak/client':
+        specifier: workspace:*
+        version: link:packages/client
 
   apps/browser:
     dependencies:
