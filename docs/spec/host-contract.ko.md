@@ -692,6 +692,7 @@ fn invalid_json_closes_connection() {
 | `log.native.platform-takes-the-policy` | 플랫폼은 정책(class마다 level 하나 또는 -1)을 native 라이브러리에 주고, 열거 밖의 level은 거부한다. | both |
 | `log.policy.file-names-every-class-and-nothing-else` | 모든 class를 한 번씩 여섯 값 중 하나로 이름 붙인 정책 파일은 적용한다. JSON이 아닌 글, `schema`와 `classes` 외의 항목, 다른 schema, 빠졌거나 모르는 class, 여섯 밖의 값은 파일 이름과 발견한 것을 담은 오류로 거부한다. | both |
 | `log.policy.file-is-watched` | `log-policy.json`의 생성, 쓰기, 교체, 삭제는 타이머 없이 파일 시스템 event로 정책을 적용하고, 파일을 그대로 두는 알림은 아무것도 바꾸지 않으며, 규칙을 어긴 파일은 장소 `log policy`의 오류 기록이고 적용 중인 정책은 그대로 남는다. | both |
+| `log.policy.default-stores-errors` | 정책 파일이 없는 writer는 모든 class의 `error` event를 저장하고 모든 class의 `warn`, `info`, `debug`, `trace` event를 거부하며, 기본 정책은 `packages/log-contract/fixtures/policy/cases.json`의 `default`와 같다. | both |
 | `log.policy.change-is-an-event` | writer의 첫 정책과 이후의 각 변경은 `source`와 `classes`를 가진 `log.policy` event 하나이며, 같은 정책이 다시 오면 아무것도 저장하지 않는다. | both |
 | `log.policy.gate-counts-what-it-did-not-build` | 닫힌 gate는 아무것도 저장하지 않고, writer는 거부한 event의 정확한 수를 class와 level별로 `log.gated`로 보고한다. | both |
 | `log.policy.gate-passes-the-events-of-the-writer-itself` | `log.open`, `log.rotated`, `log.dropped`, `log.policy`, `log.gated`, `log.pruned`는 class `lifecycle`을 끈 정책을 지난다. | both |

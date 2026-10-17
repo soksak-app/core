@@ -1025,6 +1025,7 @@
   - [~] F197.3 — P1: 두 host와 두 `sok` build가 정책 파일 없이 새 기본 정책을 적용한다. Red와 Green.
   - [o] F197.4 — P1: native event ring이 첫 정책 전에 `error`만 저장한다. Red와 Green.
   - [~] F197.5 — P1: files, shell, vt sidecar가 새 기본 정책을 적용한다. 각각 자기 저장소 체크리스트에서.
+  - [ ] F197.6 — P1: `sok`이 모든 process처럼 시작할 때와 실행하는 동안 `<config-dir>/log-policy.json`을 적용한다: 도구 writer에 정책 파일이 없어 기본 정책만 저장하고 어떤 검사도 그것을 넓힐 수 없다.
 - [~] F196 — P1: 애플리케이션 메모리: 3일 사용 뒤 workbench page가 242 MB(Wails), 291 MB(Tauri), host가 각각 약 154 MB였고, 브라우저 탭의 문서 web view가 1.31 GB였는데, 애플리케이션의 어떤 기록도 그것을 가리키지 못한다.
   - [o] F196.1 — P1: 창 상태가 `host.window`의 `documents`에 각 문서 web view의 WebContent process를 보고하므로, 측정이 브라우저 탭의 메모리를 그 surface에 연결한다.
     - [ ] F196.1.1 — P2: performance trace의 메모리 표본이 host, page process, 모든 문서 process를 그 window, surface와 함께 잰다.
