@@ -4,6 +4,8 @@
 
 use serde_json::{Value, json};
 
+use crate::endpoint::Failure;
+
 /// The objects that the host process keeps for one window. regions are the image regions and documents are the document
 /// regions (docs/spec/native-surfaces.md#regions). sidecar_sessions are the sessions of the sidecars that the surfaces of
 /// the window use. pending_replies are the requests of the window that wait for a reply: the sidecar requests with
@@ -53,3 +55,64 @@ pub struct SidecarSession {
     pub sidecar: String,
     pub surface: String,
 }
+
+/// The counts of the document region `document` of `surface`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentObjects {
+    pub surface: String,
+    pub document: String,
+    pub counts: PageObjects,
+}
+
+/// The object counts of one window that diagnostics.objects replies.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ObjectCounts {
+    pub host: HostObjects,
+    pub page: PageObjects,
+    pub documents: Vec<DocumentObjects>,
+    pub sessions: Vec<SidecarSession>,
+}
+
+/// The diagnostic backend of diagnostics.objects: it counts the objects of an existing window. The application host
+/// implements it, and tests of the method give a backend with fixed counts.
+pub trait ObjectCounter {
+    fn object_counts(&self, window: &str) -> Result<ObjectCounts, Failure>;
+}
+
+/// Returns the reply of diagnostics.objects for window: the counts that counter counts with the names of the reply, with
+/// the documents ordered by surface and document.
+pub fn objects_reply(counter: &dyn ObjectCounter, window: &str) -> Result<Value, Failure> {
+    let mut counts = counter.object_counts(window)?;
+    counts
+        .documents
+        .sort_by(|a, b| (&a.surface, &a.document).cmp(&(&b.surface, &b.document)));
+    let documents: Vec<Value> = counts
+        .documents
+        .iter()
+        .map(|document| {
+            json!({
+                "surface": document.surface,
+                "document": document.document,
+                "elements": document.counts.elements,
+                "documents": document.counts.documents,
+            })
+        })
+        .collect();
+    Ok(json!({
+        "host": counts.host.payload(),
+        "page": counts.page.payload(),
+        "documents": documents,
+        "sessions": counts.sessions,
+    }))
+}
+
+impl crate::surfaces::Views {
+    /// Returns the number of surfaces of the window, which is the number of their native views.
+    pub(crate) fn count(&self) -> Result<usize, String> {
+        Ok(self.0.lock().map_err(|e| e.to_string())?.len())
+    }
+}
+
+#[cfg(test)]
+#[path = "object_counts_test.rs"]
+mod tests;

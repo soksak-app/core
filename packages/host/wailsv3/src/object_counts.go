@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"runtime/metrics"
 	"runtime/pprof"
+	"slices"
 	"sort"
 	"time"
 	"unsafe"
@@ -41,6 +42,56 @@ type PageObjects struct {
 // Payload returns the counts with the names of the reply.
 func (c PageObjects) Payload() map[string]int64 {
 	return map[string]int64{"elements": c.Elements, "documents": c.Documents}
+}
+
+// DocumentObjects are the counts of the document region Key.
+type DocumentObjects struct {
+	Key    DocumentKey
+	Counts PageObjects
+}
+
+// ObjectCounts are the object counts of one window that diagnostics.objects replies.
+type ObjectCounts struct {
+	Host      HostObjects
+	Page      PageObjects
+	Documents []DocumentObjects
+	Sessions  []SidecarSession
+}
+
+// ObjectCounter is the diagnostic backend of diagnostics.objects: it counts the objects of an existing window. The application host
+// implements it, and tests of the method give a backend with fixed counts.
+type ObjectCounter interface {
+	ObjectCounts(window string) (ObjectCounts, error)
+}
+
+// Payload returns the counts with the names of the reply, with the documents ordered by surface and document.
+func (c ObjectCounts) Payload() map[string]any {
+	documents := slices.Clone(c.Documents)
+	sort.Slice(documents, func(i, j int) bool {
+		a, b := documents[i].Key, documents[j].Key
+		if a.Surface != b.Surface {
+			return a.Surface < b.Surface
+		}
+		return a.Name < b.Name
+	})
+	list := make([]map[string]any, 0, len(documents))
+	for _, document := range documents {
+		list = append(list, map[string]any{
+			"surface": document.Key.Surface, "document": document.Key.Name,
+			"elements": document.Counts.Elements, "documents": document.Counts.Documents,
+		})
+	}
+	sessions := c.Sessions
+	if sessions == nil {
+		sessions = []SidecarSession{}
+	}
+	return map[string]any{"host": c.Host.Payload(), "page": c.Page.Payload(), "documents": list, "sessions": sessions}
+}
+
+// surfaceCount returns the number of surfaces of the window, which is the number of their native views. It runs on the UI thread, which
+// changes the views.
+func (s *Surfaces) surfaceCount() int {
+	return len(s.views)
 }
 
 // runtimeMetrics are the figures of the Go runtime that the reply field `runtime` of diagnostics.objects holds, by reply name. The Go runtime

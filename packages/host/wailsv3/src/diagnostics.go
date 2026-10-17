@@ -18,7 +18,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"sort"
 	"sync"
 	"time"
 	"unsafe"
@@ -795,28 +794,48 @@ type pageAnswer struct {
 	err    error
 }
 
-// documentObjects is the count of one document region.
-type documentObjects struct {
-	key    DocumentKey
-	counts PageObjects
-}
-
-// diagnosticObjects returns the object counts of the window (docs/spec/endpoint.md): the registries of the host, the elements and documents of the
-// main page, and the elements and documents of each created document region. The document handles are read and counted on the UI thread, which
-// closes a document region, so no handle is used after its region is closed.
+// diagnosticObjects returns the object counts of the window (docs/spec/endpoint.md) that the diagnostic backend counts, and the figures of the
+// Go runtime.
 func diagnosticObjects(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
-	h, s, err := diagnosticHost(e, params)
+	window, err := e.window(params)
 	if err != nil {
 		return nil, err
 	}
+	counter, ok := e.backend.(ObjectCounter)
+	if !ok {
+		return nil, errors.New("diagnostics.objects needs a backend that counts objects")
+	}
+	counts, err := counter.ObjectCounts(window)
+	if err != nil {
+		return nil, err
+	}
+	figures, err := RuntimeMemory()
+	if err != nil {
+		return nil, err
+	}
+	payload := counts.Payload()
+	payload["runtime"] = figures
+	return payload, nil
+}
+
+// ObjectCounts counts the objects of the window: the registries of the host, the elements and documents of the main page, and the elements and
+// documents of each created document region. The document handles are read and counted on the UI thread, which closes a document region, so
+// no handle is used after its region is closed.
+func (b hostBackend) ObjectCounts(window string) (ObjectCounts, error) {
+	h := b.h
+	s := h.byName(window)
+	if s == nil {
+		return ObjectCounts{}, errMissingWindow(window)
+	}
 	counter, ok := system.(platform.PageObjectCounter)
 	if !ok {
-		return nil, errors.New("page object counts are not implemented on this platform")
+		return ObjectCounts{}, errors.New("page object counts are not implemented on this platform")
 	}
 	var views, pages int
 	var answers chan pageAnswer
+	var err error
 	application.InvokeSync(func() {
-		views = len(s.views)
+		views = s.surfaceCount()
 		var main unsafe.Pointer
 		main, err = system.MainWebview(s.window.NativeWindow())
 		if err != nil {
@@ -835,10 +854,9 @@ func diagnosticObjects(e *Endpoint, _ *endpointConn, params json.RawMessage) (an
 		pages = 1 + len(attached)
 	})
 	if err != nil {
-		return nil, err
+		return ObjectCounts{}, err
 	}
-	var page PageObjects
-	var documents []documentObjects
+	var counts ObjectCounts
 	var failure error
 	timeout := time.After(pageTimeout)
 	for i := 0; i < pages; i++ {
@@ -847,45 +865,27 @@ func diagnosticObjects(e *Endpoint, _ *endpointConn, params json.RawMessage) (an
 			if answer.err != nil {
 				failure = errors.Join(failure, answer.err)
 			} else if answer.main {
-				page = answer.counts
+				counts.Page = answer.counts
 			} else {
-				documents = append(documents, documentObjects{key: answer.key, counts: answer.counts})
+				counts.Documents = append(counts.Documents, DocumentObjects{Key: answer.key, Counts: answer.counts})
 			}
 		case <-timeout:
-			return nil, rpcError(codeTimeout, "the page did not answer the object counts within %s", pageTimeout)
+			return ObjectCounts{}, rpcError(codeTimeout, "the page did not answer the object counts within %s", pageTimeout)
 		}
 	}
 	if failure != nil {
-		return nil, failure
+		return ObjectCounts{}, failure
 	}
-	sort.Slice(documents, func(i, j int) bool {
-		a, b := documents[i].key, documents[j].key
-		if a.Surface != b.Surface {
-			return a.Surface < b.Surface
-		}
-		return a.Name < b.Name
-	})
-	list := make([]map[string]any, 0, len(documents))
-	for _, document := range documents {
-		list = append(list, map[string]any{
-			"surface": document.key.Surface, "document": document.key.Name,
-			"elements": document.counts.Elements, "documents": document.counts.Documents,
-		})
-	}
-	sessions := s.sidecars.Sessions(s)
-	objects := HostObjects{
+	counts.Sessions = s.sidecars.Sessions(s)
+	counts.Host = HostObjects{
 		Surfaces:         int64(views),
 		Regions:          int64(s.images.Count()),
 		Documents:        int64(s.documents.Count()),
-		SidecarSessions:  int64(len(sessions)),
+		SidecarSessions:  int64(len(counts.Sessions)),
 		PendingReplies:   int64(s.sidecars.PendingCount(s) + h.relay.Pending(func(target relayTarget) bool { return target.owner == s })),
-		EventSubscribers: int64(e.SubscriberCount(s.name)),
+		EventSubscribers: int64(h.endpoint.SubscriberCount(s.name)),
 	}
-	figures, err := RuntimeMemory()
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{"host": objects.Payload(), "page": page.Payload(), "documents": list, "sessions": sessions, "runtime": figures}, nil
+	return counts, nil
 }
 
 // diagnosticHeapProfile writes the heap profile of the Go runtime to the diagnostic folder of the configuration directory and replies its path.

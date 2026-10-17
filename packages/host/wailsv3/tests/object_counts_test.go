@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -242,5 +243,69 @@ func TestWriteHeapProfileWritesAProfileInTheFolder(t *testing.T) {
 	// A heap profile is a gzip-compressed protocol buffer.
 	if len(data) < 2 || data[0] != 0x1f || data[1] != 0x8b {
 		t.Fatalf("the profile %s does not start with the gzip header: % x", path, data[:min(len(data), 4)])
+	}
+}
+
+// objectsBackend is the diagnostic backend of diagnostics.objects: it answers fixed counts and records the window of each request.
+type objectsBackend struct {
+	*fakeBackend
+	mu      sync.Mutex
+	windows []string
+}
+
+func (b *objectsBackend) ObjectCounts(window string) (host.ObjectCounts, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.windows = append(b.windows, window)
+	return host.ObjectCounts{
+		Host: host.HostObjects{Surfaces: 2, Regions: 1, Documents: 2, SidecarSessions: 1, PendingReplies: 0, EventSubscribers: 3},
+		Page: host.PageObjects{Elements: 40, Documents: 1},
+		Documents: []host.DocumentObjects{
+			{Key: host.DocumentKey{Surface: "tab-2", Name: "page"}, Counts: host.PageObjects{Elements: 5, Documents: 2}},
+			{Key: host.DocumentKey{Surface: "tab-1", Name: "page"}, Counts: host.PageObjects{Elements: 3, Documents: 1}},
+		},
+		Sessions: []host.SidecarSession{{Sidecar: "@scope/sidecar-a", Surface: "tab-1"}},
+	}, nil
+}
+
+// diagnostics.objects requires a window, answers an unknown window with the missing window error without asking the backend, and replies the
+// counts of the backend for the named window with the documents ordered by surface and document.
+// contract: diagnostics.objects.reply-and-params
+func TestDiagnosticsObjectsReplyAndParams(t *testing.T) {
+	backend := &objectsBackend{fakeBackend: newFakeBackend()}
+	_, address, _ := serve(t, backend)
+	conn := dial(t, address)
+	if reply := call(t, conn, 1, "diagnostics.objects", map[string]any{}); reply.Error == nil || reply.Error.Code != -32602 {
+		t.Fatalf("a request without a window replied %+v, want the invalid params error", reply.Error)
+	}
+	if reply := call(t, conn, 2, "diagnostics.objects", map[string]any{"window": "other"}); reply.Error == nil || reply.Error.Code != 1003 {
+		t.Fatalf("an unknown window replied %+v, want the missing window error", reply.Error)
+	}
+	reply := call(t, conn, 3, "diagnostics.objects", map[string]any{"window": "main"})
+	if reply.Error != nil {
+		t.Fatalf("diagnostics.objects failed: %+v", reply.Error)
+	}
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal(reply.Result, &got); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"host":      `{"documents":2,"eventSubscribers":3,"pendingReplies":0,"regions":1,"sidecarSessions":1,"surfaces":2}`,
+		"page":      `{"documents":1,"elements":40}`,
+		"documents": `[{"document":"page","documents":1,"elements":3,"surface":"tab-1"},{"document":"page","documents":2,"elements":5,"surface":"tab-2"}]`,
+		"sessions":  `[{"sidecar":"@scope/sidecar-a","surface":"tab-1"}]`,
+	}
+	for field, value := range want {
+		if string(got[field]) != value {
+			t.Fatalf("%s is %s, want %s", field, got[field], value)
+		}
+	}
+	if _, ok := got["runtime"]; !ok || len(got) != len(want)+1 {
+		t.Fatalf("the reply has the fields %v, want host, page, documents, sessions and runtime", reflect.ValueOf(got).MapKeys())
+	}
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	if !slices.Equal(backend.windows, []string{"main"}) {
+		t.Fatalf("the backend counted the windows %v, want [main]", backend.windows)
 	}
 }

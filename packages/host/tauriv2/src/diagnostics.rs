@@ -21,7 +21,9 @@ use tauri::{Emitter, EventTarget, Manager, Window};
 use crate::application_log::log_error;
 use crate::endpoint::Failure;
 use crate::exposure::{self, Exposure, Host, TIMEOUT, on_main};
-use crate::object_counts::{HostObjects, PageObjects};
+use crate::object_counts::{
+    DocumentObjects, HostObjects, ObjectCounter, ObjectCounts, PageObjects,
+};
 use crate::platform;
 use crate::recording::{Capture, Recording, Target, layout_trace};
 use crate::workspace::Workspace;
@@ -143,7 +145,7 @@ pub(crate) fn call(
         "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.page.collect" => page_collect(window),
         "diagnostics.native.objects" => native_objects(window, &params),
-        "diagnostics.objects" => objects(window),
+        "diagnostics.objects" => crate::object_counts::objects_reply(host, window.label()),
         "diagnostics.process.exit" => process_exit(window, &params),
         "diagnostics.navigation.delay" => {
             let ms = params
@@ -178,10 +180,18 @@ fn page_collect(window: &Window) -> Result<Value, Failure> {
     Ok(Value::Null)
 }
 
-/// Returns the object counts of the window (docs/spec/endpoint.md): the registries of the host, the elements and documents
-/// of the main page, and the elements and documents of each created document region. The handles are read and counted on
-/// the main thread, which closes a document region, so no handle is used after its region is closed.
-fn objects(window: &Window) -> Result<Value, Failure> {
+impl ObjectCounter for Host {
+    /// Counts the objects of the window (docs/spec/endpoint.md): the registries of the host, the elements and documents
+    /// of the main page, and the elements and documents of each created document region. The handles are read and
+    /// counted on the main thread, which closes a document region, so no handle is used after its region is closed.
+    fn object_counts(&self, window: &str) -> Result<ObjectCounts, Failure> {
+        let window = crate::windows::find(&self.0, window)
+            .ok_or_else(|| crate::endpoint::missing_window(window))?;
+        objects(&window)
+    }
+}
+
+fn objects(window: &Window) -> Result<ObjectCounts, Failure> {
     let target = window.clone();
     let (tx, rx) = std::sync::mpsc::channel();
     let pages = on_main(window, move || {
@@ -243,20 +253,8 @@ fn objects(window: &Window) -> Result<Value, Failure> {
     if !failures.is_empty() {
         return Err(internal(failures.join("; ")));
     }
-    documents.sort_by(|(a, _), (b, _)| a.cmp(b));
-    let listed: Vec<Value> = documents
-        .iter()
-        .map(|((surface, document), counts)| {
-            json!({
-                "surface": surface,
-                "document": document,
-                "elements": counts.elements,
-                "documents": counts.documents,
-            })
-        })
-        .collect();
     let data = crate::windows::window_data(window).map_err(internal)?;
-    let surfaces = data.views.0.lock().map_err(internal)?.len();
+    let surfaces = data.views.count().map_err(internal)?;
     let sidecars = window.state::<crate::sidecars::WindowSidecars>();
     let exposure = window.state::<Exposure>();
     let relay = &exposure.relay;
@@ -269,12 +267,19 @@ fn objects(window: &Window) -> Result<Value, Failure> {
         pending_replies: sidecars.pending_count(window) + relay.pending_count(window.label()),
         event_subscribers: crate::exposure::subscribers(window),
     };
-    Ok(json!({
-        "host": host.payload(),
-        "page": page.payload(),
-        "documents": listed,
-        "sessions": sessions,
-    }))
+    Ok(ObjectCounts {
+        host,
+        page,
+        documents: documents
+            .into_iter()
+            .map(|((surface, document), counts)| DocumentObjects {
+                surface,
+                document,
+                counts,
+            })
+            .collect(),
+        sessions,
+    })
 }
 
 /// Returns the number of live library objects that are attached to windows and webviews after the application handled
