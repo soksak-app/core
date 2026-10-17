@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.17: `make app-usage CONFIG_DIR=<dir>`가 실행 중인 애플리케이션의 각 process(host, page, document, WebKit GPU와 network, sidecar)의 footprint와 CPU 점유율, 합계를 보고한다. Red: script가 없을 때 `ERR_MODULE_NOT_FOUND`로, real path나 겹 slash로 실행된 data 폴더에서 `no host process has --config-dir`로 시험이 실패했다; Green: 18개 중 18개 통과.
 - F196.9.2: `make -C native/darwin test-pressure`가 page가 약 375 MB를 놓고 시스템이 warn과 critical pressure를 올린 뒤 document region과 plain web view가 돌려주는 메모리를 잰다; 둘 다 약 24 MB(6%)를 돌려주고, 시험은 region이 plain web view의 0.8 이상을 돌려주기를 요구한다. 시스템 전체에 pressure를 주므로 `make test`에 들지 않고, 1분 load가 20을 넘으면 판정을 거부한다.
 - F196.16.1: 두 host가 native view를 닫는 main-thread 단계에서 surface 등록을 지우므로, 닫는 동안의 `host.window` 읽기는 등록과 함께 view를 찾거나 둘 다 찾지 않는다. Red: Tauri `window_close_test`(`left: None`), Go `TestSurfaceNameIsForgottenInTheStepThatClosesItsNativeView`(got 1, want 0, 이전 순서의 close 단계로 실행); Green: 둘 다 통과.
 - F196.16: 두 host가 native view를 만드는 같은 main-thread 단계에서 surface를 등록하므로, surface를 만드는 동안의 `host.window` 읽기가 더 이상 `unregistered native surface`로 실패하지 않고(Tauri) 동기화되지 않은 map으로 이름 없는 view를 읽지 않는다(Wails). Red: `window_close_test`(`left: None`)와 `TestSurfaceIsNamedWhenItsNativeViewIsCreated`(named ""); Green: host contract case `exposure.host-window.reads-during-surface-creation`과 함께 둘 다 통과.
