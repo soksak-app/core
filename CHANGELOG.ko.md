@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.8: 두 host가 `diagnostics.objects`에 창을 위해 host가 가진 객체와 page와 document region의 요소 수, 문서 수로 답한다. native 함수 `sp_webview_count_objects`가 page world나 document world에서 그것을 센다. Red: 수 없이는 시험이 build되지 않았다(`docs.Count undefined`, `unresolved import soksak_host_tauriv2::object_counts`, `undeclared function sp_webview_count_objects`). Green: `page_objects_test`가 3번 중 3번 통과하고, diagnostics tag의 Go 시험 422개와 Rust 객체 수 시험 6개가 모두 통과한다.
 - F197.5: files, shell, vt sidecar가 첫 정책 전과 정책 파일이 없는 동안 오류만 저장하는 기본 정책을 적용한다(files S23, shell S8, vt S64). 각각 core의 golden case를 복사해 가진다. 이 수정은 그 다음 release로 사람에게 닿는다.
 - F196.1.1: performance trace의 표본이 모든 창의 page process와 모든 문서 web view의 process에 대해 창과 surface와 함께 `host.sampler.memory`를 저장하고, 모든 읽기가 `rss_kb` 옆에 process의 physical footprint인 `footprint_kb`를 담는다. Red: `performance_test.go:308: no page sample names window-a`와 Rust 시험 `a page sample names window-a`. Green: 두 host의 performance 시험이 event, platform, parity 검사와 함께 통과한다.
 - F197.2: page의 log gate가 정책을 받기 전에는 `error`만 저장하고 `diagnostics.log`가 이름하지 않은 class는 `error`를 따른다. `diagnostics.performance`는 기본 false다. 설정 창의 진단 묶음이 `core.settings.debug {on}`을 실행하는 switch 디버그를 보인다. Red: `log-gate.test.mjs`가 `lifecycle warn`(`true !== false`)으로, `settings.test.mjs`가 trace 기본의 `true !== false`와 `debugOn is not a function`으로, `settings-debug-switch.test.mjs`가 `the 진단 row draws no 디버그 switch`로 실패했다. Green: workbench 시험 483개가 모두 통과하고 exposure 검사가 통과한다.

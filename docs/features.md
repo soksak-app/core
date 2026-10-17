@@ -1036,7 +1036,8 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [ ] F196.5 — P1: Both hosts and plugin-api provide the stream subscription with its subscriber count, acknowledgement and removal when the subscribing page unloads or its process ends.
   - [ ] F196.6 — P1: The core release that ships the streams.
   - [ ] F196.7 — P1: The release of the browser plugin whose panels and statuses use the streams and declare the core release of F196.6.
-  - [~] F196.8 — P1: A diagnostic command of both hosts returns the object counts of the host, the page and each document.
+  - [o] F196.8 — P1: A diagnostic command of both hosts returns the object counts of the host, the page and each document.
+    - [ ] F196.8.1 — P2: A unit test of the surface count of `diagnostics.objects` and a wire test of the command (an unknown window, the reply shape, the params) in both hosts, through a declared seam of a surface and of the diagnostic backend, which the tests of F196.8 do not have.
   - [ ] F196.9 — P2: Each document web view shares processes and data stores by site, throttles while hidden, responds to memory pressure and keeps a bounded cache; each behavior is adopted with a measurement of the document region before and after, and a benchmark target reports the cost of each site.
   - [ ] F196.10 — P2: A benchmark target repeats a fixed set of operations N times and reports the object counts per repetition; each count that grows with N is an item of its own.
   - [ ] F196.11 — P2: The share of the performance trace in the memory of the host, measured with the trace on and off.
