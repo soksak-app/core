@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.9.1: `document_throttle_test`가 보이는 document region, 숨긴 영역, 가린 창의 영역을 잰다: 보일 때 초당 timer 125.3번과 animation frame 59.8번, 숨기거나 가렸을 때 1.0번과 0.0번이며 문서 visibility는 hidden이다. document view는 WebKit의 occlusion 감지를 유지하고, window facts와 surface geometry는 main web view와 붙인 surface web view에서만 그것을 끈다. 바꿀 것이 없으며, 검사는 native suite에서 돈다.
 - F197.4-1: `observe_test`, `activity_observers_test`, `input_inject_test`, `webview_input_receipts_test`, `process_exit_test`, `quit_request_test`가 `error` 아래 기록을 읽기 전에 모든 수준을 저장하는 정책을 둔다. Red: 각각 그 기록에서 실패했다(예: `observe_test`의 `the registration is one event at the level info`와 index 오류). Green: 각각 2번 중 2번 통과하고, native 기본 suite가 58개 모두 통과한다.
 - F197.6: 두 `sok` build가 실행 시작에 `<config-dir>/log-policy.json`을 한 번 적용하고, 거부된 파일은 장소 `log policy`의 `sok.record.error`로 저장하며 기본 정책을 유지한다. `docs/spec/events.json`이 `sok.record.<level>`을 선언한다. Red: Go와 Rust에서 `the tool stored no sok.command under a policy file that stores every level: [log.open log.gated]`, Rust에서 `no sok.record.error of the place log policy`. Green: 두 build의 정책 시험이 event catalog 검사와 함께 통과한다.
 - F196.2: `make -C native/darwin benchmark-document`가 document region에서 요소 2000개의 트리를 바꾸는 page를 열고, 변경 0, 1000, 5000, 10000번마다 그 WebContent process의 physical footprint와 상태 보고 수, 바이트를 출력한다. F196.4 전: 변경 10000번에 보고 10006번, 259175913 바이트(변경마다 25910 바이트와 보고 1번), footprint 23904~41792 KB. F196.4 뒤 구독자 없이: 변경 10000번에 보고 6번, 1352 바이트, footprint 16192~20784 KB. footprint는 실행마다 그 기울기보다 크게 달라지므로 단계마다 표본 하나로는 증가량을 얻지 못한다.
