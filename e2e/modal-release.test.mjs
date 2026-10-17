@@ -26,6 +26,14 @@ for (const app of Object.values(APPS)) {
       if (await s.get("core.modal")) await s.run("core.settings.close");
     });
 
+    // The first child web view of a window registers the input of the main web view too (nativeWebviewCreate of the Wails host,
+    // watch_presses of the Tauri host), a registration that lasts as long as the window. One modal is opened and closed before the
+    // baseline, so the baseline holds that registration and the cycles measure only what each modal leaves.
+    await s.run("core.settings.open");
+    await s.until("core.modal", (state) => state?.id === "settings" && state.document !== null && state.document.loaded,
+      "the first settings modal did not render");
+    await s.run("core.settings.close");
+    await s.until("core.modal", (state) => state === null, "the first settings modal did not report closed");
     const before = await counts(s);
     const measured = [];
     for (let cycle = 1; cycle <= CYCLES; cycle++) {

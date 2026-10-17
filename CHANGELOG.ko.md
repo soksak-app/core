@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.10.2-2, F196.10.2-3: `e2e/modal-release.test.mjs`가 settings modal을 네 번 열고 닫으며 창의 native 객체 수가 돌아오기를 요구한다. 창의 첫 자식 web view가 창이 사는 동안 main web view의 입력도 등록하므로(모든 수준 정책으로 돈 실행에서 기록 `native.webview.input`이 그것을 이름했다), 검사는 기준값 전에 modal 하나를 열고 닫는다. 두 host에서 모든 modal이 입력을 등록, 해제, dealloc하며 새는 modal은 없다. Green: Wails 애플리케이션을 새로 띄운 뒤 두 host에서 다섯 번 통과한다. `native.webview.input`이 각 등록을 web view, 단계, 수와 함께 기록한다(Red: `one registration cycle emits three input records (0)`).
 - F196.11: `make trace-share`가 switch 디버그를 켰다가 끄고 조작을 5번 반복한 뒤 host process를 쟀다: Wails host 105 MB와 94 MB, Tauri host 74 MB와 70 MB이므로 진단은 Wails host에서 약 11 MB, Tauri host에서 4 MB를 차지한다. `make object-counts`와 `make trace-share`를 예제 검증 문서에 적었다.
 - F196.10: `make object-counts`가 진단을 켠 두 host의 디버그 애플리케이션에 정해진 조작을 20번 반복했다. Wails host에서는 `diagnostics.objects`의 모든 수가 기준값에 머물렀다(surface 3, region 1, document 1, sidecar session 2, 대기 응답 0, 구독자 2, page 요소 256). Tauri host에서는 모든 수가 첫 반복 뒤 일정했고, sidecar session이 기준값보다 하나 많았다(F196.10.1). reload 직후 읽은 page process footprint는 195~244 MB였고 30초 뒤 120 MB로 가라앉았으므로, reload 직후의 읽기는 불러오는 동안의 최고치다.
 - F196.10 (target): `make object-counts`가 실행 중인 애플리케이션에 `scripts/measure-object-counts.mjs`를 돌려, 연속된 두 읽기가 같아진 뒤 `diagnostics.objects`의 수를 잡고, terminal 탭과 browser 탭 열고 닫기, 카드 분할과 닫기, plugin 적용, project 창 열고 닫기를 N번 반복하며, 반복마다 수와 page, document process의 footprint를 각 수의 `grows`와 함께 기록한다. Red: script가 생기기 전 시험이 `Cannot find module`로 실패했다. Green: 그 시험 7개가 통과한다. exposure 명세의 `host.window` 행이 F196.1이 더한 각 문서의 `process`를 이름한다.
