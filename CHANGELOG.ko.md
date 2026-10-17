@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F196.10.4: Tauri host의 page reload가 persistent sidecar에 보낸 적이 있는 surface에만 reconnect하므로, browser surface가 더 이상 terminal service의 session이 아니다; `diagnostics.objects`가 session을 나열하고 두 host가 같은 session을 나열한다. Red: `left: ["@scope/sidecar-persistent"], right: []`; Green.
+- F196.8.1: 두 host가 object counter backend로 `diagnostics.objects`의 surface count와 wire를 시험한다(없는 window, 모르는 window, 응답 형태).
+- F196.16.1: Tauri surface 등록 시험을 Wails `src/surfaces_test.go`의 짝인 `src/surfaces_test.rs`로 옮겨 `make hosts-check`가 통과한다.
 - F196.13: `e2e/idle-tab-memory.test.mjs`가 빈 local page의 browser tab 비용(document process와 main web view 증가, 안정된 `host.sampler.memory` 값)이 50 MB 이하이기를 요구한다; Wails 18.9 MB, Tauri 19.0 MB를 측정했다.
 - F196.20: `make -C native/darwin benchmark-region-cost LONG=<minutes>`가 같은 page의 plain web view와 document region을 1분마다 읽고 각각의 분당 증가를 출력한다; https://www.google.com/에서 둘 다 5분부터 30분까지 평평했고, 두 check 애플리케이션의 보이는 tab도 처음 10분 뒤 증가가 멈췄다. target은 `URL`이 설정된 경우에만 넘긴다.
 - F196.18 (Rust): Rust log indexer가 Go indexer처럼 추가된 byte 크기의 읽기 buffer를 쓴다. Red: `index_update_allocates_for_the_appended_bytes_only`(`left: 8388608, right: 800`); Green.

@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F196.10.4: a page reload of the Tauri host reconnects a persistent sidecar only for the surfaces that sent to it, so the browser surface is no longer a session of the terminal service; `diagnostics.objects` lists the sessions and both hosts list the same ones. Red: `left: ["@scope/sidecar-persistent"], right: []`; Green.
+- F196.8.1: both hosts test the surface count and the wire of `diagnostics.objects` through an object counter backend (missing window, unknown window, reply shape).
+- F196.16.1: the Tauri surface registration tests move to `src/surfaces_test.rs`, the counterpart of the Wails `src/surfaces_test.go`, so `make hosts-check` passes.
 - F196.13: `e2e/idle-tab-memory.test.mjs` requires a browser tab on a blank local page to cost at most 50 MB (document process plus main web view growth, from settled `host.sampler.memory` readings); it measured 18.9 MB on Wails and 19.0 MB on Tauri.
 - F196.20: `make -C native/darwin benchmark-region-cost LONG=<minutes>` reads a plain web view and a document region on the same page each minute and prints the growth per minute of each; on https://www.google.com/ both stayed flat from minute 5 to 30, and the visible tabs of both check applications stopped growing after their first 10 minutes. The target passes `URL` only when it is set.
 - F196.18 (Rust): the Rust log indexer sizes its read buffer to the appended bytes, as the Go indexer does. Red: `index_update_allocates_for_the_appended_bytes_only` (`left: 8388608, right: 800`); Green.
