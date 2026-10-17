@@ -5,6 +5,7 @@
 #import <sys/wait.h>
 #import "process_exit.h"
 #import "support/records.h"
+#import "event_ring.h"
 
 extern char **environ;
 
@@ -50,6 +51,10 @@ static void runUntilAnswered(SPExited *state) {
 }
 
 int main(void) { @autoreleasepool {
+    // The records that this test reads include events below the level error, which the default policy refuses (docs/spec/logging.md#policy):
+    // the policy that stores every level is set here, and the default policy is tested in event_ring_test.
+    const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(everything), @"the policy stores every level of every class");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
 

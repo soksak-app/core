@@ -4,6 +4,7 @@
 #import <Cocoa/Cocoa.h>
 #import "observe.h"
 #import "support/records.h"
+#import "event_ring.h"
 
 static int failures = 0;
 
@@ -41,6 +42,10 @@ static NSNotificationName const probe = @"ObserveTestProbe";
 @end
 
 int main(void) { @autoreleasepool {
+    // The records that this test reads include events below the level error, which the default policy refuses (docs/spec/logging.md#policy):
+    // the policy that stores every level is set here, and the default policy is tested in event_ring_test.
+    const int8_t allLevels[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(allLevels), @"the policy stores every level of every class");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
