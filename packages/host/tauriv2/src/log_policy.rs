@@ -126,7 +126,7 @@ pub fn start_log_policy(
             // default: a lock that a panicking thread poisoned still holds the last state, which is only compared.
             let mut last = last.lock().unwrap_or_else(PoisonError::into_inner);
             let mut source = "file";
-            let mut policy = LogPolicy::everything();
+            let mut policy = LogPolicy::default();
             let mut failure = String::new();
             match std::fs::read(&path) {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => source = "default",

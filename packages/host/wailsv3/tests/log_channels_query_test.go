@@ -14,6 +14,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
@@ -29,6 +30,7 @@ func writeMixedEvents(t *testing.T) (string, map[host.Level]int) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	counts := map[host.Level]int{}
 	events := []struct {
 		level host.Level
@@ -140,7 +142,7 @@ func TestTheFilterClassMatchesTheClassThatTheWriterStored(t *testing.T) {
 	want := map[string][]string{
 		"call":      {"host.binding.call", "host.trace.mark"},
 		"io":        {"host.sidecar.reply"},
-		"lifecycle": {"host.app.event", "host.crash.found", "host.panic", "log.open", "log.rotated"},
+		"lifecycle": {"host.app.event", "host.crash.found", "host.panic", "log.open", "log.policy", "log.rotated"},
 	}
 	for class, names := range want {
 		found, _ := queryNames(t, config, fmt.Sprintf(`{"channel":"all","class":%q}`, class))

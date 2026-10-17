@@ -15,6 +15,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
 
@@ -200,6 +201,7 @@ func TestTheIndexCoversEachBatchTheWriterWrote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	t.Cleanup(log.Close)
 	results := make(chan indexResult, 256)
 	observe, stop := host.StartLogIndexer(func(_ string, update sok.IndexUpdate, err error) { results <- indexResult{update, err} })

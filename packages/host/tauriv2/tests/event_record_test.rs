@@ -2,6 +2,8 @@
 //! page reports, are events `<layer>.record.<level>` with the fields `where` and `text`. A bounded start buffer holds the
 //! records written before the writer exists and counts the records it refuses.
 
+#[path = "support/records.rs"]
+mod records;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -44,7 +46,7 @@ fn read(path: &Path) -> Vec<Value> {
 
 fn start(directory: &Path, queue_events: usize) -> Arc<EventLog> {
     Arc::new(
-        event_log::start(Options {
+        records::start_every_level(Options {
             directory: directory.to_path_buf(),
             role: "host".into(),
             boot: "b1".into(),
@@ -98,9 +100,9 @@ fn an_error_and_an_observation_are_events_with_where_and_text() {
             "pid 7: gone",
         ),
     ];
-    assert_eq!(events.len(), 1 + want.len(), "{events:?}");
+    assert_eq!(events.len(), 2 + want.len(), "{events:?}");
     for (index, (level, layer, event, place, text)) in want.iter().enumerate() {
-        let got = &events[1 + index];
+        let got = &events[2 + index];
         assert_eq!(got["level"], *level, "{got}");
         assert_eq!(got["layer"], *layer, "{got}");
         assert_eq!(got["event"], *event, "{got}");
@@ -127,10 +129,10 @@ fn records_written_before_the_writer_exists_are_stored_in_order_with_their_own_t
     log.flush(Duration::from_secs(5)).unwrap();
     use_host_event_log(None);
     let events = read(&path);
-    assert_eq!(events.len(), 3, "{events:?}");
-    assert_eq!(events[1]["fields"]["text"], "first");
-    assert_eq!(events[2]["fields"]["text"], "second");
-    for event in &events[1..] {
+    assert_eq!(events.len(), 4, "{events:?}");
+    assert_eq!(events[2]["fields"]["text"], "first");
+    assert_eq!(events[3]["fields"]["text"], "second");
+    for event in &events[2..] {
         let ts = event["ts_us"].as_u64().unwrap();
         assert!(
             (before..=after).contains(&ts),
@@ -191,7 +193,7 @@ fn flush_records_stores_the_records_written_so_far_without_waiting_for_the_batch
     assert_eq!(flush_records(Duration::from_secs(1)), Ok(()));
     let directory = tempfile::tempdir().unwrap();
     let log = Arc::new(
-        event_log::start(Options {
+        records::start_every_level(Options {
             directory: directory.path().to_path_buf(),
             role: "host".into(),
             boot: "b1".into(),
@@ -211,8 +213,8 @@ fn flush_records_stores_the_records_written_so_far_without_waiting_for_the_batch
     flush_records(Duration::from_secs(5)).unwrap();
     let events = read(log.path());
     use_host_event_log(None);
-    assert_eq!(events.len(), 2, "{events:?}");
-    assert_eq!(events[1]["fields"]["text"], "stored before the interval");
+    assert_eq!(events.len(), 3, "{events:?}");
+    assert_eq!(events[2]["fields"]["text"], "stored before the interval");
 }
 
 // contract: performance.trace.host-observation-is-an-event

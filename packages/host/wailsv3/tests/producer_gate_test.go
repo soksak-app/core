@@ -10,6 +10,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 func narrowCalls(t *testing.T, log *host.EventLog, level string) {
@@ -84,6 +85,7 @@ func TestAClosedGateCostsFarLessThanAnOpenOneAndStaysUnderALimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	const rounds = 20000
 	fields := func() map[string]any {
 		return map[string]any{"name": "echo", "args": "[{\"a\":1}]", "micros": 1, "ok": true, "truncated": false}
@@ -149,6 +151,7 @@ func TestTheCountsOfAClosedGateAreReportedEachSecondAndAtAFlush(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	narrowCalls(t, log, "warn")
 	fields := map[string]any{"name": "echo", "args": "[]", "micros": 1, "ok": true, "truncated": false}
 	started := time.Now()

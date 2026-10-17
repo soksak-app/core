@@ -16,6 +16,7 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 func eventLogOptions(directory string) host.EventLogOptions {
@@ -66,6 +67,7 @@ func TestTheFirstLineOfAnEventLogIsLogOpenAndSeqIsConsecutive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	for index := 0; index < 10; index++ {
 		if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index}) {
 			t.Fatalf("event %d was refused", index)
@@ -87,7 +89,7 @@ func TestTheFirstLineOfAnEventLogIsLogOpenAndSeqIsConsecutive(t *testing.T) {
 			t.Fatalf("event %d has seq %v", position, event["seq"])
 		}
 	}
-	if len(events) != 11 || events[5]["fields"].(map[string]any)["index"] != float64(4) {
+	if len(events) != 12 || events[6]["fields"].(map[string]any)["index"] != float64(4) {
 		t.Fatalf("events %v", events)
 	}
 }
@@ -111,6 +113,7 @@ func TestEveryLineCarriesTheWallClockAndTheMonotonicClockOfTheCall(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	for index := 0; index < 60; index++ {
 		if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index, "padding": "xxxxxxxxxxxxxxxxxxxx"}) {
 			t.Fatalf("event %d was refused", index)
@@ -161,6 +164,7 @@ func TestAnEventWithCorrelationIdentifiersStoresThemAndAnInvalidIdentifierIsRefu
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	if !log.EmitCids(host.LevelInfo, "host.test.input", []string{"b1.1", "b1.2"}, map[string]any{"index": 1}) {
 		t.Fatal("an event with identifiers was refused")
 	}
@@ -176,17 +180,17 @@ func TestAnEventWithCorrelationIdentifiersStoresThemAndAnInvalidIdentifierIsRefu
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 4 {
+	if len(events) != 5 {
 		t.Fatalf("events %v", events)
 	}
-	cids, ok := events[1]["cids"].([]any)
+	cids, ok := events[2]["cids"].([]any)
 	if !ok || len(cids) != 2 || cids[0] != "b1.1" || cids[1] != "b1.2" {
-		t.Fatalf("the cids of the first event: %v", events[1])
+		t.Fatalf("the cids of the first event: %v", events[2])
 	}
-	if _, present := events[2]["cids"]; present {
-		t.Fatalf("an event without identifiers has cids: %v", events[2])
+	if _, present := events[3]["cids"]; present {
+		t.Fatalf("an event without identifiers has cids: %v", events[3])
 	}
-	dropped := events[3]
+	dropped := events[4]
 	if dropped["event"] != "log.dropped" || dropped["fields"].(map[string]any)["count"] != float64(4) {
 		t.Fatalf("the four refused events were not counted: %v", dropped)
 	}
@@ -202,6 +206,7 @@ func TestAFullEventQueueReturnsFalseAndTheWriterRecordsTheRangeAsDropped(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	accepted, refused := 0, 0
 	for index := 0; index < 50; index++ {
 		if log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index}) {
@@ -210,7 +215,7 @@ func TestAFullEventQueueReturnsFalseAndTheWriterRecordsTheRangeAsDropped(t *test
 			refused++
 		}
 	}
-	if accepted < 4 || refused == 0 {
+	if accepted < 3 || refused == 0 {
 		t.Fatalf("accepted %d, refused %d", accepted, refused)
 	}
 	if err := log.Flush(5 * time.Second); err != nil {
@@ -240,6 +245,7 @@ func TestAnEventLogErrorIsWrittenWithoutWaitingForTheBatchInterval(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	if !log.Emit(host.LevelError, "host.test.failure", map[string]any{"reason": "disk"}) {
 		t.Fatal("the error was refused")
 	}
@@ -265,6 +271,7 @@ func TestTheEventLogFolderIs0700AndTheFileIs0600(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
@@ -288,6 +295,7 @@ func TestTheEventLogPassesTheAuditOfTheContractPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	for index := 0; index < 20; index++ {
 		log.Emit(host.LevelInfo, "host.app.event", map[string]any{"kind": "started"})
 	}
@@ -298,6 +306,7 @@ func TestTheEventLogPassesTheAuditOfTheContractPackage(t *testing.T) {
 	text := `{"schema":2,"events":{
 	  "log.open":{"layer":"host","class":"lifecycle","level":"info","fields":{"schema":"number","pid":"number","role":"string","boot":"string"}},
 	  "log.dropped":{"layer":"host","class":"lifecycle","level":"warn","fields":{"from_seq":"number","to_seq":"number","count":"number"}},
+	  "log.policy":{"layer":"host","class":"lifecycle","level":"info","fields":{"source":"string","classes":"object"}},
 	  "host.app.event":{"layer":"host","class":"lifecycle","level":"info","fields":{"kind":"string"}}}}`
 	if err := os.WriteFile(catalog, []byte(text), 0o600); err != nil {
 		t.Fatal(err)
@@ -331,6 +340,7 @@ func TestEventLogFlushWritesEveryAcceptedEventBeforeItReturns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	for index := 0; index < 40; index++ {
 		if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index}) {
 			t.Fatalf("event %d was refused", index)
@@ -356,6 +366,7 @@ func TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	relayed := func(layer, event string, fields string) host.RelayedEvent {
 		return host.RelayedEvent{TsMicros: 1, MonoNs: 1, Layer: layer, Level: host.LevelInfo, Event: event, Fields: json.RawMessage(fields)}
 	}
@@ -389,11 +400,11 @@ func TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter(t *testing.T)
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 2 {
+	if len(events) != 3 {
 		t.Fatalf("events %v", events)
 	}
-	stored := events[1]
-	if stored["layer"] != "page" || stored["ts_us"] != float64(1_791_000_000_000_123) || stored["mono_ns"] != float64(5_000_000_123) || stored["seq"] != float64(2) ||
+	stored := events[2]
+	if stored["layer"] != "page" || stored["ts_us"] != float64(1_791_000_000_000_123) || stored["mono_ns"] != float64(5_000_000_123) || stored["seq"] != float64(3) ||
 		stored["level"] != "warn" || stored["fields"].(map[string]any)["index"] != float64(7) || len(stored["cids"].([]any)) != 1 || stored["cids"].([]any)[0] != "b1.9" {
 		t.Fatalf("relayed event %v", stored)
 	}
@@ -409,6 +420,7 @@ func TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	for index := 0; index < 300; index++ {
 		if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index, "padding": "xxxxxxxxxxxxxxxxxxxx"}) {
 			t.Fatalf("event %d was refused", index)
@@ -482,6 +494,7 @@ func TestTheWriterAnnouncesEachWriteToItsObserver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	type announced struct {
 		path string
 		size int64
@@ -518,6 +531,7 @@ func TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	started := time.Now()
 	index := 0
 	for time.Since(started) < 400*time.Millisecond {

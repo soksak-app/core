@@ -1,6 +1,8 @@
 //! The files of the event writer (docs/spec/logging.md#files): the levels error, warn and info go to the main file, debug and
 //! trace go to the debug file, each file rotates on its own and keeps every generation, and seq runs across both.
 
+#[path = "support/records.rs"]
+mod records;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -56,6 +58,7 @@ fn levels_of(events: &[Value]) -> String {
 fn debug_and_trace_events_go_to_the_debug_file_and_the_others_to_the_main_file() {
     let directory = tempfile::tempdir().unwrap();
     let log = event_log::start(options(directory.path())).unwrap();
+    records::store_every_level(&log);
     for (index, level) in [
         Level::Error,
         Level::Debug,
@@ -99,6 +102,7 @@ fn each_file_rotates_on_its_own_and_rotation_never_removes_a_generation() {
     opts.queue_events = 500;
     opts.queue_bytes = 1 << 20;
     let log = event_log::start(opts).unwrap();
+    records::store_every_level(&log);
     for index in 0..120 {
         assert!(
             log.emit(
@@ -154,6 +158,7 @@ fn a_loss_names_the_channel_of_the_refused_events() {
     opts.queue_events = 4;
     opts.batch_interval = Duration::from_secs(30);
     let log = event_log::start(opts).unwrap();
+    records::store_every_level(&log);
     let mut refused: BTreeMap<&str, u64> = BTreeMap::new();
     // The writer takes events from the queue while the producer adds them, so the producer adds events until the queue has
     // refused events of both channels, not a fixed number that a fast writer can take in time.

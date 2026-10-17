@@ -8,6 +8,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 // contract: log.writer.stores-class
@@ -16,6 +17,7 @@ func TestEveryLineStoresTheClassOfItsCatalogEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	if !log.Emit(host.LevelInfo, "host.app.event", map[string]any{"kind": "started"}) {
 		t.Fatal("host.app.event was refused")
 	}
@@ -66,6 +68,7 @@ func TestAnEventTheCatalogDoesNotDeclareIsMarkedUndeclaredAndHasNoClass(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": 1}) {
 		t.Fatal("host.test.event was refused")
 	}
@@ -105,6 +108,7 @@ func TestTheEventsOfTheWriterItselfStoreTheirClass(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	for index := 0; index < 40; index++ {
 		log.Emit(host.LevelInfo, "host.app.event", map[string]any{"kind": "started"})
 	}

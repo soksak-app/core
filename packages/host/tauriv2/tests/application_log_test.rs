@@ -181,7 +181,7 @@ fn log_error_writes_an_error_event_to_the_event_log() {
     // The run record precedes it.
     let record = events.last().unwrap();
     assert!(
-        events.len() == 3
+        events.len() == 4
             && record["event"] == "host.record.error"
             && record["level"] == "error"
             && record["fields"]["where"] == "surface input"
@@ -244,7 +244,7 @@ fn log_info_writes_an_info_event_to_the_event_log() {
     // The run record precedes it.
     let record = events.last().unwrap();
     assert!(
-        events.len() == 3
+        events.len() == 4
             && record["event"] == "host.record.info"
             && record["level"] == "info"
             && record["fields"]["where"] == "webkit children"

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 // run writes the files of an earlier run into logs: an event file of size bytes whose first line is log.open at ts and whose last line
@@ -52,6 +53,7 @@ func startRetention(t *testing.T, logs string, bound int64) *host.EventLog {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	return log
 }
 
@@ -192,6 +194,7 @@ func TestARotationRunsTheRetentionAgain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	// An earlier run appears after the start; the first rotation finds the files past the bound and removes it.
 	run(t, logs, "host-1791500001-1", 1_791_500_001_000_000, 1_791_500_001_900_000, 1000000, time.Now().Add(-time.Hour))
 	for index := 0; index < 30; index++ {

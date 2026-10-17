@@ -14,6 +14,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 // blockedSidecar starts a sidecar that reads nothing until the returned function releases it, fills its write queue, and
@@ -102,6 +103,7 @@ func useRoomyEventLog(t *testing.T) *host.EventLog {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
 	t.Cleanup(func() { host.UseHostEventLog(nil) })
 	return log

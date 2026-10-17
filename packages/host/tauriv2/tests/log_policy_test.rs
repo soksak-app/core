@@ -235,7 +235,7 @@ fn the_events_of_the_writer_itself_pass_a_gate_that_turns_the_lifecycle_off() {
     }
 }
 
-// contract: log.policy.file-is-watched
+// contract: log.policy.file-is-watched, log.policy.default-stores-errors
 #[test]
 fn the_policy_file_is_watched_and_every_change_is_applied_once() {
     let config = tempfile::tempdir().unwrap();
@@ -269,9 +269,9 @@ fn the_policy_file_is_watched_and_every_change_is_applied_once() {
             });
         assert_eq!(got, want, "{step}: applied {got:?} ({detail})");
     };
-    // The file does not exist: the policy that stores everything is in force, from the default.
+    // The file does not exist: the default policy, which stores only errors, is in force.
     wait("start without a file", "default");
-    assert!(log.enabled(Class::Call, Level::Trace));
+    assert_default_gate(&log, "start without a file");
     let narrow = r#"{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"info","io":"trace","frame":"trace"}}"#;
     // An atomic replacement (a new file renamed over the path) is applied.
     let temporary = config.path().join(".log-policy.tmp");
@@ -290,7 +290,25 @@ fn the_policy_file_is_watched_and_every_change_is_applied_once() {
     // The removal of the file returns to the default policy.
     fs::remove_file(&policy_path).unwrap();
     wait("removal", "default");
+    assert_default_gate(&log, "removal");
     drop(watch);
+}
+
+/// Checks the gate of a writer under the default policy: an error event of every class is stored and an event of every class below
+/// error is refused.
+fn assert_default_gate(log: &EventLog, step: &str) {
+    for class in Class::ALL {
+        assert!(
+            log.enabled(class, Level::Error),
+            "{step}: the default policy refuses an error event of the class {class:?}"
+        );
+        for level in [Level::Warn, Level::Info, Level::Debug, Level::Trace] {
+            assert!(
+                !log.enabled(class, level),
+                "{step}: the default policy stores a {level:?} event of the class {class:?}"
+            );
+        }
+    }
 }
 
 // contract: log.policy.page-sets-the-file

@@ -140,6 +140,7 @@ fn the_policy_reader_refuses_every_invalid_golden_case_with_its_text() {
 
 // The writer applies the default policy before the first policy and while no policy file exists, so its gate stores the levels that the
 // golden default names: a level stores when it is not more verbose than the value of its class.
+// contract: log.policy.default-stores-errors
 #[test]
 fn the_default_policy_of_the_writer_is_the_golden_default() {
     let cases = cases();

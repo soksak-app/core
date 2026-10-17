@@ -102,6 +102,7 @@ var goldenLevels = []sok.Level{sok.LevelError, sok.LevelWarn, sok.LevelInfo, sok
 
 // The default policy is the default of the golden cases: every class at the value of the case, and each level stored or refused as
 // the value says. A value at position k of [off, error, warn, info, debug, trace] stores the levels up to position k-1.
+// contract: log.policy.default-stores-errors
 func TestTheDefaultPolicyIsTheGoldenDefault(t *testing.T) {
 	cases := readPolicyCases(t)
 	policy := sok.DefaultLogPolicy()

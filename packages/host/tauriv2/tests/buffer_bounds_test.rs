@@ -49,7 +49,7 @@ fn raw(text: &str) -> Box<RawValue> {
 fn roomy_writer(config: &Path) -> Arc<EventLog> {
     use_host_event_log(None);
     let log = Arc::new(
-        event_log::start(Options {
+        records::start_every_level(Options {
             directory: config.join("logs"),
             role: "host".into(),
             boot: "b1".into(),

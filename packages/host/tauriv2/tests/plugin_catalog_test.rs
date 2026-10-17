@@ -1,6 +1,8 @@
 //! The host gives the writer the classes that the catalogs of the enabled installed plugins declare, and records a catalog that
 //! it cannot use as an error that names the file (docs/spec/logging.md#plugin-catalogs).
 
+#[path = "support/records.rs"]
+mod records;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -29,7 +31,7 @@ fn the_host_classifies_plugin_events_by_the_installed_catalogs_and_records_a_cat
 {
     let directory = tempfile::tempdir().unwrap();
     let log = Arc::new(
-        event_log::start(Options {
+        records::start_every_level(Options {
             directory: directory.path().join("logs"),
             role: "host".into(),
             boot: "b1".into(),

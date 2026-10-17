@@ -2,6 +2,8 @@
 //! generations, the channel `debug` reads the debug file and its generations, and the filter `class` matches the class that the writer
 //! stored in the line. The same cases run in the Go host.
 
+#[path = "support/records.rs"]
+mod records;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::time::Duration;
@@ -27,6 +29,7 @@ fn write_mixed_events(config: &Path) -> BTreeMap<&'static str, usize> {
         retention_bytes: 1 << 40,
     })
     .unwrap();
+    records::store_every_level(&log);
     let events: [(Level, &str, &str, Value); 6] = [
         (
             Level::Error,
@@ -142,6 +145,7 @@ fn the_filter_class_matches_the_class_that_the_writer_stored() {
                 "host.crash.found",
                 "host.panic",
                 "log.open",
+                "log.policy",
                 "log.rotated",
             ],
         ),

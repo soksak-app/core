@@ -8,12 +8,14 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use serde_json::Value;
 use soksak_host_tauriv2::application_log::entry_line;
-use soksak_host_tauriv2::event_log::{self, EventLog};
+use soksak_host_tauriv2::event_log::{self, EventLog, Options};
 use soksak_host_tauriv2::event_record::use_host_event_log;
+use soksak_host_tauriv2::log_policy::LogPolicy;
 
 /// Starts the writer of the host in `logs/` of `config` and makes it the writer of the records.
 pub fn start_writer(config: &Path) -> Arc<EventLog> {
     let log = Arc::new(event_log::start_host(config).unwrap());
+    store_every_level(&log);
     use_host_event_log(Some(Arc::clone(&log)));
     log
 }
@@ -132,4 +134,23 @@ pub fn standard_error_text(config: &Path) -> String {
         .collect();
     assert_eq!(paths.len(), 1, "stderr files {paths:?}");
     std::fs::read_to_string(paths.remove(0)).unwrap()
+}
+
+/// Puts the policy that stores every level of every class in force in `log`. The default policy stores only errors, so a test that
+/// checks an event below error gives its writer this policy first; the policy is recorded with the event `log.policy`.
+pub fn store_every_level(log: &EventLog) {
+    let policy = LogPolicy::parse(
+        "every level",
+        br#"{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}"#,
+    )
+    .unwrap();
+    log.set_policy(policy, "file");
+}
+
+/// Starts a writer with the options and puts the policy that stores every level of every class in force in it; the same result as
+/// `event_log::start`.
+pub fn start_every_level(options: Options) -> Result<EventLog, String> {
+    let log = event_log::start(options)?;
+    store_every_level(&log);
+    Ok(log)
 }

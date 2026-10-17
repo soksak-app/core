@@ -2,6 +2,8 @@
 //! `(boot, seq)` of the line. The same cases run in the Go host.
 #![cfg(feature = "diagnostics")]
 
+#[path = "support/records.rs"]
+mod records;
 use std::fs;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -87,7 +89,7 @@ fn a_test_mark_is_an_event_and_the_reply_names_its_position() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let directory = tempfile::tempdir().unwrap();
     let log = Arc::new(
-        event_log::start(Options {
+        records::start_every_level(Options {
             directory: directory.path().to_path_buf(),
             role: "host".into(),
             boot: "b1".into(),

@@ -110,7 +110,7 @@ fn the_start_buffer_holds_at_most_four_mebibytes_and_the_writer_counts_the_rest(
     }
     let config = tempfile::tempdir().unwrap();
     let log = Arc::new(
-        event_log::start(Options {
+        records::start_every_level(Options {
             directory: config.path().to_path_buf(),
             role: "host".into(),
             boot: "b1".into(),

@@ -162,6 +162,7 @@ fn a_closed_gate_costs_far_less_than_an_open_one_and_stays_under_a_limit() {
         retention_bytes: 1 << 40,
     })
     .unwrap();
+    records::store_every_level(&log);
     const ROUNDS: u32 = 20_000;
     let fields =
         json!({"name": "echo", "args": "[{\"a\":1}]", "micros": 1, "ok": true, "truncated": false});
@@ -233,6 +234,7 @@ fn the_counts_of_a_closed_gate_are_reported_each_second_and_at_a_flush() {
         retention_bytes: 1 << 40,
     })
     .unwrap();
+    records::store_every_level(&log);
     narrow_calls(&log, "warn");
     let fields = json!({"name": "echo", "args": "[]", "micros": 1, "ok": true, "truncated": false});
     let started = std::time::Instant::now();

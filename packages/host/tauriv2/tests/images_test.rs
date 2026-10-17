@@ -424,13 +424,17 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
         String::from_utf8_lossy(&output.stdout)
     );
     // The wait ended with its own failure, so the event log holds log.open and the run record and nothing else but the registrations of the native observers.
-    // The registrations of the native observers are the events `native.observe.registered`; they are not part of the wait.
+    // The registrations of the native observers are the events `native.observe.registered`; they are not part of the wait. The native
+    // ring refuses the observer events that come before the writer applies its policy and reports them as `native.log.gated`, which
+    // is the count of the default policy of the ring (errors only).
     let events: Vec<_> = records::read_events(&records::event_log_path(config.path()))
         .into_iter()
-        .filter(|event| event["event"] != "native.observe.registered")
+        .filter(|event| {
+            event["event"] != "native.observe.registered" && event["event"] != "native.log.gated"
+        })
         .collect();
     assert!(
-        events.len() == 2 && events[1]["fields"]["where"] == "run",
+        events.len() == 3 && events[2]["fields"]["where"] == "run",
         "a presentation timeout wrote events: {events:?}"
     );
 }

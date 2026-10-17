@@ -37,7 +37,7 @@ const (
 // LogPolicy says for each class the least severe level that is stored.
 type LogPolicy = sok.LogPolicy
 
-// DefaultLogPolicy stores every level of every class.
+// DefaultLogPolicy stores only errors in every class.
 func DefaultLogPolicy() LogPolicy { return sok.DefaultLogPolicy() }
 
 // ParseLogPolicy reads the text of a policy file.

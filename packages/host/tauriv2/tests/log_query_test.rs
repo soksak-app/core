@@ -282,6 +282,7 @@ fn lines(path: &Path) -> i64 {
 fn the_index_covers_each_batch_the_writer_wrote() {
     let config = tempfile::tempdir().unwrap();
     let log = event_log::start(writer_options(&config.path().join("logs"))).unwrap();
+    records::store_every_level(&log);
     let (results, updates) = channel();
     let (observe, stop) = start_log_indexer(move |_path, result| {
         let _ = results.send(result);

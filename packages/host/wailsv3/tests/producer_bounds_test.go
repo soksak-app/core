@@ -10,6 +10,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 // reads counts the elements that the serializer asked for their text.
@@ -122,6 +123,7 @@ func TestTheStartBufferHoldsAtMostFourMebibytesAndTheWriterCountsTheRest(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
 	t.Cleanup(func() { host.UseHostEventLog(nil) })
 	if err := log.Flush(10 * time.Second); err != nil {

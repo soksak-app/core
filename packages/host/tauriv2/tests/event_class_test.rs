@@ -1,6 +1,8 @@
 //! The class of an event line (docs/spec/logging.md#event): the writer stores the class that the catalog declares for the
 //! event name, and marks an event the catalog does not declare.
 
+#[path = "support/records.rs"]
+mod records;
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
@@ -52,6 +54,7 @@ fn relayed(layer: &str, event: &str, fields: &str) -> RelayedEvent {
 fn every_line_stores_the_class_of_its_catalog_entry() {
     let directory = tempfile::tempdir().unwrap();
     let log = event_log::start(options(directory.path())).unwrap();
+    records::store_every_level(&log);
     assert!(log.emit(Level::Info, "host.app.event", &json!({"kind": "started"})));
     assert!(log.emit_cids(
         Level::Info,
@@ -101,6 +104,7 @@ fn every_line_stores_the_class_of_its_catalog_entry() {
 fn an_event_the_catalog_does_not_declare_is_marked_undeclared_and_has_no_class() {
     let directory = tempfile::tempdir().unwrap();
     let log = event_log::start(options(directory.path())).unwrap();
+    records::store_every_level(&log);
     assert!(log.emit(Level::Info, "host.test.event", &json!({"index": 1})));
     assert!(
         log.emit_relayed(relayed("plugin", "plugin.editor.opened", "{}"))
@@ -130,6 +134,7 @@ fn the_events_of_the_writer_itself_store_their_class() {
     opts.queue_events = 4;
     opts.batch_interval = Duration::from_secs(30);
     let log = event_log::start(opts).unwrap();
+    records::store_every_level(&log);
     for _ in 0..40 {
         log.emit(Level::Info, "host.app.event", &json!({"kind": "started"}));
     }

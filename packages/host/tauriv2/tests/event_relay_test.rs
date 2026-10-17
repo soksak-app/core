@@ -1,6 +1,8 @@
 //! The `log` call of the page (docs/spec/logging.md#writers): the page relays a batch of events, the host validates the
 //! whole batch before it writes any event, and every event of the batch is stored in the layer `page`.
 
+#[path = "support/records.rs"]
+mod records;
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
@@ -18,7 +20,7 @@ fn read(path: &Path) -> Vec<Value> {
 }
 
 fn start(directory: &Path) -> EventLog {
-    event_log::start(Options {
+    records::start_every_level(Options {
         directory: directory.to_path_buf(),
         role: "host".into(),
         boot: "b1".into(),
@@ -48,11 +50,11 @@ fn a_relayed_batch_is_stored_in_order_in_the_layer_page() {
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
-    assert_eq!(events.len(), 3, "{events:?}");
-    assert_eq!(events[1]["event"], "page.test.first");
-    assert_eq!(events[2]["event"], "page.test.second");
-    assert_eq!(events[1]["layer"], "page");
-    assert_eq!(events[2]["ts_us"], 1_791_000_000_000_002u64);
+    assert_eq!(events.len(), 4, "{events:?}");
+    assert_eq!(events[2]["event"], "page.test.first");
+    assert_eq!(events[3]["event"], "page.test.second");
+    assert_eq!(events[2]["layer"], "page");
+    assert_eq!(events[3]["ts_us"], 1_791_000_000_000_002u64);
 }
 
 // contract: log.batch.rejects-an-invalid-batch-without-writing, log.batch.requires-the-page
@@ -146,7 +148,7 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
     }
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
-    assert_eq!(read(&path).len(), 1, "an invalid batch wrote events");
+    assert_eq!(read(&path).len(), 2, "an invalid batch wrote events");
 }
 
 // contract: log.batch.returns-the-transcript-lines-of-page-records
@@ -193,11 +195,11 @@ fn a_relayed_batch_stores_the_clock_and_the_cids_that_the_page_gave() {
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
-    assert_eq!(events.len(), 3, "{events:?}");
-    assert_eq!(events[1]["mono_ns"], 5_000_000_001u64);
-    assert_eq!(events[1]["cids"], json!(["b1.4", "b1.5"]));
-    assert_eq!(events[2]["mono_ns"], 5_000_000_002u64);
-    assert!(events[2].get("cids").is_none(), "{}", events[2]);
+    assert_eq!(events.len(), 4, "{events:?}");
+    assert_eq!(events[2]["mono_ns"], 5_000_000_001u64);
+    assert_eq!(events[2]["cids"], json!(["b1.4", "b1.5"]));
+    assert_eq!(events[3]["mono_ns"], 5_000_000_002u64);
+    assert!(events[3].get("cids").is_none(), "{}", events[3]);
 }
 
 // contract: log.batch.answers-the-clock-request
@@ -223,7 +225,7 @@ fn the_clock_request_answers_both_clocks_of_the_host_and_stores_no_event() {
     );
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
-    assert_eq!(read(&path).len(), 1, "a clock request stored an event");
+    assert_eq!(read(&path).len(), 2, "a clock request stored an event");
 }
 
 // contract: log.batch.stores-plugin-events-in-the-layer-plugin
@@ -236,8 +238,8 @@ fn a_relayed_batch_stores_a_plugin_event_in_the_layer_plugin() {
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
-    assert_eq!(events.len(), 3, "{events:?}");
-    assert_eq!(events[1]["layer"], "plugin");
-    assert_eq!(events[1]["event"], "plugin.fixture.input");
-    assert_eq!(events[2]["layer"], "page");
+    assert_eq!(events.len(), 4, "{events:?}");
+    assert_eq!(events[2]["layer"], "plugin");
+    assert_eq!(events[2]["event"], "plugin.fixture.input");
+    assert_eq!(events[3]["layer"], "page");
 }

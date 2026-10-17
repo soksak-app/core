@@ -2,6 +2,8 @@
 //! oldest runs go first, the run of the writer and a run with a `.keep` file never go, and every removal is the event log.pruned.
 //! The same cases run in the Go host.
 
+#[path = "support/records.rs"]
+mod records;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -137,6 +139,7 @@ fn the_oldest_runs_are_removed_when_the_files_pass_the_bound_and_each_removal_is
     // The bound leaves room for the newest earlier run and the files of the writer, not for the two older runs.
     let bound = newer + 1000;
     let log = event_log::start(options(&logs, bound)).unwrap();
+    records::store_every_level(&log);
     let pruned = pruned_events(&log);
     assert_eq!(pruned.len(), 1, "{pruned:?}");
     let fields = &pruned[0]["fields"];
@@ -199,6 +202,7 @@ fn a_run_with_a_keep_file_and_the_run_of_the_writer_are_never_removed() {
     // The bound is smaller than the pinned run: the run that is not pinned goes, the pinned run stays, and the event says that the bound
     // is not met.
     let log = event_log::start(options(&logs, 100)).unwrap();
+    records::store_every_level(&log);
     let pruned = pruned_events(&log);
     assert_eq!(pruned.len(), 1, "{pruned:?}");
     assert_eq!(pruned[0]["fields"]["runs"], json!(["host-1791500002-2"]));
@@ -225,6 +229,7 @@ fn files_under_the_bound_are_not_removed_and_store_no_event() {
         ago(1),
     );
     let log = event_log::start(options(&logs, 1 << 20)).unwrap();
+    records::store_every_level(&log);
     assert_eq!(pruned_events(&log), Vec::<Value>::new());
     assert!(logs.join("host-1791500001-1.jsonl").exists());
 }
@@ -239,6 +244,7 @@ fn a_rotation_runs_the_retention_again() {
     opts.rotate_bytes = 1500;
     opts.queue_events = 200;
     let log = event_log::start(opts).unwrap();
+    records::store_every_level(&log);
     // An earlier run appears after the start; the first rotation finds the files past the bound and removes it.
     run(
         &logs,

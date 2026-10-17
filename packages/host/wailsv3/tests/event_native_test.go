@@ -10,6 +10,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 // nativeRecord is a record of the class call as the native library drains it; the names of the tests that use it are not in the catalog.
@@ -79,6 +80,7 @@ func startWithRing(t *testing.T, ring *fakeRing) *host.EventLog {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	return log
 }
 
@@ -91,12 +93,12 @@ func TestTheWriterStoresPulledNativeRecordsInTheLayerNative(t *testing.T) {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 3 || events[1]["event"] != "native.test.first" || events[2]["event"] != "native.test.second" {
+	if len(events) != 4 || events[2]["event"] != "native.test.first" || events[3]["event"] != "native.test.second" {
 		t.Fatalf("events %v", events)
 	}
-	first := events[1]
+	first := events[2]
 	if first["layer"] != "native" || first["ts_us"] != float64(1_791_000_000_000_001) || first["mono_ns"] != float64(5_000_000_001) || first["level"] != "warn" ||
-		first["seq"] != float64(2) || first["fields"].(map[string]any)["index"] != float64(1) || events[2]["level"] != "error" {
+		first["seq"] != float64(3) || first["fields"].(map[string]any)["index"] != float64(1) || events[3]["level"] != "error" {
 		t.Fatalf("pulled event %v", first)
 	}
 }
@@ -110,10 +112,10 @@ func TestAPulledNativeRecordKeepsItsMonotonicClockAndItsCorrelationIdentifiers(t
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 3 {
+	if len(events) != 4 {
 		t.Fatalf("events %v", events)
 	}
-	input, plain := events[1], events[2]
+	input, plain := events[2], events[3]
 	cids, ok := input["cids"].([]any)
 	if input["mono_ns"] != float64(7_000_000_010) || !ok || len(cids) != 2 || cids[0] != "b1.4" || cids[1] != "b1.5" || input["fields"].(map[string]any)["keyCode"] != float64(36) {
 		t.Fatalf("the input record: %v", input)
@@ -172,11 +174,11 @@ func TestAPulledNativeRecordOfADeclaredEventStoresTheCatalogClassAndAnUndeclared
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 3 || events[1]["class"] != "input" || events[1]["undeclared"] != nil {
+	if len(events) != 4 || events[2]["class"] != "input" || events[2]["undeclared"] != nil {
 		t.Fatalf("the declared record: %v", events)
 	}
-	if events[2]["undeclared"] != true || events[2]["class"] != nil {
-		t.Fatalf("the undeclared record: %v", events[2])
+	if events[3]["undeclared"] != true || events[3]["class"] != nil {
+		t.Fatalf("the undeclared record: %v", events[3])
 	}
 }
 
@@ -191,6 +193,7 @@ func TestTheWriterPullsNativeRecordsAtTheBatchInterval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	// The ring is empty at the start; a record that arrives later is stored without a flush request.
 	time.Sleep(30 * time.Millisecond)
 	ring.mu.Lock()

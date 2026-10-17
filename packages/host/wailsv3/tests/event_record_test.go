@@ -11,6 +11,7 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 // useEventLog starts a writer, makes it the writer of the records of the host, and detaches it when the test ends.
@@ -22,6 +23,7 @@ func useEventLog(t *testing.T) *host.EventLog {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
 	// The writer ends before the folder of the test is removed; a writer that outlives the test writes into a removed folder.
 	t.Cleanup(func() { host.UseHostEventLog(nil); log.Close() })
@@ -41,11 +43,11 @@ func TestAnErrorAndAnObservationAreEventsWithWhereAndText(t *testing.T) {
 		{"error", "host", "host.record.error", "surface input", "the window has no content view"},
 		{"info", "host", "host.record.info", "webkit children", "pid 7: gone"},
 	}
-	if len(events) != 1+len(want) {
+	if len(events) != 2+len(want) {
 		t.Fatalf("events %v", events)
 	}
 	for index, w := range want {
-		event := events[1+index]
+		event := events[2+index]
 		fields := event["fields"].(map[string]any)
 		if event["level"] != w.level || event["layer"] != w.layer || event["event"] != w.event || fields["where"] != w.where || fields["text"] != w.text {
 			t.Fatalf("event %d is %v, want %+v", index, event, w)
@@ -76,16 +78,17 @@ func TestRecordsWrittenBeforeTheWriterExistsAreStoredInOrderWithTheirOwnTime(t *
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
 	t.Cleanup(func() { host.UseHostEventLog(nil) })
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 3 || events[1]["fields"].(map[string]any)["text"] != "first" || events[2]["fields"].(map[string]any)["text"] != "second" {
+	if len(events) != 4 || events[2]["fields"].(map[string]any)["text"] != "first" || events[3]["fields"].(map[string]any)["text"] != "second" {
 		t.Fatalf("events %v", events)
 	}
-	for _, event := range events[1:] {
+	for _, event := range events[2:] {
 		if ts := int64(event["ts_us"].(float64)); ts < before || ts > after {
 			t.Fatalf("ts_us %d is outside [%d, %d]: the record took the time of the attach", ts, before, after)
 		}
@@ -108,6 +111,7 @@ func TestTheStartBufferRefusesRecordsBeyondItsBoundAndTheWriterCountsThem(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
 	t.Cleanup(func() { host.UseHostEventLog(nil) })
 	if err := log.Flush(10 * time.Second); err != nil {
@@ -139,6 +143,7 @@ func TestFlushRecordsStoresTheRecordsWrittenSoFarWithoutWaitingForTheBatchInterv
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
 	t.Cleanup(func() { host.UseHostEventLog(nil) })
 	host.LogInfo("flush", "stored before the interval")
@@ -146,7 +151,7 @@ func TestFlushRecordsStoresTheRecordsWrittenSoFarWithoutWaitingForTheBatchInterv
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 2 || events[1]["fields"].(map[string]any)["text"] != "stored before the interval" {
+	if len(events) != 3 || events[2]["fields"].(map[string]any)["text"] != "stored before the interval" {
 		t.Fatalf("events %v", events)
 	}
 }
@@ -230,10 +235,10 @@ func TestARegionEventWithCorrelationIdentifiersIsRecordedAsAnInputRelay(t *testi
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 2 {
+	if len(events) != 3 {
 		t.Fatalf("events %v", events)
 	}
-	relay := events[1]
+	relay := events[2]
 	cids, ok := relay["cids"].([]any)
 	fields := relay["fields"].(map[string]any)
 	if relay["event"] != "host.input.relay" || relay["layer"] != "host" || relay["level"] != "info" || !ok || len(cids) != 2 || cids[0] != "b1.3" || cids[1] != "b1.4" ||

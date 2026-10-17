@@ -10,6 +10,7 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 func relayEvent(event string, index int) map[string]any {
@@ -22,6 +23,7 @@ func TestARelayedBatchIsStoredInOrderInTheLayerPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	request := map[string]any{"action": "batch", "events": []any{relayEvent("page.test.first", 1), relayEvent("page.test.second", 2)}}
 	if _, err := host.LogCommand(log, request); err != nil {
 		t.Fatal(err)
@@ -30,8 +32,8 @@ func TestARelayedBatchIsStoredInOrderInTheLayerPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 3 || events[1]["event"] != "page.test.first" || events[2]["event"] != "page.test.second" ||
-		events[1]["layer"] != "page" || events[2]["ts_us"] != float64(1_791_000_000_000_002) {
+	if len(events) != 4 || events[2]["event"] != "page.test.first" || events[3]["event"] != "page.test.second" ||
+		events[2]["layer"] != "page" || events[3]["ts_us"] != float64(1_791_000_000_000_002) {
 		t.Fatalf("events %v", events)
 	}
 }
@@ -42,6 +44,7 @@ func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	cases := map[string]struct {
 		request map[string]any
 		message string
@@ -81,7 +84,7 @@ func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
-	if events := readEventLog(t, log.Path()); len(events) != 1 {
+	if events := readEventLog(t, log.Path()); len(events) != 2 {
 		raw, _ := json.Marshal(events)
 		t.Fatalf("an invalid batch wrote events: %s", raw)
 	}
@@ -93,6 +96,7 @@ func TestARelayedBatchReturnsTheTranscriptLinesOfItsPageRecords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	record := func(level, where, text string, index int) map[string]any {
 		return map[string]any{"ts_us": float64(1_791_000_000_000_000 + index), "mono_ns": float64(5_000_000_000 + index), "level": level, "event": "page.record." + level, "page": "1791948729050",
 			"fields": map[string]any{"where": where, "text": text}}
@@ -124,6 +128,7 @@ func TestARelayedBatchStoresTheMonotonicClockAndTheIdentifiersThatThePageGave(t 
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	withCids := relayEvent("page.call", 1)
 	withCids["cids"] = []any{"b1.7", "b1.8"}
 	request := map[string]any{"action": "batch", "events": []any{withCids, relayEvent("page.call", 2)}}
@@ -134,15 +139,15 @@ func TestARelayedBatchStoresTheMonotonicClockAndTheIdentifiersThatThePageGave(t 
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 3 {
+	if len(events) != 4 {
 		t.Fatalf("events %v", events)
 	}
-	cids, ok := events[1]["cids"].([]any)
-	if events[1]["mono_ns"] != float64(5_000_000_001) || !ok || len(cids) != 2 || cids[0] != "b1.7" || cids[1] != "b1.8" {
-		t.Fatalf("the event with identifiers: %v", events[1])
+	cids, ok := events[2]["cids"].([]any)
+	if events[2]["mono_ns"] != float64(5_000_000_001) || !ok || len(cids) != 2 || cids[0] != "b1.7" || cids[1] != "b1.8" {
+		t.Fatalf("the event with identifiers: %v", events[2])
 	}
-	if _, present := events[2]["cids"]; present || events[2]["mono_ns"] != float64(5_000_000_002) {
-		t.Fatalf("the event without identifiers: %v", events[2])
+	if _, present := events[3]["cids"]; present || events[3]["mono_ns"] != float64(5_000_000_002) {
+		t.Fatalf("the event without identifiers: %v", events[3])
 	}
 }
 
@@ -156,6 +161,7 @@ func TestTheClockRequestAnswersTheClocksOfTheHostAndStoresNoEvent(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	wallBefore := time.Now().UnixMicro()
 	monoBefore, err := system.MonotonicNanos()
 	if err != nil {
@@ -185,7 +191,7 @@ func TestTheClockRequestAnswersTheClocksOfTheHostAndStoresNoEvent(t *testing.T) 
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
-	if events := readEventLog(t, log.Path()); len(events) != 1 {
+	if events := readEventLog(t, log.Path()); len(events) != 2 {
 		t.Fatalf("a clock request stored events: %v", events)
 	}
 }
@@ -196,6 +202,7 @@ func TestARelayedBatchStoresAPluginEventInTheLayerPlugin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	request := map[string]any{"action": "batch", "events": []any{relayEvent("plugin.fixture.input", 1), relayEvent("page.console.error", 2)}}
 	if _, err := host.LogCommand(log, request); err != nil {
 		t.Fatal(err)
@@ -204,7 +211,7 @@ func TestARelayedBatchStoresAPluginEventInTheLayerPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 3 || events[1]["layer"] != "plugin" || events[1]["event"] != "plugin.fixture.input" || events[2]["layer"] != "page" {
+	if len(events) != 4 || events[2]["layer"] != "plugin" || events[2]["event"] != "plugin.fixture.input" || events[3]["layer"] != "page" {
 		t.Fatalf("events %v", events)
 	}
 }

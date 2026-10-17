@@ -23,6 +23,7 @@ func StartWriter(t *testing.T, config string) *host.EventLog {
 	if err != nil {
 		t.Fatal(err)
 	}
+	StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
 	// The writer ends before the folder of the test is removed; a writer that outlives the test writes into a removed folder.
 	t.Cleanup(func() { host.UseHostEventLog(nil); log.Close() })

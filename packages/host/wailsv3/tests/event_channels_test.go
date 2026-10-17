@@ -11,6 +11,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 // debugPathOf is the debug file beside the main file of a writer.
@@ -33,6 +34,7 @@ func TestDebugAndTraceEventsGoToTheDebugFileAndTheOthersToTheMainFile(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	levels := []host.Level{host.LevelError, host.LevelDebug, host.LevelWarn, host.LevelTrace, host.LevelInfo, host.LevelDebug}
 	for index, level := range levels {
 		if !log.Emit(level, "host.app.event", map[string]any{"kind": fmt.Sprint(index)}) {
@@ -84,6 +86,7 @@ func TestEachFileRotatesOnItsOwnAndRotationNeverRemovesAGeneration(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	for index := 0; index < 120; index++ {
 		if !log.Emit(host.LevelDebug, "host.app.event", map[string]any{"kind": strings.Repeat("x", 40)}) {
 			t.Fatalf("event %d was refused", index)
@@ -141,6 +144,7 @@ func TestALossNamesTheChannelOfTheRefusedEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	support.StoreEveryLevel(t, log)
 	refused := map[string]int{}
 	// The writer takes events from the queue while the producer adds them, so the producer adds events until the queue has
 	// refused events of both channels, not a fixed number that a fast writer can take in time.

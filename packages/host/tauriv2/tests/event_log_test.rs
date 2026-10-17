@@ -2,6 +2,8 @@
 //! writer thread assigns `seq`, writes batches and counts the loss, and the file follows the contract that
 //! `@soksak/log-contract` audits.
 
+#[path = "support/records.rs"]
+mod records;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -57,6 +59,7 @@ fn options(directory: &Path) -> Options {
 fn the_first_line_is_log_open_and_seq_is_consecutive() {
     let directory = tempfile::tempdir().unwrap();
     let log = event_log::start(options(directory.path())).unwrap();
+    records::store_every_level(&log);
     for index in 0..10 {
         assert!(log.emit(Level::Info, "host.test.event", &json!({"index": index})));
     }
@@ -68,8 +71,8 @@ fn the_first_line_is_log_open_and_seq_is_consecutive() {
     assert_eq!(events[0]["fields"]["role"], "host");
     assert_eq!(events[0]["fields"]["boot"], "b1");
     let seqs: Vec<u64> = events.iter().map(|e| e["seq"].as_u64().unwrap()).collect();
-    assert_eq!(seqs, (1..=11).collect::<Vec<u64>>());
-    assert_eq!(events[5]["fields"]["index"], 4);
+    assert_eq!(seqs, (1..=12).collect::<Vec<u64>>());
+    assert_eq!(events[6]["fields"]["index"], 4);
     assert!(
         events
             .iter()
@@ -86,6 +89,7 @@ fn a_full_queue_returns_false_and_the_writer_records_the_range_as_dropped() {
     // The writer waits a long time between batches, so the queue stays full while the producer pushes.
     opts.batch_interval = Duration::from_secs(30);
     let log = event_log::start(opts).unwrap();
+    records::store_every_level(&log);
     let mut accepted = 0;
     let mut refused = 0;
     for index in 0..50 {
@@ -96,7 +100,7 @@ fn a_full_queue_returns_false_and_the_writer_records_the_range_as_dropped() {
         }
     }
     assert!(
-        accepted >= 4 && refused > 0,
+        accepted >= 3 && refused > 0,
         "accepted {accepted}, refused {refused}"
     );
     let path = log.path().to_path_buf();
@@ -122,6 +126,7 @@ fn an_error_is_written_without_waiting_for_the_batch_interval() {
     let mut opts = options(directory.path());
     opts.batch_interval = Duration::from_secs(30);
     let log = event_log::start(opts).unwrap();
+    records::store_every_level(&log);
     assert!(log.emit(
         Level::Error,
         "host.test.failure",
@@ -153,6 +158,7 @@ fn the_folder_is_0700_and_the_file_is_0600() {
     use std::os::unix::fs::PermissionsExt;
     let directory = tempfile::tempdir().unwrap();
     let log = event_log::start(options(directory.path())).unwrap();
+    records::store_every_level(&log);
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
@@ -165,6 +171,7 @@ fn the_folder_is_0700_and_the_file_is_0600() {
 fn the_file_passes_the_audit_of_the_contract_package() {
     let directory = tempfile::tempdir().unwrap();
     let log = event_log::start(options(directory.path())).unwrap();
+    records::store_every_level(&log);
     for _ in 0..20 {
         log.emit(Level::Info, "host.app.event", &json!({"kind": "started"}));
     }
@@ -176,6 +183,8 @@ fn the_file_passes_the_audit_of_the_contract_package() {
         "events": {
             "log.open": {"layer": "host", "class": "lifecycle", "level": "info",
                 "fields": {"schema": "number", "pid": "number", "role": "string", "boot": "string"}},
+            "log.policy": {"layer": "host", "class": "lifecycle", "level": "info",
+                "fields": {"source": "string", "classes": "object"}},
             "log.dropped": {"layer": "host", "class": "lifecycle", "level": "warn",
                 "fields": {"from_seq": "number", "to_seq": "number", "count": "number"}},
             "host.app.event": {"layer": "host", "class": "lifecycle", "level": "info", "fields": {"kind": "string"}}
@@ -214,6 +223,7 @@ fn flush_writes_every_accepted_event_before_it_returns() {
     let mut opts = options(directory.path());
     opts.batch_interval = Duration::from_secs(30);
     let log = event_log::start(opts).unwrap();
+    records::store_every_level(&log);
     for index in 0..40 {
         assert!(log.emit(Level::Info, "host.test.event", &json!({"index": index})));
     }
@@ -231,6 +241,7 @@ fn flush_writes_every_accepted_event_before_it_returns() {
 fn a_relayed_event_keeps_its_layer_and_time_and_gets_the_seq_of_the_writer() {
     let directory = tempfile::tempdir().unwrap();
     let log = event_log::start(options(directory.path())).unwrap();
+    records::store_every_level(&log);
     assert_eq!(
         log.emit_relayed(relayed(
             "page",
@@ -264,14 +275,14 @@ fn a_relayed_event_keeps_its_layer_and_time_and_gets_the_seq_of_the_writer() {
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
-    assert_eq!(events.len(), 2, "{events:?}");
-    assert_eq!(events[1]["layer"], "page");
-    assert_eq!(events[1]["ts_us"], 1_791_000_000_000_123u64);
-    assert_eq!(events[1]["mono_ns"], 5_000_000_123u64);
-    assert_eq!(events[1]["cids"], json!(["b1.7", "b1.8"]));
-    assert_eq!(events[1]["seq"], 2);
-    assert_eq!(events[1]["level"], "warn");
-    assert_eq!(events[1]["fields"]["index"], 7);
+    assert_eq!(events.len(), 3, "{events:?}");
+    assert_eq!(events[2]["layer"], "page");
+    assert_eq!(events[2]["ts_us"], 1_791_000_000_000_123u64);
+    assert_eq!(events[2]["mono_ns"], 5_000_000_123u64);
+    assert_eq!(events[2]["cids"], json!(["b1.7", "b1.8"]));
+    assert_eq!(events[2]["seq"], 3);
+    assert_eq!(events[2]["level"], "warn");
+    assert_eq!(events[2]["fields"]["index"], 7);
 }
 
 /// A relayed event of the layer with the time, the monotonic clock and the identifiers that the tests expect.
@@ -302,6 +313,7 @@ fn every_line_carries_the_wall_clock_and_the_monotonic_clock_of_its_call() {
         .as_micros() as u64;
     let before = system.monotonic_ns().unwrap();
     let log = event_log::start(options(directory.path())).unwrap();
+    records::store_every_level(&log);
     for index in 0..20 {
         assert!(log.emit(Level::Info, "host.test.event", &json!({"index": index})));
     }
@@ -313,7 +325,7 @@ fn every_line_carries_the_wall_clock_and_the_monotonic_clock_of_its_call() {
         .unwrap()
         .as_micros() as u64;
     let events = read(&path);
-    assert_eq!(events.len(), 21);
+    assert_eq!(events.len(), 22);
     let mut previous = 0;
     for event in &events {
         let mono = event["mono_ns"].as_u64().unwrap();
@@ -340,6 +352,7 @@ fn every_line_carries_the_wall_clock_and_the_monotonic_clock_of_its_call() {
 fn an_event_with_cids_is_stored_with_them_and_an_invalid_identifier_is_refused() {
     let directory = tempfile::tempdir().unwrap();
     let log = event_log::start(options(directory.path())).unwrap();
+    records::store_every_level(&log);
     let cids = vec!["b1.1".to_string(), "b1.2".to_string()];
     assert!(log.emit_cids(Level::Info, "host.test.input", &cids, &json!({"a": 1})));
     assert!(log.emit(Level::Info, "host.test.plain", &json!({})));
@@ -353,8 +366,8 @@ fn an_event_with_cids_is_stored_with_them_and_an_invalid_identifier_is_refused()
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
-    assert_eq!(events[1]["cids"], json!(["b1.1", "b1.2"]));
-    assert!(events[2].get("cids").is_none(), "{}", events[2]);
+    assert_eq!(events[2]["cids"], json!(["b1.1", "b1.2"]));
+    assert!(events[3].get("cids").is_none(), "{}", events[3]);
     assert!(events.iter().all(|event| event["event"] != "host.test.bad"));
     let dropped: u64 = events
         .iter()
@@ -373,6 +386,7 @@ fn the_log_rotates_at_the_bound_and_keeps_every_generation() {
     // The queue holds every event, so no refusal makes a gap of seq that log.dropped would explain.
     opts.queue_events = 1000;
     let log = event_log::start(opts).unwrap();
+    records::store_every_level(&log);
     for index in 0..300 {
         assert!(
             log.emit(
@@ -455,6 +469,7 @@ fn a_log_without_a_rotation_bound_is_refused() {
 fn the_writer_announces_each_write_to_its_observer() {
     let directory = tempfile::tempdir().unwrap();
     let log = event_log::start(options(directory.path())).unwrap();
+    records::store_every_level(&log);
     let (sender, receiver) = std::sync::mpsc::channel();
     log.set_on_write(Box::new(move |path, size| {
         let _ = sender.send((path.to_path_buf(), size));
@@ -479,6 +494,7 @@ fn a_steady_stream_of_events_is_written_at_each_batch_interval() {
     opts.queue_bytes = 1 << 22;
     opts.batch_interval = Duration::from_millis(50);
     let log = event_log::start(opts).unwrap();
+    records::store_every_level(&log);
     let path = log.path().to_path_buf();
     let started = std::time::Instant::now();
     let mut index = 0;

@@ -114,6 +114,7 @@ func TestStartStandardErrorWritesTheRunRecordAsAnEventAndTakesTheStandardErrorOf
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}
+		support.StoreEveryLevel(t, log)
 		host.UseHostEventLog(log)
 		if err := host.StartStandardError(config, "com.soksak.test"); err != nil {
 			os.Stdout.WriteString(err.Error() + "\n")
@@ -167,6 +168,7 @@ func TestLogErrorWritesAnErrorEventToTheEventLog(t *testing.T) {
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}
+		support.StoreEveryLevel(t, log)
 		host.UseHostEventLog(log)
 		host.LogError("surface input", errors.New("the window has no content view"))
 		if err := log.Flush(5 * time.Second); err != nil {
@@ -182,9 +184,9 @@ func TestLogErrorWritesAnErrorEventToTheEventLog(t *testing.T) {
 		t.Fatalf("child ended with %v, output %q", err, output)
 	}
 	events := readHostEventLog(t, config)
-	if len(events) != 2 || events[1]["event"] != "host.record.error" || events[1]["level"] != "error" ||
-		events[1]["fields"].(map[string]any)["where"] != "surface input" ||
-		events[1]["fields"].(map[string]any)["text"] != "the window has no content view" {
+	if len(events) != 3 || events[2]["event"] != "host.record.error" || events[2]["level"] != "error" ||
+		events[2]["fields"].(map[string]any)["where"] != "surface input" ||
+		events[2]["fields"].(map[string]any)["text"] != "the window has no content view" {
 		t.Fatalf("event log %v", events)
 	}
 }
@@ -227,6 +229,7 @@ func TestLogInfoWritesAnInfoEventToTheEventLog(t *testing.T) {
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}
+		support.StoreEveryLevel(t, log)
 		host.UseHostEventLog(log)
 		host.LogInfo("webkit children", "pid 7: gone")
 		if err := log.Flush(5 * time.Second); err != nil {
@@ -242,9 +245,9 @@ func TestLogInfoWritesAnInfoEventToTheEventLog(t *testing.T) {
 		t.Fatalf("child ended with %v, output %q", err, output)
 	}
 	events := readHostEventLog(t, config)
-	if len(events) != 2 || events[1]["event"] != "host.record.info" || events[1]["level"] != "info" ||
-		events[1]["fields"].(map[string]any)["where"] != "webkit children" ||
-		events[1]["fields"].(map[string]any)["text"] != "pid 7: gone" {
+	if len(events) != 3 || events[2]["event"] != "host.record.info" || events[2]["level"] != "info" ||
+		events[2]["fields"].(map[string]any)["where"] != "webkit children" ||
+		events[2]["fields"].(map[string]any)["text"] != "pid 7: gone" {
 		t.Fatalf("event log %v", events)
 	}
 }

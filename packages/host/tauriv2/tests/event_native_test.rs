@@ -2,6 +2,8 @@
 //! library at its batch interval, stores them in the layer `native` with the time the library gave, and counts the records
 //! it refuses and the events the ring refused.
 
+#[path = "support/records.rs"]
+mod records;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -74,7 +76,7 @@ fn read(path: &Path) -> Vec<Value> {
 fn start(directory: &Path, ring: &Arc<Mutex<FakeRing>>, interval: Duration) -> EventLog {
     let pull_ring = Arc::clone(ring);
     let loss_ring = Arc::clone(ring);
-    event_log::start(Options {
+    records::start_every_level(Options {
         directory: directory.to_path_buf(),
         role: "host".into(),
         boot: "b1".into(),
@@ -129,17 +131,17 @@ fn the_writer_stores_pulled_native_records_in_the_layer_native() {
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
-    assert_eq!(events.len(), 3, "{events:?}");
-    assert_eq!(events[1]["event"], "native.test.first");
-    assert_eq!(events[2]["event"], "native.test.second");
-    assert_eq!(events[1]["layer"], "native");
-    assert_eq!(events[1]["ts_us"], 1_791_000_000_000_001u64);
-    assert_eq!(events[1]["mono_ns"], 9_001u64);
-    assert!(events[1].get("cids").is_none());
-    assert_eq!(events[1]["level"], "warn");
-    assert_eq!(events[1]["seq"], 2);
-    assert_eq!(events[1]["fields"]["index"], 1);
-    assert_eq!(events[2]["level"], "error");
+    assert_eq!(events.len(), 4, "{events:?}");
+    assert_eq!(events[2]["event"], "native.test.first");
+    assert_eq!(events[3]["event"], "native.test.second");
+    assert_eq!(events[2]["layer"], "native");
+    assert_eq!(events[2]["ts_us"], 1_791_000_000_000_001u64);
+    assert_eq!(events[2]["mono_ns"], 9_001u64);
+    assert!(events[2].get("cids").is_none());
+    assert_eq!(events[2]["level"], "warn");
+    assert_eq!(events[2]["seq"], 3);
+    assert_eq!(events[2]["fields"]["index"], 1);
+    assert_eq!(events[3]["level"], "error");
 }
 
 // contract: log.native.counts-refused-records-and-ring-loss
@@ -270,11 +272,11 @@ fn a_pulled_native_record_of_a_declared_event_stores_the_catalog_class_and_an_un
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
-    assert_eq!(events.len(), 3, "{events:?}");
-    assert_eq!(events[1]["class"], "input");
-    assert!(events[1].get("undeclared").is_none());
-    assert_eq!(events[2]["undeclared"], true);
-    assert!(events[2].get("class").is_none());
+    assert_eq!(events.len(), 4, "{events:?}");
+    assert_eq!(events[2]["class"], "input");
+    assert!(events[2].get("undeclared").is_none());
+    assert_eq!(events[3]["undeclared"], true);
+    assert!(events[3].get("class").is_none());
 }
 
 // contract: log.native.stores-clock-and-cids-of-pulled-records
@@ -307,12 +309,12 @@ fn a_pulled_native_record_keeps_its_clock_and_cids() {
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
     let events = read(&path);
-    assert_eq!(events.len(), 3, "{events:?}");
-    assert_eq!(events[1]["mono_ns"], 77_000_000_001u64);
-    assert_eq!(events[1]["cids"], serde_json::json!(["b1.4", "b1.5"]));
-    assert_eq!(events[1]["fields"]["k"], 1);
-    assert_eq!(events[2]["mono_ns"], 77_000_000_002u64);
-    assert!(events[2].get("cids").is_none());
+    assert_eq!(events.len(), 4, "{events:?}");
+    assert_eq!(events[2]["mono_ns"], 77_000_000_001u64);
+    assert_eq!(events[2]["cids"], serde_json::json!(["b1.4", "b1.5"]));
+    assert_eq!(events[2]["fields"]["k"], 1);
+    assert_eq!(events[3]["mono_ns"], 77_000_000_002u64);
+    assert!(events[3].get("cids").is_none());
 }
 
 // contract: log.native.pulls-at-the-batch-interval

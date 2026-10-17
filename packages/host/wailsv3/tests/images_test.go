@@ -16,6 +16,7 @@ import (
 	"unsafe"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/tests/support"
 )
 
 const imageSidecar = "@fixture/sidecar-echo"
@@ -397,6 +398,7 @@ func TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine(t *testing.T
 			os.Stdout.WriteString(err.Error() + "\n")
 			os.Exit(2)
 		}
+		support.StoreEveryLevel(t, log)
 		host.UseHostEventLog(log)
 		if err := host.StartStandardError(config, "com.soksak.test"); err != nil {
 			os.Stdout.WriteString(err.Error() + "\n")
@@ -425,9 +427,9 @@ func TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine(t *testing.T
 	if output, err := command.Output(); err != nil {
 		t.Fatalf("child ended with %v, output %q", err, output)
 	}
-	// The wait ended with its own failure, so the event log holds log.open and the run record and nothing else.
+	// The wait ended with its own failure, so the event log holds log.open, the policy that the test set and the run record and nothing else.
 	events := readHostEventLog(t, config)
-	if len(events) != 2 || events[1]["fields"].(map[string]any)["where"] != "run" {
+	if len(events) != 3 || events[2]["fields"].(map[string]any)["where"] != "run" {
 		t.Fatalf("a presentation timeout wrote events: %v", events)
 	}
 }

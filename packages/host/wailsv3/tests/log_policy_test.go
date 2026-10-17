@@ -175,7 +175,7 @@ func TestTheEventsOfTheWriterItselfPassAGateThatTurnsTheLifecycleOff(t *testing.
 	}
 }
 
-// contract: log.policy.file-is-watched
+// contract: log.policy.file-is-watched, log.policy.default-stores-errors
 func TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce(t *testing.T) {
 	config := t.TempDir()
 	options := eventLogOptions(filepath.Join(config, "logs"))
@@ -202,11 +202,9 @@ func TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce(t *testing.T) {
 			t.Fatalf("%s: the policy %q was not applied within 10 seconds", step, want)
 		}
 	}
-	// The file does not exist: the policy that stores everything is in force, from the default.
+	// The file does not exist: the default policy, which stores only errors, is in force.
 	wait("start without a file", "default")
-	if !log.Enabled(host.ClassCall, host.LevelTrace) {
-		t.Fatal("the default policy does not store everything")
-	}
+	assertDefaultGate(t, log, "start without a file")
 	narrow := `{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"info","io":"trace","frame":"trace"}}`
 	// An atomic replacement (a new file renamed over the path) is applied.
 	temporary := filepath.Join(config, ".log-policy.tmp")
@@ -241,6 +239,23 @@ func TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	wait("removal", "default")
+	assertDefaultGate(t, log, "removal")
+}
+
+// assertDefaultGate checks the gate of a writer under the default policy: an error event of every class is stored and an event of
+// every class below error is refused.
+func assertDefaultGate(t *testing.T, log *host.EventLog, step string) {
+	t.Helper()
+	for _, class := range []host.Class{host.ClassLifecycle, host.ClassInput, host.ClassCall, host.ClassIo, host.ClassFrame} {
+		if !log.Enabled(class, host.LevelError) {
+			t.Fatalf("%s: the default policy refuses an error event of the class %v", step, class)
+		}
+		for _, level := range []host.Level{host.LevelWarn, host.LevelInfo, host.LevelDebug, host.LevelTrace} {
+			if log.Enabled(class, level) {
+				t.Fatalf("%s: the default policy stores a %v event of the class %v", step, level, class)
+			}
+		}
+	}
 }
 
 // contract: log.policy.page-sets-the-file

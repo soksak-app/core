@@ -52,6 +52,7 @@ fn the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_t
             retention_bytes: 1 << 40,
         })
         .unwrap();
+        records::store_every_level(&log);
         use_host_event_log(Some(Arc::new(log)));
         let started = Instant::now();
         let ended = std::panic::catch_unwind(|| panic!("the window has no content view"));
