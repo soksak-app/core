@@ -19,6 +19,13 @@
 // R and U also print the footprint and vmmap rows of the graphics, IOSurface, CoreAnimation and malloc allocations.
 // The benchmark prints the numbers and asserts nothing. It ends each view and its WebContent process before the next variant.
 //
+// The long mode (--long MINUTES) measures only U and S, at the same time, each in its own window. Both windows are ordered
+// front on the visible screen without activating the application. Each minute after both loads, it prints the footprint of
+// the WebContent process of each variant: the total, the dirty bytes of the MALLOC categories, the dirty bytes of the
+// WebKit malloc category, and the dirty bytes of the graphics and JS JIT rows. At the end it prints the least-squares slope
+// of the total in megabytes per minute over the minutes 5 to MINUTES for each variant and the difference of the two slopes.
+//
+
 // The three scripts and the names of the content world and the messages are copied from src/document_view.m, because the
 // source keeps them as static strings and the benchmark does not change the source. A difference between the two copies is
 // a defect of this benchmark.
@@ -28,6 +35,7 @@
 #import <signal.h>
 #import <errno.h>
 #import <string.h>
+#import <stdlib.h>
 #import <sys/types.h>
 #import "document_view.h"
 #import "private/webkit.h"
@@ -164,6 +172,7 @@ typedef struct {
     long mallocReclaimable;
     long graphicsDirty;
     long jitDirty;
+    long allocDirty;     // the dirty bytes of the footprint rows whose category starts with MALLOC
 } Reading;
 
 // The user agent suffix that the region sets: the version of the system Safari (copied from src/document_view.m).
@@ -258,24 +267,50 @@ static NSString *footprintText(pid_t process) {
     return [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
 }
 
+// Parses one footprint row: a row has the form "<dirty> B <clean> B <reclaimable> B <regions> <category>". Returns NO for a
+// line that is not a row.
+static BOOL footprintLine(NSString *line, long *dirty, long *reclaimable, NSString **category) {
+    long rowDirty = 0;
+    long rowClean = 0;
+    long rowReclaimable = 0;
+    long rowRegions = 0;
+    int consumed = 0;
+    if (sscanf(line.UTF8String, " %ld B %ld B %ld B %ld %n", &rowDirty, &rowClean, &rowReclaimable, &rowRegions, &consumed) != 4) return NO;
+    *dirty = rowDirty;
+    *reclaimable = rowReclaimable;
+    *category = [[line substringFromIndex:consumed] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    return YES;
+}
+
 // Reads the dirty and reclaimable bytes of the footprint row with the category name. Returns NO when footprint has no such row.
-// A row has the form "<dirty> B <clean> B <reclaimable> B <regions> <category>".
 static BOOL footprintRow(NSString *text, const char *name, long *dirty, long *reclaimable) {
     NSString *wanted = [NSString stringWithUTF8String:name];
     for (NSString *line in [text componentsSeparatedByString:@"\n"]) {
         long rowDirty = 0;
-        long rowClean = 0;
         long rowReclaimable = 0;
-        long rowRegions = 0;
-        int consumed = 0;
-        if (sscanf(line.UTF8String, " %ld B %ld B %ld B %ld %n", &rowDirty, &rowClean, &rowReclaimable, &rowRegions, &consumed) != 4) continue;
-        NSString *category = [[line substringFromIndex:consumed] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+        NSString *category = nil;
+        if (!footprintLine(line, &rowDirty, &rowReclaimable, &category)) continue;
         if (![category isEqualToString:wanted]) continue;
         *dirty = rowDirty;
         *reclaimable = rowReclaimable;
         return YES;
     }
     return NO;
+}
+
+// Sums the dirty bytes of the footprint rows whose category starts with MALLOC (the malloc zones of the process). Returns -1
+// when footprint has no such row.
+static long footprintMallocDirty(NSString *text) {
+    long total = -1;
+    for (NSString *line in [text componentsSeparatedByString:@"\n"]) {
+        long rowDirty = 0;
+        long rowReclaimable = 0;
+        NSString *category = nil;
+        if (!footprintLine(line, &rowDirty, &rowReclaimable, &category)) continue;
+        if (![category hasPrefix:@"MALLOC"]) continue;
+        total = (total < 0 ? 0 : total) + rowDirty;
+    }
+    return total;
 }
 
 // Reads the footprint of the WebContent process of the view.
@@ -288,7 +323,7 @@ static Reading readFootprint(WKWebView *view, NSString *step) {
     }
     NSString *text = footprintText(process);
     if (!text) failStep(step, @"footprint did not report the process", process);
-    Reading reading = { (long)info.ri_phys_footprint, -1, -1, -1, -1 };
+    Reading reading = { (long)info.ri_phys_footprint, -1, -1, -1, -1, footprintMallocDirty(text) };
     long dirty = 0;
     long reclaimable = 0;
     if (footprintRow(text, "WebKit malloc", &dirty, &reclaimable)) {
@@ -455,6 +490,72 @@ static void printBreakdown(const Variant *spec, pid_t process) {
     fflush(stdout);
 }
 
+// The view of one variant and the objects that own it. A plain variant has the view only. A document variant has the main web
+// view of the application with the logical surface on it, and the document region (the view) inside the surface.
+typedef struct {
+    WKWebView *view;
+    WKWebView *mainView;
+    void *surface;
+    void *document;
+} OpenView;
+
+// Creates the view of the variant in the content view of the window and starts the load of the address. The step names the
+// variant in the failure messages.
+static OpenView openVariant(const Variant *spec, NSWindow *window, NSView *content, NSURL *address,
+    WKWebsiteDataStore *persistentStore, NSString *documentDirectory, NSString *step) {
+    OpenView opened = { nil, nil, NULL, NULL };
+    CGRect frame = NSMakeRect(kMarginLeft, kWindowHeight - kMarginTop - kRegionHeight, kRegionWidth, kRegionHeight);
+    if (!spec->region) {
+        opened.view = [[[WKWebView alloc] initWithFrame:frame configuration:plainConfiguration(spec, persistentStore)] autorelease];
+        [content addSubview:opened.view];
+        if (spec->appearance) opened.view.appearance = content.effectiveAppearance;
+        if (spec->pageZoom) opened.view.pageZoom = 1;
+        if (spec->overrideScale) [opened.view _setOverrideDeviceScaleFactor:window.backingScaleFactor];
+        [opened.view loadRequest:[NSURLRequest requestWithURL:address]];
+    } else {
+        // The surface is the main web view of the application: the document region is placed inside it.
+        opened.mainView = [[[WKWebView alloc] initWithFrame:content.bounds] autorelease];
+        opened.mainView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+        [content addSubview:opened.mainView];
+        opened.surface = sp_surface_create(opened.mainView);
+        if (!opened.surface) failStep(step, @"a logical surface is not created", 0);
+        webviewSetFrame(opened.surface, 0, 0, kWindowWidth, kWindowHeight);
+        webviewSetSurfaceHidden(opened.surface, false);
+        opened.document = sp_document_create(opened.surface, documentDirectory.fileSystemRepresentation, NULL, NULL, documentChanged, NULL);
+        if (!opened.document) failStep(step, @"a document view is not created inside the surface", 0);
+        opened.view = (WKWebView *)opened.document;
+        sp_document_place(opened.document, kMarginLeft, kMarginTop, kMarginRight, kMarginBottom, true);
+        if (spec->streams) {
+            sp_document_set_stream(opened.document, streamMessage, opened.document);
+            if (!sp_document_stream_on(opened.document, "elements", true) || !sp_document_stream_on(opened.document, "requests", true)) {
+                failStep(step, @"a document stream is not turned on", opened.view._webProcessIdentifier);
+            }
+        }
+        if (!sp_document_load(opened.document, address.absoluteString.UTF8String)) {
+            failStep(step, @"the document refuses the address", opened.view._webProcessIdentifier);
+        }
+    }
+    return opened;
+}
+
+// Closes the view and its surface, and ends their WebContent processes. The processes are read before the views close.
+// WebKit keeps an idle WebContent process after its last view closes, so the benchmark ends each process it started.
+static void closeOpenView(OpenView *opened, NSString *step) {
+    pid_t process = opened->view._webProcessIdentifier;
+    pid_t mainProcess = opened->mainView ? opened->mainView._webProcessIdentifier : 0;
+    if (opened->document) {
+        sp_document_close(opened->document);
+    } else {
+        [opened->view removeFromSuperview];
+    }
+    if (opened->surface) {
+        sp_surface_close(opened->surface);
+        [opened->mainView removeFromSuperview];
+    }
+    if (!endProcess(process, step)) exit(1);
+    if (mainProcess != 0 && mainProcess != process && !endProcess(mainProcess, step)) exit(1);
+}
+
 // Loads the address in one variant, reads the footprint of its WebContent process at each read time, and ends the view and
 // its process. The readings are stored in readings[0...kReads-1].
 static void measureVariant(int variant, NSWindow *window, NSView *content, NSURL *address, WKWebsiteDataStore *persistentStore,
@@ -465,41 +566,8 @@ static void measureVariant(int variant, NSWindow *window, NSView *content, NSURL
     fflush(stdout);
     double started = nowSeconds();
 
-    WKWebView *view = nil;
-    WKWebView *mainView = nil;
-    void *surface = NULL;
-    void *document = NULL;
-    CGRect frame = NSMakeRect(kMarginLeft, kWindowHeight - kMarginTop - kRegionHeight, kRegionWidth, kRegionHeight);
-    if (!spec->region) {
-        view = [[[WKWebView alloc] initWithFrame:frame configuration:plainConfiguration(spec, persistentStore)] autorelease];
-        [content addSubview:view];
-        if (spec->appearance) view.appearance = content.effectiveAppearance;
-        if (spec->pageZoom) view.pageZoom = 1;
-        if (spec->overrideScale) [view _setOverrideDeviceScaleFactor:window.backingScaleFactor];
-        [view loadRequest:[NSURLRequest requestWithURL:address]];
-    } else {
-        // The surface is the main web view of the application: the document region is placed inside it.
-        mainView = [[[WKWebView alloc] initWithFrame:content.bounds] autorelease];
-        mainView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-        [content addSubview:mainView];
-        surface = sp_surface_create(mainView);
-        if (!surface) failStep(step, @"a logical surface is not created", 0);
-        webviewSetFrame(surface, 0, 0, kWindowWidth, kWindowHeight);
-        webviewSetSurfaceHidden(surface, false);
-        document = sp_document_create(surface, documentDirectory.fileSystemRepresentation, NULL, NULL, documentChanged, NULL);
-        if (!document) failStep(step, @"a document view is not created inside the surface", 0);
-        view = (WKWebView *)document;
-        sp_document_place(document, kMarginLeft, kMarginTop, kMarginRight, kMarginBottom, true);
-        if (spec->streams) {
-            sp_document_set_stream(document, streamMessage, document);
-            if (!sp_document_stream_on(document, "elements", true) || !sp_document_stream_on(document, "requests", true)) {
-                failStep(step, @"a document stream is not turned on", view._webProcessIdentifier);
-            }
-        }
-        if (!sp_document_load(document, address.absoluteString.UTF8String)) {
-            failStep(step, @"the document refuses the address", view._webProcessIdentifier);
-        }
-    }
+    OpenView opened = openVariant(spec, window, content, address, persistentStore, documentDirectory, step);
+    WKWebView *view = opened.view;
 
     // The load has finished when the page is not loading and it has a title.
     if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
@@ -523,20 +591,7 @@ static void measureVariant(int variant, NSWindow *window, NSView *content, NSURL
     if (spec->breakdown) printBreakdown(spec, process);
     printFacts(spec, view, window, content);
 
-    // The view, its surface and its WebContent process end here. WebKit keeps an idle WebContent process after its last view
-    // closes, so the benchmark ends each process it started.
-    pid_t mainProcess = mainView ? mainView._webProcessIdentifier : 0;
-    if (document) {
-        sp_document_close(document);
-    } else {
-        [view removeFromSuperview];
-    }
-    if (surface) {
-        sp_surface_close(surface);
-        [mainView removeFromSuperview];
-    }
-    if (!endProcess(process, step)) exit(1);
-    if (mainProcess != 0 && mainProcess != process && !endProcess(mainProcess, step)) exit(1);
+    closeOpenView(&opened, step);
     fprintf(stdout, "end %s elapsed %.3f s\n", spec->name, nowSeconds() - started);
     fflush(stdout);
 }
@@ -554,30 +609,151 @@ static void printDifference(const char *name, Reading from, Reading to) {
         differenceMegabytes(from.graphicsDirty, to.graphicsDirty), differenceMegabytes(from.jitDirty, to.jitDirty));
 }
 
+// The long mode measures U and S at the same time, each in its own window. The first minute of the least-squares fit and the
+// fewest minutes that a fit accepts (a fit needs two minutes).
+static const int kLongSlopeFirstMinute = 5;
+static const long kLongMinimumMinutes = 6;
+
+// The sums of a least-squares line fit of the total (y, megabytes) against the minute (x).
+typedef struct {
+    double count;
+    double sumX;
+    double sumY;
+    double sumXY;
+    double sumXX;
+} Fit;
+
+static void fitAdd(Fit *fit, double x, double y) {
+    fit->count += 1;
+    fit->sumX += x;
+    fit->sumY += y;
+    fit->sumXY += x * y;
+    fit->sumXX += x * x;
+}
+
+// The slope of the fitted line. The minutes of a fit differ, so the denominator is not zero.
+static double fitSlope(Fit fit) {
+    return (fit.count * fit.sumXY - fit.sumX * fit.sumY) / (fit.count * fit.sumXX - fit.sumX * fit.sumX);
+}
+
+// Loads the address in U and S at the same time, prints the footprint of each WebContent process at each minute after the
+// loads, and prints the slopes of the totals. The windows are placed at the top of the visible screen: U at the left edge
+// and S at the right edge. A window is ordered front without activating the application.
+static void measureLong(int minutes, NSURL *address, WKWebsiteDataStore *persistentStore, NSString *documentDirectory) {
+    NSRect screen = NSScreen.mainScreen.visibleFrame;
+    if (screen.size.width < kWindowWidth || screen.size.height < kWindowHeight) {
+        fprintf(stderr, "FAIL: the visible screen %gx%g is smaller than the %gx%g window\n", (double)screen.size.width,
+            (double)screen.size.height, (double)kWindowWidth, (double)kWindowHeight);
+        exit(1);
+    }
+    const Variant *specs[2] = { &kVariants[kU], &kVariants[kS] };
+    NSWindow *windows[2];
+    NSView *contents[2];
+    NSString *steps[2];
+    OpenView opened[2];
+    WKWebView *views[2];
+    Fit fits[2] = { { 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0 } };
+    for (int j = 0; j < 2; j++) {
+        windows[j] = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, kWindowWidth, kWindowHeight)
+            styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+        [windows[j] setReleasedWhenClosed:NO];
+        contents[j] = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, kWindowWidth, kWindowHeight)] autorelease];
+        windows[j].contentView = contents[j];
+        CGFloat left = screen.origin.x + j * (screen.size.width - kWindowWidth);
+        [windows[j] setFrameTopLeftPoint:NSMakePoint(left, NSMaxY(screen))];
+        steps[j] = [NSString stringWithFormat:@"long %s", specs[j]->name];
+    }
+    for (int j = 0; j < 2; j++) {
+        [windows[j] orderFront:nil];
+        NSRect frame = windows[j].frame;
+        fprintf(stdout, "window %s frame=(%g, %g, %g, %g) backing_scale %g\n", specs[j]->name, (double)frame.origin.x,
+            (double)frame.origin.y, (double)frame.size.width, (double)frame.size.height, (double)windows[j].backingScaleFactor);
+    }
+    fflush(stdout);
+
+    for (int j = 0; j < 2; j++) {
+        fprintf(stdout, "start %s: %s\n", specs[j]->name, specs[j]->label);
+        fflush(stdout);
+        opened[j] = openVariant(specs[j], windows[j], contents[j], address, persistentStore, documentDirectory, steps[j]);
+        views[j] = opened[j].view;
+    }
+    for (int j = 0; j < 2; j++) {
+        WKWebView *view = views[j];
+        if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
+            failStep(steps[j], @"the page did not finish loading within 120 seconds", view._webProcessIdentifier);
+        }
+    }
+    pumpUntil(settleSeconds, ^BOOL { return NO; });
+    double loaded = nowSeconds();
+    for (int j = 0; j < 2; j++) {
+        fprintf(stdout, "loaded %s: pid=%d title=%s\n", specs[j]->name, views[j]._webProcessIdentifier, views[j].title.UTF8String);
+    }
+    fflush(stdout);
+
+    for (int minute = 1; minute <= minutes; minute++) {
+        waitUntil(loaded + 60.0 * minute);
+        for (int j = 0; j < 2; j++) {
+            Reading reading = readFootprint(views[j], steps[j]);
+            fprintf(stdout, "minute=%d variant=%s elapsed_s=%.1f total_mb=%s malloc_dirty_mb=%s webkit_malloc_mb=%s graphics_mb=%s jit_mb=%s\n",
+                minute, specs[j]->name, nowSeconds() - loaded, megabytes(reading.total), megabytes(reading.allocDirty),
+                megabytes(reading.mallocDirty), megabytes(reading.graphicsDirty), megabytes(reading.jitDirty));
+            fflush(stdout);
+            if (minute >= kLongSlopeFirstMinute) fitAdd(&fits[j], minute, (double)reading.total / kMegabyte);
+        }
+    }
+
+    double slopes[2];
+    for (int j = 0; j < 2; j++) {
+        slopes[j] = fitSlope(fits[j]);
+        fprintf(stdout, "slope %s total_mb_per_minute=%+.3f minutes=%d..%d\n", specs[j]->name, slopes[j], kLongSlopeFirstMinute, minutes);
+    }
+    fprintf(stdout, "difference S-U total_mb_per_minute=%+.3f\n", slopes[1] - slopes[0]);
+    fflush(stdout);
+
+    for (int j = 0; j < 2; j++) {
+        closeOpenView(&opened[j], steps[j]);
+        [windows[j] close];
+        [windows[j] release];
+    }
+}
+
 int main(int argc, const char *argv[]) { @autoreleasepool {
     double started = nowSeconds();
-    NSString *address = argc > 1 ? [NSString stringWithUTF8String:argv[1]] : @"https://www.google.com/";
+    const char *addressArgument = NULL;
+    long longMinutes = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--long") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "FAIL: --long needs the number of minutes\n");
+                return 1;
+            }
+            char *end = NULL;
+            errno = 0;
+            long minutes = strtol(argv[++i], &end, 10);
+            if (errno != 0 || *end != '\0' || minutes < kLongMinimumMinutes) {
+                fprintf(stderr, "FAIL: --long takes a whole number of minutes of at least %ld, not %s\n", kLongMinimumMinutes, argv[i]);
+                return 1;
+            }
+            longMinutes = minutes;
+        } else if (addressArgument == NULL) {
+            addressArgument = argv[i];
+        } else {
+            fprintf(stderr, "FAIL: the argument %s is not expected\n", argv[i]);
+            return 1;
+        }
+    }
+    NSString *address = addressArgument ? [NSString stringWithUTF8String:addressArgument] : @"https://www.google.com/";
     NSURL *url = [NSURL URLWithString:address];
     if (!url.scheme || !url.host) {
         fprintf(stderr, "FAIL: the address %s is not an absolute address\n", address.UTF8String);
         return 1;
     }
-    fprintf(stdout, "start benchmark address=%s\n", address.UTF8String);
+    fprintf(stdout, "start benchmark address=%s mode=%s\n", address.UTF8String, longMinutes > 0 ? "long" : "table");
     fflush(stdout);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
-
-    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, kWindowWidth, kWindowHeight)
-        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
-    [window setReleasedWhenClosed:NO];
-    NSView *content = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, kWindowWidth, kWindowHeight)] autorelease];
-    window.contentView = content;
-    // orderBack does not activate the application.
-    [window orderBack:nil];
-    fprintf(stdout, "window %gx%g backing_scale %g\n", (double)kWindowWidth, (double)kWindowHeight, (double)window.backingScaleFactor);
-    fflush(stdout);
 
     // The persistent store of Q is one store for the directory, as the hosts keep one store per directory. The document
     // variants use another directory, so that two store objects never write the same files.
@@ -597,30 +773,44 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         return 1;
     }
 
-    Reading readings[kVariantCount][kReads];
-    for (int variant = 0; variant < kVariantCount; variant++) {
-        measureVariant(variant, window, content, url, persistentStore, documentDirectory, readings[variant]);
-    }
+    if (longMinutes > 0) {
+        measureLong((int)longMinutes, url, persistentStore, documentDirectory);
+    } else {
+        NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, kWindowWidth, kWindowHeight)
+            styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+        [window setReleasedWhenClosed:NO];
+        NSView *content = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, kWindowWidth, kWindowHeight)] autorelease];
+        window.contentView = content;
+        // orderBack does not activate the application.
+        [window orderBack:nil];
+        fprintf(stdout, "window %gx%g backing_scale %g\n", (double)kWindowWidth, (double)kWindowHeight, (double)window.backingScaleFactor);
+        fflush(stdout);
 
-    // The tables: each variant at each read time, then the difference of each variant to P (S to R for the streams).
-    for (int i = 0; i < kReads; i++) {
-        fprintf(stdout, "\nread at %.0f s (MB)\n", readSeconds[i]);
-        fprintf(stdout, "%-8s %10s %16s %22s %14s %10s\n", "variant", "total", "malloc_dirty", "malloc_reclaimable", "graphics", "jit");
+        Reading readings[kVariantCount][kReads];
         for (int variant = 0; variant < kVariantCount; variant++) {
-            printRow(kVariants[variant].name, readings[variant][i]);
+            measureVariant(variant, window, content, url, persistentStore, documentDirectory, readings[variant]);
         }
-        for (int variant = 0; variant < kVariantCount; variant++) {
-            if (variant == kU) continue;
-            char name[16];
-            snprintf(name, sizeof(name), "%s-U", kVariants[variant].name);
-            printDifference(name, readings[kU][i], readings[variant][i]);
-        }
-        printDifference("S-R", readings[kR][i], readings[kS][i]);
-    }
-    fflush(stdout);
 
-    [window close];
-    [window release];
+        // The tables: each variant at each read time, then the difference of each variant to P (S to R for the streams).
+        for (int i = 0; i < kReads; i++) {
+            fprintf(stdout, "\nread at %.0f s (MB)\n", readSeconds[i]);
+            fprintf(stdout, "%-8s %10s %16s %22s %14s %10s\n", "variant", "total", "malloc_dirty", "malloc_reclaimable", "graphics", "jit");
+            for (int variant = 0; variant < kVariantCount; variant++) {
+                printRow(kVariants[variant].name, readings[variant][i]);
+            }
+            for (int variant = 0; variant < kVariantCount; variant++) {
+                if (variant == kU) continue;
+                char name[16];
+                snprintf(name, sizeof(name), "%s-U", kVariants[variant].name);
+                printDifference(name, readings[kU][i], readings[variant][i]);
+            }
+            printDifference("S-R", readings[kR][i], readings[kS][i]);
+        }
+        fflush(stdout);
+
+        [window close];
+        [window release];
+    }
     [NSFileManager.defaultManager removeItemAtPath:root error:nil];
     fprintf(stdout, "end benchmark elapsed %.3f s\n", nowSeconds() - started);
     fflush(stdout);
