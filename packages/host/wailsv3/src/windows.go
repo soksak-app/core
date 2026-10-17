@@ -260,10 +260,6 @@ func cancelLayout(win *application.WebviewWindow) {
 	}
 }
 
-// handleNavigation wraps the handling of the main webview navigation callback in a diagnostic build. A check delays the handling and
-// confirms from the record that it finished. It is nil in other builds.
-var handleNavigation func(s *Surfaces, handle func())
-
 // An app DOM reload replaces all plugin documents but does not end the terminal sessions.
 func (s *Surfaces) reloadSurfaceDocuments() {
 	if err := system.CancelLayout(s.window.NativeWindow()); err != nil {
@@ -382,18 +378,6 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	})
 	win.OnWindowEvent(events.Mac.WebViewDidCommitNavigation, func(*application.WindowEvent) {
 		RecordWindowEvent(s.name, "navigation_committed")
-		// This callback may run in a separate goroutine later than the calls of the new page. The cleanup of the previous page
-		// is done by the start document request (startPage) of the new page, and here only the record of the WebKit children of this run is updated (V5-113).
-		committed := func() {
-			if h.workspace != nil {
-				RefreshWebKitChildren(h.workspace.Directory())
-			}
-		}
-		if handleNavigation != nil {
-			handleNavigation(s, committed)
-		} else {
-			committed()
-		}
 	})
 	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		h.mu.Lock()

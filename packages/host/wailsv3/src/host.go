@@ -94,10 +94,6 @@ func Run(assets fs.FS, options Options) error {
 	if err != nil {
 		return fmt.Errorf("config directory: %w", err)
 	}
-	// Harvests the WebKit children that the previous run left into the record, and takes the currently running
-	// WebKit processes as the baseline so that it does not overwrite those of others (V5-113). No window exists yet, so this run has no WebKit.
-	ReapRecordedWebKit(configDirectory)
-	SnapshotBaseline()
 	host, err := newHost(configDirectory)
 	if err != nil {
 		return err

@@ -1561,8 +1561,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/workspace.rs", symbol: "host.workspace.settings" },
       { file: "packages/host/wailsv3/src/notifications.go", symbol: "host.notification.event" },
       { file: "packages/host/tauriv2/src/notifications.rs", symbol: "host.notification.event" },
-      { file: "packages/host/wailsv3/src/webkit_children.go", symbol: "psQuery" },
-      { file: "packages/host/tauriv2/src/webkit_children.rs", symbol: "ps_query" },
     ],
     tests: [
       { file: "packages/host/wailsv3/tests/project_removal_test.go", id: "TestTheEndOfAWindowRecordsEachRemovalItAllows" },
@@ -1571,10 +1569,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "each_settings_change_is_recorded_with_its_keys" },
       { file: "packages/host/wailsv3/tests/notifications_test.go", id: "TestEachNotificationEventAndFailureIsRecorded" },
       { file: "packages/host/tauriv2/tests/notifications_test.rs", id: "each_notification_event_and_failure_is_recorded" },
-      { file: "packages/host/wailsv3/tests/webkit_children_test.go", id: "TestAFailedPsQueryIsReportedAndAMissingProcessIsNot" },
-      { file: "packages/host/tauriv2/tests/webkit_children_test.rs", id: "a_failed_ps_query_is_reported_and_a_missing_process_is_not" },
     ],
-    expected: "Both hosts store an event for each removal that the end of a window allows, each settings change and each event of the notification center, record the failures of the notification center, and report a failed ps query without reporting a missing process.",
+    expected: "Both hosts store an event for each removal that the end of a window allows, each settings change and each event of the notification center, record the failures of the notification center.",
     id: "F145.15",
     implementation: [
       { file: "packages/host/wailsv3/src/performance.go", symbol: "func PerformanceProcessAdd" },
@@ -2513,15 +2509,11 @@ const FEATURE_LINKS = [
     id: "F160.27",
     implementation: [
       { file: "packages/host/tauriv2/src/recording.rs", symbol: "pub fn running" },
-      { file: "packages/host/tauriv2/src/webkit_children.rs", symbol: "pub fn parse_webkit_processes" },
-      { file: "packages/host/wailsv3/src/webkit_children.go", symbol: "func ParseWebKitProcesses" },
     ],
     tests: [
       { file: "packages/host/tauriv2/tests/recording_test.rs", id: "a_poisoned_recording_state_is_reported_when_it_is_read" },
-      { file: "packages/host/tauriv2/tests/webkit_children_test.rs", id: "a_ps_line_without_a_process_number_is_returned_as_unreadable" },
-      { file: "packages/host/wailsv3/tests/webkit_children_test.go", id: "TestAPsLineWithoutAProcessNumberIsReturnedAsUnreadable" },
     ],
-    expected: "A discarded Rust result is either reported as a record or carries a stated reason: a poisoned lock and a line of ps without a process number are records.",
+    expected: "A discarded Rust result is either reported as a record or carries a stated reason: a poisoned lock is a record.",
     levels: ["unit"],
   },
   {
@@ -3110,12 +3102,10 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/tests/private_files_test.rs", id: "create_private_file_creates_a_new_owner_only_file_only" },
       { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "the_process_lock_is_owner_only" },
       { file: "packages/host/wailsv3/tests/private_files_test.go", id: "TestWritePrivateFileCreatesAnOwnerOnlyFileAndReplacesItsContents" },
-      { file: "packages/host/wailsv3/tests/webkit_children_test.go", id: "TestTheWebKitChildRecordIsOwnerOnly" },
       { file: "packages/host/tauriv2/tests/private_files_test.rs", id: "write_private_file_creates_an_owner_only_file_and_replaces_its_contents" },
-      { file: "packages/host/tauriv2/tests/webkit_children_test.rs", id: "the_webkit_child_record_is_owner_only" },
       { file: "scripts/test/windows-build-check.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
     ],
-    expected: "Both hosts create owner-only files and directories only through the platform operations, Darwin gives them modes 0700 and 0600, the process lock and the WebKit child record have mode 0600 in both hosts, and the Windows implementation compiles and returns its not-implemented errors.",
+    expected: "Both hosts create owner-only files and directories only through the platform operations, Darwin gives them modes 0700 and 0600, the process lock has mode 0600 in both hosts, and the Windows implementation compiles and returns its not-implemented errors.",
     levels: ["unit"],
   },
   {
@@ -3250,19 +3240,6 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/list.test.mjs", id: "drawList builds new keys, removes missing keys and moves only elements out of order" },
     ],
     expected: "drawList keeps the element of each key in the document and moves only an element out of order.",
-    levels: ["unit"],
-  },
-  {
-    id: "F68",
-    implementation: [
-      { file: "packages/host/wailsv3/src/webkit_children.go", symbol: "func WriteWebKitRecord" },
-      { file: "packages/host/tauriv2/src/webkit_children.rs", symbol: "pub fn write_record" },
-    ],
-    tests: [
-      { file: "packages/host/wailsv3/tests/webkit_children_test.go", id: "TestConcurrentWebKitRecordWritesAllSucceed" },
-      { file: "packages/host/tauriv2/tests/webkit_children_test.rs", id: "concurrent_webkit_record_writes_all_succeed" },
-    ],
-    expected: "Concurrent WebKit child record writes all succeed on both hosts.",
     levels: ["unit"],
   },
   {

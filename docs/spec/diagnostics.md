@@ -6,7 +6,7 @@ A defect that appears once on a user's machine is located only from records that
 
 ## Folder
 
-Every diagnostic file of an application is under `<config-dir>/logs/`. A person who meets a defect hands over this folder, and the [debug view](debug.md) lists and saves it. No other folder holds a diagnostic file. Operating files such as `webkit-children.json` are not records and stay outside `logs/`.
+Every diagnostic file of an application is under `<config-dir>/logs/`. A person who meets a defect hands over this folder, and the [debug view](debug.md) lists and saves it. No other folder holds a diagnostic file. Operating files such as `process.lock` are not records and stay outside `logs/`.
 
 ## Files
 
@@ -104,7 +104,7 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 | a stream message of a document region is not valid, cannot be delivered, or its snapshot acknowledgement is refused | `error host document stream <name>: <reason>`, written for each failed stream message of the document named `<name>`: an invalid message, an unknown stream or message type, a refused `on` or acknowledgement, or a missing document |
 | a modal cannot be placed, rounded, raised or given the focus back, or a modal document fails to render | `error host modal place`, `error host modal corners`, `error host modal raise`, `error host modal focus restoration`, `error host modal state` (the lock of the modal record is poisoned) and `error host modal <id>`, each followed by `: <reason>` |
 | a sidecar cannot be stopped, replaced, retained for a window or told that a surface closed, or the native view bridge of the Wails host fails | `error host sidecar stop`, `error host replace`, `error host sidecar retain`, `error host sidecar close <surface>`, `error host native message` and `error host native reply`, each followed by `: <reason>` |
-| the record of the WebKit child processes cannot be read or written, or an orphaned child cannot be ended | `error host webkit children record: <reason>` and `error host webkit children: kill <pid>: <reason>`; a line of `ps` with no process number is `error host webkit children: ps line "<line>" begins with no process number`, and the lock of the recording state poisoned is `error host recording: <reason>` |
+| the lock of the recording state is poisoned | `error host recording: <reason>` |
 | the notification center reports a failure, an event cannot be read, a notice has an unknown type, names no window and surface, or names a window that is closed | `error host notification: <reason>` |
 | a crash report of an earlier run cannot be read, or the folder of the crash reports cannot be listed or named | `error host crash reports: <reason>`, and `error native diagnostic reports: the system names no Library folder for the user`; the reason names the file or the folder, and an unreadable report is reported once ([logging](logging.md#entrances)) |
 | the catalog of an installed plugin cannot be used: it is missing, is not JSON, or declares a name outside `plugin.<plugin>.` or an unknown class | `error host plugin catalog: <file>: <reason>`; the events of that plugin stay `undeclared` and the other plugins keep their classes ([logging](logging.md#plugin-catalogs)) |

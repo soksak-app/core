@@ -147,15 +147,6 @@ pub(crate) fn call(
         "diagnostics.native.objects" => native_objects(window, &params),
         "diagnostics.objects" => crate::object_counts::objects_reply(host, window.label()),
         "diagnostics.process.exit" => process_exit(window, &params),
-        "diagnostics.navigation.delay" => {
-            let ms = params
-                .get("ms")
-                .and_then(Value::as_u64)
-                .filter(|ms| *ms <= 10_000)
-                .ok_or_else(|| Failure::params("ms must be an integer from 0 to 10000"))?;
-            navigation_delay(window.label(), ms);
-            Ok(Value::Null)
-        }
         "diagnostics.presentation.failure" => {
             exposure::inject_presentation_failure(window)?;
             Ok(Value::Null)
@@ -724,38 +715,6 @@ struct ModalHold {
     /// (whether it was released, the number of replies held)
     state: Mutex<(bool, u32)>,
     changed: Condvar,
-}
-
-/// The milliseconds by which the handling of the main webview navigation callback is delayed, by window name.
-static NAVIGATION_DELAYS: Mutex<Option<HashMap<String, u64>>> = Mutex::new(None);
-
-/// Delays the later handling of the navigation callback of the window by ms milliseconds. 0 removes the delay.
-fn navigation_delay(window: &str, ms: u64) {
-    let mut delays = NAVIGATION_DELAYS.lock().expect("navigation delays");
-    let delays = delays.get_or_insert_with(HashMap::new);
-    if ms == 0 {
-        delays.remove(window);
-    } else {
-        delays.insert(window.to_string(), ms);
-    }
-}
-
-/// Waits for the delay of the window, runs the handling of the navigation callback, and records the end in the
-/// diagnostic record.
-pub(crate) fn handle_navigation(window: &Window, handle: impl FnOnce()) {
-    let delay = NAVIGATION_DELAYS
-        .lock()
-        .expect("navigation delays")
-        .as_ref()
-        .and_then(|delays| delays.get(window.label()).copied())
-        // default: a window with no specified delay does not wait.
-        .unwrap_or(0);
-    std::thread::sleep(std::time::Duration::from_millis(delay));
-    handle();
-    exposure::note(
-        window,
-        &format!("navigation callback handled after {delay} ms"),
-    );
 }
 
 /// Holds the modal content replies by window name. A check creates the order in which the modal document receives its

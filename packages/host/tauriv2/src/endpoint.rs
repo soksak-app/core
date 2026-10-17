@@ -86,7 +86,6 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.test.mark",
     "diagnostics.stall.dump",
     "diagnostics.notifications",
-    "diagnostics.navigation.delay",
     "diagnostics.page.collect",
     "diagnostics.native.objects",
     "diagnostics.objects",

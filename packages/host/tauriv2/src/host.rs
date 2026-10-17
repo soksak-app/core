@@ -82,7 +82,6 @@ pub use surfaces::surface_owner_id;
 pub mod startup;
 pub mod termination;
 mod theme;
-pub mod webkit_children;
 pub mod windows;
 pub mod workspace;
 
@@ -195,23 +194,6 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 let quit = app.clone();
                 termination::on_termination(Box::new(move || quit.exit(0)))?;
                 let directory = config_directory(app)?;
-                // Harvests the WebKit children that the previous run left behind into the record, and takes the WebKit that
-                // is running now as the baseline so that it does not overwrite another application's children (V5-113). No
-                // window exists yet, so this run has no WebKit.
-                crate::webkit_children::reap_recorded(&directory);
-                crate::webkit_children::snapshot_baseline();
-                let foreign = std::process::Command::new("sh")
-                    .arg("-c")
-                    .arg("ps -axo command= | grep -c 'com.apple.WebKit.' || true")
-                    .output()
-                    .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-                    // default: the startup does not stop when the ps of the baseline count report fails. This report is
-                    // only an observation and is not used for the harvest decision.
-                    .unwrap_or_else(|_| "unknown".into());
-                crate::application_log::log_info(
-                    "webkit children",
-                    format!("baseline {foreign} foreign WebKit processes"),
-                );
                 exposure::start(app, &directory)?;
                 // The event log and the stderr file are opened after the endpoint holds the process lock, so no other run writes
                 // the same files (docs/spec/hosts.md#application-log). The run record waits in the start buffer until the writer
@@ -293,39 +275,13 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             };
             log_error(&place, text);
             // Only the main webview holds the subscriptions of document streams (docs/spec/native-surfaces.md#document-streams).
-            // A window that the application did not register has no streams, as in the page load handler below.
+            // A window that the application did not register has no streams.
             let window = webview.window();
             if webview.label() == window.label() && windows::window_data(&window).is_ok() {
                 log_failure("page process", documents::main_page_process_ended(&window));
             }
             if let Err(error) = webview.reload() {
                 log_error(&place, format!("{}: reload: {error}", webview.label()));
-            }
-        })
-        .on_page_load(|view, payload| {
-            if payload.event() != tauri::webview::PageLoadEvent::Started {
-                return;
-            }
-            let window = view.window();
-            // Only the main webview of a window that the application registered is handled.
-            if windows::window_data(&window).is_err() {
-                return;
-            }
-            if view.label() == window.label() {
-                // The cleanup of the previous page is done by the start document request (start_page) of the new page.
-                // Here only the record of the WebKit children of this run is updated (V5-113).
-                let started = || {
-                    if let Some(workspace) = window
-                        .app_handle()
-                        .try_state::<crate::workspace::Workspace>()
-                    {
-                        crate::webkit_children::refresh(workspace.directory());
-                    }
-                };
-                #[cfg(feature = "diagnostics")]
-                crate::diagnostics::handle_navigation(&window, started);
-                #[cfg(not(feature = "diagnostics"))]
-                started();
             }
         })
         .setup(move |app| {

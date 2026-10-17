@@ -56,7 +56,6 @@ func init() {
 	debugCaptures = debugCaptureWindows
 	diagnosticMethods["diagnostics.notifications"] = diagnosticNotifications
 	holdModalContent = modalHolds.wait
-	diagnosticMethods["diagnostics.navigation.delay"] = diagnosticNavigationDelay
 	diagnosticMethods["diagnostics.page.collect"] = diagnosticPageCollect
 	diagnosticMethods["diagnostics.native.objects"] = diagnosticNativeObjects
 	diagnosticMethods["diagnostics.objects"] = diagnosticObjects
@@ -65,7 +64,6 @@ func init() {
 	diagnosticMethods["diagnostics.page.request"] = diagnosticPageMethod("diagnostics.page.request")
 	diagnosticMethods["diagnostics.surface.hold"] = diagnosticPageMethod("diagnostics.surface.hold")
 	diagnosticMethods["diagnostics.surface.held"] = diagnosticPageMethod("diagnostics.surface.held")
-	handleNavigation = navigationDelays.handle
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
 	diagnosticTopics[logTopic] = func(on bool) (string, any) {
 		return "diagnostics.transcript", map[string]bool{"on": on}
@@ -714,14 +712,6 @@ func diagnosticModalHeld(e *Endpoint, _ *endpointConn, params json.RawMessage) (
 	return nil, nil
 }
 
-// navigationDelaySet is the time by which the handling of the main webview navigation callback is delayed for each window.
-type navigationDelaySet struct {
-	mu      sync.Mutex
-	windows map[*Surfaces]time.Duration
-}
-
-var navigationDelays = navigationDelaySet{windows: map[*Surfaces]time.Duration{}}
-
 // diagnosticPageCollect makes the WebContent process of the app page of the window collect JavaScript objects. It is called before a memory check measures so that
 // the check measures the remaining memory independently of the collection time.
 func diagnosticPageCollect(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
@@ -935,39 +925,4 @@ func diagnosticProcessExit(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	case <-time.After(2 * pageTimeout):
 		return nil, rpcError(codeTimeout, "the application did not answer within %s", 2*pageTimeout)
 	}
-}
-
-// diagnosticNavigationDelay delays the later navigation callback handling of the window by ms milliseconds. 0 removes the delay.
-func diagnosticNavigationDelay(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
-	_, s, err := diagnosticHost(e, params)
-	if err != nil {
-		return nil, err
-	}
-	var p struct {
-		Ms *float64 `json:"ms"`
-	}
-	if err := decode(params, &p); err != nil {
-		return nil, err
-	}
-	if p.Ms == nil || *p.Ms != math.Trunc(*p.Ms) || *p.Ms < 0 || *p.Ms > 10000 {
-		return nil, rpcError(codeInvalidParams, "ms must be an integer from 0 to 10000")
-	}
-	navigationDelays.mu.Lock()
-	defer navigationDelays.mu.Unlock()
-	if *p.Ms == 0 {
-		delete(navigationDelays.windows, s)
-	} else {
-		navigationDelays.windows[s] = time.Duration(*p.Ms) * time.Millisecond
-	}
-	return nil, nil
-}
-
-// handle waits for the delay of the window, runs the callback handling, and records in the diagnostic record that it finished.
-func (d *navigationDelaySet) handle(s *Surfaces, handle func()) {
-	d.mu.Lock()
-	delay := d.windows[s]
-	d.mu.Unlock()
-	time.Sleep(delay)
-	handle()
-	s.note(fmt.Sprintf("navigation callback handled after %d ms", delay.Milliseconds()))
 }

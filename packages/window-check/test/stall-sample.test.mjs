@@ -33,17 +33,16 @@ test("sampleProcess runs sample on the host process into the given file and repo
     /^Error: sample 4321 exited with 1: sample cannot examine process 4321$/);
 });
 
-test("the page processes of a host are the WebContent children of its record", async () => {
-  const { mkdtempSync, writeFileSync } = await import("node:fs");
-  const { join } = await import("node:path");
-  const { tmpdir } = await import("node:os");
+test("the page processes of a host are the running WebContent services of its launchd domain", async () => {
   const { pageProcesses } = await import("../stall-sample.mjs");
-  const dir = mkdtempSync(join(tmpdir(), "soksak-stall-"));
-  writeFileSync(join(dir, "webkit-children.json"), JSON.stringify({ host_pid: 10, children: [
-    { pid: 11, kind: "GPU" }, { pid: 12, kind: "WebContent" }, { pid: 13, kind: "WebContent" },
-  ] }));
-  assert.deepEqual(pageProcesses(dir), [12, 13]);
-  assert.throws(() => pageProcesses(join(dir, "missing")), /webkit-children\.json/);
+  const stdout = "pid/10 = {\n\tservices = {\n\t\t       0      - \tcom.apple.WebKit.WebContent\n" +
+    "\t\t      11      - \tcom.apple.WebKit.GPU.A\n\t\t      12      - \tcom.apple.WebKit.WebContent.B\n" +
+    "\t\t      13      - \tcom.apple.WebKit.WebContent.C\n\t}\n\tendpoints = {\n\t\t   14 com.apple.WebKit.WebContent.D\n\t}\n}\n";
+  const calls = [];
+  assert.deepEqual(pageProcesses(10, (command, args) => { calls.push([command, ...args]); return { status: 0, stdout }; }), [12, 13]);
+  assert.deepEqual(calls, [["/bin/launchctl", "print", "pid/10"]]);
+  assert.throws(() => pageProcesses(10, () => ({ status: 113, stderr: "Could not print domain\n" })),
+    /^Error: launchctl print pid\/10 exited with 113: Could not print domain$/);
 });
 
 test("a page that does not reply records the host and its page processes and names the records", async () => {
@@ -64,10 +63,9 @@ test("a request that the page did not answer names the stall records or why they
   const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-config-"));
   const client = { endpoint: { pid: 999999 }, request: async () => { throw new EndpointError({ code: -32603, message: "the document did not reply within 10000 ms" }); } };
   const s = new Session({ name: "tauriv2", configDir }, client);
-  // This configuration folder has no record of WebKit children, so the reason why it could not be recorded stays in the
-  // error.
+  // No process 999999 runs, so sample cannot record the host and the reason stays in the error.
   await assert.rejects(s.request("status.get", { name: "core.verify" }),
-    /^EndpointError: tauriv2 status\.get core\.verify: the document did not reply within 10000 ms; sampling the host failed: .*webkit-children\.json: ENOENT/);
+    /^EndpointError: tauriv2 status\.get core\.verify: the document did not reply within 10000 ms; sampling the host failed: sample 999999 /);
 });
 
 test("a page process that already ended does not cost the records of the host and the other pages", async () => {

@@ -175,7 +175,7 @@ host의 goroutine과 스레드는 진입점으로만 시작한다. Go는 `routin
 
 **WebKit XPC 는 애플리케이션과 함께 죽는다.** 모든 종료 경로는 프로세스가 끝나기 전에 네이티브 `_killWebContentProcessAndResetState` 로 각 창의 WebContent 프로세스를 죽인다. 종료 신호는 두 호스트 모두에서 정상 quit 를 요청하므로 `host.quit` 처럼 창이 저장하고 사이드카가 멈춘다. quit 가 끝나지 않으면 두 번째 신호가 프로세스를 끝낸다. Wails 호스트는 종료 단계에서 WebContent 프로세스를 죽이고, Tauri 호스트는 애플리케이션이 종료하는 동안 닫히는 각 창의 WebContent 프로세스를 죽인다. 죽이지 않으면 macOS 는 클라이언트가 죽은 뒤에도 WebContent·GPU·Networking 프로세스를 살려 둔다.
 
-충돌 잔여는 운영체제가 회수할 때까지 받아들인다. 시작 정리를 시도했다가 전제가 틀려 지웠다(2026-09-30 실측): 이 시스템에서는 살아 있는 애플리케이션의 WebKit 도 unix 소켓이 없어 소켓 유무가 아무것도 가려내지 못하고, WebKit XPC 는 SIGTERM 을 무시하며, 유일한 건전한 소유 증명 — Networking 프로세스가 소유 번들의 `WebsiteData` 저장소를 열어 두는 것 — 은 고아 묶음의 소수만 식별한다. 메모리가 무거운 WebContent 는 식별 경로를 남기지 않기 때문이다. 죽은 애플리케이션의 WebKit 이 무엇인지 증명하지 못하는 정리는 실행되어서는 안 된다.
+종료 경로를 거치지 않고 끝난 호스트도 WebKit 프로세스를 남기지 않는다: launchd 는 애플리케이션의 WebKit service 를 그 프로세스의 launchd domain 에서 실행하고 그 프로세스가 끝나면 끝낸다(macOS 26.6.2 실측: 호스트를 `kill -9` 한 뒤 GPU·Networking·WebContent service 가 0.2초 안에 끝났고, 호스트마다 두 번 같았다). 따라서 호스트는 WebKit 프로세스 기록을 두지 않고 시작할 때 어떤 프로세스도 끝내지 않는다. 프로세스 목록은 이 호스트의 WebKit 프로세스와 다른 애플리케이션의 것을 구분하지 못하며, 목록의 프로세스를 끝내던 시작은 함께 실행 중이던 다른 애플리케이션의 프로세스를 끝냈다.
 
 **수정된 탭을 지키면 종료가 끝난다.** 종료는 준비된 창마다 닫기를 요청하고, 수정된 탭을 지킨 창의 페이지는 host 호출 `windowCloseKept`로 답한다([plugins](plugins.ko.md#탭-알림)). 그러면 host가 종료 상태를 끝낸다. 이후 마지막 창을 닫아도 애플리케이션이 종료되지 않고, WebContent process의 종료는 다시 오류 줄이 된다. `host.window`가 이 상태를 `quitting`으로 보고한다.
 

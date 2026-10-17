@@ -6,7 +6,7 @@
 
 ## 폴더
 
-애플리케이션의 모든 진단 파일은 `<config-dir>/logs/` 아래에 있다. 결함을 만난 사람은 이 폴더를 넘기고, [debug view](debug.ko.md)가 이 폴더를 나열하고 저장한다. 진단 파일을 담는 다른 폴더는 없다. `webkit-children.json` 같은 운영 파일은 기록이 아니므로 `logs/` 밖에 둔다.
+애플리케이션의 모든 진단 파일은 `<config-dir>/logs/` 아래에 있다. 결함을 만난 사람은 이 폴더를 넘기고, [debug view](debug.ko.md)가 이 폴더를 나열하고 저장한다. 진단 파일을 담는 다른 폴더는 없다. `process.lock` 같은 운영 파일은 기록이 아니므로 `logs/` 밖에 둔다.
 
 ## 파일
 
@@ -104,7 +104,7 @@
 | 문서 영역의 stream 메시지가 잘못되었거나 전달할 수 없거나, snapshot 확인이 거부된다 | `error host document stream <name>: <reason>`. 이름 `<name>`의 문서에서 실패한 stream 메시지마다 쓰며, 잘못된 메시지, 알 수 없는 stream이나 메시지 type, 거부된 `on`이나 확인, 없는 문서가 해당한다 |
 | 모달을 놓거나 모서리를 둥글게 하거나 위로 올리거나 포커스를 돌려줄 수 없거나, 모달 문서를 그리지 못한다 | `error host modal place`, `error host modal corners`, `error host modal raise`, `error host modal focus restoration`, `error host modal state`(모달 기록의 lock이 poisoned), `error host modal <id>`. 각각 뒤에 `: <reason>`이 붙는다 |
 | 사이드카를 멈추거나 교체하거나 창을 위해 유지할 수 없거나, 표면이 닫혔음을 알릴 수 없거나, Wails host의 native view 다리가 실패한다 | `error host sidecar stop`, `error host replace`, `error host sidecar retain`, `error host sidecar close <surface>`, `error host native message`, `error host native reply`. 각각 뒤에 `: <reason>`이 붙는다 |
-| WebKit 자식 process 기록을 읽거나 쓸 수 없거나, 고아가 된 자식을 끝낼 수 없다 | `error host webkit children record: <reason>`, `error host webkit children: kill <pid>: <reason>`. 프로세스 번호가 없는 `ps` 줄은 `error host webkit children: ps line "<line>" begins with no process number`, recording 상태의 lock이 poisoned이면 `error host recording: <reason>`이다 |
+| recording 상태의 lock이 poisoned이다 | `error host recording: <reason>` |
 | 알림 센터가 실패를 알리거나, 이벤트를 읽지 못하거나, 알림의 종류를 모르거나, 창과 표면이 없거나, 닫힌 창을 가리킨다 | `error host notification: <reason>` |
 | 이전 실행의 crash report를 읽을 수 없거나, crash report 폴더를 나열하거나 알아낼 수 없다 | `error host crash reports: <reason>`, `error native diagnostic reports: the system names no Library folder for the user`. 이유는 파일이나 폴더를 밝히며, 읽을 수 없는 report는 한 번만 보고한다([로깅](logging.ko.md)) |
 | 설치된 plugin의 catalog를 쓸 수 없다: 없거나 JSON이 아니거나 `plugin.<plugin>.` 밖의 이름이나 모르는 class를 선언한다 | `error host plugin catalog: <file>: <reason>`. 그 plugin의 event는 `undeclared`로 남고 다른 plugin은 class를 유지한다([로깅](logging.ko.md#plugin-catalog)) |

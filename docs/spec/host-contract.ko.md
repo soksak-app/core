@@ -459,11 +459,6 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.persistent.revive-failure-is-reported` | 재시작 실패는 연결 끊김과 그 까닭을 소유 표면에 알린다. | both |
 | `sidecars-transport.persistent.oversize-line-fails-the-connection` | 64 MiB 메시지 한도보다 긴 service 줄은 줄의 나머지를 읽지 않고 연결을 닫으며, 보낸 surface에 `message exceeds 67108864 bytes`와 함께 `sidecar-failure`를 보낸다. | both |
 | `sidecars-transport.persistent.invalid-event-fails-the-connection` | JSON 객체가 아닌 service 줄이나 문자열 `surface`가 없는 surface event는 연결을 닫고 보낸 surface에 `invalid message: ...`와 함께 `sidecar-failure`를 보낸다. 다음 전송은 다시 연결한다. | both |
-| `webkit-children.reap.requires-alive-webkit-same-start` | 기록된 WebKit 자식은 살아 있고, 여전히 WebKit 프로세스이며, 시작 시각이 기록과 같을 때만 죽는다. | both |
-| `webkit-children.record.owner-only` | 갱신이 쓰는 WebKit 자식 기록은 mode 0600이다. | both |
-| `webkit-children.record.concurrent-refreshes` | 동시에 실행된 기록 쓰기는 모두 성공하고 임시 파일을 남기지 않는다. | both |
-| `webkit-children.ps.reports-a-failed-query` | 실행할 수 없거나 존재하지 않는 프로세스의 상태 1이 아닌 상태로 끝난 `ps` 질의는 질의와 `ps`의 메시지를 담은 장소 `webkit children`의 `error` 기록이다. 존재하지 않는 프로세스를 묻는 질의는 오류가 아니다. | both |
-| `webkit-children.ps.reports-an-unreadable-line` | WebKit 프로세스의 `ps` 목록에서 프로세스 번호로 시작하지 않는 줄은 그 줄을 인용하는 장소 `webkit children`의 `error` 기록이고, 공백이 앞서는 프로세스 번호의 줄은 읽는다. | both |
 | `recording.state.poisoned-lock-is-reported` | 상태를 쥔 다른 thread가 panic한 뒤 진행 중인 녹화의 폴더를 읽으면 장소 `recording`의 `error` 기록이고 폴더는 없다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
 | `modal.state.poisoned-lock-is-reported` | 모달 기록을 쥔 다른 thread가 panic한 뒤 열린 모달이나 그 mode를 읽으면 장소 `modal state`의 `error` 기록이고 모달은 없다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
 | `surface-activation.owner.resolves-registered-view` | 등록된 네이티브 뷰는 그 표면 id로 해석된다. | both |
@@ -748,3 +743,4 @@ fn invalid_json_closes_connection() {
 | `log.batch.stores-clock-and-cids-of-page-events` | `log` 중계는 page가 준 `ts_us`, `mono_ns`와, event에 있으면 `cids`를 저장하고, `cids`가 없는 event에는 `cids`가 없다. | both |
 | `log.batch.answers-the-clock-request` | `log` 중계는 `{action: "clock"}`에 host가 호출 시점에 읽은 `ts_us`와 `mono_ns`로 답하고 event를 저장하지 않는다. 두 번째 답은 어느 clock에서도 첫 번째 답보다 작지 않다. | both |
 | `startup.failure.exits-with-its-message` | setup 단계의 실패는 그 메시지를 쓰고, 실패를 event loop에 돌려주지 않고 상태 1로 프로세스를 끝낸다. 돌려주면 프로세스가 abort된다. | both |
+| `startup.ends-no-process` | 호스트의 시작은 어떤 프로세스도 끝내지 않는다: 이전 실행의 기록 파일이 나열한 다른 애플리케이션의 WebKit 프로세스는 설정 디렉터리를 준비한 뒤에도 살아 있다. | both |
