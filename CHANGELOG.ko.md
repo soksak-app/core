@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F194.10.4: 명세가 연결 plugin, `applications.json`, `runtime.applications`, `plugins-progress`를 밝히지 않고, 외부 애플리케이션 표면과 연결 plugin의 계획을 없앤다. 끝난 sidecar의 frame에 대한 native surface 명세의 규칙은 남는다.
+- 체크리스트 항목 `F194.3.4` 폐기: 120 Hz 관문은 F194.10이 폐기하는 외부 애플리케이션 표면을 재었다.
+- 체크리스트 항목 `F194.5.9` 폐기: 예시 애플리케이션의 연결 plugin은 F194.10이 폐기하는 외부 애플리케이션 표면에 속했다.
 - F194.10.3: 연결 plugin과 애플리케이션 관문의 창 검사를 없애고, workflow가 애플리케이션 sidecar와 embed kit을 checkout하지 않고 시험 애플리케이션을 빌드하지 않으며, workspace 선언에 애플리케이션 sidecar가 없다. Green: workflow와 registry 검사 10개 중 10개, 창 검사 source 규칙.
 - F194.10.2: 두 `sok` 패키지의 설치기가 애플리케이션을 연결, 기록, 제거하지 않고, plugin 상태가 애플리케이션을 보고하지 않으며, 두 host가 `plugins-progress`를 보내지 않는다. event `sok.application.step`, `host.application.step`과 애플리케이션 연결만 쓰던 platform 작업을 없애고, host 계약에서 연결 사례 24개를 뺀다. F194.8.4부터 F194.8.6까지의 host 수정은 남는다. Green: Go `sok`과 host 검사, Rust `sok` 검사 117개, Rust host 검사 408개, clippy, event class와 census 검사.
 - F194.10.1: `@soksak/plugin-api`에 embed page `mountApplication`과 manifest 필드 `application`이 없고, surface context에 `runtime.applications`가 없으며, workbench에 연결된 애플리케이션의 기록과 애플리케이션 연결의 진행 줄이 없다. 외부 애플리케이션 표면의 파일을 없앤다. Green: plugin-api 검사 208개 중 208개, workbench 검사 481개 중 481개.

@@ -1029,14 +1029,13 @@
     - [o] F194.2.4 — P1: 애플리케이션 plugin의 로컬 저장소를 버전 0.0.1로 만들고 검사, README, 체크리스트를 둔다.
     - [o] F194.2.5 — P1: plugin page: supplier가 애플리케이션 sidecar인 image region 하나, region 입력과 DOM pointer·scroll·wheel event를 요청으로 전달, 애플리케이션의 메시지로 cursor 모양 설정, plugin 설정에서 애플리케이션 선택.
     - [o] F194.2.6 — P1: 웹 경로: 선택한 애플리케이션이 웹 주소이면 page가 그것을 document region에 보이고 sidecar를 시작하지 않는다.
-  - [~] F194.3 — P1: 측면 1의 관문. 기대: 실제 표면의 시험 애플리케이션으로, 60과 120 Hz의 frame 간격 p99가 두 frame 이하이고 빠진 frame이 없으며, pointer 이동부터 그 결과의 present까지의 지연이 부하 없는 기계에서 중앙값 25 ms 이하, p90 40 ms 이하이고 모든 단계의 기록으로 계산한다. 실패하면 결과를 기록하고 측면 1을 버린다.
+  - [o] F194.3 — P1: 측면 1의 관문. 기대: 실제 표면의 시험 애플리케이션으로, 60과 120 Hz의 frame 간격 p99가 두 frame 이하이고 빠진 frame이 없으며, pointer 이동부터 그 결과의 present까지의 지연이 부하 없는 기계에서 중앙값 25 ms 이하, p90 40 ms 이하이고 모든 단계의 기록으로 계산한다. 실패하면 결과를 기록하고 측면 1을 버린다.
     - [o] F194.3.1 — P1: 애플리케이션 plugin `appview`와 애플리케이션 sidecar를 `scripts/workspace-registry.json`에 선언해 `make install-plugins`가 그것들을 build, release해 검사 설정에 설치하게 한다. side 1을 버리면 이 선언을 지운다.
       - [o] F194.3.1-1 — P1: workflow `ci.yml`과 `window-checks.yml`이 `scripts/workspace-registry.json`이 선언한 모든 저장소를 checkout하고, 시험이 그것을 선언에 묶는다: F194.3.1의 선언이 CI가 checkout하지 않는 저장소를 이름해서, CI의 `make boundaries`가 `no such file or directory, open .../plugins/appview/package.json`으로 실패했다.
     - [o] F194.3.1-2 — P1: window-check workflow가 embed kit의 시험 애플리케이션을 빌드하고 appview 관문이 요구하는 `SOKSAK_EMBED_TEST_APP`을 정한다. `pnpm verify`가 관문을 실행하므로 workflow의 모든 실행이 거기서 실패했다. 검사가 window check가 단언하는 변수마다 workflow가 정하는지 요구한다.
     - [o] F194.3.2 — P1: 관문 검사: embed kit의 시험 애플리케이션을 실행하는 `appview` 카드를 열고, 그 위로 native pointer 이동을 보내며, 모든 단계의 기록에서 frame 간격과 각 pointer 이동부터 그것을 보이는 frame의 present까지의 지연을 계산하고, 각 단계와 그 시간을 보고하는 tracked 창 검사.
       - [o] F194.3.2-1 — P1: 관문 검사는 활성화와 함께 움직이지 않고 드래그한다: `e2e-check`는 애플리케이션을 활성화하는 검사를 거부하고 hover 이동에는 key window가 필요하며, press, present마다의 drag 단계, release는 비활성 애플리케이션의 view에 닿는다.
     - [o] F194.3.3 — P1: build한 host에서 display의 속도로 관문 검사를 실행하고, 측정한 frame 간격과 지연을 시험한 구현과 플랫폼과 함께 기록한다.
-    - [!] F194.3.4 — P2: 120 Hz에서 관문을 실행한다. 원인: 측정한 기계의 display는 60 Hz이고(`host.window.refreshRate` 60), host의 image `configure`에는 refresh rate가 없어 sidecar도 애플리케이션도 그릴 속도를 모른다. 그것을 싣는 것은 side 1이 바꾸지 않는 core의 image region 계약을 바꾼다. 재시도 조건: 측정 기계의 120 Hz display와, `configure`에 refresh rate를 더하는 image region 계약 변경의 승인.
   - [o] F194.4 — P2: 측면 2, 예시 애플리케이션의 어댑터를 그 애플리케이션의 license 아래 자기 저장소에. 기대: 애플리케이션이 공유 버퍼에 그리고 embed 입력을 창 event로 바꾸는 Slint platform으로 embed 방식에서 돌고, 애플리케이션의 변경은 창 platform 선택에 머문다. 재생과 편집 중에 F194.3의 관문을 만족한다. 실패하거나 편집 code를 고쳐야 하면 그 저장소만 버린다.
     - [o] F194.4.1 — P2: 예시 애플리케이션을 로컬 저장소로 fork하고, 어댑터 branch와 영문·한글 자체 체크리스트와 체인지로그를 둔다.
     - [o] F194.4.2 — P2: 애플리케이션의 patch된 Skia renderer에, 애플리케이션이 compositor와 공유하는 device에서 호출자가 frame마다 정하는 wgpu texture에 그리는 surface를 더한다.
@@ -1045,7 +1044,7 @@
     - [o] F194.4.5 — P2: 애플리케이션을 appview 카드에서 재생과 편집 중에 F194.3의 관문으로 측정하고 결과를 기록한다.
     - [o] F194.4.6 — P2: appview 카드가 창의 최대화와 복귀를 애플리케이션 오류 없이 따른다. 창 검사 `appview-gate`가 두 번 최대화하고 복귀하며 각 present까지의 시간을 기록한다.
     - [o] F194.4.7 — P2: 예시 애플리케이션의 관문은 그림을 바꾸는 동작을 잰다: 카드의 선언된 항목으로 연 미디어 파일이 있는 프로젝트와 그 타임라인을 따라가는 드래그. 시작 화면 위의 드래그는 아무것도 바꾸지 않아 이동 100번 중 12번만 frame을 냈다.
-  - [~] F194.5 — P2: 연결 plugin([계획](plans/connector-plugins.ko.md)): 애플리케이션의 코드를 담지 않고, 플랫폼, 설치되어 있을 때 찾는 방법, 애플리케이션의 배포로 설치하는 플랫폼별 레시피를 선언하는 애플리케이션별 plugin. plugin을 설치하면 설치된 애플리케이션을 연결하거나 레시피를 실행하고, `appview`가 그것을 시작한다.
+  - [o] F194.5 — P2: 연결 plugin: 애플리케이션의 코드를 담지 않고, 플랫폼, 설치되어 있을 때 찾는 방법, 애플리케이션의 배포로 설치하는 플랫폼별 레시피를 선언하는 애플리케이션별 plugin. plugin을 설치하면 설치된 애플리케이션을 연결하거나 레시피를 실행하고, `appview`가 그것을 시작한다.
     - [o] F194.5.1 — P2: 명세: plugin 명세의 `application` 필드, 설치 명세의 조사·설치·기록·제거 규칙과 `applications.json` 형식을 영문·한글로 둔다. `validateManifest`가 그 필드를 검사한다.
     - [o] F194.5.2 — P2: 조사: 두 `sok` 구현이 각 `locate` 항목(bundle identifier, `PATH`의 이름, 절대 경로)을 차례로 시도하고 같은 위치와 방법을 돌려준다. 쌍 시험.
     - [o] F194.5.3 — P2: 레시피 `release`: 설치기의 fetching으로 내려받기, SHA-256, `zip`과 `tar.gz` 풀기, 실패한 단계가 아무것도 바꾸지 않는 설치. 쌍 시험.
@@ -1063,10 +1062,9 @@
       - [o] F194.5.7.2 — P2: `runtime.applications`를 가진 core 버전을 release하고, 연결된 애플리케이션을 시작하는 plugin-appview 항목을 기록한다. 이 수정은 그 plugin-appview release로 사용자에게 닿는다.
     - [o] F194.5.8 — P2: embed kit 시험 애플리케이션의 release를 레시피로 가진 시험용 연결 plugin과, 없으면 설치하고 있으면 연결하며 카드에서 시작해 관문을 실행하는 창 검사.
       - [o] F194.5.8-1 — P2: 붙지 않은 region의 frame을 오류 대신 기록하는 A1.10과 함께 sidecar-app을 release한다. 이 수정은 그 release로만 사용자에게 닿는다.
-    - [!] F194.5.9 — P2: 예시 애플리케이션의 자기 배포가 embed 어댑터가 든 build를 주면, 그것의 연결 plugin. 원인: 레시피는 애플리케이션을 그 자신의 배포로만 설치하는데, 예시 애플리케이션의 어떤 release에도 embed 어댑터가 없다. 어댑터 build는 게시되지 않은 로컬 fork에만 있다. 재시도 조건: 예시 애플리케이션의 release나 tag된 source가 embed 어댑터를 가진 build를 줄 때.
     - [o] F194.5.10 — P2: 애플리케이션은 플랫폼의 애플리케이션 식별자로 식별하고, 애플리케이션의 배포물이나 플랫폼의 표준 패키지 관리자로 설치한다: `locate`에 `bundle` 곁에 `appid`(windows: 설치 package 또는 winget 식별자, linux: freedesktop 또는 Flatpak 애플리케이션 식별자)가 생기고, `package`는 플랫폼의 관리자(darwin `brew`, windows `winget`, linux `flatpak`)를 이름한다. windows와 linux는 구현될 때까지 `not implemented on <os>`를 돌려준다.
     - [o] F194.5.10-1 — P2: brew가 가지지 않은 package의 Rust 검사가 brew가 플랫폼의 관리자가 아닌 곳에서 건너뛴다. F194.5.10의 조건이 그 검사에 빠져 linux CI가 실패했다.
-  - [o] F194.7 — P1: 애플리케이션마다 plugin 하나가 사람이 여는 plugin이다: 연결 plugin은 자기 애플리케이션의 이름과 자기 surface를 가지고, `appview`는 자기 surface 대신 extension point `appview.surface`의 공유 module로 embed page를 준다([계획](plans/connector-plugins.ko.md)). 설정 `application:<id>`를 가진 `appview` 카드(F194.5.7)는 사람이 애플리케이션 대신 `appview`를 열게 했다.
+  - [o] F194.7 — P1: 애플리케이션마다 plugin 하나가 사람이 여는 plugin이다: 연결 plugin은 자기 애플리케이션의 이름과 자기 surface를 가지고, `appview`는 자기 surface 대신 extension point `appview.surface`의 공유 module로 embed page를 준다. 설정 `application:<id>`를 가진 `appview` 카드(F194.5.7)는 사람이 애플리케이션 대신 `appview`를 열게 했다.
     - [o] F194.7.0 — P1: 모든 확장 지점이 `modules`를 선언한 plugin은 surface 없이 그것을 준다. 그런 지점의 항목은 어떤 page도 받지 않기 때문이다. modules가 없는 지점은 여전히 제공자 surface가 필요하다. 반대 검토가 `extends`만 가진 plugin이 내용 요구 규칙에 거부되는 것과 권한 문장이 제공자 page만 이름하는 것을 찾았고, 둘 다 이 변경에 들어 있다.
     - [o] F194.7.1 — P1: plugin-appview가 애플리케이션 id에 대해 mount하는 공유 embed page와 함께 `appview.surface`를 선언하고 surface를 가지지 않는다. 그 저장소 항목 P5.
     - [o] F194.7.2 — P1: F194.5.8 창 검사가 공유 page를 import하는 자기 surface를 가진 연결 plugin을 설치하고, 설정 없이 그 plugin의 카드를 연다.
@@ -1085,8 +1083,8 @@
     - [o] F194.10.1 — P1: `@soksak/plugin-api`와 workbench에 embed page, `runtime.applications`, manifest 필드 `application`이 없다.
     - [o] F194.10.2 — P1: 두 `sok` 패키지의 설치기와 두 host에 애플리케이션 연결, 기록, 단계 event, 진행이 없고, 그것만 쓰던 platform 작업을 없앤다.
     - [o] F194.10.3 — P1: 창 검사, workflow, workspace 선언에 연결 plugin, 애플리케이션 관문, embed kit, 애플리케이션 sidecar가 없다.
-    - [~] F194.10.4 — P1: 명세와 계획이 외부 애플리케이션 표면을 밝히지 않는다.
-    - [ ] F194.10.5 — P1: registry가 sidecar-app 0.0.1을 철회하고, embed kit과 애플리케이션 sidecar 저장소를 보관하며, core 0.0.17을 release한다.
+    - [o] F194.10.4 — P1: 명세와 계획이 외부 애플리케이션 표면을 밝히지 않는다.
+    - [~] F194.10.5 — P1: registry가 sidecar-app 0.0.1을 철회하고, embed kit과 애플리케이션 sidecar 저장소를 보관하며, core 0.0.17을 release한다.
 - [o] F173 — P0: F161.57.5와 F112의 변경에서 source 규칙을 지키고, push 전에 검사한다. 입력: CI가 `scripts/test/census.test.mjs`를 `native/darwin/src/input_source.m:62: m.registration is outside its entrance files`로(F161.57.5의 대기가 notification observer를 직접 등록했다), `scripts/test/fallbacks.test.mjs`를 `packages/host/tauriv2/src/deep_link.rs`의 `rs.unwrap-or has neither an event nor a stated reason` 네 개와 `packages/host/wailsv3/src/deep_link.go`의 무시된 결과 하나(F112)로 실패했다. `make push-check`는 이 두 test를 돌리지 않았다. 완료: 대기가 `sp_observe_notification`으로 등록하고, Rust parse가 각 경우를 `let … else`와 `match`로 적고, Go parse가 기본값을 밝히며, `make push-check`가 census와 fallback test를 돌린다. Red: 그 실패를 로컬에서 재현했다. Green: 두 test, `input_source_test`, 두 host의 deep link test가 통과한다.
 - [o] F171 — P1: AppKit 안에서 Wails host의 main thread가 멈춘 것을 분류한다. 입력: 2026-10-14 load average 44~64에서 Wails check 애플리케이션의 stall watch(F164)가 `stalled_ms` 5012와 10849의 `host.stall`을 저장했고, 두 애플리케이션의 document가 10 s 넘게 window check에 답하지 않았다. 외부로 확인: sample한 stack(`logs/stall-host-60679-1791915914431.txt`)에서 main thread가 759 sample 모두 `-[NSMenuBarDisplayManager _applicationNameChanged:]` → `-[NSRunningApplication processIdentifier]` → `_LSCopyApplicationInformation` → `xpc_connection_send_message_with_reply_sync`에 있고, 이는 다른 애플리케이션의 상태가 바뀔 때 LaunchServices의 `applicationStatusSubsystemCallback`이 보낸 것이다. AppKit이 거기서 LaunchServices daemon을 기다리며, 그 경로에서 host의 code는 실행되지 않는다. 그런 부하에서 맨 앞 애플리케이션을 바꾸는 check는 이 대기를 만난다. stall watch가 stack과 함께 기록한다.
 - [o] F170 — P0: push 전에 CI의 검사를 실행한다. 입력: 2026-10-13의 commit이 main에 닿아 CI의 `hosts-check`에서 실패했다. push 전에 CI의 구조 검사를 실행하는 것이 없었기 때문이다. 완료: `make push-check`가 upstream branch에 없는 commit message, `ci.yml` 구조 단계의 target, format과 clippy 검사를 실행하고, `make hooks`의 pre-push hook이 그것을 실행한다. test가 그 target을 `ci.yml`과 비교한다. Red: `the push check runs every check of the structure step and the format and clippy checks of ci`가 `the Makefile has no push-check target`으로 실패했다. Green: 통과하고, `make push-check`가 통과한다.

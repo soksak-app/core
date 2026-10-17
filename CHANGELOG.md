@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F194.10.4: the specification states no connector plugin, `applications.json`, `runtime.applications` or `plugins-progress`, and the plans of the external application surface and of connector plugins are removed; the rule of the native surface specification for frames of an ended sidecar stays.
+- Retired checklist entry `F194.3.4`: the gate at 120 Hz measured the external application surface, which F194.10 retires.
+- Retired checklist entry `F194.5.9`: the connector plugin of the example application belonged to the external application surface, which F194.10 retires.
 - F194.10.3: the window checks of the connector plugin and the application gate are removed, the workflows check out neither the application sidecar nor the embed kit and build no test application, and the workspace declaration has no application sidecar. Green: 10 of 10 workflow and registry checks, the window check source rules.
 - F194.10.2: the installers of both `sok` packages connect, record and remove no application, the plugin state reports no applications, both hosts send no `plugins-progress`, the events `sok.application.step` and `host.application.step` and the platform operations that only the application connection used are removed, and the host contract drops its 24 connector cases; the host corrections of F194.8.4 to F194.8.6 stay. Green: Go `sok` and host checks, 117 Rust `sok` checks, 408 Rust host checks, clippy, the event class and census checks.
 - F194.10.1: `@soksak/plugin-api` has no embed page `mountApplication` and no manifest field `application`, the surface context has no `runtime.applications`, and the workbench has no record of connected applications and no progress line of connecting an application; the files of the external application surface are removed. Green: 208 of 208 plugin-api checks and 481 of 481 workbench checks.
