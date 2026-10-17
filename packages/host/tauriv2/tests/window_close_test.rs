@@ -10,7 +10,7 @@ use soksak_host_tauriv2::exposure::native_failure;
 use soksak_host_tauriv2::images::Images;
 use soksak_host_tauriv2::surfaces::{
     WindowNative, close_registered_surface, close_window_surfaces, create_named_surface,
-    create_registered_surface, removed_surfaces,
+    removed_surfaces,
 };
 use soksak_host_tauriv2::windows::{MainStep, NativeFailure, use_owner};
 
@@ -253,56 +253,4 @@ fn a_created_surface_has_its_name_when_its_native_surface_exists() {
         Err("surface tab-5: create returned a nil handle".to_string())
     );
     assert_eq!(named.lock().unwrap().len(), 1);
-}
-
-// contract: exposure.host-window.reads-during-surface-creation
-#[test]
-fn a_status_read_during_surface_creation_finds_the_registered_surface() {
-    // The window status reads the surface ids of the native views from the surface_hosts registry. Creation names the
-    // native view and registers it in one step, so a reading never sees a native view without its registration.
-    let named = Mutex::new(HashMap::new());
-    let surface_hosts: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
-    create_registered_surface(&named, &surface_hosts, "tab-4leevm", || Ok(7)).unwrap();
-    let status_names: HashMap<usize, String> = surface_hosts
-        .lock()
-        .unwrap()
-        .iter()
-        .map(|(id, handle)| (*handle, id.clone()))
-        .collect();
-    assert_eq!(
-        status_names.get(&7),
-        Some(&"tab-4leevm".to_string()),
-        "the native view of tab-4leevm has no registered surface after creation"
-    );
-    // A failed creation registers nothing.
-    let failed = create_registered_surface(&named, &surface_hosts, "tab-6", || {
-        Err("no window".to_string())
-    });
-    assert!(failed.is_err());
-    assert_eq!(surface_hosts.lock().unwrap().len(), 1);
-}
-
-// contract: exposure.host-window.reads-during-surface-close
-#[test]
-fn a_status_read_during_surface_close_finds_the_registered_surface() {
-    // The sync takes the removed surfaces in one step and closes each native surface in a later main-thread step. A
-    // window status read between the two steps sees the native surface, so the surface stays registered until the
-    // close step.
-    let named = Mutex::new(HashMap::from([(7usize, "tab-2".to_string())]));
-    let surface_hosts = Mutex::new(HashMap::from([("tab-2".to_string(), 7usize)]));
-    let alive = HashSet::new();
-    let removed = removed_surfaces(&surface_hosts, &alive).unwrap();
-    assert_eq!(removed, vec![("tab-2".to_string(), 7)]);
-    let status_names: HashMap<usize, String> = surface_hosts
-        .lock()
-        .unwrap()
-        .iter()
-        .map(|(id, handle)| (*handle, id.clone()))
-        .collect();
-    assert_eq!(
-        status_names.get(&7),
-        Some(&"tab-2".to_string()),
-        "the native surface of tab-2 has no registered surface before its close"
-    );
-    assert!(named.lock().unwrap().contains_key(&7));
 }

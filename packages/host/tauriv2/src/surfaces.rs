@@ -1151,3 +1151,7 @@ pub fn close_window_surfaces(
         Err(failures.join("; "))
     }
 }
+
+#[cfg(test)]
+#[path = "surfaces_test.rs"]
+mod tests;
