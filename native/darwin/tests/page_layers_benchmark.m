@@ -1,4 +1,4 @@
-// Measures the graphics memory of the WebContent process of the main web view for six layer variants of the workbench
+// Measures the graphics memory of the WebContent process of the main web view for the layer variants of the workbench
 // page in a 1200×760 window. The graphics memory is the row "Owned physical footprint (unmapped) (graphics)" that footprint
 // reports for the process. Each variant loads in a new web view, and the benchmark ends the process of that view before it
 // starts the next variant. The benchmark prints the numbers and asserts nothing.
@@ -29,15 +29,18 @@ typedef struct {
     BOOL clipped;     // the paint clip of compositor.js cuts the card rectangles out of body::before
     BOOL rail;        // a full-size absolute SVG overlay
     BOOL spinner;     // one running spinner animation
+    BOOL absolute;    // body::before is absolute instead of fixed
 } Variant;
 
 static const Variant kVariants[] = {
-    { "A", "opaque page, no fixed background (baseline)", NO, NO, NO, NO, NO },
-    { "B", "transparent body and fixed body::before background", YES, YES, NO, NO, NO },
-    { "C", "B and the paint clip of three card rectangles", YES, YES, YES, NO, NO },
-    { "D", "C and a full-size rail SVG overlay", YES, YES, YES, YES, NO },
-    { "E", "D and one running spinner animation", YES, YES, YES, YES, YES },
-    { "F", "B without isolation:isolate", YES, NO, NO, NO, NO },
+    { "A", "opaque page, no fixed background (baseline)", NO, NO, NO, NO, NO, NO },
+    { "B", "transparent body and fixed body::before background", YES, YES, NO, NO, NO, NO },
+    { "C", "B and the paint clip of three card rectangles", YES, YES, YES, NO, NO, NO },
+    { "D", "C and a full-size rail SVG overlay", YES, YES, YES, YES, NO, NO },
+    { "E", "D and one running spinner animation", YES, YES, YES, YES, YES, NO },
+    { "F", "B without isolation:isolate", YES, NO, NO, NO, NO, NO },
+    { "G", "opaque page and the rail SVG overlay", NO, NO, NO, YES, NO, NO },
+    { "H", "D with an absolute body::before", YES, YES, YES, YES, NO, YES },
 };
 
 static double nowSeconds(void) {
@@ -72,7 +75,8 @@ static NSString *pageFor(const Variant *variant) {
         [html appendString:@"body{background:transparent"];
         if (variant->isolated) [html appendString:@";isolation:isolate"];
         [html appendString:@"}"
-            "body::before{content:\"\";position:fixed;inset:0;z-index:-1;pointer-events:none;background:#1b1d21}"];
+            "body::before{content:\"\";inset:0;z-index:-1;pointer-events:none;background:#1b1d21}"];
+        [html appendString:variant->absolute ? @"body{position:relative}body::before{position:absolute}" : @"body::before{position:fixed}"];
     } else {
         [html appendString:@"body{background:#1b1d21}"];
     }

@@ -65,8 +65,11 @@ body{margin:0;background:transparent;color:var(--fg);word-break:keep-all;
   font:var(--size)/var(--line-height) var(--font);letter-spacing:var(--letter-spacing);
   box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;isolation:isolate}
 /* The window background has one paint owner. The style node that compositor.js adds to the document cuts out only the native
-   surface rectangles, so composited ancestors reveal the native pixels and the whole application background is kept. */
-body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+   surface rectangles, so composited ancestors reveal the native pixels and the whole application background is kept. It is
+   absolute in the body, which fills the window and hides its overflow: a fixed background is a composited layer of its own, so
+   the rail drawn over it took another window-sized layer (`make -C native/darwin benchmark-page-layers`, variants D and H). */
+body{position:relative}
+body::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
   background:var(--bg)}
 
 button,input,select,textarea{font:inherit;letter-spacing:inherit}
