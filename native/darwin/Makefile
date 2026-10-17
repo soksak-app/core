@@ -28,11 +28,12 @@
 #                         of the system through memory_pressure, which needs the sudoers rule for /usr/bin/memory_pressure. It asserts
 #                         the response of the region and refuses to judge when the 1-minute load is above 20
 #   make benchmark-region-cost [URL=<address>]
-#                         loads an address (default https://www.google.com/) in four variants in a 1200×760 window with a 1180×400
-#                         region: a plain web view with a nonpersistent and with a persistent data store, a document region with no
-#                         stream, and a document region with the element and request streams acknowledged. It prints the footprint
-#                         total, WebKit malloc, graphics and JS JIT of each WebContent process at 10 and 60 seconds, and the
-#                         differences R-P and S-R. It prints numbers and asserts nothing
+#                         loads an address (default https://www.google.com/) in a 1200×760 window with a 1180×400 region in the
+#                         variants of tests/region_cost_benchmark.m (plain web views with one setting each, a document region with no
+#                         stream, and a document region with the element and request streams acknowledged). It prints the footprint
+#                         total, WebKit malloc, graphics and JS JIT of each WebContent process at 10 and 60 seconds, the differences
+#                         of each variant to U (the plain web view with the region's user agent), and the footprint and vmmap rows of
+#                         the graphics and malloc allocations of R and U. It prints numbers and asserts nothing
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
 #   make repeat-suite COUNT=<n>

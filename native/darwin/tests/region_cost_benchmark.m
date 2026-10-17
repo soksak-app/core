@@ -1,13 +1,27 @@
 // The cost of a document region (docs/spec/native-surfaces.md#document-regions) against a plain web view. One address loads in
-// four variants, and each variant loads in a new view in a 1200×760 window with a 1180×400 region:
+// each variant in a new view in a 1200×760 window with a 1180×400 region at the same frame:
 //   P  a plain web view with a nonpersistent data store;
-//   Q  a plain web view with a persistent data store in a temp directory, as the hosts use;
+//   Q  a plain web view with a persistent data store in a temp directory, as the hosts use (also the persistent store of T6);
 //   R  a document region from sp_document_create with no stream subscribed;
-//   S  R with the element and request streams subscribed, and each element snapshot acknowledged.
-// For each variant the benchmark reads the physical footprint of the WebContent process of the view 10 seconds and 60 seconds
-// after the load finished: the total (ri_phys_footprint), the dirty and reclaimable bytes of WebKit malloc, and the dirty
-// bytes of the graphics and JS JIT rows of footprint. The benchmark prints the numbers and asserts nothing. It ends each view
-// and its WebContent process before it starts the next variant.
+//   S  R with the element and request streams subscribed, and each element snapshot acknowledged;
+//   T1 P with applicationNameForUserAgent set as the region sets it;
+//   T2 P with the three content-world user scripts and their message handlers as the region installs them;
+//   T3 P with a sok scheme handler;
+//   T4 P with view.appearance set to the effective appearance of the content view;
+//   T5 P with pageZoom set to 1;
+//   T7 P with the device scale override set to the backing scale of the window;
+//   U  P with applicationNameForUserAgent as the region sets it (the same setting as T1), the baseline of the difference rows,
+//      because the Safari user agent makes google.com serve its full page instead of the legacy page that P receives.
+// Each T variant differs from P by one setting. For each variant the benchmark reads the physical footprint of the WebContent
+// process of the view 10 seconds and 60 seconds after the load finished: the total (ri_phys_footprint), the dirty and
+// reclaimable bytes of WebKit malloc, and the dirty bytes of the graphics and JS JIT rows of footprint. After the 60 second
+// read it prints the page facts (user agent, document length, resource count) and the layer and frame facts of the view.
+// R and U also print the footprint and vmmap rows of the graphics, IOSurface, CoreAnimation and malloc allocations.
+// The benchmark prints the numbers and asserts nothing. It ends each view and its WebContent process before the next variant.
+//
+// The three scripts and the names of the content world and the messages are copied from src/document_view.m, because the
+// source keeps them as static strings and the benchmark does not change the source. A difference between the two copies is
+// a defect of this benchmark.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <libproc.h>
@@ -35,14 +49,112 @@ static const NSTimeInterval stepLimit = 120;
 static const NSTimeInterval settleSeconds = 2;
 // The reads of each view, in seconds after the load finished.
 static const NSTimeInterval readSeconds[] = { 10, 60 };
-enum { kReads = 2, kVariants = 4, kMegabyte = 1048576 };
-enum { kVariantP, kVariantQ, kVariantR, kVariantS };
-static const char *kVariantNames[] = { "P", "Q", "R", "S" };
-static const char *kVariantLabels[] = {
-    "plain web view, nonpersistent data store",
-    "plain web view, persistent data store in a temp directory",
-    "document region, no stream subscribed",
-    "document region, element and request streams subscribed and acknowledged",
+enum { kReads = 2, kMegabyte = 1048576 };
+
+// The scripts and the names of src/document_view.m (copied; see the comment at the top).
+static NSString *const kDocumentWorld = @"soksak-document";
+static NSString *const kScrollMessage = @"soksakDocumentScroll";
+static NSString *const kMessageMessage = @"soksakDocumentMessage";
+static NSString *const kPageMessage = @"soksakDocumentPage";
+static NSString *const kScrollScript = @"(() => {"
+    "const post = () => window.webkit.messageHandlers.soksakDocumentScroll.postMessage("
+    "{ x: window.scrollX, y: window.scrollY });"
+    "addEventListener('scroll', post, { capture: true, passive: true });"
+    "addEventListener('load', post);"
+    "post();"
+    "})();";
+static NSString *const kMessageScript = @"(() => {"
+    "if (location.protocol !== 'sok:') return;"
+    "addEventListener('message', (event) => {"
+    "if (event.source !== window) return;"
+    "let text;"
+    "try { text = JSON.stringify(event.data); } catch (error) { text = undefined; }"
+    "window.webkit.messageHandlers.soksakDocumentMessage.postMessage("
+    "text === undefined ? { error: 'the message data is not JSON' } : { message: text });"
+    "});"
+    "})();";
+static NSString *const kPageScript = @"(() => {"
+    "const post = (value) => window.webkit.messageHandlers.soksakDocumentPage.postMessage(value);"
+    "let elements = false; let marked = false;"
+    "const tree = new MutationObserver(() => { if (marked) return; marked = true; post({ changed: true }); });"
+    "globalThis.soksakSnapshot = () => {"
+    "  marked = false; const nodes = []; let total = 0;"
+    "  const walk = (element, depth) => {"
+    "    total++;"
+    "    if (nodes.length < 500) nodes.push({ depth, tag: element.localName, id: element.getAttribute('id') ?? '',"
+    "      class: element.getAttribute('class') ?? '' });"
+    "    for (const child of element.children) walk(child, depth + 1);"
+    "  };"
+    "  if (document.documentElement) walk(document.documentElement, 0);"
+    "  return { nodes, total, truncated: total > 500 };"
+    "};"
+    "let resources = null;"
+    "const entry = (item) => ({ url: item.name, type: item.entryType === 'navigation' ? 'navigation' : (item.initiatorType || 'other'),"
+    "  start: item.startTime, duration: item.duration });"
+    "globalThis.soksakStream = (name, on) => {"
+    "  if (name === 'elements') {"
+    "    if (on === elements) return null;"
+    "    elements = on;"
+    "    if (on) { tree.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'class'] });"
+    "      marked = true; post({ changed: true }); }"
+    "    else { tree.disconnect(); marked = false; }"
+    "    return null;"
+    "  }"
+    "  if (name === 'requests') {"
+    "    if (on === (resources !== null)) return null;"
+    "    if (on) {"
+    "      post({ entries: performance.getEntriesByType('navigation').map(entry) });"
+    "      resources = new PerformanceObserver((list) => post({ entries: list.getEntries().map(entry) }));"
+    "      resources.observe({ type: 'resource', buffered: true });"
+    "    } else { resources.disconnect(); resources = null; }"
+    "    return null;"
+    "  }"
+    "  throw new Error(`unknown stream ${name}`);"
+    "};"
+    "let link = null;"
+    "const point = (target) => {"
+    "  const anchor = target instanceof Element ? target.closest('a[href]') : null;"
+    "  const next = anchor ? anchor.href : null;"
+    "  if (next !== link) { link = next; post({ link: link ?? '' }); }"
+    "};"
+    "addEventListener('mouseover', (event) => point(event.target), true);"
+    "addEventListener('mouseout', (event) => { if (!event.relatedTarget) point(null); }, true);"
+    "addEventListener('pagehide', () => point(null));"
+    "addEventListener('pageshow', (event) => { if (event.persisted) post({ ready: true }); });"
+    "post({ ready: true });"
+    "})();";
+
+// The variants in the order of the table. A plain variant has none of the region fields set; the region fields select the
+// document region or the stream subscription.
+typedef struct {
+    const char *name;
+    const char *label;
+    BOOL region;         // sp_document_create, as the browser plugin gets it
+    BOOL persistent;     // a persistent data store in the temp directory
+    BOOL streams;        // the element and request streams are subscribed and acknowledged (region only)
+    BOOL userAgent;      // applicationNameForUserAgent as the region sets it
+    BOOL scripts;        // the three content-world user scripts and their message handlers
+    BOOL scheme;         // a sok scheme handler
+    BOOL appearance;     // view.appearance set to the effective appearance of the content view
+    BOOL pageZoom;       // pageZoom set to 1
+    BOOL overrideScale;  // the device scale override set to the backing scale of the window
+    BOOL breakdown;      // footprint -v and vmmap rows of the graphics and malloc allocations are printed at the last read
+} Variant;
+
+enum { kP, kQ, kR, kS, kT1, kT2, kT3, kT4, kT5, kT7, kU, kVariantCount };
+
+static const Variant kVariants[kVariantCount] = {
+    { "P", "plain web view, nonpersistent data store", NO, NO, NO, NO, NO, NO, NO, NO, NO, NO },
+    { "Q", "plain web view, persistent data store (also the store of T6)", NO, YES, NO, NO, NO, NO, NO, NO, NO, NO },
+    { "R", "document region, no stream subscribed", YES, NO, NO, NO, NO, NO, NO, NO, NO, YES },
+    { "S", "document region, element and request streams acknowledged", YES, NO, YES, NO, NO, NO, NO, NO, NO, NO },
+    { "T1", "P + applicationNameForUserAgent as the region sets it", NO, NO, NO, YES, NO, NO, NO, NO, NO, NO },
+    { "T2", "P + the three content-world user scripts and message handlers", NO, NO, NO, NO, YES, NO, NO, NO, NO, NO },
+    { "T3", "P + the sok scheme handler", NO, NO, NO, NO, NO, YES, NO, NO, NO, NO },
+    { "T4", "P + view.appearance of the content view", NO, NO, NO, NO, NO, NO, YES, NO, NO, NO },
+    { "T5", "P + pageZoom 1", NO, NO, NO, NO, NO, NO, NO, YES, NO, NO },
+    { "T7", "P + device scale override at the window backing scale", NO, NO, NO, NO, NO, NO, NO, NO, YES, NO },
+    { "U", "P + applicationNameForUserAgent (the baseline of the difference rows)", NO, NO, NO, YES, NO, NO, NO, NO, NO, YES },
 };
 
 // The footprint of one WebContent process in bytes. A row that footprint does not report is -1.
@@ -53,6 +165,41 @@ typedef struct {
     long graphicsDirty;
     long jitDirty;
 } Reading;
+
+// The user agent suffix that the region sets: the version of the system Safari (copied from src/document_view.m).
+static NSString *safariApplicationName(void) {
+    NSString *version = [NSBundle bundleWithPath:@"/Applications/Safari.app"].infoDictionary[@"CFBundleShortVersionString"];
+    NSArray<NSString *> *parts = [version componentsSeparatedByString:@"."];
+    if (parts.count < 2) return nil;
+    return [NSString stringWithFormat:@"Version/%@.%@ Safari/605.1.15", parts[0], parts[1]];
+}
+
+// Counts the script messages. The benchmark does not act on them.
+@interface ScriptSink : NSObject <WKScriptMessageHandler>
+@end
+
+@implementation ScriptSink
+- (void)userContentController:(WKUserContentController *)controller didReceiveScriptMessage:(WKScriptMessage *)message {
+    (void)controller;
+    (void)message;
+}
+@end
+
+// Fails every scheme task. The region's handler for a plugin without a folder fails every task in the same way.
+@interface FailingSchemeHandler : NSObject <WKURLSchemeHandler>
+@end
+
+@implementation FailingSchemeHandler
+- (void)webView:(WKWebView *)webView startURLSchemeTask:(id<WKURLSchemeTask>)task {
+    (void)webView;
+    [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorFileDoesNotExist userInfo:nil]];
+}
+
+- (void)webView:(WKWebView *)webView stopURLSchemeTask:(id<WKURLSchemeTask>)task {
+    (void)webView;
+    (void)task;
+}
+@end
 
 static double nowSeconds(void) {
     return NSDate.date.timeIntervalSince1970;
@@ -200,12 +347,121 @@ static const char *differenceMegabytes(long from, long to) {
     return [NSString stringWithFormat:@"%+.2f", (double)(to - from) / kMegabyte].UTF8String;
 }
 
+// The configuration of a plain web view of a variant. The region variants are created by sp_document_create.
+static WKWebViewConfiguration *plainConfiguration(const Variant *variant, WKWebsiteDataStore *persistentStore) {
+    WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
+    configuration.websiteDataStore = variant->persistent ? persistentStore : WKWebsiteDataStore.nonPersistentDataStore;
+    if (variant->userAgent) configuration.applicationNameForUserAgent = safariApplicationName();
+    if (variant->scheme) {
+        FailingSchemeHandler *handler = [[[FailingSchemeHandler alloc] init] autorelease];
+        [configuration setURLSchemeHandler:handler forURLScheme:@"sok"];
+    }
+    if (variant->scripts) {
+        WKContentWorld *world = [WKContentWorld worldWithName:kDocumentWorld];
+        ScriptSink *sink = [[[ScriptSink alloc] init] autorelease];
+        WKUserContentController *controller = configuration.userContentController;
+        [controller addScriptMessageHandler:sink contentWorld:world name:kScrollMessage];
+        [controller addScriptMessageHandler:sink contentWorld:world name:kPageMessage];
+        [controller addScriptMessageHandler:sink contentWorld:world name:kMessageMessage];
+        [controller addUserScript:[[[WKUserScript alloc] initWithSource:kMessageScript
+            injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES inContentWorld:world] autorelease]];
+        [controller addUserScript:[[[WKUserScript alloc] initWithSource:kScrollScript
+            injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES inContentWorld:world] autorelease]];
+        [controller addUserScript:[[[WKUserScript alloc] initWithSource:kPageScript
+            injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES inContentWorld:world] autorelease]];
+    }
+    return configuration;
+}
+
+// Prints the page facts and the layer and frame facts of the view after its last read. The page facts are the user agent, the
+// length of the document and the number of resource timing entries.
+static void printFacts(const Variant *variant, WKWebView *view, NSWindow *window, NSView *content) {
+    NSString *step = [NSString stringWithFormat:@"facts %s", variant->name];
+    __block id result = nil;
+    __block NSError *failure = nil;
+    __block BOOL done = NO;
+    [view callAsyncJavaScript:@"return [navigator.userAgent, document.documentElement.outerHTML.length, performance.getEntriesByType('resource').length];"
+        arguments:@{} inFrame:nil inContentWorld:WKContentWorld.pageWorld completionHandler:^(id value, NSError *error) {
+        result = [value retain];
+        failure = [error retain];
+        done = YES;
+    }];
+    if (!pumpUntil(stepLimit, ^BOOL { return done; })) failStep(step, @"the page did not answer the facts script within 120 seconds", view._webProcessIdentifier);
+    NSString *userAgent = @"n/a";
+    NSString *length = @"n/a";
+    NSString *resources = @"n/a";
+    if (failure) {
+        fprintf(stderr, "facts %s: the script failed: %s\n", variant->name, failure.localizedDescription.UTF8String);
+    } else if ([result isKindOfClass:NSArray.class] && [result count] == 3) {
+        userAgent = result[0];
+        length = [NSString stringWithFormat:@"%@", result[1]];
+        resources = [NSString stringWithFormat:@"%@", result[2]];
+    }
+    fprintf(stdout, "facts %s: user_agent=\"%s\" html_length=%s resource_entries=%s\n", variant->name, userAgent.UTF8String,
+        length.UTF8String, resources.UTF8String);
+    NSView *superview = view.superview;
+    fprintf(stdout, "facts %s: frame=(%g, %g, %g, %g) superview=%s superview_wants_layer=%d wants_layer=%d layer_contents_scale=%g "
+        "page_zoom=%g window_backing_scale=%g content_appearance=%s\n", variant->name,
+        view.frame.origin.x, view.frame.origin.y, view.frame.size.width, view.frame.size.height,
+        superview ? NSStringFromClass(superview.class).UTF8String : "none", superview ? superview.wantsLayer : 0,
+        view.wantsLayer, view.layer ? view.layer.contentsScale : 0.0, view.pageZoom, window.backingScaleFactor,
+        content.effectiveAppearance.name.UTF8String);
+    fflush(stdout);
+}
+
+// The output of a tool that reports the memory of a process, or nil when the tool cannot run or fails.
+static NSString *toolText(NSString *path, NSArray<NSString *> *arguments) {
+    NSTask *task = [[[NSTask alloc] init] autorelease];
+    task.executableURL = [NSURL fileURLWithPath:path];
+    task.arguments = arguments;
+    NSPipe *pipe = [NSPipe pipe];
+    task.standardOutput = pipe;
+    NSError *error = nil;
+    if (![task launchAndReturnError:&error]) {
+        fprintf(stderr, "%s cannot start: %s\n", path.UTF8String, error.localizedDescription.UTF8String);
+        return nil;
+    }
+    NSData *data = [pipe.fileHandleForReading readDataToEndOfFile];
+    [task waitUntilExit];
+    if (task.terminationStatus != 0) return nil;
+    return [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+}
+
+// Prints the rows of footprint -v and vmmap -summary that name the graphics, IOSurface, CoreAnimation, malloc and JS
+// allocations of the WebContent process, each row as the tool reports it. A tool that reports no matching rows prints a count of zero.
+static void printBreakdown(const Variant *spec, pid_t process) {
+    NSString *step = [NSString stringWithFormat:@"breakdown %s", spec->name];
+    NSString *pidText = [NSString stringWithFormat:@"%d", process];
+    NSArray<NSString *> *keys = @[@"IOSurface", @"IOAccelerator", @"CoreAnimation", @"IOKit", @"WebKit malloc", @"MALLOC",
+        @"JS", @"graphics", @"Owned physical", @"TOTAL"];
+    NSArray<NSString *> *commands = @[@"/usr/bin/footprint", @"/usr/bin/vmmap"];
+    NSArray<NSArray<NSString *> *> *arguments = @[@[@"-p", pidText, @"-v", @"-f", @"bytes"], @[@"-summary", pidText]];
+    for (NSUInteger tool = 0; tool < commands.count; tool++) {
+        NSString *name = commands[tool].lastPathComponent;
+        NSString *text = toolText(commands[tool], arguments[tool]);
+        if (!text) failStep(step, [NSString stringWithFormat:@"%@ did not report the process", commands[tool]], process);
+        NSUInteger printed = 0;
+        for (NSString *line in [text componentsSeparatedByString:@"\n"]) {
+            for (NSString *key in keys) {
+                if ([line rangeOfString:key].location == NSNotFound) continue;
+                fprintf(stdout, "breakdown %s %s: %s\n", spec->name, name.UTF8String,
+                    [line stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet].UTF8String);
+                printed++;
+                break;
+            }
+        }
+        fprintf(stdout, "breakdown %s %s: %lu matching rows\n", spec->name, name.UTF8String, (unsigned long)printed);
+    }
+    fflush(stdout);
+}
+
 // Loads the address in one variant, reads the footprint of its WebContent process at each read time, and ends the view and
 // its process. The readings are stored in readings[0...kReads-1].
-static void measureVariant(int variant, NSView *content, NSURL *address, WKWebsiteDataStore *persistentStore,
+static void measureVariant(int variant, NSWindow *window, NSView *content, NSURL *address, WKWebsiteDataStore *persistentStore,
     NSString *documentDirectory, Reading readings[kReads]) {
-    NSString *step = [NSString stringWithFormat:@"variant %s", kVariantNames[variant]];
-    fprintf(stdout, "start %s: %s\n", kVariantNames[variant], kVariantLabels[variant]);
+    const Variant *spec = &kVariants[variant];
+    NSString *step = [NSString stringWithFormat:@"variant %s", spec->name];
+    fprintf(stdout, "start %s: %s\n", spec->name, spec->label);
     fflush(stdout);
     double started = nowSeconds();
 
@@ -214,11 +470,12 @@ static void measureVariant(int variant, NSView *content, NSURL *address, WKWebsi
     void *surface = NULL;
     void *document = NULL;
     CGRect frame = NSMakeRect(kMarginLeft, kWindowHeight - kMarginTop - kRegionHeight, kRegionWidth, kRegionHeight);
-    if (variant == kVariantP || variant == kVariantQ) {
-        WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
-        configuration.websiteDataStore = variant == kVariantP ? WKWebsiteDataStore.nonPersistentDataStore : persistentStore;
-        view = [[[WKWebView alloc] initWithFrame:frame configuration:configuration] autorelease];
+    if (!spec->region) {
+        view = [[[WKWebView alloc] initWithFrame:frame configuration:plainConfiguration(spec, persistentStore)] autorelease];
         [content addSubview:view];
+        if (spec->appearance) view.appearance = content.effectiveAppearance;
+        if (spec->pageZoom) view.pageZoom = 1;
+        if (spec->overrideScale) [view _setOverrideDeviceScaleFactor:window.backingScaleFactor];
         [view loadRequest:[NSURLRequest requestWithURL:address]];
     } else {
         // The surface is the main web view of the application: the document region is placed inside it.
@@ -233,7 +490,7 @@ static void measureVariant(int variant, NSView *content, NSURL *address, WKWebsi
         if (!document) failStep(step, @"a document view is not created inside the surface", 0);
         view = (WKWebView *)document;
         sp_document_place(document, kMarginLeft, kMarginTop, kMarginRight, kMarginBottom, true);
-        if (variant == kVariantS) {
+        if (spec->streams) {
             sp_document_set_stream(document, streamMessage, document);
             if (!sp_document_stream_on(document, "elements", true) || !sp_document_stream_on(document, "requests", true)) {
                 failStep(step, @"a document stream is not turned on", view._webProcessIdentifier);
@@ -251,19 +508,20 @@ static void measureVariant(int variant, NSView *content, NSURL *address, WKWebsi
     pumpUntil(settleSeconds, ^BOOL { return NO; });
     double loaded = nowSeconds();
     pid_t process = view._webProcessIdentifier;
-    fprintf(stdout, "loaded %s: pid=%d title=%s elapsed %.3f s\n", kVariantNames[variant], process,
-        view.title.UTF8String, loaded - started);
+    fprintf(stdout, "loaded %s: pid=%d title=%s elapsed %.3f s\n", spec->name, process, view.title.UTF8String, loaded - started);
     fflush(stdout);
 
     for (int i = 0; i < kReads; i++) {
         waitUntil(loaded + readSeconds[i]);
         readings[i] = readFootprint(view, step);
         fprintf(stdout, "read %s at %.0f s: total_mb=%s malloc_dirty_mb=%s malloc_reclaimable_mb=%s graphics_mb=%s jit_mb=%s\n",
-            kVariantNames[variant], readSeconds[i], megabytes(readings[i].total),
+            spec->name, readSeconds[i], megabytes(readings[i].total),
             megabytes(readings[i].mallocDirty), megabytes(readings[i].mallocReclaimable),
             megabytes(readings[i].graphicsDirty), megabytes(readings[i].jitDirty));
         fflush(stdout);
     }
+    if (spec->breakdown) printBreakdown(spec, process);
+    printFacts(spec, view, window, content);
 
     // The view, its surface and its WebContent process end here. WebKit keeps an idle WebContent process after its last view
     // closes, so the benchmark ends each process it started.
@@ -279,8 +537,21 @@ static void measureVariant(int variant, NSView *content, NSURL *address, WKWebsi
     }
     if (!endProcess(process, step)) exit(1);
     if (mainProcess != 0 && mainProcess != process && !endProcess(mainProcess, step)) exit(1);
-    fprintf(stdout, "end %s elapsed %.3f s\n", kVariantNames[variant], nowSeconds() - started);
+    fprintf(stdout, "end %s elapsed %.3f s\n", spec->name, nowSeconds() - started);
     fflush(stdout);
+}
+
+// Prints one table row: the name and the total, malloc dirty, malloc reclaimable, graphics and JIT columns.
+static void printRow(const char *name, Reading reading) {
+    fprintf(stdout, "%-8s %10s %16s %22s %14s %10s\n", name, megabytes(reading.total), megabytes(reading.mallocDirty),
+        megabytes(reading.mallocReclaimable), megabytes(reading.graphicsDirty), megabytes(reading.jitDirty));
+}
+
+// Prints one difference row: to - from in each column.
+static void printDifference(const char *name, Reading from, Reading to) {
+    fprintf(stdout, "%-8s %10s %16s %22s %14s %10s\n", name, differenceMegabytes(from.total, to.total),
+        differenceMegabytes(from.mallocDirty, to.mallocDirty), differenceMegabytes(from.mallocReclaimable, to.mallocReclaimable),
+        differenceMegabytes(from.graphicsDirty, to.graphicsDirty), differenceMegabytes(from.jitDirty, to.jitDirty));
 }
 
 int main(int argc, const char *argv[]) { @autoreleasepool {
@@ -305,6 +576,8 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
     window.contentView = content;
     // orderBack does not activate the application.
     [window orderBack:nil];
+    fprintf(stdout, "window %gx%g backing_scale %g\n", (double)kWindowWidth, (double)kWindowHeight, (double)window.backingScaleFactor);
+    fflush(stdout);
 
     // The persistent store of Q is one store for the directory, as the hosts keep one store per directory. The document
     // variants use another directory, so that two store objects never write the same files.
@@ -324,34 +597,25 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         return 1;
     }
 
-    Reading readings[kVariants][kReads];
-    for (int variant = 0; variant < kVariants; variant++) {
-        measureVariant(variant, content, url, persistentStore, documentDirectory, readings[variant]);
+    Reading readings[kVariantCount][kReads];
+    for (int variant = 0; variant < kVariantCount; variant++) {
+        measureVariant(variant, window, content, url, persistentStore, documentDirectory, readings[variant]);
     }
 
-    // The table: the reads of each variant, then the differences R-P and S-R at each read time.
+    // The tables: each variant at each read time, then the difference of each variant to P (S to R for the streams).
     for (int i = 0; i < kReads; i++) {
         fprintf(stdout, "\nread at %.0f s (MB)\n", readSeconds[i]);
         fprintf(stdout, "%-8s %10s %16s %22s %14s %10s\n", "variant", "total", "malloc_dirty", "malloc_reclaimable", "graphics", "jit");
-        for (int variant = 0; variant < kVariants; variant++) {
-            Reading reading = readings[variant][i];
-            fprintf(stdout, "%-8s %10s %16s %22s %14s %10s\n", kVariantNames[variant], megabytes(reading.total),
-                megabytes(reading.mallocDirty), megabytes(reading.mallocReclaimable),
-                megabytes(reading.graphicsDirty), megabytes(reading.jitDirty));
+        for (int variant = 0; variant < kVariantCount; variant++) {
+            printRow(kVariants[variant].name, readings[variant][i]);
         }
-        Reading p = readings[kVariantP][i];
-        Reading q = readings[kVariantQ][i];
-        Reading r = readings[kVariantR][i];
-        Reading s = readings[kVariantS][i];
-        fprintf(stdout, "%-8s %10s %16s %22s %14s %10s\n", "R-P", differenceMegabytes(p.total, r.total),
-            differenceMegabytes(p.mallocDirty, r.mallocDirty), differenceMegabytes(p.mallocReclaimable, r.mallocReclaimable),
-            differenceMegabytes(p.graphicsDirty, r.graphicsDirty), differenceMegabytes(p.jitDirty, r.jitDirty));
-        fprintf(stdout, "%-8s %10s %16s %22s %14s %10s\n", "S-R", differenceMegabytes(r.total, s.total),
-            differenceMegabytes(r.mallocDirty, s.mallocDirty), differenceMegabytes(r.mallocReclaimable, s.mallocReclaimable),
-            differenceMegabytes(r.graphicsDirty, s.graphicsDirty), differenceMegabytes(r.jitDirty, s.jitDirty));
-        fprintf(stdout, "%-8s %10s %16s %22s %14s %10s\n", "Q-P", differenceMegabytes(p.total, q.total),
-            differenceMegabytes(p.mallocDirty, q.mallocDirty), differenceMegabytes(p.mallocReclaimable, q.mallocReclaimable),
-            differenceMegabytes(p.graphicsDirty, q.graphicsDirty), differenceMegabytes(p.jitDirty, q.jitDirty));
+        for (int variant = 0; variant < kVariantCount; variant++) {
+            if (variant == kU) continue;
+            char name[16];
+            snprintf(name, sizeof(name), "%s-U", kVariants[variant].name);
+            printDifference(name, readings[kU][i], readings[variant][i]);
+        }
+        printDifference("S-R", readings[kR][i], readings[kS][i]);
     }
     fflush(stdout);
 
