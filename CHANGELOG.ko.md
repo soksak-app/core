@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.10.5: core 0.0.17이 게시되었고, 그 CI 실행과 release workflow가 성공으로 끝났다.
 - F196.1: window facts의 각 web view row가 자기 WebContent process를 보고하고, 두 host가 그것을 `host.window`의 `documents` 각 항목에 `process`로 옮기므로, 브라우저 탭의 메모리가 그 surface에 연결된다. private API 목록이 window facts를 `_webProcessIdentifier`의 호출 위치로 밝힌다. Red: native window facts 검사가 web view row에서 `process`를 찾지 못했다. Green: `make -C native/darwin repeat TEST=window_facts_test` 2번 중 2번, 두 host가 build되고 host parity 검사가 통과한다.
 - F194.10.5: 선언된 모든 workspace 버전이 외부 애플리케이션 표면이 없는 release인 0.0.17이다. registry가 sidecar-app 0.0.1을 철회하고, embed kit과 애플리케이션 sidecar 저장소를 보관한다.
 - F194.10.4: 명세가 연결 plugin, `applications.json`, `runtime.applications`, `plugins-progress`를 밝히지 않고, 외부 애플리케이션 표면과 연결 plugin의 계획을 없앤다. 끝난 sidecar의 frame에 대한 native surface 명세의 규칙은 남는다.
