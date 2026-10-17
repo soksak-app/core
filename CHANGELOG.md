@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Retired checklist entry `F194.9`: capture connector plugins showed an application by copying the frames of its window, with a delay and an input path that do not meet the performance that a surface of this project requires; the proposal is removed, and a connector plugin shows an application only through the embed protocol.
 - F160.7-1: closed as not reproduced after 160 repeats, 100 of them under load, and three full runs of the Tauri diagnostics host suite; the watchers of both hosts report the error text or the policy with the source, and both checks name the step of each wait, so a recurrence is located.
 - F194.8.3: core 0.0.16 is published with both host builds, and the registry revokes appview 0.0.2.
 - F194.8.1-1: the defaults of the compose message, the missing record and the message without an event in the embed page state their reasons. Red: the census check of the push check reported 3 defaults without a stated reason. Green: 13 of 13 census checks and 9 of 9 page checks.
