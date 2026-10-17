@@ -15,6 +15,9 @@
 #                         and the Korean input method composition check of the image region.
 #                         It activates the application and takes the focus
 #   make benchmark        measures the calling thread cost of one record (the current text record and the event ring). It prints numbers and asserts nothing
+#   make benchmark-document
+#                         measures the WebContent footprint and the state report bytes of a document region whose page changes a tree of 2000
+#                         elements, at 0, 1000, 5000 and 10000 changes. It prints numbers and asserts nothing
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
 #   make repeat-suite COUNT=<n>
@@ -35,7 +38,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation benchmark repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-activation benchmark benchmark-document repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -66,11 +69,14 @@ $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(wildc
 	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 # A measurement tool is not a test. It prints numbers, asserts nothing, and is not part of the test target.
-$(BUILD)/%_benchmark: tests/%_benchmark.m $(LIBRARY) $(wildcard src/*.h)
-	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM) -o $@
+$(BUILD)/%_benchmark: tests/%_benchmark.m $(LIBRARY) $(wildcard src/*.h src/private/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 benchmark: $(BUILD)/event_ring_benchmark
 	@$(BUILD)/event_ring_benchmark
+
+benchmark-document: $(BUILD)/document_script_benchmark
+	@$(BUILD)/document_script_benchmark
 
 # A check that includes the acceptance check body is rebuilt when that body changes.
 $(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_directory_checker_test: tests/capture_test.m
