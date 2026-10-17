@@ -45,7 +45,7 @@ Registry index `index.json`은 `format` 1과 다음 목록을 가진다.
 | 필드 | 항목 |
 | --- | --- |
 | `plugins` | `{ id, package, name, description, license, repository, versions }`. 각 version은 `{ version, release: { url, sha256 }, engines: { soksak }, sidecars }`이며, `sidecars`는 그 version의 `plugin.json`의 sidecar 의존마다 범위를 정하고 sidecar가 없는 plugin은 `{}`다. plugin 의존은 index에 적지 않는다 |
-| `sidecars` | `{ name, repository, versions }`. 각 version은 `{ version, protocol, releases }`이며, `protocol`은 그 release의 `sidecar.json`의 `protocol`인 양의 정수이고, `releases`는 플랫폼마다 `{ url, sha256 }`을 정한다 |
+| `sidecars` | `{ name, repository, versions }`. 각 version은 `{ version, protocol: 2, releases }`이며, `releases`는 플랫폼마다 `{ url, sha256 }`을 정한다 |
 | `core` | 선택이며 없는 index는 core release를 나열하지 않는다. `{ versions }`. 각 version은 `{ version, releases }`이며, `releases`는 `<platform>-<host>`마다 그 플랫폼과 host(`wailsv3` 또는 `tauriv2`)의 애플리케이션 번들 zip `{ url, sha256 }`을 정한다. 예: `darwin-arm64-wailsv3`([애플리케이션 업데이트](#애플리케이션-업데이트)) |
 | `packs` | `{ name, description, plugins }`: 함께 설치하는 plugin id |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }], core: [{ version, reason }] }` |
@@ -66,7 +66,7 @@ Registry index `index.json`은 `format` 1과 다음 목록을 가진다.
 
 `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]`는 프로세스 `<pid>`가 끝날 때까지 기다리고, `<target>`을 `<target>.previous`로 옮기고, `<bundle>`을 `<target>`으로 옮기고, `<target>.previous`를 지우고, `--` 뒤의 인자로 `<target>`을 시작한다. `<target>`을 옮긴 뒤 한 단계가 실패하면 `<target>.previous`를 되돌리고 그 번들을 시작하며 그 단계의 메시지로 실패한다.
 
-plugin 화면은 업데이트 목록 맨 위에 core 업데이트를 `core: <실행 중> → <후보>`, 그 버전의 release 페이지 링크, 업데이트 동작(`core.app.update` 실행)과 함께 나열한다. release 페이지는 release URL `https://<host>/<owner>/<repository>/releases/download/<tag>/<file>`에서 `https://<host>/<owner>/<repository>/releases/tag/<tag>`로 얻는다. 다른 형태의 release URL은 release 페이지가 없으며 행에 링크가 없다. 링크는 `core.app.release`를 실행하고, 이 명령은 페이지를 기본 애플리케이션으로 연다. `core.app.update`는 `appUpdateStage`, `appUpdateApply` 순으로 실행한다. status `core.app`은 동작을 `staging`, `applying`, `failed`와 실패한 단계의 버전과 오류로 보고하고, 행은 그 단계와 오류를 보인다. 창은 시작할 때, 활성이 될 때, registry가 바뀔 때, plugin 페이지를 열 때 후보를 읽고, 창의 업데이트 N 컨트롤은 core 업데이트를 plugin 업데이트와 함께 센다. 설치된 버전의 `engines.soksak`이 후보를 포함하지 않는 설치된 plugin은 업데이트 전에 행 아래에 `<id> <installed> (<range>)`와, 범위가 후보를 포함하고 철회되지 않은 그 plugin의 가장 새 버전 또는 그런 버전이 없다는 표시와 함께 나열한다. 설치된 버전을 index가 나열하지 않는 plugin은 판단하지 않는다. status `core.app`은 이 목록을 `incompatible`로 담는다.
+plugin 화면은 업데이트 목록 맨 위에 core 업데이트를 `core: <실행 중> → <후보>`, 그 버전의 release 페이지 링크, 업데이트 동작(`core.app.update` 실행)과 함께 나열한다. release 페이지는 release URL `https://<host>/<owner>/<repository>/releases/download/<tag>/<file>`에서 `https://<host>/<owner>/<repository>/releases/tag/<tag>`로 얻는다. 다른 형태의 release URL은 release 페이지가 없으며 행에 링크가 없다. 링크는 `core.app.release`를 실행하고, 이 명령은 페이지를 기본 애플리케이션으로 연다. `core.app.update`는 `appUpdateStage`, `appUpdateApply` 순으로 실행한다. status `core.app`은 동작을 `staging`, `applying`, `failed`와 실패한 단계의 버전과 오류로 보고하고, 행은 그 단계와 오류를 보인다. 창은 시작할 때, 활성이 될 때, registry가 바뀔 때, plugin 페이지를 열 때 후보를 읽고, 창의 업데이트 N 컨트롤은 core 업데이트를 plugin 업데이트와 함께 센다. 설치된 버전의 `engines.soksak`이 후보를 포함하지 않는 설치된 plugin은 업데이트 전에 행 아래에 `<id> <installed> (<range>)`와, 범위가 후보를 포함하고 철회되지 않은 그 plugin의 가장 새 버전 또는 그런 버전이 없다는 표시와 함께 나열한다. 설치된 버전을 index가 나열하지 않는 plugin은 판단하지 않는다. `protocol`이 `2`가 아닌 설치된 sidecar를 요구하는 설치된 plugin도 같은 방식으로, sidecar 선택이 protocol `2`인 그 plugin의 가장 새 버전과 함께 나열한다. status `core.app`은 이 목록을 `incompatible`로 담는다.
 
 
 ## 받기

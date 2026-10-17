@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -229,9 +228,6 @@ func text(value any) (string, bool) {
 	s, ok := value.(string)
 	return s, ok && s != ""
 }
-
-// positiveInteger matches the decimal form of an integer of at least 1.
-var positiveInteger = regexp.MustCompile(`^[1-9][0-9]*$`)
 
 func isOne(value any) bool {
 	n, ok := value.(json.Number)
@@ -698,8 +694,8 @@ func ValidateRegistrySidecar(value any) error {
 				return err
 			}
 		}
-		if n, ok := item["protocol"].(json.Number); !ok || !positiveInteger.MatchString(n.String()) {
-			return fmt.Errorf("%s %s: protocol must be a positive integer", where, version)
+		if !isOne(item["protocol"]) {
+			return fmt.Errorf("%s %s: protocol must be 1", where, version)
 		}
 	}
 	if len(seen) == 0 {
@@ -1264,8 +1260,7 @@ func ResolveInstall(index *Index, id, core, platform string, installed *Installe
 			item := &candidates[i]
 			_, hasRelease := item.Releases[platform]
 			fits := !slices.ContainsFunc(needs, func(n Need) bool { return !Satisfies(item.Version, n.Range) })
-			// A sidecar of another protocol is not started by this host (docs/spec/sidecars.md#declaration-and-startup).
-			if !hasRelease || !fits || item.Protocol != 2 || revokedSidecar(index, name, item.Version) {
+			if !hasRelease || !fits || revokedSidecar(index, name, item.Version) {
 				continue
 			}
 			if item.Version == installed.Sidecars[name].Version {

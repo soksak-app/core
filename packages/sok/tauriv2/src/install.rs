@@ -630,14 +630,8 @@ pub fn validate_registry_sidecar(value: &Value) -> Result<(), String> {
                 releases.get(platform),
             )?;
         }
-        if !item
-            .get("protocol")
-            .and_then(Value::as_u64)
-            .is_some_and(|protocol| protocol >= 1)
-        {
-            return Err(format!(
-                "{at} {version}: protocol must be a positive integer"
-            ));
+        if !is_one(item.get("protocol")) {
+            return Err(format!("{at} {version}: protocol must be 1"));
         }
     }
     if seen.is_empty() {
@@ -1159,8 +1153,7 @@ pub fn resolve_install<'a>(
                 .sidecars
                 .iter()
                 .any(|r| &r.name == name && r.version == item.version);
-            // A sidecar of another protocol is not started by this host (docs/spec/sidecars.md#declaration-and-startup).
-            if !item.releases.contains_key(platform) || !fits || item.protocol != 2 || revoked {
+            if !item.releases.contains_key(platform) || !fits || revoked {
                 continue;
             }
             if installed.sidecars.get(name).map(|sidecar| &sidecar.version) == Some(&item.version) {

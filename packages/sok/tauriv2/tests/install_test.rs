@@ -21,8 +21,8 @@ fn plugin() -> Value {
 
 fn sidecar() -> Value {
     json!({"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": [
-        {"version": "0.1.0", "protocol": 2, "releases": {"darwin-arm64": release("a"), "darwin-x64": release("b")}},
-        {"version": "0.1.1", "protocol": 2, "releases": {"darwin-arm64": release("c")}}]})
+        {"version": "0.1.0", "protocol": 1, "releases": {"darwin-arm64": release("a"), "darwin-x64": release("b")}},
+        {"version": "0.1.1", "protocol": 1, "releases": {"darwin-arm64": release("c")}}]})
 }
 
 fn index() -> Value {
@@ -294,14 +294,14 @@ fn registry_entries_reject_unknown_fields_bad_releases_and_repeated_versions() {
         "registry sidecar @scope/sidecar-worker 0.1.0: unknown platform darwin-ppc",
     );
     let protocol: Value = serde_json::from_str(&sidecar().to_string().replacen(
-        r#""protocol":2"#,
+        r#""protocol":1"#,
         r#""protocol":1.0"#,
         1,
     ))
     .unwrap();
     rejects(
         install::validate_registry_sidecar(&protocol),
-        "registry sidecar @scope/sidecar-worker 0.1.0: protocol must be a positive integer",
+        "registry sidecar @scope/sidecar-worker 0.1.0: protocol must be 1",
     );
     rejects(
         install::validate_registry_pack(
@@ -439,25 +439,6 @@ fn installed(id: &str, version: &str, range: &str, used: &str) -> InstalledState
         },
     );
     state
-}
-
-// contract: install.select.sidecar-protocol
-#[test]
-fn installation_selects_only_sidecar_versions_of_protocol_two() {
-    let mut raw = index();
-    raw["sidecars"][0]["versions"][1]["protocol"] = json!(1);
-    let index = install::validate_registry_index(&raw).expect("index");
-    // 0.1.1 is newer but declares protocol 1, so 0.1.0 of protocol 2 is selected.
-    let arm = install::resolve_install(
-        &index,
-        "probe",
-        "0.0.2",
-        "darwin-arm64",
-        &InstalledState::empty(),
-        &[],
-    )
-    .expect("darwin-arm64");
-    assert_eq!(versions(&arm), ["@scope/sidecar-worker 0.1.0"]);
 }
 
 // contract: install.select.shared-sidecar

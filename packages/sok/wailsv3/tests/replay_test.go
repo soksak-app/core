@@ -101,7 +101,7 @@ func replayConfig(t *testing.T, events replayEvents, script, role string) string
 	writeReplayFile(t, filepath.Join(config, "logs", "host-b1.jsonl"), strings.Join(append([]string{fmt.Sprintf(logOpen, 1001, 1001, "host", "host")}, events.page...), "\n")+"\n", 0o600)
 	folder := "sidecars/probe-worker/1.0.0/darwin-arm64"
 	writeReplayFile(t, filepath.Join(config, "plugins", "installed.json"), `{"format":3,"plugins":{"probe":{"version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{"@probe/worker":"^1.0.0"}}},"sidecars":{"@probe/worker":{"version":"1.0.0","path":"`+folder+`"}}}`, 0o644)
-	writeReplayFile(t, filepath.Join(config, folder, "sidecar.json"), `{"executable":"worker","protocol":2,"replay":{"role":"`+role+`","executable":"replay.sh","inputs":`+replayInputs+`}}`, 0o644)
+	writeReplayFile(t, filepath.Join(config, folder, "sidecar.json"), `{"executable":"worker","protocol":1,"replay":{"role":"`+role+`","executable":"replay.sh","inputs":`+replayInputs+`}}`, 0o644)
 	writeReplayFile(t, filepath.Join(config, folder, "replay.sh"), script, 0o755)
 	return config
 }

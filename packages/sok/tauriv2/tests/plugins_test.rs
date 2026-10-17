@@ -135,7 +135,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
             ),
             (
                 "sidecar.json",
-                r#"{"executable": "build/worker", "protocol": 2}"#,
+                r#"{"executable": "build/worker", "protocol": 1}"#,
             ),
             ("build/worker*", "binary 0.1.0"),
         ],
@@ -156,7 +156,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
     );
     let sidecar_entry = format!(
         r#"{{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
-        "versions": [{{"version": "0.1.0", "protocol": 2, "releases": {{"{platform}":
+        "versions": [{{"version": "0.1.0", "protocol": 1, "releases": {{"{platform}":
         {{"url": "file://{}", "sha256": "{}"}}}}}}]}}"#,
         released["release"].as_str().unwrap(),
         released["sha256"].as_str().unwrap()
@@ -652,7 +652,7 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
             ),
             (
                 "sidecar.json",
-                r#"{"executable": "build/worker", "protocol": 2}"#,
+                r#"{"executable": "build/worker", "protocol": 1}"#,
             ),
             ("build/worker*", "binary 0.1.0"),
         ],
@@ -666,7 +666,7 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
         &platform,
     ]);
     let worker = json!({"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
-        "versions": [{"version": "0.1.0", "protocol": 2, "releases": {platform.as_str():
+        "versions": [{"version": "0.1.0", "protocol": 1, "releases": {platform.as_str():
         {"url": format!("file://{}", released["release"].as_str().unwrap()), "sha256": released["sha256"]}}}]});
     let revoked = json!({"plugins": [], "sidecars": []});
     let mut files = vec![
