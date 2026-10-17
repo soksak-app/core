@@ -1015,11 +1015,18 @@
   - [ ] F192.4 — P0: vt sidecar를 그 항목 S63(image가 있는 surface에 대한 `image` 없는 `open`을 거부하고, surface의 그리기 mode를 event로 남김)과 함께 릴리즈하고 terminal plugin의 dependency를 올린다. 그 릴리즈 전까지 sidecar 정정은 미릴리즈다.
 - [~] F196 — P1: 애플리케이션 메모리: 3일 사용 뒤 workbench page가 242 MB(Wails), 291 MB(Tauri), host가 각각 약 154 MB였고, 브라우저 탭의 문서 web view가 1.31 GB였는데, 애플리케이션의 어떤 기록도 그것을 가리키지 못한다.
   - [o] F196.1 — P1: 창 상태가 `host.window`의 `documents`에 각 문서 web view의 WebContent process를 보고하므로, 측정이 브라우저 탭의 메모리를 그 surface에 연결한다.
-    - [ ] F196.1.1 — P2: performance trace의 메모리 표본이 page process와 모든 문서 process를 그 surface와 함께 재므로, trace가 모든 web process의 메모리를 시간에 따라 기록한다.
-  - [ ] F196.2 — P1: 시작 직후 page와 host의 기준값, 그리고 같은 조작을 반복한 뒤의 같은 수치를 resident 크기뿐 아니라 객체(DOM node, 문서, JavaScript 객체)로 잰다. 늘어남은 자기 항목을 가진 결함이다.
-  - [ ] F196.3 — P1: host 메모리에서 performance trace가 차지하는 몫을 trace를 켜고 끈 상태로 잰다.
-  - [ ] F196.4 — P2: 각 문서 web view가 사이트별로 process와 data store를 함께 쓰고, 숨은 동안 throttle하고, memory pressure에 응답하고, 한도 있는 cache를 둔다. 각 동작은 문서 영역의 전후 측정과 함께 채택한다.
-  - [ ] F196.5 — P1: 모든 문서 web view의 스크립트가 변경마다 문서 트리 전체를 훑어 보내지 않고, 리소스마다 모든 리소스 항목을 보내지 않는다: single-page application처럼 트리를 쉬지 않고 바꾸는 문서에서 그 순회와 메시지가 끝없이 돌았고, 그런 브라우저 탭 하나가 1.31 GB로 재어졌다.
+    - [ ] F196.1.1 — P2: performance trace의 메모리 표본이 host, page process, 모든 문서 process를 그 window, surface와 함께 잰다.
+  - [ ] F196.2 — P1: benchmark 타깃이 큰 요소 트리를 쉬지 않고 바꾸는 page를 문서 영역에 열고, 현재 스크립트와 수집을 끈 때의 1000번 변경당 WebContent footprint 증가를 보고한다.
+  - [ ] F196.3 — P1: `document-state`와 분리된 문서 영역의 요소, 요청 스트림과 그 구독의 명세.
+  - [ ] F196.4 — P1: 문서 스크립트가 스트림이 구독된 동안만 요소와 요청을 모은다. 요소는 확인 아래 스냅샷으로, 요청은 새 항목만 오고, 탐색은 `reset`을 보낸다: 구독자 없는 문서가 트리 변경마다 요소 목록 전체를 보냈다(50번 변경에 보고 51번).
+  - [ ] F196.5 — P1: 두 host와 plugin-api가 구독자 수, 확인, 구독한 page가 내려가거나 그 process가 끝날 때의 제거를 갖춘 스트림 구독을 제공한다.
+  - [ ] F196.6 — P1: 스트림을 싣는 core release.
+  - [ ] F196.7 — P1: 패널과 status가 스트림을 쓰고 F196.6의 core release를 선언하는 browser plugin release.
+  - [ ] F196.8 — P1: 두 host의 진단 명령이 host, page, 각 문서의 객체 수를 돌려준다.
+  - [ ] F196.9 — P2: 각 문서 web view가 사이트별로 process와 data store를 함께 쓰고, 숨은 동안 throttle하고, memory pressure에 응답하고, 한도 있는 cache를 둔다. 각 동작은 문서 영역의 전후 측정과 함께 채택하고, benchmark 타깃이 사이트마다 비용을 보고한다.
+  - [ ] F196.10 — P2: benchmark 타깃이 정해진 조작 묶음을 N번 반복하고 반복마다 객체 수를 보고한다. N에 따라 늘어나는 수치마다 자기 항목이다.
+  - [ ] F196.11 — P2: host 메모리에서 performance trace의 몫을 trace를 켜고 끈 상태로 잰다.
+  - [ ] F196.12 — P2: event log와 performance trace를 끈 F196.9, F196.10의 최종 검증.
 - [~] F194 — P1: 외부 애플리케이션을 표면 안에 띄운다. 애플리케이션은 sidecar가 image region에 넘기는 공유 버퍼에 그리고, 입력을 자기 framework의 event로 받는다. 입력: 다른 toolkit의 애플리케이션(예시는 Slint로 만든 영상 편집기)은 지금 그 interface를 plugin page로 다시 써야만 띄울 수 있고, 창 캡처는 캡처의 지연을 더하고 popup을 잃는다. 기대: toolkit 중립 embed protocol과 client library(공유 버퍼, 크기와 배율, 키보드, input method, pointer, scroll, focus, cursor 모양, caret), 각자 저장소의 애플리케이션 sidecar와 애플리케이션 plugin, 측정 관문. Slint, egui·wgpu, Qt, 웹 interface를 처음부터 고려한다. 관문이 page 경로가 지연의 원인임을 보이지 않으면 core는 바꾸지 않는다. 작업은 각각 버릴 수 있는 두 측면이다: 측면 1은 애플리케이션을 이름하지 않는 이 표면이고, 측면 2는 예시 애플리케이션의 어댑터로 자기 저장소에 둔다.
   - [o] F194.1 — P1: 새 로컬 저장소에 embed protocol, client library, 시험 애플리케이션. 기대: protocol 문서(양방향 메시지, 운영체제별 공유 버퍼 token: darwin `iosurface-global`, windows DXGI 공유 handle, linux dmabuf), 이중 또는 삼중 버퍼의 client library, 매 frame 움직이는 그림을 그리고 입력에 곧바로 답하는 시험 애플리케이션. protocol과 버퍼 회전의 단위 시험.
     - [o] F194.1.1 — P1: embed kit의 로컬 저장소를 버전 0.0.1로 만들고, build·시험·기록 검사, README, 영문·한글 자체 체크리스트를 둔다.
