@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F196.10 (target): `make object-counts` runs `scripts/measure-object-counts.mjs` against a running application, takes the counts of `diagnostics.objects` after two equal readings, repeats opening and closing a terminal tab and a browser tab, splitting and closing a card, applying the plugins and opening and closing a project window N times, and logs the counts and the footprints of the page and document processes per repetition with `grows` for each count. Red: the test failed with `Cannot find module` before the script existed. Green: its 7 tests pass. The `host.window` row of the exposure specification names `process` of each document, which F196.1 added.
 - F196.5.2: the Wails termination callback starts its goroutine through `routine.Go`, and the nullish defaults of `document-region.js` and of the log audit state their reason, so the census of the push passes.
 - F196.5.1: the Tauri host removes the stream subscriptions of its main web view, which holds the surface page, when the page starts a new document (at its start request) and when its web content process terminates (the termination handler that the framework forwards), so the removal rows of the host contract run on both hosts. Red: the tests did not build without `remove_surface_for_reload` and `Streams::remove_page`. Green: the Tauri host tests pass, with the clippy check.
 - F197.3-2: the Rust host tests import only what they use and `documents.rs` collapses its nested `if`, so the clippy check of the push passes.

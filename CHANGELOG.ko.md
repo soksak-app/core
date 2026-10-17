@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.10 (target): `make object-counts`가 실행 중인 애플리케이션에 `scripts/measure-object-counts.mjs`를 돌려, 연속된 두 읽기가 같아진 뒤 `diagnostics.objects`의 수를 잡고, terminal 탭과 browser 탭 열고 닫기, 카드 분할과 닫기, plugin 적용, project 창 열고 닫기를 N번 반복하며, 반복마다 수와 page, document process의 footprint를 각 수의 `grows`와 함께 기록한다. Red: script가 생기기 전 시험이 `Cannot find module`로 실패했다. Green: 그 시험 7개가 통과한다. exposure 명세의 `host.window` 행이 F196.1이 더한 각 문서의 `process`를 이름한다.
 - F196.5.2: Wails 종료 callback이 `routine.Go`로 goroutine을 시작하고, `document-region.js`와 log audit의 nullish 기본값이 이유를 밝히므로 push의 census가 통과한다.
 - F196.5.1: Tauri host가 surface page를 가진 main web view의 스트림 구독을, page가 새 문서를 시작할 때(시작 요청에서)와 그 web content process가 끝날 때(framework가 전달하는 종료 handler) 지우므로, host 계약의 제거 행이 두 host에서 돈다. Red: `remove_surface_for_reload`와 `Streams::remove_page` 없이 시험이 build되지 않았다. Green: Tauri host 시험이 clippy 검사와 함께 통과한다.
 - F197.3-2: Rust host 시험이 쓰는 것만 import하고 `documents.rs`가 중첩 `if`를 합치므로 push의 clippy 검사가 통과한다.
