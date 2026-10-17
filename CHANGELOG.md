@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F196.1: each web view row of the window facts reports its WebContent process, and both hosts carry it into each entry of `documents` of `host.window` as `process`, so the memory of a browser tab is attributed to its surface; the private API inventory lists the window facts as a call site of `_webProcessIdentifier`. Red: the native window facts check found no `process` in the web view rows. Green: 2 of 2 runs of `make -C native/darwin repeat TEST=window_facts_test`; both hosts build and the host parity check passes.
 - F194.10.5: every declared workspace version is 0.0.17, the release without the external application surface; the registry revokes sidecar-app 0.0.1 and the repositories of the embed kit and of the application sidecar are archived.
 - F194.10.4: the specification states no connector plugin, `applications.json`, `runtime.applications` or `plugins-progress`, and the plans of the external application surface and of connector plugins are removed; the rule of the native surface specification for frames of an ended sidecar stays.
 - Retired checklist entry `F194.3.4`: the gate at 120 Hz measured the external application surface, which F194.10 retires.

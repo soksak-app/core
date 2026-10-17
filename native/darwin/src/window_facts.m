@@ -143,6 +143,9 @@ char *sp_window_facts(void *handle) {
         row[@"draws"] = [view valueForKey:@"drawsBackground"];
         row[@"alpha"] = @(view.underPageBackgroundColor.alphaComponent);
         row[@"main"] = @((BOOL)(view == mainWebview(window)));
+        // _webProcessIdentifier is private (docs/operations/private-native-apis.md): the WebContent process of the view, 0
+        // before it has one, so the memory of a document web view is attributed to its surface.
+        row[@"process"] = @(view._webProcessIdentifier);
         int near60 = surfaceLayoutPrefersNear60FPS(view);
         row[@"near60fps"] = near60 < 0 ? (id)NSNull.null : @(near60 == 1);
         NSView *nativePlane = (NSView *)sp_surface_native_plane(view);

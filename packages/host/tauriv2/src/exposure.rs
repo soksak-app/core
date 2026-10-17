@@ -119,7 +119,8 @@ fn host_declarations() -> Value {
                     "visible": {"type": "boolean"}, "order": {"type": "integer"}}}},
                 "documents": {"type": "array", "items": {"type": "object", "properties": {
                     "surface": {"type": "string"}, "document": {"type": "string"}, "frame": rect,
-                    "visible": {"type": "boolean"}, "focused": {"type": "boolean"}, "order": {"type": "integer"}}}},
+                    "visible": {"type": "boolean"}, "focused": {"type": "boolean"}, "order": {"type": "integer"},
+                    "process": {"type": "integer"}}}},
                 "regions": {"type": "array", "items": {"type": "object", "properties": {
                     "surface": {"type": "string"}, "name": {"type": "string"}, "frame": rect,
                     "visible": {"type": "boolean"}, "focused": {"type": "boolean"},
@@ -1338,12 +1339,15 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         let focused = view["focused"]
             .as_bool()
             .ok_or_else(|| internal("webview facts missing focused"))?;
+        let process = view["process"]
+            .as_i64()
+            .ok_or_else(|| internal("webview facts missing process"))?;
         webview_frames.push(json!({"frame": rect(view), "main": main_webview,
             "document": document_webview, "visible": !hidden, "focused": focused, "order": order}));
         if let Some((surface, document)) = documents.get(&address) {
             attached.push(
                 json!({"surface": surface, "document": document, "frame": rect(view),
-                "visible": !hidden, "focused": focused, "order": order}),
+                "visible": !hidden, "focused": focused, "order": order, "process": process}),
             );
         } else if modal.is_object() && modal_view == Some(address) {
             modal["frame"] = rect(view);

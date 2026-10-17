@@ -105,6 +105,13 @@ int main(void) { @autoreleasepool {
     pid_t pageProcess = [[main valueForKey:@"_webProcessIdentifier"] intValue];
     check(pageProcess > 0 && [pageFacts[@"pageProcess"] intValue] == pageProcess,
         [NSString stringWithFormat:@"the app page's WebContent process is reported: %@ for %d", pageFacts[@"pageProcess"], pageProcess]);
+    // Each web view row reports the WebContent process of its view, so the memory of a document web view is attributed to
+    // its surface.
+    NSArray *pageRows = pageFacts[@"webviews"];
+    check(pageRows.count == 2 && [pageRows[0][@"process"] intValue] == pageProcess
+            && [pageRows[1][@"process"] intValue] == [[top valueForKey:@"_webProcessIdentifier"] intValue],
+        [NSString stringWithFormat:@"each web view row reports its WebContent process: %@, %@ for %d",
+            pageRows.firstObject[@"process"], pageRows.lastObject[@"process"], pageProcess]);
     check(![facts[@"active"] boolValue] && ![facts[@"key"] boolValue], @"an inactive window is reported as not key and not active");
     check([facts[@"children"] integerValue] == 0, @"no child windows");
     check([facts[@"controls"] count] == 3, @"three window buttons are reported");

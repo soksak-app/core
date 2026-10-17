@@ -75,6 +75,7 @@ var hostStatus = map[string]hostEntry{
 			"documents": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"surface": map[string]any{"type": "string"}, "document": map[string]any{"type": "string"},
 				"frame": rectSchema, "visible": map[string]any{"type": "boolean"}, "focused": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
+				"process": map[string]any{"type": "integer"},
 			}}},
 			"regions": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"surface": map[string]any{"type": "string"}, "name": map[string]any{"type": "string"},
@@ -1047,6 +1048,7 @@ type windowFacts struct {
 		Document bool    `json:"document"`
 		Draws    bool    `json:"draws"`
 		Alpha    float64 `json:"alpha"`
+		Process  int     `json:"process"`
 	} `json:"webviews"`
 	NativeSurfaces []struct {
 		frame
@@ -1073,6 +1075,8 @@ type WindowDocument struct {
 	Visible  bool   `json:"visible"`
 	Focused  bool   `json:"focused"`
 	Order    int    `json:"order"`
+	// Process is the WebContent process of the document web view, 0 before it has one.
+	Process int `json:"process"`
 }
 
 // WindowWebview is the frame of one web view in the window coordinate system.
@@ -1267,7 +1271,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 			Document: view.Document, Visible: !view.Hidden, Focused: view.Focused, Order: order})
 		if key, ok := documents[view.View]; ok {
 			out.Documents = append(out.Documents, WindowDocument{Surface: key.Surface, Document: key.Name,
-				Frame: view.frame, Visible: !view.Hidden, Focused: view.Focused, Order: order})
+				Frame: view.frame, Visible: !view.Hidden, Focused: view.Focused, Order: order, Process: view.Process})
 		}
 	}
 	out.Responder = WindowResponder{Class: facts.Responder.Class, Owner: "native"}
