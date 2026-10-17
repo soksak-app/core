@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory object-counts trace-share host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory object-counts app-usage trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -58,6 +58,12 @@ object-counts:
 	@case "$(CONFIG)" in '') echo "object-counts requires CONFIG=DIR" >&2; exit 2;; esac
 	@case "$(BUILD)" in ''|debug|release) ;; *) echo "object-counts requires BUILD=release|debug" >&2; exit 2;; esac
 	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --repetitions $(or $(REPETITIONS),20)
+
+# Reports the CPU and memory of the running application of CONFIG_DIR by process: host, sidecars, pages, documents and WebKit processes
+# (scripts/measure-app-usage.mjs, docs/operations/examples.md). SOK defaults to the sok binary of target/debug.
+app-usage:
+	@case "$(CONFIG_DIR)" in '') echo "app-usage requires CONFIG_DIR=DIR [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
+	@node scripts/measure-app-usage.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --interval $(or $(INTERVAL),10)
 
 # Measures the share of the diagnostics in the memory of a running host: with the switch 디버그 on and then off, it runs five repetitions of
 # object-counts and prints the footprint of the host process (docs/operations/examples.md).
