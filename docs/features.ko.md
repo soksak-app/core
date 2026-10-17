@@ -1048,7 +1048,7 @@
     - [ ] F196.9.2 — P2: document region의 memory pressure 응답(모의 event는 `kern.memorypressure_manual_trigger`를 쓰는 `memory_pressure -S`가 필요하고, root 없이는 거부된다. 검사를 돌리는 사람이 그 권한을 줄 때 돈다): 추적되는 native 검사가 시스템의 memory pressure event를 모의로 일으키고 영역의 WebContent process footprint를 전후로 잰다. process가 스스로 메모리를 줄이지 않을 때만 이 저장소가 응답을 더한다.
     - [o] F196.9.3 — P2: document region의 process와 data store: 검사가 한 사이트와 여러 사이트의 영역 N개의 WebContent process 수를 세고, 설정 폴더마다 하나의 영구 data store를 함께 쓰는 영역당 footprint를 밝힌다.
     - [o] F196.9.4 — P2: document region의 cache: 검사가 WebKit이 정한 back-forward cache와 memory cache로 영역을 N번 탐색한 뒤의 footprint를 잰다. 한없이 늘어나는 것은 자기 항목을 가진 결함이다.
-  - [ ] F196.10 — P2: benchmark 타깃이 정해진 조작 묶음을 N번 반복하고 반복마다 객체 수를 보고한다. N에 따라 늘어나는 수치마다 자기 항목이다.
+  - [~] F196.10 — P2: benchmark 타깃이 정해진 조작 묶음을 N번 반복하고 반복마다 객체 수를 보고한다. N에 따라 늘어나는 수치마다 자기 항목이다.
   - [ ] F196.11 — P2: host 메모리에서 performance trace의 몫을 trace를 켜고 끈 상태로 잰다.
   - [ ] F196.12 — P2: event log와 performance trace를 끈 F196.9, F196.10의 최종 검증.
 - [o] F194 — P1: 외부 애플리케이션을 표면 안에 띄운다. 애플리케이션은 sidecar가 image region에 넘기는 공유 버퍼에 그리고, 입력을 자기 framework의 event로 받는다. 입력: 다른 toolkit의 애플리케이션(예시는 Slint로 만든 영상 편집기)은 지금 그 interface를 plugin page로 다시 써야만 띄울 수 있고, 창 캡처는 캡처의 지연을 더하고 popup을 잃는다. 기대: toolkit 중립 embed protocol과 client library(공유 버퍼, 크기와 배율, 키보드, input method, pointer, scroll, focus, cursor 모양, caret), 각자 저장소의 애플리케이션 sidecar와 애플리케이션 plugin, 측정 관문. Slint, egui·wgpu, Qt, 웹 interface를 처음부터 고려한다. 관문이 page 경로가 지연의 원인임을 보이지 않으면 core는 바꾸지 않는다. 작업은 각각 버릴 수 있는 두 측면이다: 측면 1은 애플리케이션을 이름하지 않는 이 표면이고, 측면 2는 예시 애플리케이션의 어댑터로 자기 저장소에 둔다.
