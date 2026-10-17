@@ -2,6 +2,7 @@
 #import <objc/runtime.h>
 #import "webview_input.h"
 #import "application_log.h"
+#import "event_ring.h"
 #import "observe.h"
 // _setIgnoresMouseMoveEvents: controls only pointer tracking and does not disable keyboard, click, or
 // drag input. The AppKit hit test selects the web view that receives those events.
@@ -71,8 +72,19 @@ static NSString *const kReceiptScript =
 @interface SPInputRegistration : NSObject
 @property(nonatomic, retain) WKUserContentController *controller;
 @property(nonatomic, retain) SPInputReceipts *receipts;
+// The address of the web view, which identifies the registration in its records. It is text, so the registration does not
+// retain the web view.
+@property(nonatomic, copy) NSString *identifier;
 - (void)end;
 @end
+
+// Stores the record of a phase of an input registration with the count of live registrations after the phase.
+static void recordInputPhase(NSString *identifier, const char *phase) {
+    NSString *fields = [NSString stringWithFormat:@"{\"phase\":\"%s\",\"view\":\"%@\",\"count\":%ld}", phase, identifier,
+        sp_window_objects_count().inputRegistrations];
+    sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_DEBUG, "native.webview.input", fields.UTF8String);
+}
+
 @implementation SPInputRegistration
 - (instancetype)init {
     if (!(self = [super init])) return nil;
@@ -93,7 +105,9 @@ static NSString *const kReceiptScript =
 - (void)dealloc {
     sp_window_object_change(SP_WINDOW_OBJECT_INPUT_REGISTRATION, -1);
     [self end];
+    recordInputPhase(self.identifier, "released");
     [_receipts release];
+    [_identifier release];
     [super dealloc];
 }
 @end
@@ -131,7 +145,9 @@ static void installReceipts(WKWebView *view) {
     SPInputRegistration *registration = [[SPInputRegistration new] autorelease];
     registration.controller = controller;
     registration.receipts = handler;
+    registration.identifier = [NSString stringWithFormat:@"%p", view];
     objc_setAssociatedObject(view, &registrationKey, registration, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    recordInputPhase(registration.identifier, "registered");
 }
 
 void webviewInputReceive(WKWebView *view, NSString *type, NSTimeInterval timeout, void (^done)(BOOL received)) {
@@ -260,7 +276,11 @@ void webviewInputUnregister(WKWebView *view) {
     [view _setIgnoresMouseMoveEvents:NO];
     [inputViews removeObject:view];
     SPInputRegistration *registration = objc_getAssociatedObject(view, &registrationKey);
+    if (!registration) return;
     [registration end];
+    // The registration is still alive here, so the count is unchanged. Clearing the association releases it, and its
+    // release record follows.
+    recordInputPhase(registration.identifier, "ended");
     objc_setAssociatedObject(view, &registrationKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 

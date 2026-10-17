@@ -965,6 +965,17 @@
         "code": "number"
       },
       "description": "The WebContent process of an app DOM webview ended. reason is the name of the WebKit termination reason (exceeded-memory, exceeded-cpu, requested-by-client, crash, exceeded-shared-process-crash-limit, or unknown-<n> for a value that WebKit defines later) and code is its number."
+    },
+    "native.webview.input": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "phase": "string",
+        "view": "string",
+        "count": "number"
+      },
+      "description": "An input registration of a web view changed phase: registered when the registration is attached to the web view, ended when the registration is unregistered (it is still alive), and released when its last reference is dropped. phase is the name of the phase, view is the address of the web view that identifies its records, and count is the number of live input registrations after the phase."
     }
   },
   "budget": {

@@ -124,10 +124,12 @@ NATIVE_TESTS = observe_test \
   input_inject_test \
   mouse_buttons_test \
   webview_input_receipts_test \
+  webview_input_records_test \
   window_facts_test \
   window_occlusion_test \
   window_reveal_test \
   window_release_test \
+  modal_release_test \
   window_objects_test \
   page_objects_test \
   process_exit_test \

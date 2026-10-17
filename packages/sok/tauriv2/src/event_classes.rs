@@ -108,6 +108,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "native.observe.failed" => Some(Class::Lifecycle),
         "native.observe.registered" => Some(Class::Lifecycle),
         "native.process.exit_timeout" => Some(Class::Lifecycle),
+        "native.webview.input" => Some(Class::Lifecycle),
         "native.webview.process_ended" => Some(Class::Lifecycle),
         "native.window.deminiaturized" => Some(Class::Lifecycle),
         "native.window.first_responder" => Some(Class::Input),
