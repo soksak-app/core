@@ -5,6 +5,7 @@ package tests
 // written, and seq runs across both files.
 
 import (
+	"github.com/soksak-app/core/packages/sok/wailsv3/tests/support"
 	"os"
 	"sort"
 	"strings"
@@ -27,7 +28,7 @@ func linesOfFile(t *testing.T, path string) []string {
 // contract: cli.log.splits-files-by-level
 func TestTheToolStoresDebugAndTraceEventsInTheDebugFile(t *testing.T) {
 	config := t.TempDir()
-	storeEveryLevel(t, config)
+	support.StoreEveryLevel(t, config)
 	log, err := sok.StartToolEventLog(config)
 	if err != nil {
 		t.Fatal(err)

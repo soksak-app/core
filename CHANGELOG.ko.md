@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F197.3-1: 모든 수준 공용 시험 helper와 객체 수 시험이 Go와 Rust에서 같은 이름을 가지므로 hosts 검사가 통과한다.
 - F196.5: 두 host가 `documentSubscribe {document, stream}`에 handle로, `documentUnsubscribe`에 답하고, 영역과 스트림마다 구독을 세어 첫 구독에서 native 수집을 켜고 마지막에서 끄며, 새 구독을 위해 200개 항목의 요청 기록을 `dropped`와 함께 두고, 스냅샷을 전한 뒤 native에 확인하며, 닫힌 영역이나 창의 구독을 지운다(Wails host는 새 문서를 불러오거나 process가 끝난 surface page의 구독도 지우고, Tauri host는 F196.5.1). `document-stream`은 구독한 surface에만 가고, plugin-api의 document handle에 `subscribe(stream, listener)`가 있다. Red: 구독 없이 Go와 Rust 시험이 build되지 않았고(`undefined: host.NewDocumentStreams`, `unresolved imports soksak_host_tauriv2::documents::StreamEffect`), plugin-api가 `region.subscribe is not a function`으로 실패했다. Green: main에서 두 언어의 host 시험, plugin-api 211개, workbench 483개가 모두 통과한다.
 - F196.9.3, F196.9.4: `document_processes_test`가 두 사이트의 영역 4개와 한 사이트의 영역 4개에서 영역마다 WebContent process 하나, 각 약 13 MB를 센다. 영역은 탭처럼 process 하나를 쓴다. `document_caches_test`가 영역을 문서 2 MB와 이미지 1 MB의 page 60개로 탐색하고 footprint가 10번째 page 뒤 229440 KB에서 60번째 뒤 171137 KB로 줄어드는 것을 읽으므로 cache는 한도가 있다. 둘 다 바꿀 것이 없으며 native suite에서 돈다.
 - F197.3: 두 host와 두 `sok` build가 정책 파일 없이 오류만 저장하는 기본 정책을 적용한다(`sok`의 기본값 부분은 F197.6의 커밋과 함께 들어갔다). `error` 아래 event를 읽는 시험은 writer에 모든 수준 정책을 주고, 그 수와 index는 그 `log.policy` 줄을 포함한다. Red: `log_policy_test.go:117: default class lifecycle is "trace", expected "error"`, `start without a file: the default policy stores a warn event of the class lifecycle`와 그 Rust 짝. Green: 두 host와 두 `sok` build의 Go, Rust 시험이 통과한다.

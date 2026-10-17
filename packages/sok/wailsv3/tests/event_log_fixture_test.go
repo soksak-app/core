@@ -5,6 +5,7 @@ package tests
 
 import (
 	"encoding/json"
+	"github.com/soksak-app/core/packages/sok/wailsv3/tests/support"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -52,7 +53,7 @@ func fixtureLines(t *testing.T, name string) []string {
 func writeEvents(t *testing.T, emit func(*sok.EventLog)) []string {
 	t.Helper()
 	config := t.TempDir()
-	storeEveryLevel(t, config)
+	support.StoreEveryLevel(t, config)
 	log, err := sok.StartToolEventLog(config)
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +183,7 @@ func TestARefusedEventIsCountedAndExplainedByLogDropped(t *testing.T) {
 // contract: cli.log.run-stores-only-the-declared-events
 func TestARunStoresOnlyTheEventsThatTheSpecificationNames(t *testing.T) {
 	config := t.TempDir()
-	storeEveryLevel(t, config)
+	support.StoreEveryLevel(t, config)
 	loggedRun(config, sok.Run, "nothing")
 	for _, event := range eventsOf(t, config) {
 		switch event.Event {

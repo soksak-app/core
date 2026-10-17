@@ -94,6 +94,7 @@ fn named<'a>(events: &'a [Value], name: &str) -> Vec<&'a Value> {
 }
 
 // contract: cli.log.records-each-command-with-its-result
+#[path = "support/policy.rs"]
 mod support;
 
 #[test]

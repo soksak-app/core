@@ -29,6 +29,7 @@ fn temp(label: &str) -> Dir {
 }
 
 // contract: log.plugin-catalog.classifies-plugin-events
+#[path = "support/policy.rs"]
 mod support;
 
 #[test]

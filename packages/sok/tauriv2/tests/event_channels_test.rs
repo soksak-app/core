@@ -45,6 +45,7 @@ fn debug_path_of(log: &EventLog) -> PathBuf {
 }
 
 // contract: cli.log.splits-files-by-level
+#[path = "support/policy.rs"]
 mod support;
 
 #[test]

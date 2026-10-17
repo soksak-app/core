@@ -8,6 +8,7 @@ use soksak_sok::event_classes::{Class, class_of};
 use soksak_sok::event_log::Level;
 
 // contract: cli.log.stores-class
+#[path = "support/policy.rs"]
 mod support;
 
 #[test]

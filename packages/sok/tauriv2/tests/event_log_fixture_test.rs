@@ -82,6 +82,7 @@ fn parse(line: &str) -> Value {
 }
 
 // contract: cli.log.lines-follow-the-golden-fixtures
+#[path = "support/policy.rs"]
 mod support;
 
 #[test]
