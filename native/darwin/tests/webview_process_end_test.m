@@ -33,6 +33,10 @@ static void check(BOOL condition, NSString *message) {
 
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
+    // The end is a warn event, which the default policy refuses (docs/spec/logging.md#policy): this check sets the policy that
+    // stores every level, and the default policy is tested in event_ring_test.
+    const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(everything), @"the policy stores every level of every class");
 
     WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 200, 100)] autorelease];
     SPPublicOnlyDelegate *framework = [[[SPPublicOnlyDelegate alloc] init] autorelease];

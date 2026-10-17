@@ -27,6 +27,10 @@ static BOOL check(const char *name, BOOL passed, NSString *detail) {
 }
 
 int main(void) { @autoreleasepool {
+    // The observations below are info events, which the default policy refuses (docs/spec/logging.md#policy): this test sets the
+    // policy that stores every level, and the default policy is tested in event_ring_test.
+    const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    BOOL ok = check("the policy stores every level of every class", sp_event_set_policy(everything), @"a policy with a level for each class is accepted");
     (void)sp_event_drain((uint8_t[64]){0}, 64);
     NSMutableArray<NSString *> *names = [NSMutableArray array];
     NSMutableArray<NSDictionary *> *fields = [NSMutableArray array];
@@ -37,7 +41,7 @@ int main(void) { @autoreleasepool {
     sp_log_info("input method", "insertText text=\"한\"");
     sp_log_info("input method", "first\nsecond\ttab \\ backslash \x01 control");
     pulled(names, fields);
-    BOOL ok = check("an error is the event native.record.error with where and text",
+    ok = check("an error is the event native.record.error with where and text",
         names.count == 3 && [names[0] isEqualToString:@"native.record.error"] &&
         [fields[0][@"where"] isEqualToString:@"surface settle"] && [fields[0][@"text"] isEqualToString:@"the DOM evaluation failed"],
         names.description);

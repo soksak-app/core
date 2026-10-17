@@ -142,6 +142,10 @@ int main(int argc, char **argv) { @autoreleasepool {
     // Used only by make test-activation.
     BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
     if (activation) sp_test_declare_activation();
+    // The records of the input method are info and debug events, which the default policy refuses (docs/spec/logging.md#policy):
+    // the policy that stores every level is set here, and the default policy is tested in event_ring_test.
+    const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(everything), @"the policy stores every level of every class");
     // The correlation identifiers of the inputs are <boot>.<n>; the host gives the boot identifier of its run.
     check(sp_event_set_boot("native-test"), @"the boot identifier of the run is accepted");
     [NSApplication sharedApplication];

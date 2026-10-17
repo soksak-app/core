@@ -64,7 +64,8 @@ bool sp_event_cids(uint8_t eventClass, uint8_t level, const char *name, const ch
 
 // Sets the policy of the process: for each class, in the order of SP_CLASS_*, the least severe level that is stored (a number of
 // SP_EVENT_*) or -1 for none. Returns false, and keeps the policy in force, for a missing array or a value outside -1 to
-// SP_EVENT_TRACE. Before the first call every level of every class is stored. The host sets it from the policy file.
+// SP_EVENT_TRACE. Before the first call the policy is the default one: only the level SP_EVENT_ERROR is stored in every class,
+// and the other levels are refused and counted as gated. The host sets it from the policy file.
 bool sp_event_set_policy(const int8_t *levels);
 
 // Whether an event of the class and the level is stored under the policy. It counts nothing. A class or a level outside the

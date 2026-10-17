@@ -136,6 +136,51 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"%d producers deliver every event once and in order (%d of %d)", producers, total, producers * perProducer]);
 
 
+    // The default policy, before any call of sp_event_set_policy: each error of every class is stored, and each warn, info,
+    // debug and trace event is refused and counted as gated (docs/spec/logging.md#policy). The drain reports the counts.
+    BOOL defaultsEnabled = YES;
+    for (uint8_t eventClass = 0; eventClass < SP_CLASS_COUNT; eventClass++) {
+        defaultsEnabled = defaultsEnabled && sp_event_enabled(eventClass, SP_EVENT_ERROR);
+        for (uint8_t level = SP_EVENT_WARN; level <= SP_EVENT_TRACE; level++) defaultsEnabled = defaultsEnabled && !sp_event_enabled(eventClass, level);
+    }
+    check(defaultsEnabled, @"the default policy stores each error of every class and no warn, info, debug or trace event");
+    BOOL errorsStored = YES;
+    BOOL othersRefused = YES;
+    for (uint8_t eventClass = 0; eventClass < SP_CLASS_COUNT; eventClass++) {
+        errorsStored = sp_event(eventClass, SP_EVENT_ERROR, "native.test.default", "{}") && errorsStored;
+        for (uint8_t level = SP_EVENT_WARN; level <= SP_EVENT_TRACE; level++) {
+            othersRefused = !sp_event(eventClass, level, "native.test.default", "{}") && othersRefused;
+        }
+    }
+    check(errorsStored && othersRefused, @"sp_event stores each error of every class and refuses each warn, info, debug and trace event");
+    uint8_t defaults[8192];
+    size_t defaultsUsed = sp_event_drain(defaults, sizeof defaults);
+    NSUInteger defaultStored = 0;
+    BOOL defaultStoredAreErrors = YES;
+    NSMutableDictionary<NSString *, NSNumber *> *defaultGated = [NSMutableDictionary dictionary];
+    for (size_t offset = 0; offset < defaultsUsed;) {
+        uint32_t length;
+        memcpy(&length, defaults + offset, sizeof length);
+        NSDictionary *record = decodedRecord(defaults + offset + 4, length);
+        offset += 4 + length;
+        if ([record[@"name"] isEqualToString:@"native.test.default"]) {
+            defaultStored++;
+            defaultStoredAreErrors = defaultStoredAreErrors && [record[@"level"] intValue] == SP_EVENT_ERROR;
+        } else if ([record[@"name"] isEqualToString:@"native.log.gated"]) {
+            NSDictionary *fields = record[@"fields"];
+            defaultGated[[NSString stringWithFormat:@"%@/%@", fields[@"class"], fields[@"level"]]] = fields[@"count"];
+        }
+    }
+    BOOL everyGateCountedOnce = defaultGated.count == 4 * SP_CLASS_COUNT;
+    for (NSNumber *count in defaultGated.allValues) everyGateCountedOnce = everyGateCountedOnce && [count intValue] == 1;
+    check(defaultStored == SP_CLASS_COUNT && defaultStoredAreErrors, @"the drain holds exactly the five errors of the default policy");
+    check(everyGateCountedOnce, [NSString stringWithFormat:@"the drain reports each refused warn, info, debug and trace event of each class as a gated count of one (%@)", defaultGated]);
+    // The report of a count waits a second after the earlier report, so the counts of the following tests are reported on time.
+    usleep(1100 * 1000);
+    // The tests below store every level, so they set the policy that stores everything; the default policy is tested above.
+    const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(everything), @"the policy that stores every level of every class is accepted");
+
     // The ring of the process: sp_event stores the wall clock, the monotonic clock, the level, the class, the name, the
     // correlation identifiers and the fields, and sp_event_drain returns them in order as records of ts_us (8 bytes), mono_ns
     // (8), level (1), class (1), name length (1), cids length (2), the name, the cids and the fields.
@@ -214,12 +259,7 @@ int main(void) { @autoreleasepool {
     check(sp_event_take_loss(SP_EVENT_CHANNEL_DEBUG).events == 2 && sp_event_take_loss(SP_EVENT_CHANNEL_OTHER).events == 0,
         @"a refused event of the level debug or trace is counted in the channel debug");
 
-    // The policy: for each class the least severe level that is stored, -1 for none. The default stores everything.
-    BOOL everythingOpen = YES;
-    for (uint8_t eventClass = 0; eventClass < SP_CLASS_COUNT; eventClass++) {
-        for (uint8_t level = 0; level <= SP_EVENT_TRACE; level++) everythingOpen = everythingOpen && sp_event_enabled(eventClass, level);
-    }
-    check(everythingOpen, @"the default policy stores every level of every class");
+    // The policy: for each class the least severe level that is stored, -1 for none.
     const int8_t narrow[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_DEBUG, SP_EVENT_INFO, -1, SP_EVENT_ERROR};
     check(sp_event_set_policy(narrow), @"a policy with a level or -1 for each class is accepted");
     check(sp_event_enabled(SP_CLASS_INPUT, SP_EVENT_DEBUG) && !sp_event_enabled(SP_CLASS_INPUT, SP_EVENT_TRACE) &&

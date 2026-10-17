@@ -165,9 +165,13 @@ static uint8_t channelOfLevel(uint8_t level) {
     return level == SP_EVENT_DEBUG || level == SP_EVENT_TRACE ? SP_EVENT_CHANNEL_DEBUG : SP_EVENT_CHANNEL_OTHER;
 }
 
-// The policy of the process (docs/spec/logging.md#classes-and-policy): for each class the least severe level that is stored, kept as
-// that level minus SP_EVENT_TRACE, so memory that was never set (all zero) stores every level, and -(SP_EVENT_TRACE + 1) stores none.
-static _Atomic int8_t policyOffset[SP_CLASS_COUNT];
+// The policy of the process (docs/spec/logging.md#policy): for each class the least severe level that is stored, kept as that level
+// minus SP_EVENT_TRACE, and -(SP_EVENT_TRACE + 1) stores none. The initial value of each class is the default policy, the level
+// SP_EVENT_ERROR, so only errors are stored before the first call of sp_event_set_policy.
+static _Atomic int8_t policyOffset[SP_CLASS_COUNT] = {
+    SP_EVENT_ERROR - SP_EVENT_TRACE, SP_EVENT_ERROR - SP_EVENT_TRACE, SP_EVENT_ERROR - SP_EVENT_TRACE,
+    SP_EVENT_ERROR - SP_EVENT_TRACE, SP_EVENT_ERROR - SP_EVENT_TRACE,
+};
 // The events that a closed gate refused, for each class and level, since the drain last reported them.
 static _Atomic uint64_t gatedCount[SP_CLASS_COUNT][SP_EVENT_TRACE + 1];
 
