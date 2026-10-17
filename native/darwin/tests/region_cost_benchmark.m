@@ -11,7 +11,11 @@
 //   T5 P with pageZoom set to 1;
 //   T7 P with the device scale override set to the backing scale of the window;
 //   U  P with applicationNameForUserAgent as the region sets it (the same setting as T1), the baseline of the difference rows,
-//      because the Safari user agent makes google.com serve its full page instead of the legacy page that P receives.
+//      because the Safari user agent makes google.com serve its full page instead of the legacy page that P receives;
+//   V1 U with the TemporaryTileCohortRetentionEnabled feature off (the tile cohorts of an earlier scale are not kept);
+//   V2 U with the SupportHDRDisplayEnabled feature off (the layers do not take an extended range contents format);
+//   V3 U with both features off.
+// --variants NAME,NAME measures only the named variants, in the order of the table.
 // Each T variant differs from P by one setting. For each variant the benchmark reads the physical footprint of the WebContent
 // process of the view 10 seconds and 60 seconds after the load finished: the total (ri_phys_footprint), the dirty and
 // reclaimable bytes of WebKit malloc, and the dirty bytes of the graphics and JS JIT rows of footprint. After the 60 second
@@ -147,9 +151,10 @@ typedef struct {
     BOOL pageZoom;       // pageZoom set to 1
     BOOL overrideScale;  // the device scale override set to the backing scale of the window
     BOOL breakdown;      // footprint -v and vmmap rows of the graphics and malloc allocations are printed at the last read
+    const char *featuresOff; // the WKPreferences feature keys turned off, separated by commas, or NULL
 } Variant;
 
-enum { kP, kQ, kR, kS, kT1, kT2, kT3, kT4, kT5, kT7, kU, kVariantCount };
+enum { kP, kQ, kR, kS, kT1, kT2, kT3, kT4, kT5, kT7, kU, kV1, kV2, kV3, kVariantCount };
 
 static const Variant kVariants[kVariantCount] = {
     { "P", "plain web view, nonpersistent data store", NO, NO, NO, NO, NO, NO, NO, NO, NO, NO },
@@ -163,6 +168,11 @@ static const Variant kVariants[kVariantCount] = {
     { "T5", "P + pageZoom 1", NO, NO, NO, NO, NO, NO, NO, YES, NO, NO },
     { "T7", "P + device scale override at the window backing scale", NO, NO, NO, NO, NO, NO, NO, NO, YES, NO },
     { "U", "P + applicationNameForUserAgent (the baseline of the difference rows)", NO, NO, NO, YES, NO, NO, NO, NO, NO, YES },
+    { "V1", "U + TemporaryTileCohortRetentionEnabled off", NO, NO, NO, YES, NO, NO, NO, NO, NO, NO,
+        "TemporaryTileCohortRetentionEnabled" },
+    { "V2", "U + SupportHDRDisplayEnabled off", NO, NO, NO, YES, NO, NO, NO, NO, NO, NO, "SupportHDRDisplayEnabled" },
+    { "V3", "U + both features off", NO, NO, NO, YES, NO, NO, NO, NO, NO, NO,
+        "TemporaryTileCohortRetentionEnabled,SupportHDRDisplayEnabled" },
 };
 
 // The footprint of one WebContent process in bytes. A row that footprint does not report is -1.
@@ -387,6 +397,19 @@ static WKWebViewConfiguration *plainConfiguration(const Variant *variant, WKWebs
     WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
     configuration.websiteDataStore = variant->persistent ? persistentStore : WKWebsiteDataStore.nonPersistentDataStore;
     if (variant->userAgent) configuration.applicationNameForUserAgent = safariApplicationName();
+    if (variant->featuresOff) {
+        NSArray<NSString *> *keys = [@(variant->featuresOff) componentsSeparatedByString:@","];
+        NSUInteger found = 0;
+        for (_WKFeature *feature in WKPreferences._features) {
+            if (![keys containsObject:feature.key]) continue;
+            [configuration.preferences _setEnabled:NO forFeature:feature];
+            found++;
+        }
+        if (found != keys.count) {
+            fprintf(stderr, "FAIL: variant %s: WebKit has %lu of the features %s\n", variant->name, (unsigned long)found, variant->featuresOff);
+            exit(1);
+        }
+    }
     if (variant->scheme) {
         FailingSchemeHandler *handler = [[[FailingSchemeHandler alloc] init] autorelease];
         [configuration setURLSchemeHandler:handler forURLScheme:@"sok"];
@@ -721,8 +744,28 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
     double started = nowSeconds();
     const char *addressArgument = NULL;
     long longMinutes = 0;
+    BOOL selected[kVariantCount];
+    for (int variant = 0; variant < kVariantCount; variant++) selected[variant] = YES;
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--long") == 0) {
+        if (strcmp(argv[i], "--variants") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "FAIL: --variants needs the names of the variants\n");
+                return 1;
+            }
+            NSArray<NSString *> *names = [@(argv[++i]) componentsSeparatedByString:@","];
+            for (int variant = 0; variant < kVariantCount; variant++) selected[variant] = NO;
+            for (NSString *name in names) {
+                int found = -1;
+                for (int variant = 0; variant < kVariantCount; variant++) {
+                    if ([name isEqualToString:@(kVariants[variant].name)]) found = variant;
+                }
+                if (found < 0) {
+                    fprintf(stderr, "FAIL: the variant %s is not in the table\n", name.UTF8String);
+                    return 1;
+                }
+                selected[found] = YES;
+            }
+        } else if (strcmp(argv[i], "--long") == 0) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "FAIL: --long needs the number of minutes\n");
                 return 1;
@@ -788,6 +831,8 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
 
         Reading readings[kVariantCount][kReads];
         for (int variant = 0; variant < kVariantCount; variant++) {
+            for (int i = 0; i < kReads; i++) readings[variant][i] = (Reading){ -1, -1, -1, -1, -1, -1 };
+            if (!selected[variant]) continue;
             measureVariant(variant, window, content, url, persistentStore, documentDirectory, readings[variant]);
         }
 
@@ -796,15 +841,16 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
             fprintf(stdout, "\nread at %.0f s (MB)\n", readSeconds[i]);
             fprintf(stdout, "%-8s %10s %16s %22s %14s %10s\n", "variant", "total", "malloc_dirty", "malloc_reclaimable", "graphics", "jit");
             for (int variant = 0; variant < kVariantCount; variant++) {
+                if (!selected[variant]) continue;
                 printRow(kVariants[variant].name, readings[variant][i]);
             }
             for (int variant = 0; variant < kVariantCount; variant++) {
-                if (variant == kU) continue;
+                if (variant == kU || !selected[variant] || !selected[kU]) continue;
                 char name[16];
                 snprintf(name, sizeof(name), "%s-U", kVariants[variant].name);
                 printDifference(name, readings[kU][i], readings[variant][i]);
             }
-            printDifference("S-R", readings[kR][i], readings[kS][i]);
+            if (selected[kR] && selected[kS]) printDifference("S-R", readings[kR][i], readings[kS][i]);
         }
         fflush(stdout);
 
