@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory object-counts host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -50,6 +50,14 @@ page-memory:
 	@case "$(CONFIG)" in '') echo "page-memory requires CONFIG=DIR" >&2; exit 2;; esac
 	@case "$(BUILD)" in ''|release|debug) ;; *) echo "page-memory requires BUILD=release|debug" >&2; exit 2;; esac
 	@node scripts/measure-page-memory.mjs --sok $(if $(filter debug,$(BUILD)),target/debug/soksak-$(APP).app,target/release/$(APP)/soksak.app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --idle-minutes $(or $(MINUTES),60) --reloads $(or $(RELOADS),20)
+
+# Repeats the fixed operations of scripts/measure-object-counts.mjs REPETITIONS times against a running diagnostic build and prints the object counts
+# and footprints per repetition (docs/plans/document-streams-and-memory.md). The diagnostic methods exist only in diagnostic builds, so BUILD defaults to debug.
+object-counts:
+	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "object-counts requires APP=wailsv3|tauriv2 CONFIG=DIR [BUILD=release|debug] [REPETITIONS=20]" >&2; exit 2;; esac
+	@case "$(CONFIG)" in '') echo "object-counts requires CONFIG=DIR" >&2; exit 2;; esac
+	@case "$(BUILD)" in ''|debug|release) ;; *) echo "object-counts requires BUILD=release|debug" >&2; exit 2;; esac
+	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --repetitions $(or $(REPETITIONS),20)
 
 # Prints the live malloc nodes and bytes of a running host process at start and after each minute (docs/operations/examples.md).
 host-allocations:
