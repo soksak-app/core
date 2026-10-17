@@ -868,9 +868,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 	rollback := func() {
 		for _, id := range created {
 			if view := s.views[id]; view != nil {
-				nativeHandle := uintptr(view.NativeView())
-				view.Close()
-				delete(s.named, nativeHandle)
+				s.closeRegisteredSurface(application.InvokeSync, view)
 				delete(s.views, id)
 			}
 		}
@@ -936,9 +934,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 			s.windowChanged()
 		})
 		s.images.EndGeneration(id)
-		nativeHandle := uintptr(view.NativeView())
-		view.Close()
-		delete(s.named, nativeHandle)
+		s.closeRegisteredSurface(application.InvokeSync, view)
 		delete(s.views, id)
 		s.mu.Lock()
 		delete(s.compositions, id)
@@ -1061,16 +1057,31 @@ func (v *nativeWebview) execJS(script string) {
 }
 
 func (v *nativeWebview) Close() {
-	application.InvokeSync(func() {
-		if v.handle == nil {
-			return
-		}
-		delete(nativeViews, v.id)
-		if v.logical {
-			system.CloseSurface(v.handle)
-		} else {
-			system.CloseWebview(v.handle)
-		}
-		v.handle = nil
+	application.InvokeSync(v.closeOnUI)
+}
+
+// closeOnUI closes the native view. It runs on the UI thread, so a caller that already runs there closes the view without
+// waiting for another UI-thread call.
+func (v *nativeWebview) closeOnUI() {
+	if v.handle == nil {
+		return
+	}
+	delete(nativeViews, v.id)
+	if v.logical {
+		system.CloseSurface(v.handle)
+	} else {
+		system.CloseWebview(v.handle)
+	}
+	v.handle = nil
+}
+
+// closeRegisteredSurface closes the native view of a removed surface and forgets its name in s.named in one call of run.
+// The window state reads s.named on the UI thread, so run is the UI-thread call (application.InvokeSync), and a reading
+// finds either the native view with its name or neither.
+func (s *Surfaces) closeRegisteredSurface(run func(func()), view *nativeWebview) {
+	run(func() {
+		handle := uintptr(view.handle)
+		view.closeOnUI()
+		delete(s.named, handle)
 	})
 }

@@ -6,6 +6,25 @@ import (
 	"unsafe"
 )
 
+// contract: exposure.host-window.reads-during-surface-close
+func TestSurfaceNameIsForgottenInTheStepThatClosesItsNativeView(t *testing.T) {
+	s := &Surfaces{named: map[uintptr]string{}}
+	// A view without a native handle closes without calling the native code.
+	view := &nativeWebview{owner: s}
+	s.named[uintptr(view.handle)] = "tab-2"
+	namesAfterStep := -1
+	// The step runs at once, as the UI thread would run it. The names are read after the step returns, which is when a
+	// window status reading on the UI thread that follows the close would see them.
+	run := func(step func()) {
+		step()
+		namesAfterStep = len(s.named)
+	}
+	s.closeRegisteredSurface(run, view)
+	if namesAfterStep != 0 {
+		t.Fatalf("names after the close step: got %d, want 0 (tab-2 is still named after its native view closed)", namesAfterStep)
+	}
+}
+
 // contract: exposure.host-window.reads-during-surface-creation
 func TestSurfaceIsNamedWhenItsNativeViewIsCreated(t *testing.T) {
 	s := &Surfaces{named: map[uintptr]string{}}

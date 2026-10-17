@@ -702,9 +702,9 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
 
         // Only the page writes the surface list, so a surface that is not in the list is a removed surface.
         let alive: HashSet<String> = request.surfaces.iter().map(|s| s.id.clone()).collect();
-        let removed = take_removed_surfaces(surface_hosts, &alive)?;
+        let removed = removed_surfaces(surface_hosts, &alive)?;
         let removed_ids: HashSet<String> = removed.iter().map(|(id, _)| id.clone()).collect();
-        // The removed handles are no longer in the registry, so a failed close does not stop the closes of the others.
+        // A failed close does not stop the closes of the others.
         let mut close_failures = Vec::new();
         for (id, handle) in removed {
             // The trigger of the surface lifecycle (V5-104): a surface that disappeared from the list is destroyed at
@@ -714,8 +714,12 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             images::close_surface(window, &id);
             context.images.end_generation(&id);
             let names = Arc::clone(&views.0);
+            let hosts = Arc::clone(&context);
+            let closing = id.clone();
             if let Err(error) = exposure::on_main(window, move || {
-                close_named_surface(&names, handle, |handle| platform.close_surface(handle))
+                close_registered_surface(&names, &hosts.surface_hosts, &closing, handle, |handle| {
+                    platform.close_surface(handle)
+                })
             }) {
                 close_failures.push(format!("surface {id}: {error}"));
             }
@@ -1053,35 +1057,47 @@ pub fn create_registered_surface(
     Ok(handle)
 }
 
-/// Closes the native surface `handle` and then forgets its name in `named`, in one step of the main thread, so a
-/// reading of the native surfaces of the window in another step finds either the surface with its name or no surface.
-/// The name is forgotten also when the close fails, and the failure is returned.
-pub fn close_named_surface(
+/// Closes the native surface `handle` of `id` and forgets its registration in `hosts` and its name in `named`, in one
+/// step of the main thread. A reading of the window state in another step finds either the surface with its
+/// registration and name or neither. The registration is forgotten only when it still holds `handle`; otherwise the
+/// surface was closed by another step (a window close) and nothing is closed here, which returns Ok(false). The
+/// registration and the name are forgotten also when the close fails, and the failure is returned.
+pub fn close_registered_surface(
     named: &Mutex<HashMap<Handle, String>>,
+    hosts: &Mutex<HashMap<String, Handle>>,
+    id: &str,
     handle: Handle,
     close: impl FnOnce(Handle) -> Result<(), String>,
-) -> Result<(), String> {
+) -> Result<bool, String> {
+    let registered = {
+        let mut hosts = hosts.lock().map_err(|e| e.to_string())?;
+        if hosts.get(id) == Some(&handle) {
+            hosts.remove(id);
+            true
+        } else {
+            false
+        }
+    };
+    if !registered {
+        return Ok(false);
+    }
     let closed = close(handle);
     named.lock().map_err(|e| e.to_string())?.remove(&handle);
-    closed
+    closed.map(|()| true)
 }
 
-/// Removes from `hosts` the surfaces that the list `alive` of the page no longer holds and returns them with their
-/// handles. The caller closes each returned handle; the removal under the lock makes the caller its only closer, so a
-/// window close that takes the remaining surfaces never closes the same handle again.
-pub fn take_removed_surfaces(
+/// Returns the surfaces of `hosts` that the list `alive` of the page no longer holds, with their handles. It does not
+/// change `hosts`: the surface stays registered until its close step runs, so a window status reading before that step
+/// still finds the native view of the surface. The caller closes each returned surface with close_registered_surface.
+pub fn removed_surfaces(
     hosts: &Mutex<HashMap<String, Handle>>,
     alive: &HashSet<String>,
 ) -> Result<Vec<(String, Handle)>, String> {
-    let mut hosts = hosts.lock().map_err(|e| e.to_string())?;
-    let ids: Vec<String> = hosts
-        .keys()
-        .filter(|id| !alive.contains(*id))
-        .cloned()
-        .collect();
-    let mut removed: Vec<(String, Handle)> = ids
-        .into_iter()
-        .filter_map(|id| hosts.remove(&id).map(|handle| (id, handle)))
+    let hosts = hosts.lock().map_err(|e| e.to_string())?;
+    let mut removed: Vec<(String, Handle)> = hosts
+        .iter()
+        .filter(|(id, _)| !alive.contains(*id))
+        .map(|(id, handle)| (id.clone(), *handle))
         .collect();
     removed.sort();
     Ok(removed)

@@ -9,8 +9,8 @@ use soksak_host_tauriv2::documents::{Documents, Streams};
 use soksak_host_tauriv2::exposure::native_failure;
 use soksak_host_tauriv2::images::Images;
 use soksak_host_tauriv2::surfaces::{
-    WindowNative, close_named_surface, close_window_surfaces, create_named_surface,
-    create_registered_surface, take_removed_surfaces,
+    WindowNative, close_registered_surface, close_window_surfaces, create_named_surface,
+    create_registered_surface, removed_surfaces,
 };
 use soksak_host_tauriv2::windows::{MainStep, NativeFailure, use_owner};
 
@@ -186,14 +186,22 @@ fn a_surface_that_the_sync_removes_is_not_closed_again_by_the_window_close() {
         ("tab-2".to_string(), 200),
     ]));
     let alive = HashSet::from(["tab-1".to_string()]);
-    let removed = take_removed_surfaces(&hosts, &alive).unwrap();
+    let removed = removed_surfaces(&hosts, &alive).unwrap();
     assert_eq!(removed, vec![("tab-2".to_string(), 200)]);
-    // The window close that runs before the sync closes the removed handle takes the remaining surfaces.
-    let remaining = std::mem::take(&mut *hosts.lock().unwrap());
-    assert_eq!(
-        remaining,
-        HashMap::from([("tab-1".to_string(), 100)]),
-        "the window close received a surface whose handle the sync closes"
+    // The window close that runs before the sync's close step takes all surfaces, including the removed one.
+    let taken = std::mem::take(&mut *hosts.lock().unwrap());
+    assert_eq!(taken.len(), 2);
+    // The close step of the sync finds no registration of the removed surface, so it does not close the handle again.
+    let named = Mutex::new(HashMap::new());
+    let mut closed = Vec::new();
+    let result = close_registered_surface(&named, &hosts, "tab-2", 200, |handle| {
+        closed.push(handle);
+        Ok(())
+    });
+    assert_eq!(result, Ok(false));
+    assert!(
+        closed.is_empty(),
+        "the sync closed a handle that the window close already closed"
     );
 }
 
@@ -201,23 +209,32 @@ fn a_surface_that_the_sync_removes_is_not_closed_again_by_the_window_close() {
 #[test]
 fn a_removed_surface_keeps_its_name_until_its_native_surface_is_closed() {
     let named = Mutex::new(HashMap::from([(7usize, "tab-1".to_string())]));
+    let hosts = Mutex::new(HashMap::from([("tab-1".to_string(), 7usize)]));
     let mut named_at_close = None;
-    close_named_surface(&named, 7, |handle| {
+    let closed = close_registered_surface(&named, &hosts, "tab-1", 7, |handle| {
         // A reading of the native surfaces of the window that sees the surface still finds its name.
         named_at_close = Some(named.lock().unwrap().get(&handle).cloned());
         Ok(())
-    })
-    .unwrap();
+    });
+    assert_eq!(closed, Ok(true));
     assert_eq!(named_at_close, Some(Some("tab-1".to_string())));
     assert!(
         named.lock().unwrap().is_empty(),
         "the name outlived the native surface"
     );
-    // A failed close still forgets the name of the surface, and the failure is returned.
+    assert!(
+        hosts.lock().unwrap().is_empty(),
+        "the registration outlived the native surface"
+    );
+    // A failed close still forgets the name and the registration of the surface, and the failure is returned.
     let named = Mutex::new(HashMap::from([(8usize, "tab-2".to_string())]));
-    let failed = close_named_surface(&named, 8, |_| Err("close failed".to_string()));
+    let hosts = Mutex::new(HashMap::from([("tab-2".to_string(), 8usize)]));
+    let failed = close_registered_surface(&named, &hosts, "tab-2", 8, |_| {
+        Err("close failed".to_string())
+    });
     assert_eq!(failed, Err("close failed".to_string()));
     assert!(named.lock().unwrap().is_empty());
+    assert!(hosts.lock().unwrap().is_empty());
 }
 
 // contract: surfaces.sync.name-outlives-native-surface
@@ -263,4 +280,29 @@ fn a_status_read_during_surface_creation_finds_the_registered_surface() {
     });
     assert!(failed.is_err());
     assert_eq!(surface_hosts.lock().unwrap().len(), 1);
+}
+
+// contract: exposure.host-window.reads-during-surface-close
+#[test]
+fn a_status_read_during_surface_close_finds_the_registered_surface() {
+    // The sync takes the removed surfaces in one step and closes each native surface in a later main-thread step. A
+    // window status read between the two steps sees the native surface, so the surface stays registered until the
+    // close step.
+    let named = Mutex::new(HashMap::from([(7usize, "tab-2".to_string())]));
+    let surface_hosts = Mutex::new(HashMap::from([("tab-2".to_string(), 7usize)]));
+    let alive = HashSet::new();
+    let removed = removed_surfaces(&surface_hosts, &alive).unwrap();
+    assert_eq!(removed, vec![("tab-2".to_string(), 7)]);
+    let status_names: HashMap<usize, String> = surface_hosts
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(id, handle)| (*handle, id.clone()))
+        .collect();
+    assert_eq!(
+        status_names.get(&7),
+        Some(&"tab-2".to_string()),
+        "the native surface of tab-2 has no registered surface before its close"
+    );
+    assert!(named.lock().unwrap().contains_key(&7));
 }
