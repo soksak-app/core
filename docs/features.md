@@ -1024,7 +1024,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [o] F197.2 — P1: The page: the log gate and the settings default to the new policy and to the trace off, and the switch 디버그 turns every level of every class and the trace on and off, with Red and Green.
   - [~] F197.3 — P1: Both hosts and both `sok` builds apply the new default policy without a policy file, with Red and Green.
   - [o] F197.4 — P1: The native event ring stores only `error` before the first policy, with Red and Green.
-  - [~] F197.5 — P1: The files, shell and vt sidecars apply the new default policy, each in its own repository checklist.
+  - [o] F197.5 — P1: The files, shell and vt sidecars apply the new default policy, each in its own repository checklist.
   - [~] F197.6 — P1: `sok` applies `<config-dir>/log-policy.json` once at its start, because a run of the tool is one command and ends: the tool writer has no policy file, so it stores only the default policy and no check can widen it.
 - [~] F196 — P1: Memory of the application: a workbench page measured 242 MB (Wails) and 291 MB (Tauri) and each host about 154 MB after three days of use, and a document web view of a browser tab 1.31 GB, which no record of the application attributes.
   - [o] F196.1 — P1: The window state reports the WebContent process of each document web view in `documents` of `host.window`, so a measurement attributes the memory of a browser tab to its surface.

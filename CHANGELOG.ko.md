@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F197.5: files, shell, vt sidecar가 첫 정책 전과 정책 파일이 없는 동안 오류만 저장하는 기본 정책을 적용한다(files S23, shell S8, vt S64). 각각 core의 golden case를 복사해 가진다. 이 수정은 그 다음 release로 사람에게 닿는다.
 - F196.1.1: performance trace의 표본이 모든 창의 page process와 모든 문서 web view의 process에 대해 창과 surface와 함께 `host.sampler.memory`를 저장하고, 모든 읽기가 `rss_kb` 옆에 process의 physical footprint인 `footprint_kb`를 담는다. Red: `performance_test.go:308: no page sample names window-a`와 Rust 시험 `a page sample names window-a`. Green: 두 host의 performance 시험이 event, platform, parity 검사와 함께 통과한다.
 - F197.2: page의 log gate가 정책을 받기 전에는 `error`만 저장하고 `diagnostics.log`가 이름하지 않은 class는 `error`를 따른다. `diagnostics.performance`는 기본 false다. 설정 창의 진단 묶음이 `core.settings.debug {on}`을 실행하는 switch 디버그를 보인다. Red: `log-gate.test.mjs`가 `lifecycle warn`(`true !== false`)으로, `settings.test.mjs`가 trace 기본의 `true !== false`와 `debugOn is not a function`으로, `settings-debug-switch.test.mjs`가 `the 진단 row draws no 디버그 switch`로 실패했다. Green: workbench 시험 483개가 모두 통과하고 exposure 검사가 통과한다.
 - F197.4: native event ring이 첫 정책 전에 모든 class에서 `error`만 저장한다. `error` 아래의 event를 기록하는 시험은 먼저 모든 수준을 저장하는 정책을 둔다. Red: `event_ring_test`가 `the default policy stores each error of every class and no warn, info, debug or trace event`로 실패했다. Green: `make -C native/darwin repeat TEST=event_ring_test COUNT=2`가 `application_log_test`, `image_region_test`, `image_region_hangul_test`, `webview_process_end_test`와 함께 통과한다.

@@ -1024,7 +1024,7 @@
   - [o] F197.2 — P1: page: log gate와 설정이 새 정책과 꺼진 trace를 기본으로 하고, switch 디버그가 모든 class의 모든 수준과 trace를 켜고 끈다. Red와 Green.
   - [~] F197.3 — P1: 두 host와 두 `sok` build가 정책 파일 없이 새 기본 정책을 적용한다. Red와 Green.
   - [o] F197.4 — P1: native event ring이 첫 정책 전에 `error`만 저장한다. Red와 Green.
-  - [~] F197.5 — P1: files, shell, vt sidecar가 새 기본 정책을 적용한다. 각각 자기 저장소 체크리스트에서.
+  - [o] F197.5 — P1: files, shell, vt sidecar가 새 기본 정책을 적용한다. 각각 자기 저장소 체크리스트에서.
   - [~] F197.6 — P1: 도구의 실행은 명령 하나로 끝나므로 `sok`이 시작할 때 `<config-dir>/log-policy.json`을 한 번 적용한다: 도구 writer에 정책 파일이 없어 기본 정책만 저장하고 어떤 검사도 그것을 넓힐 수 없다.
 - [~] F196 — P1: 애플리케이션 메모리: 3일 사용 뒤 workbench page가 242 MB(Wails), 291 MB(Tauri), host가 각각 약 154 MB였고, 브라우저 탭의 문서 web view가 1.31 GB였는데, 애플리케이션의 어떤 기록도 그것을 가리키지 못한다.
   - [o] F196.1 — P1: 창 상태가 `host.window`의 `documents`에 각 문서 web view의 WebContent process를 보고하므로, 측정이 브라우저 탭의 메모리를 그 surface에 연결한다.
