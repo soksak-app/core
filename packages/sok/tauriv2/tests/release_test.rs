@@ -241,7 +241,7 @@ fn sidecar_tree(version: &str) -> Dir {
             ("package.json", &package),
             (
                 "sidecar.json",
-                r#"{"executable": "build/worker", "protocol": 1}"#,
+                r#"{"executable": "build/worker", "protocol": 2}"#,
             ),
             ("build/worker*", &binary),
             ("build/intermediate", "not listed"),
@@ -364,7 +364,7 @@ fn sidecar_release_refuses_a_replay_executable_that_the_package_does_not_ship() 
         &[
             (
                 "sidecar.json",
-                r#"{"executable": "build/worker", "protocol": 1, "replay": {"role": "screen", "executable": "build/replay"}}"#,
+                r#"{"executable": "build/worker", "protocol": 2, "replay": {"role": "screen", "executable": "build/replay"}}"#,
             ),
             ("build/replay*", "binary replay"),
         ],
@@ -410,7 +410,7 @@ fn sidecar_release_refuses_a_replay_executable_that_the_package_does_not_ship() 
         &tree.0,
         &[(
             "sidecar.json",
-            r#"{"executable": "build/worker", "protocol": 1, "replay": {"role": "screen"}}"#,
+            r#"{"executable": "build/worker", "protocol": 2, "replay": {"role": "screen"}}"#,
         )],
     );
     let (code, _, stderr) = release(&tree);

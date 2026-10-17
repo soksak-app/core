@@ -28,8 +28,8 @@ func pluginJSON() string {
 
 func sidecarJSON() string {
 	return `{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": [
-		{"version": "0.1.0", "protocol": 1, "releases": {"darwin-arm64": ` + release("a") + `, "darwin-x64": ` + release("b") + `}},
-		{"version": "0.1.1", "protocol": 1, "releases": {"darwin-arm64": ` + release("c") + `}}]}`
+		{"version": "0.1.0", "protocol": 2, "releases": {"darwin-arm64": ` + release("a") + `, "darwin-x64": ` + release("b") + `}},
+		{"version": "0.1.1", "protocol": 2, "releases": {"darwin-arm64": ` + release("c") + `}}]}`
 }
 
 func indexJSON() string {
@@ -208,7 +208,7 @@ func TestRegistryEntriesRejectUnknownFieldsBadReleasesAndRepeatedVersions(t *tes
 	rejects(t, sok.ValidateRegistrySidecar(platform), "registry sidecar @scope/sidecar-worker 0.1.0: unknown platform darwin-ppc")
 	protocol := decode(t, sidecarJSON())
 	at(protocol, "versions", 0).(map[string]any)["protocol"] = json.Number("1.0")
-	rejects(t, sok.ValidateRegistrySidecar(protocol), "registry sidecar @scope/sidecar-worker 0.1.0: protocol must be 1")
+	rejects(t, sok.ValidateRegistrySidecar(protocol), "registry sidecar @scope/sidecar-worker 0.1.0: protocol must be a positive integer")
 	rejects(t, sok.ValidateRegistryPack(decode(t, `{"name": "starter", "description": "x", "plugins": []}`)),
 		"registry pack starter: plugins must be plugin ids")
 	rejects(t, sok.ValidateRevoked(decode(t, `{"plugins": [{"id": "probe", "version": "0.1.0"}], "sidecars": []}`)),
@@ -292,6 +292,22 @@ func TestInstallationResolvesNewestUsablePluginAndSidecarVersions(t *testing.T) 
 	// A version that does not satisfy the range of an installed plugin that names the plugin is not selected.
 	_, err = sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", emptyInstalled(), []sok.Need{{Who: "ext 1.0.0", Range: "^0.3.0"}})
 	rejects(t, err, "plugin probe has no version for core 0.0.2 that satisfies every installed plugin: ext 1.0.0 needs ^0.3.0")
+}
+
+// contract: install.select.sidecar-protocol
+func TestInstallationSelectsOnlySidecarVersionsOfProtocolTwo(t *testing.T) {
+	raw := decode(t, indexJSON())
+	sidecar := at(raw, "sidecars").([]any)[0].(map[string]any)
+	at(sidecar, "versions", 1).(map[string]any)["protocol"] = json.Number("1")
+	index, err := sok.ValidateRegistryIndex(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 0.1.1 is newer but declares protocol 1, so 0.1.0 of protocol 2 is chosen.
+	arm, err := sok.ResolveInstall(index, "probe", "0.0.2", "darwin-arm64", emptyInstalled(), nil)
+	if err != nil || strings.Join(versions(arm), ",") != "@scope/sidecar-worker 0.1.0" {
+		t.Fatalf("protocol: %v %v", arm, err)
+	}
 }
 
 // contract: install.select.shared-sidecar

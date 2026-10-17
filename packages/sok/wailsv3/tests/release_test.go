@@ -158,7 +158,7 @@ func sidecarTree(t *testing.T, version string) string {
 	dir := t.TempDir()
 	writeTree(t, dir, map[string]string{
 		"package.json":       `{"name": "@scope/sidecar-worker", "version": "` + version + `", "files": ["sidecar.json", "build/worker"]}`,
-		"sidecar.json":       `{"executable": "build/worker", "protocol": 1}`,
+		"sidecar.json":       `{"executable": "build/worker", "protocol": 2}`,
 		"build/worker*":      "binary " + version,
 		"build/intermediate": "not listed",
 	})
@@ -219,7 +219,7 @@ func TestSidecarReleaseRefusesAReplayExecutableThatThePackageDoesNotShip(t *test
 	out := t.TempDir()
 	missing := sidecarTree(t, "0.1.0")
 	writeTree(t, missing, map[string]string{
-		"sidecar.json":  `{"executable": "build/worker", "protocol": 1, "replay": {"role": "screen", "executable": "build/replay"}}`,
+		"sidecar.json":  `{"executable": "build/worker", "protocol": 2, "replay": {"role": "screen", "executable": "build/replay"}}`,
 		"build/replay*": "binary replay",
 	})
 	code, _, stderr := run("sidecar", "release", missing, out, "--platform", "darwin-arm64")
@@ -236,7 +236,7 @@ func TestSidecarReleaseRefusesAReplayExecutableThatThePackageDoesNotShip(t *test
 		t.Fatalf("a release that ships its replay executable failed with code %d: %q", code, stderr)
 	}
 	writeTree(t, missing, map[string]string{
-		"sidecar.json": `{"executable": "build/worker", "protocol": 1, "replay": {"role": "screen"}}`,
+		"sidecar.json": `{"executable": "build/worker", "protocol": 2, "replay": {"role": "screen"}}`,
 	})
 	code, _, stderr = run("sidecar", "release", missing, out, "--platform", "darwin-arm64")
 	if code != 1 || stderr != "sok: sidecar.json: replay.executable is required\n" {

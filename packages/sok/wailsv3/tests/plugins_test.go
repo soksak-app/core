@@ -55,7 +55,7 @@ func pluginVersionsFor(t *testing.T, core string, versions ...string) string {
 		"plugins/probe.json": `{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
 			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [` + strings.Join(entries, ",") + `]}`,
 		"sidecars/scope-sidecar-worker.json": `{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
-			"versions": [{"version": "0.1.0", "protocol": 1, "releases": {"` + platform + `":
+			"versions": [{"version": "0.1.0", "protocol": 2, "releases": {"` + platform + `":
 			{"url": "file://` + sidecar["release"] + `", "sha256": "` + sidecar["sha256"] + `"}}}]}`,
 		"revoked.json": `{"plugins": [], "sidecars": []}`,
 	})
@@ -474,7 +474,7 @@ func dependencyRegistry(t *testing.T, versions ...dependent) string {
 	}
 	sidecar := runJSON(t, "sidecar", "release", sidecarTree(t, "0.1.0"), releases, "--platform", platform)
 	worker := entry{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": []any{entry{"version": "0.1.0",
-		"protocol": 1, "releases": entry{platform: entry{"url": "file://" + sidecar["release"], "sha256": sidecar["sha256"]}}}}}
+		"protocol": 2, "releases": entry{platform: entry{"url": "file://" + sidecar["release"], "sha256": sidecar["sha256"]}}}}}
 	revoked := entry{"plugins": []any{}, "sidecars": []any{}}
 	files := map[string]string{"sidecars/scope-sidecar-worker.json": jsonText(t, worker), "revoked.json": jsonText(t, revoked)}
 	slices.Sort(ids)

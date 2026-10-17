@@ -89,7 +89,7 @@ func TestReplayRefusesASegmentWhoseInputsBreakTheRulesOfASession(t *testing.T) {
 	// A sidecar that does not name the events of its replay inputs cannot be checked.
 	config = replayConfig(t, standardEvents(), fakeReplay, "fake")
 	file := filepath.Join(config, "sidecars/probe-worker/1.0.0/darwin-arm64/sidecar.json")
-	writeReplayFile(t, file, `{"executable":"worker","protocol":1,"replay":{"role":"fake","executable":"replay.sh"}}`, 0o644)
+	writeReplayFile(t, file, `{"executable":"worker","protocol":2,"replay":{"role":"fake","executable":"replay.sh"}}`, 0o644)
 	if _, stderr, code := runReplay(t, config, "s1"); code != 1 || !strings.Contains(stderr, file+": replay.inputs must name the event of the layer sidecar of each kind of replay input; output is \"\"") {
 		t.Errorf("no inputs: code %d stderr %q", code, stderr)
 	}
