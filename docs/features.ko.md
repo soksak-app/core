@@ -1040,7 +1040,7 @@
     - [o] F196.5.1 — P1: Tauri host가 Wails host처럼 web content process가 끝나거나 새 문서를 불러온 surface page의 스트림 구독을 지운다: Tauri host는 지금 surface web view에서 두 신호를 모두 받지 못하므로, 끝나거나 다시 불러온 구독자가 수집을 켜 둔 채 남는다.
     - [o] F196.5.2 — P1: F196.5와 F197.1의 코드가 push의 census를 통과한다: Wails 종료 callback이 입구 `routine.Go` 밖에서 goroutine을 시작했고, nullish 기본값 둘(`document-region.js`, `@soksak/log-contract`의 audit)이 이유를 밝히지 않았다. 완료: callback이 `routine.Go`로 `webview-terminated`를 시작하고 두 기본값이 이유를 밝힌다. census 시험이 통과한다.
   - [ ] F196.6 — P1: 스트림을 싣는 core release.
-  - [ ] F196.7 — P1: 패널과 status가 스트림을 쓰고 F196.6의 core release를 선언하는 browser plugin release.
+  - [~] F196.7 — P1: 패널과 status가 스트림을 쓰고 F196.6의 core release를 선언하는 browser plugin release.
   - [o] F196.8 — P1: 두 host의 진단 명령이 host, page, 각 문서의 객체 수를 돌려준다.
     - [ ] F196.8.1 — P2: 두 host에서 `diagnostics.objects`의 surface 수 단위 시험과 명령의 wire 시험(없는 창, 응답 모양, params). F196.8의 시험에 없는 surface와 진단 backend의 선언된 seam을 통해 한다.
   - [~] F196.9 — P2: 각 문서 web view가 사이트별로 process와 data store를 함께 쓰고, 숨은 동안 throttle하고, memory pressure에 응답하고, 한도 있는 cache를 둔다. 각 동작은 문서 영역의 전후 측정과 함께 채택하고, benchmark 타깃이 사이트마다 비용을 보고한다.
