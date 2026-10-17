@@ -1024,7 +1024,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [o] F197.2 — P1: The page: the log gate and the settings default to the new policy and to the trace off, and the switch 디버그 turns every level of every class and the trace on and off, with Red and Green.
   - [~] F197.3 — P1: Both hosts and both `sok` builds apply the new default policy without a policy file, with Red and Green.
   - [o] F197.4 — P1: The native event ring stores only `error` before the first policy, with Red and Green.
-    - [~] F197.4-1 — P1: The native tests that read records below `error` set the policy that stores every level first: after F197.4 the default suite failed in `observe_test`, `activity_observers_test`, `input_inject_test`, `webview_input_receipts_test`, `process_exit_test` and `quit_request_test`.
+    - [o] F197.4-1 — P1: The native tests that read records below `error` set the policy that stores every level first: after F197.4 the default suite failed in `observe_test`, `activity_observers_test`, `input_inject_test`, `webview_input_receipts_test`, `process_exit_test` and `quit_request_test`.
   - [o] F197.5 — P1: The files, shell and vt sidecars apply the new default policy, each in its own repository checklist.
   - [o] F197.6 — P1: `sok` applies `<config-dir>/log-policy.json` once at its start, because a run of the tool is one command and ends: the tool writer has no policy file, so it stores only the default policy and no check can widen it.
   - [ ] F197.7 — P1: The releases of the files, shell and vt sidecars that carry F197.5, after the performance work of F196 and F197; until then the sidecar default is unreleased.
