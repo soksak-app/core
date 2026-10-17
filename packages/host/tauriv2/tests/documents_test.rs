@@ -2,7 +2,8 @@
 
 use serde_json::{Value, json};
 use soksak_host_tauriv2::documents::{
-    Documents, Key, Request, StreamEffect, Streams, check, go_action, stream_ack_refusal,
+    Documents, Key, Request, StreamEffect, Streams, check, go_action, remove_surface_for_reload,
+    stream_ack_refusal,
 };
 
 fn request(surface: &str, document: &str) -> Request {
@@ -403,4 +404,74 @@ fn stream_ended_surface_or_window_loses_its_subscriptions() {
     streams.remove_surface("tab-1");
     assert_eq!(streams.subscribers(&page, "requests"), 0);
     assert_eq!(streams.log_state(&page), (0, 0));
+}
+
+// contract: document.stream.page-load-removes-subscriptions
+#[test]
+fn a_new_page_document_removes_the_subscriptions_of_its_surface() {
+    let documents = Documents::default();
+    let streams = Streams::default();
+    let (page, side, other) = (
+        stream_key("tab-1", "page"),
+        stream_key("tab-1", "side"),
+        stream_key("tab-2", "page"),
+    );
+    for (k, handle) in [(&page, 1), (&side, 2), (&other, 3)] {
+        documents.reserve(k).unwrap();
+        assert!(documents.set(k, handle));
+        for stream in ["elements", "requests"] {
+            streams.subscribe(k, stream).unwrap();
+        }
+    }
+    let mut closed = remove_surface_for_reload(&documents, &streams, "tab-1");
+    closed.sort();
+    assert_eq!(closed, vec![1, 2]);
+    for k in [&page, &side] {
+        for stream in ["elements", "requests"] {
+            assert_eq!(
+                streams.subscribers(k, stream),
+                0,
+                "{k:?} {stream} kept a subscription after its page loaded a new document"
+            );
+        }
+    }
+    assert_eq!(streams.subscribers(&other, "requests"), 1);
+    assert_eq!(streams.subscribers(&other, "elements"), 1);
+    assert!(documents.get(&page).is_err());
+    assert_eq!(documents.get(&other), Ok(3));
+}
+
+// contract: document.stream.process-end-removes-subscriptions
+#[test]
+fn a_page_process_end_removes_every_subscription_of_the_page() {
+    let streams = Streams::default();
+    let (first, second) = (stream_key("tab-1", "page"), stream_key("tab-2", "page"));
+    streams.subscribe(&first, "requests").unwrap();
+    streams.subscribe(&second, "elements").unwrap();
+    streams
+        .deliver(
+            &first,
+            r#"{"stream":"requests","message":{"type":"entries","entries":[{"url":"a"}]}}"#,
+        )
+        .unwrap();
+    let mut effects = streams.remove_page();
+    effects.sort_by(|a, b| a.key.cmp(&b.key));
+    assert_eq!(
+        effects,
+        vec![
+            StreamEffect {
+                key: first.clone(),
+                stream: "requests".to_string(),
+                on: false,
+            },
+            StreamEffect {
+                key: second.clone(),
+                stream: "elements".to_string(),
+                on: false,
+            },
+        ]
+    );
+    assert_eq!(streams.subscribers(&first, "requests"), 0);
+    assert_eq!(streams.subscribers(&second, "elements"), 0);
+    assert_eq!(streams.log_state(&first), (0, 0));
 }

@@ -104,7 +104,9 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         platform.set_surface_hidden_handle(handle, true)?;
         data.images.begin_generation(&surface);
         crate::exposure::surface_closed(&window, &surface);
-        for document in data.documents.remove_surface(&surface) {
+        for document in
+            crate::documents::remove_surface_for_reload(&data.documents, &data.streams, &surface)
+        {
             platform.close_document(document)?;
         }
         for image in data.images.remove_surface(&surface) {

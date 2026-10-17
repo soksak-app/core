@@ -372,9 +372,16 @@ impl Streams {
         self.lock().remove(|region| region == key)
     }
 
-    /// Removes the subscriptions of a surface: its page loaded a new document, its web content process ended, or its window closed.
+    /// Removes the subscriptions of a surface and returns the turn-off effects of the streams that lose their last subscriber.
     pub fn remove_surface(&self, surface: &str) -> Vec<StreamEffect> {
         self.lock().remove(|region| region.0 == surface)
+    }
+
+    /// Removes every subscription of the main page of a window and returns the turn-off effects of the streams that lose
+    /// their last subscriber. Every subscription of a window is made by its main page, so this ends the subscriptions of
+    /// all surfaces of the window.
+    pub fn remove_page(&self) -> Vec<StreamEffect> {
+        self.lock().remove(|_| true)
     }
 
     /// The number of subscriptions of a stream of a region.
@@ -837,6 +844,33 @@ pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> 
         Ok(())
     })?;
     exposure::window_changed(&window);
+    Ok(())
+}
+
+/// Ends the subscriptions of a surface whose page loaded a new document, and removes its document regions. The regions
+/// close with the page, so their stream effects are not applied. It returns the handles of the regions for the caller to
+/// close.
+pub fn remove_surface_for_reload(
+    documents: &Documents,
+    streams: &Streams,
+    surface: &str,
+) -> Vec<Handle> {
+    streams.remove_surface(surface);
+    documents.remove_surface(surface)
+}
+
+/// Ends every subscription of the main page of a window whose web content process ended, and turns off the streams that
+/// lose their last subscriber in the regions that remain until the page reloads. Each failed turn-off is logged with the
+/// name of its document.
+pub(crate) fn main_page_process_ended(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    let platform = platform::current()?;
+    for effect in data.streams.remove_page() {
+        log_failure(
+            &format!("document stream {}", effect.key.1),
+            apply_effects(platform, &data.documents, std::slice::from_ref(&effect)),
+        );
+    }
     Ok(())
 }
 

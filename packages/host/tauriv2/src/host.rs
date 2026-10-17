@@ -86,7 +86,7 @@ pub mod webkit_children;
 pub mod windows;
 pub mod workspace;
 
-use application_log::log_error;
+use application_log::{log_error, log_failure};
 use sidecars::WindowSidecars;
 
 /// The publisher of the notices of changes of the event log (docs/spec/debug.md#following). It is the value of the host status
@@ -292,6 +292,12 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 return;
             };
             log_error(&place, text);
+            // Only the main webview holds the subscriptions of document streams (docs/spec/native-surfaces.md#document-streams).
+            // A window that the application did not register has no streams, as in the page load handler below.
+            let window = webview.window();
+            if webview.label() == window.label() && windows::window_data(&window).is_ok() {
+                log_failure("page process", documents::main_page_process_ended(&window));
+            }
             if let Err(error) = webview.reload() {
                 log_error(&place, format!("{}: reload: {error}", webview.label()));
             }
