@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.10: `make object-counts`가 진단을 켠 두 host의 디버그 애플리케이션에 정해진 조작을 20번 반복했다. Wails host에서는 `diagnostics.objects`의 모든 수가 기준값에 머물렀다(surface 3, region 1, document 1, sidecar session 2, 대기 응답 0, 구독자 2, page 요소 256). Tauri host에서는 모든 수가 첫 반복 뒤 일정했고, sidecar session이 기준값보다 하나 많았다(F196.10.1). reload 직후 읽은 page process footprint는 195~244 MB였고 30초 뒤 120 MB로 가라앉았으므로, reload 직후의 읽기는 불러오는 동안의 최고치다.
 - F196.10 (target): `make object-counts`가 실행 중인 애플리케이션에 `scripts/measure-object-counts.mjs`를 돌려, 연속된 두 읽기가 같아진 뒤 `diagnostics.objects`의 수를 잡고, terminal 탭과 browser 탭 열고 닫기, 카드 분할과 닫기, plugin 적용, project 창 열고 닫기를 N번 반복하며, 반복마다 수와 page, document process의 footprint를 각 수의 `grows`와 함께 기록한다. Red: script가 생기기 전 시험이 `Cannot find module`로 실패했다. Green: 그 시험 7개가 통과한다. exposure 명세의 `host.window` 행이 F196.1이 더한 각 문서의 `process`를 이름한다.
 - F196.5.2: Wails 종료 callback이 `routine.Go`로 goroutine을 시작하고, `document-region.js`와 log audit의 nullish 기본값이 이유를 밝히므로 push의 census가 통과한다.
 - F196.5.1: Tauri host가 surface page를 가진 main web view의 스트림 구독을, page가 새 문서를 시작할 때(시작 요청에서)와 그 web content process가 끝날 때(framework가 전달하는 종료 handler) 지우므로, host 계약의 제거 행이 두 host에서 돈다. Red: `remove_surface_for_reload`와 `Streams::remove_page` 없이 시험이 build되지 않았다. Green: Tauri host 시험이 clippy 검사와 함께 통과한다.
