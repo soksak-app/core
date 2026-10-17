@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F196.21: the workspace registry resolves the declared plugin and sidecar folders from the main checkout, so `make install-plugins` works in a worktree. Red: a worktree resolved `.claude/worktrees/plugins/browser/`; Green.
 - F196.10.4: a page reload of the Tauri host reconnects a persistent sidecar only for the surfaces that sent to it, so the browser surface is no longer a session of the terminal service; `diagnostics.objects` lists the sessions and both hosts list the same ones. Red: `left: ["@scope/sidecar-persistent"], right: []`; Green.
 - F196.8.1: both hosts test the surface count and the wire of `diagnostics.objects` through an object counter backend (missing window, unknown window, reply shape).
 - F196.16.1: the Tauri surface registration tests move to `src/surfaces_test.rs`, the counterpart of the Wails `src/surfaces_test.go`, so `make hosts-check` passes.
