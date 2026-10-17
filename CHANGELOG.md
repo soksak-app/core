@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F193.1: the specification makes `protocol` of `sidecar.json` the version of the start arguments and messages of a sidecar, raises it to 2, refuses a sidecar of another protocol at its own start instead of at the start of the application, and selects and lists sidecars by protocol in installation and in the update list.
 - F194.10.5: core 0.0.17 is published; its CI run and release workflow end in success.
 - F196.1: each web view row of the window facts reports its WebContent process, and both hosts carry it into each entry of `documents` of `host.window` as `process`, so the memory of a browser tab is attributed to its surface; the private API inventory lists the window facts as a call site of `_webProcessIdentifier`. Red: the native window facts check found no `process` in the web view rows. Green: 2 of 2 runs of `make -C native/darwin repeat TEST=window_facts_test`; both hosts build and the host parity check passes.
 - F194.10.5: every declared workspace version is 0.0.17, the release without the external application surface; the registry revokes sidecar-app 0.0.1 and the repositories of the embed kit and of the application sidecar are archived.

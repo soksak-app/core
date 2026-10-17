@@ -45,7 +45,7 @@ Registry index `index.json`은 `format` 1과 다음 목록을 가진다.
 | 필드 | 항목 |
 | --- | --- |
 | `plugins` | `{ id, package, name, description, license, repository, versions }`. 각 version은 `{ version, release: { url, sha256 }, engines: { soksak }, sidecars }`이며, `sidecars`는 그 version의 `plugin.json`의 sidecar 의존마다 범위를 정하고 sidecar가 없는 plugin은 `{}`다. plugin 의존은 index에 적지 않는다 |
-| `sidecars` | `{ name, repository, versions }`. 각 version은 `{ version, protocol: 1, releases }`이며, `releases`는 플랫폼마다 `{ url, sha256 }`을 정한다 |
+| `sidecars` | `{ name, repository, versions }`. 각 version은 `{ version, protocol: 2, releases }`이며, `releases`는 플랫폼마다 `{ url, sha256 }`을 정한다 |
 | `core` | 선택이며 없는 index는 core release를 나열하지 않는다. `{ versions }`. 각 version은 `{ version, releases }`이며, `releases`는 `<platform>-<host>`마다 그 플랫폼과 host(`wailsv3` 또는 `tauriv2`)의 애플리케이션 번들 zip `{ url, sha256 }`을 정한다. 예: `darwin-arm64-wailsv3`([애플리케이션 업데이트](#애플리케이션-업데이트)) |
 | `packs` | `{ name, description, plugins }`: 함께 설치하는 plugin id |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }], core: [{ version, reason }] }` |
@@ -66,7 +66,7 @@ Registry index `index.json`은 `format` 1과 다음 목록을 가진다.
 
 `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]`는 프로세스 `<pid>`가 끝날 때까지 기다리고, `<target>`을 `<target>.previous`로 옮기고, `<bundle>`을 `<target>`으로 옮기고, `<target>.previous`를 지우고, `--` 뒤의 인자로 `<target>`을 시작한다. `<target>`을 옮긴 뒤 한 단계가 실패하면 `<target>.previous`를 되돌리고 그 번들을 시작하며 그 단계의 메시지로 실패한다.
 
-plugin 화면은 업데이트 목록 맨 위에 core 업데이트를 `core: <실행 중> → <후보>`, 그 버전의 release 페이지 링크, 업데이트 동작(`core.app.update` 실행)과 함께 나열한다. release 페이지는 release URL `https://<host>/<owner>/<repository>/releases/download/<tag>/<file>`에서 `https://<host>/<owner>/<repository>/releases/tag/<tag>`로 얻는다. 다른 형태의 release URL은 release 페이지가 없으며 행에 링크가 없다. 링크는 `core.app.release`를 실행하고, 이 명령은 페이지를 기본 애플리케이션으로 연다. `core.app.update`는 `appUpdateStage`, `appUpdateApply` 순으로 실행한다. status `core.app`은 동작을 `staging`, `applying`, `failed`와 실패한 단계의 버전과 오류로 보고하고, 행은 그 단계와 오류를 보인다. 창은 시작할 때, 활성이 될 때, registry가 바뀔 때, plugin 페이지를 열 때 후보를 읽고, 창의 업데이트 N 컨트롤은 core 업데이트를 plugin 업데이트와 함께 센다. 설치된 버전의 `engines.soksak`이 후보를 포함하지 않는 설치된 plugin은 업데이트 전에 행 아래에 `<id> <installed> (<range>)`와, 범위가 후보를 포함하고 철회되지 않은 그 plugin의 가장 새 버전 또는 그런 버전이 없다는 표시와 함께 나열한다. 설치된 버전을 index가 나열하지 않는 plugin은 판단하지 않는다. status `core.app`은 이 목록을 `incompatible`로 담는다.
+plugin 화면은 업데이트 목록 맨 위에 core 업데이트를 `core: <실행 중> → <후보>`, 그 버전의 release 페이지 링크, 업데이트 동작(`core.app.update` 실행)과 함께 나열한다. release 페이지는 release URL `https://<host>/<owner>/<repository>/releases/download/<tag>/<file>`에서 `https://<host>/<owner>/<repository>/releases/tag/<tag>`로 얻는다. 다른 형태의 release URL은 release 페이지가 없으며 행에 링크가 없다. 링크는 `core.app.release`를 실행하고, 이 명령은 페이지를 기본 애플리케이션으로 연다. `core.app.update`는 `appUpdateStage`, `appUpdateApply` 순으로 실행한다. status `core.app`은 동작을 `staging`, `applying`, `failed`와 실패한 단계의 버전과 오류로 보고하고, 행은 그 단계와 오류를 보인다. 창은 시작할 때, 활성이 될 때, registry가 바뀔 때, plugin 페이지를 열 때 후보를 읽고, 창의 업데이트 N 컨트롤은 core 업데이트를 plugin 업데이트와 함께 센다. 설치된 버전의 `engines.soksak`이 후보를 포함하지 않는 설치된 plugin은 업데이트 전에 행 아래에 `<id> <installed> (<range>)`와, 범위가 후보를 포함하고 철회되지 않은 그 plugin의 가장 새 버전 또는 그런 버전이 없다는 표시와 함께 나열한다. 설치된 버전을 index가 나열하지 않는 plugin은 판단하지 않는다. `protocol`이 `2`가 아닌 설치된 sidecar를 요구하는 설치된 plugin도 같은 방식으로, sidecar 선택이 protocol `2`인 그 plugin의 가장 새 버전과 함께 나열한다. status `core.app`은 이 목록을 `incompatible`로 담는다.
 
 
 ## 받기
@@ -84,7 +84,7 @@ Registry index와 release는 위치에서 읽는다. 위치는 `https:` URL, 절
 
 ## Version 선택
 
-Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 core version을 포함하고 revoked가 아닌 가장 새 plugin version을 고른다. 한 설치에서 sidecar는 version 하나이며, 그 sidecar를 지정한 설치된 plugin이 모두 함께 쓴다. 고른 plugin version의 sidecar마다, 범위는 그 version의 범위와 그 sidecar를 지정한 다른 설치된 plugin의 범위다. 쓰고 있는 version이 모든 범위를 채우고 revoked가 아니며 그 플랫폼 release가 있으면 그대로 두고, 아니면 모든 범위를 채우고 revoked가 아니며 그 플랫폼 release가 있는 가장 새 sidecar version을 고른다. 고를 것이 없으면 설치는 plugin, version이나 범위, core version이나 플랫폼을 밝혀 실패하며, sidecar의 경우 각 plugin과 범위를 밝힌다.
+Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 core version을 포함하고 revoked가 아닌 가장 새 plugin version을 고른다. sidecar version은 그 `protocol`이 `2`일 때만 고른다. 한 설치에서 sidecar는 version 하나이며, 그 sidecar를 지정한 설치된 plugin이 모두 함께 쓴다. 고른 plugin version의 sidecar마다, 범위는 그 version의 범위와 그 sidecar를 지정한 다른 설치된 plugin의 범위다. 쓰고 있는 version이 모든 범위를 채우고 revoked가 아니며 그 플랫폼 release가 있으면 그대로 두고, 아니면 모든 범위를 채우고 revoked가 아니며 그 플랫폼 release가 있는 가장 새 sidecar version을 고른다. 고를 것이 없으면 설치는 plugin, version이나 범위, core version이나 플랫폼을 밝혀 실패하며, sidecar의 경우 각 plugin과 범위를 밝힌다.
 
 고른 version의 `plugin.json` 의존 가운데 index의 plugin을 가리키는 것은 plugin 의존이다. 설치는 아무것도 풀기 전에 받은 release에서 `plugin.json`을 읽는다. plugin을 설치하면 각 plugin 의존을 같은 규칙으로 재귀적으로 설치한다. 설치된 제공자의 version이 그것을 가리키는 모든 설치된 plugin의 범위를 채우면 그대로 두고, 아니면 모든 범위, `engines.soksak`, revoked 규칙을 채우는 가장 새 제공자 version을 고른다. 설치되었지만 켜지지 않은 제공자는 켠다. index의 plugin도 sidecar도 가리키지 않는 의존은 `<plugin> <version>: dependency <package> is neither a plugin nor a sidecar of the registry`로, 순환은 `plugin dependency cycle: <id> -> <id> -> <id>`로 실패한다. `sok plugin update`는 제공자를 가리키는 모든 설치된 plugin의 범위를 채우는 제공자 version만 고른다. `sok plugin remove`와 `sok plugin disable`은 켜진 설치 plugin이 그 package를 가리키면 `plugin <id> is required by <dependent> <range>`로 실패하며, `installed.json`과 폴더는 바뀌지 않는다.
 
