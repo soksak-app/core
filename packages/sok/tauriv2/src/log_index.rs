@@ -1027,6 +1027,12 @@ fn refresh_locked(path: &Path, source: File, idx: &File) -> Result<OpenedLog, St
     })
 }
 
+/// The length of the read buffer of an update that reads the source from `start` to `size`: at most the bytes that the update reads.
+pub fn read_buffer_bytes(start: u64, size: u64) -> usize {
+    // An update of a running log reads a few lines, and a buffer of the full chunk size made each update allocate CHUNK_BYTES.
+    (size - start.min(size)).min(CHUNK_BYTES as u64) as usize
+}
+
 /// Indexes the lines of the source after the indexed part (from the start when `rebuild` is set), writes the new full records and then the
 /// new state block. It returns the bytes it read, the lines it indexed and the lines that announce a change.
 fn index_from(
@@ -1060,7 +1066,7 @@ fn index_from(
     let mut acc = Segment::new(start);
     let mut carry: Vec<u8> = vec![];
     let mut position = start;
-    let mut buffer = vec![0u8; CHUNK_BYTES];
+    let mut buffer = vec![0u8; read_buffer_bytes(start, size)];
     let mut line_start = start;
     let mut number = events as usize + 1;
     let mut read = 0i64;

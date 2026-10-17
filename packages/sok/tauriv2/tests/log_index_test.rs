@@ -10,7 +10,9 @@ use std::time::{Duration, SystemTime};
 
 use log_support::*;
 use serde_json::Value;
-use soksak_sok::log_index::{read_log_index, rotate_log_indexes, update_log_index};
+use soksak_sok::log_index::{
+    read_buffer_bytes, read_log_index, rotate_log_indexes, update_log_index,
+};
 use soksak_sok::log_query::{parse_log_query, query_logs};
 
 /// A change of the bytes of an index file.
@@ -443,5 +445,27 @@ fn index_moves_with_the_generations_of_a_rotation() {
     assert!(
         dir.join("logs").join("host-r.jsonl.idx").exists(),
         "a failed rotation moved the index"
+    );
+}
+
+// contract: log.index.update-reads-with-a-buffer-of-the-new-bytes
+#[test]
+fn index_update_allocates_for_the_appended_bytes_only() {
+    let start = 4096u64;
+    let appended = 2 * 400u64;
+    let length = read_buffer_bytes(start, start + appended);
+    assert_eq!(
+        length as u64, appended,
+        "an update of two appended lines allocates {length} bytes"
+    );
+    assert_eq!(
+        read_buffer_bytes(0, 64 << 20),
+        8 << 20,
+        "a buffer exceeds the read chunk"
+    );
+    assert_eq!(
+        read_buffer_bytes(start, 0),
+        0,
+        "a source shorter than the start allocates bytes"
     );
 }
