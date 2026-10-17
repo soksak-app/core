@@ -877,6 +877,45 @@ pub struct OutdatedSidecar {
     pub sessions: usize,
 }
 
+#[cfg(feature = "diagnostics")]
+impl<O: Owner> Sidecars<O> {
+    /// Returns the number of sidecar sessions of the surfaces that owner owns. A surface that sent a request to a running
+    /// sidecar counts once for that sidecar.
+    pub fn session_count(&self, owner: &O) -> usize {
+        let key = owner.key();
+        let state = self.core.state.lock().expect("sidecar state");
+        state
+            .running
+            .values()
+            .flat_map(|process| process.surfaces.iter())
+            .filter(|surface| {
+                state
+                    .owners
+                    .get(surface.as_str())
+                    .is_some_and(|current| current.key() == key)
+            })
+            .count()
+    }
+
+    /// Returns the number of sidecar requests with correlation identifiers that wait for a reply and whose surface owner
+    /// owns.
+    pub fn pending_count(&self, owner: &O) -> usize {
+        let key = owner.key();
+        let state = self.core.state.lock().expect("sidecar state");
+        state
+            .requests
+            .surfaces()
+            .into_iter()
+            .filter(|surface| {
+                state
+                    .owners
+                    .get(surface.as_str())
+                    .is_some_and(|current| current.key() == key)
+            })
+            .count()
+    }
+}
+
 impl<O: Owner> Sidecars<O> {
     /// Creates the channel with the declared sidecars. The executable is the executable path inside each folder.
     /// Creates the sidecar channel with the canonical application configuration directory.

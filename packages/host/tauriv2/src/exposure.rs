@@ -376,6 +376,31 @@ pub struct Relay {
 /// The number of timed-out requests that are kept for late replies.
 const EXPIRED_LIMIT: usize = 256;
 
+#[cfg(feature = "diagnostics")]
+impl Relay {
+    /// Returns the number of requests that wait for a reply from target.
+    pub fn pending_count(&self, target: &str) -> usize {
+        self.pending
+            .lock()
+            .expect("relay pending requests")
+            .values()
+            .filter(|(waiting, _)| waiting == target)
+            .count()
+    }
+}
+
+/// Returns the number of subscriptions to the notifications of window. It is 0 before the endpoint starts.
+#[cfg(feature = "diagnostics")]
+pub(crate) fn subscribers(window: &Window) -> usize {
+    window
+        .state::<Exposure>()
+        .endpoint
+        .get()
+        .map_or(0, |endpoint| {
+            endpoint.notifier().subscribers(window.label())
+        })
+}
+
 impl Relay {
     /// Sends the request id to the document target with send, and waits for the response of target for timeout. When
     /// timeout is None, it waits for the response or the end of the document. When send fails, the document is treated

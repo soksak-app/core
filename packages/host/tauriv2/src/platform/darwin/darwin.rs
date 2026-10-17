@@ -56,6 +56,9 @@ mod file_watch;
 #[path = "mouse_buttons.rs"]
 mod mouse_buttons;
 mod notifications;
+#[cfg(feature = "diagnostics")]
+#[path = "page_objects.rs"]
+mod page_objects;
 #[path = "private_files.rs"]
 mod private_files;
 #[cfg(feature = "diagnostics")]
@@ -542,6 +545,17 @@ impl Platform for Darwin {
         done: Box<dyn FnOnce(super::WindowObjects, bool) + Send>,
     ) -> Result<(), String> {
         window_objects::when(expected, seconds, done);
+        Ok(())
+    }
+
+    #[cfg(feature = "diagnostics")]
+    fn count_page_objects(
+        &self,
+        view: Handle,
+        document: bool,
+        done: Box<dyn FnOnce(Result<crate::object_counts::PageObjects, String>) + Send>,
+    ) -> Result<(), String> {
+        page_objects::count(view, document, done);
         Ok(())
     }
     #[cfg(feature = "diagnostics")]

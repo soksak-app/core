@@ -393,6 +393,15 @@ pub fn delivered_notifications(_done: Box<dyn FnOnce(String) + Send>) -> Result<
 }
 
 #[cfg(feature = "diagnostics")]
+#[cfg(feature = "diagnostics")]
+pub fn count_page_objects(
+    _view: super::super::Handle,
+    _document: bool,
+    _done: Box<dyn FnOnce(Result<crate::object_counts::PageObjects, String>) + Send>,
+) -> Result<(), String> {
+    missing("page object counts")
+}
+
 pub fn window_objects_when(
     _expected: Option<super::super::WindowObjects>,
     _seconds: f64,

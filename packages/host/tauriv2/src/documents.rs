@@ -122,6 +122,24 @@ pub fn check(caller: Option<&str>, request: &Request) -> Result<Key, String> {
 #[derive(Default)]
 pub struct Documents(Mutex<HashMap<Key, Handle>>);
 
+#[cfg(feature = "diagnostics")]
+impl Documents {
+    /// Returns the number of names of the document regions, including the names whose document is being created.
+    pub fn count(&self) -> usize {
+        self.lock().len()
+    }
+
+    /// Returns the document regions whose document is created, with the address of each document. A name that is being
+    /// created has the address 0 and is not returned.
+    pub fn attached(&self) -> Vec<(Key, Handle)> {
+        self.lock()
+            .iter()
+            .filter(|(_, handle)| **handle != 0)
+            .map(|(key, handle)| (key.clone(), *handle))
+            .collect()
+    }
+}
+
 impl Documents {
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<Key, Handle>> {
         self.0

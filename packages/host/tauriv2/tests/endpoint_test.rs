@@ -953,3 +953,38 @@ fn the_endpoint_records_a_timeout_of_a_request() {
         " error host endpoint timeout: status.get: the document did not reply within 10000 ms";
     assert!(log.contains(want), "no {want:?} in {log}");
 }
+
+// contract: diagnostics.objects.counts-host-objects
+#[cfg(feature = "diagnostics")]
+#[test]
+fn subscriber_count_follows_the_watches_of_a_window() {
+    let config = tempfile::tempdir().unwrap();
+    let (fake, _seen) = Fake::new();
+    let endpoint = start(config.path(), "test-subscribers", fake.clone());
+    let notifier = endpoint.notifier();
+    assert_eq!(notifier.subscribers("w1"), 0);
+    let mut first = open(&endpoint);
+    let mut second = open(&endpoint);
+    request(
+        &mut first,
+        1,
+        "status.watch",
+        json!({"window": "w1", "name": "core.layout"}),
+    );
+    assert_eq!(notifier.subscribers("w1"), 1);
+    request(
+        &mut second,
+        2,
+        "status.watch",
+        json!({"window": "w1", "name": "core.layout"}),
+    );
+    assert_eq!(notifier.subscribers("w1"), 2);
+    assert_eq!(notifier.subscribers("w2"), 0);
+    request(
+        &mut first,
+        3,
+        "status.unwatch",
+        json!({"window": "w1", "name": "core.layout"}),
+    );
+    assert_eq!(notifier.subscribers("w1"), 1);
+}

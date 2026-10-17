@@ -608,6 +608,16 @@ pub trait Platform: Send + Sync {
         done: Box<dyn FnOnce(WindowObjects, bool) + Send>,
     ) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
+    /// Evaluates the element and document counts of the web view with the native handle view, in the page content world
+    /// or, when document is true, in the content world of document regions. Gives done the counts, or the failure. Call it
+    /// on the main thread, and done is called on the main thread too.
+    fn count_page_objects(
+        &self,
+        view: Handle,
+        document: bool,
+        done: Box<dyn FnOnce(Result<crate::object_counts::PageObjects, String>) + Send>,
+    ) -> Result<(), String>;
+    #[cfg(feature = "diagnostics")]
     /// Gives done true when the process pid ends and false when it does not end within seconds. A process that no
     /// longer exists has ended. Call it on the main thread, and done is called on the main thread too.
     fn when_process_exited(

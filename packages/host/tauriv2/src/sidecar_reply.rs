@@ -29,6 +29,17 @@ pub struct RequestLedger {
     order: VecDeque<String>,
 }
 
+#[cfg(feature = "diagnostics")]
+impl RequestLedger {
+    /// Returns the surface of each request that waits for a reply.
+    pub fn surfaces(&self) -> Vec<String> {
+        self.pending
+            .values()
+            .map(|request| request.surface.clone())
+            .collect()
+    }
+}
+
 impl RequestLedger {
     /// Remembers the requests of `cids`, queued for the surface of the sidecar at the monotonic time `mono`, and returns how
     /// many remembered requests it forgot to stay within the bound; the caller counts them (`host.buffer.dropped`).

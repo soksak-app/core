@@ -123,6 +123,7 @@ NATIVE_TESTS = observe_test \
   window_reveal_test \
   window_release_test \
   window_objects_test \
+  page_objects_test \
   process_exit_test \
   quit_request_test \
   webview_navigation_test \

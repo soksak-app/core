@@ -147,6 +147,14 @@ pub struct Configure {
     pub sidecar: String,
 }
 
+#[cfg(feature = "diagnostics")]
+impl Images {
+    /// Returns the number of image regions, including the regions that are being created.
+    pub fn count(&self) -> usize {
+        self.lock().handles.len()
+    }
+}
+
 impl Images {
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         self.shared

@@ -39,11 +39,15 @@ type fakeBackend struct {
 	holding    bool
 	// unwatched receives a signal each time the page receives status.unwatch.
 	unwatched chan struct{}
+	// watched receives a signal each time the page receives status.watch.
+	watched chan struct{}
 	// failures are the errors that a page request returns for each method.
 	failures map[string]error
 }
 
-func newFakeBackend() *fakeBackend { return &fakeBackend{unwatched: make(chan struct{}, 8)} }
+func newFakeBackend() *fakeBackend {
+	return &fakeBackend{unwatched: make(chan struct{}, 8), watched: make(chan struct{}, 8)}
+}
 
 func (b *fakeBackend) Windows() []host.WindowEntry {
 	return []host.WindowEntry{{Window: "main", Title: "Main", Key: true}}
@@ -66,6 +70,13 @@ func (b *fakeBackend) PageRequest(window, method string, params json.RawMessage)
 	}
 	if method == "status.unwatch" {
 		b.unwatched <- struct{}{}
+	}
+	// A test that does not read every signal must not block the page request, so a full channel drops the signal.
+	if method == "status.watch" {
+		select {
+		case b.watched <- struct{}{}:
+		default:
+		}
 	}
 	b.mu.Lock()
 	failure := b.failures[method]

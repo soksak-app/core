@@ -18,6 +18,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 	"unsafe"
@@ -59,6 +60,7 @@ func init() {
 	diagnosticMethods["diagnostics.navigation.delay"] = diagnosticNavigationDelay
 	diagnosticMethods["diagnostics.page.collect"] = diagnosticPageCollect
 	diagnosticMethods["diagnostics.native.objects"] = diagnosticNativeObjects
+	diagnosticMethods["diagnostics.objects"] = diagnosticObjects
 	diagnosticMethods["diagnostics.process.exit"] = diagnosticProcessExit
 	diagnosticMethods["diagnostics.page.request"] = diagnosticPageMethod("diagnostics.page.request")
 	diagnosticMethods["diagnostics.surface.hold"] = diagnosticPageMethod("diagnostics.surface.hold")
@@ -782,6 +784,102 @@ func diagnosticNativeObjects(e *Endpoint, _ *endpointConn, params json.RawMessag
 	case <-time.After(2 * pageTimeout):
 		return nil, rpcError(codeTimeout, "the application did not handle an event within %s", pageTimeout)
 	}
+}
+
+// pageAnswer is the count of the main page (main is true) or of the document region key.
+type pageAnswer struct {
+	key    DocumentKey
+	main   bool
+	counts PageObjects
+	err    error
+}
+
+// documentObjects is the count of one document region.
+type documentObjects struct {
+	key    DocumentKey
+	counts PageObjects
+}
+
+// diagnosticObjects returns the object counts of the window (docs/spec/endpoint.md): the registries of the host, the elements and documents of the
+// main page, and the elements and documents of each created document region. The document handles are read and counted on the UI thread, which
+// closes a document region, so no handle is used after its region is closed.
+func diagnosticObjects(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	h, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	counter, ok := system.(platform.PageObjectCounter)
+	if !ok {
+		return nil, errors.New("page object counts are not implemented on this platform")
+	}
+	var views, pages int
+	var answers chan pageAnswer
+	application.InvokeSync(func() {
+		views = len(s.views)
+		var main unsafe.Pointer
+		main, err = system.MainWebview(s.window.NativeWindow())
+		if err != nil {
+			return
+		}
+		attached := s.documents.Attached()
+		answers = make(chan pageAnswer, 1+len(attached))
+		counter.CountPageObjects(main, false, func(elements, documents int64, err error) {
+			answers <- pageAnswer{main: true, counts: PageObjects{Elements: elements, Documents: documents}, err: err}
+		})
+		for key, handle := range attached {
+			counter.CountPageObjects(handle, true, func(elements, documents int64, err error) {
+				answers <- pageAnswer{key: key, counts: PageObjects{Elements: elements, Documents: documents}, err: err}
+			})
+		}
+		pages = 1 + len(attached)
+	})
+	if err != nil {
+		return nil, err
+	}
+	var page PageObjects
+	var documents []documentObjects
+	var failure error
+	timeout := time.After(pageTimeout)
+	for i := 0; i < pages; i++ {
+		select {
+		case answer := <-answers:
+			if answer.err != nil {
+				failure = errors.Join(failure, answer.err)
+			} else if answer.main {
+				page = answer.counts
+			} else {
+				documents = append(documents, documentObjects{key: answer.key, counts: answer.counts})
+			}
+		case <-timeout:
+			return nil, rpcError(codeTimeout, "the page did not answer the object counts within %s", pageTimeout)
+		}
+	}
+	if failure != nil {
+		return nil, failure
+	}
+	sort.Slice(documents, func(i, j int) bool {
+		a, b := documents[i].key, documents[j].key
+		if a.Surface != b.Surface {
+			return a.Surface < b.Surface
+		}
+		return a.Name < b.Name
+	})
+	list := make([]map[string]any, 0, len(documents))
+	for _, document := range documents {
+		list = append(list, map[string]any{
+			"surface": document.key.Surface, "document": document.key.Name,
+			"elements": document.counts.Elements, "documents": document.counts.Documents,
+		})
+	}
+	objects := HostObjects{
+		Surfaces:         int64(views),
+		Regions:          int64(s.images.Count()),
+		Documents:        int64(s.documents.Count()),
+		SidecarSessions:  int64(s.sidecars.SessionCount(s)),
+		PendingReplies:   int64(s.sidecars.PendingCount(s) + h.relay.Pending(func(target relayTarget) bool { return target.owner == s })),
+		EventSubscribers: int64(e.SubscriberCount(s.name)),
+	}
+	return map[string]any{"host": objects.Payload(), "page": page.Payload(), "documents": list}, nil
 }
 
 // diagnosticProcessExit replies when the process pid ends. A window check waits for the WebContent process of a closed window to end through

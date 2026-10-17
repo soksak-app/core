@@ -405,6 +405,16 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::window_objects_when(expected, seconds, done)
     }
+
+    #[cfg(feature = "diagnostics")]
+    fn count_page_objects(
+        &self,
+        view: super::super::Handle,
+        document: bool,
+        done: Box<dyn FnOnce(Result<crate::object_counts::PageObjects, String>) + Send>,
+    ) -> Result<(), String> {
+        unsupported::count_page_objects(view, document, done)
+    }
     #[cfg(feature = "diagnostics")]
     fn when_process_exited(
         &self,

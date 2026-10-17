@@ -89,6 +89,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.navigation.delay",
     "diagnostics.page.collect",
     "diagnostics.native.objects",
+    "diagnostics.objects",
     "diagnostics.process.exit",
     "diagnostics.page.request",
     "diagnostics.surface.hold",
@@ -330,6 +331,20 @@ struct Shared {
 pub struct Notifier(Arc<Shared>);
 
 impl Notifier {
+    /// Returns the number of subscriptions to the notifications of window: each connection counts once for each of its
+    /// watches of the window (a name, with or without a surface).
+    #[cfg(feature = "diagnostics")]
+    pub fn subscribers(&self, window: &str) -> usize {
+        self.0
+            .peers
+            .lock()
+            .expect("endpoint peers")
+            .values()
+            .flat_map(|peer| peer.watches.iter())
+            .filter(|watch| watch.window == window)
+            .count()
+    }
+
     /// Returns whether a connection watches name of the window window without a surface specification.
     pub fn watched(&self, window: &str, name: &str) -> bool {
         watched(

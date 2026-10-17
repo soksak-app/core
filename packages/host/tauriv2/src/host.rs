@@ -52,6 +52,8 @@ pub mod log_retention;
 pub mod menu;
 pub mod modals;
 pub mod notifications;
+#[cfg(feature = "diagnostics")]
+pub mod object_counts;
 pub mod page_process;
 pub mod performance;
 #[path = "platform/platform.rs"]

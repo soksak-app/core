@@ -201,6 +201,15 @@ type WindowObjectCounter interface {
 	WindowObjectsWhen(expected *WindowObjects, seconds float64, done func(counts WindowObjects, reached bool))
 }
 
+// PageObjectCounter is the operation that counts the elements and documents of a web view. Only the platform implementation of a diagnostic build (tag diagnostics) provides it, and
+// diagnostic code uses it by checking the value of Current() against this interface.
+type PageObjectCounter interface {
+	// CountPageObjects evaluates the element count of the main document of view and its document count (the main document and its frames) in the
+	// page content world, or in the content world of document regions when document is true, and gives done the counts with a nil error, or zero
+	// counts and the failure. Call it on the UI thread, and done is also called on the UI thread.
+	CountPageObjects(view unsafe.Pointer, document bool, done func(elements, documents int64, err error))
+}
+
 // Capturer is the window recording operation. Only the platform implementation of a diagnostic build (tag diagnostics) provides it, and
 // diagnostic code uses it by checking the value of Current() against this interface.
 type Capturer interface {
