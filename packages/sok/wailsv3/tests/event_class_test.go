@@ -19,7 +19,7 @@ func TestEveryLineOfTheToolStoresTheClassOfItsCatalogEntry(t *testing.T) {
 	want := []struct {
 		event, class string
 		undeclared   bool
-	}{{"log.open", "lifecycle", false}, {"sok.command", "call", false}, {"sok.panic", "lifecycle", false}, {"sok.surprise", "", true}}
+	}{{"log.open", "lifecycle", false}, {"log.policy", "lifecycle", false}, {"sok.command", "call", false}, {"sok.panic", "lifecycle", false}, {"sok.surprise", "", true}}
 	if len(lines) != len(want) {
 		t.Fatalf("%d lines: %v", len(lines), lines)
 	}

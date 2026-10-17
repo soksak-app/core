@@ -52,6 +52,7 @@ func fixtureLines(t *testing.T, name string) []string {
 func writeEvents(t *testing.T, emit func(*sok.EventLog)) []string {
 	t.Helper()
 	config := t.TempDir()
+	storeEveryLevel(t, config)
 	log, err := sok.StartToolEventLog(config)
 	if err != nil {
 		t.Fatal(err)
@@ -113,17 +114,17 @@ func TestFieldsAreEscapedAndAnOversizeEventIsCut(t *testing.T) {
 		log.Emit(sok.LevelInfo, "sok.command", map[string]any{"args": text})
 		log.Emit(sok.LevelInfo, "sok.command", map[string]any{"args": strings.Repeat("a", 1<<20)})
 	})
-	if len(lines) != 3 {
+	if len(lines) != 4 {
 		t.Fatalf("%d lines", len(lines))
 	}
-	if escaped := decodeEvent(t, lines[1]); escaped.Fields["args"] != text {
+	if escaped := decodeEvent(t, lines[2]); escaped.Fields["args"] != text {
 		t.Fatalf("args %q", escaped.Fields["args"])
 	}
 	var cut struct {
 		Truncated int            `json:"truncated"`
 		Fields    map[string]any `json:"fields"`
 	}
-	if err := json.Unmarshal([]byte(lines[2]), &cut); err != nil {
+	if err := json.Unmarshal([]byte(lines[3]), &cut); err != nil {
 		t.Fatal(err)
 	}
 	head, _ := cut.Fields["head"].(string)
@@ -181,10 +182,11 @@ func TestARefusedEventIsCountedAndExplainedByLogDropped(t *testing.T) {
 // contract: cli.log.run-stores-only-the-declared-events
 func TestARunStoresOnlyTheEventsThatTheSpecificationNames(t *testing.T) {
 	config := t.TempDir()
+	storeEveryLevel(t, config)
 	loggedRun(config, sok.Run, "nothing")
 	for _, event := range eventsOf(t, config) {
 		switch event.Event {
-		case "log.open", "sok.command", "sok.panic", "log.dropped":
+		case "log.open", "log.policy", "sok.command", "sok.panic", "log.dropped":
 		default:
 			t.Fatalf("a run stored %s", event.Event)
 		}

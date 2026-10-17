@@ -11,6 +11,7 @@ use serde_json::json;
 
 use crate::event_bounds::cut_text;
 use crate::event_log::{EventLog, Level, Options as WriterOptions};
+use crate::log_policy::apply_tool_policy;
 use crate::replay::set_run_log;
 use crate::routine::{PANIC_STATUS, Panic, guard, set_recorder};
 use crate::{Error, Options, command, config_dir_of};
@@ -52,7 +53,7 @@ pub fn start_tool_event_log(config: &Path) -> Result<EventLog, String> {
     let seconds = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs());
-    EventLog::start(WriterOptions {
+    let log = EventLog::start(WriterOptions {
         directory: config.join("logs"),
         role: EVENT_ROLE.into(),
         boot: format!("{seconds}-{}", std::process::id()),
@@ -66,7 +67,9 @@ pub fn start_tool_event_log(config: &Path) -> Result<EventLog, String> {
         pull: None,
         policy_path: None,
         prune: None,
-    })
+    })?;
+    apply_tool_policy(&log, &config.join("log-policy.json"))?;
+    Ok(log)
 }
 
 /// One run of the tool: it takes the arguments and the streams and returns the exit status. `run` is the command of the

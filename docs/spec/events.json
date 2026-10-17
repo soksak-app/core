@@ -189,6 +189,20 @@
       },
       "description": "A panic of the command line tool: the goroutine or thread that panicked (`main` for the command), the panic text and the stack at the panic."
     },
+    "sok.record.<level>": {
+      "layer": "sok",
+      "class": "lifecycle",
+      "level": [
+        "error",
+        "info"
+      ],
+      "fields": {
+        "where": "string",
+        "text": "string",
+        "truncated?": "boolean"
+      },
+      "description": "A record of the command line tool, such as a refused policy file of the place log policy."
+    },
     "page.console.<method>": {
       "layer": "page",
       "class": "lifecycle",

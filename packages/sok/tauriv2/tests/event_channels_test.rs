@@ -45,9 +45,12 @@ fn debug_path_of(log: &EventLog) -> PathBuf {
 }
 
 // contract: cli.log.splits-files-by-level
+mod support;
+
 #[test]
 fn the_tool_stores_debug_and_trace_events_in_the_debug_file() {
     let config = Config::new("split");
+    support::store_every_level(&config.0);
     let log = soksak_sok::start_tool_event_log(&config.0).unwrap();
     for level in [
         Level::Debug,
@@ -107,6 +110,7 @@ impl serde::Serialize for Unserializable {
 #[test]
 fn a_loss_of_the_tool_names_the_channel_of_the_refused_events() {
     let config = Config::new("loss");
+    support::store_every_level(&config.0);
     let log = soksak_sok::start_tool_event_log(&config.0).unwrap();
     log.emit(Level::Debug, "sok.command", &json!({"name": "first"}));
     assert!(!log.emit(Level::Debug, "sok.command", &Unserializable));

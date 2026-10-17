@@ -2,7 +2,7 @@
 //!
 //! The policy says for each class the least severe level that is stored. The host writes it to `<config-dir>/log-policy.json` from
 //! the setting `diagnostics.log`; every process of the host watches the file through file system events and applies the policy
-//! that it holds (the tool applies none and stores every event). A producer asks the gate before it builds the fields of an
+//! that it holds (the tool has no policy file and applies the default policy). A producer asks the gate before it builds the fields of an
 //! event: a closed gate builds nothing, and the writer counts what the producers did not build for each class and level, so no
 //! event disappears without a trace.
 
@@ -50,14 +50,17 @@ pub struct LogPolicy {
     max: [i8; 5],
 }
 
-impl LogPolicy {
-    /// Stores every level of every class: the diagnostic builds of the 0.0.x series record everything.
-    pub fn everything() -> LogPolicy {
+impl Default for LogPolicy {
+    /// Stores only errors in every class: a release pays for no event below error and keeps the record of every error that the
+    /// display path shows. Every writer applies it before the first policy and while no policy file exists.
+    fn default() -> LogPolicy {
         LogPolicy {
-            max: [(LEVELS.len() - 1) as i8; 5],
+            max: [level_index(Level::Error) as i8; 5],
         }
     }
+}
 
+impl LogPolicy {
     /// Whether an event of the class and the level is stored under the policy.
     pub fn allows(&self, class: Class, level: Level) -> bool {
         i32::from(self.max[class_index(class)]) >= level_index(level) as i32
@@ -133,7 +136,7 @@ impl LogPolicy {
                 ));
             }
         }
-        let mut policy = LogPolicy::everything();
+        let mut policy = LogPolicy::default();
         for (index, class) in Class::ALL.iter().enumerate() {
             let raw = classes
                 .get(class.as_str())
@@ -172,7 +175,7 @@ impl Gate {
             gated: Default::default(),
             current: Mutex::new(None),
         };
-        gate.store(LogPolicy::everything());
+        gate.store(LogPolicy::default());
         gate
     }
 
@@ -255,5 +258,35 @@ impl EventLog {
                 eprintln!("event writer: the policy cannot be serialized: {error}");
             }
         }
+    }
+}
+
+/// Applies the policy file of the configuration directory once, at the start of the tool (docs/spec/logging.md#policy-file). No file
+/// keeps the default policy. A file that the reader refuses is stored as the error record `sok.record.error` of the place `log policy`,
+/// and the default policy stays in force; a record that the writer refuses is returned.
+pub fn apply_tool_policy(log: &EventLog, path: &std::path::Path) -> Result<(), String> {
+    let data = match std::fs::read(path) {
+        Ok(data) => data,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return record_refused_policy(log, format!("{}: {error}", path.display())),
+    };
+    match LogPolicy::parse(&path.display().to_string(), &data) {
+        Ok(policy) => {
+            log.set_policy(policy, "file");
+            Ok(())
+        }
+        Err(error) => record_refused_policy(log, error),
+    }
+}
+
+fn record_refused_policy(log: &EventLog, text: String) -> Result<(), String> {
+    if log.emit(
+        Level::Error,
+        "sok.record.error",
+        &json!({"where": "log policy", "text": text}),
+    ) {
+        Ok(())
+    } else {
+        Err(format!("log policy: {text}: the record was refused"))
     }
 }

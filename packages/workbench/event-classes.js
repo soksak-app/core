@@ -89,6 +89,7 @@ const FAMILIES = [
   ["page.record.", "lifecycle"],
   ["page.trace.", "call"],
   ["sidecar.record.", "lifecycle"],
+  ["sok.record.", "lifecycle"],
 ];
 
 const TAIL = /^[a-z0-9_.]+$/;

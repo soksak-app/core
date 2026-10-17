@@ -8,6 +8,7 @@ package sok
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -34,11 +35,12 @@ type LogPolicy struct {
 	max [5]int8
 }
 
-// DefaultLogPolicy stores every level of every class: the diagnostic builds of the 0.0.x series record everything.
+// DefaultLogPolicy stores only errors in every class: a release pays for no event below error and keeps the record of every error that
+// the display path shows. Every writer applies it before the first policy and while no policy file exists.
 func DefaultLogPolicy() LogPolicy {
 	var policy LogPolicy
 	for index := range policy.max {
-		policy.max[index] = int8(len(levelNames) - 1)
+		policy.max[index] = int8(slices.Index(levelNames, LevelError))
 	}
 	return policy
 }
@@ -212,3 +214,25 @@ func (l *EventLog) PolicyPath() string { return l.policyPath }
 // Levels returns, for each class in the order of Classes, the position in the levels error, warn, info, debug, trace of the least
 // severe level that is stored, or -1 when the class is stored at no level; the native library takes the policy in this form.
 func (p LogPolicy) Levels() [5]int8 { return p.max }
+
+// applyToolPolicy applies the policy file of the configuration directory once, at the start of the tool (docs/spec/logging.md#policy-file).
+// No file keeps the default policy. A file that the reader refuses is stored as the error record `sok.record.error` of the place
+// `log policy`, and the default policy stays in force; a record that the writer refuses is returned.
+func applyToolPolicy(log *EventLog, path string) error {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	var policy LogPolicy
+	if err == nil {
+		policy, err = ParseLogPolicy(path, data)
+	}
+	if err != nil {
+		if !log.Emit(LevelError, "sok.record.error", map[string]any{"where": "log policy", "text": err.Error()}) {
+			return fmt.Errorf("log policy: %v: the record was refused", err)
+		}
+		return nil
+	}
+	log.SetPolicy(policy, "file")
+	return nil
+}

@@ -6,9 +6,11 @@ package tests
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -16,8 +18,9 @@ import (
 )
 
 type policyCases struct {
-	File  string `json:"file"`
-	Valid []struct {
+	File    string            `json:"file"`
+	Default map[string]string `json:"default"`
+	Valid   []struct {
 		Name    string            `json:"name"`
 		Text    string            `json:"text"`
 		Classes map[string]string `json:"classes"`
@@ -92,4 +95,74 @@ func TestThePolicyReaderRefusesEveryInvalidGoldenCaseWithItsText(t *testing.T) {
 			t.Errorf("%s: error %q, expected %q", c.Name, err, expected)
 		}
 	}
+}
+
+// The levels of the contract in the order of the file: the level at position i stores with the values from position i+1 up.
+var goldenLevels = []sok.Level{sok.LevelError, sok.LevelWarn, sok.LevelInfo, sok.LevelDebug, sok.LevelTrace}
+
+// The default policy is the default of the golden cases: every class at the value of the case, and each level stored or refused as
+// the value says. A value at position k of [off, error, warn, info, debug, trace] stores the levels up to position k-1.
+func TestTheDefaultPolicyIsTheGoldenDefault(t *testing.T) {
+	cases := readPolicyCases(t)
+	policy := sok.DefaultLogPolicy()
+	classes := policy.Classes()
+	if len(cases.Default) != len(sok.Classes) {
+		t.Fatalf("the golden default names %d classes, expected %d", len(cases.Default), len(sok.Classes))
+	}
+	for _, class := range sok.Classes {
+		value, found := cases.Default[string(class)]
+		if !found {
+			t.Fatalf("the golden default does not name the class %s", class)
+		}
+		if classes[string(class)] != value {
+			t.Errorf("default class %s is %q, expected %q", class, classes[string(class)], value)
+		}
+		position := slices.Index([]string{"off", "error", "warn", "info", "debug", "trace"}, value)
+		for index, level := range goldenLevels {
+			want := index+1 <= position
+			if got := policy.Allows(class, level); got != want {
+				t.Errorf("default %s %s stored is %v, expected %v for the value %q", class, level, got, want, value)
+			}
+		}
+	}
+}
+
+// The tool applies the policy file of its configuration directory at its start, as every process does, so a file that stores every
+// level makes the tool store its command event, which the default policy refuses.
+func TestTheToolAppliesThePolicyFileOfItsConfigDirectory(t *testing.T) {
+	config := t.TempDir()
+	everything := `{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}`
+	if err := os.WriteFile(filepath.Join(config, "log-policy.json"), []byte(everything), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := loggedRun(config, sok.Run, "nothing")
+	if code != 2 {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	var names []string
+	for _, event := range eventsOf(t, config) {
+		names = append(names, event.Event)
+		if event.Event == "sok.command" {
+			return
+		}
+	}
+	t.Fatalf("the tool stored no sok.command under a policy file that stores every level: %v", names)
+}
+
+// A policy file that the reader refuses is stored as the error record of the place `log policy`.
+func TestARefusedPolicyFileIsStoredAsASokRecordError(t *testing.T) {
+	config := t.TempDir()
+	if err := os.WriteFile(filepath.Join(config, "log-policy.json"), []byte(`{"schema":9}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := loggedRun(config, sok.Run, "nothing")
+	if code != 2 {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	for _, event := range eventsOf(t, config) {
+		if event.Event == "sok.record.error" && event.Fields["where"] == "log policy" && strings.Contains(fmt.Sprint(event.Fields["text"]), "schema 9 is not 1") {
+			return
+		}
+	}
+	t.Fatalf("no sok.record.error of the place log policy naming schema 9: %+v", eventsOf(t, config))
 }

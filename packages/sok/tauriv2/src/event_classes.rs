@@ -53,6 +53,7 @@ const FAMILIES: &[(&str, Class)] = &[
     ("page.record.", Class::Lifecycle),
     ("page.trace.", Class::Call),
     ("sidecar.record.", Class::Lifecycle),
+    ("sok.record.", Class::Lifecycle),
 ];
 
 /// The class that the catalog gives the event name, and `None` for a name the catalog does not declare.

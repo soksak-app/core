@@ -56,11 +56,19 @@ var clockFailure sync.Once
 // StartToolEventLog starts the writer of the tool in logs/sok-<boot>.jsonl of the configuration directory config; the boot
 // identifier is the start time in seconds and the process identifier.
 func StartToolEventLog(config string) (*EventLog, error) {
-	return StartEventLog(EventLogOptions{
+	log, err := StartEventLog(EventLogOptions{
 		Directory: filepath.Join(config, "logs"), Role: eventRole, Boot: fmt.Sprintf("%d-%d", time.Now().Unix(), os.Getpid()),
 		Layer: eventLayer, Clock: monotonicNanos, Spawn: Go,
 		QueueEvents: eventQueueEvents, QueueBytes: eventQueueBytes, BatchInterval: eventBatchInterval,
 	})
+	if err != nil {
+		return nil, err
+	}
+	if err := applyToolPolicy(log, filepath.Join(config, "log-policy.json")); err != nil {
+		log.Close()
+		return nil, err
+	}
+	return log, nil
 }
 
 // targetConfigDir is the configuration directory that the arguments target: the value of --config-dir before any `--`, or

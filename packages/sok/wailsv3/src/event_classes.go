@@ -105,6 +105,7 @@ var eventClassFamilies = []struct {
 	{"page.record.", ClassLifecycle},
 	{"page.trace.", ClassCall},
 	{"sidecar.record.", ClassLifecycle},
+	{"sok.record.", ClassLifecycle},
 }
 
 // EventClassOf returns the class that the catalog gives the event name, and false for a name the catalog does not declare.

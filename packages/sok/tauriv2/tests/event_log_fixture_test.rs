@@ -65,6 +65,7 @@ impl Drop for Dir {
 fn write_events(label: &str, emit: impl FnOnce(&EventLog)) -> Vec<String> {
     let dir = Dir(std::env::temp_dir().join(format!("sok-fixture{}-{label}", std::process::id())));
     std::fs::create_dir_all(&dir.0).unwrap();
+    support::store_every_level(&dir.0);
     let log = soksak_sok::start_tool_event_log(&dir.0).unwrap();
     emit(&log);
     log.flush(Duration::from_secs(5)).unwrap();
@@ -81,6 +82,8 @@ fn parse(line: &str) -> Value {
 }
 
 // contract: cli.log.lines-follow-the-golden-fixtures
+mod support;
+
 #[test]
 fn lines_follow_the_golden_fixtures() {
     let golden = fixture_lines("key.jsonl");
@@ -126,9 +129,9 @@ fn fields_are_escaped_and_an_oversize_event_is_cut() {
             &json!({"args": "a".repeat(1 << 20)}),
         );
     });
-    assert_eq!(lines.len(), 3);
-    assert_eq!(parse(&lines[1])["fields"]["args"], text);
-    let cut = parse(&lines[2]);
+    assert_eq!(lines.len(), 4);
+    assert_eq!(parse(&lines[2])["fields"]["args"], text);
+    let cut = parse(&lines[3]);
     let head = cut["fields"]["head"].as_str().unwrap_or("");
     assert!(
         cut["truncated"].as_u64().unwrap_or(0) > 1 << 20
@@ -196,6 +199,7 @@ fn a_refused_event_is_counted_and_explained_by_log_dropped() {
 fn a_run_stores_only_the_events_that_the_specification_names() {
     let dir = Dir(std::env::temp_dir().join(format!("sok-fixture{}-declared", std::process::id())));
     std::fs::create_dir_all(&dir.0).unwrap();
+    support::store_every_level(&dir.0);
     let args: Vec<String> = ["nothing", "--config-dir", dir.0.to_str().unwrap()]
         .iter()
         .map(|arg| arg.to_string())
@@ -215,7 +219,14 @@ fn a_run_stores_only_the_events_that_the_specification_names() {
     for line in std::fs::read_to_string(&files[0]).unwrap().lines() {
         let name = parse(line)["event"].as_str().unwrap().to_string();
         assert!(
-            ["log.open", "sok.command", "sok.panic", "log.dropped"].contains(&name.as_str()),
+            [
+                "log.open",
+                "log.policy",
+                "sok.command",
+                "sok.panic",
+                "log.dropped"
+            ]
+            .contains(&name.as_str()),
             "a run stored {name}"
         );
     }

@@ -85,6 +85,7 @@ func loggedRun(config string, command sok.Command, args ...string) (int, string,
 // contract: cli.log.records-each-command-with-its-result
 func TestEachCommandIsRecordedWithItsResult(t *testing.T) {
 	config := t.TempDir()
+	storeEveryLevel(t, config)
 	code, _, stderr := loggedRun(config, sok.Run, "nothing")
 	if code != 2 {
 		t.Fatalf("code %d stderr %q", code, stderr)
@@ -112,6 +113,7 @@ func TestEachCommandIsRecordedWithItsResult(t *testing.T) {
 	}
 
 	passing := t.TempDir()
+	storeEveryLevel(t, passing)
 	if code, _, stderr := loggedRun(passing, sok.Run, "path", "remove"); code != 0 {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
@@ -124,6 +126,7 @@ func TestEachCommandIsRecordedWithItsResult(t *testing.T) {
 // contract: cli.log.records-a-panic-with-its-stack
 func TestAPanicOfACommandIsRecordedWithItsStack(t *testing.T) {
 	config := t.TempDir()
+	storeEveryLevel(t, config)
 	panics := func([]string, io.Writer, io.Writer, sok.Options) int { panic("the command broke") }
 	var status int
 	var stderr string

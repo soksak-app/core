@@ -94,9 +94,12 @@ fn named<'a>(events: &'a [Value], name: &str) -> Vec<&'a Value> {
 }
 
 // contract: cli.log.records-each-command-with-its-result
+mod support;
+
 #[test]
 fn each_command_is_recorded_with_its_result() {
     let config = Dir::new();
+    support::store_every_level(&config.0);
     let (code, stderr) = logged(&config.0, &soksak_sok::run, &["nothing"]);
     assert_eq!(code, 2, "stderr {stderr:?}");
     let events = events_of(&config.0);
@@ -132,6 +135,7 @@ fn each_command_is_recorded_with_its_result() {
     );
 
     let passing = Dir::new();
+    support::store_every_level(&passing.0);
     let (code, stderr) = logged(&passing.0, &soksak_sok::run, &["path", "remove"]);
     assert_eq!(code, 0, "stderr {stderr:?}");
     let events = events_of(&passing.0);
@@ -153,6 +157,7 @@ fn a_panic_of_a_command_is_recorded_with_its_stack() {
     let panics = |_: &[String], _: &mut dyn Write, _: &mut dyn Write, _: &Options| -> i32 {
         panic!("the command broke")
     };
+    support::store_every_level(&config.0);
     let result = std::panic::catch_unwind(|| logged(&config.0, &panics, &["plugin", "list"]));
     let (status, stderr) = result.unwrap_or_else(|_| panic!("the panic reached the caller"));
     assert!(

@@ -8,10 +8,13 @@ use soksak_sok::event_classes::{Class, class_of};
 use soksak_sok::event_log::Level;
 
 // contract: cli.log.stores-class
+mod support;
+
 #[test]
 fn every_line_of_the_tool_stores_the_class_of_its_catalog_entry() {
     let config = std::env::temp_dir().join(format!("sok-class{}", std::process::id()));
     std::fs::create_dir_all(&config).unwrap();
+    support::store_every_level(&config);
     let log = soksak_sok::start_tool_event_log(&config).unwrap();
     log.emit(Level::Warn, "sok.command", &json!({"name": "x"}));
     log.emit(
@@ -30,6 +33,7 @@ fn every_line_of_the_tool_stores_the_class_of_its_catalog_entry() {
         .collect();
     let want = [
         ("log.open", Some("lifecycle")),
+        ("log.policy", Some("lifecycle")),
         ("sok.command", Some("call")),
         ("sok.panic", Some("lifecycle")),
         ("sok.surprise", None),

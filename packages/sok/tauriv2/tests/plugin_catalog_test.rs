@@ -29,9 +29,12 @@ fn temp(label: &str) -> Dir {
 }
 
 // contract: log.plugin-catalog.classifies-plugin-events
+mod support;
+
 #[test]
 fn a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares() {
     let dir = temp("classify");
+    support::store_every_level(&dir.0);
     let log = soksak_sok::start_tool_event_log(&dir.0).unwrap();
     log.set_plugin_classes(HashMap::from([(
         "plugin.probe.frame".to_string(),
@@ -60,6 +63,7 @@ fn a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares() {
         got,
         vec![
             (json!("log.open"), json!("lifecycle"), Value::Null),
+            (json!("log.policy"), json!("lifecycle"), Value::Null),
             (json!("plugin.probe.frame"), json!("frame"), Value::Null),
             (json!("plugin.probe.other"), Value::Null, json!(true)),
         ]

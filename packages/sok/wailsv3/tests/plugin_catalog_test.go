@@ -22,7 +22,7 @@ func TestAPluginEventHasTheClassThatTheCatalogOfItsPluginDeclares(t *testing.T) 
 	want := []struct {
 		event, class string
 		undeclared   bool
-	}{{"log.open", "lifecycle", false}, {"plugin.probe.frame", "frame", false}, {"plugin.probe.other", "", true}}
+	}{{"log.open", "lifecycle", false}, {"log.policy", "lifecycle", false}, {"plugin.probe.frame", "frame", false}, {"plugin.probe.other", "", true}}
 	if len(lines) != len(want) {
 		t.Fatalf("%d lines: %v", len(lines), lines)
 	}

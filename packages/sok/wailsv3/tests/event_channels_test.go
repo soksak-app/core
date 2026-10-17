@@ -27,6 +27,7 @@ func linesOfFile(t *testing.T, path string) []string {
 // contract: cli.log.splits-files-by-level
 func TestTheToolStoresDebugAndTraceEventsInTheDebugFile(t *testing.T) {
 	config := t.TempDir()
+	storeEveryLevel(t, config)
 	log, err := sok.StartToolEventLog(config)
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +48,7 @@ func TestTheToolStoresDebugAndTraceEventsInTheDebugFile(t *testing.T) {
 			event := decodeEvent(t, line)
 			if event.Event == "sok.command" {
 				found = append(found, event.Level)
-			} else if event.Event != "log.open" {
+			} else if event.Event != "log.open" && event.Event != "log.policy" {
 				t.Fatalf("%s holds %s", path, line)
 			}
 		}
