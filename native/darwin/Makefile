@@ -18,6 +18,12 @@
 #   make benchmark-document
 #                         measures the WebContent footprint and the state report bytes of a document region whose page changes a tree of 2000
 #                         elements, at 0, 1000, 5000 and 10000 changes. It prints numbers and asserts nothing
+#   make benchmark-page-layers
+#                         measures the graphics footprint of the WebContent process of the main web view for six layer variants of
+#                         the workbench page in a 1200×760 window (opaque, transparent with the fixed background, the paint clip, the
+#                         rail overlay, a spinner, and no isolation), the median of three loads of each, and the difference of each
+#                         to the baseline in window buffers.
+#                         It prints numbers and asserts nothing
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
 #   make repeat-suite COUNT=<n>
@@ -38,7 +44,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation benchmark benchmark-document repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-activation benchmark benchmark-document benchmark-page-layers repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -77,6 +83,9 @@ benchmark: $(BUILD)/event_ring_benchmark
 
 benchmark-document: $(BUILD)/document_script_benchmark
 	@$(BUILD)/document_script_benchmark
+
+benchmark-page-layers: $(BUILD)/page_layers_benchmark
+	@$(BUILD)/page_layers_benchmark
 
 # A check that includes the acceptance check body is rebuilt when that body changes.
 $(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_directory_checker_test: tests/capture_test.m
