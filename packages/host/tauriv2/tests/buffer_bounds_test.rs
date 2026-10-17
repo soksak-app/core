@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 use serde_json::value::RawValue;
-use soksak_host_tauriv2::event_log::{self, EventLog, Options};
+use soksak_host_tauriv2::event_log::{EventLog, Options};
 use soksak_host_tauriv2::event_record::{emit_host, use_host_event_log};
 use soksak_host_tauriv2::exposure::Relay;
 use soksak_host_tauriv2::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};

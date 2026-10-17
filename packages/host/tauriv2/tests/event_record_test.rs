@@ -11,7 +11,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 use soksak_host_tauriv2::application_log::{log_error, log_info};
-use soksak_host_tauriv2::event_log::{self, EventLog, Options};
+use soksak_host_tauriv2::event_log::{EventLog, Options};
 use soksak_host_tauriv2::event_record::{
     START_BUFFER_RECORDS, flush_records, record_input_relay, use_host_event_log,
 };

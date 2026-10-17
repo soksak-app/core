@@ -1024,6 +1024,7 @@
   - [o] F197.2 — P1: page: log gate와 설정이 새 정책과 꺼진 trace를 기본으로 하고, switch 디버그가 모든 class의 모든 수준과 trace를 켜고 끈다. Red와 Green.
   - [o] F197.3 — P1: 두 host와 두 `sok` build가 정책 파일 없이 새 기본 정책을 적용한다. Red와 Green.
     - [o] F197.3-1 — P1: 두 언어의 공용 시험 helper와 객체 수 시험이 짝지은 이름을 가진다: hosts 검사가 각 짝에서 짝 없는 `tests/support/policy`와, `object_counts_test`에 대한 `diagnostics_objects_test`를 거부했다. 완료: 모든 수준 host helper는 두 host의 `tests/support/records`에, 도구 helper는 두 `sok` build의 `tests/support/policy`에 있고, Go 객체 수 시험은 `object_counts_test.go`다. hosts 검사가 통과한다.
+    - [o] F197.3-2 — P1: Rust 시험과 source가 push의 clippy 검사를 통과한다: F197.3과 F196.5 뒤 host 시험 7개가 쓰지 않는 `event_log`를 import했고 `documents.rs`에 clippy가 합치는 `if`가 있었다. 완료: import와 `if`를 바로잡았고 `make rust-clippy-check`가 통과한다.
   - [o] F197.4 — P1: native event ring이 첫 정책 전에 `error`만 저장한다. Red와 Green.
     - [o] F197.4-1 — P1: `error` 아래의 기록을 읽는 native 시험이 먼저 모든 수준을 저장하는 정책을 둔다: F197.4 뒤 기본 suite가 `observe_test`, `activity_observers_test`, `input_inject_test`, `webview_input_receipts_test`, `process_exit_test`, `quit_request_test`에서 실패했다.
   - [o] F197.5 — P1: files, shell, vt sidecar가 새 기본 정책을 적용한다. 각각 자기 저장소 체크리스트에서.

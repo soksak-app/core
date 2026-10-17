@@ -443,11 +443,11 @@ impl Streams {
                 })
             }
             (_, "reset") => {
-                if stream == REQUESTS {
-                    if let Some(log) = state.logs.get_mut(key) {
-                        log.entries.clear();
-                        log.dropped = 0;
-                    }
+                if stream == REQUESTS
+                    && let Some(log) = state.logs.get_mut(key)
+                {
+                    log.entries.clear();
+                    log.dropped = 0;
                 }
                 let body = json!({"type": "reset"});
                 let deliveries = state.deliveries(key, &stream, &body);

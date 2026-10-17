@@ -8,7 +8,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use soksak_host_tauriv2::event_log::{self, EventLog, Options};
+use soksak_host_tauriv2::event_log::{EventLog, Options};
 use soksak_host_tauriv2::event_relay::log_command;
 
 fn read(path: &Path) -> Vec<Value> {

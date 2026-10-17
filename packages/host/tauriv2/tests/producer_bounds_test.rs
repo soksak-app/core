@@ -15,7 +15,7 @@ use serde_json::{Map, Value, json};
 use soksak_host_tauriv2::application_log::{log_error, log_info};
 use soksak_host_tauriv2::bounds::{EVENT_FIELDS_LIMIT_BYTES, EVENT_HEAD_BYTES};
 use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Failure, Service, raw};
-use soksak_host_tauriv2::event_log::{self, Level, Options};
+use soksak_host_tauriv2::event_log::{Level, Options};
 use soksak_host_tauriv2::event_record::{
     START_BUFFER_BYTES, START_BUFFER_RECORDS, emit_host, use_host_event_log,
 };
