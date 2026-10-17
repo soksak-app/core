@@ -1030,7 +1030,7 @@
 - [~] F196 — P1: 애플리케이션 메모리: 3일 사용 뒤 workbench page가 242 MB(Wails), 291 MB(Tauri), host가 각각 약 154 MB였고, 브라우저 탭의 문서 web view가 1.31 GB였는데, 애플리케이션의 어떤 기록도 그것을 가리키지 못한다.
   - [o] F196.1 — P1: 창 상태가 `host.window`의 `documents`에 각 문서 web view의 WebContent process를 보고하므로, 측정이 브라우저 탭의 메모리를 그 surface에 연결한다.
     - [o] F196.1.1 — P2: performance trace의 메모리 표본이 host, page process, 모든 문서 process를 그 window, surface와 함께 잰다.
-  - [~] F196.2 — P1: benchmark 타깃이 큰 요소 트리를 쉬지 않고 바꾸는 page를 문서 영역에 열고, 현재 스크립트와 수집을 끈 때의 1000번 변경당 WebContent footprint 증가를 보고한다.
+  - [o] F196.2 — P1: benchmark 타깃이 큰 요소 트리를 쉬지 않고 바꾸는 page를 문서 영역에 열고, 현재 스크립트와 수집을 끈 때의 1000번 변경당 WebContent footprint 증가를 보고한다.
   - [o] F196.3 — P1: `document-state`와 분리된 문서 영역의 요소, 요청 스트림과 그 구독의 명세. 완료: `docs/spec/native-surfaces.ko.md`의 문서 영역과 문서 스트림 절이 계약을 밝히고, 명세에서 `document-state`는 요소와 요청 목록을 더 이상 담지 않으며, 용어 `stream`과 `snapshot`은 `packages/plugin-api/terms.json`에 있다. 구현 미완료: 두 host, 문서 스크립트, plugin-api는 F196.4와 F196.5가 끝나고 F196.6과 함께 배포될 때까지 목록을 `document-state`로 보내며 스트림을 제공하지 않는다.
   - [o] F196.4 — P1: 문서 스크립트가 스트림이 구독된 동안만 요소와 요청을 모은다. 요소는 확인 아래 스냅샷으로, 요청은 새 항목만 오고, 탐색은 `reset`을 보낸다: 구독자 없는 문서가 트리 변경마다 요소 목록 전체를 보냈다(50번 변경에 보고 51번).
   - [ ] F196.5 — P1: 두 host와 plugin-api가 구독자 수, 확인, 구독한 page가 내려가거나 그 process가 끝날 때의 제거를 갖춘 스트림 구독을 제공한다.
