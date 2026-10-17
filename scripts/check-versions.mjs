@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const RELEASE = "0.0.17";
+export const RELEASE = "0.0.18";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const JSON_MANIFESTS = new Set(["package.json", "plugin.json", "sidecar.json", "tauri.conf.json"]);
 
