@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F196.20: `make -C native/darwin benchmark-region-cost LONG=<minutes>` reads a plain web view and a document region on the same page each minute and prints the growth per minute of each; on https://www.google.com/ both stayed flat from minute 5 to 30, and the visible tabs of both check applications stopped growing after their first 10 minutes. The target passes `URL` only when it is set.
 - F196.18 (Rust): the Rust log indexer sizes its read buffer to the appended bytes, as the Go indexer does. Red: `index_update_allocates_for_the_appended_bytes_only` (`left: 8388608, right: 800`); Green.
 - F196.19: `e2e/window-occlusion.test.mjs` covers a window with a project window and requires `occluded: true` and a hidden document; it passes on both hosts. Both hosts report the same occlusion in every measured placement.
 - F196.18: the Go log indexer sizes its read buffer to the appended bytes instead of 8 MiB per update; the per-update buffers had raised the Go heap goal to about 20 MB and kept 13 to 16 MB of free heap dirty in the Wails host. A fresh Wails host fell from 73 to 43 MB. Red: `TestLogIndexUpdateAllocatesForTheAppendedBytesOnly` measured 8,647,392 bytes for a 2-line update; Green: under 1 MiB. Diagnostic builds report the Go runtime memory in `diagnostics.objects` and write a heap profile through `diagnostics.heap.profile`.

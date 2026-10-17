@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.20: `make -C native/darwin benchmark-region-cost LONG=<minutes>`가 같은 page의 plain web view와 document region을 1분마다 읽고 각각의 분당 증가를 출력한다; https://www.google.com/에서 둘 다 5분부터 30분까지 평평했고, 두 check 애플리케이션의 보이는 tab도 처음 10분 뒤 증가가 멈췄다. target은 `URL`이 설정된 경우에만 넘긴다.
 - F196.18 (Rust): Rust log indexer가 Go indexer처럼 추가된 byte 크기의 읽기 buffer를 쓴다. Red: `index_update_allocates_for_the_appended_bytes_only`(`left: 8388608, right: 800`); Green.
 - F196.19: `e2e/window-occlusion.test.mjs`가 창을 project 창으로 가리고 `occluded: true`와 숨겨진 document를 요구한다; 두 host에서 통과한다. 측정한 모든 배치에서 두 host가 같은 occlusion을 보고한다.
 - F196.18: Go log indexer가 갱신마다 8 MiB가 아니라 추가된 byte 크기의 읽기 buffer를 쓴다; 갱신마다의 buffer가 Wails host의 Go heap goal을 약 20 MB로 올리고 13~16 MB의 free heap을 dirty로 남겼다. 새로 시작한 Wails host는 73 MB에서 43 MB로 줄었다. Red: `TestLogIndexUpdateAllocatesForTheAppendedBytesOnly`가 2줄 갱신에 8,647,392 byte를 측정; Green: 1 MiB 미만. diagnostic build는 `diagnostics.objects`에 Go runtime 메모리를 보고하고 `diagnostics.heap.profile`로 heap profile을 쓴다.
