@@ -259,6 +259,10 @@ type Platform interface {
 	// WindowFacts returns the frame, the active state, the window buttons and the web views of the window as JSON. The form is
 	// the same as sp_window_facts of native/darwin/src/window_facts.h. Call it on the UI thread.
 	WindowFacts(window unsafe.Pointer) (string, error)
+	// ProcessFootprintKB returns the physical footprint (KB) of the process pid: the size that the system attributes to the process,
+	// which counts the pages that no other process shares. The resident size counts the shared pages too. It returns an error when the
+	// process cannot be read, such as a process that has ended.
+	ProcessFootprintKB(pid int) (uint64, error)
 	SetMainWebview(window unsafe.Pointer) error
 	// RevealAfterLoad keeps the window transparent and makes it opaque when the next display ends after the first load of the main web view finished.
 	// The caller puts the window on the screen after this call (native/darwin/src/window_reveal.h). Call it on the UI thread.

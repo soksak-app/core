@@ -298,6 +298,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	h.mu.Lock()
 	h.windows[win.ID()] = s
 	h.mu.Unlock()
+	PerformanceWindowAdd(name, s.performanceProcesses)
 	routine.Go("windows-changed", h.windowsChanged)
 	// The native view is placed over the DOM, so the page handles a dropped file based on the DOM element at that point.
 	var dropOnce sync.Once
@@ -399,6 +400,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		ready := s.ready
 		if !ready {
 			delete(h.windows, win.ID())
+			PerformanceWindowRemove(s.name)
 			for id := range s.projects {
 				delete(h.owners, id)
 			}

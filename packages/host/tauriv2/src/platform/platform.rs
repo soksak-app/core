@@ -306,6 +306,9 @@ pub trait Platform: Send + Sync {
     /// Returns the frame, the active state, the window buttons and the webviews of the window as JSON. The format is
     /// the same as sp_window_facts of native/darwin/src/window_facts.h. Call it on the main thread.
     fn window_facts(&self, window: Handle) -> Result<Value, String>;
+    /// Returns the physical footprint (KB) of the process pid, which counts the pages that no other process shares. It is an
+    /// error when the process cannot be read, such as a process that has ended.
+    fn process_footprint_kb(&self, pid: u32) -> Result<u64, String>;
     /// Moves the upper left of the window frame to the screen coordinates (x, y). Call it on the main thread.
     fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String>;
     /// Returns the displays [{x, y, width, height, scale}] in screen coordinates. Call it on the main thread.

@@ -61,6 +61,7 @@ mod private_files;
 #[cfg(feature = "diagnostics")]
 #[path = "process_exit.rs"]
 mod process_exit;
+mod process_footprint;
 #[path = "shapes.rs"]
 mod shapes;
 #[path = "stall_sample.rs"]
@@ -163,6 +164,9 @@ impl Platform for Darwin {
     }
     fn window_facts(&self, window: Handle) -> Result<Value, String> {
         window::facts(window)
+    }
+    fn process_footprint_kb(&self, pid: u32) -> Result<u64, String> {
+        process_footprint::process_footprint_kb(pid)
     }
     fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String> {
         window::move_to(window, x, y)

@@ -4,6 +4,7 @@
 package host_test
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -261,5 +262,76 @@ func TestSurfaceLifecycleEventsHoldTheGeometry(t *testing.T) {
 	}
 	if placed["surface"] != "s1" || placed["x"] != 1.0 || placed["y"] != 2.0 || placed["w"] != 30.0 || placed["h"] != 40.0 || placed["visible"] != true {
 		t.Fatalf("the placed event lacks the geometry: %v", placed)
+	}
+}
+
+// contract: performance.sampler.reads-every-window-process
+func TestTheSamplerReadsTheProcessesOfEveryWindow(t *testing.T) {
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	traceOn(t)
+	// The sampler that the switch started stores its first sample at once; the check starts after it.
+	waitForFirstSample(t, config, log)
+	page := exec.Command("sleep", "30")
+	document := exec.Command("sleep", "30")
+	for _, child := range []*exec.Cmd{page, document} {
+		if err := child.Start(); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = child.Process.Kill(); _ = child.Wait() })
+	}
+	host.PerformanceWindowAdd("window-a", func() (host.PerformanceWindowProcesses, error) {
+		return host.PerformanceWindowProcesses{Page: page.Process.Pid, Documents: []host.PerformanceDocumentProcess{
+			{Surface: "surface-a", Process: document.Process.Pid},
+			{Surface: "surface-b", Process: 0},
+		}}, nil
+	})
+	host.PerformanceWindowAdd("window-b", func() (host.PerformanceWindowProcesses, error) {
+		return host.PerformanceWindowProcesses{}, errors.New("window facts unavailable")
+	})
+	t.Cleanup(func() { host.PerformanceWindowRemove("window-a"); host.PerformanceWindowRemove("window-b") })
+	host.PerformanceSample()
+	var pageFields, documentFields, notStarted, unreadable map[string]any
+	for _, fields := range traceFields(t, config, log, "host.sampler.memory") {
+		switch {
+		case fields["role"] == "page" && fields["window"] == "window-a":
+			pageFields = fields
+		case fields["role"] == "document" && fields["surface"] == "surface-a":
+			documentFields = fields
+		case fields["role"] == "document" && fields["surface"] == "surface-b":
+			notStarted = fields
+		case fields["role"] == "page" && fields["window"] == "window-b":
+			unreadable = fields
+		}
+	}
+	if pageFields == nil {
+		t.Fatal("no page sample names window-a")
+	}
+	if pid, _ := pageFields["pid"].(float64); int(pid) != page.Process.Pid {
+		t.Fatalf("the page sample names pid %v, want %d: %v", pageFields["pid"], page.Process.Pid, pageFields)
+	}
+	if size, _ := pageFields["rss_kb"].(float64); size <= 0 {
+		t.Fatalf("the page sample holds no resident size: %v", pageFields)
+	}
+	if size, _ := pageFields["footprint_kb"].(float64); size <= 0 {
+		t.Fatalf("the page sample holds no footprint: %v", pageFields)
+	}
+	if documentFields == nil {
+		t.Fatal("no document sample names surface-a")
+	}
+	if pid, _ := documentFields["pid"].(float64); int(pid) != document.Process.Pid || documentFields["window"] != "window-a" {
+		t.Fatalf("the document sample does not name window-a and pid %d: %v", document.Process.Pid, documentFields)
+	}
+	if size, _ := documentFields["footprint_kb"].(float64); size <= 0 {
+		t.Fatalf("the document sample holds no footprint: %v", documentFields)
+	}
+	if text, _ := notStarted["error"].(string); text == "" || notStarted["window"] != "window-a" {
+		t.Fatalf("a web view whose process has not started has no error: %v", notStarted)
+	}
+	if _, ok := notStarted["rss_kb"]; ok {
+		t.Fatalf("a web view whose process has not started was recorded as a size: %v", notStarted)
+	}
+	if text, _ := unreadable["error"].(string); text == "" {
+		t.Fatalf("a window whose facts cannot be read has no error: %v", unreadable)
 	}
 }

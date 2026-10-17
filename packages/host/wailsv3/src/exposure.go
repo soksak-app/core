@@ -1177,6 +1177,20 @@ func (s *Surfaces) viewNames() (named map[uint64]string) {
 	return named
 }
 
+// performanceProcesses reads the WebContent processes of the page and of the document web views of the window for the sampler of
+// the performance trace. It reads the window state, which runs on the UI thread.
+func (s *Surfaces) performanceProcesses() (PerformanceWindowProcesses, error) {
+	state, err := s.windowState()
+	if err != nil {
+		return PerformanceWindowProcesses{}, err
+	}
+	processes := PerformanceWindowProcesses{Page: state.PageProcess, Documents: make([]PerformanceDocumentProcess, 0, len(state.Documents))}
+	for _, document := range state.Documents {
+		processes.Documents = append(processes.Documents, PerformanceDocumentProcess{Surface: document.Surface, Process: document.Process})
+	}
+	return processes, nil
+}
+
 // windowState reads the current value of host.window.
 func (s *Surfaces) windowState() (WindowStatus, error) {
 	var facts windowFacts

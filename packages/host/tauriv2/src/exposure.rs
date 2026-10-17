@@ -1231,6 +1231,35 @@ pub(crate) fn with_view<T: Send + 'static>(
     rx.recv().map_err(|e| e.to_string())?
 }
 
+/// Reads the WebContent processes of the page and of the document web views of a window for the sampler of the performance
+/// trace. It reads the window status, which runs on the main thread, so it is called from a thread that is not the main thread.
+pub(crate) fn window_processes(
+    window: &Window,
+) -> Result<crate::performance::WindowProcesses, String> {
+    let status = window_status(window).map_err(|failure| failure.message)?;
+    let page = status["pageProcess"]
+        .as_u64()
+        .ok_or("window status has no pageProcess")?;
+    let documents = status["documents"]
+        .as_array()
+        .ok_or("window status has no documents")?
+        .iter()
+        .map(|document| {
+            let surface = document["surface"]
+                .as_str()
+                .ok_or("a document of the window status has no surface")?;
+            let process = document["process"]
+                .as_u64()
+                .ok_or("a document of the window status has no process")?;
+            Ok((surface.to_string(), process as u32))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(crate::performance::WindowProcesses {
+        page: page as u32,
+        documents,
+    })
+}
+
 /// Calculates the host.window value of a window. It is called from a thread that is not the main thread.
 fn window_status(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;

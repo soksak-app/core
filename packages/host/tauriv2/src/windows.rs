@@ -496,6 +496,11 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         .lock()
         .map_err(|e| e.to_string())?
         .insert(window.label().into(), context.clone());
+    let reading = window.clone();
+    crate::performance::window_add(
+        window.label(),
+        std::sync::Arc::new(move || crate::exposure::window_processes(&reading)),
+    );
     let platform = platform::current()?;
     let owner = native_owner(&window)?;
     let main = root_view(&window).ok_or("the main webview is gone")?;
@@ -628,6 +633,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             if let Ok(mut owners) = registry.owners.lock() {
                 owners.retain(|_, label| label != host.label());
             }
+            crate::performance::window_remove(host.label());
             if let Ok(mut windows) = registry.windows.lock() {
                 windows.remove(host.label());
                 if windows.is_empty() && registry.quit.active() {

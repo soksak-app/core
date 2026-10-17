@@ -221,8 +221,18 @@
       "layer": "host",
       "class": "call",
       "level": "debug",
-      "fields": {},
-      "description": "The sampler of the host, while the trace is on."
+      "fields": {
+        "role": "string",
+        "name": "string",
+        "window": "string",
+        "surface": "string",
+        "pid": "number",
+        "rss_host_kb": "number",
+        "rss_kb": "number",
+        "footprint_kb": "number",
+        "error": "string"
+      },
+      "description": "The sampler of the host, while the trace is on. The memory event `host.sampler.memory` is one reading every five seconds: role is host (rss_host_kb), a registered process role with name, page (the page web content process of the window `window`) or document (the web content process of the document web view `surface` of the window `window`). Each process reading holds pid, rss_kb and footprint_kb; a reading that cannot obtain a size holds error instead of the sizes, and a window whose facts cannot be read holds role, window and error."
     },
     "host.buffer.dropped": {
       "layer": "host",

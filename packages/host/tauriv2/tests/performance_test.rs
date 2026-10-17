@@ -280,3 +280,120 @@ fn surface_lifecycle_events_hold_the_geometry() {
         ]
     );
 }
+
+// contract: performance.sampler.reads-every-window-process
+#[test]
+fn the_sampler_reads_the_processes_of_every_window() {
+    if let Some(config) = std::env::var_os(CHILD) {
+        let config = std::path::PathBuf::from(config);
+        let writer = records::start_writer(&config);
+        performance::command(json!({"action": "on"})).unwrap();
+        records::wait_for_first_sample(&config, &writer);
+        let mut page = Command::new("sleep").arg("30").spawn().unwrap();
+        let mut document = Command::new("sleep").arg("30").spawn().unwrap();
+        let (page_pid, document_pid) = (page.id(), document.id());
+        performance::window_add(
+            "window-a",
+            std::sync::Arc::new(move || {
+                Ok(performance::WindowProcesses {
+                    page: page_pid,
+                    documents: vec![
+                        ("surface-a".to_string(), document_pid),
+                        ("surface-b".to_string(), 0),
+                    ],
+                })
+            }),
+        );
+        performance::window_add(
+            "window-b",
+            std::sync::Arc::new(|| Err("window facts unavailable".to_string())),
+        );
+        performance::sample();
+        performance::window_remove("window-a");
+        performance::window_remove("window-b");
+        performance::command(json!({"action": "off"})).unwrap();
+        page.kill().unwrap();
+        page.wait().unwrap();
+        document.kill().unwrap();
+        document.wait().unwrap();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        let samples = trace_fields(&config, "host.sampler.memory");
+        let page_record = samples
+            .iter()
+            .find(|s| s["role"] == "page" && s["window"] == "window-a")
+            .expect("a page sample names window-a");
+        assert_eq!(page_record["pid"], json!(page_pid), "{page_record}");
+        let document_record = samples
+            .iter()
+            .find(|s| s["role"] == "document" && s["surface"] == "surface-a")
+            .expect("a document sample names surface-a");
+        assert_eq!(
+            document_record["pid"],
+            json!(document_pid),
+            "{document_record}"
+        );
+        assert_eq!(document_record["window"], "window-a", "{document_record}");
+        return;
+    }
+    let config = in_child("the_sampler_reads_the_processes_of_every_window");
+    let samples = trace_fields(config.path(), "host.sampler.memory");
+    let page: Vec<_> = samples
+        .iter()
+        .filter(|s| s["role"] == "page" && s["window"] == "window-a")
+        .collect();
+    assert_eq!(page.len(), 1, "page samples of window-a: {samples:?}");
+    assert!(
+        page[0]["rss_kb"].as_u64().is_some_and(|size| size > 0),
+        "the page sample holds no resident size: {}",
+        page[0]
+    );
+    assert!(
+        page[0]["footprint_kb"]
+            .as_u64()
+            .is_some_and(|size| size > 0),
+        "the page sample holds no footprint: {}",
+        page[0]
+    );
+    let document: Vec<_> = samples
+        .iter()
+        .filter(|s| s["role"] == "document" && s["surface"] == "surface-a")
+        .collect();
+    assert_eq!(
+        document.len(),
+        1,
+        "document samples of surface-a: {samples:?}"
+    );
+    assert!(
+        document[0]["footprint_kb"]
+            .as_u64()
+            .is_some_and(|size| size > 0),
+        "the document sample holds no footprint: {}",
+        document[0]
+    );
+    let not_started: Vec<_> = samples
+        .iter()
+        .filter(|s| s["role"] == "document" && s["surface"] == "surface-b")
+        .collect();
+    assert_eq!(not_started.len(), 1, "samples of surface-b: {samples:?}");
+    assert_eq!(not_started[0]["window"], "window-a");
+    assert!(
+        not_started[0].get("rss_kb").is_none()
+            && not_started[0]["error"]
+                .as_str()
+                .is_some_and(|text| !text.is_empty()),
+        "a web view whose process has not started has no error: {}",
+        not_started[0]
+    );
+    let unreadable: Vec<_> = samples
+        .iter()
+        .filter(|s| s["role"] == "page" && s["window"] == "window-b")
+        .collect();
+    assert_eq!(unreadable.len(), 1, "samples of window-b: {samples:?}");
+    assert!(
+        unreadable[0]["error"]
+            .as_str()
+            .is_some_and(|text| !text.is_empty()),
+        "a window whose facts cannot be read has no error: {}",
+        unreadable[0]
+    );
+}

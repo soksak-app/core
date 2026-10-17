@@ -1,10 +1,11 @@
 //! The switch and the sampler of the performance trace (docs/spec/performance-trace.md). The process holds the switch; an
 //! observation is an event of the event log while the switch is on. The page turns it on and off with the call `performance`.
 
+use crate::platform;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 static ON: AtomicBool = AtomicBool::new(false);
@@ -166,6 +167,32 @@ pub fn process_remove(pid: u32) {
     PROCESSES.lock().expect("the process registry").remove(&pid);
 }
 
+/// The processes of one window that the sampler reads: the WebContent process of its page, and the WebContent process of each
+/// document web view with the surface of that document. A process is 0 before it starts.
+pub struct WindowProcesses {
+    pub page: u32,
+    pub documents: Vec<(String, u32)>,
+}
+
+/// Reads the processes of a window. The sampler calls it on its own thread, not on the main thread.
+pub type WindowReader = Arc<dyn Fn() -> Result<WindowProcesses, String> + Send + Sync>;
+
+/// The window registry of the sampler: every open window by label, with the reader of its processes.
+static WINDOWS: Mutex<BTreeMap<String, WindowReader>> = Mutex::new(BTreeMap::new());
+
+/// Names a window for the sampler, which reads its processes at each sample. Naming a window again replaces its reader.
+pub fn window_add(window: &str, read: WindowReader) {
+    WINDOWS
+        .lock()
+        .expect("the window registry")
+        .insert(window.to_string(), read);
+}
+
+/// Removes a window from the registry when it closes; a label that is not registered is ignored.
+pub fn window_remove(window: &str) {
+    WINDOWS.lock().expect("the window registry").remove(window);
+}
+
 /// Stores the resident size of the host and of every registered process, each as one event `host.sampler.memory`. A process
 /// whose size cannot be read is stored with its error.
 pub fn sample() {
@@ -177,15 +204,61 @@ pub fn sample() {
         .map(|(pid, process)| (*pid, process.clone()))
         .collect();
     for (pid, (role, name)) in named {
-        observe("sampler", || match resident_kb(pid) {
-            Ok(size) => {
-                json!({"event":"memory", "role":role, "name":name, "pid":pid, "rss_kb":size})
-            }
-            Err(error) => {
-                json!({"event":"memory", "role":role, "name":name, "pid":pid, "error":error})
-            }
+        observe("sampler", || {
+            process_memory(json!({"role": role, "name": name}), pid)
         });
     }
+    let windows: Vec<(String, WindowReader)> = WINDOWS
+        .lock()
+        .expect("the window registry")
+        .iter()
+        .map(|(window, read)| (window.clone(), read.clone()))
+        .collect();
+    for (window, read) in windows {
+        match read() {
+            Ok(processes) => {
+                observe("sampler", || {
+                    process_memory(json!({"role": "page", "window": window}), processes.page)
+                });
+                for (surface, pid) in processes.documents {
+                    observe("sampler", || {
+                        process_memory(
+                            json!({"role": "document", "window": window, "surface": surface}),
+                            pid,
+                        )
+                    });
+                }
+            }
+            Err(error) => observe(
+                "sampler",
+                || json!({"event":"memory", "role":"page", "window":window, "error":error}),
+            ),
+        }
+    }
+}
+
+/// Adds the memory of pid to the record: rss_kb and footprint_kb, or error when a reading fails. Pid 0 is a web view whose
+/// WebContent process has not started, so no process can be read for it and its error says so.
+fn process_memory(mut record: Value, pid: u32) -> Value {
+    record["event"] = json!("memory");
+    record["pid"] = json!(pid);
+    if pid == 0 {
+        record["error"] = json!(format!("the web process has not started (pid {pid})"));
+        return record;
+    }
+    match (resident_kb(pid), footprint_kb(pid)) {
+        (Ok(size), Ok(footprint)) => {
+            record["rss_kb"] = json!(size);
+            record["footprint_kb"] = json!(footprint);
+        }
+        (Err(error), _) | (_, Err(error)) => record["error"] = json!(error),
+    }
+    record
+}
+
+/// The physical footprint (KB) of pid, read through the registered platform implementation.
+fn footprint_kb(pid: u32) -> Result<u64, String> {
+    platform::current()?.process_footprint_kb(pid)
 }
 
 /// Stores a phase of the life of a surface (`created`, `placed`, `destroyed`) as the event `surface` of the trace. A
@@ -211,9 +284,11 @@ pub fn sampler_running() -> bool {
 
 /// The memory event of pid that the sampler records. When the read fails, it records the error instead of the size.
 pub fn memory_record(pid: u32) -> Value {
-    match resident_kb(pid) {
-        Ok(size) => json!({"event":"memory", "rss_host_kb":size}),
-        Err(error) => json!({"event":"memory", "error":error}),
+    match (resident_kb(pid), footprint_kb(pid)) {
+        (Ok(size), Ok(footprint)) => {
+            json!({"event":"memory", "rss_host_kb":size, "footprint_kb":footprint})
+        }
+        (Err(error), _) | (_, Err(error)) => json!({"event":"memory", "error":error}),
     }
 }
 

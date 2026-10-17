@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
@@ -148,8 +149,8 @@ func PerformanceProcessRemove(pid int) {
 	processesMu.Unlock()
 }
 
-// PerformanceSample stores the resident size of the host and of every registered process, each as one event
-// `host.sampler.memory`. A process whose size cannot be read is stored with its error.
+// PerformanceSample stores the memory of the host, of every registered process, and of the processes of every open window, each as
+// one event `host.sampler.memory`. A reading that fails is stored with its error instead of the sizes.
 func PerformanceSample() {
 	PerformanceObserve("sampler", func() map[string]any { return PerformanceMemory(os.Getpid()) })
 	processesMu.Lock()
@@ -160,16 +161,101 @@ func PerformanceSample() {
 	processesMu.Unlock()
 	for pid, process := range named {
 		PerformanceObserve("sampler", func() map[string]any {
-			record := map[string]any{"event": "memory", "role": process.role, "name": process.name, "pid": pid}
-			size, err := residentKB(pid)
-			if err != nil {
-				record["error"] = err.Error()
-			} else {
-				record["rss_kb"] = size
-			}
-			return record
+			return processMemory(map[string]any{"role": process.role, "name": process.name}, pid)
 		})
 	}
+	performanceWindowsMu.Lock()
+	windows := make(map[string]PerformanceWindowReader, len(performanceWindows))
+	for window, read := range performanceWindows {
+		windows[window] = read
+	}
+	performanceWindowsMu.Unlock()
+	for window, read := range windows {
+		processes, err := read()
+		if err != nil {
+			PerformanceObserve("sampler", func() map[string]any {
+				return map[string]any{"event": "memory", "role": "page", "window": window, "error": err.Error()}
+			})
+			continue
+		}
+		PerformanceObserve("sampler", func() map[string]any {
+			return processMemory(map[string]any{"role": "page", "window": window}, processes.Page)
+		})
+		for _, document := range processes.Documents {
+			PerformanceObserve("sampler", func() map[string]any {
+				return processMemory(map[string]any{"role": "document", "window": window, "surface": document.Surface}, document.Process)
+			})
+		}
+	}
+}
+
+// processMemory adds the memory of pid to record: rss_kb and footprint_kb, or error when a reading fails. Pid 0 is a web view whose
+// WebContent process has not started, so no process can be read for it and its error says so.
+func processMemory(record map[string]any, pid int) map[string]any {
+	record["event"] = "memory"
+	record["pid"] = pid
+	if pid <= 0 {
+		record["error"] = fmt.Sprintf("the web process has not started (pid %d)", pid)
+		return record
+	}
+	size, err := residentKB(pid)
+	if err != nil {
+		record["error"] = err.Error()
+		return record
+	}
+	footprint, err := processFootprintKB(pid)
+	if err != nil {
+		record["error"] = err.Error()
+		return record
+	}
+	record["rss_kb"], record["footprint_kb"] = size, footprint
+	return record
+}
+
+// processFootprintKB is the physical footprint (KB) of pid, read through the registered platform implementation. The platform
+// tests and the host both register it at package initialization, so an unregistered platform is an error.
+func processFootprintKB(pid int) (uint64, error) {
+	current, err := platform.Current()
+	if err != nil {
+		return 0, err
+	}
+	return current.ProcessFootprintKB(pid)
+}
+
+// PerformanceWindowProcesses are the processes of one window that the sampler reads: the WebContent process of its page and
+// of each document web view, with the surface of that document. A process is 0 before it starts.
+type PerformanceWindowProcesses struct {
+	Page      int
+	Documents []PerformanceDocumentProcess
+}
+
+// PerformanceDocumentProcess is the WebContent process of one document web view of a window.
+type PerformanceDocumentProcess struct {
+	Surface string
+	Process int
+}
+
+// PerformanceWindowReader reads the processes of a window. The sampler calls it on its own goroutine, not on the UI thread.
+type PerformanceWindowReader func() (PerformanceWindowProcesses, error)
+
+// performanceWindows is the window registry of the sampler: every open window by name, with the reader of its processes.
+var (
+	performanceWindowsMu sync.Mutex
+	performanceWindows   = map[string]PerformanceWindowReader{}
+)
+
+// PerformanceWindowAdd names a window for the sampler, which reads its processes at each sample. Naming a window again replaces its reader.
+func PerformanceWindowAdd(window string, read PerformanceWindowReader) {
+	performanceWindowsMu.Lock()
+	performanceWindows[window] = read
+	performanceWindowsMu.Unlock()
+}
+
+// PerformanceWindowRemove removes a window from the registry when it closes; a name that is not registered is ignored.
+func PerformanceWindowRemove(window string) {
+	performanceWindowsMu.Lock()
+	delete(performanceWindows, window)
+	performanceWindowsMu.Unlock()
 }
 
 // PerformanceSurface stores a phase of the life of a surface (`created`, `placed`, `destroyed`) as the event `surface` of
@@ -199,7 +285,11 @@ func PerformanceMemory(pid int) map[string]any {
 	if err != nil {
 		return map[string]any{"event": "memory", "error": err.Error()}
 	}
-	return map[string]any{"event": "memory", "rss_host_kb": size}
+	footprint, err := processFootprintKB(pid)
+	if err != nil {
+		return map[string]any{"event": "memory", "error": err.Error()}
+	}
+	return map[string]any{"event": "memory", "rss_host_kb": size, "footprint_kb": footprint}
 }
 
 // residentKB is the resident size (KB) of pid. It is an error when ps cannot be run or returns no size (the process ended).

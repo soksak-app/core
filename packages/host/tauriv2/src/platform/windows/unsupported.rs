@@ -526,6 +526,10 @@ pub fn window_facts(_window: Handle) -> Result<Value, String> {
     missing("window state")
 }
 
+pub fn process_footprint_kb(_pid: u32) -> Result<u64, String> {
+    missing("process footprint")
+}
+
 pub fn move_window(_window: Handle, _x: f64, _y: f64) -> Result<(), String> {
     missing("window placement")
 }
