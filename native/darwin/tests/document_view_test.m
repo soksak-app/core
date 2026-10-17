@@ -10,6 +10,7 @@
 #import "input_inject.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
+#import "event_ring.h"
 
 static int failures = 0;
 
@@ -114,6 +115,23 @@ static void scrollDone(void *context, sp_input_result result, const sp_input_hel
     *(sp_input_result *)context = result;
 }
 
+// The messages of the document streams, in the order they arrived.
+static NSMutableArray<NSDictionary *> *streamed;
+
+static void stream(void *context, const char *text) {
+    NSData *data = [NSData dataWithBytes:text length:strlen(text)];
+    [streamed addObject:[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]];
+}
+
+// The messages of the stream name of the type type that arrived from index from on.
+static NSArray<NSDictionary *> *messagesOf(NSString *name, NSString *type, NSUInteger from) {
+    NSMutableArray *found = [NSMutableArray array];
+    for (NSUInteger i = from; i < streamed.count; i++) {
+        if ([streamed[i][@"stream"] isEqual:name] && [streamed[i][@"message"][@"type"] isEqual:type]) [found addObject:streamed[i][@"message"]];
+    }
+    return found;
+}
+
 static void changed(void *context, const char *text) {
     NSData *data = [NSData dataWithBytes:text length:strlen(text)];
     [latest release];
@@ -165,6 +183,11 @@ int main(int argc, char **argv) { @autoreleasepool {
     BOOL activation = argc > 1 && strcmp(argv[1], "--activation") == 0;
     if (activation) sp_test_declare_activation();
     [NSApplication sharedApplication];
+    // The records that this test reads are info events, which the default policy refuses (docs/spec/logging.md#policy):
+    // the policy that stores every level is set here, and the default policy is tested in event_ring_test.
+    const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(everything), @"the policy stores every level of every class");
+    streamed = [NSMutableArray new];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
@@ -195,6 +218,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     __block void *document = NULL;
     NSArray<NSDictionary *> *creation = capturedEvents(^{
         document = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, changed, NULL);
+        sp_document_set_stream(document, stream, NULL);
         // The first deliveries of the observed properties arrive on the run loop after the creation.
         NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.3];
         while (until.timeIntervalSinceNow > 0) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:until];
@@ -441,29 +465,95 @@ int main(int argc, char **argv) { @autoreleasepool {
     sp_document_background(document, false);
     check(view.contentFilters.count == 0, @"clearing the background state removes the blur");
 
-    // The elements of the document and the recorded requests are carried in the status.
+    // A document without a subscriber of its streams collects nothing (docs/spec/native-surfaces.md#document-streams): its
+    // state carries no elements and no requests, and a document that changes its element tree on every task, such as a
+    // single-page application, reports no state for those changes.
     check(sp_document_load(document, [base stringByAppendingString:@"/inspect"].UTF8String), @"the inspect address is accepted");
-    settle(@"the inspect document did not report its elements and requests", ^BOOL(NSDictionary *state) {
-        NSArray *entries = state[@"requests"][@"entries"];
-        BOOL fetched = NO;
-        for (NSDictionary *entry in entries) if ([entry[@"type"] isEqual:@"fetch"] && [entry[@"url"] hasSuffix:@"/blank"]) fetched = YES;
-        return [state[@"title"] isEqual:@"Inspected"] && fetched && [state[@"elements"][@"nodes"] count] > 0;
+    settle(@"the inspect document did not finish", ^BOOL(NSDictionary *state) { return [state[@"title"] isEqual:@"Inspected"]; });
+    check(latest[@"elements"] == nil && latest[@"requests"] == nil,
+        [NSString stringWithFormat:@"the state of a document carries no elements and no requests: %@", latest.allKeys]);
+    // Each change runs in a task of its own; a message channel schedules the next task without the timer throttling of
+    // a hidden web view.
+    NSString *changes = @"(() => { let left = 50; const channel = new MessageChannel();"
+        " const step = () => { document.body.append(document.createElement('i'));"
+        " if (--left > 0) channel.port2.postMessage(0); else document.title = 'Changed ' + document.body.children.length; };"
+        " channel.port1.onmessage = step; step(); })(); null";
+    int before = reports;
+    evaluate(view, changes);
+    settle(@"the changing document did not finish its changes", ^BOOL(NSDictionary *state) {
+        return [state[@"title"] hasPrefix:@"Changed"];
     });
-    NSArray *nodes = latest[@"elements"][@"nodes"];
+    check(reports - before <= 2,
+        [NSString stringWithFormat:@"50 changes of the element tree report at most the title change, not one state each: %d reports", reports - before]);
+    check(streamed.count == 0, [NSString stringWithFormat:@"a document without a subscriber sends no stream message: %@", streamed]);
+
+    // The element stream: turning it on sends one snapshot of the tree in document order.
+    check(sp_document_stream_on(document, "elements", true), @"the element stream is turned on");
+    until(@"the element stream sent no snapshot", ^BOOL { return messagesOf(@"elements", @"snapshot", 0).count == 1; });
+    NSDictionary *snapshot = messagesOf(@"elements", @"snapshot", 0)[0];
     NSMutableArray *shown = [NSMutableArray array];
-    for (NSDictionary *node in nodes) {
+    for (NSDictionary *node in [snapshot[@"nodes"] subarrayWithRange:NSMakeRange(0, 7)]) {
         [shown addObject:[NSString stringWithFormat:@"%@:%@#%@.%@", node[@"depth"], node[@"tag"], node[@"id"], node[@"class"]]];
     }
     check([[shown componentsJoinedByString:@" "] isEqual:@"0:html#. 1:head#. 2:title#. 1:body#. 2:div#box.a b 3:p#. 2:script#."]
-        && ![latest[@"elements"][@"truncated"] boolValue],
-        [NSString stringWithFormat:@"the elements are reported in document order with depth, tag, id, and class: %@", shown]);
-    NSDictionary *first = [latest[@"requests"][@"entries"] firstObject];
-    check([first[@"type"] isEqual:@"navigation"] && [first[@"url"] hasSuffix:@"/inspect"] && [first[@"duration"] doubleValue] >= 0,
-        [NSString stringWithFormat:@"the navigation is the first request: %@", first]);
-    evaluate(view, @"document.body.append(document.createElement('section')); null");
-    settle(@"a new element was not reported", ^BOOL(NSDictionary *state) {
-        return [[[state[@"elements"][@"nodes"] lastObject] objectForKey:@"tag"] isEqual:@"section"];
+        && [snapshot[@"seq"] isEqual:@1] && [snapshot[@"total"] isEqual:@(7 + 50)] && [snapshot[@"truncated"] isEqual:@NO],
+        [NSString stringWithFormat:@"the snapshot lists the elements in document order with depth, tag, id and class, seq 1 and the total: %@ %@ %@",
+            shown, snapshot[@"seq"], snapshot[@"total"]]);
+    // 50 changes while the snapshot is unacknowledged send no snapshot; its acknowledgement releases exactly one more.
+    evaluate(view, changes);
+    settle(@"the second changes did not finish", ^BOOL(NSDictionary *state) { return [state[@"title"] isEqual:@"Changed 102"]; });
+    check(messagesOf(@"elements", @"snapshot", 0).count == 1,
+        [NSString stringWithFormat:@"changes during an unacknowledged snapshot send none: %lu snapshots", (unsigned long)messagesOf(@"elements", @"snapshot", 0).count]);
+    check(!sp_document_stream_ack(document, 99), @"an acknowledgement of a seq that was not sent is refused");
+    check(sp_document_stream_ack(document, 1), @"the snapshot 1 is acknowledged");
+    until(@"the acknowledgement released no snapshot", ^BOOL { return messagesOf(@"elements", @"snapshot", 0).count == 2; });
+    NSDictionary *second = messagesOf(@"elements", @"snapshot", 0)[1];
+    check([second[@"seq"] isEqual:@2] && [second[@"total"] isEqual:@(7 + 100)],
+        [NSString stringWithFormat:@"the released snapshot holds every change: seq %@ total %@", second[@"seq"], second[@"total"]]);
+    check(sp_document_stream_ack(document, 2), @"the snapshot 2 is acknowledged");
+    check(messagesOf(@"elements", @"snapshot", 0).count == 2, @"an acknowledgement without a change sends no snapshot");
+
+    // The request stream: turning it on sends the navigation first, and later batches hold only new entries.
+    check(sp_document_stream_on(document, "requests", true), @"the request stream is turned on");
+    until(@"the request stream sent no entries", ^BOOL { return messagesOf(@"requests", @"entries", 0).count >= 1; });
+    NSDictionary *navigation = [messagesOf(@"requests", @"entries", 0)[0][@"entries"] firstObject];
+    check([navigation[@"type"] isEqual:@"navigation"] && [navigation[@"url"] hasSuffix:@"/inspect"] && [navigation[@"duration"] doubleValue] >= 0,
+        [NSString stringWithFormat:@"the navigation is the first entry: %@", navigation]);
+    until(@"the buffered resource entries did not arrive", ^BOOL {
+        for (NSDictionary *message in messagesOf(@"requests", @"entries", 0)) {
+            for (NSDictionary *item in message[@"entries"]) if ([item[@"type"] isEqual:@"fetch"] && [item[@"url"] hasSuffix:@"/blank"]) return YES;
+        }
+        return NO;
     });
+    NSUInteger mark = streamed.count;
+    evaluate(view, @"fetch('/two'); null");
+    until(@"the new request was not sent", ^BOOL { return messagesOf(@"requests", @"entries", mark).count >= 1; });
+    NSArray *fresh = messagesOf(@"requests", @"entries", mark)[0][@"entries"];
+    check(fresh.count == 1 && [fresh[0][@"url"] hasSuffix:@"/two"],
+        [NSString stringWithFormat:@"a later batch holds only the new entry: %@", fresh]);
+    check([evaluate(view, @"performance.getEntriesByType('resource').length") integerValue] >= 2,
+        @"the resource timing buffer of the page is not cleared");
+
+    // A new document sends reset to each stream that is on, and seq keeps increasing.
+    mark = streamed.count;
+    check(sp_document_load(document, [base stringByAppendingString:@"/inspect"].UTF8String), @"the inspect address is accepted again");
+    until(@"the new document sent no reset and no snapshot", ^BOOL {
+        return messagesOf(@"elements", @"reset", mark).count == 1 && messagesOf(@"requests", @"reset", mark).count == 1
+            && messagesOf(@"elements", @"snapshot", mark).count == 1;
+    });
+    check([messagesOf(@"elements", @"snapshot", mark)[0][@"seq"] isEqual:@3], @"the snapshot of the new document has seq 3");
+    check(sp_document_stream_ack(document, 2), @"an acknowledgement of a snapshot before the reset releases nothing and is not an error");
+
+    // Turning the streams off stops the collection.
+    check(sp_document_stream_on(document, "elements", false) && sp_document_stream_on(document, "requests", false),
+        @"the streams are turned off");
+    check(!sp_document_stream_on(document, "frames", true), @"another stream name is refused");
+    settle(@"the reloaded inspect document did not finish", ^BOOL(NSDictionary *state) { return [state[@"title"] isEqual:@"Inspected"]; });
+    mark = streamed.count;
+    evaluate(view, changes);
+    settle(@"the third changes did not finish", ^BOOL(NSDictionary *state) { return [state[@"title"] hasPrefix:@"Changed"]; });
+    check(streamed.count == mark, [NSString stringWithFormat:@"a stream that is off sends nothing: %@",
+        [streamed subarrayWithRange:NSMakeRange(mark, streamed.count - mark)]]);
 
     // The address of the link under the pointer is link in the status. Outside a link it is an empty string.
     check([latest[@"link"] isEqual:@""], [NSString stringWithFormat:@"a document without a pointed link reports an empty link: %@", latest[@"link"]]);

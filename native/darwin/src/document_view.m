@@ -25,11 +25,6 @@ static NSString *const kScrollScript = @"(() => {"
     "post();"
     "})();";
 
-// The script that sends the elements of the document and the requests recorded by the Performance API
-// (docs/spec/native-surfaces.md#document-regions).
-// It runs in the content world of the host, so page scripts cannot send to this handler. A document restored from the
-// page cache
-// does not run its scripts again, so the script also sends on pageshow.
 // Forwards each message that a plugin document posts to its own window (docs/spec/native-surfaces.md#document-regions).
 // The script runs in the host's content world, so it sees the message events of the page world without giving the
 // page access to the handler; other documents have no message channel.
@@ -45,34 +40,52 @@ static NSString *const kMessageScript = @"(() => {"
     "});"
     "})();";
 
+// The script of the document streams (docs/spec/native-surfaces.md#document-streams) and of the link under the pointer.
+// It collects the elements and requests only while the host turns their stream on, so a document without a subscriber
+// posts no element or request data. It runs in the content world of the host, so page scripts cannot send to this handler.
 static NSString *const kPageMessage = @"soksakDocumentPage";
+// The content world of the scripts of the host in a document.
+static NSString *const kDocumentWorld = @"soksak-document";
 static NSString *const kPageScript = @"(() => {"
     "const post = (value) => window.webkit.messageHandlers.soksakDocumentPage.postMessage(value);"
-    "const elements = () => {"
-    "  const nodes = []; let count = 0;"
+    // The element stream: the observer only marks the tree changed, once until the next snapshot takes it.
+    "let elements = false; let marked = false;"
+    "const tree = new MutationObserver(() => { if (marked) return; marked = true; post({ changed: true }); });"
+    "globalThis.soksakSnapshot = () => {"
+    "  marked = false; const nodes = []; let total = 0;"
     "  const walk = (element, depth) => {"
-    "    count++;"
+    "    total++;"
     "    if (nodes.length < 500) nodes.push({ depth, tag: element.localName, id: element.getAttribute('id') ?? '',"
     "      class: element.getAttribute('class') ?? '' });"
     "    for (const child of element.children) walk(child, depth + 1);"
     "  };"
     "  if (document.documentElement) walk(document.documentElement, 0);"
-    "  post({ elements: { nodes, truncated: count > 500 } });"
+    "  return { nodes, total, truncated: total > 500 };"
     "};"
-    "const requests = () => {"
-    "  const entries = ["
-    "    ...performance.getEntriesByType('navigation').map((entry) => ({ url: entry.name, type: 'navigation',"
-    "      start: entry.startTime, duration: entry.duration })),"
-    "    ...performance.getEntriesByType('resource').map((entry) => ({ url: entry.name, type: entry.initiatorType || 'other',"
-    "      start: entry.startTime, duration: entry.duration })),"
-    "  ];"
-    "  post({ requests: { entries: entries.slice(0, 200), truncated: entries.length > 200 } });"
+    // The request stream: each batch of new entries, the navigation first; the resource timing buffer is not cleared.
+    "let resources = null;"
+    "const entry = (item) => ({ url: item.name, type: item.entryType === 'navigation' ? 'navigation' : (item.initiatorType || 'other'),"
+    "  start: item.startTime, duration: item.duration });"
+    "globalThis.soksakStream = (name, on) => {"
+    "  if (name === 'elements') {"
+    "    if (on === elements) return null;"
+    "    elements = on;"
+    "    if (on) { tree.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'class'] });"
+    "      marked = true; post({ changed: true }); }"
+    "    else { tree.disconnect(); marked = false; }"
+    "    return null;"
+    "  }"
+    "  if (name === 'requests') {"
+    "    if (on === (resources !== null)) return null;"
+    "    if (on) {"
+    "      post({ entries: performance.getEntriesByType('navigation').map(entry) });"
+    "      resources = new PerformanceObserver((list) => post({ entries: list.getEntries().map(entry) }));"
+    "      resources.observe({ type: 'resource', buffered: true });"
+    "    } else { resources.disconnect(); resources = null; }"
+    "    return null;"
+    "  }"
+    "  throw new Error(`unknown stream ${name}`);"
     "};"
-    "new MutationObserver(elements).observe(document, { childList: true, subtree: true, attributes: true,"
-    "  attributeFilter: ['id', 'class'] });"
-    "new PerformanceObserver(requests).observe({ type: 'resource' });"
-    "addEventListener('load', requests);"
-    "addEventListener('pageshow', () => { elements(); requests(); });"
     "let link = null;"
     "const point = (target) => {"
     "  const anchor = target instanceof Element ? target.closest('a[href]') : null;"
@@ -82,7 +95,9 @@ static NSString *const kPageScript = @"(() => {"
     "addEventListener('mouseover', (event) => point(event.target), true);"
     "addEventListener('mouseout', (event) => { if (!event.relatedTarget) point(null); }, true);"
     "addEventListener('pagehide', () => point(null));"
-    "elements(); requests();"
+    // A document restored from the page cache does not run this script again, so it asks for its streams again.
+    "addEventListener('pageshow', (event) => { if (event.persisted) post({ ready: true }); });"
+    "post({ ready: true });"
     "})();";
 
 // The contexts of the key paths that the document view registers; a notification with another context belongs to the platform.
@@ -127,10 +142,21 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 @property(retain) WKNavigation *navigation;
 @property(assign) NSView *webSurface;
 @property NSPoint offset;
-// The elements and recorded requests of the current document. They are cleared when a navigation starts and replaced
-// by the values sent by the new document.
-@property(copy) NSDictionary *elements;
-@property(copy) NSDictionary *requests;
+// The document streams (docs/spec/native-surfaces.md#document-streams). The host turns a stream on while it has a
+// subscriber; ready is set when the script of the current document is installed.
+@property sp_document_stream stream;
+@property void *streamContext;
+@property BOOL elementsOn;
+@property BOOL requestsOn;
+@property BOOL ready;
+// The element tree changed since the last snapshot was taken.
+@property BOOL dirty;
+// A snapshot is being taken from the document.
+@property BOOL taking;
+// The seq of the last snapshot sent and of the snapshot that the host has not acknowledged (0 for none). seq keeps
+// increasing across navigations.
+@property unsigned long long lastSeq;
+@property unsigned long long unacknowledged;
 // The address of the link under the pointer. It is an empty string if there is none.
 @property(copy) NSString *link;
 @property NSEdgeInsets insets;
@@ -147,6 +173,9 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 - (void)surfaceScaleChanged;
 - (void)surfaceAppearanceChanged:(NSNotification *)notification;
 - (void)reportEvent:(const char *)json;
+- (void)sendStream:(NSString *)name message:(NSDictionary *)message;
+- (void)applyStream:(NSString *)name;
+- (void)takeSnapshot;
 @end
 
 // The scheme of application documents inside webviews (docs/spec/native-host.md#application-addresses).
@@ -223,10 +252,22 @@ static NSString *pluginContentType(NSString *path) {
         return;
     }
     if ([message.name isEqualToString:kPageMessage]) {
-        if ([body[@"elements"] isKindOfClass:NSDictionary.class]) view.elements = body[@"elements"];
-        if ([body[@"requests"] isKindOfClass:NSDictionary.class]) view.requests = body[@"requests"];
-        if ([body[@"link"] isKindOfClass:NSString.class]) view.link = body[@"link"];
-        [view report];
+        if ([body[@"ready"] isEqual:@YES]) {
+            view.ready = YES;
+            [view applyStream:@"elements"];
+            [view applyStream:@"requests"];
+        }
+        if ([body[@"changed"] isEqual:@YES]) {
+            view.dirty = YES;
+            [view takeSnapshot];
+        }
+        if ([body[@"entries"] isKindOfClass:NSArray.class] && view.requestsOn) {
+            [view sendStream:@"requests" message:@{ @"type": @"entries", @"entries": body[@"entries"] }];
+        }
+        if ([body[@"link"] isKindOfClass:NSString.class]) {
+            view.link = body[@"link"];
+            [view report];
+        }
         return;
     }
     if (![body[@"x"] isKindOfClass:NSNumber.class] || ![body[@"y"] isKindOfClass:NSNumber.class]) return;
@@ -242,8 +283,6 @@ static NSString *pluginContentType(NSString *path) {
 - (void)dealloc {
     [_scroll release];
     [_failure release];
-    [_elements release];
-    [_requests release];
     [_link release];
     [_plugin release];
     [_navigation release];
@@ -325,8 +364,6 @@ static NSString *pluginContentType(NSString *path) {
         @"error": self.failure ?: (id)NSNull.null,
         @"scroll": @{ @"x": @(self.offset.x), @"y": @(self.offset.y) },
         @"history": [self history],
-        @"elements": self.elements ?: @{ @"nodes": @[], @"truncated": @NO },
-        @"requests": self.requests ?: @{ @"entries": @[], @"truncated": @NO },
         @"link": self.link ?: @"",
     };
     NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
@@ -368,9 +405,66 @@ static NSString *pluginContentType(NSString *path) {
 - (void)webView:(WKWebView *)view didStartProvisionalNavigation:(WKNavigation *)navigation {
     self.navigation = navigation;
     self.failure = nil;
-    self.elements = nil;
-    self.requests = nil;
     [self report];
+}
+
+// A new document replaces the earlier one: each stream that is on sends reset, an unacknowledged snapshot is dropped, and
+// the script of the new document asks for its streams again when it is installed.
+- (void)webView:(WKWebView *)view didCommitNavigation:(WKNavigation *)navigation {
+    self.ready = NO;
+    self.dirty = NO;
+    self.unacknowledged = 0;
+    if (self.elementsOn) [self sendStream:@"elements" message:@{ @"type": @"reset" }];
+    if (self.requestsOn) [self sendStream:@"requests" message:@{ @"type": @"reset" }];
+}
+
+// Sends {"stream": name, "message": message} to the receiver of the streams.
+- (void)sendStream:(NSString *)name message:(NSDictionary *)message {
+    if (self.closed || !self.stream) return;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"stream": name, @"message": message } options:0 error:nil];
+    if (!data) {
+        sp_log_error("document stream", [NSString stringWithFormat:@"%@: the message is not JSON", name].UTF8String);
+        return;
+    }
+    NSString *text = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+    self.stream(self.streamContext, text.UTF8String);
+}
+
+// Tells the script of the current document whether the stream name is on. Before the script is installed there is
+// nothing to tell; its ready message applies the streams.
+- (void)applyStream:(NSString *)name {
+    if (self.closed || !self.ready) return;
+    BOOL on = [name isEqualToString:@"elements"] ? self.elementsOn : self.requestsOn;
+    [self callAsyncJavaScript:@"return soksakStream(name, on);" arguments:@{ @"name": name, @"on": @(on) } inFrame:nil
+        inContentWorld:[WKContentWorld worldWithName:kDocumentWorld] completionHandler:^(id result, NSError *error) {
+        (void)result;
+        if (error) sp_log_error("document stream", [NSString stringWithFormat:@"%@ %@: %@", name, on ? @"on" : @"off",
+            error.localizedDescription].UTF8String);
+    }];
+}
+
+// Takes a snapshot of the element tree when the stream is on, the tree changed and no snapshot is unacknowledged, so
+// the walk runs once per acknowledged snapshot and not once per change.
+- (void)takeSnapshot {
+    if (self.closed || !self.ready || !self.elementsOn || !self.dirty || self.unacknowledged || self.taking) return;
+    self.taking = YES;
+    self.dirty = NO;
+    [self callAsyncJavaScript:@"return soksakSnapshot();" arguments:@{} inFrame:nil
+        inContentWorld:[WKContentWorld worldWithName:kDocumentWorld] completionHandler:^(id result, NSError *error) {
+        self.taking = NO;
+        if (self.closed || !self.elementsOn) return;
+        if (error || ![result isKindOfClass:NSDictionary.class]) {
+            sp_log_error("document stream", [NSString stringWithFormat:@"elements snapshot: %@",
+                error ? error.localizedDescription : @"the result is not an object"].UTF8String);
+            return;
+        }
+        self.lastSeq += 1;
+        self.unacknowledged = self.lastSeq;
+        NSMutableDictionary *message = [[result mutableCopy] autorelease];
+        message[@"type"] = @"snapshot";
+        message[@"seq"] = @(self.lastSeq);
+        [self sendStream:@"elements" message:message];
+    }];
 }
 
 - (void)fail:(NSError *)error {
@@ -535,7 +629,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
         scheme.plugin = [NSString stringWithUTF8String:plugin];
     }
     [configuration setURLSchemeHandler:scheme forURLScheme:kApplicationScheme];
-    WKContentWorld *world = [WKContentWorld worldWithName:@"soksak-document"];
+    WKContentWorld *world = [WKContentWorld worldWithName:kDocumentWorld];
     SPDocumentScroll *scroll = [[SPDocumentScroll new] autorelease];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kScrollMessage];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kPageMessage];
@@ -601,6 +695,46 @@ bool sp_document_post(void *handle, const char *json) {
         (void)result;
         if (error) [view reportMessage:@{ @"error": [NSString stringWithFormat:@"post failed: %@", error.localizedDescription] }];
     }];
+    return true;
+}
+
+void sp_document_set_stream(void *handle, sp_document_stream stream, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) return;
+    view.stream = stream;
+    view.streamContext = context;
+}
+
+bool sp_document_stream_on(void *handle, const char *stream, bool on) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed || !stream) return false;
+    NSString *name = [NSString stringWithUTF8String:stream];
+    if ([name isEqualToString:@"elements"]) {
+        if (view.elementsOn == on) return true;
+        view.elementsOn = on;
+        view.dirty = NO;
+        view.unacknowledged = 0;
+    } else if ([name isEqualToString:@"requests"]) {
+        if (view.requestsOn == on) return true;
+        view.requestsOn = on;
+    } else {
+        return false;
+    }
+    [view applyStream:name];
+    return true;
+}
+
+bool sp_document_stream_ack(void *handle, unsigned long long seq) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) return false;
+    // An acknowledgement of a snapshot sent before a reset releases nothing; one of a seq that was never sent is refused.
+    if (seq == 0 || seq > view.lastSeq) return false;
+    if (seq != view.unacknowledged) return true;
+    view.unacknowledged = 0;
+    [view takeSnapshot];
     return true;
 }
 

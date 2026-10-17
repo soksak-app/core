@@ -68,6 +68,7 @@
 | `diagnostics.input.source`의 선택한 input source 대기가 응답이 끝난 뒤에 답한다(Tauri host) | `error host input source: the wait answered after its reply ended: <result>` |
 | writer가 쓴 뒤 event 파일의 색인을 최신으로 맞출 수 없다(event 구조를 어기는 줄, 손상된 색인, 열 수 없는 파일) | `error host log index: <reason>`, 파일마다 이유가 다를 때마다 한 번([logging](logging.ko.md#색인)) |
 | 파일 `log-policy.json`이 [정책](logging.ko.md#정책)의 형식을 어기거나(JSON이 아닌 글, 모르는 항목, 빠졌거나 계약 밖인 class, 여섯 밖의 level) 정책을 감시하거나 적용할 수 없다 | `error host log policy: <file>: <발견한 것>`, 파일이 바뀔 때마다 한 번. 적용 중인 정책은 그대로 남는다 |
+| document stream을 문서에서 켜거나 끄지 못하거나, 그 스냅샷이나 메시지가 실패한다 | `sp_log_error`의 `error native document stream: <stream> <on or off>: <text>`, `error native document stream: elements snapshot: <text>`, `error native document stream: <stream>: the message is not JSON` |
 | native 호출이 실패한다 | `sp_log_error`의 `error native <where>: <text>` |
 | Tauri host의 fatal signal이나 잡히지 않은 예외 | `error native fatal: <signal name>` 또는 `error native fatal: uncaught exception <name>: <reason>` 기록 하나, 그 뒤 process가 끝난다. Wails host의 fatal signal은 Go runtime이 보고를 표준 오류에 쓴다 |
 | host의 goroutine이나 스레드가 panic한다 | goroutine이나 스레드의 `name`, `text`, `stack`을 담은 event `host.panic`을 프로세스가 상태 2(Go) 또는 101(Rust)로 끝나기 전에 저장한다. Go runtime이나 기본 panic hook도 메시지를 표준 오류에 쓴다 |

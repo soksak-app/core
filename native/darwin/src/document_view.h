@@ -7,7 +7,7 @@
 // the bridge, injected scripts, or data store of the application. Every function is called on the main thread.
 
 // Called when the document state changes. state is the JSON object
-//   {url, title, loading, progress, canGoBack, canGoForward, error, scroll: {x, y}}
+//   {url, title, loading, progress, canGoBack, canGoForward, error, scroll: {x, y}, history, link}
 // and is released when the call returns. Called on the main thread.
 typedef void (*sp_document_changed)(void *context, const char *state);
 
@@ -19,6 +19,11 @@ typedef void (*sp_document_event)(void *context, const char *json);
 // its own window, or {"error": <reason>} when its data is not JSON or a post of the page fails. json is released when
 // the call returns. Called on the main thread.
 typedef void (*sp_document_message)(void *context, const char *json);
+
+// A message of a document stream (docs/spec/native-surfaces.md#document-streams): the JSON object
+// {"stream": "elements" | "requests", "message": {...}} where message is {type: "snapshot", seq, nodes, total, truncated},
+// {type: "entries", entries} or {type: "reset"}. json is released when the call returns. Called on the main thread.
+typedef void (*sp_document_stream)(void *context, const char *json);
 
 // Creates a document webview hidden inside the surface webview. directory is the absolute path where the persistent
 // data store keeps
@@ -37,6 +42,20 @@ void sp_document_set_message(void *document, sp_document_message message, void *
 // Posts the JSON value json to the window of the current plugin document of the region's plugin. Returns false and
 // posts nothing when the current document is not such a document or json is not JSON.
 bool sp_document_post(void *document, const char *json);
+
+// Sets the receiver of the messages of the document streams. NULL reports none. The caller keeps context while the
+// document lives.
+void sp_document_set_stream(void *document, sp_document_stream stream, void *context);
+
+// Turns the stream "elements" or "requests" of the document on or off; the host turns a stream on while it has a
+// subscriber. A stream that is off collects nothing. Turning the element stream on sends a snapshot; turning it off drops
+// an unacknowledged snapshot. Returns false for another stream name or a closed document.
+bool sp_document_stream_on(void *document, const char *stream, bool on);
+
+// Acknowledges the element snapshot seq. The document sends no further snapshot until the snapshot that it sent last is
+// acknowledged, and then one snapshot if the tree changed meanwhile. An acknowledgement of a snapshot sent before a reset
+// releases nothing. Returns false for a seq that the document has not sent.
+bool sp_document_stream_ack(void *document, unsigned long long seq);
 
 // Sets the receiver of the native events of the document. If event is NULL, no event is reported.
 // The caller keeps context while the document lives.

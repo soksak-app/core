@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.4: 문서 스크립트가 host가 스트림을 켠 동안만(`sp_document_stream_on`) document region의 요소와 요청을 모은다: 요소 observer는 다음 스냅샷까지 트리가 바뀌었다고 한 번만 표시하고, 스냅샷 `{seq, nodes, total, truncated}`는 이전 것의 확인(`sp_document_stream_ack`)을 기다리며, 요청 스트림은 `buffered: true`로 관찰한 새 항목만 보내고, 새 문서는 `reset`을 보내며, `document-state`는 요소와 요청을 싣지 않는다. Red: `document_view_test`가 상태에서 목록을 찾았고 트리 변경 50번에 상태 보고 51번을 받았다. Green: `make -C native/darwin repeat TEST=document_view_test COUNT=3`이 통과한다. 구독자 없는 문서는 스트림 메시지를 보내지 않고 변경 50번에 많아야 제목을 보고한다.
 - F196.8: 두 host가 `diagnostics.objects`에 창을 위해 host가 가진 객체와 page와 document region의 요소 수, 문서 수로 답한다. native 함수 `sp_webview_count_objects`가 page world나 document world에서 그것을 센다. Red: 수 없이는 시험이 build되지 않았다(`docs.Count undefined`, `unresolved import soksak_host_tauriv2::object_counts`, `undeclared function sp_webview_count_objects`). Green: `page_objects_test`가 3번 중 3번 통과하고, diagnostics tag의 Go 시험 422개와 Rust 객체 수 시험 6개가 모두 통과한다.
 - F197.5: files, shell, vt sidecar가 첫 정책 전과 정책 파일이 없는 동안 오류만 저장하는 기본 정책을 적용한다(files S23, shell S8, vt S64). 각각 core의 golden case를 복사해 가진다. 이 수정은 그 다음 release로 사람에게 닿는다.
 - F196.1.1: performance trace의 표본이 모든 창의 page process와 모든 문서 web view의 process에 대해 창과 surface와 함께 `host.sampler.memory`를 저장하고, 모든 읽기가 `rss_kb` 옆에 process의 physical footprint인 `footprint_kb`를 담는다. Red: `performance_test.go:308: no page sample names window-a`와 Rust 시험 `a page sample names window-a`. Green: 두 host의 performance 시험이 event, platform, parity 검사와 함께 통과한다.
