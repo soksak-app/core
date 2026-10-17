@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F196.18 (Rust): Rust log indexer가 Go indexer처럼 추가된 byte 크기의 읽기 buffer를 쓴다. Red: `index_update_allocates_for_the_appended_bytes_only`(`left: 8388608, right: 800`); Green.
+- F196.19: `e2e/window-occlusion.test.mjs`가 창을 project 창으로 가리고 `occluded: true`와 숨겨진 document를 요구한다; 두 host에서 통과한다. 측정한 모든 배치에서 두 host가 같은 occlusion을 보고한다.
 - F196.18: Go log indexer가 갱신마다 8 MiB가 아니라 추가된 byte 크기의 읽기 buffer를 쓴다; 갱신마다의 buffer가 Wails host의 Go heap goal을 약 20 MB로 올리고 13~16 MB의 free heap을 dirty로 남겼다. 새로 시작한 Wails host는 73 MB에서 43 MB로 줄었다. Red: `TestLogIndexUpdateAllocatesForTheAppendedBytesOnly`가 2줄 갱신에 8,647,392 byte를 측정; Green: 1 MiB 미만. diagnostic build는 `diagnostics.objects`에 Go runtime 메모리를 보고하고 `diagnostics.heap.profile`로 heap profile을 쓴다.
 - F196.17: `make app-usage CONFIG_DIR=<dir>`가 실행 중인 애플리케이션의 각 process(host, page, document, WebKit GPU와 network, sidecar)의 footprint와 CPU 점유율, 합계를 보고한다. Red: script가 없을 때 `ERR_MODULE_NOT_FOUND`로, real path나 겹 slash로 실행된 data 폴더에서 `no host process has --config-dir`로 시험이 실패했다; Green: 18개 중 18개 통과.
 - F196.9.2: `make -C native/darwin test-pressure`가 page가 약 375 MB를 놓고 시스템이 warn과 critical pressure를 올린 뒤 document region과 plain web view가 돌려주는 메모리를 잰다; 둘 다 약 24 MB(6%)를 돌려주고, 시험은 region이 plain web view의 0.8 이상을 돌려주기를 요구한다. 시스템 전체에 pressure를 주므로 `make test`에 들지 않고, 1분 load가 20을 넘으면 판정을 거부한다.
