@@ -120,6 +120,8 @@ fn invalid_json_closes_connection() {
 | `diagnostics.test-mark.event-carries-position` | 시작 표시는 event `host.test.start`(`name`, `run`), 끝 표시는 `host.test.end`(`name`, `run`, `result`)이며 layer `host`, level `info`다. 답은 flush 뒤에 읽은 event 파일의 `boot`와 그 줄의 `seq`다. | both |
 | `diagnostics.stall-dump.params-validate` | `diagnostics.stall.dump`는 존재하는 파일의 절대 경로만 받고, 그 밖의 값은 invalid-params 오류 `path must be a non-empty string`, `path must be absolute`, `path does not name a file: <path>`로 거부한다. | both |
 | `diagnostics.stall-dump.event-carries-path` | 정지 dump는 layer `host`, level `warn`의 event `host.stall.dump`(`path`)이며, 답은 event 파일의 `boot`와 그 줄의 `seq`다. | both |
+| `diagnostics.objects.counts-host-objects` | `diagnostics.objects`는 host가 창을 위해 가진 surface, region, document, sidecar session, 대기 중인 응답, event 구독자의 수를 돌려주고, 각 수는 그 객체가 제거되면 다시 준다. | both |
+| `diagnostics.objects.counts-documents` | `diagnostics.objects`는 main page와 창의 각 document region의 요소 수와 문서 수를 돌려준다. | both |
 | `diagnostics.crash.report-is-announced-once` | crash report 폴더에 있는 애플리케이션의 crash report는 level `warn`의 event `host.crash.found`(`path`, `pid`, header의 `time`)이다. 두 번째 lookup은 아무것도 알리지 않고, 나중에 생긴 report는 다음 lookup만 알린다. | both |
 | `diagnostics.crash.report-belongs-to-the-application` | 파일 이름이 다른 이름으로 시작하거나, header가 다른 애플리케이션(애플리케이션 이름으로 시작하는 이름 포함)을 가리키거나, 확장자가 `.ips`가 아닌 report는 알리지 않는다. | both |
 | `diagnostics.crash.lookup-is-bounded` | lookup 한 번은 파일 이름 기준으로 애플리케이션의 최신 report 64개만 알리고 그보다 오래된 것은 알리지 않는다. | both |

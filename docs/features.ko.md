@@ -1034,7 +1034,7 @@
   - [ ] F196.5 — P1: 두 host와 plugin-api가 구독자 수, 확인, 구독한 page가 내려가거나 그 process가 끝날 때의 제거를 갖춘 스트림 구독을 제공한다.
   - [ ] F196.6 — P1: 스트림을 싣는 core release.
   - [ ] F196.7 — P1: 패널과 status가 스트림을 쓰고 F196.6의 core release를 선언하는 browser plugin release.
-  - [ ] F196.8 — P1: 두 host의 진단 명령이 host, page, 각 문서의 객체 수를 돌려준다.
+  - [~] F196.8 — P1: 두 host의 진단 명령이 host, page, 각 문서의 객체 수를 돌려준다.
   - [ ] F196.9 — P2: 각 문서 web view가 사이트별로 process와 data store를 함께 쓰고, 숨은 동안 throttle하고, memory pressure에 응답하고, 한도 있는 cache를 둔다. 각 동작은 문서 영역의 전후 측정과 함께 채택하고, benchmark 타깃이 사이트마다 비용을 보고한다.
   - [ ] F196.10 — P2: benchmark 타깃이 정해진 조작 묶음을 N번 반복하고 반복마다 객체 수를 보고한다. N에 따라 늘어나는 수치마다 자기 항목이다.
   - [ ] F196.11 — P2: host 메모리에서 performance trace의 몫을 trace를 켜고 끈 상태로 잰다.
