@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F196.9.5: `document_pressure_test` prints the footprint categories, the malloc zones and whether the released array is still alive; the memory kept after pressure is live page objects that the engine has not collected, the same in a document region and a plain web view.
 - F196.21: the workspace registry resolves the declared plugin and sidecar folders from the main checkout, so `make install-plugins` works in a worktree. Red: a worktree resolved `.claude/worktrees/plugins/browser/`; Green.
 - F196.10.4: a page reload of the Tauri host reconnects a persistent sidecar only for the surfaces that sent to it, so the browser surface is no longer a session of the terminal service; `diagnostics.objects` lists the sessions and both hosts list the same ones. Red: `left: ["@scope/sidecar-persistent"], right: []`; Green.
 - F196.8.1: both hosts test the surface count and the wire of `diagnostics.objects` through an object counter backend (missing window, unknown window, reply shape).

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.9.5: `document_pressure_test`가 footprint 항목, malloc zone, 놓은 배열이 아직 살아 있는지를 출력한다; pressure 뒤 남는 메모리는 엔진이 수집하지 않은 살아 있는 page 객체이고, document region과 plain web view에서 같다.
 - F196.21: workspace registry가 선언된 plugin과 sidecar 폴더를 main checkout에서 찾으므로 `make install-plugins`가 worktree에서 동작한다. Red: worktree가 `.claude/worktrees/plugins/browser/`를 찾았다; Green.
 - F196.10.4: Tauri host의 page reload가 persistent sidecar에 보낸 적이 있는 surface에만 reconnect하므로, browser surface가 더 이상 terminal service의 session이 아니다; `diagnostics.objects`가 session을 나열하고 두 host가 같은 session을 나열한다. Red: `left: ["@scope/sidecar-persistent"], right: []`; Green.
 - F196.8.1: 두 host가 object counter backend로 `diagnostics.objects`의 surface count와 wire를 시험한다(없는 window, 모르는 window, 응답 형태).
