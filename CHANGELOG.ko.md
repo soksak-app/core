@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.9.2: `make -C native/darwin test-pressure`가 page가 약 375 MB를 놓고 시스템이 warn과 critical pressure를 올린 뒤 document region과 plain web view가 돌려주는 메모리를 잰다; 둘 다 약 24 MB(6%)를 돌려주고, 시험은 region이 plain web view의 0.8 이상을 돌려주기를 요구한다. 시스템 전체에 pressure를 주므로 `make test`에 들지 않고, 1분 load가 20을 넘으면 판정을 거부한다.
 - F196.16.1: 두 host가 native view를 닫는 main-thread 단계에서 surface 등록을 지우므로, 닫는 동안의 `host.window` 읽기는 등록과 함께 view를 찾거나 둘 다 찾지 않는다. Red: Tauri `window_close_test`(`left: None`), Go `TestSurfaceNameIsForgottenInTheStepThatClosesItsNativeView`(got 1, want 0, 이전 순서의 close 단계로 실행); Green: 둘 다 통과.
 - F196.16: 두 host가 native view를 만드는 같은 main-thread 단계에서 surface를 등록하므로, surface를 만드는 동안의 `host.window` 읽기가 더 이상 `unregistered native surface`로 실패하지 않고(Tauri) 동기화되지 않은 map으로 이름 없는 view를 읽지 않는다(Wails). Red: `window_close_test`(`left: None`)와 `TestSurfaceIsNamedWhenItsNativeViewIsCreated`(named ""); Green: host contract case `exposure.host-window.reads-during-surface-creation`과 함께 둘 다 통과.
 - F196.10.3: workbench page의 창 배경 `body::before`가 fixed가 아니라 body 안의 absolute다: fixed 배경은 자기 합성 layer이므로 그 위의 layer들이 창 크기 버퍼를 차지했다. `make -C native/darwin benchmark-page-layers`가 변형을 잰다(fixed 배경과 rail은 창 버퍼 한 장을 더하고, absolute 배경과 같은 rail은 더하지 않는다). 두 애플리케이션에서 terminal 카드와 browser 카드를 가진 project, 1200×760일 때 main web view의 graphics 메모리가 70 MB에서 20 MB로, footprint가 122~168 MB에서 74~75 MB로 줄었다. workbench 시험 483개가 모두 통과하고 composition과 geometry window check가 두 host에서 통과한다.
