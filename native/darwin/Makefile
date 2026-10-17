@@ -27,6 +27,12 @@
 #   make test-pressure    runs the memory pressure check of the document region and of a plain web view. It raises the memory pressure
 #                         of the system through memory_pressure, which needs the sudoers rule for /usr/bin/memory_pressure. It asserts
 #                         the response of the region and refuses to judge when the 1-minute load is above 20
+#   make benchmark-region-cost [URL=<address>]
+#                         loads an address (default https://www.google.com/) in four variants in a 1200×760 window with a 1180×400
+#                         region: a plain web view with a nonpersistent and with a persistent data store, a document region with no
+#                         stream, and a document region with the element and request streams acknowledged. It prints the footprint
+#                         total, WebKit malloc, graphics and JS JIT of each WebContent process at 10 and 60 seconds, and the
+#                         differences R-P and S-R. It prints numbers and asserts nothing
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
 #   make repeat-suite COUNT=<n>
@@ -47,7 +53,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation benchmark benchmark-document benchmark-page-layers repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-activation benchmark benchmark-document benchmark-page-layers benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -89,6 +95,11 @@ benchmark-document: $(BUILD)/document_script_benchmark
 
 benchmark-page-layers: $(BUILD)/page_layers_benchmark
 	@$(BUILD)/page_layers_benchmark
+
+# The address of the region cost benchmark: make benchmark-region-cost URL=https://example.com/
+URL ?= https://www.google.com/
+benchmark-region-cost: $(BUILD)/region_cost_benchmark
+	@$(BUILD)/region_cost_benchmark "$(URL)"
 
 # A check that includes the acceptance check body is rebuilt when that body changes.
 $(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_directory_checker_test: tests/capture_test.m
