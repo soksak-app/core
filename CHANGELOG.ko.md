@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.5.1: Tauri host가 surface page를 가진 main web view의 스트림 구독을, page가 새 문서를 시작할 때(시작 요청에서)와 그 web content process가 끝날 때(framework가 전달하는 종료 handler) 지우므로, host 계약의 제거 행이 두 host에서 돈다. Red: `remove_surface_for_reload`와 `Streams::remove_page` 없이 시험이 build되지 않았다. Green: Tauri host 시험이 clippy 검사와 함께 통과한다.
 - F197.3-2: Rust host 시험이 쓰는 것만 import하고 `documents.rs`가 중첩 `if`를 합치므로 push의 clippy 검사가 통과한다.
 - F197.3-1: 모든 수준 공용 시험 helper와 객체 수 시험이 Go와 Rust에서 같은 이름을 가지므로 hosts 검사가 통과한다.
 - F196.5: 두 host가 `documentSubscribe {document, stream}`에 handle로, `documentUnsubscribe`에 답하고, 영역과 스트림마다 구독을 세어 첫 구독에서 native 수집을 켜고 마지막에서 끄며, 새 구독을 위해 200개 항목의 요청 기록을 `dropped`와 함께 두고, 스냅샷을 전한 뒤 native에 확인하며, 닫힌 영역이나 창의 구독을 지운다(Wails host는 새 문서를 불러오거나 process가 끝난 surface page의 구독도 지우고, Tauri host는 F196.5.1). `document-stream`은 구독한 surface에만 가고, plugin-api의 document handle에 `subscribe(stream, listener)`가 있다. Red: 구독 없이 Go와 Rust 시험이 build되지 않았고(`undefined: host.NewDocumentStreams`, `unresolved imports soksak_host_tauriv2::documents::StreamEffect`), plugin-api가 `region.subscribe is not a function`으로 실패했다. Green: main에서 두 언어의 host 시험, plugin-api 211개, workbench 483개가 모두 통과한다.
