@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.13: `e2e/idle-tab-memory.test.mjs`가 빈 local page의 browser tab 비용(document process와 main web view 증가, 안정된 `host.sampler.memory` 값)이 50 MB 이하이기를 요구한다; Wails 18.9 MB, Tauri 19.0 MB를 측정했다.
 - F196.20: `make -C native/darwin benchmark-region-cost LONG=<minutes>`가 같은 page의 plain web view와 document region을 1분마다 읽고 각각의 분당 증가를 출력한다; https://www.google.com/에서 둘 다 5분부터 30분까지 평평했고, 두 check 애플리케이션의 보이는 tab도 처음 10분 뒤 증가가 멈췄다. target은 `URL`이 설정된 경우에만 넘긴다.
 - F196.18 (Rust): Rust log indexer가 Go indexer처럼 추가된 byte 크기의 읽기 buffer를 쓴다. Red: `index_update_allocates_for_the_appended_bytes_only`(`left: 8388608, right: 800`); Green.
 - F196.19: `e2e/window-occlusion.test.mjs`가 창을 project 창으로 가리고 `occluded: true`와 숨겨진 document를 요구한다; 두 host에서 통과한다. 측정한 모든 배치에서 두 host가 같은 occlusion을 보고한다.
