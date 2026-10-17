@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.3: 명세가 문서 영역의 요소와 요청 스트림을 정의한다. 정의는 `subscribe`와 `unsubscribe` 호출과 그 handle, 구독의 제거, `stream.ack`로 확인되는 요소 스냅샷, 200개 기록을 가진 요청 항목, 탐색의 `reset`, `document-stream` 메시지를 포함하며, `document-state`는 더 이상 요소나 요청을 나열하지 않는다. 용어 `stream`과 `snapshot`이 용어 목록에 있다. 검증: `make docs-check`. 스트림은 아직 구현되지 않았으며 구현은 F196.4와 F196.5가 맡는다.
 - F197.1: 기본 정책은 모든 class에서 `error`만 저장하고 `diagnostics.performance`는 기본 false다. 설정 창의 switch 디버그(`core.settings.debug {on}`)가 모든 class의 모든 수준과 trace를 켜고 끈다. `fixtures/policy/cases.json`이 기본을 `default`로 가지고, 기본 정책 파일이 그것을 가지며, `@soksak/log-contract`의 `DEFAULT_POLICY`가 그것과 같고, audit은 정책을 기록하지 않은 process를 그것으로 판단한다. Red: golden 시험이 이전 기본 파일에서 실패했고, `a process that recorded no policy is judged by the default policy, which stores only error`가 chain finding을 찾았다. Green: log-contract 시험 136개가 모두 통과하고, 두 `sok` build의 golden reader가 통과한다.
 - F193.6: 0.0 단계에서 sidecar protocol은 1로 남는다: 명세, 두 host, `sok`, plugin-api가 protocol 1로 돌아가며, F193.1, F193.2, F193.3을 되돌린다.
 - F193.5: 선언된 모든 workspace 버전이 0.0.18이다.

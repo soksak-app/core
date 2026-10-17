@@ -115,6 +115,18 @@
       "allowed": []
     },
     {
+      "term": "stream",
+      "definition": "One kind of data of a document region, its elements or its requests, that the host collects only while a page subscribes to it (docs/spec/native-surfaces.md#document-streams).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "snapshot",
+      "definition": "The elements of a document region at one point, sent as {seq, nodes, total, truncated} under acknowledgement of its seq.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "correlation identifier",
       "definition": "The identifier that one native input receives from the layer that first sees it and that every later layer carries (cids in an event).",
       "rejected": [
