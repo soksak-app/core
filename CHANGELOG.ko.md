@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.10.1: `@soksak/plugin-api`에 embed page `mountApplication`과 manifest 필드 `application`이 없고, surface context에 `runtime.applications`가 없으며, workbench에 연결된 애플리케이션의 기록과 애플리케이션 연결의 진행 줄이 없다. 외부 애플리케이션 표면의 파일을 없앤다. Green: plugin-api 검사 208개 중 208개, workbench 검사 481개 중 481개.
 - 체크리스트 항목 `F194.9` 폐기: 캡처 연결 plugin은 애플리케이션 창의 frame을 복사해 보였는데, 그 지연과 입력 경로는 이 프로젝트의 surface가 요구하는 성능에 맞지 않는다. 제안을 없애고, 연결 plugin은 embed protocol로만 애플리케이션을 보인다.
 - F160.7-1: 반복 160번(그중 100번은 부하 아래)과 Tauri diagnostics host suite 전체 3번 뒤 재현되지 않음으로 닫는다. 두 host의 감시자가 source와 함께 오류 문장이나 policy를 보고하고, 두 검사가 각 대기의 단계를 이름하므로 재발하면 위치가 남는다.
 - F194.8.3: core 0.0.16이 두 host build와 함께 게시되었고, registry가 appview 0.0.2를 철회했다.

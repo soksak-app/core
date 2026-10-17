@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F194.10.1: `@soksak/plugin-api` has no embed page `mountApplication` and no manifest field `application`, the surface context has no `runtime.applications`, and the workbench has no record of connected applications and no progress line of connecting an application; the files of the external application surface are removed. Green: 208 of 208 plugin-api checks and 481 of 481 workbench checks.
 - Retired checklist entry `F194.9`: capture connector plugins showed an application by copying the frames of its window, with a delay and an input path that do not meet the performance that a surface of this project requires; the proposal is removed, and a connector plugin shows an application only through the embed protocol.
 - F160.7-1: closed as not reproduced after 160 repeats, 100 of them under load, and three full runs of the Tauri diagnostics host suite; the watchers of both hosts report the error text or the policy with the source, and both checks name the step of each wait, so a recurrence is located.
 - F194.8.3: core 0.0.16 is published with both host builds, and the registry revokes appview 0.0.2.

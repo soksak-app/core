@@ -35,9 +35,7 @@
     "events-check.js",
     "census-rules.json",
     "commits-check.js",
-    "terms.json",
-    "application-page.js",
-    "application-input.js"
+    "terms.json"
   ],
   "bin": {
     "soksak-exposure": "./exposure-check.js",

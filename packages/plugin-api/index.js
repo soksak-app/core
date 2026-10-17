@@ -19,7 +19,6 @@ export { createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from ".
 export { createSurfaceCompositionController } from "./surface-composition.js";
 export { orderedSidecar } from "./sidecar-port.js";
 export { CLIPBOARD_TYPES, ClipboardError, createClipboardBridge, shellQuotePath } from "./clipboard.js";
-export { mountApplication } from "./application-page.js";
 export { createLinkBridge } from "./links.js";
 export { drawList } from "./list.js";
 
@@ -394,78 +393,10 @@ function checkContributes(where, id, contributes) {
  *   dependencies  the version range of each sidecar that the page surface or the state module uses and of each plugin that it contributes to
  *     exposes   status, command and dom entries that the surface page registers. A page surface must exist
  */
-const APPLICATION_PLATFORMS = ["darwin-arm64", "darwin-x64", "linux-x64", "windows-x64"];
-// The standard package manager of each operating system (docs/spec/installation.md#applications).
-const PACKAGE_MANAGERS = { darwin: "brew", windows: "winget", linux: "flatpak" };
-const HTTPS = (value) => typeof value === "string" && /^https:\/\/[^\s]+$/.test(value);
-const INSIDE = (value) => typeof value === "string" && value !== "" && !value.startsWith("/") && !value.split("/").includes("..");
-
-/** Checks the application of a connector plugin (docs/spec/installation.md#applications). */
-function checkApplication(where, application) {
-  if (!isObject(application)) throw new Error(`${where}: application must be an object`);
-  only(where, application, ["id", "name", "version", "platforms"]);
-  if (typeof application.id !== "string" || !/^[a-z][a-z0-9-]*$/.test(application.id)) {
-    throw new Error(`${where}: application id must be a lowercase identifier, not ${JSON.stringify(application.id)}`);
-  }
-  if (!isText(application.name)) throw new Error(`${where}: application name must be text`);
-  if (!isText(application.version)) throw new Error(`${where}: application version must be text`);
-  if (!isObject(application.platforms) || Object.keys(application.platforms).length === 0) {
-    throw new Error(`${where}: application platforms must name at least one platform`);
-  }
-  for (const [platform, entry] of Object.entries(application.platforms)) {
-    const at = `${where} ${platform}`;
-    if (!APPLICATION_PLATFORMS.includes(platform)) {
-      throw new Error(`${where}: application platform ${platform} is not one of ${APPLICATION_PLATFORMS.join(", ")}`);
-    }
-    if (!isObject(entry)) throw new Error(`${at}: the entry must be an object`);
-    only(at, entry, ["locate", "recipe", "program", "arguments"]);
-    if (!Array.isArray(entry.locate) || entry.locate.length === 0) throw new Error(`${at}: locate must list at least one way to find the application`);
-    entry.locate.forEach((way, index) => {
-      const keys = isObject(way) ? Object.keys(way) : [];
-      if (keys.length !== 1 || !["bundle", "appid", "command", "path"].includes(keys[0]) || !isText(way[keys[0]])) {
-        throw new Error(`${at}: locate entry ${index} must be one of bundle, appid, command or path with text`);
-      }
-      const system = platform.split("-")[0];
-      if (keys[0] === "bundle" && system !== "darwin") throw new Error(`${at}: locate entry ${index} bundle names an application of darwin, not ${platform}`);
-      if (keys[0] === "appid" && system === "darwin") throw new Error(`${at}: locate entry ${index} appid names an application of windows or linux, not ${platform}`);
-      if (keys[0] === "path" && !way.path.startsWith("/")) throw new Error(`${at}: locate entry ${index} path must be absolute`);
-    });
-    const recipe = entry.recipe;
-    if (!isObject(recipe) || !["release", "package", "source"].includes(recipe.kind)) {
-      throw new Error(`${at}: recipe kind must be release, package or source`);
-    }
-    if (recipe.kind === "release") {
-      only(`${at} recipe`, recipe, ["kind", "url", "sha256", "unpack"]);
-      if (!HTTPS(recipe.url)) throw new Error(`${at}: release url must be an https address`);
-      if (typeof recipe.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(recipe.sha256)) throw new Error(`${at}: release sha256 must be 64 lowercase hexadecimal digits`);
-      if (!["zip", "tar.gz", "none"].includes(recipe.unpack)) throw new Error(`${at}: release unpack must be zip, tar.gz or none`);
-    } else if (recipe.kind === "package") {
-      only(`${at} recipe`, recipe, ["kind", "manager", "name", "cask"]);
-      const manager = PACKAGE_MANAGERS[platform.split("-")[0]];
-      if (recipe.manager !== manager) throw new Error(`${at}: package manager of ${platform} must be ${manager}, not ${recipe.manager}`);
-      if (!isText(recipe.name)) throw new Error(`${at}: package name must be text`);
-      if (manager === "brew" && typeof recipe.cask !== "boolean") throw new Error(`${at}: package cask must be true or false`);
-      if (manager !== "brew" && recipe.cask !== undefined) throw new Error(`${at}: package cask belongs to brew, not ${manager}`);
-    } else {
-      only(`${at} recipe`, recipe, ["kind", "repository", "ref", "commands"]);
-      if (!HTTPS(recipe.repository)) throw new Error(`${at}: source repository must be an https address`);
-      if (!isText(recipe.ref)) throw new Error(`${at}: source ref must be text`);
-      if (!Array.isArray(recipe.commands) || recipe.commands.length === 0 ||
-          !recipe.commands.every((command) => Array.isArray(command) && command.length > 0 && command.every(isText))) {
-        throw new Error(`${at}: source commands must be a nonempty list of nonempty lists of text`);
-      }
-    }
-    if (!INSIDE(entry.program)) throw new Error(`${at}: program must be a path inside the installed folder`);
-    if (entry.arguments !== undefined && !(Array.isArray(entry.arguments) && entry.arguments.every((item) => typeof item === "string"))) {
-      throw new Error(`${at}: arguments must be a list of text`);
-    }
-  }
-}
-
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "exposes", "settings",
-    "state", "data", "sidebars", "extends", "contributes", "events", "application"]);
+    "state", "data", "sidebars", "extends", "contributes", "events"]);
   validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
@@ -501,11 +432,10 @@ export function validateManifest(manifest) {
     }
   }
   if (manifest.dependencies !== undefined) {
-    // A sidecar dependency serves the surface or the state module, and a plugin dependency serves the contributions or,
-    // for a connector plugin, shows its application (docs/spec/plugins.md#pluginjson).
-    if (manifest.surface === undefined && manifest.state === undefined && manifest.contributes === undefined &&
-        manifest.application === undefined) {
-      throw new Error(`${where}: dependencies require a surface, a state module, contributes or an application`);
+    // A sidecar dependency serves the surface or the state module, and a plugin dependency serves the contributions
+    // (docs/spec/plugins.md#pluginjson).
+    if (manifest.surface === undefined && manifest.state === undefined && manifest.contributes === undefined) {
+      throw new Error(`${where}: dependencies require a surface, a state module or contributes`);
     }
     checkDependencies(where, manifest.dependencies);
   }
@@ -632,10 +562,8 @@ export function validateManifest(manifest) {
     validateExposes(id, manifest.exposes);
   }
   checkSettings(`${where}`, manifest.settings);
-  if (manifest.application !== undefined) checkApplication(`${where} application`, manifest.application);
-  if (manifest.surface === undefined && manifest.sections === undefined && manifest.contributes === undefined &&
-      manifest.application === undefined) {
-    throw new Error(`${where}: a plugin requires a surface, sections, contributes or an application`);
+  if (manifest.surface === undefined && manifest.sections === undefined && manifest.contributes === undefined) {
+    throw new Error(`${where}: a plugin requires a surface, sections or contributes`);
   }
   if (manifest.sidebars !== undefined) validatePluginSidebarDefaults(manifest);
   return manifest;

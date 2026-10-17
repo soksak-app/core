@@ -39,7 +39,7 @@ import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
 import { foldSection, onSectionsChange, selectSection, sidebarsState } from "./sidebar-sections.js";
 import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
-import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, followPluginProgress, onPluginOperations, pluginOperations } from "./installed-plugins.js";
+import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 
 /* Receivers of the watched core statuses. */
 const watchers = new Set();
@@ -276,7 +276,6 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   onPluginOperations(coreChanged);
   followPluginChanges(applyPluginChange);
   followSidecarChanges();
-  followPluginProgress();
   followActivation();
   onTabReports(coreChanged);
   status("core.surfaces", surfacesState);

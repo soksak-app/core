@@ -10,7 +10,6 @@ import { forgetTab, reportDirectory, reportError, reportFooter, reportModified, 
 import { icon } from "./icons.js";
 import { active } from "./projects.js";
 import { pluginRecords } from "./plugin-records.js";
-import { connectedApplications, onConnectedApplications } from "./applications.js";
 const mounted = new Map();
 /* Placeholder of a surface that is not mounted in a document without a host: one element for each surface id. */
 const placeholders = new Map();
@@ -234,9 +233,6 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
             listener(next);
           });
         } },
-        // The applications that connector plugins connected (docs/spec/plugins.md#connected-applications); a listener receives
-        // the record again after each change of the plugin state.
-        applications: { read: () => connectedApplications(), on: (listener) => onConnectedApplications(() => listener(connectedApplications())) },
         settings: { read: () => pluginSettings(surface.pluginId), on: (listener) =>
           onSettingsChange(() => listener(pluginSettings(surface.pluginId))) },
         // A command that core declares, run for this surface (docs/spec/plugins.md#surface-module-ownership). A command of a

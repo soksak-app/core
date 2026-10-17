@@ -3,18 +3,11 @@ import { host } from "@soksak/runtime";
 import { pluginUnits } from "./environment.js";
 import { createAppUpdate } from "./app-update.js";
 import { createPluginOperations } from "./plugin-operations.js";
-import { notifyConnectedApplications, setConnectedApplications } from "./applications.js";
 
 const listeners = new Set();
-const notify = () => {
-  for (const fn of listeners) fn();
-  notifyConnectedApplications();
-};
+const notify = () => { for (const fn of listeners) fn(); };
 
 export const pluginOperations = createPluginOperations({ host, loaded: pluginUnits, changed: notify });
-
-// default: before the plugin state is read and without a host there is no record, so no application is connected.
-setConnectedApplications(() => pluginOperations.state()?.applications ?? {});
 
 /** The application update of this window (app-update.js), which redraws the same listeners. */
 export const appUpdate = createAppUpdate({ host, plugins: () => pluginOperations.state(), changed: notify });
@@ -44,11 +37,6 @@ export function followPluginChanges(apply) {
  */
 export function followActivation() {
   if (host) host.on("window-active", () => { pluginOperations.refresh(); appUpdate.refresh(); });
-}
-
-/** On plugins-progress from the host, records the step on the running operation (docs/spec/installation.md#applications). */
-export function followPluginProgress() {
-  if (host) host.on("plugins-progress", (progress) => pluginOperations.progress(progress));
 }
 
 /** On sidecars-changed from the host, reads the outdated sidecars again (docs/spec/installation.md). */
