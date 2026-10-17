@@ -1023,7 +1023,7 @@
   - [o] F197.1 — P1: 명세와 golden case: 기본 정책은 모든 class에서 `error`만 저장하고, `diagnostics.performance`는 기본 false이며, 설정 창에 switch 디버그가 있고, 0.0.x release에 대한 `AGENTS.md`의 규칙이 새 기본을 밝힌다. `packages/log-contract/fixtures/policy`와 그 reader가 새 기본을 가진다.
   - [~] F197.2 — P1: page: log gate와 설정이 새 정책과 꺼진 trace를 기본으로 하고, switch 디버그가 모든 class의 모든 수준과 trace를 켜고 끈다. Red와 Green.
   - [~] F197.3 — P1: 두 host와 두 `sok` build가 정책 파일 없이 새 기본 정책을 적용한다. Red와 Green.
-  - [~] F197.4 — P1: native event ring이 첫 정책 전에 `error`만 저장한다. Red와 Green.
+  - [o] F197.4 — P1: native event ring이 첫 정책 전에 `error`만 저장한다. Red와 Green.
   - [~] F197.5 — P1: files, shell, vt sidecar가 새 기본 정책을 적용한다. 각각 자기 저장소 체크리스트에서.
 - [~] F196 — P1: 애플리케이션 메모리: 3일 사용 뒤 workbench page가 242 MB(Wails), 291 MB(Tauri), host가 각각 약 154 MB였고, 브라우저 탭의 문서 web view가 1.31 GB였는데, 애플리케이션의 어떤 기록도 그것을 가리키지 못한다.
   - [o] F196.1 — P1: 창 상태가 `host.window`의 `documents`에 각 문서 web view의 WebContent process를 보고하므로, 측정이 브라우저 탭의 메모리를 그 surface에 연결한다.
