@@ -1021,7 +1021,7 @@
   - [ ] F192.4 — P0: vt sidecar를 그 항목 S63(image가 있는 surface에 대한 `image` 없는 `open`을 거부하고, surface의 그리기 mode를 event로 남김)과 함께 릴리즈하고 terminal plugin의 dependency를 올린다. 그 릴리즈 전까지 sidecar 정정은 미릴리즈다.
 - [~] F197 — P1: 진단은 기본으로 꺼져 있고 설정 창에서 켠다. 입력: `diagnostics.performance`는 0.0.x에서 기본 true이고 `diagnostics.log`는 모든 class의 모든 수준을 저장하는 `{}`가 기본이어서, release가 모든 기계에서 모든 event와 performance trace를 기록하고 그 메모리와 CPU를 쓰며, 둘 다 설정 파일로만 바꾼다. 기대: 기본으로 performance trace는 꺼지고 event log는 `error`만 저장하므로 표시 경로가 보이는 모든 오류의 기록은 남는다. 설정 창의 control 디버그가 둘을 켜고(모든 class의 모든 수준과 trace) 끈다. 0.0.x release가 trace를 기본으로 기록한다는 `AGENTS.md`의 규칙과 settings, logging, trace 명세가 새 기본을 밝힌다. 끄면 완전히 막는다: 기본값에서 모든 layer(page, 두 host, native, log policy를 통한 sidecar)의 단위 시험이 trace event를 만들지도 저장하지도 않고 `error` 아래의 event를 쓰지 않음을 보이며, 디버그를 끈 뒤의 시험도 같은 결과를 보인다.
   - [o] F197.1 — P1: 명세와 golden case: 기본 정책은 모든 class에서 `error`만 저장하고, `diagnostics.performance`는 기본 false이며, 설정 창에 switch 디버그가 있고, 0.0.x release에 대한 `AGENTS.md`의 규칙이 새 기본을 밝힌다. `packages/log-contract/fixtures/policy`와 그 reader가 새 기본을 가진다.
-  - [~] F197.2 — P1: page: log gate와 설정이 새 정책과 꺼진 trace를 기본으로 하고, switch 디버그가 모든 class의 모든 수준과 trace를 켜고 끈다. Red와 Green.
+  - [o] F197.2 — P1: page: log gate와 설정이 새 정책과 꺼진 trace를 기본으로 하고, switch 디버그가 모든 class의 모든 수준과 trace를 켜고 끈다. Red와 Green.
   - [~] F197.3 — P1: 두 host와 두 `sok` build가 정책 파일 없이 새 기본 정책을 적용한다. Red와 Green.
   - [o] F197.4 — P1: native event ring이 첫 정책 전에 `error`만 저장한다. Red와 Green.
   - [~] F197.5 — P1: files, shell, vt sidecar가 새 기본 정책을 적용한다. 각각 자기 저장소 체크리스트에서.
