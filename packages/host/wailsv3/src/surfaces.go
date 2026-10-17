@@ -217,6 +217,8 @@ type Surfaces struct {
 	shapes    map[string]*nativeShape
 	// documents are the document regions that the surface pages attached.
 	documents *Documents
+	// streams are the stream subscriptions of the document regions.
+	streams *DocumentStreams
 	// images are the image regions that the surface pages attached.
 	images   *Images
 	sidecars *Sidecars
@@ -237,6 +239,7 @@ func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 		live:                 map[string]bool{},
 		shapes:               map[string]*nativeShape{},
 		documents:            NewDocuments(),
+		streams:              NewDocumentStreams(),
 		images:               NewImages(),
 		// The value for the case in which no theme was received yet. If it is not an empty map, null is carried in the JSON,
 		// and a page that receives it stops while iterating over the tokens.
@@ -807,7 +810,7 @@ func (kind WindowNativeKind) String() string {
 // A logical surface holds a main web view and a document region has its own web content process, so a surface and a region that are not closed leave the web view and its web content process after the window
 // closed. Even when one object cannot be closed, the rest are closed and all failures are returned.
 // close closes one native object and is called on the UI thread.
-func CloseWindowSurfaces(surfaces map[string]unsafe.Pointer, documents *Documents, images *Images, close func(WindowNative) error) error {
+func CloseWindowSurfaces(surfaces map[string]unsafe.Pointer, documents *Documents, streams *DocumentStreams, images *Images, close func(WindowNative) error) error {
 	ids := make([]string, 0, len(surfaces))
 	for id := range surfaces {
 		ids = append(ids, id)
@@ -816,6 +819,8 @@ func CloseWindowSurfaces(surfaces map[string]unsafe.Pointer, documents *Document
 	var failures []string
 	for _, id := range ids {
 		var natives []WindowNative
+		// The streams of the surface end with its documents; the closed documents need no turn-off.
+		streams.RemoveSurface(id)
 		for _, handle := range documents.RemoveSurface(id) {
 			natives = append(natives, WindowNative{Kind: WindowNativeDocument, Handle: handle})
 		}
@@ -965,6 +970,7 @@ func newNativeWebview(owner *Surfaces, options nativeWebviewOptions) (*nativeWeb
 			FillParent: options.FillParent,
 			Receive:    dispatchNative,
 			Committed:  committedNative,
+			Terminated: terminatedNative,
 		})
 		if err != nil {
 			return

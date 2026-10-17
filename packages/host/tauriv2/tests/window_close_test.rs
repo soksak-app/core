@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use soksak_host_tauriv2::documents::Documents;
+use soksak_host_tauriv2::documents::{Documents, Streams};
 use soksak_host_tauriv2::exposure::native_failure;
 use soksak_host_tauriv2::images::Images;
 use soksak_host_tauriv2::surfaces::{
@@ -22,6 +22,7 @@ fn key(surface: &str, name: &str) -> (String, String) {
 #[test]
 fn closing_a_window_closes_each_surface_after_its_regions() {
     let documents = Documents::default();
+    let streams = Streams::default();
     let images = Images::default();
     for (k, handle) in [(key("tab-1", "page"), 11), (key("tab-2", "page"), 21)] {
         documents.reserve(&k).unwrap();
@@ -35,7 +36,7 @@ fn closing_a_window_closes_each_surface_after_its_regions() {
     assert!(images.set(&key("tab-1", "view"), 12));
     let surfaces = HashMap::from([("tab-2".to_string(), 200), ("tab-1".to_string(), 100)]);
     let mut closed = Vec::new();
-    close_window_surfaces(surfaces, &documents, &images, &mut |native| {
+    close_window_surfaces(surfaces, &documents, &streams, &images, &mut |native| {
         closed.push(native);
         Ok(())
     })
@@ -68,12 +69,13 @@ fn closing_a_window_closes_each_surface_after_its_regions() {
 #[test]
 fn closing_a_window_reports_every_failure_and_closes_the_rest() {
     let documents = Documents::default();
+    let streams = Streams::default();
     let images = Images::default();
     documents.reserve(&key("tab-1", "page")).unwrap();
     assert!(documents.set(&key("tab-1", "page"), 11));
     let surfaces = HashMap::from([("tab-1".to_string(), 100), ("tab-2".to_string(), 200)]);
     let mut closed = Vec::new();
-    let result = close_window_surfaces(surfaces, &documents, &images, &mut |native| {
+    let result = close_window_surfaces(surfaces, &documents, &streams, &images, &mut |native| {
         closed.push(native);
         match native {
             WindowNative::Document(_) => Err("document failed".into()),

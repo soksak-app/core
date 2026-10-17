@@ -249,6 +249,30 @@ func (h *Host) DocumentDetach(ctx context.Context, reqJSON json.RawMessage) erro
 	return s.detachDocument(uint64(s.window.ID()), req)
 }
 
+func (h *Host) DocumentSubscribe(ctx context.Context, reqJSON json.RawMessage) (DocumentSubscription, error) {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return DocumentSubscription{}, err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return DocumentSubscription{}, err
+	}
+	handle, err := s.subscribeDocument(uint64(s.window.ID()), req)
+	return DocumentSubscription{Handle: handle}, err
+}
+func (h *Host) DocumentUnsubscribe(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.unsubscribeDocument(uint64(s.window.ID()), req)
+}
+
 func (h *Host) ImageAttach(ctx context.Context, reqJSON json.RawMessage) error {
 	req, err := argument[ImageRequest]("request", reqJSON)
 	if err != nil {
@@ -486,7 +510,7 @@ func runNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return s.ModalContent(id, instance), nil
 		}
 		return nil, s.ModalReady(id, instance)
-	case "DocumentAttach", "DocumentLoad", "DocumentZoom", "DocumentGo", "DocumentPost", "DocumentDetach":
+	case "DocumentAttach", "DocumentLoad", "DocumentZoom", "DocumentGo", "DocumentPost", "DocumentDetach", "DocumentSubscribe", "DocumentUnsubscribe":
 		var req DocumentRequest
 		if err := nativeArgs(call, nativeArg{"request", &req}); err != nil {
 			return nil, err
@@ -502,6 +526,11 @@ func runNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return s.goDocument(viewID, req)
 		case "DocumentPost":
 			return nil, s.postDocument(viewID, req)
+		case "DocumentSubscribe":
+			handle, err := s.subscribeDocument(viewID, req)
+			return DocumentSubscription{Handle: handle}, err
+		case "DocumentUnsubscribe":
+			return nil, s.unsubscribeDocument(viewID, req)
 		default:
 			return nil, s.detachDocument(viewID, req)
 		}
@@ -552,6 +581,20 @@ func committedNative(viewID uint64) {
 	})
 	if owner != nil {
 		owner.surfaceCommitted(viewID)
+	}
+}
+
+// terminatedNative removes the stream subscriptions of the surface of the native web view viewID, whose WebContent process ended, and turns
+// off the streams that lose their last subscriber. It runs outside the UI thread.
+func terminatedNative(viewID uint64) {
+	var owner *Surfaces
+	application.InvokeSync(func() {
+		if view := nativeViews[viewID]; view != nil {
+			owner = view.owner
+		}
+	})
+	if owner != nil {
+		owner.surfaceTerminated(viewID)
 	}
 }
 

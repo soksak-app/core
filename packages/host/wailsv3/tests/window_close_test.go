@@ -14,6 +14,7 @@ import (
 func TestClosingAWindowClosesEachSurfaceAfterItsRegions(t *testing.T) {
 	var document1, image1, surface1, document2, surface2 int
 	documents := host.NewDocuments()
+	streams := host.NewDocumentStreams()
 	images := host.NewImages()
 	for key, handle := range map[host.DocumentKey]unsafe.Pointer{
 		{Surface: "tab-1", Name: "page"}: unsafe.Pointer(&document1),
@@ -40,7 +41,7 @@ func TestClosingAWindowClosesEachSurfaceAfterItsRegions(t *testing.T) {
 	}
 	surfaces := map[string]unsafe.Pointer{"tab-2": unsafe.Pointer(&surface2), "tab-1": unsafe.Pointer(&surface1)}
 	var closed []host.WindowNative
-	err := host.CloseWindowSurfaces(surfaces, documents, images, func(native host.WindowNative) error {
+	err := host.CloseWindowSurfaces(surfaces, documents, streams, images, func(native host.WindowNative) error {
 		closed = append(closed, native)
 		return nil
 	})
@@ -72,6 +73,7 @@ func TestClosingAWindowClosesEachSurfaceAfterItsRegions(t *testing.T) {
 func TestClosingAWindowReportsEveryFailureAndClosesTheRest(t *testing.T) {
 	var document1, surface1, surface2 int
 	documents := host.NewDocuments()
+	streams := host.NewDocumentStreams()
 	images := host.NewImages()
 	key := host.DocumentKey{Surface: "tab-1", Name: "page"}
 	if err := documents.Reserve(key); err != nil {
@@ -82,7 +84,7 @@ func TestClosingAWindowReportsEveryFailureAndClosesTheRest(t *testing.T) {
 	}
 	surfaces := map[string]unsafe.Pointer{"tab-1": unsafe.Pointer(&surface1), "tab-2": unsafe.Pointer(&surface2)}
 	var closed []host.WindowNative
-	err := host.CloseWindowSurfaces(surfaces, documents, images, func(native host.WindowNative) error {
+	err := host.CloseWindowSurfaces(surfaces, documents, streams, images, func(native host.WindowNative) error {
 		closed = append(closed, native)
 		switch {
 		case native.Kind == host.WindowNativeDocument:

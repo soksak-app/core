@@ -8,16 +8,16 @@
 //! Commands run outside the main thread and native work runs on the main thread. A cleanup that started on the main
 //! thread is not awaited.
 
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::{Mutex, MutexGuard};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use tauri::{Manager, Webview, Window};
 
 use crate::application_log::{log_error, log_failure};
 use crate::exposure::{self, on_main, with_view};
-use crate::platform::{self, Handle};
+use crate::platform::{self, Handle, Platform};
 use crate::surfaces::{require_region, surface_handle};
 use crate::windows::{emit_window, window_data};
 
@@ -42,6 +42,53 @@ pub struct Request {
     /// The JSON value that documentPost sends to a plugin document.
     #[serde(default)]
     pub message: Option<serde_json::Value>,
+    /// The stream of a subscribe request: elements or requests.
+    #[serde(default)]
+    pub stream: String,
+    /// The subscription of an unsubscribe request.
+    #[serde(default)]
+    pub handle: Option<u64>,
+}
+
+/// The reply of a stream subscription: the handle that ends it.
+#[derive(Serialize)]
+pub struct Subscription {
+    pub handle: u64,
+}
+
+/// A change of the collection of a stream of a document region, which the caller applies to the native document.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StreamEffect {
+    pub key: Key,
+    pub stream: String,
+    pub on: bool,
+}
+
+/// One message of a document stream for one subscription, which is sent only to the surface that made the subscription.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StreamDelivery {
+    pub surface: String,
+    pub handle: u64,
+    pub stream: String,
+    pub message: Value,
+}
+
+/// The outcome of a stream message of native. ack is true for a snapshot, which native is acknowledged with seq after the deliveries.
+#[derive(Debug, Default, PartialEq)]
+pub struct StreamResult {
+    pub deliveries: Vec<StreamDelivery>,
+    pub ack: bool,
+    pub seq: u64,
+}
+
+/// The event of a stream message, sent to the window of the surface that made the subscription.
+#[derive(Clone, Serialize)]
+struct StreamEvent {
+    surface: String,
+    document: String,
+    stream: String,
+    handle: u64,
+    message: Value,
 }
 
 /// A message of a plugin document, {"message": value} or {"error": reason}: the payload of the document-message
@@ -115,6 +162,305 @@ pub fn check(caller: Option<&str>, request: &Request) -> Result<Key, String> {
         return Err(format!("invalid document name {:?}", request.document));
     }
     Ok((request.surface.clone(), request.document.clone()))
+}
+
+/// The stream names of a document region (docs/spec/native-surfaces.md#document-streams).
+const ELEMENTS: &str = "elements";
+const REQUESTS: &str = "requests";
+
+/// The number of request entries that a document region keeps for a new subscription.
+const REQUEST_LOG_LIMIT: usize = 200;
+
+/// The text of a stream message that is not a JSON object with the fields of the stream protocol.
+const NOT_JSON: &str = "document stream message is not JSON";
+
+/// Checks that a stream name is elements or requests.
+fn check_stream(name: &str) -> Result<(), String> {
+    match name {
+        ELEMENTS | REQUESTS => Ok(()),
+        _ => Err(format!("unknown document stream {name:?}")),
+    }
+}
+
+/// Returns the error of an acknowledgement that native refuses. It names the document, the stream and the seq.
+pub fn stream_ack_refusal(key: &Key, stream: &str, seq: u64) -> String {
+    format!(
+        "document {:?} stream {stream}: seq {seq} was not sent",
+        key.1
+    )
+}
+
+/// Reads a string field of a stream message. A missing or null field is the empty text.
+fn text_field(value: Option<&Value>) -> Result<String, String> {
+    match value {
+        None | Some(Value::Null) => Ok(String::new()),
+        Some(Value::String(text)) => Ok(text.clone()),
+        Some(_) => Err(NOT_JSON.to_string()),
+    }
+}
+
+/// A subscription of a stream of a document region.
+struct Subscriber {
+    key: Key,
+    stream: String,
+}
+
+/// The request log of a document region: the most recent entries and the number of entries dropped since the last reset.
+#[derive(Default)]
+struct RequestLog {
+    entries: Vec<Value>,
+    dropped: u64,
+}
+
+/// The entries message of the request log: the entries and the dropped count.
+fn entries_message(log: &RequestLog) -> Value {
+    json!({"type": "entries", "entries": log.entries, "dropped": log.dropped})
+}
+
+#[derive(Default)]
+struct StreamState {
+    next: u64,
+    subscribers: BTreeMap<u64, Subscriber>,
+    logs: HashMap<Key, RequestLog>,
+}
+
+impl StreamState {
+    fn count(&self, key: &Key, stream: &str) -> usize {
+        self.subscribers
+            .values()
+            .filter(|subscriber| subscriber.key == *key && subscriber.stream == stream)
+            .count()
+    }
+
+    /// Releases the request log of a region that has no subscription.
+    fn release(&mut self, key: &Key) {
+        if !self
+            .subscribers
+            .values()
+            .any(|subscriber| subscriber.key == *key)
+        {
+            self.logs.remove(key);
+        }
+    }
+
+    /// The message of each subscription of a stream of the region, in the order of the handles.
+    fn deliveries(&self, key: &Key, stream: &str, message: &Value) -> Vec<StreamDelivery> {
+        self.subscribers
+            .iter()
+            .filter(|(_, subscriber)| subscriber.key == *key && subscriber.stream == stream)
+            .map(|(handle, _)| StreamDelivery {
+                surface: key.0.clone(),
+                handle: *handle,
+                stream: stream.to_string(),
+                message: message.clone(),
+            })
+            .collect()
+    }
+
+    /// Removes the subscriptions whose region matches and returns the turn-off effects of the streams that lose their last subscriber.
+    fn remove(&mut self, matches: impl Fn(&Key) -> bool) -> Vec<StreamEffect> {
+        let mut lost = BTreeSet::new();
+        self.subscribers.retain(|_, subscriber| {
+            if matches(&subscriber.key) {
+                lost.insert((subscriber.key.clone(), subscriber.stream.clone()));
+                false
+            } else {
+                true
+            }
+        });
+        let effects = lost
+            .into_iter()
+            .filter(|(key, stream)| self.count(key, stream) == 0)
+            .map(|(key, stream)| StreamEffect {
+                key,
+                stream,
+                on: false,
+            })
+            .collect();
+        let keys: Vec<Key> = self.logs.keys().cloned().collect();
+        for key in &keys {
+            self.release(key);
+        }
+        effects
+    }
+}
+
+/// The stream subscriptions of the document regions of a window. The host counts the subscriptions of each region and stream;
+/// the first subscription of a stream turns its collection on and the last removal turns it off. The methods do not call native,
+/// so the caller applies the returned effects on the main thread.
+#[derive(Default)]
+pub struct Streams(Mutex<StreamState>);
+
+impl Streams {
+    fn lock(&self) -> MutexGuard<'_, StreamState> {
+        self.0
+            .lock()
+            // default: a thread that stopped while holding the lock changed the maps only by one insert, remove or read, so the
+            // state is consistent, and that stop was already reported as a panic report.
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Registers a subscription of a stream on the region key. It returns the handle, the effects to apply, and the first message
+    /// of the subscriber, which is the request log of a requests subscription.
+    pub fn subscribe(
+        &self,
+        key: &Key,
+        stream: &str,
+    ) -> Result<(u64, Vec<StreamEffect>, Option<Value>), String> {
+        check_stream(stream)?;
+        let mut state = self.lock();
+        state.next += 1;
+        let handle = state.next;
+        state.subscribers.insert(
+            handle,
+            Subscriber {
+                key: key.clone(),
+                stream: stream.to_string(),
+            },
+        );
+        let initial = if stream == REQUESTS {
+            Some(entries_message(state.logs.entry(key.clone()).or_default()))
+        } else {
+            None
+        };
+        let mut effects = Vec::new();
+        if state.count(key, stream) == 1 {
+            effects.push(StreamEffect {
+                key: key.clone(),
+                stream: stream.to_string(),
+                on: true,
+            });
+        }
+        Ok((handle, effects, initial))
+    }
+
+    /// Removes a subscription whose stream native refused to turn on. No effect is returned, because native did not turn the stream on.
+    pub fn abandon(&self, handle: u64) {
+        let mut state = self.lock();
+        if let Some(subscriber) = state.subscribers.remove(&handle) {
+            state.release(&subscriber.key);
+        }
+    }
+
+    /// Ends the subscription handle of the region key. It is an error when the handle is not a subscription of that region.
+    pub fn unsubscribe(&self, key: &Key, handle: u64) -> Result<Vec<StreamEffect>, String> {
+        let mut state = self.lock();
+        let stream = match state.subscribers.get(&handle) {
+            Some(subscriber) if subscriber.key == *key => subscriber.stream.clone(),
+            _ => {
+                return Err(format!(
+                    "document stream handle {handle} is not subscribed to document {:?}",
+                    key.1
+                ));
+            }
+        };
+        state.subscribers.remove(&handle);
+        let mut effects = Vec::new();
+        if state.count(key, &stream) == 0 {
+            effects.push(StreamEffect {
+                key: key.clone(),
+                stream,
+                on: false,
+            });
+        }
+        state.release(key);
+        Ok(effects)
+    }
+
+    /// Removes the subscriptions of a closed region and releases its request log.
+    pub fn remove_region(&self, key: &Key) -> Vec<StreamEffect> {
+        self.lock().remove(|region| region == key)
+    }
+
+    /// Removes the subscriptions of a surface: its page loaded a new document, its web content process ended, or its window closed.
+    pub fn remove_surface(&self, surface: &str) -> Vec<StreamEffect> {
+        self.lock().remove(|region| region.0 == surface)
+    }
+
+    /// The number of subscriptions of a stream of a region.
+    pub fn subscribers(&self, key: &Key, stream: &str) -> usize {
+        self.lock().count(key, stream)
+    }
+
+    /// The number of entries in the request log of a region and the number of entries it dropped since the last reset.
+    pub fn log_state(&self, key: &Key) -> (usize, u64) {
+        self.lock()
+            .logs
+            .get(key)
+            .map_or((0, 0), |log| (log.entries.len(), log.dropped))
+    }
+
+    /// Handles one stream message of native for the region key. A request entry that arrives while the region has no subscription
+    /// belongs to a collection that is turned off, so it is not kept.
+    pub fn deliver(&self, key: &Key, value: &str) -> Result<StreamResult, String> {
+        let envelope: Value = serde_json::from_str(value).map_err(|_| NOT_JSON.to_string())?;
+        let stream = text_field(envelope.get("stream"))?;
+        let message = envelope
+            .get("message")
+            .ok_or_else(|| NOT_JSON.to_string())?;
+        let kind = text_field(message.get("type"))?;
+        let seq = match message.get("seq") {
+            None | Some(Value::Null) => None,
+            Some(seq) => Some(seq.as_u64().ok_or_else(|| NOT_JSON.to_string())?),
+        };
+        let entries = match message.get("entries") {
+            None | Some(Value::Null) => None,
+            Some(Value::Array(entries)) => Some(entries.clone()),
+            Some(_) => return Err(NOT_JSON.to_string()),
+        };
+        check_stream(&stream)?;
+        let mut state = self.lock();
+        match (stream.as_str(), kind.as_str()) {
+            (ELEMENTS, "snapshot") => {
+                let seq = seq.ok_or_else(|| {
+                    r#"document stream "elements" snapshot has no seq"#.to_string()
+                })?;
+                let deliveries = state.deliveries(key, ELEMENTS, message);
+                Ok(StreamResult {
+                    deliveries,
+                    ack: true,
+                    seq,
+                })
+            }
+            (REQUESTS, "entries") => {
+                let entries = entries.ok_or_else(|| {
+                    r#"document stream "requests" entries message has no entries"#.to_string()
+                })?;
+                let Some(log) = state.logs.get_mut(key) else {
+                    return Ok(StreamResult::default());
+                };
+                log.entries.extend(entries.iter().cloned());
+                if log.entries.len() > REQUEST_LOG_LIMIT {
+                    let overflow = log.entries.len() - REQUEST_LOG_LIMIT;
+                    log.dropped += overflow as u64;
+                    log.entries.drain(..overflow);
+                }
+                let body = json!({"type": "entries", "entries": entries, "dropped": log.dropped});
+                let deliveries = state.deliveries(key, REQUESTS, &body);
+                Ok(StreamResult {
+                    deliveries,
+                    ..StreamResult::default()
+                })
+            }
+            (_, "reset") => {
+                if stream == REQUESTS {
+                    if let Some(log) = state.logs.get_mut(key) {
+                        log.entries.clear();
+                        log.dropped = 0;
+                    }
+                }
+                let body = json!({"type": "reset"});
+                let deliveries = state.deliveries(key, &stream, &body);
+                Ok(StreamResult {
+                    deliveries,
+                    ..StreamResult::default()
+                })
+            }
+            _ => Err(format!(
+                "document stream {stream:?} sent an unknown message type {kind:?}"
+            )),
+        }
+    }
 }
 
 /// The document regions of a window. The value is the address of the document webview, and 0 for a region that is being
@@ -345,6 +691,12 @@ fn create(
                 }
             }),
         )?;
+        let stream_host = host.clone();
+        let stream_key = (surface_id.clone(), name.clone());
+        platform.set_document_stream(
+            handle,
+            Box::new(move |value| deliver_stream(&stream_host, platform, &stream_key, &value)),
+        )?;
         let event_host = host.clone();
         let event_surface = surface_id.clone();
         let event_document = name.clone();
@@ -480,6 +832,8 @@ pub(crate) fn detach(webview: &Webview, request: Request) -> Result<(), String> 
         if handle != 0 {
             platform.close_document(handle)?;
         }
+        // The closed region has no native stream left to turn off, so its effects are not applied.
+        data.streams.remove_region(&key);
         Ok(())
     })?;
     exposure::window_changed(&window);
@@ -504,6 +858,8 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
         "document close",
         window
             .run_on_main_thread(move || {
+                // The regions close with the surface, so their stream effects are not applied.
+                data.streams.remove_surface(&surface);
                 let handles = data.documents.remove_surface(&surface);
                 if handles.is_empty() {
                     return;
@@ -541,4 +897,121 @@ pub(crate) fn set_background(window: &Window, enabled: bool) {
             })
             .map_err(|e| e.to_string()),
     );
+}
+
+/// Sends a stream event to the window. The page of the surface receives only the events of its own surface.
+fn emit_stream_event(
+    window: &Window,
+    key: &Key,
+    stream: &str,
+    handle: u64,
+    message: Value,
+) -> Result<(), String> {
+    emit_window(
+        window,
+        "document-stream",
+        StreamEvent {
+            surface: key.0.clone(),
+            document: key.1.clone(),
+            stream: stream.to_string(),
+            handle,
+            message,
+        },
+    )
+    .map_err(|error| error.to_string())
+}
+
+/// Applies the effects to the native documents. It fails with the name of the stream that native refused.
+fn apply_effects(
+    platform: &dyn Platform,
+    documents: &Documents,
+    effects: &[StreamEffect],
+) -> Result<(), String> {
+    for effect in effects {
+        let document = documents.get(&effect.key)?;
+        if !platform.set_document_stream_on(document, &effect.stream, effect.on)? {
+            return Err(format!(
+                "document {:?} does not accept stream {:?}",
+                effect.key.1, effect.stream
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Delivers a stream message of a document region to the subscriptions of its stream, and acknowledges a snapshot to native after the
+/// delivery. It runs on the main thread.
+fn deliver_stream(window: &Window, platform: &'static dyn Platform, key: &Key, value: &str) {
+    let place = format!("document stream {}", key.1);
+    let data = match window_data(window) {
+        Ok(data) => data,
+        Err(error) => return log_error(&place, error),
+    };
+    let result = match data.streams.deliver(key, value) {
+        Ok(result) => result,
+        Err(error) => return log_error(&place, error),
+    };
+    for delivery in result.deliveries {
+        if let Err(error) = emit_stream_event(
+            window,
+            key,
+            &delivery.stream,
+            delivery.handle,
+            delivery.message,
+        ) {
+            log_error(&place, error);
+        }
+    }
+    if !result.ack {
+        return;
+    }
+    let outcome = data
+        .documents
+        .get(key)
+        .and_then(|handle| platform.ack_document_stream(handle, result.seq));
+    match outcome {
+        Ok(true) => {}
+        Ok(false) => log_error(&place, stream_ack_refusal(key, ELEMENTS, result.seq)),
+        Err(error) => log_error(&place, error),
+    }
+}
+
+/// Subscribes to a stream of a document region and returns the handle. The first message of a requests subscription is the request log,
+/// and the subscription receives it before native turns the stream on.
+pub(crate) fn subscribe(webview: &Webview, request: Request) -> Result<Subscription, String> {
+    let (key, window) = owner(webview, &request)?;
+    check_stream(&request.stream)?;
+    let data = window_data(&window)?;
+    require_region(&data.compositions, &key.0, &key.1, "document", None)?;
+    let platform = platform::current()?;
+    let stream = request.stream.clone();
+    let host = window.clone();
+    let handle = on_main(&window, move || {
+        data.documents.get(&key)?;
+        let (handle, effects, initial) = data.streams.subscribe(&key, &stream)?;
+        if let Some(message) = initial {
+            emit_stream_event(&host, &key, &stream, handle, message)?;
+        }
+        if let Err(error) = apply_effects(platform, &data.documents, &effects) {
+            data.streams.abandon(handle);
+            return Err(error);
+        }
+        Ok(handle)
+    })?;
+    Ok(Subscription { handle })
+}
+
+/// Ends a subscription of a document region. The last removal of a stream turns its collection off.
+pub(crate) fn unsubscribe(webview: &Webview, request: Request) -> Result<(), String> {
+    let (key, window) = owner(webview, &request)?;
+    let handle = request
+        .handle
+        .ok_or_else(|| "document stream unsubscribe requires a handle".to_string())?;
+    let data = window_data(&window)?;
+    require_region(&data.compositions, &key.0, &key.1, "document", None)?;
+    let platform = platform::current()?;
+    on_main(&window, move || {
+        let effects = data.streams.unsubscribe(&key, handle)?;
+        apply_effects(platform, &data.documents, &effects)
+    })
 }

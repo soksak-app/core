@@ -1,6 +1,9 @@
 //! Checks the owning surface check of document region requests and the document region list of a window.
 
-use soksak_host_tauriv2::documents::{Documents, Key, Request, check, go_action};
+use serde_json::{Value, json};
+use soksak_host_tauriv2::documents::{
+    Documents, Key, Request, StreamEffect, Streams, check, go_action, stream_ack_refusal,
+};
 
 fn request(surface: &str, document: &str) -> Request {
     serde_json::from_value(serde_json::json!({"surface": surface, "document": document})).unwrap()
@@ -132,4 +135,272 @@ fn document_entry_requires_a_non_zero_offset() {
     let request: Request =
         serde_json::from_str(r#"{"surface":"s","document":"d","action":"stop"}"#).unwrap();
     assert_eq!(go_action(&request), Ok((3, 0)));
+}
+
+fn stream_key(surface: &str, name: &str) -> Key {
+    key(surface, name)
+}
+
+fn json_of(text: &str) -> Value {
+    serde_json::from_str(text).unwrap()
+}
+
+// contract: document.stream.subscribe-rejects-unknown-stream
+#[test]
+fn stream_subscribe_rejects_an_unknown_stream() {
+    let streams = Streams::default();
+    let error = streams
+        .subscribe(&stream_key("tab-1", "page"), "pixels")
+        .unwrap_err();
+    assert_eq!(error, r#"unknown document stream "pixels""#);
+}
+
+// contract: document.stream.unsubscribe-rejects-unknown-handle
+#[test]
+fn stream_unsubscribe_rejects_a_handle_of_another_document() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    let (handle, _, _) = streams.subscribe(&page, "elements").unwrap();
+    let error = streams
+        .unsubscribe(&stream_key("tab-1", "side"), handle)
+        .unwrap_err();
+    assert_eq!(
+        error,
+        format!(r#"document stream handle {handle} is not subscribed to document "side""#)
+    );
+    assert!(streams.unsubscribe(&page, handle + 100).is_err());
+}
+
+// contract: document.stream.first-on-last-off
+#[test]
+fn stream_turns_collection_on_at_the_first_subscription_and_off_at_the_last() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    let (first, effects, _) = streams.subscribe(&page, "requests").unwrap();
+    assert_eq!(
+        effects,
+        vec![StreamEffect {
+            key: page.clone(),
+            stream: "requests".into(),
+            on: true
+        }]
+    );
+    let (second, effects, _) = streams.subscribe(&page, "requests").unwrap();
+    assert!(effects.is_empty());
+    assert_eq!(streams.subscribers(&page, "requests"), 2);
+    assert!(streams.unsubscribe(&page, first).unwrap().is_empty());
+    let effects = streams.unsubscribe(&page, second).unwrap();
+    assert_eq!(
+        effects,
+        vec![StreamEffect {
+            key: page.clone(),
+            stream: "requests".into(),
+            on: false
+        }]
+    );
+    assert_eq!(streams.subscribers(&page, "requests"), 0);
+}
+
+// contract: document.stream.native-refusal-rejects-subscription
+#[test]
+fn stream_abandoned_subscription_is_not_kept() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    let (handle, _, _) = streams.subscribe(&page, "requests").unwrap();
+    streams.abandon(handle);
+    assert_eq!(streams.subscribers(&page, "requests"), 0);
+    assert!(streams.unsubscribe(&page, handle).is_err());
+}
+
+// contract: document.stream.page-load-removes-subscriptions, document.stream.region-close-removes-subscriptions
+#[test]
+fn stream_removal_ends_subscriptions_and_releases_the_log() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    let side = stream_key("tab-1", "side");
+    let other = stream_key("tab-2", "page");
+    for k in [&page, &side, &other] {
+        for stream in ["elements", "requests"] {
+            streams.subscribe(k, stream).unwrap();
+        }
+    }
+    streams.remove_surface("tab-1");
+    for k in [&page, &side] {
+        for stream in ["elements", "requests"] {
+            assert_eq!(streams.subscribers(k, stream), 0);
+        }
+    }
+    assert_eq!(streams.subscribers(&other, "requests"), 1);
+    streams.remove_region(&other);
+    assert_eq!(streams.subscribers(&other, "requests"), 0);
+    assert_eq!(streams.log_state(&other), (0, 0));
+}
+
+// contract: document.stream.request-log-replays-with-dropped
+#[test]
+fn stream_request_log_replays_its_last_entries_with_the_dropped_count() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    streams.subscribe(&page, "requests").unwrap();
+    let batch: Vec<Value> = (0..250).map(|i| json!({"url": format!("e{i}")})).collect();
+    let result = streams
+        .deliver(
+            &page,
+            &json!({"stream": "requests", "message": {"type": "entries", "entries": batch}})
+                .to_string(),
+        )
+        .unwrap();
+    assert_eq!(result.deliveries.len(), 1);
+    assert!(!result.ack);
+    assert_eq!(streams.log_state(&page), (200, 50));
+    let (_, _, initial) = streams.subscribe(&page, "requests").unwrap();
+    let replay = initial.expect("a requests subscription receives its log");
+    assert_eq!(replay["type"], "entries");
+    assert_eq!(replay["dropped"], 50);
+    let entries = replay["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 200);
+    assert_eq!(entries[0], json!({"url": "e50"}));
+    assert_eq!(entries[199], json!({"url": "e249"}));
+    let result = streams
+        .deliver(
+            &page,
+            r#"{"stream":"requests","message":{"type":"entries","entries":[{"url":"e250"}]}}"#,
+        )
+        .unwrap();
+    assert_eq!(result.deliveries.len(), 2);
+    assert_eq!(
+        result.deliveries[1].message,
+        json!({"type": "entries", "entries": [{"url": "e250"}], "dropped": 51})
+    );
+}
+
+// contract: document.stream.reset-clears-request-log
+#[test]
+fn stream_reset_clears_the_request_log() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    streams.subscribe(&page, "requests").unwrap();
+    streams
+        .deliver(
+            &page,
+            r#"{"stream":"requests","message":{"type":"entries","entries":[{"url":"a"},{"url":"b"}]}}"#,
+        )
+        .unwrap();
+    let result = streams
+        .deliver(&page, r#"{"stream":"requests","message":{"type":"reset"}}"#)
+        .unwrap();
+    assert_eq!(result.deliveries.len(), 1);
+    assert_eq!(result.deliveries[0].message, json!({"type": "reset"}));
+    assert_eq!(streams.log_state(&page), (0, 0));
+    let (_, _, initial) = streams.subscribe(&page, "requests").unwrap();
+    assert_eq!(
+        initial,
+        Some(json!({"type": "entries", "entries": [], "dropped": 0}))
+    );
+}
+
+// contract: document.stream.delivers-to-subscribing-surface-only
+#[test]
+fn stream_messages_reach_only_the_subscriptions_of_their_stream() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    let other = stream_key("tab-2", "page");
+    let (requests, _, _) = streams.subscribe(&page, "requests").unwrap();
+    let (elements, _, _) = streams.subscribe(&page, "elements").unwrap();
+    let (foreign, _, _) = streams.subscribe(&other, "requests").unwrap();
+    let result = streams
+        .deliver(
+            &page,
+            r#"{"stream":"requests","message":{"type":"entries","entries":[{"url":"a"}]}}"#,
+        )
+        .unwrap();
+    assert_eq!(result.deliveries.len(), 1);
+    assert_eq!(result.deliveries[0].surface, "tab-1");
+    assert_eq!(result.deliveries[0].handle, requests);
+    assert!(result.deliveries[0].handle != elements && result.deliveries[0].handle != foreign);
+}
+
+// contract: document.stream.snapshot-acknowledged-after-delivery
+#[test]
+fn stream_snapshot_is_acknowledged_after_its_delivery() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    let (handle, _, _) = streams.subscribe(&page, "elements").unwrap();
+    let snapshot = r#"{"stream":"elements","message":{"type":"snapshot","seq":3,"nodes":[{"depth":0,"tag":"html","id":"","class":""}],"total":1,"truncated":false}}"#;
+    let result = streams.deliver(&page, snapshot).unwrap();
+    assert!(result.ack);
+    assert_eq!(result.seq, 3);
+    assert_eq!(result.deliveries.len(), 1);
+    assert_eq!(result.deliveries[0].handle, handle);
+    assert_eq!(
+        result.deliveries[0].message,
+        json_of(
+            r#"{"type":"snapshot","seq":3,"nodes":[{"depth":0,"tag":"html","id":"","class":""}],"total":1,"truncated":false}"#
+        )
+    );
+    streams.unsubscribe(&page, handle).unwrap();
+    let result = streams
+        .deliver(
+            &page,
+            r#"{"stream":"elements","message":{"type":"snapshot","seq":4,"nodes":[],"total":0,"truncated":false}}"#,
+        )
+        .unwrap();
+    assert!(result.ack);
+    assert_eq!(result.seq, 4);
+    assert!(result.deliveries.is_empty());
+}
+
+// contract: document.stream.rejects-unknown-message
+#[test]
+fn stream_rejects_invalid_messages() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    streams.subscribe(&page, "elements").unwrap();
+    for (body, want) in [
+        ("not json", "document stream message is not JSON"),
+        (
+            r#"{"stream":"pixels","message":{"type":"reset"}}"#,
+            r#"unknown document stream "pixels""#,
+        ),
+        (
+            r#"{"stream":"requests","message":{"type":"pixels"}}"#,
+            r#"document stream "requests" sent an unknown message type "pixels""#,
+        ),
+        (
+            r#"{"stream":"elements","message":{"type":"snapshot"}}"#,
+            r#"document stream "elements" snapshot has no seq"#,
+        ),
+    ] {
+        assert_eq!(
+            streams.deliver(&page, body).err().as_deref(),
+            Some(want),
+            "{body}"
+        );
+    }
+}
+
+// contract: document.stream.ack-refusal-names-seq
+#[test]
+fn stream_ack_refusal_names_the_document_stream_and_seq() {
+    assert_eq!(
+        stream_ack_refusal(&stream_key("tab-1", "page"), "elements", 7),
+        r#"document "page" stream elements: seq 7 was not sent"#
+    );
+}
+
+// contract: document.stream.process-end-removes-subscriptions, document.stream.window-close-removes-subscriptions
+#[test]
+fn stream_ended_surface_or_window_loses_its_subscriptions() {
+    let streams = Streams::default();
+    let page = stream_key("tab-1", "page");
+    streams.subscribe(&page, "requests").unwrap();
+    streams
+        .deliver(
+            &page,
+            r#"{"stream":"requests","message":{"type":"entries","entries":[{"url":"a"}]}}"#,
+        )
+        .unwrap();
+    streams.remove_surface("tab-1");
+    assert_eq!(streams.subscribers(&page, "requests"), 0);
+    assert_eq!(streams.log_state(&page), (0, 0));
 }

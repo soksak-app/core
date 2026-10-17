@@ -195,6 +195,21 @@ pub fn set_document_message(
     missing("document messages")
 }
 
+pub fn set_document_stream(
+    _document: Handle,
+    _stream: Box<dyn Fn(String) + Send>,
+) -> Result<(), String> {
+    missing("document streams")
+}
+
+pub fn set_document_stream_on(_document: Handle, _stream: &str, _on: bool) -> Result<bool, String> {
+    missing("document streams")
+}
+
+pub fn ack_document_stream(_document: Handle, _seq: u64) -> Result<bool, String> {
+    missing("document streams")
+}
+
 pub fn post_document(_document: Handle, _json: &str) -> Result<bool, String> {
     missing("document messages")
 }

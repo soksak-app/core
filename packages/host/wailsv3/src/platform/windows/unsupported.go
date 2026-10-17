@@ -229,6 +229,20 @@ func (implementation) SetDocumentMessage(unsafe.Pointer, func(string)) error {
 	return unsupported("document messages")
 }
 
+func (implementation) SetDocumentStream(unsafe.Pointer, func(string)) error {
+	return unsupported("document streams")
+}
+
+func (implementation) SetDocumentStreamOn(unsafe.Pointer, string, bool) bool {
+	unreachable("document streams")
+	return false
+}
+
+func (implementation) AckDocumentStream(unsafe.Pointer, uint64) bool {
+	unreachable("document streams")
+	return false
+}
+
 func (implementation) PostDocument(unsafe.Pointer, string) bool {
 	unreachable("document messages")
 	return false

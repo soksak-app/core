@@ -398,6 +398,21 @@ pub trait Platform: Send + Sync {
         document: Handle,
         message: Box<dyn Fn(String) + Send>,
     ) -> Result<(), String>;
+    /// Receives {"stream", "message"} for each stream message of the document. Call it before a stream turns on.
+    fn set_document_stream(
+        &self,
+        document: Handle,
+        stream: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String>;
+    /// Turns the stream elements or requests on or off. It is false for another stream or a closed document.
+    fn set_document_stream_on(
+        &self,
+        document: Handle,
+        stream: &str,
+        on: bool,
+    ) -> Result<bool, String>;
+    /// Acknowledges the element snapshot seq. It is false for a seq that native has not sent.
+    fn ack_document_stream(&self, document: Handle, seq: u64) -> Result<bool, String>;
     /// Posts the JSON value json to the current plugin document; false when there is none.
     fn post_document(&self, document: Handle, json: &str) -> Result<bool, String>;
     /// Opens an http, https, file or sok address; returns false for another address. Called on the main thread.

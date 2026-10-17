@@ -9,6 +9,9 @@ export const DOCUMENT_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export const DOCUMENT_ACTIONS = Object.freeze(["back", "forward", "reload", "stop"]);
 
+/** The streams of a document region (docs/spec/native-surfaces.md#document-streams). */
+export const DOCUMENT_STREAMS = Object.freeze(["elements", "requests"]);
+
 /**
  * Checks whether the element and its ancestors are hidden by CSS visibility or display.
  * It decides with getComputedStyle, the standard method.
@@ -113,6 +116,23 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     for (const fn of messageListeners) fn(message);
   }));
 
+  // The stream subscriptions of this region by handle. A message can arrive before the reply of its subscribe call, so while a
+  // subscribe call waits, the messages of a handle that is not yet known are kept until its reply.
+  const streamListeners = new Map();
+  const earlyStreamMessages = new Map();
+  let pendingSubscribes = 0;
+  const unlistenStreams = Promise.resolve(port.onStream((document, handle, message) => {
+    if (document !== name || detached) return;
+    const listener = streamListeners.get(handle);
+    if (listener) {
+      listener(message);
+    } else if (pendingSubscribes > 0) {
+      if (!earlyStreamMessages.has(handle)) earlyStreamMessages.set(handle, []);
+      earlyStreamMessages.get(handle).push(message);
+    }
+    // A message of a handle that is not known and that no subscribe call waits for arrives after its close, so it is dropped.
+  }));
+
   const placeAt = ({ insets, visible }) => queue(() => port.place(name, insets, visible));
   // default: the thrown value may not be an Error, so without message the value itself is written.
   const failed = (error) => report(`document ${name} place: ${error?.message ?? error}`);
@@ -155,14 +175,53 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     forward() { return this.go("forward"); },
     reload() { return this.go("reload"); },
     stop() { return this.go("stop"); },
+    /**
+     * Subscribes to a stream of the region and calls listener with each message of the subscription, in order. Resolves to a handle whose
+     * close() ends the subscription. The subscription of a requests stream starts with the request log, and the first snapshot of an
+     * elements stream follows.
+     */
+    subscribe(stream, listener) {
+      if (!DOCUMENT_STREAMS.includes(stream)) return Promise.reject(new Error(`unknown document stream ${JSON.stringify(stream)}`));
+      if (typeof listener !== "function") return Promise.reject(new TypeError(`document stream ${stream} requires a listener`));
+      pendingSubscribes += 1;
+      const opened = queue(() => port.subscribe(name, stream)).then((handle) => {
+        streamListeners.set(handle, listener);
+        const early = earlyStreamMessages.get(handle) ?? [];
+        earlyStreamMessages.delete(handle);
+        for (const message of early) listener(message);
+        return handle;
+      });
+      const settled = () => {
+        pendingSubscribes -= 1;
+        // The last reply has come, so the messages that are still unclaimed belong to closed subscriptions.
+        if (pendingSubscribes === 0) earlyStreamMessages.clear();
+      };
+      opened.then(settled, settled);
+      return opened.then((handle) => {
+        let closed = false;
+        return {
+          stream,
+          handle,
+          close() {
+            if (closed) return Promise.resolve();
+            closed = true;
+            streamListeners.delete(handle);
+            return queue(() => port.unsubscribe(name, handle));
+          },
+        };
+      });
+    },
     detach() {
       const done = queue(() => port.detach(name));
       detached = true;
       stopObserving();
       listeners.clear();
       messageListeners.clear();
+      streamListeners.clear();
+      earlyStreamMessages.clear();
       unlisten.then((stop) => stop());
       unlistenMessages.then((stop) => stop());
+      unlistenStreams.then((stop) => stop());
       return done;
     },
   };

@@ -11,6 +11,7 @@
 
 extern void nativeMessage(unsigned long long identifier, char *message);
 extern void nativeCommitted(unsigned long long identifier);
+extern void nativeTerminated(unsigned long long identifier);
 
 @interface SPNativeBridge : NSObject <WKScriptMessageHandler>
 @property unsigned long long identifier;
@@ -49,6 +50,7 @@ extern void nativeCommitted(unsigned long long identifier);
 // The WebContent process of a surface or a modal ended; the host records it as it records the page process of a window.
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)view {
     sp_webview_log_process_end((__bridge void *)view, "surface webview");
+    nativeTerminated(self.messageIdentifier);
 }
 - (void)dealloc {
     [_baseURL release];

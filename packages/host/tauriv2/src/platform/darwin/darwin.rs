@@ -288,6 +288,24 @@ impl Platform for Darwin {
     ) -> Result<(), String> {
         document::set_message(document, message)
     }
+    fn set_document_stream(
+        &self,
+        document: Handle,
+        stream: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String> {
+        document::set_stream(document, stream)
+    }
+    fn set_document_stream_on(
+        &self,
+        document: Handle,
+        stream: &str,
+        on: bool,
+    ) -> Result<bool, String> {
+        document::set_stream_on(document, stream, on)
+    }
+    fn ack_document_stream(&self, document: Handle, seq: u64) -> Result<bool, String> {
+        Ok(document::ack_stream(document, seq))
+    }
     fn post_document(&self, document: Handle, json: &str) -> Result<bool, String> {
         document::post(document, json)
     }

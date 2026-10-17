@@ -75,6 +75,8 @@ type WebviewOptions struct {
 	Receive func(identifier uint64, body string)
 	// Committed receives that the web view started to show a new document. It is called outside the UI thread.
 	Committed func(identifier uint64)
+	// Terminated receives that the WebContent process of the web view ended. It is called outside the UI thread.
+	Terminated func(identifier uint64)
 }
 
 // Input is the functions that receive the input over a surface.
@@ -356,6 +358,12 @@ type Platform interface {
 	// sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions).
 	CreateDocument(surface unsafe.Pointer, directory, folder, plugin string, changed func(state string)) (unsafe.Pointer, error)
 	SetDocumentEvent(document unsafe.Pointer, event func(value string)) error
+	// SetDocumentStream receives {"stream": "elements" or "requests", "message": {...}} for each stream message of the document.
+	SetDocumentStream(document unsafe.Pointer, stream func(value string)) error
+	// SetDocumentStreamOn turns the stream elements or requests on or off. It returns false for another stream or a closed document.
+	SetDocumentStreamOn(document unsafe.Pointer, stream string, on bool) bool
+	// AckDocumentStream acknowledges the element snapshot seq. It returns false for a seq that native has not sent.
+	AckDocumentStream(document unsafe.Pointer, seq uint64) bool
 	// SetDocumentMessage receives {"message": value} for each message of a plugin document and {"error": reason}.
 	SetDocumentMessage(document unsafe.Pointer, message func(value string)) error
 	// PostDocument posts the JSON value json to the current plugin document; false when there is none.

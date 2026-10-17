@@ -175,6 +175,24 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::set_document_message(document, message)
     }
+    fn set_document_stream(
+        &self,
+        document: Handle,
+        stream: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::set_document_stream(document, stream)
+    }
+    fn set_document_stream_on(
+        &self,
+        document: Handle,
+        stream: &str,
+        on: bool,
+    ) -> Result<bool, String> {
+        unsupported::set_document_stream_on(document, stream, on)
+    }
+    fn ack_document_stream(&self, document: Handle, seq: u64) -> Result<bool, String> {
+        unsupported::ack_document_stream(document, seq)
+    }
     fn post_document(&self, document: Handle, json: &str) -> Result<bool, String> {
         unsupported::post_document(document, json)
     }

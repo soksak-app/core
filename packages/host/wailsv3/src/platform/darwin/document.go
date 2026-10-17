@@ -13,6 +13,7 @@ package darwin
 extern void documentChanged(void *context, char *state);
 extern void documentEvent(void *context, char *event);
 extern void documentMessage(void *context, char *message);
+extern void documentStream(void *context, char *message);
 
 static void documentChangedBridge(void *context, const char *state) {
     documentChanged(context, (char *)state);
@@ -25,6 +26,10 @@ static void documentMessageBridge(void *context, const char *message) {
     documentMessage(context, (char *)message);
 }
 
+static void documentStreamBridge(void *context, const char *message) {
+    documentStream(context, (char *)message);
+}
+
 static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, uintptr_t context) {
     return sp_document_create(surface, store, package, plugin, documentChangedBridge, (void *)context);
 }
@@ -33,6 +38,9 @@ static void documentSetMessage(void *document, uintptr_t context) {
 }
 static void documentSetEvent(void *document, uintptr_t context) {
     sp_document_set_event(document, documentEventBridge, (void *)context);
+}
+static void documentSetStream(void *document, uintptr_t context) {
+    sp_document_set_stream(document, documentStreamBridge, (void *)context);
 }
 */
 import "C"
@@ -47,6 +55,7 @@ import (
 var documents = map[unsafe.Pointer]cgo.Handle{}
 var documentEvents = map[unsafe.Pointer]cgo.Handle{}
 var documentMessages = map[unsafe.Pointer]cgo.Handle{}
+var documentStreams = map[unsafe.Pointer]cgo.Handle{}
 
 //export documentChanged
 func documentChanged(context unsafe.Pointer, state *C.char) {
@@ -56,6 +65,11 @@ func documentChanged(context unsafe.Pointer, state *C.char) {
 
 //export documentMessage
 func documentMessage(context unsafe.Pointer, value *C.char) {
+	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+}
+
+//export documentStream
+func documentStream(context unsafe.Pointer, value *C.char) {
 	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
@@ -105,6 +119,23 @@ func (implementation) SetDocumentMessage(document unsafe.Pointer, message func(v
 	return nil
 }
 
+func (implementation) SetDocumentStream(document unsafe.Pointer, stream func(value string)) error {
+	receiver := cgo.NewHandle(stream)
+	C.documentSetStream(document, C.uintptr_t(receiver))
+	documentStreams[document] = receiver
+	return nil
+}
+
+func (implementation) SetDocumentStreamOn(document unsafe.Pointer, stream string, on bool) bool {
+	name := C.CString(stream)
+	defer C.free(unsafe.Pointer(name))
+	return bool(C.sp_document_stream_on(document, name, C.bool(on)))
+}
+
+func (implementation) AckDocumentStream(document unsafe.Pointer, seq uint64) bool {
+	return bool(C.sp_document_stream_ack(document, C.ulonglong(seq)))
+}
+
 func (implementation) PostDocument(document unsafe.Pointer, json string) bool {
 	value := C.CString(json)
 	defer C.free(unsafe.Pointer(value))
@@ -140,5 +171,9 @@ func (implementation) CloseDocument(document unsafe.Pointer) {
 	if receiver, ok := documentMessages[document]; ok {
 		receiver.Delete()
 		delete(documentMessages, document)
+	}
+	if receiver, ok := documentStreams[document]; ok {
+		receiver.Delete()
+		delete(documentStreams, document)
 	}
 }

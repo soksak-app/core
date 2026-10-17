@@ -56,6 +56,7 @@ function port() {
     onState: (fn) => { receive = fn; return Promise.resolve(() => { stopped = true; }); },
     post: async (name, message) => { calls.push(["post", name, message]); },
     onMessage: (fn) => { port.message = fn; return Promise.resolve(() => {}); },
+    onStream: (fn) => { port.stream = fn; return Promise.resolve(() => {}); },
   });
 }
 
@@ -253,4 +254,55 @@ test("a document handle posts messages and receives the messages of its own docu
   await region.detach();
   p.message("page", { type: "late" });
   assert.deepEqual(received, [{ type: "reply", id: 1 }]);
+});
+
+/** A port that also subscribes to the streams of the document. stream(document, handle, message) sends a stream message. */
+function streamPort(replies = {}) {
+  const p = port();
+  let nextHandle = 1;
+  let send = null;
+  p.subscribe = async (name, stream) => {
+    p.calls.push(["subscribe", name, stream]);
+    const handle = replies.handle ?? nextHandle++;
+    if (replies.beforeReply) replies.beforeReply(handle);
+    return handle;
+  };
+  p.unsubscribe = async (name, handle) => { p.calls.push(["unsubscribe", name, handle]); };
+  return p;
+}
+
+test("a stream subscription receives the messages of its handle and close ends it", async () => {
+  const f = fixture();
+  const p = streamPort();
+  const region = attachRegion(p, f.element, "page", f.window, { report() {} });
+  p.release();
+  const received = [];
+  const subscription = await region.subscribe("requests", (message) => received.push(message));
+  p.stream("page", 1, { type: "entries", entries: [{ url: "a" }], dropped: 0 });
+  p.stream("page", 2, { type: "entries", entries: [{ url: "other" }], dropped: 0 });
+  p.stream("other", 1, { type: "entries", entries: [], dropped: 0 });
+  assert.deepEqual(received, [{ type: "entries", entries: [{ url: "a" }], dropped: 0 }]);
+  await subscription.close();
+  assert.deepEqual(p.calls.filter(([kind]) => kind === "unsubscribe"), [["unsubscribe", "page", 1]]);
+  p.stream("page", 1, { type: "entries", entries: [{ url: "late" }], dropped: 0 });
+  assert.equal(received.length, 1);
+});
+
+test("a stream message that arrives before the subscribe reply reaches the listener", async () => {
+  const f = fixture();
+  const p = streamPort({ handle: 5, beforeReply: () => p.stream("page", 5, { type: "snapshot", seq: 1, nodes: [], total: 0, truncated: false }) });
+  const region = attachRegion(p, f.element, "page", f.window, { report() {} });
+  p.release();
+  const received = [];
+  await region.subscribe("elements", (message) => received.push(message));
+  assert.deepEqual(received, [{ type: "snapshot", seq: 1, nodes: [], total: 0, truncated: false }]);
+});
+
+test("an unknown stream is rejected before the host is called", async () => {
+  const f = fixture();
+  const p = streamPort();
+  const region = attachRegion(p, f.element, "page", f.window, { report() {} });
+  p.release();
+  await assert.rejects(region.subscribe("pixels", () => {}), /unknown document stream "pixels"/);
+  assert.deepEqual(p.calls.filter(([kind]) => kind === "subscribe"), []);
 });

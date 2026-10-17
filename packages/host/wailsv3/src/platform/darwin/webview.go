@@ -115,6 +115,16 @@ func nativeCommitted(identifier C.ulonglong) {
 	dispatcher.Commit(uint64(identifier))
 }
 
+// terminated receives the end of the WebContent process of the web views; the host passes the same function to all web views, as the dispatcher does.
+var terminated func(identifier uint64)
+
+//export nativeTerminated
+func nativeTerminated(identifier C.ulonglong) {
+	if receiver := terminated; receiver != nil {
+		go receiver(uint64(identifier))
+	}
+}
+
 //export nativeMessage
 func nativeMessage(identifier C.ulonglong, message *C.char) {
 	dispatcher.Message(uint64(identifier), C.GoString(message))
@@ -122,6 +132,7 @@ func nativeMessage(identifier C.ulonglong, message *C.char) {
 
 func (implementation) CreateWebview(window unsafe.Pointer, options platform.WebviewOptions) (unsafe.Pointer, error) {
 	dispatcher.Handle(options.Receive, options.Committed)
+	terminated = options.Terminated
 	script := C.CString(options.Script)
 	defer C.free(unsafe.Pointer(script))
 	name := C.CString(options.Name)

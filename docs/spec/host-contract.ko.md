@@ -160,6 +160,20 @@ fn invalid_json_closes_connection() {
 | `documents.registry.rejects-set-after-surface-removed` | 표면이 제거된 문서 키의 설정은 실패한다. | both |
 | `documents.registry.remove-reserved-returns-empty` | 예약만 된 문서 이름을 제거하면 빈 핸들로 성공한다. | both |
 | `documents.registry.remove-attached-returns-handle-once` | 연결된 문서 이름을 제거하면 핸들을 반환하고, 다시 제거하면 실패한다. | both |
+| `document.stream.subscribe-rejects-unknown-stream` | `elements`나 `requests`가 아닌 stream의 구독은 `unknown document stream "<name>"`으로 실패한다. | both |
+| `document.stream.unsubscribe-rejects-unknown-handle` | 문서가 가지지 않은 핸들을 끝내면 `document stream handle <handle> is not subscribed to document "<name>"`으로 실패한다. | both |
+| `document.stream.first-on-last-off` | stream의 첫 구독은 수집을 켜고, 같은 stream의 다음 구독은 다시 켜지 않으며, 마지막 구독을 제거하면 수집을 끈다. | both |
+| `document.stream.native-refusal-rejects-subscription` | native 계층이 stream 켜기를 거부하면 구독은 유지되지 않고 호출은 `document "<name>" does not accept stream "<stream>"`으로 실패한다. | both |
+| `document.stream.page-load-removes-subscriptions` | 구독한 표면 페이지의 새 문서는 그 구독을 제거하고, stream마다 구독자 수는 0으로 돌아간다. | wailsv3 only: Tauri host는 자식 webview의 commit 신호가 없어서 표면 페이지의 새 문서에서 문서 영역을 닫지 않으며, 제거는 F196.5.1로 추적한다 |
+| `document.stream.region-close-removes-subscriptions` | 문서 영역을 닫으면 그 구독을 제거하고, 구독자 수는 0으로 돌아가며, 요청 로그는 해제된다. | both |
+| `document.stream.request-log-replays-with-dropped` | 새 requests 구독은 먼저 최대 200개 항목의 로그를 받고, `dropped`는 마지막 reset 이후 로그가 버린 항목 수이며, 이후 항목은 순서대로 따른다. | both |
+| `document.stream.reset-clears-request-log` | requests stream의 reset은 로그와 `dropped` 수를 지우고, 그 stream의 구독에 `reset`을 보낸다. | both |
+| `document.stream.delivers-to-subscribing-surface-only` | stream의 메시지는 영역에서 그 stream의 구독에만 전달되며, 각 구독의 표면과 핸들을 함께 실어 보낸다. | both |
+| `document.stream.snapshot-acknowledged-after-delivery` | snapshot은 elements stream의 구독에 전달되고, 그 `seq`는 전달 뒤에 native로 확인되며, 남은 구독이 없어도 같다. | both |
+| `document.stream.rejects-unknown-message` | JSON이 아닌 stream 메시지는 `document stream message is not JSON`으로, 알 수 없는 stream은 `unknown document stream "<name>"`으로, 알 수 없는 메시지 type은 `document stream "<stream>" sent an unknown message type "<type>"`으로, `seq`가 없는 elements snapshot은 `document stream "elements" snapshot has no seq`로 실패한다. | both |
+| `document.stream.ack-refusal-names-seq` | native가 거부한 확인은 `document "<name>" stream <stream>: seq <seq> was not sent`로 실패하며, host는 이를 애플리케이션 로그에 쓴다. | both |
+| `document.stream.process-end-removes-subscriptions` | 구독한 표면 페이지의 web content process가 끝나면 그 구독을 제거하고, stream마다 구독자 수는 0으로 돌아간다. | wailsv3 only: Tauri host는 자식 webview의 종료 신호가 없어서, 제거는 F196.5.1로 추적한다 |
+| `document.stream.window-close-removes-subscriptions` | 구독한 표면이 있는 창을 닫으면 그 구독을 제거하고, 구독자 수는 0으로 돌아가며, 요청 로그는 해제된다. | both |
 | `document.plugin.folder` | 문서 영역의 plugin 폴더는 `plugins/installed.json`이 표면의 켜진 설치 plugin에 기록한 폴더다. 꺼졌거나 알 수 없는 plugin은 `plugin <id> is not installed and enabled`로 실패한다. | both |
 | `document.message.forward` | plugin 문서의 메시지 `{"message": value}`는 `document-message`의 payload `{surface, document, message}`가 되고, `{"error": reason}`은 host가 로그에 쓰는 이유가 되며, 둘 다 없는 값은 `document message <name> has neither message nor error`로 실패한다. | both |
 | `host.arguments.declared-only` | `--config-dir PATH`와 `--config-dir=PATH`는 설정 폴더를 정한다. 선언하지 않은 인자, 값 없는 flag, 두 번 준 flag는 그 문장으로 실패한다. | both |

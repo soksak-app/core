@@ -506,6 +506,20 @@ fn document_detach(webview: Webview, request: Argument<documents::Request>) -> R
     documents::detach(&webview, request)
 }
 
+/// Subscribes to a stream of a document region of the calling surface page and returns the handle.
+#[tauri::command(async)]
+fn document_subscribe(webview: Webview, request: Argument<documents::Request>) -> Result<documents::Subscription, String> {
+    let Argument(request) = request;
+    documents::subscribe(&webview, request)
+}
+
+/// Ends a stream subscription of a document region of the calling surface page.
+#[tauri::command(async)]
+fn document_unsubscribe(webview: Webview, request: Argument<documents::Request>) -> Result<(), String> {
+    let Argument(request) = request;
+    documents::unsubscribe(&webview, request)
+}
+
 /// Attaches an image region to an element of the calling surface page.
 #[tauri::command(async)]
 fn image_attach(webview: Webview, request: Argument<images::Request>) -> Result<(), String> {

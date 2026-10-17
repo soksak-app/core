@@ -68,6 +68,7 @@ function runtime({ documentAttach, imageAttach, place } = {}) {
     onState: () => Promise.resolve(() => {}),
     post: (...args) => { documentCalls.push(["post", ...args]); return Promise.resolve(); },
     onMessage: () => Promise.resolve(() => {}),
+    onStream: () => Promise.resolve(() => {}),
   };
   const image = {
     attach: (name, sidecar) => {

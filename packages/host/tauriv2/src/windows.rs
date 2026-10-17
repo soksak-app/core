@@ -44,6 +44,8 @@ pub(crate) struct WindowData {
     pub registrations: Mutex<Vec<(String, String, String)>>,
     /// The document regions of surface pages.
     pub documents: crate::documents::Documents,
+    /// The stream subscriptions of the document regions.
+    pub streams: crate::documents::Streams,
     /// The image regions of surface pages.
     pub images: crate::images::Images,
     /// The surface composition that the main page declared and that the host uses to check the authority of region
@@ -599,6 +601,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                         crate::surfaces::close_window_surfaces(
                             surfaces,
                             &natives.documents,
+                            &natives.streams,
                             &natives.images,
                             &mut |native| match native {
                                 crate::surfaces::WindowNative::Document(handle) => {

@@ -599,7 +599,7 @@ func (s *Surfaces) close() {
 			handles[id] = view.handle
 			views[view.handle] = view
 		}
-		err := CloseWindowSurfaces(handles, s.documents, s.images, func(native WindowNative) error {
+		err := CloseWindowSurfaces(handles, s.documents, s.streams, s.images, func(native WindowNative) error {
 			switch native.Kind {
 			case WindowNativeDocument:
 				system.CloseDocument(native.Handle)

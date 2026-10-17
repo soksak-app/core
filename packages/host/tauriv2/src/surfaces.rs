@@ -1082,6 +1082,7 @@ pub fn take_removed_surfaces(
 pub fn close_window_surfaces(
     surfaces: HashMap<String, Handle>,
     documents: &documents::Documents,
+    streams: &documents::Streams,
     images: &images::Images,
     close: &mut dyn FnMut(WindowNative) -> Result<(), String>,
 ) -> Result<(), String> {
@@ -1089,6 +1090,8 @@ pub fn close_window_surfaces(
     surfaces.sort();
     let mut failures = Vec::new();
     for (surface, handle) in surfaces {
+        // The streams end with the surface; the closed regions need no turn-off.
+        streams.remove_surface(&surface);
         let natives = documents
             .remove_surface(&surface)
             .into_iter()

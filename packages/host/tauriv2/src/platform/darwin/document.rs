@@ -18,6 +18,9 @@ unsafe extern "C" {
     ) -> *mut c_void;
     fn sp_document_set_event(document: *mut c_void, event: Event, context: *mut c_void);
     fn sp_document_set_message(document: *mut c_void, message: Event, context: *mut c_void);
+    fn sp_document_set_stream(document: *mut c_void, stream: Event, context: *mut c_void);
+    fn sp_document_stream_on(document: *mut c_void, stream: *const c_char, on: bool) -> bool;
+    fn sp_document_stream_ack(document: *mut c_void, seq: u64) -> bool;
     fn sp_document_post(document: *mut c_void, json: *const c_char) -> bool;
     fn sp_document_load(document: *mut c_void, url: *const c_char) -> bool;
     fn sp_document_zoom(document: *mut c_void, zoom: f64) -> bool;
@@ -45,6 +48,8 @@ thread_local! {
     static EVENTS: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
     static MESSAGES: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    static STREAMS: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
@@ -121,6 +126,25 @@ pub fn set_message(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Res
     Ok(())
 }
 
+/// Receives the stream messages of the document as {"stream", "message"}.
+pub fn set_stream(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Result<(), String> {
+    let receiver = Box::into_raw(Box::new(EventReceiver(receive)));
+    unsafe { sp_document_set_stream(document as *mut c_void, event, receiver as *mut c_void) };
+    STREAMS.with(|all| all.borrow_mut().insert(document, receiver));
+    Ok(())
+}
+
+/// Turns the stream elements or requests on or off. It is false for another stream or a closed document.
+pub fn set_stream_on(document: Handle, stream: &str, on: bool) -> Result<bool, String> {
+    let stream = CString::new(stream).map_err(|e| e.to_string())?;
+    Ok(unsafe { sp_document_stream_on(document as *mut c_void, stream.as_ptr(), on) })
+}
+
+/// Acknowledges the element snapshot seq. It is false for a seq that native has not sent.
+pub fn ack_stream(document: Handle, seq: u64) -> bool {
+    unsafe { sp_document_stream_ack(document as *mut c_void, seq) }
+}
+
 /// Posts the JSON value json to the current plugin document; false when there is none.
 pub fn post(document: Handle, json: &str) -> Result<bool, String> {
     let json = CString::new(json).map_err(|e| e.to_string())?;
@@ -165,6 +189,9 @@ pub fn close(document: Handle) {
         drop(unsafe { Box::from_raw(receiver) });
     }
     if let Some(receiver) = MESSAGES.with(|all| all.borrow_mut().remove(&document)) {
+        drop(unsafe { Box::from_raw(receiver) });
+    }
+    if let Some(receiver) = STREAMS.with(|all| all.borrow_mut().remove(&document)) {
         drop(unsafe { Box::from_raw(receiver) });
     }
 }

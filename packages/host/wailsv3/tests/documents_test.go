@@ -2,6 +2,7 @@ package host_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -185,5 +186,303 @@ func TestDispatcherHandlesACommitBeforeTheMessagesAfterIt(t *testing.T) {
 	close(release)
 	if first, second := <-events, <-events; first != "commit" || second != "place" {
 		t.Fatalf("handled %q then %q, want the commit then its message", first, second)
+	}
+}
+
+// streamKey is the document region of the tests of the stream subscriptions.
+func streamKey(surface, name string) host.DocumentKey {
+	return host.DocumentKey{Surface: surface, Name: name}
+}
+
+// jsonEqual fails the test when got does not hold the same JSON value as want.
+func jsonEqual(t *testing.T, got json.RawMessage, want string) {
+	t.Helper()
+	var gotValue, wantValue any
+	if err := json.Unmarshal(got, &gotValue); err != nil {
+		t.Fatalf("got %s is not JSON: %v", got, err)
+	}
+	if err := json.Unmarshal([]byte(want), &wantValue); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gotValue, wantValue) {
+		t.Fatalf("got %s, want %s", got, want)
+	}
+}
+
+// contract: document.stream.subscribe-rejects-unknown-stream
+func TestDocumentStreamSubscribeRejectsAnUnknownStream(t *testing.T) {
+	streams := host.NewDocumentStreams()
+	_, _, _, err := streams.Subscribe(streamKey("tab-1", "page"), "pixels")
+	if err == nil || err.Error() != `unknown document stream "pixels"` {
+		t.Fatalf("subscribe: %v", err)
+	}
+}
+
+// contract: document.stream.unsubscribe-rejects-unknown-handle
+func TestDocumentStreamUnsubscribeRejectsAHandleOfAnotherDocument(t *testing.T) {
+	streams := host.NewDocumentStreams()
+	page := streamKey("tab-1", "page")
+	handle, _, _, err := streams.Subscribe(page, "elements")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := streams.Unsubscribe(streamKey("tab-1", "side"), handle); err == nil ||
+		err.Error() != fmt.Sprintf(`document stream handle %d is not subscribed to document "side"`, handle) {
+		t.Fatalf("another document: %v", err)
+	}
+	if _, err := streams.Unsubscribe(page, handle+100); err == nil {
+		t.Fatal("an unknown handle was accepted")
+	}
+}
+
+// contract: document.stream.first-on-last-off
+func TestDocumentStreamTurnsCollectionOnAtTheFirstSubscriptionAndOffAtTheLast(t *testing.T) {
+	streams := host.NewDocumentStreams()
+	page := streamKey("tab-1", "page")
+	first, effects, _, err := streams.Subscribe(page, "requests")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []host.StreamEffect{{Key: page, Stream: "requests", On: true}}; !reflect.DeepEqual(effects, want) {
+		t.Fatalf("first subscription effects %v, want %v", effects, want)
+	}
+	second, effects, _, err := streams.Subscribe(page, "requests")
+	if err != nil || len(effects) != 0 {
+		t.Fatalf("second subscription effects %v, %v", effects, err)
+	}
+	if n := streams.Subscribers(page, "requests"); n != 2 {
+		t.Fatalf("subscribers %d, want 2", n)
+	}
+	if effects, err := streams.Unsubscribe(page, first); err != nil || len(effects) != 0 {
+		t.Fatalf("first removal effects %v, %v", effects, err)
+	}
+	effects, err = streams.Unsubscribe(page, second)
+	if err != nil || !reflect.DeepEqual(effects, []host.StreamEffect{{Key: page, Stream: "requests", On: false}}) {
+		t.Fatalf("last removal effects %v, %v", effects, err)
+	}
+	if n := streams.Subscribers(page, "requests"); n != 0 {
+		t.Fatalf("subscribers after the last removal %d", n)
+	}
+}
+
+// contract: document.stream.native-refusal-rejects-subscription
+func TestDocumentStreamAbandonedSubscriptionIsNotKept(t *testing.T) {
+	streams := host.NewDocumentStreams()
+	page := streamKey("tab-1", "page")
+	handle, _, _, err := streams.Subscribe(page, "requests")
+	if err != nil {
+		t.Fatal(err)
+	}
+	streams.Abandon(handle)
+	if n := streams.Subscribers(page, "requests"); n != 0 {
+		t.Fatalf("subscribers after the refusal %d", n)
+	}
+	if _, err := streams.Unsubscribe(page, handle); err == nil {
+		t.Fatal("an abandoned handle was ended")
+	}
+}
+
+// contract: document.stream.page-load-removes-subscriptions, document.stream.region-close-removes-subscriptions
+func TestDocumentStreamRemovalEndsSubscriptionsAndReleasesTheLog(t *testing.T) {
+	streams := host.NewDocumentStreams()
+	page := streamKey("tab-1", "page")
+	side := streamKey("tab-1", "side")
+	other := streamKey("tab-2", "page")
+	for _, key := range []host.DocumentKey{page, side, other} {
+		for _, stream := range []string{"elements", "requests"} {
+			if _, _, _, err := streams.Subscribe(key, stream); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	streams.RemoveSurface("tab-1")
+	for _, key := range []host.DocumentKey{page, side} {
+		for _, stream := range []string{"elements", "requests"} {
+			if n := streams.Subscribers(key, stream); n != 0 {
+				t.Fatalf("%v %s: %d subscribers after the page loaded a new document", key, stream, n)
+			}
+		}
+	}
+	if n := streams.Subscribers(other, "requests"); n != 1 {
+		t.Fatalf("another surface lost its subscription: %d", n)
+	}
+	streams.RemoveRegion(other)
+	if n := streams.Subscribers(other, "requests"); n != 0 {
+		t.Fatalf("subscribers after the region closed: %d", n)
+	}
+	if entries, dropped := streams.LogState(other); entries != 0 || dropped != 0 {
+		t.Fatalf("log after the region closed: %d entries, %d dropped", entries, dropped)
+	}
+}
+
+// contract: document.stream.request-log-replays-with-dropped
+func TestDocumentRequestLogReplaysItsLastEntriesWithTheDroppedCount(t *testing.T) {
+	streams := host.NewDocumentStreams()
+	page := streamKey("tab-1", "page")
+	if _, _, _, err := streams.Subscribe(page, "requests"); err != nil {
+		t.Fatal(err)
+	}
+	var batch []string
+	for i := 0; i < 250; i++ {
+		batch = append(batch, fmt.Sprintf(`{"url":"e%d"}`, i))
+	}
+	result, err := streams.Deliver(page, `{"stream":"requests","message":{"type":"entries","entries":[`+strings.Join(batch, ",")+`]}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Deliveries) != 1 || result.Ack {
+		t.Fatalf("deliveries %v ack %v", result.Deliveries, result.Ack)
+	}
+	entries, dropped := streams.LogState(page)
+	if entries != 200 || dropped != 50 {
+		t.Fatalf("log %d entries, %d dropped; want 200 and 50", entries, dropped)
+	}
+	_, _, initial, err := streams.Subscribe(page, "requests")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var replay struct {
+		Type    string            `json:"type"`
+		Entries []json.RawMessage `json:"entries"`
+		Dropped int64             `json:"dropped"`
+	}
+	if err := json.Unmarshal(initial, &replay); err != nil {
+		t.Fatal(err)
+	}
+	if replay.Type != "entries" || replay.Dropped != 50 || len(replay.Entries) != 200 ||
+		string(replay.Entries[0]) != `{"url":"e50"}` || string(replay.Entries[199]) != `{"url":"e249"}` {
+		t.Fatalf("replay type %q dropped %d entries %d", replay.Type, replay.Dropped, len(replay.Entries))
+	}
+	result, err = streams.Deliver(page, `{"stream":"requests","message":{"type":"entries","entries":[{"url":"e250"}]}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Deliveries) != 2 {
+		t.Fatalf("deliveries to both subscriptions: %d", len(result.Deliveries))
+	}
+	jsonEqual(t, result.Deliveries[1].Message, `{"type":"entries","entries":[{"url":"e250"}],"dropped":51}`)
+}
+
+// contract: document.stream.reset-clears-request-log
+func TestDocumentStreamResetClearsTheRequestLog(t *testing.T) {
+	streams := host.NewDocumentStreams()
+	page := streamKey("tab-1", "page")
+	if _, _, _, err := streams.Subscribe(page, "requests"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := streams.Deliver(page, `{"stream":"requests","message":{"type":"entries","entries":[{"url":"a"},{"url":"b"}]}}`); err != nil {
+		t.Fatal(err)
+	}
+	result, err := streams.Deliver(page, `{"stream":"requests","message":{"type":"reset"}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Deliveries) != 1 {
+		t.Fatalf("reset deliveries %d", len(result.Deliveries))
+	}
+	jsonEqual(t, result.Deliveries[0].Message, `{"type":"reset"}`)
+	if entries, dropped := streams.LogState(page); entries != 0 || dropped != 0 {
+		t.Fatalf("log after reset: %d entries, %d dropped", entries, dropped)
+	}
+	_, _, initial, err := streams.Subscribe(page, "requests")
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonEqual(t, initial, `{"type":"entries","entries":[],"dropped":0}`)
+}
+
+// contract: document.stream.delivers-to-subscribing-surface-only
+func TestDocumentStreamMessagesReachOnlyTheSubscriptionsOfTheirStream(t *testing.T) {
+	streams := host.NewDocumentStreams()
+	page := streamKey("tab-1", "page")
+	other := streamKey("tab-2", "page")
+	requests, _, _, _ := streams.Subscribe(page, "requests")
+	elements, _, _, _ := streams.Subscribe(page, "elements")
+	foreign, _, _, _ := streams.Subscribe(other, "requests")
+	result, err := streams.Deliver(page, `{"stream":"requests","message":{"type":"entries","entries":[{"url":"a"}]}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Deliveries) != 1 || result.Deliveries[0].Surface != "tab-1" || result.Deliveries[0].Handle != requests {
+		t.Fatalf("deliveries %+v, want only handle %d of tab-1", result.Deliveries, requests)
+	}
+	if result.Deliveries[0].Handle == elements || result.Deliveries[0].Handle == foreign {
+		t.Fatal("a message reached another stream or another document")
+	}
+}
+
+// contract: document.stream.snapshot-acknowledged-after-delivery
+func TestDocumentStreamSnapshotIsAcknowledgedAfterItsDelivery(t *testing.T) {
+	streams := host.NewDocumentStreams()
+	page := streamKey("tab-1", "page")
+	handle, _, _, err := streams.Subscribe(page, "elements")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := `{"stream":"elements","message":{"type":"snapshot","seq":3,"nodes":[{"depth":0,"tag":"html","id":"","class":""}],"total":1,"truncated":false}}`
+	result, err := streams.Deliver(page, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Ack || result.Seq != 3 || len(result.Deliveries) != 1 || result.Deliveries[0].Handle != handle {
+		t.Fatalf("snapshot result %+v", result)
+	}
+	jsonEqual(t, result.Deliveries[0].Message, `{"type":"snapshot","seq":3,"nodes":[{"depth":0,"tag":"html","id":"","class":""}],"total":1,"truncated":false}`)
+	if _, err := streams.Unsubscribe(page, handle); err != nil {
+		t.Fatal(err)
+	}
+	result, err = streams.Deliver(page, `{"stream":"elements","message":{"type":"snapshot","seq":4,"nodes":[],"total":0,"truncated":false}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Ack || result.Seq != 4 || len(result.Deliveries) != 0 {
+		t.Fatalf("snapshot without subscriptions %+v", result)
+	}
+}
+
+// contract: document.stream.rejects-unknown-message
+func TestDocumentStreamRejectsInvalidMessages(t *testing.T) {
+	streams := host.NewDocumentStreams()
+	page := streamKey("tab-1", "page")
+	if _, _, _, err := streams.Subscribe(page, "elements"); err != nil {
+		t.Fatal(err)
+	}
+	for body, want := range map[string]string{
+		`not json`: "document stream message is not JSON",
+		`{"stream":"pixels","message":{"type":"reset"}}`:      `unknown document stream "pixels"`,
+		`{"stream":"requests","message":{"type":"pixels"}}`:   `document stream "requests" sent an unknown message type "pixels"`,
+		`{"stream":"elements","message":{"type":"snapshot"}}`: `document stream "elements" snapshot has no seq`,
+	} {
+		if _, err := streams.Deliver(page, body); err == nil || err.Error() != want {
+			t.Fatalf("%s: %v, want %s", body, err, want)
+		}
+	}
+}
+
+// contract: document.stream.process-end-removes-subscriptions, document.stream.window-close-removes-subscriptions
+func TestDocumentStreamEndedSurfaceOrWindowLosesItsSubscriptions(t *testing.T) {
+	streams := host.NewDocumentStreams()
+	page := streamKey("tab-1", "page")
+	if _, _, _, err := streams.Subscribe(page, "requests"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := streams.Deliver(page, `{"stream":"requests","message":{"type":"entries","entries":[{"url":"a"}]}}`); err != nil {
+		t.Fatal(err)
+	}
+	// The removal of a surface is the removal of the subscriptions of its page process and of its window.
+	streams.RemoveSurface("tab-1")
+	if n := streams.Subscribers(page, "requests"); n != 0 {
+		t.Fatalf("subscribers after the process ended: %d", n)
+	}
+	if entries, dropped := streams.LogState(page); entries != 0 || dropped != 0 {
+		t.Fatalf("log after the process ended: %d entries, %d dropped", entries, dropped)
+	}
+}
+
+// contract: document.stream.ack-refusal-names-seq
+func TestDocumentStreamAckRefusalNamesTheDocumentStreamAndSeq(t *testing.T) {
+	err := host.StreamAckRefusal(streamKey("tab-1", "page"), "elements", 7)
+	if err == nil || err.Error() != `document "page" stream elements: seq 7 was not sent` {
+		t.Fatalf("refusal: %v", err)
 	}
 }
