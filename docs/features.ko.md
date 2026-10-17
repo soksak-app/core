@@ -1007,7 +1007,7 @@
 
 - [~] F193 — P0: vt sidecar에 --service-dir 뒤의 인자를 넘기지 않게 한다. 입력: 다른 컴퓨터의 로그(2026-10-15)에 sidecar 시작이 `unexpected argument after --service-dir`(sidecar의 인자 해석기)로 곧바로 끝나기를 반복하고, page가 시작 터미널 tab마다 `surface <tab> mount failed: sidecar @soksak/sidecar-vt-alacritty: service exited before endpoint`를 기록하다가 이후 시작이 성공한다. 기대: 서비스의 시작 인자가 모든 시작 경로에서 sidecar release의 해석기와 맞고, 실패 경로를 두 host의 소유 시험에서 Red로 재현한다.
   - [o] F193.1 — P0: 명세: `sidecar.json`의 `protocol`은 host와 sidecar 사이 interface, 곧 시작 인자와 메시지의 버전이며 2다. 시작 인자가 바뀌면 그것을 올린다. host는 다른 protocol의 sidecar를 애플리케이션 시작이 아니라 그 sidecar의 시작에서 `sidecar <name> <version>: protocol <found> is not 2`로 거부하므로, 애플리케이션은 시작되고 업데이트 목록이 plugin을 보인다. 설치는 protocol 2의 sidecar 버전만 고르고, 업데이트 목록은 sidecar가 다른 protocol인 설치된 plugin을 나열한다. 원인: 모든 sidecar가 `protocol: 1`을 유지한 채 `--log-dir`가 시작 인자에 더해져, 0.0.9 이전의 vt release가 검사를 통과하고 모든 시작에 실패했다. terminal 0.0.4부터 0.0.10은 `engines.soksak` `*`를 선언한다.
-  - [ ] F193.2 — P0: 두 host가 protocol 1의 sidecar를 그 시작에서 F193.1의 오류로 거부한다. sidecar 시험에서 Red와 Green.
+  - [o] F193.2 — P0: 두 host가 protocol 1의 sidecar를 그 시작에서 F193.1의 오류로 거부한다. sidecar 시험에서 Red와 Green.
   - [ ] F193.3 — P0: `sok`이 protocol 2의 sidecar 버전만 고르고, sidecar가 다른 protocol인 설치된 plugin을 호환되지 않음으로 나열한다. Red와 Green.
   - [ ] F193.4 — P0: files, shell, vt sidecar의 protocol 2 release, 각각 자기 저장소 체크리스트에서, 그리고 그것을 요구하는 plugin release.
   - [ ] F193.5 — P0: F193.2와 F193.3을 담은 core release, F193.4의 release와 함께 게시한다.

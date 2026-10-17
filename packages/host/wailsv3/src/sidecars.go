@@ -142,7 +142,10 @@ type Sidecars struct {
 	declarations sync.RWMutex
 	declared     map[string]string
 	// versions holds the version that installed.json records for each declared sidecar.
-	versions   map[string]string
+	versions map[string]string
+	// protocols holds the protocol of the sidecar.json of each declared sidecar; a sidecar of another protocol than 2 is
+	// declared but not started (docs/spec/sidecars.md#declaration-and-startup).
+	protocols  map[string]int
 	persistent map[string]bool
 	running    map[string]*sidecar
 	// starting is a sidecar that is starting. The start happens outside the lock, and when it ends, the channel is closed.
@@ -200,6 +203,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 	c := &Sidecars{
 		declared:        map[string]string{},
 		versions:        map[string]string{},
+		protocols:       map[string]int{},
 		persistent:      map[string]bool{},
 		running:         map[string]*sidecar{},
 		starting:        map[string]chan struct{}{},
@@ -280,6 +284,7 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 	defer c.declarations.Unlock()
 	declared := map[string]string{}
 	versions := map[string]string{}
+	protocols := map[string]int{}
 	persistent := map[string]bool{}
 	basenames := map[string]string{}
 	for _, item := range declarations {
@@ -297,9 +302,6 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 			strings.Contains("/"+sidecar.Executable+"/", "/../") {
 			return nil, fmt.Errorf("%s: executable must be a path inside the package", file)
 		}
-		if sidecar.Protocol != 1 {
-			return nil, fmt.Errorf("%s: protocol must be 1", file)
-		}
 		if sidecar.Transport != "" && sidecar.Transport != "persistent" {
 			return nil, fmt.Errorf("%s: transport %s is not supported", file, sidecar.Transport)
 		}
@@ -316,6 +318,7 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 		}
 		declared[name] = filepath.Join(item.Folder, filepath.FromSlash(sidecar.Executable))
 		versions[name] = item.Version
+		protocols[name] = sidecar.Protocol
 	}
 	changed := []string{}
 	for name, program := range c.declared {
@@ -323,7 +326,7 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 			changed = append(changed, name)
 		}
 	}
-	c.declared, c.versions, c.persistent, c.basenames = declared, versions, persistent, basenames
+	c.declared, c.versions, c.protocols, c.persistent, c.basenames = declared, versions, protocols, persistent, basenames
 	return changed, nil
 }
 
@@ -333,6 +336,17 @@ func (c *Sidecars) declaration(name string) (program string, persistent, ok bool
 	defer c.declarations.RUnlock()
 	program, ok = c.declared[name]
 	return program, c.persistent[name], ok
+}
+
+// supported fails when the declared sidecar name has another protocol than 2, the version of the start arguments and
+// messages of this host. It can be called independently of c.mu.
+func (c *Sidecars) supported(name string) error {
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
+	if protocol := c.protocols[name]; protocol != 2 {
+		return fmt.Errorf("sidecar %s %s: protocol %d is not 2", name, c.versions[name], protocol)
+	}
+	return nil
 }
 
 // Send passes body that came from the surface surface of the owner window to the sidecar name.
@@ -1053,6 +1067,9 @@ func (c *Sidecars) launch(name string) (*sidecar, error) {
 	if !ok {
 		return nil, fmt.Errorf("sidecar %s is not declared by any plugin", name)
 	}
+	if err := c.supported(name); err != nil {
+		return nil, err
+	}
 	if persistent {
 		return c.processPersistent(name)
 	}
@@ -1227,7 +1244,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		// and the common single creation path is entered.
 		return c.processPersistent(name)
 	}
-	if endpoint.Protocol != 1 {
+	if endpoint.Protocol != 2 {
 		return nil, fmt.Errorf("sidecar %s: service protocol %d is not supported", name, endpoint.Protocol)
 	}
 	if endpoint.PID == 0 || endpoint.Socket == "" || endpoint.Token == "" {
@@ -1238,7 +1255,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		return nil, fmt.Errorf("sidecar %s: connect authenticated service: %w", name, err)
 	}
 	reader := bufio.NewReader(conn)
-	hello, err := json.Marshal(map[string]any{"operation": "hello", "protocol": 1, "token": endpoint.Token, "client": c.configDir})
+	hello, err := json.Marshal(map[string]any{"operation": "hello", "protocol": 2, "token": endpoint.Token, "client": c.configDir})
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("sidecar %s: encode hello: %w", name, err)
@@ -1284,7 +1301,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		}
 		return nil, fmt.Errorf("sidecar %s: authentication handshake failed: %s", name, response.Error)
 	}
-	if response.Protocol == nil || *response.Protocol != 1 {
+	if response.Protocol == nil || *response.Protocol != 2 {
 		conn.Close()
 		return nil, fmt.Errorf("sidecar %s: service protocol mismatch in hello response", name)
 	}

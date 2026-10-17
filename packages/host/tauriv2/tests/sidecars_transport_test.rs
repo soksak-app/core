@@ -84,7 +84,7 @@ const ECHO: &str = "@fixture/sidecar-echo";
 /// The upper limit that ends a stalled check. Success is decided by the received event and not by this time.
 const STALL: Duration = Duration::from_secs(120);
 
-// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one
+// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-two
 #[test]
 fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     let executable_directory = tempfile::tempdir().unwrap();
@@ -94,7 +94,7 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     let socket_path = service_directory.join("s.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "test-token"
@@ -124,11 +124,11 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
                 reader.read_line(&mut line).unwrap();
                 let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
                 assert_eq!(hello["operation"], "hello");
-                assert_eq!(hello["protocol"], 1);
+                assert_eq!(hello["protocol"], 2);
                 assert_eq!(hello["token"], "test-token");
                 stream
                     .write_all(
-                        br#"{"operation":"hello","protocol":1,"ok":true}
+                        br#"{"operation":"hello","protocol":2,"ok":true}
 "#,
                     )
                     .unwrap();
@@ -145,7 +145,7 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
         }
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let first = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -169,7 +169,7 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     service.join().unwrap();
 }
 
-// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
+// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-two, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
 #[test]
 fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     let executable_directory = tempfile::tempdir().unwrap();
@@ -179,7 +179,7 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     let socket_path = service_directory.join("reconnect.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "reconnect-token"
@@ -208,11 +208,11 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
                 reader.read_line(&mut line).unwrap();
                 let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
                 assert_eq!(hello["operation"], "hello");
-                assert_eq!(hello["protocol"], 1);
+                assert_eq!(hello["protocol"], 2);
                 assert_eq!(hello["token"], "reconnect-token");
                 stream
                     .write_all(
-                        br#"{"operation":"hello","protocol":1,"ok":true}
+                        br#"{"operation":"hello","protocol":2,"ok":true}
 "#,
                     )
                     .unwrap();
@@ -248,7 +248,7 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
         }
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let first = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -339,7 +339,7 @@ fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_end
     let socket_path = service_directory.join("protocol-mismatch.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "protocol-mismatch-token"
@@ -356,12 +356,12 @@ fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_end
         assert_eq!(hello["operation"], "hello");
         writeln!(
             stream,
-            "{{\"operation\":\"hello\",\"protocol\":2,\"ok\":true}}"
+            "{{\"operation\":\"hello\",\"protocol\":3,\"ok\":true}}"
         )
         .unwrap();
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -389,7 +389,7 @@ fn persistent_transport_rejects_a_failed_hello() {
     let socket_path = service_directory.join("auth.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "auth-token"
@@ -411,7 +411,7 @@ fn persistent_transport_rejects_a_failed_hello() {
         .unwrap();
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -436,7 +436,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     let listener = UnixListener::bind(&socket_path).unwrap();
     let token = "replacement-token";
     let replacement_endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": 1,
         "socket": socket_path,
         "token": token
@@ -451,7 +451,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     std::fs::write(
         service_directory.join("endpoint.json"),
         serde_json::to_vec(&serde_json::json!({
-            "protocol": 1,
+            "protocol": 2,
             "pid": stale_pid,
             "socket": socket_path,
             "token": "stale-token"
@@ -467,7 +467,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     )
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -483,7 +483,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
         assert_eq!(hello["token"], token);
         stream
             .write_all(
-                br#"{"operation":"hello","protocol":1,"ok":true}
+                br#"{"operation":"hello","protocol":2,"ok":true}
 "#,
             )
             .unwrap();
@@ -526,7 +526,7 @@ fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacemen
     std::fs::write(
         &endpoint_path,
         serde_json::to_vec(&serde_json::json!({
-            "protocol": 1,
+            "protocol": 2,
             "pid": std::process::id(),
             "socket": missing_socket,
             "token": "live-token"
@@ -535,7 +535,7 @@ fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacemen
     )
     .unwrap();
     let original = std::fs::read(&endpoint_path).unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -560,7 +560,7 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
     let socket_path = service_directory.join("shutdown.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "shutdown-token"
@@ -584,7 +584,7 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
         assert_eq!(hello["token"], "shutdown-token");
         stream
             .write_all(
-                br#"{"operation":"hello","protocol":1,"ok":true}
+                br#"{"operation":"hello","protocol":2,"ok":true}
 "#,
             )
             .unwrap();
@@ -617,7 +617,7 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
         writeln!(stream, "{}", shutdown_reply).unwrap();
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -660,7 +660,7 @@ fn persistent_stop_does_not_log_its_own_close_as_a_read_error() {
     let socket_path = service_directory.join("own.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "own-token"
@@ -684,7 +684,7 @@ fn persistent_stop_does_not_log_its_own_close_as_a_read_error() {
             let request: serde_json::Value = serde_json::from_str(&line).unwrap();
             let reply = match request["operation"].as_str() {
                 Some("hello") => {
-                    serde_json::json!({"operation": "hello", "protocol": 1, "ok": true})
+                    serde_json::json!({"operation": "hello", "protocol": 2, "ok": true})
                 }
                 Some("close-owner") => {
                     serde_json::json!({"operation": "closed-owner", "request": request["request"], "ok": true})
@@ -698,7 +698,7 @@ fn persistent_stop_does_not_log_its_own_close_as_a_read_error() {
         }
         released.recv().unwrap();
     });
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -723,7 +723,7 @@ fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {
     let socket_path = service_directory.join("late.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "late-token"
@@ -759,7 +759,7 @@ fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {
             seen.push(operation.clone());
             match operation.as_str() {
                 "hello" => {
-                    writeln!(stream, r#"{{"operation":"hello","protocol":1,"ok":true}}"#).unwrap()
+                    writeln!(stream, r#"{{"operation":"hello","protocol":2,"ok":true}}"#).unwrap()
                 }
                 "close-owner" => {
                     writeln!(stream, r#"{{"surface":"surface","closed":true}}"#).unwrap();
@@ -784,7 +784,7 @@ fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {
         }
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -817,7 +817,7 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
     let socket_path = service_directory.join("retain.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "retain-token"
@@ -841,7 +841,7 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
             let request: serde_json::Value = serde_json::from_str(&line).unwrap();
             let reply = match request["operation"].as_str() {
                 Some("hello") => {
-                    serde_json::json!({"operation": "hello", "protocol": 1, "ok": true})
+                    serde_json::json!({"operation": "hello", "protocol": 2, "ok": true})
                 }
                 Some("retain") => {
                     answered += 1;
@@ -866,7 +866,7 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
         }
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -916,7 +916,7 @@ fn persistent_retain_after_stop_sends_nothing() {
     let listener = UnixListener::bind(&socket_path).unwrap();
     listener.set_nonblocking(true).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "retain-token"
@@ -926,7 +926,7 @@ fn persistent_retain_after_stop_sends_nothing() {
         serde_json::to_vec(&endpoint).unwrap(),
     )
     .unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::<FakeOwner>::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -948,7 +948,7 @@ fn persistent_retain_after_stop_sends_nothing() {
 fn persistent_retain_skips_a_service_without_endpoint() {
     let executable_directory = tempfile::tempdir().unwrap();
     let config_directory = tempfile::tempdir().unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::<FakeOwner>::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -968,7 +968,7 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
     let socket_path = service_directory.join("revive.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "revive-token"
@@ -994,7 +994,7 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
                 assert_eq!(hello["operation"], "hello");
                 stream
                     .write_all(
-                        br#"{"operation":"hello","protocol":1,"ok":true}
+                        br#"{"operation":"hello","protocol":2,"ok":true}
 "#,
                     )
                     .unwrap();
@@ -1021,7 +1021,7 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
         }
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1065,7 +1065,7 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
     // is alive, and the restart tries to connect to the same socket and is refused.
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "failed-revive-token"
@@ -1084,7 +1084,7 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
         assert_eq!(hello["operation"], "hello");
         stream
             .write_all(
-                br#"{"operation":"hello","protocol":1,"ok":true}
+                br#"{"operation":"hello","protocol":2,"ok":true}
 "#,
             )
             .unwrap();
@@ -1095,7 +1095,7 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
         drop(listener);
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1156,7 +1156,7 @@ fn expect_connection_failure(payload: Vec<u8>, reason: &str) {
     let socket_path = service_directory.join("bad-line.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1, "pid": std::process::id(), "socket": socket_path, "token": "bad-line-token"
+        "protocol": 2, "pid": std::process::id(), "socket": socket_path, "token": "bad-line-token"
     });
     std::fs::write(
         service_directory.join("endpoint.json"),
@@ -1169,7 +1169,7 @@ fn expect_connection_failure(payload: Vec<u8>, reason: &str) {
         let mut line = String::new();
         reader.read_line(&mut line).unwrap();
         stream
-            .write_all(b"{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}\n")
+            .write_all(b"{\"operation\":\"hello\",\"protocol\":2,\"ok\":true}\n")
             .unwrap();
         line.clear();
         reader.read_line(&mut line).unwrap();
@@ -1180,7 +1180,7 @@ fn expect_connection_failure(payload: Vec<u8>, reason: &str) {
         // When the host closes the connection, the read ends with EOF.
         std::io::copy(&mut reader, &mut std::io::sink()).unwrap();
     });
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1245,7 +1245,7 @@ fn persistent_start_does_not_delay_other_sidecars() {
     let socket_path = service_directory.join("start.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "start-token"
@@ -1265,7 +1265,7 @@ fn persistent_start_does_not_delay_other_sidecars() {
         thread::sleep(Duration::from_millis(500));
         writeln!(
             stream,
-            "{{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}}"
+            "{{\"operation\":\"hello\",\"protocol\":2,\"ok\":true}}"
         )
         .unwrap();
         // Discard the received lines until the connection ends.
@@ -1278,11 +1278,11 @@ fn persistent_start_does_not_delay_other_sidecars() {
     let fixture: Files = vec![
         (
             ECHO,
-            r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#.to_string(),
+            r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#.to_string(),
         ),
         (
             "@fixture/sidecar-fast",
-            r#"{"executable":"fast","protocol":1}"#.to_string(),
+            r#"{"executable":"fast","protocol":2}"#.to_string(),
         ),
     ];
     let mut sidecars = Sidecars::new(
@@ -1358,7 +1358,7 @@ fn persistent_start_fails_when_hello_is_not_answered() {
     let socket_path = service_directory.join("hello.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "hello-token"
@@ -1376,7 +1376,7 @@ fn persistent_start_fails_when_hello_is_not_answered() {
         reader.read_line(&mut hello).unwrap();
         let _ = released.recv();
     });
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1404,7 +1404,7 @@ fn persistent_start_fails_when_the_service_prints_no_endpoint() {
     std::fs::write(&service, "#!/bin/sh\nsleep 2\nwhile :; do sleep 1; done\n").unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
     let config_directory = tempfile::tempdir().unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1438,7 +1438,7 @@ fn persistent_service_writes_its_standard_error_to_its_log() {
     std::fs::write(&service, "#!/bin/sh\necho service line >&2\nexit 0\n").unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
     let config_directory = tempfile::tempdir().unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1483,14 +1483,14 @@ fn persistent_service_starts_in_a_new_session() {
     std::fs::write(
         &service,
         format!(
-            "#!/bin/sh\necho $$ > '{}'\nprintf '{{\"protocol\":1,\"pid\":%d,\"socket\":\"{}\",\"token\":\"session-token\"}}\\n' $$\nexec sleep 600\n",
+            "#!/bin/sh\necho $$ > '{}'\nprintf '{{\"protocol\":2,\"pid\":%d,\"socket\":\"{}\",\"token\":\"session-token\"}}\\n' $$\nexec sleep 600\n",
             pid_path.display(),
             socket_path.display()
         ),
     )
     .unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1506,7 +1506,7 @@ fn persistent_service_starts_in_a_new_session() {
         assert_eq!(hello["token"], "session-token");
         stream
             .write_all(
-                br#"{"operation":"hello","protocol":1,"ok":true}
+                br#"{"operation":"hello","protocol":2,"ok":true}
 "#,
             )
             .unwrap();
@@ -1568,7 +1568,7 @@ fn persistent_start_fails_when_the_service_log_cannot_open() {
     let config_directory = tempfile::tempdir().unwrap();
     // If logs is a file, the log directory cannot be created.
     std::fs::write(config_directory.path().join("logs"), "").unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1593,7 +1593,7 @@ fn persistent_start_fails_when_the_service_exits_before_its_endpoint() {
     std::fs::write(&service, "#!/bin/sh\nexit 0\n").unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
     let config_directory = tempfile::tempdir().unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1639,7 +1639,7 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
         let socket_path = service_directory.join("version.sock");
         let listener = UnixListener::bind(&socket_path).unwrap();
         let endpoint = serde_json::json!({
-            "protocol": 1,
+            "protocol": 2,
             "pid": std::process::id(),
             "socket": socket_path,
             "token": "version-token"
@@ -1661,7 +1661,7 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
                 let request: serde_json::Value = serde_json::from_str(&line).unwrap();
                 let reply = if request["operation"] == "hello" {
                     let mut answer =
-                        serde_json::json!({"operation": "hello", "protocol": 1, "ok": true});
+                        serde_json::json!({"operation": "hello", "protocol": 2, "ok": true});
                     if let Some(version) = &reply_version {
                         answer["version"] = serde_json::json!(version);
                     }
@@ -1675,7 +1675,7 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
                 line.clear();
             }
         });
-        let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+        let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
         let mut declarations = declare(&fixture, executable_directory.path());
         declarations[0].version = "0.0.7".to_string();
         let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf()).unwrap();
@@ -1743,14 +1743,14 @@ fn serve_replace_service(
     let process = Arc::new(Mutex::new(process));
     // The executable that the host starts for the installed service announces the endpoint of this fake service.
     let script = format!(
-        "#!/bin/sh\nprintf '{{\"protocol\":1,\"pid\":%s,\"socket\":\"{}\",\"token\":\"replace-token\"}}\\n' \"$$\"\nexec sleep 20\n",
+        "#!/bin/sh\nprintf '{{\"protocol\":2,\"pid\":%s,\"socket\":\"{}\",\"token\":\"replace-token\"}}\\n' \"$$\"\nexec sleep 20\n",
         socket_path.display()
     );
     let executable = executable_directory.join("echo");
     std::fs::write(&executable, script).unwrap();
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": process_id,
         "socket": socket_path,
         "token": "replace-token"
@@ -1806,7 +1806,7 @@ fn serve_replace_service(
                         recorded.lock().unwrap().push(operation.clone());
                     }
                     let reply = match operation.as_str() {
-                        "hello" => serde_json::json!({"operation": "hello", "protocol": 1, "ok": true, "version": version}).to_string(),
+                        "hello" => serde_json::json!({"operation": "hello", "protocol": 2, "ok": true, "version": version}).to_string(),
                         "close-owner" => serde_json::json!({"operation": "closed-owner", "request": request["request"], "ok": true}).to_string(),
                         "shutdown" => serde_json::json!({"operation": "shutdown", "request": request["request"], "ok": true}).to_string(),
                         _ => line.trim_end().to_string(),
@@ -1839,7 +1839,7 @@ fn serve_replace_service(
 }
 
 fn replace_sidecars(config_directory: &Path, executable_directory: &Path) -> Sidecars<FakeOwner> {
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let mut declarations = declare(&fixture, executable_directory);
     declarations[0].version = "0.0.7".to_string();
     Sidecars::new(&declarations, config_directory.to_path_buf()).unwrap()
@@ -1983,7 +1983,7 @@ fn the_hello_carries_the_configuration_directory_as_client() {
     let socket_path = service_directory.join("client.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let endpoint = serde_json::json!({
-        "protocol": 1,
+        "protocol": 2,
         "pid": std::process::id(),
         "socket": socket_path,
         "token": "client-token"
@@ -2004,7 +2004,7 @@ fn the_hello_carries_the_configuration_directory_as_client() {
             let request: serde_json::Value = serde_json::from_str(&line).unwrap();
             let reply = if request["operation"] == "hello" {
                 let _ = hello_sender.send(request.clone());
-                serde_json::json!({"operation": "hello", "protocol": 1, "ok": true}).to_string()
+                serde_json::json!({"operation": "hello", "protocol": 2, "ok": true}).to_string()
             } else {
                 line.trim_end().to_string()
             };
@@ -2014,7 +2014,7 @@ fn the_hello_carries_the_configuration_directory_as_client() {
             line.clear();
         }
     });
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
     let declarations = declare(&fixture, executable_directory.path());
     let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf()).unwrap();
     let (owner, events) = owner("client", "/projects/client");
@@ -2045,7 +2045,7 @@ fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {
     std::fs::write(
         service_directory.join("endpoint.json"),
         serde_json::to_vec(&serde_json::json!({
-            "protocol": 1,
+            "protocol": 2,
             "pid": std::process::id(),
             "socket": socket_path,
             "token": "replacing-token"
@@ -2089,7 +2089,7 @@ fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {
             let operation = request["operation"].as_str().unwrap_or("").to_string();
             if operation == "hello" {
                 // The version differs from the installed one, so the service is outdated.
-                let reply = serde_json::json!({"operation": "hello", "protocol": 1, "ok": true, "version": "0.0.6"});
+                let reply = serde_json::json!({"operation": "hello", "protocol": 2, "ok": true, "version": "0.0.6"});
                 writeln!(reader.get_mut(), "{reply}").unwrap();
             }
             seen_sender.send(operation.clone()).unwrap();
@@ -2189,7 +2189,7 @@ fn persistent_connections_are_recorded_as_events() {
         std::fs::write(
             service_directory.join("endpoint.json"),
             serde_json::to_vec(&serde_json::json!({
-                "protocol": 1, "pid": std::process::id(), "socket": socket_path, "token": "events-token"
+                "protocol": 2, "pid": std::process::id(), "socket": socket_path, "token": "events-token"
             }))
             .unwrap(),
         )
@@ -2207,7 +2207,7 @@ fn persistent_connections_are_recorded_as_events() {
                     let mut line = String::new();
                     reader.read_line(&mut line).unwrap();
                     stream
-                        .write_all(b"{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}\n")
+                        .write_all(b"{\"operation\":\"hello\",\"protocol\":2,\"ok\":true}\n")
                         .unwrap();
                     loop {
                         line.clear();
@@ -2229,7 +2229,7 @@ fn persistent_connections_are_recorded_as_events() {
         let writer = records::start_writer(Path::new(&config));
         soksak_host_tauriv2::performance::command(serde_json::json!({"action": "on"})).unwrap();
         records::wait_for_first_sample(Path::new(&config), &writer);
-        let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+        let fixture = files(r#"{"executable":"echo","protocol":2,"transport":"persistent"}"#);
         let sidecars = Sidecars::new(
             &declare(&fixture, executable_directory.path()),
             config_directory.path().to_path_buf(),

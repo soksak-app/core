@@ -96,7 +96,7 @@ func echoSidecarsForImages(t *testing.T) (*host.Sidecars, string) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declareImages(directory, `{"executable":"echo","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(declareImages(directory, `{"executable":"echo","protocol":2}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}

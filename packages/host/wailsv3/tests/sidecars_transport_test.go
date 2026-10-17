@@ -45,7 +45,7 @@ func (o *harnessOwner) Emit(name string, data ...any) {
 // harnessDeclarations is the declaration of one persistent sidecar installed in folder.
 func harnessDeclarations(folder string) []SidecarDeclaration {
 	return []SidecarDeclaration{{Name: "fixture-service", Folder: folder,
-		Data: []byte(`{"executable":"service","protocol":1,"transport":"persistent"}`)}}
+		Data: []byte(`{"executable":"service","protocol":2,"transport":"persistent"}`)}}
 }
 
 func writeHarnessEndpoint(t *testing.T, directory, socket string) {
@@ -55,7 +55,7 @@ func writeHarnessEndpoint(t *testing.T, directory, socket string) {
 		t.Fatal(err)
 	}
 	endpoint, err := json.Marshal(map[string]any{
-		"protocol": 1, "pid": os.Getpid(), "socket": socket, "token": "harness-token",
+		"protocol": 2, "pid": os.Getpid(), "socket": socket, "token": "harness-token",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -99,11 +99,11 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 					return
 				}
 				var hello map[string]any
-				if err := json.Unmarshal(line, &hello); err != nil || hello["operation"] != "hello" || hello["protocol"] != float64(1) || hello["token"] != "harness-token" {
+				if err := json.Unmarshal(line, &hello); err != nil || hello["operation"] != "hello" || hello["protocol"] != float64(2) || hello["token"] != "harness-token" {
 					_, _ = io.WriteString(connection, `{"operation":"hello","ok":false,"error":"authentication failed"}`+"\n")
 					return
 				}
-				_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
+				_, _ = io.WriteString(connection, `{"operation":"hello","protocol":2,"ok":true}`+"\n")
 				for {
 					line, err = reader.ReadBytes('\n')
 					if err != nil {
@@ -136,7 +136,7 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 	return done
 }
 
-// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
+// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-two, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
 func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t *testing.T) {
 	// Two hosts open at the same time. The order in which a connection that one host connected again after a loss is made before the first connection of another host
 	// is also checked. The service must cut the first connection of each host regardless of that order.
@@ -313,7 +313,7 @@ func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 			var reply map[string]any
 			switch operation {
 			case "hello":
-				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
+				reply = map[string]any{"operation": "hello", "protocol": 2, "ok": true}
 			case "close-owner":
 				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
 			case "shutdown":
@@ -401,7 +401,7 @@ func TestPersistentStopDoesNotLogItsOwnCloseAsAReadError(t *testing.T) {
 			var reply map[string]any
 			switch operation {
 			case "hello":
-				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
+				reply = map[string]any{"operation": "hello", "protocol": 2, "ok": true}
 			case "close-owner":
 				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
 			case "shutdown":
@@ -487,7 +487,7 @@ func TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop(t *testing.T) {
 			var replies []map[string]any
 			switch operation {
 			case "hello":
-				replies = []map[string]any{{"operation": "hello", "protocol": 1, "ok": true}}
+				replies = []map[string]any{{"operation": "hello", "protocol": 2, "ok": true}}
 			case "close-owner":
 				replies = []map[string]any{
 					{"surface": "surface", "closed": true},
@@ -593,7 +593,7 @@ func TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpo
 			serverDone <- readErr
 			return
 		}
-		_, writeErr := io.WriteString(connection, `{"operation":"hello","protocol":2,"ok":true}`+"\n")
+		_, writeErr := io.WriteString(connection, `{"operation":"hello","protocol":3,"ok":true}`+"\n")
 		serverDone <- writeErr
 	}()
 
@@ -647,7 +647,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 	}
 	writeHarnessEndpoint(t, configDir, socket)
 	staleEndpoint := map[string]any{
-		"protocol": 1, "pid": stalePID, "socket": socket, "token": "stale-token",
+		"protocol": 2, "pid": stalePID, "socket": socket, "token": "stale-token",
 	}
 	encoded, err := json.Marshal(staleEndpoint)
 	if err != nil {
@@ -658,7 +658,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 	}
 
 	replacement := map[string]any{
-		"protocol": 1, "pid": 1, "socket": socket, "token": "replacement-token",
+		"protocol": 2, "pid": 1, "socket": socket, "token": "replacement-token",
 	}
 	replacementJSON, err := json.Marshal(replacement)
 	if err != nil {
@@ -688,7 +688,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 			serverDone <- fmt.Errorf("unexpected replacement hello: %s", line)
 			return
 		}
-		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":2,"ok":true}`+"\n"); err != nil {
 			serverDone <- err
 			return
 		}
@@ -758,7 +758,7 @@ func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(
 	}
 	endpointPath := filepath.Join(serviceDir, "endpoint.json")
 	endpoint := map[string]any{
-		"protocol": 1, "pid": os.Getpid(), "socket": missingSocket, "token": "live-token",
+		"protocol": 2, "pid": os.Getpid(), "socket": missingSocket, "token": "live-token",
 	}
 	encoded, err := json.Marshal(endpoint)
 	if err != nil {
@@ -827,7 +827,7 @@ func TestPersistentRetainSendsLayoutAndKnownSurfaces(t *testing.T) {
 			var reply map[string]any
 			switch request["operation"] {
 			case "hello":
-				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
+				reply = map[string]any{"operation": "hello", "protocol": 2, "ok": true}
 			case "close-owner":
 				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
 			case "shutdown":
@@ -923,7 +923,7 @@ func TestPersistentRetainInterruptedByStopSendsNothing(t *testing.T) {
 			var reply map[string]any
 			switch request["operation"] {
 			case "hello":
-				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
+				reply = map[string]any{"operation": "hello", "protocol": 2, "ok": true}
 			case "close-owner":
 				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
 			case "shutdown":
@@ -1006,7 +1006,7 @@ func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 				if err != nil {
 					return
 				}
-				if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+				if _, err := io.WriteString(connection, `{"operation":"hello","protocol":2,"ok":true}`+"\n"); err != nil {
 					return
 				}
 				for {
@@ -1101,7 +1101,7 @@ func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
 		if _, err := reader.ReadBytes('\n'); err != nil {
 			return
 		}
-		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":2,"ok":true}`+"\n"); err != nil {
 			return
 		}
 		line, err := reader.ReadBytes('\n')
@@ -1210,7 +1210,7 @@ func serveOneBadLine(t *testing.T, payload []byte) (root string, closed <-chan s
 		if _, err := reader.ReadBytes('\n'); err != nil {
 			return
 		}
-		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":2,"ok":true}`+"\n"); err != nil {
 			return
 		}
 		if _, err := reader.ReadBytes('\n'); err != nil {
@@ -1293,7 +1293,7 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 		}
 		close(helloSeen)
 		time.Sleep(500 * time.Millisecond)
-		_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
+		_, _ = io.WriteString(connection, `{"operation":"hello","protocol":2,"ok":true}`+"\n")
 		_, _ = io.Copy(io.Discard, reader)
 	}()
 	folder := t.TempDir()
@@ -1301,7 +1301,7 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 		t.Fatal(err)
 	}
 	declarations := append(harnessDeclarations(folder), SidecarDeclaration{Name: "fixture-fast", Folder: folder,
-		Data: []byte(`{"executable":"fast","protocol":1}`)})
+		Data: []byte(`{"executable":"fast","protocol":2}`)})
 	sidecars, err := NewSidecars(declarations, root)
 	if err != nil {
 		t.Fatal(err)
@@ -1453,7 +1453,7 @@ func TestPersistentServiceStartsInANewSession(t *testing.T) {
 	}
 	defer listener.Close()
 	pidPath := filepath.Join(executableDir, "pid")
-	script := fmt.Sprintf("#!/bin/sh\necho $$ > '%s'\nprintf '{\"protocol\":1,\"pid\":%%d,\"socket\":\"%s\",\"token\":\"harness-token\"}\\n' $$\nexec sleep 600\n", pidPath, socket)
+	script := fmt.Sprintf("#!/bin/sh\necho $$ > '%s'\nprintf '{\"protocol\":2,\"pid\":%%d,\"socket\":\"%s\",\"token\":\"harness-token\"}\\n' $$\nexec sleep 600\n", pidPath, socket)
 	if err := os.WriteFile(filepath.Join(executableDir, "service"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1470,7 +1470,7 @@ func TestPersistentServiceStartsInANewSession(t *testing.T) {
 			serverDone <- err
 			return
 		}
-		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":2,"ok":true}`+"\n"); err != nil {
 			serverDone <- err
 			return
 		}
@@ -1602,7 +1602,7 @@ func serveHelloVersion(t *testing.T, listener net.Listener, version *string) {
 			}
 			var reply []byte
 			if request["operation"] == "hello" {
-				answer := map[string]any{"operation": "hello", "protocol": 1, "ok": true}
+				answer := map[string]any{"operation": "hello", "protocol": 2, "ok": true}
 				if version != nil {
 					answer["version"] = *version
 				}
@@ -1720,7 +1720,7 @@ func TestPersistentTransportWritesAnErrorLineForALostConnection(t *testing.T) {
 				if _, err := reader.ReadBytes('\n'); err != nil {
 					return
 				}
-				if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+				if _, err := io.WriteString(connection, `{"operation":"hello","protocol":2,"ok":true}`+"\n"); err != nil {
 					return
 				}
 				line, err := reader.ReadBytes('\n')
@@ -1815,7 +1815,7 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 		t.Fatal(err)
 	}
 	folder := t.TempDir()
-	script := "#!/bin/sh\nprintf '{\"protocol\":1,\"pid\":%s,\"socket\":\"" + socket + "\",\"token\":\"harness-token\"}\\n' \"$$\"\nexec sleep 20\n"
+	script := "#!/bin/sh\nprintf '{\"protocol\":2,\"pid\":%s,\"socket\":\"" + socket + "\",\"token\":\"harness-token\"}\\n' \"$$\"\nexec sleep 20\n"
 	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1860,7 +1860,7 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 					var reply []byte
 					switch operation {
 					case "hello":
-						reply, _ = json.Marshal(map[string]any{"operation": "hello", "protocol": 1, "ok": true, "version": version})
+						reply, _ = json.Marshal(map[string]any{"operation": "hello", "protocol": 2, "ok": true, "version": version})
 					case "close-owner":
 						if first && service.closeOwner != nil {
 							service.closeOwner <- struct{}{}
@@ -2040,7 +2040,7 @@ func TestTheHelloCarriesTheConfigurationDirectoryAsClient(t *testing.T) {
 			}
 			if request["operation"] == "hello" {
 				hello <- request
-				io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
+				io.WriteString(connection, `{"operation":"hello","protocol":2,"ok":true}`+"\n")
 				continue
 			}
 			connection.Write(line)
@@ -2176,7 +2176,7 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 				if _, err := reader.ReadBytes('\n'); err != nil {
 					return
 				}
-				if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+				if _, err := io.WriteString(connection, `{"operation":"hello","protocol":2,"ok":true}`+"\n"); err != nil {
 					return
 				}
 				for {
@@ -2196,7 +2196,7 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 	}()
 
 	sidecars, err := NewSidecars([]SidecarDeclaration{{Name: eventsService, Folder: t.TempDir(),
-		Data: []byte(`{"executable":"service","protocol":1,"transport":"persistent"}`)}}, root)
+		Data: []byte(`{"executable":"service","protocol":2,"transport":"persistent"}`)}}, root)
 	if err != nil {
 		t.Fatal(err)
 	}

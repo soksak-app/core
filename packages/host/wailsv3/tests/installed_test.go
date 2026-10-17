@@ -46,7 +46,7 @@ func installedFixture(t *testing.T) string {
 		"plugins/term/0.1.0/diagnostics.json":                           "{\n  \"module\": \"ui/d.js\",\n  \"exposes\": {}\n}\n",
 		"plugins/alpha/1.0.0/plugin.json":                               `{"id": "alpha"}`,
 		"plugins/off/1.0.0/plugin.json":                                 `{"id": "off"}`,
-		"sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json": `{"executable": "build/worker", "protocol": 1}`,
+		"sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json": `{"executable": "build/worker", "protocol": 2}`,
 	})
 	return config
 }
@@ -197,7 +197,7 @@ func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 	}
 	folder := filepath.Join(config, "sidecars/scope-sidecar-worker/0.1.2/darwin-arm64")
 	if len(declarations) != 1 || declarations[0].Name != "@scope/sidecar-worker" || declarations[0].Folder != folder ||
-		string(declarations[0].Data) != `{"executable": "build/worker", "protocol": 1}` {
+		string(declarations[0].Data) != `{"executable": "build/worker", "protocol": 2}` {
 		t.Fatalf("declarations %+v", declarations)
 	}
 	if err := os.Remove(filepath.Join(folder, "sidecar.json")); err != nil {

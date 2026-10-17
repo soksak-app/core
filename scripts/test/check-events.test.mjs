@@ -74,7 +74,7 @@ const alphaCatalog = JSON.parse(readFileSync(new URL('../../packages/log-contrac
 const SIDECAR_PATH = 'sidecars/alpha/1.0.0/platform';
 
 /** A configuration folder that has installed the sidecar `alpha`, whose `sidecar.json` names the catalog `events.json`. */
-function installed(t, { sidecar = { executable: 'bin/alpha', protocol: 1, events: 'events.json' }, catalog = alphaCatalog, format = 2 } = {}) {
+function installed(t, { sidecar = { executable: 'bin/alpha', protocol: 2, events: 'events.json' }, catalog = alphaCatalog, format = 2 } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'events-'));
   t.after(() => rmSync(root, { recursive: true }));
   mkdirSync(join(root, 'plugins'));
@@ -92,7 +92,7 @@ test('the catalogs of the installed sidecars are read from the folders that inst
   const none = mkdtempSync(join(tmpdir(), 'events-'));
   t.after(() => rmSync(none, { recursive: true }));
   assert.deepEqual(installedSidecarCatalogs(none), []);
-  const bare = installed(t, { sidecar: { executable: 'bin/alpha', protocol: 1 }, catalog: null });
+  const bare = installed(t, { sidecar: { executable: 'bin/alpha', protocol: 2 }, catalog: null });
   assert.deepEqual(installedSidecarCatalogs(bare), []);
 });
 

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F193.2: 두 host가 2가 아닌 protocol의 sidecar를 생성 실패 없이 선언하고, 시작하지 않으며, 그것으로의 send마다 `sidecar <name> <version>: protocol <found> is not 2`로 실패한다. 지속 서비스의 endpoint와 hello는 protocol 2를 담고, plugin-api의 `validateSidecar`는 protocol 2를 요구한다. Red: `TestSidecarOfAnotherProtocolIsNotStarted`가 `send = <nil>`로, `a_sidecar_of_another_protocol_is_not_started`가 생성에서, plugin-api 검사가 `protocol must be 1`로 실패했다. Green: 같은 시험이 두 host의 sidecar 시험, plugin-api 검증 시험, parity 검사와 함께 통과한다.
 - F193.1: 명세가 `sidecar.json`의 `protocol`을 sidecar의 시작 인자와 메시지의 버전으로 정하고 2로 올리며, 다른 protocol의 sidecar를 애플리케이션 시작이 아니라 그 sidecar의 시작에서 거부하고, 설치와 업데이트 목록에서 protocol로 sidecar를 고르고 나열한다.
 - F194.10.5: core 0.0.17이 게시되었고, 그 CI 실행과 release workflow가 성공으로 끝났다.
 - F196.1: window facts의 각 web view row가 자기 WebContent process를 보고하고, 두 host가 그것을 `host.window`의 `documents` 각 항목에 `process`로 옮기므로, 브라우저 탭의 메모리가 그 surface에 연결된다. private API 목록이 window facts를 `_webProcessIdentifier`의 호출 위치로 밝힌다. Red: native window facts 검사가 web view row에서 `process`를 찾지 못했다. Green: `make -C native/darwin repeat TEST=window_facts_test` 2번 중 2번, 두 host가 build되고 host parity 검사가 통과한다.

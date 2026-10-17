@@ -375,7 +375,7 @@ Items:
 | `sidecars.declaration.adds-sidecars-installed-after-start` | Declaring the installed sidecars after construction adds the undeclared ones, so a send to such a sidecar starts it. | both |
 | `sidecars.declaration.rejects-executable-escaping-package` | An executable path outside the sidecar makes construction fail. | both |
 | `sidecars.declaration.rejects-absolute-executable` | An absolute executable path makes construction fail. | both |
-| `sidecars.declaration.rejects-unsupported-protocol` | An unsupported protocol version makes construction fail. | both |
+| `sidecars.start.rejects-other-protocol` | A sidecar whose `sidecar.json` declares another protocol than 2 is declared without failing the construction, is not started, and each send to it fails with `sidecar <name> <version>: protocol <found> is not 2`. | both |
 | `sidecars.declaration.rejects-unknown-transport` | An unknown transport makes construction fail with "is not supported". | both |
 | `sidecars.declaration.persistent-requires-config-directory` | A persistent transport without a configuration directory makes construction fail. | both |
 | `sidecars.persistent.accepts-non-canonical-config-directory` | A persistent transport accepts a configuration directory path that is not canonical. | both |
@@ -407,7 +407,7 @@ Items:
 | `sidecars.failure.invalid-message-terminates-and-notifies` | A line that is not JSON, or a JSON object without `body`, ends the sidecar process and delivers `sidecar-failure` with "invalid message". | both |
 | `sidecars.failure.output-close-notifies-each-surface` | A sidecar that ends with exit status 3 while the host is not stopping delivers `sidecar-failure` with the reason "output closed: exit status 3" to the owning window of each surface that sent to it, and the next send starts a new process. | both |
 | `sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service` | Two hosts authenticate to one service endpoint with its token and each receive their own events. | both |
-| `sidecars-transport.hello.declares-protocol-one` | The hello request declares protocol 1. | both |
+| `sidecars-transport.hello.declares-protocol-two` | The hello request declares protocol 2. | both |
 | `sidecars-transport.reconnect.after-connection-loss-preserves-owner` | After the service drops the connection, the next send reconnects and events still reach the owner and surface. | both |
 | `sidecars-transport.stop.close-owner-failure-returns-promptly` | A close-owner failure reply does not delay stop beyond 1 s. | both |
 | `sidecars-transport.hello.reports-a-service-of-another-version` | A persistent service whose hello reply has another `version` than `installed.json` records, or no `version`, is listed in `host.sidecars` `outdated` with the running version or `null`, the installed version and its open surfaces; a service of the installed version is not. | both |

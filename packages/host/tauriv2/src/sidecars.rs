@@ -824,6 +824,9 @@ struct Declarations {
     declared: HashMap<String, PathBuf>,
     /// The version that installed.json records for each declared sidecar.
     versions: HashMap<String, String>,
+    /// The protocol of the sidecar.json of each declared sidecar; a sidecar of another protocol than 2 is declared but
+    /// not started (docs/spec/sidecars.md#declaration-and-startup).
+    protocols: HashMap<String, u64>,
     persistent: HashMap<String, bool>,
     basenames: HashMap<String, String>,
 }
@@ -839,6 +842,26 @@ impl<O> Core<O> {
             .cloned()
             // default: an undeclared sidecar has no installed version, and no service version equals the empty text.
             .unwrap_or_default()
+    }
+
+    /// Fails when the declared sidecar name has another protocol than 2, the version of the start arguments and messages
+    /// of this host.
+    fn supported(&self, name: &str) -> Result<(), String> {
+        let declarations = self.declarations.read().expect("sidecar declarations");
+        let protocol = declarations
+            .protocols
+            .get(name)
+            .copied()
+            // default: an undeclared sidecar has no protocol, which is not 2.
+            .unwrap_or_default();
+        if protocol != 2 {
+            // default: an undeclared sidecar has no installed version.
+            let version = declarations.versions.get(name).cloned().unwrap_or_default();
+            return Err(format!(
+                "sidecar {name} {version}: protocol {protocol} is not 2"
+            ));
+        }
+        Ok(())
     }
 
     /// The executable and the persistence of the declared sidecar name.
@@ -970,12 +993,6 @@ impl<O: Owner> Sidecars<O> {
             let path = item.folder.join("sidecar.json").display().to_string();
             let sidecar: Sidecar =
                 serde_json::from_slice(&item.data).map_err(|e| format!("{path}: {e}"))?;
-            if sidecar.protocol != 1 {
-                return Err(format!(
-                    "{path}: protocol {} is not supported",
-                    sidecar.protocol
-                ));
-            }
             let is_persistent = match sidecar.transport.as_deref() {
                 None => false,
                 Some("persistent") => true,
@@ -1002,6 +1019,7 @@ impl<O: Owner> Sidecars<O> {
             next.declared
                 .insert(name.clone(), item.folder.join(executable));
             next.versions.insert(name.clone(), item.version.clone());
+            next.protocols.insert(name.clone(), sidecar.protocol);
             next.persistent.insert(name, is_persistent);
         }
         let mut current = self
@@ -1898,6 +1916,7 @@ impl<O: Owner> Core<O> {
         let (program, persistent) = core
             .declaration(name)
             .ok_or_else(|| format!("sidecar {name} is not declared by any plugin"))?;
+        core.supported(name)?;
         // default: a sidecar that did not declare persistent runs for each window.
         if persistent {
             return Self::start_persistent(core, name, &program);
@@ -2084,7 +2103,7 @@ impl<O: Owner> Core<O> {
                 return Err(format!("sidecar {name}: read endpoint: {error}"));
             }
         };
-        if endpoint.protocol != 1 {
+        if endpoint.protocol != 2 {
             return Err(format!(
                 "sidecar {name}: service protocol {} is not supported",
                 endpoint.protocol
@@ -2108,7 +2127,7 @@ impl<O: Owner> Core<O> {
             .map_err(|e| format!("sidecar {name}: hello deadline: {e}"))?;
         let hello = serde_json::json!({
             "operation": "hello",
-            "protocol": 1,
+            "protocol": 2,
             "token": endpoint.token.clone(),
             "client": core.config_directory.to_string_lossy(),
         });
@@ -2149,7 +2168,7 @@ impl<O: Owner> Core<O> {
                 "sidecar {name}: authentication handshake failed: {reason}"
             ));
         }
-        if response.get("protocol").and_then(|v| v.as_u64()) != Some(1) {
+        if response.get("protocol").and_then(|v| v.as_u64()) != Some(2) {
             return Err(format!(
                 "sidecar {name}: service protocol mismatch in hello response"
             ));

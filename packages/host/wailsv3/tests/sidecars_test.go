@@ -111,7 +111,7 @@ func scriptSidecars(t *testing.T, script string) (*host.Sidecars, string) {
 	if err := os.WriteFile(filepath.Join(directory, "fake"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"fake","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"fake","protocol":2}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func echoSidecars(t *testing.T) (*host.Sidecars, string) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","protocol":2}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,12 +334,36 @@ func TestUndeclaredAndStoppedSidecarsAreRejected(t *testing.T) {
 // contract: sidecars.start.fails-on-missing-executable
 func TestMissingSidecarExecutableFails(t *testing.T) {
 	directory := t.TempDir()
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"absent","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"absent","protocol":2}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := sidecars.Send(newFakeOwner("/"), echoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "sidecar "+echoSidecar) {
 		t.Fatalf("missing executable = %v", err)
+	}
+}
+
+// contract: sidecars.start.rejects-other-protocol
+func TestSidecarOfAnotherProtocolIsNotStarted(t *testing.T) {
+	directory := t.TempDir()
+	record := filepath.Join(directory, "started")
+	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ntouch "+record+"\nexec cat\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	declarations := []host.SidecarDeclaration{{Name: echoSidecar, Version: "0.0.8", Folder: directory, Data: []byte(`{"executable":"echo","protocol":1}`)}}
+	sidecars, err := host.NewSidecars(declarations, directory)
+	if err != nil {
+		t.Fatalf("a sidecar of another protocol makes the construction fail: %v", err)
+	}
+	defer sidecars.Stop()
+	want := "sidecar " + echoSidecar + " 0.0.8: protocol 1 is not 2"
+	for range 2 {
+		if err := sidecars.Send(newFakeOwner("/"), echoSidecar, "s1", json.RawMessage(`{}`)); err == nil || err.Error() != want {
+			t.Fatalf("send = %v, want %q", err, want)
+		}
+	}
+	if _, err := os.Stat(record); !os.IsNotExist(err) {
+		t.Fatalf("the sidecar of another protocol was started: %v", err)
 	}
 }
 
@@ -381,7 +405,7 @@ func TestDeclaringAddsSidecarsInstalledAfterTheStart(t *testing.T) {
 	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "is not declared by any plugin") {
 		t.Fatalf("send before the declaration = %v", err)
 	}
-	if err := sidecars.Declare(declare(directory, `{"executable":"echo","protocol":1}`)); err != nil {
+	if err := sidecars.Declare(declare(directory, `{"executable":"echo","protocol":2}`)); err != nil {
 		t.Fatal(err)
 	}
 	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
@@ -393,17 +417,16 @@ func TestDeclaringAddsSidecarsInstalledAfterTheStart(t *testing.T) {
 	sidecars.Stop()
 }
 
-// contract: sidecars.declaration.rejects-executable-escaping-package, sidecars.declaration.rejects-absolute-executable, sidecars.declaration.rejects-unsupported-protocol, sidecars.declaration.rejects-unknown-transport, sidecars.declaration.persistent-requires-config-directory
+// contract: sidecars.declaration.rejects-executable-escaping-package, sidecars.declaration.rejects-absolute-executable, sidecars.declaration.rejects-unknown-transport, sidecars.declaration.persistent-requires-config-directory
 func TestInvalidSidecarDeclarationsFail(t *testing.T) {
 	cases := map[string]struct {
 		sidecar string
 		want    string
 	}{
-		"escaping executable":       {`{"executable":"../escape","protocol":1}`, "inside the package"},
-		"absolute executable":       {`{"executable":"/bin/sh","protocol":1}`, "inside the package"},
-		"unknown protocol":          {`{"executable":"echo","protocol":2}`, "protocol"},
-		"persistent without config": {`{"executable":"echo","protocol":1,"transport":"persistent"}`, "persistent transport requires a config directory"},
-		"unknown transport":         {`{"executable":"echo","protocol":1,"transport":"ptyd"}`, "transport ptyd is not supported"},
+		"escaping executable":       {`{"executable":"../escape","protocol":2}`, "inside the package"},
+		"absolute executable":       {`{"executable":"/bin/sh","protocol":2}`, "inside the package"},
+		"persistent without config": {`{"executable":"echo","protocol":2,"transport":"persistent"}`, "persistent transport requires a config directory"},
+		"unknown transport":         {`{"executable":"echo","protocol":2,"transport":"ptyd"}`, "transport ptyd is not supported"},
 	}
 	for name, c := range cases {
 		directory := t.TempDir()
@@ -419,7 +442,7 @@ func TestInvalidSidecarDeclarationsFail(t *testing.T) {
 
 // contract: sidecars.declaration.persistent-requires-config-directory
 func TestPersistentTransportRequiresConfigDirectory(t *testing.T) {
-	if _, err := host.NewSidecars(declare(t.TempDir(), `{"executable":"echo","protocol":1,"transport":"persistent"}`), ""); err == nil || !strings.Contains(err.Error(), "persistent transport requires a config directory") {
+	if _, err := host.NewSidecars(declare(t.TempDir(), `{"executable":"echo","protocol":2,"transport":"persistent"}`), ""); err == nil || !strings.Contains(err.Error(), "persistent transport requires a config directory") {
 		t.Fatalf("persistent transport without config = %v", err)
 	}
 }
@@ -428,7 +451,7 @@ func TestPersistentTransportRequiresConfigDirectory(t *testing.T) {
 func TestPersistentTransportAcceptsNonCanonicalConfigDirectory(t *testing.T) {
 	// filepath.Join removes ".", so the path that is not normalized is built by string concatenation.
 	configDirectory := t.TempDir()
-	sidecars, err := host.NewSidecars(declare(t.TempDir(), `{"executable":"echo","protocol":1,"transport":"persistent"}`), configDirectory+string(os.PathSeparator)+".")
+	sidecars, err := host.NewSidecars(declare(t.TempDir(), `{"executable":"echo","protocol":2,"transport":"persistent"}`), configDirectory+string(os.PathSeparator)+".")
 	if err != nil {
 		t.Fatalf("non-canonical config directory was rejected: %v", err)
 	}
@@ -479,8 +502,8 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 
 	// Declares the two sidecars.
 	sidecars, err := host.NewSidecars([]host.SidecarDeclaration{
-		{Name: "@fixture/sidecar-slow", Folder: directory, Data: []byte(`{"executable":"slow","protocol":1}`)},
-		{Name: "@fixture/sidecar-fast", Folder: directory, Data: []byte(`{"executable":"fast","protocol":1}`)},
+		{Name: "@fixture/sidecar-slow", Folder: directory, Data: []byte(`{"executable":"slow","protocol":2}`)},
+		{Name: "@fixture/sidecar-fast", Folder: directory, Data: []byte(`{"executable":"fast","protocol":2}`)},
 	}, directory)
 	if err != nil {
 		t.Fatal(err)
@@ -564,7 +587,7 @@ func TestStopGracefulShutdown(t *testing.T) {
 	}
 
 	// Declares the sidecar.
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"graceful","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"graceful","protocol":2}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -633,7 +656,7 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 		})
 	}
 	t.Cleanup(releaseSidecar)
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"lingering","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"lingering","protocol":2}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -690,7 +713,7 @@ func TestStopClosesUnreadOutput(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "talkative"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"talkative","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"talkative","protocol":2}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -789,7 +812,7 @@ func TestStopForcedKill(t *testing.T) {
 	}
 
 	// Declares the sidecar.
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"stubborn","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"stubborn","protocol":2}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -905,7 +928,7 @@ func closingSidecars(t *testing.T, script string) *host.Sidecars {
 	if err := os.WriteFile(filepath.Join(directory, "closing"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"closing","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"closing","protocol":2}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -983,7 +1006,7 @@ func TestDeclarationReplacesASidecarWhoseFolderChanged(t *testing.T) {
 		}
 		return directory
 	}
-	data := `{"executable":"answer","protocol":1}`
+	data := `{"executable":"answer","protocol":2}`
 	first, second := folder("first"), folder("second")
 	sidecars, err := host.NewSidecars(declare(first, data), "")
 	if err != nil {
