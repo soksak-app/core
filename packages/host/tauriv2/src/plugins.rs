@@ -30,19 +30,6 @@ pub struct Changed {
     pub plugin: String,
 }
 
-/// The value of the plugins-progress event: a step of connecting the application of a connector plugin during a plugin
-/// operation (docs/spec/installation.md#applications).
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
-pub struct Progress {
-    pub action: String,
-    pub plugin: String,
-    pub application: String,
-    pub step: String,
-    pub ok: bool,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub error: String,
-}
-
 /// Changes the plugin installation of the configuration folder.
 pub struct Plugins {
     config_dir: PathBuf,
@@ -52,7 +39,6 @@ pub struct Plugins {
     /// Applies an operation to the sidecars (docs/spec/installation.md#applying-a-change).
     apply: Box<dyn Fn() -> Result<(), String> + Send + Sync>,
     changed: Box<dyn Fn(Changed) + Send + Sync>,
-    progress: Box<dyn Fn(Progress) + Send + Sync>,
 }
 
 impl Plugins {
@@ -61,7 +47,6 @@ impl Plugins {
         config_dir: PathBuf,
         apply: Box<dyn Fn() -> Result<(), String> + Send + Sync>,
         changed: Box<dyn Fn(Changed) + Send + Sync>,
-        progress: Box<dyn Fn(Progress) + Send + Sync>,
     ) -> Result<Plugins, String> {
         Ok(Plugins {
             config_dir,
@@ -70,7 +55,6 @@ impl Plugins {
             running: Mutex::new(()),
             apply,
             changed,
-            progress,
         })
     }
 
@@ -133,17 +117,6 @@ impl Plugins {
                 &plugin,
                 &self.core,
                 &self.platform,
-                &mut |step: soksak_sok::application::ApplicationStep| {
-                    (self.progress)(Progress {
-                        action: request.action.clone(),
-                        plugin: plugin.clone(),
-                        application: step.application.clone(),
-                        step: step.step.clone(),
-                        ok: step.ok,
-                        error: step.error.clone(),
-                    });
-                    emit_application_step(step);
-                },
             )?;
             (result, (self.apply)())
         };
@@ -157,20 +130,4 @@ impl Plugins {
         applied.map_err(|error| format!("apply {action} {plugin}: {error}"))?;
         Ok(result)
     }
-}
-
-/// Stores each step of connecting the application of a connector plugin as `host.application.step`
-/// (docs/spec/installation.md#applications).
-fn emit_application_step(step: soksak_sok::application::ApplicationStep) {
-    let mut fields = serde_json::json!({"application": step.application, "step": step.step, "ok": step.ok, "micros": step.micros});
-    if !step.method.is_empty() {
-        fields["method"] = Value::from(step.method);
-    }
-    let level = if step.ok {
-        crate::event_log::Level::Info
-    } else {
-        fields["error"] = Value::from(step.error);
-        crate::event_log::Level::Warn
-    };
-    crate::event_record::emit_host(level, "host.application.step", fields);
 }

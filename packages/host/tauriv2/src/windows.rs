@@ -325,15 +325,6 @@ pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
     }
 }
 
-/// Sends plugins-progress to all windows.
-pub(crate) fn notify_plugins_progress(app: &AppHandle, progress: crate::plugins::Progress) {
-    for window in app.windows().values() {
-        if let Err(error) = emit_window(window, "plugins-progress", progress.clone()) {
-            log_error("plugins-progress", error);
-        }
-    }
-}
-
 /// Returns the window with the label label among the registered windows.
 pub(crate) fn find(app: &AppHandle, label: &str) -> Option<Window> {
     let registered = app

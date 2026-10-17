@@ -133,9 +133,6 @@ pub struct PluginsState {
     /// True when plugins/installed.json does not exist. The application installs the starter pack then.
     #[serde(rename = "firstRun")]
     pub first_run: bool,
-    /// Each application that a connector plugin connected (plugins/applications.json), which a surface starts
-    /// (docs/spec/installation.md#applications).
-    pub applications: std::collections::BTreeMap<String, crate::application::ApplicationRecord>,
 }
 
 /// Missing when there is no registry, Checked when the index was read and checked, and the error when it could not be read or checked.
@@ -166,13 +163,11 @@ pub fn read_plugins_state(config_dir: &Path) -> Result<PluginsState, String> {
             (Some(url), index)
         }
     };
-    let applications = crate::application::read_applications(config_dir)?.applications;
     Ok(PluginsState {
         registry,
         index,
         installed,
         first_run,
-        applications,
     })
 }
 
@@ -192,7 +187,6 @@ pub fn run_plugin_action(
     id: &str,
     core: &str,
     platform: &str,
-    observe: &mut dyn FnMut(crate::application::ApplicationStep),
 ) -> Result<PluginActionResult, String> {
     // The hosts call this inside their own ownership of the configuration directory, so it takes no lock; the command
     // line entry owns the directory for the duration of the write (docs/spec/installation.md).
@@ -203,7 +197,6 @@ pub fn run_plugin_action(
             core,
             platform,
             action == "update",
-            observe,
         )?)),
         "remove" | "enable" | "disable" => Ok(PluginActionResult::Changed(change_plugin(
             config_dir, id, action,
@@ -343,7 +336,6 @@ pub fn install_plugin(
     core: &str,
     platform: &str,
     update: bool,
-    observe: &mut dyn FnMut(crate::application::ApplicationStep),
 ) -> Result<PluginResult, String> {
     let index = read_registry(config_dir)?;
     let state = read_installed(config_dir)?;
@@ -398,25 +390,6 @@ pub fn install_plugin(
             &sidecar.release,
             &config_dir.join(&installed.path),
         )?;
-    }
-    // A connector plugin connects its application before the installation is recorded, so a failure leaves
-    // installed.json unchanged (docs/spec/installation.md#applications). Each installed or updated plugin connects,
-    // also when its folder was extracted by an earlier install that failed.
-    let search = std::env::var_os("PATH")
-        .ok_or("the installer has no PATH to find the application of a connector plugin")?;
-    for changed in &order {
-        if let Some(application) =
-            crate::application::installed_application(config_dir, &state.plugins[changed].path)?
-        {
-            crate::application::connect_application(
-                config_dir,
-                platform,
-                &application,
-                &search,
-                observe,
-            )
-            .map_err(|error| format!("plugin {changed}: {error}"))?;
-        }
     }
     install::validate_installed(&serde_json::to_value(&state).map_err(|error| error.to_string())?)?;
     write_installed(config_dir, &state)?;
@@ -772,16 +745,6 @@ pub fn change_plugin(
         }
     }
     if action == "remove" {
-        // The application of a connector plugin leaves with it: an installed one with its folder, a located one by its entry.
-        if let Some(application) =
-            crate::application::installed_application(config_dir, &plugin.path)?
-        {
-            let application_id = application
-                .get("id")
-                .and_then(Value::as_str)
-                .ok_or("the application of the plugin has no id")?;
-            crate::application::remove_application(config_dir, application_id)?;
-        }
         state.plugins.remove(id);
         drop_unnamed_sidecars(&mut state);
     } else if let Some(plugin) = state.plugins.get_mut(id) {
@@ -838,7 +801,6 @@ pub(crate) fn run_plugins(
                     &positionals[2],
                     options.core_version,
                     &platform,
-                    &mut crate::application::store_application_step,
                 )?;
                 Ok(print_json(stdout, &result)?)
             }

@@ -121,7 +121,7 @@ func newHost(directory string) (*Host, error) {
 		}
 		return h.sidecars.Declare(declarations)
 	}
-	plugins, err := NewPlugins(directory, apply, h.notifyPlugins, h.notifyPluginsProgress)
+	plugins, err := NewPlugins(directory, apply, h.notifyPlugins)
 	if err != nil {
 		return nil, err
 	}

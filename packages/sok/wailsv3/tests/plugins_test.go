@@ -296,12 +296,12 @@ func stateJSON(t *testing.T, config string) string {
 // contract: cli.plugin.state-reads-registry-and-installed
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
-	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"applications":{}}` {
+	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true}` {
 		t.Fatalf("state without a registry = %s", text)
 	}
 	index := pluginVersions(t, "0.2.0")
 	runJSON(t, "registry", "use", index, "--config-dir", config)
-	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t), func(sok.ApplicationStep) {}); err != nil {
+	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t)); err != nil {
 		t.Fatal(err)
 	}
 	state, err := sok.ReadPluginsState(config)
@@ -339,10 +339,10 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 func TestRunPluginActionMatchesThePluginCommands(t *testing.T) {
 	config := t.TempDir()
 	runJSON(t, "registry", "use", pluginVersions(t, "0.2.0"), "--config-dir", config)
-	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t), func(sok.ApplicationStep) {}); err != nil {
+	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t)); err != nil {
 		t.Fatal(err)
 	}
-	disabled, err := sok.RunPluginAction(config, "disable", "probe", "0.0.2", "", func(sok.ApplicationStep) {})
+	disabled, err := sok.RunPluginAction(config, "disable", "probe", "0.0.2", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,10 +353,10 @@ func TestRunPluginActionMatchesThePluginCommands(t *testing.T) {
 	if !strings.Contains(stdout, `"enabled": false`) {
 		t.Fatalf("plugin list after disable %s", stdout)
 	}
-	if _, err := sok.RunPluginAction(config, "rename", "probe", "0.0.2", "", func(sok.ApplicationStep) {}); err == nil || err.Error() != `unknown plugin action "rename"` {
+	if _, err := sok.RunPluginAction(config, "rename", "probe", "0.0.2", ""); err == nil || err.Error() != `unknown plugin action "rename"` {
 		t.Fatalf("unknown action: %v", err)
 	}
-	if removed, err := sok.RunPluginAction(config, "remove", "probe", "0.0.2", "", func(sok.ApplicationStep) {}); err != nil || removed != nil {
+	if removed, err := sok.RunPluginAction(config, "remove", "probe", "0.0.2", ""); err != nil || removed != nil {
 		t.Fatalf("remove = %v, %v", removed, err)
 	}
 	if exists(filepath.Join(config, "plugins/probe")) {

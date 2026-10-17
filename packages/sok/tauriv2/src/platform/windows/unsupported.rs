@@ -24,10 +24,6 @@ impl Platform for Windows {
         false
     }
 
-    fn symlink(&self, _target: &std::path::Path, _link: &std::path::Path) -> Result<(), String> {
-        Err("symbolic links are not implemented on windows".into())
-    }
-
     fn set_executable(&self, _path: &std::path::Path, _executable: bool) -> Result<(), String> {
         Err("file modes is not implemented on windows".into())
     }
@@ -38,13 +34,6 @@ impl Platform for Windows {
 
     fn open_index(&self, _path: &std::path::Path) -> Result<std::fs::File, String> {
         Err("index files are not implemented on windows".into())
-    }
-
-    fn application_of_bundle(
-        &self,
-        _identifier: &str,
-    ) -> Result<Option<std::path::PathBuf>, String> {
-        Err("application bundles are not implemented on windows".into())
     }
 
     fn lock_file(&self, _file: &std::fs::File) -> Result<(), String> {
@@ -97,18 +86,5 @@ impl Platform for Windows {
 
     fn key(&self) -> Result<String, String> {
         Err("platform key is not implemented on windows".into())
-    }
-
-    /// The application identifiers of the platform are not implemented on windows.
-    fn application_of_identifier(
-        &self,
-        _identifier: &str,
-    ) -> Result<Option<std::path::PathBuf>, String> {
-        Err("application identifiers are not implemented on windows".into())
-    }
-
-    /// winget is the standard package manager of windows.
-    fn package_manager(&self) -> (&'static str, &'static str) {
-        ("windows", "winget")
     }
 }

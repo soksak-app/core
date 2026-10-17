@@ -651,34 +651,10 @@ fn invalid_json_closes_connection() {
 | `plugins.run.changes-like-the-command` | `install`, `update`, `disable`, `enable`, `remove`의 `pluginsRun`은 같은 `sok plugin` 명령처럼 `installed.json`과 폴더를 바꾸고 그 출력을 돌려주며, 바꿀 때마다 모든 창에 `{action, plugin}`과 함께 `plugins-changed`를 보낸다. | both |
 | `plugins.run.applies-before-it-notifies` | `installed.json`을 바꾸는 plugin 작업은 `plugins-changed`를 보내기 전에 변경을 사이드카에 적용한다. | both |
 | `plugins.run.rejects-invalid-and-concurrent` | `pluginsRun`은 알 수 없는 action, 비어 있지 않은 문자열이 아닌 plugin id, 명령의 message로 실패한 작업, 다른 작업이 실행 중일 때의 호출을 `another plugin operation is running`으로 거부하고, `plugins-changed` event를 보내지 않는다. | both |
-| `plugins.run.reports-application-progress` | `pluginsRun` 동안 연결 plugin의 애플리케이션을 연결하는 각 단계가 host의 진행 수신자에 `{action, plugin, application, step, ok}`로 닿고, host는 그것을 모든 창에 `plugins-progress`로 보낸다. | both |
 | `plugins.registry.sets-like-the-command` | registry index로 `pluginsUseRegistry`를 부르면 `sok registry use`처럼 `plugins/registry.json`을 쓰고 `{ index }`를 돌려준다. 비어 있지 않은 문자열이 아닌 `index`는 `index must be a non-empty string`으로 거부한다. | both |
 | `fetch.https.reads-a-tls-response` | 설정한 인증 기관이 신뢰하는 TLS server에서 `https:` index나 release를 읽고, `sha256`이 항목과 다른 release는 실패한다. | both |
 | `fetch.https.redirects-only-to-https` | `https:` URL로의 redirect는 5번까지 따라간다. 여섯 번째 redirect와 `http:`로의 redirect는 그 문장으로 실패한다. | both |
 | `fetch.https.reports-status-size-and-timeout` | 200이 아닌 응답, 한도보다 큰 본문, 한도보다 느린 요청은 `HTTP <status>`, `larger than <bytes> bytes`, `timed out after <seconds> s`로 실패한다. | both |
-| `application.locate.appid-by-platform` | locate 항목 `appid`는 플랫폼에 그 식별자의 설치된 애플리케이션을 묻는다. 모든 플랫폼은 구현될 때까지 `locate entry <n>: application identifiers are not implemented on <os>`를 돌려준다. | both |
-| `application.locate.command-on-search-path` | locate 항목 `command`는 설치기가 `PATH`에서 넘기는 검색 경로에서 그 이름의 실행 파일을 찾는다. | both |
-| `application.locate.first-way-that-finds` | locate 항목은 차례로 시도하고, 실행 파일을 처음 찾은 항목이 그것을 종류와 함께 준다. | both |
-| `application.locate.skips-non-executable` | 실행 bit가 없는 파일은 설치된 애플리케이션이 아니다. | both |
-| `application.locate.bundle-by-identifier` | locate 항목 `bundle`은 darwin에서 metadata 색인으로 그 식별자의 bundle을 찾아 그 폴더에서 `program`을 쓴다. 다른 플랫폼은 `not implemented on <os>`로 거부한다. | both |
-| `application.release.downloads-compares-unpacks` | release 레시피는 https release를 내려받아 SHA-256을 비교하고, tar.gz를 파일과 안쪽 symbolic link와 함께 애플리케이션 폴더에 푼다. | both |
-| `application.release.refuses-other-hash` | SHA-256이 다른 release는 `sha256 <got> is not <want>`로 실패하고 폴더를 남기지 않는다. | both |
-| `application.release.refuses-escaping-link` | 대상이 폴더 밖으로 나가는 release의 symbolic link는 `release entry <name> links outside the folder`로 실패한다. | both |
-| `application.release.one-executable` | `unpack`이 `none`인 release는 주소의 마지막 segment 이름을 가진 실행 파일 하나다. | both |
-| `application.release.zip-by-platform` | zip release는 darwin에서 platform의 bundle 추출로 풀린다. 다른 플랫폼은 `not implemented on <os>`로 거부한다. | both |
-| `application.package.manager-of-platform` | 관리자가 플랫폼의 관리자가 아닌 package 레시피는 `application package manager of <os> is <manager>, not <name>`으로 실패한다. `winget`과 `flatpak`은 `application package manager <name> is not implemented on <os>`로 실패한다. brew 검사는 brew가 플랫폼의 관리자이고 검색 경로에 있는 곳에서 돌고, 다른 곳에서는 건너뛴다. | both |
-| `application.package.brew-has-declared-kind` | 검색 경로에 brew가 있으면 선언한 cask나 formula로 brew가 가진 package를 받아들이고, 없으면 `brew is not on the search path`로 실패한다. | both |
-| `application.package.brew-lacks-package` | brew가 가지지 않은 package는 brew의 응답과 함께 실패한다. | both |
-| `application.package.other-kind-refused` | formula로 선언한 cask는 거부된다. | both |
-| `application.source.clones-and-builds` | source 레시피는 https 저장소를 git으로 ref에서 애플리케이션 폴더로 clone하고 거기서 build 명령을 실행한다. | both |
-| `application.source.failed-command-named` | 실패한 build 명령은 출력과 함께 자기를 이름하고 폴더를 남기지 않는다. | both |
-| `application.record.holds-place-and-way` | `plugins/applications.json`은 각 애플리케이션의 버전, 경로, 방식, 방법과 함께 format 1을 가진다. | both |
-| `application.record.refuses-other-form` | 다른 형식의 기록은 파일과 찾은 것을 이름하며 거부된다. | both |
-| `application.record.removal-by-way` | 제거는 설치한 애플리케이션의 폴더와 항목을, 찾아서 연결한 애플리케이션의 항목만 지운다. | both |
-| `application.connector.connects-installed` | 연결 plugin 설치는 locate 항목이 찾은 애플리케이션을 설치하지 않고 기록하며, plugin 제거는 그 항목만 지운다. | both |
-| `application.connector.connects-after-failed-install` | 연결이 실패한 설치 뒤의 설치는, 실패한 설치가 plugin 폴더를 이미 풀어 다시 풀 것이 없어도 애플리케이션을 연결한다. | both |
-| `application.connector.refuses-other-platform` | 플랫폼 항목이 없는 연결 plugin은 `application <id> does not support <platform>`으로 실패하고 아무것도 바꾸지 않는다. | both |
-| `application.connector.steps-observed-and-stored` | 연결의 각 단계는 작업의 관찰자에 닿고, 명령줄은 그것을 `sok.application.step`으로 저장한다. | both |
 | `fetch.url.rejects-other-schemes` | `https:`도 절대 `file:` URL도 아닌 index나 release URL은 `the URL must be https: or an absolute file: URL`로 실패한다. | both |
 | `installed.modules.serve-installed-files` | 켜진 설치 plugin의 `/modules/<package>/<path>`는 기록된 `path` 안의 파일을 제공한다. 없는 파일이나 빈 segment, `.`, `..`가 있는 경로는 찾을 수 없다. 꺼진 plugin이나 다른 package는 애플리케이션 frontend가 제공한다. | both |
 | `installed.shared.serve-extension-point-modules` | `/shared/<plugin id>.<point>/<specifier>.js`는 켜진 설치 plugin의 `plugin.json` `extends.<point>.modules`가 specifier에 대응한, 그 plugin의 기록된 `path` 안의 파일을 제공한다. `.js`로 끝나지 않는 경로, plugin이 선언하지 않은 지점, 지점이 대응하지 않은 specifier, 없는 파일, 빈 부분이나 `.`, `..` 부분이 있는 경로, 꺼졌거나 알 수 없는 plugin은 찾을 수 없고, 읽을 수 없는 `plugin.json`은 그 경로와 함께 실패한다. | both |

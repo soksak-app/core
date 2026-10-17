@@ -59,7 +59,6 @@ const FAMILIES: &[(&str, Class)] = &[
 pub fn class_of(name: &str) -> Option<Class> {
     let exact = match name {
         "host.app.event" => Some(Class::Lifecycle),
-        "host.application.step" => Some(Class::Lifecycle),
         "host.binding.call" => Some(Class::Call),
         "host.buffer.dropped" => Some(Class::Lifecycle),
         "host.crash.found" => Some(Class::Lifecycle),
@@ -130,7 +129,6 @@ pub fn class_of(name: &str) -> Option<Class> {
         "page.start" => Some(Class::Lifecycle),
         "page.update.operation" => Some(Class::Call),
         "page.window.operation" => Some(Class::Call),
-        "sok.application.step" => Some(Class::Lifecycle),
         "sok.command" => Some(Class::Call),
         "sok.panic" => Some(Class::Lifecycle),
         "sok.replay.divergence" => Some(Class::Frame),

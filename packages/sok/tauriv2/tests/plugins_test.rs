@@ -417,7 +417,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let config = Dir::new();
     assert_eq!(
         state_json(&config),
-        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"applications":{}}"#
+        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true}"#
     );
     let registry = plugin_versions(&["0.2.0"]);
     run_json(&[
@@ -428,15 +428,8 @@ fn plugins_state_reports_the_registry_and_the_installation() {
         config.text(),
     ]);
     let platform = soksak_sok::current_platform().expect("platform");
-    soksak_sok::plugins::run_plugin_action(
-        &config.0,
-        "install",
-        "probe",
-        "0.0.2",
-        &platform,
-        &mut |_| {},
-    )
-    .expect("install");
+    soksak_sok::plugins::run_plugin_action(&config.0, "install", "probe", "0.0.2", &platform)
+        .expect("install");
     let state: Value = serde_json::from_str(&state_json(&config)).unwrap();
     assert_eq!(state["registry"], format!("file://{}", registry.index()));
     assert_eq!(state["index"]["plugins"][0]["id"], "probe");
@@ -472,47 +465,20 @@ fn run_plugin_action_matches_the_plugin_commands() {
         config.text(),
     ]);
     let platform = soksak_sok::current_platform().expect("platform");
-    soksak_sok::plugins::run_plugin_action(
-        &config.0,
-        "install",
-        "probe",
-        "0.0.2",
-        &platform,
-        &mut |_| {},
-    )
-    .expect("install");
-    let disabled = soksak_sok::plugins::run_plugin_action(
-        &config.0,
-        "disable",
-        "probe",
-        "0.0.2",
-        "",
-        &mut |_| {},
-    )
-    .expect("disable");
+    soksak_sok::plugins::run_plugin_action(&config.0, "install", "probe", "0.0.2", &platform)
+        .expect("install");
+    let disabled =
+        soksak_sok::plugins::run_plugin_action(&config.0, "disable", "probe", "0.0.2", "")
+            .expect("disable");
     assert_eq!(serde_json::to_value(&disabled).unwrap()["enabled"], false);
     let (_, stdout, _) = run(&["plugin", "list", "--config-dir", config.text()]);
     assert!(stdout.contains(r#""enabled": false"#), "{stdout}");
-    let error = soksak_sok::plugins::run_plugin_action(
-        &config.0,
-        "rename",
-        "probe",
-        "0.0.2",
-        "",
-        &mut |_| {},
-    )
-    .err()
-    .expect("unknown action fails");
+    let error = soksak_sok::plugins::run_plugin_action(&config.0, "rename", "probe", "0.0.2", "")
+        .err()
+        .expect("unknown action fails");
     assert_eq!(error, r#"unknown plugin action "rename""#);
-    let removed = soksak_sok::plugins::run_plugin_action(
-        &config.0,
-        "remove",
-        "probe",
-        "0.0.2",
-        "",
-        &mut |_| {},
-    )
-    .expect("remove");
+    let removed = soksak_sok::plugins::run_plugin_action(&config.0, "remove", "probe", "0.0.2", "")
+        .expect("remove");
     assert_eq!(serde_json::to_string(&removed).unwrap(), "null");
     assert!(!config.0.join("plugins/probe").exists());
 }

@@ -5,7 +5,6 @@ export const CLASSES = ["lifecycle","input","call","io","frame"];
 
 const EXACT = new Map([
   ["host.app.event", "lifecycle"],
-  ["host.application.step", "lifecycle"],
   ["host.binding.call", "call"],
   ["host.buffer.dropped", "lifecycle"],
   ["host.crash.found", "lifecycle"],
@@ -76,7 +75,6 @@ const EXACT = new Map([
   ["page.start", "lifecycle"],
   ["page.update.operation", "call"],
   ["page.window.operation", "call"],
-  ["sok.application.step", "lifecycle"],
   ["sok.command", "call"],
   ["sok.panic", "lifecycle"],
   ["sok.replay.divergence", "frame"],

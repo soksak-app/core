@@ -105,7 +105,7 @@ fn run_plugin_action_takes_no_lock_beside_a_live_owner() {
     released_config(&config);
     // The host's own lock is present, owned by this live process.
     fs::write(config.join("process.lock"), std::process::id().to_string()).unwrap();
-    if let Err(error) = run_plugin_action(&config, "disable", "probe", "", "", &mut |_| {}) {
+    if let Err(error) = run_plugin_action(&config, "disable", "probe", "", "") {
         panic!("the host entry refused beside its own lock: {error}");
     }
     let _ = fs::remove_dir_all(&config);

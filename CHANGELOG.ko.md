@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F194.10.2: 두 `sok` 패키지의 설치기가 애플리케이션을 연결, 기록, 제거하지 않고, plugin 상태가 애플리케이션을 보고하지 않으며, 두 host가 `plugins-progress`를 보내지 않는다. event `sok.application.step`, `host.application.step`과 애플리케이션 연결만 쓰던 platform 작업을 없애고, host 계약에서 연결 사례 24개를 뺀다. F194.8.4부터 F194.8.6까지의 host 수정은 남는다. Green: Go `sok`과 host 검사, Rust `sok` 검사 117개, Rust host 검사 408개, clippy, event class와 census 검사.
 - F194.10.1: `@soksak/plugin-api`에 embed page `mountApplication`과 manifest 필드 `application`이 없고, surface context에 `runtime.applications`가 없으며, workbench에 연결된 애플리케이션의 기록과 애플리케이션 연결의 진행 줄이 없다. 외부 애플리케이션 표면의 파일을 없앤다. Green: plugin-api 검사 208개 중 208개, workbench 검사 481개 중 481개.
 - 체크리스트 항목 `F194.9` 폐기: 캡처 연결 plugin은 애플리케이션 창의 frame을 복사해 보였는데, 그 지연과 입력 경로는 이 프로젝트의 surface가 요구하는 성능에 맞지 않는다. 제안을 없애고, 연결 plugin은 embed protocol로만 애플리케이션을 보인다.
 - F160.7-1: 반복 160번(그중 100번은 부하 아래)과 Tauri diagnostics host suite 전체 3번 뒤 재현되지 않음으로 닫는다. 두 host의 감시자가 source와 함께 오류 문장이나 policy를 보고하고, 두 검사가 각 대기의 단계를 이름하므로 재발하면 위치가 남는다.

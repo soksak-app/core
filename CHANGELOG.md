@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F194.10.2: the installers of both `sok` packages connect, record and remove no application, the plugin state reports no applications, both hosts send no `plugins-progress`, the events `sok.application.step` and `host.application.step` and the platform operations that only the application connection used are removed, and the host contract drops its 24 connector cases; the host corrections of F194.8.4 to F194.8.6 stay. Green: Go `sok` and host checks, 117 Rust `sok` checks, 408 Rust host checks, clippy, the event class and census checks.
 - F194.10.1: `@soksak/plugin-api` has no embed page `mountApplication` and no manifest field `application`, the surface context has no `runtime.applications`, and the workbench has no record of connected applications and no progress line of connecting an application; the files of the external application surface are removed. Green: 208 of 208 plugin-api checks and 481 of 481 workbench checks.
 - Retired checklist entry `F194.9`: capture connector plugins showed an application by copying the frames of its window, with a delay and an input path that do not meet the performance that a surface of this project requires; the proposal is removed, and a connector plugin shows an application only through the embed protocol.
 - F160.7-1: closed as not reproduced after 160 repeats, 100 of them under load, and three full runs of the Tauri diagnostics host suite; the watchers of both hosts report the error text or the policy with the source, and both checks name the step of each wait, so a recurrence is located.

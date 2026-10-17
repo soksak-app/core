@@ -53,17 +53,3 @@ func (windows) LockFile(*os.File) error {
 func (windows) PathsDir() (string, error) {
 	return "", errors.New("path entries are not implemented on windows")
 }
-
-func (windows) ApplicationOfBundle(string) (string, bool, error) {
-	return "", false, errors.New("application bundles are not implemented on windows")
-}
-
-// ApplicationOfIdentifier: the application identifiers of the platform are not implemented on windows.
-func (windows) ApplicationOfIdentifier(string) (string, bool, error) {
-	return "", false, errors.New("application identifiers are not implemented on windows")
-}
-
-// PackageManager: winget is the standard package manager of windows.
-func (windows) PackageManager() (string, string) {
-	return "windows", "winget"
-}

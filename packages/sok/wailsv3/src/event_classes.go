@@ -18,7 +18,6 @@ var Classes = []Class{ClassLifecycle, ClassInput, ClassCall, ClassIo, ClassFrame
 
 var eventClasses = map[string]Class{
 	"host.app.event":                ClassLifecycle,
-	"host.application.step":         ClassLifecycle,
 	"host.binding.call":             ClassCall,
 	"host.buffer.dropped":           ClassLifecycle,
 	"host.crash.found":              ClassLifecycle,
@@ -89,7 +88,6 @@ var eventClasses = map[string]Class{
 	"page.start":                    ClassLifecycle,
 	"page.update.operation":         ClassCall,
 	"page.window.operation":         ClassCall,
-	"sok.application.step":          ClassLifecycle,
 	"sok.command":                   ClassCall,
 	"sok.panic":                     ClassLifecycle,
 	"sok.replay.divergence":         ClassFrame,

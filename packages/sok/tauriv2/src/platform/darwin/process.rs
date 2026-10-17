@@ -40,12 +40,6 @@ impl Platform for Darwin {
         metadata.permissions().mode() & 0o111 != 0
     }
 
-    /// Makes the symbolic link with `std::os::unix::fs::symlink`.
-    fn symlink(&self, target: &std::path::Path, link: &std::path::Path) -> Result<(), String> {
-        std::os::unix::fs::symlink(target, link)
-            .map_err(|error| crate::files::file_error(link.display(), &error))
-    }
-
     fn set_executable(&self, path: &std::path::Path, executable: bool) -> Result<(), String> {
         use std::os::unix::fs::PermissionsExt;
         let mode = if executable { 0o755 } else { 0o644 };
@@ -75,44 +69,6 @@ impl Platform for Darwin {
             .mode(0o600)
             .open(path)
             .map_err(|error| crate::files::file_error(path.display(), &error))
-    }
-
-    /// Asks the metadata index (`mdfind`) for an application bundle whose `CFBundleIdentifier` is the identifier and returns the
-    /// first one under `/Applications`, `/System/Applications` or the user Applications folder before any other.
-    fn application_of_bundle(
-        &self,
-        identifier: &str,
-    ) -> Result<Option<std::path::PathBuf>, String> {
-        if identifier.contains(['\'', '"', '\\']) {
-            return Err(format!(
-                "bundle identifier {identifier:?} holds a quote or a backslash"
-            ));
-        }
-        let output = std::process::Command::new("mdfind")
-            .arg("-0")
-            .arg(format!("kMDItemCFBundleIdentifier == '{identifier}'"))
-            .output()
-            .map_err(|error| format!("mdfind for {identifier}: {error}"))?;
-        if !output.status.success() {
-            return Err(format!("mdfind for {identifier}: {}", output.status));
-        }
-        let text = String::from_utf8_lossy(&output.stdout);
-        let found: Vec<&str> = text
-            .split('\0')
-            .filter(|path| path.ends_with(".app"))
-            .collect();
-        if found.is_empty() {
-            return Ok(None);
-        }
-        let home = std::env::var_os("HOME")
-            .ok_or("the home folder for the user Applications folder: HOME is not set")?;
-        let user = format!("{}/Applications/", std::path::Path::new(&home).display());
-        for folder in ["/Applications/", "/System/Applications/", user.as_str()] {
-            if let Some(path) = found.iter().find(|path| path.starts_with(folder)) {
-                return Ok(Some(std::path::PathBuf::from(path)));
-            }
-        }
-        Ok(Some(std::path::PathBuf::from(found[0])))
     }
 
     /// Takes `flock(LOCK_EX)` on the file, which excludes the other open files of the same file in every process.
@@ -302,18 +258,5 @@ impl Platform for Darwin {
             "x86_64" => Ok("darwin-x64".into()),
             other => Err(format!("darwin/{other} has no platform key")),
         }
-    }
-
-    /// The application identifiers of the platform are not implemented on darwin.
-    fn application_of_identifier(
-        &self,
-        _identifier: &str,
-    ) -> Result<Option<std::path::PathBuf>, String> {
-        Err("application identifiers are not implemented on darwin".into())
-    }
-
-    /// brew is the standard package manager of darwin.
-    fn package_manager(&self) -> (&'static str, &'static str) {
-        ("darwin", "brew")
     }
 }

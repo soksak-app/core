@@ -164,23 +164,6 @@
       },
       "description": "One run of the command line tool: the command word, the arguments and the error text cut to 1024 bytes (`truncated` is true when either was cut), the microseconds, the exit status, and the first line of its standard error for a status other than 0."
     },
-    "sok.application.step": {
-      "layer": "sok",
-      "class": "lifecycle",
-      "level": [
-        "info",
-        "warn"
-      ],
-      "fields": {
-        "application": "string",
-        "step": "string",
-        "ok": "boolean",
-        "micros": "number",
-        "method?": "string",
-        "error?": "string"
-      },
-      "description": "The command line tool records each step of connecting the application of a connector plugin (docs/spec/installation.md#applications): `locate` with the locate kind that found it or no method when none did, `recipe` with the recipe kind and its error when it failed, and `record`, with the microseconds of the step."
-    },
     "sok.replay.divergence": {
       "layer": "sok",
       "class": "frame",
@@ -531,23 +514,6 @@
         "kind": "string"
       },
       "description": "An application event that the host registered."
-    },
-    "host.application.step": {
-      "layer": "host",
-      "class": "lifecycle",
-      "level": [
-        "info",
-        "warn"
-      ],
-      "fields": {
-        "application": "string",
-        "step": "string",
-        "ok": "boolean",
-        "micros": "number",
-        "method?": "string",
-        "error?": "string"
-      },
-      "description": "A plugin operation of the application records each step of connecting the application of a connector plugin (docs/spec/installation.md#applications): `locate` with the locate kind that found it or no method when none did, `recipe` with the recipe kind and its error when it failed, and `record`, with the microseconds of the step."
     },
     "host.sidecar.start": {
       "layer": "host",

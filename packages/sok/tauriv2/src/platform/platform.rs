@@ -28,8 +28,6 @@ pub trait Platform {
     fn key(&self) -> Result<String, String>;
     /// The folder that holds path entries. It is an error when this operating system has no such folder (docs/spec/cli.md).
     fn paths_dir(&self) -> Result<PathBuf, String>;
-    /// Makes a symbolic link at `link` whose target is the text `target`, for the symbolic links of an application release.
-    fn symlink(&self, target: &std::path::Path, link: &std::path::Path) -> Result<(), String>;
     /// Sets the mode of an unpacked file to 0755 for an executable and to 0644 otherwise.
     fn set_executable(&self, path: &std::path::Path, executable: bool) -> Result<(), String>;
     /// Closes the file at path and returns the result. The drop of the standard library discards the result of closing.
@@ -52,17 +50,6 @@ pub trait Platform {
     fn monotonic_nanos(&self) -> Result<u64, String>;
     /// Opens the index file at the path for reading and writing, and creates it with the mode of a private file when it does not exist.
     fn open_index(&self, path: &std::path::Path) -> Result<std::fs::File, String>;
-    /// The path of the application bundle with the identifier, or `None` when none is found (docs/spec/installation.md#applications).
-    fn application_of_bundle(&self, identifier: &str)
-    -> Result<Option<std::path::PathBuf>, String>;
-    /// The executable of the installed application with the application identifier of the platform, or `None` when none is found
-    /// (docs/spec/installation.md#applications).
-    fn application_of_identifier(
-        &self,
-        identifier: &str,
-    ) -> Result<Option<std::path::PathBuf>, String>;
-    /// The name of the operating system and its standard package manager (docs/spec/installation.md#applications).
-    fn package_manager(&self) -> (&'static str, &'static str);
     /// Takes an exclusive advisory lock on the open file and waits until it holds it, so the processes that update one index exclude
     /// each other (docs/spec/logging.md#index). Closing the file releases the lock.
     fn lock_file(&self, file: &std::fs::File) -> Result<(), String>;

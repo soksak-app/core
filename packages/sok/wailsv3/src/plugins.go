@@ -157,9 +157,6 @@ type PluginsState struct {
 	Installed *InstalledState `json:"installed"`
 	// FirstRun is true when plugins/installed.json does not exist. The application then installs the starter pack.
 	FirstRun bool `json:"firstRun"`
-	// Applications holds each application that a connector plugin connected (plugins/applications.json), which a surface
-	// starts (docs/spec/installation.md#applications).
-	Applications map[string]ApplicationRecord `json:"applications"`
 }
 
 // ReadPluginsState reads the registry address, the checked index and the installation state. When the index cannot be
@@ -174,11 +171,7 @@ func ReadPluginsState(configDir string) (*PluginsState, error) {
 	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 		return nil, fileError(path, statErr)
 	}
-	applications, err := ReadApplications(configDir)
-	if err != nil {
-		return nil, err
-	}
-	state := &PluginsState{Installed: installed, FirstRun: statErr != nil, Applications: applications.Applications}
+	state := &PluginsState{Installed: installed, FirstRun: statErr != nil}
 	url, exists, err := readRegistryURL(configDir)
 	switch {
 	case err != nil:
@@ -198,10 +191,10 @@ func ReadPluginsState(configDir string) (*PluginsState, error) {
 // update, remove, enable and disable. The hosts call it inside their own ownership of the configuration directory, so
 // it takes no lock; the command line entry owns the directory for the duration of the write
 // (docs/spec/installation.md).
-func RunPluginAction(configDir, action, id, core, platform string, observe ApplicationObserver) (any, error) {
+func RunPluginAction(configDir, action, id, core, platform string) (any, error) {
 	switch action {
 	case "install", "update":
-		return InstallPlugin(configDir, id, core, platform, action == "update", observe)
+		return InstallPlugin(configDir, id, core, platform, action == "update")
 	case "remove", "enable", "disable":
 		return ChangePlugin(configDir, id, action)
 	default:
@@ -349,7 +342,7 @@ func pluginResult(state *InstalledState, id string) map[string]any {
 // InstallPlugin installs the selected version of a plugin and its plugin dependencies. With update it accepts only an
 // installed plugin. It reads the plugin.json of every selected plugin version and completes the plan before it extracts
 // an release.
-func InstallPlugin(configDir, id, core, platform string, update bool, observe ApplicationObserver) (map[string]any, error) {
+func InstallPlugin(configDir, id, core, platform string, update bool) (map[string]any, error) {
 	index, err := readRegistry(configDir)
 	if err != nil {
 		return nil, err
@@ -389,24 +382,6 @@ func InstallPlugin(configDir, id, core, platform string, update bool, observe Ap
 		}
 		if err := installRelease("sidecar "+sidecar.Name+" "+sidecar.Version+" "+platform, sidecar.Release, filepath.Join(configDir, installed.Path)); err != nil {
 			return nil, err
-		}
-	}
-	// A connector plugin connects its application before the installation is recorded, so a failure leaves
-	// installed.json unchanged (docs/spec/installation.md#applications). Each installed or updated plugin connects,
-	// also when its folder was extracted by an earlier install that failed.
-	for _, changed := range plan.order {
-		application, declared, err := installedApplication(configDir, state.Plugins[changed].Path)
-		if err != nil {
-			return nil, err
-		}
-		if declared {
-			search, found := os.LookupEnv("PATH")
-			if !found {
-				return nil, errors.New("the installer has no PATH to find the application of a connector plugin")
-			}
-			if err := ConnectApplication(configDir, platform, application, search, observe); err != nil {
-				return nil, fmt.Errorf("plugin %s: %w", changed, err)
-			}
 		}
 	}
 	value, err := stateValue(state)
@@ -802,20 +777,6 @@ func ChangePlugin(configDir, id, action string) (any, error) {
 	}
 	switch action {
 	case "remove":
-		// The application of a connector plugin leaves with it: an installed one with its folder, a located one by its entry.
-		application, declared, err := installedApplication(configDir, plugin.Path)
-		if err != nil {
-			return nil, err
-		}
-		if declared {
-			applicationID, err := field("application", application, "id")
-			if err != nil {
-				return nil, err
-			}
-			if err := RemoveApplication(configDir, applicationID); err != nil {
-				return nil, err
-			}
-		}
 		delete(state.Plugins, id)
 		dropUnnamedSidecars(state)
 	case "enable", "disable":
@@ -882,7 +843,7 @@ func runPlugins(a arguments, stdout io.Writer, options Options) error {
 				return err
 			}
 		}
-		if result, err = RunPluginAction(configDir, a.positionals[1], a.positionals[2], options.CoreVersion, platform, StoreApplicationStep); err != nil {
+		if result, err = RunPluginAction(configDir, a.positionals[1], a.positionals[2], options.CoreVersion, platform); err != nil {
 			return err
 		}
 	default:

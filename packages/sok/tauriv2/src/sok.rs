@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 use serde_json::value::RawValue;
 use serde_json::{Map, Value};
 
-pub mod application;
 pub mod appupdate;
 mod command;
 mod debug;

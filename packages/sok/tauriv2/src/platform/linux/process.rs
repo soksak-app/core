@@ -34,12 +34,6 @@ impl Platform for Linux {
         metadata.permissions().mode() & 0o111 != 0
     }
 
-    /// Makes the symbolic link with `std::os::unix::fs::symlink`.
-    fn symlink(&self, target: &std::path::Path, link: &std::path::Path) -> Result<(), String> {
-        std::os::unix::fs::symlink(target, link)
-            .map_err(|error| crate::files::file_error(link.display(), &error))
-    }
-
     fn set_executable(&self, path: &std::path::Path, executable: bool) -> Result<(), String> {
         use std::os::unix::fs::PermissionsExt;
         let mode = if executable { 0o755 } else { 0o644 };
@@ -146,14 +140,6 @@ impl Platform for Linux {
         Err("application bundles are not implemented on linux".into())
     }
 
-    /// Linux has no application bundles with identifiers.
-    fn application_of_bundle(
-        &self,
-        _identifier: &str,
-    ) -> Result<Option<std::path::PathBuf>, String> {
-        Err("application bundles are not implemented on linux".into())
-    }
-
     fn bundle_version(&self, _bundle: &std::path::Path) -> Result<String, String> {
         Err("application bundles are not implemented on linux".into())
     }
@@ -164,18 +150,5 @@ impl Platform for Linux {
             "x86_64" => Ok("linux-x64".into()),
             other => Err(format!("linux/{other} has no platform key")),
         }
-    }
-
-    /// The application identifiers of the platform are not implemented on linux.
-    fn application_of_identifier(
-        &self,
-        _identifier: &str,
-    ) -> Result<Option<std::path::PathBuf>, String> {
-        Err("application identifiers are not implemented on linux".into())
-    }
-
-    /// flatpak is the standard package manager of linux.
-    fn package_manager(&self) -> (&'static str, &'static str) {
-        ("linux", "flatpak")
     }
 }
