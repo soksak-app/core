@@ -10,7 +10,7 @@ use soksak_host_tauriv2::exposure::native_failure;
 use soksak_host_tauriv2::images::Images;
 use soksak_host_tauriv2::surfaces::{
     WindowNative, close_named_surface, close_window_surfaces, create_named_surface,
-    take_removed_surfaces,
+    create_registered_surface, take_removed_surfaces,
 };
 use soksak_host_tauriv2::windows::{MainStep, NativeFailure, use_owner};
 
@@ -236,4 +236,31 @@ fn a_created_surface_has_its_name_when_its_native_surface_exists() {
         Err("surface tab-5: create returned a nil handle".to_string())
     );
     assert_eq!(named.lock().unwrap().len(), 1);
+}
+
+// contract: exposure.host-window.reads-during-surface-creation
+#[test]
+fn a_status_read_during_surface_creation_finds_the_registered_surface() {
+    // The window status reads the surface ids of the native views from the surface_hosts registry. Creation names the
+    // native view and registers it in one step, so a reading never sees a native view without its registration.
+    let named = Mutex::new(HashMap::new());
+    let surface_hosts: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
+    create_registered_surface(&named, &surface_hosts, "tab-4leevm", || Ok(7)).unwrap();
+    let status_names: HashMap<usize, String> = surface_hosts
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(id, handle)| (*handle, id.clone()))
+        .collect();
+    assert_eq!(
+        status_names.get(&7),
+        Some(&"tab-4leevm".to_string()),
+        "the native view of tab-4leevm has no registered surface after creation"
+    );
+    // A failed creation registers nothing.
+    let failed = create_registered_surface(&named, &surface_hosts, "tab-6", || {
+        Err("no window".to_string())
+    });
+    assert!(failed.is_err());
+    assert_eq!(surface_hosts.lock().unwrap().len(), 1);
 }

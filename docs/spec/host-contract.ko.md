@@ -246,6 +246,7 @@ fn invalid_json_closes_connection() {
 | `exposure.list.host-entries-described` | 모든 호스트 항목은 비어 있지 않은 설명을 가진다. | both |
 | `exposure.list.host-quit-result-null` | host.quit은 null 결과 스키마를 선언한다. | both |
 | `exposure.list.non-object-list-rejected` | 객체가 아닌 페이지 노출 목록은 오류다. | both |
+| `exposure.host-window.reads-during-surface-creation` | 네이티브 surface view는 생성하는 같은 단계에서 surface id로 이름이 붙으므로, window status 읽기는 surface id가 없는 네이티브 view를 만나지 않는다. | both |
 | `exposure.timeout.command-run-default-and-declared` | command.run은 기본 10초를 기다리고 선언된 timeout을 쓴다. | both |
 | `exposure.timeout.status-next-unbounded` | timeout이 없는 status.next는 시간 제한이 없다. | both |
 | `exposure.timeout.invalid-timeout-rejected` | 0, 600000 초과, 소수, 문자열, 음수인 command.run timeout은 -32602를 반환한다. | both |

@@ -882,17 +882,14 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		view := s.views[surface.ID]
 		if view == nil {
 			var err error
-			application.InvokeSync(func() {
-				view, err = createLogicalSurface(func() (unsafe.Pointer, error) {
-					return system.CreateSurface(win.NativeWindow())
-				}, s, surface.ID)
+			view, err = s.createRegisteredSurface(application.InvokeSync, surface.ID, func() (unsafe.Pointer, error) {
+				return system.CreateSurface(win.NativeWindow())
 			})
 			if err != nil {
 				rollback()
 				return nil, nil, err
 			}
 			s.views[surface.ID] = view
-			s.named[uintptr(view.NativeView())] = surface.ID
 			created = append(created, surface.ID)
 			PerformanceSurface("created", surface.ID, nil)
 		}
@@ -953,6 +950,21 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		gone = append(gone, id)
 	}
 	return gone, placed, nil
+}
+
+// createRegisteredSurface creates the native view of the surface id and names it in s.named in one call of run. The window
+// state reads s.named on the UI thread, so run is the UI-thread call (application.InvokeSync), and a reading never finds
+// the native view without its surface id.
+func (s *Surfaces) createRegisteredSurface(run func(func()), id string, create func() (unsafe.Pointer, error)) (*nativeWebview, error) {
+	var view *nativeWebview
+	var err error
+	run(func() {
+		view, err = createLogicalSurface(create, s, id)
+		if err == nil {
+			s.named[uintptr(view.handle)] = id
+		}
+	})
+	return view, err
 }
 
 func newNativeWebview(owner *Surfaces, options nativeWebviewOptions) (*nativeWebview, error) {

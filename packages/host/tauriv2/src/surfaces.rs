@@ -678,14 +678,13 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 handle
             } else {
                 let names = Arc::clone(&views.0);
+                let hosts = Arc::clone(&context);
                 let id = s.id.clone();
                 let handle = exposure::on_main(window, move || {
-                    create_named_surface(&names, &id, || platform.create_surface(main_handle))
+                    create_registered_surface(&names, &hosts.surface_hosts, &id, || {
+                        platform.create_surface(main_handle)
+                    })
                 })?;
-                surface_hosts
-                    .lock()
-                    .map_err(|e| e.to_string())?
-                    .insert(s.id.clone(), handle);
                 crate::performance::surface("created", &s.id, None);
                 handle
             };
@@ -1035,6 +1034,22 @@ pub fn create_named_surface(
         .lock()
         .map_err(|e| e.to_string())?
         .insert(handle, id.to_string());
+    Ok(handle)
+}
+
+/// Creates the native surface of `id` and registers it in `named` and `hosts` in one step of the main thread. The window
+/// status reads the native views with `hosts`, so a view that exists is always registered in `hosts` too.
+pub fn create_registered_surface(
+    named: &Mutex<HashMap<Handle, String>>,
+    hosts: &Mutex<HashMap<String, Handle>>,
+    id: &str,
+    create: impl FnOnce() -> Result<Handle, String>,
+) -> Result<Handle, String> {
+    let handle = create_named_surface(named, id, create)?;
+    hosts
+        .lock()
+        .map_err(|e| e.to_string())?
+        .insert(id.to_string(), handle);
     Ok(handle)
 }
 
