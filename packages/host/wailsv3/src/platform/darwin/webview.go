@@ -104,6 +104,7 @@ import (
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/routine"
 )
 
 // dispatcher passes the commit and the messages of a web view to the receiver function. The receiver function is that of the last created web view, and the host
@@ -121,7 +122,7 @@ var terminated func(identifier uint64)
 //export nativeTerminated
 func nativeTerminated(identifier C.ulonglong) {
 	if receiver := terminated; receiver != nil {
-		go receiver(uint64(identifier))
+		routine.Go("webview-terminated", func() { receiver(uint64(identifier)) })
 	}
 }
 

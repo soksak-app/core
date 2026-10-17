@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.5.2: Wails 종료 callback이 `routine.Go`로 goroutine을 시작하고, `document-region.js`와 log audit의 nullish 기본값이 이유를 밝히므로 push의 census가 통과한다.
 - F196.5.1: Tauri host가 surface page를 가진 main web view의 스트림 구독을, page가 새 문서를 시작할 때(시작 요청에서)와 그 web content process가 끝날 때(framework가 전달하는 종료 handler) 지우므로, host 계약의 제거 행이 두 host에서 돈다. Red: `remove_surface_for_reload`와 `Streams::remove_page` 없이 시험이 build되지 않았다. Green: Tauri host 시험이 clippy 검사와 함께 통과한다.
 - F197.3-2: Rust host 시험이 쓰는 것만 import하고 `documents.rs`가 중첩 `if`를 합치므로 push의 clippy 검사가 통과한다.
 - F197.3-1: 모든 수준 공용 시험 helper와 객체 수 시험이 Go와 Rust에서 같은 이름을 가지므로 hosts 검사가 통과한다.

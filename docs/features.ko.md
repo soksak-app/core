@@ -1038,6 +1038,7 @@
   - [o] F196.4 — P1: 문서 스크립트가 스트림이 구독된 동안만 요소와 요청을 모은다. 요소는 확인 아래 스냅샷으로, 요청은 새 항목만 오고, 탐색은 `reset`을 보낸다: 구독자 없는 문서가 트리 변경마다 요소 목록 전체를 보냈다(50번 변경에 보고 51번).
   - [o] F196.5 — P1: 두 host와 plugin-api가 구독자 수, 확인, 구독한 page가 내려가거나 그 process가 끝날 때의 제거를 갖춘 스트림 구독을 제공한다.
     - [o] F196.5.1 — P1: Tauri host가 Wails host처럼 web content process가 끝나거나 새 문서를 불러온 surface page의 스트림 구독을 지운다: Tauri host는 지금 surface web view에서 두 신호를 모두 받지 못하므로, 끝나거나 다시 불러온 구독자가 수집을 켜 둔 채 남는다.
+    - [o] F196.5.2 — P1: F196.5와 F197.1의 코드가 push의 census를 통과한다: Wails 종료 callback이 입구 `routine.Go` 밖에서 goroutine을 시작했고, nullish 기본값 둘(`document-region.js`, `@soksak/log-contract`의 audit)이 이유를 밝히지 않았다. 완료: callback이 `routine.Go`로 `webview-terminated`를 시작하고 두 기본값이 이유를 밝힌다. census 시험이 통과한다.
   - [ ] F196.6 — P1: 스트림을 싣는 core release.
   - [ ] F196.7 — P1: 패널과 status가 스트림을 쓰고 F196.6의 core release를 선언하는 browser plugin release.
   - [o] F196.8 — P1: 두 host의 진단 명령이 host, page, 각 문서의 객체 수를 돌려준다.

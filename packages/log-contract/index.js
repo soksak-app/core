@@ -194,7 +194,7 @@ function chainFindings(entries, catalog) {
     // default: a process that recorded no policy applied only the default policy.
     const all = [...(policies.get(processOf(file)) ?? [])].sort((a, b) => a.ts - b.ts);
     const first = all.filter((policy) => policy.ts <= from).at(-1);
-    // The policy in force at the first event is the last one before it, or the default policy before the first one.
+    // default: the policy in force at the first event is the last one before it, or the default policy before the first one.
     const applied = [first ?? DEFAULT_POLICY, ...all.filter((policy) => policy.ts > from && policy.ts <= to)];
     // A hop declared with several levels is stored only when the policy stores each of them.
     const levels = Array.isArray(declared.level) ? declared.level : [declared.level];

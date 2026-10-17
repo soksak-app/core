@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F196.5.2: the Wails termination callback starts its goroutine through `routine.Go`, and the nullish defaults of `document-region.js` and of the log audit state their reason, so the census of the push passes.
 - F196.5.1: the Tauri host removes the stream subscriptions of its main web view, which holds the surface page, when the page starts a new document (at its start request) and when its web content process terminates (the termination handler that the framework forwards), so the removal rows of the host contract run on both hosts. Red: the tests did not build without `remove_surface_for_reload` and `Streams::remove_page`. Green: the Tauri host tests pass, with the clippy check.
 - F197.3-2: the Rust host tests import only what they use and `documents.rs` collapses its nested `if`, so the clippy check of the push passes.
 - F197.3-1: the shared test helpers of every level and the object count tests have the same names in Go and Rust, so the hosts check passes.

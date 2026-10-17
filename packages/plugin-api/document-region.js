@@ -186,6 +186,7 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       pendingSubscribes += 1;
       const opened = queue(() => port.subscribe(name, stream)).then((handle) => {
         streamListeners.set(handle, listener);
+        // default: a handle that received no message before its reply has no early messages.
         const early = earlyStreamMessages.get(handle) ?? [];
         earlyStreamMessages.delete(handle);
         for (const message of early) listener(message);
