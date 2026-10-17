@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory object-counts host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory object-counts trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -58,6 +58,21 @@ object-counts:
 	@case "$(CONFIG)" in '') echo "object-counts requires CONFIG=DIR" >&2; exit 2;; esac
 	@case "$(BUILD)" in ''|debug|release) ;; *) echo "object-counts requires BUILD=release|debug" >&2; exit 2;; esac
 	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --repetitions $(or $(REPETITIONS),20)
+
+# Measures the share of the diagnostics in the memory of a running host: with the switch 디버그 on and then off, it runs five repetitions of
+# object-counts and prints the footprint of the host process (docs/operations/examples.md).
+trace-share:
+	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "trace-share requires APP=wailsv3|tauriv2 CONFIG=DIR" >&2; exit 2;; esac
+	@case "$(CONFIG)" in '') echo "trace-share requires CONFIG=DIR" >&2; exit 2;; esac
+	@sok=target/debug/soksak-$(APP).app/Contents/MacOS/sok; \
+	  pid=$$(pgrep -f "soksak-$(APP).app/Contents/MacOS/soksak-$(APP) --config-dir $(CONFIG)" | head -1); \
+	  test -n "$$pid" || { echo "trace-share: no running $(APP) with --config-dir $(CONFIG)" >&2; exit 1; }; \
+	  for on in true false; do \
+	    echo "start debug=$$on"; \
+	    $$sok core.settings.debug --config-dir "$(CONFIG)" --params "{\"on\":$$on}" > /dev/null || exit 1; \
+	    $(MAKE) --no-print-directory object-counts APP=$(APP) CONFIG="$(CONFIG)" BUILD=debug REPETITIONS=5 > /dev/null 2>&1 || exit 1; \
+	    echo "end debug=$$on host $$pid $$(footprint -p $$pid | grep -o 'Footprint: [0-9.]* [KMG]*B' | head -1)"; \
+	  done
 
 # Prints the live malloc nodes and bytes of a running host process at start and after each minute (docs/operations/examples.md).
 host-allocations:
