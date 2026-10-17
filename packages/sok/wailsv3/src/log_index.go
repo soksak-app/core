@@ -712,7 +712,9 @@ func indexFrom(name string, state indexState, source, idx *os.File, size uint64,
 	acc := newSegment(start)
 	var carry []byte
 	position := start
-	buffer := make([]byte, indexChunkBytes)
+	// The buffer holds at most the bytes that the update reads. An update of a running log reads a few lines, and a buffer of the full chunk
+	// size made each update allocate indexChunkBytes, which the garbage-collected heap keeps as free memory.
+	buffer := make([]byte, min(uint64(indexChunkBytes), size-min(start, size)))
 	lineStart := start
 	number := int(events) + 1
 	var read, announcing int64

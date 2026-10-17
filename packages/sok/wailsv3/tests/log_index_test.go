@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -431,5 +432,37 @@ func TestLogIndexMovesWithTheGenerationsOfARotation(t *testing.T) {
 	}
 	if _, err := os.Stat(path + ".idx"); err != nil {
 		t.Errorf("a failed rotation moved the index: %v", err)
+	}
+}
+
+// contract: log.index.update-reads-with-a-buffer-of-the-new-bytes
+func TestLogIndexUpdateAllocatesForTheAppendedBytesOnly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "host-a.jsonl")
+	if err := os.WriteFile(path, []byte(linesOf(1, 4)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sok.UpdateLogIndex(path); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString(linesOf(5, 6)); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	if _, err := sok.UpdateLogIndex(path); err != nil {
+		t.Fatal(err)
+	}
+	runtime.ReadMemStats(&after)
+	// The update reads two lines of a few hundred bytes. A read buffer of the whole chunk size (8 MiB) made every update of a running host
+	// allocate 8 MiB, which the garbage-collected heap kept as free memory after the collection.
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated >= 1<<20 {
+		t.Fatalf("an update of two appended lines allocated %d bytes, want less than 1 MiB", allocated)
 	}
 }
