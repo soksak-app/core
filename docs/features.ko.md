@@ -1041,9 +1041,9 @@
     - [ ] F196.8.1 — P2: 두 host에서 `diagnostics.objects`의 surface 수 단위 시험과 명령의 wire 시험(없는 창, 응답 모양, params). F196.8의 시험에 없는 surface와 진단 backend의 선언된 seam을 통해 한다.
   - [~] F196.9 — P2: 각 문서 web view가 사이트별로 process와 data store를 함께 쓰고, 숨은 동안 throttle하고, memory pressure에 응답하고, 한도 있는 cache를 둔다. 각 동작은 문서 영역의 전후 측정과 함께 채택하고, benchmark 타깃이 사이트마다 비용을 보고한다.
     - [o] F196.9.1 — P2: 숨은 document region이 throttle한다: 추적되는 native 검사가 보이는 영역과 숨긴(`isHidden`) 영역, 다른 창에 가린 창의 영역에서 timer와 animation frame 빈도를 잰다. window facts와 surface geometry가 그 web view의 occlusion 감지를 끈다(`_setWindowOcclusionDetectionEnabled:NO`)는 점을 함께 본다. 숨거나 가려진 동안 보이는 빈도로 도는 영역은 자기 항목을 가진 결함이다.
-    - [~] F196.9.2 — P2: document region의 memory pressure 응답: 추적되는 native 검사가 시스템의 memory pressure event를 모의로 일으키고 영역의 WebContent process footprint를 전후로 잰다. process가 스스로 메모리를 줄이지 않을 때만 이 저장소가 응답을 더한다.
-    - [~] F196.9.3 — P2: document region의 process와 data store: 검사가 한 사이트와 여러 사이트의 영역 N개의 WebContent process 수를 세고, 설정 폴더마다 하나의 영구 data store를 함께 쓰는 영역당 footprint를 밝힌다.
-    - [~] F196.9.4 — P2: document region의 cache: 검사가 WebKit이 정한 back-forward cache와 memory cache로 영역을 N번 탐색한 뒤의 footprint를 잰다. 한없이 늘어나는 것은 자기 항목을 가진 결함이다.
+    - [ ] F196.9.2 — P2: document region의 memory pressure 응답(모의 event는 `kern.memorypressure_manual_trigger`를 쓰는 `memory_pressure -S`가 필요하고, root 없이는 거부된다. 검사를 돌리는 사람이 그 권한을 줄 때 돈다): 추적되는 native 검사가 시스템의 memory pressure event를 모의로 일으키고 영역의 WebContent process footprint를 전후로 잰다. process가 스스로 메모리를 줄이지 않을 때만 이 저장소가 응답을 더한다.
+    - [o] F196.9.3 — P2: document region의 process와 data store: 검사가 한 사이트와 여러 사이트의 영역 N개의 WebContent process 수를 세고, 설정 폴더마다 하나의 영구 data store를 함께 쓰는 영역당 footprint를 밝힌다.
+    - [o] F196.9.4 — P2: document region의 cache: 검사가 WebKit이 정한 back-forward cache와 memory cache로 영역을 N번 탐색한 뒤의 footprint를 잰다. 한없이 늘어나는 것은 자기 항목을 가진 결함이다.
   - [ ] F196.10 — P2: benchmark 타깃이 정해진 조작 묶음을 N번 반복하고 반복마다 객체 수를 보고한다. N에 따라 늘어나는 수치마다 자기 항목이다.
   - [ ] F196.11 — P2: host 메모리에서 performance trace의 몫을 trace를 켜고 끈 상태로 잰다.
   - [ ] F196.12 — P2: event log와 performance trace를 끈 F196.9, F196.10의 최종 검증.

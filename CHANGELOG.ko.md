@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.9.3, F196.9.4: `document_processes_test`가 두 사이트의 영역 4개와 한 사이트의 영역 4개에서 영역마다 WebContent process 하나, 각 약 13 MB를 센다. 영역은 탭처럼 process 하나를 쓴다. `document_caches_test`가 영역을 문서 2 MB와 이미지 1 MB의 page 60개로 탐색하고 footprint가 10번째 page 뒤 229440 KB에서 60번째 뒤 171137 KB로 줄어드는 것을 읽으므로 cache는 한도가 있다. 둘 다 바꿀 것이 없으며 native suite에서 돈다.
 - F197.3: 두 host와 두 `sok` build가 정책 파일 없이 오류만 저장하는 기본 정책을 적용한다(`sok`의 기본값 부분은 F197.6의 커밋과 함께 들어갔다). `error` 아래 event를 읽는 시험은 writer에 모든 수준 정책을 주고, 그 수와 index는 그 `log.policy` 줄을 포함한다. Red: `log_policy_test.go:117: default class lifecycle is "trace", expected "error"`, `start without a file: the default policy stores a warn event of the class lifecycle`와 그 Rust 짝. Green: 두 host와 두 `sok` build의 Go, Rust 시험이 통과한다.
 - F196.9.1: `document_throttle_test`가 보이는 document region, 숨긴 영역, 가린 창의 영역을 잰다: 보일 때 초당 timer 125.3번과 animation frame 59.8번, 숨기거나 가렸을 때 1.0번과 0.0번이며 문서 visibility는 hidden이다. document view는 WebKit의 occlusion 감지를 유지하고, window facts와 surface geometry는 main web view와 붙인 surface web view에서만 그것을 끈다. 바꿀 것이 없으며, 검사는 native suite에서 돈다.
 - F197.4-1: `observe_test`, `activity_observers_test`, `input_inject_test`, `webview_input_receipts_test`, `process_exit_test`, `quit_request_test`가 `error` 아래 기록을 읽기 전에 모든 수준을 저장하는 정책을 둔다. Red: 각각 그 기록에서 실패했다(예: `observe_test`의 `the registration is one event at the level info`와 index 오류). Green: 각각 2번 중 2번 통과하고, native 기본 suite가 58개 모두 통과한다.
