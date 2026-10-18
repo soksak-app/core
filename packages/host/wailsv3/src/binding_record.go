@@ -124,6 +124,11 @@ func (b *Bindings) run(ctx context.Context, method string, args []json.RawMessag
 			result = value.Interface()
 		}
 	}
+	if result == nil && err == nil {
+		// The Wails transport writes `{}` for a nil result (HTTPTransport.json), so a method that returns no value or a
+		// nil value replies the JSON value null, which the Tauri host replies for the same result.
+		result = json.RawMessage("null")
+	}
 	return result, err
 }
 

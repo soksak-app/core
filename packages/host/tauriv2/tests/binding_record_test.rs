@@ -168,3 +168,21 @@ fn a_binding_call_that_does_not_finish_is_a_warning() {
     assert_eq!(fields["ok"], false);
     assert_eq!(fields["error"], "-32603: the call ended without a result");
 }
+
+// contract: binding.reply.absent-value-is-null
+#[test]
+fn a_binding_call_without_a_value_replies_null() {
+    use tauri::ipc::{InvokeResponseBody, IpcResponse};
+    // A command result is serialized by IpcResponse, so no value and a null value reply the JSON value null.
+    let replies = [
+        ().body().unwrap(),
+        Value::Null.body().unwrap(),
+        None::<String>.body().unwrap(),
+    ];
+    for reply in replies {
+        match reply {
+            InvokeResponseBody::Json(text) => assert_eq!(text, "null"),
+            InvokeResponseBody::Raw(bytes) => panic!("raw reply of {} bytes", bytes.len()),
+        }
+    }
+}

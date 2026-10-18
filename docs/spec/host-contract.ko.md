@@ -144,6 +144,7 @@ fn invalid_json_closes_connection() {
 | `binding.record.invalid-identifiers-are-refused` | 빈 식별자이거나 따옴표, 역슬래시, 제어 문자가 든 식별자를 `cids`에 담은 호출은 그 식별자를 밝힌 오류로 거절된다. 메서드는 실행되지 않고, event는 `cids` 없이 `error`가 `-32603: <그 글>`인 실패한 `host.binding.call`이다. | both |
 | `binding.record.arguments-are-cut-before-copying` | `args`는 최대 1024바이트이고 문자 경계에서 자르며, 인자가 더 길었으면 event에 `truncated: true`가 있다. | both |
 | `binding.record.unfinished-call-names-the-error` | 결과 없이 끝난 host 호출은 level `warn`이고 `ok: false`와 `error` `-32603: the call ended without a result`를 가진 event `host.binding.call`이다. | both |
+| `binding.reply.absent-value-is-null` | method가 값을 돌려주지 않거나 null 값을 돌려주는 host 호출은 page에 JSON 값 `null`을 응답한다; Wails transport가 nil 결과를 `{}`로 쓰므로 Wails entrance는 `null`로 encode되는 값을 돌려준다. | both |
 | `binding.record.refusal-names-the-error` | host의 어떤 메서드도 가리키지 않는 호출이나 메서드가 받는 것과 다른 수의 인자를 넘기는 호출은 오류로 거절되고, 그 오류를 `-32603: <text>`로 가진 level `warn`의 event `host.binding.call`로 저장된다. | wailsv3 only: Wails는 host의 모든 메서드를 이름으로 찾는 바인딩 메서드 `Bindings.Call` 하나로 닿게 하지만, Tauri는 모르는 command와 거절된 인자를 host가 실행되기 전에 거절한다 |
 | `binding.record.native-call-is-an-event` | native web view 문서의 호출은 같은 필드를 가진 event `host.binding.call`로 저장된다. | wailsv3 only: Wails page runtime은 surface page 호출을 native bridge로 보내지만, Tauri surface page는 main page의 command를 부른다 |
 | `binding.record.every-host-method-is-callable` | host의 내보낸 모든 메서드는 입구를 통해 이름으로 닿고, 지원하지 않는 서명의 메서드는 그 메서드의 이름을 말하는 오류로 host 시작을 멈춘다. | wailsv3 only: Tauri는 `bindings!` 매크로가 정의한 command를 등록하므로 매크로 밖의 command는 등록에 들어가지 않는다 |

@@ -29,6 +29,8 @@ func (bindingTarget) Pair(first, second json.RawMessage) error { return nil }
 
 func (bindingTarget) Stop() {}
 
+func (bindingTarget) Absent(value json.RawMessage) (any, error) { return nil, nil }
+
 func (bindingTarget) Explode(value json.RawMessage) error { panic("the method failed") }
 
 // bindingCalls flushes the writer and returns the events `host.binding.call` that it stored, in order.
@@ -263,5 +265,34 @@ func TestABindingCallWithAnInvalidIdentifierIsRefusedAndNotRun(t *testing.T) {
 	fields := calls[0]["fields"].(map[string]any)
 	if _, has := calls[0]["cids"]; has || calls[0]["level"] != "warn" || fields["ok"] != false || fields["error"] != "-32603: "+err.Error() {
 		t.Fatalf("event %v, error %v", calls[0], err)
+	}
+}
+
+// contract: binding.reply.absent-value-is-null
+// The Wails transport writes `{}` for a nil result (pkg/application/transport_http.go, HTTPTransport.json) and
+// json.Marshal(result) for another one, so the entrance returns a value that encodes as `null` for a method that returns
+// no value or a nil value.
+func TestABindingCallWithoutAValueRepliesNull(t *testing.T) {
+	useEventLog(t)
+	bindings := newBindings(t)
+	for _, call := range []struct {
+		method string
+		args   []json.RawMessage
+	}{
+		{"Absent", []json.RawMessage{json.RawMessage(`1`)}},
+		{"Stop", nil},
+		{"ClipboardPersistPNG", []json.RawMessage{json.RawMessage(`"x"`)}},
+	} {
+		result, err := bindings.Call(context.Background(), call.method, call.args, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result == nil {
+			t.Fatalf("%s returned a nil result, which the transport writes as {}", call.method)
+		}
+		reply, err := json.Marshal(result)
+		if err != nil || string(reply) != "null" {
+			t.Fatalf("%s replies %s, %v, want null", call.method, reply, err)
+		}
 	}
 }
