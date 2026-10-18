@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F192.3-3-1: host를 relaunch하는 window check는 다음 요청 전에 새 프로세스의 모든 창이 ready page를 알릴 때까지 기다리므로, event-log check의 cleanup이 더는 `the main page is not ready`로 실패하지 않는다.
 - F192.3-2-1: window check의 event audit가 F188.2가 도입한 format 3의 `plugins/installed.json`을 format 2가 아니라고 거부하지 않고 읽으므로, fixture를 준비하는 check가 첫 단계 전에 실패하지 않는다.
 - F199.3: workbench project switch test의 browsing check가 연 project를 제거하므로, 이후 window가 소유한 project가 없고 다음 check는 자기 snapshot의 layout을 읽는다. Red: session file check를 뒤에 두면 `closing a tab left its session file`; Green: 11 of 11.
 - F196.20-4: 시스템 warn pressure 뒤에도 남은 plain web view U의 증가는 엔진 plain web view의 동작이다; 같은 시스템 전체 pressure에서 document region R과 S는 돌려주었거나 늘지 않았다.

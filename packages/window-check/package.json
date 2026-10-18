@@ -39,7 +39,7 @@
     "soksak-window-repeat": "./repeat.mjs"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test --experimental-test-module-mocks test/*.test.mjs"
   },
   "dependencies": {
     "@soksak/client": "workspace:*",

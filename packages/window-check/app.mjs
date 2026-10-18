@@ -320,8 +320,9 @@ export class Session {
 
   /**
    * Quits the application through diagnostics.host.relaunch, which starts it again with the same executable and arguments,
-   * and connects to the new process once it has written its endpoint.json (docs/spec/endpoint.md#diagnostic-builds). The new
-   * process reads the files that the check left in the configuration folder, such as the log policy.
+   * connects to the new process once it has written its endpoint.json and waits until its page is ready
+   * (docs/spec/endpoint.md#diagnostic-builds). The new process reads the files that the check left in the configuration
+   * folder, such as the log policy.
    */
   async relaunch() {
     const previous = this.client.endpoint.pid;
@@ -337,6 +338,10 @@ export class Session {
     }
     testedHosts.add(endpoint.pid);
     this.step(`relaunched as process ${endpoint.pid}`);
+    // The new process writes endpoint.json before its page loads, and the page answers the status and command requests of
+    // the check and of its cleanups, so the relaunch ends when every window reports a ready page.
+    await this.until("host.windows", (list) => list.length > 0 && list.every((w) => w.ready),
+      `the page of process ${endpoint.pid} did not become ready`);
   }
 
   /** Cleanups to run before the connection is closed. They run in reverse order of registration. */
