@@ -1038,7 +1038,7 @@
   - [ ] F198.2 — P1: label cache, 합친 쓰기, 지우기 순서, 맞추기를 가진 tab 상태 store `tab-state.json`(format 1).
   - [ ] F198.3 — P1: `context.tab.state`, `context.tab.keep("busy")`, 오류를 뺀 tab 보고를 유지하는 `disposeSurface`의 unload mode.
   - [ ] F198.4 — P1: workbench의 scheduler, 보호, 세대를 가진 순서 있는 unload 동작, restore.
-  - [ ] F198.5 — P1: document region 보고: 판단 때의 media 재생과 capture 질의, 닫기 전에 돌려주는 `interactionState`; form 수정은 보호가 아니다(측정 뒤 결정: 숨겨진 browser tab 하나를 닫자 Wails 애플리케이션에서 402.7 MB 중 227 MB, Tauri 애플리케이션에서 392.1 MB 중 239 MB가 돌아왔고, 모든 frame의 form script는 그것이 막는 드문 손실보다 비쌌다).
+  - [ ] F198.5 — P1: document region 보고: 판단 때의 media 재생과 capture 질의, frame별 form 표시, 닫기 전에 돌려주는 `interactionState`. form 보호는 유지한다: `document_form_state_test`가 `interactionState`가 form field 내용을 담지 않음을 보인다(restore 뒤 현재 항목과 뒤 항목 모두 모든 field가 비어 있다). 그래서 unload는 입력한 글을 잃게 된다. 숨겨진 browser tab 하나를 닫자 Wails 애플리케이션에서 402.7 MB 중 227 MB, Tauri 애플리케이션에서 392.1 MB 중 239 MB가 돌아왔다.
   - [ ] F198.6 — P1: host와 함께 시작해 normal, warn, critical을 관측하는 native memory pressure source 하나, 두 host가 `memory-pressure {level, seq}`로 전달.
   - [ ] F198.7 — P1: 설정 `memorySaver`와 `memorySaverDelay`, 명령 `core.tab.unload`와 `core.tab.keep`과 menu 항목.
   - [ ] F198.8 — P1: tab button 상태와 오류 표시로 가는 restore 실패.
