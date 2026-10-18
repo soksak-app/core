@@ -130,3 +130,61 @@ test("a surface that a place leaves out sends nothing to its sidecar after the p
     dom.window.close();
   }
 });
+
+// A failed place resumes the composition of every surface it left out. A resume that fails is part of the failure of the place:
+// the error that the caller reports names the place and the resume, and the other compositions still resume.
+test("a failed place reports a composition that does not resume and resumes the others", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=a></div><div id=b></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  Object.defineProperty(dom.window, "visualViewport", { value: { width: 800, height: 600 } });
+  const placed = [];
+  let refuse = false;
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: () => () => {}, call: async (name) => {
+        if (name !== "compositionPlace") return null;
+        if (refuse && surface.surfaceId.endsWith("-a")) throw new Error(`surface "${surface.surfaceId}" refused the placement`);
+        placed.push(surface.surfaceId);
+        return null;
+      } } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, placeSurfaces } = await import("../surface-modules.js?place-left-out-resume");
+  const pluginId = "fixture-place-left-out-resume";
+  registerPlugin({ id: pluginId, surface: () => null });
+  const module = `data:text/javascript,${encodeURIComponent(`export async function mount(root, context) {
+    root.innerHTML = "<div id=view></div>";
+    const composition = await context.composition.create({ regions: { view: root.querySelector("#view") } });
+    return { dispose: () => composition.dispose() };
+  }`)}`;
+  const surfaceOf = (id) => ({ module, surfaceId: `fixture-resume-${id}`, pluginId, declarations: { status: [], commands: [], dom: [] },
+    sidecars: [], composition: { kind: "hybrid", regions: [{ name: "view", kind: "image", sidecar: "fixture-sidecar", input: "dom" }],
+      overlays: [] } });
+  try {
+    for (const id of ["a", "b"]) {
+      authorizeSurface(`fixture-resume-${id}`);
+      await mountSurface(document.querySelector(`#${id}`), surfaceOf(id));
+    }
+    placed.length = 0;
+    refuse = true;
+    const error = await placeSurfaces(async () => { throw new Error("host.place refused the layout"); }, { retain: new Set(), unload: [] })
+      .then(() => null, (failure) => failure);
+    assert.ok(error, "the failed place resolved");
+    assert.match(error.message, /host\.place refused the layout/);
+    assert.match(error.message, /1 compositions did not resume/);
+    assert.ok(error instanceof AggregateError, `the error is ${error}`);
+    assert.deepEqual(error.errors.map((item) => item.message),
+      ["host.place refused the layout", `surface "fixture-resume-a" refused the placement`]);
+    assert.deepEqual(placed, ["fixture-resume-b"], `compositions that resumed: ${JSON.stringify(placed)}`);
+  } finally {
+    dom.window.close();
+  }
+});
