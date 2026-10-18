@@ -832,7 +832,11 @@ func socketParent(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(parent) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(parent); err != nil {
+			t.Errorf("cannot remove %s: %v", parent, err)
+		}
+	})
 	return parent
 }
 

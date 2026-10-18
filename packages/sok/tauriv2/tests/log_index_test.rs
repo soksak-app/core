@@ -104,14 +104,17 @@ fn lines_of(from: i64, to: i64) -> String {
     (from..=to).map(|seq| event_line_of(seq) + "\n").collect()
 }
 
-fn temp_file(name: &str) -> std::path::PathBuf {
-    temp_dir(name).join("logs").join("host-a.jsonl")
+/// A new configuration directory and the path of host-a.jsonl in its logs folder; the folder lives as long as the first value.
+fn temp_file(name: &str) -> (Folder, std::path::PathBuf) {
+    let config = temp_dir(name);
+    let path = config.join("logs").join("host-a.jsonl");
+    (config, path)
 }
 
 // contract: log.index.follows-appended-lines-and-is-rebuilt-when-stale
 #[test]
 fn index_follows_appended_lines_and_is_rebuilt_when_stale() {
-    let path = temp_file("index-follow");
+    let (_config, path) = temp_file("index-follow");
     let complete = lines_of(1, 4);
     let partial = event_line_of(5);
     std::fs::write(&path, format!("{complete}{}", &partial[..20])).expect("write");
@@ -196,7 +199,7 @@ fn index_follows_appended_lines_and_is_rebuilt_when_stale() {
 // contract: log.index.counts-the-lines-that-announce-a-change
 #[test]
 fn index_counts_the_lines_that_announce_a_change() {
-    let path = temp_file("index-announcing");
+    let (_config, path) = temp_file("index-announcing");
     let read = |seq: i64, event: &str, name: &str| {
         format!(
             r#"{{"ts_us":{},"mono_ns":{seq},"seq":{seq},"level":"debug","layer":"host","event":"{event}","fields":{{"name":"{name}"}}}}"#,
@@ -302,7 +305,8 @@ fn index_refuses_a_damaged_index_and_a_broken_line() {
     std::fs::write(&index, &original).expect("restore");
 
     // A source that breaks the structure stops the update and the index keeps its earlier state.
-    let good = temp_dir("index-keeps").join("logs").join("host-g.jsonl");
+    let keeps = temp_dir("index-keeps");
+    let good = keeps.join("logs").join("host-g.jsonl");
     std::fs::write(&good, lines_of(1, 10)).expect("write");
     update_log_index(&good).expect("update");
     let good_index = good.with_file_name("host-g.jsonl.idx");
@@ -344,7 +348,8 @@ fn index_refuses_a_damaged_index_and_a_broken_line() {
         ("numeric window", format!("{open}\n{{\"ts_us\":1,\"mono_ns\":1,\"seq\":2,\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\",\"window\":4}}\n"), "logs/host-f.jsonl:2: window must be a string, found 4"),
     ];
     for (title, text, want) in cases {
-        let target = temp_dir("index-first").join("logs").join("host-f.jsonl");
+        let first = temp_dir("index-first");
+        let target = first.join("logs").join("host-f.jsonl");
         std::fs::write(&target, text).expect("write");
         let error = update_log_index(&target).expect_err(title);
         assert!(

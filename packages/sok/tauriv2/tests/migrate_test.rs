@@ -7,6 +7,11 @@ use soksak_sok::install::INSTALLED_FORMAT;
 use soksak_sok::migrate::migrate_installed;
 use soksak_sok::plugins::read_installed;
 
+#[path = "support/folder.rs"]
+mod folder;
+
+use folder::Folder;
+
 /// The released form of plugins/installed.json of format 2, with the `package` member, `^` ranges and the sidecar entry
 /// its plugin names, exactly as an earlier release wrote it.
 const RELEASED_FORMAT_2: &str = r#"{
@@ -38,42 +43,8 @@ const RELEASED_FORMAT_2: &str = r#"{
   }
 }"#;
 
-/// A unique empty folder for one test, removed when the value is dropped, also after a failed assertion.
-struct Config(PathBuf);
-
-impl Config {
-    fn as_path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl std::ops::Deref for Config {
-    type Target = Path;
-
-    fn deref(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for Config {
-    fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_dir_all(&self.0) {
-            let message = format!("cannot remove {}: {error}", self.0.display());
-            // A panic during the unwinding of a failed assertion aborts the process, so that case reports on stderr.
-            if std::thread::panicking() {
-                eprintln!("{message}");
-            } else {
-                panic!("{message}");
-            }
-        }
-    }
-}
-
-fn temp_config(name: &str) -> Config {
-    let path = std::env::temp_dir().join(format!("sok-migrate-{}-{}", name, std::process::id()));
-    std::fs::create_dir(&path)
-        .unwrap_or_else(|error| panic!("cannot create {}: {error}", path.display()));
-    Config(path)
+fn temp_config(name: &str) -> Folder {
+    Folder::new(&format!("migrate-{name}"))
 }
 
 fn write_installed_raw(config: &Path, text: &str) -> PathBuf {
@@ -87,9 +58,9 @@ fn write_installed_raw(config: &Path, text: &str) -> PathBuf {
 #[test]
 fn migrate_installed_migrates_the_released_format_2_to_the_current_format() {
     let config = temp_config("released");
-    let path = write_installed_raw(config.as_path(), RELEASED_FORMAT_2);
-    assert_eq!(migrate_installed(config.as_path()).unwrap(), 3);
-    let state = read_installed(config.as_path()).unwrap();
+    let path = write_installed_raw(config.path(), RELEASED_FORMAT_2);
+    assert_eq!(migrate_installed(config.path()).unwrap(), 3);
+    let state = read_installed(config.path()).unwrap();
     assert_eq!(state.format, INSTALLED_FORMAT);
     let browser = state.plugins.get("probe").unwrap();
     assert_eq!(
@@ -117,10 +88,10 @@ fn migrate_installed_migrates_the_released_format_2_to_the_current_format() {
 #[test]
 fn migrate_installed_is_idempotent_and_leaves_a_current_file_and_a_missing_file_untouched() {
     let config = temp_config("idempotent");
-    let path = write_installed_raw(config.as_path(), RELEASED_FORMAT_2);
-    migrate_installed(config.as_path()).unwrap();
+    let path = write_installed_raw(config.path(), RELEASED_FORMAT_2);
+    migrate_installed(config.path()).unwrap();
     let first = std::fs::read_to_string(&path).unwrap();
-    assert_eq!(migrate_installed(config.as_path()).unwrap(), 0);
+    assert_eq!(migrate_installed(config.path()).unwrap(), 0);
     let second = std::fs::read_to_string(&path).unwrap();
     assert_eq!(first, second, "the bytes changed");
     let empty = temp_config("empty");
@@ -146,8 +117,8 @@ fn migrate_installed_refuses_a_form_the_definitions_do_not_cover() {
         ("not JSON", "{"),
     ] {
         let config = temp_config("main");
-        write_installed_raw(config.as_path(), text);
-        let error = migrate_installed(config.as_path()).unwrap_err();
+        write_installed_raw(config.path(), text);
+        let error = migrate_installed(config.path()).unwrap_err();
         assert!(
             error.contains("plugins/installed.json"),
             "{name}: {error} does not name the file"
@@ -223,7 +194,7 @@ fn the_record_of_a_migration_passes_the_default_policy() {
     use std::time::Duration;
 
     let config = temp_config("record");
-    write_installed_raw(config.as_path(), RELEASED_FORMAT_2);
+    write_installed_raw(config.path(), RELEASED_FORMAT_2);
     let log = Arc::new(
         EventLog::start(Options {
             directory: config.join("logs"),
@@ -247,7 +218,7 @@ fn the_record_of_a_migration_passes_the_default_policy() {
         .unwrap(),
     );
     use_migration_log(Some(Arc::clone(&log)));
-    let migrated = migrate_installed(config.as_path());
+    let migrated = migrate_installed(config.path());
     use_migration_log(None);
     assert_eq!(migrated.unwrap(), 3);
     log.flush(Duration::from_secs(5)).unwrap();

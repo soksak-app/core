@@ -4,7 +4,6 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use sha2::{Digest, Sha256};
@@ -14,29 +13,10 @@ use soksak_sok::appupdate::{
 };
 use soksak_sok::install::{CoreRelease, Index, RegistryCore, Release, Revoked, RevokedCore};
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
+#[path = "support/folder.rs"]
+mod folder;
 
-/// A temporary folder that is removed at the end of the test.
-struct Dir(PathBuf);
-
-impl Dir {
-    fn new() -> Dir {
-        let path = std::env::temp_dir().join(format!(
-            "sok-appupdate{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::SeqCst)
-        ));
-        std::fs::create_dir_all(&path).expect("create temporary directory");
-        Dir(path)
-    }
-}
-
-impl Drop for Dir {
-    fn drop(&mut self) {
-        // Cleanup after the test; a folder that stays has a name of its own.
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+use folder::Folder;
 
 /// A checked index that lists the given core versions, each with a release for the key.
 fn core_index(key: &str, revoked: &[&str], versions: &[&str]) -> Index {
@@ -186,15 +166,15 @@ fn staging_checks_the_hash_extracts_the_bundle_and_checks_its_version() {
     if !bundles_supported() {
         return;
     }
-    let (config, work) = (Dir::new(), Dir::new());
-    let (zip, sum) = bundle_zip(&work.0, "0.0.9");
-    let bundle = stage_app_update(&config.0, &update(&zip, "0.0.9", &sum)).unwrap();
-    assert_eq!(bundle, config.0.join("updates/0.0.9/soksak.app"));
+    let (config, work) = (Folder::new("appupdate"), Folder::new("appupdate"));
+    let (zip, sum) = bundle_zip(work.path(), "0.0.9");
+    let bundle = stage_app_update(config.path(), &update(&zip, "0.0.9", &sum)).unwrap();
+    assert_eq!(bundle, config.path().join("updates/0.0.9/soksak.app"));
     assert!(bundle.join("Contents/MacOS/soksak").exists());
     // A staged folder that exists is replaced, so staging twice leaves one bundle.
-    std::fs::write(config.0.join("updates/0.0.9/stale"), "x").unwrap();
-    stage_app_update(&config.0, &update(&zip, "0.0.9", &sum)).unwrap();
-    assert!(!config.0.join("updates/0.0.9/stale").exists());
+    std::fs::write(config.path().join("updates/0.0.9/stale"), "x").unwrap();
+    stage_app_update(config.path(), &update(&zip, "0.0.9", &sum)).unwrap();
+    assert!(!config.path().join("updates/0.0.9/stale").exists());
 }
 
 // contract: app-update.stage.rejects-a-wrong-release
@@ -203,19 +183,20 @@ fn staging_rejects_a_wrong_hash_and_a_wrong_bundle_version() {
     if !bundles_supported() {
         return;
     }
-    let (config, work) = (Dir::new(), Dir::new());
-    let (zip, sum) = bundle_zip(&work.0, "0.0.9");
-    let error = stage_app_update(&config.0, &update(&zip, "0.0.9", &"0".repeat(64))).unwrap_err();
+    let (config, work) = (Folder::new("appupdate"), Folder::new("appupdate"));
+    let (zip, sum) = bundle_zip(work.path(), "0.0.9");
+    let error =
+        stage_app_update(config.path(), &update(&zip, "0.0.9", &"0".repeat(64))).unwrap_err();
     assert!(error.contains(&format!("has sha256 {sum}")), "{error}");
-    let (other, other_sum) = bundle_zip(&work.0, "0.0.8");
-    let error = stage_app_update(&config.0, &update(&other, "0.0.9", &other_sum)).unwrap_err();
+    let (other, other_sum) = bundle_zip(work.path(), "0.0.8");
+    let error = stage_app_update(config.path(), &update(&other, "0.0.9", &other_sum)).unwrap_err();
     assert!(error.contains("version is 0.0.8, not 0.0.9"), "{error}");
     assert!(
-        !config.0.join("updates/0.0.9").exists(),
+        !config.path().join("updates/0.0.9").exists(),
         "a rejected release left a staged folder"
     );
-    let missing = update(&work.0.join("none.zip"), "0.0.9", &sum);
-    assert!(stage_app_update(&config.0, &missing).is_err());
+    let missing = update(&work.path().join("none.zip"), "0.0.9", &sum);
+    assert!(stage_app_update(config.path(), &missing).is_err());
 }
 
 /// A folder that looks like an application bundle and whose Info.plist holds text.
@@ -241,9 +222,9 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
     if !bundles_supported() {
         return;
     }
-    let parent = Dir::new();
-    let target = fake_bundle(&parent.0, "soksak.app", "old");
-    let staged = fake_bundle(&parent.0.join("updates/0.0.9"), "soksak.app", "new");
+    let parent = Folder::new("appupdate");
+    let target = fake_bundle(parent.path(), "soksak.app", "old");
+    let staged = fake_bundle(&parent.path().join("updates/0.0.9"), "soksak.app", "new");
     let mut process = sleeping();
     let pid = process.id();
     let started = std::sync::Mutex::new(vec![]);
@@ -298,9 +279,9 @@ fn the_earlier_bundle_starts_again_when_the_new_one_fails_to_start() {
     if !bundles_supported() {
         return;
     }
-    let parent = Dir::new();
-    let target = fake_bundle(&parent.0, "soksak.app", "old");
-    let staged = fake_bundle(&parent.0, "staged.app", "new");
+    let parent = Folder::new("appupdate");
+    let target = fake_bundle(parent.path(), "soksak.app", "old");
+    let staged = fake_bundle(parent.path(), "staged.app", "new");
     let mut process = sleeping();
     let pid = process.id() as i32;
     process.kill().unwrap();
@@ -335,17 +316,17 @@ fn the_replacement_refuses_what_is_not_a_bundle_or_when_the_process_keeps_runnin
     if !bundles_supported() {
         return;
     }
-    let parent = Dir::new();
-    let staged = fake_bundle(&parent.0, "staged.app", "new");
+    let parent = Folder::new("appupdate");
+    let staged = fake_bundle(parent.path(), "staged.app", "new");
     let mut process = sleeping();
     let pid = process.id() as i32;
     let open = |_: &Path, _: &[String]| -> Result<(), String> { panic!("the application started") };
-    let plain = parent.0.join("plain");
+    let plain = parent.path().join("plain");
     std::fs::create_dir_all(&plain).unwrap();
-    let other = fake_bundle(&parent.0, "a.app", "old");
+    let other = fake_bundle(parent.path(), "a.app", "old");
     for (name, bundle, target) in [
         ("a target that is not a bundle", staged.clone(), plain),
-        ("a missing bundle", parent.0.join("none.app"), other),
+        ("a missing bundle", parent.path().join("none.app"), other),
         ("the same bundle", staged.clone(), staged.clone()),
     ] {
         let options = ReplaceOptions {
@@ -358,7 +339,7 @@ fn the_replacement_refuses_what_is_not_a_bundle_or_when_the_process_keeps_runnin
         assert!(replace_app(&options, &open).is_err(), "{name} was accepted");
     }
     // A process that keeps running past the timeout leaves the target as it was.
-    let target = fake_bundle(&parent.0, "b.app", "old");
+    let target = fake_bundle(parent.path(), "b.app", "old");
     let options = ReplaceOptions {
         pid,
         bundle: staged,

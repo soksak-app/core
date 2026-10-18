@@ -52,7 +52,11 @@ func startEndpoint(t *testing.T, respond func(method string, params map[string]a
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(socketDir) })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(socketDir); err != nil {
+			t.Errorf("cannot remove %s: %v", socketDir, err)
+		}
+	})
 	address := filepath.Join(socketDir, "e.sock")
 	listener, err := net.Listen("unix", address)
 	if err != nil {

@@ -11,6 +11,11 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use soksak_sok::log_query::LogPage;
 
+#[path = "support/folder.rs"]
+pub mod folder;
+
+pub use folder::Folder;
+
 pub const QUERY_FIXTURES: &str = "../../log-contract/fixtures/query";
 pub const BIG_BASE: i64 = 1_791_500_000_000_000;
 pub const BIG_COUNT: usize = 9000;
@@ -27,15 +32,15 @@ pub fn set_modified(path: &Path) {
         .expect("set the modification time");
 }
 
-pub fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("sok-log-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(dir.join("logs")).expect("create the logs folder");
+/// A new configuration directory with an empty logs folder, removed when the value is dropped.
+pub fn temp_dir(name: &str) -> Folder {
+    let dir = Folder::new(&format!("log-{name}"));
+    std::fs::create_dir(dir.join("logs")).expect("create the logs folder");
     dir
 }
 
 /// Copies the event files of the golden fixtures into the logs folder of a new configuration directory.
-pub fn fixture_config(name: &str) -> PathBuf {
+pub fn fixture_config(name: &str) -> Folder {
     let config = temp_dir(name);
     for entry in std::fs::read_dir(Path::new(QUERY_FIXTURES).join("logs")).expect("fixture logs") {
         let entry = entry.expect("entry");
@@ -172,7 +177,7 @@ pub fn generate_big() -> Vec<BigEvent> {
 }
 
 /// Writes the generated log as host-big.jsonl in the logs folder of a new configuration directory.
-pub fn write_big(name: &str) -> (PathBuf, PathBuf, Vec<BigEvent>) {
+pub fn write_big(name: &str) -> (Folder, PathBuf, Vec<BigEvent>) {
     let config = temp_dir(name);
     let events = generate_big();
     let mut text = String::new();

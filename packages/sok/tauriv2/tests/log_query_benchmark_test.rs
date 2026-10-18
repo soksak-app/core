@@ -151,5 +151,4 @@ fn query_answers_a_million_events_within_the_limit() {
             "{name}: {elapsed:?} is over the limit {limit:?}"
         );
     }
-    let _ = std::fs::remove_dir_all(&config);
 }

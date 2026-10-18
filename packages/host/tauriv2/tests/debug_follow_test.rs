@@ -1,7 +1,6 @@
 //! The notices of the changes of the event log: bounded in rate, counted when coalesced, announced only for the lines that announce a change,
 //! and also for the lines that a query indexes (docs/spec/debug.md#following). The same cases run in the Go host.
 
-use std::path::Path;
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -141,23 +140,22 @@ fn a_query_that_indexes_lines_announces_them_once() {
         sender.lock().unwrap().send(notice).unwrap();
     }));
     use_log_notices(Some(Arc::clone(&notices)));
-    let config = std::env::temp_dir().join(format!("soksak-follow-{}", std::process::id()));
-    let logs = config.join("logs");
+    let config = tempfile::tempdir().unwrap();
+    let logs = config.path().join("logs");
     std::fs::create_dir_all(&logs).unwrap();
     std::fs::write(logs.join("host-b1.jsonl"), event_lines(5)).unwrap();
-    query_event_logs(Path::new(&config), r#"{"channel":"all"}"#).expect("the query");
+    query_event_logs(config.path(), r#"{"channel":"all"}"#).expect("the query");
     let notice = next_notice(&published);
     assert!(
         notice.path == "logs/host-b1.jsonl" && notice.size > 0,
         "the query that built the index announced {notice:?}"
     );
     // The same query again finds the index current and announces nothing.
-    query_event_logs(Path::new(&config), r#"{"channel":"all"}"#).expect("the query again");
+    query_event_logs(config.path(), r#"{"channel":"all"}"#).expect("the query again");
     assert!(
         published.recv_timeout(Duration::from_millis(300)).is_err(),
         "a query of a current index announced a change"
     );
     use_log_notices(None);
     notices.stop();
-    std::fs::remove_dir_all(&config).unwrap();
 }

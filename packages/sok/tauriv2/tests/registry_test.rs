@@ -2,37 +2,13 @@
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde_json::{Value, json};
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
+#[path = "support/folder.rs"]
+mod folder;
 
-/// A unique temporary folder for each test. It is removed at the end.
-struct Dir(PathBuf);
-
-impl Dir {
-    fn new() -> Dir {
-        let path = std::env::temp_dir().join(format!(
-            "sok-registry{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::SeqCst)
-        ));
-        std::fs::create_dir_all(&path).expect("create temporary directory");
-        Dir(path)
-    }
-
-    fn text(&self) -> &str {
-        self.0.to_str().expect("UTF-8 path")
-    }
-}
-
-impl Drop for Dir {
-    fn drop(&mut self) {
-        // Cleanup after the test. A folder that cannot be removed has a unique name that does not affect the next test.
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+use folder::Folder;
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
@@ -66,8 +42,8 @@ fn write_tree(dir: &Path, files: &[(&str, &str)]) {
 
 /// The registry folder and the address and hash of a release.
 struct Registry {
-    dir: Dir,
-    _releases: Dir,
+    dir: Folder,
+    _releases: Folder,
     plugin: (String, String),
     sidecar: (String, String),
 }
@@ -75,10 +51,10 @@ struct Registry {
 /// Creates a release from a pack and a release, and writes a registry folder that holds its address and hash.
 fn registry_tree() -> Registry {
     let platform = soksak_sok::current_platform().expect("platform");
-    let releases = Dir::new();
-    let plugin = Dir::new();
+    let releases = Folder::new("registry");
+    let plugin = Folder::new("registry");
     write_tree(
-        &plugin.0,
+        plugin.path(),
         &[
             (
                 "package.json",
@@ -92,9 +68,9 @@ fn registry_tree() -> Registry {
             ("ui/b.js", "b"),
         ],
     );
-    let sidecar = Dir::new();
+    let sidecar = Folder::new("registry");
     write_tree(
-        &sidecar.0,
+        sidecar.path(),
         &[
             (
                 "package.json",
@@ -127,7 +103,7 @@ fn registry_tree() -> Registry {
             result["sha256"].as_str().unwrap().to_string(),
         ));
     }
-    let dir = Dir::new();
+    let dir = Folder::new("registry");
     let (plugin, sidecar) = (results[0].clone(), results[1].clone());
     let plugin_entry = format!(
         r#"{{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
@@ -143,7 +119,7 @@ fn registry_tree() -> Registry {
         sidecar.0, sidecar.1
     );
     write_tree(
-        &dir.0,
+        dir.path(),
         &[
             ("plugins/probe.json", &plugin_entry),
             ("sidecars/scope-sidecar-worker.json", &sidecar_entry),
@@ -169,7 +145,7 @@ fn registry_build_writes_the_index_after_checking_every_release() {
     let platform = soksak_sok::current_platform().expect("platform");
     let (code, stdout, stderr) = run(&["registry", "build", registry.dir.text()]);
     assert_eq!(code, 0, "{stderr}");
-    let index = registry.dir.0.join("index.json");
+    let index = registry.dir.path().join("index.json");
     let index_text = index.to_str().unwrap();
     assert_eq!(
         stdout,
@@ -259,12 +235,12 @@ type Plugins<'a> = &'a [(&'a str, &'a [(&'a str, &'a str)])];
 /// Writes a registry folder with an release packed from the plugin.json dependencies of version 1.0.0 of each plugin
 /// id and the release of sidecar worker 0.1.0. The sidecars of an entry hold only the dependencies that start with
 /// @scope/sidecar-.
-fn dependency_tree(plugins: Plugins) -> (Dir, Dir) {
+fn dependency_tree(plugins: Plugins) -> (Folder, Folder) {
     let platform = soksak_sok::current_platform().expect("platform");
-    let releases = Dir::new();
-    let dir = Dir::new();
+    let releases = Folder::new("registry");
+    let dir = Folder::new("registry");
     for (id, dependencies) in plugins {
-        let source = Dir::new();
+        let source = Folder::new("registry");
         let dependencies: serde_json::Map<String, Value> = dependencies
             .iter()
             .map(|(name, range)| (name.to_string(), Value::from(*range)))
@@ -274,7 +250,7 @@ fn dependency_tree(plugins: Plugins) -> (Dir, Dir) {
         .to_string();
         let manifest = json!({"id": id, "dependencies": dependencies}).to_string();
         write_tree(
-            &source.0,
+            source.path(),
             &[("package.json", &package), ("plugin.json", &manifest)],
         );
         let (code, stdout, stderr) = run(&["plugin", "pack", source.text(), releases.text()]);
@@ -289,13 +265,13 @@ fn dependency_tree(plugins: Plugins) -> (Dir, Dir) {
             "versions": [{"version": "1.0.0", "release": {"url": format!("file://{}", result["release"].as_str().unwrap()),
             "sha256": result["sha256"]}, "engines": {"soksak": "^0.0.2"}, "sidecars": sidecars}]});
         write_tree(
-            &dir.0,
+            dir.path(),
             &[(&format!("plugins/{id}.json"), &entry.to_string())],
         );
     }
-    let sidecar = Dir::new();
+    let sidecar = Folder::new("registry");
     write_tree(
-        &sidecar.0,
+        sidecar.path(),
         &[
             (
                 "package.json",
@@ -322,7 +298,7 @@ fn dependency_tree(plugins: Plugins) -> (Dir, Dir) {
         "versions": [{"version": "0.1.0", "protocol": 1, "releases": {platform.as_str():
         {"url": format!("file://{}", released["release"].as_str().unwrap()), "sha256": released["sha256"]}}}]});
     write_tree(
-        &dir.0,
+        dir.path(),
         &[
             ("sidecars/scope-sidecar-worker.json", &worker.to_string()),
             ("revoked.json", r#"{"plugins": [], "sidecars": []}"#),
@@ -349,7 +325,8 @@ fn registry_build_checks_plugin_dependencies() {
     let (code, _, stderr) = run(&["registry", "build", dir.text()]);
     assert_eq!(code, 0, "{stderr}");
     let built: Value =
-        serde_json::from_str(&std::fs::read_to_string(dir.0.join("index.json")).unwrap()).unwrap();
+        serde_json::from_str(&std::fs::read_to_string(dir.path().join("index.json")).unwrap())
+            .unwrap();
     assert_eq!(
         built["plugins"][1]["versions"][0]["sidecars"].to_string(),
         r#"{"@scope/sidecar-worker":"^0.1.0"}"#
@@ -372,7 +349,7 @@ fn registry_build_checks_plugin_dependencies() {
         let (code, _, stderr) = run(&["registry", "build", dir.text()]);
         assert_eq!((code, stderr.as_str()), (1, want));
         assert!(
-            !dir.0.join("index.json").exists(),
+            !dir.path().join("index.json").exists(),
             "a failed build wrote index.json"
         );
     }
@@ -386,7 +363,7 @@ fn registry_build_rejects_a_mismatch_without_writing_the_index() {
         (
             |r| {
                 replace_in(
-                    &r.dir.0.join("plugins/probe.json"),
+                    &r.dir.path().join("plugins/probe.json"),
                     r#""sha256": ""#,
                     r#""sha256": "0"#,
                 )
@@ -396,7 +373,7 @@ fn registry_build_rejects_a_mismatch_without_writing_the_index() {
         (
             |r| {
                 replace_in(
-                    &r.dir.0.join("plugins/probe.json"),
+                    &r.dir.path().join("plugins/probe.json"),
                     &r.plugin.1,
                     &"0".repeat(64),
                 )
@@ -406,7 +383,7 @@ fn registry_build_rejects_a_mismatch_without_writing_the_index() {
         (
             |r| {
                 replace_in(
-                    &r.dir.0.join("plugins/probe.json"),
+                    &r.dir.path().join("plugins/probe.json"),
                     r#""engines": {"soksak": "^0.0.2"}"#,
                     r#""engines": {"soksak": "^0.0.3"}"#,
                 )
@@ -416,7 +393,7 @@ fn registry_build_rejects_a_mismatch_without_writing_the_index() {
         (
             |r| {
                 replace_in(
-                    &r.dir.0.join("plugins/probe.json"),
+                    &r.dir.path().join("plugins/probe.json"),
                     r#""sidecars": {"@scope/sidecar-worker": "^0.1.0"}"#,
                     r#""sidecars": {"@scope/sidecar-worker": "~0.1.0"}"#,
                 )
@@ -426,21 +403,21 @@ fn registry_build_rejects_a_mismatch_without_writing_the_index() {
         (
             |r| {
                 std::fs::rename(
-                    r.dir.0.join("packs/starter.json"),
-                    r.dir.0.join("packs/first.json"),
+                    r.dir.path().join("packs/starter.json"),
+                    r.dir.path().join("packs/first.json"),
                 )
                 .unwrap()
             },
             "packs/first.json holds starter; its file name must be starter.json",
         ),
         (
-            |r| std::fs::remove_file(r.dir.0.join("revoked.json")).unwrap(),
+            |r| std::fs::remove_file(r.dir.path().join("revoked.json")).unwrap(),
             "revoked.json: ",
         ),
         (
             |r| {
                 replace_in(
-                    &r.dir.0.join("packs/starter.json"),
+                    &r.dir.path().join("packs/starter.json"),
                     r#"["probe"]"#,
                     r#"["probe", "missing"]"#,
                 )
@@ -457,7 +434,7 @@ fn registry_build_rejects_a_mismatch_without_writing_the_index() {
             "code {code} stderr {stderr:?}, want {want:?}"
         );
         assert!(
-            !registry.dir.0.join("index.json").exists(),
+            !registry.dir.path().join("index.json").exists(),
             "a failed build wrote index.json"
         );
     }
@@ -470,13 +447,16 @@ const CORE_SUM: &str = "9a4ecbf3c69aa41b219ba50b64dc4dbdaa99ee57e6217a3b50598f49
 /// path of the release.
 fn core_tree() -> (Registry, PathBuf) {
     let registry = registry_tree();
-    let release = registry.dir.0.join("soksak-0.0.9-darwin-arm64-wailsv3.zip");
+    let release = registry
+        .dir
+        .path()
+        .join("soksak-0.0.9-darwin-arm64-wailsv3.zip");
     std::fs::write(&release, "the zip of an application bundle").unwrap();
     let core = format!(
         r#"{{"versions": [{{"version": "0.0.9", "releases": {{"darwin-arm64-wailsv3": {{"url": "file://{}", "sha256": "{CORE_SUM}"}}}}}}]}}"#,
         release.display()
     );
-    write_tree(&registry.dir.0, &[("core.json", &core)]);
+    write_tree(registry.dir.path(), &[("core.json", &core)]);
     (registry, release)
 }
 
@@ -490,7 +470,7 @@ fn registry_build_lists_the_core_releases_after_checking_their_hashes() {
         stdout.contains("\"core\": 1,"),
         "stdout {stdout:?} does not count the core release"
     );
-    let index = std::fs::read_to_string(registry.dir.0.join("index.json")).unwrap();
+    let index = std::fs::read_to_string(registry.dir.path().join("index.json")).unwrap();
     let want = format!(
         r#"  "core": {{
     "versions": [
@@ -514,7 +494,7 @@ fn registry_build_lists_the_core_releases_after_checking_their_hashes() {
     let (code, stdout, stderr) = run(&["registry", "build", plain.dir.text()]);
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("\"core\": 0,"), "{stdout}");
-    let index = std::fs::read_to_string(plain.dir.0.join("index.json")).unwrap();
+    let index = std::fs::read_to_string(plain.dir.path().join("index.json")).unwrap();
     assert!(!index.contains("\"core\""), "{index}");
 }
 
@@ -526,7 +506,7 @@ fn registry_build_rejects_malformed_core_releases_without_writing_the_index() {
         (
             |r, _| {
                 replace_in(
-                    &r.dir.0.join("core.json"),
+                    &r.dir.path().join("core.json"),
                     "darwin-arm64-wailsv3",
                     "darwin-arm64",
                 )
@@ -536,7 +516,7 @@ fn registry_build_rejects_malformed_core_releases_without_writing_the_index() {
         (
             |r, _| {
                 replace_in(
-                    &r.dir.0.join("core.json"),
+                    &r.dir.path().join("core.json"),
                     "darwin-arm64-wailsv3",
                     "darwin-arm64-electron",
                 )
@@ -546,7 +526,7 @@ fn registry_build_rejects_malformed_core_releases_without_writing_the_index() {
         (
             |r, _| {
                 replace_in(
-                    &r.dir.0.join("core.json"),
+                    &r.dir.path().join("core.json"),
                     "darwin-arm64-wailsv3",
                     "plan9-arm64-wailsv3",
                 )
@@ -560,14 +540,14 @@ fn registry_build_rejects_malformed_core_releases_without_writing_the_index() {
                     release.display(),
                     "a".repeat(64)
                 );
-                replace_in(&r.dir.0.join("core.json"), r#""versions": ["#, &twice)
+                replace_in(&r.dir.path().join("core.json"), r#""versions": ["#, &twice)
             },
             "registry core: version 0.0.9 appears twice",
         ),
         (
             |r, _| {
                 replace_in(
-                    &r.dir.0.join("core.json"),
+                    &r.dir.path().join("core.json"),
                     r#"{"versions""#,
                     r#"{"extra": 1, "versions""#,
                 )
@@ -581,7 +561,7 @@ fn registry_build_rejects_malformed_core_releases_without_writing_the_index() {
         (
             |r, _| {
                 replace_in(
-                    &r.dir.0.join("revoked.json"),
+                    &r.dir.path().join("revoked.json"),
                     r#""sidecars": []"#,
                     r#""sidecars": [], "core": [{"version": "0.0.8", "reason": "broken"}]"#,
                 )
@@ -598,7 +578,7 @@ fn registry_build_rejects_malformed_core_releases_without_writing_the_index() {
             "code {code} stderr {stderr:?}, want {want:?}"
         );
         assert!(
-            !registry.dir.0.join("index.json").exists(),
+            !registry.dir.path().join("index.json").exists(),
             "a failed build wrote index.json"
         );
     }

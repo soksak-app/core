@@ -10,6 +10,11 @@ use rcgen::{BasicConstraints, CertificateParams, CertifiedIssuer, IsCa, KeyPair}
 use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
 use soksak_sok::fetch::{Fetcher, Limit};
 
+#[path = "support/folder.rs"]
+mod folder;
+
+use folder::Folder;
+
 /// The response of the server for a path.
 enum Reply {
     Body(Vec<u8>),
@@ -227,16 +232,13 @@ fn other_schemes_are_rejected() {
             ))
         );
     }
-    let dir = std::env::temp_dir().join(format!("sok-fetch{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("folder");
+    let dir = Folder::new("fetch");
     let file = dir.join("index.json");
     std::fs::write(&file, "{}").expect("index");
     assert_eq!(
         fetcher.read(&format!("file://{}", file.display()), fetcher.index),
         Ok(b"{}".to_vec())
     );
-    // Cleanup after the check. A folder that cannot be removed has a unique name that does not affect the next check.
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // contract: fetch.https.reads-a-tls-response
@@ -250,8 +252,7 @@ fn registry_use_records_an_https_index() {
     });
     let mut fetcher = fetcher(&server);
     fetcher.index.bytes = 1 << 20;
-    let config = std::env::temp_dir().join(format!("sok-fetch-registry{}", std::process::id()));
-    std::fs::create_dir_all(&config).expect("config");
+    let config = Folder::new("fetch-registry");
     let url = format!("{}/index.json", server.url);
     assert_eq!(
         soksak_sok::plugins::use_registry(&config, &url, &fetcher),
@@ -261,8 +262,6 @@ fn registry_use_records_an_https_index() {
         std::fs::read_to_string(config.join("plugins/registry.json")).expect("registry.json"),
         format!("{{\"format\":1,\"index\":\"{url}\"}}\n")
     );
-    // Cleanup after the check. A folder that cannot be removed has a unique name that does not affect the next check.
-    let _ = std::fs::remove_dir_all(&config);
 }
 
 // contract: host.arguments.registry-ca-in-diagnostic-builds
@@ -270,8 +269,7 @@ fn registry_use_records_an_https_index() {
 #[test]
 fn a_diagnostic_build_trusts_the_registry_authorities_of_a_file() {
     let server = serve(|_| Reply::Body(b"index".to_vec()));
-    let folder = std::env::temp_dir().join(format!("sok-fetch-ca{}", std::process::id()));
-    std::fs::create_dir_all(&folder).expect("folder");
+    let folder = Folder::new("fetch-ca");
     let authority = folder.join("ca.pem");
     std::fs::write(&authority, &server.ca_pem).expect("ca.pem");
     soksak_sok::fetch::use_registry_authorities(&authority).expect("authorities");
@@ -280,6 +278,4 @@ fn a_diagnostic_build_trusts_the_registry_authorities_of_a_file() {
         fetcher.read(&format!("{}/index.json", server.url), fetcher.index),
         Ok(b"index".to_vec())
     );
-    // Cleanup after the check. A folder that cannot be removed has a unique name that does not affect the next check.
-    let _ = std::fs::remove_dir_all(&folder);
 }

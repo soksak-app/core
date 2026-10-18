@@ -63,12 +63,21 @@ fn query_prints_the_golden_lines_of_every_case() {
     }
 }
 
+/// Removes the index of host-b1.jsonl so that the next query builds it again; an index that does not exist yet is the same state.
+fn remove_index(logs: &Path) {
+    let index = logs.join("host-b1.jsonl.idx");
+    match std::fs::remove_file(&index) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+            panic!("cannot remove {}: {error}", index.display())
+        }
+        _ => {}
+    }
+}
+
 // contract: cli.debug.query-errors
 #[test]
 fn query_refuses_what_breaks_the_contract() {
-    let empty = std::env::temp_dir().join(format!("sok-debug-no-logs-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&empty);
-    std::fs::create_dir_all(&empty).expect("create");
+    let empty = Folder::new("debug-no-logs");
     let (_, stderr, code) = run_query_command(&empty, &[]);
     assert!(
         code == 1 && stderr.contains("logs: no such file or directory"),
@@ -93,7 +102,7 @@ fn query_refuses_what_breaks_the_contract() {
         ("surface", line("{\"ts_us\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"a\",\"surface\":7}"), "logs/host-b1.jsonl:2: surface must be a string, found 7"),
     ];
     for (name, text, want) in cases {
-        let _ = std::fs::remove_file(logs.join("host-b1.jsonl.idx"));
+        remove_index(&logs);
         std::fs::write(logs.join("host-b1.jsonl"), text).expect("write the file");
         let (_, stderr, code) = run_query_command(&broken, &[]);
         assert!(
@@ -102,7 +111,7 @@ fn query_refuses_what_breaks_the_contract() {
         );
     }
     // A line that is not ended by a line feed is not read yet.
-    let _ = std::fs::remove_file(logs.join("host-b1.jsonl.idx"));
+    remove_index(&logs);
     std::fs::write(
         logs.join("host-b1.jsonl"),
         format!("{open}{{\"ts_us\":2,\"seq\":1,\"lev"),

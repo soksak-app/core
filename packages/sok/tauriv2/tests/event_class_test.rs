@@ -10,11 +10,15 @@ use soksak_sok::event_log::Level;
 #[path = "support/policy.rs"]
 mod support;
 
+#[path = "support/folder.rs"]
+mod folder;
+
+use folder::Folder;
+
 // contract: cli.log.stores-class
 #[test]
 fn every_line_of_the_tool_stores_the_class_of_its_catalog_entry() {
-    let config = std::env::temp_dir().join(format!("sok-class{}", std::process::id()));
-    std::fs::create_dir_all(&config).unwrap();
+    let config = Folder::new("class");
     support::store_every_level(&config);
     let log = soksak_sok::start_tool_event_log(&config).unwrap();
     log.emit(Level::Warn, "sok.command", &json!({"name": "x"}));
@@ -27,7 +31,6 @@ fn every_line_of_the_tool_stores_the_class_of_its_catalog_entry() {
     log.flush(Duration::from_secs(5)).unwrap();
     log.close();
     let text = std::fs::read_to_string(log.path()).unwrap();
-    std::fs::remove_dir_all(&config).unwrap();
     let lines: Vec<Value> = text
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())

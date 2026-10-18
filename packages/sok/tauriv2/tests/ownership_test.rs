@@ -6,6 +6,11 @@ use std::path::Path;
 
 use soksak_sok::plugins::run_plugin_action;
 
+#[path = "support/folder.rs"]
+mod folder;
+
+use folder::Folder;
+
 fn write_raw(path: &Path, text: &str) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, text).unwrap();
@@ -55,8 +60,7 @@ fn run_cli(config: &Path, args: &[&str]) -> (i32, String, String) {
 // contract: cli.plugin.writing-commands-own-the-configuration
 #[test]
 fn a_plugin_command_refuses_while_another_process_owns_the_configuration() {
-    let config = std::env::temp_dir().join(format!("sok-own-refuse-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&config);
+    let config = Folder::new("own-refuse");
     fs::create_dir_all(config.join("plugins")).unwrap();
     released_config(&config);
     // A live process (this test) owns the configuration directory through its lock, as a running host does.
@@ -70,15 +74,12 @@ fn a_plugin_command_refuses_while_another_process_owns_the_configuration() {
     );
     assert_eq!(stderr, want);
     fs::remove_file(config.join("process.lock")).unwrap();
-    let _ = fs::remove_dir_all(&config);
 }
 
 // contract: cli.plugin.writing-commands-own-the-configuration
 #[test]
 fn a_writing_command_releases_the_configuration_when_it_ends() {
-    let config = std::env::temp_dir().join(format!("sok-own-release-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&config);
-    fs::create_dir_all(&config).unwrap();
+    let config = Folder::new("own-release");
     released_config(&config);
     let (code, _, stderr) = run_cli(&config, &["plugin", "disable", "probe"]);
     assert_eq!(code, 0, "{stderr}");
@@ -91,7 +92,6 @@ fn a_writing_command_releases_the_configuration_when_it_ends() {
         !text.contains("\"package\""),
         "the second command did not see the migrated file"
     );
-    let _ = fs::remove_dir_all(&config);
 }
 
 // contract: cli.plugin.host-entry-takes-no-lock
@@ -99,14 +99,11 @@ fn a_writing_command_releases_the_configuration_when_it_ends() {
 // lock: a host that holds process.lock for its lifetime still runs its plugin operations.
 #[test]
 fn run_plugin_action_takes_no_lock_beside_a_live_owner() {
-    let config = std::env::temp_dir().join(format!("sok-own-host-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&config);
-    fs::create_dir_all(&config).unwrap();
+    let config = Folder::new("own-host");
     released_config(&config);
     // The host's own lock is present, owned by this live process.
     fs::write(config.join("process.lock"), std::process::id().to_string()).unwrap();
     if let Err(error) = run_plugin_action(&config, "disable", "probe", "", "") {
         panic!("the host entry refused beside its own lock: {error}");
     }
-    let _ = fs::remove_dir_all(&config);
 }

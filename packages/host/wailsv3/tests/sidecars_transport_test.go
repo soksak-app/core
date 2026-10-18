@@ -146,11 +146,7 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 
 func runHarnessReconnect(t *testing.T, sequential bool) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-h")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -264,11 +260,7 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 // contract: sidecars-transport.stop.close-owner-then-shutdown
 func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-h")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -353,11 +345,7 @@ func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 // contract: sidecars-transport.stop.own-close-is-not-a-read-error
 func TestPersistentStopDoesNotLogItsOwnCloseAsAReadError(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-h")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -440,11 +428,7 @@ func TestPersistentStopDoesNotLogItsOwnCloseAsAReadError(t *testing.T) {
 // contract: sidecars-transport.stop.accepts-close-answers-sent-before-stop
 func TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-h")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -529,11 +513,7 @@ func TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop(t *testing.T) {
 // contract: sidecars-transport.hello.rejects-auth-failure
 func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-h")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -564,11 +544,7 @@ func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 // contract: sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint
 func TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpoint(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-h-protocol-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -626,11 +602,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 	if err := os.MkdirAll(serviceDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	socketDir, err := os.MkdirTemp("", "sp-r")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDir)
+	socketDir := socketParent(t)
 	socket := filepath.Join(socketDir, "service.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -746,11 +718,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 // contract: sidecars-transport.endpoint.live-unreachable-reported-without-replacement
 func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(t *testing.T) {
 	root := t.TempDir()
-	socketDir, err := os.MkdirTemp("", "sp-u")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDir)
+	socketDir := socketParent(t)
 	missingSocket := filepath.Join(socketDir, "missing.sock")
 	serviceDir := filepath.Join(root, "services", "service")
 	if err := os.MkdirAll(serviceDir, 0o700); err != nil {
@@ -793,11 +761,7 @@ func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(
 // contract: sidecars.retain.sends-layout-and-known-surfaces, sidecars.retain.reports-service-failure
 func TestPersistentRetainSendsLayoutAndKnownSurfaces(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-r")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -890,11 +854,7 @@ func TestPersistentRetainSendsLayoutAndKnownSurfaces(t *testing.T) {
 // contract: sidecars.retain.rejects-after-stop
 func TestPersistentRetainInterruptedByStopSendsNothing(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-r")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -976,11 +936,7 @@ func TestPersistentRetainSkipsAServiceWithoutEndpoint(t *testing.T) {
 // contract: sidecars-transport.persistent.revives-a-lost-connection
 func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-revive")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1074,11 +1030,7 @@ func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 // contract: sidecars-transport.persistent.revive-failure-is-reported
 func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-failed-revive")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1186,11 +1138,7 @@ func (o *failureOwner) Emit(name string, data ...any) {
 func serveOneBadLine(t *testing.T, payload []byte) (root string, closed <-chan struct{}) {
 	t.Helper()
 	root = t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-bad-line")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(socketDirectory) })
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1268,11 +1216,7 @@ func TestPersistentTransportFailsTheConnectionOnAnOversizeLine(t *testing.T) {
 // contract: sidecars.send.start-does-not-block-other-sidecars
 func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-h")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1333,11 +1277,7 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 // contract: sidecars-transport.hello.times-out
 func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-h")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1441,11 +1381,7 @@ func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
 // contract: sidecars-transport.persistent.starts-in-new-session
 func TestPersistentServiceStartsInANewSession(t *testing.T) {
 	executableDir := t.TempDir()
-	socketDir, err := os.MkdirTemp("", "sp-s")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDir)
+	socketDir := socketParent(t)
 	socket := filepath.Join(socketDir, "service.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1632,11 +1568,7 @@ func TestPersistentServiceOfAnotherVersionIsReportedOutdated(t *testing.T) {
 	for _, item := range cases {
 		t.Run(item.name, func(t *testing.T) {
 			root := t.TempDir()
-			socketDirectory, err := os.MkdirTemp("", "sp-v")
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.RemoveAll(socketDirectory)
+			socketDirectory := socketParent(t)
 			socket := filepath.Join(socketDirectory, "s.sock")
 			listener, err := net.Listen("unix", socket)
 			if err != nil {
@@ -1696,11 +1628,7 @@ func (b *syncBuffer) String() string {
 func TestPersistentTransportWritesAnErrorLineForALostConnection(t *testing.T) {
 	logged := recordText(captureLog(t))
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-lost")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1781,11 +1709,7 @@ type replaceService struct {
 
 func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string) *replaceService {
 	t.Helper()
-	socketDirectory, err := os.MkdirTemp("", "sp-replace")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(socketDirectory) })
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -2009,11 +1933,7 @@ func TestAReplacedServiceStartsAfterTheEndOfItsProcess(t *testing.T) {
 // contract: sidecars-transport.hello.client-is-the-configuration-directory
 func TestTheHelloCarriesTheConfigurationDirectoryAsClient(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-client")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -2146,11 +2066,7 @@ const eventsService = "fixture-events-service"
 // contract: sidecars-transport.persistent.connection-events
 func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory, err := os.MkdirTemp("", "sp-events")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(socketDirectory)
+	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {

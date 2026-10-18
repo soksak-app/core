@@ -9,7 +9,7 @@ mod log_support;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use log_support::temp_dir;
+use log_support::{Folder, temp_dir};
 
 /// Prints, for each frame record it reads, the number of bytes of the inputs read so far as 64 decimal digits.
 const FAKE_REPLAY: &str = r#"#!/bin/sh
@@ -103,7 +103,7 @@ fn event_file(open: String, lines: &[String]) -> String {
 
 /// Writes the event files of the sidecar role "fake" and of the host, and installs a sidecar that declares the replay executable
 /// with the given script and the given role.
-fn replay_config(name: &str, events: &Events, script: &str, role: &str) -> PathBuf {
+fn replay_config(name: &str, events: &Events, script: &str, role: &str) -> Folder {
     let config = temp_dir(name);
     write_file(
         &config.join("logs/fake-b1.jsonl"),
@@ -463,7 +463,7 @@ fn segment_events(session: &str) -> Events {
 }
 
 /// The session of `standard_events` (boot b1, its page frames naming b1) followed by `segment_events` (boot b2).
-fn segmented_config(name: &str, change: impl Fn(&mut Events, &mut Events)) -> PathBuf {
+fn segmented_config(name: &str, change: impl Fn(&mut Events, &mut Events)) -> Folder {
     let mut first = standard_events();
     let mut second = segment_events("s1");
     change(&mut first, &mut second);

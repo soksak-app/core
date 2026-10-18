@@ -3,38 +3,14 @@
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
+#[path = "support/folder.rs"]
+mod folder;
 
-/// A unique temporary folder for each test. It is removed at the end.
-struct Dir(PathBuf);
-
-impl Dir {
-    fn new() -> Dir {
-        let path = std::env::temp_dir().join(format!(
-            "sok-plugins{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::SeqCst)
-        ));
-        std::fs::create_dir_all(&path).expect("create temporary directory");
-        Dir(path)
-    }
-
-    fn text(&self) -> &str {
-        self.0.to_str().expect("UTF-8 path")
-    }
-}
-
-impl Drop for Dir {
-    fn drop(&mut self) {
-        // Cleanup after the test. A folder that cannot be removed has a unique name that does not affect the next test.
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+use folder::Folder;
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
@@ -78,13 +54,18 @@ fn read_text(path: &Path) -> String {
 
 /// Builds a registry for each version of plugin probe from its packed release and the release of sidecar 0.1.0.
 struct Registry {
-    dir: Dir,
-    _work: Vec<Dir>,
+    dir: Folder,
+    _work: Vec<Folder>,
 }
 
 impl Registry {
     fn index(&self) -> String {
-        self.dir.0.join("index.json").to_str().unwrap().to_string()
+        self.dir
+            .path()
+            .join("index.json")
+            .to_str()
+            .unwrap()
+            .to_string()
     }
 }
 
@@ -95,18 +76,18 @@ fn plugin_versions(versions: &[&str]) -> Registry {
 /// A registry whose plugin requires core version core.
 fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
     let platform = soksak_sok::current_platform().expect("platform");
-    let releases = Dir::new();
+    let releases = Folder::new("plugins");
     let mut work = vec![];
     let mut entries = vec![];
     for version in versions {
-        let dir = Dir::new();
+        let dir = Folder::new("plugins");
         let package = format!(
             r#"{{"name": "@scope/plugin-probe", "version": "{version}", "engines": {{"soksak": "^{core}"}},
             "files": ["plugin.json", "ui"]}}"#
         );
         let content = format!("b {version}");
         write_tree(
-            &dir.0,
+            dir.path(),
             &[
                 ("package.json", &package),
                 (
@@ -125,9 +106,9 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
         ));
         work.push(dir);
     }
-    let sidecar = Dir::new();
+    let sidecar = Folder::new("plugins");
     write_tree(
-        &sidecar.0,
+        sidecar.path(),
         &[
             (
                 "package.json",
@@ -148,7 +129,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
         "--platform",
         &platform,
     ]);
-    let dir = Dir::new();
+    let dir = Folder::new("plugins");
     let plugin_entry = format!(
         r#"{{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
         "license": "MIT", "repository": "https://example.invalid/probe", "versions": [{}]}}"#,
@@ -162,7 +143,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
         released["sha256"].as_str().unwrap()
     );
     write_tree(
-        &dir.0,
+        dir.path(),
         &[
             ("plugins/probe.json", &plugin_entry),
             ("sidecars/scope-sidecar-worker.json", &sidecar_entry),
@@ -181,11 +162,11 @@ fn plugin_install_extracts_checked_releases_and_records_the_state() {
     let platform = soksak_sok::current_platform().expect("platform");
     let registry = plugin_versions(&["0.2.0"]);
     let index = registry.index();
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     let used = run_json(&["registry", "use", &index, "--config-dir", config.text()]);
     assert_eq!(used["index"], format!("file://{index}").as_str());
     assert_eq!(
-        read_text(&config.0.join("plugins/registry.json")),
+        read_text(&config.path().join("plugins/registry.json")),
         format!("{{\"format\":1,\"index\":\"file://{index}\"}}\n")
     );
     let (code, stdout, stderr) =
@@ -206,11 +187,11 @@ fn plugin_install_extracts_checked_releases_and_records_the_state() {
 "#;
     assert_eq!((code, stdout.as_str()), (0, want), "{stderr}");
     assert_eq!(
-        read_text(&config.0.join("plugins/probe/0.2.0/ui/b.js")),
+        read_text(&config.path().join("plugins/probe/0.2.0/ui/b.js")),
         "b 0.2.0"
     );
     let worker = config
-        .0
+        .path()
         .join("sidecars/scope-sidecar-worker/0.1.0")
         .join(&platform)
         .join("build/worker");
@@ -218,7 +199,7 @@ fn plugin_install_extracts_checked_releases_and_records_the_state() {
         std::fs::metadata(&worker).unwrap().permissions().mode() & 0o777,
         0o755
     );
-    let installed = read_text(&config.0.join("plugins/installed.json"));
+    let installed = read_text(&config.path().join("plugins/installed.json"));
     let sidecar_path = format!(r#""path": "sidecars/scope-sidecar-worker/0.1.0/{platform}""#);
     assert!(installed.contains(&sidecar_path), "{installed}");
     assert!(installed.contains(r#""version": "0.2.0""#), "{installed}");
@@ -226,7 +207,7 @@ fn plugin_install_extracts_checked_releases_and_records_the_state() {
     let (code, again, _) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);
     assert_eq!((code, again), (0, stdout));
     assert_eq!(
-        read_text(&config.0.join("plugins/installed.json")),
+        read_text(&config.path().join("plugins/installed.json")),
         installed
     );
 }
@@ -272,11 +253,11 @@ fn replace_in(path: &Path, old: &str, replacement: &str) {
 // contract: cli.plugin.install-failure-keeps-state
 #[test]
 fn plugin_install_failure_keeps_the_previous_state() {
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     let (code, _, stderr) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);
     let want = format!(
         "sok: {} does not exist; run sok registry use <index.json>\n",
-        config.0.join("plugins/registry.json").display()
+        config.path().join("plugins/registry.json").display()
     );
     assert_eq!((code, stderr), (1, want));
     // When the release changes after the index was written, the hash comparison stops the installation.
@@ -304,12 +285,12 @@ fn plugin_install_failure_keeps_the_previous_state() {
         "{stderr}"
     );
     assert!(
-        !config.0.join("plugins/installed.json").exists()
-            && !config.0.join("plugins/probe/0.2.0").exists()
+        !config.path().join("plugins/installed.json").exists()
+            && !config.path().join("plugins/probe/0.2.0").exists()
     );
     // A release that holds a path outside the folder is not unpacked.
     let sum = unsafe_release(&release);
-    let entry = registry.dir.0.join("plugins/probe.json");
+    let entry = registry.dir.path().join("plugins/probe.json");
     replace_in(
         &entry,
         r#""sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]"#,
@@ -334,15 +315,15 @@ fn plugin_install_failure_keeps_the_previous_state() {
             "sok: plugin probe 0.2.0 package: release entry ../escape.txt leaves the folder\n"
         )
     );
-    assert!(!config.0.join("plugins/installed.json").exists());
-    assert!(!config.0.join("plugins/probe/0.2.0").exists());
-    assert!(!config.0.join("plugins/probe/escape.txt").exists());
+    assert!(!config.path().join("plugins/installed.json").exists());
+    assert!(!config.path().join("plugins/probe/0.2.0").exists());
+    assert!(!config.path().join("plugins/probe/escape.txt").exists());
 }
 
 // contract: cli.plugin.update-remove-enable-list
 #[test]
 fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     let first = plugin_versions(&["0.2.0"]);
     run_json(&[
         "registry",
@@ -375,7 +356,7 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
         assert_eq!(updated["plugin"]["enabled"], false);
         registries.push(registry);
     }
-    let mut names: Vec<String> = std::fs::read_dir(config.0.join("plugins/probe"))
+    let mut names: Vec<String> = std::fs::read_dir(config.path().join("plugins/probe"))
         .unwrap()
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect();
@@ -391,11 +372,11 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
     let (code, stdout, _) = run(&["plugin", "remove", "probe", "--config-dir", config.text()]);
     assert_eq!((code, stdout.as_str()), (0, "null\n"));
     assert!(
-        !config.0.join("plugins/probe").exists()
-            && !config.0.join("sidecars/scope-sidecar-worker").exists()
+        !config.path().join("plugins/probe").exists()
+            && !config.path().join("sidecars/scope-sidecar-worker").exists()
     );
     assert_eq!(
-        read_text(&config.0.join("plugins/installed.json")),
+        read_text(&config.path().join("plugins/installed.json")),
         "{\n  \"format\": 3,\n  \"plugins\": {},\n  \"sidecars\": {}\n}\n"
     );
     let (code, _, stderr) = run(&["plugin", "remove", "probe", "--config-dir", config.text()]);
@@ -406,15 +387,15 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
 }
 
 /// Converts the result of read_plugins_state to a JSON text.
-fn state_json(config: &Dir) -> String {
-    let state = soksak_sok::plugins::read_plugins_state(&config.0).expect("plugins state");
+fn state_json(config: &Folder) -> String {
+    let state = soksak_sok::plugins::read_plugins_state(config.path()).expect("plugins state");
     serde_json::to_string(&state).expect("state JSON")
 }
 
 // contract: cli.plugin.state-reads-registry-and-installed
 #[test]
 fn plugins_state_reports_the_registry_and_the_installation() {
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     assert_eq!(
         state_json(&config),
         r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true}"#
@@ -428,7 +409,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
         config.text(),
     ]);
     let platform = soksak_sok::current_platform().expect("platform");
-    soksak_sok::plugins::run_plugin_action(&config.0, "install", "probe", "0.0.2", &platform)
+    soksak_sok::plugins::run_plugin_action(config.path(), "install", "probe", "0.0.2", &platform)
         .expect("install");
     let state: Value = serde_json::from_str(&state_json(&config)).unwrap();
     assert_eq!(state["registry"], format!("file://{}", registry.index()));
@@ -442,8 +423,8 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let error = state["index"]["error"].as_str().expect("index error");
     assert!(error.contains(&registry.index()), "{error}");
     assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.2.0");
-    std::fs::write(config.0.join("plugins/installed.json"), "{").unwrap();
-    let error = soksak_sok::plugins::read_plugins_state(&config.0)
+    std::fs::write(config.path().join("plugins/installed.json"), "{").unwrap();
+    let error = soksak_sok::plugins::read_plugins_state(config.path())
         .err()
         .expect("invalid installed.json fails");
     assert!(
@@ -455,7 +436,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
 // contract: cli.plugin.action-runs-the-command
 #[test]
 fn run_plugin_action_matches_the_plugin_commands() {
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     let registry = plugin_versions(&["0.2.0"]);
     run_json(&[
         "registry",
@@ -465,31 +446,33 @@ fn run_plugin_action_matches_the_plugin_commands() {
         config.text(),
     ]);
     let platform = soksak_sok::current_platform().expect("platform");
-    soksak_sok::plugins::run_plugin_action(&config.0, "install", "probe", "0.0.2", &platform)
+    soksak_sok::plugins::run_plugin_action(config.path(), "install", "probe", "0.0.2", &platform)
         .expect("install");
     let disabled =
-        soksak_sok::plugins::run_plugin_action(&config.0, "disable", "probe", "0.0.2", "")
+        soksak_sok::plugins::run_plugin_action(config.path(), "disable", "probe", "0.0.2", "")
             .expect("disable");
     assert_eq!(serde_json::to_value(&disabled).unwrap()["enabled"], false);
     let (_, stdout, _) = run(&["plugin", "list", "--config-dir", config.text()]);
     assert!(stdout.contains(r#""enabled": false"#), "{stdout}");
-    let error = soksak_sok::plugins::run_plugin_action(&config.0, "rename", "probe", "0.0.2", "")
-        .err()
-        .expect("unknown action fails");
+    let error =
+        soksak_sok::plugins::run_plugin_action(config.path(), "rename", "probe", "0.0.2", "")
+            .err()
+            .expect("unknown action fails");
     assert_eq!(error, r#"unknown plugin action "rename""#);
-    let removed = soksak_sok::plugins::run_plugin_action(&config.0, "remove", "probe", "0.0.2", "")
-        .expect("remove");
+    let removed =
+        soksak_sok::plugins::run_plugin_action(config.path(), "remove", "probe", "0.0.2", "")
+            .expect("remove");
     assert_eq!(serde_json::to_string(&removed).unwrap(), "null");
-    assert!(!config.0.join("plugins/probe").exists());
+    assert!(!config.path().join("plugins/probe").exists());
 }
 
 // contract: cli.file.errors-name-the-path-and-the-reason
 #[test]
 fn file_errors_name_the_path_and_the_reason() {
-    let config = Dir::new();
-    let missing = config.0.join("missing.json");
+    let config = Folder::new("plugins");
+    let missing = config.path().join("missing.json");
     let error = soksak_sok::plugins::use_registry(
-        &config.0,
+        config.path(),
         missing.to_str().unwrap(),
         &soksak_sok::fetch::Fetcher::default(),
     )
@@ -498,11 +481,11 @@ fn file_errors_name_the_path_and_the_reason() {
         error,
         format!("{}: no such file or directory", missing.display())
     );
-    let installed = config.0.join("plugins/installed.json");
+    let installed = config.path().join("plugins/installed.json");
     std::fs::create_dir_all(installed.parent().unwrap()).unwrap();
     std::fs::write(&installed, "{}").unwrap();
     std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o0)).unwrap();
-    let error = soksak_sok::plugins::read_plugins_state(&config.0)
+    let error = soksak_sok::plugins::read_plugins_state(config.path())
         .err()
         .expect("an unreadable installed state is an error");
     std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o644)).unwrap();
@@ -512,8 +495,8 @@ fn file_errors_name_the_path_and_the_reason() {
 // contract: install.installed.rejects-another-format
 #[test]
 fn an_installed_file_of_another_format_is_rejected() {
-    let config = Dir::new();
-    let file = config.0.join("plugins/installed.json");
+    let config = Folder::new("plugins");
+    let file = config.path().join("plugins/installed.json");
     std::fs::create_dir_all(file.parent().expect("plugins")).expect("plugins folder");
     let former = r#"{"format": 1, "plugins": {}, "sidecars": {}}"#;
     std::fs::write(&file, former).expect("format 1");
@@ -538,7 +521,7 @@ fn plugin_install_sets_the_modes_whatever_the_umask() {
     let platform = soksak_sok::current_platform().expect("platform");
     // The executable sok chooses plugins with the core version of this crate.
     let registry = plugin_versions_for(soksak_sok::version::CORE_VERSION, &["0.2.0"]);
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     run_json(&[
         "registry",
         "use",
@@ -564,13 +547,13 @@ fn plugin_install_sets_the_modes_whatever_the_umask() {
     for (path, want) in [
         (
             config
-                .0
+                .path()
                 .join("sidecars/scope-sidecar-worker/0.1.0")
                 .join(&platform)
                 .join("build/worker"),
             0o755,
         ),
-        (config.0.join("plugins/probe/0.2.0/ui/b.js"), 0o644),
+        (config.path().join("plugins/probe/0.2.0/ui/b.js"), 0o644),
     ] {
         let mode = std::fs::metadata(&path)
             .expect("installed file")
@@ -609,11 +592,11 @@ fn ext(range: &'static str) -> Dependent {
 /// that start with @scope/sidecar-.
 fn dependency_registry(versions: &[Dependent]) -> Registry {
     let platform = soksak_sok::current_platform().expect("platform");
-    let releases = Dir::new();
+    let releases = Folder::new("plugins");
     let mut work = vec![];
     let mut plugins: BTreeMap<&str, Value> = BTreeMap::new();
     for item in versions {
-        let dir = Dir::new();
+        let dir = Folder::new("plugins");
         let dependencies: serde_json::Map<String, Value> = item
             .dependencies
             .iter()
@@ -624,7 +607,7 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
         .to_string();
         let manifest = json!({"id": item.id, "dependencies": dependencies}).to_string();
         write_tree(
-            &dir.0,
+            dir.path(),
             &[("package.json", &package), ("plugin.json", &manifest)],
         );
         let result = run_json(&["plugin", "pack", dir.text(), releases.text()]);
@@ -642,9 +625,9 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
             "engines": {"soksak": "^0.0.2"}, "sidecars": sidecars}));
         work.push(dir);
     }
-    let sidecar = Dir::new();
+    let sidecar = Folder::new("plugins");
     write_tree(
-        &sidecar.0,
+        sidecar.path(),
         &[
             (
                 "package.json",
@@ -686,15 +669,15 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
         .iter()
         .map(|(name, content)| (name.as_str(), content.as_str()))
         .collect();
-    let dir = Dir::new();
-    write_tree(&dir.0, &files);
+    let dir = Folder::new("plugins");
+    write_tree(dir.path(), &files);
     work.push(releases);
     work.push(sidecar);
     Registry { dir, _work: work }
 }
 
 /// Makes the configuration directory use the index.json of the registry folder.
-fn use_registry(config: &Dir, registry: &Registry) {
+fn use_registry(config: &Folder, registry: &Registry) {
     run_json(&[
         "registry",
         "use",
@@ -704,8 +687,8 @@ fn use_registry(config: &Dir, registry: &Registry) {
     ]);
 }
 
-fn installed_of(config: &Dir) -> soksak_sok::install::InstalledState {
-    soksak_sok::plugins::read_installed(&config.0).expect("installed state")
+fn installed_of(config: &Folder) -> soksak_sok::install::InstalledState {
+    soksak_sok::plugins::read_installed(config.path()).expect("installed state")
 }
 
 /// Runs a sok command and stops the test when it fails.
@@ -720,7 +703,7 @@ fn succeeds(args: &[&str]) -> String {
 fn plugin_install_installs_the_plugin_dependencies() {
     let full = dependency_registry(&[base("1.0.0"), base("1.1.0"), base("2.0.0"), ext("^1.0.0")]);
     // A provider that is not installed gets the newest version that satisfies the range.
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     use_registry(&config, &full);
     let stdout = succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
     let want = r#"{
@@ -750,12 +733,15 @@ fn plugin_install_installs_the_plugin_dependencies() {
     );
     assert_eq!(state.sidecars["@scope/sidecar-worker"].version, "0.1.0");
     assert!(
-        config.0.join("plugins/base/1.1.0/plugin.json").exists()
-            && config.0.join("plugins/ext/1.0.0/plugin.json").exists(),
+        config
+            .path()
+            .join("plugins/base/1.1.0/plugin.json")
+            .exists()
+            && config.path().join("plugins/ext/1.0.0/plugin.json").exists(),
         "install ext did not extract both plugins"
     );
     // An installed provider that satisfies the range is kept and enabled.
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     let small = dependency_registry(&[base("1.0.0")]);
     use_registry(&config, &small);
     succeeds(&["plugin", "install", "base", "--config-dir", config.text()]);
@@ -772,7 +758,7 @@ fn plugin_install_installs_the_plugin_dependencies() {
         ("1.0.0", true, None)
     );
     // An installed provider that does not satisfy the range gets the newest version that satisfies it.
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     use_registry(&config, &full);
     succeeds(&["plugin", "install", "base", "--config-dir", config.text()]);
     succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
@@ -784,8 +770,8 @@ fn plugin_install_installs_the_plugin_dependencies() {
 }
 
 /// The names in the plugins folder of the configuration directory.
-fn plugin_folders(config: &Dir) -> String {
-    let mut names: Vec<String> = std::fs::read_dir(config.0.join("plugins"))
+fn plugin_folders(config: &Folder) -> String {
+    let mut names: Vec<String> = std::fs::read_dir(config.path().join("plugins"))
         .unwrap()
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect();
@@ -829,7 +815,7 @@ fn plugin_install_rejects_unresolvable_plugin_dependencies() {
         ),
     ];
     for (plugin, versions, want) in cases {
-        let config = Dir::new();
+        let config = Folder::new("plugins");
         let registry = dependency_registry(&versions);
         use_registry(&config, &registry);
         let (code, _, stderr) = run(&["plugin", "install", plugin, "--config-dir", config.text()]);
@@ -841,11 +827,11 @@ fn plugin_install_rejects_unresolvable_plugin_dependencies() {
         );
     }
     // A provider that the index does not list is not a plugin dependency, even when it is installed.
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     let small = dependency_registry(&[base("1.0.0")]);
     use_registry(&config, &small);
     succeeds(&["plugin", "install", "base", "--config-dir", config.text()]);
-    let before = read_text(&config.0.join("plugins/installed.json"));
+    let before = read_text(&config.path().join("plugins/installed.json"));
     let only_ext = dependency_registry(&[ext("^1.0.0")]);
     use_registry(&config, &only_ext);
     let (code, _, stderr) = run(&["plugin", "install", "ext", "--config-dir", config.text()]);
@@ -856,14 +842,17 @@ fn plugin_install_rejects_unresolvable_plugin_dependencies() {
             "sok: ext 1.0.0: dependency @scope/plugin-base is neither a plugin nor a sidecar of the registry\n"
         )
     );
-    assert_eq!(read_text(&config.0.join("plugins/installed.json")), before);
-    assert!(!config.0.join("plugins/ext").exists());
+    assert_eq!(
+        read_text(&config.path().join("plugins/installed.json")),
+        before
+    );
+    assert!(!config.path().join("plugins/ext").exists());
 }
 
 // contract: cli.plugin.dependencies-update
 #[test]
 fn plugin_update_selects_a_provider_version_that_satisfies_every_dependent() {
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     let first = dependency_registry(&[base("1.0.0"), ext("^1.0.0")]);
     use_registry(&config, &first);
     succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
@@ -891,11 +880,11 @@ fn plugin_update_selects_a_provider_version_that_satisfies_every_dependent() {
 // contract: cli.plugin.dependencies-required
 #[test]
 fn plugin_remove_and_disable_refuse_a_plugin_that_an_enabled_plugin_requires() {
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     let registry = dependency_registry(&[base("1.0.0"), ext("^1.0.0")]);
     use_registry(&config, &registry);
     succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
-    let before = read_text(&config.0.join("plugins/installed.json"));
+    let before = read_text(&config.path().join("plugins/installed.json"));
     for action in ["remove", "disable"] {
         let (code, _, stderr) = run(&["plugin", action, "base", "--config-dir", config.text()]);
         assert_eq!(
@@ -903,8 +892,16 @@ fn plugin_remove_and_disable_refuse_a_plugin_that_an_enabled_plugin_requires() {
             (1, "sok: plugin base is required by ext ^1.0.0\n"),
             "{action} base"
         );
-        assert_eq!(read_text(&config.0.join("plugins/installed.json")), before);
-        assert!(config.0.join("plugins/base/1.0.0/plugin.json").exists());
+        assert_eq!(
+            read_text(&config.path().join("plugins/installed.json")),
+            before
+        );
+        assert!(
+            config
+                .path()
+                .join("plugins/base/1.0.0/plugin.json")
+                .exists()
+        );
     }
     // A disabled plugin does not require its provider.
     succeeds(&["plugin", "disable", "ext", "--config-dir", config.text()]);
@@ -918,16 +915,16 @@ fn plugin_remove_and_disable_refuse_a_plugin_that_an_enabled_plugin_requires() {
 // contract: cli.plugin.installed-reads-name-from-package-json
 #[test]
 fn plugin_dependents_read_the_name_from_the_package_json_of_the_installed_plugin() {
-    let config = Dir::new();
+    let config = Folder::new("plugins");
     let registry = dependency_registry(&[base("1.0.0"), ext("^1.0.0")]);
     use_registry(&config, &registry);
     succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
-    let text = read_text(&config.0.join("plugins/installed.json"));
+    let text = read_text(&config.path().join("plugins/installed.json"));
     assert!(
         !text.contains("\"package\""),
         "installed.json holds package: {text}"
     );
-    let file = config.0.join("plugins/base/1.0.0/package.json");
+    let file = config.path().join("plugins/base/1.0.0/package.json");
     let data = read_text(&file);
     let renamed = data.replacen("@scope/plugin-base", "@scope/plugin-renamed", 1);
     assert_ne!(
@@ -942,15 +939,15 @@ fn plugin_dependents_read_the_name_from_the_package_json_of_the_installed_plugin
 // contract: cli.plugin.installed-refuses-package
 #[test]
 fn read_installed_refuses_a_package_field() {
-    let config = Dir::new();
-    let installed = config.0.join("plugins/installed.json");
+    let config = Folder::new("plugins");
+    let installed = config.path().join("plugins/installed.json");
     std::fs::create_dir_all(installed.parent().unwrap()).expect("create plugins");
     std::fs::write(
         &installed,
         r#"{"format": 3, "plugins": {"side": {"package": "plugin-side", "version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}}, "sidecars": {}}"#,
     )
     .expect("write installed.json");
-    let error = soksak_sok::plugins::read_installed(&config.0).expect_err("package field");
+    let error = soksak_sok::plugins::read_installed(config.path()).expect_err("package field");
     assert_eq!(
         error,
         format!(

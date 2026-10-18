@@ -30,43 +30,15 @@ fn result(text: &str) -> Answer {
 }
 
 struct Fake {
-    config_dir: tempfile_dir::Dir,
+    config_dir: Folder,
     requests: Arc<Mutex<Vec<Value>>>,
-    _socket: tempfile_dir::Dir,
+    _socket: Folder,
 }
 
-/// A temporary folder removed when the test ends. It is made with std without an external crate.
-mod tempfile_dir {
-    use std::path::{Path, PathBuf};
-    use std::sync::atomic::{AtomicUsize, Ordering};
+#[path = "support/folder.rs"]
+mod folder;
 
-    static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-    pub struct Dir(PathBuf);
-
-    impl Dir {
-        pub fn new(base: &Path) -> Dir {
-            let path = base.join(format!(
-                "sok{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::SeqCst)
-            ));
-            std::fs::create_dir_all(&path).expect("create temporary directory");
-            Dir(path)
-        }
-
-        pub fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-
-    impl Drop for Dir {
-        fn drop(&mut self) {
-            // Cleanup after the test. A folder that cannot be removed has a unique name that does not affect the next test.
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-}
+use folder::Folder;
 
 fn write_frame(stream: &mut UnixStream, body: &[u8]) {
     let mut frame = (body.len() as u32).to_be_bytes().to_vec();
@@ -111,10 +83,10 @@ fn serve(mut stream: UnixStream, requests: Arc<Mutex<Vec<Value>>>, respond: Resp
 
 fn start(respond: impl Fn(&str, &Value) -> Answer + Send + Sync + 'static) -> Fake {
     // A Unix socket path is limited to 104 bytes, so the socket lives in a short temporary folder.
-    let socket = tempfile_dir::Dir::new(Path::new("/tmp"));
+    let socket = Folder::new_in(Path::new("/tmp"), "socket");
     let address = socket.path().join("e.sock");
     let listener = UnixListener::bind(&address).expect("listen");
-    let config_dir = tempfile_dir::Dir::new(&std::env::temp_dir());
+    let config_dir = Folder::new("sok");
     let endpoint = json!({"transport": "unix", "address": address, "pid": std::process::id()});
     std::fs::write(
         config_dir.path().join("endpoint.json"),
@@ -188,7 +160,7 @@ const ONE_WINDOW: &str =
 // contract: cli.usage.unknown-command-exits-2
 #[test]
 fn unknown_command_exits_with_usage() {
-    let dir = tempfile_dir::Dir::new(&std::env::temp_dir());
+    let dir = Folder::new("sok");
     let (code, stdout, stderr) =
         run(&["nothing", "--config-dir", &dir.path().display().to_string()]);
     assert_eq!((code, stdout.as_str()), (2, ""));
@@ -214,7 +186,7 @@ impl std::io::Write for Unwritable {
 // contract: cli.error.unwritable-stderr-exits-3
 #[test]
 fn an_error_that_cannot_be_written_exits_with_status_3() {
-    let dir = tempfile_dir::Dir::new(&std::env::temp_dir());
+    let dir = Folder::new("sok");
     let args: Vec<String> = ["nothing", "--config-dir", &dir.path().display().to_string()]
         .iter()
         .map(|arg| arg.to_string())
@@ -235,7 +207,7 @@ fn an_error_that_cannot_be_written_exits_with_status_3() {
 // contract: cli.endpoint.missing-file-reports-not-running
 #[test]
 fn missing_endpoint_reports_the_application_is_not_running() {
-    let dir = tempfile_dir::Dir::new(&std::env::temp_dir());
+    let dir = Folder::new("sok");
     let (code, _, stderr) = run(&["windows", "--config-dir", &dir.path().display().to_string()]);
     assert_eq!(code, 1);
     assert_eq!(
@@ -362,7 +334,7 @@ fn capture_requests_a_still_image_in_a_diagnostic_build() {
 #[cfg(not(feature = "diagnostics"))]
 #[test]
 fn capture_needs_a_diagnostic_build() {
-    let dir = tempfile_dir::Dir::new(&std::env::temp_dir());
+    let dir = Folder::new("sok");
     let (code, stdout, stderr) =
         run(&["capture", "--config-dir", &dir.path().display().to_string()]);
     assert_eq!((code, stdout.as_str()), (2, ""));
@@ -375,8 +347,8 @@ fn capture_needs_a_diagnostic_build() {
 // contract: cli.window.several-windows-need-selection, cli.window.project-selects-by-canonical-folder
 #[test]
 fn several_windows_need_selection() {
-    let project = tempfile_dir::Dir::new(&std::env::temp_dir());
-    let links = tempfile_dir::Dir::new(&std::env::temp_dir());
+    let project = Folder::new("sok");
+    let links = Folder::new("sok");
     let alias: PathBuf = links.path().join("alias");
     std::os::unix::fs::symlink(project.path(), &alias).expect("alias");
     let windows = json!([{"window": "main", "project": null}, {"window": "project-a", "project": project.path()}]).to_string();
@@ -644,7 +616,7 @@ fn commands_lists_the_declared_commands_in_order() {
 // contract: cli.path.writes-and-removes-the-entry
 #[test]
 fn path_install_writes_the_executable_directory_and_remove_deletes_it() {
-    let paths = tempfile_dir::Dir::new(&std::env::temp_dir());
+    let paths = Folder::new("sok");
     *PATHS.lock().expect("paths") = paths.path().to_path_buf();
     let directory = std::env::current_exe()
         .expect("exe")

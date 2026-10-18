@@ -2,35 +2,15 @@
 
 use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::path::Path;
 
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
+#[path = "support/folder.rs"]
+mod folder;
 
-/// A unique temporary folder for each test. It is removed at the end.
-struct Dir(PathBuf);
-
-impl Dir {
-    fn new() -> Dir {
-        let path = std::env::temp_dir().join(format!(
-            "sok-release{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::SeqCst)
-        ));
-        std::fs::create_dir_all(&path).expect("create temporary directory");
-        Dir(path)
-    }
-}
-
-impl Drop for Dir {
-    fn drop(&mut self) {
-        // Cleanup after the test. A folder that cannot be removed has a unique name that does not affect the next test.
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
+use folder::Folder;
 
 fn run(args: &[&str]) -> (i32, String, String) {
     let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
@@ -95,10 +75,10 @@ fn read_release(path: &Path) -> (Vec<TarEntry>, String) {
     (entries, sum)
 }
 
-fn plugin_tree() -> Dir {
-    let dir = Dir::new();
+fn plugin_tree() -> Folder {
+    let dir = Folder::new("release");
     write_tree(
-        &dir.0,
+        dir.path(),
         &[
             (
                 "package.json",
@@ -125,9 +105,9 @@ fn text(path: &Path) -> &str {
 #[test]
 fn plugin_pack_writes_a_sorted_release_of_the_listed_files() {
     let dir = plugin_tree();
-    let base = Dir::new();
-    let out = base.0.join("out");
-    let (code, stdout, stderr) = run(&["plugin", "pack", text(&dir.0), text(&out)]);
+    let base = Folder::new("release");
+    let out = base.path().join("out");
+    let (code, stdout, stderr) = run(&["plugin", "pack", text(dir.path()), text(&out)]);
     assert_eq!(code, 0, "{stderr}");
     let release = out.join("probe-0.2.0.tgz");
     let (entries, sum) = read_release(&release);
@@ -156,7 +136,7 @@ fn plugin_pack_writes_a_sorted_release_of_the_listed_files() {
     );
     assert_eq!(entries[3].content, "b");
     // Packing the same folder again writes the same bytes.
-    let (code, again, _) = run(&["plugin", "pack", text(&dir.0), text(&out)]);
+    let (code, again, _) = run(&["plugin", "pack", text(dir.path()), text(&out)]);
     assert_eq!((code, again), (0, stdout));
 }
 
@@ -164,10 +144,10 @@ fn plugin_pack_writes_a_sorted_release_of_the_listed_files() {
 #[test]
 fn plugin_pack_rejects_links_and_a_manifest_mismatch_without_writing() {
     let dir = plugin_tree();
-    std::os::unix::fs::symlink("b.js", dir.0.join("ui/link.js")).unwrap();
-    let base = Dir::new();
-    let out = base.0.join("out");
-    let (code, _, stderr) = run(&["plugin", "pack", text(&dir.0), text(&out)]);
+    std::os::unix::fs::symlink("b.js", dir.path().join("ui/link.js")).unwrap();
+    let base = Folder::new("release");
+    let out = base.path().join("out");
+    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(&out)]);
     assert_eq!(
         (code, stderr.as_str()),
         (
@@ -184,14 +164,14 @@ fn plugin_pack_rejects_links_and_a_manifest_mismatch_without_writing() {
     );
     let other = plugin_tree();
     write_tree(
-        &other.0,
+        other.path(),
         &[(
             "package.json",
             r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
             "soksak": {"sidecars": {"@scope/sidecar-worker": "^0.1.0"}}, "files": ["plugin.json", "ui"]}"#,
         )],
     );
-    let (code, _, stderr) = run(&["plugin", "pack", text(&other.0), text(&out)]);
+    let (code, _, stderr) = run(&["plugin", "pack", text(other.path()), text(&out)]);
     assert_eq!(
         (code, stderr.as_str()),
         (
@@ -201,13 +181,13 @@ fn plugin_pack_rejects_links_and_a_manifest_mismatch_without_writing() {
     );
     let other = plugin_tree();
     write_tree(
-        &other.0,
+        other.path(),
         &[(
             "plugin.json",
             r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "latest"}}"#,
         )],
     );
-    let (code, _, stderr) = run(&["plugin", "pack", text(&other.0), text(&out)]);
+    let (code, _, stderr) = run(&["plugin", "pack", text(other.path()), text(&out)]);
     assert!(
         code == 1
             && stderr.starts_with(
@@ -216,27 +196,27 @@ fn plugin_pack_rejects_links_and_a_manifest_mismatch_without_writing() {
         "code {code} stderr {stderr:?}"
     );
     write_tree(
-        &other.0,
+        other.path(),
         &[(
             "plugin.json",
             r#"{"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
         )],
     );
-    let (code, _, stderr) = run(&["plugin", "pack", text(&other.0), text(&out)]);
+    let (code, _, stderr) = run(&["plugin", "pack", text(other.path()), text(&out)]);
     assert_eq!(
         (code, stderr.as_str()),
         (1, "sok: plugin.json: id must be a lowercase identifier\n")
     );
 }
 
-fn sidecar_tree(version: &str) -> Dir {
-    let dir = Dir::new();
+fn sidecar_tree(version: &str) -> Folder {
+    let dir = Folder::new("release");
     let package = format!(
         r#"{{"name": "@scope/sidecar-worker", "version": "{version}", "files": ["sidecar.json", "build/worker"]}}"#
     );
     let binary = format!("binary {version}");
     write_tree(
-        &dir.0,
+        dir.path(),
         &[
             ("package.json", &package),
             (
@@ -253,7 +233,7 @@ fn sidecar_tree(version: &str) -> Dir {
 // contract: cli.release.writes-release-and-sums
 #[test]
 fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
-    let out = Dir::new();
+    let out = Folder::new("release");
     let mut sums = vec![];
     for (version, platform) in [
         ("0.1.1", "linux-x64"),
@@ -264,16 +244,16 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
         let (code, stdout, stderr) = run(&[
             "sidecar",
             "release",
-            text(&tree.0),
-            text(&out.0),
+            text(tree.path()),
+            text(out.path()),
             "--platform",
             platform,
         ]);
         assert_eq!(code, 0, "{stderr}");
         let result: Value = serde_json::from_str(&stdout).unwrap();
         let name = format!("scope-sidecar-worker-{version}-{platform}.tar.gz");
-        let (entries, sum) = read_release(&out.0.join(&name));
-        assert_eq!(result["release"], text(&out.0.join(&name)));
+        let (entries, sum) = read_release(&out.path().join(&name));
+        assert_eq!(result["release"], text(&out.path().join(&name)));
         assert_eq!(result["sha256"], sum.as_str());
         assert_eq!(
             (result["platform"].as_str(), result["version"].as_str()),
@@ -295,14 +275,14 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
         sums.push(format!("{sum}  {name}"));
     }
     // A third release with the same name changes the first line, and the lines are in release name order.
-    let written = std::fs::read_to_string(out.0.join("SHA256SUMS")).unwrap();
+    let written = std::fs::read_to_string(out.path().join("SHA256SUMS")).unwrap();
     assert_eq!(written, format!("{}\n{}\n", sums[1], sums[2]));
     let tree = sidecar_tree("0.1.0");
     let (code, _, stderr) = run(&[
         "sidecar",
         "release",
-        text(&tree.0),
-        text(&out.0),
+        text(tree.path()),
+        text(out.path()),
         "--platform",
         "solaris-sparc",
     ]);
@@ -313,7 +293,7 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
     );
     let unlisted = sidecar_tree("0.1.0");
     write_tree(
-        &unlisted.0,
+        unlisted.path(),
         &[(
             "package.json",
             r#"{"name": "@scope/sidecar-worker", "version": "0.1.0", "files": ["sidecar.json"]}"#,
@@ -322,8 +302,8 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
     let (code, _, stderr) = run(&[
         "sidecar",
         "release",
-        text(&unlisted.0),
-        text(&out.0),
+        text(unlisted.path()),
+        text(out.path()),
         "--platform",
         "darwin-arm64",
     ]);
@@ -331,23 +311,23 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
         (code, stderr.as_str()),
         (1, "sok: package.json files: build/worker is not listed\n")
     );
-    write_tree(&out.0, &[("SHA256SUMS", "broken\n")]);
+    write_tree(out.path(), &[("SHA256SUMS", "broken\n")]);
     let tree = sidecar_tree("0.2.0");
     let (code, _, stderr) = run(&[
         "sidecar",
         "release",
-        text(&tree.0),
-        text(&out.0),
+        text(tree.path()),
+        text(out.path()),
         "--platform",
         "darwin-arm64",
     ]);
     let want = format!(
         "sok: {} line 1 is not \"<sha256>  <release name>\"\n",
-        text(&out.0.join("SHA256SUMS"))
+        text(&out.path().join("SHA256SUMS"))
     );
     assert_eq!((code, stderr), (1, want));
     assert!(
-        !out.0
+        !out.path()
             .join("scope-sidecar-worker-0.2.0-darwin-arm64.tar.gz")
             .exists(),
         "a failed release left its release"
@@ -357,10 +337,10 @@ fn sidecar_release_writes_the_asset_and_keeps_sha256sums_sorted() {
 // contract: cli.release.requires-the-replay-executable
 #[test]
 fn sidecar_release_refuses_a_replay_executable_that_the_package_does_not_ship() {
-    let out = Dir::new();
+    let out = Folder::new("release");
     let tree = sidecar_tree("0.1.0");
     write_tree(
-        &tree.0,
+        tree.path(),
         &[
             (
                 "sidecar.json",
@@ -369,12 +349,12 @@ fn sidecar_release_refuses_a_replay_executable_that_the_package_does_not_ship() 
             ("build/replay*", "binary replay"),
         ],
     );
-    let release = |tree: &Dir| {
+    let release = |tree: &Folder| {
         run(&[
             "sidecar",
             "release",
-            text(&tree.0),
-            text(&out.0),
+            text(tree.path()),
+            text(out.path()),
             "--platform",
             "darwin-arm64",
         ])
@@ -388,13 +368,13 @@ fn sidecar_release_refuses_a_replay_executable_that_the_package_does_not_ship() 
         )
     );
     assert!(
-        !out.0
+        !out.path()
             .join("scope-sidecar-worker-0.1.0-darwin-arm64.tar.gz")
             .exists(),
         "a refused release left its release"
     );
     write_tree(
-        &tree.0,
+        tree.path(),
         &[(
             "package.json",
             r#"{"name": "@scope/sidecar-worker", "version": "0.1.0", "files": ["sidecar.json", "build/worker", "build/replay"]}"#,
@@ -407,7 +387,7 @@ fn sidecar_release_refuses_a_replay_executable_that_the_package_does_not_ship() 
         "a release that ships its replay executable failed"
     );
     write_tree(
-        &tree.0,
+        tree.path(),
         &[(
             "sidecar.json",
             r#"{"executable": "build/worker", "protocol": 1, "replay": {"role": "screen"}}"#,
@@ -425,7 +405,7 @@ fn sidecar_release_refuses_a_replay_executable_that_the_package_does_not_ship() 
 fn plugin_pack_adds_diagnostic_declarations_only_with_the_flag() {
     let dir = plugin_tree();
     write_tree(
-        &dir.0,
+        dir.path(),
         &[
             (
                 "diagnostics.json",
@@ -441,25 +421,25 @@ fn plugin_pack_adds_diagnostic_declarations_only_with_the_flag() {
             "diagnostics.json, package.json, plugin.json, probe-diagnostics.js, ui/a/run.sh, ui/b.js",
         ),
     ] {
-        let out = Dir::new();
-        let mut args = vec!["plugin", "pack", text(&dir.0), text(&out.0)];
+        let out = Folder::new("release");
+        let mut args = vec!["plugin", "pack", text(dir.path()), text(out.path())];
         args.extend(flags.iter().copied());
         let (code, _, stderr) = run(&args);
         assert_eq!(code, 0, "{flags:?}: {stderr}");
-        let (entries, _) = read_release(&out.0.join("probe-0.2.0.tgz"));
+        let (entries, _) = read_release(&out.path().join("probe-0.2.0.tgz"));
         let names: Vec<&str> = entries.iter().map(|entry| entry.name.as_str()).collect();
         assert_eq!(names.join(", "), want, "{flags:?}");
     }
     write_tree(
-        &dir.0,
+        dir.path(),
         &[(
             "package.json",
             r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
             "files": ["plugin.json", "ui", "probe-diagnostics.js"]}"#,
         )],
     );
-    let out = Dir::new();
-    let (code, _, stderr) = run(&["plugin", "pack", text(&dir.0), text(&out.0)]);
+    let out = Folder::new("release");
+    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
     assert_eq!(
         (code, stderr.as_str()),
         (
@@ -471,8 +451,8 @@ fn plugin_pack_adds_diagnostic_declarations_only_with_the_flag() {
     let (code, _, stderr) = run(&[
         "sidecar",
         "release",
-        text(&tree.0),
-        text(&out.0),
+        text(tree.path()),
+        text(out.path()),
         "--diagnostics",
     ]);
     assert_eq!(code, 2);
@@ -500,20 +480,20 @@ fn plugin_pack_rejects_a_module_that_files_does_not_list() {
         ),
     ] {
         let dir = plugin_tree();
-        write_tree(&dir.0, &[("plugin.json", manifest)]);
-        let out = Dir::new();
-        let (code, _, stderr) = run(&["plugin", "pack", text(&dir.0), text(&out.0)]);
+        write_tree(dir.path(), &[("plugin.json", manifest)]);
+        let out = Folder::new("release");
+        let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
         assert_eq!((code, stderr), (1, format!("sok: {want}\n")));
     }
     let dir = plugin_tree();
     write_tree(
-        &dir.0,
+        dir.path(),
         &[(
             "plugin.json",
             r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"module": "ui/b.js"}, "sections": [{"id": "probe.list", "module": "ui/a/run.sh"}]}"#,
         )],
     );
-    let out = Dir::new();
-    let (code, _, stderr) = run(&["plugin", "pack", text(&dir.0), text(&out.0)]);
+    let out = Folder::new("release");
+    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
     assert_eq!(code, 0, "{stderr}");
 }
