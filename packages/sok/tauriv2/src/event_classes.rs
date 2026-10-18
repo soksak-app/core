@@ -104,6 +104,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "native.input.report" => Some(Class::Input),
         "native.input.source_changed" => Some(Class::Input),
         "native.log.gated" => Some(Class::Lifecycle),
+        "native.memory.pressure" => Some(Class::Lifecycle),
         "native.observe.counted" => Some(Class::Frame),
         "native.observe.delivered" => Some(Class::Input),
         "native.observe.failed" => Some(Class::Lifecycle),

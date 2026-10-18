@@ -49,6 +49,7 @@ const EXACT = new Map([
   ["native.input.report", "input"],
   ["native.input.source_changed", "input"],
   ["native.log.gated", "lifecycle"],
+  ["native.memory.pressure", "lifecycle"],
   ["native.observe.counted", "frame"],
   ["native.observe.delivered", "input"],
   ["native.observe.failed", "lifecycle"],

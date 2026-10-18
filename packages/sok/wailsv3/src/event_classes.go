@@ -62,6 +62,7 @@ var eventClasses = map[string]Class{
 	"native.input.report":                 ClassInput,
 	"native.input.source_changed":         ClassInput,
 	"native.log.gated":                    ClassLifecycle,
+	"native.memory.pressure":              ClassLifecycle,
 	"native.observe.counted":              ClassFrame,
 	"native.observe.delivered":            ClassInput,
 	"native.observe.failed":               ClassLifecycle,
