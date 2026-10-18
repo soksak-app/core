@@ -411,10 +411,10 @@ test("a failed commit after the tab is marked returns it to loaded with a report
 
 test("a session history refused at the first show after a restart is reported for a tab that no commit gave the memory saver", () => {
   const { saver, state } = harness();
-  saver.historyRefused("a", "browser", "document region page: the web view refused the interactionState");
+  saver.historyRefused("a", "fixture", "document region page: the web view refused the interactionState");
   assert.equal(saver.state("a"), null);
   assert.deepEqual(named("page.tab.restore.failed"),
-    [{ tab: "a", plugin: "browser", reason: "document region page: the web view refused the interactionState" }]);
+    [{ tab: "a", plugin: "fixture", reason: "document region page: the web view refused the interactionState" }]);
   assert.deepEqual(state.failures, ["memory saver: tab a: restore failed: document region page: the web view refused the interactionState"]);
 });
 
