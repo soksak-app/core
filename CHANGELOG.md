@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F196.27-1: a document region opens each new main-frame document in a new process, as the main web view does, so a reload or a navigation no longer keeps the earlier documents in the tab process: five reloads keep 6 documents and about 124 MB instead of up to 22 documents and 325 MB. A navigation takes about 1.1 s instead of 0.6 s. Red: the document stayed in process 86315; Green: `document_navigation_test`.
 - F196.19-1: `make -C native/darwin benchmark-occlusion` measures that macOS reports a window covered by a titled window only when the cover reaches 28 pt past each shared corner, so a window at the top-left corner of the screen stays visible under a maximized window and WebKit keeps its documents visible; no API or SPI changes that input.
 - F197.8: the log policy reaches every document: both hosts send `log-policy` to every window when a policy is applied and answer the action `policy-read`, and each surface or modal document applies the policy to its gate, so with the debug switch on a surface document stores its debug events. Red: a surface document batched only `page.log.gated`; Green.
 - F196.26: the package tests pass again: the chain audit fixture records the debug policy, the comments of the debug switch are English, and the surface call tests of both applications set the debug state, since diagnostics are off by default (F197).

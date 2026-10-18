@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.27-1: document region이 main webview처럼 main frame의 새 document를 새 process에서 열므로, reload나 이동이 더 이상 tab process에 이전 document를 남기지 않는다: 다섯 번 reload해도 최대 22개 document와 325 MB 대신 6개와 약 124 MB를 유지한다. 이동은 0.6초 대신 약 1.1초 걸린다. Red: document가 process 86315에 남았다; Green: `document_navigation_test`.
 - F196.19-1: `make -C native/darwin benchmark-occlusion`이 측정한 바, macOS는 제목 막대 창이 공유하는 각 모서리를 28 pt 넘을 때만 창을 덮인 것으로 보고하므로, 화면 왼쪽 위 모서리의 창은 최대화된 창 아래에서 보이는 상태로 남고 WebKit은 그 document를 보이는 상태로 유지한다; 그 입력을 바꾸는 API나 SPI는 없다.
 - F197.8: log policy가 모든 document에 닿는다: 두 host가 policy를 적용할 때 모든 window에 `log-policy`를 보내고 action `policy-read`에 답하며, 각 surface와 modal document가 policy를 자기 gate에 적용하므로 debug switch를 켜면 surface document가 debug event를 저장한다. Red: surface document가 `page.log.gated`만 batch했다; Green.
 - F196.26: package 시험이 다시 통과한다: 진단이 기본으로 꺼져 있으므로(F197) chain audit fixture가 debug policy를 기록하고, debug switch의 주석이 영어이며, 두 애플리케이션의 surface call 시험이 debug 상태를 설정한다.
