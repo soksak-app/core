@@ -22,30 +22,28 @@ core는 숨겨진 tab을 내리고, 다시 보일 때 저장된 상태로 복원
 4. **보호.** 다음 중 하나라도 해당하면 tab을 내리지 않는다; 각각 이름 붙은 이유이고, tab은 여러 이유를 가질 수 있다:
    - `shown`: 보이는 space에서 그 카드의 보이는 tab.
    - `recent`: 보인 지 지연 시간이 지나지 않았다.
-   - `restored`: restore된 지 60초가 지나지 않았다.
    - `keep`: surface가 `context.tab.keep(reason, on)`으로 keep 이유를 가진다. `reason`은 `modified`(저장되지 않은 변경) 또는 `busy`(진행 중인 작업). keep 이유는 surface가 dispose되면 끝난다. `modified`를 보고한 surface는 깨끗하다고 보고할 때까지 유지된다.
-   - `media`: document region이 소리나 영상을 재생하거나, picture in picture를 보이거나, camera나 microphone을 capture한다. camera와 microphone은 web view의 public `cameraCaptureState`와 `microphoneCaptureState`를 key-value observation으로 읽는다. 재생과 picture in picture는 자기 content world에서 모든 frame에 주입한 region script가 읽는다: 각 document에서 media 요소의 `play`, `pause`, `ended`, `emptied` event와 `enterpictureinpicture`, `leavepictureinpicture`, `webkitpresentationmodechanged`를 듣고 각 변화를 event로 보낸다. 화면 capture는 다루지 않는다: region은 `getDisplayMedia`를 허락하지 않는다.
-   - `form`: document region의 frame에 마지막 load 뒤 trusted `input` event를 받은 편집 가능한 요소(form field나 `contenteditable`)가 있다. content world에서 모든 frame에 주입한(`forMainFrameOnly` 끔) region script가 자기가 만든 식별자로 frame마다 표시를 유지한다; main frame navigation commit은 모든 frame을, subframe navigation이나 form `submit`은 그 frame을 지운다. 등록된 `beforeunload` handler는 보호가 아니다: script의 content world는 page의 listener를 볼 수 없다.
-   - `kept`: 사용자가 tab을 계속 올려 두도록 표시했다(`core.tab.keep`); tab 상태 store에 둔다.
+   - `media`: document region이 media를 재생한다. 판단할 때마다(지연 마감, pressure 알림, `core.tab.unload`) core가 region에 묻고, region은 web view의 public `requestMediaPlaybackState`를 부른다; picture in picture를 포함한 `playing`이 tab을 보호한다. camera와 microphone capture는 public `cameraCaptureState`와 `microphoneCaptureState`를 key-value observation으로 읽는다. status는 마지막 판단의 media 결과를 보인다. 화면 capture는 다루지 않는다: region은 `getDisplayMedia`를 허락하지 않는다.
+   - `form`: document region의 frame에 그 frame의 document가 load된 뒤 trusted `input` event를 받은 편집 가능한 요소(form field나 `contenteditable`)가 있다. WebKit에는 이것의 public 엔진 상태가 없으므로, region content world에서 모든 frame에 주입한(`forMainFrameOnly` 끔) region script가 보고한다. native region은 script message의 frame 식별자를 key로 한 map에 표시를 둔다; frame의 `pagehide`와 form `submit`은 그 표시를 지우고, main frame navigation commit이나 reload는 map을 지운다. 등록된 `beforeunload` handler는 보호가 아니다: content world는 page의 listener를 볼 수 없다.
    - `off`: 설정이 꺼져 있다.
 
    region은 download하지 않는다: view가 보일 수 없는 navigation은 실패하거나 취소되므로 download 보호는 없다. download 지원은 자기 보호를 가진 별도 항목이 된다.
 5. **두 가지 계기.**
-   - `delay`: 보호 없이 지연 시간(기본 5분) 동안 숨겨진 tab을 내린다. core scheduler 하나가 각 tab이 숨겨진 monotonic 시각으로 계산한 가장 이른 마감을 가지고, 그것을 바꾸는 기존 event(tab 표시나 숨김, 보호 변화, 설정 변화)에 다시 맞춘다. 경과 시간에는 event source가 없어서 timer를 쓰고, code와 명세가 그 이유를 적는다.
-   - `pressure`: native memory pressure source 하나가 host와 함께 시작하고, level(warn 또는 critical)을 읽고 각 알림에 번호를 붙인다. F196.29의 document region 소비자를 부르고(그 소비자는 source를 갖지 않고 구독한다), host는 page에 event `memory-pressure {level, seq}` 하나를 보낸다. 알림마다 core는 보호 없는 숨겨진 tab 하나를, 가장 오래전에 보인 것부터 내린다. pressure에서 `recent`는 보호하지 않는다; `restored`와 다른 보호는 모두 지킨다. 후보를 찾지 못한 알림은 event `page.tab.unload.skipped {trigger, seq, reasons}`다.
+   - `delay`: 보호 없이 지연 시간(기본 2시간, 주요 기본값의 크기) 동안 숨겨진 tab을 내린다. core scheduler 하나가 각 tab이 숨겨진 monotonic 시각으로 계산한 가장 이른 마감을 가지고, 그것을 바꾸는 기존 event(tab 표시나 숨김, 보호 변화, 설정 변화)에 다시 맞춘다. 경과 시간에는 event source가 없어서 timer를 쓰고, code와 명세가 그 이유를 적는다.
+   - `pressure`: native memory pressure source 하나가 host와 함께 시작하고, level(warn 또는 critical)을 읽고 각 알림에 번호를 붙인다. F196.29의 document region 소비자를 부르고(그 소비자는 source를 갖지 않고 구독한다), host는 page에 event `memory-pressure {level, seq}` 하나를 보낸다. 알림마다 core는 보호 없는 숨겨진 tab 하나를, 가장 오래전에 보인 것부터 내린다. pressure에서 `recent`는 보호하지 않는다; 다른 보호는 모두 지킨다. 가장 오래전에 보인 순서이므로 방금 restore된 tab은 맨 뒤에 남는다. 후보를 찾지 못한 알림은 event `page.tab.unload.skipped {trigger, seq, reasons}`다.
 6. **재시작.** 시작할 때, `surface.unload`를 선언한 plugin의 숨겨진 tab은 내려진 상태로 시작하고 처음 보일 때 restore된다.
 
    내려진 tab은 `dormant()`가 선언하는 보이지 않는 surface에서 빠지고, `disposeSurfacesExcept`는 내려진 plugin의 placeholder처럼 그 식별자를 유지 집합에 둔다. 그래서 commit이 그 tab을 닫힌 것으로 다루지 않고 상태가 남는다.
 7. **보이고 관측 가능하다.**
    - tab button은 dom name과 함께 `data-tab-state` `unloaded` 또는 `kept`를 가지고, restore 중인 tab은 surface status `restoring`을 보인다.
-   - core catalog의 event, class `lifecycle`: `page.tab.unloaded {tab, plugin, trigger}`(info), `page.tab.restored {tab, plugin}`(info), `page.tab.restore.failed {tab, plugin, reason}`(error, 하나의 오류 표시 경로로), `page.tab.kept {tab, reasons}`(debug, tab의 보호가 바뀔 때만).
+   - core catalog의 event, class `lifecycle`: `page.tab.unloaded {tab, plugin, trigger}`(info), `page.tab.restored {tab, plugin, history}`(info; session history를 얻지 못했으면 `history`가 false), `page.tab.restore.failed {tab, plugin, reason}`(error, 하나의 오류 표시 경로로), `page.tab.unload.skipped {trigger, seq, reasons}`(info).
    - status `core.tab.memory`: `{enabled, delay, pressure: {level, seq}, tabs: [{tab, plugin, state: loaded|unloaded|restoring, reasons, hiddenAt, unloadAt}]}`, 바뀔 때마다 알린다; `core.surfaces`는 각 tab의 상태를 보고하고, 내려진 surface에 대한 요청은 `tab <id> is unloaded`로 실패한다.
-8. **명령.** `core.tab.keep {tab, keep}`(idempotent; 모르는 tab이나 boolean이 아닌 값은 -32602)과 binder로 연결한 tab context menu 항목; `core.tab.unload {tab}`은 숨겨진 tab을 지금 내리고(계기와 같은 동작), tab이 보호되면 보호 이유와 함께 실패한다.
+8. **명령.** `core.tab.unload {tab}`은 숨겨진 tab을 지금 내린다(계기와 같은 동작); tab이 보호되면 보호 이유와 함께, 모르는 tab이면 -32602로 실패한다. 사용자가 tab을 계속 올려 두는 표시는 후속 항목이다.
 
 ### 설정
 
 - `memorySaver`(boolean, common scope, 기본 켜짐), 일반 절, 라벨 "메모리 절약", switch.
-- `memorySaverDelay`(정수 분 1~60, common scope, 기본 5), 라벨 "숨긴 뒤 내리기까지", slider. 다른 값은 `Invalid setting memorySaverDelay: <value>`로 거부한다. 바뀌면 scheduler를 다시 맞춘다.
+- `memorySaverDelay`(정수 분 5~720, common scope, 기본 120), 라벨 "숨긴 뒤 내리기까지", slider. 다른 값은 `Invalid setting memorySaverDelay: <value>`로 거부한다. 바뀌면 scheduler를 다시 맞춘다.
 
 설정 하나가 모든 plugin에 적용된다. plugin은 자기 설정을 더하지 않는다; plugin에 사이트 예외 목록이 필요하면 그것은 그 plugin의 설정이고 keep 이유로 core에 닿는다.
 
@@ -58,28 +56,28 @@ core는 숨겨진 tab을 내리고, 다시 보일 때 저장된 상태로 복원
 
 ### browser history
 
-내려진 region이 닫히기 전에, native region은 web view의 public `interactionState`(document나 process를 붙잡지 않는 직렬화된 session history)를 host를 거쳐 page에 돌려준다. page는 그것을 store가 아니라 메모리에 tab과 함께 두고, restore할 때 만드는 region에 넘긴다; web view가 거부한 값은 `page.tab.restore.failed`의 이유다. 재시작 뒤에는 plugin이 쓴 주소만 restore된다. 주소는 같은 변경에서 browser 자신의 `localStorage` key에서 `context.tab.state`로 옮긴다.
+내려진 region이 닫히기 전에, native region은 web view의 public `interactionState`(document나 process를 붙잡지 않는 직렬화된 session history)를 host를 거쳐 page에 돌려준다. page는 그것을 store가 아니라 메모리에 tab과 함께 두고, restore할 때 만드는 region에 넘긴다; web view가 거부한 값은 `page.tab.restore.failed`의 이유다. process가 이미 끝나 읽기가 아무것도 돌려주지 않으면, region은 저장된 주소로 만들어지고 `page.tab.restored`는 `history: false`를 가진다. 재시작 뒤에는 plugin이 쓴 주소만 restore된다. 주소는 같은 변경에서 browser 자신의 `localStorage` key에서 `context.tab.state`로 옮긴다.
 
 ### 저장 format
 
-tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 store `tab-state.json`은 첫 release부터 format 1이고, tab 식별자마다 `{format, value}` 상태, `kept` 표시, 내려짐 표시를 가진다; tab을 닫으면 그 항목을 지우고, reader는 현재 format만 받는다. `projects.json`은 내용이 바뀌지 않으므로 format을 유지한다. 별도 store는 잦은 상태 쓰기(scroll, cursor)를 layout 전체 파일에서 떼어 놓는다.
+tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 store `tab-state.json`은 첫 release부터 format 1이고, tab 식별자마다 `{format, value}` 상태를 가진다. tab이 내려졌는지는 저장하지 않는다: 규칙 6이 그것을 정한다. 한 tab의 쓰기는 초당 최대 한 번으로 합치고 종료할 때 내보내므로, crash는 최대 마지막 1초의 상태를 잃는다. tab의 항목은 그것을 참조하는 layout보다 먼저 쓰고, tab을 빼는 layout 쓰기가 확인된 뒤에만 지운다. load할 때 store를 `projects.json`의 tab 식별자와 맞추고, 지운 각 고아 항목은 event다. reader는 현재 format만 받는다. `projects.json`은 내용이 바뀌지 않으므로 format을 유지한다. 별도 store는 잦은 상태 쓰기를 layout 전체 파일에서 떼어 놓는다; plugin `data`는 tab이 아니라 project와 선언한 key별이므로 소유자가 아니다.
 
 ## 채택과 비채택
 
 - 채택: 지연 뒤와 memory pressure 때 숨겨진 tab unload; plugin마다 필수 선언; format과 크기 한계가 있고 바뀔 때마다 쓰는 상태; 위의 보호, 사실을 가진 곳(web view나 region script)에서 읽기; pressure 알림마다 가장 오래전에 보인 tab 하나; scheduler 하나; 재시작 뒤 첫 표시에서 restore; 이유와 보호를 event와 status로; public `interactionState`로 메모리에 둔 session history.
-- 비채택: 숨기자마자 내리기; 내리는 순간의 저장 hook; 선언하지 않은 tab 내리기; 전체 session history 저장; plugin별 설정; 측정된 이득 전 DOM tab 내리기.
+- 비채택: 숨기자마자 내리기; 내리는 순간의 저장 hook; 선언하지 않은 tab 내리기; 전체 session history 저장; plugin별 설정; 측정된 이득 전 DOM tab 내리기; media를 위한 page script(엔진이 답한다); 낮은 메모리 수치를 위해 고른 짧은 기본 지연.
 
 ## 단계
 
 각 단계는 checklist 항목 하나이고, 소유 module에서 Red부터 시작한다.
 
 1. F198.1 용어와 명세(`unload`, `restore`, 보호, `surface.unload`, `context.tab.state`, `context.tab.keep`, event, status, 명령, 설정); `validateManifest`가 `surface.unload`를 요구하고 `background` 옆에서 거부한다.
-2. F198.2 tab 상태 store `tab-state.json`(format 1), 다른 format을 거부하는 reader, tab을 닫을 때 항목 제거.
+2. F198.2 tab 상태 store `tab-state.json`(format 1): 다른 format을 거부하는 reader, 종료 시 내보내기를 포함한 쓰기 합치기, layout과의 쓰기 순서, load 때 맞추기.
 3. F198.3 `surface-modules.js`의 `context.tab.state`와 `context.tab.keep`; 다음 mount 전에 끝나는 dispose(mount가 진행 중인 dispose를 기다림); dispose 뒤 쓰기는 throw.
 4. F198.4 workbench의 scheduler, 보호, unload와 restore 동작; `dormant()`가 내려진 tab을 빼고 `disposeSurfacesExcept`가 유지한다(Red: 내려진 tab이 상태와 함께 commit을 견딘다); 시험에서는 `mock.timers`가 지연을 움직인다.
-5. F198.5 document region 보고: camera와 microphone은 key-value observation으로; 재생, picture in picture, form 수정은 모든 frame의 region script로; `interactionState`는 닫기 전에 돌려주고 restore할 때 넘긴다.
+5. F198.5 document region 보고: media 재생 질의, camera와 microphone은 key-value observation으로; form 수정은 frame별 map과 함께 모든 frame의 region script로(Red: 지운 subframe과 reload가 표시를 지운다); `interactionState`는 닫기 전에 돌려주고 restore할 때 넘기며 빈 경우도 다룬다.
 6. F198.6 native memory pressure source를 host와 함께 시작하는 소유자로 옮기고, level을 읽고 각 알림에 번호를 붙인다; region 소비자는 그것을 구독한다; Go와 Rust는 contract case와 선언한 fault injection과 함께 `memory-pressure {level, seq}`를 전달한다; `docs/spec/hosts.md`가 소유를 적는다.
-7. F198.7 설정과 그 검증; 명령 `core.tab.keep`과 `core.tab.unload`와 control.
+7. F198.7 설정과 그 검증; 명령 `core.tab.unload`.
 8. F198.8 tab button 상태와 오류 표시로 가는 restore 실패.
 9. F198.9 DOM tab benchmark.
 10. F198.10 두 host의 창 검사: `core.tab.unload`와 pressure fault injection이 숨겨진 browser tab을 내리고, `core.tab.memory`와 region process가 그것을 보이며, tab을 보이면 주소가 restore된다.
@@ -120,3 +118,12 @@ tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 st
 - 후보 없는 pressure 알림이 흔적을 남기지 않았다 → event `page.tab.unload.skipped`.
 - 보호가 일부뿐인데 기본 켜짐 → 기본 켜짐 release는 F198.5 뒤에 온다.
 - tab 상태를 `projects.json`에 저장하면 그 format이 바뀐다 → 별도 store `tab-state.json`이 format 1로 시작하고, `projects.json`은 바뀌지 않으며, 잦은 쓰기를 layout 파일에서 떼어 놓는다.
+
+3차(검토자 하나, 기준: 정공법, 숨김 없음, 프로덕션 안정성, 개발 편의성, 구조적 완결성). 각 반박과 답:
+
+- 엔진이 답하는 곳에 media page script는 특이하다 → core가 판단할 때마다 `requestMediaPlaybackState`를 묻는다; camera와 microphone은 key-value observation을 유지한다; script의 media 부분은 지운다.
+- 지운 frame과 reload의 form 표시가 정해지지 않았다 → native 쪽 frame별 map, `pagehide`, `submit`, main frame commit, reload가 지우고 Red 시험을 둔다; WebKit에 public 엔진 상태가 없으므로 script는 `form`에만 남는다.
+- 저장한 내려짐 표시가 규칙 6과 겹치고 두 파일이 어긋날 수 있다 → 표시를 지운다; 쓰기 합치기에 한도를 두고 종료할 때 내보낸다; 항목은 layout보다 먼저 쓰고 뒤에 지운다; load 때 고아를 event와 함께 맞춘다.
+- process가 끝난 뒤 `interactionState`가 빌 수 있다 → 저장된 주소로 restore하고 `history: false`.
+- `restored`, `page.tab.kept`, `core.tab.keep`은 첫 버전에 넘친다 → 지운다; 가장 오래전에 보인 순서가 반복을 막는다; 계속 올려 두는 표시는 후속 항목이다.
+- 5분 기본값은 주요 기본값보다 훨씬 짧다 → 기본 2시간, 범위 5분~12시간; pressure는 빠른 경로로 남는다.
