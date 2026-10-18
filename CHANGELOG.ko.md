@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F192.3-2-3: 창을 열고 닫는 window check는 여전히 `visible` true인 `native.window.occlusion` event를 요구하며, 다른 애플리케이션이 새 창을 완전히 덮으면 실패는 timeout만 보고하지 않고 덮는 창을 밝히고 아무것도 측정하지 않았다고 말한다. Red: 덮인 창의 window-check frontmost test가 timeout 메시지로 실패했다. Green: 10개 중 10개.
 - F192.3-3-3: 두 host 모두 다른 애플리케이션이 active인 동안 실행을 마칠 때 스스로 activate하지 않으므로, `open -g -n`을 쓰는 `sok app relaunch`의 relaunch처럼 activation을 요청하지 않은 실행은 frontmost 애플리케이션을 바꾸지 않고, 사람이 연 애플리케이션은 Launch Services가 여전히 앞으로 가져온다. Wails host는 `MacOptions.DisableActivationOnLaunch`가 있는 Wails fork commit을 요구하고 그 option을 설정하며, Tauri host는 `activate_ignoring_other_apps(false)`를 설정한다. Red: Go와 Rust launch activation test가 `the application activates itself when it finishes launching`으로 실패했다. Green: 둘 다 3회 중 3회 통과한다.
 - F199.2-2: restart 뒤 tab의 첫 표시에서 문서 영역이 거부한 session history는 `page.tab.restore.failed`로 보고되고, 영역은 mount를 `unknown tab`으로 실패시키지 않고 그것 없이 다시 attach된다.
 - F199.2-1: 아무것도 load하지 않은 문서 영역은 session history를 돌려주지 않으므로, home page의 browser tab이 다음 attach가 거부할 session을 저장하지 않는다.

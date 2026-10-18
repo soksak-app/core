@@ -6,7 +6,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, coveredBy, open } from "@soksak/window-check/app.mjs";
+import { unlessCovered } from "@soksak/window-check/frontmost.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { fresh, reading } from "./fixture.mjs";
 
@@ -65,13 +66,17 @@ for (const app of Object.values(APPS)) {
     const offsets = currentEventOffsets(app.configDir);
     await s.run("core.window.new");
     const list = await s.windows(2, "the new window did not open");
-    // The activity observers that the host installed at its start record the new window when it becomes visible; a window
-    // without the event means the host did not install them.
-    await s.flushLog();
-    await untilEventLine(app.configDir, offsets,
-      (line) => line.startsWith("info native native.window.occlusion:") && line.includes('"visible":true'), 30000,
-      reading(app, reads));
     const child = s.on(list.find((w) => w.window !== s.window).window);
+    // The activity observers that the host installed at its start record the new window when it becomes visible; a window
+    // without the event means the host did not install them. A window that another application covers completely never
+    // becomes visible, so the failure then names the covering window instead of the missing observers.
+    await s.flushLog();
+    await unlessCovered(() => untilEventLine(app.configDir, offsets,
+      (line) => line.startsWith("info native native.window.occlusion:") && line.includes('"visible":true'), 30000,
+      reading(app, reads)), async () => {
+      const window = await child.get("host.window");
+      return window.occluded ? coveredBy(child, window) : null;
+    });
     await child.close();
     const closed = await untilEventLine(app.configDir, offsets,
       (line) => line.startsWith("info host host.window.event:") && line.includes('"kind":"closed"'), 30000,
