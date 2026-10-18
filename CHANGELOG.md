@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F196.17-1: `make app-usage` attributes the WebKit services of each host through the launchd domain of the host, so two applications started in the same second are told apart. Red: nothing was attributed; Green.
+- F196.23: 30 repetitions of `make object-counts` show that the host memory settles (Wails 80 to 89 MB, Tauri 70 to 76 MB) with a flat Go heap.
 - F196.12: the final verification with the default settings: both hosts stored only the log writers' own events, every object count stayed at its baseline over five repetitions, and the modal, idle tab, occlusion and window release checks passed on both hosts.
 - F196.18-2: the host structure check reads the allowed file differences from the native host specification instead of its own list. Red: a table without row H1 passed; Green.
 - F196.18-1: the allowed host differences declare `diagnostics.heap.profile` as a Wails-only method (row E1), and `make host-parity-check` reads that declaration, so the check passes. Red: the declared method was reported; Green.

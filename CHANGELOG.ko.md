@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F196.17-1: `make app-usage`가 host의 launchd domain으로 각 host의 WebKit service를 귀속하므로, 같은 초에 시작한 두 애플리케이션을 구별한다. Red: 아무것도 귀속되지 않았다; Green.
+- F196.23: `make object-counts` 30번 반복에서 host 메모리가 안정되고(Wails 80~89 MB, Tauri 70~76 MB) Go heap은 평평하다.
 - F196.12: 기본 설정에서의 최종 검증: 두 host가 log writer 자신의 event만 저장했고, 다섯 번 반복 동안 모든 object count가 기준값을 유지했으며, modal, idle tab, occlusion, window release 검사가 두 host에서 통과했다.
 - F196.18-2: host 구조 검사가 자기 목록 대신 native host 명세에서 허용된 파일 차이를 읽는다. Red: H1 행이 없는 표가 통과했다; Green.
 - F196.18-1: 허용된 host 차이가 `diagnostics.heap.profile`을 Wails 전용 method로 선언하고(E1 행), `make host-parity-check`가 그 선언을 읽어 검사가 통과한다. Red: 선언된 method를 보고했다; Green.
