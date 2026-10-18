@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory object-counts host-calls app-usage hidden-tab-memory trace-share host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage hidden-tab-memory trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -250,6 +250,12 @@ node-repeat:
 	    run=$$((run + 1)); \
 	  done; \
 	  echo "$(FILE) $(NAME): $(COUNT) of $(COUNT) runs pass"
+
+# Runs COMMAND with a temporary folder of its own and fails when it leaves a soksak- entry there, except the window-check
+# configuration folders soksak-check-* (docs/operations/examples.md#temporary-folders): make temp-audit COMMAND="pnpm test"
+temp-audit:
+	@test -n '$(COMMAND)' || { echo 'temp-audit requires COMMAND=<command>' >&2; exit 2; }
+	@node scripts/temp-audit.mjs /bin/sh -c '$(COMMAND)'
 
 # Checks that operating-system-specific code exists only under platform/<os>/.
 platforms:
