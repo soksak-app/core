@@ -45,6 +45,14 @@
 // (warn or critical), back to normal 10 seconds later, and
 // reads the process again 5 seconds after that, which shows whether memory pressure releases the kept documents.
 //
+// The collection mode (--collection MINUTES) measures only U in one window that is ordered front on the visible screen
+// without activating the application, so the page is visible and its window is not active. Every 2 minutes after the load
+// it prints the footprint total, the WebKit malloc dirty bytes, and the heap counts of WebCore::Text,
+// WebCore::HTMLDocument and the sum of the classes whose name starts with JSC::. After the last read it sets the
+// simulated memory pressure level to warn, back to normal 10 seconds later, and reads again 5 seconds after that; memory
+// pressure runs a full collection, so a growth that the read after it removes was garbage awaiting collection and a
+// growth that stays is kept by the page.
+//
 
 // The three scripts and the names of the content world and the messages are copied from src/document_view.m, because the
 // source keeps them as static strings and the benchmark does not change the source. A difference between the two copies is
@@ -907,11 +915,96 @@ static void measureReload(int count, NSString *pressureLevel, NSWindow *window, 
     }
     fflush(stdout);
 }
+// The collection mode: the minutes between two reads and the classes that heap counts.
+static const int kCollectionReadMinutes = 2;
+static const char *const kCollectionClasses[] = { "WebCore::Text", "WebCore::HTMLDocument" };
+enum { kCollectionClassCount = sizeof(kCollectionClasses) / sizeof(kCollectionClasses[0]) };
+// Prints one read of the collection mode: the footprint total and WebKit malloc row, the heap counts of the classes, and the
+// count and bytes of the classes whose name starts with JSC::. A count that heap does not report is -1.
+static void printCollection(WKWebView *view, NSString *step, const char *when, double elapsed) {
+    pid_t process = view._webProcessIdentifier;
+    Reading reading = readFootprint(view, step);
+    NSString *heap = toolText(@"/usr/bin/heap", @[[NSString stringWithFormat:@"%d", process]]);
+    if (!heap) failStep(step, @"heap did not report the process", process);
+    long counts[kCollectionClassCount];
+    for (int c = 0; c < kCollectionClassCount; c++) counts[c] = -1;
+    long jscCount = 0;
+    long jscBytes = 0;
+    // heap prints one row per class: "<count> <bytes> <average> <class> <type> <binary>".
+    for (NSString *line in [heap componentsSeparatedByString:@"\n"]) {
+        long count = 0;
+        long bytes = 0;
+        double average = 0;
+        int consumed = 0;
+        if (sscanf(line.UTF8String, " %ld %ld %lf %n", &count, &bytes, &average, &consumed) != 3) continue;
+        NSArray<NSString *> *words = [[line substringFromIndex:consumed]
+            componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+        if (words.count == 0) continue;
+        for (int c = 0; c < kCollectionClassCount; c++) {
+            if ([words[0] isEqualToString:@(kCollectionClasses[c])]) counts[c] = count;
+        }
+        if ([words[0] hasPrefix:@"JSC::"]) {
+            jscCount += count;
+            jscBytes += bytes;
+        }
+    }
+    fprintf(stdout, "%-10s elapsed_s=%7.1f total_mb=%s webkit_malloc_mb=%s", when, elapsed, megabytes(reading.total),
+        megabytes(reading.mallocDirty));
+    for (int c = 0; c < kCollectionClassCount; c++) fprintf(stdout, " %s=%ld", kCollectionClasses[c], counts[c]);
+    fprintf(stdout, " JSC::*=%ld JSC::*_mb=%s\n", jscCount, megabytes(jscBytes));
+    fflush(stdout);
+}
+// Loads the address in U in a window at the top left of the visible screen, reads the process every 2 minutes for the
+// minutes, then reads it after a simulated warn memory pressure.
+static void measureCollection(int minutes, NSURL *address, WKWebsiteDataStore *persistentStore, NSString *documentDirectory) {
+    NSRect screen = NSScreen.mainScreen.visibleFrame;
+    if (screen.size.width < kWindowWidth || screen.size.height < kWindowHeight) {
+        fprintf(stderr, "FAIL: the visible screen %gx%g is smaller than the %gx%g window\n", (double)screen.size.width,
+            (double)screen.size.height, (double)kWindowWidth, (double)kWindowHeight);
+        exit(1);
+    }
+    const Variant *spec = &kVariants[kU];
+    NSString *step = [NSString stringWithFormat:@"collection %s", spec->name];
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, kWindowWidth, kWindowHeight)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [window setReleasedWhenClosed:NO];
+    NSView *content = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, kWindowWidth, kWindowHeight)] autorelease];
+    window.contentView = content;
+    [window setFrameTopLeftPoint:NSMakePoint(screen.origin.x, NSMaxY(screen))];
+    [window orderFront:nil];
+    fprintf(stdout, "start %s: %s window_active=%d\n", spec->name, spec->label, window.isKeyWindow);
+    fflush(stdout);
+    OpenView opened = openVariant(spec, window, content, address, persistentStore, documentDirectory, step);
+    WKWebView *view = opened.view;
+    if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
+        failStep(step, @"the page did not finish loading within 120 seconds", view._webProcessIdentifier);
+    }
+    pumpUntil(settleSeconds, ^BOOL { return NO; });
+    double loaded = nowSeconds();
+    pid_t process = view._webProcessIdentifier;
+    fprintf(stdout, "loaded %s: pid=%d title=%s\n", spec->name, process, view.title.UTF8String);
+    printCollection(view, step, "minute=0", 0);
+    for (int minute = kCollectionReadMinutes; minute <= minutes; minute += kCollectionReadMinutes) {
+        waitUntil(loaded + 60.0 * minute);
+        char when[32];
+        snprintf(when, sizeof(when), "minute=%d", minute);
+        printCollection(view, step, when, nowSeconds() - loaded);
+    }
+    setPressure(@"warn", step, process);
+    waitUntil(nowSeconds() + 10);
+    setPressure(@"normal", step, process);
+    waitUntil(nowSeconds() + 5);
+    printCollection(view, step, "pressure", nowSeconds() - loaded);
+    closeOpenView(&opened, step);
+    [window close];
+    [window release];
+}
 int main(int argc, const char *argv[]) { @autoreleasepool {
     double started = nowSeconds();
     const char *addressArgument = NULL;
     long longMinutes = 0;
     long reloadCount = 0;
+    long collectionMinutes = 0;
     NSString *pressureLevel = @"warn";
     BOOL selected[kVariantCount];
     BOOL variantsGiven = NO;
@@ -949,6 +1042,15 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
                 return 1;
             }
             longMinutes = minutes;
+        } else if (strcmp(argv[i], "--collection") == 0) {
+            char *end = NULL;
+            errno = 0;
+            long minutes = i + 1 < argc ? strtol(argv[++i], &end, 10) : 0;
+            if (errno != 0 || end == NULL || *end != '\0' || minutes < kCollectionReadMinutes) {
+                fprintf(stderr, "FAIL: --collection takes a whole number of minutes of at least %d\n", kCollectionReadMinutes);
+                return 1;
+            }
+            collectionMinutes = minutes;
         } else if (strcmp(argv[i], "--pressure") == 0) {
             if (i + 1 >= argc || (strcmp(argv[i + 1], "warn") != 0 && strcmp(argv[i + 1], "critical") != 0)) {
                 fprintf(stderr, "FAIL: --pressure takes warn or critical\n");
@@ -977,7 +1079,7 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         fprintf(stderr, "FAIL: the address %s is not an absolute address\n", address.UTF8String);
         return 1;
     }
-    fprintf(stdout, "start benchmark address=%s mode=%s\n", address.UTF8String, longMinutes > 0 ? "long" : reloadCount > 0 ? "reload" : "table");
+    fprintf(stdout, "start benchmark address=%s mode=%s\n", address.UTF8String, longMinutes > 0 ? "long" : collectionMinutes > 0 ? "collection" : reloadCount > 0 ? "reload" : "table");
     fflush(stdout);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -1002,7 +1104,9 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         return 1;
     }
 
-    if (longMinutes > 0) {
+    if (collectionMinutes > 0) {
+        measureCollection((int)collectionMinutes, url, persistentStore, documentDirectory);
+    } else if (longMinutes > 0) {
         measureLong((int)longMinutes, url, persistentStore, documentDirectory);
     } else {
         NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, kWindowWidth, kWindowHeight)
