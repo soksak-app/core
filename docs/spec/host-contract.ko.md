@@ -717,6 +717,8 @@ fn invalid_json_closes_connection() {
 | `log.policy.gate-counts-what-it-did-not-build` | 닫힌 gate는 아무것도 저장하지 않고, writer는 거부한 event의 정확한 수를 class와 level별로 `log.gated`로 보고한다. | both |
 | `log.policy.gate-passes-the-events-of-the-writer-itself` | `log.open`, `log.rotated`, `log.dropped`, `log.policy`, `log.gated`, `log.pruned`는 class `lifecycle`을 끈 정책을 지난다. | both |
 | `log.policy.page-sets-the-file` | host 호출 `log`의 action `policy`는 class를 파일의 규칙으로 검사하고 `log-policy.json`(mode 0600)을 쓰며, 규칙을 어긴 요청은 오류이고 아무것도 쓰지 않는다. | both |
+| `log.policy.read-answers-the-policy-in-force` | host 호출 `log`의 action `policy-read`는 적용 중인 정책의 모든 class 값인 `{classes}`로 답한다. 첫 정책 전에는 기본 정책이고, 그 뒤에는 마지막으로 적용한 정책이다. | both |
+| `log.policy.event-reaches-every-document` | 정책을 적용하는 정책 파일의 각 load(source `default` 또는 `file`)는 그 정책의 `{classes}`를 담은 host event `log-policy`를 모든 window에 보내고, 거부된 파일은 아무것도 보내지 않는다. | both |
 | `log.policy.binding-call-is-gated` | 정책이 저장하지 않는 binding 호출은 event를 만들지 않고 `log.gated`로 세며, 실패한 호출은 정책이 그 class를 `warn`부터 저장하면 경고로 저장한다. | both |
 | `log.policy.endpoint-call-is-gated` | 정책이 저장하지 않는 endpoint 요청은 event를 만들지 않고 `log.gated`로 센다. | both |
 | `log.policy.counts-each-second` | writer는 닫힌 gate의 정확한 수(`log.gated`)를 이전 보고 뒤 1초가 지났을 때, flush할 때, 멈출 때 보고한다. 여러 batch 간격에 걸친 1초 미만의 거부된 event는 `log.gated`를 저장하지 않고, flush는 그 정확한 합을 저장한다. | both |

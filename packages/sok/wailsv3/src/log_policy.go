@@ -208,6 +208,14 @@ func (l *EventLog) SetPolicy(policy LogPolicy, source string) {
 	l.enqueueWriterEvent(LevelInfo, "log.policy", fields)
 }
 
+// Policy is the policy in force: the policy that SetPolicy put in force last, or the default policy before the first.
+func (l *EventLog) Policy() LogPolicy {
+	if current := l.gate.current.Load(); current != nil {
+		return current.policy
+	}
+	return DefaultLogPolicy()
+}
+
 // PolicyPath is the file of the policy that this writer follows; it is empty for a writer that has none.
 func (l *EventLog) PolicyPath() string { return l.policyPath }
 

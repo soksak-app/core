@@ -12,7 +12,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use soksak_host_tauriv2::event_log::{self, EventLog, Level, Options};
 use soksak_host_tauriv2::event_relay::log_command;
-use soksak_host_tauriv2::log_policy::{Class, LogPolicy, start_log_policy};
+use soksak_host_tauriv2::log_policy::{Class, LogPolicy, log_policy_announcer, start_log_policy};
 
 const EVERYTHING: &str = r#"{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}"#;
 
@@ -364,4 +364,78 @@ fn the_page_sets_the_policy_through_the_log_call_and_the_host_writes_the_file() 
     let bare = event_log::start(options(bare_directory.path(), None)).unwrap();
     let error = log_command(&bare, request).expect_err("a writer without a policy file");
     assert!(error.contains("policy file"), "{error}");
+}
+
+// contract: log.policy.read-answers-the-policy-in-force
+#[test]
+fn the_action_policy_read_answers_the_classes_of_the_policy_in_force() {
+    let directory = tempfile::tempdir().unwrap();
+    let log = event_log::start(options(directory.path(), None)).unwrap();
+    let reply = log_command(&log, json!({"action": "policy-read"})).unwrap();
+    assert_eq!(
+        reply.classes.map(Value::Object),
+        Some(
+            json!({"lifecycle": "error", "input": "error", "call": "error", "io": "error", "frame": "error"})
+        )
+    );
+    let policy = LogPolicy::parse("policy", EVERYTHING.as_bytes()).unwrap();
+    log.set_policy(policy, "file");
+    let reply = log_command(&log, json!({"action": "policy-read"})).unwrap();
+    assert_eq!(reply.classes, Some(policy.classes()));
+}
+
+// contract: log.policy.event-reaches-every-document
+#[test]
+fn each_applied_policy_is_the_event_log_policy_and_a_refused_file_is_not() {
+    let config = tempfile::tempdir().unwrap();
+    let policy_path = config.path().join("log-policy.json");
+    let log = Arc::new(
+        event_log::start(options(
+            &config.path().join("logs"),
+            Some(policy_path.clone()),
+        ))
+        .unwrap(),
+    );
+    let (sender, sent) = channel::<(String, Value)>();
+    let sender = std::sync::Mutex::new(sender);
+    let watch = start_log_policy(
+        &log,
+        Some(log_policy_announcer(
+            &log,
+            move |name: &str, payload: Value| {
+                sender
+                    .lock()
+                    .unwrap()
+                    .send((name.to_string(), payload))
+                    .unwrap();
+            },
+        )),
+    )
+    .unwrap();
+    let wait = |step: &str, want: Value| {
+        let (name, payload) = sent
+            .recv_timeout(Duration::from_secs(10))
+            .unwrap_or_else(|_| panic!("{step}: no event log-policy within 10 seconds"));
+        assert_eq!(
+            (name.as_str(), payload),
+            ("log-policy", json!({"classes": want})),
+            "{step}"
+        );
+    };
+    wait(
+        "start without a file",
+        Value::Object(LogPolicy::default().classes()),
+    );
+    fs::write(&policy_path, r#"{"schema":9}"#).unwrap();
+    fs::write(&policy_path, EVERYTHING).unwrap();
+    // A refused file emits nothing, so the next event is the policy of the file.
+    wait(
+        "write in place",
+        Value::Object(
+            LogPolicy::parse("policy", EVERYTHING.as_bytes())
+                .unwrap()
+                .classes(),
+        ),
+    );
+    drop(watch);
 }

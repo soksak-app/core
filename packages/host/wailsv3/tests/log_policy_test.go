@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -310,4 +311,77 @@ func TestThePageSetsThePolicyThroughTheLogCallAndTheHostWritesTheFile(t *testing
 	if _, err := host.LogCommand(bare, request); err == nil || !strings.Contains(err.Error(), "policy file") {
 		t.Fatalf("a writer without a policy file: %v", err)
 	}
+}
+
+// contract: log.policy.read-answers-the-policy-in-force
+func TestTheActionPolicyReadAnswersTheClassesOfThePolicyInForce(t *testing.T) {
+	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reply, err := host.LogCommand(log, map[string]any{"action": "policy-read"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"lifecycle": "error", "input": "error", "call": "error", "io": "error", "frame": "error"}
+	if !reflect.DeepEqual(reply.Classes, want) {
+		t.Fatalf("the default policy reads %v, want %v", reply.Classes, want)
+	}
+	policy, err := host.ParseLogPolicy("test", []byte(everything))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.SetPolicy(policy, "file")
+	reply, err = host.LogCommand(log, map[string]any{"action": "policy-read"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(reply.Classes, policy.Classes()) {
+		t.Fatalf("the policy of the file reads %v, want %v", reply.Classes, policy.Classes())
+	}
+}
+
+// contract: log.policy.event-reaches-every-document
+func TestEachAppliedPolicyIsTheEventLogPolicyAndARefusedFileIsNot(t *testing.T) {
+	config := t.TempDir()
+	options := eventLogOptions(filepath.Join(config, "logs"))
+	options.PolicyPath = filepath.Join(config, "log-policy.json")
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type emitted struct {
+		name    string
+		payload any
+	}
+	sent := make(chan emitted, 16)
+	stop, err := host.StartLogPolicy(log, host.LogPolicyAnnouncer(log, func(name string, payload any) { sent <- emitted{name, payload} }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(stop)
+	wait := func(step string, want map[string]string) {
+		t.Helper()
+		select {
+		case got := <-sent:
+			if got.name != "log-policy" || !reflect.DeepEqual(got.payload, map[string]any{"classes": want}) {
+				t.Fatalf("%s: emitted %q %v, want log-policy {classes: %v}", step, got.name, got.payload, want)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%s: no event log-policy within 10 seconds", step)
+		}
+	}
+	wait("start without a file", host.DefaultLogPolicy().Classes())
+	if err := os.WriteFile(options.PolicyPath, []byte(`{"schema":9}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(options.PolicyPath, []byte(everything), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	policy, err := host.ParseLogPolicy("test", []byte(everything))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A refused file emits nothing, so the next event is the policy of the file.
+	wait("write in place", policy.Classes())
 }

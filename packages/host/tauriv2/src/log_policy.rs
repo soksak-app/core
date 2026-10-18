@@ -105,6 +105,22 @@ impl Drop for LogPolicyWatch {
 /// text of a refused file, or the policy that is in force.
 pub type PolicyApplied = Box<dyn Fn(&str, &str) + Send + Sync>;
 
+/// The `applied` function of `start_log_policy` that sends every policy put in force (a load of the source `default` or `file`) as
+/// the host event `log-policy` with `{classes}`; a document of a surface applies it to its own gate (docs/spec/logging.md#policy).
+/// A refused file changes no policy and sends nothing.
+pub fn log_policy_announcer(
+    log: &Arc<EventLog>,
+    emit: impl Fn(&str, Value) + Send + Sync + 'static,
+) -> PolicyApplied {
+    let log = Arc::clone(log);
+    Box::new(move |source: &str, _detail: &str| {
+        if source == "error" {
+            return;
+        }
+        emit("log-policy", json!({"classes": log.policy().classes()}));
+    })
+}
+
 /// Applies the policy file of the writer and watches the file: a creation, a write, a replacement or a removal puts the policy of the
 /// file (or the default policy, when there is no file) in force. The watch is a file system event of the platform, and no timer reads
 /// the file. A file that breaks the format is reported as an error record of the place `log policy` and the policy in force stays.

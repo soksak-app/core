@@ -49,8 +49,8 @@ func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 		request map[string]any
 		message string
 	}{
-		"no action":      {map[string]any{"events": []any{}}, "action must be batch, clock or policy"},
-		"another action": {map[string]any{"action": "line", "events": []any{}}, "action must be batch, clock or policy, not \"line\""},
+		"no action":      {map[string]any{"events": []any{}}, "action must be batch, clock, policy or policy-read"},
+		"another action": {map[string]any{"action": "line", "events": []any{}}, "action must be batch, clock, policy or policy-read, not \"line\""},
 		"no events":      {map[string]any{"action": "batch"}, "events must be an array"},
 		"an event that names no page": {map[string]any{"action": "batch", "events": []any{map[string]any{"ts_us": float64(1), "mono_ns": float64(1), "level": "info", "event": "page.test.event", "fields": map[string]any{}}}},
 			"events[0]: page must name the document that wrote the event"},

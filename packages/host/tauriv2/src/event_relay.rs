@@ -126,11 +126,13 @@ pub struct ClockReading {
     pub mono_ns: u64,
 }
 
-/// What the `log` call answers: the transcript lines of the page records of a batch, or the clocks of a clock request.
+/// What the `log` call answers: the transcript lines of the page records of a batch, the clocks of a clock request, or the classes
+/// of the policy in force of a `policy-read` request.
 #[derive(Debug)]
 pub struct LogReply {
     pub lines: Vec<String>,
     pub clock: Option<ClockReading>,
+    pub classes: Option<serde_json::Map<String, Value>>,
 }
 
 /// Validates a request of the page. A `batch` queues its events into the writer of the host and answers the lines
@@ -138,13 +140,21 @@ pub struct LogReply {
 /// A `clock` answers the clocks of the host and stores no event.
 pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
     match request.get("action").and_then(Value::as_str) {
-        None => return Err("action must be batch, clock or policy".into()),
+        None => return Err("action must be batch, clock, policy or policy-read".into()),
         Some("batch") => {}
         Some("policy") => {
             crate::log_policy::set_log_policy(log, &request)?;
             return Ok(LogReply {
                 lines: Vec::new(),
                 clock: None,
+                classes: None,
+            });
+        }
+        Some("policy-read") => {
+            return Ok(LogReply {
+                lines: Vec::new(),
+                clock: None,
+                classes: Some(log.policy().classes()),
             });
         }
         Some("clock") => {
@@ -159,11 +169,12 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
                     ts_us,
                     mono_ns: monotonic_ns(),
                 }),
+                classes: None,
             });
         }
         Some(other) => {
             return Err(format!(
-                "action must be batch, clock or policy, not {other:?}"
+                "action must be batch, clock, policy or policy-read, not {other:?}"
             ));
         }
     }
@@ -195,5 +206,9 @@ pub fn log_command(log: &EventLog, request: Value) -> Result<LogReply, String> {
             lines.push(record.line());
         }
     }
-    Ok(LogReply { lines, clock: None })
+    Ok(LogReply {
+        lines,
+        clock: None,
+        classes: None,
+    })
 }

@@ -41,10 +41,12 @@ type ClockReading struct {
 }
 
 // LogReply is the answer of the `log` call: the lines `<level> page <where>: <text>` of the records of the page in a batch,
-// which the host shows in the transcript of the window, or the clocks of a `clock` request.
+// which the host shows in the transcript of the window, the clocks of a `clock` request, or the classes of the policy in force of a
+// `policy-read` request.
 type LogReply struct {
-	Lines []string
-	Clock *ClockReading
+	Lines   []string
+	Clock   *ClockReading
+	Classes map[string]string
 }
 
 // LogCommand answers a `clock` request with the clocks of the host and stores nothing. It validates a batch request of the
@@ -52,7 +54,7 @@ type LogReply struct {
 func LogCommand(log *EventLog, request map[string]any) (LogReply, error) {
 	action, ok := request["action"].(string)
 	if !ok {
-		return LogReply{}, fmt.Errorf("action must be batch, clock or policy")
+		return LogReply{}, fmt.Errorf("action must be batch, clock, policy or policy-read")
 	}
 	if action == "clock" {
 		return LogReply{Clock: &ClockReading{TsMicros: time.Now().UnixMicro(), MonoNs: monotonicNanos()}}, nil
@@ -60,8 +62,11 @@ func LogCommand(log *EventLog, request map[string]any) (LogReply, error) {
 	if action == "policy" {
 		return LogReply{}, setLogPolicy(log, request)
 	}
+	if action == "policy-read" {
+		return LogReply{Classes: log.Policy().Classes()}, nil
+	}
 	if action != "batch" {
-		return LogReply{}, fmt.Errorf("action must be batch, clock or policy, not %q", action)
+		return LogReply{}, fmt.Errorf("action must be batch, clock, policy or policy-read, not %q", action)
 	}
 	lines, err := logBatch(log, request)
 	return LogReply{Lines: lines}, err
@@ -171,8 +176,9 @@ func relayedEventOf(item any) (relayedEvent, error) {
 }
 
 // Log relays a batch of page events to the event writer of the host and shows its page records in the transcript of the
-// window. It answers a `clock` request with the clocks of the host, and a batch with nothing.
-func (h *Host) Log(ctx context.Context, requestJSON json.RawMessage) (*ClockReading, error) {
+// window. It answers a `clock` request with the clocks of the host, a `policy-read` request with `{classes}` of the policy in force,
+// and a batch with nothing.
+func (h *Host) Log(ctx context.Context, requestJSON json.RawMessage) (any, error) {
 	request, err := argument[map[string]any]("request", requestJSON)
 	if err != nil {
 		return nil, err
@@ -191,5 +197,11 @@ func (h *Host) Log(ctx context.Context, requestJSON json.RawMessage) (*ClockRead
 	for _, line := range reply.Lines {
 		s.log(line)
 	}
-	return reply.Clock, nil
+	if reply.Classes != nil {
+		return map[string]any{"classes": reply.Classes}, nil
+	}
+	if reply.Clock != nil {
+		return reply.Clock, nil
+	}
+	return nil, nil
 }

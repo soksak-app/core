@@ -314,6 +314,15 @@ pub(crate) fn notify_log_notice(app: &AppHandle, notice: &crate::debug_follow::L
     crate::exposure::log_notice_changed(app, notice);
 }
 
+/// Sends the host event to every window; every document of a window receives it.
+pub(crate) fn notify_windows(app: &AppHandle, name: &str, payload: serde_json::Value) {
+    for window in app.windows().values() {
+        if let Err(error) = emit_window(window, name, payload.clone()) {
+            log_error(name, error);
+        }
+    }
+}
+
 /// Whether the application is quitting, which ends the WebContent process of each window on purpose.
 pub(crate) fn is_quitting(app: &AppHandle) -> bool {
     app.state::<Windows>().quit.active()

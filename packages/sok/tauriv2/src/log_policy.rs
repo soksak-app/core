@@ -217,6 +217,15 @@ impl Gate {
         taken
     }
 
+    /// The policy in force: the policy that `set` put in force last, or the default policy before the first.
+    pub fn policy(&self) -> LogPolicy {
+        // default: a lock that a panicking thread poisoned still holds a consistent policy, and the policy must stay readable.
+        let current = self.current.lock().unwrap_or_else(PoisonError::into_inner);
+        current
+            .as_ref()
+            .map_or_else(LogPolicy::default, |(policy, _)| *policy)
+    }
+
     /// Puts the policy in force; returns false when it is the policy in force already and not the first one.
     pub(crate) fn set(&self, policy: LogPolicy, source: &str) -> bool {
         // default: a lock that a panicking thread poisoned still holds a consistent policy, and the policy must stay readable.
@@ -240,6 +249,11 @@ impl EventLog {
     /// the event, which the producer then does not build, so the counter of the class and the level stays exact.
     pub fn gate(&self, class: Class, level: Level) -> bool {
         self.gate_handle().pass(class, level)
+    }
+
+    /// The policy in force: the policy that `set_policy` put in force last, or the default policy before the first.
+    pub fn policy(&self) -> LogPolicy {
+        self.gate_handle().policy()
     }
 
     /// Puts the policy in force. A policy that differs from the one in force, and the first policy of a writer, is the event

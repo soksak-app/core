@@ -167,6 +167,18 @@ func StartLogPolicy(log *EventLog, applied func(source, detail string)) (stop fu
 	return stopWatch, nil
 }
 
+// LogPolicyAnnouncer is the applied function of StartLogPolicy that sends every policy put in force (a load of the source `default`
+// or `file`) as the host event `log-policy` with `{classes}`; a document of a surface applies it to its own gate
+// (docs/spec/logging.md#policy). A refused file changes no policy and sends nothing.
+func LogPolicyAnnouncer(log *EventLog, emit func(name string, payload any)) func(source, detail string) {
+	return func(source, detail string) {
+		if source == "error" {
+			return
+		}
+		emit("log-policy", map[string]any{"classes": log.Policy().Classes()})
+	}
+}
+
 // watchPolicyFile calls changed after the file at path was created, written, replaced, renamed or removed. fsnotify watches the
 // folder of the file and every file in it, so a write in place and an entry that a rename or a removal changes both notify. A
 // notification can follow another that already led to a read, so the reader of changed compares what it reads with what it holds.

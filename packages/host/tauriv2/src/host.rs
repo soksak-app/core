@@ -205,8 +205,15 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 soksak_sok::migrate::use_migration_log(Some(std::sync::Arc::clone(&events)));
                 // The policy of the event log is the file log-policy.json, which the host and every process watch
                 // (docs/spec/logging.md#classes-and-policy).
-                let policy_watch = log_policy::start_log_policy(&events, None)
-                    .map_err(|error| format!("log policy: {error}"))?;
+                let policy_app = app.clone();
+                let policy_watch = log_policy::start_log_policy(
+                    &events,
+                    Some(log_policy::log_policy_announcer(
+                        &events,
+                        move |name, payload| windows::notify_windows(&policy_app, name, payload),
+                    )),
+                )
+                .map_err(|error| format!("log policy: {error}"))?;
                 tauri::Manager::manage(
                     app,
                     LogPolicyStop(std::sync::Mutex::new(Some(policy_watch))),

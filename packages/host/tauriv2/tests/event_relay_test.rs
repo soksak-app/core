@@ -71,12 +71,12 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
         (
             "no action",
             json!({"events": []}),
-            "action must be batch, clock or policy",
+            "action must be batch, clock, policy or policy-read",
         ),
         (
             "another action",
             json!({"action": "line", "events": []}),
-            "action must be batch, clock or policy, not \"line\"",
+            "action must be batch, clock, policy or policy-read, not \"line\"",
         ),
         (
             "an event that names no page",

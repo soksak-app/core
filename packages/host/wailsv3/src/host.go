@@ -125,7 +125,7 @@ func Run(assets fs.FS, options Options) error {
 	// (docs/spec/installation.md#stored-data-migration).
 	sok.UseMigrationLog(eventLog)
 	// The policy of the event log is the file log-policy.json, which the host and every process watch (docs/spec/logging.md#classes-and-policy).
-	stopPolicy, err := StartLogPolicy(eventLog, nil)
+	stopPolicy, err := StartLogPolicy(eventLog, LogPolicyAnnouncer(eventLog, host.announceToWindows))
 	if err != nil {
 		return fmt.Errorf("log policy: %w", err)
 	}

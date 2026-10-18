@@ -157,6 +157,12 @@ func (h *Host) WindowNew() {
 // announceLogNotice tells every window the host event `debug-log-changed` and the endpoint watchers of the host status `host.log` the
 // notice of a change of the event log.
 func (h *Host) announceLogNotice(notice LogNotice) {
+	h.announceToWindows("debug-log-changed", notice)
+	h.endpoint.NotifyWatchers("host.log", notice)
+}
+
+// announceToWindows sends the host event to every window; every document of a window receives it.
+func (h *Host) announceToWindows(name string, payload any) {
 	h.mu.Lock()
 	windows := make([]*Surfaces, 0, len(h.windows))
 	for _, s := range h.windows {
@@ -164,9 +170,8 @@ func (h *Host) announceLogNotice(notice LogNotice) {
 	}
 	h.mu.Unlock()
 	for _, s := range windows {
-		s.Emit("debug-log-changed", notice)
+		s.Emit(name, payload)
 	}
-	h.endpoint.NotifyWatchers("host.log", notice)
 }
 
 func (h *Host) notifyWorkspace() {

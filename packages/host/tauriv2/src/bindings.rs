@@ -133,12 +133,13 @@ fn performance(
 }
 
 /// Relays a batch of page events to the event writer of the host (docs/spec/logging.md#writers) and shows the page records of
-/// the batch in the transcript of the window.
+/// the batch in the transcript of the window. It answers a `clock` request with the clocks of the host and a `policy-read`
+/// request with `{classes}` of the policy in force.
 #[tauri::command(async)]
 fn log(
     window: Window,
     request: Argument<serde_json::Map<String, serde_json::Value>>,
-) -> Result<Option<crate::event_relay::ClockReading>, String> {
+) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
     let reply = crate::event_relay::log_command(
         &window.state::<std::sync::Arc<crate::event_log::EventLog>>(),
@@ -147,7 +148,10 @@ fn log(
     for line in reply.lines {
         exposure::log(&window, &line);
     }
-    Ok(reply.clock)
+    if let Some(classes) = reply.classes {
+        return Ok(serde_json::json!({ "classes": classes }));
+    }
+    serde_json::to_value(reply.clock).map_err(|error| error.to_string())
 }
 
 /// Returns the position and size of a window.
