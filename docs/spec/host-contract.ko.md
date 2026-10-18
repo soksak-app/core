@@ -153,7 +153,7 @@ fn invalid_json_closes_connection() {
 | `documents.request.rejects-foreign-or-missing-caller` | 호출자 표면이 없거나 다른 표면에서 온 문서 요청은 "not surface"로 실패한다. | both |
 | `documents.request.rejects-invalid-names` | 빈 이름, 대문자, 하이픈으로 시작, 슬래시 포함, 65자 문서 이름을 거부한다. | both |
 | `documents.request.zoom-must-be-finite-positive` | 확대 값이 없거나 0 또는 음수인 문서 확대 요청은 거부하고, 유한한 양수는 배율이다. | both |
-| `documents.query.reply-is-the-region-report` | native의 질의 답 `{media, capture, form}`에서 `media`가 `playing`, `paused`, `suspended`, `none`이면 `documentQuery`의 보고다. 답 `{error}`는 오류 `document <name>: <error>`이고, 다른 값, 빠진 field, JSON이 아닌 글은 오류 `document <name> answered an invalid query reply: <reply>`다. | both |
+| `documents.query.reply-is-the-region-report` | 세 boolean으로 된 native의 질의 답 `{media, capture, form}`은 `documentQuery`의 보고다. 답 `{error}`는 오류 `document <name>: <error>`이고, 다른 값, 빠진 field, JSON이 아닌 글은 오류 `document <name> answered an invalid query reply: <reply>`다. | both |
 | `documents.request.interaction-state-must-not-be-empty` | `interactionState`가 없는 문서 요청은 아무것도 복원하지 않고, 비어 있지 않은 `interactionState`는 `documentAttach`가 복원하는 상태이며, 빈 값은 `document interactionState must not be empty`로 거부한다. | both |
 | `documents.request.entry-requires-offset` | `entry` 문서 `go` 요청은 0이 아닌 정수 `offset`이 필요하고, `offset`이 있는 다른 동작은 거부한다. | both |
 | `documents.commit.precedes-messages` | 웹뷰가 문서 commit 뒤에 보낸 메시지는 그 commit 처리 뒤에 처리되고, 한 웹뷰의 commit은 순서대로 처리되며, 다른 웹뷰의 메시지는 기다리지 않는다. | wailsv3 only: Wails는 WebKit의 commit과 script message를 메인 스레드에서 받아 handler마다 고루틴을 따로 실행하지만, Tauri는 commit에서 표면의 문서 상태를 초기화하지 않는다 |

@@ -62,6 +62,9 @@ typedef NS_ENUM(NSInteger, SPProcessTerminationReason) {
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))completion;
 // WKWebViewPrivate.h: releases the previous document and its process that were kept paused for back and forward navigation.
 - (void)_clearBackForwardCache;
+// WKWebViewPrivate.h: whether a media element of the page plays audio that it can produce (playing, not muted, volume above
+// zero), the IsPlayingAudio media state of the page.
+@property (nonatomic, readonly, getter=_isPlayingAudio) BOOL _playingAudio;
 // WKWebViewPrivate.h (mac)
 - (void)_setIgnoresMouseMoveEvents:(BOOL)ignore;
 @property (nonatomic, setter=_setWindowOcclusionDetectionEnabled:) BOOL _windowOcclusionDetectionEnabled;

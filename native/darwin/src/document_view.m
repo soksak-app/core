@@ -778,30 +778,13 @@ void sp_document_query(void *handle, sp_document_query_reply reply, void *contex
         reply(context, "{\"error\":\"the document region is closed\"}");
         return;
     }
-    [view requestMediaPlaybackStateWithCompletionHandler:^(WKMediaPlaybackState playback) {
-        if (view.closed) {
-            reply(context, "{\"error\":\"the document region closed before the media playback state\"}");
-            return;
-        }
-        NSString *media;
-        switch (playback) {
-            case WKMediaPlaybackStateNone: media = @"none"; break;
-            case WKMediaPlaybackStatePlaying: media = @"playing"; break;
-            case WKMediaPlaybackStatePaused: media = @"paused"; break;
-            case WKMediaPlaybackStateSuspended: media = @"suspended"; break;
-            default: {
-                NSString *error = [NSString stringWithFormat:@"{\"error\":\"unknown media playback state %ld\"}", (long)playback];
-                reply(context, error.UTF8String);
-                return;
-            }
-        }
-        // The capture state is read in the same step as the reply of the media state.
-        BOOL capture = view.cameraCaptureState == WKMediaCaptureStateActive
-            || view.microphoneCaptureState == WKMediaCaptureStateActive;
-        NSString *json = [NSString stringWithFormat:@"{\"media\":\"%@\",\"capture\":%@,\"form\":%@}", media,
-            capture ? @"true" : @"false", view.formFrames.count ? @"true" : @"false"];
-        reply(context, json.UTF8String);
-    }];
+    // The public requestMediaPlaybackState answers playing for a page whose media element has never played, so the audible
+    // state of the page is read instead (docs/spec/plugins.md#memory-saver).
+    BOOL capture = view.cameraCaptureState == WKMediaCaptureStateActive
+        || view.microphoneCaptureState == WKMediaCaptureStateActive;
+    NSString *json = [NSString stringWithFormat:@"{\"media\":%@,\"capture\":%@,\"form\":%@}",
+        view._isPlayingAudio ? @"true" : @"false", capture ? @"true" : @"false", view.formFrames.count ? @"true" : @"false"];
+    reply(context, json.UTF8String);
 }
 
 char *sp_document_interaction_state(void *handle) {

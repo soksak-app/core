@@ -1,8 +1,8 @@
 // The reports of a document region that the memory saver decides with (docs/spec/plugins.md#memory-saver). A local site serves a
 // media page with a looping silent audio element, and a form page with a text field, a contenteditable element and a
-// cross-origin frame that holds a form with a text field. The check requires that the query of the region answers the media
-// playback state (playing for an element that has never played, which WebKit answers, playing while it plays and paused
-// after it is paused), no capture, and the form flag: an input event of a script does not set it, native key
+// cross-origin frame that holds a form with a text field. The check requires that the query of the region answers whether it
+// plays audible media (false for an element that has never played, true while it plays and false after it is paused), no
+// capture, and the form flag: an input event of a script does not set it, native key
 // events typed into a field of the main frame and of the cross-origin frame set it, and a reload, a form submit, the pagehide
 // of the frame and a main frame navigation clear it. It then requires that the interactionState of the region, restored into a
 // new region, gives back the history, and that a state that is not base64, a state that the web view refuses and a restore
@@ -225,18 +225,16 @@ int main(void) { @autoreleasepool {
     sp_document_load(document, [base stringByAppendingString:@"media"].UTF8String);
     waitForTitle(1, @"media", @"Media");
     NSDictionary *idle = query(document, @"media idle");
-    // Measured WebKit behavior: a page with a media element that has never played answers playing, and an element paused
-    // after it played answers paused. The check fails when WebKit changes this answer.
-    check([idle[@"media"] isEqual:@"playing"] && [evaluate(view, @"return audio.paused;") isEqual:@YES], [NSString stringWithFormat:
-        @"a media element that has never played answers playing (%@)", idle]);
+    check([idle[@"media"] isEqual:@NO] && [evaluate(view, @"return audio.paused;") isEqual:@YES], [NSString stringWithFormat:
+        @"a media element that has never played reports no audible media (%@)", idle]);
     check([idle[@"capture"] isEqual:@NO], [NSString stringWithFormat:@"a region without capture reports no capture (%@)", idle]);
     check([idle[@"form"] isEqual:@NO], [NSString stringWithFormat:@"a region without input reports no form (%@)", idle]);
     evaluate(view, @"await document.getElementById('audio').play(); return true;");
-    NSDictionary *playing = queryUntil(document, @"media playing", @"media", @"playing");
-    check([playing[@"media"] isEqual:@"playing"], [NSString stringWithFormat:@"a playing audio element reports playing (%@)", playing]);
+    NSDictionary *playing = queryUntil(document, @"media playing", @"media", @YES);
+    check([playing[@"media"] isEqual:@YES], [NSString stringWithFormat:@"a playing audio element reports audible media (%@)", playing]);
     evaluate(view, @"document.getElementById('audio').pause(); return true;");
-    NSDictionary *paused = queryUntil(document, @"media paused", @"media", @"paused");
-    check([paused[@"media"] isEqual:@"paused"], [NSString stringWithFormat:@"a paused audio element reports paused (%@)", paused]);
+    NSDictionary *paused = queryUntil(document, @"media paused", @"media", @NO);
+    check([paused[@"media"] isEqual:@NO], [NSString stringWithFormat:@"a paused audio element reports no audible media (%@)", paused]);
 
     // Form flags.
     sp_document_load(document, [base stringByAppendingString:@"form"].UTF8String);

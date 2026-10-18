@@ -53,11 +53,11 @@ pub struct Request {
     pub interaction_state: Option<String>,
 }
 
-/// The reply of documentQuery: the media playback state, whether capture is active and whether a frame holds a form flag
-/// (docs/spec/plugins.md#memory-saver).
+/// The reply of documentQuery: whether the region plays audible media, whether capture is active and whether a frame holds a
+/// form flag (docs/spec/plugins.md#memory-saver).
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Report {
-    pub media: String,
+    pub media: bool,
     pub capture: bool,
     pub form: bool,
 }
@@ -73,14 +73,7 @@ pub fn parse_report(document: &str, reply: &str) -> Result<Report, String> {
     }
     match serde_json::from_str::<Reply>(reply) {
         Ok(Reply::Failure { error }) => Err(format!("document {document}: {error}")),
-        Ok(Reply::Report(report))
-            if matches!(
-                report.media.as_str(),
-                "playing" | "paused" | "suspended" | "none"
-            ) =>
-        {
-            Ok(report)
-        }
+        Ok(Reply::Report(report)) => Ok(report),
         _ => Err(format!(
             "document {document} answered an invalid query reply: {reply}"
         )),

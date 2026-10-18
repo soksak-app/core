@@ -172,7 +172,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 
 메모리 절약이 탭을 unload하기 전에 page는 선언된 호스트 메서드 `documentInteractionState`(Wails에서 `DocumentInteractionState`, Tauri에서 `document_interaction_state`)로 `{surface, document}`, 곧 표면과 `host.window`가 알리는 문서 이름을 주어 탭의 각 문서 영역의 `interactionState`를 읽는다. 호스트는 영역 web view의 공개 `interactionState`, 곧 문서나 프로세스를 담지 않는 직렬화된 session history를 base64로 답하고, web content 프로세스가 이미 끝난 경우처럼 읽기가 아무것도 내지 않으면 빈 글로 답한다. 탭을 restore하면 그 값을 `documentAttach`의 `interactionState`로 넘기고, 이 호출은 새 영역의 첫 load 전에 그 값을 복원하며, web view가 거부하는 값은 attach를 `document <name>: <reason>`으로 실패시킨다([네이티브 표면](native-surfaces.ko.md#문서-영역)).
 
-결정마다 page는 선언된 호스트 메서드 `documentQuery`(Wails에서 `DocumentQuery`, Tauri에서 `document_query`)로 `{surface, document}`를 주어 탭의 각 문서 영역에 묻는다. 호스트는 `{media, capture, form}`으로 답한다. `media`는 `playing`, `paused`, `suspended`, `none` 중 하나이고, `capture`는 camera 또는 microphone capture가 active인지이며, `form`은 영역의 어느 frame이 form 표시를 가졌는지다. media 답 전에 닫힌 경우처럼 답할 수 없는 영역은 호출을 `document <name>: <reason>`으로 실패시킨다.
+결정마다 page는 선언된 호스트 메서드 `documentQuery`(Wails에서 `DocumentQuery`, Tauri에서 `document_query`)로 `{surface, document}`를 주어 탭의 각 문서 영역에 묻는다. 호스트는 `{media, capture, form}`으로 답한다. `media`는 영역이 소리가 나는 media를 재생하는지이고, `capture`는 camera 또는 microphone capture가 active인지이며, `form`은 영역의 어느 frame이 form 표시를 가졌는지다. 닫힌 경우처럼 답할 수 없는 영역은 호출을 `document <name>: <reason>`으로 실패시킨다.
 
 ## 프로세스 생명주기
 

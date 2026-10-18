@@ -96,15 +96,14 @@ bool sp_document_set_hidden_clear_delay(double seconds);
 // `normal` clears nothing. The memory pressure owner (memory_pressure.h) calls it on the main thread with each report.
 void sp_document_memory_pressure(const char *level);
 
-// The reply of sp_document_query: the JSON object {"media": "playing" | "paused" | "suspended" | "none", "capture": bool,
-// "form": bool}, or {"error": <reason>} when the region cannot answer. json is released when the call returns. Called once on
-// the main thread.
+// The reply of sp_document_query: the JSON object {"media": bool, "capture": bool, "form": bool}, or {"error": <reason>} when
+// the region cannot answer. json is released when the call returns. Called once on the main thread.
 typedef void (*sp_document_query_reply)(void *context, const char *json);
 
-// Reads the state that the memory saver decides with (docs/spec/plugins.md#memory-saver): media is the reply of the public
-// requestMediaPlaybackState of the web view, capture is whether the public camera or microphone capture state is active at
-// that reply, and form is whether a frame document of the region holds a form flag. reply is called once, later or at once
-// with an error for a closed region; the caller keeps context until then.
+// Reads the state that the memory saver decides with (docs/spec/plugins.md#memory-saver): media is whether a media element of
+// the page plays audible media (the private _isPlayingAudio of the web view), capture is whether the public camera or
+// microphone capture state is active, and form is whether a frame document of the region holds a form flag. reply is called
+// once before the call returns.
 void sp_document_query(void *document, sp_document_query_reply reply, void *context);
 
 // Returns the public interactionState of the region (serialized session history) as base64 in a string that the caller

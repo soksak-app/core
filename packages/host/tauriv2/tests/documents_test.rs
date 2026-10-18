@@ -480,9 +480,9 @@ fn a_page_process_end_removes_every_subscription_of_the_page() {
 #[test]
 fn document_query_reply_is_the_region_report() {
     assert_eq!(
-        parse_report("page", r#"{"media":"playing","capture":true,"form":false}"#),
+        parse_report("page", r#"{"media":true,"capture":true,"form":false}"#),
         Ok(Report {
-            media: "playing".into(),
+            media: true,
             capture: true,
             form: false
         })
@@ -492,8 +492,8 @@ fn document_query_reply_is_the_region_report() {
         Err("document page: the document region is closed".into())
     );
     for reply in [
-        r#"{"media":"loud","capture":false,"form":false}"#,
-        r#"{"media":"none","capture":false}"#,
+        r#"{"media":"playing","capture":false,"form":false}"#,
+        r#"{"media":false,"capture":false}"#,
         "not json",
     ] {
         assert_eq!(

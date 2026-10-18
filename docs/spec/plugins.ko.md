@@ -194,7 +194,7 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 - `recent`: 보인 지 지연보다 덜 지났다.
 - `keep:modified`: 탭이 `context.tab.modified`로 저장하지 않은 변경을 알렸고([탭 알림](#탭-알림)) 깨끗하다고 알리지 않았다.
 - `keep:busy`: 표면이 `context.tab.keep("busy", true)`로 진행 중인 작업을 알린다.
-- `media`: 탭의 문서 영역이 media를 재생한다. 결정마다(지연 기한, pressure 보고, `core.tab.unload`) 코어는 각 영역에 묻고 그 web view의 공개 `requestMediaPlaybackState` 답을 기다린다. `playing`이 탭을 보호한다. 영역이 사라진 경우처럼 실패한 답은 이유 `media-unknown`을 주고 로그에 남는다.
+- `media`: 탭의 문서 영역이 소리가 나는 media를 재생한다. 페이지의 media 요소가 재생 중이고 mute가 아니며 volume이 0보다 크다. 결정마다(지연 기한, pressure 보고, `core.tab.unload`) 코어는 각 영역에 묻고, 영역은 web view의 audible 상태(`_isPlayingAudio`, WebKit의 탭 audio indicator 상태)를 읽는다. `true`가 탭을 보호한다. 한 번도 재생하지 않았거나, 멈췄거나, mute된 media 요소는 보호하지 않는다. 공개 `requestMediaPlaybackState`는 한 번도 재생하지 않은 media 요소가 있는 페이지에 `playing`을 답하므로 쓰지 않는다. 영역이 사라진 경우처럼 실패한 답은 이유 `media-unknown`을 주고 로그에 남는다.
 - `capture`: 문서 영역에 진행 중인 카메라나 마이크 capture가 있다. 같은 결정 단계에서 공개 `cameraCaptureState`와 `microphoneCaptureState`로 읽는다. picture in picture로 멈춘 media는 다루지 않는다. WebKit이 공개 picture in picture 상태를 알리지 않기 때문이다. 화면 capture는 다루지 않는다. 영역은 `getDisplayMedia`를 허용하지 않기 때문이다.
 - `form`: 문서 영역의 frame에, 그 frame의 문서가 load된 뒤 trusted `input` 이벤트를 받은 편집 가능한 요소(form field나 `contenteditable`)가 있다. WebKit은 이를 위한 공개 engine 상태를 주지 않으므로, 영역 content world에서 모든 frame에 주입한 영역 script가 이를 알린다. native 영역은 frame 식별자마다 flag를 두고, frame의 `pagehide`나 form `submit`은 그 flag를 지우며, main frame navigation commit이나 reload는 모든 flag를 지운다. 등록된 `beforeunload` handler는 보호가 아니다. content world는 page의 listener를 볼 수 없기 때문이다. 공개 `interactionState`는 form field 내용을 담지 않으므로, 이 보호가 unload에서 입력한 글을 지키는 유일한 방법이다.
 - `kept`: 사람이 `core.tab.keep`으로 탭을 load된 채로 두도록 표시했다. 표시는 `tab-state.json`에 저장한다.

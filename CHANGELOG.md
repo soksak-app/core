@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.5: the region query reports `media` as whether the page plays audible media (`_isPlayingAudio`) instead of the reply of `requestMediaPlaybackState`, which answered `playing` for a page whose media element had never played; both hosts take a boolean `media`. Red: an unplayed audio element reported `playing`; Green: 3 of 3 runs.
 - F198.13: the cleanup test of `test-command` bounds only the startup of its processes with 10 s instead of 500 ms, which a loaded machine exceeded, and asserts the status before it reads the pid file. Red: 1 failure in 34 runs under load; Green: 40 of 40.
 - F198.3: surfaces of a plugin that declares `surface.unload` keep their tab state through `context.tab.state`, report busy work through `context.tab.keep`, and an unload keeps their tab reports except the error. Red: the API was missing and a surface mounted before the store opened lost its state; Green.
 - F198.2: the tab state store `tab-state.json` (format 1): both hosts write it per entry, and the workbench coalesces writes, removes entries after the layout write, reconciles orphans and keeps the label cache of tabs that can be unloaded.

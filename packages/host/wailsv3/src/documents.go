@@ -55,21 +55,19 @@ func (r DocumentRequest) RestoreState() (string, error) {
 	return *r.InteractionState, nil
 }
 
-// DocumentReport is the reply of documentQuery: the media playback state, whether capture is active and whether a frame holds
-// a form flag (docs/spec/plugins.md#memory-saver).
+// DocumentReport is the reply of documentQuery: whether the region plays audible media, whether capture is active and whether
+// a frame holds a form flag (docs/spec/plugins.md#memory-saver).
 type DocumentReport struct {
-	Media   string `json:"media"`
-	Capture bool   `json:"capture"`
-	Form    bool   `json:"form"`
+	Media   bool `json:"media"`
+	Capture bool `json:"capture"`
+	Form    bool `json:"form"`
 }
-
-var documentMedia = map[string]bool{"playing": true, "paused": true, "suspended": true, "none": true}
 
 // ParseDocumentReport turns the query reply of native, {media, capture, form} or {error}, into the report of the document, or
 // into the error that names the document.
 func ParseDocumentReport(document, reply string) (DocumentReport, error) {
 	var received struct {
-		Media   *string `json:"media"`
+		Media   *bool   `json:"media"`
 		Capture *bool   `json:"capture"`
 		Form    *bool   `json:"form"`
 		Error   *string `json:"error"`
@@ -81,7 +79,7 @@ func ParseDocumentReport(document, reply string) (DocumentReport, error) {
 	if received.Error != nil {
 		return DocumentReport{}, fmt.Errorf("document %s: %s", document, *received.Error)
 	}
-	if received.Media == nil || !documentMedia[*received.Media] || received.Capture == nil || received.Form == nil {
+	if received.Media == nil || received.Capture == nil || received.Form == nil {
 		return DocumentReport{}, invalid
 	}
 	return DocumentReport{Media: *received.Media, Capture: *received.Capture, Form: *received.Form}, nil
