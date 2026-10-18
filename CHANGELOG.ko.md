@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F192.4: vt sidecar 0.0.11이 image가 있는 surface에 대한 `image` 없는 `open`을 거부하고 surface의 그리기 mode를 기록하며, terminal plugin 0.0.14가 그것을 요구한다.
 - F197.7: vt sidecar 0.0.11과 files sidecar 0.0.6이 오류만 저장하는 기본 정책(F197.5)을 릴리즈한다. shell sidecar는 게시하지 않으므로 release가 없다.
 - F198.10-4: endpoint client는 reload가 watch를 지워 host가 unwatch를 1003으로 거부할 때 연결을 유지하고 그 거부로 watch를 reject한다. Red: 연결이 실패했다; Green.
 - F198.10-3: event `page.start`는 페이지의 모든 gate를 지나므로, reload된 문서의 시작이 setting의 policy가 gate에 닿기 전에 event 파일에 닿는다. Red: policy 전에 gate가 거부했다; Green.
