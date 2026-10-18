@@ -1038,11 +1038,11 @@
   - [ ] F198.2 — P1: label cache, 합친 쓰기, 지우기 순서, 맞추기를 가진 tab 상태 store `tab-state.json`(format 1).
   - [ ] F198.3 — P1: `context.tab.state`, `context.tab.keep("busy")`, 오류를 뺀 tab 보고를 유지하는 `disposeSurface`의 unload mode.
   - [ ] F198.4 — P1: workbench의 scheduler, 보호, 세대를 가진 순서 있는 unload 동작, restore.
-  - [ ] F198.5 — P1: document region 보고: 판단 때의 media 재생과 capture 질의, frame별 form 표시, 닫기 전에 돌려주는 `interactionState`.
+  - [ ] F198.5 — P1: document region 보고: 판단 때의 media 재생과 capture 질의, 닫기 전에 돌려주는 `interactionState`; form 수정은 보호가 아니다(측정 뒤 결정: 숨겨진 browser tab 하나를 닫자 Wails 애플리케이션에서 402.7 MB 중 227 MB, Tauri 애플리케이션에서 392.1 MB 중 239 MB가 돌아왔고, 모든 frame의 form script는 그것이 막는 드문 손실보다 비쌌다).
   - [ ] F198.6 — P1: host와 함께 시작해 normal, warn, critical을 관측하는 native memory pressure source 하나, 두 host가 `memory-pressure {level, seq}`로 전달.
   - [ ] F198.7 — P1: 설정 `memorySaver`와 `memorySaverDelay`, 명령 `core.tab.unload`와 `core.tab.keep`과 menu 항목.
   - [ ] F198.8 — P1: tab button 상태와 오류 표시로 가는 restore 실패.
-  - [ ] F198.9 — P2: 숨겨진 DOM tab의 채택을 정하는 benchmark.
+  - [ ] F198.9 — P2: 숨겨진 DOM tab의 채택을 정하는 benchmark, editor tab이 DOM 밖에 쥐는 것(문서 buffer와 다른 process에 동기화된 문서)을 포함한다.
   - [ ] F198.10 — P1: unload, pressure, restore에 대한 두 host의 창 검사.
   - [ ] F198.11 — P1: F198.5 뒤 `memorySaver`를 기본으로 켜는 release와, release 항목으로서의 plugin 채택.
   - [ ] F198.12 — P1: `surface.unload`를 선언하는 plugin release(appview, browser, editor, flowmark, hwp, shell; terminal은 `background`를 선언하고 files는 surface가 없다): release된 core는 모르는 surface field를 거부하고 다음 core는 선언을 요구하므로, 선언하는 각 plugin release는 `engines.soksak`로 그 core release를 요구하고 이전 plugin release는 이전 core를 위해 남는다. 각 plugin 저장소가 자기 항목을 기록한다.

@@ -1038,11 +1038,11 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [ ] F198.2 — P1: The tab state store `tab-state.json` (format 1) with the label cache, coalesced writes, removal order and reconciliation.
   - [ ] F198.3 — P1: `context.tab.state`, `context.tab.keep("busy")` and the unload mode of `disposeSurface` that keeps the tab reports except the error.
   - [ ] F198.4 — P1: The scheduler, the protections, the ordered unload operation with its generation, and restore in the workbench.
-  - [ ] F198.5 — P1: Document region reports: the media playback and capture query at a decision, the form flags per frame, and `interactionState` returned before close.
+  - [ ] F198.5 — P1: Document region reports: the media playback and capture query at a decision, the and `interactionState` returned before close; form edits are not a protection (decided after measurement: closing one hidden browser tab returned 227 MB of 402.7 MB in the Wails application and 239 MB of 392.1 MB in the Tauri application, and the form script in every frame cost more than the rare loss it prevents).
   - [ ] F198.6 — P1: One native memory pressure source started with the host, observing normal, warn and critical, relayed by both hosts as `memory-pressure {level, seq}`.
   - [ ] F198.7 — P1: The settings `memorySaver` and `memorySaverDelay`, and the commands `core.tab.unload` and `core.tab.keep` with the menu item.
   - [ ] F198.8 — P1: The tab button state and the restore failure through the error display.
-  - [ ] F198.9 — P2: The benchmark of hidden DOM tabs that decides their adoption.
+  - [ ] F198.9 — P2: The benchmark of hidden DOM tabs that decides their adoption, including what an editor tab holds outside its DOM (document buffers and documents synchronized to other processes).
   - [ ] F198.10 — P1: The window check of both hosts for unload, pressure and restore.
   - [ ] F198.11 — P1: The release that turns `memorySaver` on by default, after F198.5, and the plugin adoptions as release items.
   - [ ] F198.12 — P1: The plugin releases that declare `surface.unload` (appview, browser, editor, flowmark, hwp and shell; terminal declares `background` and files has no surface): the released core rejects an unknown surface field and the next core requires the declaration, so each plugin release that declares it requires that core release through `engines.soksak`, and earlier plugin releases stay for earlier cores. Each plugin repository records its item.
