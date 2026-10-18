@@ -360,8 +360,8 @@ fn the_relaunch_starts_the_same_bundle_in_the_background_after_the_process_ended
     if !bundles_supported() {
         return;
     }
-    let parent = Dir::new();
-    let target = fake_bundle(&parent.0, "soksak.app", "same");
+    let parent = Folder::new("appupdate");
+    let target = fake_bundle(parent.path(), "soksak.app", "same");
     let mut process = sleeping();
     let pid = process.id();
     let started = std::sync::Mutex::new(vec![]);
@@ -411,13 +411,13 @@ fn the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_a_process_that_keeps_r
     if !bundles_supported() {
         return;
     }
-    let parent = Dir::new();
+    let parent = Folder::new("appupdate");
     let mut process = sleeping();
     let pid = process.id() as i32;
     let open = |_: &Path, _: &[String], _: bool| -> Result<(), String> {
         panic!("the application started")
     };
-    let plain = parent.0.join("plain");
+    let plain = parent.path().join("plain");
     std::fs::create_dir_all(&plain).unwrap();
     let options = RelaunchOptions {
         pid,
@@ -434,7 +434,7 @@ fn the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_a_process_that_keeps_r
     );
     let options = RelaunchOptions {
         pid,
-        target: fake_bundle(&parent.0, "soksak.app", "same"),
+        target: fake_bundle(parent.path(), "soksak.app", "same"),
         arguments: vec![],
         timeout: Duration::from_millis(200),
     };
