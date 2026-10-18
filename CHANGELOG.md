@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.10-2: a commit stops the composition of each surface it leaves out before `host.place` runs and resumes it when the place fails, so a layout change no longer sends a placement that the host refuses with `has no composition declaration`. Red: the composition placed while the place ran; Green.
 - F198.10: the window check `e2e/memory-saver.test.mjs` installs the fixture plugin `e2e/fixtures/memory-saver/unload-probe`, which declares `surface.unload`, and checks on both hosts the unload by `core.tab.unload` with its document region gone, the restore with the same address and session history, the unload of the hidden candidates one at a time under warn pressure and its stop at normal, and that a kept and a modified tab stay loaded. It passes on both hosts as the first check of a new configuration; F198.10-2 keeps the item open.
 - F198.9-2: `diagnostics.objects` counts the elements of open shadow roots in `elements` of the page and of document regions, so it counts the DOM of shown surfaces. Red: a host with an open shadow root of three elements counted as one element; Green.
 - F198.9-1-1: the page diagnostic module publishes the parked element count for `diagnostics.objects`, so a release page publishes no diagnostic global. Red: the workbench module published it; Green.

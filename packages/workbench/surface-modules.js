@@ -77,6 +77,9 @@ let compositionRevision = 0;
 function pageRuntime(surface, scoped, compositionReady, lifetime) {
   const invoke = (name, payload) => scoped.native.call(name, payload);
   const hostClose = (name, payload) => (lifetime.released ? Promise.resolve(null) : invoke(name, payload));
+  // While a place that leaves the surface out runs, the host removes its composition, so a placement is not sent; a failed
+  // place resumes the composition, which places its current geometry again (placeSurfaces).
+  const composed = (name, payload) => (lifetime.suspended ? Promise.resolve(null) : invoke(name, payload));
   return {
     surfaces: { report: (message) => invoke("report", message) },
     document: {
@@ -98,7 +101,7 @@ function pageRuntime(surface, scoped, compositionReady, lifetime) {
     },
     image: {
       attach: (name, sidecar) => invoke("imageAttach", { name, sidecar }),
-      place: (name, insets, visible) => invoke("imagePlace", { name, insets, visible }),
+      place: (name, insets, visible) => composed("imagePlace", { name, insets, visible }),
       focus: (name) => invoke("imageFocus", { name }),
       caret: (name, x, y, width, height) => invoke("imageCaret", { name, x, y, width, height }),
       text: (name, text) => invoke("imageText", { name, text }),
@@ -119,7 +122,7 @@ function pageRuntime(surface, scoped, compositionReady, lifetime) {
       // The order inside a composition equals the call order, so the next number of the document is sent instead of the revision of the composition.
       place: (_revision, regions, overlays) => {
         const revision = ++compositionRevision;
-        return invoke("compositionPlace", { revision, regions, overlays });
+        return composed("compositionPlace", { revision, regions, overlays });
       },
     },
     sidecar: scoped.sidecar,
@@ -254,7 +257,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     // A dom composition has no native region; plugin.json declares it, and its module does not create one.
     if (!native || surface.composition?.kind === "dom") compositionReady.resolve();
     // released becomes true when a place left the surface out; the host then owns the end of its regions.
-    const lifetime = { released: false };
+    const lifetime = { released: false, suspended: false };
     const page = pageRuntime(surface, scoped, compositionReady, lifetime);
     let viewport = slot;
     const eventListeners = new Map();
@@ -493,7 +496,24 @@ export async function disposeSurfacesExcept(surfaceIds, { released = false } = {
  * Resolves the reply of the place.
  */
 export async function placeSurfaces(place, { retain, unload = [] }) {
-  const answer = await place();
+  // The place removes the compositions of the surfaces it leaves out before it replies, so their compositions stop sending
+  // placements first; the release that follows a successful place does not detach them.
+  const leftOut = [...mounted.entries()].filter(([id]) => !retain.has(id) || unload.includes(id)).map(([, entry]) => entry);
+  for (const entry of leftOut) entry.lifetime.suspended = true;
+  let answer;
+  try {
+    answer = await place();
+  } catch (error) {
+    // A failed place keeps the surfaces mounted, so their compositions resume and place their current geometry.
+    for (const entry of leftOut) {
+      entry.lifetime.suspended = false;
+      for (const composition of entry.compositions) {
+        // The composition reports a failed placement itself (surface composition failed), so the rejection is handled here.
+        composition.update(() => {}).catch(() => {});
+      }
+    }
+    throw error;
+  }
   await Promise.all(unload.map((id) => disposeSurface(id, { mode: "unload", released: true })));
   await disposeSurfacesExcept(retain, { released: true });
   return answer;
