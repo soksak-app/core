@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F198.2: the tab state store `tab-state.json` (format 1): both hosts write it per entry, and the workbench coalesces writes, removes entries after the layout write, reconciles orphans and keeps the label cache of tabs that can be unloaded.
+- F198.6: one memory pressure source per process observes normal, warn and critical; the back-forward caches clear only on warn and critical, and both hosts send `memory-pressure {level, seq}` to every window in order.
 - F198.1: the memory saver is specified (unload and restore of hidden tabs, protections, the tab state store, the settings, the status and commands, the host memory pressure source), and `validateManifest` requires `surface.unload` unless the plugin declares `background`. Red: a surface without it was accepted; Green.
 - F196.29: a browser tab that stays hidden for 5 minutes, and every tab under memory pressure, clears its back-forward cache, so the suspended processes of the pages it left end; going back then loads the page again. Each clear is the event `native.document.backforward_cleared`. Red: going back restored the page from the cache; Green: `document_backforward_test`.
 - F196.28: the CI cache keeps only the dependency build output (`Swatinem/rust-cache`); the cache of the whole target folder had grown to 8 GB and filled the disk of the runner.

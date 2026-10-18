@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F198.2: tab 상태 store `tab-state.json`(format 1): 두 host가 항목 단위로 쓰고, workbench가 쓰기를 합치며, layout 쓰기 뒤에 항목을 지우고, 고아를 맞추며, 내릴 수 있는 tab의 label cache를 유지한다.
+- F198.6: process마다 memory pressure source 하나가 normal, warn, critical을 관측한다; back-forward cache는 warn과 critical에서만 비우고, 두 host가 모든 창에 `memory-pressure {level, seq}`를 순서대로 보낸다.
 - F198.1: 메모리 절약을 명세한다(숨겨진 tab의 unload와 restore, 보호, tab 상태 store, 설정, status와 명령, host memory pressure source); `validateManifest`는 plugin이 `background`를 선언하지 않으면 `surface.unload`를 요구한다. Red: 그것이 없는 surface가 받아들여졌다; Green.
 - F196.29: 5분 동안 숨겨진 browser tab과 memory pressure 때의 모든 tab이 back-forward cache를 비우므로, 떠난 page의 중단된 process가 끝난다; 그 뒤 뒤로 가면 page를 다시 load한다. 비울 때마다 event `native.document.backforward_cleared`를 남긴다. Red: 뒤로 가면 page가 cache에서 복원되었다; Green: `document_backforward_test`.
 - F196.28: CI cache는 의존 build 산출물만 담는다(`Swatinem/rust-cache`); target 폴더 전체 cache가 8 GB로 커져 runner 디스크를 채웠다.
