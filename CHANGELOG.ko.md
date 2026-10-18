@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.7.1, F198.7.2: 설정 창은 메모리 group에 switch `memorySaver`와 slider `memorySaverDelay`를 보이고; status `core.tab.memory`는 각 tab을 state와 보호와 함께 나열하며, `core.tab.unload`는 숨겨진 tab을 바로 unload하고, `core.tab.keep`은 표시 `kept`를 설정하거나 지우며, unload된 tab의 surface에 대한 요청은 `tab <id> is unloaded`로 실패한다. Red: control, saver method와 거부가 없었다; Green.
 - F198.4: 메모리 절약은 숨겨진 모든 tab을 `media-unknown`으로 보호하는 대신 문서 영역의 질의로 숨겨진 browser tab을 판단하고, restore된 tab은 각 영역의 session history를 돌려받는다. Red: 영역 기록이 없었고 restore가 history를 넘기지 않았다; Green.
 - F198.5: 영역 질의는 한 번도 재생하지 않은 media 요소가 있는 페이지에 `playing`을 답하던 `requestMediaPlaybackState`의 답 대신, 페이지가 소리 나는 media를 재생하는지(`_isPlayingAudio`)를 `media`로 알린다; 두 host는 boolean `media`를 받는다. Red: 재생하지 않은 audio 요소가 `playing`을 알렸다; Green: 3회 중 3회.
 - F198.13: `test-command`의 정리 시험은 부하가 걸린 machine이 넘던 500 ms 대신 10초로 process 시작만 제한하고, pid 파일을 읽기 전에 상태를 확인한다. Red: 부하에서 34회 중 1회 실패; Green: 40회 중 40회.

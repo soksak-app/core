@@ -201,6 +201,9 @@ export const defaults = {
   memorySaverDelay: 120,
 };
 
+/* The range of memorySaverDelay in minutes (docs/spec/settings.md#values). */
+export const MEMORY_SAVER_DELAY = Object.freeze([5, 720]);
+
 /* The range of the layout values. Only integers are accepted. The three values share one range so that the same value is at the same slider position. */
 const WIDTH_RANGE = [60, 800];
 export const LAYOUT_RANGES = {
@@ -294,7 +297,7 @@ function validateValue(key, value) {
       }
     }
   }
-  if (key === "memorySaverDelay" && (!Number.isInteger(value) || value < 5 || value > 720)) {
+  if (key === "memorySaverDelay" && (!Number.isInteger(value) || value < MEMORY_SAVER_DELAY[0] || value > MEMORY_SAVER_DELAY[1])) {
     throw new Error(`Invalid setting memorySaverDelay: ${JSON.stringify(value)}`);
   }
   const range = RANGES[key];

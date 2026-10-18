@@ -54,6 +54,11 @@ test("every setting form is drawn with its one control", async (t) => {
     for (const key of ["gap", "radius", "size", "sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth"]) {
       assert.equal(controlOf(key).type, "range", `${key} is not a slider`);
     }
+    // The memory group of the common scope: a switch and a slider of minutes between the bounds of the setting.
+    assert.equal(controlOf("memorySaver").type, "checkbox");
+    const delay = document.querySelector('[data-set="memorySaverDelay"]');
+    assert.deepEqual([controlOf("memorySaverDelay").type, delay.min, delay.max, delay.nextSibling.textContent],
+      ["range", "5", "720", "120분"]);
     assert.equal(controlOf("link:left:").tag, "SELECT");
     assert.equal(document.querySelectorAll('[data-expose="core.settings-modal.theme"]').length, settings.THEMES.length);
 

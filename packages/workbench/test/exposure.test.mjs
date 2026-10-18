@@ -417,6 +417,14 @@ test("a failed status.next ends the watch", async () => {
     "a new watch starts after the previous one ended");
 });
 
+test("a request to an unloaded surface fails with tab <id> is unloaded", async () => {
+  const made = coreRegistry(fakeHost(() => ({ result: null })));
+  made.configure({ surfacePlugin: () => "probe", unloaded: (surface) => surface === "tab-u" });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  const reply = await made.handle({ method: "status.get", params: { name: "probe.lines", surface: "tab-u" } });
+  assert.deepEqual(reply.error, { code: EXPOSURE_ERRORS.unregistered, message: "tab tab-u is unloaded" });
+});
+
 test("surface pages register core surface entries, and requests can name the surface", async () => {
   const host = fakeHost(({ surface, method, params }) => {
     if (method === "status.get") return { result: `${params.name}@${surface}` };

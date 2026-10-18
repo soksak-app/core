@@ -194,6 +194,17 @@ function gridState() {
   };
 }
 
+/* The memory saver of the page (memory-saver.js), given at installCoreExposure. */
+let memory = null;
+
+/** The tab of a core.tab command: a string that the memory saver knows, otherwise invalid params. */
+function memoryTab(tab) {
+  if (typeof tab !== "string" || !memory.known(tab)) {
+    throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `unknown tab ${JSON.stringify(tab)}`);
+  }
+  return tab;
+}
+
 function surfacesState() {
   // The tab of a plugin that is not loaded shows a placeholder instead of a surface, and the placeholder reports the reason (docs/spec/plugins.md).
   const placeholders = [...document.querySelectorAll("[data-plugin-placeholder]")].map((el) => ({
@@ -206,6 +217,7 @@ function surfacesState() {
     surface: s.id, plugin: s.plugin, visible: s.visible, dim: s.dim,
     declared: shift(s.declared, at), applied: shift(s.applied, at),
     exposes: registry.namesOf(s.id), status: surfaceState(s.id), placeholder: null,
+    state: memory.unloaded(s.id) ? "unloaded" : "loaded",
   })), ...placeholders];
 }
 
@@ -243,7 +255,8 @@ function need(project, id) {
 /**
  * drawn returns a promise that is fulfilled when the plane has finished all scheduled drawing. A core command waits for that drawing after it ran and then replies. When a command changes the layout, the receiver of the reply reads the layout that is already drawn.
  */
-export async function installCoreExposure({ library, renames, chrome, drawn }) {
+export async function installCoreExposure({ library, renames, chrome, drawn, memorySaver }) {
+  memory = memorySaver;
   status("core.window.document", () => ({
     timeOrigin: performance.timeOrigin,
     readyState: document.readyState,
@@ -279,6 +292,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   followActivation();
   onTabReports(coreChanged);
   status("core.surfaces", surfacesState);
+  status("core.tab.memory", () => ({ enabled: value("memorySaver"), delay: value("memorySaverDelay"), ...memory.status() }));
   status("core.drop", () => lastDrop);
   status("core.notifications", () => systemNotifications.state());
   systemNotifications.onChange(coreChanged);
@@ -496,6 +510,16 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   registry.command("core.card.close", ({ card }) => closeCard(card));
   registry.command("core.tab.select", ({ tab }) => { trace("action", { kind: "tab.select", tab }); selectTab(tab); });
   registry.command("core.tab.close", ({ tab }) => closeTabById(tab));
+  registry.command("core.tab.unload", async ({ tab }) => {
+    await memory.unload(memoryTab(tab));
+    return null;
+  });
+  registry.command("core.tab.keep", ({ tab, keep }) => {
+    memoryTab(tab);
+    if (typeof keep !== "boolean") throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "keep must be a boolean");
+    memory.keep(tab, keep);
+    return null;
+  });
   registry.command("core.tab.move", ({ tab, card, zone }) => { moveTab(tab, card, zone); });
   registry.command("core.picker.pick", ({ index }) => { pickItem(index); });
   registry.command("core.picker.close", () => { closePicker(); });
@@ -551,7 +575,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn }) {
   onModalState(coreChanged);
   onSaved(coreChanged);
 
-  await connectExposure({ surfacePlugin, preferred, registrationChanged: coreChanged, settled: drawn, report });
+  await connectExposure({ surfacePlugin, preferred, registrationChanged: coreChanged, settled: drawn, report,
+    unloaded: (surface) => memory.unloaded(surface) });
 }
 
 // Action marker for window size changes (V5-104). It marks the log so that an event can be matched to the action that preceded it.

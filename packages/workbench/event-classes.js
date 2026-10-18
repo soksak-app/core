@@ -76,6 +76,7 @@ const EXACT = new Map([
   ["page.project.operation", "call"],
   ["page.settings.change", "call"],
   ["page.start", "lifecycle"],
+  ["page.tab.keep.changed", "lifecycle"],
   ["page.tab.restored", "lifecycle"],
   ["page.tab.state.orphan", "lifecycle"],
   ["page.tab.state.stored", "lifecycle"],

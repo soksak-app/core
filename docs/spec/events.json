@@ -426,6 +426,16 @@
       },
       "description": "The reconciliation at load removed the entry of a tab that no layout of projects.json holds."
     },
+    "page.tab.keep.changed": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "tab": "string",
+        "keep": "boolean"
+      },
+      "description": "core.tab.keep set or cleared the mark kept of a tab."
+    },
     "page.tab.unloaded": {
       "layer": "page",
       "class": "lifecycle",

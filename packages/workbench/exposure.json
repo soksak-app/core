@@ -468,12 +468,19 @@
       },
       {
         "name": "core.surfaces",
-        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, reload, host or unread); a mounted surface reports placeholder null.",
+        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, reload, host or unread); a mounted surface reports placeholder null. state is the memory saver state of the tab: loaded, unloaded or restoring.",
         "schema": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
+              "state": {
+                "enum": [
+                  "loaded",
+                  "unloaded",
+                  "restoring"
+                ]
+              },
               "surface": {
                 "type": "string"
               },
@@ -548,6 +555,94 @@
                   },
                   "error": {
                     "type": ["string", "null"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.tab.memory",
+        "description": "The memory saver of the main page: the settings memorySaver (enabled) and memorySaverDelay (delay, minutes), the last memory pressure report, and each tab with its state, the reasons that protect it, the time it was hidden, its next delay deadline and the time of the last decision that read the regions.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "delay": {
+              "type": "integer"
+            },
+            "pressure": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "enum": [
+                    "normal",
+                    "warn",
+                    "critical"
+                  ]
+                },
+                "seq": {
+                  "type": "integer"
+                }
+              }
+            },
+            "tabs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tab": {
+                    "type": "string"
+                  },
+                  "plugin": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "enum": [
+                      "loaded",
+                      "unloaded",
+                      "restoring"
+                    ]
+                  },
+                  "reasons": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "shown",
+                        "recent",
+                        "keep:modified",
+                        "keep:busy",
+                        "media",
+                        "media-unknown",
+                        "capture",
+                        "form",
+                        "kept",
+                        "off",
+                        "undeclared",
+                        "background"
+                      ]
+                    }
+                  },
+                  "hiddenAt": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "unloadAt": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "checkedAt": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -3305,6 +3400,39 @@
                 "top",
                 "bottom"
               ]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.tab.unload",
+        "description": "Unloads a hidden tab now. It does not wait for recent, media, media-unknown, capture or form, and fails with tab <id> is protected: <reasons> for the other reasons and for the reasons that ended the attempt.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.tab.keep",
+        "description": "Sets (true) or clears (false) the mark kept of a tab and stores it in tab-state.json; it fails for a tab that can never be unloaded.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            },
+            "keep": {
+              "type": "boolean"
             }
           }
         },

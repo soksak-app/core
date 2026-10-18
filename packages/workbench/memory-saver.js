@@ -16,16 +16,18 @@ const ORDER = ["shown", "recent", "keep:modified", "keep:busy", "media", "media-
  *   now()               the monotonic time in milliseconds;
  *   enabled(), delay()  the settings memorySaver and memorySaverDelay (minutes);
  *   declaration(plugin) "unload" for a plugin that declares surface.unload, otherwise "undeclared" or "background";
- *   keeps(tab)          the keep reasons of the tab reports (keep:modified, keep:busy); kept(tab) the stored mark;
+ *   keeps(tab)          the keep reasons of the tab reports (keep:modified, keep:busy); kept(tab) the stored mark, which
+ *                       setKept(tab, on) stores;
  *   regions(tab)        resolves the reasons of the document regions of the tab at a decision (media, media-unknown,
  *                       capture, form);
  *   interaction(tab)    resolves the interactionState of the regions of the tab before it is unloaded, or undefined;
  *   restore(tab, history) gives the regions of a restored tab the value that interaction resolved at its unload;
  *   commit()            requests a commit and resolves after host.place replied;
- *   showLabel(tab)      shows the cached label of a tab that starts unloaded.
+ *   showLabel(tab)      shows the cached label of a tab that starts unloaded;
+ *   changed()           announces that the status changed.
  */
 export function createMemorySaver({
-  now, enabled, delay, declaration, keeps, kept, regions, interaction, restore, commit, showLabel,
+  now, enabled, delay, declaration, keeps, kept, setKept, regions, interaction, restore, commit, showLabel, changed,
 }) {
   // tab id -> {id, plugin, state, hiddenAt, shownAt, unloadAt, region, checkedAt, history, generation, attempting}
   let entries = new Map();
@@ -60,6 +62,7 @@ export function createMemorySaver({
   // The scheduler holds one timer for the earliest deadline, because elapsed time has no event source; it re-arms on a
   // show or a hide, a protection change and a setting change.
   function arm() {
+    changed();
     clearTimeout(timer);
     timer = null;
     if (!enabled()) return;
@@ -86,9 +89,11 @@ export function createMemorySaver({
 
   /**
    * One unload attempt with its generation: a show increments the generation, and after every awaited step the
-   * protections are evaluated again before the tab is marked unloaded. Resolves whether the tab was unloaded.
+   * protections are evaluated again before the tab is marked unloaded. Resolves the reasons that ended the attempt, empty
+   * when the tab was unloaded. The command does not wait for recent and the reasons of the regions, because it is the
+   * person's own decision (docs/spec/exposure.md#tab-memory).
    */
-  async function attempt(entry, trigger, underPressure) {
+  async function attempt(entry, trigger, underPressure, command = false) {
     entry.attempting = true;
     const generation = entry.generation;
     const ended = () => {
@@ -103,24 +108,25 @@ export function createMemorySaver({
       let reasons = ended();
       if (reasons.length) {
         skipped(trigger, reasons);
-        return false;
+        return reasons;
       }
-      if (entry.region.length) {
+      if (entry.region.length && !command) {
         // A tab that the regions protect at its deadline gets its next deadline one delay later.
         if (trigger === "delay") entry.unloadAt = now() + delayMs();
-        return false;
+        return entry.region;
       }
       entry.history = await interaction(entry.id);
       reasons = ended();
       if (reasons.length) {
         skipped(trigger, reasons);
-        return false;
+        return reasons;
       }
       entry.state = "unloaded";
       entry.unloadAt = null;
+      changed();
       await commit();
       emitEvent("info", "page.tab.unloaded", { tab: entry.id, plugin: entry.plugin, trigger });
-      return true;
+      return [];
     } finally {
       entry.attempting = false;
     }
@@ -141,7 +147,7 @@ export function createMemorySaver({
         let unloaded = false;
         for (const entry of candidates) {
           if (pressure.level === "normal") return;
-          if (await attempt(entry, "pressure", true)) {
+          if ((await attempt(entry, "pressure", true)).length === 0) {
             unloaded = true;
             break;
           }
@@ -218,6 +224,7 @@ export function createMemorySaver({
         throw new TypeError(`memory pressure report ${JSON.stringify(report)} is not {level, seq}`);
       }
       pressure = { level: report.level, seq: report.seq };
+      changed();
       if (pressure.level !== "normal") relieve();
     },
     /** Re-arms the scheduler after a setting changed. */
@@ -227,6 +234,48 @@ export function createMemorySaver({
     },
     /** Re-arms the scheduler after a protection of a tab report or the mark changed. */
     protectionsChanged: () => arm(),
+    /** Whether the memory saver knows the tab. */
+    known: (tab) => entries.has(tab),
+    /**
+     * Unloads a hidden tab now (core.tab.unload). It does not wait for recent and the reasons of the regions; it refuses the
+     * other reasons and the reasons that ended the attempt with `tab <id> is protected: <reasons>`.
+     */
+    async unload(tab) {
+      const entry = entries.get(tab);
+      if (!entry) throw new Error(`unknown tab ${tab}`);
+      if (entry.state === "unloaded") return;
+      const refuse = (reasons) => new Error(`tab ${tab} is protected: ${reasons.join(", ")}`);
+      const before = standing(entry, true);
+      if (before.length) throw refuse(before);
+      const reasons = await attempt(entry, "command", true, true);
+      arm();
+      if (reasons.length) throw refuse(reasons);
+    },
+    /**
+     * Sets or clears the mark kept of a tab (core.tab.keep) with one page.tab.keep.changed per change; a tab that can never
+     * be unloaded is refused.
+     */
+    keep(tab, on) {
+      const entry = entries.get(tab);
+      if (!entry) throw new Error(`unknown tab ${tab}`);
+      const kind = declaration(entry.plugin);
+      if (kind !== "unload") throw new Error(`tab ${tab} can never be unloaded: ${kind}`);
+      if (kept(tab) === on) return;
+      setKept(tab, on);
+      emitEvent("info", "page.tab.keep.changed", { tab, keep: on });
+      arm();
+    },
+    /** The memory saver part of the status core.tab.memory: the last pressure report and each tab. */
+    status: () => ({
+      pressure: { ...pressure },
+      tabs: [...entries.values()].map((entry) => ({
+        tab: entry.id, plugin: entry.plugin, state: entry.state, reasons: reasonsOf(entry), hiddenAt: entry.hiddenAt,
+        // default: a tab without a next deadline (shown, unloaded, or protected by a standing reason) has null.
+        unloadAt: entry.state === "loaded" && entry.hiddenAt !== null && enabled() && standing(entry, false).length === 0
+          ? deadline(entry) : null,
+        checkedAt: entry.checkedAt,
+      })),
+    }),
     /** Whether the tab is unloaded. */
     unloaded: (tab) => entries.get(tab)?.state === "unloaded",
     /** The reasons that protect the tab now. */

@@ -24,7 +24,7 @@ import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 import { hasSection, section, sectionNames } from "./registry.js";
 import {
-  CHOICES, FONTS, LAYOUT_RANGES, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, overridden,
+  CHOICES, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, overridden,
   settingDefinitions,
 } from "./settings.js";
 
@@ -291,6 +291,10 @@ function drawGeneral() {
   body.append(group("언어", "애플리케이션 메뉴가 이 언어를 따른다. 자동은 시스템 언어이고 목록에 없으면 영어다.", [
     row("언어", choose("language",
       [["auto", "자동"], ...MENU_LANGUAGES.map(({ id, label }) => [id, label])], value("language"))),
+  ]));
+  if (scope === "common") body.append(group("메모리", "메모리 절약을 켜면 숨긴 지 정한 시간이 지난 탭을 내리고, 다시 보일 때 저장된 상태로 다시 연다.", [
+    row("메모리 절약", toggle("memorySaver", value("memorySaver"))),
+    row("숨긴 뒤 내리기까지", slide("memorySaverDelay", ...MEMORY_SAVER_DELAY, value("memorySaverDelay"), "분")),
   ]));
   if (scope === "common") body.append(group("진단", "디버그를 켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.", [
     row("디버그", debugSwitch()),

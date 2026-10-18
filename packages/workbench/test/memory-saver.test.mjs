@@ -17,7 +17,7 @@ const named = (name) => emitted.filter((entry) => entry.event === name).map((ent
 /** A saver over fakes at its declared dependencies, started before any tab; the clock is the mocked Date. */
 function harness(options = {}) {
   emitted.length = 0;
-  const state = { enabled: options.enabled ?? true, delay: 120, keeps: new Map(), kept: new Set(), commits: [] };
+  const state = { enabled: options.enabled ?? true, delay: 120, keeps: new Map(), kept: new Set(), commits: [], changes: 0 };
   const saver = createMemorySaver({
     now: () => Date.now(),
     enabled: () => state.enabled,
@@ -25,11 +25,13 @@ function harness(options = {}) {
     declaration: (plugin) => ({ undeclared: "undeclared", background: "background" })[plugin] ?? "unload",
     keeps: (tab) => state.keeps.get(tab) ?? [],
     kept: (tab) => state.kept.has(tab),
+    setKept: (tab, on) => (on ? state.kept.add(tab) : state.kept.delete(tab)),
     regions: options.regions ?? (async () => []),
     interaction: options.interaction ?? (async () => undefined),
     restore: options.restore ?? (() => {}),
     commit: options.commit ?? (async () => { state.commits.push(saver.place([]).unload); }),
     showLabel: () => {},
+    changed: () => { state.changes++; },
   });
   saver.start();
   return { saver, state };
@@ -257,7 +259,7 @@ test("a restart with the setting on starts hidden declaring tabs unloaded with t
   const create = (enabled) => createMemorySaver({
     now: () => Date.now(), enabled: () => enabled, delay: () => 120,
     declaration: (plugin) => (plugin === "undeclared" ? "undeclared" : "unload"),
-    keeps: () => [], kept: () => false, regions: async () => [], interaction: async () => undefined, restore: () => {},
+    keeps: () => [], kept: () => false, setKept: () => {}, changed: () => {}, regions: async () => [], interaction: async () => undefined, restore: () => {},
     commit: async () => {}, showLabel: (tab) => labels.push(tab),
   });
   const on = create(true);
@@ -272,4 +274,74 @@ test("a restart with the setting on starts hidden declaring tabs unloaded with t
   off.observe(new Set(["x"]), tabs("x", "a"));
   off.start();
   assert.equal(off.unloaded("a"), false);
+});
+
+test("core.tab.unload unloads a hidden tab that recent and the regions protect", async () => {
+  const { saver, state } = harness({ regions: async () => ["media", "capture", "form"] });
+  saver.observe(new Set(["a"]), tabs("a", "x"));
+  saver.observe(new Set(["x"]), tabs("a", "x"));
+  assert.deepEqual(saver.reasons("a"), ["recent"]);
+  state.changes = 0;
+  await saver.unload("a");
+  assert.equal(saver.unloaded("a"), true);
+  assert.deepEqual(state.commits, [["a"]]);
+  assert.deepEqual(named("page.tab.unloaded"), [{ tab: "a", plugin: "fixture", trigger: "command" }]);
+  assert.ok(state.changes > 0, "the unload is not announced");
+  // An unloaded tab is unloaded again without another commit.
+  await saver.unload("a");
+  assert.deepEqual(state.commits, [["a"]]);
+});
+
+test("core.tab.unload refuses a tab that a standing reason protects", async () => {
+  const { saver, state } = harness();
+  saver.observe(new Set(["x"]), tabs("x", "k", "u-a", "g-a"));
+  state.kept.add("k");
+  state.keeps.set("k", ["keep:modified"]);
+  await assert.rejects(saver.unload("x"), { message: "tab x is protected: shown" });
+  await assert.rejects(saver.unload("k"), { message: "tab k is protected: keep:modified, kept" });
+  await assert.rejects(saver.unload("u-a"), { message: "tab u-a is protected: undeclared" });
+  await assert.rejects(saver.unload("g-a"), { message: "tab g-a is protected: background" });
+  await assert.rejects(saver.unload("missing"), { message: "unknown tab missing" });
+  assert.deepEqual(state.commits, []);
+});
+
+test("core.tab.unload fails with the reasons that ended the attempt", async () => {
+  let saver;
+  ({ saver } = harness({ regions: async () => { saver.observe(new Set(["a"]), tabs("a", "x")); return []; } }));
+  saver.observe(new Set(["x"]), tabs("a", "x"));
+  await assert.rejects(saver.unload("a"), { message: "tab a is protected: shown" });
+  assert.equal(saver.unloaded("a"), false);
+});
+
+test("core.tab.keep sets and clears the mark once per change", () => {
+  const { saver, state } = harness();
+  saver.observe(new Set(["x"]), tabs("x", "a", "u-a", "g-a"));
+  saver.keep("a", true);
+  saver.keep("a", true);
+  assert.deepEqual(saver.reasons("a"), ["kept"]);
+  saver.keep("a", false);
+  assert.equal(state.kept.has("a"), false);
+  assert.deepEqual(named("page.tab.keep.changed"), [{ tab: "a", keep: true }, { tab: "a", keep: false }]);
+  assert.throws(() => saver.keep("u-a", true), { message: "tab u-a can never be unloaded: undeclared" });
+  assert.throws(() => saver.keep("g-a", false), { message: "tab g-a can never be unloaded: background" });
+  assert.throws(() => saver.keep("missing", true), { message: "unknown tab missing" });
+});
+
+test("the status lists each tab with its state, reasons and times", async () => {
+  const { saver } = harness();
+  saver.observe(new Set(["x"]), tabs("x", "a"));
+  const hidden = Date.now();
+  saver.pressure({ level: "normal", seq: 3 });
+  assert.deepEqual(saver.status(), {
+    pressure: { level: "normal", seq: 3 },
+    tabs: [
+      { tab: "x", plugin: "fixture", state: "loaded", reasons: ["shown"], hiddenAt: null, unloadAt: null, checkedAt: null },
+      { tab: "a", plugin: "fixture", state: "loaded", reasons: [], hiddenAt: hidden, unloadAt: hidden + 120 * MINUTE,
+        checkedAt: null },
+    ],
+  });
+  mock.timers.tick(120 * MINUTE);
+  await settle();
+  assert.deepEqual(saver.status().tabs[1], { tab: "a", plugin: "fixture", state: "unloaded", reasons: [], hiddenAt: hidden,
+    unloadAt: null, checkedAt: hidden + 120 * MINUTE });
 });

@@ -42,6 +42,7 @@ const surfacePorts = new Map();
  *   surfacePlugin(surface)  id of the plugin that owns the surface, or null for an unknown surface
  *   preferred()             order to choose from when several surfaces registered a name: an array of surface ids
  *   registrationChanged()   called after the registration of a surface changed
+ *   unloaded(surface)       whether the memory saver unloaded the tab of the surface (docs/spec/plugins.md#memory-saver)
  */
 /** Time (ms) to wait for a reply when a command that this document answers declares no timeout. */
 const REPLY_TIMEOUT = 10_000;
@@ -64,7 +65,7 @@ export function createRegistry({ call = null, report = null } = {}) {
   /* Surface statuses being watched: for each watch key, the followed surface, the requested surface and the last version. */
   const following = new Map();
   let options = {
-    surfacePlugin: () => null, preferred: () => [], registrationChanged: () => {},
+    surfacePlugin: () => null, preferred: () => [], registrationChanged: () => {}, unloaded: () => false,
     // Work to wait for after a core command ran. The document passes the drawing of the plane, so a command that changed the layout replies after it is drawn.
     settled: () => undefined,
     // Called when an observation inside this document fails. It is reported as a page error (docs/spec/plugins.md#sections).
@@ -109,6 +110,8 @@ export function createRegistry({ call = null, report = null } = {}) {
     if (requested !== undefined) {
       if (typeof requested !== "string") throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "surface must be a string");
       if (!owners?.has(requested)) {
+        // The surface of an unloaded tab is released, so it registers nothing until the tab is restored.
+        if (options.unloaded(requested)) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `tab ${requested} is unloaded`);
         throw new ExposureError(EXPOSURE_ERRORS.unregistered, `surface ${requested} has not registered ${kind} ${name}`);
       }
       return requested;
