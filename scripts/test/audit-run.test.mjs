@@ -18,6 +18,7 @@ const catalog = {
     'host.test.end': { layer: 'host', class: 'lifecycle', level: 'info', fields: { name: 'string', run: 'string', result: 'string' } },
     'host.window.event': { layer: 'host', class: 'lifecycle', level: 'info', fields: { window: 'string', kind: 'string' } },
     'host.update.start': { layer: 'host', class: 'lifecycle', level: 'info', fields: {} },
+    'log.policy': { layer: 'host', class: 'lifecycle', level: 'info', fields: { source: 'string', classes: 'object' } },
     'host.record.<level>': { layer: 'host', class: 'lifecycle', level: ['error', 'info'], fields: { where: 'string', text: 'string' } },
     'sidecar.record.<level>': { layer: 'sidecar', class: 'lifecycle', level: ['error', 'info'], fields: { where: 'string', text: 'string' } },
   },
@@ -119,17 +120,20 @@ test('an error before the first start mark or after the last end mark of the run
 });
 
 test('a chain finding of an earlier process before the first start mark belongs to no test of the run and is not judged', (t) => {
-  // An earlier process of the configuration folder left a chain that stops after its first event.
+  // An earlier process of the configuration folder left a chain that stops after its first event. Both processes apply
+  // the policy that stores every level, as the switch 디버그 sets it; under the default policy, which stores only error,
+  // the chain asks for no hop.
   const chained = { ...catalog, chains: { input: ['host.sidecar.request', 'host.update.start'] } };
   const request = (seq, cid) => event(seq, 'host.sidecar.request', { name: 'n' }, { class: 'io', cids: [cid] });
+  const debugOn = (seq) => event(seq, 'log.policy', { source: 'file', classes: { lifecycle: 'trace', input: 'trace', call: 'trace', io: 'trace', frame: 'trace' } });
   const { folder, config } = fixture(t, {
     files: {
-      'host-0-1.jsonl': [open('host', '0-1'), request(2, 'c-old')],
-      [`host-${BOOT}.jsonl`]: [open('host', BOOT, 10), start(11, 't1'), request(12, 'c-new'), end(13, 't1')],
+      'host-0-1.jsonl': [open('host', '0-1'), debugOn(2), request(3, 'c-old')],
+      [`host-${BOOT}.jsonl`]: [open('host', BOOT, 10), debugOn(11), start(12, 't1'), request(13, 'c-new'), end(14, 't1')],
     },
-    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 11 }), mark({ kind: 'end', boot: BOOT, seq: 13 })],
+    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 12 }), mark({ kind: 'end', boot: BOOT, seq: 14 })],
   });
-  assert.deepEqual(auditRun(chained, folder), [`${join(config, 'logs', `host-${BOOT}.jsonl`)}:3: chain input of c-new lacks host.update.start`]);
+  assert.deepEqual(auditRun(chained, folder), [`${join(config, 'logs', `host-${BOOT}.jsonl`)}:4: chain input of c-new lacks host.update.start`]);
 });
 
 test('a class that stores more events or bytes per minute than its budget over a run of a minute or more is a finding, and the judgment holds the volume of each class', (t) => {
