@@ -46,7 +46,9 @@ import {
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
    are done here. */
 import { latest, onCommit, onRun, publish, publishAhead } from "./compositor.js";
-import { authorizeSurface, disposeSurfacesExcept, focusSurface, waitSurfaceCompositionDeclared } from "./surface-modules.js";
+import { authorizeSurface, disposeSurface, disposeSurfacesExcept, focusSurface, waitSurfaceCompositionDeclared } from "./surface-modules.js";
+import { createMemorySaver } from "./memory-saver.js";
+import { onTabReports, reportTitle, tabKeeps } from "./tab-reports.js";
 
 /* One plane. This document does not know how the plane renders and only receives the render completion. */
 import {
@@ -60,7 +62,7 @@ import { verify } from "./verify.js";
 import { createErrorDisplay, createPageLayout, reportUncaught } from "./page-layout.js";
 
 /* Application interface. When it is absent, an implementation that does nothing is used. */
-import { chrome, log, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
+import { chrome, log, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
 import { setTextScope } from "./text-size.js";
 import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 
@@ -186,14 +188,50 @@ function dormant(shown) {
 
 /* Reports the surfaces to the host when the commit ends. The compositor knows only the surfaces of this plane, and this
    document knows what must stay alive. The reply of the host is returned as it is. */
+/* The memory saver (docs/spec/plugins.md#memory-saver). It observes the commits once the tab state store is open, because
+   its mark kept and the label cache of a tab that starts unloaded live in that store. */
+const memorySaver = createMemorySaver({
+  now: () => performance.now(),
+  enabled: () => value("memorySaver"),
+  delay: () => value("memorySaverDelay"),
+  declaration: (id) => {
+    if (registry.plugin(id).background) return "background";
+    // default: a plugin that is not loaded declares no surface.unload.
+    return pluginUnits().find((unit) => unit.id === id)?.unload ? "unload" : "undeclared";
+  },
+  keeps: tabKeeps,
+  kept: (tab) => projects.tabStateStore()?.entry(tab)?.kept === true,
+  // The region query and the interactionState read arrive with the document region reports (F198.5); without the query
+  // the memory saver treats every hidden tab as media-unknown, and a read that yields nothing restores without history.
+  interaction: async () => undefined,
+  commit: () => Promise.resolve(publish()),
+  showLabel: (tab) => {
+    const label = projects.tabStateStore()?.label(tab) ?? null;
+    if (label !== null) reportTitle(tab, label);
+  },
+});
+let memoryObserved = false;
+onTabReports(() => memorySaver.protectionsChanged());
+onMemoryPressure((report) => memorySaver.pressure(report));
+
+/** Gives the memory saver the shown tabs and every layout tab of a loaded plugin of a commit. */
+function observeMemory(record, all) {
+  if (!memoryObserved) return;
+  memorySaver.observe(new Set(record.surfaces.map((surface) => surface.id)),
+    all.map((surface) => ({ id: surface.id, plugin: surface.plugin })));
+}
+
 onCommit((record) => {
-  const all = [...record.surfaces, ...dormant(record.surfaces)];
-  const ids = new Set(all.map((surface) => surface.id));
+  const candidates = [...record.surfaces, ...dormant(record.surfaces)];
+  observeMemory(record, candidates);
+  // An unloaded tab stays in the layout: it is not declared to the host, its surface is released in the unload mode, and
+  // it is retained so that it is not released as a closed tab.
+  const { surfaces: all, retain: ids, unload } = memorySaver.place(candidates);
   // A tab of a plugin that is not loaded is not a surface, but its placeholder must stay alive (docs/spec/plugins.md).
   for (const card of currentGrid()?.cards ?? []) {
     for (const tab of tabsOf(card)) if (!registry.hasPlugin(tab.plugin)) ids.add(tab.id);
   }
-  return disposeSurfacesExcept(ids).then(() => {
+  return Promise.all(unload.map((id) => disposeSurface(id, { mode: "unload" }))).then(() => disposeSurfacesExcept(ids)).then(() => {
     const placed = host.place({ ...record, surfaces: all });
     return Promise.resolve(placed).then((answer) => {
       for (const surface of record.surfaces) authorizeSurface(surface.id);
@@ -604,6 +642,10 @@ const storage = await openStore();
 await connectSettings(storage);
 // default: a plugin that is not loaded declares no surface.unload.
 await projects.initialise(storage, (plugin) => pluginUnits().find((unit) => unit.id === plugin)?.unload ?? false);
+memoryObserved = true;
+// default: before the first commit there is no record, and the next commit gives the tabs.
+if (latest()) observeMemory(latest(), [...latest().surfaces, ...dormant(latest().surfaces)]);
+memorySaver.start();
 drawBars();
 // After the application restarts or the page fails, closes the sidecar sessions of surfaces that are in no layout.
 retainSidecarSessions(projects.layoutSurfaces()).catch(showError);
@@ -628,6 +670,7 @@ onSettingsChange(() => {
   drawBars();
   drawSettings();
   coreChanged();
+  memorySaver.settingsChanged();
 });
 
 /* When the window size changes, the ResizeObserver of SoksakView redraws. Observing the same

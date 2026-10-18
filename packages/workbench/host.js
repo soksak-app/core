@@ -601,6 +601,14 @@ export function onMenuCommand(fn) {
   onMenu = fn;
 }
 
+/* The receiver of the memory pressure reports {level, seq} of the host (docs/spec/hosts.md#memory-pressure). */
+let onPressure = () => {};
+
+/** Registers the function to call with each memory pressure report of the host. */
+export function onMemoryPressure(fn) {
+  onPressure = fn;
+}
+
 export function onSurfaceInput({ press, input }) {
   onPress = press;
   onInput = input;
@@ -609,6 +617,7 @@ export function onSurfaceInput({ press, input }) {
 if (native) {
   bridge.on("surface-pressed", (id) => onPress(id));
   bridge.on("menu-command", (message) => onMenu(message?.name));
+  bridge.on("memory-pressure", (report) => onPressure(report));
   bridge.on("surface-input", (step) => onInput(step));
   // A modal replies several times, so the subscription is not released here but in hide.
   // The reply carries the modal it belongs to. It is used to filter out the last reply of a closed modal so that it

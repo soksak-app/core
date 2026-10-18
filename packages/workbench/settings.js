@@ -194,6 +194,11 @@ export const defaults = {
   sidebarMinWidth: 120,
   sidebarMaxWidth: 480,
   sidebarWidth: 190,
+
+  /* The memory saver (docs/spec/plugins.md#memory-saver): whether hidden tabs are unloaded, and the minutes a tab stays hidden
+     before it is unloaded. Both are common-only. */
+  memorySaver: true,
+  memorySaverDelay: 120,
 };
 
 /* The range of the layout values. Only integers are accepted. The three values share one range so that the same value is at the same slider position. */
@@ -236,7 +241,7 @@ export const CHOICES = {
 const RANGES = { ...LAYOUT_RANGES, ...SHAPE_RANGES };
 
 /* The core settings that take a boolean. */
-const SWITCHES = ["left", "right", "dim", "diagnostics.performance"];
+const SWITCHES = ["left", "right", "dim", "diagnostics.performance", "memorySaver"];
 
 /** Validates the effective settings: the sidebar sets and links, and whether the initial width of a sidebar inside a card is between the minimum and the maximum. */
 function checkValues(values) {
@@ -289,6 +294,9 @@ function validateValue(key, value) {
       }
     }
   }
+  if (key === "memorySaverDelay" && (!Number.isInteger(value) || value < 5 || value > 720)) {
+    throw new Error(`Invalid setting memorySaverDelay: ${JSON.stringify(value)}`);
+  }
   const range = RANGES[key];
   if (range && (!Number.isInteger(value) || value < range[0] || value > range[1])) {
     throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not an integer from ${range[0]} to ${range[1]}`);
@@ -328,8 +336,9 @@ function applied(values) {
 /**
  * The common-only keys that a project setting cannot override (docs/spec/projects.md#persistence). The host decides the window title bar from the
  * textSize of the common settings before the page starts, so the frame scale is common-only (docs/spec/native-surfaces.md#title-bar-height).
+ * The memory saver settings are common-only because the memory of the application is shared by its projects (docs/spec/settings.md#values).
  */
-const COMMON_ONLY = Object.freeze(["projectOpening", "textSize"]);
+const COMMON_ONLY = Object.freeze(["projectOpening", "textSize", "memorySaver", "memorySaverDelay"]);
 
 /** It is an error when a project setting holds a common-only key. */
 function checkCommonOnly(values) {
@@ -541,6 +550,7 @@ export function set(patch, scope = projectId ? "project" : "common", actor) {
   if (scope === "project" && !id) throw new Error("No project is selected");
   if (id && Object.hasOwn(patch, "projectOpening")) throw new Error("Project opening mode is common-only");
   if (id && Object.hasOwn(patch, "textSize")) throw new Error("Text size is common-only");
+  for (const key of ["memorySaver", "memorySaverDelay"]) if (id && Object.hasOwn(patch, key)) throw new Error(`${key} is common-only`);
   for (const [key, val] of Object.entries(patch)) {
     if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
     if (val !== undefined) validateValue(key, val);

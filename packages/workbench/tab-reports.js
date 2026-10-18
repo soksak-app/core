@@ -141,8 +141,11 @@ export const tabOrigin = (tabId) => origins.get(tabId) ?? Object.freeze({ direct
 export function reportKeep(tabId, reason, on) {
   if (reason !== "busy") throw new TypeError(`unknown keep reason: ${String(reason)}`);
   if (typeof on !== "boolean") throw new TypeError("keep busy must be true or false");
+  if (busy.has(tabId) === on) return;
   if (on) busy.add(tabId);
   else busy.delete(tabId);
+  // The memory saver re-arms its scheduler on a change of a protection (docs/spec/plugins.md#memory-saver).
+  notify();
 }
 
 /** The keep protections that the reports of tabId give: keep:modified and keep:busy. */

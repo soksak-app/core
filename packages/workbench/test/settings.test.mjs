@@ -235,6 +235,30 @@ test('the frame text factor is common-only', async () => {
   }
 });
 
+// The memory saver settings are common-only, memorySaver is a boolean defaulting to true and memorySaverDelay an integer
+// from 5 to 720 minutes defaulting to 120 (docs/spec/settings.md#values).
+test('the memory saver settings are common-only with their defaults and ranges', async () => {
+  const realDocument = globalThis.document;
+  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const { beginSettings, set: change, value } = await import('../settings.js?test=memory-saver');
+  try {
+    beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
+    assert.equal(value('memorySaver'), true);
+    assert.equal(value('memorySaverDelay'), 120);
+    assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: { memorySaverDelay: 10 } }] }, 'prj-a'),
+      /project settings: memorySaverDelay is common-only/);
+    beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
+    assert.throws(() => change({ memorySaver: false }, 'project', 'test'), /memorySaver is common-only/);
+    for (const delay of [4, 721, 7.5, '60']) {
+      assert.throws(() => change({ memorySaverDelay: delay }, 'common', 'test'),
+        { message: `Invalid setting memorySaverDelay: ${JSON.stringify(delay)}` });
+    }
+    assert.throws(() => change({ memorySaver: 'on' }, 'common', 'test'), /Invalid setting memorySaver: "on" is not a boolean/);
+  } finally {
+    globalThis.document = realDocument;
+  }
+});
+
 test('a change of the settings names its actor and its keys, and its identifiers go with the write', async () => {
   const realDocument = globalThis.document;
   globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };

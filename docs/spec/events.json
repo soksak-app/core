@@ -426,6 +426,39 @@
       },
       "description": "The reconciliation at load removed the entry of a tab that no layout of projects.json holds."
     },
+    "page.tab.unloaded": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "tab": "string",
+        "plugin": "string",
+        "trigger": "string"
+      },
+      "description": "The memory saver unloaded a hidden tab after host.place replied; trigger is delay, pressure or command."
+    },
+    "page.tab.restored": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "tab": "string",
+        "plugin": "string",
+        "history": "boolean"
+      },
+      "description": "The memory saver restored an unloaded tab that was shown; history is false when no session history was captured."
+    },
+    "page.tab.unload.skipped": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "trigger": "string",
+        "seq": "number",
+        "reasons": "array"
+      },
+      "description": "A pressure report found no candidate, or an unload attempt ended because a protection appeared or the tab was shown; seq is the number of the last pressure report, 0 before the first."
+    },
     "page.window.operation": {
       "layer": "page",
       "class": "call",
