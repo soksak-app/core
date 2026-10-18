@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.8-3: tab의 restore된 session history를 거부한 문서 영역은 실패를 알리고 history 없이 다시 붙으므로, tab은 문서를 유지하고 history만 잃는다. Red: attach가 실패했다; Green.
 - F198.8-2: tab button의 이름과 `data-tab-state`는 plane이 쓰고 unit test가 다루는 tab 보고의 함수 하나 `tabButtonData`에서 온다. Red: 함수가 없었다; Green.
 - F198.8-1: tab을 unload됨으로 표시한 뒤 실패한 commit은 더 이상 처리되지 않은 rejection으로 빠지지 않는다: 시도는 `page.tab.unload.failed`와 오류 표시로 끝나고, tab은 loaded로 돌아오며, 새 commit이 그 표면을 다시 선언한다. Red: tab이 처리되지 않은 rejection과 함께 unload된 채 남았다; Green.
 - F198.7.1, F198.7.2: 설정 창은 메모리 group에 switch `memorySaver`와 slider `memorySaverDelay`를 보이고; status `core.tab.memory`는 각 tab을 state와 보호와 함께 나열하며, `core.tab.unload`는 숨겨진 tab을 바로 unload하고, `core.tab.keep`은 표시 `kept`를 설정하거나 지우며, unload된 tab의 surface에 대한 요청은 `tab <id> is unloaded`로 실패한다. Red: control, saver method와 거부가 없었다; Green.

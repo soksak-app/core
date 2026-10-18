@@ -63,8 +63,9 @@ export function createDocumentRegions() {
       else pending.delete(tab);
     },
     /**
-     * Attaches the region name of the tab through attach(request) with the interactionState that it restores once; a
-     * refused interactionState is reported to the refusal listeners, and the attach fails with the refusal.
+     * Attaches the region name of the tab through attach(request) with the interactionState that it restores once. A
+     * refused interactionState is reported to the refusal listeners and the region attaches again without it, because a
+     * lost session history is a smaller loss than a tab without its document (docs/spec/plugins.md#memory-saver).
      */
     async attach(tab, name, attach) {
       const request = this.attachRequest(tab, name);
@@ -72,8 +73,9 @@ export function createDocumentRegions() {
       try {
         reply = await attach(request);
       } catch (error) {
-        if (request.interactionState !== undefined) for (const listener of refusals) listener(tab, name, error);
-        throw error;
+        if (request.interactionState === undefined) throw error;
+        for (const listener of refusals) listener(tab, name, error);
+        reply = await attach({ document: name });
       }
       this.attached(tab, name);
       return reply;
