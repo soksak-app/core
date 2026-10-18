@@ -158,6 +158,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | H9 | `tests/framework_log_test.go` | 없음 | 프레임워크 logger의 level(`FrameworkLogLevel`)은 Wails host에만 있다. Wails asset server는 요청한 파일마다 level `info`로 한 줄을 쓰고, Tauri host는 표준 오류에 그런 줄을 쓰지 않는다 |
 | H10 | 없음 | `src/platform/darwin/file_watch.rs` | Wails host는 library `fsnotify`로 정책 파일을 감시한다. 정책 파일 감시를 충족하는 Rust library가 없으므로(`notify` 8.2의 FSEvents watcher는 writer가 하위 폴더에 덧붙이는 동안 폴더의 event를 전달하지 않았고, kqueue watcher는 rename을 다음 kernel event까지 전달하지 않았으며, `kqueue` crate 1.2에는 막힌 대기를 끝낼 user event가 없다) Tauri host는 macOS에서 kqueue로 감시한다 |
 | H11 | `src/platform/darwin/input_source_await.go` | 없음 | C에 함수를 내보내는 Go 파일은 preamble에 C 함수를 정의할 수 없으므로, `sp_input_source_await`의 block에서 내보낸 callback으로 가는 다리는 별도 파일이다. Rust는 `input_source.rs`에서 closure를 block(`block2`)으로 native 계층에 넘긴다 |
+| H12 | none | `tests/support/folder.rs` | Rust 시험은 실패한 assertion이 unwind하는 동안에도 폴더를 지우고 지우기 실패를 보고하는 guard가 필요하다. `tempfile::TempDir`는 실패를 보고하지 않고 drop한다. Go 시험은 시험 뒤 폴더를 지우고 지우기가 실패하면 시험을 실패시키는 `testing.T.TempDir`를 쓰므로 Wails 호스트에는 별도 파일이 없다 |
 | E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust host에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make host-parity-check`가 그 행을 읽는다 |
 | A1 | 내용만 다름 | 내용만 다름 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다 |
 | A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
@@ -167,6 +168,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | C1 | `src/cmd/sok/main.go` | `src/main.rs` | Go 명령은 자기 `main` package 폴더가 필요하고, Rust binary target은 library root 옆의 `src/main.rs`다 |
 | C2 | `src/diagnostics_test.go`, `src/dev_test.go`, `tests/build_test.go` | 없음 | Go 파일은 build 제약으로 한 build에만 속하므로, `sok`의 진단 build는 `diagnostics && !dev` 단위 test에서 `capture` 요청과 release 식별자를, `dev` build는 `dev` 단위 test에서 `.dev` 식별자를, 다른 build는 `!diagnostics` test에서 사용법 오류와 release 식별자를 검사한다. Rust는 `tests/sok_test.rs`에서 `cfg(feature = "diagnostics")`와 `cfg(feature = "dev")`로 build를 검사한다 |
 | C3 | `src/dev.go` | 없음 | Go는 `dev` build 태그만 컴파일하는 파일의 `init`으로 `.dev` 식별자를 고르고, Rust는 `src/identity.rs` 안의 `cfg!(feature = "dev")`로 고르므로 따로 파일이 없다 |
+| C4 | none | `tests/support/folder.rs` | `sok` 시험을 위한 H12와 같은 guard다. `sok`의 Go 시험은 `testing.T.TempDir`를 쓴다. 시험은 다른 패키지의 경로를 읽지 않으므로 호스트와 `sok` 시험 crate가 각자 파일을 둔다 |
 
 ## Memory pressure
 
