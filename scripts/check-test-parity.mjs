@@ -2075,6 +2075,13 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F192",
+    implementation: [{ file: "packages/workbench/plane.js", symbol: "function syncBackgroundSessions" }],
+    tests: [{ file: "packages/workbench/test/background-sessions.test.mjs", id: "a background session opens only for a tab without a mounted surface and ends when its surface mounts" }],
+    expected: "A background session exists only for a tab whose surface is not mounted, and each of its decisions is an event.",
+    levels: ["unit"],
+  },
+  {
     id: "F191",
     implementation: [{ file: "scripts/release-step.sh", symbol: "release-step-ok" }],
     tests: [{ file: "scripts/test/release-step.test.mjs", id: "the release step script writes the released form, runs the host once and requires the migration and its record" }],

@@ -1,5 +1,6 @@
 # Changelog
 
+- F192.5: the test inventory links F192 to `syncBackgroundSessions` and its background session test, so `make parity-check` no longer fails with `F192: completed capability has no feature link`.
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased
