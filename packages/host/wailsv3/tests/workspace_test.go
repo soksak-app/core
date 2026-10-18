@@ -387,6 +387,101 @@ func TestTabStatePutKeepsOtherEntries(t *testing.T) {
 	}
 }
 
+// contract: workspace.tab-session.put-rewrites-own-file
+func TestTabSessionPutRewritesOnlyItsOwnFile(t *testing.T) {
+	config := t.TempDir()
+	store := host.NewWorkspace(config)
+	apply := func(req host.WorkspaceRequest) any {
+		t.Helper()
+		result, err := store.Apply(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	if missing := apply(host.WorkspaceRequest{Kind: "tabSession", Tab: "tab-a"}); missing != nil {
+		t.Fatalf("a missing session file read %v, want nil", missing)
+	}
+	if tabs := apply(host.WorkspaceRequest{Kind: "tabSessions"}).([]string); len(tabs) != 0 {
+		t.Fatalf("an absent directory listed %v", tabs)
+	}
+	apply(host.WorkspaceRequest{Kind: "tabStatePut", Tab: "tab-a", Entry: host.Record{"kept": true}})
+	state, _ := os.ReadFile(filepath.Join(config, "tab-state.json"))
+	written := apply(host.WorkspaceRequest{Kind: "tabSessionPut", Tab: "tab-a", Regions: host.Record{"page": map[string]any{"session": "AAAA"}}})
+	apply(host.WorkspaceRequest{Kind: "tabSessionPut", Tab: "tab-b", Regions: host.Record{"page": map[string]any{"session": "BBBB"}}})
+	path := filepath.Join(config, "tab-sessions", "tab-a.json")
+	otherPath := filepath.Join(config, "tab-sessions", "tab-b.json")
+	other, _ := os.ReadFile(otherPath)
+	if info, err := os.Stat(path); err != nil || int64(written.(int)) != info.Size() {
+		t.Fatalf("a session put returned %v bytes for the file %v (%v)", written, info, err)
+	}
+	apply(host.WorkspaceRequest{Kind: "tabSessionPut", Tab: "tab-a", Regions: host.Record{"page": map[string]any{"session": "CCCC"}, "side": map[string]any{"session": "DDDD"}}})
+	document := apply(host.WorkspaceRequest{Kind: "tabSession", Tab: "tab-a"}).(host.Record)
+	regions := document["regions"].(map[string]any)
+	if document["format"] != float64(1) || len(regions) != 2 || regions["page"].(map[string]any)["session"] != "CCCC" || regions["side"].(map[string]any)["session"] != "DDDD" {
+		t.Fatalf("a second put stored %v", document)
+	}
+	if now, _ := os.ReadFile(otherPath); string(now) != string(other) {
+		t.Fatalf("a put of tab-a changed the file of tab-b: %s", now)
+	}
+	if now, _ := os.ReadFile(filepath.Join(config, "tab-state.json")); string(now) != string(state) {
+		t.Fatalf("a session put changed tab-state.json: %s", now)
+	}
+	if tabs := apply(host.WorkspaceRequest{Kind: "tabSessions"}).([]string); len(tabs) != 2 || tabs[0] != "tab-a" || tabs[1] != "tab-b" {
+		t.Fatalf("the listing is %v", tabs)
+	}
+	for range 2 {
+		if removed := apply(host.WorkspaceRequest{Kind: "tabSessionPut", Tab: "tab-a"}); removed != nil {
+			t.Fatalf("a null put returned %v", removed)
+		}
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("a null put left the file (%v)", err)
+	}
+	if tabs := apply(host.WorkspaceRequest{Kind: "tabSessions"}).([]string); len(tabs) != 1 || tabs[0] != "tab-b" {
+		t.Fatalf("the listing after a removal is %v", tabs)
+	}
+}
+
+// contract: workspace.tab-session.rejects-other-format, workspace.tab-session.rejects-invalid-request
+func TestTabSessionRejectsOtherFormatAndInvalidRequests(t *testing.T) {
+	config := t.TempDir()
+	store := host.NewWorkspace(config)
+	folder := filepath.Join(config, "tab-sessions")
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(folder, "tab-a.json")
+	for _, c := range []struct{ text, found string }{
+		{`{"format":2,"regions":{}}`, "tab session format 2 is not 1"},
+		{`{"regions":{}}`, "tab session format missing is not 1"},
+		{`{"format":1,"regions":[]}`, "tab session regions is not an object"},
+	} {
+		if err := os.WriteFile(path, []byte(c.text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := store.Apply(host.WorkspaceRequest{Kind: "tabSession", Tab: "tab-a"})
+		if want := path + ": " + c.found; err == nil || err.Error() != want {
+			t.Fatalf("a read of %s returned %v, want %q", c.text, err, want)
+		}
+	}
+	for _, c := range []struct {
+		req  host.WorkspaceRequest
+		want string
+	}{
+		{host.WorkspaceRequest{Kind: "tabSession"}, "tab session requires a tab"},
+		{host.WorkspaceRequest{Kind: "tabSession", Tab: "../tab-a"}, "invalid tab session tab: ../tab-a"},
+		{host.WorkspaceRequest{Kind: "tabSessionPut", Tab: "tab-a", Regions: host.Record{}}, "invalid tab session of tab-a: empty"},
+		{host.WorkspaceRequest{Kind: "tabSessionPut", Tab: "tab-a", Regions: host.Record{"page": map[string]any{"session": ""}}}, "invalid tab session region of tab-a: page"},
+		{host.WorkspaceRequest{Kind: "tabSessionPut", Tab: "tab-a", Regions: host.Record{"page": map[string]any{"session": "A", "other": 1}}}, "invalid tab session region of tab-a: page"},
+		{host.WorkspaceRequest{Kind: "tabSessionPut", Tab: "tab-a", Regions: host.Record{"page": "A"}}, "invalid tab session region of tab-a: page"},
+	} {
+		if _, err := store.Apply(c.req); err == nil || err.Error() != c.want {
+			t.Fatalf("%+v returned %v, want %q", c.req, err, c.want)
+		}
+	}
+}
+
 // contract: workspace.tab-state.rejects-other-format, workspace.tab-state.rejects-invalid-entry
 func TestTabStateRejectsOtherFormatAndInvalidEntries(t *testing.T) {
 	config := t.TempDir()

@@ -55,7 +55,8 @@ type Record map[string]any
 // from textSize of the common settings (docs/spec/native-surfaces.md#title-bar-height).
 var commonOnly = []string{"projectOpening", "textSize"}
 
-// WorkspaceRequest is one storage operation. Kind is one of snapshot, add, patch, remove, move, settings, tabState, and tabStatePut.
+// WorkspaceRequest is one storage operation. Kind is one of snapshot, add, patch, remove, move, settings, tabState,
+// tabStatePut, tabSession, tabSessionPut, and tabSessions.
 type WorkspaceRequest struct {
 	Kind    string   `json:"kind"`
 	ID      string   `json:"id,omitempty"`
@@ -65,6 +66,7 @@ type WorkspaceRequest struct {
 	Delta   *int     `json:"delta"`
 	Tab     string   `json:"tab,omitempty"`
 	Entry   Record   `json:"entry,omitempty"`
+	Regions Record   `json:"regions,omitempty"`
 }
 
 // readProjects reads the projects of projects.json, which holds them under the `projects` member beside the format
@@ -237,6 +239,109 @@ func checkTabStateEntry(tab string, entry Record) error {
 	return nil
 }
 
+// tabSessionFormat is the format of tab-sessions/<tab>.json, the session history of the document regions of one tab
+// (docs/spec/projects.md#persistence).
+const tabSessionFormat = 1
+
+// tabSessionPath returns the session file of tab in directory, or an error for a tab that is not an identifier.
+func tabSessionPath(directory, tab string) (string, error) {
+	if tab == "" {
+		return "", errors.New("tab session requires a tab")
+	}
+	if !validProjectID(tab) {
+		return "", fmt.Errorf("invalid tab session tab: %s", tab)
+	}
+	return filepath.Join(directory, "tab-sessions", tab+".json"), nil
+}
+
+// readTabSession returns the document of the session file of tab, or nil when the file does not exist; a document of
+// another format or without a regions object is refused with the path of the file.
+func readTabSession(directory, tab string) (any, error) {
+	path, err := tabSessionPath(directory, tab)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, nil
+	}
+	document := Record{}
+	if err := readJSON(path, &document); err != nil {
+		return nil, err
+	}
+	format, held := document["format"]
+	if !held {
+		return nil, fmt.Errorf("%s: tab session format missing is not %d", path, tabSessionFormat)
+	}
+	if number, ok := format.(float64); !ok || number != tabSessionFormat {
+		found, err := json.Marshal(format)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("%s: tab session format %s is not %d", path, found, tabSessionFormat)
+	}
+	if _, ok := document["regions"].(map[string]any); !ok {
+		return nil, fmt.Errorf("%s: tab session regions is not an object", path)
+	}
+	return document, nil
+}
+
+// putTabSession replaces the session file of tab with regions and returns the size of the written file, or removes the
+// file and returns nil when regions is nil. Each tab has its own file, so a put rewrites no other tab.
+func putTabSession(directory, tab string, regions Record) (any, error) {
+	path, err := tabSessionPath(directory, tab)
+	if err != nil {
+		return nil, err
+	}
+	if regions == nil {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		return nil, nil
+	}
+	if len(regions) == 0 {
+		return nil, fmt.Errorf("invalid tab session of %s: empty", tab)
+	}
+	names := make([]string, 0, len(regions))
+	for name := range regions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		region, ok := regions[name].(map[string]any)
+		session, isText := region["session"].(string)
+		if !ok || len(region) != 1 || !isText || session == "" {
+			return nil, fmt.Errorf("invalid tab session region of %s: %s", tab, name)
+		}
+	}
+	if err := writeJSON(path, Record{"format": tabSessionFormat, "regions": regions}); err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	return int(info.Size()), nil
+}
+
+// listTabSessions returns the tabs that have a session file, in name order; an absent directory has none.
+func listTabSessions(directory string) (any, error) {
+	files, err := os.ReadDir(filepath.Join(directory, "tab-sessions"))
+	if os.IsNotExist(err) {
+		return []string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	tabs := []string{}
+	for _, file := range files {
+		tab, ok := strings.CutSuffix(file.Name(), ".json")
+		if ok && !file.IsDir() && validProjectID(tab) {
+			tabs = append(tabs, tab)
+		}
+	}
+	return tabs, nil
+}
+
 // positiveInteger reports whether value, decoded from JSON or built by a caller, is a positive integer.
 func positiveInteger(value any) bool {
 	switch number := value.(type) {
@@ -261,6 +366,12 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 		return readTabState(filepath.Join(w.directory, "tab-state.json"))
 	case "tabStatePut":
 		return putTabState(filepath.Join(w.directory, "tab-state.json"), req.Tab, req.Entry)
+	case "tabSession":
+		return readTabSession(w.directory, req.Tab)
+	case "tabSessionPut":
+		return putTabSession(w.directory, req.Tab, req.Regions)
+	case "tabSessions":
+		return listTabSessions(w.directory)
 	}
 	registry := filepath.Join(w.directory, "projects.json")
 	// The entry of the shared reader of projects.json migrates it to the current format first; the file holds the
@@ -440,8 +551,8 @@ func (h *Host) runWorkspace(req WorkspaceRequest) (any, error) {
 	result, err := h.workspace.Apply(req)
 	if err == nil {
 		switch req.Kind {
-		case "tabState", "tabStatePut":
-			// The tab state store changes no project or setting, so no window is notified.
+		case "tabState", "tabStatePut", "tabSession", "tabSessionPut", "tabSessions":
+			// The tab state store and the tab sessions change no project or setting, so no window is notified.
 		case "snapshot":
 			h.mu.Lock()
 			ids := make([]string, 0, len(h.owners))

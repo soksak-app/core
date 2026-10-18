@@ -42,7 +42,8 @@ pub struct Workspace {
     writing: Mutex<()>,
 }
 
-/// A store request. kind is one of snapshot, add, patch, remove, move, settings, tabState and tabStatePut.
+/// A store request. kind is one of snapshot, add, patch, remove, move, settings, tabState, tabStatePut, tabSession,
+/// tabSessionPut and tabSessions.
 #[derive(Deserialize)]
 pub struct Request {
     kind: String,
@@ -54,6 +55,7 @@ pub struct Request {
     delta: Option<i64>,
     tab: Option<String>,
     entry: Option<Map<String, Value>>,
+    regions: Option<Map<String, Value>>,
 }
 
 /// Reads the projects of projects.json, which holds them under the `projects` member beside the format member of the
@@ -191,6 +193,131 @@ fn check_tab_state_entry(tab: &str, entry: &Map<String, Value>) -> Result<(), St
     Ok(())
 }
 
+/// The format of tab-sessions/<tab>.json, the session history of the document regions of one tab
+/// (docs/spec/projects.md#persistence).
+const TAB_SESSION_FORMAT: u64 = 1;
+
+/// Whether tab is an identifier: lowercase letters, digits and hyphens.
+fn valid_tab(tab: &str) -> bool {
+    !tab.is_empty()
+        && tab
+            .bytes()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+}
+
+/// The session file of tab in directory, or an error for a tab that is not an identifier.
+fn tab_session_path(directory: &Path, tab: &str) -> Result<PathBuf, String> {
+    if tab.is_empty() {
+        return Err("tab session requires a tab".into());
+    }
+    if !valid_tab(tab) {
+        return Err(format!("invalid tab session tab: {tab}"));
+    }
+    Ok(directory.join("tab-sessions").join(format!("{tab}.json")))
+}
+
+/// Returns the document of the session file of tab, or null when the file does not exist; a document of another
+/// format or without a regions object is refused with the path of the file.
+fn read_tab_session(directory: &Path, tab: &str) -> Result<Value, String> {
+    let path = tab_session_path(directory, tab)?;
+    if !path.exists() {
+        return Ok(Value::Null);
+    }
+    let document: Map<String, Value> = read(&path)?;
+    match document.get("format") {
+        None => {
+            return Err(format!(
+                "{}: tab session format missing is not {TAB_SESSION_FORMAT}",
+                path.display()
+            ));
+        }
+        Some(format) if format.as_f64() != Some(TAB_SESSION_FORMAT as f64) => {
+            return Err(format!(
+                "{}: tab session format {format} is not {TAB_SESSION_FORMAT}",
+                path.display()
+            ));
+        }
+        Some(_) => {}
+    }
+    if !document.get("regions").is_some_and(Value::is_object) {
+        return Err(format!(
+            "{}: tab session regions is not an object",
+            path.display()
+        ));
+    }
+    Ok(Value::Object(document))
+}
+
+/// Replaces the session file of tab with regions and returns the size of the written file, or removes the file and
+/// returns null when regions is None. Each tab has its own file, so a put rewrites no other tab.
+fn put_tab_session(
+    directory: &Path,
+    tab: &str,
+    regions: Option<Map<String, Value>>,
+) -> Result<Value, String> {
+    let path = tab_session_path(directory, tab)?;
+    let Some(regions) = regions else {
+        return match fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                Err(format!("{}: {e}", path.display()))
+            }
+            _ => Ok(Value::Null),
+        };
+    };
+    if regions.is_empty() {
+        return Err(format!("invalid tab session of {tab}: empty"));
+    }
+    let mut names: Vec<&String> = regions.keys().collect();
+    names.sort();
+    for name in names {
+        let valid = regions[name].as_object().is_some_and(|region| {
+            region.len() == 1
+                && region
+                    .get("session")
+                    .and_then(Value::as_str)
+                    .is_some_and(|session| !session.is_empty())
+        });
+        if !valid {
+            return Err(format!("invalid tab session region of {tab}: {name}"));
+        }
+    }
+    write(
+        &path,
+        &json!({"format": TAB_SESSION_FORMAT, "regions": regions}),
+    )?;
+    let size = fs::metadata(&path)
+        .map_err(|e| format!("{}: {e}", path.display()))?
+        .len();
+    Ok(size.into())
+}
+
+/// Returns the tabs that have a session file, in name order; an absent directory has none.
+fn list_tab_sessions(directory: &Path) -> Result<Value, String> {
+    let folder = directory.join("tab-sessions");
+    let entries = match fs::read_dir(&folder) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(json!([])),
+        Err(e) => return Err(format!("{}: {e}", folder.display())),
+    };
+    let mut tabs = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("{}: {e}", folder.display()))?;
+        let is_file = entry
+            .file_type()
+            .map_err(|e| format!("{}: {e}", folder.display()))?
+            .is_file();
+        let name = entry.file_name();
+        if let Some(tab) = name.to_str().and_then(|name| name.strip_suffix(".json"))
+            && is_file
+            && valid_tab(tab)
+        {
+            tabs.push(tab.to_string());
+        }
+    }
+    tabs.sort();
+    Ok(json!(tabs))
+}
+
 impl Workspace {
     /// Creates a store that uses directory as the configuration directory.
     pub fn new(directory: PathBuf) -> Self {
@@ -223,6 +350,19 @@ impl Workspace {
                     req.entry,
                 );
             }
+            "tabSession" => {
+                // default: a request without a tab is refused by tab_session_path with its own error.
+                return read_tab_session(&self.directory, req.tab.as_deref().unwrap_or_default());
+            }
+            "tabSessionPut" => {
+                return put_tab_session(
+                    &self.directory,
+                    // default: a request without a tab is refused by tab_session_path with its own error.
+                    req.tab.as_deref().unwrap_or_default(),
+                    req.regions,
+                );
+            }
+            "tabSessions" => return list_tab_sessions(&self.directory),
             _ => {}
         }
         let registry = self.directory.join("projects.json");
@@ -392,8 +532,11 @@ pub(crate) fn handle(app: &AppHandle, mut request: Request) -> Result<Value, Str
         project["root"] = folder["root"].clone();
         project["identity"] = folder["identity"].clone();
     }
-    // The tab state store changes no project or setting, so no window is notified.
-    let tab_state = matches!(request.kind.as_str(), "tabState" | "tabStatePut");
+    // The tab state store and the tab sessions change no project or setting, so no window is notified.
+    let tab_state = matches!(
+        request.kind.as_str(),
+        "tabState" | "tabStatePut" | "tabSession" | "tabSessionPut" | "tabSessions"
+    );
     let changed = request.kind != "snapshot" && !tab_state;
     let snapshot = request.kind == "snapshot";
     let mut result = app.state::<Workspace>().apply(request)?;

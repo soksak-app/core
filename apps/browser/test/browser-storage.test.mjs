@@ -50,3 +50,21 @@ test('the tab state starts empty, keeps the entries of two windows, removes on n
     assert.deepEqual(await b.tabState(), {format:2,tabs:{}});
   } finally { a.close();b.close(); }
 });
+
+test('the tab sessions start empty, keep one document per tab, list the tabs and remove on null', async () => {
+  const indexedDB = new IDBFactory();
+  const a = await WorkspaceStore.open({indexedDB,channel:false});
+  try {
+    assert.equal(await a.tabSession('tab-a'), null);
+    assert.deepEqual(await a.tabSessions(), []);
+    const bytes = await a.tabSessionPut('tab-b',{page:{session:'BBBB'}});
+    await a.tabSessionPut('tab-a',{page:{session:'AAAA'}});
+    assert.equal(bytes, JSON.stringify({format:1,regions:{page:{session:'BBBB'}}}).length);
+    assert.deepEqual(await a.tabSession('tab-a'), {format:1,regions:{page:{session:'AAAA'}}});
+    assert.deepEqual(await a.tabSessions(), ['tab-a','tab-b']);
+    assert.equal(await a.tabSessionPut('tab-a',null), null);
+    assert.equal(await a.tabSession('tab-a'), null);
+    assert.deepEqual(await a.tabSessions(), ['tab-b']);
+    await assert.rejects(a.tabSessionPut('',null), {message:'tab session requires a tab'});
+  } finally { a.close(); }
+});

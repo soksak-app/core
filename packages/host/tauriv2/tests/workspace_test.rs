@@ -382,6 +382,130 @@ fn tab_state_put_keeps_other_entries() {
     );
 }
 
+// contract: workspace.tab-session.put-rewrites-own-file
+#[test]
+fn tab_session_put_rewrites_only_its_own_file() {
+    let config = tempfile::tempdir().unwrap();
+    let store = Workspace::new(config.path().into());
+    assert_eq!(
+        apply(&store, json!({"kind":"tabSession", "tab":"tab-a"})),
+        Value::Null
+    );
+    assert_eq!(apply(&store, json!({"kind":"tabSessions"})), json!([]));
+    apply(
+        &store,
+        json!({"kind":"tabStatePut", "tab":"tab-a", "entry":{"kept":true}}),
+    );
+    let state = fs::read(config.path().join("tab-state.json")).unwrap();
+    let written = apply(
+        &store,
+        json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":{"page":{"session":"AAAA"}}}),
+    );
+    apply(
+        &store,
+        json!({"kind":"tabSessionPut", "tab":"tab-b", "regions":{"page":{"session":"BBBB"}}}),
+    );
+    let path = config.path().join("tab-sessions").join("tab-a.json");
+    let other = fs::read(config.path().join("tab-sessions").join("tab-b.json")).unwrap();
+    assert_eq!(written.as_u64(), Some(fs::metadata(&path).unwrap().len()));
+    apply(
+        &store,
+        json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":{"page":{"session":"CCCC"}, "side":{"session":"DDDD"}}}),
+    );
+    assert_eq!(
+        apply(&store, json!({"kind":"tabSession", "tab":"tab-a"})),
+        json!({"format":1, "regions":{"page":{"session":"CCCC"}, "side":{"session":"DDDD"}}})
+    );
+    assert_eq!(
+        fs::read(config.path().join("tab-sessions").join("tab-b.json")).unwrap(),
+        other
+    );
+    assert_eq!(
+        fs::read(config.path().join("tab-state.json")).unwrap(),
+        state
+    );
+    assert_eq!(
+        apply(&store, json!({"kind":"tabSessions"})),
+        json!(["tab-a", "tab-b"])
+    );
+    assert_eq!(
+        apply(
+            &store,
+            json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":null})
+        ),
+        Value::Null
+    );
+    assert!(!path.exists());
+    assert_eq!(
+        apply(
+            &store,
+            json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":null})
+        ),
+        Value::Null
+    );
+    assert_eq!(
+        apply(&store, json!({"kind":"tabSessions"})),
+        json!(["tab-b"])
+    );
+}
+
+// contract: workspace.tab-session.rejects-other-format, workspace.tab-session.rejects-invalid-request
+#[test]
+fn tab_session_rejects_other_format_and_invalid_requests() {
+    let config = tempfile::tempdir().unwrap();
+    let store = Workspace::new(config.path().into());
+    let refused = |request: Value| {
+        store
+            .apply(serde_json::from_value(request).unwrap())
+            .unwrap_err()
+    };
+    let folder = config.path().join("tab-sessions");
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("tab-a.json");
+    for (text, found) in [
+        (
+            r#"{"format":2,"regions":{}}"#,
+            "tab session format 2 is not 1",
+        ),
+        (r#"{"regions":{}}"#, "tab session format missing is not 1"),
+        (
+            r#"{"format":1,"regions":[]}"#,
+            "tab session regions is not an object",
+        ),
+    ] {
+        fs::write(&path, text).unwrap();
+        assert_eq!(
+            refused(json!({"kind":"tabSession", "tab":"tab-a"})),
+            format!("{}: {found}", path.display())
+        );
+    }
+    for (request, want) in [
+        (json!({"kind":"tabSession"}), "tab session requires a tab"),
+        (
+            json!({"kind":"tabSession", "tab":"../tab-a"}),
+            "invalid tab session tab: ../tab-a",
+        ),
+        (
+            json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":{}}),
+            "invalid tab session of tab-a: empty",
+        ),
+        (
+            json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":{"page":{"session":""}}}),
+            "invalid tab session region of tab-a: page",
+        ),
+        (
+            json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":{"page":{"session":"A", "other":1}}}),
+            "invalid tab session region of tab-a: page",
+        ),
+        (
+            json!({"kind":"tabSessionPut", "tab":"tab-a", "regions":{"page":"A"}}),
+            "invalid tab session region of tab-a: page",
+        ),
+    ] {
+        assert_eq!(refused(request), want);
+    }
+}
+
 // contract: workspace.tab-state.rejects-other-format, workspace.tab-state.rejects-invalid-entry
 #[test]
 fn tab_state_rejects_other_format_and_invalid_entries() {

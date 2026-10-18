@@ -135,6 +135,42 @@ export class WorkspaceStore {
     });
   }
 
+  /** The session document of one tab, kept under the key "tab-session:<tab>", or null (docs/spec/native-host.md). */
+  tabSession(tab) {
+    if (!tab) return Promise.reject(new Error("tab session requires a tab"));
+    return this.transaction("readonly", (_, settings, done) => {
+      // default: IndexedDB get returns undefined for a missing key; a tab without a stored session has none.
+      settings.get(`tab-session:${tab}`).onsuccess = (e) => done(e.target.result ?? null);
+    });
+  }
+
+  /**
+   * Replaces the session document of one tab, or removes it for null; returns its size, or null for a removal. The
+   * write changes no project or setting, so it notifies no window.
+   */
+  tabSessionPut(tab, regions) {
+    if (!tab) return Promise.reject(new Error("tab session requires a tab"));
+    const document = regions === null ? null : { format: 1, regions };
+    return new Promise((resolve, reject) => {
+      const tx = this.database.transaction(["settings"], "readwrite");
+      const settings = tx.objectStore("settings");
+      if (document === null) settings.delete(`tab-session:${tab}`);
+      else settings.put(document, `tab-session:${tab}`);
+      tx.oncomplete = () => resolve(document === null ? null : new TextEncoder().encode(JSON.stringify(document)).length);
+      // default: A transaction that ended with abort() has a null error, so the abort is turned into an error.
+      tx.onabort = () => reject(tx.error ?? new Error("Tab session transaction was aborted"));
+    });
+  }
+
+  /** The tabs that have a stored session, in name order. */
+  tabSessions() {
+    return this.transaction("readonly", (_, settings, done) => {
+      settings.getAllKeys().onsuccess = (e) => done(e.target.result
+        .filter((key) => typeof key === "string" && key.startsWith("tab-session:"))
+        .map((key) => key.slice("tab-session:".length)).sort());
+    });
+  }
+
   settings(id, patch) {
     if (id && Object.hasOwn(patch, "projectOpening")) return Promise.reject(new Error("Project opening mode is common-only"));
     return this.transaction("readwrite", (projects, settings) => {
