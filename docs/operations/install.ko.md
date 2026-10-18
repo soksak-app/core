@@ -12,6 +12,8 @@
 
 또는 첫 시작 전에 Terminal에서 받은 파일의 격리 표시를 지운다: `xattr -dr com.apple.quarantine /Applications/soksak.app`.
 
+메모리 절약은 기본으로 켜져 있다. `surface.unload`를 선언한 plugin의 숨긴 탭을 unload하고, 다시 보이면 restore한다([메모리 절약](../spec/plugins.ko.md#메모리-절약)).
+
 첫 시작에서 애플리케이션은 공개 registry `https://soksak-app.github.io/registry/index.json`에서 시작 plugin을 설치한다([첫 실행](../spec/installation.ko.md#첫-실행)).
 
 shell에서 애플리케이션의 command line을 쓰려면 그 `sok path install`을 관리자 권한으로 실행한다: `sudo /Applications/soksak.app/Contents/MacOS/sok path install`([command line](../spec/cli.ko.md)).

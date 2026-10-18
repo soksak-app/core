@@ -475,9 +475,10 @@ test("the replay of a sidecar manifest names the event of each kind of replay in
   assert.equal(theme, "sidecar.worker.theme");
 });
 
-test("a surface declares unload unless the plugin declares background", () => {
+test("a surface may declare unload, which is validated when present and forbidden beside background", () => {
   const { unload, ...bare } = card.surface;
-  assert.throws(() => validateManifest({ ...card, surface: bare }), /plugin probe: surface requires unload unless the plugin declares background/);
+  // Core 0.0.18 accepts a surface without unload; its tabs keep the protection undeclared (docs/spec/plugins.md#memory-saver).
+  assert.equal(validateManifest({ ...card, surface: bare }).surface.unload, undefined);
   assert.equal(validateManifest({ ...card, surface: { ...bare, unload: false } }).surface.unload, false);
   assert.deepEqual(validateManifest({ ...card, surface: { ...bare, unload: { format: 1, maxBytes: 4096 } } }).surface.unload,
     { format: 1, maxBytes: 4096 });

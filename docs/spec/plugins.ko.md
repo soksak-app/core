@@ -49,7 +49,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `name` | 예 | 표시 이름 |
 | `description` | 예 | 플러그인이 하는 일을 말하는 1자에서 200자 사이의 한두 문장. [plugin 화면](installation.ko.md#plugin-화면)이 보여 주고, plugin 화면과 설정 창이 검색한다 |
 | `surface` | 아니오 | `{ "module": "ui/page.js", "composition": ... }`: plugin 안의 모듈과 필수 [표면 합성](surface-composition.ko.md). 모듈은 앱 DOM에 마운트하며 외부 웹 문서는 문서 영역을 사용한다. 웹 주소는 표면이 아니다 |
-| `surface.unload` | `surface`가 있으면, `background`가 없을 때 | `false`, 또는 코어가 탭을 unload하고 탭이 쓴 상태로 restore할 수 있는 plugin의 `{ "format": <양의 정수>, "maxBytes": <양의 정수> }`([메모리 절약](#메모리-절약)). `background`와 함께 쓰면 거부한다 |
+| `surface.unload` | 아니오. `background`와 함께 쓰면 거부하고, 0.0.18 다음 core release부터 `background` 없는 `surface`에 필수 | `false`, 또는 코어가 탭을 unload하고 탭이 쓴 상태로 restore할 수 있는 plugin의 `{ "format": <양의 정수>, "maxBytes": <양의 정수> }`([메모리 절약](#메모리-절약)). `background`와 함께 쓰면 거부한다. 선언이 없는 표면은 unload하지 않는다(`undeclared`) |
 | `mark` | `surface`가 있으면 | 추가 메뉴와 새 탭 제목에 표시하는 짧은 텍스트 |
 | `icon` | `surface`가 있으면 | 16×16 뷰박스용 SVG 요소 |
 | `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "module" }`. `module`은 섹션을 그리는 plugin 안의 JavaScript 경로이고, 선택 항목 `fill: true`는 섹션에 남은 사이드바 높이를 준다([섹션](#섹션)) |
@@ -182,7 +182,7 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 코어는 숨겨진 탭을 **unload**하고(layout에 남는 탭의 표면을 놓는다), 탭이 다시 보이면 **restore**한다(unload된 탭을 그 상태로 다시 마운트한다). 이 두 동작은 다른 말로 부르지 않는다. 전역 설정 `memorySaver`가 이것을 켜고 끄며 `memorySaverDelay`가 지연을 정한다([설정](settings.ko.md#값)). 탭을 언제 unload하고 restore할지는 코어만 정한다. plugin에는 타이머도 unload 결정도 없다. plugin은 자기 탭을 unload할 수 있는지 선언하고 자기 상태를 최신으로 둔다.
 
-**선언.** plugin이 `background`를 선언하지 않으면 모든 표면이 `surface.unload`를 선언하고, `background`가 있는 plugin의 표면은 그것을 선언하지 않는다. background 세션은 background 경로로 세션을 유지하기 때문이다. `validateManifest`는 어느 규칙이든 어긴 manifest를 거부한다. `false`는 그 plugin의 탭을 절대 unload하지 않는다는 뜻이고, 그 탭은 상태에 이유 `undeclared`로 나타난다. `background`가 있는 plugin의 탭은 이유 `background`로 나타난다. `{format, maxBytes}`는 plugin이 쓰는 상태의 형식 번호와 byte 단위 크기 한도를 선언한다.
+**선언.** `background`가 없는 plugin의 표면은 core 0.0.18에서 `surface.unload`를 선언할 수 있고, 0.0.18 다음 core release는 이를 요구한다. `background`가 있는 plugin의 표면은 그것을 선언하지 않는다. background 세션은 background 경로로 세션을 유지하기 때문이다. `validateManifest`는 `background` 옆의 선언과 다른 형태의 선언을 거부한다. core 0.0.18은 선언 없는 표면을 받아들여, 이 field를 거부하는 이전 core용으로 게시된 plugin 버전을 계속 설치할 수 있게 한다. 그런 표면은 `false`로 다룬다. `false`는 그 plugin의 탭을 절대 unload하지 않는다는 뜻이고, 그 탭은 상태에 이유 `undeclared`로 나타난다. `background`가 있는 plugin의 탭은 이유 `background`로 나타난다. `{format, maxBytes}`는 plugin이 쓰는 상태의 형식 번호와 byte 단위 크기 한도를 선언한다.
 
 **탭 상태.** 선언한 plugin은 필요한 상태를 JSON으로 바뀔 때마다 `context.tab.state.write(value)`로 쓴다. 쓰기는 메모리에 동기로 들어가므로 같은 task의 unload가 최신 값을 본다. 코어는 메모리의 값을 버리지 않고, 1초 안에 탭마다 `{format, value}`로 `tab-state.json`에 저장하며([프로젝트](projects.ko.md#저장)), 탭의 저장소 쓰기마다 이벤트 `page.tab.state.stored`가 된다. JSON이 아니거나 `maxBytes`를 넘는 값은 탭과 크기를 이름하는 오류로 거부한다. 표면이 dispose된 뒤 옛 컨텍스트의 `state.write`는 탭과 `disposed`를 이름하는 오류로 거부하고 컨텍스트마다 한 번 로그에 남긴다. 그래서 옛 인스턴스가 restore된 인스턴스의 상태를 덮어쓸 수 없다. plugin은 dispose에서 abort되는 `context.closing`에서 남은 작업을 멈춘다. restore된 표면은 `context.tab.state.read()`를 읽으며, 저장소에 그 탭의 상태가 없으면 `null`이다. 선언한 것과 다른 저장 형식은 탭과 찾은 형식을 이름하는 restore 오류로 거부한다. 이 API로 쓴 상태만 unload, crash, 재시작을 넘어 남는다.
 

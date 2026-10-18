@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.17: `validateManifest` accepts a surface without `surface.unload` and validates the declaration when it is present; such a surface is never unloaded (`undeclared`), so the plugin versions published for core 0.0.17, which rejects the field, stay installable on core 0.0.18. The release text states that memory saver is on by default. Red: `plugin probe: surface requires unload unless the plugin declares background` for a surface without the declaration; Green: validate 30 of 30.
 - F192.4: the vt sidecar 0.0.11 refuses an `open` without `image` for a surface that has an image and records the drawing mode of a surface, and the terminal plugin 0.0.14 requires it.
 - F197.7: the vt sidecar 0.0.11 and the files sidecar 0.0.6 release the default policy that stores only errors (F197.5); the shell sidecar is not published and has no release.
 - F198.10-4: the endpoint client keeps its connection when the host refuses an unwatch with 1003 because a reload removed the watch, and rejects that watch with the refusal. Red: the connection failed; Green.
