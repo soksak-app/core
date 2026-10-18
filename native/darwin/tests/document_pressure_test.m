@@ -20,6 +20,7 @@
 #import <stdlib.h>
 #import <string.h>
 #import <sys/sysctl.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
@@ -114,14 +115,13 @@ static BOOL runPressure(NSString *level) {
     return task.terminationReason == NSTaskTerminationReasonExit && task.terminationStatus == 0;
 }
 
-// Ends the check: closes the scenario, runs `memory_pressure -S -l normal` and removes the store. Each step reports its failure.
+// Ends the check: closes the scenario, runs `memory_pressure -S -l normal`. Each step reports its failure.
 static void finish(void) {
     closeScenario();
     if (!runPressure(@"normal")) {
         fprintf(stderr, "FAIL: memory_pressure -S -l normal did not end with status 0\n");
         failures++;
     }
-    if (storeDirectory) [NSFileManager.defaultManager removeItemAtPath:storeDirectory error:nil];
 }
 
 // Ends the check at the step that cannot run, after the cleanup, and exits with status 1.
@@ -368,8 +368,7 @@ int main(void) { @autoreleasepool {
     if (!surface) fail(@"surface", @"a logical surface is not created for the document");
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);
-    storeDirectory = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"soksak-document-pressure-%d", getpid()]];
+    storeDirectory = temporaryFolder(@"soksak-document-pressure-");
     document = sp_document_create(surface, [storeDirectory stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
         NULL, NULL, changed, NULL);
     if (!document) fail(@"document", @"a document view is not created inside the surface");

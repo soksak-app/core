@@ -8,6 +8,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "input_inject.h"
 #import "private/coregraphics.h"
@@ -394,8 +395,7 @@ int main(void) { @autoreleasepool {
     verify(window, surface, 2, 200.5, @"at 2x");
     // The document region is a subview of the surface. Its size without the margins is 300-10-30 × 200.5-20-40. The
     // document store directory is removed when the check ends.
-    NSString *store = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"soksak-geometry-store-%d", getpid()]];
+    NSString *store = temporaryFolder(@"soksak-geometry-store-");
     WKWebView *region = (WKWebView *)sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, ignoreState, NULL);
     check(region != NULL, @"a document region is created in the surface");
     sp_document_place(region, 10, 20, 30, 40, true);
@@ -431,7 +431,6 @@ int main(void) { @autoreleasepool {
     verify(window, surface, 2, 200.5, @"after changing back to 2x");
     verifyRegion(region, 2, 260, 140.5, @"after changing back to 2x");
     sp_document_close(region);
-    [NSFileManager.defaultManager removeItemAtPath:store error:NULL];
 
     // The file drop view of the window: the only native drag target that accepts file URLs only; hit testing passes
     // to the view below.
@@ -454,8 +453,7 @@ int main(void) { @autoreleasepool {
 
     // The file manager places a file reference URL (file:///.file/id=…) in the drag pasteboard. The page receives a
     // path URL.
-    NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSUUID UUID].UUIDString];
-    [NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:NULL];
+    NSString *directory = temporaryFolder(@"soksak-geometry-drop-");
     NSString *path = [directory stringByAppendingPathComponent:@"drop me.txt"];
     [@"text" writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:NULL];
     NSURL *reference = [NSURL fileURLWithPath:path].fileReferenceURL;
@@ -477,7 +475,6 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"file drop: a file reference URL %@ is sent as a path URL of %@ at 30,40 (got %@)",
             reference.absoluteString, expected, drops]);
     [board releaseGlobally];
-    [NSFileManager.defaultManager removeItemAtPath:directory error:NULL];
 
     [window close];
     [window release];

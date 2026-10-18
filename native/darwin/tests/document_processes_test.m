@@ -11,6 +11,7 @@
 #import <errno.h>
 #import <string.h>
 #import <sys/types.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
@@ -181,8 +182,7 @@ int main(void) { @autoreleasepool {
     NSString *originB = [NSString stringWithFormat:@"http://localhost:%d", nw_listener_get_port(listenerB)];
 
     // The regions share one data store directory, as the hosts do with the document-data folder of a configuration.
-    NSString *root = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"soksak-document-processes-%d", getpid()]];
+    NSString *root = temporaryFolder(@"soksak-document-processes-");
     NSString *store = [root stringByAppendingPathComponent:@"document-data"];
 
     runScenario(@"two origins",
@@ -196,9 +196,6 @@ int main(void) { @autoreleasepool {
 
     nw_listener_cancel(listenerA);
     nw_listener_cancel(listenerB);
-    NSError *error = nil;
-    BOOL removed = [NSFileManager.defaultManager removeItemAtPath:root error:&error];
-    check(removed, [NSString stringWithFormat:@"the data store directory is removed: %@", error.localizedDescription ?: @"removed"]);
     printf("%s\n", failures ? "FAIL: document_processes_test" : "PASS: document_processes_test");
     return failures ? 1 : 0;
 }}

@@ -3,6 +3,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <libproc.h>
+#import "support/temporary_folder.h"
 #import "webview_geometry.h"
 #import "support/records.h"
 #import "private/webkit.h"
@@ -63,10 +64,9 @@ static long processFootprint(pid_t pid) {
 // at every reload. A document opened from a string becomes an empty document on reload, so the check opens it from a
 // file in a temporary directory.
 static long reloadGrowth(WKWebView *view, NSString *html) {
-    NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
+    NSString *directory = temporaryFolder(@"soksak-webview-process-");
     NSURL *file = [NSURL fileURLWithPath:[directory stringByAppendingPathComponent:@"page.html"]];
-    check([NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil] &&
-          [html writeToURL:file atomically:YES encoding:NSUTF8StringEncoding error:nil], @"the test page is written");
+    check([html writeToURL:file atomically:YES encoding:NSUTF8StringEncoding error:nil], @"the test page is written");
     SPLoaded *loaded = [[[SPLoaded alloc] init] autorelease];
     view.navigationDelegate = loaded;
     [view loadFileURL:file allowingReadAccessToURL:file.URLByDeletingLastPathComponent];
@@ -83,7 +83,6 @@ static long reloadGrowth(WKWebView *view, NSString *html) {
     long growth = processFootprint(process) - first;
     check(view._webProcessIdentifier == process, @"reloads stay in one WebContent process");
     view.navigationDelegate = nil;
-    [NSFileManager.defaultManager removeItemAtPath:directory error:nil];
     return growth;
 }
 

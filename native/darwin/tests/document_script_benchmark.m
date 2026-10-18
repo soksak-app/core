@@ -10,6 +10,7 @@
 #import <errno.h>
 #import <string.h>
 #import <sys/types.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
@@ -178,8 +179,7 @@ int main(void) { @autoreleasepool {
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);
 
-    NSString *stores = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"soksak-document-benchmark-%d", getpid()]];
+    NSString *stores = temporaryFolder(@"soksak-document-benchmark-");
 
     void *document = sp_document_create(surface, [stores stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
         NULL, NULL, changed, NULL);
@@ -244,7 +244,6 @@ int main(void) { @autoreleasepool {
     [window close];
     [window release];
     nw_listener_cancel(listener);
-    [NSFileManager.defaultManager removeItemAtPath:stores error:nil];
     fprintf(stdout, "end benchmark elapsed %.3f s\n", nowSeconds() - started);
     fflush(stdout);
     return 0;

@@ -5,6 +5,7 @@
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "webview_geometry.h"
 
@@ -135,8 +136,7 @@ int main(void) { @autoreleasepool {
     webviewSetSurfaceHidden(surface, false);
 
     // The store directory is deleted when the test ends.
-    NSString *stores = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"soksak-document-throttle-%d", getpid()]];
+    NSString *stores = temporaryFolder(@"soksak-document-throttle-");
     void *document = sp_document_create(surface, [stores stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
         NULL, NULL, changed, NULL);
     check(document != NULL, @"a document view is created inside the surface");
@@ -179,7 +179,6 @@ int main(void) { @autoreleasepool {
     check(!NSApp.isActive, @"the application stays inactive");
 
     [cover close];
-    [NSFileManager.defaultManager removeItemAtPath:stores error:nil];
     sp_document_close(document);
     sp_surface_close(surface);
     nw_listener_cancel(listener);

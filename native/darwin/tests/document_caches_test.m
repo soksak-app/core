@@ -9,6 +9,7 @@
 #import <signal.h>
 #import <errno.h>
 #import <string.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
@@ -71,7 +72,6 @@ static void cleanupAndExit(void) {
         pid_t process = pid.intValue;
         if (kill(process, SIGKILL) != 0 && errno != ESRCH) fprintf(stderr, "  cannot end process %d: %s\n", process, strerror(errno));
     }
-    [NSFileManager.defaultManager removeItemAtPath:storeDirectory error:nil];
     exit(1);
 }
 
@@ -224,8 +224,7 @@ int main(void) { @autoreleasepool {
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);
 
-    storeDirectory = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"soksak-document-caches-%d", getpid()]];
+    storeDirectory = temporaryFolder(@"soksak-document-caches-");
     document = sp_document_create(surface, [storeDirectory stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
         NULL, NULL, changed, NULL);
     if (!document) {
@@ -293,7 +292,6 @@ int main(void) { @autoreleasepool {
     [window close];
     [window release];
     nw_listener_cancel(listener);
-    [NSFileManager.defaultManager removeItemAtPath:storeDirectory error:nil];
     printf("%s\n", failures ? "FAIL: document_caches_test" : "PASS: document_caches_test");
     return failures ? 1 : 0;
 }}

@@ -3,6 +3,7 @@
 // their characters into the field.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "input_inject.h"
 #import "webview_geometry.h"
@@ -36,9 +37,7 @@ int main(void) { @autoreleasepool {
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
-    NSString *temporary = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"soksak-document-typing-%d", getpid()]];
-    [[NSFileManager defaultManager] createDirectoryAtPath:temporary withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *temporary = temporaryFolder(@"soksak-document-typing-");
     NSString *page = [temporary stringByAppendingPathComponent:@"type.html"];
     // The title shows the keys of the keydown events that the document receives and the value of the field.
     [@"<!doctype html><title>type</title><style>body{margin:0}</style>"
@@ -77,7 +76,6 @@ int main(void) { @autoreleasepool {
     sp_document_close(document);
     sp_surface_close(surface);
     [window close];
-    [[NSFileManager defaultManager] removeItemAtPath:temporary error:nil];
     if (failures) fprintf(stderr, "%d failures\n", failures);
     return failures ? 1 : 0;
 }}

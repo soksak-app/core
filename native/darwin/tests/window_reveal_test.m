@@ -3,6 +3,7 @@
 // whose load failed is also revealed. The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "support/temporary_folder.h"
 #import "capture.h"
 #import "window_facts.h"
 #import "window_reveal.h"
@@ -61,9 +62,7 @@ int main(void) { @autoreleasepool {
     BOOL loading = YES;
     check(waitRevealed(window, main, &loading), @"the window becomes opaque after its first load");
     check(!loading, @"the window becomes opaque only after the load ends");
-    NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"window-reveal-%d", getpid()]];
-    [NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *directory = temporaryFolder(@"soksak-window-reveal-");
     NSString *still = [directory stringByAppendingPathComponent:@"revealed.png"];
     char *captureError = NULL;
     BOOL captured = sp_capture_still(window.windowNumber, still.fileSystemRepresentation, &captureError);
@@ -81,7 +80,6 @@ int main(void) { @autoreleasepool {
             seen.colorSpace.localizedName, seen.redComponent, seen.greenComponent, seen.blueComponent,
             page.redComponent, page.greenComponent, page.blueComponent]);
     }
-    [NSFileManager.defaultManager removeItemAtPath:directory error:nil];
     [window close];
     [main release];
     [window release];

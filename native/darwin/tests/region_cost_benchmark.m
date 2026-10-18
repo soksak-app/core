@@ -67,6 +67,7 @@
 #import <string.h>
 #import <stdlib.h>
 #import <sys/types.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
@@ -1170,12 +1171,13 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
 
     // The persistent store of Q is one store for the directory, as the hosts keep one store per directory. The document
     // variants use another directory, so that two store objects never write the same files.
-    NSString *root = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"soksak-region-cost-%d", getpid()]];
+    NSString *root = temporaryFolder(@"soksak-region-cost-");
     NSString *persistentDirectory = [root stringByAppendingPathComponent:@"persistent"];
     NSString *documentDirectory = [root stringByAppendingPathComponent:@"documents"];
-    if (![NSFileManager.defaultManager createDirectoryAtPath:persistentDirectory withIntermediateDirectories:YES attributes:nil error:nil]) {
-        fprintf(stderr, "FAIL: the persistent directory %s cannot be created\n", persistentDirectory.UTF8String);
+    NSError *createError = nil;
+    if (![NSFileManager.defaultManager createDirectoryAtPath:persistentDirectory withIntermediateDirectories:YES attributes:nil error:&createError]) {
+        fprintf(stderr, "FAIL: the persistent directory %s cannot be created: %s\n", persistentDirectory.UTF8String,
+            createError.localizedDescription.UTF8String);
         return 1;
     }
     _WKWebsiteDataStoreConfiguration *storeConfiguration = [[[_WKWebsiteDataStoreConfiguration alloc]
@@ -1213,7 +1215,6 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
                 reloadVariants, reloadVariantCount);
             [window close];
             [window release];
-            [NSFileManager.defaultManager removeItemAtPath:root error:nil];
             fprintf(stdout, "end benchmark elapsed %.3f s\n", nowSeconds() - started);
             return 0;
         }
@@ -1246,7 +1247,6 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         [window close];
         [window release];
     }
-    [NSFileManager.defaultManager removeItemAtPath:root error:nil];
     fprintf(stdout, "end benchmark elapsed %.3f s\n", nowSeconds() - started);
     fflush(stdout);
     return 0;

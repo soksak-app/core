@@ -11,6 +11,7 @@
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
 #import <string.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "input_inject.h"
 #import "webview_geometry.h"
@@ -213,8 +214,7 @@ int main(void) { @autoreleasepool {
     if (!surface) failStep(@"surface", @"a logical surface is not created");
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);
-    NSString *temporary = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"soksak-document-report-%d", getpid()]];
+    NSString *temporary = temporaryFolder(@"soksak-document-report-");
     const char *store = [temporary stringByAppendingPathComponent:@"store"].fileSystemRepresentation;
     void *document = sp_document_create(surface, store, NULL, NULL, changed, (void *)1);
     if (!document) failStep(@"create", @"a document region is not created");
@@ -301,7 +301,6 @@ int main(void) { @autoreleasepool {
     [window release];
     nw_listener_cancel(listener);
     nw_listener_cancel(frameListener);
-    [NSFileManager.defaultManager removeItemAtPath:temporary error:nil];
     printf("%s\n", failures ? "FAIL: document_report_test" : "PASS: document_report_test");
     return failures ? 1 : 0;
 }}

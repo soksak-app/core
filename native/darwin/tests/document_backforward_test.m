@@ -11,6 +11,7 @@
 #import <errno.h>
 #import <signal.h>
 #import <string.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "event_ring.h"
 #import "memory_pressure.h"
@@ -170,8 +171,7 @@ int main(void) { @autoreleasepool {
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);
 
-    NSString *storeDirectory = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"soksak-document-backforward-%d", getpid()]];
+    NSString *storeDirectory = temporaryFolder(@"soksak-document-backforward-");
     document = sp_document_create(surface, [storeDirectory stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
         NULL, NULL, changed, NULL);
     if (!document) failStep(@"create", @"a document view is not created inside the surface");
@@ -258,7 +258,6 @@ int main(void) { @autoreleasepool {
     [window close];
     [window release];
     nw_listener_cancel(listener);
-    [NSFileManager.defaultManager removeItemAtPath:storeDirectory error:nil];
     printf("%s\n", failures ? "FAIL: document_backforward_test" : "PASS: document_backforward_test");
     return failures ? 1 : 0;
 }}

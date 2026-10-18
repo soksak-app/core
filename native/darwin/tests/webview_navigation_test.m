@@ -6,6 +6,7 @@
 // application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "support/temporary_folder.h"
 #import "process_exit.h"
 #import "private/webkit.h"
 #import "window_facts.h"
@@ -101,10 +102,9 @@ int main(void) { @autoreleasepool {
     check(sp_window_set_main_webview(window, view), @"the app DOM webview is registered");
 
     // A page that keeps the replaced document: it has a cached querySelectorAll result.
-    NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
+    NSString *directory = temporaryFolder(@"soksak-webview-navigation-");
     NSURL *file = [NSURL fileURLWithPath:[directory stringByAppendingPathComponent:@"page.html"]];
-    check([NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil] &&
-          [@"<span class=k></span><script>document.querySelectorAll('.k').length</script>" writeToURL:file atomically:YES
+    check([@"<span class=k></span><script>document.querySelectorAll('.k').length</script>" writeToURL:file atomically:YES
               encoding:NSUTF8StringEncoding error:nil], @"the test page is written");
     [view loadFileURL:file allowingReadAccessToURL:file.URLByDeletingLastPathComponent];
     until(^BOOL { return framework.finished == 1; }, @"the first document finishes");
@@ -134,7 +134,6 @@ int main(void) { @autoreleasepool {
     check(framework.decisions >= 4, [NSString stringWithFormat:
         @"the framework delegate still decides every navigation (%d decisions)", framework.decisions]);
     view.navigationDelegate = nil;
-    [NSFileManager.defaultManager removeItemAtPath:directory error:nil];
     [window close];
     check(!NSApp.isActive, @"application stays inactive");
     return failures ? 1 : 0;

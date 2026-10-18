@@ -3,6 +3,7 @@
 // path that leaves the plugin folder, and exchanges JSON messages with its page.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "webview_geometry.h"
 
@@ -49,8 +50,7 @@ int main(void) { @autoreleasepool {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     messages = [NSMutableArray new];
 
-    NSString *temporary = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"soksak-document-plugin-%d", getpid()]];
+    NSString *temporary = temporaryFolder(@"soksak-document-plugin-");
     NSString *folder = [temporary stringByAppendingPathComponent:@"plugin"];
     NSString *outside = [temporary stringByAppendingPathComponent:@"secret.html"];
     // The page module answers each {ping} message with {pong}; it loads as a module, so it needs text/javascript.
@@ -105,7 +105,6 @@ int main(void) { @autoreleasepool {
     sp_document_close(document);
     sp_surface_close(surface);
     [window close];
-    [[NSFileManager defaultManager] removeItemAtPath:temporary error:nil];
     if (failures) fprintf(stderr, "%d failures\n", failures);
     return failures ? 1 : 0;
 }}

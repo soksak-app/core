@@ -5,6 +5,7 @@
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "support/records.h"
 #import "input_inject.h"
@@ -211,8 +212,7 @@ int main(int argc, char **argv) { @autoreleasepool {
 
     window.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
     // The store directory is deleted when the test ends.
-    NSString *stores = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"soksak-document-store-%d", getpid()]];
+    NSString *stores = temporaryFolder(@"soksak-document-store-");
     NSString *storeA = [stores stringByAppendingPathComponent:@"a"];
     NSString *storeB = [stores stringByAppendingPathComponent:@"b"];
     __block void *document = NULL;
@@ -607,7 +607,6 @@ int main(int argc, char **argv) { @autoreleasepool {
     check(reports == after, @"a closed document reports nothing");
     check(documents(nativePlane) == 0, @"closing removes the document view");
 
-    [NSFileManager.defaultManager removeItemAtPath:stores error:nil];
     for (id connection in held) nw_connection_cancel((nw_connection_t)connection);
     nw_listener_cancel(listener);
     sp_surface_close(surface);

@@ -10,6 +10,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
+#import "support/temporary_folder.h"
 #import "document_view.h"
 #import "image_region.h"
 #import "surface_layout.h"
@@ -92,8 +93,7 @@ int main(void) { @autoreleasepool {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
-    NSString *store = [NSTemporaryDirectory() stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"window-release-test-%d", getpid()]];
+    NSString *store = temporaryFolder(@"soksak-window-release-");
 
     NSWindow *window;
     void *surface;
@@ -203,7 +203,6 @@ int main(void) { @autoreleasepool {
     for (int i = 0; i < trackedCount; i++) {
         check(released(i), [NSString stringWithFormat:@"the closed window releases its %s", weakNames[i]]);
     }
-    [NSFileManager.defaultManager removeItemAtPath:store error:NULL];
     check(!NSApp.isActive, @"application stays inactive");
     return failures ? 1 : 0;
 }}
