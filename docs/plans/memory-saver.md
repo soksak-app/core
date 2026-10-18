@@ -37,10 +37,10 @@ Terms: **unload** (release the surface of a tab that stays in the layout) and **
    `dormant()` leaves an unloaded tab out of the invisible surfaces it declares, so the host releases that surface at the next commit; the tab stays in the layout, and its state stays because the store is keyed by the tab identifiers of the layout.
 7. **Visible and observable.**
    - The tab button carries `data-tab-state` with the state of the status (`loaded`, `unloaded` or `restoring`) and a dom name; protections are shown only through the reasons of the status.
-   - Events in the core catalog, class `lifecycle`: `page.tab.unloaded {tab, plugin, trigger}` (info), `page.tab.restored {tab, plugin, history}` (info; `history` is false when no session history was captured), `page.tab.restore.failed {tab, plugin, reason}` (error, through the single error display), `page.tab.unload.skipped {trigger, seq, reasons}` (info), `page.tab.state.stored {tab, bytes}` (debug).
+   - Events in the core catalog, class `lifecycle`: `page.tab.unloaded {tab, plugin, trigger}` (info), `page.tab.restored {tab, plugin, history}` (info; `history` is false when no session history was captured), `page.tab.restore.failed {tab, plugin, reason}` (error, through the single error display), `page.tab.unload.skipped {trigger, seq, reasons}` (info), `page.tab.state.stored {tab, bytes}` (debug, every write of the tab's entry, mark included), `page.tab.keep.changed {tab, keep}` (info).
    - Reasons, one enumeration used by the status and the events: `shown`, `recent`, `keep:modified`, `keep:busy`, `media`, `media-unknown`, `capture`, `form`, `kept`, `off`, `undeclared`, `background`. `media` and `media-unknown` are the result of the last decision, at the `checkedAt` of the tab; the other reasons change as their sources report.
    - Status `core.tab.memory`: `{enabled, delay, pressure: {level, seq}, tabs: [{tab, plugin, state: loaded|unloaded|restoring, reasons, hiddenAt, unloadAt, checkedAt}]}`, notified on each change; `core.surfaces` reports the state of each tab, and a request to an unloaded surface fails with `tab <id> is unloaded`.
-8. **Command.** `core.tab.unload {tab}` unloads a hidden tab now. As the person's own decision it does not wait for `recent`, `media`, `media-unknown`, `capture` or `form`; it fails with the remaining protections (`shown`, `keep:modified`, `keep:busy`, `kept`, `off`, `undeclared`, `background`) and with -32602 for an unknown tab. `core.tab.keep {tab, keep}` sets or clears the person's mark (idempotent; -32602 for an unknown tab or a non-boolean), with a tab context menu item bound through the binder.
+8. **Command.** `core.tab.unload {tab}` unloads a hidden tab now. As the person's own decision it does not wait for `recent`, `media`, `media-unknown`, `capture` or `form`; it fails with the remaining protections (`shown`, `keep:modified`, `keep:busy`, `kept`, `off`, `undeclared`, `background`) and with -32602 for an unknown tab. `core.tab.keep {tab, keep}` sets or clears the person's mark (idempotent, one `page.tab.keep.changed` per change; -32602 for an unknown tab or a non-boolean; an error that names the tab and `undeclared` or `background` for a tab that can never be unloaded). The tab context menu item `tab-menu-keep`, bound through the binder, reads `kept` from the reasons of `core.tab.memory` and is absent for a tab that can never be unloaded.
 
 ### Setting
 
@@ -62,11 +62,11 @@ Before an unloaded region closes, the native region returns the public `interact
 
 ### Stored format
 
-Tab state is not stored in `projects.json`. A new store `tab-state.json` in the configuration folder, format 1 from its first release, holds per tab identifier the `{format, value}` state and the `kept` mark. Whether a tab is unloaded is not stored: rule 6 derives it. Writes of one tab are coalesced to at most one per second and flushed at quit, so a crash loses at most the last second of state. A tab without an entry reads `null`. An entry is removed only after the layout write that drops its tab is confirmed. At load the store is reconciled with the tab identifiers of `projects.json`, and each orphan entry it removes is an event. A reader accepts only the current format. `projects.json` keeps its format, because its contents do not change. A separate store also keeps the frequent state writes away from the whole layout file; plugin `data` is keyed per project and declared key, not per tab, so it is not the owner.
+Tab state is not stored in `projects.json`. A new store `tab-state.json` in the configuration folder, format 1 from its first release, holds per tab identifier an entry with two optional fields, `state: {format, value}` and `kept: true`, and stores an entry only while one of them is present; `read()` is `null` when `state` is absent. Whether a tab is unloaded is not stored: rule 6 derives it. Writes of one tab are coalesced to at most one per second and flushed at quit, so a crash loses at most the last second of state. A tab without an entry reads `null`. An entry is removed only after the layout write that drops its tab is confirmed. At load the store is reconciled with the tab identifiers of `projects.json`, and each orphan entry it removes is an event. A reader accepts only the current format. `projects.json` keeps its format, because its contents do not change. A separate store also keeps the frequent state writes away from the whole layout file; plugin `data` is keyed per project and declared key, not per tab, so it is not the owner.
 
 ## Adopted and not adopted
 
-- Adopted: unloading hidden tabs after a delay and under memory pressure; a required declaration per plugin; state written on each change with a format and a size limit; the protections above, read from the web view where it owns the fact; one tab per pressure report, least recently shown first; a single scheduler; restore at first show after a restart; the reasons and protections as events and status; session history kept in memory with the public `interactionState`.
+- Adopted: unloading hidden tabs after a delay and under memory pressure; a required declaration per plugin; state written on each change with a format and a size limit; the protections above, read from the web view where it owns the fact; one tab per pressure report, least recently shown first; a single scheduler; restore at first show after a restart; the person's mark `kept` set with `core.tab.keep` and stored per tab; the reasons and protections as events and status; session history kept in memory with the public `interactionState`.
 - Not adopted: a cap on the number of loaded hidden tabs in the first version (memory pressure answers the real memory limit; a cap is measured after the delay and pressure paths ship); unloading on hide at once; a save hook at unload; unloading undeclared tabs; persisting the full session history; per-plugin settings; unloading DOM tabs before a measured gain; a page script for media (the engine answers it); a short default delay chosen for a lower memory reading.
 
 ## Steps
@@ -79,7 +79,7 @@ Each step is one checklist item with Red first at the owning module.
 4. F198.4 The scheduler, the protections and the unload and restore operations in the workbench; `dormant()` leaves an unloaded tab out (Red: a commit after an unload neither mounts the tab again nor removes its store entry); `mock.timers` drives the delay in tests.
 5. F198.5 Document region reports: the media playback query, camera and microphone by key-value observation; form edits from the region script in every frame with the per-frame map (Red: a removed subframe and a reload clear their flags); `interactionState` returned before close and passed on restore, with the empty case.
 6. F198.6 The native memory pressure source moves to an owner that starts with the host, reads the level and numbers each report; the region consumer subscribes to it; Go and Rust relay `memory-pressure {level, seq}` with a contract case and a declared fault injection; `docs/spec/hosts.md` states the ownership.
-7. F198.7 Setting and its validation; the commands `core.tab.unload` and `core.tab.keep` with the context menu item.
+7. F198.7 Setting and its validation; the commands `core.tab.unload` and `core.tab.keep` with the context menu item (Red: setting the mark twice emits one event; a mark without state reads `null`).
 8. F198.8 Tab button state and the restore failure through the error display.
 9. F198.9 DOM tab benchmark.
 10. F198.10 Window check on both hosts: `core.tab.unload` and a pressure fault injection unload a hidden browser tab, `core.tab.memory` and the region process show it, and showing the tab restores the address.
@@ -127,7 +127,7 @@ Round 3 (one reviewer, by the criteria standard approach, nothing hidden, produc
 - Form flags of removed frames and reloads were undefined → a per-frame map on the native side, cleared by `pagehide`, `submit`, main-frame commit and reload, with a Red test; the script stays for `form` only because WebKit has no public engine state for it.
 - The stored unloaded flag duplicated rule 6, and two files could disagree → the flag is removed; coalescing is bounded and flushed at quit; the entry is removed after the layout write (its write-before part was removed in round 4); orphans are reconciled at load as events.
 - `interactionState` could be empty after the process ended → restore at the stored address with `history: false`.
-- `restored`, `page.tab.kept` and `core.tab.keep` were more than a first version needs → removed; least recently shown order prevents thrash; the keep mark is a follow-up item.
+- `restored`, `page.tab.kept` and `core.tab.keep` were more than a first version needs → removed; least recently shown order prevents thrash (`core.tab.keep` and the `kept` mark returned after the comparison with two platforms, because both exempt a tab the person pinned; `restored` and `page.tab.kept` stay removed).
 - A 5-minute default is far shorter than mainstream defaults → the default is 2 hours with a range of 5 minutes to 12 hours; pressure stays the fast path.
 
 Round 4 (one reviewer). Each objection and its answer:
@@ -159,3 +159,11 @@ Comparison with two established platforms (an editor platform that destroys hidd
 - One silently drops state it cannot read → our rule refuses such a value with an error, which stays.
 - One ignores `beforeunload` → matches rule 4.
 - One keeps a hidden terminal's process and parsed model and restores the view from a numbered snapshot → the design for releasing a hidden terminal's image region follows that split when it is measured.
+
+Round 6 (one reviewer). Each objection and its answer:
+
+- The round 3 answer still said the mark was removed → marked with the reason it returned.
+- Adopted left out the mark → added.
+- A changed mark had no event → `page.tab.keep.changed`; `page.tab.state.stored` covers every write of the entry.
+- `read()` for an entry with only a mark was undefined → two optional fields; `read()` is `null` without `state`.
+- The command's scope and the menu state were unspecified → an error for a tab that can never be unloaded; the menu item `tab-menu-keep` reads `kept` from the status and is absent for such a tab.
