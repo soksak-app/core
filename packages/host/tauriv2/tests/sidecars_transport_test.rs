@@ -109,17 +109,14 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     .unwrap();
 
     // Each connection is handled by a thread, so that, as in a real service, a hello is not queued behind the request
-    // round trip of another connection. Four connections are accepted: the two initial connections and the connections
-    // of the automatic restart that connects again whenever the check closes a connection (V5-106). If the deadline
-    // passes while waiting for a request, it ends quietly: the restart connection does not receive a request until the
-    // check ends.
+    // round trip of another connection. The service keeps both connections until the stop of the check: a closed
+    // connection makes its host connect again (V5-106), and a host that the ended service refuses starts the service,
+    // which writes into the configuration folder while the check removes it. It answers close-owner with a failure so
+    // that stop does not wait for the deadline.
     let service = std::thread::spawn(move || {
         let mut workers = Vec::new();
-        for stream in listener.incoming().take(4) {
+        for stream in listener.incoming().take(2) {
             let mut stream = stream.unwrap();
-            stream
-                .set_read_timeout(Some(Duration::from_secs(10)))
-                .unwrap();
             workers.push(std::thread::spawn(move || {
                 let reader_stream = stream.try_clone().unwrap();
                 let mut reader = BufReader::new(reader_stream);
@@ -135,12 +132,25 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
 "#,
                     )
                     .unwrap();
-                line.clear();
-                match reader.read_line(&mut line) {
-                    Ok(0) | Err(_) => return,
-                    Ok(_) => {}
+                loop {
+                    line.clear();
+                    match reader.read_line(&mut line) {
+                        Ok(0) | Err(_) => return,
+                        Ok(_) => {}
+                    }
+                    let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                    if request["operation"] == "close-owner" {
+                        let reply = serde_json::json!({
+                            "operation": "closed-owner",
+                            "request": request["request"],
+                            "ok": false,
+                            "error": "test close"
+                        });
+                        writeln!(stream, "{reply}").unwrap();
+                        return;
+                    }
+                    stream.write_all(line.as_bytes()).unwrap();
                 }
-                stream.write_all(line.as_bytes()).unwrap();
             }));
         }
         for worker in workers {
@@ -169,7 +179,14 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
         .unwrap();
     assert_eq!(first_events.recv_timeout(STALL).unwrap().surface, "s1");
     assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
+    // The hosts stop before the service ends, so no host connects again or starts the service.
+    first.stop();
+    second.stop();
     service.join().unwrap();
+    assert!(
+        !config_directory.path().join("logs").exists(),
+        "a host started the service after the check ended it"
+    );
 }
 
 // contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
