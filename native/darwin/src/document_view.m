@@ -128,10 +128,10 @@ static NSHashTable<SPDocumentView *> *openDocuments(void) {
 static void watchMemoryPressure(void) {
     static dispatch_source_t source;
     if (source) return;
-    source = dispatch_source_create(DISPATCH_SOURCE_TYPE_MEMORYPRESSURE, 0,
-        DISPATCH_MEMORYPRESSURE_WARN | DISPATCH_MEMORYPRESSURE_CRITICAL, dispatch_get_main_queue());
-    dispatch_source_set_event_handler(source, ^{ sp_document_memory_pressure(); });
-    dispatch_resume(source);
+    source = sp_observe_memory_pressure("document_view.memory_pressure", SP_OBSERVE_STORED, dispatch_get_main_queue(), ^{
+        sp_document_memory_pressure();
+    });
+    if (source) dispatch_resume(source);
 }
 
 extern double sp_surface_scale(void *surface);
@@ -191,7 +191,10 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 @property BOOL pending;
 @property BOOL closed;
 // Runs while the region is hidden and clears the back-forward cache when the hidden clear delay passes.
-@property(retain) NSTimer *hiddenTimer;
+// The generation of the hidden delay: hiding starts a delay with the next generation, and showing or closing the region moves to another
+// generation, so a delay that ends after it finds another generation and clears nothing.
+@property NSUInteger hiddenGeneration;
+@property BOOL hiddenDelayRunning;
 - (void)clearBackForwardCache:(NSString *)reason;
 - (void)stopHiddenTimer;
 - (void)report;
@@ -315,7 +318,6 @@ static NSString *pluginContentType(NSString *path) {
     [_plugin release];
     [_navigation release];
     [_eventMonitor release];
-    [_hiddenTimer release];
     [super dealloc];
 }
 
@@ -330,22 +332,25 @@ static NSString *pluginContentType(NSString *path) {
     sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_INFO, "native.document.backforward_cleared", fields.UTF8String);
 }
 
-- (void)hiddenDelayPassed:(NSTimer *)timer {
-    self.hiddenTimer = nil;
-    [self clearBackForwardCache:@"hidden"];
-}
-
 - (void)stopHiddenTimer {
-    [self.hiddenTimer invalidate];
-    self.hiddenTimer = nil;
+    self.hiddenGeneration += 1;
+    self.hiddenDelayRunning = NO;
 }
 
 // AppKit calls viewDidHide and viewDidUnhide when the region or one of its ancestors is hidden or shown.
 - (void)viewDidHide {
     [super viewDidHide];
-    if (self.closed || self.hiddenTimer) return;
-    self.hiddenTimer = [NSTimer scheduledTimerWithTimeInterval:hiddenClearDelay target:self
-        selector:@selector(hiddenDelayPassed:) userInfo:nil repeats:NO];
+    if (self.closed || self.hiddenDelayRunning) return;
+    self.hiddenDelayRunning = YES;
+    NSUInteger generation = self.hiddenGeneration;
+    SPDocumentView *region = [self retain];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(hiddenClearDelay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (!region.closed && region.hiddenDelayRunning && region.hiddenGeneration == generation) {
+            region.hiddenDelayRunning = NO;
+            [region clearBackForwardCache:@"hidden"];
+        }
+        [region release];
+    });
 }
 
 - (void)viewDidUnhide {

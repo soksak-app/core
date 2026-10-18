@@ -262,6 +262,26 @@ dispatch_source_t sp_observe_process_exit(const char *source, sp_observe_mode mo
     return created;
 }
 
+dispatch_source_t sp_observe_memory_pressure(const char *source, sp_observe_mode mode, dispatch_queue_t queue, void (^handler)(void)) {
+    if (!handler) {
+        fail(source, "memory_pressure", @"the handler is missing");
+        return NULL;
+    }
+    source_record *record = recordRegistration(source, mode, "memory_pressure", @"warn and critical");
+    if (!record) return NULL;
+    dispatch_source_t created = dispatch_source_create(DISPATCH_SOURCE_TYPE_MEMORYPRESSURE, 0,
+        DISPATCH_MEMORYPRESSURE_WARN | DISPATCH_MEMORYPRESSURE_CRITICAL, queue);
+    if (!created) {
+        fail(source, "memory_pressure", @"the system refused the dispatch source");
+        return NULL;
+    }
+    dispatch_source_set_event_handler(created, ^{
+        deliver(record);
+        handler();
+    });
+    return created;
+}
+
 CFRunLoopObserverRef sp_observe_run_loop(const char *source, sp_observe_mode mode, CFRunLoopRef loop, CFRunLoopActivity activities,
     bool repeats, CFIndex order, void (^handler)(void)) {
     if (!handler || !loop) {
