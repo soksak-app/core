@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F192.3-3-5: an intermittent late file notification in the event log wait is classified as load: the system event service delivered some changes after 2 to 3 s at high load, and the wait misses no change.
 - F203: the terminal runtime specification states every exit of the persistent service, including the end when its folder or endpoint is removed or replaced.
 - F200.4: `WebviewWindow.EmitEvent` of the Wails fork delivers the event only to the page of the window that emitted it, so a page no longer evaluates the events of the other windows; application events still reach every window. Red: `TestWindowEventIsEvaluatedOnlyInItsWindow` found a window event evaluated in another window; Green: the test passes and the fork package passes 3 of 3 runs. The Wails host pins the fork branch `soksak/window-events`, not yet released.
 - F200.3: the diagnostic method `diagnostics.host.events` has the host send host events that the page does not listen to, and `make host-calls EVENTS=N` measures what they leave in the page process. Measured on both debug hosts: 1411 B of WebKit malloc per event in the Wails page and 0 B in the Tauri page.

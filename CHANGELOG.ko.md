@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F192.3-3-5: event log 대기의 간헐적인 늦은 파일 알림을 부하로 분류한다. 높은 부하에서 시스템 event 서비스가 일부 변경을 2~3초 뒤에 전달했고, 대기는 변경을 놓치지 않는다.
 - F203: terminal runtime 명세가 영속 서비스의 모든 종료를 밝힌다. 폴더나 endpoint가 지워지거나 바뀔 때의 종료를 포함한다.
 - F200.4: Wails fork의 `WebviewWindow.EmitEvent`는 event를 그 event를 낸 window의 페이지에만 보내므로, 페이지가 다른 window의 event를 evaluate하지 않는다. application event는 여전히 모든 window에 간다. Red: `TestWindowEventIsEvaluatedOnlyInItsWindow`가 window event가 다른 window에서 evaluate되는 것을 찾았다. Green: test가 통과하고 fork package가 3회 중 3회 통과한다. Wails host는 fork branch `soksak/window-events`를 고정하며, 아직 배포되지 않았다.
 - F200.3: diagnostic method `diagnostics.host.events`는 host가 페이지가 listen하지 않는 host event를 보내게 하고, `make host-calls EVENTS=N`은 그 event가 페이지 process에 남기는 것을 측정한다. 두 debug host에서 측정: Wails 페이지는 event당 WebKit malloc 1411 B, Tauri 페이지는 0 B.
