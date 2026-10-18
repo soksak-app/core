@@ -94,6 +94,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs"]),
   lane("log contract", "js-ts", ["packages/log-contract/*.js"], ["packages/log-contract/test/**/*.mjs"]),
   lane("workbench", "js-ts", ["packages/workbench/*.js", "packages/workbench/*.mjs"], ["packages/workbench/test/**/*.js", "packages/workbench/test/**/*.mjs"], { sharedTests: true }),
+  lane("hidden tab memory benchmark", "js-ts", ["packages/workbench/benchmark/*.mjs"], ["packages/workbench/test/hidden-tab-memory.test.mjs"], { sharedTests: true }),
   lane("client", "js-ts", [
     "packages/client/*.js",
     "packages/client/platform/**/*.js",
