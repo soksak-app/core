@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.26: package 시험이 다시 통과한다: 진단이 기본으로 꺼져 있으므로(F197) chain audit fixture가 debug policy를 기록하고, debug switch의 주석이 영어이며, 두 애플리케이션의 surface call 시험이 debug 상태를 설정한다.
 - F196.21-1: boundary 검사가 선언된 저장소를 main checkout에서 찾으므로 `make boundaries`가 worktree에서 실행된다. Red: `.claude/worktrees` 아래 plugin의 `ENOENT`; Green.
 - F196.25: 모든 host 시험이 자기에게 붙은 정의된 contract case를 선언하므로 `make host-contract-check`가 다시 통과한다(2451개 중 2451개 시험, 두 host의 모든 case); 2026-10-17부터의 CI 실패는 정의되지 않은 sampler case, case를 선언하지 않은 sok policy 시험, `mod support;`로 시험과 떨어진 Tauri 선언에서 왔다.
 - F196.24: 두 host가 unix socket 주소의 103 byte 한계를 넘는 endpoint socket 경로를 경로, 길이, 한계를 적은 같은 문장의 오류로 거부한다. Red: `bind: invalid argument`와 `path must be shorter than SUN_LEN`; Green.

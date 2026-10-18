@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F196.26: the package tests pass again: the chain audit fixture records the debug policy, the comments of the debug switch are English, and the surface call tests of both applications set the debug state, since diagnostics are off by default (F197).
 - F196.21-1: the boundary check resolves the declared repositories from the main checkout, so `make boundaries` runs in a worktree. Red: `ENOENT` for the plugin under `.claude/worktrees`; Green.
 - F196.25: every host test declares a defined contract case attached to it, so `make host-contract-check` passes again (2451 of 2451 tests, every case of both hosts); the CI failure since 2026-10-17 came from the undefined sampler case, undeclared sok policy tests and Tauri declarations separated from their tests by `mod support;`.
 - F196.24: both hosts refuse an endpoint socket path over the 103-byte limit of a unix socket address with an error that names the path, its length and the limit, the same text in both hosts. Red: `bind: invalid argument` and `path must be shorter than SUN_LEN`; Green.
