@@ -24,6 +24,11 @@
 #                         rail overlay, a spinner, and no isolation), the median of three loads of each, and the difference of each
 #                         to the baseline in window buffers.
 #                         It prints numbers and asserts nothing
+#   make benchmark-occlusion
+#                         prints the occlusion state and document.visibilityState of a window A with a web view that a
+#                         window B covers fully: A at the top-left corner of the visible frame or away from it, B titled or
+#                         borderless, with or without shadows, B the visible frame, the frame of A, or A grown by 20 to 96
+#                         points. It orders both windows front without activating the application and asserts nothing
 #   make test-pressure    runs the memory pressure check of the document region and of a plain web view. It raises the memory pressure
 #                         of the system through memory_pressure, which needs the sudoers rule for /usr/bin/memory_pressure. It asserts
 #                         the response of the region and refuses to judge when the 1-minute load is above 20. It prints the footprint
@@ -61,7 +66,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation benchmark benchmark-document benchmark-page-layers benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-activation benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -103,6 +108,9 @@ benchmark-document: $(BUILD)/document_script_benchmark
 
 benchmark-page-layers: $(BUILD)/page_layers_benchmark
 	@$(BUILD)/page_layers_benchmark
+
+benchmark-occlusion: $(BUILD)/occlusion_corner_benchmark
+	@$(BUILD)/occlusion_corner_benchmark
 
 # The address of the region cost benchmark: make benchmark-region-cost URL=https://example.com/
 URL ?= https://www.google.com/
