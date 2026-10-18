@@ -140,10 +140,34 @@ export function auditMenuTables(spec, rust, go) {
   return failures;
 }
 
+/**
+ * Reads the endpoint methods that exist on one host only from the allowed differences table of the host specification
+ * (docs/spec/hosts.md). A row whose ID is E<number> declares endpoint methods; its Wails and Tauri cells list method names
+ * in backticks or `none`.
+ */
+export function allowedEndpointMethods(hostsMarkdown) {
+  const start = hostsMarkdown.indexOf('## Allowed differences');
+  if (start < 0) throw new Error('hosts spec has no Allowed differences section');
+  const end = hostsMarkdown.indexOf('\n## ', start + 1);
+  const section = hostsMarkdown.slice(start, end < 0 ? undefined : end);
+  const allowed = { wailsv3: new Set(), tauriv2: new Set() };
+  for (const line of section.split('\n')) {
+    const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
+    if (!/^E\d+$/.test(cells[0] ?? '')) continue;
+    for (const [host, cell] of [['wailsv3', cells[1]], ['tauriv2', cells[2]]]) {
+      if (cell === 'none') continue;
+      const names = [...cell.matchAll(/`([a-z][a-z0-9_.]*)`/g)].map((match) => match[1]);
+      if (names.length === 0) throw new Error(`hosts spec row ${cells[0]} has no method name or none in the ${host} cell: ${cell}`);
+      for (const name of names) allowed[host].add(name);
+    }
+  }
+  return allowed;
+}
+
 /** Judges propositions 1, 2, and 3 on the injected sources and returns the list of failures. */
 export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtime, wailsv3HostSources,
   tauriv2EndpointSource, wailsv3EndpointSource, wailsv3DiagnosticsSource,
-  hostContractSpec, tauriv2MenuSource, wailsv3MenuSource }) {
+  hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec }) {
   const failures = [];
   const tauriv2 = {
     calls: runtimeCalls(tauriv2Runtime, 'const COMMAND = {', 'tauriv2 runtime'),
@@ -167,14 +191,15 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   }
   const endpointT = rustEndpointMethods(tauriv2EndpointSource);
   const endpointW = goEndpointMethods(wailsv3EndpointSource, wailsv3DiagnosticsSource);
+  const allowed = allowedEndpointMethods(hostsSpec);
   for (const [name, left, right] of [
     ['endpoint base methods', endpointT.base, endpointW.base],
     ['endpoint diagnostics methods', endpointT.diagnostics, endpointW.diagnostics],
   ]) {
-    for (const method of [...left].filter((item) => !right.has(item)).sort()) {
+    for (const method of [...left].filter((item) => !right.has(item) && !allowed.tauriv2.has(item)).sort()) {
       failures.push(`tauriv2 ${name} has "${method}" that wailsv3 does not`);
     }
-    for (const method of [...right].filter((item) => !left.has(item)).sort()) {
+    for (const method of [...right].filter((item) => !left.has(item) && !allowed.wailsv3.has(item)).sort()) {
       failures.push(`wailsv3 ${name} has "${method}" that tauriv2 does not`);
     }
   }
@@ -202,6 +227,7 @@ if (process.argv[1] && process.argv[1].endsWith('check-host-parity.mjs')) {
     hostContractSpec: read('docs/spec/host-contract.md'),
     tauriv2MenuSource: read('packages/host/tauriv2/src/menu.rs'),
     wailsv3MenuSource: read('packages/host/wailsv3/src/menu.go'),
+    hostsSpec: read('docs/spec/hosts.md'),
   });
   for (const failure of failures) console.error(`FAIL: ${failure}`);
   if (failures.length > 0) {

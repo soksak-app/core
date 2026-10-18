@@ -156,6 +156,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | H9 | `tests/framework_log_test.go` | 없음 | 프레임워크 logger의 level(`FrameworkLogLevel`)은 Wails host에만 있다. Wails asset server는 요청한 파일마다 level `info`로 한 줄을 쓰고, Tauri host는 표준 오류에 그런 줄을 쓰지 않는다 |
 | H10 | 없음 | `src/platform/darwin/file_watch.rs` | Wails host는 library `fsnotify`로 정책 파일을 감시한다. 정책 파일 감시를 충족하는 Rust library가 없으므로(`notify` 8.2의 FSEvents watcher는 writer가 하위 폴더에 덧붙이는 동안 폴더의 event를 전달하지 않았고, kqueue watcher는 rename을 다음 kernel event까지 전달하지 않았으며, `kqueue` crate 1.2에는 막힌 대기를 끝낼 user event가 없다) Tauri host는 macOS에서 kqueue로 감시한다 |
 | H11 | `src/platform/darwin/input_source_await.go` | 없음 | C에 함수를 내보내는 Go 파일은 preamble에 C 함수를 정의할 수 없으므로, `sp_input_source_await`의 block에서 내보낸 callback으로 가는 다리는 별도 파일이다. Rust는 `input_source.rs`에서 closure를 block(`block2`)으로 native 계층에 넘긴다 |
+| E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust host에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make host-parity-check`가 그 행을 읽는다 |
 | A1 | 내용만 다름 | 내용만 다름 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다 |
 | A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
 | A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri 설정 |

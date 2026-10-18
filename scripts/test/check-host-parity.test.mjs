@@ -14,7 +14,17 @@ const sources = () => ({
   hostContractSpec: specFixture,
   tauriv2MenuSource: rustMenuFixture,
   wailsv3MenuSource: goMenuFixture,
+  hostsSpec: hostsFixture,
 });
+
+const hostsFixture = `## Allowed differences
+
+| ID | Wails | Tauri | Reason |
+| --- | --- | --- | --- |
+| H1 | none | \`build.rs\` | file difference |
+| E1 | \`diagnostics.heap.profile\` | none | endpoint method difference |
+
+## Process lifecycle`;
 
 const specFixture = `## Application menu
 
@@ -81,4 +91,13 @@ test("menu tables that differ from the spec fail mechanically", () => {
   const failures = auditMenuTables(spec, rustMenuTables(changed), goMenuTables(goMenuFixture));
   assert.ok(failures.some((line) => line.includes("menu menus table differs")), JSON.stringify(failures));
   assert.deepEqual(auditMenuTables(spec, rustMenuTables(rustMenuFixture), goMenuTables(goMenuFixture)), []);
+});
+
+test("an endpoint method of one host passes only when the allowed differences declare it", () => {
+  const changed = sources();
+  changed.wailsv3DiagnosticsSource = changed.wailsv3DiagnosticsSource.replace("}", '  diagnosticMethods["diagnostics.heap.profile"] = nil\n}');
+  assert.deepEqual(auditHostParity(changed), []);
+  changed.hostsSpec = changed.hostsSpec.replace(/\| E1 .*\n/, "");
+  assert.deepEqual(auditHostParity(changed),
+    ['wailsv3 endpoint diagnostics methods has "diagnostics.heap.profile" that tauriv2 does not']);
 });
