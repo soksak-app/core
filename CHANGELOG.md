@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F197.7: the vt sidecar 0.0.11 and the files sidecar 0.0.6 release the default policy that stores only errors (F197.5); the shell sidecar is not published and has no release.
 - F198.10-4: the endpoint client keeps its connection when the host refuses an unwatch with 1003 because a reload removed the watch, and rejects that watch with the refusal. Red: the connection failed; Green.
 - F198.10-3: the event `page.start` passes every gate of the page, so the start of a reloaded document reaches the event files before the policy of the setting reaches the gate. Red: the gate refused it before a policy; Green.
 - F198.10-5: a surface that a place leaves out sends nothing to its sidecar after the place ended its sessions, so the end of the session that its dispose sends no longer leaves a host entry without a project root that every later retain refused. Red: the send left while the place ran; Green.
