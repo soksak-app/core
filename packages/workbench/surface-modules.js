@@ -56,8 +56,14 @@ if (native) {
 // is sent with one increasing number (docs/spec/surface-composition.md).
 let compositionRevision = 0;
 
-function pageRuntime(surface, scoped, compositionReady) {
+/*
+ * A place that leaves a surface out closes the document and image regions of that surface in the host
+ * (docs/spec/native-surfaces.md#region-lifetime). After it, a detach or an unsubscribe of the release drops only the
+ * page-side handle and does not call the host; a region that the page detaches while the surface stays placed calls it.
+ */
+function pageRuntime(surface, scoped, compositionReady, lifetime) {
   const invoke = (name, payload) => scoped.native.call(name, payload);
+  const hostClose = (name, payload) => (lifetime.released ? Promise.resolve(null) : invoke(name, payload));
   return {
     surfaces: { report: (message) => invoke("report", message) },
     document: {
@@ -66,12 +72,12 @@ function pageRuntime(surface, scoped, compositionReady) {
       zoom: (name, zoom) => invoke("documentZoom", { document: name, zoom }),
       go: (name, action, offset) => invoke("documentGo", offset === undefined ? { document: name, action } : { document: name, action, offset }),
       detach: async (name) => {
-        const reply = await invoke("documentDetach", { document: name });
+        const reply = await hostClose("documentDetach", { document: name });
         documentRegions.detached(surface.surfaceId, name);
         return reply;
       },
       subscribe: (name, stream) => invoke("documentSubscribe", { document: name, stream }),
-      unsubscribe: (name, handle) => invoke("documentUnsubscribe", { document: name, handle }),
+      unsubscribe: (name, handle) => hostClose("documentUnsubscribe", { document: name, handle }),
       onStream: (listener) => scoped.native.on("document-stream", (event) => listener(event.document, event.handle, event.message)),
       post: (name, message) => invoke("documentPost", { document: name, message }),
       onState: (listener) => scoped.native.on("document-state", (event) => listener(event.document, event.state)),
@@ -83,7 +89,7 @@ function pageRuntime(surface, scoped, compositionReady) {
       focus: (name) => invoke("imageFocus", { name }),
       caret: (name, x, y, width, height) => invoke("imageCaret", { name, x, y, width, height }),
       text: (name, text) => invoke("imageText", { name, text }),
-      detach: (name) => invoke("imageDetach", { name }),
+      detach: (name) => hostClose("imageDetach", { name }),
       on: (listener) => scoped.native.on("image-event", (event) => listener(event.name, event.event)),
     },
     composition: {
@@ -234,7 +240,9 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     };
     // A dom composition has no native region; plugin.json declares it, and its module does not create one.
     if (!native || surface.composition?.kind === "dom") compositionReady.resolve();
-    const page = pageRuntime(surface, scoped, compositionReady);
+    // released becomes true when a place left the surface out; the host then owns the end of its regions.
+    const lifetime = { released: false };
+    const page = pageRuntime(surface, scoped, compositionReady, lifetime);
     let viewport = slot;
     const eventListeners = new Map();
     const emit = (type, detail) => {
@@ -316,7 +324,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     });
     const state = context.status.subscribe(onState);
     onState(context.status.read());
-    entry = { slot, host, shadow, context, closing, state, exposure: null, composition: compositionReady.promise, compositions,
+    entry = { slot, host, shadow, context, closing, lifetime, state, exposure: null, composition: compositionReady.promise, compositions,
       mounted: null, ready: null, authorized: false, disposed: false, surfaceId: surface.surfaceId,
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
@@ -416,14 +424,16 @@ async function disposeModule(entry, module) {
 
 /**
  * Releases the surface of a tab. The close (no mode) forgets the tab reports; the mode "unload" keeps them and clears only
- * the error, because the tab stays in the layout (docs/spec/plugins.md#memory-saver).
+ * the error, because the tab stays in the layout (docs/spec/plugins.md#memory-saver). released states that a place already
+ * left the surface out, so the host closed its regions and the release drops only the page-side handles.
  */
-export async function disposeSurface(surfaceId, { mode } = {}) {
+export async function disposeSurface(surfaceId, { mode, released = false } = {}) {
   if (mode !== undefined && mode !== "unload") throw new TypeError(`unknown dispose mode: ${String(mode)}`);
   placeholders.get(surfaceId)?.remove();
   placeholders.delete(surfaceId);
   const entry = mounted.get(surfaceId);
   if (!entry) return;
+  if (released) entry.lifetime.released = true;
   if (entry.disposing) return entry.disposing;
   entry.disposed = true;
   entry.closing.abort();
@@ -453,12 +463,25 @@ export async function disposeSurface(surfaceId, { mode } = {}) {
 export const mountedSurface = (surfaceId) => mounted.get(surfaceId) ?? null;
 
 /** Disposes the modules of the tabs that the current workspace no longer declares. */
-export async function disposeSurfacesExcept(surfaceIds) {
+export async function disposeSurfacesExcept(surfaceIds, { released = false } = {}) {
   for (const [id, placeholder] of placeholders) {
     if (surfaceIds.has(id)) continue;
     placeholder.remove();
     placeholders.delete(id);
   }
   const stale = [...mounted.keys()].filter((id) => !surfaceIds.has(id));
-  await Promise.all(stale.map((id) => disposeSurface(id)));
+  await Promise.all(stale.map((id) => disposeSurface(id, { released })));
+}
+
+/**
+ * Runs a place, and only after it succeeds releases the surfaces it left out: the ids of unload in the unload mode and
+ * every other surface outside retain. The place closed their regions in the host (docs/spec/native-surfaces.md#region-lifetime),
+ * so the release drops only the page-side handles. A failed place releases nothing, so its surfaces stay mounted.
+ * Resolves the reply of the place.
+ */
+export async function placeSurfaces(place, { retain, unload = [] }) {
+  const answer = await place();
+  await Promise.all(unload.map((id) => disposeSurface(id, { mode: "unload", released: true })));
+  await disposeSurfacesExcept(retain, { released: true });
+  return answer;
 }

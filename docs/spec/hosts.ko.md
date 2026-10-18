@@ -126,6 +126,8 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 
 웹뷰 연산은 DOM 평면을 창의 공통 표면 컨테이너에 직접 붙이지 않고 `SurfaceHost`에 붙인다. 문서·그림 연산은 그 호스트 네이티브 평면의 하위 뷰를 만든다. 플랫폼 인터페이스는 영역을 `SurfaceHost`의 형제로 배치하는 연산을 노출하지 않는다. 두 언어 호스트는 플랫폼 코드를 호출하기 전에 [표면 합성](surface-composition.ko.md)을 검증한다.
 
+두 호스트에서 place는 답하기 전에 더 이상 나열하지 않는 각 표면의 문서 영역과 그림 영역을 모두 닫는다(Wails에서 `closeSurfaceDocuments`와 `images.CloseSurface`, Tauri에서 `documents::close_surface`와 `images::close_surface`). 그 뒤 page는 영역을 detach하지 않고 그 표면을 release한다([region lifetime](native-surfaces.ko.md#region-lifetime)).
+
 ### 창 단추
 
 AppKit 이 창 자신의 단추를 소유한다. 제목줄 높이가 AppKit 이 단추를 두는 자리를 정한다. AppKit 은 단추를 제목줄의 세로 가운데에 두고, 제목 변경, 크기 변경, 이동 뒤에도 그 자리를 지킨다. 각 호스트는 AppKit 의 `-[NSWindow setTitlebarHeight:]`(`windowSetTitlebarHeight`, [비공개 네이티브 API 목록](../operations/private-native-apis.ko.md)에 있다)로 제목줄 높이를 정하고, 창에는 도구막대가 없다. 각 호스트는 창을 만들 때, 창이 보이기 전에 높이를 40pt 로 정하고, 창 페이지의 시작 문서에 답하기 전에 저장된 프레임 배율의 행 높이로 정하며, 창이 아직 이전 페이지를 보이면 시작 트랜잭션 안에서 정한다. 그래서 준비를 기다리지 않는 페이지의 첫 그리기가 자기 제목줄을 가진다([제목줄 높이](native-surfaces.ko.md#제목줄-높이)).

@@ -89,6 +89,10 @@ There are two kinds of region suppliers:
 - **Document regions**: Created by the core as subviews of surfaces, hosting web documents.
 - **Image regions**: Created by external sidecars, supplying shared images as native surfaces.
 
+### Region lifetime
+
+The host owns the end of the regions of a surface that a place leaves out: before the place replies, both hosts close every document and image region of each surface that the page no longer lists. The page runs the place first and releases the module of such a surface only after the place succeeded; that release drops the page-side handles of its regions and does not call `documentDetach`, `documentUnsubscribe` or `imageDetach`. A failed place releases nothing, so the surfaces it would have left out stay mounted. A region that the page detaches while its surface stays placed is detached through the host, and a failure of that detach is reported. This holds for every removal through a place: closing a tab, unloading a tab and the surfaces that a commit no longer retains.
+
 ## Input over native views
 
 A native view is placed on the DOM: it draws the DOM element it is placed on and does not own that element's input. The page decides input over it for the DOM element under the point, as if the native view were absent:

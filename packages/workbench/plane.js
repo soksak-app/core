@@ -25,7 +25,7 @@ import { icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
-import { disposeSurface, focusSurface, mountSurface, mountedSurface, placePluginPlaceholder } from "./surface-modules.js";
+import { focusSurface, mountSurface, mountedSurface, placePluginPlaceholder } from "./surface-modules.js";
 import { emitEvent } from "./page-log.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
@@ -493,10 +493,8 @@ async function closeTab(cardId, tabId) {
   const card = grid.card(cardId);
   if (!card) return;
   if (!tabsOf(card).some((t) => t.id === tabId)) return;
-  // Closing a tab completes only after the module has released the native composition and the sidecar session. The command
-  // registry awaits this promise before it runs the settled barrier. Otherwise the barrier races the asynchronous dispose
-  // and can time out while the host still shows the tab.
-  await disposeSurface(tabId);
+  // The surface is released by the commit of this change after its place succeeds, because the place closes the regions of
+  // the surface in the host (docs/spec/native-surfaces.md#region-lifetime); the settled barrier of the command waits for that commit.
   card.data.tabs = tabsOf(card).filter((t) => t.id !== tabId);
   if (card.data.tabs.length === 0) {
     // A card that cannot be closed remains, so one tab is inserted again. Its kind is what the focus was showing, or the first

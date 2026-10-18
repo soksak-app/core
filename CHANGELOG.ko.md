@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.8-4: commit은 `host.place`를 먼저 실행하고 성공한 뒤에만 뺀 표면을 release하며, 호스트가 place와 함께 닫은 영역은 detach하지 않는다; 실패한 place는 tab을 마운트되고 loaded인 채로 두고, tab 닫기도 같은 방식으로 그 commit이 release한다. Red: commit이 place 전에 표면을 release했다; Green.
 - F198.7.3: tab button의 오른쪽 클릭은 tab context menu(`core.tab.menu`)를 열고, 그 항목 `core.tab.menu-keep`은 표시 `kept`를 보이며 `core.tab.keep`으로 이를 설정하거나 지운다; 절대 unload될 수 없는 tab에는 항목이 없다. Red: menu module이 없었고 picker 항목이 자신의 dom 이름을 가질 수 없었다; Green.
 - F198.8-5: 문서 영역이 restore된 session history를 거부한 tab도 거부가 restore를 열어 두므로 마운트가 끝나면 `page.tab.restored`를 낸다. Red: saver에 restore를 열어 두는 경로가 없었다; Green.
 - F198.8-3: tab의 restore된 session history를 거부한 문서 영역은 실패를 알리고 history 없이 다시 붙으므로, tab은 문서를 유지하고 history만 잃는다. Red: attach가 실패했다; Green.

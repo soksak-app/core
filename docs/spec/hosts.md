@@ -125,6 +125,8 @@ An asynchronous start or delegate-stop failure changes recording errors only whe
 
 The webview operation attaches the DOM plane to a `SurfaceHost`, not directly to the window's shared surface container. Document and image operations create descendants of that host's native plane. The platform interface does not expose an operation that can place a region as a sibling of its `SurfaceHost`. Both language hosts validate the [surface composition](surface-composition.md) before calling platform code.
 
+A place closes every document and image region of each surface that it no longer lists before it replies, in both hosts (`closeSurfaceDocuments` and `images.CloseSurface` in Wails, `documents::close_surface` and `images::close_surface` in Tauri); the page then releases that surface without detaching its regions ([region lifetime](native-surfaces.md#region-lifetime)).
+
 ### Window buttons
 
 AppKit owns the window's own buttons. The title bar height decides where AppKit places them: AppKit centres the buttons vertically in the title bar and keeps them there after a title change, a resize, and a move. Each host sets the title bar height with AppKit's `-[NSWindow setTitlebarHeight:]` (`windowSetTitlebarHeight`, listed in the [private native API inventory](../operations/private-native-apis.md)); the window has no toolbar. Each host sets the height to 40pt when it creates the window, before the window becomes visible, and sets it to the row of the stored frame factor before it answers the start document of the window's page, inside a start transaction while the window still shows its previous page, so the page's first draw, which waits for no preparation, has its title bar ([title bar height](native-surfaces.md#title-bar-height)).

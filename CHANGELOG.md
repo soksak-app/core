@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.8-4: a commit runs `host.place` first and releases the surfaces it left out only after it succeeds, without detaching the regions that the host closed with the place; a failed place keeps the tab mounted and loaded, and closing a tab is released by its commit the same way. Red: the commit released the surfaces before the place; Green.
 - F198.7.3: a right click on a tab button opens the tab context menu (`core.tab.menu`), whose item `core.tab.menu-keep` shows the mark `kept` and sets or clears it through `core.tab.keep`; a tab that can never be unloaded has no item. Red: the menu module was missing and a picker item could not carry its own dom name; Green.
 - F198.8-5: a tab whose document region refused its restored session history still emits `page.tab.restored` when its mount ends, because the refusal keeps the restore open. Red: the saver had no path that kept it open; Green.
 - F198.8-3: a document region that refuses the restored session history of a tab reports the failure and attaches again without it, so the tab keeps its document and loses only the history. Red: the attach failed; Green.

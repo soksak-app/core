@@ -46,7 +46,7 @@ import {
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
    are done here. */
 import { latest, onCommit, onRun, publish, publishAhead } from "./compositor.js";
-import { authorizeSurface, disposeSurface, disposeSurfacesExcept, focusSurface, onSurfaceMounted, waitSurfaceCompositionDeclared } from "./surface-modules.js";
+import { authorizeSurface, disposeSurfacesExcept, focusSurface, onSurfaceMounted, placeSurfaces, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 import { createMemorySaver } from "./memory-saver.js";
 import { documentRegions } from "./document-regions.js";
 import { onTabReports, reportTabState, reportTitle, tabKeeps } from "./tab-reports.js";
@@ -244,13 +244,11 @@ onCommit((record) => {
   for (const card of currentGrid()?.cards ?? []) {
     for (const tab of tabsOf(card)) if (!registry.hasPlugin(tab.plugin)) ids.add(tab.id);
   }
-  return Promise.all(unload.map((id) => disposeSurface(id, { mode: "unload" }))).then(() => disposeSurfacesExcept(ids)).then(() => {
-    const placed = host.place({ ...record, surfaces: all });
-    return Promise.resolve(placed).then((answer) => {
-      for (const surface of record.surfaces) authorizeSurface(surface.id);
-      return answer;
-    });
-  });
+  // The surfaces that the place leaves out are released only after it succeeds; a failed place keeps them mounted.
+  return placeSurfaces(() => Promise.resolve(host.place({ ...record, surfaces: all })).then((answer) => {
+    for (const surface of record.surfaces) authorizeSurface(surface.id);
+    return answer;
+  }), { retain: ids, unload });
 });
 
 /* When the plane is redrawn, it is verified and the surfaces are reported. The plane does not know the two and the two only read the plane,
