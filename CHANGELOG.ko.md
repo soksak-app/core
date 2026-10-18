@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.19: 문서 영역의 handle은 워크벤치 attach 답 `{history}`에서 온 `history`를 알리며, attach가 세션 기록을 restore했으면 `true`다. 그래서 restore된 표면은 restore된 기록이 없을 때만 저장한 주소를 load한다. 그것이 없는 attach 답은 attach를 거부한다. Red: `history is unknown before the attach replies`(`undefined`), 워크벤치 attach가 `{ history: true }` 대신 `null`로 답함; Green: document-region 20 of 20, document-regions 6 of 6.
 - F198.17: `validateManifest`는 `surface.unload`가 없는 표면을 받아들이고 선언이 있으면 검사한다. 그런 표면은 unload하지 않으므로(`undeclared`), 이 field를 거부하는 core 0.0.17용으로 게시된 plugin 버전을 core 0.0.18에 계속 설치할 수 있다. release 본문은 메모리 절약이 기본으로 켜져 있음을 밝힌다. Red: 선언이 없는 표면에 `plugin probe: surface requires unload unless the plugin declares background`; Green: validate 30 of 30.
 - F192.4: vt sidecar 0.0.11이 image가 있는 surface에 대한 `image` 없는 `open`을 거부하고 surface의 그리기 mode를 기록하며, terminal plugin 0.0.14가 그것을 요구한다.
 - F197.7: vt sidecar 0.0.11과 files sidecar 0.0.6이 오류만 저장하는 기본 정책(F197.5)을 릴리즈한다. shell sidecar는 게시하지 않으므로 release가 없다.

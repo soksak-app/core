@@ -59,7 +59,7 @@ function runtime({ documentAttach, imageAttach, place } = {}) {
   const document = {
     attach: (name) => {
       documentCalls.push(["attach", name]);
-      return documentAttach ? documentAttach(name) : Promise.resolve();
+      return documentAttach ? documentAttach(name) : Promise.resolve({ history: false });
     },
     place: (...args) => { documentCalls.push(["place", ...args]); return Promise.resolve(); },
     load: (...args) => { documentCalls.push(["load", ...args]); return Promise.resolve(); },

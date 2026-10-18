@@ -43,7 +43,7 @@ function port() {
   let receive = null;
   let stopped = false;
   let release;
-  const attached = new Promise((resolve) => { release = resolve; });
+  const attached = new Promise((resolve) => { release = (reply = { history: false }) => resolve(reply); });
   return Object.assign(port, {
     calls, attached, release,
     send: (document, state) => receive(document, state),
@@ -76,6 +76,24 @@ test("fractional viewport sizes do not create native region insets", () => {
   f.resize({ left: 0, top: 0, right: 597.5, bottom: 286.5, width: 597.5, height: 286.5 });
   assert.deepEqual(regionInsets(f.element, f.window).insets,
     { left: 0, top: 0, right: 0, bottom: 0 });
+});
+
+test("history tells whether the attach restored a session history", async () => {
+  for (const history of [true, false]) {
+    const f = fixture();
+    const p = port();
+    const region = attachRegion(p, f.element, "page", f.window, { report: f.report });
+    assert.equal(region.history, null, "history is unknown before the attach replies");
+    p.release({ history });
+    await region._ready;
+    assert.equal(region.history, history);
+  }
+  const f = fixture();
+  const p = port();
+  // A composition attaches its regions without observation and waits for _ready, which rejects (surface-composition.js).
+  const region = attachRegion(p, f.element, "page", f.window, { report: f.report, observe: false });
+  p.release(null);
+  await assert.rejects(region._ready, /document page attach reply has no history: null/);
 });
 
 test("calls wait for attach and run in order", async () => {

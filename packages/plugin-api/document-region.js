@@ -86,6 +86,8 @@ export function observeRegionInsets(element, view, onPlace, report) {
  *
  * The calls on the returned region run in order after the attachment finishes. state is the last
  * document state that the host reported and onState is called each time the state changes. It cannot be called after detach.
+ * history is null until the attachment finishes and then tells whether the region restored a session history
+ * (docs/spec/plugins.md#memory-saver); an attach reply without it rejects the attachment.
  */
 export function attachRegion(port, element, name, view = element.ownerDocument.defaultView, options = {}) {
   if (!DOCUMENT_NAME.test(name)) throw new Error(`invalid document name ${JSON.stringify(name)}`);
@@ -95,7 +97,11 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
   const listeners = new Set();
   let state = null;
   let detached = false;
-  let chain = port.attach(name);
+  let history = null;
+  let chain = Promise.resolve(port.attach(name)).then((reply) => {
+    if (typeof reply?.history !== "boolean") throw new Error(`document ${name} attach reply has no history: ${JSON.stringify(reply)}`);
+    history = reply.history;
+  });
   const queue = (work) => {
     if (detached) return Promise.reject(new Error(`document ${name} is detached`));
     const next = chain.then(work);
@@ -142,6 +148,7 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
     name,
     _ready: chain,
     get state() { return state; },
+    get history() { return history; },
     onState(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);

@@ -80,6 +80,14 @@ test("a tab whose regions yield no interactionState has no history", async () =>
   assert.deepEqual(regions.attachRequest("tab", "page"), { document: "page" });
 });
 
+test("an attach replies whether it restored a session history", async () => {
+  const regions = createDocumentRegions();
+  const attach = async () => null;
+  regions.restore("tab", { page: "AAAA" });
+  assert.deepEqual(await regions.attach("tab", "page", attach), { history: true });
+  assert.deepEqual(await regions.attach("tab", "page", attach), { history: false });
+});
+
 test("a refused restored interactionState is reported and the region attaches again without it", async () => {
   const regions = createDocumentRegions();
   const refused = [];
@@ -91,7 +99,7 @@ test("a refused restored interactionState is reported and the region attaches ag
     if (request.interactionState !== undefined) throw new Error("interactionState is not a session history");
     return { attached: request.document };
   };
-  assert.deepEqual(await regions.attach("tab", "page", attach), { attached: "page" });
+  assert.deepEqual(await regions.attach("tab", "page", attach), { history: false });
   assert.deepEqual(requests, [{ document: "page", interactionState: "BAD" }, { document: "page" }]);
   assert.deepEqual(refused, [["tab", "page", "interactionState is not a session history"]]);
   answers.documentInteractionState = async () => "S";
