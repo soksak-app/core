@@ -117,3 +117,20 @@ test("the counts of a closed gate leave each second and at a flush, not with eac
   await batcher.flush();
   assert.deepEqual(gatedOf(), [{ class: "call", level: "debug", count: 20 }, { class: "call", level: "debug", count: 1 }]);
 });
+
+// The main page emits page.start in its first module, before the policy of its setting reaches the gate, and a window check
+// finds the reload of the page by it (docs/spec/logging.md#sources), so page.start passes every gate like the counts.
+test("page.start passes the gate before a policy is set and a gate that turns the class lifecycle off", async () => {
+  const batches = [];
+  const unset = createLogGate();
+  const first = createEventBatcher({ call: answering(async (request) => { batches.push(request); }), report: assert.ifError, gate: unset });
+  assert.equal(first.emit("info", "page.start", { time_origin: 1, url: "http://localhost/" }), true);
+  const off = createLogGate();
+  off.set({ ...everything, lifecycle: "off" });
+  const second = createEventBatcher({ call: answering(async (request) => { batches.push(request); }), report: assert.ifError, gate: off });
+  assert.equal(second.emit("info", "page.start", { time_origin: 2, url: "http://localhost/" }), true);
+  await first.flush();
+  await second.flush();
+  assert.deepEqual(batches.flatMap((request) => request.events).filter((event) => event.event === "page.start")
+    .map((event) => event.fields.time_origin), [1, 2]);
+});

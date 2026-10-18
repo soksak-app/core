@@ -42,6 +42,10 @@ function boundFields(fields) {
   return { stored: { head, truncated: true }, bytes: HEAD_BYTES + 32 };
 }
 
+// The events that pass every gate: page.start marks the start of a document and is emitted by its first module, before the
+// policy of the setting reaches the gate, and a reader finds the reload of a page by it (docs/spec/logging.md#policy).
+const UNGATED = new Set(["page.start"]);
+
 /**
  * The page has no wall clock or monotonic clock in microseconds: `Date.now()` has a resolution of a millisecond, and
  * `performance.now()` counts from the start of the document at the resolution that the engine allows. An event stores the
@@ -200,7 +204,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
   const emit = (level, event, fields = {}, cids = undefined) => {
     if (!LEVELS.has(level)) throw new TypeError(`event level ${JSON.stringify(level)} is not one of ${[...LEVELS].join(", ")}`);
     const klass = classOf(event);
-    if (klass !== undefined && !open(klass, level)) return false;
+    if (klass !== undefined && !UNGATED.has(event) && !open(klass, level)) return false;
     const { stored, bytes } = boundFields(typeof fields === "function" ? fields() : fields);
     const charge = bytes + event.length + EVENT_OVERHEAD_BYTES;
     if (queue.length >= maxEvents) return refuse("the page queue was full", charge);
