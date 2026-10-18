@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.10: 창 검사 `e2e/memory-saver.test.mjs`는 `surface.unload`를 선언하는 fixture plugin `e2e/fixtures/memory-saver/unload-probe`를 설치하고 두 host에서 `core.tab.unload`에 의한 unload와 사라진 document region, 같은 주소와 session history의 restore, warn pressure에서 숨은 후보를 하나씩 내리고 normal에서 멈추는 것, keep한 탭과 수정된 탭이 남는 것을 검사한다. 새 설정의 첫 검사로서 두 host에서 통과한다; F198.10-2가 항목을 열어 둔다.
 - F198.9-2: `diagnostics.objects`가 page와 document region의 `elements`에 open shadow root의 요소를 세므로 보이는 surface의 DOM을 센다. Red: 세 요소의 open shadow root를 가진 host가 요소 하나로 세어졌다. Green.
 - F198.9-1-1: page diagnostic module이 `diagnostics.objects`용 parked element 수를 게시하므로 release page는 진단 global을 게시하지 않는다. Red: workbench module이 게시했다. Green.
 - F198.9-1: `diagnostics.objects`가 document 밖에 있어 세지 않던 숨겨진 tab의 park된 surface host 요소 수 `parkedElements`를 `page`에 보고하므로, 실행 중인 애플리케이션의 memory check가 숨겨진 tab이 쥔 DOM을 본다. Red: workbench, native library, 두 host에 수가 없었다. Green.
