@@ -159,6 +159,7 @@ const SURFACE_METHOD = {
 };
 
 export const page = (() => {
+  const listen = createLifecycleListener((event, fn) => window.__soksakNative.on(event, fn));
   const calls = surfaceCalls({
     send: (name, ...args) => {
       const method = SURFACE_METHOD[name];
@@ -166,11 +167,13 @@ export const page = (() => {
       return window.__soksakNative.call(method, args);
     },
     log: (request) => window.__soksakNative.call("Log", [request]),
+    listen,
   });
   const call = calls.call;
-  const listen = createLifecycleListener((event, fn) => window.__soksakNative.on(event, fn));
   // The surface id is the id in the document address. The workbench opens the surface with that tab id.
   const surface = new URLSearchParams(location.search).get("id");
+  // A document of a surface or a modal names its id and takes the log policy from the host; the main page has no id.
+  if (surface) calls.followPolicy();
   return {
     theme(fn) {
       call("theme").then(fn);

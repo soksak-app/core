@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+// A document of a surface asks the host for the log policy at its load (action policy-read); the fake host answers it with the
+// default policy and does not record it.
+const policyRead = { classes: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" } };
+
 test("surface readiness invokes the registered native presentation command", async () => {
   const calls = [];
   globalThis.window = { __TAURI__: {
@@ -69,7 +73,7 @@ test("a failed host call rejects with an Error that carries the host's message",
 test("a page sidecar failure reaches only the listener of that sidecar and surface", async () => {
   const listeners = [];
   globalThis.window = { __TAURI__: {
-    core: { invoke: async () => null },
+    core: { invoke: async (command, args) => { if (command === "log" && args.request.action === "policy-read") return Promise.resolve(policyRead); return null; } },
     event: { listen: async (event, fn) => { listeners.push([event, fn]); return () => {}; } },
     webview: { getCurrentWebview: () => ({ label: "main" }) },
   } };

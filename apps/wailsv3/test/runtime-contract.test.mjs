@@ -2,6 +2,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+// A document of a surface asks the host for the log policy at its load (action policy-read); the fake host answers it with the
+// default policy and does not record it.
+const policyRead = { classes: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" } };
+
 test("Wails page regions expose operations but only composition places geometry", async () => {
   // Records every call that goes through the mocked native interface.
   const recorded = [];
@@ -11,6 +15,7 @@ test("Wails page regions expose operations but only composition places geometry"
   globalThis.window = {
     __soksakNative: {
       call(method, args) {
+        if (method === "Log" && args[0].action === "policy-read") return Promise.resolve(policyRead);
         // The batches of events are kept apart: the calls of the page under test are asserted one by one.
         if (method === "Log" && args[0].action === "clock") return Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 });
         // The statement of the clock anchor (page.log.clock) leads the first batch of a page and has its own test in the workbench.

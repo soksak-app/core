@@ -2,10 +2,9 @@
 // (docs/spec/logging.md#automatic-entrances).
 import assert from "node:assert/strict";
 import test from "node:test";
-import { logGate } from "@soksak/workbench/log-gate.js";
-// The event page.call is at the level debug, which only the debug state stores (docs/spec/logging.md#policy), so the state of every
-// class at trace is set here.
-logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
+// The event page.call is at the level debug, which only the debug state stores (docs/spec/logging.md#policy), so the host answers
+// the action policy-read with every class at trace.
+const TRACE = { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" };
 
 async function surface(native) {
   const calls = [];
@@ -13,6 +12,7 @@ async function surface(native) {
     call: (method, args) => {
       // The request for the clocks of the host is answered here; the batches are what the tests assert.
       if (method === "Log" && args[0].action === "clock") return Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 });
+      if (method === "Log" && args[0].action === "policy-read") return Promise.resolve({ classes: TRACE });
       calls.push([method, args]);
       return native(method, args);
     },

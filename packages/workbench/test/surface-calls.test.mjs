@@ -3,20 +3,51 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { surfaceCalls } from "../surface-calls.js";
-import { withoutClock } from "./support/records.mjs";
-import { logGate } from "../log-gate.js";
-// The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug), which these tests
-// examine, so the state of every class at trace is set here.
-logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
+import { settled, withoutClock } from "./support/records.mjs";
 
-function setup(send) {
+const TRACE = { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" };
+const ERRORS = { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" };
+
+// The fake host answers the action policy-read with the classes given, and `emit` sends the host event log-policy to the document.
+// The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug),
+// which most tests examine, so the host answers every class at trace by default.
+function setup(send, classes = TRACE) {
   const requests = [];
-  const calls = surfaceCalls({ send, log: async (request) => {
-    if (request.action === "clock") return { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
-    requests.push(withoutClock(request));
-  } });
-  return { calls, requests, events: () => requests.flatMap((request) => request.events) };
+  const listeners = new Map();
+  const calls = surfaceCalls({
+    send,
+    log: async (request) => {
+      if (request.action === "clock") return { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
+      if (request.action === "policy-read") return { classes };
+      requests.push(withoutClock(request));
+    },
+    listen: (name, fn) => { listeners.set(name, fn); },
+  });
+  calls.followPolicy();
+  const emit = (name, payload) => listeners.get(name)(payload);
+  return { calls, requests, emit, events: () => requests.flatMap((request) => request.events) };
 }
+
+test("a document applies the policy that the host reads at its load, and each later event log-policy", async () => {
+  const { calls, emit, events } = setup(async () => "answer", ERRORS);
+  await settled();
+  await calls.call("documentAttach", { document: "d" });
+  await calls.record("error", "page.record.error", { where: "page", text: "first" });
+  assert.deepEqual(events().map((event) => event.event), ["page.record.error"], "the default policy stores no page.call of level debug");
+  emit("log-policy", { classes: TRACE });
+  await calls.call("documentAttach", { document: "d" });
+  await calls.record("info", "page.record.info", { where: "page", text: "second" });
+  assert.deepEqual(events().map((event) => [event.event, event.fields.name ?? event.fields.text]).slice(1),
+    [["page.call", "documentAttach"], ["page.record.info", "second"]]);
+});
+
+test("the policy that the host reads at the load is in force before the first call", async () => {
+  const { calls, events } = setup(async () => "answer");
+  await settled();
+  await calls.call("documentLoad", { document: "d" });
+  await calls.record("info", "page.record.info", {});
+  assert.deepEqual(events().map((event) => event.event), ["page.call", "page.record.info"]);
+});
 
 test("a call returns its answer and is recorded after it ended, with the duration and the outcome", async () => {
   const { calls, events } = setup(async (name, value) => ({ echoed: value }));

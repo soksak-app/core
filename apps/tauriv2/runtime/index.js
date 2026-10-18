@@ -212,6 +212,8 @@ function surfaceWire(surface) {
 export const page = (() => {
   const invoke = hostInvoke();
   const wire = surfaceWire(new URLSearchParams(location.search).get("id"));
+  const listen = createLifecycleListener((event, fn) => window.__TAURI__.event.listen(event, fn,
+    { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
   const calls = surfaceCalls({
     send: (name, ...args) => {
       const entry = wire[name];
@@ -219,12 +221,13 @@ export const page = (() => {
       return invoke(entry.command, entry.arguments(...args));
     },
     log: (request) => invoke("log", { request }),
+    listen: (event, fn) => listen(event, (e) => fn(e.payload)),
   });
   const call = calls.call;
-  const listen = createLifecycleListener((event, fn) => window.__TAURI__.event.listen(event, fn,
-    { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
   // The surface id is the id in the document address. The workbench opens the surface with that tab id.
   const surface = new URLSearchParams(location.search).get("id");
+  // A document of a surface or a modal names its id and takes the log policy from the host; the main page has no id.
+  if (surface) calls.followPolicy();
   return {
     theme(fn) {
       call("theme").then(fn);

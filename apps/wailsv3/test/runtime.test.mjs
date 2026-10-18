@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 import test from "node:test";
 
+// A document of a surface asks the host for the log policy at its load (action policy-read); the fake host answers it with the
+// default policy and does not record it.
+const policyRead = { classes: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" } };
+
 test("surface readiness invokes the registered native presentation method", async () => {
   const calls = [];
   globalThis.window = {
@@ -26,7 +30,7 @@ test("surface readiness invokes the registered native presentation method", asyn
 
 test("the performance trace command carries the page request to the host", async () => {
   const calls = [];
-  globalThis.window = { __soksakNative: { call: async (method, args) => { calls.push([method, args]); return null; }, on: () => () => {} } };
+  globalThis.window = { __soksakNative: { call: async (method, args) => { if (method === "Log" && args[0].action === "policy-read") return Promise.resolve(policyRead); calls.push([method, args]); return null; }, on: () => () => {} } };
   globalThis.location = { search: "?id=tab" };
   try {
     // Only this check uses a separate copy of the module, because the runtime captures window on its first load.
@@ -42,7 +46,7 @@ test("the performance trace command carries the page request to the host", async
 test("a page sidecar failure reaches only the listener of that sidecar and surface", async () => {
   const listeners = [];
   globalThis.window = { __soksakNative: {
-    call: async () => null,
+    call: async (method, args) => { if (method === "Log" && args[0].action === "policy-read") return Promise.resolve(policyRead); return null; },
     on: (event, fn) => { listeners.push([event, fn]); return () => {}; },
   } };
   globalThis.location = { search: "?id=s1" };
@@ -66,7 +70,7 @@ test("a page sidecar failure reaches only the listener of that sidecar and surfa
 
 test("the log command carries the page batch to the host", async () => {
   const calls = [];
-  globalThis.window = { __soksakNative: { call: async (method, args) => { calls.push([method, args]); return null; }, on: () => () => {} } };
+  globalThis.window = { __soksakNative: { call: async (method, args) => { if (method === "Log" && args[0].action === "policy-read") return Promise.resolve(policyRead); calls.push([method, args]); return null; }, on: () => () => {} } };
   globalThis.location = { search: "?id=tab" };
   try {
     const { host } = await import("../runtime/index.js?test=log-command");

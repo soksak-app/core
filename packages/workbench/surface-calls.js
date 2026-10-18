@@ -5,15 +5,35 @@
 // events of one document reach the host in the order they happened.
 import { callEvent, failureOf } from "./host-calls.js";
 import { createEventBatcher } from "./log-batch.js";
+import { logGate } from "./log-gate.js";
 
 /**
  * `send(name, ...args)` sends one host call by its name and arguments and returns its answer; `log(request)` sends the request
- * of the host call `log`, which is not recorded because a recorded `log` call would record itself. A relay of events that fails
- * is written to the console of the document, which has no other place to report it.
+ * of the host call `log`, which is not recorded because a recorded `log` call would record itself; `listen(name, fn)` calls `fn`
+ * with the body of each host event of that name. A relay of events that fails is written to the console of the document, which
+ * has no other place to report it.
+ *
+ * `followPolicy()` puts the policy in force of the host in the gate of the document (docs/spec/logging.md#policy): the action
+ * `policy-read` once and each later host event `log-policy`. The runtime calls it at the load of a document of a surface or a
+ * modal; the main page puts the policy of its setting in the gate itself. Until the read answers, the default policy is in force;
+ * an event that arrived first is newer than the read, so the read then changes nothing.
  */
-export function surfaceCalls({ send, log }) {
-  const batcher = createEventBatcher({ call: log, report: (error) => console.error(error.message) });
+export function surfaceCalls({ send, log, listen }) {
+  const report = (error) => console.error(error.message);
+  const batcher = createEventBatcher({ call: log, report });
+  const apply = (classes) => {
+    try {
+      logGate.set(classes);
+    } catch (error) {
+      report(new Error(`log policy: ${error.message}`));
+    }
+  };
   return {
+    followPolicy() {
+      let announced = false;
+      Promise.resolve(listen("log-policy", ({ classes }) => { announced = true; apply(classes); })).catch(report);
+      Promise.resolve(log({ action: "policy-read" })).then((answer) => { if (!announced) apply(answer?.classes); }).catch(report);
+    },
     call(name, ...args) {
       const started = performance.now();
       const ended = (ok, failure) => {
