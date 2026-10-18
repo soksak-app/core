@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.3: `surface.unload`를 선언한 plugin의 surface는 `context.tab.state`로 tab 상태를 유지하고, `context.tab.keep`으로 진행 중인 작업을 알리며, unload는 오류를 뺀 tab 보고를 유지한다. Red: API가 없었고 store가 열리기 전에 mount된 surface가 상태를 잃었다; Green.
 - F198.2: tab 상태 store `tab-state.json`(format 1): 두 host가 항목 단위로 쓰고, workbench가 쓰기를 합치며, layout 쓰기 뒤에 항목을 지우고, 고아를 맞추며, 내릴 수 있는 tab의 label cache를 유지한다.
 - F198.6: process마다 memory pressure source 하나가 normal, warn, critical을 관측한다; back-forward cache는 warn과 critical에서만 비우고, 두 host가 모든 창에 `memory-pressure {level, seq}`를 순서대로 보낸다.
 - F198.1: 메모리 절약을 명세한다(숨겨진 tab의 unload와 restore, 보호, tab 상태 store, 설정, status와 명령, host memory pressure source); `validateManifest`는 plugin이 `background`를 선언하지 않으면 `surface.unload`를 요구한다. Red: 그것이 없는 surface가 받아들여졌다; Green.

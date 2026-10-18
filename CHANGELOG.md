@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.3: surfaces of a plugin that declares `surface.unload` keep their tab state through `context.tab.state`, report busy work through `context.tab.keep`, and an unload keeps their tab reports except the error. Red: the API was missing and a surface mounted before the store opened lost its state; Green.
 - F198.2: the tab state store `tab-state.json` (format 1): both hosts write it per entry, and the workbench coalesces writes, removes entries after the layout write, reconciles orphans and keeps the label cache of tabs that can be unloaded.
 - F198.6: one memory pressure source per process observes normal, warn and critical; the back-forward caches clear only on warn and critical, and both hosts send `memory-pressure {level, seq}` to every window in order.
 - F198.1: the memory saver is specified (unload and restore of hidden tabs, protections, the tab state store, the settings, the status and commands, the host memory pressure source), and `validateManifest` requires `surface.unload` unless the plugin declares `background`. Red: a surface without it was accepted; Green.
