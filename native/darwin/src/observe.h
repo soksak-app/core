@@ -56,9 +56,10 @@ id sp_observe_global_monitor(const char *source, sp_observe_mode mode, NSEventMa
 // NULL, after the event `native.observe.failed`, when the system refuses it or the handler is missing.
 dispatch_source_t sp_observe_process_exit(const char *source, sp_observe_mode mode, pid_t pid, dispatch_queue_t queue, void (^handler)(void));
 
-// Creates a dispatch source for the warn and critical memory pressure of the system on the queue; the handler runs after the delivery is
-// counted. The caller resumes it. Returns NULL, after the event `native.observe.failed`, when the system refuses it or the handler is missing.
-dispatch_source_t sp_observe_memory_pressure(const char *source, sp_observe_mode mode, dispatch_queue_t queue, void (^handler)(void));
+// Creates a dispatch source for the normal, warn and critical memory pressure of the system on the queue; the handler runs after the
+// delivery is counted and receives the level `normal`, `warn` or `critical`. The caller resumes it. Returns NULL, after the event
+// `native.observe.failed`, when the system refuses it or the handler is missing.
+dispatch_source_t sp_observe_memory_pressure(const char *source, sp_observe_mode mode, dispatch_queue_t queue, void (^handler)(const char *level));
 
 // Adds a run loop observer of `activities` in the common modes of the loop. Returns the observer, or NULL, after the event
 // `native.observe.failed`, when the system refuses it or the handler is missing.

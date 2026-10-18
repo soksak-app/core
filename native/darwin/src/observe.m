@@ -262,22 +262,25 @@ dispatch_source_t sp_observe_process_exit(const char *source, sp_observe_mode mo
     return created;
 }
 
-dispatch_source_t sp_observe_memory_pressure(const char *source, sp_observe_mode mode, dispatch_queue_t queue, void (^handler)(void)) {
+dispatch_source_t sp_observe_memory_pressure(const char *source, sp_observe_mode mode, dispatch_queue_t queue, void (^handler)(const char *level)) {
     if (!handler) {
         fail(source, "memory_pressure", @"the handler is missing");
         return NULL;
     }
-    source_record *record = recordRegistration(source, mode, "memory_pressure", @"warn and critical");
+    source_record *record = recordRegistration(source, mode, "memory_pressure", @"normal, warn and critical");
     if (!record) return NULL;
     dispatch_source_t created = dispatch_source_create(DISPATCH_SOURCE_TYPE_MEMORYPRESSURE, 0,
-        DISPATCH_MEMORYPRESSURE_WARN | DISPATCH_MEMORYPRESSURE_CRITICAL, queue);
+        DISPATCH_MEMORYPRESSURE_NORMAL | DISPATCH_MEMORYPRESSURE_WARN | DISPATCH_MEMORYPRESSURE_CRITICAL, queue);
     if (!created) {
         fail(source, "memory_pressure", @"the system refused the dispatch source");
         return NULL;
     }
     dispatch_source_set_event_handler(created, ^{
         deliver(record);
-        handler();
+        // The data of the source holds the flags of the levels that the system reported since the last delivery; the most severe
+        // one is the level in force.
+        unsigned long flags = dispatch_source_get_data(created);
+        handler((flags & DISPATCH_MEMORYPRESSURE_CRITICAL) ? "critical" : (flags & DISPATCH_MEMORYPRESSURE_WARN) ? "warn" : "normal");
     });
     return created;
 }

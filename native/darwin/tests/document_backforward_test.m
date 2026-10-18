@@ -3,7 +3,8 @@
 // identifier when WebKit restores the page from its back-forward cache and a new identifier when it loads the page again.
 // The check first requires a restore from the cache, then requires that a region hidden for the hidden clear delay and a
 // region under memory pressure clear the cache, record the event native.document.backforward_cleared with its reason, and load
-// page 1 again on going back. The check does not activate the application.
+// page 1 again on going back, and that a report of the normal level keeps the cache. The pressure reports come from the fault
+// injection of the memory pressure owner (memory_pressure.h). The check does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
@@ -12,6 +13,7 @@
 #import <string.h>
 #import "document_view.h"
 #import "event_ring.h"
+#import "memory_pressure.h"
 #import "private/webkit.h"
 #import "support/records.h"
 #import "webview_geometry.h"
@@ -149,6 +151,7 @@ int main(void) { @autoreleasepool {
         @"a delay that is not a finite positive number is refused");
     check(sp_document_set_hidden_clear_delay(hiddenDelay), @"the hidden clear delay is set");
     processes = [[NSMutableSet alloc] init];
+    check(sp_memory_pressure_start(^(const char *level, unsigned long long seq) {}), @"the memory pressure owner starts");
 
     nw_listener_t listener = serve();
     NSString *base = [NSString stringWithFormat:@"http://127.0.0.1:%d/", nw_listener_get_port(listener)];
@@ -216,10 +219,12 @@ int main(void) { @autoreleasepool {
     check([afterShort isEqualToString:afterHidden], [NSString stringWithFormat:
         @"a region shown again before the delay restores page 1 from the cache (identifier %@, cached %@)", afterShort, afterHidden]);
 
-    // Memory pressure clears the cache of a shown region.
+    // Memory pressure at warn clears the cache of a shown region.
     go(@"forward before pressure", 1);
     waitForPage(@"forward before pressure", 2);
-    NSArray<NSDictionary *> *pressureEvents = capturedEvents(^{ sp_document_memory_pressure(); });
+    NSArray<NSDictionary *> *pressureEvents = capturedEvents(^{
+        check(sp_memory_pressure_inject("warn"), @"the warn report is injected");
+    });
     NSArray<NSString *> *pressureReasons = clearReasons(pressureEvents);
     check([pressureReasons isEqualToArray:@[ @"pressure" ]], [NSString stringWithFormat:
         @"memory pressure records one clear with the reason pressure (%@)", pressureReasons]);
@@ -227,6 +232,19 @@ int main(void) { @autoreleasepool {
     NSString *afterPressure = waitForPage(@"back after pressure", 1);
     check(![afterPressure isEqualToString:afterShort], [NSString stringWithFormat:
         @"going back after the pressure clear loads page 1 again (identifier %@, cached %@)", afterPressure, afterShort]);
+
+    // A report of the normal level keeps the cache.
+    go(@"forward before normal", 1);
+    waitForPage(@"forward before normal", 2);
+    NSArray<NSDictionary *> *normalEvents = capturedEvents(^{
+        check(sp_memory_pressure_inject("normal"), @"the normal report is injected");
+    });
+    check(clearReasons(normalEvents).count == 0, [NSString stringWithFormat:
+        @"a report of the normal level records no clear (%@)", clearReasons(normalEvents)]);
+    go(@"back after normal", 0);
+    NSString *afterNormal = waitForPage(@"back after normal", 1);
+    check([afterNormal isEqualToString:afterPressure], [NSString stringWithFormat:
+        @"going back after the normal report restores page 1 from the cache (identifier %@, cached %@)", afterNormal, afterPressure]);
     check(!NSApp.isActive, @"the application stays inactive");
 
     sp_document_close(document);

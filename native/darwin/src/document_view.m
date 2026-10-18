@@ -124,16 +124,6 @@ static NSHashTable<SPDocumentView *> *openDocuments(void) {
     return documents;
 }
 
-// The memory pressure source of the process. It is created with the first document region and kept until the process ends.
-static void watchMemoryPressure(void) {
-    static dispatch_source_t source;
-    if (source) return;
-    source = sp_observe_memory_pressure("document_view.memory_pressure", SP_OBSERVE_STORED, dispatch_get_main_queue(), ^{
-        sp_document_memory_pressure();
-    });
-    if (source) dispatch_resume(source);
-}
-
 extern double sp_surface_scale(void *surface);
 
 static CGFloat documentSurfaceScale(NSView *surface) {
@@ -721,7 +711,6 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     view.webSurface = surface;
     view.appearance = surface.effectiveAppearance;
     view.hidden = YES;
-    watchMemoryPressure();
     if (!webviewInputRegister(view) || !webviewIgnorePageFocus(view)) {
         [view release];
         return NULL;
@@ -934,7 +923,8 @@ bool sp_document_set_hidden_clear_delay(double seconds) {
     return true;
 }
 
-void sp_document_memory_pressure(void) {
+void sp_document_memory_pressure(const char *level) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    if (strcmp(level, "warn") != 0 && strcmp(level, "critical") != 0) return;
     for (SPDocumentView *view in openDocuments().allObjects) [view clearBackForwardCache:@"pressure"];
 }

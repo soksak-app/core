@@ -779,6 +779,16 @@
       },
       "description": "A document region cleared its back-forward cache, so going back loads the page again. reason is hidden when the region stayed hidden for the hidden clear delay and pressure when the system reported memory pressure."
     },
+    "native.memory.pressure": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "level": "string",
+        "seq": "number"
+      },
+      "description": "The memory pressure source of the process reported a change of level. level is normal, warn or critical and seq numbers the reports of the process from 1; each host relays the report to the pages as the page event memory-pressure."
+    },
     "native.window.key": {
       "layer": "native",
       "class": "lifecycle",
