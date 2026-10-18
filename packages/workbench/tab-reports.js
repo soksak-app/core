@@ -9,6 +9,9 @@ const modified = new Set();
 const errors = new Map();
 // The tabs whose surface reports work in progress through context.tab.keep("busy", true) (docs/spec/plugins.md#memory-saver).
 const busy = new Set();
+// The state of each tab that the memory saver does not hold loaded: unloaded or restoring (docs/spec/exposure.md#tab-memory).
+const memoryStates = new Map();
+const MEMORY_STATES = new Set(["loaded", "unloaded", "restoring"]);
 // The plane tells whether a tab is visible (whether it is the active tab of the focused card).
 let visibleTab = () => false;
 const listeners = new Set();
@@ -151,6 +154,19 @@ export function reportKeep(tabId, reason, on) {
 /** The keep protections that the reports of tabId give: keep:modified and keep:busy. */
 export const tabKeeps = (tabId) => [...(modified.has(tabId) ? ["keep:modified"] : []), ...(busy.has(tabId) ? ["keep:busy"] : [])];
 
+/** Records the state of tabId that the memory saver reports: loaded, unloaded or restoring. */
+export function reportTabState(tabId, state) {
+  if (!MEMORY_STATES.has(state)) throw new TypeError(`unknown tab state: ${String(state)}`);
+  // default: a tab that the memory saver did not report is loaded.
+  if ((memoryStates.get(tabId) ?? "loaded") === state) return;
+  if (state === "loaded") memoryStates.delete(tabId);
+  else memoryStates.set(tabId, state);
+  notify();
+}
+
+// default: a tab that the memory saver did not report is loaded.
+export const tabMemoryState = (tabId) => memoryStates.get(tabId) ?? "loaded";
+
 /**
  * Releasing a surface in the unload mode keeps the reports of its tab and clears the error, whose display ended with the
  * instance, and the busy report, which ends at dispose (docs/spec/plugins.md#memory-saver).
@@ -163,6 +179,7 @@ export function unloadTab(tabId) {
 /** Releasing a surface also clears the notice of its tab. */
 export function forgetTab(tabId) {
   busy.delete(tabId);
+  memoryStates.delete(tabId);
   directories.delete(tabId);
   origins.delete(tabId);
   const noticed = notices.delete(tabId);

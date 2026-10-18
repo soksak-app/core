@@ -124,3 +124,16 @@ test("a title report of a declaring surface writes the label cache", async () =>
   await disposeSurface("tab-label");
   dom.window.close();
 });
+
+test("each mount reports its end to the mount listeners, with the error of a failed mount", async () => {
+  const { onSurfaceMounted } = await import("../surface-modules.js");
+  const ended = [];
+  const off = onSurfaceMounted((id, error) => ended.push([id, error?.message ?? null]));
+  await mountSurface(slot, surface("tab-mount-ok"));
+  const failing = `data:text/javascript,${encodeURIComponent("export function mount() { throw new Error('mount refused'); }")}`;
+  await assert.rejects(mountSurface(slot, { ...surface("tab-mount-bad"), module: failing }), /mount refused/);
+  off();
+  assert.deepEqual(ended, [["tab-mount-ok", null], ["tab-mount-bad", "mount refused"]]);
+  await disposeSurface("tab-mount-ok");
+  await disposeSurface("tab-mount-bad");
+});

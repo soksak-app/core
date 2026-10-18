@@ -17,6 +17,14 @@ const mounted = new Map();
 const placeholders = new Map();
 const parking = document.createDocumentFragment();
 const authorization = new Map();
+// The listeners (surfaceId, error) of the end of each mount; error is null for a mount that ended.
+const mountListeners = new Set();
+
+/** Adds a listener of the end of each mount, which the memory saver reads for a restore; returns its removal. */
+export function onSurfaceMounted(listener) {
+  mountListeners.add(listener);
+  return () => mountListeners.delete(listener);
+}
 
 function authorizationFor(id) {
   let gate = authorization.get(id);
@@ -53,11 +61,7 @@ function pageRuntime(surface, scoped, compositionReady) {
   return {
     surfaces: { report: (message) => invoke("report", message) },
     document: {
-      attach: async (name) => {
-        const reply = await invoke("documentAttach", documentRegions.attachRequest(surface.surfaceId, name));
-        documentRegions.attached(surface.surfaceId, name);
-        return reply;
-      },
+      attach: (name) => documentRegions.attach(surface.surfaceId, name, (request) => invoke("documentAttach", request)),
       load: (name, url) => invoke("documentLoad", { document: name, url }),
       zoom: (name, zoom) => invoke("documentZoom", { document: name, zoom }),
       go: (name, action, offset) => invoke("documentGo", offset === undefined ? { document: name, action } : { document: name, action, offset }),
@@ -345,10 +349,12 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         // Waiting here creates a cycle: the presentation waits for the module, and the
         // composition of the module is the work that builds the raster.
         releaseSurfaceReady(context);
+        for (const listener of mountListeners) listener(surface.surfaceId, null);
         return mountedModule;
       }).catch((error) => {
         if (entry.disposed) return null;
         context.status.report("error", error);
+        for (const listener of mountListeners) listener(surface.surfaceId, error);
         throw error;
       });
   } else {

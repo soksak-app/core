@@ -17,7 +17,8 @@ const named = (name) => emitted.filter((entry) => entry.event === name).map((ent
 /** A saver over fakes at its declared dependencies, started before any tab; the clock is the mocked Date. */
 function harness(options = {}) {
   emitted.length = 0;
-  const state = { enabled: options.enabled ?? true, delay: 120, keeps: new Map(), kept: new Set(), commits: [], changes: 0 };
+  const state = { enabled: options.enabled ?? true, delay: 120, keeps: new Map(), kept: new Set(), commits: [], changes: 0,
+    failures: [], states: [] };
   const saver = createMemorySaver({
     now: () => Date.now(),
     enabled: () => state.enabled,
@@ -32,6 +33,8 @@ function harness(options = {}) {
     commit: options.commit ?? (async () => { state.commits.push(saver.place([]).unload); }),
     showLabel: () => {},
     changed: () => { state.changes++; },
+    failed: (text) => state.failures.push(text),
+    stateChanged: (tab, value) => state.states.push([tab, value]),
   });
   saver.start();
   return { saver, state };
@@ -54,6 +57,9 @@ test("the delay unloads a hidden tab and a show restores it", async () => {
   assert.deepEqual(named("page.tab.unloaded"), [{ tab: "a", plugin: "fixture", trigger: "delay" }]);
   saver.observe(new Set(["a"]), tabs("a", "b"));
   assert.equal(saver.unloaded("a"), false);
+  assert.equal(saver.state("a"), "restoring");
+  saver.restored("a");
+  assert.equal(saver.state("a"), "loaded");
   assert.deepEqual(named("page.tab.restored"), [{ tab: "a", plugin: "fixture", history: false }]);
   assert.deepEqual(saver.place([{ id: "a" }, { id: "b" }]).surfaces.map((surface) => surface.id), ["a", "b"]);
 });
@@ -139,6 +145,7 @@ test("a restore passes the interactionState read at the unload to the regions of
   assert.deepEqual(restored, []);
   saver.observe(new Set(["a"]), tabs("a", "b"));
   assert.deepEqual(restored, [{ tab: "a", history: { page: "state of a" } }]);
+  saver.restored("a");
   assert.deepEqual(named("page.tab.restored"), [{ tab: "a", plugin: "fixture", history: true }]);
 });
 
@@ -260,7 +267,7 @@ test("a restart with the setting on starts hidden declaring tabs unloaded with t
     now: () => Date.now(), enabled: () => enabled, delay: () => 120,
     declaration: (plugin) => (plugin === "undeclared" ? "undeclared" : "unload"),
     keeps: () => [], kept: () => false, setKept: () => {}, changed: () => {}, regions: async () => [], interaction: async () => undefined, restore: () => {},
-    commit: async () => {}, showLabel: (tab) => labels.push(tab),
+    commit: async () => {}, showLabel: (tab) => labels.push(tab), failed: () => {}, stateChanged: () => {},
   });
   const on = create(true);
   on.observe(new Set(["x"]), tabs("x", "a", "u-b"));
@@ -344,4 +351,33 @@ test("the status lists each tab with its state, reasons and times", async () => 
   await settle();
   assert.deepEqual(saver.status().tabs[1], { tab: "a", plugin: "fixture", state: "unloaded", reasons: [], hiddenAt: hidden,
     unloadAt: null, checkedAt: hidden + 120 * MINUTE });
+});
+
+test("a rejected interactionState read ends the attempt with a reported failure and keeps the tab loaded", async () => {
+  const { saver, state } = harness({ interaction: async () => { throw new Error("document region page is gone"); } });
+  saver.observe(new Set(["b"]), tabs("a", "b"));
+  mock.timers.tick(120 * MINUTE);
+  await settle();
+  assert.equal(saver.unloaded("a"), false);
+  assert.deepEqual(state.commits, []);
+  assert.deepEqual(named("page.tab.unload.failed"),
+    [{ tab: "a", plugin: "fixture", trigger: "delay", reason: "document region page is gone" }]);
+  assert.deepEqual(state.failures, ["memory saver: tab a: unload failed: document region page is gone"]);
+  assert.deepEqual(state.states, []);
+});
+
+test("a shown unloaded tab is restoring until its surface mounts, and a failed restore is reported", async () => {
+  const { saver, state } = harness();
+  saver.observe(new Set(["b"]), tabs("a", "b"));
+  mock.timers.tick(120 * MINUTE);
+  await settle();
+  saver.observe(new Set(["a"]), tabs("a", "b"));
+  assert.deepEqual(state.states, [["a", "unloaded"], ["a", "restoring"]]);
+  assert.deepEqual(named("page.tab.restored"), []);
+  saver.restoreFailed("a", "stored format 2 is not the declared format 1");
+  assert.equal(saver.unloaded("a"), false);
+  assert.deepEqual(state.states.at(-1), ["a", "loaded"]);
+  assert.deepEqual(named("page.tab.restore.failed"),
+    [{ tab: "a", plugin: "fixture", reason: "stored format 2 is not the declared format 1" }]);
+  assert.deepEqual(state.failures, ["memory saver: tab a: restore failed: stored format 2 is not the declared format 1"]);
 });

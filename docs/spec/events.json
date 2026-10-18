@@ -458,6 +458,29 @@
       },
       "description": "The memory saver restored an unloaded tab that was shown; history is false when no session history was captured."
     },
+    "page.tab.restore.failed": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "tab": "string",
+        "plugin": "string",
+        "reason": "string"
+      },
+      "description": "The restore of a shown unloaded tab failed: its surface did not mount or a document region refused its session history; the error display of the page shows it."
+    },
+    "page.tab.unload.failed": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "tab": "string",
+        "plugin": "string",
+        "trigger": "string",
+        "reason": "string"
+      },
+      "description": "An unload attempt ended because a read of the document regions of the tab failed; the tab stays loaded and the error display of the page shows it."
+    },
     "page.tab.unload.skipped": {
       "layer": "page",
       "class": "lifecycle",

@@ -265,7 +265,8 @@ The [memory saver](plugins.md#memory-saver) emits these page events of the class
 | --- | --- | --- | --- |
 | `page.tab.unloaded` | info | `tab`, `plugin`, `trigger` | A hidden tab was unloaded after `host.place` replied; `trigger` is `delay`, `pressure` or `command` |
 | `page.tab.restored` | info | `tab`, `plugin`, `history` | An unloaded tab was restored; `history` is `false` when no session history was captured |
-| `page.tab.restore.failed` | error | `tab`, `plugin`, `reason` | A restore failed; the single error display shows it |
+| `page.tab.restore.failed` | error | `tab`, `plugin`, `reason` | A restore failed: the surface did not mount or a document region refused its session history; the single error display shows it |
+| `page.tab.unload.failed` | error | `tab`, `plugin`, `trigger`, `reason` | A read of the document regions of the tab failed during an unload attempt; the attempt ends, the tab stays loaded and the single error display shows it |
 | `page.tab.unload.skipped` | info | `trigger`, `seq`, `reasons` | A pressure report found no candidate, or an unload attempt ended because a protection appeared or the tab was shown; `seq` is the number of the pressure report |
 | `page.tab.state.stored` | debug | `tab`, `bytes` | The tab state store wrote the entry of a tab, its state, mark and label included |
 | `page.tab.state.orphan` | info | `tab` | The reconciliation at load removed the entry of a tab that no layout of `projects.json` holds |

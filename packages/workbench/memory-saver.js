@@ -24,10 +24,13 @@ const ORDER = ["shown", "recent", "keep:modified", "keep:busy", "media", "media-
  *   restore(tab, history) gives the regions of a restored tab the value that interaction resolved at its unload;
  *   commit()            requests a commit and resolves after host.place replied;
  *   showLabel(tab)      shows the cached label of a tab that starts unloaded;
- *   changed()           announces that the status changed.
+ *   changed()           announces that the status changed;
+ *   failed(text)        shows a failed unload or restore through the error display of the page;
+ *   stateChanged(tab, state) receives each change of the state of a tab (loaded, unloaded, restoring).
  */
 export function createMemorySaver({
-  now, enabled, delay, declaration, keeps, kept, setKept, regions, interaction, restore, commit, showLabel, changed,
+  now, enabled, delay, declaration, keeps, kept, setKept, regions, interaction, restore, commit, showLabel, changed, failed,
+  stateChanged,
 }) {
   // tab id -> {id, plugin, state, hiddenAt, shownAt, unloadAt, region, checkedAt, history, generation, attempting}
   let entries = new Map();
@@ -83,6 +86,12 @@ export function createMemorySaver({
     arm();
   }
 
+  function setState(entry, state) {
+    entry.state = state;
+    stateChanged(entry.id, state);
+    changed();
+  }
+
   function skipped(trigger, reasons) {
     emitEvent("info", "page.tab.unload.skipped", { trigger, seq: pressure.seq, reasons });
   }
@@ -90,7 +99,7 @@ export function createMemorySaver({
   /**
    * One unload attempt with its generation: a show increments the generation, and after every awaited step the
    * protections are evaluated again before the tab is marked unloaded. Resolves the reasons that ended the attempt, empty
-   * when the tab was unloaded. The command does not wait for recent and the reasons of the regions, because it is the
+   * when the tab was unloaded, or the error of a failed read of the regions. The command does not wait for recent and the reasons of the regions, because it is the
    * person's own decision (docs/spec/exposure.md#tab-memory).
    */
   async function attempt(entry, trigger, underPressure, command = false) {
@@ -103,7 +112,11 @@ export function createMemorySaver({
       return reasons;
     };
     try {
-      entry.region = await regions(entry.id);
+      try {
+        entry.region = await regions(entry.id);
+      } catch (error) {
+        return unloadFailed(entry, trigger, error);
+      }
       entry.checkedAt = now();
       let reasons = ended();
       if (reasons.length) {
@@ -115,21 +128,41 @@ export function createMemorySaver({
         if (trigger === "delay") entry.unloadAt = now() + delayMs();
         return entry.region;
       }
-      entry.history = await interaction(entry.id);
+      try {
+        entry.history = await interaction(entry.id);
+      } catch (error) {
+        return unloadFailed(entry, trigger, error);
+      }
       reasons = ended();
       if (reasons.length) {
         skipped(trigger, reasons);
         return reasons;
       }
-      entry.state = "unloaded";
+      setState(entry, "unloaded");
       entry.unloadAt = null;
-      changed();
       await commit();
       emitEvent("info", "page.tab.unloaded", { tab: entry.id, plugin: entry.plugin, trigger });
       return [];
     } finally {
       entry.attempting = false;
     }
+  }
+
+  /**
+   * A rejected read of the regions ends the attempt before the tab is marked, so the tab stays loaded; returns the error
+   * as the result of the attempt.
+   */
+  function unloadFailed(entry, trigger, error) {
+    emitEvent("error", "page.tab.unload.failed", { tab: entry.id, plugin: entry.plugin, trigger, reason: error.message });
+    failed(`memory saver: tab ${entry.id}: unload failed: ${error.message}`);
+    return error;
+  }
+
+  /** The restoring entry of a tab whose surface reported the end of its restore. */
+  function restoring(tab) {
+    const entry = entries.get(tab);
+    if (entry?.state !== "restoring") throw new Error(`tab ${tab} is not restoring`);
+    return entry;
   }
 
   // While the level is warn or critical, unloads one candidate at a time, least recently shown first, after the
@@ -147,7 +180,8 @@ export function createMemorySaver({
         let unloaded = false;
         for (const entry of candidates) {
           if (pressure.level === "normal") return;
-          if ((await attempt(entry, "pressure", true)).length === 0) {
+          const result = await attempt(entry, "pressure", true);
+          if (Array.isArray(result) && result.length === 0) {
             unloaded = true;
             break;
           }
@@ -187,9 +221,8 @@ export function createMemorySaver({
           entry.region = [];
           entry.generation++;
           if (entry.state === "unloaded") {
-            entry.state = "loaded";
+            setState(entry, "restoring");
             restore(id, entry.history);
-            emitEvent("info", "page.tab.restored", { tab: id, plugin, history: entry.history !== undefined });
           }
         } else if (isShown) {
           entry.shownAt = time;
@@ -211,7 +244,7 @@ export function createMemorySaver({
       for (const entry of entries.values()) {
         if (entry.state !== "loaded" || entry.hiddenAt === null || entry.shownAt !== null) continue;
         if (declaration(entry.plugin) !== "unload") continue;
-        entry.state = "unloaded";
+        setState(entry, "unloaded");
         showLabel(entry.id);
         changed = true;
       }
@@ -249,6 +282,7 @@ export function createMemorySaver({
       if (before.length) throw refuse(before);
       const reasons = await attempt(entry, "command", true, true);
       arm();
+      if (reasons instanceof Error) throw reasons;
       if (reasons.length) throw refuse(reasons);
     },
     /**
@@ -276,6 +310,24 @@ export function createMemorySaver({
         checkedAt: entry.checkedAt,
       })),
     }),
+    /** Ends the restore of a tab whose surface mounted. */
+    restored(tab) {
+      const entry = restoring(tab);
+      setState(entry, "loaded");
+      emitEvent("info", "page.tab.restored", { tab, plugin: entry.plugin, history: entry.history !== undefined });
+    },
+    /** Ends the restore of a tab whose surface or region refused it, and shows the failure (docs/spec/plugins.md#memory-saver). */
+    restoreFailed(tab, reason) {
+      const entry = entries.get(tab);
+      if (!entry) throw new Error(`unknown tab ${tab}`);
+      // A region that refuses its session history after the surface mounted fails a restore that already ended.
+      if (entry.state === "restoring") setState(entry, "loaded");
+      emitEvent("error", "page.tab.restore.failed", { tab, plugin: entry.plugin, reason });
+      failed(`memory saver: tab ${tab}: restore failed: ${reason}`);
+    },
+    /** The state of the tab: loaded, unloaded or restoring. */
+    // default: a tab that no commit gave the memory saver yet has no state (null).
+    state: (tab) => entries.get(tab)?.state ?? null,
     /** Whether the tab is unloaded. */
     unloaded: (tab) => entries.get(tab)?.state === "unloaded",
     /** The reasons that protect the tab now. */

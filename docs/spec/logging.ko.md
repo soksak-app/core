@@ -263,7 +263,8 @@ JavaScript의 emit site는 `emitEvent(`와 page writer의 batcher 호출이며, 
 | --- | --- | --- | --- |
 | `page.tab.unloaded` | info | `tab`, `plugin`, `trigger` | `host.place`가 답한 뒤 숨겨진 탭이 unload되었다. `trigger`는 `delay`, `pressure`, `command` 중 하나다 |
 | `page.tab.restored` | info | `tab`, `plugin`, `history` | unload된 탭이 restore되었다. session history를 얻지 못했으면 `history`는 `false`다 |
-| `page.tab.restore.failed` | error | `tab`, `plugin`, `reason` | restore가 실패했다. 하나의 오류 표시가 이를 보인다 |
+| `page.tab.restore.failed` | error | `tab`, `plugin`, `reason` | restore가 실패했다. 표면이 마운트되지 않았거나 문서 영역이 session history를 거부했다. 하나의 오류 표시가 이를 보인다 |
+| `page.tab.unload.failed` | error | `tab`, `plugin`, `trigger`, `reason` | unload 시도 중 탭의 문서 영역 읽기가 실패했다. 시도는 끝나고 탭은 loaded로 남으며 하나의 오류 표시가 이를 보인다 |
 | `page.tab.unload.skipped` | info | `trigger`, `seq`, `reasons` | pressure 보고가 후보를 찾지 못했거나, 보호가 생기거나 탭이 보여 unload 시도가 끝났다. `seq`는 pressure 보고의 번호다 |
 | `page.tab.state.stored` | debug | `tab`, `bytes` | 탭 상태 저장소가 탭의 항목을 썼다. 상태, 표시, label을 포함한다 |
 | `page.tab.state.orphan` | info | `tab` | load할 때의 맞춤이 `projects.json`의 어떤 layout에도 없는 탭의 항목을 지웠다 |

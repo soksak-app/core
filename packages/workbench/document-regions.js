@@ -10,6 +10,8 @@ export function createDocumentRegions() {
   const attachedNames = new Map();
   // tab id -> {name: interactionState} that the next attach of each name restores once
   const pending = new Map();
+  // The listeners of a region that refused its restored interactionState, a restore failure.
+  const refusals = new Set();
 
   // default: a tab whose surface attached no region has no names.
   const namesOf = (tab) => [...(attachedNames.get(tab) ?? [])];
@@ -59,6 +61,27 @@ export function createDocumentRegions() {
     restore(tab, history) {
       if (history) pending.set(tab, { ...history });
       else pending.delete(tab);
+    },
+    /**
+     * Attaches the region name of the tab through attach(request) with the interactionState that it restores once; a
+     * refused interactionState is reported to the refusal listeners, and the attach fails with the refusal.
+     */
+    async attach(tab, name, attach) {
+      const request = this.attachRequest(tab, name);
+      let reply;
+      try {
+        reply = await attach(request);
+      } catch (error) {
+        if (request.interactionState !== undefined) for (const listener of refusals) listener(tab, name, error);
+        throw error;
+      }
+      this.attached(tab, name);
+      return reply;
+    },
+    /** Adds a listener (tab, name, error) of a refused interactionState; returns its removal. */
+    onRefused(listener) {
+      refusals.add(listener);
+      return () => refusals.delete(listener);
     },
     /** The documentAttach request of the region name of the tab, with the interactionState that it restores once. */
     attachRequest(tab, name) {

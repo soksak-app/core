@@ -46,10 +46,10 @@ import {
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
    are done here. */
 import { latest, onCommit, onRun, publish, publishAhead } from "./compositor.js";
-import { authorizeSurface, disposeSurface, disposeSurfacesExcept, focusSurface, waitSurfaceCompositionDeclared } from "./surface-modules.js";
+import { authorizeSurface, disposeSurface, disposeSurfacesExcept, focusSurface, onSurfaceMounted, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 import { createMemorySaver } from "./memory-saver.js";
 import { documentRegions } from "./document-regions.js";
-import { onTabReports, reportTitle, tabKeeps } from "./tab-reports.js";
+import { onTabReports, reportTabState, reportTitle, tabKeeps } from "./tab-reports.js";
 
 /* One plane. This document does not know how the plane renders and only receives the render completion. */
 import {
@@ -212,10 +212,20 @@ const memorySaver = createMemorySaver({
     if (label !== null) reportTitle(tab, label);
   },
   changed: () => coreChanged(),
+  // A failed unload or restore is shown through the error display of the page, which writes it to the application log.
+  failed: (text) => showError(text),
+  stateChanged: reportTabState,
 });
 let memoryObserved = false;
 onTabReports(() => memorySaver.protectionsChanged());
 onMemoryPressure((report) => memorySaver.pressure(report));
+// The end of the mount of a restoring tab ends its restore; a region that refuses its session history fails it.
+onSurfaceMounted((tab, error) => {
+  if (!memoryObserved || memorySaver.state(tab) !== "restoring") return;
+  if (error) memorySaver.restoreFailed(tab, error.message);
+  else memorySaver.restored(tab);
+});
+documentRegions.onRefused((tab, name, error) => memorySaver.restoreFailed(tab, `document region ${name}: ${error.message}`));
 
 /** Gives the memory saver the shown tabs and every layout tab of a loaded plugin of a commit. */
 function observeMemory(record, all) {

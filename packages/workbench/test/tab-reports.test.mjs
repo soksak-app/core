@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { clearVisibleNotices, forgetTab, onTabReports, recordOrigin, reportDirectory, reportError, reportModified, reportNotice, reportTitle,
-  setVisibleTab, tabError, tabLabel, tabModified, tabNotice, tabNotices, tabOrigin } from "../tab-reports.js";
+  reportTabState, setVisibleTab, tabError, tabMemoryState, tabLabel, tabModified, tabNotice, tabNotices, tabOrigin } from "../tab-reports.js";
 
 test("a reported title is the tab label until it is removed, and changes notify once", () => {
   let notified = 0;
@@ -117,5 +117,20 @@ test("a surface reports whether its tab holds unsaved changes until the tab is f
   forgetTab("tab-m");
   assert.equal(tabModified("tab-m"), false);
   assert.equal(notified, 4);
+  off();
+});
+
+test("the memory state of a tab is loaded until the memory saver reports another, and changes notify once", () => {
+  let notified = 0;
+  const off = onTabReports(() => notified++);
+  assert.equal(tabMemoryState("tab-m"), "loaded");
+  reportTabState("tab-m", "unloaded");
+  reportTabState("tab-m", "unloaded");
+  assert.equal(tabMemoryState("tab-m"), "unloaded");
+  assert.equal(notified, 1);
+  assert.throws(() => reportTabState("tab-m", "gone"), /unknown tab state: gone/);
+  reportTabState("tab-m", "loaded");
+  assert.equal(tabMemoryState("tab-m"), "loaded");
+  assert.equal(notified, 2);
   off();
 });
