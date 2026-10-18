@@ -14,7 +14,6 @@
 #import "private/webkit.h"
 #import "webview_geometry.h"
 #import "webview_input.h"
-#import "webview_navigation.h"
 
 static NSString *const kScrollMessage = @"soksakDocumentScroll";
 
@@ -650,13 +649,6 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     view.context = context;
     view.plugin = folder && plugin ? scheme.plugin : nil;
     view.navigationDelegate = view;
-    // Each new document of the main frame opens in a new WebContent process, so the process that holds the replaced
-    // document ends with it (docs/spec/native-surfaces.md#document-regions).
-    if (!sp_webview_replace_documents_in_new_process(view)) {
-        sp_log_error("document view", "the new-process navigation cannot be installed: _clearBackForwardCache is unavailable");
-        [view release];
-        return NULL;
-    }
     view.UIDelegate = view;
     view.webSurface = surface;
     view.appearance = surface.effectiveAppearance;

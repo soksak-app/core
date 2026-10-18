@@ -4,8 +4,6 @@
 //   Q  a plain web view with a persistent data store in a temp directory, as the hosts use (also the persistent store of T6);
 //   R  a document region from sp_document_create with no stream subscribed;
 //   S  R with the element and request streams subscribed, and each element snapshot acknowledged;
-//   S2 S with sp_webview_replace_documents_in_new_process called on the region; sp_document_create installs it itself and
-//      the call is idempotent, so S2 measures the same region as S and checks that the installation holds;
 //   T1 P with applicationNameForUserAgent set as the region sets it;
 //   T2 P with the three content-world user scripts and their message handlers as the region installs them;
 //   T3 P with a sok scheme handler;
@@ -31,10 +29,9 @@
 // WebKit malloc category, and the dirty bytes of the graphics and JS JIT rows. At the end it prints the least-squares slope
 // of the total in megabytes per minute over the minutes 5 to MINUTES for each variant and the difference of the two slopes.
 //
-// The reload mode (--reload COUNT) measures only U, then S, then S2, each in the window of the table. After the first load and after
+// The reload mode (--reload COUNT) measures only U and then S, each in the window of the table. After the first load and after
 // COUNT reloads (each a navigation to the same address that starts 15 seconds after the previous load finished and is waited
-// for), it prints the time from the start of each navigation to its finish and the median of those times, the number of
-// distinct WebContent processes of the view and whether the earlier ones ended, and it prints the footprint total and the MALLOC_SMALL dirty bytes of the WebContent process and the heap counts of
+// for), it prints the footprint total and the MALLOC_SMALL dirty bytes of the WebContent process and the heap counts of
 // WebCore::Text, WebCore::HTMLDocument, WebCore::CSSFontAccessor and NSCTFont. A count that grows with the
 // reloads in one variant and not in the other shows earlier documents that the variant keeps. Then it sets the simulated
 // memory pressure level of the system to warn (sudo -n memory_pressure -S -l warn), or to the level of --pressure LEVEL
@@ -56,7 +53,6 @@
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
-#import "webview_navigation.h"
 
 static const CGFloat kWindowWidth = 1200;
 static const CGFloat kWindowHeight = 760;
@@ -165,17 +161,15 @@ typedef struct {
     BOOL overrideScale;  // the device scale override set to the backing scale of the window
     BOOL breakdown;      // footprint -v and vmmap rows of the graphics and malloc allocations are printed at the last read
     const char *featuresOff; // the WKPreferences feature keys turned off, separated by commas, or NULL
-    BOOL newProcess;     // sp_webview_replace_documents_in_new_process is called on the region (region only)
 } Variant;
 
-enum { kP, kQ, kR, kS, kS2, kT1, kT2, kT3, kT4, kT5, kT7, kU, kV1, kV2, kV3, kVariantCount };
+enum { kP, kQ, kR, kS, kT1, kT2, kT3, kT4, kT5, kT7, kU, kV1, kV2, kV3, kVariantCount };
 
 static const Variant kVariants[kVariantCount] = {
     { "P", "plain web view, nonpersistent data store", NO, NO, NO, NO, NO, NO, NO, NO, NO, NO },
     { "Q", "plain web view, persistent data store (also the store of T6)", NO, YES, NO, NO, NO, NO, NO, NO, NO, NO },
     { "R", "document region, no stream subscribed", YES, NO, NO, NO, NO, NO, NO, NO, NO, YES },
     { "S", "document region, element and request streams acknowledged", YES, NO, YES, NO, NO, NO, NO, NO, NO, NO },
-    { "S2", "S + each new main-frame document in a new WebContent process", YES, NO, YES, NO, NO, NO, NO, NO, NO, NO, NULL, YES },
     { "T1", "P + applicationNameForUserAgent as the region sets it", NO, NO, NO, YES, NO, NO, NO, NO, NO, NO },
     { "T2", "P + the three content-world user scripts and message handlers", NO, NO, NO, NO, YES, NO, NO, NO, NO, NO },
     { "T3", "P + the sok scheme handler", NO, NO, NO, NO, NO, YES, NO, NO, NO, NO },
@@ -562,9 +556,6 @@ static OpenView openVariant(const Variant *spec, NSWindow *window, NSView *conte
         opened.document = sp_document_create(opened.surface, documentDirectory.fileSystemRepresentation, NULL, NULL, documentChanged, NULL);
         if (!opened.document) failStep(step, @"a document view is not created inside the surface", 0);
         opened.view = (WKWebView *)opened.document;
-        if (spec->newProcess && !sp_webview_replace_documents_in_new_process(opened.view)) {
-            failStep(step, @"the new-process navigation is not installed on the document view", 0);
-        }
         sp_document_place(opened.document, kMarginLeft, kMarginTop, kMarginRight, kMarginBottom, true);
         if (spec->streams) {
             sp_document_set_stream(opened.document, streamMessage, opened.document);
@@ -821,21 +812,13 @@ static void waitNavigation(WKWebView *view, NSString *step) {
         failStep(step, @"the reload did not finish within 120 seconds", view._webProcessIdentifier);
     }
 }
-static int compareDoubles(const void *a, const void *b) {
-    double x = *(const double *)a;
-    double y = *(const double *)b;
-    return x < y ? -1 : (x > y ? 1 : 0);
-}
-// Loads the address in U, then in S, then in S2, reloads it count times in each, and prints the readings after the first load and
+// Loads the address in U and then in S, reloads it count times in each, and prints the readings after the first load and
 // after the last reload.
 static void measureReload(int count, NSString *pressureLevel, NSWindow *window, NSView *content, NSURL *address, WKWebsiteDataStore *persistentStore,
     NSString *documentDirectory) {
-    enum { kReloadVariants = 3 };
-    const int variants[kReloadVariants] = { kU, kS, kS2 };
-    ReloadReading readings[kReloadVariants][3];
-    double medians[kReloadVariants];
-    int processCounts[kReloadVariants];
-    for (int j = 0; j < kReloadVariants; j++) {
+    const int variants[2] = { kU, kS };
+    ReloadReading readings[2][3];
+    for (int j = 0; j < 2; j++) {
         const Variant *spec = &kVariants[variants[j]];
         NSString *step = [NSString stringWithFormat:@"reload %s", spec->name];
         fprintf(stdout, "start %s: %s\n", spec->name, spec->label);
@@ -852,11 +835,7 @@ static void measureReload(int count, NSString *pressureLevel, NSWindow *window, 
         fprintf(stdout, "loaded %s: pid=%d title=%s\n", spec->name, process, view.title.UTF8String);
         printReload(spec->name, "load", readings[j][0]);
         fflush(stdout);
-        NSMutableArray<NSNumber *> *processes = [NSMutableArray arrayWithObject:@(process)];
-        double *seconds = calloc((size_t)count, sizeof(double));
-        if (!seconds) failStep(step, @"the navigation times are not allocated", process);
         for (int r = 1; r <= count; r++) {
-            double navigationStarted = nowSeconds();
             if (opened.document) {
                 if (!sp_document_load(opened.document, address.absoluteString.UTF8String)) {
                     failStep(step, @"the document refuses the address", view._webProcessIdentifier);
@@ -866,29 +845,14 @@ static void measureReload(int count, NSString *pressureLevel, NSWindow *window, 
             }
             waitNavigation(view, step);
             loaded = nowSeconds();
-            seconds[r - 1] = loaded - navigationStarted;
-            pid_t current = view._webProcessIdentifier;
-            if (current != process) {
-                if (!spec->region) {
-                    failStep(step, [NSString stringWithFormat:@"the reload %d moved the page to the process %d", r, current], process);
-                }
-                if (![processes containsObject:@(current)]) [processes addObject:@(current)];
-                process = current;
+            if (view._webProcessIdentifier != process) {
+                failStep(step, [NSString stringWithFormat:@"the reload %d moved the page to the process %d", r,
+                    view._webProcessIdentifier], process);
             }
-            fprintf(stdout, "reloaded %s: %d of %d navigation_s=%.3f pid=%d\n", spec->name, r, count, seconds[r - 1], current);
+            fprintf(stdout, "reloaded %s: %d of %d\n", spec->name, r, count);
             fflush(stdout);
             waitUntil(loaded + kReloadGapSeconds);
         }
-        qsort(seconds, (size_t)count, sizeof(double), compareDoubles);
-        medians[j] = count % 2 ? seconds[count / 2] : (seconds[count / 2 - 1] + seconds[count / 2]) / 2;
-        free(seconds);
-        processCounts[j] = (int)processes.count;
-        int alive = 0;
-        for (NSNumber *earlier in processes) {
-            if (earlier.intValue != process && kill(earlier.intValue, 0) == 0) alive++;
-        }
-        fprintf(stdout, "navigation %s: median_s=%.3f processes=%d earlier_alive=%d\n", spec->name, medians[j],
-            processCounts[j], alive);
         readings[j][1] = readReload(view, step);
         printReload(spec->name, "reloads", readings[j][1]);
         fflush(stdout);
@@ -905,14 +869,10 @@ static void measureReload(int count, NSString *pressureLevel, NSWindow *window, 
     fprintf(stdout, "%-4s %-12s %10s %16s", "var", "when", "total", "malloc_small");
     for (int c = 0; c < kHeapClassCount; c++) fprintf(stdout, " %24s", kHeapClasses[c]);
     fprintf(stdout, "\n");
-    for (int j = 0; j < kReloadVariants; j++) {
+    for (int j = 0; j < 2; j++) {
         printReload(kVariants[variants[j]].name, "load", readings[j][0]);
         printReload(kVariants[variants[j]].name, "reloads", readings[j][1]);
         printReload(kVariants[variants[j]].name, "pressure", readings[j][2]);
-    }
-    for (int j = 0; j < kReloadVariants; j++) {
-        fprintf(stdout, "%-4s navigation median %.3f s, %d WebContent processes\n", kVariants[variants[j]].name, medians[j],
-            processCounts[j]);
     }
     fflush(stdout);
 }
