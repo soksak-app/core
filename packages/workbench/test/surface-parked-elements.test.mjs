@@ -22,7 +22,7 @@ const MODULE = `data:text/javascript,${encodeURIComponent(`export function mount
 }`)}`;
 const surface = (surfaceId) => ({ module: MODULE, surfaceId, pluginId: "fixture-parked", unload: false, composition: { kind: "dom" }, declarations: {}, sidecars: [] });
 
-test("parkedElements counts the elements of the parked surface hosts and their shadow roots, and the page reads it", async () => {
+test("parkedElements counts the elements of the parked surface hosts and their shadow roots, and is not published by the module", async () => {
   await mountSurface(slot, surface("parked-a"));
   assert.equal(parkedElements(), 0);
   // Mounting another surface in the same slot parks the first host outside the document.
@@ -30,7 +30,8 @@ test("parkedElements counts the elements of the parked surface hosts and their s
   assert.equal(document.querySelectorAll('[data-surface="parked-a"]').length, 0);
   // The host, the list and its three items.
   assert.equal(parkedElements(), 5);
-  assert.equal(globalThis.__soksakParkedElements, parkedElements);
+  // The page diagnostic module publishes the function for the object counts; surface-modules.js publishes nothing.
+  assert.equal(globalThis.__soksakParkedElements, undefined);
   await disposeSurface("parked-a");
   assert.equal(parkedElements(), 0);
   await disposeSurface("parked-b");

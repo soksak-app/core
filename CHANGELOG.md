@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.9-1-1: the page diagnostic module publishes the parked element count for `diagnostics.objects`, so a release page publishes no diagnostic global. Red: the workbench module published it; Green.
 - F198.9-1: `diagnostics.objects` reports in `page` the `parkedElements` of the parked surface hosts of hidden tabs, which are outside the document and were not counted, so a memory check of the running application sees the DOM that hidden tabs keep. Red: the count was missing in the workbench, the native library and both hosts; Green.
 - F198.9: `make hidden-tab-memory` measures the JS heap and the DOM nodes that hidden DOM tabs hold and that their unload returns; the unload returns more than 99 percent for editor, rendered document and terminal fixtures, so the specification states that DOM tab plugins declare `surface.unload`.
 - F198.15: tests of `scripts/test` and `packages/plugin-api` judge success by events, output lines, order, counts and process state instead of elapsed time; command limits in those tests only bound a hang. Red: recorded runs under load and controlled holds; Green.

@@ -29,8 +29,6 @@ export function parkedElements() {
   };
   return count(parking);
 }
-// The object count script of the host evaluates this function in the page content world.
-globalThis.__soksakParkedElements = parkedElements;
 const authorization = new Map();
 // The listeners (surfaceId, error) of the end of each mount; error is null for a mount that ended.
 const mountListeners = new Set();

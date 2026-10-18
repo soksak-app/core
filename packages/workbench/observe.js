@@ -11,13 +11,17 @@ import { registry } from "./exposure.js";
 import { gateSurfaceReplies, log, native, watchCalls } from "./host.js";
 import { createTranscript } from "./transcript.js";
 import { createSurfaceReplyHold } from "./surface-reply-hold.js";
-import { mountedSurface } from "./surface-modules.js";
+import { mountedSurface, parkedElements } from "./surface-modules.js";
 import { watchResizeLoop } from "./resize-loop.js";
 import { host } from "@soksak/runtime";
 import { currentGrid, surfaceInput } from "./plane.js";
 
 // Writes the observations that the ResizeObserver loop deferred to the application log (G1.4-115). It is replaced before the plane and the regions create observers.
 watchResizeLoop(globalThis, log);
+
+// The object count script of diagnostics.objects calls this function in the page content world for parkedElements; a page
+// without this module fails that count (docs/spec/endpoint.md).
+globalThis.__soksakParkedElements = parkedElements;
 
 registry.method("diagnostics.fixture", async (params) => {
   const { prepareFixture } = await import("./diagnostic-fixture.js");
