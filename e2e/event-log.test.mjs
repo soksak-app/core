@@ -31,9 +31,9 @@ for (const app of Object.values(APPS)) {
     assert.equal(events[0].fields.pid, pid);
     assert.equal(events[0].fields.role, "host");
     assert.equal(events[0].fields.schema, 2);
-    // The policy in force at the start of the process is stored as log.policy, which passes every gate; the events of the start
-    // below `error` (host.app.event, the events of the activity observers) are stored only by a policy that was in force before
-    // the process started, which a check does not set (docs/spec/logging.md#policy).
+    // The policy in force at the start of the process is stored as log.policy, which passes every gate. host.app.event `started`
+    // is below `error` and is stored only by a policy in force before the process started, which no declared entry sets; the
+    // activity observers are checked by the window that the next test opens.
     assert.ok(events.some((event) => event.event === "log.policy"), `${path} holds no log.policy`);
     // The debug file of the process holds the events of the levels debug and trace; one seq counts across both files, the log.open
     // of each file included.
@@ -59,16 +59,23 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a window that opens and closes leaves the events of the window`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    // host.window.event is a lifecycle event at the levels debug and info.
-    await fresh(s, { log: { lifecycle: "debug" }, reads: ["host.window.event"] });
+    // host.window.event is a lifecycle event at the levels debug and info, and native.window.occlusion at the level info.
+    const reads = ["host.window.event", "native.window.occlusion"];
+    await fresh(s, { log: { lifecycle: "debug" }, reads });
     const offsets = currentEventOffsets(app.configDir);
     await s.run("core.window.new");
     const list = await s.windows(2, "the new window did not open");
+    // The activity observers that the host installed at its start record the new window when it becomes visible; a window
+    // without the event means the host did not install them.
+    await s.flushLog();
+    await untilEventLine(app.configDir, offsets,
+      (line) => line.startsWith("info native native.window.occlusion:") && line.includes('"visible":true'), 30000,
+      reading(app, reads));
     const child = s.on(list.find((w) => w.window !== s.window).window);
     await child.close();
     const closed = await untilEventLine(app.configDir, offsets,
       (line) => line.startsWith("info host host.window.event:") && line.includes('"kind":"closed"'), 30000,
-      reading(app, ["host.window.event"]));
+      reading(app, reads));
     assert.match(closed, /"window":"[^"]+"/);
   });
 }
