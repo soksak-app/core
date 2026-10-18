@@ -74,6 +74,14 @@ typedef NS_ENUM(NSInteger, SPProcessTerminationReason) {
 @end
 
 // _WKWebsiteDataStoreConfiguration.h
+// The cache model of the C API of WebKit (Source/WebKit/UIProcess/API/C/WKContext.h). WKContextSetCacheModel stores the model
+// in LegacyGlobalSettings, which applies it to every process pool; it does not read its context argument.
+typedef const struct OpaqueWKContext *WKContextRef;
+typedef uint32_t WKCacheModel;
+enum { kWKCacheModelDocumentViewer = 0, kWKCacheModelDocumentBrowser = 1, kWKCacheModelPrimaryWebBrowser = 2 };
+extern void WKContextSetCacheModel(WKContextRef context, WKCacheModel cacheModel);
+extern WKCacheModel WKContextGetCacheModel(WKContextRef context);
+
 @interface _WKWebsiteDataStoreConfiguration : NSObject
 - (instancetype)initWithDirectory:(NSURL *)directory;
 @end

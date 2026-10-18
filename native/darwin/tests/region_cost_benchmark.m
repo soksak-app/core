@@ -61,14 +61,6 @@
 #import "private/webkit.h"
 #import "webview_geometry.h"
 
-// The cache model of the C API of WebKit (Source/WebKit/UIProcess/API/C/WKContext.h). WKContextSetCacheModel stores the model
-// in LegacyGlobalSettings, which applies it to every process pool; it does not read its context argument.
-typedef const struct OpaqueWKContext *WKContextRef;
-typedef uint32_t WKCacheModel;
-enum { kWKCacheModelDocumentViewer = 0, kWKCacheModelDocumentBrowser = 1, kWKCacheModelPrimaryWebBrowser = 2 };
-extern void WKContextSetCacheModel(WKContextRef context, WKCacheModel cacheModel);
-extern WKCacheModel WKContextGetCacheModel(WKContextRef context);
-
 static const CGFloat kWindowWidth = 1200;
 static const CGFloat kWindowHeight = 760;
 // The region of every variant: the margins (left, top, right, bottom) in CSS pixels of the surface viewport and the size of
