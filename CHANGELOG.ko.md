@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.15: `scripts/test`와 `packages/plugin-api`의 시험은 성공을 경과 시간 대신 event, 출력 줄, 순서, 수, process 상태로 판정한다. 그 시험의 command limit은 hang만 제한한다. Red: 부하에서 기록된 실행과 controlled hold; Green.
 - F198.14: test runner의 pool 시험은 병렬 실행을 경과 시간 대신 `RUN` 줄의 running 수로 확인한다. 경과 시간 판정은 부하에서 실패했다. Red: 부하에서 기록된 실행; Green.
 - F198.8-4: commit은 `host.place`를 먼저 실행하고 성공한 뒤에만 뺀 표면을 release하며, 호스트가 place와 함께 닫은 영역은 detach하지 않는다; 실패한 place는 tab을 마운트되고 loaded인 채로 두고, tab 닫기도 같은 방식으로 그 commit이 release한다. Red: commit이 place 전에 표면을 release했다; Green.
 - F198.7.3: tab button의 오른쪽 클릭은 tab context menu(`core.tab.menu`)를 열고, 그 항목 `core.tab.menu-keep`은 표시 `kept`를 보이며 `core.tab.keep`으로 이를 설정하거나 지운다; 절대 unload될 수 없는 tab에는 항목이 없다. Red: menu module이 없었고 picker 항목이 자신의 dom 이름을 가질 수 없었다; Green.

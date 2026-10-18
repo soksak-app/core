@@ -1,13 +1,20 @@
 import assert from 'node:assert/strict';
 import childProcess, { execFileSync, spawn } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { loadavg, tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
+import { mkdtemp, readFile, rm, watch } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { runCommand } from '../test-command.mjs';
 
 const node = process.execPath;
 const task = (source) => [node, ['-e', source]];
+// A command that ends on its own gets this limit, so the limit only bounds a hang and never decides the result under load.
+const hangMs = 60_000;
+// The per-test limit of such a test is above the command limit and also only bounds a hang.
+const testHangMs = 70_000;
+// A child that stays until a signal ends it, so a limit, a cancellation or a heartbeat always comes before its end.
+const forever = 'setInterval(() => {}, 1000)';
 
 // An ended process remains a zombie until its parent reaps it, and kill(pid, 0) on a zombie succeeds. So the judgment uses the state in the process table.
 // This file uses the function as imported, not childProcess.execFileSync, which other tests of this file replace.
@@ -22,10 +29,10 @@ function assertEnded(pid) {
   assert.match(state, /^Z/, `process ${pid} is running with state ${state}`);
 }
 
-test('emits ordered start and terminal events with visible output', { timeout: 2000 }, async () => {
+test('emits ordered start and terminal events with visible output', { timeout: testHangMs }, async () => {
   const events = [];
   const [command, args] = task("console.log('visible-out'); console.error('visible-err')");
-  const result = await runCommand({ id: 'ordered', command, args, timeoutMs: 500, onEvent: (event) => events.push(event) });
+  const result = await runCommand({ id: 'ordered', command, args, timeoutMs: hangMs, onEvent: (event) => events.push(event) });
   assert.equal(result.status, 'pass');
   assert.deepEqual(events.map((event) => event.type), ['start', 'pass']);
   assert.deepEqual(events.at(-1), { type: 'pass', id: 'ordered', elapsedMs: events.at(-1).elapsedMs, exitCode: 0, signal: null, error: null, cleanupObservations: [] });
@@ -34,32 +41,38 @@ test('emits ordered start and terminal events with visible output', { timeout: 2
   assert.ok(events.every((event) => event.id === 'ordered' && Number.isFinite(event.elapsedMs)));
 });
 
-test('preserves UTF-8 stdout and stderr across split byte chunks', { timeout: 2000 }, async () => {
+test('preserves UTF-8 stdout and stderr across split byte chunks', { timeout: testHangMs }, async () => {
   const source = "const out=Buffer.from('한글\\n'); const err=Buffer.from('오류\\n'); process.stdout.write(out.subarray(0,1)); process.stderr.write(err.subarray(0,1)); setTimeout(() => { process.stdout.write(out.subarray(1)); process.stderr.write(err.subarray(1)); }, 10);";
   const [command, args] = task(source);
-  const result = await runCommand({ id: 'utf8-split', command, args, timeoutMs: 500, onEvent: () => {} });
+  const result = await runCommand({ id: 'utf8-split', command, args, timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'pass', JSON.stringify(result));
   assert.equal(result.stdout, '한글\n');
   assert.equal(result.stderr, '오류\n');
 });
 
-test('emits heartbeat progress while the command runs', { timeout: 2000 }, async () => {
+test('emits heartbeat progress while the command runs', { timeout: testHangMs }, async () => {
   const events = [];
-  const [command, args] = task('setTimeout(() => {}, 130)');
-  await runCommand({ id: 'heartbeat', command, args, timeoutMs: 500, heartbeatMs: 30, onEvent: (event) => events.push(event) });
-  assert.ok(events.some((event) => event.type === 'progress'));
+  const controller = new AbortController();
+  const [command, args] = task(forever);
+  // The child stays until it is cancelled, and the first progress event cancels it, so the result shows the heartbeat.
+  const result = await runCommand({ id: 'heartbeat', command, args, timeoutMs: hangMs, heartbeatMs: 30, signal: controller.signal, onEvent: (event) => {
+    events.push(event);
+    if (event.type === 'progress') controller.abort();
+  } });
+  assert.equal(result.status, 'cancelled', JSON.stringify(result));
+  assert.deepEqual(events.map((event) => event.type), ['start', 'progress', 'cancelled']);
 });
 
-test('reports nonzero exit as fail', { timeout: 2000 }, async () => {
+test('reports nonzero exit as fail', { timeout: testHangMs }, async () => {
   const [command, args] = task('process.exit(7)');
-  const result = await runCommand({ id: 'nonzero', command, args, timeoutMs: 500, onEvent: () => {} });
+  const result = await runCommand({ id: 'nonzero', command, args, timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'fail');
   assert.equal(result.exitCode, 7);
 });
 
-test('reports an absent executable as fail with an error', { timeout: 2000 }, async () => {
+test('reports an absent executable as fail with an error', { timeout: testHangMs }, async () => {
   const events = [];
-  const result = await runCommand({ id: 'enoent', command: 'definitely-not-a-command', args: [], timeoutMs: 500, onEvent: (event) => events.push(event) });
+  const result = await runCommand({ id: 'enoent', command: 'definitely-not-a-command', args: [], timeoutMs: hangMs, onEvent: (event) => events.push(event) });
   assert.equal(result.status, 'fail');
   assert.equal(result.error.code, 'ENOENT');
   assert.equal(events.at(-1).error.code, 'ENOENT');
@@ -68,7 +81,7 @@ test('reports an absent executable as fail with an error', { timeout: 2000 }, as
 test('a forced kill after the child already ended on SIGTERM still reports timeout', { timeout: 10000 }, async () => {
   // Makes the SIGKILL after 100 ms run while the loop has not yet handled the end of a child that ended with SIGTERM. It is the same order as when the loop is
   // late under load. macOS can reject with EPERM a signal sent to a process group in which only ended children remain.
-  const [command, args] = task('setTimeout(() => {}, 5000)');
+  const [command, args] = task(forever);
   let held = false;
   const result = await runCommand({
     id: 'late-exit', command, args, timeoutMs: 50, heartbeatMs: 50,
@@ -98,14 +111,14 @@ test('a refused forced kill of a group that ended on SIGTERM still reports timeo
   };
   // The child receives SIGTERM and ends 120 ms later. So the forced termination after 100 ms runs first and receives the injected rejection. The 300 ms
   // limit makes SIGTERM arrive after the child has installed its handler.
-  const [command, args] = task("process.on('SIGTERM', () => setTimeout(() => process.exit(0), 120)); setTimeout(() => {}, 5000)");
+  const [command, args] = task("process.on('SIGTERM', () => setTimeout(() => process.exit(0), 120)); setInterval(() => {}, 1000)");
   const result = await runCommand({ id: 'refused-kill', command, args, timeoutMs: 300, onEvent: () => {} });
   assert.equal(result.status, 'timeout', JSON.stringify({ error: result.error }));
 });
 
 test('times out and reports timeout', { timeout: 2000 }, async () => {
   const events = [];
-  const [command, args] = task('setTimeout(() => {}, 1000)');
+  const [command, args] = task(forever);
   const result = await runCommand({ id: 'timeout', command, args, timeoutMs: 50, heartbeatMs: 20, onEvent: (event) => events.push(event) });
   assert.equal(result.status, 'timeout');
   assert.equal(events.at(-1).type, 'timeout');
@@ -114,44 +127,46 @@ test('times out and reports timeout', { timeout: 2000 }, async () => {
   assert.equal(events.at(-1).error, null);
 });
 
-test('cancels and reports cancelled', { timeout: 2000 }, async () => {
+test('cancels and reports cancelled', { timeout: testHangMs }, async () => {
   const controller = new AbortController();
   const events = [];
-  const [command, args] = task('setTimeout(() => {}, 1000)');
-  const promise = runCommand({ id: 'cancel', command, args, timeoutMs: 500, signal: controller.signal, onEvent: (event) => events.push(event) });
-  setTimeout(() => controller.abort(), 30);
-  const result = await promise;
+  const [command, args] = task(forever);
+  // The start event cancels the command, so the cancellation comes before the limit at any load.
+  const result = await runCommand({ id: 'cancel', command, args, timeoutMs: hangMs, signal: controller.signal, onEvent: (event) => {
+    events.push(event);
+    if (event.type === 'start') controller.abort();
+  } });
   assert.equal(result.status, 'cancelled');
   assert.equal(events.at(-1).type, 'cancelled');
   assert.equal(events.at(-1).error, null);
 });
 
-test('cleans descendants after the leader exits', { timeout: 2000 }, async (t) => {
+test('cleans descendants after the leader exits', { timeout: testHangMs }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'test-command-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const pidFile = join(directory, 'pid');
-  const source = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e','setTimeout(()=>{},1000)'],{stdio:'ignore'}); writeFileSync(${JSON.stringify(pidFile)},String(child.pid)); process.exit(0);`;
+  const source = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'}); writeFileSync(${JSON.stringify(pidFile)},String(child.pid)); process.exit(0);`;
   const [command, args] = task(source);
-  const result = await runCommand({ id: 'descendant', command, args, timeoutMs: 500, onEvent: () => {} });
-  const descendantPid = Number(await readFile(pidFile, 'utf8'));
+  const result = await runCommand({ id: 'descendant', command, args, timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'pass', JSON.stringify(result));
+  const descendantPid = Number(await readFile(pidFile, 'utf8'));
   assertEnded(descendantPid);
 });
 
-test('cleans a descendant that inherits supervisor stdio before close', { timeout: 2000 }, async (t) => {
+test('cleans a descendant that inherits supervisor stdio before close', { timeout: testHangMs }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'test-command-inherit-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const pidFile = join(directory, 'pid');
-  const source = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e','setTimeout(()=>{},1000)'],{stdio:'inherit'}); writeFileSync(${JSON.stringify(pidFile)},String(child.pid)); process.exit(0);`;
+  const source = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'inherit'}); writeFileSync(${JSON.stringify(pidFile)},String(child.pid)); process.exit(0);`;
   const [command, args] = task(source);
-  const result = await runCommand({ id: 'inherited-stdio', command, args, timeoutMs: 500, onEvent: () => {} });
+  const result = await runCommand({ id: 'inherited-stdio', command, args, timeoutMs: hangMs, onEvent: () => {} });
+  assert.equal(result.status, 'pass', JSON.stringify(result));
   const descendantPid = Number(await readFile(pidFile, 'utf8'));
-  assert.equal(result.status, 'pass');
   assertEnded(descendantPid);
 });
 
 // The command ends when the descendant reports readiness, so its timeout only bounds process startup under load and is not the behavior under test.
-test('escalates cleanup for a descendant that ignores SIGTERM', { timeout: 15000 }, async (t) => {
+test('escalates cleanup for a descendant that ignores SIGTERM', { timeout: testHangMs }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'test-command-resistant-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const pidFile = join(directory, 'pid');
@@ -165,20 +180,20 @@ test('escalates cleanup for a descendant that ignores SIGTERM', { timeout: 15000
       try { process.kill(descendantPid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
     }
   });
-  const descendantSource = `const {writeFileSync}=require('node:fs'); process.on('SIGTERM',()=>writeFileSync(${JSON.stringify(markerFile)},'term')); process.send('ready'); setTimeout(()=>{},1000);`;
+  const descendantSource = `const {writeFileSync}=require('node:fs'); process.on('SIGTERM',()=>writeFileSync(${JSON.stringify(markerFile)},'term')); process.send('ready'); setInterval(()=>{},1000);`;
   const source = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e',${JSON.stringify(descendantSource)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile)},String(child.pid)); process.exit(0);}});`;
   const [command, args] = task(source);
-  const result = await runCommand({ id: 'resistant-descendant', command, args, timeoutMs: 10000, onEvent: () => {} });
-  assert.equal(result.status, 'pass');
+  const result = await runCommand({ id: 'resistant-descendant', command, args, timeoutMs: hangMs, onEvent: () => {} });
+  assert.equal(result.status, 'pass', JSON.stringify(result));
   descendantPid = Number(await readFile(pidFile, 'utf8'));
   assert.equal(await readFile(markerFile, 'utf8'), 'term');
   assertEnded(descendantPid);
 });
 
-test('turns an event callback exception into a failure and cleans the child', { timeout: 2000 }, async () => {
+test('turns an event callback exception into a failure and cleans the child', { timeout: testHangMs }, async () => {
   const events = [];
-  const [command, args] = task('setTimeout(() => {}, 1000)');
-  const result = await runCommand({ id: 'callback-error', command, args, timeoutMs: 500, heartbeatMs: 20, onEvent: (event) => {
+  const [command, args] = task(forever);
+  const result = await runCommand({ id: 'callback-error', command, args, timeoutMs: hangMs, heartbeatMs: 20, onEvent: (event) => {
     if (event.type === 'progress') throw new Error('event callback failed');
     events.push(event);
   } });
@@ -187,9 +202,9 @@ test('turns an event callback exception into a failure and cleans the child', { 
   assert.equal(events.at(-1).type, 'fail');
 });
 
-test('reports a terminal observer exception instead of claiming success', { timeout: 2000 }, async () => {
+test('reports a terminal observer exception instead of claiming success', { timeout: testHangMs }, async () => {
   const [command, args] = task('process.stdout.write(\'output-before-terminal\')');
-  const result = await runCommand({ id: 'terminal-callback-error', command, args, timeoutMs: 500, onEvent: (event) => {
+  const result = await runCommand({ id: 'terminal-callback-error', command, args, timeoutMs: hangMs, onEvent: (event) => {
     if (event.type === 'pass') throw new Error('terminal observer failed');
   } });
   assert.equal(result.status, 'fail');
@@ -213,7 +228,7 @@ test('reports process-group signal failure without an unhandled timer error', { 
     }
     return originalKill(pid, signal);
   };
-  const source = `const {writeFileSync}=require('node:fs'); writeFileSync(${JSON.stringify(pidFile)},String(process.pid)); setTimeout(()=>{},1000);`;
+  const source = `const {writeFileSync}=require('node:fs'); writeFileSync(${JSON.stringify(pidFile)},String(process.pid)); setInterval(()=>{},1000);`;
   const [command, args] = task(source);
   const result = await runCommand({ id: 'signal-error', command, args, timeoutMs: 20, onEvent: () => {} });
   assert.equal(result.status, 'fail');
@@ -222,7 +237,7 @@ test('reports process-group signal failure without an unhandled timer error', { 
   assert.match(result.error.message, /^SIGTERM to process group \d+: blocked process-group signal$/);
 });
 
-test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: 3000 }, async (t) => {
+test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: testHangMs }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'test-command-cli-signal-'));
   const pidFile = join(directory, 'pid');
   const markerFile = join(directory, 'term');
@@ -240,27 +255,24 @@ test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: 3000
     }
     await rm(directory, { recursive: true, force: true });
   });
-  const descendantSource = `const {writeFileSync}=require('node:fs'); process.on('SIGTERM',()=>writeFileSync(${JSON.stringify(markerFile)},'term')); process.send('ready'); setTimeout(()=>{},2000);`;
+  const descendantSource = `const {writeFileSync}=require('node:fs'); process.on('SIGTERM',()=>writeFileSync(${JSON.stringify(markerFile)},'term')); process.send('ready'); setInterval(()=>{},1000);`;
   // The pid file is created by writing a temporary file and renaming it. The reader never reads an empty file in the middle of the write.
-  const commandSource = `const {spawn}=require('node:child_process'); const {renameSync,writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e',${JSON.stringify(descendantSource)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile + '.tmp')},String(child.pid)); renameSync(${JSON.stringify(pidFile + '.tmp')},${JSON.stringify(pidFile)});}}); setTimeout(()=>{},2000);`;
-  cli = spawn(node, [join(process.cwd(), 'scripts/test-command.mjs'), '--id', 'cli-signal', '--timeout-ms', '1500', '--', node, '-e', commandSource], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const commandSource = `const {spawn}=require('node:child_process'); const {renameSync,writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e',${JSON.stringify(descendantSource)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile + '.tmp')},String(child.pid)); renameSync(${JSON.stringify(pidFile + '.tmp')},${JSON.stringify(pidFile)});}}); setInterval(()=>{},1000);`;
+  const watching = new AbortController();
+  const watcher = watch(directory, { signal: watching.signal });
+  const ready = (async () => {
+    for await (const { filename } of watcher) {
+      if (filename === 'pid' && existsSync(pidFile)) return readFile(pidFile, 'utf8');
+    }
+    return null;
+  })();
+  t.after(() => watching.abort());
+  cli = spawn(node, [join(process.cwd(), 'scripts/test-command.mjs'), '--id', 'cli-signal', '--timeout-ms', String(hangMs), '--', node, '-e', commandSource], { stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '';
   cli.stdout.on('data', (chunk) => { stdout += chunk; });
-  const started = Date.now();
-  const readyDeadline = started + 1000;
-  let read = null;
-  while (Date.now() < readyDeadline) {
-    try {
-      read = await readFile(pidFile, 'utf8');
-      const pid = Number(read);
-      if (Number.isInteger(pid) && pid > 0) { descendantPid = pid; break; }
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  assert.ok(descendantPid, `command did not report descendant readiness within ${Date.now() - started} ms ` +
-    `(pid file ${read === null ? 'absent' : JSON.stringify(read)}; load average ${loadavg().map((value) => value.toFixed(1)).join(' ')})`);
+  // The rename of the pid file is the readiness event; the watcher starts before the command, so it sees the rename at any load.
+  descendantPid = Number(await ready);
+  assert.ok(Number.isInteger(descendantPid) && descendantPid > 0, `pid file holds ${descendantPid}`);
   cli.kill('SIGTERM');
   const closeResult = await new Promise((resolve) => cli.once('close', (code, signal) => resolve({ code, signal })));
   assert.equal(closeResult.code, 1);
@@ -280,7 +292,7 @@ test('rejects invalid arguments', { timeout: 2000 }, () => {
   assert.throws(() => runCommand({ id: 'bad-signal', command: node, args: [], timeoutMs: 1, signal: {} }), /signal/);
 });
 
-test('does not convert denied cleanup verification after SIGKILL into success', { timeout: 3000 }, async (t) => {
+test('does not convert denied cleanup verification after SIGKILL into success', { timeout: testHangMs }, async (t) => {
   // Injects the state in which the check is rejected and the process table shows a running member. This user cannot send a signal to that member.
   const originalKill = process.kill;
   const originalExecFileSync = childProcess.execFileSync;
@@ -305,13 +317,13 @@ test('does not convert denied cleanup verification after SIGKILL into success', 
     }
     return originalKill(pid, signal);
   };
-  const result = await runCommand({ id: 'denied-verification', command: node, args: ['-e', 'process.exit(0)'], timeoutMs: 1000, onEvent: () => {} });
+  const result = await runCommand({ id: 'denied-verification', command: node, args: ['-e', 'process.exit(0)'], timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'fail', JSON.stringify(result));
   assert.equal(result.error.code, 'EPERM');
   assert.ok(result.cleanupObservations.some((item) => item.operation === 'verify' && item.error.code === 'EPERM' && item.members.some((member) => member.pid === group && member.state === 'S')), JSON.stringify(result.cleanupObservations));
 });
 
-test('counts a process group that holds only zombies as gone after a denied probe', { timeout: 3000 }, async (t) => {
+test('counts a process group that holds only zombies as gone after a denied probe', { timeout: testHangMs }, async (t) => {
   // Injects the measured state. For a group in which every member has ended but has not been reaped, kill(-pgid, sig) of macOS returns EPERM, and
   // the process table shows that member as a zombie (Z).
   const originalKill = process.kill;
@@ -334,12 +346,12 @@ test('counts a process group that holds only zombies as gone after a denied prob
     if (file !== 'ps') return originalExecFileSync(file, args, options);
     return `    1     1 Ss\n${group + 1} ${group} Z\n`;
   };
-  const result = await runCommand({ id: 'zombie-group', command: node, args: ['-e', 'process.exit(0)'], timeoutMs: 1000, onEvent: () => {} });
+  const result = await runCommand({ id: 'zombie-group', command: node, args: ['-e', 'process.exit(0)'], timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'pass', JSON.stringify(result));
   assert.deepEqual(result.cleanupObservations, [{ operation: 'verify', error: { name: 'Error', message: 'kill EPERM', code: 'EPERM' }, members: [{ pid: group + 1, state: 'Z' }] }]);
 });
 
-test('reads the members of a group from the real process table after a denied probe', { timeout: 3000 }, async (t) => {
+test('reads the members of a group from the real process table after a denied probe', { timeout: testHangMs }, async (t) => {
   // Only the check is rejected, and the process table is read with the real ps. A descendant that remained at the first check appears running and disappears after the SIGTERM of the cleanup.
   const directory = await mkdtemp(join(tmpdir(), 'test-command-members-'));
   const pidFile = join(directory, 'pid');
@@ -360,10 +372,10 @@ test('reads the members of a group from the real process table after a denied pr
     }
     return originalKill(pid, signal);
   };
-  const source = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e','setTimeout(()=>{},2000)'],{stdio:'ignore'}); writeFileSync(${JSON.stringify(pidFile)},String(child.pid)); process.exit(0);`;
-  const result = await runCommand({ id: 'process-table', command: node, args: ['-e', source], timeoutMs: 1000, onEvent: () => {} });
-  descendantPid = Number(await readFile(pidFile, 'utf8'));
+  const source = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'}); writeFileSync(${JSON.stringify(pidFile)},String(child.pid)); process.exit(0);`;
+  const result = await runCommand({ id: 'process-table', command: node, args: ['-e', source], timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'pass', JSON.stringify(result));
+  descendantPid = Number(await readFile(pidFile, 'utf8'));
   const verify = result.cleanupObservations.find((item) => item.operation === 'verify');
   assert.ok(verify?.members.some((member) => member.pid === descendantPid && !member.state.startsWith('Z')), JSON.stringify(result.cleanupObservations));
   assertEnded(descendantPid);

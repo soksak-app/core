@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.15: tests of `scripts/test` and `packages/plugin-api` judge success by events, output lines, order, counts and process state instead of elapsed time; command limits in those tests only bound a hang. Red: recorded runs under load and controlled holds; Green.
 - F198.14: the pool test of the test runner asserts parallelism by the running counts of its `RUN` lines instead of elapsed time, which failed under load. Red: recorded runs under load; Green.
 - F198.8-4: a commit runs `host.place` first and releases the surfaces it left out only after it succeeds, without detaching the regions that the host closed with the place; a failed place keeps the tab mounted and loaded, and closing a tab is released by its commit the same way. Red: the commit released the surfaces before the place; Green.
 - F198.7.3: a right click on a tab button opens the tab context menu (`core.tab.menu`), whose item `core.tab.menu-keep` shows the mark `kept` and sets or clears it through `core.tab.keep`; a tab that can never be unloaded has no item. Red: the menu module was missing and a picker item could not carry its own dom name; Green.

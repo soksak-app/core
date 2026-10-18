@@ -26,14 +26,14 @@ test("each test reports its start, its end and its elapsed time, and a failure c
 });
 
 test("a test over its own limit is killed and reported as a timeout without holding the others", async () => {
-  const started = performance.now();
   const { results, lines } = await run([
     node("slow", sleeping(60000), { timeoutMs: 300 }),
     node("quick", "process.exit(0)"),
   ], { concurrency: 2, defaultTimeoutMs: 5000 });
   assert.equal(results.get("slow").status, "timeout");
   assert.equal(results.get("quick").status, "pass");
-  assert.ok(performance.now() - started < 5000, "the run waited for the hanging test");
+  // The quick test starts while the hanging test is in flight; the running count of its RUN line shows it.
+  assert.match(lines.find((line) => line.startsWith("RUN  quick")), /^RUN  quick \(2 running\)$/);
   assert.match(lines.find((line) => line.startsWith("TIME slow")), /^TIME slow \d+\.\d{3}s exceeded 0\.300s and was killed$/);
 });
 
@@ -46,17 +46,21 @@ test("the pool runs at most `concurrency` tests at once and runs them in paralle
 });
 
 test("a heartbeat names the tests in flight with their running time", async () => {
-  const { lines } = await run([node("long", sleeping(400))], { concurrency: 1, defaultTimeoutMs: 5000 });
+  // The heartbeat timer is due at 50 ms and the limit timer at 1000 ms; timers of one loop run in the order they are due, so the heartbeat comes first.
+  const { lines } = await run([node("long", sleeping(60000), { timeoutMs: 1000 })], { concurrency: 1, defaultTimeoutMs: 5000 });
   const beat = lines.find((line) => line.startsWith("RUNNING 1 test"));
   assert.ok(beat, `no heartbeat: ${JSON.stringify(lines)}`);
   assert.match(beat, /long \d+\.\d{3}s/);
 });
 
 test("the summary counts the results and lists the slowest tests, slowest first", async () => {
-  const { lines, slowest } = await run([
+  const { lines, slowest, results } = await run([
     node("fast", sleeping(10)), node("middle", sleeping(150)), node("slowest", sleeping(300)),
   ], { concurrency: 3, defaultTimeoutMs: 5000, slowCount: 2 });
-  assert.deepEqual(slowest.map((item) => item.name), ["slowest", "middle"]);
+  // The order follows the measured elapsed times of the results, which depend on the machine load.
+  const measured = [...results].sort(([, a], [, b]) => b.elapsedMs - a.elapsedMs).slice(0, 2).map(([name]) => name);
+  assert.deepEqual(slowest.map((item) => item.name), measured);
+  assert.ok(slowest[0].elapsedMs >= slowest[1].elapsedMs, JSON.stringify(slowest));
   assert.match(lines.at(-1), /^TOTAL 3 tests: 3 pass, 0 fail, 0 timeout in \d+\.\d{3}s$/);
   assert.ok(lines.some((line) => line.startsWith("SLOWEST ")));
 });
@@ -72,12 +76,14 @@ test("a test starts only after the gate of the runner opened, and the wait is no
   let open;
   const gate = new Promise((resolve) => { open = resolve; });
   const calls = [];
+  let entered;
+  const waiting = new Promise((resolve) => { entered = resolve; });
   const run = runTests({
     tests: [{ name: "gated", command: process.execPath, args: ["-e", "setTimeout(() => {}, 150)"], timeoutMs: 3000 }],
     concurrency: 1, defaultTimeoutMs: 3000, write: (line) => lines.push(line),
-    beforeEach: async (item) => { calls.push(item.name); await gate; },
+    beforeEach: async (item) => { calls.push(item.name); entered(); await gate; },
   });
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  await waiting;
   assert.deepEqual(calls, ["gated"]);
   assert.equal(lines.some((line) => line.startsWith("RUN  gated")), false, "the test started before the gate opened");
   assert.equal(lines.some((line) => line.startsWith("WAIT gated")), true, "the wait is not named");
@@ -117,18 +123,22 @@ test("a manifest names a test that is still running, so a run that stops leaves 
   const { join } = await import("node:path");
   const folder = mkdtempSync(join(tmpdir(), "run-"));
   const lines = [];
+  let during = null;
+  // A heartbeat line names the test in flight, and the runner saves the manifest before it starts the test, so the manifest is read at the first heartbeat.
   const pending = runTests({
     tests: [node("slow", sleeping(60000), { timeoutMs: 1500 })], concurrency: 1, defaultTimeoutMs: 5000,
-    write: (line) => lines.push(line), heartbeatMs: 50, run: { id: "r-1", folder },
+    write: (line) => {
+      lines.push(line);
+      if (during === null && line.startsWith("RUNNING 1 test")) {
+        assert.ok(existsSync(join(folder, "manifest.json")), "the run wrote no manifest while its test was running");
+        during = JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8"));
+      }
+    },
+    heartbeatMs: 50, run: { id: "r-1", folder },
   });
-  const deadline = performance.now() + 3000;
-  while (!existsSync(join(folder, "manifest.json"))) {
-    assert.ok(performance.now() < deadline, "the run wrote no manifest while its test was running");
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-  const during = JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8"));
+  await pending;
+  assert.ok(during, `no heartbeat while the test was running: ${JSON.stringify(lines)}`);
   assert.deepEqual(during.tests.map((item) => [item.name, item.status]), [["slow", "running"]]);
   assert.equal(during.finished_us, null);
-  await pending;
   assert.equal(JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8")).tests[0].status, "timeout");
 });
