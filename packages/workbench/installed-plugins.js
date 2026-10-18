@@ -20,15 +20,34 @@ export function onPluginOperations(fn) {
 /**
  * Subscribes to plugins-changed from the host, then reads the state once and applies a difference between the loaded
  * and the installed plugins, so a change made before the subscription is applied as well; each later event reads the
- * state again and applies the change to this window with apply (docs/spec/installation.md#applying-a-change). An apply
- * that runs serves a change seen again through the event or the read, so one change starts one apply. A read failure
- * is reported as the error of the state, and a failure of apply reaches the error display through the document's
- * unhandledrejection.
+ * state again and applies the change to this window with apply (docs/spec/installation.md#applying-a-change). At most
+ * one apply runs: an event during a running apply marks one more apply due, which runs after it settles when the state
+ * read by that event still differs, so a newer change is not served by an apply that read an earlier state. A read
+ * failure is reported as the error of the state, and a failure of apply reaches the error display through the
+ * document's unhandledrejection.
  */
 export async function followPluginChanges(apply) {
   if (!host) return;
   let running = null;
-  const once = () => (running ??= Promise.resolve(apply()).finally(() => { running = null; }));
+  let due = false;
+  const once = () => {
+    if (running) {
+      due = true;
+      return running;
+    }
+    running = (async () => {
+      try {
+        return await apply();
+      } finally {
+        running = null;
+        if (due) {
+          due = false;
+          if (pluginOperations.status().reload) once();
+        }
+      }
+    })();
+    return running;
+  };
   host.on("plugins-changed", async () => {
     await pluginOperations.refresh();
     await pluginOperations.refreshOutdated();
