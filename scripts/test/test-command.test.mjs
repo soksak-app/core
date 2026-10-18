@@ -150,7 +150,8 @@ test('cleans a descendant that inherits supervisor stdio before close', { timeou
   assertEnded(descendantPid);
 });
 
-test('escalates cleanup for a descendant that ignores SIGTERM', { timeout: 2000 }, async (t) => {
+// The command ends when the descendant reports readiness, so its timeout only bounds process startup under load and is not the behavior under test.
+test('escalates cleanup for a descendant that ignores SIGTERM', { timeout: 15000 }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'test-command-resistant-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const pidFile = join(directory, 'pid');
@@ -167,9 +168,9 @@ test('escalates cleanup for a descendant that ignores SIGTERM', { timeout: 2000 
   const descendantSource = `const {writeFileSync}=require('node:fs'); process.on('SIGTERM',()=>writeFileSync(${JSON.stringify(markerFile)},'term')); process.send('ready'); setTimeout(()=>{},1000);`;
   const source = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e',${JSON.stringify(descendantSource)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile)},String(child.pid)); process.exit(0);}});`;
   const [command, args] = task(source);
-  const result = await runCommand({ id: 'resistant-descendant', command, args, timeoutMs: 500, onEvent: () => {} });
-  descendantPid = Number(await readFile(pidFile, 'utf8'));
+  const result = await runCommand({ id: 'resistant-descendant', command, args, timeoutMs: 10000, onEvent: () => {} });
   assert.equal(result.status, 'pass');
+  descendantPid = Number(await readFile(pidFile, 'utf8'));
   assert.equal(await readFile(markerFile, 'utf8'), 'term');
   assertEnded(descendantPid);
 });
