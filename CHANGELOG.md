@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F200.1: the page diagnostic method `diagnostics.page.calls` sends up to 50 host calls `theme` in one request, and `make host-calls` measures the WebKit malloc that the host calls of the page leave in its process before and after a collection. Measured on both debug hosts: about 0.7 KB (Wails) and 1.1 KB (Tauri) per call before the collection and none after it.
 - F198.12, F196.7: the plugin releases browser 0.0.6, editor 0.0.4 and hwp 0.0.2 declare `surface.unload` and require core `>=0.0.18`, and browser 0.0.6 reads the document streams; the registry lists the three. flowmark and shell are not published, and appview is retired. F198 and F196 are complete.
 - F193.5, F196.6, F198.11: core 0.0.18 is released after the CI of its commit passed; its release text states that memory saver is on by default.
 - F198.23-1: the Rust check that two hosts share one authenticated service endpoint stops both hosts before its fake service ends, so no host connects again and starts the service in the configuration folder while the folder guard removes it. Red: the unchanged check found `logs` and `services` written after the service ended; Green: 10 of 10 runs of the check and 3 of 3 runs of `soksak-host-tauriv2`.

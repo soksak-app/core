@@ -114,7 +114,8 @@ pub(crate) fn call(
         "diagnostics.transcript"
         | "diagnostics.surface.hold"
         | "diagnostics.surface.held"
-        | "diagnostics.page.request" => {
+        | "diagnostics.page.request"
+        | "diagnostics.page.calls" => {
             exposure::parsed(&host.page(window, method, params, TIMEOUT)?)
         }
         "diagnostics.modal.hold" => {

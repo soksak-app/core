@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory object-counts app-usage hidden-tab-memory trace-share host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat page-memory object-counts host-calls app-usage hidden-tab-memory trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -58,6 +58,13 @@ object-counts:
 	@case "$(CONFIG)" in '') echo "object-counts requires CONFIG=DIR" >&2; exit 2;; esac
 	@case "$(BUILD)" in ''|debug|release) ;; *) echo "object-counts requires BUILD=release|debug" >&2; exit 2;; esac
 	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --repetitions $(or $(REPETITIONS),20)
+
+# Has the main page of a running diagnostic build send CALLS host calls ROUNDS times and prints the footprint of its page process before the calls, after
+# them and after a collection (scripts/measure-host-calls.mjs). The diagnostic methods exist only in diagnostic builds.
+host-calls:
+	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "host-calls requires APP=wailsv3|tauriv2 CONFIG=DIR [CALLS=1000] [ROUNDS=5]" >&2; exit 2;; esac
+	@case "$(CONFIG)" in '') echo "host-calls requires CONFIG=DIR" >&2; exit 2;; esac
+	@node scripts/measure-host-calls.mjs --sok target/debug/soksak-$(APP).app/Contents/MacOS/sok --config-dir "$(CONFIG)" --calls $(or $(CALLS),1000) --rounds $(or $(ROUNDS),5)
 
 # Reports the CPU and memory of the running application of CONFIG_DIR by process: host, sidecars, pages, documents and WebKit processes
 # (scripts/measure-app-usage.mjs, docs/operations/examples.md). SOK defaults to the sok binary of target/debug.

@@ -86,6 +86,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
   lane("installed format mentions", "js-ts", ["scripts/test/format-mentions.test.mjs"], ["scripts/test/format-mentions.test.mjs"]),
   lane("page memory measurement", "js-ts", ["scripts/measure-page-memory.mjs"], ["scripts/test/measure-page-memory.test.mjs"]),
   lane("object counts measurement", "js-ts", ["scripts/measure-object-counts.mjs"], ["scripts/test/measure-object-counts.test.mjs"]),
+  lane("host call memory measurement", "js-ts", ["scripts/measure-host-calls.mjs"], ["scripts/test/measure-host-calls.test.mjs"]),
   lane("application usage measurement", "js-ts", ["scripts/measure-app-usage.mjs"], ["scripts/test/measure-app-usage.test.mjs"]),
   lane("host allocation measurement", "js-ts", ["scripts/measure-host-allocations.mjs"], ["scripts/test/measure-host-allocations.test.mjs"]),
   lane("application update check", "js-ts", ["scripts/check-app-update.mjs"], ["scripts/test/check-app-update.test.mjs"]),

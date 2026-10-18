@@ -93,6 +93,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.process.exit",
     "diagnostics.memory.pressure",
     "diagnostics.page.request",
+    "diagnostics.page.calls",
     "diagnostics.surface.hold",
     "diagnostics.surface.held",
     TRANSCRIPT,

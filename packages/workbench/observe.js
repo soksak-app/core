@@ -51,6 +51,15 @@ registry.method("diagnostics.page.request", async ({ path }) => {
   return { path, status: response.status };
 });
 
+// The page sends `count` host calls `theme` one after another and answers the count and the elapsed time, so a memory check can
+// measure what the host calls of the page leave in the page process (docs/spec/endpoint.md).
+registry.method("diagnostics.page.calls", async ({ count }) => {
+  if (!Number.isInteger(count) || count < 1 || count > 50) throw new Error("diagnostics.page.calls requires a count from 1 to 50");
+  const started = performance.now();
+  for (let i = 0; i < count; i++) await host.call("theme");
+  return { count, ms: Math.round(performance.now() - started) };
+});
+
 // The reply of a held surface is sent after the host reports that it removed the surface (docs/spec/endpoint.md). That reply arrives after the request has ended.
 const replyHold = createSurfaceReplyHold(log);
 gateSurfaceReplies(replyHold.gate);

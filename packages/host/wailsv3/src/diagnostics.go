@@ -64,6 +64,7 @@ func init() {
 	diagnosticMethods["diagnostics.process.exit"] = diagnosticProcessExit
 	diagnosticMethods["diagnostics.memory.pressure"] = diagnosticMemoryPressure
 	diagnosticMethods["diagnostics.page.request"] = diagnosticPageMethod("diagnostics.page.request")
+	diagnosticMethods["diagnostics.page.calls"] = diagnosticPageMethod("diagnostics.page.calls")
 	diagnosticMethods["diagnostics.surface.hold"] = diagnosticPageMethod("diagnostics.surface.hold")
 	diagnosticMethods["diagnostics.surface.held"] = diagnosticPageMethod("diagnostics.surface.held")
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F200.1: 페이지 진단 method `diagnostics.page.calls`가 요청 하나에서 host call `theme`을 최대 50번 보내고, `make host-calls`가 페이지의 host call이 그 process에 남기는 WebKit malloc을 수집 전후로 측정한다. 두 debug host 측정: 수집 전 call당 약 0.7 KB(Wails), 1.1 KB(Tauri), 수집 뒤 없음.
 - F198.12, F196.7: plugin release browser 0.0.6, editor 0.0.4, hwp 0.0.2가 `surface.unload`를 선언하고 core `>=0.0.18`을 요구하며, browser 0.0.6은 document stream을 읽는다. registry가 셋을 나열한다. flowmark와 shell은 게시하지 않고 appview는 retired 되었다. F198과 F196이 완료되었다.
 - F193.5, F196.6, F198.11: core 0.0.18을 커밋의 CI가 통과한 뒤 release했다. release 문서는 메모리 절약이 기본으로 켜져 있다고 밝힌다.
 - F198.23-1: 두 host가 인증된 service endpoint 하나를 공유하는 Rust 시험은 fake service가 끝나기 전에 두 host를 stop하므로, folder guard가 configuration 폴더를 지우는 동안 어떤 host도 다시 연결해 service를 시작하지 않는다. Red: 바꾸지 않은 시험은 service가 끝난 뒤 쓰인 `logs`와 `services`를 찾았다. Green: 시험 10 of 10, `soksak-host-tauriv2` 3 of 3이 통과했다.
