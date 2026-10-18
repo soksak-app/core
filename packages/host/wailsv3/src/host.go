@@ -176,6 +176,7 @@ func Run(assets fs.FS, options Options) error {
 		Services:   []application.Service{application.NewService(bindings)},
 		LogLevel:   FrameworkLogLevel,
 		ShouldQuit: host.shouldQuit,
+		Mac:        LaunchMacOptions(),
 		// The default signal handler of Wails does not receive SIGHUP and only holds the signals after the first one, so
 		// it does not end the process with the default action. The handler that Run registered
 		// keeps the termination signal contract of the host specification (docs/spec/hosts.md).
@@ -321,4 +322,12 @@ func setupDockMenu(host *Host) {
 			}
 		})
 	})
+}
+
+// LaunchMacOptions returns the macOS options of the application. Launch Services activates an application that it launches
+// unless the launch requested no activation (`open -g`, kLSLaunchDontSwitch, NSWorkspaceOpenConfiguration.activates false),
+// so the application does not activate itself when it finishes launching, which Wails does by default and which brings a
+// background launch to the front (docs/spec/hosts.md#launch-activation).
+func LaunchMacOptions() application.MacOptions {
+	return application.MacOptions{ActivationPolicy: application.ActivationPolicyRegular, DisableActivationOnLaunch: true}
 }

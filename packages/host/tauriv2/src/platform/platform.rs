@@ -707,6 +707,14 @@ pub trait Platform: Send + Sync {
     /// created.
     fn instant_window_resize(&self) -> Result<(), String>;
 
+    /// Sets whether the application activates itself at launch while another application is active
+    /// (docs/spec/hosts.md#launch-activation). Call it on the builder before the application runs.
+    fn launch_activation(
+        &self,
+        builder: tauri::Builder<tauri::Wry>,
+        ignore_other_apps: bool,
+    ) -> Result<tauri::Builder<tauri::Wry>, String>;
+
     // Standard error
 
     /// Moves whole records of the native event ring into `buffer` and returns the number of bytes written; 0 means the ring

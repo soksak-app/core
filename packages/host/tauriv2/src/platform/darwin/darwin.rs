@@ -646,6 +646,13 @@ impl Platform for Darwin {
         window::instant_resize();
         Ok(())
     }
+    fn launch_activation(
+        &self,
+        builder: tauri::Builder<tauri::Wry>,
+        ignore_other_apps: bool,
+    ) -> Result<tauri::Builder<tauri::Wry>, String> {
+        Ok(builder.activate_ignoring_other_apps(ignore_other_apps))
+    }
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String> {
         events::pull(buffer)
     }

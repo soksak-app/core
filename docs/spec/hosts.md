@@ -197,6 +197,10 @@ A host that ends without its exit path leaves no WebKit process: launchd runs th
 
 **Non-persistent sidecars die with their window.** Removing a surface or closing its window sends the close notice; the process ends with the channel.
 
+## Launch activation
+
+Launch Services activates an application that it launches unless the launch requested no activation (`open -g`, `kLSLaunchDontSwitch`, or `NSWorkspaceOpenConfiguration.activates` false), so a host leaves the activation at launch to the system. A host does not activate itself when it finishes launching while another application is active: the Wails host sets `MacOptions.DisableActivationOnLaunch`, because Wails activates every application with the regular activation policy at launch by default, and the Tauri host sets `activate_ignoring_other_apps(false)`, because Tauri activates regardless of other applications by default. A person who opens the application sees it come to the front, and a background launch, such as the relaunch of `sok app relaunch`, leaves the frontmost application unchanged.
+
 ## Application log
 
 [Diagnostics](diagnostics.md) states every record, its form and where each failure leaves it. Every diagnostic file of an application is in one fixed folder, `logs/` under the configuration directory: the application log, the [performance trace](performance-trace.md), the service logs, the stall samples, and still captures and recordings in `logs/captures/`. A person who meets a defect hands over this folder.

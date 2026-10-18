@@ -198,6 +198,10 @@ host의 goroutine과 스레드는 진입점으로만 시작한다. Go는 `routin
 
 **비영속 사이드카는 창과 함께 죽는다.** 표면 제거나 창 닫기가 닫힘을 알리고 프로세스는 채널과 함께 끝난다.
 
+## Launch activation
+
+Launch Services는 실행 요청이 activation을 요청하지 않은 경우(`open -g`, `kLSLaunchDontSwitch`, `NSWorkspaceOpenConfiguration.activates` false)를 빼고 자신이 실행한 애플리케이션을 activate하므로, host는 실행 시점의 activation을 시스템에 맡긴다. host는 다른 애플리케이션이 active인 동안 실행을 마칠 때 스스로 activate하지 않는다. Wails는 기본으로 regular activation policy의 모든 애플리케이션을 실행 시점에 activate하므로 Wails host는 `MacOptions.DisableActivationOnLaunch`를 설정하고, Tauri는 기본으로 다른 애플리케이션과 상관없이 activate하므로 Tauri host는 `activate_ignoring_other_apps(false)`를 설정한다. 애플리케이션을 연 사람은 애플리케이션이 앞으로 오는 것을 보고, `sok app relaunch`의 relaunch 같은 background 실행은 frontmost 애플리케이션을 바꾸지 않는다.
+
 ## 애플리케이션 로그
 
 [진단](diagnostics.ko.md)이 모든 기록과 그 형태, 각 실패가 기록을 남기는 곳을 정한다. 애플리케이션의 모든 진단 파일은 고정된 폴더 하나, 설정 디렉터리의 `logs/`에 있다: 애플리케이션 로그, [성능 트레이스](performance-trace.md), 서비스 로그, 응답 멈춤 sample, 그리고 `logs/captures/`의 정지 캡처와 녹화. 결함을 만난 사람은 이 폴더를 넘겨준다.

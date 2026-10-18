@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F192.3-3-3: neither host activates itself when it finishes launching while another application is active, so a launch that requested no activation, such as the relaunch of `sok app relaunch` through `open -g -n`, leaves the frontmost application unchanged, and Launch Services still brings an application that a person opens to the front. The Wails host requires the Wails fork commit with `MacOptions.DisableActivationOnLaunch` and sets it; the Tauri host sets `activate_ignoring_other_apps(false)`. Red: the Go and Rust launch activation tests failed with `the application activates itself when it finishes launching`; Green: both pass 3 of 3 runs.
 - F199.2-2: a session history that a document region refuses at the first show of a tab after a restart is reported with `page.tab.restore.failed`, and the region attaches again without it instead of failing the mount with `unknown tab`.
 - F199.2-1: a document region that has loaded nothing returns no session history, so a browser tab on its home page stores no session that the next attach would refuse.
 - F192.3-2-2: both hosts store the `page.start` event that the page relays under every log policy, as the logging specification states, so a reload is marked in the event log also when the class `lifecycle` stores only errors.

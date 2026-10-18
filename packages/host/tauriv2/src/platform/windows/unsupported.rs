@@ -494,6 +494,13 @@ pub fn instant_window_resize() -> Result<(), String> {
     missing("window resize animation")
 }
 
+pub fn launch_activation(
+    _builder: tauri::Builder<tauri::Wry>,
+    _ignore_other_apps: bool,
+) -> Result<tauri::Builder<tauri::Wry>, String> {
+    missing("launch activation")
+}
+
 pub fn install_fatal_handlers() -> Result<(), String> {
     Err("install fatal handlers: not implemented on windows".to_string())
 }

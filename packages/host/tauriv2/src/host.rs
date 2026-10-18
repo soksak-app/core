@@ -148,6 +148,14 @@ fn run_menu_command(app: &tauri::AppHandle, command: &str) -> Result<(), String>
     Err("no main window".into())
 }
 
+/// Whether the application activates itself at launch while another application is active. Launch Services activates an
+/// application that it launches unless the launch requested no activation (`open -g`, kLSLaunchDontSwitch,
+/// NSWorkspaceOpenConfiguration.activates false), so the application leaves that decision to the system; Tauri activates
+/// regardless by default, which brings a background launch to the front (docs/spec/hosts.md#launch-activation).
+pub fn launch_activates_ignoring_other_apps() -> bool {
+    false
+}
+
 /// Creates the application and runs it until it exits.
 ///
 /// context is the `tauri::generate_context!()` of the application. background is the script that the surface webviews
@@ -258,7 +266,20 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             })())
         })
         .build();
-    tauri::Builder::default()
+    // A platform that cannot provide this step ends with status 1 before it opens a window.
+    let builder = match platform::current().and_then(|platform| {
+        platform.launch_activation(
+            tauri::Builder::default(),
+            launch_activates_ignoring_other_apps(),
+        )
+    }) {
+        Ok(builder) => builder,
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    };
+    builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
         .manage(windows::Windows::default())

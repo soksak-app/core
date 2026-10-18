@@ -497,6 +497,13 @@ impl Platform for Windows {
     fn instant_window_resize(&self) -> Result<(), String> {
         unsupported::instant_window_resize()
     }
+    fn launch_activation(
+        &self,
+        builder: tauri::Builder<tauri::Wry>,
+        ignore_other_apps: bool,
+    ) -> Result<tauri::Builder<tauri::Wry>, String> {
+        unsupported::launch_activation(builder, ignore_other_apps)
+    }
     fn pull_native_events(&self, buffer: &mut [u8]) -> Result<usize, String> {
         unsupported::pull_native_events(buffer)
     }
