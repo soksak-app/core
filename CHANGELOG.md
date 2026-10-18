@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F197.8: the log policy reaches every document: both hosts send `log-policy` to every window when a policy is applied and answer the action `policy-read`, and each surface or modal document applies the policy to its gate, so with the debug switch on a surface document stores its debug events. Red: a surface document batched only `page.log.gated`; Green.
 - F196.26: the package tests pass again: the chain audit fixture records the debug policy, the comments of the debug switch are English, and the surface call tests of both applications set the debug state, since diagnostics are off by default (F197).
 - F196.21-1: the boundary check resolves the declared repositories from the main checkout, so `make boundaries` runs in a worktree. Red: `ENOENT` for the plugin under `.claude/worktrees`; Green.
 - F196.25: every host test declares a defined contract case attached to it, so `make host-contract-check` passes again (2451 of 2451 tests, every case of both hosts); the CI failure since 2026-10-17 came from the undefined sampler case, undeclared sok policy tests and Tauri declarations separated from their tests by `mod support;`.
