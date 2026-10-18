@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.8-2: the name and `data-tab-state` of a tab button come from one function of the tab reports, `tabButtonData`, which the plane uses and a unit test covers. Red: the function was missing; Green.
 - F198.8-1: a commit that fails after a tab is marked unloaded no longer escapes as an unhandled rejection: the attempt ends with `page.tab.unload.failed` and the error display, the tab returns to loaded and a new commit declares its surface again. Red: the tab stayed unloaded with an unhandled rejection; Green.
 - F198.7.1, F198.7.2: the settings window shows the group 메모리 with the switch `memorySaver` and the slider `memorySaverDelay`; the status `core.tab.memory` lists each tab with its state and protections, `core.tab.unload` unloads a hidden tab now, `core.tab.keep` sets or clears the mark `kept`, and a request to the surface of an unloaded tab fails with `tab <id> is unloaded`. Red: the controls, the saver methods and the refusal were missing; Green.
 - F198.8: tab buttons carry `data-tab-state` from the memory saver, a shown unloaded tab is `restoring` until its surface mounts, and a failed restore emits `page.tab.restore.failed` and is shown through the error display of the page. A rejected read of the document regions during an unload attempt no longer escapes as an unhandled rejection: the attempt ends with `page.tab.unload.failed` and the error display, and the tab stays loaded. Red: the failure event was missing and the rejection was unhandled; Green: workbench 531 of 531.

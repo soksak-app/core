@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { clearVisibleNotices, forgetTab, onTabReports, recordOrigin, reportDirectory, reportError, reportModified, reportNotice, reportTitle,
-  reportTabState, setVisibleTab, tabError, tabMemoryState, tabLabel, tabModified, tabNotice, tabNotices, tabOrigin } from "../tab-reports.js";
+  reportTabState, setVisibleTab, tabButtonData, tabError, tabMemoryState, tabLabel, tabModified, tabNotice, tabNotices, tabOrigin } from "../tab-reports.js";
 
 test("a reported title is the tab label until it is removed, and changes notify once", () => {
   let notified = 0;
@@ -133,4 +133,17 @@ test("the memory state of a tab is loaded until the memory saver reports another
   assert.equal(tabMemoryState("tab-m"), "loaded");
   assert.equal(notified, 2);
   off();
+});
+
+test("the data of a tab button carries the memory state and the label that the tab reports or caches", () => {
+  const tab = { id: "tab-button", title: "Shell" };
+  assert.deepEqual(tabButtonData(tab), { name: "Shell", tabState: "loaded" });
+  reportTitle("tab-button", "vim notes.md");
+  reportTabState("tab-button", "unloaded");
+  assert.deepEqual(tabButtonData(tab), { name: "vim notes.md", tabState: "unloaded" });
+  reportModified("tab-button", true);
+  reportTabState("tab-button", "restoring");
+  assert.deepEqual(tabButtonData(tab), { name: "● vim notes.md", tabState: "restoring" });
+  forgetTab("tab-button");
+  assert.deepEqual(tabButtonData(tab), { name: "Shell", tabState: "loaded" });
 });

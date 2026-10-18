@@ -168,6 +168,16 @@ export function reportTabState(tabId, state) {
 export const tabMemoryState = (tabId) => memoryStates.get(tabId) ?? "loaded";
 
 /**
+ * The data of the button of tab {id, title}: the name, with the modified mark and the reported or cached label, and the
+ * memory saver state of `data-tab-state` (docs/spec/exposure.md#tab-memory).
+ */
+export function tabButtonData(tab) {
+  // default: a tab whose surface reported no title shows the title of its layout entry.
+  const label = labels.get(tab.id) ?? tab.title;
+  return { name: `${modified.has(tab.id) ? "● " : ""}${label}`, tabState: tabMemoryState(tab.id) };
+}
+
+/**
  * Releasing a surface in the unload mode keeps the reports of its tab and clears the error, whose display ended with the
  * instance, and the busy report, which ends at dispose (docs/spec/plugins.md#memory-saver).
  */

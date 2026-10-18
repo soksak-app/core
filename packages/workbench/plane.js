@@ -29,8 +29,8 @@ import { disposeSurface, focusSurface, mountSurface, mountedSurface, placePlugin
 import { emitEvent } from "./page-log.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
-import { clearVisibleNotices, onTabReports, recordOrigin, reportError, setVisibleTab, tabError, tabFooter, tabLabel, tabMemoryState, tabModified,
-  tabNotice } from "./tab-reports.js";
+import { clearVisibleNotices, onTabReports, recordOrigin, reportError, setVisibleTab, tabButtonData, tabError, tabFooter,
+  tabModified, tabNotice } from "./tab-reports.js";
 import { hideError, showError } from "./shown-errors.js";
 import { registry } from "./exposure.js";
 import { configureSystemNotifications, systemNotifications } from "./system-notifications.js";
@@ -135,7 +135,7 @@ const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
 /** The name shown on a tab: the title that the surface announced if there is one, otherwise the tab name. */
 // default: a surface that announced no title shows the tab name (tab.title in docs/spec/plugins.md).
 // A modified tab shows a dot before its name (docs/spec/plugins.md#tab-reports).
-const tabName = (t) => `${tabModified(t.id) ? "● " : ""}${tabLabel(t.id) ?? t.title}`;
+const tabName = (t) => tabButtonData(t).name;
 
 /** One new tab. The number is only a displayed name; ids.js issues the id. */
 function newTab(kind, params) {
@@ -335,7 +335,7 @@ function updateCard(el, card, rect) {
   }
   for (const b of strip.querySelectorAll(".tab")) {
     b.dataset.active = String(b.dataset.tabId === card.data.activeId);
-    b.dataset.tabState = tabMemoryState(b.dataset.tabId);
+    b.dataset.tabState = tabButtonData({ id: b.dataset.tabId }).tabState;
   }
   drawNotices(chrome, tabs);
 
@@ -1494,9 +1494,11 @@ const redrawTabReports = () => {
     if (!card?.data || !chrome) continue;
     for (const name of chrome.querySelectorAll(".tab[data-tab-id] .tab__name")) {
       const t = tabsOf(card).find((item) => item.id === name.parentElement.dataset.tabId);
-      if (t) name.textContent = tabName(t);
-      // The memory saver state (docs/spec/exposure.md#tab-memory); an unloaded tab keeps its reported or cached label.
-      name.parentElement.dataset.tabState = tabMemoryState(name.parentElement.dataset.tabId);
+      if (!t) continue;
+      // The name and the memory saver state (docs/spec/exposure.md#tab-memory); an unloaded tab keeps its label.
+      const data = tabButtonData(t);
+      name.textContent = data.name;
+      name.parentElement.dataset.tabState = data.tabState;
     }
     drawNotices(chrome, tabsOf(card));
     const statusText = el.querySelector(":scope > .status .status__text");
