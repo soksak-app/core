@@ -48,6 +48,7 @@ import {
 import { latest, onCommit, onRun, publish, publishAhead } from "./compositor.js";
 import { authorizeSurface, disposeSurface, disposeSurfacesExcept, focusSurface, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 import { createMemorySaver } from "./memory-saver.js";
+import { documentRegions } from "./document-regions.js";
 import { onTabReports, reportTitle, tabKeeps } from "./tab-reports.js";
 
 /* One plane. This document does not know how the plane renders and only receives the render completion. */
@@ -201,9 +202,9 @@ const memorySaver = createMemorySaver({
   },
   keeps: tabKeeps,
   kept: (tab) => projects.tabStateStore()?.entry(tab)?.kept === true,
-  // The region query and the interactionState read arrive with the document region reports (F198.5); without the query
-  // the memory saver treats every hidden tab as media-unknown, and a read that yields nothing restores without history.
-  interaction: async () => undefined,
+  regions: (tab) => documentRegions.reasons(tab),
+  interaction: (tab) => documentRegions.interaction(tab),
+  restore: (tab, history) => documentRegions.restore(tab, history),
   commit: () => Promise.resolve(publish()),
   showLabel: (tab) => {
     const label = projects.tabStateStore()?.label(tab) ?? null;

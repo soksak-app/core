@@ -78,6 +78,7 @@
     "tab-params.js",
     "tab-reports.js",
     "tab-state.js",
+    "document-regions.js",
     "memory-saver.js",
     "text-size.js",
     "frame-text.js",

@@ -11,6 +11,7 @@ import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, repo
 import { icon } from "./icons.js";
 import { active, tabStateStore, tabStatesReady } from "./projects.js";
 import { pluginRecords } from "./plugin-records.js";
+import { documentRegions } from "./document-regions.js";
 const mounted = new Map();
 /* Placeholder of a surface that is not mounted in a document without a host: one element for each surface id. */
 const placeholders = new Map();
@@ -52,11 +53,19 @@ function pageRuntime(surface, scoped, compositionReady) {
   return {
     surfaces: { report: (message) => invoke("report", message) },
     document: {
-      attach: (name) => invoke("documentAttach", { document: name }),
+      attach: async (name) => {
+        const reply = await invoke("documentAttach", documentRegions.attachRequest(surface.surfaceId, name));
+        documentRegions.attached(surface.surfaceId, name);
+        return reply;
+      },
       load: (name, url) => invoke("documentLoad", { document: name, url }),
       zoom: (name, zoom) => invoke("documentZoom", { document: name, zoom }),
       go: (name, action, offset) => invoke("documentGo", offset === undefined ? { document: name, action } : { document: name, action, offset }),
-      detach: (name) => invoke("documentDetach", { document: name }),
+      detach: async (name) => {
+        const reply = await invoke("documentDetach", { document: name });
+        documentRegions.detached(surface.surfaceId, name);
+        return reply;
+      },
       subscribe: (name, stream) => invoke("documentSubscribe", { document: name, stream }),
       unsubscribe: (name, handle) => invoke("documentUnsubscribe", { document: name, handle }),
       onStream: (listener) => scoped.native.on("document-stream", (event) => listener(event.document, event.handle, event.message)),
@@ -424,6 +433,8 @@ export async function disposeSurface(surfaceId, { mode } = {}) {
     entry.state();
     entry.host.removeAttribute("data-surface-suspended");
     entry.host.remove();
+    // The host closes the document regions of a released surface.
+    documentRegions.released(surfaceId);
     if (mode === "unload") unloadTab(surfaceId);
     else forgetTab(surfaceId);
     authorization.delete(surfaceId);

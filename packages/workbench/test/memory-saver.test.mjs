@@ -25,8 +25,9 @@ function harness(options = {}) {
     declaration: (plugin) => ({ undeclared: "undeclared", background: "background" })[plugin] ?? "unload",
     keeps: (tab) => state.keeps.get(tab) ?? [],
     kept: (tab) => state.kept.has(tab),
-    ...("regions" in options ? (options.regions ? { regions: options.regions } : {}) : { regions: async () => [] }),
+    regions: options.regions ?? (async () => []),
     interaction: options.interaction ?? (async () => undefined),
+    restore: options.restore ?? (() => {}),
     commit: options.commit ?? (async () => { state.commits.push(saver.place([]).unload); }),
     showLabel: () => {},
   });
@@ -123,8 +124,20 @@ test("capture and form replies protect a tab", async () => {
   assert.deepEqual(await protectedBy(null, { regions: async () => ["capture", "form"] }), ["capture", "form"]);
 });
 
-test("without a region query every hidden tab is protected by media-unknown", async () => {
-  assert.deepEqual(await protectedBy(null, { regions: undefined }), ["media-unknown"]);
+test("a restore passes the interactionState read at the unload to the regions of the tab", async () => {
+  const restored = [];
+  const { saver } = harness({
+    interaction: async (tab) => ({ page: `state of ${tab}` }),
+    restore: (tab, history) => restored.push({ tab, history }),
+  });
+  saver.observe(new Set(["b"]), tabs("a", "b"));
+  mock.timers.tick(120 * MINUTE);
+  await settle();
+  assert.equal(saver.unloaded("a"), true);
+  assert.deepEqual(restored, []);
+  saver.observe(new Set(["a"]), tabs("a", "b"));
+  assert.deepEqual(restored, [{ tab: "a", history: { page: "state of a" } }]);
+  assert.deepEqual(named("page.tab.restored"), [{ tab: "a", plugin: "fixture", history: true }]);
 });
 
 test("turning the setting on keeps the hidden time of each tab", async () => {
@@ -244,7 +257,7 @@ test("a restart with the setting on starts hidden declaring tabs unloaded with t
   const create = (enabled) => createMemorySaver({
     now: () => Date.now(), enabled: () => enabled, delay: () => 120,
     declaration: (plugin) => (plugin === "undeclared" ? "undeclared" : "unload"),
-    keeps: () => [], kept: () => false, regions: async () => [], interaction: async () => undefined,
+    keeps: () => [], kept: () => false, regions: async () => [], interaction: async () => undefined, restore: () => {},
     commit: async () => {}, showLabel: (tab) => labels.push(tab),
   });
   const on = create(true);

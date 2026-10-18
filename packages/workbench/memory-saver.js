@@ -20,15 +20,12 @@ const ORDER = ["shown", "recent", "keep:modified", "keep:busy", "media", "media-
  *   regions(tab)        resolves the reasons of the document regions of the tab at a decision (media, media-unknown,
  *                       capture, form);
  *   interaction(tab)    resolves the interactionState of the regions of the tab before it is unloaded, or undefined;
+ *   restore(tab, history) gives the regions of a restored tab the value that interaction resolved at its unload;
  *   commit()            requests a commit and resolves after host.place replied;
  *   showLabel(tab)      shows the cached label of a tab that starts unloaded.
  */
 export function createMemorySaver({
-  now, enabled, delay, declaration, keeps, kept,
-  // The document region query arrives with the region reports (F198.5). Until a page provides it, the state of the regions
-  // is unknown, and media-unknown protects every hidden tab, as a failed reply does (docs/spec/plugins.md#memory-saver).
-  regions = async () => ["media-unknown"],
-  interaction, commit, showLabel,
+  now, enabled, delay, declaration, keeps, kept, regions, interaction, restore, commit, showLabel,
 }) {
   // tab id -> {id, plugin, state, hiddenAt, shownAt, unloadAt, region, checkedAt, history, generation, attempting}
   let entries = new Map();
@@ -185,6 +182,7 @@ export function createMemorySaver({
           entry.generation++;
           if (entry.state === "unloaded") {
             entry.state = "loaded";
+            restore(id, entry.history);
             emitEvent("info", "page.tab.restored", { tab: id, plugin, history: entry.history !== undefined });
           }
         } else if (isShown) {

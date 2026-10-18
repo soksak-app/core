@@ -453,6 +453,15 @@ export const chrome = native ? {
   presented: () => presentedChrome,
 } : null;
 
+/**
+ * The document region reads of the memory saver (docs/spec/hosts.md#memory-pressure): the query {media, capture, form} and
+ * the base64 interactionState of the region `document` of `surface`. Without an application there are no regions.
+ */
+export const documents = native ? {
+  query: (surface, document) => bridge.call("documentQuery", { surface, document }),
+  interactionState: (surface, document) => bridge.call("documentInteractionState", { surface, document }),
+} : null;
+
 /** The surface interface. Without an application it does nothing. */
 export const surfaces = native ? {
     /* The plugin kinds that the application draws. Every plugin that has a surface is drawn here, so the registry is that
