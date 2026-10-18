@@ -728,24 +728,31 @@ bool sp_webview_collect_garbage(void *handle) {
     return true;
 }
 
-// The script of sp_webview_count_objects: the elements of the main document and the documents of the page, which are the document and its frames.
+// The scripts of sp_webview_count_objects: the elements of the main document and the documents of the page, which are the document
+// and its frames, and in the page content world the elements of the parked surface hosts. A page without the function of the
+// workbench fails the count with the error of the script.
 static NSString *const kCountObjectsScript = @"[document.getElementsByTagName('*').length, 1 + window.frames.length]";
+static NSString *const kCountPageObjectsScript =
+    @"[document.getElementsByTagName('*').length, 1 + window.frames.length, window.__soksakParkedElements()]";
 
 void sp_webview_count_objects(void *handle, bool document, sp_page_objects_done done, void *context) {
     NSCAssert(NSThread.isMainThread, @"object count requests require the UI thread");
     WKWebView *view = (WKWebView *)handle;
     WKContentWorld *world = document ? [WKContentWorld worldWithName:@"soksak-document"] : WKContentWorld.pageWorld;
-    [view evaluateJavaScript:kCountObjectsScript inFrame:nil inContentWorld:world completionHandler:^(id value, NSError *error) {
+    NSUInteger expected = document ? 2 : 3;
+    [view evaluateJavaScript:(document ? kCountObjectsScript : kCountPageObjectsScript) inFrame:nil inContentWorld:world completionHandler:^(id value, NSError *error) {
         if (error) {
-            done(context, 0, 0, error.localizedDescription.UTF8String);
+            done(context, 0, 0, 0, error.localizedDescription.UTF8String);
             return;
         }
         NSArray *counts = [value isKindOfClass:NSArray.class] ? value : nil;
-        if (counts.count != 2 || ![counts[0] isKindOfClass:NSNumber.class] || ![counts[1] isKindOfClass:NSNumber.class]) {
-            done(context, 0, 0, "the page did not return the element and document counts");
+        BOOL numbers = counts.count == expected;
+        for (NSUInteger index = 0; numbers && index < expected; index++) numbers = [counts[index] isKindOfClass:NSNumber.class];
+        if (!numbers) {
+            done(context, 0, 0, 0, "the page did not return the element, document and parked element counts");
             return;
         }
-        done(context, [counts[0] longValue], [counts[1] longValue], NULL);
+        done(context, [counts[0] longValue], [counts[1] longValue], document ? 0 : [counts[2] longValue], NULL);
     }];
 }
 

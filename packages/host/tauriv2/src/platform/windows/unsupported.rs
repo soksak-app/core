@@ -427,7 +427,7 @@ pub fn delivered_notifications(_done: Box<dyn FnOnce(String) + Send>) -> Result<
 pub fn count_page_objects(
     _view: super::super::Handle,
     _document: bool,
-    _done: Box<dyn FnOnce(Result<crate::object_counts::PageObjects, String>) + Send>,
+    _done: crate::object_counts::PageCountDone,
 ) -> Result<(), String> {
     missing("page object counts")
 }

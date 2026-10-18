@@ -127,6 +127,7 @@ fn invalid_json_closes_connection() {
 | `diagnostics.objects.runtime-memory` | `diagnostics.objects`는 Go runtime의 수치 여덟 개를 가진 `runtime`을 돌려준다: heap 객체, 쓰이지 않는 heap, free heap, released heap, stack, 그 밖의 metadata의 byte 수, heap goal, goroutine 수다. | wailsv3 only: Tauri host에는 garbage collection runtime이 없다 |
 | `diagnostics.heap-profile.writes-a-profile` | `diagnostics.heap.profile`은 Go runtime의 heap profile(gzip으로 압축한 protocol buffer)을 진단 폴더의 `heap-<pid>-<ms>.pprof`에 쓰고 그 경로로 답한다. | wailsv3 only: Tauri host에는 garbage collection heap이 없다 |
 | `diagnostics.objects.counts-documents` | `diagnostics.objects`는 main page와 창의 각 document region의 요소 수와 문서 수를 돌려준다. | both |
+| `diagnostics.objects.counts-parked-elements` | `diagnostics.objects`는 page content world가 park된 surface host에 대해 답한 `parkedElements`를 `page`에 돌려주고, 그 답이 없는 page는 count가 실패한다. | both |
 | `diagnostics.crash.report-is-announced-once` | crash report 폴더에 있는 애플리케이션의 crash report는 level `warn`의 event `host.crash.found`(`path`, `pid`, header의 `time`)이다. 두 번째 lookup은 아무것도 알리지 않고, 나중에 생긴 report는 다음 lookup만 알린다. | both |
 | `diagnostics.crash.report-belongs-to-the-application` | 파일 이름이 다른 이름으로 시작하거나, header가 다른 애플리케이션(애플리케이션 이름으로 시작하는 이름 포함)을 가리키거나, 확장자가 `.ips`가 아닌 report는 알리지 않는다. | both |
 | `diagnostics.crash.lookup-is-bounded` | lookup 한 번은 파일 이름 기준으로 애플리케이션의 최신 report 64개만 알리고 그보다 오래된 것은 알리지 않는다. | both |

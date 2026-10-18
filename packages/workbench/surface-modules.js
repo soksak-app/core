@@ -16,6 +16,21 @@ const mounted = new Map();
 /* Placeholder of a surface that is not mounted in a document without a host: one element for each surface id. */
 const placeholders = new Map();
 const parking = document.createDocumentFragment();
+
+/**
+ * The elements of the parked surface hosts and of their shadow roots. A parked host is outside the document, so a count of the
+ * document does not reach it; the object counts of diagnostics.objects read it as parkedElements (docs/spec/endpoint.md).
+ */
+export function parkedElements() {
+  const count = (root) => {
+    let total = 0;
+    for (const element of root.querySelectorAll("*")) total += 1 + (element.shadowRoot ? count(element.shadowRoot) : 0);
+    return total;
+  };
+  return count(parking);
+}
+// The object count script of the host evaluates this function in the page content world.
+globalThis.__soksakParkedElements = parkedElements;
 const authorization = new Map();
 // The listeners (surfaceId, error) of the end of each mount; error is null for a mount that ended.
 const mountListeners = new Set();

@@ -442,7 +442,7 @@ impl Platform for Windows {
         &self,
         view: super::super::Handle,
         document: bool,
-        done: Box<dyn FnOnce(Result<crate::object_counts::PageObjects, String>) + Send>,
+        done: crate::object_counts::PageCountDone,
     ) -> Result<(), String> {
         unsupported::count_page_objects(view, document, done)
     }

@@ -235,6 +235,7 @@ fn objects(window: &Window) -> Result<ObjectCounts, Failure> {
     })
     .map_err(internal)?;
     let mut page = PageObjects::default();
+    let mut parked_elements = 0;
     let mut documents = Vec::new();
     let mut failures = Vec::new();
     for _ in 0..pages {
@@ -245,8 +246,11 @@ fn objects(window: &Window) -> Result<ObjectCounts, Failure> {
             )
         })?;
         match (key, counts) {
-            (None, Ok(counts)) => page = counts,
-            (Some(key), Ok(counts)) => documents.push((key, counts)),
+            (None, Ok((counts, parked))) => {
+                page = counts;
+                parked_elements = parked;
+            }
+            (Some(key), Ok((counts, _))) => documents.push((key, counts)),
             (_, Err(error)) => failures.push(error),
         }
     }
@@ -270,6 +274,7 @@ fn objects(window: &Window) -> Result<ObjectCounts, Failure> {
     Ok(ObjectCounts {
         host,
         page,
+        parked_elements,
         documents: documents
             .into_iter()
             .map(|((surface, document), counts)| DocumentObjects {

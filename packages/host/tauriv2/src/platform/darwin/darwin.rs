@@ -587,7 +587,7 @@ impl Platform for Darwin {
         &self,
         view: Handle,
         document: bool,
-        done: Box<dyn FnOnce(Result<crate::object_counts::PageObjects, String>) + Send>,
+        done: crate::object_counts::PageCountDone,
     ) -> Result<(), String> {
         page_objects::count(view, document, done);
         Ok(())

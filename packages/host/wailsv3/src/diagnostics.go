@@ -782,6 +782,7 @@ type pageAnswer struct {
 	key    DocumentKey
 	main   bool
 	counts PageObjects
+	parked int64
 	err    error
 }
 
@@ -834,11 +835,11 @@ func (b hostBackend) ObjectCounts(window string) (ObjectCounts, error) {
 		}
 		attached := s.documents.Attached()
 		answers = make(chan pageAnswer, 1+len(attached))
-		counter.CountPageObjects(main, false, func(elements, documents int64, err error) {
-			answers <- pageAnswer{main: true, counts: PageObjects{Elements: elements, Documents: documents}, err: err}
+		counter.CountPageObjects(main, false, func(elements, documents, parked int64, err error) {
+			answers <- pageAnswer{main: true, counts: PageObjects{Elements: elements, Documents: documents}, parked: parked, err: err}
 		})
 		for key, handle := range attached {
-			counter.CountPageObjects(handle, true, func(elements, documents int64, err error) {
+			counter.CountPageObjects(handle, true, func(elements, documents, _ int64, err error) {
 				answers <- pageAnswer{key: key, counts: PageObjects{Elements: elements, Documents: documents}, err: err}
 			})
 		}
@@ -857,6 +858,7 @@ func (b hostBackend) ObjectCounts(window string) (ObjectCounts, error) {
 				failure = errors.Join(failure, answer.err)
 			} else if answer.main {
 				counts.Page = answer.counts
+				counts.ParkedElements = answer.parked
 			} else {
 				counts.Documents = append(counts.Documents, DocumentObjects{Key: answer.key, Counts: answer.counts})
 			}

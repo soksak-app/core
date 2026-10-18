@@ -49,6 +49,9 @@ impl PageObjects {
     }
 }
 
+/// Receives the counts of one web view, with the element count of its parked surface hosts, or the failure.
+pub type PageCountDone = Box<dyn FnOnce(Result<(PageObjects, usize), String>) + Send>;
+
 /// A sidecar session of diagnostics.objects: the sidecar and the surface that sent a request to it.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 pub struct SidecarSession {
@@ -64,11 +67,13 @@ pub struct DocumentObjects {
     pub counts: PageObjects,
 }
 
-/// The object counts of one window that diagnostics.objects replies.
+/// The object counts of one window that diagnostics.objects replies. parked_elements are the elements of the parked
+/// surface hosts of the main page, which are outside its document and so not in page.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ObjectCounts {
     pub host: HostObjects,
     pub page: PageObjects,
+    pub parked_elements: usize,
     pub documents: Vec<DocumentObjects>,
     pub sessions: Vec<SidecarSession>,
 }
@@ -98,9 +103,11 @@ pub fn objects_reply(counter: &dyn ObjectCounter, window: &str) -> Result<Value,
             })
         })
         .collect();
+    let mut page = counts.page.payload();
+    page["parkedElements"] = json!(counts.parked_elements);
     Ok(json!({
         "host": counts.host.payload(),
-        "page": counts.page.payload(),
+        "page": page,
         "documents": documents,
         "sessions": counts.sessions,
     }))
