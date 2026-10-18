@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F203: the terminal runtime specification states every exit of the persistent service, including the end when its folder or endpoint is removed or replaced.
 - F200.3: the diagnostic method `diagnostics.host.events` has the host send host events that the page does not listen to, and `make host-calls EVENTS=N` measures what they leave in the page process. Measured on both debug hosts: 1411 B of WebKit malloc per event in the Wails page and 0 B in the Tauri page.
 - F201.4: `sp_document_store_close` ends the data store of a document directory and reports when the WebKit network process has removed its session, and `document_view_test` and `document_plugin_test` end their stores before they remove their folders; before, the network process wrote `Cookies/Cookies.binarycookies` into the removed folder after the check exited. Red: 3 of 3 runs of `document_view_test` under `make temp-audit` left `soksak-document-store-*`; Green: 3 of 3 runs of each check under the audit with no entry left.
 - F202: a closed document region is released at once again; since F196.29 the hidden delay block retained the region until the hidden clear delay of 300 seconds passed, and it now holds a token that closing, showing and releasing the region clear. Red: `window_release_test` failed with `the closed window releases its SPDocumentView`; Green: 3 of 3 runs.
