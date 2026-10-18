@@ -35,7 +35,9 @@ core는 숨겨진 tab을 내리고, 다시 보일 때 저장된 상태로 복원
    - `pressure`: native memory pressure source 하나가 host와 함께 시작하고, level(warn 또는 critical)을 읽고 각 알림에 번호를 붙인다. F196.29의 document region 소비자를 부르고(그 소비자는 source를 갖지 않고 구독한다), host는 page에 event `memory-pressure {level, seq}` 하나를 보낸다. 알림마다 core는 보호 없는 숨겨진 tab 하나를, 가장 오래전에 보인 것부터 내린다. pressure에서 `recent`는 보호하지 않는다; 다른 보호는 모두 지킨다. 가장 오래전에 보인 순서이므로 방금 restore된 tab은 맨 뒤에 남는다. 후보를 찾지 못한 알림은 event `page.tab.unload.skipped {trigger, seq, reasons}`다.
 6. **unload, 재시작, 숨김 시각.**
 
-   unload는 이 순서의 core 동작 하나다: (1) core는 `host.window`가 보고하는 surface와 document 이름으로 지정하는 선언된 host method로 tab의 각 document region에 `interactionState`를 묻는다; (2) tab을 내려진 것으로 표시한다; (3) commit을 요청해 `dormant()`가 tab을 빼게 한다; (4) `forgetTab`은 tab을 닫을 때만 실행되므로, `disposeSurfacesExcept`는 tab 보고(제목, modified, footer, directory, notice, error)를 유지하는 unload dispose로 surface를 dispose한다; (5) `host.place`가 응답한 뒤 `page.tab.unloaded`를 보낸다.
+   unload는 이 순서의 core 동작 하나다: (1) core는 `host.window`가 보고하는 surface와 document 이름으로 지정하는 선언된 host method로 tab의 각 document region에 `interactionState`를 묻는다; (2) tab을 내려진 것으로 표시한다; (3) commit을 요청해 `dormant()`가 tab을 빼게 한다; (4) `disposeSurfacesExcept`가 받는 집합은 tab을 빼고, tab이 내려진 것으로 표시되어 있으므로 surface는 `disposeSurface`의 unload mode로 해제된다; 이 mode는 설명 보고(제목, footer, directory, origin, modified)를 유지하고 동작 보고(notice, error: 표시는 instance와 함께 끝났고 문장은 log에 있다)를 지운다; `forgetTab`은 tab을 닫을 때만 실행한다; (5) `host.place`가 응답한 뒤 `page.tab.unloaded`를 보낸다.
+
+   각 unload 시도는 세대를 가진다. 기다리는 각 단계(`interactionState` 응답, media 응답) 뒤에 core는 단계 2 전에 보호를 다시 평가한다; 생긴 보호나 tab 표시는 그 시도를 `page.tab.unload.skipped {trigger, seq, reasons}`로 끝내고, `core.tab.unload`는 그 이유와 함께 실패한다.
 
    보이지 않고 mount된 tab은 mount 시각을 숨김 시각으로 삼는다. 설정을 켜면 각 tab의 숨김 시각을 유지하고 scheduler를 다시 맞춘다.
 
@@ -82,8 +84,8 @@ tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 st
 
 1. F198.1 용어와 명세(`unload`, `restore`, 보호, `surface.unload`, `context.tab.state`, `context.tab.keep`, event, status, 명령, 설정); `validateManifest`가 `surface.unload`를 요구하고 `background` 옆에서 거부한다.
 2. F198.2 tab 상태 store `tab-state.json`(format 1): 다른 format을 거부하는 reader, 종료 시 내보내기를 포함한 쓰기 합치기, layout과의 쓰기 순서, load 때 맞추기.
-3. F198.3 `surface-modules.js`의 `context.tab.state`와 `context.tab.keep("busy")`; tab 보고를 유지하는 unload dispose(Red: unload 뒤 보고한 제목이 남는다); 다음 mount 전에 끝나는 dispose(mount가 진행 중인 dispose를 기다림); dispose 뒤 쓰기는 거부하고 context마다 한 번 기록한다(Red: 두 번째 쓰기는 더 기록하지 않는다).
-4. F198.4 workbench의 scheduler, 보호, 적힌 순서의 unload 동작과 restore(Red: 보이지 않고 mount된 tab은 mount 시각을 얻는다; 설정을 켜도 숨김 시각이 유지된다); `dormant()`가 내려진 tab을 뺀다(Red: unload 뒤 commit이 tab을 다시 mount하지 않고 store 항목을 지우지 않는다); 시험에서는 `mock.timers`가 지연을 움직인다.
+3. F198.3 `surface-modules.js`의 `context.tab.state`와 `context.tab.keep("busy")`; `disposeSurface`의 unload mode(Red: unload 뒤 보고한 제목과 restore된 context의 `origin`이 남고, 보이던 오류는 지워진다); 다음 mount 전에 끝나는 dispose(mount가 진행 중인 dispose를 기다림); dispose 뒤 쓰기는 거부하고 context마다 한 번 기록한다(Red: 두 번째 쓰기는 더 기록하지 않는다).
+4. F198.4 workbench의 scheduler, 보호, 적힌 순서의 unload 동작과 restore(Red: 보이지 않고 mount된 tab은 mount 시각을 얻는다; 설정을 켜도 숨김 시각이 유지된다; `interactionState` 응답을 기다리는 동안의 표시나 `modified` 보고는 tab을 올려 둔다); `dormant()`가 내려진 tab을 뺀다(Red: unload 뒤 commit이 tab을 다시 mount하지 않고 store 항목을 지우지 않는다); 시험에서는 `mock.timers`가 지연을 움직인다.
 5. F198.5 document region 보고: media 재생 질의, camera와 microphone은 key-value observation으로; form 수정은 frame별 map과 함께 모든 frame의 region script로(Red: 지운 subframe과 reload가 표시를 지운다); `interactionState`는 닫기 전에 돌려주고 restore할 때 넘기며 빈 경우도 다룬다.
 6. F198.6 native memory pressure source를 host와 함께 시작하는 소유자로 옮긴다; `sp_observe_memory_pressure`는 handler에 level을 넘기고 단일 등록으로 남는다(public dispatch API, private API 행 없음; Red: host 시작 한 번이 source 하나만 등록한다); region 소비자는 그것을 구독한다; Go와 Rust는 contract case와 선언한 fault injection과 함께 `memory-pressure {level, seq}`를 전달한다; `docs/spec/hosts.md`가 소유를 적는다.
 7. F198.7 설정과 그 검증; 명령 `core.tab.unload`와 `core.tab.keep`, context menu 항목(Red: 표시를 두 번 설정하면 event가 하나; 상태 없는 표시는 `null`을 읽는다).
@@ -123,7 +125,7 @@ tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 st
 - region이 닫힌 뒤 `interactionState`의 소유자가 없다 → region이 닫기 전에 page에 돌려주고 page가 tab과 함께 메모리에 둔다.
 - pressure source가 첫 region과 함께만 시작하고 level과 전달이 없다 → host와 함께 시작하는 소유자로 옮기고, level을 읽고, 알림에 번호를 붙이며, region 소비자와 host event에 준다.
 - `surface.unload` 필수가 `background`와 모순된다 → `background`가 없으면 필수, 있으면 금지, 이유 `background`로 나열.
-- 내려진 상태로 시작하는 것이 `dormant()`와 `disposeSurfacesExcept`와 충돌한다 → 내려진 tab은 `dormant()`에서 빠지고 유지 집합에 남으며, Red 시험을 둔다.
+- 내려진 상태로 시작하는 것이 `dormant()`와 `disposeSurfacesExcept`와 충돌한다 → 내려진 tab은 `dormant()`에서 빠진다(유지 집합 부분은 8차에서 바로잡았다: 집합은 tab을 빼고 `disposeSurface`의 unload mode가 해제한다), Red 시험을 둔다.
 - 후보 없는 pressure 알림이 흔적을 남기지 않았다 → event `page.tab.unload.skipped`.
 - 보호가 일부뿐인데 기본 켜짐 → 기본 켜짐 release는 F198.5 뒤에 온다.
 - tab 상태를 `projects.json`에 저장하면 그 format이 바뀐다 → 별도 store `tab-state.json`이 format 1로 시작하고, `projects.json`은 바뀌지 않으며, 잦은 쓰기를 layout 파일에서 떼어 놓는다.
@@ -182,3 +184,10 @@ tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 st
 - unload에 순서가 없고 닫기 전에 `interactionState`를 읽을 수 없었다 → 순서가 정해진 다섯 단계의 동작 하나와 surface와 document로 지정하는 선언된 host method.
 - 한 번도 보이지 않은 tab에 숨김 시각이 없었다 → mount 시각; 설정을 켜도 숨김 시각을 유지한다.
 - pressure handler에 level이 없고 두 번째 source가 가능했다 → entrance가 level을 넘기고 단일 등록으로 남으며 Red 시험을 둔다.
+
+8차(검토자 하나). 각 반박과 답:
+
+- 유지하는 보고에 origin이 빠져 restore된 tab이 directory를 잃는다 → origin을 유지하고 Red 시험을 둔다.
+- 유지한 notice와 error는 지울 instance가 없다 → unload mode가 동작 보고를 지운다; 그 문장은 이미 log에 있다.
+- 2차 답이 내려진 tab을 유지 집합에 넣어 해제와 모순된다 → 바로잡았다: 집합은 tab을 빼고 unload mode가 해제한다.
+- 기다리는 단계 동안 보호가 생길 수 있다 → 시도마다 세대를 두고 기다린 각 단계 뒤에 다시 평가하며, `page.tab.unload.skipped`로 끝낸다.
