@@ -89,6 +89,8 @@ github.com/mattn/go-zglob v0.0.6/go.mod h1:MxxjyoXXnMxfIpxTK2GAkw1w8glPsQILx3N5w
 github.com/microcosm-cc/bluemonday v1.0.27/go.mod h1:jFi9vgW+H7c3V0lb6nR74Ib/DIB5OBs92Dimizgw2cA=
 github.com/min-median-max/wails/v3 v3.0.0-20261007071621-63ed015bedfa h1:vTTV9Z/TAvsRbAm27Ya6FvC0F+p7kUBawQJC6EmSpUs=
 github.com/min-median-max/wails/v3 v3.0.0-20261007071621-63ed015bedfa/go.mod h1:5DR/EG5FHU8+BNV7tQYQ/rJMjoFsVlYpM+0gp1+gcTI=
+github.com/min-median-max/wails/v3 v3.0.0-20261018174723-4f8c857ee347 h1:RTQD0p7xnTkOIGnvm/0O04J6GonS6YatscfAW1qxiMg=
+github.com/min-median-max/wails/v3 v3.0.0-20261018174723-4f8c857ee347/go.mod h1:5DR/EG5FHU8+BNV7tQYQ/rJMjoFsVlYpM+0gp1+gcTI=
 github.com/mitchellh/copystructure v1.2.0/go.mod h1:qLl+cE2AmVv+CoeAwDPye/v+N2HKCj9FbZEVFJRxO9s=
 github.com/mitchellh/hashstructure/v2 v2.0.2/go.mod h1:MG3aRVU/N29oo/V/IhBX8GR/zz4kQkprJgF2EVszyDE=
 github.com/mitchellh/reflectwalk v1.0.2/go.mod h1:mSTlrgnPZtwu0c4WaC2kGObEpuNDbx0jmZXqmk4esnw=
