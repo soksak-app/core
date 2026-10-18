@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F193.5, F196.6, F198.11: core 0.0.18을 커밋의 CI가 통과한 뒤 release했다. release 문서는 메모리 절약이 기본으로 켜져 있다고 밝힌다.
 - F198.23-1: 두 host가 인증된 service endpoint 하나를 공유하는 Rust 시험은 fake service가 끝나기 전에 두 host를 stop하므로, folder guard가 configuration 폴더를 지우는 동안 어떤 host도 다시 연결해 service를 시작하지 않는다. Red: 바꾸지 않은 시험은 service가 끝난 뒤 쓰인 `logs`와 `services`를 찾았다. Green: 시험 10 of 10, `soksak-host-tauriv2` 3 of 3이 통과했다.
 - F192.3-3-4: window check가 folder의 file을 기다리는 wait는 `@parcel/watcher` 위의 `packages/window-check/folder-wait.mjs` `untilFolderState`로 watch가 active가 된 뒤 상태를 한 번 읽고 변경마다 다시 읽는다. 그 subscription은 FSEvents stream이 시작되면 resolve된다. Node의 `fs.watch`는 watch가 active가 되기 전에 반환하므로, relaunch된 host의 `endpoint.json`처럼 wait 시작 직후의 변경이 알려지지 않을 수 있었다. 바뀐 곳: `untilEndpoint`, `untilPolicy`, `untilEventLines`, `e2e/normal-shutdown.mjs`의 두 wait, `scripts/check-app-update.mjs`의 `untilChange`, test-command test의 pid file wait. Red: watch activation을 300 ms 늦추면 window-check의 세 wait가 timeout되었다. Green: 각각 20회 중 20회.
 - F192.3-2-5: `make go-repeat`는 `go test -json`을 실행하고 package 결과를 판정하므로, test file이 없는 support package가 test package가 통과한 run을 더 이상 실패시키지 않는다. Red: target이 `has no test files built with tags ''`로 실패했다. Green: target test가 5개 중 5개 통과한다.
