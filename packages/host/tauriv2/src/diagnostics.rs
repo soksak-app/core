@@ -146,6 +146,7 @@ pub(crate) fn call(
         "diagnostics.capture.still" => capture_still(window),
         "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.page.collect" => page_collect(window),
+        "diagnostics.host.events" => host_events(window, &params),
         "diagnostics.native.objects" => native_objects(window, &params),
         "diagnostics.objects" => crate::object_counts::objects_reply(host, window.label()),
         "diagnostics.process.exit" => process_exit(window, &params),
@@ -203,6 +204,31 @@ fn page_collect(window: &Window) -> Result<Value, Failure> {
     })
     .map_err(internal)?;
     Ok(Value::Null)
+}
+
+/// The most events of one diagnostics.host.events request (docs/spec/endpoint.md).
+const MAX_HOST_EVENTS: u64 = 1000;
+
+/// Sends count host events diagnostics-unlistened, for which the page declares no listener, to the main page of the
+/// window.
+fn host_events(window: &Window, params: &Map<String, Value>) -> Result<Value, Failure> {
+    let count = params
+        .get("count")
+        .and_then(Value::as_u64)
+        .filter(|count| (1..=MAX_HOST_EVENTS).contains(count))
+        .ok_or_else(|| {
+            Failure::params(format!(
+                "diagnostics.host.events requires a count from 1 to {MAX_HOST_EVENTS}"
+            ))
+        })?;
+    let label = window.label().to_string();
+    for _ in 0..count {
+        window
+            .app_handle()
+            .emit_to(EventTarget::webview(&label), "diagnostics-unlistened", ())
+            .map_err(internal)?;
+    }
+    Ok(json!({"count": count}))
 }
 
 impl ObjectCounter for Host {

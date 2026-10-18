@@ -43,6 +43,25 @@ test("the idle mode waits instead of sending calls and reports the growth per mi
   assert.deepEqual(entries.at(-1), { idleMinutes: 2, rounds: 1, perMinute: { beforeCollect: 3000, afterCollect: 300 } });
 });
 
+test("the event mode has the host send events in requests of 1000, then one barrier call, and reports the growth per event", async () => {
+  const entries = [];
+  const steps = [];
+  const sizes = [1000, 3500, 1250];
+  await measure({
+    status: async () => ({ pageProcess: 7 }),
+    collect: async () => { steps.push("collect"); },
+    calls: async (count) => { steps.push(`calls ${count}`); return { count, ms: 1 }; },
+    hostEvents: async (count) => { steps.push(`events ${count}`); return { count }; },
+    footprint: () => { const webkitMalloc = sizes.shift(); return { footprint: webkitMalloc * 2, webkitMalloc, reclaimable: 0 }; },
+    events: 2500,
+    rounds: 1,
+    log: (entry) => entries.push(entry),
+  });
+  assert.deepEqual(steps, ["collect", "events 1000", "events 1000", "events 500", "calls 1", "collect"]);
+  assert.equal(entries.at(1).phase, "events");
+  assert.deepEqual(entries.at(-1), { events: 2500, rounds: 1, perEvent: { beforeCollect: 1, afterCollect: 0 } });
+});
+
 test("a page that answers another count or changes its process fails the round", async () => {
   const base = { collect: async () => {}, footprint: () => ({ footprint: 1, webkitMalloc: 1 }), count: 3, rounds: 1, log: () => {} };
   await assert.rejects(measure({ ...base, status: async () => ({ pageProcess: 7 }), calls: async () => ({ count: 2, ms: 1 }) }),
@@ -62,9 +81,12 @@ test("footprint output and options are read strictly", () => {
   assert.deepEqual(parseFootprint(output), { footprint: 123456, webkitMalloc: 4096, reclaimable: 8192 });
   assert.throws(() => parseFootprint("no data"), /footprint reported no byte count/);
   assert.throws(() => parseFootprint("Footprint: 1 B"), /no WebKit malloc category/);
-  assert.deepEqual(parseOptions(["--sok", "/s", "--config-dir", "/c"]), { calls: 1000, rounds: 5, idleMinutes: 0, sok: "/s", configDir: "/c" });
+  assert.deepEqual(parseOptions(["--sok", "/s", "--config-dir", "/c"]), { calls: 1000, rounds: 5, idleMinutes: 0, events: 0, sok: "/s", configDir: "/c" });
   assert.equal(parseOptions(["--sok", "/s", "--config-dir", "/c", "--idle-minutes", "3"]).idleMinutes, 3);
   assert.throws(() => parseOptions(["--sok", "/s", "--config-dir", "/c", "--idle-minutes", "1.5"]), /non-negative integer/);
+  assert.equal(parseOptions(["--sok", "/s", "--config-dir", "/c", "--events", "5000"]).events, 5000);
+  assert.throws(() => parseOptions(["--sok", "/s", "--config-dir", "/c", "--events", "1.5"]), /--events must be a non-negative integer/);
+  assert.throws(() => parseOptions(["--sok", "/s", "--config-dir", "/c", "--events", "5", "--idle-minutes", "1"]), /exclude each other/);
   assert.throws(() => parseOptions(["--sok", "/s"]), /required options/);
   assert.throws(() => parseOptions(["--sok", "/s", "--config-dir", "/c", "--calls", "0"]), /positive integer/);
 });

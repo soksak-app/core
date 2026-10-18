@@ -94,6 +94,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.memory.pressure",
     "diagnostics.page.request",
     "diagnostics.page.calls",
+    "diagnostics.host.events",
     "diagnostics.surface.hold",
     "diagnostics.surface.held",
     TRANSCRIPT,

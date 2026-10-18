@@ -65,6 +65,7 @@ func init() {
 	diagnosticMethods["diagnostics.memory.pressure"] = diagnosticMemoryPressure
 	diagnosticMethods["diagnostics.page.request"] = diagnosticPageMethod("diagnostics.page.request")
 	diagnosticMethods["diagnostics.page.calls"] = diagnosticPageMethod("diagnostics.page.calls")
+	diagnosticMethods["diagnostics.host.events"] = diagnosticHostEvents
 	diagnosticMethods["diagnostics.surface.hold"] = diagnosticPageMethod("diagnostics.surface.hold")
 	diagnosticMethods["diagnostics.surface.held"] = diagnosticPageMethod("diagnostics.surface.held")
 	diagnosticSubscriptions["diagnostics.transcript"] = transcriptTopic
@@ -752,6 +753,31 @@ func diagnosticPageCollect(e *Endpoint, _ *endpointConn, params json.RawMessage)
 		}
 	})
 	return nil, err
+}
+
+// maxHostEvents is the most events of one diagnostics.host.events request (docs/spec/endpoint.md).
+const maxHostEvents = 1000
+
+// diagnosticHostEvents sends count host events diagnostics-unlistened, for which the page declares no listener, to the main page of the window.
+func diagnosticHostEvents(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	var p struct {
+		Count any `json:"count"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	count, ok := p.Count.(float64)
+	if !ok || count != math.Trunc(count) || count < 1 || count > maxHostEvents {
+		return nil, rpcError(codeInvalidParams, "diagnostics.host.events requires a count from 1 to %d", maxHostEvents)
+	}
+	for range int(count) {
+		s.Emit("diagnostics-unlistened")
+	}
+	return map[string]int{"count": int(count)}, nil
 }
 
 // diagnosticNativeObjects returns the number of live library objects attached to windows and web views after the application handled one event.

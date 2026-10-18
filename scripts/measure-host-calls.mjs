@@ -6,10 +6,12 @@
 // {round, phase, pageProcess, footprint, webkitMalloc, ms?} and after the rounds one summary {calls, rounds, perCall: {beforeCollect, afterCollect}} with the
 // mean growth of WebKit malloc in bytes per call before and after the collection. With --idle-minutes M the page sends no calls: each round waits M minutes
 // without input instead (phase "idle"), and the summary {idleMinutes, rounds, perMinute: {beforeCollect, afterCollect}} is the mean growth per minute,
-// which measures what the page allocates on its own while idle. The idle interval waits for no event, so it is set by duration. The JavaScript heap of WebKit is allocated in WebKit malloc, while the
+// which measures what the page allocates on its own while idle. With --events N the host sends N host events that the page does not listen to
+// (diagnostics.host.events, in requests of at most 1000 events) instead of the calls, followed by one host call as a barrier that returns after the page
+// evaluated the events that were sent before it (phase "events"), and the summary {events, rounds, perEvent: {beforeCollect, afterCollect}} is the mean growth per event. The idle interval waits for no event, so it is set by duration. The JavaScript heap of WebKit is allocated in WebKit malloc, while the
 // total footprint also moves with graphics memory of the window that the calls do not cause. It measures the first ready window and makes no judgment. `make host-calls` runs it.
 //
-//   node scripts/measure-host-calls.mjs --sok PATH --config-dir DIR [--calls N | --idle-minutes M] [--rounds N]
+//   node scripts/measure-host-calls.mjs --sok PATH --config-dir DIR [--calls N | --idle-minutes M | --events N] [--rounds N]
 import { execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -18,11 +20,15 @@ import { connect } from "@soksak/client";
 /** The most calls of one diagnostics.page.calls request (docs/spec/endpoint.md); a round sends its calls in requests of this size. */
 export const BATCH = 50;
 
+/** The most events of one diagnostics.host.events request (docs/spec/endpoint.md). */
+export const EVENT_BATCH = 1000;
+
 /**
  * Measures the rounds. status() is the host.window state, collect() and calls(count) are the diagnostic methods, and footprint(pid) returns
- * {footprint, webkitMalloc, reclaimable} in bytes. With idleMs and wait(ms) a round waits idleMs instead of sending calls.
+ * {footprint, webkitMalloc, reclaimable} in bytes. With idleMs and wait(ms) a round waits idleMs instead of sending calls. With events and
+ * hostEvents(count) a round has the host send that many unlistened host events and then sends one call.
  */
-export async function measure({ status, collect, calls, footprint, count, rounds, log, idleMs, wait }) {
+export async function measure({ status, collect, calls, footprint, count, rounds, log, idleMs, wait, events, hostEvents }) {
   const read = async (round, phase, extra = {}) => {
     const { pageProcess } = await status();
     if (!Number.isInteger(pageProcess) || pageProcess <= 0) throw new Error(`round ${round} ${phase}: the window has no page process (${pageProcess})`);
@@ -38,6 +44,15 @@ export async function measure({ status, collect, calls, footprint, count, rounds
     if (idleMs) {
       await wait(idleMs);
       called = await read(round, "idle");
+    } else if (events) {
+      for (let sent = 0; sent < events; sent += EVENT_BATCH) {
+        const batch = Math.min(EVENT_BATCH, events - sent);
+        const reply = await hostEvents(batch);
+        if (reply?.count !== batch) throw new Error(`round ${round}: the host answered ${JSON.stringify(reply)} for ${batch} events`);
+      }
+      const reply = await calls(1);
+      if (reply?.count !== 1) throw new Error(`round ${round}: the page answered ${JSON.stringify(reply)} for the barrier call`);
+      called = await read(round, "events");
     } else {
       let ms = 0;
       for (let sent = 0; sent < count; sent += BATCH) {
@@ -57,7 +72,9 @@ export async function measure({ status, collect, calls, footprint, count, rounds
     growth.afterCollect += collected.webkitMalloc - base.webkitMalloc;
   }
   const per = (bytes, unit) => Math.round(bytes / (rounds * unit));
-  const summary = idleMs
+  const summary = events
+    ? { events, rounds, perEvent: { beforeCollect: per(growth.beforeCollect, events), afterCollect: per(growth.afterCollect, events) } }
+    : idleMs
     ? { idleMinutes: idleMs / 60_000, rounds, perMinute: { beforeCollect: per(growth.beforeCollect, idleMs / 60_000), afterCollect: per(growth.afterCollect, idleMs / 60_000) } }
     : { calls: count, rounds, perCall: { beforeCollect: per(growth.beforeCollect, count), afterCollect: per(growth.afterCollect, count) } };
   log(summary);
@@ -77,7 +94,7 @@ export function parseFootprint(text) {
 export function parseOptions(args) {
   const { values } = parseArgs({
     args, strict: true,
-    options: { sok: { type: "string" }, "config-dir": { type: "string" }, calls: { type: "string", default: "1000" }, rounds: { type: "string", default: "5" }, "idle-minutes": { type: "string", default: "0" } },
+    options: { sok: { type: "string" }, "config-dir": { type: "string" }, calls: { type: "string", default: "1000" }, rounds: { type: "string", default: "5" }, "idle-minutes": { type: "string", default: "0" }, events: { type: "string", default: "0" } },
   });
   const positive = (name) => {
     const number = Number(values[name]);
@@ -87,7 +104,10 @@ export function parseOptions(args) {
   if (!values.sok || !values["config-dir"]) throw new Error("required options: --sok PATH --config-dir DIR");
   const idleMinutes = Number(values["idle-minutes"]);
   if (!Number.isInteger(idleMinutes) || idleMinutes < 0) throw new Error("--idle-minutes must be a non-negative integer");
-  return { calls: positive("calls"), rounds: positive("rounds"), idleMinutes, sok: values.sok, configDir: values["config-dir"] };
+  const events = Number(values.events);
+  if (!Number.isInteger(events) || events < 0) throw new Error("--events must be a non-negative integer");
+  if (events && idleMinutes) throw new Error("--events and --idle-minutes exclude each other");
+  return { calls: positive("calls"), rounds: positive("rounds"), idleMinutes, events, sok: values.sok, configDir: values["config-dir"] };
 }
 
 if (import.meta.main) {
@@ -108,6 +128,8 @@ if (import.meta.main) {
       rounds: options.rounds,
       idleMs: options.idleMinutes * 60_000,
       wait: (ms) => sleep(ms),
+      events: options.events,
+      hostEvents: (count) => client.request("diagnostics.host.events", { window, count }),
       log: (entry) => console.log(JSON.stringify(entry)),
     });
   } finally {
