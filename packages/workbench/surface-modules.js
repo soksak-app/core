@@ -508,7 +508,9 @@ export async function disposeSurfacesExcept(surfaceIds, { released = false } = {
 export async function placeSurfaces(place, { retain, unload = [] }) {
   // The place removes the compositions of the surfaces it leaves out before it replies, so their compositions stop sending
   // placements first; the release that follows a successful place does not detach them.
-  const leftOut = [...mounted.entries()].filter(([id]) => !retain.has(id) || unload.includes(id)).map(([, entry]) => entry);
+  const left = new Set(unload);
+  for (const id of mounted.keys()) if (!retain.has(id)) left.add(id);
+  const leftOut = [...left].filter((id) => mounted.has(id)).map((id) => mounted.get(id));
   for (const entry of leftOut) entry.lifetime.suspended = true;
   let answer;
   try {
