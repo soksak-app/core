@@ -37,7 +37,7 @@ export function installedSidecarCatalogs(directory) {
     if (error.code === 'ENOENT') return [];
     throw new Error(`${file}: ${error.message}`, { cause: error });
   }
-  if (installed?.format !== 2) throw new Error(`${file}: plugins/installed.json: format must be 2, found ${JSON.stringify(installed?.format)}`);
+  if (installed?.format !== 3) throw new Error(`${file}: plugins/installed.json: format must be 3, found ${JSON.stringify(installed?.format)}`);
   const catalogs = [];
   for (const [name, { path }] of Object.entries(installed.sidecars ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
     const manifest = join(directory, path, 'sidecar.json');

@@ -216,7 +216,7 @@ test('the events of a sidecar installed in a configuration folder of the run are
   const path = 'sidecars/alpha/1.0.0/platform';
   mkdirSync(join(config, 'plugins'));
   mkdirSync(join(config, path), { recursive: true });
-  writeFileSync(join(config, 'plugins', 'installed.json'), JSON.stringify({ format: 2, plugins: {}, sidecars: { alpha: { version: '1.0.0', path } } }));
+  writeFileSync(join(config, 'plugins', 'installed.json'), JSON.stringify({ format: 3, plugins: {}, sidecars: { alpha: { version: '1.0.0', path } } }));
   writeFileSync(join(config, path, 'sidecar.json'), JSON.stringify({ executable: 'bin/alpha', protocol: 1, events: 'events.json' }));
   writeFileSync(join(config, path, 'events.json'), JSON.stringify(alpha));
   assert.deepEqual(auditRun(catalog, folder), [`${join(config, 'logs', 'alpha-3-4.jsonl')}:3: event sidecar.alpha.surprise is not declared`]);

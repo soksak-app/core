@@ -74,7 +74,7 @@ const alphaCatalog = JSON.parse(readFileSync(new URL('../../packages/log-contrac
 const SIDECAR_PATH = 'sidecars/alpha/1.0.0/platform';
 
 /** A configuration folder that has installed the sidecar `alpha`, whose `sidecar.json` names the catalog `events.json`. */
-function installed(t, { sidecar = { executable: 'bin/alpha', protocol: 1, events: 'events.json' }, catalog = alphaCatalog, format = 2 } = {}) {
+function installed(t, { sidecar = { executable: 'bin/alpha', protocol: 1, events: 'events.json' }, catalog = alphaCatalog, format = 3 } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'events-'));
   t.after(() => rmSync(root, { recursive: true }));
   mkdirSync(join(root, 'plugins'));
@@ -97,7 +97,7 @@ test('the catalogs of the installed sidecars are read from the folders that inst
 });
 
 test('an installed sidecar whose record or catalog cannot be read is an error that names the file', (t) => {
-  assert.throws(() => installedSidecarCatalogs(installed(t, { format: 1 })), /plugins\/installed\.json: format must be 2/);
+  assert.throws(() => installedSidecarCatalogs(installed(t, { format: 1 })), /plugins\/installed\.json: format must be 3/);
   assert.throws(() => installedSidecarCatalogs(installed(t, { catalog: null })), /platform\/events\.json: the event catalog of the sidecar alpha: ENOENT/);
   assert.throws(() => catalogOf(catalog, installed(t, { catalog: { ...alphaCatalog, sidecar: undefined } })), /the member sidecar must name the sidecar/);
 });
