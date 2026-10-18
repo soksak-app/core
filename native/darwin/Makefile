@@ -45,8 +45,10 @@
 #                         variant with the footprint total, the MALLOC dirty bytes, the WebKit malloc dirty bytes, and the graphics
 #                         and JS JIT dirty bytes. At the end it prints the least-squares slope of the total in megabytes per minute
 #                         over minutes 5 to LONG for U and S, and the difference S-U. It prints numbers and asserts nothing.
-#                         VARIANTS (for example U,V1,V2,V3) measures only the named variants of the table. With RELOAD it runs U
-#                         and then S, reloads the address RELOAD times in each (15 seconds apart), and prints the footprint total,
+#                         VARIANTS (for example U,V1,V2,V3) measures only the named variants of the table. With RELOAD it runs U,
+#                         S and S2 (S with each new main-frame document in a new WebContent process), reloads the address RELOAD
+#                         times in each (15 seconds apart), prints the time of each navigation, its median and the number of
+#                         WebContent processes, and prints the footprint total,
 #                         MALLOC_SMALL and the heap counts of Text, HTMLDocument, CSSFontAccessor and NSCTFont after the first load,
 #                         after the reloads, and after a simulated memory pressure level PRESSURE (warn, the default, or critical)
 #                         set with sudo -n memory_pressure -S for 10 seconds
@@ -187,6 +189,7 @@ NATIVE_TESTS = observe_test \
   webview_process_test \
   webview_process_end_test \
   document_view_test \
+  document_navigation_test \
   document_throttle_test \
   document_processes_test \
   document_caches_test \
