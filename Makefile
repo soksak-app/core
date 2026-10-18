@@ -217,10 +217,10 @@ go-repeat:
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "go-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
 	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    $(GO_ENV) go test -count=1 $(if $(TAGS),-tags '$(TAGS)') -ldflags "$(GO_LINK)" $(if $(TEST),-run '$(TEST)') $(PACKAGE) > "$$output" 2>&1 \
-	      || { cat "$$output"; echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
-	    if grep -q "no tests to run" "$$output"; then cat "$$output"; echo "FAIL: $(PACKAGE) has no test matching $(TEST)" >&2; exit 1; fi; \
-	    if grep -q "no test files" "$$output"; then cat "$$output"; echo "FAIL: $(PACKAGE) has no test files built with tags '$(TAGS)'" >&2; exit 1; fi; \
+	    $(GO_ENV) go test -json -count=1 $(if $(TAGS),-tags '$(TAGS)') -ldflags "$(GO_LINK)" $(if $(TEST),-run '$(TEST)') $(PACKAGE) > "$$output" 2>&1; \
+	    status=$$?; \
+	    node scripts/go-repeat-result.mjs "$$output" $$status '$(PACKAGE)' '$(TEST)' '$(TAGS)' \
+	      || { echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
 	    run=$$((run + 1)); \
 	  done; \
 	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"
