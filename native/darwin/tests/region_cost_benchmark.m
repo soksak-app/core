@@ -45,9 +45,10 @@
 // (warn or critical), back to normal 10 seconds later, and
 // reads the process again 5 seconds after that, which shows whether memory pressure releases the kept documents.
 //
-// The collection mode (--collection MINUTES) measures only U in one window that is ordered front on the visible screen
-// without activating the application, so the page is visible and its window is not active. Every 2 minutes after the load
-// it prints the footprint total, the WebKit malloc dirty bytes, and the heap counts of WebCore::Text,
+// The collection mode (--collection MINUTES) measures U, R and S at the same time, each in its own window. The windows are
+// ordered front on the visible screen without activating the application, spread so that a part of each is visible, so each
+// page is visible and its window is not active; the mode fails when a window is occluded. Every 2 minutes after the loads it prints the load averages of the system
+// and, for each variant, the footprint total, the WebKit malloc dirty bytes, and the heap counts of WebCore::Text,
 // WebCore::HTMLDocument and the sum of the classes whose name starts with JSC::. After the last read it sets the
 // simulated memory pressure level to warn, back to normal 10 seconds later, and reads again 5 seconds after that; memory
 // pressure runs a full collection, so a growth that the read after it removes was garbage awaiting collection and a
@@ -60,6 +61,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <libproc.h>
+#import <sys/sysctl.h>
 #import <signal.h>
 #import <errno.h>
 #import <string.h>
@@ -921,7 +923,7 @@ static const char *const kCollectionClasses[] = { "WebCore::Text", "WebCore::HTM
 enum { kCollectionClassCount = sizeof(kCollectionClasses) / sizeof(kCollectionClasses[0]) };
 // Prints one read of the collection mode: the footprint total and WebKit malloc row, the heap counts of the classes, and the
 // count and bytes of the classes whose name starts with JSC::. A count that heap does not report is -1.
-static void printCollection(WKWebView *view, NSString *step, const char *when, double elapsed) {
+static void printCollection(WKWebView *view, NSString *step, const char *name, const char *when, double elapsed) {
     pid_t process = view._webProcessIdentifier;
     Reading reading = readFootprint(view, step);
     NSString *heap = toolText(@"/usr/bin/heap", @[[NSString stringWithFormat:@"%d", process]]);
@@ -948,14 +950,30 @@ static void printCollection(WKWebView *view, NSString *step, const char *when, d
             jscBytes += bytes;
         }
     }
-    fprintf(stdout, "%-10s elapsed_s=%7.1f total_mb=%s webkit_malloc_mb=%s", when, elapsed, megabytes(reading.total),
+    fprintf(stdout, "%-10s %-2s elapsed_s=%7.1f total_mb=%s webkit_malloc_mb=%s", when, name, elapsed, megabytes(reading.total),
         megabytes(reading.mallocDirty));
     for (int c = 0; c < kCollectionClassCount; c++) fprintf(stdout, " %s=%ld", kCollectionClasses[c], counts[c]);
     fprintf(stdout, " JSC::*=%ld JSC::*_mb=%s\n", jscCount, megabytes(jscBytes));
     fflush(stdout);
 }
-// Loads the address in U in a window at the top left of the visible screen, reads the process every 2 minutes for the
-// minutes, then reads it after a simulated warn memory pressure.
+// The variants of the collection mode, each in its own window.
+static const int kCollectionVariants[] = { kU, kR, kS };
+enum { kCollectionVariantCount = sizeof(kCollectionVariants) / sizeof(kCollectionVariants[0]) };
+// Prints the load averages of the system over 1, 5 and 15 minutes (sysctl vm.loadavg).
+static void printLoad(const char *when) {
+    struct loadavg load;
+    size_t size = sizeof(load);
+    if (sysctlbyname("vm.loadavg", &load, &size, NULL, 0) != 0) {
+        fprintf(stderr, "FAIL: sysctl vm.loadavg failed: %s\n", strerror(errno));
+        exit(1);
+    }
+    fprintf(stdout, "%-10s loadavg=%.2f %.2f %.2f\n", when, (double)load.ldavg[0] / load.fscale,
+        (double)load.ldavg[1] / load.fscale, (double)load.ldavg[2] / load.fscale);
+    fflush(stdout);
+}
+// Loads the address in U, R and S at the same time, each in its own window at the top of the visible screen. The windows
+// are spread from the left edge to the right edge, so that a part of each window is visible and no window is occluded. It
+// reads each process every 2 minutes for the minutes, then reads them after a simulated warn memory pressure.
 static void measureCollection(int minutes, NSURL *address, WKWebsiteDataStore *persistentStore, NSString *documentDirectory) {
     NSRect screen = NSScreen.mainScreen.visibleFrame;
     if (screen.size.width < kWindowWidth || screen.size.height < kWindowHeight) {
@@ -963,41 +981,67 @@ static void measureCollection(int minutes, NSURL *address, WKWebsiteDataStore *p
             (double)screen.size.height, (double)kWindowWidth, (double)kWindowHeight);
         exit(1);
     }
-    const Variant *spec = &kVariants[kU];
-    NSString *step = [NSString stringWithFormat:@"collection %s", spec->name];
-    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, kWindowWidth, kWindowHeight)
-        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
-    [window setReleasedWhenClosed:NO];
-    NSView *content = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, kWindowWidth, kWindowHeight)] autorelease];
-    window.contentView = content;
-    [window setFrameTopLeftPoint:NSMakePoint(screen.origin.x, NSMaxY(screen))];
-    [window orderFront:nil];
-    fprintf(stdout, "start %s: %s window_active=%d\n", spec->name, spec->label, window.isKeyWindow);
-    fflush(stdout);
-    OpenView opened = openVariant(spec, window, content, address, persistentStore, documentDirectory, step);
-    WKWebView *view = opened.view;
-    if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
-        failStep(step, @"the page did not finish loading within 120 seconds", view._webProcessIdentifier);
+    NSWindow *windows[kCollectionVariantCount];
+    OpenView opened[kCollectionVariantCount];
+    NSString *steps[kCollectionVariantCount];
+    const Variant *specs[kCollectionVariantCount];
+    CGFloat spacing = (screen.size.width - kWindowWidth) / (kCollectionVariantCount - 1);
+    for (int j = 0; j < kCollectionVariantCount; j++) {
+        specs[j] = &kVariants[kCollectionVariants[j]];
+        steps[j] = [NSString stringWithFormat:@"collection %s", specs[j]->name];
+        windows[j] = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, kWindowWidth, kWindowHeight)
+            styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+        [windows[j] setReleasedWhenClosed:NO];
+        NSView *content = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, kWindowWidth, kWindowHeight)] autorelease];
+        windows[j].contentView = content;
+        [windows[j] setFrameTopLeftPoint:NSMakePoint(screen.origin.x + j * spacing, NSMaxY(screen))];
+        [windows[j] orderFront:nil];
+        fprintf(stdout, "start %s: %s window_active=%d\n", specs[j]->name, specs[j]->label, windows[j].isKeyWindow);
+        fflush(stdout);
+        opened[j] = openVariant(specs[j], windows[j], content, address, persistentStore, documentDirectory, steps[j]);
+    }
+    for (int j = 0; j < kCollectionVariantCount; j++) {
+        WKWebView *view = opened[j].view;
+        if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
+            failStep(steps[j], @"the page did not finish loading within 120 seconds", view._webProcessIdentifier);
+        }
     }
     pumpUntil(settleSeconds, ^BOOL { return NO; });
     double loaded = nowSeconds();
-    pid_t process = view._webProcessIdentifier;
-    fprintf(stdout, "loaded %s: pid=%d title=%s\n", spec->name, process, view.title.UTF8String);
-    printCollection(view, step, "minute=0", 0);
-    for (int minute = kCollectionReadMinutes; minute <= minutes; minute += kCollectionReadMinutes) {
+    for (int j = 0; j < kCollectionVariantCount; j++) {
+        fprintf(stdout, "loaded %s: pid=%d visible=%d title=%s\n", specs[j]->name, opened[j].view._webProcessIdentifier,
+            (windows[j].occlusionState & NSWindowOcclusionStateVisible) != 0, opened[j].view.title.UTF8String);
+    }
+    fflush(stdout);
+    // An occluded window throttles its page, so a read of it does not measure a visible page.
+    for (int j = 0; j < kCollectionVariantCount; j++) {
+        if (!(windows[j].occlusionState & NSWindowOcclusionStateVisible)) {
+            failStep(steps[j], @"the window is occluded, so the page is not visible", opened[j].view._webProcessIdentifier);
+        }
+    }
+    for (int minute = 0; minute <= minutes; minute += kCollectionReadMinutes) {
         waitUntil(loaded + 60.0 * minute);
         char when[32];
         snprintf(when, sizeof(when), "minute=%d", minute);
-        printCollection(view, step, when, nowSeconds() - loaded);
+        printLoad(when);
+        for (int j = 0; j < kCollectionVariantCount; j++) {
+            printCollection(opened[j].view, steps[j], specs[j]->name, when, nowSeconds() - loaded);
+        }
     }
-    setPressure(@"warn", step, process);
+    pid_t process = opened[0].view._webProcessIdentifier;
+    setPressure(@"warn", steps[0], process);
     waitUntil(nowSeconds() + 10);
-    setPressure(@"normal", step, process);
+    setPressure(@"normal", steps[0], process);
     waitUntil(nowSeconds() + 5);
-    printCollection(view, step, "pressure", nowSeconds() - loaded);
-    closeOpenView(&opened, step);
-    [window close];
-    [window release];
+    printLoad("pressure");
+    for (int j = 0; j < kCollectionVariantCount; j++) {
+        printCollection(opened[j].view, steps[j], specs[j]->name, "pressure", nowSeconds() - loaded);
+    }
+    for (int j = 0; j < kCollectionVariantCount; j++) {
+        closeOpenView(&opened[j], steps[j]);
+        [windows[j] close];
+        [windows[j] release];
+    }
 }
 int main(int argc, const char *argv[]) { @autoreleasepool {
     double started = nowSeconds();

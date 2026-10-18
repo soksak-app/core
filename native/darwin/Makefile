@@ -50,9 +50,10 @@
 #                         prints the footprint total, MALLOC_SMALL, WebKit malloc, the load times and the heap counts of Text, HTMLDocument, CSSFontAccessor and NSCTFont after the first load,
 #                         after the reloads, and after a simulated memory pressure level PRESSURE (warn, the default, or critical)
 #                         set with sudo -n memory_pressure -S for 10 seconds
-#                         With COLLECTION (at least 2 minutes) it runs only U in a window ordered front without activating the
-#                         application and prints the footprint total, WebKit malloc and the heap counts of Text, HTMLDocument and
-#                         the JSC:: classes every 2 minutes, and again after a simulated warn memory pressure of 10 seconds
+#                         With COLLECTION (at least 2 minutes) it runs U, R and S at the same time, each in a window ordered front
+#                         without activating the application, and prints the load averages and, per variant, the footprint total,
+#                         WebKit malloc and the heap counts of Text, HTMLDocument and the JSC:: classes every 2 minutes, and again
+#                         after a simulated warn memory pressure of 10 seconds
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
 #   make repeat-suite COUNT=<n>
