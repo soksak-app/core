@@ -46,8 +46,8 @@
 #                         and JS JIT dirty bytes. At the end it prints the least-squares slope of the total in megabytes per minute
 #                         over minutes 5 to LONG for U and S, and the difference S-U. It prints numbers and asserts nothing.
 #                         VARIANTS (for example U,V1,V2,V3) measures only the named variants of the table. With RELOAD it runs U
-#                         and then S, reloads the address RELOAD times in each (15 seconds apart), and prints the footprint total,
-#                         MALLOC_SMALL and the heap counts of Text, HTMLDocument, CSSFontAccessor and NSCTFont after the first load,
+#                         and then S, or the variants of VARIANTS, reloads the address RELOAD times in each (15 seconds apart), and
+#                         prints the footprint total, MALLOC_SMALL, WebKit malloc, the load times and the heap counts of Text, HTMLDocument, CSSFontAccessor and NSCTFont after the first load,
 #                         after the reloads, and after a simulated memory pressure level PRESSURE (warn, the default, or critical)
 #                         set with sudo -n memory_pressure -S for 10 seconds
 #   make repeat TEST=<name>_test COUNT=<n>

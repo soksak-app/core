@@ -14,7 +14,12 @@
 //      because the Safari user agent makes google.com serve its full page instead of the legacy page that P receives;
 //   V1 U with the TemporaryTileCohortRetentionEnabled feature off (the tile cohorts of an earlier scale are not kept);
 //   V2 U with the SupportHDRDisplayEnabled feature off (the layers do not take an extended range contents format);
-//   V3 U with both features off.
+//   V3 U with both features off;
+//   W  U with the cache model of the engine set to DocumentBrowser instead of the default PrimaryWebBrowser (a smaller
+//      memory cache: 96 MB instead of 128 MB, dead resources 12 to 24 MB instead of 32 to 64 MB, and no deletion of the
+//      decoded data of dead resources after 60 seconds; the back-forward cache keeps 2 pages in both). The cache model is
+//      one setting of the UI process for all process pools, so the benchmark sets it before the view of W and sets it back
+//      to PrimaryWebBrowser after the view of W closes.
 // --variants NAME,NAME measures only the named variants, in the order of the table.
 // Each T variant differs from P by one setting. For each variant the benchmark reads the physical footprint of the WebContent
 // process of the view 10 seconds and 60 seconds after the load finished: the total (ri_phys_footprint), the dirty and
@@ -29,9 +34,11 @@
 // WebKit malloc category, and the dirty bytes of the graphics and JS JIT rows. At the end it prints the least-squares slope
 // of the total in megabytes per minute over the minutes 5 to MINUTES for each variant and the difference of the two slopes.
 //
-// The reload mode (--reload COUNT) measures only U and then S, each in the window of the table. After the first load and after
+// The reload mode (--reload COUNT) measures U and then S, or the variants of --variants in the order of the table, each in
+// the window of the table. After the first load and after
 // COUNT reloads (each a navigation to the same address that starts 15 seconds after the previous load finished and is waited
-// for), it prints the footprint total and the MALLOC_SMALL dirty bytes of the WebContent process and the heap counts of
+// for), it prints the footprint total, the MALLOC_SMALL and WebKit malloc dirty bytes of the WebContent process, the time of
+// the first load and the mean time of the reloads (from the load request to the end of loading), and the heap counts of
 // WebCore::Text, WebCore::HTMLDocument, WebCore::CSSFontAccessor and NSCTFont. A count that grows with the
 // reloads in one variant and not in the other shows earlier documents that the variant keeps. Then it sets the simulated
 // memory pressure level of the system to warn (sudo -n memory_pressure -S -l warn), or to the level of --pressure LEVEL
@@ -53,6 +60,14 @@
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
+
+// The cache model of the C API of WebKit (Source/WebKit/UIProcess/API/C/WKContext.h). WKContextSetCacheModel stores the model
+// in LegacyGlobalSettings, which applies it to every process pool; it does not read its context argument.
+typedef const struct OpaqueWKContext *WKContextRef;
+typedef uint32_t WKCacheModel;
+enum { kWKCacheModelDocumentViewer = 0, kWKCacheModelDocumentBrowser = 1, kWKCacheModelPrimaryWebBrowser = 2 };
+extern void WKContextSetCacheModel(WKContextRef context, WKCacheModel cacheModel);
+extern WKCacheModel WKContextGetCacheModel(WKContextRef context);
 
 static const CGFloat kWindowWidth = 1200;
 static const CGFloat kWindowHeight = 760;
@@ -161,9 +176,10 @@ typedef struct {
     BOOL overrideScale;  // the device scale override set to the backing scale of the window
     BOOL breakdown;      // footprint -v and vmmap rows of the graphics and malloc allocations are printed at the last read
     const char *featuresOff; // the WKPreferences feature keys turned off, separated by commas, or NULL
+    BOOL documentBrowserCache; // the cache model of the engine is DocumentBrowser while the view is open
 } Variant;
 
-enum { kP, kQ, kR, kS, kT1, kT2, kT3, kT4, kT5, kT7, kU, kV1, kV2, kV3, kVariantCount };
+enum { kP, kQ, kR, kS, kT1, kT2, kT3, kT4, kT5, kT7, kU, kV1, kV2, kV3, kW, kVariantCount };
 
 static const Variant kVariants[kVariantCount] = {
     { "P", "plain web view, nonpersistent data store", NO, NO, NO, NO, NO, NO, NO, NO, NO, NO },
@@ -182,6 +198,7 @@ static const Variant kVariants[kVariantCount] = {
     { "V2", "U + SupportHDRDisplayEnabled off", NO, NO, NO, YES, NO, NO, NO, NO, NO, NO, "SupportHDRDisplayEnabled" },
     { "V3", "U + both features off", NO, NO, NO, YES, NO, NO, NO, NO, NO, NO,
         "TemporaryTileCohortRetentionEnabled,SupportHDRDisplayEnabled" },
+    { "W", "U + cache model DocumentBrowser", NO, NO, NO, YES, NO, NO, NO, NO, NO, NO, NULL, YES },
 };
 
 // The footprint of one WebContent process in bytes. A row that footprint does not report is -1.
@@ -529,13 +546,19 @@ typedef struct {
     WKWebView *mainView;
     void *surface;
     void *document;
+    BOOL cacheModelSet;  // the view set the cache model, and closing it sets the default back
 } OpenView;
 
 // Creates the view of the variant in the content view of the window and starts the load of the address. The step names the
 // variant in the failure messages.
 static OpenView openVariant(const Variant *spec, NSWindow *window, NSView *content, NSURL *address,
     WKWebsiteDataStore *persistentStore, NSString *documentDirectory, NSString *step) {
-    OpenView opened = { nil, nil, NULL, NULL };
+    OpenView opened = { nil, nil, NULL, NULL, NO };
+    if (spec->documentBrowserCache) {
+        WKContextSetCacheModel(NULL, kWKCacheModelDocumentBrowser);
+        if (WKContextGetCacheModel(NULL) != kWKCacheModelDocumentBrowser) failStep(step, @"the cache model is not DocumentBrowser", 0);
+        opened.cacheModelSet = YES;
+    }
     CGRect frame = NSMakeRect(kMarginLeft, kWindowHeight - kMarginTop - kRegionHeight, kRegionWidth, kRegionHeight);
     if (!spec->region) {
         opened.view = [[[WKWebView alloc] initWithFrame:frame configuration:plainConfiguration(spec, persistentStore)] autorelease];
@@ -586,6 +609,10 @@ static void closeOpenView(OpenView *opened, NSString *step) {
     }
     if (!endProcess(process, step)) exit(1);
     if (mainProcess != 0 && mainProcess != process && !endProcess(mainProcess, step)) exit(1);
+    if (opened->cacheModelSet) {
+        WKContextSetCacheModel(NULL, kWKCacheModelPrimaryWebBrowser);
+        if (WKContextGetCacheModel(NULL) != kWKCacheModelPrimaryWebBrowser) failStep(step, @"the cache model is not PrimaryWebBrowser", 0);
+    }
 }
 
 // Loads the address in one variant, reads the footprint of its WebContent process at each read time, and ends the view and
@@ -758,13 +785,18 @@ enum { kHeapClassCount = sizeof(kHeapClasses) / sizeof(kHeapClasses[0]) };
 typedef struct {
     long total;
     long mallocSmallDirty;
+    long webkitMallocDirty;
+    double loadSeconds;  // the first load, or the mean of the reloads; -1 for a reading after memory pressure
     long counts[kHeapClassCount];
 } ReloadReading;
 // Reads the footprint total, the MALLOC_SMALL row and the heap counts of the WebContent process of the view.
 static ReloadReading readReload(WKWebView *view, NSString *step) {
     pid_t process = view._webProcessIdentifier;
     ReloadReading reading;
-    reading.total = readFootprint(view, step).total;
+    Reading footprint = readFootprint(view, step);
+    reading.total = footprint.total;
+    reading.webkitMallocDirty = footprint.mallocDirty;
+    reading.loadSeconds = -1;
     reading.mallocSmallDirty = -1;
     NSString *text = footprintText(process);
     if (!text) failStep(step, @"footprint did not report the process", process);
@@ -791,7 +823,8 @@ static ReloadReading readReload(WKWebView *view, NSString *step) {
     return reading;
 }
 static void printReload(const char *name, const char *when, ReloadReading reading) {
-    fprintf(stdout, "%-4s %-12s %10s %16s", name, when, megabytes(reading.total), megabytes(reading.mallocSmallDirty));
+    fprintf(stdout, "%-4s %-12s %10s %16s %16s %10.2f", name, when, megabytes(reading.total), megabytes(reading.mallocSmallDirty),
+        megabytes(reading.webkitMallocDirty), reading.loadSeconds);
     for (int c = 0; c < kHeapClassCount; c++) fprintf(stdout, " %24ld", reading.counts[c]);
     fprintf(stdout, "\n");
 }
@@ -812,17 +845,17 @@ static void waitNavigation(WKWebView *view, NSString *step) {
         failStep(step, @"the reload did not finish within 120 seconds", view._webProcessIdentifier);
     }
 }
-// Loads the address in U and then in S, reloads it count times in each, and prints the readings after the first load and
-// after the last reload.
+// Loads the address in each of the variants, reloads it count times in each, and prints the readings after the first load,
+// after the last reload and after memory pressure.
 static void measureReload(int count, NSString *pressureLevel, NSWindow *window, NSView *content, NSURL *address, WKWebsiteDataStore *persistentStore,
-    NSString *documentDirectory) {
-    const int variants[2] = { kU, kS };
-    ReloadReading readings[2][3];
-    for (int j = 0; j < 2; j++) {
+    NSString *documentDirectory, const int *variants, int variantCount) {
+    ReloadReading readings[kVariantCount][3];
+    for (int j = 0; j < variantCount; j++) {
         const Variant *spec = &kVariants[variants[j]];
         NSString *step = [NSString stringWithFormat:@"reload %s", spec->name];
         fprintf(stdout, "start %s: %s\n", spec->name, spec->label);
         fflush(stdout);
+        double requested = nowSeconds();
         OpenView opened = openVariant(spec, window, content, address, persistentStore, documentDirectory, step);
         WKWebView *view = opened.view;
         if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
@@ -830,12 +863,16 @@ static void measureReload(int count, NSString *pressureLevel, NSWindow *window, 
         }
         pid_t process = view._webProcessIdentifier;
         double loaded = nowSeconds();
+        double firstLoad = loaded - requested;
+        double reloadSum = 0;
         waitUntil(loaded + kReloadGapSeconds);
         readings[j][0] = readReload(view, step);
+        readings[j][0].loadSeconds = firstLoad;
         fprintf(stdout, "loaded %s: pid=%d title=%s\n", spec->name, process, view.title.UTF8String);
         printReload(spec->name, "load", readings[j][0]);
         fflush(stdout);
         for (int r = 1; r <= count; r++) {
+            requested = nowSeconds();
             if (opened.document) {
                 if (!sp_document_load(opened.document, address.absoluteString.UTF8String)) {
                     failStep(step, @"the document refuses the address", view._webProcessIdentifier);
@@ -845,6 +882,7 @@ static void measureReload(int count, NSString *pressureLevel, NSWindow *window, 
             }
             waitNavigation(view, step);
             loaded = nowSeconds();
+            reloadSum += loaded - requested;
             if (view._webProcessIdentifier != process) {
                 failStep(step, [NSString stringWithFormat:@"the reload %d moved the page to the process %d", r,
                     view._webProcessIdentifier], process);
@@ -854,6 +892,7 @@ static void measureReload(int count, NSString *pressureLevel, NSWindow *window, 
             waitUntil(loaded + kReloadGapSeconds);
         }
         readings[j][1] = readReload(view, step);
+        readings[j][1].loadSeconds = reloadSum / count;
         printReload(spec->name, "reloads", readings[j][1]);
         fflush(stdout);
         setPressure(pressureLevel, step, process);
@@ -866,10 +905,10 @@ static void measureReload(int count, NSString *pressureLevel, NSWindow *window, 
         closeOpenView(&opened, step);
     }
     fprintf(stdout, "\nreload table: %d reloads (MB and heap counts)\n", count);
-    fprintf(stdout, "%-4s %-12s %10s %16s", "var", "when", "total", "malloc_small");
+    fprintf(stdout, "%-4s %-12s %10s %16s %16s %10s", "var", "when", "total", "malloc_small", "webkit_malloc", "load_s");
     for (int c = 0; c < kHeapClassCount; c++) fprintf(stdout, " %24s", kHeapClasses[c]);
     fprintf(stdout, "\n");
-    for (int j = 0; j < 2; j++) {
+    for (int j = 0; j < variantCount; j++) {
         printReload(kVariants[variants[j]].name, "load", readings[j][0]);
         printReload(kVariants[variants[j]].name, "reloads", readings[j][1]);
         printReload(kVariants[variants[j]].name, "pressure", readings[j][2]);
@@ -883,6 +922,7 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
     long reloadCount = 0;
     NSString *pressureLevel = @"warn";
     BOOL selected[kVariantCount];
+    BOOL variantsGiven = NO;
     for (int variant = 0; variant < kVariantCount; variant++) selected[variant] = YES;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--variants") == 0) {
@@ -891,6 +931,7 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
                 return 1;
             }
             NSArray<NSString *> *names = [@(argv[++i]) componentsSeparatedByString:@","];
+            variantsGiven = YES;
             for (int variant = 0; variant < kVariantCount; variant++) selected[variant] = NO;
             for (NSString *name in names) {
                 int found = -1;
@@ -982,7 +1023,16 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         fprintf(stdout, "window %gx%g backing_scale %g\n", (double)kWindowWidth, (double)kWindowHeight, (double)window.backingScaleFactor);
         fflush(stdout);
         if (reloadCount > 0) {
-            measureReload((int)reloadCount, pressureLevel, window, content, url, persistentStore, documentDirectory);
+            int reloadVariants[kVariantCount] = { kU, kS };
+            int reloadVariantCount = 2;
+            if (variantsGiven) {
+                reloadVariantCount = 0;
+                for (int variant = 0; variant < kVariantCount; variant++) {
+                    if (selected[variant]) reloadVariants[reloadVariantCount++] = variant;
+                }
+            }
+            measureReload((int)reloadCount, pressureLevel, window, content, url, persistentStore, documentDirectory,
+                reloadVariants, reloadVariantCount);
             [window close];
             [window release];
             [NSFileManager.defaultManager removeItemAtPath:root error:nil];
