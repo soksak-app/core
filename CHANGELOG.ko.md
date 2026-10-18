@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.14, F196.20-1: browser tab은 page가 쓰는 만큼 쓰고 document region과 plain web view에서 같다; 보이는 page는 JavaScript collector가 늦게 수집하는 할당만큼 늘고 page를 다시 그리면 내려가며, WebKit에는 보이는 page를 더 낮추는 표준 메커니즘이 없다.
 - F196.27-2: F196.27-1의 region document마다 새 process를 되돌린다: 메모리 수치를 낮추려고 같은 사이트 이동마다 약 0.5초와 cache를 내주었고, 그것이 해제한 이전 document는 엔진이 약 8분 뒤 스스로 해제한다.
 - F196.27-1: document region이 main webview처럼 main frame의 새 document를 새 process에서 열므로, reload나 이동이 더 이상 tab process에 이전 document를 남기지 않는다: 다섯 번 reload해도 최대 22개 document와 325 MB 대신 6개와 약 124 MB를 유지한다. 이동은 0.6초 대신 약 1.1초 걸린다. Red: document가 process 86315에 남았다; Green: `document_navigation_test`.
 - F196.19-1: `make -C native/darwin benchmark-occlusion`이 측정한 바, macOS는 제목 막대 창이 공유하는 각 모서리를 28 pt 넘을 때만 창을 덮인 것으로 보고하므로, 화면 왼쪽 위 모서리의 창은 최대화된 창 아래에서 보이는 상태로 남고 WebKit은 그 document를 보이는 상태로 유지한다; 그 입력을 바꾸는 API나 SPI는 없다.
