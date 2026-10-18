@@ -1,6 +1,9 @@
 //! The host gives the writer the classes that the catalogs of the enabled installed plugins declare, and records a catalog that
 //! it cannot use as an error that names the file (docs/spec/logging.md#plugin-catalogs).
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 use std::fs;
@@ -29,7 +32,7 @@ fn write_plugin(config: &Path, id: &str, catalog: &str) -> String {
 #[test]
 fn the_host_classifies_plugin_events_by_the_installed_catalogs_and_records_a_catalog_it_cannot_use()
 {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = Arc::new(
         records::start_every_level(Options {
             directory: directory.path().join("logs"),

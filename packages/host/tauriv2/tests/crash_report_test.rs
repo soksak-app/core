@@ -1,6 +1,9 @@
 //! The crash reports of the system (docs/spec/logging.md#automatic-entrances): the start of the host announces each crash report
 //! of the application once as the event `host.crash.found`. The same cases run in the Go host.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 
@@ -41,9 +44,9 @@ fn found(log: &EventLog) -> Vec<Value> {
 /// Runs `body` with a writer attached and a folder of reports and a ledger file in disposable folders.
 fn with_log(body: impl FnOnce(&Arc<EventLog>, &Path, &Path)) {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let config = tempfile::tempdir().unwrap();
-    let reports = tempfile::tempdir().unwrap();
-    let ledger = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
+    let reports = folder::Folder::new();
+    let ledger = folder::Folder::new();
     let log = records::start_writer(config.path());
     body(&log, reports.path(), &ledger.path().join("crash-found.txt"));
     use_host_event_log(None);

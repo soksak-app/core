@@ -1,6 +1,9 @@
 //! Tests of the transport, the frames, the JSON-RPC handling and the watch list of the local endpoint. A fake service
 //! replaces the window and the page.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::io::Write;
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -90,7 +93,7 @@ fn start(config: &Path, application: &str, service: Arc<Fake>) -> Endpoint {
 // contract: endpoint.process.one-owner-per-config-dir
 #[test]
 fn a_configuration_directory_has_one_process_owner() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (first, _) = Fake::new();
     let endpoint = start(config.path(), "test-owner", first);
     let (second, _) = Fake::new();
@@ -111,7 +114,7 @@ fn a_configuration_directory_has_one_process_owner() {
 // contract: endpoint.process.lock-mode-0600
 #[test]
 fn the_process_lock_is_owner_only() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-lock-mode", fake);
     assert_eq!(mode(&config.path().join("process.lock")), 0o600);
@@ -150,7 +153,7 @@ fn request(connection: &mut Box<dyn Connection>, id: u64, method: &str, params: 
 // contract: endpoint.transport.http-request-line-closes
 #[test]
 fn http_request_line_closes_connection_without_running_a_method() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-http", fake.clone());
     let mut connection = open(&endpoint);
@@ -165,7 +168,7 @@ fn http_request_line_closes_connection_without_running_a_method() {
 // contract: endpoint.transport.invalid-json-closes
 #[test]
 fn invalid_json_closes_connection() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-json", fake.clone());
     let mut connection = open(&endpoint);
@@ -182,7 +185,7 @@ fn invalid_json_closes_connection() {
 // contract: endpoint.transport.non-jsonrpc-object-closes
 #[test]
 fn non_jsonrpc_object_closes_connection() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-object", fake.clone());
     let mut connection = open(&endpoint);
@@ -195,7 +198,7 @@ fn non_jsonrpc_object_closes_connection() {
 // contract: endpoint.transport.undeclared-method-closes
 #[test]
 fn undeclared_method_closes_connection() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-undeclared", fake.clone());
     let mut connection = open(&endpoint);
@@ -211,7 +214,7 @@ fn undeclared_method_closes_connection() {
 // contract: endpoint.diagnostics.methods-exist-only-in-diagnostic-builds
 #[test]
 fn diagnostic_methods_exist_only_in_diagnostic_builds() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-diagnostics", fake.clone());
     let mut connection = open(&endpoint);
@@ -236,7 +239,7 @@ fn diagnostic_methods_exist_only_in_diagnostic_builds() {
 // contract: endpoint.rpc.unknown-window-1003, endpoint.rpc.missing-window-param-invalid
 #[test]
 fn declared_method_on_unknown_window_returns_1003() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-window", fake.clone());
     let mut connection = open(&endpoint);
@@ -262,7 +265,7 @@ fn declared_method_on_unknown_window_returns_1003() {
 // contract: endpoint.rpc.round-trip-by-id, endpoint.rpc.page-params-omit-window
 #[test]
 fn framing_round_trip_answers_requests_by_id() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-frame", fake.clone());
     let mut connection = open(&endpoint);
@@ -293,7 +296,7 @@ fn framing_round_trip_answers_requests_by_id() {
 // contract: endpoint.discovery.writes-endpoint-json, endpoint.discovery.removes-endpoint-json-on-close, endpoint.discovery.removes-socket-on-close
 #[test]
 fn endpoint_file_is_written_and_removed() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-file", fake);
     let file = config.path().join("endpoint.json");
@@ -318,7 +321,7 @@ fn endpoint_file_is_written_and_removed() {
 // contract: endpoint.discovery.close-keeps-replacement
 #[test]
 fn stop_keeps_an_endpoint_file_that_another_process_wrote() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-replacement", fake);
     let file = config.path().join("endpoint.json");
@@ -339,7 +342,7 @@ fn stop_keeps_an_endpoint_file_that_another_process_wrote() {
 // contract: endpoint.discovery.endpoint-json-mode-0600, endpoint.socket.private-modes
 #[test]
 fn endpoint_files_are_private_to_the_user() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-modes", fake);
     assert_eq!(mode(&config.path().join("sockets")), 0o700);
@@ -358,7 +361,7 @@ fn ended_process() -> u32 {
 #[test]
 fn sockets_of_ended_processes_are_removed() {
     use std::os::unix::fs::DirBuilderExt;
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let sockets = config.path().join("sockets");
     std::fs::DirBuilder::new()
         .mode(0o700)
@@ -388,7 +391,7 @@ fn sockets_of_ended_processes_are_removed() {
 #[test]
 fn a_socket_directory_open_to_others_is_refused() {
     use std::os::unix::fs::PermissionsExt;
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let sockets = config.path().join("sockets");
     std::fs::create_dir(&sockets).unwrap();
     std::fs::set_permissions(&sockets, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -404,7 +407,7 @@ fn a_socket_directory_open_to_others_is_refused() {
 #[test]
 fn a_socket_directory_of_another_user_is_refused() {
     // /usr is owned by root. The check looks at the owner before the permissions.
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let refused = Endpoint::start(Path::new("/usr"), config.path(), "test-owner", fake)
         .err()
@@ -415,7 +418,7 @@ fn a_socket_directory_of_another_user_is_refused() {
 // contract: endpoint.socket.refuses-non-directory
 #[test]
 fn a_socket_path_that_is_not_a_directory_is_refused() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let target = config.path().join("target");
     std::fs::create_dir(&target).unwrap();
     let sockets = config.path().join("sockets");
@@ -431,7 +434,7 @@ fn a_socket_path_that_is_not_a_directory_is_refused() {
 #[test]
 fn a_socket_path_over_the_limit_is_refused() {
     use std::os::unix::ffi::OsStrExt;
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let sockets = config.path().join("s".repeat(120));
     let address = sockets.join(format!("test-long-{}.sock", std::process::id()));
     let (fake, _) = Fake::new();
@@ -451,7 +454,7 @@ fn a_socket_path_over_the_limit_is_refused() {
 // contract: endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.page-watch-deduplicated, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page, endpoint.watch.registry-reflects-watches
 #[test]
 fn watchers_belong_to_their_connection() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, seen) = Fake::new();
     let endpoint = start(config.path(), "test-watch", fake.clone());
     let notifier = endpoint.notifier();
@@ -538,7 +541,7 @@ fn watchers_belong_to_their_connection() {
 // contract: endpoint.watch.surface-and-plain-forwarded-separately, endpoint.watch.empty-surface-invalid, endpoint.watch.surface-change-names-surface, endpoint.watch.surface-unwatch-forwarded-with-surface, endpoint.watch.surface-unwatch-keeps-plain-watch
 #[test]
 fn surface_watches_are_separate() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, seen) = Fake::new();
     let endpoint = start(config.path(), "test-surface", fake.clone());
     let notifier = endpoint.notifier();
@@ -612,7 +615,7 @@ fn surface_watches_are_separate() {
 // contract: endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples
 #[test]
 fn names_must_have_the_owner_form() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _) = Fake::new();
     let endpoint = start(config.path(), "test-names", fake.clone());
     let mut connection = open(&endpoint);
@@ -681,7 +684,7 @@ impl Service for GatedPage {
 // contract: endpoint.watch.subscription-arrival-order, endpoint.watch.other-requests-not-blocked-by-pending-subscription
 #[test]
 fn subscription_changes_reach_the_page_in_arrival_order() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (open_gate, gate) = mpsc::channel();
     let (entered, calls) = mpsc::channel();
     let page = Arc::new(GatedPage {
@@ -759,7 +762,7 @@ impl Service for Late {
 // contract: endpoint.discovery.written-after-first-window
 #[test]
 fn endpoint_file_is_written_only_after_the_first_window_exists() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let service = Arc::new(Late(std::sync::atomic::AtomicBool::new(false)));
     let endpoint = Endpoint::start(
         &config.path().join("sockets"),
@@ -797,7 +800,7 @@ fn endpoint_file_is_written_only_after_the_first_window_exists() {
 // contract: endpoint.transport.closing-a-disconnected-connection-succeeds
 #[test]
 fn closing_an_already_disconnected_connection_succeeds() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (service, _) = Fake::new();
     let endpoint = start(config.path(), "test-close", service);
     let connection = open(&endpoint);
@@ -814,7 +817,7 @@ fn closing_an_already_disconnected_connection_succeeds() {
 #[test]
 fn a_malformed_process_lock_is_refused() {
     for contents in ["abc", "0", "-3", ""] {
-        let config = tempfile::tempdir().unwrap();
+        let config = folder::Folder::new();
         let lock = config.path().join("process.lock");
         std::fs::write(&lock, contents).unwrap();
         let (service, _) = Fake::new();
@@ -885,7 +888,7 @@ fn the_endpoint_records_why_a_connection_closes() {
         writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -949,7 +952,7 @@ fn the_endpoint_records_a_timeout_of_a_request() {
         writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -979,7 +982,7 @@ fn the_endpoint_records_a_timeout_of_a_request() {
 #[cfg(feature = "diagnostics")]
 #[test]
 fn subscriber_count_follows_the_watches_of_a_window() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (fake, _seen) = Fake::new();
     let endpoint = start(config.path(), "test-subscribers", fake.clone());
     let notifier = endpoint.notifier();

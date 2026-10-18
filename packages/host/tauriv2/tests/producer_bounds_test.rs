@@ -2,6 +2,9 @@
 //! serializes it, the start buffer and the lists of the endpoint have bounds, and every loss is counted. The same cases run
 //! in the Go host.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 
@@ -29,7 +32,7 @@ fn serial() -> std::sync::MutexGuard<'static, ()> {
 
 /// Runs `body` with a writer attached and returns the events that the writer stored.
 fn events_of(body: impl FnOnce()) -> Vec<Value> {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = records::start_writer(config.path());
     body();
     log.flush(Duration::from_secs(10)).unwrap();
@@ -108,7 +111,7 @@ fn the_start_buffer_holds_at_most_four_mebibytes_and_the_writer_counts_the_rest(
     for _ in 0..records_written {
         log_info("flood", &text);
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = Arc::new(
         records::start_every_level(Options {
             directory: config.path().to_path_buf(),
@@ -189,7 +192,7 @@ fn receive(connection: &mut Box<dyn Connection>) -> Value {
 #[test]
 fn the_subscription_changes_of_a_topic_hold_at_most_256_and_the_rest_is_refused_and_counted() {
     let _serial = serial();
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = records::start_writer(config.path());
     let (open_gate, gate) = mpsc::channel();
     let (entered, calls) = mpsc::channel();

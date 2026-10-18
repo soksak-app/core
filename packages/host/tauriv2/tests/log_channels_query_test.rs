@@ -2,6 +2,9 @@
 //! generations, the channel `debug` reads the debug file and its generations, and the filter `class` matches the class that the writer
 //! stored in the line. The same cases run in the Go host.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 use std::collections::{BTreeMap, BTreeSet};
@@ -97,7 +100,7 @@ fn count(names: &[String], name: &str) -> usize {
 // contract: log.query.reads-the-files-the-writer-wrote
 #[test]
 fn the_query_reads_the_main_files_as_other_and_the_debug_files_as_debug_across_generations() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let counts = write_mixed_events(config.path());
     let (other, other_files) = query_names(config.path(), r#"{"channel":"other"}"#);
     let (debug, debug_files) = query_names(config.path(), r#"{"channel":"debug"}"#);
@@ -133,7 +136,7 @@ fn the_query_reads_the_main_files_as_other_and_the_debug_files_as_debug_across_g
 // contract: log.query.matches-the-class-the-writer-stored
 #[test]
 fn the_filter_class_matches_the_class_that_the_writer_stored() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     write_mixed_events(config.path());
     let want: [(&str, Vec<&str>); 3] = [
         ("call", vec!["host.binding.call", "host.trace.mark"]),

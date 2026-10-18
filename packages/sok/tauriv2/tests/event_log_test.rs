@@ -9,30 +9,10 @@ use std::process::Command;
 use serde_json::Value;
 use soksak_sok::{Options, PANIC_STATUS};
 
-static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+#[path = "support/folder.rs"]
+mod folder;
 
-/// A temporary folder removed when the test ends.
-struct Dir(PathBuf);
-
-impl Dir {
-    fn new() -> Dir {
-        let path = std::env::temp_dir().join(format!(
-            "sok-log{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
-        ));
-        std::fs::create_dir_all(&path).unwrap();
-        Dir(path)
-    }
-}
-
-impl Drop for Dir {
-    fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_dir_all(&self.0) {
-            panic!("{}: {error}", self.0.display());
-        }
-    }
-}
+use folder::Folder;
 
 type Command2<'a> = &'a dyn Fn(&[String], &mut dyn Write, &mut dyn Write, &Options) -> i32;
 
@@ -99,11 +79,11 @@ mod support;
 // contract: cli.log.records-each-command-with-its-result
 #[test]
 fn each_command_is_recorded_with_its_result() {
-    let config = Dir::new();
-    support::store_every_level(&config.0);
-    let (code, stderr) = logged(&config.0, &soksak_sok::run, &["nothing"]);
+    let config = Folder::new("log");
+    support::store_every_level(config.path());
+    let (code, stderr) = logged(config.path(), &soksak_sok::run, &["nothing"]);
     assert_eq!(code, 2, "stderr {stderr:?}");
-    let events = events_of(&config.0);
+    let events = events_of(config.path());
     assert!(
         events[0]["event"] == "log.open" && events[0]["layer"] == "sok" && events[0]["seq"] == 1,
         "the first line is {}, want log.open of the layer sok with seq 1",
@@ -132,14 +112,14 @@ fn each_command_is_recorded_with_its_result() {
     );
     assert_eq!(
         fields["args"],
-        format!("nothing --config-dir {}", config.0.display())
+        format!("nothing --config-dir {}", config.path().display())
     );
 
-    let passing = Dir::new();
-    support::store_every_level(&passing.0);
-    let (code, stderr) = logged(&passing.0, &soksak_sok::run, &["path", "remove"]);
+    let passing = Folder::new("log");
+    support::store_every_level(passing.path());
+    let (code, stderr) = logged(passing.path(), &soksak_sok::run, &["path", "remove"]);
     assert_eq!(code, 0, "stderr {stderr:?}");
-    let events = events_of(&passing.0);
+    let events = events_of(passing.path());
     let ok = named(&events, "sok.command");
     assert!(
         ok.len() == 1
@@ -154,18 +134,18 @@ fn each_command_is_recorded_with_its_result() {
 // contract: cli.log.records-a-panic-with-its-stack
 #[test]
 fn a_panic_of_a_command_is_recorded_with_its_stack() {
-    let config = Dir::new();
+    let config = Folder::new("log");
     let panics = |_: &[String], _: &mut dyn Write, _: &mut dyn Write, _: &Options| -> i32 {
         panic!("the command broke")
     };
-    support::store_every_level(&config.0);
-    let result = std::panic::catch_unwind(|| logged(&config.0, &panics, &["plugin", "list"]));
+    support::store_every_level(config.path());
+    let result = std::panic::catch_unwind(|| logged(config.path(), &panics, &["plugin", "list"]));
     let (status, stderr) = result.unwrap_or_else(|_| panic!("the panic reached the caller"));
     assert!(
         status == PANIC_STATUS && stderr.starts_with("sok: panic: the command broke\n"),
         "status {status} stderr {stderr:?}"
     );
-    let events = events_of(&config.0);
+    let events = events_of(config.path());
     let found = named(&events, "sok.panic");
     assert!(
         found.len() == 1
@@ -203,14 +183,14 @@ fn a_panic_of_a_routine_is_recorded_and_ends_the_process() {
         logged(Path::new(&config), &waits, &["windows"]);
         return;
     }
-    let config = Dir::new();
+    let config = Folder::new("log");
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
             "a_panic_of_a_routine_is_recorded_and_ends_the_process",
             "--nocapture",
         ])
-        .env("SOK_ROUTINE_PANIC_CONFIG", &config.0)
+        .env("SOK_ROUTINE_PANIC_CONFIG", config.path())
         .output()
         .unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -220,7 +200,7 @@ fn a_panic_of_a_routine_is_recorded_and_ends_the_process() {
         "the child ended with {:?}; stderr {stderr:?}",
         output.status
     );
-    let events = events_of(&config.0);
+    let events = events_of(config.path());
     let found = named(&events, "sok.panic");
     assert!(
         found.len() == 1
@@ -238,8 +218,8 @@ fn a_panic_of_a_routine_is_recorded_and_ends_the_process() {
 // contract: cli.log.reports-a-folder-that-cannot-be-written
 #[test]
 fn a_folder_that_cannot_be_written_is_reported_and_the_command_runs() {
-    let parent = Dir::new();
-    let config = parent.0.join("file");
+    let parent = Folder::new("log");
+    let config = parent.path().join("file");
     std::fs::write(&config, "x").unwrap();
     let (code, stderr) = logged(&config, &soksak_sok::run, &["path", "remove"]);
     assert!(

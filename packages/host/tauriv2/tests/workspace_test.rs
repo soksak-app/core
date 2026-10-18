@@ -1,5 +1,8 @@
 //! Tests of the settings and project list store and the project directory check.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::fs;
 use std::path::Path;
 
@@ -24,8 +27,8 @@ fn read(path: &Path) -> Value {
 // contract: workspace.settings.project-file-holds-only-overrides, workspace.settings.persist-across-reopen, workspace.settings.reset-removes-override, workspace.settings.rejects-project-opening-override, workspace.settings.invalid-common-file-not-overwritten
 #[test]
 fn settings_use_common_and_project_files_and_reset_removes_override() {
-    let config = tempfile::tempdir().unwrap();
-    let root = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
+    let root = folder::Folder::new();
     let store = Workspace::new(config.path().into());
     apply(
         &store,
@@ -80,8 +83,8 @@ fn settings_use_common_and_project_files_and_reset_removes_override() {
 // contract: workspace.settings.concurrent-patches-preserved, workspace.projects.move-reorders, workspace.projects.remove-keeps-remaining-order
 #[test]
 fn concurrent_updates_preserve_fields_and_saved_project_order() {
-    let config = tempfile::tempdir().unwrap();
-    let roots: Vec<_> = (0..3).map(|_| tempfile::tempdir().unwrap()).collect();
+    let config = folder::Folder::new();
+    let roots: Vec<_> = (0..3).map(|_| folder::Folder::new()).collect();
     let store = std::sync::Arc::new(Workspace::new(config.path().into()));
     for (i, root) in roots.iter().enumerate() {
         apply(
@@ -118,8 +121,8 @@ fn concurrent_updates_preserve_fields_and_saved_project_order() {
 // contract: workspace.folder.aliases-share-identity, workspace.folder.rejects-file
 #[test]
 fn directory_aliases_have_one_identity() {
-    let root = tempfile::tempdir().unwrap();
-    let parent = tempfile::tempdir().unwrap();
+    let root = folder::Folder::new();
+    let parent = folder::Folder::new();
     let alias = parent.path().join("alias");
     std::os::unix::fs::symlink(root.path(), &alias).unwrap();
     let first =
@@ -135,7 +138,7 @@ fn directory_aliases_have_one_identity() {
 // contract: workspace.config-dir.creates-requested-path, workspace.config-dir.rejects-empty-path, workspace.config-dir.rejects-path-under-file
 #[test]
 fn config_directory_is_created_and_canonical() {
-    let root = tempfile::tempdir().unwrap();
+    let root = folder::Folder::new();
     let path = root.path().join("new").join("configuration");
     let prepared = prepare_config_directory(&path, create).unwrap();
     assert_eq!(prepared, fs::canonicalize(&path).unwrap());
@@ -161,7 +164,7 @@ fn create(path: &Path) -> Result<(), String> {
 #[test]
 fn a_created_config_directory_is_owner_only_and_an_existing_one_keeps_its_mode() {
     use std::os::unix::fs::PermissionsExt;
-    let root = tempfile::tempdir().unwrap();
+    let root = folder::Folder::new();
     let created = prepare_config_directory(&root.path().join("created"), create).unwrap();
     assert_eq!(
         fs::metadata(&created).unwrap().permissions().mode() & 0o777,
@@ -180,8 +183,8 @@ fn a_created_config_directory_is_owner_only_and_an_existing_one_keeps_its_mode()
 // contract: workspace.projects.plugin-data-patched
 #[test]
 fn a_project_patch_stores_plugin_data_and_rejects_unknown_fields() {
-    let config = tempfile::tempdir().unwrap();
-    let root = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
+    let root = folder::Folder::new();
     let store = Workspace::new(config.path().into());
     apply(
         &store,
@@ -215,7 +218,7 @@ fn a_project_patch_stores_plugin_data_and_rejects_unknown_fields() {
 #[test]
 fn folder_errors_name_the_folder_once() {
     use std::os::unix::fs::PermissionsExt;
-    let root = tempfile::tempdir().unwrap();
+    let root = folder::Folder::new();
     let missing = root.path().join("gone").join("child");
     assert_eq!(
         folder(missing.to_str().unwrap(), root.path()).unwrap_err(),
@@ -245,8 +248,8 @@ fn folder_errors_name_the_folder_once() {
 // contract: workspace.projects.move-requires-delta
 #[test]
 fn move_without_delta_is_refused() {
-    let config = tempfile::tempdir().unwrap();
-    let root = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
+    let root = folder::Folder::new();
     let store = Workspace::new(config.path().into());
     apply(
         &store,
@@ -266,8 +269,8 @@ fn move_without_delta_is_refused() {
 // contract: workspace.settings.rejects-project-text-size-override
 #[test]
 fn a_project_text_size_override_is_rejected() {
-    let config = tempfile::tempdir().unwrap();
-    let root = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
+    let root = folder::Folder::new();
     let store = Workspace::new(config.path().into());
     apply(
         &store,
@@ -296,7 +299,7 @@ fn each_settings_change_is_recorded_with_its_keys() {
     // The writer of the records belongs to the process, so the scenario runs in a child process.
     if let Some(config) = std::env::var_os("SOKSAK_SETTINGS_CHILD") {
         let config = std::path::PathBuf::from(config);
-        let root = tempfile::tempdir().unwrap();
+        let root = folder::Folder::new();
         let writer = records::start_writer(&config);
         let store = Workspace::new(config.clone());
         for request in [
@@ -310,7 +313,7 @@ fn each_settings_change_is_recorded_with_its_keys() {
         writer.flush(std::time::Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -351,7 +354,7 @@ fn each_settings_change_is_recorded_with_its_keys() {
 // contract: workspace.tab-state.put-keeps-other-entries
 #[test]
 fn tab_state_put_keeps_other_entries() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let first = Workspace::new(config.path().into());
     let second = Workspace::new(config.path().into());
     assert_eq!(apply(&first, json!({"kind":"tabState"})), Value::Null);
@@ -509,7 +512,7 @@ fn tab_session_rejects_other_format_and_invalid_requests() {
 // contract: workspace.tab-state.rejects-other-format, workspace.tab-state.rejects-invalid-entry
 #[test]
 fn tab_state_rejects_other_format_and_invalid_entries() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let store = Workspace::new(config.path().into());
     let path = config.path().join("tab-state.json");
     fs::write(&path, r#"{"format":2,"tabs":{}}"#).unwrap();

@@ -2,6 +2,9 @@
 //! oldest runs go first, the run of the writer and a run with a `.keep` file never go, and every removal is the event log.pruned.
 //! The same cases run in the Go host.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 use std::fs;
@@ -105,7 +108,7 @@ fn ago(hours: u64) -> SystemTime {
 // contract: log.retention.removes-the-oldest-runs-over-the-bound
 #[test]
 fn the_oldest_runs_are_removed_when_the_files_pass_the_bound_and_each_removal_is_an_event() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let logs = directory.path().join("logs");
     fs::create_dir_all(&logs).unwrap();
     let oldest = run(
@@ -179,7 +182,7 @@ fn the_oldest_runs_are_removed_when_the_files_pass_the_bound_and_each_removal_is
 // contract: log.retention.keeps-a-pinned-run-and-the-current-run
 #[test]
 fn a_run_with_a_keep_file_and_the_run_of_the_writer_are_never_removed() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let logs = directory.path().join("logs");
     fs::create_dir_all(&logs).unwrap();
     run(
@@ -217,7 +220,7 @@ fn a_run_with_a_keep_file_and_the_run_of_the_writer_are_never_removed() {
 // contract: log.retention.stores-nothing-under-the-bound
 #[test]
 fn files_under_the_bound_are_not_removed_and_store_no_event() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let logs = directory.path().join("logs");
     fs::create_dir_all(&logs).unwrap();
     run(
@@ -237,7 +240,7 @@ fn files_under_the_bound_are_not_removed_and_store_no_event() {
 // contract: log.retention.runs-after-a-rotation
 #[test]
 fn a_rotation_runs_the_retention_again() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let logs = directory.path().join("logs");
     fs::create_dir_all(&logs).unwrap();
     let mut opts = options(&logs, 600_000);
@@ -269,7 +272,7 @@ fn a_rotation_runs_the_retention_again() {
 // contract: log.retention.requires-a-bound
 #[test]
 fn an_event_log_without_a_retention_bound_is_refused() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     match event_log::start(options(directory.path(), 0)) {
         Err(error) => assert!(error.contains("retention_bytes"), "{error}"),
         Ok(_) => panic!("a log without a retention bound started"),

@@ -1,5 +1,8 @@
 //! Checks the plugin operations in the application (docs/spec/installation.md#plugin-operations-in-the-application).
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::ffi::CString;
 use std::io::Write;
 use std::path::Path;
@@ -12,7 +15,7 @@ use soksak_host_tauriv2::plugins::{Changed, Plugins, RegistryRequest, RunRequest
 fn sok_json(args: &[&str]) -> Value {
     let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
     let (mut stdout, mut stderr) = (vec![], vec![]);
-    let paths = tempfile::tempdir().unwrap();
+    let paths = folder::Folder::new();
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
         paths_dir: Ok(paths.path()),
@@ -41,11 +44,11 @@ fn write_tree(dir: &Path, files: &[(&str, &str)]) {
 struct Registry {
     index: String,
     release: String,
-    _dirs: Vec<tempfile::TempDir>,
+    _dirs: Vec<folder::Folder>,
 }
 
 fn plugin_registry() -> Registry {
-    let (releases, registry) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let (releases, registry) = (folder::Folder::new(), folder::Folder::new());
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/plugin-probe");
     let packed = sok_json(&[
         "plugin",
@@ -106,7 +109,7 @@ fn state_text(plugins: &Plugins) -> String {
 // contract: plugins.state.reports-registry-and-installed
 #[test]
 fn plugins_state_reports_the_registry_and_the_installation() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (plugins, _) = new_plugins(config.path());
     assert_eq!(
         state_text(&plugins),
@@ -141,7 +144,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
 // contract: plugins.run.changes-like-the-command
 #[test]
 fn plugins_run_changes_the_installation_like_the_command() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let registry = plugin_registry();
     soksak_sok::plugins::use_registry(
         config.path(),
@@ -178,7 +181,7 @@ fn plugins_run_changes_the_installation_like_the_command() {
 // contract: plugins.run.applies-before-it-notifies
 #[test]
 fn plugins_run_applies_the_change_before_it_notifies() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let registry = plugin_registry();
     soksak_sok::plugins::use_registry(
         config.path(),
@@ -213,7 +216,7 @@ fn plugins_run_applies_the_change_before_it_notifies() {
 // contract: plugins.run.rejects-invalid-and-concurrent
 #[test]
 fn plugins_run_rejects_invalid_and_concurrent_operations() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let registry = plugin_registry();
     soksak_sok::plugins::use_registry(
         config.path(),
@@ -275,7 +278,7 @@ fn plugins_run_rejects_invalid_and_concurrent_operations() {
 // contract: plugins.registry.sets-like-the-command
 #[test]
 fn plugins_use_registry_sets_the_registry_like_the_command() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let (plugins, _) = new_plugins(config.path());
     let registry = plugin_registry();
     let result = plugins

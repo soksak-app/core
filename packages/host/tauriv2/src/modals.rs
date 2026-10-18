@@ -578,7 +578,7 @@ mod tests {
     // contract: modal.state.poisoned-lock-is-reported
     #[test]
     fn a_poisoned_modal_record_is_reported_when_it_is_read() {
-        let config = tempfile::tempdir().unwrap();
+        let config = crate::test_folder::Folder::new();
         let writer = Arc::new(event_log::start_host(config.path()).unwrap());
         use_host_event_log(Some(Arc::clone(&writer)));
         let overlay = Overlay::default();

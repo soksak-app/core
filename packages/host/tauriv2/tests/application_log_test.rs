@@ -1,6 +1,9 @@
 //! Application log tests (docs/spec/hosts.md#application-log). Replacing the standard error affects the whole process,
 //! so it is checked in a child process.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Stdio};
@@ -18,7 +21,7 @@ const NAME: &str = "start_standard_error_writes_the_start_line_and_takes_the_sta
 // contract: log.open.rotates-at-100mb
 #[test]
 fn open_log_moves_a_file_of_one_hundred_megabytes_to_the_earlier_generation() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let path = directory.path().join("logs").join("application.log");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let full = "x".repeat(100 * 1024 * 1024);
@@ -65,7 +68,7 @@ fn open_log_moves_a_file_of_one_hundred_megabytes_to_the_earlier_generation() {
 // contract: log.open.appends-below-bound
 #[test]
 fn open_log_appends_to_a_smaller_file_and_creates_a_private_file() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let path = directory.path().join("logs").join("application.log");
     for line in ["first\n", "second\n"] {
         let mut file = open_log(&path).unwrap();
@@ -106,7 +109,7 @@ fn start_standard_error_writes_the_start_line_and_takes_the_standard_error_of_th
         writer.flush(std::time::Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", NAME, "--nocapture", "--test-threads=1"])
         .env(CHILD, config.path())
@@ -155,7 +158,7 @@ fn log_error_writes_an_error_event_to_the_event_log() {
         log.flush(std::time::Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -218,7 +221,7 @@ fn log_info_writes_an_info_event_to_the_event_log() {
         log.flush(std::time::Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",

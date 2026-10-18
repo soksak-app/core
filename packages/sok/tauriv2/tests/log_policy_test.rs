@@ -2,8 +2,6 @@
 //! through the reader of the tool, so the reader of the tool gives the classes, the gate and the error texts that the readers of
 //! the hosts and of the sidecars give.
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use serde_json::Value;
@@ -11,30 +9,10 @@ use soksak_sok::event_classes::Class;
 use soksak_sok::event_log::{EventLog, Level, Options};
 use soksak_sok::log_policy::LogPolicy;
 
-static NEXT: AtomicUsize = AtomicUsize::new(0);
+#[path = "support/folder.rs"]
+mod folder;
 
-/// A temporary folder removed when the test ends.
-struct Dir(PathBuf);
-
-impl Dir {
-    fn new() -> Dir {
-        let path = std::env::temp_dir().join(format!(
-            "sok-policy{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::SeqCst)
-        ));
-        std::fs::create_dir_all(&path).unwrap();
-        Dir(path)
-    }
-}
-
-impl Drop for Dir {
-    fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_dir_all(&self.0) {
-            panic!("{}: {error}", self.0.display());
-        }
-    }
-}
+use folder::Folder;
 
 fn level_named(name: &str) -> Option<Level> {
     match name {
@@ -144,9 +122,9 @@ fn the_policy_reader_refuses_every_invalid_golden_case_with_its_text() {
 #[test]
 fn the_default_policy_of_the_writer_is_the_golden_default() {
     let cases = cases();
-    let directory = Dir::new();
+    let directory = Folder::new("policy");
     let log = EventLog::start(Options {
-        directory: directory.0.clone(),
+        directory: directory.to_path_buf(),
         role: "sok".into(),
         boot: "b1".into(),
         layer: "sok",
@@ -209,10 +187,10 @@ fn the_default_policy_of_the_writer_is_the_golden_default() {
 }
 
 /// Runs the tool with the arguments and the configuration directory, and returns the events that the run stored in the main file.
-fn tool_run_events(config: &Dir, args: &[&str]) -> Vec<Value> {
+fn tool_run_events(config: &Folder, args: &[&str]) -> Vec<Value> {
     let mut all: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
     all.push("--config-dir".into());
-    all.push(config.0.to_str().unwrap().into());
+    all.push(config.path().to_str().unwrap().into());
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
         paths_dir: Ok(std::path::Path::new("/nonexistent/paths.d")),
@@ -221,7 +199,7 @@ fn tool_run_events(config: &Dir, args: &[&str]) -> Vec<Value> {
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     soksak_sok::logged(&all, &mut stdout, &mut stderr, &options, &soksak_sok::run);
     let mut events = Vec::new();
-    for entry in std::fs::read_dir(config.0.join("logs")).unwrap() {
+    for entry in std::fs::read_dir(config.path().join("logs")).unwrap() {
         let path = entry.unwrap().path();
         if path.to_string_lossy().ends_with(".debug.jsonl") {
             continue;
@@ -238,9 +216,9 @@ fn tool_run_events(config: &Dir, args: &[&str]) -> Vec<Value> {
 // contract: cli.log.applies-the-policy-file
 #[test]
 fn the_tool_applies_the_policy_file_of_its_config_directory() {
-    let config = Dir::new();
+    let config = Folder::new("policy");
     std::fs::write(
-        config.0.join("log-policy.json"),
+        config.path().join("log-policy.json"),
         r#"{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}"#,
     )
     .unwrap();
@@ -259,8 +237,8 @@ fn the_tool_applies_the_policy_file_of_its_config_directory() {
 // contract: cli.log.records-a-refused-policy-file
 #[test]
 fn a_refused_policy_file_is_stored_as_a_sok_record_error() {
-    let config = Dir::new();
-    std::fs::write(config.0.join("log-policy.json"), r#"{"schema":9}"#).unwrap();
+    let config = Folder::new("policy");
+    std::fs::write(config.path().join("log-policy.json"), r#"{"schema":9}"#).unwrap();
     let events = tool_run_events(&config, &["nothing"]);
     let records: Vec<&Value> = events
         .iter()

@@ -2,6 +2,9 @@
 //! library at its batch interval, stores them in the layer `native` with the time the library gave, and counts the records
 //! it refuses and the events the ring refused.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 use std::fs;
@@ -126,7 +129,7 @@ fn the_writer_stores_pulled_native_records_in_the_layer_native() {
         .concat(),
         ..FakeRing::default()
     }));
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path(), &ring, Duration::from_millis(20));
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
@@ -199,7 +202,7 @@ fn a_refused_native_record_and_the_loss_of_the_ring_are_counted_as_dropped() {
         debug_events: 2,
         debug_bytes: 40,
     }));
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path(), &ring, Duration::from_millis(20));
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
@@ -267,7 +270,7 @@ fn a_pulled_native_record_of_a_declared_event_stores_the_catalog_class_and_an_un
         .concat(),
         ..FakeRing::default()
     }));
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path(), &ring, Duration::from_millis(20));
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
@@ -304,7 +307,7 @@ fn a_pulled_native_record_keeps_its_clock_and_cids() {
         .concat(),
         ..FakeRing::default()
     }));
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path(), &ring, Duration::from_millis(20));
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
@@ -321,7 +324,7 @@ fn a_pulled_native_record_keeps_its_clock_and_cids() {
 #[test]
 fn the_writer_pulls_native_records_at_the_batch_interval() {
     let ring = Arc::new(Mutex::new(FakeRing::default()));
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path(), &ring, Duration::from_millis(10));
     let path = log.path().to_path_buf();
     // The ring is empty at the start; a record that arrives later is stored without a flush request.

@@ -1,5 +1,8 @@
 //! A fatal signal of the host after its standard error file is open writes an error line (docs/spec/diagnostics.md).
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::process::{Command, Stdio};
 
 #[path = "support/records.rs"]
@@ -19,7 +22,7 @@ fn a_fatal_signal_writes_an_error_line_to_the_standard_error_file() {
         }
         std::process::abort();
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",

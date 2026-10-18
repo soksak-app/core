@@ -3,6 +3,9 @@
 //! removed. They are compiled only in diagnostic builds. The same cases run in the Go host.
 #![cfg(feature = "diagnostics")]
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::os::unix::fs::PermissionsExt;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
@@ -80,7 +83,7 @@ fn image_region_count_falls_back_when_removed() {
 // contract: diagnostics.objects.counts-host-objects
 #[test]
 fn sidecar_session_and_pending_reply_counts_follow_the_owner() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     // The fixture keeps its standard input open, so the session stays running until the sidecars stop.
     let program = directory.path().join("echo");
     std::fs::write(&program, "#!/bin/sh\ncat > /dev/null\n").unwrap();
@@ -260,7 +263,7 @@ fn request(connection: &mut Box<dyn Connection>, id: u64, params: Value) -> Valu
 // contract: diagnostics.objects.counts-parked-elements
 #[test]
 fn diagnostics_objects_reply_and_params() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let service = Arc::new(ObjectsService(FixedCounts::default()));
     let endpoint = Endpoint::start(
         &config.path().join("sockets"),

@@ -1,6 +1,9 @@
 //! Tests of the value of host.buttons and its notifications. A fake service replaces the window and the page of the
 //! endpoint.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -73,7 +76,7 @@ fn next_mask(connection: &mut Box<dyn Connection>) -> Value {
 // contract: exposure.host-buttons.notifies-mask-change
 #[test]
 fn buttons_notify_each_mask_change() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let fake = Arc::new(Fake {
         buttons: OnceLock::new(),
     });

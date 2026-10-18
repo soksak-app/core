@@ -1,6 +1,9 @@
 //! The host stages the candidate of an application update and no other version
 //! (docs/spec/installation.md#application-update).
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -59,7 +62,7 @@ fn update_registry(work: &Path, key: &str) -> PathBuf {
 #[test]
 fn the_host_stages_the_candidate_and_no_other_version() {
     const KEY: &str = "darwin-arm64-tauriv2";
-    let work = tempfile::tempdir().unwrap();
+    let work = folder::Folder::new();
     let config = update_registry(work.path(), KEY);
     let state = read_state(&config, "0.0.8", KEY).unwrap();
     assert_eq!(state.version, "0.0.8");
@@ -82,8 +85,8 @@ fn the_host_stages_the_candidate_and_no_other_version() {
 // contract: app-update.apply.starts-sok-from-a-copy-and-checks-the-bundle
 #[test]
 fn the_update_starts_sok_from_a_copy_beside_the_updates_and_checks_the_staged_bundle() {
-    let config = tempfile::tempdir().unwrap();
-    let running_parent = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
+    let running_parent = folder::Folder::new();
     let running = running_parent.path().join("soksak.app");
     std::fs::create_dir_all(running.join("Contents/MacOS")).unwrap();
     let executable = running.join("Contents/MacOS/soksak-tauriv2");
@@ -174,7 +177,7 @@ fn the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts()
         std::fs::write(config.join("child-pid"), child.id().to_string()).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",

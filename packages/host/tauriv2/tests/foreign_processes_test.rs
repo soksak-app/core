@@ -1,5 +1,8 @@
 //! The start of a host ends no process of another application.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::os::unix::process::CommandExt;
 
 /// The start of a host ends no process: a WebKit process of another application, listed in the record file that an
@@ -21,7 +24,7 @@ fn the_start_ends_no_process_of_another_application() {
         .args(["-o", "lstart=", "-p", &pid.to_string()])
         .output()
         .unwrap();
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     std::fs::write(
         config.path().join("webkit-children.json"),
         serde_json::json!({"host_pid": ended.id(), "children": [{"pid": pid, "kind": "Networking",

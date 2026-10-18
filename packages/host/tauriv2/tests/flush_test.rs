@@ -3,6 +3,9 @@
 //! These tests verify that the buffering mechanism works when the write queue is full. The write thread correctly
 //! flushes the buffered messages before it blocks in recv().
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -102,7 +105,7 @@ fn a_buffered_close_is_recorded() {
         writer.flush(std::time::Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -131,7 +134,7 @@ fn a_buffered_close_is_recorded() {
 
 /// The scenario of the queue that fills, the replies and closes that wait for it, and the drain.
 fn every_pending_reply_scenario() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let fifo_path = directory.path().join("go");
     let fifo_str = fifo_path.display().to_string();
 
@@ -290,7 +293,7 @@ fn every_pending_reply_scenario() {
 // contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain
 #[test]
 fn order_is_correct_when_stop_flushes_buffered_messages() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let fifo_path = directory.path().join("go");
     let fifo_str = fifo_path.display().to_string();
 

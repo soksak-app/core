@@ -1,5 +1,8 @@
 //! Sidecar channel tests. They use a fake window and shell script sidecars.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -107,8 +110,8 @@ const ECHO: &str = "@fixture/sidecar-echo";
 
 /// Declares the fake sidecar @fixture/sidecar-echo, which prints the received line as it is and leaves it in the
 /// request record file.
-fn echo_sidecars() -> (Sidecars<FakeOwner>, tempfile::TempDir) {
-    let directory = tempfile::tempdir().unwrap();
+fn echo_sidecars() -> (Sidecars<FakeOwner>, folder::Folder) {
+    let directory = folder::Folder::new();
     let record = directory.path().join("requests");
     let program = directory.path().join("echo");
     std::fs::write(&program, format!("#!/bin/sh\ntee {}\n", record.display())).unwrap();
@@ -258,7 +261,7 @@ fn undeclared_and_stopped_sidecars_are_rejected() {
 // contract: sidecars.start.fails-on-missing-executable
 #[test]
 fn a_missing_executable_fails() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let sidecars = create(
         &files(r#"{"executable":"echo","protocol":1}"#),
         directory.path(),
@@ -272,7 +275,7 @@ fn a_missing_executable_fails() {
 // contract: sidecars.start.passes-log-directory
 #[test]
 fn a_sidecar_receives_the_log_directory() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let record = directory.path().join("argv");
     let program = directory.path().join("echo");
     std::fs::write(
@@ -303,7 +306,7 @@ fn a_sidecar_receives_the_log_directory() {
 // contract: sidecars.declaration.adds-sidecars-installed-after-start
 #[test]
 fn declaring_adds_sidecars_installed_after_the_start() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let record = directory.path().join("requests");
     let program = directory.path().join("echo");
     std::fs::write(&program, format!("#!/bin/sh\ntee {}\n", record.display())).unwrap();
@@ -333,7 +336,7 @@ fn declaring_adds_sidecars_installed_after_the_start() {
 // contract: sidecars.declaration.rejects-executable-escaping-package
 #[test]
 fn an_executable_outside_the_package_fails() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let error = create(
         &files(r#"{"executable":"../escape","protocol":1}"#),
         directory.path(),
@@ -349,7 +352,7 @@ fn an_executable_outside_the_package_fails() {
 // contract: sidecars.declaration.rejects-absolute-executable
 #[test]
 fn an_absolute_executable_fails() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let error = create(
         &files(r#"{"executable":"/bin/sh","protocol":1}"#),
         directory.path(),
@@ -365,7 +368,7 @@ fn an_absolute_executable_fails() {
 // contract: sidecars.declaration.persistent-requires-config-directory
 #[test]
 fn persistent_transport_requires_a_config_directory() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let error = Sidecars::<FakeOwner>::new(
         &declare(&fixture, directory.path()),
@@ -379,7 +382,7 @@ fn persistent_transport_requires_a_config_directory() {
 // contract: sidecars.declaration.rejects-unsupported-protocol
 #[test]
 fn an_unsupported_protocol_fails() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let error = create(
         &files(r#"{"executable":"echo","protocol":2}"#),
         directory.path(),
@@ -395,7 +398,7 @@ fn an_unsupported_protocol_fails() {
 // contract: sidecars.declaration.rejects-unknown-transport
 #[test]
 fn persistent_transport_rejects_unknown_transport() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let error = create(
         &files(r#"{"executable":"echo","protocol":1,"transport":"ptyd"}"#),
         directory.path(),
@@ -408,8 +411,8 @@ fn persistent_transport_rejects_unknown_transport() {
 // contract: sidecars.persistent.accepts-non-canonical-config-directory
 #[test]
 fn persistent_transport_accepts_a_non_canonical_config_directory() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
@@ -434,7 +437,7 @@ fn persistent_transport_accepts_a_non_canonical_config_directory() {
 // contract: sidecars.send.rejects-when-no-plugin-declares-sidecars
 #[test]
 fn plugins_without_sidecars_declare_none() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let sidecars = create(&Files::new(), directory.path()).unwrap();
     let (window, _events) = owner("a", "/");
     let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
@@ -449,7 +452,7 @@ fn slow_sidecar_does_not_block_other_sends() {
     // 1. Even when the channel of the slow sidecar is full, send() to the fast sidecar does not block.
     // 2. stop() keeps stop_timeout.
 
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
 
     // The slow sidecar: it does not read stdin, so the pipe fills and stop kills it after the deadline. A program that
     // reads stdin, such as cat, has a read speed that depends on the load, so whether the channel fills is not
@@ -553,7 +556,7 @@ fn stop_graceful_shutdown() {
     // after the sidecar received the echo of send, and checks that it ends at once without waiting for the deadline (1
     // second).
 
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
 
     // The sidecar: it echoes the received line as it is and ends normally at stdin EOF.
     let graceful_program = directory.path().join("graceful");
@@ -633,7 +636,7 @@ fn stop_closes_unread_output() {
 }
 
 fn stop_closes_unread_output_in_child() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let program = directory.path().join("talkative");
     std::fs::write(
         &program,
@@ -821,7 +824,7 @@ fn the_relay_records_every_message_with_its_whole_body() {
         "#!/bin/sh\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\",\"text\":\"\\ud55c\"}}'\nwhile read line; do :; done\n",
     );
     sidecars.0.stop_timeout = STALL;
-    let events_directory = tempfile::tempdir().unwrap();
+    let events_directory = folder::Folder::new();
     let writer = records::start_writer(events_directory.path());
     let _ = &directory;
     soksak_host_tauriv2::performance::command(serde_json::json!({"action": "on"})).unwrap();
@@ -866,7 +869,7 @@ fn close_during_stop_sends_nothing() {
     // Verifies that, after stop ended the input and before the process ended, the surface close and the window close
     // send nothing. When the application ends, the windows close together with stop and close their surfaces.
     use std::io::{BufRead, Write};
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     // The sidecar: at the start it opens ended and release for writing and reading. It echoes the received line, and
     // when the input ends it writes one line to ended and stays alive until one line arrives in release. The sidecar
     // keeps both pipes open, so the line it wrote is not discarded and the side that opens them is not blocked.
@@ -968,7 +971,7 @@ fn stop_forced_kill() {
 }
 
 fn stop_forced_kill_in_child() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
 
     // The sidecar: it does not read stdin, so it keeps running after stdin EOF. The stdin of a background command can
     // become /dev/null depending on the shell and end at once, so it is not used.
@@ -1050,8 +1053,8 @@ impl Drop for Stopping {
 
 /// Creates a channel that declares a fake sidecar running script, and its directory. DIR in script is replaced with
 /// that directory.
-fn script_sidecars(script: &str) -> (Stopping, tempfile::TempDir) {
-    let directory = tempfile::tempdir().unwrap();
+fn script_sidecars(script: &str) -> (Stopping, folder::Folder) {
+    let directory = folder::Folder::new();
     let program = directory.path().join("fake");
     std::fs::write(
         &program,
@@ -1265,9 +1268,9 @@ fn closing_sidecars(
 ) -> (
     std::sync::Arc<Sidecars<FakeOwner>>,
     Receiver<Vec<ClosingSurface>>,
-    tempfile::TempDir,
+    folder::Folder,
 ) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let program = directory.path().join("closing");
     std::fs::write(&program, script).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -1341,7 +1344,7 @@ fn failed_close_answer_is_logged() {
 #[test]
 fn declaration_replaces_a_sidecar_whose_folder_changed() {
     // Each folder holds a sidecar that answers every request with the name of its folder.
-    let root = tempfile::tempdir().unwrap();
+    let root = folder::Folder::new();
     let folder = |name: &str| {
         let directory = root.path().join(name);
         std::fs::create_dir_all(&directory).unwrap();
@@ -1487,7 +1490,7 @@ fn a_dropped_sidecar_message_is_recorded() {
         writer.flush(STALL).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -1539,7 +1542,7 @@ fn the_lifetime_of_a_sidecar_is_recorded_as_events() {
         writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -1605,7 +1608,7 @@ fn the_sampler_names_a_running_sidecar_until_it_ends() {
         writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -1668,7 +1671,7 @@ fn a_request_with_cids_is_recorded_as_an_event() {
         writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -1742,7 +1745,7 @@ cat >/dev/null
 /// Runs the scenario `name` of this file in a child process that nothing else writes in, with the configuration folder in the
 /// variable `variable`, and returns the output of the child and the events `host.sidecar.reply` that it stored.
 fn replies_of_child(name: &str, variable: &str) -> (String, Vec<serde_json::Value>) {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args(["--exact", name, "--nocapture"])
         .env(variable, config.path())

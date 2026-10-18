@@ -1,5 +1,8 @@
 //! The watch of the main thread records a stall, the stacks of the threads and the end of the stall without a window check.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -20,7 +23,7 @@ fn a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end() {
     });
     let events: Recorded = Arc::new(Mutex::new(Vec::new()));
     let sampled = Arc::new(Mutex::new(Vec::new()));
-    let folder = tempfile::tempdir().unwrap();
+    let folder = folder::Folder::new();
     let on_main = work.clone();
     let recorded = Arc::clone(&events);
     let samples = Arc::clone(&sampled);

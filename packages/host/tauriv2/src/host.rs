@@ -16,6 +16,10 @@
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 
+#[cfg(test)]
+#[path = "../tests/support/folder.rs"]
+mod test_folder;
+
 pub mod app_events;
 pub mod app_update;
 pub mod application_log;

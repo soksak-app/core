@@ -1,6 +1,9 @@
 //! The files of the event writer (docs/spec/logging.md#files): the levels error, warn and info go to the main file, debug and
 //! trace go to the debug file, each file rotates on its own and keeps every generation, and seq runs across both.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 use std::collections::BTreeMap;
@@ -56,7 +59,7 @@ fn levels_of(events: &[Value]) -> String {
 // contract: log.writer.splits-files-by-level
 #[test]
 fn debug_and_trace_events_go_to_the_debug_file_and_the_others_to_the_main_file() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = event_log::start(options(directory.path())).unwrap();
     records::store_every_level(&log);
     for (index, level) in [
@@ -96,7 +99,7 @@ fn debug_and_trace_events_go_to_the_debug_file_and_the_others_to_the_main_file()
 // contract: log.writer.rotation-keeps-every-generation
 #[test]
 fn each_file_rotates_on_its_own_and_rotation_never_removes_a_generation() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let mut opts = options(directory.path());
     opts.rotate_bytes = 700;
     opts.queue_events = 500;
@@ -153,7 +156,7 @@ fn each_file_rotates_on_its_own_and_rotation_never_removes_a_generation() {
 // contract: log.writer.never-blocks-and-counts-loss
 #[test]
 fn a_loss_names_the_channel_of_the_refused_events() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let mut opts = options(directory.path());
     opts.queue_events = 4;
     opts.batch_interval = Duration::from_secs(30);

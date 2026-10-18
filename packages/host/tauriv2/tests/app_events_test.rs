@@ -1,6 +1,9 @@
 //! The events of the application are events of the event log (docs/spec/logging.md#automatic-entrances). The writer of the
 //! records is shared by the process, so the check runs in a child process that nothing else writes in.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -27,7 +30,7 @@ fn an_application_event_is_recorded_as_an_event() {
         writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", NAME, "--nocapture", "--test-threads=1"])
         .env(CHILD, config.path())

@@ -2,6 +2,9 @@
 //! and bytes, a message beyond the bound is refused with an error, and the loss is the event `host.buffer.dropped`. The same
 //! cases run in the Go host.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 
@@ -73,12 +76,12 @@ struct Blocked {
     sidecars: Sidecars<FakeOwner>,
     fifo: std::path::PathBuf,
     released: bool,
-    _directory: tempfile::TempDir,
+    _directory: folder::Folder,
 }
 
 impl Blocked {
     fn new(root: &str, surfaces: usize) -> (Blocked, FakeOwner) {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = folder::Folder::new();
         let fifo = directory.path().join("go");
         let made = std::process::Command::new("mkfifo")
             .arg(&fifo)
@@ -193,7 +196,7 @@ fn drops(log: &EventLog, config: &Path) -> Vec<Value> {
 #[test]
 fn the_pending_replies_of_a_sidecar_hold_at_most_1024_messages() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = roomy_writer(config.path());
     let (mut blocked, _owner) = Blocked::new("/p", 1);
     let mut refused = Vec::new();
@@ -234,7 +237,7 @@ fn the_pending_replies_of_a_sidecar_hold_at_most_1024_messages() {
 #[test]
 fn the_pending_replies_of_a_sidecar_hold_at_most_four_mebibytes() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = roomy_writer(config.path());
     let (mut blocked, _owner) = Blocked::new("/p", 1);
     let mut refused = Vec::new();
@@ -266,7 +269,7 @@ fn the_pending_replies_of_a_sidecar_hold_at_most_four_mebibytes() {
 #[test]
 fn a_pending_close_beyond_the_bound_is_dropped_and_the_surface_is_not_waited_for() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = roomy_writer(config.path());
     // A long project root makes each close message large, so the bound in bytes is reached with few surfaces.
     let root = format!("/{}", "r".repeat(200 << 10));
@@ -298,7 +301,7 @@ fn a_pending_close_beyond_the_bound_is_dropped_and_the_surface_is_not_waited_for
 #[test]
 fn the_relay_remembers_at_most_256_expired_requests_and_counts_the_ones_it_forgets() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = roomy_writer(config.path());
     let relay = Relay::default();
     for _ in 0..256 + 5 {
@@ -335,7 +338,7 @@ fn the_relay_remembers_at_most_256_expired_requests_and_counts_the_ones_it_forge
 #[test]
 fn an_event_over_the_size_bound_is_stored_cut_with_its_original_size() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = roomy_writer(config.path());
     // The text reaches the writer whole, as the fields of a relayed event do; a producer that serializes a value stops at the
     // bound before it (bounds.producer.fields-are-cut-while-serialized).
@@ -404,7 +407,7 @@ fn write_waits(log: &EventLog, config: &Path) -> Vec<Value> {
 #[test]
 fn a_line_that_waits_in_the_write_queue_of_a_sidecar_is_recorded() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = roomy_writer(config.path());
     let (mut blocked, _owner) = Blocked::new("/p", 1);
     // The sidecar reads nothing, so the queued lines wait at least this long before the release lets the writer go on.
@@ -436,9 +439,9 @@ fn a_line_that_waits_in_the_write_queue_of_a_sidecar_is_recorded() {
 #[test]
 fn a_line_that_is_written_at_once_stores_no_write_wait() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = roomy_writer(config.path());
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let program = directory.path().join("echo");
     std::fs::write(&program, "#!/bin/sh\nexec cat > /dev/null\n").unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();

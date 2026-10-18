@@ -2,6 +2,9 @@
 //! into an event, and the writer counts it; a failed call is a warning and still passes a policy that stores the class from warn on.
 //! The same cases run in the Go host.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 
@@ -51,7 +54,7 @@ fn gated_counts(events: &[Value]) -> BTreeMap<String, u64> {
 #[test]
 fn a_binding_call_that_the_policy_does_not_store_is_counted_and_a_failed_one_is_stored() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = records::start_writer(config.path());
     narrow_calls(&log, "warn");
     for _ in 0..3 {
@@ -103,7 +106,7 @@ impl Service for Fake {
 #[test]
 fn an_endpoint_request_that_the_policy_does_not_store_is_counted() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = records::start_writer(config.path());
     narrow_calls(&log, "warn");
     let endpoint = Endpoint::start(
@@ -147,7 +150,7 @@ fn an_endpoint_request_that_the_policy_does_not_store_is_counted() {
 fn a_closed_gate_costs_far_less_than_an_open_one_and_stays_under_a_limit() {
     use soksak_host_tauriv2::event_log::{Level as L, Options};
     use soksak_host_tauriv2::log_policy::Class;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = event_log::start(Options {
         directory: directory.path().to_path_buf(),
         role: "host".into(),
@@ -196,7 +199,7 @@ fn a_closed_gate_costs_far_less_than_an_open_one_and_stays_under_a_limit() {
 #[test]
 fn a_closed_gate_builds_no_fields_at_the_producers_of_the_host() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = records::start_writer(config.path());
     narrow_calls(&log, "warn");
     // The observation of the trace builds its fields only for a gate that is open.
@@ -219,7 +222,7 @@ fn a_closed_gate_builds_no_fields_at_the_producers_of_the_host() {
 #[test]
 fn the_counts_of_a_closed_gate_are_reported_each_second_and_at_a_flush() {
     use soksak_host_tauriv2::event_log::{Level as L, Options};
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = event_log::start(Options {
         directory: directory.path().to_path_buf(),
         role: "host".into(),

@@ -2,6 +2,9 @@
 //! builds.
 #![cfg(feature = "diagnostics")]
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::cell::RefCell;
 use std::path::Path;
 
@@ -71,7 +74,7 @@ fn calls(fake: &Fake) -> Vec<String> {
 // contract: recording.finish.keeps-folder-and-reports-frames
 #[test]
 fn a_finished_recording_keeps_its_folder_and_reports_frames() {
-    let parent = tempfile::tempdir().unwrap();
+    let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
     let fake = Fake::default();
@@ -87,7 +90,7 @@ fn a_finished_recording_keeps_its_folder_and_reports_frames() {
 // contract: recording.start.failed-open-removes-folder
 #[test]
 fn a_failed_open_removes_the_folder() {
-    let parent = tempfile::tempdir().unwrap();
+    let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
     let fake = Fake {
@@ -105,7 +108,7 @@ fn a_failed_open_removes_the_folder() {
 // contract: recording.start.failed-start-removes-folder
 #[test]
 fn a_failed_start_removes_the_folder() {
-    let parent = tempfile::tempdir().unwrap();
+    let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
     let fake = Fake {
@@ -123,7 +126,7 @@ fn a_failed_start_removes_the_folder() {
 // contract: recording.start.no-first-frame-stops-and-removes
 #[test]
 fn a_recording_without_a_first_frame_is_stopped_and_removed() {
-    let parent = tempfile::tempdir().unwrap();
+    let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
     let fake = Fake {
@@ -139,7 +142,7 @@ fn a_recording_without_a_first_frame_is_stopped_and_removed() {
 // contract: recording.start.rejects-while-running, recording.abort.stops-removes-and-allows-next, recording.target.prepared-each-recording
 #[test]
 fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
-    let parent = tempfile::tempdir().unwrap();
+    let parent = folder::Folder::new();
     let first = parent.path().join("first");
     let second = parent.path().join("second");
     let recording = Recording::new();
@@ -162,7 +165,7 @@ fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
 // contract: recording.abort.reports-stop-failure-and-removes-folder
 #[test]
 fn an_abort_reports_a_stop_failure_and_still_removes_the_folder() {
-    let parent = tempfile::tempdir().unwrap();
+    let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
     let fake = Fake {
@@ -179,7 +182,7 @@ fn an_abort_reports_a_stop_failure_and_still_removes_the_folder() {
 // contract: recording.target.different-target-reopened
 #[test]
 fn a_different_target_is_prepared_again() {
-    let parent = tempfile::tempdir().unwrap();
+    let parent = folder::Folder::new();
     let recording = Recording::new();
     let fake = Fake::default();
     recording
@@ -273,7 +276,7 @@ impl Capture for Panicking {
 // contract: recording.state.poisoned-lock-is-reported
 #[test]
 fn a_poisoned_recording_state_is_reported_when_it_is_read() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let writer = records::start_writer(config.path());
     let folder = config.path().join("frames");
     let recording = Recording::new();

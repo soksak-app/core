@@ -188,7 +188,7 @@ mod tests {
         ]
         .to_vec();
         let other = [png.as_slice(), b"other"].concat();
-        let root = tempfile::tempdir().unwrap();
+        let root = crate::test_folder::Folder::new();
         let first = persist_png_at(root.path(), &png).unwrap();
         assert_eq!(std::fs::read(&first).unwrap(), png);
         let permissions = std::fs::metadata(&first).unwrap().permissions();

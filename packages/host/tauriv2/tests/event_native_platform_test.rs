@@ -1,6 +1,9 @@
 //! The pull of the native ring through the platform (docs/spec/logging.md#writers): the host writer starts with the pull of
 //! the platform, and an empty ring yields no record and no loss.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -64,7 +67,7 @@ fn the_platform_takes_the_policy_of_the_native_library_and_refuses_a_level_outsi
 #[test]
 fn the_host_writer_starts_with_the_pull_of_the_platform() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = event_log::start_host(directory.path()).unwrap();
     let path = log.path().to_path_buf();
     log.flush(Duration::from_secs(5)).unwrap();
@@ -84,7 +87,7 @@ fn the_host_writer_starts_with_the_pull_of_the_platform() {
 #[test]
 fn the_shutdown_flushes_the_native_observers_before_the_writer_flush() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = event_log::start_host(directory.path()).unwrap();
     let mut flushed = false;
     let result = event_log::flush_event_log(
@@ -114,7 +117,7 @@ fn the_shutdown_flushes_the_native_observers_before_the_writer_flush() {
 #[test]
 fn the_shutdown_reports_a_failed_observer_flush_and_still_flushes_the_writer() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = event_log::start_host(directory.path()).unwrap();
     log.emit(
         event_log::Level::Info,

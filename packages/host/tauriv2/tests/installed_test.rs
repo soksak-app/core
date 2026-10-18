@@ -1,6 +1,9 @@
 //! Checks the provision of the plugins installed in the configuration folder and finding their sidecars (the provision
 //! of installed plugins in docs/spec/installation.md).
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::borrow::Cow;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
@@ -19,8 +22,8 @@ fn write_installed(config: &Path, files: &[(&str, &str)]) {
 }
 
 /// A configuration folder in which two enabled plugins, one disabled plugin and one sidecar are installed.
-fn installed_fixture() -> tempfile::TempDir {
-    let config = tempfile::tempdir().unwrap();
+fn installed_fixture() -> folder::Folder {
+    let config = folder::Folder::new();
     let state = r#"{"format": 3, "plugins": {
         "term": {"version": "0.1.0", "path": "plugins/term/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
         "alpha": {"version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}},
@@ -80,7 +83,7 @@ fn installed_plugins_document_lists_enabled_plugins_by_id() {
         text(installed::installed_plugins_document(config.path(), true)),
         diagnostic
     );
-    let empty = tempfile::tempdir().unwrap();
+    let empty = folder::Folder::new();
     assert_eq!(
         text(installed::installed_plugins_document(empty.path(), true)),
         r#"{"plugins":[]}"#
@@ -256,7 +259,7 @@ fn installed_assets_serve_the_files_of_enabled_packages() {
 
 /// A configuration directory where the enabled plugin alpha declares the shared modules of the point language and the
 /// disabled plugin off declares a point of the same name.
-fn shared_fixture() -> tempfile::TempDir {
+fn shared_fixture() -> folder::Folder {
     let config = installed_fixture();
     write_installed(
         config.path(),
@@ -364,7 +367,7 @@ fn installed_sidecars_resolve_the_installed_version_folders() {
         error.contains("sidecar @scope/sidecar-other has no installed version"),
         "{error}"
     );
-    let empty = tempfile::tempdir().unwrap();
+    let empty = folder::Folder::new();
     assert!(
         installed::installed_sidecars(empty.path())
             .unwrap()

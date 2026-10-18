@@ -1,6 +1,9 @@
 //! The class of an event line (docs/spec/logging.md#event): the writer stores the class that the catalog declares for the
 //! event name, and marks an event the catalog does not declare.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 use std::fs;
@@ -52,7 +55,7 @@ fn relayed(layer: &str, event: &str, fields: &str) -> RelayedEvent {
 // contract: log.writer.stores-class
 #[test]
 fn every_line_stores_the_class_of_its_catalog_entry() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = event_log::start(options(directory.path())).unwrap();
     records::store_every_level(&log);
     assert!(log.emit(Level::Info, "host.app.event", &json!({"kind": "started"})));
@@ -102,7 +105,7 @@ fn every_line_stores_the_class_of_its_catalog_entry() {
 // contract: log.writer.marks-undeclared
 #[test]
 fn an_event_the_catalog_does_not_declare_is_marked_undeclared_and_has_no_class() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = event_log::start(options(directory.path())).unwrap();
     records::store_every_level(&log);
     assert!(log.emit(Level::Info, "host.test.event", &json!({"index": 1})));
@@ -128,7 +131,7 @@ fn an_event_the_catalog_does_not_declare_is_marked_undeclared_and_has_no_class()
 // contract: log.writer.stores-class
 #[test]
 fn the_events_of_the_writer_itself_store_their_class() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let mut opts = options(directory.path());
     opts.rotate_bytes = 600;
     opts.queue_events = 4;

@@ -2,6 +2,9 @@
 //! line. The same cases run in the Go host.
 #![cfg(feature = "diagnostics")]
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 
@@ -24,7 +27,7 @@ fn parse(text: &str) -> Result<String, (i64, String)> {
 // contract: diagnostics.stall-dump.params-validate
 #[test]
 fn a_stall_dump_names_an_existing_file_by_its_absolute_path() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let dump = directory.path().join("stall-10-7.txt");
     fs::write(&dump, "Sampling process 10").unwrap();
     let path = dump.to_str().unwrap();
@@ -63,7 +66,7 @@ fn a_stall_dump_names_an_existing_file_by_its_absolute_path() {
 #[test]
 fn a_stall_dump_is_an_event_and_the_reply_names_its_position() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = records::start_writer(config.path());
     let (boot, seq) = emit_stall_dump("/x/logs/stall-10-7.txt", Duration::from_secs(5)).unwrap();
     log.flush(Duration::from_secs(5)).unwrap();

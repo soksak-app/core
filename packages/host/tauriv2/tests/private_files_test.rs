@@ -1,6 +1,9 @@
 //! Tests of the platform operations for files and directories of the current user only
 //! (docs/spec/hosts.md#platform-interface).
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -14,7 +17,7 @@ fn mode(path: &Path) -> u32 {
 // contract: platform.private.creates-owner-only-directories
 #[test]
 fn create_private_directories_makes_missing_directories_owner_only() {
-    let root = tempfile::tempdir().unwrap();
+    let root = folder::Folder::new();
     std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
     let middle = root.path().join("middle");
     let leaf = middle.join("leaf");
@@ -31,7 +34,7 @@ fn create_private_directories_makes_missing_directories_owner_only() {
 // contract: platform.private.appends-owner-only-file
 #[test]
 fn append_private_file_creates_an_owner_only_file_and_appends() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let path = directory.path().join("private.log");
     let current = platform::current().unwrap();
     for line in ["first\n", "second\n"] {
@@ -54,7 +57,7 @@ fn append_private_file_creates_an_owner_only_file_and_appends() {
 // contract: platform.private.creates-new-owner-only-file
 #[test]
 fn create_private_file_creates_a_new_owner_only_file_only() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let path = directory.path().join("private.lock");
     let current = platform::current().unwrap();
     drop(current.create_private_file(&path).unwrap());
@@ -70,7 +73,7 @@ fn create_private_file_creates_a_new_owner_only_file_only() {
 // contract: platform.private.writes-owner-only-file
 #[test]
 fn write_private_file_creates_an_owner_only_file_and_replaces_its_contents() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let path = directory.path().join("private.json");
     let current = platform::current().unwrap();
     for contents in ["first contents\n", "second\n"] {

@@ -1,3 +1,6 @@
+#[path = "support/folder.rs"]
+mod folder;
+
 // The switch of the performance trace of the host (docs/spec/performance-trace.md): the process holds it, the page turns it
 // on and off, an observation is an event of the event log while it is on, and its markers are events too. No file holds the
 // switch and no flag reaches a service. The writer of the records and the switch belong to the process, so the checks that
@@ -14,8 +17,8 @@ mod records;
 const CHILD: &str = "SOKSAK_PERFORMANCE_CHILD";
 
 /// Runs the test `name` again in a child process with a fresh configuration folder and returns that folder.
-fn in_child(name: &str) -> tempfile::TempDir {
-    let config = tempfile::tempdir().unwrap();
+fn in_child(name: &str) -> folder::Folder {
+    let config = folder::Folder::new();
     let output = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", name, "--nocapture", "--test-threads=1"])
         .env(CHILD, config.path())

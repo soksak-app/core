@@ -1,6 +1,9 @@
 //! The `log` call of the page (docs/spec/logging.md#writers): the page relays a batch of events, the host validates the
 //! whole batch before it writes any event, and every event of the batch is stored in the layer `page`.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 use std::fs;
@@ -43,7 +46,7 @@ fn event(name: &str, index: u64) -> Value {
 // contract: log.batch.stores-page-events-in-order
 #[test]
 fn a_relayed_batch_is_stored_in_order_in_the_layer_page() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path());
     let request = json!({"action": "batch", "events": [event("page.test.first", 1), event("page.test.second", 2)]});
     log_command(&log, request).unwrap();
@@ -60,7 +63,7 @@ fn a_relayed_batch_is_stored_in_order_in_the_layer_page() {
 // contract: log.batch.rejects-an-invalid-batch-without-writing, log.batch.requires-the-page
 #[test]
 fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path());
     let bad = |field: &str, value: Value| {
         let mut item = json!({"ts_us": 1, "mono_ns": 1, "level": "info", "event": "page.test.event", "page": "1791948729050", "fields": {}});
@@ -154,7 +157,7 @@ fn an_invalid_relayed_batch_writes_nothing_and_names_the_event() {
 // contract: log.batch.returns-the-transcript-lines-of-page-records
 #[test]
 fn a_relayed_batch_returns_the_transcript_lines_of_its_page_records() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path());
     let record = |level: &str, place: &str, text: &str, index: u64| {
         json!({"ts_us": 1_791_000_000_000_000u64 + index, "mono_ns": 5_000_000_000u64 + index, "level": level, "event": format!("page.record.{level}"), "page": "1791948729050",
@@ -186,7 +189,7 @@ fn a_relayed_batch_returns_the_transcript_lines_of_its_page_records() {
 // contract: log.batch.stores-clock-and-cids-of-page-events
 #[test]
 fn a_relayed_batch_stores_the_clock_and_the_cids_that_the_page_gave() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path());
     let mut with = event("page.test.input", 1);
     with["cids"] = json!(["b1.4", "b1.5"]);
@@ -205,7 +208,7 @@ fn a_relayed_batch_stores_the_clock_and_the_cids_that_the_page_gave() {
 // contract: log.batch.answers-the-clock-request
 #[test]
 fn the_clock_request_answers_both_clocks_of_the_host_and_stores_no_event() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path());
     let first = log_command(&log, json!({"action": "clock"}))
         .unwrap()
@@ -231,7 +234,7 @@ fn the_clock_request_answers_both_clocks_of_the_host_and_stores_no_event() {
 // contract: log.batch.stores-plugin-events-in-the-layer-plugin
 #[test]
 fn a_relayed_batch_stores_a_plugin_event_in_the_layer_plugin() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path());
     let request = json!({"action": "batch", "events": [event("plugin.fixture.input", 1), event("page.console.error", 2)]});
     log_command(&log, request).unwrap();

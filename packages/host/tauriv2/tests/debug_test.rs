@@ -1,5 +1,8 @@
 //! The files, copies, tar and state file of the debug view (docs/spec/debug.md).
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
@@ -7,8 +10,8 @@ use std::time::{Duration, UNIX_EPOCH};
 use soksak_host_tauriv2::debug;
 
 /// A configuration folder with an application log and a capture under logs/ and a file outside it.
-fn debug_config() -> tempfile::TempDir {
-    let config = tempfile::tempdir().unwrap();
+fn debug_config() -> folder::Folder {
+    let config = folder::Folder::new();
     let write = |path: &str, text: &str| {
         let full = config.path().join(path);
         std::fs::create_dir_all(full.parent().unwrap()).unwrap();
@@ -46,7 +49,7 @@ fn debug_files_list_the_logs_folder() {
 #[test]
 fn debug_copy_copies_a_file_of_the_logs_folder_only() {
     let config = debug_config();
-    let target = tempfile::tempdir().unwrap();
+    let target = folder::Folder::new();
     let destination: PathBuf = target.path().join("application.log");
     debug::copy(config.path(), "logs/application.log", &destination).unwrap();
     assert_eq!(std::fs::read_to_string(&destination).unwrap(), "started\n");
@@ -68,7 +71,7 @@ fn debug_copy_copies_a_file_of_the_logs_folder_only() {
 #[test]
 fn debug_write_logs_tar_writes_the_logs_folder() {
     let config = debug_config();
-    let target = tempfile::tempdir().unwrap();
+    let target = folder::Folder::new();
     let destination = target.path().join("debug.tar.gz");
     debug::write_logs_tar(config.path(), &destination, &mut |_, _| {}).unwrap();
     let file = std::fs::File::open(&destination).unwrap();
@@ -95,7 +98,7 @@ fn debug_write_logs_tar_reports_progress_each_mebibyte_and_at_the_end() {
     let config = debug_config();
     let big = 3 * 1024 * 1024 + 512 * 1024;
     std::fs::write(config.path().join("logs/host-1-2.jsonl"), "x".repeat(big)).unwrap();
-    let out = tempfile::tempdir().unwrap();
+    let out = folder::Folder::new();
     let destination = out.path().join("debug.tar.gz");
     let mut reports: Vec<(u64, u64)> = Vec::new();
     debug::write_logs_tar(config.path(), &destination, &mut |written, total| {
@@ -274,7 +277,7 @@ fn debug_write_state_keeps_the_newest_20_state_files() {
 // contract: debug.save-text.writes-the-text-to-the-destination
 #[test]
 fn debug_write_text_writes_the_text_of_the_request() {
-    let target = tempfile::tempdir().unwrap();
+    let target = folder::Folder::new();
     let destination = target.path().join("rows.txt");
     let request = debug::TextRequest {
         name: "rows.txt".into(),

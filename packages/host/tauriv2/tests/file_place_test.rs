@@ -1,6 +1,9 @@
 //! The save place of a new document (docs/spec/plugins.md#pluginjson): the chosen file is answered relative to the project
 //! root, and a place outside the root or a name that is not a file name is refused. The same cases run in the Go host.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::path::Path;
 
 use soksak_host_tauriv2::file_place::{check_name, relative};
@@ -8,7 +11,7 @@ use soksak_host_tauriv2::file_place::{check_name, relative};
 // contract: files.place.answers-the-path-inside-the-project
 #[test]
 fn a_place_inside_the_project_is_answered_relative_to_the_root() {
-    let base = tempfile::tempdir().unwrap();
+    let base = folder::Folder::new();
     let root = base.path().join("project");
     std::fs::create_dir_all(root.join("docs")).unwrap();
     let link = base.path().join("link");
@@ -31,7 +34,7 @@ fn a_place_inside_the_project_is_answered_relative_to_the_root() {
 // contract: files.place.refuses-a-place-outside-the-project
 #[test]
 fn a_place_outside_the_project_is_refused() {
-    let base = tempfile::tempdir().unwrap();
+    let base = folder::Folder::new();
     let root = base.path().join("project");
     let other = base.path().join("other");
     std::fs::create_dir_all(&root).unwrap();

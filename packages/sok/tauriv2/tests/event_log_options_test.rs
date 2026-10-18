@@ -9,23 +9,10 @@ use serde_json::{Value, json};
 use soksak_sok::event_bounds::Fields;
 use soksak_sok::event_log::{Channel, EventLog, Level, Options, PullSink, RelayedEvent};
 
-struct Dir(PathBuf);
+#[path = "support/folder.rs"]
+mod folder;
 
-impl Dir {
-    fn new(label: &str) -> Dir {
-        let path = std::env::temp_dir().join(format!("sok-options{}-{label}", std::process::id()));
-        std::fs::create_dir_all(&path).unwrap();
-        Dir(path)
-    }
-}
-
-impl Drop for Dir {
-    fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_dir_all(&self.0) {
-            panic!("{}: {error}", self.0.display());
-        }
-    }
-}
+use folder::Folder;
 
 fn options(directory: &Path, boot: &str) -> Options {
     Options {
@@ -61,8 +48,8 @@ fn stored_lines(path: &Path) -> Vec<Value> {
 // contract: cli.log.writer-options.stores-the-layer-the-clock-and-the-cids
 #[test]
 fn a_writer_without_rotation_stores_the_layer_the_clock_and_the_cids_of_its_options() {
-    let directory = Dir::new("plain");
-    let log = EventLog::start(options(&directory.0, "plain")).unwrap();
+    let directory = Folder::new("options-plain");
+    let log = EventLog::start(options(directory.path(), "plain")).unwrap();
     assert!(log.emit_cids(
         Level::Info,
         "host.probe.event",
@@ -85,8 +72,8 @@ fn a_writer_without_rotation_stores_the_layer_the_clock_and_the_cids_of_its_opti
 // contract: cli.log.writer-options.rotates-at-its-bound
 #[test]
 fn a_writer_rotates_at_its_bound_and_the_new_file_starts_with_log_open_and_log_rotated() {
-    let directory = Dir::new("rotating");
-    let mut rotating = options(&directory.0, "rotating");
+    let directory = Folder::new("options-rotating");
+    let mut rotating = options(directory.path(), "rotating");
     rotating.rotate_bytes = 600;
     let log = EventLog::start(rotating).unwrap();
     for _ in 0..20 {
@@ -110,8 +97,8 @@ fn a_writer_rotates_at_its_bound_and_the_new_file_starts_with_log_open_and_log_r
 // contract: cli.log.writer-options.stores-the-events-and-the-loss-of-its-pull-source
 #[test]
 fn a_writer_stores_the_events_and_the_loss_of_its_pull_source() {
-    let directory = Dir::new("pulling");
-    let mut pulling = options(&directory.0, "pulling");
+    let directory = Folder::new("options-pulling");
+    let mut pulling = options(directory.path(), "pulling");
     let mut delivered = false;
     pulling.pull = Some(Box::new(move |sink: &mut dyn PullSink| {
         if delivered {

@@ -2,7 +2,7 @@
 //! read from the enabled installed plugins (docs/spec/logging.md#plugin-catalogs).
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -10,21 +10,14 @@ use soksak_sok::event_classes::Class;
 use soksak_sok::event_log::Level;
 use soksak_sok::plugin_catalog::plugin_event_classes;
 
-/// A folder of a test that is removed when the test ends.
-struct Dir(PathBuf);
+#[path = "support/folder.rs"]
+mod folder;
 
-impl Drop for Dir {
-    fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_dir_all(&self.0) {
-            panic!("{}: {error}", self.0.display());
-        }
-    }
-}
+use folder::Folder;
 
-fn temp(label: &str) -> Dir {
-    let dir =
-        Dir(std::env::temp_dir().join(format!("sok-plugin-catalog{}-{label}", std::process::id())));
-    std::fs::create_dir_all(dir.0.join("plugins")).unwrap();
+fn temp(label: &str) -> Folder {
+    let dir = Folder::new(&format!("plugin-catalog-{label}"));
+    std::fs::create_dir_all(dir.join("plugins")).unwrap();
     dir
 }
 
@@ -35,8 +28,8 @@ mod support;
 #[test]
 fn a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares() {
     let dir = temp("classify");
-    support::store_every_level(&dir.0);
-    let log = soksak_sok::start_tool_event_log(&dir.0).unwrap();
+    support::store_every_level(dir.path());
+    let log = soksak_sok::start_tool_event_log(dir.path()).unwrap();
     log.set_plugin_classes(HashMap::from([(
         "plugin.probe.frame".to_string(),
         Class::Frame,
@@ -105,20 +98,20 @@ fn enabled(id: &str, enabled: bool) -> String {
 fn the_plugin_classes_are_the_catalogs_of_the_enabled_installed_plugins() {
     let dir = temp("enabled");
     write_plugin(
-        &dir.0,
+        dir.path(),
         "probe",
         r#"{"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{}},"plugin.probe.error":{"layer":"plugin","class":"lifecycle","level":"error","fields":{}}}}"#,
     );
     write_plugin(
-        &dir.0,
+        dir.path(),
         "fixture",
         r#"{"events":{"plugin.fixture.watch":{"layer":"plugin","class":"io","level":"debug","fields":{}}}}"#,
     );
     write_installed(
-        &dir.0,
+        dir.path(),
         &format!("{},{}", enabled("probe", true), enabled("fixture", false)),
     );
-    let (classes, errors) = plugin_event_classes(&dir.0);
+    let (classes, errors) = plugin_event_classes(dir.path());
     assert!(errors.is_empty(), "errors {errors:?}");
     assert_eq!(
         classes,
@@ -135,37 +128,37 @@ fn a_catalog_that_cannot_be_used_is_an_error_that_names_its_file_and_the_other_p
  {
     let dir = temp("refused");
     write_plugin(
-        &dir.0,
+        dir.path(),
         "probe",
         r#"{"events":{"plugin.probe.frame":{"class":"frame"}}}"#,
     );
     write_plugin(
-        &dir.0,
+        dir.path(),
         "outside",
         r#"{"events":{"plugin.probe.frame":{"class":"frame"}}}"#,
     );
     write_plugin(
-        &dir.0,
+        dir.path(),
         "classless",
         r#"{"events":{"plugin.classless.x":{"class":"often"}}}"#,
     );
-    write_plugin(&dir.0, "broken", r#"{"events":"#);
-    write_plugin(&dir.0, "missing", "");
+    write_plugin(dir.path(), "broken", r#"{"events":"#);
+    write_plugin(dir.path(), "missing", "");
     let ids = ["probe", "outside", "classless", "broken", "missing"];
     write_installed(
-        &dir.0,
+        dir.path(),
         &ids.iter()
             .map(|id| enabled(id, true))
             .collect::<Vec<_>>()
             .join(","),
     );
-    let (classes, errors) = plugin_event_classes(&dir.0);
+    let (classes, errors) = plugin_event_classes(dir.path());
     assert_eq!(
         classes,
         HashMap::from([("plugin.probe.frame".to_string(), Class::Frame)])
     );
     let file = |id: &str| {
-        dir.0
+        dir.path()
             .join("plugins")
             .join(id)
             .join("1.0.0/events.json")

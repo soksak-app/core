@@ -2,6 +2,9 @@
 //! `log.query`, the host call `logQuery`, the index that follows the writer, and the event of an index that is built from the file. The
 //! same cases run in the Go host.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 
@@ -100,7 +103,7 @@ fn with_endpoint<T>(config: &Path, body: impl FnOnce(&mut Box<dyn Connection>) -
 // contract: log.endpoint.query-answers-the-rows-around-a-row
 #[test]
 fn the_endpoint_method_log_query_answers_the_rows_around_a_row() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     write_event_file(config.path(), "host-b1.jsonl", &event_lines(9));
     with_endpoint(config.path(), |connection| {
         let around = json!({"ts_us": 1005, "role": "host", "boot": "b1", "seq": 5});
@@ -151,7 +154,7 @@ fn the_endpoint_method_log_query_answers_the_rows_around_a_row() {
 // contract: log.endpoint.query-answers-one-page
 #[test]
 fn the_endpoint_method_log_query_answers_one_page() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let path = write_event_file(config.path(), "host-b1.jsonl", &event_lines(5));
     with_endpoint(config.path(), |connection| {
         let reply = request(
@@ -225,7 +228,7 @@ fn the_endpoint_method_log_query_answers_one_page() {
 // contract: debug.log-query.answers-the-query-of-the-endpoint
 #[test]
 fn the_host_call_log_query_answers_the_query_of_the_endpoint() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     write_event_file(config.path(), "host-b1.jsonl", &event_lines(8));
     let params = json!({"order": "desc", "limit": 4, "event_prefix": "host.x"});
     let from_endpoint = with_endpoint(config.path(), |connection| {
@@ -280,7 +283,7 @@ fn lines(path: &Path) -> i64 {
 // contract: log.writer.indexes-each-batch-it-wrote
 #[test]
 fn the_index_covers_each_batch_the_writer_wrote() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log = event_log::start(writer_options(&config.path().join("logs"))).unwrap();
     records::store_every_level(&log);
     let (results, updates) = channel();
@@ -336,9 +339,9 @@ fn the_index_covers_each_batch_the_writer_wrote() {
 #[test]
 fn an_index_built_from_the_file_is_an_event_and_an_append_is_not() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
-    let writer_config = tempfile::tempdir().unwrap();
+    let writer_config = folder::Folder::new();
     let log: Arc<EventLog> = records::start_writer(writer_config.path());
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let path = write_event_file(config.path(), "host-x1.jsonl", &event_lines(6));
     let rebuilt = |log: &EventLog| -> Vec<Value> {
         log.flush(Duration::from_secs(5)).unwrap();
@@ -408,7 +411,7 @@ fn an_index_built_from_the_file_is_an_event_and_an_append_is_not() {
 // contract: log.writer.indexes-each-batch-it-wrote
 #[test]
 fn a_file_that_rotation_or_retention_removed_is_not_a_failure_of_the_index() {
-    let logs = tempfile::tempdir().unwrap();
+    let logs = folder::Folder::new();
     let real = logs.path().join("host-b1.jsonl");
     let mut text = String::from(
         "{\"ts_us\":1000,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"host\",\"event\":\"log.open\",\"fields\":{\"schema\":2,\"pid\":1,\"role\":\"host\",\"boot\":\"b1\"}}\n",

@@ -51,22 +51,16 @@ fn fixture_lines(name: &str) -> Vec<String> {
         .collect()
 }
 
-struct Dir(PathBuf);
+#[path = "support/folder.rs"]
+mod folder;
 
-impl Drop for Dir {
-    fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_dir_all(&self.0) {
-            panic!("{}: {error}", self.0.display());
-        }
-    }
-}
+use folder::Folder;
 
 /// Starts the writer of the tool, emits through `emit` and returns the lines of its file.
 fn write_events(label: &str, emit: impl FnOnce(&EventLog)) -> Vec<String> {
-    let dir = Dir(std::env::temp_dir().join(format!("sok-fixture{}-{label}", std::process::id())));
-    std::fs::create_dir_all(&dir.0).unwrap();
-    support::store_every_level(&dir.0);
-    let log = soksak_sok::start_tool_event_log(&dir.0).unwrap();
+    let dir = Folder::new(&format!("fixture-{label}"));
+    support::store_every_level(dir.path());
+    let log = soksak_sok::start_tool_event_log(dir.path()).unwrap();
     emit(&log);
     log.flush(Duration::from_secs(5)).unwrap();
     log.close();
@@ -198,10 +192,9 @@ fn a_refused_event_is_counted_and_explained_by_log_dropped() {
 // contract: cli.log.run-stores-only-the-declared-events
 #[test]
 fn a_run_stores_only_the_events_that_the_specification_names() {
-    let dir = Dir(std::env::temp_dir().join(format!("sok-fixture{}-declared", std::process::id())));
-    std::fs::create_dir_all(&dir.0).unwrap();
-    support::store_every_level(&dir.0);
-    let args: Vec<String> = ["nothing", "--config-dir", dir.0.to_str().unwrap()]
+    let dir = Folder::new("fixture-declared");
+    support::store_every_level(dir.path());
+    let args: Vec<String> = ["nothing", "--config-dir", dir.path().to_str().unwrap()]
         .iter()
         .map(|arg| arg.to_string())
         .collect();
@@ -212,7 +205,7 @@ fn a_run_stores_only_the_events_that_the_specification_names() {
     };
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     soksak_sok::logged(&args, &mut stdout, &mut stderr, &options, &soksak_sok::run);
-    let files: Vec<PathBuf> = std::fs::read_dir(dir.0.join("logs"))
+    let files: Vec<PathBuf> = std::fs::read_dir(dir.path().join("logs"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect();

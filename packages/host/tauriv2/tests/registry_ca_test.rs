@@ -3,6 +3,9 @@
 //! authority is passed to the download.
 #![cfg(feature = "diagnostics")]
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use soksak_host_tauriv2::command_line::{apply_arguments, parse_arguments};
 
 fn parse(args: &[&str]) -> soksak_host_tauriv2::command_line::Arguments {
@@ -12,7 +15,7 @@ fn parse(args: &[&str]) -> soksak_host_tauriv2::command_line::Arguments {
 // contract: host.arguments.registry-ca-in-diagnostic-builds
 #[test]
 fn a_diagnostic_build_reads_the_registry_authority() {
-    let folder = tempfile::tempdir().unwrap();
+    let folder = folder::Folder::new();
     let empty = folder.path().join("empty.pem");
     std::fs::write(&empty, "no certificate\n").unwrap();
     let parsed = parse(&["--registry-ca", empty.to_str().unwrap()]);

@@ -1,6 +1,9 @@
 //! The entrance of the threads of the host (docs/spec/hosts.md#process-lifecycle): a panic of a thread that started through
 //! `spawn_named` is the event `host.panic` in the event log before the process ends with status 101.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::process::{Command, Stdio};
 
 #[path = "support/records.rs"]
@@ -25,7 +28,7 @@ fn a_panic_of_a_thread_is_recorded_as_an_event_before_the_process_ends() {
         std::thread::sleep(std::time::Duration::from_secs(10));
         std::process::exit(4);
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",

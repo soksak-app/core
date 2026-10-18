@@ -1,6 +1,9 @@
 //! The notices of the changes of the event log: bounded in rate, counted when coalesced, announced only for the lines that announce a change,
 //! and also for the lines that a query indexes (docs/spec/debug.md#following). The same cases run in the Go host.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -140,7 +143,7 @@ fn a_query_that_indexes_lines_announces_them_once() {
         sender.lock().unwrap().send(notice).unwrap();
     }));
     use_log_notices(Some(Arc::clone(&notices)));
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let logs = config.path().join("logs");
     std::fs::create_dir_all(&logs).unwrap();
     std::fs::write(logs.join("host-b1.jsonl"), event_lines(5)).unwrap();

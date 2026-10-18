@@ -1,6 +1,9 @@
 //! A removal request for a project resolves with the answer of the window that shows it
 //! (docs/spec/projects.md).
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 
@@ -62,7 +65,7 @@ fn the_end_of_a_window_records_each_removal_it_allows() {
         writer.flush(std::time::Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",

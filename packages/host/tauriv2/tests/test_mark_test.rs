@@ -2,6 +2,9 @@
 //! `(boot, seq)` of the line. The same cases run in the Go host.
 #![cfg(feature = "diagnostics")]
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 use std::fs;
@@ -87,7 +90,7 @@ fn a_test_mark_accepts_only_a_start_or_an_end_with_its_result() {
 #[test]
 fn a_test_mark_is_an_event_and_the_reply_names_its_position() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = Arc::new(
         records::start_every_level(Options {
             directory: directory.path().to_path_buf(),

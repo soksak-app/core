@@ -9,24 +9,10 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use soksak_sok::event_log::{EventLog, Level};
 
-/// Removes the configuration folder of a test when the test ends.
-struct Config(PathBuf);
+#[path = "support/folder.rs"]
+mod folder;
 
-impl Config {
-    fn new(label: &str) -> Config {
-        let path = std::env::temp_dir().join(format!("sok-channels{}-{label}", std::process::id()));
-        std::fs::create_dir_all(&path).unwrap();
-        Config(path)
-    }
-}
-
-impl Drop for Config {
-    fn drop(&mut self) {
-        if let Err(error) = std::fs::remove_dir_all(&self.0) {
-            panic!("{}: {error}", self.0.display());
-        }
-    }
-}
+use folder::Folder;
 
 fn read(path: &std::path::Path) -> Vec<Value> {
     std::fs::read_to_string(path)
@@ -50,9 +36,9 @@ mod support;
 // contract: cli.log.splits-files-by-level
 #[test]
 fn the_tool_stores_debug_and_trace_events_in_the_debug_file() {
-    let config = Config::new("split");
-    support::store_every_level(&config.0);
-    let log = soksak_sok::start_tool_event_log(&config.0).unwrap();
+    let config = Folder::new("channels-split");
+    support::store_every_level(config.path());
+    let log = soksak_sok::start_tool_event_log(config.path()).unwrap();
     for level in [
         Level::Debug,
         Level::Warn,
@@ -90,8 +76,8 @@ fn the_tool_stores_debug_and_trace_events_in_the_debug_file() {
 // contract: cli.log.splits-files-by-level
 #[test]
 fn a_run_of_the_tool_without_a_debug_event_leaves_no_debug_file() {
-    let config = Config::new("nodebug");
-    let log = soksak_sok::start_tool_event_log(&config.0).unwrap();
+    let config = Folder::new("channels-nodebug");
+    let log = soksak_sok::start_tool_event_log(config.path()).unwrap();
     log.emit(Level::Info, "sok.command", &json!({"name": "x"}));
     log.flush(Duration::from_secs(5)).unwrap();
     log.close();
@@ -110,9 +96,9 @@ impl serde::Serialize for Unserializable {
 // contract: cli.log.records-a-refused-event-as-log-dropped
 #[test]
 fn a_loss_of_the_tool_names_the_channel_of_the_refused_events() {
-    let config = Config::new("loss");
-    support::store_every_level(&config.0);
-    let log = soksak_sok::start_tool_event_log(&config.0).unwrap();
+    let config = Folder::new("channels-loss");
+    support::store_every_level(config.path());
+    let log = soksak_sok::start_tool_event_log(config.path()).unwrap();
     log.emit(Level::Debug, "sok.command", &json!({"name": "first"}));
     assert!(!log.emit(Level::Debug, "sok.command", &Unserializable));
     assert!(!log.emit(Level::Info, "sok.command", &Unserializable));

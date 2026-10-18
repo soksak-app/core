@@ -1,5 +1,8 @@
 //! Sidecar persistent transport tests. They use a fake window and a service endpoint harness.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -87,8 +90,8 @@ const STALL: Duration = Duration::from_secs(120);
 // contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one
 #[test]
 fn concurrent_hosts_share_an_authenticated_service_endpoint() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("s.sock");
@@ -172,8 +175,8 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
 // contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
 #[test]
 fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("reconnect.sock");
@@ -332,8 +335,8 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
 // contract: sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint
 #[test]
 fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_endpoint() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("protocol-mismatch.sock");
@@ -382,8 +385,8 @@ fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_end
 // contract: sidecars-transport.hello.rejects-auth-failure
 #[test]
 fn persistent_transport_rejects_a_failed_hello() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("auth.sock");
@@ -428,8 +431,8 @@ fn persistent_transport_rejects_a_failed_hello() {
 // contract: sidecars-transport.endpoint.replaces-dead-service-endpoint
 #[test]
 fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("replacement.sock");
@@ -517,8 +520,8 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
 // contract: sidecars-transport.endpoint.live-unreachable-reported-without-replacement
 #[test]
 fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacement() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let endpoint_path = service_directory.join("endpoint.json");
@@ -553,8 +556,8 @@ fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacemen
 // contract: sidecars-transport.stop.close-owner-then-shutdown
 #[test]
 fn persistent_stop_closes_owner_then_requests_service_shutdown() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("shutdown.sock");
@@ -653,8 +656,8 @@ fn persistent_stop_does_not_log_its_own_close_as_a_read_error() {
         );
         return;
     }
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("own.sock");
@@ -716,8 +719,8 @@ fn persistent_stop_does_not_log_its_own_close_as_a_read_error() {
 // contract: sidecars-transport.stop.accepts-close-answers-sent-before-stop
 #[test]
 fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("late.sock");
@@ -810,8 +813,8 @@ fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {
 // contract: sidecars.retain.sends-layout-and-known-surfaces, sidecars.retain.reports-service-failure
 #[test]
 fn persistent_retain_sends_layout_and_known_surfaces() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("retain.sock");
@@ -908,8 +911,8 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
 fn persistent_retain_after_stop_sends_nothing() {
     // A retain after the stop does not attach to the service and fails with the stop. This host checks the stop and
     // sends inside one lock, so no stop intervenes between preparing the service and sending.
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("retain.sock");
@@ -946,8 +949,8 @@ fn persistent_retain_after_stop_sends_nothing() {
 // contract: sidecars.retain.skips-service-without-endpoint
 #[test]
 fn persistent_retain_skips_a_service_without_endpoint() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::<FakeOwner>::new(
         &declare(&fixture, executable_directory.path()),
@@ -961,8 +964,8 @@ fn persistent_retain_skips_a_service_without_endpoint() {
 // contract: sidecars-transport.persistent.revives-a-lost-connection
 #[test]
 fn persistent_transport_revives_a_lost_connection_without_a_send() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("revive.sock");
@@ -1056,8 +1059,8 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
 // contract: sidecars-transport.persistent.revive-failure-is-reported
 #[test]
 fn persistent_transport_reports_a_failed_revive_to_the_owner() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("failed-revive.sock");
@@ -1149,8 +1152,8 @@ impl Owner for FailureOwner {
 /// host closes the connection. If the host closes before payload is written completely, the write error is an expected
 /// result.
 fn expect_connection_failure(payload: Vec<u8>, reason: &str) {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("bad-line.sock");
@@ -1235,11 +1238,11 @@ fn persistent_transport_fails_the_connection_on_an_oversize_line() {
 // contract: sidecars.send.start-does-not-block-other-sidecars
 #[test]
 fn persistent_start_does_not_delay_other_sidecars() {
-    let executable_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
     let fast = executable_directory.path().join("fast");
     std::fs::write(&fast, "#!/bin/sh\ntee /dev/null\n").unwrap();
     std::fs::set_permissions(&fast, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("start.sock");
@@ -1351,8 +1354,8 @@ fn send_within(
 // contract: sidecars-transport.hello.times-out
 #[test]
 fn persistent_start_fails_when_hello_is_not_answered() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("hello.sock");
@@ -1399,11 +1402,11 @@ fn persistent_start_fails_when_hello_is_not_answered() {
 // contract: sidecars-transport.startup.times-out
 #[test]
 fn persistent_start_fails_when_the_service_prints_no_endpoint() {
-    let executable_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
     let service = executable_directory.path().join("echo");
     std::fs::write(&service, "#!/bin/sh\nsleep 2\nwhile :; do sleep 1; done\n").unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let config_directory = folder::Folder::new();
     let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
@@ -1433,11 +1436,11 @@ fn persistent_start_fails_when_the_service_prints_no_endpoint() {
 // contract: log.service.standard-error-goes-to-service-log
 #[test]
 fn persistent_service_writes_its_standard_error_to_its_log() {
-    let executable_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
     let service = executable_directory.path().join("echo");
     std::fs::write(&service, "#!/bin/sh\necho service line >&2\nexit 0\n").unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let config_directory = folder::Folder::new();
     let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
@@ -1473,9 +1476,9 @@ impl Drop for EndService {
 // contract: sidecars-transport.persistent.starts-in-new-session
 #[test]
 fn persistent_service_starts_in_a_new_session() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
-    let socket_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let socket_directory = folder::Folder::new();
     let socket_path = socket_directory.path().join("service.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let pid_path = executable_directory.path().join("pid");
@@ -1556,7 +1559,7 @@ fn persistent_service_starts_in_a_new_session() {
 // contract: log.service.open-failure-fails-start
 #[test]
 fn persistent_start_fails_when_the_service_log_cannot_open() {
-    let executable_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
     let started = executable_directory.path().join("started");
     let service = executable_directory.path().join("echo");
     std::fs::write(
@@ -1565,7 +1568,7 @@ fn persistent_start_fails_when_the_service_log_cannot_open() {
     )
     .unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let config_directory = folder::Folder::new();
     // If logs is a file, the log directory cannot be created.
     std::fs::write(config_directory.path().join("logs"), "").unwrap();
     let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
@@ -1588,11 +1591,11 @@ fn persistent_start_fails_when_the_service_log_cannot_open() {
 // contract: sidecars-transport.startup.exits-before-endpoint
 #[test]
 fn persistent_start_fails_when_the_service_exits_before_its_endpoint() {
-    let executable_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
     let service = executable_directory.path().join("echo");
     std::fs::write(&service, "#!/bin/sh\nexit 0\n").unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let config_directory = folder::Folder::new();
     let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
@@ -1632,8 +1635,8 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
         (Some("0.0.7"), vec![]),
     ];
     for (version, want) in cases {
-        let executable_directory = tempfile::tempdir().unwrap();
-        let config_directory = tempfile::tempdir().unwrap();
+        let executable_directory = folder::Folder::new();
+        let config_directory = folder::Folder::new();
         let service_directory = config_directory.path().join("services/echo");
         std::fs::create_dir_all(&service_directory).unwrap();
         let socket_path = service_directory.join("version.sock");
@@ -1848,8 +1851,8 @@ fn replace_sidecars(config_directory: &Path, executable_directory: &Path) -> Sid
 // contract: sidecars-transport.replace.replaces-an-outdated-service
 #[test]
 fn an_outdated_service_is_replaced() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service = serve_replace_service(
         config_directory.path(),
         executable_directory.path(),
@@ -1893,8 +1896,8 @@ fn an_outdated_service_is_replaced() {
 // contract: sidecars-transport.replace.refuses-a-service-that-is-not-outdated
 #[test]
 fn a_service_that_is_not_outdated_is_not_replaced() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service = serve_replace_service(
         config_directory.path(),
         executable_directory.path(),
@@ -1919,8 +1922,8 @@ fn a_service_that_is_not_outdated_is_not_replaced() {
 // contract: sidecars-transport.replace.runs-when-sessions-reach-zero
 #[test]
 fn an_outdated_service_is_replaced_when_its_sessions_end() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service = serve_replace_service(
         config_directory.path(),
         executable_directory.path(),
@@ -1947,8 +1950,8 @@ fn an_outdated_service_is_replaced_when_its_sessions_end() {
 // contract: sidecars-transport.replace.waits-for-the-end-of-the-service-process
 #[test]
 fn a_replaced_service_starts_after_the_end_of_its_process() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service = serve_replace_service(
         config_directory.path(),
         executable_directory.path(),
@@ -1976,8 +1979,8 @@ fn a_replaced_service_starts_after_the_end_of_its_process() {
 // contract: sidecars-transport.hello.client-is-the-configuration-directory
 #[test]
 fn the_hello_carries_the_configuration_directory_as_client() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("client.sock");
@@ -2036,8 +2039,8 @@ fn the_hello_carries_the_configuration_directory_as_client() {
 // contract: sidecars-transport.stop.leaves-the-close-of-a-replacement-to-the-replacement
 #[test]
 fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("replacing.sock");
@@ -2139,8 +2142,8 @@ fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {
 // contract: sidecars-transport.detach.closes-the-connection-without-closing-the-owner
 #[test]
 fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owner() {
-    let executable_directory = tempfile::tempdir().unwrap();
-    let config_directory = tempfile::tempdir().unwrap();
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
     let service = serve_replace_service(
         config_directory.path(),
         executable_directory.path(),
@@ -2180,8 +2183,8 @@ fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owne
 fn persistent_connections_are_recorded_as_events() {
     // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
     if let Some(config) = std::env::var_os("SOKSAK_CONNECTION_EVENTS_CHILD") {
-        let executable_directory = tempfile::tempdir().unwrap();
-        let config_directory = tempfile::tempdir().unwrap();
+        let executable_directory = folder::Folder::new();
+        let config_directory = folder::Folder::new();
         let service_directory = config_directory.path().join("services/echo");
         std::fs::create_dir_all(&service_directory).unwrap();
         let socket_path = service_directory.join("events.sock");
@@ -2250,7 +2253,7 @@ fn persistent_connections_are_recorded_as_events() {
         writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",

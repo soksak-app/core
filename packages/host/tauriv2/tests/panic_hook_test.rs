@@ -1,6 +1,9 @@
 //! The panic hook of the host records a panic as the event `host.panic` without waiting for the writer on the panicking
 //! thread, which can be the thread of the interface (docs/spec/hosts.md#process-lifecycle).
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -64,7 +67,7 @@ fn the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_t
         std::thread::sleep(Duration::from_secs(10));
         std::process::exit(4);
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",

@@ -1,6 +1,9 @@
 //! The record of the endpoint methods (docs/spec/logging.md#entrances): every request of a client is the event
 //! `host.endpoint.call` with the performance trace off. The same cases run in the Go host.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 
@@ -47,7 +50,7 @@ fn calls_of(body: impl FnOnce(&mut Box<dyn Connection>)) -> Vec<Value> {
         !soksak_host_tauriv2::performance::enabled(),
         "the performance trace is on"
     );
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let log: Arc<EventLog> = records::start_writer(config.path());
     let endpoint = Endpoint::start(
         &config.path().join("sockets"),

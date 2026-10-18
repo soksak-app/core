@@ -2,6 +2,9 @@
 //! severe level that is stored; the gate at the producers builds nothing for an event the policy refuses and counts it. The same
 //! cases run in the Go host.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -40,8 +43,8 @@ fn options(directory: &Path, policy_path: Option<std::path::PathBuf>) -> Options
     }
 }
 
-fn start_with_policy(policy: &str) -> (tempfile::TempDir, EventLog) {
-    let directory = tempfile::tempdir().unwrap();
+fn start_with_policy(policy: &str) -> (folder::Folder, EventLog) {
+    let directory = folder::Folder::new();
     let log = event_log::start(options(directory.path(), None)).unwrap();
     log.set_policy(
         LogPolicy::parse("policy", policy.as_bytes()).unwrap(),
@@ -238,7 +241,7 @@ fn the_events_of_the_writer_itself_pass_a_gate_that_turns_the_lifecycle_off() {
 // contract: log.policy.file-is-watched, log.policy.default-stores-errors
 #[test]
 fn the_policy_file_is_watched_and_every_change_is_applied_once() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let policy_path = config.path().join("log-policy.json");
     let log = Arc::new(
         event_log::start(options(
@@ -314,7 +317,7 @@ fn assert_default_gate(log: &EventLog, step: &str) {
 // contract: log.policy.page-sets-the-file
 #[test]
 fn the_page_sets_the_policy_through_the_log_call_and_the_host_writes_the_file() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let policy_path = config.path().join("log-policy.json");
     let log = event_log::start(options(
         &config.path().join("logs"),
@@ -360,7 +363,7 @@ fn the_page_sets_the_policy_through_the_log_call_and_the_host_writes_the_file() 
         );
         assert!(!policy_path.exists(), "{name} wrote the file");
     }
-    let bare_directory = tempfile::tempdir().unwrap();
+    let bare_directory = folder::Folder::new();
     let bare = event_log::start(options(bare_directory.path(), None)).unwrap();
     let error = log_command(&bare, request).expect_err("a writer without a policy file");
     assert!(error.contains("policy file"), "{error}");
@@ -369,7 +372,7 @@ fn the_page_sets_the_policy_through_the_log_call_and_the_host_writes_the_file() 
 // contract: log.policy.read-answers-the-policy-in-force
 #[test]
 fn the_action_policy_read_answers_the_classes_of_the_policy_in_force() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = event_log::start(options(directory.path(), None)).unwrap();
     let reply = log_command(&log, json!({"action": "policy-read"})).unwrap();
     assert_eq!(
@@ -387,7 +390,7 @@ fn the_action_policy_read_answers_the_classes_of_the_policy_in_force() {
 // contract: log.policy.event-reaches-every-document
 #[test]
 fn each_applied_policy_is_the_event_log_policy_and_a_refused_file_is_not() {
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let policy_path = config.path().join("log-policy.json");
     let log = Arc::new(
         event_log::start(options(

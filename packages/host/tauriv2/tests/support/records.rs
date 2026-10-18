@@ -114,7 +114,7 @@ pub fn records_text(config: &Path, log: &EventLog) -> String {
 /// Runs `body` with a writer attached, then prints the records it wrote to the standard error as lines of the text form, so
 /// a parent process that ran this test as a child reads them.
 pub fn capturing(body: impl FnOnce()) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::folder::Folder::new();
     let log = start_writer(directory.path());
     body();
     let text = records_text(directory.path(), &log);

@@ -1,5 +1,8 @@
 //! Checks the decision logic of image envelopes and the confirmation of their representation.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 use serde_json::json;
 use soksak_host_tauriv2::application_log::start_standard_error;
 use soksak_host_tauriv2::images::{
@@ -405,7 +408,7 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
         writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -1164,7 +1167,7 @@ fn image_frame_refusals_are_recorded() {
         writer.flush(Duration::from_secs(5)).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",

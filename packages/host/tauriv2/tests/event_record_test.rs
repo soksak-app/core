@@ -2,6 +2,9 @@
 //! page reports, are events `<layer>.record.<level>` with the fields `where` and `text`. A bounded start buffer holds the
 //! records written before the writer exists and counts the records it refuses.
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/records.rs"]
 mod records;
 use std::fs;
@@ -75,7 +78,7 @@ fn micros() -> u64 {
 fn an_error_and_an_observation_are_events_with_where_and_text() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     use_host_event_log(None);
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path(), 64);
     use_host_event_log(Some(Arc::clone(&log)));
     log_error("surface input", "the window has no content view");
@@ -122,7 +125,7 @@ fn records_written_before_the_writer_exists_are_stored_in_order_with_their_own_t
     log_info("early", "second");
     let after = micros();
     let mono_after = platform::current().unwrap().monotonic_ns().unwrap();
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path(), 64);
     use_host_event_log(Some(Arc::clone(&log)));
     let path = log.path().to_path_buf();
@@ -155,7 +158,7 @@ fn the_start_buffer_refuses_records_beyond_its_bound_and_the_writer_counts_them(
     for _ in 0..START_BUFFER_RECORDS + extra {
         log_info("flood", "record");
     }
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path(), 4 * START_BUFFER_RECORDS);
     use_host_event_log(Some(Arc::clone(&log)));
     let path = log.path().to_path_buf();
@@ -191,7 +194,7 @@ fn flush_records_stores_the_records_written_so_far_without_waiting_for_the_batch
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     use_host_event_log(None);
     assert_eq!(flush_records(Duration::from_secs(1)), Ok(()));
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = Arc::new(
         records::start_every_level(Options {
             directory: directory.path().to_path_buf(),
@@ -222,7 +225,7 @@ fn flush_records_stores_the_records_written_so_far_without_waiting_for_the_batch
 fn a_host_observation_of_the_trace_is_an_event() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     use_host_event_log(None);
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path(), 64);
     use_host_event_log(Some(Arc::clone(&log)));
     performance::command(json!({"action": "on"})).unwrap();
@@ -271,7 +274,7 @@ fn a_host_observation_of_the_trace_is_an_event() {
 fn a_region_event_with_cids_is_recorded_as_the_relay_of_an_input() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     use_host_event_log(None);
-    let directory = tempfile::tempdir().unwrap();
+    let directory = folder::Folder::new();
     let log = start(directory.path(), 64);
     use_host_event_log(Some(Arc::clone(&log)));
     record_input_relay(
