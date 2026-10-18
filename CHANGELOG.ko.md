@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.8-1: tab을 unload됨으로 표시한 뒤 실패한 commit은 더 이상 처리되지 않은 rejection으로 빠지지 않는다: 시도는 `page.tab.unload.failed`와 오류 표시로 끝나고, tab은 loaded로 돌아오며, 새 commit이 그 표면을 다시 선언한다. Red: tab이 처리되지 않은 rejection과 함께 unload된 채 남았다; Green.
 - F198.7.1, F198.7.2: 설정 창은 메모리 group에 switch `memorySaver`와 slider `memorySaverDelay`를 보이고; status `core.tab.memory`는 각 tab을 state와 보호와 함께 나열하며, `core.tab.unload`는 숨겨진 tab을 바로 unload하고, `core.tab.keep`은 표시 `kept`를 설정하거나 지우며, unload된 tab의 surface에 대한 요청은 `tab <id> is unloaded`로 실패한다. Red: control, saver method와 거부가 없었다; Green.
 - F198.8: tab button은 메모리 절약이 알리는 `data-tab-state`를 갖고, 보인 unload된 tab은 surface가 mount될 때까지 `restoring`이며, 실패한 restore는 `page.tab.restore.failed`를 내고 page의 오류 표시로 보인다. unload 시도 중 거부된 문서 영역 읽기는 더 이상 처리되지 않은 rejection으로 빠지지 않는다: 시도는 `page.tab.unload.failed`와 오류 표시로 끝나고 tab은 loaded로 남는다. Red: 실패 event가 없었고 rejection이 처리되지 않았다; Green: workbench 531 중 531.
 - F198.4: 메모리 절약은 숨겨진 모든 tab을 `media-unknown`으로 보호하는 대신 문서 영역의 질의로 숨겨진 browser tab을 판단하고, restore된 tab은 각 영역의 session history를 돌려받는다. Red: 영역 기록이 없었고 restore가 history를 넘기지 않았다; Green.

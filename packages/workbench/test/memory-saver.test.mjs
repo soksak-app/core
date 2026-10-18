@@ -381,3 +381,28 @@ test("a shown unloaded tab is restoring until its surface mounts, and a failed r
     [{ tab: "a", plugin: "fixture", reason: "stored format 2 is not the declared format 1" }]);
   assert.deepEqual(state.failures, ["memory saver: tab a: restore failed: stored format 2 is not the declared format 1"]);
 });
+
+test("a failed commit after the tab is marked returns it to loaded with a reported failure", async () => {
+  let fail = true;
+  const { saver, state } = harness({
+    commit: async () => {
+      state.commits.push(saver.place([]).unload);
+      if (fail) {
+        fail = false;
+        throw new Error("host.place refused the layout");
+      }
+    },
+  });
+  saver.observe(new Set(["b"]), tabs("a", "b"));
+  mock.timers.tick(120 * MINUTE);
+  await settle();
+  assert.equal(saver.unloaded("a"), false);
+  assert.equal(saver.state("a"), "loaded");
+  // The commit after the failure declares the surface of the tab again.
+  assert.deepEqual(state.commits, [["a"], []]);
+  assert.deepEqual(named("page.tab.unloaded"), []);
+  assert.deepEqual(named("page.tab.unload.failed"),
+    [{ tab: "a", plugin: "fixture", trigger: "delay", reason: "host.place refused the layout" }]);
+  assert.deepEqual(state.failures, ["memory saver: tab a: unload failed: host.place refused the layout"]);
+  assert.deepEqual(state.states, [["a", "unloaded"], ["a", "loaded"]]);
+});

@@ -99,7 +99,7 @@ export function createMemorySaver({
   /**
    * One unload attempt with its generation: a show increments the generation, and after every awaited step the
    * protections are evaluated again before the tab is marked unloaded. Resolves the reasons that ended the attempt, empty
-   * when the tab was unloaded, or the error of a failed read of the regions. The command does not wait for recent and the reasons of the regions, because it is the
+   * when the tab was unloaded, or the error of a failed read of the regions or commit. The command does not wait for recent and the reasons of the regions, because it is the
    * person's own decision (docs/spec/exposure.md#tab-memory).
    */
   async function attempt(entry, trigger, underPressure, command = false) {
@@ -140,7 +140,14 @@ export function createMemorySaver({
       }
       setState(entry, "unloaded");
       entry.unloadAt = null;
-      await commit();
+      try {
+        await commit();
+      } catch (error) {
+        // A commit that fails after the tab is marked returns the tab to loaded, and the next commit declares its surface.
+        setState(entry, "loaded");
+        commit().catch((again) => failed(`memory saver: tab ${entry.id}: commit failed: ${again.message}`));
+        return unloadFailed(entry, trigger, error);
+      }
       emitEvent("info", "page.tab.unloaded", { tab: entry.id, plugin: entry.plugin, trigger });
       return [];
     } finally {
@@ -149,8 +156,8 @@ export function createMemorySaver({
   }
 
   /**
-   * A rejected read of the regions ends the attempt before the tab is marked, so the tab stays loaded; returns the error
-   * as the result of the attempt.
+   * A rejected read of the regions or a failed commit ends the attempt with the tab loaded; returns the error as the result
+   * of the attempt.
    */
   function unloadFailed(entry, trigger, error) {
     emitEvent("error", "page.tab.unload.failed", { tab: entry.id, plugin: entry.plugin, trigger, reason: error.message });
