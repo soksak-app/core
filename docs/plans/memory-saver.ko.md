@@ -46,7 +46,7 @@ core는 숨겨진 tab을 내리고, 다시 보일 때 저장된 상태로 복원
    `dormant()`는 내려진 tab을 자기가 선언하는 보이지 않는 surface에서 빼므로, host가 다음 commit에서 그 surface를 해제한다; tab은 layout에 남고, store가 layout의 tab 식별자를 key로 하므로 상태가 남는다.
 7. **보이고 관측 가능하다.**
    - tab button은 status의 상태(`loaded`, `unloaded`, `restoring`)를 담은 `data-tab-state`와 dom name을 가진다; 보호는 status의 이유로만 보인다.
-   - core catalog의 event, class `lifecycle`: `page.tab.unloaded {tab, plugin, trigger}`(info), `page.tab.restored {tab, plugin, history}`(info; session history를 얻지 못했으면 `history`가 false), `page.tab.restore.failed {tab, plugin, reason}`(error, 하나의 오류 표시 경로로), `page.tab.unload.skipped {trigger, seq, reasons}`(info), `page.tab.state.stored {tab, bytes}`(debug, 표시를 포함한 tab 항목의 모든 쓰기), `page.tab.keep.changed {tab, keep}`(info).
+   - core catalog의 event, class `lifecycle`: `page.tab.unloaded {tab, plugin, trigger}`(info), `page.tab.restored {tab, plugin, history}`(info; session history를 얻지 못했으면 `history`가 false), `page.tab.restore.failed {tab, plugin, reason}`(error, 하나의 오류 표시 경로로), `page.tab.unload.skipped {trigger, seq, reasons}`(info), `page.tab.state.stored {tab, bytes}`(debug, 표시와 label을 포함한 tab 항목의 모든 쓰기), `page.tab.keep.changed {tab, keep}`(info).
    - 이유는 status와 event가 함께 쓰는 열거 하나다: `shown`, `recent`, `keep:modified`, `keep:busy`, `media`, `media-unknown`, `capture`, `form`, `kept`, `off`, `undeclared`, `background`. `media`와 `media-unknown`은 tab의 `checkedAt`에 한 마지막 판단의 결과다; 다른 이유는 그 source가 보고할 때 바뀐다.
    - status `core.tab.memory`: `{enabled, delay, pressure: {level, seq}, tabs: [{tab, plugin, state: loaded|unloaded|restoring, reasons, hiddenAt, unloadAt, checkedAt}]}`, 바뀔 때마다 알린다; `core.surfaces`는 각 tab의 상태를 보고하고, 내려진 surface에 대한 요청은 `tab <id> is unloaded`로 실패한다.
 8. **명령.** `core.tab.unload {tab}`은 숨겨진 tab을 지금 내린다. 사용자 자신의 결정이므로 `recent`, `media`, `media-unknown`, `capture`, `form`을 기다리지 않는다; 남은 보호(`shown`, `keep:modified`, `keep:busy`, `kept`, `off`, `undeclared`, `background`)가 있으면 그 이유와 함께, 모르는 tab이면 -32602로 실패한다. `core.tab.keep {tab, keep}`은 사용자의 표시를 설정하거나 지운다(idempotent, 바뀔 때마다 `page.tab.keep.changed` 하나; 모르는 tab이나 boolean이 아닌 값은 -32602; 절대 내릴 수 없는 tab은 tab과 `undeclared` 또는 `background`를 적은 오류). binder로 연결한 tab context menu 항목 `tab-menu-keep`은 `core.tab.memory`의 이유에서 `kept`를 읽고, 절대 내릴 수 없는 tab에는 없다.
@@ -71,7 +71,7 @@ core는 숨겨진 tab을 내리고, 다시 보일 때 저장된 상태로 복원
 
 ### 저장 format
 
-tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 store `tab-state.json`은 첫 release부터 format 1이고, tab 식별자마다 선택 field 셋, `state: {format, value}`, `kept: true`, tab이 마지막으로 보고한 core 소유의 `reports: {title, footer, directory}`를 가진 항목을 두고, 그중 하나가 있을 때만 항목을 저장한다; 재시작 뒤 내려진 상태로 시작한 tab은 restore될 때까지 이 보고를 보인다; `state`가 없으면 `read()`는 `null`이다. tab이 내려졌는지는 저장하지 않는다: 규칙 6이 그것을 정한다. 한 tab의 쓰기는 초당 최대 한 번으로 합치고 종료할 때 내보내므로, crash는 최대 마지막 1초의 상태를 잃는다. 항목이 없는 tab은 `null`을 읽는다. 항목은 그 tab을 빼는 layout 쓰기가 확인된 뒤에만 지운다. load할 때 store를 `projects.json`의 tab 식별자와 맞추고, 지운 각 고아 항목은 event다. reader는 현재 format만 받는다. `projects.json`은 내용이 바뀌지 않으므로 format을 유지한다. 별도 store는 잦은 상태 쓰기를 layout 전체 파일에서 떼어 놓는다; plugin `data`는 tab이 아니라 project와 선언한 key별이므로 소유자가 아니다.
+tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 store `tab-state.json`은 첫 release부터 format 1이고, tab 식별자마다 선택 field 셋, `state: {format, value}`, `kept: true`, `label`을 가진 항목을 두고, 그중 하나가 있을 때만 항목을 저장한다. `label`은 surface가 마지막으로 보고한 제목이고, `surface.unload`를 선언한 plugin의 tab에만 설정과 관계없이 같은 합치기로 쓴다; `null` 보고는 그것을 지운다. 이것은 mount되지 않은 tab을 위한 표시 cache다: surface가 제목의 소유자로 남고, layout `title`은 tab 이름으로 남으며, restore 뒤 첫 보고가 cache를 바꾼다. footer와 directory는 저장하지 않는다: footer는 보이는 tab에만 보이고, 내려진 tab에서 더한 tab은 plugin 명세대로 `origin.directory: null`을 얻어 project root에서 시작한다; `state`가 없으면 `read()`는 `null`이다. tab이 내려졌는지는 저장하지 않는다: 규칙 6이 그것을 정한다. 한 tab의 쓰기는 초당 최대 한 번으로 합치고 종료할 때 내보내므로, crash는 최대 마지막 1초의 상태를 잃는다. 항목이 없는 tab은 `null`을 읽는다. 항목은 그 tab을 빼는 layout 쓰기가 확인된 뒤에만 지운다. load할 때 store를 `projects.json`의 tab 식별자와 맞추고, 지운 각 고아 항목은 event다. reader는 현재 format만 받는다. `projects.json`은 내용이 바뀌지 않으므로 format을 유지한다. 별도 store는 잦은 상태 쓰기를 layout 전체 파일에서 떼어 놓는다; plugin `data`는 tab이 아니라 project와 선언한 key별이므로 소유자가 아니다.
 
 ## 채택과 비채택
 
@@ -82,8 +82,8 @@ tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 st
 
 각 단계는 checklist 항목 하나이고, 소유 module에서 Red부터 시작한다.
 
-1. F198.1 용어와 명세(`unload`, `restore`, 보호, `surface.unload`, `context.tab.state`, `context.tab.keep`, event, status, 명령, 설정); `validateManifest`가 `surface.unload`를 요구하고 `background` 옆에서 거부한다.
-2. F198.2 저장된 보고를 포함한 tab 상태 store `tab-state.json`(format 1)(Red: 설정을 켠 모의 재시작 뒤 `core.grid`가 숨겨지고 내려진 tab의 마지막 label을 보고한다): 다른 format을 거부하는 reader, 종료 시 내보내기를 포함한 쓰기 합치기, layout과의 쓰기 순서, load 때 맞추기.
+1. F198.1 용어와 명세(`docs/spec/plugins.md`의 tab 보고 절: 선언한 plugin의 tab label은 tab이 restore될 때까지 `tab-state.json`에 유지한다; `unload`, `restore`, 보호, `surface.unload`, `context.tab.state`, `context.tab.keep`, event, status, 명령, 설정); `validateManifest`가 `surface.unload`를 요구하고 `background` 옆에서 거부한다.
+2. F198.2 label cache를 포함한 tab 상태 store `tab-state.json`(format 1)(Red: 설정을 켠 모의 재시작 뒤 `core.grid`가 숨겨지고 내려진 tab의 마지막 label을 보고하고, 그 뒤 `tab.title(null)`은 tab 이름을 보인다): 다른 format을 거부하는 reader, 종료 시 내보내기를 포함한 쓰기 합치기, layout과의 쓰기 순서, load 때 맞추기.
 3. F198.3 `surface-modules.js`의 `context.tab.state`와 `context.tab.keep("busy")`; `disposeSurface`의 unload mode(Red: unload 뒤 보고한 제목, notice, restore된 context의 `origin`이 남고, 보이던 오류는 지워진다); 다음 mount 전에 끝나는 dispose(mount가 진행 중인 dispose를 기다림); dispose 뒤 쓰기는 거부하고 context마다 한 번 기록한다(Red: 두 번째 쓰기는 더 기록하지 않는다).
 4. F198.4 workbench의 scheduler, 보호, 적힌 순서의 unload 동작과 restore(Red: 보이지 않고 mount된 tab은 mount 시각을 얻는다; 설정을 켜도 숨김 시각이 유지된다; `interactionState` 응답을 기다리는 동안의 표시나 `modified` 보고는 tab을 올려 둔다); `dormant()`가 내려진 tab을 뺀다(Red: unload 뒤 commit이 tab을 다시 mount하지 않고 store 항목을 지우지 않는다); 시험에서는 `mock.timers`가 지연을 움직인다.
 5. F198.5 document region 보고: media 재생 질의, camera와 microphone은 key-value observation으로; form 수정은 frame별 map과 함께 모든 frame의 region script로(Red: 지운 subframe과 reload가 표시를 지운다); `interactionState`는 닫기 전에 돌려주고 restore할 때 넘기며 빈 경우도 다룬다.
@@ -195,4 +195,9 @@ tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 st
 9차(검토자 하나). 각 반박과 답:
 
 - notice는 숨겨진 tab에만 있고, 표시나 닫기에서만 끝나며, log에 남지 않는다 → unload mode는 notice를 유지하고 오류만 지운다.
-- 재시작 뒤 내려진 상태로 시작한 tab에 보고가 없어 저장된 제목을 보였다 → store가 core 소유 보고(제목, footer, directory)를 유지하고 tab은 restore될 때까지 그것을 보이며, Red 시험을 둔다.
+- 재시작 뒤 내려진 상태로 시작한 tab에 보고가 없어 저장된 제목을 보였다 → store가 label cache를 유지한다(이 답의 footer와 directory 부분은 10차에서 좁혔다).
+
+10차(검토자 하나, 대안 제안과 함께). 각 쟁점과 결과:
+
+- 9차의 `reports` field는 쓰는 시점, event 누락, plugin 명세와의 모순이 있었다. 조정자는 field 자체가 틀렸다고 판단하고, 대신 보고한 label을 layout `title`에 쓰자고 제안했다. 검토자가 근거로 거부했다: layout `title`은 tab 이름이고(`tab.title(null)`이 이름을 다시 보인다), 그 의미를 바꾸면 format 변경이며, 이동마다 layout 파일 전체를 다시 쓰게 된다. 대안은 철회했다.
+- 합의한 답: `label`만, 선언한 plugin에만 같은 합치기로 쓰는 표시 cache이고 restore 뒤 첫 보고가 바꾼다; footer와 directory는 저장하지 않으며 보이는 손실이 없다; event 문장, F198.1의 plugin 명세 변경, F198.2의 Red 시험이 따라 바뀐다.
