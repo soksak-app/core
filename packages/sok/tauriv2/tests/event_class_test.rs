@@ -7,10 +7,10 @@ use serde_json::{Value, json};
 use soksak_sok::event_classes::{Class, class_of};
 use soksak_sok::event_log::Level;
 
-// contract: cli.log.stores-class
 #[path = "support/policy.rs"]
 mod support;
 
+// contract: cli.log.stores-class
 #[test]
 fn every_line_of_the_tool_stores_the_class_of_its_catalog_entry() {
     let config = std::env::temp_dir().join(format!("sok-class{}", std::process::id()));

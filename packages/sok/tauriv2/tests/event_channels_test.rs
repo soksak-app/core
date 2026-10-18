@@ -44,10 +44,10 @@ fn debug_path_of(log: &EventLog) -> PathBuf {
     ))
 }
 
-// contract: cli.log.splits-files-by-level
 #[path = "support/policy.rs"]
 mod support;
 
+// contract: cli.log.splits-files-by-level
 #[test]
 fn the_tool_stores_debug_and_trace_events_in_the_debug_file() {
     let config = Config::new("split");

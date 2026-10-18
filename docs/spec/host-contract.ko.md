@@ -287,6 +287,7 @@ fn invalid_json_closes_connection() {
 | `performance.sampler.failed-reading-is-explicit` | 상주 크기를 얻지 못한 sampler 읽기는 `rss_host_kb` 대신 `error`를 기록한다. | both |
 | `performance.sampler.reads-every-registered-process` | trace가 켜져 있는 동안 표본 추출은 host와 프로세스 등록부의 각 process마다 `role`, `name`, `pid`, `rss_kb`를 담은 이벤트 `host.sampler.memory`를 하나씩 저장한다. process의 이름을 붙이면 이벤트 `host.trace.process`를 저장하고, 제거된 process는 다시 읽지 않으며, 크기를 읽을 수 없는 등록 process는 `rss_kb` 없이 `error`와 함께 저장한다. | both |
 | `performance.sampler.names-the-sidecar-processes` | host가 시작한 사이드카 process와 연결한 상주 service는 process가 끝나거나 연결이 끝날 때까지 프로세스 등록부에 있다. | both |
+| `performance.sampler.reads-every-window-process` | 표본은 등록된 각 window의 page process마다 `role` `page`, `window`, `pid`, `rss_kb`, `footprint_kb`를 가진 `host.sampler.memory` event 하나를, 각 document region의 process마다 `role` `document`, `window`, `surface`, `pid`, `footprint_kb`를 가진 event 하나를 저장합니다. process가 아직 시작되지 않은 document region과 process를 읽을 수 없는 window는 `rss_kb` 없이 `error`로 저장됩니다. | both |
 | `performance.surface.lifecycle-events-hold-the-geometry` | trace는 표면의 단계를 단계 `created`, `placed`, `destroyed`를 가진 이벤트 `host.trace.surface`로 저장하고, 단계 `placed`는 `x`, `y`, `w`, `h`, `visible`을 담는다. | both |
 | `performance.clock.before-epoch-is-explicit` | 유닉스 epoch 이전의 trace 시각은 epoch가 아니라 오류다. | tauriv2 only: Rust host는 epoch부터의 기간으로 시각을 적으므로 그 이전에서 실패하고, Go는 모든 시각을 적는다 |
 | `log.open.rotates-at-100mb` | 100 MB 이상인 로그 파일을 열면 먼저 `<이름>.1`로 옮기고 이전 세대를 하나씩 뒤로 옮기며 다섯째를 지우고 새 파일을 시작한다. | both |
@@ -640,6 +641,8 @@ fn invalid_json_closes_connection() {
 | `cli.log.stores-class` | 도구는 host writer처럼 `class`와 `undeclared`를 저장한다. | both |
 | `cli.log.policy-accepts-the-golden-cases` | 도구의 policy 파일 reader는 `packages/log-contract/fixtures/policy/cases.json`의 모든 valid case를 그 class와 gate대로 받는다. | both |
 | `cli.log.policy-refuses-the-golden-cases` | 도구의 policy 파일 reader는 `packages/log-contract/fixtures/policy/cases.json`의 모든 invalid case를 그 case의 오류 문구로 거부한다. | both |
+| `cli.log.applies-the-policy-file` | 도구는 시작할 때 configuration directory의 `log-policy.json`을 적용하므로, 모든 level을 저장하는 file이 있으면 default policy가 거부하는 `sok.command`를 저장합니다. | both |
+| `cli.log.records-a-refused-policy-file` | reader가 거부한 policy file은 place `log policy`의 error record로 저장됩니다. | both |
 | `cli.log.splits-files-by-level` | 도구는 `error`, `warn`, `info`를 `logs/sok-<boot>.jsonl`에, `debug`와 `trace`를 `logs/sok-<boot>.debug.jsonl`에 쓰며, 후자는 첫 해당 event와 함께 만들고 `log.open`으로 시작한다. | both |
 | `cli.log.reports-a-folder-that-cannot-be-written` | `logs/`나 event 파일을 만들 수 없으면 도구는 `sok: event log: <path>: <reason>`을 표준 오류에 쓰고 명령을 자기 종료 상태로 실행한다. | both |
 | `install.version.ranges-and-order` | 범위 `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z <a.b.c`는 선언한 경계를 가지고, `*`는 상한이 없는 `>=0.0.0`이다. Version은 숫자로 비교한다. 다른 형식, 앞자리 0, 빈 범위, 4294967295를 넘는 자리는 `invalid version`으로 거부한다. | both |

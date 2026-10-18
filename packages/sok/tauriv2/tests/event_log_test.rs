@@ -93,10 +93,10 @@ fn named<'a>(events: &'a [Value], name: &str) -> Vec<&'a Value> {
         .collect()
 }
 
-// contract: cli.log.records-each-command-with-its-result
 #[path = "support/policy.rs"]
 mod support;
 
+// contract: cli.log.records-each-command-with-its-result
 #[test]
 fn each_command_is_recorded_with_its_result() {
     let config = Dir::new();

@@ -235,6 +235,7 @@ fn tool_run_events(config: &Dir, args: &[&str]) -> Vec<Value> {
 
 // The tool applies the policy file of its configuration directory at its start, as every process does, so a file that stores every
 // level makes the tool store its command event, which the default policy refuses.
+// contract: cli.log.applies-the-policy-file
 #[test]
 fn the_tool_applies_the_policy_file_of_its_config_directory() {
     let config = Dir::new();
@@ -255,6 +256,7 @@ fn the_tool_applies_the_policy_file_of_its_config_directory() {
 }
 
 // A policy file that the reader refuses is stored as the error record of the place `log policy`.
+// contract: cli.log.records-a-refused-policy-file
 #[test]
 fn a_refused_policy_file_is_stored_as_a_sok_record_error() {
     let config = Dir::new();

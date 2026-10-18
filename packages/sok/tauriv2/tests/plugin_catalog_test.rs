@@ -28,10 +28,10 @@ fn temp(label: &str) -> Dir {
     dir
 }
 
-// contract: log.plugin-catalog.classifies-plugin-events
 #[path = "support/policy.rs"]
 mod support;
 
+// contract: log.plugin-catalog.classifies-plugin-events
 #[test]
 fn a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares() {
     let dir = temp("classify");

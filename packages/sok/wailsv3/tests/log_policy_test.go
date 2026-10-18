@@ -130,6 +130,7 @@ func TestTheDefaultPolicyIsTheGoldenDefault(t *testing.T) {
 
 // The tool applies the policy file of its configuration directory at its start, as every process does, so a file that stores every
 // level makes the tool store its command event, which the default policy refuses.
+// contract: cli.log.applies-the-policy-file
 func TestTheToolAppliesThePolicyFileOfItsConfigDirectory(t *testing.T) {
 	config := t.TempDir()
 	everything := `{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}`
@@ -151,6 +152,7 @@ func TestTheToolAppliesThePolicyFileOfItsConfigDirectory(t *testing.T) {
 }
 
 // A policy file that the reader refuses is stored as the error record of the place `log policy`.
+// contract: cli.log.records-a-refused-policy-file
 func TestARefusedPolicyFileIsStoredAsASokRecordError(t *testing.T) {
 	config := t.TempDir()
 	if err := os.WriteFile(filepath.Join(config, "log-policy.json"), []byte(`{"schema":9}`), 0o600); err != nil {

@@ -81,10 +81,10 @@ fn parse(line: &str) -> Value {
     serde_json::from_str(line).unwrap_or_else(|error| panic!("{line:?}: {error}"))
 }
 
-// contract: cli.log.lines-follow-the-golden-fixtures
 #[path = "support/policy.rs"]
 mod support;
 
+// contract: cli.log.lines-follow-the-golden-fixtures
 #[test]
 fn lines_follow_the_golden_fixtures() {
     let golden = fixture_lines("key.jsonl");
