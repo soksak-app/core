@@ -91,6 +91,8 @@ github.com/min-median-max/wails/v3 v3.0.0-20261007071621-63ed015bedfa h1:vTTV9Z/
 github.com/min-median-max/wails/v3 v3.0.0-20261007071621-63ed015bedfa/go.mod h1:5DR/EG5FHU8+BNV7tQYQ/rJMjoFsVlYpM+0gp1+gcTI=
 github.com/min-median-max/wails/v3 v3.0.0-20261018174723-4f8c857ee347 h1:RTQD0p7xnTkOIGnvm/0O04J6GonS6YatscfAW1qxiMg=
 github.com/min-median-max/wails/v3 v3.0.0-20261018174723-4f8c857ee347/go.mod h1:5DR/EG5FHU8+BNV7tQYQ/rJMjoFsVlYpM+0gp1+gcTI=
+github.com/min-median-max/wails/v3 v3.0.0-20261018201303-338ee14d5ba5 h1:i/+TPkZHHdtibqDKvyBE5Zz0Xf6OpavgBijrA5Nz7L0=
+github.com/min-median-max/wails/v3 v3.0.0-20261018201303-338ee14d5ba5/go.mod h1:5DR/EG5FHU8+BNV7tQYQ/rJMjoFsVlYpM+0gp1+gcTI=
 github.com/mitchellh/copystructure v1.2.0/go.mod h1:qLl+cE2AmVv+CoeAwDPye/v+N2HKCj9FbZEVFJRxO9s=
 github.com/mitchellh/hashstructure/v2 v2.0.2/go.mod h1:MG3aRVU/N29oo/V/IhBX8GR/zz4kQkprJgF2EVszyDE=
 github.com/mitchellh/reflectwalk v1.0.2/go.mod h1:mSTlrgnPZtwu0c4WaC2kGObEpuNDbx0jmZXqmk4esnw=

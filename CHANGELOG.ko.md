@@ -5,6 +5,7 @@
 ## 미배포
 
 - F203: terminal runtime 명세가 영속 서비스의 모든 종료를 밝힌다. 폴더나 endpoint가 지워지거나 바뀔 때의 종료를 포함한다.
+- F200.4: Wails fork의 `WebviewWindow.EmitEvent`는 event를 그 event를 낸 window의 페이지에만 보내므로, 페이지가 다른 window의 event를 evaluate하지 않는다. application event는 여전히 모든 window에 간다. Red: `TestWindowEventIsEvaluatedOnlyInItsWindow`가 window event가 다른 window에서 evaluate되는 것을 찾았다. Green: test가 통과하고 fork package가 3회 중 3회 통과한다. Wails host는 fork branch `soksak/window-events`를 고정하며, 아직 배포되지 않았다.
 - F200.3: diagnostic method `diagnostics.host.events`는 host가 페이지가 listen하지 않는 host event를 보내게 하고, `make host-calls EVENTS=N`은 그 event가 페이지 process에 남기는 것을 측정한다. 두 debug host에서 측정: Wails 페이지는 event당 WebKit malloc 1411 B, Tauri 페이지는 0 B.
 - F201.4: `sp_document_store_close`가 document 디렉터리의 data store를 끝내고 WebKit network process가 session을 지운 때를 알리며, `document_view_test`와 `document_plugin_test`는 폴더를 지우기 전에 store를 끝낸다. 이전에는 검사가 끝난 뒤 network process가 지운 폴더에 `Cookies/Cookies.binarycookies`를 썼다. Red: `make temp-audit` 아래 `document_view_test` 3 of 3 실행이 `soksak-document-store-*`를 남겼다. Green: audit 아래 각 검사 3 of 3 실행이 entry를 남기지 않았다.
 - F202: 닫힌 document region이 다시 바로 해제된다. F196.29 이후 hidden delay block이 hidden clear delay 300초가 지날 때까지 region을 retain했고, 이제 region을 닫거나 보이거나 해제할 때 지워지는 token을 가진다. Red: `window_release_test`가 `the closed window releases its SPDocumentView`로 실패했다. Green: 3 of 3 실행.
