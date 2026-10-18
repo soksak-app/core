@@ -52,10 +52,10 @@ export function repositoryFolder(relative, commonDir) {
   return resolve(dirname(commonDir), relative);
 }
 
-/** The git common directory of the checkout that holds root. Every worktree of a repository has the same common directory. */
-function gitCommonDir(root) {
+/** The git common directory of the checkout that holds dir. Every worktree of a repository has the same common directory. */
+export function gitCommonDir(dir) {
   return execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
-    cwd: fileURLToPath(root), encoding: "utf8", stdio: ["ignore", "pipe", "inherit"],
+    cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"],
   }).trim();
 }
 
@@ -129,7 +129,7 @@ export function sidecarReleases(declared, manifests, plugins) {
 /** Writes the registry folder anew and creates index.json. Earlier entries in the output folder are removed. */
 export function buildWorkspaceRegistry(binary, out, diagnostics, root = ROOT) {
   const declaration = checkDeclaration(read(new URL(DECLARATION, root)));
-  const commonDir = gitCommonDir(root);
+  const commonDir = gitCommonDir(fileURLToPath(root));
   const folder = (relative) => repositoryFolder(relative, commonDir);
   // A sidecar name → its declared repository and sidecar folder.
   const declared = new Map();

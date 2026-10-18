@@ -9,7 +9,7 @@
 //   node scripts/check-boundaries.mjs [core checkout]
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { checkDeclaration } from "./workspace-registry.mjs";
+import { checkDeclaration, gitCommonDir, repositoryFolder } from "./workspace-registry.mjs";
 
 const ROOT = resolve(process.argv[2] ?? new URL("../", import.meta.url).pathname);
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "target", "frontend", "bin", "gen"]);
@@ -35,8 +35,11 @@ function components() {
   for (const dir of listDirs(join(ROOT, "packages"))) add(dir, "core");
   for (const dir of listDirs(join(ROOT, "packages/host"))) add(dir, "core");
   const declaration = checkDeclaration(readJson(join(ROOT, "scripts/workspace-registry.json")));
-  for (const folder of declaration.plugins) add(resolve(ROOT, folder), "plugin");
-  for (const { repository, folder } of declaration.sidecars) add(resolve(ROOT, repository, folder), "sidecar");
+  const commonDir = gitCommonDir(ROOT);
+  for (const folder of declaration.plugins) add(repositoryFolder(folder, commonDir), "plugin");
+  for (const { repository, folder } of declaration.sidecars) {
+    add(join(repositoryFolder(repository, commonDir), folder), "sidecar");
+  }
   return found;
 }
 
