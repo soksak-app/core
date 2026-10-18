@@ -111,8 +111,7 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     // Each connection is handled by a thread, so that, as in a real service, a hello is not queued behind the request
     // round trip of another connection. The service keeps both connections until the stop of the check: a closed
     // connection makes its host connect again (V5-106), and a host that the ended service refuses starts the service,
-    // which writes into the configuration folder while the check removes it. It answers close-owner with a failure so
-    // that stop does not wait for the deadline.
+    // which writes into the configuration folder while the check removes it. It answers close-owner as a service does.
     let service = std::thread::spawn(move || {
         let mut workers = Vec::new();
         for stream in listener.incoming().take(2) {
@@ -143,8 +142,7 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
                         let reply = serde_json::json!({
                             "operation": "closed-owner",
                             "request": request["request"],
-                            "ok": false,
-                            "error": "test close"
+                            "ok": true
                         });
                         writeln!(stream, "{reply}").unwrap();
                         return;
