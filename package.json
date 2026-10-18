@@ -25,6 +25,7 @@
     "url": "git+https://github.com/soksak-app/core.git"
   },
   "dependencies": {
-    "@soksak/client": "workspace:*"
+    "@soksak/client": "workspace:*",
+    "@soksak/window-check": "workspace:*"
   }
 }

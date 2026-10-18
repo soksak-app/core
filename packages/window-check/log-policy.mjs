@@ -2,8 +2,9 @@
 // that reads a record below `error` declares the policy that stores it and the records that it reads; a declaration or a
 // policy file that does not store a record that the check reads is an error that names the record and the policy, and the
 // check fails at once instead of waiting until its deadline.
-import { readFileSync, watch } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { untilFolderState } from "./folder-wait.mjs";
 import { declaration, DEFAULT_POLICY, parsePolicy, POLICY_CLASSES, POLICY_SCHEMA, policyAllows, policyIsBeingWritten } from "@soksak/log-contract";
 
 /** The value of the setting `diagnostics.log` that stores every level of every class, as `core.settings.debug {on: true}` sets it. */
@@ -73,36 +74,19 @@ const POLICY_LIMIT = 10000;
 
 /**
  * Waits until the policy in force in the configuration folder is `policy`. The host writes the file when the page sends it the
- * policy of the setting, so a change watch of the folder reads the file again at each notification; a file that a writer is
- * writing is read at the next notification. When the limit passes, it rejects with an error that names the file and the policy
- * it holds.
+ * policy of the setting, so the file is read once the change watch of the folder is active and again at each change
+ * (folder-wait.mjs); a file that a writer is writing is read at the next change. When the limit passes, it rejects with an
+ * error that names the file and the policy it holds.
  */
-export function untilPolicy(configDir, policy, limit = POLICY_LIMIT) {
+export async function untilPolicy(configDir, policy, limit = POLICY_LIMIT) {
   const expected = JSON.stringify(policy.classes);
-  return new Promise((resolve, reject) => {
-    let found = "nothing read";
-    let watcher;
-    const finish = (error) => {
-      clearTimeout(timer);
-      watcher?.close();
-      if (error) reject(error);
-      else resolve();
-    };
-    const check = () => {
-      try {
-        const text = policyText(configDir);
-        if (text !== null && policyIsBeingWritten(text)) return;
-        found = JSON.stringify(readPolicy(configDir).classes);
-        if (found === expected) finish();
-      } catch (error) {
-        finish(error);
-      }
-    };
-    const timer = setTimeout(() => {
-      watcher?.close();
-      reject(new Error(`${policyFile(configDir)} did not hold the log policy ${expected} within ${limit} ms; it holds ${found}`));
-    }, limit);
-    watcher = watch(configDir, check);
-    check();
-  });
+  let found = "nothing read";
+  const read = () => {
+    const text = policyText(configDir);
+    if (text !== null && policyIsBeingWritten(text)) return undefined;
+    found = JSON.stringify(readPolicy(configDir).classes);
+    return found === expected ? true : undefined;
+  };
+  await untilFolderState(configDir, read, limit,
+    () => new Error(`${policyFile(configDir)} did not hold the log policy ${expected} within ${limit} ms; it holds ${found}`));
 }

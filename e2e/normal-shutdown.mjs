@@ -5,10 +5,11 @@
 // SOKSAK_SHUTDOWN_TERMINAL=1 the quit also ends the terminal service, because a normal quit ends the owned sessions and
 // shuts the service down (docs/spec/terminal-runtime.md).
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, watch } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { connect } from "@soksak/client";
 import { APPS } from "@soksak/window-check/app.mjs";
+import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 
 const app = APPS[Object.keys(APPS)[0]];
 const endpointFile = `${app.configDir}/endpoint.json`;
@@ -30,31 +31,8 @@ async function request(client, method, params) {
 
 function waitForFilesystem(label, predicate, limit) {
   const started = Date.now();
-  return new Promise((resolve, reject) => {
-    let timer;
-    let watcher;
-    const finish = (error, value) => {
-      clearTimeout(timer);
-      watcher?.close();
-      if (error) reject(error);
-      else resolve(value);
-    };
-    const check = () => {
-      if (predicate()) finish(null, Date.now() - started);
-    };
-    timer = setTimeout(() => {
-      watcher?.close();
-      reject(new Error(`${label} did not reach the expected state within ${limit}ms`));
-    }, limit);
-    try {
-      watcher = watch(dirname(endpointFile), { persistent: false }, check);
-      watcher.once("error", (error) => finish(error));
-    } catch (error) {
-      finish(error);
-      return;
-    }
-    check();
-  });
+  return untilFolderState(dirname(endpointFile), () => (predicate() ? Date.now() - started : undefined), limit,
+    () => new Error(`${label} did not reach the expected state within ${limit}ms`));
 }
 
 async function waitForReady(client) {
@@ -126,39 +104,25 @@ function waitForShutdown(pid, limit) {
   const exit = waitForExit(pid);
   let exitedAt;
   let removedAt;
-  let watcher;
   const measured = exit.exited.then(() => {
     exitedAt = Date.now() - started;
   });
-  const removed = new Promise((resolve, reject) => {
-    const check = () => {
-      if (existsSync(endpointFile)) return;
-      removedAt ??= Date.now() - started;
-      watcher?.close();
-      resolve();
-    };
-    try {
-      watcher = watch(dirname(endpointFile), { persistent: false }, check);
-      watcher.once("error", reject);
-    } catch (error) {
-      reject(error);
-      return;
-    }
-    check();
-  });
+  const incomplete = () => new Error(`application exit and endpoint removal did not complete within ${limit}ms: ` +
+    `process ${exitedAt === undefined ? "running" : `exited at ${exitedAt}ms`}, ` +
+    `endpoint.json ${removedAt === undefined ? "present" : `removed at ${removedAt}ms`}`);
+  const removed = untilFolderState(dirname(endpointFile), () => {
+    if (existsSync(endpointFile)) return undefined;
+    removedAt ??= Date.now() - started;
+    return true;
+  }, limit, incomplete);
   let timer;
   const deadline = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      reject(new Error(`application exit and endpoint removal did not complete within ${limit}ms: ` +
-        `process ${exitedAt === undefined ? "running" : `exited at ${exitedAt}ms`}, ` +
-        `endpoint.json ${removedAt === undefined ? "present" : `removed at ${removedAt}ms`}`));
-    }, limit);
+    timer = setTimeout(() => reject(incomplete()), limit);
   });
   return Promise.race([Promise.all([measured, removed]), deadline])
     .then(() => ({ exitedAt, removedAt }))
     .finally(() => {
       clearTimeout(timer);
-      watcher?.close();
       exit.cancel();
     });
 }

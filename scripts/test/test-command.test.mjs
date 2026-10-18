@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import childProcess, { execFileSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm, watch } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { untilFolderState } from '@soksak/window-check/folder-wait.mjs';
 import { runCommand } from '../test-command.mjs';
 
 const node = process.execPath;
@@ -258,19 +259,13 @@ test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: test
   const descendantSource = `const {writeFileSync}=require('node:fs'); process.on('SIGTERM',()=>writeFileSync(${JSON.stringify(markerFile)},'term')); process.send('ready'); setInterval(()=>{},1000);`;
   // The pid file is created by writing a temporary file and renaming it. The reader never reads an empty file in the middle of the write.
   const commandSource = `const {spawn}=require('node:child_process'); const {renameSync,writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e',${JSON.stringify(descendantSource)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile + '.tmp')},String(child.pid)); renameSync(${JSON.stringify(pidFile + '.tmp')},${JSON.stringify(pidFile)});}}); setInterval(()=>{},1000);`;
-  const watching = new AbortController();
-  const watcher = watch(directory, { signal: watching.signal });
-  const ready = (async () => {
-    for await (const { filename } of watcher) {
-      if (filename === 'pid' && existsSync(pidFile)) return readFile(pidFile, 'utf8');
-    }
-    return null;
-  })();
-  t.after(() => watching.abort());
+  // The pid file is read once the watch of the folder is active and again at each change, so its rename is seen at any load.
+  const ready = untilFolderState(directory, () => (existsSync(pidFile) ? readFileSync(pidFile, 'utf8') : undefined), hangMs,
+    () => new Error(`${pidFile} was not written within ${hangMs} ms`));
   cli = spawn(node, [join(process.cwd(), 'scripts/test-command.mjs'), '--id', 'cli-signal', '--timeout-ms', String(hangMs), '--', node, '-e', commandSource], { stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '';
   cli.stdout.on('data', (chunk) => { stdout += chunk; });
-  // The rename of the pid file is the readiness event; the watcher starts before the command, so it sees the rename at any load.
+  // The rename of the pid file is the readiness event.
   descendantPid = Number(await ready);
   assert.ok(Number.isInteger(descendantPid) && descendantPid > 0, `pid file holds ${descendantPid}`);
   cli.kill('SIGTERM');

@@ -1,7 +1,8 @@
 // Reads error events from the event log of the application under check. The host process writes one event per line to
 // `logs/host-<boot>.jsonl` for each run, and an event with level error is an error (docs/spec/logging.md#files).
-import { existsSync, readdirSync, readFileSync, statSync, watch, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { untilFolderState } from "./folder-wait.mjs";
 import { policyFile, readPolicy, requireStored } from "./log-policy.mjs";
 
 // The event files of the processes of the application (docs/spec/logging.md#files): the host and every sidecar service, each with its
@@ -143,69 +144,31 @@ export function readEventLines(configDir, offsets) {
 
 /**
  * Waits until a whole line of an event written after offsets satisfies the predicate and returns that line. An
- * asynchronous writer writes the records to the file at every batch interval, so a change watch (fs.watch) is placed on
- * each host event log file and the files are read again at each notification. The notification of a folder cannot
- * report content that another process appends to a file, so it is used only to notice new files. When the deadline
- * passes, it rejects with an error that holds the lines read. `records` names the records that the predicate reads, declared in
- * `catalog`; a record that the policy file of the folder does not store is an error at once that names the record and the policy
- * (docs/spec/logging.md#policy), because the wait would end only at its deadline.
+ * asynchronous writer writes the records to the file at every batch interval, so the files are read once the change
+ * watch of the folder `logs` is active and again at each change (folder-wait.mjs); the watch reports a new file and
+ * content that another process appends to a file. When the deadline passes, it rejects with an error that holds the lines
+ * read. `records` names the records that the predicate reads, declared in `catalog`; a record that the policy file of the
+ * folder does not store is an error at once that names the record and the policy (docs/spec/logging.md#policy), because
+ * the wait would end only at its deadline.
  */
-export function untilEventLines(configDir, offsets, predicate, timeout, { catalog, records } = {}) {
-  return new Promise((resolve, reject) => {
-    if (!Array.isArray(records) || records.length === 0) {
-      throw new Error("untilEventLines: the wait names no record; give { catalog, records } of the records that the predicate reads");
+export async function untilEventLines(configDir, offsets, predicate, timeout, { catalog, records } = {}) {
+  if (!Array.isArray(records) || records.length === 0) {
+    throw new Error("untilEventLines: the wait names no record; give { catalog, records } of the records that the predicate reads");
+  }
+  requireStored(readPolicy(configDir), catalog, records, policyFile(configDir));
+  const read = () => {
+    const { lines } = readEventLines(configDir, offsets);
+    return predicate(lines) ? lines : undefined;
+  };
+  const seen = () => {
+    try {
+      return JSON.stringify(readEventLines(configDir, offsets).lines.slice(-8));
+    } catch (error) {
+      return `unreadable: ${error.message}`;
     }
-    requireStored(readPolicy(configDir), catalog, records, policyFile(configDir));
-    const logs = join(configDir, "logs");
-    const watchers = new Map();
-    let finished = false;
-    let timer;
-    const stop = () => {
-      finished = true;
-      clearTimeout(timer);
-      for (const watcher of watchers.values()) watcher.close();
-    };
-    const fail = (error) => {
-      if (finished) return;
-      stop();
-      reject(error);
-    };
-    // Every host event log has a watcher, including a file that a later run created.
-    const watchFiles = () => {
-      for (const name of readdirSync(logs).filter((entry) => HOST_LOG.test(entry))) {
-        if (!watchers.has(name)) watchers.set(name, watch(join(logs, name), check));
-      }
-    };
-    function check() {
-      if (finished) return;
-      try {
-        watchFiles();
-        const { lines } = readEventLines(configDir, offsets);
-        if (predicate(lines)) {
-          stop();
-          resolve(lines);
-        }
-      } catch (error) {
-        fail(error);
-      }
-    }
-    const folder = watch(logs, check);
-    watchers.set("", folder);
-    const seen = () => {
-      try {
-        return JSON.stringify(readEventLines(configDir, offsets).lines.slice(-8));
-      } catch (error) {
-        return `unreadable: ${error.message}`;
-      }
-    };
-    timer = setTimeout(() => {
-      if (finished) return;
-      const lines = seen();
-      stop();
-      reject(new Error(`no event line matched within ${timeout} ms; the lines after the offsets: ${lines}`));
-    }, timeout);
-    check();
-  });
+  };
+  return untilFolderState(join(configDir, "logs"), read, timeout,
+    () => new Error(`no event line matched within ${timeout} ms; the lines after the offsets: ${seen()}`));
 }
 
 /** Returns, within timeout, the first line among the event lines written after offsets that the predicate accepts; `declared` is the { catalog, records } of untilEventLines. */

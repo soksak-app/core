@@ -11,10 +11,11 @@
 import { parseArgs } from "node:util";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, watch, writeFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 
 const NEWER = "99.0.0";
 const WAIT_MS = 120_000;
@@ -39,29 +40,13 @@ export function withCore(base, key, url, sha256) {
 
 const run = (file, args) => execFileSync(file, args, { encoding: "utf8" });
 
-/** Resolves when `ready()` returns a value, re-evaluating it on each change in `folder`; rejects after WAIT_MS. */
+/**
+ * Resolves when `ready()` returns a value, evaluating it once the watch of `folder` is active and again on each change
+ * (folder-wait.mjs of @soksak/window-check); rejects after WAIT_MS.
+ */
 function untilChange(folder, ready, what) {
-  return new Promise((resolve, reject) => {
-    const watcher = watch(folder, () => settle());
-    const timer = setTimeout(() => finish(new Error(`${what} did not happen in ${WAIT_MS / 1000} s`)), WAIT_MS);
-    const finish = (error, value) => {
-      clearTimeout(timer);
-      watcher.close();
-      if (error) reject(error);
-      else resolve(value);
-    };
-    const settle = () => {
-      let value;
-      try {
-        value = ready();
-      } catch (error) {
-        finish(error);
-        return;
-      }
-      if (value) finish(null, value);
-    };
-    settle();
-  });
+  return untilFolderState(folder, () => ready() || undefined, WAIT_MS,
+    () => new Error(`${what} did not happen in ${WAIT_MS / 1000} s`));
 }
 
 /** The endpoint of the configuration directory, or null while it is not written. */

@@ -7,6 +7,7 @@
   "exports": {
     "./app.mjs": "./app.mjs",
     "./endpoint-wait.mjs": "./endpoint-wait.mjs",
+    "./folder-wait.mjs": "./folder-wait.mjs",
     "./event-log.mjs": "./event-log.mjs",
     "./frame.mjs": "./frame.mjs",
     "./frontmost.mjs": "./frontmost.mjs",
@@ -23,6 +24,7 @@
   "files": [
     "app.mjs",
     "endpoint-wait.mjs",
+    "folder-wait.mjs",
     "event-log.mjs",
     "frame.mjs",
     "frontmost.mjs",
@@ -42,6 +44,7 @@
     "test": "node --test --experimental-test-module-mocks test/*.test.mjs"
   },
   "dependencies": {
+    "@parcel/watcher": "2.6.0",
     "@soksak/client": "workspace:*",
     "@soksak/log-contract": "workspace:*"
   }
