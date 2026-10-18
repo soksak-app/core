@@ -751,6 +751,15 @@
       "fields": {},
       "description": "The application was shown again."
     },
+    "native.document.backforward_cleared": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "reason": "string"
+      },
+      "description": "A document region cleared its back-forward cache, so going back loads the page again. reason is hidden when the region stayed hidden for the hidden clear delay and pressure when the system reported memory pressure."
+    },
     "native.window.key": {
       "layer": "native",
       "class": "lifecycle",

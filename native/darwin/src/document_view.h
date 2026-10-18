@@ -87,5 +87,14 @@ void sp_document_background(void *document, bool enabled);
 // Sets the native appearance that the document webview and its web content use.
 void sp_document_appearance(void *document, bool dark);
 
+// Sets the time in seconds that a document region stays hidden before it clears its back-forward cache
+// (docs/spec/native-surfaces.md#document-regions). It is 300 until it is set; a region that is hidden at the call keeps the
+// time it started with. Returns false and changes nothing if seconds is not a finite positive number.
+bool sp_document_set_hidden_clear_delay(double seconds);
+
+// Clears the back-forward cache of every open document region that has one, because the system reports memory pressure.
+// The memory pressure source of the process calls it on the main thread.
+void sp_document_memory_pressure(void);
+
 // Removes and releases the webview. changed is not called afterward.
 void sp_document_close(void *document);

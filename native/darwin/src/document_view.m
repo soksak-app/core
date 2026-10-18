@@ -10,6 +10,7 @@
 #import <WebKit/WebKit.h>
 #import "application_log.h"
 #import "document_view.h"
+#import "event_ring.h"
 #import "observe.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
@@ -110,6 +111,29 @@ static NSArray<NSString *> *observedKeys(void) {
 
 @class SPDocumentView;
 
+// The time in seconds that a region stays hidden before it clears its back-forward cache.
+static NSTimeInterval hiddenClearDelay = 300;
+
+// The open document regions, which memory pressure clears. The table does not retain them; sp_document_close removes each.
+static NSHashTable<SPDocumentView *> *openDocuments(void) {
+    static NSHashTable<SPDocumentView *> *documents;
+    if (!documents) {
+        documents = [[NSHashTable alloc] initWithOptions:NSPointerFunctionsOpaqueMemory | NSPointerFunctionsObjectPointerPersonality
+            capacity:0];
+    }
+    return documents;
+}
+
+// The memory pressure source of the process. It is created with the first document region and kept until the process ends.
+static void watchMemoryPressure(void) {
+    static dispatch_source_t source;
+    if (source) return;
+    source = dispatch_source_create(DISPATCH_SOURCE_TYPE_MEMORYPRESSURE, 0,
+        DISPATCH_MEMORYPRESSURE_WARN | DISPATCH_MEMORYPRESSURE_CRITICAL, dispatch_get_main_queue());
+    dispatch_source_set_event_handler(source, ^{ sp_document_memory_pressure(); });
+    dispatch_resume(source);
+}
+
 extern double sp_surface_scale(void *surface);
 
 static CGFloat documentSurfaceScale(NSView *surface) {
@@ -166,6 +190,10 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 @property BOOL placed;
 @property BOOL pending;
 @property BOOL closed;
+// Runs while the region is hidden and clears the back-forward cache when the hidden clear delay passes.
+@property(retain) NSTimer *hiddenTimer;
+- (void)clearBackForwardCache:(NSString *)reason;
+- (void)stopHiddenTimer;
 - (void)report;
 - (void)request:(WKNavigation *)navigation;
 - (BOOL)requestIfStarted:(WKNavigation *)navigation;
@@ -287,7 +315,42 @@ static NSString *pluginContentType(NSString *path) {
     [_plugin release];
     [_navigation release];
     [_eventMonitor release];
+    [_hiddenTimer release];
     [super dealloc];
+}
+
+// WebKit keeps each page that a region navigated away from in its back-forward cache, suspended with its process, and
+// releases it only when the cache exceeds its capacity. A region releases these pages after it stays hidden for the hidden
+// clear delay and under memory pressure (docs/spec/native-surfaces.md#document-regions); going back then loads the page again.
+// A region without back or forward entries has no cached page.
+- (void)clearBackForwardCache:(NSString *)reason {
+    if (self.closed || (self.backForwardList.backList.count == 0 && self.backForwardList.forwardList.count == 0)) return;
+    [self _clearBackForwardCache];
+    NSString *fields = [NSString stringWithFormat:@"{\"reason\":\"%@\"}", reason];
+    sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_INFO, "native.document.backforward_cleared", fields.UTF8String);
+}
+
+- (void)hiddenDelayPassed:(NSTimer *)timer {
+    self.hiddenTimer = nil;
+    [self clearBackForwardCache:@"hidden"];
+}
+
+- (void)stopHiddenTimer {
+    [self.hiddenTimer invalidate];
+    self.hiddenTimer = nil;
+}
+
+// AppKit calls viewDidHide and viewDidUnhide when the region or one of its ancestors is hidden or shown.
+- (void)viewDidHide {
+    [super viewDidHide];
+    if (self.closed || self.hiddenTimer) return;
+    self.hiddenTimer = [NSTimer scheduledTimerWithTimeInterval:hiddenClearDelay target:self
+        selector:@selector(hiddenDelayPassed:) userInfo:nil repeats:NO];
+}
+
+- (void)viewDidUnhide {
+    [super viewDidUnhide];
+    [self stopHiddenTimer];
 }
 
 - (void)reportEvent:(const char *)json {
@@ -653,6 +716,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     view.webSurface = surface;
     view.appearance = surface.effectiveAppearance;
     view.hidden = YES;
+    watchMemoryPressure();
     if (!webviewInputRegister(view) || !webviewIgnorePageFocus(view)) {
         [view release];
         return NULL;
@@ -670,6 +734,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     view.pageZoom = view.zoom;
     [view _setOverrideDeviceScaleFactor:sp_surface_scale(surface)];
     for (NSString *key in observedKeys()) sp_observe_key_path("document_view.state", SP_OBSERVE_COUNT, view, view, key, 0, &kStateContext);
+    [openDocuments() addObject:view];
     return view; // The caller owns this reference until sp_document_close.
 }
 
@@ -837,6 +902,8 @@ void sp_document_close(void *handle) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;
     view.closed = YES;
+    [openDocuments() removeObject:view];
+    [view stopHiddenTimer];
     if (view.eventMonitor) {
         [NSEvent removeMonitor:view.eventMonitor];
         view.eventMonitor = nil;
@@ -853,4 +920,16 @@ void sp_document_close(void *handle) {
     [view stopLoading];
     [view removeFromSuperview];
     [view release];
+}
+
+bool sp_document_set_hidden_clear_delay(double seconds) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    if (!isfinite(seconds) || seconds <= 0) return false;
+    hiddenClearDelay = seconds;
+    return true;
+}
+
+void sp_document_memory_pressure(void) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    for (SPDocumentView *view in openDocuments().allObjects) [view clearBackForwardCache:@"pressure"];
 }
