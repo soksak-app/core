@@ -34,6 +34,7 @@
 | 사이드바 크기 | [배치 값](#배치-값)의 폭 설정 |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
+| 메모리 (전역 범위에서만) | 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
 | 진단 | 디버그 (`core.settings.debug {on}`을 실행하는 switch) |
 
 창 선택은 고정 왼쪽 사이드바 하나와 고정 오른쪽 사이드바 하나의 내용을 선택한다. 포커스 활성 플러그인은 추가 열 없이 일반 변 선택을 오버라이드한다. 표시 스위치는 고정 변에 적용한다. 카드 사이드바는 카드 내부에 있으며 기존 `cardSidebar` 위치 설정은 거부한다. 일반에는 플러그인 설정이 없다.
@@ -94,10 +95,10 @@
 
 | 형식 | 컨트롤 | 명령 |
 |---|---|---|
-| Boolean (`left`, `right`, `dim`) | 스위치: 스위치로 그린 체크 상자 | `core.settings.change {key, value, scope}` |
+| Boolean (`left`, `right`, `dim`, `memorySaver`) | 스위치: 스위치로 그린 체크 상자 | `core.settings.change {key, value, scope}` |
 | 나열된 값 중 하나 (`projectOpening`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `language`, plugin `enum`) | 선언 순서대로 값마다 항목 하나가 있는 선택 상자 | `core.settings.change {key, value, scope}` |
 | Catalog의 theme (`theme`) | Theme마다 그 theme의 색과 형태로 그린 견본 하나가 있는 견본 격자 | `core.settings.theme {name, scope}` |
-| 경계가 있는 정수 (`gap`, `radius`, `size`, [배치 값](#배치-값), plugin `integer`) | 경계 사이의 슬라이더와 그 뒤의 값과 단위 | `core.settings.change {key, value, scope}` |
+| 경계가 있는 정수 (`gap`, `radius`, `size`, `memorySaverDelay`, [배치 값](#배치-값), plugin `integer`) | 경계 사이의 슬라이더와 그 뒤의 값과 단위 | `core.settings.change {key, value, scope}` |
 | 문자열 또는 주소 (plugin `string` 또는 `address`) | 한 줄 글자 입력 | `core.settings.change {key, value, scope}` |
 | 세트 참조 ([사이드바 선택](#사이드바-선택)의 연결) | 사용 안 함과 모든 세트의 선택 상자 | `core.settings.link {place, plugin, set, scope}` |
 
@@ -125,6 +126,8 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `fullRule` | `under`, `over`, `none` 중 하나 |
 | `language` | `auto` 또는 애플리케이션 메뉴의 언어(`ko`, `en`) |
 | `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth` | [배치 값](#배치-값) |
+| `memorySaver` | boolean, 전역 범위, 기본값 `true`: [메모리 절약](plugins.ko.md#메모리-절약)이 숨겨진 탭을 unload한다 |
+| `memorySaverDelay` | 5부터 720까지의 정수(분), 전역 범위, 기본값 120: 메모리 절약이 탭을 unload하기 전에 탭이 숨겨져 있는 시간. 다른 값은 `Invalid setting memorySaverDelay: <value>`로 거부하고, 변경은 scheduler를 다시 맞춘다 |
 | `sets`, `links` | [저장되는 세트와 연결](#저장되는-세트와-연결) |
 
 플러그인 설정은 그 선언의 형식을 따른다([플러그인](plugins.ko.md)).

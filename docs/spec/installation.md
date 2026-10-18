@@ -105,6 +105,7 @@ The stored files of the contract, with their owner, the member that carries thei
 | `log-policy.json` | core | `schema` | numbered |
 | `settings.json`, `<project root>/.soksak/settings.json` | core | `format` | numbered |
 | `projects.json` | core | `format` | numbered |
+| `tab-state.json` | core | `format` | numbered |
 | `logs/<role>-<boot>.jsonl` and their index | core | per file (`log.open`, the index header) | log |
 | `endpoint.json`, `process.lock`, `performance` | core | rewritten each run | transient |
 | `plugins/<id>/<version>/`, `sidecars/<file name>/`, `updates/` | the release payload | the version in the path | external |
@@ -115,7 +116,7 @@ Core performs every migration. One engine, in the installer library of both comm
 
 The engine is idempotent and bounded. It reads the file's format number and applies the definitions step by step up to the current number; a file already at the current number is untouched, and applying the chain twice writes the same bytes. A form below the floor or above the current number is refused with an error that names the file and both numbers, and so is a file that does not parse. The floor of `plugins/installed.json` is format 2: the format-1 form belongs to the configuration folders of the earlier application identity, which the removal of their conversion closed; such a file is refused with its file and its format. The engine never creates a file that is absent — a missing file is the empty state of the current format — and never writes while another process owns the configuration: a live owner migrated the file at its own first read, so a reader that finds another owner reads the file as it is. The engine writes through the one writer of its package, which syncs before it replaces; a migration it applies is a record of the process that applied it, written through that process's event writer, and a refusal is the record.
 
-A plugin owns no stored file of a configuration folder: the values it persists live as keys of `projects.json` under the per-key format that `convertData` converts ([project data](plugins.md#project-data)). A sidecar's definitions name only paths under its own `services/<name>/` tree and apply while its service is stopped. Released identifiers of plugins and their settings sections are immutable once published: a rename breaks stored files that the engine cannot reach.
+A plugin owns no stored file of a configuration folder: the values it persists live as keys of `projects.json` under the per-key format that `convertData` converts ([project data](plugins.md#project-data)), and the tab state it writes lives in `tab-state.json`, which core owns, under the format the plugin declares in `surface.unload` ([memory saver](plugins.md#memory-saver)). A sidecar's definitions name only paths under its own `services/<name>/` tree and apply while its service is stopped. Released identifiers of plugins and their settings sections are immutable once published: a rename breaks stored files that the engine cannot reach.
 
 ## Serving installed plugins
 

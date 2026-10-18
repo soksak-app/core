@@ -94,6 +94,16 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. [플러그인 상태 모듈](plugins.ko.md#플러그인-상태)이 등록한 이름에 대한 `surface` 없는 요청은 애플리케이션 문서의 그 모듈이 답한다.
 
+## Tab memory
+
+메인 페이지의 [메모리 절약](plugins.ko.md#메모리-절약)에는 다음 항목이 있다.
+
+- Status `core.tab.memory`: `{enabled, delay, pressure: {level, seq}, tabs: [{tab, plugin, state, reasons, hiddenAt, unloadAt, checkedAt}]}`이며 바뀔 때마다 알린다. `enabled`는 설정 `memorySaver`, `delay`는 분 단위 설정 `memorySaverDelay`, `pressure`는 마지막 [memory pressure](hosts.ko.md#memory-pressure) 보고다. `state`는 `loaded`, `unloaded`, `restoring` 중 하나다. `reasons`는 탭을 보호하는 이유를 하나의 열거 `shown`, `recent`, `keep:modified`, `keep:busy`, `media`, `media-unknown`, `capture`, `form`, `kept`, `off`, `undeclared`, `background`에서 나열한다. `hiddenAt`은 탭이 숨겨진 시각이나 `null`, `unloadAt`은 다음 지연 기한이나 `null`, `checkedAt`은 `media`, `media-unknown`, `capture`를 읽은 마지막 결정의 시각이나 `null`이다. `core.surfaces`는 탭마다 같은 `state`를 알리고, unload된 표면에 대한 요청은 `tab <id> is unloaded`로 실패한다.
+- Command `core.tab.unload {tab}`은 숨겨진 탭을 지금 unload한다. 사람이 직접 정한 것이므로 `recent`, `media`, `media-unknown`, `capture`, `form`을 기다리지 않는다. 남은 이유(`shown`, `keep:modified`, `keep:busy`, `kept`, `off`, `undeclared`, `background`)와 시도를 끝낸 이유에는 오류 `tab <id> is protected: <reasons>`로, 알 수 없는 탭에는 -32602(invalid params)로 실패한다.
+- Command `core.tab.keep {tab, keep}`은 사람의 표시 `kept`를 정하거나(`true`) 지우고(`false`) `tab-state.json`에 저장한다. 멱등이며 바뀔 때마다 `page.tab.keep.changed`를 하나 낸다. 알 수 없는 탭이나 boolean이 아닌 `keep`에는 -32602로, 절대 unload될 수 없는 탭에는 이유 `undeclared`나 `background`를 담은 `tab <id> can never be unloaded: <reason>`로 실패한다.
+- 각 탭 단추는 자기 `state`(`loaded`, `unloaded`, `restoring`)를 담은 `data-tab-state`를 가진다. 보호는 `reasons`로만 보인다.
+- dom 이름 `tab-menu-keep`인 탭 context menu 항목은 binder로 `core.tab.keep`을 실행하고, `core.tab.memory`의 reasons에 있는 `kept`로 표시를 보이며, 절대 unload될 수 없는 탭에는 없다.
+
 ## 창
 
 애플리케이션에는 창이 하나 이상 있고, 창마다 메인 페이지와 등록소가 따로 있다. `windows.list`와 `log.query`를 제외한 모든 메서드는 `window`를 받는다. 이 값은 `windows.list`가 반환하는 식별자다. 더 이상 없는 창을 요청하면 오류 1003 `window "<name>" does not exist`를 반환한다. host가 요청을 받은 뒤 닫힌 창도 같다. host는 native 창을 native code에 넘기는 main thread 단계에서 읽고, 그 단계 전에 닫힌 창은 native code에 닿지 않고 요청을 1003으로 실패시킨다. 그런 창의 `host.window` 변경은 아무것도 알리지 않는다. 닫기는 `host.windows`에서 창이 빠지는 것으로 알려진다.

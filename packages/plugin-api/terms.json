@@ -207,6 +207,44 @@
         "file 분류"
       ],
       "allowed": []
+    },
+    {
+      "term": "unload",
+      "definition": "The core operation of the memory saver that releases the surface of a hidden tab that stays in the layout; the tab keeps its reports and the state its plugin wrote.",
+      "rejected": [
+        "tab discarding",
+        "discarded tab",
+        "sleeping tab",
+        "탭 재우기"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "restore",
+      "definition": "The core operation of the memory saver that mounts an unloaded tab again from the state its plugin wrote when the tab is shown.",
+      "rejected": [
+        "rehydrate",
+        "탭 깨우기"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "protection",
+      "definition": "A reason of the memory saver that keeps a tab from being unloaded, such as shown, keep:modified or media.",
+      "rejected": [
+        "unload exemption",
+        "unload guard"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "memory saver",
+      "definition": "The core function, turned on and off by the setting memorySaver, that unloads hidden tabs after a delay and under memory pressure and restores them when they are shown.",
+      "rejected": [
+        "memory saving mode",
+        "탭 절전"
+      ],
+      "allowed": []
     }
   ]
 }

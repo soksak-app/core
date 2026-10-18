@@ -166,6 +166,12 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | C2 | `src/diagnostics_test.go`, `src/dev_test.go`, `tests/build_test.go` | 없음 | Go 파일은 build 제약으로 한 build에만 속하므로, `sok`의 진단 build는 `diagnostics && !dev` 단위 test에서 `capture` 요청과 release 식별자를, `dev` build는 `dev` 단위 test에서 `.dev` 식별자를, 다른 build는 `!diagnostics` test에서 사용법 오류와 release 식별자를 검사한다. Rust는 `tests/sok_test.rs`에서 `cfg(feature = "diagnostics")`와 `cfg(feature = "dev")`로 build를 검사한다 |
 | C3 | `src/dev.go` | 없음 | Go는 `dev` build 태그만 컴파일하는 파일의 `init`으로 `.dev` 식별자를 고르고, Rust는 `src/identity.rs` 안의 `cfg!(feature = "dev")`로 고르므로 따로 파일이 없다 |
 
+## Memory pressure
+
+호스트는 native memory pressure source 하나를 소유한다. 이 source는 호스트와 함께 시작하며 프로세스의 유일한 등록이다(macOS에서는 공개 dispatch memory pressure source). 수준 `normal`, `warn`, `critical`을 관찰하고, 보고마다 `seq`로 번호를 매기며, 수준이 바뀔 때만 보고한다. back-forward cache를 지우는 문서 영역 소비자([네이티브 표면](native-surfaces.ko.md#문서-영역))는 source를 소유하지 않고 이를 구독하며 `warn`과 `critical`에서만 지운다. 각 호스트는 모든 보고를 각 창의 메인 페이지에 page 이벤트 `memory-pressure` `{level, seq}`로 보내고, [메모리 절약](plugins.ko.md#메모리-절약)이 이를 소비하며 `core.tab.memory`가 `pressure`로 알린다. 진단 빌드의 선언된 fault injection이 검사를 위해 보고를 보내고, contract case가 두 호스트를 같은 이벤트로 묶는다.
+
+메모리 절약이 탭을 unload하기 전에 page는 표면과 `host.window`가 알리는 문서 이름으로 주소를 정한 선언된 호스트 메서드로 탭의 각 문서 영역의 `interactionState`를 읽는다. 호스트는 영역 web view의 공개 `interactionState`, 곧 문서나 프로세스를 담지 않는 직렬화된 session history로 답하고, web content 프로세스가 이미 끝난 경우처럼 읽기가 아무것도 내지 않으면 빈 값으로 답한다. 탭을 restore하면 그 값을 새로 만드는 영역에 넘긴다.
+
 ## 프로세스 생명주기
 
 host의 goroutine과 스레드는 진입점으로만 시작한다. Go는 `routine.Go(name, fn)`(`src/routine/routine.go`), Rust는 `spawn_named(name, body)`(`src/routine/routine.rs`)이다. Go는 `fn`의 panic을 recover하고 메시지와 stack을 표준 오류에 쓰고, `name`, panic 값의 `text`, `stack`을 담은 event `host.panic`([events](events.json))을 저장하고, event가 event log에 들어갈 때까지 최대 2초 기다린 뒤 상태 2로 프로세스를 끝낸다. Rust panic hook은 panic한 스레드의 이름(이름이 없는 스레드는 `<unnamed>`)으로 같은 event를 저장하고(Rust panic 값에는 위치가 없으므로 `text`는 `<file>:<line>: `로 시작한다), 자기 스레드를 깨운다. 그 스레드가 event가 event log에 들어갈 때까지 최대 2초 기다린 뒤 상태 101로 프로세스를 끝낸다. hook은 writer를 기다리지 않으므로 인터페이스 스레드의 panic이 writer가 멈춘 동안 그 스레드를 붙잡지 않는다. backtrace는 panic한 스레드에서 만든다. 정책은 두 host가 같다. panic이 남긴 상태는 믿지 않으므로 panic은 기록 뒤에 프로세스를 끝내고, panic 뒤에 계속하는 모드는 없다. 인터페이스 스레드의 panic으로 프로세스가 abort하는 시점이 writer가 큐의 event를 쓰기 전이면 메시지는 표준 오류에만 남는다. 시작 실패를 호출자에게 오류로 돌려주는 스레드(Rust host의 event writer, 성능 sampler, debug follower, termination watcher)만 `std::thread::Builder`를 직접 쓰며, 그 panic도 hook이 다른 스레드와 같이 기록한다.

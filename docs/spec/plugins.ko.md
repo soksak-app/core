@@ -49,6 +49,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `name` | 예 | 표시 이름 |
 | `description` | 예 | 플러그인이 하는 일을 말하는 1자에서 200자 사이의 한두 문장. [plugin 화면](installation.ko.md#plugin-화면)이 보여 주고, plugin 화면과 설정 창이 검색한다 |
 | `surface` | 아니오 | `{ "module": "ui/page.js", "composition": ... }`: plugin 안의 모듈과 필수 [표면 합성](surface-composition.ko.md). 모듈은 앱 DOM에 마운트하며 외부 웹 문서는 문서 영역을 사용한다. 웹 주소는 표면이 아니다 |
+| `surface.unload` | `surface`가 있으면, `background`가 없을 때 | `false`, 또는 코어가 탭을 unload하고 탭이 쓴 상태로 restore할 수 있는 plugin의 `{ "format": <양의 정수>, "maxBytes": <양의 정수> }`([메모리 절약](#메모리-절약)). `background`와 함께 쓰면 거부한다 |
 | `mark` | `surface`가 있으면 | 추가 메뉴와 새 탭 제목에 표시하는 짧은 텍스트 |
 | `icon` | `surface`가 있으면 | 16×16 뷰박스용 SVG 요소 |
 | `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "module" }`. `module`은 섹션을 그리는 plugin 안의 JavaScript 경로이고, 선택 항목 `fill: true`는 섹션에 남은 사이드바 높이를 준다([섹션](#섹션)) |
@@ -165,7 +166,7 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 `tab.error(text)`는 표면이 준비된 뒤 실패한 표면 작업(예: 저장)의 오류를 제어 문자 없는 1자부터 1024자까지의 글로 보이고, `tab.error(null)`은 그것을 지운다. 다른 값은 예외를 던진다. 탭이 활성인 동안 카드 상태 행이 오류 표시로 그 글을 보이고, 오류 표시는 글이 나타날 때 애플리케이션 로그에 `error page tab error <tab id>: <text>`를 쓴다. `core.grid`는 탭마다 `error`를 글이나 `null`로 보고하고, 이 오류는 layout에 저장하지 않는다. 표면 자체의 실패는 표면 상태가 `error`로 두며, 이는 탭이 닫힐 때까지 남는다.
 
-`tab.title(text)`는 표면의 탭이 이름 대신 보일 제목을 정하고, `tab.title(null)`은 그 제목을 지워 탭이 다시 이름을 보이게 한다. 텍스트는 제어 문자(U+0000–U+001F, U+007F–U+009F)가 없는 1–256자의 문자열이며, 다른 값은 예외를 던진다. 제목은 레이아웃과 함께 저장하지 않는다. `core.grid`는 각 탭이 보이는 제목을 `label`로, 없으면 `null`로 알린다.
+`tab.title(text)`는 표면의 탭이 이름 대신 보일 제목을 정하고, `tab.title(null)`은 그 제목을 지워 탭이 다시 이름을 보이게 한다. 텍스트는 제어 문자(U+0000–U+001F, U+007F–U+009F)가 없는 1–256자의 문자열이며, 다른 값은 예외를 던진다. 제목은 레이아웃과 함께 저장하지 않는다. `core.grid`는 각 탭이 보이는 제목을 `label`로, 없으면 `null`로 알린다. plugin이 `surface.unload`를 `{format, maxBytes}`로 선언한 탭이면 워크벤치는 `memorySaver` 설정과 상관없이 마지막 제목을 탭의 `label`로 `tab-state.json`에 둔다. 그래서 마운트되지 않은 탭은 restore 뒤 첫 제목 알림이 그것을 바꿀 때까지 그것을 보인다. `tab.title(null)`은 그것을 지운다([메모리 절약](#메모리-절약)).
 
 `tab.footer(text)`는 표면이 카드의 활성 탭인 동안 그 카드의 내용 발이 보일 글을 정한다. 터미널의 작업 디렉터리나 브라우저 문서에서 포인터 아래 링크의 주소가 그 예다. `tab.footer(null)`은 그 글을 지운다. 텍스트는 제어 문자가 없는 1–1024자의 문자열이며, 다른 값은 예외를 던진다. 하단 글은 레이아웃과 함께 저장하지 않는다. `core.grid`는 각 탭의 하단 글을 `footer`로, 없으면 `null`로, 각 카드가 보이는 발을 `status`로 알린다.
 
@@ -176,6 +177,40 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 `tab.directory(path)`는 표면의 작업 디렉터리인 절대 경로를 기록하고, `tab.directory(null)`은 그것을 지운다. 다른 값은 예외를 던진다. 워크벤치는 이를 위해 파일 시스템을 읽지 않고 저장하지 않는다. `+`나 쪼개기가 탭을 만들면, 새 표면의 `origin.directory`는 탭을 더하거나 쪼갠 카드의 활성 탭이 그 순간 기록한 디렉터리이고, 없으면 `null`이다.
 
 `project`는 표면이 마운트될 때 표면의 창이 보이는 프로젝트의 정규 `root`를 담은 `{root}`이고([프로젝트](projects.ko.md#프로젝트-식별)), 프로젝트가 없는 창에서는 `null`이다. 작업 디렉터리에서 시작하는 표면은 `origin.directory`가 `null`이 아니면 그것을, 아니면 `project.root`를, 그것도 없으면 계정의 홈 디렉터리를 쓴다.
+
+## 메모리 절약
+
+코어는 숨겨진 탭을 **unload**하고(layout에 남는 탭의 표면을 놓는다), 탭이 다시 보이면 **restore**한다(unload된 탭을 그 상태로 다시 마운트한다). 이 두 동작은 다른 말로 부르지 않는다. 전역 설정 `memorySaver`가 이것을 켜고 끄며 `memorySaverDelay`가 지연을 정한다([설정](settings.ko.md#값)). 탭을 언제 unload하고 restore할지는 코어만 정한다. plugin에는 타이머도 unload 결정도 없다. plugin은 자기 탭을 unload할 수 있는지 선언하고 자기 상태를 최신으로 둔다.
+
+**선언.** plugin이 `background`를 선언하지 않으면 모든 표면이 `surface.unload`를 선언하고, `background`가 있는 plugin의 표면은 그것을 선언하지 않는다. background 세션은 background 경로로 세션을 유지하기 때문이다. `validateManifest`는 어느 규칙이든 어긴 manifest를 거부한다. `false`는 그 plugin의 탭을 절대 unload하지 않는다는 뜻이고, 그 탭은 상태에 이유 `undeclared`로 나타난다. `background`가 있는 plugin의 탭은 이유 `background`로 나타난다. `{format, maxBytes}`는 plugin이 쓰는 상태의 형식 번호와 byte 단위 크기 한도를 선언한다.
+
+**탭 상태.** 선언한 plugin은 필요한 상태를 JSON으로 바뀔 때마다 `context.tab.state.write(value)`로 쓴다. 쓰기는 메모리에 동기로 들어가므로 같은 task의 unload가 최신 값을 본다. 코어는 메모리의 값을 버리지 않고, 1초 안에 탭마다 `{format, value}`로 `tab-state.json`에 저장하며([프로젝트](projects.ko.md#저장)), 탭의 저장소 쓰기마다 이벤트 `page.tab.state.stored`가 된다. JSON이 아니거나 `maxBytes`를 넘는 값은 탭과 크기를 이름하는 오류로 거부한다. 표면이 dispose된 뒤 옛 컨텍스트의 `state.write`는 탭과 `disposed`를 이름하는 오류로 거부하고 컨텍스트마다 한 번 로그에 남긴다. 그래서 옛 인스턴스가 restore된 인스턴스의 상태를 덮어쓸 수 없다. plugin은 dispose에서 abort되는 `context.closing`에서 남은 작업을 멈춘다. restore된 표면은 `context.tab.state.read()`를 읽으며, 저장소에 그 탭의 상태가 없으면 `null`이다. 선언한 것과 다른 저장 형식은 탭과 찾은 형식을 이름하는 restore 오류로 거부한다. 이 API로 쓴 상태만 unload, crash, 재시작을 넘어 남는다.
+
+**진행 중인 작업.** `context.tab.keep("busy", on)`은 진행 중인 작업을 알린다(`on`은 boolean). 켜져 있는 동안 탭에는 보호 `keep:busy`가 있고, 이는 표면이 dispose되면 끝난다.
+
+**보호.** 다음 이유 중 하나라도 있는 동안 탭은 unload되지 않으며, 탭은 여러 이유를 가질 수 있다.
+
+- `shown`: 보이는 space에서 카드의 보이는 탭이다.
+- `recent`: 보인 지 지연보다 덜 지났다.
+- `keep:modified`: 탭이 `context.tab.modified`로 저장하지 않은 변경을 알렸고([탭 알림](#탭-알림)) 깨끗하다고 알리지 않았다.
+- `keep:busy`: 표면이 `context.tab.keep("busy", true)`로 진행 중인 작업을 알린다.
+- `media`: 탭의 문서 영역이 media를 재생한다. 결정마다(지연 기한, pressure 보고, `core.tab.unload`) 코어는 각 영역에 묻고 그 web view의 공개 `requestMediaPlaybackState` 답을 기다린다. `playing`이 탭을 보호한다. 영역이 사라진 경우처럼 실패한 답은 이유 `media-unknown`을 주고 로그에 남는다.
+- `capture`: 문서 영역에 진행 중인 카메라나 마이크 capture가 있다. 같은 결정 단계에서 공개 `cameraCaptureState`와 `microphoneCaptureState`로 읽는다. picture in picture로 멈춘 media는 다루지 않는다. WebKit이 공개 picture in picture 상태를 알리지 않기 때문이다. 화면 capture는 다루지 않는다. 영역은 `getDisplayMedia`를 허용하지 않기 때문이다.
+- `form`: 문서 영역의 frame에, 그 frame의 문서가 load된 뒤 trusted `input` 이벤트를 받은 편집 가능한 요소(form field나 `contenteditable`)가 있다. WebKit은 이를 위한 공개 engine 상태를 주지 않으므로, 영역 content world에서 모든 frame에 주입한 영역 script가 이를 알린다. native 영역은 frame 식별자마다 flag를 두고, frame의 `pagehide`나 form `submit`은 그 flag를 지우며, main frame navigation commit이나 reload는 모든 flag를 지운다. 등록된 `beforeunload` handler는 보호가 아니다. content world는 page의 listener를 볼 수 없기 때문이다.
+- `kept`: 사람이 `core.tab.keep`으로 탭을 load된 채로 두도록 표시했다. 표시는 `tab-state.json`에 저장한다.
+- `off`: 설정 `memorySaver`가 꺼져 있다.
+
+영역은 download하지 않으므로 download 보호는 없다. 이유는 상태 `core.tab.memory`와 이벤트가 `undeclared`, `background`와 함께 쓰는 하나의 열거다([exposure](exposure.ko.md#tab-memory)). `media`, `media-unknown`, `capture`는 마지막 결정의 결과이고, 다른 이유는 그 출처가 알릴 때 바뀐다.
+
+**계기.** 보호 없이 지연 동안 숨겨진 탭은 unload된다. 코어 scheduler 하나가 각 탭이 숨겨진 monotonic 시각으로 계산한 가장 이른 기한을 들고, 그것을 바꾸는 이벤트(탭이 보이거나 숨겨짐, 보호 변화, 설정 변화)에 다시 맞춘다. 지난 시간에는 이벤트 출처가 없으므로 타이머를 쓴다. 기한에 `media`나 `media-unknown`이 보호한 탭은 다음 기한을 지연 하나 뒤로 받는다. 호스트의 [memory pressure](hosts.ko.md#memory-pressure) 수준이 warn이나 critical인 동안 코어는 보호 없는 숨겨진 탭 하나를 unload하고, 그 unload가 끝나기를 기다리며, normal 보고가 오거나 후보가 남지 않을 때까지 되풀이한다. 후보는 가장 오래전에 보인 것부터이고, pressure 아래에서는 `recent`가 보호하지 않는다. 후보를 찾지 못한 보고는 이벤트 `page.tab.unload.skipped`가 된다.
+
+**Unload.** unload는 이 순서의 코어 동작 하나다. (1) 코어는 선언된 호스트 메서드로 탭의 각 문서 영역에 `interactionState`를 묻는다([호스트](hosts.ko.md#memory-pressure)). (2) 탭을 unload됨으로 표시한다. (3) commit을 요청하며, commit은 자기가 선언하는 보이지 않는 표면에서 탭을 뺀다. (4) 워크벤치는 dispose의 unload 방식으로 표면을 놓으며, 이 방식은 탭 알림(제목, 하단 글, 디렉터리, origin, modified, 알림)을 두고 오류만 지운다. 오류의 표시는 인스턴스와 함께 끝났고 그 글은 오류 표시가 이미 로그에 썼다. (5) `host.place`가 답한 뒤 `page.tab.unloaded`를 낸다. 시도마다 generation이 있다. 기다린 단계마다 코어는 (2) 전에 보호를 다시 평가하고, 새로 생긴 보호나 탭의 보임은 시도를 `page.tab.unload.skipped`로 끝낸다. 보이지 않고 마운트된 탭은 마운트 시각을 숨겨진 시각으로 삼고, 설정을 켜도 각 탭의 숨겨진 시각은 유지된다. unload된 표면에 대한 요청은 `tab <id> is unloaded`로 실패한다.
+
+**Restore.** unload된 탭을 보이면 같은 `origin`으로 표면을 마운트하고, 표면은 `context.tab.state.read()`로 상태를 읽는다. 이벤트는 `page.tab.restored`이고, 실패는 오류 표시를 거친 `page.tab.restore.failed`다. unload된 문서 영역이 닫히기 전에 그 직렬화된 session history(`interactionState`)가 page에 닿고, page는 이를 저장소가 아닌 메모리에 두었다가 restore에서 만드는 영역에 넘긴다. web view가 거부한 값은 restore 실패이고, 읽기가 아무것도 내지 않으면 영역은 plugin이 저장한 주소에 만들어지고 `page.tab.restored`는 `history: false`를 싣는다.
+
+**재시작.** `memorySaver`가 켜져 있는 동안 plugin이 `surface.unload`를 `{format, maxBytes}`로 선언한 숨겨진 탭은 unload된 채 시작하고 처음 보일 때 restore된다. 꺼져 있으면 숨겨진 탭은 시작할 때 마운트된다. 탭이 unload되었는지는 저장하지 않는다.
+
+**plugin이 포기하는 것.** 선언한 plugin은 unload된 탭에서 `context.tab.state`로 쓰지 않은 모든 상태를 포기한다. DOM, 메모리의 객체, sidecar 세션, session history를 뺀 문서 영역의 보이는 page, 그리고 재시작 뒤에는 그 history도 포기한다. unload된 탭에서 더한 탭은 `origin.directory: null`을 받는다. 마운트되지 않은 탭의 디렉터리 알림은 저장하지 않기 때문이다. 각 plugin은 자기 명세에 무엇을 저장하고 무엇을 포기하는지 적는다. plugin은 이를 위한 설정을 더하지 않는다. plugin에 site 예외 목록이 필요하면 그것은 그 plugin의 설정이며 keep 이유로 코어에 닿는다.
 
 ## 링크 열기
 

@@ -105,6 +105,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 | `log-policy.json` | 코어 | `schema` | numbered |
 | `settings.json`, `<project root>/.soksak/settings.json` | 코어 | `format` | numbered |
 | `projects.json` | 코어 | `format` | numbered |
+| `tab-state.json` | 코어 | `format` | numbered |
 | `logs/<role>-<boot>.jsonl`과 그 색인 | 코어 | file마다(`log.open`, 색인 머리) | log |
 | `endpoint.json`, `process.lock`, `performance` | 코어 | 실행마다 다시 쓴다 | transient |
 | `plugins/<id>/<version>/`, `sidecars/<file name>/`, `updates/` | release 내용 | 경로의 version | external |
@@ -115,7 +116,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 engine은 멱등하고 범위가 정해져 있다. file의 형식 번호를 읽고 현재 번호까지 정의를 단계별로 적용한다. 이미 현재 번호인 file은 그대로 두고, 사슬을 두 번 적용해도 같은 byte를 쓴다. floor보다 오래되거나 현재 번호보다 새 형식은 파일과 두 숫자를 이름하는 오류로 거부되고, 판독 불가한 file도 그렇다. `plugins/installed.json`의 floor는 형식 2다. 형식 1은 이전 애플리케이션 identity의 설정 폴더 것이고 그 변환의 제거가 닫았다; 그런 file은 파일과 형식과 함께 거부된다. engine은 없는 file을 만들지 않는다 — 없는 file은 현재 형식의 빈 상태다 — 그리고 다른 process가 설정을 소유 중이면 쓰지 않는다. 살아 있는 소유자는 자기 첫 읽기에서 갱신했으므로, 다른 소유자를 만난 reader는 file을 그대로 읽는다. engine은 자기 package의 하나둘뿐인 writer로 쓰고 그 writer는 교체 앞에 sync한다. engine이 적용한 갱신은 적용한 process의 기록이다 — 그 process의 event writer로 쓴다 — 그리고 거부 자체가 기록이다.
 
-plugin은 설정 폴더에 저장 file을 소유하지 않는다. plugin이 남기는 값은 `projects.json`의 key로 살고 `convertData`가 그 per-key 형식을 변환한다([프로젝트 데이터](plugins.ko.md#프로젝트-데이터)). sidecar의 정의는 자기 `services/<name>/` 아래 경로만 이름하고 서비스가 멈춰 있을 때 적용된다. 공개된 plugin과 settings section의 식별자는 한 번 공개되면 불변이다. 이름을 바꾸면 engine이 닿을 수 없는 저장 file이 깨진다.
+plugin은 설정 폴더에 저장 file을 소유하지 않는다. plugin이 남기는 값은 `projects.json`의 key로 살고 `convertData`가 그 per-key 형식을 변환한다([프로젝트 데이터](plugins.ko.md#프로젝트-데이터)). plugin이 쓰는 탭 상태는 코어가 소유하는 `tab-state.json`에 plugin이 `surface.unload`에 선언한 형식으로 산다([메모리 절약](plugins.ko.md#메모리-절약)). sidecar의 정의는 자기 `services/<name>/` 아래 경로만 이름하고 서비스가 멈춰 있을 때 적용된다. 공개된 plugin과 settings section의 식별자는 한 번 공개되면 불변이다. 이름을 바꾸면 engine이 닿을 수 없는 저장 file이 깨진다.
 
 ## 설치된 plugin 제공
 

@@ -255,6 +255,21 @@ JavaScript의 emit site는 `emitEvent(`와 page writer의 batcher 호출이며, 
 
 입력 사슬의 한 단계인 event는 `"cids": "required"`로 선언하고, 감사는 비어 있지 않은 문자열 `cids`가 없는 그 event의 줄을 거부한다(입력 사슬의 guard). catalog는 입력 종류마다 남겨야 하는 사슬도(`chains`) 선언한다. 첫 층에서 마지막 층까지 event의 순서 있는 목록이다. 이 catalog는 `input`을 선언한다: `native.input.key_down`, `host.input.relay`, `page.call`(식별자를 나르는 호출 `sidecarSend`), `host.sidecar.request`. 요청이 일으키는 sidecar의 event(예: `sidecar.vt.pty_write`)는 sidecar 저장소의 catalog가 선언하며 그 저장소가 사슬을 거기서 확장한다([sidecar catalog](#sidecar-catalog)). catalog는 [page 작업](#작업-사슬)의 사슬(`plugin`, `project`, `window`, `settings`, `update`)도 선언한다. 로그 감사는 선언된 사슬이 모두 완결되어 있기를 요구한다. 사슬의 첫 event에 나타나는 각 식별자는 모든 계층의 파일을 통틀어 그 사슬의 뒤 event마다 나타나야 한다. 다만 `error` event가 그 식별자를 가지면 그렇지 않다. 첫 event의 process에서 사슬의 첫 event부터 마지막 event까지 적용된 policy(첫 event 앞의 마지막 `log.policy` 또는 기본 policy, 그리고 마지막 event까지의 모든 `log.policy`) 중 하나라도 선언된 class와 level(여러 level로 선언된 event는 그 모든 level)을 저장하지 않는 뒤 event는 요구하지 않는다. `diagnostics.log`를 이름하는 `page.settings.change` 뒤의 `log.policy`는 그 변경부터 적용된다. page가 setting이 바뀔 때 setting의 policy를 gate에 넣기 때문이다. 좁은 policy는 애플리케이션을 실행하는 사람의 결정이기 때문이다([정책](#정책)). 실패한 입력은 그 error에서 끝난다. native library는 키의 실패(active application의 key window 밖에서 응답하지 않는 input method, 지원하지 않는 Ctrl 문자, commit된 text의 교체, 거부된 presentation)를 키의 식별자와 함께 `native.record.error`로 기록하고 page에 오류를 보고하며, page는 sidecar에 아무것도 보내지 않는다.
 
+### 메모리 절약 이벤트
+
+[메모리 절약](plugins.ko.md#메모리-절약)은 class `lifecycle`의 다음 page 이벤트를 낸다. 이유는 [tab memory](exposure.ko.md#tab-memory)의 열거다.
+
+| 이벤트 | 수준 | 필드 | 뜻 |
+| --- | --- | --- | --- |
+| `page.tab.unloaded` | info | `tab`, `plugin`, `trigger` | `host.place`가 답한 뒤 숨겨진 탭이 unload되었다. `trigger`는 `delay`, `pressure`, `command` 중 하나다 |
+| `page.tab.restored` | info | `tab`, `plugin`, `history` | unload된 탭이 restore되었다. session history를 얻지 못했으면 `history`는 `false`다 |
+| `page.tab.restore.failed` | error | `tab`, `plugin`, `reason` | restore가 실패했다. 하나의 오류 표시가 이를 보인다 |
+| `page.tab.unload.skipped` | info | `trigger`, `seq`, `reasons` | pressure 보고가 후보를 찾지 못했거나, 보호가 생기거나 탭이 보여 unload 시도가 끝났다. `seq`는 pressure 보고의 번호다 |
+| `page.tab.state.stored` | debug | `tab`, `bytes` | 탭 상태 저장소가 탭의 항목을 썼다. 상태, 표시, label을 포함한다 |
+| `page.tab.keep.changed` | info | `tab`, `keep` | `core.tab.keep`이 탭의 표시 `kept`를 정하거나 지웠다 |
+
+각 이벤트는 그 emit site를 더하는 변경에서 `events.json`에 들어간다. catalog 검사는 어떤 source도 내지 않는 선언된 이벤트를 거부하기 때문이다.
+
 ### Sidecar catalog
 
 sidecar catalog(sidecar 저장소의 `events.json`)는 member `sidecar`에 자기 sidecar의 이름을 쓰고, `layers: ["sidecar"]`만 나열하며, layer `sidecar`의 event를 선언한다. `sidecar.<name>.*` event와 lifecycle event `log.open`, `log.dropped`, `log.rotated`이다. `composeCatalogs(base, ...sidecars)`(`packages/log-contract`)는 이 저장소의 catalog와 설치된 sidecar의 catalog를 감사가 받는 하나의 catalog로 합친다. catalog가 sidecar 이름을 쓰지 않거나, 다른 layer를 나열하거나, 다른 layer의 event 또는 `sidecar.<name>.`과 `log.` 밖의 이름을 선언하거나, `sidecar.<name>.*` event를 두 번 선언하거나, base의 선언과 class, level, field, `cids`가 다른 `log.*` event를 선언하면 sidecar와 event 이름을 담은 오류로 거부한다. 둘 다 선언한 `log.*` event는 하나의 선언이므로 sidecar 파일의 lifecycle event(`log.open`, `from_seq`, `to_seq`, `count`, `bytes`, `reason`을 가진 `log.dropped`, `log.rotated`)는 layer `sidecar`로 통과하고, 빠졌거나 형이 틀린 field는 다른 event처럼 줄 번호를 가진 발견이다.
