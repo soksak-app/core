@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F192.3-2-2: both hosts store the `page.start` event that the page relays under every log policy, as the logging specification states, so a reload is marked in the event log also when the class `lifecycle` stores only errors.
 - F192.3-3-2: the relaunch tests of the Rust `sok` create their folders through the reporting folder guard, so the test crate builds again.
 - F192.3-3-1: a window check that relaunches the host waits until every window of the new process reports a ready page before its next request, so the cleanup of the event-log check no longer fails with `the main page is not ready`.
 - F192.3-2-1: the event audit of the window checks reads `plugins/installed.json` of format 3, which F188.2 introduced, instead of refusing it as not format 2, so a check that prepares a fixture no longer fails before its first step.

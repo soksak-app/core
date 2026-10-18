@@ -733,6 +733,7 @@ fn invalid_json_closes_connection() {
 | `log.policy.change-is-an-event` | writer의 첫 정책과 이후의 각 변경은 `source`와 `classes`를 가진 `log.policy` event 하나이며, 같은 정책이 다시 오면 아무것도 저장하지 않는다. | both |
 | `log.policy.gate-counts-what-it-did-not-build` | 닫힌 gate는 아무것도 저장하지 않고, writer는 거부한 event의 정확한 수를 class와 level별로 `log.gated`로 보고한다. | both |
 | `log.policy.gate-passes-the-events-of-the-writer-itself` | `log.open`, `log.rotated`, `log.dropped`, `log.policy`, `log.gated`, `log.pruned`는 class `lifecycle`을 끈 정책을 지난다. | both |
+| `log.policy.gate-passes-the-start-of-a-page-document` | page가 host call `log`의 action `batch`로 전달한 `page.start` event는 class `lifecycle`을 끈 정책 아래에서도 저장된다. | both |
 | `log.policy.page-sets-the-file` | host 호출 `log`의 action `policy`는 class를 파일의 규칙으로 검사하고 `log-policy.json`(mode 0600)을 쓰며, 규칙을 어긴 요청은 오류이고 아무것도 쓰지 않는다. | both |
 | `log.policy.read-answers-the-policy-in-force` | host 호출 `log`의 action `policy-read`는 적용 중인 정책의 모든 class 값인 `{classes}`로 답한다. 첫 정책 전에는 기본 정책이고, 그 뒤에는 마지막으로 적용한 정책이다. | both |
 | `log.policy.event-reaches-every-document` | 정책을 적용하는 정책 파일의 각 load(source `default` 또는 `file`)는 그 정책의 `{classes}`를 담은 host event `log-policy`를 모든 window에 보내고, 거부된 파일은 아무것도 보내지 않는다. | both |

@@ -566,7 +566,10 @@ impl EventLog {
                 "the event {event} of the layer {layer} names the page {named:?}; only an event of the layer page or plugin names one, and it must"
             ));
         }
+        // page.start passes every gate: the first module of the page emits it before the policy reaches the gate of the page,
+        // and a reader finds the start of each document by it (docs/spec/logging.md#policy).
         if let Some(class) = self.class(event)
+            && event != "page.start"
             && !self.gate(class, level)
         {
             return Ok(false);
@@ -611,9 +614,10 @@ impl EventLog {
             self.count_loss(Channel::of(level), 1, bytes as u64);
             return false;
         }
-        // A closed gate stores nothing and counts the event.
+        // A closed gate stores nothing and counts the event; page.start passes every gate.
         let class = self.class(event);
         if let Some(class) = class
+            && event != "page.start"
             && !self.gate(class, level)
         {
             return false;
