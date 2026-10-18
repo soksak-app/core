@@ -6,7 +6,7 @@ import { readFileSync, watch } from "node:fs";
 import { join } from "node:path";
 import { declaration, DEFAULT_POLICY, parsePolicy, POLICY_CLASSES, POLICY_SCHEMA, policyAllows, policyIsBeingWritten } from "@soksak/log-contract";
 
-/** The value of the setting `diagnostics.log` that stores every level of every class, as the switch 디버그 sets it. */
+/** The value of the setting `diagnostics.log` that stores every level of every class, as `core.settings.debug {on: true}` sets it. */
 export const EVERY_LEVEL = Object.freeze(Object.fromEntries(POLICY_CLASSES.map((kind) => [kind, "trace"])));
 
 /**
