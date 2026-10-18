@@ -4,7 +4,8 @@
 //   Q  a plain web view with a persistent data store in a temp directory, as the hosts use (also the persistent store of T6);
 //   R  a document region from sp_document_create with no stream subscribed;
 //   S  R with the element and request streams subscribed, and each element snapshot acknowledged;
-//   S2 S with each new main-frame document opened in a new WebContent process (sp_webview_replace_documents_in_new_process);
+//   S2 S with sp_webview_replace_documents_in_new_process called on the region; sp_document_create installs it itself and
+//      the call is idempotent, so S2 measures the same region as S and checks that the installation holds;
 //   T1 P with applicationNameForUserAgent set as the region sets it;
 //   T2 P with the three content-world user scripts and their message handlers as the region installs them;
 //   T3 P with a sok scheme handler;
@@ -164,7 +165,7 @@ typedef struct {
     BOOL overrideScale;  // the device scale override set to the backing scale of the window
     BOOL breakdown;      // footprint -v and vmmap rows of the graphics and malloc allocations are printed at the last read
     const char *featuresOff; // the WKPreferences feature keys turned off, separated by commas, or NULL
-    BOOL newProcess;     // each new main-frame document opens in a new WebContent process (region only)
+    BOOL newProcess;     // sp_webview_replace_documents_in_new_process is called on the region (region only)
 } Variant;
 
 enum { kP, kQ, kR, kS, kS2, kT1, kT2, kT3, kT4, kT5, kT7, kU, kV1, kV2, kV3, kVariantCount };
@@ -868,7 +869,7 @@ static void measureReload(int count, NSString *pressureLevel, NSWindow *window, 
             seconds[r - 1] = loaded - navigationStarted;
             pid_t current = view._webProcessIdentifier;
             if (current != process) {
-                if (!spec->newProcess) {
+                if (!spec->region) {
                     failStep(step, [NSString stringWithFormat:@"the reload %d moved the page to the process %d", r, current], process);
                 }
                 if (![processes containsObject:@(current)]) [processes addObject:@(current)];
