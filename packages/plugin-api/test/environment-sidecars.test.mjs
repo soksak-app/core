@@ -9,7 +9,7 @@ const environment = (extra = {}) => ({
   sidebars: { sets: [], links: [] },
   ...extra,
 });
-const card = { id: "card", name: "Card", mark: "c", icon: "<path/>", surface: { module: "ui/page.js", composition: { kind: "dom" } },
+const card = { id: "card", name: "Card", mark: "c", icon: "<path/>", surface: { module: "ui/page.js", composition: { kind: "dom" }, unload: false },
   dependencies: { "@scope/sidecar-card": "0.1.0" } };
 const stateful = { id: "probe", name: "Probe", sections: [{ id: "probe.list", name: "목록", module: "ui/list.js" }],
   state: { module: "ui/state.js" }, dependencies: { "@scope/sidecar-probe": ">=0.1.0 <0.3.0" } };

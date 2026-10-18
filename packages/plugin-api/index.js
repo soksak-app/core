@@ -451,7 +451,7 @@ export function validateManifest(manifest) {
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
     if (!isObject(surface)) throw new Error(`${where}: surface must be an object`);
-    only(`${where} surface`, surface, ["module", "composition", "drop", "params", "opens", "save", "menu"]);
+    only(`${where} surface`, surface, ["module", "composition", "drop", "params", "opens", "save", "menu", "unload"]);
     // The context menu of the surface (docs/spec/plugins.md#pluginjson).
     if (surface.menu !== undefined) {
       if (!Array.isArray(surface.menu) || surface.menu.length === 0 || surface.menu.length > 16) {
@@ -515,6 +515,20 @@ export function validateManifest(manifest) {
     }
     if (surface.composition === undefined) throw new Error(`${where}: surface requires a composition`);
     checkComposition(`${where} surface`, surface.composition, manifestSidecars(manifest));
+    // A plugin with a background session keeps it through the background path, so only the other surfaces declare
+    // whether the core may unload their tabs (docs/spec/plugins.md#memory-saver).
+    if (manifest.background !== undefined) {
+      if (surface.unload !== undefined) throw new Error(`${where}: surface unload is forbidden beside background`);
+    } else if (surface.unload === undefined) {
+      throw new Error(`${where}: surface requires unload unless the plugin declares background`);
+    } else if (surface.unload !== false) {
+      const unload = surface.unload;
+      if (!isObject(unload) || !Number.isInteger(unload.format) || unload.format < 1 ||
+          !Number.isInteger(unload.maxBytes) || unload.maxBytes < 1) {
+        throw new Error(`${where}: surface unload must be false or {format, maxBytes} with positive integers`);
+      }
+      only(`${where} surface unload`, unload, ["format", "maxBytes"]);
+    }
     if (!isText(manifest.mark)) throw new Error(`${where}: mark is required with a surface`);
     if (!isText(manifest.icon)) throw new Error(`${where}: icon is required with a surface`);
   }
