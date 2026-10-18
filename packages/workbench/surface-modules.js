@@ -125,7 +125,17 @@ function pageRuntime(surface, scoped, compositionReady, lifetime) {
         return composed("compositionPlace", { revision, regions, overlays });
       },
     },
-    sidecar: scoped.sidecar,
+    sidecar: (...args) => {
+      const port = scoped.sidecar(...args);
+      return { ...port, send: (id, body, cids) => {
+        // A place that leaves the surface out ends its sidecar sessions in the host, so a send after the release, such as the end
+        // of the session that the dispose of the module sends, has no session and is not sent; a host send would open a session
+        // without a project root. A send while that place runs waits for its outcome (placeSurfaces).
+        if (lifetime.released) return Promise.resolve(null);
+        if (lifetime.suspended) return new Promise((resolve, reject) => lifetime.held.push({ run: () => port.send(id, body, cids), resolve, reject }));
+        return port.send(id, body, cids);
+      } };
+    },
   };
 }
 
@@ -257,7 +267,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     // A dom composition has no native region; plugin.json declares it, and its module does not create one.
     if (!native || surface.composition?.kind === "dom") compositionReady.resolve();
     // released becomes true when a place left the surface out; the host then owns the end of its regions.
-    const lifetime = { released: false, suspended: false };
+    const lifetime = { released: false, suspended: false, held: [] };
     const page = pageRuntime(surface, scoped, compositionReady, lifetime);
     let viewport = slot;
     const eventListeners = new Map();
@@ -306,7 +316,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       // Canonical root of the project that the surface window shows (docs/spec/plugins.md#tab-reports). A library window has none.
       project: active() ? { root: active().root } : null,
       icon,
-      runtime: { sidecar: scoped.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
+      runtime: { sidecar: page.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
         clipboard: scoped.clipboard,
         links: scoped.links,
         theme: scoped.theme,
@@ -507,12 +517,17 @@ export async function placeSurfaces(place, { retain, unload = [] }) {
     // A failed place keeps the surfaces mounted, so their compositions resume and place their current geometry.
     for (const entry of leftOut) {
       entry.lifetime.suspended = false;
+      for (const held of entry.lifetime.held.splice(0)) held.run().then(held.resolve, held.reject);
       for (const composition of entry.compositions) {
         // The composition reports a failed placement itself (surface composition failed), so the rejection is handled here.
         composition.update(() => {}).catch(() => {});
       }
     }
     throw error;
+  }
+  for (const entry of leftOut) {
+    entry.lifetime.released = true;
+    for (const held of entry.lifetime.held.splice(0)) held.resolve(null);
   }
   await Promise.all(unload.map((id) => disposeSurface(id, { mode: "unload", released: true })));
   await disposeSurfacesExcept(retain, { released: true });

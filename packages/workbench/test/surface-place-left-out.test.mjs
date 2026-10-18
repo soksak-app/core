@@ -74,3 +74,59 @@ test("a surface that a place leaves out sends no composition place while the pla
   }
 });
 
+// The place ends the sidecar sessions of a surface that it leaves out in the host. A send of the module after that, such as the
+// end of the session that its dispose sends, would open a session in the host without a project root, which the next retain of
+// the sidecar refuses (`retain surface entry is invalid`). A send while a failed place runs is sent after it.
+test("a surface that a place leaves out sends nothing to its sidecar after the place ends its sessions", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  Object.defineProperty(dom.window, "visualViewport", { value: { width: 800, height: 600 } });
+  const sent = [];
+  globalThis.surfacePlaceSidecar = null;
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: () => () => {}, call: async () => null },
+        sidecar: () => ({ send: async (id, body) => { sent.push(body.op); return null; }, on: () => () => {} }) };
+    },
+  } });
+  const { mountSurface, authorizeSurface, placeSurfaces, mountedSurface } = await import("../surface-modules.js?place-left-out-sidecar");
+  const pluginId = "fixture-place-left-out-sidecar";
+  const surfaceId = "fixture-place-left-out-sidecar-surface";
+  registerPlugin({ id: pluginId, surface: () => null });
+  const module = `data:text/javascript,${encodeURIComponent(`export async function mount(root, context) {
+    const port = context.runtime.sidecar();
+    globalThis.surfacePlaceSidecar = (op) => port.send(context.surfaceId, { op });
+    return { dispose: () => port.send(context.surfaceId, { op: "end" }) };
+  }`)}`;
+  const surface = { module, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: ["fixture-sidecar"],
+    composition: { kind: "dom" } };
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    // A send while a failed place runs waits and is sent after it.
+    let during;
+    await assert.rejects(placeSurfaces(async () => {
+      during = globalThis.surfacePlaceSidecar("input");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.deepEqual(sent, [], "a sidecar send left while the place ran");
+      throw new Error("host.place refused the layout");
+    }, { retain: new Set(), unload: [] }), /host.place refused the layout/);
+    await during;
+    assert.deepEqual(sent, ["input"]);
+    // After a place that succeeds, the dispose of the module sends nothing.
+    assert.equal(await placeSurfaces(async () => "placed", { retain: new Set(), unload: [] }), "placed");
+    assert.equal(mountedSurface(surfaceId), null);
+    assert.deepEqual(sent, ["input"], `sidecar sends after the place ended the sessions: ${JSON.stringify(sent)}`);
+  } finally {
+    delete globalThis.surfacePlaceSidecar;
+    dom.window.close();
+  }
+});
