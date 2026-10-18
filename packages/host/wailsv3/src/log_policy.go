@@ -179,6 +179,9 @@ func LogPolicyAnnouncer(log *EventLog, emit func(name string, payload any)) func
 	}
 }
 
+// logPolicyWatchHook is the function that SetLogPolicyWatchHook of a diagnostic build declares; a release build has no setter.
+var logPolicyWatchHook atomic.Pointer[func(watched []string)]
+
 // watchPolicyFile calls changed after the file at path was created, written, replaced, renamed or removed. fsnotify watches the
 // folder of the file and every file in it, so a write in place and an entry that a rename or a removal changes both notify. A
 // notification can follow another that already led to a read, so the reader of changed compares what it reads with what it holds.
@@ -206,6 +209,16 @@ func watchPolicyFile(path string, changed func()) (func(), error) {
 					return
 				}
 				if filepath.Base(event.Name) == name {
+					// The kqueue backend of fsnotify sends the Create of a new file before it watches the file
+					// (sendCreateIfNew of backend_kqueue.go), so a write in place between the two has no notification.
+					// The watch of the file is added here before the read starts: the read sees every earlier write,
+					// and a later write notifies. Adding a watched path again renews its registration.
+					if err := watcher.Add(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+						LogError("log policy", fmt.Errorf("watch %s: %w", path, err))
+					}
+					if hook := logPolicyWatchHook.Load(); hook != nil && *hook != nil {
+						(*hook)(watcher.WatchList())
+					}
 					changed()
 				}
 			case err, open := <-watcher.Errors:

@@ -51,6 +51,8 @@ pub mod images;
 pub mod installed;
 pub mod link;
 pub mod log_policy;
+#[cfg(feature = "diagnostics")]
+pub mod log_policy_watch_hook;
 pub mod log_query;
 pub mod log_retention;
 pub mod memory_pressure;

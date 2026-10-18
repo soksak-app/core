@@ -127,6 +127,8 @@ pub fn watch_file(
         }
     };
     let watched = path.to_path_buf();
+    #[cfg(feature = "diagnostics")]
+    let watched_directory = directory.to_path_buf();
     let handle = crate::routine::spawn_named("file-watch", move || {
         let mut events: [libc::kevent; 8] = unsafe { std::mem::zeroed() };
         loop {
@@ -181,6 +183,14 @@ pub fn watch_file(
                     Ok(None) => {}
                     Err(error) => eprintln!("watch {}: {error}", watched.display()),
                 }
+            }
+            #[cfg(feature = "diagnostics")]
+            {
+                let mut held = vec![watched_directory.clone()];
+                if file >= 0 {
+                    held.push(watched.clone());
+                }
+                crate::log_policy_watch_hook::observe(&held);
             }
             changed();
         }
