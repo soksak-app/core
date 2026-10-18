@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-// The 진단 row of the general section draws one switch, 디버그, that runs core.settings.debug and is on only when the debug state holds
-// (docs/spec/settings.md#진단).
-test("the 디버그 switch runs core.settings.debug and is on only when the trace and every class are at trace", async (t) => {
+// The diagnostics row of the general section draws one debug switch that runs core.settings.debug and is on only when the debug state holds
+// (docs/spec/settings.md, the section of core.settings.debug).
+test("the debug switch runs core.settings.debug and is on only when the trace and every class are at trace", async (t) => {
   const dom = new JSDOM("<body><div id=plane></div></body>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   globalThis.window = dom.window;

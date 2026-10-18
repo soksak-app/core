@@ -65,7 +65,7 @@ app-usage:
 	@case "$(CONFIG_DIR)" in '') echo "app-usage requires CONFIG_DIR=DIR [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
 	@node scripts/measure-app-usage.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --interval $(or $(INTERVAL),10)
 
-# Measures the share of the diagnostics in the memory of a running host: with the switch 디버그 on and then off, it runs five repetitions of
+# Measures the share of the diagnostics in the memory of a running host: with the debug switch on and then off, it runs five repetitions of
 # object-counts and prints the footprint of the host process (docs/operations/examples.md).
 trace-share:
 	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "trace-share requires APP=wailsv3|tauriv2 CONFIG=DIR" >&2; exit 2;; esac

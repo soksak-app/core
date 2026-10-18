@@ -16,7 +16,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
 } } });
 const { log, report, surfaceContextRuntime } = await import("../host.js");
 const { logGate } = await import("../log-gate.js");
-// The events below the level error are stored only in the debug state (docs/spec/settings.md, 진단 section), which these tests
+// The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug), which these tests
 // examine, so the state of every class at trace is set here.
 logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
 

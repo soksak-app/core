@@ -23,7 +23,7 @@ test('the performance trace flag is a declared boolean defaulting to false', asy
       settings: async (id, values) => { memory.common = { ...memory.common, ...values }; },
       onChange: () => () => {},
     });
-    // The trace is off by default: no layer builds or stores a trace event until the 디버그 switch turns it on (docs/spec/settings.md#진단).
+    // The trace is off by default: no layer builds or stores a trace event until the debug switch turns it on (docs/spec/settings.md, the section of core.settings.debug).
     assert.equal(value('diagnostics.performance'), false);
     await change({ 'diagnostics.performance': false }, 'common', 'test');
     assert.equal(memory.common['diagnostics.performance'], false);
@@ -265,7 +265,7 @@ test('a change of the settings names its actor and its keys, and its identifiers
   }
 });
 
-test('the 디버그 switch sets the trace and every class to trace, and off restores the defaults', async () => {
+test('the debug switch sets the trace and every class to trace, and off restores the defaults', async () => {
   const realDocument = globalThis.document;
   globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
   const memory = { common: {}, projects: [] };

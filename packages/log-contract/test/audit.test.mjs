@@ -26,7 +26,7 @@ const line = (seq, event, fields = {}, extra = {}) => JSON.stringify({
   ...(["page", "plugin"].includes(extra.layer) && !("page" in extra) ? { page: "1791948729050" } : {}), ...extra,
 });
 const open = line(1, "log.open", { schema: 2, pid: 7, role: "host", boot: "b1" });
-// The policy that stores every level, as the switch 디버그 sets it; without it the default policy, which stores only
+// The policy that stores every level, as the debug switch sets it; without it the default policy, which stores only
 // error, is in force.
 const debugOn = (seq) => line(seq, "log.policy", { source: "file", classes: { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" } });
 

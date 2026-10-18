@@ -151,12 +151,12 @@ export const defaults = {
   language: "auto",
 
   /* The performance trace, present in every build. When it is on, the layers store the events of the trace in the event files under
-     <config-dir>/logs; when it is off, no layer builds or stores one. It is off by default and the 디버그 switch turns it on (docs/spec/settings.md#진단). */
+     <config-dir>/logs; when it is off, no layer builds or stores one. It is off by default and the debug switch turns it on (docs/spec/settings.md, the section of core.settings.debug). */
   "diagnostics.performance": false,
 
   /* The policy of the event log (docs/spec/logging.md#classes-and-policy): the least severe level that is stored for the classes that the
      object names, one of off, error, warn, info, debug and trace; a class it does not name stores the level error. The default stores only
-     the errors of every class, and the 디버그 switch sets every class to trace. */
+     the errors of every class, and the debug switch sets every class to trace. */
   "diagnostics.log": {},
 
   /* The position of the project tabs. top = the chrome row, left = the vertical list on the left. */
@@ -575,7 +575,7 @@ export function set(patch, scope = projectId ? "project" : "common", actor) {
 }
 
 /**
- * Turns the 디버그 switch on or off (docs/spec/settings.md#진단). On sets the trace on and every class of the policy to trace; off sets the
+ * Turns the debug switch on or off (docs/spec/settings.md, the section of core.settings.debug). On sets the trace on and every class of the policy to trace; off sets the
  * trace off and the policy to the empty object, which stores only the errors. Both values are common settings.
  */
 export function setDebug(on, actor) {
@@ -585,7 +585,7 @@ export function setDebug(on, actor) {
   }, "common", actor);
 }
 
-/** Whether the 디버그 switch is on: the trace is on and every class of the policy is at trace. */
+/** Whether the debug switch is on: the trace is on and every class of the policy is at trace. */
 export const debugOn = () => settings["diagnostics.performance"] === true
   && CLASSES.every((name) => settings["diagnostics.log"][name] === "trace");
 

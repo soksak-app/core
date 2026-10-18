@@ -297,7 +297,7 @@ function drawGeneral() {
   ]));
 }
 
-/** The 디버그 switch. It is on when the performance trace is on and every class of the log policy is at trace, and it runs core.settings.debug with its new value. */
+/** The debug switch. It is on when the performance trace is on and every class of the log policy is at trace, and it runs core.settings.debug with its new value. */
 function debugSwitch() {
   const el = document.createElement("input");
   el.type = "checkbox";

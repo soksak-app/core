@@ -121,7 +121,7 @@ test('an error before the first start mark or after the last end mark of the run
 
 test('a chain finding of an earlier process before the first start mark belongs to no test of the run and is not judged', (t) => {
   // An earlier process of the configuration folder left a chain that stops after its first event. Both processes apply
-  // the policy that stores every level, as the switch 디버그 sets it; under the default policy, which stores only error,
+  // the policy that stores every level, as the debug switch sets it; under the default policy, which stores only error,
   // the chain asks for no hop.
   const chained = { ...catalog, chains: { input: ['host.sidecar.request', 'host.update.start'] } };
   const request = (seq, cid) => event(seq, 'host.sidecar.request', { name: 'n' }, { class: 'io', cids: [cid] });
