@@ -54,13 +54,14 @@ test("a page that does not reply records the host and its page processes and nam
   assert.deepEqual(files, sampled.map(([, file]) => file));
 });
 
-test("a request that the page did not answer names the stall records or why they could not be made", async () => {
-  const { mkdtempSync } = await import("node:fs");
+test("a request that the page did not answer names the stall records or why they could not be made", async (t) => {
+  const { mkdtempSync, rmSync } = await import("node:fs");
   const { join } = await import("node:path");
   const { tmpdir } = await import("node:os");
   const { EndpointError } = await import("@soksak/client");
   const { Session } = await import("../app.mjs");
   const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-config-"));
+  t.after(() => rmSync(configDir, { recursive: true }));
   const client = { endpoint: { pid: 999999 }, request: async () => { throw new EndpointError({ code: -32603, message: "the document did not reply within 10000 ms" }); } };
   const s = new Session({ name: "tauriv2", configDir }, client);
   // No process 999999 runs, so sample cannot record the host and the reason stays in the error.

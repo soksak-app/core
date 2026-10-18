@@ -7,11 +7,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { currentEventOffsets, eventLine, sessionEventStart, readEvents, traceRows, readEventErrors, readEventLines, readEventOffsets, untilEventLine, untilEventLines, writeEventOffsets } from "../event-log.mjs";
+import { currentEventOffsets, eventLine, eventOffsetFile, sessionEventStart, readEvents, traceRows, readEventErrors, readEventLines, readEventOffsets, untilEventLine, untilEventLines, writeEventOffsets } from "../event-log.mjs";
 
 function configDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-event-log-"));
-  t.after(() => rmSync(dir, { recursive: true }));
+  // The offsets of a configuration folder are the file beside it (eventOffsetFile), which a test may write.
+  t.after(() => { rmSync(dir, { recursive: true }); rmSync(eventOffsetFile(dir), { force: true }); });
   mkdirSync(join(dir, "logs"));
   return dir;
 }
