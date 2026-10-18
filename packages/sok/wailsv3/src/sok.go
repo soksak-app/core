@@ -38,6 +38,8 @@ commands:
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
   app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
                             replaces the application bundle TARGET with BUNDLE after the process PID ended
+  app relaunch --wait PID --target PATH [-- ARGUMENT...]
+                            starts the application bundle TARGET again in the background after the process PID ended
   plugin pack DIRECTORY OUTPUT [--diagnostics]
                             writes the plugin into OUTPUT; --diagnostics adds diagnostics.json
   sidecar release DIRECTORY OUTPUT [--platform P]

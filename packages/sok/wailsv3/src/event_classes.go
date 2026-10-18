@@ -28,6 +28,7 @@ var eventClasses = map[string]Class{
 	"host.overlay.dropped":                ClassInput,
 	"host.panic":                          ClassLifecycle,
 	"host.project.removal_allowed":        ClassLifecycle,
+	"host.relaunch.start":                 ClassLifecycle,
 	"host.sidecar.connect":                ClassLifecycle,
 	"host.sidecar.disconnect":             ClassLifecycle,
 	"host.sidecar.exit":                   ClassLifecycle,

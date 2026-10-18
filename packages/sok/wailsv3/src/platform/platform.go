@@ -27,8 +27,9 @@ type Platform interface {
 	WaitProcessEnd(pid int, timeout time.Duration) (bool, error)
 	// CopyBundle copies an application bundle, also across volumes, keeping its modes and signature.
 	CopyBundle(source, destination string) error
-	// OpenApplication starts a new instance of the application bundle with the arguments.
-	OpenApplication(bundle string, arguments []string) error
+	// OpenApplication starts a new instance of the application bundle with the arguments. It activates the new instance
+	// only when activate is set.
+	OpenApplication(bundle string, arguments []string, activate bool) error
 	// MonotonicNanos is the system-wide monotonic clock in nanoseconds that the events carry as mono_ns
 	// (docs/spec/logging.md#event). It is the clock of the native library, so events of different processes compare.
 	MonotonicNanos() (uint64, error)

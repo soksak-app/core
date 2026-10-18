@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -288,4 +289,61 @@ func TestTheReplacementRefusesWhatIsNotABundleOrWhenTheProcessKeepsRunning(t *te
 		t.Fatalf("the target holds %q", data)
 	}
 	end()
+}
+
+// contract: app-relaunch.starts-the-same-bundle-in-the-background-after-the-process-ended
+func TestTheRelaunchStartsTheSameBundleInTheBackgroundAfterTheProcessEnded(t *testing.T) {
+	requireBundles(t)
+	target := fakeBundle(t, t.TempDir(), "soksak.app", "same")
+	pid, end := endingProcess(t)
+	var started []string
+	open := func(bundle string, arguments []string, activate bool) error {
+		if err := exec.Command("kill", "-0", strconv.Itoa(pid)).Run(); err == nil {
+			t.Error("the application started before the process ended")
+		}
+		started = append(started, fmt.Sprintf("%s %s activate=%v", bundle, strings.Join(arguments, " "), activate))
+		return nil
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- sok.RelaunchApp(sok.RelaunchOptions{PID: pid, Target: target, Arguments: []string{"--config-dir", "/config"}, Timeout: 30 * time.Second}, open)
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("the relaunch finished while the process ran: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	end()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{target + " --config-dir /config activate=false"}; !slices.Equal(started, want) {
+		t.Fatalf("started %v, want %v", started, want)
+	}
+	data, _ := os.ReadFile(filepath.Join(target, "Contents", "Info.plist"))
+	if string(data) != "same" {
+		t.Fatalf("the target holds %q", data)
+	}
+}
+
+// contract: app-relaunch.refuses-a-folder-that-is-not-a-bundle-and-a-process-that-keeps-running
+func TestTheRelaunchRefusesAFolderThatIsNotABundleAndAProcessThatKeepsRunning(t *testing.T) {
+	requireBundles(t)
+	parent := t.TempDir()
+	pid, end := endingProcess(t)
+	defer end()
+	open := func(string, []string, bool) error { t.Fatal("the application started"); return nil }
+	plain := filepath.Join(parent, "plain")
+	if err := os.MkdirAll(plain, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	err := sok.RelaunchApp(sok.RelaunchOptions{PID: pid, Target: plain, Timeout: time.Second}, open)
+	if err == nil || err.Error() != "application relaunch: the target "+plain+" is not an application bundle" {
+		t.Fatalf("the error is %v", err)
+	}
+	target := fakeBundle(t, parent, "soksak.app", "same")
+	err = sok.RelaunchApp(sok.RelaunchOptions{PID: pid, Target: target, Timeout: 200 * time.Millisecond}, open)
+	if err == nil || err.Error() != fmt.Sprintf("application relaunch: process %d did not end within 200ms", pid) {
+		t.Fatalf("the error is %v", err)
+	}
 }

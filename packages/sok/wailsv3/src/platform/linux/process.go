@@ -59,7 +59,7 @@ func (linux) CopyBundle(string, string) error {
 }
 
 // OpenApplication is an error: an application bundle is a macOS file.
-func (linux) OpenApplication(string, []string) error {
+func (linux) OpenApplication(string, []string, bool) error {
 	return errors.New("application bundles are not implemented on linux")
 }
 

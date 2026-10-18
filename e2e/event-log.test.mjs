@@ -32,8 +32,8 @@ for (const app of Object.values(APPS)) {
     assert.equal(events[0].fields.role, "host");
     assert.equal(events[0].fields.schema, 2);
     // The policy in force at the start of the process is stored as log.policy, which passes every gate. host.app.event `started`
-    // is below `error` and is stored only by a policy in force before the process started, which no declared entry sets; the
-    // activity observers are checked by the window that the next test opens.
+    // is below `error` and is stored only by a policy in force before the process started, so the test after the next one
+    // starts the host again under its policy.
     assert.ok(events.some((event) => event.event === "log.policy"), `${path} holds no log.policy`);
     // The debug file of the process holds the events of the levels debug and trace; one seq counts across both files, the log.open
     // of each file included.
@@ -77,6 +77,36 @@ for (const app of Object.values(APPS)) {
       (line) => line.startsWith("info host host.window.event:") && line.includes('"kind":"closed"'), 30000,
       reading(app, reads));
     assert.match(closed, /"window":"[^"]+"/);
+  });
+}
+
+// A host that starts under the policy that a check left (diagnostics.host.relaunch) stores the start of the application
+// (`host.app.event` `started`, once per host process) and the observers that the native library registers at the start.
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a host that starts under the policy of the check stores its start and its observers`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    assert.ok(s, `${app.binary} is not built`);
+    // host.app.event and native.observe.registered are lifecycle events at the level info.
+    const reads = ["host.app.event", "native.observe.registered"];
+    await fresh(s, { log: { lifecycle: "info" }, reads });
+    const previous = s.client.endpoint.pid;
+    await s.relaunch();
+    const { pid } = s.client.endpoint;
+    assert.notEqual(pid, previous, "the relaunch connected to the process that quit");
+    await s.flushLog();
+    const logs = join(app.configDir, "logs");
+    const offsets = Object.fromEntries(Object.entries(currentEventOffsets(app.configDir))
+      .filter(([name]) => !name.endsWith(`-${pid}.jsonl`)));
+    await untilEventLine(app.configDir, offsets,
+      (line) => line.startsWith("info host host.app.event:") && line.includes('"kind":"started"'), 30000, reading(app, reads));
+    // The events are read from the event log of the new process, so an event of the process that quit is not counted.
+    const names = readdirSync(logs).filter((name) => name.startsWith("host-") && name.endsWith(`-${pid}.jsonl`));
+    assert.equal(names.length, 1, `logs/ holds ${names.length} event logs of process ${pid}: ${names.join(", ")}`);
+    const events = readFileSync(join(logs, names[0]), "utf8").split("\n").slice(0, -1).map((line) => JSON.parse(line));
+    const started = events.filter((event) => event.event === "host.app.event" && event.fields.kind === "started");
+    assert.equal(started.length, 1, `process ${pid} stored ${started.length} host.app.event started`);
+    assert.ok(events.some((event) => event.event === "native.observe.registered"),
+      `process ${pid} stored no native.observe.registered`);
   });
 }
 

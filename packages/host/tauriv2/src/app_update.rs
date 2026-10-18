@@ -153,9 +153,15 @@ pub fn prepare_start(
 /// command and its command line. The command waits for the end of this process, so the host starts it before the final
 /// flush of the event log, which then holds the event and the error of a start that fails.
 pub fn start_update(command: &mut Command) -> Result<Child, String> {
+    start_detached(command, "application update", "host.update.start")
+}
+
+/// Starts a detached command of the exit and stores the event with the pid of the command and its command line;
+/// subject begins the error of a start that fails.
+fn start_detached(command: &mut Command, subject: &str, event: &str) -> Result<Child, String> {
     let child = command.spawn().map_err(|error| {
         format!(
-            "application update: start {}: {error}",
+            "{subject}: start {}: {error}",
             command.get_program().to_string_lossy()
         )
     })?;
@@ -163,12 +169,82 @@ pub fn start_update(command: &mut Command) -> Result<Child, String> {
         .chain(command.get_args())
         .map(|part| part.to_string_lossy().into_owned())
         .collect();
+    // events: host.update.start, host.relaunch.start
     crate::event_record::emit_host(
         crate::event_log::Level::Info,
-        "host.update.start",
+        event,
         serde_json::json!({"pid": child.id(), "command": line.join(" ")}),
     );
     Ok(child)
+}
+
+/// Prepares the command that starts the application again after this process `pid` has ended
+/// (docs/spec/endpoint.md#diagnostic-builds): `sok app relaunch` of the running bundle, which the relaunch does not
+/// change, with the arguments of the application.
+pub fn prepare_relaunch(
+    executable: &Path,
+    pid: u32,
+    arguments: &[String],
+) -> Result<Command, String> {
+    let not_bundled = || {
+        format!(
+            "application relaunch: {} does not run from an application bundle",
+            executable.display()
+        )
+    };
+    let macos = executable.parent().ok_or_else(not_bundled)?;
+    let target = macos
+        .parent()
+        .and_then(Path::parent)
+        .filter(|target| {
+            target
+                .extension()
+                .is_some_and(|extension| extension == "app")
+        })
+        .filter(|_| macos.file_name().is_some_and(|name| name == "MacOS"))
+        .ok_or_else(not_bundled)?;
+    let mut command = Command::new(macos.join("sok"));
+    command
+        .args(["app", "relaunch", "--wait"])
+        .arg(pid.to_string())
+        .arg("--target")
+        .arg(target);
+    if !arguments.is_empty() {
+        command.arg("--").args(arguments);
+    }
+    // The command outlives this process, so its failure message has no other reader than the standard error file of this run
+    // (docs/spec/logging.md#files); the command keeps the standard error of the host.
+    command.stderr(Stdio::inherit());
+    crate::platform::current()
+        .and_then(|platform| platform.new_session(&mut command))
+        .map_err(|error| format!("application relaunch: {error}"))?;
+    Ok(command)
+}
+
+/// Starts the detached command of a relaunch and stores the event `host.relaunch.start` with the pid of the command and
+/// its command line, before the final flush of the event log as start_update does.
+pub fn start_relaunch(command: &mut Command) -> Result<Child, String> {
+    start_detached(command, "application relaunch", "host.relaunch.start")
+}
+
+/// The detached command that the exit starts: an application update or a relaunch.
+pub struct PendingStart {
+    pub command: Command,
+    pub relaunch: bool,
+}
+
+impl PendingStart {
+    /// Starts the command of the pending update or relaunch and reports a start that fails.
+    pub fn start(mut self) {
+        let (result, place) = if self.relaunch {
+            (start_relaunch(&mut self.command), "application relaunch")
+        } else {
+            (start_update(&mut self.command), "application update")
+        };
+        if let Err(error) = result {
+            crate::application_log::log_error(place, error);
+        }
+    }
 }
 
 /// The argument of the appUpdateApply call.

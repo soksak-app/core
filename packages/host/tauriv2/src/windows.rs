@@ -144,8 +144,9 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
 #[derive(Default)]
 pub(crate) struct Windows {
     pub(crate) quit: crate::quit::Quit,
-    /// The command of the pending application update, which the exit starts (docs/spec/installation.md#application-update).
-    pub(crate) update: Mutex<Option<std::process::Command>>,
+    /// The command of the pending application update or relaunch, which the exit starts
+    /// (docs/spec/installation.md#application-update, docs/spec/endpoint.md#diagnostic-builds).
+    pub(crate) update: Mutex<Option<crate::app_update::PendingStart>>,
     removals: crate::project_removal::Removals,
     next_window: AtomicU64,
     opening: Mutex<()>,

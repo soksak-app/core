@@ -70,6 +70,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.overlay.dropped" => Some(Class::Input),
         "host.panic" => Some(Class::Lifecycle),
         "host.project.removal_allowed" => Some(Class::Lifecycle),
+        "host.relaunch.start" => Some(Class::Lifecycle),
         "host.sidecar.connect" => Some(Class::Lifecycle),
         "host.sidecar.disconnect" => Some(Class::Lifecycle),
         "host.sidecar.exit" => Some(Class::Lifecycle),

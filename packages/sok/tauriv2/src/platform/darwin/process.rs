@@ -213,13 +213,17 @@ impl Platform for Darwin {
         ))
     }
 
-    /// Starts a new instance with open -n.
+    /// Starts a new instance with open -n; open -g keeps the new instance in the background.
     fn open_application(
         &self,
         bundle: &std::path::Path,
         arguments: &[String],
+        activate: bool,
     ) -> Result<(), String> {
         let mut command = std::process::Command::new("open");
+        if !activate {
+            command.arg("-g");
+        }
         command.arg("-n").arg(bundle);
         if !arguments.is_empty() {
             command.arg("--args").args(arguments);

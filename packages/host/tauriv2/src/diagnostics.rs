@@ -129,6 +129,7 @@ pub(crate) fn call(
         "diagnostics.log.flush" => crate::event_record::flush_records(TIMEOUT)
             .map(|()| Value::Null)
             .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error)),
+        "diagnostics.host.relaunch" => relaunch(host),
         "diagnostics.test.mark" => {
             let mark = crate::test_mark::parse_test_mark(&params)?;
             crate::test_mark::emit_test_mark(&mark, TIMEOUT)
@@ -165,6 +166,29 @@ pub(crate) fn call(
             format!("{method} is not a diagnostic method"),
         )),
     }
+}
+
+/// Quits the application as host.quit does and starts it again with the same executable and arguments once this process
+/// has ended, so the new process reads the files that a check left in the configuration folder
+/// (docs/spec/endpoint.md#diagnostic-builds). It replies once the quit has begun.
+fn relaunch(host: &Host) -> Result<Value, Failure> {
+    let failed = |error: String| Failure::new(crate::endpoint::HANDLER_FAILED, error);
+    let executable = std::env::current_exe()
+        .map_err(|error| failed(format!("application relaunch: {error}")))?;
+    let arguments: Vec<String> = std::env::args().skip(1).collect();
+    let command = crate::app_update::prepare_relaunch(&executable, std::process::id(), &arguments)
+        .map_err(failed)?;
+    *host
+        .0
+        .state::<crate::windows::Windows>()
+        .update
+        .lock()
+        .expect("pending update") = Some(crate::app_update::PendingStart {
+        command,
+        relaunch: true,
+    });
+    host.0.exit(0);
+    Ok(Value::Null)
 }
 
 /// Makes the app page WebContent process of the window collect JavaScript objects. It is called before a memory check

@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
 import { announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
+import { untilEndpoint } from "./endpoint-wait.mjs";
 import { readEventErrors, sessionEventStart, writeEventOffsets } from "./event-log.mjs";
 import { policyOfSetting, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
@@ -184,7 +185,7 @@ export async function open(t, app) {
       const { before, after } = await restoreFrontmost({
         name: app.name,
         baseline: baselineFrontmost,
-        host: client.endpoint.pid,
+        host: session.client.endpoint.pid,
         hosts: [...testedHosts],
         inactive: () => session.until("host.window", (w) => w.active === false, "the application stayed active after the check"),
       });
@@ -204,8 +205,9 @@ export async function open(t, app) {
     for (const line of await session.releasePresses()) t.diagnostic(line);
   });
   // The cleanup of a check runs before the connection is closed. node:test runs after hooks in registration order.
+  // A relaunch replaces the connection of the session, so the connection is read when the check ends.
   t.after(() => finishSession(t, session, () => {
-    client.close();
+    session.client.close();
     releaseSlot();
   }));
   // The cleanup reads the errors after this position and the recordings beside these, so both are taken before a check of
@@ -314,6 +316,27 @@ export class Session {
    * ends names the step that ran. */
   step(what) {
     process.stderr.write(`step ${this.app.name} +${((performance.now() - this.started) / 1000).toFixed(1)} s ${what}\n`);
+  }
+
+  /**
+   * Quits the application through diagnostics.host.relaunch, which starts it again with the same executable and arguments,
+   * and connects to the new process once it has written its endpoint.json (docs/spec/endpoint.md#diagnostic-builds). The new
+   * process reads the files that the check left in the configuration folder, such as the log policy.
+   */
+  async relaunch() {
+    const previous = this.client.endpoint.pid;
+    // The watch starts before the request, so an endpoint that the new process writes at once is not missed.
+    const next = untilEndpoint(this.app.configDir, previous, 60000);
+    this.step(`relaunch process ${previous}`);
+    await this.request("diagnostics.host.relaunch");
+    const endpoint = await next;
+    this.client.close();
+    this.client = await connect({ configDir: this.app.configDir });
+    if (this.client.endpoint.pid !== endpoint.pid) {
+      throw new Error(`${this.app.name}: the relaunch connected to process ${this.client.endpoint.pid}, not ${endpoint.pid}`);
+    }
+    testedHosts.add(endpoint.pid);
+    this.step(`relaunched as process ${endpoint.pid}`);
   }
 
   /** Cleanups to run before the connection is closed. They run in reverse order of registration. */

@@ -825,6 +825,16 @@
       },
       "description": "The index of an event file was built from the whole file, because it did not exist or was not the index of that file."
     },
+    "host.relaunch.start": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "pid": "number",
+        "command": "string"
+      },
+      "description": "The host started the detached command that starts the application again after the process ended (diagnostics.host.relaunch)."
+    },
     "host.update.start": {
       "layer": "host",
       "class": "lifecycle",

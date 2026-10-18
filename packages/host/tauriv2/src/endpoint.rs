@@ -83,6 +83,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.presentation.failure",
     "diagnostics.input.source",
     "diagnostics.log.flush",
+    "diagnostics.host.relaunch",
     "diagnostics.test.mark",
     "diagnostics.stall.dump",
     "diagnostics.notifications",

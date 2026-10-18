@@ -55,11 +55,13 @@ pub trait Platform {
     fn lock_file(&self, file: &std::fs::File) -> Result<(), String>;
     /// Whether the open file is the file at the path (the same device and the same index).
     fn same_file(&self, file: &std::fs::File, path: &std::path::Path) -> Result<bool, String>;
-    /// Starts a new instance of the application bundle with the arguments.
+    /// Starts a new instance of the application bundle with the arguments. It activates the new instance only when
+    /// activate is set.
     fn open_application(
         &self,
         bundle: &std::path::Path,
         arguments: &[String],
+        activate: bool,
     ) -> Result<(), String>;
 }
 

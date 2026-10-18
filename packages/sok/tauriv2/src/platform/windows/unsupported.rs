@@ -72,6 +72,7 @@ impl Platform for Windows {
         &self,
         _bundle: &std::path::Path,
         _arguments: &[String],
+        _activate: bool,
     ) -> Result<(), String> {
         Err("application bundles are not implemented on windows".into())
     }

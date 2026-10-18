@@ -15,6 +15,7 @@ const EXACT = new Map([
   ["host.overlay.dropped", "input"],
   ["host.panic", "lifecycle"],
   ["host.project.removal_allowed", "lifecycle"],
+  ["host.relaunch.start", "lifecycle"],
   ["host.sidecar.connect", "lifecycle"],
   ["host.sidecar.disconnect", "lifecycle"],
   ["host.sidecar.exit", "lifecycle"],

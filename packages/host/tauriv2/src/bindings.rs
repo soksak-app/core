@@ -648,7 +648,10 @@ fn app_update_apply(
         .state::<crate::windows::Windows>()
         .update
         .lock()
-        .expect("pending update") = Some(command);
+        .expect("pending update") = Some(crate::app_update::PendingStart {
+        command,
+        relaunch: false,
+    });
     window.app_handle().exit(0);
     Ok(())
 }

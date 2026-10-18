@@ -24,6 +24,7 @@
 | `sok debug replay <session> [--until <sequence>]` | 저장된 입력에서 해당 sidecar의 재생 실행 파일로 session의 화면을 다시 만들고, 저장된 sidecar와 page의 모든 hash를 재생한 hash와 비교해 첫 불일치를 session, 순번, 층을 이름으로 가진 `error` event로 보고하며 종료 상태 1로 끝난다([replay](replay.ko.md#명령)). 실행 중인 애플리케이션이 필요 없다 |
 | `sok capture [window]` | 진단 build: 창에 focus를 주지 않고 정지 이미지를 쓴다 |
 | `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` | 프로세스 `<pid>`가 끝난 뒤 애플리케이션 번들 `<target>`을 `<bundle>`로 바꾸고 시작한다([애플리케이션 업데이트](installation.ko.md#애플리케이션-업데이트)) |
+| `sok app relaunch --wait <pid> --target <path> [-- <argument>...]` | 프로세스 `<pid>`가 끝난 뒤 애플리케이션 번들 `<target>`을 인자와 함께 활성화하지 않고 다시 시작한다([진단 빌드](endpoint.ko.md#진단-빌드)) |
 | `sok path install\|remove` | 이 애플리케이션의 경로 항목을 쓰거나 지운다. `install`은 파일과 그 안의 폴더를 출력한다 |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | 설치된 plugin을 바꾼다([설치](installation.ko.md)) |
 | `sok plugin list` | 설치된 plugin을 나열한다 |

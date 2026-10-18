@@ -9,7 +9,8 @@ use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 use soksak_sok::appupdate::{
-    AppUpdate, ReplaceOptions, core_update_candidate, replace_app, stage_app_update,
+    AppUpdate, RelaunchOptions, ReplaceOptions, core_update_candidate, relaunch_app, replace_app,
+    stage_app_update,
 };
 use soksak_sok::install::{CoreRelease, Index, RegistryCore, Release, Revoked, RevokedCore};
 
@@ -368,6 +369,98 @@ fn the_replacement_refuses_what_is_not_a_bundle_or_when_the_process_keeps_runnin
     let error = replace_app(&options, &open).unwrap_err();
     assert!(error.contains("did not end within"), "{error}");
     assert_eq!(plist_text(&target), "old");
+    process.kill().unwrap();
+    process.wait().unwrap();
+}
+
+// contract: app-relaunch.starts-the-same-bundle-in-the-background-after-the-process-ended
+#[test]
+fn the_relaunch_starts_the_same_bundle_in_the_background_after_the_process_ended() {
+    if !bundles_supported() {
+        return;
+    }
+    let parent = Dir::new();
+    let target = fake_bundle(&parent.0, "soksak.app", "same");
+    let mut process = sleeping();
+    let pid = process.id();
+    let started = std::sync::Mutex::new(vec![]);
+    let to = target.clone();
+    let relaunching = std::thread::scope(|scope| {
+        let handle = scope.spawn(|| {
+            relaunch_app(
+                &RelaunchOptions {
+                    pid: pid as i32,
+                    target: to.clone(),
+                    arguments: vec!["--config-dir".into(), "/config".into()],
+                    timeout: Duration::from_secs(30),
+                },
+                &|opened: &Path, arguments: &[String], activate: bool| {
+                    started.lock().unwrap().push(format!(
+                        "{} {} activate={activate}",
+                        opened.display(),
+                        arguments.join(" ")
+                    ));
+                    Ok(())
+                },
+            )
+        });
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(
+            !handle.is_finished(),
+            "the relaunch finished while the process ran"
+        );
+        process.kill().unwrap();
+        process.wait().unwrap();
+        handle.join().unwrap()
+    });
+    relaunching.unwrap();
+    assert_eq!(
+        *started.lock().unwrap(),
+        [format!(
+            "{} --config-dir /config activate=false",
+            target.display()
+        )]
+    );
+    assert_eq!(plist_text(&target), "same");
+}
+
+// contract: app-relaunch.refuses-a-folder-that-is-not-a-bundle-and-a-process-that-keeps-running
+#[test]
+fn the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_a_process_that_keeps_running() {
+    if !bundles_supported() {
+        return;
+    }
+    let parent = Dir::new();
+    let mut process = sleeping();
+    let pid = process.id() as i32;
+    let open = |_: &Path, _: &[String], _: bool| -> Result<(), String> {
+        panic!("the application started")
+    };
+    let plain = parent.0.join("plain");
+    std::fs::create_dir_all(&plain).unwrap();
+    let options = RelaunchOptions {
+        pid,
+        target: plain.clone(),
+        arguments: vec![],
+        timeout: Duration::from_secs(1),
+    };
+    assert_eq!(
+        relaunch_app(&options, &open).unwrap_err(),
+        format!(
+            "application relaunch: the target {} is not an application bundle",
+            plain.display()
+        )
+    );
+    let options = RelaunchOptions {
+        pid,
+        target: fake_bundle(&parent.0, "soksak.app", "same"),
+        arguments: vec![],
+        timeout: Duration::from_millis(200),
+    };
+    assert_eq!(
+        relaunch_app(&options, &open).unwrap_err(),
+        format!("application relaunch: process {pid} did not end within 200ms")
+    );
     process.kill().unwrap();
     process.wait().unwrap();
 }

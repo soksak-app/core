@@ -188,11 +188,49 @@ func ReplaceApp(options ReplaceOptions, open func(bundle string, arguments []str
 	return errors.Join(os.RemoveAll(previous), os.RemoveAll(options.Bundle))
 }
 
-// runApp runs `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]`.
+// RelaunchOptions are the arguments of `sok app relaunch`.
+type RelaunchOptions struct {
+	// PID is the process of the application that quits for the relaunch.
+	PID int
+	// Target is the bundle that the application runs from and starts again from.
+	Target string
+	// Arguments are the arguments of the application that starts again.
+	Arguments []string
+	// Timeout is how long RelaunchApp waits for the end of the process.
+	Timeout time.Duration
+}
+
+// RelaunchApp starts the application bundle Target again with its arguments after the process PID has ended
+// (docs/spec/endpoint.md#diagnostic-builds). It starts the application without activating it, so the new process does
+// not take the focus from the application that the person uses.
+func RelaunchApp(options RelaunchOptions, open func(bundle string, arguments []string, activate bool) error) error {
+	if !isBundle(options.Target) {
+		return fmt.Errorf("application relaunch: the target %s is not an application bundle", options.Target)
+	}
+	current, err := platform.Current()
+	if err != nil {
+		return err
+	}
+	ended, err := current.WaitProcessEnd(options.PID, options.Timeout)
+	if err != nil {
+		return fmt.Errorf("application relaunch: %w", err)
+	}
+	if !ended {
+		return fmt.Errorf("application relaunch: process %d did not end within %s", options.PID, options.Timeout)
+	}
+	if err := open(options.Target, options.Arguments, false); err != nil {
+		return fmt.Errorf("application relaunch: start the bundle: %w", err)
+	}
+	return nil
+}
+
+// runApp runs `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` and
+// `sok app relaunch --wait <pid> --target <path> [-- <argument>...]`.
 func runApp(args []string, stdout io.Writer) error {
-	if len(args) == 0 || args[0] != "update" {
+	if len(args) == 0 || (args[0] != "update" && args[0] != "relaunch") {
 		return usage("unknown command: app %s", strings.Join(args, " "))
 	}
+	relaunch := args[0] == "relaunch"
 	args = args[1:]
 	var arguments []string
 	if at := slices.Index(args, "--"); at >= 0 {
@@ -213,9 +251,11 @@ func runApp(args []string, stdout io.Writer) error {
 	if err != nil || pid <= 0 {
 		return usage("--wait must be the pid of a process")
 	}
-	bundle, err := parsed.required("bundle")
-	if err != nil {
-		return err
+	var bundle string
+	if !relaunch {
+		if bundle, err = parsed.required("bundle"); err != nil {
+			return err
+		}
 	}
 	target, err := parsed.required("target")
 	if err != nil {
@@ -225,7 +265,14 @@ func runApp(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := ReplaceApp(ReplaceOptions{PID: pid, Bundle: bundle, Target: target, Arguments: arguments, Timeout: time.Minute}, current.OpenApplication); err != nil {
+	if relaunch {
+		if err := RelaunchApp(RelaunchOptions{PID: pid, Target: target, Arguments: arguments, Timeout: time.Minute}, current.OpenApplication); err != nil {
+			return err
+		}
+		return printJSON(stdout, map[string]string{"target": target})
+	}
+	open := func(bundle string, arguments []string) error { return current.OpenApplication(bundle, arguments, true) }
+	if err := ReplaceApp(ReplaceOptions{PID: pid, Bundle: bundle, Target: target, Arguments: arguments, Timeout: time.Minute}, open); err != nil {
 		return err
 	}
 	return printJSON(stdout, map[string]string{"target": target})

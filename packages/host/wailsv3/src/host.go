@@ -204,14 +204,12 @@ func Run(assets fs.FS, options Options) error {
 					}
 				})
 			}
-			// An application update keeps the persistent services running for the application that starts next.
+			// An application update or a relaunch keeps the persistent services running for the application that starts next.
 			update := host.takeUpdate()
 			if update != nil {
 				// The command waits for the end of this process, so it starts here, before the flush that stores its event and
 				// the error of a start that fails.
-				if err := StartAppUpdate(update); err != nil {
-					LogError("application update", err)
-				}
+				update.start()
 				sidecars.Detach()
 			} else {
 				sidecars.Stop()

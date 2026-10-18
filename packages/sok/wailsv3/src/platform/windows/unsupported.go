@@ -38,7 +38,7 @@ func (windows) CopyBundle(string, string) error {
 	return errors.New("application bundles are not implemented on windows")
 }
 
-func (windows) OpenApplication(string, []string) error {
+func (windows) OpenApplication(string, []string, bool) error {
 	return errors.New("application bundles are not implemented on windows")
 }
 

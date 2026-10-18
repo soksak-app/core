@@ -232,17 +232,64 @@ pub fn replace_app(options: &ReplaceOptions, open: OpenApplication) -> Result<()
     Ok(())
 }
 
-/// Runs `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]`.
+/// The arguments of `sok app relaunch`.
+pub struct RelaunchOptions {
+    /// The process of the application that quits for the relaunch.
+    pub pid: i32,
+    /// The bundle that the application runs from and starts again from.
+    pub target: PathBuf,
+    /// The arguments of the application that starts again.
+    pub arguments: Vec<String>,
+    /// How long relaunch_app waits for the end of the process.
+    pub timeout: std::time::Duration,
+}
+
+/// Starts the application bundle with arguments, activating it only when the flag is set.
+pub type OpenApplicationActivating<'a> = &'a dyn Fn(&Path, &[String], bool) -> Result<(), String>;
+
+/// Starts the application bundle `target` again with its arguments after the process `pid` has ended
+/// (docs/spec/endpoint.md#diagnostic-builds). It starts the application without activating it, so the new process does
+/// not take the focus from the application that the person uses.
+pub fn relaunch_app(
+    options: &RelaunchOptions,
+    open: OpenApplicationActivating,
+) -> Result<(), String> {
+    if !is_bundle(&options.target) {
+        return Err(format!(
+            "application relaunch: the target {} is not an application bundle",
+            options.target.display()
+        ));
+    }
+    let platform = crate::platform::current()?;
+    if !platform
+        .wait_process_end(options.pid, options.timeout)
+        .map_err(|error| format!("application relaunch: {error}"))?
+    {
+        return Err(format!(
+            "application relaunch: process {} did not end within {:?}",
+            options.pid, options.timeout
+        ));
+    }
+    open(&options.target, &options.arguments, false)
+        .map_err(|error| format!("application relaunch: start the bundle: {error}"))
+}
+
+/// Runs `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` and
+/// `sok app relaunch --wait <pid> --target <path> [-- <argument>...]`.
 pub(crate) fn run_app(
     args: &[String],
     stdout: &mut dyn std::io::Write,
 ) -> Result<(), crate::Error> {
-    if args.first().map(String::as_str) != Some("update") {
-        return Err(crate::Error::Usage(format!(
-            "unknown command: app {}",
-            args.join(" ")
-        )));
-    }
+    let relaunch = match args.first().map(String::as_str) {
+        Some("update") => false,
+        Some("relaunch") => true,
+        _ => {
+            return Err(crate::Error::Usage(format!(
+                "unknown command: app {}",
+                args.join(" ")
+            )));
+        }
+    };
     let mut rest = &args[1..];
     let mut arguments = vec![];
     if let Some(at) = rest.iter().position(|arg| arg == "--") {
@@ -260,6 +307,23 @@ pub(crate) fn run_app(
         .ok()
         .filter(|pid| *pid > 0)
         .ok_or_else(|| crate::Error::Usage("--wait must be the pid of a process".into()))?;
+    let platform = crate::platform::current()?;
+    if relaunch {
+        let options = RelaunchOptions {
+            pid,
+            target: PathBuf::from(parsed.required("target")?),
+            arguments,
+            timeout: std::time::Duration::from_secs(60),
+        };
+        relaunch_app(&options, &|bundle, arguments, activate| {
+            platform.open_application(bundle, arguments, activate)
+        })?;
+        crate::release::print_json(
+            stdout,
+            &serde_json::json!({"target": options.target.display().to_string()}),
+        )?;
+        return Ok(());
+    }
     let options = ReplaceOptions {
         pid,
         bundle: PathBuf::from(parsed.required("bundle")?),
@@ -267,9 +331,8 @@ pub(crate) fn run_app(
         arguments,
         timeout: std::time::Duration::from_secs(60),
     };
-    let platform = crate::platform::current()?;
     replace_app(&options, &|bundle, arguments| {
-        platform.open_application(bundle, arguments)
+        platform.open_application(bundle, arguments, true)
     })?;
     crate::release::print_json(
         stdout,

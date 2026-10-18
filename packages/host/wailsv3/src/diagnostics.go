@@ -50,6 +50,7 @@ func init() {
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
 	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
 	diagnosticMethods["diagnostics.log.flush"] = diagnosticLogFlush
+	diagnosticMethods["diagnostics.host.relaunch"] = diagnosticHostRelaunch
 	diagnosticMethods["diagnostics.test.mark"] = diagnosticTestMark
 	diagnosticMethods["diagnostics.stall.dump"] = diagnosticStallDump
 	diagnosticMethods["diagnostics.capture.still"] = diagnosticCaptureStill
@@ -517,6 +518,29 @@ func diagnosticLogFlush(e *Endpoint, _ *endpointConn, params json.RawMessage) (a
 		return nil, err
 	}
 	return nil, FlushRecords(10 * time.Second)
+}
+
+// diagnosticHostRelaunch quits the application as host.quit does and starts it again with the same executable and
+// arguments once this process has ended, so the new process reads the files that a check left in the configuration
+// folder (docs/spec/endpoint.md#diagnostic-builds). It replies once the quit has begun.
+func diagnosticHostRelaunch(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	h, _, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return nil, fmt.Errorf("application relaunch: %w", err)
+	}
+	command, err := PrepareAppRelaunch(executable, os.Getpid(), os.Args[1:])
+	if err != nil {
+		return nil, err
+	}
+	h.mu.Lock()
+	h.update = &pendingStart{command: command, relaunch: true}
+	h.mu.Unlock()
+	routine.Go("quit", application.Get().Quit)
+	return nil, nil
 }
 
 // diagnosticTestMark stores the start or the end of a test as an event and replies with the position of its line.

@@ -428,19 +428,18 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 }
             }
             if let tauri::RunEvent::Exit = event {
-                // An application update keeps the persistent services running for the application that starts next.
+                // An application update or a relaunch keeps the persistent services running for the application that starts
+                // next.
                 let update = app
                     .state::<windows::Windows>()
                     .update
                     .lock()
                     .expect("pending update")
                     .take();
-                if let Some(mut command) = update {
+                if let Some(pending) = update {
                     // The command waits for the end of this process, so it starts here, before the flush that stores its event
                     // and the error of a start that fails.
-                    if let Err(error) = app_update::start_update(&mut command) {
-                        log_error("application update", error);
-                    }
+                    pending.start();
                     app.state::<WindowSidecars>().detach();
                 } else {
                     app.state::<WindowSidecars>().stop();

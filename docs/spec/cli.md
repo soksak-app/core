@@ -24,6 +24,7 @@
 | `sok debug replay <session> [--until <sequence>]` | Rebuilds the screen of a session from the stored inputs with the replay executable of its sidecar, compares every stored sidecar and page hash with the replayed one, and reports the first divergence as an `error` event naming the session, the sequence and the layer, with exit status 1 ([replay](replay.md#command)); it does not need a running application |
 | `sok capture [window]` | Diagnostic builds: writes a still image of the window without focusing it |
 | `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` | Replaces the application bundle `<target>` with `<bundle>` after the process `<pid>` ended and starts it ([application update](installation.md#application-update)) |
+| `sok app relaunch --wait <pid> --target <path> [-- <argument>...]` | Starts the application bundle `<target>` again with the arguments, without activating it, after the process `<pid>` ended ([diagnostic builds](endpoint.md#diagnostic-builds)) |
 | `sok path install\|remove` | Writes or deletes the path entry of this application; `install` prints the file and the directory it holds |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | Changes the installed plugins ([installation](installation.md)) |
 | `sok plugin list` | Lists the installed plugins |

@@ -166,7 +166,7 @@ func (h *Host) AppUpdateApply(ctx context.Context, requestJSON json.RawMessage) 
 		return err
 	}
 	h.mu.Lock()
-	h.update = command
+	h.update = &pendingStart{command: command}
 	h.mu.Unlock()
 	routine.Go("quit", application.Get().Quit)
 	return nil
@@ -176,23 +176,83 @@ func (h *Host) AppUpdateApply(ctx context.Context, requestJSON json.RawMessage) 
 // of the command and its command line. The command waits for the end of this process, so the host starts it before the
 // final flush of the event log, which then holds the event and the error of a start that fails.
 func StartAppUpdate(command *exec.Cmd) error {
+	return startDetached(command, "application update", "host.update.start")
+}
+
+// startDetached starts a detached command of the shutdown and stores the event with the pid of the command and its
+// command line; subject begins the error of a start that fails.
+func startDetached(command *exec.Cmd, subject, event string) error {
 	if err := command.Start(); err != nil {
-		return fmt.Errorf("application update: start %s: %w", command.Path, err)
+		return fmt.Errorf("%s: start %s: %w", subject, command.Path, err)
 	}
-	EmitHost(LevelInfo, "host.update.start", map[string]any{"pid": command.Process.Pid, "command": strings.Join(command.Args, " ")})
+	// events: host.update.start, host.relaunch.start
+	EmitHost(LevelInfo, event, map[string]any{"pid": command.Process.Pid, "command": strings.Join(command.Args, " ")})
 	return nil
 }
 
-// takeUpdate returns the command of the pending update, which the shutdown starts, and clears it.
-func (h *Host) takeUpdate() *exec.Cmd {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	command := h.update
-	h.update = nil
-	return command
+// PrepareAppRelaunch prepares the command that starts the application again after this process pid has ended
+// (docs/spec/endpoint.md#diagnostic-builds): `sok app relaunch` of the running bundle, which the relaunch does not
+// change, with the arguments of the application.
+func PrepareAppRelaunch(executable string, pid int, arguments []string) (*exec.Cmd, error) {
+	macOS := filepath.Dir(executable)
+	target := filepath.Dir(filepath.Dir(macOS))
+	if filepath.Base(macOS) != "MacOS" || !strings.HasSuffix(target, ".app") {
+		return nil, fmt.Errorf("application relaunch: %s does not run from an application bundle", executable)
+	}
+	args := []string{"app", "relaunch", "--wait", strconv.Itoa(pid), "--target", target}
+	if len(arguments) > 0 {
+		args = append(args, "--")
+		args = append(args, arguments...)
+	}
+	command := exec.Command(filepath.Join(macOS, "sok"), args...)
+	// The command outlives this process, so its failure message has no other reader than the standard error file of this run
+	// (docs/spec/logging.md#files).
+	command.Stderr = os.Stderr
+	current, err := platform.Current()
+	if err != nil {
+		return nil, fmt.Errorf("application relaunch: %w", err)
+	}
+	if err := current.NewSession(command); err != nil {
+		return nil, fmt.Errorf("application relaunch: %w", err)
+	}
+	return command, nil
 }
 
-// cancelUpdate drops the pending update when the quit that it began is cancelled.
+// StartAppRelaunch starts the detached command of a relaunch and stores the event `host.relaunch.start` with the pid of
+// the command and its command line, before the final flush of the event log as StartAppUpdate does.
+func StartAppRelaunch(command *exec.Cmd) error {
+	return startDetached(command, "application relaunch", "host.relaunch.start")
+}
+
+// pendingStart is the detached command that the shutdown starts: an application update or a relaunch.
+type pendingStart struct {
+	command  *exec.Cmd
+	relaunch bool
+}
+
+// start starts the command of the pending update or relaunch and reports a start that fails.
+func (p pendingStart) start() {
+	if p.relaunch {
+		if err := StartAppRelaunch(p.command); err != nil {
+			LogError("application relaunch", err)
+		}
+		return
+	}
+	if err := StartAppUpdate(p.command); err != nil {
+		LogError("application update", err)
+	}
+}
+
+// takeUpdate returns the pending update or relaunch, which the shutdown starts, and clears it.
+func (h *Host) takeUpdate() *pendingStart {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	pending := h.update
+	h.update = nil
+	return pending
+}
+
+// cancelUpdate drops the pending update or relaunch when the quit that it began is cancelled.
 func (h *Host) cancelUpdate() {
 	h.mu.Lock()
 	h.update = nil

@@ -94,9 +94,12 @@ func (darwin) CopyBundle(source, destination string) error {
 	return nil
 }
 
-// OpenApplication starts a new instance with open -n.
-func (darwin) OpenApplication(bundle string, arguments []string) error {
+// OpenApplication starts a new instance with open -n; open -g keeps the new instance in the background.
+func (darwin) OpenApplication(bundle string, arguments []string, activate bool) error {
 	command := []string{"-n", bundle}
+	if !activate {
+		command = append([]string{"-g"}, command...)
+	}
 	if len(arguments) > 0 {
 		command = append(command, "--args")
 		command = append(command, arguments...)

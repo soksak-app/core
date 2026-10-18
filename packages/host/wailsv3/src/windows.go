@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os/exec"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -44,8 +43,8 @@ const (
 // Host selects the native state of the calling window. Wails binds the public methods of Host to the page.
 type Host struct {
 	quit Quit
-	// update is the command of an application update that the shutdown starts; h.mu guards it.
-	update     *exec.Cmd
+	// update is the command of an application update or a relaunch that the shutdown starts; h.mu guards it.
+	update     *pendingStart
 	removals   Removals
 	nextWindow uint64
 	workspace  *Workspace
