@@ -38,7 +38,8 @@ mock.module("@soksak/runtime", {
   },
 });
 mock.module("../host.js", {
-  namedExports: { log: () => {}, retainSidecarSessions: async () => ({ closed: 0 }), windowSidecar: () => null },
+  namedExports: { log: () => {}, retainSidecarSessions: async () => ({ closed: 0 }), windowSidecar: () => null, documents: null,
+    report: () => {} },
 });
 mock.module("../plugin-states.js", {
   namedExports: { configureStates: () => {}, showStates: async () => {} },
@@ -76,6 +77,10 @@ const store = {
   // The tab state store holds no entry.
   tabState: async () => null,
   tabStatePut: async () => 0,
+  // The tab sessions hold no file.
+  tabSession: async () => null,
+  tabSessionPut: async () => null,
+  tabSessions: async () => [],
   add: async () => { throw new Error("not used"); },
   patch: async () => { events.push("patch"); },
   remove: async () => { events.push("remove"); },

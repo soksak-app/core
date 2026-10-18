@@ -426,6 +426,36 @@
       },
       "description": "The reconciliation at load removed the entry of a tab that no layout of projects.json holds."
     },
+    "page.tab.session.stored": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "tab": "string",
+        "bytes": "number"
+      },
+      "description": "Core wrote the session history of the document regions of a tab to tab-sessions/<tab>.json; bytes is the size of the written file."
+    },
+    "page.tab.session.dropped": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "tab": "string",
+        "region": "string",
+        "bytes": "number"
+      },
+      "description": "The session history of a document region exceeded 1 MiB decoded and was not stored; bytes is its decoded size."
+    },
+    "page.tab.session.orphan": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "tab": "string"
+      },
+      "description": "The reconciliation at load removed the session file of a tab that no layout of projects.json holds."
+    },
     "page.tab.keep.changed": {
       "layer": "page",
       "class": "lifecycle",

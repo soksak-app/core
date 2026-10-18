@@ -55,44 +55,61 @@ test("a failed query gives media-unknown and is logged", async () => {
   assert.deepEqual(reports, ["memory saver: tab tab: document page: the document region is closed"]);
 });
 
-test("the interactionState of each region returns to the region of the same name on restore", async () => {
+// Document regions whose stored sessions are sessions, {tab: {name: interactionState}}.
+function withSessions(sessions = {}) {
   const regions = createDocumentRegions();
+  regions.useSessions(async (tab) => sessions[tab]);
+  return regions;
+}
+
+test("the stored interactionState of each region returns to the region of the same name on restore", async () => {
+  const sessions = {};
+  const regions = withSessions(sessions);
   answers.documentInteractionState = async (_surface, document) => ({ page: "AAAA", empty: "" })[document];
   regions.attached("tab", "page");
   regions.attached("tab", "empty");
-  const history = await regions.interaction("tab");
-  assert.deepEqual(history, { page: "AAAA" });
+  sessions.tab = await regions.interaction("tab");
+  assert.deepEqual(sessions.tab, { page: "AAAA" });
   regions.released("tab");
-  regions.restore("tab", history);
-  assert.deepEqual(regions.attachRequest("tab", "page"), { document: "page", interactionState: "AAAA" });
+  regions.restore("tab");
+  assert.deepEqual(await regions.attachRequest("tab", "page"), { document: "page", interactionState: "AAAA" });
   // The state is restored once: a later region of the same name loads without it.
-  assert.deepEqual(regions.attachRequest("tab", "page"), { document: "page" });
-  assert.deepEqual(regions.attachRequest("tab", "empty"), { document: "empty" });
+  assert.deepEqual(await regions.attachRequest("tab", "page"), { document: "page" });
+  assert.deepEqual(await regions.attachRequest("tab", "empty"), { document: "empty" });
+  assert.deepEqual(regions.tabs(), []);
 });
 
 test("a tab whose regions yield no interactionState has no history", async () => {
-  const regions = createDocumentRegions();
+  const regions = withSessions();
   answers.documentInteractionState = async () => "";
   assert.equal(await regions.interaction("none"), undefined);
   regions.attached("tab", "page");
+  assert.deepEqual(regions.tabs(), ["tab"]);
   assert.equal(await regions.interaction("tab"), undefined);
-  regions.restore("tab", undefined);
-  assert.deepEqual(regions.attachRequest("tab", "page"), { document: "page" });
+  regions.restore("tab");
+  assert.deepEqual(await regions.attachRequest("tab", "page"), { document: "page" });
+});
+
+test("an attach waits for the stored sessions, and a page without them attaches without a history", async () => {
+  const regions = createDocumentRegions();
+  const request = regions.attachRequest("tab", "page");
+  regions.useSessions(null);
+  assert.deepEqual(await request, { document: "page" });
 });
 
 test("an attach replies whether it restored a session history", async () => {
-  const regions = createDocumentRegions();
+  const regions = withSessions({ tab: { page: "AAAA" } });
   const attach = async () => null;
-  regions.restore("tab", { page: "AAAA" });
+  regions.restore("tab");
   assert.deepEqual(await regions.attach("tab", "page", attach), { history: true });
   assert.deepEqual(await regions.attach("tab", "page", attach), { history: false });
 });
 
 test("a refused restored interactionState is reported and the region attaches again without it", async () => {
-  const regions = createDocumentRegions();
+  const regions = withSessions({ tab: { page: "BAD" } });
   const refused = [];
   regions.onRefused((tab, name, error) => refused.push([tab, name, error.message]));
-  regions.restore("tab", { page: "BAD" });
+  regions.restore("tab");
   const requests = [];
   const attach = async (request) => {
     requests.push(request);

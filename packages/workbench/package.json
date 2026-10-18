@@ -78,6 +78,7 @@
     "tab-menu.js",
     "tab-params.js",
     "tab-reports.js",
+    "tab-session.js",
     "tab-state.js",
     "document-regions.js",
     "memory-saver.js",

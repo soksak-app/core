@@ -188,6 +188,8 @@ host의 goroutine과 스레드는 진입점으로만 시작한다. Go는 `routin
 
 종료 경로를 거치지 않고 끝난 호스트도 WebKit 프로세스를 남기지 않는다: launchd 는 애플리케이션의 WebKit service 를 그 프로세스의 launchd domain 에서 실행하고 그 프로세스가 끝나면 끝낸다(macOS 26.6.2 실측: 호스트를 `kill -9` 한 뒤 GPU·Networking·WebContent service 가 0.2초 안에 끝났고, 호스트마다 두 번 같았다). 따라서 호스트는 WebKit 프로세스 기록을 두지 않고 시작할 때 어떤 프로세스도 끝내지 않는다. 프로세스 목록은 이 호스트의 WebKit 프로세스와 다른 애플리케이션의 것을 구분하지 못하며, 목록의 프로세스를 끝내던 시작은 함께 실행 중이던 다른 애플리케이션의 프로세스를 끝냈다.
 
+**종료는 영역이 닫히기 전에 탭 session을 모은다.** 종료가 닫는 창의 저장은 page가 `windowClose`를 부르기 전에 문서 영역이 있는 각 탭의 session history를 `tab-sessions/<tab>.json`([메모리 절약](plugins.ko.md#메모리-절약))에 쓴다. 그래서 호스트는 session이 저장된 뒤에야 창의 문서 영역을 닫는다.
+
 **수정된 탭을 지키면 종료가 끝난다.** 종료는 준비된 창마다 닫기를 요청하고, 수정된 탭을 지킨 창의 페이지는 host 호출 `windowCloseKept`로 답한다([plugins](plugins.ko.md#탭-알림)). 그러면 host가 종료 상태를 끝낸다. 이후 마지막 창을 닫아도 애플리케이션이 종료되지 않고, WebContent process의 종료는 다시 오류 줄이 된다. `host.window`가 이 상태를 `quitting`으로 보고한다.
 
 **영속 사이드카는 애플리케이션보다 오래 살고 다시 붙는다.** 터미널 서비스는 앱 재시작과 연결 단절을 지나 세션을 유지하며, 끊긴 연결은 즉시 다시 맺고 죽은 서비스는 재스폰한다([터미널 런타임](terminal-runtime.ko.md)). 애플리케이션은 종료 시 영속 서비스를 죽이지 않는다. 두 호스트는 platform 연산 `NewSession`(Go) 또는 `new_session`(Rust)으로 영속 서비스를 새 session에서 시작하므로, 서비스는 애플리케이션의 process group이나 terminal의 signal을 받지 않는다.

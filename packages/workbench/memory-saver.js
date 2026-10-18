@@ -20,8 +20,8 @@ const ORDER = ["shown", "recent", "keep:modified", "keep:busy", "media", "media-
  *                       setKept(tab, on) stores;
  *   regions(tab)        resolves the reasons of the document regions of the tab at a decision (media, media-unknown,
  *                       capture, form);
- *   interaction(tab)    resolves the interactionState of the regions of the tab before it is unloaded, or undefined;
- *   restore(tab, history) gives the regions of a restored tab the value that interaction resolved at its unload;
+ *   interaction(tab)    stores the session history of the regions of the tab before it is unloaded;
+ *   restore(tab)        gives the regions of a restored tab the stored session history;
  *   commit()            requests a commit and resolves after host.place replied;
  *   showLabel(tab)      shows the cached label of a tab that starts unloaded;
  *   changed()           announces that the status changed;
@@ -32,7 +32,7 @@ export function createMemorySaver({
   now, enabled, delay, declaration, keeps, kept, setKept, regions, interaction, restore, commit, showLabel, changed, failed,
   stateChanged,
 }) {
-  // tab id -> {id, plugin, state, hiddenAt, shownAt, unloadAt, region, checkedAt, history, generation, attempting}
+  // tab id -> {id, plugin, state, hiddenAt, shownAt, unloadAt, region, checkedAt, generation, attempting}
   let entries = new Map();
   let timer = null;
   let pressure = { level: "normal", seq: 0 };
@@ -129,7 +129,7 @@ export function createMemorySaver({
         return entry.region;
       }
       try {
-        entry.history = await interaction(entry.id);
+        await interaction(entry.id);
       } catch (error) {
         return unloadFailed(entry, trigger, error);
       }
@@ -220,7 +220,7 @@ export function createMemorySaver({
         const isShown = shown.has(id);
         if (!entry) {
           entry = { id, plugin, state: "loaded", hiddenAt: isShown ? null : time, shownAt: isShown ? time : null,
-            unloadAt: null, region: [], checkedAt: null, history: undefined, generation: 0, attempting: false };
+            unloadAt: null, region: [], checkedAt: null, generation: 0, attempting: false };
         } else if (isShown && entry.hiddenAt !== null) {
           entry.hiddenAt = null;
           entry.shownAt = time;
@@ -229,7 +229,7 @@ export function createMemorySaver({
           entry.generation++;
           if (entry.state === "unloaded") {
             setState(entry, "restoring");
-            restore(id, entry.history);
+            restore(id);
           }
         } else if (isShown) {
           entry.shownAt = time;
@@ -317,11 +317,11 @@ export function createMemorySaver({
         checkedAt: entry.checkedAt,
       })),
     }),
-    /** Ends the restore of a tab whose surface mounted. */
-    restored(tab) {
+    /** Ends the restore of a tab whose surface mounted; history is whether a region of it restored a session history. */
+    restored(tab, history) {
       const entry = restoring(tab);
       setState(entry, "loaded");
-      emitEvent("info", "page.tab.restored", { tab, plugin: entry.plugin, history: entry.history !== undefined });
+      emitEvent("info", "page.tab.restored", { tab, plugin: entry.plugin, history });
     },
     /** Ends the restore of a tab whose surface or region refused it, and shows the failure (docs/spec/plugins.md#memory-saver). */
     restoreFailed(tab, reason) {

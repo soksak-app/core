@@ -618,6 +618,12 @@ export function onMemoryPressure(fn) {
   onPressure = fn;
 }
 
+let onDocumentStateChange = () => {};
+/** Receives each document state {surface, document, state} that a document region of any surface reports. */
+export function onDocumentState(fn) {
+  onDocumentStateChange = fn;
+}
+
 export function onSurfaceInput({ press, input }) {
   onPress = press;
   onInput = input;
@@ -627,6 +633,7 @@ if (native) {
   bridge.on("surface-pressed", (id) => onPress(id));
   bridge.on("menu-command", (message) => onMenu(message?.name));
   bridge.on("memory-pressure", (report) => onPressure(report));
+  bridge.on("document-state", (event) => onDocumentStateChange(event));
   bridge.on("surface-input", (step) => onInput(step));
   // A modal replies several times, so the subscription is not released here but in hide.
   // The reply carries the modal it belongs to. It is used to filter out the last reply of a closed modal so that it

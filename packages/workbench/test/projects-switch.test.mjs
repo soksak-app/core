@@ -40,6 +40,8 @@ mock.module("../host.js", {
     log: () => {},
     retainSidecarSessions: async (surfaces) => { retained.push(surfaces); return { closed: 0 }; },
     windowSidecar: () => null,
+    documents: null,
+    report: () => {},
   },
 });
 /* The order in which the project that the window showed was reported to the state module. */
@@ -107,6 +109,10 @@ const store = {
   // The tab state store holds no entry.
   tabState: async () => null,
   tabStatePut: async () => 0,
+  // The tab sessions hold no file.
+  tabSession: async () => null,
+  tabSessionPut: async () => null,
+  tabSessions: async () => [],
   add: async () => { throw new Error("not used"); },
   patch: async () => {},
   remove: async () => {},
@@ -327,6 +333,24 @@ test("a project removed from the registry by another window ends in the window t
   assert.deepEqual(retained, [{ modules: ["tab-other"] }, [{ surface: "tab-other", root: "/work/prj-other" }]],
     "the window kept the surface modules and sidecar sessions of its last removed project");
   assert.deepEqual(reported, [], "ending the removed project reported an error");
+  await projects.flush();
+});
+
+test("closing a tab removes its session file after the layout write, and the start removes the files of tabs in no layout", async () => {
+  const layout = (...tabs) => ({ state: { cards: [{ id: "card-one", data: { tabs: tabs.map((id) => ({ id })) } }] } });
+  const project = { ...structuredClone(PROJECT), spaces: [{ id: "spc-one", title: "SPACE1", layout: layout("tab-a", "tab-b") }] };
+  const puts = [];
+  plane.layout = layout("tab-a", "tab-b");
+  await projects.initialise({ ...store,
+    snapshot: async () => ({ common: {}, projects: [structuredClone(project)], open: [] }),
+    tabSessions: async () => ["tab-gone"],
+    tabSessionPut: async (tab, regions) => { puts.push([tab, regions]); return null; } });
+  assert.deepEqual(puts, [["tab-gone", null]], "the start kept the session file of a tab in no layout");
+  await projects.activate("prj-one");
+  puts.length = 0;
+  plane.layout = layout("tab-b");
+  await projects.keep();
+  assert.deepEqual(puts, [["tab-a", null]], "closing a tab left its session file");
   await projects.flush();
 });
 

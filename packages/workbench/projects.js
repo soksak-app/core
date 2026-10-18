@@ -7,6 +7,8 @@ import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
 import { configureStates, showStates } from "./plugin-states.js";
 import { openTabStates } from "./tab-state.js";
+import { createTabSessions } from "./tab-session.js";
+import { documentRegions } from "./document-regions.js";
 
 let store;
 let projects = [];
@@ -23,6 +25,7 @@ let refreshing = Promise.resolve();
 let begun = null;
 // The tab state store of the memory saver (docs/spec/projects.md#persistence), opened by initialise.
 let tabStates = null;
+let tabSessions = null;
 // Resolves when initialise has tried to open the tab state store; the first plane is drawn before that, so a surface whose
 // plugin declares surface.unload waits for it before its module mounts. A store that failed to open stays null, and the
 // tab state of a surface then throws that the store is not open.
@@ -32,6 +35,8 @@ const tabStatesTried = new Promise((resolve) => { triedTabStates = resolve; });
 export const all = () => projects;
 /** The tab state store of the memory saver. */
 export const tabStateStore = () => tabStates;
+/** The tab sessions of this window (tab-session.js), or null before the start opened them. */
+export const tabSessionStore = () => tabSessions;
 /** Resolves once initialise has tried to open the tab state store. */
 export const tabStatesReady = () => tabStatesTried;
 
@@ -154,6 +159,9 @@ export async function initialise(storage, unloadOf) {
     data: { get: (id, plugin) => projects.find((p) => p.id === id)?.plugins?.[plugin] ?? {}, set: setPluginData },
   });
   await refresh();
+  tabSessions = createTabSessions({ store, failed, interaction: (tab) => documentRegions.interaction(tab),
+    tabs: () => documentRegions.tabs() });
+  documentRegions.useSessions((tab) => tabSessions.read(tab));
   try {
     tabStates = await openTabStates({ store, failed, unloadOf });
   } finally {
@@ -162,7 +170,8 @@ export async function initialise(storage, unloadOf) {
   // A stored layout that cannot be read leaves the tab ids unknown, so the store keeps every entry and the error is
   // shown; opening that project reports the same layout again.
   try {
-    await tabStates.reconcile(new Set(layoutSurfaces().map((item) => item.surface)));
+    const tabIds = new Set(layoutSurfaces().map((item) => item.surface));
+    await Promise.all([tabStates.reconcile(tabIds), tabSessions.reconcile(tabIds)]);
   } catch (error) {
     failed(error);
   }
@@ -269,7 +278,7 @@ export function keep() {
   // The entries of the dropped tabs are removed only after the layout write is confirmed (docs/spec/projects.md#persistence).
   const after = projectTabs(project);
   const dropped = [...before].filter((tab) => !after.has(tab));
-  if (dropped.length) writing = tabStates.removeAfter(writing, dropped);
+  if (dropped.length) writing = Promise.all([tabStates.removeAfter(writing, dropped), tabSessions.removeAfter(writing, dropped)]);
   return writing;
 }
 
@@ -444,6 +453,7 @@ export async function flush() {
   await keep();
   await flushSettings();
   await saveGeometry();
+  await tabSessions.flush();
   await tabStates.flush();
 }
 

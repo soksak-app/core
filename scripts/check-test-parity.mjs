@@ -2082,6 +2082,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F199",
+    implementation: [
+      { file: "packages/workbench/tab-session.js", symbol: "export function createTabSessions" },
+      { file: "packages/host/wailsv3/src/workspace.go", symbol: "func putTabSession" },
+      { file: "packages/host/tauriv2/src/workspace.rs", symbol: "fn put_tab_session" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/tab-session.test.mjs", id: "a session stored before a restart is passed to the first attach after it and to the attach after a restore" },
+      { file: "packages/host/wailsv3/tests/workspace_test.go", id: "TestTabSessionPutRewritesOnlyItsOwnFile" },
+      { file: "packages/host/tauriv2/tests/workspace_test.rs", id: "tab_session_put_rewrites_only_its_own_file" },
+    ],
+    expected: "A browser tab keeps the session history of its document regions across a restart in tab-sessions/<tab>.json.",
+    levels: ["unit"],
+  },
+  {
     id: "F191",
     implementation: [{ file: "scripts/release-step.sh", symbol: "release-step-ok" }],
     tests: [{ file: "scripts/test/release-step.test.mjs", id: "the release step script writes the released form, runs the host once and requires the migration and its record" }],

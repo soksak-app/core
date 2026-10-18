@@ -58,7 +58,7 @@ test("the delay unloads a hidden tab and a show restores it", async () => {
   saver.observe(new Set(["a"]), tabs("a", "b"));
   assert.equal(saver.unloaded("a"), false);
   assert.equal(saver.state("a"), "restoring");
-  saver.restored("a");
+  saver.restored("a", false);
   assert.equal(saver.state("a"), "loaded");
   assert.deepEqual(named("page.tab.restored"), [{ tab: "a", plugin: "fixture", history: false }]);
   assert.deepEqual(saver.place([{ id: "a" }, { id: "b" }]).surfaces.map((surface) => surface.id), ["a", "b"]);
@@ -132,20 +132,22 @@ test("capture and form replies protect a tab", async () => {
   assert.deepEqual(await protectedBy(null, { regions: async () => ["capture", "form"] }), ["capture", "form"]);
 });
 
-test("a restore passes the interactionState read at the unload to the regions of the tab", async () => {
+test("an unload stores the session of the tab first, and a restore gives the regions of the tab the stored session", async () => {
+  const stored = [];
   const restored = [];
   const { saver } = harness({
-    interaction: async (tab) => ({ page: `state of ${tab}` }),
-    restore: (tab, history) => restored.push({ tab, history }),
+    interaction: async (tab) => { stored.push(tab); },
+    restore: (tab) => restored.push(tab),
   });
   saver.observe(new Set(["b"]), tabs("a", "b"));
   mock.timers.tick(120 * MINUTE);
   await settle();
   assert.equal(saver.unloaded("a"), true);
+  assert.deepEqual(stored, ["a"]);
   assert.deepEqual(restored, []);
   saver.observe(new Set(["a"]), tabs("a", "b"));
-  assert.deepEqual(restored, [{ tab: "a", history: { page: "state of a" } }]);
-  saver.restored("a");
+  assert.deepEqual(restored, ["a"]);
+  saver.restored("a", true);
   assert.deepEqual(named("page.tab.restored"), [{ tab: "a", plugin: "fixture", history: true }]);
 });
 
@@ -408,7 +410,7 @@ test("a failed commit after the tab is marked returns it to loaded with a report
 });
 
 test("a refused session history keeps the restore open, and the later mount still emits page.tab.restored", async () => {
-  const { saver, state } = harness({ interaction: async () => "c2Vzc2lvbg==" });
+  const { saver, state } = harness();
   saver.observe(new Set(["b"]), tabs("a", "b"));
   mock.timers.tick(120 * MINUTE);
   await settle();
@@ -420,9 +422,9 @@ test("a refused session history keeps the restore open, and the later mount stil
     [{ tab: "a", plugin: "fixture", reason: "document region page: interactionState is not a session history" }]);
   assert.deepEqual(state.failures,
     ["memory saver: tab a: restore failed: document region page: interactionState is not a session history"]);
-  saver.restored("a");
+  saver.restored("a", false);
   assert.equal(saver.state("a"), "loaded");
-  assert.deepEqual(named("page.tab.restored"), [{ tab: "a", plugin: "fixture", history: true }]);
+  assert.deepEqual(named("page.tab.restored"), [{ tab: "a", plugin: "fixture", history: false }]);
   // A refusal after the mount ended reports the failure and leaves the tab loaded.
   saver.historyRefused("a", "document region page: refused");
   assert.equal(saver.state("a"), "loaded");

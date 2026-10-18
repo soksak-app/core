@@ -106,6 +106,7 @@ The stored files of the contract, with their owner, the member that carries thei
 | `settings.json`, `<project root>/.soksak/settings.json` | core | `format` | numbered |
 | `projects.json` | core | `format` | numbered |
 | `tab-state.json` | core | `format` | numbered |
+| `tab-sessions/<tab>.json` | core | `format` | numbered |
 | `logs/<role>-<boot>.jsonl` and their index | core | per file (`log.open`, the index header) | log |
 | `endpoint.json`, `process.lock`, `performance` | core | rewritten each run | transient |
 | `plugins/<id>/<version>/`, `sidecars/<file name>/`, `updates/` | the release payload | the version in the path | external |

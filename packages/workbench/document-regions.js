@@ -1,6 +1,7 @@
 // The document regions of each tab for the memory saver (docs/spec/plugins.md#memory-saver): the regions that the surface
-// of a tab attached, the reasons that their query gives at a decision, the interactionState read before an unload, and the
-// restore of that state into the region of the same name that the restored surface attaches.
+// of a tab attached, the reasons that their query gives at a decision, the interactionState read before a write of the
+// tab session, and the restore of the stored session into the region of the same name, on the first attach of a tab after
+// the start and on the attach that follows a restore.
 
 import { documents, report } from "./host.js";
 
@@ -8,13 +9,33 @@ import { documents, report } from "./host.js";
 export function createDocumentRegions() {
   // tab id -> the names of the regions that its surface attached and has not detached
   const attachedNames = new Map();
-  // tab id -> {name: interactionState} that the next attach of each name restores once
+  // tab id -> the promise of {name: interactionState} that the next attach of each name restores once
   const pending = new Map();
+  // The tabs whose stored session is read: a tab outside the set reads it at its next attach.
+  const seeded = new Set();
+  // The tabs of which a region restored a session history since the last restore.
+  const restoredHistory = new Set();
+  // The reader of the stored sessions, given once the tab sessions are open (useSessions).
+  let resolveSessions;
+  const sessions = new Promise((resolve) => { resolveSessions = resolve; });
   // The listeners of a region that refused its restored interactionState, a restore failure.
   const refusals = new Set();
 
   // default: a tab whose surface attached no region has no names.
   const namesOf = (tab) => [...(attachedNames.get(tab) ?? [])];
+
+  // Reads the stored session of tab for its next attaches; a failed read is logged and the regions attach without it.
+  function seed(tab) {
+    seeded.add(tab);
+    restoredHistory.delete(tab);
+    pending.set(tab, sessions
+      .then((read) => (read ? read(tab) : undefined))
+      .then((states) => ({ ...states }))
+      .catch((error) => {
+        report(`memory saver: tab ${tab}: session read failed: ${error.message}`);
+        return {};
+      }));
+  }
 
   return {
     attached(tab, name) {
@@ -57,11 +78,21 @@ export function createDocumentRegions() {
       }
       return Object.keys(history).length ? history : undefined;
     },
-    /** Keeps the history of a restored tab for the regions that its new surface attaches. */
-    restore(tab, history) {
-      if (history) pending.set(tab, { ...history });
-      else pending.delete(tab);
+    /**
+     * Gives the reader read(tab) of the stored sessions, or null when the tab sessions did not open; attaches wait for
+     * it.
+     */
+    useSessions(read) {
+      resolveSessions(read);
     },
+    /** Reads the stored session of a restored tab for the regions that its new surface attaches. */
+    restore(tab) {
+      seed(tab);
+    },
+    /** The tabs that have attached regions. */
+    tabs: () => [...attachedNames].filter(([, names]) => names.size).map(([tab]) => tab),
+    /** Whether a region of the tab restored a session history since its last restore. */
+    restoredHistory: (tab) => restoredHistory.has(tab),
     /**
      * Attaches the region name of the tab through attach(request) with the interactionState that it restores once. A
      * refused interactionState is reported to the refusal listeners and the region attaches again without it, because a
@@ -69,7 +100,7 @@ export function createDocumentRegions() {
      * resolves to {history}, true when the region restored a session history.
      */
     async attach(tab, name, attach) {
-      const request = this.attachRequest(tab, name);
+      const request = await this.attachRequest(tab, name);
       let history = request.interactionState !== undefined;
       try {
         await attach(request);
@@ -80,6 +111,7 @@ export function createDocumentRegions() {
         await attach({ document: name });
       }
       this.attached(tab, name);
+      if (history) restoredHistory.add(tab);
       return { history };
     },
     /** Adds a listener (tab, name, error) of a refused interactionState; returns its removal. */
@@ -88,12 +120,12 @@ export function createDocumentRegions() {
       return () => refusals.delete(listener);
     },
     /** The documentAttach request of the region name of the tab, with the interactionState that it restores once. */
-    attachRequest(tab, name) {
-      const states = pending.get(tab);
+    async attachRequest(tab, name) {
+      if (!seeded.has(tab)) seed(tab);
+      const states = await pending.get(tab);
       const state = states?.[name];
       if (state === undefined) return { document: name };
       delete states[name];
-      if (!Object.keys(states).length) pending.delete(tab);
       return { document: name, interactionState: state };
     },
   };

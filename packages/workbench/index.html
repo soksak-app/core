@@ -63,7 +63,7 @@ import { verify } from "./verify.js";
 import { createErrorDisplay, createPageLayout, reportUncaught } from "./page-layout.js";
 
 /* Application interface. When it is absent, an implementation that does nothing is used. */
-import { chrome, log, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
+import { chrome, log, onDocumentState, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
 import { setTextScope } from "./text-size.js";
 import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 
@@ -204,8 +204,8 @@ const memorySaver = createMemorySaver({
   kept: (tab) => projects.tabStateStore()?.entry(tab)?.kept === true,
   setKept: (tab, on) => projects.tabStateStore().setKept(tab, on),
   regions: (tab) => documentRegions.reasons(tab),
-  interaction: (tab) => documentRegions.interaction(tab),
-  restore: (tab, history) => documentRegions.restore(tab, history),
+  interaction: (tab) => projects.tabSessionStore().capture(tab),
+  restore: (tab) => documentRegions.restore(tab),
   commit: () => Promise.resolve(publish()),
   showLabel: (tab) => {
     const label = projects.tabStateStore()?.label(tab) ?? null;
@@ -223,9 +223,11 @@ onMemoryPressure((report) => memorySaver.pressure(report));
 onSurfaceMounted((tab, error) => {
   if (!memoryObserved || memorySaver.state(tab) !== "restoring") return;
   if (error) memorySaver.restoreFailed(tab, error.message);
-  else memorySaver.restored(tab);
+  else memorySaver.restored(tab, documentRegions.restoredHistory(tab));
 });
 documentRegions.onRefused((tab, name, error) => memorySaver.historyRefused(tab, `document region ${name}: ${error.message}`));
+// A changed history of a document region is a navigation commit, after which the tab session is written.
+onDocumentState((event) => projects.tabSessionStore()?.navigated(event.surface, event.document, event.state.history));
 
 /** Gives the memory saver the shown tabs and every layout tab of a loaded plugin of a commit. */
 function observeMemory(record, all) {
