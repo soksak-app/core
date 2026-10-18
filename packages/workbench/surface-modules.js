@@ -514,15 +514,16 @@ export async function placeSurfaces(place, { retain, unload = [] }) {
   try {
     answer = await place();
   } catch (error) {
-    // A failed place keeps the surfaces mounted, so their compositions resume and place their current geometry.
+    // A failed place keeps the surfaces mounted, so their compositions resume and place their current geometry. A resume that
+    // fails is part of the failure of the place, which the caller reports.
+    const resumed = [];
     for (const entry of leftOut) {
       entry.lifetime.suspended = false;
       for (const held of entry.lifetime.held.splice(0)) held.run().then(held.resolve, held.reject);
-      for (const composition of entry.compositions) {
-        // The composition reports a failed placement itself (surface composition failed), so the rejection is handled here.
-        composition.update(() => {}).catch(() => {});
-      }
+      for (const composition of entry.compositions) resumed.push(composition.update(() => {}));
     }
+    const failures = (await Promise.allSettled(resumed)).filter((result) => result.status === "rejected").map((result) => result.reason);
+    if (failures.length) throw new AggregateError([error, ...failures], `${error.message}; ${failures.length} compositions did not resume`);
     throw error;
   }
   for (const entry of leftOut) {
