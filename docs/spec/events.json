@@ -407,6 +407,25 @@
       },
       "description": "The page started the open or the removal of a project; its host calls carry the same cids."
     },
+    "page.tab.state.stored": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "tab": "string",
+        "bytes": "number"
+      },
+      "description": "The tab state store wrote the entry of a tab, its state, mark and label included; bytes is the size of the written store."
+    },
+    "page.tab.state.orphan": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "tab": "string"
+      },
+      "description": "The reconciliation at load removed the entry of a tab that no layout of projects.json holds."
+    },
     "page.window.operation": {
       "layer": "page",
       "class": "call",

@@ -268,6 +268,7 @@ The [memory saver](plugins.md#memory-saver) emits these page events of the class
 | `page.tab.restore.failed` | error | `tab`, `plugin`, `reason` | A restore failed; the single error display shows it |
 | `page.tab.unload.skipped` | info | `trigger`, `seq`, `reasons` | A pressure report found no candidate, or an unload attempt ended because a protection appeared or the tab was shown; `seq` is the number of the pressure report |
 | `page.tab.state.stored` | debug | `tab`, `bytes` | The tab state store wrote the entry of a tab, its state, mark and label included |
+| `page.tab.state.orphan` | info | `tab` | The reconciliation at load removed the entry of a tab that no layout of `projects.json` holds |
 | `page.tab.keep.changed` | info | `tab`, `keep` | `core.tab.keep` set or cleared the mark `kept` of a tab |
 
 Each event enters `events.json` in the change that adds its emit site, because the catalog check refuses a declared event that no source emits.

@@ -24,7 +24,7 @@
 /* environment.json is loaded first. The modules below read the registered plugins and the defaults
    at the time a function is called. */
 import { pageStart } from "./page-start-errors-install.js";
-import { defaultRegistry, installEnvironment, starterPack } from "./environment.js";
+import { defaultRegistry, installEnvironment, pluginUnits, starterPack } from "./environment.js";
 import { appUpdate, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { installExposure } from "./exposure.js";
 /* The declaration files and the installed list are imported as a module graph so that the first screen is drawn before the first await (docs/spec/native-host.md#page-start). */
@@ -602,7 +602,8 @@ addEventListener("focusout", coreChanged);
 
 const storage = await openStore();
 await connectSettings(storage);
-await projects.initialise(storage);
+// default: a plugin that is not loaded declares no surface.unload.
+await projects.initialise(storage, (plugin) => pluginUnits().find((unit) => unit.id === plugin)?.unload ?? false);
 drawBars();
 // After the application restarts or the page fails, closes the sidecar sessions of surfaces that are in no layout.
 retainSidecarSessions(projects.layoutSurfaces()).catch(showError);

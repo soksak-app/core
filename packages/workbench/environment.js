@@ -110,6 +110,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
   setSidebarDefaults(normalizeSidebarDefaults(environment, manifests.map(({ manifest }) => manifest)));
   units = manifests.map(({ manifest, version }) => ({
     id: manifest.id, name: manifest.name, description: manifest.description, version, surface: Boolean(manifest.surface),
+    // default: a plugin without a surface declares no surface.unload.
+    unload: manifest.surface?.unload ?? false,
     // default: sections is an optional field of plugin.json; without it there are no sections.
     sections: (manifest.sections ?? []).map((s) => s.id),
     // default: dependencies is an optional field of plugin.json; without it there are no sidecars.

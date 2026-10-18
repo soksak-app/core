@@ -6,6 +6,7 @@ import { flushEvents } from "./page-log.js";
 import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
 import { configureStates, showStates } from "./plugin-states.js";
+import { openTabStates } from "./tab-state.js";
 
 let store;
 let projects = [];
@@ -20,8 +21,18 @@ let writing = Promise.resolve();
 let refreshing = Promise.resolve();
 /* Project that was drawn on the first screen and is not activated yet. The activation of initialise takes it over. */
 let begun = null;
+// The tab state store of the memory saver (docs/spec/projects.md#persistence), opened by initialise.
+let tabStates = null;
 
 export const all = () => projects;
+/** The tab state store of the memory saver. */
+export const tabStateStore = () => tabStates;
+
+/** The tab ids of the layouts of all spaces of project. */
+function projectTabs(project) {
+  // default: a seat card has null data, so it has no tabs.
+  return new Set(project.spaces.flatMap((space) => space.layout.state.cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => tab.id))));
+}
 
 /**
  * Returns the tabs of the layouts of all spaces of all projects as surfaces with the root of their project. A sidecar session of a surface that is not in this list has nowhere to attach again (docs/spec/terminal-runtime.md).
@@ -127,7 +138,8 @@ export function begin(snapshot) {
   savedLayout = JSON.stringify({ spaces: opened.spaces, activeSpaceId: opened.activeSpaceId, named: opened.named });
 }
 
-export async function initialise(storage) {
+/** Starts the project list of the window over storage; unloadOf(plugin) returns the surface.unload declaration of a plugin. */
+export async function initialise(storage, unloadOf) {
   store = storage;
   configureStates({
     sidecar: windowSidecar,
@@ -135,6 +147,14 @@ export async function initialise(storage) {
     data: { get: (id, plugin) => projects.find((p) => p.id === id)?.plugins?.[plugin] ?? {}, set: setPluginData },
   });
   await refresh();
+  tabStates = await openTabStates({ store, failed, unloadOf });
+  // A stored layout that cannot be read leaves the tab ids unknown, so the store keeps every entry and the error is
+  // shown; opening that project reports the same layout again.
+  try {
+    await tabStates.reconcile(new Set(layoutSurfaces().map((item) => item.surface)));
+  } catch (error) {
+    failed(error);
+  }
   store.onChange(() => { reread().catch(failed); });
   await windows.onActivate((id) => activateHere(id).catch(failed));
   await windows.onCloseRequest(() => closeWindow().catch(failed));
@@ -227,6 +247,7 @@ async function readProjects() {
 export function keep() {
   const project = active();
   if (!project || !listener || browsing) return writing;
+  const before = projectTabs(project);
   project.spaces.find((s) => s.id === project.activeSpaceId).layout = listener.save();
   const patch = { spaces: project.spaces, activeSpaceId: project.activeSpaceId, named: project.named };
   const key = JSON.stringify(patch);
@@ -234,6 +255,10 @@ export function keep() {
   savedLayout = key;
   const copy = structuredClone(patch);
   writing = writing.then(() => store.patch(project.id, copy));
+  // The entries of the dropped tabs are removed only after the layout write is confirmed (docs/spec/projects.md#persistence).
+  const after = projectTabs(project);
+  const dropped = [...before].filter((tab) => !after.has(tab));
+  if (dropped.length) writing = tabStates.removeAfter(writing, dropped);
   return writing;
 }
 
@@ -408,6 +433,7 @@ export async function flush() {
   await keep();
   await flushSettings();
   await saveGeometry();
+  await tabStates.flush();
 }
 
 async function closeWindow() {

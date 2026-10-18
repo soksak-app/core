@@ -44,7 +44,7 @@ mock.module("../plugin-states.js", {
   namedExports: { configureStates: () => {}, showStates: async () => {} },
 });
 mock.module("../page-log.js", {
-  namedExports: { flushEvents: async () => { events.push("logflush"); } },
+  namedExports: { flushEvents: async () => { events.push("logflush"); }, emitEvent: () => {} },
 });
 // The order of the operation start beside the order of the saves and the close.
 const operationStarts = [];
@@ -73,6 +73,9 @@ projects.onSwitch({
 });
 const store = {
   snapshot: async () => ({ common: {}, projects: [structuredClone(PROJECT)], open: [] }),
+  // The tab state store holds no entry.
+  tabState: async () => null,
+  tabStatePut: async () => 0,
   add: async () => { throw new Error("not used"); },
   patch: async () => { events.push("patch"); },
   remove: async () => { events.push("remove"); },

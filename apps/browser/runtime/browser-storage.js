@@ -102,6 +102,39 @@ export class WorkspaceStore {
     });
   }
 
+  /** The tab state document of the memory saver, kept under the key "tab-state", or null (docs/spec/native-host.md). */
+  tabState() {
+    return this.transaction("readonly", (_, settings, done) => {
+      // default: IndexedDB get returns undefined for a missing key; a store that never wrote tab state has none.
+      settings.get("tab-state").onsuccess = (e) => done(e.target.result ?? null);
+    });
+  }
+
+  /**
+   * Sets the entry of one tab, or removes it for null, and returns the size of the stored document. The write changes
+   * no project or setting, so it notifies no window.
+   */
+  tabStatePut(tab, entry) {
+    if (!tab) return Promise.reject(new Error("tab state put requires a tab"));
+    return new Promise((resolve, reject) => {
+      const tx = this.database.transaction(["settings"], "readwrite");
+      const settings = tx.objectStore("settings");
+      let bytes;
+      settings.get("tab-state").onsuccess = (e) => {
+        // default: a store that never wrote tab state starts from an empty document of format 1.
+        const document = e.target.result ?? { format: 1, tabs: {} };
+        if (document.format !== 1) { tx.abort(); reject(new Error(`tab-state: tab state format ${JSON.stringify(document.format)} is not 1`)); return; }
+        if (entry === null) delete document.tabs[tab];
+        else document.tabs[tab] = entry;
+        bytes = new TextEncoder().encode(JSON.stringify(document)).length;
+        settings.put(document, "tab-state");
+      };
+      tx.oncomplete = () => resolve(bytes);
+      // default: A transaction that ended with abort() has a null error, so the abort is turned into an error.
+      tx.onabort = () => reject(tx.error ?? new Error("Tab state transaction was aborted"));
+    });
+  }
+
   settings(id, patch) {
     if (id && Object.hasOwn(patch, "projectOpening")) return Promise.reject(new Error("Project opening mode is common-only"));
     return this.transaction("readwrite", (projects, settings) => {

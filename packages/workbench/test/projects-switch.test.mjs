@@ -32,7 +32,7 @@ mock.module("@soksak/runtime", {
 // Records the calls that clean up sidecar sessions.
 // The page event queue drains before a window closes; the queue of this test holds no events.
 mock.module("../page-log.js", {
-  namedExports: { flushEvents: async () => {} },
+  namedExports: { flushEvents: async () => {}, emitEvent: () => {} },
 });
 const retained = [];
 mock.module("../host.js", {
@@ -104,6 +104,9 @@ projects.onSwitch({
 
 const store = {
   snapshot: async () => ({ common: {}, projects: [structuredClone(PROJECT)], open: [] }),
+  // The tab state store holds no entry.
+  tabState: async () => null,
+  tabStatePut: async () => 0,
   add: async () => { throw new Error("not used"); },
   patch: async () => {},
   remove: async () => {},
@@ -172,7 +175,11 @@ test("the surfaces of every layout are listed with their project root, and remov
   assert.deepEqual(retained, [{ modules: ["tab-one"] }, [{ surface: "tab-one", root: "/work/one" }]],
     "removing a project disposes the surface modules of its tabs before it ends their sidecar sessions");
   listed[0].spaces[0].layout = { state: {} };
+  reported.length = 0;
   await projects.initialise(local);
+  assert.deepEqual(reported, ["project prj-three space spc-one has no layout cards"],
+    "the reconciliation of the tab state store reports a layout without cards and keeps the entries");
+  reported.length = 0;
   assert.throws(() => projects.layoutSurfaces(), /has no layout cards/, "a layout without cards is an explicit error");
 });
 

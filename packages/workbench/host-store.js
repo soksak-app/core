@@ -10,6 +10,8 @@ export class HostWorkspaceStore {
   snapshot() { return this.host.call("workspace", { kind: "snapshot" }); }
   add(project) { return this.host.call("workspace", { kind: "add", project }); }
   patch(id, patch) { return this.host.call("workspace", { kind: "patch", id, patch }); }
+  tabState() { return this.host.call("workspace", { kind: "tabState" }); }
+  tabStatePut(tab, entry) { return this.host.call("workspace", { kind: "tabStatePut", tab, entry }); }
   remove(id) { return this.host.call("workspace", { kind: "remove", id }); }
   move(id, delta) { return this.host.call("workspace", { kind: "move", id, delta }); }
   settings(id, values, cids) {

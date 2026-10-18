@@ -266,6 +266,7 @@ JavaScript의 emit site는 `emitEvent(`와 page writer의 batcher 호출이며, 
 | `page.tab.restore.failed` | error | `tab`, `plugin`, `reason` | restore가 실패했다. 하나의 오류 표시가 이를 보인다 |
 | `page.tab.unload.skipped` | info | `trigger`, `seq`, `reasons` | pressure 보고가 후보를 찾지 못했거나, 보호가 생기거나 탭이 보여 unload 시도가 끝났다. `seq`는 pressure 보고의 번호다 |
 | `page.tab.state.stored` | debug | `tab`, `bytes` | 탭 상태 저장소가 탭의 항목을 썼다. 상태, 표시, label을 포함한다 |
+| `page.tab.state.orphan` | info | `tab` | load할 때의 맞춤이 `projects.json`의 어떤 layout에도 없는 탭의 항목을 지웠다 |
 | `page.tab.keep.changed` | info | `tab`, `keep` | `core.tab.keep`이 탭의 표시 `kept`를 정하거나 지웠다 |
 
 각 이벤트는 그 emit site를 더하는 변경에서 `events.json`에 들어간다. catalog 검사는 어떤 source도 내지 않는 선언된 이벤트를 거부하기 때문이다.

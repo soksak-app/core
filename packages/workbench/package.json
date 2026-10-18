@@ -77,6 +77,7 @@
     "settings-ui.js",
     "tab-params.js",
     "tab-reports.js",
+    "tab-state.js",
     "text-size.js",
     "frame-text.js",
     "verify.js",

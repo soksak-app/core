@@ -130,6 +130,8 @@ pub fn class_of(name: &str) -> Option<Class> {
         "page.project.operation" => Some(Class::Call),
         "page.settings.change" => Some(Class::Call),
         "page.start" => Some(Class::Lifecycle),
+        "page.tab.state.orphan" => Some(Class::Lifecycle),
+        "page.tab.state.stored" => Some(Class::Lifecycle),
         "page.update.operation" => Some(Class::Call),
         "page.window.operation" => Some(Class::Call),
         "sok.command" => Some(Class::Call),

@@ -88,6 +88,8 @@ var eventClasses = map[string]Class{
 	"page.project.operation":              ClassCall,
 	"page.settings.change":                ClassCall,
 	"page.start":                          ClassLifecycle,
+	"page.tab.state.orphan":               ClassLifecycle,
+	"page.tab.state.stored":               ClassLifecycle,
 	"page.update.operation":               ClassCall,
 	"page.window.operation":               ClassCall,
 	"sok.command":                         ClassCall,
