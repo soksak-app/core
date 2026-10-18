@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F199.3: workbench project switch test의 browsing check가 연 project를 제거하므로, 이후 window가 소유한 project가 없고 다음 check는 자기 snapshot의 layout을 읽는다. Red: session file check를 뒤에 두면 `closing a tab left its session file`; Green: 11 of 11.
 - F196.20-4: 시스템 warn pressure 뒤에도 남은 plain web view U의 증가는 엔진 plain web view의 동작이다; 같은 시스템 전체 pressure에서 document region R과 S는 돌려주었거나 늘지 않았다.
 - F196.20-3: region cost benchmark가 기다리는 동안 application event를 보내므로, `occlusionState`와 각 page의 visibility가 창을 만들 때의 상태가 아니라 window server를 따르고, collection mode는 창마다 순서와 덮는 창을 출력한다. 30분 동안 heap count는 평평했다; R은 증가를 collection에서 돌려주었고 U는 warn pressure 뒤에도 WebKit malloc 20 MB를 유지했다(F196.20-4).
 - F199.2: 브라우저 탭이 재시작 뒤에도 back/forward history를 유지한다. workbench는 탭의 각 문서 영역 session을 main-frame navigation commit 때(탭마다 1초에 한 번), unload 때, quit의 window 저장 때 `tab-sessions/<tab>.json`에 쓰고, restore와 재시작 뒤 첫 표시 때 영역의 attach에 넘긴다. decode한 크기가 1 MiB를 넘는 영역 값은 `page.tab.session.dropped`를 낸다. 메모리 절약은 history를 메모리에 두지 않는다. file은 tab-state 항목과 함께 지운다. Red: 재시작을 흉내 낸 뒤 attach에 `interactionState`가 없었고, 탭을 닫아도 file이 남음; Green.
