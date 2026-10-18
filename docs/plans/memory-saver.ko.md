@@ -35,7 +35,7 @@ core는 숨겨진 tab을 내리고, 다시 보일 때 저장된 상태로 복원
    - `pressure`: native memory pressure source 하나가 host와 함께 시작하고, level(warn 또는 critical)을 읽고 각 알림에 번호를 붙인다. F196.29의 document region 소비자를 부르고(그 소비자는 source를 갖지 않고 구독한다), host는 page에 event `memory-pressure {level, seq}` 하나를 보낸다. 알림마다 core는 보호 없는 숨겨진 tab 하나를, 가장 오래전에 보인 것부터 내린다. pressure에서 `recent`는 보호하지 않는다; 다른 보호는 모두 지킨다. 가장 오래전에 보인 순서이므로 방금 restore된 tab은 맨 뒤에 남는다. 후보를 찾지 못한 알림은 event `page.tab.unload.skipped {trigger, seq, reasons}`다.
 6. **unload, 재시작, 숨김 시각.**
 
-   unload는 이 순서의 core 동작 하나다: (1) core는 `host.window`가 보고하는 surface와 document 이름으로 지정하는 선언된 host method로 tab의 각 document region에 `interactionState`를 묻는다; (2) tab을 내려진 것으로 표시한다; (3) commit을 요청해 `dormant()`가 tab을 빼게 한다; (4) `disposeSurfacesExcept`가 받는 집합은 tab을 빼고, tab이 내려진 것으로 표시되어 있으므로 surface는 `disposeSurface`의 unload mode로 해제된다; 이 mode는 설명 보고(제목, footer, directory, origin, modified)를 유지하고 동작 보고(notice, error: 표시는 instance와 함께 끝났고 문장은 log에 있다)를 지운다; `forgetTab`은 tab을 닫을 때만 실행한다; (5) `host.place`가 응답한 뒤 `page.tab.unloaded`를 보낸다.
+   unload는 이 순서의 core 동작 하나다: (1) core는 `host.window`가 보고하는 surface와 document 이름으로 지정하는 선언된 host method로 tab의 각 document region에 `interactionState`를 묻는다; (2) tab을 내려진 것으로 표시한다; (3) commit을 요청해 `dormant()`가 tab을 빼게 한다; (4) `disposeSurfacesExcept`가 받는 집합은 tab을 빼고, tab이 내려진 것으로 표시되어 있으므로 surface는 `disposeSurface`의 unload mode로 해제된다; 이 mode는 tab 보고(제목, footer, directory, origin, modified, notice; notice는 plugin 명세대로 tab이 보이거나 닫힐 때만 끝난다)를 유지하고 오류만 지운다(표시는 instance와 함께 끝났고, 하나의 오류 표시가 이미 문장을 log에 썼다); `forgetTab`은 tab을 닫을 때만 실행한다; (5) `host.place`가 응답한 뒤 `page.tab.unloaded`를 보낸다.
 
    각 unload 시도는 세대를 가진다. 기다리는 각 단계(`interactionState` 응답, media 응답) 뒤에 core는 단계 2 전에 보호를 다시 평가한다; 생긴 보호나 tab 표시는 그 시도를 `page.tab.unload.skipped {trigger, seq, reasons}`로 끝내고, `core.tab.unload`는 그 이유와 함께 실패한다.
 
@@ -71,7 +71,7 @@ core는 숨겨진 tab을 내리고, 다시 보일 때 저장된 상태로 복원
 
 ### 저장 format
 
-tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 store `tab-state.json`은 첫 release부터 format 1이고, tab 식별자마다 선택 field 둘, `state: {format, value}`와 `kept: true`를 가진 항목을 두고, 둘 중 하나가 있을 때만 항목을 저장한다; `state`가 없으면 `read()`는 `null`이다. tab이 내려졌는지는 저장하지 않는다: 규칙 6이 그것을 정한다. 한 tab의 쓰기는 초당 최대 한 번으로 합치고 종료할 때 내보내므로, crash는 최대 마지막 1초의 상태를 잃는다. 항목이 없는 tab은 `null`을 읽는다. 항목은 그 tab을 빼는 layout 쓰기가 확인된 뒤에만 지운다. load할 때 store를 `projects.json`의 tab 식별자와 맞추고, 지운 각 고아 항목은 event다. reader는 현재 format만 받는다. `projects.json`은 내용이 바뀌지 않으므로 format을 유지한다. 별도 store는 잦은 상태 쓰기를 layout 전체 파일에서 떼어 놓는다; plugin `data`는 tab이 아니라 project와 선언한 key별이므로 소유자가 아니다.
+tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 store `tab-state.json`은 첫 release부터 format 1이고, tab 식별자마다 선택 field 셋, `state: {format, value}`, `kept: true`, tab이 마지막으로 보고한 core 소유의 `reports: {title, footer, directory}`를 가진 항목을 두고, 그중 하나가 있을 때만 항목을 저장한다; 재시작 뒤 내려진 상태로 시작한 tab은 restore될 때까지 이 보고를 보인다; `state`가 없으면 `read()`는 `null`이다. tab이 내려졌는지는 저장하지 않는다: 규칙 6이 그것을 정한다. 한 tab의 쓰기는 초당 최대 한 번으로 합치고 종료할 때 내보내므로, crash는 최대 마지막 1초의 상태를 잃는다. 항목이 없는 tab은 `null`을 읽는다. 항목은 그 tab을 빼는 layout 쓰기가 확인된 뒤에만 지운다. load할 때 store를 `projects.json`의 tab 식별자와 맞추고, 지운 각 고아 항목은 event다. reader는 현재 format만 받는다. `projects.json`은 내용이 바뀌지 않으므로 format을 유지한다. 별도 store는 잦은 상태 쓰기를 layout 전체 파일에서 떼어 놓는다; plugin `data`는 tab이 아니라 project와 선언한 key별이므로 소유자가 아니다.
 
 ## 채택과 비채택
 
@@ -83,8 +83,8 @@ tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 st
 각 단계는 checklist 항목 하나이고, 소유 module에서 Red부터 시작한다.
 
 1. F198.1 용어와 명세(`unload`, `restore`, 보호, `surface.unload`, `context.tab.state`, `context.tab.keep`, event, status, 명령, 설정); `validateManifest`가 `surface.unload`를 요구하고 `background` 옆에서 거부한다.
-2. F198.2 tab 상태 store `tab-state.json`(format 1): 다른 format을 거부하는 reader, 종료 시 내보내기를 포함한 쓰기 합치기, layout과의 쓰기 순서, load 때 맞추기.
-3. F198.3 `surface-modules.js`의 `context.tab.state`와 `context.tab.keep("busy")`; `disposeSurface`의 unload mode(Red: unload 뒤 보고한 제목과 restore된 context의 `origin`이 남고, 보이던 오류는 지워진다); 다음 mount 전에 끝나는 dispose(mount가 진행 중인 dispose를 기다림); dispose 뒤 쓰기는 거부하고 context마다 한 번 기록한다(Red: 두 번째 쓰기는 더 기록하지 않는다).
+2. F198.2 저장된 보고를 포함한 tab 상태 store `tab-state.json`(format 1)(Red: 설정을 켠 모의 재시작 뒤 `core.grid`가 숨겨지고 내려진 tab의 마지막 label을 보고한다): 다른 format을 거부하는 reader, 종료 시 내보내기를 포함한 쓰기 합치기, layout과의 쓰기 순서, load 때 맞추기.
+3. F198.3 `surface-modules.js`의 `context.tab.state`와 `context.tab.keep("busy")`; `disposeSurface`의 unload mode(Red: unload 뒤 보고한 제목, notice, restore된 context의 `origin`이 남고, 보이던 오류는 지워진다); 다음 mount 전에 끝나는 dispose(mount가 진행 중인 dispose를 기다림); dispose 뒤 쓰기는 거부하고 context마다 한 번 기록한다(Red: 두 번째 쓰기는 더 기록하지 않는다).
 4. F198.4 workbench의 scheduler, 보호, 적힌 순서의 unload 동작과 restore(Red: 보이지 않고 mount된 tab은 mount 시각을 얻는다; 설정을 켜도 숨김 시각이 유지된다; `interactionState` 응답을 기다리는 동안의 표시나 `modified` 보고는 tab을 올려 둔다); `dormant()`가 내려진 tab을 뺀다(Red: unload 뒤 commit이 tab을 다시 mount하지 않고 store 항목을 지우지 않는다); 시험에서는 `mock.timers`가 지연을 움직인다.
 5. F198.5 document region 보고: media 재생 질의, camera와 microphone은 key-value observation으로; form 수정은 frame별 map과 함께 모든 frame의 region script로(Red: 지운 subframe과 reload가 표시를 지운다); `interactionState`는 닫기 전에 돌려주고 restore할 때 넘기며 빈 경우도 다룬다.
 6. F198.6 native memory pressure source를 host와 함께 시작하는 소유자로 옮긴다; `sp_observe_memory_pressure`는 handler에 level을 넘기고 단일 등록으로 남는다(public dispatch API, private API 행 없음; Red: host 시작 한 번이 source 하나만 등록한다); region 소비자는 그것을 구독한다; Go와 Rust는 contract case와 선언한 fault injection과 함께 `memory-pressure {level, seq}`를 전달한다; `docs/spec/hosts.md`가 소유를 적는다.
@@ -188,6 +188,11 @@ tab 상태는 `projects.json`에 저장하지 않는다. 설정 폴더의 새 st
 8차(검토자 하나). 각 반박과 답:
 
 - 유지하는 보고에 origin이 빠져 restore된 tab이 directory를 잃는다 → origin을 유지하고 Red 시험을 둔다.
-- 유지한 notice와 error는 지울 instance가 없다 → unload mode가 동작 보고를 지운다; 그 문장은 이미 log에 있다.
+- 유지한 notice와 error는 지울 instance가 없다 → unload mode가 오류를 지우고 그 문장은 log에 있다(notice 부분은 9차에서 바로잡았다: notice는 tab이 보이거나 닫힐 때까지 남는다).
 - 2차 답이 내려진 tab을 유지 집합에 넣어 해제와 모순된다 → 바로잡았다: 집합은 tab을 빼고 unload mode가 해제한다.
 - 기다리는 단계 동안 보호가 생길 수 있다 → 시도마다 세대를 두고 기다린 각 단계 뒤에 다시 평가하며, `page.tab.unload.skipped`로 끝낸다.
+
+9차(검토자 하나). 각 반박과 답:
+
+- notice는 숨겨진 tab에만 있고, 표시나 닫기에서만 끝나며, log에 남지 않는다 → unload mode는 notice를 유지하고 오류만 지운다.
+- 재시작 뒤 내려진 상태로 시작한 tab에 보고가 없어 저장된 제목을 보였다 → store가 core 소유 보고(제목, footer, directory)를 유지하고 tab은 restore될 때까지 그것을 보이며, Red 시험을 둔다.
