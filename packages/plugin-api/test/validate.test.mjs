@@ -7,7 +7,7 @@ import {
 
 const card = {
   id: "probe", name: "Probe", description: "검사용 표면.", mark: "p", icon: "<path/>",
-  surface: { module: "ui/probe.js", composition: { kind: "dom" }, unload: false }, dependencies: { "@scope/sidecar-worker": "^1.2.0" },
+  surface: { module: "ui/probe.js", composition: { kind: "dom" } }, dependencies: { "@scope/sidecar-worker": "^1.2.0" },
   settings: { "cursor.shape": { type: "enum", label: "커서 모양", default: "block", values: ["block", "beam"] } },
 };
 const side = { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] };
@@ -108,7 +108,7 @@ test("surface composition declarations are complete and fail closed", () => {
     name: "view", kind: "image", sidecar: "@scope/sidecar-worker", input: "dom",
   };
   const hybrid = (regions = [documentRegion], overlays = []) => ({
-    ...card, surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions, overlays }, unload: false },
+    ...card, surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions, overlays } },
   });
   assert.equal(validateManifest(hybrid()).surface.composition.kind, "hybrid");
   assert.equal(validateManifest(hybrid([imageRegion])).surface.composition.regions[0].sidecar, "@scope/sidecar-worker");
@@ -476,20 +476,21 @@ test("the replay of a sidecar manifest names the event of each kind of replay in
 });
 
 test("a surface may declare unload, which is validated when present and forbidden beside background", () => {
-  const { unload, ...bare } = card.surface;
-  // Core 0.0.18 accepts a surface without unload; its tabs keep the protection undeclared (docs/spec/plugins.md#memory-saver).
+  const bare = card.surface;
+  // A surface without unload is a valid form; its tabs are never unloaded (undeclared) (docs/spec/plugins.md#memory-saver).
   assert.equal(validateManifest({ ...card, surface: bare }).surface.unload, undefined);
-  assert.equal(validateManifest({ ...card, surface: { ...bare, unload: false } }).surface.unload, false);
+  assert.throws(() => validateManifest({ ...card, surface: { ...bare, unload: false } }),
+    /plugin probe: surface unload must be \{format, maxBytes\} with positive integers/);
   assert.deepEqual(validateManifest({ ...card, surface: { ...bare, unload: { format: 1, maxBytes: 4096 } } }).surface.unload,
     { format: 1, maxBytes: 4096 });
   const background = { sidecar: "@scope/sidecar-worker", operation: "open" };
   assert.equal(validateManifest({ ...card, surface: bare, background }).surface.unload, undefined);
-  assert.throws(() => validateManifest({ ...card, surface: { ...bare, unload: false }, background }),
+  assert.throws(() => validateManifest({ ...card, surface: { ...bare, unload: { format: 1, maxBytes: 1 } }, background }),
     /plugin probe: surface unload is forbidden beside background/);
   for (const value of [true, null, 1, {}, { format: 1 }, { maxBytes: 1 }, { format: 0, maxBytes: 1 }, { format: 1.5, maxBytes: 1 },
     { format: 1, maxBytes: 0 }, { format: 1, maxBytes: "1" }]) {
     assert.throws(() => validateManifest({ ...card, surface: { ...bare, unload: value } }),
-      /plugin probe: surface unload must be false or \{format, maxBytes\} with positive integers/, JSON.stringify(value));
+      /plugin probe: surface unload must be \{format, maxBytes\} with positive integers/, JSON.stringify(value));
   }
   assert.throws(() => validateManifest({ ...card, surface: { ...bare, unload: { format: 1, maxBytes: 1, extra: 1 } } }), /unknown field extra/);
 });

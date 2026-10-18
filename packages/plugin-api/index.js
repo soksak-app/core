@@ -515,16 +515,14 @@ export function validateManifest(manifest) {
     }
     if (surface.composition === undefined) throw new Error(`${where}: surface requires a composition`);
     checkComposition(`${where} surface`, surface.composition, manifestSidecars(manifest));
-    // A plugin with a background session keeps it through the background path, so only the other surfaces declare
-    // whether the core may unload their tabs; a surface without the declaration is never unloaded (undeclared), and
-    // the next core release requires it (docs/spec/plugins.md#memory-saver).
+    // surface.unload is absent (the tabs are never unloaded, undeclared) or {format, maxBytes} (docs/spec/plugins.md#memory-saver).
     if (manifest.background !== undefined) {
       if (surface.unload !== undefined) throw new Error(`${where}: surface unload is forbidden beside background`);
-    } else if (surface.unload !== undefined && surface.unload !== false) {
+    } else if (surface.unload !== undefined) {
       const unload = surface.unload;
       if (!isObject(unload) || !Number.isInteger(unload.format) || unload.format < 1 ||
           !Number.isInteger(unload.maxBytes) || unload.maxBytes < 1) {
-        throw new Error(`${where}: surface unload must be false or {format, maxBytes} with positive integers`);
+        throw new Error(`${where}: surface unload must be {format, maxBytes} with positive integers`);
       }
       only(`${where} surface unload`, unload, ["format", "maxBytes"]);
     }

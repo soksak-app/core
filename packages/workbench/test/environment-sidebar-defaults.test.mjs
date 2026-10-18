@@ -7,7 +7,7 @@ const files = {
       { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture", title: "Fixture" }] },
     ] } } },
   card: { id: "fixture", name: "Fixture", description: "Fixture card.",
-    mark: "f", icon: "<path/>", surface: { module: "ui/card.js", composition: { kind: "dom" }, unload: false },
+    mark: "f", icon: "<path/>", surface: { module: "ui/card.js", composition: { kind: "dom" } },
     sidebars: { sets: [{ id: "main", title: "Main", sections: ["sections.tree"], layout: "list" }],
       card: { left: "main", top: "main" }, window: { right: "main" } } },
   sections: { id: "sections", name: "Sections", description: "Fixture sections.",

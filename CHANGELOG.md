@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.21: `surface.unload` is absent, which leaves the tabs never unloaded (`undeclared`), or `{format, maxBytes}`; `validateManifest` refuses `false` with an error that names the plugin, and the specification no longer calls the declaration required. Red: the validator accepted `unload: false` (`Missing expected exception`); Green: the plugin-api tests pass.
 - F198.18: `surface.unload` stays optional; a requirement would add no function, since a surface without it is never unloaded, and would revoke five installable plugin versions.
 - F196.20-2: the slow growth of a visible page is the late JavaScript full collection, whose timer limits its CPU by the bytes it expects to reclaim; the engine offers no public interface that collects an idle visible page earlier, and the system memory pressure that F198.6 delivers is its standard release path. No change.
 - F198.20: the record `log.migrated` of a stored-data migration passes every gate of the event log, so the default policy, which stores only errors, keeps it and the release step that requires it passes. Red: the Go and Rust migrate tests found `log.gated` and no `log.migrated`; Green: both pass.

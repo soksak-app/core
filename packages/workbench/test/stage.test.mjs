@@ -80,7 +80,7 @@ function installedConfiguration(t) {
 
 const MANIFESTS = {
   probe: { id: "probe", name: "Probe", description: "검사용 표면.", mark: "P", icon: "<path/>",
-    surface: { module: "ui/probe.js", composition: { kind: "dom" }, unload: false },
+    surface: { module: "ui/probe.js", composition: { kind: "dom" } },
     extends: { language: { version: "1.0.0", schema: { type: "object" }, modules: { "@scope/library": "ui/vendor/library.js" } } } },
   alpha: { id: "alpha", name: "Alpha", description: "검사용 섹션.", sections: [{ id: "alpha.list", name: "List", module: "ui/list.js" }] },
 };
