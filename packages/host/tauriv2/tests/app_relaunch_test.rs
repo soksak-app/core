@@ -4,6 +4,8 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+#[path = "support/folder.rs"]
+mod folder;
 #[path = "support/records.rs"]
 mod records;
 
@@ -12,7 +14,7 @@ use soksak_host_tauriv2::app_update::{prepare_relaunch, start_relaunch};
 // contract: app-relaunch.host.starts-sok-of-the-running-bundle
 #[test]
 fn the_relaunch_starts_sok_of_the_running_bundle_with_the_arguments_of_the_application() {
-    let folder = tempfile::tempdir().unwrap();
+    let folder = folder::Folder::new();
     let running = folder.path().join("soksak.app");
     std::fs::create_dir_all(running.join("Contents/MacOS")).unwrap();
     let executable = running.join("Contents/MacOS/soksak-tauriv2");
@@ -85,7 +87,7 @@ fn the_detached_relaunch_command_is_recorded_when_it_starts() {
         std::fs::write(config.join("child-pid"), child.id().to_string()).unwrap();
         return;
     }
-    let config = tempfile::tempdir().unwrap();
+    let config = folder::Folder::new();
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
