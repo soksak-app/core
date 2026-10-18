@@ -27,3 +27,26 @@ test('browser persistence shares settings, serializes duplicate directories and 
     reopened.close();
   } finally { a.close();b.close(); }
 });
+
+test('the tab state starts empty, keeps the entries of two windows, removes on null and refuses another format', async () => {
+  const indexedDB = new IDBFactory();
+  const a = await WorkspaceStore.open({indexedDB,channel:false});
+  const b = await WorkspaceStore.open({indexedDB,channel:false});
+  try {
+    assert.equal(await a.tabState(), null);
+    const bytes = await a.tabStatePut('tab-a',{kept:true});
+    await b.tabStatePut('tab-b',{label:'b'});
+    assert.equal(bytes, JSON.stringify({format:1,tabs:{'tab-a':{kept:true}}}).length);
+    assert.deepEqual(await a.tabState(), {format:1,tabs:{'tab-a':{kept:true},'tab-b':{label:'b'}}});
+    await b.tabStatePut('tab-a',null);
+    assert.deepEqual(await a.tabState(), {format:1,tabs:{'tab-b':{label:'b'}}});
+    await assert.rejects(a.tabStatePut('',{kept:true}), {message:'tab state put requires a tab'});
+    await new Promise((resolve, reject) => {
+      const tx = a.database.transaction(['settings'],'readwrite');
+      tx.objectStore('settings').put({format:2,tabs:{}},'tab-state');
+      tx.oncomplete = resolve; tx.onabort = () => reject(tx.error);
+    });
+    await assert.rejects(a.tabStatePut('tab-c',{kept:true}), {message:'tab-state: tab state format 2 is not 1'});
+    assert.deepEqual(await b.tabState(), {format:2,tabs:{}});
+  } finally { a.close();b.close(); }
+});
