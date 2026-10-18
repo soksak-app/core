@@ -28,6 +28,17 @@ test("a grouped picker draws headings that take no press and counts only the ite
   ]);
 });
 
+test("an item that gives its own dom name carries it instead of core.picker.item", () => {
+  const { document } = new JSDOM("<div id=picker></div>").window;
+  const el = document.getElementById("picker");
+  fillPicker(el, "탭", [{ heading: null, items: [
+    { key: "keep", name: "메모리에 유지", mark: "", svg: "", active: true, expose: "core.tab.menu-keep" },
+    { key: "t1", name: "터미널", mark: ">", svg: "" },
+  ] }], () => {});
+  assert.deepEqual([...el.querySelectorAll(".picker__item")].map((b) => b.dataset.expose), ["core.tab.menu-keep", "core.picker.item"]);
+  assert.deepEqual(pickerItems(el)[0], { key: "keep", name: "메모리에 유지", active: true, group: null });
+});
+
 test("an ungrouped picker draws its items with no heading and no group", () => {
   const { document } = new JSDOM("<div id=picker></div>").window;
   const el = document.getElementById("picker");

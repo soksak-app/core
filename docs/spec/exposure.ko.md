@@ -102,7 +102,8 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 - Command `core.tab.unload {tab}`은 숨겨진 탭을 지금 unload한다. 사람이 직접 정한 것이므로 `recent`, `media`, `media-unknown`, `capture`, `form`을 기다리지 않는다. 남은 이유(`shown`, `keep:modified`, `keep:busy`, `kept`, `off`, `undeclared`, `background`)와 시도를 끝낸 이유에는 오류 `tab <id> is protected: <reasons>`로, 알 수 없는 탭에는 -32602(invalid params)로 실패한다.
 - Command `core.tab.keep {tab, keep}`은 사람의 표시 `kept`를 정하거나(`true`) 지우고(`false`) `tab-state.json`에 저장한다. 멱등이며 바뀔 때마다 `page.tab.keep.changed`를 하나 낸다. 알 수 없는 탭이나 boolean이 아닌 `keep`에는 -32602로, 절대 unload될 수 없는 탭에는 이유 `undeclared`나 `background`를 담은 `tab <id> can never be unloaded: <reason>`로 실패한다.
 - 각 탭 단추는 자기 `state`(`loaded`, `unloaded`, `restoring`)를 담은 `data-tab-state`를 가진다. 보호는 `reasons`로만 보인다.
-- dom 이름 `tab-menu-keep`인 탭 context menu 항목은 binder로 `core.tab.keep`을 실행하고, `core.tab.memory`의 reasons에 있는 `kept`로 표시를 보이며, 절대 unload될 수 없는 탭에는 없다.
+- 명령 `core.tab.menu {tab, x, y}`는 탭 context menu를 창의 `x`, `y`에 선택 layer로 연다. 탭 버튼의 오른쪽 클릭은 menu에 항목이 있을 때 이를 실행한다. 알 수 없는 탭에는 -32602로, 절대 unload될 수 없는 탭에는 `tab <id> has no menu items`로 실패한다.
+- dom 이름 `core.tab.menu-keep`인 탭 context menu 항목은 binder로 `core.picker.pick`을 거쳐 골라지고 표시를 뒤집은 값으로 `core.tab.keep`을 실행한다. `core.tab.memory`의 reasons에 `kept`가 있는 동안 `core.picker`에서 `active`이며, 절대 unload될 수 없는 탭에는 없다. exposure 검사는 접두사 `core.`가 있는 이름만 읽으므로, 이 이름은 core가 선언하는 모든 dom 이름처럼 그 접두사를 갖는다.
 
 ## 창
 

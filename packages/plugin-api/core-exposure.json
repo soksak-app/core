@@ -123,6 +123,7 @@
     "core.tab.move",
     "core.tab.unload",
     "core.tab.keep",
+    "core.tab.menu",
     "core.picker.pick",
     "core.picker.close",
     "core.library.page",

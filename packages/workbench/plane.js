@@ -1701,6 +1701,22 @@ export function openSurfaceMenu(surfaceId, x, y) {
   openLayer(anchor, owner.name, items, (key) => runOn(key, {}, surfaceId), "left");
 }
 
+/**
+ * Opens the context menu of a tab in the selection layer at x and y of the window with the items of the tab menu
+ * (tab-menu.js); the chosen item runs its declared command (docs/spec/exposure.md#tab-memory).
+ */
+export function openTabMenu(tabId, x, y, items) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error(`the menu of tab ${tabId} needs x and y as numbers`);
+  const tab = tabsOf(cardOfTab(tabId)).find((t) => t.id === tabId);
+  if (items.length === 0) throw new Error(`tab ${tabId} has no menu items`);
+  // The layer is placed below and to the right of the point, as from an anchor of no size there.
+  const anchor = { getBoundingClientRect: () => ({ left: x, right: x, top: y, bottom: y }), contains: () => false };
+  openLayer(anchor, tabName(tab), items, (key) => {
+    const item = items.find((entry) => entry.key === key);
+    return run(item.command, item.params);
+  }, "left");
+}
+
 /** A right click on a surface whose plugin declares a menu opens that menu; elsewhere the page menu opens. */
 export function onSurfaceContextMenu(event) {
   // The target of a contextmenu event is the element under the pointer; a surface in a shadow root retargets it to its host.

@@ -3441,6 +3441,27 @@
         }
       },
       {
+        "name": "core.tab.menu",
+        "description": "Opens the context menu of a tab in the selection layer at x and y of the window; its keep item runs core.tab.keep with the toggled mark. A tab whose menu has no item, a tab that can never be unloaded, is refused.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.picker.pick",
         "description": "Picks an item of the open menu by index.",
         "params": {
@@ -3936,6 +3957,10 @@
         "name": "core.picker.item",
         "description": "The items of the open add or tab menu in order.",
         "many": true
+      },
+      {
+        "name": "core.tab.menu-keep",
+        "description": "The keep item of the tab context menu; it runs core.tab.keep with the toggled mark, is active while the tab has the mark kept, and is absent for a tab that can never be unloaded."
       },
       {
         "name": "core.picker.item-icon",

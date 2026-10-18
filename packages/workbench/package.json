@@ -75,6 +75,7 @@
     "plugin-search.js",
     "settings-scope.js",
     "settings-ui.js",
+    "tab-menu.js",
     "tab-params.js",
     "tab-reports.js",
     "tab-state.js",

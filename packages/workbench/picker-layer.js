@@ -4,8 +4,9 @@
 /**
  * Empties el, draws the question ask and the groups groups, and returns the item keys in choosing order.
  *
- *   groups  [{ heading: null | { id, name, depth, map }, items: [{ key, name, mark, svg, viewBox?, active?, notice? }] }]
+ *   groups  [{ heading: null | { id, name, depth, map }, items: [{ key, name, mark, svg, viewBox?, active?, notice?, expose? }] }]
  *           map is the SVG content of the group title icon, and depth is the indentation level of the title.
+ *           expose is the dom name of an item that has its own, such as an item of the tab context menu.
  *   mark    (button, index, item) attaches the choose command to an item button.
  *
  * Item names and titles are set with `textContent`. A tab title is user input, so inserting it as markup could change the layer structure.
@@ -32,7 +33,8 @@ export function fillPicker(el, ask, groups, mark) {
     for (const item of items) {
       const b = document.createElement("button");
       b.className = "picker__item";
-      b.dataset.expose = "core.picker.item";
+      // default: an item without its own dom name is a picker item.
+      b.dataset.expose = item.expose ?? "core.picker.item";
       b.type = "button";
       b.dataset.key = item.key;
       b.dataset.active = String(item.active === true);

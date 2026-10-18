@@ -13,12 +13,13 @@ import { createPluginApply } from "./plugin-apply.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
 import { trackPointer } from "./pointer-state.js";
+import { tabMenuItems } from "./tab-menu.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
 import {
   activeTab, addTabTo, assignSidebar, openFile, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
-  focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
+  focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
 } from "./plane.js";
 import {
@@ -519,6 +520,15 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     if (typeof keep !== "boolean") throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "keep must be a boolean");
     memory.keep(tab, keep);
     return null;
+  });
+  registry.command("core.tab.menu", ({ tab, x, y }) => { openTabMenu(tab, x, y, tabMenuItems(memoryTab(tab), memory.reasons(tab))); });
+  // A right click on a tab button opens its context menu when the menu has items; otherwise the page menu opens.
+  document.addEventListener("contextmenu", (event) => {
+    const button = event.target.closest(".tab[data-tab-id]");
+    if (!button || !memory.known(button.dataset.tabId)) return;
+    if (tabMenuItems(button.dataset.tabId, memory.reasons(button.dataset.tabId)).length === 0) return;
+    event.preventDefault();
+    return registry.run("core.tab.menu", { tab: button.dataset.tabId, x: event.clientX, y: event.clientY });
   });
   registry.command("core.tab.move", ({ tab, card, zone }) => { moveTab(tab, card, zone); });
   registry.command("core.picker.pick", ({ index }) => { pickItem(index); });
