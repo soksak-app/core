@@ -160,7 +160,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | A1 | 내용만 다름 | 내용만 다름 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다 |
 | A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
 | A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | Tauri 설정 |
-| A4 | `go.mod`, `go.sum` | `Cargo.toml` | 언어마다 매니페스트가 다르며, 호스트 패키지에도 같은 차이가 있다 |
+| A4 | `go.mod`, `go.sum` | `Cargo.toml`, `Cargo.lock` | 언어마다 매니페스트와 잠금 파일이 다르며, 호스트 패키지에도 같은 차이가 있다 |
 | A5 | `test/support/wails-runtime-loader.mjs` | 없음 | Wails page는 runtime module을 asset server(`/wails/runtime.js`)에서 import하는데 시험 실행에는 그 파일이 없으므로, loader가 그 specifier에 시험이 제공하는 module을 준다. Tauri page는 `window.__TAURI__`를 읽으며 시험이 직접 정한다 |
 | C1 | `src/cmd/sok/main.go` | `src/main.rs` | Go 명령은 자기 `main` package 폴더가 필요하고, Rust binary target은 library root 옆의 `src/main.rs`다 |
 | C2 | `src/diagnostics_test.go`, `src/dev_test.go`, `tests/build_test.go` | 없음 | Go 파일은 build 제약으로 한 build에만 속하므로, `sok`의 진단 build는 `diagnostics && !dev` 단위 test에서 `capture` 요청과 release 식별자를, `dev` build는 `dev` 단위 test에서 `.dev` 식별자를, 다른 build는 `!diagnostics` test에서 사용법 오류와 release 식별자를 검사한다. Rust는 `tests/sok_test.rs`에서 `cfg(feature = "diagnostics")`와 `cfg(feature = "dev")`로 build를 검사한다 |

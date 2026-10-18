@@ -152,9 +152,19 @@ test("host structure audit reports a clean paired-host graph", { timeout: 5000 }
 });
 
 test("host structure audit rejects a missing host and a missing counterpart", { timeout: 1000 }, () => {
-  const pairs = [{ left: "hosts/wails", right: "hosts/tauri", only: { left: {}, right: {} } }];
+  const pairs = [{ left: "hosts/wails", right: "hosts/tauri", rows: [] }];
   assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go"], pairs), ["hosts/tauri: no files", "hosts/wails/src/host: no counterpart in hosts/tauri"]);
   assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go", "hosts/tauri/src/host.rs", "hosts/tauri/src/extra.rs"], pairs), ["hosts/tauri/src/extra: no counterpart in hosts/wails"]);
+});
+
+test("host structure audit reads the allowed file differences from the table rows", { timeout: 1000 }, async () => {
+  const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
+  const withoutH1 = hostsSpec.split("\n").filter((line) => !line.startsWith("| H1 |")).join("\n");
+  const tracked = ["packages/host/wailsv3/src/host.go", "packages/host/tauriv2/src/host.rs", "packages/host/tauriv2/build.rs"];
+  assert.throws(() => auditHostPairs(tracked, undefined, withoutH1), /H1/);
+  const pairs = [{ left: "hosts/wails", right: "hosts/tauri", rows: ["H1"] }];
+  assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go", "hosts/tauri/src/host.rs", "hosts/tauri/build.rs"], pairs, hostsSpec), []);
+  assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go", "hosts/tauri/src/host.rs", "hosts/tauri/src/extra.rs"], pairs, hostsSpec), ["hosts/tauri/src/extra: no counterpart in hosts/wails"]);
 });
 
 test("command argument audit rejects a Tauri command argument that the framework decodes", { timeout: 1000 }, () => {

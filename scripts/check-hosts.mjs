@@ -1,59 +1,19 @@
 // Checks that the file structures of the two native hosts and the two native applications are the same.
 //
 // .go and .rs files are compared by the path without the extension, and other files are compared by the path as it is.
-// A file that exists on only one side passes only when it is in the allow list below (the difference IDs of docs/spec/hosts.md).
+// A file that exists on only one side passes only when a row of the Allowed differences table of docs/spec/hosts.md lists it (the row IDs of PAIRS).
 //
 //   node scripts/check-hosts.mjs
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 
 const PAIRS = [
-  {
-    left: "packages/host/wailsv3",
-    right: "packages/host/tauriv2",
-    only: {
-      left: {
-        "go.mod": "A4", "go.sum": "A4",
-        "src/bridge.js": "H3",
-        "src/platform/darwin/webview.m": "H4",
-        "src/diagnostics_test": "H5",
-        "src/menu": "H6", "tests/menu_test": "H6",
-        "tests/event_log_benchmark_test": "H8", "tests/event_native_benchmark_test": "H8",
-        "tests/framework_log_test": "H9",
-        "src/platform/darwin/input_source_await": "H11",
-      },
-      right: {
-        "Cargo.toml": "A4", "Cargo.lock": "A4",
-        "build": "H1",
-        "tests/panic_hook_test": "H7", "tests/fatal_signal_test": "H7",
-        "benches/event_log_benchmark": "H8", "benches/event_native_benchmark": "H8",
-        "src/platform/darwin/file_watch": "H10",
-      },
-    },
-  },
-  {
-    left: "packages/sok/wailsv3",
-    right: "packages/sok/tauriv2",
-    only: {
-      left: { "go.mod": "A4", "go.sum": "A4", "src/cmd/": "C1", "src/diagnostics_test": "C2", "src/dev_test": "C2", "tests/build_test": "C2", "src/dev": "C3" },
-      right: { "Cargo.toml": "A4", "src/main": "C1" },
-    },
-  },
-  {
-    left: "apps/wailsv3",
-    right: "apps/tauriv2",
-    only: {
-      left: { "go.mod": "A4", "go.sum": "A4", "test/support/wails-runtime-loader.mjs": "A5" },
-      right: {
-        "Cargo.toml": "A4", "Cargo.lock": "A4",
-        "build": "A2",
-        "tauri.conf.json": "A3", "capabilities/": "A3", "icons/": "A3", "gen/": "A3",
-      },
-    },
-  },
+  { left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["A4", "H1", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11"] },
+  { left: "packages/sok/wailsv3", right: "packages/sok/tauriv2", rows: ["A4", "C1", "C2", "C3"] },
+  { left: "apps/wailsv3", right: "apps/tauriv2", rows: ["A2", "A3", "A4", "A5"] },
 ];
 
 /** Converts the files under a directory to paths for comparison. */
@@ -64,11 +24,38 @@ function tree(dir) {
     .map((path) => path.slice(prefix.length).replace(/\.(go|rs)$/, "")));
 }
 
-const allowed = (path, table) => Object.keys(table).some((key) => key.endsWith("/") ? path.startsWith(key) : path === key);
+const allowed = (path, files) => files.some((key) => key.endsWith("/") ? path.startsWith(key) : path === key);
 
-export function auditHostPairs(tracked, pairs = PAIRS) {
+/**
+ * Returns the files that exist on the left host only (left) and on the right host only (right) in the rows of the Allowed differences table
+ * of the host specification (docs/spec/hosts.md). The Wails cell of a row lists the left files and the Tauri cell lists the right files; each
+ * file is compared without a .go or .rs extension, and a path that ends with "/" is a directory. A cell of none lists no file. A row that the
+ * table lacks is an error, so a pair cannot rely on a difference that the specification does not state.
+ */
+export function allowedFileDifferences(hostsMarkdown, ids) {
+  const start = hostsMarkdown.indexOf("## Allowed differences");
+  if (start < 0) throw new Error("hosts spec has no Allowed differences section");
+  const end = hostsMarkdown.indexOf("\n## ", start + 1);
+  const section = hostsMarkdown.slice(start, end < 0 ? undefined : end);
+  const result = { left: [], right: [] };
+  for (const id of ids) {
+    const line = section.split("\n").find((candidate) => candidate.split("|")[1]?.trim() === id);
+    if (line === undefined) throw new Error(`hosts spec has no allowed difference row ${id}`);
+    const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
+    for (const [side, cell] of [["left", cells[1]], ["right", cells[2]]]) {
+      if (cell === "none") continue;
+      const paths = [...cell.matchAll(/`([^`]+)`/g)].map((match) => match[1].replace(/\.(go|rs)$/, ""));
+      if (paths.length === 0) throw new Error(`hosts spec row ${id} lists neither none nor a file in the ${side} cell: ${cell}`);
+      result[side].push(...paths);
+    }
+  }
+  return result;
+}
+
+export function auditHostPairs(tracked, pairs = PAIRS, hostsMarkdown = readFileSync(`${ROOT}docs/spec/hosts.md`, "utf8")) {
   const errors = [];
   for (const pair of pairs) {
+    const only = allowedFileDifferences(hostsMarkdown, pair.rows);
     const left = new Set(tracked
       .filter((path) => path.startsWith(`${pair.left}/`))
       .map((path) => path.slice(pair.left.length + 1).replace(/\.(go|rs)$/, "")));
@@ -78,17 +65,16 @@ export function auditHostPairs(tracked, pairs = PAIRS) {
     if (left.size === 0) errors.push(`${pair.left}: no files`);
     if (right.size === 0) errors.push(`${pair.right}: no files`);
     for (const path of left) {
-      if (!right.has(path) && !allowed(path, pair.only.left)) errors.push(`${pair.left}/${path}: no counterpart in ${pair.right}`);
+      if (!right.has(path) && !allowed(path, only.left)) errors.push(`${pair.left}/${path}: no counterpart in ${pair.right}`);
     }
     for (const path of right) {
-      if (!left.has(path) && !allowed(path, pair.only.right)) errors.push(`${pair.right}/${path}: no counterpart in ${pair.left}`);
+      if (!left.has(path) && !allowed(path, only.right)) errors.push(`${pair.right}/${path}: no counterpart in ${pair.left}`);
     }
   }
   return errors;
 }
 
 // Checks for stub implementations (a regression guard).
-const { readFileSync } = await import("node:fs");
 const STUB_PATTERNS = [
   /TODO:\s*Implement/,
   /not yet implemented/,
