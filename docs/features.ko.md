@@ -1030,7 +1030,9 @@
   - [o] F197.5 — P1: files, shell, vt sidecar가 새 기본 정책을 적용한다. 각각 자기 저장소 체크리스트에서.
   - [o] F197.6 — P1: 도구의 실행은 명령 하나로 끝나므로 `sok`이 시작할 때 `<config-dir>/log-policy.json`을 한 번 적용한다: 도구 writer에 정책 파일이 없어 기본 정책만 저장하고 어떤 검사도 그것을 넓힐 수 없다.
   - [ ] F197.7 — P1: F196과 F197의 성능 작업 뒤, F197.5를 담은 files, shell, vt sidecar의 release. 그때까지 sidecar 기본값은 미게시다.
-  - [ ] F197.8 — P1: main page만 log policy를 적용하고(`packages/workbench/log-policy.js`의 `setLogPolicy`) surface document의 gate에 적용하는 코드가 없어서, debug switch를 켜도 surface document의 `page.call` event가 저장되지 않을 수 있다. switch를 켠 뒤 surface document가 debug event를 저장하는지 시험으로 보이고, 저장하지 않으면 policy가 모든 document gate에 닿게 Red/Green으로 고친다.
+  - [~] F197.8 — P1: main page만 log policy를 적용하고(`packages/workbench/log-policy.js`의 `setLogPolicy`) surface document의 gate에 적용하는 코드가 없어서, debug switch를 켜도 surface document의 `page.call` event가 저장되지 않을 수 있다. switch를 켠 뒤 surface document가 debug event를 저장하는지 시험으로 보이고, 저장하지 않으면 policy가 모든 document gate에 닿게 Red/Green으로 고친다.
+  - [~] F197.8.1 — P1: 두 host가 log policy를 적용할 때(default 또는 file) 모든 window에 host event `log-policy`를 `{classes}`로 보내고, call `log`에 `{classes}`를 돌려주는 action `policy-read`가 있다. theme처럼 처음 읽기와 event의 형태이고, host contract case와 Go, Rust 시험을 Red/Green으로 둔다.
+  - [ ] F197.8.2 — P1: `surfaceCalls`가 load할 때 policy를 읽고 각 `log-policy` event를 자기 document의 gate에 적용하며, 두 runtime이 `listen`을 넘긴다; workbench 시험이 read가 trace를 돌려주는 가짜 host로 `surfaceCalls`를 만들고 batch에 `page.call`을 요구한다(Red: batch에 `page.log.gated`만 있다).
 - [~] F196 — P1: 애플리케이션 메모리: 3일 사용 뒤 workbench page가 242 MB(Wails), 291 MB(Tauri), host가 각각 약 154 MB였고, 브라우저 탭의 문서 web view가 1.31 GB였는데, 애플리케이션의 어떤 기록도 그것을 가리키지 못한다.
   - [o] F196.1 — P1: 창 상태가 `host.window`의 `documents`에 각 문서 web view의 WebContent process를 보고하므로, 측정이 브라우저 탭의 메모리를 그 surface에 연결한다.
     - [o] F196.1.1 — P2: performance trace의 메모리 표본이 host, page process, 모든 문서 process를 그 window, surface와 함께 잰다.
