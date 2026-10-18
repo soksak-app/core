@@ -58,15 +58,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-      # The crates and the build output of cargo are kept between runs, so a run does not build every crate cold.
-      - uses: actions/cache@v4
+      # The crates and the dependency build output of cargo are kept between runs, so a run does not build every crate cold. The action keeps
+      # only the dependencies in the cache and removes the workspace crates and the incremental output, so the cache does not grow with each
+      # run; a cache of the whole target folder grew to 8 GB and filled the disk of the runner.
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            core/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('core/Cargo.lock') }}
-          restore-keys: cargo-${{ runner.os }}-
+          workspaces: core -> target
       - name: Build
         run: make -C core build native-darwin
       - name: Commit messages
