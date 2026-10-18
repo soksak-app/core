@@ -17,9 +17,10 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { pluginEntry } from "../scripts/workspace-registry.mjs";
 import { allRows, tailOf } from "./chains.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, pluginChangeApplied } from "./fixture.mjs";
 
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 const PROBE = fileURLToPath(new URL("./fixtures/memory-saver/unload-probe/", import.meta.url));
@@ -49,25 +50,11 @@ async function serve(s) {
   return { a: `${base}/a`, b: `${base}/b`, c: `${base}/c` };
 }
 
-/**
- * Runs a plugin operation that changes installed.json and waits until the main document has reloaded
- * (docs/spec/installation.md#applying-a-change). The wait watches the host status host.windows, which stays served while the
- * page reloads, for the window to leave and regain readiness, and then reads the new time origin of core.window.document.
- * A watch of a page status would end with the closed document.
- */
+/** Runs a plugin operation that changes installed.json and waits until the page has reloaded (docs/spec/installation.md#applying-a-change). */
 async function pluginChange(s, action, run) {
-  const before = (await s.get("core.window.document")).timeOrigin;
-  let left = false;
-  const reloaded = s.until("host.windows", (list) => {
-    const window = list.find((entry) => entry.window === s.window);
-    if (!window?.ready) left = true;
-    return left && window?.ready === true;
-  }, `the page did not reload and become ready after ${action}`);
+  const offsets = currentEventOffsets(s.app.configDir);
   await run();
-  await reloaded;
-  const after = await s.get("core.window.document");
-  assert.notEqual(after.timeOrigin, before, `the main document kept its time origin after ${action}`);
-  assert.equal(after.readyState, "complete", `the main document is ${after.readyState} after ${action}`);
+  await pluginChangeApplied(s, offsets, action);
 }
 
 /**
@@ -102,8 +89,8 @@ for (const app of Object.values(APPS)) {
     // The delay of 720 minutes keeps the delay deadline out of the check, so every unload comes from the command or the pressure.
     await step(t, s, "prepare the fixture", () => fresh(s, { settings: { memorySaver: true, memorySaverDelay: 720 } }));
     await keepCommonSettings(s);
-    // The check reads page.start and the page.tab events, lifecycle events at the level info, and the host writes the log
-    // policy from the common setting diagnostics.log; keepCommonSettings restores it.
+    // The check reads the page.tab events, lifecycle events at the level info, and the host writes the log policy from the
+    // common setting diagnostics.log; keepCommonSettings restores it.
     await s.run("core.settings.set", { patch: { "diagnostics.log": { lifecycle: "info" } }, scope: "common" });
     const pages = await serve(s);
     const before = await s.get("core.plugins");
