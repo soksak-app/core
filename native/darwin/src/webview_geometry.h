@@ -42,7 +42,8 @@ void sp_webview_log_process_end(void *webview, const char *kind);
 // Returns false when the collection for testing does not exist.
 bool sp_webview_collect_garbage(void *webview);
 
-// For diagnostic builds: the number of elements of the main document of webview and the number of its documents (the
+// For diagnostic builds: the number of elements of the main document of webview, with the elements of every open shadow
+// root in it, and the number of its documents (the
 // main document and its frames), evaluated in the page content world or, when document is true, in the content world
 // "soksak-document" of document regions. In the page content world parked is the number of elements of the parked surface
 // hosts, which window.__soksakParkedElements() of the workbench returns, because a parked host is outside the document;

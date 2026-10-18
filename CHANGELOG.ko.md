@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.9-2: `diagnostics.objects`가 page와 document region의 `elements`에 open shadow root의 요소를 세므로 보이는 surface의 DOM을 센다. Red: 세 요소의 open shadow root를 가진 host가 요소 하나로 세어졌다. Green.
 - F198.9-1-1: page diagnostic module이 `diagnostics.objects`용 parked element 수를 게시하므로 release page는 진단 global을 게시하지 않는다. Red: workbench module이 게시했다. Green.
 - F198.9-1: `diagnostics.objects`가 document 밖에 있어 세지 않던 숨겨진 tab의 park된 surface host 요소 수 `parkedElements`를 `page`에 보고하므로, 실행 중인 애플리케이션의 memory check가 숨겨진 tab이 쥔 DOM을 본다. Red: workbench, native library, 두 host에 수가 없었다. Green.
 - F198.9: `make hidden-tab-memory`는 숨겨진 DOM tab이 쥐고 unload가 돌려주는 JS heap과 DOM node를 측정한다. editor, rendered document, terminal fixture에서 unload가 99 percent 이상을 돌려주므로, specification은 DOM tab plugin이 `surface.unload`를 선언한다고 적는다.

@@ -109,6 +109,19 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"after the frame is removed and an element added the page counts 7 elements and 1 document (ok %d, elements %ld, documents %ld)",
             changed.ok, changed.elements, changed.documents]);
 
+    // contract: diagnostics.objects.counts-documents
+    // A surface draws in the open shadow root of its host, so the elements of open shadow roots, nested ones too, are counted.
+    evaluate(view, @"const outer = document.body.appendChild(document.createElement('div')).attachShadow({mode: 'open'});"
+        "outer.append(document.createElement('span'), document.createElement('span'));"
+        "outer.firstChild.attachShadow({mode: 'open'}).append(document.createElement('b')); true");
+    Answer shadow = count(view, false);
+    check(shadow.ok && shadow.elements == 11,
+        [NSString stringWithFormat:@"a host with an open shadow root of two elements, one holding a nested root of one element, adds 4 elements to 7 (ok %d, elements %ld)",
+            shadow.ok, shadow.elements]);
+    Answer shadowRegion = count(view, true);
+    check(shadowRegion.ok && shadowRegion.elements == 11,
+        [NSString stringWithFormat:@"the document world counts the same shadow root elements (ok %d, elements %ld)", shadowRegion.ok, shadowRegion.elements]);
+
     [window close];
     if (failures) { fprintf(stderr, "%d check(s) failed\n", failures); return 1; }
     printf("PASS: page_objects_test\n");

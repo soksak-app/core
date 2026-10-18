@@ -728,12 +728,14 @@ bool sp_webview_collect_garbage(void *handle) {
     return true;
 }
 
-// The scripts of sp_webview_count_objects: the elements of the main document and the documents of the page, which are the document
-// and its frames, and in the page content world the elements of the parked surface hosts. A page without the function of the
-// workbench fails the count with the error of the script.
-static NSString *const kCountObjectsScript = @"[document.getElementsByTagName('*').length, 1 + window.frames.length]";
-static NSString *const kCountPageObjectsScript =
-    @"[document.getElementsByTagName('*').length, 1 + window.frames.length, window.__soksakParkedElements()]";
+// The scripts of sp_webview_count_objects: the elements of the main document with the elements of every open shadow root in
+// it, nested ones too, because a surface draws in the open shadow root of its host; the documents of the page, which are the
+// document and its frames; and in the page content world the elements of the parked surface hosts, which the page diagnostic
+// module publishes. A page without that function fails the count with the error of the script.
+#define SP_COUNT_ELEMENTS @"(() => { const count = (root) => { let total = 0; for (const element of root.querySelectorAll('*')) " \
+    @"total += 1 + (element.shadowRoot ? count(element.shadowRoot) : 0); return total; }; return count(document); })()"
+static NSString *const kCountObjectsScript = @"[" SP_COUNT_ELEMENTS @", 1 + window.frames.length]";
+static NSString *const kCountPageObjectsScript = @"[" SP_COUNT_ELEMENTS @", 1 + window.frames.length, window.__soksakParkedElements()]";
 
 void sp_webview_count_objects(void *handle, bool document, sp_page_objects_done done, void *context) {
     NSCAssert(NSThread.isMainThread, @"object count requests require the UI thread");
