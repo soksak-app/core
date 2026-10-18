@@ -791,6 +791,9 @@ char *sp_document_interaction_state(void *handle) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;
     if (!view || view.closed) return NULL;
+    // A region that has loaded nothing has no history entry; WebKit still serializes an empty session history for it,
+    // and the setter restores no entry from that value, so the region returns no state.
+    if (!view.backForwardList.currentItem) return strdup("");
     id state = view.interactionState;
     NSString *text = [state isKindOfClass:NSData.class] ? [(NSData *)state base64EncodedStringWithOptions:0] : @"";
     return strdup(text.UTF8String);

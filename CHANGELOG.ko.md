@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F199.2-1: 아무것도 load하지 않은 문서 영역은 session history를 돌려주지 않으므로, home page의 browser tab이 다음 attach가 거부할 session을 저장하지 않는다.
 - F192.3-2-2: 두 host가 page가 전달한 `page.start` event를 logging 명세대로 모든 log policy에서 저장하므로, class `lifecycle`이 오류만 저장할 때도 reload가 event log에 표시된다.
 - F192.3-3-2: Rust `sok`의 relaunch 시험이 오류를 알리는 폴더 guard로 폴더를 만들므로 test crate가 다시 빌드된다.
 - F192.3-3-1: host를 relaunch하는 window check는 다음 요청 전에 새 프로세스의 모든 창이 ready page를 알릴 때까지 기다리므로, event-log check의 cleanup이 더는 `the main page is not ready`로 실패하지 않는다.

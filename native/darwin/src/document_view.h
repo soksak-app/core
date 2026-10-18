@@ -107,7 +107,8 @@ typedef void (*sp_document_query_reply)(void *context, const char *json);
 void sp_document_query(void *document, sp_document_query_reply reply, void *context);
 
 // Returns the public interactionState of the region (serialized session history) as base64 in a string that the caller
-// releases with free, an empty string when the web view yields no state, or NULL for a closed region.
+// releases with free, an empty string when the region has loaded nothing or the web view yields no state, or NULL for a
+// closed region.
 char *sp_document_interaction_state(void *document);
 
 // Restores the session history state, base64 of an interactionState, into a region that has loaded nothing yet, which then

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F199.2-1: a document region that has loaded nothing returns no session history, so a browser tab on its home page stores no session that the next attach would refuse.
 - F192.3-2-2: both hosts store the `page.start` event that the page relays under every log policy, as the logging specification states, so a reload is marked in the event log also when the class `lifecycle` stores only errors.
 - F192.3-3-2: the relaunch tests of the Rust `sok` create their folders through the reporting folder guard, so the test crate builds again.
 - F192.3-3-1: a window check that relaunches the host waits until every window of the new process reports a ready page before its next request, so the cleanup of the event-log check no longer fails with `the main page is not ready`.

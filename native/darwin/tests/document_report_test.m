@@ -276,6 +276,10 @@ int main(void) { @autoreleasepool {
     void *restored = sp_document_create(surface, store, NULL, NULL, changed, (void *)2);
     if (!restored) failStep(@"restore", @"a second document region is not created");
     sp_document_place(restored, 0, 0, 0, 0, true);
+    char *unloaded = sp_document_interaction_state(restored);
+    check(unloaded && strlen(unloaded) == 0,
+        [NSString stringWithFormat:@"a region that has loaded nothing returns no interactionState (%zu characters)", unloaded ? strlen(unloaded) : 0]);
+    free(unloaded);
     const char *notBase64 = sp_document_restore(restored, "%%%");
     check(notBase64 && strcmp(notBase64, "the interactionState is not base64") == 0,
         [NSString stringWithFormat:@"a state that is not base64 is refused (%s)", notBase64 ?: "accepted"]);
