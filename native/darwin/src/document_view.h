@@ -118,3 +118,14 @@ const char *sp_document_restore(void *document, const char *state);
 
 // Removes and releases the webview. changed is not called afterward.
 void sp_document_close(void *document);
+
+// Called when the data store of a directory has ended. error is NULL, or the reason the store did not end; it is released
+// when the call returns. Called on the main thread.
+typedef void (*sp_document_store_closed)(void *context, const char *error);
+
+// Ends the persistent data store of directory, so its folder can be removed: closed is called after the WebKit network
+// process has removed the session of the store and writes nothing more to the directory. Every document of the directory
+// must be closed first. A directory without a store ends at once; documents of a directory whose store is ending are not
+// created. closed reports an error for a directory that is not an absolute path, a store that is already ending, or an
+// open document of the directory.
+void sp_document_store_close(const char *directory, sp_document_store_closed closed, void *context);

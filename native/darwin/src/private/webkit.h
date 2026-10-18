@@ -92,4 +92,5 @@ extern WKCacheModel WKContextGetCacheModel(WKContextRef context);
 // WKWebsiteDataStorePrivate.h
 @interface WKWebsiteDataStore (SPPrivate)
 - (instancetype)_initWithConfiguration:(_WKWebsiteDataStoreConfiguration *)configuration;
+- (void)_setCompletionHandlerForRemovalFromNetworkProcess:(void (^)(NSError *error))completionHandler;
 @end

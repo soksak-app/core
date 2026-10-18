@@ -2127,6 +2127,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F201",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "void sp_document_store_close(" }],
+    tests: [{ file: "native/darwin/tests/document_view_test.m", id: "the data stores end without an error" }],
+    expected: "A check ends the data store of its document directory before it removes the folder, so nothing writes into it afterward.",
+    levels: ["unit"],
+  },
+  {
     id: "F202",
     implementation: [{ file: "native/darwin/src/document_view.m", symbol: "@interface SPHiddenDelay : NSObject" }],
     tests: [{ file: "native/darwin/tests/window_release_test.m", id: "the closed window releases its" }],

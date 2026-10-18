@@ -681,14 +681,29 @@ static BOOL webAddress(NSURL *url) {
 @end
 
 // One persistent data store per directory. Two store objects that use the same directory write the same files
-// separately, so
-// all documents of one directory use the same store. The store is kept until the process ends.
-static WKWebsiteDataStore *storeForDirectory(const char *path) {
+// separately, so all documents of one directory use the same store. The store is kept until sp_document_store_close
+// ends it; a directory whose store is ending gets no new store until the network process has removed the session.
+static NSMutableDictionary<NSString *, WKWebsiteDataStore *> *dataStores(void) {
     static NSMutableDictionary<NSString *, WKWebsiteDataStore *> *stores;
     if (!stores) stores = [NSMutableDictionary new];
+    return stores;
+}
+
+static NSMutableSet<NSString *> *endingStores(void) {
+    static NSMutableSet<NSString *> *ending;
+    if (!ending) ending = [NSMutableSet new];
+    return ending;
+}
+
+static NSString *storeDirectory(const char *path) {
     NSString *directory = [NSFileManager.defaultManager stringWithFileSystemRepresentation:path length:strlen(path)];
-    if (!directory.absolutePath) return nil;
-    WKWebsiteDataStore *store = stores[directory];
+    return directory.absolutePath ? directory : nil;
+}
+
+static WKWebsiteDataStore *storeForDirectory(const char *path) {
+    NSString *directory = storeDirectory(path);
+    if (!directory || [endingStores() containsObject:directory]) return nil;
+    WKWebsiteDataStore *store = dataStores()[directory];
     if (store) return store;
     if (![NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil]) {
         return nil;
@@ -696,7 +711,7 @@ static WKWebsiteDataStore *storeForDirectory(const char *path) {
     _WKWebsiteDataStoreConfiguration *configuration = [[[_WKWebsiteDataStoreConfiguration alloc]
         initWithDirectory:[NSURL fileURLWithPath:directory isDirectory:YES]] autorelease];
     store = [[[WKWebsiteDataStore alloc] _initWithConfiguration:configuration] autorelease];
-    if (store) stores[directory] = store;
+    if (store) dataStores()[directory] = store;
     return store;
 }
 
@@ -1002,6 +1017,43 @@ void sp_document_close(void *handle) {
     [view stopLoading];
     [view removeFromSuperview];
     [view release];
+}
+
+void sp_document_store_close(const char *directory, sp_document_store_closed closed, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    NSString *path = directory ? storeDirectory(directory) : nil;
+    if (!path) {
+        closed(context, "the store directory is not an absolute path");
+        return;
+    }
+    if ([endingStores() containsObject:path]) {
+        closed(context, "the store of the directory is already ending");
+        return;
+    }
+    WKWebsiteDataStore *store = dataStores()[path];
+    if (!store) {
+        closed(context, NULL);
+        return;
+    }
+    // A configuration read returns an autoreleased copy that keeps the store, so the reads drain their own pool.
+    BOOL open = NO;
+    @autoreleasepool {
+        for (SPDocumentView *view in openDocuments()) open = open || view.configuration.websiteDataStore == store;
+    }
+    if (open) {
+        closed(context, "a document of the directory is open");
+        return;
+    }
+    // WebKit removes the session of a store from the network process when the last reference to the store goes away
+    // (WebsiteDataStore::~WebsiteDataStore calls NetworkProcessProxy::removeSession), and calls this handler after the
+    // network process has destroyed the session and closed its storage. A closed web view can still hold its
+    // configuration for a while, so the handler runs when that reference also goes away.
+    [endingStores() addObject:path];
+    [store _setCompletionHandlerForRemovalFromNetworkProcess:^(NSError *error) {
+        [endingStores() removeObject:path];
+        closed(context, error ? error.localizedDescription.UTF8String : NULL);
+    }];
+    [dataStores() removeObjectForKey:path];
 }
 
 bool sp_document_set_hidden_clear_delay(double seconds) {

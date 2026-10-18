@@ -43,6 +43,14 @@ static void writeFile(NSString *root, NSString *path, NSString *text) {
     [text writeToFile:file atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 
+static BOOL storeClosed;
+static NSString *storeError;
+
+static void recordStoreClosed(void *context, const char *error) {
+    storeClosed = YES;
+    if (error) storeError = [@(error) retain];
+}
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -71,38 +79,46 @@ int main(void) { @autoreleasepool {
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
-    void *document = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", changed, NULL);
-    check(document != NULL, @"a document region is created with the folder of its plugin");
-    sp_document_set_message(document, message, NULL);
-    sp_document_place(document, 0, 0, 0, 0, true);
+    // The document and every autoreleased reference to it live in this pool, so the closed document and its data store are
+    // released before the store ends.
+    @autoreleasepool {
+        void *document = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", changed, NULL);
+        check(document != NULL, @"a document region is created with the folder of its plugin");
+        sp_document_set_message(document, message, NULL);
+        sp_document_place(document, 0, 0, 0, 0, true);
 
-    check(!sp_document_post(document, "{\"ping\":1}"), @"a document that is not a plugin document has no message channel");
-    check(sp_document_load(document, "sok://probe/ui/app/index.html"), @"a region loads a sok address");
-    until(@"the plugin page module runs", ^BOOL{ return [latest[@"title"] hasPrefix:@"ready"]; });
-    check([latest[@"title"] isEqual:@"ready sok://probe"],
-        [NSString stringWithFormat:@"the plugin document has the origin of its plugin: %@", latest[@"title"]]);
+        check(!sp_document_post(document, "{\"ping\":1}"), @"a document that is not a plugin document has no message channel");
+        check(sp_document_load(document, "sok://probe/ui/app/index.html"), @"a region loads a sok address");
+        until(@"the plugin page module runs", ^BOOL{ return [latest[@"title"] hasPrefix:@"ready"]; });
+        check([latest[@"title"] isEqual:@"ready sok://probe"],
+            [NSString stringWithFormat:@"the plugin document has the origin of its plugin: %@", latest[@"title"]]);
 
-    check(sp_document_post(document, "{\"ping\":7}"), @"the page posts a message to a plugin document");
-    until(@"the plugin document answers", ^BOOL{ return messages.count >= 2; });
-    check([messages[0] isEqual:@{ @"ping": @7 }], [NSString stringWithFormat:@"the page receives its own message first: %@", messages]);
-    check([messages[1] isEqual:@{ @"pong": @7 }], [NSString stringWithFormat:@"the page receives the answer: %@", messages]);
+        check(sp_document_post(document, "{\"ping\":7}"), @"the page posts a message to a plugin document");
+        until(@"the plugin document answers", ^BOOL{ return messages.count >= 2; });
+        check([messages[0] isEqual:@{ @"ping": @7 }], [NSString stringWithFormat:@"the page receives its own message first: %@", messages]);
+        check([messages[1] isEqual:@{ @"pong": @7 }], [NSString stringWithFormat:@"the page receives the answer: %@", messages]);
 
-    // The URL parser resolves the dot segments, so the last address requests sok://probe/secret.html.
-    NSDictionary<NSString *, NSString *> *refused = @{
-        @"sok://other/ui/app/index.html": @"sok://other/ui/app/index.html is not found",
-        @"sok://probe/ui/app/missing.html": @"sok://probe/ui/app/missing.html is not found",
-        @"sok://probe/ui/../../secret.html": @"sok://probe/secret.html is not found",
-    };
-    for (NSString *address in refused) {
-        check(sp_document_load(document, address.UTF8String), [NSString stringWithFormat:@"%@ starts a load", address]);
-        // A failed load keeps the previous document, so the load is settled when the region reports its error.
-        until([NSString stringWithFormat:@"%@ fails", address], ^BOOL{
-            return [latest[@"loading"] isEqual:@NO] && [latest[@"error"] isKindOfClass:NSString.class] && [latest[@"error"] containsString:refused[address]];
-        });
-        check(![latest[@"title"] isEqual:@"outside"], [NSString stringWithFormat:@"%@ is not found: %@", address, latest[@"error"]]);
+        // The URL parser resolves the dot segments, so the last address requests sok://probe/secret.html.
+        NSDictionary<NSString *, NSString *> *refused = @{
+            @"sok://other/ui/app/index.html": @"sok://other/ui/app/index.html is not found",
+            @"sok://probe/ui/app/missing.html": @"sok://probe/ui/app/missing.html is not found",
+            @"sok://probe/ui/../../secret.html": @"sok://probe/secret.html is not found",
+        };
+        for (NSString *address in refused) {
+            check(sp_document_load(document, address.UTF8String), [NSString stringWithFormat:@"%@ starts a load", address]);
+            // A failed load keeps the previous document, so the load is settled when the region reports its error.
+            until([NSString stringWithFormat:@"%@ fails", address], ^BOOL{
+                return [latest[@"loading"] isEqual:@NO] && [latest[@"error"] isKindOfClass:NSString.class] && [latest[@"error"] containsString:refused[address]];
+            });
+            check(![latest[@"title"] isEqual:@"outside"], [NSString stringWithFormat:@"%@ is not found: %@", address, latest[@"error"]]);
+        }
+
+        sp_document_close(document);
     }
-
-    sp_document_close(document);
+    // The store ends before the check removes its folder, so the network process writes nothing into it afterward.
+    sp_document_store_close(store.fileSystemRepresentation, recordStoreClosed, NULL);
+    until(@"the data store ends", ^BOOL{ return storeClosed; });
+    check(storeError == nil, [NSString stringWithFormat:@"the data store ends without an error: %@", storeError]);
     sp_surface_close(surface);
     [window close];
     if (failures) fprintf(stderr, "%d failures\n", failures);
