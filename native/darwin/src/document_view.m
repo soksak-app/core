@@ -151,6 +151,15 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 
 // The message handler for scroll and document content. The user content controller retains the handler, so it points
 // to the view weakly.
+// The token of a hidden delay of a region. The region clears region when the delay stops, so the delay that ends after it
+// clears nothing.
+@interface SPHiddenDelay : NSObject
+@property(assign) SPDocumentView *region;
+@end
+
+@implementation SPHiddenDelay
+@end
+
 @interface SPDocumentScroll : NSObject <WKScriptMessageHandler>
 @property(assign) SPDocumentView *view;
 @end
@@ -199,13 +208,11 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 @property BOOL placed;
 @property BOOL pending;
 @property BOOL closed;
-// Runs while the region is hidden and clears the back-forward cache when the hidden clear delay passes.
-// The generation of the hidden delay: hiding starts a delay with the next generation, and showing or closing the region moves to another
-// generation, so a delay that ends after it finds another generation and clears nothing.
-@property NSUInteger hiddenGeneration;
+// The running hidden delay, which clears the back-forward cache when the hidden clear delay passes, or nil. The delay
+// holds the token and not the region, so a closed region is released before its delay ends.
+@property(retain) SPHiddenDelay *hiddenDelay;
 // The frame documents with a form flag, by the identifier that the form script of each frame document generates.
 @property(retain) NSMutableSet<NSString *> *formFrames;
-@property BOOL hiddenDelayRunning;
 - (void)clearBackForwardCache:(NSString *)reason;
 - (void)stopHiddenTimer;
 - (void)report;
@@ -341,6 +348,7 @@ static NSString *pluginContentType(NSString *path) {
     [_plugin release];
     [_navigation release];
     [_eventMonitor release];
+    [self stopHiddenTimer];
     [super dealloc];
 }
 
@@ -356,23 +364,23 @@ static NSString *pluginContentType(NSString *path) {
 }
 
 - (void)stopHiddenTimer {
-    self.hiddenGeneration += 1;
-    self.hiddenDelayRunning = NO;
+    self.hiddenDelay.region = nil;
+    self.hiddenDelay = nil;
 }
 
 // AppKit calls viewDidHide and viewDidUnhide when the region or one of its ancestors is hidden or shown.
 - (void)viewDidHide {
     [super viewDidHide];
-    if (self.closed || self.hiddenDelayRunning) return;
-    self.hiddenDelayRunning = YES;
-    NSUInteger generation = self.hiddenGeneration;
-    SPDocumentView *region = [self retain];
+    if (self.closed || self.hiddenDelay) return;
+    SPHiddenDelay *delay = [[SPHiddenDelay new] autorelease];
+    delay.region = self;
+    self.hiddenDelay = delay;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(hiddenClearDelay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (!region.closed && region.hiddenDelayRunning && region.hiddenGeneration == generation) {
-            region.hiddenDelayRunning = NO;
-            [region clearBackForwardCache:@"hidden"];
-        }
-        [region release];
+        SPDocumentView *region = delay.region;
+        if (!region) return;
+        region.hiddenDelay = nil;
+        delay.region = nil;
+        [region clearBackForwardCache:@"hidden"];
     });
 }
 

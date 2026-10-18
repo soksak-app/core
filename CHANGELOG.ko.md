@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F202: 닫힌 document region이 다시 바로 해제된다. F196.29 이후 hidden delay block이 hidden clear delay 300초가 지날 때까지 region을 retain했고, 이제 region을 닫거나 보이거나 해제할 때 지워지는 token을 가진다. Red: `window_release_test`가 `the closed window releases its SPDocumentView`로 실패했다. Green: 3 of 3 실행.
 - F200.2: `make host-calls MINUTES=M`은 메인 페이지가 idle 동안 분당 할당하는 WebKit malloc을 collection 전후로 reclaimable byte와 함께 측정한다. 같은 project, terminal 2개, browser tab 1개로 두 debug host에서 측정: 분당 57 KB(Wails)와 -76 KB(Tauri), collection 뒤 두 host 모두 footprint 82 MB와 WebKit malloc 38 MB이므로 idle 페이지는 F200 차이의 source가 아니다.
 - F201.3: `make temp-audit COMMAND=<command>`가 command를 자기 임시 폴더로 실행하고, window check configuration 폴더 `soksak-check-*`를 빼고 command가 그곳에 남긴 `soksak-` entry를 하나씩 밝히며 실패한다. Red: audit 아래 `pnpm test`가 `soksak-stall-config-*`와 `soksak-event-log-*.event-offsets` 둘을 남겼다. Green: audit test 5 of 5가 통과하고, audit 아래 `pnpm test`가 entry를 남기지 않는다.
 - F201.2: stall-sample test가 configuration 폴더를 지우고, event-log test가 각 configuration 폴더 옆의 offsets file을 지운다. Red: 각 한 번의 실행이 entry를 남겼다. Green: 각 3 of 3이 entry 없이 통과했다.

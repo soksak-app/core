@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F202: a closed document region is released at once again; since F196.29 the hidden delay block retained the region until the hidden clear delay of 300 seconds passed, and it now holds a token that closing, showing and releasing the region clear. Red: `window_release_test` failed with `the closed window releases its SPDocumentView`; Green: 3 of 3 runs.
 - F200.2: `make host-calls MINUTES=M` measures the WebKit malloc that the main page allocates per minute while idle, before and after a collection, with its reclaimable bytes. Measured on both debug hosts with the same project, two terminals and one browser tab: 57 KB (Wails) and -76 KB (Tauri) per minute, and 82 MB footprint with 38 MB WebKit malloc in both after a collection, so the idle page is not the source of the difference of F200.
 - F201.3: `make temp-audit COMMAND=<command>` runs a command with a temporary folder of its own and fails naming each `soksak-` entry that the command left there, except the window-check configuration folders `soksak-check-*`. Red: `pnpm test` under the audit left `soksak-stall-config-*` and two `soksak-event-log-*.event-offsets`; Green: the audit tests pass, 5 of 5, and `pnpm test` under the audit leaves no entry.
 - F201.2: the stall-sample test removes its configuration folder and the event-log tests remove the offsets file beside each configuration folder. Red: one run of each left its entries; Green: 3 of 3 runs of each with no entry left.

@@ -2127,6 +2127,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F202",
+    implementation: [{ file: "native/darwin/src/document_view.m", symbol: "@interface SPHiddenDelay : NSObject" }],
+    tests: [{ file: "native/darwin/tests/window_release_test.m", id: "the closed window releases its" }],
+    expected: "A closed document region is released before its hidden clear delay passes.",
+    levels: ["unit"],
+  },
+  {
     id: "F198",
     implementation: [{ file: "packages/workbench/memory-saver.js", symbol: "export function createMemorySaver" }],
     tests: [{ file: "packages/workbench/test/memory-saver.test.mjs", id: "the delay unloads a hidden tab and a show restores it" }],
