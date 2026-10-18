@@ -48,6 +48,43 @@ pub struct Request {
     /// The subscription of an unsubscribe request.
     #[serde(default)]
     pub handle: Option<u64>,
+    /// The base64 interactionState that documentAttach restores into the new region before its first load.
+    #[serde(default, rename = "interactionState")]
+    pub interaction_state: Option<String>,
+}
+
+/// The reply of documentQuery: the media playback state, whether capture is active and whether a frame holds a form flag
+/// (docs/spec/plugins.md#memory-saver).
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Report {
+    pub media: String,
+    pub capture: bool,
+    pub form: bool,
+}
+
+/// Turns the query reply of native, {media, capture, form} or {error}, into the report of the document, or into the error
+/// that names the document.
+pub fn parse_report(document: &str, reply: &str) -> Result<Report, String> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Reply {
+        Failure { error: String },
+        Report(Report),
+    }
+    match serde_json::from_str::<Reply>(reply) {
+        Ok(Reply::Failure { error }) => Err(format!("document {document}: {error}")),
+        Ok(Reply::Report(report))
+            if matches!(
+                report.media.as_str(),
+                "playing" | "paused" | "suspended" | "none"
+            ) =>
+        {
+            Ok(report)
+        }
+        _ => Err(format!(
+            "document {document} answered an invalid query reply: {reply}"
+        )),
+    }
 }
 
 /// The reply of a stream subscription: the handle that ends it.
@@ -119,6 +156,14 @@ pub fn document_message(surface: &str, document: &str, value: &str) -> Result<Me
 impl Request {
     /// The text scale of the document (docs/spec/text-size.md). It is an error when it is absent or not a finite
     /// positive number.
+    /// The interactionState that documentAttach restores, or None. An empty value is an error.
+    pub fn restore_state(&self) -> Result<Option<&str>, String> {
+        match self.interaction_state.as_deref() {
+            Some("") => Err("document interactionState must not be empty".into()),
+            state => Ok(state),
+        }
+    }
+
     pub fn zoom_factor(&self) -> Result<f64, String> {
         match self.zoom {
             Some(zoom) if zoom.is_finite() && zoom > 0.0 => Ok(zoom),
@@ -585,11 +630,19 @@ fn owner(webview: &Webview, request: &Request) -> Result<(Key, Window), String> 
 pub(crate) fn attach(webview: &Webview, request: Request) -> Result<(), String> {
     let (key, window) = owner(webview, &request)?;
     let platform = platform::current()?;
+    let restore = request.restore_state()?.map(str::to_string);
     let data = window_data(&window)?;
     require_region(&data.compositions, &key.0, &key.1, "document", None)?;
     // The name is taken first. The lock is not held while waiting for native work.
     data.documents.reserve(&key)?;
-    let handle = match create(webview, &window, &key, platform, data.overlay.dialog()) {
+    let handle = match create(
+        webview,
+        &window,
+        &key,
+        platform,
+        data.overlay.dialog(),
+        restore,
+    ) {
         Ok(handle) => handle,
         Err(error) => {
             drop(data.documents.remove(&key));
@@ -623,6 +676,7 @@ fn create(
     key: &Key,
     platform: &'static dyn platform::Platform,
     dialog: bool,
+    restore: Option<String>,
 ) -> Result<Handle, String> {
     with_view(webview, move |view| platform.view_id(view))?;
     let host = window.clone();
@@ -676,6 +730,13 @@ fn create(
             .ok_or_else(|| format!("plugin folder is not UTF-8: {}", folder.display()))?
             .to_string();
         let handle = platform.create_document(surface, directory, &folder, &plugin, changed)?;
+        // The history is restored before anything else uses the new region, so it loads the restored entry first.
+        if let Some(state) = &restore
+            && let Err(refusal) = platform.restore_document(handle, state)
+        {
+            platform.close_document(handle)?;
+            return Err(format!("document {name}: {refusal}"));
+        }
         let dark = crate::theme::is_dark(&host)?;
         platform.set_document_appearance(handle, dark)?;
         platform.set_document_background(handle, dialog)?;
@@ -794,6 +855,38 @@ pub(crate) fn zoom(webview: &Webview, request: Request) -> Result<(), String> {
         } else {
             Err(format!("document zoom {zoom} was rejected"))
         }
+    })
+}
+
+/// Asks a document region for its media, capture and form state (docs/spec/plugins.md#memory-saver). The reply of native
+/// arrives later on the main thread, and this call waits for it outside the main thread.
+pub(crate) fn query(webview: &Webview, request: Request) -> Result<Report, String> {
+    let platform = platform::current()?;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    with_document(webview, &request, move |handle| {
+        platform.query_document(
+            handle,
+            Box::new(move |reply| {
+                if sender.send(reply).is_err() {
+                    log_error("document query", "the caller stopped waiting for the reply");
+                }
+            }),
+        )
+    })?;
+    let reply = receiver
+        .recv()
+        .map_err(|_| format!("document {} gave no query reply", request.document))?;
+    parse_report(&request.document, &reply)
+}
+
+/// Returns the interactionState of a document region as base64, empty when the web view yields none.
+pub(crate) fn interaction_state(webview: &Webview, request: Request) -> Result<String, String> {
+    let platform = platform::current()?;
+    let name = request.document.clone();
+    with_document(webview, &request, move |handle| {
+        platform
+            .document_interaction_state(handle)?
+            .ok_or_else(|| format!("document {name} is closed"))
     })
 }
 

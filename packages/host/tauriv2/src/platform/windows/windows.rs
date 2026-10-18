@@ -212,6 +212,19 @@ impl Platform for Windows {
     fn go_document(&self, document: Handle, action: i32, offset: i32) -> Result<bool, String> {
         unsupported::go_document(document, action, offset)
     }
+    fn query_document(
+        &self,
+        document: Handle,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::query_document(document, reply)
+    }
+    fn document_interaction_state(&self, document: Handle) -> Result<Option<String>, String> {
+        unsupported::document_interaction_state(document)
+    }
+    fn restore_document(&self, document: Handle, state: &str) -> Result<(), String> {
+        unsupported::restore_document(document, state)
+    }
     fn place_document(
         &self,
         document: Handle,

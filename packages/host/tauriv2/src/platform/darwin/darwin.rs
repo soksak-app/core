@@ -327,6 +327,20 @@ impl Platform for Darwin {
     fn go_document(&self, document: Handle, action: i32, offset: i32) -> Result<bool, String> {
         Ok(document::go(document, action, offset))
     }
+    fn query_document(
+        &self,
+        document: Handle,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        document::query(document, reply);
+        Ok(())
+    }
+    fn document_interaction_state(&self, document: Handle) -> Result<Option<String>, String> {
+        Ok(document::interaction_state(document))
+    }
+    fn restore_document(&self, document: Handle, state: &str) -> Result<(), String> {
+        document::restore(document, state)
+    }
     fn place_document(
         &self,
         document: Handle,

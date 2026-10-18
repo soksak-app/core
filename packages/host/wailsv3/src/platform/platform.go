@@ -375,6 +375,15 @@ type Platform interface {
 	// GoDocument runs back 0, forward 1, reload 2, stop 3, and the history entry that is offset away from the current one 4,
 	// and returns whether it ran.
 	GoDocument(document unsafe.Pointer, action, offset int) bool
+	// QueryDocument asks the region for its media, capture and form state; reply receives the JSON reply of native once, as
+	// {media, capture, form} or {error}.
+	QueryDocument(document unsafe.Pointer, reply func(value string))
+	// DocumentInteractionState returns the interactionState of the region as base64, empty when the web view yields none; ok
+	// is false for a closed region.
+	DocumentInteractionState(document unsafe.Pointer) (state string, ok bool)
+	// RestoreDocument restores the base64 interactionState into a region that has loaded nothing; the error is the refusal of
+	// native.
+	RestoreDocument(document unsafe.Pointer, state string) error
 	// PlaceDocument sets the document region with the CSS pixel margins of the surface viewport.
 	PlaceDocument(document unsafe.Pointer, left, top, right, bottom float64, visible bool)
 	// SetDocumentBackground dims the document while a dialog is open.

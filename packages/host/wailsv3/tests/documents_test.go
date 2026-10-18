@@ -486,3 +486,40 @@ func TestDocumentStreamAckRefusalNamesTheDocumentStreamAndSeq(t *testing.T) {
 		t.Fatalf("refusal: %v", err)
 	}
 }
+
+// contract: documents.query.reply-is-the-region-report
+func TestDocumentQueryReplyIsTheRegionReport(t *testing.T) {
+	report, err := host.ParseDocumentReport("page", `{"media":"playing","capture":true,"form":false}`)
+	if err != nil || report != (host.DocumentReport{Media: "playing", Capture: true, Form: false}) {
+		t.Fatalf("report %+v, %v", report, err)
+	}
+	if _, err := host.ParseDocumentReport("page", `{"error":"the document region is closed"}`); err == nil || err.Error() != "document page: the document region is closed" {
+		t.Fatalf("error reply: %v", err)
+	}
+	for _, reply := range []string{`{"media":"loud","capture":false,"form":false}`, `{"media":"none","capture":false}`, `not json`} {
+		_, err := host.ParseDocumentReport("page", reply)
+		if want := "document page answered an invalid query reply: " + reply; err == nil || err.Error() != want {
+			t.Fatalf("%s: %v", reply, err)
+		}
+	}
+}
+
+// contract: documents.request.interaction-state-must-not-be-empty
+func TestDocumentInteractionStateMustNotBeEmpty(t *testing.T) {
+	for body, want := range map[string]string{`{}`: "", `{"interactionState":"AAAA"}`: "AAAA"} {
+		var req host.DocumentRequest
+		if err := json.Unmarshal([]byte(body), &req); err != nil {
+			t.Fatal(err)
+		}
+		if state, err := req.RestoreState(); err != nil || state != want {
+			t.Fatalf("%s: %q, %v", body, state, err)
+		}
+	}
+	var req host.DocumentRequest
+	if err := json.Unmarshal([]byte(`{"interactionState":""}`), &req); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := req.RestoreState(); err == nil || err.Error() != "document interactionState must not be empty" {
+		t.Fatalf("empty state: %v", err)
+	}
+}

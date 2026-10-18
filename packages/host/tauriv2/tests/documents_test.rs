@@ -2,8 +2,8 @@
 
 use serde_json::{Value, json};
 use soksak_host_tauriv2::documents::{
-    Documents, Key, Request, StreamEffect, Streams, check, go_action, remove_surface_for_reload,
-    stream_ack_refusal,
+    Documents, Key, Report, Request, StreamEffect, Streams, check, go_action, parse_report,
+    remove_surface_for_reload, stream_ack_refusal,
 };
 
 fn request(surface: &str, document: &str) -> Request {
@@ -474,4 +474,50 @@ fn a_page_process_end_removes_every_subscription_of_the_page() {
     assert_eq!(streams.subscribers(&first, "requests"), 0);
     assert_eq!(streams.subscribers(&second, "elements"), 0);
     assert_eq!(streams.log_state(&first), (0, 0));
+}
+
+// contract: documents.query.reply-is-the-region-report
+#[test]
+fn document_query_reply_is_the_region_report() {
+    assert_eq!(
+        parse_report("page", r#"{"media":"playing","capture":true,"form":false}"#),
+        Ok(Report {
+            media: "playing".into(),
+            capture: true,
+            form: false
+        })
+    );
+    assert_eq!(
+        parse_report("page", r#"{"error":"the document region is closed"}"#),
+        Err("document page: the document region is closed".into())
+    );
+    for reply in [
+        r#"{"media":"loud","capture":false,"form":false}"#,
+        r#"{"media":"none","capture":false}"#,
+        "not json",
+    ] {
+        assert_eq!(
+            parse_report("page", reply),
+            Err(format!(
+                "document page answered an invalid query reply: {reply}"
+            ))
+        );
+    }
+}
+
+// contract: documents.request.interaction-state-must-not-be-empty
+#[test]
+fn document_interaction_state_must_not_be_empty() {
+    let absent = request("s", "d");
+    assert_eq!(absent.restore_state(), Ok(None));
+    let empty: Request =
+        serde_json::from_str(r#"{"surface":"s","document":"d","interactionState":""}"#).unwrap();
+    assert_eq!(
+        empty.restore_state(),
+        Err("document interactionState must not be empty".into())
+    );
+    let state: Request =
+        serde_json::from_str(r#"{"surface":"s","document":"d","interactionState":"AAAA"}"#)
+            .unwrap();
+    assert_eq!(state.restore_state(), Ok(Some("AAAA")));
 }

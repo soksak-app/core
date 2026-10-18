@@ -40,6 +40,51 @@ type DocumentRequest struct {
 	Handle *uint64 `json:"handle,omitempty"`
 	// Message is the JSON value that documentPost sends to a plugin document.
 	Message json.RawMessage `json:"message,omitempty"`
+	// InteractionState is the base64 interactionState that documentAttach restores into the new region before its first load.
+	InteractionState *string `json:"interactionState,omitempty"`
+}
+
+// RestoreState is the interactionState that documentAttach restores, or an empty string for none. An empty value is an error.
+func (r DocumentRequest) RestoreState() (string, error) {
+	if r.InteractionState == nil {
+		return "", nil
+	}
+	if *r.InteractionState == "" {
+		return "", fmt.Errorf("document interactionState must not be empty")
+	}
+	return *r.InteractionState, nil
+}
+
+// DocumentReport is the reply of documentQuery: the media playback state, whether capture is active and whether a frame holds
+// a form flag (docs/spec/plugins.md#memory-saver).
+type DocumentReport struct {
+	Media   string `json:"media"`
+	Capture bool   `json:"capture"`
+	Form    bool   `json:"form"`
+}
+
+var documentMedia = map[string]bool{"playing": true, "paused": true, "suspended": true, "none": true}
+
+// ParseDocumentReport turns the query reply of native, {media, capture, form} or {error}, into the report of the document, or
+// into the error that names the document.
+func ParseDocumentReport(document, reply string) (DocumentReport, error) {
+	var received struct {
+		Media   *string `json:"media"`
+		Capture *bool   `json:"capture"`
+		Form    *bool   `json:"form"`
+		Error   *string `json:"error"`
+	}
+	invalid := fmt.Errorf("document %s answered an invalid query reply: %s", document, reply)
+	if err := json.Unmarshal([]byte(reply), &received); err != nil {
+		return DocumentReport{}, invalid
+	}
+	if received.Error != nil {
+		return DocumentReport{}, fmt.Errorf("document %s: %s", document, *received.Error)
+	}
+	if received.Media == nil || !documentMedia[*received.Media] || received.Capture == nil || received.Form == nil {
+		return DocumentReport{}, invalid
+	}
+	return DocumentReport{Media: *received.Media, Capture: *received.Capture, Form: *received.Form}, nil
 }
 
 // DocumentMessage turns a message of a plugin document, {"message": value} or {"error": reason}, into the payload of
@@ -225,6 +270,10 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 	if err != nil {
 		return err
 	}
+	restore, err := req.RestoreState()
+	if err != nil {
+		return err
+	}
 	if err := s.requireRegion(key.Surface, key.Name, "document", ""); err != nil {
 		return err
 	}
@@ -249,6 +298,13 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, func(state string) {
 			s.documentChanged(key, state)
 		})
+		// The history is restored before anything else uses the new region, so it loads the restored entry first.
+		if err == nil && restore != "" {
+			if refusal := system.RestoreDocument(handle, restore); refusal != nil {
+				system.CloseDocument(handle)
+				err = fmt.Errorf("document %s: %w", key.Name, refusal)
+			}
+		}
 		if err == nil {
 			s.mu.Lock()
 			dark := s.theme.Scheme == "dark"
@@ -458,6 +514,33 @@ func (s *Surfaces) zoomDocument(viewID uint64, req DocumentRequest) error {
 		}
 		return nil
 	})
+}
+
+// queryDocument asks a document region for its media, capture and form state (docs/spec/plugins.md#memory-saver). The reply
+// of native arrives later on the UI thread, and this call waits for it outside the UI thread.
+func (s *Surfaces) queryDocument(viewID uint64, req DocumentRequest) (DocumentReport, error) {
+	replies := make(chan string, 1)
+	err := s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		system.QueryDocument(handle, func(reply string) { replies <- reply })
+		return nil
+	})
+	if err != nil {
+		return DocumentReport{}, err
+	}
+	return ParseDocumentReport(req.Document, <-replies)
+}
+
+// documentInteractionState returns the interactionState of a document region as base64, empty when the web view yields none.
+func (s *Surfaces) documentInteractionState(viewID uint64, req DocumentRequest) (string, error) {
+	var state string
+	err := s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		var ok bool
+		if state, ok = system.DocumentInteractionState(handle); !ok {
+			return fmt.Errorf("document %s is closed", req.Document)
+		}
+		return nil
+	})
+	return state, err
 }
 
 // goDocument runs history navigation, opening a history entry, reload, and stop, and returns whether it ran.

@@ -79,6 +79,8 @@ const METHOD = {
   documentLoad: "DocumentLoad",
   documentZoom: "DocumentZoom",
   documentGo: "DocumentGo",
+  documentQuery: "DocumentQuery",
+  documentInteractionState: "DocumentInteractionState",
   documentPost: "DocumentPost",
   documentDetach: "DocumentDetach",
   documentSubscribe: "DocumentSubscribe",

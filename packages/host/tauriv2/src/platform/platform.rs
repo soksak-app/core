@@ -421,6 +421,17 @@ pub trait Platform: Send + Sync {
     fn zoom_document(&self, document: Handle, zoom: f64) -> Result<bool, String>;
     /// Runs back 0, forward 1, reload 2 and stop 3, and returns whether it ran. Call it on the main thread.
     fn go_document(&self, document: Handle, action: i32, offset: i32) -> Result<bool, String>;
+    /// Asks the region for its media, capture and form state; reply receives the JSON reply of native once, as
+    /// {media, capture, form} or {error}. Call it on the main thread.
+    fn query_document(
+        &self,
+        document: Handle,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String>;
+    /// The interactionState of the region as base64, empty when the web view yields none, or None for a closed region.
+    fn document_interaction_state(&self, document: Handle) -> Result<Option<String>, String>;
+    /// Restores the base64 interactionState into a region that has loaded nothing; the error is the refusal of native.
+    fn restore_document(&self, document: Handle, state: &str) -> Result<(), String>;
     /// Sets the document region with the CSS pixel insets of the surface viewport. Call it on the main thread.
     fn place_document(&self, document: Handle, insets: Insets, visible: bool)
     -> Result<(), String>;

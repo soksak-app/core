@@ -36,6 +36,10 @@ unsafe extern "C" {
     fn sp_document_background(document: *mut c_void, enabled: bool);
     fn sp_document_appearance(document: *mut c_void, dark: bool);
     fn sp_document_close(document: *mut c_void);
+    fn sp_document_query(document: *mut c_void, reply: Event, context: *mut c_void);
+    fn sp_document_interaction_state(document: *mut c_void) -> *mut c_char;
+    fn sp_document_restore(document: *mut c_void, state: *const c_char) -> *const c_char;
+    fn free(pointer: *mut c_void);
 }
 
 /// The state receiver of each document handle. It is used only on the main thread.
@@ -98,6 +102,48 @@ pub fn create(
     let handle = document as Handle;
     RECEIVERS.with(|all| all.borrow_mut().insert(handle, receiver));
     Ok(handle)
+}
+
+/// The receiver of one query reply. Native calls it once.
+struct QueryReceiver(Box<dyn FnOnce(String) + Send>);
+
+extern "C" fn queried(context: *mut c_void, value: *const c_char) {
+    let receiver = unsafe { Box::from_raw(context as *mut QueryReceiver) };
+    let value = unsafe { CStr::from_ptr(value) }
+        .to_string_lossy()
+        .into_owned();
+    (receiver.0)(value);
+}
+
+/// Asks the region for its media, capture and form state; reply receives the JSON reply of native once.
+pub fn query(document: Handle, reply: Box<dyn FnOnce(String) + Send>) {
+    let receiver = Box::into_raw(Box::new(QueryReceiver(reply)));
+    unsafe { sp_document_query(document as *mut c_void, queried, receiver as *mut c_void) };
+}
+
+/// The interactionState of the region as base64, empty when the web view yields none, or None for a closed region.
+pub fn interaction_state(document: Handle) -> Option<String> {
+    let state = unsafe { sp_document_interaction_state(document as *mut c_void) };
+    if state.is_null() {
+        return None;
+    }
+    let text = unsafe { CStr::from_ptr(state) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { free(state as *mut c_void) };
+    Some(text)
+}
+
+/// Restores the base64 interactionState into a region that has loaded nothing; the error is the refusal of native.
+pub fn restore(document: Handle, state: &str) -> Result<(), String> {
+    let state = CString::new(state).map_err(|e| e.to_string())?;
+    let refusal = unsafe { sp_document_restore(document as *mut c_void, state.as_ptr()) };
+    if refusal.is_null() {
+        return Ok(());
+    }
+    Err(unsafe { CStr::from_ptr(refusal) }
+        .to_string_lossy()
+        .into_owned())
 }
 
 /// Opens an http, https, file or sok address; returns false for another address.

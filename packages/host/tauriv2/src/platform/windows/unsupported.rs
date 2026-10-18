@@ -233,6 +233,21 @@ pub fn go_document(_document: Handle, _action: i32, _offset: i32) -> Result<bool
     missing("document history")
 }
 
+pub fn query_document(
+    _document: Handle,
+    _reply: Box<dyn FnOnce(String) + Send>,
+) -> Result<(), String> {
+    missing("document query")
+}
+
+pub fn document_interaction_state(_document: Handle) -> Result<Option<String>, String> {
+    missing("document interaction state")
+}
+
+pub fn restore_document(_document: Handle, _state: &str) -> Result<(), String> {
+    missing("document restore")
+}
+
 pub fn place_document(_document: Handle, _insets: Insets, _visible: bool) -> Result<(), String> {
     missing("document placement")
 }

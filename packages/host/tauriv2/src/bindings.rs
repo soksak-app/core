@@ -503,6 +503,20 @@ fn document_go(webview: Webview, request: Argument<documents::Request>) -> Resul
     documents::go(&webview, request)
 }
 
+/// Answers the media, capture and form state of a document region (docs/spec/plugins.md#memory-saver).
+#[tauri::command(async)]
+fn document_query(webview: Webview, request: Argument<documents::Request>) -> Result<documents::Report, String> {
+    let Argument(request) = request;
+    documents::query(&webview, request)
+}
+
+/// Returns the interactionState of a document region as base64.
+#[tauri::command(async)]
+fn document_interaction_state(webview: Webview, request: Argument<documents::Request>) -> Result<String, String> {
+    let Argument(request) = request;
+    documents::interaction_state(&webview, request)
+}
+
 /// Closes a document region.
 #[tauri::command(async)]
 fn document_detach(webview: Webview, request: Argument<documents::Request>) -> Result<(), String> {

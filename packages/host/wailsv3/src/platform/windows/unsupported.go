@@ -271,6 +271,19 @@ func (implementation) GoDocument(unsafe.Pointer, int, int) bool {
 	return false
 }
 
+func (implementation) QueryDocument(unsafe.Pointer, func(string)) {
+	unreachable("document query")
+}
+
+func (implementation) DocumentInteractionState(unsafe.Pointer) (string, bool) {
+	unreachable("document interaction state")
+	return "", false
+}
+
+func (implementation) RestoreDocument(unsafe.Pointer, string) error {
+	return unsupported("document restore")
+}
+
 func (implementation) PlaceDocument(unsafe.Pointer, float64, float64, float64, float64, bool) {
 	unreachable("document placement")
 }

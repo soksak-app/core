@@ -237,6 +237,33 @@ func (h *Host) DocumentGo(ctx context.Context, reqJSON json.RawMessage) (bool, e
 	}
 	return s.goDocument(uint64(s.window.ID()), req)
 }
+
+// DocumentQuery answers the media, capture and form state of a document region (docs/spec/plugins.md#memory-saver).
+func (h *Host) DocumentQuery(ctx context.Context, reqJSON json.RawMessage) (DocumentReport, error) {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return DocumentReport{}, err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return DocumentReport{}, err
+	}
+	return s.queryDocument(uint64(s.window.ID()), req)
+}
+
+// DocumentInteractionState returns the interactionState of a document region as base64.
+func (h *Host) DocumentInteractionState(ctx context.Context, reqJSON json.RawMessage) (string, error) {
+	req, err := argument[DocumentRequest]("request", reqJSON)
+	if err != nil {
+		return "", err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return "", err
+	}
+	return s.documentInteractionState(uint64(s.window.ID()), req)
+}
+
 func (h *Host) DocumentDetach(ctx context.Context, reqJSON json.RawMessage) error {
 	req, err := argument[DocumentRequest]("request", reqJSON)
 	if err != nil {

@@ -14,6 +14,7 @@ extern void documentChanged(void *context, char *state);
 extern void documentEvent(void *context, char *event);
 extern void documentMessage(void *context, char *message);
 extern void documentStream(void *context, char *message);
+extern void documentQueried(void *context, char *reply);
 
 static void documentChangedBridge(void *context, const char *state) {
     documentChanged(context, (char *)state);
@@ -28,6 +29,14 @@ static void documentMessageBridge(void *context, const char *message) {
 
 static void documentStreamBridge(void *context, const char *message) {
     documentStream(context, (char *)message);
+}
+
+static void documentQueriedBridge(void *context, const char *reply) {
+    documentQueried(context, (char *)reply);
+}
+
+static void documentQuery(void *document, uintptr_t context) {
+    sp_document_query(document, documentQueriedBridge, (void *)context);
 }
 
 static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, uintptr_t context) {
@@ -71,6 +80,16 @@ func documentMessage(context unsafe.Pointer, value *C.char) {
 //export documentStream
 func documentStream(context unsafe.Pointer, value *C.char) {
 	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+}
+
+// documentQueried receives the one reply of a query and releases its receiver.
+//
+//export documentQueried
+func documentQueried(context unsafe.Pointer, value *C.char) {
+	handle := cgo.Handle(uintptr(context))
+	reply := handle.Value().(func(string))
+	handle.Delete()
+	reply(C.GoString(value))
 }
 
 //export documentEvent
@@ -144,6 +163,28 @@ func (implementation) PostDocument(document unsafe.Pointer, json string) bool {
 
 func (implementation) GoDocument(document unsafe.Pointer, action, offset int) bool {
 	return bool(C.sp_document_go(document, C.int(action), C.int(offset)))
+}
+
+func (implementation) QueryDocument(document unsafe.Pointer, reply func(value string)) {
+	C.documentQuery(document, C.uintptr_t(cgo.NewHandle(reply)))
+}
+
+func (implementation) DocumentInteractionState(document unsafe.Pointer) (string, bool) {
+	state := C.sp_document_interaction_state(document)
+	if state == nil {
+		return "", false
+	}
+	defer C.free(unsafe.Pointer(state))
+	return C.GoString(state), true
+}
+
+func (implementation) RestoreDocument(document unsafe.Pointer, state string) error {
+	value := C.CString(state)
+	defer C.free(unsafe.Pointer(value))
+	if refusal := C.sp_document_restore(document, value); refusal != nil {
+		return errors.New(C.GoString(refusal))
+	}
+	return nil
 }
 
 func (implementation) PlaceDocument(document unsafe.Pointer, left, top, right, bottom float64, visible bool) {
