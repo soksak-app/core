@@ -246,6 +246,10 @@ class Client {
       throw new Error(`status.unwatch skipped because status.watch failed: ${error.message}`);
     }));
     released.then(undefined, (error) => {
+      // A reload of the page removes the watches of its document, and the host refuses their unwatch with 1003 (the document
+      // closed or the page is not ready). That ends the watch; the caller of the watch receives the refusal, and the
+      // connection stays open. Any other refusal leaves the host watch in an unknown state and fails the connection.
+      if (error instanceof EndpointError && error.code === 1003) return;
       this.#fail(new Error(`status.unwatch failed: ${error.message}`));
     });
     return released;

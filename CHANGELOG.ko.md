@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.10-4: endpoint client는 reload가 watch를 지워 host가 unwatch를 1003으로 거부할 때 연결을 유지하고 그 거부로 watch를 reject한다. Red: 연결이 실패했다; Green.
 - F198.10-3: event `page.start`는 페이지의 모든 gate를 지나므로, reload된 문서의 시작이 setting의 policy가 gate에 닿기 전에 event 파일에 닿는다. Red: policy 전에 gate가 거부했다; Green.
 - F198.10-5: place가 빼는 surface는 place가 session을 끝낸 뒤 sidecar로 아무것도 보내지 않으므로, dispose가 보내는 session 종료가 이후 모든 retain이 거부하던 project root 없는 host 항목을 더 이상 남기지 않는다. Red: place 동안 send가 나갔다; Green.
 - F198.10-2: commit은 `host.place`를 실행하기 전에 빼는 각 surface의 composition을 멈추고 place가 실패하면 다시 시작하므로, layout 변경이 host가 `has no composition declaration`로 거부하는 placement를 더 이상 보내지 않는다. Red: place 동안 composition이 place를 보냈다; Green.

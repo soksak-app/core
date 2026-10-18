@@ -286,3 +286,27 @@ test("a watch with a surface requests that surface and ignores changes of other 
   assert.deepEqual(server.requests.filter((m) => m.method !== "status.unwatch").map((m) => m.params),
     Array(2).fill({ window: "main", name: "probe.lines", surface: "tab-a" }));
 });
+
+// A reload of the page removes the watches of its document, so an unwatch that the host refuses with 1003 (the document
+// closed or the page is not ready) ends that watch; it is reported to the caller of the watch and the connection stays open.
+test("an unwatch refused with 1003 rejects the watch and keeps the connection", async (t) => {
+  const sample = sampleHandlers();
+  const server = await startFakeEndpoint({ ...sample.handlers,
+    "status.unwatch": () => { throw rpcError(1003, "the main page is not ready"); } });
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  await assert.rejects(client.watch("main", "core.screen", (value) => value === "home"), /the main page is not ready/);
+  assert.equal(await client.request("status.get", { window: "main", name: "core.screen" }), "home");
+});
+
+test("an unwatch refused with another code fails the connection", async (t) => {
+  const sample = sampleHandlers();
+  const server = await startFakeEndpoint({ ...sample.handlers,
+    "status.unwatch": () => { throw rpcError(-32603, "internal error"); } });
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  await assert.rejects(client.watch("main", "core.screen", (value) => value === "home"), /internal error/);
+  await assert.rejects(client.request("status.get", { window: "main", name: "core.screen" }), /status.unwatch failed: internal error/);
+});
