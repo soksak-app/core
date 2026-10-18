@@ -17,7 +17,8 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a surface reply that arrives after its surface closed is discarded as an observation`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
-    await fresh(s);
+    // The observation of the late reply is a record of the host at the level info.
+    await fresh(s, { log: { lifecycle: "info" }, reads: ["host.record.info"] });
     const { tab } = await s.run("core.card.add-tab", { card: "browser", plugin: "browser" });
     // If the check fails before it closes the tab, it closes the remaining tab. The hold of the closed surface ends then as well.
     s.cleanup(async () => {

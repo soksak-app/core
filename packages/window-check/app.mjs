@@ -11,6 +11,8 @@ import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
 import { announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { readEventErrors, sessionEventStart, writeEventOffsets } from "./event-log.mjs";
+import { policyOfSetting, requireStored, untilPolicy } from "./log-policy.mjs";
+import { policyAllows } from "@soksak/log-contract";
 import { readPasteboard, restoreFailure, writePasteboard } from "./pasteboard.mjs";
 
 // The launch declares the application executables that are checked. SOKSAK_BINARY_WAILSV3 and SOKSAK_BINARY_TAURIV2
@@ -717,8 +719,20 @@ const START = { width: 1200, height: 760 };
  * window, opens the test project with the settings in a new layout (diagnostics.fixture), reloads the main document and
  * verifies that no display failure occurred in between. Waiting for the surfaces of the layout is done by the
  * preparation of the repository that knows those surfaces.
+ *
+ * `log` is the value of the setting `diagnostics.log` that the check declares (docs/spec/logging.md#policy); the default
+ * `{}` is the default policy, which stores only `error`. `reads` names the records below `error` that the check reads, declared
+ * in `catalog`; a record that the declared policy does not store is an error before the preparation changes anything. The
+ * performance trace stores its events in the class `call` at the level `debug`, so with `performanceTrace` the policy stores
+ * that class at least at `debug`. The preparation waits until the policy file of the configuration folder holds the policy.
  */
-export async function prepareFixture(s, { settings = {}, performanceTrace = TRACE } = {}) {
+export async function prepareFixture(s, { settings = {}, performanceTrace = TRACE, log = {}, reads = [], catalog } = {}) {
+  if (Object.hasOwn(settings, "diagnostics.log")) {
+    throw new Error("prepareFixture: the check declares its log policy with log, not with the setting diagnostics.log");
+  }
+  const traced = performanceTrace && !policyAllows(policyOfSetting(log), "call", "debug") ? { ...log, call: "debug" } : log;
+  const policy = policyOfSetting(traced);
+  requireStored(policy, catalog, reads, "the declaration of the check");
   // Remember the values before the preparation changes the settings. A person also uses the check application, so the
   // values return when the check ends (F129).
   await keepCommonSettings(s);
@@ -743,7 +757,8 @@ export async function prepareFixture(s, { settings = {}, performanceTrace = TRAC
   const initial = verification.values.length;
   let records;
   try {
-    await s.request("diagnostics.fixture", { settings: { ...settings, "diagnostics.performance": performanceTrace } });
+    await s.request("diagnostics.fixture", { settings: { ...settings, "diagnostics.performance": performanceTrace, "diagnostics.log": traced } });
+    await untilPolicy(s.app.configDir, policy);
     await s.presented();
     if (presentationErrors.length) {
       throw new Error(`test preparation reported presentation errors before reload: ${JSON.stringify(presentationErrors)}; ` +

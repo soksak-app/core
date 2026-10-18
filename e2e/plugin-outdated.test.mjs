@@ -11,7 +11,7 @@ import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, reading } from "./fixture.mjs";
 
 const SIDECAR = "@soksak/sidecar-vt-alacritty";
 
@@ -34,7 +34,8 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: the plugin page shows an outdated terminal service and replaces it`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
-    await fresh(s);
+    // The replacement of the service is a record of the host at the level info.
+    await fresh(s, { log: { lifecycle: "info" }, reads: ["host.record.info"] });
     await keepCommonSettings(s);
     const file = join(app.configDir, "plugins", "installed.json");
     const original = readFileSync(file, "utf8");
@@ -71,6 +72,7 @@ for (const app of Object.values(APPS)) {
     // The action ends the sessions of the service and replaces it; the host writes the replacement to its log.
     const offsets = currentEventOffsets(app.configDir);
     await s.act("core.library.plugins.replace", "click");
-    await untilEventLine(app.configDir, offsets, (line) => line.includes(`service ${running.version} replaced by ${newer}`), 10000);
+    await untilEventLine(app.configDir, offsets, (line) => line.includes(`service ${running.version} replaced by ${newer}`), 10000,
+      reading(app, ["host.record.info"]));
   });
 }

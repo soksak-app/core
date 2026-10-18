@@ -2,6 +2,7 @@
 // `logs/host-<boot>.jsonl` for each run, and an event with level error is an error (docs/spec/logging.md#files).
 import { existsSync, readdirSync, readFileSync, statSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { policyFile, readPolicy, requireStored } from "./log-policy.mjs";
 
 // The event files of the processes of the application (docs/spec/logging.md#files): the host and every sidecar service, each with its
 // main file (error, warn and info) and its debug file (debug and trace).
@@ -145,10 +146,16 @@ export function readEventLines(configDir, offsets) {
  * asynchronous writer writes the records to the file at every batch interval, so a change watch (fs.watch) is placed on
  * each host event log file and the files are read again at each notification. The notification of a folder cannot
  * report content that another process appends to a file, so it is used only to notice new files. When the deadline
- * passes, it rejects with an error that holds the lines read.
+ * passes, it rejects with an error that holds the lines read. `records` names the records that the predicate reads, declared in
+ * `catalog`; a record that the policy file of the folder does not store is an error at once that names the record and the policy
+ * (docs/spec/logging.md#policy), because the wait would end only at its deadline.
  */
-export function untilEventLines(configDir, offsets, predicate, timeout) {
+export function untilEventLines(configDir, offsets, predicate, timeout, { catalog, records } = {}) {
   return new Promise((resolve, reject) => {
+    if (!Array.isArray(records) || records.length === 0) {
+      throw new Error("untilEventLines: the wait names no record; give { catalog, records } of the records that the predicate reads");
+    }
+    requireStored(readPolicy(configDir), catalog, records, policyFile(configDir));
     const logs = join(configDir, "logs");
     const watchers = new Map();
     let finished = false;
@@ -201,9 +208,9 @@ export function untilEventLines(configDir, offsets, predicate, timeout) {
   });
 }
 
-/** Returns, within timeout, the first line among the event lines written after offsets that the predicate accepts. */
-export async function untilEventLine(configDir, offsets, predicate, timeout) {
-  const lines = await untilEventLines(configDir, offsets, (all) => all.some(predicate), timeout);
+/** Returns, within timeout, the first line among the event lines written after offsets that the predicate accepts; `declared` is the { catalog, records } of untilEventLines. */
+export async function untilEventLine(configDir, offsets, predicate, timeout, declared) {
+  const lines = await untilEventLines(configDir, offsets, (all) => all.some(predicate), timeout, declared);
   return lines.find(predicate);
 }
 

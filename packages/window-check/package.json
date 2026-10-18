@@ -9,6 +9,7 @@
     "./event-log.mjs": "./event-log.mjs",
     "./frame.mjs": "./frame.mjs",
     "./frontmost.mjs": "./frontmost.mjs",
+    "./log-policy.mjs": "./log-policy.mjs",
     "./lz4.mjs": "./lz4.mjs",
     "./pasteboard.mjs": "./pasteboard.mjs",
     "./png.mjs": "./png.mjs",
@@ -23,6 +24,7 @@
     "event-log.mjs",
     "frame.mjs",
     "frontmost.mjs",
+    "log-policy.mjs",
     "lz4.mjs",
     "pasteboard.mjs",
     "png.mjs",
@@ -38,6 +40,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@soksak/client": "workspace:*"
+    "@soksak/client": "workspace:*",
+    "@soksak/log-contract": "workspace:*"
   }
 }

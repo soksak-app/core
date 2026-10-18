@@ -65,7 +65,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     // The sampler stores its readings at the level debug of the class call, which the default policy does not store.
-    await fresh(s, { performanceTrace: true, settings: { "diagnostics.log": { call: "debug" } } });
+    await fresh(s, { performanceTrace: true, log: { call: "debug" }, reads: ["host.sampler.memory"] });
     const url = await serve(s);
     await s.until("core.surfaces",
       (list) => list.some((x) => x.visible && x.plugin === "browser" && x.exposes.includes("status browser.location")),

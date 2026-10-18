@@ -22,7 +22,7 @@ for (const app of Object.values(APPS)) {
     const results = [];
     const INFO = { lifecycle: "info", input: "info", call: "info", io: "info", frame: "info" };
     for (const { trace, gate } of [{ trace: false }, { trace: true }, { trace: false }, { trace: false, gate: INFO }]) {
-      await fresh(s, { performanceTrace: trace, settings: gate === undefined ? {} : { "diagnostics.log": gate } });
+      await fresh(s, { performanceTrace: trace, log: gate ?? {} });
       const [terminal] = await ensureTerminals(s, 1);
       await s.until("terminal.session", (state) => Boolean(state.sessionId),
         `${terminal.surface} did not open a sidecar session`, { surface: terminal.surface });

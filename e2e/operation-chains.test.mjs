@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
+import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
 import { chainOf, declaredChains, PERFORMED, tailOf } from "./chains.mjs";
 import { fresh, pluginChangeApplied } from "./fixture.mjs";
 
@@ -30,7 +31,8 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
     const chains = declaredChains();
-    await fresh(s);
+    // The events of the chains are below `error`, which the default policy does not store.
+    await fresh(s, { log: EVERY_LEVEL, reads: [...new Set(PERFORMED.flatMap((name) => chains[name]))] });
     await keepCommonSettings(s);
     for (const name of PERFORMED) s.expectEvent(chains[name][0]);
     const before = await s.get("core.plugins");

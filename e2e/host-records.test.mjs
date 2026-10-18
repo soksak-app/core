@@ -7,13 +7,17 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, reading } from "./fixture.mjs";
+
+/** The records that the first check reads. */
+const RECORDS = ["host.record.info", "page.record.info"];
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the event log holds the run record and the records the page reports`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return t.skip(`${app.binary} is not built`);
-    await fresh(s);
+    // The run record and the page record are records at the level info.
+    await fresh(s, { log: { lifecycle: "info" }, reads: RECORDS });
     s.cleanup(() => s.run("core.projects.browse"));
     // When the focus moves, the page writes the transition to the host log as a report.
     await s.run("core.projects.browse");
@@ -27,10 +31,10 @@ for (const app of Object.values(APPS)) {
     await transcript.until((lines) => lines.includes(`info page page: ${line}`), `the page did not report "${line}"`);
     const logs = readdirSync(join(s.app.configDir, "logs"));
     assert.ok(logs.some((name) => /^host-.+\.jsonl$/.test(name)), `logs/ holds no host event log: ${JSON.stringify(logs)}`);
-    const run = await untilEventLine(s.app.configDir, {}, (entry) => /^info host run: \S+ pid \d+$/.test(entry), 10000);
+    const run = await untilEventLine(s.app.configDir, {}, (entry) => /^info host run: \S+ pid \d+$/.test(entry), 10000, reading(app, RECORDS));
     assert.ok(run, "the event log has no run record");
     // The writer stores the record at its next batch, so the check reads the event log until the record is there.
-    assert.equal(await untilEventLine(s.app.configDir, offsets, (entry) => entry === `info page page: ${line}`, 10000), `info page page: ${line}`);
+    assert.equal(await untilEventLine(s.app.configDir, offsets, (entry) => entry === `info page page: ${line}`, 10000, reading(app, RECORDS)), `info page page: ${line}`);
   });
 }
 

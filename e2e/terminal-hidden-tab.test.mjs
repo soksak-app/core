@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, open, within } from "@soksak/window-check/app.mjs";
+import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
 import { allRows, tailOf } from "./chains.mjs";
 import { fresh } from "./fixture.mjs";
 import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
@@ -16,14 +17,14 @@ import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
 const promptCount = (lines) => lines.filter((line) => line.startsWith("sh-")).length;
 /** The upper bound of the wait for the frame of the output; the wait ends at the notice of the log that shows the frame. */
 const FRAME_LIMIT = 10_000;
-/** The records that the check reads are below `error`, which the default policy does not store. */
-const EVERY_LEVEL = { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" };
+/** The records that the check reads, all below `error`, which the default policy does not store. */
+const READS = ["sidecar.vt.pty_read", "sidecar.vt.frame", "sidecar.vt.surface_mode", "page.background.session"];
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a terminal shown again after another tab of its card draws the output after Enter`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s, { settings: { "terminal.cursor.blink": "Never", "diagnostics.log": EVERY_LEVEL } });
+    await fresh(s, { settings: { "terminal.cursor.blink": "Never" }, log: EVERY_LEVEL, reads: READS });
     const [terminal] = await ensureTerminals(s, 1);
     await s.until("terminal.session", (state) => Boolean(state.sessionId),
       `${terminal.surface} did not open a sidecar session`, { surface: terminal.surface });

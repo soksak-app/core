@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLines } from "@soksak/window-check/event-log.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, reading } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a request for a missing page file writes one error line for each path`, { timeout: 60000 }, async (t) => {
@@ -24,7 +24,8 @@ for (const app of Object.values(APPS)) {
     }
     // The error records reach the file at the next batch of the writer, so the check waits for both of them.
     const lines = await untilEventLines(app.configDir, before,
-      (all) => all.filter((line) => line.startsWith("error ") && line.includes(`missing-${process.pid}`)).length >= 2, 10000);
+      (all) => all.filter((line) => line.startsWith("error ") && line.includes(`missing-${process.pid}`)).length >= 2, 10000,
+      reading(app, ["host.record.error"]));
     const errors = lines.filter((line) => line.startsWith("error "));
     assert.deepEqual(errors.filter((line) => line.includes(`missing-${process.pid}`)).sort(), [
       `error host page asset: ${first}: not found`,

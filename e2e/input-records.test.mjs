@@ -8,11 +8,17 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { eventLine, currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, reading } from "./fixture.mjs";
+import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
 import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
 
 // The text of the bytes that a pty_read line of the terminal sidecar holds as hex; the event stores no text copy of the bytes
 // (docs/spec/replay.md#records). The line is `<level> <layer> <event>: <fields>`.
+/** The records of the input path that the check reads, all below `error`. */
+const READS = ["native.record.info", "native.input.key_down", "native.input.report", "host.trace.region", "host.trace.sidecar.send",
+  "host.input.relay", "page.call", "page.log.clock", "host.sidecar.request", "sidecar.vt.request", "sidecar.vt.pty_write",
+  "sidecar.vt.pty_read"];
+
 function readText(line) {
   const { hex } = JSON.parse(line.slice(line.indexOf(": ") + 2));
   return Buffer.from(hex, "hex").toString("latin1");
@@ -22,7 +28,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a typed key leaves a record in every layer of the input path`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s, { performanceTrace: true });
+    await fresh(s, { performanceTrace: true, log: EVERY_LEVEL, reads: READS });
     const [terminal] = await ensureTerminals(s, 1);
     await s.until("terminal.session", (state) => Boolean(state.sessionId),
       `${terminal.surface} did not open a sidecar session`, { surface: terminal.surface });
@@ -50,7 +56,8 @@ for (const app of Object.values(APPS)) {
     // and the flush waits until they are in the event log.
     await s.flushLog();
     // The sidecar writes its own event file in batches, so the check waits until the read of the prompt after Enter is in it.
-    await untilEventLine(s.app.configDir, eventOffsets, (text) => text.includes("sidecar.vt.pty_read") && readText(text).includes("sh-"), 10000);
+    await untilEventLine(s.app.configDir, eventOffsets, (text) => text.includes("sidecar.vt.pty_read") && readText(text).includes("sh-"), 10000,
+      reading(s.app, ["sidecar.vt.pty_read"]));
     const events = readEvents(s.app.configDir, eventOffsets).events;
     const log = events.map((event) => ({ text: eventLine(event), ts: new Date(event.ts_us / 1000).toISOString() }));
     // The trace of the page and of the host is in the event log.

@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { pluginEntry } from "../scripts/workspace-registry.mjs";
 import { allRows, tailOf } from "./chains.mjs";
@@ -87,11 +87,9 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
     // The delay of 720 minutes keeps the delay deadline out of the check, so every unload comes from the command or the pressure.
-    await step(t, s, "prepare the fixture", () => fresh(s, { settings: { memorySaver: true, memorySaverDelay: 720 } }));
-    await keepCommonSettings(s);
-    // The check reads the page.tab events, lifecycle events at the level info, and the host writes the log policy from the
-    // common setting diagnostics.log; keepCommonSettings restores it.
-    await s.run("core.settings.set", { patch: { "diagnostics.log": { lifecycle: "info" } }, scope: "common" });
+    // The check reads the page.tab events, lifecycle events at the level info.
+    await step(t, s, "prepare the fixture", () => fresh(s, { settings: { memorySaver: true, memorySaverDelay: 720 },
+      log: { lifecycle: "info" }, reads: ["page.tab.restored", "page.tab.unloaded", "page.tab.unload.skipped"] }));
     const pages = await serve(s);
     const before = await s.get("core.plugins");
     const folder = probeRegistry(join(dirname(app.binary), "sok"));

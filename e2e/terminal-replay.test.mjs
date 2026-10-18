@@ -12,8 +12,14 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, untilEventLines } from "@soksak/window-check/event-log.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, reading } from "./fixture.mjs";
+import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
 import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
+
+// The records of a session that the replay reads (docs/spec/replay.md#records), all below `error`, which the default policy does
+// not store.
+const READS = ["sidecar.vt.frame", "sidecar.vt.pty_read", "sidecar.vt.pty_write", "sidecar.vt.resize", "sidecar.vt.viewport",
+  "sidecar.vt.theme", "sidecar.vt.selection"];
 
 // Waits until the event files hold a page frame record of the session and the sidecar frame record of the same sequence, and
 // returns the greatest such sequence. The terminal plugin, the page batch and the sidecar each write at their own interval, so
@@ -28,7 +34,7 @@ async function storedSequence(app, offsets, session) {
       .map((event) => event.fields.sequence).filter((value) => sidecar.has(value));
     sequence = Math.max(0, ...page);
     return sequence >= 2;
-  }, 20000);
+  }, 20000, reading(app, ["sidecar.vt.frame"]));
   return sequence;
 }
 
@@ -50,7 +56,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a terminal session replays with the sidecar and page hashes equal`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s);
+    await fresh(s, { log: EVERY_LEVEL, reads: READS });
     t.diagnostic(`${app.name}: START terminal replay`);
     const [{ surface }] = await ensureTerminals(s, 1);
     const { sessionId } = await s.until("terminal.session", (state) => Boolean(state.sessionId),
@@ -73,7 +79,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a screen message changed on the way is a divergence of the layer plugin`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s);
+    await fresh(s, { log: EVERY_LEVEL, reads: READS });
     t.diagnostic(`${app.name}: START terminal replay divergence`);
     const [{ surface }] = await ensureTerminals(s, 1);
     const { sessionId } = await s.until("terminal.session", (state) => Boolean(state.sessionId),
@@ -96,7 +102,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a session with output, a resize, a scroll, a selection, a theme and input replays with every hash equal`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s);
+    await fresh(s, { log: EVERY_LEVEL, reads: READS });
     t.diagnostic(`${app.name}: START terminal replay of the view state`);
     const { mode } = (await s.get("core.settings")).values;
     s.cleanup(async () => {
@@ -151,7 +157,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a stored input that was changed is a divergence of the layer sidecar`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s);
+    await fresh(s, { log: EVERY_LEVEL, reads: READS });
     t.diagnostic(`${app.name}: START terminal replay of a changed input`);
     const [{ surface }] = await ensureTerminals(s, 1);
     const { sessionId } = await s.until("terminal.session", (state) => Boolean(state.sessionId),

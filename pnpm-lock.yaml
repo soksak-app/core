@@ -95,6 +95,9 @@ importers:
       '@soksak/client':
         specifier: workspace:*
         version: link:../client
+      '@soksak/log-contract':
+        specifier: workspace:*
+        version: link:../log-contract
 
   packages/workbench:
     dependencies:

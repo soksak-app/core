@@ -1,10 +1,11 @@
 # 변경 기록
 
-- F192.5: test inventory가 F192를 `syncBackgroundSessions`와 그 background session test에 연결하므로 `make parity-check`가 더는 `F192: completed capability has no feature link`로 실패하지 않는다.
 [English](CHANGELOG.md)
 
 ## 미배포
 
+- F192.5: test inventory가 F192를 `syncBackgroundSessions`와 그 background session test에 연결하므로 `make parity-check`가 더는 `F192: completed capability has no feature link`로 실패하지 않는다.
+- F192.3-2: `error`보다 낮은 record를 읽는 모든 window check가 그 record를 저장하는 log policy와 읽는 record를 선언한다. `prepareFixture`는 검사가 읽는 record를 policy가 저장하지 않는 선언을 거부하고 policy file이 그 policy를 담을 때까지 기다리며, event file을 기다리는 대기는 마감까지 기다리지 않고 record와 policy를 밝힌 error로 바로 실패한다. 해당 check: `terminal-hidden-tab`, `idle-tab-memory`, `memory-saver`, `input-latency`(policy를 설정이나 `core.settings.set`으로 주었다), `event-log`, `host-records`, `late-reply`, `plugin-outdated`, `settings`(trace switch), `terminal-replay`, `input-oracle`, `input-records`, `operation-chains`, 그리고 performance trace를 통해 `registration-lifecycle`, `projects`와 `fresh`의 registration timeline. Red: 대기가 `no event line matched within 3000 ms`로 시간 초과했고 준비가 그 선언을 받아들였다. Green: `packages/window-check`의 test가 통과한다. window check는 실행하지 않았다.
 - F192.3: window check `e2e/terminal-hidden-tab.test.mjs`가 main으로 build한 debug Wails와 Tauri application에서 terminal plugin 0.0.14, vt sidecar 0.0.11, browser plugin 0.0.5로 통과한다: 같은 card의 다른 tab 뒤에서 다시 보인 terminal이 Enter 뒤 출력을 그리고, background `open`과 headless surface가 없다. F192.3-1: 기본 policy가 error만 저장해 check가 출력의 record를 찾지 못했으므로 check가 `diagnostics.log`를 모든 class에서 `trace`로 정한다. Red: 두 host가 저장된 `sidecar.vt.pty_read` 없이 실패했다; Green.
 - F198.22: Rust migrate test는 설정 폴더를 drop guard로 지우며, assertion이 실패한 뒤에도 지우고, 제거 실패를 무시하지 않고 알린다.
 - F198.21: `surface.unload`는 없거나(탭은 unload되지 않는다, `undeclared`) `{format, maxBytes}`다. `validateManifest`는 `false`를 plugin을 이름하는 오류로 거부하고, 명세는 더 이상 선언을 필수로 부르지 않는다. Red: validator가 `unload: false`를 받아들였다(`Missing expected exception`). Green: plugin-api test가 통과한다.

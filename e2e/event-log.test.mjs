@@ -8,11 +8,14 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
+import { fresh, reading } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the host writes its event log from the start of the process`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
+    // The endpoint calls of the check are events of the class call at the level debug, which the debug file holds.
+    await fresh(s, { log: { call: "debug" }, reads: ["host.endpoint.call"] });
     const { pid } = JSON.parse(readFileSync(join(app.configDir, "endpoint.json"), "utf8"));
     assert.ok(Number.isInteger(pid), `endpoint.json holds no process identifier: ${pid}`);
     const logs = join(app.configDir, "logs");
@@ -28,9 +31,10 @@ for (const app of Object.values(APPS)) {
     assert.equal(events[0].fields.pid, pid);
     assert.equal(events[0].fields.role, "host");
     assert.equal(events[0].fields.schema, 2);
-    assert.ok(events.some((event) => event.event === "host.app.event" && event.fields.kind === "started"), `${path} holds no application event started`);
-    // The observers store a window event or an input source event while the first window opens; a start without either means the host did not install them.
-    assert.ok(events.some((event) => event.event.startsWith("native.window.") || event.event === "native.input.source_changed"), `${path} holds no event of the activity observers`);
+    // The policy in force at the start of the process is stored as log.policy, which passes every gate; the events of the start
+    // below `error` (host.app.event, the events of the activity observers) are stored only by a policy that was in force before
+    // the process started, which a check does not set (docs/spec/logging.md#policy).
+    assert.ok(events.some((event) => event.event === "log.policy"), `${path} holds no log.policy`);
     // The debug file of the process holds the events of the levels debug and trace; one seq counts across both files, the log.open
     // of each file included.
     const debugPath = path.replace(/\.jsonl$/, ".debug.jsonl");
@@ -55,13 +59,16 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a window that opens and closes leaves the events of the window`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
+    // host.window.event is a lifecycle event at the levels debug and info.
+    await fresh(s, { log: { lifecycle: "debug" }, reads: ["host.window.event"] });
     const offsets = currentEventOffsets(app.configDir);
     await s.run("core.window.new");
     const list = await s.windows(2, "the new window did not open");
     const child = s.on(list.find((w) => w.window !== s.window).window);
     await child.close();
     const closed = await untilEventLine(app.configDir, offsets,
-      (line) => line.startsWith("info host host.window.event:") && line.includes('"kind":"closed"'), 30000);
+      (line) => line.startsWith("info host host.window.event:") && line.includes('"kind":"closed"'), 30000,
+      reading(app, ["host.window.event"]));
     assert.match(closed, /"window":"[^"]+"/);
   });
 }
@@ -73,7 +80,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: the trace stores the surface geometry, the memory of the sidecar and the start of each page document`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    const { fresh } = await import("./fixture.mjs");
     const { ensureTerminals } = await import("./terminal-screen.mjs");
     const offsets = currentEventOffsets(app.configDir);
     await fresh(s, { performanceTrace: true });
@@ -85,15 +91,17 @@ for (const app of Object.values(APPS)) {
       if (!line.includes("host.trace.surface") || !line.includes(terminal.surface)) return false;
       const fields = JSON.parse(line.slice(line.indexOf("{")));
       return fields.phase === "placed" && fields.visible === true && fields.w > 0 && fields.h > 0;
-    }, 30000);
+    }, 30000, reading(app, ["host.trace.surface"]));
     assert.ok(placed.includes(terminal.surface), `the placed surface event names no surface: ${placed}`);
     const memory = await untilEventLine(app.configDir, offsets,
-      (line) => line.includes("host.sampler.memory") && line.includes('"role":"sidecar"') && line.includes('"rss_kb"'), 60000);
+      (line) => line.includes("host.sampler.memory") && line.includes('"role":"sidecar"') && line.includes('"rss_kb"'), 60000,
+      reading(app, ["host.sampler.memory"]));
     assert.match(memory, /"pid":[0-9]+/, `the memory event of the sidecar holds no process: ${memory}`);
     await s.run("host.window.reload");
     await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), "the reloaded page did not report ready");
     await s.flushLog();
-    const starts = await untilEventLine(app.configDir, offsets, (line) => line.includes("page.start") && line.includes('"url"'), 30000);
+    const starts = await untilEventLine(app.configDir, offsets, (line) => line.includes("page.start") && line.includes('"url"'), 30000,
+      reading(app, ["page.start"]));
     assert.match(starts, /"time_origin":[0-9.]+/, `the page start event holds no clock origin: ${starts}`);
   });
 }

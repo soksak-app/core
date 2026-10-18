@@ -359,7 +359,8 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: performance tracing records enabled card focus and stops while disabled`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s);
+    // The events of the trace are stored in the class call at the level debug, which the default policy does not store.
+    await fresh(s, { log: { call: "debug" }, reads: ["page.trace.action", "host.trace.on", "host.trace.off"] });
     await keepCommonSettings(s);
     // The host uses the path in which the symbolic link of the configuration directory is resolved.
     const config = realpathSync(app.configDir);

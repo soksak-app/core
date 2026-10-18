@@ -64,7 +64,7 @@ function typeOf(value) {
  * The declaration of an event name. A catalog name with a placeholder such as `page.record.<level>` declares every event of
  * its family: a placeholder stands for one or more characters of `a-z`, `0-9`, `_` and `.`.
  */
-function declaration(catalog, name) {
+export function declaration(catalog, name) {
   if (catalog.events[name] !== undefined) return catalog.events[name];
   for (const [declared, value] of Object.entries(catalog.events)) {
     if (!declared.includes("<")) continue;
