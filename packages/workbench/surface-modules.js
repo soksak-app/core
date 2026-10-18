@@ -6,9 +6,10 @@ import { pluginDiagnostics } from "./environment.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
-import { forgetTab, reportDirectory, reportError, reportFooter, reportModified, reportNotice, reportTitle, tabOrigin } from "./tab-reports.js";
+import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, reportModified, reportNotice, reportTitle, tabOrigin,
+  unloadTab } from "./tab-reports.js";
 import { icon } from "./icons.js";
-import { active } from "./projects.js";
+import { active, tabStateStore, tabStatesReady } from "./projects.js";
 import { pluginRecords } from "./plugin-records.js";
 const mounted = new Map();
 /* Placeholder of a surface that is not mounted in a document without a host: one element for each surface id. */
@@ -122,8 +123,56 @@ function clearSlotPlaceholders(slot, surfaceId) {
   }
 }
 
+/** The store of the tab state store; the page opens it before it mounts a surface. */
+function tabStates() {
+  const store = tabStateStore();
+  if (!store) throw new Error("the tab state store is not open");
+  return store;
+}
+
+/**
+ * context.tab.state of a surface whose plugin declares surface.unload as {format, maxBytes} (docs/spec/plugins.md#memory-saver).
+ * isDisposed tells whether the surface of this context was disposed; a write after it is refused and reported once.
+ */
+function tabState(surface, isDisposed) {
+  const { surfaceId: tab } = surface;
+  const { format, maxBytes } = surface.unload;
+  let refused = false;
+  return {
+    read() {
+      // default: a tab without an entry or without a state reads null (docs/spec/plugins.md#memory-saver).
+      const stored = tabStates().entry(tab)?.state ?? null;
+      if (stored === null) return null;
+      if (stored.format !== format) throw new Error(`tab ${tab} state format ${JSON.stringify(stored.format)} is not ${format}`);
+      return stored.value;
+    },
+    write(value) {
+      if (isDisposed()) {
+        if (!refused) {
+          refused = true;
+          dispatchEvent(new ErrorEvent("error", { message: `tab ${tab} state write refused: disposed` }));
+        }
+        return;
+      }
+      let text;
+      try {
+        text = JSON.stringify(value);
+      } catch (error) {
+        throw new TypeError(`tab ${tab} state is not JSON: ${error.message}`);
+      }
+      if (text === undefined) throw new TypeError(`tab ${tab} state is not JSON: ${typeof value}`);
+      const bytes = new TextEncoder().encode(text).length;
+      if (bytes > maxBytes) throw new RangeError(`tab ${tab} state of ${bytes} bytes exceeds ${maxBytes}`);
+      tabStates().write(tab, { format, value: JSON.parse(text) });
+    },
+  };
+}
+
 export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   if (!slot || !surface?.module) throw new TypeError("surface module mount requires a slot and module");
+  // A tab that is restored while its unload still disposes it mounts a new surface after that dispose ends.
+  const leaving = mounted.get(surface.surfaceId)?.disposing;
+  if (leaving) await leaving;
   clearSlotPlaceholders(slot, surface.surfaceId);
   // Without a host there are no sidecars and no native regions. A surface that needs them is not mounted and a placeholder is drawn.
   // (docs/spec/plugins.md#runtime-module).
@@ -205,11 +254,16 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     const context = createSurfaceContext({
       root: shadow, closing: closing.signal, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
       declarations: surface.declarations, composition, diagnostics: () => diagnostics, contributions: surface.contributions,
-      tab: { title: (text) => reportTitle(surface.surfaceId, text),
+      tab: { title: (text) => {
+        reportTitle(surface.surfaceId, text);
+        if (surface.unload) tabStates().cacheLabel(surface.surfaceId, surface.pluginId, text);
+      },
         footer: (text) => reportFooter(surface.surfaceId, text),
         directory: (path) => reportDirectory(surface.surfaceId, path),
         notify: (text, policy) => reportNotice(surface.surfaceId, text, policy),
         modified: (value) => reportModified(surface.surfaceId, value), error: (text) => reportError(surface.surfaceId, text),
+        keep: (reason, on) => reportKeep(surface.surfaceId, reason, on),
+        ...(surface.unload ? { state: tabState(surface, () => entry.disposed) } : {}),
         params: surface.params },
       origin: tabOrigin(surface.surfaceId),
       // Canonical root of the project that the surface window shows (docs/spec/plugins.md#tab-reports). A library window has none.
@@ -263,6 +317,8 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
           declarations: registry.surfaceDeclarations() });
         await entry.exposure.ready;
         diagnostics = await pluginDiagnostics(surface.pluginId);
+        // The module of a declaring surface reads and writes its tab state, which the page opens after the first plane.
+        if (surface.unload) await tabStatesReady();
         if (entry.disposed) return null;
         return import(surface.module);
       }).then((module) => {
@@ -343,7 +399,12 @@ async function disposeModule(entry, module) {
   await module.dispose();
 }
 
-export async function disposeSurface(surfaceId) {
+/**
+ * Releases the surface of a tab. The close (no mode) forgets the tab reports; the mode "unload" keeps them and clears only
+ * the error, because the tab stays in the layout (docs/spec/plugins.md#memory-saver).
+ */
+export async function disposeSurface(surfaceId, { mode } = {}) {
+  if (mode !== undefined && mode !== "unload") throw new TypeError(`unknown dispose mode: ${String(mode)}`);
   placeholders.get(surfaceId)?.remove();
   placeholders.delete(surfaceId);
   const entry = mounted.get(surfaceId);
@@ -363,7 +424,8 @@ export async function disposeSurface(surfaceId) {
     entry.state();
     entry.host.removeAttribute("data-surface-suspended");
     entry.host.remove();
-    forgetTab(surfaceId);
+    if (mode === "unload") unloadTab(surfaceId);
+    else forgetTab(surfaceId);
     authorization.delete(surfaceId);
     if (mounted.get(surfaceId) === entry) mounted.delete(surfaceId);
   })();

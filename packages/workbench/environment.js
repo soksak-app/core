@@ -32,6 +32,8 @@ function surfaceOf(name, pluginId, surface) {
   const module = `/${modulePath(name, surface.module)}`;
   return (tabId) => ({ module, composition: surface.composition, surfaceId: tabId,
     pluginId, declarations: surface.declarations, sidecars: surface.sidecars,
+    // default: a surface of a plugin with background declares no surface.unload, so its tabs are not unloaded.
+    unload: surface.unload ?? false,
     contributions: (point) => contributionsOf(pluginId, point) });
 }
 

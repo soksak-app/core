@@ -22,8 +22,12 @@ export function createSurfaceContext({
     throw new TypeError("surface context requires scoped event routing");
   }
   if (typeof tab?.title !== "function" || typeof tab?.footer !== "function" || typeof tab?.directory !== "function"
-    || typeof tab?.notify !== "function" || typeof tab?.modified !== "function" || typeof tab?.error !== "function") {
-    throw new TypeError("surface context requires tab.title, tab.footer, tab.directory, tab.notify, tab.modified, and tab.error");
+    || typeof tab?.notify !== "function" || typeof tab?.modified !== "function" || typeof tab?.error !== "function"
+    || typeof tab?.keep !== "function") {
+    throw new TypeError("surface context requires tab.title, tab.footer, tab.directory, tab.notify, tab.modified, tab.error, and tab.keep");
+  }
+  if (tab.state !== undefined && (typeof tab.state?.read !== "function" || typeof tab.state?.write !== "function")) {
+    throw new TypeError("surface context tab.state requires read and write");
   }
   if (typeof icon !== "function") throw new TypeError("surface context requires icon(name)");
   if (!(closing instanceof AbortSignal)) throw new TypeError("surface context requires the closing signal");
@@ -56,7 +60,11 @@ export function createSurfaceContext({
     // before it mounts the module.
     get diagnostics() { return diagnostics(); },
     // Tab reports (docs/spec/plugins.md#tab-reports): report to the workbench the title shown on the tab, the bottom text of the card header and the working directory.
+    // keep reports work in progress, and state, present only for a plugin that declares surface.unload as {format, maxBytes},
+    // reads and writes the tab state (docs/spec/plugins.md#memory-saver).
     tab: Object.freeze({ title: tab.title, footer: tab.footer, directory: tab.directory, notify: tab.notify, modified: tab.modified, error: tab.error,
+      keep: tab.keep,
+      ...(tab.state === undefined ? {} : { state: Object.freeze({ read: tab.state.read, write: tab.state.write }) }),
       // default: a tab opened without parameters has none (docs/spec/plugins.md#pluginjson).
       params: tab.params === undefined || tab.params === null ? null : Object.freeze(structuredClone(tab.params)) }),
     // The working directory that the active tab of the card that created this tab recorded at that time.

@@ -7,6 +7,8 @@ const notices = new Map();
 const noticePolicies = new Map();
 const modified = new Set();
 const errors = new Map();
+// The tabs whose surface reports work in progress through context.tab.keep("busy", true) (docs/spec/plugins.md#memory-saver).
+const busy = new Set();
 // The plane tells whether a tab is visible (whether it is the active tab of the focused card).
 let visibleTab = () => false;
 const listeners = new Set();
@@ -135,8 +137,29 @@ export function recordOrigin(tabId, fromTabId) {
 // default: a tab whose origin was not recorded has no directory.
 export const tabOrigin = (tabId) => origins.get(tabId) ?? Object.freeze({ directory: null });
 
+/** Records whether the surface of tabId reports work in progress (docs/spec/plugins.md#memory-saver). */
+export function reportKeep(tabId, reason, on) {
+  if (reason !== "busy") throw new TypeError(`unknown keep reason: ${String(reason)}`);
+  if (typeof on !== "boolean") throw new TypeError("keep busy must be true or false");
+  if (on) busy.add(tabId);
+  else busy.delete(tabId);
+}
+
+/** The keep protections that the reports of tabId give: keep:modified and keep:busy. */
+export const tabKeeps = (tabId) => [...(modified.has(tabId) ? ["keep:modified"] : []), ...(busy.has(tabId) ? ["keep:busy"] : [])];
+
+/**
+ * Releasing a surface in the unload mode keeps the reports of its tab and clears the error, whose display ended with the
+ * instance, and the busy report, which ends at dispose (docs/spec/plugins.md#memory-saver).
+ */
+export function unloadTab(tabId) {
+  busy.delete(tabId);
+  if (errors.delete(tabId)) notify();
+}
+
 /** Releasing a surface also clears the notice of its tab. */
 export function forgetTab(tabId) {
+  busy.delete(tabId);
   directories.delete(tabId);
   origins.delete(tabId);
   const noticed = notices.delete(tabId);

@@ -23,10 +23,17 @@ let refreshing = Promise.resolve();
 let begun = null;
 // The tab state store of the memory saver (docs/spec/projects.md#persistence), opened by initialise.
 let tabStates = null;
+// Resolves when initialise has tried to open the tab state store; the first plane is drawn before that, so a surface whose
+// plugin declares surface.unload waits for it before its module mounts. A store that failed to open stays null, and the
+// tab state of a surface then throws that the store is not open.
+let triedTabStates;
+const tabStatesTried = new Promise((resolve) => { triedTabStates = resolve; });
 
 export const all = () => projects;
 /** The tab state store of the memory saver. */
 export const tabStateStore = () => tabStates;
+/** Resolves once initialise has tried to open the tab state store. */
+export const tabStatesReady = () => tabStatesTried;
 
 /** The tab ids of the layouts of all spaces of project. */
 function projectTabs(project) {
@@ -147,7 +154,11 @@ export async function initialise(storage, unloadOf) {
     data: { get: (id, plugin) => projects.find((p) => p.id === id)?.plugins?.[plugin] ?? {}, set: setPluginData },
   });
   await refresh();
-  tabStates = await openTabStates({ store, failed, unloadOf });
+  try {
+    tabStates = await openTabStates({ store, failed, unloadOf });
+  } finally {
+    triedTabStates();
+  }
   // A stored layout that cannot be read leaves the tab ids unknown, so the store keeps every entry and the error is
   // shown; opening that project reports the same layout again.
   try {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "../surface.js";
 
-const TAB = { title() {}, footer() {}, directory() {}, notify() {}, modified() {}, error() {} };
+const TAB = { title() {}, footer() {}, directory() {}, notify() {}, modified() {}, error() {}, keep() {} };
 const ICON = (name) => `<svg data-icon="${name}"></svg>`;
 const CLOSING = new AbortController().signal;
 
@@ -50,7 +50,8 @@ test("surface context carries the tab reports and the origin directory", () => {
   const context = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", pluginId: "fixture", runtime, icon: ICON,
     tab: { title: (text) => reported.push(["title", text]), footer: (text) => reported.push(["footer", text]),
       directory: (path) => reported.push(["directory", path]), notify: (text) => reported.push(["notify", text]),
-      modified: (value) => reported.push(["modified", value]), error: (text) => reported.push(["error", text]) },
+      modified: (value) => reported.push(["modified", value]), error: (text) => reported.push(["error", text]),
+      keep: (reason, on) => reported.push(["keep", reason, on]) },
     origin: { directory: "/tmp/origin" } });
   context.tab.title("vim");
   context.tab.footer("/tmp");
@@ -58,14 +59,16 @@ test("surface context carries the tab reports and the origin directory", () => {
   context.tab.notify("done");
   context.tab.modified(true);
   context.tab.error("write failed");
-  assert.deepEqual(reported, [["title", "vim"], ["footer", "/tmp"], ["directory", "/tmp"], ["notify", "done"], ["modified", true], ["error", "write failed"]]);
+  context.tab.keep("busy", true);
+  assert.deepEqual(reported, [["title", "vim"], ["footer", "/tmp"], ["directory", "/tmp"], ["notify", "done"], ["modified", true], ["error", "write failed"], ["keep", "busy", true]]);
+  assert.equal(context.tab.state, undefined, "a surface without surface.unload has no tab state");
   assert.equal(context.origin.directory, "/tmp/origin");
   assert.equal(Object.isFrozen(context.origin), true);
   assert.equal(createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-2", runtime, tab: TAB, icon: ICON }).origin.directory, null);
   assert.throws(() => createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-3", runtime, icon: ICON }),
-    /surface context requires tab.title, tab.footer, tab.directory, tab.notify, tab.modified, and tab.error/);
+    /surface context requires tab.title, tab.footer, tab.directory, tab.notify, tab.modified, tab.error, and tab.keep/);
   assert.throws(() => createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-4", runtime, icon: ICON, tab: { ...TAB, error: undefined } }),
-    /surface context requires tab.title, tab.footer, tab.directory, tab.notify, tab.modified, and tab.error/);
+    /surface context requires tab.title, tab.footer, tab.directory, tab.notify, tab.modified, tab.error, and tab.keep/);
 });
 
 test("surface context offers the core icons and requires them", () => {
@@ -242,4 +245,16 @@ test("a surface context requires the closing signal and exposes it", () => {
   assert.throws(() => createSurfaceContext({ root, surfaceId: "tab-1", runtime, tab: TAB, icon: ICON }),
     /requires the closing signal/);
   assert.equal(createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", runtime, tab: TAB, icon: ICON }).closing, CLOSING);
+});
+
+test("surface context carries the tab state of a surface that declares surface.unload", () => {
+  const root = { appendChild() {} };
+  const runtime = { exposure: { command() {} }, sidecar() {}, command() {}, emit() {}, native: {} };
+  const written = [];
+  const state = { read: () => ({ page: 2 }), write: (value) => written.push(value) };
+  const context = createSurfaceContext({ closing: CLOSING, root, surfaceId: "tab-1", runtime, icon: ICON, tab: { ...TAB, state } });
+  context.tab.state.write({ page: 3 });
+  assert.deepEqual(written, [{ page: 3 }]);
+  assert.deepEqual(context.tab.state.read(), { page: 2 });
+  assert.equal(Object.isFrozen(context.tab.state), true);
 });
