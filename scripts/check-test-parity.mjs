@@ -2127,6 +2127,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F200",
+    implementation: [{ file: "scripts/measure-host-calls.mjs", symbol: "export async function measure" }],
+    tests: [{ file: "scripts/test/measure-host-calls.test.mjs", id: "the idle mode waits instead of sending calls and reports the growth per minute" }],
+    expected: "The page garbage of host calls, idle time and host events is measured in both hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F201",
     implementation: [{ file: "native/darwin/src/document_view.m", symbol: "void sp_document_store_close(" }],
     tests: [{ file: "native/darwin/tests/document_view_test.m", id: "the data stores end without an error" }],
@@ -4715,9 +4722,9 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 const NON_CAPABILITY_COMPLETIONS = new Set(["F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
-// moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109) and the window checks of plugins (F110). Core cannot read
+// moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66) and the window checks of plugins (F110). Core cannot read
 // those repositories, so they have no link here and each repository checks its own evidence.
-const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110"]);
+const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203"]);
 
 // Completed capabilities whose implementation a later item removed: F68 wrote the WebKit child record, which F196.22
 // removed with the start that ended the recorded processes.
