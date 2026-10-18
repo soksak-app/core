@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.18: `surface.unload`는 선택으로 남는다. 선언이 없는 표면은 unload하지 않으므로 요구는 기능을 더하지 않고, 설치 가능한 plugin 버전 다섯 개를 revoke하게 만든다.
 - F196.20-2: 보이는 페이지의 느린 증가는 늦은 JavaScript full collection이다. 그 timer는 회수 예상 bytes에 비례해 CPU를 제한한다. 엔진은 idle 상태의 보이는 페이지를 더 일찍 거두는 공개 interface를 제공하지 않고, F198.6이 전달하는 시스템 메모리 압력이 표준 해제 경로다. 변경 없음.
 - F198.20: 저장 데이터 migration의 기록 `log.migrated`는 event log의 모든 gate를 지나므로, 오류만 저장하는 기본 정책도 이를 남기고 그것을 요구하는 release 단계가 통과한다. Red: Go와 Rust migrate 시험이 `log.migrated` 없이 `log.gated`를 찾음; Green: 둘 다 통과.
 - F198.19: 문서 영역의 handle은 워크벤치 attach 답 `{history}`에서 온 `history`를 알리며, attach가 세션 기록을 restore했으면 `true`다. 그래서 restore된 표면은 restore된 기록이 없을 때만 저장한 주소를 load한다. 그것이 없는 attach 답은 attach를 거부한다. Red: `history is unknown before the attach replies`(`undefined`), 워크벤치 attach가 `{ history: true }` 대신 `null`로 답함; Green: document-region 20 of 20, document-regions 6 of 6.
