@@ -252,11 +252,16 @@ static double nowSeconds(void) {
     return NSDate.date.timeIntervalSince1970;
 }
 
-// Pumps the run loop until done() holds or the limit passes. Returns done().
+// Sends the application events until done() holds or the limit passes. Returns done().
 static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        // The window server delivers the occlusion state of a window as an application event, so the pump dequeues and
+        // sends events; a run of the run loop alone leaves occlusionState and the visibility of each page at the state
+        // of the window's creation.
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
+            inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event) [NSApp sendEvent:event];
     }
     return done();
 }
@@ -971,6 +976,38 @@ static void printLoad(const char *when) {
         (double)load.ldavg[1] / load.fscale, (double)load.ldavg[2] / load.fscale);
     fflush(stdout);
 }
+// Prints the occlusion state, the space, the level and the window number of the window, its window list entry, and each
+// window of the window list that is ordered above it with an intersecting frame, so that a failed visibility check names
+// the windows that cover it.
+static void printWindowOrder(NSWindow *window, const char *name) {
+    fprintf(stdout, "window %s occlusion=0x%lx visible=%d on_active_space=%d level=%ld number=%ld\n", name,
+        (unsigned long)window.occlusionState, (window.occlusionState & NSWindowOcclusionStateVisible) != 0,
+        window.isOnActiveSpace, (long)window.level, (long)window.windowNumber);
+    CGWindowID number = (CGWindowID)window.windowNumber;
+    NSArray *own = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow, number) autorelease];
+    NSArray *above = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenAboveWindow, number) autorelease];
+    if (own.count != 1) {
+        fprintf(stdout, "window %s list_entries=%lu\n", name, (unsigned long)own.count);
+        fflush(stdout);
+        return;
+    }
+    CGRect frame;
+    CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)own[0][(id)kCGWindowBounds], &frame);
+    fprintf(stdout, "window %s list onscreen=%d layer=%d alpha=%g bounds=(%g, %g, %g, %g) above=%lu\n", name,
+        [own[0][(id)kCGWindowIsOnscreen] intValue], [own[0][(id)kCGWindowLayer] intValue],
+        [own[0][(id)kCGWindowAlpha] doubleValue], frame.origin.x, frame.origin.y, frame.size.width, frame.size.height,
+        (unsigned long)above.count);
+    for (NSDictionary *entry in above) {
+        CGRect bounds;
+        CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)entry[(id)kCGWindowBounds], &bounds);
+        if (!CGRectIntersectsRect(bounds, frame)) continue;
+        fprintf(stdout, "window %s covered_by owner=%s pid=%d number=%d layer=%d alpha=%g bounds=(%g, %g, %g, %g)\n", name,
+            [entry[(id)kCGWindowOwnerName] UTF8String], [entry[(id)kCGWindowOwnerPID] intValue],
+            [entry[(id)kCGWindowNumber] intValue], [entry[(id)kCGWindowLayer] intValue],
+            [entry[(id)kCGWindowAlpha] doubleValue], bounds.origin.x, bounds.origin.y, bounds.size.width, bounds.size.height);
+    }
+    fflush(stdout);
+}
 // Loads the address in U, R and S at the same time, each in its own window at the top of the visible screen. The windows
 // are spread from the left edge to the right edge, so that a part of each window is visible and no window is occluded. It
 // reads each process every 2 minutes for the minutes, then reads them after a simulated warn memory pressure.
@@ -1013,6 +1050,7 @@ static void measureCollection(int minutes, NSURL *address, WKWebsiteDataStore *p
             (windows[j].occlusionState & NSWindowOcclusionStateVisible) != 0, opened[j].view.title.UTF8String);
     }
     fflush(stdout);
+    for (int j = 0; j < kCollectionVariantCount; j++) printWindowOrder(windows[j], specs[j]->name);
     // An occluded window throttles its page, so a read of it does not measure a visible page.
     for (int j = 0; j < kCollectionVariantCount; j++) {
         if (!(windows[j].occlusionState & NSWindowOcclusionStateVisible)) {
