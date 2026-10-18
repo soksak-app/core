@@ -94,19 +94,19 @@ export function createDocumentRegions() {
     /** Whether a region of the tab restored a session history since its last restore. */
     restoredHistory: (tab) => restoredHistory.has(tab),
     /**
-     * Attaches the region name of the tab through attach(request) with the interactionState that it restores once. A
-     * refused interactionState is reported to the refusal listeners and the region attaches again without it, because a
+     * Attaches the region name of the tab of plugin through attach(request) with the interactionState that it restores
+     * once. A refused interactionState is reported to the refusal listeners and the region attaches again without it, because a
      * lost session history is a smaller loss than a tab without its document (docs/spec/plugins.md#memory-saver). It
      * resolves to {history}, true when the region restored a session history.
      */
-    async attach(tab, name, attach) {
+    async attach(tab, plugin, name, attach) {
       const request = await this.attachRequest(tab, name);
       let history = request.interactionState !== undefined;
       try {
         await attach(request);
       } catch (error) {
         if (!history) throw error;
-        for (const listener of refusals) listener(tab, name, error);
+        for (const listener of refusals) listener(tab, plugin, name, error);
         history = false;
         await attach({ document: name });
       }
@@ -114,7 +114,7 @@ export function createDocumentRegions() {
       if (history) restoredHistory.add(tab);
       return { history };
     },
-    /** Adds a listener (tab, name, error) of a refused interactionState; returns its removal. */
+    /** Adds a listener (tab, plugin, name, error) of a refused interactionState; returns its removal. */
     onRefused(listener) {
       refusals.add(listener);
       return () => refusals.delete(listener);

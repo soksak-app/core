@@ -497,7 +497,7 @@
         "plugin": "string",
         "reason": "string"
       },
-      "description": "The restore of a shown unloaded tab failed: its surface did not mount or a document region refused its session history; the error display of the page shows it."
+      "description": "The restore of a shown unloaded tab failed, or a document region refused its session history at that restore or at the first show of the tab after a restart; the error display of the page shows it."
     },
     "page.tab.unload.failed": {
       "layer": "page",

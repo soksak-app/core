@@ -332,13 +332,13 @@ export function createMemorySaver({
       failed(`memory saver: tab ${tab}: restore failed: ${reason}`);
     },
     /**
-     * Reports a document region that refused its restored session history. The region attaches again without it, so the
-     * restore stays open and the end of the mount still emits page.tab.restored (docs/spec/plugins.md#memory-saver).
+     * Reports a document region of a tab of plugin that refused its restored session history. The region attaches again
+     * without it, so a restore stays open and the end of the mount still emits page.tab.restored
+     * (docs/spec/plugins.md#memory-saver). The first show of a tab after a restart restores a session history before any
+     * commit gives the tab to the memory saver, so the tab need not be known.
      */
-    historyRefused(tab, reason) {
-      const entry = entries.get(tab);
-      if (!entry) throw new Error(`unknown tab ${tab}`);
-      emitEvent("error", "page.tab.restore.failed", { tab, plugin: entry.plugin, reason });
+    historyRefused(tab, plugin, reason) {
+      emitEvent("error", "page.tab.restore.failed", { tab, plugin, reason });
       failed(`memory saver: tab ${tab}: restore failed: ${reason}`);
     },
     /** The state of the tab: loaded, unloaded or restoring. */

@@ -101,14 +101,14 @@ test("an attach replies whether it restored a session history", async () => {
   const regions = withSessions({ tab: { page: "AAAA" } });
   const attach = async () => null;
   regions.restore("tab");
-  assert.deepEqual(await regions.attach("tab", "page", attach), { history: true });
-  assert.deepEqual(await regions.attach("tab", "page", attach), { history: false });
+  assert.deepEqual(await regions.attach("tab", "fixture", "page", attach), { history: true });
+  assert.deepEqual(await regions.attach("tab", "fixture", "page", attach), { history: false });
 });
 
 test("a refused restored interactionState is reported and the region attaches again without it", async () => {
   const regions = withSessions({ tab: { page: "BAD" } });
   const refused = [];
-  regions.onRefused((tab, name, error) => refused.push([tab, name, error.message]));
+  regions.onRefused((tab, plugin, name, error) => refused.push([tab, plugin, name, error.message]));
   regions.restore("tab");
   const requests = [];
   const attach = async (request) => {
@@ -116,12 +116,12 @@ test("a refused restored interactionState is reported and the region attaches ag
     if (request.interactionState !== undefined) throw new Error("interactionState is not a session history");
     return { attached: request.document };
   };
-  assert.deepEqual(await regions.attach("tab", "page", attach), { history: false });
+  assert.deepEqual(await regions.attach("tab", "fixture", "page", attach), { history: false });
   assert.deepEqual(requests, [{ document: "page", interactionState: "BAD" }, { document: "page" }]);
-  assert.deepEqual(refused, [["tab", "page", "interactionState is not a session history"]]);
+  assert.deepEqual(refused, [["tab", "fixture", "page", "interactionState is not a session history"]]);
   answers.documentInteractionState = async () => "S";
   assert.deepEqual(await regions.interaction("tab"), { page: "S" });
   // An attach without a restored state that fails is no restore failure.
-  await assert.rejects(regions.attach("tab", "side", async () => { throw new Error("region side is gone"); }), /region side is gone/);
+  await assert.rejects(regions.attach("tab", "fixture", "side", async () => { throw new Error("region side is gone"); }), /region side is gone/);
   assert.equal(refused.length, 1);
 });

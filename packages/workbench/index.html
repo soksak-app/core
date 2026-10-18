@@ -225,7 +225,7 @@ onSurfaceMounted((tab, error) => {
   if (error) memorySaver.restoreFailed(tab, error.message);
   else memorySaver.restored(tab, documentRegions.restoredHistory(tab));
 });
-documentRegions.onRefused((tab, name, error) => memorySaver.historyRefused(tab, `document region ${name}: ${error.message}`));
+documentRegions.onRefused((tab, plugin, name, error) => memorySaver.historyRefused(tab, plugin, `document region ${name}: ${error.message}`));
 // A changed history of a document region is a navigation commit, after which the tab session is written.
 onDocumentState((event) => projects.tabSessionStore()?.navigated(event.surface, event.document, event.state.history));
 

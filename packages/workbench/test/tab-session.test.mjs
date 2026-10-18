@@ -76,14 +76,14 @@ test("a session stored before a restart is passed to the first attach after it a
   assert.deepEqual(await second.regions.attachRequest("tab-a", "page"), { document: "page" }, "a session is restored once");
   assert.deepEqual(await second.regions.attachRequest("tab-a", "side"), { document: "side" });
   assert.deepEqual(await second.regions.attachRequest("tab-b", "page"), { document: "page" }, "a tab without a file");
-  assert.deepEqual(await second.regions.attach("tab-a", "page", async () => null), { history: false });
+  assert.deepEqual(await second.regions.attach("tab-a", "fixture", "page", async () => null), { history: false });
   assert.equal(second.regions.restoredHistory("tab-a"), false);
   // An unload stores the session; the restore reads it for the attach of the restored surface.
   answers.documentInteractionState = async () => "BBBB";
   await second.sessions.capture("tab-a");
   second.regions.released("tab-a");
   second.regions.restore("tab-a");
-  assert.deepEqual(await second.regions.attach("tab-a", "page", async () => null), { history: true });
+  assert.deepEqual(await second.regions.attach("tab-a", "fixture", "page", async () => null), { history: true });
   assert.equal(second.regions.restoredHistory("tab-a"), true);
   assert.equal(files.tabStatePuts, 0, "a session write leaves tab-state.json unchanged");
 });

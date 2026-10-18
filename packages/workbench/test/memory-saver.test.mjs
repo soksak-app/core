@@ -409,6 +409,15 @@ test("a failed commit after the tab is marked returns it to loaded with a report
   assert.deepEqual(state.states, [["a", "unloaded"], ["a", "loaded"]]);
 });
 
+test("a session history refused at the first show after a restart is reported for a tab that no commit gave the memory saver", () => {
+  const { saver, state } = harness();
+  saver.historyRefused("a", "browser", "document region page: the web view refused the interactionState");
+  assert.equal(saver.state("a"), null);
+  assert.deepEqual(named("page.tab.restore.failed"),
+    [{ tab: "a", plugin: "browser", reason: "document region page: the web view refused the interactionState" }]);
+  assert.deepEqual(state.failures, ["memory saver: tab a: restore failed: document region page: the web view refused the interactionState"]);
+});
+
 test("a refused session history keeps the restore open, and the later mount still emits page.tab.restored", async () => {
   const { saver, state } = harness();
   saver.observe(new Set(["b"]), tabs("a", "b"));
@@ -416,7 +425,7 @@ test("a refused session history keeps the restore open, and the later mount stil
   await settle();
   saver.observe(new Set(["a"]), tabs("a", "b"));
   // The region refuses its history during the mount and attaches again without it.
-  saver.historyRefused("a", "document region page: interactionState is not a session history");
+  saver.historyRefused("a", "fixture", "document region page: interactionState is not a session history");
   assert.equal(saver.state("a"), "restoring");
   assert.deepEqual(named("page.tab.restore.failed"),
     [{ tab: "a", plugin: "fixture", reason: "document region page: interactionState is not a session history" }]);
@@ -426,7 +435,7 @@ test("a refused session history keeps the restore open, and the later mount stil
   assert.equal(saver.state("a"), "loaded");
   assert.deepEqual(named("page.tab.restored"), [{ tab: "a", plugin: "fixture", history: false }]);
   // A refusal after the mount ended reports the failure and leaves the tab loaded.
-  saver.historyRefused("a", "document region page: refused");
+  saver.historyRefused("a", "fixture", "document region page: refused");
   assert.equal(saver.state("a"), "loaded");
   assert.equal(named("page.tab.restore.failed").length, 2);
 });

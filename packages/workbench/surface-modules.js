@@ -83,7 +83,7 @@ function pageRuntime(surface, scoped, compositionReady, lifetime) {
   return {
     surfaces: { report: (message) => invoke("report", message) },
     document: {
-      attach: (name) => documentRegions.attach(surface.surfaceId, name, (request) => invoke("documentAttach", request)),
+      attach: (name) => documentRegions.attach(surface.surfaceId, surface.pluginId, name, (request) => invoke("documentAttach", request)),
       load: (name, url) => invoke("documentLoad", { document: name, url }),
       zoom: (name, zoom) => invoke("documentZoom", { document: name, zoom }),
       go: (name, action, offset) => invoke("documentGo", offset === undefined ? { document: name, action } : { document: name, action, offset }),

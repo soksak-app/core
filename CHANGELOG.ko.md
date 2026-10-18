@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F199.2-2: restart 뒤 tab의 첫 표시에서 문서 영역이 거부한 session history는 `page.tab.restore.failed`로 보고되고, 영역은 mount를 `unknown tab`으로 실패시키지 않고 그것 없이 다시 attach된다.
 - F199.2-1: 아무것도 load하지 않은 문서 영역은 session history를 돌려주지 않으므로, home page의 browser tab이 다음 attach가 거부할 session을 저장하지 않는다.
 - F192.3-2-2: 두 host가 page가 전달한 `page.start` event를 logging 명세대로 모든 log policy에서 저장하므로, class `lifecycle`이 오류만 저장할 때도 reload가 event log에 표시된다.
 - F192.3-3-2: Rust `sok`의 relaunch 시험이 오류를 알리는 폴더 guard로 폴더를 만들므로 test crate가 다시 빌드된다.
