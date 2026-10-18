@@ -5,11 +5,9 @@ import {
   attributeWebKit,
   cpuPercent,
   hostProcess,
-  lsofMentions,
   parseCpuSamples,
   parseCpuTime,
   parseFootprint,
-  parseLstart,
   parseProcessTable,
   sidecarProcesses,
   totalsOf,
@@ -120,64 +118,60 @@ test("lists the sidecars whose executable is under the config dir", () => {
   ]);
 });
 
-test("finds the config dir in the lsof output of a process", () => {
-  const text = [
-    "COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME",
-    `com.apple 300 me txt REG 1,2 3 4 ${DIR}/cache/store.db`,
-    "com.apple 300 me cwd DIR 1,2 96 2 /",
+/** The `launchctl print pid/<host>` output of a host whose WebKit services run as gpu, networking and webContent. */
+function launchdDomain({ gpu, networking, webContent }) {
+  return [
+    "pid/0 = {",
+    "\tservices = {",
+    "\t\t       0      - \tcom.apple.WebKit.GPU",
+    `\t\t   ${gpu}      - \tcom.apple.WebKit.GPU.79E5AEE6-A76D-4B8E-9BE4-197F4E2ACD4D`,
+    `\t\t   ${networking}      - \tcom.apple.WebKit.Networking.D60DD8E6-6C1D-45D1-AAA5-B4D63E6E2417`,
+    "\t\t       0      - \tcom.apple.WebKit.Networking",
+    `\t\t   ${webContent}      - \tcom.apple.WebKit.WebContent.042944D2-1A7A-492A-819D-BBAEEE5A28D3`,
+    "\t}",
+    "}",
   ].join("\n");
-  assert.equal(lsofMentions(text, DIR), true);
-  assert.equal(lsofMentions(text.replace(DIR, "/Users/tester/other"), DIR), false);
-});
+}
 
-test("reads the start time of ps lstart", () => {
-  assert.equal(parseLstart("Sun Oct 18 06:52:13 2026"), new Date(2026, 9, 18, 6, 52, 13).getTime());
-  assert.throws(() => parseLstart("yesterday"), /lstart "yesterday" is not a start time/);
-});
-
-test("attributes each WebKit process by data folder or by the start second of its networking process", () => {
+test("attributes the WebKit services of two hosts that started in the same second by the launchd domain of each host", () => {
   const second = new Date(2026, 9, 18, 6, 52, 13).getTime();
-  const result = attributeWebKit([
-    { pid: 300, kind: "networking", startedAt: second + 200, configDir: DIR },
-    { pid: 301, kind: "gpu", startedAt: second + 900, configDir: null },
-    { pid: 302, kind: "gpu", startedAt: second - 5000, configDir: null },
-    { pid: 310, kind: "networking", startedAt: second, configDir: null },
-    { pid: 320, kind: "networking", startedAt: second + 60_000, configDir: DIR },
-    { pid: 330, kind: "gpu", startedAt: second + 61_000, configDir: null },
-    { pid: 331, kind: "gpu", startedAt: second + 61_500, configDir: null },
-    { pid: 340, kind: "networking", startedAt: second + 120_000, configDir: DIR },
+  const domains = new Map([
+    [100, launchdDomain({ gpu: 301, networking: 300, webContent: 302 })],
+    [200, launchdDomain({ gpu: 401, networking: 400, webContent: 402 })],
   ]);
+  const calls = [];
+  const run = (command, args) => {
+    calls.push([command, ...args]);
+    const host = Number(args[1].slice("pid/".length));
+    return { status: 0, stdout: domains.get(host), stderr: "" };
+  };
+  const result = attributeWebKit(
+    [
+      { configDir: DIR, pid: 100, startedAt: second + 100 },
+      { configDir: "/Users/tester/other", pid: 200, startedAt: second + 400 },
+    ],
+    run,
+  );
   assert.deepEqual(result.attributed, [
-    { configDir: DIR, role: "webkit networking", pid: 300, attribution: "data folder" },
-    { configDir: DIR, role: "webkit gpu", pid: 301, attribution: "start time" },
-    { configDir: DIR, role: "webkit networking", pid: 320, attribution: "data folder" },
-    { configDir: DIR, role: "webkit networking", pid: 340, attribution: "data folder" },
+    { configDir: DIR, role: "webkit gpu", pid: 301, attribution: "launchd domain" },
+    { configDir: DIR, role: "webkit networking", pid: 300, attribution: "launchd domain" },
+    { configDir: DIR, role: "webkit webcontent", pid: 302, attribution: "launchd domain" },
+    { configDir: "/Users/tester/other", role: "webkit gpu", pid: 401, attribution: "launchd domain" },
+    { configDir: "/Users/tester/other", role: "webkit networking", pid: 400, attribution: "launchd domain" },
+    { configDir: "/Users/tester/other", role: "webkit webcontent", pid: 402, attribution: "launchd domain" },
   ]);
-  assert.deepEqual(result.unattributed, [
-    { role: "webkit gpu", pid: 302, attribution: "unattributed" },
-    { role: "webkit networking", pid: 310, attribution: "unattributed" },
-    { role: "webkit gpu", pid: 330, attribution: "unattributed" },
-    { role: "webkit gpu", pid: 331, attribution: "unattributed" },
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(calls, [
+    ["/bin/launchctl", "print", "pid/100"],
+    ["/bin/launchctl", "print", "pid/200"],
   ]);
-  assert.equal(result.errors.length, 2);
-  assert.match(result.errors[0], /webkit networking pid 320 .* no webkit gpu process/);
-  assert.match(result.errors[1], /webkit networking pid 340 .* no webkit gpu process/);
 });
 
-test("two GPU processes in the start second of one networking process are an error, and both stay unattributed", () => {
-  const second = new Date(2026, 9, 18, 6, 52, 13).getTime();
-  const result = attributeWebKit([
-    { pid: 400, kind: "networking", startedAt: second, configDir: DIR },
-    { pid: 401, kind: "gpu", startedAt: second + 100, configDir: null },
-    { pid: 402, kind: "gpu", startedAt: second + 900, configDir: null },
-  ]);
-  assert.deepEqual(result.attributed, [{ configDir: DIR, role: "webkit networking", pid: 400, attribution: "data folder" }]);
-  assert.deepEqual(result.unattributed, [
-    { role: "webkit gpu", pid: 401, attribution: "unattributed" },
-    { role: "webkit gpu", pid: 402, attribution: "unattributed" },
-  ]);
-  assert.equal(result.errors.length, 1);
-  assert.match(result.errors[0], /webkit networking pid 400 .* 2 webkit gpu processes/);
+test("a host whose launchd domain cannot be read is an error that names the data folder", () => {
+  const run = () => ({ status: 113, stdout: "", stderr: "Could not find domain for pid: 100" });
+  const result = attributeWebKit([{ configDir: DIR, pid: 100 }], run);
+  assert.deepEqual(result.attributed, []);
+  assert.deepEqual(result.errors, [`webkit services of ${DIR}: launchctl print pid/100 exited with 113: Could not find domain for pid: 100`]);
 });
 
 test("totals count the attributed rows only", () => {

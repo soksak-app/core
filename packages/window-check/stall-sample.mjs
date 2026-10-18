@@ -20,22 +20,34 @@ export function sampleProcess(pid, file, run = (command, args) => spawnSync(comm
 }
 
 /**
- * The running WebContent processes of host, which run its pages. While the page does not answer, its JavaScript runs in
- * this process and not in the host, so it is recorded too. launchd runs the WebKit services of an application in the
- * launchd domain of its process, and `launchctl print pid/<host>` lists each service of that domain as a line
- * `<pid> <status> <label>`, with pid 0 for a service that does not run; no other interface lists the services of another
- * process. It fails with the reason when launchctl fails.
+ * The running services of the launchd domain of process host, as { pid, label }. launchd runs the WebKit services of an
+ * application in the launchd domain of its process, and `launchctl print pid/<host>` lists each service of that domain as
+ * a line `<pid> <status> <label>`, with pid 0 for a service that does not run; no other interface lists the services of
+ * another process. It fails with the reason when launchctl fails.
  *
  * run(command, args)  an executor that returns the same result as spawnSync ({status, stdout, stderr}). The checks replace it.
  */
-export function pageProcesses(host, run = (command, args) => spawnSync(command, args, { encoding: "utf8" })) {
+export function launchdServices(host, run = (command, args) => spawnSync(command, args, { encoding: "utf8" })) {
   const result = run("/bin/launchctl", ["print", `pid/${host}`]);
   if (result.error) throw new Error(`launchctl print pid/${host}: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`launchctl print pid/${host} exited with ${result.status}: ${String(result.stderr).trim()}`);
   return String(result.stdout).split("\n")
     .map((line) => line.trim().split(/\s+/))
-    .filter((fields) => fields.length === 3 && /^[1-9][0-9]*$/.test(fields[0]) && fields[2].startsWith("com.apple.WebKit.WebContent."))
-    .map((fields) => Number(fields[0]));
+    .filter((fields) => fields.length === 3 && /^[1-9][0-9]*$/.test(fields[0]))
+    .map((fields) => ({ pid: Number(fields[0]), label: fields[2] }));
+}
+
+/**
+ * The running WebContent processes of host, which run its pages. While the page does not answer, its JavaScript runs in
+ * this process and not in the host, so it is recorded too. They are the WebContent services of the launchd domain of host
+ * (launchdServices). It fails with the reason when launchctl fails.
+ *
+ * run(command, args)  an executor that returns the same result as spawnSync ({status, stdout, stderr}). The checks replace it.
+ */
+export function pageProcesses(host, run = (command, args) => spawnSync(command, args, { encoding: "utf8" })) {
+  return launchdServices(host, run)
+    .filter(({ label }) => label.startsWith("com.apple.WebKit.WebContent."))
+    .map(({ pid }) => pid);
 }
 
 /**

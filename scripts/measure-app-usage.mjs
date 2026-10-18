@@ -1,9 +1,9 @@
 // Reports the CPU and memory of the running applications of the given data folders, by process (docs/operations/examples.md).
 // The host is the process whose command line has --config-dir DIR. The sidecars are the processes whose executable is under DIR/sidecars/.
-// The page and document processes come from sok windows and from sok status host.window of each window. The WebKit GPU and networking processes
-// (pgrep -f com.apple.WebKit.(GPU|Networking)) belong to an application when lsof of their networking process lists a path under DIR; the GPU
-// process of that application is the one that started in the same second as the networking process (ps lstart). A WebKit process that no
-// application claims is printed as unattributed. The memory of a process is its phys_footprint (footprint -p PID -f bytes). Its CPU share is the
+// The page and document processes come from sok windows and from sok status host.window of each window. The WebKit GPU, networking and
+// WebContent services belong to the application whose host lists them in its launchd domain (launchctl print pid/<host>). A WebKit GPU or
+// networking process (pgrep -f com.apple.WebKit.GPU|Networking) that no application claims is printed as unattributed. The memory of a
+// process is its phys_footprint (footprint -p PID -f bytes). Its CPU share is the
 // CPU time that ps reports, read at two points INTERVAL seconds apart. Every error is printed to stderr with the process or window it concerns,
 // and the exit status is 1 when an error occurred. `make app-usage` runs it.
 //
@@ -12,11 +12,10 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { basename, isAbsolute, posix } from "node:path";
 import { parseArgs } from "node:util";
+import { launchdServices } from "../packages/window-check/stall-sample.mjs";
 
 /** Executables of the tools that run this measurement; their command lines name the data folder, but they are not the application. */
 const TOOL_EXECUTABLES = new Set(["node", "sh", "bash", "zsh", "make", "sok"]);
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** Parses a CPU time of ps, [[dd-]hh:]mm:ss.ss, into seconds. */
 export function parseCpuTime(text) {
@@ -127,59 +126,39 @@ export function sidecarProcesses(table, configDir, realPath = configDir) {
   return rows;
 }
 
-/** Whether the lsof output of a process lists a path under the data folder. */
-export function lsofMentions(text, configDir) {
-  return text.split("\n").some((line) => line.includes(`${configDir}/`) || line.endsWith(configDir));
-}
-
-/** Parses the output of ps -o lstart= into the start time in milliseconds. ps reports the start time in whole seconds. */
-export function parseLstart(text) {
-  const trimmed = text.trim();
-  const match = /^\w{3} (\w{3}) +(\d{1,2}) (\d{2}):(\d{2}):(\d{2}) (\d{4})$/.exec(trimmed);
-  const month = match ? MONTHS.indexOf(match[1]) : -1;
-  if (!match || month < 0) throw new Error(`lstart "${trimmed}" is not a start time`);
-  const [, , day, hour, minute, second, year] = match;
-  return new Date(Number(year), month, Number(day), Number(hour), Number(minute), Number(second)).getTime();
-}
-
-function secondOf(milliseconds) {
-  return Math.floor(milliseconds / 1000);
-}
+/** The role of each WebKit service by the prefix of its launchd label. */
+const WEBKIT_ROLES = [
+  ["com.apple.WebKit.GPU.", "webkit gpu"],
+  ["com.apple.WebKit.Networking.", "webkit networking"],
+  ["com.apple.WebKit.WebContent.", "webkit webcontent"],
+];
 
 /**
- * Attributes the WebKit processes. Each process is { pid, kind: "gpu" | "networking", startedAt (milliseconds), configDir (the data folder of a
- * networking process, or null) }. A networking process with a data folder belongs to that application, and the GPU process that started in the
- * same second belongs to the same application; a second with no GPU process or with several is an error. Returns the attributed rows of each
- * process with its data folder, the rows of the processes no application claims, and the errors, all in the order of the input.
+ * Attributes the WebKit services to the applications. Each host is { configDir, pid }. A WebKit service belongs to the
+ * application whose host has it in its launchd domain. `launchctl print pid/<host>` is read because it is the only interface
+ * that lists the services of another process; a start time or an open file does not separate two applications that started in
+ * the same second or share a file. Returns the attributed rows in the order of the hosts and the errors of the hosts whose
+ * domain cannot be read.
+ *
+ * run(command, args)  an executor that returns the same result as spawnSync ({status, stdout, stderr}). The tests replace it.
  */
-export function attributeWebKit(processes) {
+export function attributeWebKit(hosts, run = (command, args) => spawnSync(command, args, { encoding: "utf8" })) {
+  const attributed = [];
   const errors = [];
-  const owners = new Map();
-  const networkings = processes.filter((process) => process.kind === "networking" && process.configDir !== null);
-  const gpus = processes.filter((process) => process.kind === "gpu");
-  for (const networking of networkings) {
-    owners.set(networking.pid, { configDir: networking.configDir, attribution: "data folder" });
-    const second = secondOf(networking.startedAt);
-    const candidates = gpus.filter((gpu) => !owners.has(gpu.pid) && secondOf(gpu.startedAt) === second);
-    if (candidates.length === 0) {
-      errors.push(`webkit networking pid ${networking.pid} (${networking.configDir}) has no webkit gpu process started in its start second`);
-    } else if (candidates.length > 1) {
-      errors.push(
-        `webkit networking pid ${networking.pid} (${networking.configDir}) has ${candidates.length} webkit gpu processes started in its start second: ${candidates.map(({ pid }) => pid).join(", ")}`,
-      );
-    } else {
-      owners.set(candidates[0].pid, { configDir: networking.configDir, attribution: "start time" });
+  for (const { configDir, pid } of hosts) {
+    let services;
+    try {
+      services = launchdServices(pid, run);
+    } catch (error) {
+      errors.push(`webkit services of ${configDir}: ${error.message}`);
+      continue;
+    }
+    for (const service of services) {
+      const role = WEBKIT_ROLES.find(([prefix]) => service.label.startsWith(prefix))?.[1];
+      if (role !== undefined) attributed.push({ configDir, role, pid: service.pid, attribution: "launchd domain" });
     }
   }
-  const attributed = [];
-  const unattributed = [];
-  for (const process of processes) {
-    const role = process.kind === "gpu" ? "webkit gpu" : "webkit networking";
-    const owner = owners.get(process.pid);
-    if (owner) attributed.push({ configDir: owner.configDir, role, pid: process.pid, attribution: owner.attribution });
-    else unattributed.push({ role, pid: process.pid, attribution: "unattributed" });
-  }
-  return { attributed, unattributed, errors };
+  return { attributed, errors };
 }
 
 /** Sums the rows of one application. A row whose value is null has an error in the errors list, and the sum leaves that value out. */
@@ -244,11 +223,14 @@ function run(file, args) {
   return execFileSync(file, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 }
 
-function pgrepPids() {
-  const result = spawnSync("pgrep", ["-f", "com.apple.WebKit.(GPU|Networking)"], { encoding: "utf8" });
-  if (result.status === 1) return [];
-  if (result.error || result.status !== 0) throw new Error(`pgrep failed: ${result.error?.message ?? result.stderr.trim()}`);
-  return result.stdout.split("\n").filter((line) => line !== "").map(Number);
+/** The running WebKit GPU and networking processes of every application, as { pid, role }. */
+function webkitPids() {
+  return ["GPU", "Networking"].flatMap((name) => {
+    const result = spawnSync("pgrep", ["-f", `com.apple.WebKit.${name}`], { encoding: "utf8" });
+    if (result.status === 1) return [];
+    if (result.error || result.status !== 0) throw new Error(`pgrep failed: ${result.error?.message ?? result.stderr.trim()}`);
+    return result.stdout.split("\n").filter((line) => line !== "").map((pid) => ({ pid: Number(pid), role: `webkit ${name.toLowerCase()}` }));
+  });
 }
 
 /** The pages and documents of each window of one application, and its host and sidecars. */
@@ -299,51 +281,6 @@ function applicationRows(configDir, sok, table, errors) {
   return rows;
 }
 
-/** The data folder that a networking process opens, or null with an error when it opens several data folders or lsof fails. */
-function dataFolderOf(pid, configDirs, errors) {
-  const result = spawnSync("lsof", ["-p", String(pid)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  if (result.error || result.status !== 0) {
-    errors.push(`webkit networking pid ${pid}: lsof -p failed: ${result.error?.message ?? result.stderr.trim()}`);
-    return null;
-  }
-  // lsof prints the resolved path of each file, so the data folder is compared by its real path (a launch path can name a symbolic link).
-  const owners = configDirs.filter((configDir) => lsofMentions(result.stdout, realpathSync(configDir)));
-  if (owners.length > 1) {
-    errors.push(`webkit networking pid ${pid} opens the data folders of ${owners.length} applications: ${owners.join(", ")}`);
-    return null;
-  }
-  return owners[0] ?? null;
-}
-
-/** The WebKit GPU and networking processes, attributed to the applications and the unattributed ones. */
-function webkitRows(table, configDirs, errors) {
-  const commands = new Map(table.map(({ pid, command }) => [pid, command]));
-  const processes = [];
-  const unattributed = [];
-  for (const pid of pgrepPids()) {
-    const command = commands.get(pid);
-    if (command === undefined) {
-      errors.push(`webkit process ${pid}: exited before its command line was read`);
-      continue;
-    }
-    const kind = /com\.apple\.WebKit\.GPU\b/.test(command) ? "gpu" : /com\.apple\.WebKit\.Networking\b/.test(command) ? "networking" : null;
-    if (kind === null) continue;
-    let startedAt;
-    try {
-      startedAt = parseLstart(run("ps", ["-o", "lstart=", "-p", String(pid)]));
-    } catch (error) {
-      errors.push(`webkit ${kind} pid ${pid}: ${error.message}`);
-      unattributed.push({ role: `webkit ${kind}`, pid, attribution: "unattributed" });
-      continue;
-    }
-    const configDir = kind === "networking" ? dataFolderOf(pid, configDirs, errors) : null;
-    processes.push({ pid, kind, startedAt, configDir });
-  }
-  const attribution = attributeWebKit(processes);
-  errors.push(...attribution.errors);
-  return { attributed: attribution.attributed, unattributed: [...attribution.unattributed, ...unattributed] };
-}
-
 function footprintOf(pid, where, errors) {
   try {
     return parseFootprint(run("footprint", ["-p", String(pid), "-f", "bytes"]));
@@ -370,11 +307,19 @@ async function measureApps({ sok, configDirs, interval }) {
   const errors = [];
   const table = parseProcessTable(run("ps", ["-axww", "-o", "pid=,command="]));
   const apps = configDirs.map((configDir) => ({ configDir, rows: applicationRows(configDir, sok, table, errors) }));
-  const webkit = webkitRows(table, configDirs, errors);
+  const hosts = apps.flatMap(({ configDir, rows }) => rows.filter(({ role }) => role === "host").map(({ pid }) => ({ configDir, pid })));
+  const webkit = attributeWebKit(hosts);
+  errors.push(...webkit.errors);
   for (const row of webkit.attributed) {
-    apps.find((app) => app.configDir === row.configDir).rows.push({ role: row.role, pid: row.pid, attribution: row.attribution });
+    const app = apps.find((candidate) => candidate.configDir === row.configDir);
+    // A page or document process that host.window reported is already a row of the application.
+    if (app.rows.some(({ pid }) => pid === row.pid)) continue;
+    app.rows.push({ role: row.role, pid: row.pid, attribution: row.attribution });
   }
-  const unattributed = webkit.unattributed;
+  const claimed = new Set(webkit.attributed.map(({ pid }) => pid));
+  const unattributed = webkitPids()
+    .filter(({ pid }) => !claimed.has(pid))
+    .map(({ pid, role }) => ({ role, pid, attribution: "unattributed" }));
 
   const groups = [...apps.map((app) => ({ name: app.configDir, rows: app.rows })), { name: "unattributed", rows: unattributed }];
   const measured = groups.flatMap(({ name, rows }) => rows.map((row) => ({ row, where: `${name} ${row.role} (pid ${row.pid})` })));
