@@ -60,11 +60,11 @@ object-counts:
 	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --repetitions $(or $(REPETITIONS),20)
 
 # Has the main page of a running diagnostic build send CALLS host calls ROUNDS times and prints the footprint of its page process before the calls, after
-# them and after a collection (scripts/measure-host-calls.mjs). The diagnostic methods exist only in diagnostic builds.
+# them and after a collection (scripts/measure-host-calls.mjs); MINUTES=M waits M minutes without input instead of the calls. The diagnostic methods exist only in diagnostic builds.
 host-calls:
-	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "host-calls requires APP=wailsv3|tauriv2 CONFIG=DIR [CALLS=1000] [ROUNDS=5]" >&2; exit 2;; esac
+	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "host-calls requires APP=wailsv3|tauriv2 CONFIG=DIR [CALLS=1000 | MINUTES=M] [ROUNDS=5]" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "host-calls requires CONFIG=DIR" >&2; exit 2;; esac
-	@node scripts/measure-host-calls.mjs --sok target/debug/soksak-$(APP).app/Contents/MacOS/sok --config-dir "$(CONFIG)" --calls $(or $(CALLS),1000) --rounds $(or $(ROUNDS),5)
+	@node scripts/measure-host-calls.mjs --sok target/debug/soksak-$(APP).app/Contents/MacOS/sok --config-dir "$(CONFIG)" --calls $(or $(CALLS),1000) --idle-minutes $(or $(MINUTES),0) --rounds $(or $(ROUNDS),5)
 
 # Reports the CPU and memory of the running application of CONFIG_DIR by process: host, sidecars, pages, documents and WebKit processes
 # (scripts/measure-app-usage.mjs, docs/operations/examples.md). SOK defaults to the sok binary of target/debug.

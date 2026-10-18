@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F200.2: `make host-calls MINUTES=M`은 메인 페이지가 idle 동안 분당 할당하는 WebKit malloc을 collection 전후로 reclaimable byte와 함께 측정한다. 같은 project, terminal 2개, browser tab 1개로 두 debug host에서 측정: 분당 57 KB(Wails)와 -76 KB(Tauri), collection 뒤 두 host 모두 footprint 82 MB와 WebKit malloc 38 MB이므로 idle 페이지는 F200 차이의 source가 아니다.
 - F199.4: page는 project를 initialise한 뒤에만 plugin 변경을 따르므로, 첫 실행의 starter 설치가 더 이상 apply로 하여금 존재하기 전의 tab session을 flush하게 하지 않는다. page는 구독한 뒤 plugin 상태를 한 번 읽으므로 구독 전의 변경도 적용되고, 실행 중인 apply 동안의 event는 상태를 다시 읽는 apply 하나를 더 실행한다. initialise 전의 `projects.flush`는 명시적 error로 실패한다. Red: workbench test가 `Cannot read properties of null (reading 'flush')`, `the change made before the subscription was not applied`, `the change made during the apply was not applied`로 실패했다. Green: workbench test 562 of 562가 통과한다.
 - F200.1: 페이지 진단 method `diagnostics.page.calls`가 요청 하나에서 host call `theme`을 최대 50번 보내고, `make host-calls`가 페이지의 host call이 그 process에 남기는 WebKit malloc을 수집 전후로 측정한다. 두 debug host 측정: 수집 전 call당 약 0.7 KB(Wails), 1.1 KB(Tauri), 수집 뒤 없음.
 - F198.12, F196.7: plugin release browser 0.0.6, editor 0.0.4, hwp 0.0.2가 `surface.unload`를 선언하고 core `>=0.0.18`을 요구하며, browser 0.0.6은 document stream을 읽는다. registry가 셋을 나열한다. flowmark와 shell은 게시하지 않고 appview는 retired 되었다. F198과 F196이 완료되었다.

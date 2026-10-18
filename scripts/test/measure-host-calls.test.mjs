@@ -24,6 +24,25 @@ test("the measurement reads the footprint before the calls, after them and after
   assert.deepEqual(entries.at(-1), { calls: 60, rounds: 2, perCall: { beforeCollect: 13, afterCollect: 2 } });
 });
 
+test("the idle mode waits instead of sending calls and reports the growth per minute", async () => {
+  const entries = [];
+  const steps = [];
+  const sizes = [1000, 7000, 1600];
+  await measure({
+    status: async () => ({ pageProcess: 7 }),
+    collect: async () => { steps.push("collect"); },
+    calls: async () => { throw new Error("the idle mode sent a call"); },
+    footprint: () => { const webkitMalloc = sizes.shift(); return { footprint: webkitMalloc * 2, webkitMalloc, reclaimable: 0 }; },
+    wait: async (ms) => { steps.push(`wait ${ms}`); },
+    idleMs: 120_000,
+    rounds: 1,
+    log: (entry) => entries.push(entry),
+  });
+  assert.deepEqual(steps, ["collect", "wait 120000", "collect"]);
+  assert.equal(entries.at(1).phase, "idle");
+  assert.deepEqual(entries.at(-1), { idleMinutes: 2, rounds: 1, perMinute: { beforeCollect: 3000, afterCollect: 300 } });
+});
+
 test("a page that answers another count or changes its process fails the round", async () => {
   const base = { collect: async () => {}, footprint: () => ({ footprint: 1, webkitMalloc: 1 }), count: 3, rounds: 1, log: () => {} };
   await assert.rejects(measure({ ...base, status: async () => ({ pageProcess: 7 }), calls: async () => ({ count: 2, ms: 1 }) }),
@@ -40,10 +59,12 @@ test("footprint output and options are read strictly", () => {
     "\tDirty      Clean  Reclaimable    Regions    Category\n" +
     "\t   ---        ---          ---        ---    ---\n" +
     "\t 4096 B       0 B       8192 B         12    WebKit malloc\n";
-  assert.deepEqual(parseFootprint(output), { footprint: 123456, webkitMalloc: 4096 });
+  assert.deepEqual(parseFootprint(output), { footprint: 123456, webkitMalloc: 4096, reclaimable: 8192 });
   assert.throws(() => parseFootprint("no data"), /footprint reported no byte count/);
   assert.throws(() => parseFootprint("Footprint: 1 B"), /no WebKit malloc category/);
-  assert.deepEqual(parseOptions(["--sok", "/s", "--config-dir", "/c"]), { calls: 1000, rounds: 5, sok: "/s", configDir: "/c" });
+  assert.deepEqual(parseOptions(["--sok", "/s", "--config-dir", "/c"]), { calls: 1000, rounds: 5, idleMinutes: 0, sok: "/s", configDir: "/c" });
+  assert.equal(parseOptions(["--sok", "/s", "--config-dir", "/c", "--idle-minutes", "3"]).idleMinutes, 3);
+  assert.throws(() => parseOptions(["--sok", "/s", "--config-dir", "/c", "--idle-minutes", "1.5"]), /non-negative integer/);
   assert.throws(() => parseOptions(["--sok", "/s"]), /required options/);
   assert.throws(() => parseOptions(["--sok", "/s", "--config-dir", "/c", "--calls", "0"]), /positive integer/);
 });
