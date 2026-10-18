@@ -38,12 +38,42 @@ const RELEASED_FORMAT_2: &str = r#"{
   }
 }"#;
 
-/// A unique empty folder for one test, removed at the end.
-fn temp_config(name: &str) -> PathBuf {
+/// A unique empty folder for one test, removed when the value is dropped, also after a failed assertion.
+struct Config(PathBuf);
+
+impl Config {
+    fn as_path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl std::ops::Deref for Config {
+    type Target = Path;
+
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Config {
+    fn drop(&mut self) {
+        if let Err(error) = std::fs::remove_dir_all(&self.0) {
+            let message = format!("cannot remove {}: {error}", self.0.display());
+            // A panic during the unwinding of a failed assertion aborts the process, so that case reports on stderr.
+            if std::thread::panicking() {
+                eprintln!("{message}");
+            } else {
+                panic!("{message}");
+            }
+        }
+    }
+}
+
+fn temp_config(name: &str) -> Config {
     let path = std::env::temp_dir().join(format!("sok-migrate-{}-{}", name, std::process::id()));
-    let _ = std::fs::remove_dir_all(&path);
-    std::fs::create_dir_all(&path).unwrap();
-    path
+    std::fs::create_dir(&path)
+        .unwrap_or_else(|error| panic!("cannot create {}: {error}", path.display()));
+    Config(path)
 }
 
 fn write_installed_raw(config: &Path, text: &str) -> PathBuf {
@@ -81,7 +111,6 @@ fn migrate_installed_migrates_the_released_format_2_to_the_current_format() {
     );
     let text = std::fs::read_to_string(&path).unwrap();
     assert_ne!(text, RELEASED_FORMAT_2, "the file was not rewritten");
-    let _ = std::fs::remove_dir_all(&config);
 }
 
 // contract: install.migration.is-idempotent
@@ -100,8 +129,6 @@ fn migrate_installed_is_idempotent_and_leaves_a_current_file_and_a_missing_file_
         !empty.join("plugins").join("installed.json").exists(),
         "a missing file was created"
     );
-    let _ = std::fs::remove_dir_all(&config);
-    let _ = std::fs::remove_dir_all(&empty);
 }
 
 // contract: install.migration.refuses-forms-outside-the-chain
@@ -125,7 +152,6 @@ fn migrate_installed_refuses_a_form_the_definitions_do_not_cover() {
             error.contains("plugins/installed.json"),
             "{name}: {error} does not name the file"
         );
-        let _ = std::fs::remove_dir_all(config);
     }
 }
 
@@ -165,7 +191,6 @@ fn migrate_settings_adds_the_format_number_of_the_form_without_one() {
         "{text}"
     );
     assert_eq!(soksak_sok::migrate::migrate_settings(&config).unwrap(), 0);
-    let _ = std::fs::remove_dir_all(&config);
 }
 
 // contract: install.migration.projects-wraps-the-bare-list
@@ -185,7 +210,6 @@ fn migrate_projects_wraps_the_bare_list_of_the_earlier_form() {
         "{text}"
     );
     assert_eq!(soksak_sok::migrate::migrate_projects(&config).unwrap(), 0);
-    let _ = std::fs::remove_dir_all(&config);
 }
 
 // A migration happens once, at the install moment, so its record passes every gate: the default policy, which stores only
@@ -243,5 +267,4 @@ fn the_record_of_a_migration_passes_the_default_policy() {
     );
     assert_eq!(records[0]["fields"]["from"], 2);
     log.close();
-    let _ = std::fs::remove_dir_all(&config);
 }

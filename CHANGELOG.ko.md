@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.22: Rust migrate test는 설정 폴더를 drop guard로 지우며, assertion이 실패한 뒤에도 지우고, 제거 실패를 무시하지 않고 알린다.
 - F198.21: `surface.unload`는 없거나(탭은 unload되지 않는다, `undeclared`) `{format, maxBytes}`다. `validateManifest`는 `false`를 plugin을 이름하는 오류로 거부하고, 명세는 더 이상 선언을 필수로 부르지 않는다. Red: validator가 `unload: false`를 받아들였다(`Missing expected exception`). Green: plugin-api test가 통과한다.
 - F198.18: `surface.unload`는 선택으로 남는다. 선언이 없는 표면은 unload하지 않으므로 요구는 기능을 더하지 않고, 설치 가능한 plugin 버전 다섯 개를 revoke하게 만든다.
 - F196.20-2: 보이는 페이지의 느린 증가는 늦은 JavaScript full collection이다. 그 timer는 회수 예상 bytes에 비례해 CPU를 제한한다. 엔진은 idle 상태의 보이는 페이지를 더 일찍 거두는 공개 interface를 제공하지 않고, F198.6이 전달하는 시스템 메모리 압력이 표준 해제 경로다. 변경 없음.

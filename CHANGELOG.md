@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.22: the Rust migrate tests remove their configuration folders through a drop guard, also after a failed assertion, and report a removal failure instead of ignoring it.
 - F198.21: `surface.unload` is absent, which leaves the tabs never unloaded (`undeclared`), or `{format, maxBytes}`; `validateManifest` refuses `false` with an error that names the plugin, and the specification no longer calls the declaration required. Red: the validator accepted `unload: false` (`Missing expected exception`); Green: the plugin-api tests pass.
 - F198.18: `surface.unload` stays optional; a requirement would add no function, since a surface without it is never unloaded, and would revoke five installable plugin versions.
 - F196.20-2: the slow growth of a visible page is the late JavaScript full collection, whose timer limits its CPU by the bytes it expects to reclaim; the engine offers no public interface that collects an idle visible page earlier, and the system memory pressure that F198.6 delivers is its standard release path. No change.
