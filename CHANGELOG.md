@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F196.29: a browser tab that stays hidden for 5 minutes, and every tab under memory pressure, clears its back-forward cache, so the suspended processes of the pages it left end; going back then loads the page again. Each clear is the event `native.document.backforward_cleared`. Red: going back restored the page from the cache; Green: `document_backforward_test`.
+- F196.28: the CI cache keeps only the dependency build output (`Swatinem/rust-cache`); the cache of the whole target folder had grown to 8 GB and filled the disk of the runner.
 - F196.14, F196.20-1: a browser tab costs what its page takes, the same in a document region and a plain web view; a visible page grows by the allocation that the JavaScript collector collects late and falls back when the page is drawn again, and WebKit has no standard mechanism that lowers a visible page further.
 - F196.27-2: the new process per region document of F196.27-1 is reverted: it cost about 0.5 s and the caches of every same-site navigation to lower a memory reading, and the earlier documents it released are released by the engine on its own about eight minutes later.
 - F196.27-1: a document region opens each new main-frame document in a new process, as the main web view does, so a reload or a navigation no longer keeps the earlier documents in the tab process: five reloads keep 6 documents and about 124 MB instead of up to 22 documents and 325 MB. A navigation takes about 1.1 s instead of 0.6 s. Red: the document stayed in process 86315; Green: `document_navigation_test`.

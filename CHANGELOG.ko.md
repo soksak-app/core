@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F196.29: 5분 동안 숨겨진 browser tab과 memory pressure 때의 모든 tab이 back-forward cache를 비우므로, 떠난 page의 중단된 process가 끝난다; 그 뒤 뒤로 가면 page를 다시 load한다. 비울 때마다 event `native.document.backforward_cleared`를 남긴다. Red: 뒤로 가면 page가 cache에서 복원되었다; Green: `document_backforward_test`.
+- F196.28: CI cache는 의존 build 산출물만 담는다(`Swatinem/rust-cache`); target 폴더 전체 cache가 8 GB로 커져 runner 디스크를 채웠다.
 - F196.14, F196.20-1: browser tab은 page가 쓰는 만큼 쓰고 document region과 plain web view에서 같다; 보이는 page는 JavaScript collector가 늦게 수집하는 할당만큼 늘고 page를 다시 그리면 내려가며, WebKit에는 보이는 page를 더 낮추는 표준 메커니즘이 없다.
 - F196.27-2: F196.27-1의 region document마다 새 process를 되돌린다: 메모리 수치를 낮추려고 같은 사이트 이동마다 약 0.5초와 cache를 내주었고, 그것이 해제한 이전 document는 엔진이 약 8분 뒤 스스로 해제한다.
 - F196.27-1: document region이 main webview처럼 main frame의 새 document를 새 process에서 열므로, reload나 이동이 더 이상 tab process에 이전 document를 남기지 않는다: 다섯 번 reload해도 최대 22개 document와 325 MB 대신 6개와 약 124 MB를 유지한다. 이동은 0.6초 대신 약 1.1초 걸린다. Red: document가 process 86315에 남았다; Green: `document_navigation_test`.
