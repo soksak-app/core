@@ -668,6 +668,7 @@ fn invalid_json_closes_connection() {
 | `install.migration.settings-migrates-the-form-without-a-number` | engine이 workspace 계층의 첫 읽기에서 settings.json의 format member(형태 0에서 1)를 더하고 모든 설정을 유지하며, 두 번 적용은 아무것도 쓰지 않는다. | both |
 | `install.migration.chain-ends-at-the-current-format` | embed된 정의 사슬이 reader가 요구하는 형식에서 끝나고 각 단계가 이전 단계가 끝나는 곳에서 시작한다. 다른 곳에서 끝나는 사슬은 소유 시험에 실패한다. | both |
 | `install.migration.migrates-the-released-form` | 두 command line의 engine이 릴리즈가 쓴 그대로의 형식 2 `plugins/installed.json`(지워진 member와 `^` 범위 포함)에 정의를 적용하고 reader가 갱신된 file을 받아들인다. | both |
+| `install.migration.record-passes-every-gate` | 적용한 단계의 기록 `log.migrated`는 오류만 저장하는 기본 정책과 다른 모든 정책을 지난다. | both |
 | `install.migration.is-idempotent` | 두 번 적용은 아무것도 쓰지 않고 byte가 바뀌지 않으며, 없는 file은 없는 채로 둔다. | both |
 | `install.migration.refuses-forms-outside-the-chain` | 바닥 아래 형식, 현재 번호보다 새 형식, 판독 불가 file은 파일과 숫자로 거부되고 file은 바뀌지 않는다. | both |
 | `install.installed.rejects-another-format` | 바닥 위에서 `format`이 2가 아닌 `plugins/installed.json`은 `<file>: plugins/installed.json: format must be 3`로 실패하고 바뀌지 않는다. 바닥 아래 형식은 `<file>: the file holds format <n>; the definitions migrate formats 2 to 3`로 실패하고 바뀌지 않는다. 형식 2 file은 reader 입구에서 3으로 갱신된다([저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)). | both |

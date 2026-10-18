@@ -187,3 +187,61 @@ fn migrate_projects_wraps_the_bare_list_of_the_earlier_form() {
     assert_eq!(soksak_sok::migrate::migrate_projects(&config).unwrap(), 0);
     let _ = std::fs::remove_dir_all(&config);
 }
+
+// A migration happens once, at the install moment, so its record passes every gate: the default policy, which stores only
+// errors, still stores it (docs/spec/logging.md#policy).
+// contract: install.migration.record-passes-every-gate
+#[test]
+fn the_record_of_a_migration_passes_the_default_policy() {
+    use soksak_sok::event_log::{EventLog, Options};
+    use soksak_sok::migrate::use_migration_log;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    let config = temp_config("record");
+    write_installed_raw(config.as_path(), RELEASED_FORMAT_2);
+    let log = Arc::new(
+        EventLog::start(Options {
+            directory: config.join("logs"),
+            role: "sok".into(),
+            boot: "b1".into(),
+            layer: "sok",
+            clock: || 1,
+            spawn: |work| {
+                std::thread::Builder::new()
+                    .spawn(work)
+                    .map_err(|error| error.to_string())
+            },
+            queue_events: 64,
+            queue_bytes: 64 * 1024,
+            batch_interval: Duration::from_millis(20),
+            rotate_bytes: 1 << 30,
+            pull: None,
+            policy_path: None,
+            prune: None,
+        })
+        .unwrap(),
+    );
+    use_migration_log(Some(Arc::clone(&log)));
+    let migrated = migrate_installed(config.as_path());
+    use_migration_log(None);
+    assert_eq!(migrated.unwrap(), 3);
+    log.flush(Duration::from_secs(5)).unwrap();
+    let stored: Vec<serde_json::Value> = std::fs::read_to_string(log.path())
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let records: Vec<&serde_json::Value> = stored
+        .iter()
+        .filter(|event| event["event"] == "log.migrated")
+        .collect();
+    assert_eq!(
+        records.len(),
+        1,
+        "the default policy stored {stored:?}, without one log.migrated"
+    );
+    assert_eq!(records[0]["fields"]["from"], 2);
+    log.close();
+    let _ = std::fs::remove_dir_all(&config);
+}

@@ -334,11 +334,17 @@ func UseMigrationLog(log *EventLog) {
 	migrationLog.Store(log)
 }
 
-// recordMigration stores the applied step as the event `log.migrated` through the event writer of this process.
+// recordMigration stores the applied step as the event `log.migrated` through the event writer of this process. A migration
+// happens once, at the install moment, so its record passes every gate like the events of the writer itself
+// (docs/spec/logging.md#policy); a record the full queue refuses is counted as lost by the writer.
 func recordMigration(file string, from, to int) {
 	log := migrationLog.Load()
 	if log == nil {
 		return
 	}
-	log.Emit(LevelInfo, "log.migrated", map[string]any{"file": file, "from": from, "to": to})
+	fields, err := json.Marshal(map[string]any{"file": file, "from": from, "to": to})
+	if err != nil {
+		panic(fmt.Sprintf("the fields of log.migrated do not encode: %v", err))
+	}
+	log.enqueueWriterEvent(LevelInfo, "log.migrated", fields)
 }

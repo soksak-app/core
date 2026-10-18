@@ -269,12 +269,14 @@ fn migrate(config_dir: &Path, file: &str) -> Result<u64, String> {
         })?;
         crate::release::replace_file(&path, text.as_bytes())?;
     }
+    // A migration happens once, at the install moment, so its record passes every gate like the events of the writer itself
+    // (docs/spec/logging.md#policy); a record the full queue refuses is counted as lost by the writer.
     if let Some(log) = process_log() {
-        log.emit(
-            Level::Info,
-            "log.migrated",
+        let fields = serde_json::value::to_raw_value(
             &serde_json::json!({"file": file, "from": step.from, "to": step.to}),
-        );
+        )
+        .expect("a json value serializes");
+        log.enqueue_writer_event(Level::Info, "log.migrated", fields);
     }
     Ok(step.to)
 }

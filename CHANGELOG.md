@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.20: the record `log.migrated` of a stored-data migration passes every gate of the event log, so the default policy, which stores only errors, keeps it and the release step that requires it passes. Red: the Go and Rust migrate tests found `log.gated` and no `log.migrated`; Green: both pass.
 - F198.19: the handle of a document region reports `history`, `true` when its attach restored a session history, from the attach reply `{history}` of the workbench, so a restored surface loads its stored address only without a restored history; an attach reply without it rejects the attachment. Red: `history is unknown before the attach replies` (`undefined`), and the workbench attach replied `null` instead of `{ history: true }`; Green: document-region 20 of 20, document-regions 6 of 6.
 - F198.17: `validateManifest` accepts a surface without `surface.unload` and validates the declaration when it is present; such a surface is never unloaded (`undeclared`), so the plugin versions published for core 0.0.17, which rejects the field, stay installable on core 0.0.18. The release text states that memory saver is on by default. Red: `plugin probe: surface requires unload unless the plugin declares background` for a surface without the declaration; Green: validate 30 of 30.
 - F192.4: the vt sidecar 0.0.11 refuses an `open` without `image` for a surface that has an image and records the drawing mode of a surface, and the terminal plugin 0.0.14 requires it.

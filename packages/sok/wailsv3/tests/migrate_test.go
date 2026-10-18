@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 )
@@ -199,5 +200,40 @@ func TestMigrateProjectsWrapsTheBareListOfTheEarlierForm(t *testing.T) {
 	}
 	if applied, err := sok.MigrateProjects(config); err != nil || applied != 0 {
 		t.Fatalf("second run %d err %v", applied, err)
+	}
+}
+
+// A migration happens once, at the install moment, so its record passes every gate: the default policy, which stores only
+// errors, still stores it (docs/spec/logging.md#policy).
+// contract: install.migration.record-passes-every-gate
+func TestTheRecordOfAMigrationPassesTheDefaultPolicy(t *testing.T) {
+	config := t.TempDir()
+	writeInstalledRaw(t, config, releasedFormat2)
+	log, err := sok.StartEventLog(optionsIn(filepath.Join(config, "logs"), "b1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	sok.UseMigrationLog(log)
+	_, err = sok.MigrateInstalled(config)
+	sok.UseMigrationLog(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var records []map[string]any
+	stored := storedLines(t, log.Path())
+	for _, event := range stored {
+		if event["event"] == "log.migrated" {
+			records = append(records, event)
+		}
+	}
+	if len(records) != 1 {
+		t.Fatalf("the default policy stored %v, without one log.migrated", stored)
+	}
+	if records[0]["fields"].(map[string]any)["from"] != float64(2) {
+		t.Fatalf("record %v", records[0])
 	}
 }
