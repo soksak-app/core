@@ -503,6 +503,9 @@ Items:
 | `workspace.settings.persist-across-reopen` | A workspace opened again on the same configuration directory shows the saved common and project settings. | both |
 | `workspace.settings.reset-removes-override` | Removing a project override leaves an empty project settings object. | both |
 | `workspace.settings.rejects-project-opening-override` | A project override of projectOpening is rejected. | both |
+| `workspace.tab-state.put-keeps-other-entries` | `tabState` reads `null` without `tab-state.json`; two `tabStatePut` of different tabs from two stores of one configuration directory keep both entries in `{format: 1, tabs}`, a `null` entry removes only its tab, and each put returns the size of the written file. | both |
+| `workspace.tab-state.rejects-other-format` | `tabStatePut` into a `tab-state.json` of format 2 fails with `<path>: tab state format 2 is not 1` and leaves the file unchanged. | both |
+| `workspace.tab-state.rejects-invalid-entry` | `tabStatePut` refuses a missing tab with `tab state put requires a tab` and an empty entry, `kept: false`, an empty label, a state without a positive integer format or without a value, and another field with `invalid tab state entry of <tab>: <field>`. | both |
 | `workspace.settings.invalid-common-file-not-overwritten` | An invalid common settings file makes a settings change fail and stays byte-identical. | both |
 | `workspace.settings.concurrent-patches-preserved` | Concurrent common settings changes of different keys are all kept. | both |
 | `workspace.settings.records-each-change` | Each settings change is the event `host.workspace.settings` with the `scope` (`common` or the project id), the `set` keys and the `removed` keys that were present, each as a sorted list separated by commas. | both |

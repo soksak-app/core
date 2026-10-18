@@ -42,7 +42,7 @@ pub struct Workspace {
     writing: Mutex<()>,
 }
 
-/// A store request. kind is one of snapshot, add, patch, remove, move and settings.
+/// A store request. kind is one of snapshot, add, patch, remove, move, settings, tabState and tabStatePut.
 #[derive(Deserialize)]
 pub struct Request {
     kind: String,
@@ -52,6 +52,8 @@ pub struct Request {
     patch: Option<Map<String, Value>>,
     remove: Option<Vec<String>>,
     delta: Option<i64>,
+    tab: Option<String>,
+    entry: Option<Map<String, Value>>,
 }
 
 /// Reads the projects of projects.json, which holds them under the `projects` member beside the format member of the
@@ -93,6 +95,102 @@ fn write(path: &Path, value: &impl serde::Serialize) -> Result<(), String> {
     Ok(())
 }
 
+/// The format of tab-state.json, the tab state store of the memory saver (docs/spec/projects.md#persistence).
+const TAB_STATE_FORMAT: u64 = 1;
+
+/// Returns the document of tab-state.json as stored, or null when the file does not exist; the page reader checks its
+/// format.
+fn read_tab_state(path: &Path) -> Result<Value, String> {
+    if !path.exists() {
+        return Ok(Value::Null);
+    }
+    Ok(Value::Object(read::<Map<String, Value>>(path)?))
+}
+
+/// Sets the entry of tab, or removes it when entry is None, in tab-state.json and returns the size of the written
+/// file. Each put changes one entry, so windows that write different tabs keep each other's entries.
+fn put_tab_state(
+    path: &Path,
+    tab: &str,
+    entry: Option<Map<String, Value>>,
+) -> Result<Value, String> {
+    if tab.is_empty() {
+        return Err("tab state put requires a tab".into());
+    }
+    if let Some(entry) = &entry {
+        check_tab_state_entry(tab, entry)?;
+    }
+    let document: Map<String, Value> = read(path)?;
+    let mut tabs = Map::new();
+    if !document.is_empty() {
+        match document.get("format") {
+            None => {
+                return Err(format!(
+                    "{}: tab state format missing is not {TAB_STATE_FORMAT}",
+                    path.display()
+                ));
+            }
+            Some(format) if format.as_f64() != Some(TAB_STATE_FORMAT as f64) => {
+                return Err(format!(
+                    "{}: tab state format {format} is not {TAB_STATE_FORMAT}",
+                    path.display()
+                ));
+            }
+            Some(_) => {}
+        }
+        tabs = document
+            .get("tabs")
+            .and_then(Value::as_object)
+            .ok_or_else(|| format!("{}: tab state tabs is not an object", path.display()))?
+            .clone();
+    }
+    match entry {
+        Some(entry) => {
+            tabs.insert(tab.into(), Value::Object(entry));
+        }
+        None => {
+            tabs.remove(tab);
+        }
+    }
+    write(path, &json!({"format": TAB_STATE_FORMAT, "tabs": tabs}))?;
+    let size = fs::metadata(path)
+        .map_err(|e| format!("{}: {e}", path.display()))?
+        .len();
+    Ok(size.into())
+}
+
+/// Refuses an entry that is empty or holds a field other than state {format, value}, kept true and a label of 1 to 256
+/// characters; the first invalid field in name order is named.
+fn check_tab_state_entry(tab: &str, entry: &Map<String, Value>) -> Result<(), String> {
+    if entry.is_empty() {
+        return Err(format!("invalid tab state entry of {tab}: empty"));
+    }
+    let mut keys: Vec<&String> = entry.keys().collect();
+    keys.sort();
+    for key in keys {
+        let value = &entry[key];
+        let valid = match key.as_str() {
+            "kept" => value == &Value::Bool(true),
+            "label" => value
+                .as_str()
+                .is_some_and(|text| !text.is_empty() && text.chars().count() <= 256),
+            "state" => value.as_object().is_some_and(|state| {
+                state.len() == 2
+                    && state.contains_key("value")
+                    && state
+                        .get("format")
+                        .and_then(Value::as_f64)
+                        .is_some_and(|format| format >= 1.0 && format.fract() == 0.0)
+            }),
+            _ => false,
+        };
+        if !valid {
+            return Err(format!("invalid tab state entry of {tab}: {key}"));
+        }
+    }
+    Ok(())
+}
+
 impl Workspace {
     /// Creates a store that uses directory as the configuration directory.
     pub fn new(directory: PathBuf) -> Self {
@@ -115,6 +213,18 @@ impl Workspace {
     /// read, it returns an error without changing the file.
     pub fn apply(&self, req: Request) -> Result<Value, String> {
         let _writing = self.writing.lock().map_err(|e| e.to_string())?;
+        match req.kind.as_str() {
+            "tabState" => return read_tab_state(&self.directory.join("tab-state.json")),
+            "tabStatePut" => {
+                return put_tab_state(
+                    &self.directory.join("tab-state.json"),
+                    // default: a request without a tab is refused by put_tab_state with its own error.
+                    req.tab.as_deref().unwrap_or_default(),
+                    req.entry,
+                );
+            }
+            _ => {}
+        }
         let registry = self.directory.join("projects.json");
         // The entry of the shared reader of projects.json migrates it to the current format first.
         soksak_sok::migrate::migrate_projects(&self.directory)?;
@@ -282,9 +392,12 @@ pub(crate) fn handle(app: &AppHandle, mut request: Request) -> Result<Value, Str
         project["root"] = folder["root"].clone();
         project["identity"] = folder["identity"].clone();
     }
-    let changed = request.kind != "snapshot";
+    // The tab state store changes no project or setting, so no window is notified.
+    let tab_state = matches!(request.kind.as_str(), "tabState" | "tabStatePut");
+    let changed = request.kind != "snapshot" && !tab_state;
+    let snapshot = request.kind == "snapshot";
     let mut result = app.state::<Workspace>().apply(request)?;
-    if !changed {
+    if snapshot {
         result["open"] = serde_json::to_value(opened(app)?).map_err(|e| e.to_string())?;
     }
     if changed {

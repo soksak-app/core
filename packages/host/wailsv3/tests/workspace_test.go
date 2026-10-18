@@ -345,3 +345,82 @@ func TestProjectTextSizeOverrideIsRejected(t *testing.T) {
 		t.Fatalf("a project settings file with textSize returned %v, want %q", err, want)
 	}
 }
+
+// contract: workspace.tab-state.put-keeps-other-entries
+func TestTabStatePutKeepsOtherEntries(t *testing.T) {
+	config := t.TempDir()
+	first := host.NewWorkspace(config)
+	second := host.NewWorkspace(config)
+	missing, err := first.Apply(host.WorkspaceRequest{Kind: "tabState"})
+	if err != nil || missing != nil {
+		t.Fatalf("a missing tab-state.json read %v, %v, want nil", missing, err)
+	}
+	written, err := first.Apply(host.WorkspaceRequest{Kind: "tabStatePut", Tab: "tab-a", Entry: host.Record{"kept": true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if written.(int) <= 0 {
+		t.Fatalf("a tab state put returned %v bytes", written)
+	}
+	if _, err := second.Apply(host.WorkspaceRequest{Kind: "tabStatePut", Tab: "tab-b", Entry: host.Record{"label": "b", "state": map[string]any{"format": 1, "value": map[string]any{"x": 1}}}}); err != nil {
+		t.Fatal(err)
+	}
+	document, err := first.Apply(host.WorkspaceRequest{Kind: "tabState"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tabs := document.(host.Record)["tabs"].(map[string]any)
+	if document.(host.Record)["format"] != float64(1) || len(tabs) != 2 || tabs["tab-a"].(map[string]any)["kept"] != true || tabs["tab-b"].(map[string]any)["label"] != "b" {
+		t.Fatalf("two puts of different tabs stored %v", document)
+	}
+	last, err := second.Apply(host.WorkspaceRequest{Kind: "tabStatePut", Tab: "tab-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(config, "tab-state.json")
+	if info, err := os.Stat(path); err != nil || int64(last.(int)) != info.Size() {
+		t.Fatalf("a removal returned %v bytes for the file %v (%v)", last, info, err)
+	}
+	document, _ = first.Apply(host.WorkspaceRequest{Kind: "tabState"})
+	if tabs := document.(host.Record)["tabs"].(map[string]any); len(tabs) != 1 || tabs["tab-b"] == nil {
+		t.Fatalf("a null entry left %v", document)
+	}
+}
+
+// contract: workspace.tab-state.rejects-other-format, workspace.tab-state.rejects-invalid-entry
+func TestTabStateRejectsOtherFormatAndInvalidEntries(t *testing.T) {
+	config := t.TempDir()
+	store := host.NewWorkspace(config)
+	path := filepath.Join(config, "tab-state.json")
+	if err := os.WriteFile(path, []byte(`{"format":2,"tabs":{}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := store.Apply(host.WorkspaceRequest{Kind: "tabStatePut", Tab: "tab-a", Entry: host.Record{"kept": true}})
+	if want := path + ": tab state format 2 is not 1"; err == nil || err.Error() != want {
+		t.Fatalf("a put into format 2 returned %v, want %q", err, want)
+	}
+	if data, _ := os.ReadFile(path); string(data) != `{"format":2,"tabs":{}}` {
+		t.Fatalf("a refused put changed the file: %s", data)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		tab   string
+		entry host.Record
+		want  string
+	}{
+		{"", host.Record{"kept": true}, "tab state put requires a tab"},
+		{"tab-a", host.Record{}, "invalid tab state entry of tab-a: empty"},
+		{"tab-a", host.Record{"kept": false}, "invalid tab state entry of tab-a: kept"},
+		{"tab-a", host.Record{"label": ""}, "invalid tab state entry of tab-a: label"},
+		{"tab-a", host.Record{"state": map[string]any{"format": 0, "value": 1}}, "invalid tab state entry of tab-a: state"},
+		{"tab-a", host.Record{"state": map[string]any{"format": 1}}, "invalid tab state entry of tab-a: state"},
+		{"tab-a", host.Record{"other": 1}, "invalid tab state entry of tab-a: other"},
+	} {
+		_, err := store.Apply(host.WorkspaceRequest{Kind: "tabStatePut", Tab: c.tab, Entry: c.entry})
+		if err == nil || err.Error() != c.want {
+			t.Errorf("put %q %v returned %v, want %q", c.tab, c.entry, err, c.want)
+		}
+	}
+}

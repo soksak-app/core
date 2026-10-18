@@ -55,7 +55,7 @@ type Record map[string]any
 // from textSize of the common settings (docs/spec/native-surfaces.md#title-bar-height).
 var commonOnly = []string{"projectOpening", "textSize"}
 
-// WorkspaceRequest is one storage operation. Kind is one of snapshot, add, patch, remove, move, and settings.
+// WorkspaceRequest is one storage operation. Kind is one of snapshot, add, patch, remove, move, settings, tabState, and tabStatePut.
 type WorkspaceRequest struct {
 	Kind    string   `json:"kind"`
 	ID      string   `json:"id,omitempty"`
@@ -63,6 +63,8 @@ type WorkspaceRequest struct {
 	Patch   Record   `json:"patch,omitempty"`
 	Remove  []string `json:"remove,omitempty"`
 	Delta   *int     `json:"delta"`
+	Tab     string   `json:"tab,omitempty"`
+	Entry   Record   `json:"entry,omitempty"`
 }
 
 // readProjects reads the projects of projects.json, which holds them under the `projects` member beside the format
@@ -137,7 +139,115 @@ func writeJSON(path string, value any) error {
 	return os.Rename(file.Name(), path)
 }
 
-// Apply performs the operation req and returns its result.
+// tabStateFormat is the format of tab-state.json, the tab state store of the memory saver (docs/spec/projects.md#persistence).
+const tabStateFormat = 1
+
+// readTabState returns the document of tab-state.json as stored, or nil when the file does not exist; the page reader
+// checks its format.
+func readTabState(path string) (any, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, nil
+	}
+	document := Record{}
+	if err := readJSON(path, &document); err != nil {
+		return nil, err
+	}
+	return document, nil
+}
+
+// putTabState sets the entry of tab, or removes it when entry is nil, in tab-state.json and returns the size of the
+// written file. Each put changes one entry, so windows that write different tabs keep each other's entries.
+func putTabState(path, tab string, entry Record) (any, error) {
+	if tab == "" {
+		return nil, errors.New("tab state put requires a tab")
+	}
+	if entry != nil {
+		if err := checkTabStateEntry(tab, entry); err != nil {
+			return nil, err
+		}
+	}
+	document := Record{}
+	if err := readJSON(path, &document); err != nil {
+		return nil, err
+	}
+	tabs := map[string]any{}
+	if len(document) > 0 {
+		format, held := document["format"]
+		if !held {
+			return nil, fmt.Errorf("%s: tab state format missing is not %d", path, tabStateFormat)
+		}
+		if number, ok := format.(float64); !ok || number != tabStateFormat {
+			found, err := json.Marshal(format)
+			if err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("%s: tab state format %s is not %d", path, found, tabStateFormat)
+		}
+		stored, ok := document["tabs"].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("%s: tab state tabs is not an object", path)
+		}
+		tabs = stored
+	}
+	if entry == nil {
+		delete(tabs, tab)
+	} else {
+		tabs[tab] = entry
+	}
+	if err := writeJSON(path, Record{"format": tabStateFormat, "tabs": tabs}); err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	return int(info.Size()), nil
+}
+
+// checkTabStateEntry refuses an entry that is empty or holds a field other than state {format, value}, kept true and
+// a label of 1 to 256 characters; the first invalid field in name order is named.
+func checkTabStateEntry(tab string, entry Record) error {
+	if len(entry) == 0 {
+		return fmt.Errorf("invalid tab state entry of %s: empty", tab)
+	}
+	keys := make([]string, 0, len(entry))
+	for key := range entry {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		value := entry[key]
+		valid := false
+		switch key {
+		case "kept":
+			valid = value == true
+		case "label":
+			text, ok := value.(string)
+			valid = ok && text != "" && len([]rune(text)) <= 256
+		case "state":
+			if state, ok := value.(map[string]any); ok {
+				_, hasValue := state["value"]
+				valid = len(state) == 2 && hasValue && positiveInteger(state["format"])
+			}
+		}
+		if !valid {
+			return fmt.Errorf("invalid tab state entry of %s: %s", tab, key)
+		}
+	}
+	return nil
+}
+
+// positiveInteger reports whether value, decoded from JSON or built by a caller, is a positive integer.
+func positiveInteger(value any) bool {
+	switch number := value.(type) {
+	case float64:
+		return number >= 1 && number == float64(int64(number))
+	case int:
+		return number >= 1
+	}
+	return false
+}
+
 // Directory returns the configuration directory of this storage.
 func (w *Workspace) Directory() string {
 	return w.directory
@@ -146,6 +256,12 @@ func (w *Workspace) Directory() string {
 func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	switch req.Kind {
+	case "tabState":
+		return readTabState(filepath.Join(w.directory, "tab-state.json"))
+	case "tabStatePut":
+		return putTabState(filepath.Join(w.directory, "tab-state.json"), req.Tab, req.Entry)
+	}
 	registry := filepath.Join(w.directory, "projects.json")
 	// The entry of the shared reader of projects.json migrates it to the current format first; the file holds the
 	// projects under the `projects` member beside the format member (docs/spec/installation.md#stored-data-migration).
@@ -323,7 +439,10 @@ func (h *Host) runWorkspace(req WorkspaceRequest) (any, error) {
 	}
 	result, err := h.workspace.Apply(req)
 	if err == nil {
-		if req.Kind == "snapshot" {
+		switch req.Kind {
+		case "tabState", "tabStatePut":
+			// The tab state store changes no project or setting, so no window is notified.
+		case "snapshot":
 			h.mu.Lock()
 			ids := make([]string, 0, len(h.owners))
 			for id := range h.owners {
@@ -331,7 +450,7 @@ func (h *Host) runWorkspace(req WorkspaceRequest) (any, error) {
 			}
 			h.mu.Unlock()
 			result.(Record)["open"] = ids
-		} else {
+		default:
 			h.notifyWorkspace()
 		}
 	}

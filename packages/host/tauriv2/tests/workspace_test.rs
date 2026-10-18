@@ -347,3 +347,98 @@ fn each_settings_change_is_recorded_with_its_keys() {
         ]
     );
 }
+
+// contract: workspace.tab-state.put-keeps-other-entries
+#[test]
+fn tab_state_put_keeps_other_entries() {
+    let config = tempfile::tempdir().unwrap();
+    let first = Workspace::new(config.path().into());
+    let second = Workspace::new(config.path().into());
+    assert_eq!(apply(&first, json!({"kind":"tabState"})), Value::Null);
+    let written = apply(
+        &first,
+        json!({"kind":"tabStatePut", "tab":"tab-a", "entry":{"kept":true}}),
+    );
+    assert!(written.as_u64().unwrap() > 0, "{written}");
+    apply(
+        &second,
+        json!({"kind":"tabStatePut", "tab":"tab-b", "entry":{"label":"b", "state":{"format":1, "value":{"x":1}}}}),
+    );
+    assert_eq!(
+        apply(&first, json!({"kind":"tabState"})),
+        json!({"format":1, "tabs":{"tab-a":{"kept":true}, "tab-b":{"label":"b", "state":{"format":1, "value":{"x":1}}}}})
+    );
+    let last = apply(
+        &second,
+        json!({"kind":"tabStatePut", "tab":"tab-a", "entry":null}),
+    );
+    let size = fs::metadata(config.path().join("tab-state.json"))
+        .unwrap()
+        .len();
+    assert_eq!(last.as_u64(), Some(size));
+    assert_eq!(
+        apply(&first, json!({"kind":"tabState"})),
+        json!({"format":1, "tabs":{"tab-b":{"label":"b", "state":{"format":1, "value":{"x":1}}}}})
+    );
+}
+
+// contract: workspace.tab-state.rejects-other-format, workspace.tab-state.rejects-invalid-entry
+#[test]
+fn tab_state_rejects_other_format_and_invalid_entries() {
+    let config = tempfile::tempdir().unwrap();
+    let store = Workspace::new(config.path().into());
+    let path = config.path().join("tab-state.json");
+    fs::write(&path, r#"{"format":2,"tabs":{}}"#).unwrap();
+    let put = |tab: &str, entry: Value| {
+        store
+            .apply(
+                serde_json::from_value(json!({"kind":"tabStatePut", "tab":tab, "entry":entry}))
+                    .unwrap(),
+            )
+            .unwrap_err()
+    };
+    assert_eq!(
+        put("tab-a", json!({"kept":true})),
+        format!("{}: tab state format 2 is not 1", path.display())
+    );
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        r#"{"format":2,"tabs":{}}"#
+    );
+    fs::remove_file(&path).unwrap();
+    for (tab, entry, want) in [
+        ("", json!({"kept":true}), "tab state put requires a tab"),
+        (
+            "tab-a",
+            json!({}),
+            "invalid tab state entry of tab-a: empty",
+        ),
+        (
+            "tab-a",
+            json!({"kept":false}),
+            "invalid tab state entry of tab-a: kept",
+        ),
+        (
+            "tab-a",
+            json!({"label":""}),
+            "invalid tab state entry of tab-a: label",
+        ),
+        (
+            "tab-a",
+            json!({"state":{"format":0, "value":1}}),
+            "invalid tab state entry of tab-a: state",
+        ),
+        (
+            "tab-a",
+            json!({"state":{"format":1}}),
+            "invalid tab state entry of tab-a: state",
+        ),
+        (
+            "tab-a",
+            json!({"other":1}),
+            "invalid tab state entry of tab-a: other",
+        ),
+    ] {
+        assert_eq!(put(tab, entry.clone()), want, "{tab} {entry}");
+    }
+}

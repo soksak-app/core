@@ -503,6 +503,9 @@ fn invalid_json_closes_connection() {
 | `workspace.settings.persist-across-reopen` | 같은 설정 디렉터리로 다시 연 작업 공간은 저장된 공통 설정과 프로젝트 설정을 보여 준다. | both |
 | `workspace.settings.reset-removes-override` | 프로젝트 재정의를 제거하면 빈 프로젝트 설정 객체가 남는다. | both |
 | `workspace.settings.rejects-project-opening-override` | projectOpening의 프로젝트 재정의를 거부한다. | both |
+| `workspace.tab-state.put-keeps-other-entries` | `tab-state.json`이 없으면 `tabState`는 `null`을 읽는다. 한 설정 디렉터리의 두 저장소에서 다른 탭의 `tabStatePut` 두 번은 `{format: 1, tabs}`에 두 entry를 모두 지키고, `null` entry는 자기 탭만 지우며, put마다 쓴 file의 크기를 돌려준다. | both |
+| `workspace.tab-state.rejects-other-format` | 형식 2의 `tab-state.json`에 대한 `tabStatePut`은 `<path>: tab state format 2 is not 1`로 실패하고 file을 바꾸지 않는다. | both |
+| `workspace.tab-state.rejects-invalid-entry` | `tabStatePut`은 탭이 없으면 `tab state put requires a tab`로, 빈 entry, `kept: false`, 빈 label, 양의 정수 format이나 value가 없는 state, 다른 필드는 `invalid tab state entry of <tab>: <field>`로 거부한다. | both |
 | `workspace.settings.invalid-common-file-not-overwritten` | 잘못된 공통 설정 파일은 설정 변경을 실패시키고 바이트 단위로 그대로 남는다. | both |
 | `workspace.settings.concurrent-patches-preserved` | 서로 다른 키에 대한 동시 공통 설정 변경이 모두 유지된다. | both |
 | `workspace.settings.records-each-change` | 설정 변경마다 `scope`(`common` 또는 project id), 바꾼 키 `set`, 있었던 키 중 지운 `removed`를 각각 쉼표로 이은 정렬된 목록으로 가진 event `host.workspace.settings`가 있다. | both |
