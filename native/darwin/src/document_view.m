@@ -101,6 +101,25 @@ static NSString *const kPageScript = @"(() => {"
     "post({ ready: true });"
     "})();";
 
+// The script of the form flags (docs/spec/plugins.md#memory-saver). It runs in every frame in the content world of the host
+// and reports a trusted input event on an editable element (a form field or a contenteditable element) once per document,
+// with an identifier of the frame document that it generates; pagehide and a form submit clear the flag of that frame.
+static NSString *const kFormMessage = @"soksakDocumentForm";
+static NSString *const kFormScript = @"(() => {"
+    "const frame = crypto.randomUUID();"
+    "const post = (edited) => window.webkit.messageHandlers.soksakDocumentForm.postMessage({ frame, edited });"
+    "let edited = false;"
+    "addEventListener('input', (event) => {"
+    "  if (edited || !event.isTrusted) return;"
+    "  const target = event.composedPath()[0];"
+    "  if (!(target instanceof Element) || !(target.matches('input, textarea, select') || target.isContentEditable)) return;"
+    "  edited = true; post(true);"
+    "}, true);"
+    "const clear = () => { if (!edited) return; edited = false; post(false); };"
+    "addEventListener('submit', clear, true);"
+    "addEventListener('pagehide', clear);"
+    "})();";
+
 // The contexts of the key paths that the document view registers; a notification with another context belongs to the platform.
 static char kStateContext;
 static char kAppearanceContext;
@@ -184,6 +203,8 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 // The generation of the hidden delay: hiding starts a delay with the next generation, and showing or closing the region moves to another
 // generation, so a delay that ends after it finds another generation and clears nothing.
 @property NSUInteger hiddenGeneration;
+// The frame documents with a form flag, by the identifier that the form script of each frame document generates.
+@property(retain) NSMutableSet<NSString *> *formFrames;
 @property BOOL hiddenDelayRunning;
 - (void)clearBackForwardCache:(NSString *)reason;
 - (void)stopHiddenTimer;
@@ -260,8 +281,19 @@ static NSString *pluginContentType(NSString *path) {
 @implementation SPDocumentScroll
 - (void)userContentController:(WKUserContentController *)controller didReceiveScriptMessage:(WKScriptMessage *)message {
     SPDocumentView *view = self.view;
-    if (!view || !message.frameInfo.isMainFrame || ![message.body isKindOfClass:NSDictionary.class]) return;
+    if (!view || ![message.body isKindOfClass:NSDictionary.class]) return;
     NSDictionary *body = message.body;
+    // The form flags come from every frame; the other messages come only from the main frame.
+    if ([message.name isEqualToString:kFormMessage]) {
+        if (![body[@"frame"] isKindOfClass:NSString.class] || ![body[@"edited"] isKindOfClass:NSNumber.class]) {
+            sp_log_error("document view", [NSString stringWithFormat:@"form message without frame or flag: %@", body].UTF8String);
+            return;
+        }
+        if ([body[@"edited"] boolValue]) [view.formFrames addObject:body[@"frame"]];
+        else [view.formFrames removeObject:body[@"frame"]];
+        return;
+    }
+    if (!message.frameInfo.isMainFrame) return;
     if ([message.name isEqualToString:kMessageMessage]) {
         if ([body[@"message"] isKindOfClass:NSString.class]) {
             [view reportMessage:@{ @"text": body[@"message"] }];
@@ -302,6 +334,7 @@ static NSString *pluginContentType(NSString *path) {
 @implementation SPDocumentView
 
 - (void)dealloc {
+    [_formFrames release];
     [_scroll release];
     [_failure release];
     [_link release];
@@ -468,7 +501,9 @@ static NSString *pluginContentType(NSString *path) {
 
 // A new document replaces the earlier one: each stream that is on sends reset, an unacknowledged snapshot is dropped, and
 // the script of the new document asks for its streams again when it is installed.
+// A main frame commit, a reload included, replaces every frame document, so every form flag is cleared.
 - (void)webView:(WKWebView *)view didCommitNavigation:(WKNavigation *)navigation {
+    [self.formFrames removeAllObjects];
     self.ready = NO;
     self.dirty = NO;
     self.unacknowledged = 0;
@@ -692,6 +727,9 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kScrollMessage];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kPageMessage];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kMessageMessage];
+    [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kFormMessage];
+    [configuration.userContentController addUserScript:[[[WKUserScript alloc] initWithSource:kFormScript
+        injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO inContentWorld:world] autorelease]];
     [configuration.userContentController addUserScript:[[[WKUserScript alloc] initWithSource:kMessageScript
         injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES inContentWorld:world] autorelease]];
     WKUserScript *script = [[[WKUserScript alloc] initWithSource:kScrollScript
@@ -703,6 +741,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     SPDocumentView *view = [[SPDocumentView alloc] initWithFrame:NSZeroRect configuration:configuration];
     scroll.view = view;
     view.scroll = scroll;
+    view.formFrames = [NSMutableSet set];
     view.changed = changed;
     view.context = context;
     view.plugin = folder && plugin ? scheme.plugin : nil;
@@ -730,6 +769,61 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     for (NSString *key in observedKeys()) sp_observe_key_path("document_view.state", SP_OBSERVE_COUNT, view, view, key, 0, &kStateContext);
     [openDocuments() addObject:view];
     return view; // The caller owns this reference until sp_document_close.
+}
+
+void sp_document_query(void *handle, sp_document_query_reply reply, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) {
+        reply(context, "{\"error\":\"the document region is closed\"}");
+        return;
+    }
+    [view requestMediaPlaybackStateWithCompletionHandler:^(WKMediaPlaybackState playback) {
+        if (view.closed) {
+            reply(context, "{\"error\":\"the document region closed before the media playback state\"}");
+            return;
+        }
+        NSString *media;
+        switch (playback) {
+            case WKMediaPlaybackStateNone: media = @"none"; break;
+            case WKMediaPlaybackStatePlaying: media = @"playing"; break;
+            case WKMediaPlaybackStatePaused: media = @"paused"; break;
+            case WKMediaPlaybackStateSuspended: media = @"suspended"; break;
+            default: {
+                NSString *error = [NSString stringWithFormat:@"{\"error\":\"unknown media playback state %ld\"}", (long)playback];
+                reply(context, error.UTF8String);
+                return;
+            }
+        }
+        // The capture state is read in the same step as the reply of the media state.
+        BOOL capture = view.cameraCaptureState == WKMediaCaptureStateActive
+            || view.microphoneCaptureState == WKMediaCaptureStateActive;
+        NSString *json = [NSString stringWithFormat:@"{\"media\":\"%@\",\"capture\":%@,\"form\":%@}", media,
+            capture ? @"true" : @"false", view.formFrames.count ? @"true" : @"false"];
+        reply(context, json.UTF8String);
+    }];
+}
+
+char *sp_document_interaction_state(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) return NULL;
+    id state = view.interactionState;
+    NSString *text = [state isKindOfClass:NSData.class] ? [(NSData *)state base64EncodedStringWithOptions:0] : @"";
+    return strdup(text.UTF8String);
+}
+
+const char *sp_document_restore(void *handle, const char *state) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) return "the document region is closed";
+    if (view.backForwardList.currentItem) return "the document region has already loaded a document";
+    NSData *data = state ? [[[NSData alloc] initWithBase64EncodedString:[NSString stringWithUTF8String:state] options:0] autorelease] : nil;
+    if (!data.length) return "the interactionState is not base64";
+    view.interactionState = data;
+    // The setter reports no result; a state that WebKit cannot decode restores no history entry.
+    if (!view.backForwardList.currentItem) return "the web view refused the interactionState";
+    return NULL;
 }
 
 void sp_document_set_message(void *handle, sp_document_message message, void *context) {
