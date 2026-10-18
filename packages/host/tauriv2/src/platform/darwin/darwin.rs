@@ -53,6 +53,8 @@ mod link;
 mod events;
 #[path = "file_watch.rs"]
 mod file_watch;
+#[path = "memory_pressure.rs"]
+mod memory_pressure;
 #[path = "mouse_buttons.rs"]
 mod mouse_buttons;
 mod notifications;
@@ -619,6 +621,12 @@ impl Platform for Darwin {
     }
     fn cancel_quit_requests(&self) {
         termination::cancel_quit_requests()
+    }
+    fn on_memory_pressure(&self, report: crate::memory_pressure::Report) -> Result<(), String> {
+        memory_pressure::start(report)
+    }
+    fn inject_memory_pressure(&self, level: &str) -> Result<(), String> {
+        memory_pressure::inject(level)
     }
     fn instant_window_resize(&self) -> Result<(), String> {
         window::instant_resize();

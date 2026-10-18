@@ -147,6 +147,15 @@ pub(crate) fn call(
         "diagnostics.native.objects" => native_objects(window, &params),
         "diagnostics.objects" => crate::object_counts::objects_reply(host, window.label()),
         "diagnostics.process.exit" => process_exit(window, &params),
+        "diagnostics.memory.pressure" => {
+            let level = crate::memory_pressure::parse_level(params.get("level"))
+                .map_err(Failure::params)?;
+            on_main(window, move || {
+                platform::current()?.inject_memory_pressure(&level)
+            })
+            .map(|()| Value::Null)
+            .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error))
+        }
         "diagnostics.presentation.failure" => {
             exposure::inject_presentation_failure(window)?;
             Ok(Value::Null)

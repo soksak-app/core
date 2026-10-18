@@ -168,7 +168,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 
 ## Memory pressure
 
-호스트는 native memory pressure source 하나를 소유한다. 이 source는 호스트와 함께 시작하며 프로세스의 유일한 등록이다(macOS에서는 공개 dispatch memory pressure source). 수준 `normal`, `warn`, `critical`을 관찰하고, 보고마다 `seq`로 번호를 매기며, 수준이 바뀔 때만 보고한다. back-forward cache를 지우는 문서 영역 소비자([네이티브 표면](native-surfaces.ko.md#문서-영역))는 source를 소유하지 않고 이를 구독하며 `warn`과 `critical`에서만 지운다. 각 호스트는 모든 보고를 각 창의 메인 페이지에 page 이벤트 `memory-pressure` `{level, seq}`로 보내고, [메모리 절약](plugins.ko.md#메모리-절약)이 이를 소비하며 `core.tab.memory`가 `pressure`로 알린다. 진단 빌드의 선언된 fault injection이 검사를 위해 보고를 보내고, contract case가 두 호스트를 같은 이벤트로 묶는다.
+호스트는 native memory pressure source 하나를 소유한다. 이 source는 호스트와 함께 시작하며 프로세스의 유일한 등록이다(macOS에서는 공개 dispatch memory pressure source). 수준 `normal`, `warn`, `critical`을 관찰하고, 보고마다 `seq`로 번호를 매기며, 수준이 바뀔 때만 보고한다. back-forward cache를 지우는 문서 영역 소비자([네이티브 표면](native-surfaces.ko.md#문서-영역))는 source를 소유하지 않고 이를 구독하며 `warn`과 `critical`에서만 지운다. 각 호스트는 모든 보고를 각 창의 메인 페이지에 page 이벤트 `memory-pressure` `{level, seq}`로 `seq` 순서대로, 보고를 받는 thread를 붙잡지 않고 보내므로 페이지는 현재 수준으로 끝난다. 그리고 [메모리 절약](plugins.ko.md#메모리-절약)이 이를 소비하며 `core.tab.memory`가 `pressure`로 알린다. 진단 빌드의 선언된 fault injection이 검사를 위해 보고를 보내고, contract case가 두 호스트를 같은 이벤트로 묶는다.
 
 메모리 절약이 탭을 unload하기 전에 page는 표면과 `host.window`가 알리는 문서 이름으로 주소를 정한 선언된 호스트 메서드로 탭의 각 문서 영역의 `interactionState`를 읽는다. 호스트는 영역 web view의 공개 `interactionState`, 곧 문서나 프로세스를 담지 않는 직렬화된 session history로 답하고, web content 프로세스가 이미 끝난 경우처럼 읽기가 아무것도 내지 않으면 빈 값으로 답한다. 탭을 restore하면 그 값을 새로 만드는 영역에 넘긴다.
 

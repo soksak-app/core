@@ -475,6 +475,12 @@ impl Platform for Windows {
     fn cancel_quit_requests(&self) {
         unsupported::cancel_quit_requests()
     }
+    fn on_memory_pressure(&self, report: crate::memory_pressure::Report) -> Result<(), String> {
+        unsupported::on_memory_pressure(report)
+    }
+    fn inject_memory_pressure(&self, level: &str) -> Result<(), String> {
+        unsupported::inject_memory_pressure(level)
+    }
     fn instant_window_resize(&self) -> Result<(), String> {
         unsupported::instant_window_resize()
     }

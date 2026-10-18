@@ -49,6 +49,7 @@ pub mod link;
 pub mod log_policy;
 pub mod log_query;
 pub mod log_retention;
+pub mod memory_pressure;
 pub mod menu;
 pub mod modals;
 pub mod notifications;
@@ -316,6 +317,13 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // RunEvent::Exit has finished the save (docs/spec/hosts.md#process-lifecycle).
                 let quit = app.handle().clone();
                 platform::current()?.on_quit_request(Box::new(move || quit.exit(0)))?;
+                // The one memory pressure source of the process starts with the host, and each report goes to every window
+                // (docs/spec/hosts.md#memory-pressure).
+                let pressure = app.handle().clone();
+                memory_pressure::start(
+                    |report| platform::current()?.on_memory_pressure(report),
+                    move |name, payload| windows::notify_windows(&pressure, name, payload),
+                )?;
                 let dock = app.handle().clone();
                 platform::current()?.install_dock_menu(Box::new(move || {
                     if let Err(error) = windows::window_new_on_main(dock.clone()) {

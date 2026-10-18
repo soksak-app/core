@@ -277,6 +277,7 @@ func Run(assets fs.FS, options Options) error {
 	app.Menu.Set(menu)
 	setupDockMenu(host)
 	setupQuitRequest()
+	setupMemoryPressure(host)
 	main := host.newWindow("main", "/")
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		main.prepareNative()

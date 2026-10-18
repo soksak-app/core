@@ -679,6 +679,16 @@ pub trait Platform: Send + Sync {
     /// protects a modified tab and the application does not end.
     fn cancel_quit_requests(&self);
 
+    // Memory pressure
+
+    /// Starts the one memory pressure source of the process, which observes the levels normal, warn and critical
+    /// (docs/spec/hosts.md#memory-pressure); report is called on the main thread with the level and the seq of each
+    /// change of level. Call it once on the main thread after the application started.
+    fn on_memory_pressure(&self, report: crate::memory_pressure::Report) -> Result<(), String>;
+    /// Delivers the level normal, warn or critical as the memory pressure source delivers it; it is the fault injection
+    /// of the checks. Call it on the main thread after on_memory_pressure.
+    fn inject_memory_pressure(&self, level: &str) -> Result<(), String>;
+
     // Window behavior
 
     /// Makes the window zoom and the animated size change finish within one screen update. Call it before the window is

@@ -128,6 +128,14 @@ func (implementation) AnswerQuitRequests() {}
 // CancelQuitRequests has nothing to cancel because no termination request was received.
 func (implementation) CancelQuitRequests() {}
 
+func (implementation) OnMemoryPressure(func(string, uint64)) error {
+	return unsupported("memory pressure reports")
+}
+
+func (implementation) InjectMemoryPressure(string) error {
+	return unsupported("memory pressure reports")
+}
+
 func (implementation) InstantWindowResize() error {
 	return unsupported("window resize animation")
 }

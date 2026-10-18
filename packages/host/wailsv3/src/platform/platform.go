@@ -494,6 +494,14 @@ type Platform interface {
 	// tab and the application does not end.
 	CancelQuitRequests()
 
+	// OnMemoryPressure starts the one memory pressure source of the process, which observes the levels normal, warn and critical
+	// (docs/spec/hosts.md#memory-pressure); report is called on the UI thread with the level and the seq of each change of level.
+	// Call it once on the UI thread after the application started.
+	OnMemoryPressure(report func(level string, seq uint64)) error
+	// InjectMemoryPressure delivers the level normal, warn or critical as the memory pressure source delivers it; it is the fault
+	// injection of the checks. Call it on the UI thread after OnMemoryPressure.
+	InjectMemoryPressure(level string) error
+
 	// InstantWindowResize makes the window zoom and the animated resize end within one screen update.
 	// Call it before creating a window.
 	InstantWindowResize() error

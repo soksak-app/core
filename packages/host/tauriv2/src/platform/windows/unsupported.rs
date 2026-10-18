@@ -467,6 +467,14 @@ pub fn on_quit_request(_quit: Box<dyn Fn()>) -> Result<(), String> {
 pub fn answer_quit_requests() {}
 pub fn cancel_quit_requests() {}
 
+pub fn on_memory_pressure(_report: crate::memory_pressure::Report) -> Result<(), String> {
+    missing("memory pressure reports")
+}
+
+pub fn inject_memory_pressure(_level: &str) -> Result<(), String> {
+    missing("memory pressure reports")
+}
+
 pub fn instant_window_resize() -> Result<(), String> {
     missing("window resize animation")
 }

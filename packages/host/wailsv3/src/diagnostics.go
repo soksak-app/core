@@ -61,6 +61,7 @@ func init() {
 	diagnosticMethods["diagnostics.objects"] = diagnosticObjects
 	diagnosticMethods["diagnostics.heap.profile"] = diagnosticHeapProfile
 	diagnosticMethods["diagnostics.process.exit"] = diagnosticProcessExit
+	diagnosticMethods["diagnostics.memory.pressure"] = diagnosticMemoryPressure
 	diagnosticMethods["diagnostics.page.request"] = diagnosticPageMethod("diagnostics.page.request")
 	diagnosticMethods["diagnostics.surface.hold"] = diagnosticPageMethod("diagnostics.surface.hold")
 	diagnosticMethods["diagnostics.surface.held"] = diagnosticPageMethod("diagnostics.surface.held")
@@ -889,6 +890,27 @@ func diagnosticHeapProfile(e *Endpoint, _ *endpointConn, params json.RawMessage)
 		return nil, err
 	}
 	return map[string]any{"path": path}, nil
+}
+
+// diagnosticMemoryPressure delivers a memory pressure level as the source of the process delivers it, so a check observes the
+// report that the pages receive (docs/spec/hosts.md#memory-pressure).
+func diagnosticMemoryPressure(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	if _, err := e.window(params); err != nil {
+		return nil, err
+	}
+	var p struct {
+		Level json.RawMessage `json:"level"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	level, err := ParseMemoryPressureLevel(p.Level)
+	if err != nil {
+		return nil, rpcError(codeInvalidParams, "%s", err)
+	}
+	var injected error
+	application.InvokeSync(func() { injected = system.InjectMemoryPressure(level) })
+	return nil, injected
 }
 
 // diagnosticProcessExit replies when the process pid ends. A window check waits for the WebContent process of a closed window to end through

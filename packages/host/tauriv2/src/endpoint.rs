@@ -90,6 +90,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.native.objects",
     "diagnostics.objects",
     "diagnostics.process.exit",
+    "diagnostics.memory.pressure",
     "diagnostics.page.request",
     "diagnostics.surface.hold",
     "diagnostics.surface.held",
