@@ -97,6 +97,14 @@ const applyPluginChange = createPluginApply({
   settle: settleModifiedTabs, flush: projects.flush, reload: () => whenRepliesSent().then(reloadPage),
 });
 
+/**
+ * Applies each later plugin change to this window. The page calls it after the projects are initialised, because the
+ * apply saves them (F199.4); a change of a first run before that is applied by the reload after the starter install.
+ */
+export function followPlugins() {
+  followPluginChanges(applyPluginChange);
+}
+
 /** Handler of the core.plugins.<action> commands. plugin is a non-empty string (Plugin screen of docs/spec/installation.md). */
 function pluginCommand(action) {
   return async ({ plugin }) => {
@@ -288,7 +296,6 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   status("core.sidebars", sidebarsState);
   onSectionsChange(coreChanged);
   onPluginOperations(coreChanged);
-  followPluginChanges(applyPluginChange);
   followSidecarChanges();
   followActivation();
   onTabReports(coreChanged);

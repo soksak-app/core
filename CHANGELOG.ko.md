@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F199.4: page는 project를 initialise한 뒤에만 plugin 변경을 따르므로, 첫 실행의 starter 설치가 더 이상 apply로 하여금 존재하기 전의 tab session을 flush하게 하지 않는다. initialise 전의 `projects.flush`는 명시적 error로 실패한다. Red: workbench test가 `Cannot read properties of null (reading 'flush')`로 실패했다. Green: workbench test 561 of 561이 통과한다.
 - F200.1: 페이지 진단 method `diagnostics.page.calls`가 요청 하나에서 host call `theme`을 최대 50번 보내고, `make host-calls`가 페이지의 host call이 그 process에 남기는 WebKit malloc을 수집 전후로 측정한다. 두 debug host 측정: 수집 전 call당 약 0.7 KB(Wails), 1.1 KB(Tauri), 수집 뒤 없음.
 - F198.12, F196.7: plugin release browser 0.0.6, editor 0.0.4, hwp 0.0.2가 `surface.unload`를 선언하고 core `>=0.0.18`을 요구하며, browser 0.0.6은 document stream을 읽는다. registry가 셋을 나열한다. flowmark와 shell은 게시하지 않고 appview는 retired 되었다. F198과 F196이 완료되었다.
 - F193.5, F196.6, F198.11: core 0.0.18을 커밋의 CI가 통과한 뒤 release했다. release 문서는 메모리 절약이 기본으로 켜져 있다고 밝힌다.

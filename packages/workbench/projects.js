@@ -449,7 +449,13 @@ export async function saveGeometry() {
   if (geometry) await store.patch(id, { geometry });
 }
 
+/**
+ * Saves the projects, the settings, the geometry, the tab sessions and the tab states. The stores exist only after
+ * initialise, and the page follows plugin changes and page hiding only after it, so a flush before initialise is a
+ * defect of the caller and fails.
+ */
 export async function flush() {
+  if (!tabSessions) throw new Error("projects.flush: the projects are not initialised");
   await keep();
   await flushSettings();
   await saveGeometry();

@@ -87,6 +87,11 @@ const store = {
   onChange: () => {},
 };
 
+// On a first run the starter install emits a plugin change before the page initialises its projects (F199.4).
+test("flushing the projects before initialise fails with an explicit error", async () => {
+  await assert.rejects(projects.flush(), { message: "projects.flush: the projects are not initialised" });
+});
+
 test("a window close request asks about modified tabs before it saves and closes", async () => {
   await projects.initialise(store);
   await projects.activate(PROJECT.id);

@@ -68,7 +68,7 @@ import { setTextScope } from "./text-size.js";
 import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 
 /* Public entries and diagnostic methods of the core. The registry answers requests of the host. */
-import { coreChanged, installCoreExposure, setVerify } from "./core-exposure.js";
+import { coreChanged, followPlugins, installCoreExposure, setVerify } from "./core-exposure.js";
 /* Only a diagnostic build contains the diagnostic methods. In other builds this is an empty module. */
 import "./diagnostics.js";
 
@@ -656,6 +656,8 @@ await connectSettings(storage);
 // default: a plugin that is not loaded declares no surface.unload.
 await projects.initialise(storage, (plugin) => pluginUnits().find((unit) => unit.id === plugin)?.unload ?? false);
 memoryObserved = true;
+// The apply of a plugin change saves the projects, so the page follows plugin changes only after they are initialised.
+followPlugins();
 // default: before the first commit there is no record, and the next commit gives the tabs.
 if (latest()) observeMemory(latest(), [...latest().surfaces, ...dormant(latest().surfaces)]);
 memorySaver.start();
