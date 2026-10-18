@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.19-1: `make -C native/darwin benchmark-occlusion`이 측정한 바, macOS는 제목 막대 창이 공유하는 각 모서리를 28 pt 넘을 때만 창을 덮인 것으로 보고하므로, 화면 왼쪽 위 모서리의 창은 최대화된 창 아래에서 보이는 상태로 남고 WebKit은 그 document를 보이는 상태로 유지한다; 그 입력을 바꾸는 API나 SPI는 없다.
 - F197.8: log policy가 모든 document에 닿는다: 두 host가 policy를 적용할 때 모든 window에 `log-policy`를 보내고 action `policy-read`에 답하며, 각 surface와 modal document가 policy를 자기 gate에 적용하므로 debug switch를 켜면 surface document가 debug event를 저장한다. Red: surface document가 `page.log.gated`만 batch했다; Green.
 - F196.26: package 시험이 다시 통과한다: 진단이 기본으로 꺼져 있으므로(F197) chain audit fixture가 debug policy를 기록하고, debug switch의 주석이 영어이며, 두 애플리케이션의 surface call 시험이 debug 상태를 설정한다.
 - F196.21-1: boundary 검사가 선언된 저장소를 main checkout에서 찾으므로 `make boundaries`가 worktree에서 실행된다. Red: `.claude/worktrees` 아래 plugin의 `ENOENT`; Green.

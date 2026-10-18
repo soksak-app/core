@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F196.19-1: `make -C native/darwin benchmark-occlusion` measures that macOS reports a window covered by a titled window only when the cover reaches 28 pt past each shared corner, so a window at the top-left corner of the screen stays visible under a maximized window and WebKit keeps its documents visible; no API or SPI changes that input.
 - F197.8: the log policy reaches every document: both hosts send `log-policy` to every window when a policy is applied and answer the action `policy-read`, and each surface or modal document applies the policy to its gate, so with the debug switch on a surface document stores its debug events. Red: a surface document batched only `page.log.gated`; Green.
 - F196.26: the package tests pass again: the chain audit fixture records the debug policy, the comments of the debug switch are English, and the surface call tests of both applications set the debug state, since diagnostics are off by default (F197).
 - F196.21-1: the boundary check resolves the declared repositories from the main checkout, so `make boundaries` runs in a worktree. Red: `ENOENT` for the plugin under `.claude/worktrees`; Green.
