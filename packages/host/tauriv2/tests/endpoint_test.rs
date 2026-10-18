@@ -427,6 +427,27 @@ fn a_socket_path_that_is_not_a_directory_is_refused() {
     assert!(refused.contains("is not a directory"), "{refused}");
 }
 
+// contract: endpoint.socket.path-over-limit
+#[test]
+fn a_socket_path_over_the_limit_is_refused() {
+    use std::os::unix::ffi::OsStrExt;
+    let config = tempfile::tempdir().unwrap();
+    let sockets = config.path().join("s".repeat(120));
+    let address = sockets.join(format!("test-long-{}.sock", std::process::id()));
+    let (fake, _) = Fake::new();
+    let refused = Endpoint::start(&sockets, config.path(), "test-long", fake)
+        .err()
+        .unwrap();
+    assert_eq!(
+        refused,
+        format!(
+            "endpoint socket path {} is {} bytes, over the limit of 103 bytes of a unix socket address",
+            address.display(),
+            address.as_os_str().as_bytes().len()
+        )
+    );
+}
+
 // contract: endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.page-watch-deduplicated, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page, endpoint.watch.registry-reflects-watches
 #[test]
 fn watchers_belong_to_their_connection() {

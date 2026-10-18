@@ -940,6 +940,17 @@ func TestSocketPathThatIsNotADirectoryIsRefused(t *testing.T) {
 	}
 }
 
+// contract: endpoint.socket.path-over-limit
+func TestSocketPathOverTheLimitIsRefused(t *testing.T) {
+	sockets := filepath.Join(socketParent(t), strings.Repeat("s", 120))
+	address := filepath.Join(sockets, fmt.Sprintf("test-long-%d.sock", os.Getpid()))
+	_, _, err := listen(t, sockets, "test-long")
+	want := fmt.Sprintf("endpoint socket path %s is %d bytes, over the limit of 103 bytes of a unix socket address", address, len(address))
+	if err == nil || err.Error() != want {
+		t.Fatalf("got %v, want %q", err, want)
+	}
+}
+
 // lateBackend has the window main only after that window is registered.
 type lateBackend struct {
 	*fakeBackend

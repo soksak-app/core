@@ -25,6 +25,9 @@ unsafe extern "C" {
 const ESRCH: i32 = 3;
 /// The error number that `kill` reports when it refuses to signal a process of another user.
 const EPERM: i32 = 1;
+/// The length in bytes of a unix socket path. `sockaddr_un.sun_path` has 104 bytes on macOS (`sys/un.h`), and the last
+/// of them is the terminating NUL.
+const SOCKET_PATH_LIMIT: usize = 103;
 
 /// Checks whether the process of the persistent service endpoint still exists.
 ///
@@ -268,11 +271,19 @@ impl Connection for Stream {
 }
 
 /// Opens the socket `<directory>/<name>-<pid>.sock`. First it removes the socket of an ended process and the socket
-/// file of the same path that an ended process with the same number left.
+/// file of the same path that an ended process with the same number left. A path longer than the limit is refused
+/// before the directory is changed.
 pub fn listen(directory: &Path, name: &str) -> Result<Box<dyn Listener>, String> {
+    let path = directory.join(format!("{name}-{}.sock", std::process::id()));
+    let length = path.as_os_str().as_encoded_bytes().len();
+    if length > SOCKET_PATH_LIMIT {
+        return Err(format!(
+            "endpoint socket path {} is {length} bytes, over the limit of {SOCKET_PATH_LIMIT} bytes of a unix socket address",
+            path.display()
+        ));
+    }
     private_directory(directory)?;
     remove_ended(directory, name)?;
-    let path = directory.join(format!("{name}-{}.sock", std::process::id()));
     match fs::remove_file(&path) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}

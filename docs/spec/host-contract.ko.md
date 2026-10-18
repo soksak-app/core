@@ -226,6 +226,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.socket.refuses-open-directory` | 다른 사용자에게 열린 소켓 디렉터리를 오류에 모드를 적어 거부한다. | both |
 | `endpoint.socket.refuses-foreign-owner` | 다른 사용자가 소유한 소켓 디렉터리를 "belongs to another user"로 거부한다. | both |
 | `endpoint.socket.refuses-non-directory` | 심볼릭 링크인 소켓 경로를 "is not a directory"로 거부한다. | both |
+| `endpoint.socket.path-over-limit` | 103바이트를 넘는 소켓 경로는 macOS unix socket 주소의 한계(`sun_path`는 종료 NUL을 포함해 104바이트이다)이므로, 소켓 디렉터리를 바꾸기 전에 `endpoint socket path <path> is <n> bytes, over the limit of 103 bytes of a unix socket address`로 거부한다. | both |
 | `endpoint.watch.notifies-watching-connection` | status.watch 뒤의 변경은 window, name, value를 가진 status.changed 알림으로 그 연결에 도착한다. | both |
 | `endpoint.watch.non-watching-connection-not-notified` | 구독하지 않은 연결은 알림을 받지 않는다. | both |
 | `endpoint.watch.unwatch-is-per-connection` | 한 연결의 구독 해제는 같은 상태를 구독한 다른 연결의 알림을 유지한다. | both |

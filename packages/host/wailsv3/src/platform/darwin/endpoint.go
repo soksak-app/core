@@ -67,17 +67,24 @@ func removeEnded(directory, application string) error {
 	return nil
 }
 
+// socketPathLimit is the length in bytes of a unix socket path. sockaddr_un.sun_path has 104 bytes on macOS
+// (sys/un.h), and the last of them is the terminating NUL.
+const socketPathLimit = 103
+
 // Listen creates a Unix domain socket in directory. directory must be a 0700
-// directory that only this user accesses. It first removes the sockets that ended processes left. The socket path is limited to 104 bytes, so the application uses the
-// temporary directory and not the configuration directory.
+// directory that only this user accesses. It first removes the sockets that ended processes left. The socket path is limited to 103 bytes, so the application uses the
+// temporary directory and not the configuration directory. A longer path is refused before the directory is changed.
 func (implementation) Listen(directory, application string) (net.Listener, platform.Endpoint, error) {
+	address := filepath.Join(directory, fmt.Sprintf("%s-%d.sock", application, os.Getpid()))
+	if len(address) > socketPathLimit {
+		return nil, platform.Endpoint{}, fmt.Errorf("endpoint socket path %s is %d bytes, over the limit of %d bytes of a unix socket address", address, len(address), socketPathLimit)
+	}
 	if err := privateDirectory(directory); err != nil {
 		return nil, platform.Endpoint{}, err
 	}
 	if err := removeEnded(directory, application); err != nil {
 		return nil, platform.Endpoint{}, err
 	}
-	address := filepath.Join(directory, fmt.Sprintf("%s-%d.sock", application, os.Getpid()))
 	// A socket that a previous process with the same process number left.
 	if err := os.Remove(address); err != nil && !os.IsNotExist(err) {
 		return nil, platform.Endpoint{}, err

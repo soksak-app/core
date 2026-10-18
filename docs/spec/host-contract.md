@@ -226,6 +226,7 @@ Items:
 | `endpoint.socket.refuses-open-directory` | A socket directory open to others is refused with its mode in the error. | both |
 | `endpoint.socket.refuses-foreign-owner` | A socket directory owned by another user is refused with "belongs to another user". | both |
 | `endpoint.socket.refuses-non-directory` | A socket path that is a symbolic link is refused with "is not a directory". | both |
+| `endpoint.socket.path-over-limit` | A socket path longer than 103 bytes, the unix socket address limit of macOS (`sun_path` has 104 bytes including the terminating NUL), is refused before the socket directory is changed with `endpoint socket path <path> is <n> bytes, over the limit of 103 bytes of a unix socket address`. | both |
 | `endpoint.watch.notifies-watching-connection` | After status.watch, a change reaches that connection as a status.changed notification with window, name, and value. | both |
 | `endpoint.watch.non-watching-connection-not-notified` | A connection that does not watch receives no notification. | both |
 | `endpoint.watch.unwatch-is-per-connection` | An unwatch on one connection keeps the notifications of another connection that watches the same status. | both |
