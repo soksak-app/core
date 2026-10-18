@@ -657,7 +657,7 @@ await connectSettings(storage);
 await projects.initialise(storage, (plugin) => pluginUnits().find((unit) => unit.id === plugin)?.unload ?? false);
 memoryObserved = true;
 // The apply of a plugin change saves the projects, so the page follows plugin changes only after they are initialised.
-followPlugins();
+await followPlugins();
 // default: before the first commit there is no record, and the next commit gives the tabs.
 if (latest()) observeMemory(latest(), [...latest().surfaces, ...dormant(latest().surfaces)]);
 memorySaver.start();

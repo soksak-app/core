@@ -98,11 +98,11 @@ const applyPluginChange = createPluginApply({
 });
 
 /**
- * Applies each later plugin change to this window. The page calls it after the projects are initialised, because the
- * apply saves them (F199.4); a change of a first run before that is applied by the reload after the starter install.
+ * Subscribes to plugin changes and applies a change made before the subscription (installed-plugins.js). The page
+ * calls it after the projects are initialised, because the apply saves them (F199.4).
  */
 export function followPlugins() {
-  followPluginChanges(applyPluginChange);
+  return followPluginChanges(applyPluginChange);
 }
 
 /** Handler of the core.plugins.<action> commands. plugin is a non-empty string (Plugin screen of docs/spec/installation.md). */
