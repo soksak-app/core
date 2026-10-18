@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.9: `make hidden-tab-memory` measures the JS heap and the DOM nodes that hidden DOM tabs hold and that their unload returns; the unload returns more than 99 percent for editor, rendered document and terminal fixtures, so the specification states that DOM tab plugins declare `surface.unload`.
 - F198.15: tests of `scripts/test` and `packages/plugin-api` judge success by events, output lines, order, counts and process state instead of elapsed time; command limits in those tests only bound a hang. Red: recorded runs under load and controlled holds; Green.
 - F198.16: a Wails host call whose method returns no value or nil replies `null` instead of `{}`, which the Wails transport writes for a nil result, so a missing `tab-state.json` no longer shows `tab state format missing is not 1`; both hosts reply `null` (`binding.reply.absent-value-is-null`). Red: the entrance returned a nil result; Green.
 - F198.14: the pool test of the test runner asserts parallelism by the running counts of its `RUN` lines instead of elapsed time, which failed under load. Red: recorded runs under load; Green.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.9: `make hidden-tab-memory`는 숨겨진 DOM tab이 쥐고 unload가 돌려주는 JS heap과 DOM node를 측정한다. editor, rendered document, terminal fixture에서 unload가 99 percent 이상을 돌려주므로, specification은 DOM tab plugin이 `surface.unload`를 선언한다고 적는다.
 - F198.15: `scripts/test`와 `packages/plugin-api`의 시험은 성공을 경과 시간 대신 event, 출력 줄, 순서, 수, process 상태로 판정한다. 그 시험의 command limit은 hang만 제한한다. Red: 부하에서 기록된 실행과 controlled hold; Green.
 - F198.16: method가 값을 돌려주지 않거나 nil을 돌려주는 Wails host 호출은 Wails transport가 nil 결과에 쓰는 `{}` 대신 `null`로 응답하므로, 없는 `tab-state.json`이 더 이상 `tab state format missing is not 1`을 보이지 않는다; 두 host 모두 `null`로 응답한다(`binding.reply.absent-value-is-null`). Red: entrance가 nil 결과를 돌려주었다; Green.
 - F198.14: test runner의 pool 시험은 병렬 실행을 경과 시간 대신 `RUN` 줄의 running 수로 확인한다. 경과 시간 판정은 부하에서 실패했다. Red: 부하에서 기록된 실행; Green.

@@ -210,6 +210,8 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 **재시작.** `memorySaver`가 켜져 있는 동안 plugin이 `surface.unload`를 `{format, maxBytes}`로 선언한 숨겨진 탭은 unload된 채 시작하고 처음 보일 때 restore된다. 꺼져 있으면 숨겨진 탭은 시작할 때 마운트된다. 탭이 unload되었는지는 저장하지 않는다.
 
+**DOM 탭.** surface가 main page의 DOM에 그리는 plugin(composition `dom`)은 `surface.unload`를 선언한다. 이런 탭의 unload는 process가 아니라 main page의 JS object와 DOM node를 해제한다. 숨겨진 탭은 host를 document 밖 fragment에 두므로, 해제될 때까지 DOM, buffer, 다른 process에 동기화하는 문서의 사본을 쥔다. 규칙: DOM 탭 plugin은 해제가 탭이 더한 JS heap과 DOM node의 90 percent 이상을 돌려주고 탭 상태가 돌려주는 양에 비해 작을 때 `surface.unload`를 선언한다. `make hidden-tab-memory`는 core test tree의 작업 크기 fixture surface를 측정한다. 숨겨진 탭 하나당 동기화 사본을 가진 20000줄 editor는 heap 11.6 MB와 node 1524개, 3000 block의 rendered document는 27.8 MB와 node 19504개, scrollback 10000행의 terminal은 6.1 MB와 node 1254개를 더한다. unload는 탭 4개와 8개 모두에서 각각의 99 percent 이상을 돌려주고, 저장된 탭 상태는 32~48 byte이다. heap은 Node와 jsdom 아래 page code의 V8 heap이다. WebKit은 page에 JS heap 값을 주지 않기 때문이다. node 수는 page의 값이다. 다른 process가 쥔 문서 사본은 plugin이 포기하는 sidecar session이고, plugin은 이를 탭 상태에서 복원한다.
+
 **plugin이 포기하는 것.** 선언한 plugin은 unload된 탭에서 `context.tab.state`로 쓰지 않은 모든 상태를 포기한다. DOM, 메모리의 객체, sidecar 세션, session history를 뺀 문서 영역의 보이는 page, 그리고 재시작 뒤에는 그 history도 포기한다. unload된 탭에서 더한 탭은 `origin.directory: null`을 받는다. 마운트되지 않은 탭의 디렉터리 알림은 저장하지 않기 때문이다. 각 plugin은 자기 명세에 무엇을 저장하고 무엇을 포기하는지 적는다. plugin은 이를 위한 설정을 더하지 않는다. plugin에 site 예외 목록이 필요하면 그것은 그 plugin의 설정이며 keep 이유로 코어에 닿는다.
 
 ## 링크 열기
