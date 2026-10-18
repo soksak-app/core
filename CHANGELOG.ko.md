@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.13: `test-command`의 정리 시험은 부하가 걸린 machine이 넘던 500 ms 대신 10초로 process 시작만 제한하고, pid 파일을 읽기 전에 상태를 확인한다. Red: 부하에서 34회 중 1회 실패; Green: 40회 중 40회.
 - F198.3: `surface.unload`를 선언한 plugin의 surface는 `context.tab.state`로 tab 상태를 유지하고, `context.tab.keep`으로 진행 중인 작업을 알리며, unload는 오류를 뺀 tab 보고를 유지한다. Red: API가 없었고 store가 열리기 전에 mount된 surface가 상태를 잃었다; Green.
 - F198.2: tab 상태 store `tab-state.json`(format 1): 두 host가 항목 단위로 쓰고, workbench가 쓰기를 합치며, layout 쓰기 뒤에 항목을 지우고, 고아를 맞추며, 내릴 수 있는 tab의 label cache를 유지한다.
 - F198.6: process마다 memory pressure source 하나가 normal, warn, critical을 관측한다; back-forward cache는 warn과 critical에서만 비우고, 두 host가 모든 창에 `memory-pressure {level, seq}`를 순서대로 보낸다.
