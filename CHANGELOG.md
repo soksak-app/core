@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F196.24: both hosts refuse an endpoint socket path over the 103-byte limit of a unix socket address with an error that names the path, its length and the limit, the same text in both hosts. Red: `bind: invalid argument` and `path must be shorter than SUN_LEN`; Green.
 - F196.17-1: `make app-usage` attributes the WebKit services of each host through the launchd domain of the host, so two applications started in the same second are told apart. Red: nothing was attributed; Green.
 - F196.23: 30 repetitions of `make object-counts` show that the host memory settles (Wails 80 to 89 MB, Tauri 70 to 76 MB) with a flat Go heap.
 - F196.12: the final verification with the default settings: both hosts stored only the log writers' own events, every object count stayed at its baseline over five repetitions, and the modal, idle tab, occlusion and window release checks passed on both hosts.

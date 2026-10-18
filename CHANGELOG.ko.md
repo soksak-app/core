@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.24: 두 host가 unix socket 주소의 103 byte 한계를 넘는 endpoint socket 경로를 경로, 길이, 한계를 적은 같은 문장의 오류로 거부한다. Red: `bind: invalid argument`와 `path must be shorter than SUN_LEN`; Green.
 - F196.17-1: `make app-usage`가 host의 launchd domain으로 각 host의 WebKit service를 귀속하므로, 같은 초에 시작한 두 애플리케이션을 구별한다. Red: 아무것도 귀속되지 않았다; Green.
 - F196.23: `make object-counts` 30번 반복에서 host 메모리가 안정되고(Wails 80~89 MB, Tauri 70~76 MB) Go heap은 평평하다.
 - F196.12: 기본 설정에서의 최종 검증: 두 host가 log writer 자신의 event만 저장했고, 다섯 번 반복 동안 모든 object count가 기준값을 유지했으며, modal, idle tab, occlusion, window release 검사가 두 host에서 통과했다.
