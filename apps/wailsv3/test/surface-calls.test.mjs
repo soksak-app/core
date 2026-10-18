@@ -2,6 +2,10 @@
 // (docs/spec/logging.md#automatic-entrances).
 import assert from "node:assert/strict";
 import test from "node:test";
+import { logGate } from "@soksak/workbench/log-gate.js";
+// The event page.call is at the level debug, which only the debug state stores (docs/spec/logging.md#policy), so the state of every
+// class at trace is set here.
+logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
 
 async function surface(native) {
   const calls = [];
