@@ -1975,18 +1975,18 @@ fn a_page_reload_reconnects_only_the_declared_sidecars_of_a_surface() {
 }
 
 // A page reload reconnects a running persistent sidecar only for the surfaces that have sent to it: a send to it from
-// another surface, such as a browser surface beside a terminal surface, would make that surface a sidecar session of
+// another surface, such as a surface of another card beside the surface that sent, would make that surface a sidecar session of
 // the persistent sidecar, which the Wails host does not count.
 // contract: diagnostics.objects.sidecar-sessions-agree
 #[test]
 fn a_page_reload_does_not_reconnect_a_persistent_sidecar_for_a_surface_that_never_sent_to_it() {
     assert_eq!(
         soksak_host_tauriv2::windows::reconnect_targets(
-            "browser",
+            "tab-other",
             Vec::new(),
             &[(
                 "@scope/sidecar-persistent".to_string(),
-                vec!["terminal".to_string()]
+                vec!["tab-sender".to_string()]
             )],
             |_| true,
         ),
