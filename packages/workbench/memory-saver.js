@@ -327,8 +327,17 @@ export function createMemorySaver({
     restoreFailed(tab, reason) {
       const entry = entries.get(tab);
       if (!entry) throw new Error(`unknown tab ${tab}`);
-      // A region that refuses its session history after the surface mounted fails a restore that already ended.
       if (entry.state === "restoring") setState(entry, "loaded");
+      emitEvent("error", "page.tab.restore.failed", { tab, plugin: entry.plugin, reason });
+      failed(`memory saver: tab ${tab}: restore failed: ${reason}`);
+    },
+    /**
+     * Reports a document region that refused its restored session history. The region attaches again without it, so the
+     * restore stays open and the end of the mount still emits page.tab.restored (docs/spec/plugins.md#memory-saver).
+     */
+    historyRefused(tab, reason) {
+      const entry = entries.get(tab);
+      if (!entry) throw new Error(`unknown tab ${tab}`);
       emitEvent("error", "page.tab.restore.failed", { tab, plugin: entry.plugin, reason });
       failed(`memory saver: tab ${tab}: restore failed: ${reason}`);
     },

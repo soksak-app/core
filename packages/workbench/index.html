@@ -225,7 +225,7 @@ onSurfaceMounted((tab, error) => {
   if (error) memorySaver.restoreFailed(tab, error.message);
   else memorySaver.restored(tab);
 });
-documentRegions.onRefused((tab, name, error) => memorySaver.restoreFailed(tab, `document region ${name}: ${error.message}`));
+documentRegions.onRefused((tab, name, error) => memorySaver.historyRefused(tab, `document region ${name}: ${error.message}`));
 
 /** Gives the memory saver the shown tabs and every layout tab of a loaded plugin of a commit. */
 function observeMemory(record, all) {

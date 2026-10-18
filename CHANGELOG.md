@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F198.8-5: a tab whose document region refused its restored session history still emits `page.tab.restored` when its mount ends, because the refusal keeps the restore open. Red: the saver had no path that kept it open; Green.
 - F198.8-3: a document region that refuses the restored session history of a tab reports the failure and attaches again without it, so the tab keeps its document and loses only the history. Red: the attach failed; Green.
 - F198.8-2: the name and `data-tab-state` of a tab button come from one function of the tab reports, `tabButtonData`, which the plane uses and a unit test covers. Red: the function was missing; Green.
 - F198.8-1: a commit that fails after a tab is marked unloaded no longer escapes as an unhandled rejection: the attempt ends with `page.tab.unload.failed` and the error display, the tab returns to loaded and a new commit declares its surface again. Red: the tab stayed unloaded with an unhandled rejection; Green.

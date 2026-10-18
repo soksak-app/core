@@ -406,3 +406,25 @@ test("a failed commit after the tab is marked returns it to loaded with a report
   assert.deepEqual(state.failures, ["memory saver: tab a: unload failed: host.place refused the layout"]);
   assert.deepEqual(state.states, [["a", "unloaded"], ["a", "loaded"]]);
 });
+
+test("a refused session history keeps the restore open, and the later mount still emits page.tab.restored", async () => {
+  const { saver, state } = harness({ interaction: async () => "c2Vzc2lvbg==" });
+  saver.observe(new Set(["b"]), tabs("a", "b"));
+  mock.timers.tick(120 * MINUTE);
+  await settle();
+  saver.observe(new Set(["a"]), tabs("a", "b"));
+  // The region refuses its history during the mount and attaches again without it.
+  saver.historyRefused("a", "document region page: interactionState is not a session history");
+  assert.equal(saver.state("a"), "restoring");
+  assert.deepEqual(named("page.tab.restore.failed"),
+    [{ tab: "a", plugin: "fixture", reason: "document region page: interactionState is not a session history" }]);
+  assert.deepEqual(state.failures,
+    ["memory saver: tab a: restore failed: document region page: interactionState is not a session history"]);
+  saver.restored("a");
+  assert.equal(saver.state("a"), "loaded");
+  assert.deepEqual(named("page.tab.restored"), [{ tab: "a", plugin: "fixture", history: true }]);
+  // A refusal after the mount ended reports the failure and leaves the tab loaded.
+  saver.historyRefused("a", "document region page: refused");
+  assert.equal(saver.state("a"), "loaded");
+  assert.equal(named("page.tab.restore.failed").length, 2);
+});
