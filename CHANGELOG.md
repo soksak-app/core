@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F192.3: the window check `e2e/terminal-hidden-tab.test.mjs` passes on the debug Wails and Tauri applications built from main with the terminal plugin 0.0.14, the vt sidecar 0.0.11 and the browser plugin 0.0.5: a terminal shown again after another tab of its card draws the output after Enter, with no background `open` and no headless surface. F192.3-1: the check sets `diagnostics.log` to `trace` in every class, because the default policy stores only errors and the check found no record of the output. Red: both hosts failed with no stored `sidecar.vt.pty_read`; Green.
 - F198.22: the Rust migrate tests remove their configuration folders through a drop guard, also after a failed assertion, and report a removal failure instead of ignoring it.
 - F198.21: `surface.unload` is absent, which leaves the tabs never unloaded (`undeclared`), or `{format, maxBytes}`; `validateManifest` refuses `false` with an error that names the plugin, and the specification no longer calls the declaration required. Red: the validator accepted `unload: false` (`Missing expected exception`); Green: the plugin-api tests pass.
 - F198.18: `surface.unload` stays optional; a requirement would add no function, since a surface without it is never unloaded, and would revoke five installable plugin versions.

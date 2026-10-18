@@ -16,12 +16,14 @@ import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
 const promptCount = (lines) => lines.filter((line) => line.startsWith("sh-")).length;
 /** The upper bound of the wait for the frame of the output; the wait ends at the notice of the log that shows the frame. */
 const FRAME_LIMIT = 10_000;
+/** The records that the check reads are below `error`, which the default policy does not store. */
+const EVERY_LEVEL = { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" };
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a terminal shown again after another tab of its card draws the output after Enter`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     assert.ok(s, `${app.binary} is not built`);
-    await fresh(s, { settings: { "terminal.cursor.blink": "Never" } });
+    await fresh(s, { settings: { "terminal.cursor.blink": "Never", "diagnostics.log": EVERY_LEVEL } });
     const [terminal] = await ensureTerminals(s, 1);
     await s.until("terminal.session", (state) => Boolean(state.sessionId),
       `${terminal.surface} did not open a sidecar session`, { surface: terminal.surface });
