@@ -1034,7 +1034,7 @@
   - [o] F197.8.1 — P1: 두 host가 log policy를 적용할 때(default 또는 file) 모든 window에 host event `log-policy`를 `{classes}`로 보내고, call `log`에 `{classes}`를 돌려주는 action `policy-read`가 있다. theme처럼 처음 읽기와 event의 형태이고, host contract case와 Go, Rust 시험을 Red/Green으로 둔다. 완료: 두 host가 default 또는 file load 뒤 모든 window에 `log-policy {classes}`를 보내고 `policy-read`에 적용 중인 policy로 답한다; 모르는 action은 두 host에서 같은 문장으로 거부한다. Red: Go와 Rust에서 응답 field와 announcer가 없음; Green.
   - [o] F197.8.2 — P1: `surfaceCalls`가 load할 때 policy를 읽고 각 `log-policy` event를 자기 document의 gate에 적용하며, 두 runtime이 `listen`을 넘긴다; workbench 시험이 read가 trace를 돌려주는 가짜 host로 `surfaceCalls`를 만들고 batch에 `page.call`을 요구한다(Red: batch에 `page.log.gated`만 있다). 완료: `surfaceCalls`의 `followPolicy()`가 surface와 modal document를 load할 때 policy를 읽고 각 `log-policy` event를 gate에 적용한다; surface call 시험은 더 이상 gate를 직접 설정하지 않는다. Red: `actual: [], expected: [ 'page.call', 'page.record.info' ]`; Green, `pnpm test` 272개 중 272개.
 - [~] F198 — P1: 메모리 절약: 숨겨진 tab을 지연 뒤와 memory pressure 때 내리고 저장된 상태로 다시 mount하며, 설정 하나로 켜고 끈다. 명세 [메모리 절약](spec/plugins.ko.md#메모리-절약)이 설명한다. 명세를 바꾸기 전에 제안이 적대 검증을 통과한다. 제안은 열한 차례의 적대 검증을 거쳐 반박이 남지 않았다.
-  - [ ] F198.1 — P1: 메모리 절약의 용어와 명세(plugins, settings, exposure, hosts, logging, terms)를 제안에서 옮긴다; `validateManifest`가 `surface.unload`를 요구하고 `background` 옆에서 거부한다.
+  - [o] F198.1 — P1: 메모리 절약의 용어와 명세(plugins, settings, exposure, hosts, logging, terms)를 제안에서 옮긴다; `validateManifest`가 `surface.unload`를 요구하고 `background` 옆에서 거부한다. 완료: 명세(plugins, settings, exposure, hosts, logging, projects, installation, terms)가 메모리 절약을 담는다; `validateManifest`는 `background`가 없으면 `surface.unload`를 요구하고 `background` 옆에서 거부한다(Red: 그것이 없는 surface에 `Missing expected exception`; Green: plugin-api 212개 중 212개, workbench 485개 중 485개). event와 exposure 항목은 그것을 보내고 등록하는 단계에서 catalog에 들어간다: catalog 검사가 아무것도 보내거나 등록하지 않는 선언 이름을 거부하기 때문이다.
   - [ ] F198.2 — P1: label cache, 합친 쓰기, 지우기 순서, 맞추기를 가진 tab 상태 store `tab-state.json`(format 1).
   - [ ] F198.3 — P1: `context.tab.state`, `context.tab.keep("busy")`, 오류를 뺀 tab 보고를 유지하는 `disposeSurface`의 unload mode.
   - [ ] F198.4 — P1: workbench의 scheduler, 보호, 세대를 가진 순서 있는 unload 동작, restore.
@@ -1045,6 +1045,7 @@
   - [ ] F198.9 — P2: 숨겨진 DOM tab의 채택을 정하는 benchmark.
   - [ ] F198.10 — P1: unload, pressure, restore에 대한 두 host의 창 검사.
   - [ ] F198.11 — P1: F198.5 뒤 `memorySaver`를 기본으로 켜는 release와, release 항목으로서의 plugin 채택.
+  - [ ] F198.12 — P1: `surface.unload`를 선언하는 plugin release(appview, browser, editor, flowmark, hwp, shell; terminal은 `background`를 선언하고 files는 surface가 없다): release된 core는 모르는 surface field를 거부하고 다음 core는 선언을 요구하므로, 선언하는 각 plugin release는 `engines.soksak`로 그 core release를 요구하고 이전 plugin release는 이전 core를 위해 남는다. 각 plugin 저장소가 자기 항목을 기록한다.
 - [~] F196 — P1: 애플리케이션 메모리: 3일 사용 뒤 workbench page가 242 MB(Wails), 291 MB(Tauri), host가 각각 약 154 MB였고, 브라우저 탭의 문서 web view가 1.31 GB였는데, 애플리케이션의 어떤 기록도 그것을 가리키지 못한다.
   - [o] F196.1 — P1: 창 상태가 `host.window`의 `documents`에 각 문서 web view의 WebContent process를 보고하므로, 측정이 브라우저 탭의 메모리를 그 surface에 연결한다.
     - [o] F196.1.1 — P2: performance trace의 메모리 표본이 host, page process, 모든 문서 process를 그 window, surface와 함께 잰다.

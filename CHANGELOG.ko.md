@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F198.1: 메모리 절약을 명세한다(숨겨진 tab의 unload와 restore, 보호, tab 상태 store, 설정, status와 명령, host memory pressure source); `validateManifest`는 plugin이 `background`를 선언하지 않으면 `surface.unload`를 요구한다. Red: 그것이 없는 surface가 받아들여졌다; Green.
 - F196.29: 5분 동안 숨겨진 browser tab과 memory pressure 때의 모든 tab이 back-forward cache를 비우므로, 떠난 page의 중단된 process가 끝난다; 그 뒤 뒤로 가면 page를 다시 load한다. 비울 때마다 event `native.document.backforward_cleared`를 남긴다. Red: 뒤로 가면 page가 cache에서 복원되었다; Green: `document_backforward_test`.
 - F196.28: CI cache는 의존 build 산출물만 담는다(`Swatinem/rust-cache`); target 폴더 전체 cache가 8 GB로 커져 runner 디스크를 채웠다.
 - F196.14, F196.20-1: browser tab은 page가 쓰는 만큼 쓰고 document region과 plain web view에서 같다; 보이는 page는 JavaScript collector가 늦게 수집하는 할당만큼 늘고 page를 다시 그리면 내려가며, WebKit에는 보이는 page를 더 낮추는 표준 메커니즘이 없다.
