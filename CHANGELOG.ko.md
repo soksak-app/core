@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F196.12: 기본 설정에서의 최종 검증: 두 host가 log writer 자신의 event만 저장했고, 다섯 번 반복 동안 모든 object count가 기준값을 유지했으며, modal, idle tab, occlusion, window release 검사가 두 host에서 통과했다.
 - F196.18-2: host 구조 검사가 자기 목록 대신 native host 명세에서 허용된 파일 차이를 읽는다. Red: H1 행이 없는 표가 통과했다; Green.
 - F196.18-1: 허용된 host 차이가 `diagnostics.heap.profile`을 Wails 전용 method로 선언하고(E1 행), `make host-parity-check`가 그 선언을 읽어 검사가 통과한다. Red: 선언된 method를 보고했다; Green.
 - F196.22: host 시작이 더 이상 WebKit process를 끝내지 않는다. WebKit child 기록이 host 뒤에 시작한 다른 애플리케이션의 process를 적었고, 다음 시작이 그 process에 `kill -9`를 보내 다른 host의 page process(F196.13-1)와 check 중의 Tauri host process(F196.10.2-4)를 끝냈다. launchd가 끝난 host의 service를 0.2초 안에 끝내므로 두 host에서 기록과 reap를 없앴다. Red: `the start ended process 58287 of another application`; Green: `startup.ends-no-process`.

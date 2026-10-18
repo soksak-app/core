@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F196.12: the final verification with the default settings: both hosts stored only the log writers' own events, every object count stayed at its baseline over five repetitions, and the modal, idle tab, occlusion and window release checks passed on both hosts.
 - F196.18-2: the host structure check reads the allowed file differences from the native host specification instead of its own list. Red: a table without row H1 passed; Green.
 - F196.18-1: the allowed host differences declare `diagnostics.heap.profile` as a Wails-only method (row E1), and `make host-parity-check` reads that declaration, so the check passes. Red: the declared method was reported; Green.
 - F196.22: a host start no longer ends WebKit processes. The record of WebKit children listed processes of other applications that started after the host, and the next start sent `kill -9` to them, which ended the page process of another host (F196.13-1) and the processes of the Tauri host during its checks (F196.10.2-4). launchd ends the services of an exited host within 0.2 s, so the record and the reap are removed in both hosts. Red: `the start ended process 58287 of another application`; Green: `startup.ends-no-process`.
