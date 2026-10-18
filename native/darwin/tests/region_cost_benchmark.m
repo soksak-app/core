@@ -29,6 +29,15 @@
 // WebKit malloc category, and the dirty bytes of the graphics and JS JIT rows. At the end it prints the least-squares slope
 // of the total in megabytes per minute over the minutes 5 to MINUTES for each variant and the difference of the two slopes.
 //
+// The reload mode (--reload COUNT) measures only U and then S, each in the window of the table. After the first load and after
+// COUNT reloads (each a navigation to the same address that starts 15 seconds after the previous load finished and is waited
+// for), it prints the footprint total and the MALLOC_SMALL dirty bytes of the WebContent process and the heap counts of
+// WebCore::Text, WebCore::HTMLDocument, WebCore::CSSFontAccessor and NSCTFont. A count that grows with the
+// reloads in one variant and not in the other shows earlier documents that the variant keeps. Then it sets the simulated
+// memory pressure level of the system to warn (sudo -n memory_pressure -S -l warn), or to the level of --pressure LEVEL
+// (warn or critical), back to normal 10 seconds later, and
+// reads the process again 5 seconds after that, which shows whether memory pressure releases the kept documents.
+//
 
 // The three scripts and the names of the content world and the messages are copied from src/document_view.m, because the
 // source keeps them as static strings and the benchmark does not change the source. A difference between the two copies is
@@ -740,10 +749,139 @@ static void measureLong(int minutes, NSURL *address, WKWebsiteDataStore *persist
     }
 }
 
+// The reload mode: the seconds between the end of a load and the start of the next reload, and the classes that heap counts.
+static const NSTimeInterval kReloadGapSeconds = 15;
+static const char *const kHeapClasses[] = { "WebCore::Text", "WebCore::HTMLDocument",
+    "WebCore::CSSFontAccessor", "NSCTFont" };
+enum { kHeapClassCount = sizeof(kHeapClasses) / sizeof(kHeapClasses[0]) };
+// The reading of one WebContent process in the reload mode. A count or row that the tool does not report is -1.
+typedef struct {
+    long total;
+    long mallocSmallDirty;
+    long counts[kHeapClassCount];
+} ReloadReading;
+// Reads the footprint total, the MALLOC_SMALL row and the heap counts of the WebContent process of the view.
+static ReloadReading readReload(WKWebView *view, NSString *step) {
+    pid_t process = view._webProcessIdentifier;
+    ReloadReading reading;
+    reading.total = readFootprint(view, step).total;
+    reading.mallocSmallDirty = -1;
+    NSString *text = footprintText(process);
+    if (!text) failStep(step, @"footprint did not report the process", process);
+    long dirty = 0;
+    long reclaimable = 0;
+    if (footprintRow(text, "MALLOC_SMALL", &dirty, &reclaimable)) reading.mallocSmallDirty = dirty;
+    // heap prints one row per class: "<count> <bytes> <average> <class> <type> <binary>".
+    NSString *heap = toolText(@"/usr/bin/heap", @[[NSString stringWithFormat:@"%d", process]]);
+    if (!heap) failStep(step, @"heap did not report the process", process);
+    for (int c = 0; c < kHeapClassCount; c++) reading.counts[c] = -1;
+    for (NSString *line in [heap componentsSeparatedByString:@"\n"]) {
+        long count = 0;
+        long bytes = 0;
+        double average = 0;
+        int consumed = 0;
+        if (sscanf(line.UTF8String, " %ld %ld %lf %n", &count, &bytes, &average, &consumed) != 3) continue;
+        NSArray<NSString *> *words = [[line substringFromIndex:consumed]
+            componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+        if (words.count == 0) continue;
+        for (int c = 0; c < kHeapClassCount; c++) {
+            if ([words[0] isEqualToString:@(kHeapClasses[c])]) reading.counts[c] = count;
+        }
+    }
+    return reading;
+}
+static void printReload(const char *name, const char *when, ReloadReading reading) {
+    fprintf(stdout, "%-4s %-12s %10s %16s", name, when, megabytes(reading.total), megabytes(reading.mallocSmallDirty));
+    for (int c = 0; c < kHeapClassCount; c++) fprintf(stdout, " %24ld", reading.counts[c]);
+    fprintf(stdout, "\n");
+}
+// Sets the simulated memory pressure level of the system. The level stays until the next call sets another.
+static void setPressure(NSString *level, NSString *step, pid_t process) {
+    if (!toolText(@"/usr/bin/sudo", @[@"-n", @"/usr/bin/memory_pressure", @"-S", @"-l", level])) {
+        failStep(step, [NSString stringWithFormat:@"sudo -n memory_pressure -S -l %@ failed", level], process);
+    }
+    fprintf(stdout, "pressure level %s\n", level.UTF8String);
+    fflush(stdout);
+}
+// Waits until the navigation that the caller started has finished: the view reports loading, then not loading.
+static void waitNavigation(WKWebView *view, NSString *step) {
+    if (!pumpUntil(stepLimit, ^BOOL { return view.loading; })) {
+        failStep(step, @"the reload did not start within 120 seconds", view._webProcessIdentifier);
+    }
+    if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
+        failStep(step, @"the reload did not finish within 120 seconds", view._webProcessIdentifier);
+    }
+}
+// Loads the address in U and then in S, reloads it count times in each, and prints the readings after the first load and
+// after the last reload.
+static void measureReload(int count, NSString *pressureLevel, NSWindow *window, NSView *content, NSURL *address, WKWebsiteDataStore *persistentStore,
+    NSString *documentDirectory) {
+    const int variants[2] = { kU, kS };
+    ReloadReading readings[2][3];
+    for (int j = 0; j < 2; j++) {
+        const Variant *spec = &kVariants[variants[j]];
+        NSString *step = [NSString stringWithFormat:@"reload %s", spec->name];
+        fprintf(stdout, "start %s: %s\n", spec->name, spec->label);
+        fflush(stdout);
+        OpenView opened = openVariant(spec, window, content, address, persistentStore, documentDirectory, step);
+        WKWebView *view = opened.view;
+        if (!pumpUntil(stepLimit, ^BOOL { return !view.loading && view.title.length > 0; })) {
+            failStep(step, @"the page did not finish loading within 120 seconds", view._webProcessIdentifier);
+        }
+        pid_t process = view._webProcessIdentifier;
+        double loaded = nowSeconds();
+        waitUntil(loaded + kReloadGapSeconds);
+        readings[j][0] = readReload(view, step);
+        fprintf(stdout, "loaded %s: pid=%d title=%s\n", spec->name, process, view.title.UTF8String);
+        printReload(spec->name, "load", readings[j][0]);
+        fflush(stdout);
+        for (int r = 1; r <= count; r++) {
+            if (opened.document) {
+                if (!sp_document_load(opened.document, address.absoluteString.UTF8String)) {
+                    failStep(step, @"the document refuses the address", view._webProcessIdentifier);
+                }
+            } else {
+                [view loadRequest:[NSURLRequest requestWithURL:address]];
+            }
+            waitNavigation(view, step);
+            loaded = nowSeconds();
+            if (view._webProcessIdentifier != process) {
+                failStep(step, [NSString stringWithFormat:@"the reload %d moved the page to the process %d", r,
+                    view._webProcessIdentifier], process);
+            }
+            fprintf(stdout, "reloaded %s: %d of %d\n", spec->name, r, count);
+            fflush(stdout);
+            waitUntil(loaded + kReloadGapSeconds);
+        }
+        readings[j][1] = readReload(view, step);
+        printReload(spec->name, "reloads", readings[j][1]);
+        fflush(stdout);
+        setPressure(pressureLevel, step, process);
+        waitUntil(nowSeconds() + 10);
+        setPressure(@"normal", step, process);
+        waitUntil(nowSeconds() + 5);
+        readings[j][2] = readReload(view, step);
+        printReload(spec->name, "pressure", readings[j][2]);
+        fflush(stdout);
+        closeOpenView(&opened, step);
+    }
+    fprintf(stdout, "\nreload table: %d reloads (MB and heap counts)\n", count);
+    fprintf(stdout, "%-4s %-12s %10s %16s", "var", "when", "total", "malloc_small");
+    for (int c = 0; c < kHeapClassCount; c++) fprintf(stdout, " %24s", kHeapClasses[c]);
+    fprintf(stdout, "\n");
+    for (int j = 0; j < 2; j++) {
+        printReload(kVariants[variants[j]].name, "load", readings[j][0]);
+        printReload(kVariants[variants[j]].name, "reloads", readings[j][1]);
+        printReload(kVariants[variants[j]].name, "pressure", readings[j][2]);
+    }
+    fflush(stdout);
+}
 int main(int argc, const char *argv[]) { @autoreleasepool {
     double started = nowSeconds();
     const char *addressArgument = NULL;
     long longMinutes = 0;
+    long reloadCount = 0;
+    NSString *pressureLevel = @"warn";
     BOOL selected[kVariantCount];
     for (int variant = 0; variant < kVariantCount; variant++) selected[variant] = YES;
     for (int i = 1; i < argc; i++) {
@@ -778,6 +916,21 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
                 return 1;
             }
             longMinutes = minutes;
+        } else if (strcmp(argv[i], "--pressure") == 0) {
+            if (i + 1 >= argc || (strcmp(argv[i + 1], "warn") != 0 && strcmp(argv[i + 1], "critical") != 0)) {
+                fprintf(stderr, "FAIL: --pressure takes warn or critical\n");
+                return 1;
+            }
+            pressureLevel = @(argv[++i]);
+        } else if (strcmp(argv[i], "--reload") == 0) {
+            char *end = NULL;
+            errno = 0;
+            long reloads = i + 1 < argc ? strtol(argv[++i], &end, 10) : 0;
+            if (errno != 0 || end == NULL || *end != '\0' || reloads < 1) {
+                fprintf(stderr, "FAIL: --reload takes a whole number of reloads of at least 1\n");
+                return 1;
+            }
+            reloadCount = reloads;
         } else if (addressArgument == NULL) {
             addressArgument = argv[i];
         } else {
@@ -791,7 +944,7 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         fprintf(stderr, "FAIL: the address %s is not an absolute address\n", address.UTF8String);
         return 1;
     }
-    fprintf(stdout, "start benchmark address=%s mode=%s\n", address.UTF8String, longMinutes > 0 ? "long" : "table");
+    fprintf(stdout, "start benchmark address=%s mode=%s\n", address.UTF8String, longMinutes > 0 ? "long" : reloadCount > 0 ? "reload" : "table");
     fflush(stdout);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -828,6 +981,14 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         [window orderBack:nil];
         fprintf(stdout, "window %gx%g backing_scale %g\n", (double)kWindowWidth, (double)kWindowHeight, (double)window.backingScaleFactor);
         fflush(stdout);
+        if (reloadCount > 0) {
+            measureReload((int)reloadCount, pressureLevel, window, content, url, persistentStore, documentDirectory);
+            [window close];
+            [window release];
+            [NSFileManager.defaultManager removeItemAtPath:root error:nil];
+            fprintf(stdout, "end benchmark elapsed %.3f s\n", nowSeconds() - started);
+            return 0;
+        }
 
         Reading readings[kVariantCount][kReads];
         for (int variant = 0; variant < kVariantCount; variant++) {

@@ -33,7 +33,7 @@
 #                         of the system through memory_pressure, which needs the sudoers rule for /usr/bin/memory_pressure. It asserts
 #                         the response of the region and refuses to judge when the 1-minute load is above 20. It prints the footprint
 #                         and vmmap malloc zone rows and the collection state of the released array before and after the pressure
-#   make benchmark-region-cost [URL=<address>] [LONG=<minutes>] [VARIANTS=<name,name>]
+#   make benchmark-region-cost [URL=<address>] [LONG=<minutes>] [VARIANTS=<name,name>] [RELOAD=<count>] [PRESSURE=<level>]
 #                         loads an address (default https://www.google.com/) in a 1200×760 window with a 1180×400 region in the
 #                         variants of tests/region_cost_benchmark.m (plain web views with one setting each, a document region with no
 #                         stream, and a document region with the element and request streams acknowledged). It prints the footprint
@@ -45,7 +45,11 @@
 #                         variant with the footprint total, the MALLOC dirty bytes, the WebKit malloc dirty bytes, and the graphics
 #                         and JS JIT dirty bytes. At the end it prints the least-squares slope of the total in megabytes per minute
 #                         over minutes 5 to LONG for U and S, and the difference S-U. It prints numbers and asserts nothing.
-#                         VARIANTS (for example U,V1,V2,V3) measures only the named variants of the table
+#                         VARIANTS (for example U,V1,V2,V3) measures only the named variants of the table. With RELOAD it runs U
+#                         and then S, reloads the address RELOAD times in each (15 seconds apart), and prints the footprint total,
+#                         MALLOC_SMALL and the heap counts of Text, HTMLDocument, CSSFontAccessor and NSCTFont after the first load,
+#                         after the reloads, and after a simulated memory pressure level PRESSURE (warn, the default, or critical)
+#                         set with sudo -n memory_pressure -S for 10 seconds
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
 #   make repeat-suite COUNT=<n>
@@ -115,7 +119,7 @@ benchmark-occlusion: $(BUILD)/occlusion_corner_benchmark
 # The address of the region cost benchmark: make benchmark-region-cost URL=https://example.com/
 URL ?= https://www.google.com/
 benchmark-region-cost: $(BUILD)/region_cost_benchmark
-	@$(BUILD)/region_cost_benchmark $(if $(URL),"$(URL)") $(if $(LONG),--long $(LONG)) $(if $(VARIANTS),--variants $(VARIANTS))
+	@$(BUILD)/region_cost_benchmark $(if $(URL),"$(URL)") $(if $(LONG),--long $(LONG)) $(if $(VARIANTS),--variants $(VARIANTS)) $(if $(RELOAD),--reload $(RELOAD)) $(if $(PRESSURE),--pressure $(PRESSURE))
 
 # A check that includes the acceptance check body is rebuilt when that body changes.
 $(BUILD)/capture_checker_test $(BUILD)/capture_file_checker_test $(BUILD)/capture_lifecycle_test $(BUILD)/capture_directory_checker_test: tests/capture_test.m
