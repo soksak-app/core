@@ -2105,6 +2105,33 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F193",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "\"--service-dir\", serviceDir, \"--log-dir\"" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: ".arg(\"--service-dir\")" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/sidecars_test.go", id: "TestSidecarReceivesTheLogDirectory" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "a_sidecar_receives_the_log_directory" },
+    ],
+    expected: "A sidecar service starts with the arguments that the parser of its release accepts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F196",
+    implementation: [{ file: "packages/plugin-api/document-region.js", symbol: "subscribe(stream, listener)" }],
+    tests: [{ file: "packages/plugin-api/test/document-region.test.mjs", id: "a stream subscription receives the messages of its handle and close ends it" }],
+    expected: "A document region sends its elements and requests only through a subscribed stream.",
+    levels: ["unit"],
+  },
+  {
+    id: "F198",
+    implementation: [{ file: "packages/workbench/memory-saver.js", symbol: "export function createMemorySaver" }],
+    tests: [{ file: "packages/workbench/test/memory-saver.test.mjs", id: "the delay unloads a hidden tab and a show restores it" }],
+    expected: "The memory saver unloads a hidden tab after the delay and a show restores it from its stored state.",
+    levels: ["unit"],
+  },
+  {
     id: "F191",
     implementation: [{ file: "scripts/release-step.sh", symbol: "release-step-ok" }],
     tests: [{ file: "scripts/test/release-step.test.mjs", id: "the release step script writes the released form, runs the host once and requires the migration and its record" }],
