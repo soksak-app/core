@@ -2082,6 +2082,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F197",
+    implementation: [{ file: "packages/workbench/settings.js", symbol: "export const debugOn" }],
+    tests: [{ file: "packages/workbench/test/settings-debug-switch.test.mjs", id: "the debug switch runs core.settings.debug and is on only when the trace and every class are at trace" }],
+    expected: "Diagnostics are off by default and the debug switch turns the trace and every log class on and off together.",
+    levels: ["unit"],
+  },
+  {
     id: "F199",
     implementation: [
       { file: "packages/workbench/tab-session.js", symbol: "export function createTabSessions" },
