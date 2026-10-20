@@ -8,8 +8,8 @@
 //! docs/spec/endpoint.md.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::fs::File;
-use std::io::{ErrorKind, Read, Write};
+use std::fs::{File, TryLockError};
+use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -473,7 +473,7 @@ impl Notifier {
 pub struct Endpoint {
     shared: Arc<Shared>,
     listener: Arc<dyn Listener>,
-    _process_lock: ProcessLock,
+    process_lock: Mutex<Option<ProcessLock>>,
     address: String,
     directory: PathBuf,
     file: PathBuf,
@@ -484,11 +484,21 @@ pub struct Endpoint {
     stopped: Arc<AtomicBool>,
 }
 
-/// One application process owns one configuration directory. The file handle stays open while the endpoint exists. The
-/// file itself also records the owner PID, so a process that was terminated by force can be replaced explicitly.
+/// How many times the acquisition opens the lock file again after the file that it opened was replaced.
+const LOCK_ATTEMPTS: usize = 8;
+
+/// One application process owns one configuration directory. The lock file stays open and locked with an exclusive
+/// advisory lock (flock) for the life of the process. A held lock means a live owner. A file that is present and not
+/// locked was left by an owner that ended without removing it, and the next owner takes it over. The lock is taken
+/// on the open file, so two starters that open the same file cannot both replace it.
 struct ProcessLock {
     path: PathBuf,
     _file: File,
+}
+
+/// The process identifier that a lock file holds: a positive decimal number, with surrounding white space ignored.
+fn parse_pid(contents: &str) -> Option<u32> {
+    contents.trim().parse::<u32>().ok().filter(|pid| *pid > 0)
 }
 
 impl ProcessLock {
@@ -496,50 +506,77 @@ impl ProcessLock {
         let platform = platform::current()?;
         platform.create_private_directories(directory)?;
         let path = directory.join("process.lock");
-        for attempt in 0..2 {
-            match platform.create_private_file(&path) {
-                Ok(mut file) => {
-                    file.write_all(std::process::id().to_string().as_bytes())
-                        .map_err(|error| format!("{}: {error}", path.display()))?;
-                    file.sync_all()
-                        .map_err(|error| format!("{}: {error}", path.display()))?;
-                    return Ok(Self { path, _file: file });
-                }
-                Err(error) if error.kind() == ErrorKind::AlreadyExists && attempt == 0 => {
-                    let contents = std::fs::read_to_string(&path)
-                        .map_err(|read| format!("{}: {read}", path.display()))?;
-                    let pid = contents
-                        .trim()
-                        .parse::<u32>()
-                        // default: a lock file without a process number becomes the error "invalid process lock" below.
-                        .ok()
-                        .filter(|pid| *pid > 0)
-                        .ok_or_else(|| format!("{}: invalid process lock", path.display()))?;
-                    if platform.service_process_exists(pid)? {
-                        return Err(format!(
-                            "configuration directory {} is already owned by process {pid}",
-                            directory.display()
-                        ));
+        for _ in 0..LOCK_ATTEMPTS {
+            let (file, existed) = match platform.create_private_file(&path) {
+                Ok(file) => (file, false),
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                    match platform.open_private_file(&path) {
+                        Ok(file) => (file, true),
+                        // The file was removed after the create failed, so the next attempt creates it.
+                        Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                        Err(error) => return Err(format!("{}: {error}", path.display())),
                     }
-                    std::fs::remove_file(&path)
-                        .map_err(|remove| format!("{}: {remove}", path.display()))?;
                 }
                 Err(error) => return Err(format!("{}: {error}", path.display())),
+            };
+            match file.try_lock() {
+                Ok(()) => {}
+                Err(TryLockError::WouldBlock) => {
+                    // The owner removes the file before it unlocks, so a file that is gone now was released.
+                    let contents = match std::fs::read_to_string(&path) {
+                        Ok(contents) => contents,
+                        Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                        Err(error) => return Err(format!("{}: {error}", path.display())),
+                    };
+                    let pid = parse_pid(&contents)
+                        .ok_or_else(|| format!("{}: invalid process lock", path.display()))?;
+                    return Err(format!(
+                        "configuration directory {} is already owned by process {pid}",
+                        directory.display()
+                    ));
+                }
+                Err(TryLockError::Error(error)) => {
+                    return Err(format!("{}: {error}", path.display()));
+                }
             }
+            // The file at path was replaced after this open, so the lock is on a file that no longer names the lock.
+            if !platform.is_named_file(&file, &path)? {
+                continue;
+            }
+            if existed {
+                // The contents are read through the locked file, so they cannot change while they are checked.
+                let mut contents = String::new();
+                (&file)
+                    .read_to_string(&mut contents)
+                    .map_err(|read| format!("{}: {read}", path.display()))?;
+                parse_pid(&contents)
+                    .ok_or_else(|| format!("{}: invalid process lock", path.display()))?;
+                #[cfg(feature = "diagnostics")]
+                crate::process_lock_hook::observe_stale_lock();
+            }
+            let pid = std::process::id().to_string();
+            file.set_len(0)
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            (&file)
+                .seek(SeekFrom::Start(0))
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            (&file)
+                .write_all(pid.as_bytes())
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            file.sync_all()
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            return Ok(Self { path, _file: file });
         }
-        unreachable!("process lock acquisition has at most two attempts")
-    }
-
-    fn release(&self) -> Result<(), String> {
-        match std::fs::remove_file(&self.path) {
-            Ok(()) => Ok(()),
-            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(format!("{}: {error}", self.path.display())),
-        }
+        Err(format!(
+            "{}: the process lock was replaced in each of {LOCK_ATTEMPTS} attempts",
+            path.display()
+        ))
     }
 }
 
 impl Drop for ProcessLock {
+    /// Removes the lock file while the lock is still held. The file closes after this, which releases the lock, so a
+    /// starter that locks the file next finds the path gone or a new file.
     fn drop(&mut self) {
         if let Err(error) = std::fs::remove_file(&self.path)
             && error.kind() != ErrorKind::NotFound
@@ -576,7 +613,7 @@ impl Endpoint {
         let mut endpoint = Endpoint {
             shared,
             listener,
-            _process_lock: process_lock,
+            process_lock: Mutex::new(Some(process_lock)),
             address,
             directory: directory.to_path_buf(),
             file,
@@ -680,9 +717,8 @@ impl Endpoint {
                 }
             }
         }
-        if let Err(error) = self._process_lock.release() {
-            log_error("process lock release", error);
-        }
+        // The lock is released last, after the endpoint file is removed (ProcessLock::drop).
+        drop(self.process_lock.lock().expect("the process lock mutex").take());
     }
 }
 

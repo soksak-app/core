@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -186,11 +185,35 @@ type Endpoint struct {
 	queues  map[topic][]func()
 }
 
-// processLock gives one application process exclusive ownership of the configuration directory
-// and keeps the PID needed to replace a stale lock after an abnormal exit.
+// lockAttempts is how many times the acquisition opens the lock file again after the file that it opened was replaced.
+const lockAttempts = 8
+
+// processLock gives one application process exclusive ownership of the configuration directory. The lock file stays open and locked with
+// an exclusive advisory lock (flock) for the life of the process. A held lock means a live owner. A file that is present and not locked was
+// left by an owner that ended without removing it, and the next owner takes it over. The lock is taken on the open file, so two starters that
+// open the same file cannot both replace it.
 type processLock struct {
 	path string
 	file *os.File
+}
+
+// parsePID reads the process identifier that a lock file holds: a positive decimal number, with surrounding white space ignored.
+func parsePID(contents []byte) (int, bool) {
+	pid, err := strconv.Atoi(strings.TrimSpace(string(contents)))
+	return pid, err == nil && pid > 0
+}
+
+// openProcessLockFile creates the lock file at path, or opens the file that exists, and reports whether the file existed.
+func openProcessLockFile(system platform.Platform, path string) (*os.File, bool, error) {
+	file, err := system.CreatePrivateFile(path)
+	if err == nil {
+		return file, false, nil
+	}
+	if !errors.Is(err, os.ErrExist) {
+		return nil, false, err
+	}
+	file, err = system.OpenPrivateFile(path)
+	return file, true, err
 }
 
 func acquireProcessLock(directory string) (*processLock, error) {
@@ -202,59 +225,88 @@ func acquireProcessLock(directory string) (*processLock, error) {
 		return nil, err
 	}
 	path := filepath.Join(directory, "process.lock")
-	for attempt := 0; attempt < 2; attempt++ {
-		file, err := system.CreatePrivateFile(path)
-		if err == nil {
-			if _, err := fmt.Fprintf(file, "%d", os.Getpid()); err != nil {
-				return nil, errors.Join(err, file.Close(), os.Remove(path))
-			}
-			if err := file.Sync(); err != nil {
-				return nil, errors.Join(err, file.Close(), os.Remove(path))
-			}
-			return &processLock{path: path, file: file}, nil
+	for attempt := 0; attempt < lockAttempts; attempt++ {
+		file, existed, err := openProcessLockFile(system, path)
+		// The file was removed after the create failed, so the next attempt creates it.
+		if errors.Is(err, os.ErrNotExist) {
+			continue
 		}
-		if !errors.Is(err, os.ErrExist) || attempt != 0 {
+		if err != nil {
 			return nil, err
 		}
-		contents, readErr := os.ReadFile(path)
-		if readErr != nil {
-			var pathErr *fs.PathError
-			if errors.As(readErr, &pathErr) {
-				readErr = pathErr.Err
+		locked, err := system.TryLockFile(file)
+		if err != nil {
+			return nil, errors.Join(err, file.Close())
+		}
+		if !locked {
+			// The owner removes the file before it unlocks, so a file that is gone now was released.
+			contents, readErr := os.ReadFile(path)
+			if errors.Is(readErr, os.ErrNotExist) {
+				if err := file.Close(); err != nil {
+					return nil, err
+				}
+				continue
 			}
-			return nil, fmt.Errorf("%s: %w", path, readErr)
+			if readErr != nil {
+				return nil, errors.Join(readErr, file.Close())
+			}
+			pid, ok := parsePID(contents)
+			if !ok {
+				return nil, errors.Join(fmt.Errorf("%s: invalid process lock", path), file.Close())
+			}
+			return nil, errors.Join(fmt.Errorf("configuration directory %s is already owned by process %d", directory, pid), file.Close())
 		}
-		pid, parseErr := strconv.Atoi(strings.TrimSpace(string(contents)))
-		if parseErr != nil || pid <= 0 {
-			return nil, fmt.Errorf("%s: invalid process lock", path)
+		// The file at path was replaced after this open, so the lock is on a file that no longer names the lock.
+		named, err := system.IsNamedFile(file, path)
+		if err != nil {
+			return nil, errors.Join(err, file.Close())
 		}
-		implementation, currentErr := platform.Current()
-		if currentErr != nil {
-			return nil, currentErr
+		if !named {
+			if err := file.Close(); err != nil {
+				return nil, err
+			}
+			continue
 		}
-		exists, existsErr := implementation.ServiceProcessExists(pid)
-		if existsErr != nil {
-			return nil, existsErr
+		if existed {
+			// The contents are read through the locked file, so they cannot change while they are checked.
+			contents, err := io.ReadAll(file)
+			if err != nil {
+				return nil, errors.Join(err, file.Close())
+			}
+			if _, ok := parsePID(contents); !ok {
+				return nil, errors.Join(fmt.Errorf("%s: invalid process lock", path), file.Close())
+			}
+			if hook := processLockHook.Load(); hook != nil && *hook != nil {
+				(*hook)()
+			}
 		}
-		if exists {
-			return nil, fmt.Errorf("configuration directory %s is already owned by process %d", directory, pid)
+		if err := file.Truncate(0); err != nil {
+			return nil, errors.Join(err, file.Close())
 		}
-		if err := os.Remove(path); err != nil {
-			return nil, err
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return nil, errors.Join(err, file.Close())
 		}
+		if _, err := file.WriteString(strconv.Itoa(os.Getpid())); err != nil {
+			return nil, errors.Join(err, file.Close())
+		}
+		if err := file.Sync(); err != nil {
+			return nil, errors.Join(err, file.Close())
+		}
+		return &processLock{path: path, file: file}, nil
 	}
-	return nil, fmt.Errorf("could not acquire process lock %s", path)
+	return nil, fmt.Errorf("the process lock %s was replaced in each of %d attempts", path, lockAttempts)
 }
 
+// close removes the lock file while the lock is held, then closes the file, which releases the lock.
 func (lock *processLock) close() error {
 	if lock == nil {
 		return nil
 	}
 	var errs []error
-	if err := lock.file.Close(); err != nil {
+	if err := os.Remove(lock.path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		errs = append(errs, err)
 	}
-	if err := os.Remove(lock.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := lock.file.Close(); err != nil {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)

@@ -92,7 +92,7 @@ fn start(config: &Path, application: &str, service: Arc<Fake>) -> Endpoint {
     endpoint
 }
 
-// contract: endpoint.process.one-owner-per-config-dir
+// contract: endpoint.lock.single-owner
 #[test]
 fn a_configuration_directory_has_one_process_owner() {
     let config = folder::Folder::new();
@@ -121,6 +121,59 @@ fn the_process_lock_is_owner_only() {
     let endpoint = start(config.path(), "test-lock-mode", fake);
     assert_eq!(mode(&config.path().join("process.lock")), 0o600);
     endpoint.stop();
+}
+
+/// The process identifier of a child process that has ended and been waited for.
+#[cfg(feature = "diagnostics")]
+fn ended_pid() -> u32 {
+    let mut child = std::process::Command::new("true").spawn().unwrap();
+    let pid = child.id();
+    child.wait().unwrap();
+    pid
+}
+
+// contract: endpoint.lock.single-owner
+#[cfg(feature = "diagnostics")]
+#[test]
+fn two_starters_of_a_stale_lock_leave_one_owner() {
+    use soksak_host_tauriv2::process_lock_hook::set_process_lock_hook;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let config = folder::Folder::new();
+    std::fs::write(config.path().join("process.lock"), ended_pid().to_string()).unwrap();
+    // The second start runs once, while the first start has found the stale lock and has not claimed it.
+    let outcome: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    let slot = outcome.clone();
+    let directory = config.path().to_path_buf();
+    let fired = Arc::new(AtomicBool::new(false));
+    set_process_lock_hook(Some(Arc::new(move || {
+        if fired.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let (second, _) = Fake::new();
+        let started = Endpoint::start(&directory.join("sockets"), &directory, "test-race", second);
+        *slot.lock().unwrap() = Some(match started {
+            Ok(endpoint) => {
+                // A started endpoint is kept alive so that its lock file is not removed by this test.
+                std::mem::forget(endpoint);
+                "started".to_string()
+            }
+            Err(error) => error,
+        });
+    })));
+    let (first, _) = Fake::new();
+    let first_started = Endpoint::start(&config.path().join("sockets"), config.path(), "test-race", first);
+    set_process_lock_hook(None);
+    let second_outcome = outcome
+        .lock()
+        .unwrap()
+        .take()
+        .expect("the second start did not run at the stale lock");
+    assert!(
+        second_outcome.contains("already owned by process"),
+        "the second start was not refused while the first start claims the lock: {second_outcome}"
+    );
+    assert!(first_started.is_ok(), "the first start failed: {:?}", first_started.err());
 }
 
 fn mode(path: &Path) -> u32 {

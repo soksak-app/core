@@ -145,7 +145,7 @@ func serve(t *testing.T, backend host.Backend) (*host.Endpoint, string, string) 
 	return endpoint, listener.Addr().String(), config
 }
 
-// contract: endpoint.process.one-owner-per-config-dir
+// contract: endpoint.lock.single-owner
 func TestEndpointAllowsOneProcessPerConfigurationDirectory(t *testing.T) {
 	first, _, config := serve(t, newFakeBackend())
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1019,6 +1019,59 @@ func TestEndpointRejectsAMalformedLock(t *testing.T) {
 		if data, err := os.ReadFile(lock); err != nil || string(data) != contents {
 			t.Fatalf("lock %q changed: %q %v", contents, data, err)
 		}
+	}
+}
+
+// contract: endpoint.lock.single-owner
+func TestTwoStartersOfAStaleLockLeaveOneOwner(t *testing.T) {
+	config := t.TempDir()
+	if err := os.WriteFile(filepath.Join(config, "process.lock"), fmt.Appendf(nil, "%d", endedProcess(t)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The second start runs once, while the first start has found the stale lock and has not claimed it.
+	var fired atomic.Bool
+	var secondErr error
+	var second *host.Endpoint
+	host.SetProcessLockHook(func() {
+		if fired.Swap(true) {
+			return
+		}
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		second = host.NewEndpoint(newFakeBackend())
+		info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
+			Application: "wailsv3", Version: "0.0.20", Started: time.Now()}
+		secondErr = second.Serve(listener, info, config)
+		if secondErr != nil {
+			_ = listener.Close()
+		}
+	})
+	defer host.SetProcessLockHook(nil)
+	first := host.NewEndpoint(newFakeBackend())
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
+		Application: "wailsv3", Version: "0.0.20", Started: time.Now()}
+	firstErr := first.Serve(listener, info, config)
+	if second != nil {
+		defer second.Close()
+	}
+	if !fired.Load() {
+		t.Fatal("the second start did not run at the stale lock")
+	}
+	if secondErr == nil || !strings.Contains(secondErr.Error(), "already owned by process") {
+		t.Fatalf("the second start was not refused while the first start claims the lock: %v", secondErr)
+	}
+	if firstErr != nil {
+		_ = listener.Close()
+		t.Fatalf("the first start failed: %v", firstErr)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
 

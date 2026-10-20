@@ -591,6 +591,14 @@ type Platform interface {
 	// CreatePrivateFile creates a new file at path that only the current user reads and writes and opens it for writing. When path already exists, the error is
 	// os.ErrExist.
 	CreatePrivateFile(path string) (*os.File, error)
+	// OpenPrivateFile opens the existing file at path for reading and writing. A missing file is an os.ErrNotExist error, and its contents and
+	// permissions are not changed.
+	OpenPrivateFile(path string) (*os.File, error)
+	// TryLockFile takes an exclusive advisory lock (flock LOCK_EX|LOCK_NB) on file without waiting. It reports false when another open file holds the
+	// lock.
+	TryLockFile(file *os.File) (bool, error)
+	// IsNamedFile reports whether file is the file that path names now, which is the same device and inode. A missing path names no file.
+	IsNamedFile(file *os.File, path string) (bool, error)
 	// WritePrivateFile replaces the content of the file at path with data. When it does not exist, it creates a file that only the current user reads and writes. It does not change the permissions of an existing
 	// file.
 	WritePrivateFile(path string, data []byte) error

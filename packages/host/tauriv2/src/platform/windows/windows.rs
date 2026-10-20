@@ -610,6 +610,12 @@ impl Platform for Windows {
     fn create_private_file(&self, path: &Path) -> std::io::Result<std::fs::File> {
         unsupported::create_private_file(path)
     }
+    fn open_private_file(&self, path: &Path) -> std::io::Result<std::fs::File> {
+        unsupported::open_private_file(path)
+    }
+    fn is_named_file(&self, file: &std::fs::File, path: &Path) -> Result<bool, String> {
+        unsupported::is_named_file(file, path)
+    }
     fn write_private_file(&self, path: &Path, data: &[u8]) -> Result<(), String> {
         unsupported::write_private_file(path, data)
     }

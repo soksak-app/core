@@ -475,6 +475,18 @@ func (implementation) CreatePrivateFile(string) (*os.File, error) {
 	return nil, unsupported("new private file creation")
 }
 
+func (implementation) OpenPrivateFile(string) (*os.File, error) {
+	return nil, unsupported("existing private file opening")
+}
+
+func (implementation) TryLockFile(*os.File) (bool, error) {
+	return false, unsupported("file locking")
+}
+
+func (implementation) IsNamedFile(*os.File, string) (bool, error) {
+	return false, unsupported("file identity")
+}
+
 func (implementation) WritePrivateFile(string, []byte) error {
 	return unsupported("private file writing")
 }

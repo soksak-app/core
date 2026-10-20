@@ -191,7 +191,7 @@ Items:
 | `host.arguments.registry-ca-in-diagnostic-builds` | A diagnostic build accepts `--registry-ca PATH`, and its registry fetches then trust only the authorities of that PEM file; a file without a certificate fails with `--registry-ca <path>: <reason>`. | both |
 | `host.memory-pressure.relays-level-and-seq` | The host starts the memory pressure source of the platform with its start and sends each report to every window as the page event `memory-pressure` with `{level, seq}` of that report, in the order of `seq` and without holding the thread that reports; a source that the platform refuses fails the start with `failed to start the memory pressure source`. | both |
 | `endpoint.process.rejects-a-malformed-lock` | A `process.lock` whose contents are not a positive process ID, including `0`, refuses the endpoint with `<path>: invalid process lock` and stays in place. | both |
-| `endpoint.process.one-owner-per-config-dir` | A second endpoint on the same configuration directory is refused with "already owned by process", and the first keeps its lock until it closes. | both |
+| `endpoint.lock.single-owner` | A second endpoint on the same configuration directory is refused with "already owned by process" while the first holds the lock, and two starters that find a stale `process.lock` leave one owner. | both |
 | `endpoint.process.lock-mode-0600` | The `process.lock` of a configuration directory has mode 0600. | both |
 | `endpoint.transport.http-request-line-closes` | An HTTP request line closes the connection without a reply or a method call. | both |
 | `endpoint.transport.invalid-json-closes` | A frame whose body is not JSON closes the connection without a reply. | both |

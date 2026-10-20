@@ -818,6 +818,11 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Creates a new file at path that only the current user reads and writes, and opens it for writing. It is an
     /// AlreadyExists error when path already exists.
     fn create_private_file(&self, path: &Path) -> std::io::Result<std::fs::File>;
+    /// Opens the existing file at path for reading and writing. A missing file is a NotFound error, and its contents
+    /// and permissions are not changed.
+    fn open_private_file(&self, path: &Path) -> std::io::Result<std::fs::File>;
+    /// Reports whether file is the file that path names now, which is the same device and inode.
+    fn is_named_file(&self, file: &std::fs::File, path: &Path) -> Result<bool, String>;
     /// Replaces the content of the file at path with data. If it does not exist, it is created as a file that only the
     /// current user reads and writes. The permissions of an existing file are not changed.
     fn write_private_file(&self, path: &Path, data: &[u8]) -> Result<(), String>;

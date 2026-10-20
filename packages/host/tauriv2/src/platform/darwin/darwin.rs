@@ -760,6 +760,12 @@ impl Platform for Darwin {
     fn create_private_file(&self, path: &Path) -> std::io::Result<std::fs::File> {
         private_files::create_private_file(path)
     }
+    fn open_private_file(&self, path: &Path) -> std::io::Result<std::fs::File> {
+        private_files::open_private_file(path)
+    }
+    fn is_named_file(&self, file: &std::fs::File, path: &Path) -> Result<bool, String> {
+        private_files::is_named_file(file, path)
+    }
     fn write_private_file(&self, path: &Path, data: &[u8]) -> Result<(), String> {
         private_files::write_private_file(path, data)
     }
