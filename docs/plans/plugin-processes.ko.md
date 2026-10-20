@@ -108,7 +108,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
    - F212.7b는 view가 있는 card의 전체 화면 전환과 탭 전환을 녹화해, 두 기다림이 모두 끝나는지 확인한다.
    - [native surfaces](../spec/native-surfaces.ko.md)의 해당 규칙을 고친다.
 7. **입력.**
-   - workbench 단축키는 아래 표에 주인과 함께 적는다.
+   - workbench 단축키는 주인과 명령을 함께 [키보드 단축키](../spec/exposure.ko.md#키보드-단축키)에 적는다.
    - 명령 단축키는 native 메뉴를 거쳐 core 명령에 간다.
    - view는 시작할 때 호스트에 단축키 표를 등록한다. 표에는 workbench 단축키와 각각의 주인이 들어 있다. 표가 등록되기 전에는 키가 기본 동작을 지키며, view는 `page.view.shortcut-table-missing {plugin}`을 쓴다.
    - view는 그 표를 보고 자기 안에서 동기로 판단한다.
@@ -120,13 +120,8 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
    - F212.7 시작 전에 F212.6a에서 Escape의 왕복 시간을 메뉴 닫기와 비교해 재고 결과를 기록한다. Escape의 주인은 view이며, 측정은 주인을 정하지 않는다.
    - IME는 view의 first responder가 받는다. activation 검사(F212.13)로 확인한다.
 
-   | 단축키 | 주인 | 이유 |
-   |---|---|---|
-   | Command `=`, `-`, `0` (View 메뉴의 글자 크기, [글자 크기](../spec/text-size.ko.md)) | native 메뉴 → core 명령 `core.text.larger`, `core.text.smaller`, `core.text.reset` | 메뉴 단축키는 어느 view가 포커스를 가져도 동작한다 |
-   | Escape | view | view가 자기 글 입력에 Escape를 쓰기 때문이다. F212.6a의 측정은 메뉴 닫기와 비교한 왕복을 검증하고 결과를 기록하며, 주인을 정하지 않는다 |
-   | 글 입력과 IME 키 | view | view의 first responder가 받는다 |
-
-   workbench 단축키 전체 목록은 두 호스트의 메뉴 선언과 workbench의 키 처리기에서 얻는다. 이 표는 지금 명세가 선언한 단축키만 담는다. 나머지는 F212.7 시작 전에 F212.6a가 이 표에 더한다.
+   - Escape와 글 입력 키의 주인은 view다. view의 first responder가 이 키들을 받기 때문이다. View 메뉴의 메뉴 단축키(Command `=`, `-`, `0`)는 글자 크기 명령을 실행하는 native 메뉴 단축키다([글자 크기](../spec/text-size.ko.md)).
+   - 단축키 표 전체는 [키보드 단축키](../spec/exposure.ko.md#키보드-단축키)이며, 기계가 읽는 선언은 `packages/workbench/shortcuts.json`이다. `scripts/test/shortcut-table.test.mjs`가 이 표를 두 호스트의 메뉴 표와 workbench 키 처리기에 대해 검사한다.
 
 8. **테마와 접근성.**
    - 호스트는 view를 만들 때 현재 테마 token 묶음을 document-start user script로 view 설정에 넣는다. 그래서 페이지의 첫 script가 돌기 전에 token이 있다.

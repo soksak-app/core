@@ -58,6 +58,42 @@ People and external clients operate a document through the same entries.
 
 Coverage is judged in the running document. The binder's `audit(root)` lists interactive elements that are not connected or have no dom name as `{tag, expose, command, text}`; the main page publishes it as `core.page.audit` and every plugin page as `unbound` in `core.surface.document`. `e2e/audit.test.mjs` visits every screen, modal section, menu, editing state, and visible plugin surface of both applications and requires empty lists. `scripts/check-exposure.mjs` (`make exposure-check`) checks only what the workbench sources state through `exposure-check.js` of `@soksak/plugin-api`: every name written in a source is declared, every declared status and command is registered, and every declared dom name is written as an exposed value. A plugin section module may also name core statuses and bind core commands ([sections](plugins.md#sections)), and a surface module may run a core command through `runtime.command` ([surface module ownership](plugins.md#surface-module-ownership)); those names must be declared by core; a plugin repository checks the names of its own pages and sections with the same module, `soksak-exposure`, which reads the core names from `core-exposure.json` of the package. `make exposure-check` fails when that file differs from the workbench declaration, and `node scripts/check-exposure.mjs --write` writes it.
 
+## Keyboard shortcuts
+
+Every keyboard shortcut of the workbench has one owner and one command. The machine-readable table is [shortcuts.json](../../packages/workbench/shortcuts.json) (`packages/workbench/shortcuts.json`); the table below is its copy. `scripts/test/shortcut-table.test.mjs` requires that both match, that every key equivalent of the [application menu](host-contract.md#application-menu) is a `native menu` row, and that every key comparison of the workbench key handlers has a `workbench` or `view` row. The owners follow [plugin processes](../plans/plugin-processes.md) rule 7:
+
+- `native menu`: a key equivalent of an application menu item. The menu receives the key before the view, so the view's default action is not prevented. A row with a core command reaches it through the menu; a row with `framework role` runs the role of the item.
+- `workbench`: a key that the workbench page or its native modals handle and prevent by default. The row names the command that the key runs.
+- `view`: a key that a plugin view handles inside itself under plan rule 7: Escape and the keys of a text input. A view row names no command, because the view decides synchronously; it is a rule, not a binding.
+
+In a key, `cmd` is the Command key on macOS and the Control key on the other hosts (`CmdOrCtrl`). `Enter` and `Escape` are key names.
+
+| Key | Owner | Command | Menu item | When |
+|---|---|---|---|---|
+| `cmd+h` | native menu | framework role | app/hide | Any focus |
+| `opt+cmd+h` | native menu | framework role | app/hide-others | Any focus |
+| `cmd+q` | native menu | framework role | app/quit | Any focus |
+| `cmd+w` | native menu | framework role | file/close-window | Any focus |
+| `cmd+z` | native menu | framework role | edit/undo | Any focus |
+| `shift+cmd+z` | native menu | framework role | edit/redo | Any focus |
+| `cmd+x` | native menu | framework role | edit/cut | Any focus |
+| `cmd+c` | native menu | framework role | edit/copy | Any focus |
+| `cmd+v` | native menu | framework role | edit/paste | Any focus |
+| `cmd+a` | native menu | framework role | edit/select-all | Any focus |
+| `cmd+=` | native menu | core.text.larger | view/text-larger | Any focus |
+| `cmd+-` | native menu | core.text.smaller | view/text-smaller | Any focus |
+| `cmd+0` | native menu | core.text.reset | view/text-default | Any focus |
+| `shift+cmd+n` | native menu | core.window.new | window/new-window | Any focus |
+| `shift+cmd+n` | workbench | core.window.new | — | No host chrome (browser build) |
+| `cmd+k` | workbench | core.focus.set | — | The library is shown |
+| `Enter` | workbench | core.rename.commit | — | The tab rename field has focus |
+| `Escape` | workbench | core.rename.cancel | — | The tab rename field has focus |
+| `Enter` | workbench | core.library.form.submit | — | A library form field has focus |
+| `Escape` | workbench | core.picker.close | — | A picker layer is open |
+| `Escape` | workbench | page.modal.answer | — | A native modal menu is open; the answer has an empty key |
+| `Escape` | view | none | — | A plugin view has keyboard focus; the view decides it under plan rule 7 |
+| `text input keys` | view | none | — | A plugin view has a text input focused; the first responder of the view receives them |
+
 ## Registration
 
 The workbench registers core entries in the registry of the main page. A plugin surface page registers its entries through `@soksak/plugin-api/page`. A core command answers after its handler has finished, including the asynchronous work that the handler starts, and after the plane has drawn the newest layout, so a caller that reads the layout after a command that changes it reads the drawn layout. The wait waits for the newest layout and waits again when a newer layout was scheduled while it waited, because a layout that a newer layout replaces ends without a draw. It then reads the surface slots of that draw and waits for the declared composition of each surface they name. A surface that this command or a later one removed therefore has no slot when the wait reads them; a slot that names a surface that is not mounted after the newest draw is a defect, and the wait fails with `surface <id> is not mounted`. When the newest layout fails, the layout queue shows that failure, and the wait ends without reading slots, because that layout was not presented. A failure of the wait itself is written as `exposure settled failed: <text>`. In both cases the command answers with its handler's result, and the failure has one line in the [application log](hosts.md#application-log).

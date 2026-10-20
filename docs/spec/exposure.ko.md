@@ -58,6 +58,42 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 충족 여부는 실행 중인 문서에서 판단한다. 연결기의 `audit(루트)`는 연결되지 않았거나 dom 이름이 없는 조작 요소를 `{tag, expose, command, text}`로 나열한다. 메인 페이지는 이를 `core.page.audit`로, 모든 플러그인 페이지는 `core.surface.document`의 `unbound`로 공개한다. `e2e/audit.test.mjs`가 두 앱의 모든 화면, 모달 구역, 메뉴, 편집 상태, 보이는 플러그인 표면을 방문해 빈 목록을 요구한다. `scripts/check-exposure.mjs`(`make exposure-check`)는 `@soksak/plugin-api`의 `exposure-check.js`로 워크벤치 소스가 적은 것만 검사한다. 소스에 적은 이름은 모두 선언되고, 선언한 status와 명령은 등록되며, 선언한 dom 이름은 공개 값으로 적혀 있다. 플러그인 섹션 모듈은 코어 status를 적고 코어 명령을 연결할 수도 있고([섹션](plugins.ko.md#섹션)), 표면 모듈은 `runtime.command`로 코어 명령을 실행할 수 있으며([표면 모듈 소유권](plugins.ko.md#표면-모듈-소유권)), 그 이름은 코어가 선언해야 한다. 플러그인 repository는 같은 module인 `soksak-exposure`로 자기 페이지와 섹션의 이름을 검사하며, 이 module은 package의 `core-exposure.json`에서 코어 이름을 읽는다. 그 파일이 워크벤치 선언과 다르면 `make exposure-check`가 실패하고, `node scripts/check-exposure.mjs --write`가 그 파일을 쓴다.
 
+## 키보드 단축키
+
+워크벤치의 모든 키보드 단축키는 소유자 하나와 명령 하나를 가진다. 기계가 읽는 표는 [shortcuts.json](../../packages/workbench/shortcuts.json)(`packages/workbench/shortcuts.json`)이며, 아래 표는 그 사본이다. `scripts/test/shortcut-table.test.mjs`는 두 표가 일치하는지, [애플리케이션 메뉴](host-contract.ko.md#애플리케이션-메뉴)의 모든 키 동등물이 `native menu` 행인지, 워크벤치 키 처리기의 모든 키 비교에 `workbench` 또는 `view` 행이 있는지 요구한다. 소유자는 [플러그인 프로세스](../plans/plugin-processes.ko.md)의 7번 규칙을 따른다.
+
+- `native menu`: 애플리케이션 메뉴 항목의 키 동등물. 메뉴가 view보다 먼저 키를 받으므로 view의 기본 동작을 막지 않는다. 코어 명령이 있는 행은 메뉴를 거쳐 그 명령에 닿고, `framework role`인 행은 항목의 role을 실행한다.
+- `workbench`: 워크벤치 page 또는 그 네이티브 modal이 처리하고 기본 동작을 막는 키. 행은 그 키가 실행하는 명령을 적는다.
+- `view`: 플러그인 view가 plugin processes 규칙 7에 따라 자기 안에서 처리하는 키: Escape와 텍스트 입력의 키. view 행은 명령을 적지 않는다. view가 동기로 정하므로 바인딩이 아니라 규칙이다.
+
+키에서 `cmd`는 macOS에서 Command 키, 다른 host에서 Control 키다(`CmdOrCtrl`). `Enter`와 `Escape`는 키 이름이다.
+
+| 키 | 소유자 | 명령 | 메뉴 항목 | 조건 |
+|---|---|---|---|---|
+| `cmd+h` | native menu | framework role | app/hide | 모든 포커스 |
+| `opt+cmd+h` | native menu | framework role | app/hide-others | 모든 포커스 |
+| `cmd+q` | native menu | framework role | app/quit | 모든 포커스 |
+| `cmd+w` | native menu | framework role | file/close-window | 모든 포커스 |
+| `cmd+z` | native menu | framework role | edit/undo | 모든 포커스 |
+| `shift+cmd+z` | native menu | framework role | edit/redo | 모든 포커스 |
+| `cmd+x` | native menu | framework role | edit/cut | 모든 포커스 |
+| `cmd+c` | native menu | framework role | edit/copy | 모든 포커스 |
+| `cmd+v` | native menu | framework role | edit/paste | 모든 포커스 |
+| `cmd+a` | native menu | framework role | edit/select-all | 모든 포커스 |
+| `cmd+=` | native menu | core.text.larger | view/text-larger | 모든 포커스 |
+| `cmd+-` | native menu | core.text.smaller | view/text-smaller | 모든 포커스 |
+| `cmd+0` | native menu | core.text.reset | view/text-default | 모든 포커스 |
+| `shift+cmd+n` | native menu | core.window.new | window/new-window | 모든 포커스 |
+| `shift+cmd+n` | workbench | core.window.new | — | host 크롬이 없음(브라우저 빌드) |
+| `cmd+k` | workbench | core.focus.set | — | 라이브러리가 보임 |
+| `Enter` | workbench | core.rename.commit | — | 탭 이름 변경 필드에 포커스가 있음 |
+| `Escape` | workbench | core.rename.cancel | — | 탭 이름 변경 필드에 포커스가 있음 |
+| `Enter` | workbench | core.library.form.submit | — | 라이브러리 양식 필드에 포커스가 있음 |
+| `Escape` | workbench | core.picker.close | — | 선택 layer가 열려 있음 |
+| `Escape` | workbench | page.modal.answer | — | 네이티브 modal 메뉴가 열려 있고, 응답의 key가 비어 있음 |
+| `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. plugin processes 규칙 7에 따라 view가 정한다 |
+| `text input keys` | view | none | — | 플러그인 view의 텍스트 입력에 포커스가 있음. view의 first responder가 받는다 |
+
 ## 등록
 
 워크벤치는 코어 항목을 메인 페이지의 등록소에 등록한다. 플러그인 표면 페이지는 `@soksak/plugin-api/page`로 항목을 등록한다. 코어 명령은 handler가 시작한 비동기 작업까지 handler가 끝나고, 판이 가장 새 배치를 그린 뒤 답한다. 배치를 바꾸는 명령 뒤에 배치를 읽는 쪽은 그려진 배치를 읽는다. 기다림은 가장 새 배치를 기다리고, 기다리는 동안 더 새 배치가 예약되면 다시 기다린다. 더 새 배치가 대신한 배치는 그리지 않고 끝나기 때문이다. 그 뒤 그 그리기의 표면 slot을 읽고, slot이 가리키는 각 표면의 선언된 composition을 기다린다. 그래서 이 명령이나 뒤의 명령이 제거한 표면은 기다림이 slot을 읽을 때 slot이 없다. 가장 새 그리기 뒤에 mount되지 않은 표면을 가리키는 slot은 결함이며, 기다림은 `surface <id> is not mounted`로 실패한다. 가장 새 배치가 실패하면 배치 대기열이 그 실패를 보이고, 그 배치는 표시되지 않았으므로 기다림은 slot을 읽지 않고 끝난다. 기다림 자체의 실패는 `exposure settled failed: <text>`로 쓴다. 두 경우 모두 명령은 handler의 결과로 답하며, 그 실패는 [애플리케이션 로그](hosts.ko.md#애플리케이션-로그)에 한 줄을 가진다.

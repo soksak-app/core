@@ -1,0 +1,27 @@
+{
+  "shortcuts": [
+    { "key": "cmd+h", "owner": "native menu", "command": "framework role", "menu": "app/hide", "when": "Any focus" },
+    { "key": "opt+cmd+h", "owner": "native menu", "command": "framework role", "menu": "app/hide-others", "when": "Any focus" },
+    { "key": "cmd+q", "owner": "native menu", "command": "framework role", "menu": "app/quit", "when": "Any focus" },
+    { "key": "cmd+w", "owner": "native menu", "command": "framework role", "menu": "file/close-window", "when": "Any focus" },
+    { "key": "cmd+z", "owner": "native menu", "command": "framework role", "menu": "edit/undo", "when": "Any focus" },
+    { "key": "shift+cmd+z", "owner": "native menu", "command": "framework role", "menu": "edit/redo", "when": "Any focus" },
+    { "key": "cmd+x", "owner": "native menu", "command": "framework role", "menu": "edit/cut", "when": "Any focus" },
+    { "key": "cmd+c", "owner": "native menu", "command": "framework role", "menu": "edit/copy", "when": "Any focus" },
+    { "key": "cmd+v", "owner": "native menu", "command": "framework role", "menu": "edit/paste", "when": "Any focus" },
+    { "key": "cmd+a", "owner": "native menu", "command": "framework role", "menu": "edit/select-all", "when": "Any focus" },
+    { "key": "cmd+=", "owner": "native menu", "command": "core.text.larger", "menu": "view/text-larger", "when": "Any focus" },
+    { "key": "cmd+-", "owner": "native menu", "command": "core.text.smaller", "menu": "view/text-smaller", "when": "Any focus" },
+    { "key": "cmd+0", "owner": "native menu", "command": "core.text.reset", "menu": "view/text-default", "when": "Any focus" },
+    { "key": "shift+cmd+n", "owner": "native menu", "command": "core.window.new", "menu": "window/new-window", "when": "Any focus" },
+    { "key": "shift+cmd+n", "owner": "workbench", "command": "core.window.new", "menu": null, "when": "No host chrome (browser build)" },
+    { "key": "cmd+k", "owner": "workbench", "command": "core.focus.set", "menu": null, "when": "The library is shown" },
+    { "key": "Enter", "owner": "workbench", "command": "core.rename.commit", "menu": null, "when": "The tab rename field has focus" },
+    { "key": "Escape", "owner": "workbench", "command": "core.rename.cancel", "menu": null, "when": "The tab rename field has focus" },
+    { "key": "Enter", "owner": "workbench", "command": "core.library.form.submit", "menu": null, "when": "A library form field has focus" },
+    { "key": "Escape", "owner": "workbench", "command": "core.picker.close", "menu": null, "when": "A picker layer is open" },
+    { "key": "Escape", "owner": "workbench", "command": "page.modal.answer", "menu": null, "when": "A native modal menu is open; the answer has an empty key" },
+    { "key": "Escape", "owner": "view", "command": "none", "menu": null, "when": "A plugin view has keyboard focus; the view decides it under plan rule 7" },
+    { "key": "text input keys", "owner": "view", "command": "none", "menu": null, "when": "A plugin view has a text input focused; the first responder of the view receives them" }
+  ]
+}

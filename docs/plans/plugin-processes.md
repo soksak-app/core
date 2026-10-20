@@ -108,7 +108,7 @@ When a value is not met, the measured values are recorded in the checklist. A fa
    - F212.7b records a card entering full screen and a tab change for a card with a view, and checks that both waits end.
    - [native surfaces](../spec/native-surfaces.md) is corrected for this rule.
 7. **Input.**
-   - The keyboard shortcuts of the workbench are listed with their owner in the table below.
+   - The keyboard shortcuts of the workbench are listed with their owner and command in [keyboard shortcuts](../spec/exposure.md#keyboard-shortcuts).
    - A shortcut whose owner is the native menu reaches a core command through the menu.
    - A view registers the shortcut table with the host when it starts. The table holds each workbench shortcut and its owner. Until the table is registered, a key keeps its default action, and the view writes `page.view.shortcut-table-missing {plugin}`.
    - The view decides synchronously inside itself, using that table.
@@ -120,13 +120,8 @@ When a value is not met, the measured values are recorded in the checklist. A fa
    - F212.6a measures the round trip of Escape against the menu close before F212.7 starts and records the result. The owner of Escape is the view; the measurement does not choose it.
    - IME input goes to the first responder of the view. The activation check (F212.13) verifies it.
 
-   | shortcut | owner | reason |
-   |---|---|---|
-   | Command `=`, `-`, `0` (View menu: text size, [text size](../spec/text-size.md)) | native menu → core commands `core.text.larger`, `core.text.smaller`, `core.text.reset` | a menu key equivalent works whatever view has focus |
-   | Escape | view | a view consumes Escape for its own text input; the measurement of F212.6a verifies the round trip against the menu close and records the result; it does not choose the owner |
-   | text input and IME keys | view | the first responder of the view receives them |
-
-   The full list of workbench shortcuts is taken from the menu declarations of both hosts and from the workbench key handlers. The table lists only the shortcuts the specifications declare now; F212.6a adds the rest to this table before F212.7 starts.
+   - The owner of Escape and of the text input keys is the view, because the first responder of the view receives them. The menu key equivalents of the View menu (Command `=`, `-`, `0`) are native menu shortcuts that run the text size commands ([text size](../spec/text-size.md)).
+   - The complete shortcut table is [keyboard shortcuts](../spec/exposure.md#keyboard-shortcuts), with the machine-readable declaration `packages/workbench/shortcuts.json`. `scripts/test/shortcut-table.test.mjs` checks it against both hosts' menu table and the workbench key handlers.
 
 8. **Theme and accessibility.**
    - When it creates a view, the host gives the view's configuration the token set of the current theme as a document-start user script. The page's first script therefore sees the tokens.
