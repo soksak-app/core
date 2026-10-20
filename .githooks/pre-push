@@ -1,3 +1,6 @@
 #!/bin/sh
 # Runs the checks of CI that a push needs before the push leaves this checkout. `make hooks` sets this folder as the git hook folder.
-exec make -C "$(git rev-parse --show-toplevel)" push-check
+# git passes the remote name as the first argument and one line per pushed ref on stdin; RANGE holds the commits of those refs.
+root=$(git rev-parse --show-toplevel) || exit 1
+ranges=$(node "$root/scripts/push-range.mjs" "$1") || exit 1
+exec make -C "$root" push-check RANGE="$ranges"

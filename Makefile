@@ -11,20 +11,22 @@ docs-check:
 records-check:
 	@node packages/plugin-api/records-check.js
 
-# Checks the commit message form of RANGE. Example: make commits-check RANGE=origin/main..HEAD
+# Checks the commit message form of RANGE, which holds one or more revision ranges separated by spaces. Example: make commits-check RANGE=origin/main..HEAD
 commits-check:
 	@test -n "$(RANGE)" || { echo "make commits-check RANGE=<revision range>" >&2; exit 2; }
-	@node packages/plugin-api/commits-check.js "$(RANGE)"
+	@node packages/plugin-api/commits-check.js $(RANGE)
 
 # Sets the git hook folder of this checkout to .githooks. The commit-msg hook checks the commit message form.
 hooks:
 	@git config core.hooksPath .githooks
 
-# Runs before a push (the pre-push hook of `make hooks`): the commit messages that are not on the upstream branch, the checks of
-# the structure step of ci.yml, its format and clippy checks, and the census and fallback tests of the sources. The host tests, the package tests and the window checks are left
-# to CI.
+# Runs before a push (the pre-push hook of `make hooks`): the commit messages of RANGE, the checks of the structure step of ci.yml,
+# its format and clippy checks, and the census and fallback tests of the sources. The host tests, the package tests and the window checks are left
+# to CI. The pre-push hook sets RANGE to the commits of each pushed ref (scripts/push-range.mjs). Without RANGE, the commits are origin/main..HEAD:
+# the commits that the remote main branch does not have. This range exists on every branch, while @{upstream}..HEAD fails with git exit 128
+# on a branch without an upstream, which a new branch has until its first push.
 push-check:
-	@$(MAKE) --no-print-directory commits-check RANGE=@{upstream}..HEAD
+	@$(MAKE) --no-print-directory commits-check RANGE="$(or $(RANGE),origin/main..HEAD)"
 	@$(MAKE) --no-print-directory docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check migrations-check
 	@$(MAKE) --no-print-directory rust-format-check go-format-check rust-clippy-check
 	@node --test scripts/test/census.test.mjs scripts/test/fallbacks.test.mjs
