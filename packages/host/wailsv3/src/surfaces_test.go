@@ -127,11 +127,11 @@ func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 }
 
 func TestViewCompositionDeclaresPageWithOptionalRegions(t *testing.T) {
-	if err := validateComposition(SurfaceComposition{Kind: "view", Page: "ui/page.html"}); err != nil {
+	if err := validateComposition("probe", SurfaceComposition{Kind: "view", Page: "ui/page.html"}); err != nil {
 		t.Fatalf("view without regions: %v", err)
 	}
 	document := SurfaceRegion{Name: "page", Kind: "document", Input: "native"}
-	if err := validateComposition(SurfaceComposition{Kind: "view", Page: "ui/page.html", Regions: []SurfaceRegion{document}, Overlays: []string{}}); err != nil {
+	if err := validateComposition("probe", SurfaceComposition{Kind: "view", Page: "ui/page.html", Regions: []SurfaceRegion{document}, Overlays: []string{}}); err != nil {
 		t.Fatalf("view with a region: %v", err)
 	}
 	for _, composition := range []SurfaceComposition{
@@ -141,7 +141,7 @@ func TestViewCompositionDeclaresPageWithOptionalRegions(t *testing.T) {
 		{Kind: "view", Page: "ui/.binary/page.html"},
 		{Kind: "hybrid", Page: "ui/page.html", Regions: []SurfaceRegion{document}, Overlays: []string{}},
 	} {
-		if err := validateComposition(composition); err == nil {
+		if err := validateComposition("probe", composition); err == nil {
 			t.Fatalf("composition %+v is accepted", composition)
 		}
 	}
@@ -469,5 +469,14 @@ func TestViewCommandReplyIsForwardedAsAViewReplyEvent(t *testing.T) {
 		if _, ok, err := ViewReplyEvent("probe-surface", "probe", json.RawMessage(message)); err == nil || !ok {
 			t.Fatalf("invalid reply %s: ok %v, err %v, want an error", message, ok, err)
 		}
+	}
+}
+
+// The dom composition kind is removed: the reader refuses it with an error that names the plugin and the manifest field.
+func TestDomCompositionIsRefusedWithThePluginAndTheField(t *testing.T) {
+	err := validateComposition("probe", SurfaceComposition{Kind: "dom"})
+	want := "plugin probe surface composition: kind dom is removed; the composition takes kind view or hybrid"
+	if err == nil || err.Error() != want {
+		t.Fatalf("dom composition error %v, want %q", err, want)
 	}
 }

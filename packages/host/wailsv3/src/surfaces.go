@@ -87,12 +87,9 @@ func validViewPage(page string) bool {
 	return true
 }
 
-func validateComposition(composition SurfaceComposition) error {
+func validateComposition(plugin string, composition SurfaceComposition) error {
 	if composition.Kind == "dom" {
-		if len(composition.Regions) != 0 || len(composition.Overlays) != 0 || composition.Page != "" {
-			return fmt.Errorf("dom composition cannot declare a page, regions or overlays")
-		}
-		return nil
+		return fmt.Errorf("plugin %s surface composition: kind dom is removed; the composition takes kind view or hybrid", plugin)
 	}
 	if composition.Kind == "view" {
 		if !validViewPage(composition.Page) {
@@ -101,7 +98,7 @@ func validateComposition(composition SurfaceComposition) error {
 		return validateRegions(composition)
 	}
 	if composition.Kind != "hybrid" || len(composition.Regions) == 0 || composition.Overlays == nil {
-		return fmt.Errorf("surface composition must be dom, view or a complete hybrid composition")
+		return fmt.Errorf("surface composition must be view or a complete hybrid composition")
 	}
 	if composition.Page != "" {
 		return fmt.Errorf("hybrid composition cannot declare a page")
@@ -523,7 +520,7 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugi
 		if err := ValidateRect(fmt.Sprintf("surface %q", surface.ID), surface.X, surface.Y, surface.W, surface.H); err != nil {
 			return nil, err
 		}
-		if err := validateComposition(surface.Composition); err != nil {
+		if err := validateComposition(surface.Plugin, surface.Composition); err != nil {
 			return nil, fmt.Errorf("surface %q: %w", surface.ID, err)
 		}
 		if surface.Plugin == "" {

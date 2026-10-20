@@ -170,7 +170,7 @@ func (s *Surfaces) declareComposition(viewID uint64, request CompositionDeclareR
 	if err := s.authorizeSurface(viewID, request.Surface); err != nil {
 		return err
 	}
-	if err := validateComposition(request.Composition); err != nil {
+	if err := validateComposition(request.Plugin, request.Composition); err != nil {
 		return err
 	}
 

@@ -94,15 +94,11 @@ fn valid_view_page(page: &str) -> bool {
             .all(|segment| !matches!(segment, "" | "." | ".." | ".binary"))
 }
 
-fn validate_composition(composition: &SurfaceComposition) -> Result<(), String> {
+fn validate_composition(plugin: &str, composition: &SurfaceComposition) -> Result<(), String> {
     if composition.kind == "dom" {
-        if !composition.regions.is_empty()
-            || composition.overlays.as_ref().is_some_and(|v| !v.is_empty())
-            || !composition.page.is_empty()
-        {
-            return Err("dom composition cannot declare a page, regions or overlays".into());
-        }
-        return Ok(());
+        return Err(format!(
+            "plugin {plugin} surface composition: kind dom is removed; the composition takes kind view or hybrid"
+        ));
     }
     if composition.kind == "view" {
         if !valid_view_page(&composition.page) {
@@ -117,9 +113,7 @@ fn validate_composition(composition: &SurfaceComposition) -> Result<(), String> 
         || composition.regions.is_empty()
         || composition.overlays.is_none()
     {
-        return Err(
-            "surface composition must be dom, view or a complete hybrid composition".into(),
-        );
+        return Err("surface composition must be view or a complete hybrid composition".into());
     }
     if !composition.page.is_empty() {
         return Err("hybrid composition cannot declare a page".into());
@@ -206,7 +200,7 @@ pub(crate) fn declare(webview: &Webview, request: CompositionDeclareRequest) -> 
             request.surface
         ));
     }
-    validate_composition(&request.composition)?;
+    validate_composition(&request.plugin, &request.composition)?;
     let data = window_data(&webview.window())?;
     let mut all = data.compositions.lock().map_err(|e| e.to_string())?;
     let mut plugins = data.surface_plugins.lock().map_err(|e| e.to_string())?;
@@ -525,7 +519,7 @@ pub fn check_sync_request(
             surface.w,
             surface.h,
         )?;
-        validate_composition(&surface.composition)
+        validate_composition(&surface.plugin, &surface.composition)
             .map_err(|e| format!("surface {:?}: {e}", surface.id))?;
         if surface.plugin.is_empty() {
             return Err(format!("surface {:?} requires its plugin", surface.id));

@@ -34,13 +34,12 @@ Every `plugin.json` surface declares one composition.
 ```json
 {
   "surface": {
-    "page": "ui/shell.html",
-    "composition": { "kind": "dom" }
+    "composition": { "kind": "view", "page": "ui/shell.html" }
   }
 }
 ```
 
-A `dom` composition has no native region, and `plugin.json` declares it completely: its page does not create a composition, and a core command that waits for the declared composition of a surface does not wait for a call of a `dom` surface. A hybrid composition declares every native region and every DOM overlay before the page loads.
+A `view` composition declares its page, and it declares its native regions and overlays in `plugin.json`, if it has any. Its page does not create a composition; the workbench declares the composition when the view mounts ([view surfaces](plugins.md#view-surfaces)). A hybrid composition declares every native region and every DOM overlay before the page loads. The kind `dom` does not exist: the reader refuses it.
 
 ```json
 {

@@ -8,7 +8,7 @@ const provider = {
   id: "probe", package: "@scope/plugin-probe", version: "0.1.0",
   manifest: {
     id: "probe", name: "Probe", description: "검사용 표면.", mark: "p", icon: "<path/>",
-    surface: { module: "ui/probe.js", composition: { kind: "dom" } },
+    surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
     extends: { language: { version: "1.2.0", schema: { type: "object", properties: { extensions: { type: "array", items: { type: "string" } } } } } },
   },
 };

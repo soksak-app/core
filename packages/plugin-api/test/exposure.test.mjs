@@ -20,7 +20,7 @@ const exposes = () => ({
 
 const page = {
   id: "probe", name: "Probe", description: "검사용 플러그인.", mark: "p", icon: "<path/>",
-  surface: { module: "ui/probe.js", composition: { kind: "dom" } },
+  surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
 };
 
 test("exposes with the three kinds are accepted in a manifest and in a core file", () => {

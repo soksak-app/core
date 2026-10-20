@@ -4,7 +4,7 @@ import * as api from "../index.js";
 
 const manifests = () => [
   { id: "card", name: "Card", description: "Fixture card.", mark: "c", icon: "<path/>",
-    surface: { module: "ui/card.js", composition: { kind: "dom" } },
+    surface: { module: "ui/card.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
     sections: [{ id: "card.info", name: "Info", module: "ui/info.js" }],
     sidebars: { sets: [{ id: "main", title: "Main", sections: ["card.info", "other.tree"], layout: "list" }],
       card: { top: "main", bottom: "main", left: "main", right: "main" } } },

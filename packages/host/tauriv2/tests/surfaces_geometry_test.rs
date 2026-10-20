@@ -26,7 +26,7 @@ fn sync_request(request: serde_json::Value) -> SyncRequest {
 fn surface(id: &str, w: f64) -> serde_json::Value {
     serde_json::json!({
         "id": id, "module": "surface.js", "x": 0.0, "y": 0.0, "w": w, "h": 10.0,
-        "visible": true, "dim": false, "plugin": "page", "composition": {"kind": "dom"},
+        "visible": true, "dim": false, "plugin": "page", "composition": {"kind": "hybrid", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []},
     })
 }
 

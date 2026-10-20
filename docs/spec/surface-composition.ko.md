@@ -34,13 +34,12 @@ DOM 전용 표면은 공유 DOM 평면에 콘텐츠를 그리고 네이티브 �
 ```json
 {
   "surface": {
-    "page": "ui/shell.html",
-    "composition": { "kind": "dom" }
+    "composition": { "kind": "view", "page": "ui/shell.html" }
   }
 }
 ```
 
-`dom` 합성에는 네이티브 영역이 없고 `plugin.json`이 그것을 모두 선언한다. 그 페이지는 합성을 만들지 않으며, 표면의 선언된 합성을 기다리는 코어 명령은 `dom` 표면의 호출을 기다리지 않는다. 혼합 합성은 페이지를 불러오기 전에 모든 네이티브 영역과 DOM 오버레이를 선언한다.
+`view` 합성은 페이지를 선언하며, 네이티브 영역과 오버레이가 있으면 `plugin.json`이 그것을 모두 선언한다. 그 페이지는 합성을 만들지 않으며, workbench가 view를 mount할 때 합성을 선언한다([view 표면](plugins.ko.md#view-표면)). 혼합 합성은 페이지를 불러오기 전에 모든 네이티브 영역과 DOM 오버레이를 선언한다. `dom` 종류는 없다. reader는 `dom`을 거부한다.
 
 ```json
 {

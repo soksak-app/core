@@ -377,8 +377,7 @@ const isViewPage = (page) => isText(page) && page.endsWith(".html") &&
 function checkComposition(where, composition, sidecars) {
   if (!isObject(composition)) throw new Error(`${where}: composition must be an object`);
   if (composition.kind === "dom") {
-    only(`${where} composition`, composition, ["kind"]);
-    return;
+    throw new Error(`${where} composition: kind dom is removed; the composition takes kind view or hybrid`);
   }
   if (composition.kind === "view") {
     only(`${where} composition`, composition, ["kind", "page", "regions", "overlays"]);
@@ -396,7 +395,7 @@ function checkComposition(where, composition, sidecars) {
     checkRegions(where, composition.regions ?? [], composition.overlays ?? [], sidecars);
     return;
   }
-  if (composition.kind !== "hybrid") throw new Error(`${where}: composition kind must be dom, hybrid or view`);
+  if (composition.kind !== "hybrid") throw new Error(`${where}: composition kind must be hybrid or view`);
   only(`${where} composition`, composition, ["kind", "regions", "overlays"]);
   if (!Array.isArray(composition.regions) || composition.regions.length === 0) {
     throw new Error(`${where}: hybrid composition requires regions`);

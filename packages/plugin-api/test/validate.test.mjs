@@ -7,7 +7,7 @@ import {
 
 const card = {
   id: "probe", name: "Probe", description: "검사용 표면.", mark: "p", icon: "<path/>",
-  surface: { module: "ui/probe.js", composition: { kind: "dom" } }, dependencies: { "@scope/sidecar-worker": "^1.2.0" },
+  surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, dependencies: { "@scope/sidecar-worker": "^1.2.0" },
   settings: { "cursor.shape": { type: "enum", label: "커서 모양", default: "block", values: ["block", "beam"] } },
 };
 const side = { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] };
@@ -44,9 +44,9 @@ test("a manifest with a page surface or with sections only is accepted", () => {
   assert.equal(validateManifest(address("https://example.com/start")).settings.home.default, "https://example.com/start");
   assert.deepEqual(validateManifest(card).settings["cursor.shape"].values, ["block", "beam"]);
   const background = { sidecar: "@scope/sidecar-worker", operation: "open" };
-  assert.equal(validateManifest({ ...card, surface: { module: "ui/probe.js", composition: { kind: "dom" } }, background }).background.operation, "open");
+  assert.equal(validateManifest({ ...card, surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, background }).background.operation, "open");
   const withSettings = { ...background, settings: { shape: "cursor.shape" } };
-  assert.deepEqual(validateManifest({ ...card, surface: { module: "ui/probe.js", composition: { kind: "dom" } }, background: withSettings }).background.settings, { shape: "cursor.shape" });
+  assert.deepEqual(validateManifest({ ...card, surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, background: withSettings }).background.settings, { shape: "cursor.shape" });
 });
 
 test("a manifest is rejected for each invalid field", () => {
@@ -56,15 +56,15 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, name: "" }, /name is required/],
     [{ ...card, extra: 1 }, /unknown field extra/],
     [{ ...card, surface: { url: "https://a" } }, /unknown field url/],
-    [{ ...card, surface: { url: "https://a", module: "b.js", composition: { kind: "dom" } } }, /unknown field url/],
+    [{ ...card, surface: { url: "https://a", module: "b.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } } }, /unknown field url/],
     [{ ...card, surface: {} }, /surface requires a module/],
     [{ ...card, surface: { module: "ui/probe.js" } }, /surface requires a composition/],
     [{ ...card, home: "https://example.com" }, /unknown field home/],
     [{ ...card, settings: { home: { label: "홈 주소", type: "address", default: "file:///etc" } } }, /address default/],
     [{ ...card, settings: { home: { label: "홈 주소", type: "address", default: "https:///" } } }, /address default/],
     [{ ...card, settings: { home: { label: "홈 주소", type: "address", default: "", maxLength: 9 } } }, /unknown field maxLength/],
-    [{ ...card, surface: { module: "../x.js", composition: { kind: "dom" } } }, /inside the package/],
-    [{ ...card, surface: { module: "/x.js", composition: { kind: "dom" } } }, /inside the package/],
+    [{ ...card, surface: { module: "../x.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } } }, /inside the package/],
+    [{ ...card, surface: { module: "/x.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } } }, /inside the package/],
     [{ ...card, mark: undefined }, /mark is required/],
     [{ ...card, icon: undefined }, /icon is required/],
     [{ ...side, sections: [{ id: "other.list", name: "x" }] }, /must be side.<name>/],
@@ -115,8 +115,8 @@ test("surface composition declarations are complete and fail closed", () => {
   assert.equal(validateManifest(hybrid([imageRegion])).surface.composition.regions[0].sidecar, "@scope/sidecar-worker");
 
   const cases = [
-    [{ ...card, surface: { ...card.surface, composition: { kind: "other" } } }, /kind must be dom, hybrid or view/],
-    [{ ...card, surface: { ...card.surface, composition: { kind: "dom", regions: [] } } }, /unknown field regions/],
+    [{ ...card, surface: { ...card.surface, composition: { kind: "other" } } }, /kind must be hybrid or view/],
+    [{ ...card, surface: { ...card.surface, composition: { kind: "dom" } } }, /kind dom is removed/],
     [hybrid([]), /requires regions/],
     [{ ...hybrid(), surface: { ...hybrid().surface, composition: { kind: "hybrid", regions: [documentRegion] } } }, /requires overlays/],
     [hybrid([{ ...documentRegion, input: "dom" }]), /document input must be native/],
@@ -528,4 +528,12 @@ test("a plugin release refuses a file whose path has a .binary segment", () => {
   assert.deepEqual(validateReleaseFiles({ files: ["ui", "binary/app.js", ".binaryfoo/app.js"] }), ["ui", "binary/app.js", ".binaryfoo/app.js"]);
   assert.throws(() => validateReleaseFiles({ files: ["ui", ".binary"] }), /plugin release lists \.binary: the \.binary path is reserved for the binary store/);
   assert.throws(() => validateReleaseFiles({ files: ["ui/.binary/app.js"] }), /plugin release lists ui\/\.binary\/app\.js: the \.binary path is reserved for the binary store/);
+});
+
+// The dom composition kind is removed: the reader refuses it with an error that names the plugin and the manifest field.
+test("a dom composition is refused with the plugin and the manifest field", () => {
+  assert.throws(
+    () => validateManifest({ ...card, surface: { module: "ui/probe.js", composition: { kind: "dom" } } }),
+    { message: `plugin ${card.id} surface composition: kind dom is removed; the composition takes kind view or hybrid` },
+  );
 });
