@@ -97,7 +97,11 @@ type sidecar struct {
 	persistent bool
 	// servicePID is the process of the service endpoint that a persistent connection reached.
 	servicePID int
-	outbox     chan queuedLine
+	// spawnedAt is the time before the host started the process, or the zero time when the host did not start it.
+	spawnedAt time.Time
+	// readyRecorded is true once the first message line after the spawn is recorded (recordReady).
+	readyRecorded bool
+	outbox        chan queuedLine
 	// writing is the size in bytes of the line that the writer is writing, and 0 between lines.
 	writing       atomic.Int64
 	exited        chan struct{}
@@ -1073,6 +1077,7 @@ func (c *Sidecars) launch(name string) (*sidecar, error) {
 		stdin.Close()
 		return nil, err
 	}
+	spawnedAt := time.Now()
 	if err := cmd.Start(); err != nil {
 		stdin.Close()
 		stdout.Close()
@@ -1081,7 +1086,7 @@ func (c *Sidecars) launch(name string) (*sidecar, error) {
 	EmitHost(LevelInfo, "host.sidecar.start", map[string]any{"name": name, "pid": cmd.Process.Pid})
 	PerformanceProcessAdd("sidecar", name, cmd.Process.Pid)
 	process := &sidecar{
-		name: name, cmd: cmd, stdin: stdin,
+		name: name, cmd: cmd, stdin: stdin, spawnedAt: spawnedAt,
 		outbox:       make(chan queuedLine, 256),
 		exited:       make(chan struct{}),
 		closeWaiters: make(map[string]chan error),
@@ -1154,6 +1159,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 	endpointPath := filepath.Join(serviceDir, "endpoint.json")
 	var endpoint persistentEndpoint
 	var cmd *exec.Cmd
+	var spawnedAt time.Time
 	if data, err := os.ReadFile(endpointPath); err == nil {
 		if err := json.Unmarshal(data, &endpoint); err != nil {
 			return nil, fmt.Errorf("sidecar %s: invalid endpoint: %w", name, err)
@@ -1178,6 +1184,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		if err != nil {
 			return nil, errors.Join(fmt.Errorf("sidecar %s: service stdout: %w", name, err), serviceLog.Close())
 		}
+		spawnedAt = time.Now()
 		startErr := cmd.Start()
 		// The service has a duplicated descriptor, so the file that the host opened is closed.
 		if err := errors.Join(startErr, serviceLog.Close()); err != nil {
@@ -1291,7 +1298,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 	EmitHost(LevelInfo, "host.sidecar.connect", map[string]any{"name": name, "pid": endpoint.PID, "spawned": cmd != nil})
 	PerformanceProcessAdd("sidecar", name, endpoint.PID)
 	process := &sidecar{
-		name: name, cmd: cmd, conn: conn, persistent: true, version: response.Version, servicePID: endpoint.PID,
+		name: name, cmd: cmd, conn: conn, persistent: true, version: response.Version, servicePID: endpoint.PID, spawnedAt: spawnedAt,
 		outbox: make(chan queuedLine, 256), exited: make(chan struct{}),
 		closeWaiters: make(map[string]chan error), surfaces: make(map[string]bool),
 	}
@@ -1536,6 +1543,7 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 	unfinished := 0
 	scanner.Split(MessageLines(&unfinished))
 	for scanner.Scan() {
+		recordReady(process)
 		var output sidecarOutput
 		if err := json.Unmarshal(scanner.Bytes(), &output); err != nil {
 			return fmt.Sprintf("invalid message: %v", err)
@@ -1644,6 +1652,22 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	}
 }
 
+// recordReady writes the event host.trace.sidecar.ready for the first message line that a process spawned by the host sends. Its ms is the time from
+// the spawn to that line, and it is written once for each spawn. A process that another host started has no spawn time, so it writes nothing.
+func recordReady(process *sidecar) {
+	if process.spawnedAt.IsZero() || process.readyRecorded {
+		return
+	}
+	process.readyRecorded = true
+	pid := process.servicePID
+	if !process.persistent {
+		pid = process.cmd.Process.Pid
+	}
+	EmitHost(LevelDebug, "host.trace.sidecar.ready", map[string]any{
+		"sidecar": process.name, "pid": pid, "ms": float64(time.Since(process.spawnedAt)) / float64(time.Millisecond),
+	})
+}
+
 // readPersistentLines reads the lines of a persistent connection and passes replies and events. It returns an empty string when the connection ends and the reason when the protocol is
 // violated. When the part of a line before the line break exceeds sidecarMessageLimit bytes, it does not buffer more and
 // fails (docs/spec/terminal-runtime.md#service-transport).
@@ -1654,6 +1678,7 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 	unfinished := 0
 	scanner.Split(MessageLines(&unfinished))
 	for scanner.Scan() {
+		recordReady(process)
 		line := scanner.Bytes()
 		var value map[string]json.RawMessage
 		if err := json.Unmarshal(line, &value); err != nil {

@@ -2167,3 +2167,101 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 		t.Fatalf("connection events = %q, want %q", seen, want)
 	}
 }
+
+// contract: sidecars.trace.first-answer-after-spawn-is-recorded
+func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
+	config := t.TempDir()
+	folder := t.TempDir()
+	socket := filepath.Join(socketParent(t), "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The service that the host spawns prints its endpoint and records its process id; the listener of this check serves it.
+	// It stays alive until the check ends, so the host does not treat it as a stale endpoint (ServiceProcessExists).
+	pidPath := filepath.Join(folder, "pid")
+	script := fmt.Sprintf("#!/bin/sh\necho $$ > %s\necho '{\"protocol\":1,\"pid\":'$$',\"socket\":\"%s\",\"token\":\"harness-token\"}'\nexec sleep 600\n",
+		pidPath, socket)
+	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The spawned service is ended by this check when the check ends, whatever its result.
+	t.Cleanup(func() {
+		data, err := os.ReadFile(pidPath)
+		if err != nil {
+			return
+		}
+		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+	})
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		connection, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		if _, err := reader.ReadBytes('\n'); err != nil {
+			return
+		}
+		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+			return
+		}
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			if _, err := connection.Write(line); err != nil {
+				return
+			}
+		}
+	}()
+	log := support.StartWriter(t, config)
+	sidecars, err := NewSidecars(harnessDeclarations(folder), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
+	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/only", seen: make(chan SidecarMessage, 8)}
+	if err := sidecars.Send(owner, "fixture-service", "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	receiveSidecarMessage(t, owner.seen)
+	sidecars.Stop()
+	listener.Close()
+	<-served
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(folder, "pid"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ready map[string]any
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		if event["event"] == "host.trace.sidecar.ready" {
+			ready = event
+		}
+	}
+	if ready == nil {
+		t.Fatal("the first answer after the spawn of the service was not recorded")
+	}
+	fields, _ := ready["fields"].(map[string]any)
+	if ready["level"] != "debug" || fields["sidecar"] != "fixture-service" || fields["pid"] != float64(pid) {
+		t.Fatalf("ready event = %v", ready)
+	}
+	if ms, ok := fields["ms"].(float64); !ok || ms < 0 {
+		t.Fatalf("ms = %v, want a number of milliseconds from the spawn", fields["ms"])
+	}
+}

@@ -1486,3 +1486,40 @@ func TestAResponseToASidecarThatEndedIsTheEndedError(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 }
+
+// contract: sidecars.trace.first-answer-after-spawn-is-recorded
+func TestStandardIOSidecarFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
+	script := "#!/bin/sh\necho $$ > DIR/pid\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\"}}'\nwhile read line; do :; done\n"
+	sidecars, directory := scriptSidecars(t, script)
+	sidecars.StopTimeout = stall
+	log := useEventLog(t)
+	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
+	owner := newFakeOwner("/projects/test")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	owner.next(t)
+	sidecars.Stop()
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var ready map[string]any
+	for _, record := range readEventLog(t, log.Path()) {
+		if record["event"] == "host.trace.sidecar.ready" {
+			ready = record
+		}
+	}
+	if ready == nil {
+		t.Fatal("the first answer after the spawn was not recorded")
+	}
+	fields, _ := ready["fields"].(map[string]any)
+	if ready["level"] != "debug" || fields["sidecar"] != echoSidecar || fields["pid"] != float64(processID(t, directory)) {
+		t.Fatalf("ready event = %v", ready)
+	}
+	if ms, ok := fields["ms"].(float64); !ok || ms < 0 {
+		t.Fatalf("ms = %v, want a number of milliseconds from the spawn", fields["ms"])
+	}
+}
