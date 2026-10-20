@@ -241,7 +241,7 @@ fn a_held_lock_with_another_form_is_refused_and_kept() {
 // contract: endpoint.lock.unrecorded-end
 #[test]
 fn a_stale_lock_of_another_form_is_taken_over_and_reported() {
-    for contents in ["123", ""] {
+    for contents in ["123", "abc"] {
         let config = folder::Folder::new();
         std::fs::write(config.path().join("process.lock"), contents).unwrap();
         let (fake, _) = Fake::new();
@@ -262,6 +262,25 @@ fn a_stale_lock_of_another_form_is_taken_over_and_reported() {
         );
         endpoint.stop();
     }
+}
+
+// contract: endpoint.lock.empty-is-no-previous-run
+#[test]
+fn an_empty_lock_file_is_taken_over_without_a_report() {
+    // A starter creates process.lock before it locks the file, so an empty file that is not locked can be the file of a
+    // starter that has not locked it yet. No owner wrote a record in it, so no earlier run is reported.
+    let config = folder::Folder::new();
+    std::fs::write(config.path().join("process.lock"), "").unwrap();
+    let (fake, _) = Fake::new();
+    let endpoint = Endpoint::start(
+        &config.path().join("sockets"),
+        config.path(),
+        "test-empty",
+        fake,
+    )
+    .unwrap_or_else(|error| panic!("an empty lock file was refused: {error}"));
+    assert_eq!(endpoint.unrecorded_end(), None);
+    endpoint.stop();
 }
 
 // contract: endpoint.lock.unrecorded-end

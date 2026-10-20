@@ -1034,7 +1034,7 @@ func TestEndpointRefusesAHeldLockWithAnotherForm(t *testing.T) {
 
 // contract: endpoint.lock.unrecorded-end
 func TestStaleLockOfAnotherFormIsTakenOverAndReported(t *testing.T) {
-	for _, contents := range []string{"123", ""} {
+	for _, contents := range []string{"123", "abc"} {
 		config := t.TempDir()
 		if err := os.WriteFile(filepath.Join(config, "process.lock"), []byte(contents), 0o600); err != nil {
 			t.Fatal(err)
@@ -1140,6 +1140,33 @@ func startBesideStaleLock(t *testing.T, config, stale string) (bool, error, erro
 }
 
 // contract: endpoint.lock.unrecorded-end
+// contract: endpoint.lock.empty-is-no-previous-run
+func TestAnEmptyLockFileIsTakenOverWithoutAReport(t *testing.T) {
+	// A starter creates process.lock before it locks the file, so an empty file that is not locked can be the file of a
+	// starter that has not locked it yet. No owner wrote a record in it, so no earlier run is reported.
+	config := t.TempDir()
+	if err := os.WriteFile(filepath.Join(config, "process.lock"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := host.NewEndpoint(newFakeBackend())
+	info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
+		Application: "wailsv3", Version: "0.0.20", Started: time.Now()}
+	if err := endpoint.Serve(listener, info, config); err != nil {
+		_ = listener.Close()
+		t.Fatalf("an empty lock file was refused: %v", err)
+	}
+	if end, ok := endpoint.UnrecordedEnd(); ok {
+		t.Fatalf("an empty lock file was reported as an earlier run: %+v", end)
+	}
+	if err := endpoint.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestStaleLockIsTakenOverAndNamesThePreviousRun(t *testing.T) {
 	config := t.TempDir()
 	dead := endedProcess(t)

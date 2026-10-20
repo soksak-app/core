@@ -191,7 +191,8 @@ fn invalid_json_closes_connection() {
 | `host.arguments.registry-ca-in-diagnostic-builds` | 진단 build는 `--registry-ca PATH`를 받고, 그 뒤 registry 받기는 그 PEM 파일의 인증 기관만 신뢰한다. 인증서 없는 파일은 `--registry-ca <path>: <reason>`으로 실패한다. | both |
 | `host.memory-pressure.relays-level-and-seq` | host는 시작할 때 platform의 memory pressure source를 시작하고, 각 보고를 그 보고의 `{level, seq}`를 가진 page event `memory-pressure`로 `seq` 순서대로, 보고하는 thread를 붙잡지 않고 모든 창에 보낸다. platform이 거부한 source는 `failed to start the memory pressure source`로 시작을 실패시킨다. | both |
 | `endpoint.process.rejects-a-malformed-lock` | 잠금이 걸린 `process.lock`의 내용이 비었거나 다른 형식이면 엔드포인트는 `already owned by a live process`로 거부하며, 거부에 드는 내용은 256 바이트로 잘린다. 잠금 파일은 그대로 남는다. | both |
-| `endpoint.lock.unrecorded-end` | 시작할 때 잠기지 않은 `process.lock`은 내용과 관계없이 넘겨받으며, 엔드포인트는 이전 실행의 `boot`와 `pid`, 또는 다른 형식 파일의 내용을 알려 준다. host는 이를 `host.run.unrecorded-end`로 저장한다. | both |
+| `endpoint.lock.empty-is-no-previous-run` | 시작할 때 비었고 잠기지 않은 `process.lock`은 event `host.run.unrecorded-end`를 저장하지 않고 넘겨받는다. 시작자가 잠그기 전에 파일을 만들고, 소유자는 잠금 아래에서만 기록을 쓰기 때문이다. | both |
+| `endpoint.lock.unrecorded-end` | 시작할 때 잠기지 않았고 비어 있지 않은 `process.lock`은 내용과 관계없이 넘겨받으며, 엔드포인트는 이전 실행의 `boot`와 `pid`, 또는 다른 형식 파일의 내용을 알려 준다. host는 이를 `host.run.unrecorded-end`로 저장한다. | both |
 | `endpoint.lock.single-owner` | 같은 설정 디렉터리의 두 번째 엔드포인트는 첫 엔드포인트가 잠금을 쥐고 있는 동안 "already owned by process"로 거부되며, 오래된 `process.lock`을 찾은 두 시작자는 소유자를 하나만 남긴다. | both |
 | `endpoint.process.lock-mode-0600` | 설정 디렉터리의 `process.lock`은 mode 0600이다. | both |
 | `endpoint.transport.http-request-line-closes` | HTTP 요청 줄은 응답이나 메서드 호출 없이 연결을 닫는다. | both |

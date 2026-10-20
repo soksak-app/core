@@ -610,7 +610,9 @@ impl ProcessLock {
             if !platform.is_named_file(&file, &path)? {
                 continue;
             }
-            // A free lock file that was present was left by an owner that ended without removing it, whatever its content.
+            // A free lock file that was present was left by an owner that ended without removing it, whatever its content, except
+            // an empty file: a starter creates the file before it locks it, so an empty file that is free can belong to a starter
+            // that has not locked it yet. No owner writes a record into an empty file, so it names no earlier run.
             let mut unrecorded_end = None;
             if existed {
                 // The contents are read through the locked file, so they cannot change while they are checked.
@@ -618,7 +620,9 @@ impl ProcessLock {
                 (&file)
                     .read_to_end(&mut contents)
                     .map_err(|read| format!("{}: {read}", path.display()))?;
-                unrecorded_end = Some(unrecorded_end_of(&contents));
+                if !contents.is_empty() {
+                    unrecorded_end = Some(unrecorded_end_of(&contents));
+                }
                 #[cfg(feature = "diagnostics")]
                 crate::process_lock_hook::observe_stale_lock(directory);
             }

@@ -320,7 +320,9 @@ func acquireProcessLock(directory string) (*processLock, error) {
 			}
 			continue
 		}
-		// A free lock file that was present was left by an owner that ended without removing it, whatever its content.
+		// A free lock file that was present was left by an owner that ended without removing it, whatever its content, except
+		// an empty file: a starter creates the file before it locks it, so an empty file that is free can belong to a starter
+		// that has not locked it yet. No owner writes a record into an empty file, so it names no earlier run.
 		var unrecordedEnd *UnrecordedEnd
 		if existed {
 			// The contents are read through the locked file, so they cannot change while they are checked.
@@ -328,8 +330,10 @@ func acquireProcessLock(directory string) (*processLock, error) {
 			if err != nil {
 				return nil, errors.Join(err, file.Close())
 			}
-			end := unrecordedEndOf(contents)
-			unrecordedEnd = &end
+			if len(contents) > 0 {
+				end := unrecordedEndOf(contents)
+				unrecordedEnd = &end
+			}
 			if hook := processLockHook.Load(); hook != nil && *hook != nil {
 				(*hook)(directory)
 			}
