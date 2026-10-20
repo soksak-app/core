@@ -254,7 +254,7 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 
 창이 시작할 때 manifest를 불러온 플러그인을 불러온 플러그인이라 한다. 설치는 저장된 스페이스, 설정, 프로젝트 데이터가 아직 가리키는 플러그인을 제거하거나 끌 수 있으므로, 불러오지 않은 플러그인을 가리키는 것은 바꾸지 않고 유지하며 불러오기를 실패시키지 않는다.
 
-- 그런 플러그인의 내용 탭은 placeholder 카드로 열린다. 카드는 플러그인 id와 이유에 따른 한 줄을 보여 주고, 탭은 저장된 스페이스에서 id, 제목, 저장된 상태를 유지한다. 탭을 닫으면 다른 탭처럼 지워진다. `core.surfaces`는 그 탭의 `placeholder`를 이유로 보고하고, 마운트된 표면은 `placeholder: null`을 보고한다.
+- 그런 플러그인의 내용 탭은 placeholder 카드로 열린다. 카드는 플러그인 id와 이유에 따른 한 줄을 보여 주고, 탭은 저장된 스페이스에서 id, 제목, 저장된 상태를 유지한다. 탭을 닫으면 다른 탭처럼 지워진다. `core.surfaces`는 그 탭의 `placeholder`를 이유로 보고하고, 마운트된 표면은 `placeholder: null`을 보고한다. `missing`, `disabled`, `reload`, `host` 이유는 저장된 배치가 유효하고 플러그인이 사용자의 선택이나 환경으로 없으므로 일반 placeholder 문구다. `unread` 이유는 설치 상태를 읽지 못한 실패이므로 그 줄은 오류이며, 오류 표시 경로로 `surface <tab id> placeholder`라는 place에 보이고 상태를 다시 읽거나 탭이 사라지면 거둔다.
 
 | 이유 | 줄 | 동작 |
 | --- | --- | --- |

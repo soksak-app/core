@@ -1911,6 +1911,7 @@
     - [o] R5.5.1 — P1: registry 저장소의 항목을 `release`와 `releases`로 쓰고, 그것을 읽는 core release 뒤에 게시한다. 그 뒤로 이전 core의 애플리케이션은 index를 읽지 못한다. 2026-10-09에 F125로 완료: release된 core 중 새 이름을 읽는 것이 없으므로 항목을 core release 전에 쓰고 게시했다. core 0.0.8의 애플리케이션은 index를 읽지 못한다.
   - [o] R5.6 — P1: `sidecar.json`의 `helpers[].package`를 `helpers[].name`으로 바꾼다. Red: `a sidecar manifest may include optional helpers with name and executable`가 `sidecar.json helpers: unknown field name`으로 실패했다. Green: `@soksak/plugin-api`가 157개 test를 통과하고, `package`를 가진 helper는 `unknown field package`로 실패한다. helper를 선언한 sidecar는 없다. 2026-10-08 완료.
 - [o] R6 — P1: 새 지시는 체크리스트에 기록하고 진행 중인 작업이 멈출 지점에 이르면 우선순위에 따라 진행하며, 명시적 요청이나 우선순위가 요구할 때만 진행 중인 작업을 멈추고, 항목 하나의 미커밋 범위가 독립 항목의 시작을 금지하지 않는다는 것을 `AGENTS.md`에 적는다. 2026-10-09 완료.
+- [~] F217 — P1: 불러오지 않은 플러그인의 탭 placeholder를 이유가 실패를 뜻할 때만 공용 오류 표시 경로로 보인다. 입력: `packages/workbench/plane.js`의 `pluginPlaceholder`가 모든 이유를 일반 문구로 그려서, `unread` 이유(플러그인 설치 상태를 읽지 못함)는 실패인데도 애플리케이션 log에 쓰이지 않고 `showError`로 보이지 않는다. `missing`, `disabled`, `reload`, `host` 이유는 불러오지 않은 플러그인을 가리키는 저장된 배치의 의도된 상태이므로([플러그인](plugins.ko.md#불러오지-않은-플러그인)) 일반 placeholder 문구로 둔다. 기대: `unread` placeholder는 표면을 이름으로 가진 `where`로 `showError`를 거치며, 서로 다른 문구마다 한 번 쓰고, 표면이 사라지거나 상태를 다시 읽으면 `hideError`로 거둔다. Red: 새 `packages/workbench/test/plane-placeholder-error.test.mjs`는 설치 상태를 읽지 못하는 동안 불러오지 않은 플러그인을 가리키는 배치에서 `showError` 쓰기를 찾지 못한다. Green: 같은 테스트가 placeholder 경로로 통과한다.
 
 ## Tauri/Wails 대칭 감사 (2026-09-21)
 
