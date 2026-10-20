@@ -58,6 +58,7 @@ export function callReporter(plugin) {
 export const openCalls = () => {
   const totals = new Map();
   for (const { plugin, count, oldestStartedAt } of layers.values()) {
+    // default: the first layer of a plugin starts its total at zero open calls.
     const total = totals.get(plugin) ?? { plugin, count: 0, oldestStartedAt: null };
     total.count += count;
     if (oldestStartedAt !== null && (total.oldestStartedAt === null || oldestStartedAt < total.oldestStartedAt)) {

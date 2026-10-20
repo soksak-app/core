@@ -64,6 +64,15 @@ test("a reply with an error rejects the call with its code and message", async (
   await assert.rejects(failed, { code: -32602, message: "bad" });
 });
 
+test("a reply whose error has no message throws an explicit error and keeps the call open", async (t) => {
+  const { calls, transport } = setup(t);
+  const pending = calls.request("probe.run");
+  assert.throws(() => transport.deliver({ id: 1, error: { code: -32602 } }), /call reply 1 has an error without a message/);
+  assert.equal(calls.openCalls().count, 1);
+  transport.deliver({ id: 1, result: 2 });
+  assert.equal(await pending, 2);
+});
+
 test("a message that is not a reply, or a reply to no request, throws an explicit error", (t) => {
   const { transport } = setup(t);
   assert.throws(() => transport.deliver({ result: 1 }), /is not a reply with an integer id/);

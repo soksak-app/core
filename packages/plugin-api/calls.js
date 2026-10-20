@@ -96,10 +96,13 @@ export function createCalls({ plugin, send, onMessage, report }) {
       report({ kind: "late-reply", plugin, command: late.command, delay: Date.now() - late.sent });
       return;
     }
+    if ("error" in message && typeof message.error?.message !== "string") {
+      throw new Error(`call reply ${message.id} has an error without a message`);
+    }
     const call = end(message.id);
     changed();
     if ("error" in message) {
-      call.reject(callError(message.error?.message ?? String(message.error), { code: message.error?.code }));
+      call.reject(callError(message.error.message, { code: message.error.code }));
     } else {
       call.resolve(message.result);
     }
