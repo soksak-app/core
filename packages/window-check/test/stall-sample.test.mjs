@@ -102,3 +102,30 @@ test("a host that does not answer the dump event within the bound is named in th
   const text = await announceStall(() => new Promise(() => {}), "main", ["/x/logs/stall-10-7.txt"], 10);
   assert.equal(text, "host.stall.dump not stored: no answer within 10 ms");
 });
+
+test("a request pending past 3 s starts the host and page samples in the same turn", async (t) => {
+  const { sampleStall } = await import("../stall-sample.mjs");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const started = [];
+  const sample = async () => sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
+    sample: (pid, file) => { started.push(pid); return file; } }).join(", ");
+  const reports = [];
+  void within(new Promise(() => {}), 10_000, "wailsv3 status.get host.windows", sample, (text) => reports.push(text));
+  t.mock.timers.tick(2999);
+  assert.deepEqual(started, []);
+  t.mock.timers.tick(1);
+  assert.deepEqual(started, [10, 12, 13]);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(reports, ["wailsv3 status.get host.windows still pending after 3000 ms; the host's threads at that moment: /x/logs/stall-10-7.txt, /x/logs/stall-10-7-page-12.txt, /x/logs/stall-10-7-page-13.txt"]);
+});
+
+test("a request that answers before 3 s does not start a sample", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let sampled = 0;
+  const answer = within(new Promise((resolve) => setTimeout(() => resolve(5), 1000)), 10_000, "probe",
+    async () => { sampled++; return ""; }, () => {});
+  t.mock.timers.tick(1000);
+  assert.equal(await answer, 5);
+  t.mock.timers.tick(10_000);
+  assert.equal(sampled, 0);
+});

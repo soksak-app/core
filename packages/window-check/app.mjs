@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
-import { announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
+import { STALL_AFTER, announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { untilEndpoint } from "./endpoint-wait.mjs";
 import { readEventErrors, sessionEventStart, writeEventOffsets } from "./event-log.mjs";
 import { policyOfSetting, requireStored, untilPolicy } from "./log-policy.mjs";
@@ -438,7 +438,7 @@ export class Session {
       }
       throw error;
     });
-    return within(answer, timeout, what, sample);
+    return within(answer, timeout, what, sample, (text) => this.step(text));
   }
 
   get(name, surface) {
@@ -733,7 +733,7 @@ function compact(object) {
  * before failing and writes the path of that record into the error (F69). When recording fails, the error states the
  * reason.
  */
-export function within(promise, ms, what, sample) {
+export function within(promise, ms, what, sample, report) {
   let timer;
   const limit = new Promise((_, reject) => {
     timer = setTimeout(async () => {
@@ -746,7 +746,23 @@ export function within(promise, ms, what, sample) {
       }
     }, ms);
   });
-  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+  // A request still pending at STALL_AFTER starts the host and page samples in the same turn, so a stall that ends before
+  // the limit keeps its stacks. The result of that sample goes to report, and a failed sample is reported with its reason.
+  let stall;
+  if (sample && ms > STALL_AFTER) {
+    if (typeof report !== "function") throw new Error(`within needs a report function for a sample after ${STALL_AFTER} ms`);
+    stall = setTimeout(() => {
+      const pending = `${what} still pending after ${STALL_AFTER} ms`;
+      sample().then(
+        (text) => report(`${pending}; the host's threads at that moment: ${text}`),
+        (error) => report(`${pending}; sampling the host failed: ${error.message}`),
+      );
+    }, STALL_AFTER);
+  }
+  return Promise.race([promise, limit]).finally(() => {
+    clearTimeout(timer);
+    clearTimeout(stall);
+  });
 }
 
 /** Returns the code of the EndpointError when the request fails, and null when it succeeds. */
