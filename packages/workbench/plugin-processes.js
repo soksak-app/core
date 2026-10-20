@@ -1,13 +1,75 @@
 // Core statuses of the plugin processes (docs/plans/plugin-processes.md, rules 2, 3 and 6). Each status holds a list of records
-// that carry the plugin id. The lists are empty until the call layer (F212.3-1) and the declared UI snapshots (F212.3-2) fill them.
+// that carry the plugin id. The call layer of a plugin process reports its open calls and its losses through callReporter
+// (F212.3-1); the declared UI snapshots (F212.3-2) and the presentation and responsiveness of views (F212.7) fill the others.
 //
 // core-exposure.js registers each reader under the name that exposure.json declares.
 
-/** The open calls of each plugin: `{plugin, count, oldestStartedAt}`. */
-export const openCalls = () => [];
+/** The losses of each plugin, in the order of their first count. */
+const lossCounts = new Map();
+/** The open calls of each call layer. A layer with no open call is removed. */
+const layers = new Map();
+const listeners = new Set();
 
-/** The losses of each plugin: `{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}`. */
-export const losses = () => [];
+const announce = () => {
+  for (const listener of listeners) listener();
+};
+
+const lossesOf = (plugin) => {
+  if (!lossCounts.has(plugin)) {
+    lossCounts.set(plugin, { plugin, skipped: 0, stalled: 0, abandoned: 0, lateReplies: 0, timeouts: 0, peerLost: 0 });
+  }
+  return lossCounts.get(plugin);
+};
+
+/** Calls fn after each change of a plugin process status. Returns the function that removes the listener. */
+export function onPluginProcessChange(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+/**
+ * Returns the report function of one call layer (createCalls of @soksak/plugin-api). Each call of callReporter makes a new layer,
+ * so the open calls of the layers of one plugin add up in openCalls.
+ *
+ * A timeout counts losses.timeouts, a late reply counts losses.lateReplies, and a surface that closed with a call open counts
+ * losses.peerLost. A process or sidecar that ends with a call open is a failure: no loss is counted, and the host relay writes
+ * it as an error event.
+ */
+export function callReporter(plugin) {
+  const layer = {};
+  return (event) => {
+    if (event.kind === "open-calls") {
+      if (event.count === 0) layers.delete(layer);
+      else layers.set(layer, { plugin, count: event.count, oldestStartedAt: event.oldestStartedAt });
+    } else if (event.kind === "timeout") {
+      lossesOf(plugin).timeouts += 1;
+    } else if (event.kind === "late-reply") {
+      lossesOf(plugin).lateReplies += 1;
+    } else if (event.kind === "peer-lost") {
+      if (event.reason === "surface-closed") lossesOf(plugin).peerLost += 1;
+    } else {
+      throw new TypeError(`unknown call report kind ${event.kind}`);
+    }
+    announce();
+  };
+}
+
+/** The open calls of each plugin that has one: `{plugin, count, oldestStartedAt}`. */
+export const openCalls = () => {
+  const totals = new Map();
+  for (const { plugin, count, oldestStartedAt } of layers.values()) {
+    const total = totals.get(plugin) ?? { plugin, count: 0, oldestStartedAt: null };
+    total.count += count;
+    if (oldestStartedAt !== null && (total.oldestStartedAt === null || oldestStartedAt < total.oldestStartedAt)) {
+      total.oldestStartedAt = oldestStartedAt;
+    }
+    totals.set(plugin, total);
+  }
+  return [...totals.values()];
+};
+
+/** The losses of each plugin that has counted one: `{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}`. */
+export const losses = () => [...lossCounts.values()].map((entry) => ({ ...entry }));
 
 /** The responsiveness of each plugin view surface: `{plugin, surface, responsive}`. */
 export const views = () => [];

@@ -28,6 +28,7 @@
     "clipboard.js",
     "links.js",
     "list.js",
+    "calls.js",
     "exposure-check.js",
     "engines-check.js",
     "core-exposure.json",
