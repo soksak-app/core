@@ -357,6 +357,20 @@
       "allowed": []
     },
     {
+      "term": "view configuration",
+      "definition": "The web view configuration that the host creates for one view, with `isView`, the plugin id of the surface, the document-start scripts of the view channel and of the theme, and the handler `sok-view`.",
+      "rejected": [
+        "view config"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "ready document",
+      "definition": "The document of a view whose ready message the host has recorded, the only document that receives host messages.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "installation record",
       "definition": "The file plugins/installed.json, which maps each plugin id to its recorded path.",
       "rejected": [],

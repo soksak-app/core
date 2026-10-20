@@ -48,7 +48,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `id` | 예 | `[a-z][a-z0-9-]*` 형식의 소문자 식별자. 탭과 설정이 참조한다. `core`는 core root가 예약하므로 거부한다 |
 | `name` | 예 | 표시 이름 |
 | `description` | 예 | 플러그인이 하는 일을 말하는 1자에서 200자 사이의 한두 문장. [plugin 화면](installation.ko.md#plugin-화면)이 보여 주고, plugin 화면과 설정 창이 검색한다 |
-| `surface` | 아니오 | `{ "module": "ui/page.js", "composition": ... }`: plugin 안의 모듈과 필수 [표면 합성](surface-composition.ko.md). 모듈은 앱 DOM에 마운트하며 외부 웹 문서는 문서 영역을 사용한다. 웹 주소는 표면이 아니다 |
+| `surface` | 아니오 | `{ "composition": ..., "module"?: "ui/page.js" }`: 필수 [표면 합성](surface-composition.ko.md). `hybrid` 합성에서 `module`은 앱 DOM에 마운트하는 plugin 안의 모듈이며 필수다. `view` 합성은 페이지를 합성 안에 선언하며 `module`이 없다([view 표면](#view-표면)). 외부 웹 문서는 문서 영역을 사용한다. 웹 주소는 표면이 아니다 |
 | `surface.unload` | 아니오. `background`와 함께 쓰면 거부 | 코어가 탭을 unload하고 탭이 쓴 상태로 restore할 수 있는 plugin의 `{ "format": <양의 정수>, "maxBytes": <양의 정수> }`([메모리 절약](#메모리-절약)). `background`와 함께 쓰면 거부한다. 선언이 없는 표면은 unload하지 않는다(`undeclared`) |
 | `mark` | `surface`가 있으면 | 추가 메뉴와 새 탭 제목에 표시하는 짧은 텍스트 |
 | `icon` | `surface`가 있으면 | 16×16 뷰박스용 SVG 요소 |
@@ -64,7 +64,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: 상태 모듈이 프로젝트마다 저장하는 [프로젝트 데이터](#프로젝트-데이터). `state`가 필요하다 |
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣으며, `settings`는 `operation`이나 선언하지 않은 설정을 가리킬 수 없다. `surface`와 `dependencies`가 필요하다 |
 
-플러그인은 `surface`, `sections`, `contributes` 중 하나 이상이 필요하다. 표면이 있는 플러그인만 추가 메뉴에 표시되고 레일을 갖는다. 워크벤치는 `modules/<name>/<module>`(`<name>`은 플러그인 `package.json`의 `name`)을 import하고 `mount(root, context)`를 호출한다. 표면 식별자는 URL 쿼리가 아닌 명시적인 context 멤버다. 기존 `page` 선언은 거부하며 별도 구현 경로를 선택하지 않는다. 정의되지 않은 필드는 거부한다.
+플러그인은 `surface`, `sections`, `contributes` 중 하나 이상이 필요하다. 표면이 있는 플러그인만 추가 메뉴에 표시되고 레일을 갖는다. `hybrid` 표면에서 워크벤치는 `modules/<name>/<module>`(`<name>`은 플러그인 `package.json`의 `name`)을 import하고 `mount(root, context)`를 호출한다. `view` 표면은 module이 없으며 워크벤치는 그것을 위해 아무것도 import하지 않는다([view 표면](#view-표면)). 표면 식별자는 URL 쿼리가 아닌 명시적인 context 멤버다. 기존 `page` 선언은 거부하며 별도 구현 경로를 선택하지 않는다. 정의되지 않은 필드는 거부한다.
 
 `surface.params`가 있으면 plugin의 탭 인자의 schema이며, `type`이 `object`인 exposure 선언 schema 부분집합이다. `core.card.add-tab {card, plugin, params}`는 `params`를 그것으로 검사하고 space layout에 탭과 함께 저장하며, 맞지 않으면 `params do not match <plugin> surface.params`로, `surface.params`가 없는 plugin이면 `plugin <plugin> declares no tab params`로 실패한다. surface context는 그것을 복사본 `tab.params`로 주고, 인자가 없는 탭이면 `null`이다. 저장된 탭의 인자가 불러온 plugin의 선언과 맞지 않으면 그 탭은 이유와 함께 `<plugin> <version> 탭의 인자가 선언과 맞지 않습니다`를 보이는 placeholder로 열리며, 인자는 변환하지 않는다.
 
@@ -76,7 +76,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 
 `surface.drop`이 있으면 파일이 표면에 놓였을 때 페이지가 그 표면에서 실행할 `exposes`의 명령을 가리키며, `{urls}`에 놓인 파일 URL을 담는다([네이티브 표면](native-surfaces.ko.md#네이티브-뷰-위의-입력)).
 
-`surface.composition`은 `{ "kind": "dom" }`이거나 `kind: "hybrid"`, 완전한 `regions`, 완전한 `overlays`를 가진 혼합 선언이다. 그림 영역은 `dependencies`에 이미 나열한 사이드카를 지정한다. manifest 선언은 호스트에 전달하는 권한 데이터다. 페이지 코드는 선언에 없는 영역, 공급자, 입력 소유자, 쌓임 항목을 추가할 수 없다.
+`surface.composition`은 `{ "kind": "view", "page": "<path>" }` 선언이며 `regions`와 `overlays`를 추가로 가질 수 있다([view 표면](#view-표면)). 또는 `kind: "hybrid"`, 완전한 `regions`, 완전한 `overlays`를 가진 혼합 선언이다. 그림 영역은 `dependencies`에 이미 나열한 사이드카를 지정한다. manifest 선언은 호스트에 전달하는 권한 데이터다. 페이지 코드는 선언에 없는 영역, 공급자, 입력 소유자, 쌓임 항목을 추가할 수 없다. `dom` 종류는 없다. reader는 `{ "kind": "dom" }`을 plugin과 필드 `surface.composition`을 밝힌 오류로 거부한다.
 
 ## 기본 사이드바 세트
 
@@ -158,6 +158,17 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 `background` 선언은 두 번째 페이지나 숨은 WebView가 아니라 세션 수명을 명시하는 계약이다. 워크벤치는 선언된 `operation`을 선언된 사이드카에 사이드카 메시지 프로토콜로 보낸다. manifest에서는 읽기 쉬운 전체 필드명 `operation`을 사용한다. 워크벤치는 요청을 임의로 만들거나 누락된 동작을 대체하거나 오류를 숨기지 않는다. 표면이 마운트된 탭은 그 표면을 통해 세션을 소유한다. 같은 카드의 다른 탭이 보이는 동안에도 탭의 표면은 마운트된 채 남으므로 그런 탭에는 background 세션이 없고, 탭이 보이거나 그 표면이 마운트되면 탭의 background 세션은 끝난다. 연결 listener도 함께 멈추므로, 사이드카가 다시 연결되어도 세션을 소유한 표면에 그 동작을 보내지 않는다. 탭이 보이게 되면 그 표면이 같은 동작과 이미지 영역을 보내 기존 세션에 다시 연결한다. 탭을 제거하면 listener의 구독이 끝나지 않았어도 background 세션을 제거한다. 각 결정은 event `page.background.session` `{tab, plugin, sidecar, action, surface}`다. `open`과 `reopen`은 동작을 보내고, `skip`은 표면이 마운트된 비활성 탭에 아무것도 보내지 않으며, `stop`은 세션을 끝낸다. `surface`는 `mounted` 또는 `absent`다.
 
+## view 표면
+
+`view` 합성을 가진 표면은 plugin의 native 웹뷰 하나, 즉 view로 그린다. view는 plugin의 페이지를 담으며, 자유 DOM, 입력기(IME)가 필요한 텍스트 입력, canvas, editor 또는 영역을 가질 수 있다. view의 호스트 쪽은 [native 표면](native-surfaces.ko.md#view-표면)에 정의한다.
+
+- **선언.** 합성은 `{ "kind": "view", "page": "<path>", "regions"?: [...], "overlays"?: [...] }`이다. `page`는 plugin release 안의 경로다. 상대 경로이고 앞에 `/`가 없으며, 빈 segment, `.`, `..` segment와 `.binary` segment가 없고, `.html`로 끝나며, `package.json`의 `files`에 나열한다. page가 나열되지 않으면 `sok plugin pack`이 실패한다. `regions`가 있으면 빈 배열이 아닌 배열이고, `overlays`가 있으면 배열이다. 각 항목은 혼합 합성의 규칙을 따르며, 그림 영역은 `dependencies`에 나열한 사이드카를 지정한다. `view` 합성의 표면은 `module`이 없다. `view` 합성 옆의 `surface.module`은 거부하며, `hybrid` 합성에 `module`이 없으면 거부한다. 나머지 `surface` 필드는 view에도 그대로 적용한다. view가 그것을 위해 실행하는 명령은 view가 channel을 통해 등록한다.
+- **영역.** view의 영역은 그 view의 표면 host에 붙는다. 선언이 영역의 유일한 권한이다. view는 `regions`에 없는 영역을 배치할 수 없다. 영역의 inset은 view frame에 상대적이다([native 표면](native-surfaces.ko.md#view-표면)).
+- **워크벤치.** 워크벤치는 view 표면을 다른 표면과 같이 만들고 배치한다. 그것을 위해 `mount`를 호출하지 않고 module을 import하지 않으며, card 요소는 plugin DOM을 갖지 않는다. 호스트가 view를 card 요소 위에 배치한다. 앱 DOM을 reload해도 view는 교체되지 않는다.
+- **페이지.** 페이지는 view import map에서만 import한다. 이 map은 정확히 네 항목을 가진다: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/view`, `@soksak/shared/`. `@soksak/plugin-api/view`가 view bridge다. 이것은 view channel 위에서 `createViewChannel()`을, 그리고 그 channel 위의 call 계층과 선언 UI snapshot을 내보낸다. 페이지는 `@soksak/runtime`이나 `@soksak/workbench/` 아래의 것을 import하지 않는다. 페이지는 시작할 때 표면 context의 동기 값(`icon(name)`, `params`, `origin`, `project`, `declarations`)을 받고, 표면 context의 비동기 동작은 view bridge를 거쳐 호출하며, `contributions(point)`는 그 point의 연결된 항목을 받는다. 항목의 module은 core root에서 import한다.
+- **unload와 restore.** view 탭은 plugin이 `surface.unload`를 선언한 경우에만 unload한다. 규칙은 [메모리 절약](#메모리-절약)과 같다. unload는 view의 웹뷰와 process를 닫고 영역을 해제한다([영역 수명](native-surfaces.ko.md#region-lifetime)). view의 문서 영역은 메모리 절약이 설명하는 대로 먼저 session history를 쓴다. restore는 같은 origin으로 새 view를 만들고 페이지를 다시 load한다. 페이지는 `tab.state`로 쓴 상태를 표면 context와 같은 동작으로 읽는다. 선언한 plugin이 unload 뒤에 가지는 상태는 메모리 절약이 설명하는 대로 저장된 탭 상태뿐이다.
+- **process 종료.** view process가 끝나면 view가 열어 둔 call은 `process-ended` 이유로 끝난다([plugin process](../plans/plugin-processes.ko.md) 규칙 3). 이 계약은 view process의 재시작을 정의하지 않는다. [사이드카](sidecars.ko.md#실패)와 plugin host의 재시작 한도는 view process에 적용하지 않는다.
+
 ## 탭 알림
 
 표면 컨텍스트에는 `tab.title(text)`, `tab.footer(text)`, `tab.directory(path)`, `tab.notify(text, policy)`, `tab.modified(value)`, `tab.error(text)`, 고정된 `origin` 객체, 고정된 `project` 객체가 있다.
@@ -210,7 +221,7 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면 요소와 
 
 **재시작.** `memorySaver`가 켜져 있는 동안 plugin이 `surface.unload`를 `{format, maxBytes}`로 선언한 숨겨진 탭은 unload된 채 시작하고 처음 보일 때 restore된다. 꺼져 있으면 숨겨진 탭은 시작할 때 마운트된다. 탭이 unload되었는지는 저장하지 않는다.
 
-**DOM 탭.** surface가 main page의 DOM에 그리는 plugin(composition `dom`)은 `surface.unload`를 선언할 수 있다. 이런 탭의 unload는 process가 아니라 main page의 JS object와 DOM node를 해제한다. 숨겨진 탭은 host를 document 밖 fragment에 두므로, 해제될 때까지 DOM, buffer, 다른 process에 동기화하는 문서의 사본을 쥔다. DOM 탭 plugin은 unload가 탭이 더한 heap과 DOM node의 90 percent 이상을 해제하고(`make hidden-tab-memory`) 탭 상태가 해제하는 양에 비해 작을 때 그것을 선언하는 것이 좋다. `make hidden-tab-memory`는 core test tree의 작업 크기 fixture surface를 측정한다. 숨겨진 탭 하나당 동기화 사본을 가진 20000줄 editor는 heap 11.6 MB와 node 1524개, 3000 block의 rendered document는 27.8 MB와 node 19504개, scrollback 10000행의 terminal은 6.1 MB와 node 1254개를 더한다. unload는 탭 4개와 8개 모두에서 각각의 99 percent 이상을 돌려주고, 저장된 탭 상태는 32~48 byte이다. heap은 Node와 jsdom 아래 page code의 V8 heap이다. WebKit은 page에 JS heap 값을 주지 않기 때문이다. node 수는 page의 값이다. 다른 process가 쥔 문서 사본은 plugin이 포기하는 sidecar session이고, plugin은 이를 탭 상태에서 복원한다.
+**DOM 탭.** surface가 main page의 DOM에 그리는 plugin(`hybrid` 합성이며 module이 앱 DOM에 마운트한다)은 `surface.unload`를 선언할 수 있다. 이런 탭의 unload는 process가 아니라 main page의 JS object와 DOM node를 해제한다. 숨겨진 탭은 host를 document 밖 fragment에 두므로, 해제될 때까지 DOM, buffer, 다른 process에 동기화하는 문서의 사본을 쥔다. DOM 탭 plugin은 unload가 탭이 더한 heap과 DOM node의 90 percent 이상을 해제하고(`make hidden-tab-memory`) 탭 상태가 해제하는 양에 비해 작을 때 그것을 선언하는 것이 좋다. `make hidden-tab-memory`는 core test tree의 작업 크기 fixture surface를 측정한다. 숨겨진 탭 하나당 동기화 사본을 가진 20000줄 editor는 heap 11.6 MB와 node 1524개, 3000 block의 rendered document는 27.8 MB와 node 19504개, scrollback 10000행의 terminal은 6.1 MB와 node 1254개를 더한다. unload는 탭 4개와 8개 모두에서 각각의 99 percent 이상을 돌려주고, 저장된 탭 상태는 32~48 byte이다. heap은 Node와 jsdom 아래 page code의 V8 heap이다. WebKit은 page에 JS heap 값을 주지 않기 때문이다. node 수는 page의 값이다. 다른 process가 쥔 문서 사본은 plugin이 포기하는 sidecar session이고, plugin은 이를 탭 상태에서 복원한다.
 
 **plugin이 포기하는 것.** 선언한 plugin은 unload된 탭에서 `context.tab.state`로 쓰지 않은 모든 상태를 포기한다. DOM, 메모리의 객체, sidecar 세션, session history를 뺀 문서 영역의 보이는 page를 포기한다. plugin은 main page의 web storage(`localStorage`, `sessionStorage`, IndexedDB)에 아무것도 저장하지 않는다. 그 저장소는 origin으로 공유되고 코어가 살피거나 지울 수 없기 때문이다. 탭 값은 `context.tab.state`로, 프로젝트 값은 프로젝트 데이터로 저장한다. 문서 영역은 자기 origin이며 자기 web storage를 가진다. unload된 탭에서 더한 탭은 `origin.directory: null`을 받는다. 마운트되지 않은 탭의 디렉터리 알림은 저장하지 않기 때문이다. 각 plugin은 자기 명세에 무엇을 저장하고 무엇을 포기하는지 적는다. plugin은 이를 위한 설정을 더하지 않는다. plugin에 site 예외 목록이 필요하면 그것은 그 plugin의 설정이며 keep 이유로 코어에 닿는다.
 

@@ -76,6 +76,32 @@ macOS 콘텐츠 웹뷰는 장치 픽셀을 좌표 단위로 사용하는 공통 
 - 페이지의 첫 그리기는 준비를 기다리지 않으므로([페이지 시작](native-host.ko.md#page-시작)) 제목줄은 그 그리기의 행을 이미 가져야 한다. 호스트는 창 페이지의 시작 문서에 답하기 전에, 보내는 작업 공간 스냅샷의 공통 설정 `textSize` 에 대해 창의 제목줄을 `round(max(40, 36 × textSize))` 로 정하고(설정이 없으면 40), 문서의 `controls` 는 그 뒤에 읽는다. `textSize` 는 공통 전용이므로([설정](projects.ko.md#저장)) 페이지는 같은 값으로 첫 행을 그린다. 아직 보이지 않는 창, 곧 첫 페이지가 표시될 때까지 투명한 새 창은 이전 페이지를 보이지 않으므로 호스트는 높이를 바로 정하고, 첫 보이는 프레임의 행과 제목줄은 같은 배율의 것이다. 보이는 창은 다시 읽기처럼 새 페이지가 첫 그리기를 표시할 때까지 이전 페이지를 보이므로, 호스트는 시작 트랜잭션 안에서 높이를 정한다. 페이지 시작이 창의 활성 준비와 대기 중인 준비를 취소한 뒤, 새 ticket 으로 창의 준비 하나인 배치 트랜잭션을 시작하고, 그 안에서 제목줄을 정하고, 시작 문서에 답한다. 메인 웹뷰의 읽기가 끝나고 그 다음 표시 갱신이 끝나면, 곧 첫 그리기가 표시되면 그 트랜잭션을 커밋한다. 시작 트랜잭션이 열린 동안 도착한 새 페이지의 준비는 그 트랜잭션을 연장하고 자기 표시와 함께 커밋하며, 그때 시작 커밋은 ticket 이 바뀐 것을 보고 아무것도 커밋하지 않는다. 높이를 정하지 못한 시작 트랜잭션은 취소하고 그 오류로 시작을 실패시킨다. 열린 트랜잭션은 새 페이지를 막지 않는다. 새 WebContent 프로세스는 창의 트랜잭션이 열린 동안 첫 화면을 그려 표시하고 표시 갱신은 끝난다([`window_titlebar_reload_test.m`](../../native/darwin/tests/window_titlebar_reload_test.m)). 0.5 이상 3 이하의 수가 아닌 `textSize` 는 `common setting textSize must be a number, not <type>` 이나 `common setting textSize must be from 0.5 through 3` 으로 시작을 실패시킨다. 창이 전체 화면인 동안에는 준비에서처럼 제목줄을 바꾸지 않는다.
 - 창이 전체 화면에서 나올 때 AppKit 은 들어갈 때 저장한 높이를 되돌리며, 전체 화면 동안 프레임 배율이 바뀌었으면 그 높이는 행과 다르다. 페이지는 창 크기가 바뀔 때마다 `windowControls` 를 읽고, 전체 화면에서 나오면 창 크기가 바뀐다. 답에 제목줄이 있고(`row` 가 0 보다 큼) 그 높이가 현재 프레임 배율의 행과 다르면, 페이지는 그 행을 담은 배치를 준비하고 그 준비가 마지막으로 보낸 요청과 같아도 보낸다.
 
+## view 표면
+
+view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.md#view-표면)). 각 view는 탭마다 하나의 웹뷰이며 `sok://<plugin id>` origin에서 그 plugin의 페이지를 실행한다. 워크벤치 페이지는 plugin 코드를 실행하지 않는다.
+
+- **구성.** 호스트는 view를 다음을 가진 웹뷰 구성으로 만든다.
+  - `isView` 설정. 이 구성만 `core` scheme을 core root resolver로 보낸다([문서 영역](#문서-영역));
+  - 표면 plugin의 plugin id. view의 origin과 core root 응답의 `Access-Control-Allow-Origin`을 정한다. 요청은 plugin id를 제공하지 않는다;
+  - `packages/plugin-api/view-start.js`의 text를 담은 document-start 사용자 script. view channel script이며 staged 사본에서 가져온다;
+  - 테마 토큰을 담은 document-start 사용자 script(아래 테마 참조);
+  - [호스트 계약](host-contract.ko.md)이 이름으로 선언한 script message handler `sok-view`.
+
+  두 document-start script는 모든 페이지 script보다 먼저 실행된다. 둘은 서로에 의존하지 않으므로 주입 순서는 이 계약의 일부가 아니다.
+- **load.** 구성을 만든 뒤 호스트는 `sok://<plugin id>/<page>`를 load한다. `<page>`는 합성의 `page`다. view의 파일은 문서 영역에 주는 plugin 파일과 같이 제공한다([문서 영역](#문서-영역)). 즉 `plugins/installed.json`이 기록한 폴더에서 가져오며, 같은 거부와 log 줄을 쓴다. view는 core root `sok://core/<path>`를 [문서 영역](#문서-영역)의 규칙과 [plugin process](../plans/plugin-processes.ko.md) 규칙 4의 grant 규칙에 따라 요청한다.
+- **배치.** view의 frame은 card 사각형과 요소의 DOM inset에서 합성기가 구한 표면 사각형이다. hybrid 합성의 outer surface와 같다([배치 순서](#배치-순서)). 호스트는 그 frame을 card의 transaction에 적용하므로, 매 frame마다 view와 card가 함께 움직인다. `hidden` 속성이 있는 요소 안이거나 너비나 높이가 0인 view는 보이지 않음으로 제출하며, 다른 표면과 같이 웹뷰와 process를 유지한다.
+- **영역.** view의 영역은 그 view의 표면 host 아래에 배치하고, inset은 view frame에 상대적이다. 영역을 배치하거나 바꾸는 호출마다 호출 envelope의 view id를 확인하므로 view는 다른 view의 영역을 조작할 수 없다([plugins](plugins.ko.md#view-표면)). 영역의 표시는 view frame과 같은 window transaction에 있다.
+- **view channel.** view channel은 위 구성의 script와 handler `sok-view`다.
+  1. document start에서 script는 `sok-view`로 ready message `{event: "view.ready", plugin, document}`를 보낸다. `document`는 script가 문서마다 만드는 식별자다. 호스트는 그것을 view의 ready 문서로 기록한다. 탐색(navigation)은 기록을 지우며, 새 문서의 ready message가 올 때까지 ready 문서가 없다.
+  2. 호스트는 `window.postMessage(message, location.origin)`을 page world에서 실행해 view에 message를 보낸다. 이것은 [문서 영역](#문서-영역)의 문서 post와 같은 형식이다. 호스트 message마다 `sok: 1` 필드가 있다. ready 문서가 기록되지 않은 view에 대한 post는 false를 반환하고, 호출자가 `error: view channel: <view> has no ready document`를 application log에 쓴다.
+  3. script는 event source가 window이고 `sok: 1`을 가진 message 이벤트를, document start부터 페이지가 `window.sokView.attach`를 부를 때까지 queue에 보관한다. attach는 queue의 message를 순서대로, 이어서 나중 message를 모두 전달한다. 전달 대상은 [view bridge](plugins.ko.md#view-표면)의 `createViewChannel()`이 붙이는 `onMessage` handler다. queue는 한 문서의 message만 담으며 최대 256개다.
+  4. `sok: 1`이 없는 message는 application log에 error로 쓰고 어떤 handler에도 넘기지 않는다. queue가 256개인 상태에서 도착한 message는 queue에 들어가지 않는다. script는 `sok-view`를 거쳐 `error: view channel: queue full for <plugin>`을 쓰고, 호스트는 view process를 끝낸다. 기록 없이 버리는 호스트 message는 없다.
+  5. `core.plugin.views`는 `queued`를 보고한다. 이는 view가 attach하지 않아 queue에서 기다리는 현재 문서의 message 수다.
+- **presentation wait.** view는 card 배치가 바뀐 뒤 처음 표시될 때만 presentation wait에 참여한다. divider 끌기 같은 계속되는 gesture에서는 view의 frame이 매 frame마다 card와 같은 commit에 배치되며, commit은 그 뒤 view가 그리는 내용을 기다리지 않는다. wait는 다음 중 처음 일어나는 것으로 끝난다. view의 presentation 완료, view process의 종료, 변경이 끝날 때 view가 보이지 않게 되는 것, `host.trace.view.unresponsive` 알림. wait는 timer로 끝나지 않는다. presentation 완료 없이 끝나면 commit은 그 view 없이 계속되고, 손실은 `core.plugin.losses`의 `abandoned`로 센다. 성능 trace가 켜져 있으면 `page.trace.view.presentation-abandoned {surface, reason}`을 쓴다.
+- **테마.** 생성할 때 호스트는 현재 테마의 토큰 집합을 document-start script로 view 구성에 준다. 그래서 페이지의 첫 script가 토큰을 읽는다. 나중의 테마 변경은 post 경로로 host message가 되어 view에 간다.
+- **입력.** view는 시작할 때 shortcut table을 호스트에 등록한다. table은 각 workbench 단축키와 그 주인을 담는다([plugin process](../plans/plugin-processes.ko.md) 규칙 7). 등록 전에는 각 키가 기본 동작을 유지하며, view는 `page.view.shortcut-table-missing {plugin}`을 error 수준으로 쓴다. view는 table로 각 키를 동기적으로 판단한다. workbench가 주인인 키는 기본 동작을 막고 event 데이터와 함께 넘긴다. view가 주인인 키는 view가 처리하고 넘기지 않는다. 네이티브 메뉴가 주인인 키는 view의 기본 동작을 막지 않는다. 그 밖의 키는 기본 동작을 유지한다. 넘긴 명령이 실패하면 `page.input.shortcut.failed {plugin, key, command}`를 쓴다. 입력기 조합은 view의 first responder에 간다.
+- **process 종료.** view process가 끝나면 호스트는 view가 열어 둔 각 call을 `process-ended` 이유로 끝내고, `host.call.peer-lost`를 쓰며, view의 presentation wait를 끝낸다.
+
 ## 영역
 
 영역은 표면에서 네이티브 콘텐츠를 표시하는 장소다. 소유권, 계층, 완전한 스냅샷 위치, 쌓임, 입력, 세대, 래스터 규칙은 [표면 합성](surface-composition.ko.md)이 정의한다. 이 문서는 문서·그림 공급자에만 해당하는 동작을 정의한다.
@@ -107,7 +133,7 @@ place가 빼는 표면의 영역 종료는 호스트가 맡는다. 두 호스트
 표면 페이지는 문서 영역으로 자기 요소 하나에 웹 문서를 표시한다. 표면은 항상 플러그인의 페이지를 표시하며([플러그인](plugins.ko.md)), 웹 주소는 표면이 아니다.
 
 - manifest가 `^[a-z0-9][a-z0-9-]{0,63}$`와 일치하는 고유 이름을 선언한다. 페이지는 `createSurfaceComposition`에서 문서 손잡이를 얻는다. 개별 attach, place, detach 연산은 공개하지 않는다.
-- 호스트는 호출한 표면의 `SurfaceHost.NativePlane` 아래에 웹뷰를 만들고, 호출마다 호출한 DOM 웹뷰가 요청에 적힌 표면인지 확인한다. 표면은 다른 표면의 영역을 조작할 수 없다.
+- 호스트는 호출한 표면의 `SurfaceHost.NativePlane` 아래에 웹뷰를 만들고, 호출마다 호출한 웹뷰가 요청에 적힌 표면에 속하는지 확인한다. 그 웹뷰는 hybrid 표면의 앱 DOM 웹뷰이거나 [view 표면](#view-표면)의 view다. 표면은 다른 표면의 영역을 조작할 수 없다.
 - 완전한 합성이 뷰포트 가장자리에서 요소까지의 여백을 CSS 픽셀로 보고하고 요소가 보이는지를 함께 보낸다. 호스트는 여백을 저장하고 바깥 표면이 바뀔 때 같은 네이티브 트랜잭션에서 다시 적용한다.
 - 페이지는 요소를 숨겨 영역을 숨긴다. 그러면 합성이 영역을 보이지 않는 것으로 보고하고, 호스트는 네이티브 뷰를 숨겨 그 뷰는 그리지도 입력을 받지도 않는다. 브라우저 플러그인은 `browser.location`이 빈 `url`을 보고하는 동안, 즉 첫 주소를 열기 전에 문서 요소를 숨긴다. 저장된 주소가 없는 브라우저 표면은 마운트할 때 브라우저 설정 `browser.home`(라벨 `홈 주소`, 기본값이 빈 주소 설정)의 주소를 연다. 그 설정이 비어 있으면 표면은 빈 상태로 시작한다. 그 자리에는 `주소를 입력하세요` 문구의 빈 상태 `browser.empty`를 표시하고, 이를 누르면 `browser.address.select`가 실행되어 주소창에 초점을 주고 값을 선택한다. 상태가 비어 있지 않은 `url`을 보고하면 플러그인은 빈 상태를 없애고 문서 요소를 다시 표시한다.
 - 영역은 `http`, `https`, `file`, `sok` 주소를 연다([애플리케이션 주소](native-host.ko.md#애플리케이션-주소)). 앱 자체 스킴은 요청할 때와 문서가 이동할 때 모두 거부한다. `file` 주소는 loadFileURL:allowingReadAccessToURL: 로 열어 파일이 있는 디렉터리까지 읽기 권한을 준다. 영역 문서는 앱 문서와 분리된 영구 웹사이트 데이터 저장소 하나를 사용하며 앱 브리지를 받지 않는다. 저장소는 쿠키, 로컬 저장소, 캐시 같은 사이트 데이터를 앱 설정 디렉터리 안의 `document-data` 디렉터리에 둔다. 설정 디렉터리는 앱이 `--config-dir`로 시작하면 그 디렉터리이고, 아니면 기본 설정 디렉터리다. 따라서 두 설정 디렉터리는 사이트 데이터를 공유하지 않고, 설정 디렉터리를 지우면 그 사이트 데이터도 지워진다. 공개 `dataStoreForIdentifier:`는 모든 저장소를 앱의 WebKit 컨테이너에 두므로, 호스트는 `_WKWebsiteDataStoreConfiguration` `initWithDirectory:`로 저장소를 만든다([비공개 네이티브 API](../operations/private-native-apis.ko.md)).
