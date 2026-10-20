@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"mime"
 	"net/http"
@@ -175,6 +176,125 @@ func insidePackage(dir string, parts []string) (string, bool) {
 		return "", false
 	}
 	return file, true
+}
+
+// coreRootFile is the file of the bundled frontend that lists the core targets of the view import map. The staging tool
+// writes it from viewCoreTargets of @soksak/plugin-api (CORE_ROOT_FILE), so the host holds no copy of the list.
+const coreRootFile = "core-root.json"
+
+// coreRootTargets reads the core targets of the view import map from core-root.json of the bundled frontend. A missing
+// file, a file that is not a JSON array of core target paths, or a path outside /modules is an error.
+func coreRootTargets(frontend fs.FS) (map[string]bool, error) {
+	data, err := fs.ReadFile(frontend, coreRootFile)
+	if err != nil {
+		return nil, fmt.Errorf("%s: the core targets are missing from the bundled frontend: %w", coreRootFile, err)
+	}
+	var paths []string
+	if err := json.Unmarshal(data, &paths); err != nil || paths == nil {
+		return nil, fmt.Errorf("%s: expected a JSON array of core target paths", coreRootFile)
+	}
+	targets := make(map[string]bool, len(paths))
+	for _, target := range paths {
+		if !strings.HasPrefix(target, "/modules/") {
+			return nil, fmt.Errorf("%s: %q is not a core target path", coreRootFile, target)
+		}
+		targets[target] = true
+	}
+	return targets, nil
+}
+
+// CoreRootFile is a file that the core root serves to a view: its content and its content type.
+type CoreRootFile struct {
+	Data        []byte
+	ContentType string
+}
+
+// CoreRoot returns the file at urlPath of the core root for a view of plugin (docs/plans/plugin-processes.md, rule 4).
+// A core target is read from the bundled frontend. Any other path is read from an installed plugin folder only when the
+// granted item rule (sok.GrantedFiles) grants it to plugin; the rule reads the installation record at each request.
+// found is false for a refused path, and the refusal is written as an error record. err is set when the requester
+// is installed but its declarations are malformed, or when a core target or a granted file is missing or unreadable.
+func CoreRoot(configDir, plugin, urlPath string, frontend fs.FS) (file CoreRootFile, found bool, err error) {
+	targets, err := coreRootTargets(frontend)
+	if err != nil {
+		return CoreRootFile{}, false, err
+	}
+	plugins, state, err := enabledPlugins(configDir)
+	if err != nil {
+		return CoreRootFile{}, false, err
+	}
+	if !slices.ContainsFunc(plugins, func(entry installedPlugin) bool { return entry.id == plugin }) {
+		return refuseCoreRoot(urlPath, plugin)
+	}
+	if targets[urlPath] {
+		data, err := fs.ReadFile(frontend, strings.TrimPrefix(urlPath, "/"))
+		if err != nil {
+			return CoreRootFile{}, false, fmt.Errorf("%s: the core file is missing from the bundled frontend: %w", urlPath, err)
+		}
+		return CoreRootFile{Data: data, ContentType: coreContentType(urlPath)}, true, nil
+	}
+	files := map[string]sok.PluginFiles{}
+	for _, entry := range plugins {
+		manifestFile := filepath.Join(entry.dir, "plugin.json")
+		data, err := os.ReadFile(manifestFile)
+		if err != nil {
+			return CoreRootFile{}, false, err
+		}
+		var manifest any
+		if err := json.Unmarshal(data, &manifest); err != nil {
+			return CoreRootFile{}, false, fmt.Errorf("%s: %w", manifestFile, err)
+		}
+		files[entry.id] = sok.PluginFiles{Package: entry.pkg, Manifest: manifest}
+	}
+	granted, err := sok.GrantedFiles(state, files, plugin)
+	if err != nil {
+		return CoreRootFile{}, false, err
+	}
+	if !slices.Contains(granted, urlPath) {
+		return refuseCoreRoot(urlPath, plugin)
+	}
+	lookup := InstalledModule
+	if strings.HasPrefix(urlPath, SharedPrefix) {
+		lookup = InstalledShared
+	}
+	target, _, exists, err := lookup(configDir, urlPath)
+	if err != nil {
+		return CoreRootFile{}, false, err
+	}
+	if !exists {
+		return CoreRootFile{}, false, fmt.Errorf("%s is granted to %s, but its file is missing", urlPath, plugin)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		return CoreRootFile{}, false, err
+	}
+	return CoreRootFile{Data: data, ContentType: coreContentType(urlPath)}, true, nil
+}
+
+// refuseCoreRoot writes the refusal of urlPath for plugin as an error record and returns the not found result.
+func refuseCoreRoot(urlPath, plugin string) (CoreRootFile, bool, error) {
+	LogError("core root", urlPath+" is not granted to "+plugin)
+	return CoreRootFile{}, false, nil
+}
+
+// coreContentType returns the content type of a core root file by its extension. The table is fixed, so that both hosts
+// give a file the same type.
+func coreContentType(urlPath string) string {
+	switch path.Ext(urlPath) {
+	case ".js", ".mjs":
+		return "text/javascript"
+	case ".json":
+		return "application/json"
+	case ".css":
+		return "text/css"
+	case ".html":
+		return "text/html"
+	case ".svg":
+		return "image/svg+xml"
+	case ".png":
+		return "image/png"
+	}
+	return "application/octet-stream"
 }
 
 // SharedPrefix is the path prefix that serves the shared modules of extension points.

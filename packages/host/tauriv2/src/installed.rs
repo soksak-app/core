@@ -4,12 +4,13 @@
 //! change. The format check uses the implementation of the command line sok.
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use serde::Serialize;
 use serde_json::value::RawValue;
-use soksak_sok::install::InstalledState;
+use soksak_sok::install::{InstalledState, PluginFiles};
 
 use crate::application_log::log_error;
 use crate::sidecars::SidecarDeclaration;
@@ -248,6 +249,122 @@ pub fn installed_module(config_dir: &Path, url_path: &str) -> Result<Module, Str
         return Ok(Module::Frontend);
     };
     Ok(inside_package(&plugin.dir, &parts[count..]))
+}
+
+/// A file that the core root serves to a view: its content and its content type.
+#[derive(Debug, PartialEq)]
+pub struct CoreRootFile {
+    pub data: Vec<u8>,
+    pub content_type: &'static str,
+}
+
+/// The file of the bundled frontend that lists the core targets of the view import map. The staging tool writes it from
+/// viewCoreTargets of @soksak/plugin-api (CORE_ROOT_FILE), so the host holds no copy of the list.
+const CORE_ROOT_FILE: &str = "core-root.json";
+
+/// Reads the core targets of the view import map from core-root.json of the bundled frontend. A missing file, a file that
+/// is not a JSON array of core target paths, or a path outside /modules is an error.
+fn core_root_targets(frontend: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Vec<String>, String> {
+    let data = frontend(CORE_ROOT_FILE).ok_or_else(|| {
+        format!("{CORE_ROOT_FILE}: the core targets are missing from the bundled frontend")
+    })?;
+    let paths: Vec<String> = serde_json::from_slice(&data)
+        .map_err(|_| format!("{CORE_ROOT_FILE}: expected a JSON array of core target paths"))?;
+    if let Some(path) = paths.iter().find(|path| !path.starts_with("/modules/")) {
+        return Err(format!(
+            "{CORE_ROOT_FILE}: {path:?} is not a core target path"
+        ));
+    }
+    Ok(paths)
+}
+
+/// Returns the file at url_path of the core root for a view of plugin (docs/plans/plugin-processes.md, rule 4). A core
+/// target is read from the bundled frontend, which frontend gives by its name without a leading slash. Any other path is
+/// read from an installed plugin folder only when the granted item rule (granted_files) grants it to plugin; the rule
+/// reads the installation record at each request. Ok(None) is a refused path, and the refusal is written as an error
+/// record. An error is returned when the declarations are malformed, or when a core target or a granted file is missing
+/// or unreadable.
+pub fn core_root(
+    config_dir: &Path,
+    plugin: &str,
+    url_path: &str,
+    frontend: &dyn Fn(&str) -> Option<Vec<u8>>,
+) -> Result<Option<CoreRootFile>, String> {
+    let targets = core_root_targets(frontend)?;
+    let (plugins, state) = enabled_plugins(config_dir)?;
+    if !plugins.iter().any(|entry| entry.id == plugin) {
+        return Ok(refuse_core_root(url_path, plugin));
+    }
+    if targets.iter().any(|target| target == url_path) {
+        let name = url_path.trim_start_matches('/');
+        let data = frontend(name).ok_or_else(|| {
+            format!("{url_path}: the core file is missing from the bundled frontend")
+        })?;
+        return Ok(Some(CoreRootFile {
+            data,
+            content_type: core_content_type(url_path),
+        }));
+    }
+    let mut files = BTreeMap::new();
+    for entry in &plugins {
+        let manifest_file = entry.dir.join("plugin.json");
+        let text = std::fs::read_to_string(&manifest_file)
+            .map_err(|error| format!("{}: {error}", manifest_file.display()))?;
+        let manifest: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|error| format!("{}: {error}", manifest_file.display()))?;
+        files.insert(
+            entry.id.clone(),
+            PluginFiles {
+                package: entry.package.clone(),
+                manifest,
+            },
+        );
+    }
+    let granted = soksak_sok::install::granted_files(&state, &files, plugin)?;
+    if !granted.iter().any(|path| path == url_path) {
+        return Ok(refuse_core_root(url_path, plugin));
+    }
+    let module = if url_path.starts_with(SHARED_PREFIX) {
+        installed_shared(config_dir, url_path)?
+    } else {
+        installed_module(config_dir, url_path)?
+    };
+    let Module::File(file) = module else {
+        return Err(format!(
+            "{url_path} is granted to {plugin}, but its file is missing"
+        ));
+    };
+    let data = std::fs::read(&file).map_err(|error| format!("{}: {error}", file.display()))?;
+    Ok(Some(CoreRootFile {
+        data,
+        content_type: core_content_type(url_path),
+    }))
+}
+
+/// Writes the refusal of url_path for plugin as an error record and returns the not found result.
+fn refuse_core_root(url_path: &str, plugin: &str) -> Option<CoreRootFile> {
+    log_error(
+        "core root",
+        format!("{url_path} is not granted to {plugin}"),
+    );
+    None
+}
+
+/// Returns the content type of a core root file by its extension. The table is fixed, so that both hosts give a file the
+/// same type.
+fn core_content_type(url_path: &str) -> &'static str {
+    match Path::new(url_path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+    {
+        Some("js" | "mjs") => "text/javascript",
+        Some("json") => "application/json",
+        Some("css") => "text/css",
+        Some("html") => "text/html",
+        Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
+        _ => "application/octet-stream",
+    }
 }
 
 /// Returns the sidecars that the plugin.json dependencies of an enabled installed plugin specify, together with the
