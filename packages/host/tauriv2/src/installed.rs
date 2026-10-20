@@ -110,12 +110,6 @@ pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u
     for plugin in plugins {
         let manifest_file = plugin.dir.join("plugin.json");
         let manifest = match std::fs::read_to_string(&manifest_file) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return failure(format!(
-                    "{}: the plugin manifest is missing",
-                    manifest_file.display()
-                ));
-            }
             Err(error) => return failure(format!("{}: {error}", manifest_file.display())),
             Ok(text) => match RawValue::from_string(compact(&text)) {
                 Ok(raw) if serde_json::from_str::<serde_json::Value>(raw.get()).is_ok() => raw,

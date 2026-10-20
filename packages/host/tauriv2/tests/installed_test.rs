@@ -205,6 +205,30 @@ fn installed_plugin_json_invalid_text_names_only_the_file() {
     }
 }
 
+// contract: installed.json.invalid-text
+#[test]
+fn installed_json_invalid_text_names_only_the_file() {
+    let config = installed_fixture();
+    write_installed(config.path(), &[("plugins/installed.json", "{")]);
+    let file = config.path().join("plugins/installed.json");
+    assert_eq!(
+        text(installed::installed_plugins_document(config.path(), false)),
+        format!(r#"{{"error":"{} is not valid JSON"}}"#, file.display())
+    );
+}
+
+// contract: installed.package-json.invalid-text
+#[test]
+fn installed_package_json_invalid_text_names_only_the_file() {
+    let config = installed_fixture();
+    write_installed(config.path(), &[("plugins/alpha/1.0.0/package.json", "{")]);
+    let file = config.path().join("plugins/alpha/1.0.0/package.json");
+    assert_eq!(
+        text(installed::installed_plugins_document(config.path(), false)),
+        format!(r#"{{"error":"{} is not valid JSON"}}"#, file.display())
+    );
+}
+
 /// A frontend that returns the path as it is.
 struct Frontend;
 

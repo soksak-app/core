@@ -169,7 +169,7 @@ func migrate(configDir, file string) (int, error) {
 	}
 	value, err := DecodeJSON(data)
 	if err != nil {
-		return 0, fmt.Errorf("%s is not valid JSON: %w", path, err)
+		return 0, fmt.Errorf("%s is not valid JSON", path)
 	}
 	// A document that is a list is the form 0 of a file whose first definition wraps it (the bare array of
 	// projects.json); the wrap operation of that definition names the member it goes under.
