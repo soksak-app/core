@@ -64,7 +64,14 @@
 
 실패 뒤의 프로토콜 상태는 정의되지 않으므로 호스트는 그 프로세스의 메시지를 더 읽지 않는다. 호스트는 프로세스를 실행 중인 사이드카에서 제거하고 강제 종료 신호를 보낸 뒤 끝나기를 기다린다. 그다음 실패를 로그에 쓰고, 그 프로세스에 요청을 보냈고 아직 소유 창이 있는 각 표면의 소유 창에 `sidecar-failure` 이벤트 `{sidecar, surface, reason}`을 전달한다. `reason`은 원인을 밝히는 텍스트로 `message exceeds 67108864 bytes`, `invalid message: <parser 오류>`, `unknown surface <surface>`, `unexpected close answer for <surface>`, `read: <오류>`, `output closed: <exit>` 중 하나다. `<exit>`는 [선언과 시작](#선언과-시작)의 종료 규칙과 같은 형식이다. 실패한 프로세스가 답하지 않은 요청은 답을 받지 않고, 페이지는 대신 실패를 관측한다.
 
-실패 뒤의 전송은 시작 규칙을 따른다. 그 사이드카에 대한 다음 요청이 새 프로세스를 시작한다. 새 프로세스에는 실패한 프로세스의 세션이 없으므로 세션을 유지하는 페이지는 세션을 다시 연다. 각 표면은 소유 창과 첫 root를 유지한다.
+실패 뒤의 전송은 시작 규칙을 따른다. 재시작 한도가 멈추지 않는 한 그 사이드카에 대한 다음 요청이 새 프로세스를 시작한다. 새 프로세스에는 실패한 프로세스의 세션이 없으므로 세션을 유지하는 페이지는 세션을 다시 연다. 각 표면은 소유 창과 첫 root를 유지한다.
+
+재시작 한도는 표준 입출력 사이드카에 적용된다. 호스트는 각 실패의 시각으로 사이드카의 실패를 센다. 시각은 실패 event가 도착할 때 잡으며, timer는 돌지 않는다. 새 실패보다 300초 넘게 앞선 실패는 세지 않는다(sliding window). 네 번째 실패가 세어지면 호스트는 로그에 `error: sidecar <name>: restart limit: 4 failures within 300 s`를 쓰고, `{sidecar}`를 가진 event `host.sidecar.restart-limit`을 level `error`로 쓰며, 그 사이드카의 재시작을 멈춘다. 멈춘 사이드카에 대한 요청은 프로세스를 시작하지 않는다.
+
+- 실패한 프로세스에 요청을 보낸 표면의 요청은 실패한다. 호스트는 `error: sidecar <name>: restart limit: request for <surface> refused`를 쓰고, 표면의 소유 창에 `{sidecar, surface, reason: "restart limit"}`인 `sidecar-failure`를 전달하며, 전송은 `sidecar <name>: restart limit`로 실패한다.
+- 실패한 프로세스에 요청을 보내지 않은 표면의 요청은 사이드카가 필요한 표면을 여는 것이다. 호스트는 실패 기록을 지우고 프로세스를 시작하며, `{sidecar, surface}`인 event `host.trace.sidecar.restart-reset`을 level `debug`로 쓴다.
+
+지속 service의 재시작 한도는 이 절이 정의하지 않는다. 지속 transport는 그 재시작 규칙이 [terminal runtime](terminal-runtime.ko.md)에 정해질 때까지 그 규칙을 따른다.
 
 호스트가 사이드카를 종료하는 동안 출력의 끝은 실패가 아니다. 멈추는 동안의 다른 실패는 호스트 로그에 `sidecar <name>: failed: <reason>`으로 쓰고, 중지 뒤의 전송은 실패해 페이지가 세션을 다시 열 수 없으므로 호스트는 실패 이벤트를 보내지 않는다. 그다음 [선언과 시작](#선언과-시작)의 종료 규칙이 프로세스를 끝낸다. 멈추는 동안이든 아니든 실패 뒤 호스트가 사이드카의 출력을 더 읽지 않으면 파이프의 자기 쪽 끝을 닫으므로, 사이드카의 이후 쓰기는 막히지 않고 실패한다. 이 실패 규칙은 표준 입출력 transport에 적용된다. 영속 transport는 [터미널 런타임](terminal-runtime.ko.md)이 정의하는 대로 연결 끊김을 알린다.
 

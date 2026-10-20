@@ -446,6 +446,10 @@ fn invalid_json_closes_connection() {
 | `sidecars.failure.oversize-message-terminates-and-notifies` | 67108864 byte보다 긴 줄은 줄이 끝나기를 기다리지 않고 사이드카 프로세스를 끝내고 "exceeds"를 담은 `sidecar-failure`를 소유 창에 전달한다. | both |
 | `sidecars.failure.invalid-message-terminates-and-notifies` | JSON이 아닌 줄이나 `body`가 없는 JSON 객체는 사이드카 프로세스를 끝내고 "invalid message"를 담은 `sidecar-failure`를 전달한다. | both |
 | `sidecars.failure.output-close-notifies-each-surface` | 호스트가 종료 중이 아닐 때 종료 상태 3으로 끝난 사이드카는 그 사이드카에 보낸 각 표면의 소유 창에 이유가 "output closed: exit status 3"인 `sidecar-failure`를 전달하고, 다음 전송은 새 프로세스를 시작한다. | both |
+| `sidecars.restart.three-failures-restart` | 표준 입출력 사이드카의 실패 3번이 각각 300초 안에 있으면 다음 전송은 새 프로세스를 시작하고, 재시작 한도 오류를 쓰지 않는다. | both |
+| `sidecars.restart.fourth-failure-stops` | 300초 안의 네 번째 실패는 `error: sidecar <name>: restart limit: 4 failures within 300 s`를 쓰고, level `error`의 event `host.sidecar.restart-limit`을 기록하며, 실패한 프로세스에 요청을 보낸 표면의 다음 전송은 프로세스를 시작하지 않고 이유가 "restart limit"인 `sidecar-failure`를 소유 창에 전달하고 실패한다. | both |
+| `sidecars.restart.old-failure-not-counted` | 나중 실패보다 300초 넘게 앞선 실패는 세지 않는다. 0, 10, 20초의 실패 뒤 305초의 실패는 사이드카를 계속 재시작하게 두고, 0초의 실패는 세지 않는다. | both |
+| `sidecars.restart.surface-open-resets-the-record` | 재시작 한도가 사이드카를 멈춘 뒤 실패한 프로세스에 보내지 않은 표면의 전송은 실패 기록을 지우고 사이드카를 시작하며, `sidecar`와 `surface`를 가진 event `host.trace.sidecar.restart-reset`을 기록한다. | both |
 | `sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service` | 두 호스트가 토큰으로 한 서비스 엔드포인트에 인증하고 각자의 이벤트를 받는다. | both |
 | `sidecars-transport.hello.declares-protocol-one` | hello 요청은 프로토콜 1을 선언한다. | both |
 | `sidecars-transport.reconnect.after-connection-loss-preserves-owner` | 서비스가 연결을 끊으면 다음 보내기가 다시 연결하고 이벤트는 계속 소유자와 표면에 도착한다. | both |

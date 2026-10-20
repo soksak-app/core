@@ -1153,7 +1153,11 @@
   - [ ] F212.7d — P0: 두 호스트에서 document-start user script로 주는 첫 frame 테마.
   - [ ] F212.7a — P0: F212.8 전에 첫 editor view로 통과값을 잰다.
   - [ ] F212.8 — P0: 선언 UI schema와 workbench의 그리기(sidebar section 포함).
-  - [ ] F212.8a — P0: sidecar 재시작 한도: 300초 sliding window에서 4번째 실패에 멈춘다. sidecar 계약, 두 호스트, 계약 case.
+  - [~] F212.8a — P0: sidecar 재시작 한도: 300초 sliding window에서 4번째 실패에 멈춘다. sidecar 계약, 두 호스트, 계약 case.
+    - [o] F212.8a-1 — P0: 표준 입출력 sidecar 재시작 한도의 계약: sidecars의 `## 실패`와 그 번역, event `host.sidecar.restart-limit`과 `host.trace.sidecar.restart-reset`(방출 지점은 F212.8a-2에서 선언), host-contract의 `sidecars.restart.*` case와 그 번역.
+    - [ ] F212.8a-2 — P0: Go(`packages/host/wailsv3/src/sidecars.go`): 실패 기록, 멈춤, 거절된 요청, reset, 주입 clock의 Red·Green 테스트.
+    - [ ] F212.8a-3 — P0: Rust(`packages/host/tauriv2/src/sidecars.rs`): Go와 같은 동작과 오류 글, 주입 clock의 Red·Green 테스트.
+    - [ ] F212.8a-4 — P0: 지속 service의 재시작 한도: `terminal-runtime.md` 43행(연결 끊김마다 한 번 시도)을 한도와 함께 명세하고 두 호스트에 구현한다. sidecars의 F212.8a-1 문장은 지속 transport를 덮지 않으므로 이 하위 항목이 F212.8a의 남은 범위다.
   - [ ] F212.9 — P0: plugin host 기구. view나 sidecar가 담을 수 없는 DOM 없는 로직이 필요한 plugin이 있을 때만.
   - [ ] F212.10 — P0: plugin 이전. 각 plugin 저장소의 항목이고, release 전에 자기 view를 잰다.
   - [ ] F212.11 — P0: plugin 표면의 페이지 mount, parking, `dom` 구성, section과 state module의 페이지 mount를 지운다.

@@ -1153,7 +1153,11 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [ ] F212.7d — P0: The first-frame theme through a document-start user script in both hosts.
   - [ ] F212.7a — P0: Measure the pass values on the first editor view before F212.8.
   - [ ] F212.8 — P0: The declared UI schema and its drawing by the workbench, including sidebar sections.
-  - [ ] F212.8a — P0: The restart limit of sidecars: a 300 s sliding window that stops at the fourth failure, in the sidecar contract, both hosts and a contract case.
+  - [~] F212.8a — P0: The restart limit of sidecars: a 300 s sliding window that stops at the fourth failure, in the sidecar contract, both hosts and a contract case.
+    - [o] F212.8a-1 — P0: The contract of the restart limit of standard input and output sidecars: `## Failure` of sidecars and its translation, the events `host.sidecar.restart-limit` and `host.trace.sidecar.restart-reset` (declared with their emit sites in F212.8a-2), and the cases `sidecars.restart.*` of host-contract with their translations.
+    - [ ] F212.8a-2 — P0: Go (`packages/host/wailsv3/src/sidecars.go`): the failure record, the stop, the refused request, the reset, and the Red and Green tests with the injected clock.
+    - [ ] F212.8a-3 — P0: Rust (`packages/host/tauriv2/src/sidecars.rs`): the same behavior and error text as Go, with the Red and Green tests with the injected clock.
+    - [ ] F212.8a-4 — P0: The restart limit of persistent services: `terminal-runtime.md` line 43 (one attempt per disconnect) is specified with the limit and implemented in both hosts. The sidecars.md sentence added by F212.8a-1 does not cover the persistent transport, so this sub-item is the remaining scope of F212.8a.
   - [ ] F212.9 — P0: The plugin host mechanism, only when a plugin needs DOM-free logic that a view or sidecar cannot hold.
   - [ ] F212.10 — P0: The plugin moves, as items of each plugin repository, each measuring its view before its release.
   - [ ] F212.11 — P0: Remove the page mount of plugin surfaces, parking, the `dom` composition and the page mount of sections and state modules.
