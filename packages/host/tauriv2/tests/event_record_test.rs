@@ -310,3 +310,44 @@ fn a_region_event_with_cids_is_recorded_as_the_relay_of_an_input() {
         .count();
     assert_eq!(errors, 4, "{events:?}");
 }
+
+// contract: endpoint.lock.unrecorded-end
+#[test]
+fn an_unrecorded_end_is_stored_as_an_error_event_with_its_fields() {
+    use soksak_host_tauriv2::endpoint::{UnrecordedEnd, report_unrecorded_end};
+
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    use_host_event_log(None);
+    let directory = folder::Folder::new();
+    let log = start(directory.path(), 64);
+    use_host_event_log(Some(Arc::clone(&log)));
+    report_unrecorded_end(&UnrecordedEnd {
+        boot: None,
+        pid: None,
+        previous: Some("123".into()),
+    });
+    report_unrecorded_end(&UnrecordedEnd {
+        boot: Some("1700000000-4242".into()),
+        pid: Some(4242),
+        previous: None,
+    });
+    let path = log.path().to_path_buf();
+    log.flush(Duration::from_secs(5)).unwrap();
+    use_host_event_log(None);
+    let events: Vec<Value> = read(&path)
+        .into_iter()
+        .filter(|event| event["event"] == "host.run.unrecorded-end")
+        .collect();
+    assert_eq!(events.len(), 2, "{events:?}");
+    assert_eq!(events[0]["level"], "error", "{events:?}");
+    assert_eq!(
+        events[0]["fields"],
+        json!({"boot": null, "pid": null, "previous": "123"}),
+        "{events:?}"
+    );
+    assert_eq!(
+        events[1]["fields"],
+        json!({"boot": "1700000000-4242", "pid": 4242}),
+        "{events:?}"
+    );
+}

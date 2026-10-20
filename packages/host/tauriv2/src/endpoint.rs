@@ -8,8 +8,8 @@
 //! docs/spec/endpoint.md.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::fs::File;
-use std::io::{ErrorKind, Read, Write};
+use std::fs::{File, TryLockError};
+use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -150,6 +150,9 @@ pub trait Service: Send + Sync + 'static {
         method: &str,
         params: Map<String, Value>,
     ) -> Result<Box<RawValue>, Failure>;
+    /// Called when the last connection stops watching the status name of the window window without a surface
+    /// specification, after the change that ended the watch is queued.
+    fn unwatched(&self, window: &str, name: &str);
 }
 
 /// One watch. surface is the surface that the watch specified, and a watch that specified one differs from a watch that
@@ -470,7 +473,8 @@ impl Notifier {
 pub struct Endpoint {
     shared: Arc<Shared>,
     listener: Arc<dyn Listener>,
-    _process_lock: ProcessLock,
+    process_lock: Mutex<Option<ProcessLock>>,
+    unrecorded_end: Option<UnrecordedEnd>,
     address: String,
     directory: PathBuf,
     file: PathBuf,
@@ -481,11 +485,92 @@ pub struct Endpoint {
     stopped: Arc<AtomicBool>,
 }
 
-/// One application process owns one configuration directory. The file handle stays open while the endpoint exists. The
-/// file itself also records the owner PID, so a process that was terminated by force can be replaced explicitly.
+/// How many times the acquisition opens the lock file again after the file that it opened was replaced.
+const LOCK_ATTEMPTS: usize = 8;
+
+/// The owner that process.lock holds: the process identifier and the boot identifier of its host run
+/// (docs/spec/endpoint.md#discovery). A file of another form is refused.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LockOwner {
+    pub pid: u32,
+    pub boot: String,
+}
+
+/// One application process owns one configuration directory. The lock file stays open and locked with an exclusive
+/// advisory lock (flock) for the life of the process. A held lock means a live owner. A file that is present and not
+/// locked was left by an owner that ended without removing it, and the next owner takes it over. The lock is taken
+/// on the open file, so two starters that open the same file cannot both replace it.
 struct ProcessLock {
     path: PathBuf,
     _file: File,
+    /// The earlier run that left the file, when the file was present and not locked.
+    unrecorded_end: Option<UnrecordedEnd>,
+}
+
+/// The earlier run that left process.lock without removing it. The file of the current form names the run by its boot
+/// and pid. Another content is reported as it was written, cut to 256 bytes, and the boot and pid are None.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnrecordedEnd {
+    pub boot: Option<String>,
+    pub pid: Option<u32>,
+    pub previous: Option<String>,
+}
+
+/// The number of bytes of a lock content that a refusal or an unrecorded end reports.
+const REPORTED_CONTENT_BYTES: usize = 256;
+
+/// The content of a lock file for a report: its first bytes, with an invalid sequence replaced.
+fn reported_content(contents: &[u8]) -> String {
+    String::from_utf8_lossy(&contents[..contents.len().min(REPORTED_CONTENT_BYTES)]).into_owned()
+}
+
+/// The earlier run that a free lock file with these contents left.
+fn unrecorded_end_of(contents: &[u8]) -> UnrecordedEnd {
+    // default: contents that are not UTF-8 are not the current form, and they are reported as their cut text.
+    match std::str::from_utf8(contents).ok().and_then(parse_owner) {
+        Some(owner) => UnrecordedEnd {
+            boot: Some(owner.boot),
+            pid: Some(owner.pid),
+            previous: None,
+        },
+        None => UnrecordedEnd {
+            boot: None,
+            pid: None,
+            previous: Some(reported_content(contents)),
+        },
+    }
+}
+
+/// The refusal of a second start while the lock is held. The owner is live, so the refusal does not depend on the content:
+/// the content names the owner when it is the current form, and it is reported otherwise.
+fn held_refusal(directory: &Path, contents: &[u8]) -> String {
+    // default: contents that are not UTF-8 name no owner, and the refusal reports them as their cut text.
+    if let Some(owner) = std::str::from_utf8(contents).ok().and_then(parse_owner) {
+        return format!(
+            "configuration directory {} is already owned by process {}",
+            directory.display(),
+            owner.pid
+        );
+    }
+    if contents.iter().all(u8::is_ascii_whitespace) {
+        return format!(
+            "configuration directory {} is already owned by a live process",
+            directory.display()
+        );
+    }
+    format!(
+        "configuration directory {} is already owned by a live process; process.lock is not the current form: {}",
+        directory.display(),
+        reported_content(contents)
+    )
+}
+
+/// The owner that the contents of a lock file name: a JSON object with a positive pid and a non-empty boot.
+fn parse_owner(contents: &str) -> Option<LockOwner> {
+    // default: contents that do not parse are not the current form, and the callers report them.
+    let owner: LockOwner = serde_json::from_str(contents).ok()?;
+    (owner.pid > 0 && !owner.boot.is_empty()).then_some(owner)
 }
 
 impl ProcessLock {
@@ -493,50 +578,86 @@ impl ProcessLock {
         let platform = platform::current()?;
         platform.create_private_directories(directory)?;
         let path = directory.join("process.lock");
-        for attempt in 0..2 {
-            match platform.create_private_file(&path) {
-                Ok(mut file) => {
-                    file.write_all(std::process::id().to_string().as_bytes())
-                        .map_err(|error| format!("{}: {error}", path.display()))?;
-                    file.sync_all()
-                        .map_err(|error| format!("{}: {error}", path.display()))?;
-                    return Ok(Self { path, _file: file });
-                }
-                Err(error) if error.kind() == ErrorKind::AlreadyExists && attempt == 0 => {
-                    let contents = std::fs::read_to_string(&path)
-                        .map_err(|read| format!("{}: {read}", path.display()))?;
-                    let pid = contents
-                        .trim()
-                        .parse::<u32>()
-                        // default: a lock file without a process number becomes the error "invalid process lock" below.
-                        .ok()
-                        .filter(|pid| *pid > 0)
-                        .ok_or_else(|| format!("{}: invalid process lock", path.display()))?;
-                    if platform.service_process_exists(pid)? {
-                        return Err(format!(
-                            "configuration directory {} is already owned by process {pid}",
-                            directory.display()
-                        ));
+        for _ in 0..LOCK_ATTEMPTS {
+            let (file, existed) = match platform.create_private_file(&path) {
+                Ok(file) => (file, false),
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                    match platform.open_private_file(&path) {
+                        Ok(file) => (file, true),
+                        // The file was removed after the create failed, so the next attempt creates it.
+                        Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                        Err(error) => return Err(format!("{}: {error}", path.display())),
                     }
-                    std::fs::remove_file(&path)
-                        .map_err(|remove| format!("{}: {remove}", path.display()))?;
                 }
                 Err(error) => return Err(format!("{}: {error}", path.display())),
+            };
+            match file.try_lock() {
+                Ok(()) => {}
+                Err(TryLockError::WouldBlock) => {
+                    // The owner removes the file before it unlocks, so a file that is gone now was released.
+                    let contents = match std::fs::read(&path) {
+                        Ok(contents) => contents,
+                        Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                        Err(error) => return Err(format!("{}: {error}", path.display())),
+                    };
+                    return Err(held_refusal(directory, &contents));
+                }
+                Err(TryLockError::Error(error)) => {
+                    return Err(format!("{}: {error}", path.display()));
+                }
             }
+            // The file at path was replaced after this open, so the lock is on a file that no longer names the lock.
+            if !platform.is_named_file(&file, &path)? {
+                continue;
+            }
+            // A free lock file that was present was left by an owner that ended without removing it, whatever its content, except
+            // an empty file: a starter creates the file before it locks it, so an empty file that is free can belong to a starter
+            // that has not locked it yet. No owner writes a record into an empty file, so it names no earlier run.
+            let mut unrecorded_end = None;
+            if existed {
+                // The contents are read through the locked file, so they cannot change while they are checked.
+                let mut contents = Vec::new();
+                (&file)
+                    .read_to_end(&mut contents)
+                    .map_err(|read| format!("{}: {read}", path.display()))?;
+                if !contents.is_empty() {
+                    unrecorded_end = Some(unrecorded_end_of(&contents));
+                }
+                #[cfg(feature = "diagnostics")]
+                crate::process_lock_hook::observe_stale_lock(directory);
+            }
+            let owner = LockOwner {
+                pid: std::process::id(),
+                boot: crate::event_log::process_boot().to_string(),
+            };
+            let contents = serde_json::to_string(&owner)
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            file.set_len(0)
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            (&file)
+                .seek(SeekFrom::Start(0))
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            (&file)
+                .write_all(contents.as_bytes())
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            file.sync_all()
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            return Ok(Self {
+                path,
+                _file: file,
+                unrecorded_end,
+            });
         }
-        unreachable!("process lock acquisition has at most two attempts")
-    }
-
-    fn release(&self) -> Result<(), String> {
-        match std::fs::remove_file(&self.path) {
-            Ok(()) => Ok(()),
-            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(format!("{}: {error}", self.path.display())),
-        }
+        Err(format!(
+            "{}: the process lock was replaced in each of {LOCK_ATTEMPTS} attempts",
+            path.display()
+        ))
     }
 }
 
 impl Drop for ProcessLock {
+    /// Removes the lock file while the lock is still held. The file closes after this, which releases the lock, so a
+    /// starter that locks the file next finds the path gone or a new file.
     fn drop(&mut self) {
         if let Err(error) = std::fs::remove_file(&self.path)
             && error.kind() != ErrorKind::NotFound
@@ -556,6 +677,7 @@ impl Endpoint {
         service: Arc<dyn Service>,
     ) -> Result<Endpoint, String> {
         let process_lock = ProcessLock::acquire(directory)?;
+        let unrecorded_end = process_lock.unrecorded_end.clone();
         let listener: Arc<dyn Listener> = platform::current()?
             .endpoint_listen(sockets, application)?
             .into();
@@ -573,7 +695,8 @@ impl Endpoint {
         let mut endpoint = Endpoint {
             shared,
             listener,
-            _process_lock: process_lock,
+            process_lock: Mutex::new(Some(process_lock)),
+            unrecorded_end,
             address,
             directory: directory.to_path_buf(),
             file,
@@ -632,6 +755,11 @@ impl Endpoint {
         write_record(&self.directory, &self.file, &self.record)
     }
 
+    /// The earlier run that left process.lock without removing it. The host reports it with [`report_unrecorded_end`].
+    pub fn unrecorded_end(&self) -> Option<&UnrecordedEnd> {
+        self.unrecorded_end.as_ref()
+    }
+
     /// The socket path or the pipe name.
     pub fn address(&self) -> &str {
         &self.address
@@ -677,9 +805,13 @@ impl Endpoint {
                 }
             }
         }
-        if let Err(error) = self._process_lock.release() {
-            log_error("process lock release", error);
-        }
+        // The lock is released last, after the endpoint file is removed (ProcessLock::drop).
+        drop(
+            self.process_lock
+                .lock()
+                .expect("the process lock mutex")
+                .take(),
+        );
     }
 }
 
@@ -687,6 +819,21 @@ impl Drop for Endpoint {
     fn drop(&mut self) {
         self.stop();
     }
+}
+
+/// Stores the event `host.run.unrecorded-end` for an earlier run that left process.lock without removing it. The fields are
+/// `boot` and `pid` (null when the file is not the current form) and `previous`, the content of the file, when it is not
+/// the current form.
+pub fn report_unrecorded_end(end: &UnrecordedEnd) {
+    let mut fields = json!({"boot": end.boot, "pid": end.pid});
+    if let Some(previous) = &end.previous {
+        fields["previous"] = json!(previous);
+    }
+    crate::event_record::emit_host(
+        crate::event_log::Level::Error,
+        "host.run.unrecorded-end",
+        fields,
+    );
 }
 
 /// The directory in which the application places its sockets. It is under the temporary directory of the user.
@@ -1064,6 +1211,13 @@ fn drain(shared: &Shared, topic: Topic) {
                 }
             }
         };
+        if let Topic::Status(watch) = &topic
+            && watch.surface.is_none()
+            && !next.on
+            && next.last
+        {
+            shared.service.unwatched(&watch.window, &watch.name);
+        }
         let (method, params) = topic.request(next.on);
         let (outcome, following) = if next.on && !page {
             match shared.service.call(topic.window(), method, params) {

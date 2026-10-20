@@ -219,7 +219,7 @@ func ReadInstalled(configDir string) (*InstalledState, error) {
 	}
 	value, err := DecodeJSON(data)
 	if err != nil {
-		return nil, fmt.Errorf("%s is not valid JSON: %w", path, err)
+		return nil, fmt.Errorf("%s is not valid JSON", path)
 	}
 	state, err := ValidateInstalled(value)
 	if err != nil {
@@ -430,11 +430,13 @@ func (p *dependencyPlan) selectedSidecars() map[string]string {
 	return versions
 }
 
-// checkPluginIDOf checks the plugin.json text of plugin id. file is the location for errors.
+// checkPluginIDOf checks the plugin.json text of plugin id. file is the location for errors. The error names only the
+// file: the parser texts of encoding/json and serde_json differ, so a parser detail would make the hosts report
+// different texts (docs/spec/host-contract.md#installed.plugin-json.invalid-text).
 func checkPluginIDOf(id, file string, data []byte) error {
 	value, err := DecodeJSON(data)
 	if err != nil {
-		return fmt.Errorf("%s is not valid JSON: %w", file, err)
+		return fmt.Errorf("%s is not valid JSON", file)
 	}
 	manifest, err := object(file, value)
 	if err != nil {
@@ -451,7 +453,10 @@ func checkInstalledPluginIDs(configDir string, state *InstalledState) error {
 	for _, id := range sortedPluginIDs(state.Plugins) {
 		file := filepath.Join(configDir, state.Plugins[id].Path, "plugin.json")
 		data, err := os.ReadFile(file)
-		if err != nil {
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			return fmt.Errorf("%s: the plugin manifest is missing", file)
+		case err != nil:
 			return fileError(file, err)
 		}
 		if err := checkPluginIDOf(id, file, data); err != nil {
@@ -465,7 +470,7 @@ func checkInstalledPluginIDs(configDir string, state *InstalledState) error {
 func manifestDependenciesOf(file string, data []byte) (map[string]string, error) {
 	value, err := DecodeJSON(data)
 	if err != nil {
-		return nil, fmt.Errorf("%s is not valid JSON: %w", file, err)
+		return nil, fmt.Errorf("%s is not valid JSON", file)
 	}
 	manifest, err := object(file, value)
 	if err != nil {
@@ -497,7 +502,7 @@ func InstalledName(configDir string, plugin InstalledPlugin) (string, error) {
 	}
 	value, err := DecodeJSON(data)
 	if err != nil {
-		return "", fmt.Errorf("%s is not valid JSON: %w", file, err)
+		return "", fmt.Errorf("%s is not valid JSON", file)
 	}
 	pkg, err := object("package.json", value)
 	if err != nil {

@@ -24,14 +24,14 @@ import (
 // terminationSignals are the signals that request the end of the process.
 var terminationSignals = []os.Signal{syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP}
 
-func (implementation) OnTermination(quit func()) error {
+func (implementation) OnTermination(quit func(signal os.Signal)) error {
 	received := make(chan os.Signal, 1)
 	signal.Notify(received, terminationSignals...)
 	routine.Go("termination-signal", func() {
-		<-received
+		value := <-received
 		// The next signal ends the process with the default action. This allows ending even when the save during termination hangs.
 		signal.Reset(terminationSignals...)
-		quit()
+		quit(value)
 	})
 	return nil
 }

@@ -4,12 +4,12 @@
 // SOKSAK_SHUTDOWN_BY=signal sends SIGTERM to the host instead, which requests the same quit (docs/spec/hosts.md). With
 // SOKSAK_SHUTDOWN_TERMINAL=1 the quit also ends the terminal service, because a normal quit ends the owned sessions and
 // shuts the service down (docs/spec/terminal-runtime.md).
-import { spawn } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { connect } from "@soksak/client";
 import { APPS } from "@soksak/window-check/app.mjs";
 import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
+import { untilShutdown } from "@soksak/window-check/shutdown-wait.mjs";
 
 const app = APPS[Object.keys(APPS)[0]];
 const endpointFile = `${app.configDir}/endpoint.json`;
@@ -75,56 +75,12 @@ async function prepareTerminal(client) {
   throw new Error("terminal session did not become ready before shutdown");
 }
 
-/** The process id of the one persistent service of the configuration directory that published an endpoint. */
-function serviceProcess() {
+/** The configuration directory of the one persistent service that published an endpoint: the terminal service. */
+function serviceDirectory() {
   const directory = join(app.configDir, "services");
   const services = readdirSync(directory).filter((name) => existsSync(join(directory, name, "endpoint.json")));
   if (services.length !== 1) throw new Error(`${directory} has ${services.length} services with an endpoint, expected the terminal service`);
-  return JSON.parse(readFileSync(join(directory, services[0], "endpoint.json"), "utf8")).pid;
-}
-
-// The exit of a process creates no file event in the configuration directory. The host deletes
-// endpoint.json before it exits, so waiting only for the file event cannot confirm the exit after it. Node
-// offers no exit notification of another process (kqueue NOTE_EXIT), so the check waits for the exit of the pid with
-// `caffeinate -w` of macOS, which waits on that notification.
-function waitForExit(pid) {
-  const child = spawn("/usr/bin/caffeinate", ["-w", String(pid)], { stdio: "ignore" });
-  const exited = new Promise((resolve, reject) => {
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      if (code === 0) resolve();
-      else reject(new Error(`caffeinate -w ${pid} ended with ${code ?? signal}`));
-    });
-  });
-  return { exited, cancel: () => child.kill() };
-}
-
-function waitForShutdown(pid, limit) {
-  const started = Date.now();
-  const exit = waitForExit(pid);
-  let exitedAt;
-  let removedAt;
-  const measured = exit.exited.then(() => {
-    exitedAt = Date.now() - started;
-  });
-  const incomplete = () => new Error(`application exit and endpoint removal did not complete within ${limit}ms: ` +
-    `process ${exitedAt === undefined ? "running" : `exited at ${exitedAt}ms`}, ` +
-    `endpoint.json ${removedAt === undefined ? "present" : `removed at ${removedAt}ms`}`);
-  const removed = untilFolderState(dirname(endpointFile), () => {
-    if (existsSync(endpointFile)) return undefined;
-    removedAt ??= Date.now() - started;
-    return true;
-  }, limit, incomplete);
-  let timer;
-  const deadline = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(incomplete()), limit);
-  });
-  return Promise.race([Promise.all([measured, removed]), deadline])
-    .then(() => ({ exitedAt, removedAt }))
-    .finally(() => {
-      clearTimeout(timer);
-      exit.cancel();
-    });
+  return join(directory, services[0]);
 }
 
 console.log(`START normal-shutdown app=${app.name} case_timeout_ms=${SHUTDOWN_LIMIT}`);
@@ -135,10 +91,10 @@ await waitForReady(client);
 const terminal = process.env.SOKSAK_SHUTDOWN_TERMINAL === "1" ? await prepareTerminal(client) : null;
 const by = process.env.SOKSAK_SHUTDOWN_BY ?? "command";
 if (by !== "command" && by !== "signal") throw new Error(`SOKSAK_SHUTDOWN_BY is ${by}, expected command or signal`);
-// The service that holds the terminal session: the one persistent service directory that published an endpoint.
-const service = terminal ? serviceProcess() : null;
-const serviceExit = service ? waitForExit(service) : null;
+// The connections end when their processes end, so each one is opened before the request that ends the application.
+const serviceClient = terminal ? await connect({ configDir: serviceDirectory() }) : null;
 
+const from = Date.now();
 if (by === "signal") {
   process.kill(pid, "SIGTERM");
 } else {
@@ -149,21 +105,20 @@ if (by === "signal") {
   });
   if (result !== null) throw new Error(`host.quit returned ${JSON.stringify(result)}, expected null`);
 }
-const { exitedAt, removedAt } = await waitForShutdown(pid, SHUTDOWN_LIMIT);
-client.close();
-let serviceEndedAt = "none";
-if (serviceExit) {
-  const started = Date.now();
+const { closedMs } = await untilShutdown(client, endpointFile, { from, limit: SHUTDOWN_LIMIT });
+let serviceClosedMs = "none";
+if (serviceClient) {
+  const serviceFrom = Date.now();
   let timer;
   const deadline = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`the terminal service ${service} still runs ${SHUTDOWN_LIMIT}ms after the application quit by ${by}`)), SHUTDOWN_LIMIT);
+    timer = setTimeout(() => reject(new Error(`the terminal service still holds its connection ${SHUTDOWN_LIMIT}ms after the application quit by ${by}`)), SHUTDOWN_LIMIT);
   });
   try {
-    await Promise.race([serviceExit.exited, deadline]);
+    await Promise.race([serviceClient.ended, deadline]);
   } finally {
     clearTimeout(timer);
-    serviceExit.cancel();
   }
-  serviceEndedAt = Date.now() - started;
+  serviceClosedMs = Date.now() - serviceFrom;
 }
-console.log(`PASS normal-shutdown app=${app.name} by=${by} pid=${pid} terminal=${terminal?.sessionId ?? "none"} endpoint_removed_ms=${removedAt} exited_ms=${exitedAt} service_ended_ms=${serviceEndedAt}`);
+client.close();
+console.log(`PASS normal-shutdown app=${app.name} by=${by} pid=${pid} terminal=${terminal?.sessionId ?? "none"} endpoint_absent_at_close=true endpoint_closed_ms=${closedMs} service_closed_ms=${serviceClosedMs}`);

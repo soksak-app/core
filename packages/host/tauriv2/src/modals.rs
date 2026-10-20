@@ -65,9 +65,6 @@ struct Modal {
     radius: f64,
     /// The rectangle in page coordinates. It is also used for the corner setting.
     at: Rect,
-    /// Shows whether this display started to show the window. The modal document reports readiness at every render, and
-    /// when it is shown again it takes the keyboard focus again.
-    shown: bool,
     /// Shows whether the webview is shown and passed the keyboard focus. host.window reports this value.
     visible: bool,
 }
@@ -242,7 +239,6 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
         revision: 1,
         radius: request.radius,
         at,
-        shown: false,
         visible: false,
     });
     let built = window.add_child(
@@ -363,68 +359,94 @@ pub(crate) fn content(
     Ok(content)
 }
 
-/// Shows the modal webview when the document of this display has rendered.
+/// What a ready request of a modal does, decided from the open modal record.
+#[derive(Debug, PartialEq)]
+enum ReadyStep {
+    /// No open modal has the id and instance, so the request came from a document that was removed. It changes nothing.
+    Stale,
+    /// The open modal is visible already, and the request reports a new render of its document.
+    Visible,
+    /// The open modal is not visible yet, so it is shown with this mode and radius.
+    Show { dialog: bool, radius: f64 },
+}
+
+/// Decides what a ready request of the modal of id and instance does.
+fn ready_step(overlay: &Overlay, id: &str, instance: u64) -> Result<ReadyStep, String> {
+    let held = overlay.open.lock().map_err(|e| e.to_string())?;
+    let Some(modal) = held
+        .as_ref()
+        .filter(|m| m.id == id && m.instance == instance)
+    else {
+        return Ok(ReadyStep::Stale);
+    };
+    if modal.visible {
+        return Ok(ReadyStep::Visible);
+    }
+    Ok(ReadyStep::Show {
+        dialog: modal.content.mode == "dialog",
+        radius: modal.radius,
+    })
+}
+
+/// Sets the visible flag of the open modal of id and instance. It is an error when that modal is no longer open.
+fn mark_visible(overlay: &Overlay, id: &str, instance: u64) -> Result<(), String> {
+    let mut held = overlay.open.lock().map_err(|e| e.to_string())?;
+    let modal = held
+        .as_mut()
+        .filter(|m| m.id == id && m.instance == instance)
+        .ok_or_else(|| {
+            format!("modal ready: {id} instance {instance} is no longer the open modal")
+        })?;
+    modal.visible = true;
+    Ok(())
+}
+
+/// Shows the modal webview when the document of this display has rendered. The webview is shown, focused and marked
+/// visible on the main thread before the request is answered, so a window status read after the answer reports the
+/// modal as visible. A request for a modal that is not open is stale: it changes nothing, answers ok and writes
+/// `host.trace.modal.stale-ready`. It is an error when showing the modal fails.
 pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), String> {
     let context = window_data(window)?;
     let state = &context.overlay;
 
+    let (dialog, radius) = match ready_step(state, &id, instance)? {
+        ReadyStep::Stale => {
+            crate::event_record::emit_host(
+                soksak_sok::event_log::Level::Debug,
+                "host.trace.modal.stale-ready",
+                serde_json::json!({"modal": id, "instance": instance}),
+            );
+            return Ok(());
+        }
+        ReadyStep::Visible => {
+            emit_window(window, "modal-rendered", &id).map_err(|e| e.to_string())?;
+            exposure::note(window, &format!("observe: modal rendered {id}"));
+            return Ok(());
+        }
+        ReadyStep::Show { dialog, radius } => (dialog, radius),
+    };
     let view = state
         .view
         .lock()
         .map_err(|e| e.to_string())?
         .clone()
         .ok_or("modal webview is gone")?;
-    let first = {
-        let mut held = state.open.lock().map_err(|e| e.to_string())?;
-        let Some(modal) = held
-            .as_mut()
-            .filter(|m| m.id == id && m.instance == instance)
-        else {
-            return Ok(());
-        };
-        if modal.shown {
-            emit_window(window, "modal-rendered", &id).map_err(|e| e.to_string())?;
-            exposure::note(window, &format!("observe: modal rendered {id}"));
-            return Ok(());
-        }
-        modal.shown = true;
-        modal.clone()
-    };
     let platform = platform::current()?;
-    set_background(window, first.content.mode == "dialog")?;
-    view.with_webview(move |webview| {
-        log_failure(
-            "modal corners",
-            platform.round_corners(&webview, first.radius),
-        );
-        log_failure("modal raise", platform.raise_webview(&webview));
-    })
-    .map_err(|e| e.to_string())?;
+    set_background(window, dialog)?;
+    exposure::with_view(&view, move |webview| {
+        log_failure("modal corners", platform.round_corners(webview, radius));
+        log_failure("modal raise", platform.raise_webview(webview));
+        Ok(())
+    })?;
     view.show().map_err(|e| e.to_string())?;
-    let host = window.clone();
-    view.with_webview(move |webview| {
-        if let Err(error) = platform.focus_webview(&webview) {
-            log_error(&format!("modal {id}"), error);
-            return;
-        }
-        let marked = window_data(&host).and_then(|context| {
-            let mut open = context.overlay.open.lock().map_err(|e| e.to_string())?;
-            if let Some(modal) = open
-                .as_mut()
-                .filter(|m| m.id == id && m.instance == instance)
-            {
-                modal.visible = true;
-            }
-            Ok(())
-        });
-        log_failure(&format!("modal {id}"), marked);
-        if let Err(error) = emit_window(&host, "modal-rendered", &id) {
-            log_error("modal-rendered", error);
-        }
-        exposure::note(&host, &format!("observe: modal rendered {id}"));
-        exposure::window_changed(&host);
-    })
-    .map_err(|e| e.to_string())
+    exposure::with_view(&view, move |webview| platform.focus_webview(webview))?;
+    mark_visible(state, &id, instance)?;
+    if let Err(error) = emit_window(window, "modal-rendered", &id) {
+        log_error("modal-rendered", error);
+    }
+    exposure::note(window, &format!("observe: modal rendered {id}"));
+    exposure::window_changed(window);
+    Ok(())
 }
 
 /// Closes the modal of id if it is open and returns the focus to the main webview.
@@ -603,3 +625,7 @@ mod tests {
         assert_eq!(errors, 2, "log {text}");
     }
 }
+
+#[cfg(test)]
+#[path = "modals_readiness_test.rs"]
+mod readiness_test;

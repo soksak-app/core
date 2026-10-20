@@ -199,8 +199,8 @@ fn migrate(config_dir: &Path, file: &str) -> Result<u64, String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
         Err(error) => return Err(file_error(path.display(), &error)),
     };
-    let raw: Value = serde_json::from_str(&text)
-        .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))?;
+    let raw: Value =
+        serde_json::from_str(&text).map_err(|_| format!("{} is not valid JSON", path.display()))?;
     let mut bare = raw.as_array().cloned();
     if !raw.is_object() && bare.is_none() {
         return Err(format!(

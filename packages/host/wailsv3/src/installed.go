@@ -98,8 +98,6 @@ func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {
 		manifestFile := filepath.Join(plugin.dir, "plugin.json")
 		manifest, err := os.ReadFile(manifestFile)
 		switch {
-		case errors.Is(err, os.ErrNotExist):
-			return failure(fmt.Errorf("%s: the plugin manifest is missing", manifestFile))
 		case err != nil:
 			return failure(err)
 		case !json.Valid(manifest):

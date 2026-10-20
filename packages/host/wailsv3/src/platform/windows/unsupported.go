@@ -114,7 +114,7 @@ func (implementation) Screens() (string, error) {
 	return "", unsupported("display list")
 }
 
-func (implementation) OnTermination(func()) error {
+func (implementation) OnTermination(func(os.Signal)) error {
 	return unsupported("termination requests")
 }
 
@@ -481,6 +481,18 @@ func (implementation) AppendPrivateFile(string) (*os.File, error) {
 
 func (implementation) CreatePrivateFile(string) (*os.File, error) {
 	return nil, unsupported("new private file creation")
+}
+
+func (implementation) OpenPrivateFile(string) (*os.File, error) {
+	return nil, unsupported("existing private file opening")
+}
+
+func (implementation) TryLockFile(*os.File) (bool, error) {
+	return false, unsupported("file locking")
+}
+
+func (implementation) IsNamedFile(*os.File, string) (bool, error) {
+	return false, unsupported("file identity")
 }
 
 func (implementation) WritePrivateFile(string, []byte) error {

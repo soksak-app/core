@@ -3,6 +3,9 @@
 // A card has one copy in the main document and one in the native view. It is placed here
 // because both documents must handle the same input.
 
+/** The key of the answer of an Escape in a native menu. It is the declared command that closes the menu (docs/spec/exposure.md). */
+export const MODAL_DISMISS = "core.modal.dismiss";
+
 /**
  * Passes the (key, value) that a control inside root answered to send.
  *
@@ -22,7 +25,7 @@ export function onAnswer(root, send) {
   // A menu is canceled with Escape. A dialog is closed only by its own close button.
   root.addEventListener("keydown", (e) => {
     const menu = '[data-native-modal="menu"]';
-    if (e.key === "Escape" && root.querySelector(menu)) send("", "");
+    if (e.key === "Escape" && root.querySelector(menu)) send(MODAL_DISMISS, "");
   });
 }
 

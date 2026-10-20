@@ -203,8 +203,10 @@ fn invalid_json_closes_connection() {
 | `host.arguments.declared-only` | `--config-dir PATH`와 `--config-dir=PATH`는 설정 폴더를 정한다. 선언하지 않은 인자, 값 없는 flag, 두 번 준 flag는 그 문장으로 실패한다. | both |
 | `host.arguments.registry-ca-in-diagnostic-builds` | 진단 build는 `--registry-ca PATH`를 받고, 그 뒤 registry 받기는 그 PEM 파일의 인증 기관만 신뢰한다. 인증서 없는 파일은 `--registry-ca <path>: <reason>`으로 실패한다. | both |
 | `host.memory-pressure.relays-level-and-seq` | host는 시작할 때 platform의 memory pressure source를 시작하고, 각 보고를 그 보고의 `{level, seq}`를 가진 page event `memory-pressure`로 `seq` 순서대로, 보고하는 thread를 붙잡지 않고 모든 창에 보낸다. platform이 거부한 source는 `failed to start the memory pressure source`로 시작을 실패시킨다. | both |
-| `endpoint.process.rejects-a-malformed-lock` | 내용이 양수 process ID가 아닌 `process.lock`은 `0`을 포함해 `<path>: invalid process lock`으로 endpoint를 거부하고 그대로 남는다. | both |
-| `endpoint.process.one-owner-per-config-dir` | 같은 설정 디렉터리의 두 번째 엔드포인트는 "already owned by process"로 거부되고, 첫 엔드포인트는 닫을 때까지 잠금을 유지한다. | both |
+| `endpoint.process.rejects-a-malformed-lock` | 잠금이 걸린 `process.lock`의 내용이 비었거나 다른 형식이면 엔드포인트는 `already owned by a live process`로 거부하며, 거부에 드는 내용은 256 바이트로 잘린다. 잠금 파일은 그대로 남는다. | both |
+| `endpoint.lock.empty-is-no-previous-run` | 시작할 때 비었고 잠기지 않은 `process.lock`은 event `host.run.unrecorded-end`를 저장하지 않고 넘겨받는다. 시작자가 잠그기 전에 파일을 만들고, 소유자는 잠금 아래에서만 기록을 쓰기 때문이다. | both |
+| `endpoint.lock.unrecorded-end` | 시작할 때 잠기지 않았고 비어 있지 않은 `process.lock`은 내용과 관계없이 넘겨받으며, 엔드포인트는 이전 실행의 `boot`와 `pid`, 또는 다른 형식 파일의 내용을 알려 준다. host는 이를 `host.run.unrecorded-end`로 저장한다. | both |
+| `endpoint.lock.single-owner` | 같은 설정 디렉터리의 두 번째 엔드포인트는 첫 엔드포인트가 잠금을 쥐고 있는 동안 "already owned by process"로 거부되며, 오래된 `process.lock`을 찾은 두 시작자는 소유자를 하나만 남긴다. | both |
 | `endpoint.process.lock-mode-0600` | 설정 디렉터리의 `process.lock`은 mode 0600이다. | both |
 | `endpoint.transport.http-request-line-closes` | HTTP 요청 줄은 응답이나 메서드 호출 없이 연결을 닫는다. | both |
 | `endpoint.transport.invalid-json-closes` | 본문이 JSON이 아닌 프레임은 응답 없이 연결을 닫는다. | both |
@@ -261,6 +263,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.watch.surface-unwatch-forwarded-with-surface` | 표면 구독을 해제하면 surface를 담은 status.unwatch를 페이지에 보낸다. | both |
 | `endpoint.watch.surface-unwatch-keeps-plain-watch` | 표면 구독을 해제해도 같은 이름의 일반 구독은 유지된다. | both |
 | `endpoint.watch.subscription-arrival-order` | 연달아 보낸 watch, unwatch, watch는 느린 페이지에 그 순서로 도착하고 연결은 계속 구독한다. | both |
+| `status.window.rewatch-notifies` | host.window의 마지막 watch가 끝난 뒤 시작한 watch는, 앞선 watch 종료 전에 보낸 값과 같더라도 창의 다음 값을 받는다. Tauri host는 마지막 watch가 끝날 때 마지막으로 보낸 값의 기록을 지우고, Wails host는 기록을 두지 않는다. | both |
 | `endpoint.watch.other-requests-not-blocked-by-pending-subscription` | 페이지 구독 해제가 대기 중이어도 같은 연결의 다음 요청에 응답한다. | both |
 | `exposure-reply.payload.main-reply-unscoped` | surface가 없는 주 문서 응답 페이로드는 빈 surface로 해석된다. | both |
 | `exposure-reply.payload.scoped-reply-keeps-surface` | surface가 있는 응답 페이로드는 인코딩과 해석을 거쳐도 surface를 유지한다. | both |
@@ -512,6 +515,8 @@ fn invalid_json_closes_connection() {
 | `host-calls.native.image-argument-lists` | surface 페이지의 요청 하나와 좌표 넷인 `ImageCaret` 호출과 요청 하나와 텍스트인 `ImageText` 호출은 각자의 인자 목록으로 해석되어 호출자 확인에 닿는다. | wailsv3 only: Wails page runtime은 surface 페이지 호출을 native bridge로 보내고 host가 그 인자 목록을 해석한다. Tauri surface 페이지는 메인 페이지의 명령을 부른다. |
 | `host-calls.decode.every-binding` | 모든 `Host` binding의 모든 인자는 binding이 다른 일보다 먼저 해석하는 raw JSON이므로 framework는 인자를 해석하지 않는다. | wailsv3 only: Go reflection은 실행 중에 binding을 나열한다. `make hosts-check`는 framework 객체가 아닌 모든 Tauri 명령 인자가 `Argument<T>`이기를 요구한다. |
 | `termination.signal.first-requests-quit-second-ends-process` | 첫 종료 신호는 종료를 요청하고 두 번째 신호는 프로세스를 끝낸다. | both |
+| `log.closed.signal-before-quit` | 첫 종료 신호는 quit을 요청하기 전에 원인 `signal`과 번호를 담은 `log.closed`를 저장하므로, quit의 flush가 실행될 때 기록이 로그에 있다. | both |
+| `log.closed.passes-every-gate` | writer는 class `lifecycle`을 끈 정책에서도 level `info`, class `lifecycle`의 `log.closed`를 저장한다. | both |
 | `window-close.surfaces.closes-regions-then-surface` | 창을 닫으면 논리 표면마다 id 순서로 그 문서 영역과 그림 영역을 닫은 뒤 표면을 닫고, 그 이름을 창의 문서 영역 목록과 그림 영역 목록에서 지운다. | both |
 | `window-close.native-window.used-in-reading-step` | native 창을 쓰는 host 요청은 native 창을 native code에 넘기는 main thread 단계에서 읽으므로, 요청의 앞선 단계 뒤에 main thread가 처리한 닫기가 닫힌 창을 native code에 넘기지 않는다. 그 단계 전에 닫힌 창은 native code에 닿지 않고, 요청은 오류 1003 `window "<name>" does not exist`로 실패한다. | both |
 | `window-close.surfaces.reports-every-failure` | 네이티브 닫기 하나가 실패해도 나머지를 닫고, 창 닫기는 모든 실패를 표면 id 와 객체 종류와 함께 반환한다. | both |
@@ -561,6 +566,7 @@ fn invalid_json_closes_connection() {
 | `debug.save-all.writes-the-logs-folder-as-tar` | 모두 저장은 `logs/`의 파일을 그 경로로 담은 gzip 압축 tar 파일을 쓴다. | both |
 | `debug.save-all.reports-progress` | tar writer는 나열한 byte를 1 MiB 이상 더 쓸 때마다, 그리고 마지막 파일 뒤에 쓴 byte가 전체와 같게 한 번 보고한다. | both |
 | `overlay.pick.dropped-is-recorded` | id와 instance가 열린 모달의 것이 아닌 모달의 응답은 기록 `host.overlay.dropped`의 field `{id, instance, key, open}`과 함께 버려지며, 열린 모달이 없으면 `open`은 빈 글이다. 열린 모달의 응답은 버려지지 않는다. | both |
+| `modal.ready-visible` | 열린 모달의 ready 요청은 모달을 표시하고 visible 플래그를 설정한 뒤, 둘 다 끝난 후에 메인 스레드에서 응답한다. 표시가 실패하면 그 오류로 응답하고 모달은 다음 ready 요청까지 대기 상태로 남는다. id와 instance가 열린 모달의 것이 아닌 ready 요청은 오래된 요청이다. 아무것도 바꾸지 않고 ok로 응답하며, 이벤트 `host.trace.modal.stale-ready`를 `modal`과 `instance`와 함께 기록한다. | both |
 | `reload.timeout.names-running-calls` | 범위 안에 page가 준비를 알리지 않은 다시 읽기는 `the reloaded page did not report ready within <bound>; running host calls: <calls>`로 실패하며, `<calls>`는 그 window에서 돌아오지 않은 호출을 시작 순서로 각각 소수 한 자리의 `<name> <seconds>s`로 적거나 `none`이다. | both |
 | `log.batch.requires-the-page` | 쓴 page를 `page`에 이름하지 않은 relay event는 `page must name the document that wrote the event`로 거부되고, writer는 page 없는 layer page나 plugin의 relay event와 page가 있는 다른 layer의 event를 거부한다. | both |
 | `debug.save-text.writes-the-text-to-the-destination` | 글 저장은 요청의 글을 줄바꿈과 ASCII가 아닌 글자를 그대로 둔 채 목적지에 쓴다. | both |
@@ -709,6 +715,9 @@ fn invalid_json_closes_connection() {
 | `installed.document.names-from-package-json` | `/installed-plugins.json` 항목의 `package`와 설치된 plugin의 `/modules/<package>`는 기록된 `path`의 `package.json`의 `name`이며, `package.json`이 없으면 `{"error":"<file>: no such file or directory"}`다. | both |
 | `installed.document.refuses-package` | Plugin이 `package`를 담은 `installed.json`은 `{"error":"<file>: plugins/installed.json <id>: unknown field package"}`다. | both |
 | `installed.document.reports-errors` | 켜진 plugin의 `plugin.json`이 없거나 잘못되었거나, `diagnostics.json`이나 `installed.json`이 잘못되었으면 `/installed-plugins.json`은 파일과 이유를 담은 `{"error":...}`다. | both |
+| `installed.plugin-json.invalid-text` | 켜진 plugin의 `plugin.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |
+| `installed.json.invalid-text` | `installed.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |
+| `installed.package-json.invalid-text` | 켜진 plugin의 `package.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |
 | `page.start.document` | 시작 문서는 작업 공간 스냅샷과 window의 `windowControls` 답을 이 순서로 담은 `{"workspace":...,"controls":...}`다. | both |
 | `page.start.requires-window` | 시작 문서 요청은 요청한 window를 시작한 뒤 문서를 `no-store`인 `application/json`으로 답하고, 요청이 window를 가리키지 않으면 아무것도 시작하지 않고 400과 `the start document request names no window`로 실패하며, 시작이 실패하면 500과 그 이유로 실패한다. | both |
 | `page.start.sok-core-owner` | Tauri는 시작 문서를 `sok://core/start.json`에서 내보낸다. 다른 owner의 `sok` 주소는 창을 시작하지 않고 404와 `sok://<owner>/start.json not found`로 답한다. | tauriv2 only: Wails는 시작 문서를 asset server의 `/start.json`에서 내보낸다 |

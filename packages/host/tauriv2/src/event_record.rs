@@ -234,6 +234,21 @@ pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
     }
 }
 
+/// Stores the event `log.closed` of the host process that ends (docs/spec/logging.md#self-reports). `cause` is `exit`,
+/// `exit-request` or `signal`, and `signal` is the termination signal of the cause `signal`.
+pub fn emit_closed(cause: &str, signal: Option<i32>) {
+    let log = records().log.clone();
+    match log {
+        Some(log) if log.record_closed(cause, signal) => {}
+        Some(_) => {
+            eprintln!("event writer: log.closed ({cause}) cannot be stored: the queue has no room")
+        }
+        None => eprintln!(
+            "event writer: log.closed ({cause}) cannot be stored: the writer is not attached"
+        ),
+    }
+}
+
 /// Stores an event of the layer `host` with the correlation identifiers of the inputs it belongs to, like `emit_host`. An
 /// identifier that is not valid is reported on the standard error and nothing is stored.
 pub fn emit_host_cids(level: Level, event: &str, cids: &[String], fields: serde_json::Value) {

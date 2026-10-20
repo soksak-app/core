@@ -219,14 +219,21 @@ pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
         }
         Err(error) => return Err(crate::files::file_error(path.display(), &error)),
     };
-    let value: Value = serde_json::from_str(&text)
-        .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))?;
+    let value: Value =
+        serde_json::from_str(&text).map_err(|_| format!("{} is not valid JSON", path.display()))?;
     let state = install::validate_installed(&value)
         .map_err(|error| format!("{}: {error}", path.display()))?;
     for (id, plugin) in &state.plugins {
         let file = config_dir.join(&plugin.path).join("plugin.json");
-        let data = std::fs::read(&file)
-            .map_err(|error| crate::files::file_error(file.display(), &error))?;
+        let data = match std::fs::read(&file) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(format!(
+                    "{}: the plugin manifest is missing",
+                    file.display()
+                ));
+            }
+            other => other.map_err(|error| crate::files::file_error(file.display(), &error))?,
+        };
         check_plugin_id_of(id, &file.display().to_string(), &data)?;
     }
     Ok(state)
@@ -427,18 +434,20 @@ struct DependencyPlan<'a> {
 
 /// Checks and returns the dependencies of a plugin.json text. file is the location for errors.
 fn manifest_dependencies_of(file: &str, data: &[u8]) -> Result<BTreeMap<String, String>, String> {
-    let value: Value = serde_json::from_slice(data)
-        .map_err(|error| format!("{file} is not valid JSON: {error}"))?;
+    let value: Value =
+        serde_json::from_slice(data).map_err(|_| format!("{file} is not valid JSON"))?;
     if !value.is_object() {
         return Err(format!("{file}: expected an object"));
     }
     install::manifest_dependencies(&value).map_err(|error| format!("{file}: {error}"))
 }
 
-/// Checks the plugin.json text of plugin id. file is the location for errors.
+/// Checks the plugin.json text of plugin id. file is the location for errors. The error names only the file: the parser
+/// texts of serde_json and encoding/json differ, so a parser detail would make the hosts report different texts
+/// (docs/spec/host-contract.md#installed.plugin-json.invalid-text).
 fn check_plugin_id_of(id: &str, file: &str, data: &[u8]) -> Result<(), String> {
-    let value: Value = serde_json::from_slice(data)
-        .map_err(|error| format!("{file} is not valid JSON: {error}"))?;
+    let value: Value =
+        serde_json::from_slice(data).map_err(|_| format!("{file} is not valid JSON"))?;
     if !value.is_object() {
         return Err(format!("{file}: expected an object"));
     }
@@ -462,7 +471,7 @@ pub fn installed_name(config_dir: &Path, plugin: &InstalledPlugin) -> Result<Str
     let data =
         std::fs::read(&file).map_err(|error| crate::files::file_error(file.display(), &error))?;
     let value: Value = serde_json::from_slice(&data)
-        .map_err(|error| format!("{} is not valid JSON: {error}", file.display()))?;
+        .map_err(|_| format!("{} is not valid JSON", file.display()))?;
     let package = value
         .as_object()
         .ok_or_else(|| format!("{}: package.json: expected an object", file.display()))?;

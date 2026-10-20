@@ -1,3 +1,5 @@
+import { MODAL_DISMISS } from "./card.js";
+
 // The content of the picker layer. It draws one question line and, for each group, the title (if any) and the items. A title does not receive presses, and the chosen index counts only
 // items (docs/spec/example-model.md#card-fullscreen). plane.js does the positioning and the opening and closing.
 
@@ -89,4 +91,20 @@ export function pickerGroups(el) {
     name: g.querySelector(".picker__group-name").textContent,
     depth: Number(g.style.getPropertyValue("--depth")),
   }));
+}
+
+/**
+ * The receiver of the answers of a native picker. A key of an item picks that item by its index. The dismiss answer, which the
+ * native view sends for Escape, runs core.modal.dismiss. Any other key is refused, because no control of the picker sends it.
+ *
+ *   keys  the item keys in choosing order, as fillPicker returns them.
+ *   run   runs a declared command by name and parameters.
+ */
+export function pickerAnswer(keys, run) {
+  return (key) => {
+    if (key === MODAL_DISMISS) return run(MODAL_DISMISS);
+    const index = keys.indexOf(key);
+    if (index < 0) throw new Error(`picker answer ${key} is not an item of the menu`);
+    return run("core.picker.pick", { index });
+  };
 }

@@ -3567,6 +3567,17 @@
         }
       },
       {
+        "name": "core.modal.dismiss",
+        "description": "Closes the open native menu without picking. Escape in the menu answers with this command.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.library.page",
         "description": "Shows a page of the library: projects or plugins.",
         "params": {

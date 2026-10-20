@@ -2,7 +2,13 @@
 
 package darwin
 
-import "os"
+import (
+	"errors"
+	"fmt"
+	"os"
+
+	"golang.org/x/sys/unix"
+)
 
 // CreatePrivateDirectories creates the missing directories of path with mode 0700. It does not change the permissions of a directory
 // that already exists.
@@ -20,6 +26,40 @@ func (implementation) AppendPrivateFile(path string) (*os.File, error) {
 // os.ErrExist.
 func (implementation) CreatePrivateFile(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+}
+
+// OpenPrivateFile opens the existing file at path for reading and writing. A missing file is an os.ErrNotExist error. Its contents and
+// permissions are not changed.
+func (implementation) OpenPrivateFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDWR, 0)
+}
+
+// TryLockFile takes flock(LOCK_EX|LOCK_NB) on file. A lock held by another open file is reported as false, not as an error.
+func (implementation) TryLockFile(file *os.File) (bool, error) {
+	err := unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB)
+	if errors.Is(err, unix.EWOULDBLOCK) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("%s cannot be locked: %w", file.Name(), err)
+	}
+	return true, nil
+}
+
+// IsNamedFile reports whether file is the file that path names now. A missing path names no file.
+func (implementation) IsNamedFile(file *os.File, path string) (bool, error) {
+	opened, err := file.Stat()
+	if err != nil {
+		return false, err
+	}
+	named, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return os.SameFile(opened, named), nil
 }
 
 // WritePrivateFile replaces the content of the file at path with data. When it does not exist, it creates it with mode 0600. It does not change the permissions of an existing

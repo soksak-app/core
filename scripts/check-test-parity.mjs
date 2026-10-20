@@ -93,6 +93,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("host allocation measurement", "js-ts", ["scripts/measure-host-allocations.mjs"], ["scripts/test/measure-host-allocations.test.mjs"]),
   lane("application update check", "js-ts", ["scripts/check-app-update.mjs"], ["scripts/test/check-app-update.test.mjs"]),
   lane("Go repeat result", "js-ts", ["scripts/go-repeat-result.mjs"], ["scripts/test/language-repeat.test.mjs"], { sharedTests: true }),
+  lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"]),
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platforms.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs"]),
@@ -111,10 +112,10 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/object_counts_test.rs", "packages/host/tauriv2/src/sidecar_reply_test.rs", "packages/host/tauriv2/src/surfaces_test.rs", "packages/host/tauriv2/src/view_lifecycle_test.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/object_counts_test.rs", "packages/host/tauriv2/src/view_lifecycle_test.rs", "packages/host/tauriv2/src/sidecar_reply_test.rs", "packages/host/tauriv2/src/surfaces_test.rs", "packages/host/tauriv2/src/modals_readiness_test.rs", "packages/host/tauriv2/src/exposure_status_test.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json"], { testExtensions: new Set([".rs", ".json"]) }),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/exposure_status_test.go", "packages/host/wailsv3/src/modals_readiness_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails command line", "go", ["packages/sok/wailsv3/src/**/*.go"], ["packages/sok/wailsv3/tests/**/*.go", "packages/sok/wailsv3/src/diagnostics_test.go", "packages/sok/wailsv3/src/dev_test.go"]),
   lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
@@ -3930,14 +3931,14 @@ const FEATURE_LINKS = [
   {
     id: "F15",
     implementation: [
-      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "invalid process lock" },
-      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "invalid process lock" },
+      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "already owned by a live process" },
+      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "already owned by a live process" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRejectsAMalformedLock" },
-      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "a_malformed_process_lock_is_refused" },
+      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRefusesAHeldLockWithAnotherForm" },
+      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "a_held_lock_with_another_form_is_refused_and_kept" },
     ],
-    expected: "Both hosts refuse a process.lock whose contents are not a positive process ID with the same text.",
+    expected: "Both hosts refuse a held process.lock whose contents are not the current form, with the same text.",
     levels: ["unit"],
   },
   {
@@ -4763,7 +4764,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 
 // Aggregate review and release records, withdrawn items and changes of agent guidance (R4, R6) are not capabilities and
 // therefore do not need a behavior link. Every completed capability must have one otherwise.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66) and the window checks of plugins (F110). Core cannot read

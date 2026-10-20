@@ -13,9 +13,11 @@ pub fn on_termination(quit: Box<dyn Fn() + Send>) -> Result<(), String> {
         .name("termination".into())
         .spawn(move || {
             let mut received = signals.forever();
-            if received.next().is_none() {
+            let Some(signal) = received.next() else {
                 return;
-            }
+            };
+            // The record of the signal is queued before quit runs, so it precedes the flush that the quit ends with.
+            crate::event_record::emit_closed("signal", Some(signal));
             quit();
             // The next signal ends the process with the default action. It can end the process even if the save during
             // termination stops.

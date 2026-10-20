@@ -31,6 +31,16 @@
       },
       "description": "The first line of every event file."
     },
+    "log.closed": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "cause": "string",
+        "signal?": "number"
+      },
+      "description": "The host process is ending. cause is signal for the first termination signal before quit, exit-request for a request to end the process, and exit for the end of the process; signal is the number of the termination signal when cause is signal. The writer stores it through its own path, so it passes every gate."
+    },
     "log.dropped": {
       "layer": "host",
       "class": "lifecycle",
@@ -236,6 +246,24 @@
       },
       "description": "The mount of one plugin surface in the page, while the trace is on: plugin and surface name the surface, and ms is the time in milliseconds from the start of its mount to the end of the module mount, including the awaited promise of the module (performance.now). A mount that fails writes no event; its error has its own record."
     },
+    "page.trace.modal.answer": {
+      "layer": "page",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "key": "string"
+      },
+      "description": "An answer of the open native modal that the page receives, while the trace is on: key is the answered key, and the event is written at the receipt of the answer by the page, because the overlay document has no trace switch. A state report of the modal document is not an answer and writes no event."
+    },
+    "page.trace.picker.close": {
+      "layer": "page",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "reason": "string"
+      },
+      "description": "The close of the native picker layer, while the trace is on: reason is the reason of the close, one of `replaced` (another layer opened), `settled` (the layout settled), `fullscreen` (a card entered or left fullscreen), `toggle` (its button closed it), `pick` (an item was picked), `dismiss` (core.modal.dismiss), and `command` (core.picker.close, which the page runs for Escape and for a press outside the layer)."
+    },
     "host.call.timeout": {
       "layer": "host",
       "class": "call",
@@ -256,6 +284,27 @@
         "delay": "number"
       },
       "description": "A reply to a forwarded command arrived after its time limit, and the relay refused it: delay is the time in milliseconds from the send of the command to the reply (docs/spec/exposure.md#errors)."
+    },
+    "host.trace.modal.stale-ready": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "modal": "string",
+        "instance": "number"
+      },
+      "description": "A ready request of a modal document named a modal that is not open, so the request changed nothing and was answered ok: modal is the id and instance the number of the request (docs/spec/host-contract.md#contract-cases)."
+    },
+    "host.trace.status.notify": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "status": "string",
+        "window": "string",
+        "decision": "string"
+      },
+      "description": "The decision of a host.window notification of a window: decision is sent when the value was sent to the watching connections, unchanged when it equals the value sent last, and unwatched when no connection watches host.window of the window (docs/spec/host-contract.md#contract-cases)."
     },
     "host.trace.<event>": {
       "layer": "host",
@@ -796,6 +845,17 @@
         "stack": "string"
       },
       "description": "A goroutine or a thread of the host panicked; name is the name that the entrance gave it, text is the panic value (the Rust host prefixes `<file>:<line>: `), and the process ends after the event is stored."
+    },
+    "host.run.unrecorded-end": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "boot": "string|null",
+        "pid": "number|null",
+        "previous?": "string"
+      },
+      "description": "A process.lock that was not locked when this run started was left by an earlier run that ended without removing it, and this run took it over. boot and pid are the boot identifier and the process identifier of that run when the file is the current form, and null otherwise; previous holds the content of the file, cut to 256 bytes, when the file is not the current form."
     },
     "host.stall": {
       "layer": "host",

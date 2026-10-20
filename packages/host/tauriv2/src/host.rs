@@ -66,6 +66,8 @@ pub mod performance;
 #[path = "platform/platform.rs"]
 pub mod platform;
 pub mod plugins;
+#[cfg(feature = "diagnostics")]
+pub mod process_lock_hook;
 pub mod project_removal;
 pub mod projects;
 pub mod quit;
@@ -218,6 +220,11 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // exists.
                 let events = std::sync::Arc::new(event_log::start_host(&directory)?);
                 event_record::use_host_event_log(Some(std::sync::Arc::clone(&events)));
+                // An owner that an earlier run left in process.lock marks an end of that run without its exit path
+                // (docs/spec/endpoint.md#discovery). The event is stored once the writer exists.
+                if let Some(end) = exposure::unrecorded_end(app) {
+                    endpoint::report_unrecorded_end(&end);
+                }
                 // The records of the migration engine go through the event writer of this process
                 // (docs/spec/installation.md#stored-data-migration).
                 soksak_sok::migrate::use_migration_log(Some(std::sync::Arc::clone(&events)));
@@ -461,9 +468,13 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             match &event {
                 tauri::RunEvent::Ready => app_events::record_app_event("started"),
                 tauri::RunEvent::ExitRequested { .. } => {
-                    app_events::record_app_event("exit_requested")
+                    app_events::record_app_event("exit_requested");
+                    event_record::emit_closed("exit-request", None);
                 }
-                tauri::RunEvent::Exit => app_events::record_app_event("exit"),
+                tauri::RunEvent::Exit => {
+                    app_events::record_app_event("exit");
+                    event_record::emit_closed("exit", None);
+                }
                 _ => {}
             }
             if let tauri::RunEvent::ExitRequested {

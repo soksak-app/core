@@ -707,6 +707,14 @@ pub fn create_private_file(_path: &std::path::Path) -> std::io::Result<std::fs::
     missing("new private file creation").map_err(std::io::Error::other)
 }
 
+pub fn open_private_file(_path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    missing("existing private file opening").map_err(std::io::Error::other)
+}
+
+pub fn is_named_file(_file: &std::fs::File, _path: &std::path::Path) -> Result<bool, String> {
+    missing("file identity")
+}
+
 pub fn write_private_file(_path: &std::path::Path, _data: &[u8]) -> Result<(), String> {
     missing("private file writing")
 }

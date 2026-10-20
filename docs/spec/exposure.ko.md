@@ -90,7 +90,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | `Escape` | workbench | core.rename.cancel | — | 탭 이름 변경 필드에 포커스가 있음 |
 | `Enter` | workbench | core.library.form.submit | — | 라이브러리 양식 필드에 포커스가 있음 |
 | `Escape` | workbench | core.picker.close | — | 선택 layer가 열려 있음 |
-| `Escape` | workbench | page.modal.answer | — | 네이티브 modal 메뉴가 열려 있고, 응답의 key가 비어 있음 |
+| `Escape` | workbench | core.modal.dismiss | — | 네이티브 modal 메뉴가 열려 있고 키보드 포커스가 있음 |
 | `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. plugin processes 규칙 7에 따라 view가 정한다 |
 | `text input keys` | view | none | — | 플러그인 view의 텍스트 입력에 포커스가 있음. view의 first responder가 받는다 |
 
@@ -123,6 +123,8 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 ### 모달 문서
 
 네이티브 모달 문서는 렌더, 배치, 테마 변경마다 모달 응답 경로로 키 `document`를 사용해 자기 상태를 메인 페이지에 보고한다. 메인 페이지는 이를 status `core.modal`로 공개한다. 열린 모달이 없으면 `null`이고, 있으면 `{id, mode, document}`다. `document`는 첫 보고 전에는 `null`이며 이후 `{mode, filter, htmlBackground, bodyBackground, scrimBackground, loaded, rect}`다: 렌더한 요소의 `data-native-modal`, 루트의 계산된 `filter`, 루트와 body의 계산된 배경색, 대화상자 scrim에 사용하는 `body::before`의 계산된 배경색, 문서가 첫 내용 요청의 응답을 처리했는지(적용한 변경보다 오래되어 버린 경우도 포함), CSS 픽셀 단위 요소 사각형.
+
+네이티브 메뉴 모달에서 Escape는 키 `core.modal.dismiss`로 응답하며, 이 키는 메뉴를 닫는 선언된 명령의 이름이다. 응답 값은 비어 있다. 메인 페이지는 그 명령을 registry로 실행하며, 네이티브 뷰는 명령을 스스로 실행하지 않는다.
 
 모달 문서의 응답은 그 모달이 열린 모달일 때만 메인 페이지에 닿는다. host는 모달 id와 instance가 열린 모달의 것이 아닌 응답을 버리고 `host.overlay.dropped` `{id, instance, key, open}`을 기록한다. 메인 페이지는 보이지 않는 모달이나 받는 곳이 없는 모달의 응답을 버리고 `page.overlay.dropped` `{id, shown, key}`를 기록한다. 닫히는 모달도 마지막 상태 보고를 보내므로 버림은 오류가 아니라 `info` event이며, 기록 없이 버리는 응답은 없다.
 

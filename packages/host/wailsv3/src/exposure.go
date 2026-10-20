@@ -1546,7 +1546,11 @@ func (h *Host) windowsChanged() {
 // windowChanged sends the new value to the connections that watch host.window. When no connection watches, it does not
 // read the value. It is also called on the UI thread, so the value is read in another goroutine.
 func (s *Surfaces) windowChanged() {
-	if s.host == nil || s.host.endpoint == nil || !s.host.endpoint.Watching(s.name, "host.window") {
+	if s.host == nil || s.host.endpoint == nil {
+		return
+	}
+	if !s.host.endpoint.Watching(s.name, "host.window") {
+		EmitHost(LevelDebug, "host.trace.status.notify", map[string]any{"status": "host.window", "window": s.name, "decision": "unwatched"})
 		return
 	}
 	routine.Go("window-status", func() {
@@ -1560,6 +1564,8 @@ func (s *Surfaces) windowChanged() {
 			s.fail("host.window", err)
 			return
 		}
+		// The endpoint keeps no record of the values it sent, so every value read while the window is watched is sent.
+		EmitHost(LevelDebug, "host.trace.status.notify", map[string]any{"status": "host.window", "window": s.name, "decision": "sent"})
 		s.host.endpoint.StatusChanged(s.name, "host.window", "", state)
 	})
 }

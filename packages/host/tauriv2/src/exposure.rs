@@ -641,6 +641,14 @@ pub(crate) fn start(app: &AppHandle, directory: &std::path::Path) -> Result<(), 
         .map_err(|_| "the endpoint is already started".to_string())
 }
 
+/// The owner that an earlier run left in process.lock without removing it, or None when the endpoint is not started.
+pub(crate) fn unrecorded_end(app: &AppHandle) -> Option<crate::endpoint::UnrecordedEnd> {
+    app.state::<Exposure>()
+        .endpoint
+        .get()
+        .and_then(|endpoint| endpoint.unrecorded_end().cloned())
+}
+
 /// Writes endpoint.json after the first window window is registered.
 pub(crate) fn publish(app: &AppHandle, window: &str) -> Result<(), String> {
     app.state::<Exposure>()
@@ -1180,31 +1188,34 @@ pub(crate) fn window_changed(window: &Window) {
         .get()
         .is_some_and(|endpoint| endpoint.notifier().watched(window.label(), "host.window"));
     if !watched {
+        trace_window_notify(window.label(), &WindowNotify::Unwatched);
         return;
     }
     let window = window.clone();
     crate::routine::spawn_named("window-status", move || {
         let value = match window_status(&window) {
             Ok(value) => value,
-            // A window that closed before its state was read has no state to report. window_closed reports the close of
-            // the window.
-            Err(error) if error.code == MISSING_DOCUMENT => return,
+            // A failed read is logged, including the read of a window that closed before its state was read.
             Err(error) => {
                 log_error("host.window", error.message);
                 return;
             }
         };
         let state = window.state::<Exposure>();
-        {
+        let Some(endpoint) = state.endpoint.get() else {
+            return;
+        };
+        let decision = {
             let Ok(mut reported) = state.reported.lock() else {
                 return;
             };
-            if reported.get(window.label()) == Some(&value) {
-                return;
-            }
-            reported.insert(window.label().to_string(), value.clone());
-        }
-        if let Some(endpoint) = state.endpoint.get() {
+            // The watch is read under the lock of the record. A watch that ends before this read clears the record after
+            // this decision, so the next watch receives the next value.
+            let watched = endpoint.notifier().watched(window.label(), "host.window");
+            decide_window_notify(&mut reported, window.label(), watched, &value)
+        };
+        trace_window_notify(window.label(), &decision);
+        if let WindowNotify::Sent(value) = decision {
             match raw(&value) {
                 Ok(text) => endpoint
                     .notifier()
@@ -1214,6 +1225,69 @@ pub(crate) fn window_changed(window: &Window) {
         }
     });
 }
+
+/// The decision of one host.window notification for a window.
+#[derive(Debug, PartialEq)]
+pub(crate) enum WindowNotify {
+    /// The value differs from the value sent last, and it is sent to the watching connections.
+    Sent(Value),
+    /// The value equals the value sent last, so nothing is sent.
+    Unchanged,
+    /// No connection watches host.window of the window, so nothing is sent and the record of the window is kept.
+    Unwatched,
+}
+
+/// Decides whether the value of host.window of a window is sent. reported holds the value sent last for each window.
+/// A value is sent when a connection watches the window and the value differs from the value sent last, and the sent
+/// value is recorded.
+pub(crate) fn decide_window_notify(
+    reported: &mut HashMap<String, Value>,
+    window: &str,
+    watched: bool,
+    value: &Value,
+) -> WindowNotify {
+    if !watched {
+        return WindowNotify::Unwatched;
+    }
+    if reported.get(window) == Some(value) {
+        return WindowNotify::Unchanged;
+    }
+    reported.insert(window.to_string(), value.clone());
+    WindowNotify::Sent(value.clone())
+}
+
+/// Removes the value sent last for a window. It is called when the last connection that watches host.window of the window
+/// stops watching, so that the next watch receives the value of the next change.
+pub(crate) fn forget_window_notify(reported: &mut HashMap<String, Value>, window: &str) {
+    reported.remove(window);
+}
+
+/// Stores the decision of a host.window notification as the trace event `host.trace.status.notify`.
+fn trace_window_notify(window: &str, decision: &WindowNotify) {
+    let decision = match decision {
+        WindowNotify::Sent(_) => "sent",
+        WindowNotify::Unchanged => "unchanged",
+        WindowNotify::Unwatched => "unwatched",
+    };
+    emit_host(
+        Level::Debug,
+        "host.trace.status.notify",
+        json!({"status": "host.window", "window": window, "decision": decision}),
+    );
+}
+
+/// Called when the last connection stops watching host.window of a window: the record of the value sent last for the
+/// window is removed.
+pub(crate) fn window_unwatched(app: &AppHandle, window: &str) {
+    match app.state::<Exposure>().reported.lock() {
+        Ok(mut reported) => forget_window_notify(&mut reported, window),
+        Err(error) => log_error("host.window unwatch", error),
+    }
+}
+
+#[cfg(test)]
+#[path = "exposure_status_test.rs"]
+mod status_test;
 
 fn internal(error: impl ToString) -> Failure {
     Failure::new(-32603, error.to_string())
@@ -2062,6 +2136,12 @@ impl Service for Host {
 
     fn exists(&self, window: &str) -> bool {
         windows::find(&self.0, window).is_some()
+    }
+
+    fn unwatched(&self, window: &str, name: &str) {
+        if name == "host.window" {
+            window_unwatched(&self.0, window);
+        }
     }
 
     fn call(

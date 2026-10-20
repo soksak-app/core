@@ -7,6 +7,7 @@ package tests
 import (
 	"encoding/json"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -238,4 +239,37 @@ func TestAPlacedEventRefusedByThePolicyNamesThePolicy(t *testing.T) {
 		}
 	}
 	t.Fatal("the gated event is not recorded by log.gated")
+}
+
+// contract: log.closed.passes-every-gate
+func TestAClosedRecordIsStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T) {
+	log, err := sok.StartEventLog(optionsIn(t.TempDir(), "b1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	policy, err := sok.ParseLogPolicy("log-policy.json", []byte(`{"schema":1,"classes":{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"error"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.SetPolicy(policy, "file")
+	signal := 15
+	if !log.RecordClosed("signal", &signal) {
+		t.Fatal("the record was refused")
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var closed []map[string]any
+	for _, event := range storedLines(t, log.Path()) {
+		if event["event"] == "log.closed" {
+			closed = append(closed, event)
+		}
+	}
+	if len(closed) != 1 {
+		t.Fatalf("log.closed records %v, want 1", closed)
+	}
+	if closed[0]["level"] != "info" || closed[0]["class"] != "lifecycle" || !reflect.DeepEqual(closed[0]["fields"], map[string]any{"cause": "signal", "signal": float64(15)}) {
+		t.Fatalf("log.closed record %v", closed[0])
+	}
 }

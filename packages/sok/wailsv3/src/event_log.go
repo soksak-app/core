@@ -455,6 +455,22 @@ func (l *EventLog) enqueueWriterEvent(level Level, name string, fields json.RawM
 	return l.queue(pending) == nil
 }
 
+// RecordClosed queues the event `log.closed` that the writer reports when a host process ends (docs/spec/logging.md#self-reports).
+// cause is `exit`, `exit-request` or `signal`, and signal is the number of the termination signal of the cause `signal`. It
+// returns false when the queue has no room.
+func (l *EventLog) RecordClosed(cause string, signal *int) bool {
+	fields := map[string]any{"cause": cause}
+	if signal != nil {
+		fields["signal"] = *signal
+	}
+	text, err := json.Marshal(fields)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "event writer: the fields of log.closed cannot be serialized: %v\n", err)
+		return false
+	}
+	return l.enqueueWriterEvent(LevelInfo, "log.closed", text)
+}
+
 // capFields returns the fields text of an event as the writer stores it. Fields over EventFieldsLimitBytes are replaced by
 // `{"head": <the first EventHeadBytes bytes of the text>}`, and the second result is the size of the text before the cut;
 // it is 0 for fields under the bound (docs/spec/logging.md#bounds).

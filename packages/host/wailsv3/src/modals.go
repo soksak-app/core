@@ -357,7 +357,11 @@ func (s *Surfaces) ModalReady(id string, instance uint64) error {
 	if !first {
 		if current {
 			s.rendered(id)
+			return nil
 		}
+		// A ready request of a modal that is not open came from a document that was removed. It changes nothing and is
+		// recorded as a trace event, not as an error (docs/spec/host-contract.md#contract-cases).
+		EmitHost(LevelDebug, "host.trace.modal.stale-ready", map[string]any{"modal": id, "instance": instance})
 		return nil
 	}
 	if view == nil {

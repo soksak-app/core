@@ -59,7 +59,7 @@ const HOST_BATCH_INTERVAL: Duration = Duration::from_millis(100);
 const HOST_ROTATE_BYTES: u64 = 100 << 20;
 
 /// The identifier of this run, shared by the files of the run: the start time in seconds and the process identifier.
-fn process_boot() -> &'static str {
+pub(crate) fn process_boot() -> &'static str {
     static BOOT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     BOOT.get_or_init(|| {
         let seconds = SystemTime::now()

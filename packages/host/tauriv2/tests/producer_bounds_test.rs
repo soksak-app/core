@@ -155,6 +155,8 @@ struct GatedPage {
 }
 
 impl Service for GatedPage {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
     fn windows(&self) -> Result<Value, Failure> {
         Ok(json!([]))
     }

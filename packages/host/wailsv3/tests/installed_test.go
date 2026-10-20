@@ -95,6 +95,38 @@ func TestInstalledPluginsDocumentRefusesAPackageField(t *testing.T) {
 	}
 }
 
+// contract: installed.plugin-json.invalid-text
+func TestInstalledPluginJSONInvalidTextNamesOnlyTheFile(t *testing.T) {
+	config := installedFixture(t)
+	manifest := filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")
+	for _, content := range []string{"", "{"} {
+		writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": content})
+		if got, want := string(host.InstalledPluginsDocument(config, false)), `{"error":"`+manifest+` is not valid JSON"}`; got != want {
+			t.Fatalf("invalid plugin.json %q: got %s, want %s", content, got, want)
+		}
+	}
+}
+
+// contract: installed.json.invalid-text
+func TestInstalledJSONInvalidTextNamesOnlyTheFile(t *testing.T) {
+	config := installedFixture(t)
+	file := filepath.Join(config, "plugins/installed.json")
+	writeInstalled(t, config, map[string]string{"plugins/installed.json": "{"})
+	if got, want := string(host.InstalledPluginsDocument(config, false)), `{"error":"`+file+` is not valid JSON"}`; got != want {
+		t.Fatalf("invalid installed.json: got %s, want %s", got, want)
+	}
+}
+
+// contract: installed.package-json.invalid-text
+func TestInstalledPackageJSONInvalidTextNamesOnlyTheFile(t *testing.T) {
+	config := installedFixture(t)
+	file := filepath.Join(config, "plugins/alpha/1.0.0/package.json")
+	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/package.json": "{"})
+	if got, want := string(host.InstalledPluginsDocument(config, false)), `{"error":"`+file+` is not valid JSON"}`; got != want {
+		t.Fatalf("invalid package.json: got %s, want %s", got, want)
+	}
+}
+
 // contract: installed.document.reports-errors
 func TestInstalledPluginsDocumentReportsAnInvalidState(t *testing.T) {
 	config := installedFixture(t)

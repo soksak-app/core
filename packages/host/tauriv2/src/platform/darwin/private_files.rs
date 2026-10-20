@@ -1,7 +1,7 @@
 //! Files and directories for the current user only. The permissions are set with the Unix mode.
 
 use std::fs::{DirBuilder, File, OpenOptions, Permissions};
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
@@ -33,6 +33,26 @@ pub fn create_private_file(path: &Path) -> std::io::Result<File> {
         .create_new(true)
         .mode(0o600)
         .open(path)
+}
+
+/// Opens the existing file at path for reading and writing. A missing file is a NotFound error. Its contents and
+/// permissions are not changed.
+pub fn open_private_file(path: &Path) -> std::io::Result<File> {
+    OpenOptions::new().read(true).write(true).open(path)
+}
+
+/// Reports whether file is the file that path names now, which is the same device and inode. A path that does not
+/// exist names no file.
+pub fn is_named_file(file: &File, path: &Path) -> Result<bool, String> {
+    use std::os::unix::fs::MetadataExt;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    match std::fs::metadata(path) {
+        Ok(named) => Ok(opened.dev() == named.dev() && opened.ino() == named.ino()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(format!("{}: {error}", path.display())),
+    }
 }
 
 /// Replaces the content of the file at path with data. It is created with mode 0600 when it does not exist. The

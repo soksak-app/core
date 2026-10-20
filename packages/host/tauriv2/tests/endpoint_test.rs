@@ -15,7 +15,9 @@ mod records;
 
 use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
-use soksak_host_tauriv2::endpoint::{self, Connection, Endpoint, Failure, Service, Watch, raw};
+use soksak_host_tauriv2::endpoint::{
+    self, Connection, Endpoint, Failure, Service, UnrecordedEnd, Watch, raw,
+};
 
 /// A service that records requests and has only the window w1.
 struct Fake {
@@ -44,6 +46,8 @@ impl Fake {
 }
 
 impl Service for Fake {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
     fn windows(&self) -> Result<Value, Failure> {
         self.calls
             .lock()
@@ -90,7 +94,7 @@ fn start(config: &Path, application: &str, service: Arc<Fake>) -> Endpoint {
     endpoint
 }
 
-// contract: endpoint.process.one-owner-per-config-dir
+// contract: endpoint.lock.single-owner
 #[test]
 fn a_configuration_directory_has_one_process_owner() {
     let config = folder::Folder::new();
@@ -119,6 +123,198 @@ fn the_process_lock_is_owner_only() {
     let endpoint = start(config.path(), "test-lock-mode", fake);
     assert_eq!(mode(&config.path().join("process.lock")), 0o600);
     endpoint.stop();
+}
+
+/// The process identifier of a child process that has ended and been waited for.
+fn ended_pid() -> u32 {
+    let mut child = std::process::Command::new("true").spawn().unwrap();
+    let pid = child.id();
+    child.wait().unwrap();
+    pid
+}
+
+/// Starts an endpoint in a directory whose lock file has the content `stale`. A second start runs once, at the point where
+/// the first start has read the stale content and before it writes its record. It returns the result of the second start,
+/// when it ran, and the result of the first start.
+#[cfg(feature = "diagnostics")]
+fn start_beside_a_stale_lock(
+    directory: &Path,
+    stale: &str,
+) -> (Option<String>, Result<Endpoint, String>) {
+    use soksak_host_tauriv2::process_lock_hook::set_process_lock_hook;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    std::fs::write(directory.join("process.lock"), stale).unwrap();
+    let outcome: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    let slot = outcome.clone();
+    let nested = directory.to_path_buf();
+    let fired = Arc::new(AtomicBool::new(false));
+    set_process_lock_hook(Some(Arc::new(move |locked: &Path| {
+        // The hook is process-wide, so it acts only on the directory of this test and on its first call.
+        if locked != nested.as_path() || fired.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let (second, _) = Fake::new();
+        let started = Endpoint::start(&nested.join("sockets"), &nested, "test-race", second);
+        *slot.lock().unwrap() = Some(match started {
+            Ok(endpoint) => {
+                // A started endpoint is kept alive so that its lock file is not removed by this test.
+                std::mem::forget(endpoint);
+                "started".to_string()
+            }
+            Err(error) => error,
+        });
+    })));
+    let (first, _) = Fake::new();
+    let first_started = Endpoint::start(&directory.join("sockets"), directory, "test-race", first);
+    set_process_lock_hook(None);
+    let second = outcome.lock().unwrap().take();
+    (second, first_started)
+}
+
+// contract: endpoint.lock.single-owner
+#[cfg(feature = "diagnostics")]
+#[test]
+fn two_starters_of_a_stale_lock_leave_one_owner() {
+    let config = folder::Folder::new();
+    let stale = format!("{{\"pid\":{},\"boot\":\"1700000000-4242\"}}", ended_pid());
+    let (second, first) = start_beside_a_stale_lock(config.path(), &stale);
+    let second = second.expect("the second start did not run at the stale lock");
+    assert!(
+        second.contains("already owned by process"),
+        "the second start was not refused while the first start claims the lock: {second}"
+    );
+    assert!(first.is_ok(), "the first start failed: {:?}", first.err());
+}
+
+// contract: endpoint.lock.single-owner
+#[cfg(feature = "diagnostics")]
+#[test]
+fn a_starter_meets_an_owner_that_has_not_written_its_record() {
+    let config = folder::Folder::new();
+    let (second, first) = start_beside_a_stale_lock(config.path(), "");
+    let second = second.expect("the second start did not run at the lock of the first start");
+    assert!(
+        second.contains("already owned by a live process"),
+        "the second start was not refused while the owner has not written its record: {second}"
+    );
+    assert!(first.is_ok(), "the first start failed: {:?}", first.err());
+}
+
+// contract: endpoint.process.rejects-a-malformed-lock
+#[test]
+fn a_held_lock_with_another_form_is_refused_and_kept() {
+    for contents in [
+        "123",
+        "abc",
+        "0",
+        r#"{"pid":0,"boot":"b1"}"#,
+        r#"{"pid":5}"#,
+    ] {
+        let config = folder::Folder::new();
+        let lock = config.path().join("process.lock");
+        std::fs::write(&lock, contents).unwrap();
+        // This test is the live owner: it holds the lock while the content has another form.
+        let owner = std::fs::File::open(&lock).unwrap();
+        owner.try_lock().unwrap();
+        let (fake, _) = Fake::new();
+        let refused = Endpoint::start(
+            &config.path().join("sockets"),
+            config.path(),
+            "test-malformed",
+            fake,
+        )
+        .err()
+        .unwrap_or_else(|| panic!("lock {contents:?} was accepted while held"));
+        assert!(
+            refused.starts_with(&format!(
+                "configuration directory {} is already owned by a live process",
+                config.path().display()
+            )),
+            "lock {contents:?}: {refused}"
+        );
+        assert_eq!(std::fs::read_to_string(&lock).unwrap(), contents);
+        drop(owner);
+    }
+}
+
+// contract: endpoint.lock.unrecorded-end
+#[test]
+fn a_stale_lock_of_another_form_is_taken_over_and_reported() {
+    for contents in ["123", "abc"] {
+        let config = folder::Folder::new();
+        std::fs::write(config.path().join("process.lock"), contents).unwrap();
+        let (fake, _) = Fake::new();
+        let endpoint = Endpoint::start(
+            &config.path().join("sockets"),
+            config.path(),
+            "test-stale-form",
+            fake,
+        )
+        .unwrap_or_else(|error| panic!("a stale lock {contents:?} was refused: {error}"));
+        assert_eq!(
+            endpoint.unrecorded_end(),
+            Some(&UnrecordedEnd {
+                boot: None,
+                pid: None,
+                previous: Some(contents.into()),
+            })
+        );
+        endpoint.stop();
+    }
+}
+
+// contract: endpoint.lock.empty-is-no-previous-run
+#[test]
+fn an_empty_lock_file_is_taken_over_without_a_report() {
+    // A starter creates process.lock before it locks the file, so an empty file that is not locked can be the file of a
+    // starter that has not locked it yet. No owner wrote a record in it, so no earlier run is reported.
+    let config = folder::Folder::new();
+    std::fs::write(config.path().join("process.lock"), "").unwrap();
+    let (fake, _) = Fake::new();
+    let endpoint = Endpoint::start(
+        &config.path().join("sockets"),
+        config.path(),
+        "test-empty",
+        fake,
+    )
+    .unwrap_or_else(|error| panic!("an empty lock file was refused: {error}"));
+    assert_eq!(endpoint.unrecorded_end(), None);
+    endpoint.stop();
+}
+
+// contract: endpoint.lock.unrecorded-end
+#[test]
+fn a_stale_lock_is_taken_over_and_names_the_previous_run() {
+    let config = folder::Folder::new();
+    let dead = ended_pid();
+    let lock = config.path().join("process.lock");
+    std::fs::write(
+        &lock,
+        format!("{{\"pid\":{dead},\"boot\":\"1700000000-4242\"}}"),
+    )
+    .unwrap();
+    let (fake, _) = Fake::new();
+    let endpoint = Endpoint::start(
+        &config.path().join("sockets"),
+        config.path(),
+        "test-stale",
+        fake,
+    )
+    .unwrap_or_else(|error| panic!("a stale lock was refused: {error}"));
+    assert_eq!(
+        endpoint.unrecorded_end(),
+        Some(&UnrecordedEnd {
+            boot: Some("1700000000-4242".into()),
+            pid: Some(dead),
+            previous: None,
+        })
+    );
+    let owner: Value = serde_json::from_str(&std::fs::read_to_string(&lock).unwrap()).unwrap();
+    assert_eq!(owner["pid"], std::process::id());
+    assert_ne!(owner["boot"], "1700000000-4242");
+    endpoint.stop();
+    assert!(!lock.exists());
 }
 
 fn mode(path: &Path) -> u32 {
@@ -649,6 +845,8 @@ struct GatedPage {
 }
 
 impl Service for GatedPage {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
     fn windows(&self) -> Result<Value, Failure> {
         Ok(json!([]))
     }
@@ -746,6 +944,8 @@ fn subscription_changes_reach_the_page_in_arrival_order() {
 struct Late(std::sync::atomic::AtomicBool);
 
 impl Service for Late {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
     fn windows(&self) -> Result<Value, Failure> {
         Ok(json!([]))
     }
@@ -811,31 +1011,6 @@ fn closing_an_already_disconnected_connection_succeeds() {
         Ok(()),
         "closing a disconnected connection reported an error"
     );
-}
-
-// contract: endpoint.process.rejects-a-malformed-lock
-#[test]
-fn a_malformed_process_lock_is_refused() {
-    for contents in ["abc", "0", "-3", ""] {
-        let config = folder::Folder::new();
-        let lock = config.path().join("process.lock");
-        std::fs::write(&lock, contents).unwrap();
-        let (service, _) = Fake::new();
-        let refused = Endpoint::start(
-            &config.path().join("sockets"),
-            config.path(),
-            "test-lock",
-            service,
-        )
-        .err()
-        .unwrap();
-        assert_eq!(
-            refused,
-            format!("{}: invalid process lock", lock.display()),
-            "{contents:?}"
-        );
-        assert_eq!(std::fs::read_to_string(&lock).unwrap(), contents);
-    }
 }
 
 const CLOSE_CHILD: &str = "SOKSAK_ENDPOINT_CLOSE_CHILD";
