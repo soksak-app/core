@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULT_TIMEOUT_MS, discoverLanguageCases, parseLanguageResult, readLanguageCaseManifest, runLanguageCases } from '../language-test-adapters.mjs';
+import { DEFAULT_TIMEOUT_MS, discoverLanguageCases, parseLanguageResult, runLanguageCases } from '../language-test-adapters.mjs';
 
 const command = (source) => ({ command: process.execPath, args: ['-e', source] });
 
@@ -63,8 +63,12 @@ test('the node case counts its tests when the reporter writes colors', { timeout
   process.env.FORCE_COLOR = '3';
   delete process.env.NODE_TEST_CONTEXT;
   try {
-    const manifest = await readLanguageCaseManifest(new URL('../language-test-cases.json', import.meta.url));
-    const cases = manifest.filter(({ language }) => language === 'js-ts');
+    // A fixture of three tests: the count is the subject, so the check does not run the repository's own suites again.
+    const fixture = 'scripts/test/fixtures/node-color-count.mjs';
+    const cases = discoverLanguageCases({ cases: [{
+      id: 'js-color-count', language: 'js-ts', command: 'node', args: ['--test', '--test-reporter=tap', fixture], expectedTests: 3,
+      implementationFiles: [fixture], testFiles: [fixture], dependencyFiles: ['package.json'], buildFlags: ['node --test'],
+    }] });
     const result = await runLanguageCases(cases);
     for (const item of result.cases) {
       assert.equal(item.status, 'pass', JSON.stringify(item));
