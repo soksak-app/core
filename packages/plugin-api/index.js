@@ -1161,6 +1161,23 @@ export function pagePackage(pathname) {
   return name && PACKAGE.test(name) ? name : null;
 }
 
+/**
+ * Returns the plugin of a page location and the path of its plugin.json, or null for a page that is not a plugin page.
+ * A `sok://<plugin id>` page belongs to the plugin named by its host, and its manifest is on its own origin. A staged page
+ * of the main origin belongs to the module named by its path. A sok host that is not a plugin id, or `core`, throws.
+ */
+export function pagePlugin(location) {
+  if (location.protocol === "sok:") {
+    // core is the reserved host of the core root, so it names no plugin.
+    if (!ID.test(location.host) || location.host === "core") {
+      throw new Error(`${location.href}: host ${location.host} is not a plugin id`);
+    }
+    return { name: location.host, manifest: `/${MANIFEST}` };
+  }
+  const name = pagePackage(location.pathname);
+  return name ? { name, manifest: `/${modulePath(name, MANIFEST)}` } : null;
+}
+
 /** A request failure that has a code. The caller answers with {error: {code, message}}. */
 export class ExposureError extends Error {
   constructor(code, message) {

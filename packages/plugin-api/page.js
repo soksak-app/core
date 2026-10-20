@@ -4,7 +4,7 @@
 // tokens that the host sent on their own root.
 import { page as runtimePage } from "@soksak/runtime";
 import {
-  EXPOSURE, MANIFEST, SURFACE_CORE, createExpose, declarationMap, modulePath, orderedSidecar, pagePackage,
+  EXPOSURE, MANIFEST, SURFACE_CORE, createExpose, declarationMap, orderedSidecar, pagePlugin,
   validateExposureFile, validateManifest,
 } from "@soksak/plugin-api";
 import { installDocumentErrors } from "./document-errors.js";
@@ -73,11 +73,11 @@ async function fetchJson(path) {
   return response.json();
 }
 
-/** The plugin.json of the plugin of this document. The document is in `modules/<plugin>/...`. */
+/** The plugin.json of the plugin of this document. The plugin is found from the location of the document ([pagePlugin]). */
 export async function ownManifest() {
-  const name = pagePackage(location.pathname);
-  if (!name) throw new Error(`${location.pathname} is not a plugin page`);
-  return validateManifest(await fetchJson(`/${modulePath(name, MANIFEST)}`));
+  const plugin = pagePlugin(location);
+  if (!plugin) throw new Error(`${location.href} is not a plugin page`);
+  return validateManifest(await fetchJson(plugin.manifest));
 }
 
 /**
@@ -166,4 +166,4 @@ function exposeSurfaceDocument() {
   ]).catch((error) => console.error(`core surface entries: ${error.message}`));
 }
 
-if (expose && pagePackage(location.pathname)) exposeSurfaceDocument();
+if (expose && pagePlugin(location)) exposeSurfaceDocument();
