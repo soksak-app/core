@@ -27,6 +27,7 @@ import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
 import { focusSurface, mountSurface, mountedSurface, placePluginPlaceholder } from "./surface-modules.js";
 import { emitEvent } from "./page-log.js";
+import { trace } from "./performance.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
 import { clearVisibleNotices, onTabReports, recordOrigin, reportError, setVisibleTab, tabButtonData, tabError, tabFooter,
@@ -691,7 +692,7 @@ function openTabList(anchor, cardId) {
  * change the structure of the layer.
  */
 function openLayer(anchor, ask, items, pick, align = "right", groups = [{ heading: null, items }]) {
-  closePicker();
+  closePicker("replaced");
   // The window name when the host draws this layer as a window. It is the same value as the visible question.
   pickerEl.setAttribute("aria-label", ask);
   // A list with group titles has many items, so it is drawn taller.
@@ -739,8 +740,10 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   }
 }
 
-function closePicker() {
+function closePicker(reason) {
   if (!picker) return;
+  // The close is an event of the page trace with the reason that closed the layer (docs/spec/performance-trace.md#producers).
+  trace("picker.close", { reason });
   // A question that waits for its answer learns that the layer closed without a pick.
   const { dismiss } = picker;
   picker = null;
@@ -1032,7 +1035,7 @@ function dismiss(id) {
  */
 function settle() {
   if (!grid) return;
-  closePicker();
+  closePicker("settled");
   arrangeWindowSidebars(grid, windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()), windowSidebars,
     value("sidebarWidth"), side => value(side), dismiss);
   // default: when only place cards remain, there is no card to focus (null).
@@ -1617,7 +1620,7 @@ function restoreFullscreen() {
 export function toggleCardFullscreen(id) {
   paneCard(id);
   focusedId = id;
-  closePicker();
+  closePicker("fullscreen");
   view.fullscreen(view.fullscreenCard === id ? null : id);
 }
 
@@ -1637,7 +1640,7 @@ export function openCardMenu(id, menu) {
   const anchor = cardElement(id)?.querySelector(`.chrome__act[data-do="${what}"]`);
   if (!anchor) throw new Error(`card ${id} has no ${menu} button`);
   if (anchor.disabled) throw new Error(`card ${id} cannot ${menu}`);
-  if (picker?.anchor === anchor) { closePicker(); return; }
+  if (picker?.anchor === anchor) { closePicker("toggle"); return; }
   focusedId = id;
   settle();
   openPicker(anchor, what, id);
@@ -1652,7 +1655,7 @@ export function openCardTools(id) {
   paneCard(id);
   const anchor = cardElement(id)?.querySelector(".chrome__more");
   if (!anchor) throw new Error(`card ${id} has no tool menu button`);
-  if (picker?.anchor === anchor) { closePicker(); return; }
+  if (picker?.anchor === anchor) { closePicker("toggle"); return; }
   const acts = cardElement(id).querySelector(".chrome__acts");
   const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled).map((b) => ({
     // A sidebar button has no data-do and points to a side with data-side.
@@ -1727,7 +1730,7 @@ export function openSpaceApps(id) {
   if (view.fullscreenCard !== id) throw new Error(`card ${id} is not fullscreen`);
   const anchor = cardElement(id)?.querySelector(".chrome__apps");
   if (!anchor) throw new Error(`card ${id} has no space apps button`);
-  if (picker?.anchor === anchor) { closePicker(); return; }
+  if (picker?.anchor === anchor) { closePicker("toggle"); return; }
   const cards = grid.cards.filter((card) => card.data);
   const tree = sliceTree(cards);
   if (!tree) throw new Error("the cards of the space are not a slicing arrangement");
@@ -1780,7 +1783,7 @@ export function openCardTabs(id) {
   paneCard(id);
   const anchor = cardElement(id)?.querySelector(".chrome__ham");
   if (!anchor) throw new Error(`card ${id} has no tab list button`);
-  if (picker?.anchor === anchor) { closePicker(); return; }
+  if (picker?.anchor === anchor) { closePicker("toggle"); return; }
   openTabList(anchor, id);
 }
 
@@ -1974,7 +1977,7 @@ export function pickItem(index) {
   if (key === undefined) throw new Error(`the menu has no item ${index}`);
   const { pick } = picker;
   picker.dismiss = null;
-  closePicker();
+  closePicker("pick");
   pick(key);
 }
 

@@ -236,6 +236,24 @@
       },
       "description": "The mount of one plugin surface in the page, while the trace is on: plugin and surface name the surface, and ms is the time in milliseconds from the start of its mount to the end of the module mount, including the awaited promise of the module (performance.now). A mount that fails writes no event; its error has its own record."
     },
+    "page.trace.modal.answer": {
+      "layer": "page",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "key": "string"
+      },
+      "description": "An answer of the open native modal that the page receives, while the trace is on: key is the answered key, and the event is written at the receipt of the answer by the page, because the overlay document has no trace switch. A state report of the modal document is not an answer and writes no event."
+    },
+    "page.trace.picker.close": {
+      "layer": "page",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "reason": "string"
+      },
+      "description": "The close of the native picker layer, while the trace is on: reason is the reason of the close, one of `replaced` (another layer opened), `settled` (the layout settled), `fullscreen` (a card entered or left fullscreen), `toggle` (its button closed it), `pick` (an item was picked), `dismiss` (core.modal.dismiss), and `command` (core.picker.close, which the page runs for Escape and for a press outside the layer)."
+    },
     "host.call.timeout": {
       "layer": "host",
       "class": "call",

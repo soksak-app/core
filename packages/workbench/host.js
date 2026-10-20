@@ -7,6 +7,7 @@
 // This file is not duplicated per application. The only difference between applications is the transport, which the
 // runtime module (@soksak/runtime) handles.
 import { emitEvent, reportRecord } from "./page-log.js";
+import { trace } from "./performance.js";
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
 import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
@@ -654,6 +655,9 @@ if (native) {
       emitEvent("info", "page.overlay.dropped", { id, shown: "", key });
       return;
     }
+    // The answer is traced at its receipt: the overlay document has no trace switch, so the page writes this event for it
+    // (docs/spec/performance-trace.md#producers).
+    trace("modal.answer", { key });
     pick(key, value);
   });
 }
