@@ -81,7 +81,6 @@ async function mountMs(s, app, card, plugin, params) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the DOM mount time of every surface plugin of the add menu`, { timeout: 900000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     t.diagnostic(`load average at start ${loads()}`);
     await fresh(s, { performanceTrace: true, reads: ["page.trace.surface.mount"] });
     const card = (await s.get("core.grid")).cards.find((item) => item.pane !== null && item.acts?.add?.enabled);

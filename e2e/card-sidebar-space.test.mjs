@@ -76,7 +76,6 @@ for (const app of Object.values(APPS))
     async (t) => {
       console.info(`START ${app.name}: sidebar space acceptance`);
       const s = await open(t, app);
-      assert.ok(s, "required host is not built");
       t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
       await fresh(s);
       await s.run("core.settings.theme", { name: "midnight", mode: "dark" });

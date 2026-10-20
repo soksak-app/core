@@ -81,7 +81,6 @@ async function blankCellsWithPixels(s, surface) {
 async function prepare(t, app, line, { fullscreen = false } = {}) {
   requireTrusted();
   const s = await open(t, app);
-  assert.ok(s, `${app.binary} is not built`);
   await fresh(s);
   const [terminal] = await ensureTerminals(s, 1);
   const surface = terminal.surface;
@@ -134,7 +133,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a real click gives native focus to the clicked terminal and its card`, { timeout: 90000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const terminals = await ensureTerminals(s, 3);
     await s.presented();
@@ -961,7 +959,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: clicking a real tab notice of a terminal out of view selects its tab`, { timeout: 60000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const [shown, hidden] = await ensureTerminals(s, 2);
     const cardOf = (grid, surface) => grid.cards.find((card) => card.tabs.some((tab) => tab.id === surface));
@@ -986,7 +983,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a real Finder drag of a file and of an image pastes their quoted paths without executing`, { timeout: 90000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;

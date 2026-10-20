@@ -37,7 +37,6 @@ function probeRegistry(sok) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a contributed item connects to the extension point of its provider and the provider uses it`, { timeout: 180000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const before = await s.get("core.plugins");

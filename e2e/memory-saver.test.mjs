@@ -85,7 +85,6 @@ const regionsOf = (objects, tab) => objects.documents.filter((entry) => entry.su
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the memory saver unloads hidden tabs on the command and under pressure and restores them`, { timeout: 300000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     // The delay of 720 minutes keeps the delay deadline out of the check, so every unload comes from the command or the pressure.
     // The check reads the page.tab events, lifecycle events at the level info.
     await step(t, s, "prepare the fixture", () => fresh(s, { settings: { memorySaver: true, memorySaverDelay: 720 },

@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, drag, open } from "@soksak/window-check/app.mjs";
+import { APPS, drag, open, requiresBoth } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { textDifference } from "@soksak/window-check/text-difference.mjs";
 
@@ -75,20 +75,18 @@ async function layoutState(s) {
   };
 }
 
-/** Connects to both applications. It is null when one of them is not built. */
+/**
+ * Connects to both applications. The tests below are registered only when requiresBoth holds, so APPS holds both
+ * applications here and each open returns a session.
+ */
 async function both(t) {
   const sessions = {};
-  for (const app of Object.values(APPS)) {
-    const s = await open(t, app);
-    if (!s) return null;
-    sessions[app.name] = s;
-  }
+  for (const app of Object.values(APPS)) sessions[app.name] = await open(t, app);
   return sessions;
 }
 
-test("both hosts answer the same page the same way", async (t) => {
+if (requiresBoth(process.env)) test("both hosts answer the same page the same way", async (t) => {
   const sessions = await both(t);
-  if (!sessions) return t.skip("both hosts must be built");
   const dragged = {};
   const results = {};
   const logs = {};
@@ -171,9 +169,8 @@ test("both hosts answer the same page the same way", async (t) => {
   }
 });
 
-test("both hosts lay out the same page the same way after a resize", async (t) => {
+if (requiresBoth(process.env)) test("both hosts lay out the same page the same way after a resize", async (t) => {
   const sessions = await both(t);
-  if (!sessions) return t.skip("both hosts must be built");
   const rested = {};
   for (const [name, s] of Object.entries(sessions)) {
     await fresh(s);
@@ -221,9 +218,8 @@ function normalizeMenus(menus, names, windowTitles, declaredCounts) {
   }));
 }
 
-test("both hosts serve the declared application menu", async (t) => {
+if (requiresBoth(process.env)) test("both hosts serve the declared application menu", async (t) => {
   const sessions = await both(t);
-  if (!sessions) return t.skip("both hosts must be built");
   const contract = await menuContract();
   // The active language that the host reports is the reference. The check does not guess it from the title (docs/spec/host-contract.md).
   // The reported language must be a language column of the table, and a new language is declared by adding a column.

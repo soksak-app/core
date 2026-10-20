@@ -55,7 +55,6 @@ function replay(app, session, until, config = app.configDir) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a terminal session replays with the sidecar and page hashes equal`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s, { log: EVERY_LEVEL, reads: READS });
     t.diagnostic(`${app.name}: START terminal replay`);
     const [{ surface }] = await ensureTerminals(s, 1);
@@ -78,7 +77,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a screen message changed on the way is a divergence of the layer plugin`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s, { log: EVERY_LEVEL, reads: READS });
     t.diagnostic(`${app.name}: START terminal replay divergence`);
     const [{ surface }] = await ensureTerminals(s, 1);
@@ -101,7 +99,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a session with output, a resize, a scroll, a selection, a theme and input replays with every hash equal`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s, { log: EVERY_LEVEL, reads: READS });
     t.diagnostic(`${app.name}: START terminal replay of the view state`);
     const { mode } = (await s.get("core.settings")).values;
@@ -156,7 +153,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a stored input that was changed is a divergence of the layer sidecar`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s, { log: EVERY_LEVEL, reads: READS });
     t.diagnostic(`${app.name}: START terminal replay of a changed input`);
     const [{ surface }] = await ensureTerminals(s, 1);

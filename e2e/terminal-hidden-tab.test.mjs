@@ -23,7 +23,6 @@ const READS = ["sidecar.vt.pty_read", "sidecar.vt.frame", "sidecar.vt.surface_mo
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a terminal shown again after another tab of its card draws the output after Enter`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s, { settings: { "terminal.cursor.blink": "Never" }, log: EVERY_LEVEL, reads: READS });
     const [terminal] = await ensureTerminals(s, 1);
     await s.until("terminal.session", (state) => Boolean(state.sessionId),

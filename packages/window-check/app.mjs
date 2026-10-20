@@ -40,6 +40,12 @@ export function requiredApps(env) {
   return [env.SOKSAK_APP];
 }
 
+/** Whether the required set holds both applications, so that a check of both hosts is part of the session. */
+export function requiresBoth(env) {
+  const names = requiredApps(env);
+  return APP_NAMES.every((name) => names.includes(name));
+}
+
 /** The applications to check: the executable and the configuration folder. */
 export const APPS = Object.fromEntries(requiredApps(process.env).map((name) => [name, {
   name,

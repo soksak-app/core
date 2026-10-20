@@ -76,7 +76,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: every recorded frame keeps the window buttons centred in the first row while the frame factor steps from 1 to 3 and back`,
     { timeout: 120000 }, async (t) => {
       const s = await open(t, app);
-      assert.ok(s, `${app.binary} is not built`);
       await fresh(s);
       s.cleanup(() => setFrame(s, 1));
       await setFrame(s, 1);
@@ -102,7 +101,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: every recorded frame of a reload after another window changed the frame factor keeps the window buttons centred`,
     { timeout: 120000 }, async (t) => {
       const s = await open(t, app);
-      assert.ok(s, `${app.binary} is not built`);
       await fresh(s);
       s.cleanup(() => setFrame(s, 1));
       await setFrame(s, 1);

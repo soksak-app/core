@@ -11,7 +11,6 @@ const panes = (grid) => grid.cards.filter((item) => item.pane !== null);
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a fullscreen card lists the apps of the space by card and switches to a picked one`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     // Adds one more tab of B to the layout A | (B / C). A is the terminal card of the fixture.
     const start = panes(await s.get("core.grid"));

@@ -43,7 +43,6 @@ async function clickFullscreen(t, s, card, expected) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: card fullscreen fills the work area and restores live surfaces`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
     await fresh(s);
     const initial = await s.get("core.grid");
@@ -147,7 +146,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: sidebar settings apply to fullscreen and restored cards`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const originalLinks = (await s.get("core.settings")).values.links;
@@ -193,7 +191,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a native click on another tab of a fullscreen card switches the tab and keeps fullscreen`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });
     const added = await s.until("core.grid", grid => grid.cards.find(item => item.id === "terminal")?.tabs.length === 2,
@@ -219,7 +216,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a fullscreen card disables the tools that change the layout and refuses their commands`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     await s.run("core.card.fullscreen", { card: "terminal" });
     s.cleanup(async () => {

@@ -8,7 +8,6 @@ import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 for (const app of Object.values(APPS))
   test(`${app.name}: current terminal right sidebar follows saved plugin settings`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, "required host is not built");
     const settings = (await s.get("core.settings")).values;
     const initial = await s.get("core.grid");
     assert.equal(initial.fullscreen, null, "start observation from normal card presentation");

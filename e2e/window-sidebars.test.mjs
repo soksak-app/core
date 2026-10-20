@@ -30,7 +30,6 @@ for (const app of Object.values(APPS))
   test(`${app.name}: fixed sidebars apply plugin overrides without extra columns`, { timeout: 90000 }, async (t) => {
     console.info(`START ${app.name}: fixed sidebar overrides`);
     const s = await open(t, app);
-    assert.ok(s, "required host is not built");
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
     await fresh(s);
     await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
@@ -154,7 +153,6 @@ for (const app of Object.values(APPS))
     { timeout: 60000 },
     async (t) => {
       const s = await open(t, app);
-      assert.ok(s, "required host is not built");
       await fresh(s);
       const links = (await s.get("core.settings")).values.links;
       const columns = async () =>

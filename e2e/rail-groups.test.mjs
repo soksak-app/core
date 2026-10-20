@@ -10,7 +10,6 @@ import { railPixels } from "./rail.mjs";
 
 for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adjacent, detached, fullscreen and restored cards`, { timeout: 90000 }, async (t) => {
   const s = await open(t, app);
-  assert.ok(s, "required host is not built");
   await fresh(s);
   await keepCommonSettings(s);
   await s.run("core.settings.theme", { name: "midnight", mode: "dark" });

@@ -11,7 +11,6 @@ for (const app of Object.values(APPS))
     console.info(`START ${app.name}: still PNG observation`);
     const started = performance.now();
     const s = await open(t, app);
-    assert.ok(s, "required host is not built");
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
     await fresh(s);
     await s.run("core.settings.theme", { name: "midnight", mode: "dark" });

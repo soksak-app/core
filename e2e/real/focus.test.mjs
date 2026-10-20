@@ -15,7 +15,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a real terminal press never moves focus to the browser address field`, { timeout: 120000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const terminals = await ensureTerminals(s, 2);
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === terminals[1].surface));

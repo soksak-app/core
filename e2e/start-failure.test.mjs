@@ -11,7 +11,6 @@ import { fresh } from "./fixture.mjs";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a rejected installed plugin manifest stops the page start with a shown and logged error`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     // Changes the manifest of the installed terminal plugin to the earlier form that lists the sidecar in sidecars instead of dependencies.
     const installed = JSON.parse(readFileSync(join(s.app.configDir, "plugins", "installed.json"), "utf8"));

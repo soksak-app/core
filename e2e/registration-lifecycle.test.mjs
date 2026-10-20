@@ -8,7 +8,6 @@ import { fresh } from "./fixture.mjs";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: fixture reload retains core registrations and records their lifecycle`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     const rowsSince = async (offsets) => {
       await s.flushLog();
       return traceRows(readEvents(app.configDir, offsets).events);

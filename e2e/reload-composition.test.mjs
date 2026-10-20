@@ -13,7 +13,6 @@ const near = (a, b, tolerance) => a.every((value, index) => Math.abs(value - b[i
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a main-page reload shows no native surface without the page`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     // Makes only the place that the terminal raster paints take the measurement color.

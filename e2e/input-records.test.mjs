@@ -27,7 +27,6 @@ function readText(line) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a typed key leaves a record in every layer of the input path`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s, { performanceTrace: true, log: EVERY_LEVEL, reads: READS });
     const [terminal] = await ensureTerminals(s, 1);
     await s.until("terminal.session", (state) => Boolean(state.sessionId),

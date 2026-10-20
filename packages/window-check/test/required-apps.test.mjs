@@ -64,3 +64,9 @@ test("open returns null without reading the binary of an application outside the
     assert.equal(read, false);
   });
 });
+
+test("requiresBoth is true only when the required set holds both applications", () => {
+  assert.equal(harness.requiresBoth({}), true);
+  assert.equal(harness.requiresBoth({ SOKSAK_APP: "wailsv3" }), false);
+  assert.equal(harness.requiresBoth({ SOKSAK_APP: "tauriv2" }), false);
+});

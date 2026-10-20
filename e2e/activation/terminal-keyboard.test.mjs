@@ -56,7 +56,6 @@ function temporaryProject(s, prefix) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: native keyboard edits and executes independently in three terminals`, { timeout: 180000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const tab = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
     assert.ok(tab, "the fixture has no terminal tab");
@@ -239,7 +238,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a key to a window that is not the key window is rejected instead of delivered`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;

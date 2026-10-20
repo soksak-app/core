@@ -28,7 +28,6 @@ function readText(line) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the bytes logged as written to the PTY are the bytes that an independent receiver read`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     // The reads of the PTY are stored in the class io at the level debug.
     await fresh(s, { performanceTrace: true, log: { io: "debug" }, reads: READS });
     const [terminal] = await ensureTerminals(s, 1);

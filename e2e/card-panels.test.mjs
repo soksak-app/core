@@ -14,7 +14,6 @@ const geometry=grid=>grid.cards.map(({id,x,y,w,h})=>({id,x,y,w,h})).sort((a,b)=>
 for (const app of Object.values(APPS)) {
   test(`${app.name}: assigned left and right panels reduce the actual native surface width`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs?.length);
     assert.ok(card, "no content card to measure");
@@ -74,7 +73,6 @@ for (const app of Object.values(APPS)) {
   // (V5-116-4-11-2). The check measures together, for the same assignment, the native rectangle, the grip registration, and the agreement of DOM and native.
   test(`${app.name}: left, right and top panels on the terminal card reserve their space in the native surface`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const card = (await s.get("core.grid")).cards.find((item) => item.id === "terminal");
     assert.ok(card, "the fixture has no terminal card");
@@ -116,7 +114,6 @@ for (const app of Object.values(APPS)) {
   // (docs/spec/native-surfaces.md). Even for a size off the grid, the display is on the grid, and the declaration and the application must be equal (V5-115-1-3).
   test(`${app.name}: fractional panel sizes place the native surface on the device-pixel grid`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const card = (await s.get("core.grid")).cards.find((item) => item.id === "terminal");
     assert.ok(card, "the fixture has no terminal card");
@@ -146,7 +143,6 @@ for (const app of Object.values(APPS)) {
   // reaches the minimum size (docs/spec/example-model.md).
   test(`${app.name}: a click opens a side folded for lack of space and a drag opens a folded side under the pointer`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs?.some((tab) => tab.plugin === "terminal"));
@@ -196,7 +192,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a card carries assigned panels on all four sides regardless of the active tab`, {timeout:60000}, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built; four-side assignment was not observed`);
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
     await fresh(s);
     const settings = await s.get("core.settings");

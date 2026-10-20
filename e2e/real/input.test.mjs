@@ -15,7 +15,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a posted HID click reaches the terminal region through the window server`, { timeout: 60000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -34,7 +33,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: an injected wheel keeps its own modifier flags while HID system reports Shift`, { timeout: 60000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -58,7 +56,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a posted click on the inset sidebar divider folds the sidebar and keeps its width`, { timeout: 60000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const first = (await s.get("core.grid")).cards.find((item) => item.tabs?.length);
     const set = (await s.get("core.settings")).values.sets[0];
@@ -80,7 +77,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the real-input pasteboard helpers restore every item type`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     const items = [{
       "public.utf8-plain-text": Buffer.from("real input").toString("base64"),
       "public.png": Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"),

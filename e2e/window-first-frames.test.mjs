@@ -34,7 +34,6 @@ function differing(a, b, tolerance) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a new window shows its complete first screen from its first frame`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const { displayed } = await s.presented();
     const recording = await s.record({ display: true });

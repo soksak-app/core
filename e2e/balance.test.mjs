@@ -12,7 +12,6 @@ const spread = (values) => Math.max(...values) - Math.min(...values);
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the auto-arrange button gives three over four cards a fair share`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     // The upper row is divided into 1/2, 1/4 and 1/4, the lower row into four times 1/4, and then one boundary of the lower row is moved to make the division uneven.
     const split = async (from, side) => (await s.run("core.card.split", { card: from, side, plugin: "browser" })).card;

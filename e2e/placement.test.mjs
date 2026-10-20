@@ -5,16 +5,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, requiresBoth } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
-test("fresh places the two check windows at their own frames", async (t) => {
+// The check places two windows, so it is registered only when the required set holds both applications.
+if (requiresBoth(process.env)) test("fresh places the two check windows at their own frames", async (t) => {
   const sessions = [];
   for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     sessions.push(s);
   }
-  if (sessions.length < 2) return t.skip("only one check application is selected");
   // Overlaps both windows at the same position and then checks that fresh returns each to its own position. Positioning sets only the position of the window.
   // Whether a window of another application covers a check window does not depend on the position, so this check does not measure it.
   const { frame } = await sessions[0].get("host.window");

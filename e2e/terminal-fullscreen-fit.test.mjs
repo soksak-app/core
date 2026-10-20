@@ -9,7 +9,6 @@ import { fresh } from "./fixture.mjs";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a terminal fits its card in the presentation that ends the full screen`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const grid = await s.get("core.grid");
     const card = grid.cards.find((item) => item.tabs.some((tab) => tab.plugin === "terminal"));

@@ -9,7 +9,6 @@ import { fresh } from "./fixture.mjs";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: core.file.place refuses a name that is not a file name before the save panel`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     // A refused command is an error that the check causes on purpose.
     s.expectError(/file place: name .* is not a file name/);

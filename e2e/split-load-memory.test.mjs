@@ -34,7 +34,6 @@ function gridCards(grid) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: split, resize, reload, and WebView churn stay bounded`, { timeout: 300_000 }, async (t) => {
     const session = await open(t, app);
-    if (!session) return t.skip(`${app.binary} is not built`);
     await fresh(session);
     const initialWindow = await session.get("host.window");
     const initialGrid = await session.get("core.grid");

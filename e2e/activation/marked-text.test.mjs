@@ -20,7 +20,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: marked text that the input method ends is written to the PTY once`,
     { timeout: 60000 }, async (t) => {
       const s = await open(t, app);
-      assert.ok(s, `${app.binary} is not built`);
       await fresh(s);
       const [terminal] = await ensureTerminals(s, 1);
       const surface = terminal.surface;

@@ -18,7 +18,6 @@ const percentile = (sorted, share) => sorted[Math.min(sorted.length - 1, Math.fl
 for (const app of Object.values(APPS)) {
   test(`${app.name}: input latency from the injected key to the prompt, trace off and on and the gate at info`, { timeout: 160000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     const results = [];
     const INFO = { lifecycle: "info", input: "info", call: "info", io: "info", frame: "info" };
     for (const { trace, gate } of [{ trace: false }, { trace: true }, { trace: false }, { trace: false, gate: INFO }]) {

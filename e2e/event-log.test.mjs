@@ -14,7 +14,6 @@ import { fresh, reading } from "./fixture.mjs";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the host writes its event log from the start of the process`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     // The endpoint calls of the check are events of the class call at the level debug, which the debug file holds.
     await fresh(s, { log: { call: "debug" }, reads: ["host.endpoint.call"] });
     const { pid } = JSON.parse(readFileSync(join(app.configDir, "endpoint.json"), "utf8"));
@@ -59,7 +58,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a window that opens and closes leaves the events of the window`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     // host.window.event is a lifecycle event at the levels debug and info, and native.window.occlusion at the level info.
     const reads = ["host.window.event", "native.window.occlusion"];
     await fresh(s, { log: { lifecycle: "debug" }, reads });
@@ -90,7 +88,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a host that starts under the policy of the check stores its start and its observers`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     // host.app.event and native.observe.registered are lifecycle events at the level info.
     const reads = ["host.app.event", "native.observe.registered"];
     await fresh(s, { log: { lifecycle: "info" }, reads });
@@ -121,7 +118,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the trace stores the surface geometry, the memory of the sidecar and the start of each page document`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     const { ensureTerminals } = await import("./terminal-screen.mjs");
     const offsets = currentEventOffsets(app.configDir);
     await fresh(s, { performanceTrace: true });

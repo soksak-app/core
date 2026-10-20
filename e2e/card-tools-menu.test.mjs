@@ -10,7 +10,6 @@ const card = (grid, id) => grid.cards.find((item) => item.id === id);
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a narrow card folds its tools into a menu that runs them and keeps its title`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const born = (await s.run("core.card.split", { card: "terminal", side: "right", plugin: "browser" })).card;
     await s.until("core.grid", (grid) => card(grid, born), "the split did not add a card");
@@ -40,7 +39,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the tab list button of a card shows at every width of its head`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const grid = await s.get("core.grid");
     const index = grid.cards.filter((item) => item.pane !== null).findIndex((item) => item.id === "terminal");

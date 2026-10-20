@@ -61,7 +61,6 @@ async function record(s, action) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: page changes keep the window drawn`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     // The logo text is to the right of the logo icon in the window head row. If the logo is pushed toward the traffic light buttons, this area is empty.
     const logo = { x: 112, y: 13, width: 48, height: 12 };

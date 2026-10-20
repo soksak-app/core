@@ -145,7 +145,6 @@ async function assertGridFillsPlane(session, message) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a newly split terminal presents its first native raster`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     t.diagnostic(`${app.name}: START split-terminal presentation`);
     const terminals = await ensureTerminals(s, 2);
@@ -164,7 +163,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: balancing unequal cards presents every terminal at its new size`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
     const terminals = await ensureTerminals(s, 3);
@@ -192,7 +190,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: four split terminals complete native presentation without a host crash`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     t.diagnostic(`${app.name}: START four-terminal presentation`);
     const terminals = await ensureTerminals(s, 4);
@@ -211,7 +208,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: endpoint split requests survive repeated native WebView presentation`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     t.diagnostic(`${app.name}: START endpoint repeated split`);
     const terminals = await ensureTerminals(s, 3);
@@ -232,7 +228,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: native presentation failure is explicit and the next split remains usable`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     t.diagnostic(`${app.name}: START injected presentation failure`);
     await ensureTerminals(s, 1);
@@ -254,7 +249,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: three terminals and two browsers share one app DOM and one terminal service`, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const initial = await s.get("core.grid");
     const tab = initial.cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
@@ -1091,7 +1085,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: inline image pixels follow scroll, resize, replacement, deletion, and cleanup`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    assert.ok(s, `${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;

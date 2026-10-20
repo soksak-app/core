@@ -12,7 +12,6 @@ for (const app of Object.values(APPS))
     { timeout: 120000 },
     async (t) => {
       const s = await open(t, app);
-      assert.ok(s, "required host is not built");
       t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
       await fresh(s);
       await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
