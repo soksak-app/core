@@ -275,6 +275,60 @@
       "definition": "A call across a process boundary from its start until it receives its reply or ends with a timeout, a lost peer or a failure; the core status core.plugin.open-calls counts the open calls of a plugin.",
       "rejected": [],
       "allowed": []
+    },
+    {
+      "term": "card surface",
+      "definition": "A surface placed in a card that a sidebar item opens when a sidebar section needs a view.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "presentation wait",
+      "definition": "The wait of a window commit for a view to present its content after a card layout change.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "shortcut table",
+      "definition": "The table that a view registers with its host, holding each workbench shortcut and its owner.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "call envelope",
+      "definition": "The fields of a call: its id, command and cancellation; a reply carries the same id.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "reserved module root",
+      "definition": "The core root host `core`, which serves shared modules and permitted plugin files and which no plugin id can use.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "installation record",
+      "definition": "The file plugins/installed.json, which maps each plugin id to its recorded path.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "owner key",
+      "definition": "The key that identifies the owner of an exposure registration.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "snapshot in transit",
+      "definition": "A declared UI snapshot that is sent for one status and not yet acknowledged.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "plugin name",
+      "definition": "The name field of a plugin's package.json. The installation record does not hold it.",
+      "rejected": [],
+      "allowed": []
     }
   ]
 }
