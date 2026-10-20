@@ -1129,6 +1129,8 @@
   - [ ] F212.7-2 — P0: view 통로를 두 호스트에 연결한다. native가 plugin-api에서 staging한 `view-start.js`를 주입하고 `sok-view`를 등록하며, ready 문서를 기록하고, ready 없는 문서로의 post를 거부하고, queue가 넘친 view를 끝낸다.
   - [ ] F212.7-3 — P0: `dom` 종류를 지우고, reader는 plugin과 manifest field를 밝힌 오류로 거부한다.
   - [ ] F212.7-4 — P0: native가 view의 응답 없음·회복 delegate 메서드를 구현하고 호스트가 `core.plugin.views`에 보고하며, `host.trace.view.process-request`와 `process-ready`를 쓴다.
+  - [ ] F212.7-5 — P0: 끝난 view 프로세스는 호스트가 재시작 한도 (vi) 안에서 view surface별로 세어 다시 만들고, 저장된 tab 상태를 복원한다. 한도를 넘으면 card가 오류를 보이고 사람이 tab을 다시 열 때까지 기다린다.
+  - [ ] F212.7-6 — P0: plugin-api가 `checkViewPage(html)`을 내보낸다. view page가 `VIEW_IMPORTS`의 정적 import map을 담는지 plugin 저장소 시험이 확인한다.
   - [ ] F212.10-editor — P0: editor plugin이 자기 저장소에서 branch를 기준으로 view로 옮긴다. editor 저장소의 항목으로 기록한다.
   - [ ] F212.7b — P0: view의 presentation wait: 첫 변경에만, presentation, 프로세스 종료, 보이지 않는 view로 끝나고 timer를 쓰지 않는다.
   - [ ] F212.7c — P0: view의 끌기 녹화: native frame과 card 경계, 내용 frame 간격, gesture 뒤 내용 불일치.

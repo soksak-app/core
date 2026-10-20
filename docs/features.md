@@ -1129,6 +1129,8 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [ ] F212.7-2 — P0: The view channel is connected to both hosts: native injects `view-start.js` staged from plugin-api, registers `sok-view`, records the ready document, refuses a post to a document without ready, and ends a view whose queue overflows.
   - [ ] F212.7-3 — P0: The `dom` kind is removed and its reader refuses it with an error that names the plugin and the manifest field.
   - [ ] F212.7-4 — P0: Native implements the unresponsive and responsive delegate methods for views and the hosts report them in `core.plugin.views`, with `host.trace.view.process-request` and `process-ready`.
+  - [ ] F212.7-5 — P0: A view process that ends is created again by the host within the restart limit (vi), counted per view surface, restoring its saved tab state; after the limit the card shows the error and waits for the person to reopen the tab.
+  - [ ] F212.7-6 — P0: plugin-api exports `checkViewPage(html)`, which checks that a view page carries the static import map of `VIEW_IMPORTS`, for plugin repository tests.
   - [ ] F212.10-editor — P0: The editor plugin moves to a view in its repository against the branch, recorded as an item of the editor repository.
   - [ ] F212.7b — P0: The presentation wait of views: first change only, ended by presentation, process exit or a view that is not shown, without a timer.
   - [ ] F212.7c — P0: The drag recording of views: native frame against card boundary, content frame gap and content mismatch after the gesture.
