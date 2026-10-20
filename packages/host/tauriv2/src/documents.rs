@@ -1937,3 +1937,7 @@ pub fn record_view_process_ready(surface: &str, plugin: &str) {
         json!({"plugin": plugin, "surface": surface}),
     );
 }
+
+#[cfg(test)]
+#[path = "view_responsiveness_test.rs"]
+mod tests;

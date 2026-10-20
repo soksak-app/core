@@ -177,6 +177,20 @@ fn store_event(
     });
 }
 
+/// The fields of each record of event name that the start buffer holds, in the order of the buffer. The tests of the host read them
+/// in place of a writer.
+#[cfg(test)]
+pub(crate) fn buffered_fields(name: &str) -> Vec<serde_json::Value> {
+    records()
+        .buffer
+        .iter()
+        .filter(|record| record.event == name)
+        .map(|record| {
+            serde_json::from_str(record.fields.text.get()).expect("a buffered record is JSON")
+        })
+        .collect()
+}
+
 /// Stores an observation of the trace of the host as the event `host.<kind>.<event>`, where kind is `trace` for the layer
 /// `host` and `sampler` for the layer `sampler`. The fields hold the name of the event in `event`, which the name of the
 /// stored event replaces.
