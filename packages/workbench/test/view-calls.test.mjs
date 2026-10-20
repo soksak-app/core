@@ -201,3 +201,22 @@ test("a view-stopped event becomes the error state of its surface with its reaso
 test("a view-stopped event without a reason is refused", () => {
   assert.throws(() => viewStopState({ surface: "probe-surface", plugin: "probe" }), /has no reason/);
 });
+
+// contract: view.restart.restores-state
+// The workbench keys the tab state by surface, so a view that is created again on the same surface reads the state that was saved before
+// the restart. The restarted view has a new pending map, and the tab state of the surface is the same object.
+test("a restarted view reads the tab state of its surface as it was saved before the restart", async () => {
+  const store = new Map();
+  const surfaceTab = {
+    read: () => store.get("probe-surface") ?? null,
+    write: (value) => { store.set("probe-surface", value); },
+  };
+  const { options: before } = fakes();
+  await answerViewCall({ id: 1, command: "tab.state.write", params: { page: 3 } }, { ...before, tab: surfaceTab });
+  assert.deepEqual(store.get("probe-surface"), { page: 3 });
+  const { options: restarted } = fakes();
+  assert.deepEqual(
+    await answerViewCall({ id: 1, command: "tab.state.read", params: null }, { ...restarted, tab: surfaceTab }),
+    { page: 3 },
+  );
+});
