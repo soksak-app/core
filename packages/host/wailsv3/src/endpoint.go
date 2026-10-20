@@ -17,7 +17,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -173,16 +172,25 @@ type Endpoint struct {
 	mu          sync.Mutex
 	listener    net.Listener
 	processLock *processLock
-	file        string
-	owner       EndpointInfo
-	published   bool
-	conns       map[*endpointConn]bool
+	// unrecordedEnd is the owner that an earlier run left in process.lock, or nil.
+	unrecordedEnd *LockOwner
+	file          string
+	owner         EndpointInfo
+	published     bool
+	conns         map[*endpointConn]bool
 	// counts is the number of subscribed connections for each topic.
 	counts map[topic]int
 	// queues are the subscription changes to run in the order received for each topic. When a list exists, a goroutine that runs
 	// that topic exists. queueMu protects it.
 	queueMu sync.Mutex
 	queues  map[topic][]func()
+}
+
+// LockOwner is the owner that process.lock holds: the process identifier and the boot identifier of its host run
+// (docs/spec/endpoint.md#discovery). A file of another form is refused.
+type LockOwner struct {
+	PID  int    `json:"pid"`
+	Boot string `json:"boot"`
 }
 
 // lockAttempts is how many times the acquisition opens the lock file again after the file that it opened was replaced.
@@ -195,12 +203,22 @@ const lockAttempts = 8
 type processLock struct {
 	path string
 	file *os.File
+	// previous is the owner that an earlier run left in the file, when the file was present and not locked.
+	previous *LockOwner
 }
 
-// parsePID reads the process identifier that a lock file holds: a positive decimal number, with surrounding white space ignored.
-func parsePID(contents []byte) (int, bool) {
-	pid, err := strconv.Atoi(strings.TrimSpace(string(contents)))
-	return pid, err == nil && pid > 0
+// parseOwner reads the owner that the contents of a lock file name: one JSON object with a positive pid and a non-empty boot.
+func parseOwner(contents []byte) (LockOwner, bool) {
+	var owner LockOwner
+	decoder := json.NewDecoder(strings.NewReader(string(contents)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&owner); err != nil {
+		return LockOwner{}, false
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return LockOwner{}, false
+	}
+	return owner, owner.PID > 0 && owner.Boot != ""
 }
 
 // openProcessLockFile creates the lock file at path, or opens the file that exists, and reports whether the file existed.
@@ -250,11 +268,11 @@ func acquireProcessLock(directory string) (*processLock, error) {
 			if readErr != nil {
 				return nil, errors.Join(readErr, file.Close())
 			}
-			pid, ok := parsePID(contents)
+			owner, ok := parseOwner(contents)
 			if !ok {
 				return nil, errors.Join(fmt.Errorf("%s: invalid process lock", path), file.Close())
 			}
-			return nil, errors.Join(fmt.Errorf("configuration directory %s is already owned by process %d", directory, pid), file.Close())
+			return nil, errors.Join(fmt.Errorf("configuration directory %s is already owned by process %d", directory, owner.PID), file.Close())
 		}
 		// The file at path was replaced after this open, so the lock is on a file that no longer names the lock.
 		named, err := system.IsNamedFile(file, path)
@@ -267,15 +285,18 @@ func acquireProcessLock(directory string) (*processLock, error) {
 			}
 			continue
 		}
+		var previous *LockOwner
 		if existed {
 			// The contents are read through the locked file, so they cannot change while they are checked.
 			contents, err := io.ReadAll(file)
 			if err != nil {
 				return nil, errors.Join(err, file.Close())
 			}
-			if _, ok := parsePID(contents); !ok {
+			owner, ok := parseOwner(contents)
+			if !ok {
 				return nil, errors.Join(fmt.Errorf("%s: invalid process lock", path), file.Close())
 			}
+			previous = &owner
 			if hook := processLockHook.Load(); hook != nil && *hook != nil {
 				(*hook)()
 			}
@@ -286,13 +307,17 @@ func acquireProcessLock(directory string) (*processLock, error) {
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
 			return nil, errors.Join(err, file.Close())
 		}
-		if _, err := file.WriteString(strconv.Itoa(os.Getpid())); err != nil {
+		owner, err := json.Marshal(LockOwner{PID: os.Getpid(), Boot: processBoot()})
+		if err != nil {
+			return nil, errors.Join(err, file.Close())
+		}
+		if _, err := file.Write(owner); err != nil {
 			return nil, errors.Join(err, file.Close())
 		}
 		if err := file.Sync(); err != nil {
 			return nil, errors.Join(err, file.Close())
 		}
-		return &processLock{path: path, file: file}, nil
+		return &processLock{path: path, file: file, previous: previous}, nil
 	}
 	return nil, fmt.Errorf("the process lock %s was replaced in each of %d attempts", path, lockAttempts)
 }
@@ -337,9 +362,21 @@ func (e *Endpoint) Serve(listener net.Listener, info EndpointInfo, configDir str
 	}
 	e.mu.Lock()
 	e.listener, e.processLock, e.file, e.owner = listener, lock, file, info
+	e.unrecordedEnd = lock.previous
 	e.mu.Unlock()
 	routine.Go("endpoint-accept", func() { e.accept(listener) })
 	return nil
+}
+
+// UnrecordedEnd returns the owner that an earlier run left in process.lock without removing it. The host stores it in the event
+// host.run.unrecorded-end.
+func (e *Endpoint) UnrecordedEnd() (LockOwner, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.unrecordedEnd == nil {
+		return LockOwner{}, false
+	}
+	return *e.unrecordedEnd, true
 }
 
 // Publish writes endpoint.json when the window window is registered. It is called once after the first window is registered so that

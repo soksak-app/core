@@ -836,6 +836,16 @@
       },
       "description": "A goroutine or a thread of the host panicked; name is the name that the entrance gave it, text is the panic value (the Rust host prefixes `<file>:<line>: `), and the process ends after the event is stored."
     },
+    "host.run.unrecorded-end": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "boot": "string",
+        "pid": "number"
+      },
+      "description": "The process.lock of the configuration directory held the owner of an earlier run that did not remove it: that run ended without its exit path. boot and pid are the boot identifier and the process identifier of that run, and this run took the lock over."
+    },
     "host.stall": {
       "layer": "host",
       "class": "lifecycle",

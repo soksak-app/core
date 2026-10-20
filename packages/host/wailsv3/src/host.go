@@ -126,6 +126,11 @@ func Run(assets fs.FS, options Options) error {
 	}
 	host.events = eventLog
 	UseHostEventLog(eventLog)
+	// An owner that an earlier run left in process.lock marks an end of that run without its exit path (docs/spec/endpoint.md#discovery).
+	// The event is stored once the writer exists.
+	if owner, ok := host.endpoint.UnrecordedEnd(); ok {
+		EmitHost(LevelError, "host.run.unrecorded-end", map[string]any{"boot": owner.Boot, "pid": owner.PID})
+	}
 	// The records of the migration engine go through the event writer of this process
 	// (docs/spec/installation.md#stored-data-migration).
 	sok.UseMigrationLog(eventLog)
