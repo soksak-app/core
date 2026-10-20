@@ -246,7 +246,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 
 ## 단계
 
-각 단계는 기능 하나의 체크리스트 항목이다. 명세, Red, 구현, Green, 기록, 커밋 순서로 진행하며, main은 병합하는 매 단계 뒤에도 green이다. F212.7은 branch `feat/view-kind-F212.7`에서 개발하며, `dom`을 선언하는 모든 plugin의 F212.10 migration release가 발행된 뒤에만 main에 합친다. 그 전까지 main은 `dom` 종류를 유지하며, branch는 일부만 합치지 않는다.
+각 단계는 기능 하나의 체크리스트 항목이다. 명세, Red, 구현, Green, 기록, 커밋 순서로 진행하며, main은 병합하는 매 단계 뒤에도 green이다. F212.7, F212.7b, F212.7d, F212.10-editor, F212.7a, F212.7c, F212.8, F212.8a, F212.9, F212.9a 항목은 branch `feat/view-kind-F212.7`에서 개발하며, 체크리스트 항목마다 commit 하나를 쓴다. branch를 main에 합칠 때까지 main은 `dom` 종류를 유지한다. branch는 한 번만 합치며, F212.9a 뒤 `dom`을 선언하는 모든 plugin의 migration이 각 저장소에 합쳐지고 branch build에서 검증된 뒤에 합친다. `engines.soksak` 범위를 가진 plugin release는 F212.15 core release 전에는 발행하지 않는다. 각 plugin release는 그 plugin 저장소의 체크리스트 항목이며, F212.15가 요구하는 core 버전을 발행할 때까지 미출시로 기록한다.
 
 단계 순서: F212.7, F212.7b, F212.7d, F212.10-editor, F212.7a, F212.7c, F212.8, F212.8a, F212.9, F212.9a, F212.10(나머지 plugin), F212.11~F212.15. F212.7c는 F212.10-editor가 만든 editor view를 재므로 F212.10-editor와 F212.7a 뒤에 온다. F212.7a와 F212.7c는 둘 다 F212.10-editor에 기댄다.
 
@@ -258,7 +258,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 5. **F212.5 공용 module 예약 root와 import map.** [설치](../spec/installation.ko.md)의 `/modules`와 `/shared`를 바꾸고 core root 경로 형식을 더한다.
 6. **F212.6 신원, exposure 등록, 예약 core 검사.** `validateManifest`에 예약 `core` 검사, plugin id 대응, exposure 등록을 더한다.
    - **F212.6a:** 단축키 표. Escape의 왕복 시간을 메뉴 닫기와 비교해 재고 결과를 기록한다. Escape의 주인은 view이며 측정은 주인을 정하지 않는다. 그 뒤 두 호스트의 메뉴 선언과 workbench 키 처리기에서 얻은 나머지 workbench 단축키를 규칙 7의 표에 더한다. F212.7 전에 끝낸다.
-7. **F212.7 view 구성 종류**(manifest, workbench, native 배치, `view` 구성 종류). F212.7은 `view` 종류를 더하고 `dom`을 branch `feat/view-kind-F212.7`의 한 commit에서 제거한다. plugin은 각자의 F212.10 항목에서 그 branch에 맞춰 옮긴다. main으로의 병합은 그 release들 뒤에 한다. 병합 뒤에는 reader가 `dom`을 plugin 이름과 manifest field를 밝힌 명시적 오류로 거부한다. 되돌림은 이전 `engines` 범위의 plugin release로 하며, 두 번째 reader 형식으로 되돌리지 않는다. 규칙 9와 10은 여기서 구현하며, F212.7이 그 계약 case를 정한다.
+7. **F212.7 view 구성 종류**(manifest, workbench, native 배치, `view` 구성 종류). F212.7은 `view` 종류를 더하고 `dom`을 branch `feat/view-kind-F212.7`의 한 commit에서 제거한다. plugin은 각자의 F212.10 항목에서 그 branch에 맞춰 옮기며, 그 migration은 release 없이 각 저장소에 합친다. branch의 main 병합은 F212.10 release 전에 하며, plugin release는 F212.15 뒤에 따른다. 병합 뒤에는 reader가 `dom`을 plugin 이름과 manifest field를 밝힌 명시적 오류로 거부한다. 되돌림은 이전 `engines` 범위의 plugin release로 하며, 두 번째 reader 형식으로 되돌리지 않는다. 규칙 9와 10은 여기서 구현하며, F212.7이 그 계약 case를 정한다.
    - **F212.7b:** presentation wait 참여와 예산 (v).
    - **F212.7d:** 첫 frame 테마 user script(미결 항목 9).
    - **F212.10-editor:** editor plugin을 view로 옮긴다(그 저장소의 항목). F212.7a와 F212.7c 전에 한다.
@@ -273,7 +273,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 12. **F212.12 기능별 창 검사**(표시, 입력과 포커스, 끌기, 재시작). 기능 하나당 항목 하나다.
 13. **F212.13 IME activation 검사**(사용자 승인).
 14. **F212.14** 마지막 배치에서 모든 plugin view로 (i), (ii), (iii), (iii-b), (v)를 다시 재고, 모든 plugin view로 (viii)을 잰다. (vi)은 F212.12의 재시작 창 검사가 만든다.
-15. **F212.15 core release.** plugin은 각 저장소에서 release한다.
+15. **F212.15 core release.** F212.10의 plugin release는 이 release 뒤에 발행하며, 각 release는 요구하는 core 버전의 `engines.soksak` 범위를 가진다.
 
 ## 검증
 
@@ -282,7 +282,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 
 ## 되돌림
 
-- core 단계는 그 단계를 요구하는 plugin release를 이전 `engines` 범위로 되돌려 release한 뒤에만 되돌린다.
+- core 단계는 그 단계를 요구하는 plugin release를 이전 `engines` 범위로 되돌려 release한 뒤에만 되돌린다. F212.10의 plugin release는 각각 이전 `engines` 범위로 되돌린다.
 - 순서: F212.3부터 F212.6까지는 기구를 더하고 기존 plugin의 동작을 바꾸지 않으므로, 그 commit을 되돌려서 되돌린다. F212.7부터 F212.9까지와 F212.10-editor는 그것을 쓰는 plugin release를 되돌린 뒤에 되돌린다. F212.10은 각 plugin을 이전 `engines` 범위로 release하여 되돌린다. F212.11은 옛 경로를 제거하므로, F212.10을 되돌린 뒤에만 그 commit을 되돌린다.
 - 각 단계의 되돌림 순서는 그 단계를 쓸 때 그 단계의 체크리스트 항목에 기록한다.
 
@@ -316,7 +316,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 
 ## 검토된 반론 답변
 
-아래 반론은 첫 번째, 두 번째, 세 번째, 네 번째, 다섯 번째 검토의 답변이다. 각 항목은 반론, 판정, 해결을 적는다. 해결은 이 제안서의 규칙에 기록한다. 두 번째 검토의 항목은 검토의 id(C, H, M)를 쓴다. 세 번째 검토의 항목은 검토의 id(N, D)를 쓴다. 두 번째 검토의 잘못된 답변 세 개는 C1, C7, H3에 대한 답변이다.
+아래 반론은 첫 번째, 두 번째, 세 번째, 네 번째, 다섯 번째, 여섯 번째 검토의 답변이다. 각 항목은 반론, 판정, 해결을 적는다. 해결은 이 제안서의 규칙에 기록한다. 두 번째 검토의 항목은 검토의 id(C, H, M)를 쓴다. 세 번째 검토의 항목은 검토의 id(N, D)를 쓴다. 두 번째 검토의 잘못된 답변 세 개는 C1, C7, H3에 대한 답변이다.
 
 **첫 번째 검토**
 
@@ -352,7 +352,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 - H3: 신원과 audit. 판정: 수용. 해결: 고칠 곳은 pagePackage의 `index.js:1127`, `page.js:78`, `page.js:169`이며, F212.6이 `validateManifest`에 예약 core 검사를 더한다. `e2e/audit.test.mjs:12`에 대한 주장은 틀렸으므로 제거한다. 첫 번째 검토의 audit 답변도 같은 방식으로 고친다.
 - H4: shell 층, browser section, Escape 측정. 판정: 일부 수용. 해결: shell 층과 browser 네 section은 각 plugin 저장소의 이름 붙은 항목(F212.10-shell-layer, F212.10-browser-sections)에서 그 plugin의 F212.10 이전 전에 정한다. Escape와 나머지 단축키는 F212.6a가 F212.7 전에 표에 모은다. 항목 없이 남은 칸은 없다(배치, 단계).
 - H5: view의 unload와 restore. 판정: 수용. 해결: 규칙 10은 unload에서 탭의 view와 프로세스를 닫고, restore에서 저장한 state로 새 view를 만들며, 통과값 (ii)를 unload마다 적용한다.
-- H6: `dom` 옆의 `view` 구성 종류. 판정: 세 번째 검토(D1)에서 수용. 이전의 기각을 뒤집는다. 해결: F212.7이 `view` 종류를 더하고 `dom`을 같은 항목에서 제거한다. 검사 환경의 plugin은 각자의 F212.10 항목에서 F212.7 branch에 맞춰 옮기며, F212.7은 그 plugin release가 `engines` 범위를 요구하는 형태로 발행되면 main에 합친다. F212.7부터 reader는 `dom`을 plugin 이름과 manifest field를 밝힌 명시적 오류로 거부한다. 되돌림은 이전 `engines` 범위의 plugin release로 하며, 두 번째 reader 형식으로 되돌리지 않는다(F212.7).
+- H6: `dom` 옆의 `view` 구성 종류. 판정: 세 번째 검토(D1)에서 수용. 이전의 기각을 뒤집는다. 해결: F212.7이 `view` 종류를 더하고 `dom`을 같은 항목에서 제거한다. 검사 환경의 plugin은 각자의 F212.10 항목에서 F212.7 branch에 맞춰 옮기며, F212.7은 F212.9a 뒤 plugin migration이 각 저장소에 합쳐진 뒤, F212.10 release 전에 main에 합친다(단계, F212.7). F212.7부터 reader는 `dom`을 plugin 이름과 manifest field를 밝힌 명시적 오류로 거부한다. 되돌림은 이전 `engines` 범위의 plugin release로 하며, 두 번째 reader 형식으로 되돌리지 않는다(F212.7).
 - H7: RPC protocol 번호. 판정: 수용. 해결: RPC protocol 번호는 0.0 계열에서 1이다(메시지).
 - M1: core root 경로 형식. 판정: 수용. 해결: core root 경로 형식은 `sok://core/<plugin id>/<path>`이며, installation.md 129~130행을 명세 변경에 더한다(규칙 4, 명세 변경).
 - M2: 용어. 판정: 수용. 해결: card surface, presentation wait, shortcut table, call envelope, reserved module root, installation record, owner key, snapshot in transit, plugin name을 `packages/plugin-api/terms.json`에 더한다. 신원 절은 "package name" 대신 "plugin name"을 쓴다. 용어 "declared UI snapshot"은 이 제안서가 아니라 [native surfaces](../spec/native-surfaces.ko.md)를 가리킨다. 그 절은 명세로 옮길 때 쓴다.
@@ -382,8 +382,13 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 **다섯 번째 검토**
 
 - F1: N1 답변이 F212.7a를 (viii)의 측정자로 적었지만, F212.7a는 F212.7c보다 먼저 실행한다. 판정: 수용. 해결: F212.7a는 (i), (ii), (iii), (iii-b), (v)를 재고, (viii)은 F212.7c가 잰다(단계의 F212.7a, N1).
-- F2: F212.7에서 main의 `dom`을 제거하면 `dom`을 선언한 plugin의 이전보다 앞서게 된다. 판정: 수용. 해결: F212.7은 branch `feat/view-kind-F212.7`에서 개발하며, `dom`을 선언하는 모든 plugin의 F212.10 migration release가 발행된 뒤에만 main에 합친다(단계, F212.7).
+- F2: F212.7에서 main의 `dom`을 제거하면 `dom`을 선언한 plugin의 이전보다 앞서게 된다. 판정: 수용. 해결: F212.7은 branch `feat/view-kind-F212.7`에서 개발하며, `dom`을 선언하는 모든 plugin의 F212.10 migration release가 migration이 F212.9a 뒤 각 저장소에 합쳐진 뒤, F212.10 release 전에 main에 합친다(단계, F212.7).
 - F3: 표면이 닫힐 때 수가 0으로 되돌아가, 닫힐 때 잃은 dirty 값이 세어지지 않았다. 판정: 수용. 해결: 수는 plugin마다 세고 앱이 끝날 때까지 유지하며, dirty 값을 가진 채 닫히는 표면은 `losses.stalled`를 늘린다(릴리스의 event level).
 - F4: 디버그 event를 진단 build로 거르는 것은 릴리스 규칙과 맞지 않는다. 판정: 수용. 해결: 성능 trace가 수가 바뀔 때의 기록을 거르며, trace event는 `host.trace.<event>`와 `page.trace.<event>`로 바꾼다(규칙 2, 규칙 3, (iii-b), 메시지와 event).
 - F5: 호출 timeout의 오류 문장이 적히지 않았다. 판정: 수용. 해결: 호출은 -32000과 `command <name> did not reply within <ms>ms`로 거부하며, 이것은 exposure.md가 적는 오류다. 이 설계는 메시지를 바꾸지 않는다(규칙 3).
 - F6: 검토자가 한국어 파일의 영어 문자열을 셌다. 판정: 기각. 해결: 한국어 파일은 같은 절, 표 행, 단계, 반론 항목을 가지며 네 번째 검토의 변경도 한국어로 담는다. 절별 비교는 네 가지 차이를 찾았고 모두 고쳤다: 규칙 4의 영어 문장에 빠진 `contributes` field 이름, 한국어 미결 항목 3에 빠진 `requestAnimationFrame` code span, 탭과 프로세스 절의 한국어 문장에 빠진 F212.2 참조, 그리고 M6 답변에 있던 영어에 없는 한국어 번역 주석(삭제).
+
+**여섯 번째 검토**
+
+- K1: F212.7 병합과 plugin release 순서. 판정: 수용. 해결: branch는 F212.9a 뒤 plugin migration이 각 저장소에 합쳐진 뒤, F212.10 release 전에 한 번 main에 합친다. plugin release는 F212.15 core release 뒤에 발행한다. F212.10 release는 각각 이전 `engines` 범위로 되돌린다(단계, F212.7, F212.10, F212.15, 되돌림).
+- F6: 식별자와 절 개수를 확인한 뒤 반론이 철회되었다. 판정: 철회. 해결: 다섯 번째 검토의 F6 답변은 그대로 둔다.

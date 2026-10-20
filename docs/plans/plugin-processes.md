@@ -246,7 +246,7 @@ The identifiers in code use the names as written here.
 
 ## Steps
 
-Each step is one checklist item with one unit of function: specification, Red, implementation, Green, record, commit. The main branch is green after each step that merges. F212.7 is developed on the branch `feat/view-kind-F212.7` and merged only after the F212.10 migration releases of every plugin that declares `dom` are published. Until that merge, main keeps the `dom` kind; the branch is not merged in part.
+Each step is one checklist item with one unit of function: specification, Red, implementation, Green, record, commit. The main branch is green after each step that merges. The items F212.7, F212.7b, F212.7d, F212.10-editor, F212.7a, F212.7c, F212.8, F212.8a, F212.9 and F212.9a are developed on the branch `feat/view-kind-F212.7`, one checklist item per commit, and main keeps the `dom` kind until the branch is merged. The branch is merged once, after F212.9a and the migrations of every plugin that declares `dom` are merged into their repositories and verified against the branch build. Plugin releases with an `engines.soksak` range are not published before the core release of F212.15; each plugin release is a checklist item of its plugin repository, recorded as unreleased until F212.15 publishes the core version it requires.
 
 Step order: F212.7, F212.7b, F212.7d, F212.10-editor, F212.7a, F212.7c, F212.8, F212.8a, F212.9, F212.9a, F212.10 (other plugins), F212.11 to F212.15. F212.7c measures the editor view created by F212.10-editor, so it follows F212.10-editor and F212.7a. F212.7a and F212.7c both depend on F212.10-editor.
 
@@ -258,7 +258,7 @@ Step order: F212.7, F212.7b, F212.7d, F212.10-editor, F212.7a, F212.7c, F212.8, 
 5. **F212.5 Reserved module root and import map.** Changes `/modules` and `/shared` in [installation](../spec/installation.md) and adds the core root path form.
 6. **F212.6 Identity, exposure registration, and the reserved core check.** Adds the reserved `core` check to `validateManifest`, the plugin id mapping, and the exposure registration.
    - **F212.6a:** shortcut table. Measures the round trip of Escape against the menu close and records the result; the owner of Escape is the view and the measurement does not choose it. It then adds every other workbench shortcut from both hosts' menu declarations and workbench key handlers to the table of rule 7. It is completed before F212.7.
-7. **F212.7 View configuration kinds** (manifest, workbench, native placement, and the `view` composition kind). F212.7 adds the `view` kind and removes `dom` in one commit on the branch `feat/view-kind-F212.7`. The plugins migrate in their F212.10 items against that branch. The merge to main follows those releases. After the merge, the reader rejects `dom` with an explicit error that names the plugin and the manifest field. Rollback is by plugin release with the previous `engines` range, not by a second reader form. Rules 9 and 10 are implemented here, and F212.7 names their contract cases.
+7. **F212.7 View configuration kinds** (manifest, workbench, native placement, and the `view` composition kind). F212.7 adds the `view` kind and removes `dom` in one commit on the branch `feat/view-kind-F212.7`. The plugins migrate in their F212.10 items against that branch, and their migrations are merged into their repositories without a release. The merge of the branch to main happens before F212.10 releases, and the plugin releases follow F212.15. After the merge, the reader rejects `dom` with an explicit error that names the plugin and the manifest field. Rollback is by plugin release with the previous `engines` range, not by a second reader form. Rules 9 and 10 are implemented here, and F212.7 names their contract cases.
    - **F212.7b:** presentation wait participation and budget (v).
    - **F212.7d:** first-frame theme user script (open item 9).
    - **F212.10-editor:** the editor plugin migrates to a view (its own repository item), before F212.7a and F212.7c.
@@ -273,7 +273,7 @@ Step order: F212.7, F212.7b, F212.7d, F212.10-editor, F212.7a, F212.7c, F212.8, 
 12. **F212.12** Window checks by function (display, input and focus, drag, restart). One item per function.
 13. **F212.13** IME activation check (with the user's approval).
 14. **F212.14** At the final layout, every plugin view is measured again for (i), (ii), (iii), (iii-b) and (v), and every plugin view is measured for (viii). (vi) is covered by the restart window check of F212.12.
-15. **F212.15** Core release. Plugins are released in their own repositories.
+15. **F212.15** Core release. The plugin releases of F212.10 are published after this release, each with the `engines.soksak` range of the core version it requires.
 
 ## Verification
 
@@ -282,7 +282,7 @@ Step order: F212.7, F212.7b, F212.7d, F212.10-editor, F212.7a, F212.7c, F212.8, 
 
 ## Rollback
 
-- A core stage is rolled back only after the plugin releases that require it are rolled back to their previous `engines` range and released.
+- A core stage is rolled back only after the plugin releases that require it are rolled back to their previous `engines` range and released. Each F212.10 plugin release is rolled back by its previous `engines` range.
 - Order: stages F212.3 to F212.6 add mechanisms and do not change the behavior of existing plugins, so they are rolled back by reverting their commits. Stages F212.7 to F212.9, with F212.10-editor, are rolled back after any plugin release that uses them is rolled back. Stage F212.10 is rolled back by releasing each plugin with its previous `engines` range. Stage F212.11 removes the old paths; it is rolled back by reverting its commit only after F212.10 is rolled back.
 - The rollback order of each stage is recorded in the checklist item of that stage when the stage is written.
 
@@ -316,7 +316,7 @@ Each specification location that this design contradicts, with the stage that ch
 
 ## Objections answered
 
-The objections below are the answers of the first, second, third, fourth and fifth reviews. Each entry gives the objection, the verdict and the resolution, which a rule of this proposal records. The entries of the second review use the review's ids (C, H, M). The entries of the third review use the review's ids (N, D). The three wrong answers of the second review are the answers to C1, C7 and H3.
+The objections below are the answers of the first, second, third, fourth, fifth and sixth reviews. Each entry gives the objection, the verdict and the resolution, which a rule of this proposal records. The entries of the second review use the review's ids (C, H, M). The entries of the third review use the review's ids (N, D). The three wrong answers of the second review are the answers to C1, C7 and H3.
 
 **First review**
 
@@ -352,7 +352,7 @@ The objections below are the answers of the first, second, third, fourth and fif
 - H3: identity and audit. Verdict: accepted. Resolution: the fix sites are `index.js:1127` in pagePackage and `page.js:78` and `page.js:169`; F212.6 adds the reserved core check to `validateManifest`. The claim about `e2e/audit.test.mjs:12` was wrong and is removed. The first-review answer on the audit is corrected the same way.
 - H4: shell layer, browser sections and the Escape measurement. Verdict: partly accepted. Resolution: the shell layer and the four browser sections are decided in each plugin repository's named items (F212.10-shell-layer and F212.10-browser-sections) before that plugin's F212.10 migration; Escape and the remaining shortcuts are collected into the table by F212.6a before F212.7. No open cell remains without an item (Placement, Steps).
 - H5: unload and restore of views. Verdict: accepted. Resolution: rule 10 closes a tab's views and processes on unload, creates a new view from the stored state on restore, and applies pass value (ii) to each unload.
-- H6: the `view` composition kind next to `dom`. Verdict: accepted in the third review (D1), which reverses the earlier rejection. Resolution: F212.7 adds the `view` kind and removes `dom` in the same item. The plugins of the check environment migrate in their own F212.10 items against the F212.7 branch; F212.7 merges into main when those plugin releases are published with an `engines` range that requires it. From F212.7 on the reader rejects `dom` with an explicit error that names the plugin and the manifest field. Rollback is by plugin release with the previous `engines` range, not by a second reader form (F212.7).
+- H6: the `view` composition kind next to `dom`. Verdict: accepted in the third review (D1), which reverses the earlier rejection. Resolution: F212.7 adds the `view` kind and removes `dom` in the same item. The plugins of the check environment migrate in their own F212.10 items against the F212.7 branch; F212.7 merges into main after F212.9a and the plugin migrations are merged into their repositories, before the F212.10 releases (Steps, F212.7). From F212.7 on the reader rejects `dom` with an explicit error that names the plugin and the manifest field. Rollback is by plugin release with the previous `engines` range, not by a second reader form (F212.7).
 - H7: RPC protocol number. Verdict: accepted. Resolution: the RPC protocol number is 1 in the 0.0 series (Messages).
 - M1: core root path form. Verdict: accepted. Resolution: the core root path form is `sok://core/<plugin id>/<path>`, and installation.md lines 129-130 are added to the specification changes (rule 4, Specification changes).
 - M2: terms. Verdict: accepted. Resolution: the terms card surface, presentation wait, shortcut table, call envelope, reserved module root, installation record, owner key, snapshot in transit and plugin name are added to `packages/plugin-api/terms.json`. The identity section uses "plugin name" instead of "package name". The term "declared UI snapshot" cites [native surfaces](../spec/native-surfaces.md), where its section is written in the spec move, not this plan.
@@ -382,8 +382,13 @@ The objections below are the answers of the first, second, third, fourth and fif
 **Fifth review**
 
 - F1: the N1 answer named F212.7a as the measurer of (viii), but F212.7a runs before F212.7c. Verdict: accepted. Resolution: F212.7a measures (i), (ii), (iii), (iii-b) and (v), and (viii) is measured by F212.7c (Steps, F212.7a and N1).
-- F2: removing `dom` in F212.7 on main would precede the migration of the plugins that declare `dom`. Verdict: accepted. Resolution: F212.7 is developed on the branch `feat/view-kind-F212.7` and merges to main only after the F212.10 migration releases of every plugin that declares `dom` are published (Steps, F212.7).
+- F2: removing `dom` in F212.7 on main would precede the migration of the plugins that declare `dom`. Verdict: accepted. Resolution: F212.7 is developed on the branch `feat/view-kind-F212.7` and merges to main after F212.9a and the migrations of every plugin that declares `dom` are merged into their repositories, before the F212.10 releases (Steps, F212.7).
 - F3: the counts were reset when a surface closed, so a dirty value lost at close was not counted. Verdict: accepted. Resolution: the counts are per plugin and are kept until the application ends, and a surface that closes with a dirty value increments `losses.stalled` (event levels in a release).
 - F4: the diagnostic-build gate on the debug events does not follow the release rule. Verdict: accepted. Resolution: the performance trace gates the writes of the trace events, which are renamed `host.trace.<event>` and `page.trace.<event>` (rule 2, rule 3, (iii-b), messages and events).
 - F5: the call timeout error text was not stated. Verdict: accepted. Resolution: the call is rejected with -32000 and `command <name> did not reply within <ms>ms`, the error that exposure.md states; this design does not change the message (rule 3).
 - F6: the reviewer counted English strings in the Korean file. Verdict: rejected. Resolution: the Korean file has the same sections, table rows, steps and objection entries, and the fourth-review changes in Korean. The section comparison found four differences, all fixed: the field name `contributes` missing from English rule 4; the `requestAnimationFrame` code span missing from Korean open item 3; the F212.2 reference missing from Korean in Tabs and processes; and a Korean-only translation note in the Korean M6 answer, which is removed.
+
+**Sixth review**
+
+- K1: the merge of F212.7 and the order of the plugin releases. Verdict: accepted. Resolution: the branch merges once, after F212.9a and the plugin migrations are merged into their repositories and before the F212.10 releases. Plugin releases follow the F212.15 core release, and each F212.10 release is rolled back by its previous `engines` range (Steps, F212.7, F212.10, F212.15, Rollback).
+- F6: the objection was withdrawn after the identifiers and section counts were checked. Verdict: withdrawn. Resolution: the fifth-review answer stands.
