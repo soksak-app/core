@@ -19,29 +19,34 @@ use crate::sidecars::SidecarDeclaration;
 /// The path through which the page reads the list of installed plugins.
 pub const INSTALLED_PLUGINS_PATH: &str = "/installed-plugins.json";
 
-/// One enabled installed plugin and its file folder.
+/// One enabled installed plugin, its file folder and its plugin.json in compact form.
 struct InstalledPlugin {
     id: String,
     package: String,
     version: String,
     dir: PathBuf,
+    manifest: Box<RawValue>,
 }
 
 /// Returns the enabled installed plugins in id order. The installation folder is recorded as a path relative to the
 /// configuration folder, and the conversion report of a format 1 file is written to the standard error, which is the
 /// application log (docs/spec/installation.md).
 fn enabled_plugins(config_dir: &Path) -> Result<(Vec<InstalledPlugin>, InstalledState), String> {
-    let state = soksak_sok::plugins::read_installed(config_dir)?;
+    let (state, mut manifests) = soksak_sok::plugins::read_installed_manifests(config_dir)?;
     let mut plugins = vec![];
     for (id, plugin) in &state.plugins {
         if !plugin.enabled {
             continue;
         }
+        let manifest = manifests
+            .remove(id)
+            .ok_or_else(|| format!("plugin {id} has no installed manifest"))?;
         plugins.push(InstalledPlugin {
             id: id.clone(),
             package: soksak_sok::plugins::installed_name(config_dir, plugin)?,
             version: plugin.version.clone(),
             dir: config_dir.join(&plugin.path),
+            manifest: manifest.compact,
         });
     }
     plugins.sort_by(|a, b| a.id.cmp(&b.id));
@@ -57,30 +62,6 @@ pub fn plugin_folder(config_dir: &Path, plugin: &str) -> Result<PathBuf, String>
         .find(|entry| entry.id == plugin)
         .map(|entry| entry.dir)
         .ok_or_else(|| format!("plugin {plugin} is not installed and enabled"))
-}
-
-/// Removes the whitespace outside strings from JSON text. The key order and the strings stay as they are.
-fn compact(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let (mut quoted, mut escaped) = (false, false);
-    for c in text.chars() {
-        if quoted {
-            out.push(c);
-            if escaped {
-                escaped = false;
-            } else if c == '\\' {
-                escaped = true;
-            } else if c == '"' {
-                quoted = false;
-            }
-        } else if c == '"' {
-            quoted = true;
-            out.push(c);
-        } else if !c.is_whitespace() {
-            out.push(c);
-        }
-    }
-    out
 }
 
 /// The content of /installed-plugins.json. For each plugin it holds the installed plugin.json as the manifest, so that
@@ -108,19 +89,11 @@ pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u
     };
     let mut entries = vec![];
     for plugin in plugins {
-        let manifest_file = plugin.dir.join("plugin.json");
-        let manifest = match std::fs::read_to_string(&manifest_file) {
-            Err(error) => return failure(format!("{}: {error}", manifest_file.display())),
-            Ok(text) => match RawValue::from_string(compact(&text)) {
-                Ok(raw) if serde_json::from_str::<serde_json::Value>(raw.get()).is_ok() => raw,
-                _ => return failure(format!("{} is not valid JSON", manifest_file.display())),
-            },
-        };
         let mut entry = Entry {
             id: plugin.id,
             package: plugin.package,
             version: plugin.version,
-            manifest,
+            manifest: plugin.manifest,
             diagnostics: None,
         };
         if diagnostics {
@@ -129,7 +102,7 @@ pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u
                 // default: a plugin without diagnostics.json has no diagnostic declaration.
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return failure(format!("{}: {error}", file.display())),
-                Ok(text) => match RawValue::from_string(compact(&text)) {
+                Ok(text) => match RawValue::from_string(soksak_sok::plugins::compact_json(&text)) {
                     Ok(raw) if serde_json::from_str::<serde_json::Value>(raw.get()).is_ok() => {
                         entry.diagnostics = Some(raw)
                     }
