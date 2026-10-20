@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.7d: 두 host는 view가 page를 불러오기 전에 document-start user script `window.sokTheme = Object.freeze({scheme, tokens})`를 view 구성에 더해, 페이지의 첫 script가 생성 시점의 테마를 읽는다. native 계층은 `sp_document_add_user_script`로 page world에 script를 더한다. 나중의 테마 변경은 post 경로를 쓴다. 계약 case `view.theme.first-script`는 두 host에서 실행한다. card 토큰 색과 첫 프레임 색의 비교는 창 실행이 필요하며 F212.12의 F212.7d-1로 등록한다.
 - F212.7-8-3-1: Tauri host의 설치된 plugin 문서는 잘못된 `plugin.json`을 parser 세부 없이 평범한 문구 `<file> is not valid JSON`으로 보고한다. parser 세부를 없앤 변경은 main(F212.6-2-2와 F212.6-2-3)에서 왔고, 이 branch는 그것을 합친다. 계약 case `installed.plugin-json.invalid-text`와 `installed.document.reports-errors`는 두 host에서 실행한다.
 - F212.7-3-1: core fixture `e2e/fixtures/extension-probe/provider`는 제거된 `dom` 대신 native 문서 영역 하나를 가진 `hybrid` 합성을 선언한다. 구조 시험 `scripts/test/fixture-compositions.test.mjs`는 합성을 선언하는 core 저장소의 추적된 plugin manifest를 모두 읽고 manifest reader가 받아들이는지 확인한다.
 - F212.7-3: `dom` 합성 종류를 없앴다. plugin-api는 manifest의 `{kind: "dom"}`을 거부하고, Go와 Rust host는 선언에서 같은 방식으로 거부하며, 두 경우 모두 `plugin <id> surface composition: kind dom is removed; the composition takes kind view or hybrid` 오류를 쓴다. surface-composition 명세는 manifest에 `view`와 `hybrid`만 말하며, reader의 시험 fixture는 hybrid 합성을 쓴다. `dom`을 아직 선언하는 설치된 plugin은 이 branch가 합쳐지기 전에 각자의 항목으로 옮기고, `dom` 표면의 page mount는 F212.11이 없앤다.
