@@ -185,3 +185,50 @@ test("a surface module runs a command of core through runtime.command and cannot
   await disposeSurface("tab-core-command");
   dom.window.close();
 });
+
+// The trace is recorded through a fresh instance of the module, so the mocked trace is the one that mountSurface calls.
+let tracedInstances = 0;
+async function tracedSurfaceModules(t, clock) {
+  const records = [];
+  t.mock.method(performance, "now", () => clock.now);
+  t.mock.module("../performance.js", { exports: {
+    timed: async (_name, answer) => answer(),
+    trace: (event, fields) => { records.push({ event, ...fields }); },
+    traceEnabled: () => true,
+    setTraceEnabled: async () => {},
+    reportTraceAtStart: async () => {},
+  } });
+  const { mountSurface } = await import(`../surface-modules.js?mount-trace-${tracedInstances++}`);
+  return { records, mountSurface };
+}
+
+test("a surface mount writes one surface.mount trace with its plugin, its surface and the elapsed milliseconds", async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  const clock = { now: 1000 };
+  const { records, mountSurface } = await tracedSurfaceModules(t, clock);
+  globalThis.advanceClock = (ms) => { clock.now += ms; };
+  const moduleUrl = "data:text/javascript,export async function mount(root,c){await Promise.resolve();globalThis.advanceClock(42.5);return {dispose(){}}}";
+  await mountSurface(document.querySelector("#slot"),
+    { module: moduleUrl, surfaceId: "tab-mount-trace", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] });
+  const mounts = records.filter(({ event }) => event === "surface.mount");
+  assert.equal(mounts.length, 1, `expected one surface.mount trace, found ${mounts.length}`);
+  assert.equal(mounts[0].plugin, "fixture");
+  assert.equal(mounts[0].surface, "tab-mount-trace");
+  assert.equal(typeof mounts[0].ms, "number", "the elapsed time must be a number");
+  assert.equal(mounts[0].ms, 42.5, "the elapsed time must cover the awaited module mount");
+  dom.window.close();
+});
+
+test("a failed surface mount writes no surface.mount trace", async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  const clock = { now: 1000 };
+  const { records, mountSurface } = await tracedSurfaceModules(t, clock);
+  const moduleUrl = "data:text/javascript,export function mount(){throw new Error('fixture mount failed')}";
+  await assert.rejects(mountSurface(document.querySelector("#slot"),
+    { module: moduleUrl, surfaceId: "tab-mount-failed", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] }),
+  /fixture mount failed/);
+  assert.deepEqual(records.filter(({ event }) => event === "surface.mount"), [], "a failed mount must not write surface.mount");
+  dom.window.close();
+});

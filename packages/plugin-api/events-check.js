@@ -31,7 +31,8 @@ const MARKER_REACH = 5;
  * whose producer chooses it (the native library); `fixed` is the level of an entrance that has no level argument; `only`
  * limits an entrance to the files it is local to. `name` is the event of an entrance that stores one event and gives no name argument
  * (`event` is then the position of its first argument). `levelGroup` is the group of the pattern that holds the level of an entrance
- * that names it in the call, and `relative` marks an entrance whose event name lacks the prefix `plugin.<plugin>.`.
+ * that names it in the call, and `relative` marks an entrance whose event name lacks the prefix `plugin.<plugin>.`. `prefix` is
+ * the text that the entrance adds before the name of its call (the performance trace adds `page.trace.`).
  */
 const ENTRANCES = {
   go: [
@@ -59,6 +60,8 @@ const ENTRANCES = {
     // (`runtime.log[level](`), and the event name has no `plugin.<plugin>.` prefix, which the runtime adds.
     { re: /\bruntime\.log\.(error|warn|info|debug|trace)\s*\(/g, levelGroup: 1, relative: true, event: 0, fields: 1 },
     { re: /\bruntime\.log\[[^\]]+\]\s*\(/g, relative: true, event: 0, fields: 1 },
+    // The performance trace of the workbench (docs/spec/performance-trace.md): `trace(event, fields)` stores `page.trace.<event>` at the level debug.
+    { re: /(?<![.\w$])trace\s*\(/g, fixed: 'debug', prefix: 'page.trace.', event: 0, fields: 1, only: /^packages\/workbench\// },
   ],
   m: [
     { re: /\bsp_event\s*\(/g, class: 0, level: 1, event: 2, fields: 3 },
@@ -278,6 +281,7 @@ function classOf(source, range) {
 
 /** The name of a site of a plugin entrance with the plugin left open (`plugin.*.<event>`); the catalog gives the plugin. */
 const relativeName = (entrance, name) => (entrance.relative && name !== null ? `plugin.*.${name}` : name);
+const prefixedName = (entrance, name) => (entrance.prefix !== undefined && name !== null ? `${entrance.prefix}${name}` : name);
 
 /** The levels that an expression names literally, or null when it names none. */
 function levelsOf(source, range) {
@@ -345,7 +349,7 @@ export function sitesOf(path, text, emitters = {}) {
         line: source.lineAt(args[entrance.event][0]),
         call: source.lineAt(match.index),
         // default: an entrance without a fixed name reads the name from the literal argument of the call.
-        name: entrance.name ?? relativeName(entrance, literalName(source, args[entrance.event])),
+        name: entrance.name ?? relativeName(entrance, prefixedName(entrance, literalName(source, args[entrance.event]))),
         levels: entrance.fixed ? [entrance.fixed] : entrance.levelGroup ? [match[entrance.levelGroup]] : levelsOf(source, args[entrance.level]),
         class: entrance.class === undefined ? null : classOf(source, args[entrance.class]),
         fields: fieldsOf(source, args[entrance.fields]),
@@ -446,7 +450,9 @@ export function emitFindings(catalog, sources, catalogPath, config = { emitters:
       if (site.class !== null && site.class !== entry.class) {
         report(site.line, `${site.name} is emitted with the class ${site.class} and the catalog declares ${entry.class}`);
       }
-      if (site.fields !== null) {
+      // A family whose entry declares no fields leaves the fields of each of its events to the site (the performance trace of the page).
+      const fieldsDeclared = !(key.includes('<') && Object.keys(entry.fields).length === 0);
+      if (site.fields !== null && fieldsDeclared) {
         const declared = Object.keys(entry.fields).map((field) => field.replace(/\?$/, ''));
         if (!site.fields.open) {
           for (const field of Object.keys(entry.fields).filter((name) => !name.endsWith('?'))) {

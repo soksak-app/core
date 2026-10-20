@@ -143,6 +143,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "page.tab.unload.failed" => Some(Class::Lifecycle),
         "page.tab.unload.skipped" => Some(Class::Lifecycle),
         "page.tab.unloaded" => Some(Class::Lifecycle),
+        "page.trace.surface.mount" => Some(Class::Call),
         "page.update.operation" => Some(Class::Call),
         "page.window.operation" => Some(Class::Call),
         "sok.command" => Some(Class::Call),

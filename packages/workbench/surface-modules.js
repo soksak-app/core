@@ -12,6 +12,7 @@ import { icon } from "./icons.js";
 import { active, tabStateStore, tabStatesReady } from "./projects.js";
 import { pluginRecords } from "./plugin-records.js";
 import { documentRegions } from "./document-regions.js";
+import { trace } from "./performance.js";
 const mounted = new Map();
 /* Placeholder of a surface that is not mounted in a document without a host: one element for each surface id. */
 const placeholders = new Map();
@@ -215,6 +216,8 @@ function tabState(surface, isDisposed) {
 
 export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   if (!slot || !surface?.module) throw new TypeError("surface module mount requires a slot and module");
+  // The start of the mount for the trace event surface.mount, which covers the wait for the earlier dispose too.
+  const started = performance.now();
   // A tab that is restored while its unload still disposes it mounts a new surface after that dispose ends.
   const leaving = mounted.get(surface.surfaceId)?.disposing;
   if (leaving) await leaving;
@@ -379,6 +382,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
           return null;
         }
         entry.module = mountedModule;
+        trace("surface.mount", { plugin: surface.pluginId, surface: surface.surfaceId, ms: performance.now() - started });
         // A newly created native surface must declare and lay out its image before its first presentation can wait for the raster of that image.
         // Waiting here creates a cycle: the presentation waits for the module, and the
         // composition of the module is the work that builds the raster.

@@ -88,6 +88,7 @@ const EXACT = new Map([
   ["page.tab.unload.failed", "lifecycle"],
   ["page.tab.unload.skipped", "lifecycle"],
   ["page.tab.unloaded", "lifecycle"],
+  ["page.trace.surface.mount", "call"],
   ["page.update.operation", "call"],
   ["page.window.operation", "call"],
   ["sok.command", "call"],

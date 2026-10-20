@@ -224,6 +224,17 @@
       "fields": {},
       "description": "The performance trace of the page, while it is on."
     },
+    "page.trace.surface.mount": {
+      "layer": "page",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "surface": "string",
+        "ms": "number"
+      },
+      "description": "The mount of one plugin surface in the page, while the trace is on: plugin and surface name the surface, and ms is the time in milliseconds from the start of its mount to the end of the module mount, including the awaited promise of the module (performance.now). A mount that fails writes no event; its error has its own record."
+    },
     "host.trace.<event>": {
       "layer": "host",
       "class": "call",

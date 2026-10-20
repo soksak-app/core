@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.1-1: page는 plugin 표면의 모듈 mount가 끝나면 performance trace가 켜져 있는 동안 이벤트 `page.trace.surface.mount`(`plugin`, `surface`, `ms`)를 쓴다. `ms`는 mount 시작부터 모듈 mount 종료까지의 시간이므로 표면마다 DOM mount 시간을 기록에서 읽는다. 실패한 mount는 이벤트를 쓰지 않는다. Red: `a surface mount writes one surface.mount trace`가 `expected one surface.mount trace, found 0`으로 실패했고, `a trace call of the workbench emits the page trace event`가 `page.trace.surface.mount is declared and no source emits it`으로 실패했다. Green: surface-modules test 10 of 10이 통과하고 `make events-check`와 `make docs-check`가 통과한다.
 - F211: core 0.0.20을 release한다.
 - F210: 은퇴한 plugin이나 sidecar는 철회 항목과 함께 registry에서 제거한다. appview와 application sidecar를 제거했다.
 - F209: 철회된 version만 가진 plugin은 제안되지 않는다. 카드와 최신 버전은 철회되지 않은 version만 쓰므로 설치된 plugin도 철회된 update를 제안하지 않는다.

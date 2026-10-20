@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F212.1-1: the page writes the event `page.trace.surface.mount` (`plugin`, `surface`, `ms`) when the module mount of a plugin surface completes, while the performance trace is on; `ms` is the time from the start of the mount to the end of the module mount, so the DOM mount time of each surface is read from the records. A failed mount writes no event. Red: `a surface mount writes one surface.mount trace` failed with `expected one surface.mount trace, found 0`, and `a trace call of the workbench emits the page trace event` failed with `page.trace.surface.mount is declared and no source emits it`; Green: the surface-modules tests pass 10 of 10 and `make events-check` and `make docs-check` pass.
 - F211: core 0.0.20 is released.
 - F210: a retired plugin or sidecar is removed from the registry with its revocation entries; appview and the application sidecar are removed.
 - F209: a plugin whose every registry version is revoked is not offered: its card and its latest version use only the versions that are not revoked, so an installed plugin offers no revoked update.

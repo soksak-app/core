@@ -452,3 +452,23 @@ test('soksak-events --catalog finds the emit sites of a Rust sidecar through the
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^Event catalog checks passed: 3 declared events, emit sites: rs 4 literal 1 built/m);
 });
+
+test('a trace call of the workbench emits the page trace event that the catalog declares with its fields', () => {
+  const traced = { schema: 2, layers: ['page'], events: {
+    'page.trace.surface.mount': { layer: 'page', class: 'call', level: 'debug', fields: { plugin: 'string', surface: 'string', ms: 'number' } },
+  } };
+  const source = (call) => new Map([['packages/workbench/surface-modules.js', `function mount() {\n  ${call};\n}\n`]]);
+  assert.deepEqual(checker.emitFindings(traced, source('trace("surface.mount", { plugin, surface, ms })'), CATALOG), []);
+  assert.deepEqual(checker.emitFindings(traced, source('trace("surface.mount", { plugin, surface })'), CATALOG), [
+    'packages/workbench/surface-modules.js:2: page.trace.surface.mount lacks the field ms that the catalog requires',
+  ]);
+  assert.deepEqual(checker.emitFindings(traced, source('trace("surface.mount", { plugin, surface, ms, extra: 1 })'), CATALOG), [
+    'packages/workbench/surface-modules.js:2: page.trace.surface.mount has the field extra, which the catalog does not declare',
+  ]);
+  assert.deepEqual(checker.emitFindings(traced, source('tracer.trace("surface.mount", { plugin, surface, ms })'), CATALOG), [
+    'docs/spec/events.json: page.trace.surface.mount is declared and no source emits it',
+  ], 'a method named trace of another object is not the page trace');
+  // A family whose entry declares no fields leaves the fields of each of its events to the site (the performance trace of the page).
+  const family = { schema: 2, layers: ['page'], events: { 'page.trace.<event>': { layer: 'page', class: 'call', level: 'debug', fields: {} } } };
+  assert.deepEqual(checker.emitFindings(family, source('trace("surface.registration", { phase, names, extra: 1 })'), CATALOG), []);
+});

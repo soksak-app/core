@@ -101,6 +101,7 @@ var eventClasses = map[string]Class{
 	"page.tab.unload.failed":              ClassLifecycle,
 	"page.tab.unload.skipped":             ClassLifecycle,
 	"page.tab.unloaded":                   ClassLifecycle,
+	"page.trace.surface.mount":            ClassCall,
 	"page.update.operation":               ClassCall,
 	"page.window.operation":               ClassCall,
 	"sok.command":                         ClassCall,
