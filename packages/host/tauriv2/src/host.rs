@@ -53,8 +53,6 @@ pub mod link;
 pub mod log_policy;
 #[cfg(feature = "diagnostics")]
 pub mod log_policy_watch_hook;
-#[cfg(feature = "diagnostics")]
-pub mod process_lock_hook;
 pub mod log_query;
 pub mod log_retention;
 pub mod memory_pressure;
@@ -68,6 +66,8 @@ pub mod performance;
 #[path = "platform/platform.rs"]
 pub mod platform;
 pub mod plugins;
+#[cfg(feature = "diagnostics")]
+pub mod process_lock_hook;
 pub mod project_removal;
 pub mod projects;
 pub mod quit;

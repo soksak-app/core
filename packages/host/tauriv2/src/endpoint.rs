@@ -752,7 +752,12 @@ impl Endpoint {
             }
         }
         // The lock is released last, after the endpoint file is removed (ProcessLock::drop).
-        drop(self.process_lock.lock().expect("the process lock mutex").take());
+        drop(
+            self.process_lock
+                .lock()
+                .expect("the process lock mutex")
+                .take(),
+        );
     }
 }
 
