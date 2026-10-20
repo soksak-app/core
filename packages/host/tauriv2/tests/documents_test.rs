@@ -673,6 +673,29 @@ fn view_restart_stops_at_the_fourth_failure_within_the_window() {
     );
 }
 
+// contract: view.restart.restores-state
+#[test]
+fn view_restart_keeps_the_surface_and_plugin_of_its_record() {
+    let lifecycle = ViewLifecycle::default();
+    let start = Instant::now();
+    lifecycle.track("probe-surface", 7, "probe", "ui/page.html", true);
+    assert!(
+        lifecycle.fail("probe-surface", start),
+        "the failure restarts the view"
+    );
+    let spec = lifecycle
+        .spec("probe-surface")
+        .expect("the record of the view is kept for the restart");
+    assert_eq!(
+        spec.surface_handle, 7,
+        "the restart creates the view on the native surface of its record"
+    );
+    assert_eq!(
+        spec.plugin, "probe",
+        "the restart keeps the plugin of the view"
+    );
+}
+
 // contract: view.channel.overflow-closes
 #[test]
 fn view_channel_overflow_is_the_queue_full_reason_that_closes_the_view() {

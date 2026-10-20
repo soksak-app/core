@@ -22,13 +22,16 @@ func (c *fakeClock) set(offset time.Duration) {
 type lifecyclePlatform struct {
 	viewPlatform
 	created []unsafe.Pointer
-	closed  []unsafe.Pointer
-	ended   map[unsafe.Pointer]func()
+	// createdFor is the native surface that each created view was given, in the order of created.
+	createdFor []unsafe.Pointer
+	closed     []unsafe.Pointer
+	ended      map[unsafe.Pointer]func()
 }
 
 func (p *lifecyclePlatform) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error) {
 	handle := unsafe.Pointer(new(int))
 	p.created = append(p.created, handle)
+	p.createdFor = append(p.createdFor, surface)
 	return handle, nil
 }
 
@@ -154,5 +157,21 @@ func TestViewStoppedSurfaceIsNotCreatedUntilItsRecordIsCleared(t *testing.T) {
 	s.viewRecords().forget("probe-surface")
 	if s.viewRecords().isStopped("probe-surface") {
 		t.Fatalf("the record of the removed surface keeps its stop")
+	}
+}
+
+// contract: view.restart.restores-state
+// A view that is created again after its process ends keeps the surface of its record: the platform creates it for the same native
+// surface, and the channel of the surface is the one of the new view, so its view calls are forwarded with the same surface.
+func TestViewRestartKeepsTheSurfaceOfItsRecord(t *testing.T) {
+	clock := &fakeClock{}
+	s, fake, native := newLifecycleSurfaces(t, clock)
+	endView(t, s, fake)
+	if len(fake.createdFor) != 2 || fake.createdFor[1] != native {
+		t.Fatalf("the view created again has the native surface of its record: %v, want the same surface twice", fake.createdFor)
+	}
+	channel, ok := s.documents.view("probe-surface")
+	if !ok || channel.plugin != "probe" {
+		t.Fatalf("the channel of the surface after the restart: %+v, %v; want the plugin probe", channel, ok)
 	}
 }
