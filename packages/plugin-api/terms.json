@@ -245,6 +245,36 @@
         "탭 절전"
       ],
       "allowed": []
+    },
+    {
+      "term": "view",
+      "definition": "A separate web view of a plugin on its sok://<plugin id> origin, with one view per tab, that runs plugin code the declared UI vocabulary cannot express (free DOM, text input with an input method, a canvas or editor, or a document region or image region).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared UI",
+      "definition": "A screen whose every element is expressed with the declared vocabulary (lists, trees, menus, commands, status lines), which the workbench draws from the declared UI snapshots that a plugin sends.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared UI snapshot",
+      "definition": "The declared values of one status of a view or plugin host, sent by the plugin to the workbench as {plugin, status, seq, value} and acknowledged by seq (docs/plans/plugin-processes.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "plugin host",
+      "definition": "A process of a plugin, with a platform web view attached to the window, that runs DOM-free logic which neither a view nor a sidecar can hold; it exists only when the contract requires it.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "open call",
+      "definition": "A call across a process boundary from its start until it receives its reply or ends with a timeout, a lost peer or a failure; the core status core.plugin.open-calls counts the open calls of a plugin.",
+      "rejected": [],
+      "allowed": []
     }
   ]
 }
