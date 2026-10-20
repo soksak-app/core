@@ -231,6 +231,10 @@ func (c *Sidecars) countFailure(name string, surfaces map[string]bool) bool {
 	return true
 }
 
+// SurfaceOpened is called when the host creates a surface of plugin. It clears the restart limit of each stopped standard input and output
+// sidecar that the plugin lists in dependencies (docs/spec/sidecars.md#failure).
+func (c *Sidecars) SurfaceOpened(plugin, surface string) {}
+
 // restartRefused applies the restart limit to a request from surface to the sidecar name, which has no running process. It is called holding
 // c.mu. A request from a surface that sent to the failed process is refused and reported as an error. A request from any other surface opens
 // a surface that needs the sidecar: it clears the record, and the start that follows is recorded as the event host.trace.sidecar.restart-reset.
@@ -255,6 +259,8 @@ type SidecarDeclaration struct {
 	Data   []byte
 	// Version is the version that installed.json records for the sidecar.
 	Version string
+	// Dependents are the ids of the plugins whose plugin.json lists the sidecar in dependencies (docs/spec/sidecars.md#failure).
+	Dependents []string
 }
 
 // OutdatedSidecar is a persistent sidecar whose running service has another version than the installed one

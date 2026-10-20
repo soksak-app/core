@@ -1550,10 +1550,19 @@ func (c *restartClock) read() time.Time {
 // restartScript is a sidecar that fails on each request with an invalid message, unless the file ok exists in its folder; then it runs.
 const restartScript = "#!/bin/sh\nread request\nif [ -f DIR/ok ]; then exec sleep 600; fi\nprintf 'not json\\n'\nexec sleep 600\n"
 
-// restartSidecars declares the restartScript sidecar with an injected clock.
+// restartSidecars declares the restartScript sidecar, which plugin-a lists in dependencies, with an injected clock.
 func restartSidecars(t *testing.T) (*host.Sidecars, string, *restartClock) {
 	t.Helper()
-	sidecars, directory := scriptSidecars(t, restartScript)
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "fake"), []byte(strings.ReplaceAll(restartScript, "DIR", directory)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	declarations := []host.SidecarDeclaration{{Name: echoSidecar, Folder: directory, Data: []byte(`{"executable":"fake","protocol":1}`), Dependents: []string{"plugin-a"}}}
+	sidecars, err := host.NewSidecars(declarations, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
 	clock := &restartClock{}
 	sidecars.Now = clock.read
 	return sidecars, directory, clock
@@ -1710,5 +1719,38 @@ func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("the opened surface recorded no host.trace.sidecar.restart-reset")
+	}
+}
+
+// contract: sidecars.restart.refuses-already-open-surface
+func TestRestartRefusesAnAlreadyOpenSurface(t *testing.T) {
+	sidecars, _, clock := restartSidecars(t)
+	// s3 is open: its request failed the first process, which is not the process that stopped.
+	first, second := newFakeOwner("/projects/b"), newFakeOwner("/projects/a")
+	if err := sendAt(t, clock, sidecars, first, "s3", 0); err != nil {
+		t.Fatal(err)
+	}
+	requireInvalidFailure3(t, first, "s3", 0)
+	for _, offset := range []time.Duration{10 * time.Second, 20 * time.Second, 30 * time.Second} {
+		if err := sendAt(t, clock, sidecars, second, "s1", offset); err != nil {
+			t.Fatalf("send at %v: %v", offset, err)
+		}
+		requireInvalidFailure3(t, second, "s1", offset)
+	}
+	// The fourth failure stopped the sidecar. s3 is open, so its next request is refused too.
+	err := sendAt(t, clock, sidecars, first, "s3", 40*time.Second)
+	if err == nil || err.Error() != "sidecar "+echoSidecar+": restart limit" {
+		t.Fatalf("send of the open surface s3 after the stop = %v, want the restart limit refusal", err)
+	}
+	if failure := first.failure(t); failure.Surface != "s3" || failure.Reason != "restart limit" {
+		t.Fatalf("refused failure = %+v", failure)
+	}
+}
+
+// requireInvalidFailure3 waits for the next failure of owner and checks that the surface failed with an invalid message.
+func requireInvalidFailure3(t *testing.T, owner *fakeOwner, surface string, offset time.Duration) {
+	t.Helper()
+	if failure := owner.failure(t); failure.Sidecar != echoSidecar || failure.Surface != surface || !strings.Contains(failure.Reason, "invalid message") {
+		t.Fatalf("failure of %s at %v = %+v", surface, offset, failure)
 	}
 }
