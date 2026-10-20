@@ -399,6 +399,7 @@ pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, 
                 folder,
                 data,
                 version: sidecar.version.clone(),
+                dependents: vec![],
             });
         }
     }

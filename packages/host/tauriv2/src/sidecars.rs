@@ -868,6 +868,8 @@ pub struct SidecarDeclaration {
     pub data: Vec<u8>,
     /// The version that installed.json records for the sidecar.
     pub version: String,
+    /// The ids of the plugins whose plugin.json lists the sidecar in dependencies (docs/spec/sidecars.md#failure).
+    pub dependents: Vec<String>,
 }
 
 /// A persistent sidecar whose running service has another version than the installed one
@@ -1079,6 +1081,10 @@ impl<O: Owner> Sidecars<O> {
             .ready_timeout = limit;
         self
     }
+
+    /// Called when the host creates a surface of plugin. It clears the restart limit of each stopped standard input and output sidecar that the
+    /// plugin lists in dependencies (docs/spec/sidecars.md#failure). The implementation follows in the next change.
+    pub fn surface_opened(&self, _plugin: &str, _surface: &str) {}
 
     /// Changes the clock of the restart limit of standard input and output sidecars (docs/spec/sidecars.md#failure). A check
     /// injects a clock that it moves; the default is the monotonic clock. Call it only right after creation, before another

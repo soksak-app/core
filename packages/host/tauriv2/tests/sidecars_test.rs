@@ -99,6 +99,7 @@ fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
             folder: folder.to_path_buf(),
             data: data.as_bytes().to_vec(),
             version: "0.0.1".to_string(),
+            dependents: Vec::new(),
         })
         .collect()
 }
@@ -2083,7 +2084,8 @@ impl RestartClock {
     }
 }
 
-/// Creates a channel that declares the restart script with the injected clock, and its folder.
+/// Creates a channel that declares the restart script, which plugin-a lists in dependencies, with the injected clock,
+/// and its folder.
 fn restart_sidecars(clock: &RestartClock) -> (Stopping, folder::Folder) {
     let directory = folder::Folder::new();
     let program = directory.path().join("fake");
@@ -2093,13 +2095,17 @@ fn restart_sidecars(clock: &RestartClock) -> (Stopping, folder::Folder) {
     )
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let declarations = vec![SidecarDeclaration {
+        name: ECHO.to_string(),
+        folder: directory.path().to_path_buf(),
+        data: br#"{"executable":"fake","protocol":1}"#.to_vec(),
+        version: "0.0.1".to_string(),
+        dependents: vec!["plugin-a".to_string()],
+    }];
     let clock = clock.clone();
-    let sidecars = create(
-        &files(r#"{"executable":"fake","protocol":1}"#),
-        directory.path(),
-    )
-    .unwrap()
-    .with_clock(move || clock.read());
+    let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf())
+        .unwrap()
+        .with_clock(move || clock.read());
     (Stopping(sidecars), directory)
 }
 
@@ -2245,4 +2251,46 @@ fn surface_open_clears_the_restart_limit() {
         .expect("the opened surface recorded no host.trace.sidecar.restart-reset");
     assert_eq!(reset["fields"]["sidecar"], ECHO, "restart-reset {reset}");
     assert_eq!(reset["fields"]["surface"], "s2", "restart-reset {reset}");
+}
+
+/// Waits for the next failure of the window and checks that it is an invalid message of surface.
+fn require_invalid_failure_of(failures: &Receiver<Failure>, surface: &str, offset: Duration) {
+    let failure = failures
+        .recv_timeout(STALL)
+        .expect("no sidecar failure; the test stalled");
+    assert!(
+        failure.sidecar == ECHO
+            && failure.surface == surface
+            && failure.reason.contains("invalid message"),
+        "failure of {surface} at {offset:?} = {failure:?}"
+    );
+}
+
+// contract: sidecars.restart.refuses-already-open-surface
+#[test]
+fn refuses_an_already_open_surface() {
+    let clock = RestartClock::new();
+    let (sidecars, _directory) = restart_sidecars(&clock);
+    let (first, _first_events, first_failures) = failing_owner("a", "/projects/b");
+    let (second, _second_events, second_failures) = failing_owner("b", "/projects/a");
+    // s3 is open: its request failed the first process, which is not the process that stops.
+    send_at(&clock, &sidecars, &first, "s3", Duration::ZERO).unwrap();
+    require_invalid_failure_of(&first_failures, "s3", Duration::ZERO);
+    for seconds in [10, 20, 30] {
+        let offset = Duration::from_secs(seconds);
+        send_at(&clock, &sidecars, &second, "s1", offset).unwrap();
+        require_invalid_failure_of(&second_failures, "s1", offset);
+    }
+    // The fourth failure stopped the sidecar. s3 is open, so its next request is refused too.
+    require_restart_limit(
+        send_at(&clock, &sidecars, &first, "s3", Duration::from_secs(40)),
+        Duration::from_secs(40),
+    );
+    let refused = first_failures
+        .recv_timeout(STALL)
+        .expect("no refusal failure");
+    assert!(
+        refused.surface == "s3" && refused.reason == "restart limit",
+        "refused send failure = {refused:?}"
+    );
 }
