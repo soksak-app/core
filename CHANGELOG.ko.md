@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- F212.7-8-2: view는 `runtime.command.register`로 자기 command를 선언하고, 페이지는 이를 surface의 exposure로 선언하므로 registry가 `exposes` 선언과 주인을 검사한다. 이런 command의 요청은 `viewRequest`로 view에 post되고 응답은 `view-reply`로 돌아오며, command의 선언된 제한 시간을 적용하고 늦은 응답은 손실로 센다. `packages/plugin-api/view.js`는 view에 `commands.register(name, run)`을 준다.
+- F212.7-8-2: Wails runtime 표는 `viewReply`, `viewEvent`, `viewRequest`를 매핑하므로 view call 응답과 요청이 Wails host에 닿는다. view는 `runtime.command.register`로 자기 command를 선언하고, 페이지는 이를 surface의 exposure로 선언하므로 registry가 `exposes` 선언과 주인을 검사한다. 이런 command의 요청은 `viewRequest`로 view에 post되고 응답은 `view-reply`로 돌아오며, command의 선언된 제한 시간을 적용하고 늦은 응답은 손실로 센다. `packages/plugin-api/view.js`는 view에 `commands.register(name, run)`을 준다.
 - F212.7-8-3: view는 `runtime.native.on`, `runtime.sidecar.on`, `runtime.sidecar.onFailure` call로 view context의 event를 구독한다. 페이지는 각 event를 `viewEvent`를 거쳐 호스트 message `{sok: 1, event, data}`로 view에 보내며, 호스트는 ready 문서에만 post한다. 테마 message는 값을 `data`에 담고, Tauri runtime 표는 `viewReply`와 `viewEvent`를 매핑한다. `packages/plugin-api/view.js`는 view에 DOM surface context와 같은 구독 API를 준다.
 - F212.7-7: Go와 Rust의 `sok plugin pack`은 view의 `page`가 `package.json`의 `files`에 덮이지 않으면 `plugin.json: view page <path> must be listed in files`로 거부하고 release를 쓰지 않는다. `files`의 폴더가 page를 덮으면 받아들인다. Host 계약 case `cli.pack.view-page-listed`는 두 host에서 실행한다.
 - F212.7-6: plugin-api가 `checkViewPage(html)`을 내보낸다. 이 함수는 view page가 정적 import map 하나를 가지고 그 imports가 `VIEW_IMPORTS`와 같으며 다른 필드가 없는지 확인하고, 첫 차이를 밝히는 오류를 던진다.
