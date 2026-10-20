@@ -21,10 +21,10 @@ use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
-use crate::presentation_wait::PresentationWait;
-use crate::surfaces::{require_region, surface_handle};
+use crate::presentation_wait::{PresentationWait, views_to_join};
+use crate::surfaces::{Placement, require_region, surface_handle};
 use crate::view_lifecycle::{ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event};
-use crate::windows::{emit_window, window_data};
+use crate::windows::{emit_window, window_data, with_native_owner};
 
 /// The directory inside the configuration directory that holds the persistent site data of document regions. It differs
 /// from the storage of the app document.
@@ -2048,6 +2048,57 @@ pub fn take_document_binary_of(
 mod binary_take_tests;
 
 /// Ends the presentation wait of the view of surface with reason, and writes the failure of the end to the application log.
+/// Joins each shown view that waits for no presentation yet to the open layout transaction of window with ticket
+/// (docs/plans/plugin-processes.md, rule 6). A surface without a view document has no presentation to wait for, so it is skipped.
+pub(crate) fn join_shown_views(
+    window: &Window,
+    platform: &'static dyn Platform,
+    ticket: u64,
+    placements: &[Placement],
+) -> Result<(), String> {
+    let data = window_data(window)?;
+    let shown = placements
+        .iter()
+        .filter(|placement| placement.visible)
+        .map(|placement| placement.id.as_str());
+    let surfaces = views_to_join(
+        shown,
+        |surface| data.documents.lifecycle().spec(surface).is_some(),
+        |surface| data.documents.presentation().waits(surface),
+    );
+    for surface in surfaces {
+        let key: Key = (surface.to_string(), VIEW_NAME.to_string());
+        let Ok(view) = data.documents.get(&key) else {
+            continue;
+        };
+        let presented_window = window.clone();
+        let presented_surface = surface.to_string();
+        let presented: Box<dyn FnOnce() + Send> = Box::new(move || {
+            let ended = platform::current().and_then(|platform| {
+                platform.enqueue_ui(Box::new(move || {
+                    end_presentation_wait(&presented_window, &presented_surface, "presented")
+                }))
+            });
+            if let Err(error) = ended {
+                log_error("view channel", error);
+            }
+        });
+        let abandon = with_native_owner(window, move |owner| {
+            platform.join_view(owner, ticket, view, presented)
+        })
+        .map_err(|error| error.to_string())?;
+        let Some(abandon) = abandon else {
+            continue;
+        };
+        if !data.documents.presentation().begin(surface, Some(abandon)) {
+            return Err(format!(
+                "view {surface} joined the layout transaction while it already waits"
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn end_presentation_wait(window: &Window, surface: &str, reason: &str) {
     let result = window_data(window).and_then(|data| {
         data.documents

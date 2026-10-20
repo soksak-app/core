@@ -784,6 +784,15 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 				view.SetHidden(!p.Visible)
 				out = append(out, Placement{ID: p.ID, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: p.Visible})
 			}
+			if req.Settled {
+				if err := s.joinShownViews(win.NativeWindow(), req.Ticket, req.Placements); err != nil {
+					if cancel := system.CancelLayout(win.NativeWindow()); cancel != nil {
+						err = fmt.Errorf("%w; cancelling layout: %v", err, cancel)
+					}
+					done <- result{err: err}
+					return
+				}
+			}
 			committed := system.CommitLayout(win.NativeWindow(), req.Ticket)
 			if !committed {
 				done <- result{err: fmt.Errorf("surface preparation %d is no longer current", req.Ticket)}

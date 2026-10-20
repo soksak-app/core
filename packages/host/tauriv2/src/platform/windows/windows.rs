@@ -335,6 +335,15 @@ impl Platform for Windows {
     fn cancel_layout(&self, window: Handle) -> Result<(), String> {
         unsupported::cancel_layout(window)
     }
+    fn join_view(
+        &self,
+        window: Handle,
+        ticket: u64,
+        view: Handle,
+        presented: Box<dyn FnOnce() + Send>,
+    ) -> Result<Option<crate::platform::ViewAbandon>, String> {
+        unsupported::join_view(window, ticket, view, presented)
+    }
     fn start_page_titlebar(
         &self,
         window: Handle,

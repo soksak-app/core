@@ -399,6 +399,10 @@ func (implementation) CancelLayout(unsafe.Pointer) error {
 	return unsupported("surface layout cancel")
 }
 
+func (implementation) JoinView(unsafe.Pointer, uint64, unsafe.Pointer, func()) (func() error, bool, error) {
+	return nil, false, unsupported("view presentation wait")
+}
+
 func (implementation) StartPageTitlebar(unsafe.Pointer, uint64, float64, func(error)) error {
 	return unsupported("start title bar")
 }

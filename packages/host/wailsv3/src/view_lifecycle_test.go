@@ -31,6 +31,33 @@ type lifecyclePlatform struct {
 	createdFor []unsafe.Pointer
 	closed     []unsafe.Pointer
 	ended      map[unsafe.Pointer]func()
+	// joins holds the native joins of the views, in the order of their joins.
+	joins []*viewJoin
+}
+
+// viewJoin is one join of a view to a layout transaction. abandons counts the calls of its abandon.
+type viewJoin struct {
+	window    unsafe.Pointer
+	ticket    uint64
+	view      unsafe.Pointer
+	presented func()
+	abandons  int
+}
+
+// JoinView records the join and returns the function that counts its abandon.
+func (p *lifecyclePlatform) JoinView(window unsafe.Pointer, ticket uint64, view unsafe.Pointer, presented func()) (func() error, bool, error) {
+	join := &viewJoin{window: window, ticket: ticket, view: view, presented: presented}
+	p.joins = append(p.joins, join)
+	return func() error {
+		join.abandons++
+		return nil
+	}, true, nil
+}
+
+// EnqueueUI runs the function at once, because the test runs on the only thread.
+func (p *lifecyclePlatform) EnqueueUI(run func()) error {
+	run()
+	return nil
 }
 
 func (p *lifecyclePlatform) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error) {

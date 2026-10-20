@@ -6,10 +6,10 @@ import "testing"
 // A view joins the presentation wait once per change: a second join of a waiting view does not join again.
 func TestAViewJoinsThePresentationWaitOncePerChange(t *testing.T) {
 	var w presentationWait
-	if !w.begin("probe-surface") {
+	if !w.begin("probe-surface", nil) {
 		t.Fatalf("the first join of the view does not join the wait")
 	}
-	if w.begin("probe-surface") {
+	if w.begin("probe-surface", nil) {
 		t.Fatalf("a second join of the waiting view joined again")
 	}
 }
@@ -21,7 +21,7 @@ func TestEachEndWithoutPresentationWritesTheAbandonedEvent(t *testing.T) {
 	for _, reason := range []string{"process-ended", "hidden", "unresponsive"} {
 		isolateTraceRecords(t)
 		var w presentationWait
-		w.begin("probe-surface")
+		w.begin("probe-surface", nil)
 		abandoned, err := w.end("probe-surface", reason)
 		if err != nil || !abandoned {
 			t.Fatalf("end %s: abandoned %v, error %v; want the wait to end without presentation", reason, abandoned, err)
@@ -37,11 +37,37 @@ func TestEachEndWithoutPresentationWritesTheAbandonedEvent(t *testing.T) {
 }
 
 // contract: view.presentation-wait.ends
+// An end without presentation calls the abandon of the native join once, and the presentation of the view does not call it.
+func TestEachEndWithoutPresentationAbandonsTheNativeJoin(t *testing.T) {
+	isolateTraceRecords(t)
+	var w presentationWait
+	abandons := 0
+	abandon := func() error {
+		abandons++
+		return nil
+	}
+	w.begin("probe-surface", abandon)
+	if _, err := w.end("probe-surface", "process-ended"); err != nil {
+		t.Fatalf("process-ended: %v", err)
+	}
+	if abandons != 1 {
+		t.Fatalf("the process-ended end abandoned the native join %d times, want 1", abandons)
+	}
+	w.begin("probe-surface", abandon)
+	if _, err := w.end("probe-surface", "presented"); err != nil {
+		t.Fatalf("presented: %v", err)
+	}
+	if abandons != 1 {
+		t.Fatalf("the presented end abandoned the native join, %d abandons in total", abandons)
+	}
+}
+
+// contract: view.presentation-wait.ends
 // A presentation of the view ends its wait without the abandoned event, and an end that is not a reason of the wait is refused.
 func TestPresentationEndsTheWaitWithoutAnAbandonedEvent(t *testing.T) {
 	isolateTraceRecords(t)
 	var w presentationWait
-	w.begin("probe-surface")
+	w.begin("probe-surface", nil)
 	abandoned, err := w.end("probe-surface", "presented")
 	if err != nil || abandoned {
 		t.Fatalf("presented: abandoned %v, error %v; want the wait to end with its presentation", abandoned, err)

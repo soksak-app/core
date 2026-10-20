@@ -313,12 +313,12 @@ pub(crate) struct Rect {
 /// The position where a surface was actually placed. It is in page coordinates.
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Placement {
-    id: String,
+    pub(crate) id: String,
     x: f64,
     y: f64,
     w: f64,
     h: f64,
-    visible: bool,
+    pub(crate) visible: bool,
 }
 
 /// The answer of a preparation. chrome is the window button area and the title bar height after the host set the title
@@ -984,6 +984,14 @@ pub(crate) async fn present(
                     return Err(error);
                 }
             };
+            if presentation_settled
+                && let Err(error) =
+                    documents::join_shown_views(&presentation_window, platform, ticket, &placed)
+            {
+                cancel_window_layout(&presentation_window)
+                    .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
+                return Err(error);
+            }
             let committed = with_native_owner(&presentation_window, move |owner| {
                 platform.commit_layout(owner, ticket)
             })

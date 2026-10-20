@@ -108,6 +108,9 @@ impl std::fmt::Display for WindowObjects {
 /// An address that points to a native window, view or input monitor.
 pub type Handle = usize;
 
+/// Ends a view join without its presentation. join_view returns it.
+pub type ViewAbandon = Box<dyn FnOnce() -> Result<(), String> + Send>;
+
 /// A rectangle in the order x, y, width, height.
 pub type Frame = (f64, f64, f64, f64);
 
@@ -537,6 +540,16 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn commit_layout(&self, window: Handle, ticket: u64) -> Result<bool, String>;
     /// Cancels the surface placement transaction in progress of the window.
     fn cancel_layout(&self, window: Handle) -> Result<(), String>;
+    /// Joins the view document to the open layout transaction of window with ticket, so that the commit waits until the view
+    /// presents. presented runs on the UI thread when the view presents. The returned function ends the join without the
+    /// presentation; it is None when no transaction of ticket is open.
+    fn join_view(
+        &self,
+        window: Handle,
+        ticket: u64,
+        view: Handle,
+        presented: Box<dyn FnOnce() + Send>,
+    ) -> Result<Option<ViewAbandon>, String>;
     /// Sets the title bar of the window to height (pt) when a new page starts. A visible window is set inside the start
     /// transaction of ticket and committed together with the first presentation of the new page
     /// (surfaceLayoutStartPage). ready is called on the UI thread after the title bar is set or after a failure. Call

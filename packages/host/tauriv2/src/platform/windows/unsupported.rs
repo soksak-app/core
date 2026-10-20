@@ -319,6 +319,15 @@ pub fn cancel_layout(_window: Handle) -> Result<(), String> {
     missing("surface layout cancel")
 }
 
+pub fn join_view(
+    _window: Handle,
+    _ticket: u64,
+    _view: Handle,
+    _presented: Box<dyn FnOnce() + Send>,
+) -> Result<Option<crate::platform::ViewAbandon>, String> {
+    missing("view presentation wait")
+}
+
 pub fn start_page_titlebar(
     _window: Handle,
     _ticket: u64,

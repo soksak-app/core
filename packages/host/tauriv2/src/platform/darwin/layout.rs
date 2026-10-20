@@ -1,6 +1,9 @@
 //! The surface placement transaction.
 
+use std::cell::RefCell;
 use std::ffi::{CStr, c_char, c_void};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use block2::{Block, RcBlock};
 use tauri::webview::PlatformWebview;
@@ -22,6 +25,50 @@ pub fn commit(window: Handle, ticket: u64) -> bool {
         fn surfaceLayoutCommit(owner: *mut c_void, ticket: u64) -> bool;
     }
     unsafe { surfaceLayoutCommit(window as *mut c_void, ticket) }
+}
+
+/// Joins the view webview to the surface placement transaction of the window with ticket. The native join ends by the
+/// presentation of the view, which runs presented once, or by the returned abandon, whichever comes first. The native side
+/// does not call presented for a join that the abandon ended.
+pub fn join_view(
+    window: Handle,
+    ticket: u64,
+    view: Handle,
+    presented: Box<dyn FnOnce() + Send>,
+) -> Result<Option<crate::platform::ViewAbandon>, String> {
+    unsafe extern "C" {
+        fn surfaceLayoutJoinView(
+            owner: *mut c_void,
+            ticket: u64,
+            view: *mut c_void,
+            presented: &Block<dyn Fn()>,
+        ) -> bool;
+        fn surfaceLayoutAbandonView(owner: *mut c_void, view: *mut c_void) -> bool;
+    }
+    let ended = Arc::new(AtomicBool::new(false));
+    let presented_slot = RefCell::new(Some(presented));
+    let presented_ended = ended.clone();
+    let done = RcBlock::new(move || {
+        presented_ended.store(true, Ordering::SeqCst);
+        if let Some(presented) = presented_slot.borrow_mut().take() {
+            presented();
+        }
+    });
+    let joined =
+        unsafe { surfaceLayoutJoinView(window as *mut c_void, ticket, view as *mut c_void, &done) };
+    if !joined {
+        return Ok(None);
+    }
+    Ok(Some(Box::new(move || {
+        if ended.swap(true, Ordering::SeqCst) {
+            return Ok(());
+        }
+        if unsafe { surfaceLayoutAbandonView(window as *mut c_void, view as *mut c_void) } {
+            Ok(())
+        } else {
+            Err("the native layout transaction has no open join of the view".to_string())
+        }
+    })))
 }
 
 /// Cancels the surface placement transaction in progress of the window.

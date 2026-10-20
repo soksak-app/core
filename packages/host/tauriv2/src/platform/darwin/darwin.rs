@@ -467,6 +467,15 @@ impl Platform for Darwin {
         layout::cancel(window);
         Ok(())
     }
+    fn join_view(
+        &self,
+        window: Handle,
+        ticket: u64,
+        view: Handle,
+        presented: Box<dyn FnOnce() + Send>,
+    ) -> Result<Option<crate::platform::ViewAbandon>, String> {
+        layout::join_view(window, ticket, view, presented)
+    }
     fn start_page_titlebar(
         &self,
         window: Handle,

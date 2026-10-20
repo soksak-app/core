@@ -77,6 +77,11 @@ bool nativeWindowAfterPresentation(void *handle, uintptr_t callback) {
     return true;
 }
 
+// nativeWindowJoinView joins the view webview to the layout transaction of window. callback runs when the view presents.
+bool nativeWindowJoinView(void *window, uint64_t ticket, void *view, uintptr_t callback) {
+    return surfaceLayoutJoinView(window, ticket, view, ^{ nativePresentationDone(callback); });
+}
+
 extern void nativeSettledDone(uintptr_t callback, double displayed, char *error);
 bool nativeWindowAfterSettled(void *handle, uintptr_t callback) {
     WKWebView *view = sp_window_main_webview(handle);

@@ -190,6 +190,7 @@ fn invalid_json_closes_connection() {
 | `documents.binary.take-releases-id` | document 영역의 binary id를 take하면 저장된 byte를 돌려주고 id를 놓으므로, 같은 id의 두 번째 take는 native 오류 문구 `the binary id is not stored`로 실패한다. | both |
 | `documents.binary.take-errors` | 연결되지 않은 document의 take는 다른 document 작업의 문구인 `document "<name>" is not attached`로 실패한다. | both |
 | `view.presentation-wait.ends` | view는 변경마다 한 번 presentation wait에 참여한다. presentation 없는 끝(process-ended, hidden, unresponsive)은 wait를 한 번 끝내고 `host.trace.view.presentation-abandoned {surface, reason}`을 쓴다. presentation은 그 event 없이 wait를 끝낸다. end가 아닌 reason은 거부된다. | both |
+| `view.presentation-wait.joins` | 표시되며 기다리는 것이 없는 view는 settled present의 열린 배치 트랜잭션에 참여하고, 트랜잭션은 view가 표시된 뒤 commit된다. 표시 없이 끝나면 native 참여를 한 번 끝낸다. | both |
 | `view.call.peer-lost` | view가 `sok-view`로 보내고 메인 page가 답하지 않은 call 요청은 view process가 끝날 때까지 열려 있다. process 종료는 그것을 process-ended 이유로 끝내고 `host.call.peer-lost {plugin, command, reason}`을 쓴다. 종료 전에 메인 page가 답한 call은 아무것도 쓰지 않는다. | both |
 | `view.theme.first-script` | host가 만든 view는 page를 불러오기 전에 생성 시점의 테마 `{scheme, tokens}`를 동결해 `window.sokTheme`에 넣는 document-start script를 가진다. 그래서 page의 첫 script가 토큰을 읽으며, 나중의 테마 변경은 post 경로로 보낸다. | both |
 | `view.channel.ready` | view의 `view.ready` message는 그 문서를 ready 문서로 기록하고, 호스트는 이어서 현재 테마를 `sok: 1`과 함께 보낸다. view의 탐색(loading 상태)은 기록을 지우므로, 그 뒤의 post는 다음 ready message 전까지 거부된다. | both |
