@@ -45,7 +45,7 @@ Core window checks install plugins from a registry fixture. `scripts/workspace-r
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `id` | yes | Lowercase identifier. Tabs and settings reference it |
+| `id` | yes | Lowercase identifier of the form `[a-z][a-z0-9-]*`. Tabs and settings reference it. `core` is reserved for the core root and is refused |
 | `name` | yes | Display name |
 | `description` | yes | One or two sentences of 1 to 200 characters that say what the plugin does; the [plugin screen](installation.md#plugin-screen) shows it, and the plugin screen and the settings window search it |
 | `surface` | no | `{ "module": "ui/page.js", "composition": ... }`: a module inside the plugin and its required [surface composition](surface-composition.md). The module mounts into the app DOM; external web documents use document regions. A web address is not a surface |

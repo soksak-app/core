@@ -45,7 +45,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 
 | 필드 | 필수 | 의미 |
 | --- | --- | --- |
-| `id` | 예 | 소문자 식별자. 탭과 설정이 참조한다 |
+| `id` | 예 | `[a-z][a-z0-9-]*` 형식의 소문자 식별자. 탭과 설정이 참조한다. `core`는 core root가 예약하므로 거부한다 |
 | `name` | 예 | 표시 이름 |
 | `description` | 예 | 플러그인이 하는 일을 말하는 1자에서 200자 사이의 한두 문장. [plugin 화면](installation.ko.md#plugin-화면)이 보여 주고, plugin 화면과 설정 창이 검색한다 |
 | `surface` | 아니오 | `{ "module": "ui/page.js", "composition": ... }`: plugin 안의 모듈과 필수 [표면 합성](surface-composition.ko.md). 모듈은 앱 DOM에 마운트하며 외부 웹 문서는 문서 영역을 사용한다. 웹 주소는 표면이 아니다 |
