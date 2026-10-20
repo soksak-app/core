@@ -1,6 +1,7 @@
 package host
 
 import (
+	"fmt"
 	"time"
 	"unsafe"
 )
@@ -21,6 +22,12 @@ type viewSpec struct {
 	directory string
 	folder    string
 	visible   bool
+}
+
+// viewStopReason is the reason of a view that stopped its restarts: the log line and the view-stopped event carry it. The window is
+// written in whole seconds, as the Tauri host writes it.
+func viewStopReason() string {
+	return fmt.Sprintf("the view failed %d times within %d seconds and is created again when its tab is reopened", viewRestartLimit, int(viewRestartWindow/time.Second))
 }
 
 // viewLifecycle counts the failures of each view surface and keeps the record that creates its view again. now is the clock of the

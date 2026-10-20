@@ -7,7 +7,9 @@ use soksak_host_tauriv2::documents::{
     Documents, Key, Report, Request, StreamEffect, Streams, ViewChannels, check, go_action,
     parse_report, remove_surface_for_reload, stream_ack_refusal,
 };
-use soksak_host_tauriv2::view_lifecycle::{ViewLifecycle, is_queue_full};
+use soksak_host_tauriv2::view_lifecycle::{
+    ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event,
+};
 
 fn request(surface: &str, document: &str) -> Request {
     serde_json::from_value(serde_json::json!({"surface": surface, "document": document})).unwrap()
@@ -693,6 +695,26 @@ fn view_restart_keeps_the_surface_and_plugin_of_its_record() {
     assert_eq!(
         spec.plugin, "probe",
         "the restart keeps the plugin of the view"
+    );
+}
+
+// contract: view.restart.limit-shows-error
+#[test]
+fn view_stop_event_names_the_surface_plugin_and_reason() {
+    assert_eq!(
+        view_stop_reason(),
+        "the view failed 4 times within 300 seconds and is created again when its tab is reopened"
+    );
+    let event = view_stopped_event("probe-surface", "probe");
+    assert_eq!(
+        event["surface"], "probe-surface",
+        "the event names the surface"
+    );
+    assert_eq!(event["plugin"], "probe", "the event names the plugin");
+    assert_eq!(
+        event["reason"],
+        view_stop_reason(),
+        "the event carries the stop reason"
     );
 }
 

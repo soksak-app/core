@@ -225,6 +225,8 @@ type Surfaces struct {
 	compositionRevisions map[string]uint64
 	// lifecycle counts the failures of each view surface and keeps the record that creates its view again (view_lifecycle.go).
 	lifecycle *viewLifecycle
+	// events receives the window events of this window in place of the window, when it is set. The tests set it.
+	events func(name string, data any)
 	// A surface is a native view, so input that pressed a surface does not reach the page. This map converts the pressed
 	// view to the surface id that the page uses.
 	named map[uintptr]string
@@ -277,6 +279,15 @@ func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 		theme: Theme{Tokens: map[string]string{}},
 	}
 	return s
+}
+
+// windowEvent sends an event to the app DOM of this window, or to the events function of a test.
+func (s *Surfaces) windowEvent(name string, data any) {
+	if s.events != nil {
+		s.events(name, data)
+		return
+	}
+	s.window.EmitEvent(name, data)
 }
 
 // Emit delivers an event to the single app DOM of this window.

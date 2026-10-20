@@ -47,3 +47,54 @@ test("mounting a view surface imports no module and declares its view compositio
     dom.window.close();
   }
 });
+
+// contract: view.restart.limit-shows-error
+// The view-stopped event of the surface is shown as the error state of the surface, and mounting the surface again replaces that state.
+test("a view that stopped its restarts shows its reason as the error state of its surface until it is mounted again", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      // The fake host delivers an event to the listener of its name, as the surface runtime does for its own surface.
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async () => null } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-stop");
+  const pluginId = "fixture-stopped-view";
+  const surfaceId = "fixture-stopped-view-surface";
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  const reason = "the view failed 4 times within 300 seconds and is created again when its tab is reopened";
+  try {
+    authorizeSurface(surfaceId);
+    const states = [];
+    await mountSurface(document.querySelector("#slot"), surface, { onState: (state) => states.push(state) });
+    await waitSurfaceCompositionDeclared(surfaceId);
+    listeners.get("view-stopped")({ surface: surfaceId, plugin: pluginId, reason });
+    const stopped = states.at(-1);
+    assert.equal(stopped.phase, "error");
+    assert.equal(stopped.error.message, reason);
+
+    await disposeSurface(surfaceId);
+    authorizeSurface(surfaceId);
+    const reopened = [];
+    await mountSurface(document.querySelector("#slot"), surface, { onState: (state) => reopened.push(state) });
+    assert.notEqual(reopened.at(-1).phase, "error", "mounting the surface again shows no error");
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});

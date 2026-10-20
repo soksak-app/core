@@ -717,7 +717,7 @@ func (s *Surfaces) emitToSurface(surface, name string, data any) {
 		LogInfo("document", fmt.Sprintf("native event %s of closed surface %q arrived after the surface closed", name, surface))
 		return
 	}
-	s.window.EmitEvent(name, data)
+	s.windowEvent(name, data)
 }
 
 // imageChanged sends the image region event only to the owning surface and notifies the host.window watchers. It is called on the UI thread.
@@ -1259,11 +1259,17 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 	}
 	system.CloseDocument(handle)
 	lifecycle := s.viewRecords()
+	spec := lifecycle.specs[surface]
 	if !lifecycle.fail(surface) {
-		LogError("view channel", fmt.Errorf("%s: the view failed %d times within %s and is created again when its tab is reopened", surface, viewRestartLimit, viewRestartWindow))
+		reason := viewStopReason()
+		LogError("view channel", fmt.Errorf("%s: %s", surface, reason))
+		if spec == nil {
+			LogError("view channel", fmt.Errorf("%s: the view record is missing, so the view-stopped event is not sent", surface))
+			return
+		}
+		s.emitToSurface(surface, "view-stopped", viewStoppedEvent(surface, spec.plugin, reason))
 		return
 	}
-	spec := lifecycle.specs[surface]
 	if spec == nil {
 		LogError("view channel", fmt.Errorf("%s: the view record is missing, so the view is not created again", surface))
 		return
@@ -1395,6 +1401,12 @@ func (s *Surfaces) postThemeToViews() {
 			LogError("view channel", err)
 		}
 	}
+}
+
+// viewStoppedEvent returns the payload of the view-stopped event of the view of surface, which has the plugin id and the reason. The
+// main page answers it by showing the reason on the card of the surface (docs/spec/native-surfaces.md#view-surfaces).
+func viewStoppedEvent(surface, plugin, reason string) map[string]any {
+	return map[string]any{"surface": surface, "plugin": plugin, "reason": reason}
 }
 
 // ViewCallEvent returns the payload of the view-call event for a call request or a cancel of the view of surface, which has the plugin id.

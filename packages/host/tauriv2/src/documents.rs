@@ -20,9 +20,7 @@ use crate::application_log::{log_error, log_failure};
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
 use crate::surfaces::{require_region, surface_handle};
-use crate::view_lifecycle::{
-    VIEW_RESTART_LIMIT, VIEW_RESTART_WINDOW, ViewLifecycle, is_queue_full,
-};
+use crate::view_lifecycle::{ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event};
 use crate::windows::{emit_window, window_data};
 
 /// The directory inside the configuration directory that holds the persistent site data of document regions. It differs
@@ -1130,16 +1128,27 @@ fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, 
         return log_error("view channel", error);
     }
     log_failure("view channel", platform.close_document(document));
+    let record = data.documents.lifecycle().spec(surface);
     if !data.documents.lifecycle().fail(surface, Instant::now()) {
-        return log_error(
-            "view channel",
-            format!(
-                "{surface}: the view failed {VIEW_RESTART_LIMIT} times within {} seconds and is created again when its tab is reopened",
-                VIEW_RESTART_WINDOW.as_secs()
-            ),
-        );
+        log_error("view channel", format!("{surface}: {}", view_stop_reason()));
+        let Some(spec) = record else {
+            return log_error(
+                "view channel",
+                format!(
+                    "{surface}: the view record is missing, so the view-stopped event is not sent"
+                ),
+            );
+        };
+        if let Err(error) = emit_window(
+            window,
+            "view-stopped",
+            view_stopped_event(surface, &spec.plugin),
+        ) {
+            log_error("view channel", error);
+        }
+        return;
     }
-    let Some(spec) = data.documents.lifecycle().spec(surface) else {
+    let Some(spec) = record else {
         return log_error(
             "view channel",
             format!("{surface}: the view record is missing, so the view is not created again"),

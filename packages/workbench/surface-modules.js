@@ -1,7 +1,7 @@
 import { createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { registry } from "./exposure.js";
-import { answerViewCall } from "./view-calls.js";
+import { answerViewCall, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands } from "./view-commands.js";
 import { callReporter } from "./plugin-processes.js";
@@ -447,7 +447,12 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     mounted.set(surface.surfaceId, entry);
     if (viewSurface) {
       const answering = answerViewCalls(surface, scoped, page, () => entry.disposed, context.exposure);
-      closing.signal.addEventListener("abort", () => answering.then((off) => off()), { once: true });
+      // A view that stopped its restarts shows its reason as the error of the surface (docs/spec/native-surfaces.md#view-surfaces).
+      const stopping = scoped.native.on("view-stopped", (event) => onState(viewStopState(event)));
+      closing.signal.addEventListener("abort", () => {
+        answering.then((off) => off());
+        stopping.then((off) => off());
+      }, { once: true });
     }
     entry.mounted = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
       .then(async () => {

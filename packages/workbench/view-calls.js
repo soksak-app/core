@@ -126,3 +126,13 @@ function objectOf(command, params) {
   }
   return params;
 }
+
+/**
+ * The state of a surface whose view stopped its restarts (docs/spec/native-surfaces.md#view-surfaces): the card shows the reason of
+ * the view-stopped event as the error of the surface. An event without a reason is refused.
+ */
+export function viewStopState(event) {
+  if (event === null || typeof event !== "object") throw new TypeError("view stop event is not an object");
+  if (typeof event.reason !== "string" || event.reason === "") throw new TypeError("view stop event has no reason");
+  return { phase: "error", error: new Error(event.reason) };
+}

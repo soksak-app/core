@@ -175,3 +175,63 @@ func TestViewRestartKeepsTheSurfaceOfItsRecord(t *testing.T) {
 		t.Fatalf("the channel of the surface after the restart: %+v, %v; want the plugin probe", channel, ok)
 	}
 }
+
+// windowEvent is one event that the surfaces of a test send to their window.
+type windowEvent struct {
+	name string
+	data any
+}
+
+// recordWindowEvents makes the window events of s go to the returned slice.
+func recordWindowEvents(s *Surfaces) *[]windowEvent {
+	events := &[]windowEvent{}
+	s.events = func(name string, data any) { *events = append(*events, windowEvent{name, data}) }
+	return events
+}
+
+// contract: view.restart.limit-shows-error
+// The fourth failure within the window sends one view-stopped event to the surface, which names the surface, the plugin and the reason.
+// Failures before the fourth send nothing.
+func TestViewStopSendsTheStopEventOnceToTheSurface(t *testing.T) {
+	clock := &fakeClock{}
+	s, fake, _ := newLifecycleSurfaces(t, clock)
+	s.views = map[string]*nativeWebview{"probe-surface": {}}
+	events := recordWindowEvents(s)
+	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second} {
+		clock.set(offset)
+		endView(t, s, fake)
+	}
+	if len(*events) != 0 {
+		t.Fatalf("events after three failures: %d, want none", len(*events))
+	}
+	clock.set(30 * time.Second)
+	endView(t, s, fake)
+	if len(*events) != 1 || (*events)[0].name != "view-stopped" {
+		t.Fatalf("events after the fourth failure: %+v, want one view-stopped event", *events)
+	}
+	payload, ok := (*events)[0].data.(map[string]any)
+	if !ok {
+		t.Fatalf("view-stopped payload is %T, want a map", (*events)[0].data)
+	}
+	if payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["reason"] != viewStopReason() {
+		t.Fatalf("view-stopped payload %v, want surface probe-surface, plugin probe and the stop reason", payload)
+	}
+}
+
+// contract: view.restart.limit-shows-error
+// The stop reason names the restart window in seconds, the same text as the Tauri host.
+func TestViewStopReasonNamesTheWindowInSeconds(t *testing.T) {
+	const want = "the view failed 4 times within 300 seconds and is created again when its tab is reopened"
+	if got := viewStopReason(); got != want {
+		t.Fatalf("stop reason %q, want %q", got, want)
+	}
+}
+
+// contract: view.restart.limit-shows-error
+// The view-stopped payload carries the surface, the plugin and the reason.
+func TestViewStoppedEventCarriesSurfaceAndReason(t *testing.T) {
+	payload := viewStoppedEvent("probe-surface", "probe", "the reason")
+	if payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["reason"] != "the reason" {
+		t.Fatalf("payload %v, want surface probe-surface, plugin probe and reason the reason", payload)
+	}
+}

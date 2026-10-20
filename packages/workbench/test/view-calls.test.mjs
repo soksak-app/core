@@ -2,7 +2,7 @@
 // the runtime handlers and the command runners are fakes, so the test runs without a host.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { answerViewCall } from "../view-calls.js";
+import { answerViewCall, viewStopState } from "../view-calls.js";
 
 function fakes() {
   const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [] };
@@ -188,4 +188,16 @@ test("a registration call without a name is refused and declares nothing", async
   await assert.rejects(answerViewCall({ id: 1, command: "runtime.command.register", params: { name: "" } }, options), /requires a non-empty name/);
   await assert.rejects(answerViewCall({ id: 2, command: "runtime.command.register", params: "probe.run" }, options), /requires an object/);
   assert.deepEqual(ran.declared, []);
+});
+
+// contract: view.restart.limit-shows-error
+test("a view-stopped event becomes the error state of its surface with its reason", () => {
+  const state = viewStopState({ surface: "probe-surface", plugin: "probe", reason: "the view failed 4 times within 300 seconds" });
+  assert.equal(state.phase, "error");
+  assert.equal(state.error.message, "the view failed 4 times within 300 seconds");
+});
+
+// contract: view.restart.limit-shows-error
+test("a view-stopped event without a reason is refused", () => {
+  assert.throws(() => viewStopState({ surface: "probe-surface", plugin: "probe" }), /has no reason/);
 });

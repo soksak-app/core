@@ -107,6 +107,20 @@ impl ViewLifecycle {
     }
 }
 
+/// The reason of a view that stopped its restarts. The log line and the view-stopped event carry it.
+pub fn view_stop_reason() -> String {
+    format!(
+        "the view failed {VIEW_RESTART_LIMIT} times within {} seconds and is created again when its tab is reopened",
+        VIEW_RESTART_WINDOW.as_secs()
+    )
+}
+
+/// The payload of the view-stopped event of the view of surface, which has the plugin id and the reason. The main page answers it by
+/// showing the reason on the card of the surface (docs/spec/native-surfaces.md#view-surfaces).
+pub fn view_stopped_event(surface: &str, plugin: &str) -> serde_json::Value {
+    serde_json::json!({"surface": surface, "plugin": plugin, "reason": view_stop_reason()})
+}
+
 /// The prefix of the reason of a view.error message whose message queue is full (docs/spec/native-surfaces.md#view-surfaces).
 const QUEUE_FULL_PREFIX: &str = "queue full for ";
 
