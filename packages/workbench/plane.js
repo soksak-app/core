@@ -24,7 +24,7 @@ import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "
 import { icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
-import { fillPicker, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
+import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
 import { focusSurface, mountSurface, mountedSurface, placePluginPlaceholder } from "./surface-modules.js";
 import { emitEvent } from "./page-log.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
@@ -723,12 +723,7 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   // element and renders it in such a view, so the surfaces below keep running. The whole element is passed, so the
   // application does not need to know its content.
   if (native) {
-    // A modal reports closing with an empty key. If that were passed on as a selection, the lookup of an unregistered plugin
-    // would throw an exception.
-    overlay.show(pickerEl, rect, (key) => {
-      const index = keys.indexOf(key);
-      return index < 0 ? run("core.picker.close") : run("core.picker.pick", { index });
-    });
+    overlay.show(pickerEl, rect, pickerAnswer(keys, run));
     pickerEl.hidden = true;
   } else {
     standIn(true, rect);

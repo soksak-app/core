@@ -129,6 +129,7 @@
     "core.tab.menu",
     "core.picker.pick",
     "core.picker.close",
+    "core.modal.dismiss",
     "core.library.page",
     "core.library.plugins.search",
     "core.library.search",

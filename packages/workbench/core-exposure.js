@@ -545,6 +545,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.tab.move", ({ tab, card, zone }) => { moveTab(tab, card, zone); });
   registry.command("core.picker.pick", ({ index }) => { pickItem(index); });
   registry.command("core.picker.close", () => { closePicker(); });
+  // Escape in the native menu answers with this command (card.js). The menu is the picker, the only native menu.
+  registry.command("core.modal.dismiss", () => { closePicker(); });
 
   registry.command("core.library.page", ({ page }) => { library.actions.page(page); });
   registry.command("core.library.plugins.search", ({ query }) => { library.actions.searchPlugins(query); });

@@ -20,7 +20,7 @@
     { "key": "Escape", "owner": "workbench", "command": "core.rename.cancel", "menu": null, "when": "The tab rename field has focus" },
     { "key": "Enter", "owner": "workbench", "command": "core.library.form.submit", "menu": null, "when": "A library form field has focus" },
     { "key": "Escape", "owner": "workbench", "command": "core.picker.close", "menu": null, "when": "A picker layer is open" },
-    { "key": "Escape", "owner": "workbench", "command": "page.modal.answer", "menu": null, "when": "A native modal menu is open; the answer has an empty key" },
+    { "key": "Escape", "owner": "workbench", "command": "core.modal.dismiss", "menu": null, "when": "A native modal menu is open and has keyboard focus" },
     { "key": "Escape", "owner": "view", "command": "none", "menu": null, "when": "A plugin view has keyboard focus; the view decides it under plan rule 7" },
     { "key": "text input keys", "owner": "view", "command": "none", "menu": null, "when": "A plugin view has a text input focused; the first responder of the view receives them" }
   ]
