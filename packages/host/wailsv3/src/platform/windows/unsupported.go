@@ -241,6 +241,10 @@ func (implementation) SetViewResponsiveness(unsafe.Pointer, func(bool)) error {
 	return unsupported("view channel")
 }
 
+func (implementation) TakeDocumentBinary(unsafe.Pointer, string) ([]byte, error) {
+	return nil, unsupported("document region")
+}
+
 func (implementation) AddDocumentScript(unsafe.Pointer, string) error {
 	return unsupported("view channel")
 }

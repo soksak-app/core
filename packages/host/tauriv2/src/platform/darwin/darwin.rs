@@ -307,6 +307,9 @@ impl Platform for Darwin {
     ) -> Result<(), String> {
         document::set_view_responsiveness(document, responsiveness)
     }
+    fn take_document_binary(&self, document: Handle, id: &str) -> Result<Vec<u8>, String> {
+        document::take_document_binary(document, id)
+    }
     fn add_document_script(&self, document: Handle, source: &str) -> Result<(), String> {
         document::add_document_script(document, source)
     }

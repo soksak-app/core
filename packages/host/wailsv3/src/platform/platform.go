@@ -383,6 +383,9 @@ type Platform interface {
 	// AddDocumentScript adds a user script that runs at document start in the page world, before any page script, for each load of the
 	// document from now on. The host adds the theme script of a view before it loads the page (docs/spec/native-surfaces.md#view-surfaces).
 	AddDocumentScript(document unsafe.Pointer, source string) error
+	// TakeDocumentBinary takes the bytes that the binary store of the document keeps under id, and releases the id. It returns the error
+	// text of the native layer when the document is closed or the id is not stored (docs/spec/native-surfaces.md#document-regions).
+	TakeDocumentBinary(document unsafe.Pointer, id string) ([]byte, error)
 	SetDocumentEvent(document unsafe.Pointer, event func(value string)) error
 	// SetDocumentStream receives {"stream": "elements" or "requests", "message": {...}} for each stream message of the document.
 	SetDocumentStream(document unsafe.Pointer, stream func(value string)) error

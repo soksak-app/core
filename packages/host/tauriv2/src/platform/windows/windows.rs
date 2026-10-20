@@ -193,6 +193,9 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::set_view_responsiveness(document, responsiveness)
     }
+    fn take_document_binary(&self, document: Handle, id: &str) -> Result<Vec<u8>, String> {
+        unsupported::take_document_binary(document, id)
+    }
     fn add_document_script(&self, document: Handle, source: &str) -> Result<(), String> {
         unsupported::add_document_script(document, source)
     }

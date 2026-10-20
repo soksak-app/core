@@ -42,6 +42,12 @@ unsafe extern "C" {
         context: *mut c_void,
     );
     fn sp_document_add_user_script(document: *mut c_void, source: *const c_char);
+    fn sp_document_binary_take(
+        document: *mut c_void,
+        id: *const c_char,
+        bytes: *mut *mut c_void,
+        length: *mut usize,
+    ) -> *const c_char;
     fn sp_document_set_stream(document: *mut c_void, stream: Event, context: *mut c_void);
     fn sp_document_stream_on(document: *mut c_void, stream: *const c_char, on: bool) -> bool;
     fn sp_document_stream_ack(document: *mut c_void, seq: u64) -> bool;
@@ -358,6 +364,35 @@ pub fn close(document: Handle) {
     if let Some(receiver) = STREAMS.with(|all| all.borrow_mut().remove(&document)) {
         drop(unsafe { Box::from_raw(receiver) });
     }
+}
+
+/// Takes the bytes that the binary store of the document keeps under id, and releases the id. The copy that the native layer makes is
+/// released here. The error is the text of the native layer.
+pub fn take_document_binary(document: Handle, id: &str) -> Result<Vec<u8>, String> {
+    let id =
+        CString::new(id).map_err(|error| format!("the binary id contains a NUL byte: {error}"))?;
+    let mut bytes: *mut c_void = std::ptr::null_mut();
+    let mut length: usize = 0;
+    let text = unsafe {
+        sp_document_binary_take(
+            document as *mut c_void,
+            id.as_ptr(),
+            &mut bytes,
+            &mut length,
+        )
+    };
+    if !text.is_null() {
+        return Err(unsafe { CStr::from_ptr(text) }
+            .to_string_lossy()
+            .into_owned());
+    }
+    if length == 0 {
+        unsafe { free(bytes) };
+        return Ok(Vec::new());
+    }
+    let data = unsafe { std::slice::from_raw_parts(bytes as *const u8, length) }.to_vec();
+    unsafe { free(bytes) };
+    Ok(data)
 }
 
 /// Adds a document-start user script to the document. The source is copied by the native layer. Call it on the main thread before the

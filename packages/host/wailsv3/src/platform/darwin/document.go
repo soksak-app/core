@@ -74,6 +74,9 @@ static void documentSetViewEnded(void *document, uintptr_t context) {
 static void viewResponsivenessBridge(void *context, bool responsive) {
     viewResponsiveness(context, responsive);
 }
+static const char *documentBinaryTake(void *document, const char *id, void **bytes, size_t *length) {
+    return sp_document_binary_take(document, id, bytes, length);
+}
 static void documentAddScript(void *document, const char *source) {
     sp_document_add_user_script(document, source);
 }
@@ -242,6 +245,18 @@ func (implementation) SetViewResponsiveness(document unsafe.Pointer, responsiven
 	C.documentSetViewResponsiveness(document, C.uintptr_t(receiver))
 	viewResponsivenesses[document] = receiver
 	return nil
+}
+
+func (implementation) TakeDocumentBinary(document unsafe.Pointer, id string) ([]byte, error) {
+	cID := C.CString(id)
+	defer C.free(unsafe.Pointer(cID))
+	var bytes unsafe.Pointer
+	var length C.size_t
+	if text := C.documentBinaryTake(document, cID, &bytes, &length); text != nil {
+		return nil, errors.New(C.GoString(text))
+	}
+	defer C.free(bytes)
+	return C.GoBytes(bytes, C.int(length)), nil
 }
 
 func (implementation) AddDocumentScript(document unsafe.Pointer, source string) error {

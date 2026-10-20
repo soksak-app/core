@@ -2009,3 +2009,21 @@ pub fn record_view_call_peer_lost(plugin: &str, command: &str) {
 #[cfg(test)]
 #[path = "view_call_peer_test.rs"]
 mod call_peer_tests;
+
+/// Takes the bytes that the binary store of the document name of surface keeps under id, through take, and releases the id. A
+/// document that is not attached gives the error `document "<name>" is not attached`, the text of the other document operations, and
+/// the error text of the native take is passed on unchanged (docs/spec/native-surfaces.md#document-regions).
+pub(crate) fn take_document_binary_of(
+    documents: &Documents,
+    surface: &str,
+    name: &str,
+    id: &str,
+    take: impl FnOnce(Handle, &str) -> Result<Vec<u8>, String>,
+) -> Result<Vec<u8>, String> {
+    let handle = documents.get(&(surface.to_string(), name.to_string()))?;
+    take(handle, id)
+}
+
+#[cfg(test)]
+#[path = "document_binary_take_test.rs"]
+mod binary_take_tests;
