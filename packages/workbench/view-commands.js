@@ -42,6 +42,7 @@ export function createViewCommands({ plugin, post, timeoutOf, report }) {
   });
   return {
     run(name, params) {
+      // default: a command that declares no time limit waits for the default time limit of the call layer (docs/spec/exposure.md).
       return calls.request(name, params, { timeout: timeoutOf(name) ?? DEFAULT_CALL_TIMEOUT });
     },
     receive(event) {
