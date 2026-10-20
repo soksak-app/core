@@ -70,7 +70,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
    - 전송 중에 생긴 변경은 dirty로 표시한다. 확인(ack)이 오면 최신 값을 담아 다음 snapshot을 보낸다.
    - 건너뛴 값의 수는 core status `core.plugin.losses`의 `losses.skipped`로 센다. 이 수는 각 snapshot message의 필드 `skipped`로 메인 페이지에 닿는다. 전송 중에 덮어쓴 값의 수이며, status의 이전 snapshot이 보내진 뒤의 수다. 성능 trace가 켜져 있으면 메인 페이지는 덮어쓴 값마다 `page.trace.declared-ui.snapshot.skipped {plugin, status, count}`를 쓴다. host는 snapshot을 중계하지 않으며 이 경우 event를 쓰지 않는다. `host.*` event는 host 코드만 쓰기 때문이다.
    - plugin 프로세스가 (다시) 시작하면 그 프로세스의 첫 snapshot이 각 status의 전체 값이다. workbench는 이전 프로세스의 멈춘 snapshot과 확인 대기를 버린다. 다시 시작한 plugin은 저장한 state에서 값을 만들어 보낸다(규칙 5).
-   - 확인을 기다리는 동안 view 프로세스가 끝나거나 표면이 닫히면, 성능 trace가 켜져 있을 때 메인 페이지는 `page.trace.status.stalled {plugin, status, reason}`을 쓴다. 다시 시작한 프로세스는 첫 snapshot으로 각 status의 최신 값을 보내고 dirty 표시를 지운다. 표면이 닫힌 것이면 dirty 값은 버리고 그 사실을 reason에 적는다. timer는 쓰지 않는다.
+   - 확인을 기다리는 동안 view 프로세스가 끝나거나 표면이 닫히면, 값은 `losses.stalled`로 세고 event는 쓰지 않는다. receiver는 각 snapshot을 즉시 확인하므로 확인을 기다리는 것은 view 안의 sender뿐이다. 기다리는 sender는 view 프로세스와 함께 끝나고, 표면이 닫히는 것도 view를 끝낸다. 따라서 이를 관찰하는 live 관찰자가 없으며, 규칙 2가 다시 시작한 프로세스에 대해 말하는 대로 다음 프로세스는 전체 값을 보낸다. 다시 시작한 프로세스는 첫 snapshot으로 각 status의 최신 값을 보내고 dirty 표시를 지운다. 표면이 닫힌 것이면 dirty 값은 버리고 그 사실을 reason에 적는다. timer는 쓰지 않는다.
 3. **경계를 넘는 호출.**
    - 명령은 [exposure](../spec/exposure.ko.md)에 적힌 대로 `timeout`을 선언한다(최대 600000 ms, 없으면 10초). timer는 살아 있는 상대가 명령에 답하지 않는 경우에만 남긴다. 느린 명령 답을 알려 주는 event가 없기 때문이다. `host.trace.view.unresponsive`는 WebKit의 응답성 검사에 답하지 않는 view 프로세스를 알리며, 명령 답이 아니므로 timer를 대신하지 않는다. 기한을 넘기면 호출을 -32000과 `command <name> did not reply within <ms>ms`로 거부한다. 이 오류는 [exposure](../spec/exposure.ko.md)의 명령 `timeout` 항목이 적는 것이며, 이 설계는 메시지를 바꾸지 않는다. `host.call.timeout {plugin, command}`를 쓰고 `losses.timeouts`를 센다.
    - view는 메인 page의 요청에 자기 command로 답할 때 `{sok: 1, reply: id, result}` 또는 `{sok: 1, reply: id, error}`를 보내며, 호스트는 이를 `view-reply`로 전달한다([native surface](../spec/native-surfaces.ko.md#view-표면), view command). 메인 page는 그 요청에 command가 선언한 제한 시간을 적용하며, 제한 시간 뒤의 응답은 늦은 응답으로 버린다.
@@ -150,7 +150,6 @@ RPC protocol 번호는 0.0 계열에서 1이다.
 | event | class | level | field |
 |---|---|---|---|
 | `page.trace.declared-ui.snapshot.skipped` | call | debug | `{plugin, status, count}`: 전송 중일 때 건너뛴 값. 카운터 `losses.skipped`. 메인 페이지가 쓴다 |
-| `page.trace.status.stalled` | call | debug | `{plugin, status, reason}`. 카운터 `losses.stalled`. 메인 페이지가 쓴다 |
 | `host.call.timeout` | call | error | `{plugin, command}`. 카운터 `losses.timeouts` |
 | `host.call.peer-lost` | call | error | `{plugin, command, reason}`: `process-ended`와 `sidecar-ended`. `surface-closed`는 event를 쓰지 않고 `losses.peerLost`를 센다 |
 | `host.trace.call.late-reply` | call | debug | `{plugin, command, delay}`. 카운터 `losses.lateReplies` |

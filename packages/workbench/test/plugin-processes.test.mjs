@@ -101,8 +101,9 @@ test("a view responsiveness notice that is not a boolean is refused and changes 
 });
 
 // contract: view.snapshot.skipped-count
-// The reports of a snapshot channel write the page trace events of the skipped and stalled values (docs/plans/plugin-processes.md, rule 2).
-test("the reports of a snapshot channel write the page trace events of skipped and stalled values", async (t) => {
+// The reports of a snapshot channel write the page trace event of each skipped value. A stalled value is counted and writes no event,
+// because no live observer waits for its acknowledgement (docs/plans/plugin-processes.md, rule 2).
+test("the reports of a snapshot channel write the page trace event of skipped values and count stalled values without an event", async (t) => {
   const traced = [];
   t.mock.module("../performance.js", { exports: { trace: (event, fields) => { traced.push({ event, fields }); } } });
   const { snapshotReporter } = await import("../plugin-processes.js?page-trace");
@@ -111,6 +112,7 @@ test("the reports of a snapshot channel write the page trace events of skipped a
   report({ kind: "stalled", plugin: "trace-probe", status: "trace-probe.tree", reason: "surface-closed", count: 1 });
   assert.deepEqual(traced, [
     { event: "declared-ui.snapshot.skipped", fields: { plugin: "trace-probe", status: "trace-probe.tree", count: 1 } },
-    { event: "status.stalled", fields: { plugin: "trace-probe", status: "trace-probe.tree", reason: "surface-closed" } },
   ]);
+  const { losses } = await import("../plugin-processes.js?page-trace");
+  assert.equal(losses().find((entry) => entry.plugin === "trace-probe").stalled, 1, "the stalled value is counted");
 });

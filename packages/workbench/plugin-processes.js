@@ -70,8 +70,8 @@ export function snapshotReporter(plugin) {
       entry.skipped += event.count;
       trace("declared-ui.snapshot.skipped", { plugin, status: event.status, count: event.count });
     } else if (event.kind === "stalled") {
+      // A stalled value is counted only: no live observer waits for its acknowledgement, so it writes no trace event.
       entry.stalled += event.count;
-      trace("status.stalled", { plugin, status: event.status, reason: event.reason });
     } else {
       throw new TypeError(`unknown snapshot report kind ${event.kind}`);
     }
