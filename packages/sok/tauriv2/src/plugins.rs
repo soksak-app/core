@@ -305,14 +305,17 @@ pub fn compact_json(text: &str) -> String {
     out
 }
 
+/// The fault hook of read_installed_manifests: it receives the location of each plugin.json after the reader checks it.
+type ManifestHook = Box<dyn Fn(&Path)>;
+
 thread_local! {
     // The fault hook of the reader. It runs on the calling thread after read_installed reads and checks a plugin.json.
-    static AFTER_MANIFEST_READ: RefCell<Option<Box<dyn Fn(&Path)>>> = const { RefCell::new(None) };
+    static AFTER_MANIFEST_READ: RefCell<Option<ManifestHook>> = const { RefCell::new(None) };
 }
 
 /// Sets the fault hook that runs after read_installed reads and checks each plugin.json on the calling thread. Tests use
 /// it to change a file between two reads; None removes the hook.
-pub fn set_after_manifest_read(hook: Option<Box<dyn Fn(&Path)>>) {
+pub fn set_after_manifest_read(hook: Option<ManifestHook>) {
     AFTER_MANIFEST_READ.with(|slot| *slot.borrow_mut() = hook);
 }
 
