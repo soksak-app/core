@@ -1,13 +1,21 @@
 //! Tests of the page request relay and the host entries. A function that receives requests replaces the page.
 
+#[path = "support/folder.rs"]
+mod folder;
+#[path = "support/records.rs"]
+mod records;
+
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::value::RawValue;
 use serde_json::{Value, json};
-use soksak_host_tauriv2::exposure::{self, Relay};
+use soksak_host_tauriv2::event_log::EventLog;
+use soksak_host_tauriv2::event_record::use_host_event_log;
+use soksak_host_tauriv2::exposure::{self, Relay, RelayCall};
 use soksak_host_tauriv2::windows::{ListStep, list_entries, window_entry};
 
 const WAIT: Duration = Duration::from_secs(5);
@@ -677,4 +685,85 @@ fn an_unregistered_native_surface_view_fails_with_its_address() {
     assert_eq!(exposure::registered_surface(&named, 7).unwrap(), "tab-2");
     let error = exposure::registered_surface(&named, 9).unwrap_err();
     assert_eq!(error, "unregistered native surface 9");
+}
+
+/// The records of the host are process-wide, so the tests that attach a writer of events run one at a time.
+static RECORDS: Mutex<()> = Mutex::new(());
+
+/// The fields of the events named event that the writer stored.
+fn call_events(log: &EventLog, config: &Path, event: &str) -> Vec<Value> {
+    log.flush(WAIT).unwrap();
+    records::read_events(&records::event_log_path(config))
+        .into_iter()
+        .filter(|record| record["event"] == event)
+        .map(|record| record["fields"].clone())
+        .collect()
+}
+
+// contract: exposure.relay.timeout-writes-call-event
+#[test]
+fn timeout_of_a_command_writes_the_call_timeout_event() {
+    let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let config = folder::Folder::new();
+    let log = records::start_writer(config.path());
+    let relay = Relay::default();
+    let call = RelayCall {
+        plugin: "probe".into(),
+        command: "probe.run".into(),
+    };
+    let failure = relay
+        .request_call(
+            "surface-main-a",
+            Some(call),
+            Some(Duration::from_millis(50)),
+            |_| Ok(()),
+        )
+        .unwrap_err();
+    assert_eq!(failure.code, 1005);
+    assert_eq!(
+        call_events(&log, config.path(), "host.call.timeout"),
+        vec![json!({"plugin": "probe", "command": "probe.run"})]
+    );
+    // A request that is not a command writes no call event.
+    relay
+        .request("main", Some(Duration::from_millis(50)), |_| Ok(()))
+        .unwrap_err();
+    assert_eq!(
+        call_events(&log, config.path(), "host.call.timeout").len(),
+        1
+    );
+    use_host_event_log(None);
+}
+
+// contract: exposure.relay.late-reply-writes-call-event
+#[test]
+fn late_reply_to_a_command_writes_the_call_late_reply_event() {
+    let _serial = RECORDS.lock().unwrap_or_else(|poison| poison.into_inner());
+    let config = folder::Folder::new();
+    let log = records::start_writer(config.path());
+    let relay = Relay::default();
+    let call = RelayCall {
+        plugin: "probe".into(),
+        command: "probe.run".into(),
+    };
+    relay
+        .request_call(
+            "surface-main-a",
+            Some(call),
+            Some(Duration::from_millis(50)),
+            |_| Ok(()),
+        )
+        .unwrap_err();
+    assert!(
+        relay
+            .reply("surface-main-a", &text(json!({"id": 1, "result": 1})))
+            .is_err()
+    );
+    let late = call_events(&log, config.path(), "host.trace.call.late-reply");
+    assert_eq!(late.len(), 1, "{late:?}");
+    assert_eq!(late[0]["plugin"], "probe");
+    assert_eq!(late[0]["command"], "probe.run");
+    let delay = late[0]["delay"].as_u64().expect("delay is a number");
+    assert!(delay >= 50, "delay {delay} ms, want at least 50 ms");
+    use_host_event_log(None);
 }

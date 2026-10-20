@@ -270,6 +270,8 @@ fn invalid_json_closes_connection() {
 | `exposure.relay.error-reply-keeps-code-and-message` | 오류 응답은 같은 코드와 메시지로 요청을 실패시킨다. | both |
 | `exposure.relay.foreign-document-reply-ignored-timeout-1005` | 다른 문서의 응답은 무시되고, 요청은 1005로 시간 초과되며, 늦은 응답도 받지 않는다. | both |
 | `exposure.relay.late-reply-states-its-delay` | 시간이 초과된 요청은 `the document did not reply within <ms> ms`로 실패하고, 그 뒤에 온 답은 요청을 보낸 뒤의 지연과 제한 시간으로 실패하며, 요청이 없는 답은 `has no matching request`로 실패한다. | both |
+| `exposure.relay.timeout-writes-call-event` | 시간이 초과된 command는 `plugin`과 `command`를 가진 `host.call.timeout`을 쓰고, command가 아닌 요청은 call event를 쓰지 않는다. | both |
+| `exposure.relay.late-reply-writes-call-event` | 시간이 초과된 command의 늦은 답은 `plugin`, `command`와 보낸 뒤의 `delay`를 가진 `host.trace.call.late-reply`를 쓴다. | both |
 | `exposure.relay.send-failure-1003` | 문서로 보내기가 실패하면 요청은 즉시 1003으로 실패한다. | both |
 | `exposure.relay.closed-document-fails-pending-1003` | 문서를 닫으면 대기 중인 요청은 1003으로 실패한다. | both |
 | `exposure.relay.no-timeout-waits-until-close` | timeout이 없는 요청은 문서가 닫힐 때까지 기다린 뒤 1003으로 실패한다. | both |

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"slices"
 	"testing"
@@ -284,5 +285,59 @@ func TestPageStatusChangeRefusesHostName(t *testing.T) {
 	}
 	if err := host.CheckPageStatusChange("core.grid"); err != nil {
 		t.Fatalf("core.grid: %v", err)
+	}
+}
+
+// callEvents flushes the writer and returns the fields of the events named event that it stored.
+func callEvents(t *testing.T, log *host.EventLog, event string) []map[string]any {
+	t.Helper()
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var fields []map[string]any
+	for _, record := range readEventLog(t, log.Path()) {
+		if record["event"] == event {
+			fields = append(fields, record["fields"].(map[string]any))
+		}
+	}
+	return fields
+}
+
+// contract: exposure.relay.timeout-writes-call-event
+func TestRelayTimeoutOfACommandWritesCallTimeout(t *testing.T) {
+	log := useRoomyEventLog(t)
+	relay := host.NewRelay[string]()
+	got := relay.RequestCall("surface-main-a", host.RelayCall{Plugin: "probe", Command: "probe.run"}, 50*time.Millisecond, func(uint64) error { return nil })
+	if got.Error == nil || got.Error.Code != 1005 {
+		t.Fatalf("reply %+v, want 1005", got)
+	}
+	if want := []map[string]any{{"plugin": "probe", "command": "probe.run"}}; !reflect.DeepEqual(callEvents(t, log, "host.call.timeout"), want) {
+		t.Fatalf("host.call.timeout = %v, want %v", callEvents(t, log, "host.call.timeout"), want)
+	}
+	// A request that is not a command writes no call event.
+	relay.Request("main", 50*time.Millisecond, func(uint64) error { return nil })
+	if got := callEvents(t, log, "host.call.timeout"); len(got) != 1 {
+		t.Fatalf("host.call.timeout has %d events after a request that is not a command, want 1", len(got))
+	}
+}
+
+// contract: exposure.relay.late-reply-writes-call-event
+func TestRelayLateReplyOfACommandWritesCallLateReply(t *testing.T) {
+	log := useRoomyEventLog(t)
+	relay := host.NewRelay[string]()
+	var requested uint64
+	relay.RequestCall("surface-main-a", host.RelayCall{Plugin: "probe", Command: "probe.run"}, 50*time.Millisecond, func(id uint64) error {
+		requested = id
+		return nil
+	})
+	if err := relay.Resolve(requested, "surface-main-a", host.ExposureResult{Result: json.RawMessage(`1`)}); err == nil {
+		t.Fatal("a late reply was accepted after the timeout")
+	}
+	late := callEvents(t, log, "host.trace.call.late-reply")
+	if len(late) != 1 || late[0]["plugin"] != "probe" || late[0]["command"] != "probe.run" {
+		t.Fatalf("host.trace.call.late-reply = %v, want one event of plugin probe and command probe.run", late)
+	}
+	if delay, ok := late[0]["delay"].(float64); !ok || delay < 50 {
+		t.Fatalf("delay = %v, want a number of at least 50 ms", late[0]["delay"])
 	}
 }

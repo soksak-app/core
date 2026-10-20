@@ -236,6 +236,27 @@
       },
       "description": "The mount of one plugin surface in the page, while the trace is on: plugin and surface name the surface, and ms is the time in milliseconds from the start of its mount to the end of the module mount, including the awaited promise of the module (performance.now). A mount that fails writes no event; its error has its own record."
     },
+    "host.call.timeout": {
+      "layer": "host",
+      "class": "call",
+      "level": "error",
+      "fields": {
+        "plugin": "string",
+        "command": "string"
+      },
+      "description": "A command that the exposure relay forwarded to a surface page got no reply within its declared time limit: plugin is the plugin of the surface and command is the forwarded method (docs/spec/exposure.md#errors)."
+    },
+    "host.trace.call.late-reply": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "command": "string",
+        "delay": "number"
+      },
+      "description": "A reply to a forwarded command arrived after its time limit, and the relay refused it: delay is the time in milliseconds from the send of the command to the reply (docs/spec/exposure.md#errors)."
+    },
     "host.trace.<event>": {
       "layer": "host",
       "class": "call",

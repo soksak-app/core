@@ -232,6 +232,13 @@ type relayExpired[T comparable] struct {
 	target  T
 	sent    time.Time
 	timeout time.Duration
+	call    RelayCall
+}
+
+// RelayCall is the plugin command that a request carries. A request whose Command is empty writes no call event.
+type RelayCall struct {
+	Plugin  string
+	Command string
 }
 
 type relayWaiter[T comparable] struct {
@@ -248,6 +255,12 @@ func NewRelay[T comparable]() *Relay[T] {
 // returns a 1003 error. When the time limit passes, it deletes the request and returns a 1005 error. When timeout is 0, it waits for a reply or
 // Abandon.
 func (r *Relay[T]) Request(target T, timeout time.Duration, send func(id uint64) error) ExposureResult {
+	return r.RequestCall(target, RelayCall{}, timeout, send)
+}
+
+// RequestCall is Request for a request that carries call. A time limit that passes writes the event host.call.timeout, and a late
+// reply to it writes host.trace.call.late-reply (docs/spec/exposure.md#errors).
+func (r *Relay[T]) RequestCall(target T, call RelayCall, timeout time.Duration, send func(id uint64) error) ExposureResult {
 	r.mu.Lock()
 	r.next++
 	id := r.next
@@ -283,8 +296,11 @@ func (r *Relay[T]) Request(target T, timeout time.Duration, send func(id uint64)
 			r.expired = r.expired[1:]
 			recordBufferDrop("relay expired requests", 0, fmt.Sprintf("%d requests", relayExpiredLimit))
 		}
-		r.expired = append(r.expired, relayExpired[T]{id: id, target: target, sent: sent, timeout: timeout})
+		r.expired = append(r.expired, relayExpired[T]{id: id, target: target, sent: sent, timeout: timeout, call: call})
 		r.mu.Unlock()
+		if call.Command != "" {
+			EmitHost(LevelError, "host.call.timeout", map[string]any{"plugin": call.Plugin, "command": call.Command})
+		}
 		return ExposureResult{Error: rpcError(codeTimeout, "the document did not reply within %d ms", timeout.Milliseconds())}
 	}
 }
@@ -298,8 +314,13 @@ func (r *Relay[T]) Resolve(id uint64, from T, reply ExposureResult) error {
 		for i, expired := range r.expired {
 			if expired.id == id && expired.target == from {
 				r.expired = append(r.expired[:i], r.expired[i+1:]...)
+				delay := time.Since(expired.sent).Milliseconds()
+				if expired.call.Command != "" {
+					EmitHost(LevelDebug, "host.trace.call.late-reply", map[string]any{
+						"plugin": expired.call.Plugin, "command": expired.call.Command, "delay": delay})
+				}
 				return fmt.Errorf("exposure reply %d arrived %d ms after it was sent; its request timed out after %d ms",
-					id, time.Since(expired.sent).Milliseconds(), expired.timeout.Milliseconds())
+					id, delay, expired.timeout.Milliseconds())
 			}
 		}
 		return fmt.Errorf("exposure reply %d has no matching request", id)
@@ -493,8 +514,16 @@ func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (Ex
 	if invalid != nil {
 		return ExposureResult{Error: invalid}, nil
 	}
+	// A surface that declared its composition has its plugin (sync checks it), so the call names that plugin.
+	s.mu.Lock()
+	plugin, declared := s.surfacePlugins[req.Surface]
+	s.mu.Unlock()
+	call := RelayCall{}
+	if declared {
+		call = RelayCall{Plugin: plugin, Command: req.Method}
+	}
 	// status.next has no time limit. It ends with 1003 when the surface closes.
-	reply := h.relay.Request(relayTarget{owner: s, surface: req.Surface}, timeout, func(id uint64) error {
+	reply := h.relay.RequestCall(relayTarget{owner: s, surface: req.Surface}, call, timeout, func(id uint64) error {
 		var sent bool
 		application.InvokeSync(func() {
 			if s.views[req.Surface] != nil {

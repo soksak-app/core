@@ -23,6 +23,8 @@ use crate::endpoint::{
     BUTTON_HELD, Endpoint, Failure, HANDLER_FAILED, INVALID_PARAMS, MISSING_DOCUMENT, NO_INPUT,
     NOT_ACTIVE, PRESS_OPEN, Service, TIMED_OUT, UNKNOWN_NAME, missing_window,
 };
+use crate::event_log::Level;
+use crate::event_record::emit_host;
 use crate::platform;
 use crate::surfaces::label_for;
 use crate::windows::{self, NativeFailure, window_data, with_native_owner};
@@ -368,13 +370,29 @@ struct Answer {
 pub struct Relay {
     next: AtomicU64,
     pending: Mutex<HashMap<u64, Waiting>>,
-    /// The id, document, send time and time limit of recent requests that timed out. To state the delay of a late reply
-    /// in its error, up to EXPIRED_LIMIT of them are kept and the oldest is discarded (docs/spec/exposure.md#errors).
-    expired: Mutex<std::collections::VecDeque<(u64, String, std::time::Instant, Duration)>>,
+    /// The recent requests that timed out. To state the delay of a late reply in its error, up to EXPIRED_LIMIT of them are
+    /// kept and the oldest is discarded (docs/spec/exposure.md#errors).
+    expired: Mutex<std::collections::VecDeque<Expired>>,
 }
 
 /// The number of timed-out requests that are kept for late replies.
 const EXPIRED_LIMIT: usize = 256;
+
+/// The plugin command that a request carries. A request without one writes no call event.
+#[derive(Clone)]
+pub struct RelayCall {
+    pub plugin: String,
+    pub command: String,
+}
+
+/// A request that timed out: its id, document, send time, time limit and the command it carries, if any.
+struct Expired {
+    id: u64,
+    target: String,
+    sent: Instant,
+    timeout: Duration,
+    call: Option<RelayCall>,
+}
 
 #[cfg(feature = "diagnostics")]
 impl Relay {
@@ -408,6 +426,18 @@ impl Relay {
     pub fn request(
         &self,
         target: &str,
+        timeout: Option<Duration>,
+        send: impl FnOnce(u64) -> Result<(), String>,
+    ) -> Result<Box<RawValue>, Failure> {
+        self.request_call(target, None, timeout, send)
+    }
+
+    /// The same as request for a request that carries call. A time limit that passes writes the event `host.call.timeout`, and a
+    /// late reply to it writes `host.trace.call.late-reply`.
+    pub fn request_call(
+        &self,
+        target: &str,
+        call: Option<RelayCall>,
         timeout: Option<Duration>,
         send: impl FnOnce(u64) -> Result<(), String>,
     ) -> Result<Box<RawValue>, Failure> {
@@ -457,7 +487,20 @@ impl Relay {
                         &format!("{EXPIRED_LIMIT} requests"),
                     );
                 }
-                expired.push_back((id, target.to_string(), sent, timeout));
+                if let Some(call) = &call {
+                    emit_host(
+                        Level::Error,
+                        "host.call.timeout",
+                        json!({"plugin": call.plugin, "command": call.command}),
+                    );
+                }
+                expired.push_back(Expired {
+                    id,
+                    target: target.to_string(),
+                    sent,
+                    timeout,
+                    call,
+                });
                 Err(Failure::new(
                     TIMED_OUT,
                     format!(
@@ -510,14 +553,26 @@ impl Relay {
         let mut expired = self.expired.lock().map_err(|e| e.to_string())?;
         let Some(index) = expired
             .iter()
-            .position(|(held, target, _, _)| *held == id && target == from)
+            .position(|held| held.id == id && held.target == from)
         else {
             return Ok(format!("exposure reply {id} has no matching request"));
         };
-        let (_, _, sent, timeout) = expired.remove(index).expect("the position is in the queue");
+        let Expired {
+            sent,
+            timeout,
+            call,
+            ..
+        } = expired.remove(index).expect("the position is in the queue");
+        let delay = sent.elapsed().as_millis();
+        if let Some(call) = call {
+            emit_host(
+                Level::Debug,
+                "host.trace.call.late-reply",
+                json!({"plugin": call.plugin, "command": call.command, "delay": delay as u64}),
+            );
+        }
         Ok(format!(
-            "exposure reply {id} arrived {} ms after it was sent; its request timed out after {} ms",
-            sent.elapsed().as_millis(),
+            "exposure reply {id} arrived {delay} ms after it was sent; its request timed out after {} ms",
             timeout.as_millis()
         ))
     }
@@ -766,6 +821,16 @@ pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValu
     let label = label_for(&window, &request.surface);
     let app = window.app_handle().clone();
     let surface_exists = crate::surfaces::surface_handle(&window, &request.surface).is_ok();
+    // A surface that declared its composition has its plugin (surfaces.rs checks it), so the call names that plugin.
+    let call = window_data(&window)?
+        .surface_plugins
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(&request.surface)
+        .map(|plugin| RelayCall {
+            plugin: plugin.clone(),
+            command: request.method.clone(),
+        });
     let outcome = match forward_timeout(&request.method, &request.timeout) {
 		Err(invalid) => Err(invalid),
 		Ok(_) if !surface_exists => Err(Failure::new(
@@ -776,7 +841,7 @@ pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValu
         Ok(timeout) => window
             .state::<Exposure>()
 			.relay
-			.request(&label, timeout, |id| {
+			.request_call(&label, call, timeout, |id| {
 				emit_to(
 					&app,
 					window.label(),
