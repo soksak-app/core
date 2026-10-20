@@ -53,8 +53,8 @@ The values below are fixed before stage F212.1 starts. Each value is judged by t
 |---|---|
 | (i) total | The summed footprint of N views of one plugin is at most N times the footprint of one view, plus 10 MB. |
 | (ii) reclaim | Applies to a view that shares no process with another view; views that share a process are measured as one unit with them. Closing a view opened and closed with a session history that holds only its initial document returns at least 90% of its footprint within 10 seconds, in 3 repeated runs. A process held by an engine cache counts as not returned. |
-| (iii) first display | First display of a view whose process is already running: the time from the view start request to the first content frame in the recording, at most the DOM mount baseline plus 300 ms. |
-| (iii-b) first display of a new process | First display of a new process: (the time from the view start request to its first content frame in the recording) minus (the median of five process start durations of F212.1, each a duration from the process request to its ready state) is at most the DOM mount baseline plus 300 ms, over three repeated runs. |
+| (iii) first display | First display of a view whose process is already running: the time from the view start request to the first content frame in the recording, at most the DOM mount baseline plus 300 ms, where the DOM mount baseline is the median time from the surface start request to the first content frame in the recording of the same plugin's surface mount in the main page, measured by the same recording method. |
+| (iii-b) first display of a new process | First display of a new process: (the time from the view start request to its first content frame in the recording) minus (the median of five process start durations of F212.7a, each a duration from the process request (`host.view.process-request`) to the first `host.view.process-ready` that the view writes when its page runtime starts; both are declared in F212.3 (class lifecycle, level debug)) is at most the DOM mount baseline plus 300 ms, over three repeated runs. |
 | (v) display judgment | From a recording of a card layout change, the view's content frame at its new size appears within 100 ms of the first frame of that change. Fixed before F212.7. |
 | (vi) restart limit | When a failure event arrives, the failure time is recorded and counted at that point; no timer is used. Reaching the fourth failure within the last 300 seconds stops the restarts. Failures older than 300 seconds are not counted (sliding window). After a stop, the failure record is kept. It is cleared only when the person opens a surface that needs the process, and the process then starts again. |
 | (iv) editor measurement | The footprint of the editor view and the footprint of a hidden DOM editor are measured. When the view footprint exceeds 50 MB, a checklist item for moving the buffer and analysis to a sidecar is added after F212.9. This is a measurement and item-addition rule, not a pass condition. |
@@ -73,9 +73,9 @@ When a value is not met, the measured values are recorded in the checklist. A fa
    - When the view process ends or the surface closes while an acknowledgement is pending, the workbench writes `host.status.stalled {plugin, status, reason}`. A restarted process sends the latest value of each status as its first snapshot and clears the dirty mark. When the surface is closed, the dirty values are discarded and the reason says so. No timer is used.
 3. **Calls across a boundary.**
    - A command declares `timeout` as stated in [exposure](../spec/exposure.md) (at most 600000 ms; 10 seconds when omitted). The timer remains for a live peer that does not reply to a command, because no event reports a slow command reply. `host.view.unresponsive` reports a view process that stops answering WebKit's responsiveness check; it is not a command reply, so it does not replace the timer. When the time limit passes, the call is rejected with an error that names the elapsed time and the timeout, as the current contract states, and `host.call.timeout {plugin, command}` is written.
-   - When the peer disappears, the call ends before its time limit through an event. The peers are: a view or host process that ends, a surface that closes, a sidecar that ends, and a view reported unresponsive by `host.view.unresponsive`. The promise is rejected with an error that gives the reason, and `host.call.peer-lost {plugin, command, reason}` is written. The reason is one of `process-ended`, `surface-closed`, `sidecar-ended` or `unresponsive`.
+   - When the peer disappears, the call ends before its time limit through an event. The peers whose end ends a call are: a view or host process that ends, a surface that closes, and a sidecar that ends. The promise is rejected with an error that gives the reason, and `host.call.peer-lost {plugin, command, reason}` is written. The reason is one of `process-ended`, `surface-closed` or `sidecar-ended`. `host.view.unresponsive` does not end a call; it is written and used only by the presentation wait of rule 6 and by the status of the view. A call ends only by its declared timeout or by one of these peers.
    - A late reply to a call that has ended is discarded. It is not passed to any promise, and no error is sent to the document that sent it. The host writes `host.call.late-reply {plugin, command, delay}`. The host-contract cases `exposure-reply.removed-surface-discarded` and `exposure.relay.foreign-document-reply-ignored-timeout-1005` state this behavior.
-   - The number of open calls, including snapshots waiting for acknowledgement, and the start time of the oldest open call are exposed as the core status `core.plugin.open-calls {plugin, count, oldestStartedAt}`. The name and location are fixed here; F212.3 declares the status.
+   - The number of open calls, including snapshots waiting for acknowledgement, and the start time of the oldest open call are exposed as the core status `core.plugin.open-calls {plugin, count, oldestStartedAt, lateReplies}`. `lateReplies` is the count of late replies of the bullet above. The name and location are fixed here; F212.3 declares the status.
    - The relay timeout is product behavior of exposure. The two paths are: the host applies the timeout to a command forwarded to a surface page, and the main page applies the timeout to a handler that it runs itself ([exposure](../spec/exposure.md), command `timeout`). Both paths are written in exposure.md in F212.2.
    - Cancellation is part of the call envelope. A binary payload uses a separate channel (open item 2).
 4. **Origin and shared modules.**
@@ -89,7 +89,7 @@ When a value is not met, the measured values are recorded in the checklist. A fa
    - Red test: a request from a view of plugin A for a file of plugin B, when B neither contributes to an extension point of A nor is in A's dependencies, receives not found.
 5. **Restarts.** Sidecars and plugin hosts restart within the limit of pass value (vi). When the limit is exceeded, the host reports `error:` and stops.
    - After the limit is exceeded, the next request fails with `sidecar-failure` (reason `restart limit`) without starting the process. The failure record is kept. It is cleared only when the person opens a surface that needs the process; the process then starts, and the host writes `host.sidecar.restart-reset {sidecar, surface}`. A plugin host writes `host.plugin-host.restart-reset {plugin}`.
-   - This rule changes two specification locations. The `## Failure` section of [sidecars](../spec/sidecars.md) lists the failure causes and does not state a restart rule, so F212.8a adds the limit to it. The restart rule that [terminal runtime](../spec/terminal-runtime.md) states at line 43 (one attempt per disconnect, with the next send retrying the same path) changes in F212.8a as well.
+   - This rule changes two specification locations. The `## Failure` section of [sidecars](../spec/sidecars.md) at line 67 states that the next request after a failure starts a new process without a limit. F212.8a replaces that sentence with the limit of rule 5. The restart rule that [terminal runtime](../spec/terminal-runtime.md) states at line 43 (one attempt per disconnect, with the next send retrying the same path) changes in F212.8a as well.
    - A restart restores the state from the last saved value. A state that was not saved is lost, and each plugin states which state that is.
    - Fault injection exists only in diagnostic builds.
 6. **Presentation.** A plugin view joins the presentation wait only at the first display after a card layout change (the first change of a gesture).
@@ -109,13 +109,13 @@ When a value is not met, the measured values are recorded in the checklist. A fa
      - A key whose owner is the native menu does not prevent the view's default action, because the menu receives it first.
      - A key that is not in the table keeps its default action.
    - When a passed command fails, the failure is written as `page.input.shortcut.failed {plugin, key, command}`, and the default action is not run again.
-   - F212.6a measures the round trip of Escape against the menu close before F212.7 starts.
+   - F212.6a measures the round trip of Escape against the menu close before F212.7 starts and records the result. The owner of Escape is the view; the measurement does not choose it.
    - IME input goes to the first responder of the view. The activation check (F212.13) verifies it.
 
    | shortcut | owner | reason |
    |---|---|---|
    | Command `=`, `-`, `0` (View menu: text size, [text size](../spec/text-size.md)) | native menu → core commands `core.text.larger`, `core.text.smaller`, `core.text.reset` | a menu key equivalent works whatever view has focus |
-   | Escape | set by the round-trip measurement of F212.6a (menu close or view) | measured against the menu close in F212.6a |
+   | Escape | view | a view consumes Escape for its own text input; the measurement of F212.6a verifies the round trip against the menu close and records the result; it does not choose the owner |
    | text input and IME keys | view | the first responder of the view receives them |
 
    The full list of workbench shortcuts is taken from the menu declarations of both hosts and from the workbench key handlers. The table lists only the shortcuts the specifications declare now; F212.6a adds the rest to this table before F212.7 starts.
@@ -144,13 +144,15 @@ The RPC protocol number is 1 in the 0.0 series.
 
 | event | class | level | fields |
 |---|---|---|---|
-| `host.declared-ui.snapshot.skipped` | call | debug | `{plugin, status, count}`: values skipped while a snapshot was in transit |
+| `host.declared-ui.snapshot.skipped` | call | warn | `{plugin, status, count}`: values skipped while a snapshot was in transit |
 | `host.status.stalled` | lifecycle | warn | `{plugin, status, reason}` |
 | `host.call.timeout` | call | warn | `{plugin, command}` |
 | `host.call.peer-lost` | call | warn | `{plugin, command, reason}` |
 | `host.call.late-reply` | call | debug | `{plugin, command, delay}` |
 | `host.view.unresponsive` | lifecycle | warn | `{plugin, surface}` |
 | `host.view.responsive` | lifecycle | info | `{plugin, surface}` |
+| `host.view.process-request` | lifecycle | debug | `{plugin, surface}` |
+| `host.view.process-ready` | lifecycle | debug | `{plugin, surface}` |
 | `page.view.presentation-abandoned` | lifecycle | warn | `{surface, reason}` |
 | `page.view.shortcut-table-missing` | input | error | `{plugin}` |
 | `page.input.shortcut.failed` | input | error | `{plugin, key, command}` |
@@ -159,7 +161,7 @@ The RPC protocol number is 1 in the 0.0 series.
 | `host.plugin-host.restart-reset` | lifecycle | info | `{plugin}` |
 | `host.sidecar.restart-reset` | lifecycle | info | `{sidecar, surface}`, declared by F212.8a |
 
-The status `core.plugin.open-calls` is declared in F212.3.
+The status `core.plugin.open-calls {plugin, count, oldestStartedAt, lateReplies}` is declared in F212.3. `host.call.late-reply` stays at debug, and its count is also reported in `core.plugin.open-calls`. Every event that records a loss or a failure is warn or higher: the skipped snapshot values (`host.declared-ui.snapshot.skipped`), the timeouts, the stalled statuses, the peer losses and the abandoned presentations.
 
 The identifiers in code use the names as written here.
 
@@ -217,7 +219,7 @@ The identifiers in code use the names as written here.
 7. The exposure owner key of a plugin host is `plugin:<plugin id>`. The key uses the plugin id, which is the identity of a plugin (see [identity](#identity)).
 8. Each new private API is listed in [private native APIs](../operations/private-native-apis.md) with its call condition in the stage that adds it. The unresponsive selectors of open item 10 are listed in F212.3. No other new private API is decided in this document.
 9. A native operation adds the document-start user script to the view configuration, on both hosts, with a contract case (F212.7d).
-10. Unresponsive detection is decided. The public API has only termination (`WKNavigationDelegate.h` in the SDK). The private selectors `_webViewWebProcessDidBecomeUnresponsive:` and `_webViewWebProcessDidBecomeResponsive:` of `WKNavigationDelegatePrivate` are called by WebKit's internal ResponsivenessTimer (default 3 s, running only while a page waits for a reply from its process). They are adopted as an event source and used for that purpose. They are declared in `native/darwin/src/private/webkit.h` and listed in [private native APIs](../operations/private-native-apis.md) with their call conditions in F212.3. They produce `host.view.unresponsive` and `host.view.responsive`.
+10. Decision: the private `WKNavigationDelegatePrivate` selectors `_webViewWebProcessDidBecomeUnresponsive:` and `_webViewWebProcessDidBecomeResponsive:` are the event source; no public API exists (the SDK's `WKNavigationDelegate.h` has only `webViewWebContentProcessDidTerminate:`). They are not declared yet. F212.3 adds them to `native/darwin/src/private/webkit.h` and to [private native APIs](../operations/private-native-apis.md) with the call condition and the source lines read from the WebKit source of the SDK revision in use (ResponsivenessTimer, its default and its trigger). Rule 6 uses them only after that record exists.
 
 ## Identity
 
@@ -241,25 +243,28 @@ The identifiers in code use the names as written here.
 
 Each step is one checklist item with one unit of function: specification, Red, implementation, Green, record, commit. The main branch is green after each step.
 
-1. **F212.1 Measurement.** WebContent totals per window; base cost of a web view; cost and throttle of a plugin host; DOM editor and flowmark with memory saving on and off, and the same screen as a view; two views of one plugin under (a) and (b); process-sharing pairs (two views of one plugin, two plugins, a view and a document region of one plugin); the main page of two windows; the DOM mount time of every surface plugin in the installed record (the baseline of (iii), recorded with the plugin version); the first display time, the first status time, and the start time of a new WebContent process. The page writes `page.trace.surface.mount {plugin, surface, ms}` at each surface mount when the trace is on, and `make events-check` compares the workbench `trace(` calls with the catalog.
+Step order: F212.7, F212.7b, F212.7d, F212.10-editor, F212.7a, F212.7c, F212.8, F212.8a, F212.9, F212.9a, F212.10 (other plugins), F212.11 to F212.15. F212.7c measures the editor view created by F212.10-editor, so it follows F212.10-editor and F212.7a. F212.7a and F212.7c both depend on F212.10-editor.
+
+1. **F212.1 Measurement.** WebContent totals per window; base cost of a web view; cost and throttle of a plugin host; DOM editor and flowmark with memory saving on and off, and the same screen as a view; two views of one plugin under (a) and (b); process-sharing pairs (two views of one plugin, two plugins, a view and a document region of one plugin); the main page of two windows; the DOM mount time of every surface plugin in the installed record (page trace, recorded with the plugin version; the (iii) baseline is F212.1-3); the first display time, the first status time, and the start time of a new WebContent process. The page writes `page.trace.surface.mount {plugin, surface, ms}` at each surface mount when the trace is on, and `make events-check` compares the workbench `trace(` calls with the catalog.
+   - **F212.1-3:** the recorded DOM mount baseline of every installed surface plugin (first content frame in a recording), the baseline of (iii). The median of F212.1-2 (`page.trace.surface.mount`) is the trace value of the mount, not the (iii) baseline.
 2. **F212.2 Design document.** This document and its Korean translation. The review result is recorded in [objections answered](#objections-answered).
-3. **F212.3 Call message layer (plugin-api).** Declares the events of [messages and events](#messages-and-events) in the event catalog, except `host.sidecar.restart-reset` (declared by F212.8a); declares the status `core.plugin.open-calls`; lists the unresponsive selectors in [private native APIs](../operations/private-native-apis.md) with their call conditions (open item 10); and runs `make events-check`.
+3. **F212.3 Call message layer (plugin-api).** Declares the events of [messages and events](#messages-and-events) in the event catalog, except `host.sidecar.restart-reset` (declared by F212.8a); declares the status `core.plugin.open-calls`; adds the unresponsive selectors to `native/darwin/src/private/webkit.h` and to [private native APIs](../operations/private-native-apis.md) with the call condition and the source lines read from the WebKit source of the SDK revision in use (open item 10); and runs `make events-check`.
 4. **F212.4 Binary path** (native code and both hosts).
 5. **F212.5 Reserved module root and import map.** Changes `/modules` and `/shared` in [installation](../spec/installation.md) and adds the core root path form.
 6. **F212.6 Identity, exposure registration, and the reserved core check.** Adds the reserved `core` check to `validateManifest`, the plugin id mapping, and the exposure registration.
-   - **F212.6a:** shortcut table. Measures the round trip of Escape against the menu close and decides its owner, then adds every other workbench shortcut from both hosts' menu declarations and workbench key handlers to the table of rule 7. It is completed before F212.7.
-7. **F212.7 View configuration kinds** (manifest, workbench, native placement, and the `view` composition kind). The `view` kind is added beside `dom`. Both kinds are current until F212.11 removes `dom`; no reader converts one form into the other. Rules 9 and 10 are implemented here, and F212.7 names their contract cases.
+   - **F212.6a:** shortcut table. Measures the round trip of Escape against the menu close and records the result; the owner of Escape is the view and the measurement does not choose it. It then adds every other workbench shortcut from both hosts' menu declarations and workbench key handlers to the table of rule 7. It is completed before F212.7.
+7. **F212.7 View configuration kinds** (manifest, workbench, native placement, and the `view` composition kind). F212.7 adds the `view` kind and removes `dom` in the same item. The plugins of the check environment migrate in their own F212.10 items against the F212.7 branch; F212.7 merges into main when those plugin releases are published with an `engines` range that requires it. From F212.7 on the reader rejects `dom` with an explicit error that names the plugin and the manifest field. Rollback is by plugin release with the previous `engines` range, not by a second reader form. Rules 9 and 10 are implemented here, and F212.7 names their contract cases.
    - **F212.7b:** presentation wait participation and budget (v).
-   - **F212.7c:** drag recording and geometry error (viii). The first view (the editor view of F212.10-editor) is the measured view. Every plugin view is measured in its own F212.10 item and in F212.14.
    - **F212.7d:** first-frame theme user script (open item 9).
-   - **F212.10-editor:** the editor plugin migrates to a view (its own repository item), before F212.7a.
-   - **F212.7a:** after F212.10-editor and before F212.8, the editor view measures (i), (ii), (iii), (iii-b), (v) and (viii).
+   - **F212.10-editor:** the editor plugin migrates to a view (its own repository item), before F212.7a and F212.7c.
+   - **F212.7a:** after F212.10-editor, the editor view measures (i), (ii), (iii), (iii-b), (v) and (viii) through the drag recording of F212.7c.
+   - **F212.7c:** drag recording and geometry error (viii). The first view (the editor view of F212.10-editor) is the measured view. Every plugin view is measured in its own F212.10 item and in F212.14. It follows F212.10-editor and F212.7a.
 8. **F212.8** Declared UI schema and drawing in the workbench, including sidebar sections.
    - **F212.8a:** restart limit (vi) in the `## Failure` section of [sidecars](../spec/sidecars.md) and in [terminal runtime](../spec/terminal-runtime.md) line 43, and their translations. Red tests in the host packages that own sidecar failure (Go, Rust, and the contract cases). F212.8a precedes F212.9. It declares `host.sidecar.restart-reset`.
 9. **F212.9** Plugin host mechanism (platform operation, owner key, restart). The files repository first completes its item that moves the state to a sidecar. A host is built only when a plugin still needs it.
    - **F212.9a:** when a plugin host is built, its footprint and throttle are measured before F212.10.
 10. **F212.10** Plugin migrations (one item per plugin repository, with `engines.soksak`). The named items F212.10-shell-layer and F212.10-browser-sections are completed before the shell and browser migrations. Each plugin item measures (iii), (v) and (viii) for its views before its release.
-11. **F212.11** Removal of the old paths (page mount, parking, the `dom` composition, section and state mounts on the page). The manifest accepts only the new form.
+11. **F212.11** Removal of the remaining page-mount code paths only (page mount, parking, section and state mounts on the page).
 12. **F212.12** Window checks by function (display, input and focus, drag, restart). One item per function.
 13. **F212.13** IME activation check (with the user's approval).
 14. **F212.14** At the final layout, every plugin view is measured again for (i), (ii), (iii), (iii-b) and (v), and every plugin view is measured for (viii). (vi) is covered by the restart window check of F212.12.
@@ -306,7 +311,7 @@ Each specification location that this design contradicts, with the stage that ch
 
 ## Objections answered
 
-The objections below are the answers of the first and second reviews. Each entry gives the objection, the verdict and the resolution, which a rule of this proposal records. The entries of the second review use the review's ids (C, H, M). The three wrong answers of the second review are the answers to C1, C7 and H3.
+The objections below are the answers of the first, second and third reviews. Each entry gives the objection, the verdict and the resolution, which a rule of this proposal records. The entries of the second review use the review's ids (C, H, M). The entries of the third review use the review's ids (N, D). The three wrong answers of the second review are the answers to C1, C7 and H3.
 
 **First review**
 
@@ -342,7 +347,7 @@ The objections below are the answers of the first and second reviews. Each entry
 - H3: identity and audit. Verdict: accepted. Resolution: the fix sites are `index.js:1127` in pagePackage and `page.js:78` and `page.js:169`; F212.6 adds the reserved core check to `validateManifest`. The claim about `e2e/audit.test.mjs:12` was wrong and is removed. The first-review answer on the audit is corrected the same way.
 - H4: shell layer, browser sections and the Escape measurement. Verdict: partly accepted. Resolution: the shell layer and the four browser sections are decided in each plugin repository's named items (F212.10-shell-layer and F212.10-browser-sections) before that plugin's F212.10 migration; Escape and the remaining shortcuts are collected into the table by F212.6a before F212.7. No open cell remains without an item (Placement, Steps).
 - H5: unload and restore of views. Verdict: accepted. Resolution: rule 10 closes a tab's views and processes on unload, creates a new view from the stored state on restore, and applies pass value (ii) to each unload.
-- H6: the `view` composition kind next to `dom`. Verdict: rejected. Resolution: the `view` kind is a new kind beside `dom`, not a second stored format of the same data. Both kinds are current until F212.11 removes `dom`. No reader converts one form into the other, so this is not a compatibility layer (F212.7).
+- H6: the `view` composition kind next to `dom`. Verdict: accepted in the third review (D1), which reverses the earlier rejection. Resolution: F212.7 adds the `view` kind and removes `dom` in the same item. The plugins of the check environment migrate in their own F212.10 items against the F212.7 branch; F212.7 merges into main when those plugin releases are published with an `engines` range that requires it. From F212.7 on the reader rejects `dom` with an explicit error that names the plugin and the manifest field. Rollback is by plugin release with the previous `engines` range, not by a second reader form (F212.7).
 - H7: RPC protocol number. Verdict: accepted. Resolution: the RPC protocol number is 1 in the 0.0 series (Messages).
 - M1: core root path form. Verdict: accepted. Resolution: the core root path form is `sok://core/<plugin id>/<path>`, and installation.md lines 129-130 are added to the specification changes (rule 4, Specification changes).
 - M2: terms. Verdict: accepted. Resolution: the terms card surface, presentation wait, shortcut table, call envelope, reserved module root, installation record, owner key, snapshot in transit and plugin name are added to `packages/plugin-api/terms.json`. The identity section uses "plugin name" instead of "package name". The term "declared UI snapshot" cites [native surfaces](../spec/native-surfaces.md), where its section is written in the spec move, not this plan.
@@ -351,3 +356,15 @@ The objections below are the answers of the first and second reviews. Each entry
 - M5: reason 3 and the hidden region. Verdict: accepted. Resolution: reason 3 gives the release main page process size and the reload sizes (G1.4-107), and reason 4 uses the F198.5 wording "hidden browser tab".
 - M6: blank numbering. Verdict: accepted. Resolution: every "blank N" is renamed "open item N".
 - M7: shortcut default action before registration. Verdict: accepted. Resolution: rule 7 keeps a key's default action until the table is registered, and the view writes `page.view.shortcut-table-missing` at error level.
+
+**Third review**
+
+- N1: step order. Verdict: accepted. Resolution: the Steps section fixes the order F212.7, F212.7b, F212.7d, F212.10-editor, F212.7a, F212.7c, F212.8, F212.8a, F212.9, F212.9a, F212.10 (other plugins), F212.11 to F212.15. F212.7c measures the editor view created by F212.10-editor, so it follows F212.10-editor and F212.7a. F212.7a and F212.7c both depend on F212.10-editor, and F212.7a measures (viii) through the drag recording of F212.7c.
+- N2: peer-lost reasons. Verdict: accepted. Resolution: `host.view.unresponsive` does not end a call. The peers whose end ends a call are a view or host process that ends, a surface that closes, and a sidecar that ends; their reasons are `process-ended`, `surface-closed` and `sidecar-ended` (rule 3). `host.view.unresponsive` is written and used only by the presentation wait of rule 6 and by the status of the view. The reason `unresponsive` is removed everywhere.
+- N3: open item 10. Verdict: accepted. Resolution: open item 10 is restated as a decision. The private `WKNavigationDelegatePrivate` selectors are the event source, because the public API has only termination. F212.3 adds them with their call conditions and the WebKit source lines read for the SDK revision in use, and rule 6 uses them only after that record exists.
+- N4: (iii) baseline. Verdict: accepted. Resolution: the DOM mount baseline of (iii) is the median time from the surface start request to the first content frame in the recording of the same plugin's surface mount in the main page, measured by the same recording method. It is measured by F212.1-3. The median of `page.trace.surface.mount` in F212.1-2 is the trace value of the mount and is not the (iii) baseline.
+- N5: process start durations of (iii-b). Verdict: accepted. Resolution: each duration runs from `host.view.process-request` to the first `host.view.process-ready`. Both events are declared in F212.3 (class lifecycle, level debug). The durations are measured within F212.7a; no separate F212.1-4 item is added.
+- N6: sidecar restart text. Verdict: accepted. Resolution: the `## Failure` sentence of sidecars.md at line 67, which states a restart without a limit, is replaced by F212.8a with the limit of rule 5. The terminal runtime sentence at line 43 also changes in F212.8a (rule 5).
+- N7: event levels. Verdict: accepted. Resolution: `host.declared-ui.snapshot.skipped` is warn, because a skipped snapshot value is an observable loss and must be stored in release builds. Every event that records a loss or a failure is warn or higher: `host.call.timeout`, `host.status.stalled`, `host.call.peer-lost` and `page.view.presentation-abandoned`. `host.call.late-reply` stays at debug, and its count is also reported in `core.plugin.open-calls` as `lateReplies`.
+- D1: the `view` kind replaces `dom` in one item. Verdict: accepted in the third review; it reverses H6. Resolution: F212.7 adds the `view` kind and removes `dom` in the same item, with the migration and reader rules stated in H6 and in Steps. F212.11 removes only the remaining page-mount code paths.
+- D2: owner of Escape. Verdict: partly accepted. Resolution: the owner of Escape is the view, because a view consumes Escape for its own text input. F212.6a verifies the round trip against the menu close and records the result; it does not choose the owner. The shell layer and the browser sections stay with their plugin repository items (F212.10-shell-layer and F212.10-browser-sections): core does not decide a plugin's internal layout, because plugin functionality belongs to its plugin repository and each repository keeps its own checklist.
