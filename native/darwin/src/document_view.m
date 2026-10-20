@@ -1241,8 +1241,10 @@ NSData *sp_document_upload_body(NSURLRequest *request, NSUInteger limit, NSError
     while (data.length <= limit) {
         NSInteger count = [stream read:buffer maxLength:sizeof buffer];
         if (count < 0) {
-            NSString *reason = [NSString stringWithFormat:@"the request body could not be read: %@",
-                stream.streamError.localizedDescription];
+            // A stream may fail without an error object; the reason then states that, so the text never holds "(null)".
+            NSString *reason = stream.streamError
+                ? [NSString stringWithFormat:@"the request body could not be read: %@", stream.streamError.localizedDescription]
+                : @"the request body could not be read: the stream failed without an error";
             [stream close];
             if (error) *error = uploadBodyError(reason);
             return nil;
