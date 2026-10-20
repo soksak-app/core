@@ -84,6 +84,8 @@ fn a_binding_call_that_the_policy_does_not_store_is_counted_and_a_failed_one_is_
 struct Fake;
 
 impl Service for Fake {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
     fn windows(&self) -> Result<Value, Failure> {
         Ok(json!([{"window": "main", "title": "Main", "project": null, "key": true}]))
     }

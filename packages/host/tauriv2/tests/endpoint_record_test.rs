@@ -24,6 +24,8 @@ static SERIAL: Mutex<()> = Mutex::new(());
 struct Fake;
 
 impl Service for Fake {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
     fn windows(&self) -> Result<Value, Failure> {
         Ok(json!([{"window": "main", "title": "Main", "project": null, "key": true}]))
     }

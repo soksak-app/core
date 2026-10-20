@@ -23,6 +23,17 @@ const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.l
 const loads = () => loadavg().map((value) => value.toFixed(2)).join(" ");
 
 /**
+ * Closes the add menu when a round failed before its close, so the next round starts from a closed menu. A menu that is
+ * already closed needs no command.
+ */
+async function closePicker(s) {
+  const picker = await s.get("core.picker");
+  if (!picker.open) return;
+  await s.run("core.picker.close");
+  await s.until("core.picker", (value) => !value.open, "the add menu did not close in the cleanup of a failed round");
+}
+
+/**
  * Opens the add menu of the card, sends Escape through native input, and returns the nanoseconds from the receipt of the
  * answer on the main page to the close of the picker. The events are read after the offsets taken before the Escape, so
  * only the records of this round trip are in the read.
@@ -67,7 +78,14 @@ for (const app of Object.values(APPS)) {
     const values = [];
     for (let run = 1; run <= RUNS; run++) {
       await t.test(`${app.name}: round trip ${run} of ${RUNS}`, { timeout: ROUND_TIMEOUT + 30000 }, async (u) => {
-        const ns = await roundTripNs(s, app, card.id);
+        let ns;
+        try {
+          ns = await roundTripNs(s, app, card.id);
+        } catch (error) {
+          // The failure of this round is rethrown. A cleanup failure is reported with it, so neither error is dropped.
+          await closePicker(s).catch((cleanup) => u.diagnostic(`cleanup after round ${run} failed: ${cleanup.message}`));
+          throw error;
+        }
         values.push(ns / 1e6);
         u.diagnostic(`${app.name} round trip ${run}: ${(ns / 1e6).toFixed(3)} ms`);
       });

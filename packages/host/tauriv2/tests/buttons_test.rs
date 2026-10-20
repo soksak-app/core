@@ -18,6 +18,8 @@ struct Fake {
 }
 
 impl Service for Fake {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
     fn windows(&self) -> Result<Value, Failure> {
         Ok(json!([{"window": "w1", "title": "one", "project": null, "key": true}]))
     }

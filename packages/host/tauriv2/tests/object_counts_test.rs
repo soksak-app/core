@@ -224,6 +224,8 @@ impl ObjectCounter for FixedCounts {
 struct ObjectsService(FixedCounts);
 
 impl Service for ObjectsService {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
     fn windows(&self) -> Result<Value, endpoint::Failure> {
         Ok(json!([{"window": "main", "title": "Main", "project": null, "key": true}]))
     }

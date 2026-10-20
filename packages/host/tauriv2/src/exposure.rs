@@ -1180,15 +1180,14 @@ pub(crate) fn window_changed(window: &Window) {
         .get()
         .is_some_and(|endpoint| endpoint.notifier().watched(window.label(), "host.window"));
     if !watched {
+        trace_window_notify(window.label(), &WindowNotify::Unwatched);
         return;
     }
     let window = window.clone();
     crate::routine::spawn_named("window-status", move || {
         let value = match window_status(&window) {
             Ok(value) => value,
-            // A window that closed before its state was read has no state to report. window_closed reports the close of
-            // the window.
-            Err(error) if error.code == MISSING_DOCUMENT => return,
+            // A failed read is logged, including the read of a window that closed before its state was read.
             Err(error) => {
                 log_error("host.window", error.message);
                 return;
@@ -1207,6 +1206,7 @@ pub(crate) fn window_changed(window: &Window) {
             let watched = endpoint.notifier().watched(window.label(), "host.window");
             decide_window_notify(&mut reported, window.label(), watched, &value)
         };
+        trace_window_notify(window.label(), &decision);
         if let WindowNotify::Sent(value) = decision {
             match raw(&value) {
                 Ok(text) => endpoint
@@ -1246,6 +1246,35 @@ pub(crate) fn decide_window_notify(
     }
     reported.insert(window.to_string(), value.clone());
     WindowNotify::Sent(value.clone())
+}
+
+/// Removes the value sent last for a window. It is called when the last connection that watches host.window of the window
+/// stops watching, so that the next watch receives the value of the next change.
+pub(crate) fn forget_window_notify(reported: &mut HashMap<String, Value>, window: &str) {
+    reported.remove(window);
+}
+
+/// Stores the decision of a host.window notification as the trace event `host.trace.status.notify`.
+fn trace_window_notify(window: &str, decision: &WindowNotify) {
+    let decision = match decision {
+        WindowNotify::Sent(_) => "sent",
+        WindowNotify::Unchanged => "unchanged",
+        WindowNotify::Unwatched => "unwatched",
+    };
+    emit_host(
+        Level::Debug,
+        "host.trace.status.notify",
+        json!({"status": "host.window", "window": window, "decision": decision}),
+    );
+}
+
+/// Called when the last connection stops watching host.window of a window: the record of the value sent last for the
+/// window is removed.
+pub(crate) fn window_unwatched(app: &AppHandle, window: &str) {
+    match app.state::<Exposure>().reported.lock() {
+        Ok(mut reported) => forget_window_notify(&mut reported, window),
+        Err(error) => log_error("host.window unwatch", error),
+    }
 }
 
 #[cfg(test)]
@@ -2099,6 +2128,12 @@ impl Service for Host {
 
     fn exists(&self, window: &str) -> bool {
         windows::find(&self.0, window).is_some()
+    }
+
+    fn unwatched(&self, window: &str, name: &str) {
+        if name == "host.window" {
+            window_unwatched(&self.0, window);
+        }
     }
 
     fn call(

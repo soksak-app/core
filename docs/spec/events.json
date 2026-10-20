@@ -285,6 +285,17 @@
       },
       "description": "A ready request of a modal document named a modal that is not open, so the request changed nothing and was answered ok: modal is the id and instance the number of the request (docs/spec/host-contract.md#contract-cases)."
     },
+    "host.trace.status.notify": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "status": "string",
+        "window": "string",
+        "decision": "string"
+      },
+      "description": "The decision of a host.window notification of a window: decision is sent when the value was sent to the watching connections, unchanged when it equals the value sent last, and unwatched when no connection watches host.window of the window (docs/spec/host-contract.md#contract-cases)."
+    },
     "host.trace.<event>": {
       "layer": "host",
       "class": "call",

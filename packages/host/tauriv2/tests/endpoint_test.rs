@@ -44,6 +44,8 @@ impl Fake {
 }
 
 impl Service for Fake {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
     fn windows(&self) -> Result<Value, Failure> {
         self.calls
             .lock()
@@ -649,6 +651,8 @@ struct GatedPage {
 }
 
 impl Service for GatedPage {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
     fn windows(&self) -> Result<Value, Failure> {
         Ok(json!([]))
     }
@@ -746,6 +750,8 @@ fn subscription_changes_reach_the_page_in_arrival_order() {
 struct Late(std::sync::atomic::AtomicBool);
 
 impl Service for Late {
+    fn unwatched(&self, _window: &str, _name: &str) {}
+
     fn windows(&self) -> Result<Value, Failure> {
         Ok(json!([]))
     }

@@ -13,6 +13,8 @@ fn a_new_watch_receives_the_next_window_value_after_a_stale_record() {
         WindowNotify::Sent(open.clone()),
         "the first value of a watched window is sent"
     );
+    // The last watch of the window ends.
+    forget_window_notify(&mut reported, "main");
     assert_eq!(
         decide_window_notify(&mut reported, "main", false, &closed),
         WindowNotify::Unwatched,

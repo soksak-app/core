@@ -150,6 +150,9 @@ pub trait Service: Send + Sync + 'static {
         method: &str,
         params: Map<String, Value>,
     ) -> Result<Box<RawValue>, Failure>;
+    /// Called when the last connection stops watching the status name of the window window without a surface
+    /// specification, after the change that ended the watch is queued.
+    fn unwatched(&self, window: &str, name: &str);
 }
 
 /// One watch. surface is the surface that the watch specified, and a watch that specified one differs from a watch that
@@ -1064,6 +1067,13 @@ fn drain(shared: &Shared, topic: Topic) {
                 }
             }
         };
+        if let Topic::Status(watch) = &topic
+            && watch.surface.is_none()
+            && !next.on
+            && next.last
+        {
+            shared.service.unwatched(&watch.window, &watch.name);
+        }
         let (method, params) = topic.request(next.on);
         let (outcome, following) = if next.on && !page {
             match shared.service.call(topic.window(), method, params) {
