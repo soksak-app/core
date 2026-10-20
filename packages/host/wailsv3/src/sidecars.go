@@ -172,6 +172,8 @@ type Sidecars struct {
 	StopTimeout time.Duration // The deadline of Stop() that a test can inject. Default: 5 seconds.
 	// ReadyTimeout is the upper bound of the time until a newly started persistent service prints its endpoint. Default: 30 seconds. A test injects it.
 	ReadyTimeout time.Duration
+	// Now is the clock of the restart limit of standard input and output sidecars (docs/spec/sidecars.md#failure). A test injects it; nil uses time.Now.
+	Now func() time.Time
 	// RetainSending is called with the service name after Retain prepared the service and before it sends retain. It is the point at which a check inserts
 	// other work in between, and it is not called when nil.
 	RetainSending func(name string)
