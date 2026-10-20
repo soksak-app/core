@@ -2166,6 +2166,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F217",
+    implementation: [{ file: "packages/workbench/plane.js", symbol: "function pluginPlaceholder(tab, paramsProblem)" }],
+    tests: [
+      { file: "packages/workbench/test/plane-placeholder-error.test.mjs", id: "a placeholder whose install state cannot be read is an error shown once, and withdrawn when its surface leaves" },
+      { file: "packages/workbench/test/plane-placeholder-params.test.mjs", id: "a stored tab whose params do not match its plugin is an error shown once, and withdrawn when its surface leaves" },
+      { file: "packages/workbench/test/plane-placeholder-reasons.test.mjs", id: "the placeholder reasons that are designed states write no error" },
+    ],
+    expected: "A tab whose install state cannot be read, or whose stored params do not match its loaded plugin, shows its placeholder error once through the error display path at the place of its surface, and the draw withdraws it when the surface leaves; the designed placeholder reasons write no error.",
+    levels: ["unit"],
+  },
+  {
     id: "F209",
     implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "export function pluginRows(loaded, state)" }],
     tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a plugin whose every registry version is revoked is not offered, and an installed one keeps its row without an update" }],

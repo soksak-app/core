@@ -264,7 +264,7 @@ The workbench registers `environment.json` and the [installed plugins](installat
 
 A plugin is loaded when the window loaded its manifest at startup. Installation can remove or disable a plugin that saved spaces, settings and project data still name, so a reference to a plugin that is not loaded is kept unchanged and does not fail a load:
 
-- A content tab of such a plugin opens as a placeholder card. The card shows the plugin id and one line by the reason, and the tab keeps its id, title and stored state in the saved space; closing the tab removes it as for any tab. `core.surfaces` reports the tab with `placeholder` set to the reason; a mounted surface reports `placeholder: null`.
+- A content tab of such a plugin opens as a placeholder card. The card shows the plugin id and one line by the reason, and the tab keeps its id, title and stored state in the saved space; closing the tab removes it as for any tab. `core.surfaces` reports the tab with `placeholder` set to the reason; a mounted surface reports `placeholder: null`. The reasons `missing`, `disabled`, `reload` and `host` are plain placeholder text, because the saved layout is valid and the plugin is absent by the person's choice or by the environment. The reason `unread` states a failure to read the install state, and the reason `params` states a stored tab whose params do not match the declaration of the loaded plugin; the `params` text names the plugin, its version and the mismatch. Each of these lines is an error: it is shown through the error display path with the place `surface <tab id> placeholder`, and it is withdrawn when the state is read again, the params match, or the tab leaves.
 
 | Reason | Line | Action |
 | --- | --- | --- |
