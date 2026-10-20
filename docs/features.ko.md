@@ -1074,6 +1074,16 @@
 - [o] F207 — P2: language test adapter의 js-ts case 한도는 10초였는데, 그 case가 돌리는 20개 시험의 command supervisor 파일이 load average 35~67에서 최대 11초 걸려 timeout으로 보고됐다. 한도는 멈춤만 제한하므로 compiled 언어의 한도인 30초로 올린다. Red: `the node case counts its tests when the reporter writes colors`가 따로 돌려도 10.2초에 `command status timeout`으로 실패했다. 그 검사는 시험 수를 세려고 저장소의 command supervisor 시험 전체를 다시 돌렸으므로, 이제 시험 세 개의 fixture(`scripts/test/fixtures/node-color-count.mjs`)를 돌리고 0.2초 걸린다. Green: adapter 시험 다섯 개가 통과한다.
 - [o] F210 — P1: registry 명세는 저장소가 보관 처리되었고 나열된 어떤 plugin도 의존하지 않는 은퇴한 plugin이나 sidecar를 철회 항목과 함께 제거하므로, index는 동작하지 않는 것을 내놓지 않는다. registry는 appview와 `@soksak/sidecar-app`을 제거했다(registry 항목 G51).
 - [o] F211 — P1: 시스템 창 명령의 timeout(F208)과 철회된 버전을 뺀 plugin 행(F209)을 담은 core release 0.0.20.
+- [~] F212 — P0: plugin 코드는 메인 페이지 밖에서 돈다. 메인 페이지는 workbench와 선언된 기여만 그린다. DOM이 없는 plugin 로직은 공용 plugin host 페이지에서, 자기 HTML 화면이 있는 plugin은 `sok://<plugin>` origin의 자기 plugin view 페이지에서, 무거운 상태와 계산은 sidecar에서 돈다. plugin 표면의 페이지 mount는 지운다. 이유: WebKit은 프로세스 하나의 메모리를 제한하거나 일찍 회수하는 공개 수단이 없고, 한 페이지의 plugin들은 메모리, 장애, 측정을 공유하므로 경계는 프로세스다.
+  - [ ] F212.1 — P0: plugin view 페이지 하나의 기본 비용, plugin view로 띄운 editor와 flowmark 화면의 메모리, 창 두 개가 메인 페이지 프로세스를 공유하는지를 tracked benchmark로 잰다.
+  - [ ] F212.2 — P0: 프로세스 구조 설계 문서, 합의까지의 적대 검증, 명세로의 이동.
+  - [ ] F212.3 — P0: plugin API 메시지 RPC 계층: 요청, 응답, 확인, 취소, 무응답, binary payload.
+  - [ ] F212.4 — P0: 두 호스트의 plugin view와 plugin host 페이지 통로, 그리고 `sok://`로 제공하는 공용 plugin-api module.
+  - [ ] F212.5 — P0: 제한된 재시작과 affinity를 가진 plugin host 페이지.
+  - [ ] F212.6 — P0: workbench가 그리는 선언 UI 기여.
+  - [ ] F212.7 — P0: plugin view 화면 구성 종류.
+  - [ ] F212.8 — P0: plugin 표면의 페이지 mount와 `dom` 구성을 지운다.
+  - [ ] F212.9 — P0: 각 plugin 저장소 항목으로서 plugin을 새 API로 옮기고, core와 모든 plugin을 release한다.
 - [o] F206 — P1: core release 0.0.19이며 0.0.18 다음 release다. 선언된 모든 workspace 버전은 0.0.19이고, 이 release는 changelog 미배포 section의 나머지 항목을 모두 담는다. 여기에는 Wails fork window event 수정 F200.4, F192.3의 window check 수정, F199.4, F201, F202, F203, F204, F205가 포함된다.
 - [o] F198 — P1: 메모리 절약: 숨겨진 tab을 지연 뒤와 memory pressure 때 내리고 저장된 상태로 다시 mount하며, 설정 하나로 켜고 끈다. 명세 [메모리 절약](spec/plugins.ko.md#메모리-절약)이 설명한다. 명세를 바꾸기 전에 제안이 적대 검증을 통과한다. 제안은 열한 차례의 적대 검증을 거쳐 반박이 남지 않았다.
   - [o] F198.1 — P1: 메모리 절약의 용어와 명세(plugins, settings, exposure, hosts, logging, terms)를 제안에서 옮긴다; `validateManifest`가 `surface.unload`를 요구하고 `background` 옆에서 거부한다. 완료: 명세(plugins, settings, exposure, hosts, logging, projects, installation, terms)가 메모리 절약을 담는다; `validateManifest`는 `background`가 없으면 `surface.unload`를 요구하고 `background` 옆에서 거부한다(Red: 그것이 없는 surface에 `Missing expected exception`; Green: plugin-api 212개 중 212개, workbench 485개 중 485개). event와 exposure 항목은 그것을 보내고 등록하는 단계에서 catalog에 들어간다: catalog 검사가 아무것도 보내거나 등록하지 않는 선언 이름을 거부하기 때문이다. 선언은 F198.17부터 선택이며, F198.21이 여기 적은 요구를 바로잡는다.
