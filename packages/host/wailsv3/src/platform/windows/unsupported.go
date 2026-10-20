@@ -114,7 +114,7 @@ func (implementation) Screens() (string, error) {
 	return "", unsupported("display list")
 }
 
-func (implementation) OnTermination(func()) error {
+func (implementation) OnTermination(func(os.Signal)) error {
 	return unsupported("termination requests")
 }
 

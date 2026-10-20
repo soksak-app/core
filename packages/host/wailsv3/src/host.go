@@ -66,7 +66,7 @@ func Run(assets fs.FS, options Options) error {
 	// The termination signals are received before the endpoint is created. A normal termination is
 	// requested after the application started. A normal termination closes the endpoint after the save of the ready windows finishes.
 	started := make(chan struct{})
-	if err := system.OnTermination(func() {
+	if err := OnTermination(func() {
 		<-started
 		application.Get().Quit()
 	}); err != nil {
@@ -196,6 +196,7 @@ func Run(assets fs.FS, options Options) error {
 		ErrorHandler: func(err error) { LogError("wails", err) },
 		OnShutdown: func() {
 			RecordAppEvent("exit")
+			EmitClosed("exit", nil)
 			// Kills the web processes of all windows before exit. AppKit keeps XPC services alive
 			// longer than their clients (V5-105), so unless they are killed, the WebContent, GPU and Networking processes
 			// remain after the application exits and occupy memory.

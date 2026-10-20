@@ -60,6 +60,21 @@ var records struct {
 	lost [sok.ChannelCount]struct{ count, bytes uint64 }
 }
 
+// EmitClosed stores the event `log.closed` of the host process that ends (docs/spec/logging.md#self-reports). cause is `exit`,
+// `exit-request` or `signal`, and signal is the termination signal of the cause `signal`.
+func EmitClosed(cause string, signal *int) {
+	records.Lock()
+	log := records.log
+	records.Unlock()
+	if log == nil {
+		fmt.Fprintf(os.Stderr, "event writer: log.closed (%s) cannot be stored: the writer is not attached\n", cause)
+		return
+	}
+	if !log.RecordClosed(cause, signal) {
+		fmt.Fprintf(os.Stderr, "event writer: log.closed (%s) cannot be stored: the queue has no room\n", cause)
+	}
+}
+
 // UseHostEventLog makes log the writer of the records of the host and hands it the records of the start buffer in their
 // order and with the time they were written; the records that the buffer refused are counted in the writer. A nil log
 // detaches the writer and clears the buffer.

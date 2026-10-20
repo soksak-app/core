@@ -457,9 +457,13 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
             match &event {
                 tauri::RunEvent::Ready => app_events::record_app_event("started"),
                 tauri::RunEvent::ExitRequested { .. } => {
-                    app_events::record_app_event("exit_requested")
+                    app_events::record_app_event("exit_requested");
+                    event_record::emit_closed("exit-request", None);
                 }
-                tauri::RunEvent::Exit => app_events::record_app_event("exit"),
+                tauri::RunEvent::Exit => {
+                    app_events::record_app_event("exit");
+                    event_record::emit_closed("exit", None);
+                }
                 _ => {}
             }
             if let tauri::RunEvent::ExitRequested {

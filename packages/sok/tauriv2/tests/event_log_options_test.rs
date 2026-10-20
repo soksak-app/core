@@ -234,3 +234,34 @@ fn a_placed_event_refused_by_the_policy_names_the_policy() {
         "the gated event is not recorded by log.gated: {lines:?}"
     );
 }
+
+// contract: log.closed.passes-every-gate
+#[test]
+fn a_closed_record_is_stored_under_a_policy_that_turns_lifecycle_off() {
+    let directory = Folder::new("closed-record");
+    let log = EventLog::start(options(directory.path(), "b1")).unwrap();
+    let policy = soksak_sok::log_policy::LogPolicy::parse(
+        "log-policy.json",
+        br#"{"schema":1,"classes":{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"error"}}"#,
+    )
+    .unwrap();
+    log.set_policy(policy, "file");
+    assert!(
+        log.record_closed("signal", Some(15)),
+        "the record was refused"
+    );
+    log.flush(Duration::from_secs(5)).unwrap();
+    let events = stored_lines(log.path());
+    let closed: Vec<&Value> = events
+        .iter()
+        .filter(|event| event["event"] == "log.closed")
+        .collect();
+    assert_eq!(closed.len(), 1, "{events:?}");
+    assert_eq!(closed[0]["level"], "info", "{events:?}");
+    assert_eq!(closed[0]["class"], "lifecycle", "{events:?}");
+    assert_eq!(
+        closed[0]["fields"],
+        json!({"cause": "signal", "signal": 15}),
+        "{events:?}"
+    );
+}

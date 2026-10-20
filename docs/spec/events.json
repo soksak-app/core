@@ -31,6 +31,16 @@
       },
       "description": "The first line of every event file."
     },
+    "log.closed": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "cause": "string",
+        "signal?": "number"
+      },
+      "description": "The host process is ending. cause is signal for the first termination signal before quit, exit-request for a request to end the process, and exit for the end of the process; signal is the number of the termination signal when cause is signal. The writer stores it through its own path, so it passes every gate."
+    },
     "log.dropped": {
       "layer": "host",
       "class": "lifecycle",

@@ -503,9 +503,9 @@ type Platform interface {
 	// SecureServiceDirectory makes the persistent service directory path accessible only to the current user.
 	SecureServiceDirectory(path string) error
 
-	// OnTermination makes quit be called when the first termination signal (SIGTERM, SIGINT, SIGHUP) is received. A termination
+	// OnTermination makes quit be called with the first termination signal (SIGTERM, SIGINT, SIGHUP) that is received. A termination
 	// signal after that ends the process with the default action.
-	OnTermination(quit func()) error
+	OnTermination(quit func(signal os.Signal)) error
 	// OnQuitRequest makes quit be called when a termination request of the operating system (quit from the Dock, logout, restart, a quit Apple event of another program) is
 	// received, and that request is not answered until AnswerQuitRequests. Call it on the UI thread after the application
 	// started.
