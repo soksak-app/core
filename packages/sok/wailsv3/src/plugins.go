@@ -202,33 +202,50 @@ func RunPluginAction(configDir, action, id, core, platform string) (any, error) 
 	}
 }
 
+// InstalledManifest is the plugin.json of an installed plugin. ReadInstalledManifests reads and parses it once, and the
+// dependency and document code use this value.
+type InstalledManifest struct {
+	// Compact is the plugin.json with the insignificant whitespace removed; the key order is kept.
+	Compact []byte
+	// Value is the parsed plugin.json.
+	Value map[string]any
+}
+
 // ReadInstalled reads plugins/installed.json. The entry of the shared reader migrates the file to the current format
 // first, so every reader in every process finds the current form (docs/spec/installation.md#stored-data-migration). When
 // the file does not exist, nothing is installed. A file that is not in the current format is an error.
 func ReadInstalled(configDir string) (*InstalledState, error) {
+	state, _, err := ReadInstalledManifests(configDir)
+	return state, err
+}
+
+// ReadInstalledManifests reads plugins/installed.json and the plugin.json of each installed plugin, each once. It
+// returns the state and the manifest of each installed plugin by id.
+func ReadInstalledManifests(configDir string) (*InstalledState, map[string]InstalledManifest, error) {
 	if _, err := MigrateInstalled(configDir); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	path := filepath.Join(configDir, Installed)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return &InstalledState{Format: InstalledFormat, Plugins: map[string]InstalledPlugin{}, Sidecars: map[string]InstalledSidecar{}}, nil
+		return &InstalledState{Format: InstalledFormat, Plugins: map[string]InstalledPlugin{}, Sidecars: map[string]InstalledSidecar{}}, map[string]InstalledManifest{}, nil
 	}
 	if err != nil {
-		return nil, fileError(path, err)
+		return nil, nil, fileError(path, err)
 	}
 	value, err := DecodeJSON(data)
 	if err != nil {
-		return nil, fmt.Errorf("%s is not valid JSON", path)
+		return nil, nil, fmt.Errorf("%s is not valid JSON", path)
 	}
 	state, err := ValidateInstalled(value)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+		return nil, nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if err := checkInstalledPluginIDs(configDir, state); err != nil {
-		return nil, err
+	manifests, err := readInstalledManifests(configDir, state)
+	if err != nil {
+		return nil, nil, err
 	}
-	return state, nil
+	return state, manifests, nil
 }
 
 // writeInstalled replaces installed.json in one step.
@@ -350,7 +367,7 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 	if err != nil {
 		return nil, err
 	}
-	state, err := ReadInstalled(configDir)
+	state, manifests, err := ReadInstalledManifests(configDir)
 	if err != nil {
 		return nil, err
 	}
@@ -358,8 +375,8 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 		return nil, fmt.Errorf("plugin %s is not installed", id)
 	}
 	plan := &dependencyPlan{configDir: configDir, core: core, platform: platform, index: index, state: state,
-		dependencies: map[string]map[string]string{}, providers: map[string]map[string]string{}, releases: map[string][]byte{},
-		sidecars: map[string]SelectedSidecar{}, placed: map[string]bool{}}
+		manifests: manifests, dependencies: map[string]map[string]string{}, providers: map[string]map[string]string{},
+		releases: map[string][]byte{}, sidecars: map[string]SelectedSidecar{}, placed: map[string]bool{}}
 	if err := plan.place(id, false, nil); err != nil {
 		return nil, err
 	}
@@ -412,6 +429,7 @@ type dependencyPlan struct {
 	configDir, core, platform string
 	index                     *Index
 	state                     *InstalledState
+	manifests                 map[string]InstalledManifest
 	dependencies              map[string]map[string]string
 	providers                 map[string]map[string]string
 	releases                  map[string][]byte
@@ -430,67 +448,78 @@ func (p *dependencyPlan) selectedSidecars() map[string]string {
 	return versions
 }
 
-// checkPluginIDOf checks the plugin.json text of plugin id. file is the location for errors. The error names only the
+// manifestFile is the plugin.json in the recorded folder of an installed plugin.
+func manifestFile(configDir string, plugin InstalledPlugin) string {
+	return filepath.Join(configDir, plugin.Path, "plugin.json")
+}
+
+// readInstalledManifests reads and checks the plugin.json of each installed plugin in its recorded folder, once each.
+func readInstalledManifests(configDir string, state *InstalledState) (map[string]InstalledManifest, error) {
+	manifests := map[string]InstalledManifest{}
+	for _, id := range sortedPluginIDs(state.Plugins) {
+		file := manifestFile(configDir, state.Plugins[id])
+		data, err := os.ReadFile(file)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			return nil, fmt.Errorf("%s: the plugin manifest is missing", file)
+		case err != nil:
+			return nil, fileError(file, err)
+		}
+		manifest, err := parseManifest(file, data)
+		if err != nil {
+			return nil, err
+		}
+		if err := checkPluginID(id, file, manifest); err != nil {
+			return nil, err
+		}
+		var compact bytes.Buffer
+		if err := json.Compact(&compact, data); err != nil {
+			return nil, fmt.Errorf("%s is not valid JSON", file)
+		}
+		manifests[id] = InstalledManifest{Compact: compact.Bytes(), Value: manifest}
+		if afterManifestRead != nil {
+			afterManifestRead(file)
+		}
+	}
+	return manifests, nil
+}
+
+// parseManifest parses a plugin.json text into an object. file is the location for errors. The error names only the
 // file: the parser texts of encoding/json and serde_json differ, so a parser detail would make the hosts report
 // different texts (docs/spec/host-contract.md#installed.plugin-json.invalid-text).
-func checkPluginIDOf(id, file string, data []byte) error {
+func parseManifest(file string, data []byte) (map[string]any, error) {
 	value, err := DecodeJSON(data)
 	if err != nil {
-		return fmt.Errorf("%s is not valid JSON", file)
+		return nil, fmt.Errorf("%s is not valid JSON", file)
 	}
-	manifest, err := object(file, value)
-	if err != nil {
-		return err
-	}
+	return object(file, value)
+}
+
+// checkPluginID checks that the plugin.json of plugin id names id. file is the location for errors.
+func checkPluginID(id, file string, manifest map[string]any) error {
 	if err := CheckPluginID(id, manifest); err != nil {
 		return fmt.Errorf("%s: %w", file, err)
 	}
 	return nil
 }
 
-// checkInstalledPluginIDs checks the plugin.json of each installed plugin in its recorded folder.
-func checkInstalledPluginIDs(configDir string, state *InstalledState) error {
-	for _, id := range sortedPluginIDs(state.Plugins) {
-		file := filepath.Join(configDir, state.Plugins[id].Path, "plugin.json")
-		data, err := os.ReadFile(file)
-		switch {
-		case errors.Is(err, os.ErrNotExist):
-			return fmt.Errorf("%s: the plugin manifest is missing", file)
-		case err != nil:
-			return fileError(file, err)
-		}
-		if err := checkPluginIDOf(id, file, data); err != nil {
-			return err
-		}
-	}
-	return nil
+// afterManifestRead is the fault hook of the reader. It runs after checkInstalledPluginIDs reads and checks each
+// plugin.json. Tests use it to change a file between two reads; nil means no hook.
+var afterManifestRead func(file string)
+
+// SetAfterManifestRead sets the fault hook that runs after ReadInstalled reads and checks each plugin.json. A nil
+// hook removes it.
+func SetAfterManifestRead(hook func(file string)) {
+	afterManifestRead = hook
 }
 
-// manifestDependenciesOf checks and returns the dependencies of a plugin.json text. file is the location for errors.
-func manifestDependenciesOf(file string, data []byte) (map[string]string, error) {
-	value, err := DecodeJSON(data)
-	if err != nil {
-		return nil, fmt.Errorf("%s is not valid JSON", file)
-	}
-	manifest, err := object(file, value)
-	if err != nil {
-		return nil, err
-	}
+// manifestDependenciesOf checks and returns the dependencies of a parsed plugin.json. file is the location for errors.
+func manifestDependenciesOf(file string, manifest map[string]any) (map[string]string, error) {
 	dependencies, err := ManifestDependencies(manifest)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)
 	}
 	return dependencies, nil
-}
-
-// installedDependencies reads the plugin.json dependencies from the recorded folder of an installed plugin.
-func installedDependencies(configDir string, plugin InstalledPlugin) (map[string]string, error) {
-	file := filepath.Join(configDir, plugin.Path, "plugin.json")
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return nil, fileError(file, err)
-	}
-	return manifestDependenciesOf(file, data)
 }
 
 // InstalledName reads the name of the package.json in the recorded folder of an installed plugin.
@@ -519,7 +548,11 @@ func (p *dependencyPlan) manifest(id string) (map[string]string, error) {
 	if dependencies, ok := p.dependencies[id]; ok {
 		return dependencies, nil
 	}
-	dependencies, err := installedDependencies(p.configDir, p.state.Plugins[id])
+	installed, ok := p.manifests[id]
+	if !ok {
+		return nil, fmt.Errorf("plugin %s has no installed manifest", id)
+	}
+	dependencies, err := manifestDependenciesOf(manifestFile(p.configDir, p.state.Plugins[id]), installed.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -665,10 +698,14 @@ func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed b
 	} else {
 		return fileError(where, err)
 	}
-	if err := checkPluginIDOf(id, file, data); err != nil {
+	manifest, err := parseManifest(file, data)
+	if err != nil {
 		return err
 	}
-	dependencies, err := manifestDependenciesOf(file, data)
+	if err := checkPluginID(id, file, manifest); err != nil {
+		return err
+	}
+	dependencies, err := manifestDependenciesOf(file, manifest)
 	if err != nil {
 		return err
 	}
@@ -789,7 +826,7 @@ func pruneFolders(configDir string, state *InstalledState) error {
 
 // ChangePlugin removes an installed plugin or turns it on or off.
 func ChangePlugin(configDir, id, action string) (any, error) {
-	state, err := ReadInstalled(configDir)
+	state, manifests, err := ReadInstalledManifests(configDir)
 	if err != nil {
 		return nil, err
 	}
@@ -808,7 +845,11 @@ func ChangePlugin(configDir, id, action string) (any, error) {
 			if other == id || !dependent.Enabled {
 				continue
 			}
-			dependencies, err := installedDependencies(configDir, dependent)
+			installed, ok := manifests[other]
+			if !ok {
+				return nil, fmt.Errorf("plugin %s has no installed manifest", other)
+			}
+			dependencies, err := manifestDependenciesOf(manifestFile(configDir, dependent), installed.Value)
 			if err != nil {
 				return nil, err
 			}

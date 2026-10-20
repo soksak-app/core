@@ -34,12 +34,13 @@ const InstalledPluginsPath = "/installed-plugins.json"
 // installedPlugin is one enabled installed plugin and its file folder.
 type installedPlugin struct {
 	id, pkg, version, dir string
+	manifest              []byte
 }
 
 // enabledPlugins returns the enabled installed plugins in the order of their ids. The install folder is recorded as a path relative to the configuration folder, and the conversion report of
 // a format 1 file is written to the standard error, which is the application log (docs/spec/installation.md).
 func enabledPlugins(configDir string) ([]installedPlugin, *sok.InstalledState, error) {
-	state, err := sok.ReadInstalled(configDir)
+	state, manifests, err := sok.ReadInstalledManifests(configDir)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -52,7 +53,11 @@ func enabledPlugins(configDir string) ([]installedPlugin, *sok.InstalledState, e
 		if err != nil {
 			return nil, nil, err
 		}
-		plugins = append(plugins, installedPlugin{id: id, pkg: name, version: plugin.Version, dir: filepath.Join(configDir, plugin.Path)})
+		manifest, ok := manifests[id]
+		if !ok {
+			return nil, nil, fmt.Errorf("plugin %s has no installed manifest", id)
+		}
+		plugins = append(plugins, installedPlugin{id: id, pkg: name, version: plugin.Version, dir: filepath.Join(configDir, plugin.Path), manifest: manifest.Compact})
 	}
 	slices.SortFunc(plugins, func(a, b installedPlugin) int { return strings.Compare(a.id, b.id) })
 	return plugins, state, nil
@@ -95,19 +100,7 @@ func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {
 	}
 	entries := []entry{}
 	for _, plugin := range plugins {
-		manifestFile := filepath.Join(plugin.dir, "plugin.json")
-		manifest, err := os.ReadFile(manifestFile)
-		switch {
-		case err != nil:
-			return failure(err)
-		case !json.Valid(manifest):
-			return failure(fmt.Errorf("%s is not valid JSON", manifestFile))
-		}
-		var compactManifest bytes.Buffer
-		if err := json.Compact(&compactManifest, manifest); err != nil {
-			return failure(err)
-		}
-		item := entry{ID: plugin.id, Package: plugin.pkg, Version: plugin.version, Manifest: compactManifest.Bytes()}
+		item := entry{ID: plugin.id, Package: plugin.pkg, Version: plugin.version, Manifest: plugin.manifest}
 		if diagnostics {
 			file := filepath.Join(plugin.dir, "diagnostics.json")
 			data, err := os.ReadFile(file)

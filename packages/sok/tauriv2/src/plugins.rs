@@ -2,10 +2,12 @@
 //! renames it into place, and changes installed.json once at the end, so a failed installation does not change the
 //! previous installation.
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
+use serde_json::value::RawValue;
 use serde_json::{Value, json};
 
 use crate::fetch::{Fetcher, check_location};
@@ -205,9 +207,26 @@ pub fn run_plugin_action(
     }
 }
 
+/// The plugin.json of an installed plugin. read_installed_manifests reads and parses it once, and the dependency and document
+/// code use this value.
+pub struct InstalledManifest {
+    /// The plugin.json text with the whitespace outside strings removed; the key order is kept.
+    pub compact: Box<RawValue>,
+    /// The parsed plugin.json.
+    pub value: Value,
+}
+
 /// Reads plugins/installed.json. When the file does not exist, nothing is installed. A file that is not in the current format is
 /// an error (docs/spec/installation.md).
 pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
+    read_installed_manifests(config_dir).map(|(state, _)| state)
+}
+
+/// Reads plugins/installed.json and the plugin.json of each installed plugin, each once. It returns the state and the manifest of
+/// each installed plugin by id.
+pub fn read_installed_manifests(
+    config_dir: &Path,
+) -> Result<(InstalledState, BTreeMap<String, InstalledManifest>), String> {
     // The entry of the shared reader migrates the file to the current format first, so every reader in every process
     // finds the current form (docs/spec/installation.md#stored-data-migration).
     crate::migrate::migrate_installed(config_dir)?;
@@ -215,7 +234,7 @@ pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(InstalledState::empty());
+            return Ok((InstalledState::empty(), BTreeMap::new()));
         }
         Err(error) => return Err(crate::files::file_error(path.display(), &error)),
     };
@@ -223,8 +242,9 @@ pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
         serde_json::from_str(&text).map_err(|_| format!("{} is not valid JSON", path.display()))?;
     let state = install::validate_installed(&value)
         .map_err(|error| format!("{}: {error}", path.display()))?;
+    let mut manifests = BTreeMap::new();
     for (id, plugin) in &state.plugins {
-        let file = config_dir.join(&plugin.path).join("plugin.json");
+        let file = manifest_file(config_dir, plugin);
         let data = match std::fs::read(&file) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 return Err(format!(
@@ -234,9 +254,69 @@ pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
             }
             other => other.map_err(|error| crate::files::file_error(file.display(), &error))?,
         };
-        check_plugin_id_of(id, &file.display().to_string(), &data)?;
+        let location = file.display().to_string();
+        let manifest = parse_manifest(&location, &data)?;
+        install::check_plugin_id(id, &manifest).map_err(|error| format!("{location}: {error}"))?;
+        let invalid = || format!("{location} is not valid JSON");
+        let text = std::str::from_utf8(&data).map_err(|_| invalid())?;
+        let compact = RawValue::from_string(compact_json(text)).map_err(|_| invalid())?;
+        manifests.insert(
+            id.clone(),
+            InstalledManifest {
+                compact,
+                value: manifest,
+            },
+        );
+        AFTER_MANIFEST_READ.with(|slot| {
+            if let Some(hook) = slot.borrow().as_ref() {
+                hook(&file);
+            }
+        });
     }
-    Ok(state)
+    Ok((state, manifests))
+}
+
+/// The plugin.json in the recorded folder of an installed plugin.
+fn manifest_file(config_dir: &Path, plugin: &InstalledPlugin) -> PathBuf {
+    config_dir.join(&plugin.path).join("plugin.json")
+}
+
+/// Removes the whitespace outside strings from JSON text. The key order and the strings stay as they are.
+pub fn compact_json(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let (mut quoted, mut escaped) = (false, false);
+    for c in text.chars() {
+        if quoted {
+            out.push(c);
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                quoted = false;
+            }
+        } else if c == '"' {
+            quoted = true;
+            out.push(c);
+        } else if !c.is_whitespace() {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// The fault hook of read_installed_manifests: it receives the location of each plugin.json after the reader checks it.
+type ManifestHook = Box<dyn Fn(&Path)>;
+
+thread_local! {
+    // The fault hook of the reader. It runs on the calling thread after read_installed reads and checks a plugin.json.
+    static AFTER_MANIFEST_READ: RefCell<Option<ManifestHook>> = const { RefCell::new(None) };
+}
+
+/// Sets the fault hook that runs after read_installed reads and checks each plugin.json on the calling thread. Tests use
+/// it to change a file between two reads; None removes the hook.
+pub fn set_after_manifest_read(hook: Option<ManifestHook>) {
+    AFTER_MANIFEST_READ.with(|slot| *slot.borrow_mut() = hook);
 }
 
 /// Changes installed.json once.
@@ -353,7 +433,7 @@ pub fn install_plugin(
     update: bool,
 ) -> Result<PluginResult, String> {
     let index = read_registry(config_dir)?;
-    let state = read_installed(config_dir)?;
+    let (state, manifests) = read_installed_manifests(config_dir)?;
     if update && !state.plugins.contains_key(id) {
         return Err(format!("plugin {id} is not installed"));
     }
@@ -363,6 +443,7 @@ pub fn install_plugin(
         platform,
         index: &index,
         state,
+        manifests,
         dependencies: BTreeMap::new(),
         providers: BTreeMap::new(),
         releases: BTreeMap::new(),
@@ -423,6 +504,7 @@ struct DependencyPlan<'a> {
     platform: &'a str,
     index: &'a Index,
     state: InstalledState,
+    manifests: BTreeMap<String, InstalledManifest>,
     dependencies: BTreeMap<String, BTreeMap<String, String>>,
     providers: BTreeMap<String, BTreeMap<String, String>>,
     releases: BTreeMap<String, Vec<u8>>,
@@ -432,37 +514,21 @@ struct DependencyPlan<'a> {
     changed: bool,
 }
 
-/// Checks and returns the dependencies of a plugin.json text. file is the location for errors.
-fn manifest_dependencies_of(file: &str, data: &[u8]) -> Result<BTreeMap<String, String>, String> {
-    let value: Value =
-        serde_json::from_slice(data).map_err(|_| format!("{file} is not valid JSON"))?;
-    if !value.is_object() {
-        return Err(format!("{file}: expected an object"));
-    }
-    install::manifest_dependencies(&value).map_err(|error| format!("{file}: {error}"))
-}
-
-/// Checks the plugin.json text of plugin id. file is the location for errors. The error names only the file: the parser
-/// texts of serde_json and encoding/json differ, so a parser detail would make the hosts report different texts
+/// Parses a plugin.json text into an object. file is the location for errors. The error names only the file: the parser texts
+/// of serde_json and encoding/json differ, so a parser detail would make the hosts report different texts
 /// (docs/spec/host-contract.md#installed.plugin-json.invalid-text).
-fn check_plugin_id_of(id: &str, file: &str, data: &[u8]) -> Result<(), String> {
+fn parse_manifest(file: &str, data: &[u8]) -> Result<Value, String> {
     let value: Value =
         serde_json::from_slice(data).map_err(|_| format!("{file} is not valid JSON"))?;
     if !value.is_object() {
         return Err(format!("{file}: expected an object"));
     }
-    install::check_plugin_id(id, &value).map_err(|error| format!("{file}: {error}"))
+    Ok(value)
 }
 
-/// Reads the plugin.json dependencies from the recorded folder of an installed plugin.
-fn installed_dependencies(
-    config_dir: &Path,
-    plugin: &InstalledPlugin,
-) -> Result<BTreeMap<String, String>, String> {
-    let file = config_dir.join(&plugin.path).join("plugin.json");
-    let data =
-        std::fs::read(&file).map_err(|error| crate::files::file_error(file.display(), &error))?;
-    manifest_dependencies_of(&file.display().to_string(), &data)
+/// Checks and returns the dependencies of a parsed plugin.json. file is the location for errors.
+fn manifest_dependencies_of(file: &str, value: &Value) -> Result<BTreeMap<String, String>, String> {
+    install::manifest_dependencies(value).map_err(|error| format!("{file}: {error}"))
 }
 
 /// Reads the name of the package.json in the recorded folder of an installed plugin.
@@ -486,7 +552,12 @@ impl DependencyPlan<'_> {
         if let Some(dependencies) = self.dependencies.get(id) {
             return Ok(dependencies.clone());
         }
-        let dependencies = installed_dependencies(self.config_dir, &self.state.plugins[id])?;
+        let installed = self
+            .manifests
+            .get(id)
+            .ok_or_else(|| format!("plugin {id} has no installed manifest"))?;
+        let file = manifest_file(self.config_dir, &self.state.plugins[id]);
+        let dependencies = manifest_dependencies_of(&file.display().to_string(), &installed.value)?;
         self.dependencies
             .insert(id.to_string(), dependencies.clone());
         Ok(dependencies)
@@ -636,8 +707,9 @@ impl DependencyPlan<'_> {
             }
             Err(error) => return Err(crate::files::file_error(&at, &error)),
         };
-        check_plugin_id_of(id, &file, &data)?;
-        let dependencies = manifest_dependencies_of(&file, &data)?;
+        let manifest = parse_manifest(&file, &data)?;
+        install::check_plugin_id(id, &manifest).map_err(|error| format!("{file}: {error}"))?;
+        let dependencies = manifest_dependencies_of(&file, &manifest)?;
         let (providers, _) =
             install::classify_dependencies(self.index, id, &version, &dependencies)?;
         self.dependencies.insert(id.to_string(), dependencies);
@@ -756,7 +828,7 @@ pub fn change_plugin(
     id: &str,
     action: &str,
 ) -> Result<Option<InstalledPlugin>, String> {
-    let mut state = read_installed(config_dir)?;
+    let (mut state, manifests) = read_installed_manifests(config_dir)?;
     let Some(plugin) = state.plugins.get(id) else {
         return Err(format!("plugin {id} is not installed"));
     };
@@ -767,7 +839,13 @@ pub fn change_plugin(
             if other == id || !dependent.enabled {
                 continue;
             }
-            if let Some(range) = installed_dependencies(config_dir, dependent)?.get(&name) {
+            let installed = manifests
+                .get(other)
+                .ok_or_else(|| format!("plugin {other} has no installed manifest"))?;
+            let file = manifest_file(config_dir, dependent);
+            let dependencies =
+                manifest_dependencies_of(&file.display().to_string(), &installed.value)?;
+            if let Some(range) = dependencies.get(&name) {
                 return Err(format!("plugin {id} is required by {other} {range}"));
             }
         }
