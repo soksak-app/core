@@ -1228,9 +1228,9 @@ export function pagePackage(pathname) {
 }
 
 /**
- * Returns the plugin of a page location and the path of its plugin.json, or null for a page that is not a plugin page.
- * A `sok://<plugin id>` page belongs to the plugin named by its host, and its manifest is on its own origin. A staged page
- * of the main origin belongs to the module named by its path. A sok host that is not a plugin id, or `core`, throws.
+ * Returns the plugin of a page location, or null for a page that is not a plugin page. A `sok://<host>` page belongs to the
+ * plugin whose id is its host, and its manifest is on its own origin. A staged page of the main origin belongs to the package
+ * named by its module path. A sok host that is not a plugin id, or `core`, throws.
  */
 export function pagePlugin(location) {
   if (location.protocol === "sok:") {
@@ -1238,10 +1238,30 @@ export function pagePlugin(location) {
     if (!ID.test(location.host) || location.host === "core") {
       throw new Error(`${location.href}: host ${location.host} is not a plugin id`);
     }
-    return { name: location.host, manifest: `/${MANIFEST}` };
+    return { host: location.host, manifest: `/${MANIFEST}` };
   }
   const name = pagePackage(location.pathname);
-  return name ? { name, manifest: `/${modulePath(name, MANIFEST)}` } : null;
+  return name ? { package: name, manifest: `/${modulePath(name, MANIFEST)}` } : null;
+}
+
+/**
+ * Returns the plugin id of a page location and its validated plugin.json, or null for a page that is not a plugin page.
+ * `read(path)` returns the parsed JSON of a path on the origin of the page. A sok page takes the id of its host, which its
+ * plugin.json must carry. A staged page takes the id of the installed plugin whose package is its module name
+ * (`installed-plugins.json`); a missing entry throws.
+ */
+export async function pageIdentity(location, read) {
+  const page = pagePlugin(location);
+  if (!page) return null;
+  const manifest = validateManifest(await read(page.manifest));
+  if (page.host !== undefined) {
+    if (manifest.id !== page.host) throw new Error(`plugin.json id ${manifest.id} differs from the page plugin ${page.host}`);
+    return { id: page.host, manifest };
+  }
+  const entry = validateInstalledPlugins(await read(`/${INSTALLED_PLUGINS}`)).find((plugin) => plugin.package === page.package);
+  if (!entry) throw new Error(`${page.package}: no installed plugin has this package in ${INSTALLED_PLUGINS}`);
+  if (manifest.id !== entry.id) throw new Error(`plugin.json id ${manifest.id} differs from the installed plugin ${entry.id}`);
+  return { id: entry.id, manifest };
 }
 
 /** A request failure that has a code. The caller answers with {error: {code, message}}. */

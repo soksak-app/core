@@ -4,8 +4,8 @@
 // tokens that the host sent on their own root.
 import { page as runtimePage } from "@soksak/runtime";
 import {
-  EXPOSURE, MANIFEST, SURFACE_CORE, createExpose, declarationMap, orderedSidecar, pagePlugin,
-  validateExposureFile, validateManifest,
+  EXPOSURE, MANIFEST, SURFACE_CORE, createExpose, declarationMap, orderedSidecar, pageIdentity,
+  validateExposureFile,
 } from "@soksak/plugin-api";
 import { installDocumentErrors } from "./document-errors.js";
 import { createSurfaceCompositionController } from "./surface-composition.js";
@@ -73,11 +73,16 @@ async function fetchJson(path) {
   return response.json();
 }
 
-/** The plugin.json of the plugin of this document. The plugin is found from the location of the document ([pagePlugin]). */
-export async function ownManifest() {
-  const plugin = pagePlugin(location);
+/** The id and the plugin.json of the plugin of this document. The plugin is found from the location of the document ([pageIdentity]). */
+async function ownPlugin() {
+  const plugin = await pageIdentity(location, fetchJson);
   if (!plugin) throw new Error(`${location.href} is not a plugin page`);
-  return validateManifest(await fetchJson(plugin.manifest));
+  return plugin;
+}
+
+/** The plugin.json of the plugin of this document. */
+export async function ownManifest() {
+  return (await ownPlugin()).manifest;
 }
 
 /**
@@ -166,4 +171,11 @@ function exposeSurfaceDocument() {
   ]).catch((error) => console.error(`core surface entries: ${error.message}`));
 }
 
-if (expose && pagePlugin(location)) exposeSurfaceDocument();
+// The surface entries are registered only in a plugin page, and the page identity must resolve first: a mismatch is logged, not registered.
+if (expose) {
+  pageIdentity(location, fetchJson)
+    .then((plugin) => {
+      if (plugin) exposeSurfaceDocument();
+    })
+    .catch((error) => console.error(`core surface entries: ${error.message}`));
+}
