@@ -56,7 +56,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 - 다시 그리기는 문서에 남는 모든 컨트롤을 제자리에 두고, 순서가 틀린 컨트롤만 옮긴다. WebKit은 누름과 뗌 사이에 요소가 문서에서 빠진 누름에 `click`을 보내지 않고, `insertBefore`로 요소를 옮기면 요소가 먼저 문서에서 빠지므로, 컨트롤을 옮긴 다시 그리기는 그동안 누른 click을 잃었다. plugin page는 key마다 요소를 제자리에 두는 `@soksak/plugin-api`의 `drawList`로 컨트롤 목록을 그린다.
 - 네이티브 모달은 요소의 사본을 그리고 컨트롤의 key로 답한다. 메인 페이지는 자기 요소에서 그 컨트롤을 찾아 명령을 실행한다.
 
-충족 여부는 실행 중인 문서에서 판단한다. 연결기의 `audit(루트)`는 연결되지 않았거나 dom 이름이 없는 조작 요소를 `{tag, expose, command, text}`로 나열한다. 메인 페이지는 이를 `core.page.audit`로, 모든 플러그인 페이지는 `core.surface.document`의 `unbound`로 공개한다. `e2e/audit.test.mjs`가 두 앱의 모든 화면, 모달 구역, 메뉴, 편집 상태, 보이는 플러그인 표면을 방문해 빈 목록을 요구한다. `scripts/check-exposure.mjs`(`make exposure-check`)는 `@soksak/plugin-api`의 `exposure-check.js`로 워크벤치 소스가 적은 것만 검사한다. 소스에 적은 이름은 모두 선언되고, 선언한 status와 명령은 등록되며, 선언한 dom 이름은 공개 값으로 적혀 있다. 플러그인 섹션 모듈은 코어 status를 적고 코어 명령을 연결할 수도 있고([섹션](plugins.ko.md#섹션)), 표면 모듈은 `runtime.command`로 코어 명령을 실행할 수 있으며([표면 모듈 소유권](plugins.ko.md#표면-모듈-소유권)), 그 이름은 코어가 선언해야 한다. 플러그인 repository는 같은 module인 `soksak-exposure`로 자기 페이지와 섹션의 이름을 검사하며, 이 module은 package의 `core-exposure.json`에서 코어 이름을 읽는다. 그 파일이 워크벤치 선언과 다르면 `make exposure-check`가 실패하고, `node scripts/check-exposure.mjs --write`가 그 파일을 쓴다.
+충족 여부는 실행 중인 문서에서 판단한다. 보이는 view 표면의 page가 `core.surface.document`를 노출하지 않으면 audit이 실패한다. view는 별도의 문서이므로 audit이 그렇지 않으면 그 조작을 판단할 수 없기 때문이다. 연결기의 `audit(루트)`는 연결되지 않았거나 dom 이름이 없는 조작 요소를 `{tag, expose, command, text}`로 나열한다. 메인 페이지는 이를 `core.page.audit`로, 모든 플러그인 페이지는 `core.surface.document`의 `unbound`로 공개한다. `e2e/audit.test.mjs`가 두 앱의 모든 화면, 모달 구역, 메뉴, 편집 상태, 보이는 플러그인 표면을 방문해 빈 목록을 요구한다. `scripts/check-exposure.mjs`(`make exposure-check`)는 `@soksak/plugin-api`의 `exposure-check.js`로 워크벤치 소스가 적은 것만 검사한다. 소스에 적은 이름은 모두 선언되고, 선언한 status와 명령은 등록되며, 선언한 dom 이름은 공개 값으로 적혀 있다. 플러그인 섹션 모듈은 코어 status를 적고 코어 명령을 연결할 수도 있고([섹션](plugins.ko.md#섹션)), 표면 모듈은 `runtime.command`로 코어 명령을 실행할 수 있으며([표면 모듈 소유권](plugins.ko.md#표면-모듈-소유권)), 그 이름은 코어가 선언해야 한다. 플러그인 repository는 같은 module인 `soksak-exposure`로 자기 페이지와 섹션의 이름을 검사하며, 이 module은 package의 `core-exposure.json`에서 코어 이름을 읽는다. 그 파일이 워크벤치 선언과 다르면 `make exposure-check`가 실패하고, `node scripts/check-exposure.mjs --write`가 그 파일을 쓴다.
 
 ## 키보드 단축키
 
@@ -150,6 +150,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 - status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, 열린 call이 있는 각 plugin의 값이다. 응답 확인을 기다리는 snapshot도 포함한다. `oldestStartedAt`은 가장 오래된 열린 call의 시작 시각이고, 없으면 `null`이다.
 - status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, 각 plugin의 손실 횟수다. 응용 프로그램이 끝날 때까지 유지한다.
 - status `core.plugin.views`: `[{plugin, surface, responsive}]`, 각 plugin view surface의 응답 상태다.
+- status `core.surfaces`: 각 표면 항목은 선언된 합성의 종류인 `composition`(`view` 또는 `hybrid`)을 가진다. plugin이 그 표면을 선언하지 않으면 `null`이다.
 
 ## 창
 

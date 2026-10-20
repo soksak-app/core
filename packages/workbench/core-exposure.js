@@ -34,7 +34,8 @@ import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
 import { filePlace, modalState, onFilesDropped, onModalState } from "./host.js";
-import { plugin } from "./registry.js";
+import { hasPlugin, plugin } from "./registry.js";
+import { compositionKindOf } from "./surface-composition-kind.js";
 import { systemNotifications } from "./system-notifications.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
@@ -219,6 +220,7 @@ function surfacesState() {
   // The tab of a plugin that is not loaded shows a placeholder instead of a surface, and the placeholder reports the reason (docs/spec/plugins.md).
   const placeholders = [...document.querySelectorAll("[data-plugin-placeholder]")].map((el) => ({
     surface: el.dataset.surfaceId, plugin: el.dataset.plugin, visible: true, placeholder: el.dataset.pluginPlaceholder,
+    composition: null,
   }));
   const record = seated();
   if (!record) return placeholders;
@@ -227,6 +229,8 @@ function surfacesState() {
     surface: s.id, plugin: s.plugin, visible: s.visible, dim: s.dim,
     declared: shift(s.declared, at), applied: shift(s.applied, at),
     exposes: registry.namesOf(s.id), status: surfaceState(s.id), placeholder: null,
+    // A stored layout may name a plugin that this environment does not register, which reports no composition.
+    composition: hasPlugin(s.plugin) ? compositionKindOf(plugin(s.plugin).surface(s.id)) : null,
     state: memory.unloaded(s.id) ? "unloaded" : "loaded",
   })), ...placeholders];
 }
