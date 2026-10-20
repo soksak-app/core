@@ -16,7 +16,8 @@ impl PresentationWait {
     fn lock(&self) -> MutexGuard<'_, BTreeSet<String>> {
         self.0
             .lock()
-            // default: the set is changed by one insert or remove at a time, so it is consistent after a thread stopped while it held the lock.
+            // default: a thread that stopped while holding the lock changed the set only by one insert or remove, so the set is
+            // consistent, and that stop was already reported as a panic report.
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
