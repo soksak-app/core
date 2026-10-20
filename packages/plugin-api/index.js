@@ -35,6 +35,8 @@ export const DIAGNOSTICS = "diagnostics.json";
 /** The list of plugin diagnostics declarations in the staging root. It is {} unless the build is a diagnostic build. */
 /** The document in which the host provides the list of plugins installed in the configuration folder (installed plugin provision in docs/spec/installation.md). */
 export const INSTALLED_PLUGINS = "installed-plugins.json";
+/** The list of the core targets of the view import map in the staged frontend, written by the staging tool from viewCoreTargets. */
+export const CORE_ROOT_FILE = "core-root.json";
 
 /** The name prefix of the core entries that the surface document registers. The main document registers the other core entries. */
 export const SURFACE_CORE = "core.surface.";
@@ -66,6 +68,70 @@ export const VIEW_IMPORTS = Object.freeze({
   "@soksak/plugin-api/view": `sok://core/${modulePath("@soksak/plugin-api", "view.js")}`,
   "@soksak/shared/": "sok://core/shared/",
 });
+
+/** The entry files of the view import closure, by package name (docs/plans/plugin-processes.md, rule 4). */
+const VIEW_CLOSURE_ENTRIES = Object.freeze({
+  "@soksak/plugin-api": Object.freeze(["index.js", "view.js"]),
+  "soksak": Object.freeze(["dist/index.js"]),
+});
+
+/** Returns the specifiers of the static imports, dynamic imports and re-exports of a module, without comments. */
+function importSpecifiers(source) {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const found = [];
+  const pattern = /\bfrom\s+["']([^"']+)["']|\bimport\s+["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']\s*\)/g;
+  // Each alternative of the pattern has one capture group; the group that did not match is undefined.
+  for (const match of code.matchAll(pattern)) found.push(match.slice(1).find((group) => group !== undefined));
+  return found;
+}
+
+/**
+ * Returns the core root paths (`/modules/<package>/<file>`) of the files that the import closure of the view entries reaches,
+ * sorted and without repeats. `read(name, file)` returns the source of a file of the package `name`, or undefined when the
+ * package has no such file. A core target imports only relative paths inside its own package; any other import fails.
+ * The staging tool writes the result to core-root.json, which each host reads as the list of its core targets.
+ */
+export function viewCoreTargets(read) {
+  const reached = new Map();
+  const pending = Object.entries(VIEW_CLOSURE_ENTRIES).flatMap(([name, files]) => files.map((file) => [name, file]));
+  while (pending.length > 0) {
+    const [name, file] = pending.shift();
+    const key = `${name}/${file}`;
+    if (reached.has(key)) continue;
+    reached.set(key, `/${modulePath(name, file)}`);
+    const source = read(name, file);
+    if (source === undefined) throw new Error(`${key} is missing`);
+    for (const specifier of importSpecifiers(source)) {
+      if (!specifier.startsWith("./") && !specifier.startsWith("../")) {
+        throw new Error(`${key} imports ${specifier}, which a core target may not import`);
+      }
+      const target = joinInside(file, specifier);
+      if (target === undefined) throw new Error(`${key} imports ${specifier}, which is outside the package`);
+      const targetKey = `${name}/${target}`;
+      if (!reached.has(targetKey)) {
+        if (read(name, target) === undefined) throw new Error(`${key} imports ${specifier}, which is missing`);
+        pending.push([name, target]);
+      }
+    }
+  }
+  return [...reached.values()].sort();
+}
+
+/** Joins a relative specifier to the directory of a file of a package. Returns undefined when the path leaves the package. */
+function joinInside(file, specifier) {
+  const parts = file.includes("/") ? file.slice(0, file.lastIndexOf("/")).split("/") : [];
+  for (const part of specifier.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part !== "..") {
+      parts.push(part);
+    } else if (parts.length > 0) {
+      parts.pop();
+    } else {
+      return undefined;
+    }
+  }
+  return parts.join("/");
+}
 
 /** Reads the imports of the import map from an HTML document. Throws unless the document has exactly one import map. */
 export function pageImports(html) {

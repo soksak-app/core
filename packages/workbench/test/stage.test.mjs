@@ -128,3 +128,15 @@ test("a native application stages no plugin and no installed plugin document", (
   assert.equal(existsSync(join(app, "out/diagnostic-plugins.json")), false);
   assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--executables", "bin"], { cwd: app, stdio: "pipe" }), /usage/);
 });
+
+test("staging writes core-root.json with the core targets of the view import map", (t) => {
+  const app = fixtureApp(t);
+  stage(app);
+  assert.equal(existsSync(join(app, "out/core-root.json")), true);
+  const targets = JSON.parse(readFileSync(join(app, "out/core-root.json"), "utf8"));
+  assert.deepEqual(targets, [...targets].sort());
+  assert.ok(targets.includes("/modules/@soksak/plugin-api/view.js"));
+  assert.ok(targets.includes("/modules/soksak/dist/index.js"));
+  assert.ok(targets.includes("/modules/soksak/dist/soksak.js"));
+  for (const path of targets) assert.equal(existsSync(join(app, "out", path)), true, path);
+});

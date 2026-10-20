@@ -10,6 +10,7 @@
 //   <output>/modules/<package.json name>/   the files of soksak and plugin-api
 //   <output>/runtime/                 runtime directory of environment.json
 //   <output>/environment.json         environment.json of the application
+//   <output>/core-root.json           the core targets of the view import map, computed from the staged files by viewCoreTargets
 //   <output>/diagnostics.js           observe.js of the workbench (page diagnostic methods) with --diagnostics,
 //   otherwise release-diagnostics.js (an empty module). Diagnostic code
 //   goes only into diagnostic builds
@@ -30,7 +31,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { STAGED } from "./staged.js";
 import {
-  ENVIRONMENT, INSTALLED_PLUGINS, RUNTIME, modulePath, validateEnvironment, validateInstalledPlugins,
+  CORE_ROOT_FILE, ENVIRONMENT, INSTALLED_PLUGINS, RUNTIME, modulePath, validateEnvironment, validateInstalledPlugins, viewCoreTargets,
 } from "@soksak/plugin-api";
 
 const USAGE = "usage: soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>]";
@@ -118,6 +119,12 @@ if (diagnostics) {
   for (const file of STAGED.diagnostics) copyFileSync(join(workbench, file), join(target, file));
 }
 writeFileSync(join(target, ENVIRONMENT), `${JSON.stringify(environment, null, 2)}\n`);
+// The core targets are computed from the staged files, so the list names only files that the staged frontend holds.
+const coreTargets = viewCoreTargets((name, file) => {
+  const path = join(target, modulePath(name, file));
+  return existsSync(path) ? readFileSync(path, "utf8") : undefined;
+});
+writeFileSync(join(target, CORE_ROOT_FILE), `${JSON.stringify(coreTargets)}\n`);
 
 let plugins = [];
 if (installedDirectory) {

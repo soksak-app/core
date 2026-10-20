@@ -281,6 +281,7 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 | `/modules/<패키지>/` | `soksak`, `@soksak/plugin-api`의 `files` |
 | `/runtime/` | 애플리케이션의 `runtime` 디렉터리 |
 | `/environment.json` | 애플리케이션의 `environment.json` |
+| `/core-root.json` | view import map의 core target 목록. `@soksak/plugin-api`의 `viewCoreTargets`가 스테이징된 `soksak`과 `@soksak/plugin-api` 파일에서 계산하며, 호스트는 이것을 core target 목록으로 읽는다 ([core root](../plans/plugin-processes.md)) |
 | `/diagnostics.js` | `--diagnostics`이면 워크벤치의 `observe.js`(페이지 진단 메서드), 아니면 워크벤치의 빈 모듈 `release-diagnostics.js` |
 | `/transcript.js` | `--diagnostics`이면 워크벤치의 `transcript.js`(진단 모듈이 쓰는 호출 기록기), 아니면 없음 |
 

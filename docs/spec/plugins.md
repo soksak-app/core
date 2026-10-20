@@ -280,6 +280,7 @@ A plugin that becomes loaded after a restart uses the kept tabs, links, sections
 | `/modules/<package>/` | `files` of `soksak` and `@soksak/plugin-api` |
 | `/runtime/` | The application's `runtime` directory |
 | `/environment.json` | The application's `environment.json` |
+| `/core-root.json` | The core targets of the view import map, computed by `viewCoreTargets` of `@soksak/plugin-api` from the staged files of `soksak` and `@soksak/plugin-api`; the hosts read it as the list of core targets ([core root](../plans/plugin-processes.md)) |
 | `/diagnostics.js` | With `--diagnostics`, the workbench's `observe.js` (the page diagnostic methods); otherwise the workbench's empty module `release-diagnostics.js` |
 | `/transcript.js` | With `--diagnostics`, the workbench's `transcript.js` (the call recorder of the diagnostic module); otherwise absent |
 
