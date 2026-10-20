@@ -98,3 +98,49 @@ test("a view that stopped its restarts shows its reason as the error state of it
     dom.window.close();
   }
 });
+
+// contract: view.responsiveness.relay
+// The view-responsiveness event of a view is the state of its surface in core.plugin.views, and dispose removes that state.
+test("a view responsiveness notice is the state of its surface until the surface is disposed", { timeout: 20000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async () => null } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-responsive");
+  const { views } = await import("../plugin-processes.js");
+  const pluginId = "fixture-responsive-view";
+  const surfaceId = "fixture-responsive-view-surface";
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  const ofSurface = () => views().filter((entry) => entry.surface === surfaceId);
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
+    await waitSurfaceCompositionDeclared(surfaceId);
+    listeners.get("view-responsiveness")({ surface: surfaceId, plugin: pluginId, responsive: false });
+    assert.deepEqual(ofSurface(), [{ plugin: pluginId, surface: surfaceId, responsive: false }]);
+    listeners.get("view-responsiveness")({ surface: surfaceId, plugin: pluginId, responsive: true });
+    assert.deepEqual(ofSurface(), [{ plugin: pluginId, surface: surfaceId, responsive: true }]);
+    await disposeSurface(surfaceId);
+    assert.deepEqual(ofSurface(), [], "dispose removes the responsiveness of the surface");
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});

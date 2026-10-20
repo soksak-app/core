@@ -9,6 +9,8 @@ const lossCounts = new Map();
 /** The open calls of each call layer. A layer with no open call is removed. */
 const layers = new Map();
 const listeners = new Set();
+/** The responsiveness of each view surface, in the order of its first notice. */
+const viewStates = [];
 
 const announce = () => {
   for (const listener of listeners) listener();
@@ -87,4 +89,24 @@ export const openCalls = () => {
 export const losses = () => [...lossCounts.values()].map((entry) => ({ ...entry }));
 
 /** The responsiveness of each plugin view surface: `{plugin, surface, responsive}`. */
-export const views = () => [];
+export const views = () => viewStates.map((entry) => ({ ...entry }));
+
+/**
+ * Records the responsiveness notice of the view of surface, which the host sends as view-responsiveness (docs/spec/native-surfaces.md#view-surfaces).
+ * A notice whose responsive is not a boolean is refused.
+ */
+export function viewResponsiveness(plugin, surface, responsive) {
+  if (typeof responsive !== "boolean") throw new TypeError(`view ${surface} responsive is not a boolean`);
+  const entry = viewStates.find((state) => state.surface === surface);
+  if (entry) entry.responsive = responsive;
+  else viewStates.push({ plugin, surface, responsive });
+  announce();
+}
+
+/** Removes the state of the view of surface when the surface is disposed. */
+export function forgetView(surface) {
+  const index = viewStates.findIndex((state) => state.surface === surface);
+  if (index < 0) return;
+  viewStates.splice(index, 1);
+  announce();
+}

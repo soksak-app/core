@@ -14,6 +14,7 @@ import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, repo
   unloadTab } from "./tab-reports.js";
 import { icon } from "./icons.js";
 import { active, tabStateStore, tabStatesReady } from "./projects.js";
+import { forgetView, viewResponsiveness } from "./plugin-processes.js";
 import { pluginRecords } from "./plugin-records.js";
 import { documentRegions } from "./document-regions.js";
 import { trace } from "./performance.js";
@@ -449,9 +450,13 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       const answering = answerViewCalls(surface, scoped, page, () => entry.disposed, context.exposure);
       // A view that stopped its restarts shows its reason as the error of the surface (docs/spec/native-surfaces.md#view-surfaces).
       const stopping = scoped.native.on("view-stopped", (event) => onState(viewStopState(event)));
+      // The responsiveness of the view is the state of its surface in core.plugin.views, and the surface keeps no state after its dispose.
+      const responding = scoped.native.on("view-responsiveness", (event) => viewResponsiveness(surface.pluginId, surface.surfaceId, event.responsive));
       closing.signal.addEventListener("abort", () => {
         answering.then((off) => off());
         stopping.then((off) => off());
+        responding.then((off) => off());
+        forgetView(surface.surfaceId);
       }, { once: true });
     }
     entry.mounted = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
