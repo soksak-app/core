@@ -107,9 +107,9 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 ## Plugin processes
 
-메인 페이지는 [plugin process 설계](../plans/plugin-processes.md#messages-and-events)의 status 세 개를 게시한다. 각 status는 plugin id를 담은 record의 목록이다. 지금 각 목록은 `[]`이며, plugin call 계층과 snapshot 계층이 record를 채운다.
+메인 페이지는 [plugin process 설계](../plans/plugin-processes.md#messages-and-events)의 status 세 개를 게시한다. 각 status는 plugin id를 담은 record의 목록이다. plugin process가 call 계층을 연결하기 전까지 각 목록은 `[]`이다. call 계층은 자기 plugin의 열린 call과 손실을 메인 페이지에 보고한다.
 
-- status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, 각 plugin의 열린 call이다. 응답 확인을 기다리는 snapshot도 포함한다. `oldestStartedAt`은 가장 오래된 열린 call의 시작 시각이고, 없으면 `null`이다.
+- status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, 열린 call이 있는 각 plugin의 값이다. 응답 확인을 기다리는 snapshot도 포함한다. `oldestStartedAt`은 가장 오래된 열린 call의 시작 시각이고, 없으면 `null`이다.
 - status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, 각 plugin의 손실 횟수다. 응용 프로그램이 끝날 때까지 유지한다.
 - status `core.plugin.views`: `[{plugin, surface, responsive}]`, 각 plugin view surface의 응답 상태다.
 

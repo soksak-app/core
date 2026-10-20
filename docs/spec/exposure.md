@@ -107,9 +107,9 @@ The [memory saver](plugins.md#memory-saver) of the main page has these entries.
 
 ## Plugin processes
 
-The main page publishes three statuses of the [plugin process design](../plans/plugin-processes.md#messages-and-events). Each status is a list of records that carry the plugin id. Each list is `[]` now; the plugin call and snapshot layers fill the records.
+The main page publishes three statuses of the [plugin process design](../plans/plugin-processes.md#messages-and-events). Each status is a list of records that carry the plugin id. Each list is `[]` until a plugin process connects its call layer, which reports the open calls and the losses of its plugin to the main page.
 
-- Status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, the open calls of each plugin, including snapshots waiting for acknowledgement. `oldestStartedAt` is the start time of the oldest open call, or `null`.
+- Status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, the open calls of each plugin that has one, including snapshots waiting for acknowledgement. `oldestStartedAt` is the start time of the oldest open call, or `null`.
 - Status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, the counts of each plugin's losses, kept until the application ends.
 - Status `core.plugin.views`: `[{plugin, surface, responsive}]`, the responsiveness of each plugin view surface.
 

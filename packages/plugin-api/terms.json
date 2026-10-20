@@ -277,8 +277,14 @@
       "allowed": []
     },
     {
+      "term": "call layer",
+      "definition": "The createCalls module of plugin-api that sends a call over a transport, resolves or rejects it by its reply, and reports its timeouts, lost peers, late replies and open calls.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "loss count",
-      "definition": "A count of a loss, a skipped value, a late reply or a presentation abandoned on a surface, kept in the core status core.plugin.losses per surface and reset when the surface closes; it is not a log event in a release.",
+      "definition": "A count of a loss, a skipped value, a late reply or a presentation abandoned, kept in the core status core.plugin.losses per plugin until the application ends; it is not a log event in a release.",
       "rejected": [],
       "allowed": []
     },
