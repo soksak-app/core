@@ -190,6 +190,8 @@ fn invalid_json_closes_connection() {
 | `view.channel.ready` | view의 `view.ready` message는 그 문서를 ready 문서로 기록하고, 호스트는 이어서 현재 테마를 `sok: 1`과 함께 보낸다. view의 탐색(loading 상태)은 기록을 지우므로, 그 뒤의 post는 다음 ready message 전까지 거부된다. | both |
 | `view.channel.post-before-ready` | ready 문서가 기록되지 않은 view로의 post는 `<surface> has no ready document`로 거부되며, 아무것도 보내지 않는다. | both |
 | `view.channel.queue-full` | view의 `view.error` message는 그 이유를 `error: view channel: <reason>`으로 application log에 쓰고, 다른 frame에서 온 view의 `{"error": reason}` message도 같은 형식으로 이유를 쓴다. | both |
+| `view.restart.limit` | 프로세스가 끝나거나 message queue가 넘친 view는 닫고 다시 만들며, 300초 안의 네 번째 실패까지 이를 반복한다. 네 번째 실패는 재시작을 멈추고, 멈춘 surface는 view를 만들지 않으며, surface를 제거하면 실패 기록이 지워진다. | both |
+| `view.channel.overflow-closes` | 이유가 `queue full for <plugin>`인 `view.error` message는 그 surface의 view를 닫고 그 surface의 실패 하나로 센다. 이미 닫힌 view의 message는 아무것도 닫지 않는다. | both |
 | `view.create-loads-page` | view surface는 첫 sync에서 view 구성(`isView` 설정)으로 web view를 folder와 plugin을 surface의 것으로 하여 만들고, `sok://<plugin>/<page>`를 load한다. | both |
 | `host.arguments.declared-only` | `--config-dir PATH`와 `--config-dir=PATH`는 설정 폴더를 정한다. 선언하지 않은 인자, 값 없는 flag, 두 번 준 flag는 그 문장으로 실패한다. | both |
 | `host.arguments.registry-ca-in-diagnostic-builds` | 진단 build는 `--registry-ca PATH`를 받고, 그 뒤 registry 받기는 그 PEM 파일의 인증 기관만 신뢰한다. 인증서 없는 파일은 `--registry-ca <path>: <reason>`으로 실패한다. | both |
