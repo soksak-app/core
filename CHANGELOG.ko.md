@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.6-4: window 검사는 필요한 집합의 애플리케이션에 build된 실행 파일이 없으면 실행 파일 이름을 밝힌 error로 실패한다. `open`(`packages/window-check/app.mjs`)은 집합을 `requiredApps(env)`에서 읽는다. 집합은 `SOKSAK_APP`이 고른 애플리케이션이며, `SOKSAK_APP`이 없으면 모든 애플리케이션이다. 집합 밖의 애플리케이션은 열리지 않고 null을 돌려준다. `e2e/`의 window 검사 파일 44개에 있던 `if (!s) return t.skip(...)` 가드 157개를 제거했다. `APPS`의 모든 애플리케이션이 세션을 주거나 실패하기 때문이다. Red: 수정 전 코드에서 `packages/window-check/test/required-apps.test.mjs`는 `harness.requiredApps is not a function`, binary가 없을 때 `Missing expected rejection`, 집합 밖 애플리케이션의 실행 파일을 읽은 경우 `true !== false`로 실패했다. Green: 이 파일의 시험 여섯 개가 통과하고, `pnpm -F @soksak/window-check test`는 시험 112개를 통과하며, `make e2e-check`는 0으로 종료한다.
 - F214-1: `make push-check`가 주석 언어 시험을 돌려서, 다른 언어의 주석은 push gate에서 실패한다.
 - F214: 주석 언어 검사가 `.githooks`의 추적 파일 전부와, 확장자 없이 `#!` 줄로 시작하는 추적 파일 전부를 hash 주석 문법으로 읽는다(`scripts/check-comment-language.mjs`). `.githooks/commit-msg`와 `e2e/check-shell`의 주석은 영어이다. Red: 수정 전 코드에서 `scripts/test/comment-language.test.mjs`의 시험 `hook files and extensionless scripts are checked, and other extensionless files are not`가 `actual: []`로 실패했고, 기대값은 `.githooks/commit-msg:2`와 `scripts/run-tool:2`였다. Green: 파일의 시험 아홉 개가 통과하고, `make push-check`가 0으로 종료한다.
 - F212.5-8: darwin document region의 scheme handler는 거부된 plugin 페이지 요청(없는 파일, 다른 owner의 주소, dot 부분이 있는 경로)을 `error: document view: plugin file not found: <URL>`로 error 수준에 쓴다. binary 요청의 거부와 같은 수준이다. Red: `document_plugin_test`는 각 거부를 `native.record.info`로 보였다. Green: 시험이 거부 주소마다 error 기록을 확인하며 통과한다.
