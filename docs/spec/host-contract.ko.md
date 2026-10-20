@@ -248,6 +248,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.watch.surface-unwatch-forwarded-with-surface` | 표면 구독을 해제하면 surface를 담은 status.unwatch를 페이지에 보낸다. | both |
 | `endpoint.watch.surface-unwatch-keeps-plain-watch` | 표면 구독을 해제해도 같은 이름의 일반 구독은 유지된다. | both |
 | `endpoint.watch.subscription-arrival-order` | 연달아 보낸 watch, unwatch, watch는 느린 페이지에 그 순서로 도착하고 연결은 계속 구독한다. | both |
+| `status.window.rewatch-notifies` | host.window의 마지막 watch가 끝난 뒤 시작한 watch는, 앞선 watch 종료 전에 보낸 값과 같더라도 창의 다음 값을 받는다. Tauri host는 마지막 watch가 끝날 때 마지막으로 보낸 값의 기록을 지우고, Wails host는 기록을 두지 않는다. | both |
 | `endpoint.watch.other-requests-not-blocked-by-pending-subscription` | 페이지 구독 해제가 대기 중이어도 같은 연결의 다음 요청에 응답한다. | both |
 | `exposure-reply.payload.main-reply-unscoped` | surface가 없는 주 문서 응답 페이로드는 빈 surface로 해석된다. | both |
 | `exposure-reply.payload.scoped-reply-keeps-surface` | surface가 있는 응답 페이로드는 인코딩과 해석을 거쳐도 surface를 유지한다. | both |
