@@ -1120,7 +1120,14 @@
   - [o] F212.6-4 — P1: audit window check는 선언된 check 집합의 앱에 build된 binary가 없으면 건너뛰지 않고 실패한다. 필요한 집합의 규칙은 packages/window-check의 단위다. Red: 수정 전 코드에서 `packages/window-check/test/required-apps.test.mjs`는 `requiredApps` 시험 세 개가 `harness.requiredApps is not a function`으로, binary가 없는 `open` 시험 두 개가 `Missing expected rejection`으로 실패했다. 집합 밖 앱은 열리지 않는다는 시험은 `open`이 그 실행 파일을 읽어 `true !== false`로 실패했다. Green: 이 파일의 시험 여섯 개가 통과하고, `pnpm -F @soksak/window-check test`는 시험 112개를 통과하며, `make e2e-check`는 0으로 종료한다.
   - [o] F212.6-4-1 — P2: F212.6-4 뒤로 window check의 `assert.ok(s, "... is not built")` 71줄은 더 이상 실패할 수 없고, `e2e/hosts.test.mjs`의 `both()`와 `e2e/split-load-memory.test.mjs`는 여전히 없는 session을 건너뛴다. 기대: 죽은 assertion을 지우고, 남은 건너뛰기는 모두 `requiredApps`의 필요 집합을 따른다. Red: 수정 전 코드에서 `packages/window-check/test/required-apps.test.mjs`의 `requiresBoth` 시험은 `harness.requiresBoth is not a function`으로 실패했다. Green: 이 시험이 통과하고, `pnpm -F @soksak/window-check test`는 시험 113개를 통과하며, `make e2e-check`는 0으로 종료한다. 줄 71개의 제거는 Red가 없다. 실패할 수 없는 줄은 실패하는 입력이 없기 때문이다.
   - [ ] F212.6-5 — P0: audit은 page가 `core.surface.document`를 노출하지 않는 보이는 view에서 실패하고, `core.surfaces`는 surface마다 구성 종류를 보고한다. view 종류가 surface를 별도 문서로 만들므로 F212.7과 함께 branch `feat/view-kind-F212.7`에서 한다.
+  - [~] F212.6a — P0: 단축키 표: 두 호스트의 메뉴 선언과 workbench key handler에서 모은 모든 workbench 단축키와 그 주인(native 메뉴, view, workbench)을 F212.7 시작 전에 명세에 적는다. Escape의 주인은 view다.
   - [ ] F212.7 — P0: manifest, workbench, native 배치의 view 구성 종류. 규칙 4의 view channel을 두 호스트에 연결한다. F212.7은 또한 `packages/plugin-api/view-start.js`의 text를 page script보다 먼저 각 view 구성에 주입하고, native/darwin에 handler `sok-view`를 등록하며, 첫 pull의 전달을 view channel queue를 거쳐 window check로 시험한다. staging 도구가 이 파일을 staging하고 각 호스트가 view를 만들 때 그 text를 넘겨서, plugin-api가 script의 유일한 출처로 남는다.
+  - [ ] F212.7-0 — P0: view 선언(`surface.composition` 종류 `view`, page 경로, region)의 명세를 branch에서 코드보다 먼저 plugins.md와 native-surfaces.md에 적는다.
+  - [ ] F212.7-1 — P0: view 하나가 card에 보인다. plugin-api가 `view` 종류를 받고, 두 호스트가 `isView`로 web view를 만들어 `sok://<plugin>/<page>`를 load하고, workbench mount는 module을 import하지 않고 card를 배치한다.
+  - [ ] F212.7-2 — P0: view 통로를 두 호스트에 연결한다. native가 plugin-api에서 staging한 `view-start.js`를 주입하고 `sok-view`를 등록하며, ready 문서를 기록하고, ready 없는 문서로의 post를 거부하고, queue가 넘친 view를 끝낸다.
+  - [ ] F212.7-3 — P0: `dom` 종류를 지우고, reader는 plugin과 manifest field를 밝힌 오류로 거부한다.
+  - [ ] F212.7-4 — P0: native가 view의 응답 없음·회복 delegate 메서드를 구현하고 호스트가 `core.plugin.views`에 보고하며, `host.trace.view.process-request`와 `process-ready`를 쓴다.
+  - [ ] F212.10-editor — P0: editor plugin이 자기 저장소에서 branch를 기준으로 view로 옮긴다. editor 저장소의 항목으로 기록한다.
   - [ ] F212.7b — P0: view의 presentation wait: 첫 변경에만, presentation, 프로세스 종료, 보이지 않는 view로 끝나고 timer를 쓰지 않는다.
   - [ ] F212.7c — P0: view의 끌기 녹화: native frame과 card 경계, 내용 frame 간격, gesture 뒤 내용 불일치.
   - [ ] F212.7d — P0: 두 호스트에서 document-start user script로 주는 첫 frame 테마.
