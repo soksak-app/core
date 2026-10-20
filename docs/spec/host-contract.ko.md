@@ -650,6 +650,8 @@ fn invalid_json_closes_connection() {
 | `cli.log.writer-options.stores-the-layer-the-clock-and-the-cids` | rotation이 없는 writer는 옵션이 주는 layer, 시계, correlation identifier를 저장하고 rotation하지 않는다. | both |
 | `cli.log.writer-options.rotates-at-its-bound` | rotation 한도가 있는 writer는 한도에서 새 파일을 쓰고, 새 파일은 `log.open`과 `log.rotated`로 시작한다. | both |
 | `cli.log.writer-options.stores-the-events-and-the-loss-of-its-pull-source` | writer는 pull source가 돌려주는 event와 source가 보고한 손실을 저장한다. | both |
+| `cli.log.writer-options.records-refused-events-as-loss-before-the-next-accepted-event` | queue가 가득 찬 writer는 placed write의 event를 `its queue was full` 원인으로 거부하고, 다음 accepted event 앞에 개수, reason, queue 깊이를 담은 `log.dropped`를 저장한다. | both |
+| `cli.log.writer-options.refuses-a-placed-event-by-its-cause` | 정책이 거부한 placed event는 `the policy does not store it` 원인으로 실패하며, gated event로 저장되고 손실이 아니다. | both |
 | `buffers.sidecar-replies.order-is-bounded` | sidecar reply를 기다리는 요청의 순서는 응답한 요청이 몇 개든 대기 요청 한도의 두 배를 넘지 않는다. | both |
 | `buffers.sidecar-replies.forgotten-request-is-counted` | 대기 요청의 한도에서 잊는 요청은 세며, 잊는 것은 가장 오래된 요청이다. | both |
 | `cli.log.lines-follow-the-golden-fixtures` | 도구의 `log.open` 줄은 `packages/log-contract/fixtures/key.jsonl`의 `log.open` 줄과 같은 key, key 순서, field 집합(schema 2, `role` `sok`)을 가지며, event 줄은 golden event 줄의 key 순서와 `ts_us`, `mono_ns`, `seq` 2를 가진다. | both |

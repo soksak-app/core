@@ -41,9 +41,10 @@
         "count": "number",
         "bytes": "number",
         "reason": "string",
-        "channel": "string"
+        "channel": "string",
+        "queued?": "number"
       },
-      "description": "A range of seq that the writer refused; it explains the gap. channel is other for the events of the levels error, warn and info and debug for the events of the levels debug and trace; it is stored in the main file."
+      "description": "A range of seq that the writer refused; it explains the gap. channel is other for the events of the levels error, warn and info and debug for the events of the levels debug and trace; it is stored in the main file. queued is the largest number of events that waited in the writer queue at a refusal that the record counts; it is absent for a loss that a source reports through the pull."
     },
     "log.policy": {
       "layer": "host",

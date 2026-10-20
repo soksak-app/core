@@ -131,3 +131,106 @@ fn a_writer_stores_the_events_and_the_loss_of_its_pull_source() {
     assert_eq!(lines[2]["fields"]["reason"], "the source was full");
     assert_eq!(lines[2]["fields"]["count"], 3);
 }
+
+// contract: cli.log.writer-options.records-refused-events-as-loss-before-the-next-accepted-event
+#[test]
+fn refused_events_are_recorded_as_loss_before_the_next_accepted_event() {
+    let directory = Folder::new("options-full-queue");
+    let mut full = options(directory.path(), "full-queue");
+    full.queue_events = 2;
+    // The pull runs on the writer thread at each drain. Holding it there keeps the writer from taking the queued events, so the
+    // queue stays full until the test releases it.
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel::<()>();
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let mut entered_tx = Some(entered_tx);
+    full.pull = Some(Box::new(move |_sink: &mut dyn PullSink| {
+        if let Some(entered) = entered_tx.take() {
+            entered.send(()).unwrap();
+            release_rx.recv().unwrap();
+        }
+    }));
+    let log = EventLog::start(full).unwrap();
+    let policy = soksak_sok::log_policy::LogPolicy::parse(
+        "log-policy.json",
+        br#"{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}"#,
+    )
+    .unwrap();
+    log.set_policy(policy, "file");
+    entered_rx.recv().unwrap();
+    assert!(log.emit(Level::Warn, "host.stall.dump", &json!({"path": "/first"})));
+    assert!(log.emit(Level::Warn, "host.stall.dump", &json!({"path": "/second"})));
+    for _ in 0..2 {
+        let error = log
+            .emit_placed(
+                Level::Warn,
+                "host.stall.dump",
+                serde_json::value::RawValue::from_string(r#"{"path":"/refused"}"#.into()).unwrap(),
+                Duration::from_secs(5),
+            )
+            .unwrap_err();
+        assert_eq!(
+            error, "the event writer refused host.stall.dump because its queue was full",
+            "{error}"
+        );
+    }
+    release_tx.send(()).unwrap();
+    log.flush(Duration::from_secs(5)).unwrap();
+    assert!(log.emit(Level::Info, "sok.command", &json!({"name": "after"})));
+    log.flush(Duration::from_secs(5)).unwrap();
+    log.close();
+    let lines = stored_lines(log.path());
+    let dropped = lines
+        .iter()
+        .position(|line| line["event"] == "log.dropped")
+        .unwrap_or_else(|| panic!("no log.dropped records the two refused events: {lines:?}"));
+    assert_eq!(lines[dropped]["fields"]["count"], 2, "{lines:?}");
+    assert_eq!(
+        lines[dropped]["fields"]["reason"], "the queue was full",
+        "{lines:?}"
+    );
+    assert_eq!(lines[dropped]["fields"]["channel"], "other", "{lines:?}");
+    assert_eq!(lines[dropped]["fields"]["queued"], 2, "{lines:?}");
+    assert_eq!(lines[dropped]["level"], "warn", "{lines:?}");
+    let after = lines
+        .iter()
+        .position(|line| line["event"] == "sok.command" && line["fields"]["name"] == "after")
+        .unwrap_or_else(|| panic!("the event after the refusals is not stored: {lines:?}"));
+    assert!(
+        dropped < after,
+        "log.dropped is stored after the next accepted event: {lines:?}"
+    );
+}
+
+// contract: cli.log.writer-options.refuses-a-placed-event-by-its-cause
+#[test]
+fn a_placed_event_refused_by_the_policy_names_the_policy() {
+    let directory = Folder::new("options-policy-refusal");
+    let log = EventLog::start(options(directory.path(), "policy-refusal")).unwrap();
+    // The default policy stores only errors, so a warning of a lifecycle class is refused by the gate and not by the queue.
+    let error = log
+        .emit_placed(
+            Level::Warn,
+            "host.stall.dump",
+            serde_json::value::RawValue::from_string(r#"{"path":"/probe"}"#.into()).unwrap(),
+            Duration::from_secs(5),
+        )
+        .unwrap_err();
+    assert_eq!(
+        error, "the event writer refused host.stall.dump because the policy does not store it",
+        "{error}"
+    );
+    log.flush(Duration::from_secs(5)).unwrap();
+    log.close();
+    let lines = stored_lines(log.path());
+    assert!(
+        lines.iter().all(|line| line["event"] != "log.dropped"),
+        "a gated event was recorded as a loss: {lines:?}"
+    );
+    assert!(
+        lines.iter().any(|line| line["event"] == "log.gated"
+            && line["fields"]["class"] == "lifecycle"
+            && line["fields"]["level"] == "warn"
+            && line["fields"]["count"] == 1),
+        "the gated event is not recorded by log.gated: {lines:?}"
+    );
+}

@@ -10,6 +10,7 @@ package sok
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -162,7 +163,7 @@ type EventLog struct {
 	queueEvents  int64
 	queueBytes   int64
 	// lost counts what the queue and the producers refused, for each channel.
-	lost [ChannelCount]struct{ events, bytes atomic.Uint64 }
+	lost [ChannelCount]struct{ events, bytes, depth atomic.Uint64 }
 	// gate is the policy in force and the count of the events that it refused.
 	gate        *eventGate
 	policyPath  string
@@ -255,6 +256,7 @@ func openLogFile(path string) (*os.File, error) {
 func (l *EventLog) CountLoss(channel Channel, events, bytes uint64) {
 	l.lost[channel].events.Add(events)
 	l.lost[channel].bytes.Add(bytes)
+	raiseDepth(&l.lost[channel].depth, l.queuedEvents.Load())
 }
 
 // Boot is the identifier of the run that this writer belongs to; with a seq it names a line of the log.
@@ -274,8 +276,12 @@ func (l *EventLog) EmitPlaced(level Level, event string, fields json.RawMessage,
 // producer stopped at the bound after it had written produced bytes.
 func (l *EventLog) EmitPlacedBounded(level Level, event string, fields []byte, produced int, deadline time.Duration) (uint64, error) {
 	placed := make(chan uint64, 1)
-	if !l.enqueuePlaced(time.Now().UnixMicro(), l.clock(), l.layer, "", level, event, nil, fields, produced, placed) {
-		return 0, fmt.Errorf("the event writer refused %s because its queue was full or the policy does not store it", event)
+	if l.queuedEvents.Load() >= l.queueEvents {
+		l.countLoss(ChannelOf(level), len(event))
+		return 0, fmt.Errorf("the event writer refused %s because %w", event, errQueueFull)
+	}
+	if err := l.enqueuePlaced(time.Now().UnixMicro(), l.clock(), l.layer, "", level, event, nil, fields, produced, placed); err != nil {
+		return 0, fmt.Errorf("the event writer refused %s because %w", event, err)
 	}
 	if err := l.Flush(deadline); err != nil {
 		return 0, err
@@ -332,7 +338,7 @@ func (l *EventLog) EmitCids(level Level, event string, cids []string, fields any
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return false
 	}
-	return l.enqueue(time.Now().UnixMicro(), l.clock(), l.layer, level, event, cids, text, produced)
+	return l.enqueue(time.Now().UnixMicro(), l.clock(), l.layer, level, event, cids, text, produced) == nil
 }
 
 // layers are the layers of the event contract that another layer of a process relays (docs/spec/logging.md#event).
@@ -386,17 +392,17 @@ func (l *EventLog) EmitRelayed(e RelayedEvent) (bool, error) {
 		l.countLoss(ChannelOf(e.Level), len(e.Event))
 		return false, nil
 	}
-	return l.enqueuePlaced(e.TsMicros, e.MonoNs, e.Layer, e.Page, e.Level, e.Event, e.Cids, e.Fields, e.Produced, nil), nil
+	return l.enqueuePlaced(e.TsMicros, e.MonoNs, e.Layer, e.Page, e.Level, e.Event, e.Cids, e.Fields, e.Produced, nil) == nil, nil
 }
 
-func (l *EventLog) enqueue(tsMicros int64, monoNs uint64, layer string, level Level, event string, cids []string, text json.RawMessage, produced int) bool {
+func (l *EventLog) enqueue(tsMicros int64, monoNs uint64, layer string, level Level, event string, cids []string, text json.RawMessage, produced int) error {
 	return l.enqueuePlaced(tsMicros, monoNs, layer, "", level, event, cids, text, produced, nil)
 }
 
 // enqueuePlaced queues an event. produced is 0 for fields that are JSON, which the writer cuts when they are over the bound,
 // and for fields that the producer cut at the bound the number of bytes it had written when it stopped; text is then the first
 // bytes of the text.
-func (l *EventLog) enqueuePlaced(tsMicros int64, monoNs uint64, layer, page string, level Level, event string, cids []string, text json.RawMessage, produced int, placed chan uint64) bool {
+func (l *EventLog) enqueuePlaced(tsMicros int64, monoNs uint64, layer, page string, level Level, event string, cids []string, text json.RawMessage, produced int, placed chan uint64) error {
 	var truncated int
 	if produced > 0 {
 		text, truncated = headFields(text, produced)
@@ -409,30 +415,30 @@ func (l *EventLog) enqueuePlaced(tsMicros int64, monoNs uint64, layer, page stri
 	}
 	if l.queuedBytes.Load()+int64(bytes) > l.queueBytes {
 		l.countLoss(ChannelOf(level), bytes)
-		return false
+		return errQueueFull
 	}
 	pending := &pendingEvent{tsMicros: tsMicros, monoNs: monoNs, cids: cids, layer: layer, page: page, level: level, event: event, fields: text, bytes: bytes, truncated: truncated, placed: placed}
 	l.classify(pending)
 	// A closed gate stores nothing and counts the event; an event that the catalog does not declare has no class and no gate, and
 	// page.start passes every gate.
 	if pending.class != "" && event != "page.start" && !l.Gate(pending.class, level) {
-		return false
+		return errPolicy
 	}
 	return l.queue(pending)
 }
 
 // queue hands a counted event to the writer; a full queue refuses it and counts the loss.
-func (l *EventLog) queue(pending *pendingEvent) bool {
+func (l *EventLog) queue(pending *pendingEvent) error {
 	l.queuedBytes.Add(int64(pending.bytes))
 	l.queuedEvents.Add(1)
 	select {
 	case l.messages <- eventMessage{event: pending}:
-		return true
+		return nil
 	default:
 		l.queuedBytes.Add(-int64(pending.bytes))
 		l.queuedEvents.Add(-1)
 		l.countLoss(ChannelOf(pending.level), pending.bytes)
-		return false
+		return errQueueFull
 	}
 }
 
@@ -446,7 +452,7 @@ func (l *EventLog) enqueueWriterEvent(level Level, name string, fields json.RawM
 		l.countLoss(ChannelOf(level), pending.bytes)
 		return false
 	}
-	return l.queue(pending)
+	return l.queue(pending) == nil
 }
 
 // capFields returns the fields text of an event as the writer stores it. Fields over EventFieldsLimitBytes are replaced by
@@ -476,7 +482,24 @@ func headFields(text []byte, size int) (json.RawMessage, int) {
 func (l *EventLog) countLoss(channel Channel, bytes int) {
 	l.lost[channel].events.Add(1)
 	l.lost[channel].bytes.Add(uint64(bytes))
+	raiseDepth(&l.lost[channel].depth, l.queuedEvents.Load())
 }
+
+// raiseDepth keeps the largest depth of the queue that a refusal of the channel saw since the writer last recorded the loss.
+func raiseDepth(depth *atomic.Uint64, queued int64) {
+	for {
+		current := depth.Load()
+		if uint64(queued) <= current || depth.CompareAndSwap(current, uint64(queued)) {
+			return
+		}
+	}
+}
+
+// The causes of a refusal by the queue, which a placed event names in its error (docs/spec/logging.md#policy).
+var (
+	errQueueFull = errors.New("its queue was full")
+	errPolicy    = errors.New("the policy does not store it")
+)
 
 // Flush writes everything that is queued and waits until it is on disk, at most deadline.
 func (l *EventLog) Flush(deadline time.Duration) error {
@@ -720,7 +743,7 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 	prune()
 	// dropped stores one log.dropped after the range of seq that the refused events would have had; channel is the channel of the
 	// refused events.
-	dropped := func(events, bytes uint64, reason string, channel Channel) {
+	dropped := func(events, bytes uint64, reason string, channel Channel, queued *uint64) {
 		if events == 0 {
 			return
 		}
@@ -729,8 +752,12 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 		from := seq + 1
 		seq += events
 		// The fields are numbers and fixed texts, so they are written as text without a serializer that can fail.
-		fields := json.RawMessage(fmt.Sprintf(`{"from_seq":%d,"to_seq":%d,"count":%d,"bytes":%d,"reason":%q,"channel":%q}`,
-			from, seq, events, bytes, reason, channel.String()))
+		text := fmt.Sprintf(`{"from_seq":%d,"to_seq":%d,"count":%d,"bytes":%d,"reason":%q,"channel":%q`,
+			from, seq, events, bytes, reason, channel.String())
+		if queued != nil {
+			text += fmt.Sprintf(`,"queued":%d`, *queued)
+		}
+		fields := json.RawMessage(text + "}")
 		push(l.writerEvent(LevelWarn, "log.dropped", fields))
 	}
 	// pull takes the events of the source of the process. No event source reaches the writer from there (a native thread
@@ -743,12 +770,16 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 			pending := &pendingEvent{tsMicros: e.TsMicros, monoNs: e.MonoNs, cids: e.Cids, layer: e.Layer, level: e.Level, event: e.Event, fields: e.Fields}
 			l.classify(pending)
 			push(pending)
-		}, dropped)
+		}, func(events, bytes uint64, reason string, channel Channel) {
+			dropped(events, bytes, reason, channel, nil)
+		})
 	}
 	recordLoss := func() {
 		for channel := Channel(0); channel < ChannelCount; channel++ {
 			events := l.lost[channel].events.Swap(0)
-			dropped(events, l.lost[channel].bytes.Swap(0), "the queue was full", channel)
+			bytes := l.lost[channel].bytes.Swap(0)
+			queued := l.lost[channel].depth.Swap(0)
+			dropped(events, bytes, "the queue was full", channel, &queued)
 		}
 	}
 	// reportGated reports the events that the gate refused with the exact count for each class and level, each second and

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -132,4 +133,109 @@ func TestAWriterStoresTheEventsAndTheLossOfItsPullSource(t *testing.T) {
 	if lines[2]["event"] != "log.dropped" || fields["reason"] != "the source was full" || fields["count"] != float64(3) {
 		t.Errorf("the loss is %v", lines[2])
 	}
+}
+
+// contract: cli.log.writer-options.records-refused-placed-events-as-loss
+func TestRefusedPlacedEventsAreRecordedAsLossBeforeTheNextAcceptedEvent(t *testing.T) {
+	options := optionsIn(t.TempDir(), "full-queue")
+	options.QueueEvents = 2
+	options.QueueBytes = 1 << 20
+	options.BatchInterval = time.Hour
+	options.Spawn = func(name string, fn func()) { go fn() }
+	// The pull runs on the writer goroutine at each drain. Holding it there keeps the writer from taking the queued events,
+	// so the queue stays full until the test releases it.
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	options.Pull = func(accept func(sok.RelayedEvent), lost func(events, bytes uint64, reason string, channel sok.Channel)) {
+		once.Do(func() {
+			close(entered)
+			<-release
+		})
+	}
+	log, err := sok.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := sok.ParseLogPolicy("log-policy.json", []byte(`{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.SetPolicy(policy, "file")
+	flushed := make(chan error, 1)
+	go func() { flushed <- log.Flush(5 * time.Second) }()
+	<-entered
+	if !log.Emit(sok.LevelWarn, "host.stall.dump", map[string]any{"path": "/first"}) || !log.Emit(sok.LevelWarn, "host.stall.dump", map[string]any{"path": "/second"}) {
+		t.Fatal("the queue refused an event before it was full")
+	}
+	for range 2 {
+		_, err := log.EmitPlaced(sok.LevelWarn, "host.stall.dump", json.RawMessage(`{"path":"/refused"}`), 5*time.Second)
+		if err == nil || err.Error() != "the event writer refused host.stall.dump because its queue was full" {
+			t.Fatalf("a placed event on a full queue returned %v", err)
+		}
+	}
+	close(release)
+	if err := <-flushed; err != nil {
+		t.Fatal(err)
+	}
+	if !log.Emit(sok.LevelInfo, "sok.command", map[string]any{"name": "after"}) {
+		t.Fatal("the queue refused an event after the writer took its batch")
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	log.Close()
+	lines := storedLines(t, log.Path())
+	dropped := -1
+	for i, line := range lines {
+		if line["event"] == "log.dropped" {
+			dropped = i
+		}
+	}
+	if dropped < 0 {
+		t.Fatalf("no log.dropped records the two refused events: %v", lines)
+	}
+	fields2, _ := lines[dropped]["fields"].(map[string]any)
+	if fields2["count"] != float64(2) || fields2["reason"] != "the queue was full" || fields2["channel"] != "other" || fields2["queued"] != float64(2) {
+		t.Fatalf("log.dropped = %v", lines[dropped])
+	}
+	if lines[dropped]["level"] != "warn" {
+		t.Fatalf("log.dropped has level %v", lines[dropped]["level"])
+	}
+	for i := dropped + 1; i < len(lines); i++ {
+		if lines[i]["event"] == "sok.command" && lines[i]["fields"].(map[string]any)["name"] == "after" {
+			return
+		}
+	}
+	t.Fatalf("the event after the refusals is not stored after log.dropped: %v", lines)
+}
+
+// contract: cli.log.writer-options.refuses-a-placed-event-by-its-cause
+func TestAPlacedEventRefusedByThePolicyNamesThePolicy(t *testing.T) {
+	options := optionsIn(t.TempDir(), "policy-refusal")
+	log, err := sok.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The default policy stores only errors, so a warning of a lifecycle class is refused by the gate and not by the queue.
+	_, err = log.EmitPlaced(sok.LevelWarn, "host.stall.dump", json.RawMessage(`{"path":"/probe"}`), 5*time.Second)
+	if err == nil || err.Error() != "the event writer refused host.stall.dump because the policy does not store it" {
+		t.Fatalf("a placed event refused by the policy returned %v", err)
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	log.Close()
+	for _, line := range storedLines(t, log.Path()) {
+		if line["event"] == "log.dropped" {
+			t.Fatalf("a gated event was recorded as a loss: %v", line)
+		}
+		if line["event"] == "log.gated" {
+			fields, _ := line["fields"].(map[string]any)
+			if fields["class"] == "lifecycle" && fields["level"] == "warn" && fields["count"] == float64(1) {
+				return
+			}
+		}
+	}
+	t.Fatal("the gated event is not recorded by log.gated")
 }

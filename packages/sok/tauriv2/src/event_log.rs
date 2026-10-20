@@ -213,6 +213,25 @@ const GATED_REPORT_INTERVAL: Duration = Duration::from_secs(1);
 struct Loss {
     events: [AtomicU64; 2],
     bytes: [AtomicU64; 2],
+    /// The largest number of events waiting in the queue at a refusal since the writer last recorded the loss, for each channel.
+    depth: [AtomicU64; 2],
+}
+
+/// Why the queue did not take an event: it had no room, or the policy does not store the event (docs/spec/logging.md#policy).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Refusal {
+    Queue,
+    Policy,
+}
+
+impl Refusal {
+    /// The reason that a refused placed event states in its error.
+    fn reason(self) -> &'static str {
+        match self {
+            Refusal::Queue => "its queue was full",
+            Refusal::Policy => "the policy does not store it",
+        }
+    }
 }
 
 /// The observer that the writer calls after it wrote a batch, with the path of the file and its size.
@@ -315,6 +334,7 @@ impl EventLog {
         let loss = Arc::new(Loss {
             events: [AtomicU64::new(0), AtomicU64::new(0)],
             bytes: [AtomicU64::new(0), AtomicU64::new(0)],
+            depth: [AtomicU64::new(0), AtomicU64::new(0)],
         });
         // events: forwarded
         let open = Pending::writer_event(
@@ -449,7 +469,13 @@ impl EventLog {
         deadline: Duration,
     ) -> Result<u64, String> {
         let (placed, receiver) = sync_channel(1);
-        if !self.enqueue(
+        if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
+            self.count_loss(Channel::of(level), 1, event.len() as u64);
+            return Err(format!(
+                "the event writer refused {event} because its queue was full"
+            ));
+        }
+        if let Err(refusal) = self.enqueue(
             now_us(),
             (self.clock)(),
             Vec::new(),
@@ -461,7 +487,8 @@ impl EventLog {
             Some(placed),
         ) {
             return Err(format!(
-                "the event writer refused {event} because its queue was full"
+                "the event writer refused {event} because {}",
+                refusal.reason()
             ));
         }
         self.flush(deadline)?;
@@ -523,6 +550,7 @@ impl EventLog {
             fields,
             None,
         )
+        .is_ok()
     }
 
     /// Queues an event that another layer of this process produced, with the time and the layer it carries. The event
@@ -578,17 +606,19 @@ impl EventLog {
             self.count_loss(Channel::of(level), 1, event.len() as u64);
             return Ok(false);
         }
-        Ok(self.enqueue(
-            ts_us,
-            mono_ns,
-            cids,
-            Cow::Owned(layer.to_string()),
-            page,
-            level,
-            event,
-            fields,
-            None,
-        ))
+        Ok(self
+            .enqueue(
+                ts_us,
+                mono_ns,
+                cids,
+                Cow::Owned(layer.to_string()),
+                page,
+                level,
+                event,
+                fields,
+                None,
+            )
+            .is_ok())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -603,7 +633,7 @@ impl EventLog {
         event: &str,
         fields: Fields,
         placed: Option<SyncSender<u64>>,
-    ) -> bool {
+    ) -> Result<(), Refusal> {
         // Fields that the producer cut at the bound are stored as they are; the others are cut here when they are over it.
         let (fields, truncated) = match fields.truncated {
             Some(size) => (fields.text, Some(size)),
@@ -612,7 +642,7 @@ impl EventLog {
         let bytes = fields.get().len() + event.len();
         if self.queued_bytes.load(Ordering::Relaxed) + bytes > self.queue_bytes {
             self.count_loss(Channel::of(level), 1, bytes as u64);
-            return false;
+            return Err(Refusal::Queue);
         }
         // A closed gate stores nothing and counts the event; page.start passes every gate.
         let class = self.class(event);
@@ -620,7 +650,7 @@ impl EventLog {
             && event != "page.start"
             && !self.gate(class, level)
         {
-            return false;
+            return Err(Refusal::Policy);
         }
         let pending = Pending {
             ts_us,
@@ -640,17 +670,17 @@ impl EventLog {
     }
 
     /// Hands a counted event to the writer; a full queue refuses it and counts the loss.
-    fn queue(&self, pending: Pending) -> bool {
+    fn queue(&self, pending: Pending) -> Result<(), Refusal> {
         let (bytes, channel) = (pending.bytes, Channel::of(pending.level));
         self.queued_bytes.fetch_add(bytes, Ordering::Relaxed);
         self.queued_events.fetch_add(1, Ordering::Relaxed);
         match self.sender.try_send(Message::Event(pending)) {
-            Ok(()) => true,
+            Ok(()) => Ok(()),
             Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {
                 self.queued_bytes.fetch_sub(bytes, Ordering::Relaxed);
                 self.queued_events.fetch_sub(1, Ordering::Relaxed);
                 self.count_loss(channel, 1, bytes as u64);
-                false
+                Err(Refusal::Queue)
             }
         }
     }
@@ -670,7 +700,7 @@ impl EventLog {
             self.count_loss(Channel::of(level), 1, pending.bytes as u64);
             return false;
         }
-        self.queue(pending)
+        self.queue(pending).is_ok()
     }
 
     /// The gate of this writer, shared with the producers of the process.
@@ -684,10 +714,12 @@ impl EventLog {
     }
 
     /// Adds events and bytes of a channel that a producer of this process refused before they reached the writer; the writer
-    /// records them as a `log.dropped` that names the channel.
+    /// records them as a `log.dropped` that names the channel and the depth of the queue at the refusal.
     pub fn count_loss(&self, channel: Channel, events: u64, bytes: u64) {
         self.loss.events[channel.index()].fetch_add(events, Ordering::Relaxed);
         self.loss.bytes[channel.index()].fetch_add(bytes, Ordering::Relaxed);
+        let depth = self.queued_events.load(Ordering::Relaxed) as u64;
+        self.loss.depth[channel.index()].fetch_max(depth, Ordering::Relaxed);
     }
 
     /// Writes everything that is queued and waits until it is on disk, at most `deadline`.
@@ -970,25 +1002,36 @@ impl Output {
     }
 
     /// Stores one `log.dropped` after the range of `seq` that the refused events would have had; `channel` is the channel of the
-    /// refused events. The refused events had no `seq`; their numbers are skipped (docs/spec/logging.md#event).
-    fn dropped(&mut self, events: u64, bytes: u64, reason: &str, channel: Channel) {
+    /// refused events and `queued` the depth of the writer queue at their refusal, when the writer counted them.
+    /// The refused events had no `seq`; their numbers are skipped (docs/spec/logging.md#event).
+    fn dropped(
+        &mut self,
+        events: u64,
+        bytes: u64,
+        reason: &str,
+        channel: Channel,
+        queued: Option<u64>,
+    ) {
         if events == 0 {
             return;
         }
         let from = self.seq + 1;
         self.seq += events;
+        let mut fields = json!({
+            "from_seq": from,
+            "to_seq": self.seq,
+            "count": events,
+            "bytes": bytes,
+            "reason": reason,
+            "channel": channel.name(),
+        });
+        if let Some(queued) = queued {
+            fields["queued"] = json!(queued);
+        }
         let pending = self.own(
             Level::Warn,
             "log.dropped",
-            to_raw_value(&json!({
-                "from_seq": from,
-                "to_seq": self.seq,
-                "count": events,
-                "bytes": bytes,
-                "reason": reason,
-                "channel": channel.name(),
-            }))
-            .expect("a json value serializes"),
+            to_raw_value(&fields).expect("a json value serializes"),
         );
         self.push(&pending);
     }
@@ -1104,7 +1147,7 @@ impl PullSink for Output {
     }
 
     fn lost(&mut self, events: u64, bytes: u64, reason: &str, channel: Channel) {
-        self.dropped(events, bytes, reason, channel);
+        self.dropped(events, bytes, reason, channel, None);
     }
 }
 
@@ -1133,7 +1176,8 @@ fn write_loop(
         for channel in Channel::ALL {
             let events = loss.events[channel.index()].swap(0, Ordering::Relaxed);
             let bytes = loss.bytes[channel.index()].swap(0, Ordering::Relaxed);
-            out.dropped(events, bytes, "the queue was full", channel);
+            let queued = loss.depth[channel.index()].swap(0, Ordering::Relaxed);
+            out.dropped(events, bytes, "the queue was full", channel, Some(queued));
         }
     };
     // The events that the gate refused are reported with the exact count for each class and level, each second and at a
