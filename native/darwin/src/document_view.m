@@ -1125,6 +1125,16 @@ void sp_document_set_view_ended(void *handle, sp_view_ended ended, void *context
     view.viewEndedContext = context;
 }
 
+void sp_document_add_user_script(void *handle, const char *source) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed || !source) return;
+    // The page world, as the view channel script runs, so the page's first script reads the value.
+    WKContentWorld *pageWorld = WKContentWorld.pageWorld;
+    [view.configuration.userContentController addUserScript:[[[WKUserScript alloc] initWithSource:[NSString stringWithUTF8String:source]
+        injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES inContentWorld:pageWorld] autorelease]];
+}
+
 void sp_document_set_view_responsiveness(void *handle, sp_view_responsiveness receiver, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;

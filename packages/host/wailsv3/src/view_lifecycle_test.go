@@ -24,6 +24,9 @@ type lifecyclePlatform struct {
 	created []unsafe.Pointer
 	// responsiveness holds the responsiveness receiver of each view.
 	responsiveness map[unsafe.Pointer]func(bool)
+	// scripts holds the user scripts that each document received, and loadsBeforeScript the number of loads at each of them.
+	scripts           map[unsafe.Pointer][]string
+	loadsBeforeScript []int
 	// createdFor is the native surface that each created view was given, in the order of created.
 	createdFor []unsafe.Pointer
 	closed     []unsafe.Pointer
@@ -51,6 +54,13 @@ func (p *lifecyclePlatform) SetViewResponsiveness(document unsafe.Pointer, respo
 	return nil
 }
 
+// AddDocumentScript records the user script of each document, and the loads that the view made before it.
+func (p *lifecyclePlatform) AddDocumentScript(document unsafe.Pointer, source string) error {
+	p.scripts[document] = append(p.scripts[document], source)
+	p.loadsBeforeScript = append(p.loadsBeforeScript, len(p.loaded))
+	return nil
+}
+
 // PostDocument accepts the message, so a ready message of the view can post the theme to it.
 func (p *lifecyclePlatform) PostDocument(document unsafe.Pointer, value string) bool {
 	return true
@@ -64,7 +74,7 @@ func (p *lifecyclePlatform) CloseDocument(document unsafe.Pointer) {
 // platform that records its documents. The clock is the clock of the lifecycle.
 func newLifecycleSurfaces(t *testing.T, clock *fakeClock) (*Surfaces, *lifecyclePlatform, unsafe.Pointer) {
 	t.Helper()
-	fake := &lifecyclePlatform{ended: map[unsafe.Pointer]func(){}, responsiveness: map[unsafe.Pointer]func(bool){}}
+	fake := &lifecyclePlatform{ended: map[unsafe.Pointer]func(){}, responsiveness: map[unsafe.Pointer]func(bool){}, scripts: map[unsafe.Pointer][]string{}}
 	saved := system
 	system = fake
 	t.Cleanup(func() { system = saved })

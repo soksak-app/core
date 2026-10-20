@@ -377,6 +377,9 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 			s.viewResponsiveness(surfaceID, plugin, responsive)
 		})
 	}
+	if err == nil {
+		err = s.addThemeScript(handle)
+	}
 	if err == nil && !system.LoadDocument(handle, "sok://"+plugin+"/"+page) {
 		system.CloseDocument(handle)
 		err = fmt.Errorf("view of surface %q cannot load sok://%s/%s", surfaceID, plugin, page)
@@ -392,6 +395,16 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	s.documents.registerView(surfaceID, plugin)
 	EmitHost(LevelDebug, "host.trace.view.process-request", map[string]any{"plugin": plugin, "surface": surfaceID})
 	return nil
+}
+
+// addThemeScript adds the theme script of the view document, with the theme current at its creation, before the view loads its page
+// (docs/spec/native-surfaces.md#view-surfaces).
+func (s *Surfaces) addThemeScript(document unsafe.Pointer) error {
+	script, err := themeScript(s.Theme())
+	if err != nil {
+		return err
+	}
+	return system.AddDocumentScript(document, script)
 }
 
 // viewResponsiveness relays a responsiveness notice of the view of surface: it writes the trace event of the notice and sends the

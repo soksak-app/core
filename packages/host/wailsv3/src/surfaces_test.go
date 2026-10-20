@@ -105,6 +105,8 @@ func (p *viewPlatform) SetViewResponsiveness(document unsafe.Pointer, responsive
 	return nil
 }
 
+func (p *viewPlatform) AddDocumentScript(document unsafe.Pointer, source string) error { return nil }
+
 // contract: view.create-loads-page
 func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	fake := &viewPlatform{}

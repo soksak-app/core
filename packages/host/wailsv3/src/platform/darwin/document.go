@@ -74,6 +74,9 @@ static void documentSetViewEnded(void *document, uintptr_t context) {
 static void viewResponsivenessBridge(void *context, bool responsive) {
     viewResponsiveness(context, responsive);
 }
+static void documentAddScript(void *document, const char *source) {
+    sp_document_add_user_script(document, source);
+}
 static void documentSetViewResponsiveness(void *document, uintptr_t context) {
     sp_document_set_view_responsiveness(document, viewResponsivenessBridge, (void *)context);
 }
@@ -238,6 +241,13 @@ func (implementation) SetViewResponsiveness(document unsafe.Pointer, responsiven
 	receiver := cgo.NewHandle(responsiveness)
 	C.documentSetViewResponsiveness(document, C.uintptr_t(receiver))
 	viewResponsivenesses[document] = receiver
+	return nil
+}
+
+func (implementation) AddDocumentScript(document unsafe.Pointer, source string) error {
+	cSource := C.CString(source)
+	defer C.free(unsafe.Pointer(cSource))
+	C.documentAddScript(document, cSource)
 	return nil
 }
 

@@ -307,6 +307,9 @@ impl Platform for Darwin {
     ) -> Result<(), String> {
         document::set_view_responsiveness(document, responsiveness)
     }
+    fn add_document_script(&self, document: Handle, source: &str) -> Result<(), String> {
+        document::add_document_script(document, source)
+    }
     fn set_document_message(
         &self,
         document: Handle,

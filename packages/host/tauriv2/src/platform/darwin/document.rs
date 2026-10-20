@@ -41,6 +41,7 @@ unsafe extern "C" {
         responsiveness: Responsiveness,
         context: *mut c_void,
     );
+    fn sp_document_add_user_script(document: *mut c_void, source: *const c_char);
     fn sp_document_set_stream(document: *mut c_void, stream: Event, context: *mut c_void);
     fn sp_document_stream_on(document: *mut c_void, stream: *const c_char, on: bool) -> bool;
     fn sp_document_stream_ack(document: *mut c_void, seq: u64) -> bool;
@@ -357,6 +358,15 @@ pub fn close(document: Handle) {
     if let Some(receiver) = STREAMS.with(|all| all.borrow_mut().remove(&document)) {
         drop(unsafe { Box::from_raw(receiver) });
     }
+}
+
+/// Adds a document-start user script to the document. The source is copied by the native layer. Call it on the main thread before the
+/// document loads a page.
+pub fn add_document_script(document: Handle, source: &str) -> Result<(), String> {
+    let source = CString::new(source)
+        .map_err(|error| format!("the document script contains a NUL byte: {error}"))?;
+    unsafe { sp_document_add_user_script(document as *mut c_void, source.as_ptr()) };
+    Ok(())
 }
 
 /// Receives the responsiveness notices of a view. A receiver that is set again replaces the earlier one. Call it on the main thread

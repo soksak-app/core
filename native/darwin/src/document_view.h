@@ -61,6 +61,11 @@ typedef void (*sp_view_responsiveness)(void *context, bool responsive);
 // context while the document lives.
 void sp_document_set_view_responsiveness(void *document, sp_view_responsiveness receiver, void *context);
 
+// Adds a user script that runs at document start in the page world of the main frame, before any page script, for each load of the
+// document from now on (docs/spec/native-surfaces.md#view-surfaces). The host adds the theme script of a view before it loads the page.
+// The source is copied. Call it on the main thread before the view loads a page.
+void sp_document_add_user_script(void *document, const char *source);
+
 // Sets the receiver of the messages of the sok-view handler of a view. NULL reports none. The caller keeps context while the
 // document lives.
 void sp_document_set_view_message(void *document, sp_view_message message, void *context);

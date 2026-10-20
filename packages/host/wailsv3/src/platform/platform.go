@@ -380,6 +380,9 @@ type Platform interface {
 	// SetViewResponsiveness receives the responsiveness notices of a view: false when its WebContent process stops answering its
 	// responsiveness check, and true when it answers again. A closed view receives no call (docs/spec/native-surfaces.md#view-surfaces).
 	SetViewResponsiveness(document unsafe.Pointer, responsiveness func(responsive bool)) error
+	// AddDocumentScript adds a user script that runs at document start in the page world, before any page script, for each load of the
+	// document from now on. The host adds the theme script of a view before it loads the page (docs/spec/native-surfaces.md#view-surfaces).
+	AddDocumentScript(document unsafe.Pointer, source string) error
 	SetDocumentEvent(document unsafe.Pointer, event func(value string)) error
 	// SetDocumentStream receives {"stream": "elements" or "requests", "message": {...}} for each stream message of the document.
 	SetDocumentStream(document unsafe.Pointer, stream func(value string)) error

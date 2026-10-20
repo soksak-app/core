@@ -193,6 +193,9 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::set_view_responsiveness(document, responsiveness)
     }
+    fn add_document_script(&self, document: Handle, source: &str) -> Result<(), String> {
+        unsupported::add_document_script(document, source)
+    }
     fn set_document_message(
         &self,
         document: Handle,

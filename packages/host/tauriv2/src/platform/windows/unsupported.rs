@@ -204,6 +204,10 @@ pub fn set_view_ended(_document: Handle, _ended: Box<dyn Fn() + Send>) -> Result
     missing("view channel")
 }
 
+pub fn add_document_script(_document: Handle, _source: &str) -> Result<(), String> {
+    missing("view channel")
+}
+
 pub fn set_view_responsiveness(
     _document: Handle,
     _responsiveness: Box<dyn Fn(bool) + Send>,

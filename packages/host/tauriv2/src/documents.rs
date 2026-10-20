@@ -1066,6 +1066,9 @@ fn attach_view(
                     }
                 }),
             )?;
+            let theme = crate::theme::get(window)?;
+            let theme = serde_json::to_value(&theme).map_err(|error| error.to_string())?;
+            platform.add_document_script(document, &theme_script(&theme))?;
             record_view_process_request(surface, plugin);
             Ok(document)
         },
@@ -1945,3 +1948,13 @@ pub fn record_view_process_ready(surface: &str, plugin: &str) {
 #[cfg(test)]
 #[path = "view_responsiveness_test.rs"]
 mod tests;
+
+/// The document-start script that sets window.sokTheme to the frozen theme value {scheme, tokens}, which the first page script of a
+/// view reads (docs/spec/native-surfaces.md#view-surfaces).
+pub fn theme_script(theme: &Value) -> String {
+    format!("window.sokTheme = Object.freeze({theme});")
+}
+
+#[cfg(test)]
+#[path = "view_theme_test.rs"]
+mod theme_tests;

@@ -411,6 +411,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
     ) -> Result<(), String>;
     /// Receives the end of the WebContent process of a view, before the host closes the view. A closed view receives no call.
     fn set_view_ended(&self, document: Handle, ended: Box<dyn Fn() + Send>) -> Result<(), String>;
+    /// Adds a user script that runs at document start in the page world, before any page script, for each load of the document from
+    /// now on. The host adds the theme script of a view before it loads the page (docs/spec/native-surfaces.md#view-surfaces).
+    fn add_document_script(&self, document: Handle, source: &str) -> Result<(), String>;
     /// Receives the responsiveness notices of a view: false when its WebContent process stops answering its responsiveness check,
     /// and true when it answers again. A closed view receives no call (docs/spec/native-surfaces.md#view-surfaces).
     fn set_view_responsiveness(

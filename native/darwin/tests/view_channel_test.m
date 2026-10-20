@@ -69,6 +69,14 @@ static NSString *const page = @"<!doctype html><meta charset=utf-8><title>loadin
     "<script>const handlers = window.webkit && window.webkit.messageHandlers;"
     "document.title = 'handler ' + (handlers ? typeof handlers['sok-view'] : 'undefined');</script>";
 
+// The theme script that the host adds to a view: the frozen theme value that the first page script reads from window.sokTheme.
+static NSString *const themeScript = @"window.sokTheme = Object.freeze({\"scheme\":\"dark\",\"tokens\":{\"surface\":\"#101010\"}});";
+
+// The page reports the scheme that its first script reads, through the title.
+static NSString *const themePage = @"<!doctype html><meta charset=utf-8><title>loading</title>"
+    "<script>const theme = window.sokTheme;"
+    "document.title = 'theme ' + (theme ? theme.scheme : 'undefined');</script>";
+
 static BOOL hasChannelScript(WKWebView *web) {
     for (WKUserScript *script in web.configuration.userContentController.userScripts) {
         if ([script.source isEqualToString:channelScript]) return YES;
@@ -149,6 +157,21 @@ int main(void) { @autoreleasepool {
         [(id<WKNavigationDelegate>)region webViewWebContentProcessDidTerminate:(WKWebView *)region];
         check(viewEnded == 1, @"the end of a document region does not call the view ended receiver");
         sp_document_close(region);
+    }
+    @autoreleasepool {
+        writeFile(folder, @"ui/theme.html", themePage);
+        void *themed = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe",
+            channelScript.UTF8String, changed, NULL);
+        check(themed != NULL, @"a themed view configuration is created");
+        sp_document_set_view_message(themed, viewMessage, NULL);
+        sp_document_add_user_script(themed, themeScript.UTF8String);
+        sp_document_place(themed, 0, 0, 0, 0, true);
+        latest = nil;
+        check(sp_document_load(themed, "sok://probe/ui/theme.html"), @"the themed view loads its page");
+        until(@"the theme page reports the scheme of its first script", ^BOOL{ return [latest[@"title"] hasPrefix:@"theme"]; });
+        check([latest[@"title"] isEqual:@"theme dark"],
+            [NSString stringWithFormat:@"the first page script reads the theme from window.sokTheme: %@", latest[@"title"]]);
+        sp_document_close(themed);
     }
     sp_surface_close(surface);
     [window close];

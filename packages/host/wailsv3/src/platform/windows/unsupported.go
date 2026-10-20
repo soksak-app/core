@@ -241,6 +241,10 @@ func (implementation) SetViewResponsiveness(unsafe.Pointer, func(bool)) error {
 	return unsupported("view channel")
 }
 
+func (implementation) AddDocumentScript(unsafe.Pointer, string) error {
+	return unsupported("view channel")
+}
+
 func (implementation) SetDocumentEvent(unsafe.Pointer, func(string)) error {
 	return unsupported("document events")
 }
