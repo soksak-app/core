@@ -373,7 +373,7 @@ static NSString *pluginContentType(NSString *path) {
     NSData *data = file && [[NSFileManager defaultManager] fileExistsAtPath:file isDirectory:&directory] && !directory
         ? [NSData dataWithContentsOfFile:file] : nil;
     if (!data) {
-        sp_log_info("document view", [NSString stringWithFormat:@"plugin file not found: %@", url.absoluteString].UTF8String);
+        sp_log_error("document view", [NSString stringWithFormat:@"plugin file not found: %@", url.absoluteString].UTF8String);
         [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorFileDoesNotExist
             userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"%@ is not found", url.absoluteString] }]];
         return;

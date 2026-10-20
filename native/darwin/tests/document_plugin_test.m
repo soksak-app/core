@@ -4,8 +4,11 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
+#import "support/records.h"
+#import "application_log.h"
 #import "document_view.h"
 #import "webview_geometry.h"
+#import "event_ring.h"
 
 static int failures = 0;
 
@@ -52,6 +55,10 @@ static void recordStoreClosed(void *context, const char *error) {
 }
 
 int main(void) { @autoreleasepool {
+    // The policy stores every level, so the test shows the level of each record that a refusal writes; the default policy stores
+    // only errors (docs/spec/logging.md#policy).
+    const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(everything), @"a policy with a level for each class is accepted");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -125,19 +132,31 @@ int main(void) { @autoreleasepool {
                 [NSString stringWithFormat:@"the %@ reply arrives as %@: %@", reply[0], reply[1], messages[index + 1]]);
         }
 
-        // The URL parser resolves the dot segments, so the last address requests sok://probe/secret.html.
+        // The URL parser resolves the dot segments, so the last address requests sok://probe/secret.html. A refused request is
+        // logged once as an error with its URL (docs/spec/native-surfaces.md#document-regions).
         NSDictionary<NSString *, NSString *> *refused = @{
-            @"sok://other/ui/app/index.html": @"sok://other/ui/app/index.html is not found",
-            @"sok://probe/ui/app/missing.html": @"sok://probe/ui/app/missing.html is not found",
-            @"sok://probe/ui/../../secret.html": @"sok://probe/secret.html is not found",
+            @"sok://other/ui/app/index.html": @"sok://other/ui/app/index.html",
+            @"sok://probe/ui/app/missing.html": @"sok://probe/ui/app/missing.html",
+            @"sok://probe/ui/../../secret.html": @"sok://probe/secret.html",
         };
         for (NSString *address in refused) {
-            check(sp_document_load(document, address.UTF8String), [NSString stringWithFormat:@"%@ starts a load", address]);
-            // A failed load keeps the previous document, so the load is settled when the region reports its error.
-            until([NSString stringWithFormat:@"%@ fails", address], ^BOOL{
-                return [latest[@"loading"] isEqual:@NO] && [latest[@"error"] isKindOfClass:NSString.class] && [latest[@"error"] containsString:refused[address]];
+            NSString *url = refused[address];
+            NSArray<NSDictionary *> *events = capturedEvents(^{
+                check(sp_document_load(document, address.UTF8String), [NSString stringWithFormat:@"%@ starts a load", address]);
+                // A failed load keeps the previous document, so the load is settled when the region reports its error.
+                until([NSString stringWithFormat:@"%@ fails", address], ^BOOL{
+                    return [latest[@"loading"] isEqual:@NO] && [latest[@"error"] isKindOfClass:NSString.class] &&
+                        [latest[@"error"] containsString:[url stringByAppendingString:@" is not found"]];
+                });
             });
             check(![latest[@"title"] isEqual:@"outside"], [NSString stringWithFormat:@"%@ is not found: %@", address, latest[@"error"]]);
+            NSMutableArray<NSDictionary *> *refusals = [NSMutableArray array];
+            for (NSDictionary *event in events) {
+                if ([event[@"fields"][@"where"] isEqual:@"document view"] && [event[@"fields"][@"text"] hasPrefix:@"plugin file not found"]) [refusals addObject:event];
+            }
+            check(refusals.count == 1 && [refusals[0][@"name"] isEqual:@"native.record.error"] &&
+                [refusals[0][@"fields"][@"text"] isEqual:[NSString stringWithFormat:@"plugin file not found: %@", url]],
+                [NSString stringWithFormat:@"%@ is logged once as an error with its URL: %@", address, events]);
         }
 
         sp_document_close(document);
