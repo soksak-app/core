@@ -1996,3 +1996,60 @@ fn a_page_reload_does_not_reconnect_a_persistent_sidecar_for_a_surface_that_neve
         Vec::<String>::new()
     );
 }
+
+// contract: sidecars.trace.first-answer-after-spawn-is-recorded
+#[test]
+fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {
+    // The switch of the trace belongs to the process, so the check runs in a child process that nothing else shares it with.
+    if std::env::var_os("SOKSAK_READY_TRACE_CHILD").is_none() {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "standard_io_sidecar_first_answer_after_spawn_is_recorded",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("SOKSAK_READY_TRACE_CHILD", "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "the child check failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    let (mut sidecars, directory) = script_sidecars(
+        "#!/bin/sh\necho $$ > DIR/pid\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\"}}'\nwhile read line; do :; done\n",
+    );
+    sidecars.0.stop_timeout = STALL;
+    let events_directory = folder::Folder::new();
+    let writer = records::start_writer(events_directory.path());
+    soksak_host_tauriv2::performance::command(serde_json::json!({"action": "on"})).unwrap();
+    let (window, events) = owner("a", "/projects/test");
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
+        .unwrap();
+    events
+        .recv_timeout(STALL)
+        .expect("no event; the test stalled");
+    sidecars.stop();
+    writer.flush(STALL).unwrap();
+    let records_of_the_run = records::read_events(writer.path());
+    soksak_host_tauriv2::event_record::use_host_event_log(None);
+    let ready = records_of_the_run
+        .iter()
+        .find(|record| record["event"] == "host.trace.sidecar.ready")
+        .expect("the first answer after the spawn was not recorded");
+    assert_eq!(ready["level"], "debug");
+    assert_eq!(ready["fields"]["sidecar"], ECHO);
+    assert_eq!(
+        ready["fields"]["pid"].as_i64(),
+        Some(i64::from(process_id(directory.path())))
+    );
+    assert!(
+        ready["fields"]["ms"].as_f64().is_some_and(|ms| ms >= 0.0),
+        "ms = {}, want a number of milliseconds from the spawn",
+        ready["fields"]["ms"]
+    );
+}

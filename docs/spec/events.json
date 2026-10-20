@@ -378,6 +378,17 @@
       },
       "description": "The decision of a host.window notification of a window: decision is sent when the value was sent to the watching connections, unchanged when it equals the value sent last, and unwatched when no connection watches host.window of the window (docs/spec/host-contract.md#contract-cases)."
     },
+    "host.trace.sidecar.ready": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "sidecar": "string",
+        "pid": "number",
+        "ms": "number"
+      },
+      "description": "The first message line that a sidecar sent after its spawn by the host: sidecar is the name, pid the process and ms the time in milliseconds from the spawn to that line; it is written once for each spawn (docs/spec/host-contract.md#contract-cases)."
+    },
     "host.trace.<event>": {
       "layer": "host",
       "class": "call",

@@ -2316,3 +2316,98 @@ fn persistent_connections_are_recorded_as_events() {
         .count();
     assert_eq!(sampled, 1, "samples that name the service");
 }
+
+// contract: sidecars.trace.first-answer-after-spawn-is-recorded
+#[test]
+fn persistent_spawned_service_first_answer_after_spawn_is_recorded() {
+    // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
+    if let Some(config) = std::env::var_os("SOKSAK_READY_PERSISTENT_CHILD") {
+        let executable_directory = folder::Folder::new();
+        let config_directory = folder::Folder::new();
+        let service_directory = config_directory.path().join("services/service");
+        std::fs::create_dir_all(&service_directory).unwrap();
+        let socket_path = service_directory.join("ready.sock");
+        let listener = UnixListener::bind(&socket_path).unwrap();
+        // The service that the host spawns prints its endpoint, records its process id and ends; the listener of this check serves it.
+        let pid_path = executable_directory.path().join("pid");
+        let script = format!(
+            "#!/bin/sh\necho $$ > {}\necho '{{\"protocol\":1,\"pid\":'$$',\"socket\":\"{}\",\"token\":\"ready-token\"}}'\n",
+            pid_path.display(),
+            socket_path.display()
+        );
+        let program = executable_directory.path().join("service");
+        std::fs::write(&program, script).unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let service = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(30)))
+                .unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            stream
+                .write_all(b"{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}\n")
+                .unwrap();
+            loop {
+                line.clear();
+                if reader.read_line(&mut line).unwrap() == 0 {
+                    return;
+                }
+                stream.write_all(line.as_bytes()).unwrap();
+            }
+        });
+        let writer = records::start_writer(Path::new(&config));
+        soksak_host_tauriv2::performance::command(serde_json::json!({"action": "on"})).unwrap();
+        let fixture = files(r#"{"executable":"service","protocol":1,"transport":"persistent"}"#);
+        let sidecars = Sidecars::new(
+            &declare(&fixture, executable_directory.path()),
+            config_directory.path().to_path_buf(),
+        )
+        .unwrap();
+        let (owner, events) = owner("only", "/projects/only");
+        sidecars
+            .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+        events.recv_timeout(STALL).unwrap(); // the echo
+        sidecars.stop();
+        service.join().unwrap();
+        soksak_host_tauriv2::performance::command(serde_json::json!({"action": "off"})).unwrap();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        let pid: i64 = std::fs::read_to_string(&pid_path)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let records_of_the_run = records::read_events(writer.path());
+        soksak_host_tauriv2::event_record::use_host_event_log(None);
+        let ready = records_of_the_run
+            .iter()
+            .find(|record| record["event"] == "host.trace.sidecar.ready")
+            .expect("the first answer after the spawn of the service was not recorded");
+        assert_eq!(ready["level"], "debug");
+        assert_eq!(ready["fields"]["sidecar"], ECHO);
+        assert_eq!(ready["fields"]["pid"].as_i64(), Some(pid));
+        assert!(
+            ready["fields"]["ms"].as_f64().is_some_and(|ms| ms >= 0.0),
+            "ms = {}, want a number of milliseconds from the spawn",
+            ready["fields"]["ms"]
+        );
+        return;
+    }
+    let config = folder::Folder::new();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "persistent_spawned_service_first_answer_after_spawn_is_recorded",
+            "--nocapture",
+        ])
+        .env("SOKSAK_READY_PERSISTENT_CHILD", config.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

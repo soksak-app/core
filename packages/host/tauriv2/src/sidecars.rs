@@ -1954,6 +1954,7 @@ impl<O: Owner> Core<O> {
         command
             .arg("--log-dir")
             .arg(core.config_directory.join("logs"));
+        let spawned_at = Instant::now();
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -2029,8 +2030,12 @@ impl<O: Owner> Core<O> {
         let tx_clone = tx.clone();
         let pid = child.id();
         threads.push(Box::new(move || {
+            let mut ready = Some(ReadyClock {
+                spawned: spawned_at,
+                pid,
+            });
             let mut reader = BufReader::new(stdout);
-            let violation = relay(&mut reader, &state, &sidecar, &tx_clone);
+            let violation = relay(&mut reader, &state, &sidecar, &tx_clone, &mut ready);
             // The read end is closed so that a process that is still writing is not blocked in a write.
             drop(reader);
             drop(tx_clone);
@@ -2074,6 +2079,7 @@ impl<O: Owner> Core<O> {
         let endpoint_path = service_dir.join("endpoint.json");
 
         let mut child = None;
+        let mut spawn_clock = None;
         let endpoint: Endpoint = match std::fs::read(&endpoint_path) {
             Ok(bytes) => {
                 let endpoint: Endpoint = serde_json::from_slice(&bytes)
@@ -2109,6 +2115,7 @@ impl<O: Owner> Core<O> {
                 current()?
                     .new_session(&mut command)
                     .map_err(|e| format!("sidecar {name}: new session: {e}"))?;
+                let spawned_at = Instant::now();
                 let mut spawned = command
                     .spawn()
                     .map_err(|e| format!("sidecar {name}: {}: {e}", program.display()))?;
@@ -2122,6 +2129,10 @@ impl<O: Owner> Core<O> {
                 }
                 let endpoint: Endpoint = serde_json::from_str(&line)
                     .map_err(|e| format!("sidecar {name}: service endpoint: {e}"))?;
+                spawn_clock = Some(ReadyClock {
+                    spawned: spawned_at,
+                    pid: endpoint.pid,
+                });
                 child = Some(spawned);
                 endpoint
             }
@@ -2296,6 +2307,7 @@ impl<O: Owner> Core<O> {
         let retain_waiters_for_reader = Arc::clone(&retain_waiters);
         let tx_clone = tx.clone();
         let reader_service_pid = endpoint.pid;
+        let mut reader_ready = spawn_clock;
         let reader_connected = Arc::clone(&connected);
         threads.push(Box::new(move || {
             struct ConnectionGuard(Arc<AtomicBool>);
@@ -2312,7 +2324,9 @@ impl<O: Owner> Core<O> {
                 let mut line = Vec::new();
                 loop {
                     match read_message_line(&mut reader, MESSAGE_LIMIT, &mut line) {
-                        Ok(MessageLine::Complete) => {}
+                        Ok(MessageLine::Complete) => {
+                            record_ready(&mut reader_ready, &sidecar);
+                        }
                         Ok(MessageLine::End) => return None,
                         Ok(MessageLine::Unfinished(bytes)) => {
                             log_unfinished_line(&sidecar, bytes);
@@ -2796,6 +2810,7 @@ fn relay<O: Owner>(
     state: &Arc<Mutex<State<O>>>,
     sidecar: &str,
     tx: &SyncSender<Outgoing>,
+    ready: &mut Option<ReadyClock>,
 ) -> Option<String> {
     let mut line = Vec::new();
     loop {
@@ -2811,6 +2826,7 @@ fn relay<O: Owner>(
             }
             Err(error) => return Some(format!("read: {error}")),
         }
+        record_ready(ready, sidecar);
         match close_answer(state, sidecar, &line) {
             Ok(true) => continue,
             Ok(false) => {}
@@ -2866,6 +2882,30 @@ fn relay<O: Owner>(
             body: event.body,
         });
     }
+}
+
+/// The spawn of a process that the host started, with its pid. The first message line that the process sends after the spawn is
+/// written as the event `host.trace.sidecar.ready` (docs/spec/host-contract.md#contract-cases).
+struct ReadyClock {
+    spawned: Instant,
+    pid: u32,
+}
+
+/// Writes `host.trace.sidecar.ready` with the time from the spawn to the first message line of the process in milliseconds, once for each spawn.
+/// A process that the host did not spawn has no clock, so it writes nothing.
+fn record_ready(clock: &mut Option<ReadyClock>, sidecar: &str) {
+    let Some(clock) = clock.take() else {
+        return;
+    };
+    emit_host(
+        Level::Debug,
+        "host.trace.sidecar.ready",
+        serde_json::json!({
+            "sidecar": sidecar,
+            "pid": clock.pid,
+            "ms": clock.spawned.elapsed().as_secs_f64() * 1000.0,
+        }),
+    );
 }
 
 /// Writes a request that the host sends to a sidecar, or a message that it receives, as a trace event with its whole
