@@ -1615,8 +1615,7 @@ func TestSidecarRestartsAfterThreeFailuresWithinTheWindow(t *testing.T) {
 // contract: sidecars.restart.fourth-failure-stops
 func TestSidecarStopsAtTheFourthFailureWithinTheWindow(t *testing.T) {
 	sidecars, _, clock := restartSidecars(t)
-	config := t.TempDir()
-	log := support.StartWriter(t, config)
+	log := useEventLog(t)
 	owner := newFakeOwner("/projects/a")
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 * time.Second} {
 		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
@@ -1634,7 +1633,7 @@ func TestSidecarStopsAtTheFourthFailureWithinTheWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	starts, stops := 0, 0
-	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+	for _, event := range readEventLog(t, log.Path()) {
 		switch event["event"] {
 		case "host.sidecar.start":
 			starts++
@@ -1675,8 +1674,7 @@ func TestSidecarCountsOnlyFailuresWithinTheWindow(t *testing.T) {
 // contract: sidecars.restart.surface-open-resets-the-record
 func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 	sidecars, directory, clock := restartSidecars(t)
-	config := t.TempDir()
-	log := support.StartWriter(t, config)
+	log := useEventLog(t)
 	owner := newFakeOwner("/projects/a")
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 * time.Second} {
 		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
@@ -1700,7 +1698,7 @@ func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := false
-	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+	for _, event := range readEventLog(t, log.Path()) {
 		if event["event"] != "host.trace.sidecar.restart-reset" {
 			continue
 		}

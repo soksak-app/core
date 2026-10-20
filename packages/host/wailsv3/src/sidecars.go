@@ -174,11 +174,78 @@ type Sidecars struct {
 	ReadyTimeout time.Duration
 	// Now is the clock of the restart limit of standard input and output sidecars (docs/spec/sidecars.md#failure). A test injects it; nil uses time.Now.
 	Now func() time.Time
+	// restarts holds the restart-limit record of each standard input and output sidecar that has a counted failure. c.mu protects it.
+	restarts map[string]*restartRecord
 	// RetainSending is called with the service name after Retain prepared the service and before it sends retain. It is the point at which a check inserts
 	// other work in between, and it is not called when nil.
 	RetainSending func(name string)
 	configDir     string
 	nextRequest   uint64
+}
+
+// restartWindow and restartLimit are the sliding window and the number of counted failures of the restart limit of a standard input and
+// output sidecar (docs/spec/sidecars.md#failure).
+const (
+	restartWindow = 300 * time.Second
+	restartLimit  = 4
+)
+
+// restartRecord is the restart-limit record of one standard input and output sidecar. failures are the times of the counted failures,
+// oldest first. When the limit stops the restarts, stopped is true and refused holds the surfaces that sent to the failed process.
+type restartRecord struct {
+	failures []time.Time
+	stopped  bool
+	refused  map[string]bool
+}
+
+// now is the time of the restart limit: the injected Now, or time.Now when no test injects one.
+func (c *Sidecars) now() time.Time {
+	if c.Now != nil {
+		return c.Now()
+	}
+	return time.Now()
+}
+
+// countFailure counts a failure of the standard input and output sidecar name at the current time among the failures within restartWindow.
+// It reports true when this failure is the restartLimit-th counted one, which stops the restarts; surfaces are the surfaces that sent to the
+// failed process. It is called holding c.mu.
+func (c *Sidecars) countFailure(name string, surfaces map[string]bool) bool {
+	record := c.restarts[name]
+	if record == nil {
+		record = &restartRecord{}
+		c.restarts[name] = record
+	}
+	now := c.now()
+	kept := record.failures[:0]
+	for _, at := range record.failures {
+		if now.Sub(at) <= restartWindow {
+			kept = append(kept, at)
+		}
+	}
+	record.failures = append(kept, now)
+	if len(record.failures) < restartLimit {
+		return false
+	}
+	record.stopped = true
+	record.refused = surfaces
+	return true
+}
+
+// restartRefused applies the restart limit to a request from surface to the sidecar name, which has no running process. It is called holding
+// c.mu. A request from a surface that sent to the failed process is refused and reported as an error. A request from any other surface opens
+// a surface that needs the sidecar: it clears the record, and the start that follows is recorded as the event host.trace.sidecar.restart-reset.
+func (c *Sidecars) restartRefused(name, surface string) bool {
+	record := c.restarts[name]
+	if record == nil || !record.stopped {
+		return false
+	}
+	if record.refused[surface] {
+		LogError("sidecar "+name, fmt.Sprintf("restart limit: request for %s refused", surface))
+		return true
+	}
+	delete(c.restarts, name)
+	EmitHost(LevelDebug, "host.trace.sidecar.restart-reset", map[string]any{"sidecar": name, "surface": surface})
+	return false
 }
 
 // SidecarDeclaration is one installed sidecar. Data is the content of its sidecar.json and Folder is the folder that holds it.
@@ -213,6 +280,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		owners:          map[string]SidecarOwner{},
 		roots:           map[string]string{},
 		unannouncedLoss: map[string]bool{},
+		restarts:        map[string]*restartRecord{},
 		replacing:       map[string]replacement{},
 		basenames:       map[string]string{},
 		StopTimeout:     5 * time.Second,
@@ -379,6 +447,13 @@ func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body j
 			c.closingChanged()
 		}
 	}()
+	// A refusal by the restart limit is reported to the owner after the unlock, as the failure event of the sidecar (docs/spec/sidecars.md#failure).
+	var refusal *SidecarFailure
+	defer func() {
+		if refusal != nil {
+			owner.Emit("sidecar-failure", *refusal)
+		}
+	}()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.stopped {
@@ -389,6 +464,10 @@ func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body j
 	}
 	if other, ok := c.owners[surface]; ok && other != owner {
 		return fmt.Errorf("surface %s belongs to another window", surface)
+	}
+	if c.restartRefused(name, surface) {
+		refusal = &SidecarFailure{Sidecar: name, Surface: surface, Reason: "restart limit"}
+		return fmt.Errorf("sidecar %s: restart limit", name)
 	}
 	process, started, err := c.process(name)
 	if err != nil {
@@ -1467,7 +1546,9 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 		delete(c.running, process.name)
 		forgot = c.forgetClosing(process.name)
 	}
+	stop := false
 	if failed {
+		stop = c.countFailure(process.name, process.surfaces)
 		// While ending, Stop closes the outbox. Otherwise it is closed here to end the write goroutine.
 		// Every send to outbox happens inside c.mu and only to a process that is in running.
 		close(process.outbox)
@@ -1511,6 +1592,10 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 	PerformanceProcessRemove(process.cmd.Process.Pid)
 	close(process.exited)
 	LogError("sidecar "+process.name, "failed: "+reason)
+	if stop {
+		LogError("sidecar "+process.name, fmt.Sprintf("restart limit: %d failures within %d s", restartLimit, int(restartWindow/time.Second)))
+		EmitHost(LevelError, "host.sidecar.restart-limit", map[string]any{"sidecar": process.name})
+	}
 	c.failRequests(process.name, reason)
 	for _, item := range owned {
 		item.owner.Emit("sidecar-failure", SidecarFailure{Sidecar: process.name, Surface: item.surface, Reason: reason})

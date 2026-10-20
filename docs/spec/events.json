@@ -792,6 +792,25 @@
       },
       "description": "The connection to a persistent service ended."
     },
+    "host.sidecar.restart-limit": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "sidecar": "string"
+      },
+      "description": "A standard input and output sidecar failed for the fourth time within 300 seconds, so the host stopped its restarts (docs/spec/sidecars.md#failure)."
+    },
+    "host.trace.sidecar.restart-reset": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "sidecar": "string",
+        "surface": "string"
+      },
+      "description": "A surface that did not send to a sidecar stopped at its restart limit was opened: the host cleared the failure record and started the sidecar (docs/spec/sidecars.md#failure)."
+    },
     "host.project.removal_allowed": {
       "layer": "host",
       "class": "lifecycle",
