@@ -231,7 +231,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 4. Wails에는 앱이 만든 웹뷰로 가는 호출 통로가 없다(H3). Objective-C 쪽에서 통로를 만들고, 계약 case로 두 호스트가 같게 동작하는지 검증한다(F212.4).
 5. core root를 F212.5-4와 F212.5-6에서 만들고, 그 scheme은 F212.5-7에서 제공한다. 복사본과 link는 쓰지 않는다.
 6. view import map은 `@soksak/plugin-api`의 상수 하나이며, staging 도구가 쓰고 F212.5-4의 closure 시험이 확인한다(규칙 4). 문서 영역은 core root grant를 받지 않는다.
-7. plugin host를 가리키는 exposure owner key는 `plugin:<plugin id>`로 한다. plugin의 identity인 plugin id를 쓰므로([신원](#신원)) 그렇게 정한다.
+7. plugin host를 가리키는 exposure owner key는 `plugin:<plugin id>`로 한다. view에는 새 key가 필요 없다. view는 모든 surface처럼 surface id 아래에 등록하고, owner는 그 tab의 plugin이다(F212.6-3). plugin의 identity인 plugin id를 쓰므로([신원](#신원)) 그렇게 정한다.
 8. 새로 쓰는 private API는 그것을 추가하는 단계에서 호출 조건과 함께 [비공개 native API](../operations/private-native-apis.ko.md)에 올린다. 미결 항목 10의 응답 없음 selector는 F212.3에서 올린다. 이 문서는 그 밖의 새 private API를 정하지 않는다.
 9. document-start user script를 view 설정에 넣는 native 연산을 두 호스트에 만들고 계약 case를 둔다(F212.7d).
 10. 결정: 이벤트 원천은 private `WKNavigationDelegatePrivate` selector `_webViewWebProcessDidBecomeUnresponsive:`와 `_webViewWebProcessDidBecomeResponsive:`다. 공개 API는 없다(SDK의 `WKNavigationDelegate.h`에는 `webViewWebContentProcessDidTerminate:`만 있다). 아직 선언하지 않았다. F212.3이 이 selector를 `native/darwin/src/private/webkit.h`와 [비공개 native API](../operations/private-native-apis.ko.md)에 더하며, 호출 조건과 사용 중인 SDK의 WebKit 소스에서 읽은 소스 줄(ResponsivenessTimer, 기본값과 발동 조건)을 함께 적는다. 규칙 6은 그 기록이 생긴 뒤에만 이를 쓴다.
