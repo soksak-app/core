@@ -1126,9 +1126,13 @@ fn view_message(
     let ready = window_data(window).and_then(|data| data.documents.views().message(surface, value));
     match ready {
         Ok(true) => {
-            let first = window_data(window)
-                .ok()
-                .and_then(|data| data.documents.views().first_ready(surface));
+            let first = match window_data(window) {
+                Ok(data) => data.documents.views().first_ready(surface),
+                Err(error) => {
+                    log_error("view channel", error);
+                    None
+                }
+            };
             if let Some(plugin) = first {
                 record_view_process_ready(surface, &plugin);
             }
