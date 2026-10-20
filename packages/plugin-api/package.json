@@ -7,6 +7,7 @@
   "exports": {
     ".": "./index.js",
     "./page": "./page.js",
+    "./view": "./view.js",
     "./exposure-check": "./exposure-check.js",
     "./package.json": "./package.json",
     "./records-check": "./records-check.js",
@@ -30,6 +31,8 @@
     "list.js",
     "calls.js",
     "snapshots.js",
+    "view.js",
+    "view-start.js",
     "exposure-check.js",
     "engines-check.js",
     "core-exposure.json",

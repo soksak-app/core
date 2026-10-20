@@ -56,6 +56,17 @@ export const PAGE_IMPORTS = Object.freeze({
   "@soksak/workbench/": "/",
 });
 
+/**
+ * The imports of the import map of a view page. A view is served from the core root (docs/plans/plugin-processes.md, rule 4),
+ * so its import map names the core targets at sok://core, and it has no entry for runtime/ or the workbench.
+ */
+export const VIEW_IMPORTS = Object.freeze({
+  "soksak": `sok://core/${modulePath("soksak", "dist/index.js")}`,
+  "@soksak/plugin-api": `sok://core/${modulePath("@soksak/plugin-api", "index.js")}`,
+  "@soksak/plugin-api/view": `sok://core/${modulePath("@soksak/plugin-api", "view.js")}`,
+  "@soksak/shared/": "sok://core/shared/",
+});
+
 /** Reads the imports of the import map from an HTML document. Throws unless the document has exactly one import map. */
 export function pageImports(html) {
   const maps = [...html.matchAll(/<script type="importmap">([\s\S]*?)<\/script>/g)];

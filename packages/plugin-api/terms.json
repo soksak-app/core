@@ -333,6 +333,12 @@
       "allowed": []
     },
     {
+      "term": "view import map",
+      "definition": "The import map of a view page, with the four entries `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/view` and `@soksak/shared/`, which map to their `sok://core` addresses.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "connected item",
       "definition": "A contribution of a plugin to an extension point of another installed plugin, whose provider is installed and enabled, whose range contains the version of the point, and whose entry matches the schema of the point.",
       "rejected": [],
