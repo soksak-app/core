@@ -460,7 +460,8 @@ go-format-check:
 	  echo "Go format check passed: $$(echo $$files | wc -w | tr -d ' ') files"
 
 # Checks every package and test of the Rust workspace in the diagnostic build and the default build without clippy warnings.
-rust-clippy-check: native-darwin
+# generate_context! of soksak-tauriv2 reads the staged frontend (frontendDist), so the check stages it first, as native-test does.
+rust-clippy-check: native-darwin frontend-tauriv2
 	@$(CARGO_ENV) cargo clippy --workspace --tests --features soksak-host-tauriv2/diagnostics -- -D warnings
 	@$(CARGO_ENV) cargo clippy --workspace --tests -- -D warnings
 	@echo "Rust clippy check passed: 1 workspace, diagnostics and default builds"
