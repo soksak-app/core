@@ -221,6 +221,7 @@ pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
     }
     // A closed gate serializes nothing; an event the catalog does not declare has no class and no gate.
     if let Some(class) = soksak_sok::event_classes::class_of(event)
+        && !soksak_sok::event_log::passes_every_gate(event)
         && !crate::log_policy::gate_event(class, level)
     {
         return;
@@ -263,6 +264,7 @@ pub fn emit_host_cids(level: Level, event: &str, cids: &[String], fields: serde_
         return;
     }
     if let Some(class) = soksak_sok::event_classes::class_of(event)
+        && !soksak_sok::event_log::passes_every_gate(event)
         && !crate::log_policy::gate_event(class, level)
     {
         return;

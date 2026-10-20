@@ -206,17 +206,18 @@ fn refused_events_are_recorded_as_loss_before_the_next_accepted_event() {
 fn a_placed_event_refused_by_the_policy_names_the_policy() {
     let directory = Folder::new("options-policy-refusal");
     let log = EventLog::start(options(directory.path(), "policy-refusal")).unwrap();
-    // The default policy stores only errors, so a warning of a lifecycle class is refused by the gate and not by the queue.
+    // The default policy stores only errors, so a warning of a lifecycle class that passes no gate exception is refused by the
+    // gate and not by the queue.
     let error = log
         .emit_placed(
             Level::Warn,
-            "host.stall.dump",
+            "host.buffer.dropped",
             serde_json::value::RawValue::from_string(r#"{"path":"/probe"}"#.into()).unwrap(),
             Duration::from_secs(5),
         )
         .unwrap_err();
     assert_eq!(
-        error, "the event writer refused host.stall.dump because the policy does not store it",
+        error, "the event writer refused host.buffer.dropped because the policy does not store it",
         "{error}"
     );
     log.flush(Duration::from_secs(5)).unwrap();
@@ -264,4 +265,35 @@ fn a_closed_record_is_stored_under_a_policy_that_turns_lifecycle_off() {
         json!({"cause": "signal", "signal": 15}),
         "{events:?}"
     );
+}
+
+// contract: host.stall.passes-every-gate
+#[test]
+fn the_stall_records_are_stored_under_a_policy_that_turns_lifecycle_off() {
+    let directory = Folder::new("stall-records");
+    let log = EventLog::start(options(directory.path(), "b1")).unwrap();
+    let policy = soksak_sok::log_policy::LogPolicy::parse(
+        "log-policy.json",
+        br#"{"schema":1,"classes":{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"error"}}"#,
+    )
+    .unwrap();
+    log.set_policy(policy, "file");
+    let names = ["host.stall", "host.stall.sampled", "host.stall.dump"];
+    for name in names {
+        assert!(
+            log.emit(Level::Warn, name, &json!({"late_ms": 1000})),
+            "{name} was refused"
+        );
+    }
+    log.flush(Duration::from_secs(5)).unwrap();
+    let events = stored_lines(log.path());
+    for name in names {
+        let stored: Vec<&Value> = events
+            .iter()
+            .filter(|event| event["event"] == name)
+            .collect();
+        assert_eq!(stored.len(), 1, "{events:?}");
+        assert_eq!(stored[0]["level"], "warn", "{events:?}");
+        assert_eq!(stored[0]["class"], "lifecycle", "{events:?}");
+    }
 }

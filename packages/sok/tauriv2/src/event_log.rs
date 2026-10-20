@@ -264,6 +264,16 @@ const LAYERS: [&str; 5] = ["native", "host", "page", "plugin", "sidecar"];
 
 /// Whether `cid` can be stored as a correlation identifier: it is not empty and holds no quote, no backslash and no
 /// control character, so it is written as the text of a JSON string without escaping.
+/// The events that pass every gate, so the policy never refuses them (docs/spec/logging.md#policy): `page.start`, which the
+/// first module of a page emits before the policy reaches the gate of the page, and the stall records of a host, which are
+/// the only record of a main-thread stall that no event source reports.
+pub fn passes_every_gate(event: &str) -> bool {
+    matches!(
+        event,
+        "page.start" | "host.stall" | "host.stall.sampled" | "host.stall.dump"
+    )
+}
+
 pub fn valid_cid(cid: &str) -> bool {
     !cid.is_empty()
         && cid
@@ -520,8 +530,10 @@ impl EventLog {
             );
             return false;
         }
-        // A closed gate serializes nothing; an event the catalog does not declare has no class and no gate.
+        // A closed gate serializes nothing; an event the catalog does not declare has no class and no gate, and an event
+        // that passes every gate is never refused by the gate.
         if let Some(class) = self.class(event)
+            && !passes_every_gate(event)
             && !self.gate(class, level)
         {
             return false;
@@ -594,10 +606,9 @@ impl EventLog {
                 "the event {event} of the layer {layer} names the page {named:?}; only an event of the layer page or plugin names one, and it must"
             ));
         }
-        // page.start passes every gate: the first module of the page emits it before the policy reaches the gate of the page,
-        // and a reader finds the start of each document by it (docs/spec/logging.md#policy).
+        // An event that passes every gate is named by passes_every_gate (docs/spec/logging.md#policy).
         if let Some(class) = self.class(event)
-            && event != "page.start"
+            && !passes_every_gate(event)
             && !self.gate(class, level)
         {
             return Ok(false);
@@ -644,10 +655,10 @@ impl EventLog {
             self.count_loss(Channel::of(level), 1, bytes as u64);
             return Err(Refusal::Queue);
         }
-        // A closed gate stores nothing and counts the event; page.start passes every gate.
+        // A closed gate stores nothing and counts the event; an event that passes every gate is named by passes_every_gate.
         let class = self.class(event);
         if let Some(class) = class
-            && event != "page.start"
+            && !passes_every_gate(event)
             && !self.gate(class, level)
         {
             return Err(Refusal::Policy);

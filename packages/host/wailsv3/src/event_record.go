@@ -202,7 +202,7 @@ func EmitHost(level Level, event string, fields map[string]any) {
 		return
 	}
 	// A closed gate serializes nothing; an event the catalog does not declare has no class and no gate.
-	if class, declared := sok.EventClassOf(event); declared && !GateEvent(class, level) {
+	if class, declared := sok.EventClassOf(event); declared && !sok.PassesEveryGate(event) && !GateEvent(class, level) {
 		return
 	}
 	text, produced, err := sok.BoundedMarshal(fields, EventFieldsLimitBytes)
@@ -222,7 +222,7 @@ func EmitHostCids(level Level, event string, cids []string, fields map[string]an
 		fmt.Fprintf(os.Stderr, "event writer: the event %q does not start with host.\n", event)
 		return
 	}
-	if class, declared := sok.EventClassOf(event); declared && !GateEvent(class, level) {
+	if class, declared := sok.EventClassOf(event); declared && !sok.PassesEveryGate(event) && !GateEvent(class, level) {
 		return
 	}
 	if err := sok.CheckCids(cids); err != nil {
