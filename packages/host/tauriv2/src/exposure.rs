@@ -642,7 +642,7 @@ pub(crate) fn start(app: &AppHandle, directory: &std::path::Path) -> Result<(), 
 }
 
 /// The owner that an earlier run left in process.lock without removing it, or None when the endpoint is not started.
-pub(crate) fn unrecorded_end(app: &AppHandle) -> Option<crate::endpoint::LockOwner> {
+pub(crate) fn unrecorded_end(app: &AppHandle) -> Option<crate::endpoint::UnrecordedEnd> {
     app.state::<Exposure>()
         .endpoint
         .get()

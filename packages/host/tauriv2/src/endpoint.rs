@@ -474,7 +474,7 @@ pub struct Endpoint {
     shared: Arc<Shared>,
     listener: Arc<dyn Listener>,
     process_lock: Mutex<Option<ProcessLock>>,
-    unrecorded_end: Option<LockOwner>,
+    unrecorded_end: Option<UnrecordedEnd>,
     address: String,
     directory: PathBuf,
     file: PathBuf,
@@ -504,8 +504,64 @@ pub struct LockOwner {
 struct ProcessLock {
     path: PathBuf,
     _file: File,
-    /// The owner that an earlier run left in the file, when the file was present and not locked.
-    previous: Option<LockOwner>,
+    /// The earlier run that left the file, when the file was present and not locked.
+    unrecorded_end: Option<UnrecordedEnd>,
+}
+
+/// The earlier run that left process.lock without removing it. The file of the current form names the run by its boot
+/// and pid. Another content is reported as it was written, cut to 256 bytes, and the boot and pid are None.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnrecordedEnd {
+    pub boot: Option<String>,
+    pub pid: Option<u32>,
+    pub previous: Option<String>,
+}
+
+/// The number of bytes of a lock content that a refusal or an unrecorded end reports.
+const REPORTED_CONTENT_BYTES: usize = 256;
+
+/// The content of a lock file for a report: its first bytes, with an invalid sequence replaced.
+fn reported_content(contents: &[u8]) -> String {
+    String::from_utf8_lossy(&contents[..contents.len().min(REPORTED_CONTENT_BYTES)]).into_owned()
+}
+
+/// The earlier run that a free lock file with these contents left.
+fn unrecorded_end_of(contents: &[u8]) -> UnrecordedEnd {
+    match std::str::from_utf8(contents).ok().and_then(parse_owner) {
+        Some(owner) => UnrecordedEnd {
+            boot: Some(owner.boot),
+            pid: Some(owner.pid),
+            previous: None,
+        },
+        None => UnrecordedEnd {
+            boot: None,
+            pid: None,
+            previous: Some(reported_content(contents)),
+        },
+    }
+}
+
+/// The refusal of a second start while the lock is held. The owner is live, so the refusal does not depend on the content:
+/// the content names the owner when it is the current form, and it is reported otherwise.
+fn held_refusal(directory: &Path, contents: &[u8]) -> String {
+    if let Some(owner) = std::str::from_utf8(contents).ok().and_then(parse_owner) {
+        return format!(
+            "configuration directory {} is already owned by process {}",
+            directory.display(),
+            owner.pid
+        );
+    }
+    if contents.iter().all(u8::is_ascii_whitespace) {
+        return format!(
+            "configuration directory {} is already owned by a live process",
+            directory.display()
+        );
+    }
+    format!(
+        "configuration directory {} is already owned by a live process; process.lock is not the current form: {}",
+        directory.display(),
+        reported_content(contents)
+    )
 }
 
 /// The owner that the contents of a lock file name: a JSON object with a positive pid and a non-empty boot.
@@ -536,18 +592,12 @@ impl ProcessLock {
                 Ok(()) => {}
                 Err(TryLockError::WouldBlock) => {
                     // The owner removes the file before it unlocks, so a file that is gone now was released.
-                    let contents = match std::fs::read_to_string(&path) {
+                    let contents = match std::fs::read(&path) {
                         Ok(contents) => contents,
                         Err(error) if error.kind() == ErrorKind::NotFound => continue,
                         Err(error) => return Err(format!("{}: {error}", path.display())),
                     };
-                    let owner = parse_owner(&contents)
-                        .ok_or_else(|| format!("{}: invalid process lock", path.display()))?;
-                    return Err(format!(
-                        "configuration directory {} is already owned by process {}",
-                        directory.display(),
-                        owner.pid
-                    ));
+                    return Err(held_refusal(directory, &contents));
                 }
                 Err(TryLockError::Error(error)) => {
                     return Err(format!("{}: {error}", path.display()));
@@ -557,19 +607,17 @@ impl ProcessLock {
             if !platform.is_named_file(&file, &path)? {
                 continue;
             }
-            let mut previous = None;
+            // A free lock file that was present was left by an owner that ended without removing it, whatever its content.
+            let mut unrecorded_end = None;
             if existed {
                 // The contents are read through the locked file, so they cannot change while they are checked.
-                let mut contents = String::new();
+                let mut contents = Vec::new();
                 (&file)
-                    .read_to_string(&mut contents)
+                    .read_to_end(&mut contents)
                     .map_err(|read| format!("{}: {read}", path.display()))?;
-                previous = Some(
-                    parse_owner(&contents)
-                        .ok_or_else(|| format!("{}: invalid process lock", path.display()))?,
-                );
+                unrecorded_end = Some(unrecorded_end_of(&contents));
                 #[cfg(feature = "diagnostics")]
-                crate::process_lock_hook::observe_stale_lock();
+                crate::process_lock_hook::observe_stale_lock(directory);
             }
             let owner = LockOwner {
                 pid: std::process::id(),
@@ -590,7 +638,7 @@ impl ProcessLock {
             return Ok(Self {
                 path,
                 _file: file,
-                previous,
+                unrecorded_end,
             });
         }
         Err(format!(
@@ -622,7 +670,7 @@ impl Endpoint {
         service: Arc<dyn Service>,
     ) -> Result<Endpoint, String> {
         let process_lock = ProcessLock::acquire(directory)?;
-        let unrecorded_end = process_lock.previous.clone();
+        let unrecorded_end = process_lock.unrecorded_end.clone();
         let listener: Arc<dyn Listener> = platform::current()?
             .endpoint_listen(sockets, application)?
             .into();
@@ -700,9 +748,8 @@ impl Endpoint {
         write_record(&self.directory, &self.file, &self.record)
     }
 
-    /// The owner that an earlier run left in process.lock without removing it. The host stores it in the event
-    /// `host.run.unrecorded-end`.
-    pub fn unrecorded_end(&self) -> Option<&LockOwner> {
+    /// The earlier run that left process.lock without removing it. The host reports it with [`report_unrecorded_end`].
+    pub fn unrecorded_end(&self) -> Option<&UnrecordedEnd> {
         self.unrecorded_end.as_ref()
     }
 
@@ -765,6 +812,21 @@ impl Drop for Endpoint {
     fn drop(&mut self) {
         self.stop();
     }
+}
+
+/// Stores the event `host.run.unrecorded-end` for an earlier run that left process.lock without removing it. The fields are
+/// `boot` and `pid` (null when the file is not the current form) and `previous`, the content of the file, when it is not
+/// the current form.
+pub fn report_unrecorded_end(end: &UnrecordedEnd) {
+    let mut fields = json!({"boot": end.boot, "pid": end.pid});
+    if let Some(previous) = &end.previous {
+        fields["previous"] = json!(previous);
+    }
+    crate::event_record::emit_host(
+        crate::event_log::Level::Error,
+        "host.run.unrecorded-end",
+        fields,
+    );
 }
 
 /// The directory in which the application places its sockets. It is under the temporary directory of the user.

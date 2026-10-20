@@ -841,10 +841,11 @@
       "class": "lifecycle",
       "level": "error",
       "fields": {
-        "boot": "string",
-        "pid": "number"
+        "boot": "string|null",
+        "pid": "number|null",
+        "previous?": "string"
       },
-      "description": "The process.lock of the configuration directory held the owner of an earlier run that did not remove it: that run ended without its exit path. boot and pid are the boot identifier and the process identifier of that run, and this run took the lock over."
+      "description": "A process.lock that was not locked when this run started was left by an earlier run that ended without removing it, and this run took it over. boot and pid are the boot identifier and the process identifier of that run when the file is the current form, and null otherwise; previous holds the content of the file, cut to 256 bytes, when the file is not the current form."
     },
     "host.stall": {
       "layer": "host",

@@ -5,6 +5,7 @@ package host_test
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -244,5 +245,31 @@ func TestARegionEventWithCorrelationIdentifiersIsRecordedAsAnInputRelay(t *testi
 	if relay["event"] != "host.input.relay" || relay["layer"] != "host" || relay["level"] != "info" || !ok || len(cids) != 2 || cids[0] != "b1.3" || cids[1] != "b1.4" ||
 		fields["surface"] != "tab-1" || fields["name"] != "view" || fields["type"] != "key" {
 		t.Fatalf("the relay record: %v", relay)
+	}
+}
+
+// contract: endpoint.lock.unrecorded-end
+func TestAnUnrecordedEndIsStoredAsAnErrorEventWithItsFields(t *testing.T) {
+	log := useEventLog(t)
+	boot, pid, previous := "1700000000-4242", 4242, "123"
+	host.ReportUnrecordedEnd(host.UnrecordedEnd{Previous: &previous})
+	host.ReportUnrecordedEnd(host.UnrecordedEnd{Boot: &boot, PID: &pid})
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var found []map[string]any
+	for _, event := range readEventLog(t, log.Path()) {
+		if event["event"] == "host.run.unrecorded-end" {
+			found = append(found, event)
+		}
+	}
+	if len(found) != 2 {
+		t.Fatalf("unrecorded end events %v, want 2", found)
+	}
+	if found[0]["level"] != "error" || !reflect.DeepEqual(found[0]["fields"], map[string]any{"boot": nil, "pid": nil, "previous": "123"}) {
+		t.Fatalf("first event %v", found[0])
+	}
+	if !reflect.DeepEqual(found[1]["fields"], map[string]any{"boot": "1700000000-4242", "pid": float64(4242)}) {
+		t.Fatalf("second event %v", found[1])
 	}
 }

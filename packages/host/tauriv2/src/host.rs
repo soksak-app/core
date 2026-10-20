@@ -221,12 +221,8 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 event_record::use_host_event_log(Some(std::sync::Arc::clone(&events)));
                 // An owner that an earlier run left in process.lock marks an end of that run without its exit path
                 // (docs/spec/endpoint.md#discovery). The event is stored once the writer exists.
-                if let Some(owner) = exposure::unrecorded_end(app) {
-                    event_record::emit_host(
-                        crate::event_log::Level::Error,
-                        "host.run.unrecorded-end",
-                        serde_json::json!({"boot": owner.boot, "pid": owner.pid}),
-                    );
+                if let Some(end) = exposure::unrecorded_end(app) {
+                    endpoint::report_unrecorded_end(&end);
                 }
                 // The records of the migration engine go through the event writer of this process
                 // (docs/spec/installation.md#stored-data-migration).

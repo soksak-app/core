@@ -997,11 +997,19 @@ func TestEndpointFileIsWrittenOnlyAfterTheFirstWindowExists(t *testing.T) {
 }
 
 // contract: endpoint.process.rejects-a-malformed-lock
-func TestEndpointRejectsAMalformedLock(t *testing.T) {
-	for _, contents := range []string{"abc", "0", "-3", "", "123", `{"pid":0,"boot":"b1"}`, `{"pid":5}`, `{"pid":5,"boot":""}`} {
+func TestEndpointRefusesAHeldLockWithAnotherForm(t *testing.T) {
+	for _, contents := range []string{"123", "abc", "0", "-3", "", `{"pid":0,"boot":"b1"}`, `{"pid":5}`} {
 		config := t.TempDir()
 		lock := filepath.Join(config, "process.lock")
 		if err := os.WriteFile(lock, []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		// This test is the live owner: it holds the lock while the content has another form.
+		owner, err := os.Open(lock)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := syscall.Flock(int(owner.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 			t.Fatal(err)
 		}
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1013,11 +1021,41 @@ func TestEndpointRejectsAMalformedLock(t *testing.T) {
 			Application: "wailsv3", Version: "0.0.8", Started: time.Now()}
 		err = endpoint.Serve(listener, info, config)
 		_ = listener.Close()
-		if want := lock + ": invalid process lock"; err == nil || err.Error() != want {
-			t.Fatalf("lock %q: %v, want %q", contents, err, want)
+		want := fmt.Sprintf("configuration directory %s is already owned by a live process", config)
+		if err == nil || !strings.HasPrefix(err.Error(), want) {
+			t.Fatalf("held lock %q: %v, want prefix %q", contents, err, want)
 		}
 		if data, err := os.ReadFile(lock); err != nil || string(data) != contents {
 			t.Fatalf("lock %q changed: %q %v", contents, data, err)
+		}
+		_ = owner.Close()
+	}
+}
+
+// contract: endpoint.lock.unrecorded-end
+func TestStaleLockOfAnotherFormIsTakenOverAndReported(t *testing.T) {
+	for _, contents := range []string{"123", ""} {
+		config := t.TempDir()
+		if err := os.WriteFile(filepath.Join(config, "process.lock"), []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		endpoint := host.NewEndpoint(newFakeBackend())
+		info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
+			Application: "wailsv3", Version: "0.0.20", Started: time.Now()}
+		if err := endpoint.Serve(listener, info, config); err != nil {
+			_ = listener.Close()
+			t.Fatalf("a stale lock %q was refused: %v", contents, err)
+		}
+		end, ok := endpoint.UnrecordedEnd()
+		if !ok || end.Boot != nil || end.PID != nil || end.Previous == nil || *end.Previous != contents {
+			t.Fatalf("stale lock %q: unrecorded end %+v (%v)", contents, end, ok)
+		}
+		if err := endpoint.Close(); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
@@ -1025,15 +1063,49 @@ func TestEndpointRejectsAMalformedLock(t *testing.T) {
 // contract: endpoint.lock.single-owner
 func TestTwoStartersOfAStaleLockLeaveOneOwner(t *testing.T) {
 	config := t.TempDir()
-	if err := os.WriteFile(filepath.Join(config, "process.lock"), fmt.Appendf(nil, `{"pid":%d,"boot":"1700000000-4242"}`, endedProcess(t)), 0o600); err != nil {
+	stale := fmt.Sprintf(`{"pid":%d,"boot":"1700000000-4242"}`, endedProcess(t))
+	ran, secondErr, firstErr := startBesideStaleLock(t, config, stale)
+	if !ran {
+		t.Fatal("the second start did not run at the stale lock")
+	}
+	if secondErr == nil || !strings.Contains(secondErr.Error(), "already owned by process") {
+		t.Fatalf("the second start was not refused while the first start claims the lock: %v", secondErr)
+	}
+	if firstErr != nil {
+		t.Fatalf("the first start failed: %v", firstErr)
+	}
+}
+
+// contract: endpoint.lock.single-owner
+func TestAStarterMeetsAnOwnerThatHasNotWrittenItsRecord(t *testing.T) {
+	config := t.TempDir()
+	ran, secondErr, firstErr := startBesideStaleLock(t, config, "")
+	if !ran {
+		t.Fatal("the second start did not run at the lock of the first start")
+	}
+	if secondErr == nil || !strings.Contains(secondErr.Error(), "already owned by a live process") {
+		t.Fatalf("the second start was not refused while the owner has not written its record: %v", secondErr)
+	}
+	if firstErr != nil {
+		t.Fatalf("the first start failed: %v", firstErr)
+	}
+}
+
+// startBesideStaleLock starts an endpoint in config whose lock file has the content stale. A second start runs once, at the point where
+// the first start has read the stale content and before it writes its record. It reports whether the second start ran, and the errors of
+// the second and the first start.
+func startBesideStaleLock(t *testing.T, config, stale string) (bool, error, error) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(config, "process.lock"), []byte(stale), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// The second start runs once, while the first start has found the stale lock and has not claimed it.
 	var fired atomic.Bool
+	var ran bool
 	var secondErr error
 	var second *host.Endpoint
-	host.SetProcessLockHook(func() {
-		if fired.Swap(true) {
+	host.SetProcessLockHook(func(directory string) {
+		// The hook is process-wide, so it acts only on the directory of this test and on its first call.
+		if directory != config || fired.Swap(true) {
 			return
 		}
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1044,6 +1116,7 @@ func TestTwoStartersOfAStaleLockLeaveOneOwner(t *testing.T) {
 		info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
 			Application: "wailsv3", Version: "0.0.20", Started: time.Now()}
 		secondErr = second.Serve(listener, info, config)
+		ran = true
 		if secondErr != nil {
 			_ = listener.Close()
 		}
@@ -1057,22 +1130,13 @@ func TestTwoStartersOfAStaleLockLeaveOneOwner(t *testing.T) {
 	info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
 		Application: "wailsv3", Version: "0.0.20", Started: time.Now()}
 	firstErr := first.Serve(listener, info, config)
+	if firstErr == nil {
+		t.Cleanup(func() { _ = first.Close() })
+	}
 	if second != nil {
-		defer second.Close()
+		t.Cleanup(func() { _ = second.Close() })
 	}
-	if !fired.Load() {
-		t.Fatal("the second start did not run at the stale lock")
-	}
-	if secondErr == nil || !strings.Contains(secondErr.Error(), "already owned by process") {
-		t.Fatalf("the second start was not refused while the first start claims the lock: %v", secondErr)
-	}
-	if firstErr != nil {
-		_ = listener.Close()
-		t.Fatalf("the first start failed: %v", firstErr)
-	}
-	if err := first.Close(); err != nil {
-		t.Fatal(err)
-	}
+	return ran, secondErr, firstErr
 }
 
 // contract: endpoint.lock.unrecorded-end
@@ -1094,9 +1158,9 @@ func TestStaleLockIsTakenOverAndNamesThePreviousRun(t *testing.T) {
 		_ = listener.Close()
 		t.Fatalf("a stale lock was refused: %v", err)
 	}
-	owner, ok := endpoint.UnrecordedEnd()
-	if !ok || owner != (host.LockOwner{PID: dead, Boot: "1700000000-4242"}) {
-		t.Fatalf("unrecorded end %+v (%v), want pid %d boot 1700000000-4242", owner, ok, dead)
+	end, ok := endpoint.UnrecordedEnd()
+	if !ok || end.Boot == nil || *end.Boot != "1700000000-4242" || end.PID == nil || *end.PID != dead || end.Previous != nil {
+		t.Fatalf("unrecorded end %+v (%v), want pid %d boot 1700000000-4242", end, ok, dead)
 	}
 	data, err := os.ReadFile(lock)
 	if err != nil {
