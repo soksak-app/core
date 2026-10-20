@@ -68,14 +68,14 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 2. **Declared UI snapshot.** plugin view나 plugin host는 declared UI snapshot을 workbench로 보낸다(push). 메인 페이지가 load될 때(reload 포함) workbench는 그 페이지의 표면이 선언한 plugin view와 host의 각 status에 대해 snapshot을 한 번 요청한다(pull). 다른 pull은 없다. 메시지의 이름과 field는 [메시지와 event](#메시지와-event)에 적는다.
    - status 하나에는 전송 중인 snapshot이 최대 1개다.
    - 전송 중에 생긴 변경은 dirty로 표시한다. 확인(ack)이 오면 최신 값을 담아 다음 snapshot을 보낸다.
-   - 건너뛴 값의 수는 `host.declared-ui.snapshot.skipped`로 남긴다.
+   - 건너뛴 값의 수는 core status `core.plugin.losses`의 `losses.skipped`로 센다. 진단 build에서는 수가 바뀔 때마다 `host.declared-ui.snapshot.skipped`도 쓴다.
    - plugin 프로세스가 (다시) 시작하면 그 프로세스의 첫 snapshot이 각 status의 전체 값이다. workbench는 이전 프로세스의 멈춘 snapshot과 확인 대기를 버린다. 다시 시작한 plugin은 저장한 state에서 값을 만들어 보낸다(규칙 5).
    - 확인을 기다리는 동안 view 프로세스가 끝나거나 표면이 닫히면 workbench는 `host.status.stalled {plugin, status, reason}`을 쓴다. 다시 시작한 프로세스는 첫 snapshot으로 각 status의 최신 값을 보내고 dirty 표시를 지운다. 표면이 닫힌 것이면 dirty 값은 버리고 그 사실을 reason에 적는다. timer는 쓰지 않는다.
 3. **경계를 넘는 호출.**
-   - 명령은 [exposure](../spec/exposure.ko.md)에 적힌 대로 `timeout`을 선언한다(최대 600000 ms, 없으면 10초). timer는 살아 있는 상대가 명령에 답하지 않는 경우에만 남긴다. 느린 명령 답을 알려 주는 event가 없기 때문이다. `host.view.unresponsive`는 WebKit의 응답성 검사에 답하지 않는 view 프로세스를 알리며, 명령 답이 아니므로 timer를 대신하지 않는다. 기한을 넘기면 현재 계약대로 지난 시간과 timeout을 밝힌 오류로 거부하고 `host.call.timeout {plugin, command}`를 쓴다.
-   - 상대가 사라지면 기한 전에 event로 호출을 끝낸다. 호출을 끝내는 상대는 view나 host 프로세스의 종료, 표면 닫기, sidecar 종료다. promise는 그 이유를 밝힌 오류로 거부하고 `host.call.peer-lost {plugin, command, reason}`을 쓴다. reason은 `process-ended`, `surface-closed`, `sidecar-ended` 중 하나다. `host.view.unresponsive`는 호출을 끝내지 않는다. 이 event는 규칙 6의 presentation wait와 view의 status에서만 쓴다. 호출은 선언한 timeout이나 이 상대들 가운데 하나로만 끝난다.
-   - 끝난 호출에 늦게 온 답은 버린다. promise에 전달하지 않으며, 답을 보낸 문서에 오류를 보내지도 않는다. 호스트는 `host.call.late-reply {plugin, command, delay}`를 쓴다. host-contract case `exposure-reply.removed-surface-discarded`와 `exposure.relay.foreign-document-reply-ignored-timeout-1005`가 이 동작을 명시한다.
-   - 열린 호출 수(확인을 기다리는 snapshot 포함)와 가장 오래된 열린 호출의 시작 시각을 core status `core.plugin.open-calls {plugin, count, oldestStartedAt, lateReplies}`로 노출한다. `lateReplies`는 바로 위 항목의 늦은 답 수다. 이름과 위치는 여기서 정하며, F212.3이 status를 선언한다.
+   - 명령은 [exposure](../spec/exposure.ko.md)에 적힌 대로 `timeout`을 선언한다(최대 600000 ms, 없으면 10초). timer는 살아 있는 상대가 명령에 답하지 않는 경우에만 남긴다. 느린 명령 답을 알려 주는 event가 없기 때문이다. `host.view.unresponsive`는 WebKit의 응답성 검사에 답하지 않는 view 프로세스를 알리며, 명령 답이 아니므로 timer를 대신하지 않는다. 기한을 넘기면 현재 계약대로 지난 시간과 timeout을 밝힌 오류로 거부하고 `host.call.timeout {plugin, command}`를 쓰고 `losses.timeouts`를 센다.
+   - 상대가 사라지면 기한 전에 event로 호출을 끝낸다. 호출을 끝내는 상대는 view나 host 프로세스의 종료, 표면 닫기, sidecar 종료다. promise는 그 이유를 밝힌 오류로 거부한다. reason은 `process-ended`, `surface-closed`, `sidecar-ended` 중 하나다. `process-ended`와 `sidecar-ended`는 `host.call.peer-lost {plugin, command, reason}`을 쓰고, `surface-closed`는 event를 쓰지 않으며 `losses.peerLost`를 센다. `host.view.unresponsive`는 호출을 끝내지 않는다. 이 event는 규칙 6의 presentation wait와 view의 status에서만 쓴다. 호출은 선언한 timeout이나 이 상대들 가운데 하나로만 끝난다.
+   - 끝난 호출에 늦게 온 답은 버린다. promise에 전달하지 않으며, 답을 보낸 문서에 오류를 보내지도 않는다. 호스트는 `host.call.late-reply {plugin, command, delay}`를 쓰고 `losses.lateReplies`를 센다. host-contract case `exposure-reply.removed-surface-discarded`와 `exposure.relay.foreign-document-reply-ignored-timeout-1005`가 이 동작을 명시한다.
+   - 열린 호출 수(확인을 기다리는 snapshot 포함)와 가장 오래된 열린 호출의 시작 시각을 core status `core.plugin.open-calls {plugin, count, oldestStartedAt}`로 노출한다. 이름과 위치는 여기서 정하며, F212.3이 status를 선언한다.
    - relay timeout은 exposure의 제품 동작이다. 두 경로가 있다. 호스트는 surface page로 보낸 명령에 timeout을 적용하고, 메인 페이지는 자기가 직접 실행하는 handler에 timeout을 적용한다([exposure](../spec/exposure.ko.md), 명령 `timeout`). 두 경로는 F212.2에서 exposure.md에 적는다.
    - 취소는 호출 envelope의 일부다. binary payload는 별도 경로를 쓴다(미결 항목 2).
 4. **Origin과 공용 module.**
@@ -95,7 +95,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 6. **표시.** plugin view는 card 배치가 바뀐 뒤(gesture의 첫 변경)의 첫 표시에만 presentation wait에 참여한다.
    - 계속되는 gesture(구분선이나 card 끌기) 동안 view의 native frame은 매 frame card와 같은 commit에서 새 기하로 놓는다. 내용 그리기를 기다리는 것은 첫 변경에서만 한다. 그 뒤 내용은 늦게 그려질 수 있으며, 그 늦음은 frame 간격으로 잰다.
    - F212.7c에서 끌기 gesture 전체를 녹화해 frame 간격과 기하 오차를 재고, 통과값 (viii)로 판정한다.
-   - 기다림은 다음 가운데 먼저 오는 것으로 끝난다: view의 presentation 완료, view 프로세스 종료, 변경이 끝났을 때 그 view가 보이지 않음(`hidden` 조상, 선택되지 않은 탭, 닫힌 표면. workbench가 표면마다 이미 알리는 상태를 읽는다), `host.view.unresponsive`의 응답 없음 알림. presentation 완료가 아닌 것으로 끝나면 그 view 없이 commit을 진행하고 `page.view.presentation-abandoned {surface, reason}`을 쓴다. timer는 쓰지 않는다.
+   - 기다림은 다음 가운데 먼저 오는 것으로 끝난다: view의 presentation 완료, view 프로세스 종료, 변경이 끝났을 때 그 view가 보이지 않음(`hidden` 조상, 선택되지 않은 탭, 닫힌 표면. workbench가 표면마다 이미 알리는 상태를 읽는다), `host.view.unresponsive`의 응답 없음 알림. presentation 완료가 아닌 것으로 끝나면 그 view 없이 commit을 진행하고 `page.view.presentation-abandoned {surface, reason}`을 쓰고 `losses.abandoned`를 센다. timer는 쓰지 않는다.
    - 통과값 (v)는 실행 중 기한이 아니다. F212.7b와 각 plugin 항목이 재는 판정값이다.
    - F212.7b는 view가 있는 card의 전체 화면 전환과 탭 전환을 녹화해, 두 기다림이 모두 끝나는지 확인한다.
    - [native surfaces](../spec/native-surfaces.ko.md)의 해당 규칙을 고친다.
@@ -144,24 +144,29 @@ RPC protocol 번호는 0.0 계열에서 1이다.
 
 | event | class | level | field |
 |---|---|---|---|
-| `host.declared-ui.snapshot.skipped` | call | warn | `{plugin, status, count}`: 전송 중일 때 건너뛴 값 |
-| `host.status.stalled` | lifecycle | warn | `{plugin, status, reason}` |
-| `host.call.timeout` | call | warn | `{plugin, command}` |
-| `host.call.peer-lost` | call | warn | `{plugin, command, reason}` |
-| `host.call.late-reply` | call | debug | `{plugin, command, delay}` |
-| `host.view.unresponsive` | lifecycle | warn | `{plugin, surface}` |
-| `host.view.responsive` | lifecycle | info | `{plugin, surface}` |
+| `host.declared-ui.snapshot.skipped` | call | debug | `{plugin, status, count}`: 전송 중일 때 건너뛴 값. 카운터 `losses.skipped` |
+| `host.status.stalled` | lifecycle | debug | `{plugin, status, reason}`. 카운터 `losses.stalled` |
+| `host.call.timeout` | call | error | `{plugin, command}`. 카운터 `losses.timeouts` |
+| `host.call.peer-lost` | call | error | `{plugin, command, reason}`: `process-ended`와 `sidecar-ended`. `surface-closed`는 event를 쓰지 않고 `losses.peerLost`를 센다 |
+| `host.call.late-reply` | call | debug | `{plugin, command, delay}`. 카운터 `losses.lateReplies` |
+| `host.view.unresponsive` | lifecycle | debug | `{plugin, surface}`. 상태 `core.plugin.views.responsive` |
+| `host.view.responsive` | lifecycle | debug | `{plugin, surface}`. 상태 `core.plugin.views.responsive` |
 | `host.view.process-request` | lifecycle | debug | `{plugin, surface}` |
 | `host.view.process-ready` | lifecycle | debug | `{plugin, surface}` |
-| `page.view.presentation-abandoned` | lifecycle | warn | `{surface, reason}` |
+| `page.view.presentation-abandoned` | lifecycle | debug | `{surface, reason}`. 카운터 `losses.abandoned` |
 | `page.view.shortcut-table-missing` | input | error | `{plugin}` |
 | `page.input.shortcut.failed` | input | error | `{plugin, key, command}` |
-| `host.plugin-host.restart` | lifecycle | warn | `{plugin, attempt}` |
+| `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |
 | `host.plugin-host.restart-limit` | lifecycle | error | `{plugin}` |
-| `host.plugin-host.restart-reset` | lifecycle | info | `{plugin}` |
-| `host.sidecar.restart-reset` | lifecycle | info | `{sidecar, surface}`, F212.8a가 선언 |
+| `host.plugin-host.restart-reset` | lifecycle | debug | `{plugin}` |
+| `host.sidecar.restart-reset` | lifecycle | debug | `{sidecar, surface}`, F212.8a가 선언 |
 
-status `core.plugin.open-calls`는 F212.3에서 선언한다. `host.call.late-reply`는 debug에 두며, 그 수는 `core.plugin.open-calls`에도 보고한다. 손실이나 실패를 기록하는 event는 모두 warn 이상이다. 건너뛴 snapshot 값(`host.declared-ui.snapshot.skipped`), timeout, stalled status, 상대 소실, 중단된 presentation이 여기에 든다.
+F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`를 선언한다. 이 설계의 event는 level `error` 또는 `debug`로만 선언한다. catalog 항목을 쓰기 전에 [events](../spec/events.json)의 class 예산을 확인한다(F212.3). plugin host와 sidecar의 재시작 상태는 `core.plugin.views` 또는 sidecar status에 보인다.
+
+**릴리스의 event level.** 0.0.x 릴리스는 error event만 저장한다(AGENTS.md, Diagnostic code). 따라서 이 설계의 각 발생은 한 번 분류한다.
+(a) 실패나 거부된 연산은 level `error`의 event다.
+(b) 손실, 건너뜀, 일시 상태, 표시 품질 저하는 event가 아니다. 선언된 status `core.plugin.losses {plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}`에 센다. 이것은 선언된 status `core.plugin.views {plugin, surface, responsive}`의 상태이기도 하다. 각 수는 바뀔 때마다 status 구독자에게 알린다. 수는 표면마다 세며 표면이 닫히면 0으로 되돌린다.
+진단 build에서는 수가 바뀔 때 표에 적힌 `debug` event도 쓴다. 그래야 진단 기록에 발생 순서가 남는다. debug event는 릴리스에 저장하지 않는다.
 
 코드의 식별자는 여기에 적은 이름을 그대로 쓴다.
 
@@ -248,7 +253,7 @@ status `core.plugin.open-calls`는 F212.3에서 선언한다. `host.call.late-re
 1. **F212.1 측정.** 창마다 모든 WebContent의 합계, 웹뷰 기본 비용, plugin host의 비용과 throttle, DOM editor와 flowmark(메모리 절약 켬과 끔)와 같은 화면을 view로 띄운 경우, 한 plugin의 view 둘을 (a)와 (b)로 잰 값, 프로세스 공유 쌍(한 plugin의 view 둘, 두 plugin의 view, 한 plugin의 view와 document region), 창 두 개의 메인 페이지 공유, 설치 기록의 표면을 가진 모든 plugin의 DOM mount 시간(page trace, plugin 버전과 함께 기록. (iii) 기준값은 F212.1-3), 첫 표시 시간과 첫 status 시간, 새 WebContent 프로세스 시작 시간. trace가 켜졌을 때 페이지는 표면 mount마다 `page.trace.surface.mount {plugin, surface, ms}`를 쓰며, `make events-check`는 workbench의 `trace(` 호출을 catalog와 대조한다.
    - **F212.1-3:** 설치 기록의 모든 표면 plugin에 대해 녹화에서 얻은 DOM mount 기준값(녹화에서 첫 내용 frame)이며, (iii)의 기준값이다. F212.1-2의 `page.trace.surface.mount` 중앙값은 mount의 trace 값이며 (iii)의 기준값이 아니다.
 2. **F212.2 설계 문서.** 이 문서와 한국어 번역. 검토 결과는 [검토된 반론 답변](#검토된-반론-답변)에 적는다.
-3. **F212.3 호출 메시지 계층(plugin-api).** [메시지와 event](#메시지와-event)의 event를 event catalog에 선언하고(`host.sidecar.restart-reset`은 F212.8a가 선언), status `core.plugin.open-calls`를 선언하며, 응답 없음 selector를 `native/darwin/src/private/webkit.h`와 [비공개 native API](../operations/private-native-apis.ko.md)에 넣고, 호출 조건과 사용 중인 SDK의 WebKit 소스에서 읽은 소스 줄을 함께 적는다(미결 항목 10), `make events-check`를 돌린다.
+3. **F212.3 호출 메시지 계층(plugin-api).** [메시지와 event](#메시지와-event)의 event를 event catalog에 선언하고(`host.sidecar.restart-reset`은 F212.8a가 선언), status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`를 선언하며, 응답 없음 selector를 `native/darwin/src/private/webkit.h`와 [비공개 native API](../operations/private-native-apis.ko.md)에 넣고, 호출 조건과 사용 중인 SDK의 WebKit 소스에서 읽은 소스 줄을 함께 적는다(미결 항목 10), `make events-check`를 돌린다.
 4. **F212.4 binary 경로**(native 코드와 두 호스트).
 5. **F212.5 공용 module 예약 root와 import map.** [설치](../spec/installation.ko.md)의 `/modules`와 `/shared`를 바꾸고 core root 경로 형식을 더한다.
 6. **F212.6 신원, exposure 등록, 예약 core 검사.** `validateManifest`에 예약 `core` 검사, plugin id 대응, exposure 등록을 더한다.
@@ -311,7 +316,7 @@ status `core.plugin.open-calls`는 F212.3에서 선언한다. `host.call.late-re
 
 ## 검토된 반론 답변
 
-아래 반론은 첫 번째, 두 번째, 세 번째 검토의 답변이다. 각 항목은 반론, 판정, 해결을 적는다. 해결은 이 제안서의 규칙에 기록한다. 두 번째 검토의 항목은 검토의 id(C, H, M)를 쓴다. 세 번째 검토의 항목은 검토의 id(N, D)를 쓴다. 두 번째 검토의 잘못된 답변 세 개는 C1, C7, H3에 대한 답변이다.
+아래 반론은 첫 번째, 두 번째, 세 번째, 네 번째 검토의 답변이다. 각 항목은 반론, 판정, 해결을 적는다. 해결은 이 제안서의 규칙에 기록한다. 두 번째 검토의 항목은 검토의 id(C, H, M)를 쓴다. 세 번째 검토의 항목은 검토의 id(N, D)를 쓴다. 두 번째 검토의 잘못된 답변 세 개는 C1, C7, H3에 대한 답변이다.
 
 **첫 번째 검토**
 
@@ -365,6 +370,10 @@ status `core.plugin.open-calls`는 F212.3에서 선언한다. `host.call.late-re
 - N4: (iii) 기준값. 판정: 수용. 해결: (iii)의 DOM mount 기준값은 메인 페이지에서 같은 plugin의 표면 mount를 녹화한 것의 표면 시작 요청부터 첫 내용 frame까지의 중앙값이며, 같은 녹화 방법으로 잰다. F212.1-3이 잰다. F212.1-2의 `page.trace.surface.mount` 중앙값은 mount의 trace 값이고 (iii)의 기준값이 아니다.
 - N5: (iii-b)의 프로세스 시작 시간. 판정: 수용. 해결: 각 시간은 `host.view.process-request`부터 첫 `host.view.process-ready`까지다. 두 event는 F212.3에서 선언한다(class lifecycle, level debug). 시간은 F212.7a에서 잰다. 별도 F212.1-4 항목은 만들지 않는다.
 - N6: sidecar 재시작 문장. 판정: 수용. 해결: sidecars.md 67행의 `## Failure` 문장, 즉 한도 없는 재시작은 F212.8a가 규칙 5의 한도로 바꾼다. terminal runtime의 43행 문장도 F212.8a에서 바뀐다(규칙 5).
-- N7: event level. 판정: 수용. 해결: `host.declared-ui.snapshot.skipped`는 warn이다. 건너뛴 snapshot 값은 관찰 가능한 손실이며 release build에 저장해야 하기 때문이다. 손실이나 실패를 기록하는 event는 모두 warn 이상이다: `host.call.timeout`, `host.status.stalled`, `host.call.peer-lost`, `page.view.presentation-abandoned`. `host.call.late-reply`는 debug에 두며, 그 수는 `core.plugin.open-calls`에도 `lateReplies`로 보고한다.
+- N7: event level. 판정: 수용. 해결: 답변은 네 번째 검토의 규칙으로 대체한다(아래 네 번째 검토).
 - D1: `dom`을 같은 항목에서 `view`로 바꾼다. 판정: 세 번째 검토에서 수용하며 H6을 뒤집는다. 해결: H6과 단계 절에 적은 대로 F212.7이 `view` 종류를 더하고 `dom`을 같은 항목에서 제거한다. F212.11은 남은 페이지 mount 코드 경로만 제거한다.
 - D2: Escape의 주인. 판정: 일부 수용. 해결: Escape의 주인은 view다. view가 자기 글 입력에 Escape를 쓰기 때문이다. F212.6a는 왕복을 메뉴 닫기와 비교해 검증하고 결과를 기록하며, 주인은 정하지 않는다. shell 층과 browser section은 각 plugin 저장소의 항목(F212.10-shell-layer, F212.10-browser-sections)에 남는다. core는 plugin 내부의 배치를 정하지 않는다. plugin 기능은 그 plugin에 속하고 각 저장소는 자기 체크리스트를 가지기 때문이다.
+
+**네 번째 검토**
+
+- 반론: N7 답변은 손실이나 실패를 기록하는 event를 모두 warn 이상으로 두었지만, 0.0.x 릴리스는 error event만 저장한다. 판정: 수용. 해결: 각 발생을 한 번 분류한다. 실패나 거부된 연산은 `error` event다. 손실, 건너뜀, 일시 상태, 표시 품질 저하는 status `core.plugin.losses` 또는 상태 `core.plugin.views`에 세고, 진단 build에서는 수와 함께 `debug` event를 쓴다([메시지와 event](#메시지와-event), 릴리스의 event level). `lateReplies`는 `core.plugin.open-calls`에서 제거하며, 그 수는 `core.plugin.losses`에만 보고한다.

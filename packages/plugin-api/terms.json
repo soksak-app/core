@@ -277,6 +277,12 @@
       "allowed": []
     },
     {
+      "term": "loss count",
+      "definition": "A count of a loss, a skipped value, a late reply or a presentation abandoned on a surface, kept in the core status core.plugin.losses per surface and reset when the surface closes; it is not a log event in a release.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "card surface",
       "definition": "A surface placed in a card that a sidebar item opens when a sidebar section needs a view.",
       "rejected": [],

@@ -68,14 +68,14 @@ When a value is not met, the measured values are recorded in the checklist. A fa
 2. **Declared UI snapshots.** A plugin view or plugin host pushes its declared UI snapshot to the workbench (push). When the main page loads, including a reload, the workbench requests one snapshot for each declared status of each view and host that its surfaces declare (pull). No other pull is made. Message names and fields are in [messages and events](#messages-and-events).
    - A status has at most one snapshot in transit.
    - A change made while a snapshot is in transit marks the status dirty. When the acknowledgement arrives, the next snapshot carries the latest value.
-   - The number of skipped values is recorded as `host.declared-ui.snapshot.skipped`.
+   - The number of skipped values is counted in `losses.skipped` of the core status `core.plugin.losses`. In diagnostic builds, each change of the count also writes `host.declared-ui.snapshot.skipped`.
    - When a plugin process starts (or starts again), the first snapshot of each status is the full value of that status. The workbench discards the stopped snapshot and the pending acknowledgement of the previous process. A restarted plugin builds its values from its saved state (rule 5).
    - When the view process ends or the surface closes while an acknowledgement is pending, the workbench writes `host.status.stalled {plugin, status, reason}`. A restarted process sends the latest value of each status as its first snapshot and clears the dirty mark. When the surface is closed, the dirty values are discarded and the reason says so. No timer is used.
 3. **Calls across a boundary.**
-   - A command declares `timeout` as stated in [exposure](../spec/exposure.md) (at most 600000 ms; 10 seconds when omitted). The timer remains for a live peer that does not reply to a command, because no event reports a slow command reply. `host.view.unresponsive` reports a view process that stops answering WebKit's responsiveness check; it is not a command reply, so it does not replace the timer. When the time limit passes, the call is rejected with an error that names the elapsed time and the timeout, as the current contract states, and `host.call.timeout {plugin, command}` is written.
-   - When the peer disappears, the call ends before its time limit through an event. The peers whose end ends a call are: a view or host process that ends, a surface that closes, and a sidecar that ends. The promise is rejected with an error that gives the reason, and `host.call.peer-lost {plugin, command, reason}` is written. The reason is one of `process-ended`, `surface-closed` or `sidecar-ended`. `host.view.unresponsive` does not end a call; it is written and used only by the presentation wait of rule 6 and by the status of the view. A call ends only by its declared timeout or by one of these peers.
-   - A late reply to a call that has ended is discarded. It is not passed to any promise, and no error is sent to the document that sent it. The host writes `host.call.late-reply {plugin, command, delay}`. The host-contract cases `exposure-reply.removed-surface-discarded` and `exposure.relay.foreign-document-reply-ignored-timeout-1005` state this behavior.
-   - The number of open calls, including snapshots waiting for acknowledgement, and the start time of the oldest open call are exposed as the core status `core.plugin.open-calls {plugin, count, oldestStartedAt, lateReplies}`. `lateReplies` is the count of late replies of the bullet above. The name and location are fixed here; F212.3 declares the status.
+   - A command declares `timeout` as stated in [exposure](../spec/exposure.md) (at most 600000 ms; 10 seconds when omitted). The timer remains for a live peer that does not reply to a command, because no event reports a slow command reply. `host.view.unresponsive` reports a view process that stops answering WebKit's responsiveness check; it is not a command reply, so it does not replace the timer. When the time limit passes, the call is rejected with an error that names the elapsed time and the timeout, as the current contract states, and `host.call.timeout {plugin, command}` is written, and `losses.timeouts` counts it.
+   - When the peer disappears, the call ends before its time limit through an event. The peers whose end ends a call are: a view or host process that ends, a surface that closes, and a sidecar that ends. The promise is rejected with an error that gives the reason. The reason is one of `process-ended`, `surface-closed` or `sidecar-ended`. `host.call.peer-lost {plugin, command, reason}` is written for `process-ended` and `sidecar-ended`; `surface-closed` writes no event and increments `losses.peerLost`. `host.view.unresponsive` does not end a call; it is written and used only by the presentation wait of rule 6 and by the status of the view. A call ends only by its declared timeout or by one of these peers.
+   - A late reply to a call that has ended is discarded. It is not passed to any promise, and no error is sent to the document that sent it. The host writes `host.call.late-reply {plugin, command, delay}` and increments `losses.lateReplies`. The host-contract cases `exposure-reply.removed-surface-discarded` and `exposure.relay.foreign-document-reply-ignored-timeout-1005` state this behavior.
+   - The number of open calls, including snapshots waiting for acknowledgement, and the start time of the oldest open call are exposed as the core status `core.plugin.open-calls {plugin, count, oldestStartedAt}`. The name and location are fixed here; F212.3 declares the status.
    - The relay timeout is product behavior of exposure. The two paths are: the host applies the timeout to a command forwarded to a surface page, and the main page applies the timeout to a handler that it runs itself ([exposure](../spec/exposure.md), command `timeout`). Both paths are written in exposure.md in F212.2.
    - Cancellation is part of the call envelope. A binary payload uses a separate channel (open item 2).
 4. **Origin and shared modules.**
@@ -95,7 +95,7 @@ When a value is not met, the measured values are recorded in the checklist. A fa
 6. **Presentation.** A plugin view joins the presentation wait only at the first display after a card layout change (the first change of a gesture).
    - During a continuing gesture (a divider drag or a card drag), the native frame of a view is placed at the new geometry in the same commit as its card, in every frame. The wait for content drawing applies only to the first change. Later content may draw late, and that delay is measured by frame intervals.
    - F212.7c records a full drag gesture, measures the frame intervals and the geometry error, and judges them with pass value (viii).
-   - The wait ends with the first of: the presentation completion of the view; the end of the view process; the view becoming invisible when the change ends (a `hidden` ancestor, an unselected tab, a closed surface, read from the state that the workbench already reports for each surface); and an unresponsive notification from `host.view.unresponsive`. When the wait ends without presentation completion, the commit continues without that view, and `page.view.presentation-abandoned {surface, reason}` is written. No timer is used.
+   - The wait ends with the first of: the presentation completion of the view; the end of the view process; the view becoming invisible when the change ends (a `hidden` ancestor, an unselected tab, a closed surface, read from the state that the workbench already reports for each surface); and an unresponsive notification from `host.view.unresponsive`. When the wait ends without presentation completion, the commit continues without that view, and `page.view.presentation-abandoned {surface, reason}` is written and increments `losses.abandoned`. No timer is used.
    - Pass value (v) is not a runtime deadline. It is the judgment that F212.7b and each plugin item measure.
    - F212.7b records a card entering full screen and a tab change for a card with a view, and checks that both waits end.
    - [native surfaces](../spec/native-surfaces.md) is corrected for this rule.
@@ -144,24 +144,29 @@ The RPC protocol number is 1 in the 0.0 series.
 
 | event | class | level | fields |
 |---|---|---|---|
-| `host.declared-ui.snapshot.skipped` | call | warn | `{plugin, status, count}`: values skipped while a snapshot was in transit |
-| `host.status.stalled` | lifecycle | warn | `{plugin, status, reason}` |
-| `host.call.timeout` | call | warn | `{plugin, command}` |
-| `host.call.peer-lost` | call | warn | `{plugin, command, reason}` |
-| `host.call.late-reply` | call | debug | `{plugin, command, delay}` |
-| `host.view.unresponsive` | lifecycle | warn | `{plugin, surface}` |
-| `host.view.responsive` | lifecycle | info | `{plugin, surface}` |
+| `host.declared-ui.snapshot.skipped` | call | debug | `{plugin, status, count}`: values skipped while a snapshot was in transit; counter `losses.skipped` |
+| `host.status.stalled` | lifecycle | debug | `{plugin, status, reason}`; counter `losses.stalled` |
+| `host.call.timeout` | call | error | `{plugin, command}`; counter `losses.timeouts` |
+| `host.call.peer-lost` | call | error | `{plugin, command, reason}` for `process-ended` and `sidecar-ended`; `surface-closed` writes no event and counts `losses.peerLost` |
+| `host.call.late-reply` | call | debug | `{plugin, command, delay}`; counter `losses.lateReplies` |
+| `host.view.unresponsive` | lifecycle | debug | `{plugin, surface}`; state `core.plugin.views.responsive` |
+| `host.view.responsive` | lifecycle | debug | `{plugin, surface}`; state `core.plugin.views.responsive` |
 | `host.view.process-request` | lifecycle | debug | `{plugin, surface}` |
 | `host.view.process-ready` | lifecycle | debug | `{plugin, surface}` |
-| `page.view.presentation-abandoned` | lifecycle | warn | `{surface, reason}` |
+| `page.view.presentation-abandoned` | lifecycle | debug | `{surface, reason}`; counter `losses.abandoned` |
 | `page.view.shortcut-table-missing` | input | error | `{plugin}` |
 | `page.input.shortcut.failed` | input | error | `{plugin, key, command}` |
-| `host.plugin-host.restart` | lifecycle | warn | `{plugin, attempt}` |
+| `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |
 | `host.plugin-host.restart-limit` | lifecycle | error | `{plugin}` |
-| `host.plugin-host.restart-reset` | lifecycle | info | `{plugin}` |
-| `host.sidecar.restart-reset` | lifecycle | info | `{sidecar, surface}`, declared by F212.8a |
+| `host.plugin-host.restart-reset` | lifecycle | debug | `{plugin}` |
+| `host.sidecar.restart-reset` | lifecycle | debug | `{sidecar, surface}`, declared by F212.8a |
 
-The status `core.plugin.open-calls {plugin, count, oldestStartedAt, lateReplies}` is declared in F212.3. `host.call.late-reply` stays at debug, and its count is also reported in `core.plugin.open-calls`. Every event that records a loss or a failure is warn or higher: the skipped snapshot values (`host.declared-ui.snapshot.skipped`), the timeouts, the stalled statuses, the peer losses and the abandoned presentations.
+F212.3 declares the statuses `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views`. The events of this design are declared with level `error` or `debug` only; check the class budget in [events](../spec/events.json) before writing catalog entries (F212.3). The restart state of a plugin host or a sidecar is shown in `core.plugin.views` or in the sidecar status.
+
+**Event levels in a release.** A 0.0.x release stores only error events (AGENTS.md, Diagnostic code). Each occurrence of this design is therefore classified once:
+(a) a failure or a rejected operation is an event at level `error`;
+(b) a loss, a skip, a transient state or a presentation degradation is not an event. It is counted in the declared status `core.plugin.losses {plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}`, and it is a state of the declared status `core.plugin.views {plugin, surface, responsive}`. Each count is notified to status watchers when it changes. The counts are per surface and reset when the surface closes.
+In diagnostic builds, a change of a count also writes the `debug` event named in the table, so that the diagnostic record has the occurrence in order. The debug event is not stored in a release.
 
 The identifiers in code use the names as written here.
 
@@ -248,7 +253,7 @@ Step order: F212.7, F212.7b, F212.7d, F212.10-editor, F212.7a, F212.7c, F212.8, 
 1. **F212.1 Measurement.** WebContent totals per window; base cost of a web view; cost and throttle of a plugin host; DOM editor and flowmark with memory saving on and off, and the same screen as a view; two views of one plugin under (a) and (b); process-sharing pairs (two views of one plugin, two plugins, a view and a document region of one plugin); the main page of two windows; the DOM mount time of every surface plugin in the installed record (page trace, recorded with the plugin version; the (iii) baseline is F212.1-3); the first display time, the first status time, and the start time of a new WebContent process. The page writes `page.trace.surface.mount {plugin, surface, ms}` at each surface mount when the trace is on, and `make events-check` compares the workbench `trace(` calls with the catalog.
    - **F212.1-3:** the recorded DOM mount baseline of every installed surface plugin (first content frame in a recording), the baseline of (iii). The median of F212.1-2 (`page.trace.surface.mount`) is the trace value of the mount, not the (iii) baseline.
 2. **F212.2 Design document.** This document and its Korean translation. The review result is recorded in [objections answered](#objections-answered).
-3. **F212.3 Call message layer (plugin-api).** Declares the events of [messages and events](#messages-and-events) in the event catalog, except `host.sidecar.restart-reset` (declared by F212.8a); declares the status `core.plugin.open-calls`; adds the unresponsive selectors to `native/darwin/src/private/webkit.h` and to [private native APIs](../operations/private-native-apis.md) with the call condition and the source lines read from the WebKit source of the SDK revision in use (open item 10); and runs `make events-check`.
+3. **F212.3 Call message layer (plugin-api).** Declares the events of [messages and events](#messages-and-events) in the event catalog, except `host.sidecar.restart-reset` (declared by F212.8a); declares the statuses `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views`; adds the unresponsive selectors to `native/darwin/src/private/webkit.h` and to [private native APIs](../operations/private-native-apis.md) with the call condition and the source lines read from the WebKit source of the SDK revision in use (open item 10); and runs `make events-check`.
 4. **F212.4 Binary path** (native code and both hosts).
 5. **F212.5 Reserved module root and import map.** Changes `/modules` and `/shared` in [installation](../spec/installation.md) and adds the core root path form.
 6. **F212.6 Identity, exposure registration, and the reserved core check.** Adds the reserved `core` check to `validateManifest`, the plugin id mapping, and the exposure registration.
@@ -311,7 +316,7 @@ Each specification location that this design contradicts, with the stage that ch
 
 ## Objections answered
 
-The objections below are the answers of the first, second and third reviews. Each entry gives the objection, the verdict and the resolution, which a rule of this proposal records. The entries of the second review use the review's ids (C, H, M). The entries of the third review use the review's ids (N, D). The three wrong answers of the second review are the answers to C1, C7 and H3.
+The objections below are the answers of the first, second, third and fourth reviews. Each entry gives the objection, the verdict and the resolution, which a rule of this proposal records. The entries of the second review use the review's ids (C, H, M). The entries of the third review use the review's ids (N, D). The three wrong answers of the second review are the answers to C1, C7 and H3.
 
 **First review**
 
@@ -365,6 +370,10 @@ The objections below are the answers of the first, second and third reviews. Eac
 - N4: (iii) baseline. Verdict: accepted. Resolution: the DOM mount baseline of (iii) is the median time from the surface start request to the first content frame in the recording of the same plugin's surface mount in the main page, measured by the same recording method. It is measured by F212.1-3. The median of `page.trace.surface.mount` in F212.1-2 is the trace value of the mount and is not the (iii) baseline.
 - N5: process start durations of (iii-b). Verdict: accepted. Resolution: each duration runs from `host.view.process-request` to the first `host.view.process-ready`. Both events are declared in F212.3 (class lifecycle, level debug). The durations are measured within F212.7a; no separate F212.1-4 item is added.
 - N6: sidecar restart text. Verdict: accepted. Resolution: the `## Failure` sentence of sidecars.md at line 67, which states a restart without a limit, is replaced by F212.8a with the limit of rule 5. The terminal runtime sentence at line 43 also changes in F212.8a (rule 5).
-- N7: event levels. Verdict: accepted. Resolution: `host.declared-ui.snapshot.skipped` is warn, because a skipped snapshot value is an observable loss and must be stored in release builds. Every event that records a loss or a failure is warn or higher: `host.call.timeout`, `host.status.stalled`, `host.call.peer-lost` and `page.view.presentation-abandoned`. `host.call.late-reply` stays at debug, and its count is also reported in `core.plugin.open-calls` as `lateReplies`.
+- N7: event levels. Verdict: accepted. Resolution: replaced by the fourth review (below), which sets the event levels of a release.
 - D1: the `view` kind replaces `dom` in one item. Verdict: accepted in the third review; it reverses H6. Resolution: F212.7 adds the `view` kind and removes `dom` in the same item, with the migration and reader rules stated in H6 and in Steps. F212.11 removes only the remaining page-mount code paths.
 - D2: owner of Escape. Verdict: partly accepted. Resolution: the owner of Escape is the view, because a view consumes Escape for its own text input. F212.6a verifies the round trip against the menu close and records the result; it does not choose the owner. The shell layer and the browser sections stay with their plugin repository items (F212.10-shell-layer and F212.10-browser-sections): core does not decide a plugin's internal layout, because plugin functionality belongs to its plugin repository and each repository keeps its own checklist.
+
+**Fourth review**
+
+- Objection: the N7 answer made every event that records a loss or a failure warn or higher, while a 0.0.x release stores only error events. Verdict: accepted. Resolution: each occurrence is classified once. A failure or a rejected operation is an `error` event. A loss, a skip, a transient state or a presentation degradation is counted in the status `core.plugin.losses` or the state `core.plugin.views`, and a `debug` event is written with the count in diagnostic builds ([messages and events](#messages-and-events), event levels in a release). `lateReplies` is removed from `core.plugin.open-calls`, and its count is reported only in `core.plugin.losses`.
