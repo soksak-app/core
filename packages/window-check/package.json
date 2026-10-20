@@ -17,6 +17,7 @@
     "./png.mjs": "./png.mjs",
     "./repeat.mjs": "./repeat.mjs",
     "./session.mjs": "./session.mjs",
+    "./shutdown-wait.mjs": "./shutdown-wait.mjs",
     "./stall-sample.mjs": "./stall-sample.mjs",
     "./text-difference.mjs": "./text-difference.mjs",
     "./package.json": "./package.json"
@@ -34,6 +35,7 @@
     "png.mjs",
     "repeat.mjs",
     "session.mjs",
+    "shutdown-wait.mjs",
     "stall-sample.mjs",
     "text-difference.mjs"
   ],

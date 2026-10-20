@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.6a-1-5: `e2e/normal-shutdown.mjs`는 application의 endpoint 연결이 끝나는 시점(`packages/window-check/shutdown-wait.mjs`의 `untilShutdown`, client의 `ended` event)에 `endpoint.json`을 읽는다. 종료 시각을 폴더 watch로 재지 않는다(watch는 종료 뒤에 알렸다). 종료 service도 같은 방식으로 관찰하며, 외부 프로세스로 종료를 관찰하지 않는다. 두 host는 프로세스가 끝나기 전에 파일을 지운다. Red: 시험 파일은 기다리지 않고 resolve하는 선언된 stub에서 `the wait settled before the connection ended`로 실패했다. Green: 시험 3개가 통과하고, 다시 빌드한 Tauri host는 `host.quit`로(연결 종료 54 ms), 다시 빌드한 Wails host는 signal로(19 ms) check를 통과한다.
 - F212.6a-1-3-1c: 두 호스트의 process lock은 열린 `process.lock`에 거는 배타적 advisory lock(`flock`)이며 프로세스가 사는 동안 유지한다. 그래서 같은 오래된 파일을 본 두 시작자는 소유자를 하나만 남긴다. Red: 경쟁 시험에서 두 번째 시작이 받아들여졌다(Rust와 Go). Green: 경쟁 시험과 잠금 보유 시험이 두 언어에서 3회 모두 통과한다.
 - F212.6a-1-3-1b-1: 잠기지 않은 `process.lock`은 내용과 관계없이 넘겨받고, `host.run.unrecorded-end`는 `boot`와 `pid`(다른 형식이면 null)와 256 바이트로 자른 `previous`를 담는다. 잠긴 lock의 내용이 비었거나 다른 형식이면 `already owned by a live process`로 거부하며, 소유 여부는 flock만으로 정한다. 시작 때의 event 저장을 event writer로 시험한다. Red: 다른 형식, 잠긴 형식, 빈 내용, 저장 시험이 수정 전 코드에서 두 호스트 모두 실패했다. Green: 이 시험과 잠금 시험이 두 호스트에서 3회 모두 통과한다.
 - F212.6a-1-3-1b: `process.lock`은 `{"pid","boot"}`를 담는다. 오래된 잠금을 넘겨받은 host는 event writer가 시작된 뒤 level `error`로 `host.run.unrecorded-end {boot, pid}`를 저장하며, 잠금을 지우지 않고 끝난 실행을 이름으로 가리킨다. Red: 오래된 잠금 넘겨받기 시험이 두 언어에서 `invalid process lock`으로 실패했다. Green: 잠금 시험이 두 언어에서 3회 모두 통과한다.
