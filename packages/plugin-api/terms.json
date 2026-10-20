@@ -320,7 +320,7 @@
     },
     {
       "term": "core root",
-      "definition": "The reserved host `core` on the sok:// scheme, which serves the view import map targets, the shared modules and the connected contribution modules to views, and which no plugin id can use.",
+      "definition": "The reserved host `core` on the sok:// scheme, which serves the view import map targets, the shared modules and the modules of granted items to views, and which no plugin id can use.",
       "rejected": [
         "reserved module root"
       ],
@@ -335,6 +335,18 @@
     {
       "term": "connected item",
       "definition": "A contribution of a plugin to an extension point of another installed plugin, whose provider is installed and enabled, whose range contains the version of the point, and whose entry matches the schema of the point.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "granted item",
+      "definition": "A contribution item whose provider is installed and enabled and whose range contains the version of the point, used only by the core root grant.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "view channel",
+      "definition": "The document-start script and the message handler `sok-view` that the host registers with a view's web view configuration, through which a view page sends and receives its calls and snapshots.",
       "rejected": [],
       "allowed": []
     },
