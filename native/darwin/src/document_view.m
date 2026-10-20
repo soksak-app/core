@@ -30,14 +30,37 @@ static NSString *const kScrollScript = @"(() => {"
 // The script runs in the host's content world, so it sees the message events of the page world without giving the
 // page access to the handler; other documents have no message channel.
 static NSString *const kMessageMessage = @"soksakDocumentMessage";
+// The reason that a value is not plain JSON, or an empty string when it is. Plain JSON is null, a boolean, a finite number,
+// a string, an array or a plain object of such values, without a cycle or a property that JSON would drop, so the text
+// that JSON.stringify makes from a forwarded value holds the value that the page posted. The article of a type name is
+// "an" when the name starts with A, E, I or O, which covers the type names that JSON refuses (Uint8Array takes "a").
 static NSString *const kMessageScript = @"(() => {"
     "if (location.protocol !== 'sok:') return;"
+    "const refusal = (value, ancestors) => {"
+    "if (value === null || typeof value === 'string' || typeof value === 'boolean') return '';"
+    "if (typeof value === 'number') return Number.isFinite(value) ? '' : 'the message holds a number that is not finite, which is not JSON';"
+    "if (typeof value !== 'object') return 'the message holds ' + (value === undefined ? 'undefined' : 'a ' + typeof value) + ', which is not JSON';"
+    "const array = Array.isArray(value);"
+    "const proto = Object.getPrototypeOf(value);"
+    "if (proto !== null && proto !== (array ? Array.prototype : Object.prototype)) {"
+    "const type = proto.constructor?.name || 'object';"
+    "return 'the message holds ' + (/^[AEIO]/.test(type) ? 'an ' : 'a ') + type + ', which is not JSON';"
+    "}"
+    "if (ancestors.includes(value)) return 'the message holds a cycle, which is not JSON';"
+    "const keys = Reflect.ownKeys(value).filter((key) => !(array && key === 'length'));"
+    "if (keys.length !== Object.keys(value).length) return 'the message holds a property that JSON does not keep, which is not JSON';"
+    "for (const item of array ? value : Object.values(value)) {"
+    "const reason = refusal(item, [...ancestors, value]);"
+    "if (reason) return reason;"
+    "}"
+    "return '';"
+    "};"
     "addEventListener('message', (event) => {"
     "if (event.source !== window) return;"
-    "let text;"
-    "try { text = JSON.stringify(event.data); } catch (error) { text = undefined; }"
+    "let reason = '';"
+    "try { reason = refusal(event.data, []); } catch (error) { reason = 'the message could not be read: ' + String(error); }"
     "window.webkit.messageHandlers.soksakDocumentMessage.postMessage("
-    "text === undefined ? { error: 'the message data is not JSON' } : { message: text });"
+    "reason ? { error: reason } : { message: JSON.stringify(event.data) });"
     "});"
     "})();";
 

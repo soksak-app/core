@@ -61,10 +61,17 @@ int main(void) { @autoreleasepool {
     NSString *temporary = temporaryFolder(@"soksak-document-plugin-");
     NSString *folder = [temporary stringByAppendingPathComponent:@"plugin"];
     NSString *outside = [temporary stringByAppendingPathComponent:@"secret.html"];
-    // The page module answers each {ping} message with {pong}; it loads as a module, so it needs text/javascript.
+    // The page module answers each {ping} message with {pong}, and each {reply} message with the value that the name
+    // selects; it loads as a module, so it needs text/javascript.
     writeFile(folder, @"ui/app/index.html", @"<!doctype html><title>loading</title><script type=module src=./main.js></script>");
     writeFile(folder, @"ui/app/main.js", @"document.title = `ready ${location.origin}`;"
-        "addEventListener('message', (event) => { if (event.data && event.data.ping) postMessage({ pong: event.data.ping }, location.origin); });");
+        "const replies = {"
+        "buffer: () => new ArrayBuffer(4), bytes: () => new Uint8Array([1, 2]), date: () => new Date(0),"
+        "nested: () => ({ list: [1, 'a', null, true], text: 'ok' }),"
+        "cycle: () => { const value = {}; value.self = value; return value; } };"
+        "addEventListener('message', (event) => {"
+        "if (event.data && event.data.ping) postMessage({ pong: event.data.ping }, location.origin);"
+        "if (event.data && event.data.reply) postMessage(replies[event.data.reply](), location.origin); });");
     writeFile(temporary, @"secret.html", @"<!doctype html><title>outside</title>");
     (void)outside;
 
@@ -97,6 +104,26 @@ int main(void) { @autoreleasepool {
         until(@"the plugin document answers", ^BOOL{ return messages.count >= 2; });
         check([messages[0] isEqual:@{ @"ping": @7 }], [NSString stringWithFormat:@"the page receives its own message first: %@", messages]);
         check([messages[1] isEqual:@{ @"pong": @7 }], [NSString stringWithFormat:@"the page receives the answer: %@", messages]);
+
+        // A page message that JSON cannot hold is refused with the type of the value; a plain object arrives unchanged.
+        NSArray<NSArray *> *replies = @[
+            @[ @"buffer", @{ @"error": @"the message holds an ArrayBuffer, which is not JSON" } ],
+            @[ @"bytes", @{ @"error": @"the message holds a Uint8Array, which is not JSON" } ],
+            @[ @"date", @{ @"error": @"the message holds a Date, which is not JSON" } ],
+            @[ @"cycle", @{ @"error": @"the message holds a cycle, which is not JSON" } ],
+            @[ @"nested", @{ @"list": @[ @1, @"a", NSNull.null, @YES ], @"text": @"ok" } ],
+        ];
+        for (NSArray *reply in replies) {
+            NSUInteger index = messages.count;
+            check(sp_document_post(document, [NSString stringWithFormat:@"{\"reply\":\"%@\"}", reply[0]].UTF8String),
+                [NSString stringWithFormat:@"the plugin document posts the %@ reply request", reply[0]]);
+            // The page receives its own request first, then the answer.
+            until([NSString stringWithFormat:@"the page answers the %@ reply", reply[0]], ^BOOL{ return messages.count >= index + 2; });
+            check([messages[index] isEqual:@{ @"reply": reply[0] }],
+                [NSString stringWithFormat:@"the page receives its %@ request first: %@", reply[0], messages[index]]);
+            check([messages[index + 1] isEqual:reply[1]],
+                [NSString stringWithFormat:@"the %@ reply arrives as %@: %@", reply[0], reply[1], messages[index + 1]]);
+        }
 
         // The URL parser resolves the dot segments, so the last address requests sok://probe/secret.html.
         NSDictionary<NSString *, NSString *> *refused = @{
