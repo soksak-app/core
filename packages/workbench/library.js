@@ -168,21 +168,32 @@ export function createLibrary(root, rendered = () => {}) {
   }
   delegate(root);
 
-  /* Whether the project folder can be read. It asks the host once for each path and asks again when the project list changes. If the folder cannot be read,
-     it holds the reason that the host reported (docs/spec/projects.md). */
+  /* Whether the project folder can be read. It asks the host for each path when the project list changes. If the folder cannot be read,
+     it holds the reason that the host reported (docs/spec/projects.md). A re-check that is pending keeps the last known result of its path, so a
+     missing folder is not withdrawn from the display and written again while the list changes; only the answer of the latest check replaces the result. */
   const folders=new Map();
+  const checks=new Map();
+  let checkCount=0;
   let foldersFor=null;
   function checkFolders(all) {
     const roots=all.map(p=>p.root).join('\n');
-    if(foldersFor!==roots) { folders.clear(); foldersFor=roots; }
+    if(foldersFor===roots) return;
+    foldersFor=roots;
+    for(const root of [...folders.keys()]) if(!all.some(p=>p.root===root)) { folders.delete(root); checks.delete(root); }
     for(const project of all) {
-      if(folders.has(project.root)) continue;
-      folders.set(project.root, {pending:true});
+      const check=++checkCount;
+      checks.set(project.root, check);
       windows.folder(project.root).then(
-        ()=>{ folders.set(project.root,{error:null}); },
-        (reason)=>{ folders.set(project.root,{error:String(reason.message)}); },
-      ).then(()=>{ if(foldersFor===roots) render(); });
+        ()=>{ settleFolder(project.root, check, {error:null}); },
+        (reason)=>{ settleFolder(project.root, check, {error:String(reason.message)}); },
+      );
     }
+  }
+  /** Stores the answer of a check. The answer of a check that a later check of the same path replaced, or of a removed path, is ignored. */
+  function settleFolder(root, check, result) {
+    if(checks.get(root)!==check) return;
+    folders.set(root, result);
+    render();
   }
   /** The project list changed. Checks the folders again. */
   function refreshFolders() { foldersFor=null; }
@@ -396,7 +407,8 @@ export function createLibrary(root, rendered = () => {}) {
         const missing=element('p','library-project__missing');
         text.append(missing);
         showError(missing, `library project ${project.root}`, folderReason(folder.error));
-      } else {
+      } else if(folder) {
+        // A folder whose last known result has no error hides the error. A folder that has no result yet keeps the display as it is.
         hideError(null, `library project ${project.root}`);
       }
       choose.append(text);
@@ -450,7 +462,7 @@ export function createLibrary(root, rendered = () => {}) {
       const key=JSON.stringify([project, projects.isOpen(project.id), folder?.error ?? null]);
       const kept=cards.get(project.id);
       if(kept?.key===key) {
-        if(!folder?.error) hideError(null, `library project ${project.root}`);
+        if(folder&&!folder.error) hideError(null, `library project ${project.root}`);
         wanted.push(kept.card);
         continue;
       }
