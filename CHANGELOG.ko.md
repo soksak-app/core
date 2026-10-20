@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.1-2-1: library는 project의 재확인이 대기 중인 동안 마지막 폴더 결과를 유지하고, 최신 check의 답으로만 바꾼다. 따라서 없는 폴더는 project 항목마다 한 번 알리며, project 목록이 바뀌어도 다시 알리지 않는다. 다시 나타난 폴더는 오류를 숨긴다. Red: `a missing project folder is reported once across project list changes, and a folder that appears again hides the error`가 `the missing folder error is not written once`로 실패했고, 실제 목록에 `library project /work/missing: 폴더가 없습니다.`가 4개 있었다. Green: 같은 test가 2 of 2 통과하고, library test 파일과 error display test가 11 of 11 통과하며, `make docs-check`가 통과한다.
 - F212.1-1: page는 plugin 표면의 모듈 mount가 끝나면 performance trace가 켜져 있는 동안 이벤트 `page.trace.surface.mount`(`plugin`, `surface`, `ms`)를 쓴다. `ms`는 mount 시작부터 모듈 mount 종료까지의 시간이므로 표면마다 DOM mount 시간을 기록에서 읽는다. 실패한 mount는 이벤트를 쓰지 않는다. Red: `a surface mount writes one surface.mount trace`가 `expected one surface.mount trace, found 0`으로 실패했고, `a trace call of the workbench emits the page trace event`가 `page.trace.surface.mount is declared and no source emits it`으로 실패했다. Green: surface-modules test 10 of 10이 통과하고 `make events-check`와 `make docs-check`가 통과한다.
 - F211: core 0.0.20을 release한다.
 - F210: 은퇴한 plugin이나 sidecar는 철회 항목과 함께 registry에서 제거한다. appview와 application sidecar를 제거했다.
