@@ -66,10 +66,9 @@
 
 실패 뒤의 전송은 시작 규칙을 따른다. 재시작 한도가 멈추지 않는 한 그 사이드카에 대한 다음 요청이 새 프로세스를 시작한다. 새 프로세스에는 실패한 프로세스의 세션이 없으므로 세션을 유지하는 페이지는 세션을 다시 연다. 각 표면은 소유 창과 첫 root를 유지한다.
 
-재시작 한도는 표준 입출력 사이드카에 적용된다. 호스트는 각 실패의 시각으로 사이드카의 실패를 센다. 시각은 실패 event가 도착할 때 잡으며, timer는 돌지 않는다. 새 실패보다 300초 넘게 앞선 실패는 세지 않는다(sliding window). 네 번째 실패가 세어지면 호스트는 로그에 `error: sidecar <name>: restart limit: 4 failures within 300 s`를 쓰고, `{sidecar}`를 가진 event `host.sidecar.restart-limit`을 level `error`로 쓰며, 그 사이드카의 재시작을 멈춘다. 멈춘 사이드카에 대한 요청은 프로세스를 시작하지 않는다.
+재시작 한도는 표준 입출력 사이드카에 적용된다. 호스트는 각 실패의 시각으로 사이드카의 실패를 센다. 시각은 실패 event가 도착할 때 잡으며, timer는 돌지 않는다. 새 실패보다 300초 넘게 앞선 실패는 세지 않는다(sliding window). 네 번째 실패가 세어지면 호스트는 로그에 `error: sidecar <name>: restart limit: 4 failures within 300 s`를 쓰고, `{sidecar}`를 가진 event `host.sidecar.restart-limit`을 level `error`로 쓰며, 그 사이드카의 재시작을 멈춘다. 멈춘 사이드카에 대한 요청은 표면이 실패한 프로세스에 보냈든 나중에 열렸든 어느 표면에서 오든 프로세스를 시작하지 않는다. 호스트는 `error: sidecar <name>: restart limit: request for <surface> refused`를 쓰고, 표면의 소유 창에 `{sidecar, surface, reason: "restart limit"}`인 `sidecar-failure`를 전달하며, 전송은 `sidecar <name>: restart limit`로 실패한다.
 
-- 실패한 프로세스에 요청을 보낸 표면의 요청은 실패한다. 호스트는 `error: sidecar <name>: restart limit: request for <surface> refused`를 쓰고, 표면의 소유 창에 `{sidecar, surface, reason: "restart limit"}`인 `sidecar-failure`를 전달하며, 전송은 `sidecar <name>: restart limit`로 실패한다.
-- 실패한 프로세스에 요청을 보내지 않은 표면의 요청은 사이드카가 필요한 표면을 여는 것이다. 호스트는 실패 기록을 지우고 프로세스를 시작하며, `{sidecar, surface}`인 event `host.trace.sidecar.restart-reset`을 level `debug`로 쓴다.
+멈춤을 푸는 것은 사람이 표면을 여는 행위뿐이다. 호스트가 `plugin.json`의 `dependencies`에 그 사이드카를 적은 plugin의 표면을 만들면, 호스트는 그 사이드카의 실패 기록을 지우고 `{sidecar, surface}`인 event `host.trace.sidecar.restart-reset`을 level `debug`로 쓰며, 다음 요청이 프로세스를 시작한다. 이미 열린 표면의 요청은 멈춤을 풀지 않으며, 그 사이드카를 적지 않은 plugin의 표면을 만드는 것도 풀지 않는다.
 
 지속 service의 재시작 한도는 이 절이 정의하지 않는다. 지속 transport는 그 재시작 규칙이 [terminal runtime](terminal-runtime.ko.md)에 정해질 때까지 그 규칙을 따른다.
 
