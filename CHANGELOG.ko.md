@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F211: core 0.0.20을 release한다.
 - F210: 은퇴한 plugin이나 sidecar는 철회 항목과 함께 registry에서 제거한다. appview와 application sidecar를 제거했다.
 - F209: 철회된 version만 가진 plugin은 제안되지 않는다. 카드와 최신 버전은 철회되지 않은 version만 쓰므로 설치된 plugin도 철회된 update를 제안하지 않는다.
 - F208: 시스템 대화상자를 띄우는 명령(`core.library.choose-folder`, `core.file.place`)이 600000 ms의 timeout을 선언하므로, 대화상자에서 10초를 넘게 고른 사람은 더 이상 명령 timeout을 보지 않는다.

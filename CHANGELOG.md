@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F211: core 0.0.20 is released.
 - F210: a retired plugin or sidecar is removed from the registry with its revocation entries; appview and the application sidecar are removed.
 - F209: a plugin whose every registry version is revoked is not offered: its card and its latest version use only the versions that are not revoked, so an installed plugin offers no revoked update.
 - F208: the commands that show a system dialog (`core.library.choose-folder`, `core.file.place`) declare a timeout of 600000 ms, so a person who takes longer than 10 s in the dialog no longer sees a command timeout.

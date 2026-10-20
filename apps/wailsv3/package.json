@@ -1,6 +1,6 @@
 {
   "name": "@soksak/wailsv3",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "private": true,
   "type": "module",
   "description": "Wails v3 application hosting the workbench with native webview surfaces.",
