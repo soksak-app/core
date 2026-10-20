@@ -8,6 +8,13 @@ import { join } from "node:path";
 const SECONDS = 2;
 
 /**
+ * The milliseconds that a request may stay pending before the check samples the host and its page processes. A pending
+ * request has no event source: it is pending exactly while nothing comes back, so a timer per pending request is the only
+ * source of the mark. A stall that ends before the request limit is recorded only when it starts at this mark.
+ */
+export const STALL_AFTER = 3000;
+
+/**
  * Writes the thread stacks of process pid to file and returns file. It fails with the reason when sample fails.
  *
  * run(command, args)  an executor that returns the same result as spawnSync ({status, stderr}). The checks replace it.
