@@ -1195,16 +1195,19 @@ pub(crate) fn window_changed(window: &Window) {
             }
         };
         let state = window.state::<Exposure>();
-        {
+        let Some(endpoint) = state.endpoint.get() else {
+            return;
+        };
+        let decision = {
             let Ok(mut reported) = state.reported.lock() else {
                 return;
             };
-            if reported.get(window.label()) == Some(&value) {
-                return;
-            }
-            reported.insert(window.label().to_string(), value.clone());
-        }
-        if let Some(endpoint) = state.endpoint.get() {
+            // The watch is read under the lock of the record. A watch that ends before this read clears the record after
+            // this decision, so the next watch receives the next value.
+            let watched = endpoint.notifier().watched(window.label(), "host.window");
+            decide_window_notify(&mut reported, window.label(), watched, &value)
+        };
+        if let WindowNotify::Sent(value) = decision {
             match raw(&value) {
                 Ok(text) => endpoint
                     .notifier()
@@ -1214,6 +1217,40 @@ pub(crate) fn window_changed(window: &Window) {
         }
     });
 }
+
+/// The decision of one host.window notification for a window.
+#[derive(Debug, PartialEq)]
+pub(crate) enum WindowNotify {
+    /// The value differs from the value sent last, and it is sent to the watching connections.
+    Sent(Value),
+    /// The value equals the value sent last, so nothing is sent.
+    Unchanged,
+    /// No connection watches host.window of the window, so nothing is sent and the record of the window is kept.
+    Unwatched,
+}
+
+/// Decides whether the value of host.window of a window is sent. reported holds the value sent last for each window.
+/// A value is sent when a connection watches the window and the value differs from the value sent last, and the sent
+/// value is recorded.
+pub(crate) fn decide_window_notify(
+    reported: &mut HashMap<String, Value>,
+    window: &str,
+    watched: bool,
+    value: &Value,
+) -> WindowNotify {
+    if !watched {
+        return WindowNotify::Unwatched;
+    }
+    if reported.get(window) == Some(value) {
+        return WindowNotify::Unchanged;
+    }
+    reported.insert(window.to_string(), value.clone());
+    WindowNotify::Sent(value.clone())
+}
+
+#[cfg(test)]
+#[path = "exposure_status_test.rs"]
+mod status_test;
 
 fn internal(error: impl ToString) -> Failure {
     Failure::new(-32603, error.to_string())
