@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.7-8-3-1: Tauri host의 설치된 plugin 문서는 잘못된 `plugin.json`을 parser 세부 없이 평범한 문구 `<file> is not valid JSON`으로 보고한다. parser 세부를 없앤 변경은 main(F212.6-2-2와 F212.6-2-3)에서 왔고, 이 branch는 그것을 합친다. 계약 case `installed.plugin-json.invalid-text`와 `installed.document.reports-errors`는 두 host에서 실행한다.
 - F212.7-3-1: core fixture `e2e/fixtures/extension-probe/provider`는 제거된 `dom` 대신 native 문서 영역 하나를 가진 `hybrid` 합성을 선언한다. 구조 시험 `scripts/test/fixture-compositions.test.mjs`는 합성을 선언하는 core 저장소의 추적된 plugin manifest를 모두 읽고 manifest reader가 받아들이는지 확인한다.
 - F212.7-3: `dom` 합성 종류를 없앴다. plugin-api는 manifest의 `{kind: "dom"}`을 거부하고, Go와 Rust host는 선언에서 같은 방식으로 거부하며, 두 경우 모두 `plugin <id> surface composition: kind dom is removed; the composition takes kind view or hybrid` 오류를 쓴다. surface-composition 명세는 manifest에 `view`와 `hybrid`만 말하며, reader의 시험 fixture는 hybrid 합성을 쓴다. `dom`을 아직 선언하는 설치된 plugin은 이 branch가 합쳐지기 전에 각자의 항목으로 옮기고, `dom` 표면의 page mount는 F212.11이 없앤다.
 - F212.7-5-1: 프로세스가 끝난 뒤 host가 다시 만든 view가 기록의 native surface와 plugin을 유지하고, 재시작 전에 그 surface에 저장된 tab 상태를 재시작된 view가 읽는다는 것을 시험으로 고정한다(Go `TestViewRestartKeepsTheSurfaceOfItsRecord`, Rust `view_restart_keeps_the_surface_and_plugin_of_its_record`, workbench `a restarted view reads the tab state of its surface as it was saved before the restart`). 바뀌지 않은 코드에서 동작이 이미 성립하므로 시험은 Red를 기록하지 않는다. 계약 case `view.restart.restores-state`는 두 host에서 실행한다.
