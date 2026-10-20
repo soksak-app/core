@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.7-8-3: view는 `runtime.native.on`, `runtime.sidecar.on`, `runtime.sidecar.onFailure` call로 view context의 event를 구독한다. 페이지는 각 event를 `viewEvent`를 거쳐 호스트 message `{sok: 1, event, data}`로 view에 보내며, 호스트는 ready 문서에만 post한다. 테마 message는 값을 `data`에 담고, Tauri runtime 표는 `viewReply`와 `viewEvent`를 매핑한다. `packages/plugin-api/view.js`는 view에 DOM surface context와 같은 구독 API를 준다.
 - F212.7-7: Go와 Rust의 `sok plugin pack`은 view의 `page`가 `package.json`의 `files`에 덮이지 않으면 `plugin.json: view page <path> must be listed in files`로 거부하고 release를 쓰지 않는다. `files`의 폴더가 page를 덮으면 받아들인다. Host 계약 case `cli.pack.view-page-listed`는 두 host에서 실행한다.
 - F212.7-6: plugin-api가 `checkViewPage(html)`을 내보낸다. 이 함수는 view page가 정적 import map 하나를 가지고 그 imports가 `VIEW_IMPORTS`와 같으며 다른 필드가 없는지 확인하고, 첫 차이를 밝히는 오류를 던진다.
 - F212.7-8: `sok-view`로 보낸 view call `{sok: 1, id, command, params}`은 `view-call {surface, plugin, id, command, params}` event로 메인 page에 전달되고, `answerViewCall`(`packages/workbench/view-calls.js`)이 답한다. `tab.state.read`는 surface의 tab state를 돌려주고, `core.*` command는 `runtime.command`처럼 실행되며, 다른 주인의 command는 거부된다. 응답 `viewReply`는 ready 문서를 거쳐 `{sok: 1, id, result|error}`로 view에 돌아온다. 두 호스트가 전달과 응답을 한다(Go `ViewCallEvent`, `replyView`, `ViewReply`; Rust `ViewChannels::call`, `view_reply_message`, `view_reply`). `createViewBridge`는 각 call을 `sok: 1`과 함께 보낸다. 계약 case `view.call.forward`와 `view.call.reply`를 선언한다. 아직 미제공: F212.7-8-1의 항목. 경로는 [native surface](docs/spec/native-surfaces.ko.md#view-표면)에 명시한다.
