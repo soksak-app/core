@@ -285,6 +285,17 @@
       },
       "description": "A reply to a forwarded command arrived after its time limit, and the relay refused it: delay is the time in milliseconds from the send of the command to the reply (docs/spec/exposure.md#errors)."
     },
+    "host.call.peer-lost": {
+      "layer": "host",
+      "class": "call",
+      "level": "error",
+      "fields": {
+        "plugin": "string",
+        "command": "string",
+        "reason": "string"
+      },
+      "description": "A call that a view had open when its view process ended was ended by the host with the reason process-ended: plugin and command name the call (docs/spec/native-surfaces.md#view-surfaces)."
+    },
     "host.trace.view.process-request": {
       "layer": "host",
       "class": "call",

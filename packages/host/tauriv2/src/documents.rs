@@ -652,6 +652,8 @@ struct ViewChannel {
     document: String,
     /// Set by the first ready message of the view, which writes host.trace.view.process-ready once.
     process_ready: bool,
+    /// The calls that the view has open, by id, with the plugin and the command of each.
+    calls: BTreeMap<u64, String>,
 }
 
 /// The view channels of a window, by surface. A navigation clears the ready document, so a post cannot reach a document that
@@ -698,6 +700,7 @@ impl ViewChannels {
                 plugin: plugin.to_string(),
                 document: String::new(),
                 process_ready: false,
+                calls: BTreeMap::new(),
             },
         );
     }
@@ -712,6 +715,27 @@ impl ViewChannels {
         }
         channel.process_ready = true;
         Some(channel.plugin.clone())
+    }
+
+    /// Ends the open calls of the view of surface with the reason process-ended, and returns the plugin and the command of each in the
+    /// order of their ids (docs/spec/native-surfaces.md#view-surfaces).
+    pub fn end_calls(&self, surface: &str) -> Vec<(String, String)> {
+        let mut channels = self.lock();
+        let Some(channel) = channels.get_mut(surface) else {
+            return Vec::new();
+        };
+        let calls = std::mem::take(&mut channel.calls);
+        calls
+            .into_values()
+            .map(|command| (channel.plugin.clone(), command))
+            .collect()
+    }
+
+    /// Records that the main page answered the call id of the view of surface, so the call is no longer open.
+    pub fn answer_call(&self, surface: &str, id: u64) {
+        if let Some(channel) = self.lock().get_mut(surface) {
+            channel.calls.remove(&id);
+        }
     }
 
     /// Removes the record of the view of surface.
@@ -876,6 +900,10 @@ impl ViewChannels {
         };
         // default: a call without params sends null to its command, as the call envelope has no params for it.
         let params = message.get("params").cloned().unwrap_or(Value::Null);
+        // The call is open until the main page answers it (docs/spec/native-surfaces.md#view-surfaces).
+        if let Some(channel) = self.lock().get_mut(surface) {
+            channel.calls.insert(id, command.to_string());
+        }
         Ok(Some(json!({
             "surface": surface,
             "plugin": plugin,
@@ -1169,8 +1197,13 @@ fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, 
         Ok(current) if current == document => {}
         _ => return,
     }
+    // The open calls are taken before the view is removed, because the removal drops the channel of the view.
+    let open_calls = data.documents.views().end_calls(surface);
     if let Err(error) = data.documents.remove(&key) {
         return log_error("view channel", error);
+    }
+    for (plugin, command) in &open_calls {
+        record_view_call_peer_lost(plugin, command);
     }
     log_failure("view channel", platform.close_document(document));
     let record = data.documents.lifecycle().spec(surface);
@@ -1238,6 +1271,10 @@ pub(crate) fn view_request(webview: &Webview, request: ViewRequest) -> Result<()
 
 pub(crate) fn view_reply(webview: &Webview, reply: ViewReply) -> Result<(), String> {
     let message = view_reply_message(&reply)?;
+    window_data(&webview.window())?
+        .documents
+        .views()
+        .answer_call(&reply.surface, reply.id);
     post_from_main(webview, "view reply", &reply.surface, message)
 }
 
@@ -1958,3 +1995,17 @@ pub fn theme_script(theme: &Value) -> String {
 #[cfg(test)]
 #[path = "view_theme_test.rs"]
 mod theme_tests;
+
+/// Writes host.call.peer-lost {plugin, command, reason: process-ended} for a view call that was open when its view process ended
+/// (docs/spec/native-surfaces.md#view-surfaces).
+pub fn record_view_call_peer_lost(plugin: &str, command: &str) {
+    emit_host(
+        Level::Error,
+        "host.call.peer-lost",
+        json!({"plugin": plugin, "command": command, "reason": "process-ended"}),
+    );
+}
+
+#[cfg(test)]
+#[path = "view_call_peer_test.rs"]
+mod call_peer_tests;

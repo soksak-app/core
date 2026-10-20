@@ -1217,6 +1217,55 @@ type viewChannel struct {
 	document string
 	// processReady is set by the first ready message of the view, which writes host.trace.view.process-ready once.
 	processReady bool
+	// calls holds the command of each call request of the view that the main page has not answered, by id.
+	calls map[uint64]string
+}
+
+// openViewCall is a call request of a view that was open when the view process ended.
+type openViewCall struct {
+	plugin  string
+	command string
+	id      uint64
+}
+
+// trackViewCall records the call request id with command as open. It runs when the request is forwarded to the main page.
+func (d *Documents) trackViewCall(surface string, id uint64, command string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if channel, ok := d.views[surface]; ok {
+		channel.calls[id] = command
+	}
+}
+
+// answerViewCall records that the main page answered the call request id of the view of surface, so the call is no longer open.
+func (d *Documents) answerViewCall(surface string, id uint64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if channel, ok := d.views[surface]; ok {
+		delete(channel.calls, id)
+	}
+}
+
+// endViewCalls removes the open call requests of the view of surface and returns them in the order of their ids. It runs when the view
+// process ends, and each returned call ends with the reason process-ended (docs/spec/native-surfaces.md#view-surfaces).
+func (d *Documents) endViewCalls(surface string) []openViewCall {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	channel, ok := d.views[surface]
+	if !ok {
+		return nil
+	}
+	ids := make([]uint64, 0, len(channel.calls))
+	for id := range channel.calls {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	ended := make([]openViewCall, 0, len(ids))
+	for _, id := range ids {
+		ended = append(ended, openViewCall{plugin: channel.plugin, command: channel.calls[id], id: id})
+	}
+	channel.calls = map[uint64]string{}
+	return ended
 }
 
 // firstReady reports whether the view of surface has no ready message yet, and records that it has one now. A view without a channel
@@ -1236,7 +1285,7 @@ func (d *Documents) firstReady(surface string) bool {
 func (d *Documents) registerView(surface, plugin string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.views[surface] = &viewChannel{plugin: plugin}
+	d.views[surface] = &viewChannel{plugin: plugin, calls: map[uint64]string{}}
 }
 
 // view returns the channel of the view of surface, and false when the surface has no view.
@@ -1298,11 +1347,17 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 		// The handle belongs to a view that was already closed or replaced, so its failure is already counted.
 		return
 	}
+	// The open calls are taken before the view is removed, because the removal drops the channel of the view.
+	openCalls := s.documents.endViewCalls(surface)
 	if _, err := s.documents.Remove(key); err != nil {
 		LogError("view channel", err)
 		return
 	}
 	system.CloseDocument(handle)
+	// Each call that the view had open ends with the reason process-ended, and the host writes its peer-lost event.
+	for _, call := range openCalls {
+		EmitHost(LevelError, "host.call.peer-lost", map[string]any{"plugin": call.plugin, "command": call.command, "reason": "process-ended"})
+	}
 	lifecycle := s.viewRecords()
 	spec := lifecycle.specs[surface]
 	if !lifecycle.fail(surface) {
@@ -1359,7 +1414,13 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 		return err
 	}
 	if isCall {
-		// A call request goes to the main page of the window, which answers it (docs/spec/native-surfaces.md#view-surfaces).
+		// A call request goes to the main page of the window, which answers it (docs/spec/native-surfaces.md#view-surfaces). A
+		// cancel carries no command and opens no call.
+		if id, ok := payload["id"].(uint64); ok {
+			if command, ok := payload["command"].(string); ok {
+				s.documents.trackViewCall(surface, id, command)
+			}
+		}
 		s.emitToSurface(surface, "view-call", payload)
 		return nil
 	}
@@ -1530,6 +1591,7 @@ func (s *Surfaces) replyView(req ViewReplyRequest) error {
 	if err != nil {
 		return err
 	}
+	s.documents.answerViewCall(req.Surface, req.ID)
 	return s.postView(req.Surface, message)
 }
 
