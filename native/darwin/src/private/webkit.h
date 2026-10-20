@@ -51,6 +51,10 @@ typedef NS_ENUM(NSInteger, SPProcessTerminationReason) {
 @protocol SPNavigationDelegatePrivate <WKNavigationDelegate>
 @optional
 - (void)_webView:(WKWebView *)webView webContentProcessDidTerminateWithReason:(SPProcessTerminationReason)reason;
+// WKNavigationDelegatePrivate.h: WebKit calls these when the WebContent process of the view stops or resumes answering its
+// responsiveness check (ResponsivenessTimer, after 3 seconds without a reply to an event or a navigation message).
+- (void)_webViewWebProcessDidBecomeUnresponsive:(WKWebView *)webView;
+- (void)_webViewWebProcessDidBecomeResponsive:(WKWebView *)webView;
 @end
 
 @interface WKWebView (SPPrivate)
