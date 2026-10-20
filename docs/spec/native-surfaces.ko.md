@@ -85,7 +85,8 @@ view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.
   - 표면 plugin의 plugin id. view의 origin과 core root 응답의 `Access-Control-Allow-Origin`을 정한다. 요청은 plugin id를 제공하지 않는다;
   - `packages/plugin-api/view-start.js`의 text를 담은 document-start 사용자 script. view channel script이며 staged 사본에서 가져온다;
   - 테마 토큰을 담은 document-start 사용자 script(아래 테마 참조);
-  - [호스트 계약](host-contract.ko.md)이 이름으로 선언한 script message handler `sok-view`.
+  - [호스트 계약](host-contract.ko.md)이 이름으로 선언한 script message handler `sok-view`;
+  - 그 plugin의 영구 website data store. plugin id로 구분하며, 문서 영역의 store와 같이 설정 디렉터리의 `document-data` 아래에 둔다([문서 영역](#문서-영역)).
 
   두 document-start script는 모든 페이지 script보다 먼저 실행된다. 둘은 서로에 의존하지 않으므로 주입 순서는 이 계약의 일부가 아니다.
 - **load.** 구성을 만든 뒤 호스트는 `sok://<plugin id>/<page>`를 load한다. `<page>`는 합성의 `page`다. view의 파일은 문서 영역에 주는 plugin 파일과 같이 제공한다([문서 영역](#문서-영역)). 즉 `plugins/installed.json`이 기록한 폴더에서 가져오며, 같은 거부와 log 줄을 쓴다. view는 core root `sok://core/<path>`를 [문서 영역](#문서-영역)의 규칙과 [plugin process](../plans/plugin-processes.ko.md) 규칙 4의 grant 규칙에 따라 요청한다.
@@ -93,14 +94,14 @@ view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.
 - **영역.** view의 영역은 그 view의 표면 host 아래에 배치하고, inset은 view frame에 상대적이다. 영역을 배치하거나 바꾸는 호출마다 호출 envelope의 view id를 확인하므로 view는 다른 view의 영역을 조작할 수 없다([plugins](plugins.ko.md#view-표면)). 영역의 표시는 view frame과 같은 window transaction에 있다.
 - **view channel.** view channel은 위 구성의 script와 handler `sok-view`다.
   1. document start에서 script는 `sok-view`로 ready message `{event: "view.ready", plugin, document}`를 보낸다. `document`는 script가 문서마다 만드는 식별자다. 호스트는 그것을 view의 ready 문서로 기록한다. 탐색(navigation)은 기록을 지우며, 새 문서의 ready message가 올 때까지 ready 문서가 없다.
-  2. 호스트는 `window.postMessage(message, location.origin)`을 page world에서 실행해 view에 message를 보낸다. 이것은 [문서 영역](#문서-영역)의 문서 post와 같은 형식이다. 호스트 message마다 `sok: 1` 필드가 있다. ready 문서가 기록되지 않은 view에 대한 post는 false를 반환하고, 호출자가 `error: view channel: <view> has no ready document`를 application log에 쓴다.
+  2. 호스트는 `window.postMessage(message, location.origin)`을 page world에서 실행해 view에 message를 보낸다. 이것은 [문서 영역](#문서-영역)의 문서 post와 같은 형식이다. 호스트 message마다 `sok: 1` 필드가 있다. ready 문서가 기록되지 않은 view에 대한 post는 false를 반환하고, 호출자가 `error: view channel: <view> has no ready document`를 application log에 쓴다. 테마는 예외다. 호스트는 테마를 그런 문서에 보내지 않는다(테마 참조).
   3. script는 event source가 window이고 `sok: 1`을 가진 message 이벤트를, document start부터 페이지가 `window.sokView.attach`를 부를 때까지 queue에 보관한다. attach는 queue의 message를 순서대로, 이어서 나중 message를 모두 전달한다. 전달 대상은 [view bridge](plugins.ko.md#view-표면)의 `createViewChannel()`이 붙이는 `onMessage` handler다. queue는 한 문서의 message만 담으며 최대 256개다.
   4. `sok: 1`이 없는 message는 application log에 error로 쓰고 어떤 handler에도 넘기지 않는다. queue가 256개인 상태에서 도착한 message는 queue에 들어가지 않는다. script는 `sok-view`를 거쳐 `error: view channel: queue full for <plugin>`을 쓰고, 호스트는 view process를 끝낸다. 기록 없이 버리는 호스트 message는 없다.
   5. `core.plugin.views`는 `queued`를 보고한다. 이는 view가 attach하지 않아 queue에서 기다리는 현재 문서의 message 수다.
 - **presentation wait.** view는 card 배치가 바뀐 뒤 처음 표시될 때만 presentation wait에 참여한다. divider 끌기 같은 계속되는 gesture에서는 view의 frame이 매 frame마다 card와 같은 commit에 배치되며, commit은 그 뒤 view가 그리는 내용을 기다리지 않는다. wait는 다음 중 처음 일어나는 것으로 끝난다. view의 presentation 완료, view process의 종료, 변경이 끝날 때 view가 보이지 않게 되는 것, `host.trace.view.unresponsive` 알림. wait는 timer로 끝나지 않는다. presentation 완료 없이 끝나면 commit은 그 view 없이 계속되고, 손실은 `core.plugin.losses`의 `abandoned`로 센다. 성능 trace가 켜져 있으면 `page.trace.view.presentation-abandoned {surface, reason}`을 쓴다.
-- **테마.** 생성할 때 호스트는 현재 테마의 토큰 집합을 document-start script로 view 구성에 준다. 그래서 페이지의 첫 script가 토큰을 읽는다. 나중의 테마 변경은 post 경로로 host message가 되어 view에 간다.
+- **테마.** 생성할 때 호스트는 현재 테마의 토큰 집합을 document-start script로 view 구성에 준다. 그래서 페이지의 첫 script가 토큰을 읽는다. 나중의 테마 변경은 post 경로로 host message가 되어 view에 간다. 다만 ready 문서가 기록되지 않은 문서에는 보내지 않는다. 호스트는 ready message마다 현재 테마를 보내므로, ready 전의 변경은 오류도 아니고 유실도 아니다.
 - **입력.** view는 시작할 때 shortcut table을 호스트에 등록한다. table은 각 workbench 단축키와 그 주인을 담는다([plugin process](../plans/plugin-processes.ko.md) 규칙 7). 등록 전에는 각 키가 기본 동작을 유지하며, view는 `page.view.shortcut-table-missing {plugin}`을 error 수준으로 쓴다. view는 table로 각 키를 동기적으로 판단한다. workbench가 주인인 키는 기본 동작을 막고 event 데이터와 함께 넘긴다. view가 주인인 키는 view가 처리하고 넘기지 않는다. 네이티브 메뉴가 주인인 키는 view의 기본 동작을 막지 않는다. 그 밖의 키는 기본 동작을 유지한다. 넘긴 명령이 실패하면 `page.input.shortcut.failed {plugin, key, command}`를 쓴다. 입력기 조합은 view의 first responder에 간다.
-- **process 종료.** view process가 끝나면 호스트는 view가 열어 둔 각 call을 `process-ended` 이유로 끝내고, `host.call.peer-lost`를 쓰며, view의 presentation wait를 끝낸다.
+- **process 종료.** view process가 끝나면 호스트는 view가 열어 둔 각 call을 `process-ended` 이유로 끝내고, `host.call.peer-lost`를 쓰며, view의 presentation wait를 끝낸다. 그 뒤 호스트는 view를 다시 만들고, 새 view는 저장된 탭 상태에서 상태를 복원한다. 재시작 한도는 [plugins](plugins.ko.md#view-표면)의 한도다. 같은 표면의 실패가 300초 안에 4번 일어나면 재시작을 멈추며, 한도를 넘으면 사용자가 탭을 다시 열 때까지 card가 표시 경로로 오류를 보여 준다.
 
 ## 영역
 
