@@ -133,11 +133,39 @@ function joinInside(file, specifier) {
   return parts.join("/");
 }
 
-/** Reads the imports of the import map from an HTML document. Throws unless the document has exactly one import map. */
-export function pageImports(html) {
+/** Reads the import map object of an HTML document. Throws unless the document has exactly one import map. */
+function importMap(html) {
   const maps = [...html.matchAll(/<script type="importmap">([\s\S]*?)<\/script>/g)];
   if (maps.length !== 1) throw new Error(`expected one import map, found ${maps.length}`);
-  return JSON.parse(maps[0][1]).imports;
+  return JSON.parse(maps[0][1]);
+}
+
+/** Reads the imports of the import map from an HTML document. Throws unless the document has exactly one import map. */
+export function pageImports(html) {
+  return importMap(html).imports;
+}
+
+/**
+ * Checks that a view page has exactly one static import map whose imports equal VIEW_IMPORTS, and that the map has no other
+ * field, because a scopes field could remap the imports (docs/spec/plugins.md#view-surfaces). Returns nothing; throws an error
+ * that names the first difference.
+ */
+export function checkViewPage(html) {
+  const map = importMap(html);
+  if (!isObject(map)) throw new Error("view page import map: expected an object");
+  const field = Object.keys(map).find((key) => key !== "imports");
+  if (field !== undefined) throw new Error(`view page import map: unexpected field ${JSON.stringify(field)}`);
+  if (!isObject(map.imports)) throw new Error("view page import map: imports must be an object");
+  for (const [key, target] of Object.entries(VIEW_IMPORTS)) {
+    if (!Object.hasOwn(map.imports, key)) throw new Error(`view page import map: missing entry ${JSON.stringify(key)}`);
+    if (map.imports[key] !== target) {
+      throw new Error(
+        `view page import map: entry ${JSON.stringify(key)} is ${JSON.stringify(map.imports[key])}, want ${JSON.stringify(target)}`,
+      );
+    }
+  }
+  const extra = Object.keys(map.imports).find((key) => !Object.hasOwn(VIEW_IMPORTS, key));
+  if (extra !== undefined) throw new Error(`view page import map: unexpected entry ${JSON.stringify(extra)}`);
 }
 
 const ID = /^[a-z][a-z0-9-]*$/;
