@@ -1191,6 +1191,17 @@ func (s *Surfaces) performanceProcesses() (PerformanceWindowProcesses, error) {
 	return processes, nil
 }
 
+// registeredSurface returns the surface id that the registry names for a native surface view. A view without a
+// registered surface fails with an error that names the view address, which is the view of the window facts that
+// locates the view.
+func registeredSurface(named map[uint64]string, view uint64) (string, error) {
+	id, ok := named[view]
+	if !ok {
+		return "", fmt.Errorf("unregistered native surface %d", view)
+	}
+	return id, nil
+}
+
 // windowState reads the current value of host.window.
 func (s *Surfaces) windowState() (WindowStatus, error) {
 	var facts windowFacts
@@ -1274,9 +1285,9 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 		return WindowStatus{}, fmt.Errorf("window facts missing nativeSurfaces")
 	}
 	for order, view := range facts.NativeSurfaces {
-		id, ok := named[view.View]
-		if !ok {
-			return WindowStatus{}, fmt.Errorf("unregistered native surface %d", view.View)
+		id, err := registeredSurface(named, view.View)
+		if err != nil {
+			return WindowStatus{}, err
 		}
 		out.Surfaces = append(out.Surfaces, WindowSurface{ID: id, Frame: view.frame, Visible: !view.Hidden, Order: order})
 	}

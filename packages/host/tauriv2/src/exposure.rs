@@ -1154,6 +1154,17 @@ fn internal(error: impl ToString) -> Failure {
     Failure::new(-32603, error.to_string())
 }
 
+/// Returns the surface id that the registry names for a native surface view. A view without a registered surface fails
+/// with an error that names the view address, which is the `view` of the window facts that locates the view.
+pub fn registered_surface(
+    named: &HashMap<platform::Handle, String>,
+    view: platform::Handle,
+) -> Result<&String, String> {
+    named
+        .get(&view)
+        .ok_or_else(|| format!("unregistered native surface {view}"))
+}
+
 /// Converts the failure of an operation that wrote the native address of a window into an error with code. A window
 /// that closed before the main-thread step of the operation is the same as a window that does not exist.
 pub fn native_failure(window: &str, code: i64) -> impl Fn(NativeFailure) -> Failure + '_ {
@@ -1365,9 +1376,7 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
             .as_u64()
             .ok_or_else(|| internal("surface facts missing view"))?
             as platform::Handle;
-        let surface = named
-            .get(&address)
-            .ok_or_else(|| internal("unregistered native surface"))?;
+        let surface = registered_surface(&named, address).map_err(internal)?;
         let hidden = view["hidden"]
             .as_bool()
             .ok_or_else(|| internal("surface facts missing hidden"))?;

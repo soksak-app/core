@@ -47,3 +47,16 @@ func TestSurfaceIsNamedWhenItsNativeViewIsCreated(t *testing.T) {
 		t.Fatalf("failed creation: err %v, names %d", err, len(s.named))
 	}
 }
+
+// contract: exposure.host-window.unregistered-surface-named
+func TestUnregisteredNativeSurfaceViewFailsWithItsAddress(t *testing.T) {
+	named := map[uint64]string{7: "tab-2"}
+	id, err := registeredSurface(named, 7)
+	if err != nil || id != "tab-2" {
+		t.Fatalf("registered view: id %q, err %v; want tab-2 and no error", id, err)
+	}
+	_, err = registeredSurface(named, 9)
+	if err == nil || err.Error() != "unregistered native surface 9" {
+		t.Fatalf("unregistered view: err %v; want unregistered native surface 9", err)
+	}
+}

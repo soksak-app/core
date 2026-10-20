@@ -1,5 +1,6 @@
 //! Tests of the page request relay and the host entries. A function that receives requests replaces the page.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -667,4 +668,13 @@ fn a_page_status_change_of_a_host_status_is_refused() {
         soksak_host_tauriv2::exposure::check_page_status_change("core.grid"),
         Ok(())
     );
+}
+
+// contract: exposure.host-window.unregistered-surface-named
+#[test]
+fn an_unregistered_native_surface_view_fails_with_its_address() {
+    let named = HashMap::from([(7usize, "tab-2".to_string())]);
+    assert_eq!(exposure::registered_surface(&named, 7).unwrap(), "tab-2");
+    let error = exposure::registered_surface(&named, 9).unwrap_err();
+    assert_eq!(error, "unregistered native surface 9");
 }
