@@ -438,6 +438,10 @@ function cardStatusText(card, tabs, folded) {
 
 /* ── Tab of a plugin that is not loaded (docs/spec/plugins.md) ───────────────── */
 
+// The places of the placeholder errors that the current view draw shows, and the places that the previous draw showed (F217).
+let placeholderErrorPlaces = new Set();
+let shownPlaceholderErrors = new Set();
+
 /** The text of the placeholder for each reason. */
 const PLACEHOLDER_LINES = {
   missing: (id) => `${id} 플러그인이 설치되어 있지 않습니다.`,
@@ -467,7 +471,16 @@ function pluginPlaceholder(tab, paramsProblem) {
   el.dataset.plugin = tab.plugin;
   el.style.cssText = "position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:10px;color:var(--muted)";
   const line = document.createElement("p");
-  line.textContent = reason === "params" ? paramsProblem : PLACEHOLDER_LINES[reason](tab.plugin);
+  const text = reason === "params" ? paramsProblem : PLACEHOLDER_LINES[reason](tab.plugin);
+  // The reason unread states a failure to read the install state, so its line is an error shown through the error display path (F217).
+  // The other reasons are the designed states of a saved layout and stay plain text.
+  if (reason === "unread") {
+    const where = `surface ${tab.id} placeholder`;
+    showError(line, where, text);
+    placeholderErrorPlaces.add(where);
+  } else {
+    line.textContent = text;
+  }
   el.append(line);
   const row = pluginOperations.status().plugins.find((entry) => entry.id === tab.plugin);
   const action = reason === "missing" && row?.latest ? ["install", "설치"] : reason === "disabled" ? ["enable", "사용"] : null;
@@ -1441,6 +1454,10 @@ function build(kept) {
         divider.dataset.expose = "core.divider";
       }
       markFocus();
+      // A placeholder error that this draw does not show again is withdrawn: its surface left, or its plugin state was read again (F217).
+      for (const where of shownPlaceholderErrors) if (!placeholderErrorPlaces.has(where)) hideError(null, where);
+      shownPlaceholderErrors = placeholderErrorPlaces;
+      placeholderErrorPlaces = new Set();
       // Clears the notification of a tab that became visible.
       clearVisibleNotices();
       centreTabs();
