@@ -54,6 +54,20 @@ export function callReporter(plugin) {
   };
 }
 
+/**
+ * Returns the report function of one declared UI snapshot channel (createSnapshotSender of @soksak/plugin-api). A value that a
+ * newer value overwrites counts losses.skipped, and a stall counts losses.stalled.
+ */
+export function snapshotReporter(plugin) {
+  return (event) => {
+    const entry = lossesOf(plugin);
+    if (event.kind === "skipped") entry.skipped += event.count;
+    else if (event.kind === "stalled") entry.stalled += event.count;
+    else throw new TypeError(`unknown snapshot report kind ${event.kind}`);
+    announce();
+  };
+}
+
 /** The open calls of each plugin that has one: `{plugin, count, oldestStartedAt}`. */
 export const openCalls = () => {
   const totals = new Map();

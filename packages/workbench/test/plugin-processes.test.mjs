@@ -62,3 +62,22 @@ test("the reports of call layers fill the open-call and loss statuses, and each 
   assert.ok(announced > 0);
   stop();
 });
+
+test("the reports of snapshot channels count the skipped and stalled values of a plugin", async () => {
+  const { createSnapshotSender } = await import("@soksak/plugin-api");
+  const { losses, snapshotReporter } = await import("../plugin-processes.js");
+  const sent = [];
+  const sender = createSnapshotSender({
+    plugin: "tree-probe",
+    send: (message) => sent.push(message),
+    onMessage: () => () => {},
+    report: snapshotReporter("tree-probe"),
+  });
+  sender.push("tree-probe.tree", "v1");
+  sender.push("tree-probe.tree", "v2");
+  sender.push("tree-probe.tree", "v3");
+  assert.deepEqual(losses().find((entry) => entry.plugin === "tree-probe"), { plugin: "tree-probe", skipped: 1, stalled: 0, abandoned: 0, lateReplies: 0, timeouts: 0, peerLost: 0 }, "the overwritten value counts one skip");
+  sender.peerLost("surface-closed");
+  assert.deepEqual(losses().find((entry) => entry.plugin === "tree-probe"), { plugin: "tree-probe", skipped: 1, stalled: 2, abandoned: 0, lateReplies: 0, timeouts: 0, peerLost: 0 });
+  assert.equal(sent.length, 1);
+});

@@ -265,6 +265,12 @@
       "allowed": []
     },
     {
+      "term": "dirty mark",
+      "definition": "The mark of a status whose value changed while its snapshot was in transit; the acknowledgement of that snapshot sends the latest value of the status and clears the mark.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "plugin host",
       "definition": "A process of a plugin, with a platform web view attached to the window, that runs DOM-free logic which neither a view nor a sidecar can hold; it exists only when the contract requires it.",
       "rejected": [],

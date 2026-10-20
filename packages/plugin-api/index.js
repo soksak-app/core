@@ -22,6 +22,7 @@ export { CLIPBOARD_TYPES, ClipboardError, createClipboardBridge, shellQuotePath 
 export { createLinkBridge } from "./links.js";
 export { drawList } from "./list.js";
 export { createCalls, DEFAULT_CALL_TIMEOUT, ENDED_CALLS_KEPT, MAX_CALL_TIMEOUT, PEER_LOST_REASONS } from "./calls.js";
+export { createSnapshotReceiver, createSnapshotSender, pullSnapshots } from "./snapshots.js";
 
 export const ENVIRONMENT = "environment.json";
 export const MANIFEST = "plugin.json";

@@ -29,6 +29,7 @@
     "links.js",
     "list.js",
     "calls.js",
+    "snapshots.js",
     "exposure-check.js",
     "engines-check.js",
     "core-exposure.json",
