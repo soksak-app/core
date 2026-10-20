@@ -93,6 +93,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("host allocation measurement", "js-ts", ["scripts/measure-host-allocations.mjs"], ["scripts/test/measure-host-allocations.test.mjs"]),
   lane("application update check", "js-ts", ["scripts/check-app-update.mjs"], ["scripts/test/check-app-update.test.mjs"]),
   lane("Go repeat result", "js-ts", ["scripts/go-repeat-result.mjs"], ["scripts/test/language-repeat.test.mjs"], { sharedTests: true }),
+  lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"]),
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platforms.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs"]),
@@ -4763,7 +4764,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 
 // Aggregate review and release records, withdrawn items and changes of agent guidance (R4, R6) are not capabilities and
 // therefore do not need a behavior link. Every completed capability must have one otherwise.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66) and the window checks of plugins (F110). Core cannot read

@@ -225,9 +225,10 @@ rust-repeat:
 go-repeat:
 	@case "$(PACKAGE)" in '') echo "go-repeat requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "go-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
-	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
+	@cgo=$$(node scripts/go-repeat-inputs.mjs '$(PACKAGE)' '$(TAGS)') || exit 1; \
+	  output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
 	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    $(GO_ENV) go test -json -count=1 $(if $(TAGS),-tags '$(TAGS)') -ldflags "$(GO_LINK)" $(if $(TEST),-run '$(TEST)') $(PACKAGE) > "$$output" 2>&1; \
+	    CGO_CFLAGS="$(GO_CFLAGS) $$cgo" go test -json -count=1 $(if $(TAGS),-tags '$(TAGS)') -ldflags "$(GO_LINK)" $(if $(TEST),-run '$(TEST)') $(PACKAGE) > "$$output" 2>&1; \
 	    status=$$?; \
 	    node scripts/go-repeat-result.mjs "$$output" $$status '$(PACKAGE)' '$(TEST)' '$(TAGS)' \
 	      || { echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
@@ -324,7 +325,8 @@ MACOS_MINIMUM = 14.4
 export PKG_CONFIG_PATH := $(CURDIR)/native/darwin/build
 # go build puts CGO_CFLAGS into the cache key but not the contents of the static libraries that cgo links.
 # Putting the library hash into CGO_CFLAGS recompiles and relinks the cgo packages when a library changes.
-GO_ENV       = CGO_CFLAGS="-O2 -g -mmacosx-version-min=$(MACOS_MINIMUM) -DSOKSAK_DARWIN_LIBRARY=$$(shasum -a 256 native/darwin/build/libsoksak-darwin.a | cut -c1-16)"
+GO_CFLAGS    = -O2 -g -mmacosx-version-min=$(MACOS_MINIMUM)
+GO_ENV       = CGO_CFLAGS="$(GO_CFLAGS) -DSOKSAK_DARWIN_LIBRARY=$$(shasum -a 256 native/darwin/build/libsoksak-darwin.a | cut -c1-16)"
 GO_LINK      = -extldflags=-mmacosx-version-min=$(MACOS_MINIMUM)
 CARGO_ENV    = MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)
 

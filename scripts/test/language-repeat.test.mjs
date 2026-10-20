@@ -53,10 +53,12 @@ test('go repeat fails a run in which no test matched',{timeout:30000},t=>{
  assert.match(result.stderr,/no test matching TestMissing/);
 });
 
-test('go repeat passes its build tags to go test',{timeout:30000},t=>{
+test('go repeat passes its build tags to go list and go test',{timeout:30000},t=>{
  const result=repeat(t,'go',goOutput(passed('fixture/src','TestProbe')),['go-repeat','PACKAGE=./fixture/src','COUNT=1','TEST=TestProbe','TAGS=diagnostics']);
  assert.equal(result.status,0,result.stdout+result.stderr);
- assert.ok(result.calls.length===1&&result.calls[0].includes('-tags')&&result.calls[0][result.calls[0].indexOf('-tags')+1]==='diagnostics',JSON.stringify(result.calls));
+ // The native library input is resolved with go list before the one go test run.
+ assert.deepEqual(result.calls.map(call=>call[0]),['list','test'],JSON.stringify(result.calls));
+ for(const call of result.calls)assert.ok(call.includes('-tags')&&call[call.indexOf('-tags')+1]==='diagnostics',JSON.stringify(call));
 });
 
 test('rust repeat passes its features to every cargo test',{timeout:30000},t=>{
