@@ -1086,6 +1086,7 @@
   - [ ] F212.1-2-2-3 — P1: event writer가 queue가 차서 `host.stall.dump`를 두 번 거부했고, 거부와 queue 깊이를 보이는 손실 기록이 없다. 기대: 거부를 모두 세고, 다음 쓰기 때 수와 깊이를 담은 손실 기록을 쓴다.
   - [ ] F212.1-2-2-4 — P1: window check가 이틀 전 호스트 boot의 오류 기록을 자기 오류로 보고했다. 설정의 저장된 event offset이 이전 boot 파일을 제한하지 못했다. 기대: session은 자기 시작 뒤에 쓰인 기록만 판정한다.
   - [o] F212.1-2-2-5 — P1: 등록되지 않은 native surface의 window status 오류가 tauriv2에서는 `unregistered native surface`, wailsv3에서는 `unregistered native surface <id>`다. 기대: 두 호스트가 같은 글이고 계약 case가 확인한다. 완료: 두 호스트가 native view 주소를 담은 `unregistered native surface <id>`를 쓴다. tauriv2의 `registered_surface`와 wailsv3의 `registeredSurface`가 이 오류를 반환하며, case `exposure.host-window.unregistered-surface-named`는 `an_unregistered_native_surface_view_fails_with_its_address`와 `TestUnregisteredNativeSurfaceViewFailsWithItsAddress`가 확인한다. Red: Rust test가 left `unregistered native surface`, right `unregistered native surface 9`로 실패했다. Green: Rust test가 통과하고, Go test가 wailsv3가 이미 쓰던 글로 통과한다.
+  - [ ] F212.1-3 — P0: 녹화로 잰 DOM mount 기준값: 설치된 표면 plugin마다 메인 페이지 녹화에서 표면 시작 요청부터 첫 내용 frame까지의 중앙값. 통과값 (iii)의 기준값이다. F212.1-2의 `page.trace.surface.mount` 중앙값은 mount의 trace 값이고 이 기준값이 아니다.
   - [~] F212.2 — P0: 프로세스 구조 설계 문서, 합의까지의 적대 검증, 명세로의 이동: 통과값, 메시지, event, 열린 호출 status, 응답 없음 감지, RPC protocol 번호.
   - [ ] F212.3 — P0: plugin-api RPC 계층: 요청, 답, 취소, 선언된 timeout, 상대 사라짐과 늦은 답 처리, 한 번에 하나인 snapshot push와 pull, 선언된 event와 열린 호출 status.
   - [ ] F212.4 — P0: native와 두 호스트의 view binary 경로.
