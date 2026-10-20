@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.7-5-2: host는 한 view surface의 네 번째 실패가 300초 안에 일어나면 `view-stopped {surface, plugin, reason}` event를 메인 page에 한 번 보내고, `error: view channel: <surface>: <reason>`을 application log에 쓴다. reason은 두 host에서 `the view failed 4 times within 300 seconds and is created again when its tab is reopened`이다. Go host는 창 시간을 Go duration인 `5m0s`로 썼으나 이제 초 단위로 쓴다. workbench는 `viewStopState`와 error display로 reason을 surface의 오류로 card에 보이고, card를 다시 mount하면 이를 지운다. 계약 case `view.restart.limit-shows-error`는 두 host에서 실행한다.
 - F212.7-8-2: Wails runtime 표는 `viewReply`, `viewEvent`, `viewRequest`를 매핑하므로 view call 응답과 요청이 Wails host에 닿는다. view는 `runtime.command.register`로 자기 command를 선언하고, 페이지는 이를 surface의 exposure로 선언하므로 registry가 `exposes` 선언과 주인을 검사한다. 이런 command의 요청은 `viewRequest`로 view에 post되고 응답은 `view-reply`로 돌아오며, command의 선언된 제한 시간을 적용하고 늦은 응답은 손실로 센다. `packages/plugin-api/view.js`는 view에 `commands.register(name, run)`을 준다.
 - F212.7-8-3: view는 `runtime.native.on`, `runtime.sidecar.on`, `runtime.sidecar.onFailure` call로 view context의 event를 구독한다. 페이지는 각 event를 `viewEvent`를 거쳐 호스트 message `{sok: 1, event, data}`로 view에 보내며, 호스트는 ready 문서에만 post한다. 테마 message는 값을 `data`에 담고, Tauri runtime 표는 `viewReply`와 `viewEvent`를 매핑한다. `packages/plugin-api/view.js`는 view에 DOM surface context와 같은 구독 API를 준다.
 - F212.7-7: Go와 Rust의 `sok plugin pack`은 view의 `page`가 `package.json`의 `files`에 덮이지 않으면 `plugin.json: view page <path> must be listed in files`로 거부하고 release를 쓰지 않는다. `files`의 폴더가 page를 덮으면 받아들인다. Host 계약 case `cli.pack.view-page-listed`는 두 host에서 실행한다.
