@@ -2156,6 +2156,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F214",
+    implementation: [{ file: "scripts/check-comment-language.mjs", symbol: "export function findKoreanComments" }],
+    tests: [{ file: "scripts/test/comment-language.test.mjs", id: "hook files and extensionless scripts are checked, and other extensionless files are not" }],
+    expected: "The comment language check reads the hook folder and the extensionless scripts, so a Korean comment in them is reported.",
+    levels: ["unit"],
+  },
+  {
     id: "F209",
     implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "export function pluginRows(loaded, state)" }],
     tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a plugin whose every registry version is revoked is not offered, and an installed one keeps its row without an update" }],
