@@ -250,10 +250,10 @@ static const NSUInteger kBinaryPageLimit = 64 * 1024 * 1024;
 
 // Whether text is a binary id: 32 lowercase hexadecimal characters.
 static BOOL isBinaryIdentifier(NSString *text) {
-    if (text.length != 32) return NO;
+    if (text.length != 32) return NO; // silent: the predicate answers NO for a text of another length, and the caller refuses the id
     for (NSUInteger index = 0; index < text.length; index++) {
         unichar character = [text characterAtIndex:index];
-        if (!((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f'))) return NO;
+        if (!((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f'))) return NO; // silent: a character outside lowercase hexadecimal makes the text no id, and the caller refuses it
     }
     return YES;
 }
