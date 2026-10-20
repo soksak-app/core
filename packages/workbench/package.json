@@ -93,6 +93,7 @@
     "file-open.js",
     "focus-state.js",
     "pointer-state.js",
+    "plugin-processes.js",
     "stage.mjs",
     "staged.js",
     "replace-file.mjs"

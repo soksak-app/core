@@ -1733,6 +1733,84 @@
         }
       },
       {
+        "name": "core.plugin.open-calls",
+        "description": "The open calls of each plugin, including declared UI snapshots waiting for acknowledgement: `{plugin, count, oldestStartedAt}`, where oldestStartedAt is the start time of the oldest open call, or null without open calls.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "count": {
+                "type": "number"
+              },
+              "oldestStartedAt": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.plugin.losses",
+        "description": "The counts of each plugin's losses kept until the application ends: `{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}`, one count per kind of loss in the plugin process design.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "skipped": {
+                "type": "number"
+              },
+              "stalled": {
+                "type": "number"
+              },
+              "abandoned": {
+                "type": "number"
+              },
+              "lateReplies": {
+                "type": "number"
+              },
+              "timeouts": {
+                "type": "number"
+              },
+              "peerLost": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.plugin.views",
+        "description": "The responsiveness of each plugin view surface: `{plugin, surface, responsive}`, where responsive is false while the view process does not answer WebKit's responsiveness check.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "surface": {
+                "type": "string"
+              },
+              "responsive": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      {
         "name": "core.pointer",
         "description": "The last pointer sequence that the main document received: a press increments sequence, and down, up and click name the exposed element (or tag) that received pointerdown, pointerup and click; pressedConnected tells whether the pressed element was still in the document at pointerup. A click is missing when the pressed element was replaced before the release.",
         "schema": {
