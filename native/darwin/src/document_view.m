@@ -9,6 +9,7 @@
 #import <CoreImage/CoreImage.h>
 #import <WebKit/WebKit.h>
 #import "application_log.h"
+#import "document_upload_body.h"
 #import "document_view.h"
 #import "event_ring.h"
 #import "observe.h"
@@ -258,29 +259,6 @@ static BOOL isBinaryIdentifier(NSString *text) {
     return YES;
 }
 
-// The body of an upload: HTTPBody, or the bytes of HTTPBodyStream, which WebKit sets when it sends the body as a stream.
-// A stream is read to one chunk past the limit at most, so an oversized body is refused without reading all of it. A
-// read error sets reason and returns nil; a request without a body returns nil.
-static NSData *requestBody(NSURLRequest *request, NSUInteger limit, NSString **reason) {
-    if (request.HTTPBody) return request.HTTPBody;
-    NSInputStream *stream = request.HTTPBodyStream;
-    if (!stream) return nil;
-    NSMutableData *data = [NSMutableData data];
-    uint8_t buffer[64 * 1024];
-    [stream open];
-    while (data.length <= limit) {
-        NSInteger count = [stream read:buffer maxLength:sizeof buffer];
-        if (count < 0) {
-            *reason = [NSString stringWithFormat:@"the request body could not be read: %@", stream.streamError.localizedDescription];
-            break;
-        }
-        if (count == 0) break;
-        [data appendBytes:buffer length:(NSUInteger)count];
-    }
-    [stream close];
-    return *reason ? nil : data;
-}
-
 @interface SPDocumentScroll : NSObject <WKScriptMessageHandler>
 @property(assign) SPDocumentView *view;
 @end
@@ -427,15 +405,10 @@ static NSString *pluginContentType(NSString *path) {
         return;
     }
     if (upload) {
-        // WebKit gives a body with neither form for some bodies, such as a Blob, so the request has no bytes to store.
-        if (!task.request.HTTPBody && !task.request.HTTPBodyStream) {
-            [self refuseBinary:task status:400 reason:@"the upload has no body that WebKit delivers as HTTPBody or HTTPBodyStream"];
-            return;
-        }
-        NSString *reason = nil;
-        NSData *body = requestBody(task.request, kBinaryUploadLimit, &reason);
-        if (reason) {
-            [self refuseBinary:task status:400 reason:reason];
+        NSError *error = nil;
+        NSData *body = sp_document_upload_body(task.request, kBinaryUploadLimit, &error);
+        if (!body) {
+            [self refuseBinary:task status:400 reason:error.localizedDescription];
             return;
         }
         if (!body.length) {
@@ -1243,6 +1216,42 @@ const char *sp_document_binary_take(void *handle, const char *id, void **bytes, 
     // removeId releases the entry, and with it data, so the length is read before the id is removed.
     [view.binaries removeId:identifier];
     return NULL;
+}
+
+// The domain of the errors of sp_document_upload_body; the localized description of each error is its reason.
+static NSString *const kUploadBodyErrorDomain = @"SPDocumentUploadBody";
+
+static NSError *uploadBodyError(NSString *reason) {
+    return [NSError errorWithDomain:kUploadBodyErrorDomain code:1 userInfo:@{ NSLocalizedDescriptionKey: reason }];
+}
+
+// The HTTPBody of the request is returned as it is. WebKit sets HTTPBodyStream when it sends the body as a stream, and the
+// stream is read into data. A stream is read to one chunk past limit at most, so an oversized body is refused without
+// reading all of it. WebKit gives a body with neither form for some bodies, such as a Blob.
+NSData *sp_document_upload_body(NSURLRequest *request, NSUInteger limit, NSError **error) {
+    if (request.HTTPBody) return request.HTTPBody;
+    NSInputStream *stream = request.HTTPBodyStream;
+    if (!stream) {
+        if (error) *error = uploadBodyError(@"the upload has no body that WebKit delivers as HTTPBody or HTTPBodyStream");
+        return nil;
+    }
+    NSMutableData *data = [NSMutableData data];
+    uint8_t buffer[64 * 1024];
+    [stream open];
+    while (data.length <= limit) {
+        NSInteger count = [stream read:buffer maxLength:sizeof buffer];
+        if (count < 0) {
+            NSString *reason = [NSString stringWithFormat:@"the request body could not be read: %@",
+                stream.streamError.localizedDescription];
+            [stream close];
+            if (error) *error = uploadBodyError(reason);
+            return nil;
+        }
+        if (count == 0) break;
+        [data appendBytes:buffer length:(NSUInteger)count];
+    }
+    [stream close];
+    return data;
 }
 
 size_t sp_document_binary_count(void *handle) {

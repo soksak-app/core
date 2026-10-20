@@ -1,10 +1,13 @@
 // Checks the binary store of a document region (docs/spec/native-surfaces.md#document-regions): a plugin page uploads bytes
 // by POST to sok://<plugin>/.binary and downloads them by GET to sok://<plugin>/.binary/<id>, the host refuses an upload
 // over 16 MiB, a page over 64 MiB, an upload for another plugin's origin and an id that is not stored, a download releases
-// its id, a native take returns the bytes and releases the id, and closing the region releases every id it holds.
+// its id, a native take returns the bytes and releases the id, closing the region releases every id it holds, and the
+// upload body reader reads a streamed body, refuses one over the limit after one chunk past it, reports a read failure,
+// and refuses a request with neither body form.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
+#import "document_upload_body.h"
 #import "document_view.h"
 #import "webview_geometry.h"
 
@@ -83,7 +86,121 @@ static BOOL matchesPattern(const unsigned char *bytes, size_t length) {
 
 static const size_t kMiB = 1024 * 1024;
 
+// An input stream of the pattern bytes: it delivers length bytes and counts them in delivered. When failAt is not NSNotFound,
+// it delivers failAt bytes and then fails its read with an error.
+@interface PatternInputStream : NSInputStream {
+    NSUInteger _length;
+    NSUInteger _failAt;
+    NSUInteger _position;
+    NSUInteger _delivered;
+    BOOL _failed;
+}
+- (instancetype)initWithLength:(NSUInteger)length failAt:(NSUInteger)failAt;
+- (NSUInteger)delivered;
+@end
+
+@implementation PatternInputStream
+- (instancetype)initWithLength:(NSUInteger)length failAt:(NSUInteger)failAt {
+    self = [super init];
+    if (self) {
+        _length = length;
+        _failAt = failAt;
+    }
+    return self;
+}
+
+- (NSUInteger)delivered {
+    return _delivered;
+}
+
+- (void)open {
+}
+
+- (void)close {
+}
+
+- (NSInteger)read:(uint8_t *)buffer maxLength:(NSUInteger)maxLength {
+    if (_failAt != NSNotFound && _position >= _failAt) {
+        _failed = YES;
+        return -1;
+    }
+    NSUInteger end = _failAt != NSNotFound && _failAt < _length ? _failAt : _length;
+    if (_position >= end) return 0;
+    NSUInteger count = MIN(maxLength, end - _position);
+    for (NSUInteger index = 0; index < count; index++) buffer[index] = (uint8_t)((_position + index) & 255);
+    _position += count;
+    _delivered += count;
+    return (NSInteger)count;
+}
+
+- (BOOL)hasBytesAvailable {
+    return !_failed && _position < _length;
+}
+
+- (NSStreamStatus)streamStatus {
+    return _failed ? NSStreamStatusError : NSStreamStatusOpen;
+}
+
+- (NSError *)streamError {
+    if (!_failed) return nil;
+    return [NSError errorWithDomain:NSPOSIXErrorDomain code:EIO userInfo:@{ NSLocalizedDescriptionKey: @"injected read failure" }];
+}
+@end
+
+static NSURLRequest *uploadRequest(NSInputStream *stream) {
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"sok://probe/.binary"]];
+    request.HTTPMethod = @"POST";
+    request.HTTPBodyStream = stream;
+    return request;
+}
+
+// The upload body reader of a stream body (sp_document_upload_body): a 1 MiB stream is read byte-equal, a stream over the
+// 16 MiB limit is refused after reading at most one chunk past the limit, a stream that fails mid-read reports its error,
+// and a request with neither body form gives the 400 text of the binary store.
+static void checkUploadBodies(void) {
+    const NSUInteger chunk = 64 * 1024;
+    const NSUInteger limit = 16 * kMiB;
+    NSError *error = nil;
+
+    // An HTTPBody is returned as the object that the request holds, without a copy.
+    NSData *fixed = [NSData dataWithBytes:"abc" length:3];
+    NSMutableURLRequest *plain = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"sok://probe/.binary"]];
+    plain.HTTPBody = fixed;
+    NSData *body = sp_document_upload_body(plain, limit, &error);
+    check(body == fixed && error == nil, @"an HTTPBody is returned without a copy");
+
+    PatternInputStream *small = [[[PatternInputStream alloc] initWithLength:kMiB failAt:NSNotFound] autorelease];
+    error = nil;
+    body = sp_document_upload_body(uploadRequest(small), limit, &error);
+    check(body != nil && error == nil && body.length == kMiB && matchesPattern(body.bytes, body.length),
+        [NSString stringWithFormat:@"a 1 MiB stream body is read byte-equal: %@ (%lu bytes)",
+            error.localizedDescription ?: @"ok", (unsigned long)body.length]);
+
+    PatternInputStream *big = [[[PatternInputStream alloc] initWithLength:32 * kMiB failAt:NSNotFound] autorelease];
+    error = nil;
+    body = sp_document_upload_body(uploadRequest(big), limit, &error);
+    check(body != nil && error == nil && body.length > limit && body.length <= limit + chunk,
+        [NSString stringWithFormat:@"a stream over 16 MiB is read to one chunk past the limit: %@ (%lu bytes)",
+            error.localizedDescription ?: @"ok", (unsigned long)body.length]);
+    check(big.delivered == body.length && big.delivered <= limit + chunk,
+        [NSString stringWithFormat:@"the stream over 16 MiB delivers at most one chunk past the limit: %lu bytes read",
+            (unsigned long)big.delivered]);
+
+    PatternInputStream *broken = [[[PatternInputStream alloc] initWithLength:kMiB failAt:256 * 1024] autorelease];
+    error = nil;
+    body = sp_document_upload_body(uploadRequest(broken), limit, &error);
+    check(body == nil && [error.localizedDescription containsString:@"injected read failure"],
+        [NSString stringWithFormat:@"a stream that fails mid-read reports its error: %@", error.localizedDescription ?: @"no error"]);
+
+    NSURLRequest *empty = [NSURLRequest requestWithURL:[NSURL URLWithString:@"sok://probe/.binary"]];
+    error = nil;
+    body = sp_document_upload_body(empty, limit, &error);
+    check(body == nil && [error.localizedDescription isEqualToString:@"the upload has no body that WebKit delivers as HTTPBody or HTTPBodyStream"],
+        [NSString stringWithFormat:@"a request with neither body gives the 400 text: %@", error.localizedDescription ?: @"no error"]);
+}
+
 int main(void) { @autoreleasepool {
+    checkUploadBodies();
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
