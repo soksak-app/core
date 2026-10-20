@@ -787,6 +787,7 @@ impl ViewChannels {
             .ok_or_else(|| {
                 format!("{surface}: view channel message of a surface without a view")
             })?;
+        // default: a call without params sends null to its command, as the call envelope has no params for it.
         let params = message.get("params").cloned().unwrap_or(Value::Null);
         Ok(Some(json!({
             "surface": surface,

@@ -227,7 +227,9 @@ function answerViewCalls(surface, scoped) {
     runCore: (name, params) => scoped.call(name, params),
     runOwned: (name, params, owner) => registry.runOwned(name, params, owner),
   }).then(
+    // default: a handler that returns no value replies with null, which is the result of a call without a value.
     (result) => ({ id: event.id, result: result ?? null }),
+    // default: a rejection that is not an Error replies with its text.
     (error) => ({ id: event.id, error: { code: -32000, message: String(error?.message ?? error) } }),
   ).then((reply) => scoped.native.call("viewReply", reply)));
 }
