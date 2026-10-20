@@ -1088,7 +1088,11 @@
   - [o] F212.1-2-2-5 — P1: 등록되지 않은 native surface의 window status 오류가 tauriv2에서는 `unregistered native surface`, wailsv3에서는 `unregistered native surface <id>`다. 기대: 두 호스트가 같은 글이고 계약 case가 확인한다. 완료: 두 호스트가 native view 주소를 담은 `unregistered native surface <id>`를 쓴다. tauriv2의 `registered_surface`와 wailsv3의 `registeredSurface`가 이 오류를 반환하며, case `exposure.host-window.unregistered-surface-named`는 `an_unregistered_native_surface_view_fails_with_its_address`와 `TestUnregisteredNativeSurfaceViewFailsWithItsAddress`가 확인한다. Red: Rust test가 left `unregistered native surface`, right `unregistered native surface 9`로 실패했다. Green: Rust test가 통과하고, Go test가 wailsv3가 이미 쓰던 글로 통과한다.
   - [ ] F212.1-3 — P0: 녹화로 잰 DOM mount 기준값: 설치된 표면 plugin마다 메인 페이지 녹화에서 표면 시작 요청부터 첫 내용 frame까지의 중앙값. 통과값 (iii)의 기준값이다. F212.1-2의 `page.trace.surface.mount` 중앙값은 mount의 trace 값이고 이 기준값이 아니다.
   - [o] F212.2 — P0: 프로세스 구조 설계 문서, 합의까지의 적대 검증, 명세로의 이동: 통과값, 메시지, event, 열린 호출 status, 응답 없음 감지, RPC protocol 번호. 결과: docs/plans/plugin-processes.md가 적대 검증 7회 뒤 합의되었다. 각 단계는 그 문서의 명세 변경 표가 적은 명세를 바꾸고, RPC protocol 번호는 1이다.
-  - [ ] F212.3 — P0: plugin-api RPC 계층: 요청, 답, 취소, 선언된 timeout, 상대 사라짐과 늦은 답 처리, 한 번에 하나인 snapshot push와 pull, 선언된 event와 열린 호출 status.
+  - [~] F212.3 — P0: plugin-api RPC 계층: 요청, 답, 취소, 선언된 timeout, 상대 사라짐과 늦은 답 처리, 한 번에 하나인 snapshot push와 pull, 선언된 event와 열린 호출 status.
+  - [ ] F212.3-1 — P0: plugin-api 호출 계층: 요청, 답, 취소, `host.call.timeout`을 쓰는 선언된 timeout, 프로세스 종료·표면 닫기·sidecar 종료에 따른 peer-lost, 버리고 세는 늦은 답.
+  - [ ] F212.3-2 — P0: 선언 UI snapshot: 한 번에 하나 보내는 push, dirty 표시, 확인, 메인 페이지 load 때의 pull, 건너뛴 값과 멈춘 값의 수.
+  - [ ] F212.3-3 — P0: status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`와 설계의 error·trace event를 event catalog에 선언.
+  - [~] F212.3-4 — P0: 응답 없음과 응답 회복 selector를 `native/darwin/src/private/webkit.h`와 비공개 native API 목록에 호출 조건, 쓰는 SDK 판의 WebKit 소스 줄과 함께 올린다.
   - [ ] F212.4 — P0: native와 두 호스트의 view binary 경로.
   - [ ] F212.5 — P0: `sok://`의 예약 `core` module root와 view 페이지의 import map.
   - [ ] F212.6 — P0: plugin id인 `sok` host, view의 exposure 등록, 건너뛰지 않고 실패하는 audit.
