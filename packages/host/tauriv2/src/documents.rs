@@ -21,7 +21,7 @@ use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
-use crate::presentation_wait::{PresentationWait, views_to_join};
+use crate::presentation_wait::{PresentationWait, presentation_abandoned_payload, views_to_join};
 use crate::surfaces::{Placement, require_region, surface_handle};
 use crate::view_lifecycle::{ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event};
 use crate::windows::{emit_window, window_data, with_native_owner};
@@ -2099,6 +2099,8 @@ pub(crate) fn join_shown_views(
     Ok(())
 }
 
+/// Ends the presentation wait of the view of surface. An end without presentation sends the view-presentation-abandoned notice to
+/// the window, which the surface counts in losses.abandoned.
 fn end_presentation_wait(window: &Window, surface: &str, reason: &str) {
     let result = window_data(window).and_then(|data| {
         data.documents
@@ -2106,7 +2108,14 @@ fn end_presentation_wait(window: &Window, surface: &str, reason: &str) {
             .end(surface, reason)
             .map_err(|error| error.to_string())
     });
-    if let Err(error) = result {
-        log_error("view channel", error);
+    match result {
+        Ok(true) => {
+            let payload = presentation_abandoned_payload(surface, reason);
+            if let Err(error) = emit_window(window, "view-presentation-abandoned", payload) {
+                log_error("view channel", error);
+            }
+        }
+        Ok(false) => {}
+        Err(error) => log_error("view channel", error),
     }
 }

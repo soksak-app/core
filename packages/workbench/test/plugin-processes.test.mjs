@@ -83,6 +83,13 @@ test("the reports of snapshot channels count the skipped and stalled values of a
 });
 
 // contract: view.responsiveness.relay
+test("a view whose presentation wait ends without presentation counts losses.abandoned of its plugin", async () => {
+  const { losses, presentationAbandoned } = await import("../plugin-processes.js");
+  presentationAbandoned("abandon-probe");
+  presentationAbandoned("abandon-probe");
+  assert.deepEqual(losses().find((entry) => entry.plugin === "abandon-probe"), { plugin: "abandon-probe", skipped: 0, stalled: 0, abandoned: 2, lateReplies: 0, timeouts: 0, peerLost: 0 }, "each notice counts one abandoned presentation of the plugin");
+});
+
 test("a view responsiveness notice is the state of its surface until the surface is disposed", async () => {
   const { forgetView, views, viewResponsiveness } = await import("../plugin-processes.js");
   viewResponsiveness("probe", "responsive-probe-surface", false);

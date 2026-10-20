@@ -14,7 +14,7 @@ import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, repo
   unloadTab } from "./tab-reports.js";
 import { icon } from "./icons.js";
 import { active, tabStateStore, tabStatesReady } from "./projects.js";
-import { forgetView, viewResponsiveness } from "./plugin-processes.js";
+import { forgetView, presentationAbandoned, viewResponsiveness } from "./plugin-processes.js";
 import { pluginRecords } from "./plugin-records.js";
 import { documentRegions } from "./document-regions.js";
 import { trace } from "./performance.js";
@@ -452,10 +452,13 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       const stopping = scoped.native.on("view-stopped", (event) => onState(viewStopState(event)));
       // The responsiveness of the view is the state of its surface in core.plugin.views, and the surface keeps no state after its dispose.
       const responding = scoped.native.on("view-responsiveness", (event) => viewResponsiveness(surface.pluginId, surface.surfaceId, event.responsive));
+      // A presentation wait that ended without the presentation of the view counts losses.abandoned of the plugin.
+      const abandoning = scoped.native.on("view-presentation-abandoned", () => presentationAbandoned(surface.pluginId));
       closing.signal.addEventListener("abort", () => {
         answering.then((off) => off());
         stopping.then((off) => off());
         responding.then((off) => off());
+        abandoning.then((off) => off());
         forgetView(surface.surfaceId);
       }, { once: true });
     }

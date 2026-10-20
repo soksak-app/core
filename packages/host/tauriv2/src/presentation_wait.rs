@@ -68,6 +68,11 @@ impl PresentationWait {
     }
 }
 
+/// Returns the payload of the view-presentation-abandoned notice of the view of surface.
+pub fn presentation_abandoned_payload(surface: &str, reason: &str) -> serde_json::Value {
+    serde_json::json!({"surface": surface, "reason": reason})
+}
+
 /// Returns the view surfaces among the shown surfaces that wait for no presentation yet, in their order.
 pub fn views_to_join<'a>(
     shown: impl IntoIterator<Item = &'a str>,

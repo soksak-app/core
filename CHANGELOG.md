@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F212.7b-3-4: The workbench counts `losses.abandoned` of the plugin of a view surface for each `view-presentation-abandoned` notice. Both hosts send the notice with `{surface, reason}` at each end of a presentation wait that ended without presentation.
 - F212.7b-3-2, F212.7b-3-3: Each host joins the shown views that wait for nothing to the open layout transaction at each settled present. The native commit waits for each joined view to present, and each end without presentation (process end, hidden view, unresponsive notice) releases the join through the native abandon. The Go and Rust checks are `view_join_test` and `presentation_wait_test`.
 - F212.7b-3-1: The native layout transaction joins each view that enters the presentation wait. `surfaceLayoutJoinView` holds the commit until the view presents, and `surfaceLayoutAbandonView` ends a wait without presentation, so the next transaction starts after the commit. The check `checkViewJoin` in `surface_layout_test` covers both ends.
 - F212.7b-2: The host keeps the presentation wait state of views in both hosts. A view joins once per change, and each end without presentation (process end, a view that is not shown, an unresponsive notice) ends its wait once and writes `host.trace.view.presentation-abandoned {surface, reason}` while the trace is on. A presentation ends the wait without the event. The join and the native transaction that waits come with F212.7b-3. The contract case `view.presentation-wait.ends` runs in both hosts.

@@ -5,7 +5,7 @@ use serde_json::json;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use super::PresentationWait;
+use super::{PresentationWait, presentation_abandoned_payload};
 use crate::event_record::buffered_fields;
 
 const SURFACE: &str = "presentation-probe-surface";
@@ -129,5 +129,15 @@ fn a_presentation_does_not_abandon_the_native_join() {
         abandons.load(Ordering::SeqCst),
         0,
         "the presentation does not abandon the native join"
+    );
+}
+
+// contract: view.presentation-wait.joins
+#[test]
+fn the_abandoned_notice_names_the_surface_and_the_reason() {
+    assert_eq!(
+        presentation_abandoned_payload(SURFACE, "hidden"),
+        json!({"surface": SURFACE, "reason": "hidden"}),
+        "the notice of an abandoned presentation wait names its surface and reason"
     );
 }

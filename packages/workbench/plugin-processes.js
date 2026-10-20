@@ -79,6 +79,12 @@ export function snapshotReporter(plugin) {
   };
 }
 
+/** Counts one view presentation wait of plugin that ended without its presentation (the host sends the notice to the surface). */
+export function presentationAbandoned(plugin) {
+  lossesOf(plugin).abandoned += 1;
+  announce();
+}
+
 /** The open calls of each plugin that has one: `{plugin, count, oldestStartedAt}`. */
 export const openCalls = () => {
   const totals = new Map();

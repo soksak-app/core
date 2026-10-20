@@ -50,6 +50,8 @@ func TestEachEndWithoutPresentationAbandonsTheViewJoin(t *testing.T) {
 		t.Run(reason, func(t *testing.T) {
 			isolateTraceRecords(t)
 			s, fake, native := newLifecycleSurfaces(t, &fakeClock{})
+			s.views = map[string]*nativeWebview{"probe-surface": {}}
+			events := recordWindowEvents(s)
 			if err := s.joinShownViews(window, 7, shown); err != nil {
 				t.Fatalf("join: %v", err)
 			}
@@ -71,6 +73,19 @@ func TestEachEndWithoutPresentationAbandonsTheViewJoin(t *testing.T) {
 			}
 			if s.presentation.waits("probe-surface") {
 				t.Fatalf("the %s end left the view waiting", reason)
+			}
+			var abandoned []map[string]any
+			for _, event := range *events {
+				if event.name == "view-presentation-abandoned" {
+					data, _ := event.data.(map[string]any)
+					abandoned = append(abandoned, data)
+				}
+			}
+			if len(abandoned) != 1 {
+				t.Fatalf("the %s end sent %d view-presentation-abandoned notices, want 1: %v", reason, len(abandoned), *events)
+			}
+			if abandoned[0]["surface"] != "probe-surface" || abandoned[0]["reason"] != reason {
+				t.Fatalf("the %s notice carries %v, want its surface and reason", reason, abandoned[0])
 			}
 		})
 	}

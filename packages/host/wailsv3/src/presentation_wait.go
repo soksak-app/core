@@ -90,8 +90,13 @@ func (w *presentationWait) end(surface, reason string) (bool, error) {
 }
 
 // endPresentationWait ends the wait of the view of surface with reason and reports a failure of the end to the application log.
+// An end without presentation sends the view-presentation-abandoned notice to the surface, which counts it in losses.abandoned.
 func (s *Surfaces) endPresentationWait(surface, reason string) {
-	if _, err := s.presentation.end(surface, reason); err != nil {
+	abandoned, err := s.presentation.end(surface, reason)
+	if err != nil {
 		LogError("view channel", err)
+	}
+	if abandoned {
+		s.emitToSurface(surface, "view-presentation-abandoned", map[string]any{"surface": surface, "reason": reason})
 	}
 }
