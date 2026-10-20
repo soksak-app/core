@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.1-2-2-2: WebKit의 `PerformanceObserver::supportedEntryTypes`에 `longtask` entry type이 없어 long task observer는 넣지 않는다. 페이지 stall의 출처는 F212.1-2-2-1의 페이지 프로세스 sample이 보여 준다.
 - F212.1-2-2-1: 3초 뒤에도 대기 중인 window-check 요청은 같은 turn에 host와 page thread 표본을 시작한다(`packages/window-check/app.mjs`의 `within`, `stall-sample.mjs`의 `STALL_AFTER`). 그래서 요청 한도 전에 끝난 stall도 stack을 남긴다. 결과는 step log에 남는다. 대기 중인 요청을 알리는 event가 없으므로 요청마다 timer를 쓴다. Red: `a request pending past 3 s starts the host and page samples in the same turn`이 수정 전 코드에서 `AssertionError` at `stall-sample.test.mjs:117`, `actual: []`, `expected: [ 10, 12, 13 ]`로 실패했다. Green: 이 test가 통과하고 `packages/window-check`의 test 119개가 모두 통과한다.
 - F212.1-2-2-4: 저장된 event offset이 호스트 log 파일의 이름을 붙이지 않으면 window-check session은 시작 뒤에 쓰인 기록만 판정한다. `sessionEventStart`가 그런 파일을 session 시작 시점의 끝에 두므로 이전 boot의 오류가 검사의 오류로 보고되지 않는다. 실행 중인 process의 파일은 여전히 처음부터 읽는다. Red: `with stored offsets, a file that the stored offsets do not name is judged from the end it had at the session start` test가 실제 오류에 이전 boot의 오류를 담고 실패했다. Green: 이 test가 통과하고 `packages/window-check/test/event-log.test.mjs`의 test 25개가 모두 통과한다.
 - F212.1-2-1-1: library는 library 목록에서 빠진 project의 표시된 오류 `library project <root>`를 공용 오류 표시 경로(`checkFolders`의 `hideError`)로 거둔다. 같은 폴더 없는 project를 다시 더하면 오류를 다시 쓴다. Red: 수정 전 코드에서 `packages/workbench/test/library-removed-project.test.mjs`가 `AssertionError: the error of a project added again is not written`, `1 !== 2`로 실패했다. Green: 이 테스트가 1 of 1 통과하고, workbench의 library 및 오류 표시 테스트가 14 of 14 통과한다.
