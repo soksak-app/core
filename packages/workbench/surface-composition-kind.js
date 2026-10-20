@@ -2,5 +2,6 @@
 
 /** Returns the kind of the composition of a surface declaration, or null when there is no declaration. */
 export function compositionKindOf(declaration) {
+  // default: a declaration without a composition, or no declaration, has no composition kind, which core.surfaces reports as null.
   return declaration?.composition?.kind ?? null;
 }
