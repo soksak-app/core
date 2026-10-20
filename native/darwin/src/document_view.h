@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stddef.h>
 
 // A webview that shows an external document in one region of a surface document.
 //
@@ -118,6 +119,14 @@ const char *sp_document_restore(void *document, const char *state);
 
 // Removes and releases the webview. changed is not called afterward.
 void sp_document_close(void *document);
+
+// Takes the bytes that the binary store of the region keeps under id (docs/spec/native-surfaces.md#document-regions) and
+// releases the id. On success it sets bytes to a copy that the caller releases with free, sets length to its size, and
+// returns NULL. It returns a static error text and sets nothing when the region is closed or the id is not stored.
+const char *sp_document_binary_take(void *document, const char *id, void **bytes, size_t *length);
+
+// Returns the number of ids that the binary store of the region holds. A closed region holds none, so it returns 0.
+size_t sp_document_binary_count(void *document);
 
 // Called when the data store of a directory has ended. error is NULL, or the reason the store did not end; it is released
 // when the call returns. Called on the main thread.

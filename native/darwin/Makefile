@@ -214,6 +214,7 @@ NATIVE_TESTS = observe_test \
   document_form_state_test \
   document_report_test \
   document_plugin_test \
+  document_binary_test \
   document_typing_test \
   document_press_test \
   image_region_test \

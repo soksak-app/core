@@ -183,6 +183,104 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 @implementation SPHiddenDelay
 @end
 
+// The binary store of a document region (docs/spec/native-surfaces.md#document-regions): the bytes of each upload of the
+// region's plugin, under the id that the host mints. The store belongs to the main thread.
+@interface SPBinaryStore : NSObject
+@property(readonly) NSUInteger count;
+@property(readonly) NSUInteger total;
+// Stores data with its content type and returns its new id.
+- (NSString *)addData:(NSData *)data type:(NSString *)type;
+// Returns {data, type} of the id, or nil when the id is not stored.
+- (NSDictionary *)entryForId:(NSString *)identifier;
+- (void)removeId:(NSString *)identifier;
+- (void)releaseAll;
+@end
+
+@implementation SPBinaryStore {
+    NSMutableDictionary<NSString *, NSDictionary *> *_entries;
+    NSUInteger _total;
+}
+
+- (instancetype)init {
+    self = [super init];
+    if (self) _entries = [NSMutableDictionary new];
+    return self;
+}
+
+- (void)dealloc {
+    [_entries release];
+    [super dealloc];
+}
+
+- (NSUInteger)count { return _entries.count; }
+
+- (NSUInteger)total { return _total; }
+
+- (NSString *)addData:(NSData *)data type:(NSString *)type {
+    NSString *identifier = [[[NSUUID UUID].UUIDString stringByReplacingOccurrencesOfString:@"-" withString:@""] lowercaseString];
+    _entries[identifier] = @{ @"data": data, @"type": type };
+    _total += data.length;
+    return identifier;
+}
+
+- (NSDictionary *)entryForId:(NSString *)identifier {
+    return _entries[identifier];
+}
+
+- (void)removeId:(NSString *)identifier {
+    NSDictionary *entry = _entries[identifier];
+    if (!entry) return;
+    _total -= [entry[@"data"] length];
+    [_entries removeObjectForKey:identifier];
+}
+
+- (void)releaseAll {
+    [_entries removeAllObjects];
+    _total = 0;
+}
+@end
+
+// The upload and download paths of the binary store. The document region answers them before it looks up a file, so a
+// plugin release refuses a .binary path segment (plugin-api validateReleaseFiles).
+static NSString *const kBinaryUploadPath = @"/.binary";
+static NSString *const kBinaryDownloadPrefix = @"/.binary/";
+// The bytes of one upload: the clipboard bound of both hosts. A page holds four uploads of that size.
+static const NSUInteger kBinaryUploadLimit = 16 * 1024 * 1024;
+static const NSUInteger kBinaryPageLimit = 64 * 1024 * 1024;
+
+// Whether text is a binary id: 32 lowercase hexadecimal characters.
+static BOOL isBinaryIdentifier(NSString *text) {
+    if (text.length != 32) return NO;
+    for (NSUInteger index = 0; index < text.length; index++) {
+        unichar character = [text characterAtIndex:index];
+        if (!((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f'))) return NO;
+    }
+    return YES;
+}
+
+// The body of an upload: HTTPBody, or the bytes of HTTPBodyStream, which WebKit sets when it sends the body as a stream.
+// A stream is read to one chunk past the limit at most, so an oversized body is refused without reading all of it. A
+// read error sets reason and returns nil; a request without a body returns nil.
+static NSData *requestBody(NSURLRequest *request, NSUInteger limit, NSString **reason) {
+    if (request.HTTPBody) return request.HTTPBody;
+    NSInputStream *stream = request.HTTPBodyStream;
+    if (!stream) return nil;
+    NSMutableData *data = [NSMutableData data];
+    uint8_t buffer[64 * 1024];
+    [stream open];
+    while (data.length <= limit) {
+        NSInteger count = [stream read:buffer maxLength:sizeof buffer];
+        if (count < 0) {
+            *reason = [NSString stringWithFormat:@"the request body could not be read: %@", stream.streamError.localizedDescription];
+            break;
+        }
+        if (count == 0) break;
+        [data appendBytes:buffer length:(NSUInteger)count];
+    }
+    [stream close];
+    return *reason ? nil : data;
+}
+
 @interface SPDocumentScroll : NSObject <WKScriptMessageHandler>
 @property(assign) SPDocumentView *view;
 @end
@@ -193,6 +291,8 @@ static CGFloat documentSurfaceScale(NSView *surface) {
 @property void *messageContext;
 // The id of the plugin whose surface owns the region; its plugin documents have the origin sok://<plugin>.
 @property(copy) NSString *plugin;
+// The bytes that the plugin documents of the region store under binary ids (docs/spec/native-surfaces.md#document-regions).
+@property(retain) SPBinaryStore *binaries;
 - (void)reportMessage:(NSDictionary *)value;
 @property void *context;
 @property sp_document_event event;
@@ -272,12 +372,18 @@ static NSString *pluginContentType(NSString *path) {
 @interface SPPluginScheme : NSObject <WKURLSchemeHandler>
 @property(copy) NSString *root;
 @property(copy) NSString *plugin;
+// The binary store of the region that owns the scheme.
+@property(retain) SPBinaryStore *binaries;
 @end
 
 @implementation SPPluginScheme
 - (void)webView:(WKWebView *)view startURLSchemeTask:(id<WKURLSchemeTask>)task {
     (void)view;
     NSURL *url = task.request.URL;
+    if ([url.path isEqualToString:kBinaryUploadPath] || [url.path hasPrefix:kBinaryDownloadPrefix]) {
+        [self answerBinary:task];
+        return;
+    }
     NSArray<NSString *> *parts = [url.path componentsSeparatedByString:@"/"];
     BOOL inside = self.root != nil && [url.host isEqualToString:self.plugin] && parts.count > 1 && parts[0].length == 0;
     for (NSUInteger index = 1; inside && index < parts.count; index++) {
@@ -305,7 +411,78 @@ static NSString *pluginContentType(NSString *path) {
     (void)view; (void)task;
 }
 
-- (void)dealloc { [_root release]; [_plugin release]; [super dealloc]; }
+// Answers a request of the binary store. An upload answers {id, length}; a download answers the stored bytes and releases
+// the id when the response finishes. Each refusal answers its status with {error} and writes the reason to the log.
+- (void)answerBinary:(id<WKURLSchemeTask>)task {
+    NSURL *url = task.request.URL;
+    NSString *method = task.request.HTTPMethod;
+    BOOL upload = [url.path isEqualToString:kBinaryUploadPath];
+    if (!self.plugin || ![url.host isEqualToString:self.plugin]) {
+        [self refuseBinary:task status:403 reason:[NSString stringWithFormat:@"%@ is not a binary path of plugin %@",
+            url.absoluteString, self.plugin ?: @"none"]];
+        return;
+    }
+    if (![method isEqualToString:upload ? @"POST" : @"GET"]) {
+        [self refuseBinary:task status:405 reason:[NSString stringWithFormat:@"%@ does not take %@", url.absoluteString, method]];
+        return;
+    }
+    if (upload) {
+        // WebKit gives a body with neither form for some bodies, such as a Blob, so the request has no bytes to store.
+        if (!task.request.HTTPBody && !task.request.HTTPBodyStream) {
+            [self refuseBinary:task status:400 reason:@"the upload has no body that WebKit delivers as HTTPBody or HTTPBodyStream"];
+            return;
+        }
+        NSString *reason = nil;
+        NSData *body = requestBody(task.request, kBinaryUploadLimit, &reason);
+        if (reason) {
+            [self refuseBinary:task status:400 reason:reason];
+            return;
+        }
+        if (!body.length) {
+            [self refuseBinary:task status:400 reason:@"the upload holds no bytes"];
+            return;
+        }
+        if (body.length > kBinaryUploadLimit) {
+            [self refuseBinary:task status:413 reason:@"the upload is over the limit of 16777216 bytes"];
+            return;
+        }
+        if (self.binaries.total + body.length > kBinaryPageLimit) {
+            [self refuseBinary:task status:413 reason:[NSString stringWithFormat:
+                @"the binary store of the page would hold %lu bytes, over the limit of 67108864 bytes",
+                (unsigned long)(self.binaries.total + body.length)]];
+            return;
+        }
+        NSString *type = [task.request valueForHTTPHeaderField:@"Content-Type"] ?: @"application/octet-stream";
+        NSString *identifier = [self.binaries addData:body type:type];
+        NSData *answer = [NSJSONSerialization dataWithJSONObject:@{ @"id": identifier, @"length": @(body.length) } options:0 error:nil];
+        [self respond:task status:200 type:@"application/json" data:answer];
+        return;
+    }
+    NSString *identifier = [url.path substringFromIndex:kBinaryDownloadPrefix.length];
+    NSDictionary *entry = isBinaryIdentifier(identifier) ? [self.binaries entryForId:identifier] : nil;
+    if (!entry) {
+        [self refuseBinary:task status:404 reason:[NSString stringWithFormat:@"binary id %@ is not stored", identifier]];
+        return;
+    }
+    [self respond:task status:200 type:entry[@"type"] data:entry[@"data"]];
+    [self.binaries removeId:identifier];
+}
+
+- (void)refuseBinary:(id<WKURLSchemeTask>)task status:(NSInteger)status reason:(NSString *)reason {
+    sp_log_error("document view", reason.UTF8String);
+    NSData *answer = [NSJSONSerialization dataWithJSONObject:@{ @"error": reason } options:0 error:nil];
+    [self respond:task status:status type:@"application/json" data:answer];
+}
+
+- (void)respond:(id<WKURLSchemeTask>)task status:(NSInteger)status type:(NSString *)type data:(NSData *)data {
+    NSHTTPURLResponse *response = [[[NSHTTPURLResponse alloc] initWithURL:task.request.URL statusCode:status
+        HTTPVersion:@"HTTP/1.1" headerFields:@{ @"Content-Type": type, @"Content-Length": @(data.length).stringValue }] autorelease];
+    [task didReceiveResponse:response];
+    [task didReceiveData:data];
+    [task didFinish];
+}
+
+- (void)dealloc { [_root release]; [_plugin release]; [_binaries release]; [super dealloc]; }
 @end
 
 @implementation SPDocumentScroll
@@ -369,6 +546,7 @@ static NSString *pluginContentType(NSString *path) {
     [_failure release];
     [_link release];
     [_plugin release];
+    [_binaries release];
     [_navigation release];
     [_eventMonitor release];
     [self stopHiddenTimer];
@@ -762,7 +940,9 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
     configuration.applicationNameForUserAgent = applicationName;
     configuration.websiteDataStore = store;
+    SPBinaryStore *binaries = [[SPBinaryStore new] autorelease];
     SPPluginScheme *scheme = [[SPPluginScheme new] autorelease];
+    scheme.binaries = binaries;
     if (folder && plugin) {
         scheme.root = [NSString stringWithUTF8String:folder];
         scheme.plugin = [NSString stringWithUTF8String:plugin];
@@ -791,6 +971,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     view.changed = changed;
     view.context = context;
     view.plugin = folder && plugin ? scheme.plugin : nil;
+    view.binaries = binaries;
     view.navigationDelegate = view;
     view.UIDelegate = view;
     view.webSurface = surface;
@@ -1022,6 +1203,8 @@ void sp_document_close(void *handle) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;
     view.closed = YES;
+    [view.binaries releaseAll];
+    view.binaries = nil;
     [openDocuments() removeObject:view];
     [view stopHiddenTimer];
     if (view.eventMonitor) {
@@ -1040,6 +1223,31 @@ void sp_document_close(void *handle) {
     [view stopLoading];
     [view removeFromSuperview];
     [view release];
+}
+
+const char *sp_document_binary_take(void *handle, const char *id, void **bytes, size_t *length) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) return "the document region is closed";
+    if (!id || !bytes || !length) return "the binary id is not given";
+    NSString *identifier = [NSString stringWithUTF8String:id];
+    if (!identifier) return "the binary id is not UTF-8";
+    NSDictionary *entry = [view.binaries entryForId:identifier];
+    if (!entry) return "the binary id is not stored";
+    NSData *data = entry[@"data"];
+    void *copy = malloc(data.length);
+    if (!copy) return "the bytes cannot be copied";
+    memcpy(copy, data.bytes, data.length);
+    *bytes = copy;
+    *length = data.length;
+    // removeId releases the entry, and with it data, so the length is read before the id is removed.
+    [view.binaries removeId:identifier];
+    return NULL;
+}
+
+size_t sp_document_binary_count(void *handle) {
+    SPDocumentView *view = (SPDocumentView *)handle;
+    return view ? view.binaries.count : 0;
 }
 
 void sp_document_store_close(const char *directory, sp_document_store_closed closed, void *context) {
