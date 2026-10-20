@@ -138,7 +138,7 @@ int main(void) { @autoreleasepool {
     // The store directory is deleted when the test ends.
     NSString *stores = temporaryFolder(@"soksak-document-throttle-");
     void *document = sp_document_create(surface, [stores stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
-        NULL, NULL, changed, NULL);
+        NULL, NULL, false, changed, NULL);
     check(document != NULL, @"a document view is created inside the surface");
     WKWebView *view = (WKWebView *)document;
     sp_document_place(document, 10, 20, 30, 40, true);

@@ -346,18 +346,31 @@ static NSString *pluginContentType(NSString *path) {
     return type ?: @"application/octet-stream"; // default: an extension outside the list is sent as bytes.
 }
 
+// The core root resolver of the application (sp_core_root_set_resolver) and its context. The main thread reads and writes them.
+static sp_core_root_resolver coreRootResolver;
+static void *coreRootContext;
+
+// The host of the core root in a sok address of a view (docs/spec/native-surfaces.md#document-regions).
+static NSString *const kCoreHost = @"core";
+
 // Serves sok://<plugin>/<path> from the folder of the region's plugin.
 @interface SPPluginScheme : NSObject <WKURLSchemeHandler>
 @property(copy) NSString *root;
 @property(copy) NSString *plugin;
 // The binary store of the region that owns the scheme.
 @property(retain) SPBinaryStore *binaries;
+// Whether the region is a view, which may request the core root at sok://core/<path>.
+@property BOOL allowsCoreRoot;
 @end
 
 @implementation SPPluginScheme
 - (void)webView:(WKWebView *)view startURLSchemeTask:(id<WKURLSchemeTask>)task {
     (void)view;
     NSURL *url = task.request.URL;
+    if (self.allowsCoreRoot && [url.host isEqualToString:kCoreHost]) {
+        [self answerCore:task];
+        return;
+    }
     if ([url.path isEqualToString:kBinaryUploadPath] || [url.path hasPrefix:kBinaryDownloadPrefix]) {
         [self answerBinary:task];
         return;
@@ -387,6 +400,33 @@ static NSString *pluginContentType(NSString *path) {
 
 - (void)webView:(WKWebView *)view stopURLSchemeTask:(id<WKURLSchemeTask>)task {
     (void)view; (void)task;
+}
+
+// Answers a request of the core root of a view with the resolver of the application. A served file carries the header
+// Access-Control-Allow-Origin of the view's plugin, so the page's module import or fetch succeeds. A refused path answers not
+// found with no such header, so the page's request fails. The resolver writes the refusal to the application log.
+- (void)answerCore:(id<WKURLSchemeTask>)task {
+    NSURL *url = task.request.URL;
+    void *bytes = NULL;
+    size_t length = 0;
+    char *type = NULL;
+    if (!coreRootResolver || !coreRootResolver(coreRootContext, self.plugin.UTF8String, url.path.UTF8String, &bytes, &length, &type)) {
+        [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorFileDoesNotExist
+            userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"%@ is not found", url.absoluteString] }]];
+        return;
+    }
+    NSData *data = [NSData dataWithBytes:bytes length:length];
+    free(bytes);
+    NSString *contentType = [NSString stringWithUTF8String:type];
+    free(type);
+    NSHTTPURLResponse *response = [[[NSHTTPURLResponse alloc] initWithURL:url statusCode:200 HTTPVersion:@"HTTP/1.1" headerFields:@{
+        @"Content-Type": contentType,
+        @"Content-Length": @(data.length).stringValue,
+        @"Access-Control-Allow-Origin": [NSString stringWithFormat:@"sok://%@", self.plugin],
+    }] autorelease];
+    [task didReceiveResponse:response];
+    [task didReceiveData:data];
+    [task didFinish];
 }
 
 // Answers a request of the binary store. An upload answers {id, length}; a download answers the stored bytes and releases
@@ -901,11 +941,18 @@ static NSString *safariApplicationName(void) {
     return [NSString stringWithFormat:@"Version/%@.%@ Safari/605.1.15", parts[0], parts[1]];
 }
 
-void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin,
+void sp_core_root_set_resolver(sp_core_root_resolver resolver, void *context) {
+    NSCAssert(NSThread.isMainThread, @"the core root belongs to the main thread");
+    coreRootResolver = resolver;
+    coreRootContext = context;
+}
+
+void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin, bool isView,
     sp_document_changed changed, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     NSView *surface = (NSView *)surfaceHandle;
     if (!surface || !directory || !changed || !surface.window) return NULL;
+    if (isView && !(folder && plugin)) return NULL;
     WKWebsiteDataStore *store = storeForDirectory(directory);
     if (!store) return NULL;
     NSString *applicationName = safariApplicationName();
@@ -916,6 +963,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     SPBinaryStore *binaries = [[SPBinaryStore new] autorelease];
     SPPluginScheme *scheme = [[SPPluginScheme new] autorelease];
     scheme.binaries = binaries;
+    scheme.allowsCoreRoot = isView;
     if (folder && plugin) {
         scheme.root = [NSString stringWithUTF8String:folder];
         scheme.plugin = [NSString stringWithUTF8String:plugin];

@@ -213,7 +213,7 @@ fn installed_assets_serve_the_files_of_enabled_packages() {
     let config = installed_fixture();
     let directory = Arc::new(OnceLock::new());
     let assets = InstalledAssets::<tauri::Wry> {
-        frontend: Box::new(Frontend),
+        frontend: std::sync::Arc::new(Frontend),
         config_dir: directory.clone(),
         diagnostics: false,
     };
@@ -287,7 +287,7 @@ fn installed_assets_serve_the_shared_modules_of_extension_points() {
     let directory = Arc::new(OnceLock::new());
     directory.set(config.path().to_path_buf()).unwrap();
     let assets = InstalledAssets::<tauri::Wry> {
-        frontend: Box::new(Frontend),
+        frontend: std::sync::Arc::new(Frontend),
         config_dir: directory,
         diagnostics: false,
     };

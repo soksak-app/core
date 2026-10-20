@@ -250,7 +250,7 @@ int main(void) { @autoreleasepool {
     // The document and every autoreleased reference to it live in this pool, so the closed document and its data store are
     // released before the store ends.
     @autoreleasepool {
-        void *document = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", changed, NULL);
+        void *document = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", false, changed, NULL);
         check(document != NULL, @"a document region is created with the folder of its plugin");
         sp_document_set_message(document, message, NULL);
         sp_document_place(document, 0, 0, 0, 0, true);

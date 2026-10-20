@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -269,6 +270,19 @@ func CoreRoot(configDir, plugin, urlPath string, frontend fs.FS) (file CoreRootF
 		return CoreRootFile{}, false, err
 	}
 	return CoreRootFile{Data: data, ContentType: coreContentType(urlPath)}, true, nil
+}
+
+// RegisterCoreRoot registers the core root resolver of the configuration folder with the platform. The resolver answers each
+// request of a view with CoreRoot. An error of CoreRoot is written to the application log, and the request is answered not found.
+func RegisterCoreRoot(system platform.CoreRootHost, configDir string, frontend fs.FS) error {
+	return system.SetCoreRoot(func(plugin, urlPath string) ([]byte, string, bool) {
+		file, found, err := CoreRoot(configDir, plugin, urlPath, frontend)
+		if err != nil {
+			LogError("core root", err)
+			return nil, "", false
+		}
+		return file.Data, file.ContentType, found
+	})
 }
 
 // refuseCoreRoot writes the refusal of urlPath for plugin as an error record and returns the not found result.

@@ -8,8 +8,8 @@ use tauri::Window;
 use tauri::webview::PlatformWebview;
 
 use super::super::{
-    ClipboardValue, Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener,
-    PersistentStream, Pointer, Raster, WindowBuilder, WindowOverlay,
+    ClipboardValue, Connection, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit, Insets,
+    Key, Listener, PersistentStream, Pointer, Raster, WindowBuilder, WindowOverlay,
 };
 
 /// Returns an error that contains operation in its name.
@@ -176,6 +176,10 @@ pub fn round_corners(_view: &PlatformWebview, _radius: f64) -> Result<(), String
 
 pub fn focus_webview(_view: &PlatformWebview) -> Result<(), String> {
     missing("webview focus")
+}
+
+pub fn set_core_root(_resolve: CoreRootResolver) -> Result<(), String> {
+    missing("core root")
 }
 
 pub fn create_document(

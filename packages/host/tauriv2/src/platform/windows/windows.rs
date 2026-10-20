@@ -13,8 +13,9 @@ use tauri::webview::PlatformWebview;
 use std::time::Duration;
 
 use super::{
-    ClipboardValue, Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener,
-    PersistentStream, Platform, Pointer, Raster, WindowBuilder, WindowOverlay,
+    ClipboardValue, Connection, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame,
+    Handle, Hit, Insets, Key, Listener, PersistentStream, Platform, Pointer, Raster, WindowBuilder,
+    WindowOverlay,
 };
 
 #[path = "identity.rs"]
@@ -24,6 +25,12 @@ mod unsupported;
 
 /// The Windows platform implementation.
 pub struct Windows;
+
+impl CoreRootHost for Windows {
+    fn set_core_root(&self, resolve: CoreRootResolver) -> Result<(), String> {
+        unsupported::set_core_root(resolve)
+    }
+}
 
 impl Platform for Windows {
     fn enqueue_ui(&self, work: Box<dyn FnOnce() + Send>) -> Result<(), String> {

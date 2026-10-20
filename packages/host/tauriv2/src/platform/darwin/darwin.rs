@@ -18,8 +18,8 @@ use tauri::webview::PlatformWebview;
 use std::time::Duration;
 
 use super::{
-    Connection, DOMOverlay, Delivery, Frame, Handle, Hit, Insets, Key, Listener, PersistentStream,
-    Platform, Pointer, Raster, WindowBuilder, WindowOverlay,
+    Connection, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit, Insets,
+    Key, Listener, PersistentStream, Platform, Pointer, Raster, WindowBuilder, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
@@ -123,6 +123,12 @@ unsafe impl objc2::Encode for NSRect {
 
 /// The macOS platform implementation.
 pub struct Darwin;
+
+impl CoreRootHost for Darwin {
+    fn set_core_root(&self, resolve: CoreRootResolver) -> Result<(), String> {
+        document::set_core_root(resolve)
+    }
+}
 
 impl Platform for Darwin {
     fn enqueue_ui(&self, work: Box<dyn FnOnce() + Send>) -> Result<(), String> {

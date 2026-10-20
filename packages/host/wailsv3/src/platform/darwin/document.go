@@ -15,6 +15,15 @@ extern void documentEvent(void *context, char *event);
 extern void documentMessage(void *context, char *message);
 extern void documentStream(void *context, char *message);
 extern void documentQueried(void *context, char *reply);
+extern bool coreRootServe(void *context, char *plugin, char *path, void **bytes, size_t *length, char **contentType);
+
+static bool coreRootBridge(void *context, const char *plugin, const char *path, void **bytes, size_t *length, char **type) {
+    return coreRootServe(context, (char *)plugin, (char *)path, bytes, length, type);
+}
+
+static void coreRootSet(uintptr_t context) {
+    sp_core_root_set_resolver(coreRootBridge, (void *)context);
+}
 
 static void documentChangedBridge(void *context, const char *state) {
     documentChanged(context, (char *)state);
@@ -40,7 +49,7 @@ static void documentQuery(void *document, uintptr_t context) {
 }
 
 static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, uintptr_t context) {
-    return sp_document_create(surface, store, package, plugin, documentChangedBridge, (void *)context);
+    return sp_document_create(surface, store, package, plugin, false, documentChangedBridge, (void *)context);
 }
 static void documentSetMessage(void *document, uintptr_t context) {
     sp_document_set_message(document, documentMessageBridge, (void *)context);
@@ -58,6 +67,8 @@ import (
 	"errors"
 	"runtime/cgo"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // documents are the state receiver handles of each document handle. They are read and changed only on the UI thread.
@@ -82,6 +93,26 @@ func documentStream(context unsafe.Pointer, value *C.char) {
 	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
+// coreRootSet and coreRootHandle hold the core root resolver of the application, which is registered once at its start.
+var coreRootSet bool
+var coreRootHandle cgo.Handle
+
+// coreRootServe answers one request of the core root of a view with the resolver that SetCoreRoot registered. It returns false
+// for a path that the resolver does not serve. The file is copied to memory that the native scheme releases.
+//
+//export coreRootServe
+func coreRootServe(context unsafe.Pointer, plugin, urlPath *C.char, bytes *unsafe.Pointer, length *C.size_t, contentType **C.char) C.bool {
+	resolve := cgo.Handle(uintptr(context)).Value().(platform.CoreRootResolver)
+	data, kind, found := resolve(C.GoString(plugin), C.GoString(urlPath))
+	if !found {
+		return false
+	}
+	*bytes = C.CBytes(data)
+	*length = C.size_t(len(data))
+	*contentType = C.CString(kind)
+	return true
+}
+
 // documentQueried receives the one reply of a query and releases its receiver.
 //
 //export documentQueried
@@ -95,6 +126,18 @@ func documentQueried(context unsafe.Pointer, value *C.char) {
 //export documentEvent
 func documentEvent(context unsafe.Pointer, value *C.char) {
 	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+}
+
+// SetCoreRoot registers the resolver of the core root. The application registers one resolver at its start, and a second
+// registration is refused, so the handle of the first one is kept for the process.
+func (implementation) SetCoreRoot(resolve platform.CoreRootResolver) error {
+	if coreRootSet {
+		return errors.New("the core root resolver is already set")
+	}
+	coreRootSet = true
+	coreRootHandle = cgo.NewHandle(resolve)
+	C.coreRootSet(C.uintptr_t(coreRootHandle))
+	return nil
 }
 
 func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, plugin string, changed func(state string)) (unsafe.Pointer, error) {

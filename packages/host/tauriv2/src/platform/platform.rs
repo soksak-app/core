@@ -261,11 +261,23 @@ pub struct Raster {
     pub scale: f64,
 }
 
+/// Resolves a request of the core root of a view of plugin for url_path (docs/plans/plugin-processes.md, rule 4). It returns
+/// None for a path that is not served.
+pub type CoreRootResolver =
+    Box<dyn Fn(&str, &str) -> Option<crate::installed::CoreRootFile> + Send + Sync>;
+
+/// Registers the core root resolver of the application.
+pub trait CoreRootHost {
+    /// Receives the resolver. The native scheme of each view calls it on the main thread for each request of sok://core/<path>,
+    /// and the view receives the file with the header Access-Control-Allow-Origin of its plugin when the resolver serves it.
+    fn set_core_root(&self, resolve: CoreRootResolver) -> Result<(), String>;
+}
+
 /// The window, webview, surface placement, shape, input, capture, Dock, directory identification and endpoint functions
 /// that the operating system provides.
 ///
 /// A function that is not implemented returns a "not implemented" error.
-pub trait Platform: Send + Sync {
+pub trait Platform: CoreRootHost + Send + Sync {
     /// Runs work once on the main queue after the current framework event callback ends.
     fn enqueue_ui(&self, work: Box<dyn FnOnce() + Send>) -> Result<(), String>;
 

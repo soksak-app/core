@@ -99,7 +99,7 @@ static void runScenario(NSString *name, NSArray<NSString *> *addresses, NSString
     Region regions[4];
     for (int i = 0; i < 4; i++) {
         regions[i].address = addresses[i];
-        regions[i].document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, changed, NULL);
+        regions[i].document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, false, changed, NULL);
         regions[i].process = 0;
         regions[i].footprint = -1;
         check(regions[i].document != NULL, [NSString stringWithFormat:@"region %d is created", i + 1]);

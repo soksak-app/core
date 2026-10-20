@@ -182,7 +182,7 @@ int main(void) { @autoreleasepool {
     NSString *stores = temporaryFolder(@"soksak-document-benchmark-");
 
     void *document = sp_document_create(surface, [stores stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
-        NULL, NULL, changed, NULL);
+        NULL, NULL, false, changed, NULL);
     if (!document) {
         fprintf(stderr, "FAIL: a document view is not created inside the surface\n");
         return 1;

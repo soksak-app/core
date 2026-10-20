@@ -11,6 +11,7 @@ import (
 	"testing/fstest"
 
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // coreFrontend is the bundled frontend. It holds the core files and also the paths that a view must not receive.
@@ -186,5 +187,81 @@ func TestCoreRootFailsAMalformedCoreRootFile(t *testing.T) {
 		if _, _, err := host.CoreRoot(config, "provider", "/modules/@soksak/plugin-api/index.js", frontend); err == nil {
 			t.Fatalf("core-root.json %s is not an error", text)
 		}
+	}
+}
+
+// coreRootHost is the platform fake that keeps the core root resolver that the host registers.
+type coreRootHost struct {
+	resolve platform.CoreRootResolver
+}
+
+func (h *coreRootHost) SetCoreRoot(resolve platform.CoreRootResolver) error {
+	h.resolve = resolve
+	return nil
+}
+
+// registeredCoreRoot registers the core root of config with a fake platform and returns the resolver of the host.
+func registeredCoreRoot(t *testing.T, config string) platform.CoreRootResolver {
+	t.Helper()
+	fake := &coreRootHost{}
+	if err := host.RegisterCoreRoot(fake, config, coreFrontend()); err != nil {
+		t.Fatalf("the host did not register the core root: %v", err)
+	}
+	if fake.resolve == nil {
+		t.Fatal("the host registered no core root resolver")
+	}
+	return fake.resolve
+}
+
+// contract: document.core-root.native
+func TestCoreRootResolverAnswersAViewThroughThePlatform(t *testing.T) {
+	config := coreRootFixture(t)
+	resolve := registeredCoreRoot(t, config)
+
+	data, contentType, found := resolve("provider", "/modules/plugin-view/ui/item.js")
+	if !found || string(data) != "export const item = 1;" || contentType != "text/javascript" {
+		t.Fatalf("a granted module: found %v, data %q, type %q, want the module as text/javascript", found, data, contentType)
+	}
+	data, contentType, found = resolve("view", "/shared/provider.list/format.js")
+	if !found || string(data) != "export const format = 1;" || contentType != "text/javascript" {
+		t.Fatalf("a shared target: found %v, data %q, type %q, want the shared target as text/javascript", found, data, contentType)
+	}
+	data, contentType, found = resolve("provider", "/modules/@soksak/plugin-api/index.js")
+	if !found || string(data) != "export const index = 1;" {
+		t.Fatalf("a core file: found %v, data %q, want the core file", found, data)
+	}
+}
+
+// contract: document.core-root.native
+func TestCoreRootResolverRefusesAPathThroughThePlatform(t *testing.T) {
+	config := coreRootFixture(t)
+	resolve := registeredCoreRoot(t, config)
+	written := captureLog(t)
+
+	if _, _, found := resolve("provider", "/runtime/index.js"); found {
+		t.Fatal("a runtime path is found, want not found")
+	}
+	if want := "error host core root: /runtime/index.js is not granted to provider"; !strings.Contains(written(), want) {
+		t.Fatalf("the log has no %q", want)
+	}
+	if _, _, found := resolve("nobody", "/modules/@soksak/plugin-api/index.js"); found {
+		t.Fatal("a requester that is not installed is found, want not found")
+	}
+}
+
+// contract: document.core-root.native
+func TestCoreRootResolverReportsAGrantedFileThatIsMissing(t *testing.T) {
+	config := coreRootFixture(t)
+	if err := os.Remove(filepath.Join(config, "plugins/view/1.0.0/ui/item.js")); err != nil {
+		t.Fatal(err)
+	}
+	resolve := registeredCoreRoot(t, config)
+	written := captureLog(t)
+
+	if _, _, found := resolve("provider", "/modules/plugin-view/ui/item.js"); found {
+		t.Fatal("a granted file that is missing is found, want not found")
+	}
+	if want := "error host core root: /modules/plugin-view/ui/item.js is granted to provider, but its file is missing"; !strings.Contains(written(), want) {
+		t.Fatalf("the log has no %q", want)
 	}
 }

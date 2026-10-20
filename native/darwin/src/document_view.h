@@ -32,9 +32,22 @@ typedef void (*sp_document_stream)(void *context, const char *json);
 // name
 // the installed
 // folder and the id of the plugin whose surface owns the region; sok://<plugin>/<path> serves <path> from that folder,
-// and NULL folder serves nothing. Returns NULL if the webview cannot be created.
-void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin,
+// and NULL folder serves nothing. isView is true for a view configuration, which may also request sok://core/<path> from
+// the core root resolver (sp_core_root_set_resolver); a region is false and receives no core root grant
+// (docs/plans/plugin-processes.md, rule 4). A view needs folder and plugin. Returns NULL if the webview cannot be created.
+void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin, bool isView,
     sp_document_changed changed, void *context);
+
+// Resolves a request of the core root (docs/plans/plugin-processes.md, rule 4) of a view of plugin for the URL path path,
+// which names a file of the core host. When the path is served, it returns true and sets bytes to a copy of the file that
+// the caller releases with free, length to its size, and type to its content type that the caller releases with free. It
+// returns false for a path that is not served. Called on the main thread.
+typedef bool (*sp_core_root_resolver)(void *context, const char *plugin, const char *path, void **bytes, size_t *length,
+    char **type);
+
+// Sets the core root resolver of the application. NULL serves no core file. The caller keeps context while the application
+// runs. Called on the main thread.
+void sp_core_root_set_resolver(sp_core_root_resolver resolver, void *context);
 
 // Sets the receiver of the messages of plugin documents. NULL reports none. The caller keeps context while the
 // document lives.

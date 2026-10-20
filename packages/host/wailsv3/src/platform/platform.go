@@ -247,10 +247,22 @@ type Capturer interface {
 	CaptureStill(windowNumber int, path string) error
 }
 
+// CoreRootResolver returns the file at urlPath of the core root of a view of plugin (docs/plans/plugin-processes.md, rule 4)
+// with its content type. found is false for a path that is not served.
+type CoreRootResolver func(plugin, urlPath string) (data []byte, contentType string, found bool)
+
+// CoreRootHost registers the core root resolver of the application.
+type CoreRootHost interface {
+	// SetCoreRoot receives the resolver. The native scheme of each view calls it on the UI thread for each request of sok://core/<path>,
+	// and the view receives the file with the header Access-Control-Allow-Origin of its plugin when found is true.
+	SetCoreRoot(resolve CoreRootResolver) error
+}
+
 // Platform is the behavior that differs for each operating system.
 //
 // A function that does not return an error receives only a handle that a creation function returning an error made.
 type Platform interface {
+	CoreRootHost
 	// EnqueueUI runs work once on the main queue after the current framework event callback ends.
 	EnqueueUI(work func()) error
 	// PrepareWindow fits the sizes of the content view of the window and the main web view.

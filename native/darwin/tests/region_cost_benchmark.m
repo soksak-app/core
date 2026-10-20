@@ -584,7 +584,7 @@ static OpenView openVariant(const Variant *spec, NSWindow *window, NSView *conte
         if (!opened.surface) failStep(step, @"a logical surface is not created", 0);
         webviewSetFrame(opened.surface, 0, 0, kWindowWidth, kWindowHeight);
         webviewSetSurfaceHidden(opened.surface, false);
-        opened.document = sp_document_create(opened.surface, documentDirectory.fileSystemRepresentation, NULL, NULL, documentChanged, NULL);
+        opened.document = sp_document_create(opened.surface, documentDirectory.fileSystemRepresentation, NULL, NULL, false, documentChanged, NULL);
         if (!opened.document) failStep(step, @"a document view is not created inside the surface", 0);
         opened.view = (WKWebView *)opened.document;
         sp_document_place(opened.document, kMarginLeft, kMarginTop, kMarginRight, kMarginBottom, true);

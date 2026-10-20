@@ -181,7 +181,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
     // Installed plugins are provided from the configuration folder (docs/spec/installation.md). setup decides the
     // configuration folder.
     let installed_directory = std::sync::Arc::new(std::sync::OnceLock::new());
-    let frontend = context.set_assets(Box::new(installed::NoAssets));
+    let frontend: std::sync::Arc<dyn tauri::Assets<tauri::Wry>> =
+        std::sync::Arc::from(context.set_assets(Box::new(installed::NoAssets)));
+    let core_frontend = std::sync::Arc::clone(&frontend);
     let installed_assets = installed::InstalledAssets {
         frontend,
         config_dir: installed_directory.clone(),
@@ -366,6 +368,18 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 let directory = config_directory(app.handle())?;
                 installed_directory.set(directory.clone()).map_err(
                     |_| "the configuration directory of installed plugins is already set",
+                )?;
+                // The core root of a view serves the core files from the bundled frontend, which the page reads too
+                // (docs/plans/plugin-processes.md, rule 4).
+                let core_root_frontend = std::sync::Arc::clone(&core_frontend);
+                installed::register_core_root(
+                    platform::current()?,
+                    directory.clone(),
+                    std::sync::Arc::new(move |name: &str| {
+                        core_root_frontend
+                            .get(&tauri::utils::assets::AssetKey::from(name))
+                            .map(|bytes| bytes.into_owned())
+                    }),
                 )?;
                 app.manage(workspace::Workspace::new(directory.clone()));
                 // A stall of the main thread is recorded without a window check (docs/spec/logging.md, stalls). The

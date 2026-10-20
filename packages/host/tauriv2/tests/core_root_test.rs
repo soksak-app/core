@@ -8,10 +8,11 @@ mod folder;
 mod records;
 
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use soksak_host_tauriv2::event_record::use_host_event_log;
 use soksak_host_tauriv2::installed::{self, CoreRootFile};
+use soksak_host_tauriv2::platform::{CoreRootHost, CoreRootResolver};
 
 /// Serializes the tests that attach the writer of the records, which is one value of the process.
 static LOG_LOCK: Mutex<()> = Mutex::new(());
@@ -364,4 +365,102 @@ fn core_root_fails_a_malformed_core_root_file() {
             "core-root.json {text} is not an error"
         );
     }
+}
+
+/// The platform fake that keeps the core root resolver that the host registers.
+struct FakeCoreRoot {
+    resolver: Mutex<Option<CoreRootResolver>>,
+}
+
+impl CoreRootHost for FakeCoreRoot {
+    fn set_core_root(&self, resolve: CoreRootResolver) -> Result<(), String> {
+        *self.resolver.lock().unwrap() = Some(resolve);
+        Ok(())
+    }
+}
+
+/// Registers the core root of config with a fake platform, then resolves one request through the resolver of the host.
+fn resolve_through_platform(config: &Path, plugin: &str, url_path: &str) -> Option<CoreRootFile> {
+    let platform = FakeCoreRoot {
+        resolver: Mutex::new(None),
+    };
+    installed::register_core_root(&platform, config.to_path_buf(), Arc::new(core_frontend))
+        .expect("the host registers the core root");
+    let resolver = platform.resolver.lock().unwrap();
+    let resolver = resolver
+        .as_ref()
+        .expect("the host registered no core root resolver");
+    resolver(plugin, url_path)
+}
+
+// contract: document.core-root.native
+#[test]
+fn core_root_resolver_answers_a_view_through_the_platform() {
+    let config = core_root_fixture();
+    let cases = [
+        (
+            "provider",
+            "/modules/plugin-view/ui/item.js",
+            "export const item = 1;",
+        ),
+        (
+            "view",
+            "/shared/provider.list/format.js",
+            "export const format = 1;",
+        ),
+        (
+            "provider",
+            "/modules/@soksak/plugin-api/index.js",
+            "export const index = 1;",
+        ),
+    ];
+    for (plugin, url_path, content) in cases {
+        assert_eq!(
+            resolve_through_platform(config.path(), plugin, url_path),
+            Some(CoreRootFile {
+                data: content.as_bytes().to_vec(),
+                content_type: "text/javascript",
+            }),
+            "{url_path} for {plugin}"
+        );
+    }
+}
+
+// contract: document.core-root.native
+#[test]
+fn core_root_resolver_refuses_a_path_through_the_platform() {
+    let config = core_root_fixture();
+    let written = records_of(|| {
+        assert_eq!(
+            resolve_through_platform(config.path(), "provider", "/runtime/index.js"),
+            None
+        );
+    });
+    assert_refusal_recorded(&written, "provider", "/runtime/index.js");
+    assert_eq!(
+        resolve_through_platform(
+            config.path(),
+            "nobody",
+            "/modules/@soksak/plugin-api/index.js"
+        ),
+        None
+    );
+}
+
+// contract: document.core-root.native
+#[test]
+fn core_root_resolver_reports_a_granted_file_that_is_missing() {
+    let config = core_root_fixture();
+    std::fs::remove_file(config.path().join("plugins/view/1.0.0/ui/item.js")).unwrap();
+    let written = records_of(|| {
+        assert_eq!(
+            resolve_through_platform(config.path(), "provider", "/modules/plugin-view/ui/item.js"),
+            None
+        );
+    });
+    let want = "error host core root: /modules/plugin-view/ui/item.js is granted to provider, but its file is missing";
+    assert!(
+        written.contains(want),
+        "the records have no {want:?}: {written}"
+    );
 }

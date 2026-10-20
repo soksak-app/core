@@ -98,6 +98,11 @@ func Run(assets fs.FS, options Options) error {
 	if err != nil {
 		return err
 	}
+	// The core root of the views serves the files of the configuration folder and the bundled frontend, so the application does not start
+	// when the platform cannot register the resolver.
+	if err := RegisterCoreRoot(system, configDirectory, frontend); err != nil {
+		return err
+	}
 	// The endpoint is created before a window is shown. When it cannot be created, the application does not start.
 	// endpoint.json is written after the first window is registered and the application started.
 	listener, address, err := system.Listen(SocketDirectory(), applicationName)

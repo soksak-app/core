@@ -233,6 +233,10 @@ func (implementation) SetDocumentEvent(unsafe.Pointer, func(string)) error {
 	return unsupported("document events")
 }
 
+func (implementation) SetCoreRoot(platform.CoreRootResolver) error {
+	return unsupported("core root")
+}
+
 func (implementation) SetDocumentMessage(unsafe.Pointer, func(string)) error {
 	return unsupported("document messages")
 }

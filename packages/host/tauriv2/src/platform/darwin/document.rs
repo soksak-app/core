@@ -1,11 +1,21 @@
 //! The external document webview inside a surface document. The implementation is document_view.m of native/darwin.
 
 use std::ffi::{CStr, CString, c_char, c_void};
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::super::{Handle, Insets};
+use super::super::{CoreRootResolver, Handle, Insets};
+use crate::application_log::log_error;
 
 type Changed = extern "C" fn(*mut c_void, *const c_char);
 type Event = extern "C" fn(*mut c_void, *const c_char);
+type CoreRoot = extern "C" fn(
+    *mut c_void,
+    *const c_char,
+    *const c_char,
+    *mut *mut c_void,
+    *mut usize,
+    *mut *mut c_char,
+) -> bool;
 
 unsafe extern "C" {
     fn sp_document_create(
@@ -13,9 +23,13 @@ unsafe extern "C" {
         store: *const c_char,
         folder: *const c_char,
         plugin: *const c_char,
+        is_view: bool,
         changed: Changed,
         context: *mut c_void,
     ) -> *mut c_void;
+    fn sp_core_root_set_resolver(resolver: CoreRoot, context: *mut c_void);
+    fn malloc(size: usize) -> *mut c_void;
+    fn strdup(text: *const c_char) -> *mut c_char;
     fn sp_document_set_event(document: *mut c_void, event: Event, context: *mut c_void);
     fn sp_document_set_message(document: *mut c_void, message: Event, context: *mut c_void);
     fn sp_document_set_stream(document: *mut c_void, stream: Event, context: *mut c_void);
@@ -91,6 +105,7 @@ pub fn create(
             store.as_ptr(),
             folder.as_ptr(),
             plugin.as_ptr(),
+            false,
             changed,
             receiver as *mut c_void,
         )
@@ -165,6 +180,64 @@ pub fn set_event(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Resul
 }
 
 /// Receives the messages of plugin documents as {"message": value} or {"error": reason}.
+/// Set once, so that a second registration cannot leak the resolver of the first one.
+static CORE_ROOT_SET: AtomicBool = AtomicBool::new(false);
+
+/// Registers the core root resolver of the application. The resolver is kept for the process; the application registers it once
+/// at its start, so the second registration is refused.
+pub fn set_core_root(resolve: CoreRootResolver) -> Result<(), String> {
+    if CORE_ROOT_SET.swap(true, Ordering::SeqCst) {
+        return Err("the core root resolver is already set".into());
+    }
+    let context = Box::into_raw(Box::new(resolve)) as *mut c_void;
+    unsafe { sp_core_root_set_resolver(core_root, context) };
+    Ok(())
+}
+
+/// Answers one request of the core root of a view. It copies the file into memory that the native scheme releases with free.
+/// It returns false for a path that the resolver does not serve.
+extern "C" fn core_root(
+    context: *mut c_void,
+    plugin: *const c_char,
+    path: *const c_char,
+    bytes: *mut *mut c_void,
+    length: *mut usize,
+    content_type: *mut *mut c_char,
+) -> bool {
+    let resolver = unsafe { &*(context as *const CoreRootResolver) };
+    let (Ok(plugin), Ok(path)) = (
+        unsafe { CStr::from_ptr(plugin) }.to_str(),
+        unsafe { CStr::from_ptr(path) }.to_str(),
+    ) else {
+        log_error("core root", "the request of a view is not UTF-8");
+        return false;
+    };
+    let Some(file) = resolver(plugin, path) else {
+        return false;
+    };
+    let Ok(kind) = CString::new(file.content_type) else {
+        log_error("core root", format!("{path}: the content type is not text"));
+        return false;
+    };
+    let data = unsafe { malloc(file.data.len().max(1)) } as *mut u8;
+    let kind_copy = unsafe { strdup(kind.as_ptr()) };
+    if data.is_null() || kind_copy.is_null() {
+        log_error("core root", format!("{path}: the file cannot be copied"));
+        unsafe {
+            free(data as *mut c_void);
+            free(kind_copy as *mut c_void);
+        }
+        return false;
+    }
+    unsafe {
+        std::ptr::copy_nonoverlapping(file.data.as_ptr(), data, file.data.len());
+        *bytes = data as *mut c_void;
+        *length = file.data.len();
+        *content_type = kind_copy;
+    }
+    true
+}
+
 pub fn set_message(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Result<(), String> {
     let receiver = Box::into_raw(Box::new(EventReceiver(receive)));
     unsafe { sp_document_set_message(document as *mut c_void, event, receiver as *mut c_void) };
