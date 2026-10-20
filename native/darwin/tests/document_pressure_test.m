@@ -370,7 +370,7 @@ int main(void) { @autoreleasepool {
     webviewSetSurfaceHidden(surface, false);
     storeDirectory = temporaryFolder(@"soksak-document-pressure-");
     document = sp_document_create(surface, [storeDirectory stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
-        NULL, NULL, false, changed, NULL);
+        NULL, NULL, NULL, changed, NULL);
     if (!document) fail(@"document", @"a document view is not created inside the surface");
     view = (WKWebView *)document;
     sp_document_place(document, 10, 20, 30, 40, true);

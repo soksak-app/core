@@ -76,7 +76,7 @@ test("the 257th host message before the attach is reported through the handler a
   assert.equal(posted.length, before, "no report while the queue holds its limit");
   host({ sok: 1, id: QUEUE_LIMIT + 1, result: "overflow" });
   assert.deepEqual(plain(posted.slice(before)), [
-    { event: "view.error", plugin: "probe", text: "error: view channel: queue full for probe" },
+    { event: "view.error", plugin: "probe", reason: "queue full for probe" },
   ]);
   const received = [];
   globalThis.window.sokView.attach((message) => received.push(message.id));
@@ -92,8 +92,8 @@ test("a host message without the sok marker is reported as an error and passed t
   host({ sok: 2, id: 2, result: "wrong marker" });
   host("text");
   host(null);
-  assert.deepEqual(plain(posted.slice(before)).map((message) => message.text), Array(4).fill(
-    "error: view channel: message without the sok marker for probe",
+  assert.deepEqual(plain(posted.slice(before)).map((message) => message.reason), Array(4).fill(
+    "message without the sok marker for probe",
   ));
   assert.deepEqual(received, []);
 });
@@ -115,7 +115,7 @@ test("a message from a source other than the window is reported as an error and 
   const before = posted.length;
   host({ sok: 1, id: 1, result: "foreign" }, { postMessage() {} });
   assert.deepEqual(plain(posted.slice(before)), [
-    { event: "view.error", plugin: "probe", text: "error: view channel: message from another source for probe" },
+    { event: "view.error", plugin: "probe", reason: "message from another source for probe" },
   ]);
   assert.deepEqual(received, []);
 });

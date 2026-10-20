@@ -171,10 +171,17 @@ impl Platform for Windows {
         store: &str,
         folder: &str,
         plugin: &str,
-        view: bool,
+        channel: Option<&str>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
-        unsupported::create_document(surface, store, folder, plugin, view, changed)
+        unsupported::create_document(surface, store, folder, plugin, channel, changed)
+    }
+    fn set_view_message(
+        &self,
+        document: Handle,
+        message: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::set_view_message(document, message)
     }
     fn set_document_message(
         &self,

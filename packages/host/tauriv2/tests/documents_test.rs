@@ -525,13 +525,14 @@ fn document_interaction_state_must_not_be_empty() {
 // contract: view.create-loads-page
 #[test]
 fn a_view_surface_creates_a_view_configuration_and_loads_its_page() {
-    // The view is created with the view flag, and the page is loaded from sok://<plugin>/<page> right after creation.
+    // The view is created with the channel script, and the page is loaded from sok://<plugin>/<page> right after creation.
     let created = std::cell::RefCell::new(Vec::new());
     let loaded = std::cell::RefCell::new(Vec::new());
     let closed = std::cell::RefCell::new(Vec::new());
     let handle = soksak_host_tauriv2::documents::create_view(
-        |view| {
-            created.borrow_mut().push(view);
+        "channel-script",
+        |channel| {
+            created.borrow_mut().push(channel.to_string());
             Ok(7)
         },
         |document, url| {
@@ -549,8 +550,8 @@ fn a_view_surface_creates_a_view_configuration_and_loads_its_page() {
     assert_eq!(handle, 7, "the created view is returned");
     assert_eq!(
         *created.borrow(),
-        vec![true],
-        "the view configuration has the view flag"
+        vec!["channel-script".to_string()],
+        "the view configuration is created with the channel script"
     );
     assert_eq!(
         *loaded.borrow(),
@@ -558,4 +559,60 @@ fn a_view_surface_creates_a_view_configuration_and_loads_its_page() {
         "the view loads its page at creation"
     );
     assert!(closed.borrow().is_empty(), "a loaded view is not closed");
+}
+
+const READY: &str = r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}"#;
+
+// contract: view.channel.ready
+#[test]
+fn view_channel_records_the_ready_document_and_clears_it_on_navigation() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.message("probe-surface", READY),
+        Ok(true),
+        "a ready message makes the view ready"
+    );
+    assert_eq!(channels.check_post("probe-surface"), Ok(()));
+    assert_eq!(
+        channels.state("probe-surface", r#"{"loading":true}"#),
+        Ok(())
+    );
+    assert_eq!(
+        channels.check_post("probe-surface"),
+        Err("probe-surface has no ready document".to_string()),
+        "a navigation clears the ready record"
+    );
+}
+
+// contract: view.channel.post-before-ready
+#[test]
+fn view_channel_refuses_a_post_before_ready_with_its_text() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.check_post("probe-surface"),
+        Err("probe-surface has no ready document".to_string())
+    );
+}
+
+// contract: view.channel.queue-full
+#[test]
+fn view_channel_reports_queue_full_and_foreign_frame_with_their_reasons() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.message(
+            "probe-surface",
+            r#"{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}"#
+        ),
+        Err("queue full for probe".to_string())
+    );
+    assert_eq!(
+        channels.message(
+            "probe-surface",
+            r#"{"error":"the view channel message comes from a frame that is not the main frame"}"#
+        ),
+        Err("the view channel message comes from a frame that is not the main frame".to_string())
+    );
 }

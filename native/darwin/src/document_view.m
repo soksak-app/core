@@ -19,6 +19,10 @@
 
 static NSString *const kScrollMessage = @"soksakDocumentScroll";
 
+// The script message handler of the view channel of a view configuration (docs/spec/native-surfaces.md#view-surfaces). The
+// handler belongs to the page world, where the channel script runs, so the page can post to it.
+static NSString *const kViewMessage = @"sok-view";
+
 static NSString *const kScrollScript = @"(() => {"
     "const post = () => window.webkit.messageHandlers.soksakDocumentScroll.postMessage("
     "{ x: window.scrollX, y: window.scrollY });"
@@ -267,11 +271,15 @@ static BOOL isBinaryIdentifier(NSString *text) {
 @property sp_document_changed changed;
 @property sp_document_message message;
 @property void *messageContext;
+// The receiver of the sok-view handler of a view configuration (docs/spec/native-surfaces.md#view-surfaces).
+@property sp_view_message viewMessage;
+@property void *viewMessageContext;
 // The id of the plugin whose surface owns the region; its plugin documents have the origin sok://<plugin>.
 @property(copy) NSString *plugin;
 // The bytes that the plugin documents of the region store under binary ids (docs/spec/native-surfaces.md#document-regions).
 @property(retain) SPBinaryStore *binaries;
 - (void)reportMessage:(NSDictionary *)value;
+- (void)reportViewMessage:(WKScriptMessage *)message;
 @property void *context;
 @property sp_document_event event;
 @property void *eventContext;
@@ -501,6 +509,10 @@ static NSString *const kCoreHost = @"core";
 @implementation SPDocumentScroll
 - (void)userContentController:(WKUserContentController *)controller didReceiveScriptMessage:(WKScriptMessage *)message {
     SPDocumentView *view = self.view;
+    if ([message.name isEqualToString:kViewMessage]) {
+        [view reportViewMessage:message];
+        return;
+    }
     if (!view || ![message.body isKindOfClass:NSDictionary.class]) return;
     NSDictionary *body = message.body;
     // The form flags come from every frame; the other messages come only from the main frame.
@@ -618,6 +630,22 @@ static NSString *const kCoreHost = @"core";
         json = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
     }
     self.message(self.messageContext, json.UTF8String);
+}
+
+- (void)reportViewMessage:(WKScriptMessage *)message {
+    NSString *json = nil;
+    if (!message.frameInfo.isMainFrame) {
+        json = @"{\"error\":\"the view channel message comes from a frame that is not the main frame\"}";
+    } else {
+        NSData *data = [NSJSONSerialization dataWithJSONObject:@{ @"message": message.body } options:0 error:nil];
+        json = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : nil;
+        if (!json) json = @"{\"error\":\"the view channel message is not JSON\"}";
+    }
+    if (!self.viewMessage) {
+        sp_log_error("document view", "view channel message without a receiver");
+        return;
+    }
+    self.viewMessage(self.viewMessageContext, json.UTF8String);
 }
 
 - (void)installEventMonitor {
@@ -947,12 +975,15 @@ void sp_core_root_set_resolver(sp_core_root_resolver resolver, void *context) {
     coreRootContext = context;
 }
 
-void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin, bool isView,
+void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin, const char *channel,
     sp_document_changed changed, void *context) {
+    bool isView = channel != NULL;
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     NSView *surface = (NSView *)surfaceHandle;
     if (!surface || !directory || !changed || !surface.window) return NULL;
     if (isView && !(folder && plugin)) return NULL;
+    NSString *channelSource = isView ? [NSString stringWithUTF8String:channel] : nil;
+    if (isView && !channelSource) return NULL;
     WKWebsiteDataStore *store = storeForDirectory(directory);
     if (!store) return NULL;
     NSString *applicationName = safariApplicationName();
@@ -975,6 +1006,14 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kPageMessage];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kMessageMessage];
     [configuration.userContentController addScriptMessageHandler:scroll contentWorld:world name:kFormMessage];
+    if (isView) {
+        // The channel script and its handler run in the page world, so the page can read the host messages through
+        // window.sokView (docs/spec/native-surfaces.md#view-surfaces).
+        WKContentWorld *pageWorld = WKContentWorld.pageWorld;
+        [configuration.userContentController addScriptMessageHandler:scroll contentWorld:pageWorld name:kViewMessage];
+        [configuration.userContentController addUserScript:[[[WKUserScript alloc] initWithSource:channelSource
+            injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:YES inContentWorld:pageWorld] autorelease]];
+    }
     [configuration.userContentController addUserScript:[[[WKUserScript alloc] initWithSource:kFormScript
         injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO inContentWorld:world] autorelease]];
     [configuration.userContentController addUserScript:[[[WKUserScript alloc] initWithSource:kMessageScript
@@ -1058,6 +1097,14 @@ const char *sp_document_restore(void *handle, const char *state) {
     // The setter reports no result; a state that WebKit cannot decode restores no history entry.
     if (!view.backForwardList.currentItem) return "the web view refused the interactionState";
     return NULL;
+}
+
+void sp_document_set_view_message(void *handle, sp_view_message message, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) return;
+    view.viewMessage = message;
+    view.viewMessageContext = context;
 }
 
 void sp_document_set_message(void *handle, sp_document_message message, void *context) {

@@ -187,10 +187,17 @@ pub fn create_document(
     _store: &str,
     _folder: &str,
     _plugin: &str,
-    _view: bool,
+    _channel: Option<&str>,
     _changed: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {
     missing("document view")
+}
+
+pub fn set_view_message(
+    _document: Handle,
+    _message: Box<dyn Fn(String) + Send>,
+) -> Result<(), String> {
+    missing("view channel")
 }
 
 pub fn set_document_message(

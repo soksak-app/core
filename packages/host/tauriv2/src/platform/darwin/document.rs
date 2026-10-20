@@ -23,7 +23,7 @@ unsafe extern "C" {
         store: *const c_char,
         folder: *const c_char,
         plugin: *const c_char,
-        is_view: bool,
+        channel: *const c_char,
         changed: Changed,
         context: *mut c_void,
     ) -> *mut c_void;
@@ -32,6 +32,7 @@ unsafe extern "C" {
     fn strdup(text: *const c_char) -> *mut c_char;
     fn sp_document_set_event(document: *mut c_void, event: Event, context: *mut c_void);
     fn sp_document_set_message(document: *mut c_void, message: Event, context: *mut c_void);
+    fn sp_document_set_view_message(document: *mut c_void, message: Event, context: *mut c_void);
     fn sp_document_set_stream(document: *mut c_void, stream: Event, context: *mut c_void);
     fn sp_document_stream_on(document: *mut c_void, stream: *const c_char, on: bool) -> bool;
     fn sp_document_stream_ack(document: *mut c_void, seq: u64) -> bool;
@@ -67,6 +68,8 @@ thread_local! {
         std::cell::RefCell::new(std::collections::HashMap::new());
     static MESSAGES: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+    static VIEW_MESSAGES: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
     static STREAMS: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
@@ -93,12 +96,16 @@ pub fn create(
     store: &str,
     folder: &str,
     plugin: &str,
-    view: bool,
+    channel: Option<&str>,
     receive: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {
     let store = CString::new(store).map_err(|e| e.to_string())?;
     let folder = CString::new(folder).map_err(|e| e.to_string())?;
     let plugin = CString::new(plugin).map_err(|e| e.to_string())?;
+    let channel = channel
+        .map(CString::new)
+        .transpose()
+        .map_err(|e| e.to_string())?;
     let receiver = Box::into_raw(Box::new(Receiver(receive)));
     let document = unsafe {
         sp_document_create(
@@ -106,7 +113,9 @@ pub fn create(
             store.as_ptr(),
             folder.as_ptr(),
             plugin.as_ptr(),
-            view,
+            channel
+                .as_ref()
+                .map_or(std::ptr::null(), |text| text.as_ptr()),
             changed,
             receiver as *mut c_void,
         )
@@ -311,7 +320,24 @@ pub fn close(document: Handle) {
     if let Some(receiver) = MESSAGES.with(|all| all.borrow_mut().remove(&document)) {
         drop(unsafe { Box::from_raw(receiver) });
     }
+    if let Some(receiver) = VIEW_MESSAGES.with(|all| all.borrow_mut().remove(&document)) {
+        drop(unsafe { Box::from_raw(receiver) });
+    }
     if let Some(receiver) = STREAMS.with(|all| all.borrow_mut().remove(&document)) {
         drop(unsafe { Box::from_raw(receiver) });
     }
+}
+
+/// Receives the messages of the sok-view handler of a view as {"message": value} or {"error": reason}. Call it on the main thread
+/// before the view loads a page.
+pub fn set_view_message(
+    document: Handle,
+    receive: Box<dyn Fn(String) + Send>,
+) -> Result<(), String> {
+    let receiver = Box::into_raw(Box::new(EventReceiver(receive)));
+    unsafe {
+        sp_document_set_view_message(document as *mut c_void, event, receiver as *mut c_void)
+    };
+    VIEW_MESSAGES.with(|all| all.borrow_mut().insert(document, receiver));
+    Ok(())
 }

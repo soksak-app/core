@@ -225,8 +225,12 @@ func (implementation) EvaluateScript(unsafe.Pointer, string) {
 	unreachable("native webview script evaluation")
 }
 
-func (implementation) CreateDocument(unsafe.Pointer, string, string, string, bool, func(string)) (unsafe.Pointer, error) {
+func (implementation) CreateDocument(unsafe.Pointer, string, string, string, string, func(string)) (unsafe.Pointer, error) {
 	return nil, unsupported("document view")
+}
+
+func (implementation) SetViewMessage(unsafe.Pointer, func(string)) error {
+	return unsupported("view channel")
 }
 
 func (implementation) SetDocumentEvent(unsafe.Pointer, func(string)) error {

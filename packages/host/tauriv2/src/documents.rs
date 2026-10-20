@@ -511,7 +511,7 @@ impl Streams {
 /// The document regions of a window. The value is the address of the document webview, and 0 for a region that is being
 /// created.
 #[derive(Default)]
-pub struct Documents(Mutex<HashMap<Key, Handle>>);
+pub struct Documents(Mutex<HashMap<Key, Handle>>, ViewChannels);
 
 #[cfg(feature = "diagnostics")]
 impl Documents {
@@ -532,6 +532,11 @@ impl Documents {
 }
 
 impl Documents {
+    /// The view channels of the window. A view record leaves with the view of its surface.
+    pub fn views(&self) -> &ViewChannels {
+        &self.1
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<Key, Handle>> {
         self.0
             .lock()
@@ -572,14 +577,20 @@ impl Documents {
 
     /// Removes a name and returns the address of its document. The address is 0 when the name was being created.
     pub fn remove(&self, key: &Key) -> Result<Handle, String> {
-        self.lock()
+        let handle = self
+            .lock()
             .remove(key)
-            .ok_or_else(|| format!("document {:?} is not attached", key.1))
+            .ok_or_else(|| format!("document {:?} is not attached", key.1))?;
+        if key.1 == VIEW_NAME {
+            self.1.forget(&key.0);
+        }
+        Ok(handle)
     }
 
     /// Removes every name of a surface and returns the addresses of the created documents.
     pub fn remove_surface(&self, surface: &str) -> Vec<Handle> {
         let mut removed = Vec::new();
+        self.1.forget(surface);
         self.lock().retain(|key, handle| {
             if key.0 != surface {
                 return true;
@@ -611,6 +622,151 @@ impl Documents {
     }
 }
 
+/// The text of the view channel script that each view configuration runs (docs/spec/native-surfaces.md#view-surfaces). The
+/// application sets it once at startup from the bundled frontend.
+static VIEW_CHANNEL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Sets the view channel script. It is an error when the script is already set.
+pub fn set_view_channel(text: &str) -> Result<(), String> {
+    VIEW_CHANNEL
+        .set(text.to_string())
+        .map_err(|_| "the view channel script is already set".to_string())
+}
+
+/// The view channel of one view surface: the plugin of its view and its ready document. An empty document means that no ready
+/// document is recorded (docs/plans/plugin-processes.md, rule 4).
+#[derive(Default)]
+struct ViewChannel {
+    plugin: String,
+    document: String,
+}
+
+/// The view channels of a window, by surface. A navigation clears the ready document, so a post cannot reach a document that
+/// the view has not reported.
+#[derive(Default)]
+pub struct ViewChannels(Mutex<HashMap<String, ViewChannel>>);
+
+#[derive(Deserialize)]
+struct ViewReceived {
+    message: Option<Value>,
+    error: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ViewEvent {
+    event: String,
+    #[serde(default)]
+    plugin: String,
+    #[serde(default)]
+    document: String,
+    #[serde(default)]
+    reason: String,
+}
+
+#[derive(Deserialize)]
+struct ViewState {
+    loading: bool,
+}
+
+impl ViewChannels {
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, ViewChannel>> {
+        self.0
+            .lock()
+            // default: the map is only changed by one insert, update or remove, so it is consistent after a thread stopped
+            // while it held the lock.
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Records the plugin of the view of surface. It runs when the view is created.
+    pub fn register(&self, surface: &str, plugin: &str) {
+        self.lock().insert(
+            surface.to_string(),
+            ViewChannel {
+                plugin: plugin.to_string(),
+                document: String::new(),
+            },
+        );
+    }
+
+    /// Removes the record of the view of surface.
+    pub fn forget(&self, surface: &str) {
+        self.lock().remove(surface);
+    }
+
+    /// Returns the surfaces that have a view, in order.
+    pub fn surfaces(&self) -> Vec<String> {
+        let mut surfaces: Vec<String> = self.lock().keys().cloned().collect();
+        surfaces.sort();
+        surfaces
+    }
+
+    /// Returns the ready document of the view of surface, or None when the view has none.
+    pub fn ready_document(&self, surface: &str) -> Option<String> {
+        self.lock()
+            .get(surface)
+            .map(|channel| channel.document.clone())
+            .filter(|document| !document.is_empty())
+    }
+
+    /// Dispatches one message of the sok-view handler of the view of surface, which is {"message": value} or {"error": reason}.
+    /// It returns Ok(true) when the message makes the view ready, and the reason that the host logs for any other failure.
+    pub fn message(&self, surface: &str, value: &str) -> Result<bool, String> {
+        let received: ViewReceived = serde_json::from_str(value)
+            .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+        if let Some(error) = received.error {
+            return Err(error);
+        }
+        let message = received
+            .message
+            .ok_or_else(|| format!("{surface}: view message has neither message nor error"))?;
+        let event: ViewEvent = serde_json::from_value(message)
+            .map_err(|error| format!("{surface}: view event is not an object: {error}"))?;
+        let plugin = self
+            .lock()
+            .get(surface)
+            .map(|channel| channel.plugin.clone())
+            .ok_or_else(|| {
+                format!("{surface}: view channel message of a surface without a view")
+            })?;
+        match event.event.as_str() {
+            "view.ready" => {
+                if event.plugin != plugin || event.document.is_empty() {
+                    return Err(format!(
+                        "{surface}: view.ready names plugin {:?} and document {:?}, want plugin {plugin:?}",
+                        event.plugin, event.document
+                    ));
+                }
+                if let Some(channel) = self.lock().get_mut(surface) {
+                    channel.document = event.document;
+                }
+                Ok(true)
+            }
+            "view.error" => Err(event.reason),
+            other => Err(format!("{surface}: view event {other:?} is unknown")),
+        }
+    }
+
+    /// Records the navigation state of the view of surface. A loading document clears the ready document of the view.
+    pub fn state(&self, surface: &str, state: &str) -> Result<(), String> {
+        let loaded: ViewState = serde_json::from_str(state)
+            .map_err(|error| format!("{surface}: view state is not JSON: {error}"))?;
+        if loaded.loading
+            && let Some(channel) = self.lock().get_mut(surface)
+        {
+            channel.document.clear();
+        }
+        Ok(())
+    }
+
+    /// Returns the error for a post to the view of surface that has no ready document.
+    pub fn check_post(&self, surface: &str) -> Result<(), String> {
+        match self.ready_document(surface) {
+            Some(_) => Ok(()),
+            None => Err(format!("{surface} has no ready document")),
+        }
+    }
+}
+
 /// The name of the view web view of a view surface. No composition region has an empty name, so the view cannot collide with a
 /// region, and the view closes with the other documents of its surface.
 const VIEW_NAME: &str = "";
@@ -619,13 +775,14 @@ const VIEW_NAME: &str = "";
 /// into it. When the load does not succeed, the view is closed and the error is returned. create, load and close are the
 /// platform operations, and they run on the main thread.
 pub fn create_view(
-    create: impl FnOnce(bool) -> Result<Handle, String>,
+    channel: &str,
+    create: impl FnOnce(&str) -> Result<Handle, String>,
     load: impl FnOnce(Handle, &str) -> Result<bool, String>,
     close: impl FnOnce(Handle) -> Result<(), String>,
     plugin: &str,
     page: &str,
 ) -> Result<Handle, String> {
-    let handle = create(true)?;
+    let handle = create(channel)?;
     let address = format!("sok://{plugin}/{page}");
     let reason = match load(handle, &address) {
         Ok(true) => return Ok(handle),
@@ -653,7 +810,7 @@ pub(crate) fn sync_view(
         Ok(handle) => handle,
         Err(_) => {
             data.documents.reserve(&key)?;
-            match attach_view(window, platform, surface_handle, plugin, page) {
+            match attach_view(window, platform, surface, surface_handle, plugin, page) {
                 Ok(handle) => {
                     if !data.documents.set(&key, handle) {
                         platform.close_document(handle)?;
@@ -661,6 +818,7 @@ pub(crate) fn sync_view(
                             "surface {surface:?} closed while its view was created"
                         ));
                     }
+                    data.documents.views().register(surface, plugin);
                     handle
                 }
                 Err(error) => {
@@ -686,6 +844,7 @@ pub(crate) fn sync_view(
 fn attach_view(
     window: &Window,
     platform: &'static dyn platform::Platform,
+    surface: &str,
     surface_handle: Handle,
     plugin: &str,
     page: &str,
@@ -703,22 +862,92 @@ fn attach_view(
         .to_str()
         .ok_or_else(|| format!("plugin folder is not UTF-8: {}", folder.display()))?
         .to_string();
+    let channel = VIEW_CHANNEL
+        .get()
+        .ok_or_else(|| "the view channel script is not loaded".to_string())?;
+    let state_window = window.clone();
+    let state_surface = surface.to_string();
+    let message_window = window.clone();
+    let message_surface = surface.to_string();
     create_view(
-        |view| {
-            platform.create_document(
+        channel,
+        |channel| {
+            let document = platform.create_document(
                 surface_handle,
                 directory,
                 &folder,
                 plugin,
-                view,
-                Box::new(|_: String| {}),
-            )
+                Some(channel),
+                Box::new(move |state: String| view_state(&state_window, &state_surface, &state)),
+            )?;
+            // The receiver is set before the page loads, so the first message of the page reaches it.
+            platform.set_view_message(
+                document,
+                Box::new(move |value: String| {
+                    view_message(&message_window, platform, &message_surface, &value)
+                }),
+            )?;
+            Ok(document)
         },
         |document, url| platform.load_document(document, url),
         |document| platform.close_document(document),
         plugin,
         page,
     )
+}
+
+/// Records the navigation state of a view. A failure is written to the application log.
+fn view_state(window: &Window, surface: &str, state: &str) {
+    let result = window_data(window).and_then(|data| data.documents.views().state(surface, state));
+    if let Err(error) = result {
+        log_error("view channel", error);
+    }
+}
+
+/// Dispatches a message of the sok-view handler of a view. The ready message makes the view receive the current theme. A failure
+/// is written to the application log.
+fn view_message(window: &Window, platform: &'static dyn Platform, surface: &str, value: &str) {
+    let ready = window_data(window).and_then(|data| data.documents.views().message(surface, value));
+    match ready {
+        Ok(true) => {
+            if let Err(error) = post_theme(window, platform, surface) {
+                log_error("view channel", error);
+            }
+        }
+        Ok(false) => {}
+        Err(error) => log_error("view channel", error),
+    }
+}
+
+/// Posts the current theme to the ready document of the view of surface, with the field sok 1.
+fn post_theme(window: &Window, platform: &dyn Platform, surface: &str) -> Result<(), String> {
+    let theme = crate::theme::get(window)?;
+    let data = window_data(window)?;
+    let handle = data
+        .documents
+        .get(&(surface.to_string(), VIEW_NAME.to_string()))?;
+    let message = json!({"sok": 1, "event": "theme", "theme": theme}).to_string();
+    if platform.post_document(handle, &message)? {
+        Ok(())
+    } else {
+        Err(format!("{surface}: the view document refused the message"))
+    }
+}
+
+/// Posts the current theme to each view of the window that has a ready document. A view without one is skipped, because the theme
+/// reaches it with its ready message.
+pub(crate) fn post_theme_to_views(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    let platform = platform::current()?;
+    for surface in data.documents.views().surfaces() {
+        if data.documents.views().ready_document(&surface).is_none() {
+            continue;
+        }
+        if let Err(error) = post_theme(window, platform, &surface) {
+            log_error("view channel", error);
+        }
+    }
+    Ok(())
 }
 
 /// Checks the surface id of the calling webview and returns the key and the window of the request.
@@ -833,7 +1062,7 @@ fn create(
             .ok_or_else(|| format!("plugin folder is not UTF-8: {}", folder.display()))?
             .to_string();
         let handle =
-            platform.create_document(surface, directory, &folder, &plugin, false, changed)?;
+            platform.create_document(surface, directory, &folder, &plugin, None, changed)?;
         // The history is restored before anything else uses the new region, so it loads the restored entry first.
         if let Some(state) = &restore
             && let Err(refusal) = platform.restore_document(handle, state)

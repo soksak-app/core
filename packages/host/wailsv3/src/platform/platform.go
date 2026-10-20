@@ -368,9 +368,13 @@ type Platform interface {
 	// data store keeps the site data. changed receives the state JSON ({url, title, loading, progress, canGoBack, canGoForward,
 	// error, scroll}) on the UI thread.
 	// folder and plugin are the installed folder and the id of the plugin whose surface owns the region; the region serves
-	// sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). view is true for the web view
-	// configuration of a view surface, which is the only configuration that serves the core root (docs/spec/native-surfaces.md#view-surfaces).
-	CreateDocument(surface unsafe.Pointer, directory, folder, plugin string, view bool, changed func(state string)) (unsafe.Pointer, error)
+	// sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). channel is empty for a document region.
+	// A view surface passes the text of the view channel script, and its configuration is the only one that serves the core
+	// root and runs the script (docs/spec/native-surfaces.md#view-surfaces).
+	CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error)
+	// SetViewMessage receives {"message": value} for each message of the sok-view handler of a view, and {"error": reason} for a
+	// message from another frame. It must be set before the view loads a page.
+	SetViewMessage(document unsafe.Pointer, message func(value string)) error
 	SetDocumentEvent(document unsafe.Pointer, event func(value string)) error
 	// SetDocumentStream receives {"stream": "elements" or "requests", "message": {...}} for each stream message of the document.
 	SetDocumentStream(document unsafe.Pointer, stream func(value string)) error

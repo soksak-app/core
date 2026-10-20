@@ -1,6 +1,7 @@
 package host
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
@@ -73,12 +74,11 @@ type viewPlatform struct {
 }
 
 type viewCreation struct {
-	folder, plugin string
-	view           bool
+	folder, plugin, channel string
 }
 
-func (p *viewPlatform) CreateDocument(surface unsafe.Pointer, directory, folder, plugin string, view bool, changed func(state string)) (unsafe.Pointer, error) {
-	p.created = append(p.created, viewCreation{folder: folder, plugin: plugin, view: view})
+func (p *viewPlatform) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error) {
+	p.created = append(p.created, viewCreation{folder: folder, plugin: plugin, channel: channel})
 	return unsafe.Pointer(new(int)), nil
 }
 
@@ -92,6 +92,10 @@ func (p *viewPlatform) PlaceDocument(document unsafe.Pointer, left, top, right, 
 
 func (p *viewPlatform) CloseDocument(document unsafe.Pointer) {}
 
+func (p *viewPlatform) SetViewMessage(document unsafe.Pointer, message func(value string)) error {
+	return nil
+}
+
 // contract: view.create-loads-page
 func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	fake := &viewPlatform{}
@@ -99,11 +103,11 @@ func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	system = fake
 	t.Cleanup(func() { system = saved })
 	s := &Surfaces{documents: NewDocuments()}
-	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html"); err != nil {
+	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script"); err != nil {
 		t.Fatalf("attach view: %v", err)
 	}
-	if len(fake.created) != 1 || !fake.created[0].view || fake.created[0].plugin != "probe" || fake.created[0].folder != "/plugins/probe" {
-		t.Fatalf("created documents: %+v, want one view configuration of plugin probe in its folder", fake.created)
+	if len(fake.created) != 1 || fake.created[0].channel != "channel-script" || fake.created[0].plugin != "probe" || fake.created[0].folder != "/plugins/probe" {
+		t.Fatalf("created documents: %+v, want one view configuration of plugin probe in its folder with the channel script", fake.created)
 	}
 	if want := []string{"sok://probe/ui/page.html"}; !reflect.DeepEqual(fake.loaded, want) {
 		t.Fatalf("loaded addresses: %v, want %v", fake.loaded, want)
@@ -131,5 +135,90 @@ func TestViewCompositionDeclaresPageWithOptionalRegions(t *testing.T) {
 		if err := validateComposition(composition); err == nil {
 			t.Fatalf("composition %+v is accepted", composition)
 		}
+	}
+}
+
+// channelPlatform is the platform of the view channel tests. It keeps the receiver of the sok-view messages of each document and
+// records each message that the host posts to a document.
+type channelPlatform struct {
+	viewPlatform
+	receive func(string)
+	posted  []string
+}
+
+func (p *channelPlatform) SetViewMessage(document unsafe.Pointer, message func(value string)) error {
+	p.receive = message
+	return nil
+}
+
+func (p *channelPlatform) PostDocument(document unsafe.Pointer, value string) bool {
+	p.posted = append(p.posted, value)
+	return true
+}
+
+// newViewChannelSurfaces returns the surfaces of one attached view of plugin probe and the platform that records its messages.
+func newViewChannelSurfaces(t *testing.T) (*Surfaces, *channelPlatform) {
+	t.Helper()
+	fake := &channelPlatform{}
+	var _ platform.Platform = fake
+	saved := system
+	system = fake
+	t.Cleanup(func() { system = saved })
+	s := &Surfaces{documents: NewDocuments()}
+	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script"); err != nil {
+		t.Fatalf("attach view: %v", err)
+	}
+	return s, fake
+}
+
+// contract: view.channel.ready
+func TestViewChannelRecordsReadyDocumentPostsThemeAndClearsOnNavigation(t *testing.T) {
+	s, fake := newViewChannelSurfaces(t)
+	s.theme = Theme{Scheme: "dark", Tokens: map[string]string{"bg": "#000000"}}
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`
+	if err := s.viewMessage("probe-surface", ready); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	if len(fake.posted) != 1 {
+		t.Fatalf("messages posted after ready: %d, want the current theme", len(fake.posted))
+	}
+	var theme map[string]any
+	if err := json.Unmarshal([]byte(fake.posted[0]), &theme); err != nil {
+		t.Fatalf("theme message is not JSON: %v", err)
+	}
+	if theme["sok"] != float64(1) || theme["event"] != "theme" {
+		t.Fatalf("theme message %v, want sok 1 and event theme", theme)
+	}
+	if err := s.postView("probe-surface", map[string]any{"event": "probe"}); err != nil {
+		t.Fatalf("post to a ready view: %v", err)
+	}
+	s.viewState("probe-surface", `{"loading":true}`)
+	if err := s.postView("probe-surface", map[string]any{"event": "probe"}); err == nil {
+		t.Fatalf("post after navigation is accepted, want the ready record cleared")
+	}
+}
+
+// contract: view.channel.post-before-ready
+func TestViewChannelRefusesPostBeforeReadyWithItsText(t *testing.T) {
+	s, fake := newViewChannelSurfaces(t)
+	err := s.postView("probe-surface", map[string]any{"event": "probe"})
+	if err == nil || err.Error() != "probe-surface has no ready document" {
+		t.Fatalf("post before ready: %v, want probe-surface has no ready document", err)
+	}
+	if len(fake.posted) != 0 {
+		t.Fatalf("posted before ready: %v", fake.posted)
+	}
+}
+
+// contract: view.channel.queue-full
+func TestViewChannelReportsQueueFullAndForeignFrameWithTheirReasons(t *testing.T) {
+	s, _ := newViewChannelSurfaces(t)
+	full := `{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}`
+	if err := s.viewMessage("probe-surface", full); err == nil || err.Error() != "queue full for probe" {
+		t.Fatalf("queue full: %v, want queue full for probe", err)
+	}
+	foreign := `{"error":"the view channel message comes from a frame that is not the main frame"}`
+	if err := s.viewMessage("probe-surface", foreign); err == nil || err.Error() != "the view channel message comes from a frame that is not the main frame" {
+		t.Fatalf("foreign frame: %v", err)
 	}
 }

@@ -150,9 +150,13 @@ func (s *Surfaces) checkDocument(viewID uint64, req DocumentRequest) (DocumentKe
 type Documents struct {
 	mu      sync.Mutex
 	handles map[DocumentKey]unsafe.Pointer
+	// views is the view channel of each view surface. A record leaves with the view of its surface.
+	views map[string]*viewChannel
 }
 
-func NewDocuments() *Documents { return &Documents{handles: map[DocumentKey]unsafe.Pointer{}} }
+func NewDocuments() *Documents {
+	return &Documents{handles: map[DocumentKey]unsafe.Pointer{}, views: map[string]*viewChannel{}}
+}
 
 // Reserve takes a name. It is an error when the same name already exists.
 func (d *Documents) Reserve(key DocumentKey) error {
@@ -195,6 +199,9 @@ func (d *Documents) Remove(key DocumentKey) (unsafe.Pointer, error) {
 		return nil, fmt.Errorf("document %q is not attached", key.Name)
 	}
 	delete(d.handles, key)
+	if key.Name == viewRegionName {
+		delete(d.views, key.Surface)
+	}
 	return handle, nil
 }
 
@@ -203,6 +210,7 @@ func (d *Documents) RemoveSurface(surface string) []unsafe.Pointer {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	var removed []unsafe.Pointer
+	delete(d.views, surface)
 	for key, handle := range d.handles {
 		if key.Surface != surface {
 			continue
@@ -293,7 +301,7 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 		if err != nil {
 			return
 		}
-		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, false, func(state string) {
+		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, "", func(state string) {
 			s.documentChanged(key, state)
 		})
 		// The history is restored before anything else uses the new region, so it loads the restored entry first.
@@ -342,12 +350,23 @@ const viewRegionName = ""
 
 // attachView creates the view web view of a view surface with the view configuration (isView) and loads sok://<plugin>/<page> into it.
 // The view state is not reported by this step. It runs on the UI thread.
-func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, directory, folder, plugin, page string) error {
+func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, directory, folder, plugin, page, channel string) error {
 	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
 	if err := s.documents.Reserve(key); err != nil {
 		return err
 	}
-	handle, err := system.CreateDocument(surface, directory, folder, plugin, true, func(string) {})
+	handle, err := system.CreateDocument(surface, directory, folder, plugin, channel, func(state string) {
+		if err := s.viewState(surfaceID, state); err != nil {
+			LogError("view channel", err)
+		}
+	})
+	if err == nil {
+		err = system.SetViewMessage(handle, func(value string) {
+			if err := s.viewMessage(surfaceID, value); err != nil {
+				LogError("view channel", err)
+			}
+		})
+	}
 	if err == nil && !system.LoadDocument(handle, "sok://"+plugin+"/"+page) {
 		system.CloseDocument(handle)
 		err = fmt.Errorf("view of surface %q cannot load sok://%s/%s", surfaceID, plugin, page)
@@ -360,6 +379,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		system.CloseDocument(handle)
 		return fmt.Errorf("surface %q closed while its view was created", surfaceID)
 	}
+	s.documents.registerView(surfaceID, plugin)
 	return nil
 }
 
@@ -372,7 +392,7 @@ func (s *Surfaces) syncView(surfaceID string, surface unsafe.Pointer, plugin, pa
 		if folderErr != nil {
 			return folderErr
 		}
-		if err := s.attachView(surfaceID, surface, filepath.Join(s.host.configDir, documentData), folder, plugin, page); err != nil {
+		if err := s.attachView(surfaceID, surface, filepath.Join(s.host.configDir, documentData), folder, plugin, page, viewChannelScript); err != nil {
 			return err
 		}
 		if handle, err = s.documents.Get(key); err != nil {
@@ -1135,4 +1155,165 @@ func (d *DocumentStreams) deliveriesLocked(key DocumentKey, stream string, body 
 		deliveries = append(deliveries, StreamDelivery{Surface: key.Surface, Handle: handle, Stream: stream, Message: body})
 	}
 	return deliveries
+}
+
+// viewChannelPath is the path of the view channel script in the bundled frontend, where the staging tool places the plugin-api package.
+const viewChannelPath = "modules/@soksak/plugin-api/view-start.js"
+
+// viewChannelScript is the text of the view channel script that each view configuration runs before its page.
+var viewChannelScript string
+
+// viewChannelMarker is the field that each host message to a view carries.
+const viewChannelMarker = 1
+
+// viewChannel is the channel of one view surface: the plugin of its view and its ready document. An empty document means that no
+// ready document is recorded.
+type viewChannel struct {
+	plugin   string
+	document string
+}
+
+// registerView records the plugin of the view of surface. It runs when the view is created.
+func (d *Documents) registerView(surface, plugin string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.views[surface] = &viewChannel{plugin: plugin}
+}
+
+// view returns the channel of the view of surface, and false when the surface has no view.
+func (d *Documents) view(surface string) (viewChannel, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	channel, ok := d.views[surface]
+	if !ok {
+		return viewChannel{}, false
+	}
+	return *channel, true
+}
+
+// viewSurfaces returns the surfaces that have a view, in order.
+func (d *Documents) viewSurfaces() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	surfaces := make([]string, 0, len(d.views))
+	for surface := range d.views {
+		surfaces = append(surfaces, surface)
+	}
+	sort.Strings(surfaces)
+	return surfaces
+}
+
+// setReadyDocument records document as the ready document of the view of surface, and clears the record when document is empty.
+func (d *Documents) setReadyDocument(surface, document string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	channel, ok := d.views[surface]
+	if !ok {
+		return false
+	}
+	channel.document = document
+	return true
+}
+
+// viewMessage dispatches one message of the sok-view handler of the view of surface. The message is {"message": value} for a message
+// of the view and {"error": reason} for a message from another frame. It returns the reason that the host writes to the application
+// log, or nil when the message needs no log line.
+func (s *Surfaces) viewMessage(surface, value string) error {
+	var received struct {
+		Message json.RawMessage `json:"message"`
+		Error   *string         `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(value), &received); err != nil {
+		return fmt.Errorf("%s: view message is not JSON: %w", surface, err)
+	}
+	if received.Error != nil {
+		return errors.New(*received.Error)
+	}
+	if received.Message == nil {
+		return fmt.Errorf("%s: view message has neither message nor error", surface)
+	}
+	var event struct {
+		Event    string `json:"event"`
+		Plugin   string `json:"plugin"`
+		Document string `json:"document"`
+		Reason   string `json:"reason"`
+	}
+	if err := json.Unmarshal(received.Message, &event); err != nil {
+		return fmt.Errorf("%s: view event is not an object: %w", surface, err)
+	}
+	channel, ok := s.documents.view(surface)
+	if !ok {
+		return fmt.Errorf("%s: view channel message of a surface without a view", surface)
+	}
+	switch event.Event {
+	case "view.ready":
+		if event.Plugin != channel.plugin || event.Document == "" {
+			return fmt.Errorf("%s: view.ready names plugin %q and document %q, want plugin %q", surface, event.Plugin, event.Document, channel.plugin)
+		}
+		s.documents.setReadyDocument(surface, event.Document)
+		// The current theme is the first message to a ready document (docs/spec/native-surfaces.md#view-surfaces).
+		return s.postView(surface, map[string]any{"event": "theme", "theme": s.Theme()})
+	case "view.error":
+		return errors.New(event.Reason)
+	}
+	return fmt.Errorf("%s: view event %q is unknown", surface, event.Event)
+}
+
+// viewState records the navigation state of the view of surface. A loading document clears the ready record of the view, so the
+// next ready message of the new document is the first record of it.
+func (s *Surfaces) viewState(surface, state string) error {
+	var loaded struct {
+		Loading bool `json:"loading"`
+	}
+	if err := json.Unmarshal([]byte(state), &loaded); err != nil {
+		return fmt.Errorf("%s: view state is not JSON: %w", surface, err)
+	}
+	if loaded.Loading {
+		s.documents.setReadyDocument(surface, "")
+	}
+	return nil
+}
+
+// postView posts message to the ready document of the view of surface, with the field sok 1. It returns an error when the view has no
+// ready document or when the document refuses the message.
+func (s *Surfaces) postView(surface string, message map[string]any) error {
+	ready, err := s.sendToView(surface, message)
+	if err != nil {
+		return err
+	}
+	if !ready {
+		return fmt.Errorf("%s has no ready document", surface)
+	}
+	return nil
+}
+
+// sendToView posts message to the ready document of the view of surface and reports whether the view has one. A view without a ready
+// document is not an error here, so the theme of a view that is not ready is skipped.
+func (s *Surfaces) sendToView(surface string, message map[string]any) (bool, error) {
+	channel, ok := s.documents.view(surface)
+	if !ok || channel.document == "" {
+		return false, nil
+	}
+	handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: viewRegionName})
+	if err != nil {
+		return false, err
+	}
+	message["sok"] = viewChannelMarker
+	data, err := json.Marshal(message)
+	if err != nil {
+		return false, err
+	}
+	if !system.PostDocument(handle, string(data)) {
+		return false, fmt.Errorf("%s: the view document refused the message", surface)
+	}
+	return true, nil
+}
+
+// postThemeToViews posts the current theme to each view that has a ready document. It runs after the theme changed.
+func (s *Surfaces) postThemeToViews() {
+	for _, surface := range s.documents.viewSurfaces() {
+		if _, err := s.sendToView(surface, map[string]any{"event": "theme", "theme": s.Theme()}); err != nil {
+			LogError("view channel", err)
+		}
+	}
 }

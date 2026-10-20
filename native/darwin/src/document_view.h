@@ -26,17 +26,28 @@ typedef void (*sp_document_message)(void *context, const char *json);
 // {type: "entries", entries} or {type: "reset"}. json is released when the call returns. Called on the main thread.
 typedef void (*sp_document_stream)(void *context, const char *json);
 
+// A message of a view page through the sok-view handler (docs/spec/native-surfaces.md#view-surfaces): the JSON object
+// {"message": <value>} for each message that the page posts, or {"error": <reason>} when the message comes from a frame that
+// is not the main frame. json is released when the call returns. Called on the main thread.
+typedef void (*sp_view_message)(void *context, const char *json);
+
 // Creates a document webview hidden inside the surface webview. directory is the absolute path where the persistent
 // data store keeps
 // site data, and it is created if missing. Documents with the same directory use the same store. folder and plugin
 // name
 // the installed
 // folder and the id of the plugin whose surface owns the region; sok://<plugin>/<path> serves <path> from that folder,
-// and NULL folder serves nothing. isView is true for a view configuration, which may also request sok://core/<path> from
-// the core root resolver (sp_core_root_set_resolver); a region is false and receives no core root grant
-// (docs/plans/plugin-processes.md, rule 4). A view needs folder and plugin. Returns NULL if the webview cannot be created.
-void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin, bool isView,
+// and NULL folder serves nothing. channel is NULL for a document region, which receives no core root grant
+// (docs/plans/plugin-processes.md, rule 4). A non-NULL channel is the text of the view channel script of a view
+// configuration: the script runs at document start in the page world, the sok-view handler is registered, and the
+// configuration may request sok://core/<path> from the core root resolver (sp_core_root_set_resolver). A view needs
+// folder and plugin. Returns NULL if the webview cannot be created.
+void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin, const char *channel,
     sp_document_changed changed, void *context);
+
+// Sets the receiver of the messages of the sok-view handler of a view. NULL reports none. The caller keeps context while the
+// document lives.
+void sp_document_set_view_message(void *document, sp_view_message message, void *context);
 
 // Resolves a request of the core root (docs/plans/plugin-processes.md, rule 4) of a view of plugin for the URL path path,
 // which names a file of the core host. When the path is served, it returns true and sets bytes to a copy of the file that

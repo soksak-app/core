@@ -396,7 +396,7 @@ int main(void) { @autoreleasepool {
     // The document region is a subview of the surface. Its size without the margins is 300-10-30 × 200.5-20-40. The
     // document store directory is removed when the check ends.
     NSString *store = temporaryFolder(@"soksak-geometry-store-");
-    WKWebView *region = (WKWebView *)sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, false, ignoreState, NULL);
+    WKWebView *region = (WKWebView *)sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, ignoreState, NULL);
     check(region != NULL, @"a document region is created in the surface");
     sp_document_place(region, 10, 20, 30, 40, true);
     verifyRegion(region, 2, 260, 140.5, @"at 2x");

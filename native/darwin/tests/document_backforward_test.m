@@ -173,7 +173,7 @@ int main(void) { @autoreleasepool {
 
     NSString *storeDirectory = temporaryFolder(@"soksak-document-backforward-");
     document = sp_document_create(surface, [storeDirectory stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
-        NULL, NULL, false, changed, NULL);
+        NULL, NULL, NULL, changed, NULL);
     if (!document) failStep(@"create", @"a document view is not created inside the surface");
     view = (WKWebView *)document;
     sp_document_place(document, 10, 20, 30, 40, true);

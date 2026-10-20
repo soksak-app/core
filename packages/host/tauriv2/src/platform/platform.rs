@@ -399,9 +399,16 @@ pub trait Platform: CoreRootHost + Send + Sync {
         store: &str,
         folder: &str,
         plugin: &str,
-        view: bool,
+        channel: Option<&str>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String>;
+    /// Receives {"message": value} for each message of the sok-view handler of a view and {"error": reason} for a message from
+    /// another frame. It must be set before the view loads a page.
+    fn set_view_message(
+        &self,
+        document: Handle,
+        message: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String>;
     fn set_document_event(
         &self,
         document: Handle,

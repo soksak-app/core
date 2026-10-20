@@ -62,7 +62,7 @@ int main(void) { @autoreleasepool {
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
 
     @autoreleasepool {
-        void *view = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", true, changed, NULL);
+        void *view = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", "", changed, NULL);
         check(view != NULL, @"a view configuration is created with the folder and the plugin of its surface");
         sp_document_place(view, 0, 0, 0, 0, true);
         latest = nil;
