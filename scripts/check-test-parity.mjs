@@ -2141,6 +2141,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F207",
+    implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "export const DEFAULT_TIMEOUT_MS" }],
+    tests: [{ file: "scripts/test/test-language-test-adapters.test.mjs", id: "discovers all supported language cases with explicit default limits" }],
+    expected: "Each language case has a limit that only bounds a hang.",
+    levels: ["unit"],
+  },
+  {
     id: "F201",
     implementation: [{ file: "native/darwin/src/document_view.m", symbol: "void sp_document_store_close(" }],
     tests: [{ file: "native/darwin/tests/document_view_test.m", id: "the data stores end without an error" }],

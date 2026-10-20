@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F192.3-3-6: a folder wait judges the state of the folder at its deadline, so a watch that is active or notifies late at a high load does not fail a wait whose state is reached.
+- F207: the js-ts limit of the language test adapters is 30 s, the hang bound of the other languages.
+- F206: core 0.0.19 is released after the CI of its commit passed; every declared workspace version is 0.0.19, and the release carries every other entry of this section.
 - F205: new commits are authored as `min-0-max <max@blue.tools>`; `.mailmap` maps the former name, and the tao fork is named by the renamed account.
 - F204: the Wails modules name the fork by its renamed account `min-0-max/wails`.
 - V5-117-1-3-4-7-1-8: closed by F192.3-3-3, which leaves the launch activation to the system in both hosts.

@@ -7,7 +7,7 @@ const command = (source) => ({ command: process.execPath, args: ['-e', source] }
 test('discovers all supported language cases with explicit default limits', () => {
   const cases = discoverLanguageCases({ cases: Object.entries(DEFAULT_TIMEOUT_MS).filter(([language]) => language !== 'application').map(([language]) => ({ id: language, language, ...command('process.exit(0)') })) });
   assert.deepEqual(cases.map(({ language, timeoutMs }) => [language, timeoutMs]), [
-    ['js-ts', 10_000], ['rust', 30_000], ['go', 30_000], ['objective-c', 30_000], ['shell', 30_000],
+    ['js-ts', 30_000], ['rust', 30_000], ['go', 30_000], ['objective-c', 30_000], ['shell', 30_000],
   ]);
 });
 

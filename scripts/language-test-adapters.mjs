@@ -3,8 +3,10 @@ import { pathToFileURL } from 'node:url';
 import { runCommand } from './test-command.mjs';
 import { collectEvidence, persistEvidence } from './test-evidence.mjs';
 
+// Each limit only bounds a hang. The js-ts case runs the command supervisor file of 20 tests, which takes up to 11 s at
+// load averages of 35 to 67, so its limit equals the limit of the compiled languages.
 export const DEFAULT_TIMEOUT_MS = Object.freeze({
-  'js-ts': 10_000,
+  'js-ts': 30_000,
   rust: 30_000,
   go: 30_000,
   'objective-c': 30_000,
