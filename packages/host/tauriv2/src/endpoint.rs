@@ -527,6 +527,7 @@ fn reported_content(contents: &[u8]) -> String {
 
 /// The earlier run that a free lock file with these contents left.
 fn unrecorded_end_of(contents: &[u8]) -> UnrecordedEnd {
+    // default: contents that are not UTF-8 are not the current form, and they are reported as their cut text.
     match std::str::from_utf8(contents).ok().and_then(parse_owner) {
         Some(owner) => UnrecordedEnd {
             boot: Some(owner.boot),
@@ -544,6 +545,7 @@ fn unrecorded_end_of(contents: &[u8]) -> UnrecordedEnd {
 /// The refusal of a second start while the lock is held. The owner is live, so the refusal does not depend on the content:
 /// the content names the owner when it is the current form, and it is reported otherwise.
 fn held_refusal(directory: &Path, contents: &[u8]) -> String {
+    // default: contents that are not UTF-8 name no owner, and the refusal reports them as their cut text.
     if let Some(owner) = std::str::from_utf8(contents).ok().and_then(parse_owner) {
         return format!(
             "configuration directory {} is already owned by process {}",
@@ -566,6 +568,7 @@ fn held_refusal(directory: &Path, contents: &[u8]) -> String {
 
 /// The owner that the contents of a lock file name: a JSON object with a positive pid and a non-empty boot.
 fn parse_owner(contents: &str) -> Option<LockOwner> {
+    // default: contents that do not parse are not the current form, and the callers report them.
     let owner: LockOwner = serde_json::from_str(contents).ok()?;
     (owner.pid > 0 && !owner.boot.is_empty()).then_some(owner)
 }
