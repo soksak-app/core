@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- F212.3-6: 선언된 UI snapshot은 전송 중에 status가 덮어쓴 값의 수를 필드 `skipped`로 담는다. receiver는 0 이상이 아닌 수를 거부하고 `onSnapshot`에 넘긴다. 메인 페이지는 성능 trace가 켜져 있을 때 `page.trace.declared-ui.snapshot.skipped`와 `page.trace.status.stalled`를 페이지 trace로 쓴다. live receiver와 stall 생산자는 아직 연결하지 않았다.
+- F212.3-6: 선언된 UI snapshot은 전송 중에 status가 덮어쓴 값의 수를 필드 `skipped`로 담는다. receiver는 0 이상이 아닌 수를 거부하고 `onSnapshot`에 넘긴다. 메인 페이지는 성능 trace가 켜져 있을 때 `page.trace.declared-ui.snapshot.skipped`를 페이지 trace로 쓴다. 멈춘 값은 `losses.stalled`로 세며 event를 쓰지 않는다.
 - F212.6-5-1: `core.surfaces` composition 필드의 `hasPlugin` 보호를 제거한다. compositor가 필드를 읽기 전에 등록되지 않은 plugin에서 throw하므로 보호는 dead code였고, 필드는 표면 선언의 종류를 읽는다.
 - F212.3-7: host는 view process가 끝날 때 열려 있던 view call마다 `host.call.peer-lost {plugin, command, reason: process-ended}`(error)를 쓴다. host는 메인 page가 답하지 않은 call을 plugin과 command와 함께 보관하며, event는 event catalog에 선언한다. 계약 case `view.call.peer-lost`는 두 host에서 실행한다. `sidecar-ended` 경우는 F212.3-7-1이며, sidecar 요청 원장이 command를 기록하지 않아 막혀 있다.
 - F212.6-5: 실행 중인 문서의 audit은 page가 `core.surface.document`를 노출하지 않는 보이는 view를 건너뛰지 않고 실패한다. `core.surfaces`는 surface마다 구성 종류를 `composition`으로 보고하며, plugin이 그 표면을 선언하지 않으면 `null`이다. audit 선택은 `e2e/audit-surfaces.mjs`의 `unauditedViews`이고, 종류는 workbench의 `compositionKindOf`가 읽는다.
