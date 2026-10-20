@@ -324,7 +324,7 @@ func (l *EventLog) EmitCids(level Level, event string, cids []string, fields any
 		return false
 	}
 	// A closed gate builds nothing: the fields are not serialized for an event that the policy does not store.
-	if class, declared := EventClassOf(event); declared && !l.Gate(class, level) {
+	if class, declared := EventClassOf(event); declared && !PassesEveryGate(event) && !l.Gate(class, level) {
 		return false
 	}
 	if l.queuedEvents.Load() >= l.queueEvents {
@@ -385,7 +385,7 @@ func (l *EventLog) EmitRelayed(e RelayedEvent) (bool, error) {
 	}
 	// page.start passes every gate: the first module of the page emits it before the policy reaches the gate of the page, and a
 	// reader finds the start of each document by it (docs/spec/logging.md#policy).
-	if class, declared := EventClassOf(e.Event); declared && e.Event != "page.start" && !l.Gate(class, e.Level) {
+	if class, declared := EventClassOf(e.Event); declared && !PassesEveryGate(e.Event) && !l.Gate(class, e.Level) {
 		return false, nil
 	}
 	if l.queuedEvents.Load() >= l.queueEvents {
@@ -421,7 +421,7 @@ func (l *EventLog) enqueuePlaced(tsMicros int64, monoNs uint64, layer, page stri
 	l.classify(pending)
 	// A closed gate stores nothing and counts the event; an event that the catalog does not declare has no class and no gate, and
 	// page.start passes every gate.
-	if pending.class != "" && event != "page.start" && !l.Gate(pending.class, level) {
+	if pending.class != "" && !PassesEveryGate(event) && !l.Gate(pending.class, level) {
 		return errPolicy
 	}
 	return l.queue(pending)

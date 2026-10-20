@@ -7,6 +7,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use soksak_host_tauriv2::event_log::Level;
 use soksak_host_tauriv2::stall_watch::{StallWatchOptions, start_stall_watch};
 
 type Recorded = Arc<Mutex<Vec<(String, serde_json::Value)>>>;
@@ -27,6 +28,8 @@ fn a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end() {
     let on_main = work.clone();
     let recorded = Arc::clone(&events);
     let samples = Arc::clone(&sampled);
+    let levels: Arc<Mutex<Vec<(String, Level)>>> = Arc::new(Mutex::new(Vec::new()));
+    let stored_levels = Arc::clone(&levels);
     let stop = start_stall_watch(StallWatchOptions {
         on_main: Box::new(move |f| on_main.send(f).map_err(|e| e.to_string())),
         sample: Box::new(move |path| {
@@ -34,7 +37,11 @@ fn a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end() {
             Ok(())
         }),
         folder: folder.path().to_path_buf(),
-        emit_host: Box::new(move |_, event, fields| {
+        emit_host: Box::new(move |level, event, fields| {
+            stored_levels
+                .lock()
+                .unwrap()
+                .push((event.to_string(), level));
             recorded.lock().unwrap().push((event.to_string(), fields))
         }),
     });
@@ -57,4 +64,14 @@ fn a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end() {
     assert!(path.contains("stall-host-"), "{path}");
     assert_eq!(sampled.lock().unwrap().len(), 1);
     assert!(events[2].1["stalled_ms"].as_u64().unwrap() >= 1000);
+    // The stall and its dump are warnings, which the policy stores through the gate exception of passes_every_gate; the end
+    // of the stall is info.
+    for (name, level) in levels.lock().unwrap().iter() {
+        let want = if name == "host.stall.resumed" {
+            Level::Info
+        } else {
+            Level::Warn
+        };
+        assert_eq!(*level, want, "{name}");
+    }
 }

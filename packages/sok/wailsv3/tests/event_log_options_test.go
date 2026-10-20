@@ -218,9 +218,10 @@ func TestAPlacedEventRefusedByThePolicyNamesThePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The default policy stores only errors, so a warning of a lifecycle class is refused by the gate and not by the queue.
-	_, err = log.EmitPlaced(sok.LevelWarn, "host.stall.dump", json.RawMessage(`{"path":"/probe"}`), 5*time.Second)
-	if err == nil || err.Error() != "the event writer refused host.stall.dump because the policy does not store it" {
+	// The default policy stores only errors, so a warning of a lifecycle class that passes no gate exception is refused by the
+	// gate and not by the queue.
+	_, err = log.EmitPlaced(sok.LevelWarn, "host.buffer.dropped", json.RawMessage(`{"path":"/probe"}`), 5*time.Second)
+	if err == nil || err.Error() != "the event writer refused host.buffer.dropped because the policy does not store it" {
 		t.Fatalf("a placed event refused by the policy returned %v", err)
 	}
 	if err := log.Flush(5 * time.Second); err != nil {
@@ -271,5 +272,43 @@ func TestAClosedRecordIsStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T) {
 	}
 	if closed[0]["level"] != "info" || closed[0]["class"] != "lifecycle" || !reflect.DeepEqual(closed[0]["fields"], map[string]any{"cause": "signal", "signal": float64(15)}) {
 		t.Fatalf("log.closed record %v", closed[0])
+	}
+}
+
+// contract: host.stall.passes-every-gate
+func TestTheStallRecordsAreStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T) {
+	log, err := sok.StartEventLog(optionsIn(t.TempDir(), "b1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	policy, err := sok.ParseLogPolicy("log-policy.json", []byte(`{"schema":1,"classes":{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"error"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.SetPolicy(policy, "file")
+	names := []string{"host.stall", "host.stall.sampled", "host.stall.dump"}
+	for _, name := range names {
+		if !log.Emit(sok.LevelWarn, name, map[string]any{"late_ms": 1000}) {
+			t.Fatalf("%s was refused", name)
+		}
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := storedLines(t, log.Path())
+	for _, name := range names {
+		var stored []map[string]any
+		for _, event := range events {
+			if event["event"] == name {
+				stored = append(stored, event)
+			}
+		}
+		if len(stored) != 1 {
+			t.Fatalf("%s records %v, want 1", name, stored)
+		}
+		if stored[0]["level"] != "warn" || stored[0]["class"] != "lifecycle" {
+			t.Fatalf("%s record %v", name, stored[0])
+		}
 	}
 }

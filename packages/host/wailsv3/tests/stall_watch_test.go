@@ -22,6 +22,8 @@ func TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd(t *testing.T) {
 	var mu sync.Mutex
 	var events []string
 	var fields []map[string]any
+	var levels []host.Level
+	var names []string
 	var sampled []string
 	stop := host.StartStallWatch(host.StallWatchOptions{
 		OnMain: func(f func()) { work <- f },
@@ -29,6 +31,8 @@ func TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd(t *testing.T) {
 		Folder: t.TempDir(),
 		EmitHost: func(level host.Level, event string, f map[string]any) {
 			mu.Lock()
+			levels = append(levels, level)
+			names = append(names, event)
 			events = append(events, event)
 			fields = append(fields, f)
 			mu.Unlock()
@@ -53,5 +57,16 @@ func TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd(t *testing.T) {
 	}
 	if stalled, _ := fields[2]["stalled_ms"].(int64); stalled < 1000 {
 		t.Fatalf("stalled_ms %v, want at least 1000", fields[2]["stalled_ms"])
+	}
+	// The stall and its dump are warnings, which the policy stores through the gate exception of PassesEveryGate; the end of the
+	// stall is info.
+	for i, name := range names {
+		want := host.LevelWarn
+		if name == "host.stall.resumed" {
+			want = host.LevelInfo
+		}
+		if levels[i] != want {
+			t.Fatalf("%s at %v, want %v", name, levels[i], want)
+		}
 	}
 }

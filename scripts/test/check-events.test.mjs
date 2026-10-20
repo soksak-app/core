@@ -127,3 +127,23 @@ test('the events of an installed sidecar are audited against its catalog, and a 
     `${join(logs, 'host-1-2.jsonl')}:2: chain input of 1-2.1 lacks sidecar.alpha.write after host.sidecar.request of alpha`,
   ]);
 });
+
+test('a host stall record at warn that the gate exception stores is not an audit finding', () => {
+  const root = mkdtempSync(join(tmpdir(), 'events-'));
+  mkdirSync(join(root, 'logs'));
+  const line = (seq, event, fields, level = 'info') => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level, class: 'lifecycle', layer: 'host', event, fields });
+  const stall = {
+    ...catalog,
+    events: {
+      ...catalog.events,
+      'host.stall': { layer: 'host', class: 'lifecycle', level: 'warn', fields: { late_ms: 'number' } },
+      'host.stall.sampled': { layer: 'host', class: 'lifecycle', level: 'warn', fields: { path: 'string', 'error?': 'string' } },
+    },
+  };
+  writeFileSync(join(root, 'logs', 'host-1-2.jsonl'), [
+    line(1, 'log.open', { schema: 2, pid: 2, role: 'host', boot: '1-2' }),
+    line(2, 'host.stall', { late_ms: 1200 }, 'warn'),
+    line(3, 'host.stall.sampled', { path: '/logs/stall-host-2-3.txt' }, 'warn'),
+  ].join('\n') + '\n');
+  assert.deepEqual(auditLogDirectories(stall, [root]), []);
+});
