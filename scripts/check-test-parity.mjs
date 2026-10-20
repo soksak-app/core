@@ -3930,14 +3930,14 @@ const FEATURE_LINKS = [
   {
     id: "F15",
     implementation: [
-      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "invalid process lock" },
-      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "invalid process lock" },
+      { file: "packages/host/wailsv3/src/endpoint.go", symbol: "already owned by a live process" },
+      { file: "packages/host/tauriv2/src/endpoint.rs", symbol: "already owned by a live process" },
     ],
     tests: [
-      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRejectsAMalformedLock" },
-      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "a_malformed_process_lock_is_refused" },
+      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRefusesAHeldLockWithAnotherForm" },
+      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "a_held_lock_with_another_form_is_refused_and_kept" },
     ],
-    expected: "Both hosts refuse a process.lock whose contents are not a positive process ID with the same text.",
+    expected: "Both hosts refuse a held process.lock whose contents are not the current form, with the same text.",
     levels: ["unit"],
   },
   {
