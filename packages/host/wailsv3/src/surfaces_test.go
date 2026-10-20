@@ -400,3 +400,70 @@ func TestViewEventPostsTheEventWithItsDataToTheReadyDocument(t *testing.T) {
 		t.Fatalf("event without data: %v, want view event probe.changed has no data", err)
 	}
 }
+
+// contract: view.command.request
+func TestViewCommandRequestPostsTheRequestToTheReadyDocument(t *testing.T) {
+	s, fake := newViewChannelSurfaces(t)
+	request := ViewRequestRequest{Surface: "probe-surface", ID: 7, Command: "probe.run", Params: json.RawMessage(`{"a":1}`)}
+	if err := s.pushViewRequest(request); err == nil || err.Error() != "probe-surface has no ready document" {
+		t.Fatalf("request before ready: %v, want probe-surface has no ready document", err)
+	}
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`
+	if err := s.viewMessage("probe-surface", ready); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	before := len(fake.posted)
+	if err := s.pushViewRequest(request); err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	if len(fake.posted) != before+1 {
+		t.Fatalf("requests posted: %d, want 1", len(fake.posted)-before)
+	}
+	var posted map[string]any
+	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &posted); err != nil {
+		t.Fatalf("request message is not JSON: %v", err)
+	}
+	if posted["sok"] != float64(1) || posted["id"] != float64(7) || posted["command"] != "probe.run" || !reflect.DeepEqual(posted["params"], map[string]any{"a": float64(1)}) {
+		t.Fatalf("request message %v, want sok 1, id 7, command probe.run and the params", posted)
+	}
+	if err := s.pushViewRequest(ViewRequestRequest{Surface: "probe-surface", ID: 0, Command: "probe.run"}); err == nil || err.Error() != "view request has no id" {
+		t.Fatalf("request without an id: %v, want view request has no id", err)
+	}
+	if err := s.pushViewRequest(ViewRequestRequest{Surface: "probe-surface", ID: 8, Command: ""}); err == nil || err.Error() != "view request 8 has an empty command" {
+		t.Fatalf("request without a command: %v, want view request 8 has an empty command", err)
+	}
+}
+
+// contract: view.command.request
+func TestViewCommandReplyIsForwardedAsAViewReplyEvent(t *testing.T) {
+	payload, ok, err := ViewReplyEvent("probe-surface", "probe", json.RawMessage(`{"sok":1,"reply":7,"result":{"n":2}}`))
+	if err != nil {
+		t.Fatalf("reply: %v", err)
+	}
+	if !ok {
+		t.Fatalf("a reply is not forwarded")
+	}
+	if payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["id"] != uint64(7) || !reflect.DeepEqual(payload["result"], json.RawMessage(`{"n":2}`)) {
+		t.Fatalf("forwarded reply %v, want surface probe-surface, plugin probe, id 7 and the result", payload)
+	}
+	payload, ok, err = ViewReplyEvent("probe-surface", "probe", json.RawMessage(`{"sok":1,"reply":8,"error":{"code":-32000,"message":"boom"}}`))
+	if err != nil || !ok {
+		t.Fatalf("error reply: ok %v, err %v", ok, err)
+	}
+	if !reflect.DeepEqual(payload["error"], ViewReplyError{Code: -32000, Message: "boom"}) || payload["id"] != uint64(8) {
+		t.Fatalf("forwarded error reply %v, want id 8 and the error", payload)
+	}
+	if _, ok, _ := ViewReplyEvent("probe-surface", "probe", json.RawMessage(`{"event":"view.ready"}`)); ok {
+		t.Fatalf("a ready message is forwarded as a reply")
+	}
+	for _, message := range []string{
+		`{"reply":"7","result":1}`,
+		`{"reply":7}`,
+		`{"reply":7,"result":1,"error":{"code":1,"message":"x"}}`,
+		`{"reply":7,"error":{"code":1}}`,
+	} {
+		if _, ok, err := ViewReplyEvent("probe-surface", "probe", json.RawMessage(message)); err == nil || !ok {
+			t.Fatalf("invalid reply %s: ok %v, err %v, want an error", message, ok, err)
+		}
+	}
+}

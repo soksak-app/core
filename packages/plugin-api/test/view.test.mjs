@@ -246,3 +246,54 @@ test("an event that no listener has is passed to no call layer and reports nothi
   host({ sok: 1, event: "probe.unlistened", data: 1 });
   assert.deepEqual(reports, []);
 });
+
+test("commands.register sends the registration call, and the page reply resolves it", async (t) => {
+  const { posted, host } = setup(t);
+  const { commands } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const registered = commands.register("probe.run", () => null);
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.command.register", params: { name: "probe.run" } });
+  host({ sok: 1, id: 1, result: null });
+  assert.equal(await registered, undefined);
+});
+
+test("a request of the page runs the registered command and replies with its result on the reply field", async (t) => {
+  const { posted, host } = setup(t);
+  const { commands } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const calls = [];
+  commands.register("probe.run", (params) => { calls.push(params); return { n: params.a + 1 }; });
+  host({ sok: 1, id: 1, result: null });
+  await new Promise((resolve) => setImmediate(resolve));
+  host({ sok: 1, id: 9, command: "probe.run", params: { a: 1 } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls, [{ a: 1 }]);
+  assert.deepEqual(posted.at(-1), { sok: 1, reply: 9, result: { n: 2 } });
+});
+
+test("a request for a command the view did not register replies with the unregistered error", async (t) => {
+  const { posted, host } = setup(t);
+  createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  host({ sok: 1, id: 10, command: "probe.other", params: null });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(posted.at(-1), { sok: 1, reply: 10, error: { code: 1002, message: "view command probe.other is not registered" } });
+});
+
+test("a handler that throws replies with its message as the error of the reply", async (t) => {
+  const { posted, host } = setup(t);
+  const { commands } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  commands.register("probe.fail", () => { throw new Error("boom"); });
+  host({ sok: 1, id: 1, result: null });
+  host({ sok: 1, id: 11, command: "probe.fail", params: null });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(posted.at(-1), { sok: 1, reply: 11, error: { code: -32000, message: "boom" } });
+});
+
+test("a registration that the page refuses leaves no handler, so a request for it is unregistered", async (t) => {
+  const { posted, host } = setup(t);
+  const { commands } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const refused = commands.register("other.run", () => null);
+  host({ sok: 1, id: 1, error: { code: 1002, message: "owner probe has not registered command other.run" } });
+  await assert.rejects(refused, { message: "owner probe has not registered command other.run" });
+  host({ sok: 1, id: 12, command: "other.run", params: null });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(posted.at(-1), { sok: 1, reply: 12, error: { code: 1002, message: "view command other.run is not registered" } });
+});

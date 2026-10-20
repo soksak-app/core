@@ -1294,6 +1294,15 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 	if !ok {
 		return fmt.Errorf("%s: view channel message of a surface without a view", surface)
 	}
+	// A reply of the view answers a request of the main page, and goes to the main page as view-reply (docs/spec/native-surfaces.md#view-surfaces).
+	reply, isReply, err := ViewReplyEvent(surface, channel.plugin, received.Message)
+	if err != nil {
+		return err
+	}
+	if isReply {
+		s.emitToSurface(surface, "view-reply", reply)
+		return nil
+	}
 	payload, isCall, err := ViewCallEvent(surface, channel.plugin, received.Message)
 	if err != nil {
 		return err
@@ -1482,4 +1491,64 @@ func (s *Surfaces) pushViewEvent(req ViewEventRequest) error {
 		return fmt.Errorf("view event %s has no data", req.Event)
 	}
 	return s.postView(req.Surface, map[string]any{"event": req.Event, "data": req.Data})
+}
+
+// ViewRequestRequest is the command request that the main page sends to the view of Surface. Params is the params of the command.
+type ViewRequestRequest struct {
+	Surface string          `json:"surface"`
+	ID      uint64          `json:"id"`
+	Command string          `json:"command"`
+	Params  json.RawMessage `json:"params"`
+}
+
+// pushViewRequest posts the command request of req to the ready document of its view as {"sok": 1, "id", "command", "params"}. A request
+// has an id and a command; a request without params carries null. A view without a ready document refuses it.
+func (s *Surfaces) pushViewRequest(req ViewRequestRequest) error {
+	if req.ID == 0 {
+		return errors.New("view request has no id")
+	}
+	if req.Command == "" {
+		return fmt.Errorf("view request %d has an empty command", req.ID)
+	}
+	params := req.Params
+	if len(params) == 0 {
+		params = json.RawMessage(`null`)
+	}
+	return s.postView(req.Surface, map[string]any{"id": req.ID, "command": req.Command, "params": params})
+}
+
+// ViewReplyEvent returns the payload of the view-reply event for a reply of the view of surface, which has the plugin id. A reply is
+// {"reply": id, "result"} or {"reply": id, "error": {"code", "message"}}, and it has exactly one of result and error. It returns false when
+// message has no reply field, and an error for a reply whose fields are invalid.
+func ViewReplyEvent(surface, plugin string, message json.RawMessage) (map[string]any, bool, error) {
+	var reply struct {
+		Reply  json.RawMessage `json:"reply"`
+		Result json.RawMessage `json:"result"`
+		Error  json.RawMessage `json:"error"`
+	}
+	if err := json.Unmarshal(message, &reply); err != nil {
+		return nil, false, fmt.Errorf("%s: view message is not an object: %w", surface, err)
+	}
+	if len(reply.Reply) == 0 {
+		return nil, false, nil
+	}
+	var id uint64
+	if err := json.Unmarshal(reply.Reply, &id); err != nil {
+		return nil, true, fmt.Errorf("%s: view reply has no integer id", surface)
+	}
+	hasResult, hasError := len(reply.Result) > 0, len(reply.Error) > 0
+	if hasResult && hasError {
+		return nil, true, fmt.Errorf("%s: view reply %d has both a result and an error", surface, id)
+	}
+	if !hasResult && !hasError {
+		return nil, true, fmt.Errorf("%s: view reply %d has neither a result nor an error", surface, id)
+	}
+	if hasError {
+		var failure ViewReplyError
+		if err := json.Unmarshal(reply.Error, &failure); err != nil || failure.Message == "" {
+			return nil, true, fmt.Errorf("%s: view reply %d has an error without a message", surface, id)
+		}
+		return map[string]any{"surface": surface, "plugin": plugin, "id": id, "error": failure}, true, nil
+	}
+	return map[string]any{"surface": surface, "plugin": plugin, "id": id, "result": reply.Result}, true, nil
 }

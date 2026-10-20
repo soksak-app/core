@@ -3,6 +3,8 @@ import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRunt
 import { registry } from "./exposure.js";
 import { answerViewCall } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
+import { createViewCommands } from "./view-commands.js";
+import { callReporter } from "./plugin-processes.js";
 import { plugin } from "./registry.js";
 import { pluginDiagnostics } from "./environment.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
@@ -221,7 +223,7 @@ function tabState(surface, isDisposed) {
  * (docs/spec/native-surfaces.md#view-surfaces). It resolves with the function that ends the answers. page is the runtime of the
  * surface, whose sidecar send ends with its place; isDisposed tells whether the surface was disposed.
  */
-function answerViewCalls(surface, scoped, page, isDisposed) {
+function answerViewCalls(surface, scoped, page, isDisposed, exposure) {
   const tab = surface.unload ? tabState(surface, isDisposed) : null;
   // The pending calls of this view, by id. A cancel ends the pending call that it names.
   const pending = new Map();
@@ -235,6 +237,13 @@ function answerViewCalls(surface, scoped, page, isDisposed) {
     },
     push: (event, data) => scoped.native.call("viewEvent", { event, data }),
     report: (text) => dispatchEvent(new ErrorEvent("error", { message: text })),
+  });
+  // The commands of the view. A command is declared through the exposure of the surface, and each request of it runs in the view.
+  const viewCommands = createViewCommands({
+    plugin: surface.pluginId,
+    post: (message) => scoped.native.call("viewRequest", message),
+    timeoutOf: (name) => registry.commandTimeout(name),
+    report: callReporter(surface.pluginId),
   });
   const options = {
     plugin: surface.pluginId,
@@ -251,6 +260,10 @@ function answerViewCalls(surface, scoped, page, isDisposed) {
         native: (name) => subscriptions.native(name),
         sidecarMessage: (id) => subscriptions.sidecarMessage(id),
         sidecarFailure: (id) => subscriptions.sidecarFailure(id),
+      },
+      command: {
+        // The command is declared through the exposure of the surface, so the registry checks its declaration and owner.
+        register: (name) => exposure.command(name, (params) => viewCommands.run(name, params)),
       },
     },
   };
@@ -269,9 +282,20 @@ function answerViewCalls(surface, scoped, page, isDisposed) {
       (error) => ({ id: event.id, error: { code: -32000, message: String(error?.message ?? error) } }),
     ).then((reply) => scoped.native.call("viewReply", reply));
   });
-  // The answers end with the view: the call listener is removed and each page subscription is ended.
-  return answering.then((off) => () => {
-    off();
+  // The replies of the view to the commands of the page.
+  const replies = scoped.native.on("view-reply", (event) => {
+    try {
+      viewCommands.receive(event);
+    } catch (error) {
+      // default: a failure that is not an Error carries its value as the text.
+      dispatchEvent(new ErrorEvent("error", { message: `view command reply ${event?.id}: ${error?.message ?? error}` }));
+    }
+  });
+  // The answers end with the view: the listeners are removed, the open command runs end, and each page subscription is ended.
+  return Promise.all([answering, replies]).then(([offCall, offReply]) => () => {
+    offCall();
+    offReply();
+    viewCommands.close();
     return subscriptions.close();
   });
 }
@@ -422,7 +446,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
     if (viewSurface) {
-      const answering = answerViewCalls(surface, scoped, page, () => entry.disposed);
+      const answering = answerViewCalls(surface, scoped, page, () => entry.disposed, context.exposure);
       closing.signal.addEventListener("abort", () => answering.then((off) => off()), { once: true });
     }
     entry.mounted = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())

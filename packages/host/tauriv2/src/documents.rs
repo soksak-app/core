@@ -757,6 +757,61 @@ impl ViewChannels {
         }
     }
 
+    /// Returns the view-reply payload of a reply of the view of surface, or None when the message has no reply field. A reply has an
+    /// integer id and exactly one of result and error; an error has an integer code and a message.
+    pub fn reply(&self, surface: &str, value: &str) -> Result<Option<Value>, String> {
+        let received: ViewReceived = serde_json::from_str(value)
+            .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+        let Some(message) = received.message else {
+            return Ok(None);
+        };
+        let Some(reply) = message.get("reply") else {
+            return Ok(None);
+        };
+        let id = reply
+            .as_u64()
+            .ok_or_else(|| format!("{surface}: view reply has no integer id"))?;
+        let plugin = self
+            .lock()
+            .get(surface)
+            .map(|channel| channel.plugin.clone())
+            .ok_or_else(|| {
+                format!("{surface}: view channel message of a surface without a view")
+            })?;
+        match (message.get("result"), message.get("error")) {
+            (Some(_), Some(_)) => Err(format!(
+                "{surface}: view reply {id} has both a result and an error"
+            )),
+            (None, None) => Err(format!(
+                "{surface}: view reply {id} has neither a result nor an error"
+            )),
+            (Some(result), None) => Ok(Some(json!({
+                "surface": surface,
+                "plugin": plugin,
+                "id": id,
+                "result": result,
+            }))),
+            (None, Some(error)) => {
+                let code = error.get("code").and_then(Value::as_i64).ok_or_else(|| {
+                    format!("{surface}: view reply {id} has an error without an integer code")
+                })?;
+                let text = error
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .filter(|text| !text.is_empty())
+                    .ok_or_else(|| {
+                        format!("{surface}: view reply {id} has an error without a message")
+                    })?;
+                Ok(Some(json!({
+                    "surface": surface,
+                    "plugin": plugin,
+                    "id": id,
+                    "error": {"code": code, "message": text},
+                })))
+            }
+        }
+    }
+
     /// Returns the view-call payload of a call request or a cancel of the view of surface, or None when the message is neither.
     /// A call request is {"id", "command", "params"}; a cancel is {"id", "cancel": true} and its payload is {"id", "cancel": true}
     /// with the surface and plugin. A cancel that is not true or that names a command is an error.
@@ -1008,6 +1063,21 @@ fn view_message(
     document: Handle,
     value: &str,
 ) {
+    // A reply of the view answers a request of the main page, and goes to the main page as view-reply.
+    let reply = window_data(window).and_then(|data| data.documents.views().reply(surface, value));
+    match reply {
+        Ok(Some(payload)) => {
+            if let Err(error) = emit_window(window, "view-reply", payload) {
+                log_error("view channel", error);
+            }
+            return;
+        }
+        Ok(None) => {}
+        Err(error) => {
+            log_error("view channel", error);
+            return;
+        }
+    }
     // A call request goes to the main page, which answers it (docs/spec/native-surfaces.md#view-surfaces).
     let call = window_data(window).and_then(|data| data.documents.views().call(surface, value));
     match call {
@@ -1106,6 +1176,12 @@ fn post_theme(window: &Window, platform: &dyn Platform, surface: &str) -> Result
 
 /// Posts the reply of the main page to the view of reply.surface. The main page must be the caller, and the view must have a
 /// ready document, as for the theme (docs/spec/native-surfaces.md#view-surfaces).
+/// Posts a command request of the main page to the view of request.surface (docs/spec/native-surfaces.md#view-surfaces).
+pub(crate) fn view_request(webview: &Webview, request: ViewRequest) -> Result<(), String> {
+    let message = view_request_message(&request)?;
+    post_from_main(webview, "view request", &request.surface, message)
+}
+
 pub(crate) fn view_reply(webview: &Webview, reply: ViewReply) -> Result<(), String> {
     let message = view_reply_message(&reply)?;
     post_from_main(webview, "view reply", &reply.surface, message)
@@ -1716,6 +1792,33 @@ pub struct ViewEventRequest {
     pub event: String,
     #[serde(default, deserialize_with = "present")]
     pub data: Option<Value>,
+}
+
+/// A command request that the main page sends to the view of surface: the command, its id and its params (docs/spec/native-surfaces.md#view-surfaces).
+#[derive(Deserialize)]
+pub struct ViewRequest {
+    pub surface: String,
+    pub id: u64,
+    pub command: String,
+    #[serde(default, deserialize_with = "present")]
+    pub params: Option<Value>,
+}
+
+/// Returns the host message of a command request: {"sok", "id", "command", "params"}. A request has an id and a command, and a
+/// request without params carries null.
+pub fn view_request_message(request: &ViewRequest) -> Result<Value, String> {
+    if request.id == 0 {
+        return Err("view request has no id".to_string());
+    }
+    if request.command.is_empty() {
+        return Err(format!("view request {} has an empty command", request.id));
+    }
+    Ok(json!({
+        "sok": 1,
+        "id": request.id,
+        "command": request.command,
+        "params": request.params,
+    }))
 }
 
 /// Returns the theme message of a view: {"sok", "event": "theme", "data": theme}, as every event carries its value in data.

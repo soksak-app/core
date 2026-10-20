@@ -773,6 +773,103 @@ fn theme_message_carries_the_theme_in_its_data_field() {
     );
 }
 
+// contract: view.command.request
+#[test]
+fn view_request_message_is_the_host_message_with_its_id_command_and_params() {
+    use soksak_host_tauriv2::documents::{ViewRequest, view_request_message};
+    let request = ViewRequest {
+        surface: "probe-surface".to_string(),
+        id: 7,
+        command: "probe.run".to_string(),
+        params: Some(json!({"a": 1})),
+    };
+    assert_eq!(
+        view_request_message(&request),
+        Ok(json!({"sok": 1, "id": 7, "command": "probe.run", "params": {"a": 1}})),
+        "a request is posted with the sok marker, its id, its command and its params"
+    );
+    let no_params = ViewRequest {
+        surface: "probe-surface".to_string(),
+        id: 7,
+        command: "probe.run".to_string(),
+        params: None,
+    };
+    assert_eq!(
+        view_request_message(&no_params),
+        Ok(json!({"sok": 1, "id": 7, "command": "probe.run", "params": null })),
+        "a request without params carries null"
+    );
+    let no_id = ViewRequest {
+        surface: "probe-surface".to_string(),
+        id: 0,
+        command: "probe.run".to_string(),
+        params: None,
+    };
+    assert_eq!(
+        view_request_message(&no_id),
+        Err("view request has no id".to_string())
+    );
+    let unnamed = ViewRequest {
+        surface: "probe-surface".to_string(),
+        id: 8,
+        command: String::new(),
+        params: None,
+    };
+    assert_eq!(
+        view_request_message(&unnamed),
+        Err("view request 8 has an empty command".to_string())
+    );
+}
+
+// contract: view.command.request
+#[test]
+fn view_reply_is_forwarded_as_a_view_reply_event_with_its_plugin_and_surface() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.reply(
+            "probe-surface",
+            r#"{"message":{"sok":1,"reply":7,"result":{"n":2}}}"#
+        ),
+        Ok(Some(json!({
+            "surface": "probe-surface",
+            "plugin": "probe",
+            "id": 7,
+            "result": {"n": 2}
+        }))),
+        "a reply with a result is forwarded with its surface, plugin and id"
+    );
+    assert_eq!(
+        channels.reply(
+            "probe-surface",
+            r#"{"message":{"sok":1,"reply":8,"error":{"code":-32000,"message":"boom"}}}"#
+        ),
+        Ok(Some(json!({
+            "surface": "probe-surface",
+            "plugin": "probe",
+            "id": 8,
+            "error": {"code": -32000, "message": "boom"}
+        }))),
+        "a reply with an error is forwarded with its error"
+    );
+    assert_eq!(
+        channels.reply("probe-surface", READY),
+        Ok(None),
+        "a ready message is not a reply"
+    );
+    for message in [
+        r#"{"message":{"reply":"7","result":1}}"#,
+        r#"{"message":{"reply":7}}"#,
+        r#"{"message":{"reply":7,"result":1,"error":{"code":1,"message":"x"}}}"#,
+        r#"{"message":{"reply":7,"error":{"code":1}}}"#,
+    ] {
+        assert!(
+            channels.reply("probe-surface", message).is_err(),
+            "an invalid reply is refused: {message}"
+        );
+    }
+}
+
 // contract: view.event.push
 #[test]
 fn view_event_message_is_the_host_message_with_its_event_and_data() {

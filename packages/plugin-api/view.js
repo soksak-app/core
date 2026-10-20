@@ -10,6 +10,21 @@ import { createCalls } from "./calls.js";
 import { createSnapshotSender, SNAPSHOT_ACK_EVENT } from "./snapshots.js";
 
 const PLUGIN = /^[a-z][a-z0-9-]*$/;
+/** The code of a command that the view did not register: EXPOSURE_ERRORS.unregistered of index.js, which this module does not import. */
+const UNREGISTERED_COMMAND = 1002;
+/** The code of a command that failed: EXPOSURE_ERRORS.failed of index.js. */
+const FAILED_COMMAND = -32000;
+
+/** Runs a command handler and settles with the reply payload {result} or {error: {code, message}}, as the exposure relay expects. */
+async function runCommand(run, params) {
+  try {
+    // default: an undefined result of a command without a result is answered as null.
+    return { result: (await run(params)) ?? null };
+  } catch (error) {
+    // default: a thrown value that is not an Error carries its value as the message.
+    return { error: { code: FAILED_COMMAND, message: String(error?.message ?? error) } };
+  }
+}
 
 /** The plugin id of the view: the host of the sok:// origin of the page. */
 function pluginOfView() {
@@ -106,6 +121,34 @@ export function createViewBridge({ handler, report }) {
     if (message.event === "sidecar.message" || message.event === "sidecar.failure") return `${message.event}:${message.data?.id}`;
     return `native:${message.event}`;
   };
+  // The command handlers of the view by command name, registered through commands.register.
+  const handlers = new Map();
+  const commands = {
+    /**
+     * Declares a command of the view: the page applies the declaration through the exposure registry, and each request of the command
+     * runs run(params). The handler is kept before the declaration is sent, so a request that follows the reply finds it. A refused
+     * declaration removes the handler and rejects with the error of the page.
+     */
+    register(name, run) {
+      if (typeof name !== "string" || name === "") throw new TypeError("commands.register requires a non-empty name");
+      if (typeof run !== "function") throw new TypeError(`commands.register requires a function for ${name}`);
+      handlers.set(name, run);
+      return calls.request("runtime.command.register", { name }).then(() => undefined, (error) => {
+        handlers.delete(name);
+        throw error;
+      });
+    },
+  };
+  // A request of the page for a command of the view is answered with {sok: 1, reply: id, result} or {sok: 1, reply: id, error}.
+  // A command that the view did not register is refused with the unregistered code of the exposure errors (docs/plans/plugin-processes.md, rule 3).
+  const answerRequest = (request) => {
+    if (!Number.isInteger(request.id)) throw new TypeError("command request has no integer id");
+    const run = handlers.get(request.command);
+    const reply = run
+      ? runCommand(run, request.params)
+      : Promise.resolve({ error: { code: UNREGISTERED_COMMAND, message: `view command ${request.command} is not registered` } });
+    reply.then((payload) => channel.send({ sok: 1, reply: request.id, ...payload }));
+  };
   const dispatch = (message) => {
     if (message.event === "theme") lastTheme = message.data;
     for (const listener of [...(listeners.get(keyOf(message)) ?? [])]) listener(message.data);
@@ -143,8 +186,12 @@ export function createViewBridge({ handler, report }) {
       dispatch(message);
       return;
     }
+    if (typeof message.command === "string") {
+      answerRequest(message);
+      return;
+    }
     if (!onCall) throw new Error(`view channel for ${plugin} has no call layer`);
     onCall(message);
   });
-  return { calls, snapshots, runtime };
+  return { calls, snapshots, runtime, commands };
 }

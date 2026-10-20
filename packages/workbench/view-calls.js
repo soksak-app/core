@@ -19,6 +19,8 @@
  *                 links.open(url): opens a link, as runtime.links.open
  *                 subscribe.native(name), subscribe.sidecarMessage(id), subscribe.sidecarFailure(id): register the page subscriptions
  *                   of the view (view-events.js); each resolves when it is registered
+ *                 command.register(name): declares the command of the view on the page through the exposure registry, so a command of
+ *                   another plugin or an undeclared name is refused (view-commands.js)
  */
 export async function answerViewCall(event, options) {
   if (event === null || typeof event !== "object") throw new TypeError("view call event is not an object");
@@ -92,6 +94,12 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime })
       if (typeof fields.id !== "string" || fields.id === "") throw new TypeError(`view call ${command} requires a non-empty id`);
       if (command === "runtime.sidecar.on") await runtime.subscribe.sidecarMessage(fields.id);
       else await runtime.subscribe.sidecarFailure(fields.id);
+      return null;
+    }
+    case "runtime.command.register": {
+      const fields = objectOf(command, params);
+      if (typeof fields.name !== "string" || fields.name === "") throw new TypeError(`view call ${command} requires a non-empty name`);
+      await runtime.command.register(fields.name);
       return null;
     }
     case "runtime.links.open":

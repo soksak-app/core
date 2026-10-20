@@ -517,6 +517,8 @@ export function createRegistry({ call = null, report = null } = {}) {
     }),
 
     list,
+    /** The declared time limit of a command in milliseconds, or undefined when its declaration has none (docs/spec/exposure.md). */
+    commandTimeout: (name) => declared.get(declarationKey("command", name))?.declaration.timeout,
     surfaceDeclarations() {
       const listed = list();
       const onlySurface = (entry) => entry.name.startsWith(SURFACE_CORE);

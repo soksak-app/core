@@ -312,6 +312,17 @@ test("requests for surface names are forwarded to the preferred surface in the a
   assert.equal((await made.handle({ method: "status.get", params: { name: "probe.lines" } })).error.code, EXPOSURE_ERRORS.unregistered);
 });
 
+test("commandTimeout gives the declared time limit of a command, and undefined for a command without one", () => {
+  const made = createRegistry();
+  made.declare("core", coreExposes());
+  const slow = probeExposes();
+  slow.commands.push({ name: "probe.wait", description: "Waits.", params: { type: "object" }, result: {}, timeout: 120000 });
+  made.declare("probe", slow);
+  assert.equal(made.commandTimeout("probe.wait"), 120000);
+  assert.equal(made.commandTimeout("probe.send"), undefined);
+  assert.equal(made.commandTimeout("probe.absent"), undefined);
+});
+
 test("a forwarded command carries the timeout its declaration gives, and other requests carry none", async () => {
   const host = fakeHost(() => ({ result: null }));
   const made = createRegistry({ call: host.call, report: (error) => { throw error; } });

@@ -5,7 +5,7 @@ import test from "node:test";
 import { answerViewCall } from "../view-calls.js";
 
 function fakes() {
-  const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [] };
+  const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [] };
   const options = {
     plugin: "probe",
     pending: new Map(),
@@ -27,6 +27,9 @@ function fakes() {
         native: async (name) => { ran.subscribed.push({ native: name }); return null; },
         sidecarMessage: async (id) => { ran.subscribed.push({ sidecarMessage: id }); return null; },
         sidecarFailure: async (id) => { ran.subscribed.push({ sidecarFailure: id }); return null; },
+      },
+      command: {
+        register: async (name) => { ran.declared.push(name); return null; },
       },
     },
   };
@@ -118,7 +121,7 @@ test("runtime.links.open opens the link of its params", async () => {
 
 test("a runtime or tab entry that the route does not serve is refused as not served", async () => {
   const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.command.register", params: {} }, options), /runtime.command.register is not served/);
+  await assert.rejects(answerViewCall({ id: 1, command: "runtime.unknown.run", params: {} }, options), /runtime.unknown.run is not served/);
   assert.deepEqual(ran.core, []);
   assert.deepEqual(ran.owned, []);
 });
@@ -172,4 +175,17 @@ test("a subscription call without its name or id is refused and subscribes to no
 test("runtime.theme is refused as a call, because the theme reaches a view as a host message", async () => {
   const { options } = fakes();
   await assert.rejects(answerViewCall({ id: 1, command: "runtime.theme", params: null }, options), /view call runtime.theme is not served/);
+});
+
+test("a registration call of the view declares its command on the page and replies null", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.command.register", params: { name: "probe.run" } }, options), null);
+  assert.deepEqual(ran.declared, ["probe.run"]);
+});
+
+test("a registration call without a name is refused and declares nothing", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(answerViewCall({ id: 1, command: "runtime.command.register", params: { name: "" } }, options), /requires a non-empty name/);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.command.register", params: "probe.run" }, options), /requires an object/);
+  assert.deepEqual(ran.declared, []);
 });
