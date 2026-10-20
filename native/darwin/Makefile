@@ -33,6 +33,15 @@
 #                         of the system through memory_pressure, which needs the sudoers rule for /usr/bin/memory_pressure. It asserts
 #                         the response of the region and refuses to judge when the 1-minute load is above 20. It prints the footprint
 #                         and vmmap malloc zone rows and the collection state of the released array before and after the pressure
+#   make benchmark-view-processes [COUNT=<n,n,...>]
+#                         measures N plugin views of one window (default N = 1,5,10,20,40), each loading the same local page, in two
+#                         variants: the default WebKit process assignment, and each view forced into its own WebContent process by
+#                         _WKNavigationActionPolicyAllowInNewProcess. It prints the distinct process count, the total and the
+#                         per-process footprint, and the time until every navigation finishes. After the views close, it prints
+#                         the processes that exit within 10 seconds and the retained processes that stay alive, with their
+#                         footprint, and then the reuse of the retained processes by a fresh set of views. It sends no signal to
+#                         a WebContent process. It fails when a navigation does not finish within its limit, or when a WebContent
+#                         process that the benchmark retained still exists after the benchmark exits
 #   make benchmark-region-cost [URL=<address>] [LONG=<minutes>] [VARIANTS=<name,name>] [RELOAD=<count>] [COLLECTION=<minutes>] [PRESSURE=<level>]
 #                         loads an address (default https://www.google.com/) in a 1200×760 window with a 1180×400 region in the
 #                         variants of tests/region_cost_benchmark.m (plain web views with one setting each, a document region with no
@@ -74,7 +83,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-activation benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -119,6 +128,11 @@ benchmark-page-layers: $(BUILD)/page_layers_benchmark
 
 benchmark-occlusion: $(BUILD)/occlusion_corner_benchmark
 	@$(BUILD)/occlusion_corner_benchmark
+
+benchmark-view-processes: $(BUILD)/view_processes_benchmark
+	@rm -f $(BUILD)/view-processes.pids
+	@$(BUILD)/view_processes_benchmark --pid-file $(BUILD)/view-processes.pids $(if $(COUNT),--counts $(COUNT))
+	@leftover=0; while read pid; do if kill -0 $$pid 2>/dev/null; then echo "FAIL: WebContent process $$pid remains after the benchmark exits"; leftover=1; fi; done < $(BUILD)/view-processes.pids; test $$leftover -eq 0
 
 # The address of the region cost benchmark: make benchmark-region-cost URL=https://example.com/
 URL ?= https://www.google.com/
