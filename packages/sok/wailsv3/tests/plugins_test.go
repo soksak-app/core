@@ -712,3 +712,49 @@ func TestReadInstalledRefusesAPackageField(t *testing.T) {
 		t.Fatalf("installed.json with package: %v", err)
 	}
 }
+
+// mismatchedIndex writes an index.json, without `registry build`, whose plugin probe has one release of version 0.2.0.
+// The release holds a plugin.json that names the plugin other, so the index does not match the release.
+func mismatchedIndex(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`,
+		"plugin.json":  `{"id": "other"}`,
+	})
+	releases := t.TempDir()
+	result := runJSON(t, "plugin", "pack", dir, releases)
+	index := t.TempDir()
+	writeTree(t, index, map[string]string{
+		"index.json": `{"format": 1, "plugins": [{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
+			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.2.0",
+			"release": {"url": "file://` + result["release"] + `", "sha256": "` + result["sha256"] + `"},
+			"engines": {"soksak": "^0.0.2"}, "sidecars": {}}]}], "sidecars": [], "packs": [],
+			"revoked": {"plugins": [], "sidecars": []}}`,
+	})
+	return filepath.Join(index, "index.json")
+}
+
+// contract: install.plugin-id.mismatch-refused
+func TestPluginInstallRefusesAReleaseWhosePluginIDDiffers(t *testing.T) {
+	index := mismatchedIndex(t)
+	config := t.TempDir()
+	runJSON(t, "registry", "use", index, "--config-dir", config)
+	_, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t))
+	rejects(t, err, "plugin.json id other differs from the installed plugin probe")
+	if exists(filepath.Join(config, "plugins", "installed.json")) || exists(filepath.Join(config, "plugins", "probe")) {
+		t.Fatal("a refused install wrote to the configuration directory")
+	}
+}
+
+// contract: install.plugin-id.mismatch-refused
+func TestReadInstalledRefusesAPluginWhosePluginIDDiffers(t *testing.T) {
+	config := t.TempDir()
+	writeTree(t, config, map[string]string{
+		"plugins/installed.json":           `{"format": 3, "plugins": {"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "sidecars": {}}}, "sidecars": {}}`,
+		"plugins/probe/0.2.0/package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`,
+		"plugins/probe/0.2.0/plugin.json":  `{"id": "other"}`,
+	})
+	_, err := sok.ReadInstalled(config)
+	rejects(t, err, "plugin.json id other differs from the installed plugin probe")
+}

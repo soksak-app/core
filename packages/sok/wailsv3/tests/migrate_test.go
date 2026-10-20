@@ -41,6 +41,20 @@ const releasedFormat2 = `{
   }
 }`
 
+// writeReleasedFolders writes the plugin.json of each folder that releasedFormat2 records, as an installation extracts them.
+func writeReleasedFolders(t *testing.T, config string) {
+	t.Helper()
+	for id, version := range map[string]string{"probe": "0.0.4", "probe2": "0.0.2"} {
+		dir := filepath.Join(config, "plugins", id, version)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "plugin.json"), []byte(`{"id":"`+id+`"}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func writeInstalledRaw(t *testing.T, config, text string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Join(config, "plugins"), 0o755); err != nil {
@@ -55,6 +69,7 @@ func writeInstalledRaw(t *testing.T, config, text string) {
 func TestMigrateInstalledMigratesTheReleasedFormat2ToTheCurrentFormat(t *testing.T) {
 	config := t.TempDir()
 	writeInstalledRaw(t, config, releasedFormat2)
+	writeReleasedFolders(t, config)
 	if _, err := sok.MigrateInstalled(config); err != nil {
 		t.Fatal(err)
 	}

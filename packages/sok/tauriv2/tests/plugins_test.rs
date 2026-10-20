@@ -956,3 +956,75 @@ fn read_installed_refuses_a_package_field() {
         )
     );
 }
+
+/// An index.json written without `registry build`, whose plugin probe has one release of version 0.2.0. The release
+/// holds a plugin.json that names the plugin other, so the index does not match the release.
+fn mismatched_index() -> Registry {
+    let releases = Folder::new("plugins");
+    let dir = Folder::new("plugins");
+    write_tree(
+        dir.path(),
+        &[
+            (
+                "package.json",
+                r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}"#,
+            ),
+            ("plugin.json", r#"{"id": "other"}"#),
+        ],
+    );
+    let result = run_json(&["plugin", "pack", dir.text(), releases.text()]);
+    let index = Folder::new("plugins");
+    let plugin = json!({"id": "probe", "package": "@scope/plugin-probe", "name": "Probe",
+        "description": "검사용 plugin.", "license": "MIT", "repository": "https://example.invalid/probe",
+        "versions": [{"version": "0.2.0",
+            "release": {"url": format!("file://{}", result["release"].as_str().unwrap()), "sha256": result["sha256"]},
+            "engines": {"soksak": "^0.0.2"}, "sidecars": {}}]});
+    let index_json = json!({"format": 1, "plugins": [plugin], "sidecars": [], "packs": [],
+        "revoked": {"plugins": [], "sidecars": []}});
+    write_tree(index.path(), &[("index.json", &index_json.to_string())]);
+    Registry {
+        dir: index,
+        _work: vec![dir, releases],
+    }
+}
+
+// contract: install.plugin-id.mismatch-refused
+#[test]
+fn plugin_install_refuses_a_release_whose_plugin_id_differs() {
+    let registry = mismatched_index();
+    let config = Folder::new("plugins");
+    use_registry(&config, &registry);
+    let (code, _, stderr) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);
+    assert_ne!(code, 0, "install succeeded");
+    assert!(
+        stderr.contains("plugin.json id other differs from the installed plugin probe"),
+        "{stderr}"
+    );
+    assert!(!config.path().join("plugins/installed.json").exists());
+    assert!(!config.path().join("plugins/probe").exists());
+}
+
+// contract: install.plugin-id.mismatch-refused
+#[test]
+fn read_installed_refuses_a_plugin_whose_plugin_id_differs() {
+    let config = Folder::new("plugins");
+    write_tree(
+        config.path(),
+        &[
+            (
+                "plugins/installed.json",
+                r#"{"format": 3, "plugins": {"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "sidecars": {}}}, "sidecars": {}}"#,
+            ),
+            (
+                "plugins/probe/0.2.0/package.json",
+                r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}"#,
+            ),
+            ("plugins/probe/0.2.0/plugin.json", r#"{"id": "other"}"#),
+        ],
+    );
+    let error = soksak_sok::plugins::read_installed(config.path()).expect_err("plugin id");
+    assert!(
+        error.contains("plugin.json id other differs from the installed plugin probe"),
+        "{error}"
+    );
+}

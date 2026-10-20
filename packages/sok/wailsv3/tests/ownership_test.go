@@ -49,10 +49,8 @@ func TestAWritingCommandReleasesTheConfigurationWhenItEnds(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(plugin, "package.json"), []byte(`{"name":"`+name+`"}`), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if id == "probe2" {
-			if err := os.WriteFile(filepath.Join(plugin, "plugin.json"), []byte(`{"id":"probe2"}`), 0o644); err != nil {
-				t.Fatal(err)
-			}
+		if err := os.WriteFile(filepath.Join(plugin, "plugin.json"), []byte(`{"id":"`+id+`"}`), 0o644); err != nil {
+			t.Fatal(err)
 		}
 	}
 	code, _, stderr := run("plugin", "disable", "probe", "--config-dir", config)
@@ -86,10 +84,8 @@ func TestRunPluginActionTakesNoLockBesideALiveOwner(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(plugin, "package.json"), []byte(`{"name":"`+name+`"}`), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if id == "probe2" {
-			if err := os.WriteFile(filepath.Join(plugin, "plugin.json"), []byte(`{"id":"probe2"}`), 0o644); err != nil {
-				t.Fatal(err)
-			}
+		if err := os.WriteFile(filepath.Join(plugin, "plugin.json"), []byte(`{"id":"`+id+`"}`), 0o644); err != nil {
+			t.Fatal(err)
 		}
 	}
 	// The host's own lock is present, owned by this live process.

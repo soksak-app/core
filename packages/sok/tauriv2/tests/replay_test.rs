@@ -124,6 +124,11 @@ fn replay_config(name: &str, events: &Events, script: &str, role: &str) -> Folde
         0o644,
     );
     write_file(
+        &config.join("plugins/probe/1.0.0/plugin.json"),
+        r#"{"id":"probe"}"#,
+        0o644,
+    );
+    write_file(
         &config.join(folder).join("sidecar.json"),
         &format!(
             r#"{{"executable":"worker","protocol":1,"replay":{{"role":"{role}","executable":"replay.sh","inputs":{REPLAY_INPUTS}}}}}"#

@@ -382,6 +382,20 @@ func ValidatePackageJSON(value any) error {
 	return checkVersion("package.json version", pkg["version"])
 }
 
+// CheckPluginID checks that the id that plugin.json names is the id of the installation record of the plugin. A release
+// whose plugin.json names another plugin is refused at installation and at the reading of the installed state
+// (docs/spec/installation.md#installation-layout).
+func CheckPluginID(id string, manifest map[string]any) error {
+	found, ok := text(manifest["id"])
+	if !ok {
+		return fmt.Errorf("plugin.json id must be a string")
+	}
+	if found != id {
+		return fmt.Errorf("plugin.json id %s differs from the installed plugin %s", found, id)
+	}
+	return nil
+}
+
 // ManifestDependencies checks the dependencies of plugin.json and returns the version range of each package. A plugin
 // that needs no other package has no dependencies.
 func ManifestDependencies(manifest map[string]any) (map[string]string, error) {

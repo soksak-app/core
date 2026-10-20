@@ -221,7 +221,15 @@ pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
     };
     let value: Value = serde_json::from_str(&text)
         .map_err(|error| format!("{} is not valid JSON: {error}", path.display()))?;
-    install::validate_installed(&value).map_err(|error| format!("{}: {error}", path.display()))
+    let state = install::validate_installed(&value)
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    for (id, plugin) in &state.plugins {
+        let file = config_dir.join(&plugin.path).join("plugin.json");
+        let data = std::fs::read(&file)
+            .map_err(|error| crate::files::file_error(file.display(), &error))?;
+        check_plugin_id_of(id, &file.display().to_string(), &data)?;
+    }
+    Ok(state)
 }
 
 /// Changes installed.json once.
@@ -427,6 +435,16 @@ fn manifest_dependencies_of(file: &str, data: &[u8]) -> Result<BTreeMap<String, 
     install::manifest_dependencies(&value).map_err(|error| format!("{file}: {error}"))
 }
 
+/// Checks the plugin.json text of plugin id. file is the location for errors.
+fn check_plugin_id_of(id: &str, file: &str, data: &[u8]) -> Result<(), String> {
+    let value: Value = serde_json::from_slice(data)
+        .map_err(|error| format!("{file} is not valid JSON: {error}"))?;
+    if !value.is_object() {
+        return Err(format!("{file}: expected an object"));
+    }
+    install::check_plugin_id(id, &value).map_err(|error| format!("{file}: {error}"))
+}
+
 /// Reads the plugin.json dependencies from the recorded folder of an installed plugin.
 fn installed_dependencies(
     config_dir: &Path,
@@ -609,6 +627,7 @@ impl DependencyPlan<'_> {
             }
             Err(error) => return Err(crate::files::file_error(&at, &error)),
         };
+        check_plugin_id_of(id, &file, &data)?;
         let dependencies = manifest_dependencies_of(&file, &data)?;
         let (providers, _) =
             install::classify_dependencies(self.index, id, &version, &dependencies)?;

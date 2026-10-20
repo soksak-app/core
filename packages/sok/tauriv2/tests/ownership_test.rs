@@ -32,9 +32,7 @@ fn released_config(config: &Path) {
             &plugin.join("package.json"),
             &format!(r#"{{"name":"{name}"}}"#),
         );
-        if id == "probe2" {
-            write_raw(&plugin.join("plugin.json"), r#"{"id":"probe2"}"#);
-        }
+        write_raw(&plugin.join("plugin.json"), &format!(r#"{{"id":"{id}"}}"#));
     }
 }
 

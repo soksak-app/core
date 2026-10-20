@@ -225,6 +225,9 @@ func ReadInstalled(configDir string) (*InstalledState, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	if err := checkInstalledPluginIDs(configDir, state); err != nil {
+		return nil, err
+	}
 	return state, nil
 }
 
@@ -427,6 +430,37 @@ func (p *dependencyPlan) selectedSidecars() map[string]string {
 	return versions
 }
 
+// checkPluginIDOf checks the plugin.json text of plugin id. file is the location for errors.
+func checkPluginIDOf(id, file string, data []byte) error {
+	value, err := DecodeJSON(data)
+	if err != nil {
+		return fmt.Errorf("%s is not valid JSON: %w", file, err)
+	}
+	manifest, err := object(file, value)
+	if err != nil {
+		return err
+	}
+	if err := CheckPluginID(id, manifest); err != nil {
+		return fmt.Errorf("%s: %w", file, err)
+	}
+	return nil
+}
+
+// checkInstalledPluginIDs checks the plugin.json of each installed plugin in its recorded folder.
+func checkInstalledPluginIDs(configDir string, state *InstalledState) error {
+	for _, id := range sortedPluginIDs(state.Plugins) {
+		file := filepath.Join(configDir, state.Plugins[id].Path, "plugin.json")
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return fileError(file, err)
+		}
+		if err := checkPluginIDOf(id, file, data); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // manifestDependenciesOf checks and returns the dependencies of a plugin.json text. file is the location for errors.
 func manifestDependenciesOf(file string, data []byte) (map[string]string, error) {
 	value, err := DecodeJSON(data)
@@ -625,6 +659,9 @@ func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed b
 		p.releases[id] = release
 	} else {
 		return fileError(where, err)
+	}
+	if err := checkPluginIDOf(id, file, data); err != nil {
+		return err
 	}
 	dependencies, err := manifestDependenciesOf(file, data)
 	if err != nil {

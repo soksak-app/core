@@ -336,6 +336,19 @@ pub fn validate_package_json(value: &Value) -> Result<(), String> {
     check_version("package.json version", pkg.get("version")).map(|_| ())
 }
 
+/// Checks that the id that plugin.json names is the id of the installation record of the plugin. A release whose
+/// plugin.json names another plugin is refused at installation and at the reading of the installed state
+/// (docs/spec/installation.md#installation-layout).
+pub fn check_plugin_id(id: &str, manifest: &Value) -> Result<(), String> {
+    match manifest.get("id").and_then(Value::as_str) {
+        None => Err("plugin.json id must be a string".to_string()),
+        Some(found) if found != id => Err(format!(
+            "plugin.json id {found} differs from the installed plugin {id}"
+        )),
+        Some(_) => Ok(()),
+    }
+}
+
 /// Checks the dependencies of plugin.json and returns the version range of each package. A plugin that needs no other
 /// package has no dependencies.
 pub fn manifest_dependencies(manifest: &Value) -> Result<BTreeMap<String, String>, String> {

@@ -54,11 +54,21 @@ fn write_installed_raw(config: &Path, text: &str) -> PathBuf {
     path
 }
 
+/// Writes the plugin.json of each folder that RELEASED_FORMAT_2 records, as an installation extracts them.
+fn write_released_folders(config: &Path) {
+    for (id, version) in [("probe", "0.0.4"), ("probe2", "0.0.2")] {
+        let folder = config.join("plugins").join(id).join(version);
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("plugin.json"), format!(r#"{{"id": "{id}"}}"#)).unwrap();
+    }
+}
+
 // contract: install.migration.migrates-the-released-form
 #[test]
 fn migrate_installed_migrates_the_released_format_2_to_the_current_format() {
     let config = temp_config("released");
     let path = write_installed_raw(config.path(), RELEASED_FORMAT_2);
+    write_released_folders(config.path());
     assert_eq!(migrate_installed(config.path()).unwrap(), 3);
     let state = read_installed(config.path()).unwrap();
     assert_eq!(state.format, INSTALLED_FORMAT);
