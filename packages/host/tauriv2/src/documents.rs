@@ -775,12 +775,10 @@ impl ViewChannels {
             .and_then(Value::as_u64)
             .ok_or_else(|| format!("{surface}: view call has no integer id"))?;
         let cancel = field("cancel");
-        if let Some(cancel) = cancel {
-            if *cancel != Value::Bool(true) || field("command").is_some() {
-                return Err(format!(
-                    "{surface}: view call {id} cancel must be true and name no command"
-                ));
-            }
+        if cancel.is_some_and(|cancel| *cancel != Value::Bool(true) || field("command").is_some()) {
+            return Err(format!(
+                "{surface}: view call {id} cancel must be true and name no command"
+            ));
         }
         let command = match cancel {
             Some(_) => None,
