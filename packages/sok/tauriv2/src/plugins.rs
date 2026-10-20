@@ -225,8 +225,15 @@ pub fn read_installed(config_dir: &Path) -> Result<InstalledState, String> {
         .map_err(|error| format!("{}: {error}", path.display()))?;
     for (id, plugin) in &state.plugins {
         let file = config_dir.join(&plugin.path).join("plugin.json");
-        let data = std::fs::read(&file)
-            .map_err(|error| crate::files::file_error(file.display(), &error))?;
+        let data = match std::fs::read(&file) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(format!(
+                    "{}: the plugin manifest is missing",
+                    file.display()
+                ));
+            }
+            other => other.map_err(|error| crate::files::file_error(file.display(), &error))?,
+        };
         check_plugin_id_of(id, &file.display().to_string(), &data)?;
     }
     Ok(state)
@@ -435,10 +442,12 @@ fn manifest_dependencies_of(file: &str, data: &[u8]) -> Result<BTreeMap<String, 
     install::manifest_dependencies(&value).map_err(|error| format!("{file}: {error}"))
 }
 
-/// Checks the plugin.json text of plugin id. file is the location for errors.
+/// Checks the plugin.json text of plugin id. file is the location for errors. The error names only the file: the parser
+/// texts of serde_json and encoding/json differ, so a parser detail would make the hosts report different texts
+/// (docs/spec/host-contract.md#installed.plugin-json.invalid-text).
 fn check_plugin_id_of(id: &str, file: &str, data: &[u8]) -> Result<(), String> {
-    let value: Value = serde_json::from_slice(data)
-        .map_err(|error| format!("{file} is not valid JSON: {error}"))?;
+    let value: Value =
+        serde_json::from_slice(data).map_err(|_| format!("{file} is not valid JSON"))?;
     if !value.is_object() {
         return Err(format!("{file}: expected an object"));
     }

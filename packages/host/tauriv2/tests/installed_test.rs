@@ -188,6 +188,23 @@ fn installed_plugins_document_reports_an_invalid_state() {
     );
 }
 
+// contract: installed.plugin-json.invalid-text
+#[test]
+fn installed_plugin_json_invalid_text_names_only_the_file() {
+    let config = installed_fixture();
+    let manifest = config.path().join("plugins/alpha/1.0.0/plugin.json");
+    for content in ["", "{"] {
+        write_installed(
+            config.path(),
+            &[("plugins/alpha/1.0.0/plugin.json", content)],
+        );
+        assert_eq!(
+            text(installed::installed_plugins_document(config.path(), false)),
+            format!(r#"{{"error":"{} is not valid JSON"}}"#, manifest.display())
+        );
+    }
+}
+
 /// A frontend that returns the path as it is.
 struct Frontend;
 
