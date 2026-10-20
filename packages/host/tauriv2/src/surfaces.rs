@@ -60,6 +60,9 @@ pub(crate) struct SurfaceRegion {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct SurfaceComposition {
     pub(crate) kind: String,
+    /// The page of a view composition: a path inside the plugin release (docs/spec/plugins.md#view-surfaces).
+    #[serde(default)]
+    pub(crate) page: String,
     #[serde(default)]
     pub(crate) regions: Vec<SurfaceRegion>,
     pub(crate) overlays: Option<Vec<String>>,
@@ -82,21 +85,50 @@ fn valid_composition_name(name: &str) -> bool {
             .all(|(i, ch)| ch.is_ascii_lowercase() || ch.is_ascii_digit() || (i > 0 && ch == '-'))
 }
 
+/// Reports whether page is a path inside the plugin release: relative, with no empty, `.` or `..` segment, no `.binary` segment,
+/// and the `.html` extension (docs/spec/plugins.md#view-surfaces).
+fn valid_view_page(page: &str) -> bool {
+    page.ends_with(".html")
+        && page
+            .split('/')
+            .all(|segment| !matches!(segment, "" | "." | ".." | ".binary"))
+}
+
 fn validate_composition(composition: &SurfaceComposition) -> Result<(), String> {
     if composition.kind == "dom" {
         if !composition.regions.is_empty()
             || composition.overlays.as_ref().is_some_and(|v| !v.is_empty())
+            || !composition.page.is_empty()
         {
-            return Err("dom composition cannot declare regions or overlays".into());
+            return Err("dom composition cannot declare a page, regions or overlays".into());
         }
         return Ok(());
+    }
+    if composition.kind == "view" {
+        if !valid_view_page(&composition.page) {
+            return Err(format!(
+                "view composition page {:?} must be a path inside the plugin release that ends in .html",
+                composition.page
+            ));
+        }
+        return validate_regions(composition);
     }
     if composition.kind != "hybrid"
         || composition.regions.is_empty()
         || composition.overlays.is_none()
     {
-        return Err("surface composition must be dom or a complete hybrid composition".into());
+        return Err(
+            "surface composition must be dom, view or a complete hybrid composition".into(),
+        );
     }
+    if !composition.page.is_empty() {
+        return Err("hybrid composition cannot declare a page".into());
+    }
+    validate_regions(composition)
+}
+
+/// Checks the names and kinds of the regions and overlays of a hybrid or view composition.
+fn validate_regions(composition: &SurfaceComposition) -> Result<(), String> {
     let mut seen = HashSet::new();
     for region in &composition.regions {
         if !valid_composition_name(&region.name) || !seen.insert(region.name.clone()) {
@@ -123,7 +155,7 @@ fn validate_composition(composition: &SurfaceComposition) -> Result<(), String> 
             _ => return Err(format!("unknown region kind {:?}", region.kind)),
         }
     }
-    for overlay in composition.overlays.as_ref().expect("checked above") {
+    for overlay in composition.overlays.iter().flatten() {
         if !valid_composition_name(overlay) || !seen.insert(overlay.clone()) {
             return Err(format!("invalid or duplicate composition name {overlay:?}"));
         }
@@ -698,6 +730,24 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 }
                 Ok(())
             })?;
+            // The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
+            if s.composition.kind == "view" {
+                let view_window = window.clone();
+                let surface = s.id.clone();
+                let plugin = s.plugin.clone();
+                let page = s.composition.page.clone();
+                exposure::on_main(window, move || {
+                    documents::sync_view(
+                        &view_window,
+                        platform,
+                        handle,
+                        &surface,
+                        &plugin,
+                        &page,
+                        visible,
+                    )
+                })?;
+            }
         }
 
         // Only the page writes the surface list, so a surface that is not in the list is a removed surface.

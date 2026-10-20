@@ -2,8 +2,11 @@ package host
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // contract: exposure.host-window.reads-during-surface-close
@@ -58,5 +61,75 @@ func TestUnregisteredNativeSurfaceViewFailsWithItsAddress(t *testing.T) {
 	_, err = registeredSurface(named, 9)
 	if err == nil || err.Error() != "unregistered native surface 9" {
 		t.Fatalf("unregistered view: err %v; want unregistered native surface 9", err)
+	}
+}
+
+// viewPlatform is the platform of the view tests. It records the document web views that are created with their configuration and
+// the addresses that they load. Every other operation of the platform interface is not implemented by it.
+type viewPlatform struct {
+	platform.Platform
+	created []viewCreation
+	loaded  []string
+}
+
+type viewCreation struct {
+	folder, plugin string
+	view           bool
+}
+
+func (p *viewPlatform) CreateDocument(surface unsafe.Pointer, directory, folder, plugin string, view bool, changed func(state string)) (unsafe.Pointer, error) {
+	p.created = append(p.created, viewCreation{folder: folder, plugin: plugin, view: view})
+	return unsafe.Pointer(new(int)), nil
+}
+
+func (p *viewPlatform) LoadDocument(document unsafe.Pointer, url string) bool {
+	p.loaded = append(p.loaded, url)
+	return true
+}
+
+func (p *viewPlatform) PlaceDocument(document unsafe.Pointer, left, top, right, bottom float64, visible bool) {
+}
+
+func (p *viewPlatform) CloseDocument(document unsafe.Pointer) {}
+
+// contract: view.create-loads-page
+func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
+	fake := &viewPlatform{}
+	saved := system
+	system = fake
+	t.Cleanup(func() { system = saved })
+	s := &Surfaces{documents: NewDocuments()}
+	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html"); err != nil {
+		t.Fatalf("attach view: %v", err)
+	}
+	if len(fake.created) != 1 || !fake.created[0].view || fake.created[0].plugin != "probe" || fake.created[0].folder != "/plugins/probe" {
+		t.Fatalf("created documents: %+v, want one view configuration of plugin probe in its folder", fake.created)
+	}
+	if want := []string{"sok://probe/ui/page.html"}; !reflect.DeepEqual(fake.loaded, want) {
+		t.Fatalf("loaded addresses: %v, want %v", fake.loaded, want)
+	}
+	if _, err := s.documents.Get(DocumentKey{Surface: "probe-surface", Name: viewRegionName}); err != nil {
+		t.Fatalf("the view is not recorded for its surface: %v", err)
+	}
+}
+
+func TestViewCompositionDeclaresPageWithOptionalRegions(t *testing.T) {
+	if err := validateComposition(SurfaceComposition{Kind: "view", Page: "ui/page.html"}); err != nil {
+		t.Fatalf("view without regions: %v", err)
+	}
+	document := SurfaceRegion{Name: "page", Kind: "document", Input: "native"}
+	if err := validateComposition(SurfaceComposition{Kind: "view", Page: "ui/page.html", Regions: []SurfaceRegion{document}, Overlays: []string{}}); err != nil {
+		t.Fatalf("view with a region: %v", err)
+	}
+	for _, composition := range []SurfaceComposition{
+		{Kind: "view"},
+		{Kind: "view", Page: "../page.html"},
+		{Kind: "view", Page: "ui/page.js"},
+		{Kind: "view", Page: "ui/.binary/page.html"},
+		{Kind: "hybrid", Page: "ui/page.html", Regions: []SurfaceRegion{document}, Overlays: []string{}},
+	} {
+		if err := validateComposition(composition); err == nil {
+			t.Fatalf("composition %+v is accepted", composition)
+		}
 	}
 }

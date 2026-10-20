@@ -390,13 +390,16 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// which the persistent data store keeps the site data. changed receives the state JSON ({url, title, loading,
     /// progress, canGoBack, canGoForward, error, scroll}) on the main thread. Call it on the main thread.
     /// folder and plugin are the installed folder and the id of the plugin whose surface owns the region; the region
-    /// serves sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions).
+    /// serves sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). view is true for the
+    /// web view configuration of a view surface, which is the only configuration that serves the core root
+    /// (docs/spec/native-surfaces.md#view-surfaces).
     fn create_document(
         &self,
         surface: Handle,
         store: &str,
         folder: &str,
         plugin: &str,
+        view: bool,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String>;
     fn set_document_event(

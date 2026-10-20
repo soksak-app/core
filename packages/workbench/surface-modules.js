@@ -215,7 +215,9 @@ function tabState(surface, isDisposed) {
 }
 
 export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
-  if (!slot || !surface?.module) throw new TypeError("surface module mount requires a slot and module");
+  // A view surface has no module: its page is loaded by the host into the view (docs/spec/plugins.md#view-surfaces).
+  const viewSurface = surface?.composition?.kind === "view";
+  if (!slot || (!surface?.module && !viewSurface)) throw new TypeError("surface module mount requires a slot and module");
   // The start of the mount for the trace event surface.mount, which covers the wait for the earlier dispose too.
   const started = performance.now();
   // A tab that is restored while its unload still disposes it mounts a new surface after that dispose ends.
@@ -224,7 +226,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   clearSlotPlaceholders(slot, surface.surfaceId);
   // Without a host there are no sidecars and no native regions. A surface that needs them is not mounted and a placeholder is drawn.
   // (docs/spec/plugins.md#runtime-module).
-  if (!native && (surface.sidecars.length > 0 || surface.composition?.kind === "hybrid")) {
+  if (!native && (surface.sidecars.length > 0 || surface.composition?.kind === "hybrid" || viewSurface)) {
     const placeholder = document.createElement("div");
     placeholder.className = "surface-placeholder";
     placeholder.dataset.surfaceId = surface.surfaceId;
@@ -370,6 +372,11 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         // The module of a declaring surface reads and writes its tab state, which the page opens after the first plane.
         if (surface.unload) await tabStatesReady();
         if (entry.disposed) return null;
+        // The workbench mounts no module for a view. It declares the view composition, which resolves the composition wait of the surface.
+        if (viewSurface) {
+          await page.composition.declare(surface.composition);
+          return null;
+        }
         return import(surface.module);
       }).then((module) => {
         return module && mountSurfaceModule(module, shadow, context);

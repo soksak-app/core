@@ -171,9 +171,10 @@ impl Platform for Windows {
         store: &str,
         folder: &str,
         plugin: &str,
+        view: bool,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
-        unsupported::create_document(surface, store, folder, plugin, changed)
+        unsupported::create_document(surface, store, folder, plugin, view, changed)
     }
     fn set_document_message(
         &self,

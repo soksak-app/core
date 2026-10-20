@@ -93,6 +93,7 @@ pub fn create(
     store: &str,
     folder: &str,
     plugin: &str,
+    view: bool,
     receive: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {
     let store = CString::new(store).map_err(|e| e.to_string())?;
@@ -105,7 +106,7 @@ pub fn create(
             store.as_ptr(),
             folder.as_ptr(),
             plugin.as_ptr(),
-            false,
+            view,
             changed,
             receiver as *mut c_void,
         )

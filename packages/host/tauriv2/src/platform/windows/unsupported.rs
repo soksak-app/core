@@ -187,6 +187,7 @@ pub fn create_document(
     _store: &str,
     _folder: &str,
     _plugin: &str,
+    _view: bool,
     _changed: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {
     missing("document view")

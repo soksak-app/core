@@ -56,3 +56,33 @@ fn a_status_read_during_surface_close_finds_the_registered_surface() {
     );
     assert!(named.lock().unwrap().contains_key(&7));
 }
+
+#[test]
+fn a_view_composition_declares_its_page_with_optional_regions() {
+    use super::{SurfaceComposition, validate_composition};
+    let composition = |value: serde_json::Value| -> SurfaceComposition {
+        serde_json::from_value(value).expect("the composition fixture is valid")
+    };
+    let region = serde_json::json!({"name": "page", "kind": "document", "input": "native"});
+    assert!(
+        validate_composition(&composition(
+            serde_json::json!({"kind": "view", "page": "ui/page.html"})
+        ))
+        .is_ok()
+    );
+    assert!(
+        validate_composition(&composition(serde_json::json!({"kind": "view", "page": "ui/page.html", "regions": [region], "overlays": []}))).is_ok()
+    );
+    for value in [
+        serde_json::json!({"kind": "view"}),
+        serde_json::json!({"kind": "view", "page": "../page.html"}),
+        serde_json::json!({"kind": "view", "page": "ui/page.js"}),
+        serde_json::json!({"kind": "view", "page": "ui/.binary/page.html"}),
+        serde_json::json!({"kind": "hybrid", "page": "ui/page.html", "regions": [region], "overlays": []}),
+    ] {
+        assert!(
+            validate_composition(&composition(value.clone())).is_err(),
+            "composition {value} is accepted"
+        );
+    }
+}

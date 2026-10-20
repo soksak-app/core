@@ -115,7 +115,7 @@ test("surface composition declarations are complete and fail closed", () => {
   assert.equal(validateManifest(hybrid([imageRegion])).surface.composition.regions[0].sidecar, "@scope/sidecar-worker");
 
   const cases = [
-    [{ ...card, surface: { ...card.surface, composition: { kind: "other" } } }, /kind must be dom or hybrid/],
+    [{ ...card, surface: { ...card.surface, composition: { kind: "other" } } }, /kind must be dom, hybrid or view/],
     [{ ...card, surface: { ...card.surface, composition: { kind: "dom", regions: [] } } }, /unknown field regions/],
     [hybrid([]), /requires regions/],
     [{ ...hybrid(), surface: { ...hybrid().surface, composition: { kind: "hybrid", regions: [documentRegion] } } }, /requires overlays/],
@@ -127,6 +127,34 @@ test("surface composition declarations are complete and fail closed", () => {
     [hybrid([documentRegion, { ...documentRegion }]), /duplicate name page/],
     [hybrid([documentRegion], ["page"]), /duplicate name page/],
     [hybrid([documentRegion], ["Bad Name"]), /invalid overlay name/],
+  ];
+  for (const [manifest, message] of cases) assert.throws(() => validateManifest(manifest), message);
+});
+
+test("a view composition declares its page and no module", () => {
+  const view = (composition, extra = {}) => ({ ...card, surface: { composition, ...extra } });
+  const documentRegion = { name: "page", kind: "document", input: "native" };
+  const imageRegion = { name: "view", kind: "image", sidecar: "@scope/sidecar-worker", input: "dom" };
+  assert.deepEqual(validateManifest(view({ kind: "view", page: "ui/page.html" })).surface.composition,
+    { kind: "view", page: "ui/page.html" });
+  assert.equal(validateManifest(view({ kind: "view", page: "page.html", regions: [documentRegion], overlays: ["menu"] })).surface.composition.overlays[0], "menu");
+  assert.equal(validateManifest(view({ kind: "view", page: "ui/page.html", regions: [imageRegion] })).surface.composition.regions[0].sidecar, "@scope/sidecar-worker");
+  assert.equal(validateManifest(view({ kind: "view", page: "ui/page.html", overlays: [] })).surface.composition.overlays.length, 0);
+  const cases = [
+    [view({ kind: "view", page: "ui/page.html" }, { module: "ui/probe.js" }), /surface module is refused beside a view composition/],
+    [view({ kind: "view" }), /view composition requires page/],
+    [view({ kind: "view", page: "/ui/page.html" }), /page must be a path inside the plugin release that ends in .html/],
+    [view({ kind: "view", page: "../page.html" }), /page must be a path inside the plugin release that ends in .html/],
+    [view({ kind: "view", page: "ui//page.html" }), /page must be a path inside the plugin release that ends in .html/],
+    [view({ kind: "view", page: "ui/./page.html" }), /page must be a path inside the plugin release that ends in .html/],
+    [view({ kind: "view", page: "ui/page.js" }), /page must be a path inside the plugin release that ends in .html/],
+    [view({ kind: "view", page: "ui/.binary/page.html" }), /page must be a path inside the plugin release that ends in .html/],
+    [view({ kind: "view", page: "ui/page.html", regions: [] }), /regions must be a non-empty array/],
+    [view({ kind: "view", page: "ui/page.html", regions: [{ ...documentRegion, input: "dom" }] }), /document input must be native/],
+    [view({ kind: "view", page: "ui/page.html", overlays: "menu" }), /overlays must be an array/],
+    [view({ kind: "view", page: "ui/page.html", module: "ui/x.js" }), /unknown field module/],
+    [{ ...card, surface: { module: "ui/probe.js", composition: { kind: "hybrid", page: "ui/page.html", regions: [documentRegion], overlays: [] } } }, /unknown field page/],
+    [{ ...card, surface: { composition: { kind: "hybrid", regions: [documentRegion], overlays: [] } } }, /surface requires a module/],
   ];
   for (const [manifest, message] of cases) assert.throws(() => validateManifest(manifest), message);
 });

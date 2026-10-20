@@ -341,6 +341,10 @@ export function settingDeclarations(manifest) {
   ]));
 }
 
+/** The page of a view is a path inside the plugin release: relative, no empty, `.` or `..` segment, no `.binary` segment, ending in `.html`. */
+const isViewPage = (page) => isText(page) && page.endsWith(".html") &&
+  page.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".." && segment !== ".binary");
+
 /** Validates the surface composition declaration. This declaration is the host's list of region permissions. */
 function checkComposition(where, composition, sidecars) {
   if (!isObject(composition)) throw new Error(`${where}: composition must be an object`);
@@ -348,15 +352,35 @@ function checkComposition(where, composition, sidecars) {
     only(`${where} composition`, composition, ["kind"]);
     return;
   }
-  if (composition.kind !== "hybrid") throw new Error(`${where}: composition kind must be dom or hybrid`);
+  if (composition.kind === "view") {
+    only(`${where} composition`, composition, ["kind", "page", "regions", "overlays"]);
+    if (composition.page === undefined) throw new Error(`${where} composition: view composition requires page`);
+    if (!isViewPage(composition.page)) {
+      throw new Error(`${where} composition: page must be a path inside the plugin release that ends in .html`);
+    }
+    if (composition.regions !== undefined && (!Array.isArray(composition.regions) || composition.regions.length === 0)) {
+      throw new Error(`${where} composition: regions must be a non-empty array`);
+    }
+    if (composition.overlays !== undefined && !Array.isArray(composition.overlays)) {
+      throw new Error(`${where} composition: overlays must be an array`);
+    }
+    // default: regions and overlays are optional in a view; a view without them declares no native region or overlay.
+    checkRegions(where, composition.regions ?? [], composition.overlays ?? [], sidecars);
+    return;
+  }
+  if (composition.kind !== "hybrid") throw new Error(`${where}: composition kind must be dom, hybrid or view`);
   only(`${where} composition`, composition, ["kind", "regions", "overlays"]);
   if (!Array.isArray(composition.regions) || composition.regions.length === 0) {
     throw new Error(`${where}: hybrid composition requires regions`);
   }
   if (!Array.isArray(composition.overlays)) throw new Error(`${where}: hybrid composition requires overlays`);
+  checkRegions(where, composition.regions, composition.overlays, sidecars);
+}
 
+/** Validates the regions and overlays of a hybrid or view composition; the names of both are unique. */
+function checkRegions(where, regions, overlays, sidecars) {
   const names = new Set();
-  for (const region of composition.regions) {
+  for (const region of regions) {
     if (!isObject(region)) throw new Error(`${where} composition region: expected an object`);
     if (typeof region.name !== "string" || !REGION.test(region.name)) {
       throw new Error(`${where} composition: invalid region name ${region.name}`);
@@ -379,7 +403,7 @@ function checkComposition(where, composition, sidecars) {
     }
     throw new Error(`${regionWhere}: kind must be document or image`);
   }
-  for (const overlay of composition.overlays) {
+  for (const overlay of overlays) {
     if (typeof overlay !== "string" || !REGION.test(overlay)) {
       throw new Error(`${where} composition: invalid overlay name ${overlay}`);
     }
@@ -605,9 +629,14 @@ export function validateManifest(manifest) {
       !(manifest.exposes?.commands ?? []).some((command) => command.name === surface.drop))) {
       throw new Error(`${where}: surface drop must name a command declared in exposes`);
     }
-    if (!isText(surface.module)) throw new Error(`${where}: surface requires a module`);
-    if (surface.module.startsWith("/") || surface.module.split("/").includes("..") || !surface.module.endsWith(".js")) {
-      throw new Error(`${where}: surface module must be a JavaScript path inside the package`);
+    // A view surface has no module: its page is declared in the composition (docs/spec/plugins.md#view-surfaces).
+    const view = isObject(surface.composition) && surface.composition.kind === "view";
+    if (view && surface.module !== undefined) throw new Error(`${where}: surface module is refused beside a view composition`);
+    if (!view) {
+      if (!isText(surface.module)) throw new Error(`${where}: surface requires a module`);
+      if (surface.module.startsWith("/") || surface.module.split("/").includes("..") || !surface.module.endsWith(".js")) {
+        throw new Error(`${where}: surface module must be a JavaScript path inside the package`);
+      }
     }
     if (surface.composition === undefined) throw new Error(`${where}: surface requires a composition`);
     checkComposition(`${where} surface`, surface.composition, manifestSidecars(manifest));

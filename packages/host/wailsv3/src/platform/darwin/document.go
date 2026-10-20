@@ -48,8 +48,8 @@ static void documentQuery(void *document, uintptr_t context) {
     sp_document_query(document, documentQueriedBridge, (void *)context);
 }
 
-static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, uintptr_t context) {
-    return sp_document_create(surface, store, package, plugin, false, documentChangedBridge, (void *)context);
+static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, bool isView, uintptr_t context) {
+    return sp_document_create(surface, store, package, plugin, isView, documentChangedBridge, (void *)context);
 }
 static void documentSetMessage(void *document, uintptr_t context) {
     sp_document_set_message(document, documentMessageBridge, (void *)context);
@@ -140,7 +140,7 @@ func (implementation) SetCoreRoot(resolve platform.CoreRootResolver) error {
 	return nil
 }
 
-func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, plugin string, changed func(state string)) (unsafe.Pointer, error) {
+func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, plugin string, view bool, changed func(state string)) (unsafe.Pointer, error) {
 	name := C.CString(directory)
 	defer C.free(unsafe.Pointer(name))
 	folderText := C.CString(folder)
@@ -148,7 +148,7 @@ func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, 
 	id := C.CString(plugin)
 	defer C.free(unsafe.Pointer(id))
 	receiver := cgo.NewHandle(changed)
-	document := C.documentCreate(surface, name, folderText, id, C.uintptr_t(receiver))
+	document := C.documentCreate(surface, name, folderText, id, C.bool(view), C.uintptr_t(receiver))
 	if document == nil {
 		receiver.Delete()
 		return nil, errors.New("cannot create a document view in this surface")

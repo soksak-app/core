@@ -216,6 +216,7 @@ NATIVE_TESTS = observe_test \
   document_plugin_test \
   core_root_cors_test \
   document_core_root_test \
+  document_view_load_test \
   document_binary_test \
   document_typing_test \
   document_press_test \

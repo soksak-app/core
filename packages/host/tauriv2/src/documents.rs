@@ -611,6 +611,116 @@ impl Documents {
     }
 }
 
+/// The name of the view web view of a view surface. No composition region has an empty name, so the view cannot collide with a
+/// region, and the view closes with the other documents of its surface.
+const VIEW_NAME: &str = "";
+
+/// Creates the view web view of a view surface, with the view configuration (`view` is true), and loads sok://<plugin>/<page>
+/// into it. When the load does not succeed, the view is closed and the error is returned. create, load and close are the
+/// platform operations, and they run on the main thread.
+pub fn create_view(
+    create: impl FnOnce(bool) -> Result<Handle, String>,
+    load: impl FnOnce(Handle, &str) -> Result<bool, String>,
+    close: impl FnOnce(Handle) -> Result<(), String>,
+    plugin: &str,
+    page: &str,
+) -> Result<Handle, String> {
+    let handle = create(true)?;
+    let address = format!("sok://{plugin}/{page}");
+    let reason = match load(handle, &address) {
+        Ok(true) => return Ok(handle),
+        Ok(false) => format!("view cannot load {address}"),
+        Err(error) => error,
+    };
+    close(handle).map_err(|closing| format!("{reason}; closing the view: {closing}"))?;
+    Err(reason)
+}
+
+/// Creates the view of a view surface when the surface has none, and places the view over the whole surface. Call it on the
+/// main thread.
+pub(crate) fn sync_view(
+    window: &Window,
+    platform: &'static dyn platform::Platform,
+    surface_handle: Handle,
+    surface: &str,
+    plugin: &str,
+    page: &str,
+    visible: bool,
+) -> Result<(), String> {
+    let data = window_data(window)?;
+    let key: Key = (surface.to_string(), VIEW_NAME.to_string());
+    let handle = match data.documents.get(&key) {
+        Ok(handle) => handle,
+        Err(_) => {
+            data.documents.reserve(&key)?;
+            match attach_view(window, platform, surface_handle, plugin, page) {
+                Ok(handle) => {
+                    if !data.documents.set(&key, handle) {
+                        platform.close_document(handle)?;
+                        return Err(format!(
+                            "surface {surface:?} closed while its view was created"
+                        ));
+                    }
+                    handle
+                }
+                Err(error) => {
+                    data.documents.remove(&key)?;
+                    return Err(error);
+                }
+            }
+        }
+    };
+    platform.place_document(
+        handle,
+        platform::Insets {
+            left: 0.0,
+            top: 0.0,
+            right: 0.0,
+            bottom: 0.0,
+        },
+        visible,
+    )
+}
+
+/// Creates the view configuration of a plugin page in the data directory and the installed folder of the plugin.
+fn attach_view(
+    window: &Window,
+    platform: &'static dyn platform::Platform,
+    surface_handle: Handle,
+    plugin: &str,
+    page: &str,
+) -> Result<Handle, String> {
+    let config = crate::config_directory(window.app_handle()).map_err(|e| e.to_string())?;
+    let directory = config.join(DOCUMENT_DATA);
+    let directory = directory.to_str().ok_or_else(|| {
+        format!(
+            "document data directory is not UTF-8: {}",
+            directory.display()
+        )
+    })?;
+    let folder = crate::installed::plugin_folder(&config, plugin)?;
+    let folder = folder
+        .to_str()
+        .ok_or_else(|| format!("plugin folder is not UTF-8: {}", folder.display()))?
+        .to_string();
+    create_view(
+        |view| {
+            platform.create_document(
+                surface_handle,
+                directory,
+                &folder,
+                plugin,
+                view,
+                Box::new(|_: String| {}),
+            )
+        },
+        |document, url| platform.load_document(document, url),
+        |document| platform.close_document(document),
+        plugin,
+        page,
+    )
+}
+
 /// Checks the surface id of the calling webview and returns the key and the window of the request.
 fn owner(webview: &Webview, request: &Request) -> Result<(Key, Window), String> {
     let window = webview.window();
@@ -722,7 +832,8 @@ fn create(
             .to_str()
             .ok_or_else(|| format!("plugin folder is not UTF-8: {}", folder.display()))?
             .to_string();
-        let handle = platform.create_document(surface, directory, &folder, &plugin, changed)?;
+        let handle =
+            platform.create_document(surface, directory, &folder, &plugin, false, changed)?;
         // The history is restored before anything else uses the new region, so it loads the restored entry first.
         if let Some(state) = &restore
             && let Err(refusal) = platform.restore_document(handle, state)

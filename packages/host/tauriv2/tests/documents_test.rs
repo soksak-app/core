@@ -521,3 +521,41 @@ fn document_interaction_state_must_not_be_empty() {
             .unwrap();
     assert_eq!(state.restore_state(), Ok(Some("AAAA")));
 }
+
+// contract: view.create-loads-page
+#[test]
+fn a_view_surface_creates_a_view_configuration_and_loads_its_page() {
+    // The view is created with the view flag, and the page is loaded from sok://<plugin>/<page> right after creation.
+    let created = std::cell::RefCell::new(Vec::new());
+    let loaded = std::cell::RefCell::new(Vec::new());
+    let closed = std::cell::RefCell::new(Vec::new());
+    let handle = soksak_host_tauriv2::documents::create_view(
+        |view| {
+            created.borrow_mut().push(view);
+            Ok(7)
+        },
+        |document, url| {
+            loaded.borrow_mut().push((document, url.to_string()));
+            Ok(true)
+        },
+        |document| {
+            closed.borrow_mut().push(document);
+            Ok(())
+        },
+        "probe",
+        "ui/page.html",
+    )
+    .expect("the view is created");
+    assert_eq!(handle, 7, "the created view is returned");
+    assert_eq!(
+        *created.borrow(),
+        vec![true],
+        "the view configuration has the view flag"
+    );
+    assert_eq!(
+        *loaded.borrow(),
+        vec![(7, "sok://probe/ui/page.html".to_string())],
+        "the view loads its page at creation"
+    );
+    assert!(closed.borrow().is_empty(), "a loaded view is not closed");
+}

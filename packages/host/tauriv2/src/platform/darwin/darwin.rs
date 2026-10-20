@@ -285,9 +285,10 @@ impl Platform for Darwin {
         store: &str,
         folder: &str,
         plugin: &str,
+        view: bool,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
-        document::create(surface, store, folder, plugin, changed)
+        document::create(surface, store, folder, plugin, view, changed)
     }
     fn set_document_message(
         &self,

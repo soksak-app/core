@@ -225,7 +225,7 @@ func (implementation) EvaluateScript(unsafe.Pointer, string) {
 	unreachable("native webview script evaluation")
 }
 
-func (implementation) CreateDocument(unsafe.Pointer, string, string, string, func(string)) (unsafe.Pointer, error) {
+func (implementation) CreateDocument(unsafe.Pointer, string, string, string, bool, func(string)) (unsafe.Pointer, error) {
 	return nil, unsupported("document view")
 }
 

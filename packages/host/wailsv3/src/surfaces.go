@@ -55,6 +55,7 @@ type SurfaceRegion struct {
 
 type SurfaceComposition struct {
 	Kind     string          `json:"kind"`
+	Page     string          `json:"page,omitempty"`
 	Regions  []SurfaceRegion `json:"regions,omitempty"`
 	Overlays []string        `json:"overlays,omitempty"`
 }
@@ -72,16 +73,44 @@ func validCompositionName(name string) bool {
 	return true
 }
 
+// validViewPage reports whether page is a path inside the plugin release: relative, with no empty, `.` or `..` segment, no `.binary`
+// segment, and the `.html` extension (docs/spec/plugins.md#view-surfaces).
+func validViewPage(page string) bool {
+	if !strings.HasSuffix(page, ".html") {
+		return false
+	}
+	for _, segment := range strings.Split(page, "/") {
+		if segment == "" || segment == "." || segment == ".." || segment == ".binary" {
+			return false
+		}
+	}
+	return true
+}
+
 func validateComposition(composition SurfaceComposition) error {
 	if composition.Kind == "dom" {
-		if len(composition.Regions) != 0 || len(composition.Overlays) != 0 {
-			return fmt.Errorf("dom composition cannot declare regions or overlays")
+		if len(composition.Regions) != 0 || len(composition.Overlays) != 0 || composition.Page != "" {
+			return fmt.Errorf("dom composition cannot declare a page, regions or overlays")
 		}
 		return nil
 	}
-	if composition.Kind != "hybrid" || len(composition.Regions) == 0 || composition.Overlays == nil {
-		return fmt.Errorf("surface composition must be dom or a complete hybrid composition")
+	if composition.Kind == "view" {
+		if !validViewPage(composition.Page) {
+			return fmt.Errorf("view composition page %q must be a path inside the plugin release that ends in .html", composition.Page)
+		}
+		return validateRegions(composition)
 	}
+	if composition.Kind != "hybrid" || len(composition.Regions) == 0 || composition.Overlays == nil {
+		return fmt.Errorf("surface composition must be dom, view or a complete hybrid composition")
+	}
+	if composition.Page != "" {
+		return fmt.Errorf("hybrid composition cannot declare a page")
+	}
+	return validateRegions(composition)
+}
+
+// validateRegions checks the names and kinds of the regions and overlays of a hybrid or view composition.
+func validateRegions(composition SurfaceComposition) error {
 	seen := map[string]bool{}
 	for _, region := range composition.Regions {
 		if !validCompositionName(region.Name) || seen[region.Name] {
@@ -910,6 +939,12 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		s.surfacePlugins[item.id] = item.decl.Plugin
 		s.mu.Unlock()
 		s.images.SetSurfaceVisible(item.id, item.visible)
+		// The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
+		if item.decl.Composition.Kind == "view" {
+			if err := s.syncView(item.id, item.view.NativeView(), item.decl.Plugin, item.decl.Composition.Page, item.visible); err != nil {
+				return nil, nil, err
+			}
+		}
 		// The native view is kept hidden until PresentSurfaces confirms that the corresponding application DOM frame
 		// was displayed.
 		item.view.SetHidden(true)

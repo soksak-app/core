@@ -293,7 +293,7 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 		if err != nil {
 			return
 		}
-		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, func(state string) {
+		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, false, func(state string) {
 			s.documentChanged(key, state)
 		})
 		// The history is restored before anything else uses the new region, so it loads the restored entry first.
@@ -333,6 +333,53 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 	if !registered {
 		return fmt.Errorf("surface %q closed while its document was created", key.Surface)
 	}
+	return nil
+}
+
+// viewRegionName is the document name of the view web view of a view surface. No composition region has an empty name, so the view
+// cannot collide with a region, and the view closes with the other documents of its surface.
+const viewRegionName = ""
+
+// attachView creates the view web view of a view surface with the view configuration (isView) and loads sok://<plugin>/<page> into it.
+// The view state is not reported by this step. It runs on the UI thread.
+func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, directory, folder, plugin, page string) error {
+	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
+	if err := s.documents.Reserve(key); err != nil {
+		return err
+	}
+	handle, err := system.CreateDocument(surface, directory, folder, plugin, true, func(string) {})
+	if err == nil && !system.LoadDocument(handle, "sok://"+plugin+"/"+page) {
+		system.CloseDocument(handle)
+		err = fmt.Errorf("view of surface %q cannot load sok://%s/%s", surfaceID, plugin, page)
+	}
+	if err != nil {
+		s.documents.Remove(key)
+		return err
+	}
+	if !s.documents.Set(key, handle) {
+		system.CloseDocument(handle)
+		return fmt.Errorf("surface %q closed while its view was created", surfaceID)
+	}
+	return nil
+}
+
+// syncView creates the view of a view surface when the surface has none, and places the view over the whole surface. It runs on the UI thread.
+func (s *Surfaces) syncView(surfaceID string, surface unsafe.Pointer, plugin, page string, visible bool) error {
+	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
+	handle, err := s.documents.Get(key)
+	if err != nil {
+		folder, folderErr := PluginFolder(s.host.configDir, plugin)
+		if folderErr != nil {
+			return folderErr
+		}
+		if err := s.attachView(surfaceID, surface, filepath.Join(s.host.configDir, documentData), folder, plugin, page); err != nil {
+			return err
+		}
+		if handle, err = s.documents.Get(key); err != nil {
+			return err
+		}
+	}
+	system.PlaceDocument(handle, 0, 0, 0, 0, visible)
 	return nil
 }
 
