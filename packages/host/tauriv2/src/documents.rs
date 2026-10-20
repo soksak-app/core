@@ -2013,7 +2013,7 @@ mod call_peer_tests;
 /// Takes the bytes that the binary store of the document name of surface keeps under id, through take, and releases the id. A
 /// document that is not attached gives the error `document "<name>" is not attached`, the text of the other document operations, and
 /// the error text of the native take is passed on unchanged (docs/spec/native-surfaces.md#document-regions).
-pub(crate) fn take_document_binary_of(
+pub fn take_document_binary_of(
     documents: &Documents,
     surface: &str,
     name: &str,
