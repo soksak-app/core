@@ -30,7 +30,7 @@ func sokJSON(t *testing.T, args ...string) map[string]any {
 	return value
 }
 
-// pluginRegistry builds the release of fixtures/plugin-probe (the plugin probe 0.0.18 without a sidecar) and its registry, and
+// pluginRegistry builds the release of fixtures/plugin-probe (the plugin probe 0.0.19 without a sidecar) and its registry, and
 // returns the paths of index.json and the release. go test runs in the folder of the Go package, so the fixture is below it.
 func pluginRegistry(t *testing.T) (index, release string) {
 	t.Helper()
@@ -39,7 +39,7 @@ func pluginRegistry(t *testing.T) (index, release string) {
 	release = packed["release"].(string)
 	writeInstalled(t, registry, map[string]string{
 		"plugins/probe.json": `{"id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
-			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.0.18",
+			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.0.19",
 			"release": {"url": "file://` + release + `", "sha256": "` + packed["sha256"].(string) + `"},
 			"engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}]}`,
 		"revoked.json": `{"plugins": [], "sidecars": []}`,
@@ -116,7 +116,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	if state.Registry != "file://"+index || state.Index["plugins"].([]any)[0].(map[string]any)["id"] != "probe" {
 		t.Fatalf("state with a registry %+v", state)
 	}
-	if plugin := state.Installed.Plugins["probe"]; plugin.Version != "0.0.18" || !plugin.Enabled {
+	if plugin := state.Installed.Plugins["probe"]; plugin.Version != "0.0.19" || !plugin.Enabled {
 		t.Fatalf("installed %+v", state.Installed)
 	}
 	if err := os.Remove(index); err != nil {
@@ -149,7 +149,7 @@ func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"plugin":{"version":"0.0.18","path":"plugins/probe/0.0.18","enabled":true,"sidecars":{}},"sidecars":{}}`
+	want := `{"plugin":{"version":"0.0.19","path":"plugins/probe/0.0.19","enabled":true,"sidecars":{}},"sidecars":{}}`
 	if string(data) != want {
 		t.Fatalf("install result %s", data)
 	}

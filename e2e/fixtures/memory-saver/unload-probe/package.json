@@ -1,6 +1,6 @@
 {
   "name": "@soksak-check/probe-unload",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "private": true,
   "type": "module",
   "description": "Window check fixture: a plugin that declares surface.unload and stores the address of its document region as the tab state.",
