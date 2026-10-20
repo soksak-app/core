@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.6-5-1: `core.surfaces` composition 필드의 `hasPlugin` 보호를 제거한다. compositor가 필드를 읽기 전에 등록되지 않은 plugin에서 throw하므로 보호는 dead code였고, 필드는 표면 선언의 종류를 읽는다.
 - F212.3-7: host는 view process가 끝날 때 열려 있던 view call마다 `host.call.peer-lost {plugin, command, reason: process-ended}`(error)를 쓴다. host는 메인 page가 답하지 않은 call을 plugin과 command와 함께 보관하며, event는 event catalog에 선언한다. 계약 case `view.call.peer-lost`는 두 host에서 실행한다. `sidecar-ended` 경우는 F212.3-7-1이며, sidecar 요청 원장이 command를 기록하지 않아 막혀 있다.
 - F212.6-5: 실행 중인 문서의 audit은 page가 `core.surface.document`를 노출하지 않는 보이는 view를 건너뛰지 않고 실패한다. `core.surfaces`는 surface마다 구성 종류를 `composition`으로 보고하며, plugin이 그 표면을 선언하지 않으면 `null`이다. audit 선택은 `e2e/audit-surfaces.mjs`의 `unauditedViews`이고, 종류는 workbench의 `compositionKindOf`가 읽는다.
 - F212.7d: 두 host는 view가 page를 불러오기 전에 document-start user script `window.sokTheme = Object.freeze({scheme, tokens})`를 view 구성에 더해, 페이지의 첫 script가 생성 시점의 테마를 읽는다. native 계층은 `sp_document_add_user_script`로 page world에 script를 더한다. 나중의 테마 변경은 post 경로를 쓴다. 계약 case `view.theme.first-script`는 두 host에서 실행한다. card 토큰 색과 첫 프레임 색의 비교는 창 실행이 필요하며 F212.12의 F212.7d-1로 등록한다.
