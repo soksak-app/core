@@ -235,6 +235,28 @@
       "fields": {},
       "description": "The performance trace of the page, while it is on."
     },
+    "page.trace.declared-ui.snapshot.skipped": {
+      "layer": "page",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "status": "string",
+        "count": "number"
+      },
+      "description": "A value of a declared UI status was overwritten while its snapshot was in transit, while the performance trace is on: the main page writes it with the count of the overwritten values, which the snapshot message carries as its skipped field (docs/plans/plugin-processes.md, rule 2)."
+    },
+    "page.trace.status.stalled": {
+      "layer": "page",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "status": "string",
+        "reason": "string"
+      },
+      "description": "A snapshot in transit or a dirty value of a declared UI status was lost when its peer ended, while the performance trace is on: reason is the peer loss reason (docs/plans/plugin-processes.md, rule 2)."
+    },
     "page.trace.surface.mount": {
       "layer": "page",
       "class": "call",

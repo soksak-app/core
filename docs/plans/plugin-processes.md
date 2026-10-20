@@ -68,9 +68,9 @@ When a value is not met, the measured values are recorded in the checklist. A fa
 2. **Declared UI snapshots.** A plugin view or plugin host pushes its declared UI snapshot to the workbench (push). When the main page loads, including a reload, the workbench requests one snapshot for each declared status of each view and host that its surfaces declare (pull). No other pull is made. Message names and fields are in [messages and events](#messages-and-events).
    - A status has at most one snapshot in transit.
    - A change made while a snapshot is in transit marks the status dirty. When the acknowledgement arrives, the next snapshot carries the latest value.
-   - The number of skipped values is counted in `losses.skipped` of the core status `core.plugin.losses`. While the performance trace is on, each change of the count also writes `host.trace.declared-ui.snapshot.skipped`.
+   - The number of skipped values is counted in `losses.skipped` of the core status `core.plugin.losses`. The count reaches the main page as the field `skipped` of each snapshot message: the number of values of the status that were overwritten while a snapshot was in transit, since the previous snapshot of the status was sent. While the performance trace is on, the main page writes `page.trace.declared-ui.snapshot.skipped {plugin, status, count}` for each overwritten value. The host relays no snapshot and writes no event for it, because `host.*` events are written only by host code.
    - When a plugin process starts (or starts again), the first snapshot of each status is the full value of that status. The workbench discards the stopped snapshot and the pending acknowledgement of the previous process. A restarted plugin builds its values from its saved state (rule 5).
-   - When the view process ends or the surface closes while an acknowledgement is pending, the workbench writes `host.trace.status.stalled {plugin, status, reason}`. A restarted process sends the latest value of each status as its first snapshot and clears the dirty mark. When the surface is closed, the dirty values are discarded and the reason says so. No timer is used.
+   - When the view process ends or the surface closes while an acknowledgement is pending, the main page writes `page.trace.status.stalled {plugin, status, reason}` while the performance trace is on. A restarted process sends the latest value of each status as its first snapshot and clears the dirty mark. When the surface is closed, the dirty values are discarded and the reason says so. No timer is used.
 3. **Calls across a boundary.**
    - A command declares `timeout` as stated in [exposure](../spec/exposure.md) (at most 600000 ms; 10 seconds when omitted). The timer remains for a live peer that does not reply to a command, because no event reports a slow command reply. `host.trace.view.unresponsive` reports a view process that stops answering WebKit's responsiveness check; it is not a command reply, so it does not replace the timer. When the time limit passes, the call is rejected with -32000 and `command <name> did not reply within <ms>ms`, the error that exposure.md states at its command timeout entry. This design does not change the message. `host.call.timeout {plugin, command}` is written, and `losses.timeouts` counts it.
    - A view answers a request of the main page for its command with `{sok: 1, reply: id, result}` or `{sok: 1, reply: id, error}`, which the host forwards as `view-reply` ([native surfaces](../spec/native-surfaces.md#view-surfaces), view commands). The main page applies the command's declared time limit to that request, and a reply after the limit is discarded as a late reply.
@@ -139,7 +139,7 @@ When a value is not met, the measured values are recorded in the checklist. A fa
 
 | message | direction | fields | note |
 |---|---|---|---|
-| `declared-ui.snapshot` | plugin → workbench (event) | `{plugin, status, seq, value}` | the push of rule 2 |
+| `declared-ui.snapshot` | plugin → workbench (event) | `{plugin, status, seq, value, skipped}`; `skipped` is the count of values overwritten since the previous snapshot of the status | the push of rule 2 |
 | `declared-ui.snapshot.ack` | workbench → plugin (event) | `{plugin, status, seq}` | confirms receipt; releases the in-transit slot |
 | `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`; the reply is `{seq, value}` | the one pull of load time |
 
@@ -149,8 +149,8 @@ The RPC protocol number is 1 in the 0.0 series.
 
 | event | class | level | fields |
 |---|---|---|---|
-| `host.trace.declared-ui.snapshot.skipped` | call | debug | `{plugin, status, count}`: values skipped while a snapshot was in transit; counter `losses.skipped` |
-| `host.trace.status.stalled` | call | debug | `{plugin, status, reason}`; counter `losses.stalled` |
+| `page.trace.declared-ui.snapshot.skipped` | call | debug | `{plugin, status, count}`: values skipped while a snapshot was in transit; counter `losses.skipped`; written by the main page |
+| `page.trace.status.stalled` | call | debug | `{plugin, status, reason}`; counter `losses.stalled`; written by the main page |
 | `host.call.timeout` | call | error | `{plugin, command}`; counter `losses.timeouts` |
 | `host.call.peer-lost` | call | error | `{plugin, command, reason}` for `process-ended` and `sidecar-ended`; `surface-closed` writes no event and counts `losses.peerLost` |
 | `host.trace.call.late-reply` | call | debug | `{plugin, command, delay}`; counter `losses.lateReplies` |

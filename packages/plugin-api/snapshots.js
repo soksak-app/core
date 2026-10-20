@@ -2,7 +2,9 @@
 // module runs over the send function and the onMessage subscription of a transport, so the same code serves a view, a plugin
 // host and the workbench. The caller routes the messages of this channel to the module; the call envelope goes to createCalls.
 //
-// Messages of the channel: a snapshot is {event: "declared-ui.snapshot", plugin, status, seq, value}, pushed by the plugin;
+// Messages of the channel: a snapshot is {event: "declared-ui.snapshot", plugin, status, seq, value, skipped}, pushed by the plugin.
+// skipped is the number of values of the status that were overwritten while a snapshot was in transit, since the previous snapshot of
+// the status was sent;
 // an acknowledgement is {event: "declared-ui.snapshot.ack", plugin, status, seq}, sent by the workbench. The pull of load time
 // is a call with the command "declared-ui.snapshot.request" and the reply {seq, value}.
 //
@@ -62,22 +64,27 @@ export function createSnapshotSender({ plugin, send, onMessage, report }) {
   checkPlugin(plugin);
   checkTransport(send, onMessage);
   if (typeof report !== "function") throw new TypeError("the snapshot sender requires the report function");
-  // Per status: the seq of the latest value, the latest value, the seq in transit (or null) and the dirty mark.
+  // Per status: the seq of the latest value, the latest value, the seq in transit (or null), the dirty mark and the count of the
+  // values skipped since the last snapshot was sent.
   const states = new Map();
 
   const stateOf = (status) => {
-    if (!states.has(status)) states.set(status, { seq: 0, value: undefined, inTransit: null, dirty: false });
+    if (!states.has(status)) states.set(status, { seq: 0, value: undefined, inTransit: null, dirty: false, skipped: 0 });
     return states.get(status);
   };
 
-  /** Sends the snapshot of a status with the seq of its latest value. The slot is released again when the send throws. */
+  /** Sends the snapshot of a status with the seq of its latest value and the count of values it skipped. The slot is released again
+   * when the send throws, and the count is kept for the next snapshot. */
   function transmit(status, state) {
+    const skipped = state.skipped;
     state.inTransit = state.seq;
     state.dirty = false;
+    state.skipped = 0;
     try {
-      send({ event: SNAPSHOT_EVENT, plugin, status, seq: state.seq, value: state.value });
+      send({ event: SNAPSHOT_EVENT, plugin, status, seq: state.seq, value: state.value, skipped });
     } catch (error) {
       state.inTransit = null;
+      state.skipped += skipped;
       throw error;
     }
   }
@@ -107,7 +114,10 @@ export function createSnapshotSender({ plugin, send, onMessage, report }) {
     state.seq += 1;
     state.value = value;
     if (state.inTransit !== null) {
-      if (state.dirty) report({ kind: "skipped", plugin, status, count: 1 });
+      if (state.dirty) {
+        state.skipped += 1;
+        report({ kind: "skipped", plugin, status, count: 1 });
+      }
       state.dirty = true;
       return;
     }
@@ -153,7 +163,7 @@ export function createSnapshotSender({ plugin, send, onMessage, report }) {
  *     plugin      the plugin id of the snapshots that it accepts
  *     send        send(message): sends one message to the plugin synchronously; throws when it cannot
  *     onMessage   onMessage(listener): delivers each message from the plugin to listener; returns the unsubscribe function
- *     onSnapshot  onSnapshot(status, seq, value): receives each snapshot
+ *     onSnapshot  onSnapshot(status, seq, value, skipped): receives each snapshot and the count of values it skipped
  *
  * The acknowledgement is sent before onSnapshot runs, so the plugin releases its slot when the snapshot arrives. An error of
  * onSnapshot is thrown to the transport after the acknowledgement.
@@ -171,8 +181,11 @@ export function createSnapshotReceiver({ plugin, send, onMessage, onSnapshot }) 
     checkStatus(message.status);
     checkSeq(message.seq, `snapshot of ${message.status}`);
     if (!("value" in message)) throw new TypeError(`snapshot of ${message.status} has no value`);
+    if (!Number.isInteger(message.skipped) || message.skipped < 0) {
+      throw new TypeError(`snapshot of ${message.status} skipped must be a count of 0 or more, got ${message.skipped}`);
+    }
     send({ event: SNAPSHOT_ACK_EVENT, plugin, status: message.status, seq: message.seq });
-    onSnapshot(message.status, message.seq, message.value);
+    onSnapshot(message.status, message.seq, message.value, message.skipped);
   }
 
   return onMessage(receive);

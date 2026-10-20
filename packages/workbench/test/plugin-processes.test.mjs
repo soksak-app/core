@@ -99,3 +99,18 @@ test("a view responsiveness notice that is not a boolean is refused and changes 
   assert.throws(() => viewResponsiveness("probe", "refused-probe-surface", "no"), /responsive is not a boolean/);
   assert.deepEqual(views().filter((entry) => entry.surface === "refused-probe-surface"), []);
 });
+
+// contract: view.snapshot.skipped-count
+// The reports of a snapshot channel write the page trace events of the skipped and stalled values (docs/plans/plugin-processes.md, rule 2).
+test("the reports of a snapshot channel write the page trace events of skipped and stalled values", async (t) => {
+  const traced = [];
+  t.mock.module("../performance.js", { exports: { trace: (event, fields) => { traced.push({ event, fields }); } } });
+  const { snapshotReporter } = await import("../plugin-processes.js?page-trace");
+  const report = snapshotReporter("trace-probe");
+  report({ kind: "skipped", plugin: "trace-probe", status: "trace-probe.tree", count: 1 });
+  report({ kind: "stalled", plugin: "trace-probe", status: "trace-probe.tree", reason: "surface-closed", count: 1 });
+  assert.deepEqual(traced, [
+    { event: "declared-ui.snapshot.skipped", fields: { plugin: "trace-probe", status: "trace-probe.tree", count: 1 } },
+    { event: "status.stalled", fields: { plugin: "trace-probe", status: "trace-probe.tree", reason: "surface-closed" } },
+  ]);
+});

@@ -182,12 +182,12 @@ test("createViewBridge sends a snapshot and takes its acknowledgement without a 
   });
   snapshots.push("state", { count: 1 });
   assert.deepEqual(posted.at(-1), {
-    event: "declared-ui.snapshot", plugin: "probe", status: "state", seq: 1, value: { count: 1 },
+    event: "declared-ui.snapshot", plugin: "probe", status: "state", seq: 1, value: { count: 1 }, skipped: 0,
   });
   host({ sok: 1, event: "declared-ui.snapshot.ack", plugin: "probe", status: "state", seq: 1 });
   snapshots.push("state", { count: 2 });
   assert.deepEqual(posted.at(-1), {
-    event: "declared-ui.snapshot", plugin: "probe", status: "state", seq: 2, value: { count: 2 },
+    event: "declared-ui.snapshot", plugin: "probe", status: "state", seq: 2, value: { count: 2 }, skipped: 0,
   });
   assert.deepEqual(reports, []);
 });

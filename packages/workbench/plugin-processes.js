@@ -4,6 +4,8 @@
 //
 // core-exposure.js registers each reader under the name that exposure.json declares.
 
+import { trace } from "./performance.js";
+
 /** The losses of each plugin, in the order of their first count. */
 const lossCounts = new Map();
 /** The open calls of each call layer. A layer with no open call is removed. */
@@ -63,9 +65,16 @@ export function callReporter(plugin) {
 export function snapshotReporter(plugin) {
   return (event) => {
     const entry = lossesOf(plugin);
-    if (event.kind === "skipped") entry.skipped += event.count;
-    else if (event.kind === "stalled") entry.stalled += event.count;
-    else throw new TypeError(`unknown snapshot report kind ${event.kind}`);
+    // The page writes each event through the page trace while the trace is on (docs/spec/performance-trace.md).
+    if (event.kind === "skipped") {
+      entry.skipped += event.count;
+      trace("declared-ui.snapshot.skipped", { plugin, status: event.status, count: event.count });
+    } else if (event.kind === "stalled") {
+      entry.stalled += event.count;
+      trace("status.stalled", { plugin, status: event.status, reason: event.reason });
+    } else {
+      throw new TypeError(`unknown snapshot report kind ${event.kind}`);
+    }
     announce();
   };
 }
