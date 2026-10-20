@@ -78,15 +78,22 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
    - 열린 호출 수(확인을 기다리는 snapshot 포함)와 가장 오래된 열린 호출의 시작 시각을 core status `core.plugin.open-calls {plugin, count, oldestStartedAt}`로 노출한다. 이름과 위치는 여기서 정하며, F212.3이 status를 선언한다.
    - relay timeout은 exposure의 제품 동작이다. 두 경로가 있다. 호스트는 surface page로 보낸 명령에 timeout을 적용하고, 메인 페이지는 자기가 직접 실행하는 handler에 timeout을 적용한다([exposure](../spec/exposure.ko.md), 명령 `timeout`). exposure.md는 두 경로를 이미 적고 있다(명령 timeout 항목과 relay 절).
    - 취소는 호출 envelope의 일부다. binary payload는 별도 경로를 쓴다(미결 항목 2).
-4. **Origin과 공용 module.**
-   - 각 plugin HTML은 `sok://<plugin id>`의 별도 웹뷰에서 돈다.
-   - 공용 module은 plugin id로 쓸 수 없는 예약 host `core`의 root로 제공한다. `validateManifest`가 그 이름을 거부한다. F212.6이 이 검사를 추가하며, 지금은 없다.
-   - core root의 경로 형식은 `sok://core/<plugin id>/<path>`이며, `<plugin id>`는 그 파일을 소유한 plugin이다.
-   - core root가 제공하는 것은 core module 묶음과, plugin B의 파일 가운데 다음 경우에 해당하는 것이다. 요청마다 설치 기록에서 확인한다.
-     - plugin A의 view가 요청했고, A가 `extends`로 선언한 확장점에 B가 `contributes`로 항목을 선언했을 때
-     - A의 `dependencies`가 B를 지정할 때
-   - 그 밖의 경로는 [native surfaces](../spec/native-surfaces.ko.md#문서-영역)와 같이 not found로 답한다.
-   - Red 시험: plugin A의 view가 A의 확장점에 대한 기여도 아니고 A의 의존 대상도 아닌 plugin B의 파일을 요청하면 not found를 받는다.
+4. **Origin과 core root.**
+   - 각 plugin HTML은 `sok://<plugin id>`의 별도 웹뷰에서 돈다. 요청의 plugin id는 요청이 아니라 view 구성에서 온다.
+   - core root는 plugin id로 쓸 수 없는 예약 host `core`다. `validateManifest`가 그 이름을 거부한다. F212.6의 예약 id 검사는 F212.5-6의 core root resolver보다 먼저 들어가므로, resolver가 `core` 아래의 plugin을 제공하는 일은 없다.
+   - core root는 plugin A의 view에 다음 파일만 제공한다. 그 밖의 경로는 모두 not found로 답한다.
+     - view import map의 core 대상: `sok://core/modules/soksak/dist/index.js`, `sok://core/modules/@soksak/plugin-api/index.js`, `sok://core/modules/@soksak/plugin-api/view.js`;
+     - plugin B의 연결된 기여 항목 가운데 A의 확장점에 대한 항목의 module: `sok://core/modules/<B package>/<module path>`. `<module path>`는 그 항목의 `module`이다;
+     - A가 연결된 항목을 기여하는 확장점에서, `extends.<point>.modules`가 specifier에 대응한 파일: `sok://core/shared/<plugin id>.<point>/<specifier>.js`.
+   - 기여 항목은 제공자가 설치되고 켜져 있으며, 항목의 `range`가 확장점의 `version`을 담고, 항목이 확장점의 `schema`에 맞을 때 연결된다. 연결 규칙은 두 언어의 `packages/sok` 설치 라이브러리에 있다(F212.5-3). `dependencies` 항목은 어떤 파일도 허용하지 않는다.
+   - view import map은 항목이 정확히 네 개다: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/view`, 그리고 `sok://core/shared/`에 대응하는 `@soksak/shared/`. `@soksak/runtime`과 `@soksak/workbench/` 항목은 없다. staging 도구가 `@soksak/plugin-api`의 상수 하나에서 이를 쓰며, closure 시험이 view 페이지의 모든 import가 이 항목 가운데 하나로 해석되는지 확인한다.
+   - view bridge `@soksak/plugin-api/view`는 파일 `packages/plugin-api/view.js`다. `runtime/`이나 `@soksak/workbench/` 아래의 것을 import하지 않으며, view 쪽 call layer(`calls.js`)와 선언 UI snapshot(`snapshots.js`)을 view 통로로 내보낸다.
+   - 기여 module과 공용 module은 각각 자체완결 ES module 하나다. 그 안의 상대 import는 그 plugin의 빌드 오류이며, 그 plugin 저장소가 검사한다([경계](#경계-결합-금지)).
+   - core root는 애플리케이션 frontend로 넘기지 않는다. view는 `/runtime/` 경로를 받지 않으며, `/start.json`, `/environment.json`, `/index.html`, `/runtime/...`과 위에 없는 그 밖의 경로는 모두 not found다.
+   - view에 보내는 모든 응답은 view 구성의 plugin id로 `Access-Control-Allow-Origin: sok://<plugin id>`를 담는다. 요청의 `Origin`이나 `*`는 담지 않는다. 거부한 요청은 이 header를 담지 않는다. 첫 native 단계가 이 header에 대한 WebKit 동작을 기록하며(F212.5-2), 규칙은 그 기록 뒤에 확정한다.
+   - 연결된 항목이나 공용 대상이 지정하지 않은 plugin B의 파일 요청은 not found로 답하고, 두 호스트 모두 `error: core root: <path> is not granted to <plugin>`을 쓴다. 문서 영역은 core root grant를 받지 않는다.
+   - core root는 host 계약이 선언하고 각 호스트가 scheme handler에 등록하는 callback으로 제공하며, 계약 case를 둔다(F212.5-6).
+   - Red 시험: plugin A의 view가 연결된 항목이 지정하지 않은 plugin B의 파일, A가 `dependencies`로 지정한 plugin의 파일, 또는 `/start.json`, `/environment.json`, `/index.html`, `/runtime/...`을 요청하면 각각 not found를 받는다.
 5. **재시작.** sidecar와 plugin host는 통과값 (vi)의 한도 안에서 다시 띄운다. 한도를 넘으면 호스트는 `error:`를 보고하고 멈춘다.
    - 한도를 넘은 뒤의 다음 요청은 프로세스를 띄우지 않고 `sidecar-failure`(reason `restart limit`)로 실패한다. 실패 기록은 남긴다. 그 프로세스가 필요한 표면을 사용자가 열 때만 기록을 비우고 프로세스를 띄우며, 호스트는 `host.trace.sidecar.restart-reset {sidecar, surface}`를 쓴다. plugin host는 `host.trace.plugin-host.restart-reset {plugin}`을 쓴다.
    - 이 규칙은 두 명세 위치를 바꾼다. [sidecars](../spec/sidecars.ko.md)의 `## Failure` 절은 67행에서 실패 뒤의 다음 요청이 한도 없이 새 프로세스를 띄운다고 적는다. F212.8a가 그 문장을 규칙 5의 한도로 바꾼다. [terminal runtime](../spec/terminal-runtime.ko.md)의 43행이 적는 재시작 규칙(연결 끊김마다 한 번 시도하고, 다음 전송이 같은 경로를 다시 시도)도 F212.8a에서 바꾼다.
@@ -172,12 +179,13 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 
 ## 경계 (결합 금지)
 
-- 이 설계에서 core가 하는 일은 기구뿐이다. view 구성 종류, 선언 UI schema와 그리기, RPC와 binary 통로, 예약 module root, 재시작 한도, 계약 case가 여기에 든다.
+- 이 설계에서 core가 하는 일은 기구뿐이다. view 구성 종류, 선언 UI schema와 그리기, RPC와 binary 통로, core root, 재시작 한도, 계약 case가 여기에 든다.
 - 위 plugin 표는 각 plugin 저장소의 체크리스트에 올라갈 이전 항목의 입력이다. core 코드와 시험은 plugin과 sidecar의 이름, 경로, 구현을 모른다.
   - files state를 sidecar로 옮기는 일은 files plugin과 files sidecar 저장소의 항목이다.
   - editor buffer를 옮길지는 editor 저장소의 항목이다.
 - core의 F212.9는 view나 sidecar가 맡을 수 없는 DOM 없는 로직을 가진 plugin을 위한 plugin host 기구다. 계약이 그것을 요구할 때만 만든다.
-- 관계는 manifest의 `dependencies`, `extends`, `contributes`로만 맺는다. core root가 plugin B의 파일을 plugin A에게 주는 근거도 이 선언과 설치 기록뿐이다.
+- 관계는 manifest의 `dependencies`, `extends`, `contributes`로만 맺는다. core root가 plugin B의 파일을 plugin A에게 주는 것은 연결된 기여 항목이나 공용 대상일 때뿐이며, 그 판단도 이 선언과 설치 기록으로 한다(규칙 4).
+- 플러그인 저장소 요구: 기여 module이나 공용 module을 제공하는 plugin의 저장소는 자기 시험에서 그 module이 각각 자체완결 ES module 하나인지 확인한다. 그 안의 상대 import는 그 plugin의 빌드 오류다.
 - 시험:
   - core 시험은 자기 경계를 fake plugin fixture로 검증한다.
   - 공통 계약 case(RPC, snapshot, 재시작, 단축키 표)는 소유 package인 core와 두 호스트가 구현하고 실행한다. core는 소비자에게 필요한 fixture를 공개한다. 각 plugin 저장소는 그 fixture로 자기 module만 시험하며, core의 case를 실행하거나 core의 경로를 읽지 않는다.
@@ -219,8 +227,8 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 2. 호출 envelope에 id, 확인, 취소를 넣는다. 호출은 `id`를 가지고, 응답은 같은 `id`로 결과나 오류를 담고, 취소는 `id`를 가진다. binary 경로는 F212.4에서 두 호스트에 native로 만든다. 결정(F212.4-2): plugin 문서는 `POST sok://<plugin>/.binary`로 byte를 올리고 `GET sok://<plugin>/.binary/<id>`로 내려받는다. id는 host가 만들고, byte는 문서 영역이 자기 binary store에 보관한다([네이티브 표면](../spec/native-surfaces.ko.md#문서-영역)). 소유자 검사는 영역의 `view.plugin`을 URL host와 비교하는 것이다. 한 번의 upload는 16 MiB 이하이며, 이는 두 호스트의 클립보드 상한이다(darwin 클립보드의 `MAX_BYTES`, wailsv3의 `clipboardMaxBytes`). 한 페이지는 64 MiB 이하를 가지며, 이는 가장 큰 upload 4개 분량이다. id는 download가 끝날 때, native take가 byte를 돌려줄 때, 또는 영역이 닫힐 때 해제한다. plugin release는 `.binary` 경로 부분을 거부한다. host가 파일 조회보다 먼저 그 경로에 응답하므로, 그 아래의 plugin 파일은 닿을 수 없기 때문이다. release 검사는 `@soksak/plugin-api`의 `validateReleaseFiles`이며, `sok plugin pack`은 F212.4-4에서 같은 거부를 적용한다.
 3. plugin host 웹뷰를 만드는 플랫폼 연산을 둔다. 이 웹뷰는 `SurfaceHost`가 아니라 창에 붙인다. 숨었을 때의 throttle과 `requestAnimationFrame` 동작은 F212.1과 F212.9a에서 잰다.
 4. Wails에는 앱이 만든 웹뷰로 가는 호출 통로가 없다(H3). Objective-C 쪽에서 통로를 만들고, 계약 case로 두 호스트가 같게 동작하는지 검증한다(F212.4).
-5. core의 공용 module 예약 root를 F212.5에서 만든다. 복사본과 link는 쓰지 않는다.
-6. region 페이지에는 F212.5에서 import map을 준다.
+5. core root를 F212.5-4와 F212.5-6에서 만들고, 그 scheme은 F212.5-7에서 제공한다. 복사본과 link는 쓰지 않는다.
+6. view import map은 `@soksak/plugin-api`의 상수 하나이며, staging 도구가 쓰고 F212.5-4의 closure 시험이 확인한다(규칙 4). 문서 영역은 core root grant를 받지 않는다.
 7. plugin host를 가리키는 exposure owner key는 `plugin:<plugin id>`로 한다. plugin의 identity인 plugin id를 쓰므로([신원](#신원)) 그렇게 정한다.
 8. 새로 쓰는 private API는 그것을 추가하는 단계에서 호출 조건과 함께 [비공개 native API](../operations/private-native-apis.ko.md)에 올린다. 미결 항목 10의 응답 없음 selector는 F212.3에서 올린다. 이 문서는 그 밖의 새 private API를 정하지 않는다.
 9. document-start user script를 view 설정에 넣는 native 연산을 두 호스트에 만들고 계약 case를 둔다(F212.7d).
@@ -255,7 +263,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 2. **F212.2 설계 문서.** 이 문서와 한국어 번역. 검토 결과는 [검토된 반론 답변](#검토된-반론-답변)에 적는다.
 3. **F212.3 호출 메시지 계층(plugin-api).** [메시지와 event](#메시지와-event)의 event를 event catalog에 선언하고(`host.trace.sidecar.restart-reset`은 F212.8a가 선언), status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`를 선언하며, 응답 없음 selector를 `native/darwin/src/private/webkit.h`와 [비공개 native API](../operations/private-native-apis.ko.md)에 넣고, 호출 조건과 사용 중인 SDK의 WebKit 소스에서 읽은 소스 줄을 함께 적는다(미결 항목 10), `make events-check`를 돌린다.
 4. **F212.4 binary 경로**(native 코드와 두 호스트).
-5. **F212.5 공용 module 예약 root와 import map.** [설치](../spec/installation.ko.md)의 `/modules`와 `/shared`를 바꾸고 core root 경로 형식을 더한다.
+5. **F212.5 core root와 view import map.** [설치](../spec/installation.ko.md)의 `/modules`와 `/shared`를 바꾸고 규칙 4의 core root 경로를 더한다. 항목은 F212.5-1(설계), F212.5-2(WebKit Origin 측정, CORS 규칙이 확정되기 전), F212.5-3(`packages/sok`의 연결 규칙), F212.5-4(view bridge와 import map 상수), F212.5-5(page origin), F212.5-6(resolver, F212.6의 예약 id 검사가 먼저 들어간 뒤), F212.5-7(native scheme), F212.5-8(거부된 page 요청의 수준)이다.
 6. **F212.6 신원, exposure 등록, 예약 core 검사.** `validateManifest`에 예약 `core` 검사, plugin id 대응, exposure 등록을 더한다.
    - **F212.6a:** 단축키 표. Escape의 왕복 시간을 메뉴 닫기와 비교해 재고 결과를 기록한다. Escape의 주인은 view이며 측정은 주인을 정하지 않는다. 그 뒤 두 호스트의 메뉴 선언과 workbench 키 처리기에서 얻은 나머지 workbench 단축키를 규칙 7의 표에 더한다. F212.7 전에 끝낸다.
 7. **F212.7 view 구성 종류**(manifest, workbench, native 배치, `view` 구성 종류). F212.7은 `view` 종류를 더하고 `dom`을 branch `feat/view-kind-F212.7`의 한 commit에서 제거한다. plugin은 각자의 F212.10 항목에서 그 branch에 맞춰 옮기며, 그 migration은 release 없이 각 저장소에 합친다. branch의 main 병합은 F212.10 release 전에 하며, plugin release는 F212.15 뒤에 따른다. 병합 뒤에는 reader가 `dom`을 plugin 이름과 manifest field를 밝힌 명시적 오류로 거부한다. 되돌림은 이전 `engines` 범위의 plugin release로 하며, 두 번째 reader 형식으로 되돌리지 않는다. 규칙 9와 10은 여기서 구현하며, F212.7이 그 계약 case를 정한다.
@@ -294,7 +302,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 |---|---|---|
 | [native surfaces](../spec/native-surfaces.ko.md) 14, 23, 57행 | app DOM presentation wait. document region은 기다림에서 빠진다(규칙 6) | F212.7b |
 | native surfaces 110, 111행 | 호출한 view 아래의 region 배치와 view frame 기준 insets(규칙 9) | F212.7 |
-| native surfaces 113행 | region 주소. `sok` core root 경로 형식을 포함한다(규칙 4) | F212.5 |
+| native surfaces 113행 | region 주소. core root 경로와, 문서 영역이 core root grant를 받지 않는 규칙을 포함한다(규칙 4) | F212.5 |
 | native surfaces 114행 | 설치된 폴더에서 주는 plugin 주소. plugin id 대응에 따른다(신원) | F212.6 |
 | native surfaces 115행 | `post` 통로와 bridge 설명(미결 항목 1) | F212.4 |
 | [plugins](../spec/plugins.ko.md) 51행 | surface module이 app DOM에 mount된다. view 종류(규칙 1) | F212.7 |
@@ -306,7 +314,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 | surface composition 104행 | app DOM reload가 view를 바꾸지 않는다(규칙 1, 규칙 2) | F212.7 |
 | [exposure](../spec/exposure.ko.md) 160행 | 공유 app DOM에 mount된 plugin module의 좌표 | F212.11 |
 | [endpoint](../spec/endpoint.ko.md) 99행 | exposure 답의 `diagnostics.surface.hold`. 늦은 답은 버린다(규칙 3) | F212.6 |
-| [installation](../spec/installation.ko.md) 129~130행 | `/modules`와 `/shared` 경로, core root 경로 형식 `sok://core/<plugin id>/<path>` | F212.5 |
+| [installation](../spec/installation.ko.md) 129~130행 | `/modules`와 `/shared` 경로, core root 경로 `sok://core/modules/<package>/<path>`와 `sok://core/shared/<plugin id>.<point>/<specifier>.js`(규칙 4) | F212.5 |
 | [terminal runtime](../spec/terminal-runtime.ko.md) 43행 | sidecar 연결의 재시작 규칙(규칙 5) | F212.8a |
 | [sidecars](../spec/sidecars.ko.md) `## Failure` | 재시작 한도(규칙 5) | F212.8a |
 
@@ -316,7 +324,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 
 ## 검토된 반론 답변
 
-아래 반론은 첫 번째, 두 번째, 세 번째, 네 번째, 다섯 번째, 여섯 번째 검토의 답변이다. 각 항목은 반론, 판정, 해결을 적는다. 해결은 이 제안서의 규칙에 기록한다. 두 번째 검토의 항목은 검토의 id(C, H, M)를 쓴다. 세 번째 검토의 항목은 검토의 id(N, D)를 쓴다. 두 번째 검토의 잘못된 답변 세 개는 C1, C7, H3에 대한 답변이다.
+아래 반론은 첫 번째, 두 번째, 세 번째, 네 번째, 다섯 번째, 여섯 번째 검토와 core root 검토 1의 답변이다. 각 항목은 반론, 판정, 해결을 적는다. 해결은 이 제안서의 규칙에 기록한다. 두 번째 검토의 항목은 검토의 id(C, H, M)를 쓴다. 세 번째 검토의 항목은 검토의 id(N, D)를 쓴다. 두 번째 검토의 잘못된 답변 세 개는 C1, C7, H3에 대한 답변이다.
 
 **첫 번째 검토**
 
@@ -355,7 +363,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 - H6: `dom` 옆의 `view` 구성 종류. 판정: 세 번째 검토(D1)에서 수용. 이전의 기각을 뒤집는다. 해결: F212.7이 `view` 종류를 더하고 `dom`을 같은 항목에서 제거한다. 검사 환경의 plugin은 각자의 F212.10 항목에서 F212.7 branch에 맞춰 옮기며, F212.7은 F212.9a 뒤 plugin migration이 각 저장소에 합쳐진 뒤, F212.10 release 전에 main에 합친다(단계, F212.7). F212.7부터 reader는 `dom`을 plugin 이름과 manifest field를 밝힌 명시적 오류로 거부한다. 되돌림은 이전 `engines` 범위의 plugin release로 하며, 두 번째 reader 형식으로 되돌리지 않는다(F212.7).
 - H7: RPC protocol 번호. 판정: 수용. 해결: RPC protocol 번호는 0.0 계열에서 1이다(메시지).
 - M1: core root 경로 형식. 판정: 수용. 해결: core root 경로 형식은 `sok://core/<plugin id>/<path>`이며, installation.md 129~130행을 명세 변경에 더한다(규칙 4, 명세 변경).
-- M2: 용어. 판정: 수용. 해결: card surface, presentation wait, shortcut table, call envelope, reserved module root, installation record, owner key, snapshot in transit, plugin name을 `packages/plugin-api/terms.json`에 더한다. 신원 절은 "package name" 대신 "plugin name"을 쓴다. 용어 "declared UI snapshot"은 이 제안서가 아니라 [native surfaces](../spec/native-surfaces.ko.md)를 가리킨다. 그 절은 명세로 옮길 때 쓴다.
+- M2: 용어. 판정: 수용. 해결: card surface, presentation wait, shortcut table, call envelope, core root, installation record, owner key, snapshot in transit, plugin name을 `packages/plugin-api/terms.json`에 더한다. 신원 절은 "package name" 대신 "plugin name"을 쓴다. 용어 "declared UI snapshot"은 이 제안서가 아니라 [native surfaces](../spec/native-surfaces.ko.md)를 가리킨다. 그 절은 명세로 옮길 때 쓴다.
 - M3: 'files state가 유일한 host'라는 주장. 판정: 수용. 해결: "지금 그런 module은 files state 하나뿐이다"라는 문장을 뺐다(층 규칙).
 - M4: 강제 정책 측정. 판정: 수용. 해결: 측정 문장을 바꾼다. 5개 이상의 view에서는 강제 정책이 더 느리게 load되고, 1개 view에서는 더 빨랐다(0.13초 대 0.24초). 프로세스 재사용은 측정하지 않았다(탭과 프로세스).
 - M5: 근거 3과 숨은 영역. 판정: 수용. 해결: 근거 3은 release 메인 페이지 프로세스 크기와 재로드 크기를 적는다(G1.4-107). 근거 4는 F198.5의 표현인 "숨은 browser tab"을 쓴다.
@@ -392,3 +400,17 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 
 - K1: F212.7 병합과 plugin release 순서. 판정: 수용. 해결: branch는 F212.9a 뒤 plugin migration이 각 저장소에 합쳐진 뒤, F212.10 release 전에 한 번 main에 합친다. plugin release는 F212.15 core release 뒤에 발행한다. F212.10 release는 각각 이전 `engines` 범위로 되돌린다(단계, F212.7, F212.10, F212.15, 되돌림).
 - F6: 식별자와 절 개수를 확인한 뒤 반론이 철회되었다. 판정: 철회. 해결: 다섯 번째 검토의 F6 답변은 그대로 둔다.
+
+**core root 검토 1**
+
+- C1: view에게 주는 경로. 판정: 수용. 해결: 주는 것은 plugin B의 연결된 기여 항목이 A의 확장점에 대해 가진 module(`/modules/<B package>/` 아래)과, A가 기여하는 확장점의 `extends.<point>.modules` 대상(`/shared/` 아래)뿐이다. B의 그 밖의 경로는 모두 not found다(규칙 4). 기여 module과 공용 module은 각각 자체완결 ES module 하나이며, 상대 import 검사는 plugin 저장소의 요구다(규칙 4, 경계). 이 답변은 M1의 경로 형식과 첫 번째 검토의 core root 파일 답변을 대체한다.
+- C2: view에는 `/runtime/`이 없다. 판정: 수용. 해결: view bridge는 `@soksak/plugin-api/view`이며 파일은 `packages/plugin-api/view.js`, 제공 경로는 `sok://core/modules/@soksak/plugin-api/view.js`다. `runtime/`이나 `@soksak/workbench/` 아래를 import하지 않고, `calls.js`와 `snapshots.js`의 view 쪽을 view 통로로 내보낸다(규칙 4, F212.5-4).
+- C3: view import map. 판정: 수용. 해결: view import map은 항목이 정확히 네 개다: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/view`, 그리고 `sok://core/shared/`에 대응하는 `@soksak/shared/`. `@soksak/runtime`과 `@soksak/workbench/` 항목은 없다. staging 도구가 상수 하나에서 쓰며, closure 시험이 이를 확인한다(규칙 4, F212.5-4).
+- C4: CORS header. 판정: 수용. 해결: view에 보내는 응답은 view 구성의 `Access-Control-Allow-Origin: sok://<plugin id>`를 담고, 요청의 `Origin`이나 `*`는 담지 않는다. 거부한 요청은 이 header가 없다. 이 header에 대한 WebKit 동작은 규칙을 확정하기 전에 native 시험으로 기록한다(규칙 4, F212.5-2).
+- C5: 애플리케이션 frontend로 넘기지 않는다. 판정: 수용. 해결: core root는 애플리케이션 frontend로 넘기지 않는다. `/start.json`, `/environment.json`, `/index.html`, `/runtime/...`과 규칙 4에 없는 그 밖의 경로는 not found다(규칙 4).
+- C6: dependencies grant. 판정: 수용. 해결: `dependencies` grant를 제거한다. `dependencies` 항목은 어떤 파일도 허용하지 않으며, 첫 번째 검토의 core root 파일 답변을 대체한다(규칙 4).
+- C7: 연결 규칙. 판정: 수용. 해결: 연결 규칙(제공자가 설치되고 켜져 있음, 항목의 `range`가 확장점의 `version`을 담음, 항목이 확장점의 `schema`에 맞음)은 두 언어의 `packages/sok` 설치 라이브러리에 두며, 공용 host 계약 case를 함께 둔다(규칙 4, F212.5-3).
+- N1: 문서 영역. 판정: 수용. 해결: 문서 영역은 core root grant를 받지 않는다(규칙 4, 미결 항목 6).
+- N2: callback. 판정: 수용. 해결: core root는 host 계약이 선언하고 각 호스트가 등록하는 callback으로 제공하며, 계약 case를 둔다(규칙 4, F212.5-6).
+- N3: 거부 오류. 판정: 수용. 해결: 거부된 grant는 두 호스트 모두 `error: core root: <path> is not granted to <plugin>`을 쓴다(규칙 4, F212.5-6).
+- 순서: F212.6의 예약 id 검사는 F212.5-6의 resolver보다 먼저 들어가므로, resolver가 `core` 아래의 plugin을 제공하지 않는다(단계, F212.5). F212.5의 첫 native 단계는 F212.5-2의 WebKit Origin 측정이다.

@@ -78,15 +78,22 @@ When a value is not met, the measured values are recorded in the checklist. A fa
    - The number of open calls, including snapshots waiting for acknowledgement, and the start time of the oldest open call are exposed as the core status `core.plugin.open-calls {plugin, count, oldestStartedAt}`. The name and location are fixed here; F212.3 declares the status.
    - The relay timeout is product behavior of exposure. The two paths are: the host applies the timeout to a command forwarded to a surface page, and the main page applies the timeout to a handler that it runs itself ([exposure](../spec/exposure.md), command `timeout`). exposure.md already states both paths (its command timeout entry and its relay section).
    - Cancellation is part of the call envelope. A binary payload uses a separate channel (open item 2).
-4. **Origin and shared modules.**
-   - Each plugin HTML runs in its own web view on `sok://<plugin id>`.
-   - Shared modules are served from the reserved host `core`, which a plugin id cannot use. `validateManifest` rejects that name; F212.6 adds this check, which is not present now.
-   - The core root path form is `sok://core/<plugin id>/<path>`, where `<plugin id>` is the plugin that owns the file.
-   - The core root serves the core modules and the files of plugin B that match either of these cases. Each request is checked against the installation record:
-     - plugin A's view requests the file, and B declares a contribution in `contributes` to an extension point that A declares in `extends`;
-     - A's `dependencies` names B.
-   - Any other path answers not found, as in [native surfaces](../spec/native-surfaces.md#document-regions).
-   - Red test: a request from a view of plugin A for a file of plugin B, when B neither contributes to an extension point of A nor is in A's dependencies, receives not found.
+4. **Origin and core root.**
+   - Each plugin HTML runs in its own web view on `sok://<plugin id>`. The plugin id of a request comes from the view configuration, never from the request.
+   - The core root is the reserved host `core`, which a plugin id cannot use. `validateManifest` rejects that name. The reserved-id check of F212.6 lands before the core root resolver of F212.5-6, so the resolver never serves a plugin under `core`.
+   - The core root serves a view of plugin A only these files. Every other path answers not found:
+     - the core targets of the view import map: `sok://core/modules/soksak/dist/index.js`, `sok://core/modules/@soksak/plugin-api/index.js` and `sok://core/modules/@soksak/plugin-api/view.js`;
+     - the module of a connected contribution item of plugin B to a point of A, at `sok://core/modules/<B package>/<module path>`, where `<module path>` is the `module` of that item;
+     - the file that `extends.<point>.modules` maps to a specifier, for a point to which A contributes a connected item, at `sok://core/shared/<plugin id>.<point>/<specifier>.js`.
+   - A contribution item is connected when its provider is installed and enabled, its `range` contains the `version` of the point, and it matches the `schema` of the point. The connected rule is in the installer library of `packages/sok`, in Go and Rust (F212.5-3). A `dependencies` entry grants no file.
+   - The view import map has exactly four entries: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/view` and `@soksak/shared/` mapped to `sok://core/shared/`. It has no `@soksak/runtime` or `@soksak/workbench/` entry. The staging tool writes it from one constant of `@soksak/plugin-api`, and a closure test checks that every import of a view page resolves to one of its entries.
+   - The view bridge `@soksak/plugin-api/view` is the file `packages/plugin-api/view.js`. It imports nothing under `runtime/` or `@soksak/workbench/`, and it exports the view side of the call layer (`calls.js`) and of the declared UI snapshots (`snapshots.js`) over the view channel.
+   - Contributed and shared modules are one self-contained ES module each. A relative import inside one is a build error of the owning plugin, checked in that plugin's repository (see [boundary](#boundary-no-coupling)).
+   - The core root never delegates to the application frontend. A view receives no `/runtime/` path. `/start.json`, `/environment.json`, `/index.html`, `/runtime/...` and every other path not listed above answer not found.
+   - Each response to a view carries `Access-Control-Allow-Origin: sok://<plugin id>`, with the plugin id of the view configuration. It never carries the request `Origin`, and never `*`. A refused request carries no such header. The first native step records how WebKit treats this header (F212.5-2), and the rule is final after that record.
+   - A request for a file of plugin B that no connected item or shared target grants answers not found and writes `error: core root: <path> is not granted to <plugin>` in both hosts. Document regions receive no core root grant.
+   - The core root is served through a callback that the host contract declares and each host registers with its scheme handler, with a contract case (F212.5-6).
+   - Red test: a request from a view of plugin A for a file of plugin B that no connected item names, for a file of a plugin that A lists in `dependencies`, and for `/start.json`, `/environment.json`, `/index.html` or `/runtime/...`, each receives not found.
 5. **Restarts.** Sidecars and plugin hosts restart within the limit of pass value (vi). When the limit is exceeded, the host reports `error:` and stops.
    - After the limit is exceeded, the next request fails with `sidecar-failure` (reason `restart limit`) without starting the process. The failure record is kept. It is cleared only when the person opens a surface that needs the process; the process then starts, and the host writes `host.trace.sidecar.restart-reset {sidecar, surface}`. A plugin host writes `host.trace.plugin-host.restart-reset {plugin}`.
    - This rule changes two specification locations. The `## Failure` section of [sidecars](../spec/sidecars.md) at line 67 states that the next request after a failure starts a new process without a limit. F212.8a replaces that sentence with the limit of rule 5. The restart rule that [terminal runtime](../spec/terminal-runtime.md) states at line 43 (one attempt per disconnect, with the next send retrying the same path) changes in F212.8a as well.
@@ -172,12 +179,13 @@ The identifiers in code use the names as written here.
 
 ## Boundary (no coupling)
 
-- The core of this design provides only the mechanisms: view configuration kinds, the declared UI schema and its drawing, the RPC and binary channels, the reserved module root, the restart limit, and the contract cases.
+- The core of this design provides only the mechanisms: view configuration kinds, the declared UI schema and its drawing, the RPC and binary channels, the core root, the restart limit, and the contract cases.
 - The plugin table above is the input of the migration items in each plugin repository's checklist. Core code and tests do not know plugin or sidecar names, paths or implementations.
   - Moving the files state to a sidecar is an item of the files plugin and files sidecar repositories.
   - Whether the editor buffer moves is an item of the editor repository.
 - Core F212.9 is the plugin host mechanism for a plugin whose DOM-free logic fits neither a view nor a sidecar. It is built only when the contract requires it.
-- Relations are declared only by the `dependencies`, `extends` and `contributes` fields of a manifest. The core root serves a plugin's file to another plugin only on the basis of these declarations and the installation record.
+- Relations are declared only by the `dependencies`, `extends` and `contributes` fields of a manifest. The core root serves a plugin's file to another plugin only for a connected contribution item or a shared target (rule 4), which the connected rule decides from these declarations and the installation record.
+- Plugin repository requirement: the repository of each plugin that contributes a module or provides a shared module checks in its own tests that each such module is one self-contained ES module. A relative import inside one is a build error of that plugin.
 - Tests:
   - Core tests verify its boundary with fake plugin fixtures.
   - Common contract cases (RPC, snapshot, restart, shortcut table) are run by the owning package, core, and by both hosts. Core publishes the fixtures that a consumer needs. Each plugin repository tests only its own modules with those fixtures; it does not run core's cases or read core's paths.
@@ -219,8 +227,8 @@ The identifiers in code use the names as written here.
 2. Call ids, acknowledgements and cancellation are added to the call envelope: a call carries `id`, a reply carries the same `id` with a result or an error, and a cancel carries `id`. The binary path is native in F212.4, on the two hosts. Decision (F212.4-2): a plugin document uploads bytes by `POST sok://<plugin>/.binary` and downloads them by `GET sok://<plugin>/.binary/<id>`, where the host mints the id and the document region keeps the bytes in its binary store ([native surfaces](../spec/native-surfaces.md#document-regions)). The owner check is the `view.plugin` of the region against the URL host. An upload is at most 16 MiB, which is the clipboard bound of both hosts (`MAX_BYTES` in the darwin clipboard, `clipboardMaxBytes` in wailsv3). A page holds at most 64 MiB, which is four uploads of the largest size per page. An id is released when a download finishes, when a native take returns its bytes, or when the region closes. The `.binary` path segment is refused in a plugin release: the host answers that path before it looks up a file, so a plugin file under it would be unreachable. The release check is `validateReleaseFiles` of `@soksak/plugin-api`, and `sok plugin pack` applies the same refusal in F212.4-4.
 3. A platform operation creates the plugin host web view. It attaches to the window, not to a `SurfaceHost`. Its throttling while hidden and its `requestAnimationFrame` behavior are measured in F212.1 and F212.9a.
 4. Wails has no call path to a web view that the application creates (H3). The path is made in the Objective-C host, and the contract cases verify that both hosts behave the same way (F212.4).
-5. The reserved module root of core is built in F212.5. It uses no copy and no link.
-6. The region page receives an import map in F212.5.
+5. The core root is built in F212.5-4 and F212.5-6, and its scheme is served in F212.5-7. It uses no copy and no link.
+6. The view import map is one constant of `@soksak/plugin-api`, written by the staging tool and checked by a closure test in F212.5-4 (rule 4). Document regions receive no core root grant.
 7. The exposure owner key of a plugin host is `plugin:<plugin id>`. The key uses the plugin id, which is the identity of a plugin (see [identity](#identity)).
 8. Each new private API is listed in [private native APIs](../operations/private-native-apis.md) with its call condition in the stage that adds it. The unresponsive selectors of open item 10 are listed in F212.3. No other new private API is decided in this document.
 9. A native operation adds the document-start user script to the view configuration, on both hosts, with a contract case (F212.7d).
@@ -255,7 +263,7 @@ Step order: F212.7, F212.7b, F212.7d, F212.10-editor, F212.7a, F212.7c, F212.8, 
 2. **F212.2 Design document.** This document and its Korean translation. The review result is recorded in [objections answered](#objections-answered).
 3. **F212.3 Call message layer (plugin-api).** Declares the events of [messages and events](#messages-and-events) in the event catalog, except `host.trace.sidecar.restart-reset` (declared by F212.8a); declares the statuses `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views`; adds the unresponsive selectors to `native/darwin/src/private/webkit.h` and to [private native APIs](../operations/private-native-apis.md) with the call condition and the source lines read from the WebKit source of the SDK revision in use (open item 10); and runs `make events-check`.
 4. **F212.4 Binary path** (native code and both hosts).
-5. **F212.5 Reserved module root and import map.** Changes `/modules` and `/shared` in [installation](../spec/installation.md) and adds the core root path form.
+5. **F212.5 Core root and view import map.** Changes `/modules` and `/shared` in [installation](../spec/installation.md) and adds the core root paths of rule 4. The items are F212.5-1 (design), F212.5-2 (the WebKit Origin measurement, before the CORS rule is final), F212.5-3 (the connected rule in `packages/sok`), F212.5-4 (the view bridge and the import map constant), F212.5-5 (the page origin), F212.5-6 (the resolver, after the reserved-id check of F212.6, which lands first), F212.5-7 (the native scheme) and F212.5-8 (the level of refused page requests).
 6. **F212.6 Identity, exposure registration, and the reserved core check.** Adds the reserved `core` check to `validateManifest`, the plugin id mapping, and the exposure registration.
    - **F212.6a:** shortcut table. Measures the round trip of Escape against the menu close and records the result; the owner of Escape is the view and the measurement does not choose it. It then adds every other workbench shortcut from both hosts' menu declarations and workbench key handlers to the table of rule 7. It is completed before F212.7.
 7. **F212.7 View configuration kinds** (manifest, workbench, native placement, and the `view` composition kind). F212.7 adds the `view` kind and removes `dom` in one commit on the branch `feat/view-kind-F212.7`. The plugins migrate in their F212.10 items against that branch, and their migrations are merged into their repositories without a release. The merge of the branch to main happens before F212.10 releases, and the plugin releases follow F212.15. After the merge, the reader rejects `dom` with an explicit error that names the plugin and the manifest field. Rollback is by plugin release with the previous `engines` range, not by a second reader form. Rules 9 and 10 are implemented here, and F212.7 names their contract cases.
@@ -294,7 +302,7 @@ Each specification location that this design contradicts, with the stage that ch
 |---|---|---|
 | [native surfaces](../spec/native-surfaces.md) lines 14, 23, 57 | the app DOM presentation wait; document regions leave the wait (rule 6) | F212.7b |
 | native surfaces lines 110, 111 | region placement under the calling view and insets relative to the view frame (rule 9) | F212.7 |
-| native surfaces line 113 | region addresses, including the `sok` core root path form (rule 4) | F212.5 |
+| native surfaces line 113 | region addresses, including the core root paths, and the rule that document regions receive no core root grant (rule 4) | F212.5 |
 | native surfaces line 114 | plugin address served from the installed folder, by plugin id mapping (identity) | F212.6 |
 | native surfaces line 115 | the `post` channel and the bridge statement (open item 1) | F212.4 |
 | [plugins](../spec/plugins.md) line 51 | a surface module mounts into the app DOM; the view kind (rule 1) | F212.7 |
@@ -306,7 +314,7 @@ Each specification location that this design contradicts, with the stage that ch
 | surface composition line 104 | a reload of the app DOM does not replace views (rule 1 and rule 2) | F212.7 |
 | [exposure](../spec/exposure.md) line 160 | coordinates of mounted plugin modules in the shared app DOM | F212.11 |
 | [endpoint](../spec/endpoint.md) line 99 | `diagnostics.surface.hold` of exposure replies, with late replies discarded (rule 3) | F212.6 |
-| [installation](../spec/installation.md) lines 129-130 | `/modules` and `/shared` paths and the core root path form `sok://core/<plugin id>/<path>` | F212.5 |
+| [installation](../spec/installation.md) lines 129-130 | `/modules` and `/shared` paths, and the core root paths `sok://core/modules/<package>/<path>` and `sok://core/shared/<plugin id>.<point>/<specifier>.js` (rule 4) | F212.5 |
 | [terminal runtime](../spec/terminal-runtime.md) line 43 | the restart rule of a sidecar connection (rule 5) | F212.8a |
 | [sidecars](../spec/sidecars.md) `## Failure` | the restart limit (rule 5) | F212.8a |
 
@@ -316,7 +324,7 @@ Each specification location that this design contradicts, with the stage that ch
 
 ## Objections answered
 
-The objections below are the answers of the first, second, third, fourth, fifth and sixth reviews. Each entry gives the objection, the verdict and the resolution, which a rule of this proposal records. The entries of the second review use the review's ids (C, H, M). The entries of the third review use the review's ids (N, D). The three wrong answers of the second review are the answers to C1, C7 and H3.
+The objections below are the answers of the first, second, third, fourth, fifth and sixth reviews, and of the core root review 1. Each entry gives the objection, the verdict and the resolution, which a rule of this proposal records. The entries of the second review use the review's ids (C, H, M). The entries of the third review use the review's ids (N, D). The three wrong answers of the second review are the answers to C1, C7 and H3.
 
 **First review**
 
@@ -355,7 +363,7 @@ The objections below are the answers of the first, second, third, fourth, fifth 
 - H6: the `view` composition kind next to `dom`. Verdict: accepted in the third review (D1), which reverses the earlier rejection. Resolution: F212.7 adds the `view` kind and removes `dom` in the same item. The plugins of the check environment migrate in their own F212.10 items against the F212.7 branch; F212.7 merges into main after F212.9a and the plugin migrations are merged into their repositories, before the F212.10 releases (Steps, F212.7). From F212.7 on the reader rejects `dom` with an explicit error that names the plugin and the manifest field. Rollback is by plugin release with the previous `engines` range, not by a second reader form (F212.7).
 - H7: RPC protocol number. Verdict: accepted. Resolution: the RPC protocol number is 1 in the 0.0 series (Messages).
 - M1: core root path form. Verdict: accepted. Resolution: the core root path form is `sok://core/<plugin id>/<path>`, and installation.md lines 129-130 are added to the specification changes (rule 4, Specification changes).
-- M2: terms. Verdict: accepted. Resolution: the terms card surface, presentation wait, shortcut table, call envelope, reserved module root, installation record, owner key, snapshot in transit and plugin name are added to `packages/plugin-api/terms.json`. The identity section uses "plugin name" instead of "package name". The term "declared UI snapshot" cites [native surfaces](../spec/native-surfaces.md), where its section is written in the spec move, not this plan.
+- M2: terms. Verdict: accepted. Resolution: the terms card surface, presentation wait, shortcut table, call envelope, core root, installation record, owner key, snapshot in transit and plugin name are added to `packages/plugin-api/terms.json`. The identity section uses "plugin name" instead of "package name". The term "declared UI snapshot" cites [native surfaces](../spec/native-surfaces.md), where its section is written in the spec move, not this plan.
 - M3: the files state as the only host. Verdict: accepted. Resolution: the sentence that the files state module is the only such module today is removed (Layer rules).
 - M4: forced policy measurement. Verdict: accepted. Resolution: the measurement sentence is replaced: with 5 or more views the forced policy loads slower; with 1 view it loaded faster (0.13 s against 0.24 s); process reuse was not measured (Tabs and processes).
 - M5: reason 3 and the hidden region. Verdict: accepted. Resolution: reason 3 gives the release main page process size and the reload sizes (G1.4-107), and reason 4 uses the F198.5 wording "hidden browser tab".
@@ -392,3 +400,17 @@ The objections below are the answers of the first, second, third, fourth, fifth 
 
 - K1: the merge of F212.7 and the order of the plugin releases. Verdict: accepted. Resolution: the branch merges once, after F212.9a and the plugin migrations are merged into their repositories and before the F212.10 releases. Plugin releases follow the F212.15 core release, and each F212.10 release is rolled back by its previous `engines` range (Steps, F212.7, F212.10, F212.15, Rollback).
 - F6: the objection was withdrawn after the identifiers and section counts were checked. Verdict: withdrawn. Resolution: the fifth-review answer stands.
+
+**Core root review 1**
+
+- C1: paths served to a view. Verdict: accepted. Resolution: only the module of a connected contribution item of plugin B to a point of A (under `/modules/<B package>/`) and the `extends.<point>.modules` target of a point to which A contributes (under `/shared/`) are served; every other path of B answers not found (rule 4). Contributed and shared modules are one self-contained ES module each, and the relative import check is a plugin repository requirement (rule 4, boundary). This supersedes the path form of M1 and the first-review answer on the files that the core root serves.
+- C2: no `/runtime/` for views. Verdict: accepted. Resolution: the view bridge is `@soksak/plugin-api/view`, the file `packages/plugin-api/view.js`, served at `sok://core/modules/@soksak/plugin-api/view.js`. It imports nothing under `runtime/` or `@soksak/workbench/`, and it exports the view side of `calls.js` and `snapshots.js` over the view channel (rule 4, F212.5-4).
+- C3: view import map. Verdict: accepted. Resolution: the view import map has exactly four entries: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/view` and `@soksak/shared/` mapped to `sok://core/shared/`. It has no `@soksak/runtime` or `@soksak/workbench/` entry. The staging tool writes it from one constant, and a closure test checks it (rule 4, F212.5-4).
+- C4: CORS header. Verdict: accepted. Resolution: each response to a view carries `Access-Control-Allow-Origin: sok://<plugin id>` from the view configuration, never the request `Origin` and never `*`; a refused request carries no such header. The WebKit behavior of this header is recorded by a native test before the rule is final (rule 4, F212.5-2).
+- C5: no delegation to the application frontend. Verdict: accepted. Resolution: the core root never delegates to the application frontend. `/start.json`, `/environment.json`, `/index.html`, `/runtime/...` and every other path not listed in rule 4 answer not found (rule 4).
+- C6: dependency grant. Verdict: accepted. Resolution: the dependency grant is removed. A `dependencies` entry grants no file, which supersedes the first-review answer on the core root's files (rule 4).
+- C7: connected rule. Verdict: accepted. Resolution: the connected rule (the provider is installed and enabled, the item's `range` contains the point's `version`, and the item matches the point's `schema`) is in the installer library of `packages/sok`, in Go and Rust, with a shared host contract case (rule 4, F212.5-3).
+- N1: document regions. Verdict: accepted. Resolution: document regions receive no core root grant (rule 4, open item 6).
+- N2: callback. Verdict: accepted. Resolution: the core root is served through a callback that the host contract declares and each host registers, with a contract case (rule 4, F212.5-6).
+- N3: refusal error. Verdict: accepted. Resolution: a refused grant writes `error: core root: <path> is not granted to <plugin>` in both hosts (rule 4, F212.5-6).
+- Order: the reserved-id check of F212.6 lands before the resolver of F212.5-6, so the resolver never serves a plugin under `core` (Steps, F212.5). The first native step of F212.5 is the WebKit Origin measurement of F212.5-2.
