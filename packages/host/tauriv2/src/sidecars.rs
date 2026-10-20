@@ -830,6 +830,8 @@ struct Declarations {
     versions: HashMap<String, String>,
     persistent: HashMap<String, bool>,
     basenames: HashMap<String, String>,
+    /// The plugins that list each declared sidecar in dependencies.
+    dependents: HashMap<String, Vec<String>>,
 }
 
 impl<O> Core<O> {
@@ -1055,7 +1057,8 @@ impl<O: Owner> Sidecars<O> {
             next.declared
                 .insert(name.clone(), item.folder.join(executable));
             next.versions.insert(name.clone(), item.version.clone());
-            next.persistent.insert(name, is_persistent);
+            next.persistent.insert(name.clone(), is_persistent);
+            next.dependents.insert(name, item.dependents.clone());
         }
         let mut current = self
             .core
@@ -1082,9 +1085,35 @@ impl<O: Owner> Sidecars<O> {
         self
     }
 
-    /// Called when the host creates a surface of plugin. It clears the restart limit of each stopped standard input and output sidecar that the
-    /// plugin lists in dependencies (docs/spec/sidecars.md#failure). The implementation follows in the next change.
-    pub fn surface_opened(&self, _plugin: &str, _surface: &str) {}
+    /// Called when the host creates a surface of plugin. It clears the restart limit of each stopped standard input and
+    /// output sidecar that the plugin lists in dependencies, so the next request starts the sidecar
+    /// (docs/spec/sidecars.md#failure).
+    pub fn surface_opened(&self, plugin: &str, surface: &str) {
+        let mut state = self.core.state.lock().expect("sidecar state");
+        let cleared: Vec<String> = {
+            let declarations = self.core.declarations.read().expect("sidecar declarations");
+            state
+                .restarts
+                .iter()
+                .filter(|(name, record)| {
+                    record.stopped
+                        && declarations
+                            .dependents
+                            .get(*name)
+                            .is_some_and(|plugins| plugins.iter().any(|item| item == plugin))
+                })
+                .map(|(name, _)| name.clone())
+                .collect()
+        };
+        for name in cleared {
+            state.restarts.remove(&name);
+            emit_host(
+                Level::Debug,
+                "host.trace.sidecar.restart-reset",
+                serde_json::json!({"sidecar": name, "surface": surface}),
+            );
+        }
+    }
 
     /// Changes the clock of the restart limit of standard input and output sidecars (docs/spec/sidecars.md#failure). A check
     /// injects a clock that it moves; the default is the monotonic clock. Call it only right after creation, before another
@@ -2970,19 +2999,16 @@ const RESTART_WINDOW: Duration = Duration::from_secs(300);
 const RESTART_LIMIT: usize = 4;
 
 /// The restart-limit record of one standard input and output sidecar. `failures` are the times of the counted failures,
-/// oldest first. When the limit stops the restarts, `stopped` is true and `refused` holds the surfaces that sent to the
-/// failed process.
+/// oldest first. When the limit stops the restarts, `stopped` is true.
 #[derive(Default)]
 struct RestartRecord {
     failures: Vec<Instant>,
     stopped: bool,
-    refused: HashSet<String>,
 }
 
 /// Counts a failure of the sidecar at the time of the clock of the state, among the failures within RESTART_WINDOW. It
-/// returns true when this failure is the RESTART_LIMIT-th counted one, which stops the restarts. surfaces are the
-/// surfaces that sent to the failed process.
-fn count_failure<O>(state: &mut State<O>, sidecar: &str, surfaces: &HashSet<String>) -> bool {
+/// returns true when this failure is the RESTART_LIMIT-th counted one, which stops the restarts.
+fn count_failure<O>(state: &mut State<O>, sidecar: &str) -> bool {
     let now = (state.clock)();
     let record = state.restarts.entry(sidecar.to_string()).or_default();
     record
@@ -2993,35 +3019,24 @@ fn count_failure<O>(state: &mut State<O>, sidecar: &str, surfaces: &HashSet<Stri
         return false;
     }
     record.stopped = true;
-    record.refused = surfaces.clone();
     true
 }
 
 /// Applies the restart limit to a request from surface to the sidecar, which has no running process, and returns true
-/// when the request is refused. A request from a surface that sent to the failed process is refused and logged. A
-/// request from any other surface opens a surface that needs the sidecar: it clears the record, and the start that
-/// follows is recorded as host.trace.sidecar.restart-reset.
+/// when the sidecar is stopped: the request is refused and logged, whichever surface sent it. Only surface_opened clears
+/// the stop.
 fn restart_refused<O>(state: &mut State<O>, sidecar: &str, surface: &str) -> bool {
-    let Some(record) = state.restarts.get(sidecar) else {
-        return false;
-    };
-    if !record.stopped {
-        return false;
-    }
-    if record.refused.contains(surface) {
+    let stopped = state
+        .restarts
+        .get(sidecar)
+        .is_some_and(|record| record.stopped);
+    if stopped {
         log_error(
             &format!("sidecar {sidecar}"),
             format!("restart limit: request for {surface} refused"),
         );
-        return true;
     }
-    state.restarts.remove(sidecar);
-    emit_host(
-        Level::Debug,
-        "host.trace.sidecar.restart-reset",
-        serde_json::json!({"sidecar": sidecar, "surface": surface}),
-    );
-    false
+    stopped
 }
 
 fn fail<O: Owner>(
@@ -3056,7 +3071,7 @@ fn fail<O: Owner>(
         }
         let process = state.running.remove(sidecar).expect("checked by pid above");
         let changed = forget_closing(&mut state, sidecar);
-        let stop = count_failure(&mut state, sidecar, &process.surfaces);
+        let stop = count_failure(&mut state, sidecar);
         let owned: Vec<(String, O)> = process
             .surfaces
             .iter()

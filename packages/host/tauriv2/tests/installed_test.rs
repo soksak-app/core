@@ -433,6 +433,23 @@ fn installed_sidecars_leave_out_the_packages_of_installed_plugins() {
     assert_eq!(names, ["@scope/sidecar-worker"]);
 }
 
+// contract: installed.sidecars.dependents-of-a-shared-sidecar
+#[test]
+fn installed_sidecars_list_every_dependent_plugin() {
+    let config = installed_fixture();
+    // A second enabled plugin that lists the same sidecar is one more dependent of the one declaration.
+    write_installed(
+        config.path(),
+        &[(
+            "plugins/alpha/1.0.0/plugin.json",
+            r#"{"id": "alpha", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
+        )],
+    );
+    let declarations = installed::installed_sidecars(config.path()).unwrap();
+    assert_eq!(declarations.len(), 1);
+    assert_eq!(declarations[0].dependents, ["alpha", "term"]);
+}
+
 // contract: document.plugin.folder
 #[test]
 fn plugin_folder_is_the_folder_of_the_enabled_installed_plugin() {

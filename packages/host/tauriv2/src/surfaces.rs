@@ -652,6 +652,8 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             NativeFailure::Failed(error) => Err(error),
         })
     };
+    // The surfaces that this layout creates, as (plugin, surface), which the sidecars are told about after the layout.
+    let opened = std::cell::RefCell::new(Vec::new());
     let steps = |change: &TitlebarChange| -> Result<PreparedSurfaces, String> {
         for s in &request.surfaces {
             context
@@ -677,6 +679,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             let handle = if let Some(handle) = existing {
                 handle
             } else {
+                opened.borrow_mut().push((s.plugin.clone(), s.id.clone()));
                 let names = Arc::clone(&views.0);
                 let hosts = Arc::clone(&context);
                 let id = s.id.clone();
@@ -782,6 +785,12 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     };
     let (prepared, change) =
         run_layout(place_overlays, begin, set_titlebar, steps, restore, cancel)?;
+    // The layout is applied, so the surfaces it created are opened: their plugins may clear a restart limit.
+    for (plugin, surface) in opened.into_inner() {
+        window
+            .state::<WindowSidecars>()
+            .surface_opened(&plugin, &surface);
+    }
     // Even if the image raster update fails after the placement was fitted, no started placement remains. A cancel
     // commits the transaction, so the title bar is restored first.
     if let Err(error) = crate::composition::refresh_image_rasters(window) {

@@ -2237,11 +2237,18 @@ fn surface_open_clears_the_restart_limit() {
         Duration::from_secs(40),
     );
     failures.recv_timeout(STALL).expect("no refusal failure");
-    // A surface that did not send to the failed process is opened: the record is cleared and the sidecar starts.
+    // The creation of a surface of a plugin that does not list the sidecar leaves the stop in place.
+    sidecars.surface_opened("plugin-b", "s2");
+    require_restart_limit(
+        send_at(&clock, &sidecars, &window, "s2", Duration::from_secs(41)),
+        Duration::from_secs(41),
+    );
+    failures.recv_timeout(STALL).expect("no refusal failure");
+    // The creation of a surface of plugin-a, which lists the sidecar, clears the record; the next send starts the process.
     std::fs::write(directory.path().join("ok"), b"").unwrap();
-    send_at(&clock, &sidecars, &window, "s2", Duration::from_secs(41)).unwrap();
-    // The surface that was refused sends again after the reset.
-    send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(42)).unwrap();
+    sidecars.surface_opened("plugin-a", "s2");
+    send_at(&clock, &sidecars, &window, "s2", Duration::from_secs(42)).unwrap();
+    send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(43)).unwrap();
     sidecars.stop();
     writer.flush(Duration::from_secs(5)).unwrap();
     let events = records::read_events(&records::event_log_path(writer_folder.path()));
