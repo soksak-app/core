@@ -163,7 +163,7 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 
 창의 라이브러리 화면([프로젝트](projects.ko.md#프로젝트-식별))에는 머리줄 앞의 탭으로 고르는 두 페이지, 프로젝트와 플러그인이 있다. 탭은 `projects` 또는 `plugins`로 `core.library.page {page}`를 실행한다. 플러그인이 plugin 화면이다. 이 화면은 plugin을 그 설명과 함께 나열하고 plugin 작업을 실행한다. 설정 창은 불러온 plugin의 설정만 담는다([설정 창](settings.ko.md#플러그인)). `core.plugins.browse`는 설정 창이 열려 있으면 닫고, 창이 작업 화면을 보이면 라이브러리를 보이고, 플러그인을 고른다. `core.projects.browse`는 프로젝트를 고른다. 창은 작업 화면을 보이는 동안에도 plugin 검색어를 유지한다.
 
-페이지는 검색 칸과, 창이 불러온 plugin, `installed.json`이 나열한 plugin, registry index가 나열한 plugin마다 카드 하나를 id 순서로 보여 준다. 검색 칸은 `core.library.plugins.search {query}`를 실행한다. 페이지는 id, 이름, 설명에 검색어가 들어 있는 plugin을 대소문자 구분 없이 보여 주며, 빈 검색어는 모든 plugin을 보여 준다. 맞는 plugin이 없으면 "찾는 플러그인이 없습니다."를 보여 준다.
+페이지는 검색 칸과, 창이 불러온 plugin, `installed.json`이 나열한 plugin, 철회되지 않은 version을 registry index가 나열한 plugin마다 카드 하나를 id 순서로 보여 준다. registry index가 철회된 version만 나열한 plugin은 설치되었거나 불러온 경우가 아니면 카드가 없다. 검색 칸은 `core.library.plugins.search {query}`를 실행한다. 페이지는 id, 이름, 설명에 검색어가 들어 있는 plugin을 대소문자 구분 없이 보여 주며, 빈 검색어는 모든 plugin을 보여 준다. 맞는 plugin이 없으면 "찾는 플러그인이 없습니다."를 보여 준다.
 
 카드는 다음을 보여 준다.
 
@@ -177,9 +177,9 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 | `reload` | 창을 다시 불러오면 적용 | 수정된 탭을 유지해 창이 page를 유지했으므로 `installed.json`이 창이 불러온 것과 다르다([변경 적용](#변경-적용)) |
 
 - 불러온 manifest의 설명, 없으면 registry 항목의 설명([plugins](plugins.ko.md)와 [registry index](#registry-index)가 설명을 요구한다). `installed.json`만 나열한 plugin은 설명이 없고 id를 이름으로 보여 준다.
-- 설치된 버전 <version>과 최신 버전 <version>(registry index가 나열한 가장 새 버전)을 있을 때 보여 주는 버전 줄.
+- 설치된 버전 <version>과 최신 버전 <version>(registry index가 나열한 철회되지 않은 가장 새 버전)을 있을 때 보여 주는 버전 줄.
 - 사이드카 줄: 사이드카 뒤에 plugin이 이름을 댄 사이드카를 이름 순서로 보여 준다. 각 사이드카는 `installed.json` `sidecars`의 설치된 버전을, 없으면 plugin이 선언한 범위를 보여 준다. 사이드카와 범위는 설치된 plugin이면 `installed.json` 항목에서, 아니면 가장 새 registry 버전에서, 아니면 불러온 manifest의 `dependencies`에서 온다. 사이드카가 없는 plugin은 사이드카 없음을 보여 준다.
-- 동작: 각각 자기 명령에 연결된 버튼이다. 설치 `core.plugins.install`은 registry가 plugin을 나열하고 설치되지 않았을 때, 업데이트 `core.plugins.update`는 설치되었고 registry가 설치된 것보다 새 version을 나열할 때, 적용 `core.plugins.apply`는 상태가 `reload`일 때, 사용 `core.plugins.enable` 또는 사용 안 함 `core.plugins.disable`은 설치되었을 때 `enabled` 값에 따라, 제거 `core.plugins.remove`는 설치되었을 때 보인다. 작업이 실행되는 동안 모든 카드의 모든 동작은 비활성이고 그 plugin의 카드는 "<plugin> <action> 진행 중"을 보여 준다. 작업이 실패하면 카드는 그 오류를 보여 준다.
+- 동작: 각각 자기 명령에 연결된 버튼이다. 설치 `core.plugins.install`은 registry가 철회되지 않은 version의 plugin을 나열하고 설치되지 않았을 때, 업데이트 `core.plugins.update`는 설치되었고 registry가 설치된 것보다 새 version을 나열할 때, 적용 `core.plugins.apply`는 상태가 `reload`일 때, 사용 `core.plugins.enable` 또는 사용 안 함 `core.plugins.disable`은 설치되었을 때 `enabled` 값에 따라, 제거 `core.plugins.remove`는 설치되었을 때 보인다. 작업이 실행되는 동안 모든 카드의 모든 동작은 비활성이고 그 plugin의 카드는 "<plugin> <action> 진행 중"을 보여 준다. 작업이 실패하면 카드는 그 오류를 보여 준다.
 
 페이지는 보일 때, `plugins-changed` event를 받을 때, `sidecars-changed` event를 받을 때마다 `pluginsState`로 plugin 상태를, `sidecarsOutdated`로 오래된 sidecar를 읽는다. `core.plugins`는 오래된 sidecar를 `outdated`로 보고하고, plugin 화면은 각각을 카드 위에 `<running> → <installed>`와 `core.plugins.replace {sidecar}`에 묶인 동작 터미널 <sessions>개를 끝내고 적용과 함께 보인다. Registry index를 읽지 못하면 카드 위에 "레지스트리를 읽지 못했습니다: <message>"를 보여 주고, 페이지는 불러온 plugin과 설치된 plugin을 유지한다. 잘못된 `installed.json`처럼 plugin 상태를 읽지 못하면 "플러그인 상태를 읽지 못했습니다: <message>"를 보여 주고 카드는 없다. Browser 애플리케이션처럼 host가 없으면 페이지에는 불러온 plugin만 모두 `loaded`로 있고 동작은 없다.
 
@@ -193,10 +193,10 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 |---|---|
 | `registry` | Registry index URL 또는 `null` |
 | `error` | Registry index 오류 또는 plugin 상태 오류, 또는 `null` |
-| `plugins` | 카드마다 id 순서로 `{id, name, description, state, installed, latest, sidecars}`. `installed`는 `{version, enabled}` 또는 `null`, `latest`는 registry index가 나열한 가장 새 버전 또는 `null`, `sidecars`는 이름 순서의 `{name, range, version}` 목록이며 모르는 `range`와 `version`은 `null`이다 |
+| `plugins` | 카드마다 id 순서로 `{id, name, description, state, installed, latest, sidecars}`. `installed`는 `{version, enabled}` 또는 `null`, `latest`는 registry index가 나열한 철회되지 않은 가장 새 버전 또는 `null`, `sidecars`는 이름 순서의 `{name, range, version}` 목록이며 모르는 `range`와 `version`은 `null`이다 |
 | `operation` | 첫 작업 전에는 `null`, 그 뒤에는 마지막 작업의 `{action, plugin, state, error}`. `state`는 `running`, `done`, `failed`이고, `error`는 실패한 작업의 message 또는 `null`이다 |
 | `reload` | 상태가 `reload`인 plugin이 있으면 `true` |
-| `updates` | registry index가 더 새 version을 나열하는 설치 plugin을 id 순으로: `{id, installed, latest}` |
+| `updates` | registry index가 더 새 철회되지 않은 version을 나열하는 설치 plugin을 id 순으로: `{id, installed, latest}` |
 
 완료 기준:
 

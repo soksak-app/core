@@ -14,7 +14,7 @@ export const PLUGIN_ACTIONS = ["install", "update", "remove", "enable", "disable
 function sidecarsOf(record, entry, unit, state) {
   let ranges;
   if (record) ranges = Object.entries(record.sidecars);
-  else if (entry) ranges = Object.entries(entry.versions.toSorted((a, b) => compareVersions(a.version, b.version)).at(-1).sidecars);
+  else if (entry?.versions.length) ranges = Object.entries(entry.versions.toSorted((a, b) => compareVersions(a.version, b.version)).at(-1).sidecars);
   else ranges = Object.entries(unit.dependencies);
   return ranges.sort(([a], [b]) => a.localeCompare(b)).map(([name, range]) => ({
     name, range,
@@ -41,9 +41,15 @@ export function pluginRows(loaded, state) {
     }));
   }
   const installed = state.installed.plugins;
-  // If the index is absent or could not be read, there are no registry plugins.
-  const indexed = new Map(Array.isArray(state.index?.plugins) ? state.index.plugins.map((entry) => [entry.id, entry]) : []);
-  const ids = [...new Set([...byId.keys(), ...Object.keys(installed), ...indexed.keys()])].sort();
+  // If the index is absent or could not be read, there are no registry plugins. A revoked version is withdrawn, so the
+  // entry keeps only the versions that are not revoked (docs/spec/installation.md#version-selection).
+  const listed = Array.isArray(state.index?.plugins);
+  const revoked = listed ? state.index.revoked.plugins : [];
+  const indexed = new Map(listed ? state.index.plugins.map((entry) => [entry.id, {
+    ...entry, versions: entry.versions.filter((item) => !revoked.some((r) => r.id === entry.id && r.version === item.version)),
+  }]) : []);
+  // A plugin without a usable version is not offered; an installed or loaded one keeps its row.
+  const ids = [...new Set([...byId.keys(), ...Object.keys(installed), ...[...indexed.values()].filter((entry) => entry.versions.length).map((entry) => entry.id)])].sort();
   return ids.map((id) => {
     const unit = byId.get(id);
     const entry = indexed.get(id);
@@ -53,7 +59,7 @@ export function pluginRows(loaded, state) {
     else if (!unit && record && !record.enabled) status = "disabled";
     else if (!unit && !record) status = "available";
     else status = "reload";
-    const latest = entry ? entry.versions.map((v) => v.version).sort(compareVersions).at(-1) : null;
+    const latest = entry?.versions.length ? entry.versions.map((v) => v.version).sort(compareVersions).at(-1) : null;
     // default: name and description are decided in the order of the loaded manifest, the registry entry, and the plugin id (docs/spec/installation.md).
     const about = unit ?? entry ?? { name: id, description: "" };
     return {

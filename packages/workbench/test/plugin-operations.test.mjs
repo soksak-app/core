@@ -13,7 +13,8 @@ const entry = (id, name, versions) => ({ id, package: `plugin-${id}`, name, desc
 
 const state = {
   registry: "file:///registry/index.json",
-  index: { plugins: [entry("term", "Terminal", ["0.1.0", "0.10.0", "0.9.0"]), entry("db", "DB", ["2.0.0"]), entry("off", "Off", ["1.0.0"])] },
+  index: { plugins: [entry("term", "Terminal", ["0.1.0", "0.10.0", "0.9.0"]), entry("db", "DB", ["2.0.0"]), entry("off", "Off", ["1.0.0"])],
+    revoked: { plugins: [], sidecars: [], core: [] } },
   installed: {
     format: 2,
     plugins: {
@@ -37,6 +38,22 @@ test("plugin rows join loaded, installed and registry plugins by id with their s
   ]);
 });
 
+test("a plugin whose every registry version is revoked is not offered, and an installed one keeps its row without an update", () => {
+  const withdrawn = {
+    registry: "file:///registry/index.json",
+    index: {
+      plugins: [entry("appview", "AppView", ["0.0.2"]), entry("term", "Terminal", ["0.1.0", "0.10.0"])],
+      revoked: { plugins: [{ id: "appview", version: "0.0.2", reason: "fixture" }, { id: "term", version: "0.10.0", reason: "fixture" }], sidecars: [], core: [] },
+    },
+    installed: { format: 2, plugins: { appview: { version: "0.0.2", enabled: true, sidecars: {} } }, sidecars: {} },
+  };
+  // The installed row keeps its version and has no latest version, so the update action is not offered for it.
+  assert.deepEqual(pluginRows([], withdrawn).map((row) => [row.id, row.state, row.latest]), [["appview", "reload", null], ["term", "available", "0.1.0"]]);
+  // Without an installed version, the plugin with only revoked versions has no row.
+  const uninstalled = { ...withdrawn, installed: { ...withdrawn.installed, plugins: {} } };
+  assert.deepEqual(pluginRows([], uninstalled).map((row) => row.id), ["term"]);
+});
+
 test("a loaded plugin that was disabled after the window loaded waits for a page reload", () => {
   const disabled = { ...state, installed: { ...state.installed, plugins: { term: { version: "0.1.0", enabled: false, sidecars: {} } } } };
   assert.equal(pluginRows([loaded[0]], disabled).find((row) => row.id === "term").state, "reload");
@@ -49,7 +66,7 @@ test("a row names its sidecars from the installed entry, else the newest registr
     index: { plugins: [{ id: "db", package: "plugin-db", name: "DB", description: "DB 설명.", versions: [
       { version: "1.0.0", sidecars: { "@x/old": "1.0.0" } },
       { version: "2.0.0", sidecars: { "@x/db": "^1.0.0", "@a/b": "1.0.0" } },
-    ] }] },
+    ] }], revoked: { plugins: [], sidecars: [], core: [] } },
     installed: {
       format: 2,
       plugins: { term: { version: "0.1.0", enabled: true, sidecars: { [vt]: "^0.1.0" } } },
@@ -149,7 +166,7 @@ function starterHost({ registry = "file:///registry/index.json", index, firstRun
   };
 }
 
-const starterIndex = { plugins: [], packs: [{ name: "starter", description: "Starter.", plugins: ["alpha", "beta"] }] };
+const starterIndex = { plugins: [], revoked: { plugins: [], sidecars: [], core: [] }, packs: [{ name: "starter", description: "Starter.", plugins: ["alpha", "beta"] }] };
 
 test("the first run installs the starter pack in its order and asks for a reload", async () => {
   const host = starterHost({ index: starterIndex });

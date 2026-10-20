@@ -163,7 +163,7 @@ A window that receives `plugins-changed` reloads its page, so it loads the plugi
 
 The library screen of a window ([projects](projects.md#project-identity)) has two pages, 프로젝트 and 플러그인, selected by the tabs at the start of its heading, which run `core.library.page {page}` with `projects` or `plugins`. 플러그인 is the plugin screen: it lists plugins with their descriptions and runs the plugin operations. The settings window keeps only the settings of loaded plugins ([settings window](settings.md#플러그인)). `core.plugins.browse` closes the settings window when it is open, shows the library when the window shows a workspace, and selects 플러그인. `core.projects.browse` selects 프로젝트. The window keeps the plugin search while it shows a workspace.
 
-The page has a search field and one card per plugin that the window loaded, that `installed.json` lists, or that the registry index lists, sorted by id. The search field runs `core.library.plugins.search {query}`; the page shows the plugins whose id, name, or description contains the query, ignoring letter case, and an empty query shows every plugin. A query that matches no plugin shows "찾는 플러그인이 없습니다."
+The page has a search field and one card per plugin that the window loaded, that `installed.json` lists, or that the registry index lists with a version that is not revoked, sorted by id. A plugin that the index lists only with revoked versions has no card unless it is installed or loaded. The search field runs `core.library.plugins.search {query}`; the page shows the plugins whose id, name, or description contains the query, ignoring letter case, and an empty query shows every plugin. A query that matches no plugin shows "찾는 플러그인이 없습니다."
 
 A card shows:
 
@@ -177,9 +177,9 @@ A card shows:
 | `reload` | 창을 다시 불러오면 적용 | `installed.json` differs from what the window loaded, because the window kept its page when a modified tab was kept ([applying a change](#applying-a-change)) |
 
 - The description of the loaded manifest, else of the registry entry ([plugins](plugins.md) and [registry index](#registry-index) require one); a plugin that only `installed.json` lists has no description and shows its id as its name.
-- A version line with 설치된 버전 <version> and 최신 버전 <version>, the newest version that the registry index lists, each when present.
+- A version line with 설치된 버전 <version> and 최신 버전 <version>, the newest version that the registry index lists and that is not revoked, each when present.
 - A sidecar line, 사이드카 followed by each sidecar that the plugin names, sorted by name: the installed version from `installed.json` `sidecars`, or else the range that the plugin declares. The sidecars and ranges come from the `installed.json` entry of an installed plugin, else from the newest registry version, else from the `dependencies` of the loaded manifest. A plugin without sidecars shows 사이드카 없음.
-- Actions, each a button bound to its command: 설치 `core.plugins.install` when the registry lists the plugin and it is not installed; 업데이트 `core.plugins.update` when it is installed and the registry lists a version newer than the installed one; 적용 `core.plugins.apply` when its state is `reload`; 사용 `core.plugins.enable` or 사용 안 함 `core.plugins.disable` when it is installed, by its `enabled` value; 제거 `core.plugins.remove` when it is installed. While an operation runs, every action of every card is disabled and the card of its plugin shows "<plugin> <action> 진행 중". After a failed operation the card shows its error.
+- Actions, each a button bound to its command: 설치 `core.plugins.install` when the registry lists a version of the plugin that is not revoked and it is not installed; 업데이트 `core.plugins.update` when it is installed and the registry lists a version newer than the installed one; 적용 `core.plugins.apply` when its state is `reload`; 사용 `core.plugins.enable` or 사용 안 함 `core.plugins.disable` when it is installed, by its `enabled` value; 제거 `core.plugins.remove` when it is installed. While an operation runs, every action of every card is disabled and the card of its plugin shows "<plugin> <action> 진행 중". After a failed operation the card shows its error.
 
 The page reads the plugin state with `pluginsState` and the outdated sidecars with `sidecarsOutdated` when it is shown, after each `plugins-changed` event and after each `sidecars-changed` event. `core.plugins` reports the outdated sidecars as `outdated`, and the plugin screen shows each of them above the cards with `<running> → <installed>` and the action 터미널 <sessions>개를 끝내고 적용, bound to `core.plugins.replace {sidecar}`. A registry index that cannot be read shows "레지스트리를 읽지 못했습니다: <message>" above the cards, and the page keeps the loaded and installed plugins. A plugin state that cannot be read, such as an invalid `installed.json`, shows "플러그인 상태를 읽지 못했습니다: <message>" and no cards. Without a host, as in the browser application, the page has only the loaded plugins, each `loaded`, and no action.
 
@@ -193,10 +193,10 @@ While `updates` is not empty, the plugin screen shows an update list above the c
 |---|---|
 | `registry` | The registry index URL, or `null` |
 | `error` | The registry index error or the plugin state error, or `null` |
-| `plugins` | One entry per card, sorted by id: `{id, name, description, state, installed, latest, sidecars}`; `installed` is `{version, enabled}` or `null`, `latest` is the newest version that the registry index lists, or `null`, and `sidecars` lists `{name, range, version}` sorted by name, where `range` and `version` are `null` when unknown |
+| `plugins` | One entry per card, sorted by id: `{id, name, description, state, installed, latest, sidecars}`; `installed` is `{version, enabled}` or `null`, `latest` is the newest version that the registry index lists and that is not revoked, or `null`, and `sidecars` lists `{name, range, version}` sorted by name, where `range` and `version` are `null` when unknown |
 | `operation` | `null` before the first operation, then `{action, plugin, state, error}` of the latest one: `state` is `running`, `done` or `failed`, and `error` is the message of a failed operation or `null` |
 | `reload` | `true` when a plugin has the state `reload` |
-| `updates` | The installed plugins for which the registry index lists a newer version, sorted by id: `{id, installed, latest}` |
+| `updates` | The installed plugins for which the registry index lists a newer version that is not revoked, sorted by id: `{id, installed, latest}` |
 
 Acceptance:
 

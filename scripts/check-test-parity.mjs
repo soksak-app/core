@@ -2148,6 +2148,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F209",
+    implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "export function pluginRows(loaded, state)" }],
+    tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a plugin whose every registry version is revoked is not offered, and an installed one keeps its row without an update" }],
+    expected: "A plugin whose every registry version is revoked has no install action and no latest version.",
+    levels: ["unit"],
+  },
+  {
     id: "F208",
     implementation: [{ file: "packages/workbench/exposure.json", symbol: "\"name\": \"core.library.choose-folder\"" }],
     tests: [{ file: "packages/workbench/test/dialog-command-timeout.test.mjs", id: "every declared command that shows a dialog is listed with its host call" }],
