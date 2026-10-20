@@ -53,6 +53,14 @@ typedef void (*sp_view_ended)(void *context);
 // process end is handled only by its own state. The caller keeps context while the document lives.
 void sp_document_set_view_ended(void *document, sp_view_ended ended, void *context);
 
+// Called when WebKit reports that the WebContent process of a view stops (responsive false) or resumes (responsive true) answering its
+// responsiveness check (docs/plans/plugin-processes.md, rule 6). The notice does not end the view or its calls. Called on the main thread.
+typedef void (*sp_view_responsiveness)(void *context, bool responsive);
+
+// Sets the receiver of the responsiveness notices of a view. NULL reports none. A document region has no receiver. The caller keeps
+// context while the document lives.
+void sp_document_set_view_responsiveness(void *document, sp_view_responsiveness receiver, void *context);
+
 // Sets the receiver of the messages of the sok-view handler of a view. NULL reports none. The caller keeps context while the
 // document lives.
 void sp_document_set_view_message(void *document, sp_view_message message, void *context);

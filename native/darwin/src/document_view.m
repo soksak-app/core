@@ -277,6 +277,9 @@ static BOOL isBinaryIdentifier(NSString *text) {
 // The receiver of the end of the WebContent process of a view (docs/plans/plugin-processes.md, rule 5). A region has none.
 @property sp_view_ended viewEnded;
 @property void *viewEndedContext;
+// The receiver of the responsiveness notices of a view (docs/plans/plugin-processes.md, rule 6). A region has none.
+@property sp_view_responsiveness viewResponsiveness;
+@property void *viewResponsivenessContext;
 // The id of the plugin whose surface owns the region; its plugin documents have the origin sok://<plugin>.
 @property(copy) NSString *plugin;
 // The bytes that the plugin documents of the region store under binary ids (docs/spec/native-surfaces.md#document-regions).
@@ -832,6 +835,17 @@ static NSString *const kCoreHost = @"core";
     if (self.viewEnded && !self.closed) self.viewEnded(self.viewEndedContext);
 }
 
+// WebKit reports that the WebContent process of this view stopped answering its responsiveness check. The notice ends neither the
+// view nor its calls; the host records it (docs/plans/plugin-processes.md, rule 6). WebKit calls it through the navigation forwarder.
+- (void)_webViewWebProcessDidBecomeUnresponsive:(WKWebView *)view {
+    if (self.viewResponsiveness && !self.closed) self.viewResponsiveness(self.viewResponsivenessContext, false);
+}
+
+// WebKit reports that the WebContent process of this view resumed answering its responsiveness check.
+- (void)_webViewWebProcessDidBecomeResponsive:(WKWebView *)view {
+    if (self.viewResponsiveness && !self.closed) self.viewResponsiveness(self.viewResponsivenessContext, true);
+}
+
 - (void)webView:(WKWebView *)view didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
     [self settle:navigation];
     [self fail:error];
@@ -1109,6 +1123,14 @@ void sp_document_set_view_ended(void *handle, sp_view_ended ended, void *context
     if (!view || view.closed) return;
     view.viewEnded = ended;
     view.viewEndedContext = context;
+}
+
+void sp_document_set_view_responsiveness(void *handle, sp_view_responsiveness receiver, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) return;
+    view.viewResponsiveness = receiver;
+    view.viewResponsivenessContext = context;
 }
 
 void sp_document_set_view_message(void *handle, sp_view_message message, void *context) {

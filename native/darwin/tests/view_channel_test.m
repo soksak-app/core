@@ -5,6 +5,7 @@
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
 #import "document_view.h"
+#import "private/webkit.h"
 #import "webview_geometry.h"
 
 static int failures = 0;
@@ -23,6 +24,14 @@ static void until(NSString *what, BOOL (^done)(void)) {
 }
 
 static int viewEnded = 0;
+static int unresponsiveCalls = 0;
+static int responsiveCalls = 0;
+
+static void viewResponsivenessReceiver(void *context, bool responsive) {
+    (void)context;
+    if (responsive) responsiveCalls++;
+    else unresponsiveCalls++;
+}
 
 static void viewEndedReceiver(void *context) {
     (void)context;
@@ -109,6 +118,19 @@ int main(void) { @autoreleasepool {
         sp_document_set_view_ended(view, viewEndedReceiver, NULL);
         [(id<WKNavigationDelegate>)view webViewWebContentProcessDidTerminate:(WKWebView *)view];
         check(viewEnded == 1, [NSString stringWithFormat:@"the end of the view process calls the ended receiver once: %d", viewEnded]);
+        // The responsiveness notices are delivered through the private navigation delegate selectors, invoked here as WebKit invokes them.
+        SEL unresponsive = NSSelectorFromString(@"_webViewWebProcessDidBecomeUnresponsive:");
+        SEL responsive = NSSelectorFromString(@"_webViewWebProcessDidBecomeResponsive:");
+        sp_document_set_view_responsiveness(view, viewResponsivenessReceiver, NULL);
+        check([(id)view respondsToSelector:unresponsive], @"the view responds to _webViewWebProcessDidBecomeUnresponsive:");
+        check([(id)view respondsToSelector:responsive], @"the view responds to _webViewWebProcessDidBecomeResponsive:");
+        if ([(id)view respondsToSelector:unresponsive]) [(id<SPNavigationDelegatePrivate>)view _webViewWebProcessDidBecomeUnresponsive:(WKWebView *)view];
+        check(unresponsiveCalls == 1 && responsiveCalls == 0,
+            [NSString stringWithFormat:@"the unresponsive notice calls the receiver once: %d unresponsive, %d responsive", unresponsiveCalls, responsiveCalls]);
+        if ([(id)view respondsToSelector:responsive]) [(id<SPNavigationDelegatePrivate>)view _webViewWebProcessDidBecomeResponsive:(WKWebView *)view];
+        check(responsiveCalls == 1 && unresponsiveCalls == 1,
+            [NSString stringWithFormat:@"the responsive notice calls the receiver once: %d unresponsive, %d responsive", unresponsiveCalls, responsiveCalls]);
+        check(viewEnded == 1, @"a responsiveness notice does not end the view process");
         sp_document_close(view);
     }
 
