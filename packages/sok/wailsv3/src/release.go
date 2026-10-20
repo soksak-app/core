@@ -199,8 +199,8 @@ func checkReleaseFiles(listed []string) error {
 	return nil
 }
 
-// manifestModules are the modules that plugin.json loads and their names: the surface, the module of each section, and
-// the state.
+// manifestModules are the modules that plugin.json loads and their names: the surface module, the page of a view
+// composition, the module of each section, and the state.
 func manifestModules(manifest map[string]any) [][2]string {
 	var modules [][2]string
 	add := func(what string, value any) {
@@ -210,6 +210,9 @@ func manifestModules(manifest map[string]any) [][2]string {
 	}
 	if surface, ok := manifest["surface"].(map[string]any); ok {
 		add("surface module", surface["module"])
+		if composition, ok := surface["composition"].(map[string]any); ok && composition["kind"] == "view" {
+			add("view page", composition["page"])
+		}
 	}
 	if sections, ok := manifest["sections"].([]any); ok {
 		for _, raw := range sections {

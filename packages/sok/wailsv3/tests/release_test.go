@@ -323,3 +323,30 @@ func TestPluginPackRefusesABinaryPathInFilesWithoutWriting(t *testing.T) {
 		t.Fatalf("a refused pack left %v", names)
 	}
 }
+
+// contract: cli.pack.view-page-listed
+func TestPluginPackRefusesAViewPageNotListedInFiles(t *testing.T) {
+	dir := pluginTree(t)
+	writeTree(t, dir, map[string]string{
+		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
+			"files": ["plugin.json", "ui/b.js"]}`,
+		"plugin.json":  `{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}}`,
+		"ui/page.html": "<!doctype html>",
+	})
+	out := filepath.Join(t.TempDir(), "out")
+	code, _, stderr := run("plugin", "pack", dir, out)
+	want := "sok: plugin.json: view page ui/page.html must be listed in files\n"
+	if code != 1 || stderr != want {
+		t.Fatalf("code %d stderr %q, want %q", code, stderr, want)
+	}
+	if names, _ := os.ReadDir(out); len(names) != 0 {
+		t.Fatalf("a refused pack left %v", names)
+	}
+	writeTree(t, dir, map[string]string{
+		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
+			"files": ["plugin.json", "ui"]}`,
+	})
+	if code, _, stderr := run("plugin", "pack", dir, out); code != 0 {
+		t.Fatalf("listed view page: code %d stderr %q", code, stderr)
+	}
+}
