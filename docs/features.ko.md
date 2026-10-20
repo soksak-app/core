@@ -1077,6 +1077,7 @@
 - [~] F212 — P0: plugin 코드는 메인 페이지 밖에서 돈다. 메인 페이지는 workbench와 선언 UI만 그린다. 선언 어휘로 표현할 수 없는 plugin 화면은 view, 즉 `sok://<plugin id>` origin의 별도 웹뷰로 탭마다 하나씩 돈다. 무거운 상태와 계산은 sidecar에서 돈다. plugin host는 DOM 없는 로직이 둘 다에 맞지 않을 때만 둔다. plugin 표면의 페이지 mount는 지운다. 이유: WebKit은 프로세스 하나의 메모리를 제한하거나 일찍 회수하는 공개 수단이 없고, 한 페이지의 plugin들은 메모리, 장애, 측정을 공유하므로 경계는 프로세스다.
   - [~] F212.1 — P0: tracked benchmark로 잰다: 창마다 WebContent 합계, view 하나의 기본 비용, plugins/installed.json에서 표면을 가진 모든 plugin의 DOM mount 시간, 한 plugin의 view 둘을 기본 프로세스 배정과 새 프로세스 정책으로 띄운 경우(프로세스 수, 기본 비용, view 생성 시간), 프로세스 공유 쌍, 창 두 개의 메인 페이지, 새 WebContent 프로세스 시작 시간(5회 중앙값과 load average). 측정(`make -C native/darwin benchmark-view-processes`, load average 17): WebKit은 기본 배정에서 view마다 프로세스를 따로 준다. 작은 페이지의 프로세스 하나는 약 11 MB이고 합계는 선형으로 는다(view 40개: 422 MB, 1.5초에 load). view를 닫으면 모든 프로세스가 0.13초 안에 끝난다. view마다 새 프로세스를 강제하는 것은 이득이 없고 더 느리다(40개 2.1초).
   - [o] F212.1-1 — P0: 페이지는 plugin 표면 mount마다 시작에서 끝까지의 시간을 plugin과 표면과 함께 event로 쓴다. 그래서 통과값 (iii)의 DOM mount 기준값을 기록에서 잰다.
+  - [ ] F212.1-2 — P0: tracked window check가 설치된 표면 plugin마다 DOM mount 시간을 `page.trace.surface.mount`로 세 번 재고 plugin별 중앙값을 보고한다. 통과값 (iii)의 기준값이다.
   - [ ] F212.2 — P0: 프로세스 구조 설계 문서, 합의까지의 적대 검증, 명세로의 이동: 통과값, 메시지, event, 열린 호출 status, 응답 없음 감지, RPC protocol 번호.
   - [ ] F212.3 — P0: plugin-api RPC 계층: 요청, 답, 취소, 선언된 timeout, 상대 사라짐과 늦은 답 처리, 한 번에 하나인 snapshot push와 pull, 선언된 event와 열린 호출 status.
   - [ ] F212.4 — P0: native와 두 호스트의 view binary 경로.
