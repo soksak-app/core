@@ -1135,6 +1135,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
     - [ ] F212.7-5-2 — P0: The card shows the error of a view that stopped its restarts through the error display (`showError`): the host sends the stop of the surface to the workbench, and the workbench shows it. Retry when: the host event of a surface for an error is declared and the workbench shows it.
   - [ ] F212.7-6 — P0: plugin-api exports `checkViewPage(html)`, which checks that a view page carries the static import map of `VIEW_IMPORTS`, for plugin repository tests.
   - [ ] F212.7-7 — P1: `sok plugin pack` refuses a view whose `page` is not listed in the release `files`, in Go and Rust, as the view specification states.
+  - [ ] F212.7-8 — P0: The call route of a view: a call that a view sends through `sok-view` reaches the host and the workbench with the plugin and surface of the view, as the context entries table of the design states (tab state, runtime calls, commands, sidecar), and its reply returns through the channel; the call layer of F212.3-1 runs on both sides.
   - [ ] F212.10-editor — P0: The editor plugin moves to a view in its repository against the branch, recorded as an item of the editor repository.
   - [ ] F212.7b — P0: The presentation wait of views: first change only, ended by presentation, process exit or a view that is not shown, without a timer.
   - [ ] F212.7c — P0: The drag recording of views: native frame against card boundary, content frame gap and content mismatch after the gesture.

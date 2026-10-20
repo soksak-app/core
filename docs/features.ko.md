@@ -1135,6 +1135,7 @@
     - [ ] F212.7-5-2 — P0: 재시작 한도를 넘은 view의 오류를 card가 error display(`showError`)로 보인다. host가 surface의 정지를 workbench에 보내고 workbench가 이를 보인다. 재시작 조건: host의 surface 오류 event가 선언되고 workbench가 이를 보일 때.
   - [ ] F212.7-6 — P0: plugin-api가 `checkViewPage(html)`을 내보낸다. view page가 `VIEW_IMPORTS`의 정적 import map을 담는지 plugin 저장소 시험이 확인한다.
   - [ ] F212.7-7 — P1: `sok plugin pack`은 view의 `page`가 release `files`에 없으면 거부한다. Go와 Rust, view 명세가 정한 대로.
+  - [ ] F212.7-8 — P0: view의 호출 경로: view가 `sok-view`로 보낸 호출은 view의 plugin과 surface를 지닌 채 호스트와 workbench에 닿고(설계의 context 항목 표: tab 상태, runtime 호출, 명령, sidecar), 답은 통로로 돌아온다. F212.3-1의 호출 계층이 양쪽에서 돈다.
   - [ ] F212.10-editor — P0: editor plugin이 자기 저장소에서 branch를 기준으로 view로 옮긴다. editor 저장소의 항목으로 기록한다.
   - [ ] F212.7b — P0: view의 presentation wait: 첫 변경에만, presentation, 프로세스 종료, 보이지 않는 view로 끝나고 timer를 쓰지 않는다.
   - [ ] F212.7c — P0: view의 끌기 녹화: native frame과 card 경계, 내용 frame 간격, gesture 뒤 내용 불일치.
