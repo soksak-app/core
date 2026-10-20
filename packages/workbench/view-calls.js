@@ -19,7 +19,8 @@
  *                 links.open(url): opens a link, as runtime.links.open
  */
 export async function answerViewCall(event, options) {
-  const { id, cancel, command, params } = event ?? {};
+  if (event === null || typeof event !== "object") throw new TypeError("view call event is not an object");
+  const { id, cancel, command, params } = event;
   if (!Number.isInteger(id)) throw new TypeError("view call event has no integer id");
   const { pending } = options;
   if (cancel === true) {
