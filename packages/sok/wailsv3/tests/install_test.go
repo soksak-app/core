@@ -424,3 +424,105 @@ func TestInstalledFileOfAnotherFormatIsRejected(t *testing.T) {
 		t.Fatalf("code %d stderr %q want %q", code, stderr, want)
 	}
 }
+
+// grantedState holds the installed plugins of the granted item fixtures. probe is the requester of the first case,
+// view contributes to probe, lib provides a point to probe and contributes to probe, and old is disabled.
+const grantedState = `{"format": 3, "plugins": {
+	"lib": {"version": "1.2.0", "path": "plugins/lib/1.2.0", "enabled": true, "sidecars": {}},
+	"old": {"version": "1.0.0", "path": "plugins/old/1.0.0", "enabled": false, "sidecars": {}},
+	"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "sidecars": {}},
+	"view": {"version": "1.0.0", "path": "plugins/view/1.0.0", "enabled": true, "sidecars": {}}},
+	"sidecars": {}}`
+
+const grantedProbe = `{"id": "probe",
+	"extends": {
+		"list": {"version": "1.1.0", "schema": {}, "modules": {"format": "shared/format.js", "table": "shared/table.js"}},
+		"bare": {"schema": {}, "modules": {"x": "shared/x.js"}}},
+	"contributes": {
+		"lib.panel": [{"range": "^1.0.0", "module": "ui/probe-panel.js"}],
+		"lib.panel2": [{"range": "^2.0.0", "module": "ui/probe-panel2.js"}],
+		"lib.gone": [{"range": "*", "module": "ui/probe-gone.js"}]}}`
+
+const grantedView = `{"id": "view",
+	"contributes": {
+		"probe.list": [{"range": "^1.0.0", "module": "ui/view-list.js"}, {"range": "^2.0.0", "module": "ui/view-old.js"}],
+		"probe.bare": [{"range": "*", "module": "ui/view-bare.js"}],
+		"probe.nope": [{"range": "*", "module": "ui/view-nope.js"}],
+		"gone.point": [{"range": "*", "module": "ui/view-gone.js"}],
+		"old.panel": [{"range": "*", "module": "ui/view-disabled.js"}]}}`
+
+const grantedLib = `{"id": "lib",
+	"extends": {
+		"panel": {"version": "1.4.0", "schema": {}, "modules": {"util": "shared/util.js"}},
+		"panel2": {"version": "1.4.0", "schema": {}, "modules": {"m2": "shared/m2.js"}}},
+	"contributes": {"probe.list": [{"range": "1.1.0", "module": "ui/lib-list.js"}]}}`
+
+const grantedOld = `{"id": "old",
+	"extends": {"panel": {"version": "1.0.0", "schema": {}, "modules": {"m": "shared/m.js"}}},
+	"contributes": {"probe.list": [{"range": "*", "module": "ui/old-list.js"}]}}`
+
+// grantedFiles returns the package names and manifests of the granted item fixtures, with the manifest of plugin id
+// replaced by replacement when it is not empty.
+func grantedFiles(t *testing.T, id, replacement string) map[string]sok.PluginFiles {
+	t.Helper()
+	manifests := map[string]string{"probe": grantedProbe, "view": grantedView, "lib": grantedLib, "old": grantedOld}
+	if replacement != "" {
+		manifests[id] = replacement
+	}
+	files := map[string]sok.PluginFiles{}
+	for name, text := range manifests {
+		files[name] = sok.PluginFiles{Package: "plugin-" + name, Manifest: decode(t, text)}
+	}
+	return files
+}
+
+// contract: install.granted-items
+func TestGrantedItemsListTheModulesAndSharedTargetsOfEachRequester(t *testing.T) {
+	state, err := sok.ValidateInstalled(decode(t, grantedState))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string][]string{
+		// The items of view and lib to the points of probe with a granted range, and the shared targets of probe.list.
+		"probe": {"/modules/plugin-lib/ui/lib-list.js", "/modules/plugin-view/ui/view-list.js", "/shared/lib.panel/util.js",
+			"/shared/probe.list/format.js", "/shared/probe.list/table.js"},
+		// The shared targets of probe.list, to which view contributes a granted item.
+		"view": {"/shared/probe.list/format.js", "/shared/probe.list/table.js"},
+		// The module of probe to the point panel of lib, the shared targets of panel and of list, to which lib contributes.
+		"lib": {"/modules/plugin-probe/ui/probe-panel.js", "/shared/lib.panel/util.js",
+			"/shared/probe.list/format.js", "/shared/probe.list/table.js"},
+	}
+	for requester, want := range cases {
+		got, err := sok.GrantedFiles(state, grantedFiles(t, "", ""), requester)
+		if err != nil || strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Fatalf("%s: granted %q, want %q (%v)", requester, got, want, err)
+		}
+	}
+}
+
+// contract: install.granted-items
+func TestGrantedItemsRejectMalformedDeclarationsAndUnknownRequesters(t *testing.T) {
+	state, err := sok.ValidateInstalled(decode(t, grantedState))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = sok.GrantedFiles(state, grantedFiles(t, "", ""), "missing")
+	rejects(t, err, "plugin missing is not installed")
+	files := grantedFiles(t, "", "")
+	delete(files, "lib")
+	_, err = sok.GrantedFiles(state, files, "probe")
+	rejects(t, err, "installed plugin lib has no package.json and plugin.json")
+	cases := []struct {
+		id, manifest, want string
+	}{
+		{"probe", strings.Replace(grantedProbe, `"version": "1.1.0"`, `"version": "1.x"`, 1), `invalid version "1.x"`},
+		{"view", strings.Replace(grantedView, `"range": "^1.0.0"`, `"range": "^x"`, 1), `invalid version range "^x"`},
+		{"view", strings.Replace(grantedView, `"module": "ui/view-list.js"`, `"module": "../view-list.js"`, 1), "module must be a relative path"},
+		{"probe", strings.Replace(grantedProbe, `"lib.gone"`, `"lib"`, 1), "contributes lib: the key must be <plugin id>.<point>"},
+		{"probe", strings.Replace(grantedProbe, `"shared/x.js"`, `3`, 1), "module must be a relative path"},
+	}
+	for _, c := range cases {
+		_, err := sok.GrantedFiles(state, grantedFiles(t, c.id, c.manifest), "probe")
+		rejects(t, err, c.want)
+	}
+}

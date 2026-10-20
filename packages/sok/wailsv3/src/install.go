@@ -1293,3 +1293,219 @@ func sortedPluginIDs(m map[string]InstalledPlugin) []string {
 	slices.Sort(ids)
 	return ids
 }
+
+// PluginFiles are the declarations of an installed plugin that the granted item rule reads: the name of its package
+// (package.json) and the content of its plugin.json.
+type PluginFiles struct {
+	Package  string
+	Manifest any
+}
+
+// grantedPoint is an extension point that a plugin declares in extends. Version is nil when the point has no version.
+type grantedPoint struct {
+	version *semver.Version
+	modules map[string]string
+}
+
+// grantedItem is an item that a plugin contributes to the point `point` of the plugin `provider`.
+type grantedItem struct {
+	provider string
+	point    string
+	rng      Range
+	module   string
+}
+
+// grantedPlugin holds the declarations that the granted item rule reads from one plugin.
+type grantedPlugin struct {
+	pkg    string
+	points map[string]grantedPoint
+	items  []grantedItem
+}
+
+// checkModulePath checks that a module path names a file inside the package: a relative path whose segments are
+// neither empty, `.` nor `..`. It returns the path.
+func checkModulePath(where string, value any) (string, error) {
+	path, ok := text(value)
+	if !ok || strings.HasPrefix(path, "/") || slices.ContainsFunc(strings.Split(path, "/"), func(segment string) bool {
+		return segment == "" || segment == "." || segment == ".."
+	}) {
+		return "", fmt.Errorf("%s: module must be a relative path inside the package, got %s", where, quote(value))
+	}
+	return path, nil
+}
+
+// grantedDeclarations reads the extends and contributes declarations of plugin id and checks each one that the granted
+// item rule uses. A malformed declaration is an error, not a missing grant.
+func grantedDeclarations(id string, files PluginFiles) (grantedPlugin, error) {
+	where := id + " plugin.json"
+	if files.Package == "" {
+		return grantedPlugin{}, fmt.Errorf("installed plugin %s has no package name", id)
+	}
+	manifest, err := object(where, files.Manifest)
+	if err != nil {
+		return grantedPlugin{}, err
+	}
+	plugin := grantedPlugin{pkg: files.Package, points: map[string]grantedPoint{}}
+	if value, ok := manifest["extends"]; ok {
+		extends, err := object(where+" extends", value)
+		if err != nil {
+			return grantedPlugin{}, err
+		}
+		for _, name := range sortedKeys(extends) {
+			at := where + " extends " + name
+			point, err := object(at, extends[name])
+			if err != nil {
+				return grantedPlugin{}, err
+			}
+			var entry grantedPoint
+			if value, ok := point["version"]; ok {
+				version, err := checkedVersion(at+" version", value)
+				if err != nil {
+					return grantedPlugin{}, err
+				}
+				if entry.version, err = ParseVersion(version); err != nil {
+					return grantedPlugin{}, fmt.Errorf("%s version: %w", at, err)
+				}
+			}
+			if value, ok := point["modules"]; ok {
+				modules, err := object(at+" modules", value)
+				if err != nil {
+					return grantedPlugin{}, err
+				}
+				entry.modules = map[string]string{}
+				for _, specifier := range sortedKeys(modules) {
+					path, err := checkModulePath(at+" modules "+specifier, modules[specifier])
+					if err != nil {
+						return grantedPlugin{}, err
+					}
+					entry.modules[specifier] = path
+				}
+			}
+			plugin.points[name] = entry
+		}
+	}
+	if value, ok := manifest["contributes"]; ok {
+		contributes, err := object(where+" contributes", value)
+		if err != nil {
+			return grantedPlugin{}, err
+		}
+		for _, key := range sortedKeys(contributes) {
+			provider, point, found := strings.Cut(key, ".")
+			if !found || provider == "" || point == "" {
+				return grantedPlugin{}, fmt.Errorf("%s contributes %s: the key must be <plugin id>.<point>", where, key)
+			}
+			at := where + " contributes " + key
+			raws, err := array(at, contributes[key])
+			if err != nil {
+				return grantedPlugin{}, err
+			}
+			for _, raw := range raws {
+				item, err := object(at+" item", raw)
+				if err != nil {
+					return grantedPlugin{}, err
+				}
+				if err := checkRange(at+" range", item["range"]); err != nil {
+					return grantedPlugin{}, err
+				}
+				rng, err := ParseRange(item["range"].(string))
+				if err != nil {
+					return grantedPlugin{}, fmt.Errorf("%s range: %w", at, err)
+				}
+				module, err := checkModulePath(at+" module", item["module"])
+				if err != nil {
+					return grantedPlugin{}, err
+				}
+				plugin.items = append(plugin.items, grantedItem{provider: provider, point: point, rng: rng, module: module})
+			}
+		}
+	}
+	return plugin, nil
+}
+
+// GrantedFiles returns the files that a view of the requester may read, in the core root form (docs/spec/installation.md):
+// `/modules/<package>/<module>` for the module of each granted item that another plugin contributes to a point of the
+// requester, and `/shared/<plugin id>.<point>/<specifier>.js` for each shared module of a point that has a granted item
+// of another plugin, whether the requester provides the point or contributes to it. An item is granted when its
+// contributor and its provider are installed and the provider is enabled, the point declares a version, and the range
+// of the item contains that version. The requester must be installed; its own enabled state is not checked. Every
+// enabled plugin and the requester must have files, and each declaration that the rule reads must be well formed, or
+// an error names it. The result is sorted and has no repeated path.
+func GrantedFiles(state *InstalledState, files map[string]PluginFiles, requester string) ([]string, error) {
+	if _, ok := state.Plugins[requester]; !ok {
+		return nil, fmt.Errorf("plugin %s is not installed", requester)
+	}
+	plugins := map[string]grantedPlugin{}
+	for _, id := range sortedPluginIDs(state.Plugins) {
+		if !state.Plugins[id].Enabled && id != requester {
+			continue
+		}
+		entry, ok := files[id]
+		if !ok {
+			return nil, fmt.Errorf("installed plugin %s has no package.json and plugin.json", id)
+		}
+		plugin, err := grantedDeclarations(id, entry)
+		if err != nil {
+			return nil, err
+		}
+		plugins[id] = plugin
+	}
+	paths := map[string]bool{}
+	self := plugins[requester]
+	// The requester provides the points. A granted item of another plugin adds its module and the shared modules of its point.
+	provided := map[string]bool{}
+	for _, id := range sortedPluginIDs(state.Plugins) {
+		contributor, ok := plugins[id]
+		if !ok || id == requester {
+			continue
+		}
+		for _, item := range contributor.items {
+			if item.provider != requester || !grantedBy(self.points[item.point], item.rng) {
+				continue
+			}
+			paths["/modules/"+contributor.pkg+"/"+item.module] = true
+			provided[item.point] = true
+		}
+	}
+	for point := range provided {
+		addShared(paths, requester, point, self.points[point])
+	}
+	// The requester contributes to the points of other plugins. Each point with a granted item adds its shared modules.
+	contributed := map[sharedPoint]grantedPoint{}
+	for _, item := range self.items {
+		provider, ok := plugins[item.provider]
+		if !ok || item.provider == requester {
+			continue
+		}
+		point := provider.points[item.point]
+		if grantedBy(point, item.rng) {
+			contributed[sharedPoint{item.provider, item.point}] = point
+		}
+	}
+	for key, entry := range contributed {
+		addShared(paths, key.id, key.point, entry)
+	}
+	out := make([]string, 0, len(paths))
+	for path := range paths {
+		out = append(out, path)
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
+// grantedBy reports whether a point declares a version and the range of an item contains it.
+func grantedBy(point grantedPoint, rng Range) bool {
+	return point.version != nil && rng.Contains(point.version)
+}
+
+// addShared adds the core root path of each shared module of the point `id.point`.
+func addShared(paths map[string]bool, id, point string, entry grantedPoint) {
+	for specifier := range entry.modules {
+		paths["/shared/"+id+"."+point+"/"+specifier+".js"] = true
+	}
+}
+
+// sharedPoint names the point `point` of the plugin `id`.
+type sharedPoint struct {
+	id    string
+	point string
+}

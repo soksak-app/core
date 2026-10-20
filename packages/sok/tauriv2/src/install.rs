@@ -1185,3 +1185,217 @@ pub fn resolve_install<'a>(
         sidecars,
     })
 }
+
+/// The declarations of an installed plugin that the granted item rule reads: the name of its package (package.json) and
+/// the content of its plugin.json.
+pub struct PluginFiles {
+    pub package: String,
+    pub manifest: Value,
+}
+
+/// An extension point that a plugin declares in extends. version is None when the point has no version.
+struct GrantedPoint {
+    version: Option<Version>,
+    modules: BTreeMap<String, String>,
+}
+
+/// An item that a plugin contributes to the point `point` of the plugin `provider`.
+struct GrantedItem {
+    provider: String,
+    point: String,
+    range: Range,
+    module: String,
+}
+
+/// The declarations that the granted item rule reads from one plugin.
+struct GrantedPlugin {
+    package: String,
+    points: BTreeMap<String, GrantedPoint>,
+    items: Vec<GrantedItem>,
+}
+
+/// Checks that a module path names a file inside the package: a relative path whose segments are neither empty, `.`
+/// nor `..`. It returns the path.
+fn check_module_path(at: &str, value: Option<&Value>) -> Result<String, String> {
+    match value.and_then(Value::as_str) {
+        Some(path)
+            if !path.is_empty()
+                && !path.starts_with('/')
+                && !path
+                    .split('/')
+                    .any(|segment| segment.is_empty() || segment == "." || segment == "..") =>
+        {
+            Ok(path.to_string())
+        }
+        _ => Err(format!(
+            "{at}: module must be a relative path inside the package, got {}",
+            shown(value)
+        )),
+    }
+}
+
+/// Reads the extends and contributes declarations of plugin id and checks each one that the granted item rule uses. A
+/// malformed declaration is an error, not a missing grant.
+fn granted_declarations(id: &str, files: &PluginFiles) -> Result<GrantedPlugin, String> {
+    let at = format!("{id} plugin.json");
+    if files.package.is_empty() {
+        return Err(format!("installed plugin {id} has no package name"));
+    }
+    let manifest = object(&at, Some(&files.manifest))?;
+    let mut plugin = GrantedPlugin {
+        package: files.package.clone(),
+        points: BTreeMap::new(),
+        items: vec![],
+    };
+    if let Some(extends) = manifest.get("extends") {
+        let extends = object(&format!("{at} extends"), Some(extends))?;
+        for name in sorted_keys(extends) {
+            let point_at = format!("{at} extends {name}");
+            let point = object(&point_at, extends.get(name))?;
+            let mut entry = GrantedPoint {
+                version: None,
+                modules: BTreeMap::new(),
+            };
+            if let Some(value) = point.get("version") {
+                let text = check_version(&format!("{point_at} version"), Some(value))?;
+                entry.version = Some(
+                    parse_version(text).map_err(|error| format!("{point_at} version: {error}"))?,
+                );
+            }
+            if let Some(value) = point.get("modules") {
+                let modules = object(&format!("{point_at} modules"), Some(value))?;
+                for specifier in sorted_keys(modules) {
+                    let path = check_module_path(
+                        &format!("{point_at} modules {specifier}"),
+                        modules.get(specifier),
+                    )?;
+                    entry.modules.insert(specifier.clone(), path);
+                }
+            }
+            plugin.points.insert(name.clone(), entry);
+        }
+    }
+    if let Some(contributes) = manifest.get("contributes") {
+        let contributes = object(&format!("{at} contributes"), Some(contributes))?;
+        for key in sorted_keys(contributes) {
+            let Some((provider, point)) = key.split_once('.') else {
+                return Err(format!(
+                    "{at} contributes {key}: the key must be <plugin id>.<point>"
+                ));
+            };
+            if provider.is_empty() || point.is_empty() {
+                return Err(format!(
+                    "{at} contributes {key}: the key must be <plugin id>.<point>"
+                ));
+            }
+            let key_at = format!("{at} contributes {key}");
+            for raw in array(&key_at, contributes.get(key))? {
+                let item = object(&format!("{key_at} item"), Some(raw))?;
+                let range = match item.get("range").and_then(Value::as_str) {
+                    Some(text) => {
+                        parse_range(text).map_err(|error| format!("{key_at} range: {error}"))?
+                    }
+                    None => {
+                        return Err(format!(
+                            "{key_at} range: invalid version range {}",
+                            shown(item.get("range"))
+                        ));
+                    }
+                };
+                let module = check_module_path(&format!("{key_at} module"), item.get("module"))?;
+                plugin.items.push(GrantedItem {
+                    provider: provider.to_string(),
+                    point: point.to_string(),
+                    range,
+                    module,
+                });
+            }
+        }
+    }
+    Ok(plugin)
+}
+
+/// Whether a point declares a version and the range of an item contains it.
+fn granted_by(point: &GrantedPoint, range: &Range) -> bool {
+    point
+        .version
+        .as_ref()
+        .is_some_and(|version| range.contains(version))
+}
+
+/// Adds the core root path of each shared module of the point `id.point`.
+fn add_shared(paths: &mut BTreeSet<String>, id: &str, point: &str, entry: &GrantedPoint) {
+    for specifier in entry.modules.keys() {
+        paths.insert(format!("/shared/{id}.{point}/{specifier}.js"));
+    }
+}
+
+/// Returns the files that a view of the requester may read, in the core root form (docs/spec/installation.md):
+/// `/modules/<package>/<module>` for the module of each granted item that another plugin contributes to a point of the
+/// requester, and `/shared/<plugin id>.<point>/<specifier>.js` for each shared module of a point that has a granted item
+/// of another plugin, whether the requester provides the point or contributes to it. An item is granted when its
+/// contributor and its provider are installed and the provider is enabled, the point declares a version, and the range
+/// of the item contains that version. The requester must be installed; its own enabled state is not checked. Every
+/// enabled plugin and the requester must have files, and each declaration that the rule reads must be well formed, or
+/// an error names it. The result is sorted and has no repeated path.
+pub fn granted_files(
+    state: &InstalledState,
+    files: &BTreeMap<String, PluginFiles>,
+    requester: &str,
+) -> Result<Vec<String>, String> {
+    if !state.plugins.contains_key(requester) {
+        return Err(format!("plugin {requester} is not installed"));
+    }
+    let mut plugins = BTreeMap::new();
+    for (id, plugin) in &state.plugins {
+        if !plugin.enabled && id.as_str() != requester {
+            continue;
+        }
+        let entry = files
+            .get(id)
+            .ok_or_else(|| format!("installed plugin {id} has no package.json and plugin.json"))?;
+        plugins.insert(id.clone(), granted_declarations(id, entry)?);
+    }
+    let me = &plugins[requester];
+    let mut paths = BTreeSet::new();
+    // The requester provides the points. A granted item of another plugin adds its module and the shared modules of its point.
+    let mut provided: BTreeMap<&str, &GrantedPoint> = BTreeMap::new();
+    for (id, contributor) in &plugins {
+        if id.as_str() == requester {
+            continue;
+        }
+        for item in &contributor.items {
+            let Some(point) = me.points.get(&item.point) else {
+                continue;
+            };
+            if item.provider != requester || !granted_by(point, &item.range) {
+                continue;
+            }
+            paths.insert(format!("/modules/{}/{}", contributor.package, item.module));
+            provided.insert(&item.point, point);
+        }
+    }
+    for (point, entry) in provided {
+        add_shared(&mut paths, requester, point, entry);
+    }
+    // The requester contributes to the points of other plugins. Each point with a granted item adds its shared modules.
+    let mut contributed: BTreeMap<(&str, &str), &GrantedPoint> = BTreeMap::new();
+    for item in &me.items {
+        if item.provider == requester {
+            continue;
+        }
+        let Some(provider) = plugins.get(&item.provider) else {
+            continue;
+        };
+        let Some(point) = provider.points.get(&item.point) else {
+            continue;
+        };
+        if granted_by(point, &item.range) {
+            contributed.insert((&item.provider, &item.point), point);
+        }
+    }
+    for ((provider, point), entry) in contributed {
+        add_shared(&mut paths, provider, point, entry);
+    }
+    Ok(paths.into_iter().collect())
+}

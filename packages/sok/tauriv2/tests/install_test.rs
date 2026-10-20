@@ -1,5 +1,7 @@
 //! Checks the installation formats (docs/spec/installation.md) and the version selection.
 
+use std::collections::BTreeMap;
+
 use serde_json::{Value, json};
 use soksak_sok::install::{self, InstalledPlugin, InstalledSidecar, InstalledState, Selection};
 
@@ -622,5 +624,168 @@ fn installed_state_names_one_version_of_each_plugin_and_sidecar() {
         let mut value = state.clone();
         change(&mut value);
         rejects(install::validate_installed(&value), want);
+    }
+}
+
+const GRANTED_STATE: &str = r#"{"format": 3, "plugins": {
+    "lib": {"version": "1.2.0", "path": "plugins/lib/1.2.0", "enabled": true, "sidecars": {}},
+    "old": {"version": "1.0.0", "path": "plugins/old/1.0.0", "enabled": false, "sidecars": {}},
+    "probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "sidecars": {}},
+    "view": {"version": "1.0.0", "path": "plugins/view/1.0.0", "enabled": true, "sidecars": {}}},
+    "sidecars": {}}"#;
+
+const GRANTED_PROBE: &str = r#"{"id": "probe",
+    "extends": {
+        "list": {"version": "1.1.0", "schema": {}, "modules": {"format": "shared/format.js", "table": "shared/table.js"}},
+        "bare": {"schema": {}, "modules": {"x": "shared/x.js"}}},
+    "contributes": {
+        "lib.panel": [{"range": "^1.0.0", "module": "ui/probe-panel.js"}],
+        "lib.panel2": [{"range": "^2.0.0", "module": "ui/probe-panel2.js"}],
+        "lib.gone": [{"range": "*", "module": "ui/probe-gone.js"}]}}"#;
+
+const GRANTED_VIEW: &str = r#"{"id": "view",
+    "contributes": {
+        "probe.list": [{"range": "^1.0.0", "module": "ui/view-list.js"}, {"range": "^2.0.0", "module": "ui/view-old.js"}],
+        "probe.bare": [{"range": "*", "module": "ui/view-bare.js"}],
+        "probe.nope": [{"range": "*", "module": "ui/view-nope.js"}],
+        "gone.point": [{"range": "*", "module": "ui/view-gone.js"}],
+        "old.panel": [{"range": "*", "module": "ui/view-disabled.js"}]}}"#;
+
+const GRANTED_LIB: &str = r#"{"id": "lib",
+    "extends": {
+        "panel": {"version": "1.4.0", "schema": {}, "modules": {"util": "shared/util.js"}},
+        "panel2": {"version": "1.4.0", "schema": {}, "modules": {"m2": "shared/m2.js"}}},
+    "contributes": {"probe.list": [{"range": "1.1.0", "module": "ui/lib-list.js"}]}}"#;
+
+const GRANTED_OLD: &str = r#"{"id": "old",
+    "extends": {"panel": {"version": "1.0.0", "schema": {}, "modules": {"m": "shared/m.js"}}},
+    "contributes": {"probe.list": [{"range": "*", "module": "ui/old-list.js"}]}}"#;
+
+fn parsed(text: &str) -> Value {
+    serde_json::from_str(text).expect("fixture")
+}
+
+/// The files of the granted item fixtures. The manifest of plugin `id` is replaced by `replacement` when it is not empty.
+fn granted_files(id: &str, replacement: &str) -> BTreeMap<String, install::PluginFiles> {
+    let mut manifests: Vec<(String, String)> = [
+        ("probe", GRANTED_PROBE),
+        ("view", GRANTED_VIEW),
+        ("lib", GRANTED_LIB),
+        ("old", GRANTED_OLD),
+    ]
+    .map(|(name, text)| (name.to_string(), text.to_string()))
+    .to_vec();
+    if !replacement.is_empty() {
+        for (name, text) in manifests.iter_mut() {
+            if name.as_str() == id {
+                *text = replacement.to_string();
+            }
+        }
+    }
+    manifests
+        .into_iter()
+        .map(|(name, text)| {
+            let files = install::PluginFiles {
+                package: format!("plugin-{name}"),
+                manifest: parsed(&text),
+            };
+            (name, files)
+        })
+        .collect()
+}
+
+// contract: install.granted-items
+#[test]
+fn granted_items_list_the_modules_and_shared_targets_of_each_requester() {
+    let state = install::validate_installed(&parsed(GRANTED_STATE)).unwrap();
+    let cases: [(&str, Vec<&str>); 3] = [
+        // The items of view and lib to the points of probe with a granted range, and the shared targets of probe.list.
+        (
+            "probe",
+            vec![
+                "/modules/plugin-lib/ui/lib-list.js",
+                "/modules/plugin-view/ui/view-list.js",
+                "/shared/lib.panel/util.js",
+                "/shared/probe.list/format.js",
+                "/shared/probe.list/table.js",
+            ],
+        ),
+        // The shared targets of probe.list, to which view contributes a granted item.
+        (
+            "view",
+            vec![
+                "/shared/probe.list/format.js",
+                "/shared/probe.list/table.js",
+            ],
+        ),
+        // The module of probe to the point panel of lib, the shared targets of panel and of list, to which lib contributes.
+        (
+            "lib",
+            vec![
+                "/modules/plugin-probe/ui/probe-panel.js",
+                "/shared/lib.panel/util.js",
+                "/shared/probe.list/format.js",
+                "/shared/probe.list/table.js",
+            ],
+        ),
+    ];
+    for (requester, want) in cases {
+        let got = install::granted_files(&state, &granted_files("", ""), requester);
+        assert_eq!(
+            got,
+            Ok(want.iter().map(|path| path.to_string()).collect::<Vec<_>>()),
+            "{requester}"
+        );
+    }
+}
+
+// contract: install.granted-items
+#[test]
+fn granted_items_reject_malformed_declarations_and_unknown_requesters() {
+    let state = install::validate_installed(&parsed(GRANTED_STATE)).unwrap();
+    rejects(
+        install::granted_files(&state, &granted_files("", ""), "missing"),
+        "plugin missing is not installed",
+    );
+    let mut files = granted_files("", "");
+    files.remove("lib");
+    rejects(
+        install::granted_files(&state, &files, "probe"),
+        "installed plugin lib has no package.json and plugin.json",
+    );
+    let cases: [(&str, String, &str); 5] = [
+        (
+            "probe",
+            GRANTED_PROBE.replacen(r#""version": "1.1.0""#, r#""version": "1.x""#, 1),
+            r#"invalid version "1.x""#,
+        ),
+        (
+            "view",
+            GRANTED_VIEW.replacen(r#""range": "^1.0.0""#, r#""range": "^x""#, 1),
+            r#"invalid version range "^x""#,
+        ),
+        (
+            "view",
+            GRANTED_VIEW.replacen(
+                r#""module": "ui/view-list.js""#,
+                r#""module": "../view-list.js""#,
+                1,
+            ),
+            "module must be a relative path",
+        ),
+        (
+            "probe",
+            GRANTED_PROBE.replacen(r#""lib.gone""#, r#""lib""#, 1),
+            "contributes lib: the key must be <plugin id>.<point>",
+        ),
+        (
+            "probe",
+            GRANTED_PROBE.replacen(r#""shared/x.js""#, "3", 1),
+            "module must be a relative path",
+        ),
+    ];
+    for (id, manifest, want) in cases {
+        let files = granted_files(id, &manifest);
+        rejects(install::granted_files(&state, &files, "probe"), want);
     }
 }
