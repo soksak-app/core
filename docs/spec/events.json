@@ -307,6 +307,16 @@
       },
       "description": "A call that a view had open when its view process ended was ended by the host with the reason process-ended: plugin and command name the call (docs/spec/native-surfaces.md#view-surfaces)."
     },
+    "host.trace.view.presentation-abandoned": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "surface": "string",
+        "reason": "string"
+      },
+      "description": "The presentation wait of a view ended without its presentation: surface names the view and reason is the end, one of process-ended, hidden or unresponsive (docs/spec/native-surfaces.md#view-surfaces)."
+    },
     "host.trace.view.process-request": {
       "layer": "host",
       "class": "call",

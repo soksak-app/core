@@ -66,6 +66,7 @@ pub mod performance;
 #[path = "platform/platform.rs"]
 pub mod platform;
 pub mod plugins;
+pub mod presentation_wait;
 #[cfg(feature = "diagnostics")]
 pub mod process_lock_hook;
 pub mod project_removal;

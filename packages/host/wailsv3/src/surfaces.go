@@ -224,6 +224,8 @@ type Surfaces struct {
 	lifecycle *viewLifecycle
 	// events receives the window events of this window in place of the window, when it is set. The tests set it.
 	events func(name string, data any)
+	// presentation holds the views that wait for their presentation after a card layout change (presentation_wait.go).
+	presentation presentationWait
 	// A surface is a native view, so input that pressed a surface does not reach the page. This map converts the pressed
 	// view to the surface id that the page uses.
 	named map[uintptr]string

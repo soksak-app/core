@@ -21,6 +21,7 @@ use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
+use crate::presentation_wait::PresentationWait;
 use crate::surfaces::{require_region, surface_handle};
 use crate::view_lifecycle::{ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event};
 use crate::windows::{emit_window, window_data};
@@ -515,12 +516,22 @@ impl Streams {
 /// The document regions of a window. The value is the address of the document webview, and 0 for a region that is being
 /// created.
 #[derive(Default)]
-pub struct Documents(Mutex<HashMap<Key, Handle>>, ViewChannels, ViewLifecycle);
+pub struct Documents(
+    Mutex<HashMap<Key, Handle>>,
+    ViewChannels,
+    ViewLifecycle,
+    PresentationWait,
+);
 
 impl Documents {
     /// Returns the failures and the records of the view surfaces of the window.
     pub fn lifecycle(&self) -> &ViewLifecycle {
         &self.2
+    }
+
+    /// The presentation wait of the views of the window (presentation_wait.rs).
+    pub fn presentation(&self) -> &PresentationWait {
+        &self.3
     }
 }
 
@@ -972,6 +983,10 @@ pub(crate) fn sync_view(
     visible: bool,
 ) -> Result<(), String> {
     let data = window_data(window)?;
+    if !visible {
+        // A view that is not shown ends its presentation wait, because its presentation cannot come (presentation_wait.rs).
+        end_presentation_wait(window, surface, "hidden");
+    }
     data.documents
         .lifecycle()
         .track(surface, surface_handle, plugin, page, visible);
@@ -1086,6 +1101,9 @@ fn attach_view(
             platform.set_view_responsiveness(
                 document,
                 Box::new(move |responsive| {
+                    if !responsive {
+                        end_presentation_wait(&notice_window, &notice_surface, "unresponsive");
+                    }
                     let payload =
                         view_responsiveness_notice(&notice_surface, &notice_plugin, responsive);
                     if let Err(error) = emit_window(&notice_window, "view-responsiveness", payload)
@@ -1199,6 +1217,7 @@ fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, 
     }
     // The open calls are taken before the view is removed, because the removal drops the channel of the view.
     let open_calls = data.documents.views().end_calls(surface);
+    end_presentation_wait(window, surface, "process-ended");
     if let Err(error) = data.documents.remove(&key) {
         return log_error("view channel", error);
     }
@@ -2027,3 +2046,16 @@ pub fn take_document_binary_of(
 #[cfg(test)]
 #[path = "document_binary_take_test.rs"]
 mod binary_take_tests;
+
+/// Ends the presentation wait of the view of surface with reason, and writes the failure of the end to the application log.
+fn end_presentation_wait(window: &Window, surface: &str, reason: &str) {
+    let result = window_data(window).and_then(|data| {
+        data.documents
+            .presentation()
+            .end(surface, reason)
+            .map_err(|error| error.to_string())
+    });
+    if let Err(error) = result {
+        log_error("view channel", error);
+    }
+}

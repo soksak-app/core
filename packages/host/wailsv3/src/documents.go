@@ -410,6 +410,9 @@ func (s *Surfaces) addThemeScript(document unsafe.Pointer) error {
 // viewResponsiveness relays a responsiveness notice of the view of surface: it writes the trace event of the notice and sends the
 // view-responsiveness event to the owning surface. It ends no call of the view (docs/spec/native-surfaces.md#view-surfaces).
 func (s *Surfaces) viewResponsiveness(surface, plugin string, responsive bool) {
+	if !responsive {
+		s.endPresentationWait(surface, "unresponsive")
+	}
 	if responsive {
 		EmitHost(LevelDebug, "host.trace.view.responsive", map[string]any{"plugin": plugin, "surface": surface})
 	} else {
@@ -421,6 +424,10 @@ func (s *Surfaces) viewResponsiveness(surface, plugin string, responsive bool) {
 // syncView creates the view of a view surface when the surface has none, and places the view over the whole surface. It runs on the UI thread.
 func (s *Surfaces) syncView(surfaceID string, surface unsafe.Pointer, plugin, page string, visible bool) error {
 	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
+	if !visible {
+		// A view that is not shown ends its presentation wait, because its presentation cannot come (presentation_wait.go).
+		s.endPresentationWait(surfaceID, "hidden")
+	}
 	spec := s.viewRecords().track(surfaceID, surface, plugin, page, visible)
 	// A view that failed beyond the restart limit is not created again until its surface is removed (view_lifecycle.go).
 	if s.viewRecords().isStopped(surfaceID) {
@@ -1358,6 +1365,7 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 	for _, call := range openCalls {
 		EmitHost(LevelError, "host.call.peer-lost", map[string]any{"plugin": call.plugin, "command": call.command, "reason": "process-ended"})
 	}
+	s.endPresentationWait(surface, "process-ended")
 	lifecycle := s.viewRecords()
 	spec := lifecycle.specs[surface]
 	if !lifecycle.fail(surface) {
