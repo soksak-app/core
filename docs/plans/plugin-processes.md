@@ -157,7 +157,7 @@ The RPC protocol number is 1 in the 0.0 series.
 | `host.trace.view.responsive` | call | debug | `{plugin, surface}`; state `core.plugin.views.responsive` |
 | `host.trace.view.process-request` | call | debug | `{plugin, surface}` |
 | `host.trace.view.process-ready` | call | debug | `{plugin, surface}` |
-| `page.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`; counter `losses.abandoned` |
+| `host.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`; counter `losses.abandoned` |
 | `page.view.shortcut-table-missing` | input | error | `{plugin}` |
 | `page.input.shortcut.failed` | input | error | `{plugin, key, command}` |
 | `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |
@@ -330,7 +330,7 @@ The objections below are the answers of the first, second, third, fourth, fifth 
 - Objection: a crashing process restarts without end and keeps the page busy. Verdict: accepted. Resolution: a sliding window of 300 seconds stops restarts at the fourth failure, and opening the surface clears the record (rule 5, pass value (vi)).
 - Objection: the current sidecar failure rule restarts without a limit, with the same risk. Verdict: accepted. Resolution: the limit applies to every sidecar; the contract change is made in F212.8a with Red tests in the host packages.
 - Objection: a timer on each call polls for a reply. Verdict: partly accepted. Resolution: events end a call when its peer is lost (`host.call.peer-lost`); the timeout remains only for a live peer that does not reply, and the reason is recorded in rule 3.
-- Objection: waiting for a view's presentation can block a commit indefinitely. Verdict: accepted. Resolution: the wait ends at the first of the events of rule 6, with no timer, and `page.trace.view.presentation-abandoned` is written when it ends without presentation (rule 6). The second review corrected the event list (C1, below).
+- Objection: waiting for a view's presentation can block a commit indefinitely. Verdict: accepted. Resolution: the wait ends at the first of the events of rule 6, with no timer, and `host.trace.view.presentation-abandoned` is written when it ends without presentation (rule 6). The second review corrected the event list (C1, below).
 - Objection: waiting for every content frame during a drag makes the drag lag. Verdict: accepted. Resolution: only the first change waits; the native frame moves in the same commit as its card, and later frames are judged by their intervals under pass value (viii) (rule 6).
 - Objection: a view that handles every key blocks native menu shortcuts. Verdict: accepted. Resolution: each shortcut has an owner in the table, menu keys do not prevent the default action, and view-owned keys are handled inside the view (rule 7).
 - Objection: copying shared modules into each plugin duplicates code and versions. Verdict: rejected. Resolution: a reserved core root serves the modules, with no copy and no link (rule 4, open item 5).

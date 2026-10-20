@@ -330,7 +330,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 - 반론: 죽는 프로세스가 끝없이 다시 떠서 페이지를 붙잡는다. 판정: 수용. 해결: 300초 sliding window에서 4번째 실패에 재시작을 멈추고, 표면을 열면 기록을 비운다(규칙 5, 통과값 (vi)).
 - 반론: 현재 sidecar 실패 규칙은 한도 없이 다시 띄우므로 같은 위험이 있다. 판정: 수용. 해결: 한도를 모든 sidecar에 적용하고, 계약 변경은 F212.8a에서 host package의 Red 시험과 함께 한다.
 - 반론: 호출마다 거는 timer는 응답을 polling하는 것이다. 판정: 일부 수용. 해결: 상대가 사라지면 event(`host.call.peer-lost`)로 호출을 끝내고, timer는 살아 있는데 답하지 않는 상대에만 남기며 그 이유를 규칙 3에 적는다.
-- 반론: view의 presentation 기다림이 commit을 무한히 막을 수 있다. 판정: 수용. 해결: 규칙 6의 event 가운데 먼저 오는 것으로 끝나며 timer를 쓰지 않고, presentation 없이 끝나면 `page.trace.view.presentation-abandoned`를 쓴다(규칙 6). 두 번째 검토가 event 목록을 바로잡았다(C1).
+- 반론: view의 presentation 기다림이 commit을 무한히 막을 수 있다. 판정: 수용. 해결: 규칙 6의 event 가운데 먼저 오는 것으로 끝나며 timer를 쓰지 않고, presentation 없이 끝나면 `host.trace.view.presentation-abandoned`를 쓴다(규칙 6). 두 번째 검토가 event 목록을 바로잡았다(C1).
 - 반론: 끌기 중 모든 내용 frame을 기다리면 끌기가 밀린다. 판정: 수용. 해결: 첫 변경만 기다리고, native frame은 card와 같은 commit에서 움직이며, 이후 frame은 통과값 (viii)의 간격으로 판정한다(규칙 6).
 - 반론: 모든 키를 처리하는 view가 native 메뉴 단축키를 막는다. 판정: 수용. 해결: 단축키마다 주인을 표에 적고, 메뉴 키는 기본 동작을 막지 않으며, view가 주인인 키는 view 안에서 처리한다(규칙 7).
 - 반론: 공용 module을 plugin마다 복사하면 코드와 버전이 중복된다. 판정: 기각. 해결: core의 예약 root가 module을 제공하며, 복사와 link를 쓰지 않는다(규칙 4, 미결 항목 5).

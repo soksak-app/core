@@ -25,7 +25,20 @@
 - (void)dealloc { [_main release]; [_done release]; [super dealloc]; }
 @end
 
+// SPViewJoin is a view that the open layout transaction waits for. It ends once: by its presentation or by an abandon.
+@interface SPViewJoin : NSObject
+@property(nonatomic, retain) WKWebView *view;
+@property(nonatomic, assign) BOOL resolved;
+@end
+@implementation SPViewJoin
+- (void)dealloc { [_view release]; [super dealloc]; }
+@end
+
 static uint64_t preparation;
+// The views that the open transaction waits for. Joins are added only while the transaction of activeOwner is open.
+static NSMutableArray<SPViewJoin *> *viewJoins;
+// YES while the open transaction waits for its joined views before the CATransaction commit.
+static BOOL committing;
 static void *activeOwner;
 static NSMutableArray<SPLayoutRequest *> *waiting;
 static NSMutableArray<SPSettleRequest *> *settling;
@@ -83,7 +96,7 @@ static void startLayout(SPLayoutRequest *request) {
 }
 
 static void nextLayout(void) {
-    while (waiting.count && (!activeOwner || waiting.firstObject.owner == activeOwner)) {
+    while (waiting.count && (!activeOwner || (waiting.firstObject.owner == activeOwner && !committing))) {
         SPLayoutRequest *request = [waiting.firstObject retain];
         [waiting removeObjectAtIndex:0];
         startLayout(request);
@@ -98,21 +111,50 @@ void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int)) {
     request.owner = owner;
     request.ticket = ticket;
     request.ready = ready;
-    if (!activeOwner || activeOwner == owner) { startLayout(request); return; }
+    if (!activeOwner || (activeOwner == owner && !committing)) { startLayout(request); return; }
     if (!waiting) waiting = [[NSMutableArray alloc] init];
     [waiting addObject:request];
 }
 
-bool surfaceLayoutCommit(void *owner, uint64_t ticket) {
-    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    if (activeOwner != owner || ticket != preparation) {
-        return false;
-    }
+// Ends the open transaction: the CATransaction commits, and the next waiting layout starts.
+static void finishTransaction(void) {
+    uint64_t ticket = preparation;
+    committing = NO;
     activeOwner = NULL;
     [CATransaction commit];
     traceMark(ticket, 3);
     nextLayout();
     releaseSettled();
+}
+
+// Detaches a join from the open transaction. It returns false when the join already ended, so each join ends once.
+static bool detachViewJoin(SPViewJoin *join) {
+    if (join.resolved) return false;
+    join.resolved = YES;
+    [viewJoins removeObjectIdenticalTo:join];
+    return true;
+}
+
+// Finishes a deferred commit once the last joined view has ended.
+static void finishDeferredCommit(void) {
+    if (committing && viewJoins.count == 0) finishTransaction();
+}
+
+// Ends every view wait of the open transaction without a presentation.
+static void dropViewJoins(void) {
+    for (SPViewJoin *join in [[viewJoins copy] autorelease]) detachViewJoin(join);
+}
+
+bool surfaceLayoutCommit(void *owner, uint64_t ticket) {
+    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
+    if (activeOwner != owner || ticket != preparation || committing) {
+        return false;
+    }
+    if (viewJoins.count) {
+        committing = YES;
+        return true;
+    }
+    finishTransaction();
     return true;
 }
 
@@ -123,7 +165,11 @@ void surfaceLayoutCancel(void *owner) {
         [waiting removeObjectIdenticalTo:request];
         request.ready(false);
     }
-    if (activeOwner == owner) surfaceLayoutCommit(owner, preparation);
+    if (activeOwner == owner) {
+        dropViewJoins();
+        if (committing) finishTransaction();
+        else surfaceLayoutCommit(owner, preparation);
+    }
     releaseSettled();
 }
 
@@ -353,4 +399,40 @@ void surfaceLayoutStartPage(void *owner, uint64_t ticket, double height, void (^
         finish(NULL);
         [main release];
     });
+}
+
+// Joins the view webview to the open layout transaction of owner. The commit waits until the view presents or is abandoned.
+bool surfaceLayoutJoinView(void *owner, uint64_t ticket, void *handle, void (^presented)(void)) {
+    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
+    WKWebView *view = (WKWebView *)handle;
+    if (!view || activeOwner != owner || ticket != preparation || committing) return false;
+    SPViewJoin *join = [[[SPViewJoin alloc] init] autorelease];
+    join.view = view;
+    if (!viewJoins) viewJoins = [[NSMutableArray alloc] init];
+    [viewJoins addObject:join];
+    void (^finish)(void) = [[presented copy] autorelease];
+    [view _doAfterNextPresentationUpdate:^{
+        if (!detachViewJoin(join)) return;
+        finish();
+        finishDeferredCommit();
+    }];
+    return true;
+}
+
+// Ends the view wait of the open transaction of owner without a presentation.
+bool surfaceLayoutAbandonView(void *owner, void *handle) {
+    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
+    if (activeOwner != owner) return false;
+    SPViewJoin *found = nil;
+    for (SPViewJoin *join in viewJoins) {
+        if ((void *)join.view == handle) { found = join; break; }
+    }
+    if (!found) return false;
+    detachViewJoin(found);
+    finishDeferredCommit();
+    return true;
+}
+
+size_t surfaceLayoutViewJoinCount(void *owner) {
+    return activeOwner == owner ? viewJoins.count : 0;
 }
