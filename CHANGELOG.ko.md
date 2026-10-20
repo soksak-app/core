@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F214-1: `make push-check`가 주석 언어 시험을 돌려서, 다른 언어의 주석은 push gate에서 실패한다.
 - F214: 주석 언어 검사가 `.githooks`의 추적 파일 전부와, 확장자 없이 `#!` 줄로 시작하는 추적 파일 전부를 hash 주석 문법으로 읽는다(`scripts/check-comment-language.mjs`). `.githooks/commit-msg`와 `e2e/check-shell`의 주석은 영어이다. Red: 수정 전 코드에서 `scripts/test/comment-language.test.mjs`의 시험 `hook files and extensionless scripts are checked, and other extensionless files are not`가 `actual: []`로 실패했고, 기대값은 `.githooks/commit-msg:2`와 `scripts/run-tool:2`였다. Green: 파일의 시험 아홉 개가 통과하고, `make push-check`가 0으로 종료한다.
 - F212.5-8: darwin document region의 scheme handler는 거부된 plugin 페이지 요청(없는 파일, 다른 owner의 주소, dot 부분이 있는 경로)을 `error: document view: plugin file not found: <URL>`로 error 수준에 쓴다. binary 요청의 거부와 같은 수준이다. Red: `document_plugin_test`는 각 거부를 `native.record.info`로 보였다. Green: 시험이 거부 주소마다 error 기록을 확인하며 통과한다.
 - F213: push gate는 push하는 ref가 보내는 commit을 어느 branch에서든 검사한다. pre-push hook은 git이 준 ref 줄에서 각 ref의 범위를 `scripts/push-range.mjs`로 넘긴다. 원격 ref와 비교하며, 새 원격 ref는 `<remote>/main`과 비교한다. RANGE가 없는 `make push-check`는 `origin/main..HEAD`를 쓰며, upstream 없는 branch도 이 범위를 풀 수 있다. 기존의 `@{upstream}..HEAD`는 그 branch에서 128로 종료했다. `commits-check`는 여러 범위를 받는다. 시험 inventory의 lane은 이 script와 `scripts/test/push-range.test.mjs`를 나열한다. Red: 수정 전 코드에서 `scripts/test/push-range.test.mjs`의 시험 세 개가 `scripts/push-range.mjs`에 대한 `Cannot find module`로 실패했고, upstream 없는 branch에서 `make push-check`는 128로 종료했다. Green: 시험 세 개가 통과하고, upstream 없는 branch에서 `make push-check`는 0으로 종료한다.
