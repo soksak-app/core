@@ -60,9 +60,10 @@ export function createViewBridge({ handler, report }) {
   const channel = createViewChannel({ handler });
   let onCall = null;
   let onAcknowledgement = null;
+  // A call message carries the sok marker, which the host reads as a call request of the view (docs/spec/native-surfaces.md#view-surfaces).
   const calls = createCalls({
     plugin,
-    send: channel.send,
+    send: (message) => channel.send({ sok: 1, ...message }),
     onMessage: (next) => {
       onCall = next;
       return () => {

@@ -489,6 +489,13 @@ fn document_post(webview: Webview, request: Argument<documents::Request>) -> Res
     documents::post(&webview, request)
 }
 
+/// Receives the reply of the main page to a call request of a view (docs/spec/native-surfaces.md#view-surfaces).
+#[tauri::command(async)]
+fn view_reply(webview: Webview, request: Argument<documents::ViewReply>) -> Result<(), String> {
+    let Argument(request) = request;
+    documents::view_reply(&webview, request)
+}
+
 /// Sets the page zoom of a document region as the text scale.
 #[tauri::command(async)]
 fn document_zoom(webview: Webview, request: Argument<documents::Request>) -> Result<(), String> {

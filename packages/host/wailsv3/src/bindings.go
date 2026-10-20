@@ -226,6 +226,19 @@ func (h *Host) DocumentPost(ctx context.Context, reqJSON json.RawMessage) error 
 	}
 	return s.postDocument(uint64(s.window.ID()), req)
 }
+
+// ViewReply receives the reply of the main page to a call request of a view (docs/spec/native-surfaces.md#view-surfaces).
+func (h *Host) ViewReply(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[ViewReplyRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.replyView(req)
+}
 func (h *Host) DocumentGo(ctx context.Context, reqJSON json.RawMessage) (bool, error) {
 	req, err := argument[DocumentRequest]("request", reqJSON)
 	if err != nil {

@@ -1,6 +1,7 @@
 import { createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { registry } from "./exposure.js";
+import { answerViewCall } from "./view-calls.js";
 import { plugin } from "./registry.js";
 import { pluginDiagnostics } from "./environment.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
@@ -214,6 +215,23 @@ function tabState(surface, isDisposed) {
   };
 }
 
+/**
+ * Answers the call requests of the view of surface with the handlers of its context, and sends each reply to the view
+ * (docs/spec/native-surfaces.md#view-surfaces). It resolves with the function that ends the answers.
+ */
+function answerViewCalls(surface, scoped) {
+  const tab = surface.unload ? tabState(surface, () => false) : null;
+  return scoped.native.on("view-call", (event) => answerViewCall(event, {
+    plugin: surface.pluginId,
+    tab,
+    runCore: (name, params) => scoped.call(name, params),
+    runOwned: (name, params, owner) => registry.runOwned(name, params, owner),
+  }).then(
+    (result) => ({ id: event.id, result: result ?? null }),
+    (error) => ({ id: event.id, error: { code: -32000, message: String(error?.message ?? error) } }),
+  ).then((reply) => scoped.native.call("viewReply", reply)));
+}
+
 export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   // A view surface has no module: its page is loaded by the host into the view (docs/spec/plugins.md#view-surfaces).
   const viewSurface = surface?.composition?.kind === "view";
@@ -359,6 +377,10 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       mounted: null, ready: null, authorized: false, disposed: false, surfaceId: surface.surfaceId,
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
+    if (viewSurface) {
+      const answering = answerViewCalls(surface, scoped);
+      closing.signal.addEventListener("abort", () => answering.then((off) => off()), { once: true });
+    }
     entry.mounted = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
       .then(async () => {
         // Does not start the registration and module of a surface that was removed while waiting for approval.

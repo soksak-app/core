@@ -1290,6 +1290,19 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 	if received.Message == nil {
 		return fmt.Errorf("%s: view message has neither message nor error", surface)
 	}
+	channel, ok := s.documents.view(surface)
+	if !ok {
+		return fmt.Errorf("%s: view channel message of a surface without a view", surface)
+	}
+	payload, isCall, err := ViewCallEvent(surface, channel.plugin, received.Message)
+	if err != nil {
+		return err
+	}
+	if isCall {
+		// A call request goes to the main page of the window, which answers it (docs/spec/native-surfaces.md#view-surfaces).
+		s.emitToSurface(surface, "view-call", payload)
+		return nil
+	}
 	var event struct {
 		Event    string `json:"event"`
 		Plugin   string `json:"plugin"`
@@ -1298,10 +1311,6 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 	}
 	if err := json.Unmarshal(received.Message, &event); err != nil {
 		return fmt.Errorf("%s: view event is not an object: %w", surface, err)
-	}
-	channel, ok := s.documents.view(surface)
-	if !ok {
-		return fmt.Errorf("%s: view channel message of a surface without a view", surface)
 	}
 	switch event.Event {
 	case "view.ready":
@@ -1377,4 +1386,77 @@ func (s *Surfaces) postThemeToViews() {
 			LogError("view channel", err)
 		}
 	}
+}
+
+// ViewCallEvent returns the payload of the view-call event for a call request of the view of surface, which has the plugin id.
+// A call request is {"id", "command", "params"}; its id is an integer and its command is not empty. A cancel message {"id", "cancel"} is
+// a call message that the host does not serve yet, so it is an error. It returns false when message is neither, and an error for a call
+// message whose fields are invalid.
+func ViewCallEvent(surface, plugin string, message json.RawMessage) (map[string]any, bool, error) {
+	var call struct {
+		ID      *uint64         `json:"id"`
+		Command *string         `json:"command"`
+		Cancel  *bool           `json:"cancel"`
+		Params  json.RawMessage `json:"params"`
+	}
+	if err := json.Unmarshal(message, &call); err != nil {
+		return nil, false, fmt.Errorf("%s: view message is not an object: %w", surface, err)
+	}
+	if call.Command == nil && call.Cancel == nil {
+		return nil, false, nil
+	}
+	if call.ID == nil {
+		return nil, true, fmt.Errorf("%s: view call has no integer id", surface)
+	}
+	if call.Cancel != nil {
+		return nil, true, fmt.Errorf("%s: view call %d cancel is not served", surface, *call.ID)
+	}
+	if call.Command == nil || *call.Command == "" {
+		return nil, true, fmt.Errorf("%s: view call %d has an empty command", surface, *call.ID)
+	}
+	params := call.Params
+	if len(params) == 0 {
+		params = json.RawMessage(`null`)
+	}
+	return map[string]any{"surface": surface, "plugin": plugin, "id": *call.ID, "command": *call.Command, "params": params}, true, nil
+}
+
+// ViewReplyRequest is the reply of the main page to a call request of the view of Surface. It has a result or an error, not both.
+type ViewReplyRequest struct {
+	Surface string          `json:"surface"`
+	ID      uint64          `json:"id"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *ViewReplyError `json:"error,omitempty"`
+}
+
+// ViewReplyError is the error of a view reply, with the code and the message of the call envelope.
+type ViewReplyError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+// ViewReplyMessage returns the message that the host posts to the view for a reply: {"id", "result"} or {"id", "error"}.
+func ViewReplyMessage(req ViewReplyRequest) (map[string]any, error) {
+	if len(req.Result) == 0 && req.Error == nil {
+		return nil, fmt.Errorf("view reply %d has neither a result nor an error", req.ID)
+	}
+	if len(req.Result) != 0 && req.Error != nil {
+		return nil, fmt.Errorf("view reply %d has both a result and an error", req.ID)
+	}
+	if req.Error != nil {
+		if req.Error.Message == "" {
+			return nil, fmt.Errorf("view reply %d has an error without a message", req.ID)
+		}
+		return map[string]any{"id": req.ID, "error": map[string]any{"code": req.Error.Code, "message": req.Error.Message}}, nil
+	}
+	return map[string]any{"id": req.ID, "result": req.Result}, nil
+}
+
+// replyView posts the reply of the main page to the view of req.Surface through the ready document of the view.
+func (s *Surfaces) replyView(req ViewReplyRequest) error {
+	message, err := ViewReplyMessage(req)
+	if err != nil {
+		return err
+	}
+	return s.postView(req.Surface, message)
 }

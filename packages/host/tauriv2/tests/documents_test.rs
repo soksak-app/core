@@ -693,3 +693,82 @@ fn view_channel_overflow_is_the_queue_full_reason_that_closes_the_view() {
         "a foreign frame message does not close the view"
     );
 }
+
+// contract: view.call.forward
+#[test]
+fn view_call_request_is_forwarded_with_its_plugin_and_surface() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.call(
+            "probe-surface",
+            r#"{"message":{"sok":1,"id":7,"command":"tab.state.read","params":{"a":1}}}"#
+        ),
+        Ok(Some(json!({
+            "surface": "probe-surface",
+            "plugin": "probe",
+            "id": 7,
+            "command": "tab.state.read",
+            "params": {"a": 1}
+        }))),
+        "a call request is forwarded with its surface and plugin"
+    );
+    assert_eq!(channels.call("probe-surface", READY), Ok(None), "a ready message is not a call");
+}
+
+// contract: view.call.reply
+#[test]
+fn view_call_reply_is_the_channel_message_with_its_id() {
+    use soksak_host_tauriv2::documents::{ViewReply, ViewReplyError, view_reply_message};
+    let result = ViewReply {
+        surface: "probe-surface".to_string(),
+        id: 7,
+        result: Some(json!({"count": 2})),
+        error: None,
+    };
+    assert_eq!(
+        view_reply_message(&result),
+        Ok(json!({"sok": 1, "id": 7, "result": {"count": 2}}))
+    );
+    let failed = ViewReply {
+        surface: "probe-surface".to_string(),
+        id: 8,
+        result: None,
+        error: Some(ViewReplyError {
+            code: -32000,
+            message: "tab.state is not declared".to_string(),
+        }),
+    };
+    assert_eq!(
+        view_reply_message(&failed),
+        Ok(json!({"sok": 1, "id": 8, "error": {"code": -32000, "message": "tab.state is not declared"}}))
+    );
+    let empty = ViewReply {
+        surface: "probe-surface".to_string(),
+        id: 9,
+        result: None,
+        error: None,
+    };
+    assert_eq!(
+        view_reply_message(&empty),
+        Err("view reply 9 has neither a result nor an error".to_string())
+    );
+}
+
+// contract: view.call.forward
+#[test]
+fn view_call_cancel_and_invalid_requests_are_errors_not_forwarded() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    for message in [
+        r#"{"message":{"id":7,"cancel":true}}"#,
+        r#"{"message":{"command":"tab.state.read"}}"#,
+        r#"{"message":{"id":"7","command":"tab.state.read"}}"#,
+        r#"{"message":{"id":7,"command":""}}"#,
+    ] {
+        assert!(
+            channels.call("probe-surface", message).is_err(),
+            "message {message} is accepted, want an error"
+        );
+    }
+}

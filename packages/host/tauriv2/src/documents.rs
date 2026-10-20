@@ -757,6 +757,46 @@ impl ViewChannels {
         }
     }
 
+    /// Returns the view-call payload of a call request of the view of surface, {"id", "command", "params"}, or None when the message
+    /// is not a call request. A cancel message is an error, because the host does not serve cancellation yet.
+    pub fn call(&self, surface: &str, value: &str) -> Result<Option<Value>, String> {
+        let received: ViewReceived = serde_json::from_str(value)
+            .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+        let Some(message) = received.message else {
+            return Ok(None);
+        };
+        let field = |name: &str| message.get(name).filter(|value| !value.is_null());
+        if field("command").is_none() && field("cancel").is_none() {
+            return Ok(None);
+        }
+        let id = message
+            .get("id")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| format!("{surface}: view call has no integer id"))?;
+        if field("cancel").is_some() {
+            return Err(format!("{surface}: view call {id} cancel is not served"));
+        }
+        let command = field("command")
+            .and_then(Value::as_str)
+            .filter(|command| !command.is_empty())
+            .ok_or_else(|| format!("{surface}: view call {id} has an empty command"))?;
+        let plugin = self
+            .lock()
+            .get(surface)
+            .map(|channel| channel.plugin.clone())
+            .ok_or_else(|| {
+                format!("{surface}: view channel message of a surface without a view")
+            })?;
+        let params = message.get("params").cloned().unwrap_or(Value::Null);
+        Ok(Some(json!({
+            "surface": surface,
+            "plugin": plugin,
+            "id": id,
+            "command": command,
+            "params": params,
+        })))
+    }
+
     /// Records the navigation state of the view of surface. A loading document clears the ready document of the view.
     pub fn state(&self, surface: &str, state: &str) -> Result<(), String> {
         let loaded: ViewState = serde_json::from_str(state)
@@ -950,6 +990,21 @@ fn view_message(
     document: Handle,
     value: &str,
 ) {
+    // A call request goes to the main page, which answers it (docs/spec/native-surfaces.md#view-surfaces).
+    let call = window_data(window).and_then(|data| data.documents.views().call(surface, value));
+    match call {
+        Ok(Some(payload)) => {
+            if let Err(error) = emit_window(window, "view-call", payload) {
+                log_error("view channel", error);
+            }
+            return;
+        }
+        Ok(None) => {}
+        Err(error) => {
+            log_error("view channel", error);
+            return;
+        }
+    }
     let ready = window_data(window).and_then(|data| data.documents.views().message(surface, value));
     match ready {
         Ok(true) => {
@@ -1023,6 +1078,26 @@ fn post_theme(window: &Window, platform: &dyn Platform, surface: &str) -> Result
         .documents
         .get(&(surface.to_string(), VIEW_NAME.to_string()))?;
     let message = json!({"sok": 1, "event": "theme", "theme": theme}).to_string();
+    if platform.post_document(handle, &message)? {
+        Ok(())
+    } else {
+        Err(format!("{surface}: the view document refused the message"))
+    }
+}
+
+/// Posts the reply of the main page to the view of reply.surface. The main page must be the caller, and the view must have a
+/// ready document, as for the theme (docs/spec/native-surfaces.md#view-surfaces).
+pub(crate) fn view_reply(webview: &Webview, reply: ViewReply) -> Result<(), String> {
+    let window = webview.window();
+    exposure::authorize_main_caller(webview.label(), window.label(), "view reply")?;
+    let message = view_reply_message(&reply)?.to_string();
+    let surface = reply.surface;
+    let data = window_data(&window)?;
+    data.documents.views().check_post(&surface)?;
+    let handle = data
+        .documents
+        .get(&(surface.clone(), VIEW_NAME.to_string()))?;
+    let platform = platform::current()?;
     if platform.post_document(handle, &message)? {
         Ok(())
     } else {
@@ -1571,4 +1646,51 @@ pub(crate) fn unsubscribe(webview: &Webview, request: Request) -> Result<(), Str
         let effects = data.streams.unsubscribe(&key, handle)?;
         apply_effects(platform, &data.documents, &effects)
     })
+}
+
+/// Keeps a field that is present as Some, including null, and leaves an absent field as None.
+fn present<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<Value>, D::Error> {
+    Value::deserialize(deserializer).map(Some)
+}
+
+/// A reply of the main page to a call request of a view: a result or an error (docs/spec/native-surfaces.md#view-surfaces).
+#[derive(Deserialize)]
+pub struct ViewReply {
+    pub surface: String,
+    pub id: u64,
+    #[serde(default, deserialize_with = "present")]
+    pub result: Option<Value>,
+    #[serde(default)]
+    pub error: Option<ViewReplyError>,
+}
+
+/// The error of a view reply, with the code and the message of the call envelope.
+#[derive(Deserialize, Debug, PartialEq)]
+pub struct ViewReplyError {
+    pub code: i64,
+    pub message: String,
+}
+
+/// Returns the message that the host posts to the view for a reply: {"sok", "id", "result"} or {"sok", "id", "error"}.
+pub fn view_reply_message(reply: &ViewReply) -> Result<Value, String> {
+    match (&reply.result, &reply.error) {
+        (None, None) => Err(format!(
+            "view reply {} has neither a result nor an error",
+            reply.id
+        )),
+        (Some(_), Some(_)) => Err(format!(
+            "view reply {} has both a result and an error",
+            reply.id
+        )),
+        (None, Some(error)) if error.message.is_empty() => Err(format!(
+            "view reply {} has an error without a message",
+            reply.id
+        )),
+        (None, Some(error)) => Ok(json!({
+            "sok": 1,
+            "id": reply.id,
+            "error": {"code": error.code, "message": error.message}
+        })),
+        (Some(result), None) => Ok(json!({"sok": 1, "id": reply.id, "result": result})),
+    }
 }

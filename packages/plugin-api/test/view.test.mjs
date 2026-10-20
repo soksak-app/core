@@ -156,13 +156,21 @@ test("send posts each message through the handler", (t) => {
   assert.deepEqual(posted.at(-1), { id: 1, command: "probe.run", params: { a: 1 } });
 });
 
-test("createViewBridge sends a call and passes its reply to the caller", async (t) => {
+test("createViewBridge sends a call with the sok marker and passes its reply to the caller", async (t) => {
   const { posted, host } = setup(t);
   const { calls } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
   const reply = calls.request("probe.run", { a: 1 });
-  assert.deepEqual(posted.at(-1), { id: 1, command: "probe.run", params: { a: 1 } });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "probe.run", params: { a: 1 } });
   host({ sok: 1, id: 1, result: "done" });
   assert.equal(await reply, "done");
+});
+
+test("createViewBridge rejects a call with the error that the host forwards", async (t) => {
+  const { host } = setup(t);
+  const { calls } = createViewBridge({ handler: { postMessage: () => {} }, report: () => {} });
+  const reply = calls.request("tab.state.read");
+  host({ sok: 1, id: 1, error: { code: -32000, message: "tab.state is not declared" } });
+  await assert.rejects(reply, { code: -32000, message: "tab.state is not declared" });
 });
 
 test("createViewBridge sends a snapshot and takes its acknowledgement without a call error", (t) => {

@@ -275,3 +275,74 @@ func TestViewChannelOverflowClosesTheViewAndCreatesItAgain(t *testing.T) {
 		t.Fatalf("a message of the closed view changed the views: closed %d, created %d", len(fake.closed), len(fake.created))
 	}
 }
+
+// contract: view.call.forward
+func TestViewCallIsForwardedWithItsPluginAndSurface(t *testing.T) {
+	payload, ok, err := ViewCallEvent("probe-surface", "probe", json.RawMessage(`{"id":7,"command":"tab.state.read","params":{"a":1}}`))
+	if err != nil {
+		t.Fatalf("call request: %v", err)
+	}
+	if !ok {
+		t.Fatalf("a call request is not forwarded")
+	}
+	if payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["id"] != uint64(7) || payload["command"] != "tab.state.read" {
+		t.Fatalf("forwarded payload %v, want surface probe-surface, plugin probe, id 7, command tab.state.read", payload)
+	}
+	if _, ok, _ := ViewCallEvent("probe-surface", "probe", json.RawMessage(`{"event":"view.ready"}`)); ok {
+		t.Fatalf("a ready message is forwarded as a call")
+	}
+}
+
+// contract: view.call.reply
+func TestViewCallReplyReturnsThroughTheChannelPost(t *testing.T) {
+	s, fake := newViewChannelSurfaces(t)
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`
+	if err := s.viewMessage("probe-surface", ready); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	before := len(fake.posted)
+	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", ID: 7, Result: json.RawMessage(`{"count":2}`)}); err != nil {
+		t.Fatalf("reply: %v", err)
+	}
+	if len(fake.posted) != before+1 {
+		t.Fatalf("replies posted: %d, want 1", len(fake.posted)-before)
+	}
+	var reply map[string]any
+	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &reply); err != nil {
+		t.Fatalf("reply is not JSON: %v", err)
+	}
+	if reply["sok"] != float64(1) || reply["id"] != float64(7) || !reflect.DeepEqual(reply["result"], map[string]any{"count": float64(2)}) {
+		t.Fatalf("reply %v, want sok 1, id 7 and the result", reply)
+	}
+	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", ID: 8, Error: &ViewReplyError{Code: -32000, Message: "tab.state is not declared"}}); err != nil {
+		t.Fatalf("error reply: %v", err)
+	}
+	var failed map[string]any
+	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &failed); err != nil {
+		t.Fatalf("error reply is not JSON: %v", err)
+	}
+	if failed["id"] != float64(8) || failed["error"] == nil {
+		t.Fatalf("error reply %v, want id 8 and the error", failed)
+	}
+	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", ID: 9}); err == nil || err.Error() != "view reply 9 has neither a result nor an error" {
+		t.Fatalf("reply without result or error: %v", err)
+	}
+}
+
+// contract: view.call.forward
+func TestViewCallCancelAndInvalidRequestsAreErrorsNotForwarded(t *testing.T) {
+	for _, message := range []string{
+		`{"id":7,"cancel":true}`,
+		`{"command":"tab.state.read"}`,
+		`{"id":"7","command":"tab.state.read"}`,
+		`{"id":7,"command":""}`,
+	} {
+		payload, _, err := ViewCallEvent("probe-surface", "probe", json.RawMessage(message))
+		if err == nil {
+			t.Fatalf("message %s is accepted as %v, want an error", message, payload)
+		}
+		if payload != nil {
+			t.Fatalf("message %s returns payload %v with its error", message, payload)
+		}
+	}
+}
