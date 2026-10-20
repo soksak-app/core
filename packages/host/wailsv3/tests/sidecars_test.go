@@ -1693,13 +1693,17 @@ func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 	}
 	requireRestartLimit(t, sendAt(t, clock, sidecars, owner, "s1", 40*time.Second), 40*time.Second)
 	owner.failure(t)
-	// A surface that did not send to the failed process is opened: the record is cleared and the sidecar starts.
+	// The creation of a surface of a plugin that does not list the sidecar leaves the stop in place.
+	sidecars.SurfaceOpened("plugin-b", "s2")
+	requireRestartLimit(t, sendAt(t, clock, sidecars, owner, "s2", 41*time.Second), 41*time.Second)
+	owner.failure(t)
+	// The creation of a surface of plugin-a, which lists the sidecar, clears the record; the next send starts the process.
 	touchFile(t, directory, "ok")
-	if err := sendAt(t, clock, sidecars, owner, "s2", 41*time.Second); err != nil {
+	sidecars.SurfaceOpened("plugin-a", "s2")
+	if err := sendAt(t, clock, sidecars, owner, "s2", 42*time.Second); err != nil {
 		t.Fatalf("send of the opened surface: %v", err)
 	}
-	// The surface that was refused sends again after the reset.
-	if err := sendAt(t, clock, sidecars, owner, "s1", 42*time.Second); err != nil {
+	if err := sendAt(t, clock, sidecars, owner, "s1", 43*time.Second); err != nil {
 		t.Fatalf("send of the refused surface after the reset: %v", err)
 	}
 	sidecars.Stop()

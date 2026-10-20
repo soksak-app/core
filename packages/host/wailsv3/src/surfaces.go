@@ -865,6 +865,8 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 	}
 	desired := make([]desiredSurface, 0, len(req.Surfaces))
 	created := make([]string, 0)
+	// opened are the surfaces that this call creates; the host tells the sidecars of their plugins after the layout is applied.
+	opened := make([]Surface, 0)
 	rollback := func() {
 		for _, id := range created {
 			if view := s.views[id]; view != nil {
@@ -889,6 +891,7 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 			}
 			s.views[surface.ID] = view
 			created = append(created, surface.ID)
+			opened = append(opened, surface)
 			PerformanceSurface("created", surface.ID, nil)
 		}
 		alignedWant := Rect{}
@@ -944,6 +947,9 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		// Instrument of the surface lifecycle (V5-104): a surface that disappeared from the list is destroyed at this point.
 		PerformanceSurface("destroyed", id, nil)
 		gone = append(gone, id)
+	}
+	for _, surface := range opened {
+		s.sidecars.SurfaceOpened(surface.Plugin, surface.ID)
 	}
 	return gone, placed, nil
 }

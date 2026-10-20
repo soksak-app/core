@@ -409,6 +409,7 @@ func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 		return nil, err
 	}
 	var declarations []SidecarDeclaration
+	declaredAt := map[string]int{}
 	// The package of an installed plugin is a plugin dependency, so it is not declared as a sidecar.
 	seen := map[string]bool{}
 	for _, plugin := range state.Plugins {
@@ -435,7 +436,11 @@ func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 			if seen[name] {
 				continue
 			}
-			seen[name] = true
+			// A sidecar that several plugins list is declared once, and each of them is one of its dependents.
+			if index, ok := declaredAt[name]; ok {
+				declarations[index].Dependents = append(declarations[index].Dependents, plugin.id)
+				continue
+			}
 			sidecar, ok := state.Sidecars[name]
 			if !ok {
 				return nil, fmt.Errorf("%s: sidecar %s has no installed version", file, name)
@@ -445,7 +450,8 @@ func InstalledSidecars(configDir string) ([]SidecarDeclaration, error) {
 			if err != nil {
 				return nil, err
 			}
-			declarations = append(declarations, SidecarDeclaration{Name: name, Folder: folder, Data: declaration, Version: sidecar.Version})
+			declaredAt[name] = len(declarations)
+			declarations = append(declarations, SidecarDeclaration{Name: name, Folder: folder, Data: declaration, Version: sidecar.Version, Dependents: []string{plugin.id}})
 		}
 	}
 	return declarations, nil
