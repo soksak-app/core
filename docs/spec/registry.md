@@ -24,7 +24,7 @@ A plugin or sidecar entry follows the [registry index](installation.md#registry-
 - `repository` is `https://github.com/<owner>/<repo>`, the repository that publishes the entry's releases.
 - Every `url` is `https://github.com/<owner>/<repo>/releases/download/v<version>/<file>` with the `<owner>` and `<repo>` of `repository` and the version of its entry. `<file>` is `<id>-<version>.tgz` for a plugin version and `<file name>-<version>-<platform>.tar.gz` for a sidecar release of a platform ([installation](installation.md)).
 - Every `url` of `core.json` is `https://github.com/soksak-app/core/releases/download/v<version>/soksak-<version>-<platform>-<host>.zip`.
-- A version that the published index lists does not change: its `url`, `sha256`, `engines`, `sidecars`, `protocol` and releases stay as they are, and it is not removed. A version is withdrawn only by a `revoked.json` entry.
+- A version that the published index lists does not change: its `url`, `sha256`, `engines`, `sidecars`, `protocol` and releases stay as they are, and it is not removed. A version is withdrawn only by a `revoked.json` entry. A plugin or sidecar that is retired, whose repository is archived and on which no listed plugin depends, is removed from the registry with its revocation entries, so the index never offers what does not work.
 - A plugin id, the `name` of the plugin's `package.json` and a sidecar name belong to one entry.
 
 ## Owners

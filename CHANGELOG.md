@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F210: a retired plugin or sidecar is removed from the registry with its revocation entries; appview and the application sidecar are removed.
 - F192.3-3-6: a folder wait judges the state of the folder at its deadline, so a watch that is active or notifies late at a high load does not fail a wait whose state is reached.
 - F207: the js-ts limit of the language test adapters is 30 s, the hang bound of the other languages.
 - F206: core 0.0.19 is released after the CI of its commit passed; every declared workspace version is 0.0.19, and the release carries every other entry of this section.

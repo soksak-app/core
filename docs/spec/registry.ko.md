@@ -24,7 +24,7 @@ plugin이나 sidecar 항목은 [registry index](installation.ko.md#registry-inde
 - `repository`는 항목의 release를 게시하는 저장소 `https://github.com/<owner>/<repo>`다.
 - 모든 `url`은 `repository`의 `<owner>`와 `<repo>`, 그리고 그 항목의 version을 쓴 `https://github.com/<owner>/<repo>/releases/download/v<version>/<file>`이다. `<file>`은 plugin version이면 `<id>-<version>.tgz`, platform의 sidecar release이면 `<file name>-<version>-<platform>.tar.gz`다([설치](installation.ko.md)).
 - `core.json`의 모든 `url`은 `https://github.com/soksak-app/core/releases/download/v<version>/soksak-<version>-<platform>-<host>.zip`이다.
-- 게시한 index에 있는 version은 바뀌지 않는다. 그 `url`, `sha256`, `engines`, `sidecars`, `protocol`, release는 그대로이며 지워지지 않는다. version은 `revoked.json` 항목으로만 거둔다.
+- 게시한 index에 있는 version은 바뀌지 않는다. 그 `url`, `sha256`, `engines`, `sidecars`, `protocol`, release는 그대로이며 지워지지 않는다. version은 `revoked.json` 항목으로만 거둔다. 은퇴했고 저장소가 보관 처리되었으며 나열된 어떤 plugin도 의존하지 않는 plugin이나 sidecar는 철회 항목과 함께 registry에서 제거하므로, index는 동작하지 않는 것을 내놓지 않는다.
 - plugin id, `package.json`의 plugin 이름, sidecar 이름은 항목 하나에만 속한다.
 
 ## 소유자
