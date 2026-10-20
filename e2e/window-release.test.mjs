@@ -22,7 +22,6 @@ const counts = (s, equal) => s.request("diagnostics.native.objects", equal ? { e
 for (const app of Object.values(APPS)) {
   test(`${app.name}: closed project windows release their windows, webviews, attached native objects and page processes`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-release-")));

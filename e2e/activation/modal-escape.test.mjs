@@ -7,7 +7,6 @@ import { fresh } from "../fixture.mjs";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an active key window closes its add picker with native Escape`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const card = (await s.get("core.grid")).cards.find((item) => item.pane === 0).id;
     await s.run("core.card.menu", { card, menu: "add" });

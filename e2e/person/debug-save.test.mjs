@@ -16,7 +16,6 @@ const PERSON = 180000;
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the save panel of the debug view saves a file where the person chooses and answers null on cancel`, { timeout: 2 * PERSON + 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await s.run("core.debug.open");
     const isEventLog = (file) => /^logs\/host-.+\.jsonl$/.test(file.path);

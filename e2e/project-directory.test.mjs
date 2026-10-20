@@ -20,7 +20,6 @@ async function addTab(s, plugin) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a new terminal in a project starts in the project root`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     // The check project is under $TMPDIR and resolves through /private, so the check compares canonical paths.
     const root = realpathSync((await s.get("core.project")).root);

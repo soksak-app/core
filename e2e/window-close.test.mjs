@@ -13,7 +13,6 @@ const QUESTION = ["저장하고 닫기", "저장하지 않고 닫기", "닫지 �
 for (const app of Object.values(APPS)) {
   test(`${app.name}: closing a window asks about a modified tab and 닫지 않기 keeps the window`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-window-close-")));
     const file = join(root, "note.txt");
@@ -62,7 +61,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a quit that a kept modified tab cancels ends the quit state`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const project = await s.get("core.project");
     const folder = `quit-cancel-check-${process.pid}`;
@@ -98,7 +96,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: removing the active space asks about a modified tab`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const project = await s.get("core.project");
     const folder = `space-close-check-${process.pid}`;
@@ -150,7 +147,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: removing the project shown in a window asks about a modified tab`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-project-remove-")));
     writeFileSync(join(root, "note.txt"), "alpha\n");
@@ -197,7 +193,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: removing a project that another window shows asks that window`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-project-remote-remove-")));
     writeFileSync(join(root, "note.txt"), "alpha\n");

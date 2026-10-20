@@ -25,7 +25,6 @@ async function serve(s) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a covered window is occluded and hides the document of its browser tab`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const url = await serve(s);
     await s.until("core.surfaces",

@@ -23,7 +23,6 @@ const ids = (grid) => panes(grid).map((c) => c.id).sort();
 for (const app of Object.values(APPS)) {
   test(`${app.name}: card, tab, and menu commands change the grid`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const start = await s.get("core.grid");
     const terminal = cardOf(start, "terminal");
@@ -105,7 +104,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: settings modal commands change its section, scope, and position`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await s.run("core.settings.open");
     const opened = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
@@ -143,7 +141,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: native clicks reach every chrome icon at wide window sizes`, { timeout: 180000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const initialWindow = await s.get("host.window");
     const initialSettings = await s.get("core.settings");
@@ -343,7 +340,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: library commands search, sort, and edit the form`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const project = await s.get("core.project");
     await s.run("core.projects.browse");
@@ -379,7 +375,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: layout commands return after the new layout is drawn`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     /** The widths of the card elements drawn in the document. */
     const drawnWidths = async () => {
@@ -408,7 +403,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: rename commands edit and cancel a space title`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const project = await s.get("core.project");
     const space = project.spaces.find((x) => x.id === project.activeSpaceId);

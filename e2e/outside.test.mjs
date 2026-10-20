@@ -111,7 +111,6 @@ function assertNoWhiteSurfaceBleed(run, message, marks) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: native content, cards, and the sidebar rail stay aligned`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     // The right override of the terminal ties the fixed sidebar and the rail to the terminal card.
     await keepCommonSettings(s);
@@ -128,7 +127,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: terminal divider drag does not leave a white surface frame`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     // Drags the boundary between the left fixed sidebar and the terminal card.
     const marks = await terminalMarks(s, { measured: true });
@@ -157,7 +155,6 @@ async function assertDocumentFillsFrame(s, surface, label) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the terminal document fills its native frame before and after a divider drag`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const surface = (await s.get("core.grid")).cards.find((card) => card.id === "terminal").active;
     await assertDocumentFillsFrame(s, surface, "at rest");

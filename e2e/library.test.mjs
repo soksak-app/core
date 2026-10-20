@@ -105,7 +105,6 @@ function assertNoWhiteTerminalBleed(frameFiles, regions, message) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: library windows create and open projects in place`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const verification = await s.collect("core.verify");
     s.cleanup(async () => {
@@ -323,7 +322,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the library names a missing project folder and removes the project`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const first = await s.get("core.project");
     const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-missing-")));

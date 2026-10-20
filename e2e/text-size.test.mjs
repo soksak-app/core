@@ -30,7 +30,6 @@ async function press(s, rect) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: text size commands enlarge the pressed card or the frame and keep the plane in the window`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(async () => {
       await s.run("core.settings.set", { patch: { textSize: 1 }, scope: "common" });

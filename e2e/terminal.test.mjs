@@ -309,7 +309,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: closing terminal tabs reaps every PTY child without killing the shared service`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const grid = await s.get("core.grid");
     const tab = grid.cards.flatMap((card) => card.tabs).find((item) => item.plugin === "terminal");
@@ -345,7 +344,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: padding settings inset the terminal grid and show the terminal background`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -395,7 +393,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: removing a project ends the terminal sessions that its layout held`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     await readScreenUntil(s, terminal.surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
@@ -421,7 +418,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a click gives native focus to the clicked terminal and its card`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const terminals = await ensureTerminals(s, 3);
     await s.presented();
@@ -439,7 +435,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the login shell setting starts the account's login shell as a login shell`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
     const existing = await ensureTerminals(s, 1);
@@ -457,7 +452,6 @@ for (const app of Object.values(APPS)) {
   for (const shell of ["/bin/zsh", "/bin/bash"]) {
     test(`${app.name}: a resize redraws a wrapped ${basename(shell)} input line without rows of the previous width`, async (t) => {
       const s = await open(t, app);
-      if (!s) return t.skip(`${app.binary} is not built`);
       await fresh(s);
       s.cleanup(() => closeTerminalTabs(s));
       const existing = await ensureTerminals(s, 1);
@@ -569,7 +563,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the terminal tab shows the program title unless the title setting is name`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
     const [terminal] = await ensureTerminals(s, 1);
@@ -588,7 +581,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a long tab title is cut at the width bound of a tab`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
     const [terminal] = await ensureTerminals(s, 1);
@@ -604,7 +596,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: an OSC 9 notification from a terminal out of view becomes a tab notice until the tab is in view`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
     const [shown, hidden] = await ensureTerminals(s, 2);
@@ -627,7 +618,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: an OSC 9 notification from a terminal out of view follows the system policy and then the tab policy`, async (t) => {
       const s = await open(t, app);
-      if (!s) return t.skip(`${app.binary} is not built`);
       await fresh(s);
       s.cleanup(() => closeTerminalTabs(s));
       const [shown, hidden] = await ensureTerminals(s, 2);
@@ -667,7 +657,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: OSC 8 linked cells are drawn with an underline and plain cells are not`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
     const [terminal] = await ensureTerminals(s, 1);
@@ -718,7 +707,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: clear leaves no history and hides the scrollbar`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
     const [terminal] = await ensureTerminals(s, 1);
@@ -736,7 +724,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a presentation that fails while the terminal service is stopped leaves the next fixture and splits usable`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
     const [terminal] = await ensureTerminals(s, 1);
@@ -777,7 +764,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a terminal split from a terminal starts in the directory that terminal reported`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
     const directory = realpathSync(mkdtempSync(join(tmpdir(), "soksak-origin ")));
@@ -811,7 +797,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a page start keeps the terminal sessions that the layouts hold`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -834,7 +819,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: hiding three terminals retains native geometry and rasters`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const tab = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
     assert.ok(tab, "the fixture has no terminal tab");
@@ -860,7 +844,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: three terminals survive repeated divider drags and project returns`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     // The trace stays on: the check judges the presentation of every surface, and its records name the frame that a
     // surface did not present (docs/spec/performance-trace.md, F161.18).
     await fresh(s, { performanceTrace: true });
@@ -991,7 +974,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: terminal input returns terminal output through the terminal sidecar`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await assertGridFillsPlane(s, "initial terminal layout");
 
@@ -1167,7 +1149,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the terminal background equals the card color of every theme and mode`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     s.cleanup(async () => {
@@ -1196,7 +1177,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: terminal raster follows application light and dark theme`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
@@ -1236,7 +1216,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: terminal cursor policy uses declared settings, persistence, and pixels`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const cursorKeys = [
@@ -1325,7 +1304,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: each cursor shape and focus state renders its own cursor-cell pixels`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -1433,7 +1411,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the terminal font follows the pressed card's text size`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -1468,7 +1445,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a native drag over blank terminal cells ends without a surface error`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -1513,7 +1489,6 @@ for (const app of Object.values(APPS)) {
     // A resize that the system makes, such as the tiling of a window, configures the terminal again; the frame of the new
     // raster shows the screen with its cursor, without input.
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -1533,7 +1508,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a native drag into the padding below the last row selects to the last row`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -1580,7 +1554,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: native terminal selection renders and copies through one explicit paste`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -1674,7 +1647,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: an explicit PNG paste writes an owned image and inserts its quoted path`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -1707,7 +1679,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: terminal file drop pastes quoted paths without executing`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -1725,7 +1696,6 @@ for (const app of Object.values(APPS)) {
   // The surface of a diagnostic build has the entries that the plugin diagnostic module (diagnostics.json) registered.
   test(`${app.name}: diagnostic terminal entries inject preedit and record terminal input`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -1746,7 +1716,6 @@ for (const app of Object.values(APPS)) {
   // An unrelated event (a theme check) does not clear a session error; only the event that resolves the error (a new trace) clears it.
   test(`${app.name}: a terminal session error stays until the event that resolves it`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -1775,7 +1744,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: terminal image follows a window resize`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await assertGridFillsPlane(s, "initial terminal resize layout");
 
@@ -1954,7 +1922,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: multiple terminals keep fixed cells during a divider drag`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => closeTerminalTabs(s));
     const terminals = await ensureTerminals(s, 3);

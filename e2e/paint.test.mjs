@@ -35,7 +35,6 @@ for (const app of Object.values(APPS)) {
   for (const [which, plan] of Object.entries(PLANS)) {
     test(`${app.name}: shaking the ${which} exposes no unrendered area`, async (t) => {
       const s = await open(t, app);
-      if (!s) return t.skip(`${app.binary} is not built`);
       await fresh(s);
       const marks = await terminalMarks(s);
       // The verifier of the page runs at every render and publishes the result as core.verify. The check collects all results during the drag.

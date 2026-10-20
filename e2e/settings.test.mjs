@@ -67,7 +67,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: settings keep sidebar appearance in general and list plugins with search and pages`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     await s.run("core.settings.open");
@@ -145,7 +144,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the settings plugin page has no plugin operation and 플러그인 관리 shows the plugin screen`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     await s.run("core.settings.open");
@@ -171,7 +169,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: each sidebar set line fits beside its buttons on one line`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     await s.run("core.settings.open");
@@ -191,7 +188,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: settings create, edit with section rows, and delete a sidebar set`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     await s.run("core.settings.open");
@@ -262,7 +258,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: layout value settings change the inset sidebar widths`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await terminalCardSidebar(s);
     await s.run("core.settings.set", { patch: { sidebarWidth: 150, sidebarMinWidth: 140 }, scope: "common" });
@@ -276,7 +271,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: an invalid stored set or link is rejected when it is changed and when it is loaded`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const sets = await settingsValue(s, "sets");
@@ -315,7 +309,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a plugin's right sidebar choice takes precedence over the general choice`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const right = async (card, want, message) => {
@@ -341,7 +334,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a card-left link draws an internal card sidebar and no rail column`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await terminalCardSidebar(s);
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left),
@@ -407,7 +399,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a new inset sidebar opens at 190 points`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await terminalCardSidebar(s);
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left),
@@ -421,7 +412,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a settings change keeps the scroll position of the window`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const dim = (await s.get("core.settings")).values.dim;
     s.cleanup(async () => {

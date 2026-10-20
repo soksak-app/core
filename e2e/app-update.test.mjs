@@ -42,7 +42,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the update list shows the core release first and a refused release fails the operation`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const before = await s.get("core.plugins");
@@ -84,7 +83,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a release without a published page offers no release link`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const before = await s.get("core.plugins");

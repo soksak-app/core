@@ -100,7 +100,6 @@ function brightness(frame) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the settings modal is on screen at the time presented reports after it is shown`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const { frames: directory } = await s.request("diagnostics.capture.start", {});
     s.cleanup(() => rmSync(directory, { recursive: true, force: true }));
@@ -133,7 +132,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: an open modal's document receives the content the page updates`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await openSidebars(s);
     const { document } = await s.get("core.modal");
@@ -144,7 +142,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a first modal answer that arrives after later changes keeps the moved position`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await s.request("diagnostics.modal.hold", { on: true });
     s.cleanup(() => s.request("diagnostics.modal.hold", { on: false }));
@@ -169,7 +166,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a card split while settings are open keeps settings above new surfaces`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await openSidebars(s);
     await s.presented();
@@ -187,7 +183,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: reloading the main document removes its settings webview`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await openSettings(s);
     await s.presented();
@@ -203,7 +198,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: settings blocks background input and closes only through its close button`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [browser] = await s.surfaces("browser");
     assert.ok(browser, "a browser surface must be visible");
@@ -251,7 +245,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: add and split menus are transparent and have no backdrop`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const card = (await s.get("core.grid")).cards.find((c) => c.pane === 0).id;
     for (const menu of ["add", "split-x", "split-y"]) {
@@ -272,7 +265,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: moving settings and resizing the parent preserves its native coverage`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await openSettings(s);
     await s.presented();
@@ -314,7 +306,6 @@ const HELP_TITLES = {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: Help > Debug records the state, lists the logs folder and refuses a path outside it`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const titles = HELP_TITLES[(await s.get("host.menu")).language];
     s.cleanup(() => s.run("core.debug.close"));
@@ -377,7 +368,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the debug timeline shows a page of the events of the event files and applies its filter`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const titles = HELP_TITLES[(await s.get("host.menu")).language];
     s.cleanup(() => s.run("core.debug.close"));
@@ -408,7 +398,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the debug timeline selects rows and reports the count and the warning of the save`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const titles = HELP_TITLES[(await s.get("host.menu")).language];
     s.cleanup(() => s.run("core.debug.close"));
@@ -439,7 +428,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the debug timeline follows the event files, stops, and catches up when it resumes`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const titles = HELP_TITLES[(await s.get("host.menu")).language];
     s.cleanup(() => s.run("core.debug.close"));
@@ -475,7 +463,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the debug view filters the timeline by event name and shows a state file as a tree`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const titles = HELP_TITLES[(await s.get("host.menu")).language];
     s.cleanup(() => s.run("core.debug.close"));

@@ -29,7 +29,6 @@ async function centred(s, when) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: maximising the window leaves its own buttons in place`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const before = (await s.get("host.window")).frame;
     await s.run("host.window.maximize", { on: true });
@@ -48,7 +47,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the soksak logo letters are light in dark mode and dark in light mode`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "mode" }));
     // Logo text color. The icon tile is the same in both modes.
@@ -80,7 +78,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: stopping a window recording leaves the native buttons centred`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await drag(t, s, PLAN, { capture: true });
     // When the window title or the recording indicator changes, AppKit takes the buttons back, and the library puts them again before the next run loop
@@ -92,7 +89,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: full screen keeps the first row height`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const row = (await s.rect("core.chrome.bar")).height;
     assert.ok(row > 0, "the first row has no height");
@@ -113,7 +109,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: moving, resizing, and renaming keep the buttons centred in the first row`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const start = (await s.get("host.window")).frame;
     const project = await s.get("core.project");

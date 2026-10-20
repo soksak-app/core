@@ -12,7 +12,6 @@ test("fresh places the two check windows at their own frames", async (t) => {
   const sessions = [];
   for (const app of Object.values(APPS)) {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     sessions.push(s);
   }
   if (sessions.length < 2) return t.skip("only one check application is selected");
@@ -38,7 +37,6 @@ test("fresh places the two check windows at their own frames", async (t) => {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a check window that another window covers reports occluded to its watchers`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });

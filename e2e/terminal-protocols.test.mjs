@@ -70,7 +70,6 @@ const at = (screen, row, col) => screen[row][col].ch ?? " ";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: implemented CSI sequences change the screen, the cursor, and the replies`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     s.cleanup(() => closeTerminalTabs(s));
@@ -156,7 +155,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: implemented OSC sequences change the title, colors, cursor, and clipboard and reply`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     s.cleanup(() => closeTerminalTabs(s));
@@ -268,7 +266,6 @@ for (const app of Object.values(APPS)) {
   });
   test(`${app.name}: mouse, focus, paste, and alternate-scroll modes report input`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     s.cleanup(() => closeTerminalTabs(s));
@@ -348,7 +345,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: repeated card focus keeps terminal drag PTY ownership idempotent`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const terminals = await ensureTerminals(s, 1);
     s.cleanup(() => closeTerminalTabs(s));

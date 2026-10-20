@@ -13,7 +13,6 @@ import { lines, openHwp, sha, studio } from "../hwp-support.mjs";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an hwp file takes native keys and a drag in the active key window and saves`, { timeout: 180000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const { surface, file } = await openHwp(s);
     const region = await studio(s, surface);

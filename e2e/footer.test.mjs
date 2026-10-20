@@ -10,7 +10,6 @@ import { rasterRow, terminalMarks } from "./outside.mjs";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: vertical dragging preserves the footer border`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const initial = await s.get("host.window");
     const marks = await terminalMarks(s, { measured: true });
@@ -50,7 +49,6 @@ for (const app of Object.values(APPS)) {
   // The content foot of a card shows the bottom text that the plugin of the active tab reports. For a terminal it is the working directory (docs/spec/plugins.md#tab-reports).
   test(`${app.name}: the content footer shows the footer text that the active tab's plugin reports`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const { root } = await s.get("core.project");
     const grid = await s.until("core.grid", (value) => {

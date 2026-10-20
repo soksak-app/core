@@ -59,7 +59,6 @@ async function serveRegistry() {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: plugin operations read an https registry and refuse a wrong hash, a revoked version and an unreachable registry`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const before = await s.get("core.plugins");

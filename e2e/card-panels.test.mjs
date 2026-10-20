@@ -357,7 +357,6 @@ for (const app of Object.values(APPS)) {
   // (docs/spec/example-model.md).
   test(`${app.name}: a card sidebar ends in its own status line and the content footer spans only the content`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const set = (await s.get("core.settings")).values.sets[0];
     await s.run("core.card.sidebar.set", { card: "terminal", side: "left", set: set.id });
@@ -389,7 +388,6 @@ for (const app of Object.values(APPS)) {
   // The card head has a collapse/expand button for each face that the card shows. A collapsed face is opened again with the button of the head (docs/spec/example-model.md).
   test(`${app.name}: the card header has a fold control for each sidebar the card shows`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const listed = (await s.request("exposure.list")).dom.find((entry) => entry.name === "core.card.sidebar.fold");
     assert.ok(listed, "the card header fold control is not declared");
@@ -422,7 +420,6 @@ for (const app of Object.values(APPS)) {
   // (docs/spec/example-model.md).
   test(`${app.name}: a folded sidebar strip next to a card divider keeps each input to its own control`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     // Splits the terminal card to the right so that two ordinary cards share a vertical boundary, and collapses the right sidebar of the left card.
     await s.run("core.card.split", { card: "terminal", side: "right", plugin: "terminal" });

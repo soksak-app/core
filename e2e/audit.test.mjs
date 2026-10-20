@@ -31,7 +31,6 @@ async function menu(s, name, params, where) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: every control on every screen runs a declared command and has a dom name`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const surfaces = await s.surfaces();
     assert.ok(surfaces.length > 0, "the workspace must show plugin surfaces");

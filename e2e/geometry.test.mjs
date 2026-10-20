@@ -60,7 +60,6 @@ async function clickLastPixel(s, surface, scale) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: resizing preserves document geometry and native input`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     const shell = await prepare(s);
     const { scale } = await s.get("host.window");
     await clickLastPixel(s, shell.surface, scale);

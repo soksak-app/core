@@ -18,7 +18,6 @@ const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the plugin screen lists the updates and 모두 업데이트 stops at a refused update`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const before = await s.get("core.plugins");
@@ -74,7 +73,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a window that becomes active reads the registry again`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const before = await s.get("core.plugins");

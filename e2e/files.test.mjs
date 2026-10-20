@@ -43,7 +43,6 @@ const ROW = 20;
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the files sections show the project folder and its bookmarks from the files state`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const project = await s.get("core.project");
     const folder = `files-check-${process.pid}`;
@@ -150,7 +149,6 @@ function inkRuns(image, scale, band, gap) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the file tree section keeps one horizontal grid and the sidebar's 12-point rows`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const project = await s.get("core.project");
     // Periods are not used, so that the whole name is measured as one ink group. Spaces before and after a period split the group, and where it splits
@@ -236,7 +234,6 @@ function drawnRows(image, scale, holder) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: two mounted trees of one project show files.tree and bookmark through native clicks`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await terminalCardSidebar(s);
     // Puts only the file tree in the inner left sidebar of the terminal card. Together with the tree of the left fixed sidebar, two are mounted.
@@ -335,7 +332,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the failure to open a file is shown in the message row of the file tree and not in the error display`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     // Without the editor, which opens every file, no plugin opens the files of the check. Each change of the plugin reloads the window.
     const page = async () => (await s.get("host.window")).pageProcess;

@@ -109,7 +109,6 @@ function assertSettled(t, { displayed, measured }, label) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: maximising and restoring settle with the layout at the window size`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const before = (await s.get("host.window")).frame;
     // The usable area of the screen that holds the window is the frame of the maximized window.

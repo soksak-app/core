@@ -29,7 +29,6 @@ const NEWER = "99.0.0";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: each operation of the page leaves its complete chain in the log`, { timeout: 240000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     const chains = declaredChains();
     // The events of the chains are below `error`, which the default policy does not store.
     await fresh(s, { log: EVERY_LEVEL, reads: [...new Set(PERFORMED.flatMap((name) => chains[name]))] });

@@ -13,7 +13,6 @@ const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a sidebar's selected tab and folded sections survive a reload from the saved space`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await terminalCardSidebar(s);
     // The inner left sidebar of the terminal card uses a tabs set and the fixed left sidebar uses a list set.

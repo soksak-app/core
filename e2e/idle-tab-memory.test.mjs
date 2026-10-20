@@ -63,7 +63,6 @@ const settledOf = (name, match) => (rows) => {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an idle browser tab on a blank page costs at most 50 MB`, { timeout: 300000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     // The sampler stores its readings at the level debug of the class call, which the default policy does not store.
     await fresh(s, { performanceTrace: true, log: { call: "debug" }, reads: ["host.sampler.memory"] });
     const url = await serve(s);

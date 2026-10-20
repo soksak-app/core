@@ -27,7 +27,6 @@ const actionsOf = (library, plugin) => library.plugins.actions.filter((item) => 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the library plugin page lists plugins with descriptions, versions and sidecars`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const library = await showPlugins(s);
@@ -65,7 +64,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a plugin card disables and enables an installed plugin and the window applies each change`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     // Turns files on again so that the next check starts from the same installation even if a check fails midway.
@@ -107,7 +105,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a plugin change asks about a modified tab before it reloads the window`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const project = await s.get("core.project");
     const folder = `plugin-apply-check-${process.pid}`;

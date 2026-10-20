@@ -162,7 +162,6 @@ async function placed(s, surface, message) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the browser document region navigates, takes native input, and follows its surface`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const base = await serve(s);
     const [browser] = await browsers(s);
@@ -233,7 +232,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a browser without an address hides its document region and shows the empty state`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const base = await serve(s);
     const [browser] = await browsers(s);
@@ -268,7 +266,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the address field shows each loaded address and keeps text being typed`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const base = await serve(s);
     const [browser] = await browsers(s);
@@ -304,7 +301,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the browser history buttons draw the core icons at the card header button size`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
@@ -347,7 +343,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: document site data lives in the configuration directory`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const base = await serve(s);
     const [browser] = await browsers(s);
@@ -369,7 +364,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a new browser card opens the home setting or starts empty`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const base = await serve(s);
     const home = `${base}/home`;
@@ -414,7 +408,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a placement that keeps a shown document in place does not hide it`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const base = await serve(s);
     const [browser] = await browsers(s);
@@ -446,7 +439,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: browser document focus and isolation`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const base = await serve(s);
     const [browser] = await browsers(s);
@@ -493,7 +485,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: browser documents follow host theme pixels for existing, new, and reloaded documents`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const base = await serve(s);
     const [browser] = await browsers(s);
@@ -549,7 +540,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the address bar paints the card colour in light and dark modes`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
@@ -573,7 +563,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a site's appearance remains independent of the host theme`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
@@ -621,7 +610,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a change of the color scheme reaches the document of a browser card at once`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
@@ -644,7 +632,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a change of the color scheme reaches the document of a hidden browser card`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const [browser] = await browsers(s);
     const surface = browser.surface;
@@ -673,7 +660,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the browser document zoom follows the pressed card's text size`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const base = await serve(s);
     const [browser] = await browsers(s);

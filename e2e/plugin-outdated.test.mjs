@@ -33,7 +33,6 @@ async function change(s, action) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the plugin page shows an outdated terminal service and replaces it`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     // The replacement of the service is a record of the host at the level info.
     await fresh(s, { log: { lifecycle: "info" }, reads: ["host.record.info"] });
     await keepCommonSettings(s);

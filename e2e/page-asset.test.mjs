@@ -9,7 +9,6 @@ import { fresh, reading } from "./fixture.mjs";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a request for a missing page file writes one error line for each path`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const first = `/missing-${process.pid}-first.js`;
     const second = `/missing-${process.pid}-second.js`;

@@ -14,7 +14,6 @@ const DEFAULT = "D2Coding;Menlo";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the terminal applies the first installed family of font.family`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.change", { key: SETTING, value: DEFAULT, scope: "common" }));
     const [terminal] = await ensureTerminals(s, 1);
@@ -46,7 +45,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a wide glyph narrower than two cells is centred in them`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.change", { key: SETTING, value: DEFAULT, scope: "common" }));
     const [terminal] = await ensureTerminals(s, 1);

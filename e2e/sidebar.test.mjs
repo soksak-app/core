@@ -18,7 +18,6 @@ const DIVIDER = 6;
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an inset sidebar stands inside its card and folds or resizes without changing the card`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await terminalCardSidebar(s);
     const railed = (grid) => grid.cards.filter((card) => card.id.startsWith("rail-"));
@@ -102,7 +101,6 @@ const press = async (s, name, index) => {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a combined set mounts every section in list layout and switches sections in tabs layout`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await terminalCardSidebar(s);
     const cardSidebar = "terminal:left";
@@ -175,7 +173,6 @@ async function serveTitles(s) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the browser sections list the session history and the card's browser tabs`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
     const base = await serveTitles(s);
@@ -269,7 +266,6 @@ const rects = async (s, name) => {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a sidebar starts with its sections and lines up its header and status rules with the neighbouring cards`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     // The right sidebar is shown as the right override of the terminal, which is the focused card.
     await terminalCardSidebar(s);
@@ -326,7 +322,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the browser DOM and network sections list the document's elements and requests`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
     const base = await serveTitles(s);
@@ -358,7 +353,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a browser tab and the tabs section show the document title or the address`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
     const base = await serveTitles(s);
@@ -385,7 +379,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: tabs-layout tabs keep their full names on one line at the strip height`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await terminalCardSidebar(s);
     const sets = (await s.get("core.settings")).values.sets;
@@ -416,7 +409,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a section header's name stays in place when sections fold and sits alike in every header`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     // The left set (file tree, bookmarks) is the first list sidebar in the document.
     const sidebars = await s.until("core.sidebars", (value) => value[0]?.sidebar === "left" && value[0].layout === "list"
@@ -447,7 +439,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a fill section takes the sidebar height the other sections leave and gives it up when folded`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     // The left set is the file tree (fill) and the bookmarks (content height). The left sidebar is the first sidebar in the document.
     const ready = (value) => value[0]?.sidebar === "left" && value[0].sections.every((item) => item.mounted);
@@ -488,7 +479,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: sections that follow a core status mount without an error after a reload`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
     const sidebar = "right";
@@ -513,7 +503,6 @@ for (const app of Object.values(APPS)) {
   // The window sidebar is turned off by the fold control at the end of the bottom line and turned on again by the button of the window header (docs/spec/plugins.md#sections).
   test(`${app.name}: the fold control at the bottom of a window sidebar turns it off and the header turns it on`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const { left } = (await s.get("core.settings")).values;
     s.cleanup(() => s.run("core.settings.set", { patch: { left }, scope: "common" }));

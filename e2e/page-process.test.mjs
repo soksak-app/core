@@ -9,7 +9,6 @@ import { fresh } from "./fixture.mjs";
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the end of the web content process is written to the event log`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const { pageProcess } = await s.get("host.window");
     assert.ok(Number.isInteger(pageProcess) && pageProcess > 0, `host.window reports no page process: ${pageProcess}`);

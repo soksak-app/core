@@ -15,7 +15,6 @@ const RECORDS = ["host.record.info", "page.record.info"];
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the event log holds the run record and the records the page reports`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     // The run record and the page record are records at the level info.
     await fresh(s, { log: { lifecycle: "info" }, reads: RECORDS });
     s.cleanup(() => s.run("core.projects.browse"));
@@ -41,7 +40,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a page reload loses no host reply`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const files = readdirSync(join(s.app.configDir, "logs")).filter((name) => /^host-.+\.stderr$/.test(name));
     assert.equal(files.length >= 1, true, "logs/ holds no stderr file of a run");

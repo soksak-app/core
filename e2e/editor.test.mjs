@@ -29,7 +29,6 @@ const controlIndex = (sidebars, sidebar, section, at) => {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a file opens from the tree in the editor, saves, shows a save error and asks before it closes`, { timeout: 180000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const project = await s.get("core.project");
     const folder = `editor-check-${process.pid}`;

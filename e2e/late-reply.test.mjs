@@ -16,7 +16,6 @@ const holder = (grid, tab) => grid?.cards.find((card) => card.tabs.some((entry) 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a surface reply that arrives after its surface closed is discarded as an observation`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     // The observation of the late reply is a record of the host at the level info.
     await fresh(s, { log: { lifecycle: "info" }, reads: ["host.record.info"] });
     const { tab } = await s.run("core.card.add-tab", { card: "browser", plugin: "browser" });

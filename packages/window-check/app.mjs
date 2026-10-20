@@ -27,13 +27,21 @@ const declared = (name) => {
   return path;
 };
 
-/** The applications to check: the executable and the configuration folder. */
-const appNames = process.env.SOKSAK_APP ? [process.env.SOKSAK_APP] : ["wailsv3", "tauriv2"];
-if (!appNames.every((name) => ["wailsv3", "tauriv2"].includes(name))) {
-  throw new Error(`unknown SOKSAK_APP: ${process.env.SOKSAK_APP}`);
+const APP_NAMES = ["wailsv3", "tauriv2"];
+
+/**
+ * The applications that a window session covers. SOKSAK_APP names one application; when it is unset, the session covers
+ * every application. An application of the set whose executable is missing fails the check (open), and an application
+ * outside the set is not opened.
+ */
+export function requiredApps(env) {
+  if (!env.SOKSAK_APP) return [...APP_NAMES];
+  if (!APP_NAMES.includes(env.SOKSAK_APP)) throw new Error(`unknown SOKSAK_APP: ${env.SOKSAK_APP}`);
+  return [env.SOKSAK_APP];
 }
 
-export const APPS = Object.fromEntries(appNames.map((name) => [name, {
+/** The applications to check: the executable and the configuration folder. */
+export const APPS = Object.fromEntries(requiredApps(process.env).map((name) => [name, {
   name,
   // The executable is read when it is used. Without a declaration, the check that tests that application fails and
   // names the variable.
@@ -143,14 +151,21 @@ function lock() {
 }
 
 /**
- * Connects to one application. When the executable does not exist, it returns null and the check is skipped. The
+ * Connects to one application. An application outside the required set returns null without reading its executable. An
+ * application of the required set whose executable does not exist fails with an error that names the executable. The
  * connection is closed when the check ends.
  *
  * Verifies that the process of endpoint.json is the executable of this repository, so that the check does not test an
  * application of another checkout or an earlier build.
  */
 export async function open(t, app) {
-  if (!existsSync(app.binary)) return null;
+  if (!requiredApps(process.env).includes(app.name)) return null;
+  if (!existsSync(app.binary)) {
+    throw new Error(
+      `${app.binary} does not exist; ${app.name} is in the window check set, so the check fails. Build the application ` +
+        "or select another one with SOKSAK_APP.",
+    );
+  }
   lock();
   const releaseSlot = await acquireWindowCheckSlot(app.name);
   let client;

@@ -77,7 +77,6 @@ const hasKey = async (s, key) => (await s.get("core.settings-modal")).controls.s
 for (const app of Object.values(APPS)) {
   test(`${app.name}: two independent project states repeat create-use-close-recreate in one instance`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-v4-")));
     const firstRoot = join(root, "first");
@@ -136,7 +135,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: project windows persist files, inherit settings, and isolate native state`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-projects-")));
@@ -340,7 +338,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a saved layout naming a plugin that is not loaded opens with a placeholder card`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     await keepCommonSettings(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-unknown-")));
@@ -397,7 +394,6 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the first project opened from the library replies and replaces the library in the same window`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     // Turns the performance record on so that the stage of a late reply is reported.
     await fresh(s, { performanceTrace: true });
     for (const project of await s.get("core.projects")) await s.run("core.project.close", { id: project.id });
@@ -434,7 +430,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a window that holds no open project reports no project`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-window-project-")));
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
@@ -462,7 +457,6 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a covered window keeps its document visible and completes presentation commands`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     for (const project of await s.get("core.projects")) await s.run("core.project.close", { id: project.id });
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-covered-")));

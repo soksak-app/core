@@ -26,7 +26,6 @@ async function serve(s) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an active key window gives a document region typed text`, async (t) => {
     const s = await open(t, app);
-    if (!s) return t.skip(`${app.binary} is not built`);
     await fresh(s);
     const base = await serve(s);
     await s.until("core.surfaces", (list) => list.some((x) => x.visible && x.plugin === "browser" && x.exposes.includes("status browser.location")),
