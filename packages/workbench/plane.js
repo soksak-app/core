@@ -472,9 +472,9 @@ function pluginPlaceholder(tab, paramsProblem) {
   el.style.cssText = "position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:10px;color:var(--muted)";
   const line = document.createElement("p");
   const text = reason === "params" ? paramsProblem : PLACEHOLDER_LINES[reason](tab.plugin);
-  // The reason unread states a failure to read the install state, so its line is an error shown through the error display path (F217).
-  // The other reasons are the designed states of a saved layout and stay plain text.
-  if (reason === "unread") {
+  // The reasons unread and params state a failure (the install state could not be read, or the stored params do not match the declaration),
+  // so their lines are errors shown through the error display path (F217). The other reasons are the designed states of a saved layout and stay plain text.
+  if (reason === "unread" || reason === "params") {
     const where = `surface ${tab.id} placeholder`;
     showError(line, where, text);
     placeholderErrorPlaces.add(where);

@@ -2167,8 +2167,12 @@ const FEATURE_LINKS = [
   {
     id: "F217",
     implementation: [{ file: "packages/workbench/plane.js", symbol: "function pluginPlaceholder(tab, paramsProblem)" }],
-    tests: [{ file: "packages/workbench/test/plane-placeholder-error.test.mjs", id: "a placeholder whose install state cannot be read is an error shown once, and withdrawn when its surface leaves" }],
-    expected: "A tab whose plugin is not loaded and whose install state cannot be read shows its placeholder error once through the error display path at the place of its surface, and the draw withdraws it when the surface leaves; the other placeholder reasons write no error.",
+    tests: [
+      { file: "packages/workbench/test/plane-placeholder-error.test.mjs", id: "a placeholder whose install state cannot be read is an error shown once, and withdrawn when its surface leaves" },
+      { file: "packages/workbench/test/plane-placeholder-params.test.mjs", id: "a stored tab whose params do not match its plugin is an error shown once, and withdrawn when its surface leaves" },
+      { file: "packages/workbench/test/plane-placeholder-reasons.test.mjs", id: "the placeholder reasons that are designed states write no error" },
+    ],
+    expected: "A tab whose install state cannot be read, or whose stored params do not match its loaded plugin, shows its placeholder error once through the error display path at the place of its surface, and the draw withdraws it when the surface leaves; the designed placeholder reasons write no error.",
     levels: ["unit"],
   },
   {
