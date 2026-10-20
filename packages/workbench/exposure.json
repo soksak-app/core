@@ -3237,7 +3237,8 @@
               "type": ["string", "null"]
             }
           }
-        }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.file.open",
@@ -3696,7 +3697,8 @@
         },
         "result": {
           "type": "null"
-        }
+        },
+        "timeout": 600000
       },
       {
         "name": "core.rename.begin",

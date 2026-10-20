@@ -5,6 +5,7 @@
 ## 미배포
 
 - F210: 은퇴한 plugin이나 sidecar는 철회 항목과 함께 registry에서 제거한다. appview와 application sidecar를 제거했다.
+- F208: 시스템 대화상자를 띄우는 명령(`core.library.choose-folder`, `core.file.place`)이 600000 ms의 timeout을 선언하므로, 대화상자에서 10초를 넘게 고른 사람은 더 이상 명령 timeout을 보지 않는다.
 - F192.3-3-6: 폴더 대기는 마감에서 폴더 상태를 판정하므로, 높은 부하에서 늦게 활성화되거나 알리는 감시가 상태에 도달한 대기를 실패시키지 않는다.
 - F207: language test adapter의 js-ts 한도는 다른 언어의 멈춤 한도인 30초다.
 - F206: core 0.0.19를 커밋의 CI가 통과한 뒤 release했다. 선언된 모든 workspace 버전은 0.0.19이며, 이 release는 이 section의 나머지 항목을 모두 담는다.

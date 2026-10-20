@@ -2148,6 +2148,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F208",
+    implementation: [{ file: "packages/workbench/exposure.json", symbol: "\"name\": \"core.library.choose-folder\"" }],
+    tests: [{ file: "packages/workbench/test/dialog-command-timeout.test.mjs", id: "every declared command that shows a dialog is listed with its host call" }],
+    expected: "Each declared command that shows a system dialog or save panel has a timeout of 600000 ms.",
+    levels: ["unit"],
+  },
+  {
     id: "F201",
     implementation: [{ file: "native/darwin/src/document_view.m", symbol: "void sp_document_store_close(" }],
     tests: [{ file: "native/darwin/tests/document_view_test.m", id: "the data stores end without an error" }],
