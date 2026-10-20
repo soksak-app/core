@@ -39,6 +39,14 @@ test("English comments, Hangul outside comments and generated folders are not re
   }), []);
 });
 
+test("hook files and extensionless scripts are checked, and other extensionless files are not", () => {
+  assert.deepEqual(scan({
+    ".githooks/commit-msg": "#!/bin/sh\n# 커밋 메시지 형식을 검사한다.\nexec node check.js \"$1\"\n",
+    "scripts/run-tool": "#!/bin/sh\n# 도구를 실행한다\n",
+    "docs/NOTICE": "Notice text 한글\n# 한글 제목\n",
+  }), [".githooks/commit-msg:2", "scripts/run-tool:2"]);
+});
+
 test("a Rust lifetime does not start a string", () => {
   assert.deepEqual(comments("a.rs", "fn f<'a>(x: &'a str) {} // returns the slice\n").map((item) => item.line), [1]);
 });

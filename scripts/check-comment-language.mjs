@@ -3,13 +3,15 @@
 // a tracked source file that holds a Hangul character. Generated folders are left out.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** The checked files; generated output is left out. */
+/** The files checked by extension; generated output is left out. */
 const SOURCE = /\.(js|mjs|cjs|ts|html|css|go|rs|m|h|sh)$|(^|\/)Makefile$/;
+/** Every tracked file of the hook folder is a script, whatever its name. */
+const HOOKS = /^\.githooks\//;
 const EXCLUDED = /(^|\/)(dist|node_modules|target)\//;
 
 const HANGUL = /[가-힣]/;
@@ -22,7 +24,18 @@ function language(file) {
   if (file.endsWith(".rs")) return "rust";
   if (file.endsWith(".go")) return "go";
   if (/\.(js|mjs|cjs|ts|html)$/.test(file)) return "js";
+  if (HOOKS.test(file) || extname(file) === "") return "hash";
   return "c";
+}
+
+/**
+ * Whether a tracked file is checked: a file with a checked extension, a hook, or a script without an extension, which
+ * starts with a #! line that names its interpreter. read(file) returns the text of the file.
+ */
+function checked(file, read) {
+  if (EXCLUDED.test(file)) return false;
+  if (SOURCE.test(file) || HOOKS.test(file)) return true;
+  return extname(file) === "" && read(file).startsWith("#!");
 }
 
 /** The quotes that open a string. A Rust single quote also marks a lifetime, so it does not open a string. */
@@ -132,7 +145,7 @@ function body(text) {
 export function findKoreanComments(files, read) {
   const found = [];
   for (const file of files) {
-    if (!SOURCE.test(file) || EXCLUDED.test(file)) continue;
+    if (!checked(file, read)) continue;
     for (const comment of comments(file, read(file))) {
       if (HANGUL.test(comment.text)) found.push({ file, line: comment.line, text: body(comment.text) });
     }
