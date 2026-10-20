@@ -85,16 +85,16 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
      - core 대상은 `index.js`, `view.js`, `soksak/dist/index.js`의 import closure가 닿는 `@soksak/plugin-api`와 `soksak`의 파일이며, 각각 `sok://core/modules/<package>/<file>`에서 제공한다. 이들은 plugin 내용이 없는 core 파일이므로 패키지가 이름을 붙인 파일에서 제공하며, closure 시험(F212.5-4)이 그 집합을 계산하고 view import가 허가되지 않으면 실패한다;
      - plugin B의 granted item 가운데 A의 확장점에 대한 항목의 module: `sok://core/modules/<B package>/<module path>`. `<module path>`는 그 항목의 `module`이다;
      - 다른 plugin의 granted item이 있는 A의 확장점, 또는 A가 granted item을 기여하는 확장점에서, `extends.<point>.modules`가 specifier에 대응한 파일: `sok://core/shared/<plugin id>.<point>/<specifier>.js`.
-   - 기여 항목은 제공자가 설치되고 켜져 있으며 `range`가 확장점의 `version`을 담고 `schema`에 맞을 때 연결된 항목이다(workbench 상태). granted item은 제공자가 설치되고 켜져 있으며 `range`가 확장점의 `version`을 담을 때 성립하며, 범위 판정은 두 호스트가 이미 쓰는 설치 라이브러리의 range parser로 한다. core root는 이 granted item 규칙만으로 grant하며, 그곳에서는 `schema`를 확인하지 않는다. `schema`에 맞지 않는 항목은 workbench(`core.contributions`)가 `invalid`로 보고하며 가져오지 않는다. 그 항목의 선언된 module 파일도 grant되며, 이 over-grant는 기여자가 자기 manifest에 선언한 파일로 한정되고 설계가 이를 밝힌다. F212.5-3은 두 호스트에서 granted item 규칙을 구현한다. `dependencies` 항목은 어떤 파일도 허용하지 않는다.
+   - 기여 항목은 제공자가 설치되고 켜져 있으며 `range`가 확장점의 `version`을 담고 `schema`에 맞을 때 연결된 항목이다(workbench 상태). granted item은 제공자가 설치되고 켜져 있으며 `range`가 확장점의 `version`을 담을 때 성립하며, 범위 판정은 두 호스트가 이미 쓰는 설치 라이브러리의 range parser로 한다. core root는 이 granted item 규칙만으로 grant하며, 그곳에서는 `schema`를 확인하지 않는다. `schema`에 맞지 않는 항목은 workbench(`core.contributions`)가 `invalid`로 보고하며 가져오지 않는다. 그 항목의 선언된 module 파일도 grant되며, 이 over-grant는 기여자가 자기 manifest에 선언한 파일로 한정되고 설계가 이를 밝힌다. F212.5-3은 두 호스트에서 granted item 규칙을 구현한다. provider가 그 확장점의 `extends` 항목을 선언하지 않거나 그 항목에 `version`이 없는 항목은 grant하지 않는다. provider가 설치되지 않았거나 켜져 있지 않은 경우와, `module` 경로가 소유 manifest에 기여자 패키지의 파일로 적혀 있지 않은 경우도 grant하지 않는다. `dependencies` 항목은 어떤 파일도 허용하지 않는다.
    - view import map은 항목이 정확히 네 개다: `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/view`, 그리고 `sok://core/shared/`에 대응하는 `@soksak/shared/`. `@soksak/runtime`과 `@soksak/workbench/` 항목은 없다. staging 도구가 `@soksak/plugin-api`의 상수 하나에서 이를 쓰며, closure 시험이 view 페이지의 모든 import가 이 항목 가운데 하나로 해석되는지 확인한다.
    - view bridge `@soksak/plugin-api/view`는 파일 `packages/plugin-api/view.js`다. `runtime/`이나 `@soksak/workbench/` 아래의 것을 import하지 않으며, view 쪽 call layer(`calls.js`)와 선언 UI snapshot(`snapshots.js`)을 view 통로로 내보낸다.
-   - view channel은 host가 각 view 구성에 주입하는 document-start script이며, 규칙 8의 테마 script와 같다. host 계약이 이름을 정한 message handler `sok-view`를 하나 정의하고, 두 호스트가 view의 web view 구성에 이를 등록한다. `@soksak/plugin-api/view`는 `createViewChannel()`을 내보내며, 이 함수는 그 handler 위의 `{send, onMessage}`를 돌려주고 이를 `createCalls`와 `createSnapshotSender`에 넘긴다. handler 이름과 주입 script는 host 계약에 선언하고 계약 case를 둔다. view 구성은 F212.7에서만 존재하므로, F212.5-4는 가짜 handler로 `createViewChannel()`을 시험하고 F212.7이 이를 host에 연결한다.
-   - 기여 module과 공용 module은 각각 자체완결 ES module 하나다. 그 안의 상대 import는 그 plugin의 빌드 오류이며, 그 plugin 저장소가 검사한다([경계](#경계-결합-금지)).
+   - view channel은 host가 각 view 구성에 주입하는 document-start script이며, 규칙 8의 테마 script와 같다. host 계약이 이름을 정한 message handler `sok-view`를 하나 정의하고, 두 호스트가 view의 web view 구성에 이를 등록한다. host가 메시지를 view로 보내는 방식은 현재 문서 영역이 받는 방식과 같다: native 코드가 view의 page world에서 `window.postMessage(message, location.origin)`을 실행하며(`sp_document_post`의 형식), `createViewChannel()`은 source가 window인 message event를 `onMessage`의 handler에 넘긴다. page에 전역 함수를 더하지 않는다. handler 이름과 전달 형식은 host 계약에 선언하며, F212.5-4는 가짜 handler로 `createViewChannel()`을 두 방향 모두 시험한다. `@soksak/plugin-api/view`는 `createViewChannel()`을 내보내며, 이 함수는 그 handler 위의 `{send, onMessage}`를 돌려주고 이를 `createCalls`와 `createSnapshotSender`에 넘긴다. handler 이름과 주입 script는 host 계약에 선언하고 계약 case를 둔다. view 구성은 F212.7에서만 존재하므로, F212.5-4는 가짜 handler로 `createViewChannel()`을 시험하고 F212.7이 이를 host에 연결한다. native/darwin은 두 호스트 모두에 대해 view의 web view 구성에 handler와 주입 script를 등록하며, host 계약이 handler 이름을 선언한다.
+   - 기여 module과 공용 module은 각각 자체완결 ES module 하나다. 그 안의 상대 import는 그 plugin의 빌드 오류이며, 그 plugin 저장소가 검사한다([경계](#경계-결합-금지)). 기여 module과 공용 module은 view import map의 네 항목에서만 bare specifier를 import한다. 그 밖의 bare specifier는 소유 plugin의 빌드 오류다.
    - core root는 애플리케이션 frontend로 넘기지 않는다. view는 `/runtime/` 경로를 받지 않으며, `/start.json`, `/environment.json`, `/index.html`, `/runtime/...`과 위에 없는 그 밖의 경로는 모두 not found다.
    - view에 보내는 모든 응답은 view 구성의 plugin id로 `Access-Control-Allow-Origin: sok://<plugin id>`를 담는다. 요청의 `Origin`이나 `*`는 담지 않는다. 거부한 요청은 이 header를 담지 않는다. 이 절의 header 규칙은 F212.5-2가 WebKit 결과를 기록하기 전까지 잠정이다. WebKit이 custom scheme module에 대해 `Access-Control-Allow-Origin: sok://<plugin id>`를 거부하면 F212.5-2가 실패한 단언을 기록하고, F212.5-7이 시작하기 전에 이 절을 새 검토 라운드에서 고친다.
    - granted item이나 공용 대상이 지정하지 않은 plugin B의 파일 요청은 not found로 답하고, 두 호스트 모두 `error: core root: <path> is not granted to <plugin>`을 쓴다. 문서 영역은 core root grant를 받지 않는다.
    - core root는 host 계약이 선언하고 각 호스트가 scheme handler에 등록하는 callback으로 제공하며, 계약 case를 둔다(F212.5-6).
-   - Red 시험: plugin A의 view가 granted item이 지정하지 않은 plugin B의 파일, A가 `dependencies`로 지정한 plugin의 파일, 또는 `/start.json`, `/environment.json`, `/index.html`, `/runtime/...`을 요청하면 각각 not found를 받는다.
+   - Red 시험: plugin A의 view가 granted item이 지정하지 않은 plugin B의 파일, A가 `dependencies`로 지정한 plugin의 파일, 또는 `/start.json`, `/environment.json`, `/index.html`, `/runtime/...`을 요청하면 각각 not found를 받고, provider가 그 확장점을 선언하지 않은 기여 항목의 파일도 not found를 받는다.
 5. **재시작.** sidecar와 plugin host는 통과값 (vi)의 한도 안에서 다시 띄운다. 한도를 넘으면 호스트는 `error:`를 보고하고 멈춘다.
    - 한도를 넘은 뒤의 다음 요청은 프로세스를 띄우지 않고 `sidecar-failure`(reason `restart limit`)로 실패한다. 실패 기록은 남긴다. 그 프로세스가 필요한 표면을 사용자가 열 때만 기록을 비우고 프로세스를 띄우며, 호스트는 `host.trace.sidecar.restart-reset {sidecar, surface}`를 쓴다. plugin host는 `host.trace.plugin-host.restart-reset {plugin}`을 쓴다.
    - 이 규칙은 두 명세 위치를 바꾼다. [sidecars](../spec/sidecars.ko.md)의 `## Failure` 절은 67행에서 실패 뒤의 다음 요청이 한도 없이 새 프로세스를 띄운다고 적는다. F212.8a가 그 문장을 규칙 5의 한도로 바꾼다. [terminal runtime](../spec/terminal-runtime.ko.md)의 43행이 적는 재시작 규칙(연결 끊김마다 한 번 시도하고, 다음 전송이 같은 경로를 다시 시도)도 F212.8a에서 바꾼다.
@@ -181,7 +181,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 ## 경계 (결합 금지)
 
 - 이 설계에서 core가 하는 일은 기구뿐이다. view 구성 종류, 선언 UI schema와 그리기, RPC와 binary 통로, core root, 재시작 한도, 계약 case가 여기에 든다.
-- view channel은 host가 각 view 구성에 주입하는 document-start script이며, 규칙 8의 테마 script와 같다. host 계약이 이름을 정한 message handler `sok-view`를 하나 정의하고, 두 호스트가 view의 web view 구성에 이를 등록한다. `@soksak/plugin-api/view`는 `createViewChannel()`을 내보내며, 이 함수는 그 handler 위의 `{send, onMessage}`를 돌려주고 이를 `createCalls`와 `createSnapshotSender`에 넘긴다. handler 이름과 주입 script는 host 계약에 선언하고 계약 case를 둔다. view 구성은 F212.7에서만 존재하므로, F212.5-4는 가짜 handler로 `createViewChannel()`을 시험하고 F212.7이 이를 host에 연결한다.
+- 규칙 4의 view channel이 view의 유일한 전송 통로다.
 - 위 plugin 표는 각 plugin 저장소의 체크리스트에 올라갈 이전 항목의 입력이다. core 코드와 시험은 plugin과 sidecar의 이름, 경로, 구현을 모른다.
   - files state를 sidecar로 옮기는 일은 files plugin과 files sidecar 저장소의 항목이다.
   - editor buffer를 옮길지는 editor 저장소의 항목이다.
@@ -326,7 +326,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 
 ## 검토된 반론 답변
 
-아래 반론은 첫 번째, 두 번째, 세 번째, 네 번째, 다섯 번째, 여섯 번째 검토와 core root 검토 1, 2의 답변이다. 각 항목은 반론, 판정, 해결을 적는다. 해결은 이 제안서의 규칙에 기록한다. 두 번째 검토의 항목은 검토의 id(C, H, M)를 쓴다. 세 번째 검토의 항목은 검토의 id(N, D)를 쓴다. 두 번째 검토의 잘못된 답변 세 개는 C1, C7, H3에 대한 답변이다.
+아래 반론은 첫 번째, 두 번째, 세 번째, 네 번째, 다섯 번째, 여섯 번째 검토와 core root 검토 1, 2, 3의 답변이다. 각 항목은 반론, 판정, 해결을 적는다. 해결은 이 제안서의 규칙에 기록한다. 두 번째 검토의 항목은 검토의 id(C, H, M)를 쓴다. 세 번째 검토의 항목은 검토의 id(N, D)를 쓴다. 두 번째 검토의 잘못된 답변 세 개는 C1, C7, H3에 대한 답변이다.
 
 **첫 번째 검토**
 
@@ -425,3 +425,10 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 - R4: 연결된 항목과 granted item. 판정: 수용. 해결: 연결된 항목은 workbench 상태로 남고 `schema`를 확인한다. core root grant는 별도 용어 granted item을 쓴다. granted item은 제공자가 설치되고 켜져 있으며 `range`가 확장점의 `version`을 담는 항목이다. grant는 `schema`를 확인하지 않으므로, `schema`에 맞지 않는 항목의 선언된 module 파일도 grant된다. 이 over-grant는 기여자가 자기 manifest에 선언한 파일로 한정되며, 설계가 이를 밝힌다. F212.5-3은 두 호스트에서 granted item 규칙을 구현한다(규칙 4).
 - R5: view channel. 판정: 수용. 해결: view channel은 host가 주입하는 document-start script이며, host 계약이 정한 handler `sok-view`를 가진다. `createViewChannel()`은 F212.5-4에서 가짜 handler로 시험하고, F212.7에서 host에 연결한다(규칙 4, 경계).
 - N1: header 규칙. 판정: 수용. 해결: 규칙 4의 header 규칙은 F212.5-2가 WebKit 결과를 기록하기 전까지 잠정이다. WebKit이 header를 거부하면 F212.5-7 전에 이 절을 새 검토 라운드에서 고친다(규칙 4).
+
+**core root 검토 3**
+
+- S1: host가 view로 보내는 경로가 없었고 전달 형식이 선언되지 않았다. 판정: 부분 수용. 해결: host는 각 host-to-view 메시지를 view의 page world에서 `window.postMessage(message, location.origin)`으로 전달한다(`sp_document_post`의 형식이며 문서 영역이 이미 이 방식으로 받는다). `createViewChannel()`은 source가 window인 message event를 `onMessage`의 handler에 넘긴다. 제안된 전역 함수 `sokViewDeliver`는 기각하며 page에 전역 함수를 더하지 않으므로, 영역과 view가 전달 형식 하나를 쓴다. handler 이름과 전달 형식은 host 계약에 선언하며, F212.5-4는 가짜 handler로 두 방향을 시험한다(규칙 4).
+- S2: granted item 규칙이 provider가 확장점을 선언하지 않은 경우, `version`이 없는 entry, 소유 manifest에 없는 `module` 경로의 세 경우를 다루지 않았다. 판정: 수용. 해결: 이 항목들은 grant하지 않으며, 규칙이 그 경우를 적는다(규칙 4). 확장점을 선언하지 않은 기여 항목의 파일을 시험하는 Red 시험을 둔다(규칙 4).
+- N1: handler와 주입 script의 native 등록에 담당이 없었다. 판정: 수용. 해결: native/darwin이 두 호스트 모두에 대해 handler와 주입 script를 view의 web view 구성에 등록하며, host 계약이 handler 이름을 선언한다(규칙 4).
+- N2: 기여 module과 공용 module의 bare import 규칙이 없었다. 판정: 수용. 해결: 그 module은 view import map의 네 항목에서만 bare specifier를 import한다. 그 밖의 bare specifier는 소유 plugin의 빌드 오류다(규칙 4).
