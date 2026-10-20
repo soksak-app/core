@@ -352,6 +352,12 @@ func TestReleasesAndInstallationPathsFollowTheDeclaredNames(t *testing.T) {
 	}
 }
 
+// contract: install.plugin-id.core-reserved
+func TestPluginIDCoreIsReservedForTheCoreRoot(t *testing.T) {
+	_, err := sok.PluginInstallPath("core", "0.2.0")
+	rejects(t, err, "plugin id core is reserved for the core root")
+}
+
 // contract: install.installed.consistency
 func TestInstalledStateNamesOneVersionOfEachPluginAndSidecar(t *testing.T) {
 	text := `{"format": 3, "plugins": {

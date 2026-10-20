@@ -441,6 +441,10 @@ func PluginInstallPath(id, version string) (string, error) {
 	if !isIdentifier(id) {
 		return "", fmt.Errorf("invalid plugin id %s", id)
 	}
+	// The core root is the reserved host `core` (docs/plans/plugin-processes.md rule 4), so no plugin may be installed under that id.
+	if id == "core" {
+		return "", fmt.Errorf("plugin id %s is reserved for the core root", id)
+	}
 	if err := checkVersion("plugin "+id+" version", version); err != nil {
 		return "", err
 	}

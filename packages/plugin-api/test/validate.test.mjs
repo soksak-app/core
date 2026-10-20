@@ -52,6 +52,7 @@ test("a manifest with a page surface or with sections only is accepted", () => {
 test("a manifest is rejected for each invalid field", () => {
   const cases = [
     [{ ...card, id: "Probe" }, /invalid id/],
+    [{ ...card, id: "core" }, /plugin id core is reserved for the core root/],
     [{ ...card, name: "" }, /name is required/],
     [{ ...card, extra: 1 }, /unknown field extra/],
     [{ ...card, surface: { url: "https://a" } }, /unknown field url/],

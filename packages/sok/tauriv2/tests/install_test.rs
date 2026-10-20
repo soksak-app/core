@@ -514,6 +514,15 @@ fn releases_and_installation_paths_follow_the_declared_names() {
     assert_eq!(install::PLATFORMS.len(), 6);
 }
 
+// contract: install.plugin-id.core-reserved
+#[test]
+fn plugin_id_core_is_reserved_for_the_core_root() {
+    rejects(
+        install::plugin_install_path("core", "0.2.0"),
+        "plugin id core is reserved for the core root",
+    );
+}
+
 // contract: install.installed.consistency
 #[test]
 fn installed_state_names_one_version_of_each_plugin_and_sidecar() {

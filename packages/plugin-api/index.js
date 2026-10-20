@@ -417,6 +417,8 @@ export function validateManifest(manifest) {
   validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
+  // The core root is the reserved host `core` (docs/plans/plugin-processes.md rule 4), so no plugin may take that id.
+  if (id === "core") throw new Error("plugin.json: plugin id core is reserved for the core root");
   const where = `plugin ${id}`;
   if (!isText(manifest.name)) throw new Error(`${where}: name is required`);
   // The plugin list of the settings window shows the description and searches it.
