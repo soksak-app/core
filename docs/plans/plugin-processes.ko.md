@@ -216,7 +216,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 **미결 항목**
 
 1. [native surfaces](../spec/native-surfaces.ko.md)의 113행("application bridge 없음")과 115행(`post` 통로)의 모순을 바로잡는다. region 문서는 bridge를 받지 않으며, 그 메시지는 origin을 확인하는 `window.postMessage`뿐이고 호스트가 보내고 받는다. 이 정정은 F212.4에서 한다.
-2. 호출 envelope에 id, 확인, 취소를 넣는다. 호출은 `id`를 가지고, 응답은 같은 `id`로 결과나 오류를 담고, 취소는 `id`를 가진다. binary 경로는 F212.4에서 두 호스트에 native로 만든다.
+2. 호출 envelope에 id, 확인, 취소를 넣는다. 호출은 `id`를 가지고, 응답은 같은 `id`로 결과나 오류를 담고, 취소는 `id`를 가진다. binary 경로는 F212.4에서 두 호스트에 native로 만든다. 결정(F212.4-2): plugin 문서는 `POST sok://<plugin>/.binary`로 byte를 올리고 `GET sok://<plugin>/.binary/<id>`로 내려받는다. id는 host가 만들고, byte는 문서 영역이 자기 binary store에 보관한다([네이티브 표면](../spec/native-surfaces.ko.md#문서-영역)). 소유자 검사는 영역의 `view.plugin`을 URL host와 비교하는 것이다. 한 번의 upload는 16 MiB 이하이며, 이는 두 호스트의 클립보드 상한이다(darwin 클립보드의 `MAX_BYTES`, wailsv3의 `clipboardMaxBytes`). 한 페이지는 64 MiB 이하를 가지며, 이는 가장 큰 upload 4개 분량이다. id는 download가 끝날 때, native take가 byte를 돌려줄 때, 또는 영역이 닫힐 때 해제한다. plugin release는 `.binary` 경로 부분을 거부한다. host가 파일 조회보다 먼저 그 경로에 응답하므로, 그 아래의 plugin 파일은 닿을 수 없기 때문이다. release 검사는 `@soksak/plugin-api`의 `validateReleaseFiles`이며, `sok plugin pack`은 F212.4-4에서 같은 거부를 적용한다.
 3. plugin host 웹뷰를 만드는 플랫폼 연산을 둔다. 이 웹뷰는 `SurfaceHost`가 아니라 창에 붙인다. 숨었을 때의 throttle과 `requestAnimationFrame` 동작은 F212.1과 F212.9a에서 잰다.
 4. Wails에는 앱이 만든 웹뷰로 가는 호출 통로가 없다(H3). Objective-C 쪽에서 통로를 만들고, 계약 case로 두 호스트가 같게 동작하는지 검증한다(F212.4).
 5. core의 공용 module 예약 root를 F212.5에서 만든다. 복사본과 link는 쓰지 않는다.

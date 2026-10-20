@@ -347,6 +347,25 @@
       "definition": "The name field of a plugin's package.json. The installation record does not hold it.",
       "rejected": [],
       "allowed": []
+    },
+    {
+      "term": "binary store",
+      "definition": "The bytes that a document region keeps for its plugin under binary ids, from an upload until a download or a native take releases each id, or until the region closes (docs/spec/native-surfaces.md#document-regions).",
+      "rejected": [
+        "blob store",
+        "binary cache",
+        "바이너리 저장소"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "binary id",
+      "definition": "The 32-character lowercase hexadecimal id that the host mints for one stored upload of a document region's binary store.",
+      "rejected": [
+        "blob id",
+        "바이너리 id"
+      ],
+      "allowed": []
     }
   ]
 }
