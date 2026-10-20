@@ -787,6 +787,8 @@ struct State<O> {
     requests: RequestLedger,
     /// The clock of the restart limit of standard input and output sidecars (docs/spec/sidecars.md#failure). A check injects it.
     clock: Arc<dyn Fn() -> Instant + Send + Sync>,
+    /// The restart-limit record of each standard input and output sidecar that has a counted failure.
+    restarts: HashMap<String, RestartRecord>,
 }
 
 /// The record of a stopping standard-I/O sidecar. The read thread reads the output to its end even after stop emptied
@@ -953,6 +955,7 @@ impl<O: Owner> Sidecars<O> {
                     stopping: HashMap::new(),
                     requests: RequestLedger::default(),
                     clock: Arc::new(Instant::now),
+                    restarts: HashMap::new(),
                 })),
                 started: Condvar::new(),
                 ready_timeout: READY_TIMEOUT,
@@ -1150,6 +1153,16 @@ impl<O: Owner> Sidecars<O> {
                 &format!("sidecar {name}"),
                 "discarding disconnected persistent connection",
             );
+        }
+        // A refusal by the restart limit is reported to the owner after the unlock, as the failure event of the sidecar.
+        if restart_refused(&mut state, name, surface) {
+            drop(state);
+            owner.deliver_failure(Failure {
+                sidecar: name.to_string(),
+                surface: surface.to_string(),
+                reason: "restart limit".to_string(),
+            });
+            return Err(format!("sidecar {name}: restart limit"));
         }
         // The first start, for which no loss was announced, has no notification. When the start consumes the record of
         // an earlier connection loss, this call sends the connection notification (V5-106). If the start fails, the
@@ -2945,13 +2958,73 @@ fn exit_text(status: std::process::ExitStatus) -> String {
 /// the process. Otherwise it removes the process from the running sidecars, ends it, and reports the failure to the
 /// owning window of each surface that sent to that process. The protocol state after a failure is undefined, so the
 /// process is ended.
+/// The sliding window and the number of counted failures of the restart limit of a standard input and output sidecar
+/// (docs/spec/sidecars.md#failure).
+const RESTART_WINDOW: Duration = Duration::from_secs(300);
+const RESTART_LIMIT: usize = 4;
+
+/// The restart-limit record of one standard input and output sidecar. `failures` are the times of the counted failures,
+/// oldest first. When the limit stops the restarts, `stopped` is true and `refused` holds the surfaces that sent to the
+/// failed process.
+#[derive(Default)]
+struct RestartRecord {
+    failures: Vec<Instant>,
+    stopped: bool,
+    refused: HashSet<String>,
+}
+
+/// Counts a failure of the sidecar at the time of the clock of the state, among the failures within RESTART_WINDOW. It
+/// returns true when this failure is the RESTART_LIMIT-th counted one, which stops the restarts. surfaces are the
+/// surfaces that sent to the failed process.
+fn count_failure<O>(state: &mut State<O>, sidecar: &str, surfaces: &HashSet<String>) -> bool {
+    let now = (state.clock)();
+    let record = state.restarts.entry(sidecar.to_string()).or_default();
+    record
+        .failures
+        .retain(|at| now.duration_since(*at) <= RESTART_WINDOW);
+    record.failures.push(now);
+    if record.failures.len() < RESTART_LIMIT {
+        return false;
+    }
+    record.stopped = true;
+    record.refused = surfaces.clone();
+    true
+}
+
+/// Applies the restart limit to a request from surface to the sidecar, which has no running process, and returns true
+/// when the request is refused. A request from a surface that sent to the failed process is refused and logged. A
+/// request from any other surface opens a surface that needs the sidecar: it clears the record, and the start that
+/// follows is recorded as host.trace.sidecar.restart-reset.
+fn restart_refused<O>(state: &mut State<O>, sidecar: &str, surface: &str) -> bool {
+    let Some(record) = state.restarts.get(sidecar) else {
+        return false;
+    };
+    if !record.stopped {
+        return false;
+    }
+    if record.refused.contains(surface) {
+        log_error(
+            &format!("sidecar {sidecar}"),
+            format!("restart limit: request for {surface} refused"),
+        );
+        return true;
+    }
+    state.restarts.remove(sidecar);
+    emit_host(
+        Level::Debug,
+        "host.trace.sidecar.restart-reset",
+        serde_json::json!({"sidecar": sidecar, "surface": surface}),
+    );
+    false
+}
+
 fn fail<O: Owner>(
     state: &Arc<Mutex<State<O>>>,
     sidecar: &str,
     pid: u32,
     violation: Option<String>,
 ) {
-    let (process, owned, changed) = {
+    let (process, owned, changed, stop) = {
         let mut state = state.lock().expect("sidecar state");
         // A declaration change can stop this process and start a new one of the same name, so the pid tells whether
         // the running process is the process of this reader; otherwise this process is stopping.
@@ -2977,6 +3050,7 @@ fn fail<O: Owner>(
         }
         let process = state.running.remove(sidecar).expect("checked by pid above");
         let changed = forget_closing(&mut state, sidecar);
+        let stop = count_failure(&mut state, sidecar, &process.surfaces);
         let owned: Vec<(String, O)> = process
             .surfaces
             .iter()
@@ -2987,7 +3061,7 @@ fn fail<O: Owner>(
                     .map(|owner| (surface.clone(), owner.clone()))
             })
             .collect();
-        (process, owned, changed)
+        (process, owned, changed, stop)
     };
     if let Some(changed) = changed {
         changed();
@@ -3024,6 +3098,20 @@ fn fail<O: Owner>(
         reason = format!("{reason}; {failure}");
     }
     log_error(&format!("sidecar {sidecar}"), format!("failed: {reason}"));
+    if stop {
+        log_error(
+            &format!("sidecar {sidecar}"),
+            format!(
+                "restart limit: {RESTART_LIMIT} failures within {} s",
+                RESTART_WINDOW.as_secs()
+            ),
+        );
+        emit_host(
+            Level::Error,
+            "host.sidecar.restart-limit",
+            serde_json::json!({"sidecar": sidecar}),
+        );
+    }
     fail_requests(state, sidecar, &reason);
     for (surface, owner) in owned {
         owner.deliver_failure(Failure {
