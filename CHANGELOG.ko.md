@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.4-3: 두 host는 document 영역 binary store의 take 작업을 가진다. 플랫폼 메서드는 native take로 binary id의 byte를 가져와 id를 놓고, host 작업은 연결되지 않은 document에 두 host 모두 같은 문구 `document "<name>" is not attached`를 준다. 계약 case `documents.binary.take-releases-id`와 `documents.binary.take-errors`는 두 host에서 실행한다. binary id를 이름으로 받는 첫 명령은 view와 함께 온다.
 - F212.3-7-1: host가 sidecar를 멈추거나 떼어낼 때 응답을 기다리는 식별자 있는 요청은 기록 없이 버려지지 않고, surface, sidecar, 식별자를 밝힌 `host.sidecar.reply` 오류를 얻는다. 두 host에서 같다(계약 `sidecars.stop.records-open-requests`). sidecar 종료는 `host.call.peer-lost`를 쓰지 않는다. sidecar 요청은 command를 갖지 않기 때문이며, `host.call.peer-lost`는 view call을 덮는다.
 - F212.3-6: 선언된 UI snapshot은 전송 중에 status가 덮어쓴 값의 수를 필드 `skipped`로 담는다. receiver는 0 이상이 아닌 수를 거부하고 `onSnapshot`에 넘긴다. 메인 페이지는 성능 trace가 켜져 있을 때 `page.trace.declared-ui.snapshot.skipped`를 페이지 trace로 쓴다. 멈춘 값은 `losses.stalled`로 세며 event를 쓰지 않는다.
 - F212.6-5-1: `core.surfaces` composition 필드의 `hasPlugin` 보호를 제거한다. compositor가 필드를 읽기 전에 등록되지 않은 plugin에서 throw하므로 보호는 dead code였고, 필드는 표면 선언의 종류를 읽는다.
