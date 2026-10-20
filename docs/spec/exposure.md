@@ -90,7 +90,7 @@ In a key, `cmd` is the Command key on macOS and the Control key on the other hos
 | `Escape` | workbench | core.rename.cancel | — | The tab rename field has focus |
 | `Enter` | workbench | core.library.form.submit | — | A library form field has focus |
 | `Escape` | workbench | core.picker.close | — | A picker layer is open |
-| `Escape` | workbench | page.modal.answer | — | A native modal menu is open; the answer has an empty key |
+| `Escape` | workbench | core.modal.dismiss | — | A native modal menu is open and has keyboard focus |
 | `Escape` | view | none | — | A plugin view has keyboard focus; the view decides it under plan rule 7 |
 | `text input keys` | view | none | — | A plugin view has a text input focused; the first responder of the view receives them |
 
@@ -123,6 +123,8 @@ Core and plugin entries of a native-backed module register only after its native
 ### Modal documents
 
 A native modal document reports its state to the main page through the modal answer channel with the key `document` after each render, placement, and theme change. The main page publishes it as status `core.modal`: `null` without an open modal, or `{id, mode, document}` where `document` is `null` until the first report and then `{mode, filter, htmlBackground, bodyBackground, scrimBackground, loaded, rect}`: the rendered element's `data-native-modal`, the root's computed `filter`, the computed background colors of the root and the body, the computed `body::before` background used for the dialog scrim, whether the document has handled the answer to its first content request (also when it dropped that answer as older than applied changes), and the element rectangle in CSS pixels.
+
+Escape in a native menu answers with the key `core.modal.dismiss`, which names the declared command that closes the menu, and the answer carries an empty value. The main page runs that command through the registry; the native view runs no command itself.
 
 A reply of a modal document reaches the main page only while that modal is the open one. The host drops a reply whose modal id and instance are not those of the open modal and records `host.overlay.dropped` `{id, instance, key, open}`; the main page drops a reply of a modal that it does not show, or that has no receiver, and records `page.overlay.dropped` `{id, shown, key}`. A closing modal still sends its last state report, so a drop is an `info` event and not an error, and no reply is dropped without a record.
 
