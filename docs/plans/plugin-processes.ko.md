@@ -105,7 +105,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 6. **표시.** plugin view는 card 배치가 바뀐 뒤(gesture의 첫 변경)의 첫 표시에만 presentation wait에 참여한다.
    - 계속되는 gesture(구분선이나 card 끌기) 동안 view의 native frame은 매 frame card와 같은 commit에서 새 기하로 놓는다. 내용 그리기를 기다리는 것은 첫 변경에서만 한다. 그 뒤 내용은 늦게 그려질 수 있으며, 그 늦음은 frame 간격으로 잰다.
    - F212.7c에서 끌기 gesture 전체를 녹화해 frame 간격과 기하 오차를 재고, 통과값 (viii)로 판정한다.
-   - 기다림은 다음 가운데 먼저 오는 것으로 끝난다: view의 presentation 완료, view 프로세스 종료, 변경이 끝났을 때 그 view가 보이지 않음(`hidden` 조상, 선택되지 않은 탭, 닫힌 표면. workbench가 표면마다 이미 알리는 상태를 읽는다), `host.trace.view.unresponsive`의 응답 없음 알림. presentation 완료가 아닌 것으로 끝나면 그 view 없이 commit을 진행하고 `page.trace.view.presentation-abandoned {surface, reason}`을 쓰고 `losses.abandoned`를 센다. timer는 쓰지 않는다.
+   - 기다림은 다음 가운데 먼저 오는 것으로 끝난다: view의 presentation 완료, view 프로세스 종료, 변경이 끝났을 때 그 view가 보이지 않음(`hidden` 조상, 선택되지 않은 탭, 닫힌 표면. workbench가 표면마다 이미 알리는 상태를 읽는다), `host.trace.view.unresponsive`의 응답 없음 알림. presentation 완료가 아닌 것으로 끝나면 그 view 없이 commit을 진행하고 `host.trace.view.presentation-abandoned {surface, reason}`을 쓰고 `losses.abandoned`를 센다. host가 쓰는 이유는 wait를 host가 소유하기 때문이다. host가 commit을 하고 각 끝을 보기 때문이다. timer는 쓰지 않는다.
    - 통과값 (v)는 실행 중 기한이 아니다. F212.7b와 각 plugin 항목이 재는 판정값이다.
    - F212.7b는 view가 있는 card의 전체 화면 전환과 탭 전환을 녹화해, 두 기다림이 모두 끝나는지 확인한다.
    - [native surfaces](../spec/native-surfaces.ko.md)의 해당 규칙을 고친다.
@@ -157,7 +157,7 @@ RPC protocol 번호는 0.0 계열에서 1이다.
 | `host.trace.view.responsive` | call | debug | `{plugin, surface}`. 상태 `core.plugin.views.responsive` |
 | `host.trace.view.process-request` | call | debug | `{plugin, surface}` |
 | `host.trace.view.process-ready` | call | debug | `{plugin, surface}` |
-| `page.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`. 카운터 `losses.abandoned` |
+| `host.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`. 카운터 `losses.abandoned`. host가 wait를 소유하므로 host가 쓴다 |
 | `page.view.shortcut-table-missing` | input | error | `{plugin}` |
 | `page.input.shortcut.failed` | input | error | `{plugin, key, command}` |
 | `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |

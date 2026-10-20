@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.7b-2: 두 host가 view의 presentation wait 상태를 가진다. view는 변경마다 한 번 참여하고, presentation 없는 각 끝(프로세스 종료, 보이지 않는 view, 응답 없음 알림)은 그 wait를 한 번 끝내며 trace가 켜져 있을 때 `host.trace.view.presentation-abandoned {surface, reason}`을 쓴다. presentation은 event 없이 wait를 끝낸다. 참여와 기다리는 native transaction은 F212.7b-3이다. 계약 case `view.presentation-wait.ends`는 두 host에서 실행한다.
 - F212.4-3: 두 host는 document 영역 binary store의 take 작업을 가진다. 플랫폼 메서드는 native take로 binary id의 byte를 가져와 id를 놓고, host 작업은 연결되지 않은 document에 두 host 모두 같은 문구 `document "<name>" is not attached`를 준다. 계약 case `documents.binary.take-releases-id`와 `documents.binary.take-errors`는 두 host에서 실행한다. binary id를 이름으로 받는 첫 명령은 view와 함께 온다.
 - F212.3-7-1: host가 sidecar를 멈추거나 떼어낼 때 응답을 기다리는 식별자 있는 요청은 기록 없이 버려지지 않고, surface, sidecar, 식별자를 밝힌 `host.sidecar.reply` 오류를 얻는다. 두 host에서 같다(계약 `sidecars.stop.records-open-requests`). sidecar 종료는 `host.call.peer-lost`를 쓰지 않는다. sidecar 요청은 command를 갖지 않기 때문이며, `host.call.peer-lost`는 view call을 덮는다.
 - F212.3-6: 선언된 UI snapshot은 전송 중에 status가 덮어쓴 값의 수를 필드 `skipped`로 담는다. receiver는 0 이상이 아닌 수를 거부하고 `onSnapshot`에 넘긴다. 메인 페이지는 성능 trace가 켜져 있을 때 `page.trace.declared-ui.snapshot.skipped`를 페이지 trace로 쓴다. 멈춘 값은 `losses.stalled`로 세며 event를 쓰지 않는다.
