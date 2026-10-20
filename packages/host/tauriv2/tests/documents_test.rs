@@ -713,7 +713,11 @@ fn view_call_request_is_forwarded_with_its_plugin_and_surface() {
         }))),
         "a call request is forwarded with its surface and plugin"
     );
-    assert_eq!(channels.call("probe-surface", READY), Ok(None), "a ready message is not a call");
+    assert_eq!(
+        channels.call("probe-surface", READY),
+        Ok(None),
+        "a ready message is not a call"
+    );
 }
 
 // contract: view.call.reply
@@ -741,7 +745,9 @@ fn view_call_reply_is_the_channel_message_with_its_id() {
     };
     assert_eq!(
         view_reply_message(&failed),
-        Ok(json!({"sok": 1, "id": 8, "error": {"code": -32000, "message": "tab.state is not declared"}}))
+        Ok(
+            json!({"sok": 1, "id": 8, "error": {"code": -32000, "message": "tab.state is not declared"}})
+        )
     );
     let empty = ViewReply {
         surface: "probe-surface".to_string(),
