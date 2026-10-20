@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.3-7-1: host가 sidecar를 멈추거나 떼어낼 때 응답을 기다리는 식별자 있는 요청은 기록 없이 버려지지 않고, surface, sidecar, 식별자를 밝힌 `host.sidecar.reply` 오류를 얻는다. 두 host에서 같다(계약 `sidecars.stop.records-open-requests`). sidecar 종료는 `host.call.peer-lost`를 쓰지 않는다. sidecar 요청은 command를 갖지 않기 때문이며, `host.call.peer-lost`는 view call을 덮는다.
 - F212.3-6: 선언된 UI snapshot은 전송 중에 status가 덮어쓴 값의 수를 필드 `skipped`로 담는다. receiver는 0 이상이 아닌 수를 거부하고 `onSnapshot`에 넘긴다. 메인 페이지는 성능 trace가 켜져 있을 때 `page.trace.declared-ui.snapshot.skipped`를 페이지 trace로 쓴다. 멈춘 값은 `losses.stalled`로 세며 event를 쓰지 않는다.
 - F212.6-5-1: `core.surfaces` composition 필드의 `hasPlugin` 보호를 제거한다. compositor가 필드를 읽기 전에 등록되지 않은 plugin에서 throw하므로 보호는 dead code였고, 필드는 표면 선언의 종류를 읽는다.
 - F212.3-7: host는 view process가 끝날 때 열려 있던 view call마다 `host.call.peer-lost {plugin, command, reason: process-ended}`(error)를 쓴다. host는 메인 page가 답하지 않은 call을 plugin과 command와 함께 보관하며, event는 event catalog에 선언한다. 계약 case `view.call.peer-lost`는 두 host에서 실행한다. `sidecar-ended` 경우는 F212.3-7-1이며, sidecar 요청 원장이 command를 기록하지 않아 막혀 있다.
