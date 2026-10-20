@@ -761,6 +761,62 @@ fn view_call_reply_is_the_channel_message_with_its_id() {
     );
 }
 
+// contract: view.channel.ready
+#[test]
+fn theme_message_carries_the_theme_in_its_data_field() {
+    use soksak_host_tauriv2::documents::theme_message;
+    let theme = json!({"scheme": "dark", "tokens": {"bg": "#000000"}});
+    assert_eq!(
+        theme_message(&theme),
+        json!({"sok": 1, "event": "theme", "data": {"scheme": "dark", "tokens": {"bg": "#000000"}}}),
+        "the theme message carries the theme in its data field, as every event does"
+    );
+}
+
+// contract: view.event.push
+#[test]
+fn view_event_message_is_the_host_message_with_its_event_and_data() {
+    use soksak_host_tauriv2::documents::{ViewEventRequest, view_event_message};
+    let event = ViewEventRequest {
+        surface: "probe-surface".to_string(),
+        event: "probe.changed".to_string(),
+        data: Some(json!({"count": 2})),
+    };
+    assert_eq!(
+        view_event_message(&event),
+        Ok(json!({"sok": 1, "event": "probe.changed", "data": {"count": 2}})),
+        "an event is posted with the sok marker, its name and its data"
+    );
+    let null_data = ViewEventRequest {
+        surface: "probe-surface".to_string(),
+        event: "probe.changed".to_string(),
+        data: Some(Value::Null),
+    };
+    assert_eq!(
+        view_event_message(&null_data),
+        Ok(json!({"sok": 1, "event": "probe.changed", "data": null })),
+        "a null data is a value and is posted"
+    );
+    let unnamed = ViewEventRequest {
+        surface: "probe-surface".to_string(),
+        event: String::new(),
+        data: Some(json!(1)),
+    };
+    assert_eq!(
+        view_event_message(&unnamed),
+        Err("view event has an empty event name".to_string())
+    );
+    let no_data = ViewEventRequest {
+        surface: "probe-surface".to_string(),
+        event: "probe.changed".to_string(),
+        data: None,
+    };
+    assert_eq!(
+        view_event_message(&no_data),
+        Err("view event probe.changed has no data".to_string())
+    );
+}
+
 // contract: view.call.cancel
 #[test]
 fn view_call_cancel_is_forwarded_with_its_plugin_and_surface() {

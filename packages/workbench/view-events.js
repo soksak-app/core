@@ -1,0 +1,62 @@
+// The page side of the event subscriptions of a view (docs/spec/native-surfaces.md#view-surfaces). A subscription call of the view
+// registers one listener in the page, and each event that the listener receives is pushed to the view as a host message
+// {sok: 1, event, data} through push. The subscriptions end when the surface closes.
+
+/**
+ * Creates the subscriptions of one view surface.
+ *
+ *     native      native(name, fn): the surface event of the name, as runtime.native.on; resolves with the off function
+ *     sidecar     the sidecar of the surface with on(id, fn) and onFailure(id, fn), as runtime.sidecar() has; each resolves with the off function
+ *     push        push(event, data): posts {event, data} to the view through viewEvent; rejects when the host refuses it
+ *     report      report(text): receives the text of a push that the host refused
+ *
+ * Returns {native(name), sidecarMessage(id), sidecarFailure(id), close()}. A subscription call resolves with null, and a second call
+ * for the same name or id registers nothing.
+ */
+export function createViewSubscriptions({ native, sidecar, push, report }) {
+  if (typeof push !== "function" || typeof report !== "function") {
+    throw new TypeError("createViewSubscriptions requires the push and report functions");
+  }
+  // The registration of each key and its off function, by key. A key is native:<name>, sidecar.message:<id> or sidecar.failure:<id>.
+  const registered = new Map();
+  // Set by close: an event that arrives after the surface closed is pushed to no view.
+  let closed = false;
+  const forward = (event, data) => {
+    if (closed) return;
+    push(event, data).then(undefined, (error) => {
+      // default: a refusal that is not an Error carries its value as the text.
+      report(`view event ${event}: ${error?.message ?? error}`);
+    });
+  };
+  const subscribe = (key, register) => {
+    if (closed) return Promise.reject(new Error("view subscriptions are closed"));
+    if (registered.has(key)) return Promise.resolve(null);
+    const pending = register().then((off) => {
+      registered.set(key, off);
+      return null;
+    });
+    // A refused registration is forgotten, so that a later call for the key registers again.
+    pending.catch(() => registered.delete(key));
+    return pending;
+  };
+  return {
+    native(name) {
+      return subscribe(`native:${name}`, () => {
+        if (typeof native !== "function") throw new TypeError("view subscriptions have no surface event");
+        return native(name, (data) => forward(name, data));
+      });
+    },
+    sidecarMessage(id) {
+      return subscribe(`sidecar.message:${id}`, () => sidecar.on(id, (body) => forward("sidecar.message", { id, body })));
+    },
+    sidecarFailure(id) {
+      return subscribe(`sidecar.failure:${id}`, () => sidecar.onFailure(id, (reason) => forward("sidecar.failure", { id, reason })));
+    },
+    async close() {
+      closed = true;
+      const offs = [...registered.values()];
+      registered.clear();
+      for (const off of offs) await off();
+    },
+  };
+}

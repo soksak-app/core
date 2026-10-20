@@ -17,6 +17,8 @@
  *                 sidecar.send(id, body, cids): the send to the declared sidecar, as runtime.sidecar().send
  *                 clipboard: {read(type), writeText(text)}, the clipboard bridge without the PNG bytes
  *                 links.open(url): opens a link, as runtime.links.open
+ *                 subscribe.native(name), subscribe.sidecarMessage(id), subscribe.sidecarFailure(id): register the page subscriptions
+ *                   of the view (view-events.js); each resolves when it is registered
  */
 export async function answerViewCall(event, options) {
   if (event === null || typeof event !== "object") throw new TypeError("view call event is not an object");
@@ -78,6 +80,20 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime })
       if (typeof params !== "string") throw new TypeError(`view call ${command} requires a string`);
       await runtime.clipboard.writeText(params);
       return null;
+    case "runtime.native.on": {
+      const fields = objectOf(command, params);
+      if (typeof fields.name !== "string" || fields.name === "") throw new TypeError(`view call ${command} requires a non-empty name`);
+      await runtime.subscribe.native(fields.name);
+      return null;
+    }
+    case "runtime.sidecar.on":
+    case "runtime.sidecar.onFailure": {
+      const fields = objectOf(command, params);
+      if (typeof fields.id !== "string" || fields.id === "") throw new TypeError(`view call ${command} requires a non-empty id`);
+      if (command === "runtime.sidecar.on") await runtime.subscribe.sidecarMessage(fields.id);
+      else await runtime.subscribe.sidecarFailure(fields.id);
+      return null;
+    }
     case "runtime.links.open":
       if (typeof params !== "string" || params === "") throw new TypeError(`view call ${command} requires a non-empty URL`);
       await runtime.links.open(params);

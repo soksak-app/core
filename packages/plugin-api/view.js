@@ -60,6 +60,56 @@ export function createViewBridge({ handler, report }) {
   const channel = createViewChannel({ handler });
   let onCall = null;
   let onAcknowledgement = null;
+  // The listeners of the view by key (see keyOf), and the last theme that the host sent. A key has one subscription call on the
+  // page, made by its first listener; a theme has none, because the host sends it.
+  const listeners = new Map();
+  const subscriptions = new Map();
+  let lastTheme;
+  const listen = (key, call, listener) => {
+    if (typeof listener !== "function") throw new TypeError(`${key} requires a listener`);
+    if (!listeners.has(key)) listeners.set(key, new Set());
+    listeners.get(key).add(listener);
+    if (!subscriptions.has(key)) {
+      const pending = call();
+      subscriptions.set(key, pending);
+      // A refused subscription is forgotten, so that a later listener of the key subscribes again.
+      pending.catch(() => subscriptions.delete(key));
+    }
+    return subscriptions.get(key).then(() => () => {
+      listeners.get(key)?.delete(listener);
+    });
+  };
+  const subscribe = (name) => calls.request("runtime.native.on", { name });
+  const runtime = {
+    native: {
+      on: (name, listener) => {
+        if (typeof name !== "string" || name === "") throw new TypeError("runtime.native.on requires a non-empty name");
+        return listen(`native:${name}`, () => subscribe(name), listener);
+      },
+    },
+    sidecar: () => ({
+      on: (id, listener) => listen(`sidecar.message:${id}`, () => calls.request("runtime.sidecar.on", { id }), (data) => listener(data.body)),
+      onFailure: (id, listener) => listen(`sidecar.failure:${id}`, () => calls.request("runtime.sidecar.onFailure", { id }), (data) => listener(data.reason)),
+    }),
+    theme: (listener) => {
+      if (typeof listener !== "function") throw new TypeError("runtime.theme requires a listener");
+      if (!listeners.has("theme")) listeners.set("theme", new Set());
+      listeners.get("theme").add(listener);
+      // The listener gets the last theme at once, so a theme that arrived before the listener is not lost.
+      if (lastTheme !== undefined) listener(lastTheme);
+      return { ready: Promise.resolve(), dispose: Promise.resolve(() => listeners.get("theme")?.delete(listener)) };
+    },
+  };
+  // The key of the listeners of a host event: a sidecar event has the session id in its data, and a theme has one key.
+  const keyOf = (message) => {
+    if (message.event === "theme") return "theme";
+    if (message.event === "sidecar.message" || message.event === "sidecar.failure") return `${message.event}:${message.data?.id}`;
+    return `native:${message.event}`;
+  };
+  const dispatch = (message) => {
+    if (message.event === "theme") lastTheme = message.data;
+    for (const listener of [...(listeners.get(keyOf(message)) ?? [])]) listener(message.data);
+  };
   // A call message carries the sok marker, which the host reads as a call request of the view (docs/spec/native-surfaces.md#view-surfaces).
   const calls = createCalls({
     plugin,
@@ -89,8 +139,12 @@ export function createViewBridge({ handler, report }) {
       onAcknowledgement(message);
       return;
     }
+    if (typeof message.event === "string") {
+      dispatch(message);
+      return;
+    }
     if (!onCall) throw new Error(`view channel for ${plugin} has no call layer`);
     onCall(message);
   });
-  return { calls, snapshots };
+  return { calls, snapshots, runtime };
 }

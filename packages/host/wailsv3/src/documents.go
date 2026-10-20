@@ -1319,7 +1319,7 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 		}
 		s.documents.setReadyDocument(surface, event.Document)
 		// The current theme is the first message to a ready document (docs/spec/native-surfaces.md#view-surfaces).
-		return s.postView(surface, map[string]any{"event": "theme", "theme": s.Theme()})
+		return s.postView(surface, map[string]any{"event": "theme", "data": s.Theme()})
 	case "view.error":
 		if strings.HasPrefix(event.Reason, viewQueueFullPrefix) {
 			return viewOverflow{reason: event.Reason}
@@ -1382,7 +1382,7 @@ func (s *Surfaces) sendToView(surface string, message map[string]any) (bool, err
 // postThemeToViews posts the current theme to each view that has a ready document. It runs after the theme changed.
 func (s *Surfaces) postThemeToViews() {
 	for _, surface := range s.documents.viewSurfaces() {
-		if _, err := s.sendToView(surface, map[string]any{"event": "theme", "theme": s.Theme()}); err != nil {
+		if _, err := s.sendToView(surface, map[string]any{"event": "theme", "data": s.Theme()}); err != nil {
 			LogError("view channel", err)
 		}
 	}
@@ -1462,4 +1462,24 @@ func (s *Surfaces) replyView(req ViewReplyRequest) error {
 		return err
 	}
 	return s.postView(req.Surface, message)
+}
+
+// ViewEventRequest is the event that the main page pushes to the view of Surface. Event names the subscription and Data is its value,
+// which may be any JSON value.
+type ViewEventRequest struct {
+	Surface string          `json:"surface"`
+	Event   string          `json:"event"`
+	Data    json.RawMessage `json:"data"`
+}
+
+// pushViewEvent posts the event of req to the ready document of its view as {"sok": 1, "event", "data"}. An event without a name or
+// without data is refused. A view without a ready document refuses it, and the caller writes that error to the application log.
+func (s *Surfaces) pushViewEvent(req ViewEventRequest) error {
+	if req.Event == "" {
+		return errors.New("view event has an empty event name")
+	}
+	if len(req.Data) == 0 {
+		return fmt.Errorf("view event %s has no data", req.Event)
+	}
+	return s.postView(req.Surface, map[string]any{"event": req.Event, "data": req.Data})
 }

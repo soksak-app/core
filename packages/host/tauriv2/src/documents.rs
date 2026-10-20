@@ -1095,7 +1095,8 @@ fn post_theme(window: &Window, platform: &dyn Platform, surface: &str) -> Result
     let handle = data
         .documents
         .get(&(surface.to_string(), VIEW_NAME.to_string()))?;
-    let message = json!({"sok": 1, "event": "theme", "theme": theme}).to_string();
+    let message = theme_message(&serde_json::to_value(&theme).map_err(|error| error.to_string())?)
+        .to_string();
     if platform.post_document(handle, &message)? {
         Ok(())
     } else {
@@ -1106,15 +1107,33 @@ fn post_theme(window: &Window, platform: &dyn Platform, surface: &str) -> Result
 /// Posts the reply of the main page to the view of reply.surface. The main page must be the caller, and the view must have a
 /// ready document, as for the theme (docs/spec/native-surfaces.md#view-surfaces).
 pub(crate) fn view_reply(webview: &Webview, reply: ViewReply) -> Result<(), String> {
+    let message = view_reply_message(&reply)?;
+    post_from_main(webview, "view reply", &reply.surface, message)
+}
+
+/// Posts the event of a subscription to the view of event.surface. The main page must be the caller, and the view must have a ready
+/// document, as for a reply (docs/spec/native-surfaces.md#view-surfaces).
+pub(crate) fn view_event(webview: &Webview, event: ViewEventRequest) -> Result<(), String> {
+    let message = view_event_message(&event)?;
+    post_from_main(webview, "view event", &event.surface, message)
+}
+
+/// Posts message to the ready document of the view of surface, after the main page is confirmed as the caller. The action names the
+/// command in the error of an unauthorized caller.
+fn post_from_main(
+    webview: &Webview,
+    action: &str,
+    surface: &str,
+    message: Value,
+) -> Result<(), String> {
     let window = webview.window();
-    exposure::authorize_main_caller(webview.label(), window.label(), "view reply")?;
-    let message = view_reply_message(&reply)?.to_string();
-    let surface = reply.surface;
+    exposure::authorize_main_caller(webview.label(), window.label(), action)?;
+    let message = message.to_string();
     let data = window_data(&window)?;
-    data.documents.views().check_post(&surface)?;
+    data.documents.views().check_post(surface)?;
     let handle = data
         .documents
-        .get(&(surface.clone(), VIEW_NAME.to_string()))?;
+        .get(&(surface.to_string(), VIEW_NAME.to_string()))?;
     let platform = platform::current()?;
     if platform.post_document(handle, &message)? {
         Ok(())
@@ -1687,6 +1706,32 @@ pub struct ViewReply {
 pub struct ViewReplyError {
     pub code: i64,
     pub message: String,
+}
+
+/// An event that the main page pushes to the view of surface: its name and its data (docs/spec/native-surfaces.md#view-surfaces).
+/// A null data is a value; an absent data is None and is refused.
+#[derive(Deserialize)]
+pub struct ViewEventRequest {
+    pub surface: String,
+    pub event: String,
+    #[serde(default, deserialize_with = "present")]
+    pub data: Option<Value>,
+}
+
+/// Returns the theme message of a view: {"sok", "event": "theme", "data": theme}, as every event carries its value in data.
+pub fn theme_message(theme: &Value) -> Value {
+    json!({"sok": 1, "event": "theme", "data": theme})
+}
+
+/// Returns the host message of an event push: {"sok", "event", "data"}. An empty name and an absent data are errors.
+pub fn view_event_message(event: &ViewEventRequest) -> Result<Value, String> {
+    if event.event.is_empty() {
+        return Err("view event has an empty event name".to_string());
+    }
+    let Some(data) = &event.data else {
+        return Err(format!("view event {} has no data", event.event));
+    };
+    Ok(json!({"sok": 1, "event": event.event, "data": data}))
 }
 
 /// Returns the message that the host posts to the view for a reply: {"sok", "id", "result"} or {"sok", "id", "error"}.

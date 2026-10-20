@@ -194,6 +194,9 @@ func TestViewChannelRecordsReadyDocumentPostsThemeAndClearsOnNavigation(t *testi
 	if theme["sok"] != float64(1) || theme["event"] != "theme" {
 		t.Fatalf("theme message %v, want sok 1 and event theme", theme)
 	}
+	if _, has := theme["theme"]; has || theme["data"] == nil {
+		t.Fatalf("theme message %v, want the theme in its data field", theme)
+	}
 	if err := s.postView("probe-surface", map[string]any{"event": "probe"}); err != nil {
 		t.Fatalf("post to a ready view: %v", err)
 	}
@@ -363,5 +366,37 @@ func TestViewCallInvalidRequestsAreErrorsNotForwarded(t *testing.T) {
 		if payload != nil {
 			t.Fatalf("message %s returns payload %v with its error", message, payload)
 		}
+	}
+}
+
+// contract: view.event.push
+func TestViewEventPostsTheEventWithItsDataToTheReadyDocument(t *testing.T) {
+	s, fake := newViewChannelSurfaces(t)
+	if err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Event: "probe.changed", Data: json.RawMessage(`{"count":1}`)}); err == nil || err.Error() != "probe-surface has no ready document" {
+		t.Fatalf("event before ready: %v, want probe-surface has no ready document", err)
+	}
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`
+	if err := s.viewMessage("probe-surface", ready); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	before := len(fake.posted)
+	if err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Event: "probe.changed", Data: json.RawMessage(`{"count":2}`)}); err != nil {
+		t.Fatalf("event: %v", err)
+	}
+	if len(fake.posted) != before+1 {
+		t.Fatalf("events posted: %d, want 1", len(fake.posted)-before)
+	}
+	var posted map[string]any
+	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &posted); err != nil {
+		t.Fatalf("event message is not JSON: %v", err)
+	}
+	if posted["sok"] != float64(1) || posted["event"] != "probe.changed" || !reflect.DeepEqual(posted["data"], map[string]any{"count": float64(2)}) {
+		t.Fatalf("event message %v, want sok 1, event probe.changed and the data", posted)
+	}
+	if err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Event: "", Data: json.RawMessage(`null`)}); err == nil || err.Error() != "view event has an empty event name" {
+		t.Fatalf("event without a name: %v, want view event has an empty event name", err)
+	}
+	if err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Event: "probe.changed"}); err == nil || err.Error() != "view event probe.changed has no data" {
+		t.Fatalf("event without data: %v, want view event probe.changed has no data", err)
 	}
 }

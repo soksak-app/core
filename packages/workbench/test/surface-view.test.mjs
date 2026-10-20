@@ -22,7 +22,8 @@ test("mounting a view surface imports no module and declares its view compositio
     onSurfacePrepared: () => () => {},
     surfaceContextRuntime: (surface, declarations) => {
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, call: async (name, payload) => {
+      // The view answers its calls on view-call, which the fake host does not deliver, so its listener is a no-op.
+      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name, payload) => {
         calls.push({ name, payload });
         return null;
       } } };

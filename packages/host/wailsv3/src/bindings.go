@@ -239,6 +239,19 @@ func (h *Host) ViewReply(ctx context.Context, reqJSON json.RawMessage) error {
 	}
 	return s.replyView(req)
 }
+
+// ViewEvent receives an event that the main page pushes to the view of the request (docs/spec/native-surfaces.md#view-surfaces).
+func (h *Host) ViewEvent(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[ViewEventRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.pushViewEvent(req)
+}
 func (h *Host) DocumentGo(ctx context.Context, reqJSON json.RawMessage) (bool, error) {
 	req, err := argument[DocumentRequest]("request", reqJSON)
 	if err != nil {

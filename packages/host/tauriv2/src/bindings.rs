@@ -489,6 +489,13 @@ fn document_post(webview: Webview, request: Argument<documents::Request>) -> Res
     documents::post(&webview, request)
 }
 
+/// Pushes an event of a subscription of a view to the view (docs/spec/native-surfaces.md#view-surfaces).
+#[tauri::command(async)]
+fn view_event(webview: Webview, request: Argument<documents::ViewEventRequest>) -> Result<(), String> {
+    let Argument(request) = request;
+    documents::view_event(&webview, request)
+}
+
 /// Receives the reply of the main page to a call request of a view (docs/spec/native-surfaces.md#view-surfaces).
 #[tauri::command(async)]
 fn view_reply(webview: Webview, request: Argument<documents::ViewReply>) -> Result<(), String> {

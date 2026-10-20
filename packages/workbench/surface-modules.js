@@ -2,6 +2,7 @@ import { createSurfaceCompositionController, createSurfaceContext, mountSurfaceM
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { registry } from "./exposure.js";
 import { answerViewCall } from "./view-calls.js";
+import { createViewSubscriptions } from "./view-events.js";
 import { plugin } from "./registry.js";
 import { pluginDiagnostics } from "./environment.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
@@ -224,6 +225,17 @@ function answerViewCalls(surface, scoped, page, isDisposed) {
   const tab = surface.unload ? tabState(surface, isDisposed) : null;
   // The pending calls of this view, by id. A cancel ends the pending call that it names.
   const pending = new Map();
+  // The event subscriptions of the view. Each event is pushed to the view as viewEvent, and the subscriptions end with the answers.
+  const subscriptions = createViewSubscriptions({
+    native: (name, listener) => scoped.native.on(name, listener),
+    // The declared sidecar is read at each subscription, because a view without a declared sidecar subscribes to none.
+    sidecar: {
+      on: (id, listener) => page.sidecar().on(id, listener),
+      onFailure: (id, listener) => page.sidecar().onFailure(id, listener),
+    },
+    push: (event, data) => scoped.native.call("viewEvent", { event, data }),
+    report: (text) => dispatchEvent(new ErrorEvent("error", { message: text })),
+  });
   const options = {
     plugin: surface.pluginId,
     pending,
@@ -235,9 +247,14 @@ function answerViewCalls(surface, scoped, page, isDisposed) {
       sidecar: { send: (id, body, cids) => page.sidecar().send(id, body, cids) },
       clipboard: scoped.clipboard,
       links: scoped.links,
+      subscribe: {
+        native: (name) => subscriptions.native(name),
+        sidecarMessage: (id) => subscriptions.sidecarMessage(id),
+        sidecarFailure: (id) => subscriptions.sidecarFailure(id),
+      },
     },
   };
-  return scoped.native.on("view-call", (event) => {
+  const answering = scoped.native.on("view-call", (event) => {
     if (event?.cancel === true) {
       // A cancel has no reply: the call that it ends replies cancelled.
       answerViewCall(event, options).catch((error) => {
@@ -251,6 +268,11 @@ function answerViewCalls(surface, scoped, page, isDisposed) {
       // default: a rejection that is not an Error replies with its text.
       (error) => ({ id: event.id, error: { code: -32000, message: String(error?.message ?? error) } }),
     ).then((reply) => scoped.native.call("viewReply", reply));
+  });
+  // The answers end with the view: the call listener is removed and each page subscription is ended.
+  return answering.then((off) => () => {
+    off();
+    return subscriptions.close();
   });
 }
 

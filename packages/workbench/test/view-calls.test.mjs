@@ -5,7 +5,7 @@ import test from "node:test";
 import { answerViewCall } from "../view-calls.js";
 
 function fakes() {
-  const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [] };
+  const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [] };
   const options = {
     plugin: "probe",
     pending: new Map(),
@@ -23,6 +23,11 @@ function fakes() {
         writeText: async (text) => { ran.clipboard.push({ write: text }); },
       },
       links: { open: async (url) => { ran.links.push(url); } },
+      subscribe: {
+        native: async (name) => { ran.subscribed.push({ native: name }); return null; },
+        sidecarMessage: async (id) => { ran.subscribed.push({ sidecarMessage: id }); return null; },
+        sidecarFailure: async (id) => { ran.subscribed.push({ sidecarFailure: id }); return null; },
+      },
     },
   };
   return { ran, options };
@@ -146,4 +151,25 @@ test("a call whose id is pending is refused", async () => {
   await assert.rejects(answerViewCall({ id: 6, command: "runtime.links.open", params: "https://example.test" }, options), /view call 6 is already pending/);
   await answerViewCall({ id: 6, cancel: true }, options);
   await assert.rejects(first, { message: "cancelled" });
+});
+
+test("a subscription call of the view runs its page subscription and replies null", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.native.on", params: { name: "probe.changed" } }, options), null);
+  assert.equal(await answerViewCall({ id: 2, command: "runtime.sidecar.on", params: { id: "probe" } }, options), null);
+  assert.equal(await answerViewCall({ id: 3, command: "runtime.sidecar.onFailure", params: { id: "probe" } }, options), null);
+  assert.deepEqual(ran.subscribed, [{ native: "probe.changed" }, { sidecarMessage: "probe" }, { sidecarFailure: "probe" }]);
+});
+
+test("a subscription call without its name or id is refused and subscribes to nothing", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(answerViewCall({ id: 1, command: "runtime.native.on", params: { name: "" } }, options), /requires a non-empty name/);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.sidecar.on", params: null }, options), /requires an object/);
+  await assert.rejects(answerViewCall({ id: 3, command: "runtime.sidecar.onFailure", params: { id: 7 } }, options), /requires a non-empty id/);
+  assert.deepEqual(ran.subscribed, []);
+});
+
+test("runtime.theme is refused as a call, because the theme reaches a view as a host message", async () => {
+  const { options } = fakes();
+  await assert.rejects(answerViewCall({ id: 1, command: "runtime.theme", params: null }, options), /view call runtime.theme is not served/);
 });

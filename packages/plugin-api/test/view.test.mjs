@@ -191,3 +191,58 @@ test("createViewBridge sends a snapshot and takes its acknowledgement without a 
   });
   assert.deepEqual(reports, []);
 });
+
+test("runtime.native.on sends one subscription call per name and passes each host event of that name to its listener", async (t) => {
+  const { posted, host } = setup(t);
+  const seen = [];
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const off = runtime.native.on("probe.changed", (event) => seen.push(event));
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.native.on", params: { name: "probe.changed" } });
+  host({ sok: 1, id: 1, result: null });
+  const unsubscribe = await off;
+  await runtime.native.on("probe.changed", () => {});
+  assert.equal(posted.filter((message) => message.command === "runtime.native.on").length, 1);
+  host({ sok: 1, event: "probe.changed", data: { count: 1 } });
+  assert.deepEqual(seen, [{ count: 1 }]);
+  unsubscribe();
+  host({ sok: 1, event: "probe.changed", data: { count: 2 } });
+  assert.deepEqual(seen, [{ count: 1 }]);
+});
+
+test("runtime.sidecar() delivers the messages and failures of its id only, with their body and reason", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const bodies = [];
+  const reasons = [];
+  const onMessage = runtime.sidecar().on("probe-surface", (body) => bodies.push(body));
+  const onFailure = runtime.sidecar().onFailure("probe-surface", (reason) => reasons.push(reason));
+  assert.deepEqual(posted.at(-2), { sok: 1, id: 1, command: "runtime.sidecar.on", params: { id: "probe-surface" } });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.sidecar.onFailure", params: { id: "probe-surface" } });
+  host({ sok: 1, id: 1, result: null });
+  host({ sok: 1, id: 2, result: null });
+  await onMessage;
+  await onFailure;
+  host({ sok: 1, event: "sidecar.message", data: { id: "probe-surface", body: { n: 1 } } });
+  host({ sok: 1, event: "sidecar.message", data: { id: "other-surface", body: { n: 2 } } });
+  host({ sok: 1, event: "sidecar.failure", data: { id: "probe-surface", reason: "exited" } });
+  assert.deepEqual(bodies, [{ n: 1 }]);
+  assert.deepEqual(reasons, ["exited"]);
+});
+
+test("runtime.theme gives the listener the last theme that the host sent, then each later theme", (t) => {
+  const { host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: () => {} }, report: () => {} });
+  host({ sok: 1, event: "theme", data: { scheme: "dark", tokens: { bg: "#000" } } });
+  const seen = [];
+  runtime.theme((theme) => seen.push(theme));
+  host({ sok: 1, event: "theme", data: { scheme: "light", tokens: { bg: "#fff" } } });
+  assert.deepEqual(seen, [{ scheme: "dark", tokens: { bg: "#000" } }, { scheme: "light", tokens: { bg: "#fff" } }]);
+});
+
+test("an event that no listener has is passed to no call layer and reports nothing", (t) => {
+  const { host } = setup(t);
+  const reports = [];
+  createViewBridge({ handler: { postMessage: () => {} }, report: (event) => reports.push(event) });
+  host({ sok: 1, event: "probe.unlistened", data: 1 });
+  assert.deepEqual(reports, []);
+});
