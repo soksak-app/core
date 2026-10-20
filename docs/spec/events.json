@@ -275,6 +275,16 @@
       },
       "description": "A reply to a forwarded command arrived after its time limit, and the relay refused it: delay is the time in milliseconds from the send of the command to the reply (docs/spec/exposure.md#errors)."
     },
+    "host.trace.modal.stale-ready": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "modal": "string",
+        "instance": "number"
+      },
+      "description": "A ready request of a modal document named a modal that is not open, so the request changed nothing and was answered ok: modal is the id and instance the number of the request (docs/spec/host-contract.md#contract-cases)."
+    },
     "host.trace.<event>": {
       "layer": "host",
       "class": "call",

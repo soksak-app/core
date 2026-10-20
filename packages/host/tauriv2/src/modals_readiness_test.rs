@@ -1,7 +1,7 @@
 //! Checks the readiness rules of the open modal record: a ready request shows a modal once, the visible flag is set before
-//! the request is answered, and a ready request for a modal that is not open is an error.
+//! the request is answered, and a ready request for a modal that is not open is stale and changes nothing.
 
-use super::{Modal, Overlay, mark_visible, pending_show};
+use super::{Modal, Overlay, ReadyStep, mark_visible, ready_step};
 
 fn open(overlay: &Overlay, id: &str, instance: u64) {
     *overlay.open.lock().unwrap() = Some(Modal {
@@ -16,12 +16,18 @@ fn open(overlay: &Overlay, id: &str, instance: u64) {
 fn ready_after_a_reopen_leaves_the_second_modal_visible() {
     let overlay = Overlay::default();
     open(&overlay, "debug", 1);
-    assert!(pending_show(&overlay, "debug", 1).unwrap().is_some());
+    assert!(matches!(
+        ready_step(&overlay, "debug", 1).unwrap(),
+        ReadyStep::Show { .. }
+    ));
     mark_visible(&overlay, "debug", 1).unwrap();
     assert_eq!(overlay.open_state().map(|s| s.2), Some(true));
     *overlay.open.lock().unwrap() = None;
     open(&overlay, "debug", 2);
-    assert!(pending_show(&overlay, "debug", 2).unwrap().is_some());
+    assert!(matches!(
+        ready_step(&overlay, "debug", 2).unwrap(),
+        ReadyStep::Show { .. }
+    ));
     mark_visible(&overlay, "debug", 2).unwrap();
     assert_eq!(
         overlay.open_state().map(|s| s.2),
@@ -32,23 +38,36 @@ fn ready_after_a_reopen_leaves_the_second_modal_visible() {
 
 // contract: modal.ready-visible
 #[test]
-fn ready_for_a_modal_that_is_not_open_is_an_error() {
+fn ready_for_a_modal_that_is_not_open_is_stale_and_changes_nothing() {
     let overlay = Overlay::default();
-    assert!(
-        pending_show(&overlay, "debug", 1).is_err(),
+    assert_eq!(
+        ready_step(&overlay, "debug", 1).unwrap(),
+        ReadyStep::Stale,
         "no modal is open"
     );
     open(&overlay, "debug", 2);
-    assert!(
-        pending_show(&overlay, "debug", 1).is_err(),
-        "a replaced instance was answered"
+    assert_eq!(
+        ready_step(&overlay, "debug", 1).unwrap(),
+        ReadyStep::Stale,
+        "a replaced instance was not stale"
     );
-    assert!(
-        pending_show(&overlay, "settings", 2).is_err(),
-        "another id was answered"
+    assert_eq!(
+        ready_step(&overlay, "settings", 2).unwrap(),
+        ReadyStep::Stale,
+        "another id was not stale"
     );
-    assert!(mark_visible(&overlay, "debug", 1).is_err());
     assert_eq!(overlay.open_state().map(|s| s.2), Some(false));
+    mark_visible(&overlay, "debug", 2).unwrap();
+    assert_eq!(
+        ready_step(&overlay, "debug", 1).unwrap(),
+        ReadyStep::Stale,
+        "a stale request of a replaced instance was not stale"
+    );
+    assert_eq!(
+        overlay.open_state().map(|s| s.2),
+        Some(true),
+        "a stale request changed the visible flag of the open modal"
+    );
 }
 
 // contract: modal.ready-visible
@@ -56,15 +75,22 @@ fn ready_for_a_modal_that_is_not_open_is_an_error() {
 fn a_failed_show_leaves_the_modal_pending_for_the_next_ready() {
     let overlay = Overlay::default();
     open(&overlay, "debug", 3);
-    assert!(pending_show(&overlay, "debug", 3).unwrap().is_some());
+    assert!(matches!(
+        ready_step(&overlay, "debug", 3).unwrap(),
+        ReadyStep::Show { .. }
+    ));
     assert_eq!(overlay.open_state().map(|s| s.2), Some(false));
     assert!(
-        pending_show(&overlay, "debug", 3).unwrap().is_some(),
+        matches!(
+            ready_step(&overlay, "debug", 3).unwrap(),
+            ReadyStep::Show { .. }
+        ),
         "a modal that is not visible is shown again"
     );
     mark_visible(&overlay, "debug", 3).unwrap();
-    assert!(
-        pending_show(&overlay, "debug", 3).unwrap().is_none(),
-        "a visible modal is not shown again"
+    assert_eq!(
+        ready_step(&overlay, "debug", 3).unwrap(),
+        ReadyStep::Visible,
+        "a visible modal is shown again"
     );
 }
