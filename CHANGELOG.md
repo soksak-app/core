@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F205: new commits are authored as `min-0-max <max@blue.tools>`; `.mailmap` maps the former name, and the tao fork is named by the renamed account.
 - F204: the Wails modules name the fork by its renamed account `min-0-max/wails`.
 - V5-117-1-3-4-7-1-8: closed by F192.3-3-3, which leaves the launch activation to the system in both hosts.
 - F192.3-3-5: an intermittent late file notification in the event log wait is classified as load: the system event service delivered some changes after 2 to 3 s at high load, and the wait misses no change.

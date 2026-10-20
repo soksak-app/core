@@ -27,4 +27,4 @@ strip = true
 # https://github.com/tauri-apps/tao/pull/1328 이 두 곳을 고치며 아직 배포되지 않았다. 그 수정 커밋 둘을 태그
 # tao-v0.37.1 위에 얹은 포크 브랜치의 커밋을 쓴다. crates.io 의 tao 배포판이 #1328 을 담으면 이 고정을 없앤다(G1.4-101-1).
 [patch.crates-io]
-tao = { git = "https://github.com/min-median-max/tao", rev = "1a047e239c90ff22563ebcf25acc8a3eb069a6a7" }
+tao = { git = "https://github.com/min-0-max/tao", rev = "1a047e239c90ff22563ebcf25acc8a3eb069a6a7" }
