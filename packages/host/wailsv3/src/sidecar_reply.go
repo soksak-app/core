@@ -124,11 +124,6 @@ func (l *requestLedger) failed(sidecar string) ([]string, map[string][]string) {
 	return surfaces, byCid
 }
 
-// forget removes the requests that wait for the sidecar without an event: the host ended the sidecar, which `host.sidecar.exit` states.
-func (l *requestLedger) forget(sidecar string) {
-	l.failed(sidecar)
-}
-
 // errorOfBody returns the text of the member `error` of a reply body, which a sidecar writes as a string or as another JSON value, and
 // whether the body has one. A body without the member, or that is not an object, is not an error reply.
 func errorOfBody(body json.RawMessage) (string, bool) {
@@ -189,4 +184,10 @@ func (c *Sidecars) failRequests(sidecar, reason string) {
 			"name": sidecar, "surface": surface, "bytes": 0, "ok": false, "error": text,
 		})
 	}
+}
+
+// failStoppedRequests records the requests of sidecar that wait for a reply when the host stops or detaches the sidecar, as failures
+// with their surfaces and identifiers (docs/spec/host-contract.md#contract-cases). The requests are removed from the ledger.
+func (c *Sidecars) failStoppedRequests(sidecar string) {
+	c.failRequests(sidecar, "the host stopped before the sidecar replied")
 }

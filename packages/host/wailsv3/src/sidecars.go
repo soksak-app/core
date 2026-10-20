@@ -1474,7 +1474,7 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 	}
 	if !failed {
 		// It is stopping. A violation is written to the log and no failure event is sent. Stop decides the report of the exit.
-		c.requests.forget(process.name)
+		c.failStoppedRequests(process.name)
 		if violation != "" {
 			LogError("sidecar "+process.name, "failed: "+violation)
 		}
@@ -1624,7 +1624,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		"stopping": stopping, "violation": violation})
 	PerformanceProcessRemove(process.servicePID)
 	if stopping {
-		c.requests.forget(process.name)
+		c.failStoppedRequests(process.name)
 	}
 	if violation != "" {
 		// The service violated the protocol. The same message would end the next connection too, so it is not connected again immediately, and the next send

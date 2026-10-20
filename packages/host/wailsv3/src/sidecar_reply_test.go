@@ -44,3 +44,17 @@ func TestForgettingARequestAtTheBoundIsCounted(t *testing.T) {
 		t.Fatal("the oldest request is still remembered")
 	}
 }
+
+// contract: sidecars.stop.records-open-requests
+// A request with correlation identifiers that is open when the host stops or detaches its sidecar gets a host.sidecar.reply error
+// record that names its surface, its sidecar and its identifiers.
+func TestAnOpenRequestAtAHostStopGetsAnErrorRecord(t *testing.T) {
+	isolateTraceRecords(t)
+	c := &Sidecars{}
+	c.requests.add("probe-sidecar", "probe-surface", []string{"req-1"}, monotonicNanos())
+	c.failStoppedRequests("probe-sidecar")
+	got := bufferedTraces(t, "host.sidecar.reply")
+	if len(got) != 1 || got[0]["name"] != "probe-sidecar" || got[0]["surface"] != "probe-surface" || got[0]["ok"] != false {
+		t.Fatalf("host.sidecar.reply records after the stop: %v, want one error for probe-sidecar and probe-surface", got)
+	}
+}
