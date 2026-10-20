@@ -785,6 +785,8 @@ struct State<O> {
     stopping: HashMap<String, Stopping>,
     /// The requests with correlation identifiers that wait for a reply (sidecar_reply.rs).
     requests: RequestLedger,
+    /// The clock of the restart limit of standard input and output sidecars (docs/spec/sidecars.md#failure). A check injects it.
+    clock: Arc<dyn Fn() -> Instant + Send + Sync>,
 }
 
 /// The record of a stopping standard-I/O sidecar. The read thread reads the output to its end even after stop emptied
@@ -950,6 +952,7 @@ impl<O: Owner> Sidecars<O> {
                     replacing: HashMap::new(),
                     stopping: HashMap::new(),
                     requests: RequestLedger::default(),
+                    clock: Arc::new(Instant::now),
                 })),
                 started: Condvar::new(),
                 ready_timeout: READY_TIMEOUT,
@@ -1071,6 +1074,15 @@ impl<O: Owner> Sidecars<O> {
         Arc::get_mut(&mut self.core)
             .expect("the ready timeout is set before the sidecars are shared")
             .ready_timeout = limit;
+        self
+    }
+
+    /// Changes the clock of the restart limit of standard input and output sidecars (docs/spec/sidecars.md#failure). A check
+    /// injects a clock that it moves; the default is the monotonic clock. Call it only right after creation, before another
+    /// reference exists.
+    pub fn with_clock(self, clock: impl Fn() -> Instant + Send + Sync + 'static) -> Self {
+        let clock: Arc<dyn Fn() -> Instant + Send + Sync> = Arc::new(clock);
+        self.core.state.lock().expect("sidecar state").clock = clock;
         self
     }
 

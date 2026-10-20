@@ -6,6 +6,7 @@ mod folder;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[path = "support/records.rs"]
@@ -2052,4 +2053,196 @@ fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {
         "ms = {}, want a number of milliseconds from the spawn",
         ready["fields"]["ms"]
     );
+}
+
+/// The failing restart script: each request gets an invalid message, unless the file ok exists in the folder; then the
+/// process runs without failing.
+const RESTART_SCRIPT: &str = "#!/bin/sh\nread request\nif [ -f DIR/ok ]; then exec sleep 600; fi\nprintf 'not json\\n'\nexec sleep 600\n";
+
+/// A clock that a restart-limit check moves. Its time is the base plus the offset that the check set.
+#[derive(Clone)]
+struct RestartClock {
+    base: std::time::Instant,
+    offset: Arc<Mutex<Duration>>,
+}
+
+impl RestartClock {
+    fn new() -> Self {
+        Self {
+            base: std::time::Instant::now(),
+            offset: Arc::new(Mutex::new(Duration::ZERO)),
+        }
+    }
+
+    fn set(&self, offset: Duration) {
+        *self.offset.lock().unwrap() = offset;
+    }
+
+    fn read(&self) -> std::time::Instant {
+        self.base + *self.offset.lock().unwrap()
+    }
+}
+
+/// Creates a channel that declares the restart script with the injected clock, and its folder.
+fn restart_sidecars(clock: &RestartClock) -> (Stopping, folder::Folder) {
+    let directory = folder::Folder::new();
+    let program = directory.path().join("fake");
+    std::fs::write(
+        &program,
+        RESTART_SCRIPT.replace("DIR", &directory.path().display().to_string()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let clock = clock.clone();
+    let sidecars = create(
+        &files(r#"{"executable":"fake","protocol":1}"#),
+        directory.path(),
+    )
+    .unwrap()
+    .with_clock(move || clock.read());
+    (Stopping(sidecars), directory)
+}
+
+/// Moves the clock to offset and sends an open request of surface from window.
+fn send_at(
+    clock: &RestartClock,
+    sidecars: &Stopping,
+    window: &FakeOwner,
+    surface: &str,
+    offset: Duration,
+) -> Result<(), String> {
+    clock.set(offset);
+    sidecars.send(window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+}
+
+/// Waits for the next failure of the window and checks that it is an invalid message of sidecar s1.
+fn require_invalid_failure(failures: &Receiver<Failure>, offset: Duration) {
+    let failure = failures
+        .recv_timeout(STALL)
+        .expect("no sidecar failure; the test stalled");
+    assert!(
+        failure.sidecar == ECHO
+            && failure.surface == "s1"
+            && failure.reason.contains("invalid message"),
+        "failure at {offset:?} = {failure:?}"
+    );
+}
+
+/// Checks that err is the refusal of a sidecar at its restart limit.
+fn require_restart_limit(result: Result<(), String>, offset: Duration) {
+    let error = result.expect_err("send was not refused");
+    assert_eq!(
+        error,
+        format!("sidecar {ECHO}: restart limit"),
+        "send at {offset:?}"
+    );
+}
+
+// contract: sidecars.restart.three-failures-restart
+#[test]
+fn restarts_after_three_failures_within_the_window() {
+    let clock = RestartClock::new();
+    let (sidecars, directory) = restart_sidecars(&clock);
+    let (window, _events, failures) = failing_owner("a", "/projects/a");
+    for seconds in [0, 10, 20] {
+        let offset = Duration::from_secs(seconds);
+        send_at(&clock, &sidecars, &window, "s1", offset).unwrap();
+        require_invalid_failure(&failures, offset);
+    }
+    // After three failures within 300 seconds the next send starts a process, which runs without failing.
+    std::fs::write(directory.path().join("ok"), b"").unwrap();
+    send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(30)).unwrap();
+    assert!(
+        failures.recv_timeout(Duration::from_millis(200)).is_err(),
+        "the restarted sidecar failed"
+    );
+}
+
+// contract: sidecars.restart.fourth-failure-stops
+#[test]
+fn stops_at_the_fourth_failure_within_the_window() {
+    let clock = RestartClock::new();
+    let (sidecars, _directory) = restart_sidecars(&clock);
+    let writer_folder = folder::Folder::new();
+    let writer = records::start_writer(writer_folder.path());
+    let (window, _events, failures) = failing_owner("a", "/projects/a");
+    for seconds in [0, 10, 20, 30] {
+        let offset = Duration::from_secs(seconds);
+        send_at(&clock, &sidecars, &window, "s1", offset).unwrap();
+        require_invalid_failure(&failures, offset);
+    }
+    // The fourth failure stops the restarts: the next send starts no process and fails with the reason restart limit.
+    require_restart_limit(
+        send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(40)),
+        Duration::from_secs(40),
+    );
+    let refused = failures.recv_timeout(STALL).expect("no refusal failure");
+    assert!(
+        refused.sidecar == ECHO && refused.surface == "s1" && refused.reason == "restart limit",
+        "refused send failure = {refused:?}"
+    );
+    sidecars.stop();
+    writer.flush(Duration::from_secs(5)).unwrap();
+    let events = records::read_events(&records::event_log_path(writer_folder.path()));
+    assert!(
+        events.iter().any(
+            |event| event["event"] == "host.sidecar.restart-limit" && event["level"] == "error"
+        ),
+        "the stop recorded no host.sidecar.restart-limit error event"
+    );
+}
+
+// contract: sidecars.restart.old-failure-not-counted
+#[test]
+fn counts_only_failures_within_the_window() {
+    let clock = RestartClock::new();
+    let (sidecars, _directory) = restart_sidecars(&clock);
+    let (window, _events, failures) = failing_owner("a", "/projects/a");
+    // The failure at 0 seconds is more than 300 seconds before the failure at 305 seconds, so it is not counted there.
+    for seconds in [0, 10, 20, 305] {
+        let offset = Duration::from_secs(seconds);
+        send_at(&clock, &sidecars, &window, "s1", offset).unwrap();
+        require_invalid_failure(&failures, offset);
+    }
+    // At 305 seconds three failures are counted, so the send at 306 seconds starts a process; its failure is the fourth counted.
+    send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(306)).unwrap();
+    require_invalid_failure(&failures, Duration::from_secs(306));
+    require_restart_limit(
+        send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(307)),
+        Duration::from_secs(307),
+    );
+}
+
+// contract: sidecars.restart.surface-open-resets-the-record
+#[test]
+fn surface_open_clears_the_restart_limit() {
+    let clock = RestartClock::new();
+    let (sidecars, directory) = restart_sidecars(&clock);
+    let writer_folder = folder::Folder::new();
+    let writer = records::start_writer(writer_folder.path());
+    let (window, _events, failures) = failing_owner("a", "/projects/a");
+    for seconds in [0, 10, 20, 30] {
+        let offset = Duration::from_secs(seconds);
+        send_at(&clock, &sidecars, &window, "s1", offset).unwrap();
+        require_invalid_failure(&failures, offset);
+    }
+    require_restart_limit(
+        send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(40)),
+        Duration::from_secs(40),
+    );
+    failures.recv_timeout(STALL).expect("no refusal failure");
+    // A surface that did not send to the failed process is opened: the record is cleared and the sidecar starts.
+    std::fs::write(directory.path().join("ok"), b"").unwrap();
+    send_at(&clock, &sidecars, &window, "s2", Duration::from_secs(41)).unwrap();
+    // The surface that was refused sends again after the reset.
+    send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(42)).unwrap();
+    sidecars.stop();
+    writer.flush(Duration::from_secs(5)).unwrap();
+    let events = records::read_events(&records::event_log_path(writer_folder.path()));
+    let reset = events
+        .iter()
+        .find(|event| event["event"] == "host.trace.sidecar.restart-reset")
+        .expect("the opened surface recorded no host.trace.sidecar.restart-reset");
+    assert_eq!(reset["fields"]["sidecar"], ECHO, "restart-reset {reset}");
+    assert_eq!(reset["fields"]["surface"], "s2", "restart-reset {reset}");
 }
