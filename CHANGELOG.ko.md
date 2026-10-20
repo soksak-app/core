@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.7-7: Go와 Rust의 `sok plugin pack`은 view의 `page`가 `package.json`의 `files`에 덮이지 않으면 `plugin.json: view page <path> must be listed in files`로 거부하고 release를 쓰지 않는다. `files`의 폴더가 page를 덮으면 받아들인다. Host 계약 case `cli.pack.view-page-listed`는 두 host에서 실행한다.
+- F212.7-6: plugin-api가 `checkViewPage(html)`을 내보낸다. 이 함수는 view page가 정적 import map 하나를 가지고 그 imports가 `VIEW_IMPORTS`와 같으며 다른 필드가 없는지 확인하고, 첫 차이를 밝히는 오류를 던진다.
 - F212.7-2-1: queue가 넘친 view는 `sp_document_close`로 닫고 F212.7-5의 재시작 경로로 다시 만든다. 넘친 일은 그 surface의 실패 하나로 센다. 계약 case `view.channel.overflow-closes`는 두 호스트에서 실행한다.
 - F212.7-5: host는 프로세스가 끝난 view를 닫고 그 기록에서 다시 만든다. darwin 계층은 `sp_document_set_view_ended`로 종료를 알린다(문서 영역은 알리지 않는다). 한 view surface의 네 번째 실패가 300초 안에 일어나면 재시작을 멈추며, surface를 제거하면 실패가 지워진다. 계약 case `view.restart.limit`는 두 호스트에서 실행한다. 복원되는 tab 상태와 card의 오류는 F212.7-5-1과 F212.7-5-2로 열려 있다.
 - F212.7-2: plugin-processes rule 4의 view 통로를 두 호스트에 연결한다. `sp_document_create`는 view 구성에 channel script 텍스트를 받아 page world에서 document start에 실행하고 handler `sok-view`를 등록하며, `sp_document_set_view_message`는 handler message를 전달한다. Go host와 Rust host는 시작할 때 bundled frontend의 `view-start.js`를 읽고, view마다 ready 문서를 기록하며, ready message 뒤에 현재 테마를 보내고, loading 탐색에서 기록을 지우며, ready 문서가 없는 post를 `<surface> has no ready document`로 거부한다. script는 `view.error`의 이유를 보내고, 호스트는 그것을 `error: view channel: <reason>`으로 쓴다. queue 초과 process 종료는 아직 연결하지 않았으며 F212.7-2-1로 보류한다. Red와 Green은 F212.7-2에 기록한다(native `view_channel_test`, Go `surfaces_test.go`, Rust `documents_test.rs`, plugin-api `view.test.mjs`).
