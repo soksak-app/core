@@ -259,6 +259,7 @@ Items:
 | `exposure.list.non-object-list-rejected` | A page exposure list that is not an object is an error. | both |
 | `exposure.host-window.reads-during-surface-creation` | A native surface view is named by its surface id in the same step that creates it, so a reading of the window status never finds a native view without its surface id. | both |
 | `exposure.host-window.reads-during-surface-close` | A native surface view keeps its surface id until the step that closes it also forgets the id, so a reading of the window status never finds a native view without its surface id while the view is open. | both |
+| `exposure.host-window.unregistered-surface-named` | A window status reading that finds a native surface view without a registered surface fails with `unregistered native surface <id>`, where `<id>` is the address of the native view in the window facts, the same text in both hosts. | both |
 | `exposure.timeout.command-run-default-and-declared` | command.run waits 10 s by default and uses a declared timeout. | both |
 | `exposure.timeout.status-next-unbounded` | status.next without a timeout has no time limit. | both |
 | `exposure.timeout.invalid-timeout-rejected` | A command.run timeout of 0, above 600000, fractional, a string, or negative returns -32602. | both |
