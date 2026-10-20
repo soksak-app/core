@@ -497,3 +497,37 @@ fn plugin_pack_rejects_a_module_that_files_does_not_list() {
     let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
     assert_eq!(code, 0, "{stderr}");
 }
+
+// contract: cli.pack.binary-path-refused
+#[test]
+fn plugin_pack_refuses_a_binary_path_in_files_without_writing() {
+    let dir = plugin_tree();
+    write_tree(
+        dir.path(),
+        &[
+            (
+                "package.json",
+                r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
+                "files": ["plugin.json", "ui", ".binary/x"]}"#,
+            ),
+            (".binary/x", "stored"),
+        ],
+    );
+    let base = Folder::new("release");
+    let out = base.path().join("out");
+    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(&out)]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: plugin release lists .binary/x: the .binary path is reserved for the binary store\n"
+        )
+    );
+    assert_eq!(
+        std::fs::read_dir(&out)
+            .map(|names| names.count())
+            .unwrap_or(0),
+        0,
+        "a refused pack left files"
+    );
+}

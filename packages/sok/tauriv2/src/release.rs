@@ -239,6 +239,22 @@ fn covers(listed: &[String], path: &str) -> bool {
     })
 }
 
+/// The path segment that the binary store of a page reserves. The host answers that path before it looks up a file, so a
+/// plugin release cannot hold a file under it (docs/spec/native-surfaces.md).
+const BINARY_SEGMENT: &str = ".binary";
+
+/// Refuses a listed path that has a BINARY_SEGMENT part, with the same text as validateReleaseFiles of @soksak/plugin-api.
+fn check_release_files(listed: &[String]) -> Result<(), String> {
+    for file in listed {
+        if file.split('/').any(|segment| segment == BINARY_SEGMENT) {
+            return Err(format!(
+                "plugin release lists {file}: the {BINARY_SEGMENT} path is reserved for the binary store"
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// The modules that plugin.json loads and their names: the surface, the module of each section, and the state.
 fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
     let mut modules = vec![];
@@ -308,6 +324,7 @@ fn run_pack(dir: &str, out: &str, diagnostics: bool, stdout: &mut dyn Write) -> 
     install::manifest_dependencies(&manifest)?;
     let object = pkg.as_object().ok_or("package.json: expected an object")?;
     let mut listed = listed_files(object)?;
+    check_release_files(&listed)?;
     for (what, module) in manifest_modules(&manifest) {
         if !covers(&listed, &module) {
             return Err(format!(

@@ -304,3 +304,22 @@ func TestPluginPackRejectsAModuleThatFilesDoesNotList(t *testing.T) {
 		t.Fatalf("listed modules: code %d stderr %q", code, stderr)
 	}
 }
+
+// contract: cli.pack.binary-path-refused
+func TestPluginPackRefusesABinaryPathInFilesWithoutWriting(t *testing.T) {
+	dir := pluginTree(t)
+	writeTree(t, dir, map[string]string{
+		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
+			"files": ["plugin.json", "ui", ".binary/x"]}`,
+		".binary/x": "stored",
+	})
+	out := filepath.Join(t.TempDir(), "out")
+	code, _, stderr := run("plugin", "pack", dir, out)
+	want := "sok: plugin release lists .binary/x: the .binary path is reserved for the binary store\n"
+	if code != 1 || stderr != want {
+		t.Fatalf("code %d stderr %q, want %q", code, stderr, want)
+	}
+	if names, _ := os.ReadDir(out); len(names) != 0 {
+		t.Fatalf("a refused pack left %v", names)
+	}
+}

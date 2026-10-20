@@ -184,6 +184,21 @@ func covers(listed []string, path string) bool {
 	})
 }
 
+// binarySegment is the path segment that the binary store of a page reserves. The host answers that path before it
+// looks up a file, so a plugin release cannot hold a file under it (docs/spec/native-surfaces.md).
+const binarySegment = ".binary"
+
+// checkReleaseFiles refuses a listed path that has a binarySegment part, with the same text as validateReleaseFiles
+// of @soksak/plugin-api.
+func checkReleaseFiles(listed []string) error {
+	for _, file := range listed {
+		if slices.Contains(strings.Split(file, "/"), binarySegment) {
+			return fmt.Errorf("plugin release lists %s: the %s path is reserved for the binary store", file, binarySegment)
+		}
+	}
+	return nil
+}
+
 // manifestModules are the modules that plugin.json loads and their names: the surface, the module of each section, and
 // the state.
 func manifestModules(manifest map[string]any) [][2]string {
@@ -273,6 +288,9 @@ func runPack(dir, out string, diagnostics bool, stdout io.Writer) error {
 		return err
 	}
 	listed := listedFiles(pkg)
+	if err := checkReleaseFiles(listed); err != nil {
+		return err
+	}
 	for _, module := range manifestModules(manifest) {
 		if !covers(listed, module[1]) {
 			return fmt.Errorf("plugin.json: %s %s must be listed in files", module[0], module[1])
