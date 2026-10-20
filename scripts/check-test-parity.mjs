@@ -2149,6 +2149,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F213",
+    implementation: [{ file: "scripts/push-range.mjs", symbol: "export function pushRanges" }],
+    tests: [{ file: "scripts/test/push-range.test.mjs", id: "a new branch without upstream resolves the commits that origin/main does not have" }],
+    expected: "The pre-push hook sends the commits of each pushed ref, and a branch without an upstream resolves them against origin/main.",
+    levels: ["unit"],
+  },
+  {
     id: "F209",
     implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "export function pluginRows(loaded, state)" }],
     tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a plugin whose every registry version is revoked is not offered, and an installed one keeps its row without an update" }],
