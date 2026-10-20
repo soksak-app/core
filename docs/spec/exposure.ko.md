@@ -105,6 +105,14 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 - 명령 `core.tab.menu {tab, x, y}`는 탭 context menu를 창의 `x`, `y`에 선택 layer로 연다. 탭 버튼의 오른쪽 클릭은 menu에 항목이 있을 때 이를 실행한다. 알 수 없는 탭에는 -32602로, 절대 unload될 수 없는 탭에는 `tab <id> has no menu items`로 실패한다.
 - dom 이름 `core.tab.menu-keep`인 탭 context menu 항목은 binder로 `core.picker.pick`을 거쳐 골라지고 표시를 뒤집은 값으로 `core.tab.keep`을 실행한다. `core.tab.memory`의 reasons에 `kept`가 있는 동안 `core.picker`에서 `active`이며, 절대 unload될 수 없는 탭에는 없다. exposure 검사는 접두사 `core.`가 있는 이름만 읽으므로, 이 이름은 core가 선언하는 모든 dom 이름처럼 그 접두사를 갖는다.
 
+## Plugin processes
+
+메인 페이지는 [plugin process 설계](../plans/plugin-processes.md#messages-and-events)의 status 세 개를 게시한다. 각 status는 plugin id를 담은 record의 목록이다. 지금 각 목록은 `[]`이며, plugin call 계층과 snapshot 계층이 record를 채운다.
+
+- status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, 각 plugin의 열린 call이다. 응답 확인을 기다리는 snapshot도 포함한다. `oldestStartedAt`은 가장 오래된 열린 call의 시작 시각이고, 없으면 `null`이다.
+- status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, 각 plugin의 손실 횟수다. 응용 프로그램이 끝날 때까지 유지한다.
+- status `core.plugin.views`: `[{plugin, surface, responsive}]`, 각 plugin view surface의 응답 상태다.
+
 ## 창
 
 애플리케이션에는 창이 하나 이상 있고, 창마다 메인 페이지와 등록소가 따로 있다. `windows.list`와 `log.query`를 제외한 모든 메서드는 `window`를 받는다. 이 값은 `windows.list`가 반환하는 식별자다. 더 이상 없는 창을 요청하면 오류 1003 `window "<name>" does not exist`를 반환한다. host가 요청을 받은 뒤 닫힌 창도 같다. host는 native 창을 native code에 넘기는 main thread 단계에서 읽고, 그 단계 전에 닫힌 창은 native code에 닿지 않고 요청을 1003으로 실패시킨다. 그런 창의 `host.window` 변경은 아무것도 알리지 않는다. 닫기는 `host.windows`에서 창이 빠지는 것으로 알려진다.

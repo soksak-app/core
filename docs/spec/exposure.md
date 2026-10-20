@@ -105,6 +105,14 @@ The [memory saver](plugins.md#memory-saver) of the main page has these entries.
 - Command `core.tab.menu {tab, x, y}` opens the tab context menu in the selection layer at `x` and `y` of the window; a right click on a tab button runs it when the menu has an item. It fails with -32602 for an unknown tab and with `tab <id> has no menu items` for a tab that can never be unloaded.
 - The tab context menu item with the dom name `core.tab.menu-keep` is picked through the binder with `core.picker.pick` and runs `core.tab.keep` with the toggled mark; it is `active` in `core.picker` while `kept` is in the reasons of `core.tab.memory`, and is absent for a tab that can never be unloaded. Its name has the prefix `core.` like every dom name that core declares, because the exposure check reads only names with that prefix.
 
+## Plugin processes
+
+The main page publishes three statuses of the [plugin process design](../plans/plugin-processes.md#messages-and-events). Each status is a list of records that carry the plugin id. Each list is `[]` now; the plugin call and snapshot layers fill the records.
+
+- Status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, the open calls of each plugin, including snapshots waiting for acknowledgement. `oldestStartedAt` is the start time of the oldest open call, or `null`.
+- Status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, the counts of each plugin's losses, kept until the application ends.
+- Status `core.plugin.views`: `[{plugin, surface, responsive}]`, the responsiveness of each plugin view surface.
+
 ## Windows
 
 An application has one or more windows, and each window has its own main page and registry. Every method except `windows.list` and `log.query` takes `window`, the identifier that `windows.list` returns. A request for a window that no longer exists returns error 1003 `window "<name>" does not exist`. This includes a window that closes after the host accepted the request: the host reads the native window in the main-thread step that passes it to native code, and a window that closed before that step fails the request with 1003 without reaching native code. A `host.window` change of such a window notifies nothing; the window's removal from `host.windows` reports the close.
