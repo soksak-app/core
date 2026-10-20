@@ -35,14 +35,22 @@ export function readEventOffsets(configDir) {
 }
 
 /**
- * The position from which a session judges the errors of the application with the process identifier pid: the offsets
- * that the earlier session stored, or, when no session stored any in this configuration, the end of the files of the
- * processes that ended and the start of the files of the running process, so the errors of earlier runs do not count.
+ * The position from which a session judges the errors of the application with the process identifier pid. A file that the
+ * stored offsets name keeps its stored position. Every other file that exists at the start of the session is placed at its
+ * end now: the stored offsets do not name it when an earlier session did not read it (a boot that ended before the earlier
+ * session stored its offsets, or a configuration whose offsets were removed), and its records all precede the session. The
+ * file of the running process pid starts at its beginning, because the records of that process belong to the session. A file
+ * that appears after the start is absent from the result and is read from its beginning, so its records count.
  */
 export function sessionEventStart(configDir, pid) {
-  if (existsSync(eventOffsetFile(configDir))) return readEventOffsets(configDir);
+  const stored = existsSync(eventOffsetFile(configDir)) ? readEventOffsets(configDir) : {};
   const running = new RegExp(`-${pid}(\\.debug)?\\.jsonl$`);
-  return Object.fromEntries(Object.entries(currentEventOffsets(configDir)).filter(([name]) => !running.test(name)));
+  const start = { ...stored };
+  for (const [name, position] of Object.entries(currentEventOffsets(configDir))) {
+    if (Object.hasOwn(stored, name) || running.test(name)) continue;
+    start[name] = position;
+  }
+  return start;
 }
 
 export function writeEventOffsets(configDir, offsets) {

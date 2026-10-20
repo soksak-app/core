@@ -179,7 +179,8 @@ export function createLibrary(root, rendered = () => {}) {
     const roots=all.map(p=>p.root).join('\n');
     if(foldersFor===roots) return;
     foldersFor=roots;
-    for(const root of [...folders.keys()]) if(!all.some(p=>p.root===root)) { folders.delete(root); checks.delete(root); }
+    // A removed project withdraws its folder error, so the same folder error is written again when the project is added again.
+    for(const root of [...folders.keys()]) if(!all.some(p=>p.root===root)) { folders.delete(root); checks.delete(root); hideError(null, `library project ${root}`); }
     for(const project of all) {
       const check=++checkCount;
       checks.set(project.root, check);

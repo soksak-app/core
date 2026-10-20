@@ -267,6 +267,18 @@ test("stored offsets are the start of the session", (t) => {
   assert.deepEqual(readEventErrors(dir, sessionEventStart(dir, 10)).errors, ["error host host.test.after: {}"]);
 });
 
+test("with stored offsets, a file that the stored offsets do not name is judged from the end it had at the session start", (t) => {
+  const dir = configDir(t);
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open"));
+  writeEventOffsets(dir, readEventErrors(dir, {}).offsets);
+  // A boot that ended before the session started wrote an error after the stored positions were taken.
+  writeFileSync(join(dir, "logs", "host-2-20.jsonl"), line(1, "error", "host.test.earlier.boot"));
+  const start = sessionEventStart(dir, 30);
+  // The running process 30 writes its error after the session started.
+  writeFileSync(join(dir, "logs", "host-3-30.jsonl"), line(1, "error", "host.test.current"));
+  assert.deepEqual(readEventErrors(dir, start).errors, ["error host host.test.current: {}"]);
+});
+
 // F192.3-2: a wait on a record that the log policy of the folder does not store fails at once with an error that names the
 // record and the policy, instead of waiting until the deadline.
 test("untilEventLines rejects at once a record that the policy of the folder does not store", async (t) => {
