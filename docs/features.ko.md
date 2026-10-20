@@ -1080,6 +1080,11 @@
   - [o] F212.1-2 — P0: tracked window check가 설치된 표면 plugin마다 DOM mount 시간을 `page.trace.surface.mount`로 세 번 재고 plugin별 중앙값을 보고한다. 통과값 (iii)의 기준값이다. 측정(`e2e/surface-mount-baseline.test.mjs`, 3회 중앙값, load average 16~39): wailsv3 browser 13 ms, editor 13 ms, hwp 701 ms, terminal 17 ms; tauriv2 browser 22 ms, editor 35 ms, hwp 813 ms, terminal 23 ms.
   - [ ] F212.1-2-1 — P1: window check 실행에서 wailsv3가 공용 check 설정에 남은, 이미 없는 project 폴더에 대해 `error page library project <path>: 폴더가 없습니다`를 일곱 번 썼다. 어떤 check가 폴더를 지우고 project 항목은 남겼다. 기대: 모든 check는 자기가 더한 project 항목을 지우고, library는 없는 폴더를 항목마다 한 번 알린다.
   - [ ] F212.1-2-2 — P1: 같은 실행에서 tauriv2 `diagnostics.fixture`가 10000 ms 안에 답하지 않았고, 호스트가 `unregistered native surface`를 썼고, exposure 답 하나가 보낸 뒤 14283 ms에 왔다. stall dump는 check 설정의 logs 아래에 있다. 기대: fixture가 답하고, 어떤 답도 timeout을 넘지 않는다.
+  - [ ] F212.1-2-2-1 — P1: window check의 stall 표본은 10초 한도와 호스트 표본이 끝난 뒤에야 페이지 표본을 시작한다. 그래서 그 전에 끝난 stall의 페이지 stack은 기록되지 않는다. 기대: 3초 넘게 걸린 요청에서 호스트와 페이지 표본을 함께 시작한다.
+  - [ ] F212.1-2-2-2 — P1: 진단 build는 50 ms 넘는 페이지 task를 기록하지 않아, 12초 stall이 script 때문인지 전달 때문인지 가를 수 없다. 기대: long task observer가 그런 task를 시간과 출처와 함께 기록한다.
+  - [ ] F212.1-2-2-3 — P1: event writer가 queue가 차서 `host.stall.dump`를 두 번 거부했고, 거부와 queue 깊이를 보이는 손실 기록이 없다. 기대: 거부를 모두 세고, 다음 쓰기 때 수와 깊이를 담은 손실 기록을 쓴다.
+  - [ ] F212.1-2-2-4 — P1: window check가 이틀 전 호스트 boot의 오류 기록을 자기 오류로 보고했다. 설정의 저장된 event offset이 이전 boot 파일을 제한하지 못했다. 기대: session은 자기 시작 뒤에 쓰인 기록만 판정한다.
+  - [ ] F212.1-2-2-5 — P1: 등록되지 않은 native surface의 window status 오류가 tauriv2에서는 `unregistered native surface`, wailsv3에서는 `unregistered native surface <id>`다. 기대: 두 호스트가 같은 글이고 계약 case가 확인한다.
   - [~] F212.2 — P0: 프로세스 구조 설계 문서, 합의까지의 적대 검증, 명세로의 이동: 통과값, 메시지, event, 열린 호출 status, 응답 없음 감지, RPC protocol 번호.
   - [ ] F212.3 — P0: plugin-api RPC 계층: 요청, 답, 취소, 선언된 timeout, 상대 사라짐과 늦은 답 처리, 한 번에 하나인 snapshot push와 pull, 선언된 event와 열린 호출 status.
   - [ ] F212.4 — P0: native와 두 호스트의 view binary 경로.
