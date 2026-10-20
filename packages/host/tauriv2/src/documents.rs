@@ -17,6 +17,8 @@ use serde_json::{Value, json};
 use tauri::{Manager, Webview, Window};
 
 use crate::application_log::{log_error, log_failure};
+use crate::event_log::Level;
+use crate::event_record::emit_host;
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
 use crate::surfaces::{require_region, surface_handle};
@@ -648,6 +650,8 @@ pub fn set_view_channel(text: &str) -> Result<(), String> {
 struct ViewChannel {
     plugin: String,
     document: String,
+    /// Set by the first ready message of the view, which writes host.trace.view.process-ready once.
+    process_ready: bool,
 }
 
 /// The view channels of a window, by surface. A navigation clears the ready document, so a post cannot reach a document that
@@ -693,8 +697,21 @@ impl ViewChannels {
             ViewChannel {
                 plugin: plugin.to_string(),
                 document: String::new(),
+                process_ready: false,
             },
         );
+    }
+
+    /// Records that the view of surface has a ready message, and returns its plugin when this is its first ready message since it was
+    /// created. A view without a channel returns None.
+    pub fn first_ready(&self, surface: &str) -> Option<String> {
+        let mut channels = self.lock();
+        let channel = channels.get_mut(surface)?;
+        if channel.process_ready {
+            return None;
+        }
+        channel.process_ready = true;
+        Some(channel.plugin.clone())
     }
 
     /// Removes the record of the view of surface.
@@ -1035,6 +1052,21 @@ fn attach_view(
                     view_failed(&ended_window, platform, &ended_surface, document);
                 }),
             )?;
+            let notice_window = window.clone();
+            let notice_surface = surface.to_string();
+            let notice_plugin = plugin.to_string();
+            platform.set_view_responsiveness(
+                document,
+                Box::new(move |responsive| {
+                    let payload =
+                        view_responsiveness_notice(&notice_surface, &notice_plugin, responsive);
+                    if let Err(error) = emit_window(&notice_window, "view-responsiveness", payload)
+                    {
+                        log_error("view channel", error);
+                    }
+                }),
+            )?;
+            record_view_process_request(surface, plugin);
             Ok(document)
         },
         |document, url| platform.load_document(document, url),
@@ -1094,6 +1126,12 @@ fn view_message(
     let ready = window_data(window).and_then(|data| data.documents.views().message(surface, value));
     match ready {
         Ok(true) => {
+            let first = window_data(window)
+                .ok()
+                .and_then(|data| data.documents.views().first_ready(surface));
+            if let Some(plugin) = first {
+                record_view_process_ready(surface, &plugin);
+            }
             if let Err(error) = post_theme(window, platform, surface) {
                 log_error("view channel", error);
             }
@@ -1868,4 +1906,34 @@ pub fn view_reply_message(reply: &ViewReply) -> Result<Value, String> {
         })),
         (Some(result), None) => Ok(json!({"sok": 1, "id": reply.id, "result": result})),
     }
+}
+
+/// Records a responsiveness notice of the view of surface: it writes the trace event of the notice and returns the payload of the
+/// view-responsiveness event that the window receives. The notice ends no call of the view (docs/spec/native-surfaces.md#view-surfaces).
+pub fn view_responsiveness_notice(surface: &str, plugin: &str, responsive: bool) -> Value {
+    let fields = json!({"plugin": plugin, "surface": surface});
+    if responsive {
+        emit_host(Level::Debug, "host.trace.view.responsive", fields);
+    } else {
+        emit_host(Level::Debug, "host.trace.view.unresponsive", fields);
+    }
+    json!({"surface": surface, "plugin": plugin, "responsive": responsive})
+}
+
+/// Writes host.trace.view.process-request for the view of surface that is created.
+pub fn record_view_process_request(surface: &str, plugin: &str) {
+    emit_host(
+        Level::Debug,
+        "host.trace.view.process-request",
+        json!({"plugin": plugin, "surface": surface}),
+    );
+}
+
+/// Writes host.trace.view.process-ready for the view of surface whose first ready message arrived.
+pub fn record_view_process_ready(surface: &str, plugin: &str) {
+    emit_host(
+        Level::Debug,
+        "host.trace.view.process-ready",
+        json!({"plugin": plugin, "surface": surface}),
+    );
 }

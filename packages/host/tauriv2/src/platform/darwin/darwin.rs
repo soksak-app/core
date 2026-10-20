@@ -300,6 +300,13 @@ impl Platform for Darwin {
     fn set_view_ended(&self, document: Handle, ended: Box<dyn Fn() + Send>) -> Result<(), String> {
         document::set_view_ended(document, ended)
     }
+    fn set_view_responsiveness(
+        &self,
+        document: Handle,
+        responsiveness: Box<dyn Fn(bool) + Send>,
+    ) -> Result<(), String> {
+        document::set_view_responsiveness(document, responsiveness)
+    }
     fn set_document_message(
         &self,
         document: Handle,

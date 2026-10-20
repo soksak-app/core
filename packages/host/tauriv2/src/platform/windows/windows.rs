@@ -186,6 +186,13 @@ impl Platform for Windows {
     fn set_view_ended(&self, document: Handle, ended: Box<dyn Fn() + Send>) -> Result<(), String> {
         unsupported::set_view_ended(document, ended)
     }
+    fn set_view_responsiveness(
+        &self,
+        document: Handle,
+        responsiveness: Box<dyn Fn(bool) + Send>,
+    ) -> Result<(), String> {
+        unsupported::set_view_responsiveness(document, responsiveness)
+    }
     fn set_document_message(
         &self,
         document: Handle,
