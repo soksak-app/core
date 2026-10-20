@@ -15,6 +15,7 @@ extern void documentEvent(void *context, char *event);
 extern void documentMessage(void *context, char *message);
 extern void viewMessage(void *context, char *message);
 extern void viewEnded(void *context);
+extern void viewResponsiveness(void *context, bool responsive);
 extern void documentStream(void *context, char *message);
 extern void documentQueried(void *context, char *reply);
 extern bool coreRootServe(void *context, char *plugin, char *path, void **bytes, size_t *length, char **contentType);
@@ -70,6 +71,12 @@ static void documentSetViewMessage(void *document, uintptr_t context) {
 static void documentSetViewEnded(void *document, uintptr_t context) {
     sp_document_set_view_ended(document, viewEndedBridge, (void *)context);
 }
+static void viewResponsivenessBridge(void *context, bool responsive) {
+    viewResponsiveness(context, responsive);
+}
+static void documentSetViewResponsiveness(void *document, uintptr_t context) {
+    sp_document_set_view_responsiveness(document, viewResponsivenessBridge, (void *)context);
+}
 static void documentSetEvent(void *document, uintptr_t context) {
     sp_document_set_event(document, documentEventBridge, (void *)context);
 }
@@ -97,6 +104,9 @@ var viewMessages = map[unsafe.Pointer]cgo.Handle{}
 
 // viewEnds holds the receiver of the end of each view until the view closes.
 var viewEnds = map[unsafe.Pointer]cgo.Handle{}
+
+// viewResponsivenesses holds the receiver of the responsiveness notices of each view until the view closes.
+var viewResponsivenesses = map[unsafe.Pointer]cgo.Handle{}
 var documentStreams = map[unsafe.Pointer]cgo.Handle{}
 
 //export documentChanged
@@ -118,6 +128,11 @@ func viewMessage(context unsafe.Pointer, value *C.char) {
 //export viewEnded
 func viewEnded(context unsafe.Pointer) {
 	cgo.Handle(uintptr(context)).Value().(func())()
+}
+
+//export viewResponsiveness
+func viewResponsiveness(context unsafe.Pointer, responsive C.bool) {
+	cgo.Handle(uintptr(context)).Value().(func(bool))(bool(responsive))
 }
 
 //export documentStream
@@ -219,6 +234,13 @@ func (implementation) SetViewEnded(document unsafe.Pointer, ended func()) error 
 	return nil
 }
 
+func (implementation) SetViewResponsiveness(document unsafe.Pointer, responsiveness func(responsive bool)) error {
+	receiver := cgo.NewHandle(responsiveness)
+	C.documentSetViewResponsiveness(document, C.uintptr_t(receiver))
+	viewResponsivenesses[document] = receiver
+	return nil
+}
+
 func (implementation) SetDocumentEvent(document unsafe.Pointer, event func(value string)) error {
 	receiver := cgo.NewHandle(event)
 	C.documentSetEvent(document, C.uintptr_t(receiver))
@@ -311,6 +333,10 @@ func (implementation) CloseDocument(document unsafe.Pointer) {
 	if receiver, ok := viewEnds[document]; ok {
 		receiver.Delete()
 		delete(viewEnds, document)
+	}
+	if receiver, ok := viewResponsivenesses[document]; ok {
+		receiver.Delete()
+		delete(viewResponsivenesses, document)
 	}
 	if receiver, ok := documentMessages[document]; ok {
 		receiver.Delete()

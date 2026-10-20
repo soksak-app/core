@@ -101,6 +101,10 @@ func (p *viewPlatform) SetViewEnded(document unsafe.Pointer, ended func()) error
 	return nil
 }
 
+func (p *viewPlatform) SetViewResponsiveness(document unsafe.Pointer, responsiveness func(responsive bool)) error {
+	return nil
+}
+
 // contract: view.create-loads-page
 func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	fake := &viewPlatform{}

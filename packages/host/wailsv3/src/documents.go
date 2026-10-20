@@ -372,6 +372,11 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 			s.viewFailed(surfaceID, handle)
 		})
 	}
+	if err == nil {
+		err = system.SetViewResponsiveness(handle, func(responsive bool) {
+			s.viewResponsiveness(surfaceID, plugin, responsive)
+		})
+	}
 	if err == nil && !system.LoadDocument(handle, "sok://"+plugin+"/"+page) {
 		system.CloseDocument(handle)
 		err = fmt.Errorf("view of surface %q cannot load sok://%s/%s", surfaceID, plugin, page)
@@ -385,7 +390,19 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		return fmt.Errorf("surface %q closed while its view was created", surfaceID)
 	}
 	s.documents.registerView(surfaceID, plugin)
+	EmitHost(LevelDebug, "host.trace.view.process-request", map[string]any{"plugin": plugin, "surface": surfaceID})
 	return nil
+}
+
+// viewResponsiveness relays a responsiveness notice of the view of surface: it writes the trace event of the notice and sends the
+// view-responsiveness event to the owning surface. It ends no call of the view (docs/spec/native-surfaces.md#view-surfaces).
+func (s *Surfaces) viewResponsiveness(surface, plugin string, responsive bool) {
+	if responsive {
+		EmitHost(LevelDebug, "host.trace.view.responsive", map[string]any{"plugin": plugin, "surface": surface})
+	} else {
+		EmitHost(LevelDebug, "host.trace.view.unresponsive", map[string]any{"plugin": plugin, "surface": surface})
+	}
+	s.emitToSurface(surface, "view-responsiveness", map[string]any{"surface": surface, "plugin": plugin, "responsive": responsive})
 }
 
 // syncView creates the view of a view surface when the surface has none, and places the view over the whole surface. It runs on the UI thread.
@@ -1185,6 +1202,21 @@ const viewChannelMarker = 1
 type viewChannel struct {
 	plugin   string
 	document string
+	// processReady is set by the first ready message of the view, which writes host.trace.view.process-ready once.
+	processReady bool
+}
+
+// firstReady reports whether the view of surface has no ready message yet, and records that it has one now. A view without a channel
+// reports false.
+func (d *Documents) firstReady(surface string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	channel, ok := d.views[surface]
+	if !ok || channel.processReady {
+		return false
+	}
+	channel.processReady = true
+	return true
 }
 
 // registerView records the plugin of the view of surface. It runs when the view is created.
@@ -1333,6 +1365,9 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 			return fmt.Errorf("%s: view.ready names plugin %q and document %q, want plugin %q", surface, event.Plugin, event.Document, channel.plugin)
 		}
 		s.documents.setReadyDocument(surface, event.Document)
+		if s.documents.firstReady(surface) {
+			EmitHost(LevelDebug, "host.trace.view.process-ready", map[string]any{"plugin": event.Plugin, "surface": surface})
+		}
 		// The current theme is the first message to a ready document (docs/spec/native-surfaces.md#view-surfaces).
 		return s.postView(surface, map[string]any{"event": "theme", "data": s.Theme()})
 	case "view.error":

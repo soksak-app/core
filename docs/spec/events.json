@@ -285,6 +285,46 @@
       },
       "description": "A reply to a forwarded command arrived after its time limit, and the relay refused it: delay is the time in milliseconds from the send of the command to the reply (docs/spec/exposure.md#errors)."
     },
+    "host.trace.view.process-request": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "surface": "string"
+      },
+      "description": "The host created the web view of a view surface, so its WebContent process is requested (docs/spec/native-surfaces.md#view-surfaces)."
+    },
+    "host.trace.view.process-ready": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "surface": "string"
+      },
+      "description": "The first ready message of a view arrived after the host created it, so its page runtime started (docs/spec/native-surfaces.md#view-surfaces)."
+    },
+    "host.trace.view.responsive": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "surface": "string"
+      },
+      "description": "The WebContent process of a view answered its responsiveness check again, so the host sent the view-responsiveness notice with responsive true to the main page of the window (docs/spec/native-surfaces.md#view-surfaces)."
+    },
+    "host.trace.view.unresponsive": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "surface": "string"
+      },
+      "description": "The WebContent process of a view stopped answering its responsiveness check, so the host sent the view-responsiveness notice with responsive false to the main page of the window (docs/spec/native-surfaces.md#view-surfaces)."
+    },
     "host.trace.modal.stale-ready": {
       "layer": "host",
       "class": "call",

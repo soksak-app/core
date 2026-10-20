@@ -377,6 +377,9 @@ type Platform interface {
 	SetViewMessage(document unsafe.Pointer, message func(value string)) error
 	// SetViewEnded receives the end of the WebContent process of a view, before the host closes the view. A closed view receives no call.
 	SetViewEnded(document unsafe.Pointer, ended func()) error
+	// SetViewResponsiveness receives the responsiveness notices of a view: false when its WebContent process stops answering its
+	// responsiveness check, and true when it answers again. A closed view receives no call (docs/spec/native-surfaces.md#view-surfaces).
+	SetViewResponsiveness(document unsafe.Pointer, responsiveness func(responsive bool)) error
 	SetDocumentEvent(document unsafe.Pointer, event func(value string)) error
 	// SetDocumentStream receives {"stream": "elements" or "requests", "message": {...}} for each stream message of the document.
 	SetDocumentStream(document unsafe.Pointer, stream func(value string)) error
