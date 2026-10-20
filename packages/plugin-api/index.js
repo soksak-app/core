@@ -395,6 +395,21 @@ function checkContributes(where, id, contributes) {
  *   dependencies  the version range of each sidecar that the page surface or the state module uses and of each plugin that it contributes to
  *     exposes   status, command and dom entries that the surface page registers. A page surface must exist
  */
+// The path segment that the binary store of a document region answers before it looks up a file
+// (docs/spec/native-surfaces.md#document-regions), so a plugin file under it could not be served.
+const BINARY_SEGMENT = ".binary";
+
+/** Returns the files of a plugin package.json, and throws for a file whose path has a .binary segment. */
+export function validateReleaseFiles(pkg) {
+  if (!Array.isArray(pkg.files)) throw new Error("package.json files: expected an array");
+  for (const file of pkg.files) {
+    if (file.split("/").includes(BINARY_SEGMENT)) {
+      throw new Error(`plugin release lists ${file}: the ${BINARY_SEGMENT} path is reserved for the binary store`);
+    }
+  }
+  return pkg.files;
+}
+
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "exposes", "settings",

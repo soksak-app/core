@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   PAGE_IMPORTS, checkReferences, checkSidebarReferences, modulePath, pageImports, validateEnvironment, validateManifest,
-  validateSidebars, validateSidecar,
+  validateReleaseFiles, validateSidebars, validateSidecar,
 } from "../index.js";
 
 const card = {
@@ -493,4 +493,10 @@ test("a surface may declare unload, which is validated when present and forbidde
       /plugin probe: surface unload must be \{format, maxBytes\} with positive integers/, JSON.stringify(value));
   }
   assert.throws(() => validateManifest({ ...card, surface: { ...bare, unload: { format: 1, maxBytes: 1, extra: 1 } } }), /unknown field extra/);
+});
+
+test("a plugin release refuses a file whose path has a .binary segment", () => {
+  assert.deepEqual(validateReleaseFiles({ files: ["ui", "binary/app.js", ".binaryfoo/app.js"] }), ["ui", "binary/app.js", ".binaryfoo/app.js"]);
+  assert.throws(() => validateReleaseFiles({ files: ["ui", ".binary"] }), /plugin release lists \.binary: the \.binary path is reserved for the binary store/);
+  assert.throws(() => validateReleaseFiles({ files: ["ui/.binary/app.js"] }), /plugin release lists ui\/\.binary\/app\.js: the \.binary path is reserved for the binary store/);
 });
