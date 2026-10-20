@@ -1093,7 +1093,7 @@
   - [ ] F212.3-1 — P0: plugin-api 호출 계층: 요청, 답, 취소, `host.call.timeout`을 쓰는 선언된 timeout, 프로세스 종료·표면 닫기·sidecar 종료에 따른 peer-lost, 버리고 세는 늦은 답.
   - [ ] F212.3-2 — P0: 선언 UI snapshot: 한 번에 하나 보내는 push, dirty 표시, 확인, 메인 페이지 load 때의 pull, 건너뛴 값과 멈춘 값의 수.
   - [ ] F212.3-3 — P0: status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`와 설계의 error·trace event를 event catalog에 선언.
-  - [~] F212.3-4 — P0: 응답 없음과 응답 회복 selector를 `native/darwin/src/private/webkit.h`와 비공개 native API 목록에 호출 조건, 쓰는 SDK 판의 WebKit 소스 줄과 함께 올린다.
+  - [o] F212.3-4 — P0: 응답 없음과 응답 회복 selector를 `native/darwin/src/private/webkit.h`와 비공개 native API 목록에 호출 조건, 쓰는 SDK 판의 WebKit 소스 줄과 함께 올린다. 결과: 두 selector가 `SPNavigationDelegatePrivate` protocol에 선언되고, 호출 조건과 소스 줄과 함께 목록에 올라갔다. SDK의 WebKit build 21624.5.1.11.3에는 공개 tag가 없어서 소스 줄은 tag `WebKit-7625.1.29.18.27`에서 읽었으며, 그 build에서는 검증하지 않았다. Red: 바뀌지 않은 header에서 `webview_responsiveness_test`가 `FAIL: SPNavigationDelegatePrivate declares _webViewWebProcessDidBecomeUnresponsive:`와 `_webViewWebProcessDidBecomeResponsive:`에 대해 실패했다. Green: 이 test가 4 of 4 assertion을 통과한다.
   - [ ] F212.4 — P0: native와 두 호스트의 view binary 경로.
   - [ ] F212.5 — P0: `sok://`의 예약 `core` module root와 view 페이지의 import map.
   - [ ] F212.6 — P0: plugin id인 `sok` host, view의 exposure 등록, 건너뛰지 않고 실패하는 audit.
