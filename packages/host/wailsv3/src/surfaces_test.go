@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
@@ -93,6 +94,10 @@ func (p *viewPlatform) PlaceDocument(document unsafe.Pointer, left, top, right, 
 func (p *viewPlatform) CloseDocument(document unsafe.Pointer) {}
 
 func (p *viewPlatform) SetViewMessage(document unsafe.Pointer, message func(value string)) error {
+	return nil
+}
+
+func (p *viewPlatform) SetViewEnded(document unsafe.Pointer, ended func()) error {
 	return nil
 }
 
@@ -220,5 +225,53 @@ func TestViewChannelReportsQueueFullAndForeignFrameWithTheirReasons(t *testing.T
 	foreign := `{"error":"the view channel message comes from a frame that is not the main frame"}`
 	if err := s.viewMessage("probe-surface", foreign); err == nil || err.Error() != "the view channel message comes from a frame that is not the main frame" {
 		t.Fatalf("foreign frame: %v", err)
+	}
+}
+
+// contract: view.restart.limit
+func TestViewProcessEndsRestartTheViewUntilTheFourthFailureWithinFiveMinutes(t *testing.T) {
+	clock := &fakeClock{}
+	s, fake, native := newLifecycleSurfaces(t, clock)
+	for _, offset := range []time.Duration{0, 60 * time.Second, 120 * time.Second, 180 * time.Second} {
+		clock.set(offset)
+		endView(t, s, fake)
+	}
+	if len(fake.created) != 4 || len(fake.closed) != 4 {
+		t.Fatalf("created %d views and closed %d, want the first view and three restarts, each failure closing its view", len(fake.created), len(fake.closed))
+	}
+	if _, err := s.documents.Get(DocumentKey{Surface: "probe-surface", Name: viewRegionName}); err == nil {
+		t.Fatalf("a view is recorded after the restart limit")
+	}
+	// The tab is reopened: its surface is removed and created again, which clears the record.
+	s.viewRecords().forget("probe-surface")
+	// The reopened surface resolves its folder again; the test replaces the installed-plugin lookup with the same folder.
+	reopened := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
+	reopened.directory, reopened.folder = "/config/document-data", "/plugins/probe"
+	clock.set(240 * time.Second)
+	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true); err != nil {
+		t.Fatalf("sync after the tab is reopened: %v", err)
+	}
+	if len(fake.created) != 5 {
+		t.Fatalf("views created after the reopen: %d, want the view created again", len(fake.created))
+	}
+}
+
+// contract: view.channel.overflow-closes
+func TestViewChannelOverflowClosesTheViewAndCreatesItAgain(t *testing.T) {
+	clock := &fakeClock{}
+	s, fake, _ := newLifecycleSurfaces(t, clock)
+	first := fake.created[0]
+	full := `{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}`
+	s.viewReceived("probe-surface", first, full)
+	if len(fake.closed) != 1 || fake.closed[0] != first {
+		t.Fatalf("closed views after the overflow: %d, want the overflowed view", len(fake.closed))
+	}
+	if len(fake.created) != 2 {
+		t.Fatalf("created views after the overflow: %d, want the view created again", len(fake.created))
+	}
+	// A message that arrives from the view closed by the overflow is a late message and closes nothing.
+	s.viewReceived("probe-surface", first, full)
+	if len(fake.closed) != 1 || len(fake.created) != 2 {
+		t.Fatalf("a message of the closed view changed the views: closed %d, created %d", len(fake.closed), len(fake.created))
 	}
 }

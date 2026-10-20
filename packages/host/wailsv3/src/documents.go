@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -362,9 +363,13 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	})
 	if err == nil {
 		err = system.SetViewMessage(handle, func(value string) {
-			if err := s.viewMessage(surfaceID, value); err != nil {
-				LogError("view channel", err)
-			}
+			s.viewReceived(surfaceID, handle, value)
+		})
+	}
+	if err == nil {
+		err = system.SetViewEnded(handle, func() {
+			LogError("view channel", surfaceID+": the view process ended")
+			s.viewFailed(surfaceID, handle)
 		})
 	}
 	if err == nil && !system.LoadDocument(handle, "sok://"+plugin+"/"+page) {
@@ -386,13 +391,22 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 // syncView creates the view of a view surface when the surface has none, and places the view over the whole surface. It runs on the UI thread.
 func (s *Surfaces) syncView(surfaceID string, surface unsafe.Pointer, plugin, page string, visible bool) error {
 	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
+	spec := s.viewRecords().track(surfaceID, surface, plugin, page, visible)
+	// A view that failed beyond the restart limit is not created again until its surface is removed (view_lifecycle.go).
+	if s.viewRecords().isStopped(surfaceID) {
+		return nil
+	}
 	handle, err := s.documents.Get(key)
 	if err != nil {
-		folder, folderErr := PluginFolder(s.host.configDir, plugin)
-		if folderErr != nil {
-			return folderErr
+		if spec.folder == "" {
+			folder, folderErr := PluginFolder(s.host.configDir, plugin)
+			if folderErr != nil {
+				return folderErr
+			}
+			spec.folder = folder
+			spec.directory = filepath.Join(s.host.configDir, documentData)
 		}
-		if err := s.attachView(surfaceID, surface, filepath.Join(s.host.configDir, documentData), folder, plugin, page, viewChannelScript); err != nil {
+		if err := s.attachView(surfaceID, surface, spec.directory, spec.folder, plugin, page, viewChannelScript); err != nil {
 			return err
 		}
 		if handle, err = s.documents.Get(key); err != nil {
@@ -1215,6 +1229,50 @@ func (d *Documents) setReadyDocument(surface, document string) bool {
 	return true
 }
 
+// viewReceived handles one message of the sok-view handler of the view handle of surface and writes its failure to the application log.
+// It runs on the UI thread.
+func (s *Surfaces) viewReceived(surface string, handle unsafe.Pointer, value string) {
+	err := s.viewMessage(surface, value)
+	if err == nil {
+		return
+	}
+	LogError("view channel", err)
+	var overflow viewOverflow
+	if errors.As(err, &overflow) {
+		// The view has lost messages, so it is closed and created again (docs/plans/plugin-processes.md, rule 4).
+		s.viewFailed(surface, handle)
+	}
+}
+
+// viewFailed handles the end of the WebContent process of the view handle of surface, or a queue overflow of that view. It runs on the UI
+// thread.
+func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
+	key := DocumentKey{Surface: surface, Name: viewRegionName}
+	current, err := s.documents.Get(key)
+	if err != nil || current != handle {
+		// The handle belongs to a view that was already closed or replaced, so its failure is already counted.
+		return
+	}
+	if _, err := s.documents.Remove(key); err != nil {
+		LogError("view channel", err)
+		return
+	}
+	system.CloseDocument(handle)
+	lifecycle := s.viewRecords()
+	if !lifecycle.fail(surface) {
+		LogError("view channel", fmt.Errorf("%s: the view failed %d times within %s and is created again when its tab is reopened", surface, viewRestartLimit, viewRestartWindow))
+		return
+	}
+	spec := lifecycle.specs[surface]
+	if spec == nil {
+		LogError("view channel", fmt.Errorf("%s: the view record is missing, so the view is not created again", surface))
+		return
+	}
+	if err := s.syncView(surface, spec.native, spec.plugin, spec.page, spec.visible); err != nil {
+		LogError("view channel", err)
+	}
+}
+
 // viewMessage dispatches one message of the sok-view handler of the view of surface. The message is {"message": value} for a message
 // of the view and {"error": reason} for a message from another frame. It returns the reason that the host writes to the application
 // log, or nil when the message needs no log line.
@@ -1254,6 +1312,9 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 		// The current theme is the first message to a ready document (docs/spec/native-surfaces.md#view-surfaces).
 		return s.postView(surface, map[string]any{"event": "theme", "theme": s.Theme()})
 	case "view.error":
+		if strings.HasPrefix(event.Reason, viewQueueFullPrefix) {
+			return viewOverflow{reason: event.Reason}
+		}
 		return errors.New(event.Reason)
 	}
 	return fmt.Errorf("%s: view event %q is unknown", surface, event.Event)

@@ -84,6 +84,7 @@ pub mod start;
 pub mod surfaces;
 #[cfg(feature = "diagnostics")]
 pub mod test_mark;
+pub mod view_lifecycle;
 pub mod window_events;
 pub use surfaces::surface_owner_id;
 pub mod startup;

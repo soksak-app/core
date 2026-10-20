@@ -22,6 +22,13 @@ static void until(NSString *what, BOOL (^done)(void)) {
     if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
+static int viewEnded = 0;
+
+static void viewEndedReceiver(void *context) {
+    (void)context;
+    viewEnded++;
+}
+
 static NSDictionary *latest;
 static NSMutableArray<NSDictionary *> *viewMessages;
 
@@ -99,6 +106,9 @@ int main(void) { @autoreleasepool {
         check([viewMessages[0][@"message"][@"event"] isEqual:@"view.ready"]
             && [viewMessages[0][@"message"][@"document"] isEqual:@"doc-1"],
             [NSString stringWithFormat:@"the view receives the ready message: %@", viewMessages[0]]);
+        sp_document_set_view_ended(view, viewEndedReceiver, NULL);
+        [(id<WKNavigationDelegate>)view webViewWebContentProcessDidTerminate:(WKWebView *)view];
+        check(viewEnded == 1, [NSString stringWithFormat:@"the end of the view process calls the ended receiver once: %d", viewEnded]);
         sp_document_close(view);
     }
 
@@ -114,6 +124,8 @@ int main(void) { @autoreleasepool {
         check([latest[@"title"] isEqual:@"handler undefined"],
             [NSString stringWithFormat:@"the region page has no sok-view handler: %@", latest[@"title"]]);
         check(viewMessages.count == 1, @"the region sends no message to a view receiver");
+        [(id<WKNavigationDelegate>)region webViewWebContentProcessDidTerminate:(WKWebView *)region];
+        check(viewEnded == 1, @"the end of a document region does not call the view ended receiver");
         sp_document_close(region);
     }
     sp_surface_close(surface);

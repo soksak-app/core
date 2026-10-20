@@ -223,6 +223,8 @@ type Surfaces struct {
 	// surfacePlugins is the plugin of each surface that declared its composition.
 	surfacePlugins       map[string]string
 	compositionRevisions map[string]uint64
+	// lifecycle counts the failures of each view surface and keeps the record that creates its view again (view_lifecycle.go).
+	lifecycle *viewLifecycle
 	// A surface is a native view, so input that pressed a surface does not reach the page. This map converts the pressed
 	// view to the surface id that the page uses.
 	named map[uintptr]string
@@ -975,6 +977,8 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		delete(s.compositions, id)
 		delete(s.surfacePlugins, id)
 		s.mu.Unlock()
+		// A surface that is removed and created again is a reopened tab, which clears the failures of its view.
+		s.viewRecords().forget(id)
 		delete(s.compositionRevisions, id)
 		// Instrument of the surface lifecycle (V5-104): a surface that disappeared from the list is destroyed at this point.
 		PerformanceSurface("destroyed", id, nil)

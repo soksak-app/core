@@ -297,6 +297,9 @@ impl Platform for Darwin {
     ) -> Result<(), String> {
         document::set_view_message(document, message)
     }
+    fn set_view_ended(&self, document: Handle, ended: Box<dyn Fn() + Send>) -> Result<(), String> {
+        document::set_view_ended(document, ended)
+    }
     fn set_document_message(
         &self,
         document: Handle,

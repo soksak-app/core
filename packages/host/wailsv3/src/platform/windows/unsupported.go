@@ -233,6 +233,10 @@ func (implementation) SetViewMessage(unsafe.Pointer, func(string)) error {
 	return unsupported("view channel")
 }
 
+func (implementation) SetViewEnded(unsafe.Pointer, func()) error {
+	return unsupported("view channel")
+}
+
 func (implementation) SetDocumentEvent(unsafe.Pointer, func(string)) error {
 	return unsupported("document events")
 }

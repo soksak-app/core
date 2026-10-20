@@ -10,6 +10,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{Mutex, MutexGuard};
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -19,6 +20,9 @@ use crate::application_log::{log_error, log_failure};
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
 use crate::surfaces::{require_region, surface_handle};
+use crate::view_lifecycle::{
+    VIEW_RESTART_LIMIT, VIEW_RESTART_WINDOW, ViewLifecycle, is_queue_full,
+};
 use crate::windows::{emit_window, window_data};
 
 /// The directory inside the configuration directory that holds the persistent site data of document regions. It differs
@@ -511,7 +515,14 @@ impl Streams {
 /// The document regions of a window. The value is the address of the document webview, and 0 for a region that is being
 /// created.
 #[derive(Default)]
-pub struct Documents(Mutex<HashMap<Key, Handle>>, ViewChannels);
+pub struct Documents(Mutex<HashMap<Key, Handle>>, ViewChannels, ViewLifecycle);
+
+impl Documents {
+    /// Returns the failures and the records of the view surfaces of the window.
+    pub fn lifecycle(&self) -> &ViewLifecycle {
+        &self.2
+    }
+}
 
 #[cfg(feature = "diagnostics")]
 impl Documents {
@@ -805,6 +816,14 @@ pub(crate) fn sync_view(
     visible: bool,
 ) -> Result<(), String> {
     let data = window_data(window)?;
+    data.documents
+        .lifecycle()
+        .track(surface, surface_handle, plugin, page, visible);
+    // A view that failed beyond the restart limit is not created again until its surface is removed (docs/plans/plugin-processes.md,
+    // rule 5).
+    if data.documents.lifecycle().is_stopped(surface) {
+        return Ok(());
+    }
     let key: Key = (surface.to_string(), VIEW_NAME.to_string());
     let handle = match data.documents.get(&key) {
         Ok(handle) => handle,
@@ -869,6 +888,8 @@ fn attach_view(
     let state_surface = surface.to_string();
     let message_window = window.clone();
     let message_surface = surface.to_string();
+    let ended_window = window.clone();
+    let ended_surface = surface.to_string();
     create_view(
         channel,
         |channel| {
@@ -884,7 +905,23 @@ fn attach_view(
             platform.set_view_message(
                 document,
                 Box::new(move |value: String| {
-                    view_message(&message_window, platform, &message_surface, &value)
+                    view_message(
+                        &message_window,
+                        platform,
+                        &message_surface,
+                        document,
+                        &value,
+                    )
+                }),
+            )?;
+            platform.set_view_ended(
+                document,
+                Box::new(move || {
+                    log_error(
+                        "view channel",
+                        format!("{ended_surface}: the view process ended"),
+                    );
+                    view_failed(&ended_window, platform, &ended_surface, document);
                 }),
             )?;
             Ok(document)
@@ -904,9 +941,15 @@ fn view_state(window: &Window, surface: &str, state: &str) {
     }
 }
 
-/// Dispatches a message of the sok-view handler of a view. The ready message makes the view receive the current theme. A failure
-/// is written to the application log.
-fn view_message(window: &Window, platform: &'static dyn Platform, surface: &str, value: &str) {
+/// Dispatches a message of the sok-view handler of the view document of surface. The ready message makes the view receive the current
+/// theme. A failure is written to the application log, and a queue overflow of the view ends its failure (view_failed).
+fn view_message(
+    window: &Window,
+    platform: &'static dyn Platform,
+    surface: &str,
+    document: Handle,
+    value: &str,
+) {
     let ready = window_data(window).and_then(|data| data.documents.views().message(surface, value));
     match ready {
         Ok(true) => {
@@ -915,7 +958,60 @@ fn view_message(window: &Window, platform: &'static dyn Platform, surface: &str,
             }
         }
         Ok(false) => {}
-        Err(error) => log_error("view channel", error),
+        Err(error) => {
+            let overflow = is_queue_full(&error);
+            log_error("view channel", error);
+            if overflow {
+                view_failed(window, platform, surface, document);
+            }
+        }
+    }
+}
+
+/// Handles the failure of the view document of surface: its process ended, or its message queue overflowed. The view is closed, and it
+/// is created again unless the failure stops the restarts (docs/plans/plugin-processes.md, rule 5). A document that is not the current
+/// view of the surface was already replaced, so its failure is not counted again.
+fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, document: Handle) {
+    let data = match window_data(window) {
+        Ok(data) => data,
+        Err(error) => return log_error("view channel", error),
+    };
+    let key: Key = (surface.to_string(), VIEW_NAME.to_string());
+    // default: a surface without this view, or with another view handle, means that the failure belongs to a view that was already
+    // closed or replaced, so the failure is not counted again.
+    match data.documents.get(&key) {
+        Ok(current) if current == document => {}
+        _ => return,
+    }
+    if let Err(error) = data.documents.remove(&key) {
+        return log_error("view channel", error);
+    }
+    log_failure("view channel", platform.close_document(document));
+    if !data.documents.lifecycle().fail(surface, Instant::now()) {
+        return log_error(
+            "view channel",
+            format!(
+                "{surface}: the view failed {VIEW_RESTART_LIMIT} times within {} seconds and is created again when its tab is reopened",
+                VIEW_RESTART_WINDOW.as_secs()
+            ),
+        );
+    }
+    let Some(spec) = data.documents.lifecycle().spec(surface) else {
+        return log_error(
+            "view channel",
+            format!("{surface}: the view record is missing, so the view is not created again"),
+        );
+    };
+    if let Err(error) = sync_view(
+        window,
+        platform,
+        spec.surface_handle,
+        surface,
+        &spec.plugin,
+        &spec.page,
+        spec.visible,
+    ) {
+        log_error("view channel", error);
     }
 }
 
@@ -1310,6 +1406,7 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
         Ok(platform) => platform,
         Err(error) => return log_error("document close", error),
     };
+    data.documents.lifecycle().forget(surface);
     let host = window.clone();
     let surface = surface.to_string();
     // The unregistration and the close happen in one task of the main thread. Other work that uses a document also

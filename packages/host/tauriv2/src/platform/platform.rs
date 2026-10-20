@@ -409,6 +409,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
         document: Handle,
         message: Box<dyn Fn(String) + Send>,
     ) -> Result<(), String>;
+    /// Receives the end of the WebContent process of a view, before the host closes the view. A closed view receives no call.
+    fn set_view_ended(&self, document: Handle, ended: Box<dyn Fn() + Send>) -> Result<(), String>;
     fn set_document_event(
         &self,
         document: Handle,

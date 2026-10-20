@@ -200,6 +200,10 @@ pub fn set_view_message(
     missing("view channel")
 }
 
+pub fn set_view_ended(_document: Handle, _ended: Box<dyn Fn() + Send>) -> Result<(), String> {
+    missing("view channel")
+}
+
 pub fn set_document_message(
     _document: Handle,
     _message: Box<dyn Fn(String) + Send>,

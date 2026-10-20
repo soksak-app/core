@@ -1,10 +1,13 @@
 //! Checks the owning surface check of document region requests and the document region list of a window.
 
 use serde_json::{Value, json};
+use std::time::{Duration, Instant};
+
 use soksak_host_tauriv2::documents::{
-    Documents, Key, Report, Request, StreamEffect, Streams, check, go_action, parse_report,
-    remove_surface_for_reload, stream_ack_refusal,
+    Documents, Key, Report, Request, StreamEffect, Streams, ViewChannels, check, go_action,
+    parse_report, remove_surface_for_reload, stream_ack_refusal,
 };
+use soksak_host_tauriv2::view_lifecycle::{ViewLifecycle, is_queue_full};
 
 fn request(surface: &str, document: &str) -> Request {
     serde_json::from_value(serde_json::json!({"surface": surface, "document": document})).unwrap()
@@ -614,5 +617,79 @@ fn view_channel_reports_queue_full_and_foreign_frame_with_their_reasons() {
             r#"{"error":"the view channel message comes from a frame that is not the main frame"}"#
         ),
         Err("the view channel message comes from a frame that is not the main frame".to_string())
+    );
+}
+
+/// Returns the instant that is the given number of seconds after start, so each failure of a test has a fixed time.
+fn seconds_after(start: Instant, seconds: u64) -> Instant {
+    start + Duration::from_secs(seconds)
+}
+
+// contract: view.restart.limit
+#[test]
+fn view_restart_stops_at_the_fourth_failure_within_the_window() {
+    // The failures are passed with their instants, so the window is measured without a timer.
+    let lifecycle = ViewLifecycle::default();
+    let start = Instant::now();
+    let spec = lifecycle.track("probe-surface", 7, "probe", "ui/page.html", true);
+    assert_eq!(
+        spec.surface_handle, 7,
+        "the record keeps the native surface of the view"
+    );
+    assert_eq!(
+        lifecycle.spec("probe-surface").map(|kept| kept.page),
+        Some("ui/page.html".to_string()),
+        "the record of the view is kept for the restart"
+    );
+    assert!(
+        lifecycle.fail("probe-surface", start),
+        "the first failure restarts the view"
+    );
+    assert!(
+        lifecycle.fail("probe-surface", seconds_after(start, 60)),
+        "the second failure restarts the view"
+    );
+    assert!(
+        lifecycle.fail("probe-surface", seconds_after(start, 120)),
+        "the third failure restarts the view"
+    );
+    assert!(
+        !lifecycle.fail("probe-surface", seconds_after(start, 180)),
+        "the fourth failure within 300 seconds stops the restarts"
+    );
+    assert!(lifecycle.is_stopped("probe-surface"));
+    assert!(
+        !lifecycle.fail("probe-surface", seconds_after(start, 190)),
+        "a stopped surface records no restart"
+    );
+    lifecycle.forget("probe-surface");
+    assert!(
+        !lifecycle.is_stopped("probe-surface"),
+        "a removed surface clears its stop, so the reopened tab starts with no failure"
+    );
+    assert!(
+        lifecycle.fail("probe-surface", seconds_after(start, 200)),
+        "the reopened view restarts after a failure"
+    );
+}
+
+// contract: view.channel.overflow-closes
+#[test]
+fn view_channel_overflow_is_the_queue_full_reason_that_closes_the_view() {
+    let channels = ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    let reason = channels
+        .message(
+            "probe-surface",
+            r#"{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}"#,
+        )
+        .expect_err("a queue full report is an error of the view");
+    assert!(
+        is_queue_full(&reason),
+        "the queue full reason closes the view: {reason}"
+    );
+    assert!(
+        !is_queue_full("the view channel message comes from a frame that is not the main frame"),
+        "a foreign frame message does not close the view"
     );
 }

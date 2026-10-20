@@ -274,6 +274,9 @@ static BOOL isBinaryIdentifier(NSString *text) {
 // The receiver of the sok-view handler of a view configuration (docs/spec/native-surfaces.md#view-surfaces).
 @property sp_view_message viewMessage;
 @property void *viewMessageContext;
+// The receiver of the end of the WebContent process of a view (docs/plans/plugin-processes.md, rule 5). A region has none.
+@property sp_view_ended viewEnded;
+@property void *viewEndedContext;
 // The id of the plugin whose surface owns the region; its plugin documents have the origin sok://<plugin>.
 @property(copy) NSString *plugin;
 // The bytes that the plugin documents of the region store under binary ids (docs/spec/native-surfaces.md#document-regions).
@@ -826,6 +829,7 @@ static NSString *const kCoreHost = @"core";
     self.navigation = nil;
     self.failure = @"the web content process ended";
     [self report];
+    if (self.viewEnded && !self.closed) self.viewEnded(self.viewEndedContext);
 }
 
 - (void)webView:(WKWebView *)view didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
@@ -1097,6 +1101,14 @@ const char *sp_document_restore(void *handle, const char *state) {
     // The setter reports no result; a state that WebKit cannot decode restores no history entry.
     if (!view.backForwardList.currentItem) return "the web view refused the interactionState";
     return NULL;
+}
+
+void sp_document_set_view_ended(void *handle, sp_view_ended ended, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) return;
+    view.viewEnded = ended;
+    view.viewEndedContext = context;
 }
 
 void sp_document_set_view_message(void *handle, sp_view_message message, void *context) {

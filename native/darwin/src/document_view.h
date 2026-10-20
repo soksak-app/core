@@ -45,6 +45,14 @@ typedef void (*sp_view_message)(void *context, const char *json);
 void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin, const char *channel,
     sp_document_changed changed, void *context);
 
+// Called when the WebContent process of a view ends, before the host closes the view (docs/plans/plugin-processes.md, rule 5). It
+// is not called for a closed view. Called on the main thread.
+typedef void (*sp_view_ended)(void *context);
+
+// Sets the receiver of the end of the WebContent process of a view. NULL reports none. A document region has no receiver, so its
+// process end is handled only by its own state. The caller keeps context while the document lives.
+void sp_document_set_view_ended(void *document, sp_view_ended ended, void *context);
+
 // Sets the receiver of the messages of the sok-view handler of a view. NULL reports none. The caller keeps context while the
 // document lives.
 void sp_document_set_view_message(void *document, sp_view_message message, void *context);

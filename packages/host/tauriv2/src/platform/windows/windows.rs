@@ -183,6 +183,9 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::set_view_message(document, message)
     }
+    fn set_view_ended(&self, document: Handle, ended: Box<dyn Fn() + Send>) -> Result<(), String> {
+        unsupported::set_view_ended(document, ended)
+    }
     fn set_document_message(
         &self,
         document: Handle,

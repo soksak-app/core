@@ -8,6 +8,7 @@ use crate::application_log::log_error;
 
 type Changed = extern "C" fn(*mut c_void, *const c_char);
 type Event = extern "C" fn(*mut c_void, *const c_char);
+type Ended = extern "C" fn(*mut c_void);
 type CoreRoot = extern "C" fn(
     *mut c_void,
     *const c_char,
@@ -33,6 +34,7 @@ unsafe extern "C" {
     fn sp_document_set_event(document: *mut c_void, event: Event, context: *mut c_void);
     fn sp_document_set_message(document: *mut c_void, message: Event, context: *mut c_void);
     fn sp_document_set_view_message(document: *mut c_void, message: Event, context: *mut c_void);
+    fn sp_document_set_view_ended(document: *mut c_void, ended: Ended, context: *mut c_void);
     fn sp_document_set_stream(document: *mut c_void, stream: Event, context: *mut c_void);
     fn sp_document_stream_on(document: *mut c_void, stream: *const c_char, on: bool) -> bool;
     fn sp_document_stream_ack(document: *mut c_void, seq: u64) -> bool;
@@ -60,6 +62,7 @@ unsafe extern "C" {
 /// The state receiver of each document handle. It is used only on the main thread.
 struct Receiver(Box<dyn Fn(String)>);
 struct EventReceiver(Box<dyn Fn(String) + Send>);
+struct EndedReceiver(Box<dyn Fn() + Send>);
 
 thread_local! {
     static RECEIVERS: std::cell::RefCell<std::collections::HashMap<Handle, *mut Receiver>> =
@@ -72,6 +75,13 @@ thread_local! {
         std::cell::RefCell::new(std::collections::HashMap::new());
     static STREAMS: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+    static VIEW_ENDS: std::cell::RefCell<std::collections::HashMap<Handle, *mut EndedReceiver>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+extern "C" fn ended(context: *mut c_void) {
+    let receiver = unsafe { &*(context as *const EndedReceiver) };
+    (receiver.0)();
 }
 
 extern "C" fn changed(context: *mut c_void, state: *const c_char) {
@@ -323,9 +333,23 @@ pub fn close(document: Handle) {
     if let Some(receiver) = VIEW_MESSAGES.with(|all| all.borrow_mut().remove(&document)) {
         drop(unsafe { Box::from_raw(receiver) });
     }
+    if let Some(receiver) = VIEW_ENDS.with(|all| all.borrow_mut().remove(&document)) {
+        drop(unsafe { Box::from_raw(receiver) });
+    }
     if let Some(receiver) = STREAMS.with(|all| all.borrow_mut().remove(&document)) {
         drop(unsafe { Box::from_raw(receiver) });
     }
+}
+
+/// Receives the end of the WebContent process of a view. A receiver that is set again replaces the earlier one, which the native
+/// layer no longer calls. Call it on the main thread before the view loads a page.
+pub fn set_view_ended(document: Handle, receive: Box<dyn Fn() + Send>) -> Result<(), String> {
+    let receiver = Box::into_raw(Box::new(EndedReceiver(receive)));
+    unsafe { sp_document_set_view_ended(document as *mut c_void, ended, receiver as *mut c_void) };
+    if let Some(earlier) = VIEW_ENDS.with(|all| all.borrow_mut().insert(document, receiver)) {
+        drop(unsafe { Box::from_raw(earlier) });
+    }
+    Ok(())
 }
 
 /// Receives the messages of the sok-view handler of a view as {"message": value} or {"error": reason}. Call it on the main thread

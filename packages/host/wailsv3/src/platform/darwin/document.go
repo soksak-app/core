@@ -14,6 +14,7 @@ extern void documentChanged(void *context, char *state);
 extern void documentEvent(void *context, char *event);
 extern void documentMessage(void *context, char *message);
 extern void viewMessage(void *context, char *message);
+extern void viewEnded(void *context);
 extern void documentStream(void *context, char *message);
 extern void documentQueried(void *context, char *reply);
 extern bool coreRootServe(void *context, char *plugin, char *path, void **bytes, size_t *length, char **contentType);
@@ -41,6 +42,10 @@ static void viewMessageBridge(void *context, const char *message) {
     viewMessage(context, (char *)message);
 }
 
+static void viewEndedBridge(void *context) {
+    viewEnded(context);
+}
+
 static void documentStreamBridge(void *context, const char *message) {
     documentStream(context, (char *)message);
 }
@@ -61,6 +66,9 @@ static void documentSetMessage(void *document, uintptr_t context) {
 }
 static void documentSetViewMessage(void *document, uintptr_t context) {
     sp_document_set_view_message(document, viewMessageBridge, (void *)context);
+}
+static void documentSetViewEnded(void *document, uintptr_t context) {
+    sp_document_set_view_ended(document, viewEndedBridge, (void *)context);
 }
 static void documentSetEvent(void *document, uintptr_t context) {
     sp_document_set_event(document, documentEventBridge, (void *)context);
@@ -86,6 +94,9 @@ var documentMessages = map[unsafe.Pointer]cgo.Handle{}
 
 // viewMessages holds the receiver of each view document until the document closes, as documentMessages does for regions.
 var viewMessages = map[unsafe.Pointer]cgo.Handle{}
+
+// viewEnds holds the receiver of the end of each view until the view closes.
+var viewEnds = map[unsafe.Pointer]cgo.Handle{}
 var documentStreams = map[unsafe.Pointer]cgo.Handle{}
 
 //export documentChanged
@@ -102,6 +113,11 @@ func documentMessage(context unsafe.Pointer, value *C.char) {
 //export viewMessage
 func viewMessage(context unsafe.Pointer, value *C.char) {
 	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+}
+
+//export viewEnded
+func viewEnded(context unsafe.Pointer) {
+	cgo.Handle(uintptr(context)).Value().(func())()
 }
 
 //export documentStream
@@ -196,6 +212,13 @@ func (implementation) SetViewMessage(document unsafe.Pointer, message func(value
 	return nil
 }
 
+func (implementation) SetViewEnded(document unsafe.Pointer, ended func()) error {
+	receiver := cgo.NewHandle(ended)
+	C.documentSetViewEnded(document, C.uintptr_t(receiver))
+	viewEnds[document] = receiver
+	return nil
+}
+
 func (implementation) SetDocumentEvent(document unsafe.Pointer, event func(value string)) error {
 	receiver := cgo.NewHandle(event)
 	C.documentSetEvent(document, C.uintptr_t(receiver))
@@ -284,6 +307,10 @@ func (implementation) CloseDocument(document unsafe.Pointer) {
 	if receiver, ok := viewMessages[document]; ok {
 		receiver.Delete()
 		delete(viewMessages, document)
+	}
+	if receiver, ok := viewEnds[document]; ok {
+		receiver.Delete()
+		delete(viewEnds, document)
 	}
 	if receiver, ok := documentMessages[document]; ok {
 		receiver.Delete()
