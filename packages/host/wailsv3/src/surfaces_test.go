@@ -329,10 +329,29 @@ func TestViewCallReplyReturnsThroughTheChannelPost(t *testing.T) {
 	}
 }
 
+// contract: view.call.cancel
+func TestViewCallCancelIsForwardedWithItsPluginAndSurface(t *testing.T) {
+	payload, ok, err := ViewCallEvent("probe-surface", "probe", json.RawMessage(`{"id":7,"cancel":true}`))
+	if err != nil {
+		t.Fatalf("cancel message: %v", err)
+	}
+	if !ok {
+		t.Fatalf("a cancel message is not forwarded")
+	}
+	if payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["id"] != uint64(7) || payload["cancel"] != true {
+		t.Fatalf("forwarded payload %v, want surface probe-surface, plugin probe, id 7, cancel true", payload)
+	}
+	if _, has := payload["command"]; has {
+		t.Fatalf("forwarded cancel %v carries a command", payload)
+	}
+}
+
 // contract: view.call.forward
-func TestViewCallCancelAndInvalidRequestsAreErrorsNotForwarded(t *testing.T) {
+func TestViewCallInvalidRequestsAreErrorsNotForwarded(t *testing.T) {
 	for _, message := range []string{
-		`{"id":7,"cancel":true}`,
+		`{"id":"7","cancel":true}`,
+		`{"id":7,"cancel":false}`,
+		`{"id":7,"cancel":true,"command":"tab.state.read"}`,
 		`{"command":"tab.state.read"}`,
 		`{"id":"7","command":"tab.state.read"}`,
 		`{"id":7,"command":""}`,

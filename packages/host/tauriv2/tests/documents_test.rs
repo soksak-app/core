@@ -761,13 +761,32 @@ fn view_call_reply_is_the_channel_message_with_its_id() {
     );
 }
 
+// contract: view.call.cancel
+#[test]
+fn view_call_cancel_is_forwarded_with_its_plugin_and_surface() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.call("probe-surface", r#"{"message":{"id":7,"cancel":true}}"#),
+        Ok(Some(json!({
+            "surface": "probe-surface",
+            "plugin": "probe",
+            "id": 7,
+            "cancel": true
+        }))),
+        "a cancel message is forwarded with its surface and plugin"
+    );
+}
+
 // contract: view.call.forward
 #[test]
-fn view_call_cancel_and_invalid_requests_are_errors_not_forwarded() {
+fn view_call_invalid_requests_are_errors_not_forwarded() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
     channels.register("probe-surface", "probe");
     for message in [
-        r#"{"message":{"id":7,"cancel":true}}"#,
+        r#"{"message":{"id":"7","cancel":true}}"#,
+        r#"{"message":{"id":7,"cancel":false}}"#,
+        r#"{"message":{"id":7,"cancel":true,"command":"tab.state.read"}}"#,
         r#"{"message":{"command":"tab.state.read"}}"#,
         r#"{"message":{"id":"7","command":"tab.state.read"}}"#,
         r#"{"message":{"id":7,"command":""}}"#,

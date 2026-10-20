@@ -1388,10 +1388,10 @@ func (s *Surfaces) postThemeToViews() {
 	}
 }
 
-// ViewCallEvent returns the payload of the view-call event for a call request of the view of surface, which has the plugin id.
-// A call request is {"id", "command", "params"}; its id is an integer and its command is not empty. A cancel message {"id", "cancel"} is
-// a call message that the host does not serve yet, so it is an error. It returns false when message is neither, and an error for a call
-// message whose fields are invalid.
+// ViewCallEvent returns the payload of the view-call event for a call request or a cancel of the view of surface, which has the plugin id.
+// A call request is {"id", "command", "params"}; its id is an integer and its command is not empty. A cancel is {"id", "cancel": true}, and
+// its payload is {"id", "cancel": true} with the surface and plugin. It returns false when message is neither, and an error for a call
+// message whose fields are invalid, including a cancel that is not true or that names a command.
 func ViewCallEvent(surface, plugin string, message json.RawMessage) (map[string]any, bool, error) {
 	var call struct {
 		ID      *uint64         `json:"id"`
@@ -1409,7 +1409,10 @@ func ViewCallEvent(surface, plugin string, message json.RawMessage) (map[string]
 		return nil, true, fmt.Errorf("%s: view call has no integer id", surface)
 	}
 	if call.Cancel != nil {
-		return nil, true, fmt.Errorf("%s: view call %d cancel is not served", surface, *call.ID)
+		if !*call.Cancel || call.Command != nil {
+			return nil, true, fmt.Errorf("%s: view call %d cancel must be true and name no command", surface, *call.ID)
+		}
+		return map[string]any{"surface": surface, "plugin": plugin, "id": *call.ID, "cancel": true}, true, nil
 	}
 	if call.Command == nil || *call.Command == "" {
 		return nil, true, fmt.Errorf("%s: view call %d has an empty command", surface, *call.ID)

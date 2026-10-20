@@ -757,8 +757,9 @@ impl ViewChannels {
         }
     }
 
-    /// Returns the view-call payload of a call request of the view of surface, {"id", "command", "params"}, or None when the message
-    /// is not a call request. A cancel message is an error, because the host does not serve cancellation yet.
+    /// Returns the view-call payload of a call request or a cancel of the view of surface, or None when the message is neither.
+    /// A call request is {"id", "command", "params"}; a cancel is {"id", "cancel": true} and its payload is {"id", "cancel": true}
+    /// with the surface and plugin. A cancel that is not true or that names a command is an error.
     pub fn call(&self, surface: &str, value: &str) -> Result<Option<Value>, String> {
         let received: ViewReceived = serde_json::from_str(value)
             .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
@@ -773,13 +774,23 @@ impl ViewChannels {
             .get("id")
             .and_then(Value::as_u64)
             .ok_or_else(|| format!("{surface}: view call has no integer id"))?;
-        if field("cancel").is_some() {
-            return Err(format!("{surface}: view call {id} cancel is not served"));
+        let cancel = field("cancel");
+        if let Some(cancel) = cancel {
+            if *cancel != Value::Bool(true) || field("command").is_some() {
+                return Err(format!(
+                    "{surface}: view call {id} cancel must be true and name no command"
+                ));
+            }
         }
-        let command = field("command")
-            .and_then(Value::as_str)
-            .filter(|command| !command.is_empty())
-            .ok_or_else(|| format!("{surface}: view call {id} has an empty command"))?;
+        let command = match cancel {
+            Some(_) => None,
+            None => Some(
+                field("command")
+                    .and_then(Value::as_str)
+                    .filter(|command| !command.is_empty())
+                    .ok_or_else(|| format!("{surface}: view call {id} has an empty command"))?,
+            ),
+        };
         let plugin = self
             .lock()
             .get(surface)
@@ -787,6 +798,14 @@ impl ViewChannels {
             .ok_or_else(|| {
                 format!("{surface}: view channel message of a surface without a view")
             })?;
+        let Some(command) = command else {
+            return Ok(Some(json!({
+                "surface": surface,
+                "plugin": plugin,
+                "id": id,
+                "cancel": true,
+            })));
+        };
         // default: a call without params sends null to its command, as the call envelope has no params for it.
         let params = message.get("params").cloned().unwrap_or(Value::Null);
         Ok(Some(json!({

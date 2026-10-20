@@ -216,22 +216,42 @@ function tabState(surface, isDisposed) {
 }
 
 /**
- * Answers the call requests of the view of surface with the handlers of its context, and sends each reply to the view
- * (docs/spec/native-surfaces.md#view-surfaces). It resolves with the function that ends the answers.
+ * Answers the call requests and the cancels of the view of surface with the handlers of its context, and sends each reply to the view
+ * (docs/spec/native-surfaces.md#view-surfaces). It resolves with the function that ends the answers. page is the runtime of the
+ * surface, whose sidecar send ends with its place; isDisposed tells whether the surface was disposed.
  */
-function answerViewCalls(surface, scoped) {
-  const tab = surface.unload ? tabState(surface, () => false) : null;
-  return scoped.native.on("view-call", (event) => answerViewCall(event, {
+function answerViewCalls(surface, scoped, page, isDisposed) {
+  const tab = surface.unload ? tabState(surface, isDisposed) : null;
+  // The pending calls of this view, by id. A cancel ends the pending call that it names.
+  const pending = new Map();
+  const options = {
     plugin: surface.pluginId,
+    pending,
     tab,
     runCore: (name, params) => scoped.call(name, params),
     runOwned: (name, params, owner) => registry.runOwned(name, params, owner),
-  }).then(
-    // default: a handler that returns no value replies with null, which is the result of a call without a value.
-    (result) => ({ id: event.id, result: result ?? null }),
-    // default: a rejection that is not an Error replies with its text.
-    (error) => ({ id: event.id, error: { code: -32000, message: String(error?.message ?? error) } }),
-  ).then((reply) => scoped.native.call("viewReply", reply)));
+    runtime: {
+      native: { call: (name, payload) => scoped.native.call(name, payload) },
+      sidecar: { send: (id, body, cids) => page.sidecar().send(id, body, cids) },
+      clipboard: scoped.clipboard,
+      links: scoped.links,
+    },
+  };
+  return scoped.native.on("view-call", (event) => {
+    if (event?.cancel === true) {
+      // A cancel has no reply: the call that it ends replies cancelled.
+      answerViewCall(event, options).catch((error) => {
+        dispatchEvent(new ErrorEvent("error", { message: `view call ${event.id} cancel: ${error.message}` }));
+      });
+      return;
+    }
+    answerViewCall(event, options).then(
+      // default: a handler that returns no value replies with null, which is the result of a call without a value.
+      (result) => ({ id: event.id, result: result ?? null }),
+      // default: a rejection that is not an Error replies with its text.
+      (error) => ({ id: event.id, error: { code: -32000, message: String(error?.message ?? error) } }),
+    ).then((reply) => scoped.native.call("viewReply", reply));
+  });
 }
 
 export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
@@ -380,7 +400,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
     if (viewSurface) {
-      const answering = answerViewCalls(surface, scoped);
+      const answering = answerViewCalls(surface, scoped, page, () => entry.disposed);
       closing.signal.addEventListener("abort", () => answering.then((off) => off()), { once: true });
     }
     entry.mounted = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
