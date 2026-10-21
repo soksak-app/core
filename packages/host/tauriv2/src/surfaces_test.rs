@@ -60,6 +60,51 @@ fn a_status_read_during_surface_close_finds_the_registered_surface() {
     assert!(named.lock().unwrap().contains_key(&7));
 }
 
+// contract: view.composition.page-and-regions
+#[test]
+fn a_view_composition_declares_its_page_with_optional_regions() {
+    use super::{SurfaceComposition, validate_composition};
+    let composition = |value: serde_json::Value| -> SurfaceComposition {
+        serde_json::from_value(value).expect("the composition fixture is valid")
+    };
+    let region = serde_json::json!({"name": "page", "kind": "document", "input": "native"});
+    assert!(
+        validate_composition(
+            "probe",
+            &composition(serde_json::json!({"kind": "view", "page": "ui/page.html"}))
+        )
+        .is_ok()
+    );
+    assert!(
+        validate_composition("probe", &composition(serde_json::json!({"kind": "view", "page": "ui/page.html", "regions": [region], "overlays": []}))).is_ok()
+    );
+    for value in [
+        serde_json::json!({"kind": "view"}),
+        serde_json::json!({"kind": "view", "page": "../page.html"}),
+        serde_json::json!({"kind": "view", "page": "ui/page.js"}),
+        serde_json::json!({"kind": "view", "page": "ui/.binary/page.html"}),
+        serde_json::json!({"kind": "hybrid", "page": "ui/page.html", "regions": [region], "overlays": []}),
+    ] {
+        assert!(
+            validate_composition("probe", &composition(value.clone())).is_err(),
+            "composition {value} is accepted"
+        );
+    }
+}
+
+// contract: view.composition.dom-removed
+#[test]
+fn a_dom_composition_is_refused_with_the_plugin_and_the_field() {
+    use super::{SurfaceComposition, validate_composition};
+    let composition: SurfaceComposition =
+        serde_json::from_value(serde_json::json!({"kind": "dom"})).expect("the fixture is valid");
+    let error = validate_composition("probe", &composition).expect_err("the dom kind is removed");
+    assert_eq!(
+        error,
+        "plugin probe surface composition: kind dom is removed; the composition takes kind view or hybrid"
+    );
+}
+
 /// Poisons the lock by panicking while its guard is held.
 fn poison<T>(lock: &Mutex<T>) {
     assert!(

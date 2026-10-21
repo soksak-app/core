@@ -354,8 +354,8 @@ export function createRegistry({ call = null, report = null } = {}) {
       }
       return result;
     }),
-    /** Registers a core dom entry. The elements are found by the data-expose attribute when requested. */
-    dom: (name, provide = byAttribute(name)) => core.dom(name, provide),
+    /** Registers a core dom entry. The elements are found by the data-expose attribute when requested. resolve answers an address (plugin-api dom). */
+    dom: (name, provide = byAttribute(name), resolve = undefined) => core.dom(name, provide, resolve),
 
     /**
      * Runs one core command of this document. It is validated by the params schema of the declaration. The UI of the document performs operations through this path, so a human operation and an external request go through the same command.
@@ -517,6 +517,8 @@ export function createRegistry({ call = null, report = null } = {}) {
     }),
 
     list,
+    /** The declared time limit of a command in milliseconds, or undefined when its declaration has none (docs/spec/exposure.md). */
+    commandTimeout: (name) => declared.get(declarationKey("command", name))?.declaration.timeout,
     surfaceDeclarations() {
       const listed = list();
       const onlySurface = (entry) => entry.name.startsWith(SURFACE_CORE);

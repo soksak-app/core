@@ -13,6 +13,8 @@ import { createPluginApply } from "./plugin-apply.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
 import { trackPointer } from "./pointer-state.js";
+import { setTreeExpanded } from "./declared-ui.js";
+import { resolveSectionControl } from "./section-address.js";
 import { losses, onPluginProcessChange, openCalls, views } from "./plugin-processes.js";
 import { tabMenuItems } from "./tab-menu.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
@@ -35,6 +37,7 @@ import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
 import { filePlace, modalState, onFilesDropped, onModalState } from "./host.js";
 import { plugin } from "./registry.js";
+import { compositionKindOf } from "./surface-composition-kind.js";
 import { systemNotifications } from "./system-notifications.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
@@ -219,6 +222,7 @@ function surfacesState() {
   // The tab of a plugin that is not loaded shows a placeholder instead of a surface, and the placeholder reports the reason (docs/spec/plugins.md).
   const placeholders = [...document.querySelectorAll("[data-plugin-placeholder]")].map((el) => ({
     surface: el.dataset.surfaceId, plugin: el.dataset.plugin, visible: true, placeholder: el.dataset.pluginPlaceholder,
+    composition: null,
   }));
   const record = seated();
   if (!record) return placeholders;
@@ -227,6 +231,7 @@ function surfacesState() {
     surface: s.id, plugin: s.plugin, visible: s.visible, dim: s.dim,
     declared: shift(s.declared, at), applied: shift(s.applied, at),
     exposes: registry.namesOf(s.id), status: surfaceState(s.id), placeholder: null,
+    composition: compositionKindOf(plugin(s.plugin).surface(s.id)),
     state: memory.unloaded(s.id) ? "unloaded" : "loaded",
   })), ...placeholders];
 }
@@ -503,6 +508,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.card.sidebar.size", ({ card, side, size }) => { resizeSidebar(card, side, size); });
   registry.command("core.sidebar.section.select", ({ sidebar, section }) => { selectSection(sidebar, section); });
   registry.command("core.sidebar.section.fold", ({ sidebar, section }) => { foldSection(sidebar, section); });
+  registry.command("core.declared-ui.tree.expand", (params) => { setTreeExpanded(params); });
   registry.command("core.text.larger", async () => { await changeTextSize(1, "core.text.larger"); });
   registry.command("core.text.smaller", async () => { await changeTextSize(-1, "core.text.smaller"); });
   registry.command("core.text.reset", async () => { await changeTextSize(0, "core.text.reset"); });
@@ -589,7 +595,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   });
 
   for (const { name } of registry.list().dom) {
-    if (name.startsWith("core.")) registry.dom(name);
+    if (name.startsWith("core.")) registry.dom(name, undefined, name === "core.sidebar.section.control" ? resolveSectionControl : undefined);
   }
 
   onPicker(coreChanged);

@@ -66,6 +66,7 @@ pub mod performance;
 #[path = "platform/platform.rs"]
 pub mod platform;
 pub mod plugins;
+pub mod presentation_wait;
 #[cfg(feature = "diagnostics")]
 pub mod process_lock_hook;
 pub mod project_removal;
@@ -86,6 +87,7 @@ pub mod start;
 pub mod surfaces;
 #[cfg(feature = "diagnostics")]
 pub mod test_mark;
+pub mod view_lifecycle;
 pub mod window_events;
 pub use surfaces::surface_owner_id;
 pub mod startup;
@@ -382,6 +384,16 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // The core root of a view serves the core files from the bundled frontend, which the page reads too
                 // (docs/plans/plugin-processes.md, rule 4).
                 let core_root_frontend = std::sync::Arc::clone(&core_frontend);
+                // Each view configuration runs the view channel script of the bundled frontend before its page
+                // (docs/spec/native-surfaces.md#view-surfaces).
+                let channel = core_frontend
+                    .get(&tauri::utils::assets::AssetKey::from(
+                        "modules/@soksak/plugin-api/view-start.js",
+                    ))
+                    .ok_or("modules/@soksak/plugin-api/view-start.js is missing from the bundled frontend")?;
+                let channel = String::from_utf8(channel.into_owned())
+                    .map_err(|error| format!("view channel script is not UTF-8: {error}"))?;
+                documents::set_view_channel(&channel)?;
                 installed::register_core_root(
                     platform::current()?,
                     directory.clone(),

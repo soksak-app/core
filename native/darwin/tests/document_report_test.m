@@ -216,7 +216,7 @@ int main(void) { @autoreleasepool {
     webviewSetSurfaceHidden(surface, false);
     NSString *temporary = temporaryFolder(@"soksak-document-report-");
     const char *store = [temporary stringByAppendingPathComponent:@"store"].fileSystemRepresentation;
-    void *document = sp_document_create(surface, store, NULL, NULL, false, changed, (void *)1);
+    void *document = sp_document_create(surface, store, NULL, NULL, NULL, changed, (void *)1);
     if (!document) failStep(@"create", @"a document region is not created");
     WKWebView *view = (WKWebView *)document;
     sp_document_place(document, 0, 0, 0, 0, true);
@@ -273,7 +273,7 @@ int main(void) { @autoreleasepool {
     check(sp_document_restore(document, encoded.UTF8String) != NULL
         && strcmp(sp_document_restore(document, encoded.UTF8String), "the document region has already loaded a document") == 0,
         @"a region that has loaded a document refuses a restore");
-    void *restored = sp_document_create(surface, store, NULL, NULL, false, changed, (void *)2);
+    void *restored = sp_document_create(surface, store, NULL, NULL, NULL, changed, (void *)2);
     if (!restored) failStep(@"restore", @"a second document region is not created");
     sp_document_place(restored, 0, 0, 0, 0, true);
     char *unloaded = sp_document_interaction_state(restored);

@@ -16,7 +16,7 @@
   let listener = null;
 
   const refuse = (reason) => {
-    handler.postMessage({ event: "view.error", plugin, text: `error: view channel: ${reason} for ${plugin}` });
+    handler.postMessage({ event: "view.error", plugin, reason: `${reason} for ${plugin}` });
   };
 
   const deliver = (message) => {

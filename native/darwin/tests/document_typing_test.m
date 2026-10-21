@@ -57,7 +57,7 @@ int main(void) { @autoreleasepool {
     webviewSetFrame(surface, 0, 0, 500, 400);
     webviewSetSurfaceHidden(surface, false);
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
-    void *document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, false, changed, NULL);
+    void *document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, changed, NULL);
     sp_document_place(document, 0, 0, 0, 0, true);
     check(sp_document_load(document, [NSURL fileURLWithPath:page].absoluteString.UTF8String), @"the region loads the page");
     check(until(^BOOL{ return [latest[@"title"] isEqual:@"type"] && [latest[@"loading"] isEqual:@NO]; }), @"the page loads");

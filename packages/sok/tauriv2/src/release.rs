@@ -255,7 +255,8 @@ fn check_release_files(listed: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// The modules that plugin.json loads and their names: the surface, the module of each section, and the state.
+/// The modules that plugin.json loads and their names: the surface module, the page of a view composition, the module of each
+/// section, and the state.
 fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
     let mut modules = vec![];
     let mut add = |what: String, value: &Value| {
@@ -264,6 +265,12 @@ fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
         }
     };
     add("surface module".into(), &manifest["surface"]["module"]);
+    if manifest["surface"]["composition"]["kind"] == "view" {
+        add(
+            "view page".into(),
+            &manifest["surface"]["composition"]["page"],
+        );
+    }
     for section in manifest["sections"].as_array().into_iter().flatten() {
         let what = match section["id"].as_str() {
             Some(id) => format!("section {id} module"),

@@ -4,11 +4,15 @@
 //
 // core-exposure.js registers each reader under the name that exposure.json declares.
 
+import { trace } from "./performance.js";
+
 /** The losses of each plugin, in the order of their first count. */
 const lossCounts = new Map();
 /** The open calls of each call layer. A layer with no open call is removed. */
 const layers = new Map();
 const listeners = new Set();
+/** The responsiveness of each view surface, in the order of its first notice. */
+const viewStates = [];
 
 const announce = () => {
   for (const listener of listeners) listener();
@@ -61,11 +65,24 @@ export function callReporter(plugin) {
 export function snapshotReporter(plugin) {
   return (event) => {
     const entry = lossesOf(plugin);
-    if (event.kind === "skipped") entry.skipped += event.count;
-    else if (event.kind === "stalled") entry.stalled += event.count;
-    else throw new TypeError(`unknown snapshot report kind ${event.kind}`);
+    // The page writes each event through the page trace while the trace is on (docs/spec/performance-trace.md).
+    if (event.kind === "skipped") {
+      entry.skipped += event.count;
+      trace("declared-ui.snapshot.skipped", { plugin, status: event.status, count: event.count });
+    } else if (event.kind === "stalled") {
+      // A stalled value is counted only: no live observer waits for its acknowledgement, so it writes no trace event.
+      entry.stalled += event.count;
+    } else {
+      throw new TypeError(`unknown snapshot report kind ${event.kind}`);
+    }
     announce();
   };
+}
+
+/** Counts one view presentation wait of plugin that ended without its presentation (the host sends the notice to the surface). */
+export function presentationAbandoned(plugin) {
+  lossesOf(plugin).abandoned += 1;
+  announce();
 }
 
 /** The open calls of each plugin that has one: `{plugin, count, oldestStartedAt}`. */
@@ -87,4 +104,24 @@ export const openCalls = () => {
 export const losses = () => [...lossCounts.values()].map((entry) => ({ ...entry }));
 
 /** The responsiveness of each plugin view surface: `{plugin, surface, responsive}`. */
-export const views = () => [];
+export const views = () => viewStates.map((entry) => ({ ...entry }));
+
+/**
+ * Records the responsiveness notice of the view of surface, which the host sends as view-responsiveness (docs/spec/native-surfaces.md#view-surfaces).
+ * A notice whose responsive is not a boolean is refused.
+ */
+export function viewResponsiveness(plugin, surface, responsive) {
+  if (typeof responsive !== "boolean") throw new TypeError(`view ${surface} responsive is not a boolean`);
+  const entry = viewStates.find((state) => state.surface === surface);
+  if (entry) entry.responsive = responsive;
+  else viewStates.push({ plugin, surface, responsive });
+  announce();
+}
+
+/** Removes the state of the view of surface when the surface is disposed. */
+export function forgetView(surface) {
+  const index = viewStates.findIndex((state) => state.surface === surface);
+  if (index < 0) return;
+  viewStates.splice(index, 1);
+  announce();
+}

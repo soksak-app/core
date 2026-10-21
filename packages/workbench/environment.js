@@ -29,7 +29,8 @@ export function defaultRegistry() {
 
 /** Converts a surface declaration into a function that returns the surface module target for a tab id. */
 function surfaceOf(name, pluginId, surface) {
-  const module = `/${modulePath(name, surface.module)}`;
+  // A view surface has no module (docs/spec/plugins.md#view-surfaces).
+  const module = surface.composition?.kind === "view" ? null : `/${modulePath(name, surface.module)}`;
   return (tabId) => ({ module, composition: surface.composition, surfaceId: tabId,
     pluginId, declarations: surface.declarations, sidecars: surface.sidecars,
     // default: a surface without surface.unload (undeclared, or beside background) is never unloaded.
@@ -98,6 +99,11 @@ export function installEnvironment(environmentDocument, installedDocument) {
     // A section module is loaded from the path of its plugin, like a surface module.
     // default: sections is an optional field of plugin.json; without it there are no sections.
     for (const section of manifest.sections ?? []) {
+      // A section with status is drawn from a declared UI status and has no module (docs/spec/declared-ui.md).
+      if (section.module === undefined) {
+        registerSection({ ...section, module: undefined });
+        continue;
+      }
       const module = typeof section.module === "string" ? `/${modulePath(name, section.module)}`
         : Object.fromEntries(Object.entries(section.module).map(([mode, path]) => [mode, `/${modulePath(name, path)}`]));
       registerSection({ ...section, module });

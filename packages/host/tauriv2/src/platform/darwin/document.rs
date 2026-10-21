@@ -8,6 +8,8 @@ use crate::application_log::log_error;
 
 type Changed = extern "C" fn(*mut c_void, *const c_char);
 type Event = extern "C" fn(*mut c_void, *const c_char);
+type Ended = extern "C" fn(*mut c_void);
+type Responsiveness = extern "C" fn(*mut c_void, bool);
 type CoreRoot = extern "C" fn(
     *mut c_void,
     *const c_char,
@@ -23,7 +25,7 @@ unsafe extern "C" {
         store: *const c_char,
         folder: *const c_char,
         plugin: *const c_char,
-        is_view: bool,
+        channel: *const c_char,
         changed: Changed,
         context: *mut c_void,
     ) -> *mut c_void;
@@ -32,6 +34,20 @@ unsafe extern "C" {
     fn strdup(text: *const c_char) -> *mut c_char;
     fn sp_document_set_event(document: *mut c_void, event: Event, context: *mut c_void);
     fn sp_document_set_message(document: *mut c_void, message: Event, context: *mut c_void);
+    fn sp_document_set_view_message(document: *mut c_void, message: Event, context: *mut c_void);
+    fn sp_document_set_view_ended(document: *mut c_void, ended: Ended, context: *mut c_void);
+    fn sp_document_set_view_responsiveness(
+        document: *mut c_void,
+        responsiveness: Responsiveness,
+        context: *mut c_void,
+    );
+    fn sp_document_add_user_script(document: *mut c_void, source: *const c_char);
+    fn sp_document_binary_take(
+        document: *mut c_void,
+        id: *const c_char,
+        bytes: *mut *mut c_void,
+        length: *mut usize,
+    ) -> *const c_char;
     fn sp_document_set_stream(document: *mut c_void, stream: Event, context: *mut c_void);
     fn sp_document_stream_on(document: *mut c_void, stream: *const c_char, on: bool) -> bool;
     fn sp_document_stream_ack(document: *mut c_void, seq: u64) -> bool;
@@ -59,6 +75,9 @@ unsafe extern "C" {
 /// The state receiver of each document handle. It is used only on the main thread.
 struct Receiver(Box<dyn Fn(String)>);
 struct EventReceiver(Box<dyn Fn(String) + Send>);
+struct EndedReceiver(Box<dyn Fn() + Send>);
+
+struct ResponsivenessReceiver(Box<dyn Fn(bool) + Send>);
 
 thread_local! {
     static RECEIVERS: std::cell::RefCell<std::collections::HashMap<Handle, *mut Receiver>> =
@@ -67,8 +86,24 @@ thread_local! {
         std::cell::RefCell::new(std::collections::HashMap::new());
     static MESSAGES: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+    static VIEW_MESSAGES: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
     static STREAMS: std::cell::RefCell<std::collections::HashMap<Handle, *mut EventReceiver>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+    static VIEW_ENDS: std::cell::RefCell<std::collections::HashMap<Handle, *mut EndedReceiver>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    static VIEW_RESPONSIVENESS: std::cell::RefCell<std::collections::HashMap<Handle, *mut ResponsivenessReceiver>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+extern "C" fn ended(context: *mut c_void) {
+    let receiver = unsafe { &*(context as *const EndedReceiver) };
+    (receiver.0)();
+}
+
+extern "C" fn responsiveness(context: *mut c_void, responsive: bool) {
+    let receiver = unsafe { &*(context as *const ResponsivenessReceiver) };
+    (receiver.0)(responsive);
 }
 
 extern "C" fn changed(context: *mut c_void, state: *const c_char) {
@@ -93,11 +128,16 @@ pub fn create(
     store: &str,
     folder: &str,
     plugin: &str,
+    channel: Option<&str>,
     receive: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {
     let store = CString::new(store).map_err(|e| e.to_string())?;
     let folder = CString::new(folder).map_err(|e| e.to_string())?;
     let plugin = CString::new(plugin).map_err(|e| e.to_string())?;
+    let channel = channel
+        .map(CString::new)
+        .transpose()
+        .map_err(|e| e.to_string())?;
     let receiver = Box::into_raw(Box::new(Receiver(receive)));
     let document = unsafe {
         sp_document_create(
@@ -105,7 +145,9 @@ pub fn create(
             store.as_ptr(),
             folder.as_ptr(),
             plugin.as_ptr(),
-            false,
+            channel
+                .as_ref()
+                .map_or(std::ptr::null(), |text| text.as_ptr()),
             changed,
             receiver as *mut c_void,
         )
@@ -310,7 +352,101 @@ pub fn close(document: Handle) {
     if let Some(receiver) = MESSAGES.with(|all| all.borrow_mut().remove(&document)) {
         drop(unsafe { Box::from_raw(receiver) });
     }
+    if let Some(receiver) = VIEW_MESSAGES.with(|all| all.borrow_mut().remove(&document)) {
+        drop(unsafe { Box::from_raw(receiver) });
+    }
+    if let Some(receiver) = VIEW_ENDS.with(|all| all.borrow_mut().remove(&document)) {
+        drop(unsafe { Box::from_raw(receiver) });
+    }
+    if let Some(receiver) = VIEW_RESPONSIVENESS.with(|all| all.borrow_mut().remove(&document)) {
+        drop(unsafe { Box::from_raw(receiver) });
+    }
     if let Some(receiver) = STREAMS.with(|all| all.borrow_mut().remove(&document)) {
         drop(unsafe { Box::from_raw(receiver) });
     }
+}
+
+/// Takes the bytes that the binary store of the document keeps under id, and releases the id. The copy that the native layer makes is
+/// released here. The error is the text of the native layer.
+pub fn take_document_binary(document: Handle, id: &str) -> Result<Vec<u8>, String> {
+    let id =
+        CString::new(id).map_err(|error| format!("the binary id contains a NUL byte: {error}"))?;
+    let mut bytes: *mut c_void = std::ptr::null_mut();
+    let mut length: usize = 0;
+    let text = unsafe {
+        sp_document_binary_take(
+            document as *mut c_void,
+            id.as_ptr(),
+            &mut bytes,
+            &mut length,
+        )
+    };
+    if !text.is_null() {
+        return Err(unsafe { CStr::from_ptr(text) }
+            .to_string_lossy()
+            .into_owned());
+    }
+    if length == 0 {
+        unsafe { free(bytes) };
+        return Ok(Vec::new());
+    }
+    let data = unsafe { std::slice::from_raw_parts(bytes as *const u8, length) }.to_vec();
+    unsafe { free(bytes) };
+    Ok(data)
+}
+
+/// Adds a document-start user script to the document. The source is copied by the native layer. Call it on the main thread before the
+/// document loads a page.
+pub fn add_document_script(document: Handle, source: &str) -> Result<(), String> {
+    let source = CString::new(source)
+        .map_err(|error| format!("the document script contains a NUL byte: {error}"))?;
+    unsafe { sp_document_add_user_script(document as *mut c_void, source.as_ptr()) };
+    Ok(())
+}
+
+/// Receives the responsiveness notices of a view. A receiver that is set again replaces the earlier one. Call it on the main thread
+/// before the view loads a page.
+pub fn set_view_responsiveness(
+    document: Handle,
+    receive: Box<dyn Fn(bool) + Send>,
+) -> Result<(), String> {
+    let receiver = Box::into_raw(Box::new(ResponsivenessReceiver(receive)));
+    unsafe {
+        sp_document_set_view_responsiveness(
+            document as *mut c_void,
+            responsiveness,
+            receiver as *mut c_void,
+        )
+    };
+    if let Some(earlier) =
+        VIEW_RESPONSIVENESS.with(|all| all.borrow_mut().insert(document, receiver))
+    {
+        drop(unsafe { Box::from_raw(earlier) });
+    }
+    Ok(())
+}
+
+/// Receives the end of the WebContent process of a view. A receiver that is set again replaces the earlier one, which the native
+/// layer no longer calls. Call it on the main thread before the view loads a page.
+pub fn set_view_ended(document: Handle, receive: Box<dyn Fn() + Send>) -> Result<(), String> {
+    let receiver = Box::into_raw(Box::new(EndedReceiver(receive)));
+    unsafe { sp_document_set_view_ended(document as *mut c_void, ended, receiver as *mut c_void) };
+    if let Some(earlier) = VIEW_ENDS.with(|all| all.borrow_mut().insert(document, receiver)) {
+        drop(unsafe { Box::from_raw(earlier) });
+    }
+    Ok(())
+}
+
+/// Receives the messages of the sok-view handler of a view as {"message": value} or {"error": reason}. Call it on the main thread
+/// before the view loads a page.
+pub fn set_view_message(
+    document: Handle,
+    receive: Box<dyn Fn(String) + Send>,
+) -> Result<(), String> {
+    let receiver = Box::into_raw(Box::new(EventReceiver(receive)));
+    unsafe {
+        sp_document_set_view_message(document as *mut c_void, event, receiver as *mut c_void)
+    };
+    VIEW_MESSAGES.with(|all| all.borrow_mut().insert(document, receiver));
+    Ok(())
 }

@@ -225,8 +225,28 @@ func (implementation) EvaluateScript(unsafe.Pointer, string) {
 	unreachable("native webview script evaluation")
 }
 
-func (implementation) CreateDocument(unsafe.Pointer, string, string, string, func(string)) (unsafe.Pointer, error) {
+func (implementation) CreateDocument(unsafe.Pointer, string, string, string, string, func(string)) (unsafe.Pointer, error) {
 	return nil, unsupported("document view")
+}
+
+func (implementation) SetViewMessage(unsafe.Pointer, func(string)) error {
+	return unsupported("view channel")
+}
+
+func (implementation) SetViewEnded(unsafe.Pointer, func()) error {
+	return unsupported("view channel")
+}
+
+func (implementation) SetViewResponsiveness(unsafe.Pointer, func(bool)) error {
+	return unsupported("view channel")
+}
+
+func (implementation) TakeDocumentBinary(unsafe.Pointer, string) ([]byte, error) {
+	return nil, unsupported("document region")
+}
+
+func (implementation) AddDocumentScript(unsafe.Pointer, string) error {
+	return unsupported("view channel")
 }
 
 func (implementation) SetDocumentEvent(unsafe.Pointer, func(string)) error {
@@ -377,6 +397,10 @@ func (implementation) CommitLayout(unsafe.Pointer, uint64) bool {
 
 func (implementation) CancelLayout(unsafe.Pointer) error {
 	return unsupported("surface layout cancel")
+}
+
+func (implementation) JoinView(unsafe.Pointer, uint64, unsafe.Pointer, func()) (func() error, bool, error) {
+	return nil, false, unsupported("view presentation wait")
 }
 
 func (implementation) StartPageTitlebar(unsafe.Pointer, uint64, float64, func(error)) error {

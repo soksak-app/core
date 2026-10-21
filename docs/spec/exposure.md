@@ -40,11 +40,11 @@ A name has the form `<owner>.<name>`. `owner` is `core`, `host`, or a plugin id.
 | command | `timeout` | Optional. How long a command may take to reply, in milliseconds from 1 to 600000; the default is 10 seconds. The host applies it to a command forwarded to a surface page, and the main page applies it to the handler of a command it runs itself, which then fails with -32000 and `command <name> did not reply within <ms>ms`. A handler that throws, synchronously or asynchronously, fails the command with its own error, and the timeout ends with it. A core command then waits for its layout to present; that wait is not part of the timeout, because each step of the presentation path fails with its own error within its own limit ([native host](native-host.md)) |
 | dom | `name` | Entry name |
 | dom | `description` | One-sentence description |
-| dom | `many` | Optional. `true` when several elements share the name; requests address one element with `index` |
+| dom | `many` | Optional. `true` when several elements share the name; requests address one element with `index`, or with `address` where [declared UI](declared-ui.md) defines one |
 
 A schema is a JSON Schema subset with the keywords `type`, `properties`, `items`, and `enum`.
 
-The element for a dom entry carries the attribute `data-expose="<name>"`. Without `many`, exactly one element has the name.
+The element for a dom entry carries the attribute `data-expose="<name>"`. Without `many`, exactly one element has the name. An interactive element that a [declared UI](declared-ui.md) value draws carries the attributes and the address that [declared UI](declared-ui.md) defines.
 
 ## User interface
 
@@ -56,7 +56,7 @@ People and external clients operate a document through the same entries.
 - A redraw keeps every control that stays in the document in its place and moves a control only when its order is wrong. WebKit sends no `click` for a press whose element left the document between the press and the release, and moving an element with `insertBefore` takes it out of the document first, so a redraw that moved a control lost a click pressed during it. A plugin page draws a list of controls with `drawList` of `@soksak/plugin-api`, which keeps the element of each key in place.
 - A native modal renders a copy of its element and answers with the control's key; the main page runs the command of the matching control in its own element.
 
-Coverage is judged in the running document. The binder's `audit(root)` lists interactive elements that are not connected or have no dom name as `{tag, expose, command, text}`; the main page publishes it as `core.page.audit` and every plugin page as `unbound` in `core.surface.document`. `e2e/audit.test.mjs` visits every screen, modal section, menu, editing state, and visible plugin surface of both applications and requires empty lists. `scripts/check-exposure.mjs` (`make exposure-check`) checks only what the workbench sources state through `exposure-check.js` of `@soksak/plugin-api`: every name written in a source is declared, every declared status and command is registered, and every declared dom name is written as an exposed value. A plugin section module may also name core statuses and bind core commands ([sections](plugins.md#sections)), and a surface module may run a core command through `runtime.command` ([surface module ownership](plugins.md#surface-module-ownership)); those names must be declared by core; a plugin repository checks the names of its own pages and sections with the same module, `soksak-exposure`, which reads the core names from `core-exposure.json` of the package. `make exposure-check` fails when that file differs from the workbench declaration, and `node scripts/check-exposure.mjs --write` writes it.
+Coverage is judged in the running document. The binder's `audit(root)` lists interactive elements that are not connected or have no dom name as `{tag, expose, command, text}`; the main page publishes it as `core.page.audit` and every plugin page as `unbound` in `core.surface.document`. A visible view surface whose page does not expose `core.surface.document` fails the audit, because a view is a separate document that the audit cannot judge otherwise. `e2e/audit.test.mjs` visits every screen, modal section, menu, editing state, and visible plugin surface of both applications and requires empty lists. `scripts/check-exposure.mjs` (`make exposure-check`) checks only what the workbench sources state through `exposure-check.js` of `@soksak/plugin-api`: every name written in a source is declared, every declared status and command is registered, and every declared dom name is written as an exposed value. A plugin section module may also name core statuses and bind core commands ([sections](plugins.md#sections)), and a surface module may run a core command through `runtime.command` ([surface module ownership](plugins.md#surface-module-ownership)); those names must be declared by core; a plugin repository checks the names of its own pages and sections with the same module, `soksak-exposure`, which reads the core names from `core-exposure.json` of the package. `make exposure-check` fails when that file differs from the workbench declaration, and `node scripts/check-exposure.mjs --write` writes it.
 
 ## Keyboard shortcuts
 
@@ -150,6 +150,7 @@ The main page publishes three statuses of the [plugin process design](../plans/p
 - Status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, the open calls of each plugin that has one, including snapshots waiting for acknowledgement. `oldestStartedAt` is the start time of the oldest open call, or `null`.
 - Status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, the counts of each plugin's losses, kept until the application ends.
 - Status `core.plugin.views`: `[{plugin, surface, responsive}]`, the responsiveness of each plugin view surface.
+- Status `core.surfaces`: each surface entry carries `composition`, the kind of its declared composition (`view` or `hybrid`), or `null` when the plugin declares no surface for it.
 
 ## Windows
 
@@ -196,10 +197,12 @@ Clients call these JSON-RPC 2.0 methods.
 | `status.watch` | `{window, name, surface?}` | `null`; the host then sends `status.changed` notifications `{window, name, surface?, value}` on each change until `status.unwatch` or until the connection closes. Watches with different `surface` values are separate |
 | `status.unwatch` | `{window, name, surface?}` | `null` |
 | `command.run` | `{window, name, params, surface?}` | Command result |
-| `dom.rect` | `{window, name, index?}` | `{x, y, width, height}` in CSS pixels of the owning document, plus `{document}`: the document origin in window coordinates |
-| `dom.act` | `{window, name, index?, action, value?, event?}` | `null`. `action` is `click`, `input`, or `dispatch`. The page receives synthetic DOM events with `isTrusted` false |
+| `dom.rect` | `{window, name, index?, address?}` | `{x, y, width, height}` in CSS pixels of the owning document, plus `{document}`: the document origin in window coordinates |
+| `dom.act` | `{window, name, index?, address?, action, value?, event?}` | `null`. `action` is `click`, `input`, or `dispatch`. The page receives synthetic DOM events with `isTrusted` false |
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. Window coordinates. `phase` is `move`, `down`, `drag`, `up`, or `scroll`. `button` is `left` (default) or `right`. `deltaX` and `deltaY` are scroll distances in points. `activate` applies to `move` |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key` is a key name (`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) or one character. `modifiers` is an array of `shift`, `control`, `option`, `command`. `phase` is `down` or `up` |
+
+A request gives either `index` or `address`, never both. `index` is a non-negative integer. A control address is `{sidebar, section, key, path?, role?}`, as [declared UI](declared-ui.md) defines it, with `sidebar`, `section`, and `key` as strings and `path` as an array of strings. The `core.sidebar.section.control` dom entry is declared `many`, so its requests give `index` or `address`. A request with both, an `address` given for another dom entry, a value of the wrong type, or a forbidden or missing `path` or `role` is refused with -32602, and a control address that matches no control is refused with 1009.
 
 Native pointer injection retains the pressed view separately for each window and button. Drag and release go to that view even when the pointer crosses another view; release receipt waits for the pressed document. A drag or release without a matching press, a second press while that button is held, or a removed pressed view returns an explicit input rejection. Scroll and button-free movement continue to use the current pointer position.
 
@@ -226,16 +229,16 @@ The host and the pages exchange these messages. They are internal to core and no
 | host → main page | event `exposure-request` | `{id, method, params}` for `exposure.list`, `status.*`, `command.run`, `dom.*` of core and plugin names. The host waits 10 seconds for the answer, except for `command.run`, which the main page answers within the command's timeout, whether it forwards the command or answers it itself; a main page that is not ready returns 1003, and requests to a main page that reloads or closes end with 1003 |
 | main page → host | call `exposureReply` | `{id, result}` or `{id, error: {code, message}}` |
 | main page → host | call `exposureChanged` | `{name, surface?, value}` for a watched status; `surface` is present when the watch named one. The host refuses a name that starts with `host.` with `the page cannot change host status <name>`; only the host changes a host status |
-| surface page → host | call `exposureRegister` | `{surface, kind, name}` |
+| surface page → host | call `exposureRegister` | `{surface, kind, name}`. The page of a view has no surface bridge: it calls `runtime.native.call` with `{name: "registered", payload: {kind, name}}` through the view channel ([view surfaces](native-surfaces.md#view-surfaces)), and the main page relays it with this call. A relay from the main page is accepted only for a surface that has a view |
 | host → main page | event `exposure-registered` | `{surface, kind, name}`; `{surface, closed: true}` when the surface is removed. Surfaces outlive a reload of the main page, so after the main page reports ready the host sends every live registration again |
 | main page → host | call `exposureForward` | `{id, surface, method, params, timeout?}` for a name that a surface page registered. `timeout` is an integer from 1 to 600000 milliseconds, taken from the command declaration; without it the host waits 10 seconds. `status.next` takes no `timeout`. An invalid `timeout` returns -32602 |
-| host → surface page | event `exposure-request` | `{id, method, params}` |
+| host → surface page | event `exposure-request` | `{id, method, params}`. For a view, the event carries `surface` and the main page relays it to the view through the view's `exposure-request` subscription (`runtime.native.on`), with `data` `{id, surface, method, params}` |
 | main page → surface page (through `exposureForward`) | `status.watch`, `status.unwatch` | `{name}`. The surface page starts or stops following the value |
 | main page → surface page (through `exposureForward`) | `status.next` | `{name, version}`. The surface page replies `{version, value}` when its value is newer than `version`, or `{closed: true}` after `status.unwatch`. The host applies no timeout to this request; it fails with 1003 when the surface closes |
 | host → main page | event `diagnostics-tick` | No payload. Diagnostic builds only: one per step of `diagnostics.drag` |
-| surface page → host | call `exposureReply` | `{id, result}` or `{id, error}`; the host returns it to the main page as the result of `exposureForward` |
+| surface page → host | call `exposureReply` | `{id, result}` or `{id, error}`; the host returns it to the main page as the result of `exposureForward`. The page of a view answers through `runtime.native.call` with `{name: "exposureReply", payload: {id, result|error}}`, which the main page sends as this call with the surface of the view |
 
-The main page validates names against the declarations before it registers or forwards them. It keeps a registration from a surface that no loaded layout contains yet, and applies or rejects it when a layout containing the surface is loaded. `exposureReply` from the main page answers an `exposure-request` of the host; `exposureReply` from a surface page answers a forwarded request. The host identifies the caller by its webview.
+The main page validates names against the declarations before it registers or forwards them. It keeps a registration from a surface that no loaded layout contains yet, and applies or rejects it when a layout containing the surface is loaded. `exposureReply` from the main page answers an `exposure-request` of the host; `exposureReply` from a surface page answers a forwarded request. The host identifies the caller by its webview. For a `core.sidebar.section.control` request, the main page validates `index` or `address` before it answers, and the hosts relay the request unread.
 
 A surface page can answer a forwarded request after its surface was removed, for example a `status.next` that it answers as the surface closes. The host already ended every request to that surface with 1003 when it removed the surface, so the reply has no request to answer: the host discards it and writes the observation `exposure reply <id> of removed surface "<surface>" arrived after its request ended` to the application log instead of refusing the call.
 
@@ -246,7 +249,7 @@ The runtime modules map these calls to framework bindings:
 | `exposureReply` | `ExposureReply` | `exposure_reply` |
 | `exposureChanged` | `ExposureChanged` | `exposure_changed` |
 | `exposureForward` | `ExposureForward` | `exposure_forward` |
-| `exposureRegister` | `ExposureRegister` (surface bridge) | `exposure_register` |
+| `exposureRegister` | `ExposureRegister` (surface bridge and main page) | `exposure_register` |
 
 The page interface for surface pages is `page.exposure`: `register(kind, name)`, `onRequest(fn)` where `fn({id, method, params})` is called for each forwarded request, and `reply(id, payload)`. The main page uses `host.on("exposure-request", fn)`, `host.on("exposure-registered", fn)`, and `host.call(...)` with the calls above. A reply without `surface` answers a request of the window's main document; a reply with `surface` answers a request of that surface document and names it with a nonempty string. A `surface` that is `null`, empty, or not a string is rejected as an error, not treated as a main-document reply.
 
@@ -255,7 +258,7 @@ The page interface for surface pages is `page.exposure`: `register(kind, name)`,
 | Code | Meaning |
 | --- | --- |
 | -32601 | Undeclared method |
-| -32602 | Invalid params |
+| -32602 | Invalid params, including a `core.sidebar.section.control` request with both `index` and `address`, an `address` given for another dom entry, a value of the wrong type, or a forbidden or missing `path` or `role` |
 | 1001 | Unknown name |
 | 1002 | Name is declared but not registered |
 | 1003 | Owner document no longer exists |
@@ -264,6 +267,7 @@ The page interface for surface pages is `page.exposure`: `register(kind, name)`,
 | 1006 | The window is not active: a pointer `move` needs the key window, or the system did not activate the application |
 | 1007 | AppKit reports a nonzero `NSEvent.pressedMouseButtons` mask, so a synthetic pointer `down` or `up` was not delivered; the message reports the mask and the frontmost application at the refusal |
 | 1008 | A synthetic press of that button is still open in the window, so a pointer `down` was not delivered |
+| 1009 | No control matches the `address` of a `core.sidebar.section.control` request |
 | -32000 | A registered command or status handler failed; `message` is its error message |
 
 A 1005 error of a relayed request has the message `the document did not reply within <ms> ms`. Both hosts remember the 256 most recent requests that timed out, dropping the oldest; a reply to one of them fails with `exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`, and a reply to no remembered request fails with `exposure reply <id> has no matching request`, so the delay of a late reply is in the error that the page reports. A command forwarded to a surface page that times out writes the event `host.call.timeout` with its plugin and command, and a late reply to such a command writes `host.trace.call.late-reply` with its delay.

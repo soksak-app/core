@@ -4,7 +4,7 @@ import { checkSidebarReferences, normalizeSidebarDefaults, validateManifest, val
 
 const manifests = () => [
   { id: "pane", name: "Pane", description: "Content fixture.", mark: "p", icon: "<path/>",
-    surface: { module: "ui/pane.js", composition: { kind: "dom" } },
+    surface: { module: "ui/pane.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
     sections: [{ id: "pane.info", name: "Info", module: "ui/info.js" }],
     sidebars: { sets: [{ id: "info", title: "Info", sections: ["pane.info", "tree.list"], layout: "list" }],
       card: { top: "info", bottom: "info", left: "info", right: "info" }, window: { left: "info", right: "info" } } },

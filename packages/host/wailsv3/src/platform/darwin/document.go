@@ -13,6 +13,9 @@ package darwin
 extern void documentChanged(void *context, char *state);
 extern void documentEvent(void *context, char *event);
 extern void documentMessage(void *context, char *message);
+extern void viewMessage(void *context, char *message);
+extern void viewEnded(void *context);
+extern void viewResponsiveness(void *context, bool responsive);
 extern void documentStream(void *context, char *message);
 extern void documentQueried(void *context, char *reply);
 extern bool coreRootServe(void *context, char *plugin, char *path, void **bytes, size_t *length, char **contentType);
@@ -36,6 +39,14 @@ static void documentMessageBridge(void *context, const char *message) {
     documentMessage(context, (char *)message);
 }
 
+static void viewMessageBridge(void *context, const char *message) {
+    viewMessage(context, (char *)message);
+}
+
+static void viewEndedBridge(void *context) {
+    viewEnded(context);
+}
+
 static void documentStreamBridge(void *context, const char *message) {
     documentStream(context, (char *)message);
 }
@@ -48,11 +59,29 @@ static void documentQuery(void *document, uintptr_t context) {
     sp_document_query(document, documentQueriedBridge, (void *)context);
 }
 
-static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, uintptr_t context) {
-    return sp_document_create(surface, store, package, plugin, false, documentChangedBridge, (void *)context);
+static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, const char *channel, uintptr_t context) {
+    return sp_document_create(surface, store, package, plugin, channel, documentChangedBridge, (void *)context);
 }
 static void documentSetMessage(void *document, uintptr_t context) {
     sp_document_set_message(document, documentMessageBridge, (void *)context);
+}
+static void documentSetViewMessage(void *document, uintptr_t context) {
+    sp_document_set_view_message(document, viewMessageBridge, (void *)context);
+}
+static void documentSetViewEnded(void *document, uintptr_t context) {
+    sp_document_set_view_ended(document, viewEndedBridge, (void *)context);
+}
+static void viewResponsivenessBridge(void *context, bool responsive) {
+    viewResponsiveness(context, responsive);
+}
+static const char *documentBinaryTake(void *document, const char *id, void **bytes, size_t *length) {
+    return sp_document_binary_take(document, id, bytes, length);
+}
+static void documentAddScript(void *document, const char *source) {
+    sp_document_add_user_script(document, source);
+}
+static void documentSetViewResponsiveness(void *document, uintptr_t context) {
+    sp_document_set_view_responsiveness(document, viewResponsivenessBridge, (void *)context);
 }
 static void documentSetEvent(void *document, uintptr_t context) {
     sp_document_set_event(document, documentEventBridge, (void *)context);
@@ -75,6 +104,15 @@ import (
 var documents = map[unsafe.Pointer]cgo.Handle{}
 var documentEvents = map[unsafe.Pointer]cgo.Handle{}
 var documentMessages = map[unsafe.Pointer]cgo.Handle{}
+
+// viewMessages holds the receiver of each view document until the document closes, as documentMessages does for regions.
+var viewMessages = map[unsafe.Pointer]cgo.Handle{}
+
+// viewEnds holds the receiver of the end of each view until the view closes.
+var viewEnds = map[unsafe.Pointer]cgo.Handle{}
+
+// viewResponsivenesses holds the receiver of the responsiveness notices of each view until the view closes.
+var viewResponsivenesses = map[unsafe.Pointer]cgo.Handle{}
 var documentStreams = map[unsafe.Pointer]cgo.Handle{}
 
 //export documentChanged
@@ -86,6 +124,21 @@ func documentChanged(context unsafe.Pointer, state *C.char) {
 //export documentMessage
 func documentMessage(context unsafe.Pointer, value *C.char) {
 	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+}
+
+//export viewMessage
+func viewMessage(context unsafe.Pointer, value *C.char) {
+	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+}
+
+//export viewEnded
+func viewEnded(context unsafe.Pointer) {
+	cgo.Handle(uintptr(context)).Value().(func())()
+}
+
+//export viewResponsiveness
+func viewResponsiveness(context unsafe.Pointer, responsive C.bool) {
+	cgo.Handle(uintptr(context)).Value().(func(bool))(bool(responsive))
 }
 
 //export documentStream
@@ -140,15 +193,21 @@ func (implementation) SetCoreRoot(resolve platform.CoreRootResolver) error {
 	return nil
 }
 
-func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, plugin string, changed func(state string)) (unsafe.Pointer, error) {
+func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error) {
 	name := C.CString(directory)
 	defer C.free(unsafe.Pointer(name))
 	folderText := C.CString(folder)
 	defer C.free(unsafe.Pointer(folderText))
 	id := C.CString(plugin)
 	defer C.free(unsafe.Pointer(id))
+	// A region has no channel script, so its channel is NULL; a view configuration has the script text.
+	var channelText *C.char
+	if channel != "" {
+		channelText = C.CString(channel)
+		defer C.free(unsafe.Pointer(channelText))
+	}
 	receiver := cgo.NewHandle(changed)
-	document := C.documentCreate(surface, name, folderText, id, C.uintptr_t(receiver))
+	document := C.documentCreate(surface, name, folderText, id, channelText, C.uintptr_t(receiver))
 	if document == nil {
 		receiver.Delete()
 		return nil, errors.New("cannot create a document view in this surface")
@@ -165,6 +224,46 @@ func (implementation) LoadDocument(document unsafe.Pointer, url string) bool {
 
 func (implementation) ZoomDocument(document unsafe.Pointer, zoom float64) bool {
 	return bool(C.sp_document_zoom(document, C.double(zoom)))
+}
+
+func (implementation) SetViewMessage(document unsafe.Pointer, message func(value string)) error {
+	receiver := cgo.NewHandle(message)
+	C.documentSetViewMessage(document, C.uintptr_t(receiver))
+	viewMessages[document] = receiver
+	return nil
+}
+
+func (implementation) SetViewEnded(document unsafe.Pointer, ended func()) error {
+	receiver := cgo.NewHandle(ended)
+	C.documentSetViewEnded(document, C.uintptr_t(receiver))
+	viewEnds[document] = receiver
+	return nil
+}
+
+func (implementation) SetViewResponsiveness(document unsafe.Pointer, responsiveness func(responsive bool)) error {
+	receiver := cgo.NewHandle(responsiveness)
+	C.documentSetViewResponsiveness(document, C.uintptr_t(receiver))
+	viewResponsivenesses[document] = receiver
+	return nil
+}
+
+func (implementation) TakeDocumentBinary(document unsafe.Pointer, id string) ([]byte, error) {
+	cID := C.CString(id)
+	defer C.free(unsafe.Pointer(cID))
+	var bytes unsafe.Pointer
+	var length C.size_t
+	if text := C.documentBinaryTake(document, cID, &bytes, &length); text != nil {
+		return nil, errors.New(C.GoString(text))
+	}
+	defer C.free(bytes)
+	return C.GoBytes(bytes, C.int(length)), nil
+}
+
+func (implementation) AddDocumentScript(document unsafe.Pointer, source string) error {
+	cSource := C.CString(source)
+	defer C.free(unsafe.Pointer(cSource))
+	C.documentAddScript(document, cSource)
+	return nil
 }
 
 func (implementation) SetDocumentEvent(document unsafe.Pointer, event func(value string)) error {
@@ -251,6 +350,18 @@ func (implementation) CloseDocument(document unsafe.Pointer) {
 	if receiver, ok := documentEvents[document]; ok {
 		receiver.Delete()
 		delete(documentEvents, document)
+	}
+	if receiver, ok := viewMessages[document]; ok {
+		receiver.Delete()
+		delete(viewMessages, document)
+	}
+	if receiver, ok := viewEnds[document]; ok {
+		receiver.Delete()
+		delete(viewEnds, document)
+	}
+	if receiver, ok := viewResponsivenesses[document]; ok {
+		receiver.Delete()
+		delete(viewResponsivenesses, document)
 	}
 	if receiver, ok := documentMessages[document]; ok {
 		receiver.Delete()

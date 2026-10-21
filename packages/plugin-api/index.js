@@ -22,7 +22,7 @@ export { CLIPBOARD_TYPES, ClipboardError, createClipboardBridge, shellQuotePath 
 export { createLinkBridge } from "./links.js";
 export { drawList } from "./list.js";
 export { createCalls, DEFAULT_CALL_TIMEOUT, ENDED_CALLS_KEPT, MAX_CALL_TIMEOUT, PEER_LOST_REASONS } from "./calls.js";
-export { createSnapshotReceiver, createSnapshotSender, pullSnapshots } from "./snapshots.js";
+export { createSnapshotReceiver, createSnapshotSender, pullSnapshots, SNAPSHOT_EVENT, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } from "./snapshots.js";
 
 export const ENVIRONMENT = "environment.json";
 export const MANIFEST = "plugin.json";
@@ -133,11 +133,39 @@ function joinInside(file, specifier) {
   return parts.join("/");
 }
 
-/** Reads the imports of the import map from an HTML document. Throws unless the document has exactly one import map. */
-export function pageImports(html) {
+/** Reads the import map object of an HTML document. Throws unless the document has exactly one import map. */
+function importMap(html) {
   const maps = [...html.matchAll(/<script type="importmap">([\s\S]*?)<\/script>/g)];
   if (maps.length !== 1) throw new Error(`expected one import map, found ${maps.length}`);
-  return JSON.parse(maps[0][1]).imports;
+  return JSON.parse(maps[0][1]);
+}
+
+/** Reads the imports of the import map from an HTML document. Throws unless the document has exactly one import map. */
+export function pageImports(html) {
+  return importMap(html).imports;
+}
+
+/**
+ * Checks that a view page has exactly one static import map whose imports equal VIEW_IMPORTS, and that the map has no other
+ * field, because a scopes field could remap the imports (docs/spec/plugins.md#view-surfaces). Returns nothing; throws an error
+ * that names the first difference.
+ */
+export function checkViewPage(html) {
+  const map = importMap(html);
+  if (!isObject(map)) throw new Error("view page import map: expected an object");
+  const field = Object.keys(map).find((key) => key !== "imports");
+  if (field !== undefined) throw new Error(`view page import map: unexpected field ${JSON.stringify(field)}`);
+  if (!isObject(map.imports)) throw new Error("view page import map: imports must be an object");
+  for (const [key, target] of Object.entries(VIEW_IMPORTS)) {
+    if (!Object.hasOwn(map.imports, key)) throw new Error(`view page import map: missing entry ${JSON.stringify(key)}`);
+    if (map.imports[key] !== target) {
+      throw new Error(
+        `view page import map: entry ${JSON.stringify(key)} is ${JSON.stringify(map.imports[key])}, want ${JSON.stringify(target)}`,
+      );
+    }
+  }
+  const extra = Object.keys(map.imports).find((key) => !Object.hasOwn(VIEW_IMPORTS, key));
+  if (extra !== undefined) throw new Error(`view page import map: unexpected entry ${JSON.stringify(extra)}`);
 }
 
 const ID = /^[a-z][a-z0-9-]*$/;
@@ -341,22 +369,45 @@ export function settingDeclarations(manifest) {
   ]));
 }
 
+/** The page of a view is a path inside the plugin release: relative, no empty, `.` or `..` segment, no `.binary` segment, ending in `.html`. */
+const isViewPage = (page) => isText(page) && page.endsWith(".html") &&
+  page.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".." && segment !== ".binary");
+
 /** Validates the surface composition declaration. This declaration is the host's list of region permissions. */
 function checkComposition(where, composition, sidecars) {
   if (!isObject(composition)) throw new Error(`${where}: composition must be an object`);
   if (composition.kind === "dom") {
-    only(`${where} composition`, composition, ["kind"]);
+    throw new Error(`${where} composition: kind dom is removed; the composition takes kind view or hybrid`);
+  }
+  if (composition.kind === "view") {
+    only(`${where} composition`, composition, ["kind", "page", "regions", "overlays"]);
+    if (composition.page === undefined) throw new Error(`${where} composition: view composition requires page`);
+    if (!isViewPage(composition.page)) {
+      throw new Error(`${where} composition: page must be a path inside the plugin release that ends in .html`);
+    }
+    if (composition.regions !== undefined && (!Array.isArray(composition.regions) || composition.regions.length === 0)) {
+      throw new Error(`${where} composition: regions must be a non-empty array`);
+    }
+    if (composition.overlays !== undefined && !Array.isArray(composition.overlays)) {
+      throw new Error(`${where} composition: overlays must be an array`);
+    }
+    // default: regions and overlays are optional in a view; a view without them declares no native region or overlay.
+    checkRegions(where, composition.regions ?? [], composition.overlays ?? [], sidecars);
     return;
   }
-  if (composition.kind !== "hybrid") throw new Error(`${where}: composition kind must be dom or hybrid`);
+  if (composition.kind !== "hybrid") throw new Error(`${where}: composition kind must be hybrid or view`);
   only(`${where} composition`, composition, ["kind", "regions", "overlays"]);
   if (!Array.isArray(composition.regions) || composition.regions.length === 0) {
     throw new Error(`${where}: hybrid composition requires regions`);
   }
   if (!Array.isArray(composition.overlays)) throw new Error(`${where}: hybrid composition requires overlays`);
+  checkRegions(where, composition.regions, composition.overlays, sidecars);
+}
 
+/** Validates the regions and overlays of a hybrid or view composition; the names of both are unique. */
+function checkRegions(where, regions, overlays, sidecars) {
   const names = new Set();
-  for (const region of composition.regions) {
+  for (const region of regions) {
     if (!isObject(region)) throw new Error(`${where} composition region: expected an object`);
     if (typeof region.name !== "string" || !REGION.test(region.name)) {
       throw new Error(`${where} composition: invalid region name ${region.name}`);
@@ -379,7 +430,7 @@ function checkComposition(where, composition, sidecars) {
     }
     throw new Error(`${regionWhere}: kind must be document or image`);
   }
-  for (const overlay of composition.overlays) {
+  for (const overlay of overlays) {
     if (typeof overlay !== "string" || !REGION.test(overlay)) {
       throw new Error(`${where} composition: invalid overlay name ${overlay}`);
     }
@@ -605,9 +656,14 @@ export function validateManifest(manifest) {
       !(manifest.exposes?.commands ?? []).some((command) => command.name === surface.drop))) {
       throw new Error(`${where}: surface drop must name a command declared in exposes`);
     }
-    if (!isText(surface.module)) throw new Error(`${where}: surface requires a module`);
-    if (surface.module.startsWith("/") || surface.module.split("/").includes("..") || !surface.module.endsWith(".js")) {
-      throw new Error(`${where}: surface module must be a JavaScript path inside the package`);
+    // A view surface has no module: its page is declared in the composition (docs/spec/plugins.md#view-surfaces).
+    const view = isObject(surface.composition) && surface.composition.kind === "view";
+    if (view && surface.module !== undefined) throw new Error(`${where}: surface module is refused beside a view composition`);
+    if (!view) {
+      if (!isText(surface.module)) throw new Error(`${where}: surface requires a module`);
+      if (surface.module.startsWith("/") || surface.module.split("/").includes("..") || !surface.module.endsWith(".js")) {
+        throw new Error(`${where}: surface module must be a JavaScript path inside the package`);
+      }
     }
     if (surface.composition === undefined) throw new Error(`${where}: surface requires a composition`);
     checkComposition(`${where} surface`, surface.composition, manifestSidecars(manifest));
@@ -628,24 +684,42 @@ export function validateManifest(manifest) {
   if (manifest.sections !== undefined) {
     if (!Array.isArray(manifest.sections)) throw new Error(`${where}: sections must be an array`);
     const seen = new Set();
+    // A status backs at most one section (docs/spec/declared-ui.md, sidebar section form).
+    const backing = new Map();
     for (const section of manifest.sections) {
       if (!isObject(section)) throw new Error(`${where}: section must be an object`);
-      only(`${where} section`, section, ["id", "name", "module", "fill"]);
+      only(`${where} section`, section, ["id", "name", "module", "fill", "status"]);
       if (typeof section.id !== "string" || !section.id.startsWith(`${id}.`) || !ID.test(section.id.slice(id.length + 1))) {
         throw new Error(`${where}: section id ${section.id} must be ${id}.<name>`);
       }
       if (seen.has(section.id)) throw new Error(`${where}: duplicate section ${section.id}`);
       seen.add(section.id);
       if (!isText(section.name)) throw new Error(`${where}: section ${section.id} requires a name`);
-      const module = section.module;
-      if (!isObject(module) && !isText(module)) throw new Error(`${where}: section ${section.id} requires a module`);
-      if (isObject(module)) {
-        only(`${where} section ${section.id} module`, module, ["horizontal", "vertical"]);
+      if (section.module !== undefined && section.status !== undefined) {
+        throw new Error(`${where}: section ${section.id} declares both module and status`);
       }
-      const paths = isObject(module) ? [module.horizontal, module.vertical] : [module];
-      for (const path of paths) {
-        if (!isText(path) || path.startsWith("/") || path.split("/").includes("..") || !path.endsWith(".js")) {
-          throw new Error(`${where}: section ${section.id} module must be a JavaScript path inside the package`);
+      if (section.module === undefined && section.status === undefined) {
+        throw new Error(`${where}: section ${section.id} declares neither module nor status`);
+      }
+      if (section.status !== undefined) {
+        const declared = Array.isArray(manifest.exposes?.status) && manifest.exposes.status.some((entry) => entry?.name === section.status);
+        if (!declared) throw new Error(`${where}: section ${section.id} status ${section.status} is not a status of plugin ${id}`);
+        if (backing.has(section.status)) {
+          throw new Error(`${where}: status ${section.status} backs section ${backing.get(section.status)} and section ${section.id}`);
+        }
+        backing.set(section.status, section.id);
+      }
+      const module = section.module;
+      if (module !== undefined) {
+        if (!isObject(module) && !isText(module)) throw new Error(`${where}: section ${section.id} requires a module`);
+        if (isObject(module)) {
+          only(`${where} section ${section.id} module`, module, ["horizontal", "vertical"]);
+        }
+        const paths = isObject(module) ? [module.horizontal, module.vertical] : [module];
+        for (const path of paths) {
+          if (!isText(path) || path.startsWith("/") || path.split("/").includes("..") || !path.endsWith(".js")) {
+            throw new Error(`${where}: section ${section.id} module must be a JavaScript path inside the package`);
+          }
         }
       }
       // fill is the section that receives the remaining height in the list layout (docs/spec/plugins.md#sections).
@@ -936,8 +1010,11 @@ export function validateSidebars(sidebars, where, loaded = null) {
     if (set.title.length < 1 || set.title.length > SET_TITLE_MAX) {
       throw new Error(`${where}: set ${set.id} title must be 1 to ${SET_TITLE_MAX} characters`);
     }
-    if (set.sections.some((id) => !isText(id)) || new Set(set.sections).size !== set.sections.length) {
-      throw new Error(`${where}: set ${set.id} sections must be section ids without repetition`);
+    if (set.sections.some((id) => !isText(id))) throw new Error(`${where}: set ${set.id} sections must be section ids`);
+    const listed = new Set();
+    for (const id of set.sections) {
+      if (listed.has(id)) throw new Error(`${where}: set ${set.id} lists section ${id} twice`);
+      listed.add(id);
     }
     // A set shows all its sections stacked (list) or one at a time as tabs (tabs).
     if (!["list", "tabs"].includes(set.layout)) throw new Error(`${where}: set ${set.id} layout must be list or tabs`);
@@ -1013,6 +1090,7 @@ export const EXPOSURE_ERRORS = Object.freeze({
   unavailable: 1004,
   timeout: 1005,
   inactive: 1006,
+  noControl: 1009,
 });
 
 const OWNER = /^(core|host|[a-z][a-z0-9-]*)$/;
@@ -1328,6 +1406,8 @@ export function exposureEntries(declared) {
   const statuses = new Map();
   const commands = new Map();
   const doms = new Map();
+  // The resolver of each dom entry that accepts an address (docs/spec/exposure.md, requests): resolve(address, elements) returns the element.
+  const resolvers = new Map();
   const tables = { status: statuses, command: commands, dom: doms };
 
   const declaration = (kind, name) => {
@@ -1415,9 +1495,14 @@ export function exposureEntries(declared) {
     },
 
     /** provide is a function that returns an array of elements. Unless many is set, it registers only once. */
-    dom(name, provide) {
+    dom(name, provide, resolve) {
       const { many } = declaration("dom", name);
       if (!many && doms.has(name)) throw new Error(`dom ${name} is already registered`);
+      if (resolve !== undefined) {
+        if (typeof resolve !== "function") throw new Error(`dom ${name} resolver must be a function`);
+        if (resolvers.has(name)) throw new Error(`dom ${name} resolver is already registered`);
+        resolvers.set(name, resolve);
+      }
       // default: for the first registration of this name, there is no earlier provider.
       doms.set(name, [...(doms.get(name) ?? []), provide]);
     },
@@ -1481,6 +1566,15 @@ export function exposureEntries(declared) {
         }
         // default: an undefined result of a command without a result is not in JSON, so it is answered as null.
         return (await run(input)) ?? null;
+      }
+      if (params.address !== undefined) {
+        if (params.index !== undefined) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "a request gives index or address, not both");
+        const resolve = resolvers.get(name);
+        if (!resolve) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `dom ${name} takes no address`);
+        const element = resolve(params.address, elements(name));
+        if (!element) throw new ExposureError(EXPOSURE_ERRORS.noControl, `dom ${name} has no element at the address`);
+        if (method === "dom.rect") return elementRect(element);
+        return actOn(element, params);
       }
       const list = elements(name);
       if (list.length === 0) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `dom ${name} has no element`);

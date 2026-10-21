@@ -81,6 +81,12 @@ func Run(assets fs.FS, options Options) error {
 		return err
 	}
 	backgroundScript = string(background)
+	// Each view configuration runs the view channel script of the bundled frontend before its page (docs/spec/native-surfaces.md#view-surfaces).
+	viewChannel, err := fs.ReadFile(frontend, viewChannelPath)
+	if err != nil {
+		return fmt.Errorf("view channel script: %w", err)
+	}
+	viewChannelScript = string(viewChannel)
 	identifier := sok.Identity()
 	configDirectory := options.ConfigDir
 	if configDirectory == "" {

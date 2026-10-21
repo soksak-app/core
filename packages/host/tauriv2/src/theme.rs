@@ -62,5 +62,7 @@ pub(crate) fn set(window: &Window, theme: Theme) -> Result<(), String> {
     for document in documents {
         platform.set_document_appearance(document, dark)?;
     }
+    // A view receives the theme after its ready message, so the views with a ready document receive the change here.
+    crate::documents::post_theme_to_views(window)?;
     emit_window(window, "theme", theme).map_err(|e| e.to_string())
 }

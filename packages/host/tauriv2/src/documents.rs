@@ -10,16 +10,22 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::{Manager, Webview, Window};
 
 use crate::application_log::{log_error, log_failure};
+use crate::event_log::Level;
+use crate::event_record::emit_host;
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
-use crate::surfaces::{require_region, surface_handle};
-use crate::windows::{emit_window, window_data};
+use crate::presentation_wait::{PresentationWait, presentation_abandoned_payload, views_to_join};
+use crate::surfaces::ViewStart;
+use crate::surfaces::{Placement, require_region, surface_handle};
+use crate::view_lifecycle::{ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event};
+use crate::windows::{emit_window, window_data, with_native_owner};
 
 /// The directory inside the configuration directory that holds the persistent site data of document regions. It differs
 /// from the storage of the app document.
@@ -511,7 +517,24 @@ impl Streams {
 /// The document regions of a window. The value is the address of the document webview, and 0 for a region that is being
 /// created.
 #[derive(Default)]
-pub struct Documents(Mutex<HashMap<Key, Handle>>);
+pub struct Documents(
+    Mutex<HashMap<Key, Handle>>,
+    ViewChannels,
+    ViewLifecycle,
+    PresentationWait,
+);
+
+impl Documents {
+    /// Returns the failures and the records of the view surfaces of the window.
+    pub fn lifecycle(&self) -> &ViewLifecycle {
+        &self.2
+    }
+
+    /// The presentation wait of the views of the window (presentation_wait.rs).
+    pub fn presentation(&self) -> &PresentationWait {
+        &self.3
+    }
+}
 
 #[cfg(feature = "diagnostics")]
 impl Documents {
@@ -532,6 +555,11 @@ impl Documents {
 }
 
 impl Documents {
+    /// The view channels of the window. A view record leaves with the view of its surface.
+    pub fn views(&self) -> &ViewChannels {
+        &self.1
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<Key, Handle>> {
         self.0
             .lock()
@@ -572,14 +600,20 @@ impl Documents {
 
     /// Removes a name and returns the address of its document. The address is 0 when the name was being created.
     pub fn remove(&self, key: &Key) -> Result<Handle, String> {
-        self.lock()
+        let handle = self
+            .lock()
             .remove(key)
-            .ok_or_else(|| format!("document {:?} is not attached", key.1))
+            .ok_or_else(|| format!("document {:?} is not attached", key.1))?;
+        if key.1 == VIEW_NAME {
+            self.1.forget(&key.0);
+        }
+        Ok(handle)
     }
 
     /// Removes every name of a surface and returns the addresses of the created documents.
     pub fn remove_surface(&self, surface: &str) -> Vec<Handle> {
         let mut removed = Vec::new();
+        self.1.forget(surface);
         self.lock().retain(|key, handle| {
             if key.0 != surface {
                 return true;
@@ -609,6 +643,810 @@ impl Documents {
             .filter(|&handle| handle != 0)
             .collect()
     }
+}
+
+/// The text of the view channel script that each view configuration runs (docs/spec/native-surfaces.md#view-surfaces). The
+/// application sets it once at startup from the bundled frontend.
+static VIEW_CHANNEL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Sets the view channel script. It is an error when the script is already set.
+pub fn set_view_channel(text: &str) -> Result<(), String> {
+    VIEW_CHANNEL
+        .set(text.to_string())
+        .map_err(|_| "the view channel script is already set".to_string())
+}
+
+/// The view channel of one view surface: the plugin of its view and its ready document. An empty document means that no ready
+/// document is recorded (docs/plans/plugin-processes.md, rule 4).
+#[derive(Default)]
+struct ViewChannel {
+    plugin: String,
+    document: String,
+    /// Set by the first ready message of the view, which writes host.trace.view.process-ready once.
+    process_ready: bool,
+    /// The calls that the view has open, by id, with the plugin and the command of each.
+    calls: BTreeMap<u64, String>,
+}
+
+/// The view channels of a window, by surface. A navigation clears the ready document, so a post cannot reach a document that
+/// the view has not reported.
+#[derive(Default)]
+pub struct ViewChannels(Mutex<HashMap<String, ViewChannel>>);
+
+#[derive(Deserialize)]
+struct ViewReceived {
+    message: Option<Value>,
+    error: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ViewEvent {
+    event: String,
+    #[serde(default)]
+    plugin: String,
+    #[serde(default)]
+    document: String,
+    #[serde(default)]
+    reason: String,
+}
+
+#[derive(Deserialize)]
+struct ViewState {
+    loading: bool,
+}
+
+impl ViewChannels {
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, ViewChannel>> {
+        self.0
+            .lock()
+            // default: the map is only changed by one insert, update or remove, so it is consistent after a thread stopped
+            // while it held the lock.
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Records the plugin of the view of surface. It runs when the view is created.
+    pub fn register(&self, surface: &str, plugin: &str) {
+        self.lock().insert(
+            surface.to_string(),
+            ViewChannel {
+                plugin: plugin.to_string(),
+                document: String::new(),
+                process_ready: false,
+                calls: BTreeMap::new(),
+            },
+        );
+    }
+
+    /// Records that the view of surface has a ready message, and returns its plugin when this is its first ready message since it was
+    /// created. A view without a channel returns None.
+    pub fn first_ready(&self, surface: &str) -> Option<String> {
+        let mut channels = self.lock();
+        let channel = channels.get_mut(surface)?;
+        if channel.process_ready {
+            return None;
+        }
+        channel.process_ready = true;
+        Some(channel.plugin.clone())
+    }
+
+    /// Ends the open calls of the view of surface with the reason process-ended, and returns the plugin and the command of each in the
+    /// order of their ids (docs/spec/native-surfaces.md#view-surfaces).
+    pub fn end_calls(&self, surface: &str) -> Vec<(String, String)> {
+        let mut channels = self.lock();
+        let Some(channel) = channels.get_mut(surface) else {
+            return Vec::new();
+        };
+        let calls = std::mem::take(&mut channel.calls);
+        calls
+            .into_values()
+            .map(|command| (channel.plugin.clone(), command))
+            .collect()
+    }
+
+    /// Records that the main page answered the call id of the view of surface, so the call is no longer open.
+    pub fn answer_call(&self, surface: &str, id: u64) {
+        if let Some(channel) = self.lock().get_mut(surface) {
+            channel.calls.remove(&id);
+        }
+    }
+
+    /// Removes the record of the view of surface.
+    pub fn forget(&self, surface: &str) {
+        self.lock().remove(surface);
+    }
+
+    /// Whether the surface has a view.
+    pub fn has(&self, surface: &str) -> bool {
+        self.lock().contains_key(surface)
+    }
+
+    /// Returns the surfaces that have a view, in order.
+    pub fn surfaces(&self) -> Vec<String> {
+        let mut surfaces: Vec<String> = self.lock().keys().cloned().collect();
+        surfaces.sort();
+        surfaces
+    }
+
+    /// Returns the ready document of the view of surface, or None when the view has none.
+    pub fn ready_document(&self, surface: &str) -> Option<String> {
+        self.lock()
+            .get(surface)
+            .map(|channel| channel.document.clone())
+            .filter(|document| !document.is_empty())
+    }
+
+    /// Dispatches one message of the sok-view handler of the view of surface, which is {"message": value} or {"error": reason}.
+    /// It returns Ok(true) when the message makes the view ready, and the reason that the host logs for any other failure.
+    pub fn message(&self, surface: &str, value: &str) -> Result<bool, String> {
+        let received: ViewReceived = serde_json::from_str(value)
+            .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+        if let Some(error) = received.error {
+            return Err(error);
+        }
+        let message = received
+            .message
+            .ok_or_else(|| format!("{surface}: view message has neither message nor error"))?;
+        let event: ViewEvent = serde_json::from_value(message)
+            .map_err(|error| format!("{surface}: view event is not an object: {error}"))?;
+        let plugin = self
+            .lock()
+            .get(surface)
+            .map(|channel| channel.plugin.clone())
+            .ok_or_else(|| {
+                format!("{surface}: view channel message of a surface without a view")
+            })?;
+        match event.event.as_str() {
+            "view.ready" => {
+                if event.plugin != plugin || event.document.is_empty() {
+                    return Err(format!(
+                        "{surface}: view.ready names plugin {:?} and document {:?}, want plugin {plugin:?}",
+                        event.plugin, event.document
+                    ));
+                }
+                if let Some(channel) = self.lock().get_mut(surface) {
+                    channel.document = event.document;
+                }
+                Ok(true)
+            }
+            "view.error" => Err(event.reason),
+            other => Err(format!("{surface}: view event {other:?} is unknown")),
+        }
+    }
+
+    /// Returns the view-reply payload of a reply of the view of surface, or None when the message has no reply field. A reply has an
+    /// integer id and exactly one of result and error; an error has an integer code and a message.
+    pub fn reply(&self, surface: &str, value: &str) -> Result<Option<Value>, String> {
+        let received: ViewReceived = serde_json::from_str(value)
+            .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+        let Some(message) = received.message else {
+            return Ok(None);
+        };
+        let Some(reply) = message.get("reply") else {
+            return Ok(None);
+        };
+        let id = reply
+            .as_u64()
+            .ok_or_else(|| format!("{surface}: view reply has no integer id"))?;
+        let plugin = self
+            .lock()
+            .get(surface)
+            .map(|channel| channel.plugin.clone())
+            .ok_or_else(|| {
+                format!("{surface}: view channel message of a surface without a view")
+            })?;
+        match (message.get("result"), message.get("error")) {
+            (Some(_), Some(_)) => Err(format!(
+                "{surface}: view reply {id} has both a result and an error"
+            )),
+            (None, None) => Err(format!(
+                "{surface}: view reply {id} has neither a result nor an error"
+            )),
+            (Some(result), None) => Ok(Some(json!({
+                "surface": surface,
+                "plugin": plugin,
+                "id": id,
+                "result": result,
+            }))),
+            (None, Some(error)) => {
+                let code = error.get("code").and_then(Value::as_i64).ok_or_else(|| {
+                    format!("{surface}: view reply {id} has an error without an integer code")
+                })?;
+                let text = error
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .filter(|text| !text.is_empty())
+                    .ok_or_else(|| {
+                        format!("{surface}: view reply {id} has an error without a message")
+                    })?;
+                Ok(Some(json!({
+                    "surface": surface,
+                    "plugin": plugin,
+                    "id": id,
+                    "error": {"code": code, "message": text},
+                })))
+            }
+        }
+    }
+
+    /// Returns the view-call payload of a call request or a cancel of the view of surface, or None when the message is neither.
+    /// A call request is {"id", "command", "params"}; a cancel is {"id", "cancel": true} and its payload is {"id", "cancel": true}
+    /// with the surface and plugin. A cancel that is not true or that names a command is an error.
+    pub fn call(&self, surface: &str, value: &str) -> Result<Option<Value>, String> {
+        let received: ViewReceived = serde_json::from_str(value)
+            .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+        let Some(message) = received.message else {
+            return Ok(None);
+        };
+        let field = |name: &str| message.get(name).filter(|value| !value.is_null());
+        if field("command").is_none() && field("cancel").is_none() {
+            return Ok(None);
+        }
+        let id = message
+            .get("id")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| format!("{surface}: view call has no integer id"))?;
+        let cancel = field("cancel");
+        if cancel.is_some_and(|cancel| *cancel != Value::Bool(true) || field("command").is_some()) {
+            return Err(format!(
+                "{surface}: view call {id} cancel must be true and name no command"
+            ));
+        }
+        let command = match cancel {
+            Some(_) => None,
+            None => Some(
+                field("command")
+                    .and_then(Value::as_str)
+                    .filter(|command| !command.is_empty())
+                    .ok_or_else(|| format!("{surface}: view call {id} has an empty command"))?,
+            ),
+        };
+        let plugin = self
+            .lock()
+            .get(surface)
+            .map(|channel| channel.plugin.clone())
+            .ok_or_else(|| {
+                format!("{surface}: view channel message of a surface without a view")
+            })?;
+        let Some(command) = command else {
+            return Ok(Some(json!({
+                "surface": surface,
+                "plugin": plugin,
+                "id": id,
+                "cancel": true,
+            })));
+        };
+        // default: a call without params sends null to its command, as the call envelope has no params for it.
+        let params = message.get("params").cloned().unwrap_or(Value::Null);
+        // The call is open until the main page answers it (docs/spec/native-surfaces.md#view-surfaces).
+        if let Some(channel) = self.lock().get_mut(surface) {
+            channel.calls.insert(id, command.to_string());
+        }
+        Ok(Some(json!({
+            "surface": surface,
+            "plugin": plugin,
+            "id": id,
+            "command": command,
+            "params": params,
+        })))
+    }
+
+    /// Returns the declared-ui.snapshot payload of a snapshot of the view of surface, or None when the message is not one.
+    /// A snapshot is {"event", "plugin", "status", "seq", "value", "skipped"} with an integer seq from 1 and a skipped
+    /// count of 0 or more; a snapshot with an invalid field is an error (docs/plans/plugin-processes.md, rule 2 and
+    /// messages and events). The host relays the snapshot and writes no event for it.
+    pub fn snapshot(&self, surface: &str, value: &str) -> Result<Option<Value>, String> {
+        let received: ViewReceived = serde_json::from_str(value)
+            .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+        let Some(message) = received.message else {
+            return Ok(None);
+        };
+        if message.get("event").and_then(Value::as_str) != Some(DECLARED_SNAPSHOT_EVENT) {
+            return Ok(None);
+        }
+        let plugin = self
+            .lock()
+            .get(surface)
+            .map(|channel| channel.plugin.clone())
+            .ok_or_else(|| {
+                format!("{surface}: view channel message of a surface without a view")
+            })?;
+        let named = message
+            .get("plugin")
+            .and_then(Value::as_str)
+            .filter(|named| !named.is_empty())
+            .ok_or_else(|| format!("{surface}: declared UI snapshot names no plugin"))?;
+        if named != plugin {
+            return Err(format!(
+                "{surface}: declared UI snapshot names plugin {named:?}, want plugin {plugin:?}"
+            ));
+        }
+        let status = message
+            .get("status")
+            .and_then(Value::as_str)
+            .filter(|status| !status.is_empty())
+            .ok_or_else(|| format!("{surface}: declared UI snapshot has no status"))?;
+        let seq = message
+            .get("seq")
+            .and_then(Value::as_u64)
+            .filter(|seq| *seq >= 1)
+            .ok_or_else(|| {
+                format!("{surface}: declared UI snapshot of status {status:?} has no seq from 1")
+            })?;
+        let skipped = message
+            .get("skipped")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| {
+                format!("{surface}: declared UI snapshot of status {status:?} has no skipped count")
+            })?;
+        // A value of null stays present: the receiver validates it like any other value (docs/spec/declared-ui.md).
+        let value = message.get("value").ok_or_else(|| {
+            format!("{surface}: declared UI snapshot of status {status:?} has no value")
+        })?;
+        Ok(Some(json!({
+            "surface": surface,
+            "plugin": plugin,
+            "status": status,
+            "seq": seq,
+            "skipped": skipped,
+            "value": value,
+        })))
+    }
+
+    /// Records the navigation state of the view of surface. A loading document clears the ready document of the view.
+    pub fn state(&self, surface: &str, state: &str) -> Result<(), String> {
+        let loaded: ViewState = serde_json::from_str(state)
+            .map_err(|error| format!("{surface}: view state is not JSON: {error}"))?;
+        if loaded.loading
+            && let Some(channel) = self.lock().get_mut(surface)
+        {
+            channel.document.clear();
+        }
+        Ok(())
+    }
+
+    /// Returns the error for a post to the view of surface that has no ready document.
+    pub fn check_post(&self, surface: &str) -> Result<(), String> {
+        match self.ready_document(surface) {
+            Some(_) => Ok(()),
+            None => Err(format!("{surface} has no ready document")),
+        }
+    }
+}
+
+/// The name of the view web view of a view surface. No composition region has an empty name, so the view cannot collide with a
+/// region, and the view closes with the other documents of its surface.
+const VIEW_NAME: &str = "";
+/// The event name of a declared UI snapshot of a view (docs/plans/plugin-processes.md, messages and events).
+const DECLARED_SNAPSHOT_EVENT: &str = "declared-ui.snapshot";
+
+/// Creates the view web view of a view surface, with the view configuration (`view` is true), and loads sok://<plugin>/<page>
+/// into it. When the load does not succeed, the view is closed and the error is returned. create, load and close are the
+/// platform operations, and they run on the main thread.
+pub fn create_view(
+    channel: &str,
+    create: impl FnOnce(&str) -> Result<Handle, String>,
+    load: impl FnOnce(Handle, &str) -> Result<bool, String>,
+    close: impl FnOnce(Handle) -> Result<(), String>,
+    plugin: &str,
+    page: &str,
+) -> Result<Handle, String> {
+    let handle = create(channel)?;
+    let address = format!("sok://{plugin}/{page}");
+    let reason = match load(handle, &address) {
+        Ok(true) => return Ok(handle),
+        Ok(false) => format!("view cannot load {address}"),
+        Err(error) => error,
+    };
+    close(handle).map_err(|closing| format!("{reason}; closing the view: {closing}"))?;
+    Err(reason)
+}
+
+/// Creates the view of a view surface when the surface has none, and places the view over the whole surface. Call it on the
+/// main thread.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn sync_view(
+    window: &Window,
+    platform: &'static dyn platform::Platform,
+    surface_handle: Handle,
+    surface: &str,
+    plugin: &str,
+    page: &str,
+    visible: bool,
+    start: ViewStart,
+) -> Result<(), String> {
+    let data = window_data(window)?;
+    if !visible {
+        // A view that is not shown ends its presentation wait, because its presentation cannot come (presentation_wait.rs).
+        end_presentation_wait(window, surface, "hidden");
+    }
+    data.documents.lifecycle().track(
+        surface,
+        surface_handle,
+        plugin,
+        page,
+        visible,
+        start.clone(),
+    );
+    // A view that failed beyond the restart limit is not created again until its surface is removed (docs/plans/plugin-processes.md,
+    // rule 5).
+    if data.documents.lifecycle().is_stopped(surface) {
+        return Ok(());
+    }
+    let key: Key = (surface.to_string(), VIEW_NAME.to_string());
+    let handle = match data.documents.get(&key) {
+        Ok(handle) => handle,
+        Err(_) => {
+            data.documents.reserve(&key)?;
+            match attach_view(
+                window,
+                platform,
+                surface,
+                surface_handle,
+                plugin,
+                page,
+                start,
+            ) {
+                Ok(handle) => {
+                    if !data.documents.set(&key, handle) {
+                        platform.close_document(handle)?;
+                        return Err(format!(
+                            "surface {surface:?} closed while its view was created"
+                        ));
+                    }
+                    data.documents.views().register(surface, plugin);
+                    handle
+                }
+                Err(error) => {
+                    data.documents.remove(&key)?;
+                    return Err(error);
+                }
+            }
+        }
+    };
+    platform.place_document(
+        handle,
+        platform::Insets {
+            left: 0.0,
+            top: 0.0,
+            right: 0.0,
+            bottom: 0.0,
+        },
+        visible,
+    )
+}
+
+/// Creates the view configuration of a plugin page in the data directory and the installed folder of the plugin.
+fn attach_view(
+    window: &Window,
+    platform: &'static dyn platform::Platform,
+    surface: &str,
+    surface_handle: Handle,
+    plugin: &str,
+    page: &str,
+    start: ViewStart,
+) -> Result<Handle, String> {
+    let config = crate::config_directory(window.app_handle()).map_err(|e| e.to_string())?;
+    let directory = config.join(DOCUMENT_DATA);
+    let directory = directory.to_str().ok_or_else(|| {
+        format!(
+            "document data directory is not UTF-8: {}",
+            directory.display()
+        )
+    })?;
+    let folder = crate::installed::plugin_folder(&config, plugin)?;
+    let folder = folder
+        .to_str()
+        .ok_or_else(|| format!("plugin folder is not UTF-8: {}", folder.display()))?
+        .to_string();
+    let channel = VIEW_CHANNEL
+        .get()
+        .ok_or_else(|| "the view channel script is not loaded".to_string())?;
+    let state_window = window.clone();
+    let state_surface = surface.to_string();
+    let message_window = window.clone();
+    let message_surface = surface.to_string();
+    let ended_window = window.clone();
+    let ended_surface = surface.to_string();
+    create_view(
+        channel,
+        |channel| {
+            let document = platform.create_document(
+                surface_handle,
+                directory,
+                &folder,
+                plugin,
+                Some(channel),
+                Box::new(move |state: String| view_state(&state_window, &state_surface, &state)),
+            )?;
+            // The receiver is set before the page loads, so the first message of the page reaches it.
+            platform.set_view_message(
+                document,
+                Box::new(move |value: String| {
+                    view_message(
+                        &message_window,
+                        platform,
+                        &message_surface,
+                        document,
+                        &value,
+                    )
+                }),
+            )?;
+            platform.set_view_ended(
+                document,
+                Box::new(move || {
+                    log_error(
+                        "view channel",
+                        format!("{ended_surface}: the view process ended"),
+                    );
+                    view_failed(&ended_window, platform, &ended_surface, document);
+                }),
+            )?;
+            let notice_window = window.clone();
+            let notice_surface = surface.to_string();
+            let notice_plugin = plugin.to_string();
+            platform.set_view_responsiveness(
+                document,
+                Box::new(move |responsive| {
+                    if !responsive {
+                        end_presentation_wait(&notice_window, &notice_surface, "unresponsive");
+                    }
+                    let payload =
+                        view_responsiveness_notice(&notice_surface, &notice_plugin, responsive);
+                    if let Err(error) = emit_window(&notice_window, "view-responsiveness", payload)
+                    {
+                        log_error("view channel", error);
+                    }
+                }),
+            )?;
+            let theme = crate::theme::get(window)?;
+            let theme = serde_json::to_value(&theme).map_err(|error| error.to_string())?;
+            platform.add_document_script(document, &theme_script(&theme))?;
+            platform.add_document_script(document, &surface_start_script(surface, &start))?;
+            record_view_process_request(surface, plugin);
+            Ok(document)
+        },
+        |document, url| platform.load_document(document, url),
+        |document| platform.close_document(document),
+        plugin,
+        page,
+    )
+}
+
+/// Records the navigation state of a view. A failure is written to the application log.
+fn view_state(window: &Window, surface: &str, state: &str) {
+    let result = window_data(window).and_then(|data| data.documents.views().state(surface, state));
+    if let Err(error) = result {
+        log_error("view channel", error);
+    }
+}
+
+/// Dispatches a message of the sok-view handler of the view document of surface. The ready message makes the view receive the current
+/// theme. A failure is written to the application log, and a queue overflow of the view ends its failure (view_failed).
+fn view_message(
+    window: &Window,
+    platform: &'static dyn Platform,
+    surface: &str,
+    document: Handle,
+    value: &str,
+) {
+    // A reply of the view answers a request of the main page, and goes to the main page as view-reply.
+    let reply = window_data(window).and_then(|data| data.documents.views().reply(surface, value));
+    match reply {
+        Ok(Some(payload)) => {
+            if let Err(error) = emit_window(window, "view-reply", payload) {
+                log_error("view channel", error);
+            }
+            return;
+        }
+        Ok(None) => {}
+        Err(error) => {
+            log_error("view channel", error);
+            return;
+        }
+    }
+    // A call request goes to the main page, which answers it (docs/spec/native-surfaces.md#view-surfaces).
+    let call = window_data(window).and_then(|data| data.documents.views().call(surface, value));
+    match call {
+        Ok(Some(payload)) => {
+            if let Err(error) = emit_window(window, "view-call", payload) {
+                log_error("view channel", error);
+            }
+            return;
+        }
+        Ok(None) => {}
+        Err(error) => {
+            log_error("view channel", error);
+            return;
+        }
+    }
+    // A declared UI snapshot goes to the main page of the window, which acknowledges it and draws it
+    // (docs/spec/declared-ui.md). The host relays the snapshot and writes no event for it (rule 2).
+    let snapshot =
+        window_data(window).and_then(|data| data.documents.views().snapshot(surface, value));
+    match snapshot {
+        Ok(Some(payload)) => {
+            if let Err(error) = emit_window(window, DECLARED_SNAPSHOT_EVENT, payload) {
+                log_error("view channel", error);
+            }
+            return;
+        }
+        Ok(None) => {}
+        Err(error) => {
+            log_error("view channel", error);
+            return;
+        }
+    }
+    let ready = window_data(window).and_then(|data| data.documents.views().message(surface, value));
+    match ready {
+        Ok(true) => {
+            let first = match window_data(window) {
+                Ok(data) => data.documents.views().first_ready(surface),
+                Err(error) => {
+                    log_error("view channel", error);
+                    None
+                }
+            };
+            if let Some(plugin) = first {
+                record_view_process_ready(surface, &plugin);
+            }
+            if let Err(error) = post_theme(window, platform, surface) {
+                log_error("view channel", error);
+            }
+        }
+        Ok(false) => {}
+        Err(error) => {
+            let overflow = is_queue_full(&error);
+            log_error("view channel", error);
+            if overflow {
+                view_failed(window, platform, surface, document);
+            }
+        }
+    }
+}
+
+/// Handles the failure of the view document of surface: its process ended, or its message queue overflowed. The view is closed, and it
+/// is created again unless the failure stops the restarts (docs/plans/plugin-processes.md, rule 5). A document that is not the current
+/// view of the surface was already replaced, so its failure is not counted again.
+fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, document: Handle) {
+    let data = match window_data(window) {
+        Ok(data) => data,
+        Err(error) => return log_error("view channel", error),
+    };
+    let key: Key = (surface.to_string(), VIEW_NAME.to_string());
+    // default: a surface without this view, or with another view handle, means that the failure belongs to a view that was already
+    // closed or replaced, so the failure is not counted again.
+    match data.documents.get(&key) {
+        Ok(current) if current == document => {}
+        _ => return,
+    }
+    // The open calls are taken before the view is removed, because the removal drops the channel of the view.
+    let open_calls = data.documents.views().end_calls(surface);
+    end_presentation_wait(window, surface, "process-ended");
+    if let Err(error) = data.documents.remove(&key) {
+        return log_error("view channel", error);
+    }
+    for (plugin, command) in &open_calls {
+        record_view_call_peer_lost(plugin, command);
+    }
+    log_failure("view channel", platform.close_document(document));
+    let record = data.documents.lifecycle().spec(surface);
+    if !data.documents.lifecycle().fail(surface, Instant::now()) {
+        log_error("view channel", format!("{surface}: {}", view_stop_reason()));
+        let Some(spec) = record else {
+            return log_error(
+                "view channel",
+                format!(
+                    "{surface}: the view record is missing, so the view-stopped event is not sent"
+                ),
+            );
+        };
+        if let Err(error) = emit_window(
+            window,
+            "view-stopped",
+            view_stopped_event(surface, &spec.plugin),
+        ) {
+            log_error("view channel", error);
+        }
+        return;
+    }
+    let Some(spec) = record else {
+        return log_error(
+            "view channel",
+            format!("{surface}: the view record is missing, so the view is not created again"),
+        );
+    };
+    if let Err(error) = sync_view(
+        window,
+        platform,
+        spec.surface_handle,
+        surface,
+        &spec.plugin,
+        &spec.page,
+        spec.visible,
+        spec.start,
+    ) {
+        log_error("view channel", error);
+    }
+}
+
+/// Posts the current theme to the ready document of the view of surface, with the field sok 1.
+fn post_theme(window: &Window, platform: &dyn Platform, surface: &str) -> Result<(), String> {
+    let theme = crate::theme::get(window)?;
+    let data = window_data(window)?;
+    let handle = data
+        .documents
+        .get(&(surface.to_string(), VIEW_NAME.to_string()))?;
+    let message = theme_message(&serde_json::to_value(&theme).map_err(|error| error.to_string())?)
+        .to_string();
+    if platform.post_document(handle, &message)? {
+        Ok(())
+    } else {
+        Err(format!("{surface}: the view document refused the message"))
+    }
+}
+
+/// Posts the reply of the main page to the view of reply.surface. The main page must be the caller, and the view must have a
+/// ready document, as for the theme (docs/spec/native-surfaces.md#view-surfaces).
+/// Posts a command request of the main page to the view of request.surface (docs/spec/native-surfaces.md#view-surfaces).
+pub(crate) fn view_request(webview: &Webview, request: ViewRequest) -> Result<(), String> {
+    let message = view_request_message(&request)?;
+    post_from_main(webview, "view request", &request.surface, message)
+}
+
+pub(crate) fn view_reply(webview: &Webview, reply: ViewReply) -> Result<(), String> {
+    let message = view_reply_message(&reply)?;
+    window_data(&webview.window())?
+        .documents
+        .views()
+        .answer_call(&reply.surface, reply.id);
+    post_from_main(webview, "view reply", &reply.surface, message)
+}
+
+/// Posts the event of a subscription to the view of event.surface. The main page must be the caller, and the view must have a ready
+/// document, as for a reply (docs/spec/native-surfaces.md#view-surfaces).
+pub(crate) fn view_event(webview: &Webview, event: ViewEventRequest) -> Result<(), String> {
+    let message = view_event_message(&event)?;
+    post_from_main(webview, "view event", &event.surface, message)
+}
+
+/// Posts message to the ready document of the view of surface, after the main page is confirmed as the caller. The action names the
+/// command in the error of an unauthorized caller.
+fn post_from_main(
+    webview: &Webview,
+    action: &str,
+    surface: &str,
+    message: Value,
+) -> Result<(), String> {
+    let window = webview.window();
+    exposure::authorize_main_caller(webview.label(), window.label(), action)?;
+    let message = message.to_string();
+    let data = window_data(&window)?;
+    data.documents.views().check_post(surface)?;
+    let handle = data
+        .documents
+        .get(&(surface.to_string(), VIEW_NAME.to_string()))?;
+    let platform = platform::current()?;
+    if platform.post_document(handle, &message)? {
+        Ok(())
+    } else {
+        Err(format!("{surface}: the view document refused the message"))
+    }
+}
+
+/// Posts the current theme to each view of the window that has a ready document. A view without one is skipped, because the theme
+/// reaches it with its ready message.
+pub(crate) fn post_theme_to_views(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    let platform = platform::current()?;
+    for surface in data.documents.views().surfaces() {
+        if data.documents.views().ready_document(&surface).is_none() {
+            continue;
+        }
+        if let Err(error) = post_theme(window, platform, &surface) {
+            log_error("view channel", error);
+        }
+    }
+    Ok(())
 }
 
 /// Checks the surface id of the calling webview and returns the key and the window of the request.
@@ -724,7 +1562,8 @@ fn create(
             .to_str()
             .ok_or_else(|| format!("plugin folder is not UTF-8: {}", folder.display()))?
             .to_string();
-        let handle = platform.create_document(surface, directory, &folder, &plugin, changed)?;
+        let handle =
+            platform.create_document(surface, directory, &folder, &plugin, None, changed)?;
         // The history is restored before anything else uses the new region, so it loads the restored entry first.
         if let Some(state) = &restore
             && let Err(refusal) = platform.restore_document(handle, state)
@@ -972,6 +1811,7 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
         Ok(platform) => platform,
         Err(error) => return log_error("document close", error),
     };
+    data.documents.lifecycle().forget(surface);
     let host = window.clone();
     let surface = surface.to_string();
     // The unregistration and the close happen in one task of the main thread. Other work that uses a document also
@@ -1136,4 +1976,290 @@ pub(crate) fn unsubscribe(webview: &Webview, request: Request) -> Result<(), Str
         let effects = data.streams.unsubscribe(&key, handle)?;
         apply_effects(platform, &data.documents, &effects)
     })
+}
+
+/// Keeps a field that is present as Some, including null, and leaves an absent field as None.
+fn present<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<Value>, D::Error> {
+    Value::deserialize(deserializer).map(Some)
+}
+
+/// A reply of the main page to a call request of a view: a result or an error (docs/spec/native-surfaces.md#view-surfaces).
+#[derive(Deserialize)]
+pub struct ViewReply {
+    pub surface: String,
+    pub id: u64,
+    #[serde(default, deserialize_with = "present")]
+    pub result: Option<Value>,
+    #[serde(default)]
+    pub error: Option<ViewReplyError>,
+}
+
+/// The error of a view reply, with the code and the message of the call envelope.
+#[derive(Deserialize, Debug, PartialEq)]
+pub struct ViewReplyError {
+    pub code: i64,
+    pub message: String,
+}
+
+/// An event that the main page pushes to the view of surface: its name and its data (docs/spec/native-surfaces.md#view-surfaces).
+/// A null data is a value; an absent data is None and is refused.
+#[derive(Deserialize)]
+pub struct ViewEventRequest {
+    pub surface: String,
+    pub event: String,
+    #[serde(default, deserialize_with = "present")]
+    pub data: Option<Value>,
+}
+
+/// A command request that the main page sends to the view of surface: the command, its id and its params (docs/spec/native-surfaces.md#view-surfaces).
+#[derive(Deserialize)]
+pub struct ViewRequest {
+    pub surface: String,
+    pub id: u64,
+    pub command: String,
+    #[serde(default, deserialize_with = "present")]
+    pub params: Option<Value>,
+}
+
+/// Returns the host message of a command request: {"sok", "id", "command", "params"}. A request has an id and a command, and a
+/// request without params carries null.
+pub fn view_request_message(request: &ViewRequest) -> Result<Value, String> {
+    if request.id == 0 {
+        return Err("view request has no id".to_string());
+    }
+    if request.command.is_empty() {
+        return Err(format!("view request {} has an empty command", request.id));
+    }
+    Ok(json!({
+        "sok": 1,
+        "id": request.id,
+        "command": request.command,
+        "params": request.params,
+    }))
+}
+
+/// Returns the theme message of a view: {"sok", "event": "theme", "data": theme}, as every event carries its value in data.
+pub fn theme_message(theme: &Value) -> Value {
+    json!({"sok": 1, "event": "theme", "data": theme})
+}
+
+/// Returns the host message of an event push: {"sok", "event", "data"}. An empty name and an absent data are errors.
+pub fn view_event_message(event: &ViewEventRequest) -> Result<Value, String> {
+    if event.event.is_empty() {
+        return Err("view event has an empty event name".to_string());
+    }
+    let Some(data) = &event.data else {
+        return Err(format!("view event {} has no data", event.event));
+    };
+    Ok(json!({"sok": 1, "event": event.event, "data": data}))
+}
+
+/// Returns the message that the host posts to the view for a reply: {"sok", "id", "result"} or {"sok", "id", "error"}.
+pub fn view_reply_message(reply: &ViewReply) -> Result<Value, String> {
+    match (&reply.result, &reply.error) {
+        (None, None) => Err(format!(
+            "view reply {} has neither a result nor an error",
+            reply.id
+        )),
+        (Some(_), Some(_)) => Err(format!(
+            "view reply {} has both a result and an error",
+            reply.id
+        )),
+        (None, Some(error)) if error.message.is_empty() => Err(format!(
+            "view reply {} has an error without a message",
+            reply.id
+        )),
+        (None, Some(error)) => Ok(json!({
+            "sok": 1,
+            "id": reply.id,
+            "error": {"code": error.code, "message": error.message}
+        })),
+        (Some(result), None) => Ok(json!({"sok": 1, "id": reply.id, "result": result})),
+    }
+}
+
+/// Records a responsiveness notice of the view of surface: it writes the trace event of the notice and returns the payload of the
+/// view-responsiveness event that the window receives. The notice ends no call of the view (docs/spec/native-surfaces.md#view-surfaces).
+pub fn view_responsiveness_notice(surface: &str, plugin: &str, responsive: bool) -> Value {
+    let fields = json!({"plugin": plugin, "surface": surface});
+    if responsive {
+        emit_host(Level::Debug, "host.trace.view.responsive", fields);
+    } else {
+        emit_host(Level::Debug, "host.trace.view.unresponsive", fields);
+    }
+    json!({"surface": surface, "plugin": plugin, "responsive": responsive})
+}
+
+/// Writes host.trace.view.process-request for the view of surface that is created.
+pub fn record_view_process_request(surface: &str, plugin: &str) {
+    emit_host(
+        Level::Debug,
+        "host.trace.view.process-request",
+        json!({"plugin": plugin, "surface": surface}),
+    );
+}
+
+/// Writes host.trace.view.process-ready for the view of surface whose first ready message arrived.
+pub fn record_view_process_ready(surface: &str, plugin: &str) {
+    emit_host(
+        Level::Debug,
+        "host.trace.view.process-ready",
+        json!({"plugin": plugin, "surface": surface}),
+    );
+}
+
+#[cfg(test)]
+#[path = "view_responsiveness_test.rs"]
+mod tests;
+
+/// The document-start script that sets window.sokTheme to the frozen theme value {scheme, tokens}, which the first page script of a
+/// view reads (docs/spec/native-surfaces.md#view-surfaces).
+pub fn theme_script(theme: &Value) -> String {
+    format!("window.sokTheme = Object.freeze({theme});")
+}
+
+/// The document-start script that sets window.sokSurface to the frozen start values of the view of surface, which the first page
+/// script of the view reads (docs/spec/native-surfaces.md#view-surfaces). A value that the surface has none of is carried as JSON
+/// null.
+pub fn surface_start_script(surface: &str, start: &ViewStart) -> String {
+    let params = start
+        .params
+        .as_ref()
+        .map_or_else(|| "null".to_string(), |value| value.to_string());
+    let directory = start
+        .origin
+        .as_ref()
+        .and_then(|origin| origin.directory.as_deref())
+        .map_or_else(
+            || "null".to_string(),
+            |directory| Value::String(directory.to_string()).to_string(),
+        );
+    let project = start.project.as_ref().map_or_else(
+        || "null".to_string(),
+        |project| {
+            let root = Value::String(project.root.clone());
+            format!("Object.freeze({{\"root\":{root}}})")
+        },
+    );
+    let declarations = start
+        .declarations
+        .as_ref()
+        .map_or_else(|| "{}".to_string(), |value| value.to_string());
+    let id = Value::String(surface.to_string());
+    format!(
+        "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations})}});"
+    )
+}
+
+#[cfg(test)]
+#[path = "view_theme_test.rs"]
+mod theme_tests;
+
+#[cfg(test)]
+#[path = "view_start_test.rs"]
+mod start_tests;
+
+/// Writes host.call.peer-lost {plugin, command, reason: process-ended} for a view call that was open when its view process ended
+/// (docs/spec/native-surfaces.md#view-surfaces).
+pub fn record_view_call_peer_lost(plugin: &str, command: &str) {
+    emit_host(
+        Level::Error,
+        "host.call.peer-lost",
+        json!({"plugin": plugin, "command": command, "reason": "process-ended"}),
+    );
+}
+
+#[cfg(test)]
+#[path = "view_call_peer_test.rs"]
+mod call_peer_tests;
+
+/// Takes the bytes that the binary store of the document name of surface keeps under id, through take, and releases the id. A
+/// document that is not attached gives the error `document "<name>" is not attached`, the text of the other document operations, and
+/// the error text of the native take is passed on unchanged (docs/spec/native-surfaces.md#document-regions).
+pub fn take_document_binary_of(
+    documents: &Documents,
+    surface: &str,
+    name: &str,
+    id: &str,
+    take: impl FnOnce(Handle, &str) -> Result<Vec<u8>, String>,
+) -> Result<Vec<u8>, String> {
+    let handle = documents.get(&(surface.to_string(), name.to_string()))?;
+    take(handle, id)
+}
+
+#[cfg(test)]
+#[path = "document_binary_take_test.rs"]
+mod binary_take_tests;
+
+/// Ends the presentation wait of the view of surface with reason, and writes the failure of the end to the application log.
+/// Joins each shown view that waits for no presentation yet to the open layout transaction of window with ticket
+/// (docs/plans/plugin-processes.md, rule 6). A surface without a view document has no presentation to wait for, so it is skipped.
+pub(crate) fn join_shown_views(
+    window: &Window,
+    platform: &'static dyn Platform,
+    ticket: u64,
+    placements: &[Placement],
+) -> Result<(), String> {
+    let data = window_data(window)?;
+    let shown = placements
+        .iter()
+        .filter(|placement| placement.visible)
+        .map(|placement| placement.id.as_str());
+    let surfaces = views_to_join(
+        shown,
+        |surface| data.documents.lifecycle().spec(surface).is_some(),
+        |surface| data.documents.presentation().waits(surface),
+    );
+    for surface in surfaces {
+        let key: Key = (surface.to_string(), VIEW_NAME.to_string());
+        let Ok(view) = data.documents.get(&key) else {
+            continue;
+        };
+        let presented_window = window.clone();
+        let presented_surface = surface.to_string();
+        let presented: Box<dyn FnOnce() + Send> = Box::new(move || {
+            let ended = platform::current().and_then(|platform| {
+                platform.enqueue_ui(Box::new(move || {
+                    end_presentation_wait(&presented_window, &presented_surface, "presented")
+                }))
+            });
+            if let Err(error) = ended {
+                log_error("view channel", error);
+            }
+        });
+        let abandon = with_native_owner(window, move |owner| {
+            platform.join_view(owner, ticket, view, presented)
+        })
+        .map_err(|error| error.to_string())?;
+        let Some(abandon) = abandon else {
+            continue;
+        };
+        if !data.documents.presentation().begin(surface, Some(abandon)) {
+            return Err(format!(
+                "view {surface} joined the layout transaction while it already waits"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Ends the presentation wait of the view of surface. An end without presentation sends the view-presentation-abandoned notice to
+/// the window, which the surface counts in losses.abandoned.
+fn end_presentation_wait(window: &Window, surface: &str, reason: &str) {
+    let result = window_data(window).and_then(|data| {
+        data.documents
+            .presentation()
+            .end(surface, reason)
+            .map_err(|error| error.to_string())
+    });
+    match result {
+        Ok(true) => {
+            let payload = presentation_abandoned_payload(surface, reason);
+            if let Err(error) = emit_window(window, "view-presentation-abandoned", payload) {
+                log_error("view channel", error);
+            }
+        }
+        Ok(false) => {}
+        Err(error) => log_error("view channel", error),
+    }
 }

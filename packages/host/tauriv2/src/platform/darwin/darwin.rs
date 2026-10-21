@@ -285,9 +285,33 @@ impl Platform for Darwin {
         store: &str,
         folder: &str,
         plugin: &str,
+        channel: Option<&str>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
-        document::create(surface, store, folder, plugin, changed)
+        document::create(surface, store, folder, plugin, channel, changed)
+    }
+    fn set_view_message(
+        &self,
+        document: Handle,
+        message: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String> {
+        document::set_view_message(document, message)
+    }
+    fn set_view_ended(&self, document: Handle, ended: Box<dyn Fn() + Send>) -> Result<(), String> {
+        document::set_view_ended(document, ended)
+    }
+    fn set_view_responsiveness(
+        &self,
+        document: Handle,
+        responsiveness: Box<dyn Fn(bool) + Send>,
+    ) -> Result<(), String> {
+        document::set_view_responsiveness(document, responsiveness)
+    }
+    fn take_document_binary(&self, document: Handle, id: &str) -> Result<Vec<u8>, String> {
+        document::take_document_binary(document, id)
+    }
+    fn add_document_script(&self, document: Handle, source: &str) -> Result<(), String> {
+        document::add_document_script(document, source)
     }
     fn set_document_message(
         &self,
@@ -442,6 +466,15 @@ impl Platform for Darwin {
     fn cancel_layout(&self, window: Handle) -> Result<(), String> {
         layout::cancel(window);
         Ok(())
+    }
+    fn join_view(
+        &self,
+        window: Handle,
+        ticket: u64,
+        view: Handle,
+        presented: Box<dyn FnOnce() + Send>,
+    ) -> Result<Option<crate::platform::ViewAbandon>, String> {
+        layout::join_view(window, ticket, view, presented)
     }
     fn start_page_titlebar(
         &self,

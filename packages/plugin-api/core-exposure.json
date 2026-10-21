@@ -111,6 +111,7 @@
     "core.card.sidebar.toggle",
     "core.card.sidebar.size",
     "core.sidebar.section.select",
+    "core.declared-ui.tree.expand",
     "core.sidebar.section.fold",
     "core.card.tab-list",
     "core.card.tools",

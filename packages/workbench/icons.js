@@ -34,3 +34,6 @@ export function icon(name) {
   if (!body) throw new Error(`unknown icon: ${name}`);
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
 }
+
+/** Whether the core icon table has the name (docs/spec/declared-ui.md, icons). */
+export const hasIcon = (name) => Object.hasOwn(PATHS, name);

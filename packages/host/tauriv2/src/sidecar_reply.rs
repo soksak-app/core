@@ -121,11 +121,6 @@ impl RequestLedger {
         }
         surfaces
     }
-
-    /// Removes the requests that wait for the sidecar without an event: the host ended the sidecar, which `host.sidecar.exit` states.
-    pub fn forget(&mut self, sidecar: &str) {
-        self.failed(sidecar);
-    }
 }
 
 #[derive(Deserialize)]
@@ -148,6 +143,16 @@ pub fn error_of_body(body: &str) -> Option<String> {
         // default: an error that is not a string is stated by its JSON text.
         Err(_) => Some(raw.get().to_string()),
     }
+}
+
+/// Records the requests of sidecar that wait for a reply, as the surfaces and identifiers that `failed` returns, when the host stops or
+/// detaches the sidecar: each one gets a host.sidecar.reply error (docs/spec/host-contract.md#contract-cases).
+pub(crate) fn record_stopped_requests(sidecar: &str, failed: Vec<(String, Vec<String>)>) {
+    crate::sidecars::record_request_failures(
+        sidecar,
+        "the host stopped before the sidecar replied",
+        failed,
+    );
 }
 
 #[cfg(test)]

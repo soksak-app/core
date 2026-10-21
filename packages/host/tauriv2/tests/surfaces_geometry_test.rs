@@ -26,7 +26,7 @@ fn sync_request(request: serde_json::Value) -> SyncRequest {
 fn surface(id: &str, w: f64) -> serde_json::Value {
     serde_json::json!({
         "id": id, "module": "surface.js", "x": 0.0, "y": 0.0, "w": w, "h": 10.0,
-        "visible": true, "dim": false, "plugin": "page", "composition": {"kind": "dom"},
+        "visible": true, "dim": false, "plugin": "page", "composition": {"kind": "hybrid", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []},
     })
 }
 
@@ -113,5 +113,56 @@ fn sync_request_check_requires_the_same_plugin_of_each_surface() {
     assert_eq!(
         check_sync_request(&missing, &HashMap::new(), &HashMap::new()).unwrap_err(),
         r#"surface "tab-1" requires its plugin"#
+    );
+}
+
+// contract: view.start-values.first-script
+#[test]
+fn sync_request_check_validates_the_start_values_of_a_view() {
+    let held = HashMap::new();
+    let view = |start: serde_json::Value| {
+        serde_json::json!({
+            "id": "tab-1", "module": null, "x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0,
+            "visible": true, "dim": false, "plugin": "page",
+            "composition": {"kind": "view", "page": "ui/page.html"}, "start": start,
+        })
+    };
+    let request = sync_request(serde_json::json!({
+        "settled": true, "titlebar": 40.0,
+        "surfaces": [view(serde_json::json!({"project": {"root": ""}}))],
+    }));
+    assert_eq!(
+        check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
+        r#"surface "tab-1": view start project root is empty"#
+    );
+    let request = sync_request(serde_json::json!({
+        "settled": true, "titlebar": 40.0,
+        "surfaces": [view(serde_json::json!({"origin": {"directory": ""}}))],
+    }));
+    assert_eq!(
+        check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
+        r#"surface "tab-1": view start origin directory is empty"#
+    );
+    let request = sync_request(serde_json::json!({
+        "settled": true, "titlebar": 40.0,
+        "surfaces": [view(serde_json::json!({"declarations": []}))],
+    }));
+    assert_eq!(
+        check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
+        r#"surface "tab-1": view start declarations are not an object"#
+    );
+    // A surface of another composition carries no start values.
+    let hybrid = serde_json::json!({
+        "id": "tab-1", "module": "surface.js", "x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0,
+        "visible": true, "dim": false, "plugin": "page",
+        "composition": {"kind": "hybrid", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []},
+        "start": {"project": {"root": "/work/one"}},
+    });
+    let request = sync_request(serde_json::json!({
+        "settled": true, "titlebar": 40.0, "surfaces": [hybrid],
+    }));
+    assert_eq!(
+        check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
+        r#"surface "tab-1": only a view surface carries start values"#
     );
 }

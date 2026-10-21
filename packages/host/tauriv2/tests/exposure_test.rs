@@ -767,3 +767,34 @@ fn late_reply_to_a_command_writes_the_call_late_reply_event() {
     assert!(delay >= 50, "delay {delay} ms, want at least 50 ms");
     use_host_event_log(None);
 }
+
+// contract: view.exposure.register
+// The caller of a registration is either the page view of the surface itself or the main page of the window registering
+// for a surface with a view (docs/spec/exposure.md#relay).
+#[test]
+fn a_registration_caller_is_the_surface_page_or_the_main_page_of_a_view() {
+    // The page view of the surface itself.
+    assert_eq!(
+        exposure::check_registration_caller("surface-main-a", "surface-main-a", "a", false, false),
+        Ok(())
+    );
+    // The page view of another surface is refused.
+    assert_eq!(
+        exposure::check_registration_caller("surface-main-b", "surface-main-a", "a", false, true),
+        Err("surface-main-b cannot register for surface a".to_string())
+    );
+    // The main page of the window registers for a surface with a view.
+    assert_eq!(
+        exposure::check_registration_caller("main", "surface-main-a", "a", true, true),
+        Ok(())
+    );
+    // It is refused for a surface without a view, and so is an unknown caller.
+    assert_eq!(
+        exposure::check_registration_caller("main", "surface-main-a", "a", true, false),
+        Err("main cannot register for surface a".to_string())
+    );
+    assert_eq!(
+        exposure::check_registration_caller("unknown", "surface-main-a", "a", false, true),
+        Err("unknown cannot register for surface a".to_string())
+    );
+}

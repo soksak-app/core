@@ -171,9 +171,33 @@ impl Platform for Windows {
         store: &str,
         folder: &str,
         plugin: &str,
+        channel: Option<&str>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
-        unsupported::create_document(surface, store, folder, plugin, changed)
+        unsupported::create_document(surface, store, folder, plugin, channel, changed)
+    }
+    fn set_view_message(
+        &self,
+        document: Handle,
+        message: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::set_view_message(document, message)
+    }
+    fn set_view_ended(&self, document: Handle, ended: Box<dyn Fn() + Send>) -> Result<(), String> {
+        unsupported::set_view_ended(document, ended)
+    }
+    fn set_view_responsiveness(
+        &self,
+        document: Handle,
+        responsiveness: Box<dyn Fn(bool) + Send>,
+    ) -> Result<(), String> {
+        unsupported::set_view_responsiveness(document, responsiveness)
+    }
+    fn take_document_binary(&self, document: Handle, id: &str) -> Result<Vec<u8>, String> {
+        unsupported::take_document_binary(document, id)
+    }
+    fn add_document_script(&self, document: Handle, source: &str) -> Result<(), String> {
+        unsupported::add_document_script(document, source)
     }
     fn set_document_message(
         &self,
@@ -310,6 +334,15 @@ impl Platform for Windows {
     }
     fn cancel_layout(&self, window: Handle) -> Result<(), String> {
         unsupported::cancel_layout(window)
+    }
+    fn join_view(
+        &self,
+        window: Handle,
+        ticket: u64,
+        view: Handle,
+        presented: Box<dyn FnOnce() + Send>,
+    ) -> Result<Option<crate::platform::ViewAbandon>, String> {
+        unsupported::join_view(window, ticket, view, presented)
     }
     fn start_page_titlebar(
         &self,

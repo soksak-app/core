@@ -7,12 +7,17 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
+import { unauditedViews } from "./audit-surfaces.mjs";
 
 /** Confirms that the audit of the main document and of every visible plugin surface document is empty. */
 async function clean(s, where) {
   const { unbound } = await s.get("core.page.audit");
   assert.deepEqual(unbound, [], `${where}: main document controls without a command or dom name`);
-  for (const surface of await s.surfaces()) {
+  const surfaces = await s.surfaces();
+  const unaudited = unauditedViews(surfaces);
+  assert.deepEqual(unaudited.map((surface) => `${surface.plugin} ${surface.surface}`), [],
+    `${where}: visible views whose page does not expose core.surface.document`);
+  for (const surface of surfaces) {
     if (!surface.exposes.includes("status core.surface.document")) continue;
     const doc = await s.get("core.surface.document", surface.surface);
     assert.deepEqual(doc.unbound, [], `${where}: ${surface.plugin} surface ${surface.surface} controls without a command or dom name`);

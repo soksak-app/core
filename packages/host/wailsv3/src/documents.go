@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -150,9 +151,13 @@ func (s *Surfaces) checkDocument(viewID uint64, req DocumentRequest) (DocumentKe
 type Documents struct {
 	mu      sync.Mutex
 	handles map[DocumentKey]unsafe.Pointer
+	// views is the view channel of each view surface. A record leaves with the view of its surface.
+	views map[string]*viewChannel
 }
 
-func NewDocuments() *Documents { return &Documents{handles: map[DocumentKey]unsafe.Pointer{}} }
+func NewDocuments() *Documents {
+	return &Documents{handles: map[DocumentKey]unsafe.Pointer{}, views: map[string]*viewChannel{}}
+}
 
 // Reserve takes a name. It is an error when the same name already exists.
 func (d *Documents) Reserve(key DocumentKey) error {
@@ -195,6 +200,9 @@ func (d *Documents) Remove(key DocumentKey) (unsafe.Pointer, error) {
 		return nil, fmt.Errorf("document %q is not attached", key.Name)
 	}
 	delete(d.handles, key)
+	if key.Name == viewRegionName {
+		delete(d.views, key.Surface)
+	}
 	return handle, nil
 }
 
@@ -203,6 +211,7 @@ func (d *Documents) RemoveSurface(surface string) []unsafe.Pointer {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	var removed []unsafe.Pointer
+	delete(d.views, surface)
 	for key, handle := range d.handles {
 		if key.Surface != surface {
 			continue
@@ -293,7 +302,7 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 		if err != nil {
 			return
 		}
-		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, func(state string) {
+		handle, err = system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, "", func(state string) {
 			s.documentChanged(key, state)
 		})
 		// The history is restored before anything else uses the new region, so it loads the restored entry first.
@@ -333,6 +342,168 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 	if !registered {
 		return fmt.Errorf("surface %q closed while its document was created", key.Surface)
 	}
+	return nil
+}
+
+// viewRegionName is the document name of the view web view of a view surface. No composition region has an empty name, so the view
+// cannot collide with a region, and the view closes with the other documents of its surface.
+const viewRegionName = ""
+
+// attachView creates the view web view of a view surface with the view configuration (isView) and loads sok://<plugin>/<page> into it.
+// The view state is not reported by this step. It runs on the UI thread.
+func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, directory, folder, plugin, page, channel string, start ViewStart) error {
+	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
+	if err := s.documents.Reserve(key); err != nil {
+		return err
+	}
+	handle, err := system.CreateDocument(surface, directory, folder, plugin, channel, func(state string) {
+		if err := s.viewState(surfaceID, state); err != nil {
+			LogError("view channel", err)
+		}
+	})
+	if err == nil {
+		err = system.SetViewMessage(handle, func(value string) {
+			s.viewReceived(surfaceID, handle, value)
+		})
+	}
+	if err == nil {
+		err = system.SetViewEnded(handle, func() {
+			LogError("view channel", surfaceID+": the view process ended")
+			s.viewFailed(surfaceID, handle)
+		})
+	}
+	if err == nil {
+		err = system.SetViewResponsiveness(handle, func(responsive bool) {
+			s.viewResponsiveness(surfaceID, plugin, responsive)
+		})
+	}
+	if err == nil {
+		err = s.addThemeScript(handle)
+	}
+	if err == nil {
+		err = s.addStartScript(handle, surfaceID, start)
+	}
+	if err == nil && !system.LoadDocument(handle, "sok://"+plugin+"/"+page) {
+		system.CloseDocument(handle)
+		err = fmt.Errorf("view of surface %q cannot load sok://%s/%s", surfaceID, plugin, page)
+	}
+	if err != nil {
+		s.documents.Remove(key)
+		return err
+	}
+	if !s.documents.Set(key, handle) {
+		system.CloseDocument(handle)
+		return fmt.Errorf("surface %q closed while its view was created", surfaceID)
+	}
+	s.documents.registerView(surfaceID, plugin)
+	EmitHost(LevelDebug, "host.trace.view.process-request", map[string]any{"plugin": plugin, "surface": surfaceID})
+	return nil
+}
+
+// addThemeScript adds the theme script of the view document, with the theme current at its creation, before the view loads its page
+// (docs/spec/native-surfaces.md#view-surfaces).
+func (s *Surfaces) addThemeScript(document unsafe.Pointer) error {
+	script, err := themeScript(s.Theme())
+	if err != nil {
+		return err
+	}
+	return system.AddDocumentScript(document, script)
+}
+
+// addStartScript adds the start values script of the view document, with the values that the page declared for the surface,
+// before the view loads its page (docs/spec/native-surfaces.md#view-surfaces).
+func (s *Surfaces) addStartScript(document unsafe.Pointer, surfaceID string, start ViewStart) error {
+	script, err := surfaceStartScript(surfaceID, start)
+	if err != nil {
+		return err
+	}
+	return system.AddDocumentScript(document, script)
+}
+
+// surfaceStartScript returns the document-start script that sets window.sokSurface to the frozen start values of the view of
+// surface, which the first page script of the view reads (docs/spec/native-surfaces.md#view-surfaces). A value that the surface
+// has none of is carried as JSON null.
+func surfaceStartScript(surface string, start ViewStart) (string, error) {
+	id, err := json.Marshal(surface)
+	if err != nil {
+		return "", fmt.Errorf("view start surface cannot be serialized: %w", err)
+	}
+	params := "null"
+	if start.Params != nil {
+		params = string(start.Params)
+	}
+	directory := "null"
+	if start.Origin != nil && start.Origin.Directory != nil {
+		text, err := json.Marshal(*start.Origin.Directory)
+		if err != nil {
+			return "", fmt.Errorf("view start origin cannot be serialized: %w", err)
+		}
+		directory = string(text)
+	}
+	project := "null"
+	if start.Project != nil {
+		root, err := json.Marshal(start.Project.Root)
+		if err != nil {
+			return "", fmt.Errorf("view start project cannot be serialized: %w", err)
+		}
+		project = `Object.freeze({"root":` + string(root) + "})"
+	}
+	declarations := "{}"
+	if start.Declarations != nil {
+		declarations = string(start.Declarations)
+	}
+	return "window.sokSurface = Object.freeze({\"surface\":" + string(id) +
+		",\"params\":" + params +
+		",\"origin\":Object.freeze({\"directory\":" + directory + "})" +
+		",\"project\":" + project +
+		",\"declarations\":Object.freeze(" + declarations + ")});", nil
+}
+
+// viewResponsiveness relays a responsiveness notice of the view of surface: it writes the trace event of the notice and sends the
+// view-responsiveness event to the owning surface. It ends no call of the view (docs/spec/native-surfaces.md#view-surfaces).
+func (s *Surfaces) viewResponsiveness(surface, plugin string, responsive bool) {
+	if !responsive {
+		s.endPresentationWait(surface, "unresponsive")
+	}
+	if responsive {
+		EmitHost(LevelDebug, "host.trace.view.responsive", map[string]any{"plugin": plugin, "surface": surface})
+	} else {
+		EmitHost(LevelDebug, "host.trace.view.unresponsive", map[string]any{"plugin": plugin, "surface": surface})
+	}
+	s.emitToSurface(surface, "view-responsiveness", map[string]any{"surface": surface, "plugin": plugin, "responsive": responsive})
+}
+
+// syncView creates the view of a view surface when the surface has none, and places the view over the whole surface. It runs on the UI thread.
+func (s *Surfaces) syncView(surfaceID string, surface unsafe.Pointer, plugin, page string, visible bool, start ViewStart) error {
+	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
+	if !visible {
+		// A view that is not shown ends its presentation wait, because its presentation cannot come (presentation_wait.go).
+		s.endPresentationWait(surfaceID, "hidden")
+	}
+	spec := s.viewRecords().track(surfaceID, surface, plugin, page, visible)
+	spec.start = start
+	// A view that failed beyond the restart limit is not created again until its surface is removed (view_lifecycle.go).
+	if s.viewRecords().isStopped(surfaceID) {
+		return nil
+	}
+	handle, err := s.documents.Get(key)
+	if err != nil {
+		if spec.folder == "" {
+			folder, folderErr := PluginFolder(s.host.configDir, plugin)
+			if folderErr != nil {
+				return folderErr
+			}
+			spec.folder = folder
+			spec.directory = filepath.Join(s.host.configDir, documentData)
+		}
+		if err := s.attachView(surfaceID, surface, spec.directory, spec.folder, plugin, page, viewChannelScript, spec.start); err != nil {
+			return err
+		}
+		if handle, err = s.documents.Get(key); err != nil {
+			return err
+		}
+	}
+	system.PlaceDocument(handle, 0, 0, 0, 0, visible)
 	return nil
 }
 
@@ -636,7 +807,7 @@ func (s *Surfaces) emitToSurface(surface, name string, data any) {
 		LogInfo("document", fmt.Sprintf("native event %s of closed surface %q arrived after the surface closed", name, surface))
 		return
 	}
-	s.window.EmitEvent(name, data)
+	s.windowEvent(name, data)
 }
 
 // imageChanged sends the image region event only to the owning surface and notifies the host.window watchers. It is called on the UI thread.
@@ -1088,4 +1259,541 @@ func (d *DocumentStreams) deliveriesLocked(key DocumentKey, stream string, body 
 		deliveries = append(deliveries, StreamDelivery{Surface: key.Surface, Handle: handle, Stream: stream, Message: body})
 	}
 	return deliveries
+}
+
+// viewChannelPath is the path of the view channel script in the bundled frontend, where the staging tool places the plugin-api package.
+const viewChannelPath = "modules/@soksak/plugin-api/view-start.js"
+
+// viewChannelScript is the text of the view channel script that each view configuration runs before its page.
+var viewChannelScript string
+
+// viewChannelMarker is the field that each host message to a view carries.
+const viewChannelMarker = 1
+
+// viewChannel is the channel of one view surface: the plugin of its view and its ready document. An empty document means that no
+// ready document is recorded.
+type viewChannel struct {
+	plugin   string
+	document string
+	// processReady is set by the first ready message of the view, which writes host.trace.view.process-ready once.
+	processReady bool
+	// calls holds the command of each call request of the view that the main page has not answered, by id.
+	calls map[uint64]string
+}
+
+// openViewCall is a call request of a view that was open when the view process ended.
+type openViewCall struct {
+	plugin  string
+	command string
+	id      uint64
+}
+
+// trackViewCall records the call request id with command as open. It runs when the request is forwarded to the main page.
+func (d *Documents) trackViewCall(surface string, id uint64, command string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if channel, ok := d.views[surface]; ok {
+		channel.calls[id] = command
+	}
+}
+
+// answerViewCall records that the main page answered the call request id of the view of surface, so the call is no longer open.
+func (d *Documents) answerViewCall(surface string, id uint64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if channel, ok := d.views[surface]; ok {
+		delete(channel.calls, id)
+	}
+}
+
+// endViewCalls removes the open call requests of the view of surface and returns them in the order of their ids. It runs when the view
+// process ends, and each returned call ends with the reason process-ended (docs/spec/native-surfaces.md#view-surfaces).
+func (d *Documents) endViewCalls(surface string) []openViewCall {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	channel, ok := d.views[surface]
+	if !ok {
+		return nil
+	}
+	ids := make([]uint64, 0, len(channel.calls))
+	for id := range channel.calls {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	ended := make([]openViewCall, 0, len(ids))
+	for _, id := range ids {
+		ended = append(ended, openViewCall{plugin: channel.plugin, command: channel.calls[id], id: id})
+	}
+	channel.calls = map[uint64]string{}
+	return ended
+}
+
+// firstReady reports whether the view of surface has no ready message yet, and records that it has one now. A view without a channel
+// reports false.
+func (d *Documents) firstReady(surface string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	channel, ok := d.views[surface]
+	if !ok || channel.processReady {
+		return false
+	}
+	channel.processReady = true
+	return true
+}
+
+// registerView records the plugin of the view of surface. It runs when the view is created.
+func (d *Documents) registerView(surface, plugin string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.views[surface] = &viewChannel{plugin: plugin, calls: map[uint64]string{}}
+}
+
+// view returns the channel of the view of surface, and false when the surface has no view.
+func (d *Documents) view(surface string) (viewChannel, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	channel, ok := d.views[surface]
+	if !ok {
+		return viewChannel{}, false
+	}
+	return *channel, true
+}
+
+// viewSurfaces returns the surfaces that have a view, in order.
+func (d *Documents) viewSurfaces() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	surfaces := make([]string, 0, len(d.views))
+	for surface := range d.views {
+		surfaces = append(surfaces, surface)
+	}
+	sort.Strings(surfaces)
+	return surfaces
+}
+
+// setReadyDocument records document as the ready document of the view of surface, and clears the record when document is empty.
+func (d *Documents) setReadyDocument(surface, document string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	channel, ok := d.views[surface]
+	if !ok {
+		return false
+	}
+	channel.document = document
+	return true
+}
+
+// viewReceived handles one message of the sok-view handler of the view handle of surface and writes its failure to the application log.
+// It runs on the UI thread.
+func (s *Surfaces) viewReceived(surface string, handle unsafe.Pointer, value string) {
+	err := s.viewMessage(surface, value)
+	if err == nil {
+		return
+	}
+	LogError("view channel", err)
+	var overflow viewOverflow
+	if errors.As(err, &overflow) {
+		// The view has lost messages, so it is closed and created again (docs/plans/plugin-processes.md, rule 4).
+		s.viewFailed(surface, handle)
+	}
+}
+
+// viewFailed handles the end of the WebContent process of the view handle of surface, or a queue overflow of that view. It runs on the UI
+// thread.
+func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
+	key := DocumentKey{Surface: surface, Name: viewRegionName}
+	current, err := s.documents.Get(key)
+	if err != nil || current != handle {
+		// The handle belongs to a view that was already closed or replaced, so its failure is already counted.
+		return
+	}
+	// The open calls are taken before the view is removed, because the removal drops the channel of the view.
+	openCalls := s.documents.endViewCalls(surface)
+	if _, err := s.documents.Remove(key); err != nil {
+		LogError("view channel", err)
+		return
+	}
+	system.CloseDocument(handle)
+	// Each call that the view had open ends with the reason process-ended, and the host writes its peer-lost event.
+	for _, call := range openCalls {
+		EmitHost(LevelError, "host.call.peer-lost", map[string]any{"plugin": call.plugin, "command": call.command, "reason": "process-ended"})
+	}
+	s.endPresentationWait(surface, "process-ended")
+	lifecycle := s.viewRecords()
+	spec := lifecycle.specs[surface]
+	if !lifecycle.fail(surface) {
+		reason := viewStopReason()
+		LogError("view channel", fmt.Errorf("%s: %s", surface, reason))
+		if spec == nil {
+			LogError("view channel", fmt.Errorf("%s: the view record is missing, so the view-stopped event is not sent", surface))
+			return
+		}
+		s.emitToSurface(surface, "view-stopped", viewStoppedEvent(surface, spec.plugin, reason))
+		return
+	}
+	if spec == nil {
+		LogError("view channel", fmt.Errorf("%s: the view record is missing, so the view is not created again", surface))
+		return
+	}
+	if err := s.syncView(surface, spec.native, spec.plugin, spec.page, spec.visible, spec.start); err != nil {
+		LogError("view channel", err)
+	}
+}
+
+// viewMessage dispatches one message of the sok-view handler of the view of surface. The message is {"message": value} for a message
+// of the view and {"error": reason} for a message from another frame. It returns the reason that the host writes to the application
+// log, or nil when the message needs no log line.
+func (s *Surfaces) viewMessage(surface, value string) error {
+	var received struct {
+		Message json.RawMessage `json:"message"`
+		Error   *string         `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(value), &received); err != nil {
+		return fmt.Errorf("%s: view message is not JSON: %w", surface, err)
+	}
+	if received.Error != nil {
+		return errors.New(*received.Error)
+	}
+	if received.Message == nil {
+		return fmt.Errorf("%s: view message has neither message nor error", surface)
+	}
+	channel, ok := s.documents.view(surface)
+	if !ok {
+		return fmt.Errorf("%s: view channel message of a surface without a view", surface)
+	}
+	// A reply of the view answers a request of the main page, and goes to the main page as view-reply (docs/spec/native-surfaces.md#view-surfaces).
+	reply, isReply, err := ViewReplyEvent(surface, channel.plugin, received.Message)
+	if err != nil {
+		return err
+	}
+	if isReply {
+		s.emitToSurface(surface, "view-reply", reply)
+		return nil
+	}
+	payload, isCall, err := ViewCallEvent(surface, channel.plugin, received.Message)
+	if err != nil {
+		return err
+	}
+	if isCall {
+		// A call request goes to the main page of the window, which answers it (docs/spec/native-surfaces.md#view-surfaces). A
+		// cancel carries no command and opens no call.
+		if id, ok := payload["id"].(uint64); ok {
+			if command, ok := payload["command"].(string); ok {
+				s.documents.trackViewCall(surface, id, command)
+			}
+		}
+		s.emitToSurface(surface, "view-call", payload)
+		return nil
+	}
+	snapshot, isSnapshot, err := DeclaredSnapshotEvent(surface, channel.plugin, received.Message)
+	if err != nil {
+		return err
+	}
+	if isSnapshot {
+		// A declared UI snapshot goes to the main page of the window, which acknowledges it and draws it
+		// (docs/spec/declared-ui.md). The host relays the snapshot and writes no event for it (rule 2).
+		s.emitToSurface(surface, declaredSnapshotEvent, snapshot)
+		return nil
+	}
+	var event struct {
+		Event    string `json:"event"`
+		Plugin   string `json:"plugin"`
+		Document string `json:"document"`
+		Reason   string `json:"reason"`
+	}
+	if err := json.Unmarshal(received.Message, &event); err != nil {
+		return fmt.Errorf("%s: view event is not an object: %w", surface, err)
+	}
+	switch event.Event {
+	case "view.ready":
+		if event.Plugin != channel.plugin || event.Document == "" {
+			return fmt.Errorf("%s: view.ready names plugin %q and document %q, want plugin %q", surface, event.Plugin, event.Document, channel.plugin)
+		}
+		s.documents.setReadyDocument(surface, event.Document)
+		if s.documents.firstReady(surface) {
+			EmitHost(LevelDebug, "host.trace.view.process-ready", map[string]any{"plugin": event.Plugin, "surface": surface})
+		}
+		// The current theme is the first message to a ready document (docs/spec/native-surfaces.md#view-surfaces).
+		return s.postView(surface, map[string]any{"event": "theme", "data": s.Theme()})
+	case "view.error":
+		if strings.HasPrefix(event.Reason, viewQueueFullPrefix) {
+			return viewOverflow{reason: event.Reason}
+		}
+		return errors.New(event.Reason)
+	}
+	return fmt.Errorf("%s: view event %q is unknown", surface, event.Event)
+}
+
+// viewState records the navigation state of the view of surface. A loading document clears the ready record of the view, so the
+// next ready message of the new document is the first record of it.
+func (s *Surfaces) viewState(surface, state string) error {
+	var loaded struct {
+		Loading bool `json:"loading"`
+	}
+	if err := json.Unmarshal([]byte(state), &loaded); err != nil {
+		return fmt.Errorf("%s: view state is not JSON: %w", surface, err)
+	}
+	if loaded.Loading {
+		s.documents.setReadyDocument(surface, "")
+	}
+	return nil
+}
+
+// postView posts message to the ready document of the view of surface, with the field sok 1. It returns an error when the view has no
+// ready document or when the document refuses the message.
+func (s *Surfaces) postView(surface string, message map[string]any) error {
+	ready, err := s.sendToView(surface, message)
+	if err != nil {
+		return err
+	}
+	if !ready {
+		return fmt.Errorf("%s has no ready document", surface)
+	}
+	return nil
+}
+
+// sendToView posts message to the ready document of the view of surface and reports whether the view has one. A view without a ready
+// document is not an error here, so the theme of a view that is not ready is skipped.
+func (s *Surfaces) sendToView(surface string, message map[string]any) (bool, error) {
+	channel, ok := s.documents.view(surface)
+	if !ok || channel.document == "" {
+		return false, nil
+	}
+	handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: viewRegionName})
+	if err != nil {
+		return false, err
+	}
+	message["sok"] = viewChannelMarker
+	data, err := json.Marshal(message)
+	if err != nil {
+		return false, err
+	}
+	if !system.PostDocument(handle, string(data)) {
+		return false, fmt.Errorf("%s: the view document refused the message", surface)
+	}
+	return true, nil
+}
+
+// postThemeToViews posts the current theme to each view that has a ready document. It runs after the theme changed.
+func (s *Surfaces) postThemeToViews() {
+	for _, surface := range s.documents.viewSurfaces() {
+		if _, err := s.sendToView(surface, map[string]any{"event": "theme", "data": s.Theme()}); err != nil {
+			LogError("view channel", err)
+		}
+	}
+}
+
+// viewStoppedEvent returns the payload of the view-stopped event of the view of surface, which has the plugin id and the reason. The
+// main page answers it by showing the reason on the card of the surface (docs/spec/native-surfaces.md#view-surfaces).
+func viewStoppedEvent(surface, plugin, reason string) map[string]any {
+	return map[string]any{"surface": surface, "plugin": plugin, "reason": reason}
+}
+
+// ViewCallEvent returns the payload of the view-call event for a call request or a cancel of the view of surface, which has the plugin id.
+// A call request is {"id", "command", "params"}; its id is an integer and its command is not empty. A cancel is {"id", "cancel": true}, and
+// its payload is {"id", "cancel": true} with the surface and plugin. It returns false when message is neither, and an error for a call
+// message whose fields are invalid, including a cancel that is not true or that names a command.
+func ViewCallEvent(surface, plugin string, message json.RawMessage) (map[string]any, bool, error) {
+	var call struct {
+		ID      *uint64         `json:"id"`
+		Command *string         `json:"command"`
+		Cancel  *bool           `json:"cancel"`
+		Params  json.RawMessage `json:"params"`
+	}
+	if err := json.Unmarshal(message, &call); err != nil {
+		return nil, false, fmt.Errorf("%s: view message is not an object: %w", surface, err)
+	}
+	if call.Command == nil && call.Cancel == nil {
+		return nil, false, nil
+	}
+	if call.ID == nil {
+		return nil, true, fmt.Errorf("%s: view call has no integer id", surface)
+	}
+	if call.Cancel != nil {
+		if !*call.Cancel || call.Command != nil {
+			return nil, true, fmt.Errorf("%s: view call %d cancel must be true and name no command", surface, *call.ID)
+		}
+		return map[string]any{"surface": surface, "plugin": plugin, "id": *call.ID, "cancel": true}, true, nil
+	}
+	if call.Command == nil || *call.Command == "" {
+		return nil, true, fmt.Errorf("%s: view call %d has an empty command", surface, *call.ID)
+	}
+	params := call.Params
+	if len(params) == 0 {
+		params = json.RawMessage(`null`)
+	}
+	return map[string]any{"surface": surface, "plugin": plugin, "id": *call.ID, "command": *call.Command, "params": params}, true, nil
+}
+
+// The event name of a declared UI snapshot of a view (docs/plans/plugin-processes.md, messages and events).
+const declaredSnapshotEvent = "declared-ui.snapshot"
+
+// DeclaredSnapshotEvent returns the payload of the declared-ui.snapshot event for a snapshot of the view of surface, which has the
+// plugin id. A snapshot is {"event": "declared-ui.snapshot", "plugin", "status", "seq", "value", "skipped"}, whose seq is an integer
+// from 1 and whose skipped is a count of 0 or more. It returns false when message is not a snapshot, and an error for a snapshot
+// whose fields are invalid. The host relays the snapshot and writes no event for it (docs/plans/plugin-processes.md, rule 2).
+func DeclaredSnapshotEvent(surface, plugin string, message json.RawMessage) (map[string]any, bool, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(message, &fields); err != nil {
+		return nil, false, fmt.Errorf("%s: view message is not an object: %w", surface, err)
+	}
+	if string(fields["event"]) != `"`+declaredSnapshotEvent+`"` {
+		return nil, false, nil
+	}
+	var named string
+	if raw, ok := fields["plugin"]; !ok || json.Unmarshal(raw, &named) != nil || named == "" {
+		return nil, true, fmt.Errorf("%s: declared UI snapshot names no plugin", surface)
+	}
+	if named != plugin {
+		return nil, true, fmt.Errorf("%s: declared UI snapshot names plugin %q, want plugin %q", surface, named, plugin)
+	}
+	var status string
+	if raw, ok := fields["status"]; !ok || json.Unmarshal(raw, &status) != nil || status == "" {
+		return nil, true, fmt.Errorf("%s: declared UI snapshot has no status", surface)
+	}
+	var seq uint64
+	if raw, ok := fields["seq"]; !ok || json.Unmarshal(raw, &seq) != nil || seq < 1 {
+		return nil, true, fmt.Errorf("%s: declared UI snapshot of status %q has no seq from 1", surface, status)
+	}
+	var skipped uint64
+	if raw, ok := fields["skipped"]; !ok || json.Unmarshal(raw, &skipped) != nil {
+		return nil, true, fmt.Errorf("%s: declared UI snapshot of status %q has no skipped count", surface, status)
+	}
+	value, ok := fields["value"]
+	if !ok {
+		return nil, true, fmt.Errorf("%s: declared UI snapshot of status %q has no value", surface, status)
+	}
+	return map[string]any{"surface": surface, "plugin": plugin, "status": status, "seq": seq, "skipped": skipped, "value": value}, true, nil
+}
+
+// ViewReplyRequest is the reply of the main page to a call request of the view of Surface. It has a result or an error, not both.
+type ViewReplyRequest struct {
+	Surface string          `json:"surface"`
+	ID      uint64          `json:"id"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *ViewReplyError `json:"error,omitempty"`
+}
+
+// ViewReplyError is the error of a view reply, with the code and the message of the call envelope.
+type ViewReplyError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+// ViewReplyMessage returns the message that the host posts to the view for a reply: {"id", "result"} or {"id", "error"}.
+func ViewReplyMessage(req ViewReplyRequest) (map[string]any, error) {
+	if len(req.Result) == 0 && req.Error == nil {
+		return nil, fmt.Errorf("view reply %d has neither a result nor an error", req.ID)
+	}
+	if len(req.Result) != 0 && req.Error != nil {
+		return nil, fmt.Errorf("view reply %d has both a result and an error", req.ID)
+	}
+	if req.Error != nil {
+		if req.Error.Message == "" {
+			return nil, fmt.Errorf("view reply %d has an error without a message", req.ID)
+		}
+		return map[string]any{"id": req.ID, "error": map[string]any{"code": req.Error.Code, "message": req.Error.Message}}, nil
+	}
+	return map[string]any{"id": req.ID, "result": req.Result}, nil
+}
+
+// replyView posts the reply of the main page to the view of req.Surface through the ready document of the view.
+func (s *Surfaces) replyView(req ViewReplyRequest) error {
+	message, err := ViewReplyMessage(req)
+	if err != nil {
+		return err
+	}
+	s.documents.answerViewCall(req.Surface, req.ID)
+	return s.postView(req.Surface, message)
+}
+
+// ViewEventRequest is the event that the main page pushes to the view of Surface. Event names the subscription and Data is its value,
+// which may be any JSON value.
+type ViewEventRequest struct {
+	Surface string          `json:"surface"`
+	Event   string          `json:"event"`
+	Data    json.RawMessage `json:"data"`
+}
+
+// pushViewEvent posts the event of req to the ready document of its view as {"sok": 1, "event", "data"}. An event without a name or
+// without data is refused. A view without a ready document refuses it, and the caller writes that error to the application log.
+func (s *Surfaces) pushViewEvent(req ViewEventRequest) error {
+	if req.Event == "" {
+		return errors.New("view event has an empty event name")
+	}
+	if len(req.Data) == 0 {
+		return fmt.Errorf("view event %s has no data", req.Event)
+	}
+	return s.postView(req.Surface, map[string]any{"event": req.Event, "data": req.Data})
+}
+
+// ViewRequestRequest is the command request that the main page sends to the view of Surface. Params is the params of the command.
+type ViewRequestRequest struct {
+	Surface string          `json:"surface"`
+	ID      uint64          `json:"id"`
+	Command string          `json:"command"`
+	Params  json.RawMessage `json:"params"`
+}
+
+// pushViewRequest posts the command request of req to the ready document of its view as {"sok": 1, "id", "command", "params"}. A request
+// has an id and a command; a request without params carries null. A view without a ready document refuses it.
+func (s *Surfaces) pushViewRequest(req ViewRequestRequest) error {
+	if req.ID == 0 {
+		return errors.New("view request has no id")
+	}
+	if req.Command == "" {
+		return fmt.Errorf("view request %d has an empty command", req.ID)
+	}
+	params := req.Params
+	if len(params) == 0 {
+		params = json.RawMessage(`null`)
+	}
+	return s.postView(req.Surface, map[string]any{"id": req.ID, "command": req.Command, "params": params})
+}
+
+// ViewReplyEvent returns the payload of the view-reply event for a reply of the view of surface, which has the plugin id. A reply is
+// {"reply": id, "result"} or {"reply": id, "error": {"code", "message"}}, and it has exactly one of result and error. It returns false when
+// message has no reply field, and an error for a reply whose fields are invalid.
+func ViewReplyEvent(surface, plugin string, message json.RawMessage) (map[string]any, bool, error) {
+	var reply struct {
+		Reply  json.RawMessage `json:"reply"`
+		Result json.RawMessage `json:"result"`
+		Error  json.RawMessage `json:"error"`
+	}
+	if err := json.Unmarshal(message, &reply); err != nil {
+		return nil, false, fmt.Errorf("%s: view message is not an object: %w", surface, err)
+	}
+	if len(reply.Reply) == 0 {
+		return nil, false, nil
+	}
+	var id uint64
+	if err := json.Unmarshal(reply.Reply, &id); err != nil {
+		return nil, true, fmt.Errorf("%s: view reply has no integer id", surface)
+	}
+	hasResult, hasError := len(reply.Result) > 0, len(reply.Error) > 0
+	if hasResult && hasError {
+		return nil, true, fmt.Errorf("%s: view reply %d has both a result and an error", surface, id)
+	}
+	if !hasResult && !hasError {
+		return nil, true, fmt.Errorf("%s: view reply %d has neither a result nor an error", surface, id)
+	}
+	if hasError {
+		var failure ViewReplyError
+		if err := json.Unmarshal(reply.Error, &failure); err != nil || failure.Message == "" {
+			return nil, true, fmt.Errorf("%s: view reply %d has an error without a message", surface, id)
+		}
+		return map[string]any{"surface": surface, "plugin": plugin, "id": id, "error": failure}, true, nil
+	}
+	return map[string]any{"surface": surface, "plugin": plugin, "id": id, "result": reply.Result}, true, nil
+}
+
+// takeDocumentBinary takes the bytes that the binary store of the document name of surface keeps under id, and releases the id. A
+// document that is not attached gives the error `document "<name>" is not attached`, and a closed document or an unstored id gives the
+// native error text (docs/spec/native-surfaces.md#document-regions).
+func (s *Surfaces) takeDocumentBinary(surface, name, id string) ([]byte, error) {
+	handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: name})
+	if err != nil {
+		return nil, err
+	}
+	return system.TakeDocumentBinary(handle, id)
 }

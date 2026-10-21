@@ -1,4 +1,5 @@
 use super::*;
+use crate::event_record::buffered_fields;
 
 fn cids(prefix: &str, from: usize, to: usize) -> Vec<String> {
     (from..to).map(|n| format!("{prefix}.{n}")).collect()
@@ -38,4 +39,25 @@ fn forgetting_a_request_at_the_bound_is_counted() {
     );
     assert_eq!(ledger.add("sidecar-a", "tab-1", &cids("q", 0, 5), 2), 5);
     assert!(ledger.take(&["p.0".to_string()], 3).is_none());
+}
+
+// contract: sidecars.stop.records-open-requests
+// A request that waits for a reply when the host stops its sidecar gets a host.sidecar.reply error that names its surface, its sidecar
+// and its identifiers.
+#[test]
+fn an_open_request_at_a_host_stop_gets_an_error_record() {
+    let mut ledger = RequestLedger::default();
+    ledger.add("probe-sidecar", "probe-surface", &["req-1".to_string()], 1);
+    record_stopped_requests("probe-sidecar", ledger.failed("probe-sidecar"));
+    let written: Vec<_> = buffered_fields("host.sidecar.reply")
+        .into_iter()
+        .filter(|fields| fields["name"] == "probe-sidecar")
+        .collect();
+    assert_eq!(
+        written.len(),
+        1,
+        "one error record is written for the open request"
+    );
+    assert_eq!(written[0]["surface"], "probe-surface");
+    assert_eq!(written[0]["ok"], false);
 }

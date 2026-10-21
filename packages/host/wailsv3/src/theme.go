@@ -3,6 +3,9 @@
 package host
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -42,5 +45,17 @@ func (s *Surfaces) SetTheme(theme Theme) error {
 		}
 	})
 	s.Emit("theme", theme)
+	// A view receives the theme after its ready message, so only the views with a ready document are posted to.
+	s.postThemeToViews()
 	return nil
+}
+
+// themeScript returns the document-start script that sets window.sokTheme to the frozen theme value {scheme, tokens}, which the
+// first page script of a view reads (docs/spec/native-surfaces.md#view-surfaces).
+func themeScript(theme Theme) (string, error) {
+	text, err := json.Marshal(theme)
+	if err != nil {
+		return "", fmt.Errorf("theme cannot be serialized: %w", err)
+	}
+	return "window.sokTheme = Object.freeze(" + string(text) + ");", nil
 }

@@ -1,6 +1,10 @@
 import { createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
-import { registry } from "./exposure.js";
+import { registry, registerSurfacePort } from "./exposure.js";
+import { answerViewCall, viewStopState } from "./view-calls.js";
+import { createViewSubscriptions } from "./view-events.js";
+import { createViewCommands, keepViewCommands } from "./view-commands.js";
+import { callReporter } from "./plugin-processes.js";
 import { plugin } from "./registry.js";
 import { pluginDiagnostics } from "./environment.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
@@ -10,6 +14,7 @@ import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, repo
   unloadTab } from "./tab-reports.js";
 import { icon } from "./icons.js";
 import { active, tabStateStore, tabStatesReady } from "./projects.js";
+import { forgetView, presentationAbandoned, viewResponsiveness } from "./plugin-processes.js";
 import { pluginRecords } from "./plugin-records.js";
 import { documentRegions } from "./document-regions.js";
 import { trace } from "./performance.js";
@@ -177,6 +182,21 @@ function tabStates() {
 }
 
 /**
+ * The start values of the view of surface (docs/spec/native-surfaces.md#view-surfaces): the members of the surface context that
+ * the page receives at start, which the host injects as window.sokSurface before the page of the view runs. project is the
+ * project that the window shows, or null in a window without one.
+ */
+export function viewStartValues(surface, project) {
+  return {
+    // default: a tab without parameters gives null, as tab.params does (docs/spec/plugins.md).
+    params: surface.params ?? null,
+    origin: tabOrigin(surface.surfaceId),
+    project: project === null ? null : { root: project.root },
+    declarations: surface.declarations,
+  };
+}
+
+/**
  * context.tab.state of a surface whose plugin declares surface.unload as {format, maxBytes} (docs/spec/plugins.md#memory-saver).
  * isDisposed tells whether the surface of this context was disposed; a write after it is refused and reported once.
  */
@@ -214,8 +234,118 @@ function tabState(surface, isDisposed) {
   };
 }
 
+/**
+ * Answers the call requests and the cancels of the view of surface with the handlers of its context, and sends each reply to the view
+ * (docs/spec/native-surfaces.md#view-surfaces). It resolves with the function that ends the answers. page is the runtime of the
+ * surface, whose sidecar send ends with its place.
+ */
+function answerViewCalls(surface, scoped, page, context) {
+  // context.tab holds the tab state only when the plugin declares surface.unload, so a view call reads the same handlers.
+  const { tab } = context;
+  // The pending calls of this view, by id. A cancel ends the pending call that it names.
+  const pending = new Map();
+  // The event subscriptions of the view. Each event is pushed to the view as viewEvent, and the subscriptions end with the answers.
+  const subscriptions = createViewSubscriptions({
+    native: (name, listener) => scoped.native.on(name, listener),
+    // The declared sidecar is read at each subscription, because a view without a declared sidecar subscribes to none.
+    sidecar: {
+      on: (id, listener) => page.sidecar().on(id, listener),
+      onFailure: (id, listener) => page.sidecar().onFailure(id, listener),
+    },
+    textSize: (listener) => context.runtime.textSize.on(listener),
+    settings: (listener) => context.runtime.settings.on(listener),
+    push: (event, data) => scoped.native.call("viewEvent", { event, data }),
+    report: (text) => dispatchEvent(new ErrorEvent("error", { message: text })),
+  });
+  // The commands of the view. A command is declared through the exposure of the surface, and each request of it runs in the view.
+  const viewCommands = createViewCommands({
+    plugin: surface.pluginId,
+    post: (message) => scoped.native.call("viewRequest", message),
+    timeoutOf: (name) => registry.commandTimeout(name),
+    report: callReporter(surface.pluginId),
+  });
+  // The declared UI pull of a declared section sends through this layer, so it is kept by surface until the answers end.
+  const forgetCommands = keepViewCommands(surface.surfaceId, viewCommands);
+  // The exposure of the view. A forwarded exposure request reaches the view through its exposure-request subscription and is
+  // answered through exposureReply of the surface (docs/spec/native-surfaces.md#view-surfaces, view exposure), so the port
+  // only consumes the request: without it the page would forward the request to the view again (docs/spec/exposure.md#relay).
+  const removeExposurePort = registerSurfacePort(surface.surfaceId, () => {});
+  const options = {
+    plugin: surface.pluginId,
+    pending,
+    tab,
+    runCore: (name, params) => scoped.call(name, params),
+    runOwned: (name, params, owner) => registry.runOwned(name, params, owner),
+    runtime: {
+      native: { call: (name, payload) => scoped.native.call(name, payload) },
+      sidecar: { send: (id, body, cids) => page.sidecar().send(id, body, cids) },
+      clipboard: scoped.clipboard,
+      links: scoped.links,
+      // The log levels of the surface context: the level gate of the page applies at delivery, and a gated record is counted there.
+      log: context.runtime.log,
+      textSize: context.runtime.textSize,
+      settings: context.runtime.settings,
+      subscribe: {
+        native: (name) => subscriptions.native(name),
+        sidecarMessage: (id) => subscriptions.sidecarMessage(id),
+        sidecarFailure: (id) => subscriptions.sidecarFailure(id),
+        textSize: () => subscriptions.textSize(),
+        settings: () => subscriptions.settings(),
+      },
+      command: {
+        // The command is declared through the exposure of the surface, so the registry checks its declaration and owner.
+        register: (name) => context.exposure.command(name, (params) => viewCommands.run(name, params)),
+      },
+      exposure: {
+        // A status or dom registration of the view: the registry validates the declaration and applies it, then the host
+        // records it, so a reloaded main page receives it again (docs/spec/exposure.md#relay).
+        registered: async ({ kind, name }) => {
+          registry.registered({ surface: surface.surfaceId, kind, name });
+          await scoped.native.call("exposureRegister", { kind, name });
+          return null;
+        },
+      },
+    },
+  };
+  const answering = scoped.native.on("view-call", (event) => {
+    if (event?.cancel === true) {
+      // A cancel has no reply: the call that it ends replies cancelled.
+      answerViewCall(event, options).catch((error) => {
+        dispatchEvent(new ErrorEvent("error", { message: `view call ${event.id} cancel: ${error.message}` }));
+      });
+      return;
+    }
+    answerViewCall(event, options).then(
+      // default: a handler that returns no value replies with null, which is the result of a call without a value.
+      (result) => ({ id: event.id, result: result ?? null }),
+      // default: a rejection that is not an Error replies with its text.
+      (error) => ({ id: event.id, error: { code: -32000, message: String(error?.message ?? error) } }),
+    ).then((reply) => scoped.native.call("viewReply", reply));
+  });
+  // The replies of the view to the commands of the page.
+  const replies = scoped.native.on("view-reply", (event) => {
+    try {
+      viewCommands.receive(event);
+    } catch (error) {
+      // default: a failure that is not an Error carries its value as the text.
+      dispatchEvent(new ErrorEvent("error", { message: `view command reply ${event?.id}: ${error?.message ?? error}` }));
+    }
+  });
+  // The answers end with the view: the listeners are removed, the open command runs end, and each page subscription is ended.
+  return Promise.all([answering, replies]).then(([offCall, offReply]) => () => {
+    offCall();
+    offReply();
+    forgetCommands();
+    removeExposurePort();
+    viewCommands.close();
+    return subscriptions.close();
+  });
+}
+
 export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
-  if (!slot || !surface?.module) throw new TypeError("surface module mount requires a slot and module");
+  // A view surface has no module: its page is loaded by the host into the view (docs/spec/plugins.md#view-surfaces).
+  const viewSurface = surface?.composition?.kind === "view";
+  if (!slot || (!surface?.module && !viewSurface)) throw new TypeError("surface module mount requires a slot and module");
   // The start of the mount for the trace event surface.mount, which covers the wait for the earlier dispose too.
   const started = performance.now();
   // A tab that is restored while its unload still disposes it mounts a new surface after that dispose ends.
@@ -224,7 +354,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   clearSlotPlaceholders(slot, surface.surfaceId);
   // Without a host there are no sidecars and no native regions. A surface that needs them is not mounted and a placeholder is drawn.
   // (docs/spec/plugins.md#runtime-module).
-  if (!native && (surface.sidecars.length > 0 || surface.composition?.kind === "hybrid")) {
+  if (!native && (surface.sidecars.length > 0 || surface.composition?.kind === "hybrid" || viewSurface)) {
     const placeholder = document.createElement("div");
     placeholder.className = "surface-placeholder";
     placeholder.dataset.surfaceId = surface.surfaceId;
@@ -357,6 +487,22 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       mounted: null, ready: null, authorized: false, disposed: false, surfaceId: surface.surfaceId,
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
+    if (viewSurface) {
+      const answering = answerViewCalls(surface, scoped, page, context);
+      // A view that stopped its restarts shows its reason as the error of the surface (docs/spec/native-surfaces.md#view-surfaces).
+      const stopping = scoped.native.on("view-stopped", (event) => onState(viewStopState(event)));
+      // The responsiveness of the view is the state of its surface in core.plugin.views, and the surface keeps no state after its dispose.
+      const responding = scoped.native.on("view-responsiveness", (event) => viewResponsiveness(surface.pluginId, surface.surfaceId, event.responsive));
+      // A presentation wait that ended without the presentation of the view counts losses.abandoned of the plugin.
+      const abandoning = scoped.native.on("view-presentation-abandoned", () => presentationAbandoned(surface.pluginId));
+      closing.signal.addEventListener("abort", () => {
+        answering.then((off) => off());
+        stopping.then((off) => off());
+        responding.then((off) => off());
+        abandoning.then((off) => off());
+        forgetView(surface.surfaceId);
+      }, { once: true });
+    }
     entry.mounted = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
       .then(async () => {
         // Does not start the registration and module of a surface that was removed while waiting for approval.
@@ -370,6 +516,11 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         // The module of a declaring surface reads and writes its tab state, which the page opens after the first plane.
         if (surface.unload) await tabStatesReady();
         if (entry.disposed) return null;
+        // The workbench mounts no module for a view. It declares the view composition, which resolves the composition wait of the surface.
+        if (viewSurface) {
+          await page.composition.declare(surface.composition);
+          return null;
+        }
         return import(surface.module);
       }).then((module) => {
         return module && mountSurfaceModule(module, shadow, context);

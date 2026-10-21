@@ -6,6 +6,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tauri::{Manager, Webview, Window};
 
 use crate::application_log::{log_error, log_failure};
@@ -36,6 +37,68 @@ pub(crate) struct Surface {
     /// The id of the plugin that owns the surface. A document region opens the plugin document of that plugin.
     plugin: String,
     composition: SurfaceComposition,
+    /// The start values of the view of a view surface, which the host injects as window.sokSurface before the page runs
+    /// (docs/spec/native-surfaces.md#view-surfaces). A surface of another composition carries none.
+    #[serde(default)]
+    start: Option<ViewStart>,
+}
+
+/// The working directory that the tab that opened the surface recorded at that moment (docs/spec/plugins.md#tab-reports).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct SurfaceOrigin {
+    pub(crate) directory: Option<String>,
+}
+
+/// The root of the project that the window shows (docs/spec/plugins.md#tab-reports).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct SurfaceProject {
+    pub(crate) root: String,
+}
+
+/// The start values of a view (docs/spec/native-surfaces.md#view-surfaces): the members of the surface context that the page
+/// receives at start, which the host injects as window.sokSurface before the page of the view runs.
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
+pub struct ViewStart {
+    #[serde(default)]
+    pub(crate) params: Option<Value>,
+    #[serde(default)]
+    pub(crate) origin: Option<SurfaceOrigin>,
+    #[serde(default)]
+    pub(crate) project: Option<SurfaceProject>,
+    #[serde(default)]
+    pub(crate) declarations: Option<Value>,
+}
+
+/// Checks the start values of the view of the surface (docs/spec/native-surfaces.md#view-surfaces).
+fn validate_view_start(surface: &str, start: &ViewStart) -> Result<(), String> {
+    if start
+        .origin
+        .as_ref()
+        .is_some_and(|origin| origin.directory.as_deref() == Some(""))
+    {
+        return Err(format!(
+            "surface {surface:?}: view start origin directory is empty"
+        ));
+    }
+    if start
+        .project
+        .as_ref()
+        .is_some_and(|project| project.root.is_empty())
+    {
+        return Err(format!(
+            "surface {surface:?}: view start project root is empty"
+        ));
+    }
+    if start
+        .declarations
+        .as_ref()
+        .is_some_and(|declarations| !declarations.is_object())
+    {
+        return Err(format!(
+            "surface {surface:?}: view start declarations are not an object"
+        ));
+    }
+    Ok(())
 }
 
 pub fn validate_rect(name: &str, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
@@ -60,6 +123,9 @@ pub(crate) struct SurfaceRegion {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct SurfaceComposition {
     pub(crate) kind: String,
+    /// The page of a view composition: a path inside the plugin release (docs/spec/plugins.md#view-surfaces).
+    #[serde(default)]
+    pub(crate) page: String,
     #[serde(default)]
     pub(crate) regions: Vec<SurfaceRegion>,
     pub(crate) overlays: Option<Vec<String>>,
@@ -82,21 +148,44 @@ fn valid_composition_name(name: &str) -> bool {
             .all(|(i, ch)| ch.is_ascii_lowercase() || ch.is_ascii_digit() || (i > 0 && ch == '-'))
 }
 
-fn validate_composition(composition: &SurfaceComposition) -> Result<(), String> {
+/// Reports whether page is a path inside the plugin release: relative, with no empty, `.` or `..` segment, no `.binary` segment,
+/// and the `.html` extension (docs/spec/plugins.md#view-surfaces).
+fn valid_view_page(page: &str) -> bool {
+    page.ends_with(".html")
+        && page
+            .split('/')
+            .all(|segment| !matches!(segment, "" | "." | ".." | ".binary"))
+}
+
+fn validate_composition(plugin: &str, composition: &SurfaceComposition) -> Result<(), String> {
     if composition.kind == "dom" {
-        if !composition.regions.is_empty()
-            || composition.overlays.as_ref().is_some_and(|v| !v.is_empty())
-        {
-            return Err("dom composition cannot declare regions or overlays".into());
+        return Err(format!(
+            "plugin {plugin} surface composition: kind dom is removed; the composition takes kind view or hybrid"
+        ));
+    }
+    if composition.kind == "view" {
+        if !valid_view_page(&composition.page) {
+            return Err(format!(
+                "view composition page {:?} must be a path inside the plugin release that ends in .html",
+                composition.page
+            ));
         }
-        return Ok(());
+        return validate_regions(composition);
     }
     if composition.kind != "hybrid"
         || composition.regions.is_empty()
         || composition.overlays.is_none()
     {
-        return Err("surface composition must be dom or a complete hybrid composition".into());
+        return Err("surface composition must be view or a complete hybrid composition".into());
     }
+    if !composition.page.is_empty() {
+        return Err("hybrid composition cannot declare a page".into());
+    }
+    validate_regions(composition)
+}
+
+/// Checks the names and kinds of the regions and overlays of a hybrid or view composition.
+fn validate_regions(composition: &SurfaceComposition) -> Result<(), String> {
     let mut seen = HashSet::new();
     for region in &composition.regions {
         if !valid_composition_name(&region.name) || !seen.insert(region.name.clone()) {
@@ -123,7 +212,7 @@ fn validate_composition(composition: &SurfaceComposition) -> Result<(), String> 
             _ => return Err(format!("unknown region kind {:?}", region.kind)),
         }
     }
-    for overlay in composition.overlays.as_ref().expect("checked above") {
+    for overlay in composition.overlays.iter().flatten() {
         if !valid_composition_name(overlay) || !seen.insert(overlay.clone()) {
             return Err(format!("invalid or duplicate composition name {overlay:?}"));
         }
@@ -176,7 +265,7 @@ pub(crate) fn declare(webview: &Webview, request: CompositionDeclareRequest) -> 
             request.surface
         ));
     }
-    validate_composition(&request.composition)?;
+    validate_composition(&request.plugin, &request.composition)?;
     let data = window_data(&webview.window())?;
     let mut all = data
         .compositions
@@ -305,12 +394,12 @@ pub(crate) struct Rect {
 /// The position where a surface was actually placed. It is in page coordinates.
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Placement {
-    id: String,
+    pub(crate) id: String,
     x: f64,
     y: f64,
     w: f64,
     h: f64,
-    visible: bool,
+    pub(crate) visible: bool,
 }
 
 /// The answer of a preparation. chrome is the window button area and the title bar height after the host set the title
@@ -552,7 +641,7 @@ pub fn check_sync_request(
             surface.w,
             surface.h,
         )?;
-        validate_composition(&surface.composition)
+        validate_composition(&surface.plugin, &surface.composition)
             .map_err(|e| format!("surface {:?}: {e}", surface.id))?;
         if surface.plugin.is_empty() {
             return Err(format!("surface {:?} requires its plugin", surface.id));
@@ -564,6 +653,15 @@ pub fn check_sync_request(
                 "surface {:?} changed its composition declaration",
                 surface.id
             ));
+        }
+        if let Some(start) = &surface.start {
+            if surface.composition.kind != "view" {
+                return Err(format!(
+                    "surface {:?}: only a view surface carries start values",
+                    surface.id
+                ));
+            }
+            validate_view_start(&surface.id, start)?;
         }
     }
     request
@@ -773,6 +871,28 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 }
                 Ok(())
             })?;
+            // The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
+            if s.composition.kind == "view" {
+                let view_window = window.clone();
+                let surface = s.id.clone();
+                let plugin = s.plugin.clone();
+                let page = s.composition.page.clone();
+                // default: a view surface synced without start values injects empty ones, as wailsv3 does; values
+                // that are present were checked by validate_view_start.
+                let start = s.start.clone().unwrap_or_default();
+                exposure::on_main(window, move || {
+                    documents::sync_view(
+                        &view_window,
+                        platform,
+                        handle,
+                        &surface,
+                        &plugin,
+                        &page,
+                        visible,
+                        start,
+                    )
+                })?;
+            }
         }
 
         // Only the page writes the surface list, so a surface that is not in the list is a removed surface.
@@ -1031,6 +1151,14 @@ pub(crate) async fn present(
                     return Err(error);
                 }
             };
+            if presentation_settled
+                && let Err(error) =
+                    documents::join_shown_views(&presentation_window, platform, ticket, &placed)
+            {
+                cancel_window_layout(&presentation_window)
+                    .map_err(|cancel| format!("{error}; cancelling layout: {cancel}"))?;
+                return Err(error);
+            }
             let committed = with_native_owner(&presentation_window, move |owner| {
                 platform.commit_layout(owner, ticket)
             })

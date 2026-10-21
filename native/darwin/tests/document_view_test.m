@@ -227,7 +227,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     @autoreleasepool {
         __block void *document = NULL;
         NSArray<NSDictionary *> *creation = capturedEvents(^{
-            document = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, false, changed, NULL);
+            document = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, NULL, changed, NULL);
             sp_document_set_stream(document, stream, NULL);
             // The first deliveries of the observed properties arrive on the run loop after the creation.
             NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.3];
@@ -578,8 +578,8 @@ int main(int argc, char **argv) { @autoreleasepool {
         });
 
         // Documents in the same directory share site data, and documents in different directories do not.
-        void *same = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, false, changed, NULL);
-        void *other = sp_document_create(surface, storeB.fileSystemRepresentation, NULL, NULL, false, changed, NULL);
+        void *same = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, NULL, changed, NULL);
+        void *other = sp_document_create(surface, storeB.fileSystemRepresentation, NULL, NULL, NULL, changed, NULL);
         check(same != NULL && other != NULL, @"documents are created for a shared and a separate store directory");
         NSHTTPCookie *cookie = [NSHTTPCookie cookieWithProperties:@{
             NSHTTPCookieDomain: @"127.0.0.1", NSHTTPCookiePath: @"/", NSHTTPCookieName: @"store",

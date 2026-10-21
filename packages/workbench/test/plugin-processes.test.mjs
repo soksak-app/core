@@ -81,3 +81,45 @@ test("the reports of snapshot channels count the skipped and stalled values of a
   assert.deepEqual(losses().find((entry) => entry.plugin === "tree-probe"), { plugin: "tree-probe", skipped: 1, stalled: 2, abandoned: 0, lateReplies: 0, timeouts: 0, peerLost: 0 });
   assert.equal(sent.length, 1);
 });
+
+// contract: view.responsiveness.relay
+test("a view whose presentation wait ends without presentation counts losses.abandoned of its plugin", async () => {
+  const { losses, presentationAbandoned } = await import("../plugin-processes.js");
+  presentationAbandoned("abandon-probe");
+  presentationAbandoned("abandon-probe");
+  assert.deepEqual(losses().find((entry) => entry.plugin === "abandon-probe"), { plugin: "abandon-probe", skipped: 0, stalled: 0, abandoned: 2, lateReplies: 0, timeouts: 0, peerLost: 0 }, "each notice counts one abandoned presentation of the plugin");
+});
+
+test("a view responsiveness notice is the state of its surface until the surface is disposed", async () => {
+  const { forgetView, views, viewResponsiveness } = await import("../plugin-processes.js");
+  viewResponsiveness("probe", "responsive-probe-surface", false);
+  assert.deepEqual(views(), [{ plugin: "probe", surface: "responsive-probe-surface", responsive: false }]);
+  viewResponsiveness("probe", "responsive-probe-surface", true);
+  assert.deepEqual(views(), [{ plugin: "probe", surface: "responsive-probe-surface", responsive: true }], "the state follows the last notice");
+  forgetView("responsive-probe-surface");
+  assert.deepEqual(views().filter((entry) => entry.surface === "responsive-probe-surface"), [], "a disposed surface keeps no state");
+});
+
+// contract: view.responsiveness.relay
+test("a view responsiveness notice that is not a boolean is refused and changes no state", async () => {
+  const { views, viewResponsiveness } = await import("../plugin-processes.js");
+  assert.throws(() => viewResponsiveness("probe", "refused-probe-surface", "no"), /responsive is not a boolean/);
+  assert.deepEqual(views().filter((entry) => entry.surface === "refused-probe-surface"), []);
+});
+
+// contract: view.snapshot.skipped-count
+// The reports of a snapshot channel write the page trace event of each skipped value. A stalled value is counted and writes no event,
+// because no live observer waits for its acknowledgement (docs/plans/plugin-processes.md, rule 2).
+test("the reports of a snapshot channel write the page trace event of skipped values and count stalled values without an event", async (t) => {
+  const traced = [];
+  t.mock.module("../performance.js", { exports: { trace: (event, fields) => { traced.push({ event, fields }); } } });
+  const { snapshotReporter } = await import("../plugin-processes.js?page-trace");
+  const report = snapshotReporter("trace-probe");
+  report({ kind: "skipped", plugin: "trace-probe", status: "trace-probe.tree", count: 1 });
+  report({ kind: "stalled", plugin: "trace-probe", status: "trace-probe.tree", reason: "surface-closed", count: 1 });
+  assert.deepEqual(traced, [
+    { event: "declared-ui.snapshot.skipped", fields: { plugin: "trace-probe", status: "trace-probe.tree", count: 1 } },
+  ]);
+  const { losses } = await import("../plugin-processes.js?page-trace");
+  assert.equal(losses().find((entry) => entry.plugin === "trace-probe").stalled, 1, "the stalled value is counted");
+});

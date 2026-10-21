@@ -368,8 +368,24 @@ type Platform interface {
 	// data store keeps the site data. changed receives the state JSON ({url, title, loading, progress, canGoBack, canGoForward,
 	// error, scroll}) on the UI thread.
 	// folder and plugin are the installed folder and the id of the plugin whose surface owns the region; the region serves
-	// sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions).
-	CreateDocument(surface unsafe.Pointer, directory, folder, plugin string, changed func(state string)) (unsafe.Pointer, error)
+	// sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). channel is empty for a document region.
+	// A view surface passes the text of the view channel script, and its configuration is the only one that serves the core
+	// root and runs the script (docs/spec/native-surfaces.md#view-surfaces).
+	CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error)
+	// SetViewMessage receives {"message": value} for each message of the sok-view handler of a view, and {"error": reason} for a
+	// message from another frame. It must be set before the view loads a page.
+	SetViewMessage(document unsafe.Pointer, message func(value string)) error
+	// SetViewEnded receives the end of the WebContent process of a view, before the host closes the view. A closed view receives no call.
+	SetViewEnded(document unsafe.Pointer, ended func()) error
+	// SetViewResponsiveness receives the responsiveness notices of a view: false when its WebContent process stops answering its
+	// responsiveness check, and true when it answers again. A closed view receives no call (docs/spec/native-surfaces.md#view-surfaces).
+	SetViewResponsiveness(document unsafe.Pointer, responsiveness func(responsive bool)) error
+	// AddDocumentScript adds a user script that runs at document start in the page world, before any page script, for each load of the
+	// document from now on. The host adds the theme script of a view before it loads the page (docs/spec/native-surfaces.md#view-surfaces).
+	AddDocumentScript(document unsafe.Pointer, source string) error
+	// TakeDocumentBinary takes the bytes that the binary store of the document keeps under id, and releases the id. It returns the error
+	// text of the native layer when the document is closed or the id is not stored (docs/spec/native-surfaces.md#document-regions).
+	TakeDocumentBinary(document unsafe.Pointer, id string) ([]byte, error)
 	SetDocumentEvent(document unsafe.Pointer, event func(value string)) error
 	// SetDocumentStream receives {"stream": "elements" or "requests", "message": {...}} for each stream message of the document.
 	SetDocumentStream(document unsafe.Pointer, stream func(value string)) error
@@ -438,6 +454,10 @@ type Platform interface {
 	CommitLayout(window unsafe.Pointer, ticket uint64) bool
 	// CancelLayout cancels the layout in progress.
 	CancelLayout(window unsafe.Pointer) error
+	// JoinView joins the view webview to the open layout transaction of window with ticket, so that the commit waits until the view
+	// presents. presented is called on the UI thread when the view presents. abandon ends the join without presentation and is
+	// nil when joined is false, which means that no transaction of ticket is open.
+	JoinView(window unsafe.Pointer, ticket uint64, view unsafe.Pointer, presented func()) (abandon func() error, joined bool, err error)
 	// StartPageTitlebar sets the title bar of the window to height (pt) when a new page starts. For a visible window, it sets it inside the start
 	// transaction of ticket and commits it together with the first display of the new page (surfaceLayoutStartPage). It calls ready on the
 	// UI thread after setting it or after a failure. Call it on the UI thread.

@@ -123,6 +123,48 @@ static WKWebView *page(NSWindow *window, WKWebViewConfiguration *configuration, 
     return view;
 }
 
+// A layout transaction that joins a view waits for the view's presentation before it commits. The transaction of another
+// owner starts only after that commit. An end without presentation (surfaceLayoutAbandonView) releases the deferred
+// commit, and a presentation that comes after the abandon is not reported.
+static void checkViewJoin(WKWebViewConfiguration *configuration) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 520, 400, 200)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    window.animationBehavior = NSWindowAnimationBehaviorNone;
+    WKWebView *view = page(window, configuration, NSMakeRect(0, 0, 400, 200), @"sptest://app/view-join");
+    [window orderFrontRegardless];
+    int otherOwner = 0;
+    __block int presented = 0;
+    __block BOOL otherStarted = NO;
+    check(!surfaceLayoutJoinView(window, 301, view, ^{ presented++; }), @"a view join needs an open transaction of its ticket");
+    surfaceLayoutBegin(window, 301, ^(int allowed) {});
+    check(surfaceLayoutJoinView(window, 301, view, ^{ presented++; }), @"a view joins the open transaction");
+    check(surfaceLayoutViewJoinCount(window) == 1, @"the transaction counts the joined view");
+    surfaceLayoutBegin(&otherOwner, 302, ^(int allowed) { otherStarted = allowed; });
+    check(surfaceLayoutCommit(window, 301), @"the transaction with a joined view commits");
+    check(!otherStarted, @"the next transaction waits for the joined view to present or end");
+    until(^BOOL { return presented != 0; });
+    check(presented == 1, @"the joined view reports its presentation once");
+    check(otherStarted, @"the next transaction starts after the joined view presents");
+    check(surfaceLayoutCommit(&otherOwner, 302), @"the next transaction commits");
+
+    otherStarted = NO;
+    surfaceLayoutBegin(window, 303, ^(int allowed) {});
+    check(surfaceLayoutJoinView(window, 303, view, ^{ presented++; }), @"the view joins the next transaction");
+    check(surfaceLayoutCommit(window, 303), @"the transaction joined to the view commits");
+    surfaceLayoutBegin(&otherOwner, 304, ^(int allowed) { otherStarted = allowed; });
+    check(!otherStarted, @"the next transaction waits for the view before the abandon");
+    check(surfaceLayoutAbandonView(window, view), @"the abandon ends the view wait");
+    check(otherStarted, @"the next transaction starts after the abandon");
+    check(!surfaceLayoutAbandonView(window, view), @"a second abandon of the view has no join to end");
+    waitFrames(window.screen, 3);
+    check(presented == 1, @"a presentation after the abandon is not reported");
+    check(surfaceLayoutCommit(&otherOwner, 304), @"the transaction after the abandon commits");
+
+    [window close];
+    [window release];
+}
+
 // The composition of the real DOM bounds and the native region must keep both bounds during preparation. Controls the
 // commit after the display confirmation and also records the frames of the transaction in progress.
 static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
@@ -305,6 +347,7 @@ int main(void) { @autoreleasepool {
 
     checkRecordedComposition([[configuration copy] autorelease]);
     checkSettledWaitsForLayout(window, main);
+    checkViewJoin([[configuration copy] autorelease]);
 
     // In an open transaction, the new layout confirmation of the web process must also complete before the wait can
     // occur before the commit. The diagnostic trace records the start of this transaction, the app DOM display

@@ -40,11 +40,11 @@
 | command | `timeout` | 선택. 명령이 답하는 데 걸릴 수 있는 시간(ms, 1–600000). 없으면 10초다. 호스트는 표면 페이지로 전달한 명령에, 메인 페이지는 스스로 실행하는 명령의 handler에 이를 적용하며, 넘으면 -32000과 `command <name> did not reply within <ms>ms`로 실패한다. 동기든 비동기든 예외를 던진 handler는 자기 오류로 명령을 실패시키며, 시간 제한도 그때 끝난다. core 명령은 그 뒤 배치 표시를 기다린다. 이 기다림은 timeout에 포함하지 않는다. 표시 경로의 각 단계가 자기 한도 안에 자기 오류로 실패하기 때문이다([네이티브 호스트](native-host.ko.md)) |
 | dom | `name` | 항목 이름 |
 | dom | `description` | 한 문장 설명 |
-| dom | `many` | 선택. 여러 요소가 같은 이름을 쓰면 `true`이며, 요청은 `index`로 요소 하나를 지정한다 |
+| dom | `many` | 선택. 여러 요소가 같은 이름을 쓰면 `true`이며, 요청은 `index`로 요소 하나를 지정하거나, [선언된 UI](declared-ui.ko.md)가 주소를 정하는 곳에서는 `address`로 지정한다 |
 
 스키마는 `type`, `properties`, `items`, `enum` 키워드만 쓰는 JSON Schema 부분집합이다.
 
-dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 없으면 그 이름을 가진 요소는 정확히 하나다.
+dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 없으면 그 이름을 가진 요소는 정확히 하나다. [선언된 UI](declared-ui.ko.md) 값이 그리는 조작 가능한 요소는 [선언된 UI](declared-ui.ko.md)가 정하는 속성과 주소를 가진다.
 
 ## 사용자 인터페이스
 
@@ -56,7 +56,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 - 다시 그리기는 문서에 남는 모든 컨트롤을 제자리에 두고, 순서가 틀린 컨트롤만 옮긴다. WebKit은 누름과 뗌 사이에 요소가 문서에서 빠진 누름에 `click`을 보내지 않고, `insertBefore`로 요소를 옮기면 요소가 먼저 문서에서 빠지므로, 컨트롤을 옮긴 다시 그리기는 그동안 누른 click을 잃었다. plugin page는 key마다 요소를 제자리에 두는 `@soksak/plugin-api`의 `drawList`로 컨트롤 목록을 그린다.
 - 네이티브 모달은 요소의 사본을 그리고 컨트롤의 key로 답한다. 메인 페이지는 자기 요소에서 그 컨트롤을 찾아 명령을 실행한다.
 
-충족 여부는 실행 중인 문서에서 판단한다. 연결기의 `audit(루트)`는 연결되지 않았거나 dom 이름이 없는 조작 요소를 `{tag, expose, command, text}`로 나열한다. 메인 페이지는 이를 `core.page.audit`로, 모든 플러그인 페이지는 `core.surface.document`의 `unbound`로 공개한다. `e2e/audit.test.mjs`가 두 앱의 모든 화면, 모달 구역, 메뉴, 편집 상태, 보이는 플러그인 표면을 방문해 빈 목록을 요구한다. `scripts/check-exposure.mjs`(`make exposure-check`)는 `@soksak/plugin-api`의 `exposure-check.js`로 워크벤치 소스가 적은 것만 검사한다. 소스에 적은 이름은 모두 선언되고, 선언한 status와 명령은 등록되며, 선언한 dom 이름은 공개 값으로 적혀 있다. 플러그인 섹션 모듈은 코어 status를 적고 코어 명령을 연결할 수도 있고([섹션](plugins.ko.md#섹션)), 표면 모듈은 `runtime.command`로 코어 명령을 실행할 수 있으며([표면 모듈 소유권](plugins.ko.md#표면-모듈-소유권)), 그 이름은 코어가 선언해야 한다. 플러그인 repository는 같은 module인 `soksak-exposure`로 자기 페이지와 섹션의 이름을 검사하며, 이 module은 package의 `core-exposure.json`에서 코어 이름을 읽는다. 그 파일이 워크벤치 선언과 다르면 `make exposure-check`가 실패하고, `node scripts/check-exposure.mjs --write`가 그 파일을 쓴다.
+충족 여부는 실행 중인 문서에서 판단한다. 보이는 view 표면의 page가 `core.surface.document`를 노출하지 않으면 audit이 실패한다. view는 별도의 문서이므로 audit이 그렇지 않으면 그 조작을 판단할 수 없기 때문이다. 연결기의 `audit(루트)`는 연결되지 않았거나 dom 이름이 없는 조작 요소를 `{tag, expose, command, text}`로 나열한다. 메인 페이지는 이를 `core.page.audit`로, 모든 플러그인 페이지는 `core.surface.document`의 `unbound`로 공개한다. `e2e/audit.test.mjs`가 두 앱의 모든 화면, 모달 구역, 메뉴, 편집 상태, 보이는 플러그인 표면을 방문해 빈 목록을 요구한다. `scripts/check-exposure.mjs`(`make exposure-check`)는 `@soksak/plugin-api`의 `exposure-check.js`로 워크벤치 소스가 적은 것만 검사한다. 소스에 적은 이름은 모두 선언되고, 선언한 status와 명령은 등록되며, 선언한 dom 이름은 공개 값으로 적혀 있다. 플러그인 섹션 모듈은 코어 status를 적고 코어 명령을 연결할 수도 있고([섹션](plugins.ko.md#섹션)), 표면 모듈은 `runtime.command`로 코어 명령을 실행할 수 있으며([표면 모듈 소유권](plugins.ko.md#표면-모듈-소유권)), 그 이름은 코어가 선언해야 한다. 플러그인 repository는 같은 module인 `soksak-exposure`로 자기 페이지와 섹션의 이름을 검사하며, 이 module은 package의 `core-exposure.json`에서 코어 이름을 읽는다. 그 파일이 워크벤치 선언과 다르면 `make exposure-check`가 실패하고, `node scripts/check-exposure.mjs --write`가 그 파일을 쓴다.
 
 ## 키보드 단축키
 
@@ -150,6 +150,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 - status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, 열린 call이 있는 각 plugin의 값이다. 응답 확인을 기다리는 snapshot도 포함한다. `oldestStartedAt`은 가장 오래된 열린 call의 시작 시각이고, 없으면 `null`이다.
 - status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, 각 plugin의 손실 횟수다. 응용 프로그램이 끝날 때까지 유지한다.
 - status `core.plugin.views`: `[{plugin, surface, responsive}]`, 각 plugin view surface의 응답 상태다.
+- status `core.surfaces`: 각 표면 항목은 선언된 합성의 종류인 `composition`(`view` 또는 `hybrid`)을 가진다. plugin이 그 표면을 선언하지 않으면 `null`이다.
 
 ## 창
 
@@ -196,10 +197,12 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | `status.watch` | `{window, name, surface?}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, surface?, value}`를 보낸다. `surface` 값이 다른 감시는 서로 별개다 |
 | `status.unwatch` | `{window, name, surface?}` | `null` |
 | `command.run` | `{window, name, params, surface?}` | 명령 결과 |
-| `dom.rect` | `{window, name, index?}` | 소유 문서의 CSS 픽셀 좌표 `{x, y, width, height}`와, 창 좌표로 나타낸 문서 원점 `{document}` |
-| `dom.act` | `{window, name, index?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
+| `dom.rect` | `{window, name, index?, address?}` | 소유 문서의 CSS 픽셀 좌표 `{x, y, width, height}`와, 창 좌표로 나타낸 문서 원점 `{document}` |
+| `dom.act` | `{window, name, index?, address?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다. `button`은 `left`(기본값) 또는 `right`다. `deltaX`, `deltaY`는 포인트 단위 스크롤 거리다. `activate`는 `move`에 적용한다 |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key`는 키 이름(`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) 또는 문자 하나다. `modifiers`는 `shift`, `control`, `option`, `command`의 배열이다. `phase`는 `down` 또는 `up`이다 |
+
+요청은 `index`나 `address` 가운데 하나만 준다. `index`는 0 이상의 정수다. control address는 [선언된 UI](declared-ui.ko.md)가 정하는 대로 `{sidebar, section, key, path?, role?}`이며, `sidebar`, `section`, `key`는 문자열이고 `path`는 문자열 배열이다. `core.sidebar.section.control` DOM 항목은 `many`로 선언되어 있으므로, 그 요청은 `index`나 `address`를 준다. 둘 다 주거나, 다른 DOM 항목에 `address`를 주거나, 타입이 틀리거나, 허용되지 않거나 빠진 `path`나 `role`이 있는 요청은 -32602로 거부하며, 어느 control과도 맞지 않는 control address는 1009로 거부한다.
 
 네이티브 포인터 주입은 창과 버튼별로 누름을 받은 뷰를 유지한다. 포인터가 다른 뷰를 가로질러도 끌기와 뗌을 그 뷰에 전달하며 뗌의 수신 확인은 누름을 받은 문서를 기다린다. 일치하는 누름 없는 끌기·뗌, 같은 버튼을 누른 상태에서의 추가 누름, 제거된 누름 대상 뷰는 명시적 입력 거부를 반환한다. 스크롤과 버튼 없는 이동은 현재 포인터 위치를 사용한다.
 
@@ -226,16 +229,16 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 호스트 → 메인 페이지 | 이벤트 `exposure-request` | 코어와 플러그인 이름에 대한 `exposure.list`, `status.*`, `command.run`, `dom.*`의 `{id, method, params}`. 호스트는 답을 10초 기다린다. `command.run`은 예외이며, 메인 페이지는 명령을 전달하든 스스로 답하든 그 명령의 제한 시간 안에 답한다. 준비되지 않은 메인 페이지는 1003을 반환하고, 다시 읽히거나 닫히는 메인 페이지에 보낸 요청은 1003으로 끝난다 |
 | 메인 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error: {code, message}}` |
 | 메인 페이지 → 호스트 | 호출 `exposureChanged` | 감시 중인 상태의 `{name, surface?, value}`. 감시가 표면을 지정했으면 `surface`가 있다. 호스트는 `host.`로 시작하는 이름을 `the page cannot change host status <name>`으로 거부한다. host 상태는 호스트만 바꾼다 |
-| 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}` |
+| 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}`. view의 페이지는 surface 브리지가 없다. view 채널을 통해 `runtime.native.call`에 `{name: "registered", payload: {kind, name}}`로 호출하고([view surfaces](native-surfaces.ko.md#view-표면)), 메인 페이지가 이 호출로 전달한다. 메인 페이지가 전달한 등록은 view를 가진 surface에만 허용된다 |
 | 호스트 → 메인 페이지 | 이벤트 `exposure-registered` | `{surface, kind, name}`. 표면이 제거되면 `{surface, closed: true}`. 표면은 메인 페이지를 다시 읽어도 남으므로 메인 페이지가 준비를 알린 뒤 호스트가 살아 있는 등록을 모두 다시 보낸다 |
 | 메인 페이지 → 호스트 | 호출 `exposureForward` | 표면 페이지가 등록한 이름에 대한 `{id, surface, method, params, timeout?}`. `timeout`은 명령 선언에서 가져온 1 이상 600000 이하의 정수 밀리초이며, 없으면 호스트는 10초를 기다린다. `status.next`는 `timeout`을 받지 않는다. 올바르지 않은 `timeout`은 -32602를 반환한다 |
-| 호스트 → 표면 페이지 | 이벤트 `exposure-request` | `{id, method, params}` |
-| 표면 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error}`. 호스트는 이 값을 `exposureForward`의 결과로 메인 페이지에 반환한다 |
+| 호스트 → 표면 페이지 | 이벤트 `exposure-request` | `{id, method, params}`. view의 경우 이벤트는 `surface`를 담고, 메인 페이지가 view의 `exposure-request` 구독(`runtime.native.on`)을 통해 view에 전달하며, `data`는 `{id, surface, method, params}`다 |
+| 표면 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error}`. 호스트는 이 값을 `exposureForward`의 결과로 메인 페이지에 반환한다. view의 페이지는 `runtime.native.call`에 `{name: "exposureReply", payload: {id, result|error}}`로 답하며, 메인 페이지가 view의 surface와 함께 이 호출로 보낸다 |
 | 메인 페이지 → 표면 페이지(`exposureForward` 경유) | `status.watch`, `status.unwatch` | `{name}`. 표면 페이지가 값 추적을 시작하거나 멈춘다 |
 | 메인 페이지 → 표면 페이지(`exposureForward` 경유) | `status.next` | `{name, version}`. 표면 페이지는 값이 `version`보다 새로우면 `{version, value}`를, `status.unwatch` 뒤에는 `{closed: true}`를 응답한다. 호스트는 이 요청에 제한 시간을 두지 않으며, 표면이 닫히면 1003으로 실패한다 |
 | 호스트 → 메인 페이지 | 이벤트 `diagnostics-tick` | 내용 없음. 진단 빌드에서만 `diagnostics.drag`의 단계마다 한 번 보낸다 |
 
-메인 페이지는 이름을 등록하거나 전달하기 전에 선언과 대조해 검증한다. 불러온 배치에 아직 없는 표면의 등록은 보관했다가, 그 표면을 담은 배치를 불러오면 반영하거나 거부한다. 메인 페이지의 `exposureReply`는 호스트의 `exposure-request`에 대한 응답이고, 표면 페이지의 `exposureReply`는 전달된 요청에 대한 응답이다. 호스트는 호출한 웹뷰로 호출자를 구분한다.
+메인 페이지는 이름을 등록하거나 전달하기 전에 선언과 대조해 검증한다. 불러온 배치에 아직 없는 표면의 등록은 보관했다가, 그 표면을 담은 배치를 불러오면 반영하거나 거부한다. 메인 페이지의 `exposureReply`는 호스트의 `exposure-request`에 대한 응답이고, 표면 페이지의 `exposureReply`는 전달된 요청에 대한 응답이다. 호스트는 호출한 웹뷰로 호출자를 구분한다. `core.sidebar.section.control` 요청에서는 메인 페이지가 응답하기 전에 `index`나 `address`를 검증하며, 호스트는 그 요청을 읽지 않고 중계한다.
 
 표면 페이지는 표면이 제거된 뒤에 전달된 요청에 답할 수 있다. 예를 들어 표면이 닫히면서 답하는 `status.next`가 그렇다. 호스트는 표면을 제거할 때 그 표면에 보낸 모든 요청을 이미 1003으로 끝냈으므로 그 답에는 답할 요청이 없다. 호스트는 호출을 거부하지 않고 그 답을 버리며, 관측 `exposure reply <id> of removed surface "<surface>" arrived after its request ended`를 애플리케이션 로그에 쓴다.
 
@@ -246,7 +249,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | `exposureReply` | `ExposureReply` | `exposure_reply` |
 | `exposureChanged` | `ExposureChanged` | `exposure_changed` |
 | `exposureForward` | `ExposureForward` | `exposure_forward` |
-| `exposureRegister` | `ExposureRegister` (표면 브리지) | `exposure_register` |
+| `exposureRegister` | `ExposureRegister` (표면 브리지와 메인 페이지) | `exposure_register` |
 
 표면 페이지의 페이지 인터페이스는 `page.exposure`이며 `register(kind, name)`, 전달된 요청마다 `fn({id, method, params})`를 호출하는 `onRequest(fn)`, `reply(id, payload)`로 구성된다. 메인 페이지는 `host.on("exposure-request", fn)`, `host.on("exposure-registered", fn)`, 그리고 위 호출을 담은 `host.call(...)`을 사용한다. `surface`가 없는 응답은 창의 메인 문서 요청에 대한 답이고, `surface`가 있는 응답은 그 표면 문서 요청에 대한 답이며 비어 있지 않은 문자열로 표면을 가리킨다. `surface`가 `null`, 빈 값, 문자열이 아니면 메인 문서 응답으로 처리하지 않고 오류로 거부한다.
 
@@ -255,7 +258,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 코드 | 의미 |
 | --- | --- |
 | -32601 | 선언되지 않은 메서드 |
-| -32602 | 잘못된 매개변수 |
+| -32602 | 잘못된 매개변수. `core.sidebar.section.control` 요청에서 `index`와 `address`를 둘 다 준 경우, 다른 DOM 항목에 `address`를 준 경우, 타입이 틀린 경우, 허용되지 않거나 빠진 `path`나 `role`을 포함한다 |
 | 1001 | 알 수 없는 이름 |
 | 1002 | 선언되었지만 등록되지 않은 이름 |
 | 1003 | 소유 문서가 더 이상 없음 |
@@ -264,6 +267,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 1006 | 창이 활성 상태가 아님: 포인터 `move`에는 키 창이 필요하거나, 시스템이 애플리케이션을 활성화하지 않음 |
 | 1007 | AppKit이 0이 아닌 `NSEvent.pressedMouseButtons` 마스크를 보고해 합성 포인터 `down`이나 `up`을 전달하지 않음. 메시지는 거부 시점의 마스크와 frontmost 애플리케이션을 보고함 |
 | 1008 | 그 창에서 그 버튼의 합성 누름이 아직 열려 있어 포인터 `down`을 전달하지 않음 |
+| 1009 | `core.sidebar.section.control` 요청의 `address`가 어느 control과도 맞지 않음 |
 | -32000 | 등록된 명령이나 status 처리기가 실패함. `message`는 그 오류 메시지다 |
 
 중계한 요청의 1005 오류 메시지는 `the document did not reply within <ms> ms`다. 두 host는 시간이 초과된 최근 요청 256개를 기억하고 가장 오래된 것을 버린다. 그중 하나에 온 답은 `exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`로 실패하고, 기억하지 않는 요청에 온 답은 `exposure reply <id> has no matching request`로 실패하므로, 늦은 답의 지연이 page가 보고하는 오류에 들어간다. 표면 페이지로 전달한 command가 시간 초과되면 `host.call.timeout`을 plugin과 command와 함께 쓰고, 그 늦은 답은 `host.trace.call.late-reply`를 지연과 함께 쓴다.

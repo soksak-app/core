@@ -24,7 +24,7 @@ use crate::buffer_bounds::{PendingLines, record_buffer_drop};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::platform::{PersistentStream, current};
-use crate::sidecar_reply::{RequestLedger, error_of_body};
+use crate::sidecar_reply::{RequestLedger, error_of_body, record_stopped_requests};
 use crate::windows::{emit_window, window_data};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -2550,13 +2550,14 @@ impl<O: Owner> Core<O> {
             let stopping;
             let mut owned = Vec::new();
             let mut changed = None;
+            let mut stopped_requests = Vec::new();
             {
                 // default: a lock that a panicking thread poisoned still holds the state of the sidecars, which the disconnect updates in
                 // full; the panic hook records the panic.
                 let mut state = state.lock().unwrap_or_else(PoisonError::into_inner);
                 stopping = state.stopped;
                 if stopping {
-                    state.requests.forget(&sidecar);
+                    stopped_requests = state.requests.failed(&sidecar);
                 }
                 let is_current = state
                     .running
@@ -2592,6 +2593,7 @@ impl<O: Owner> Core<O> {
             if let Some(changed) = changed {
                 changed();
             }
+            record_stopped_requests(&sidecar, stopped_requests);
             crate::event_record::emit_host(
                 crate::event_log::Level::Info,
                 "host.sidecar.disconnect",
@@ -3095,8 +3097,8 @@ fn fail<O: Owner>(
             .map(|child| child.id());
         if state.stopped || current != Some(pid) {
             // It is stopping. The violation is written to the log and no failure event is sent. stop decides the report
-            // of the end.
-            state.requests.forget(sidecar);
+            // of the end. The requests that wait for a reply are recorded after the lock is released.
+            let stopped_requests = state.requests.failed(sidecar);
             if let Some(violation) = violation {
                 if let Some(stopping) = state.stopping.get_mut(sidecar) {
                     stopping.violated = true;
@@ -3106,6 +3108,8 @@ fn fail<O: Owner>(
                     format!("failed: {violation}"),
                 );
             }
+            drop(state);
+            record_stopped_requests(sidecar, stopped_requests);
             return;
         }
         let process = state.running.remove(sidecar).expect("checked by pid above");
@@ -3235,6 +3239,15 @@ fn fail_requests<O>(state: &Arc<Mutex<State<O>>>, sidecar: &str, reason: &str) {
         .expect("sidecar state")
         .requests
         .failed(sidecar);
+    record_request_failures(sidecar, reason, surfaces);
+}
+
+/// Stores `host.sidecar.reply` as an error for each surface in surfaces, with the identifiers of its requests and the reason.
+pub(crate) fn record_request_failures(
+    sidecar: &str,
+    reason: &str,
+    surfaces: Vec<(String, Vec<String>)>,
+) {
     let (text, _) = crate::bounds::cut_text(
         &format!("{INTERNAL_CODE}: {reason}"),
         crate::bounds::CALL_TEXT_BYTES,

@@ -24,7 +24,7 @@ func TestValidateRectRejectsNegativeAndNonFiniteSizes(t *testing.T) {
 
 // contract: surfaces-geometry.sync.rejects-surface-rect-before-layout
 func TestSyncRequestCheckRejectsAnInvalidSurfaceRectangle(t *testing.T) {
-	dom := host.SurfaceComposition{Kind: "dom"}
+	dom := host.SurfaceComposition{Kind: "hybrid", Regions: []host.SurfaceRegion{{Name: "page", Kind: "document", Input: "native"}}, Overlays: []string{}}
 	valid := host.Surface{ID: "tab-1", Visible: true, Plugin: "page", Composition: dom, Rect: host.Rect{W: 10, H: 10}}
 	if _, err := host.CheckSyncRequest(host.SyncRequest{Settled: true, Titlebar: 40, Surfaces: []host.Surface{valid}}, map[string]host.SurfaceComposition{}, map[string]string{}); err != nil {
 		t.Fatalf("a valid sync request was refused: %v", err)

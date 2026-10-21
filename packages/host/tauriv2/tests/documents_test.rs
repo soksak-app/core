@@ -1,9 +1,15 @@
 //! Checks the owning surface check of document region requests and the document region list of a window.
 
 use serde_json::{Value, json};
+use std::time::{Duration, Instant};
+
 use soksak_host_tauriv2::documents::{
-    Documents, Key, Report, Request, StreamEffect, Streams, check, go_action, parse_report,
-    remove_surface_for_reload, stream_ack_refusal,
+    Documents, Key, Report, Request, StreamEffect, Streams, ViewChannels, check, go_action,
+    parse_report, remove_surface_for_reload, stream_ack_refusal,
+};
+use soksak_host_tauriv2::surfaces::ViewStart;
+use soksak_host_tauriv2::view_lifecycle::{
+    ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event,
 };
 
 fn request(surface: &str, document: &str) -> Request {
@@ -520,4 +526,578 @@ fn document_interaction_state_must_not_be_empty() {
         serde_json::from_str(r#"{"surface":"s","document":"d","interactionState":"AAAA"}"#)
             .unwrap();
     assert_eq!(state.restore_state(), Ok(Some("AAAA")));
+}
+
+// contract: view.create-loads-page
+#[test]
+fn a_view_surface_creates_a_view_configuration_and_loads_its_page() {
+    // The view is created with the channel script, and the page is loaded from sok://<plugin>/<page> right after creation.
+    let created = std::cell::RefCell::new(Vec::new());
+    let loaded = std::cell::RefCell::new(Vec::new());
+    let closed = std::cell::RefCell::new(Vec::new());
+    let handle = soksak_host_tauriv2::documents::create_view(
+        "channel-script",
+        |channel| {
+            created.borrow_mut().push(channel.to_string());
+            Ok(7)
+        },
+        |document, url| {
+            loaded.borrow_mut().push((document, url.to_string()));
+            Ok(true)
+        },
+        |document| {
+            closed.borrow_mut().push(document);
+            Ok(())
+        },
+        "probe",
+        "ui/page.html",
+    )
+    .expect("the view is created");
+    assert_eq!(handle, 7, "the created view is returned");
+    assert_eq!(
+        *created.borrow(),
+        vec!["channel-script".to_string()],
+        "the view configuration is created with the channel script"
+    );
+    assert_eq!(
+        *loaded.borrow(),
+        vec![(7, "sok://probe/ui/page.html".to_string())],
+        "the view loads its page at creation"
+    );
+    assert!(closed.borrow().is_empty(), "a loaded view is not closed");
+}
+
+const READY: &str = r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}"#;
+
+// contract: view.channel.ready
+#[test]
+fn view_channel_records_the_ready_document_and_clears_it_on_navigation() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.message("probe-surface", READY),
+        Ok(true),
+        "a ready message makes the view ready"
+    );
+    assert_eq!(channels.check_post("probe-surface"), Ok(()));
+    assert_eq!(
+        channels.state("probe-surface", r#"{"loading":true}"#),
+        Ok(())
+    );
+    assert_eq!(
+        channels.check_post("probe-surface"),
+        Err("probe-surface has no ready document".to_string()),
+        "a navigation clears the ready record"
+    );
+}
+
+// contract: view.channel.post-before-ready
+#[test]
+fn view_channel_refuses_a_post_before_ready_with_its_text() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.check_post("probe-surface"),
+        Err("probe-surface has no ready document".to_string())
+    );
+}
+
+// contract: view.channel.queue-full
+#[test]
+fn view_channel_reports_queue_full_and_foreign_frame_with_their_reasons() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.message(
+            "probe-surface",
+            r#"{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}"#
+        ),
+        Err("queue full for probe".to_string())
+    );
+    assert_eq!(
+        channels.message(
+            "probe-surface",
+            r#"{"error":"the view channel message comes from a frame that is not the main frame"}"#
+        ),
+        Err("the view channel message comes from a frame that is not the main frame".to_string())
+    );
+}
+
+/// Returns the instant that is the given number of seconds after start, so each failure of a test has a fixed time.
+fn seconds_after(start: Instant, seconds: u64) -> Instant {
+    start + Duration::from_secs(seconds)
+}
+
+// contract: view.restart.limit
+#[test]
+fn view_restart_stops_at_the_fourth_failure_within_the_window() {
+    // The failures are passed with their instants, so the window is measured without a timer.
+    let lifecycle = ViewLifecycle::default();
+    let start = Instant::now();
+    let spec = lifecycle.track(
+        "probe-surface",
+        7,
+        "probe",
+        "ui/page.html",
+        true,
+        ViewStart::default(),
+    );
+    assert_eq!(
+        spec.surface_handle, 7,
+        "the record keeps the native surface of the view"
+    );
+    assert_eq!(
+        lifecycle.spec("probe-surface").map(|kept| kept.page),
+        Some("ui/page.html".to_string()),
+        "the record of the view is kept for the restart"
+    );
+    assert!(
+        lifecycle.fail("probe-surface", start),
+        "the first failure restarts the view"
+    );
+    assert!(
+        lifecycle.fail("probe-surface", seconds_after(start, 60)),
+        "the second failure restarts the view"
+    );
+    assert!(
+        lifecycle.fail("probe-surface", seconds_after(start, 120)),
+        "the third failure restarts the view"
+    );
+    assert!(
+        !lifecycle.fail("probe-surface", seconds_after(start, 180)),
+        "the fourth failure within 300 seconds stops the restarts"
+    );
+    assert!(lifecycle.is_stopped("probe-surface"));
+    assert!(
+        !lifecycle.fail("probe-surface", seconds_after(start, 190)),
+        "a stopped surface records no restart"
+    );
+    lifecycle.forget("probe-surface");
+    assert!(
+        !lifecycle.is_stopped("probe-surface"),
+        "a removed surface clears its stop, so the reopened tab starts with no failure"
+    );
+    assert!(
+        lifecycle.fail("probe-surface", seconds_after(start, 200)),
+        "the reopened view restarts after a failure"
+    );
+}
+
+// contract: view.restart.restores-state
+#[test]
+fn view_restart_keeps_the_surface_and_plugin_of_its_record() {
+    let lifecycle = ViewLifecycle::default();
+    let start = Instant::now();
+    lifecycle.track(
+        "probe-surface",
+        7,
+        "probe",
+        "ui/page.html",
+        true,
+        ViewStart::default(),
+    );
+    assert!(
+        lifecycle.fail("probe-surface", start),
+        "the failure restarts the view"
+    );
+    let spec = lifecycle
+        .spec("probe-surface")
+        .expect("the record of the view is kept for the restart");
+    assert_eq!(
+        spec.surface_handle, 7,
+        "the restart creates the view on the native surface of its record"
+    );
+    assert_eq!(
+        spec.plugin, "probe",
+        "the restart keeps the plugin of the view"
+    );
+}
+
+// contract: view.restart.limit-shows-error
+#[test]
+fn view_stop_event_names_the_surface_plugin_and_reason() {
+    assert_eq!(
+        view_stop_reason(),
+        "the view failed 4 times within 300 seconds and is created again when its tab is reopened"
+    );
+    let event = view_stopped_event("probe-surface", "probe");
+    assert_eq!(
+        event["surface"], "probe-surface",
+        "the event names the surface"
+    );
+    assert_eq!(event["plugin"], "probe", "the event names the plugin");
+    assert_eq!(
+        event["reason"],
+        view_stop_reason(),
+        "the event carries the stop reason"
+    );
+}
+
+// contract: view.channel.overflow-closes
+#[test]
+fn view_channel_overflow_is_the_queue_full_reason_that_closes_the_view() {
+    let channels = ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    let reason = channels
+        .message(
+            "probe-surface",
+            r#"{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}"#,
+        )
+        .expect_err("a queue full report is an error of the view");
+    assert!(
+        is_queue_full(&reason),
+        "the queue full reason closes the view: {reason}"
+    );
+    assert!(
+        !is_queue_full("the view channel message comes from a frame that is not the main frame"),
+        "a foreign frame message does not close the view"
+    );
+}
+
+// contract: view.call.forward
+#[test]
+fn view_call_request_is_forwarded_with_its_plugin_and_surface() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.call(
+            "probe-surface",
+            r#"{"message":{"sok":1,"id":7,"command":"tab.state.read","params":{"a":1}}}"#
+        ),
+        Ok(Some(json!({
+            "surface": "probe-surface",
+            "plugin": "probe",
+            "id": 7,
+            "command": "tab.state.read",
+            "params": {"a": 1}
+        }))),
+        "a call request is forwarded with its surface and plugin"
+    );
+    assert_eq!(
+        channels.call("probe-surface", READY),
+        Ok(None),
+        "a ready message is not a call"
+    );
+}
+
+// contract: view.declared-ui.snapshot
+#[test]
+fn view_declared_snapshot_is_forwarded_with_its_surface_and_plugin() {
+    let channels = ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.snapshot(
+            "probe-surface",
+            r#"{"message":{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":3,"value":{"elements":[]},"skipped":1}}"#,
+        ),
+        Ok(Some(json!({
+            "surface": "probe-surface",
+            "plugin": "probe",
+            "status": "probe.lines",
+            "seq": 3,
+            "skipped": 1,
+            "value": {"elements": []}
+        }))),
+        "a snapshot is forwarded with its surface and plugin"
+    );
+    // A value of null stays present: the receiver validates it like any other value (docs/spec/declared-ui.md).
+    assert_eq!(
+        channels.snapshot(
+            "probe-surface",
+            r#"{"message":{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null,"skipped":0}}"#,
+        ),
+        Ok(Some(json!({
+            "surface": "probe-surface",
+            "plugin": "probe",
+            "status": "probe.lines",
+            "seq": 1,
+            "skipped": 0,
+            "value": null
+        }))),
+        "a snapshot with a null value keeps the value present"
+    );
+    assert_eq!(
+        channels.snapshot("probe-surface", READY),
+        Ok(None),
+        "a ready message is not a snapshot"
+    );
+}
+
+// contract: view.declared-ui.snapshot
+#[test]
+fn view_declared_snapshot_invalid_fields_are_errors_not_forwarded() {
+    let channels = ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    for (message, want) in [
+        (
+            r#"{"event":"declared-ui.snapshot","status":"probe.lines","seq":1,"value":null,"skipped":0}"#,
+            "probe-surface: declared UI snapshot names no plugin",
+        ),
+        (
+            r#"{"event":"declared-ui.snapshot","plugin":"other","status":"probe.lines","seq":1,"value":null,"skipped":0}"#,
+            "probe-surface: declared UI snapshot names plugin \"other\", want plugin \"probe\"",
+        ),
+        (
+            r#"{"event":"declared-ui.snapshot","plugin":"probe","seq":1,"value":null,"skipped":0}"#,
+            "probe-surface: declared UI snapshot has no status",
+        ),
+        (
+            r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"","seq":1,"value":null,"skipped":0}"#,
+            "probe-surface: declared UI snapshot has no status",
+        ),
+        (
+            r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","value":null,"skipped":0}"#,
+            "probe-surface: declared UI snapshot of status \"probe.lines\" has no seq from 1",
+        ),
+        (
+            r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":0,"value":null,"skipped":0}"#,
+            "probe-surface: declared UI snapshot of status \"probe.lines\" has no seq from 1",
+        ),
+        (
+            r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null}"#,
+            "probe-surface: declared UI snapshot of status \"probe.lines\" has no skipped count",
+        ),
+        (
+            r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"skipped":0}"#,
+            "probe-surface: declared UI snapshot of status \"probe.lines\" has no value",
+        ),
+    ] {
+        let wrapped = format!(r#"{{"message":{message}}}"#);
+        assert_eq!(
+            channels.snapshot("probe-surface", &wrapped),
+            Err(want.to_string()),
+            "the snapshot {message} is an error, not a forwarding"
+        );
+    }
+}
+
+// contract: view.call.reply
+#[test]
+fn view_call_reply_is_the_channel_message_with_its_id() {
+    use soksak_host_tauriv2::documents::{ViewReply, ViewReplyError, view_reply_message};
+    let result = ViewReply {
+        surface: "probe-surface".to_string(),
+        id: 7,
+        result: Some(json!({"count": 2})),
+        error: None,
+    };
+    assert_eq!(
+        view_reply_message(&result),
+        Ok(json!({"sok": 1, "id": 7, "result": {"count": 2}}))
+    );
+    let failed = ViewReply {
+        surface: "probe-surface".to_string(),
+        id: 8,
+        result: None,
+        error: Some(ViewReplyError {
+            code: -32000,
+            message: "tab.state is not declared".to_string(),
+        }),
+    };
+    assert_eq!(
+        view_reply_message(&failed),
+        Ok(
+            json!({"sok": 1, "id": 8, "error": {"code": -32000, "message": "tab.state is not declared"}})
+        )
+    );
+    let empty = ViewReply {
+        surface: "probe-surface".to_string(),
+        id: 9,
+        result: None,
+        error: None,
+    };
+    assert_eq!(
+        view_reply_message(&empty),
+        Err("view reply 9 has neither a result nor an error".to_string())
+    );
+}
+
+// contract: view.channel.ready
+#[test]
+fn theme_message_carries_the_theme_in_its_data_field() {
+    use soksak_host_tauriv2::documents::theme_message;
+    let theme = json!({"scheme": "dark", "tokens": {"bg": "#000000"}});
+    assert_eq!(
+        theme_message(&theme),
+        json!({"sok": 1, "event": "theme", "data": {"scheme": "dark", "tokens": {"bg": "#000000"}}}),
+        "the theme message carries the theme in its data field, as every event does"
+    );
+}
+
+// contract: view.command.request
+#[test]
+fn view_request_message_is_the_host_message_with_its_id_command_and_params() {
+    use soksak_host_tauriv2::documents::{ViewRequest, view_request_message};
+    let request = ViewRequest {
+        surface: "probe-surface".to_string(),
+        id: 7,
+        command: "probe.run".to_string(),
+        params: Some(json!({"a": 1})),
+    };
+    assert_eq!(
+        view_request_message(&request),
+        Ok(json!({"sok": 1, "id": 7, "command": "probe.run", "params": {"a": 1}})),
+        "a request is posted with the sok marker, its id, its command and its params"
+    );
+    let no_params = ViewRequest {
+        surface: "probe-surface".to_string(),
+        id: 7,
+        command: "probe.run".to_string(),
+        params: None,
+    };
+    assert_eq!(
+        view_request_message(&no_params),
+        Ok(json!({"sok": 1, "id": 7, "command": "probe.run", "params": null })),
+        "a request without params carries null"
+    );
+    let no_id = ViewRequest {
+        surface: "probe-surface".to_string(),
+        id: 0,
+        command: "probe.run".to_string(),
+        params: None,
+    };
+    assert_eq!(
+        view_request_message(&no_id),
+        Err("view request has no id".to_string())
+    );
+    let unnamed = ViewRequest {
+        surface: "probe-surface".to_string(),
+        id: 8,
+        command: String::new(),
+        params: None,
+    };
+    assert_eq!(
+        view_request_message(&unnamed),
+        Err("view request 8 has an empty command".to_string())
+    );
+}
+
+// contract: view.command.request
+#[test]
+fn view_reply_is_forwarded_as_a_view_reply_event_with_its_plugin_and_surface() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.reply(
+            "probe-surface",
+            r#"{"message":{"sok":1,"reply":7,"result":{"n":2}}}"#
+        ),
+        Ok(Some(json!({
+            "surface": "probe-surface",
+            "plugin": "probe",
+            "id": 7,
+            "result": {"n": 2}
+        }))),
+        "a reply with a result is forwarded with its surface, plugin and id"
+    );
+    assert_eq!(
+        channels.reply(
+            "probe-surface",
+            r#"{"message":{"sok":1,"reply":8,"error":{"code":-32000,"message":"boom"}}}"#
+        ),
+        Ok(Some(json!({
+            "surface": "probe-surface",
+            "plugin": "probe",
+            "id": 8,
+            "error": {"code": -32000, "message": "boom"}
+        }))),
+        "a reply with an error is forwarded with its error"
+    );
+    assert_eq!(
+        channels.reply("probe-surface", READY),
+        Ok(None),
+        "a ready message is not a reply"
+    );
+    for message in [
+        r#"{"message":{"reply":"7","result":1}}"#,
+        r#"{"message":{"reply":7}}"#,
+        r#"{"message":{"reply":7,"result":1,"error":{"code":1,"message":"x"}}}"#,
+        r#"{"message":{"reply":7,"error":{"code":1}}}"#,
+    ] {
+        assert!(
+            channels.reply("probe-surface", message).is_err(),
+            "an invalid reply is refused: {message}"
+        );
+    }
+}
+
+// contract: view.event.push
+#[test]
+fn view_event_message_is_the_host_message_with_its_event_and_data() {
+    use soksak_host_tauriv2::documents::{ViewEventRequest, view_event_message};
+    let event = ViewEventRequest {
+        surface: "probe-surface".to_string(),
+        event: "probe.changed".to_string(),
+        data: Some(json!({"count": 2})),
+    };
+    assert_eq!(
+        view_event_message(&event),
+        Ok(json!({"sok": 1, "event": "probe.changed", "data": {"count": 2}})),
+        "an event is posted with the sok marker, its name and its data"
+    );
+    let null_data = ViewEventRequest {
+        surface: "probe-surface".to_string(),
+        event: "probe.changed".to_string(),
+        data: Some(Value::Null),
+    };
+    assert_eq!(
+        view_event_message(&null_data),
+        Ok(json!({"sok": 1, "event": "probe.changed", "data": null })),
+        "a null data is a value and is posted"
+    );
+    let unnamed = ViewEventRequest {
+        surface: "probe-surface".to_string(),
+        event: String::new(),
+        data: Some(json!(1)),
+    };
+    assert_eq!(
+        view_event_message(&unnamed),
+        Err("view event has an empty event name".to_string())
+    );
+    let no_data = ViewEventRequest {
+        surface: "probe-surface".to_string(),
+        event: "probe.changed".to_string(),
+        data: None,
+    };
+    assert_eq!(
+        view_event_message(&no_data),
+        Err("view event probe.changed has no data".to_string())
+    );
+}
+
+// contract: view.call.cancel
+#[test]
+fn view_call_cancel_is_forwarded_with_its_plugin_and_surface() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.call("probe-surface", r#"{"message":{"id":7,"cancel":true}}"#),
+        Ok(Some(json!({
+            "surface": "probe-surface",
+            "plugin": "probe",
+            "id": 7,
+            "cancel": true
+        }))),
+        "a cancel message is forwarded with its surface and plugin"
+    );
+}
+
+// contract: view.call.forward
+#[test]
+fn view_call_invalid_requests_are_errors_not_forwarded() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    for message in [
+        r#"{"message":{"id":"7","cancel":true}}"#,
+        r#"{"message":{"id":7,"cancel":false}}"#,
+        r#"{"message":{"id":7,"cancel":true,"command":"tab.state.read"}}"#,
+        r#"{"message":{"command":"tab.state.read"}}"#,
+        r#"{"message":{"id":"7","command":"tab.state.read"}}"#,
+        r#"{"message":{"id":7,"command":""}}"#,
+    ] {
+        assert!(
+            channels.call("probe-surface", message).is_err(),
+            "message {message} is accepted, want an error"
+        );
+    }
 }

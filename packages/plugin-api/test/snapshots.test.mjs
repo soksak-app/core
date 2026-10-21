@@ -57,7 +57,7 @@ test("push sends the snapshot event with the plugin, the status, the seq and the
   const { sender, snapshots } = setup();
   sender.push("probe.tree", { rows: 1 });
   assert.deepEqual(snapshots(), [
-    { event: "declared-ui.snapshot", plugin: "probe", status: "probe.tree", seq: 1, value: { rows: 1 } },
+    { event: "declared-ui.snapshot", plugin: "probe", status: "probe.tree", seq: 1, value: { rows: 1 }, skipped: 0 },
   ]);
 });
 
@@ -69,7 +69,7 @@ test("a status has at most one snapshot in transit, and a push during the flight
   assert.equal(ofKind("skipped").length, 0, "one dirty value is not yet skipped");
   ack("probe.tree", 1);
   assert.equal(snapshots().length, 2);
-  assert.deepEqual(snapshots()[1], { event: "declared-ui.snapshot", plugin: "probe", status: "probe.tree", seq: 2, value: "b" });
+  assert.deepEqual(snapshots()[1], { event: "declared-ui.snapshot", plugin: "probe", status: "probe.tree", seq: 2, value: "b", skipped: 0 });
 });
 
 test("an acknowledgement with no dirty mark releases the slot without a new snapshot", () => {
@@ -155,7 +155,7 @@ test("a send that throws clears the slot, reaches the caller, and the next push 
   fail = false;
   sender.push("probe.tree", "b");
   assert.equal(transport.sent.length, 1);
-  assert.deepEqual(transport.sent[0], { event: "declared-ui.snapshot", plugin: "probe", status: "probe.tree", seq: 2, value: "b" });
+  assert.deepEqual(transport.sent[0], { event: "declared-ui.snapshot", plugin: "probe", status: "probe.tree", seq: 2, value: "b", skipped: 0 });
 });
 
 test("peerLost with process-ended stalls the pending acknowledgement, and the next push of a new process is sent at once", () => {
@@ -167,7 +167,7 @@ test("peerLost with process-ended stalls the pending acknowledgement, and the ne
   assert.equal(ofKind("skipped").length, 0);
   sender.push("probe.tree", "full");
   assert.equal(snapshots().length, 2, "the restarted process does not wait for the acknowledgement of the stopped one");
-  assert.deepEqual(snapshots()[1], { event: "declared-ui.snapshot", plugin: "probe", status: "probe.tree", seq: 3, value: "full" });
+  assert.deepEqual(snapshots()[1], { event: "declared-ui.snapshot", plugin: "probe", status: "probe.tree", seq: 3, value: "full", skipped: 0 });
 });
 
 test("peerLost with surface-closed discards a dirty value and counts it as a stall as well", () => {
@@ -229,7 +229,7 @@ test("the receiver acknowledges each snapshot with its seq and passes the value 
     onMessage: transport.onMessage,
     onSnapshot: (status, seq, value) => received.push({ status, seq, value }),
   });
-  transport.deliver({ event: "declared-ui.snapshot", plugin: "probe", status: "probe.tree", seq: 3, value: "x" });
+  transport.deliver({ event: "declared-ui.snapshot", plugin: "probe", status: "probe.tree", seq: 3, value: "x", skipped: 0 });
   assert.deepEqual(received, [{ status: "probe.tree", seq: 3, value: "x" }]);
   assert.deepEqual(transport.sent, [{ event: "declared-ui.snapshot.ack", plugin: "probe", status: "probe.tree", seq: 3 }]);
 });
@@ -302,4 +302,43 @@ test("pullSnapshots refuses a reply without an integer seq and rejects with ever
     },
   );
   assert.deepEqual(received, ["probe.ok"], "the other statuses are still applied");
+});
+
+// contract: view.snapshot.skipped-count
+test("the snapshot that follows overwritten values carries the count of the values that were skipped", () => {
+  const { sender, snapshots, ack } = setup();
+  sender.push("probe.tree", "a");
+  sender.push("probe.tree", "b");
+  sender.push("probe.tree", "c");
+  ack("probe.tree", 1);
+  assert.equal(snapshots()[0].skipped, 0, "the first snapshot skipped nothing");
+  assert.equal(snapshots()[1].skipped, 1, "b was overwritten by c before its snapshot was sent");
+  assert.equal(snapshots()[1].value, "c");
+});
+
+// contract: view.snapshot.skipped-count
+test("the receiver passes the count of skipped values of a snapshot to onSnapshot", () => {
+  const transport = fakeTransport();
+  const received = [];
+  createSnapshotReceiver({
+    plugin: "probe",
+    send: transport.send,
+    onMessage: transport.onMessage,
+    onSnapshot: (...args) => received.push(args),
+  });
+  transport.deliver({ event: "declared-ui.snapshot", plugin: "probe", status: "probe.tree", seq: 3, value: "c", skipped: 2 });
+  assert.deepEqual(received, [["probe.tree", 3, "c", 2]]);
+});
+
+// contract: view.snapshot.skipped-count
+test("the receiver refuses a snapshot whose skipped count is not a count of 0 or more", () => {
+  const transport = fakeTransport();
+  createSnapshotReceiver({ plugin: "probe", send: transport.send, onMessage: transport.onMessage, onSnapshot: () => {} });
+  for (const skipped of [-1, 1.5, "1", undefined]) {
+    assert.throws(
+      () => transport.deliver({ event: "declared-ui.snapshot", plugin: "probe", status: "s", seq: 1, value: 1, skipped }),
+      TypeError,
+      `skipped ${skipped} is refused`,
+    );
+  }
 });

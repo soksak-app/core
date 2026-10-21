@@ -2,7 +2,7 @@
   "id": "probeprovider",
   "name": "Probe provider",
   "description": "Window check fixture that declares the extension point items and reports the answer of each contributed item.",
-  "surface": { "module": "ui/page.js", "composition": { "kind": "dom" } },
+  "surface": { "module": "ui/page.js", "composition": { "kind": "hybrid", "regions": [{ "name": "page", "kind": "document", "input": "native" }], "overlays": [] } },
   "mark": "P",
   "icon": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" rx=\"2\"/>",
   "extends": {

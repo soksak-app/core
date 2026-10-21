@@ -187,9 +187,36 @@ pub fn create_document(
     _store: &str,
     _folder: &str,
     _plugin: &str,
+    _channel: Option<&str>,
     _changed: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {
     missing("document view")
+}
+
+pub fn set_view_message(
+    _document: Handle,
+    _message: Box<dyn Fn(String) + Send>,
+) -> Result<(), String> {
+    missing("view channel")
+}
+
+pub fn set_view_ended(_document: Handle, _ended: Box<dyn Fn() + Send>) -> Result<(), String> {
+    missing("view channel")
+}
+
+pub fn take_document_binary(_document: Handle, _id: &str) -> Result<Vec<u8>, String> {
+    missing("document region")
+}
+
+pub fn add_document_script(_document: Handle, _source: &str) -> Result<(), String> {
+    missing("view channel")
+}
+
+pub fn set_view_responsiveness(
+    _document: Handle,
+    _responsiveness: Box<dyn Fn(bool) + Send>,
+) -> Result<(), String> {
+    missing("view channel")
 }
 
 pub fn set_document_message(
@@ -290,6 +317,15 @@ pub fn enqueue_ui(_work: Box<dyn FnOnce() + Send>) -> Result<(), String> {
 
 pub fn cancel_layout(_window: Handle) -> Result<(), String> {
     missing("surface layout cancel")
+}
+
+pub fn join_view(
+    _window: Handle,
+    _ticket: u64,
+    _view: Handle,
+    _presented: Box<dyn FnOnce() + Send>,
+) -> Result<Option<crate::platform::ViewAbandon>, String> {
+    missing("view presentation wait")
 }
 
 pub fn start_page_titlebar(

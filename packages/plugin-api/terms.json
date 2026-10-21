@@ -253,14 +253,98 @@
       "allowed": []
     },
     {
+      "term": "control address",
+      "definition": "The object {sidebar, section, key, path?, role?} that a request uses to address one control of a declared section (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "sidebar instance",
+      "definition": "One sidebar as core.sidebars reports it, identified by left, right, or cardId:side.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "declared UI",
-      "definition": "A screen whose every element is expressed with the declared vocabulary (lists, trees, menus, commands, status lines), which the workbench draws from the declared UI snapshots that a plugin sends.",
+      "definition": "A sidebar section whose every element is one of list, tree, button or status-line, which the workbench draws from the declared UI snapshots and pull replies that a plugin sends (docs/spec/declared-ui.md).",
       "rejected": [],
       "allowed": []
     },
     {
       "term": "declared UI snapshot",
-      "definition": "The declared values of one status of a view or plugin host, sent by the plugin to the workbench as {plugin, status, seq, value} and acknowledged by seq (docs/plans/plugin-processes.md).",
+      "definition": "The message that carries one declared UI value of one status, pushed by the plugin with {plugin, status, seq, value, skipped} and acknowledged by seq.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared element",
+      "definition": "One node of a declared UI value: a list, tree, button or status-line, or an item or node of a list or tree (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared status line",
+      "definition": "The declared element that shows one line of plain text in a declared UI value (docs/spec/declared-ui.md). It is not the status line that ends a window sidebar.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared UI schema",
+      "definition": "The schema of the value of a declared UI status, which the plugin declares in exposes.status and the receiver validates with the rules of docs/spec/declared-ui.md.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared UI status",
+      "definition": "A status that a sidebar section names with the `status` form of its declaration, whose value is a declared UI value (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "branch",
+      "definition": "A tree node with a children array that is not empty, which the workbench draws with an expand control (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared section",
+      "definition": "A sidebar section declared with the `status` form, whose body the workbench draws from a declared UI status (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared UI value",
+      "definition": "The value of a declared UI status: an object with the field `elements` that a declared UI snapshot or pull reply carries (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "pull reply",
+      "definition": "The response of a pull of a declared UI status: {seq, value}, where value is the source's current value and is null when the source has no value yet (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "kept state",
+      "definition": "The expanded state that the workbench keeps for a tree branch, keyed by its status, tree and path of node keys. The expand command sets it, and a changed expanded value from the plugin replaces it (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared status source",
+      "definition": "The pair of a process and its registration of a declared UI status (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "baseline",
+      "definition": "The baseline is the last accepted value since the last rejection or change of source. It is the reference of the expanded comparison of a declared UI status's branches (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "plugin override",
+      "definition": "A plugin's override of the content of a fixed window sidebar, which applies only while the focused card's active surface is that plugin's (docs/spec/external-sidebars.md, Override context and rail border).",
       "rejected": [],
       "allowed": []
     },
@@ -296,7 +380,7 @@
     },
     {
       "term": "card surface",
-      "definition": "A surface placed in a card that a sidebar item opens when a sidebar section needs a view.",
+      "definition": "A surface placed in a card that a `button` in the sidebar opens when the plugin that declares it needs a view.",
       "rejected": [],
       "allowed": []
     },
@@ -353,6 +437,20 @@
     {
       "term": "view channel",
       "definition": "The document-start script and the message handler `sok-view` that the host registers with a view's web view configuration, through which a view page sends and receives its calls and snapshots.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "view configuration",
+      "definition": "The web view configuration that the host creates for one view, with `isView`, the plugin id of the surface, the document-start scripts of the view channel and of the theme, and the handler `sok-view`.",
+      "rejected": [
+        "view config"
+      ],
+      "allowed": []
+    },
+    {
+      "term": "ready document",
+      "definition": "The document of a view whose ready message the host has recorded, the only document that receives host messages.",
       "rejected": [],
       "allowed": []
     },

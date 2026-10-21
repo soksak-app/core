@@ -12,6 +12,8 @@ package darwin
 void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback);
 void nativeWindowStartPage(void *window, uint64_t ticket, double height, uintptr_t callback);
 bool nativeWindowAfterPresentation(void *window, uintptr_t callback);
+bool nativeWindowJoinView(void *window, uint64_t ticket, void *view, uintptr_t callback);
+bool surfaceLayoutAbandonView(void *owner, void *viewWebview);
 bool nativeWindowAfterSettled(void *window, uintptr_t callback);
 void surfaceLayoutInjectSettledFailure(void);
 */
@@ -36,6 +38,33 @@ func (implementation) CommitLayout(window unsafe.Pointer, ticket uint64) bool {
 func (implementation) CancelLayout(window unsafe.Pointer) error {
 	C.surfaceLayoutCancel(window)
 	return nil
+}
+
+// JoinView joins the view webview to the layout transaction of window with ticket. The native join ends by the presentation of the
+// view or by abandon, whichever comes first. The native side calls the presentation callback only for a join that did not end by
+// abandon, and abandon does nothing after the presentation, so the callback handle is released exactly once.
+func (implementation) JoinView(window unsafe.Pointer, ticket uint64, view unsafe.Pointer, presented func()) (func() error, bool, error) {
+	ended := false
+	handle := cgo.NewHandle(func() {
+		ended = true
+		presented()
+	})
+	if !bool(C.nativeWindowJoinView(window, C.uint64_t(ticket), view, C.uintptr_t(handle))) {
+		handle.Delete()
+		return nil, false, nil
+	}
+	abandon := func() error {
+		if ended {
+			return nil
+		}
+		ended = true
+		handle.Delete()
+		if !bool(C.surfaceLayoutAbandonView(window, view)) {
+			return errors.New("the native layout transaction has no open join of the view")
+		}
+		return nil
+	}
+	return abandon, true, nil
 }
 
 func (implementation) StartPageTitlebar(window unsafe.Pointer, ticket uint64, height float64, ready func(error)) error {

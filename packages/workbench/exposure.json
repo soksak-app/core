@@ -145,7 +145,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in document order: the sidebar (`left` or `right` for a fixed window sidebar, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its module is mounted, its mount error or null, the text content the module drew, the number of its core.sidebar.section.control elements, and whether its tab text is clipped (always false in list layout).",
+        "description": "The drawn sidebars in document order: the sidebar (`left` or `right` for a fixed window sidebar, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, `mounted`, `error`, `text`, `controls`, and whether its tab text is clipped (always false in list layout). For a declared section, `mounted` is true while the section draws an accepted value and false when the section is cleared, which is before its first accepted value and after a rejected value; `error` is the text of the current rejection while the last value is rejected, and null otherwise; `text` is the text content of the body; `controls` is the number of its core.sidebar.section.control elements. For a module section, `mounted` is its mount state, `error` its mount error or null, `text` the text content the module drew, and `controls` the number of its core.sidebar.section.control elements.",
         "schema": {
           "type": "array",
           "items": {
@@ -3214,6 +3214,33 @@
         }
       },
       {
+        "name": "core.declared-ui.tree.expand",
+        "description": "Sets the expanded state that a declared UI tree branch keeps. The branch is named by the status, the tree key, and the path of node keys from the root node. The state stays until the branch leaves the tree or the source of the status changes.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string"
+            },
+            "tree": {
+              "type": "string"
+            },
+            "path": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "expanded": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.sidebar.section.fold",
         "description": "Folds or unfolds one section of a sidebar whose set uses the list layout; the state is kept for that sidebar.",
         "params": {
@@ -3991,17 +4018,17 @@
       },
       {
         "name": "core.sidebar.section",
-        "description": "The section elements of drawn sidebars in document order; each holds the content its plugin module draws.",
+        "description": "The section elements of drawn sidebars in document order; each holds the content its plugin module draws, or the elements of its declared UI value when the section names a status.",
         "many": true
       },
       {
         "name": "core.sidebar.section.control",
-        "description": "The interactive elements that section modules draw, in document order; each runs a command of the section's plugin.",
+        "description": "The interactive elements that section modules and declared UI values draw, in document order; each runs a command of the section's plugin, or core.declared-ui.tree.expand for the expand control of a declared tree branch. An element of a declared UI value carries data-key with its key.",
         "many": true
       },
       {
         "name": "core.sidebar.section.header",
-        "description": "The fold headers of sections in list-layout sidebars in document order.",
+        "description": "The fold headers of sections in list-layout sidebars in document order, for module sections and declared UI sections.",
         "many": true
       },
       {

@@ -488,6 +488,9 @@ export const surfaces = native ? {
         composition: s.surface.composition,
         visible: s.visible,
         ...toPage(s.applied),
+        // The start values of the view of a view surface (docs/spec/native-surfaces.md#view-surfaces); a surface of another
+        // composition carries none.
+        ...(s.start ? { start: s.start } : {}),
       }));
 
       // place is called on every render, and on every frame while a divider is dragged.

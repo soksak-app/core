@@ -531,3 +531,51 @@ fn plugin_pack_refuses_a_binary_path_in_files_without_writing() {
         "a refused pack left files"
     );
 }
+
+// contract: cli.pack.view-page-listed
+#[test]
+fn plugin_pack_refuses_a_view_page_not_listed_in_files() {
+    let dir = plugin_tree();
+    write_tree(
+        dir.path(),
+        &[
+            (
+                "package.json",
+                r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
+                "files": ["plugin.json", "ui/b.js"]}"#,
+            ),
+            (
+                "plugin.json",
+                r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}}"#,
+            ),
+            ("ui/page.html", "<!doctype html>"),
+        ],
+    );
+    let base = Folder::new("release");
+    let out = base.path().join("out");
+    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(&out)]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: plugin.json: view page ui/page.html must be listed in files\n"
+        )
+    );
+    assert_eq!(
+        std::fs::read_dir(&out)
+            .map(|names| names.count())
+            .unwrap_or(0),
+        0,
+        "a refused pack left files"
+    );
+    write_tree(
+        dir.path(),
+        &[(
+            "package.json",
+            r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
+                "files": ["plugin.json", "ui"]}"#,
+        )],
+    );
+    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(&out)]);
+    assert_eq!((code, stderr.as_str()), (0, ""));
+}

@@ -44,6 +44,50 @@ type Surface struct {
 	Plugin      string             `json:"plugin"`
 	Composition SurfaceComposition `json:"composition"`
 	Rect
+	// Start holds the start values of the view of a view surface, which the host injects as window.sokSurface before the page
+	// runs (docs/spec/native-surfaces.md#view-surfaces). A surface of another composition carries none.
+	Start *ViewStart `json:"start,omitempty"`
+}
+
+// SurfaceOrigin is the working directory that the tab that opened the surface recorded at that moment
+// (docs/spec/plugins.md#tab-reports).
+type SurfaceOrigin struct {
+	Directory *string `json:"directory"`
+}
+
+// SurfaceProject is the root of the project that the window shows, or the window shows no project
+// (docs/spec/plugins.md#tab-reports).
+type SurfaceProject struct {
+	Root string `json:"root"`
+}
+
+// ViewStart is the start values of a view (docs/spec/native-surfaces.md#view-surfaces): the members of the surface context that
+// the page receives at start, which the host injects as window.sokSurface before the page of the view runs.
+type ViewStart struct {
+	Params       json.RawMessage `json:"params,omitempty"`
+	Origin       *SurfaceOrigin  `json:"origin,omitempty"`
+	Project      *SurfaceProject `json:"project,omitempty"`
+	Declarations json.RawMessage `json:"declarations,omitempty"`
+}
+
+// validateViewStart checks the start values of the view of the surface (docs/spec/native-surfaces.md#view-surfaces).
+func validateViewStart(surface string, start *ViewStart) error {
+	if start.Params != nil && !json.Valid(start.Params) {
+		return fmt.Errorf("surface %q: view start params are not JSON", surface)
+	}
+	if start.Origin != nil && start.Origin.Directory != nil && *start.Origin.Directory == "" {
+		return fmt.Errorf("surface %q: view start origin directory is empty", surface)
+	}
+	if start.Project != nil && start.Project.Root == "" {
+		return fmt.Errorf("surface %q: view start project root is empty", surface)
+	}
+	if start.Declarations != nil {
+		var declarations map[string]json.RawMessage
+		if err := json.Unmarshal(start.Declarations, &declarations); err != nil {
+			return fmt.Errorf("surface %q: view start declarations are not an object", surface)
+		}
+	}
+	return nil
 }
 
 type SurfaceRegion struct {
@@ -55,6 +99,7 @@ type SurfaceRegion struct {
 
 type SurfaceComposition struct {
 	Kind     string          `json:"kind"`
+	Page     string          `json:"page,omitempty"`
 	Regions  []SurfaceRegion `json:"regions,omitempty"`
 	Overlays []string        `json:"overlays,omitempty"`
 }
@@ -72,16 +117,41 @@ func validCompositionName(name string) bool {
 	return true
 }
 
-func validateComposition(composition SurfaceComposition) error {
-	if composition.Kind == "dom" {
-		if len(composition.Regions) != 0 || len(composition.Overlays) != 0 {
-			return fmt.Errorf("dom composition cannot declare regions or overlays")
+// validViewPage reports whether page is a path inside the plugin release: relative, with no empty, `.` or `..` segment, no `.binary`
+// segment, and the `.html` extension (docs/spec/plugins.md#view-surfaces).
+func validViewPage(page string) bool {
+	if !strings.HasSuffix(page, ".html") {
+		return false
+	}
+	for _, segment := range strings.Split(page, "/") {
+		if segment == "" || segment == "." || segment == ".." || segment == ".binary" {
+			return false
 		}
-		return nil
+	}
+	return true
+}
+
+func validateComposition(plugin string, composition SurfaceComposition) error {
+	if composition.Kind == "dom" {
+		return fmt.Errorf("plugin %s surface composition: kind dom is removed; the composition takes kind view or hybrid", plugin)
+	}
+	if composition.Kind == "view" {
+		if !validViewPage(composition.Page) {
+			return fmt.Errorf("view composition page %q must be a path inside the plugin release that ends in .html", composition.Page)
+		}
+		return validateRegions(composition)
 	}
 	if composition.Kind != "hybrid" || len(composition.Regions) == 0 || composition.Overlays == nil {
-		return fmt.Errorf("surface composition must be dom or a complete hybrid composition")
+		return fmt.Errorf("surface composition must be view or a complete hybrid composition")
 	}
+	if composition.Page != "" {
+		return fmt.Errorf("hybrid composition cannot declare a page")
+	}
+	return validateRegions(composition)
+}
+
+// validateRegions checks the names and kinds of the regions and overlays of a hybrid or view composition.
+func validateRegions(composition SurfaceComposition) error {
 	seen := map[string]bool{}
 	for _, region := range composition.Regions {
 		if !validCompositionName(region.Name) || seen[region.Name] {
@@ -194,6 +264,12 @@ type Surfaces struct {
 	// surfacePlugins is the plugin of each surface that declared its composition.
 	surfacePlugins       map[string]string
 	compositionRevisions map[string]uint64
+	// lifecycle counts the failures of each view surface and keeps the record that creates its view again (view_lifecycle.go).
+	lifecycle *viewLifecycle
+	// events receives the window events of this window in place of the window, when it is set. The tests set it.
+	events func(name string, data any)
+	// presentation holds the views that wait for their presentation after a card layout change (presentation_wait.go).
+	presentation presentationWait
 	// A surface is a native view, so input that pressed a surface does not reach the page. This map converts the pressed
 	// view to the surface id that the page uses.
 	named map[uintptr]string
@@ -246,6 +322,15 @@ func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 		theme: Theme{Tokens: map[string]string{}},
 	}
 	return s
+}
+
+// windowEvent sends an event to the app DOM of this window, or to the events function of a test.
+func (s *Surfaces) windowEvent(name string, data any) {
+	if s.events != nil {
+		s.events(name, data)
+		return
+	}
+	s.window.EmitEvent(name, data)
 }
 
 // Emit delivers an event to the single app DOM of this window.
@@ -481,7 +566,7 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugi
 		if err := ValidateRect(fmt.Sprintf("surface %q", surface.ID), surface.X, surface.Y, surface.W, surface.H); err != nil {
 			return nil, err
 		}
-		if err := validateComposition(surface.Composition); err != nil {
+		if err := validateComposition(surface.Plugin, surface.Composition); err != nil {
 			return nil, fmt.Errorf("surface %q: %w", surface.ID, err)
 		}
 		if surface.Plugin == "" {
@@ -489,6 +574,14 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugi
 		}
 		if declared, exists := held[surface.ID]; exists && (!reflect.DeepEqual(declared, surface.Composition) || plugins[surface.ID] != surface.Plugin) {
 			return nil, fmt.Errorf("surface %q changed its composition declaration", surface.ID)
+		}
+		if surface.Start != nil {
+			if surface.Composition.Kind != "view" {
+				return nil, fmt.Errorf("surface %q: only a view surface carries start values", surface.ID)
+			}
+			if err := validateViewStart(surface.ID, surface.Start); err != nil {
+				return nil, err
+			}
 		}
 	}
 	windowOverlays := make([]platform.WindowOverlay, 0, len(req.Overlays))
@@ -743,6 +836,15 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 				view.SetHidden(!p.Visible)
 				out = append(out, Placement{ID: p.ID, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: p.Visible})
 			}
+			if req.Settled {
+				if err := s.joinShownViews(win.NativeWindow(), req.Ticket, req.Placements); err != nil {
+					if cancel := system.CancelLayout(win.NativeWindow()); cancel != nil {
+						err = fmt.Errorf("%w; cancelling layout: %v", err, cancel)
+					}
+					done <- result{err: err}
+					return
+				}
+			}
 			committed := system.CommitLayout(win.NativeWindow(), req.Ticket)
 			if !committed {
 				done <- result{err: fmt.Errorf("surface preparation %d is no longer current", req.Ticket)}
@@ -913,6 +1015,16 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		s.surfacePlugins[item.id] = item.decl.Plugin
 		s.mu.Unlock()
 		s.images.SetSurfaceVisible(item.id, item.visible)
+		// The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
+		if item.decl.Composition.Kind == "view" {
+			start := ViewStart{}
+			if item.decl.Start != nil {
+				start = *item.decl.Start
+			}
+			if err := s.syncView(item.id, item.view.NativeView(), item.decl.Plugin, item.decl.Composition.Page, item.visible, start); err != nil {
+				return nil, nil, err
+			}
+		}
 		// The native view is kept hidden until PresentSurfaces confirms that the corresponding application DOM frame
 		// was displayed.
 		item.view.SetHidden(true)
@@ -943,6 +1055,8 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		delete(s.compositions, id)
 		delete(s.surfacePlugins, id)
 		s.mu.Unlock()
+		// A surface that is removed and created again is a reopened tab, which clears the failures of its view.
+		s.viewRecords().forget(id)
 		delete(s.compositionRevisions, id)
 		// Instrument of the surface lifecycle (V5-104): a surface that disappeared from the list is destroyed at this point.
 		PerformanceSurface("destroyed", id, nil)

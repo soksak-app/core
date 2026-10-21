@@ -108,6 +108,9 @@ impl std::fmt::Display for WindowObjects {
 /// An address that points to a native window, view or input monitor.
 pub type Handle = usize;
 
+/// Ends a view join without its presentation. join_view returns it.
+pub type ViewAbandon = Box<dyn FnOnce() -> Result<(), String> + Send>;
+
 /// A rectangle in the order x, y, width, height.
 pub type Frame = (f64, f64, f64, f64);
 
@@ -390,15 +393,40 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// which the persistent data store keeps the site data. changed receives the state JSON ({url, title, loading,
     /// progress, canGoBack, canGoForward, error, scroll}) on the main thread. Call it on the main thread.
     /// folder and plugin are the installed folder and the id of the plugin whose surface owns the region; the region
-    /// serves sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions).
+    /// serves sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). view is true for the
+    /// web view configuration of a view surface, which is the only configuration that serves the core root
+    /// (docs/spec/native-surfaces.md#view-surfaces).
     fn create_document(
         &self,
         surface: Handle,
         store: &str,
         folder: &str,
         plugin: &str,
+        channel: Option<&str>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String>;
+    /// Receives {"message": value} for each message of the sok-view handler of a view and {"error": reason} for a message from
+    /// another frame. It must be set before the view loads a page.
+    fn set_view_message(
+        &self,
+        document: Handle,
+        message: Box<dyn Fn(String) + Send>,
+    ) -> Result<(), String>;
+    /// Receives the end of the WebContent process of a view, before the host closes the view. A closed view receives no call.
+    fn set_view_ended(&self, document: Handle, ended: Box<dyn Fn() + Send>) -> Result<(), String>;
+    /// Takes the bytes that the binary store of the document keeps under id, and releases the id. The error is the text of the native layer
+    /// when the document is closed or the id is not stored (docs/spec/native-surfaces.md#document-regions).
+    fn take_document_binary(&self, document: Handle, id: &str) -> Result<Vec<u8>, String>;
+    /// Adds a user script that runs at document start in the page world, before any page script, for each load of the document from
+    /// now on. The host adds the theme script of a view before it loads the page (docs/spec/native-surfaces.md#view-surfaces).
+    fn add_document_script(&self, document: Handle, source: &str) -> Result<(), String>;
+    /// Receives the responsiveness notices of a view: false when its WebContent process stops answering its responsiveness check,
+    /// and true when it answers again. A closed view receives no call (docs/spec/native-surfaces.md#view-surfaces).
+    fn set_view_responsiveness(
+        &self,
+        document: Handle,
+        responsiveness: Box<dyn Fn(bool) + Send>,
+    ) -> Result<(), String>;
     fn set_document_event(
         &self,
         document: Handle,
@@ -512,6 +540,16 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn commit_layout(&self, window: Handle, ticket: u64) -> Result<bool, String>;
     /// Cancels the surface placement transaction in progress of the window.
     fn cancel_layout(&self, window: Handle) -> Result<(), String>;
+    /// Joins the view document to the open layout transaction of window with ticket, so that the commit waits until the view
+    /// presents. presented runs on the UI thread when the view presents. The returned function ends the join without the
+    /// presentation; it is None when no transaction of ticket is open.
+    fn join_view(
+        &self,
+        window: Handle,
+        ticket: u64,
+        view: Handle,
+        presented: Box<dyn FnOnce() + Send>,
+    ) -> Result<Option<ViewAbandon>, String>;
     /// Sets the title bar of the window to height (pt) when a new page starts. A visible window is set inside the start
     /// transaction of ticket and committed together with the first presentation of the new page
     /// (surfaceLayoutStartPage). ready is called on the UI thread after the title bar is set or after a failure. Call
