@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F212.8-0-16: The declared UI specification is revised after its fifteenth review. With no baseline the kept state wins only for branches of the accepted value, a state module's registration serves no declared UI status, the card surface term names the button of the declaring plugin, and a restart is handled by transitions (b) and (c).
 - F212.8-0-15: The declared UI specification is revised after its fourteenth review. A plugin that needs a view declares the card surface, a pull reply with a lower `seq` is discarded without validation, `kind` is accepted on every element, the not-an-object rows are literal per element kind, and the attributes of leaves and branches without a command are stated.
 - F212.8-0-14: The declared UI specification is revised after its thirteenth review. The user sets a kept state only through the expand command, a pull reply whose `seq` is lower than the last accepted value is discarded, an element that is not an object is rejected, `kind` names each element's kind, and a process restart is handled as a change of source.
 - F212.8-0-13: The declared UI specification is revised after its twelfth review. The control attributes and their address are defined once there, lengths of keys, text fields and parameters count code points while the serialized value counts UTF-8 bytes, a snapshot from a pair that is not the chosen source is acknowledged and discarded, and the leaf and new-branch rules hold with or without a baseline.

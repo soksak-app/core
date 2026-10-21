@@ -621,3 +621,12 @@ The objections below are the answers of the fourteenth adversarial review of [de
 - R14-4: one row covered an element, a list item and a tree node that are not objects, with a placeholder reason. Verdict: accepted. Resolution: three literal rows replace it: `element must be an object`, `list item must be an object`, and `tree node must be an object`.
 - R14-5: the attributes of a leaf and of a branch without `command` were not stated. Verdict: accepted. Resolution: a leaf without `command` carries neither attribute set, and a branch without `command` carries only the attributes of its expand control.
 - R14-6: the receiver rule named declared UI snapshots only, although it also applies to every non-null pull reply. Verdict: accepted. Resolution: the receiver applies the rules to every declared UI snapshot and every non-null pull reply.
+
+**Declared UI schema review round 15**
+
+The objections below are the answers of the fifteenth adversarial review of [declared UI](../spec/declared-ui.md). All four are accepted, and each resolution is applied as the reviewer wrote it.
+
+- R15-1: the baseline-less rule let the kept state win for every path that it holds, which included paths that are not branches of the accepted value. Verdict: accepted. Resolution: with no baseline, the kept state wins for every path that is a branch in the accepted value and holds kept state.
+- R15-2: the term card surface named the sidebar section as the trigger, which is not the declaring plugin. Verdict: accepted. Resolution: the term names a `button` in the sidebar that the plugin that declares it opens when that plugin needs a view.
+- R15-3: a registration by a state module was not stated to serve no declared UI status. Verdict: accepted. Resolution: a registration by a state module does not serve a declared UI status, and a declared UI status that only a state module registers has no source, so its section is cleared.
+- R15-4: the restart rule named transition (b) alone, although the change of source also pulls the current value under transition (c). Verdict: accepted. Resolution: the restart is handled by transitions (b) and (c).

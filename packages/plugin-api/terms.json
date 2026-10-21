@@ -350,7 +350,7 @@
     },
     {
       "term": "card surface",
-      "definition": "A surface placed in a card that a `button` in the sidebar opens when a sidebar section needs a view.",
+      "definition": "A surface placed in a card that a `button` in the sidebar opens when the plugin that declares it needs a view.",
       "rejected": [],
       "allowed": []
     },
