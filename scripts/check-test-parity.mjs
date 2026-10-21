@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, extname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { components, corePackageNames } from "./check-boundaries.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
@@ -2694,8 +2695,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F236",
-    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "function packageOwner(name)" }],
-    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "ownership audit classifies plugins and sidecars by their name prefix, without a list of real names" }],
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "function declaredOwners(root)" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "ownership audit classifies only declared names, by exact name" }],
     expected: "The ownership audit names no real plugin or sidecar: it classifies a package by its name prefix. The decoupling items F236-1 to F236-12 keep their evidence in docs/features.md, and the moves they name are in docs/plans/decouple-handoff.md.",
     levels: ["unit"],
   },
@@ -4529,17 +4530,17 @@ function isDeclaration(file) {
 }
 
 /**
- * The owner of a package by its name (docs/spec/plugins.md#repositories): every plugin-prefixed package except
- * the plugin-api package is a plugin and every sidecar-prefixed package is a sidecar, so core holds no list of the
- * packages of other repositories.
+ * The owners of the packages by their exact names (decision D3, rules 2 and 3): every core package name is "core", and
+ * every declared plugin or sidecar of scripts/workspace-registry.json is its kind. Core holds no list of the packages of
+ * other repositories and classifies no name by its prefix. A name that is not in the map is undeclared.
  */
-function packageOwner(name) {
-  const base = name.split("/").slice(0, 2).join("/");
-  if (base === "@soksak/plugin-api" || base === "@soksak/runtime" || base === "@soksak/workbench") return "core";
-  if (base.startsWith(`@soksak/${"plugin-"}`)) return "plugin";
-  if (base.startsWith(`@soksak/${"sidecar-"}`)) return "sidecar";
-  // default: another name of the scope @soksak or a name of another scope has no owner that this audit compares.
-  return null;
+export function declaredOwners(root = ROOT) {
+  const owners = new Map();
+  for (const name of corePackageNames(root)) owners.set(name, "core");
+  for (const item of components(root)) {
+    if (item.kind !== "core") owners.set(item.name, item.kind);
+  }
+  return owners;
 }
 
 function ownerReferences(source) {
@@ -4557,7 +4558,7 @@ function ownerReferences(source) {
  * The apps and e2e consume the public contract, so they may use other public packages,
  * but the private, src and tests paths are forbidden for every owner.
  */
-export function auditOwnership(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+export function auditOwnership(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8"), owners = declaredOwners()) {
   const errors = [];
   for (const file of [...new Set(files)].sort()) {
     const owner = ownerFor(file);
@@ -4572,7 +4573,13 @@ export function auditOwnership(files, readSource = (file) => readFileSync(`${ROO
     for (const reference of ownerReferences(source)) {
       const value = reference.value;
       const pathOwner = OWNER_ROOTS.find(([root]) => value.includes(root))?.[1] ?? null;
-      const referencedOwner = pathOwner ?? (value.startsWith("@soksak/") ? packageOwner(value) : null);
+      const base = value.startsWith("@soksak/") ? value.split("/").slice(0, 2).join("/") : null;
+      const declared = base ? owners.get(base) : undefined;
+      if (!pathOwner && base && declared === undefined && (owner === "plugin" || owner === "sidecar")) {
+        errors.push(`${file}: ${owner}${testFile ? " test" : " implementation"} names undeclared package ${base}`);
+        continue;
+      }
+      const referencedOwner = pathOwner ?? declared ?? null;
       if (reference.private && referencedOwner && referencedOwner !== owner) {
         errors.push(`${file}: ${owner}${testFile ? " test" : " implementation"} reads private path ${value}`);
         continue;
