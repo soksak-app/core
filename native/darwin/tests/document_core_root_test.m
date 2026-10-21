@@ -1,4 +1,4 @@
-// Checks the core root of a view (docs/plans/plugin-processes.md, rule 4): a view configuration requests sok://core/<path>
+// Checks the core root of a view (docs/spec/plugin-processes.md, rule 4): a view configuration requests sok://core/<path>
 // from the core root resolver of the application and imports the files that the resolver serves, each with the header
 // Access-Control-Allow-Origin of its plugin; a refused path fails with no such header; and a document region receives no
 // core root grant, so its requests to sok://core fail without calling the resolver.

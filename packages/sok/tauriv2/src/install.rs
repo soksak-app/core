@@ -408,7 +408,7 @@ pub fn plugin_install_path(id: &str, version: &str) -> Result<String, String> {
     if !is_identifier(id) {
         return Err(format!("invalid plugin id {id}"));
     }
-    // The core root is the reserved host `core` (docs/plans/plugin-processes.md rule 4), so no plugin may be installed under that id.
+    // The core root is the reserved host `core` (docs/spec/plugin-processes.md rule 4), so no plugin may be installed under that id.
     if id == "core" {
         return Err(format!("plugin id {id} is reserved for the core root"));
     }

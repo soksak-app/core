@@ -109,7 +109,7 @@ test("a view responsiveness notice that is not a boolean is refused and changes 
 
 // contract: view.snapshot.skipped-count
 // The reports of a snapshot channel write the page trace event of each skipped value. A stalled value is counted and writes no event,
-// because no live observer waits for its acknowledgement (docs/plans/plugin-processes.md, rule 2).
+// because no live observer waits for its acknowledgement (docs/spec/plugin-processes.md, rule 2).
 test("the reports of a snapshot channel write the page trace event of skipped values and count stalled values without an event", async (t) => {
   const traced = [];
   t.mock.module("../performance.js", { exports: { trace: (event, fields) => { traced.push({ event, fields }); } } });

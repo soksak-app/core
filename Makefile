@@ -29,7 +29,7 @@ push-check:
 	@$(MAKE) --no-print-directory commits-check RANGE="$(or $(RANGE),origin/main..HEAD)"
 	@$(MAKE) --no-print-directory docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check migrations-check
 	@$(MAKE) --no-print-directory rust-format-check go-format-check rust-clippy-check
-	@node --test scripts/test/census.test.mjs scripts/test/fallbacks.test.mjs scripts/test/comment-language.test.mjs scripts/test/event-classes.test.mjs
+	@node scripts/gate-tests.mjs scripts/test/census.test.mjs scripts/test/fallbacks.test.mjs scripts/test/comment-language.test.mjs scripts/test/event-classes.test.mjs
 
 # Builds release and checks that the staged frontend and the release executables hold no diagnostic code.
 release-check: wailsv3-build-release tauriv2-build-release registry-manifest-check
@@ -186,6 +186,8 @@ language-test: native-darwin
 MANIFEST ?= Cargo.toml
 # The limit in seconds of one Rust test in rust-tests-alone and rust-repeat; the runner kills a test at it (scripts/rust-tests.mjs).
 TEST_TIMEOUT ?= 120
+# The limit in seconds of one benchmark in benchmark-rust and benchmark-go; the runner kills a benchmark at it (scripts/benchmarks.mjs).
+BENCH_TIMEOUT ?= 300
 rust-tests-alone:
 	@case "$(PACKAGE)" in '') echo "rust-tests-alone requires PACKAGE=<cargo package> [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
@@ -195,52 +197,37 @@ rust-tests-alone:
 # This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
 # Measures the cost of the recorder. It is not a test: it prints numbers and asserts nothing. The Rust writer is measured with cargo bench and the native ring with the benchmark of native/darwin.
 benchmark-rust:
-	@$(CARGO_ENV) cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_log_benchmark --bench event_native_benchmark
+	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_log_benchmark --timeout $(BENCH_TIMEOUT) -- cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_log_benchmark
+	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_native_benchmark --timeout $(BENCH_TIMEOUT) -- cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_native_benchmark
 
 benchmark-go:
-	@$(GO_ENV) go test -count=1 -ldflags "$(GO_LINK)" -run '^$$' -bench 'EventLogEmit|NativePull' -benchtime 1x -v ./packages/host/wailsv3/tests
+	@$(GO_ENV) node scripts/benchmarks.mjs go ./packages/host/wailsv3/tests 'EventLogEmit|NativePull' --timeout $(BENCH_TIMEOUT) --ldflags='$(GO_LINK)'
 
 rust-repeat:
 	@case "$(PACKAGE)" in '') echo "rust-repeat requires PACKAGE=<cargo package> COUNT=<n> [TEST=<name>] [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "rust-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
-	@node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) $(if $(TEST),--test $(TEST)) --count $(COUNT) --timeout $(TEST_TIMEOUT)
+	@node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT)
 
-# Runs the tests of a Go package COUNT times in sequence. TEST is the go test -run regular expression and TAGS is the go test -tags value.
-# A run with no built test file (build tag) or no test of a matching name fails.
-# This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
+# Runs the tests of the Go packages of PACKAGE COUNT times in sequence. TEST is the go test -run regular expression and TAGS is the go test -tags value.
+# Each test of each package is its own process with the limit TEST_TIMEOUT, named when it starts and reported with its result and elapsed time (scripts/go-tests.mjs).
+# A pattern whose packages have no test files fails when none has test files; a run in which no test matches fails.
+# This target reproduces and accepts an intermittent failure. The runner reports the run number and the system load at the first failure.
 go-repeat:
 	@case "$(PACKAGE)" in '') echo "go-repeat requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "go-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@cgo=$$(node scripts/go-repeat-inputs.mjs '$(PACKAGE)' '$(TAGS)') || exit 1; \
-	  output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
-	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    CGO_CFLAGS="$(GO_CFLAGS) $$cgo" go test -json -count=1 $(if $(TAGS),-tags '$(TAGS)') -ldflags "$(GO_LINK)" $(if $(TEST),-run '$(TEST)') $(PACKAGE) > "$$output" 2>&1; \
-	    status=$$?; \
-	    node scripts/go-repeat-result.mjs "$$output" $$status '$(PACKAGE)' '$(TEST)' '$(TAGS)' \
-	      || { echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
-	    run=$$((run + 1)); \
-	  done; \
-	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"
+	  CGO_CFLAGS="$(GO_CFLAGS) $$cgo" node scripts/go-tests.mjs --package '$(PACKAGE)' $(if $(TAGS),--tags '$(TAGS)') $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT) --ldflags='$(GO_LINK)'
 
 # Runs the tests whose name matches the pattern in a Node test file COUNT times in sequence from the repository root.
-# This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
-# The executed tests are counted in the TAP result, which is machine-readable. The human-readable output carries color codes depending on the environment, and when no test matches the name
-# the file itself is reported as one passing result, so only results whose title matches the name pattern and that are not skipped are counted.
-node-repeat: SHELL := /bin/bash -o pipefail
+# Each repeat is one process of node --test with the limit TEST_TIMEOUT: the runner kills it at the limit and names it when it starts
+# (scripts/node-repeat.mjs). Each test of a repeat gets the same limit through --test-timeout.
+# This target reproduces and accepts an intermittent failure. The runner reports the run number and the system load at the first failure.
+# A repeat fails when no passed test matches the pattern.
 node-repeat:
 	@case "$(FILE)" in '') echo "node-repeat requires FILE=<test file> NAME=<test name pattern> COUNT=<n>" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "node-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
-	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
-	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    echo "START: $(FILE) $(NAME) run $$run of $(COUNT)"; \
-	    node --test --experimental-test-module-mocks --test-reporter=tap --test-name-pattern='$(NAME)' $(FILE) 2>&1 | tee "$$output" \
-	      || { echo "FAIL: $(FILE) $(NAME) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
-	    sed -nE 's/^[[:space:]]*ok [0-9]+ - //p' "$$output" | grep -v '# SKIP' | grep -qE -- '$(NAME)' \
-	      || { echo "FAIL: no test in $(FILE) matched $(NAME)" >&2; exit 1; }; \
-	    run=$$((run + 1)); \
-	  done; \
-	  echo "$(FILE) $(NAME): $(COUNT) of $(COUNT) runs pass"
+	@node scripts/node-repeat.mjs --file '$(FILE)' --name='$(NAME)' --count $(COUNT) --timeout $(TEST_TIMEOUT)
 
 # Runs COMMAND with a temporary folder of its own and fails when it leaves a soksak- entry there, except the window-check
 # configuration folders soksak-check-* (docs/operations/examples.md#temporary-folders): make temp-audit COMMAND="pnpm test"

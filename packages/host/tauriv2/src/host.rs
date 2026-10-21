@@ -67,6 +67,14 @@ pub mod page_process;
 pub mod performance;
 #[path = "platform/platform.rs"]
 pub mod platform;
+pub mod plugin_host;
+pub mod plugin_host_channel;
+#[cfg(test)]
+#[path = "plugin_host_channel_test.rs"]
+mod plugin_host_channel_test;
+#[cfg(test)]
+#[path = "plugin_host_test.rs"]
+mod plugin_host_test;
 pub mod plugins;
 pub mod presentation_wait;
 #[cfg(feature = "diagnostics")]
@@ -302,6 +310,8 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         .plugin(tauri_plugin_deep_link::init())
         .manage(windows::Windows::default())
         .manage(exposure::Exposure::default())
+        .manage(plugin_host::PluginHostStates::default())
+        .manage(plugin_host::PluginHostRestarts::default())
         .plugin(endpoint)
         .manage(surfaces::Background)
         // The main page is fetched with a scheme that knows the webview that requested the start document
@@ -384,7 +394,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     |_| "the configuration directory of installed plugins is already set",
                 )?;
                 // The core root of a view serves the core files from the bundled frontend, which the page reads too
-                // (docs/plans/plugin-processes.md, rule 4).
+                // (docs/spec/plugin-processes.md, rule 4).
                 let core_root_frontend = std::sync::Arc::clone(&core_frontend);
                 // Each view configuration runs the view channel script of the bundled frontend before its page
                 // (docs/spec/native-surfaces.md#view-surfaces).

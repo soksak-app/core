@@ -246,7 +246,7 @@ fn core_root_targets(frontend: &dyn Fn(&str) -> Option<Vec<u8>>) -> Result<Vec<S
     Ok(paths)
 }
 
-/// Returns the file at url_path of the core root for a view of plugin (docs/plans/plugin-processes.md, rule 4). A core
+/// Returns the file at url_path of the core root for a view of plugin (docs/spec/plugin-processes.md, rule 4). A core
 /// target is read from the bundled frontend, which frontend gives by its name without a leading slash. Any other path is
 /// read from an installed plugin folder only when the granted item rule (granted_files) grants it to plugin; the rule
 /// reads the installation record at each request. Ok(None) is a refused path, and the refusal is written as an error

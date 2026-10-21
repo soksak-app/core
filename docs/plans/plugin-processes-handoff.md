@@ -10,7 +10,7 @@ This document lists the remaining work of F212 (plugin code outside the main pag
 |---|---|
 | Process rules, the checklist rules, Red/Green, commit form, branches and worktrees | `AGENTS.md` (+ `.ko.md`) |
 | Checklist | `docs/features.md` (+ `.ko.md`) |
-| Decided design of F212: the layers, the rules 1 to 10, the pass values (i) to (viii), the review records | `docs/plans/plugin-processes.md` (+ `.ko.md`) |
+| Contract of F212: the layers, the pass values (i) to (viii), the rules 1 to 10, the messages and events, the plugin host | `docs/spec/plugin-processes.md` (+ `.ko.md`) |
 | Declared UI contract (list, tree, button, status-line, sections, addresses, rejections) | `docs/spec/declared-ui.md` (+ `.ko.md`) |
 | Exposure contract (commands, statuses, dom, `address`, errors) | `docs/spec/exposure.md` |
 | Build, test parity, window checks, diagnostics | `docs/operations/examples.md` |
@@ -134,11 +134,11 @@ Done on main: F218-2.1, F218-2.2 and F218-2.3 (F219 made the order-dependent sid
 
 **F212.1-2-2** — the fixture reply waited 12.4 s for the first answer of the files sidecar. `host.trace.sidecar.ready` (F212.1-2-2-6) measures spawn to first answer. S31 is committed in the files sidecar. Repeat the window check of F212.1-2 with the trace on, and read `host.trace.sidecar.ready` and the sidecar's first record. If the gap is before the sidecar's first record, the cause is the start of the process (the binary launch); record the measured time and its cause. If the gap is inside the sidecar, fix it there.
 
-**F212.1-3** — the recorded DOM mount baseline of pass value (iii). For each installed surface plugin, record the main page from the surface start request to the first content frame (`diagnostics.capture.start/stop`), and take the median of 5 runs with the load average. Make it a tracked window check under `e2e/`, and write the result in the plan table "F212.1-2".
+**F212.1-3** — the recorded DOM mount baseline of pass value (iii). For each installed surface plugin, record the main page from the surface start request to the first content frame (`diagnostics.capture.start/stop`), and take the median of 5 runs with the load average. Make it a tracked window check under `e2e/`, and write the median of each plugin, with the plugin version and the load average, in the result of F212.1-3 in `docs/features.md` (+ `.ko.md`), as F212.1-2 records its trace medians. Pass value (iii) in `docs/spec/plugin-processes.md` defines the baseline.
 
 ### 2. Checklist states
 
-Done: F212.3, F212.4 and F212.6 are `[o]`. F212.7 stays `[ ]` while F212.7a, F212.7b-1, F212.7c, F212.7d-1 and F212.7-9 are open.
+Done: F212.3, F212.4 and F212.6 are `[o]`. F212.7 stays `[ ]` while F212.7a, F212.7b-1, F212.7c and F212.7d-1 are open.
 
 ### 3. Declared UI (F212.8)
 
@@ -148,28 +148,33 @@ Done: F212.8 and all its children, including F212.8-6-3 (the source and transiti
 
 F212.9-1 (the specification `docs/spec/plugin-host.md`) and F212.9-2 (the native operation) are committed on `feat/plugin-host-F212.9`; F212.9-3 and F212.9-4 are in progress there.
 
-F212.9 is required, because a plugin whose sidebar section shows values while none of its views is open needs a plugin host (declared-ui.md, source order). The plan names the files state as the first case.
-- Spec first: plan native gap 3 (a platform operation that creates a plugin host web view attached to the window, not to a surface host), gap 7 (owner key `plugin:<id>`), and rule 5 (restart within limit (vi), state restored from the last saved value).
+F212.9 is required, because a plugin whose sidebar section shows values while none of its views is open needs a plugin host (declared-ui.md, source order). The files state is the first case.
+- Spec first: `docs/spec/plugin-processes.md` section "Plugin host" (a platform operation that creates a plugin host web view attached to the window, not to a surface host; owner key `plugin:<id>`) and rule 5 (restart within limit (vi), state restored from the last saved value).
 - F212.9a: measure the footprint and the throttle of a hidden host web view before F212.10.
 - Implement in native/darwin and both hosts, with contract cases, Go and Rust tests, and a native test. The view channel code of F212.7-2 is the pattern for the host channel.
 
 ### 5. Plan into specifications (F212.7-9)
 
-Before F212.15: move the accepted contract of `docs/plans/plugin-processes.md` into a new `docs/spec/plugin-processes.md` (+ko). Repoint every link, including `packages/plugin-api/terms.json` and `docs/spec/declared-ui.md` line 11, and remove the plan. Decide where the review records go: the specification has no history, so they go to the changelog entries or are dropped.
+Done: the accepted contract of the plan is `docs/spec/plugin-processes.md` (+ko), and the plan is removed. The review records of the plan are not carried over: each accepted resolution is a rule or a reason of `docs/spec/plugin-processes.md` or `docs/spec/declared-ui.md`, and the changelog entries of F212.2, F212.5-1 and F212.8-0 to F212.8-0-23 record each review and what it changed. The parts of the plan that are work, not contract, are in this document: the placement of section 6, the pass value rules of section 7, and the specification changes, rollback order and risks of section 8. A link to `docs/plans/plugin-processes.md` on another branch is repointed to `docs/spec/plugin-processes.md` when that branch merges main.
 
 ### 6. Plugin moves (F212.10)
 
-Each move is an item of its own plugin repository, made against main. The plan table "Layers and placement" gives the target of each plugin:
+Each move is an item of its own plugin repository, made against main. The table gives the target of each plugin under the layer rules of `docs/spec/plugin-processes.md`:
 
-| Plugin | Surface | Section | State | Sidecar |
-|---|---|---|---|---|
-| editor | view (text input, IME) | — | — | files |
-| flowmark | view | — | — | its own |
-| shell | declared UI if the vocabulary expresses it, otherwise view | — | — | shell |
-| files | — | declared tree, or a view when it needs rename, drag or a context menu | files sidecar, otherwise plugin host | files |
-| hwp | view with a document region | — | — | files |
-| browser | view with a document region | four sections as declared UI or card surfaces | — | — |
-| terminal | view with an image region | — | — | vt |
+| Plugin | Surface | Section | State and logic | Extension point | Sidecar |
+|---|---|---|---|---|---|
+| editor | view (CodeMirror, text input, IME) | — | — | imports the modules that contributing plugins declare, from the core root | files |
+| flowmark | view (free DOM) | — | — | — | its own |
+| shell | declared UI if the vocabulary expresses it, otherwise view; item F212.10-shell-layer sets it before the shell move | — | — | — | shell |
+| files | — | declared tree, or a view when it needs rename, drag or a context menu | moves to the files sidecar; a plugin host only when that is impossible | — | files |
+| hwp | view with a document region | — | — | — | files |
+| browser | view with a document region | the four sections each become declared UI or a card surface; item F212.10-browser-sections sets them before the browser move | — | — | — |
+| terminal | view with an image region and overlay screens | — | — | — | vt |
+
+- The items F212.10-shell-layer and F212.10-browser-sections are recorded in the checklists of the shell and browser plugin repositories, and no cell of the table stays open without such an item.
+- The modal page is out of scope, because no plugin uses it.
+- Moving the files state to a sidecar is an item of the files plugin and files sidecar repositories; whether the editor buffer moves is set by pass value (iv), in the editor repository.
+- Plugin releases with an `engines.soksak` range are published after the core release of F212.15; each is an item of its plugin repository, recorded as unreleased until F212.15 publishes the core version it requires.
 
 - Core names no plugin in code or tests (`make boundaries`). Each plugin repository checks its own sources.
 - Each plugin item measures its view before its release: (iii) first display, (v) display after a layout change, (viii) drag. Each plugin release follows the core release.
@@ -184,11 +189,13 @@ Each move is an item of its own plugin repository, made against main. The plan t
 - F212.13: the input method activation check of views, run with approval.
 - F212.14: the final measurement of every plugin view against (i), (ii), (iii), (iii-b), (v) and (viii).
 
-The pass values are in the plan, section "Pass values". A failed mechanism value ((v), (vi) or (viii)) stops the mechanism items. A failed plugin value stops only that plugin, and the person decides between accepting the cost and changing its layer.
+The pass values are in `docs/spec/plugin-processes.md`, section "Pass values". When a value is not met, record the measured values in the checklist. A failed mechanism value ((v), (vi) or (viii)) stops the mechanism items (F212.7b, F212.7c, F212.8a) and the items that depend on them. A failed plugin value ((i), (ii), (iii), (iii-b)) stops only that plugin, and the person decides between accepting the cost and changing its layer in a revision of the specification that goes to adversarial review. When the editor view footprint of (iv) exceeds 50 MB, add the item that moves the editor buffer and its analysis to a sidecar after F212.9. Completion of F212 requires (i), (ii), (iii), (iii-b), (v), (vi) and (viii) to pass and (iv) to be measured.
 
 ### 8. Removal and release
 
-- F212.11: remove the page mount of plugin surfaces, parking, the `dom` composition, and the page mount of module sections and state modules. Manifests then accept only the new form.
+- F212.11: remove the page mount of plugin surfaces, parking, the `dom` composition, and the page mount of module sections and state modules. Manifests then accept only the new form. The same item changes the specification statements of the page mount: the one app DOM WebView that owns the DOM that plugins mount (`docs/spec/plugins.md`, section "Surface module ownership" and the "DOM tabs" paragraph), the single application DOM and the reload that replaces mounted plugin documents (`docs/spec/surface-composition.md`), and the coordinates of plugin modules in the shared application DOM (`docs/spec/exposure.md`), with their translations.
+- Rollback: a core stage is rolled back only after the plugin releases that require it are rolled back to their previous `engines` range and released. F212.10 is rolled back by releasing each plugin with its previous `engines` range. F212.11 removes the old paths, so its commit is reverted only after F212.10 is rolled back. The rollback order of each stage is recorded in its checklist item.
+- Risks: IME, dragging and layout, the process count and the first display time, and the Wails call path.
 - F212.15: release core only when no development item is open; list the open items first. Then release each plugin and the files and shell sidecars.
 
 ## Held items

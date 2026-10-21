@@ -496,6 +496,12 @@
         "바이너리 id"
       ],
       "allowed": []
+    },
+    {
+      "term": "plugin host state",
+      "definition": "The value that the host page of a plugin saves through its channel and that the host keeps for the next start of the page (docs/spec/plugin-host.md).",
+      "rejected": [],
+      "allowed": []
     }
   ]
 }

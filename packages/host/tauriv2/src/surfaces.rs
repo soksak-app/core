@@ -990,6 +990,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         window
             .state::<WindowSidecars>()
             .surface_opened(&plugin, &surface);
+        crate::plugin_host_channel::surface_opened(window, &plugin);
     }
     // Even if the image raster update fails after the placement was fitted, no started placement remains. A cancel
     // commits the transaction, so the title bar is restored first.

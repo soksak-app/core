@@ -1,7 +1,9 @@
 // Runs the tests of a Rust package one at a time, each as a process of its own with its own limit, through the test runner
 // (docs/operations/examples.md#test-runner). Cargo names the test executables (`--message-format=json`), each executable names its
-// tests (`--list`), and each test runs as `<executable> --exact <name>` in the package folder, as cargo runs it. A test that does
-// not end is killed at its limit and reported with its name and elapsed time, and the next test still runs.
+// tests (`--list`), and each test runs as `<executable> --exact <name>` in the package folder, as cargo runs it. The documentation
+// tests of the library (`cargo test --doc -- --list`) run the same way, each as `cargo test --doc -- <name>`, because cargo has no
+// executable for them. A test that does not end is killed at its limit and reported with its name and elapsed time, and the next
+// test still runs.
 // Usage: node scripts/rust-tests.mjs --manifest <Cargo.toml> --package <package> [--features <list>] [--test <name>]
 //   [--count <n>] [--timeout <seconds>]
 import { execFileSync } from 'node:child_process';
@@ -14,7 +16,7 @@ import { runTests } from './test-runner.mjs';
 /** The limit of one test when `--timeout` is not given. */
 export const TEST_TIMEOUT_MS = 120_000;
 
-/** The names of the tests in the output of `<executable> --list`. */
+/** The names of the tests in the output of `<executable> --list` or `cargo test --doc -- --list`. */
 export function testNames(listing) {
   return listing.split('\n').map((line) => /^(.+): test$/.exec(line)?.[1]).filter((name) => name !== undefined);
 }
@@ -36,36 +38,53 @@ function cargo(args, { cwd } = {}) {
   return execFileSync('cargo', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
 }
 
-/** The folder of the package, where cargo runs its tests. */
-function packageFolder(manifest, pkg) {
+/** The package of the manifest, as `cargo metadata` describes it: its folder and whether its library has documentation tests. */
+function packageOf(manifest, pkg) {
   const metadata = JSON.parse(cargo(['metadata', '--no-deps', '--format-version', '1', '--manifest-path', manifest]));
   const found = metadata.packages.find((item) => item.name === pkg);
   if (found === undefined) throw new Error(`${pkg} is not a package of ${manifest}`);
-  return dirname(found.manifest_path);
+  return {
+    folder: dirname(found.manifest_path),
+    doctests: (found.targets ?? []).some((target) => target.doctest === true),
+  };
 }
 
 /**
  * Runs the tests of the package `count` times (`{manifest, package, features?, test?, count, timeoutMs, write}`), each test as
- * `<executable> --exact <name>`. Resolves with the exit status: 0 when every test of every run passed and ran.
+ * `<executable> --exact <name>` or, for a documentation test, as `cargo test --doc -- <name>`. Resolves with the exit status: 0 when
+ * every test of every run passed and ran.
  */
 export async function runRustTests({ manifest, package: pkg, features, test, count, timeoutMs, write }) {
   const cargoArgs = ['test', '-q', '--manifest-path', manifest, '-p', pkg, ...(features ? ['--features', features] : [])];
   const executables = testExecutables(cargo([...cargoArgs, '--no-run', '--message-format=json']));
-  if (executables.length === 0) throw new Error(`${pkg} has no test executables`);
-  const cwd = packageFolder(manifest, pkg);
+  const { folder: cwd, doctests } = packageOf(manifest, pkg);
+  if (executables.length === 0 && !doctests) throw new Error(`${pkg} has no test executables`);
   const listed = executables.flatMap(({ path, target }) => testNames(execFileSync(path, ['--list'], {
     cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'],
   })).map((name) => ({ path, target, name })));
+  // A named test that an executable holds needs no listing of the documentation tests.
+  if (doctests && !(test !== undefined && listed.some((item) => item.name === test))) {
+    // Cargo builds the documentation tests while it lists them; a library with none lists nothing.
+    for (const name of testNames(cargo([...cargoArgs, '--doc', '--', '--list'], { cwd }))) {
+      listed.push({ doc: true, name });
+    }
+  }
   if (listed.length === 0) throw new Error(`${pkg} has no tests`);
   const chosen = test === undefined ? listed : listed.filter((item) => item.name === test);
   if (chosen.length === 0) throw new Error(`${pkg} has no test named ${test}`);
   // A name that two executables hold is shown with its target, so each test has a name of its own in the runner.
   const occurrences = new Map();
   for (const item of listed) occurrences.set(item.name, (occurrences.get(item.name) ?? 0) + 1);
-  const tests = chosen.map((item) => ({
-    name: occurrences.get(item.name) > 1 ? `${item.target} ${item.name}` : item.name,
-    command: item.path, args: ['--exact', item.name], cwd,
-  }));
+  const tests = chosen.map((item) => {
+    if (item.doc) {
+      // A documentation test is filtered by its name as a substring; the runner requires one passed test in its output.
+      return { name: item.name, command: 'cargo', args: [...cargoArgs, '--doc', '--', item.name], cwd };
+    }
+    return {
+      name: occurrences.get(item.name) > 1 ? `${item.target} ${item.name}` : item.name,
+      command: item.path, args: ['--exact', item.name], cwd,
+    };
+  });
   for (let run = 1; run <= count; run += 1) {
     write(`START ${pkg}: run ${run} of ${count}, ${tests.length} tests, each limited to ${timeoutMs / 1000}s`);
     const { results } = await runTests({ tests, concurrency: 1, defaultTimeoutMs: timeoutMs, write });

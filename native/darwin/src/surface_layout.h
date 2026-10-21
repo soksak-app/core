@@ -39,7 +39,7 @@ void surfaceLayoutStartPage(void *owner, uint64_t ticket, double height, void (^
 // Joins the view webview to the open layout transaction of owner with ticket. The transaction does not commit until the
 // joined view presents or the view is abandoned: the commit is deferred, and the next transaction of any window starts after
 // the deferred commit. presented is called on the main thread once, when the view presents. Returns false when no transaction of
-// owner with ticket is open or the transaction is already committing (docs/plans/plugin-processes.md, rule 6).
+// owner with ticket is open or the transaction is already committing (docs/spec/plugin-processes.md, rule 6).
 bool surfaceLayoutJoinView(void *owner, uint64_t ticket, void *viewWebview, void (^presented)(void));
 // Ends the wait of the view webview for the transaction of owner without a presentation, so the deferred commit can finish.
 // The presented callback of that join is not called afterward. Returns false when the view has no open join of owner.

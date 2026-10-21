@@ -23,7 +23,6 @@ const sameSource = (a, b) => (a === null ? b === null : b !== null && a.id === b
  *
  *     body          the section element that draws the accepted value
  *     options       the options of receive (declared, hasIcon, bind)
- *     orientation() the current orientation of the section
  *     choose()      the chosen source {id, surface}, or null (chooseSource)
  *     channel(source) {send, onMessage} of the snapshot channel of a source, or null when the source has no channel
  *     pull(source)  a promise of the pull reply {seq, value}
@@ -31,12 +30,12 @@ const sameSource = (a, b) => (a === null ? b === null : b !== null && a.id === b
  *     failed(error) receives the error of a pull that failed
  *
  * reconcile() applies the choice of the source: a change of source clears the section, removes the baseline and withdraws the error,
- * subscribes to the new channel, and pulls the value of the new source once. orientationChanged() checks the accepted value for the
- * new orientation and pulls once again. A snapshot or a pull reply of a source that is no longer chosen is discarded, and so is a
+ * subscribes to the new channel, and pulls the value of the new source once. An orientation change does not reach the section: its
+ * accepted value stays valid in every orientation. A snapshot or a pull reply of a source that is no longer chosen is discarded, and so is a
  * pull reply whose seq is lower than the seq of the last accepted value. state() reports the section state of core.sidebars:
  * mounted while the section draws an accepted value, and the text of the current rejection while the last value is rejected.
  */
-export function createDeclaredSection({ statusId, body, options, orientation, choose, channel, pull, skipped, failed }) {
+export function createDeclaredSection({ statusId, body, options, choose, channel, pull, skipped, failed }) {
   const owner = statusId.slice(0, statusId.indexOf("."));
   const status = statusId.slice(statusId.indexOf(".") + 1);
   const receiveOptions = { ...options, owner, status };
@@ -48,7 +47,7 @@ export function createDeclaredSection({ statusId, body, options, orientation, ch
   let rejected = null;
 
   function accept(seq, value) {
-    const ok = receive(body, value, { ...receiveOptions, orientation: orientation() });
+    const ok = receive(body, value, receiveOptions);
     if (ok) {
       lastSeq = seq;
       accepted = value;
@@ -106,7 +105,7 @@ export function createDeclaredSection({ statusId, body, options, orientation, ch
         onSnapshot: (received, seq, value, count) => {
           // The snapshot names the status inside the plugin; the channel is per plugin (docs/spec/declared-ui.md).
           if (received !== status || current === null || current.id !== next.id) return;
-          // The count of the overwritten values reaches the main page in each snapshot (docs/plans/plugin-processes.md, rule 2).
+          // The count of the overwritten values reaches the main page in each snapshot (docs/spec/plugin-processes.md, rule 2).
           // default: a section without a skipped receiver writes no trace event of the overwritten values.
           if (count > 0) skipped?.(count);
           accept(seq, value);
@@ -116,13 +115,7 @@ export function createDeclaredSection({ statusId, body, options, orientation, ch
     pullCurrent();
   }
 
-  function orientationChanged() {
-    if (current === null) return;
-    if (accepted !== null) accept(lastSeq, accepted);
-    pullCurrent();
-  }
-
   /** The state that core.sidebars reports (docs/spec/declared-ui.md, sidebar section form). */
   const state = () => ({ mounted: accepted !== null, error: rejected });
-  return { reconcile, orientationChanged, close: leave, state };
+  return { reconcile, close: leave, state };
 }

@@ -178,6 +178,27 @@ test('section layout rejects an absent or invalid orientation explicitly',()=>{
  } finally {clearSet(container);container.remove();}
 });
 
+test('a declared tree in a horizontal body takes a full line of the row',()=>{
+ const css=readFileSync(new URL('../app.css',import.meta.url),'utf8');
+ const styled=new JSDOM(`<style>${css}</style><div class="set" data-orientation="horizontal"><div class="set__body" data-declared><div class="declared-tree"></div></div></div>`);
+ try {
+  const tree=styled.window.document.querySelector('.declared-tree');
+  assert.equal(styled.window.getComputedStyle(tree).flexBasis,'100%','a tree in a horizontal body must take the width of its line');
+ } finally {styled.window.close();}
+});
+
+test('a declared tree scrolls horizontally inside its box with a visible thin scrollbar in every orientation',()=>{
+ const css=readFileSync(new URL('../app.css',import.meta.url),'utf8');
+ const styled=new JSDOM(`<style>${css}</style><div class="set" data-orientation="horizontal"><div class="set__body" data-declared><div class="declared-tree"></div></div></div><div class="set" data-orientation="vertical"><div class="set__body" data-declared><div class="declared-tree"></div></div></div>`);
+ try {
+  for (const tree of styled.window.document.querySelectorAll('.declared-tree')) {
+   const style=styled.window.getComputedStyle(tree);
+   assert.equal(style.overflowX,'auto','a tree wider than its box must scroll inside the box');
+   assert.equal(style.scrollbarWidth,'thin','the scroll of a tree must show a scrollbar');
+  }
+ } finally {styled.window.close();}
+});
+
 test('horizontal list sections use a row while vertical lists use a column',()=>{
  const css=readFileSync(new URL('../app.css',import.meta.url),'utf8');
  const styled=new JSDOM(`<style>${css}</style><div class="set" data-layout="list" data-orientation="horizontal"></div><div class="set" data-layout="list" data-orientation="vertical"></div>`);
@@ -300,7 +321,7 @@ test("a declared section whose status the active surface did not register stays 
   }
 });
 
-test("an orientation change checks the accepted declared value again and pulls once", async () => {
+test("an orientation change keeps the accepted declared tree and makes no pull", async () => {
   const plugin = "probe-d3";
   declareDeclaredPlugin(plugin, "view-a");
   const listeners = new Map();
@@ -325,14 +346,15 @@ test("an orientation change checks the accepted declared value again and pulls o
     assert.equal(pulls, 1, "the source was not pulled once at the load");
     drawSet(container, "rail-d3", set, { card: "rail-d3", surface: "view-a", orientation: "horizontal" });
     await settle();
-    assert.equal(report().mounted, false, "the accepted value was not checked again at the orientation change");
-    assert.equal(body.textContent, "/elements/0: tree cannot be drawn in a horizontal section", "the accepted value was not checked again at the orientation change");
-    assert.equal(pulls, 2, "the orientation change did not pull once");
+    assert.equal(report().mounted, true, "the tree was not drawn in a horizontal section");
+    assert.equal(report().error, null, "the tree in a horizontal section reported an error");
+    assert.equal(body.textContent, "가지", "the tree was not drawn in a horizontal section");
+    assert.equal(pulls, 1, "the orientation change pulled the source");
     drawSet(container, "rail-d3", set, { card: "rail-d3", surface: "view-a", orientation: "vertical" });
     await settle();
-    assert.equal(report().mounted, true, "the value of the new pull was not drawn after the orientation returned");
-    assert.equal(body.textContent, "가지", "the value of the new pull was not drawn after the orientation returned");
-    assert.equal(pulls, 3, "the orientation change did not pull once");
+    assert.equal(report().mounted, true, "the tree was not kept after the orientation returned");
+    assert.equal(body.textContent, "가지", "the tree was not kept after the orientation returned");
+    assert.equal(pulls, 1, "the orientation change pulled the source");
   } finally {
     clearSet(container);
     container.remove();

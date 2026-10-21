@@ -129,15 +129,13 @@ test("a pull reply with a lower seq than the last accepted value is discarded", 
   const h = await harness();
   h.world.registrants = ["view-a"];
   h.world.active = "view-a";
-  h.world.pullReply = { seq: 5, value: list(["x"]) };
+  h.world.deferPull = true;
   h.section.reconcile();
-  await settle();
+  h.push("view-a", 5, list(["x"]));
   assert.deepEqual(h.labels(), ["x"]);
-  h.world.orientation = "horizontal";
-  h.world.pullReply = { seq: 2, value: list(["old"]) };
-  h.section.orientationChanged();
+  h.world.deferred[0]({ seq: 2, value: list(["old"]) });
   await settle();
-  assert.deepEqual(h.world.pulls, ["view-a", "view-a"], "the orientation change did not pull once");
+  assert.deepEqual(h.world.pulls, ["view-a"], "the source was pulled more than once");
   assert.deepEqual(h.labels(), ["x"], "a pull reply with a lower seq was drawn");
 });
 
@@ -169,22 +167,6 @@ test("a rejected value is shown in the section, and a change of source withdraws
   h.world.active = "view-b";
   h.section.reconcile();
   assert.equal(h.body.dataset.error, undefined, "the change of source did not withdraw the error");
-});
-
-test("an orientation change checks the accepted value again and pulls once from its source", async () => {
-  const h = await harness();
-  h.world.registrants = ["view-a"];
-  h.world.active = "view-a";
-  h.world.pullReply = { seq: 1, value: tree([leaf("l")]) };
-  h.section.reconcile();
-  await settle();
-  assert.deepEqual(h.labels(), ["l"]);
-  h.world.orientation = "horizontal";
-  h.world.pullReply = { seq: 2, value: tree([leaf("l")]) };
-  h.section.orientationChanged();
-  await settle();
-  assert.equal(h.body.textContent, "/elements/0: tree cannot be drawn in a horizontal section", "the accepted value was not checked again");
-  assert.equal(h.world.pulls.length, 2, "the orientation change did not pull once");
 });
 
 test("a process end removes its registration, which clears the section and withdraws its error", async () => {

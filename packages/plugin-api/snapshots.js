@@ -1,4 +1,4 @@
-// The declared UI snapshots of a plugin process boundary (docs/plans/plugin-processes.md, rule 2 and messages and events). The
+// The declared UI snapshots of a plugin process boundary (docs/spec/plugin-processes.md, rule 2 and messages and events). The
 // module runs over the send function and the onMessage subscription of a transport, so the same code serves a view, a plugin
 // host and the workbench. The caller routes the messages of this channel to the module; the call envelope goes to createCalls.
 //

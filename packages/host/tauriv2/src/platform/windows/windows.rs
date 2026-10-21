@@ -273,6 +273,17 @@ impl Platform for Windows {
     fn close_document(&self, document: Handle) -> Result<(), String> {
         unsupported::close_document(document)
     }
+    fn create_plugin_host(
+        &self,
+        window: Handle,
+        store: &str,
+        folder: &str,
+        plugin: &str,
+        channel: &str,
+        changed: Box<dyn Fn(String)>,
+    ) -> Result<Handle, String> {
+        unsupported::create_plugin_host(window, store, folder, plugin, channel, changed)
+    }
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String> {
         unsupported::view_id(view)
     }

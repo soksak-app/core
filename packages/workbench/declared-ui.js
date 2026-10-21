@@ -29,7 +29,7 @@ const ROWS = [
   "size", "root", "elements", "rootCount", "elementObject", "itemObject", "nodeObject", "missingKind", "kindString",
   "unknownKind", "itemCount", "nodeCount", "levels", "textLength", "keyLength", "keyPattern", "paramKeys", "paramKeyLength",
   "paramStringLength", "paramValueType", "unknownField", "missing", "requiresCommand", "wrongType", "control", "duplicateKey",
-  "commandNoOwner", "commandOwner", "commandUndeclared", "icon", "expandedLeaf", "treeHorizontal",
+  "commandNoOwner", "commandOwner", "commandUndeclared", "icon", "expandedLeaf",
 ];
 const RANK = Object.fromEntries(ROWS.map((name, index) => [name, index]));
 
@@ -69,6 +69,7 @@ const NODE_SPEC = {
   enabled: { type: "boolean", needsCommand: true },
   expanded: { type: "boolean", branchOnly: true },
   selected: BOOLEAN,
+  detail: { type: "text" },
   children: { type: "children" },
 };
 const ELEMENT_SPECS = {
@@ -275,9 +276,6 @@ function checkElement(violations, element, pointer, ctx, siblings) {
     violations.fail("unknownKind", `${pointer}/kind`, `unknown kind ${slot(element.kind)}`);
     return;
   }
-  if (element.kind === "tree" && ctx.orientation === "horizontal") {
-    violations.fail("treeHorizontal", pointer, "tree cannot be drawn in a horizontal section");
-  }
   checkObject(violations, element, pointer, ELEMENT_SPECS[element.kind], ctx, siblings, 0, true);
 }
 
@@ -287,7 +285,7 @@ export function validateValue(value, options) {
     throw new DeclaredUIRejection("/", `exceeds ${MAX_BYTES} bytes`);
   }
   if (!isPlainObject(value)) throw new DeclaredUIRejection("/", "root must be an object");
-  const ctx = { owner: options.owner, declared: options.declared, hasIcon: options.hasIcon, orientation: options.orientation };
+  const ctx = { owner: options.owner, declared: options.declared, hasIcon: options.hasIcon };
   const violations = new Violations();
   for (const name of Object.keys(value)) {
     if (name !== "elements") violations.fail("unknownField", "/", `unknown field ${slot(name)}`);
@@ -451,7 +449,8 @@ function paintNode(wrap, node, path, ctx) {
   } else if (control) {
     control.remove();
   }
-  paintLabel(childWithout(row, ["declared-expand"]), node, { key: ctx.tree, path, bind: ctx.bind });
+  paintLabel(childWithout(row, ["declared-expand", "declared-detail"]), node, { key: ctx.tree, path, bind: ctx.bind });
+  paintDetail(row, Object.hasOwn(node, "detail") ? node.detail : undefined);
   let children = childOf(wrap, "declared-children");
   if (branch && expanded) {
     if (!children) {

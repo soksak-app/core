@@ -392,6 +392,17 @@ impl Platform for Darwin {
         document::close(document);
         Ok(())
     }
+    fn create_plugin_host(
+        &self,
+        window: Handle,
+        store: &str,
+        folder: &str,
+        plugin: &str,
+        channel: &str,
+        changed: Box<dyn Fn(String)>,
+    ) -> Result<Handle, String> {
+        document::create_plugin_host(window, store, folder, plugin, channel, changed)
+    }
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String> {
         Ok(webview::id(view))
     }
