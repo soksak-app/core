@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F222: pre-push hook이 workflow 시험이 요구하는 형태인 `make -C "$(git rev-parse --show-toplevel)" push-check`를 다시 돌린다.
+- F223: window-check source 감사가 `report`로 관찰을 기록하는 timer를 받고, mock 시간으로 도는 harness 시험에는 timer 규칙을 적용하지 않는다. 이유는 주석에 적는다.
+- F221: 생성된 event class 표를 catalog에 맞게 다시 만들고, `make push-check`가 event-classes 시험을 돌려 못 미친 표가 관문에서 실패하게 한다.
 - F212.6a-1-3-2-2: page close 멈춤의 원인을 특정했다. `CFRunLoopWakeUp`의 pthread mutex는 main run loop의 `_lock`이며, main thread가 WebKit page close 일을 하는 동안 짧게 반복해 잡는다. 뒤따르는 대기자는 그 뒤에 줄 서고 IPC receive queue와의 원형 대기가 멈춤을 늘린다. 원인이 host code가 아니므로 코드는 바꾸지 않는다.
 - F212: `docs/plans/plugin-processes-handoff.md`가 F212와 그 옆 항목의 남은 작업, 각 branch와 worktree의 상태, 작업 규칙, 항목마다의 시험 명령을 적는다.
 - F219: record을 읽는 Tauri host의 restart-limit 시험 두 개(`packages/host/tauriv2/tests/sidecars_test.rs`의 `stops_at_the_fourth_failure_within_the_window`와 `surface_open_clears_the_restart_limit`)가 file의 `SERIAL` mutex를 잡는다. 둘 다 parent process에서 process 전역 record writer를 붙이고, 한 시험의 attach가 다른 시험의 event를 자신의 log으로 보냈으며, 전체 suite에서 한 번 `the opened surface recorded no host.trace.sidecar.restart-reset`으로 나타났다. Red: 변경 전 코드에서 두 시험의 order run이 5회 중 5회 `the stop recorded no host.sidecar.restart-limit error event`로 실패했다. Green: order run이 5회 중 5회 통과하고, 시험이 단독으로 통과한다(`make rust-repeat COUNT=1 TEST=surface_open_clears_the_restart_limit`). 전체 package 실행은 F218 checklist가 끝난 뒤 최종 통과로 남는다.
