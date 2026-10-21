@@ -45,7 +45,8 @@
     "contract/view-wire.json",
     "contract/create-binder.json",
     "contract/screen-hash.json",
-    "contract/draw-list.json"
+    "contract/draw-list.json",
+    "contract/manifest.json"
   ],
   "bin": {
     "soksak-exposure": "./exposure-check.js",

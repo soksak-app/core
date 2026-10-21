@@ -1,0 +1,93 @@
+{
+  "surface": "packages/plugin-api/index.js#validateManifest",
+  "description": "Ordered validator calls fix acceptance of a valid section manifest and named refusal of a reserved id and an unknown member.",
+  "cases": [
+    {
+      "id": "manifest.accepts-declared-sections",
+      "steps": [
+        {
+          "call": {
+            "manifest": {
+              "id": "probe",
+              "name": "Probe",
+              "description": "Sample.",
+              "sections": [
+                {
+                  "id": "probe.list",
+                  "name": "List",
+                  "module": "ui/list.js"
+                }
+              ]
+            }
+          },
+          "output": {
+            "accepted": true,
+            "result": {
+              "id": "probe",
+              "name": "Probe",
+              "description": "Sample.",
+              "sections": [
+                {
+                  "id": "probe.list",
+                  "name": "List",
+                  "module": "ui/list.js"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "manifest.refuses-reserved-core-id",
+      "steps": [
+        {
+          "call": {
+            "manifest": {
+              "id": "core",
+              "name": "Probe",
+              "description": "Sample.",
+              "sections": [
+                {
+                  "id": "probe.list",
+                  "name": "List",
+                  "module": "ui/list.js"
+                }
+              ]
+            }
+          },
+          "output": {
+            "accepted": false,
+            "error": "plugin.json: plugin id core is reserved for the core root"
+          }
+        }
+      ]
+    },
+    {
+      "id": "manifest.refuses-unknown-field",
+      "steps": [
+        {
+          "call": {
+            "manifest": {
+              "id": "probe",
+              "name": "Probe",
+              "description": "Sample.",
+              "sections": [
+                {
+                  "id": "probe.list",
+                  "name": "List",
+                  "module": "ui/list.js"
+                }
+              ],
+              "extra": true
+            }
+          },
+          "output": {
+            "accepted": false,
+            "error": "plugin.json: unknown field extra"
+          }
+        }
+      ]
+    }
+  ]
+}

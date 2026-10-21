@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F238-c-27: 유효한 section-only plugin, 예약된 `core` id, 알 수 없는 필드에 대한 순서 있는 manifest validator 사례를 공개한다. core 테스트는 각 호출을 `validateManifest`에 실행하며 공개 사례 회귀 검사가 소유 validator 스위트와 함께 38/38 통과한다. diagnostics validator는 계속 미완료다.
+
 - F238-c-27: keyed element identity와 update, 순서 조정/reconciliation, 중복 key 거부, 관리되지 않는 자식 제거를 위한 순서 있는 `drawList` 사례를 공개한다. core 테스트는 각 호출을 `list.js`에 실행하며 공개 사례 회귀 검사는 5/5 통과한다. manifest와 diagnostics validator는 계속 미완료다.
 
 - F238-c-27: 표준 bytes, SHA-256 결과, screen-message 변환, 이름 있는 거부 오류에 대한 순서 있는 `screenHash` 사례를 공개한다. core 테스트는 각 단계를 `screen-hash.js`에 실행하며 공개 사례 회귀 검사가 5/5 통과한다. `drawList`와 manifest/diagnostics validator는 계속 미완료다.

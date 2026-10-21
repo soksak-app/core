@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F238-c-27: Publish ordered manifest validator cases for a valid section-only plugin, the reserved `core` id, and an unknown field. Core tests execute each call against `validateManifest`; the published-case regression passes with the owning validator suite (38/38). The diagnostics validator remains open.
+
 - F238-c-27: Publish ordered `drawList` cases for keyed element identity and updates, ordering/reconciliation, duplicate-key refusal, and unmanaged-child removal. Core tests execute each call against `list.js`; the published-case regression passes 5/5. The manifest and diagnostics validators remain open.
 
 - F238-c-27: Publish ordered `screenHash` cases for canonical bytes, SHA-256 output, screen-message projection, and named refusal errors. Core tests execute every step against `screen-hash.js`; the published-case regression passes 5/5. `drawList` and the manifest/diagnostics validators remain open.
