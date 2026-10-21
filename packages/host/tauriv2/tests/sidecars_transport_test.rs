@@ -1740,6 +1740,19 @@ struct ReplaceService {
     ended: Receiver<std::time::Instant>,
     /// Receives when the first connection ends, whichever side ends it.
     first_ended: Receiver<()>,
+    /// The identifier of the endpoint process that stands for the service.
+    process_id: u32,
+    /// The endpoint process, which ends with the fixture when the fixture is dropped.
+    process: Arc<Mutex<std::process::Child>>,
+}
+
+impl Drop for ReplaceService {
+    fn drop(&mut self) {
+        let mut process = self.process.lock().unwrap();
+        // The process may have ended after the shutdown answer already; then the kill fails and the wait returns its status.
+        let _ = process.kill();
+        let _ = process.wait();
+    }
 }
 
 fn serve_replace_service(
@@ -1753,9 +1766,13 @@ fn serve_replace_service(
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("replace.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
-    // The endpoint names a process that stands for the service and ends after the shutdown answer.
+    // The endpoint names a process that stands for the service and ends after the shutdown answer. Its output is not
+    // inherited: a process that holds the output of the test keeps the runner waiting after the test ends.
     let process = std::process::Command::new("sleep")
         .arg("60")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .spawn()
         .expect("spawn sleep");
     let process_id = process.id();
@@ -1854,6 +1871,8 @@ fn serve_replace_service(
         second,
         ended,
         first_ended,
+        process_id,
+        process,
     }
 }
 
@@ -2192,6 +2211,19 @@ fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owne
             .any(|operation| operation == "close-owner" || operation == "shutdown"),
         "the stop after the detach sent to the service: {operations:?}"
     );
+    // The endpoint process of the fixture ends with the test. A process that outlives the test keeps the output of
+    // the test open, so the runner waits for it to end.
+    let process_id = service.process_id;
+    drop(service);
+    assert!(
+        !process_is_alive(process_id),
+        "the endpoint process {process_id} of the fixture outlived the test"
+    );
+}
+
+/// Whether a process of this identifier exists, which signal 0 checks without sending a signal.
+fn process_is_alive(process_id: u32) -> bool {
+    unsafe { libc::kill(process_id as i32, 0) == 0 }
 }
 
 // contract: sidecars-transport.persistent.connection-events
