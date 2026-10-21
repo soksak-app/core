@@ -6,7 +6,7 @@ Declared UI is a sidebar section whose every element is one of the vocabulary el
 
 ## Scope
 
-- The vocabulary has four elements: `list`, `tree`, `command`, and `status-line`. Core declares no other element. A screen with text input, free DOM, a canvas, a document region, or an image region is a view ([plugin processes](../plans/plugin-processes.md) layer rules). A tree that needs inline rename, drag and drop, or a context menu placed at a pointer is a view for the same reason. Core declares no element for those interactions.
+- The vocabulary has four elements: `list`, `tree`, `button`, and `status-line`. Core declares no other element. A screen with text input, free DOM, a canvas, a document region, or an image region is a view ([plugin processes](../plans/plugin-processes.md) layer rules). A tree that needs inline rename, drag and drop, or a context menu placed at a pointer is a view for the same reason. Core declares no element for those interactions.
 - The workbench draws declared UI only in sidebar sections in this version. Cards and other screens do not draw declared UI.
 - The plugin's repository declares each of its surfaces as declared UI or as a view. Core does not classify a plugin's surface.
 - The transport of a snapshot is in [plugin processes](../plans/plugin-processes.md) rule 2. The name, command, and DOM rules are in [exposure](exposure.md). The sidebar layout is in [plugins](plugins.md#sections).
@@ -15,7 +15,9 @@ Declared UI is a sidebar section whose every element is one of the vocabulary el
 
 ## Declared status
 
-A plugin declares the status that carries a declared UI value in `plugin.json` under `exposes.status`. Its `schema` is the subset that [exposure](exposure.md#entry-fields) accepts:
+A status is a declared UI status when a sidebar section names it with the `status` form of its section declaration ([sidebar section form](#sidebar-section-form)). A status is also declared UI when a surface declares it as declared UI. This version defines no surface declaration, so in this version a status is declared UI only through the section form. No schema marker identifies a declared UI status.
+
+A declared UI status declares its `schema` in `exposes.status` ([exposure](exposure.md#entry-fields)) as the subset that the exposure specification accepts:
 
 ```json
 {"type": "object", "properties": {"elements": {"type": "array"}}}
@@ -31,33 +33,34 @@ A value is an object with the field `elements`, an array of 0 to 64 elements. Ea
 
 ## Element kinds
 
-The kinds are `list`, `tree`, `command`, and `status-line`. Every object accepts only the fields that its kind lists. An unlisted field is rejected.
+The kinds are `list`, `tree`, `button`, and `status-line`. Every object accepts only the fields that its kind lists. An unlisted field is rejected.
 
 | Kind | Field | Type | Required | Limit and meaning |
 | --- | --- | --- | --- | --- |
-| `command` | `key` | string | yes | Key rules below. A button that runs `command`. |
-| `command` | `label` | string | yes | Plain text, at most 500 characters. |
-| `command` | `command` | string | yes | A declared command name ([binding](#binding)). |
-| `command` | `params` | object | no | Parameters, see [Parameters](#parameters). |
-| `command` | `icon` | string | no | A name of the core icon table (`packages/workbench/icons.js`). |
-| `command` | `enabled` | boolean | no | `false` disables the button. Default `true`. |
+| `button` | `key` | string | yes | Key rules below. A button that runs `command`. |
+| `button` | `label` | string | yes | Plain text, at most 500 characters. |
+| `button` | `command` | string | yes | A command of the plugin ([binding](#binding)). |
+| `button` | `params` | object | no | Parameters, see [Parameters](#parameters). |
+| `button` | `icon` | string | no | A name of the core icon table (`packages/workbench/icons.js`). |
+| `button` | `enabled` | boolean | no | `false` disables the button. Default `true`. |
 | `list` | `key` | string | yes | Key rules below. |
 | `list` | `empty` | string | yes | Plain text, at most 500 characters. Drawn in place of the rows when `items` is empty. Every list states its empty state, as [plugins](plugins.md#sections) requires for every list. |
 | `list` | `items` | array | yes | At most 1000 items. Each item has the fields below. |
 | `list` item | `key` | string | yes | Unique within the list. |
 | `list` item | `label` | string | yes | Plain text, at most 500 characters. |
 | `list` item | `command` | string | no | With `command`, the item is a button; without it, the item is a static row. |
-| `list` item | `params`, `icon`, `enabled` | as `command` | no | Same rules as in `command`. |
+| `list` item | `params`, `icon`, `enabled` | as `button` | no | Same rules as in `button`. |
 | `list` item | `selected` | boolean | no | Draws the item as selected. Default `false`. No workbench state is kept for it. |
 | `list` item | `detail` | string | no | Plain text, at most 500 characters, drawn after the label. |
 | `tree` | `key` | string | yes | Key rules below. |
+| `tree` | `empty` | string | yes | Plain text, at most 500 characters. Drawn in place of the nodes when `nodes` is empty. |
 | `tree` | `nodes` | array | yes | Root nodes. At most 5000 nodes in the whole tree, at most 16 levels (root nodes are level 1). A tree is not drawn in a horizontal section ([sidebar section form](#sidebar-section-form)). |
 | `tree` node | `key` | string | yes | Unique among its siblings. |
 | `tree` node | `label` | string | yes | Plain text, at most 500 characters. |
-| `tree` node | `command`, `params`, `icon`, `enabled` | as `command` | no | A node with `command` runs it when its label is pressed. |
-| `tree` node | `expanded` | boolean | no | The plugin's value for a branch. Default `false`. [Status mapping](#status-mapping) gives its precedence. |
+| `tree` node | `command`, `params`, `icon`, `enabled` | as `button` | no | A node with `command` runs it when its label is pressed. |
+| `tree` node | `expanded` | boolean | no | The plugin's value for a branch. Allowed only on a branch, so a leaf that carries it is rejected. Default `false`. [Status mapping](#status-mapping) gives its precedence. |
 | `tree` node | `selected` | boolean | no | Draws the node as selected. Default `false`. The plugin's value applies in every accepted value. |
-| `tree` node | `children` | array | no | Child nodes, with the same rules. A node with `children` is a branch. |
+| `tree` node | `children` | array | no | Child nodes, with the same rules. A node whose `children` is present and not empty is a branch; any other node is a leaf. |
 | `status-line` | `key` | string | yes | Key rules below. |
 | `status-line` | `text` | string | yes | Plain text, at most 500 characters. Drawn as one line. |
 
@@ -67,7 +70,7 @@ Text rules: a text field is plain text. The workbench draws it as text content, 
 
 The `status-line` has no tone and no error value. An error reaches the user only through the display path that writes it to the application log ([AGENTS](../../AGENTS.md)), so a declared element cannot draw an error.
 
-A `list` is a column of rows, with its `empty` text when it has none. A `tree` is an indented outline. A `command` is one button. A `status-line` is one line of text.
+A `list` is a column of rows, with its `empty` text when it has none. A `tree` is an indented outline, with its `empty` text when it has none. A `button` is one button. A `status-line` is one line of text.
 
 ## Limits
 
@@ -82,39 +85,45 @@ Each limit is chosen by this document. Its reason is the work that the main page
 | Tree levels | 16 | Bounds the indent of a tree inside a section. |
 | Text field | 500 characters | Bounds the width of one line of text in a section. |
 | Key | 128 characters | Bounds the identifier that the workbench keeps per element. |
-| Parameters | 16 keys per object, 64 characters per key, 1000 characters per string value | Bounds the parameter record that each binding keeps. |
+| Parameter keys | 16 per object | Bounds the parameter record that each binding keeps. |
+| Parameter key | 64 characters | Bounds the parameter record that each binding keeps. |
+| Parameter string value | 1000 characters | Bounds the parameter record that each binding keeps. |
 
 Each limit is checked on receipt. A value that exceeds a limit is rejected, never truncated.
 
 ## Icons
 
-The `icon` field takes a name of the core icon table. A name that the table does not contain is rejected with `unknown icon <name>`. A plugin cannot supply icon markup.
+The `icon` field takes a name of the core icon table. A name that the table does not contain is rejected. A plugin cannot supply icon markup.
 
 ## Parameters
 
-`params` of a declared element is a JSON object with at most 16 keys. Each key is a string of at most 64 characters. Each value is a string of at most 1000 characters, a finite number, a boolean, or `null`. An array, an object, or any other value is rejected. The one array in a parameter is the `path` of `core.declared-ui.tree.expand`, which the workbench sets for the control and a plugin value cannot carry.
+`params` of a declared element is a JSON object with at most 16 keys. Each key is a string of at most 64 characters. Each value is a string of at most 1000 characters, a finite number, a boolean, or `null`. An array, an object, or any other value is rejected. The one array in a parameter is the `path` of `core.declared-ui.tree.expand`, which the workbench sets for the expand control. A plugin value cannot carry it.
 
 ## Binding
 
-Every element that a user can operate is bound to a declared command. The binding follows the [user interface](exposure.md#user-interface) rules: the element points to the command with `data-command`, its parameters are in `data-params`, and it is connected with `bind(element, name, params, {event: "click"})` of the binder in `@soksak/plugin-api`.
+Every element that a user can operate is bound to a command. The binding follows the [user interface](exposure.md#user-interface) rules: the element points to the command with `data-command`, its parameters are in `data-params`, and it is connected with `bind(element, name, params, {event: "click"})` of the binder in `@soksak/plugin-api`.
 
 Declared UI elements bind to these commands:
 
 | Element | Command | Parameters |
 | --- | --- | --- |
-| `command` | its `command` field | its `params` field |
+| `button` | its `command` field | its `params` field |
 | `list` item with `command` | its `command` field | its `params` field |
 | `tree` node with `command` | its `command` field | its `params` field |
 | `tree` branch expand control | `core.declared-ui.tree.expand` | `{status, tree, path, expanded}` |
 | sidebar section header | `core.sidebar.section.fold` | `{sidebar, section}` |
 
-A command name in a declared UI value is `<owner>.<name>`. The owner is the plugin of the status or `core`. A plugin can name its own commands and core commands only. A name that is not declared is rejected when the snapshot is received, not when the user presses the element, because the binder refuses an undeclared name at mark time ([exposure](exposure.md#user-interface)).
+A command name in a declared UI value is `<plugin>.<name>`, where `<plugin>` is the plugin of the status. A name of core, or of another plugin, is rejected, because a plugin value names only commands of its own plugin. A name that is not declared is rejected when the snapshot is received, not when the user presses the element, because the binder refuses an undeclared name at mark time ([exposure](exposure.md#user-interface)).
 
-`core.declared-ui.tree.expand` is declared in `packages/workbench/exposure.json`. It is a set operation: running it again with the same arguments has the same effect as running it once. Its `expanded` argument is the state that the control requests, which is the opposite of the state the branch showed when the control was drawn. The command sets the kept state of the branch at `path` in the tree `tree` of `status`, and it does not reach the plugin. `path` is the array of node keys from a root node to the branch. A `path` that names no drawn branch, or a `status` or `tree` that is not drawn, fails the command with `tree <tree> path <path> is not drawn`.
+`core.declared-ui.tree.expand` is declared in `packages/workbench/exposure.json` together with its handler, when the `tree` element is implemented. It is a set operation: running it again with the same arguments has the same effect as running it once. Its `expanded` argument is the state that the control requests, which is the opposite of the state the branch showed when the control was drawn. The command sets the kept state of the branch at `path` in the tree `tree` of `status`, and it does not reach the plugin. `path` is the array of node keys from a root node to the branch. A `path` that names no drawn branch, or a `status` or `tree` that is not drawn, fails the command with `tree <tree> path <path> is not drawn`.
+
+The control's next request carries the state that the kept state has when the workbench draws the control. A repeated request before the workbench draws again sends the same arguments, so it sets the same state. A request after the redraw carries the state of the redrawn branch.
 
 A disabled element (`enabled: false`) is rendered with the `disabled` attribute, so no click reaches its binding.
 
-Dom names. Every interactive element that a declared UI value draws carries the dom name `core.sidebar.section.control` and the attribute `data-key` with its `key`. The section header carries `core.sidebar.section.header` ([plugins](plugins.md#sections)). These are the names that the sidebar already uses, so a declared section and a module section are audited the same way. A declared element does not carry a dom name of its own kind. Its kind is the kind of the value.
+Dom names. Every interactive element that a declared UI value draws carries the dom name `core.sidebar.section.control` and the attribute `data-key` with its `key`. A non-interactive element, such as a static list row or a status line, carries neither. The section header carries `core.sidebar.section.header` ([plugins](plugins.md#sections)). These are the names that the sidebar already uses, so a declared section and a module section are audited the same way. A declared element does not carry a dom name of its own kind. Its kind is the kind of the value.
+
+A request addresses an interactive element of a declared section by the section id and the path of keys from the root element to it. The path is unique, because keys are unique among siblings.
 
 Native keyboard operation uses the native `button` element, so Enter and Space reach the command through the same binding. A declared UI element has no key handler of its own.
 
@@ -128,25 +137,32 @@ A declared UI status is drawn through its snapshots, as follows:
 - `selected` has no kept state. No core command changes it, so the plugin's value applies in every accepted value.
 - A kept state is removed when its path is absent from an accepted value, and when the plugin process restarts. The workbench discards the kept state on a plugin restart, as [plugin processes](../plans/plugin-processes.md) rule 2 does for the snapshot of the previous process.
 - The kept state is not saved with the space or the project. A reload of the main page resets it to the plugin's values.
-- A section reads its status through the status follow of the plugin context ([plugins](plugins.md#sections)). Until the first snapshot is accepted, the section body is empty.
+- The workbench follows the status of a declared section with the follow rules of `context.status` in [plugins](plugins.md#sections), using the card and the active tab of the sidebar that draws the section. The section itself has no context.
+- Before the first accepted value, the section shows no tree. The rejection text is the only content it can show before that, and it shows it only after a rejected value.
 - The status of a declared UI value is not a change feed: the plugin sends the whole value again when any element changes.
 
 ## Sidebar section form
 
-A sidebar section is declared in `plugin.json` ([plugins](plugins.md#sections)) with a `module` or with a `status`. Exactly one of the two is accepted. A declared section has the fields `id`, `name`, `status`, and optional `fill`. `fill: true` has the meaning that [plugins](plugins.md#sections) gives a module section: an open section shares the sidebar height that the other sections leave, and its body scrolls inside it.
+A sidebar section is declared in `plugin.json` ([plugins](plugins.md#sections)) with exactly one of two forms: `module` or `status`. A section declares `id`, `name`, one of the two, and optional `fill`. `fill: true` has the meaning that [plugins](plugins.md#sections) gives a module section: an open section shares the sidebar height that the other sections leave, and its body scrolls inside it.
 
 - A section with `module` is drawn by its module, as today. The workbench imports the module and calls `mount(root, context)` in the section element.
-- A section with `status` is drawn from the declared UI value of that status. The status must be a status of the same plugin that `exposes.status` declares with the declared UI schema. The section has no module, no `mount` call, and no `context.status` or `context.bind`.
+- A section with `status` is drawn from the declared UI value of that status. The status must be a status of the same plugin that `exposes.status` declares. The section has no module, no `mount` call, and no `context.status` or `context.bind`.
 - A section with both fields, or with neither, is rejected with `section <id> declares both module and status` or `section <id> declares neither module nor status`. A `status` that is not a status of the plugin is rejected with `section <id> status <name> is not a status of plugin <plugin>`.
+- One status backs at most one section. A second section that names the same status is rejected when the manifest is read, with `status <plugin>.<name> backs section <first> and section <second>`. The check runs on the manifest, so it does not depend on the value.
 
 A declared section draws its root elements in order inside its body.
 
 - In vertical orientation the elements stack from top to bottom.
-- In horizontal orientation the elements sit left to right in one row that wraps at the section width. A `tree` in a horizontal section is rejected as a whole, with `tree <key> cannot be drawn in a horizontal section`, because a tree's indent has no horizontal form in a row.
+- In horizontal orientation the elements sit left to right in one row that wraps at the section width. A `tree` in a horizontal section is rejected as a value, with `<pointer of the tree>: tree cannot be drawn in a horizontal section`. The check is a value check, because the orientation of the section is known when the value is accepted.
 
 A declared section keeps the header, the fold control, and the tab selection of a sidebar section without change. Its header is `core.sidebar.section.header`, and folding it runs `core.sidebar.section.fold`. A set of declared sections follows the set rules in [plugins](plugins.md#sections). A section of a plugin that is not loaded is not drawn, as for any section.
 
-The `core.sidebars` status counts, for each section, the elements with the dom name `core.sidebar.section.control` in its body, which are the interactive elements of a declared value, and the section header through its own element. Its `mounted` field is true from the first accepted value that the section draws until the section is cleared, and false before that. Its `error` field is the text of the current rejection, or null when the last value was accepted. Its `text` field is the text of the body.
+The `core.sidebars` status reports each section with these fields:
+
+- `controls` is the number of elements with the dom name `core.sidebar.section.control` in the body of the section. For a declared section these are its interactive elements.
+- `mounted` is true while the section draws an accepted value. It is false when the section is cleared. A section is cleared when it has no accepted value: before its first accepted value, and after a rejected value.
+- `error` is the text of the current rejection while the last value is rejected, and null otherwise.
+- `text` is the text of the body.
 
 ## Rejection
 
@@ -154,32 +170,41 @@ The receiver validates a whole snapshot value before it draws anything. A value 
 
 The receiver acknowledges the snapshot. The acknowledgement confirms receipt, not validity, so the plugin receives no rejection signal. The rejection is shown only in the section.
 
-The display path is `showError(element, where, text)`. For a rejected value, `where` is `declared UI <owner>.<status>` and `text` is `<JSON pointer>: <reason>`. The section body is the element that `showError` shows, so the text in the section is the display of the rejection. The application log line that the same call writes is the record: `error: declared UI <owner>.<status>: <JSON pointer>: <reason>`. The section does not show the error in a second display.
+The display path is `showError(element, where, text)`. For a rejected value, `where` is `declared UI <owner>.<status>` and `text` is `<pointer>: <reason>`. The section body is the element that `showError` shows, so the text in the section is the display of the rejection. The application log line that the same call writes is the record: `error: declared UI <owner>.<status>: <pointer>: <reason>`. The section does not show the error in a second display.
 
 `showError` writes the log line once for the same `where` and the same `text`. It keeps the shown text, so a repeated rejection with the same text shows the same text and writes nothing more. A rejection with a different text writes its own line. The next accepted value of the status calls `hideError` for its `where`, which withdraws the display, so the same text is written again if it recurs after that.
 
-The receiver rejects with these reasons:
+Every rejection text has the form `<pointer>: <reason>`. The pointer is the JSON pointer of the failing value: `/` for the root and for the size of the whole value, and `/elements/<i>/...` for an element. `<field>` is the JSON field name. The reason is one of the rows below. A limit reason has the form `exceeds <n> <unit>`.
 
 | Condition | Reason |
 | --- | --- |
-| The root is not an object, or `elements` is not an array | `elements must be an array` |
-| More than 64 root elements, 1000 list items, 5000 tree nodes, or 16 tree levels | `<field> exceeds <limit>` |
-| A field that the kind does not list | `unknown field <name>` |
+| The root is not an object, or `elements` is not an array | `elements must be an array` (pointer `/`) |
+| The serialized value is larger than 1048576 bytes | `exceeds 1048576 bytes` (pointer `/`) |
+| More than 64 root elements | `exceeds 64 elements` |
+| More than 1000 items in a list | `exceeds 1000 items` |
+| More than 5000 nodes in a tree | `exceeds 5000 nodes` |
+| A tree node deeper than 16 levels | `exceeds 16 levels` |
+| A text field longer than 500 characters | `exceeds 500 characters` |
+| A key longer than 128 characters | `exceeds 128 characters` |
+| A key that does not match the key rules | `key must be 1 to 128 characters of A-Z, a-z, 0-9, ., _, : or -` |
+| A `params` object with more than 16 keys | `exceeds 16 keys` |
+| A parameter key longer than 64 characters | `exceeds 64 characters` |
+| A parameter string value longer than 1000 characters | `exceeds 1000 characters` |
+| A parameter value that is not a string, a finite number, a boolean, or `null` | `params values must be string, number, boolean or null` |
+| A field that the kind does not list | `unknown field <field>` |
 | A required field is missing | `missing <field>` |
 | A `kind` value that is not in the table | `unknown kind <value>` |
 | A field has the wrong type | `<field> must be <type>` |
-| A text field exceeds its limit | `<field> exceeds 500 characters` |
 | A text field contains a control character | `<field> contains a control character` |
-| A key does not match the key rules | `key must be 1 to 128 characters of A-Z, a-z, 0-9, ., _, : or -` |
 | Two keys are equal among their siblings, or among the items of a list | `duplicate key <key>` |
-| A command name is not `<owner>.<name>` with the plugin or `core` as owner | `command <name> must be named <owner>.<name>` |
-| A command name is not declared | `undeclared command <name>` |
-| `params` is not an object of the allowed values, or has more than 16 keys | `params must be an object of at most 16 scalar values` |
-| An icon name is not in the core icon table | `unknown icon <name>` |
-| A `tree` in a horizontal section | `tree <key> cannot be drawn in a horizontal section` |
-| The serialized value is larger than 1048576 bytes | `value exceeds 1048576 bytes` |
+| A `command` name without the prefix `<plugin>.` of the plugin of the status | `command <name> must be named <plugin>.<name>` |
+| A `command` name of core, or of another plugin | `command <name> is not a command of plugin <plugin>` |
+| A `command` name that is not declared | `undeclared command <name>` |
+| An icon name that is not in the core icon table | `unknown icon <name>` |
+| `expanded` on a leaf node | `expanded is allowed only on a branch` |
+| A `tree` in a horizontal section | `tree cannot be drawn in a horizontal section` |
 
-The JSON pointer names the failing field, for example `/elements/2/items/7/key`.
+Rejections that concern a manifest, the section form and the one-section rule, are reported when the manifest is read, with the reasons in [sidebar section form](#sidebar-section-form), and not with a value pointer.
 
 ## What sections draw today
 

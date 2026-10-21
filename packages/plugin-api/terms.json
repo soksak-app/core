@@ -254,7 +254,7 @@
     },
     {
       "term": "declared UI",
-      "definition": "A screen whose every element is expressed with the declared vocabulary (lists, trees, menus, commands, status lines), which the workbench draws from the declared UI snapshots that a plugin sends.",
+      "definition": "A screen whose every element is expressed with the declared vocabulary (lists, trees, commands, status lines), which the workbench draws from the declared UI snapshots that a plugin sends.",
       "rejected": [],
       "allowed": []
     },

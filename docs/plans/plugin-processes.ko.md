@@ -23,7 +23,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 
 ## 층 규칙
 
-- **선언 UI:** 화면 요소가 모두 선언 어휘(목록, tree, 메뉴, 명령, 상태줄)로 표현되는 화면이 선언 UI다.
+- **선언 UI:** 화면 요소가 모두 선언 어휘(목록, tree, 명령, 상태줄)로 표현되는 화면이 선언 UI다.
 - **view:** 그 밖의 화면은 view다. view는 자유 DOM, IME가 필요한 글 입력, canvas나 편집기, document region 또는 image region을 담은 화면을 맡는다.
 - **sidebar section:** 선언 UI만 sidebar section이 될 수 있다. view가 필요한 section은 card 표면이 되고, sidebar에는 그것을 여는 선언 항목만 둔다.
 - **plugin host:** view나 sidecar가 DOM 없는 로직을 맡을 수 없을 때만 만든다. 그 로직을 files sidecar나 files view로 옮기는 것을 먼저 검토하고, 옮길 수 없을 때만 host를 둔다.
@@ -459,3 +459,20 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 - D14: 진행 또는 배지 요소가 필요하다. 판정: 거부. 해결: 소비자가 없으므로 요소를 더하지 않는다.
 - D15: 거부된 값은 마지막으로 받아들인 트리를 계속 그려야 한다. 판정: 거부. 해결: 유지 트리는 대체 동작이다. plugin이 더 이상 현재 값으로 보내지 않는 값을 보이고 거부를 숨긴다. 값 전체 거부를 유지한다.
 - D16: tree label을 list label과 같은 규칙으로 제거했다. 판정: 검토의 요구가 아니라 개정의 판단으로 수용한다. 해결: 소비자가 tree 이름을 정하지 않으며, section 머리가 내용을 이름 짓는다.
+
+**선언된 UI 스키마 검토 2차**
+
+아래 이의는 [선언된 UI](../spec/declared-ui.ko.md)의 두 번째 적대적 검토에 대한 답변이다. 열두 건을 모두 수용한다. 각 항목은 이의, 판정, 해결을 적으며, 명세가 그 해결을 기록한다.
+
+- R2-1: 선언된 section의 status를 따라가는 규칙이 없었다. section은 문맥이 없기 때문이다. 판정: 수용. 해결: workbench는 plugin의 `context.status` 규칙으로 status를 따라가며, 그 section을 그리는 사이드바의 카드와 활성 탭을 쓴다.
+- R2-2: 첫 값 전 section의 내용이 정해지지 않았다. 판정: 수용. 해결: 첫 받아들인 값 전에는 section이 트리를 보이지 않는다. 그 전에 보일 수 있는 내용은 거부 텍스트뿐이며, 거부된 값 뒤에만 보인다.
+- R2-3: 펼침 명령이 선언된 것으로 기술되었으나 선언이 없었다. 판정: 수용, 해결을 바꿈. 해결: 처리기가 없는 선언은 `make exposure-check`에서 `declared but not registered`로 실패하므로, 이 개정에서는 선언을 더하지 않는다. 명세는 그 명령이 tree 요소가 구현될 때 처리기와 함께 `packages/workbench/exposure.json`에 선언된다고 적는다.
+- R2-4: `data-key`가 모든 요소에 붙었고, 요청의 주소가 정해지지 않았다. 판정: 수용. 해결: `data-key`는 조작 가능한 요소에만 붙으며, 요청은 요소를 section id와 루트 요소에서 그 요소까지의 key 경로로 지정한다. 키는 형제 사이에서 유일하므로 그 경로는 유일하다. 노출 명세가 그렇게 적는다.
+- R2-5: status 하나가 여러 section을 뒷받침할 수 있었다. 판정: 수용. 해결: 같은 status를 이름 댄 두 번째 section은 manifest를 읽을 때 두 section의 이름을 담은 오류로 거부한다. 가로 tree 검사는 section의 방향이 값을 받아들일 때만 알려지므로 값 검사로 남긴다.
+- R2-6: tree에 `empty` 텍스트가 없었고, 잎 노드에 `expanded`가 허용되었다. 판정: 수용. 해결: tree는 list와 같이 `empty`를 요구한다. `expanded`는 가지에만 허용하며, 가지는 `children`이 있고 비어 있지 않은 노드다. `expanded`를 가진 잎은 거부한다.
+- R2-7: 거부 템플릿이 하나가 아니었고, 크기 오류의 필드와 포인터가 정해지지 않았다. 판정: 수용. 해결: 모든 거부 텍스트는 `<포인터>: <이유>` 형식이다. 한도 이유는 `exceeds <n> <unit>` 형식이다. `<field>`는 JSON 필드 이름이며, 루트와 값 전체 크기의 포인터는 `/`이다. 표에는 매개변수 키 길이 64자와 매개변수 문자열 값 1000자의 행을 더한다.
+- R2-8: 종류 `command`가 명령 용어와 겹쳤고, 선언된 UI 용어에 메뉴가 남았다. 판정: 수용. 해결: 종류를 두 명세 언어 모두에서 `button`으로 바꾼다. 메뉴는 용어 목록의 선언된 UI 용어와 이 계획의 두 언어 계층 규칙에서 뺀다.
+- R2-9: 개수 필드, 비워진 상태, 거부 뒤의 `mounted`, 노출 설명이 정해지지 않았다. 판정: 수용. 해결: 개수 필드는 `controls`다. section은 받아들인 값이 없을 때 비워진다. 첫 받아들인 값 전과 거부된 값 뒤가 그 경우다. section이 비워지면 `mounted`는 false다. workbench 노출의 `core.sidebar.section`, `core.sidebar.section.control`, `core.sidebar.section.header` 설명은 선언된 section을 포함하도록 이 개정에서 고친다.
+- R2-10: plugin 명세의 sections 형태 변경을 미루었다. 판정: 수용. 해결: 이 개정에서 변경한다. section은 `module`과 `status` 가운데 정확히 하나를 선언하며, plugin 명세의 manifest 행과 sections 문단이 두 언어로 그렇게 적는다.
+- R2-11: plugin 값이 core 명령을 이름으로 지정할 수 있었고, 펼침 제어의 멱등성이 논증되지 않았다. 판정: 수용. 해결: plugin 값은 자기 plugin의 명령만 이름으로 지정하며, 값의 core 명령은 `command <name> is not a command of plugin <plugin>`으로 거부한다. workbench는 가지 제어를 `core.declared-ui.tree.expand`로 그린다. 제어의 다음 요청은 workbench가 제어를 그릴 때의 유지 상태를 담으므로, 다시 그리기 전의 반복 요청은 같은 인수를 보내 같은 상태를 설정하고, 다시 그린 뒤의 요청은 다시 그린 상태를 담는다.
+- R2-12: 어떤 status가 선언된 UI인지 정한 규칙이 없었다. 판정: 수용. 해결: sidebar section이 `status` 형태로 이름을 대거나 surface가 선언된 UI로 선언한 status가 선언된 UI다. 스키마 표지는 쓰지 않는다. 열린 점: 이 버전은 surface 선언 형식을 정하지 않으므로, surface 선언이 명세될 때까지 section 형태만 status를 선언된 UI로 만든다.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.8-0-2: 두 번째 검토 뒤 선언된 UI 명세를 고쳤다. section은 `module`과 `status` 가운데 정확히 하나를 선언하고, status 하나는 section 하나를 뒷받침한다. 어휘 요소 `command`는 `button`으로 바꾸며, tree는 `empty`를 요구하고, 값은 자기 plugin의 명령만 이름으로 지정한다. 모든 거부는 한 형식을 쓴다. plugin 명세는 section의 `status` 형태를 적고, workbench 노출은 선언된 section을 설명한다.
 - F212.8-0-1: 적대적 검토 뒤 선언된 UI 명세를 고쳤다. menu 요소, busy tone, list label을 제거했고, 가로 section에서 tree를 거부한다. 모든 한도는 이유를 적는다. tree 펼침 명령은 노드 key 경로로 상태를 설정하며, 사이드바 section은 기존 section DOM 이름을 재사용한다. 거부는 표시 경로로 보이며 plugin은 거부 신호를 받지 않는다. 노출 명세에 `data-key`를 선언했고, 검토 기록은 plugin 프로세스 계획에 있다.
 - F212.8-0: `docs/spec/declared-ui.md`가 선언된 UI 스키마를 정한다. 선언된 UI status의 값, 필드와 한도가 있는 요소 `list`, `tree`, `menu`, `command`, `status-line`, 선언된 명령과 core 명령 `core.declared-ui.tree.toggle`, `core.declared-ui.menu.toggle`에 대한 묶기, DOM 이름, status 대응, 이유가 있는 값 거부, `status`를 가진 사이드바 section 형태다. 용어 선언된 요소, 선언된 status line, 선언된 UI 스키마를 용어 목록에 더했다.
 - F212.7b-3-4: workbench는 `view-presentation-abandoned` 알림마다 view surface의 plugin에 `losses.abandoned`를 센다. 두 host는 표시 없이 끝난 presentation wait의 각 끝에서 `{surface, reason}` 알림을 보낸다.

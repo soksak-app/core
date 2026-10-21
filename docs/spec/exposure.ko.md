@@ -44,7 +44,7 @@
 
 스키마는 `type`, `properties`, `items`, `enum` 키워드만 쓰는 JSON Schema 부분집합이다.
 
-dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 없으면 그 이름을 가진 요소는 정확히 하나다. [선언된 UI](declared-ui.ko.md) 값이 그리는 요소는 그 요소의 key를 담은 `data-key="<key>"` 속성을 가져서, 외부 요청이 그 key로 요소를 지정할 수 있다. 다른 요소는 `data-key`를 갖지 않는다.
+dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 없으면 그 이름을 가진 요소는 정확히 하나다. [선언된 UI](declared-ui.ko.md) 값이 그리는 조작 가능한 요소는 그 요소의 key를 담은 `data-key="<key>"` 속성을 가진다. 요청은 그런 요소를 section id와, 루트 요소에서 그 요소까지의 key 경로로 지정한다. 키는 형제 사이에서 유일하므로 그 경로는 유일하다. 조작할 수 없는 요소는 `data-key`를 갖지 않는다.
 
 ## 사용자 인터페이스
 
