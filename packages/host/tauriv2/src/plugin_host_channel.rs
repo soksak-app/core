@@ -593,24 +593,50 @@ pub(crate) fn surface_opened(window: &Window, plugin: &str) {
 /// writes host.trace.plugin-host.restart-reset, and creates the host again in every window, as the open of a surface does
 /// (docs/spec/plugin-host.md#restarts).
 pub(crate) fn plugin_enabled(app: &AppHandle, plugin: &str) {
-    if !app.state::<PluginHostRestarts>().reset(plugin) {
-        return;
-    }
-    emit_host(
-        Level::Debug,
-        "host.trace.plugin-host.restart-reset",
-        json!({"plugin": plugin}),
+    let windows = app.windows();
+    let labels: Vec<String> = windows.keys().cloned().collect();
+    let cleared = clear_enabled_stop(
+        &app.state::<PluginHostRestarts>(),
+        plugin,
+        &labels,
+        |label| {
+            let Some(other) = windows.get(label) else {
+                return;
+            };
+            let target = other.clone();
+            log_failure(
+                "plugin host",
+                crate::exposure::on_main(other, move || {
+                    crate::windows::load_plugin_hosts(&target);
+                    Ok(())
+                }),
+            );
+        },
     );
-    for other in app.windows().into_values() {
-        let target = other.clone();
-        log_failure(
-            "plugin host",
-            crate::exposure::on_main(&other, move || {
-                crate::windows::load_plugin_hosts(&target);
-                Ok(())
-            }),
+    if cleared {
+        emit_host(
+            Level::Debug,
+            "host.trace.plugin-host.restart-reset",
+            json!({"plugin": plugin}),
         );
     }
+}
+
+/// Clears the restart-limit stop of plugin when the person enables it, and calls reload once for each window label.
+/// It calls reload for no label and returns false when the reset cleared no stop; it returns true when it cleared one.
+pub(crate) fn clear_enabled_stop(
+    restarts: &PluginHostRestarts,
+    plugin: &str,
+    labels: &[String],
+    mut reload: impl FnMut(&str),
+) -> bool {
+    if !restarts.reset(plugin) {
+        return false;
+    }
+    for label in labels {
+        reload(label);
+    }
+    true
 }
 
 /// Records the navigation state of the host of plugin. A failure is written to the application log.
