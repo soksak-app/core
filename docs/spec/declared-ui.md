@@ -124,7 +124,7 @@ The elements that carry the native `button` element are the `button`, a list ite
 
 Dom names. Every interactive element that a declared UI value draws carries the dom name `core.sidebar.section.control` and the attribute `data-key` with its `key`. A non-interactive element, such as a static list row or a status line, carries neither. The section header carries `core.sidebar.section.header` ([plugins](plugins.md#sections)). These are the names that the sidebar already uses, so a declared section and a module section are audited the same way. A declared element does not carry a dom name of its own kind. Its kind is the kind of the value.
 
-A request addresses an interactive element of a declared section by the section id and the path of keys from the root element to it. The path is unique, because keys are unique among siblings.
+A request addresses an interactive element of a declared section by the section id, the path of keys from the root element to it, and its role: `label` for the label control of a button, of a list item with `command`, or of a tree node with `command`, and `expand` for the expand control of a tree branch. The path is unique, because keys are unique among siblings, and the role tells the two controls of one tree node apart.
 
 Native keyboard operation uses the native `button` element, so Enter and Space reach the command through the same binding. A declared UI element has no key handler of its own.
 
@@ -136,6 +136,8 @@ A declared UI status is drawn through its declared UI snapshots, as follows:
 - The workbench keeps the expanded state of each branch, keyed by the status, the tree key, and the path of node keys from the root. A kept state is set by `core.declared-ui.tree.expand` only.
 - In an accepted value, a branch whose `expanded` differs from its `expanded` in the previous accepted value, or that is new, takes the plugin's value, and the kept state is replaced with it. A branch whose `expanded` did not change keeps its kept state. A new branch with no kept state takes the plugin's value.
 - A rejected value does not change the kept state. The comparison above uses the last accepted value.
+- A path that is a leaf in an accepted value loses its kept state. A branch with no kept state takes the plugin's `expanded` value.
+- A pull reply with `value: null` means that the source has no value yet. The section stays cleared until the first push from the source.
 - `selected` has no kept state. No core command changes it, so the plugin's value applies in every accepted value.
 - A kept state is removed when its path is absent from an accepted value, and when the plugin process restarts. The workbench discards the kept state on a plugin restart, as [plugin processes](../plans/plugin-processes.md) rule 2 does for the declared UI snapshot of the previous process.
 - The kept state is not saved with the space or the project. A reload of the main page resets it to the plugin's values.
@@ -145,7 +147,7 @@ The source changes by these rules:
 
 - (a) The source is chosen again when the active tab of the sidebar's card, the focused card of a fixed window sidebar, or a registration changes.
 - (b) On a change of source, the section is cleared until the first value from the new source is accepted. The kept state survives by path ([status mapping](#status-mapping)).
-- (c) On a change of source, the workbench pulls the current value from the new source once. [Plugin processes](../plans/plugin-processes.md) rule 2 allows a pull at the load of the main page and at a change of source, and at no other time, because a running view has no other way to send its last value to a new reader.
+- (c) On a change of source, the workbench pulls the current value from the new source once. [Plugin processes](../plans/plugin-processes.md) rule 2 allows a pull at the load of the main page, at a change of source, and at a change of orientation, and at no other time, because a running view has no other way to send its last value to a new reader.
 - (d) A process end removes its registrations, and the source is chosen again as in (a).
 - Before the first accepted value, the section shows no tree. The rejection text is the only content it can show before that, and it shows it only after a rejected value.
 - The status of a declared UI value is not a change feed: the plugin sends the whole value again when any element changes.
@@ -155,7 +157,7 @@ The source changes by these rules:
 A sidebar section is declared in `plugin.json` ([plugins](plugins.md#sections)) with exactly one of two forms: `module` or `status`. A section declares `id`, `name`, one of the two, and optional `fill`. `fill: true` has the meaning that [plugins](plugins.md#sections) gives a module section: an open section shares the sidebar height that the other sections leave, and its body scrolls inside it.
 A sidebar section with the `status` form is declared UI. A section that needs a view becomes a card surface, and the sidebar holds only a declared item that opens it ([plugin processes](../plans/plugin-processes.md) layer rules).
 
-- A section with `module` is drawn by its module. The workbench imports the module and calls `mount(root, context)` in the section element. [Plugin processes](../plans/plugin-processes.md) rule 1 says that plugin code does not run on the workbench page, so this form is removed with that page mount.
+- A section with `module` is drawn by its module. The workbench imports the module and calls `mount(root, context)` in the section element.
 - A section with `status` is drawn from the declared UI value of that status. The status must be a status of the same plugin that `exposes.status` declares.
 - A section with both fields, or with neither, is rejected with `section <id> declares both module and status` or `section <id> declares neither module nor status`. A `status` that is not a status of the plugin is rejected with `section <id> status <name> is not a status of plugin <plugin>`. `exposes.status` means the entries of `exposes.status` in `plugin.json` only.
 - One status backs at most one section. A second section that names the same status is rejected when the manifest is read, with `status <plugin>.<name> backs section <first> and section <second>`. The check runs on the manifest, so it does not depend on the value.
@@ -164,7 +166,7 @@ A declared section draws its root elements in order inside its body.
 
 - In vertical orientation the elements stack from top to bottom.
 - In horizontal orientation the elements sit left to right in one row that wraps at the section width. A `tree` in a horizontal section is rejected as a value, with `<pointer of the tree>: tree cannot be drawn in a horizontal section`. The check is a value check, because the orientation of the section is known when the value is accepted.
-The orientation check runs again when the section changes orientation, on the accepted value. A value that fails it is rejected with the rows of [Rejection](#rejection), its tree is removed, and the section is cleared.
+The orientation check runs again when the section changes orientation, on the accepted value. A value that fails it is rejected with the rows of [Rejection](#rejection), its tree is removed, and the section is cleared. A change of orientation also pulls the current value from the source once, as on a change of source, because a value discarded for the previous orientation may be valid for the new one, and the source is the only holder of that value.
 
 A declared section keeps the header, the fold control, and the tab selection of a sidebar section without change. Its header is `core.sidebar.section.header`, and folding it runs `core.sidebar.section.fold`. A set of declared sections follows the set rules in [plugins](plugins.md#sections). A section of a plugin that is not loaded is not drawn, as for any section.
 
@@ -177,7 +179,7 @@ The `core.sidebars` status reports each section with these fields:
 
 ## Rejection
 
-The receiver validates a whole declared UI snapshot value before it draws anything. A value that breaks one rule of this document is rejected as a whole: no element of it is drawn, and the previous tree of the status is removed. The receiver keeps no previous tree on a rejection, because a kept tree would show a value that the plugin no longer sends as its current value.
+The receiver validates a whole declared UI snapshot value before it draws anything. A value that breaks one rule of this document is rejected as a whole: no element of it is drawn, and the previous tree of the status is removed. The receiver keeps no previous tree on a rejection, because a kept tree would show a value that the plugin no longer sends as its current value. A rejection discards the value, so no kept value exists to draw again.
 
 The receiver acknowledges the declared UI snapshot. The acknowledgement confirms receipt, not validity, so the plugin receives no rejection signal. The rejection is shown only in the section.
 
@@ -186,11 +188,12 @@ The display path is `showError(element, where, text)`. For a rejected value, `wh
 `showError` writes the log line once for the same `where` and the same `text`. It keeps the shown text, so a repeated rejection with the same text shows the same text and writes nothing more. A rejection with a different text writes its own line. The next accepted value of the status calls `hideError` for its `where`, which withdraws the display, so the same text is written again if it recurs after that.
 
 Every rejection text has the form `<pointer>: <reason>`. The pointer of each row of the table is the value that breaks the row, as its Pointer column states. A count or size limit points to the array, object, or string that exceeds it. A field-presence row (`unknown field`, `missing`, `requires command`) points to the object that holds the field. A field-value row points to the field. A duplicate key points to the second key. `/` is the root and the whole serialized value. `<field>` is the JSON field name.
-When a value breaks more than one row, the first row in table order applies. The naming row comes before the ownership row, so a name with no owner is reported as unnamed.
+Field rows of an element use the field list of its kind, which its `kind` value selects, so the `unknown kind` row comes before the field rows. When a value breaks more than one row, the first row in table order applies. The naming row comes before the ownership row, so a name with no owner is reported as unnamed.
 
 | Condition | Reason | Pointer |
 | --- | --- | --- |
-| The root is not an object, or `elements` is not an array | `elements must be an array` | `/` |
+| The root is not an object | `root must be an object` | `/` |
+| `elements` is not an array | `elements must be an array` | `/elements` |
 | The serialized value is larger than 1048576 bytes | `exceeds 1048576 bytes` | `/` |
 | More than 64 root elements | `exceeds 64 elements` | `/elements` |
 | More than 1000 items in a list | `exceeds 1000 items` | `/elements/<i>/items` |
@@ -203,10 +206,10 @@ When a value breaks more than one row, the first row in table order applies. The
 | A parameter key longer than 64 characters | `exceeds 64 characters` | the parameter key |
 | A parameter string value longer than 1000 characters | `exceeds 1000 characters` | the parameter value |
 | A parameter value that is not a string, a finite number, a boolean, or `null` | `params values must be string, number, boolean or null` | the parameter value |
+| A `kind` value that is not in the table | `unknown kind <value>` | the `kind` value |
 | A field that the object does not list: a root, an element, a list item, or a tree node | `unknown field <field>` | the object |
 | A required field is missing | `missing <field>` | the object |
 | A `params` or `enabled` field in a list item or a tree node with no `command` field | `<field> requires command` | the object |
-| A `kind` value that is not in the table | `unknown kind <value>` | the `kind` value |
 | A field has the wrong type | `<field> must be <type>` | the field |
 | A text field contains a control character | `<field> contains a control character` | the field |
 | Two keys are equal among their siblings, or among the items of a list | `duplicate key <key>` | the second key |
