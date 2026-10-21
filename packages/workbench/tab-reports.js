@@ -1,3 +1,5 @@
+import { isLocalAbsolutePath } from "@soksak/plugin-api";
+
 // The tab title, the bottom text, and the working directory that a surface reported (docs/spec/plugins.md#tab-reports). They are not stored in the layout.
 const labels = new Map();
 const footers = new Map();
@@ -122,7 +124,7 @@ export function reportDirectory(tabId, path) {
     directories.delete(tabId);
     return;
   }
-  if (typeof path !== "string" || !path.startsWith("/")) {
+  if (typeof path !== "string" || !isLocalAbsolutePath(path)) {
     throw new TypeError("a tab directory must be an absolute path");
   }
   directories.set(tabId, path);

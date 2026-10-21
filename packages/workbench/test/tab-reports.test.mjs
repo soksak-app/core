@@ -147,3 +147,11 @@ test("the data of a tab button carries the memory state and the label that the t
   forgetTab("tab-button");
   assert.deepEqual(tabButtonData(tab), { name: "Shell", tabState: "loaded" });
 });
+
+test("a reported directory is refused unless it is a local absolute path", () => {
+  for (const invalid of ["//server/share", "/C:/x", "C:\\x", "/a\u0000b", "relative", ""]) {
+    assert.throws(() => reportDirectory("tab-g", invalid), TypeError, `${JSON.stringify(invalid)} is refused at report`);
+  }
+  assert.doesNotThrow(() => reportDirectory("tab-g", "/a"), "an absolute local path is accepted");
+  reportDirectory("tab-g", null);
+});
