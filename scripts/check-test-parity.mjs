@@ -2182,6 +2182,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F219",
+    implementation: [{ file: "packages/host/tauriv2/tests/sidecars_test.rs", symbol: "static SERIAL: Mutex<()>" }],
+    tests: [
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "stops_at_the_fourth_failure_within_the_window" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "surface_open_clears_the_restart_limit" },
+    ],
+    expected: "The tests of the sidecar suite that attach the process-wide writer of the records run one at a time, so the records of each test stay in its own event log whichever test attaches first.",
+    levels: ["unit"],
+  },
+  {
     id: "F217",
     implementation: [{ file: "packages/workbench/plane.js", symbol: "function pluginPlaceholder(tab, paramsProblem)" }],
     tests: [

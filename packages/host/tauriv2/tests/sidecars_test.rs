@@ -22,6 +22,9 @@ use soksak_host_tauriv2::sidecars::{
 /// this time. Even on a heavily loaded machine, the answer and the end of the sidecar come within this time.
 const STALL: Duration = Duration::from_secs(120);
 
+/// The writer of the records is process-wide, so the tests that attach it run one at a time.
+static SERIAL: Mutex<()> = Mutex::new(());
+
 #[derive(Clone)]
 struct FakeOwner {
     key: String,
@@ -2167,6 +2170,7 @@ fn restarts_after_three_failures_within_the_window() {
 // contract: sidecars.restart.fourth-failure-stops
 #[test]
 fn stops_at_the_fourth_failure_within_the_window() {
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let clock = RestartClock::new();
     let (sidecars, _directory) = restart_sidecars(&clock);
     let writer_folder = folder::Folder::new();
@@ -2222,6 +2226,7 @@ fn counts_only_failures_within_the_window() {
 // contract: sidecars.restart.surface-open-resets-the-record
 #[test]
 fn surface_open_clears_the_restart_limit() {
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let clock = RestartClock::new();
     let (sidecars, directory) = restart_sidecars(&clock);
     let writer_folder = folder::Folder::new();
