@@ -69,7 +69,7 @@ Text rules: a text field is plain text. The workbench draws it as text content, 
 
 The `status-line` has no tone and no error value. An error reaches the user only through the display path that writes it to the application log ([AGENTS](../../AGENTS.md)), so a declared element cannot draw an error.
 
-A `list` is a column of rows, with its `empty` text when it has none. A `tree` is an indented outline, with its `empty` text when it has none. A `button` is one button. A `status-line` is one line of text.
+A `list` is a column of rows, with its `empty` text when it has none. A `tree` is an indented outline, with its `empty` text when it has none. A branch draws its children only while it is expanded. A `button` is one button. A `status-line` is one line of text.
 
 ## Limits
 
@@ -114,12 +114,12 @@ Declared UI elements bind to these commands:
 
 A command name in a declared UI value is `<plugin>.<name>`, where `<plugin>` is the plugin of the status. A name of core, or of another plugin, is rejected, because a plugin value names only commands of its own plugin. A name that is not declared is rejected when the declared UI snapshot is received, not when the user presses the element, because the binder refuses an undeclared name at mark time ([exposure](exposure.md#user-interface)).
 
-`core.declared-ui.tree.expand` is declared in `packages/workbench/exposure.json` together with its handler. It is a set operation: running it again with the same arguments has the same effect as running it once. Its `expanded` argument is the state that the control requests, which is the opposite of the state the branch showed when the control was drawn. The command sets the kept state of the branch at `path` in the tree `tree` of `status`, and it does not reach the plugin. `path` is the array of node keys from the root node of the tree to the branch. A `path` that names no drawn branch, or a `status` or `tree` that is not drawn, fails the command with `tree <tree> path <path> is not drawn`. In that message, `<path>` is a JSON array of strings.
+`core.declared-ui.tree.expand` is declared in `packages/workbench/exposure.json` together with its handler. It is a set operation: running it again with the same arguments has the same effect as running it once. Its `expanded` argument is the state that the control requests, which is the opposite of the state the branch showed when the control was drawn. The command sets the kept state of the branch at `path` in the tree `tree` of `status`, and it does not reach the plugin. The workbench then draws the tree again from the kept state. `path` is the array of node keys from the root node of the tree to the branch. `status` is the status name `<plugin>.<name>`, and `tree` is the key of the tree element. A `path` that names no drawn branch, or a `status` or `tree` that is not drawn, fails the command with `tree <tree> path <path> is not drawn`. In that message, `<path>` is a JSON array of strings.
 
 The request carries the `expanded` value that the control requests, which is the opposite of the kept state when the workbench draws it. Repeating the request sets the same state.
 
 A disabled element (`enabled: false`) is rendered with the `disabled` attribute, so no click reaches its binding.
-The elements that carry the native `button` element are the `button`, a list item with `command`, a tree node with `command`, and the expand control of a tree branch. A static list row and a status line carry no button.
+The elements that carry the native `button` element are the `button`, a list item with `command`, a tree node with `command`, and the expand control of a tree branch. A static list row and a status line carry no button. The expand control of a branch shows the chevron-right icon of the core while the branch is collapsed, and the chevron-down icon while it is expanded.
 
 
 Dom names. Every control that a declared UI value draws carries the dom name `core.sidebar.section.control` and the attribute `data-key` with the key of its root element. Controls of list items and tree nodes also carry `data-path`, a JSON array of the keys below the root element, and `data-role` (`label` or `expand`). A leaf without `command` carries neither attribute set. A branch without `command` carries only the attributes of its expand control. A non-interactive element, such as a static list row or a status line, carries neither. The section header carries `core.sidebar.section.header` ([plugins](plugins.md#sections)). These are the names that the sidebar already uses, so a declared section and a module section are audited the same way. A declared element does not carry a dom name of its own kind. Its kind is the kind of the value.

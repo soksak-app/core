@@ -7,6 +7,9 @@ import { hideError, showError } from "./shown-errors.js";
 /** The dom name of every control that a declared UI value draws (docs/spec/exposure.md). */
 export const CONTROL_NAME = "core.sidebar.section.control";
 
+/** The command of the expand control of a tree branch (docs/spec/declared-ui.md, binding). */
+const EXPAND = "core.declared-ui.tree.expand";
+
 const MAX_BYTES = 1048576;
 const MAX_ROOT_ELEMENTS = 64;
 const MAX_ITEMS = 1000;
@@ -301,23 +304,8 @@ export function validateValue(value, options) {
   return { elements: value.elements };
 }
 
-function drawItem(listKey, item, bind) {
-  const row = document.createElement("div");
-  row.className = "declared-row";
-  if (item.selected === true) row.dataset.selected = "true";
-  let label;
-  if (Object.hasOwn(item, "command")) {
-    label = document.createElement("button");
-    label.type = "button";
-    label.dataset.key = listKey;
-    label.dataset.path = JSON.stringify([item.key]);
-    label.dataset.role = "label";
-    label.dataset.expose = CONTROL_NAME;
-    if (item.enabled === false) label.disabled = true;
-    bind(label, item.command, item.params, { event: "click" });
-  } else {
-    label = document.createElement("span");
-  }
+/** The label of a list item or a tree node: its icon, its text, and the detail of a list item. */
+function labelOf(item, label) {
   label.className = "declared-label";
   if (Object.hasOwn(item, "icon")) {
     const mark = document.createElement("span");
@@ -326,7 +314,28 @@ function drawItem(listKey, item, bind) {
     label.append(mark);
   }
   label.append(document.createTextNode(item.label));
-  row.append(label);
+  return label;
+}
+
+/** The label element of an item or a node: a button bound to its command when it has one, otherwise a static span. */
+function labelElement(entry, { key, path, bind }) {
+  if (!Object.hasOwn(entry, "command")) return labelOf(entry, document.createElement("span"));
+  const label = document.createElement("button");
+  label.type = "button";
+  label.dataset.key = key;
+  label.dataset.path = JSON.stringify(path);
+  label.dataset.role = "label";
+  label.dataset.expose = CONTROL_NAME;
+  if (entry.enabled === false) label.disabled = true;
+  bind(label, entry.command, entry.params, { event: "click" });
+  return labelOf(entry, label);
+}
+
+function drawItem(listKey, item, bind) {
+  const row = document.createElement("div");
+  row.className = "declared-row";
+  if (item.selected === true) row.dataset.selected = "true";
+  row.append(labelElement(item, { key: listKey, path: [item.key], bind }));
   if (Object.hasOwn(item, "detail")) {
     const detail = document.createElement("span");
     detail.className = "declared-detail";
@@ -350,16 +359,135 @@ function drawList(element, bind) {
   return box;
 }
 
+/** The kept expanded state of the branch at path, which every branch of a drawn tree has. */
+function keptOf(kept, tree, path) {
+  const expanded = kept.get(tree)?.get(JSON.stringify(path));
+  if (expanded === undefined) throw new Error(`tree ${tree} path ${JSON.stringify(path)} has no kept state`);
+  return expanded;
+}
+
+/** The expand control of a branch. It requests the state opposite to the one the branch shows. */
+function expandControl(tree, path, expanded, { statusId, bind }) {
+  const control = document.createElement("button");
+  control.type = "button";
+  control.className = "declared-expand";
+  control.dataset.key = tree;
+  control.dataset.path = JSON.stringify(path);
+  control.dataset.role = "expand";
+  control.dataset.expose = CONTROL_NAME;
+  const mark = document.createElement("span");
+  mark.className = "declared-icon";
+  mark.innerHTML = icon(expanded ? "chevron-down" : "chevron-right");
+  control.append(mark);
+  bind(control, EXPAND, { status: statusId, tree, path, expanded: !expanded }, { event: "click" });
+  return control;
+}
+
+/** The nodes of one level below parent. A branch draws its children only while it is expanded. */
+function drawNodes(tree, nodes, parent, ctx) {
+  return nodes.map((node) => {
+    const path = [...parent, node.key];
+    const wrap = document.createElement("div");
+    wrap.className = "declared-node";
+    const row = document.createElement("div");
+    row.className = "declared-row";
+    if (node.selected === true) row.dataset.selected = "true";
+    const branch = isBranch(node);
+    const expanded = branch ? keptOf(ctx.kept, tree.key, path) : false;
+    if (branch) row.append(expandControl(tree.key, path, expanded, ctx));
+    row.append(labelElement(node, { key: tree.key, path, bind: ctx.bind }));
+    wrap.append(row);
+    if (branch && expanded) {
+      const children = document.createElement("div");
+      children.className = "declared-children";
+      children.append(...drawNodes(tree, node.children, path, ctx));
+      wrap.append(children);
+    }
+    return wrap;
+  });
+}
+
+function drawTree(element, ctx) {
+  const box = document.createElement("div");
+  box.className = "declared-tree";
+  if (element.nodes.length === 0) {
+    const empty = document.createElement("span");
+    empty.className = "declared-empty";
+    empty.append(document.createTextNode(element.empty));
+    box.append(empty);
+    return box;
+  }
+  box.append(...drawNodes(element, element.nodes, [], ctx));
+  return box;
+}
+
 /**
  * Draws the root elements of an accepted value into body, replacing its previous content. Every control is connected through
- * bind(element, name, params, options) of the binder, and carries the dom name and the control attributes.
+ * bind(element, name, params, options) of the binder, and carries the dom name and the control attributes. kept holds the expanded
+ * state of each tree by its key and the path of each branch (settle).
  */
-export function drawValue(body, elements, { bind }) {
+export function drawValue(body, elements, { statusId, bind, kept }) {
   const nodes = elements.map((element) => {
-    if (element.kind !== "list") throw new Error(`declared UI kind ${element.kind} is not drawn yet`);
-    return drawList(element, bind);
+    if (element.kind === "list") return drawList(element, bind);
+    if (element.kind === "tree") return drawTree(element, { statusId, bind, kept });
+    throw new Error(`declared UI kind ${element.kind} is not drawn yet`);
   });
   body.replaceChildren(...nodes);
+}
+
+/**
+ * The state of each declared UI status, keyed by its status name `<plugin>.<name>`. kept maps each tree key to the expanded state
+ * of each branch by its path, and survives a rejection and a change of source. accepted maps each tree key to the plugin's expanded
+ * value of each branch of the last accepted value, and is null when the last value was rejected or its source changed. view is the
+ * section that draws the last accepted value, so the expand command draws it again.
+ */
+const sources = new Map();
+
+function sourceOf(statusId) {
+  let source = sources.get(statusId);
+  if (source === undefined) {
+    source = { kept: new Map(), accepted: null, view: null };
+    sources.set(statusId, source);
+  }
+  return source;
+}
+
+/**
+ * Computes the kept state of an accepted value from the baseline rules of docs/spec/declared-ui.md (status mapping). A branch that
+ * is new takes the plugin's value. A branch that is not new takes the plugin's value when that value changed, and keeps its kept
+ * state otherwise. Without a baseline, a branch with a kept state keeps it. A kept state whose path is not a branch is dropped.
+ */
+function settle(source, elements) {
+  const kept = new Map();
+  const accepted = new Map();
+  for (const element of elements) {
+    if (element.kind !== "tree") continue;
+    const keptBranches = new Map();
+    const pluginBranches = new Map();
+    const visit = (nodes, parent) => {
+      for (const node of nodes) {
+        if (!isBranch(node)) continue;
+        const path = [...parent, node.key];
+        const key = JSON.stringify(path);
+        const planned = node.expanded === true;
+        const previous = source.kept.get(element.key)?.get(key);
+        let value;
+        if (source.accepted === null) {
+          value = previous ?? planned;
+        } else {
+          const before = source.accepted.get(element.key)?.get(key);
+          value = before === undefined || before !== planned ? planned : previous;
+        }
+        keptBranches.set(key, value);
+        pluginBranches.set(key, planned);
+        visit(node.children, path);
+      }
+    };
+    visit(element.nodes, []);
+    kept.set(element.key, keptBranches);
+    accepted.set(element.key, pluginBranches);
+  }
+  return { kept, accepted };
 }
 
 /**
@@ -367,17 +495,49 @@ export function drawValue(body, elements, { bind }) {
  * the status. A rejected value removes the previous tree and shows the rejection through showError, which writes the log line.
  */
 export function receive(body, value, options) {
-  const where = `declared UI ${options.owner}.${options.status}`;
+  const statusId = `${options.owner}.${options.status}`;
+  const where = `declared UI ${statusId}`;
+  const source = sourceOf(statusId);
   let elements;
   try {
     ({ elements } = validateValue(value, options));
   } catch (error) {
     if (!(error instanceof DeclaredUIRejection)) throw error;
     body.replaceChildren();
+    source.accepted = null;
+    source.view = null;
     showError(body, where, `${error.pointer}: ${error.reason}`);
     return false;
   }
-  drawValue(body, elements, options);
+  const settled = settle(source, elements);
+  drawValue(body, elements, { statusId, bind: options.bind, kept: settled.kept });
+  source.kept = settled.kept;
+  source.accepted = settled.accepted;
+  source.view = { body, elements, bind: options.bind };
   hideError(body, where);
   return true;
+}
+
+/**
+ * Runs core.declared-ui.tree.expand: sets the kept expanded state of the branch at path in the tree of the status, and draws the
+ * tree again. The branch must be drawn; otherwise the command fails. Running it again with the same arguments sets the same state.
+ */
+export function setTreeExpanded({ status, tree, path, expanded }) {
+  const source = sources.get(status);
+  const key = JSON.stringify(path);
+  if (!source?.accepted?.get(tree)?.has(key)) throw new Error(`tree ${tree} path ${key} is not drawn`);
+  source.kept.get(tree).set(key, expanded);
+  const { body, elements, bind } = source.view;
+  drawValue(body, elements, { statusId: status, bind, kept: source.kept });
+}
+
+/**
+ * Ends the accepted value of a status when its source changes: the drawn tree is no longer the baseline, and the kept state of each
+ * path stays. The caller clears the section until the first value of the new source is accepted.
+ */
+export function changeSource(statusId) {
+  const source = sources.get(statusId);
+  if (source === undefined) return;
+  source.accepted = null;
+  source.view = null;
 }

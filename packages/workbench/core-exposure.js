@@ -13,6 +13,7 @@ import { createPluginApply } from "./plugin-apply.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
 import { trackPointer } from "./pointer-state.js";
+import { setTreeExpanded } from "./declared-ui.js";
 import { losses, onPluginProcessChange, openCalls, views } from "./plugin-processes.js";
 import { tabMenuItems } from "./tab-menu.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
@@ -506,6 +507,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.card.sidebar.size", ({ card, side, size }) => { resizeSidebar(card, side, size); });
   registry.command("core.sidebar.section.select", ({ sidebar, section }) => { selectSection(sidebar, section); });
   registry.command("core.sidebar.section.fold", ({ sidebar, section }) => { foldSection(sidebar, section); });
+  registry.command("core.declared-ui.tree.expand", (params) => { setTreeExpanded(params); });
   registry.command("core.text.larger", async () => { await changeTextSize(1, "core.text.larger"); });
   registry.command("core.text.smaller", async () => { await changeTextSize(-1, "core.text.smaller"); });
   registry.command("core.text.reset", async () => { await changeTextSize(0, "core.text.reset"); });

@@ -3214,6 +3214,33 @@
         }
       },
       {
+        "name": "core.declared-ui.tree.expand",
+        "description": "Sets the expanded state that a declared UI tree branch keeps. The branch is named by the status, the tree key, and the path of node keys from the root node. The state stays until the branch leaves the tree or the source of the status changes.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string"
+            },
+            "tree": {
+              "type": "string"
+            },
+            "path": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "expanded": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.sidebar.section.fold",
         "description": "Folds or unfolds one section of a sidebar whose set uses the list layout; the state is kept for that sidebar.",
         "params": {

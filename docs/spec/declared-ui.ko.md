@@ -69,7 +69,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 
 `status-line`에는 tone과 오류 값이 없다. 오류는 응용 프로그램 로그에 기록하는 표시 경로([AGENTS](../../AGENTS.ko.md))를 거쳐야 사용자에게 보이므로, 선언된 요소는 오류를 그릴 수 없다.
 
-`list`는 행의 열이며, 행이 없으면 `empty` 텍스트를 그린다. `tree`는 들여쓴 개요이며, 노드가 없으면 `empty` 텍스트를 그린다. `button`은 한 개의 버튼이다. `status-line`은 한 줄의 텍스트다.
+`list`는 행의 열이며, 행이 없으면 `empty` 텍스트를 그린다. `tree`는 들여쓴 개요이며, 노드가 없으면 `empty` 텍스트를 그린다. 가지는 펼쳐져 있을 때만 자식을 그린다. `button`은 한 개의 버튼이다. `status-line`은 한 줄의 텍스트다.
 
 ## 한도
 
@@ -114,12 +114,12 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 
 선언된 UI 값의 명령 이름은 `<plugin>.<name>`이며, `<plugin>`은 status의 plugin이다. core의 이름이나 다른 plugin의 이름은 거부한다. plugin 값은 자기 plugin의 명령만 이름으로 지정하기 때문이다. 선언되지 않은 이름은 사용자가 요소를 누를 때가 아니라 선언된 UI snapshot을 받을 때 거부한다. binder가 표시 시점에 선언되지 않은 이름을 거부하기 때문이다([노출](exposure.ko.md#사용자-인터페이스)).
 
-`core.declared-ui.tree.expand`는 `packages/workbench/exposure.json`에 그 처리기와 함께 선언한다. 이 명령은 설정 연산이다. 같은 인수로 다시 실행해도 한 번 실행한 것과 같은 결과다. `expanded` 인수는 제어가 요청하는 상태이며, 그릴 때 가지가 보이던 상태의 반대다. 명령은 `status`의 트리 `tree`에서 `path`에 있는 가지의 유지 상태를 설정하며, plugin에는 전달하지 않는다. `path`는 tree의 루트 노드에서 가지까지의 노드 key 배열이다. 그려진 가지가 없는 `path`, 또는 그려지지 않은 `status`나 `tree`는 `tree <tree> path <path> is not drawn`으로 명령을 실패시킨다. 그 메시지의 `<path>`는 문자열의 JSON 배열이다.
+`core.declared-ui.tree.expand`는 `packages/workbench/exposure.json`에 그 처리기와 함께 선언한다. 이 명령은 설정 연산이다. 같은 인수로 다시 실행해도 한 번 실행한 것과 같은 결과다. `expanded` 인수는 제어가 요청하는 상태이며, 그릴 때 가지가 보이던 상태의 반대다. 명령은 `status`의 트리 `tree`에서 `path`에 있는 가지의 유지 상태를 설정하며, plugin에는 전달하지 않는다. workbench는 그다음 유지된 상태로 tree를 다시 그린다. `path`는 tree의 루트 노드에서 가지까지의 노드 key 배열이다. `status`는 status 이름 `<plugin>.<name>`이고, `tree`는 tree 요소의 key다. 그려진 가지가 없는 `path`, 또는 그려지지 않은 `status`나 `tree`는 `tree <tree> path <path> is not drawn`으로 명령을 실패시킨다. 그 메시지의 `<path>`는 문자열의 JSON 배열이다.
 
 요청은 제어가 요청하는 `expanded` 값을 담으며, 이는 workbench가 그릴 때의 유지 상태와 반대다. 같은 요청을 되풀이하면 같은 상태를 설정한다.
 
 비활성 요소(`enabled: false`)는 `disabled` 속성으로 그려지므로 어떤 클릭도 그 묶기에 닿지 않는다.
-네이티브 `button` 요소를 가지는 요소는 `button`, `command`가 있는 list 항목, `command`가 있는 tree 노드, tree 가지의 펼침 제어다. 정적 list 행과 status line은 button을 가지지 않는다.
+네이티브 `button` 요소를 가지는 요소는 `button`, `command`가 있는 list 항목, `command`가 있는 tree 노드, tree 가지의 펼침 제어다. 정적 list 행과 status line은 button을 가지지 않는다. 가지의 펼침 제어는 가지가 접혀 있으면 core의 chevron-right 아이콘을, 펼쳐 있으면 chevron-down 아이콘을 보인다.
 
 
 DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sidebar.section.control`과, 루트 요소의 `key`를 담은 속성 `data-key`를 가진다. list 항목과 tree 노드의 control은 `data-path`(루트 요소 아래의 key들의 JSON 배열)와 `data-role`(`label` 또는 `expand`)도 가진다. `command`가 없는 잎 노드는 두 속성 집합을 모두 갖지 않는다. `command`가 없는 가지는 펼침 제어의 속성만 가진다. 조작할 수 없는 요소, 예컨대 정적 list 행이나 status line은 둘 다 갖지 않는다. section 머리는 `core.sidebar.section.header`를 가진다([plugin](plugins.ko.md#섹션)). 사이드바가 이미 쓰는 이름이므로, 선언된 section과 모듈 section은 같은 방식으로 감사된다. 선언된 요소는 자기 종류의 DOM 이름을 따로 갖지 않는다. 종류는 값에 있다.
