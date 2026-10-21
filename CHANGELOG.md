@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F238-c-27: Publish ordered `validateDiagnostics` calls for a valid extension, duplicate names, missing surfaces, invalid module paths, and unknown fields. Core tests execute each call against the validator; the published-case regression and exposure tests pass 21/21. The owning package test suite passes 377/377, exercising all published cases.
+
 - F238-c-27: Publish ordered manifest validator cases for a valid section-only plugin, the reserved `core` id, and an unknown field. Core tests execute each call against `validateManifest`; the published-case regression passes with the owning validator suite (38/38). The diagnostics validator remains open.
 
 - F238-c-27: Publish ordered `drawList` cases for keyed element identity and updates, ordering/reconciliation, duplicate-key refusal, and unmanaged-child removal. Core tests execute each call against `list.js`; the published-case regression passes 5/5. The manifest and diagnostics validators remain open.
@@ -12,7 +14,7 @@
 
 - F238-c-27: Publish six ordered `createBinder` contract cases for direct and delegated command calls, failed runs, command refusal, audit output, and disposal. Core tests execute each step against `binder.js`; the Red published-case assertion passes with the contract (7/7). Remaining surfaces are `screenHash`, `drawList`, and manifest/diagnostics validation.
 
-- F238-c-2: Parity ownership now uses exact declared component names and `kind` values from the workspace registry instead of package-name prefixes or hard-coded owner names. Undeclared names in plugin and sidecar code are findings. The regression test failed against the pre-fix implementation and passes with the declared-owner lookup; the ownership coverage tests pass 125/125. F238-c-3 is closed as duplicate. F238-c-12's existing coverage table was confirmed; no plugin assertions were removed.
+- F238-c-2: Parity ownership now uses exact declared component names and `kind` values from the workspace registry instead of package-name prefixes or hard-coded owner names. Undeclared names in plugin and sidecar code are findings. The regression test failed against the pre-fix implementation and passes with the declared-owner lookup; the ownership coverage tests pass 125/125. F238-c-3 is satisfied by the same classifier correction. F238-c-12's existing coverage table was confirmed; no plugin assertions were removed.
 
 - F240-1: The plugin processes handoff refers to AGENTS.md for the test time limits and the progress output of long runs instead of restating them; AGENTS.md states each test's own limit, the running, finished, passed and failed lines with elapsed time, and the single full-suite run at checklist completion.
 - F239-19: The hello tests of the sidecar host take 0.11 s and 0.11 s instead of 5.0 s, and the delay test takes 0.51 s instead of 5.6 s. The hello tests set the hello bound to 100 ms; the production bound of 5 s is unchanged. The delay test's fake service answers shutdown, so Stop no longer waits the 5 s deadline. Before the change the hello tests failed on the 5 s bound and the delay test's stop took 5.002 s.

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F238-c-27: 유효한 extension, 중복 이름, surface 누락, 잘못된 module 경로, 알 수 없는 필드에 대한 순서 있는 `validateDiagnostics` 호출을 공개한다. core 테스트는 각 호출을 validator에 실행하며 공개 사례 회귀와 exposure 테스트가 21/21 통과한다. 소유 package test 스위트가 377/377 통과하며 공개 사례를 모두 실행한다.
+
 - F238-c-27: 유효한 section-only plugin, 예약된 `core` id, 알 수 없는 필드에 대한 순서 있는 manifest validator 사례를 공개한다. core 테스트는 각 호출을 `validateManifest`에 실행하며 공개 사례 회귀 검사가 소유 validator 스위트와 함께 38/38 통과한다. diagnostics validator는 계속 미완료다.
 
 - F238-c-27: keyed element identity와 update, 순서 조정/reconciliation, 중복 key 거부, 관리되지 않는 자식 제거를 위한 순서 있는 `drawList` 사례를 공개한다. core 테스트는 각 호출을 `list.js`에 실행하며 공개 사례 회귀 검사는 5/5 통과한다. manifest와 diagnostics validator는 계속 미완료다.
@@ -12,7 +14,7 @@
 
 - F238-c-27: 직접·위임 command 호출, 실패한 run, command 거부, audit 결과, disposal에 대한 순서 있는 `createBinder` 계약 사례 6개를 공개한다. core 테스트는 각 단계를 `binder.js`에 실행하며, Red 공개 사례 검사는 계약 추가 후 7/7 통과한다. 남은 표면은 `screenHash`, `drawList`, manifest/diagnostics 검증기다.
 
-- F238-c-2: parity 소유권이 패키지 이름 접두사나 하드코딩한 소유자 이름 대신 workspace registry의 정확한 선언 component 이름과 `kind`를 사용한다. plugin과 sidecar 코드의 미선언 이름은 발견 사항이다. 회귀 테스트는 수정 전 구현에서 실패하고 선언 소유자 조회에서 통과한다. 소유자 범위 테스트는 125/125 통과한다. F238-c-3은 중복으로 종료했다. F238-c-12의 기존 범위 표를 확인했으며 plugin 단언은 삭제하지 않았다.
+- F238-c-2: parity 소유권이 패키지 이름 접두사나 하드코딩한 소유자 이름 대신 workspace registry의 정확한 선언 component 이름과 `kind`를 사용한다. plugin과 sidecar 코드의 미선언 이름은 발견 사항이다. 회귀 테스트는 수정 전 구현에서 실패하고 선언 소유자 조회에서 통과한다. 소유자 범위 테스트는 125/125 통과한다. F238-c-3은 같은 분류기 수정으로 충족했다. F238-c-12의 기존 범위 표를 확인했으며 plugin 단언은 삭제하지 않았다.
 
 - F240-1: 플러그인 프로세스 handoff는 시험 시간 한도와 긴 실행의 진행 출력을 다시 적지 않고 AGENTS.ko.md를 참조한다. AGENTS.ko.md는 시험마다 자기 한도, 경과 시간을 포함한 running, finished, passed, failed 출력, 체크리스트 완료 시 전체 suite 한 번 실행을 적는다.
 - F239-19: sidecar host의 hello test 두 개는 5.0초가 아니라 0.11초와 0.11초에, delay test는 5.6초가 아니라 0.51초에 끝난다. hello test는 hello 경계를 100ms로 설정하며 production 경계 5초는 그대로다. delay test의 fake service가 shutdown에 답하므로 Stop은 5초 기한을 더 기다리지 않는다. 변경 전 hello test는 5초 경계에서 실패했고 delay test의 stop은 5.002초였다.

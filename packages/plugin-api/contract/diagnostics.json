@@ -1,0 +1,266 @@
+{
+  "surface": "packages/plugin-api/index.js#validateDiagnostics",
+  "description": "Ordered validator calls fix a diagnostics exposure extension and refusals for duplicate names, missing surfaces, invalid module paths, and unknown members.",
+  "cases": [
+    {
+      "id": "diagnostics.accepts-declared-extension",
+      "steps": [
+        {
+          "call": {
+            "manifest": {
+              "id": "probe",
+              "surface": {
+                "module": "ui/probe.js"
+              },
+              "exposes": {
+                "commands": [
+                  {
+                    "name": "probe.send",
+                    "description": "Sends.",
+                    "params": {
+                      "type": "object",
+                      "properties": {}
+                    },
+                    "result": {
+                      "type": "null"
+                    }
+                  }
+                ]
+              }
+            },
+            "diagnostics": {
+              "module": "ui/probe-diagnostics.js",
+              "exposes": {
+                "commands": [
+                  {
+                    "name": "probe.inject",
+                    "description": "Injects.",
+                    "params": {
+                      "type": "object",
+                      "properties": {}
+                    },
+                    "result": {
+                      "type": "null"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "output": {
+            "accepted": true,
+            "result": {
+              "module": "ui/probe-diagnostics.js",
+              "exposes": {
+                "commands": [
+                  {
+                    "name": "probe.inject",
+                    "description": "Injects.",
+                    "params": {
+                      "type": "object",
+                      "properties": {}
+                    },
+                    "result": {
+                      "type": "null"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnostics.refuses-duplicate-name",
+      "steps": [
+        {
+          "call": {
+            "manifest": {
+              "id": "probe",
+              "surface": {
+                "module": "ui/probe.js"
+              },
+              "exposes": {
+                "commands": [
+                  {
+                    "name": "probe.send",
+                    "description": "Sends.",
+                    "params": {
+                      "type": "object",
+                      "properties": {}
+                    },
+                    "result": {
+                      "type": "null"
+                    }
+                  }
+                ]
+              }
+            },
+            "diagnostics": {
+              "module": "ui/probe-diagnostics.js",
+              "exposes": {
+                "commands": [
+                  {
+                    "name": "probe.send",
+                    "description": "Duplicate.",
+                    "params": {
+                      "type": "object",
+                      "properties": {}
+                    },
+                    "result": {
+                      "type": "null"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "output": {
+            "accepted": false,
+            "error": "command probe.send is declared twice"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnostics.refuses-without-surface",
+      "steps": [
+        {
+          "call": {
+            "manifest": {
+              "id": "probe"
+            },
+            "diagnostics": {
+              "module": "ui/probe-diagnostics.js",
+              "exposes": {
+                "commands": [
+                  {
+                    "name": "probe.inject",
+                    "description": "Injects.",
+                    "params": {
+                      "type": "object",
+                      "properties": {}
+                    },
+                    "result": {
+                      "type": "null"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "output": {
+            "accepted": false,
+            "error": "plugin probe diagnostics.json: diagnostics require a surface"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnostics.refuses-invalid-module-path",
+      "steps": [
+        {
+          "call": {
+            "manifest": {
+              "id": "probe",
+              "surface": {
+                "module": "ui/probe.js"
+              },
+              "exposes": {
+                "commands": [
+                  {
+                    "name": "probe.send",
+                    "description": "Sends.",
+                    "params": {
+                      "type": "object",
+                      "properties": {}
+                    },
+                    "result": {
+                      "type": "null"
+                    }
+                  }
+                ]
+              }
+            },
+            "diagnostics": {
+              "module": "../probe.js",
+              "exposes": {
+                "commands": [
+                  {
+                    "name": "probe.inject",
+                    "description": "Injects.",
+                    "params": {
+                      "type": "object",
+                      "properties": {}
+                    },
+                    "result": {
+                      "type": "null"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "output": {
+            "accepted": false,
+            "error": "plugin probe diagnostics.json: module must be a JavaScript path inside the package"
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnostics.refuses-unknown-field",
+      "steps": [
+        {
+          "call": {
+            "manifest": {
+              "id": "probe",
+              "surface": {
+                "module": "ui/probe.js"
+              },
+              "exposes": {
+                "commands": [
+                  {
+                    "name": "probe.send",
+                    "description": "Sends.",
+                    "params": {
+                      "type": "object",
+                      "properties": {}
+                    },
+                    "result": {
+                      "type": "null"
+                    }
+                  }
+                ]
+              }
+            },
+            "diagnostics": {
+              "module": "ui/probe-diagnostics.js",
+              "exposes": {
+                "commands": [
+                  {
+                    "name": "probe.inject",
+                    "description": "Injects.",
+                    "params": {
+                      "type": "object",
+                      "properties": {}
+                    },
+                    "result": {
+                      "type": "null"
+                    }
+                  }
+                ]
+              },
+              "extra": true
+            }
+          },
+          "output": {
+            "accepted": false,
+            "error": "plugin probe diagnostics.json: unknown field extra"
+          }
+        }
+      ]
+    }
+  ]
+}
